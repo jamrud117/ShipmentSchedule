@@ -518,7 +518,7 @@
     return [
       s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
       totals.totalUSD
-        ? `<span class="tag tag-usd">Nilai ${fmtUSD(totals.totalUSD)}</span>`
+        ? `<span class="tag tag-usd">${fmtUSD(totals.totalUSD)}</span>`
         : "",
       s.muatan
         ? `<span class="tag tag-muatan">${escapeHtml(s.muatan)}</span>`
@@ -886,6 +886,8 @@
     $("#lblVoyage").textContent = air ? "No. Flight" : "No. Voyage";
     $("#fVessel").placeholder = air ? "Garuda Cargo" : "MV Ever Given";
     $("#fVoyage").placeholder = air ? "GA880/04JUL" : "V.023E";
+    $("#lblMasterBL").textContent = air ? "Master AWB" : "Master B/L";
+    $("#lblHouseBL").textContent = air ? "House AWB" : "House B/L";
   }
 
   /* ==================================================================
@@ -1218,19 +1220,18 @@
         ${fieldPair("Insurance (USD)", fmtUSD(s.insurance))}
         ${fieldPair("NDPBM", fmtRp(s.ndpbm))}
         ${fieldPair("Total Nilai Barang (USD)", fmtUSD(calc.totalUSD))}
+        ${
+          s.incoterm === "CIF"
+            ? fieldPair("CIF (USD)", fmtUSD(calc.cifUsd)) +
+              fieldPair("CIF Rupiah", fmtRp(calc.cifRupiah))
+            : s.incoterm === "FOB"
+              ? fieldPair("FOB (USD)", fmtUSD(calc.fobUsd)) +
+                fieldPair("FOB Rupiah", fmtRp(calc.fobRupiah))
+              : ""
+        }
       </div>`;
 
-    if (s.incoterm === "CIF") {
-      customsHtml += `<div class="info-grid">
-        ${fieldPair("CIF (USD)", fmtUSD(calc.cifUsd))}
-        ${fieldPair("CIF Rupiah", fmtRp(calc.cifRupiah))}
-      </div>`;
-    } else if (s.incoterm === "FOB") {
-      customsHtml += `<div class="info-grid">
-        ${fieldPair("FOB (USD)", fmtUSD(calc.fobUsd))}
-        ${fieldPair("FOB Rupiah", fmtRp(calc.fobRupiah))}
-      </div>`;
-    } else {
+    if (s.incoterm !== "CIF" && s.incoterm !== "FOB") {
       customsHtml += `<div class="form-text-note mb-2">Incoterm ini bukan CIF maupun FOB — nilai CIF, CIF Rupiah, dan FOB Rupiah otomatis 0.</div>`;
     }
 
@@ -1265,8 +1266,8 @@
         ${fieldPair("No. Aju", escapeHtml(s.noAju || "—"))}
         ${fieldPair(lbl.party, escapeHtml(s.party || "—"))}
         ${fieldPair("No. Invoice", escapeHtml(s.invoice || "—"))}
-        ${fieldPair("Master B/L · AWB", escapeHtml(s.masterBL || "—"))}
-        ${fieldPair("House B/L · AWB", escapeHtml(s.houseBL || "—"))}
+        ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(s.masterBL || "—"))}
+        ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(s.houseBL || "—"))}
         ${fieldPair(lbl.factoryDate, s.factoryDate ? fmtDate(s.factoryDate) + (s.factoryTime ? " · " + escapeHtml(s.factoryTime) : "") : "—")}
       </div>
 

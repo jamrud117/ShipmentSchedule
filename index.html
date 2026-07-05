@@ -183,10 +183,10 @@
           <div class="col-md-4">
             <div class="footer-heading">Catatan Data</div>
             <p class="footer-text">
-              Data tersimpan permanen di database online (Supabase), bukan
-              lagi di browser. Tombol <b>Ekspor JSON</b> tetap bisa dipakai
-              untuk cadangan berkala, dan <b>Impor</b> untuk memuat ulang
-              dari file cadangan tersebut.
+              Data tersimpan permanen di database online (Supabase), bukan lagi
+              di browser. Tombol <b>Ekspor JSON</b> tetap bisa dipakai untuk
+              cadangan berkala, dan <b>Impor</b> untuk memuat ulang dari file
+              cadangan tersebut.
             </p>
           </div>
           <div class="col-md-3">
@@ -286,7 +286,9 @@
                   />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label">Master B/L / AWB</label>
+                  <label class="form-label" id="lblMasterBL"
+                    >Master B/L / AWB</label
+                  >
                   <input
                     type="text"
                     class="form-control"
@@ -295,7 +297,9 @@
                   />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label">House B/L / AWB</label>
+                  <label class="form-label" id="lblHouseBL"
+                    >House B/L / AWB</label
+                  >
                   <input
                     type="text"
                     class="form-control"
@@ -720,8 +724,8 @@
 
     <!-- ============ TOAST (pengganti alert() native) ============ -->
     <div
-      class="toast-container position-fixed bottom-0 end-0 p-3"
-      style="z-index: 2000"
+      class="toast-container position-fixed end-0 p-3"
+      style="z-index: 2000; top: 90px"
     >
       <div
         id="appToast"
