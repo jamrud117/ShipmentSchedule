@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MUATAN — Pelacakan Jadwal Import &amp; Export</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- ============ NAVBAR ============ -->
+    <nav class="main-navbar">
+      <div
+        class="container d-flex justify-content-between align-items-center flex-wrap gap-2"
+      >
+        <a class="navbar-brand-custom" href="#"
+          ><i class="bi bi-box-seam"></i> MUATAN</a
+        >
+        <div class="mode-tabs">
+          <button class="active" id="tabImport" data-mode="import">
+            <i class="bi bi-box-arrow-in-down-left"></i>Import
+          </button>
+          <button id="tabExport" data-mode="export">
+            <i class="bi bi-box-arrow-up-right"></i>Export
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    <header class="topbar">
+      <div class="wave-line"></div>
+      <div class="container position-relative">
+        <div class="brand-eyebrow">
+          Sistem Pelacakan Pengiriman Import &amp; Export
+        </div>
+        <div class="brand-sub">
+          Kelola ETD, ETA, dokumen kepabeanan, daftar barang per pengiriman,
+          hingga perhitungan CIF/FOB — dalam satu tampilan yang rapi dan mudah
+          dibaca.
+        </div>
+      </div>
+    </header>
+
+    <main class="container stat-strip">
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="num" id="statTotal">0</div>
+            <div class="lbl">
+              <span class="dot" style="background: var(--ocean)"></span>Total
+              Pengiriman
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="num" id="statProcess">0</div>
+            <div class="lbl">
+              <span class="dot" style="background: var(--amber)"></span>PROCESS
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="num" id="statTransit">0</div>
+            <div class="lbl">
+              <span class="dot" style="background: var(--teal)"></span>IN
+              TRANSIT
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="stat-card">
+            <div class="num" id="statArrived">0</div>
+            <div class="lbl">
+              <span class="dot" style="background: var(--green)"></span
+              ><span id="lblArrivedStat">ARRIVED</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar mb-4">
+        <div class="row g-2 align-items-center">
+          <div class="col-12 col-md-4">
+            <div class="input-group">
+              <span class="input-group-text bg-white border-end-0"
+                ><i class="bi bi-search text-muted"></i
+              ></span>
+              <input
+                type="text"
+                id="searchInput"
+                class="form-control border-start-0"
+                placeholder="Cari item, no. aju, invoice, vessel..."
+              />
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <select id="filterStatus" class="form-select">
+              <option value="">Semua Status</option>
+              <option value="process">PROCESS</option>
+              <option value="transit">IN TRANSIT</option>
+              <option value="arrived">ARRIVED</option>
+              <option value="delayed">DELAYED</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <select id="sortDir" class="form-select">
+              <option value="asc">Tanggal Terdekat</option>
+              <option value="desc">Tanggal Terjauh</option>
+            </select>
+          </div>
+          <div
+            class="col-12 col-md-4 d-flex gap-2 justify-content-md-end mt-2 mt-md-0"
+          >
+            <button class="btn btn-outline-navy btn-sm" id="btnExport">
+              <i class="bi bi-download"></i> Ekspor JSON
+            </button>
+            <label class="btn btn-outline-navy btn-sm mb-0">
+              <i class="bi bi-upload"></i> Impor
+              <input
+                type="file"
+                id="importFile"
+                accept="application/json"
+                hidden
+              />
+            </label>
+            <button class="btn btn-teal btn-sm" id="btnAdd">
+              <i class="bi bi-plus-lg"></i>
+              <span id="lblAddBtn">Tambah Jadwal</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label mb-2" id="lblSectionList">
+        Daftar Jadwal Pengiriman Import
+      </div>
+      <div id="cardContainer"></div>
+      <div id="emptyState" class="empty-state d-none">
+        <i class="bi bi-inboxes"></i>
+        <h5
+          class="mt-3 mb-1"
+          style="font-family: var(--font-display); color: var(--navy)"
+        >
+          Belum ada jadwal ditemukan
+        </h5>
+        <p class="mb-3">
+          Tambahkan jadwal baru atau ubah filter pencarian Anda.
+        </p>
+        <button class="btn btn-teal btn-sm" id="btnAddEmpty">
+          <i class="bi bi-plus-lg"></i> Tambah Jadwal
+        </button>
+      </div>
+    </main>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="app-footer">
+      <div class="container">
+        <div class="row gy-4">
+          <div class="col-md-5">
+            <div class="footer-brand">
+              <i class="bi bi-box-seam"></i> MUATAN
+            </div>
+            <p class="footer-text">
+              Sistem pelacakan jadwal import &amp; export internal — ETD, ETA,
+              dokumen kepabeanan, dan daftar barang dalam satu tampilan.
+            </p>
+          </div>
+          <div class="col-md-4">
+            <div class="footer-heading">Catatan Data</div>
+            <p class="footer-text">
+              Data tersimpan permanen di database online (Supabase), bukan
+              lagi di browser. Tombol <b>Ekspor JSON</b> tetap bisa dipakai
+              untuk cadangan berkala, dan <b>Impor</b> untuk memuat ulang
+              dari file cadangan tersebut.
+            </p>
+          </div>
+          <div class="col-md-3">
+            <div class="footer-heading">Info</div>
+            <p class="footer-text">
+              Posisi kapal/pesawat pada garis pelayaran diperbarui otomatis
+              mengikuti ETD &amp; ETA.
+            </p>
+          </div>
+        </div>
+        <hr class="footer-divider" />
+        <div class="footer-bottom">
+          © 2026 MUATAN — Internal Import/Export Tracking Tool.
+        </div>
+      </div>
+    </footer>
+
+    <!-- ============ MODAL: TAMBAH / EDIT JADWAL ============ -->
+    <div class="modal fade" id="shipmentModal" tabindex="-1">
+      <div
+        class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
+      >
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalTitle">Tambah Jadwal Import</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="fId" />
+
+            <ul class="nav nav-detail" id="detailTabs">
+              <li class="nav-item">
+                <button class="nav-link active" data-tab="umum" type="button">
+                  1. Dokumen &amp; Umum
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-tab="barang" type="button">
+                  2. Daftar Barang
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" data-tab="pabean" type="button">
+                  3. Kepabeanan &amp; Biaya
+                </button>
+              </li>
+            </ul>
+
+            <!-- TAB 1: DOKUMEN & UMUM -->
+            <div class="tab-pane" data-tabpane="umum">
+              <div class="subsection-title">
+                <i class="bi bi-file-earmark-text"></i> Dokumen
+              </div>
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label" id="lblDocNo">No. SPPB</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fDocNo"
+                    placeholder="SPPB-000123"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" id="lblDocDate">Tanggal SPPB</label>
+                  <input type="date" class="form-control" id="fDocDate" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">No. Aju</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fNoAju"
+                    placeholder="000123456789012345678901"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" id="lblParty">Nama Shipper</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fParty"
+                    placeholder="PT Sinar Abadi Trading"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">No. Invoice</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fInvoice"
+                    placeholder="INV-2026-0451"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Master B/L / AWB</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fMasterBL"
+                    placeholder="MBL-889021"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">House B/L / AWB</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fHouseBL"
+                    placeholder="HBL-114520"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" id="lblFactoryDate"
+                    >Tanggal In Factory</label
+                  >
+                  <input type="date" class="form-control" id="fFactoryDate" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" id="lblFactoryTime"
+                    >Jam In Factory</label
+                  >
+                  <input type="time" class="form-control" id="fFactoryTime" />
+                </div>
+              </div>
+
+              <div class="subsection-title">
+                <i class="bi bi-compass"></i> Transportasi &amp; Rute
+              </div>
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label">Moda Transportasi</label>
+                  <select class="form-select" id="fTransport">
+                    <option value="laut">Laut (Vessel)</option>
+                    <option value="udara">Udara (Pesawat)</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" id="lblVessel">Nama Vessel</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fVessel"
+                    placeholder="MV Ever Given"
+                  />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label" id="lblVoyage">No. Voyage</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fVoyage"
+                    placeholder="V.023E"
+                  />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Kontainer</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fContainer"
+                    placeholder="TCLU1234567"
+                  />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Jenis Muatan</label>
+                  <select class="form-select" id="fMuatan">
+                    <option value="">—</option>
+                    <option value="FCL">FCL</option>
+                    <option value="LCL">LCL</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" id="lblOrigin"
+                    >Pelabuhan Asal</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fOrigin"
+                    placeholder="Shanghai, China"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" id="lblDestination"
+                    >Pelabuhan Tujuan</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fDestination"
+                    placeholder="Tanjung Priok, Jakarta"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">ETD</label>
+                  <input type="date" class="form-control" id="fEtd" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">ETA</label>
+                  <input type="date" class="form-control" id="fEta" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" id="lblActual"
+                    >Actual Delivery</label
+                  >
+                  <input type="date" class="form-control" id="fActual" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Status</label>
+                  <select class="form-select" id="fStatus">
+                    <option value="process">PROCESS</option>
+                    <option value="transit">IN TRANSIT</option>
+                    <option value="arrived">ARRIVED</option>
+                    <option value="delayed">DELAYED</option>
+                  </select>
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label">Catatan</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fNotes"
+                    placeholder="Catatan tambahan..."
+                  />
+                </div>
+              </div>
+              <div class="form-text-note mt-2">
+                <i class="bi bi-info-circle"></i> Jika ETA diubah ke tanggal
+                yang sudah lewat atau hari ini, status otomatis berubah menjadi
+                <b>ARRIVED</b>. Mengisi Actual Delivery <u>tidak</u> mengubah
+                status secara otomatis — ubah status secara manual lewat
+                dropdown Status bila memang sudah tiba.
+              </div>
+            </div>
+
+            <!-- TAB 2: DAFTAR BARANG -->
+            <div class="tab-pane d-none" data-tabpane="barang">
+              <div
+                class="d-flex justify-content-between align-items-center mb-2"
+              >
+                <div class="subsection-title mb-0">
+                  <i class="bi bi-boxes"></i> Daftar Barang dalam Pengiriman Ini
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-teal btn-sm"
+                  id="btnAddItem"
+                >
+                  <i class="bi bi-plus-lg"></i> Tambah Barang
+                </button>
+              </div>
+              <div class="item-table-wrap">
+                <table class="item-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 22%">Nama Barang</th>
+                      <th style="width: 11%">HS Code</th>
+                      <th style="width: 13%">Jenis Barang</th>
+                      <th style="width: 8%">Qty</th>
+                      <th style="width: 9%">Satuan</th>
+                      <th style="width: 12%">Harga/Unit (USD)</th>
+                      <th style="width: 9%">Berat (Kg)</th>
+                      <th style="width: 12%">Subtotal (USD)</th>
+                      <th style="width: 4%"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="itemTableBody"></tbody>
+                </table>
+              </div>
+              <div class="item-table-foot">
+                <div>Total Qty: <b id="footTotalQty">0</b></div>
+                <div>Total Berat: <b id="footTotalBerat">0</b> Kg</div>
+                <div>Total Nilai: <b id="footTotalUSD">$0.00</b></div>
+              </div>
+            </div>
+
+            <!-- TAB 3: KEPABEANAN & BIAYA -->
+            <div class="tab-pane d-none" data-tabpane="pabean">
+              <div class="subsection-title">
+                <i class="bi bi-cash-coin"></i> Incoterm &amp; Nilai Barang
+              </div>
+              <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                  <label class="form-label">Incoterms</label>
+                  <select class="form-select" id="fIncoterm">
+                    <option value="FOB">FOB</option>
+                    <option value="CIF">CIF</option>
+                    <option value="CFR">CFR</option>
+                    <option value="EXW">EXW</option>
+                    <option value="DDP">DDP</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Freight (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control"
+                    id="fFreight"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Insurance (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control"
+                    id="fInsurance"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">NDPBM (Rp)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    class="form-control"
+                    id="fNdpbm"
+                    placeholder="16250"
+                  />
+                </div>
+              </div>
+              <div class="form-text-note mt-1">
+                Total nilai barang (USD) diambil otomatis dari penjumlahan qty ×
+                harga/unit pada tab Daftar Barang.
+              </div>
+
+              <div class="row g-3 mt-1" id="calcBoxRow">
+                <div class="col-md-6">
+                  <div class="calc-box">
+                    <div class="calc-label">Total Nilai Barang (USD)</div>
+                    <div class="calc-value" id="calcTotalUSD">$0.00</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row g-3 mt-0" id="cifBlock" style="display: none">
+                <div class="col-md-6">
+                  <div class="calc-box cif">
+                    <div class="calc-label">CIF (USD)</div>
+                    <div class="calc-value" id="calcCIF">$0.00</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="calc-box cif">
+                    <div class="calc-label">CIF Rupiah</div>
+                    <div class="calc-value" id="calcCIFRupiah">Rp 0</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row g-3 mt-0" id="fobBlock" style="display: none">
+                <div class="col-md-6">
+                  <div class="calc-box fob">
+                    <div class="calc-label">FOB (USD)</div>
+                    <div class="calc-value" id="calcFOB">$0.00</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="calc-box fob">
+                    <div class="calc-label">FOB Rupiah</div>
+                    <div class="calc-value" id="calcFOBRupiah">Rp 0</div>
+                  </div>
+                </div>
+              </div>
+              <div
+                class="form-text-note mt-2 mb-0"
+                id="noCifFobNote"
+                style="display: none"
+              >
+                <i class="bi bi-info-circle"></i> Incoterm ini bukan CIF maupun
+                FOB — nilai CIF, CIF Rupiah, dan FOB Rupiah otomatis dianggap 0.
+              </div>
+
+              <div id="dutySection">
+                <div class="subsection-title mt-3">
+                  <i class="bi bi-receipt"></i> Bea &amp; Pajak Impor
+                </div>
+                <div class="row g-3">
+                  <div class="col-md-2">
+                    <label class="form-label">Tarif (%)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      class="form-control"
+                      id="fTarif"
+                      placeholder="5"
+                    />
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">Bea Masuk (Rp)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      class="form-control"
+                      id="fBM"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">PPN (Rp)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      class="form-control"
+                      id="fPPN"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label">PPH (Rp)</label>
+                    <input
+                      type="number"
+                      step="1"
+                      class="form-control"
+                      id="fPPH"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">BM + PDRI (Rp)</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="calcBMPDRI"
+                      readonly
+                      value="Rp 0"
+                    />
+                  </div>
+                </div>
+                <div class="form-text-note mt-1">
+                  BM + PDRI dihitung otomatis: jika Bea Masuk = 0, maka BM +
+                  PDRI = 0. Jika tidak, BM + PDRI = Bea Masuk + PPN + PPH.
+                </div>
+                <div class="row g-3 mt-1">
+                  <div class="col-md-6">
+                    <label class="form-label"
+                      >Keterangan PI (Pemberitahuan Impor)</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="fPI"
+                      placeholder="Contoh: PI No. 04.PI-31.00-xxxxx berlaku s.d. ..."
+                    />
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Fasilitas SKB</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="fSKB"
+                      value="PPH"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Batal
+            </button>
+            <button type="button" class="btn btn-teal" id="btnSaveShipment">
+              Simpan Jadwal
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ MODAL: DETAIL (READ-ONLY) ============ -->
+    <div class="modal fade" id="detailViewModal" tabindex="-1">
+      <div
+        class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
+      >
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-clipboard-data"></i> Detail Pengiriman
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <div class="modal-body" id="detailViewBody">
+            <!-- diisi oleh JavaScript -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Tutup
+            </button>
+            <button type="button" class="btn btn-teal" id="btnGotoEdit">
+              <i class="bi bi-pencil"></i> Edit Jadwal Ini
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ MODAL: KONFIRMASI (pengganti confirm() native) ============ -->
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+          <div class="modal-body text-center p-4">
+            <i
+              class="bi bi-exclamation-triangle-fill"
+              style="font-size: 2rem; color: var(--coral)"
+            ></i>
+            <p class="mt-3 mb-0" id="confirmMessage">
+              Yakin ingin melanjutkan?
+            </p>
+          </div>
+          <div class="modal-footer justify-content-center border-0 pb-4">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+              Batal
+            </button>
+            <button type="button" class="btn btn-danger" id="confirmActionBtn">
+              Ya, Hapus
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ TOAST (pengganti alert() native) ============ -->
+    <div
+      class="toast-container position-fixed bottom-0 end-0 p-3"
+      style="z-index: 2000"
+    >
+      <div
+        id="appToast"
+        class="toast align-items-center text-white border-0"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        <div class="d-flex">
+          <div class="toast-body" id="toastMsg">Pesan</div>
+          <button
+            type="button"
+            class="btn-close btn-close-white me-2 m-auto"
+            data-bs-dismiss="toast"
+          ></button>
+        </div>
+      </div>
+    </div>
+
+    <datalist id="satuanList">
+      <option value="PCS"></option>
+      <option value="SET"></option>
+      <option value="UNIT"></option>
+      <option value="KG"></option>
+      <option value="TON"></option>
+      <option value="ROLL"></option>
+      <option value="DRUM"></option>
+      <option value="BOX"></option>
+      <option value="PALLET"></option>
+      <option value="LITER"></option>
+      <option value="METER"></option>
+      <option value="M2"></option>
+      <option value="M3"></option>
+      <option value="LEMBAR"></option>
+    </datalist>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
