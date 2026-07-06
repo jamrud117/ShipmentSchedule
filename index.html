@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MUATAN — Pelacakan Jadwal Import &amp; Export</title>
+    <title>EXIM DDI — Pelacakan Jadwal Import &amp; Export</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
@@ -26,7 +26,7 @@
         class="container d-flex justify-content-between align-items-center flex-wrap gap-2"
       >
         <a class="navbar-brand-custom" href="#"
-          ><i class="bi bi-box-seam"></i> MUATAN</a
+          ><i class="bi bi-box-seam"></i> EXIM DDI</a
         >
         <div class="mode-tabs">
           <button class="active" id="tabImport" data-mode="import">
@@ -150,6 +150,7 @@
         Daftar Jadwal Pengiriman Import
       </div>
       <div id="cardContainer"></div>
+      <div id="paginationBar"></div>
       <div id="emptyState" class="empty-state d-none">
         <i class="bi bi-inboxes"></i>
         <h5
@@ -161,7 +162,7 @@
         <p class="mb-3">
           Tambahkan jadwal baru atau ubah filter pencarian Anda.
         </p>
-        <button class="btn btn-teal btn-sm" id="btnAddEmpty">
+        <button class="btn btn-teal" id="btnAddEmpty">
           <i class="bi bi-plus-lg"></i> Tambah Jadwal
         </button>
       </div>
@@ -173,7 +174,7 @@
         <div class="row gy-4">
           <div class="col-md-5">
             <div class="footer-brand">
-              <i class="bi bi-box-seam"></i> MUATAN
+              <i class="bi bi-box-seam"></i> EXIM DDI
             </div>
             <p class="footer-text">
               Sistem pelacakan jadwal import &amp; export internal — ETD, ETA,
@@ -199,7 +200,7 @@
         </div>
         <hr class="footer-divider" />
         <div class="footer-bottom">
-          © 2026 MUATAN — Internal Import/Export Tracking Tool.
+          © 2026 EXIM DDI — Internal Import/Export Tracking Tool.
         </div>
       </div>
     </footer>
@@ -212,14 +213,35 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="modalTitle">Tambah Jadwal Import</h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-            ></button>
+            <div class="modal-header-actions">
+              <button
+                type="button"
+                class="btn-import-excel"
+                id="btnImportExcel"
+                title="Isi otomatis dari file Excel dokumen BC (HEADER/ENTITAS/DOKUMEN/BARANG)"
+              >
+                <i class="bi bi-file-earmark-excel"></i> Import dari Excel
+              </button>
+              <input
+                type="file"
+                id="fileImportExcel"
+                accept=".xlsx,.xls"
+                class="d-none"
+              />
+              <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"
+              ></button>
+            </div>
           </div>
           <div class="modal-body">
             <input type="hidden" id="fId" />
+
+            <div id="importNotesBox" class="import-notes-box d-none">
+              <div id="importNotesSummary" class="import-notes-summary"></div>
+              <ul id="importNotesList" class="import-notes-list"></ul>
+            </div>
 
             <ul class="nav nav-detail" id="detailTabs">
               <li class="nav-item">
@@ -451,14 +473,15 @@
                 <table class="item-table">
                   <thead>
                     <tr>
-                      <th style="width: 22%">Nama Barang</th>
-                      <th style="width: 11%">HS Code</th>
-                      <th style="width: 13%">Jenis Barang</th>
-                      <th style="width: 8%">Qty</th>
-                      <th style="width: 9%">Satuan</th>
-                      <th style="width: 12%">Harga/Unit (USD)</th>
-                      <th style="width: 9%">Berat (Kg)</th>
-                      <th style="width: 12%">Subtotal (USD)</th>
+                      <th style="width: 26%">Nama Barang</th>
+                      <th style="width: 9%">HS Code</th>
+                      <th style="width: 15%">Jenis Barang</th>
+                      <th style="width: 6%">Qty</th>
+                      <th style="width: 6%">Satuan</th>
+                      <th style="width: 11%">Harga/Unit (USD)</th>
+                      <th style="width: 7%">Netto (Kg)</th>
+                      <th style="width: 7%">Bruto (Kg)</th>
+                      <th style="width: 9%">Subtotal (USD)</th>
                       <th style="width: 4%"></th>
                     </tr>
                   </thead>
@@ -467,8 +490,27 @@
               </div>
               <div class="item-table-foot">
                 <div>Total Qty: <b id="footTotalQty">0</b></div>
-                <div>Total Berat: <b id="footTotalBerat">0</b> Kg</div>
+                <div>Total Netto: <b id="footTotalNetto">0</b> Kg</div>
+                <div>Total Bruto: <b id="footTotalBruto">0</b> Kg</div>
                 <div>Total Nilai: <b id="footTotalUSD">$0.00</b></div>
+              </div>
+
+              <div class="row g-3 mt-3">
+                <div class="col-md-4">
+                  <label class="form-label">Package</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fPackage"
+                    placeholder="cth: 2x40' &amp; 1x20', atau 1 PK"
+                  />
+                </div>
+              </div>
+              <div class="form-text-note mt-1">
+                <i class="bi bi-info-circle"></i> Package menjelaskan
+                kemasan/kontainer untuk keseluruhan pengiriman ini (bukan per
+                barang), misalnya jumlah &amp; ukuran kontainer atau jumlah
+                koli.
               </div>
             </div>
 
@@ -481,10 +523,16 @@
                 <div class="col-md-3">
                   <label class="form-label">Incoterms</label>
                   <select class="form-select" id="fIncoterm">
-                    <option value="FOB">FOB</option>
-                    <option value="CIF">CIF</option>
-                    <option value="CFR">CFR</option>
                     <option value="EXW">EXW</option>
+                    <option value="FCA">FCA</option>
+                    <option value="FAS">FAS</option>
+                    <option value="FOB">FOB</option>
+                    <option value="CFR">CFR</option>
+                    <option value="CIF">CIF</option>
+                    <option value="CPT">CPT</option>
+                    <option value="CIP">CIP</option>
+                    <option value="DAP">DAP</option>
+                    <option value="DPU">DPU</option>
                     <option value="DDP">DDP</option>
                   </select>
                 </div>
@@ -764,6 +812,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

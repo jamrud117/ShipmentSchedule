@@ -149,7 +149,8 @@
       qty: 0,
       satuan: "PCS",
       harga: 0,
-      berat: 0,
+      netto: 0,
+      bruto: 0,
     };
   }
 
@@ -199,6 +200,7 @@
     pph: "pph",
     pi: "pi",
     skb: "skb",
+    package: "package",
   };
   const NUMERIC_FIELDS = [
     "freight",
@@ -257,7 +259,8 @@
       qty: Number(it.qty) || 0,
       satuan: it.satuan || "",
       harga: Number(it.harga) || 0,
-      berat: Number(it.berat) || 0,
+      netto: Number(it.netto) || 0,
+      bruto: Number(it.bruto) || 0,
     };
   }
 
@@ -270,7 +273,8 @@
       qty: Number(row.qty) || 0,
       satuan: row.satuan || "",
       harga: Number(row.harga) || 0,
-      berat: Number(row.berat) || 0,
+      netto: Number(row.netto) || 0,
+      bruto: Number(row.bruto) || 0,
     };
   }
 
@@ -375,6 +379,8 @@
   let draftItems = [];
   let sortDir = "asc";
   let currentDetailId = null;
+  let currentPage = 1;
+  let pageSize = 5;
 
   /* ==================================================================
      DOM SHORTCUTS
@@ -427,17 +433,20 @@
   ================================================================== */
   function itemTotals(shipmentLike) {
     let totalQty = 0,
-      totalBerat = 0,
+      totalNetto = 0,
+      totalBruto = 0,
       totalUSD = 0;
     (shipmentLike.items || []).forEach((it) => {
       const qty = Number(it.qty) || 0,
         harga = Number(it.harga) || 0,
-        berat = Number(it.berat) || 0;
+        netto = Number(it.netto) || 0,
+        bruto = Number(it.bruto) || 0;
       totalQty += qty;
-      totalBerat += berat;
+      totalNetto += netto;
+      totalBruto += bruto;
       totalUSD += qty * harga;
     });
-    return { totalQty, totalBerat, totalUSD };
+    return { totalQty, totalNetto, totalBruto, totalUSD };
   }
 
   // shipmentLike needs: items, incoterm, ndpbm, bm, ppn, pph
@@ -539,6 +548,7 @@
       <div class="actions-col">
         <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="Lihat Detail"><i class="bi bi-eye"></i></button>
         <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="icon-btn" data-action="copyExcel" data-id="${s.id}" title="Salin ke Excel"><i class="bi bi-clipboard"></i></button>
         <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="Hapus"><i class="bi bi-trash3"></i></button>
       </div>`;
   }
@@ -596,7 +606,7 @@
         <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(s.container || "—")}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(s.invoice || "—")}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>
-        <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Berat</div><div class="info-value">${fmtNum(totals.totalBerat)} Kg</div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Netto</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
       </div>
 
       <div class="tag-row">${buildTags(s, totals)}</div>
@@ -699,29 +709,161 @@
     if (filtered.length === 0) {
       cardContainer.innerHTML = "";
       emptyState.classList.remove("d-none");
+      renderPaginationBar(0);
       updateStats();
       return;
     }
     emptyState.classList.add("d-none");
 
     const groups = groupAndSort(filtered);
-    let html = "";
+    const groupByKey = new Map(groups.map((g) => [g.key, g]));
+
+    // Ratakan jadi satu urutan kartu (dipakai untuk potong per halaman),
+    // tapi tetap ingat "key" tanggal grup-nya masing-masing supaya divider
+    // tanggal tetap bisa ditampilkan dengan benar per halaman.
+    const flat = [];
     groups.forEach((g) => {
-      const anyArrived = g.items.every((s) => s.status === "arrived");
-      const label = g.key ? fmtDateLong(g.key) : "Tanggal Tidak Diketahui";
-      html += `
-        <div class="date-section">
-          <span class="date-section-line"></span>
-          <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
-          <span class="date-section-line"></span>
-        </div>`;
-      html += g.items.map(renderCard).join("");
+      g.items.forEach((s) => flat.push({ key: g.key, shipment: s }));
+    });
+
+    const totalPages = Math.max(1, Math.ceil(flat.length / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    const start = (currentPage - 1) * pageSize;
+    const pageSlice = flat.slice(start, start + pageSize);
+
+    let html = "";
+    let lastKey;
+    pageSlice.forEach((entry, idx) => {
+      if (idx === 0 || entry.key !== lastKey) {
+        // anyArrived dihitung dari SELURUH anggota grup (bukan cuma yang
+        // tampil di halaman ini), supaya status badge tanggal konsisten
+        // di halaman berapa pun.
+        const g = groupByKey.get(entry.key);
+        const anyArrived = g
+          ? g.items.every((s) => s.status === "arrived")
+          : false;
+        const label = entry.key
+          ? fmtDateLong(entry.key)
+          : "Tanggal Tidak Diketahui";
+        html += `
+          <div class="date-section">
+            <span class="date-section-line"></span>
+            <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
+            <span class="date-section-line"></span>
+          </div>`;
+      }
+      html += renderCard(entry.shipment);
+      lastKey = entry.key;
     });
     cardContainer.innerHTML = html;
 
+    renderPaginationBar(flat.length);
     fixSelectWidths();
     updateStats();
   }
+
+  /* ==================================================================
+     PAGINATION
+  ================================================================== */
+  function paginationRange(current, total) {
+    const delta = 1;
+    const range = [];
+    const withDots = [];
+    let last;
+    for (let i = 1; i <= total; i++) {
+      if (
+        i === 1 ||
+        i === total ||
+        (i >= current - delta && i <= current + delta)
+      ) {
+        range.push(i);
+      }
+    }
+    range.forEach((i) => {
+      if (last != null) {
+        if (i - last === 2) withDots.push(last + 1);
+        else if (i - last !== 1) withDots.push("...");
+      }
+      withDots.push(i);
+      last = i;
+    });
+    return withDots;
+  }
+
+  function scrollToListTop() {
+    const el = $("#lblSectionList");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderPaginationBar(totalItems) {
+    const bar = $("#paginationBar");
+    if (!bar) return;
+    if (totalItems === 0) {
+      bar.className = "";
+      bar.innerHTML = "";
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const startIdx = (currentPage - 1) * pageSize + 1;
+    const endIdx = Math.min(currentPage * pageSize, totalItems);
+
+    const pageBtns = paginationRange(currentPage, totalPages)
+      .map((p) =>
+        p === "..."
+          ? `<span class="page-ellipsis">…</span>`
+          : `<button type="button" class="page-btn ${p === currentPage ? "active" : ""}" data-page="${p}">${p}</button>`,
+      )
+      .join("");
+
+    bar.className = "pagination-bar";
+    bar.innerHTML = `
+      <div class="pagination-info">Menampilkan <b>${startIdx}–${endIdx}</b> dari <b>${totalItems}</b> pengiriman</div>
+      <div class="pagination-controls">
+        <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="Halaman sebelumnya"><i class="bi bi-chevron-left"></i></button>
+        <div class="page-numbers">${pageBtns}</div>
+        <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="Halaman berikutnya"><i class="bi bi-chevron-right"></i></button>
+      </div>
+      <div class="pagination-size">
+        <label for="pageSizeSelect">Per halaman</label>
+        <select id="pageSizeSelect">
+          ${[5, 10, 20, 50]
+            .map(
+              (n) =>
+                `<option value="${n}" ${n === pageSize ? "selected" : ""}>${n}</option>`,
+            )
+            .join("")}
+        </select>
+      </div>`;
+  }
+
+  $("#paginationBar").addEventListener("click", (e) => {
+    const pageBtn = e.target.closest("[data-page]");
+    if (pageBtn) {
+      currentPage = Number(pageBtn.dataset.page);
+      render();
+      scrollToListTop();
+      return;
+    }
+    if (e.target.closest("#pagePrev")) {
+      currentPage = Math.max(1, currentPage - 1);
+      render();
+      scrollToListTop();
+      return;
+    }
+    if (e.target.closest("#pageNext")) {
+      currentPage = currentPage + 1;
+      render();
+      scrollToListTop();
+    }
+  });
+  $("#paginationBar").addEventListener("change", (e) => {
+    if (e.target.id === "pageSizeSelect") {
+      pageSize = Number(e.target.value) || 5;
+      currentPage = 1;
+      render();
+    }
+  });
 
   function updateStats() {
     const list = currentList();
@@ -800,7 +942,202 @@
     $("#tabExport").classList.toggle("active", mode === "export");
     $("#searchInput").value = "";
     $("#filterStatus").value = "";
+    currentPage = 1;
     render();
+  }
+
+  /* ==================================================================
+     SALIN KE EXCEL (clipboard, format mengikuti IMPORT_FORMAT.xlsx)
+     Kolom yang dihasilkan (urutan tetap, kolom NO & REMARK di excel
+     TIDAK diisi — paste mulai dari kolom IN FACTORY):
+       IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, ITEM, HS CODE,
+       DESCRIPTION, QTY, SAT, AMOUNT, NDPBM, INCOTERMS, FREIGHT,
+       INSURANCE, CIF, FOB RUPIAH, CIF RUPIAH, TARIF, BEA MASUK,
+       PPN 11%, PPH, TOTAL BM+PDRI, PI, FASILITAS/SKB, BL/AWB,
+       NO. INVOICE/DEL.NOTE, VESSEL, PACKAGE
+
+     - Field per-barang (ITEM, HS CODE, DESCRIPTION, QTY, SAT, AMOUNT)
+       diisi di SETIAP baris/barang.
+     - HANYA diisi 1x di baris PERTAMA, dikosongkan di baris berikutnya:
+       IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, NDPBM, INCOTERMS,
+       NO. INVOICE, VESSEL, PACKAGE.
+     - Field biaya/kepabeanan (FREIGHT, INSURANCE, CIF, FOB RUPIAH,
+       CIF RUPIAH, TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI, PI,
+       FASILITAS/SKB) tetap diulang di setiap baris.
+     - TARIF disalin apa adanya (persen, mis. 5 -> "5"), TIDAK dibagi
+       100 — cell TARIF di excel-nya sudah diformat sebagai persen.
+     - VESSEL diisi dari No. Voyage/Flight (nomor pengangkut), BUKAN
+       dari nama vessel/maskapai.
+     - BL/AWB: Master di baris pertama, House di baris KEDUA (numpang
+       di baris barang ke-2 kalau barangnya 2+; kalau barangnya cuma 1,
+       baris ke-2 baru dibuat khusus untuk House, kolom lain kosong).
+     - Kalau barangnya lebih dari satu, tiap barang jadi baris baru.
+  ================================================================== */
+  const EXCEL_MONTHS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  function excelDateFmt(d) {
+    const dt = parseLocalDate(d);
+    if (!dt) return "";
+    return `${dt.getDate()}-${EXCEL_MONTHS[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
+  }
+
+  // Angka polos tanpa pemisah ribuan (biar dikenali Excel sebagai number
+  // saat di-paste), dibulatkan ke sejumlah desimal lalu buang nol di
+  // belakang koma yang tidak perlu.
+  function numClean(n, maxDecimals) {
+    maxDecimals = maxDecimals == null ? 2 : maxDecimals;
+    let num = Number(n);
+    if (!isFinite(num)) num = 0;
+    const parsed = parseFloat(num.toFixed(maxDecimals));
+    return String(parsed === 0 ? 0 : parsed);
+  }
+
+  // Escaping ala TSV: field yang mengandung tab/newline/quote dibungkus
+  // tanda kutip (konvensi yang sama dipakai Excel sendiri saat
+  // copy-paste sel berisi line break/Alt+Enter).
+  function tsvField(val) {
+    val = val == null ? "" : String(val);
+    if (/[\t\n\r"]/.test(val)) {
+      return '"' + val.replace(/"/g, '""') + '"';
+    }
+    return val;
+  }
+
+  function buildExcelCopyRows(s) {
+    const calc = computeCustoms(s);
+    const items = s.items || [];
+
+    const masterBL = (s.masterBL || "").trim();
+    const houseBL = (s.houseBL || "").trim();
+
+    // Index kolom (0-based, lihat urutan 29 kolom di bawah) yang HANYA
+    // diisi 1x di baris pertama pengiriman, dikosongkan di baris
+    // berikutnya: IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, NDPBM,
+    // INCOTERMS, NO. INVOICE, VESSEL, PACKAGE.
+    // BL/AWB (index 25) ditangani terpisah (lihat di bawah), bukan
+    // lewat mekanisme blank-setelah-baris-pertama ini.
+    const FIRST_ROW_ONLY_IDX = [0, 1, 2, 3, 4, 11, 12, 26, 27, 28];
+
+    function buildRowForItem(it, idx) {
+      const cols = [
+        excelDateFmt(s.factoryDate), // 0  IN FACTORY
+        s.docNo || "", // 1  SPPB
+        excelDateFmt(s.docDate), // 2  DATE
+        s.noAju || "", // 3  AJU
+        s.party || "", // 4  SUPPLIER NAME
+        it.jenisBarang || "", // 5  ITEM
+        it.hsCode || "", // 6  HS CODE
+        it.namaBarang || "", // 7  DESCRIPTION
+        numClean(it.qty, 2), // 8  QTY
+        it.satuan || "", // 9  SAT
+        numClean((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 10 AMOUNT
+        numClean(s.ndpbm, 2), // 11 NDPBM
+        s.incoterm || "", // 12 INCOTERMS
+        numClean(s.freight, 2), // 13 FREIGHT
+        numClean(s.insurance, 2), // 14 INSURANCE
+        numClean(calc.cifUsd, 2), // 15 CIF
+        numClean(calc.fobRupiah, 2), // 16 FOB RUPIAH
+        numClean(calc.cifRupiah, 2), // 17 CIF RUPIAH
+        numClean(s.tarif, 2), // 18 TARIF — persen apa adanya, TIDAK dibagi 100
+        numClean(s.bm, 2), // 19 BEA MASUK
+        numClean(s.ppn, 2), // 20 PPN 11%
+        numClean(s.pph, 2), // 21 PPH
+        numClean(calc.bmPdri, 2), // 22 TOTAL BM+PDRI
+        s.pi || "", // 23 PI
+        s.skb || "", // 24 FASILITAS / SKB
+        "", // 25 BL/AWB — diisi terpisah setelah baris-baris ini dibuat
+        s.invoice || "", // 26 NO. INVOICE / DEL.NOTE
+        s.voyage || "", // 27 VESSEL -> No. Voyage/Flight (nomor pengangkut), BUKAN nama vessel
+        s.package || "", // 28 PACKAGE
+      ];
+      if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = ""));
+      return cols;
+    }
+
+    const rows = items.map((it, idx) => buildRowForItem(it, idx));
+
+    // BL/AWB: Master selalu di baris pertama. House ditaruh di baris
+    // KEDUA — kalau barangnya 2+ maka "numpang" di baris barang ke-2
+    // yang sudah ada; kalau barangnya cuma 1 (tidak ada baris ke-2
+    // secara alami), baris ke-2 baru dibuat khusus untuk House (kolom
+    // lain di baris itu dikosongkan).
+    if (rows.length >= 1) rows[0][25] = masterBL;
+    if (houseBL) {
+      if (rows.length >= 2) {
+        rows[1][25] = houseBL;
+      } else {
+        const blankRow = new Array(29).fill("");
+        blankRow[25] = houseBL;
+        rows.push(blankRow);
+      }
+    }
+
+    return rows;
+  }
+
+  function buildExcelCopyText(s) {
+    return buildExcelCopyRows(s)
+      .map((cols) => cols.map(tsvField).join("\t"))
+      .join("\n");
+  }
+
+  async function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  }
+
+  async function handleCopyExcel(id) {
+    const s = currentList().find((x) => x.id === id);
+    if (!s) return;
+    if (!s.items || !s.items.length) {
+      showToast("Tidak ada barang untuk disalin.", "danger");
+      return;
+    }
+    const text = buildExcelCopyText(s);
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      showToast(
+        `${s.items.length} baris barang disalin — tinggal paste mulai dari kolom IN FACTORY di Excel.`,
+        "success",
+      );
+    } else {
+      showToast("Gagal menyalin ke clipboard.", "danger");
+    }
   }
 
   /* ==================================================================
@@ -838,6 +1175,7 @@
     const id = btn.dataset.id;
     if (btn.dataset.action === "edit") openModal(id);
     if (btn.dataset.action === "viewDetail") openDetailView(id);
+    if (btn.dataset.action === "copyExcel") handleCopyExcel(id);
     if (btn.dataset.action === "delete") {
       showConfirm("Hapus jadwal pengiriman ini secara permanen?", async () => {
         try {
@@ -947,7 +1285,8 @@
     $("#calcBMPDRI").value = fmtRp(calc.bmPdri);
 
     $("#footTotalQty").textContent = fmtNum(calc.totalQty);
-    $("#footTotalBerat").textContent = fmtNum(calc.totalBerat);
+    $("#footTotalNetto").textContent = fmtNum(calc.totalNetto);
+    $("#footTotalBruto").textContent = fmtNum(calc.totalBruto);
     $("#footTotalUSD").textContent = fmtUSD(calc.totalUSD);
   }
 
@@ -970,7 +1309,8 @@
         <td><input type="number" step="0.01" min="0" data-f="qty" value="${it.qty}"></td>
         <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="KG/PCS/SET" list="satuanList"></td>
         <td><input type="number" step="0.01" min="0" data-f="harga" value="${it.harga}"></td>
-        <td><input type="number" step="0.01" min="0" data-f="berat" value="${it.berat}"></td>
+        <td><input type="number" step="0.01" min="0" data-f="netto" value="${it.netto}"></td>
+        <td><input type="number" step="0.01" min="0" data-f="bruto" value="${it.bruto}"></td>
         <td><input type="text" class="subtotal" readonly value="${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}"></td>
         <td><button type="button" class="rm-row" data-idx="${idx}" title="Hapus barang ini"><i class="bi bi-x-lg"></i></button></td>
       </tr>
@@ -986,7 +1326,7 @@
     const idx = Number(tr.dataset.idx);
     const field = e.target.dataset.f;
     if (!field) return;
-    draftItems[idx][field] = ["qty", "harga", "berat"].includes(field)
+    draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(field)
       ? Number(e.target.value)
       : e.target.value;
     const subtotalInput = tr.querySelector(".subtotal");
@@ -1015,8 +1355,403 @@
   /* ==================================================================
      OPEN / SAVE EDIT MODAL
   ================================================================== */
+  /* ==================================================================
+     IMPORT DARI EXCEL (dokumen BC mentah: sheet HEADER, ENTITAS,
+     DOKUMEN, PENGANGKUT, KEMASAN, KONTAINER, PUNGUTAN, BARANG, RESPON)
+
+     Mapping utama (sesuai arahan):
+       - No. Aju        <- HEADER.NOMOR AJU
+       - No. SPPB       <- HEADER.NOMOR DAFTAR
+       - Tanggal SPPB   <- RESPON, baris dengan KODE RESPON=2003 -> TANGGAL RESPON
+         (bukan HEADER.TANGGAL DAFTAR)
+       - Incoterms      <- HEADER.KODE INCOTERM
+       - Nama Shipper   <- ENTITAS (KODE ENTITAS=9).NAMA ENTITAS
+       - No. Invoice    <- DOKUMEN (KODE DOKUMEN=380).NOMOR DOKUMEN
+       - Master BL/AWB  <- DOKUMEN (KODE DOKUMEN=740 atau 742).NOMOR DOKUMEN
+       - House BL/AWB   <- DOKUMEN (KODE DOKUMEN=741 atau 743).NOMOR DOKUMEN
+     Sisanya (freight/insurance/ndpbm/pelabuhan/vessel/moda/package/
+     kontainer/BM/PPN/PPH/daftar barang) dipetakan sendiri dari sheet
+     yang relevan; kalau memang tidak ada datanya di file, field itu
+     saja yang dikosongkan/dilewati — field lain yang datanya ada tetap
+     diisi.
+  ================================================================== */
+  function excelSerialToISODate(serial) {
+    const epoch = Date.UTC(1899, 11, 30);
+    const dt = new Date(epoch + Math.round(serial) * 86400000);
+    const y = dt.getUTCFullYear();
+    const m = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(dt.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // Robust terhadap 3 kemungkinan bentuk tanggal dari SheetJS: string ISO
+  // (paling umum di file BC — cell-nya memang teks, bukan date asli),
+  // objek Date asli (kalau cell-nya date beneran), atau angka serial
+  // Excel (fallback kalau cellDates tidak berpengaruh untuk versi file
+  // tertentu).
+  function excelValueToISODate(v) {
+    if (v == null || v === "") return "";
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return "";
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, "0");
+      const d = String(v.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    if (typeof v === "number") return excelSerialToISODate(v);
+    const s = String(v).trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    return "";
+  }
+
+  function excelStr(v) {
+    return v == null ? "" : String(v).trim();
+  }
+  function excelNum(v) {
+    const n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+  function sheetRows(wb, name) {
+    if (!wb.Sheets[name]) return [];
+    return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
+  }
+
+  // Deskripsi barang: URAIAN + Merk/Tipe (kalau bukan placeholder
+  // "TANPA MEREK" / "TANPA TIPE").
+  function buildImportedNamaBarang(row) {
+    let desc = excelStr(row["URAIAN"]);
+    const merek = excelStr(row["MEREK"]);
+    const tipe = excelStr(row["TIPE"]);
+    const isPlaceholder = (v) => !v || /^TANPA\s/i.test(v);
+    const parts = [];
+    if (!isPlaceholder(merek)) parts.push(`Merk: ${merek}`);
+    if (!isPlaceholder(tipe)) parts.push(`Tipe: ${tipe}`);
+    if (parts.length) desc += (desc ? " " : "") + parts.join(", ");
+    return desc.trim();
+  }
+
+  function parseBcExcelWorkbook(wb) {
+    const notes = [];
+    const header = sheetRows(wb, "HEADER")[0] || {};
+    const respon = sheetRows(wb, "RESPON");
+    const entitas = sheetRows(wb, "ENTITAS");
+    const dokumen = sheetRows(wb, "DOKUMEN");
+    const pengangkut = sheetRows(wb, "PENGANGKUT")[0] || {};
+    const kemasan = sheetRows(wb, "KEMASAN");
+    const kontainer = sheetRows(wb, "KONTAINER");
+    const pungutan = sheetRows(wb, "PUNGUTAN");
+    const barang = sheetRows(wb, "BARANG");
+
+    const findDokumen = (...codes) => {
+      const row = dokumen.find((r) =>
+        codes.includes(excelStr(r["KODE DOKUMEN"])),
+      );
+      return row ? excelStr(row["NOMOR DOKUMEN"]) : "";
+    };
+    const findPungutan = (kode) => {
+      const row = pungutan.find(
+        (r) => excelStr(r["KODE JENIS PUNGUTAN"]).toUpperCase() === kode,
+      );
+      return row ? excelNum(row["NILAI PUNGUTAN"]) : null;
+    };
+
+    const shipper = entitas.find((r) => excelStr(r["KODE ENTITAS"]) === "9");
+
+    const kodeCaraAngkut = excelStr(pengangkut["KODE CARA ANGKUT"]);
+    const transport =
+      kodeCaraAngkut === "4" ? "udara" : kodeCaraAngkut === "1" ? "laut" : "";
+
+    const modeHint =
+      header["KODE JENIS EKSPOR"] != null
+        ? "export"
+        : header["KODE JENIS IMPOR"] != null
+          ? "import"
+          : "";
+
+    const packageStr = kemasan
+      .map((r) => {
+        const jml = r["JUMLAH KEMASAN"];
+        const kode = excelStr(r["KODE KEMASAN"]);
+        return [jml != null ? excelNum(jml) : "", kode]
+          .filter((v) => v !== "")
+          .join(" ");
+      })
+      .filter((v) => v)
+      .join(", ");
+
+    const containerStr = kontainer
+      .map((r) => {
+        const no = excelStr(r["NOMOR KONTINER"]);
+        const size = excelStr(r["KODE UKURAN KONTAINER"]);
+        if (!no) return "";
+        return size ? `${no} (${size})` : no;
+      })
+      .filter((v) => v)
+      .join(", ");
+
+    // Tanggal SPPB = TANGGAL RESPON di sheet RESPON, pada baris yang
+    // KODE RESPON-nya = 2003 (kode respon SPPB terbit) — bukan asal
+    // ambil baris terakhir, karena 1 AJU bisa punya beberapa baris
+    // respons dengan kode berbeda. Fallback ke HEADER.TANGGAL DAFTAR
+    // kalau baris kode 2003 tidak ditemukan.
+    const sppbRespon = respon.find(
+      (r) => excelStr(r["KODE RESPON"]) === "2003",
+    );
+    const respTanggal = sppbRespon
+      ? excelValueToISODate(sppbRespon["TANGGAL RESPON"])
+      : "";
+    if (respon.length && !sppbRespon) {
+      notes.push(
+        "Baris respons dengan KODE RESPON=2003 (SPPB terbit) tidak ditemukan di sheet RESPON — Tanggal SPPB fallback ke HEADER.TANGGAL DAFTAR, cek manual.",
+      );
+    }
+
+    const fields = {
+      noAju: excelStr(header["NOMOR AJU"]),
+      docNo: excelStr(header["NOMOR DAFTAR"]),
+      docDate: respTanggal || excelValueToISODate(header["TANGGAL DAFTAR"]),
+      incoterm: excelStr(header["KODE INCOTERM"]).toUpperCase(),
+      party: shipper ? excelStr(shipper["NAMA ENTITAS"]) : "",
+      invoice: findDokumen("380"),
+      masterBL: findDokumen("740", "742"),
+      houseBL: findDokumen("741", "743"),
+      freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
+      insurance:
+        header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
+      ndpbm: header["NDPBM"] != null ? excelNum(header["NDPBM"]) : null,
+      origin: excelStr(header["KODE PELABUHAN MUAT"]),
+      destination: excelStr(header["KODE PELABUHAN TUJUAN"]),
+      actual: excelValueToISODate(header["TANGGAL TIBA"]),
+      etd: excelValueToISODate(header["TANGGAL BERANGKAT"]),
+      vessel: excelStr(pengangkut["NAMA PENGANGKUT"]),
+      voyage: excelStr(pengangkut["NOMOR PENGANGKUT"]),
+      transport,
+      package: packageStr,
+      container: containerStr,
+      bm: findPungutan("BM"),
+      ppn: findPungutan("PPN"),
+      pph: findPungutan("PPH"),
+    };
+
+    // DAFTAR BARANG. Netto biasanya tersedia per barang. Bruto kadang
+    // hanya tersedia agregat di HEADER (tidak per barang) — kalau semua
+    // barang bruto-nya 0 tapi HEADER.BRUTO > 0, taruh nilai HEADER itu
+    // di barang pertama saja (bukan dibagi rata) supaya totalnya benar,
+    // lalu kasih catatan supaya dicek manual.
+    const headerBruto = excelNum(header["BRUTO"]);
+    const itemsRaw = barang.map((row) => ({
+      namaBarang: buildImportedNamaBarang(row),
+      hsCode: excelStr(row["HS"]),
+      satuan: excelStr(row["KODE SATUAN"]),
+      qty: excelNum(row["JUMLAH SATUAN"]),
+      harga: excelNum(row["HARGA SATUAN"]),
+      netto: excelNum(row["NETTO"]),
+      bruto: excelNum(row["BRUTO"]),
+    }));
+    const anyItemBruto = itemsRaw.some((it) => it.bruto > 0);
+    if (!anyItemBruto && headerBruto > 0 && itemsRaw.length) {
+      itemsRaw[0].bruto = headerBruto;
+      notes.push(
+        `Bruto per barang tidak ada di file ini — total Bruto dari HEADER (${fmtNum(headerBruto)} Kg) ditaruh di baris barang pertama, sesuaikan manual per barang kalau perlu.`,
+      );
+    }
+    const items = itemsRaw.map((it) => ({
+      ...newItem(),
+      ...it,
+      jenisBarang: "Bahan Baku",
+    }));
+
+    if (!items.length) {
+      notes.push(
+        "Sheet BARANG kosong/tidak ditemukan — daftar barang tidak terisi otomatis, tambahkan manual.",
+      );
+    }
+    if (!fields.party) {
+      notes.push(
+        "Nama Shipper (KODE ENTITAS=9) tidak ditemukan di sheet ENTITAS.",
+      );
+    }
+    if (!fields.masterBL && !fields.houseBL) {
+      notes.push(
+        "Master/House BL/AWB tidak ditemukan di sheet DOKUMEN (kode 740/741/742/743).",
+      );
+    }
+    if (!transport) {
+      notes.push(
+        "Moda transportasi tidak terdeteksi dari KODE CARA ANGKUT — cek manual di tab Transportasi.",
+      );
+    }
+    if (!fields.bm && findPungutan("BM") == null) {
+      notes.push(
+        "Bea Masuk/PPN/PPH tidak ditemukan di sheet PUNGUTAN — isi manual di tab Kepabeanan.",
+      );
+    }
+
+    return { fields, items, notes, modeHint };
+  }
+
+  function setFieldIfPresent(id, value) {
+    if (value !== "" && value != null) {
+      $("#" + id).value = value;
+      return true;
+    }
+    return false;
+  }
+
+  function applyImportedBcData(parsed) {
+    const f = parsed.fields;
+    const notes = parsed.notes.slice();
+    let filled = 0;
+    const mark = (ok) => {
+      if (ok) filled++;
+      return ok;
+    };
+
+    mark(setFieldIfPresent("fNoAju", f.noAju));
+    mark(setFieldIfPresent("fDocNo", f.docNo));
+    mark(setFieldIfPresent("fDocDate", f.docDate));
+    mark(setFieldIfPresent("fParty", f.party));
+    mark(setFieldIfPresent("fInvoice", f.invoice));
+    mark(setFieldIfPresent("fMasterBL", f.masterBL));
+    mark(setFieldIfPresent("fHouseBL", f.houseBL));
+    mark(setFieldIfPresent("fVessel", f.vessel));
+    mark(setFieldIfPresent("fVoyage", f.voyage));
+    mark(setFieldIfPresent("fContainer", f.container));
+    mark(setFieldIfPresent("fOrigin", f.origin));
+    mark(setFieldIfPresent("fDestination", f.destination));
+    mark(setFieldIfPresent("fActual", f.actual));
+    mark(setFieldIfPresent("fEtd", f.etd));
+    mark(setFieldIfPresent("fPackage", f.package));
+
+    if (f.freight != null) {
+      $("#fFreight").value = f.freight;
+      filled++;
+    }
+    if (f.insurance != null) {
+      $("#fInsurance").value = f.insurance;
+      filled++;
+    }
+    if (f.ndpbm != null) {
+      $("#fNdpbm").value = f.ndpbm;
+      filled++;
+    }
+    if (f.bm != null) {
+      $("#fBM").value = f.bm;
+      filled++;
+    }
+    if (f.ppn != null) {
+      $("#fPPN").value = f.ppn;
+      filled++;
+    }
+    if (f.pph != null) {
+      $("#fPPH").value = f.pph;
+      filled++;
+    }
+
+    if (f.transport) {
+      $("#fTransport").value = f.transport;
+      filled++;
+    }
+
+    if (f.incoterm) {
+      const hasOpt = Array.from($("#fIncoterm").options).some(
+        (o) => o.value === f.incoterm,
+      );
+      if (hasOpt) {
+        $("#fIncoterm").value = f.incoterm;
+        filled++;
+      } else
+        notes.push(
+          `Kode incoterm "${f.incoterm}" dari file tidak ada di pilihan dropdown — pilih manual.`,
+        );
+    }
+
+    if (parsed.items.length) {
+      draftItems = parsed.items;
+    }
+
+    if (parsed.modeHint && parsed.modeHint !== activeMode) {
+      notes.push(
+        `File ini sepertinya dokumen ${parsed.modeHint === "import" ? "IMPORT" : "EXPORT"}, tapi form yang terbuka sekarang mode ${activeMode === "import" ? "IMPORT" : "EXPORT"} — cek lagi sebelum simpan.`,
+      );
+    }
+
+    applyTransportLabels();
+    renderItemTable();
+
+    const summary = `${filled} field & ${parsed.items.length} barang terisi otomatis dari file Excel.`;
+    return { summary, notes };
+  }
+
+  function showImportNotes(summary, notes) {
+    const box = $("#importNotesBox");
+    const summaryEl = $("#importNotesSummary");
+    const list = $("#importNotesList");
+    if (!summary && !notes.length) {
+      box.classList.add("d-none");
+      summaryEl.innerHTML = "";
+      list.innerHTML = "";
+      return;
+    }
+    summaryEl.innerHTML = summary
+      ? `<i class="bi bi-check-circle-fill"></i> ${escapeHtml(summary)}`
+      : "";
+    list.innerHTML = notes.map((n) => `<li>${escapeHtml(n)}</li>`).join("");
+    box.classList.remove("d-none");
+  }
+
+  $("#btnImportExcel").addEventListener("click", () => {
+    $("#fileImportExcel").value = "";
+    $("#fileImportExcel").click();
+  });
+
+  $("#fileImportExcel").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const btn = $("#btnImportExcel");
+    const originalHtml = btn.innerHTML;
+    btn.classList.add("is-loading");
+    btn.disabled = true;
+    btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Membaca file...`;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
+      const missing = ["HEADER", "BARANG"].filter((n) => !wb.Sheets[n]);
+      if (missing.length) {
+        showToast(
+          `File ini bukan format dokumen BC yang dikenali (sheet ${missing.join(", ")} tidak ada).`,
+          "danger",
+        );
+        return;
+      }
+      const parsed = parseBcExcelWorkbook(wb);
+      const { summary, notes } = applyImportedBcData(parsed);
+      showImportNotes(summary, notes);
+      showToast(
+        `${summary}${notes.length ? " Ada catatan yang perlu dicek di atas form." : ""}`,
+        notes.length ? "warning" : "success",
+      );
+    } catch (err) {
+      console.error(err);
+      showToast(
+        "Gagal membaca file Excel ini. Pastikan formatnya sesuai export dokumen BC (HEADER/BARANG/dst).",
+        "danger",
+      );
+    } finally {
+      btn.classList.remove("is-loading");
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  });
+
   function openModal(id) {
     const lbl = ML();
+    $("#importNotesBox").classList.add("d-none");
+    $("#importNotesSummary").innerHTML = "";
+    $("#importNotesList").innerHTML = "";
     $("#lblDocNo").textContent = lbl.docNo;
     $("#lblDocDate").textContent = lbl.docDate;
     $("#lblParty").textContent = lbl.party;
@@ -1067,6 +1802,7 @@
       $("#fPPH").value = s.pph || "";
       $("#fPI").value = s.pi || "";
       $("#fSKB").value = s.skb || (activeMode === "import" ? "PPH" : "");
+      $("#fPackage").value = s.package || "";
       draftItems = JSON.parse(
         JSON.stringify(s.items && s.items.length ? s.items : [newItem()]),
       );
@@ -1100,6 +1836,7 @@
         "fPPN",
         "fPPH",
         "fPI",
+        "fPackage",
       ].forEach((fid) => ($("#" + fid).value = ""));
       $("#fMuatan").value = "";
       $("#fTransport").value = "laut";
@@ -1159,6 +1896,7 @@
       pph: Number($("#fPPH").value) || 0,
       pi: $("#fPI").value.trim(),
       skb: $("#fSKB").value.trim(),
+      package: $("#fPackage").value.trim(),
     };
 
     const btn = $("#btnSaveShipment");
@@ -1203,11 +1941,12 @@
         <td>${escapeHtml(it.namaBarang)}</td>
         <td>${escapeHtml(it.hsCode || "—")}</td>
         <td>${escapeHtml(it.jenisBarang || "—")}</td>
-        <td class="text-end">${fmtNum(it.qty)}</td>
-        <td>${escapeHtml(it.satuan || "—")}</td>
-        <td class="text-end">${fmtUSD(it.harga)}</td>
-        <td class="text-end">${fmtNum(it.berat)} Kg</td>
-        <td class="text-end">${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}</td>
+        <td class="text-center">${fmtNum(it.qty)}</td>
+        <td class="text-center">${escapeHtml(it.satuan || "—")}</td>
+        <td class="text-center">${fmtUSD(it.harga)}</td>
+        <td class="text-center">${fmtNum(it.netto)} Kg</td>
+        <td class="text-center">${fmtNum(it.bruto)} Kg</td>
+        <td class="text-center">${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}</td>
       </tr>`,
       )
       .join("");
@@ -1290,15 +2029,21 @@
       <div class="item-table-wrap mb-2">
         <table class="item-table">
           <thead><tr>
-            <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th><th>Qty</th><th>Satuan</th><th>Harga/Unit</th><th>Berat</th><th>Subtotal</th>
+            <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th>
+            <th class="text-center">Qty</th><th class="text-center">Satuan</th><th class="text-center">Harga/Unit</th>
+            <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">Subtotal</th>
           </tr></thead>
           <tbody>${itemRows}</tbody>
         </table>
       </div>
-      <div class="item-table-foot mb-4">
-        <div>Total Qty: <b>${fmtNum(calc.totalQty)}</b></div>
-        <div>Total Berat: <b>${fmtNum(calc.totalBerat)}</b> Kg</div>
-        <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>
+      <div class="item-table-foot item-table-foot--split mb-3">
+        <div class="foot-package">${s.package ? `<i class="bi bi-box-seam"></i> Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
+        <div class="foot-totals">
+          <div>Total Qty: <b>${fmtNum(calc.totalQty)}</b></div>
+          <div>Total Netto: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
+          <div>Total Bruto: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
+          <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>
+        </div>
       </div>
 
       ${customsHtml}
@@ -1322,10 +2067,17 @@
   /* ==================================================================
      FILTERS
   ================================================================== */
-  $("#searchInput").addEventListener("input", render);
-  $("#filterStatus").addEventListener("change", render);
+  $("#searchInput").addEventListener("input", () => {
+    currentPage = 1;
+    render();
+  });
+  $("#filterStatus").addEventListener("change", () => {
+    currentPage = 1;
+    render();
+  });
   $("#sortDir").addEventListener("change", (e) => {
     sortDir = e.target.value;
+    currentPage = 1;
     render();
   });
 
