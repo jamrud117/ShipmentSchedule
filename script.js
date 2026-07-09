@@ -154,6 +154,18 @@
     };
   }
 
+  function newStop() {
+    return {
+      id: uid("st"),
+      terminal: "",
+      transport: "laut",
+      vessel: "",
+      voyage: "",
+      arrivalDate: "",
+      departureDate: "",
+    };
+  }
+
   /* ==================================================================
      DATA (dimuat dari Supabase saat startup — lihat loadShipments())
   ================================================================== */
@@ -201,6 +213,7 @@
     pi: "pi",
     skb: "skb",
     package: "package",
+    routeType: "route_type",
   };
   const NUMERIC_FIELDS = [
     "freight",
@@ -247,6 +260,12 @@
       s[camel] = val;
     });
     s.items = (row.items || []).map(rowToItem);
+    // Terminal transit diurutkan berdasar "seq" di sini (bukan lewat query
+    // Supabase) supaya tidak bergantung pada dukungan order-by-embedded-
+    // resource versi supabase-js tertentu — lebih aman & predictable.
+    s.routeStops = (row.routeStops || [])
+      .map(rowToStop)
+      .sort((a, b) => a.seq - b.seq);
     return s;
   }
 
@@ -278,13 +297,41 @@
     };
   }
 
+  // Terminal transit (shipment_route_stops) — field transport/vessel/voyage
+  // pada 1 baris menjelaskan leg yang MEMBAWA barang TIBA di terminal itu.
+  function stopToRow(st, shipmentId, seq) {
+    return {
+      shipment_id: shipmentId,
+      seq: seq,
+      terminal: st.terminal || "",
+      transport: st.transport || "laut",
+      vessel: st.vessel || "",
+      voyage: st.voyage || "",
+      arrival_date: st.arrivalDate || null,
+      departure_date: st.departureDate || null,
+    };
+  }
+
+  function rowToStop(row) {
+    return {
+      id: row.id,
+      seq: Number(row.seq) || 1,
+      terminal: row.terminal || "",
+      transport: row.transport || "laut",
+      vessel: row.vessel || "",
+      voyage: row.voyage || "",
+      arrivalDate: row.arrival_date || "",
+      departureDate: row.departure_date || "",
+    };
+  }
+
   /* ==================================================================
      CRUD KE SUPABASE
   ================================================================== */
   async function loadShipments() {
     const { data: rows, error } = await supabaseClient
       .from("shipments")
-      .select("*, items:shipment_items(*)")
+      .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)")
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -312,7 +359,7 @@
       </div>`;
   }
 
-  async function createShipment(payload, items) {
+  async function createShipment(payload, items, stops) {
     const row = shipmentToRow(payload);
     row.mode = activeMode;
     const { data: inserted, error } = await supabaseClient
@@ -328,10 +375,17 @@
         .insert(itemRows);
       if (itemErr) throw itemErr;
     }
+    if (stops && stops.length) {
+      const stopRows = stops.map((st, i) => stopToRow(st, inserted.id, i + 1));
+      const { error: stopErr } = await supabaseClient
+        .from("shipment_route_stops")
+        .insert(stopRows);
+      if (stopErr) throw stopErr;
+    }
     return inserted;
   }
 
-  async function updateShipmentRecord(id, payload, items) {
+  async function updateShipmentRecord(id, payload, items, stops) {
     const row = shipmentToRow(payload);
     const { error } = await supabaseClient
       .from("shipments")
@@ -353,6 +407,24 @@
         .from("shipment_items")
         .insert(itemRows);
       if (insErr) throw insErr;
+    }
+
+    // Sama persis dengan pola daftar barang di atas: hapus semua terminal
+    // transit lama, lalu masukkan ulang daftar yang berlaku sekarang. Kalau
+    // route_type = "direct", "stops" yang dikirim ke sini sudah dikosongkan
+    // duluan oleh pemanggilnya, jadi baris lama otomatis ikut terhapus.
+    const { error: delStopErr } = await supabaseClient
+      .from("shipment_route_stops")
+      .delete()
+      .eq("shipment_id", id);
+    if (delStopErr) throw delStopErr;
+
+    if (stops && stops.length) {
+      const stopRows = stops.map((st, i) => stopToRow(st, id, i + 1));
+      const { error: insStopErr } = await supabaseClient
+        .from("shipment_route_stops")
+        .insert(stopRows);
+      if (insStopErr) throw insStopErr;
     }
   }
 
@@ -377,6 +449,7 @@
 
   let activeMode = "import";
   let draftItems = [];
+  let draftStops = [];
   let sortDir = "asc";
   let currentDetailId = null;
   let currentPage = 1;
@@ -396,6 +469,8 @@
   const detailViewModal = new bootstrap.Modal(detailViewModalEl);
   const confirmModalEl = $("#confirmModal");
   const confirmModal = new bootstrap.Modal(confirmModalEl);
+  const bulkModalEl = $("#bulkModal");
+  const bulkModal = new bootstrap.Modal(bulkModalEl);
 
   function currentList() {
     return data[activeMode];
@@ -488,10 +563,243 @@
     let frac = (today - etd) / (eta - etd);
     return Math.min(0.96, Math.max(0.06, frac));
   }
-  function transportIcon(s) {
-    const air = s.transport === "udara";
-    if (s.status === "arrived") return air ? "🛬" : "⚓";
+  function iconForMode(mode, status) {
+    const air = mode === "udara";
+    if (status === "arrived") return air ? "🛬" : "⚓";
     return air ? "✈️" : "🚢";
+  }
+
+  /* ==================================================================
+     RUTE TRANSIT (multi-terminal)
+     Kalau route_type !== "transit" atau tidak ada routeStops sama sekali,
+     semua fungsi di bawah ini otomatis "collapse" jadi 1 leg
+     origin -> destination — PERSIS seperti shipment direct sebelumnya,
+     tidak ada perubahan tampilan/perilaku untuk data lama.
+
+     Field transport/vessel/voyage pada 1 baris shipment_route_stops
+     menjelaskan alat angkut yang MEMBAWA barang TIBA di terminal
+     tersebut (bukan leg berikutnya). Leg TERAKHIR (dari terminal transit
+     paling akhir menuju s.destination) tetap memakai
+     s.transport / s.vessel / s.voyage — field yang sudah ada dari dulu.
+  ================================================================== */
+  function routeStopList(s) {
+    return Array.isArray(s.routeStops) ? s.routeStops : [];
+  }
+  function isTransitRoute(s) {
+    return s.routeType === "transit" && routeStopList(s).length > 0;
+  }
+
+  // Susun titik-titik rute secara urut: asal -> tiap terminal transit -> tujuan.
+  function buildRouteNodes(s) {
+    const nodes = [{ kind: "origin", terminal: s.origin, date: s.etd }];
+    routeStopList(s).forEach((st) => {
+      nodes.push({
+        kind: "stop",
+        terminal: st.terminal,
+        arrivalDate: st.arrivalDate,
+        departureDate: st.departureDate,
+        date: st.arrivalDate || st.departureDate || "",
+        transport: st.transport,
+        vessel: st.vessel,
+        voyage: st.voyage,
+      });
+    });
+    nodes.push({ kind: "destination", terminal: s.destination, date: s.eta });
+    return nodes;
+  }
+
+  // Ubah tanggal tiap titik jadi posisi 0..1 di sepanjang lane. Titik yang
+  // tanggalnya kosong diisi otomatis lewat interpolasi linear terhadap
+  // titik bertanggal terdekat kiri/kanan. Kalau rentang keseluruhan tidak
+  // valid (sama/mundur), semua titik disebar rata berdasar urutan saja —
+  // konsisten dengan cara laneProgress() menangani etd/eta yang tidak
+  // valid (fallback ke nilai tetap, bukan NaN).
+  function computeNodeFractions(nodes) {
+    const n = nodes.length;
+    const times = nodes.map((nd) => {
+      const dt = parseLocalDate(nd.date);
+      return dt ? dt.getTime() : null;
+    });
+    if (times[0] == null) times[0] = 0;
+    if (times[n - 1] == null) times[n - 1] = times[0] + 1;
+
+    for (let i = 1; i < n - 1; i++) {
+      if (times[i] != null) continue;
+      let left = i - 1;
+      while (left > 0 && times[left] == null) left--;
+      let right = i + 1;
+      while (right < n - 1 && times[right] == null) right++;
+      const span = right - left || 1;
+      const frac = (i - left) / span;
+      times[i] = times[left] + (times[right] - times[left]) * frac;
+    }
+
+    const minT = times[0];
+    const maxT = times[n - 1];
+    let fractions;
+    if (!isFinite(maxT - minT) || maxT <= minT) {
+      fractions = nodes.map((_, i) => i / (n - 1));
+    } else {
+      fractions = times.map((t) =>
+        Math.min(1, Math.max(0, (t - minT) / (maxT - minT))),
+      );
+    }
+    // Jaga urutan selalu maju supaya titik di rute tidak pernah terlihat
+    // mundur ke kiri walau ada input tanggal yang keliru.
+    for (let i = 1; i < n; i++) {
+      if (fractions[i] < fractions[i - 1]) fractions[i] = fractions[i - 1];
+    }
+    return fractions;
+  }
+
+  // Leg mana yang sedang berjalan sekarang, berdasar posisi progress
+  // keseluruhan (laneProgress) terhadap fraksi tiap titik.
+  function activeLegIndex(fractions, progress) {
+    let idx = 0;
+    for (let i = 0; i < fractions.length - 1; i++) {
+      if (progress >= fractions[i]) idx = i;
+    }
+    return idx;
+  }
+
+  // Alat angkut yang dipakai utk 1 leg tertentu. Leg terakhir (menuju
+  // destination) selalu pakai field shipments.* yang sudah ada; leg
+  // lainnya pakai field milik titik TUJUAN leg tsb (lihat catatan di atas).
+  function transportForLeg(s, nodes, legIndex) {
+    const lastLegIndex = nodes.length - 2;
+    if (legIndex >= lastLegIndex) {
+      return { mode: s.transport, vessel: s.vessel, voyage: s.voyage };
+    }
+    const arrivingNode = nodes[legIndex + 1];
+    return {
+      mode: arrivingNode.transport || s.transport,
+      vessel: arrivingNode.vessel,
+      voyage: arrivingNode.voyage,
+    };
+  }
+
+  // Satu fungsi terpusat dipakai baik saat render awal card maupun saat
+  // refresh posisi berkala (refreshLanePositions) — single source of truth.
+  function computeLaneModel(s) {
+    const nodes = buildRouteNodes(s);
+    const fractions = computeNodeFractions(nodes);
+    const progress = laneProgress(s);
+    const legIdx = activeLegIndex(fractions, progress);
+    const leg = transportForLeg(s, nodes, legIdx);
+    const icon = iconForMode(leg.mode, s.status);
+    return { nodes, fractions, progress, legIdx, leg, icon };
+  }
+
+  // Teks rute lengkap (dipakai di info-grid card & detail view).
+  function routeChainText(s) {
+    if (!isTransitRoute(s)) {
+      return `${dispVal(s.origin)} → ${dispVal(s.destination)}`;
+    }
+    const names = [
+      s.origin,
+      ...routeStopList(s).map((st) => st.terminal),
+      s.destination,
+    ];
+    return names.map((nm) => dispVal(nm)).join(" → ");
+  }
+
+  function laneNodeTitle(nd) {
+    const parts = [dispVal(nd.terminal)];
+    if (nd.kind === "stop") {
+      if (nd.arrivalDate) parts.push("Tiba " + fmtDate(nd.arrivalDate));
+      if (nd.departureDate)
+        parts.push("Berangkat " + fmtDate(nd.departureDate));
+      if (hasMeaningfulValue(nd.vessel))
+        parts.push(
+          (nd.transport === "udara" ? "Pesawat " : "Vessel ") + nd.vessel,
+        );
+      if (hasMeaningfulValue(nd.voyage))
+        parts.push(
+          (nd.transport === "udara" ? "No. Flight " : "No. Voyage ") +
+            nd.voyage,
+        );
+    } else {
+      parts.push(fmtDate(nd.date));
+    }
+    return escapeAttr(parts.join(" · "));
+  }
+
+  // Render seluruh isi ".lane" (judul + track + label tanggal). Untuk
+  // shipment direct (2 titik) outputnya PERSIS sama seperti sebelumnya;
+  // untuk transit (>2 titik) menampilkan seluruh terminal + leg aktif.
+  // Cegah label antar terminal saling tumpuk kalau tanggalnya berdekatan
+  // (atau bahkan sama persis): label yang jaraknya terlalu dekat dengan
+  // label terakhir di baris atas otomatis digeser ke baris ke-2.
+  function assignLabelRows(fractions) {
+    const MIN_GAP = 0.12;
+    const lastInRow = [-Infinity, -Infinity];
+    return fractions.map((f) => {
+      const row = f - lastInRow[0] >= MIN_GAP ? 0 : 1;
+      lastInRow[row] = f;
+      return row;
+    });
+  }
+
+  function buildLaneHtml(s) {
+    const lane = computeLaneModel(s);
+    const { nodes, fractions, progress, icon } = lane;
+    const laneClass =
+      s.status === "delayed"
+        ? "is-delayed"
+        : s.status === "process"
+          ? "is-process"
+          : "";
+    const sailing = s.status === "transit" ? "sailing" : "";
+    const multi = nodes.length > 2;
+
+    const dotsHtml = nodes
+      .map((nd, i) => {
+        const kindClass =
+          i === 0 ? "origin" : i === nodes.length - 1 ? "destination" : "stop";
+        const reached = fractions[i] <= progress + 0.0001 ? " reached" : "";
+        return `<div class="port-node ${kindClass}${reached}" style="left:${fractions[i] * 100}%" title="${laneNodeTitle(nd)}"></div>`;
+      })
+      .join("");
+
+    const labelRows = multi ? assignLabelRows(fractions) : [];
+    const labelsHtml = !multi
+      ? `
+        <div class="port-labels">
+          <div class="p">ETD <b>${fmtDate(s.etd)}</b></div>
+          <div class="p text-end">ETA <b>${fmtDate(s.eta)}</b></div>
+        </div>`
+      : `
+        <div class="port-labels port-labels--multi">
+          ${nodes
+            .map((nd, i) => {
+              const align =
+                i === 0 ? "start" : i === nodes.length - 1 ? "end" : "center";
+              const top = labelRows[i] * 36;
+              return `<div class="p p--node p--${align}" style="left:${fractions[i] * 100}%; top:${top}px">
+                <span class="p-term" title="${escapeAttr(dispVal(nd.terminal))}">${escapeHtml(dispVal(nd.terminal))}</span>
+                <b>${fmtDate(nd.date)}</b>
+              </div>`;
+            })
+            .join("")}
+        </div>`;
+
+    let delayFlag = "";
+    const today = new Date();
+    const etaDate = parseLocalDate(s.eta);
+    if (!s.actual && s.status !== "arrived" && etaDate && today > etaDate) {
+      const d = daysBetween(etaDate, today);
+      delayFlag = `<div class="delay-flag"><i class="bi bi-exclamation-triangle-fill"></i> Melewati ETA ${d} hari</div>`;
+    }
+
+    return `
+      <div class="lane-title mt-3">Progres Pengiriman</div>
+      <div class="lane-track ${laneClass}">
+        <div class="lane-fill" style="width:${progress * 100}%"></div>
+        ${dotsHtml}
+        <div class="ship-marker ${sailing}" style="left:${progress * 100}%">${icon}</div>
+      </div>
+      ${labelsHtml}
+      ${delayFlag}`;
   }
 
   /* ==================================================================
@@ -522,8 +830,20 @@
       : renderExpandedCard(s);
   }
 
+  function hasMeaningfulValue(v) {
+    const t = (v || "").toString().trim();
+    return t !== "" && t !== "-";
+  }
+
+  // Display fallback for free-text fields: treats "-" the same as empty,
+  // showing the placeholder dash instead of a literal "-" typed by the user.
+  function dispVal(v) {
+    return hasMeaningfulValue(v) ? v : "—";
+  }
+
   function buildTags(s, totals) {
     const lbl = ML();
+    const stopCount = routeStopList(s).length;
     return [
       s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
       totals.totalUSD
@@ -532,10 +852,13 @@
       s.muatan
         ? `<span class="tag tag-muatan">${escapeHtml(s.muatan)}</span>`
         : "",
-      lbl.showDuty && s.pi
+      isTransitRoute(s)
+        ? `<span class="tag tag-transit"><i class="bi bi-signpost-split"></i> Transit · ${stopCount} Stop</span>`
+        : "",
+      lbl.showDuty && hasMeaningfulValue(s.pi)
         ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI</span>`
         : "",
-      lbl.showDuty && s.skb
+      lbl.showDuty && hasMeaningfulValue(s.skb)
         ? `<span class="tag tag-skb">SKB ${escapeHtml(s.skb)}</span>`
         : "",
     ]
@@ -569,30 +892,13 @@
     const lbl = ML();
     const totals = itemTotals(s);
     const itemCount = (s.items || []).length;
-    const progress = laneProgress(s);
-    const laneClass =
-      s.status === "delayed"
-        ? "is-delayed"
-        : s.status === "process"
-          ? "is-process"
-          : "";
-    const shipIcon = transportIcon(s);
-    const sailing = s.status === "transit" ? "sailing" : "";
-
-    let delayFlag = "";
-    const today = new Date();
-    const etaDate = parseLocalDate(s.eta);
-    if (!s.actual && s.status !== "arrived" && etaDate && today > etaDate) {
-      const d = daysBetween(etaDate, today);
-      delayFlag = `<div class="delay-flag"><i class="bi bi-exclamation-triangle-fill"></i> Melewati ETA ${d} hari</div>`;
-    }
 
     return `
     <div class="ship-card ship-card--${s.status}" data-id="${s.id}">
       <div class="ship-card-top">
         <div class="ship-title-block">
-          <div class="item-name">${escapeHtml(s.party || "—")} · ${itemCount} Barang</div>
-          <div class="po-code">${lbl.docNo}: ${escapeHtml(s.docNo || "—")} &nbsp;•&nbsp; No. Aju: ${escapeHtml(s.noAju || "—")}</div>
+          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} Barang</div>
+          <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
         </div>
         <div class="ship-actions-block">
           ${statusSelectHtml(s)}
@@ -601,10 +907,10 @@
       </div>
 
       <div class="info-grid">
-        <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> Rute</div><div class="info-value">${escapeHtml(s.origin || "—")} → ${escapeHtml(s.destination || "—")}</div></div>
-        <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${s.transport === "udara" ? "Pesawat" : "Vessel"}</div><div class="info-value">${escapeHtml(s.vessel || "—")}<br><span class="muted-value">${s.transport === "udara" ? "No. Flight" : "Voyage"} ${escapeHtml(s.voyage || "—")}</span></div></div>
-        <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(s.container || "—")}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
-        <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(s.invoice || "—")}</div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> Rute</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
+        <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${s.transport === "udara" ? "Pesawat" : "Vessel"}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${s.transport === "udara" ? "No. Flight" : "Voyage"} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Netto</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
       </div>
@@ -612,18 +918,7 @@
       <div class="tag-row">${buildTags(s, totals)}</div>
 
       <div class="lane">
-        <div class="lane-title mt-3">Progres Pengiriman</div>
-        <div class="lane-track ${laneClass}">
-          <div class="lane-fill" style="width:${progress * 100}%"></div>
-          <div class="port-node origin"></div>
-          <div class="ship-marker ${sailing}" style="left:${progress * 100}%">${shipIcon}</div>
-          <div class="port-node destination"></div>
-        </div>
-        <div class="port-labels">
-          <div class="p">ETD <b>${fmtDate(s.etd)}</b></div>
-          <div class="p text-end">ETA <b>${fmtDate(s.eta)}</b></div>
-        </div>
-        ${delayFlag}
+        ${buildLaneHtml(s)}
       </div>
 
       <div class="date-strip">
@@ -641,8 +936,8 @@
       <div class="collapsed-row">
         <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
         <div class="collapsed-main">
-          <div class="collapsed-party">${escapeHtml(s.party || "—")}</div>
-          <div class="collapsed-meta">Invoice <b>${escapeHtml(s.invoice || "—")}</b> &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(s.factoryDate)}</b></div>
+          <div class="collapsed-party">${escapeHtml(dispVal(s.party))}</div>
+          <div class="collapsed-meta">Invoice <b>${escapeHtml(dispVal(s.invoice))}</b> &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(s.factoryDate)}</b></div>
         </div>
         <div class="ship-actions-block">
           ${statusSelectHtml(s)}
@@ -917,16 +1212,29 @@
     $$(".status-select", cardContainer).forEach(sizeSelectToContent);
   }
 
-  /* ---- Lightweight periodic refresh: only move markers/fill, keep DOM/focus intact ---- */
+  /* ---- Lightweight periodic refresh: only move markers/fill, keep DOM/focus intact ----
+     Posisi titik terminal (port-node) sendiri tidak perlu digeser ulang di
+     sini karena posisinya tetap (berdasar tanggal masing-masing terminal,
+     bukan "hari ini"). Yang perlu diperbarui tiap tick cuma: lebar fill,
+     posisi ship-marker, ikon leg yang sedang aktif (bisa berpindah moda di
+     tengah transit), dan status "reached" tiap titik. */
   function refreshLanePositions() {
     currentList().forEach((s) => {
       const card = cardContainer.querySelector(`.ship-card[data-id="${s.id}"]`);
       if (!card) return;
-      const progress = laneProgress(s);
+      const lane = computeLaneModel(s);
       const fill = card.querySelector(".lane-fill");
       const marker = card.querySelector(".ship-marker");
-      if (fill) fill.style.width = progress * 100 + "%";
-      if (marker) marker.style.left = progress * 100 + "%";
+      if (fill) fill.style.width = lane.progress * 100 + "%";
+      if (marker) {
+        marker.style.left = lane.progress * 100 + "%";
+        marker.textContent = lane.icon;
+        marker.classList.toggle("sailing", s.status === "transit");
+      }
+      $$(".port-node", card).forEach((dot, i) => {
+        const reached = lane.fractions[i] <= lane.progress + 0.0001;
+        dot.classList.toggle("reached", reached);
+      });
     });
   }
   setInterval(refreshLanePositions, 60000);
@@ -993,15 +1301,241 @@
     return `${dt.getDate()}-${EXCEL_MONTHS[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
   }
 
-  // Angka polos tanpa pemisah ribuan (biar dikenali Excel sebagai number
-  // saat di-paste), dibulatkan ke sejumlah desimal lalu buang nol di
-  // belakang koma yang tidak perlu.
-  function numClean(n, maxDecimals) {
-    maxDecimals = maxDecimals == null ? 2 : maxDecimals;
+  function roundNum(n, decimals) {
+    decimals = decimals == null ? 2 : decimals;
     let num = Number(n);
     if (!isFinite(num)) num = 0;
-    const parsed = parseFloat(num.toFixed(maxDecimals));
-    return String(parsed === 0 ? 0 : parsed);
+    return parseFloat(num.toFixed(decimals));
+  }
+
+  // Ambil angka DEPAN saja dari field Package bebas-teks (mis. "1 BX"
+  // -> 1, "2*40 & 1*20" -> 2), tanpa satuan/kode kemasannya. null kalau
+  // tidak ada angka di depan sama sekali.
+  function extractLeadingNumber(str) {
+    const s = String(str || "").trim();
+    const m = s.match(/^(-?\d+(?:[.,]\d+)?)/);
+    if (!m) return null;
+    return parseFloat(m[1].replace(",", "."));
+  }
+
+  // Dua "formatter" dengan aturan kolom yang SAMA PERSIS (urutan, first-
+  // row-only, zeroing fasilitas, dsb — lihat buildExcelCopyRows &
+  // buildExportCopyRows), tapi beda representasi nilai akhirnya:
+  //
+  // - clipboardFormatter: dipakai tombol "Salin ke Excel" (copy 1
+  //   pengiriman ke clipboard sebagai plain text/TSV). Angka jadi STRING
+  //   koma-desimal (locale ID) supaya saat di-paste, Excel mengenalinya
+  //   sebagai Number asli (bukan Text) — format $/Rp yang sudah ada di
+  //   kolom excel tetap berfungsi. Tanggal jadi teks "D-MMM-YY". TARIF
+  //   apa adanya (persen, TIDAK dibagi 100) karena mengandalkan cell
+  //   tujuan yang sudah diformat persen sendiri oleh Yogi.
+  // - nativeFormatter: dipakai fitur Bulk Export (bikin file .xlsx asli
+  //   dari nol lewat SheetJS). Angka jadi Number asli, tanggal jadi Date
+  //   asli, TARIF jadi PECAHAN (mis. 5 -> 0.05) karena kita yang
+  //   men-set format cell-nya sendiri jadi persen — SAMA seperti
+  //   bagaimana TARIF tersimpan di IMPORT_FORMAT.xlsx.
+  const clipboardFormatter = {
+    text: (v) => (v == null ? "" : String(v)),
+    num: (n, decimals) => {
+      const r = roundNum(n, decimals);
+      return String(r === 0 ? 0 : r).replace(".", ",");
+    },
+    date: (d) => excelDateFmt(d),
+    tarif: (percent) => clipboardFormatter.num(percent, 2),
+    packageNum: (pkg) => {
+      const n = extractLeadingNumber(pkg);
+      return n == null ? "" : clipboardFormatter.num(n, 2);
+    },
+    blank: "",
+  };
+  const nativeFormatter = {
+    text: (v) => (v == null ? "" : String(v)),
+    num: (n, decimals) => roundNum(n, decimals),
+    date: (d) => parseLocalDate(d) || "",
+    tarif: (percent) => roundNum((Number(percent) || 0) / 100, 4),
+    packageNum: (pkg) => {
+      const n = extractLeadingNumber(pkg);
+      return n == null ? "" : roundNum(n, 2);
+    },
+    blank: "",
+  };
+
+  /* ==================================================================
+     SALIN KE EXCEL / BULK EXPORT — MODE IMPORT
+     (clipboard 1 pengiriman ATAU baris untuk file bulk, formatter yang
+     membedakan; format kolom mengikuti IMPORT_FORMAT.xlsx)
+     Kolom yang dihasilkan (urutan tetap, TANPA kolom NO & REMARK — itu
+     ditambahkan terpisah oleh pemanggil, lihat buildBulkRowsForShipment):
+       IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, ITEM, HS CODE,
+       DESCRIPTION, QTY, SAT, AMOUNT, NDPBM, INCOTERMS, FREIGHT,
+       INSURANCE, CIF, FOB RUPIAH, CIF RUPIAH, TARIF, BEA MASUK,
+       PPN 11%, PPH, TOTAL BM+PDRI, PI, FASILITAS/SKB, BL/AWB,
+       NO. INVOICE/DEL.NOTE, VESSEL, PACKAGE
+
+     - Field per-barang (ITEM, HS CODE, DESCRIPTION, QTY, SAT, AMOUNT)
+       diisi di SETIAP baris/barang.
+     - HANYA diisi 1x di baris PERTAMA, dikosongkan di baris berikutnya:
+       IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, NDPBM, INCOTERMS,
+       TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI, FASILITAS/SKB,
+       NO. INVOICE, VESSEL, PACKAGE.
+     - Field yang tetap diulang di setiap baris: FREIGHT, INSURANCE, CIF,
+       FOB RUPIAH, CIF RUPIAH, PI.
+     - BEA MASUK/PPN/PPH/TOTAL BM+PDRI disalin PERSIS sesuai nilai yang
+       tampil di card/detail (lihat computeCustoms): TOTAL BM+PDRI = 0
+       kalau BEA MASUK = 0, selain itu = BEA MASUK + PPN + PPH. TIDAK
+       tergantung isi Fasilitas SKB.
+     - VESSEL diisi dari No. Voyage/Flight (nomor pengangkut), BUKAN
+       dari nama vessel/maskapai.
+     - PACKAGE: angka depan saja, tanpa satuan/kode kemasan.
+     - BL/AWB: Master di baris pertama, House di baris KEDUA (numpang
+       di baris barang ke-2 kalau barangnya 2+; kalau barangnya cuma 1,
+       baris ke-2 baru dibuat khusus untuk House, kolom lain kosong).
+     - Kalau barangnya lebih dari satu, tiap barang jadi baris baru.
+  ================================================================== */
+  function buildExcelCopyRows(s, formatter) {
+    formatter = formatter || clipboardFormatter;
+    const calc = computeCustoms(s);
+    const items = s.items || [];
+
+    const masterBL = (s.masterBL || "").trim();
+    const houseBL = (s.houseBL || "").trim();
+
+    // Samakan persis dengan computeCustoms() supaya angka yang ter-copy
+    // selalu cocok dengan yang tampil di card/detail — tidak lagi
+    // di-nolkan berdasarkan isi Fasilitas SKB.
+    const bmVal = Number(s.bm) || 0;
+    const ppnVal = Number(s.ppn) || 0;
+    const pphVal = Number(s.pph) || 0;
+    const bmPdriVal = calc.bmPdri;
+
+    const FIRST_ROW_ONLY_IDX = [
+      0,
+      1,
+      2,
+      3,
+      4, // IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME
+      11,
+      12, // NDPBM, INCOTERMS
+      18,
+      19,
+      20,
+      21,
+      22, // TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI
+      24, // FASILITAS / SKB
+      26,
+      27,
+      28, // NO. INVOICE, VESSEL, PACKAGE
+    ];
+
+    function buildRowForItem(it, idx) {
+      const cols = [
+        formatter.date(s.factoryDate), // 0  IN FACTORY
+        formatter.text(s.docNo), // 1  SPPB
+        formatter.date(s.docDate), // 2  DATE
+        formatter.text(s.noAju), // 3  AJU
+        formatter.text(s.party), // 4  SUPPLIER NAME
+        formatter.text(it.jenisBarang), // 5  ITEM
+        formatter.text(it.hsCode), // 6  HS CODE
+        formatter.text(it.namaBarang), // 7  DESCRIPTION
+        formatter.num(it.qty, 2), // 8  QTY
+        formatter.text(it.satuan), // 9  SAT
+        formatter.num((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 10 AMOUNT
+        formatter.num(s.ndpbm, 2), // 11 NDPBM
+        formatter.text(s.incoterm), // 12 INCOTERMS
+        formatter.num(s.freight, 2), // 13 FREIGHT
+        formatter.num(s.insurance, 2), // 14 INSURANCE
+        formatter.num(calc.cifUsd, 2), // 15 CIF
+        formatter.num(calc.fobRupiah, 2), // 16 FOB RUPIAH
+        formatter.num(calc.cifRupiah, 2), // 17 CIF RUPIAH
+        formatter.tarif(s.tarif), // 18 TARIF
+        formatter.num(bmVal, 2), // 19 BEA MASUK
+        formatter.num(ppnVal, 2), // 20 PPN 11%
+        formatter.num(pphVal, 2), // 21 PPH
+        formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
+        formatter.text(s.pi), // 23 PI
+        formatter.text(s.skb), // 24 FASILITAS / SKB
+        formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
+        formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
+        formatter.text(s.voyage), // 27 VESSEL -> nomor pengangkut
+        formatter.packageNum(s.package), // 28 PACKAGE
+      ];
+      if (idx > 0)
+        FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+      return cols;
+    }
+
+    const rows = items.map((it, idx) => buildRowForItem(it, idx));
+
+    if (rows.length >= 1) rows[0][25] = formatter.text(masterBL);
+    if (houseBL) {
+      if (rows.length >= 2) {
+        rows[1][25] = formatter.text(houseBL);
+      } else {
+        const blankRow = new Array(29).fill(formatter.blank);
+        blankRow[25] = formatter.text(houseBL);
+        rows.push(blankRow);
+      }
+    }
+
+    return rows;
+  }
+
+  /* ==================================================================
+     SALIN KE EXCEL / BULK EXPORT — MODE EXPORT
+     Format kolom mengikuti EXPORT_FORMAT.xlsx (lebih ringkas — tanpa
+     NDPBM/CIF/TARIF/BM/PPN/PPH/PI/FASILITAS, tanpa SAT):
+       PENGIRIMAN DARI PABRIK, PEB, DATE, AJU, CONSIGNEE, HS CODE,
+       DESCRIPTION, QTY, AMOUNT, INCOTERMS, FREIGHT, INSURANCE, BL/AWB,
+       NO. INVOICE/DEL.NOTE, VESSEL, PACKAGE
+     Aturan first-row-only / BL-AWB row1+row2 / VESSEL=voyage / PACKAGE
+     angka-saja — semuanya sama seperti mode Import di atas.
+  ================================================================== */
+  function buildExportCopyRows(s, formatter) {
+    formatter = formatter || clipboardFormatter;
+    const items = s.items || [];
+    const masterBL = (s.masterBL || "").trim();
+    const houseBL = (s.houseBL || "").trim();
+
+    const FIRST_ROW_ONLY_IDX = [0, 1, 2, 3, 4, 9, 13, 14, 15];
+
+    function buildRowForItem(it, idx) {
+      const cols = [
+        formatter.date(s.factoryDate), // 0  PENGIRIMAN DARI PABRIK
+        formatter.text(s.docNo), // 1  PEB
+        formatter.date(s.docDate), // 2  DATE
+        formatter.text(s.noAju), // 3  AJU
+        formatter.text(s.party), // 4  CONSIGNEE
+        formatter.text(it.hsCode), // 5  HS CODE
+        formatter.text(it.namaBarang), // 6  DESCRIPTION
+        formatter.num(it.qty, 2), // 7  QTY
+        formatter.num((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 8  AMOUNT
+        formatter.text(s.incoterm), // 9  INCOTERMS
+        formatter.num(s.freight, 2), // 10 FREIGHT
+        formatter.num(s.insurance, 2), // 11 INSURANCE
+        formatter.blank, // 12 BL/AWB — diisi terpisah di bawah
+        formatter.text(s.invoice), // 13 NO. INVOICE / DEL.NOTE
+        formatter.text(s.voyage), // 14 VESSEL -> nomor pengangkut
+        formatter.packageNum(s.package), // 15 PACKAGE
+      ];
+      if (idx > 0)
+        FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+      return cols;
+    }
+
+    const rows = items.map((it, idx) => buildRowForItem(it, idx));
+
+    if (rows.length >= 1) rows[0][12] = formatter.text(masterBL);
+    if (houseBL) {
+      if (rows.length >= 2) {
+        rows[1][12] = formatter.text(houseBL);
+      } else {
+        const blankRow = new Array(16).fill(formatter.blank);
+        blankRow[12] = formatter.text(houseBL);
+        rows.push(blankRow);
+      }
+    }
+
+    return rows;
   }
 
   // Escaping ala TSV: field yang mengandung tab/newline/quote dibungkus
@@ -1015,80 +1549,8 @@
     return val;
   }
 
-  function buildExcelCopyRows(s) {
-    const calc = computeCustoms(s);
-    const items = s.items || [];
-
-    const masterBL = (s.masterBL || "").trim();
-    const houseBL = (s.houseBL || "").trim();
-
-    // Index kolom (0-based, lihat urutan 29 kolom di bawah) yang HANYA
-    // diisi 1x di baris pertama pengiriman, dikosongkan di baris
-    // berikutnya: IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, NDPBM,
-    // INCOTERMS, NO. INVOICE, VESSEL, PACKAGE.
-    // BL/AWB (index 25) ditangani terpisah (lihat di bawah), bukan
-    // lewat mekanisme blank-setelah-baris-pertama ini.
-    const FIRST_ROW_ONLY_IDX = [0, 1, 2, 3, 4, 11, 12, 26, 27, 28];
-
-    function buildRowForItem(it, idx) {
-      const cols = [
-        excelDateFmt(s.factoryDate), // 0  IN FACTORY
-        s.docNo || "", // 1  SPPB
-        excelDateFmt(s.docDate), // 2  DATE
-        s.noAju || "", // 3  AJU
-        s.party || "", // 4  SUPPLIER NAME
-        it.jenisBarang || "", // 5  ITEM
-        it.hsCode || "", // 6  HS CODE
-        it.namaBarang || "", // 7  DESCRIPTION
-        numClean(it.qty, 2), // 8  QTY
-        it.satuan || "", // 9  SAT
-        numClean((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 10 AMOUNT
-        numClean(s.ndpbm, 2), // 11 NDPBM
-        s.incoterm || "", // 12 INCOTERMS
-        numClean(s.freight, 2), // 13 FREIGHT
-        numClean(s.insurance, 2), // 14 INSURANCE
-        numClean(calc.cifUsd, 2), // 15 CIF
-        numClean(calc.fobRupiah, 2), // 16 FOB RUPIAH
-        numClean(calc.cifRupiah, 2), // 17 CIF RUPIAH
-        numClean(s.tarif, 2), // 18 TARIF — persen apa adanya, TIDAK dibagi 100
-        numClean(s.bm, 2), // 19 BEA MASUK
-        numClean(s.ppn, 2), // 20 PPN 11%
-        numClean(s.pph, 2), // 21 PPH
-        numClean(calc.bmPdri, 2), // 22 TOTAL BM+PDRI
-        s.pi || "", // 23 PI
-        s.skb || "", // 24 FASILITAS / SKB
-        "", // 25 BL/AWB — diisi terpisah setelah baris-baris ini dibuat
-        s.invoice || "", // 26 NO. INVOICE / DEL.NOTE
-        s.voyage || "", // 27 VESSEL -> No. Voyage/Flight (nomor pengangkut), BUKAN nama vessel
-        s.package || "", // 28 PACKAGE
-      ];
-      if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = ""));
-      return cols;
-    }
-
-    const rows = items.map((it, idx) => buildRowForItem(it, idx));
-
-    // BL/AWB: Master selalu di baris pertama. House ditaruh di baris
-    // KEDUA — kalau barangnya 2+ maka "numpang" di baris barang ke-2
-    // yang sudah ada; kalau barangnya cuma 1 (tidak ada baris ke-2
-    // secara alami), baris ke-2 baru dibuat khusus untuk House (kolom
-    // lain di baris itu dikosongkan).
-    if (rows.length >= 1) rows[0][25] = masterBL;
-    if (houseBL) {
-      if (rows.length >= 2) {
-        rows[1][25] = houseBL;
-      } else {
-        const blankRow = new Array(29).fill("");
-        blankRow[25] = houseBL;
-        rows.push(blankRow);
-      }
-    }
-
-    return rows;
-  }
-
   function buildExcelCopyText(s) {
-    return buildExcelCopyRows(s)
+    return buildExcelCopyRows(s, clipboardFormatter)
       .map((cols) => cols.map(tsvField).join("\t"))
       .join("\n");
   }
@@ -1216,16 +1678,26 @@
      TRANSPORT LABEL TOGGLE (modal)
   ================================================================== */
   $("#fTransport").addEventListener("change", applyTransportLabels);
+  $("#fRouteType").addEventListener("change", () => {
+    renderRouteStopsUI();
+    applyTransportLabels();
+  });
   function applyTransportLabels() {
     const air = $("#fTransport").value === "udara";
-    $("#lblVessel").textContent = air
+    $("#lblVesselText").textContent = air
       ? "Nama Maskapai / Pesawat"
       : "Nama Vessel";
-    $("#lblVoyage").textContent = air ? "No. Flight" : "No. Voyage";
+    $("#lblVoyageText").textContent = air ? "No. Flight" : "No. Voyage";
     $("#fVessel").placeholder = air ? "Garuda Cargo" : "MV Ever Given";
     $("#fVoyage").placeholder = air ? "GA880/04JUL" : "V.023E";
     $("#lblMasterBL").textContent = air ? "Master AWB" : "Master B/L";
     $("#lblHouseBL").textContent = air ? "House AWB" : "House B/L";
+    // Vessel/Voyage di atas hanya "leg terakhir" kalau rutenya transit DAN
+    // sudah ada minimal 1 kartu terminal transit.
+    const showFinalLegHint =
+      $("#fRouteType").value === "transit" && draftStops.length > 0;
+    $("#finalLegHintVessel").classList.toggle("d-none", !showFinalLegHint);
+    $("#finalLegHintVoyage").classList.toggle("d-none", !showFinalLegHint);
   }
 
   /* ==================================================================
@@ -1353,6 +1825,130 @@
   });
 
   /* ==================================================================
+     ROUTE STOPS / TERMINAL TRANSIT (draft, di dalam modal)
+     Hanya tampil kalau Tipe Rute = "transit". Sama seperti daftar
+     barang: array draft di memori, re-render penuh saat struktur
+     berubah (tambah/hapus/urutkan), mutasi langsung saat isi field
+     diketik supaya fokus/cursor tidak hilang.
+  ================================================================== */
+  function stopCardHtml(st, idx, total) {
+    const air = st.transport === "udara";
+    const isLast = idx === total - 1;
+    return `
+      <div class="route-stop-card" data-idx="${idx}">
+        <div class="route-stop-head">
+          <span class="route-stop-badge"><i class="bi bi-signpost-split"></i> Transit ${idx + 1}</span>
+          <div class="route-stop-actions">
+            <button type="button" class="mv-stop-up" data-idx="${idx}" title="Naikkan urutan" ${idx === 0 ? "disabled" : ""}><i class="bi bi-arrow-up"></i></button>
+            <button type="button" class="mv-stop-down" data-idx="${idx}" title="Turunkan urutan" ${isLast ? "disabled" : ""}><i class="bi bi-arrow-down"></i></button>
+            <button type="button" class="rm-stop" data-idx="${idx}" title="Hapus terminal ini"><i class="bi bi-trash3"></i></button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-5">
+            <label class="form-label">Nama Terminal</label>
+            <input type="text" class="form-control form-control-sm" data-f="terminal" value="${escapeAttr(st.terminal)}" placeholder="mis. Singapore, Port Klang">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Moda</label>
+            <select class="form-select form-select-sm" data-f="transport">
+              <option value="laut" ${!air ? "selected" : ""}>Laut</option>
+              <option value="udara" ${air ? "selected" : ""}>Udara</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">${air ? "Nama Pesawat/Maskapai" : "Nama Vessel"}</label>
+            <input type="text" class="form-control form-control-sm" data-f="vessel" value="${escapeAttr(st.vessel)}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">${air ? "No. Flight" : "No. Voyage"}</label>
+            <input type="text" class="form-control form-control-sm" data-f="voyage" value="${escapeAttr(st.voyage)}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Tiba di Terminal Ini</label>
+            <input type="date" class="form-control form-control-sm" data-f="arrivalDate" value="${st.arrivalDate || ""}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Berangkat dari Terminal Ini</label>
+            <input type="date" class="form-control form-control-sm" data-f="departureDate" value="${st.departureDate || ""}">
+          </div>
+        </div>
+        ${
+          isLast
+            ? `<div class="form-text-note mt-1"><i class="bi bi-arrow-return-right"></i> Leg setelah terminal ini (menuju Pelabuhan Tujuan) memakai field Moda Transportasi/Vessel/Voyage di bagian atas form.</div>`
+            : ""
+        }
+      </div>`;
+  }
+
+  function renderRouteStopsUI() {
+    const isTransit = $("#fRouteType").value === "transit";
+    $("#routeStopsWrap").classList.toggle("d-none", !isTransit);
+    if (!isTransit) return;
+    $("#routeStopsBody").innerHTML = draftStops.length
+      ? draftStops
+          .map((st, idx) => stopCardHtml(st, idx, draftStops.length))
+          .join("")
+      : `<div class="form-text-note">Belum ada terminal transit — klik "Tambah Terminal" di atas.</div>`;
+  }
+
+  $("#routeStopsBody").addEventListener("input", (e) => {
+    const card = e.target.closest(".route-stop-card");
+    if (!card) return;
+    const idx = Number(card.dataset.idx);
+    const field = e.target.dataset.f;
+    if (!field) return;
+    draftStops[idx][field] = e.target.value;
+    // Cuma field Moda yang butuh re-render (label Vessel/Voyage di kartu
+    // ini ikut berubah). Field lain cukup mutasi array saja supaya fokus/
+    // kursor saat mengetik tidak hilang.
+    if (field === "transport") {
+      renderRouteStopsUI();
+      applyTransportLabels();
+    }
+  });
+
+  $("#routeStopsBody").addEventListener("click", (e) => {
+    const rm = e.target.closest(".rm-stop");
+    const up = e.target.closest(".mv-stop-up");
+    const down = e.target.closest(".mv-stop-down");
+    if (rm) {
+      draftStops.splice(Number(rm.dataset.idx), 1);
+      renderRouteStopsUI();
+      applyTransportLabels();
+      return;
+    }
+    if (up) {
+      const idx = Number(up.dataset.idx);
+      if (idx > 0) {
+        [draftStops[idx - 1], draftStops[idx]] = [
+          draftStops[idx],
+          draftStops[idx - 1],
+        ];
+        renderRouteStopsUI();
+      }
+      return;
+    }
+    if (down) {
+      const idx = Number(down.dataset.idx);
+      if (idx < draftStops.length - 1) {
+        [draftStops[idx + 1], draftStops[idx]] = [
+          draftStops[idx],
+          draftStops[idx + 1],
+        ];
+        renderRouteStopsUI();
+      }
+      return;
+    }
+  });
+
+  $("#btnAddStop").addEventListener("click", () => {
+    draftStops.push(newStop());
+    renderRouteStopsUI();
+    applyTransportLabels();
+  });
+
+  /* ==================================================================
      OPEN / SAVE EDIT MODAL
   ================================================================== */
   /* ==================================================================
@@ -1384,11 +1980,24 @@
     return `${y}-${m}-${d}`;
   }
 
-  // Robust terhadap 3 kemungkinan bentuk tanggal dari SheetJS: string ISO
-  // (paling umum di file BC — cell-nya memang teks, bukan date asli),
-  // objek Date asli (kalau cell-nya date beneran), atau angka serial
-  // Excel (fallback kalau cellDates tidak berpengaruh untuk versi file
-  // tertentu).
+  const MONTH_ABBR_IDX = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  };
+  // Robust terhadap beberapa kemungkinan bentuk tanggal dari SheetJS:
+  // string ISO, objek Date asli, angka serial Excel, string "D-MMM-YY"
+  // (format yang dipakai fitur Salin ke Excel / Bulk Export), atau
+  // "DD/MM/YYYY".
   function excelValueToISODate(v) {
     if (v == null || v === "") return "";
     if (v instanceof Date) {
@@ -1402,6 +2011,15 @@
     const s = String(v).trim();
     let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+    if (m) {
+      const mon = MONTH_ABBR_IDX[m[2].toLowerCase()];
+      if (mon != null) {
+        let yr = parseInt(m[3], 10);
+        if (yr < 100) yr += 2000;
+        return `${yr}-${String(mon + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      }
+    }
     m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
     return "";
@@ -1411,7 +2029,10 @@
     return v == null ? "" : String(v).trim();
   }
   function excelNum(v) {
-    const n = Number(v);
+    if (v == null || v === "") return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    // String angka locale ID (koma desimal) atau biasa (titik desimal).
+    const n = Number(String(v).trim().replace(",", "."));
     return isFinite(n) ? n : 0;
   }
   function sheetRows(wb, name) {
@@ -1803,9 +2424,11 @@
       $("#fPI").value = s.pi || "";
       $("#fSKB").value = s.skb || (activeMode === "import" ? "PPH" : "");
       $("#fPackage").value = s.package || "";
+      $("#fRouteType").value = s.routeType || "direct";
       draftItems = JSON.parse(
         JSON.stringify(s.items && s.items.length ? s.items : [newItem()]),
       );
+      draftStops = JSON.parse(JSON.stringify(s.routeStops || []));
     } else {
       $("#modalTitle").textContent = lbl.modalTitleNew;
       $("#fId").value = "";
@@ -1843,10 +2466,13 @@
       $("#fStatus").value = "process";
       $("#fIncoterm").value = "FOB";
       $("#fSKB").value = activeMode === "import" ? "PPH" : "";
+      $("#fRouteType").value = "direct";
       draftItems = [newItem()];
+      draftStops = [];
     }
     applyTransportLabels();
     renderItemTable();
+    renderRouteStopsUI();
     shipmentModal.show();
   }
 
@@ -1859,6 +2485,23 @@
     if (cleanItems.length === 0) {
       showToast(
         "Mohon isi minimal 1 nama barang pada tab Daftar Barang.",
+        "danger",
+      );
+      return;
+    }
+    const routeType = $("#fRouteType").value;
+    // Direct = persis 2 terminal (asal & tujuan yang sudah ada), jadi tidak
+    // pernah mengirim baris shipment_route_stops apa pun kalau direct —
+    // walaupun draftStops masih menyimpan kartu yang sempat diisi (biar
+    // tidak hilang kalau user cuma salah pencet dropdown, tapi tidak akan
+    // pernah ikut kesimpan selama masih "direct").
+    const cleanStops =
+      routeType === "transit"
+        ? draftStops.filter((st) => st.terminal.trim() !== "")
+        : [];
+    if (routeType === "transit" && cleanStops.length === 0) {
+      showToast(
+        'Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".',
         "danger",
       );
       return;
@@ -1879,6 +2522,7 @@
       voyage: $("#fVoyage").value.trim(),
       container: $("#fContainer").value.trim(),
       muatan: $("#fMuatan").value,
+      routeType: routeType,
       origin: $("#fOrigin").value.trim(),
       destination: $("#fDestination").value.trim(),
       etd: $("#fEtd").value,
@@ -1906,9 +2550,9 @@
       '<span class="spinner-border spinner-border-sm" role="status"></span> Menyimpan...';
     try {
       if (id) {
-        await updateShipmentRecord(id, payload, cleanItems);
+        await updateShipmentRecord(id, payload, cleanItems, cleanStops);
       } else {
-        await createShipment(payload, cleanItems);
+        await createShipment(payload, cleanItems, cleanStops);
       }
       await loadShipments();
       shipmentModal.hide();
@@ -1927,6 +2571,34 @@
   ================================================================== */
   function fieldPair(label, value, icon) {
     return `<div class="info-item"><div class="info-label">${icon ? `<i class="bi ${icon}"></i> ` : ""}${escapeHtml(label)}</div><div class="info-value">${value || "—"}</div></div>`;
+  }
+
+  // Daftar terminal transit (read-only) untuk detail view. Kosong sama
+  // sekali kalau route_type = "direct" (tidak ada perubahan tampilan).
+  function buildDetailStopsHtml(s) {
+    const stops = routeStopList(s);
+    if (!isTransitRoute(s)) return "";
+    const rows = stops
+      .map((st, i) => {
+        const air = st.transport === "udara";
+        return `
+        <div class="detail-stop-row">
+          <span class="detail-stop-badge">${i + 1}</span>
+          <div class="detail-stop-body">
+            <div class="detail-stop-name">${escapeHtml(dispVal(st.terminal))}</div>
+            <div class="detail-stop-meta">
+              <i class="bi ${air ? "bi-airplane" : "bi-water"}"></i> ${escapeHtml(dispVal(st.vessel))}
+              ${hasMeaningfulValue(st.voyage) ? " · " + (air ? "No. Flight " : "No. Voyage ") + escapeHtml(st.voyage) : ""}
+              &nbsp;•&nbsp; Tiba: <b>${fmtDate(st.arrivalDate)}</b>
+              &nbsp;·&nbsp; Berangkat: <b>${fmtDate(st.departureDate)}</b>
+            </div>
+          </div>
+        </div>`;
+      })
+      .join("");
+    return `
+      <div class="subsection-title mt-2"><i class="bi bi-signpost-split"></i> Terminal Transit</div>
+      <div class="detail-stop-list mb-2">${rows}</div>`;
   }
 
   function buildDetailHtml(s) {
@@ -1983,16 +2655,16 @@
           ${fieldPair("PPN", fmtRp(s.ppn))}
           ${fieldPair("PPH", fmtRp(s.pph))}
           ${fieldPair("BM + PDRI", fmtRp(calc.bmPdri))}
-          ${fieldPair("Keterangan PI", escapeHtml(s.pi || "—"))}
-          ${fieldPair("Fasilitas SKB", escapeHtml(s.skb || "—"))}
+          ${fieldPair("Keterangan PI", escapeHtml(dispVal(s.pi)))}
+          ${fieldPair("Fasilitas SKB", escapeHtml(dispVal(s.skb)))}
         </div>`;
     }
 
     return `
       <div class="detail-header">
         <div>
-          <div class="item-name">${escapeHtml(s.party || "—")}</div>
-          <div class="po-code">${lbl.docNo}: ${escapeHtml(s.docNo || "—")} · ${lbl.docDate}: ${fmtDate(s.docDate)}</div>
+          <div class="item-name">${escapeHtml(dispVal(s.party))}</div>
+          <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} · ${lbl.docDate}: ${fmtDate(s.docDate)}</div>
         </div>
         <div class="d-flex align-items-center gap-2">
           <span class="detail-badge-mode">${activeMode === "import" ? "Import" : "Export"}</span>
@@ -2002,28 +2674,30 @@
 
       <div class="subsection-title"><i class="bi bi-file-earmark-text"></i> Dokumen &amp; Umum</div>
       <div class="info-grid">
-        ${fieldPair("No. Aju", escapeHtml(s.noAju || "—"))}
-        ${fieldPair(lbl.party, escapeHtml(s.party || "—"))}
-        ${fieldPair("No. Invoice", escapeHtml(s.invoice || "—"))}
-        ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(s.masterBL || "—"))}
-        ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(s.houseBL || "—"))}
+        ${fieldPair("No. Aju", escapeHtml(dispVal(s.noAju)))}
+        ${fieldPair(lbl.party, escapeHtml(dispVal(s.party)))}
+        ${fieldPair("No. Invoice", escapeHtml(dispVal(s.invoice)))}
+        ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(dispVal(s.masterBL)))}
+        ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(dispVal(s.houseBL)))}
         ${fieldPair(lbl.factoryDate, s.factoryDate ? fmtDate(s.factoryDate) + (s.factoryTime ? " · " + escapeHtml(s.factoryTime) : "") : "—")}
       </div>
 
       <div class="subsection-title"><i class="bi bi-compass"></i> Transportasi &amp; Rute</div>
       <div class="info-grid">
         ${fieldPair("Moda Transportasi", s.transport === "udara" ? "Udara" : "Laut")}
-        ${fieldPair(s.transport === "udara" ? "Maskapai / Pesawat" : "Vessel", escapeHtml(s.vessel || "—"))}
-        ${fieldPair(s.transport === "udara" ? "No. Flight" : "No. Voyage", escapeHtml(s.voyage || "—"))}
-        ${fieldPair("Kontainer", escapeHtml(s.container || "—"))}
+        ${fieldPair(s.transport === "udara" ? (isTransitRoute(s) ? "Maskapai (Leg Terakhir)" : "Maskapai / Pesawat") : isTransitRoute(s) ? "Vessel (Leg Terakhir)" : "Vessel", escapeHtml(dispVal(s.vessel)))}
+        ${fieldPair(s.transport === "udara" ? "No. Flight" : "No. Voyage", escapeHtml(dispVal(s.voyage)))}
+        ${fieldPair("Kontainer", escapeHtml(dispVal(s.container)))}
         ${fieldPair("Jenis Muatan", escapeHtml(s.muatan || "—"))}
-        ${fieldPair(lbl.origin, escapeHtml(s.origin || "—"))}
-        ${fieldPair(lbl.destination, escapeHtml(s.destination || "—"))}
+        ${fieldPair("Tipe Rute", isTransitRoute(s) ? `Transit (${routeStopList(s).length} Terminal Singgah)` : "Direct")}
+        ${fieldPair(lbl.origin, escapeHtml(dispVal(s.origin)))}
+        ${fieldPair(lbl.destination, escapeHtml(dispVal(s.destination)))}
         ${fieldPair("ETD", fmtDate(s.etd))}
         ${fieldPair("ETA", fmtDate(s.eta))}
         ${fieldPair(lbl.actual, fmtDate(s.actual))}
       </div>
-      ${s.notes ? `<div class="form-text-note mb-3"><i class="bi bi-sticky"></i> Catatan: ${escapeHtml(s.notes)}</div>` : ""}
+      ${buildDetailStopsHtml(s)}
+      ${hasMeaningfulValue(s.notes) ? `<div class="form-text-note mb-3"><i class="bi bi-sticky"></i> Catatan: ${escapeHtml(s.notes)}</div>` : ""}
 
       <div class="subsection-title"><i class="bi bi-boxes"></i> Daftar Barang</div>
       <div class="item-table-wrap mb-2">
@@ -2037,7 +2711,7 @@
         </table>
       </div>
       <div class="item-table-foot item-table-foot--split mb-3">
-        <div class="foot-package">${s.package ? `<i class="bi bi-box-seam"></i> Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
+        <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
         <div class="foot-totals">
           <div>Total Qty: <b>${fmtNum(calc.totalQty)}</b></div>
           <div>Total Netto: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
@@ -2082,56 +2756,328 @@
   });
 
   /* ==================================================================
-     EXPORT / IMPORT JSON
+     BULK EXPORT / IMPORT (Excel, menggantikan Ekspor JSON & Impor)
+     Format kolom mengikuti IMPORT_FORMAT.xlsx (31 kolom, NO..REMARK)
+     dan EXPORT_FORMAT.xlsx (18 kolom, NO..REMARK), sheet pertama di
+     file = data (sheet SUMMARY di template asli diabaikan).
   ================================================================== */
-  $("#btnExport").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(currentList(), null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `jadwal-${activeMode}-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("File JSON berhasil diunduh.", "success");
-  });
+  const IMPORT_BULK_HEADERS = [
+    "NO",
+    "IN FACTORY",
+    "SPPB",
+    "DATE",
+    "AJU",
+    "SUPPLIER NAME",
+    "ITEM",
+    "HS CODE",
+    "DESCRIPTION",
+    "QTY",
+    "SAT",
+    "AMOUNT",
+    "NDPBM",
+    "INCOTERMS",
+    "FREIGHT",
+    "INSURANCE",
+    "CIF",
+    "FOB RUPIAH",
+    "CIF RUPIAH",
+    "TARIF",
+    "BEA MASUK",
+    "PPN 11%",
+    "PPH",
+    "TOTAL BM+PDRI",
+    "PI",
+    "FASILITAS / SKB",
+    "BL/AWB",
+    "NO. INVOICE / DEL.NOTE",
+    "VESSEL",
+    "PACKAGE",
+    "REMARK",
+  ];
+  const EXPORT_BULK_HEADERS = [
+    "NO",
+    "PENGIRIMAN DARI PABRIK",
+    "PEB",
+    "DATE",
+    "AJU",
+    "CONSIGNEE",
+    "HS CODE",
+    "DESCRIPTION",
+    "QTY",
+    "AMOUNT",
+    "INCOTERMS",
+    "FREIGHT",
+    "INSURANCE",
+    "BL/AWB",
+    "NO. INVOICE / DEL.NOTE",
+    "VESSEL",
+    "PACKAGE",
+    "REMARK",
+  ];
+  // Index kolom (0-based, termasuk NO di depan) buat baca-balik saat Bulk
+  // Import — harus sinkron persis dengan urutan header & dengan susunan
+  // buildExcelCopyRows()/buildExportCopyRows() (yang tidak termasuk NO
+  // & REMARK, makanya semua index di sini +1 dari index di fungsi itu).
+  const IMPORT_IDX = {
+    NO: 0,
+    FACTORY: 1,
+    DOCNO: 2,
+    DATE: 3,
+    AJU: 4,
+    PARTY: 5,
+    ITEM: 6,
+    HS: 7,
+    DESC: 8,
+    QTY: 9,
+    SAT: 10,
+    AMOUNT: 11,
+    NDPBM: 12,
+    INCOTERM: 13,
+    FREIGHT: 14,
+    INSURANCE: 15,
+    TARIF: 19,
+    BM: 20,
+    PPN: 21,
+    PPH: 22,
+    PI: 24,
+    SKB: 25,
+    BLAWB: 26,
+    INVOICE: 27,
+    VESSEL: 28,
+    PACKAGE: 29,
+    REMARK: 30,
+  };
+  const EXPORT_IDX = {
+    NO: 0,
+    FACTORY: 1,
+    DOCNO: 2,
+    DATE: 3,
+    AJU: 4,
+    PARTY: 5,
+    HS: 6,
+    DESC: 7,
+    QTY: 8,
+    AMOUNT: 9,
+    INCOTERM: 10,
+    FREIGHT: 11,
+    INSURANCE: 12,
+    BLAWB: 13,
+    INVOICE: 14,
+    VESSEL: 15,
+    PACKAGE: 16,
+    REMARK: 17,
+  };
 
-  $("#importFile").addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      let parsed;
-      try {
-        parsed = JSON.parse(evt.target.result);
-      } catch (err) {
-        showToast("Gagal membaca file JSON.", "danger");
+  function buildBulkRowsForShipment(s, no, mode, formatter) {
+    const innerRows =
+      mode === "import"
+        ? buildExcelCopyRows(s, formatter)
+        : buildExportCopyRows(s, formatter);
+    return innerRows.map((cols, idx) => [
+      idx === 0 ? formatter.num(no, 0) : "",
+      ...cols,
+      idx === 0 ? formatter.text(s.notes) : "",
+    ]);
+  }
+
+  async function handleBulkExport(mode) {
+    const list = (data[mode] || []).slice().sort((a, b) => {
+      const da = a.docDate || a.factoryDate || "";
+      const db = b.docDate || b.factoryDate || "";
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+    if (!list.length) {
+      showToast(
+        `Tidak ada data jadwal ${mode === "import" ? "Import" : "Export"} untuk diekspor.`,
+        "danger",
+      );
+      return;
+    }
+    const headers =
+      mode === "import" ? IMPORT_BULK_HEADERS : EXPORT_BULK_HEADERS;
+    const aoa = [headers];
+    list.forEach((s, i) => {
+      buildBulkRowsForShipment(s, i + 1, mode, nativeFormatter).forEach((r) =>
+        aoa.push(r),
+      );
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = headers.map(() => ({ wch: 15 }));
+
+    // Terapkan format tanggal & persen supaya file-nya langsung enak
+    // dibaca (bukan cuma angka/serial mentah).
+    const dateCols = [1, 3]; // IN FACTORY/PENGIRIMAN & DATE, sama di kedua mode
+    const tarifCol = mode === "import" ? IMPORT_IDX.TARIF : null;
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    for (let r = 1; r <= range.e.r; r++) {
+      dateCols.forEach((c) => {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && cell.v instanceof Date) cell.z = "d-mmm-yy";
+      });
+      if (tarifCol != null) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c: tarifCol })];
+        if (cell && typeof cell.v === "number") cell.z = "0.00%";
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    const sheetName = `ALL ${mode === "import" ? "IMPORT" : "EXPORT"} SHIPMENT`;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const fname = `bulk-${mode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fname);
+    showToast(
+      `File Excel (${list.length} jadwal, mode ${mode === "import" ? "Import" : "Export"}) berhasil diunduh.`,
+      "success",
+    );
+  }
+
+  // Kelompokkan baris-baris mentah (array-of-array, sudah lewat baris
+  // header) jadi per-jadwal: baris baru dimulai setiap kolom AJU terisi;
+  // baris berikutnya dgn AJU kosong dianggap kelanjutan jadwal yang sama
+  // (barang ke-2/dst, atau baris sisipan House BL/AWB). Baris yang benar2
+  // kosong semua (spacer) dilewati.
+  function groupBulkRows(rows, mode) {
+    const idx = mode === "import" ? IMPORT_IDX : EXPORT_IDX;
+    const groups = [];
+    let current = null;
+    rows.forEach((row) => {
+      const isBlank = row.every((v) => v == null || String(v).trim() === "");
+      if (isBlank) return;
+      const aju = excelStr(row[idx.AJU]);
+      if (aju) {
+        current = { rows: [row] };
+        groups.push(current);
+      } else if (current) {
+        current.rows.push(row);
+      }
+    });
+    return groups;
+  }
+
+  function reconstructShipmentFromGroup(group, mode) {
+    const idx = mode === "import" ? IMPORT_IDX : EXPORT_IDX;
+    const rows = group.rows;
+    const first = rows[0];
+
+    const s = {
+      mode,
+      status: "process",
+      noAju: excelStr(first[idx.AJU]),
+      docNo: excelStr(first[idx.DOCNO]),
+      docDate: excelValueToISODate(first[idx.DATE]),
+      party: excelStr(first[idx.PARTY]),
+      factoryDate: excelValueToISODate(first[idx.FACTORY]),
+      incoterm: excelStr(first[idx.INCOTERM]),
+      freight: excelNum(first[idx.FREIGHT]),
+      insurance: excelNum(first[idx.INSURANCE]),
+      invoice: excelStr(first[idx.INVOICE]),
+      voyage: excelStr(first[idx.VESSEL]), // kolom VESSEL -> field voyage (nomor pengangkut)
+      vessel: "",
+      package: excelStr(first[idx.PACKAGE]),
+      notes: excelStr(first[idx.REMARK]),
+    };
+    if (mode === "import") {
+      s.ndpbm = excelNum(first[idx.NDPBM]);
+      s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
+      s.pi = excelStr(first[idx.PI]);
+      s.skb = excelStr(first[idx.SKB]);
+      s.bm = excelNum(first[idx.BM]);
+      s.ppn = excelNum(first[idx.PPN]);
+      s.pph = excelNum(first[idx.PPH]);
+    }
+
+    // BL/AWB: baris pertama = Master. Baris kedua dalam grup (barang ke-2
+    // ATAU baris sisipan khusus House) -> House.
+    s.masterBL = excelStr(first[idx.BLAWB]);
+    s.houseBL = rows.length >= 2 ? excelStr(rows[1][idx.BLAWB]) : "";
+
+    // ITEMS: baris yang punya data barang asli (deskripsi/HS/qty tidak
+    // kosong semua). Baris sisipan House BL/AWB (semua kolom barang
+    // kosong) dilewati, tidak dihitung sebagai barang.
+    const items = [];
+    rows.forEach((row) => {
+      const desc = excelStr(row[idx.DESC]);
+      const hs = excelStr(row[idx.HS]);
+      const qty = excelNum(row[idx.QTY]);
+      if (!desc && !hs && !qty) return;
+      const amount = excelNum(row[idx.AMOUNT]);
+      items.push({
+        ...newItem(),
+        namaBarang: desc,
+        hsCode: hs,
+        jenisBarang:
+          mode === "import"
+            ? excelStr(row[idx.ITEM]) || "Bahan Baku"
+            : "Bahan Baku",
+        qty,
+        satuan: mode === "import" ? excelStr(row[idx.SAT]) : "",
+        harga: qty ? roundNum(amount / qty, 4) : amount,
+      });
+    });
+
+    return { shipment: s, items };
+  }
+
+  async function handleBulkImport(mode, file) {
+    const modeLabel = mode === "import" ? "Import" : "Export";
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
+      const sheetName = wb.SheetNames[0];
+      if (!sheetName) {
+        showToast("File Excel ini tidak punya sheet sama sekali.", "danger");
         return;
       }
-      if (!Array.isArray(parsed)) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+        header: 1,
+        defval: null,
+        raw: true,
+      });
+      if (rows.length < 2) {
         showToast(
-          "Format file tidak valid (harus berupa array JSON).",
+          "File Excel ini tidak punya data (cuma header atau kosong).",
           "danger",
         );
         return;
       }
-      const modeLabel = activeMode === "import" ? "Import" : "Export";
+      const groups = groupBulkRows(rows.slice(1), mode);
+      if (!groups.length) {
+        showToast(
+          "Tidak ada baris yang bisa dikenali — pastikan kolom AJU terisi di baris pertama tiap jadwal.",
+          "danger",
+        );
+        return;
+      }
+      const reconstructed = groups
+        .map((g) => reconstructShipmentFromGroup(g, mode))
+        .filter((r) => r.items.length);
+
+      if (!reconstructed.length) {
+        showToast(
+          "Tidak ada jadwal dengan barang yang valid di file ini.",
+          "danger",
+        );
+        return;
+      }
+
       showConfirm(
-        `Ini akan MENGGANTI seluruh data ${modeLabel} yang tersimpan di database dengan isi file ini. Lanjutkan?`,
+        `File ini punya ${reconstructed.length} jadwal ${modeLabel}. Ini akan MENGGANTI seluruh jadwal ${modeLabel} yang tersimpan di database dengan isi file ini. Lanjutkan?`,
         async () => {
           try {
             const { error: delErr } = await supabaseClient
               .from("shipments")
               .delete()
-              .eq("mode", activeMode);
+              .eq("mode", mode);
             if (delErr) throw delErr;
-            for (const s of parsed) {
-              const items = Array.isArray(s.items) ? s.items : [];
-              await createShipment(s, items);
+            for (const r of reconstructed) {
+              await createShipment(r.shipment, r.items);
             }
             await loadShipments();
-            showToast("Data berhasil dimuat ke database.", "success");
+            showToast(
+              `${reconstructed.length} jadwal ${modeLabel} berhasil diimpor.`,
+              "success",
+            );
           } catch (err) {
             console.error(err);
             showToast("Gagal mengimpor data ke database.", "danger");
@@ -2139,9 +3085,94 @@
           }
         },
       );
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+    } catch (err) {
+      console.error(err);
+      showToast(
+        "Gagal membaca file Excel ini. Pastikan formatnya sesuai template Bulk Export.",
+        "danger",
+      );
+    }
+  }
+
+  /* ---- Modal pemilih mode (Bulk Export / Bulk Import) ---- */
+  let bulkAction = "export";
+  function openBulkModal(action) {
+    bulkAction = action;
+    $("#bulkModeSelect").value = activeMode;
+    $("#bulkModalTitle").textContent =
+      action === "export" ? "Bulk Export Excel" : "Bulk Import Excel";
+    $("#bulkExportInfo").classList.toggle("d-none", action !== "export");
+    $("#bulkImportSection").classList.toggle("d-none", action !== "import");
+    $("#bulkActionBtn").textContent =
+      action === "export" ? "Unduh Excel" : "Proses Import";
+    $("#bulkImportFile").value = "";
+    bulkModal.show();
+  }
+
+  $("#btnBulkExport").addEventListener("click", () => openBulkModal("export"));
+  $("#btnBulkImport").addEventListener("click", () => openBulkModal("import"));
+
+  /* ---- Hapus Semua Data (Import + Export, permanen dari database) ---- */
+  async function handleDeleteAll() {
+    const totalImport = data.import.length;
+    const totalExport = data.export.length;
+    const total = totalImport + totalExport;
+
+    if (!total) {
+      showToast("Tidak ada data untuk dihapus.", "dark");
+      return;
+    }
+
+    showConfirm(
+      `Anda akan menghapus SELURUH data secara permanen: ${totalImport} jadwal Import dan ${totalExport} jadwal Export ` +
+        `(total ${total} jadwal, beserta seluruh daftar barang di dalamnya). Tindakan ini TIDAK BISA dibatalkan. Lanjutkan?`,
+      async () => {
+        const btn = $("#btnDeleteAll");
+        const originalLabel = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML =
+          '<span class="spinner-border spinner-border-sm" role="status"></span> Menghapus...';
+        try {
+          // Filter "neq id kosong" dipakai supaya delete berlaku ke SEMUA baris
+          // (Supabase/PostgREST butuh minimal satu filter untuk operasi delete).
+          const { error } = await supabaseClient
+            .from("shipments")
+            .delete()
+            .neq("id", "00000000-0000-0000-0000-000000000000");
+          if (error) throw error;
+          // shipment_items & shipment_route_stops ikut terhapus otomatis
+          // lewat "on delete cascade".
+          data.import = [];
+          data.export = [];
+          render();
+          showToast("Semua data berhasil dihapus.", "dark");
+        } catch (err) {
+          console.error(err);
+          showToast("Gagal menghapus data dari database.", "danger");
+          loadShipments();
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalLabel;
+        }
+      },
+    );
+  }
+  $("#btnDeleteAll").addEventListener("click", handleDeleteAll);
+
+  $("#bulkActionBtn").addEventListener("click", async () => {
+    const mode = $("#bulkModeSelect").value;
+    if (bulkAction === "export") {
+      await handleBulkExport(mode);
+      bulkModal.hide();
+    } else {
+      const file = $("#bulkImportFile").files[0];
+      if (!file) {
+        showToast("Pilih file Excel dulu.", "danger");
+        return;
+      }
+      bulkModal.hide();
+      await handleBulkImport(mode, file);
+    }
   });
 
   /* ==================================================================

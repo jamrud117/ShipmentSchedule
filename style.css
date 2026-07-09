@@ -189,6 +189,51 @@ body {
   border-color: var(--teal);
   box-shadow: 0 0 0 0.2rem rgba(15, 181, 174, 0.15);
 }
+.toolbar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.toolbar-actions-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.btn-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.btn-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  display: inline-block;
+}
+.toolbar-actions .btn-teal {
+  padding: 9px 22px;
+  font-size: 0.9rem;
+}
+@media (max-width: 576px) {
+  .toolbar-actions {
+    justify-content: flex-start;
+  }
+  .toolbar-actions .btn-teal {
+    width: 100%;
+    justify-content: center;
+  }
+  .btn-divider {
+    display: none;
+  }
+}
 .btn-teal {
   background: var(--teal);
   border-color: var(--teal);
@@ -208,6 +253,19 @@ body {
 }
 .btn-outline-navy:hover {
   background: var(--ocean);
+  color: #fff;
+}
+.btn-outline-danger {
+  border-color: var(--coral);
+  color: var(--coral);
+  font-weight: 600;
+  background: #fff;
+}
+.btn-outline-danger:hover,
+.btn-outline-danger:active,
+.btn-outline-danger:focus {
+  background: var(--coral);
+  border-color: var(--coral);
   color: #fff;
 }
 
@@ -400,6 +458,11 @@ body {
   color: #5347c7;
   border-color: #dcdafb;
 }
+.tag.tag-transit {
+  background: #e6f7f6;
+  color: var(--teal-dark);
+  border-color: #c7ece9;
+}
 
 /* ---- Status select (auto width, styled as pill) ---- */
 .status-select {
@@ -542,6 +605,15 @@ body {
 .port-node.destination.reached {
   background: var(--green);
 }
+.port-node.stop {
+  width: 8px;
+  height: 8px;
+  background: var(--violet);
+  cursor: default;
+}
+.port-node.stop.reached {
+  background: var(--green);
+}
 .ship-marker {
   position: absolute;
   top: 50%;
@@ -587,6 +659,41 @@ body {
 }
 .port-labels .p.text-end {
   text-align: right;
+}
+.port-labels--multi {
+  position: relative;
+  min-height: 72px;
+  display: block;
+}
+.port-labels--multi .p {
+  position: absolute;
+  transition: top 0.15s ease;
+  white-space: nowrap;
+}
+.port-labels--multi .p--start {
+  transform: translateX(0);
+  text-align: left;
+}
+.port-labels--multi .p--end {
+  transform: translateX(-100%);
+  text-align: right;
+}
+.port-labels--multi .p--center {
+  transform: translateX(-50%);
+  text-align: center;
+}
+.port-labels--multi .p-term {
+  display: block;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+.port-labels--multi .p--start .p-term,
+.port-labels--multi .p--end .p-term {
+  max-width: 120px;
 }
 .delay-flag {
   font-size: 0.74rem;
@@ -958,6 +1065,116 @@ body {
 }
 .subsection-title:first-child {
   margin-top: 0;
+}
+
+/* ---- Terminal Transit (dynamic list, modal Transportasi & Rute) ---- */
+.route-stops-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 4px 0 6px;
+}
+.route-stop-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.route-stop-card:last-child {
+  margin-bottom: 0;
+}
+.route-stop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.route-stop-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: #fff;
+  background: var(--violet);
+  border-radius: 20px;
+  padding: 3px 11px;
+}
+.route-stop-actions {
+  display: flex;
+  gap: 4px;
+}
+.route-stop-actions button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  transition: all 0.12s ease;
+}
+.route-stop-actions button:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--navy);
+}
+.route-stop-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.route-stop-actions .rm-stop:hover:not(:disabled) {
+  background: #fdeaea;
+  color: var(--coral);
+  border-color: #f3c6c6;
+}
+
+/* ---- Terminal Transit (read-only, detail view) ---- */
+.detail-stop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.detail-stop-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.detail-stop-badge {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--violet);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.detail-stop-name {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 0.85rem;
+}
+.detail-stop-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.detail-stop-meta b {
+  color: var(--ink);
 }
 
 .item-table-wrap {

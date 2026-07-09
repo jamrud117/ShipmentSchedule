@@ -94,8 +94,8 @@
       </div>
 
       <div class="toolbar mb-4">
-        <div class="row g-2 align-items-center">
-          <div class="col-12 col-md-4">
+        <div class="row g-3 align-items-center toolbar-filters">
+          <div class="col-12 col-lg-6">
             <div class="input-group">
               <span class="input-group-text bg-white border-end-0"
                 ><i class="bi bi-search text-muted"></i
@@ -108,7 +108,7 @@
               />
             </div>
           </div>
-          <div class="col-6 col-md-2">
+          <div class="col-6 col-lg-3">
             <select id="filterStatus" class="form-select">
               <option value="">Semua Status</option>
               <option value="process">PROCESS</option>
@@ -117,32 +117,35 @@
               <option value="delayed">DELAYED</option>
             </select>
           </div>
-          <div class="col-6 col-md-2">
+          <div class="col-6 col-lg-3">
             <select id="sortDir" class="form-select">
               <option value="asc">Tanggal Terdekat</option>
               <option value="desc">Tanggal Terjauh</option>
             </select>
           </div>
-          <div
-            class="col-12 col-md-4 d-flex gap-2 justify-content-md-end mt-2 mt-md-0"
-          >
-            <button class="btn btn-outline-navy btn-sm" id="btnExport">
-              <i class="bi bi-download"></i> Ekspor JSON
-            </button>
-            <label class="btn btn-outline-navy btn-sm mb-0">
-              <i class="bi bi-upload"></i> Impor
-              <input
-                type="file"
-                id="importFile"
-                accept="application/json"
-                hidden
-              />
-            </label>
-            <button class="btn btn-teal btn-sm" id="btnAdd">
-              <i class="bi bi-plus-lg"></i>
-              <span id="lblAddBtn">Tambah Jadwal</span>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <div class="toolbar-actions">
+          <div class="toolbar-actions-secondary">
+            <div class="btn-cluster">
+              <button class="btn btn-outline-navy btn-sm" id="btnBulkExport">
+                <i class="bi bi-file-earmark-excel"></i> Bulk Export
+              </button>
+              <button class="btn btn-outline-navy btn-sm" id="btnBulkImport">
+                <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
+              </button>
+            </div>
+            <span class="btn-divider"></span>
+            <button class="btn btn-outline-danger btn-sm" id="btnDeleteAll">
+              <i class="bi bi-trash3"></i> Hapus Semua Data
             </button>
           </div>
+          <button class="btn btn-teal" id="btnAdd">
+            <i class="bi bi-plus-lg"></i>
+            <span id="lblAddBtn">Tambah Jadwal</span>
+          </button>
         </div>
       </div>
 
@@ -185,9 +188,9 @@
             <div class="footer-heading">Catatan Data</div>
             <p class="footer-text">
               Data tersimpan permanen di database online (Supabase), bukan lagi
-              di browser. Tombol <b>Ekspor JSON</b> tetap bisa dipakai untuk
-              cadangan berkala, dan <b>Impor</b> untuk memuat ulang dari file
-              cadangan tersebut.
+              di browser. Tombol <b>Bulk Export</b> mengunduh seluruh jadwal
+              (per mode) sebagai file Excel, dan <b>Bulk Import</b> memuatnya
+              kembali dari file Excel dengan format yang sama.
             </p>
           </div>
           <div class="col-md-3">
@@ -355,7 +358,15 @@
                   </select>
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label" id="lblVessel">Nama Vessel</label>
+                  <label class="form-label" id="lblVessel"
+                    ><span id="lblVesselText">Nama Vessel</span>
+                    <span
+                      id="finalLegHintVessel"
+                      class="text-muted d-none"
+                      style="font-weight: 400"
+                      >(leg terakhir)</span
+                    ></label
+                  >
                   <input
                     type="text"
                     class="form-control"
@@ -364,7 +375,15 @@
                   />
                 </div>
                 <div class="col-md-2">
-                  <label class="form-label" id="lblVoyage">No. Voyage</label>
+                  <label class="form-label" id="lblVoyage"
+                    ><span id="lblVoyageText">No. Voyage</span>
+                    <span
+                      id="finalLegHintVoyage"
+                      class="text-muted d-none"
+                      style="font-weight: 400"
+                      >(leg terakhir)</span
+                    ></label
+                  >
                   <input
                     type="text"
                     class="form-control"
@@ -389,7 +408,14 @@
                     <option value="LCL">LCL</option>
                   </select>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-2">
+                  <label class="form-label">Tipe Rute</label>
+                  <select class="form-select" id="fRouteType">
+                    <option value="direct">Direct</option>
+                    <option value="transit">Transit (Singgah)</option>
+                  </select>
+                </div>
+                <div class="col-md-5">
                   <label class="form-label" id="lblOrigin"
                     >Pelabuhan Asal</label
                   >
@@ -400,7 +426,7 @@
                     placeholder="Shanghai, China"
                   />
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-5">
                   <label class="form-label" id="lblDestination"
                     >Pelabuhan Tujuan</label
                   >
@@ -410,6 +436,36 @@
                     id="fDestination"
                     placeholder="Tanjung Priok, Jakarta"
                   />
+                </div>
+                <div class="col-12 d-none" id="routeStopsWrap">
+                  <div class="route-stops-box">
+                    <div
+                      class="d-flex justify-content-between align-items-center mb-2"
+                    >
+                      <div
+                        class="subsection-title mb-0"
+                        style="border: none; padding: 0; margin: 0"
+                      >
+                        <i class="bi bi-signpost-split"></i> Terminal Transit
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-teal btn-sm"
+                        id="btnAddStop"
+                      >
+                        <i class="bi bi-plus-lg"></i> Tambah Terminal
+                      </button>
+                    </div>
+                    <div class="form-text-note mb-2">
+                      <i class="bi bi-info-circle"></i> Urutan mengikuti urutan
+                      kartu di bawah (dari Pelabuhan Asal menuju Pelabuhan
+                      Tujuan). Moda/Vessel/Voyage pada tiap terminal menjelaskan
+                      alat angkut yang <b>membawa barang tiba</b> di terminal
+                      tsb — leg terakhir menuju Pelabuhan Tujuan tetap pakai
+                      field Moda Transportasi/Vessel/Voyage di atas.
+                    </div>
+                    <div id="routeStopsBody"></div>
+                  </div>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">ETD</label>
@@ -746,6 +802,67 @@
     </div>
 
     <!-- ============ MODAL: KONFIRMASI (pengganti confirm() native) ============ -->
+    <!-- ============ BULK EXPORT/IMPORT (Excel) ============ -->
+    <div class="modal fade" id="bulkModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="bulkModalTitle">Bulk Export Excel</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label">Data jadwal</label>
+            <select class="form-select mb-3" id="bulkModeSelect">
+              <option value="import">Jadwal Import</option>
+              <option value="export">Jadwal Export</option>
+            </select>
+
+            <div id="bulkExportInfo">
+              <p class="form-text-note mb-0">
+                <i class="bi bi-info-circle"></i> File Excel berisi seluruh
+                jadwal (dan daftar barangnya) untuk mode yang dipilih, format
+                kolom mengikuti template BC yang sudah disepakati.
+              </p>
+            </div>
+
+            <div id="bulkImportSection" class="d-none">
+              <p class="form-text-note mb-2">
+                <i class="bi bi-exclamation-triangle"></i> Ini akan
+                <b>MENGGANTI</b> seluruh jadwal mode yang dipilih di database
+                dengan isi file Excel ini. Pastikan formatnya sesuai template.
+              </p>
+              <input
+                type="file"
+                id="bulkImportFile"
+                accept=".xlsx,.xls"
+                class="form-control"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-light btn-sm"
+              data-bs-dismiss="modal"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              class="btn btn-teal btn-sm"
+              id="bulkActionBtn"
+            >
+              Unduh Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="confirmModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
