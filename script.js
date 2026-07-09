@@ -191,6 +191,8 @@
     houseBL: "house_bl",
     factoryDate: "factory_date",
     factoryTime: "factory_time",
+    forwarder: "forwarder",
+    forwarderPic: "forwarder_pic",
     vessel: "vessel",
     voyage: "voyage",
     container: "container",
@@ -908,6 +910,7 @@
 
       <div class="info-grid">
         <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> Rute</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">PIC: ${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
         <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${s.transport === "udara" ? "Pesawat" : "Vessel"}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${s.transport === "udara" ? "No. Flight" : "Voyage"} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
@@ -961,6 +964,8 @@
         s.invoice,
         s.vessel,
         s.voyage,
+        s.forwarder,
+        s.forwarderPic,
         ...(s.items || []).map((i) => i.namaBarang),
       ]
         .join(" ")
@@ -2401,6 +2406,8 @@
       $("#fHouseBL").value = s.houseBL || "";
       $("#fFactoryDate").value = s.factoryDate || "";
       $("#fFactoryTime").value = s.factoryTime || "";
+      $("#fForwarder").value = s.forwarder || "";
+      $("#fForwarderPic").value = s.forwarderPic || "";
       $("#fTransport").value = s.transport || "laut";
       $("#fVessel").value = s.vessel || "";
       $("#fVoyage").value = s.voyage || "";
@@ -2442,6 +2449,8 @@
         "fHouseBL",
         "fFactoryDate",
         "fFactoryTime",
+        "fForwarder",
+        "fForwarderPic",
         "fVessel",
         "fVoyage",
         "fContainer",
@@ -2518,6 +2527,8 @@
       houseBL: $("#fHouseBL").value.trim(),
       factoryDate: $("#fFactoryDate").value,
       factoryTime: $("#fFactoryTime").value,
+      forwarder: $("#fForwarder").value.trim(),
+      forwarderPic: $("#fForwarderPic").value.trim(),
       vessel: $("#fVessel").value.trim(),
       voyage: $("#fVoyage").value.trim(),
       container: $("#fContainer").value.trim(),
@@ -2680,6 +2691,8 @@
         ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(dispVal(s.masterBL)))}
         ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(dispVal(s.houseBL)))}
         ${fieldPair(lbl.factoryDate, s.factoryDate ? fmtDate(s.factoryDate) + (s.factoryTime ? " · " + escapeHtml(s.factoryTime) : "") : "—")}
+        ${fieldPair("Nama Forwarder", escapeHtml(dispVal(s.forwarder)))}
+        ${fieldPair("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic)))}
       </div>
 
       <div class="subsection-title"><i class="bi bi-compass"></i> Transportasi &amp; Rute</div>
