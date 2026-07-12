@@ -395,6 +395,9 @@ body {
 .info-item {
   min-width: 0;
 }
+.info-item--wide {
+  grid-column: span 2;
+}
 .info-label {
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -420,6 +423,23 @@ body {
 .info-value.muted-value {
   color: var(--muted);
   font-weight: 500;
+}
+
+.detail-fac-line {
+  font-size: 0.76rem;
+  color: var(--ink);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.detail-fac-line + .detail-fac-line {
+  margin-top: 3px;
+}
+.detail-fac-line i {
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+  flex-shrink: 0;
 }
 
 /* ---- Tag row ---- */
@@ -462,6 +482,11 @@ body {
   background: #e6f7f6;
   color: var(--teal-dark);
   border-color: #c7ece9;
+}
+.tag.tag-ecoo {
+  background: #e9f9ee;
+  color: #1f8a4c;
+  border-color: #c9edd6;
 }
 
 /* ---- Status select (auto width, styled as pill) ---- */
@@ -955,6 +980,177 @@ body {
 .modal-header-actions .btn-close {
   margin: 0 !important;
 }
+
+/* ================= HALAMAN FORM TAMBAH/EDIT (dulu modal) =================
+   Supaya input tidak dibatasi tinggi modal, form Tambah/Edit Jadwal
+   sekarang halaman penuh (lihat #viewForm + router() di script.js).
+   Header aksi (kembali/judul/Import/Batal/Simpan) dibuat sticky supaya
+   selalu bisa dijangkau tanpa scroll balik ke atas, meniru modal-footer
+   yang dulu selalu terlihat.
+
+   Redesign: tiap subsection dibungkus ".form-section-card" dengan badge
+   ikon berwarna, warnanya mengikuti TAB induknya (ocean=Dokumen&Umum,
+   violet=Daftar Barang, amber=Kepabeanan&Biaya) dan warna yang sama
+   dipakai lagi di tab aktif stepper-nya — supaya orang bisa langsung
+   tahu "saya lagi di step mana" walau sudah scroll jauh ke bawah form
+   yang panjang. Input/select di halaman ini SEBELUMNYA tidak ada styling
+   khusus (cuma default Bootstrap polos, beda jauh dari versi modal yang
+   sudah rapi) — sekarang disamakan & dirapikan lewat .page-form
+   .form-control/.form-select di bawah. */
+.page-form {
+  min-height: 100vh;
+  background: var(--bg);
+}
+.page-form-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 6px 20px -16px rgba(11, 31, 58, 0.4);
+}
+.page-form-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.btn-back {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--navy);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  transition: all 0.15s ease;
+}
+.btn-back:hover {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.page-form-title-group {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.page-form-title-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--ocean), var(--navy));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 14px -6px rgba(20, 73, 122, 0.55);
+}
+.page-form-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.08rem;
+  color: var(--navy);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* ---- Footer aksi (Import/Batal/Simpan) — sengaja ditaruh DI BAWAH,
+   bukan di header atas, biar sesuai konvensi form pada umumnya (isi dulu
+   dari atas, konfirmasi di bawah) dan tetap meniru modal-footer lama
+   (selalu terlihat di layar, tidak perlu scroll). PAKAI position:fixed,
+   BUKAN sticky — sticky cuma "nempel" kalau kontennya lebih tinggi dari
+   layar (baru aktif pas discroll); kalau konten formnya pendek (mis. tab
+   Kepabeanan & Biaya), sticky malah diam di posisi alirannya sendiri,
+   nyisain area kosong di bawahnya sampai batas layar. Fixed selalu
+   nempel di bawah viewport apa pun tinggi kontennya. */
+.page-form-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 -6px 20px -16px rgba(11, 31, 58, 0.4);
+}
+.page-form-footer-left,
+.page-form-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.page-form-body {
+  max-width: 1120px;
+  padding: 26px 28px 90px;
+}
+@media (max-width: 767.98px) {
+  .page-form-header {
+    padding: 12px 16px;
+  }
+  .page-form-body {
+    padding: 18px 14px 116px;
+  }
+  .page-form-title {
+    max-width: 60vw;
+    font-size: 0.95rem;
+  }
+  .page-form-title-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+  .page-form-footer {
+    padding: 10px 14px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .page-form-footer-left,
+  .page-form-footer-right {
+    width: 100%;
+  }
+  .page-form-footer-left .btn-import-excel {
+    width: 100%;
+    justify-content: center;
+  }
+  .page-form-footer-right {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 8px;
+  }
+  .page-form-footer-right .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .form-section-card {
+    padding: 18px 16px 16px;
+    border-radius: 14px;
+  }
+}
 .btn-import-excel {
   display: inline-flex;
   align-items: center;
@@ -962,15 +1158,16 @@ body {
   border: 1px solid var(--teal);
   color: var(--teal-dark);
   background: rgba(15, 181, 174, 0.08);
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 0.78rem;
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 0.79rem;
   font-weight: 600;
   transition: all 0.15s ease;
 }
 .btn-import-excel:hover {
-  background: var(--teal);
+  background: var(--teal-dark);
   color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(15, 181, 174, 0.7);
 }
 .btn-import-excel i {
   font-size: 0.9rem;
@@ -992,33 +1189,75 @@ body {
     transform: rotate(360deg);
   }
 }
-
-.import-notes-box {
-  background: #fff;
+.btn-form-cancel {
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 16px;
-  margin-bottom: 18px;
-}
-.import-notes-summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  background: #fff;
+  color: var(--muted);
   font-weight: 600;
   font-size: 0.85rem;
-  color: var(--teal-dark);
+  padding: 8px 16px;
+  border-radius: 9px;
+  transition: all 0.15s ease;
+}
+.btn-form-cancel:hover {
+  background: #f4f7fb;
+  color: var(--ink);
+  border-color: #cbd5e1;
+}
+.btn-save-primary {
+  padding: 8px 18px;
+  border-radius: 9px;
+  box-shadow: 0 8px 18px -8px rgba(15, 181, 174, 0.65);
+  transition: all 0.15s ease;
+}
+.btn-save-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -8px rgba(15, 181, 174, 0.75);
+  color: #fff;
+}
+.btn-save-primary:active {
+  transform: translateY(0);
+}
+
+.import-notes-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: linear-gradient(135deg, #f2fbf8, #fff);
+  border: 1px solid #c9edd6;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.import-notes-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--green);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  margin-top: 1px;
+}
+.import-notes-body {
+  min-width: 0;
+  flex: 1;
+}
+.import-notes-summary {
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: #1f7a56;
 }
 .import-notes-summary:empty {
   display: none;
 }
-.import-notes-summary i {
-  color: var(--teal);
-  font-size: 1rem;
-}
 .import-notes-list {
-  margin: 8px 0 0;
-  padding-left: 20px;
-  font-size: 0.82rem;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
   color: #8a5a00;
 }
 .import-notes-list:empty {
@@ -1032,39 +1271,176 @@ body {
   color: #d9932c;
 }
 
+/* ---- Tab stepper (1/2/3) — warna aktifnya mengikuti data-tab, selaras
+   dengan warna badge ikon .form-section-card di bawahnya ---- */
 .nav-detail {
-  gap: 6px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 18px;
+  display: flex;
+  gap: 4px;
+  background: #eaf0f8;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 5px;
+  margin: 0 0 26px;
+}
+.nav-detail .nav-item {
+  flex: 1;
+  min-width: 0;
 }
 .nav-detail .nav-link {
-  font-size: 0.85rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--muted);
   border: none;
-  border-radius: 0;
-  padding: 10px 4px;
-  margin-right: 22px;
-  border-bottom: 2px solid transparent;
-  background: none;
+  border-radius: 10px;
+  padding: 10px 10px;
+  background: transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-detail .step-num {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.14);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+.nav-detail .nav-link:not(.active):hover {
+  color: var(--navy);
+  background: rgba(255, 255, 255, 0.7);
 }
 .nav-detail .nav-link.active {
+  color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(11, 31, 58, 0.55);
+}
+.nav-detail .nav-link.active .step-num {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.nav-detail .nav-link.active[data-tab="umum"] {
+  background: linear-gradient(135deg, var(--ocean), #123b63);
+}
+.nav-detail .nav-link.active[data-tab="barang"] {
+  background: linear-gradient(135deg, #6d5ce6, #4a3aa0);
+}
+.nav-detail .nav-link.active[data-tab="pabean"] {
+  background: linear-gradient(135deg, var(--amber), #c4740f);
   color: var(--navy);
-  border-bottom: 2px solid var(--teal);
+}
+.nav-detail .nav-link.active[data-tab="pabean"] .step-num {
+  background: rgba(11, 31, 58, 0.14);
+  color: var(--navy);
+}
+@media (max-width: 575.98px) {
+  .nav-detail .nav-link {
+    font-size: 0.68rem;
+    gap: 5px;
+    padding: 9px 4px;
+  }
 }
 
+/* ---- Kartu tiap subsection (pengelompokan visual + badge ikon
+   berwarna, warnanya senada sama tab aktifnya) ---- */
+.form-section-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 22px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(11, 31, 58, 0.03);
+}
+.form-section-card:last-child {
+  margin-bottom: 0;
+}
 .subsection-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: var(--navy);
   margin: 20px 0 10px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+}
+.form-section-card > .subsection-title,
+.form-section-card > .d-flex > .subsection-title {
+  margin: 0;
 }
 .subsection-title:first-child {
   margin-top: 0;
+}
+.subsection-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  color: #fff;
+}
+.form-section-card--ocean .subsection-icon {
+  background: linear-gradient(135deg, var(--ocean), #123b63);
+}
+.form-section-card--violet .subsection-icon {
+  background: linear-gradient(135deg, #6d5ce6, #4a3aa0);
+}
+.form-section-card--amber .subsection-icon {
+  background: linear-gradient(135deg, var(--amber), #c4740f);
+  color: var(--navy);
+}
+
+/* ---- Input/select di halaman form: sebelumnya polos (default
+   Bootstrap tanpa override), sekarang disamakan & dirapikan senada
+   dengan versi modal. ---- */
+.page-form .form-control,
+.page-form .form-select {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 0.86rem;
+  color: var(--ink);
+  background-color: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.page-form .form-control::placeholder {
+  color: #a7b2c2;
+}
+.page-form .form-control:focus,
+.page-form .form-select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+}
+.page-form .form-control[readonly] {
+  background: #f7fafd;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--navy);
+}
+.page-form .form-check-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+}
+.page-form .form-check-input:checked {
+  background-color: var(--teal);
+  border-color: var(--teal);
 }
 
 /* ---- Terminal Transit (dynamic list, modal Transportasi & Rute) ---- */
@@ -1184,7 +1560,7 @@ body {
 }
 table.item-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1140px;
   border-collapse: collapse;
   font-size: 0.83rem;
 }
@@ -1279,6 +1655,122 @@ table.item-table .rm-row:hover {
 table.item-table th.text-center,
 table.item-table td.text-center {
   text-align: center;
+}
+
+/* ---- Kolom "Fasilitas" (SKB + E-COO per barang) ---- */
+.btn-facilities {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 0;
+  width: auto;
+  transition: all 0.15s ease;
+}
+.btn-facilities:hover {
+  border-color: var(--teal);
+  color: var(--teal-dark);
+}
+.btn-facilities.has-value {
+  background: #e9f9ee;
+  border-color: #c9edd6;
+  color: #1f8a4c;
+}
+.btn-facilities i {
+  font-size: 0.68rem;
+}
+
+tr.item-fac-row td {
+  padding: 0;
+  border-top: none;
+  background: #fbfcfe;
+}
+.item-fac-panel {
+  padding: 14px 16px 16px;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.item-fac-skb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.item-fac-skb-head b {
+  font-size: 0.83rem;
+  color: var(--ink);
+}
+.btn-add-skb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--teal);
+  color: var(--teal-dark);
+  background: rgba(15, 181, 174, 0.08);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn-add-skb:hover {
+  background: var(--teal);
+  color: #fff;
+}
+.item-fac-skb-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+}
+.item-fac-skb-row:last-child {
+  margin-bottom: 0;
+}
+.item-fac-skb-row select,
+.item-fac-skb-row input {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+.item-fac-skb-row select {
+  flex: 0 0 108px;
+}
+.item-fac-skb-row input.skb-lainnya {
+  flex: 1 1 100px;
+}
+.item-fac-skb-row input[data-fac="nomor"] {
+  flex: 1 1 140px;
+  min-width: 100px;
+}
+.item-fac-skb-row input[type="date"] {
+  flex: 0 0 142px;
+}
+.item-fac-skb-row .rm-skb {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--coral);
+}
+.item-fac-skb-row .rm-skb:hover {
+  background: #fdeaea;
+}
+.item-fac-empty {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+  padding: 4px 0;
 }
 
 .calc-box {

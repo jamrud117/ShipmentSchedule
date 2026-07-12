@@ -63,6 +63,17 @@
 
   const JENIS_OPTIONS = ["Bahan Baku", "Barang Modal", "Barang Penolong"];
 
+  // Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap).
+  // "Lainnya" selalu jadi opsi terakhir — nilainya bebas (jenisLainnya).
+  const SKB_TYPE_OPTIONS = [
+    "BM",
+    "PPN",
+    "PPH",
+    "Masterlist",
+    "E-COO",
+    "Lainnya",
+  ];
+
   /* ==================================================================
      HELPERS
   ================================================================== */
@@ -151,7 +162,60 @@
       harga: 0,
       netto: 0,
       bruto: 0,
+      // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama
+      // (skb), bisa berisi berapapun entri. E-COO cuma salah satu "jenis"
+      // di dalamnya (lihat SKB_TYPE_OPTIONS), bukan field terpisah lagi.
+      skb: [],
+      // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di
+      // tabel draft), TIDAK pernah dikirim ke database — lihat itemToRow().
+      _facOpen: false,
     };
+  }
+
+  // Satu entri SKB dalam daftar per-barang. "jenis" salah satu dari
+  // SKB_TYPE_OPTIONS; kalau "Lainnya", teks bebasnya ada di jenisLainnya.
+  function newSkbEntry() {
+    return { jenis: "PPH", jenisLainnya: "", nomor: "", tanggal: "" };
+  }
+
+  // Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis. "PPH"
+  // atau "PPH, PPN" (dari kolom FASILITAS/SKB di file Excel legacy), jadi
+  // daftar entri SKB terstruktur. Dipakai di Bulk Import untuk mengisi SKB
+  // barang pertama (data lama tidak punya info per-barang, jadi baris
+  // pertama dipakai sebagai perkiraan terbaik).
+  function skbTextToEntries(raw) {
+    return String(raw || "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => {
+        const match = SKB_TYPE_OPTIONS.find(
+          (o) => o !== "Lainnya" && o.toLowerCase() === t.toLowerCase(),
+        );
+        return match
+          ? { jenis: match, jenisLainnya: "", nomor: "", tanggal: "" }
+          : { jenis: "Lainnya", jenisLainnya: t, nomor: "", tanggal: "" };
+      });
+  }
+
+  // Bersihkan 1 entri SKB (dipakai baik untuk draft di form maupun hasil
+  // baca dari Supabase) supaya selalu punya ke-4 key-nya dengan tipe yang
+  // benar, jadi kode lain tidak perlu jaga-jaga field hilang/undefined.
+  function sanitizeSkbEntry(sk) {
+    const jenis = SKB_TYPE_OPTIONS.includes(sk && sk.jenis)
+      ? sk.jenis
+      : "Lainnya";
+    return {
+      jenis,
+      jenisLainnya: (sk && sk.jenisLainnya) || "",
+      nomor: (sk && sk.nomor) || "",
+      tanggal: (sk && sk.tanggal) || "",
+    };
+  }
+
+  function sanitizeSkbList(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(sanitizeSkbEntry);
   }
 
   function newStop() {
@@ -213,7 +277,10 @@
     ppn: "ppn",
     pph: "pph",
     pi: "pi",
-    skb: "skb",
+    // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini — SKB
+    // sekarang dicatat per barang (lihat shipment_items.skb di
+    // itemToRow/rowToItem). Kolom shipments.skb di database dibiarkan ada
+    // untuk data lama, tapi aplikasi tidak baca/tulis ke situ lagi.
     package: "package",
     routeType: "route_type",
   };
@@ -282,6 +349,16 @@
       harga: Number(it.harga) || 0,
       netto: Number(it.netto) || 0,
       bruto: Number(it.bruto) || 0,
+      // Fasilitas per barang — SKB & E-COO 1 array yang sama (entri
+      // dengan jenis "E-COO" = sertifikat asal, sisanya = surat bebas
+      // pajak). sanitizeSkbList di sini cuma jaga-jaga field tidak
+      // lengkap/rusak sebelum dikirim ke Supabase. Entri dengan
+      // nomor+tanggal kosong TETAP disimpan (mis. baru pilih jenisnya,
+      // belum sempat isi nomor) — dibiarkan apa adanya, bukan tugas
+      // layer ini untuk memvalidasi. Kolom e_coo/e_coo_nomor/
+      // e_coo_tanggal di DB sudah DEPRECATED, tidak lagi ditulis dari
+      // sini — lihat migrasi di schema.sql.
+      skb: sanitizeSkbList(it.skb),
     };
   }
 
@@ -296,6 +373,8 @@
       harga: Number(row.harga) || 0,
       netto: Number(row.netto) || 0,
       bruto: Number(row.bruto) || 0,
+      skb: sanitizeSkbList(row.skb),
+      _facOpen: false,
     };
   }
 
@@ -465,8 +544,8 @@
 
   const cardContainer = $("#cardContainer");
   const emptyState = $("#emptyState");
-  const shipmentModalEl = $("#shipmentModal");
-  const shipmentModal = new bootstrap.Modal(shipmentModalEl);
+  const viewListEl = $("#viewList");
+  const viewFormEl = $("#viewForm");
   const detailViewModalEl = $("#detailViewModal");
   const detailViewModal = new bootstrap.Modal(detailViewModalEl);
   const confirmModalEl = $("#confirmModal");
@@ -843,9 +922,39 @@
     return hasMeaningfulValue(v) ? v : "—";
   }
 
+  // Ringkasan fasilitas lintas-barang untuk badge kartu — dihitung dari
+  // shipment_items sekarang (bukan lagi dari 1 field skb di shipment).
+  // E-COO DIKECUALIKAN dari hitungan ini (punya badge sendiri) walau
+  // sekarang tersimpan di array yang sama — karena secara aturan
+  // kepabeanan keduanya beda: SKB = bebas pajak, E-COO = tarif
+  // preferensi asal barang.
+  function totalSkbCount(s) {
+    return (s.items || []).reduce(
+      (n, it) => n + (it.skb || []).filter((sk) => sk.jenis !== "E-COO").length,
+      0,
+    );
+  }
+  function hasAnyEcoo(s) {
+    return (s.items || []).some((it) =>
+      (it.skb || []).some((sk) => sk.jenis === "E-COO"),
+    );
+  }
+
+  // Daftar nama barang buat kartu depan (info-grid) — dipotong kalau
+  // kepanjangan supaya kartu tidak melar, sisanya diringkas "+N lainnya".
+  function itemNamesSummary(s, maxShown = 4) {
+    const names = (s.items || [])
+      .map((it) => (it.namaBarang || "").trim())
+      .filter(Boolean);
+    if (!names.length) return "—";
+    if (names.length <= maxShown) return names.join(", ");
+    return `${names.slice(0, maxShown).join(", ")} +${names.length - maxShown} lainnya`;
+  }
+
   function buildTags(s, totals) {
     const lbl = ML();
     const stopCount = routeStopList(s).length;
+    const skbCount = totalSkbCount(s);
     return [
       s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
       totals.totalUSD
@@ -860,8 +969,11 @@
       lbl.showDuty && hasMeaningfulValue(s.pi)
         ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI</span>`
         : "",
-      lbl.showDuty && hasMeaningfulValue(s.skb)
-        ? `<span class="tag tag-skb">SKB ${escapeHtml(s.skb)}</span>`
+      lbl.showDuty && skbCount
+        ? `<span class="tag tag-skb"><i class="bi bi-shield-check"></i> SKB × ${skbCount}</span>`
+        : "",
+      hasAnyEcoo(s)
+        ? `<span class="tag tag-ecoo"><i class="bi bi-patch-check"></i> E-COO</span>`
         : "",
     ]
       .filter(Boolean)
@@ -910,12 +1022,13 @@
 
       <div class="info-grid">
         <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> Rute</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
-        <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
+        <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">PIC: ${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
         <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${s.transport === "udara" ? "Pesawat" : "Vessel"}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${s.transport === "udara" ? "No. Flight" : "Voyage"} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Netto</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
+        <div class="info-item info-item--wide"><div class="info-label"><i class="bi bi-boxes"></i> Nama Barang</div><div class="info-value">${escapeHtml(itemNamesSummary(s))}</div></div>
       </div>
 
       <div class="tag-row">${buildTags(s, totals)}</div>
@@ -1381,10 +1494,17 @@
        diisi di SETIAP baris/barang.
      - HANYA diisi 1x di baris PERTAMA, dikosongkan di baris berikutnya:
        IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME, NDPBM, INCOTERMS,
-       TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI, FASILITAS/SKB,
+       TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI,
        NO. INVOICE, VESSEL, PACKAGE.
      - Field yang tetap diulang di setiap baris: FREIGHT, INSURANCE, CIF,
-       FOB RUPIAH, CIF RUPIAH, PI.
+       FOB RUPIAH, CIF RUPIAH, PI, FASILITAS/SKB.
+     - FASILITAS/SKB: gabungan SEMUA jenis fasilitas yang dipakai di
+       pengiriman ini (SKB & E-COO, dari array skb SEMUA barang), masing-
+       masing jenis HANYA DITULIS SEKALI meski dipakai di banyak barang
+       (mis. barang 1 punya E-COO, barang 2 punya SKB PPH, barang 3 punya
+       SKB Masterlist -> kolomnya tetap "E-COO, PPH, Masterlist", bukan
+       diulang per-barang). Nilainya sama di semua baris, sama seperti
+       FREIGHT/INSURANCE/PI. Lihat shipmentFacilitiesSummary().
      - BEA MASUK/PPN/PPH/TOTAL BM+PDRI disalin PERSIS sesuai nilai yang
        tampil di card/detail (lihat computeCustoms): TOTAL BM+PDRI = 0
        kalau BEA MASUK = 0, selain itu = BEA MASUK + PPN + PPH. TIDAK
@@ -1397,10 +1517,34 @@
        baris ke-2 baru dibuat khusus untuk House, kolom lain kosong).
      - Kalau barangnya lebih dari satu, tiap barang jadi baris baru.
   ================================================================== */
+  // Gabungan fasilitas 1 PENGIRIMAN (bukan per barang) untuk kolom
+  // FASILITAS/SKB di "Salin ke Excel" & Bulk Export: tiap jenis fasilitas
+  // yang dipakai di barang manapun (termasuk E-COO — sekarang cuma
+  // salah satu "jenis" di array skb yang sama, bukan field terpisah),
+  // di-dedupe berdasarkan labelnya (case-insensitive) supaya "PPH" yang
+  // muncul di 2 barang berbeda tidak dobel ditulis.
+  function shipmentFacilitiesSummary(items) {
+    const seen = new Set();
+    const parts = [];
+    const addLabel = (label) => {
+      const clean = (label || "").trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      parts.push(clean);
+    };
+    (items || []).forEach((it) => {
+      (it.skb || []).forEach((sk) => addLabel(skbEntryLabel(sk)));
+    });
+    return parts.join(", ");
+  }
+
   function buildExcelCopyRows(s, formatter) {
     formatter = formatter || clipboardFormatter;
     const calc = computeCustoms(s);
     const items = s.items || [];
+    const facilitiesSummary = shipmentFacilitiesSummary(items);
 
     const masterBL = (s.masterBL || "").trim();
     const houseBL = (s.houseBL || "").trim();
@@ -1426,7 +1570,9 @@
       20,
       21,
       22, // TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI
-      24, // FASILITAS / SKB
+      // 24 (FASILITAS/SKB) SENGAJA TIDAK di sini lagi — SKB sekarang per
+      // barang, jadi diisi ulang di TIAP baris (lihat buildRowForItem),
+      // bukan cuma baris pertama.
       26,
       27,
       28, // NO. INVOICE, VESSEL, PACKAGE
@@ -1458,7 +1604,7 @@
         formatter.num(pphVal, 2), // 21 PPH
         formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
         formatter.text(s.pi), // 23 PI
-        formatter.text(s.skb), // 24 FASILITAS / SKB
+        formatter.text(facilitiesSummary), // 24 FASILITAS / SKB (gabungan 1 pengiriman, tiap jenis 1x)
         formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
         formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
         formatter.text(s.voyage), // 27 VESSEL -> nomor pengangkut
@@ -1640,7 +1786,8 @@
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const id = btn.dataset.id;
-    if (btn.dataset.action === "edit") openModal(id);
+    if (btn.dataset.action === "edit")
+      location.hash = "#/edit/" + encodeURIComponent(id);
     if (btn.dataset.action === "viewDetail") openDetailView(id);
     if (btn.dataset.action === "copyExcel") handleCopyExcel(id);
     if (btn.dataset.action === "delete") {
@@ -1662,8 +1809,10 @@
     }
   });
 
-  $("#btnAdd").addEventListener("click", () => openModal(null));
-  $("#btnAddEmpty").addEventListener("click", () => openModal(null));
+  $("#btnAdd").addEventListener("click", () => (location.hash = "#/new"));
+  $("#btnAddEmpty").addEventListener("click", () => (location.hash = "#/new"));
+  $("#btnFormBack").addEventListener("click", goBackToList);
+  $("#btnFormCancel").addEventListener("click", goBackToList);
 
   /* ==================================================================
      MODAL TABS
@@ -1769,12 +1918,76 @@
 
   /* ==================================================================
      ITEM TABLE (draft, inside modal)
+     Kolom "Fasilitas" membuka panel per-barang (baris tambahan, penuh
+     lebar) berisi 1 daftar fasilitas per barang, jumlahnya bebas (0, 1,
+     2, atau lebih). E-COO cuma salah satu "jenis" yang bisa dipilih di
+     situ (sama seperti BM/PPN/PPH/Masterlist/Lainnya) — bukan blok
+     terpisah lagi, karena secara input keduanya memang sama: pilih
+     jenis, isi nomor & tanggal dokumen. Re-render penuh hanya untuk
+     perubahan STRUKTUR (buka/tutup panel, tambah/hapus entri, ganti
+     jenis) — mengetik di nomor/tanggal memutasi draftItems langsung
+     tanpa render ulang, supaya fokus tidak hilang (pola yang sama
+     dipakai di seluruh tabel barang & stop transit).
   ================================================================== */
+  function skbEntryLabel(sk) {
+    if (sk.jenis === "Lainnya")
+      return (sk.jenisLainnya || "").trim() || "Lainnya";
+    return sk.jenis;
+  }
+
+  function facilitiesButtonLabel(it) {
+    const list = it.skb || [];
+    if (!list.length) return "Fasilitas";
+    const ecooCount = list.filter((sk) => sk.jenis === "E-COO").length;
+    const skbCount = list.length - ecooCount;
+    const parts = [];
+    if (skbCount) parts.push(`SKB ${skbCount}`);
+    if (ecooCount) parts.push("E-COO");
+    return parts.join(" · ");
+  }
+
+  function facilitiesPanelHtml(it, idx) {
+    const skbList = it.skb || [];
+    const skbRowsHtml = skbList.length
+      ? skbList
+          .map(
+            (sk, skIdx) => `
+          <div class="item-fac-skb-row">
+            <select data-fac="jenis" data-idx="${idx}" data-skidx="${skIdx}">
+              ${SKB_TYPE_OPTIONS.map((o) => `<option value="${o}" ${o === sk.jenis ? "selected" : ""}>${o}</option>`).join("")}
+            </select>
+            ${
+              sk.jenis === "Lainnya"
+                ? `<input type="text" class="skb-lainnya" data-fac="jenisLainnya" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.jenisLainnya)}" placeholder="Sebutkan jenisnya">`
+                : ""
+            }
+            <input type="text" data-fac="nomor" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.nomor)}" placeholder="${sk.jenis === "E-COO" ? "Nomor E-COO" : "Nomor SKB"}">
+            <input type="date" data-fac="tanggal" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.tanggal)}">
+            <button type="button" class="rm-skb" data-idx="${idx}" data-skidx="${skIdx}" title="Hapus fasilitas ini"><i class="bi bi-x-lg"></i></button>
+          </div>`,
+          )
+          .join("")
+      : `<div class="item-fac-empty">Belum ada fasilitas untuk barang ini.</div>`;
+
+    return `
+      <tr class="item-fac-row" data-idx="${idx}">
+        <td colspan="11">
+          <div class="item-fac-panel">
+            <div class="item-fac-skb-head">
+              <b>Fasilitas (SKB &amp; E-COO)</b>
+              <button type="button" class="btn-add-skb" data-idx="${idx}"><i class="bi bi-plus-lg"></i> Tambah Fasilitas</button>
+            </div>
+            ${skbRowsHtml}
+          </div>
+        </td>
+      </tr>`;
+  }
+
   function renderItemTable() {
     const tbody = $("#itemTableBody");
     tbody.innerHTML = draftItems
-      .map(
-        (it, idx) => `
+      .map((it, idx) => {
+        const mainRow = `
       <tr data-idx="${idx}">
         <td><input type="text" data-f="namaBarang" value="${escapeAttr(it.namaBarang)}" placeholder="Nama barang"></td>
         <td><input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="0000.00.00"></td>
@@ -1783,6 +1996,11 @@
             ${JENIS_OPTIONS.map((o) => `<option value="${o}" ${o === it.jenisBarang ? "selected" : ""}>${o}</option>`).join("")}
           </select>
         </td>
+        <td class="text-center">
+          <button type="button" class="btn-facilities ${(it.skb || []).length ? "has-value" : ""}" data-act="toggle-fac" data-idx="${idx}">
+            <span>${facilitiesButtonLabel(it)}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
+          </button>
+        </td>
         <td><input type="number" step="0.01" min="0" data-f="qty" value="${it.qty}"></td>
         <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="KG/PCS/SET" list="satuanList"></td>
         <td><input type="number" step="0.01" min="0" data-f="harga" value="${it.harga}"></td>
@@ -1790,9 +2008,9 @@
         <td><input type="number" step="0.01" min="0" data-f="bruto" value="${it.bruto}"></td>
         <td><input type="text" class="subtotal" readonly value="${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}"></td>
         <td><button type="button" class="rm-row" data-idx="${idx}" title="Hapus barang ini"><i class="bi bi-x-lg"></i></button></td>
-      </tr>
-    `,
-      )
+      </tr>`;
+        return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
+      })
       .join("");
     recalcCustoms();
   }
@@ -1802,26 +2020,95 @@
     if (!tr) return;
     const idx = Number(tr.dataset.idx);
     const field = e.target.dataset.f;
-    if (!field) return;
-    draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(field)
-      ? Number(e.target.value)
-      : e.target.value;
-    const subtotalInput = tr.querySelector(".subtotal");
-    subtotalInput.value = fmtUSD(
-      (Number(draftItems[idx].qty) || 0) * (Number(draftItems[idx].harga) || 0),
-    );
-    recalcCustoms();
+    if (field) {
+      draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(
+        field,
+      )
+        ? Number(e.target.value)
+        : e.target.value;
+      const subtotalInput = tr.querySelector(".subtotal");
+      subtotalInput.value = fmtUSD(
+        (Number(draftItems[idx].qty) || 0) *
+          (Number(draftItems[idx].harga) || 0),
+      );
+      recalcCustoms();
+      return;
+    }
+    // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/E-COO):
+    // mutasi langsung ke draftItems TANPA render ulang, supaya fokus/cursor
+    // tidak hilang saat mengetik.
+    const fac = e.target.dataset.fac;
+    if (!fac) return;
+    const skIdxAttr = e.target.dataset.skidx;
+    if (skIdxAttr !== undefined) {
+      const entry = draftItems[idx].skb[Number(skIdxAttr)];
+      if (
+        entry &&
+        (fac === "nomor" || fac === "tanggal" || fac === "jenisLainnya")
+      ) {
+        entry[fac] = e.target.value;
+      }
+    }
+  });
+
+  $("#itemTableBody").addEventListener("change", (e) => {
+    const tr = e.target.closest("tr");
+    if (!tr) return;
+    const idx = Number(tr.dataset.idx);
+    const fac = e.target.dataset.fac;
+    if (fac === "jenis") {
+      const skIdx = Number(e.target.dataset.skidx);
+      const entry = draftItems[idx].skb[skIdx];
+      if (!entry) return;
+      entry.jenis = e.target.value;
+      renderItemTable();
+      if (entry.jenis === "Lainnya" || entry.jenis === "E-COO") {
+        const focusField = entry.jenis === "Lainnya" ? "jenisLainnya" : "nomor";
+        const target = $(
+          `input[data-fac="${focusField}"][data-idx="${idx}"][data-skidx="${skIdx}"]`,
+        );
+        if (target) target.focus();
+      }
+    }
   });
 
   $("#itemTableBody").addEventListener("click", (e) => {
-    const btn = e.target.closest(".rm-row");
-    if (!btn) return;
-    if (draftItems.length <= 1) {
-      showToast("Minimal harus ada 1 barang dalam pengiriman ini.", "danger");
+    const rmRow = e.target.closest(".rm-row");
+    if (rmRow) {
+      if (draftItems.length <= 1) {
+        showToast("Minimal harus ada 1 barang dalam pengiriman ini.", "danger");
+        return;
+      }
+      draftItems.splice(Number(rmRow.dataset.idx), 1);
+      renderItemTable();
       return;
     }
-    draftItems.splice(Number(btn.dataset.idx), 1);
-    renderItemTable();
+    const toggleBtn = e.target.closest("[data-act='toggle-fac']");
+    if (toggleBtn) {
+      const idx = Number(toggleBtn.dataset.idx);
+      draftItems[idx]._facOpen = !draftItems[idx]._facOpen;
+      renderItemTable();
+      return;
+    }
+    const addSkbBtn = e.target.closest(".btn-add-skb");
+    if (addSkbBtn) {
+      const idx = Number(addSkbBtn.dataset.idx);
+      draftItems[idx].skb.push(newSkbEntry());
+      renderItemTable();
+      const newSkIdx = draftItems[idx].skb.length - 1;
+      const target = $(
+        `input[data-fac="nomor"][data-idx="${idx}"][data-skidx="${newSkIdx}"]`,
+      );
+      if (target) target.focus();
+      return;
+    }
+    const rmSkbBtn = e.target.closest(".rm-skb");
+    if (rmSkbBtn) {
+      const idx = Number(rmSkbBtn.dataset.idx);
+      const skIdx = Number(rmSkbBtn.dataset.skidx);
+      draftItems[idx].skb.splice(skIdx, 1);
+      renderItemTable();
+    }
   });
 
   $("#btnAddItem").addEventListener("click", () => {
@@ -2216,7 +2503,7 @@
       );
     }
 
-    return { fields, items, notes, modeHint };
+    return { fields, items, notes, modeHint, source: "excel" };
   }
 
   function setFieldIfPresent(id, value) {
@@ -2308,7 +2595,23 @@
     applyTransportLabels();
     renderItemTable();
 
-    const summary = `${filled} field & ${parsed.items.length} barang terisi otomatis dari file Excel.`;
+    const facParts = [];
+    const skbCount = parsed.items.reduce(
+      (n, it) => n + (it.skb || []).filter((sk) => sk.jenis !== "E-COO").length,
+      0,
+    );
+    if (skbCount) facParts.push(`${skbCount} SKB`);
+    if (
+      parsed.items.some((it) =>
+        (it.skb || []).some((sk) => sk.jenis === "E-COO"),
+      )
+    )
+      facParts.push("E-COO");
+    const facSuffix = facParts.length
+      ? ` (termasuk ${facParts.join(" & ")})`
+      : "";
+    const sourceLabel = parsed.source === "pdf" ? "PDF" : "Excel";
+    const summary = `${filled} field & ${parsed.items.length} barang terisi otomatis dari file ${sourceLabel}${facSuffix}.`;
     return { summary, notes };
   }
 
@@ -2334,26 +2637,455 @@
     $("#fileImportExcel").click();
   });
 
+  /* ==================================================================
+     IMPORT DARI PDF (dokumen PIB BC 2.0)
+     Tombol "Import Excel/PDF" sekarang juga menerima file .pdf hasil
+     cetak/simpan Pemberitahuan Impor Barang. pdf.js dimuat lazy (baru
+     di-fetch saat file .pdf pertama kali dipilih) lewat dynamic import
+     dari CDN, supaya pengguna yang cuma pakai Excel tidak perlu
+     men-download library ini sama sekali.
+
+     CATATAN JUJUR soal akurasi: teks yang diekstrak dari PDF TIDAK
+     selalu mengikuti urutan visual form (label & isi kadang jadi 2
+     blok terpisah karena PDF-nya multi-kolom). Bagian yang paling
+     bisa diandalkan adalah lembar "PEMENUHAN PERSYARATAN/FASILITAS"
+     (satu baris = satu dokumen/fasilitas, urutannya selalu rapi) —
+     dari situ SKB (bisa banyak) dan E-COO diambil. Bagian header
+     (freight/insurance/NDPBM/berat) memakai urutan tetap sesuai
+     template resmi BC 2.0 dan sudah divalidasi silang lewat rumus
+     Nilai FOB + Freight + Insurance = Nilai Pabean — tapi tetap
+     tandai sebagai "best-effort" karena baru diuji dari 1 contoh
+     dokumen. Selalu cek ulang sebelum simpan.
+  ================================================================== */
+  let pdfjsLibPromise = null;
+  function ensurePdfJs() {
+    if (!pdfjsLibPromise) {
+      const VER = "6.1.200";
+      pdfjsLibPromise = import(
+        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${VER}/build/pdf.mjs`
+      ).then((lib) => {
+        lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${VER}/build/pdf.worker.mjs`;
+        return lib;
+      });
+    }
+    return pdfjsLibPromise;
+  }
+
+  // Susun ulang item teks PDF (yang datang sebagai daftar potongan kata
+  // dengan koordinat x/y) jadi baris-baris teks mengikuti posisi vertikal
+  // (atas ke bawah), lalu horizontal (kiri ke kanan) dalam 1 baris — jauh
+  // lebih terbaca utk regex daripada sekadar digabung mentah-mentah.
+  //
+  // CATATAN soal spasi: sebagian PDF PIB (terutama kolom "Uraian" isian
+  // barang) menulis teksnya KARAKTER PER KARAKTER — tiap huruf jadi 1
+  // "item" pdf.js sendiri dengan jarak x persis 0 dari huruf sebelumnya
+  // (dipakai dokumen sumbernya utk justify teks supaya pas lebar kolom).
+  // Kalau tiap ganti item SELALU disambung pakai 1 spasi (perilaku lama),
+  // hasilnya rusak: "U r a i a n : B E A D R I N G ..." — bikin SEMUA
+  // regex label di bawah gagal total (termasuk yang nentuin PDF ini
+  // "dikenali" atau tidak). Makanya spasi HANYA disisipkan kalau memang
+  // ada jarak horizontal nyata antar-item, diukur relatif ke ukuran
+  // fontnya (transform[0]) supaya tetap akurat di font besar/kecil —
+  // dari sampel dokumen nyata, jarak antar-huruf dalam 1 kata yang
+  // di-justify = 0, sedangkan jarak spasi asli antar-kata = ~30% ukuran
+  // font, jadi threshold 15% di bawah aman membedakan keduanya.
+  function groupPdfItemsIntoLines(items, yTolerance = 2.5) {
+    const sorted = [...items].sort(
+      (a, b) =>
+        b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
+    );
+    const lines = [];
+    let current = null;
+    let currentY = null;
+    sorted.forEach((item) => {
+      const y = item.transform[5];
+      if (current === null || Math.abs(y - currentY) > yTolerance) {
+        current = [];
+        lines.push(current);
+        currentY = y;
+      }
+      current.push(item);
+    });
+    return lines
+      .map((line) => line.sort((a, b) => a.transform[4] - b.transform[4]))
+      .map((line) => {
+        let text = "";
+        let prevEnd = null;
+        line.forEach((it) => {
+          const x = it.transform[4];
+          const fontSize =
+            Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 1;
+          const gapThreshold = Math.max(0.5, fontSize * 0.15);
+          if (prevEnd !== null && x - prevEnd > gapThreshold) text += " ";
+          text += it.str;
+          prevEnd = x + (it.width || 0);
+        });
+        return text;
+      });
+  }
+
+  async function extractPdfText(file) {
+    const pdfjsLib = await ensurePdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pageTexts = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      pageTexts.push(groupPdfItemsIntoLines(content.items).join("\n"));
+    }
+    return pageTexts.join("\n\n");
+  }
+
+  function pibDateToISO(dmy) {
+    const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec((dmy || "").trim());
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+  }
+  // Angka gaya PIB: koma = pemisah ribuan, titik = desimal (mis.
+  // "17,979,311.70") — beda dari excelNum() yang koma-nya desimal ala ID.
+  function pibNum(s) {
+    if (s == null) return null;
+    const n = Number(String(s).replace(/,/g, ""));
+    return isFinite(n) ? n : null;
+  }
+
+  // Dipakai handler file-change utk memutuskan "PDF ini PIB atau bukan"
+  // TANPA bergantung ke field mana pun yang berhasil di-parse posisinya —
+  // judul dokumen ini SELALU 1 baris utuh di baris paling atas halaman 1,
+  // jadi jauh lebih tahan-banting dibanding cek "docNo ada / items ada"
+  // yang gampang false-negative kalau kolom form-nya berantakan.
+  const PIB_TITLE_RE = /PEMBERITAHUAN\s+IMPOR\s+BARANG/i;
+
+  function parsePibPdfText(text) {
+    const notes = [];
+    const grab = (re) => {
+      const mm = text.match(re);
+      return mm ? mm[1].trim() : "";
+    };
+    // Field 1-baris yang labelnya kadang kena tempel nomor field LAIN di
+    // ujungnya (kolom sebelah numpang di baris yang sama akibat tata
+    // letak 2 kolom form ini) — potong sebelum penanda field baru itu
+    // muncul, mis. "PT ... INDONESIA 16. Transaksi" -> berhenti sebelum
+    // " 16. ".
+    const stopAtNextField = (s) =>
+      (s || "").split(/\s+\d{1,2}[a]?\.\s+(?=[A-Z])/)[0].trim();
+
+    // --- Lembar "Pemenuhan Persyaratan/Fasilitas": baris per baris,
+    // paling reliable karena tidak ada kolom bersisian yang bikin teks
+    // ekstraksi jadi kacau. Dari sini: Invoice, AWB, Master AWB, semua
+    // SKB (bisa lebih dari 1), dan E-COO. Kolom terakhir tabel ini ("YA /
+    // TIDAK" — dokumen dilampirkan atau tidak) ada di baris yang sama
+    // dengan nomor dokumen jadi kadang ikut nempel; dibuang lewat grup
+    // opsional di regex-nya + dibersihkan sekali lagi sebagai jaring
+    // pengaman. Label yang panjang (mis. "ELECTRONIC CERTIFICATE OF
+    // ORIGIN (E-CO)") kadang wrap ke baris berikutnya SEBELUM "Tgl." —
+    // makanya ada toleransi sampai ~20 karakter tambahan sebelum "Tgl.".
+    const docTableRe =
+      /(\d+)\s+(\d{3})\s+([A-Z][A-Z()./\-\s]*?)\s*No\.\s*([^\n]+?)(?:\s+YA\s*\/\s*TIDAK)?\s*\n\s*[^\n]{0,20}?Tgl\.\s*(\d{2}-\d{2}-\d{4})/g;
+    const docRows = [];
+    let m;
+    while ((m = docTableRe.exec(text))) {
+      const nomorClean = m[4]
+        .trim()
+        .replace(/\s+YA\s*\/\s*TIDAK\s*$/i, "")
+        .trim();
+      docRows.push({ label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
+    }
+    const findDoc = (re) => docRows.find((r) => re.test(r.label));
+    const invoiceRow = findDoc(/^INVOICE$/i);
+    const houseRow = findDoc(/^AWB$/i) || findDoc(/HOUSE/i);
+    const masterRow = findDoc(/MASTER\s*(AWB|B\/?L)/i);
+    const skbRows = docRows.filter((r) =>
+      /SURAT KETERANGAN BEBAS/i.test(r.label),
+    );
+    const ecoRow = findDoc(/ELECTRONIC CERTIFICATE OF ORIGIN|\bE-?CO\b/i);
+
+    const skbList = skbRows.map((r) => {
+      const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
+      const raw = (tm && tm[1] ? tm[1] : "").toUpperCase();
+      const known =
+        SKB_TYPE_OPTIONS.includes(raw) && raw !== "LAINNYA" ? raw : null;
+      return known
+        ? {
+            jenis: known,
+            jenisLainnya: "",
+            nomor: r.nomor,
+            tanggal: pibDateToISO(r.tanggalDMY),
+          }
+        : {
+            jenis: "Lainnya",
+            jenisLainnya: raw || "SKB",
+            nomor: r.nomor,
+            tanggal: pibDateToISO(r.tanggalDMY),
+          };
+    });
+
+    // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari
+    // baris "Nomor Pengajuan : ... Tanggal Pengajuan : ..." (kop di
+    // SETIAP halaman) dan "Nomor : ... Tanggal : ..." (kop lembar
+    // lanjutan Pemenuhan Persyaratan) — keduanya SELALU 1 baris utuh
+    // tanpa kolom bersisian, jauh lebih stabil dibanding pola lama yang
+    // mengandalkan urutan "label lalu isi di baris terpisah" ala field
+    // "G. Nomor dan Tanggal Pendaftaran" yang gampang berantakan kena
+    // kolom PENGIRIM di sebelahnya. Pola lama tetap disimpan sebagai
+    // fallback kalau lembar lanjutannya tidak ada/tidak kebaca.
+    const noAju = grab(/Nomor Pengajuan\s*:\s*(\S+)/);
+    const pendaftaranMatch =
+      text.match(/\bNomor\s*:\s*(\d+)\s*Tanggal\s*:\s*(\d{2}-\d{2}-\d{4})/) ||
+      text.match(
+        /G\.\s*Nomor dan Tanggal Pendaftaran[\s\S]*?\n(\d{4,})\n(\d{2}-\d{2}-\d{4})/,
+      );
+
+    // --- Field berlabel jelas yang isinya 1 baris ---
+    const partyName = stopAtNextField(
+      grab(/3\.\s*Nama,\s*Alamat\s*:\s*([^\n]+)/),
+    );
+    const pelabuhanMuat = grab(/Pelabuhan Muat\s*:\s*([^\n]+)/);
+    const transportMatch = text.match(/Cara Pengangkutan\s*:\s*(UDARA|LAUT)/i);
+    const etaMatch = text.match(
+      /Perkiraan Tanggal Tiba\s*:\s*(\d{2}-\d{2}-\d{4})/,
+    );
+    // Pelabuhan Tujuan sering kepotong jadi 2 baris (nama lalu kode
+    // bandara/pelabuhan) — baris ke-2 ikut disambung KALAU memang cuma
+    // berisi kode singkat huruf besar (mis. "IDCGK"), supaya tidak asal
+    // menempel baris tak terkait kalau formatnya beda.
+    const destM = text.match(/Pelabuhan Tujuan\s*:\s*([^\n]+)\n([^\n]+)/);
+    let destination = destM ? destM[1].trim() : "";
+    if (destM && /^[A-Z]{3,6}$/.test(destM[2].trim()))
+      destination += " " + destM[2].trim();
+    // Incoterm paling stabil diambil dari field "23. Nilai : <INCOTERM>
+    // <angka>" — bukan dari asumsi posisi baris di dekat kata PENGIRIM.
+    const incoterm = grab(/23\.\s*Nilai\s*:\s*([A-Z]{3})\b/).toUpperCase();
+    const nilaiFobMatch = text.match(/23\.\s*Nilai\s*:\s*[A-Z]*\s*([\d,.]+)/);
+    const asuransiMatch = text.match(/24\.\s*Asuransi\/LDN\s*:\s*([\d,.]+)/);
+    const freightMatch = text.match(/25\.\s*Freight\s*:\s*([\d,.]+)/);
+    // NDPBM: labelnya ("22. NDPBM :") dan angkanya sering terpisah >1
+    // baris (kolom NPWP PPJK numpang di antaranya), tapi angkanya SELALU
+    // muncul tepat sesudah teks "US DOLLAR" (nama lengkap mata uang) —
+    // penanda yang jauh lebih stabil daripada jarak baris ke label.
+    const ndpbmMatch = text.match(/US DOLLAR\s+([\d,.]+)/i);
+    // Berat Kotor/Berat Bersih TOTAL (field 29/30) — baris bersih tanpa
+    // kolom bersisian, langsung sesudah baris header field 27-30.
+    const beratMatch = text.match(
+      /Berat Kotor[^\n]*Berat Bersih\s*\n[^\n]*?([\d.]+)\s+([\d.]+)\s*$/m,
+    );
+
+    // --- Nama sarana pengangkut & no. voyage/flight (field 10): bendera
+    // (2 huruf) nempel langsung di label jadi paling stabil diambil
+    // duluan. Nama vessel/maskapai & nomor voyage ada di beberapa baris
+    // sesudahnya tapi kolom PENJUAL di sebelahnya sering ikut nyelip
+    // (mis. "PENJUAL CN" muncul sebelum nama maskapai aslinya) — nomor
+    // voyage/flight dicari lewat pola khas kode maskapai (2-3 huruf +
+    // 3-5 angka, mis. "GA0879"), nama vessel diambil dari baris
+    // ALL-CAPS pertama di jendela yang sama yang BUKAN header blok
+    // pihak lain. Best-effort — boleh kosong, sudah ditandai di notes.
+    let vessel = "";
+    let voyage = "";
+    const saranaWindow = text.match(/Nama Sarana Pengangkutan[\s\S]{0,320}/);
+    if (saranaWindow) {
+      const w = saranaWindow[0];
+      const voyM = w.match(/\b([A-Z]{1,3}\d{3,5})\b/);
+      if (voyM) voyage = voyM[1];
+      const EXCLUDE_WORDS = [
+        "PENGIRIM",
+        "PENJUAL",
+        "PEMILIK",
+        "IMPORTIR",
+        "PPJK",
+        "NAMA SARANA",
+      ];
+      const candidate = w
+        .split("\n")
+        .map((l) => l.trim())
+        .find(
+          (l) =>
+            /^[A-Z][A-Z\s./&-]{3,40}$/.test(l) &&
+            l.includes(" ") &&
+            !EXCLUDE_WORDS.some((word) => l.includes(word)),
+        );
+      if (candidate) vessel = candidate;
+    }
+
+    const fields = {
+      noAju,
+      docNo: pendaftaranMatch ? pendaftaranMatch[1] : "",
+      docDate: pendaftaranMatch ? pibDateToISO(pendaftaranMatch[2]) : "",
+      party: partyName,
+      invoice: invoiceRow ? invoiceRow.nomor : "",
+      masterBL: masterRow ? masterRow.nomor : "",
+      houseBL: houseRow ? houseRow.nomor : "",
+      origin: pelabuhanMuat,
+      destination,
+      incoterm,
+      transport: transportMatch
+        ? transportMatch[1].toUpperCase() === "UDARA"
+          ? "udara"
+          : "laut"
+        : "",
+      vessel,
+      voyage,
+      actual: etaMatch ? pibDateToISO(etaMatch[1]) : "",
+      ndpbm: ndpbmMatch ? pibNum(ndpbmMatch[1]) : null,
+      freight: freightMatch ? pibNum(freightMatch[1]) : null,
+      insurance: asuransiMatch ? pibNum(asuransiMatch[1]) : null,
+      bm: null,
+      ppn: null,
+      pph: null,
+    };
+
+    // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif
+    // HS" dulu, baru "Uraian Jenis Barang", lalu "Negara Asal Barang" (1
+    // sel gabungan per barang) — jadi tiap "Pos Tarif :" menandai AWAL 1
+    // barang baru, dan Uraian dicari DI DALAM potongan teks milik barang
+    // itu (dari 1 "Pos Tarif :" ke "Pos Tarif :" berikutnya), bukan
+    // dengan jarak/urutan kaku — supaya tahan terhadap kolom "34. Tarif
+    // dan Fasilitas" di sebelahnya yang sering ikut ke-gabung ke baris
+    // yang sama. Sisa teks kolom itu (mis. "- PREFERENSI TARIF ...")
+    // yang kadang ikut nempel di ujung nama barang dipotong lewat daftar
+    // label baku form yang dikenal.
+    const NAMA_BARANG_CUTOFF =
+      /\s-\s*(KETERANGAN PAJAK|PREFERENSI TARIF|METODE\s*\d|IMPORTASI\s+ASEAN)/i;
+    const posTarifMatches = [];
+    const posTarifRe = /Pos Tarif\s*:\s*(\d+)/g;
+    let ptm;
+    while ((ptm = posTarifRe.exec(text))) {
+      posTarifMatches.push({ index: ptm.index, hsCode: ptm[1].trim() });
+    }
+    const rawItems = posTarifMatches
+      .map((pt, i) => {
+        const blockEnd =
+          i + 1 < posTarifMatches.length
+            ? posTarifMatches[i + 1].index
+            : text.length;
+        const block = text.slice(pt.index, blockEnd);
+        const uraianM = /Uraian\s*:\s*([^\n]+)/.exec(block);
+        // Qty/Netto/Satuan cuma tertangkap kalau kebetulan berurutan
+        // rapi (tanpa kolom lain nyelip) persis sesudah Pos Tarif —
+        // best-effort murni, wajar sering tidak ketemu (lihat notes).
+        const qtyM =
+          /Pos Tarif\s*:\s*\d+[^\n]*\n\s*([\d.]+)\n\s*([\d.]+)\n\s*(\d+)\n\s*([A-Z]+)\s*\(([A-Z]+)\)/.exec(
+            block,
+          );
+        const namaBarang = uraianM
+          ? uraianM[1].trim().split(NAMA_BARANG_CUTOFF)[0].trim()
+          : "";
+        return {
+          namaBarang,
+          hsCode: pt.hsCode,
+          qty: qtyM ? pibNum(qtyM[1]) : null,
+          netto: qtyM ? pibNum(qtyM[2]) : null,
+          satuan: qtyM ? qtyM[4] : "",
+        };
+      })
+      .filter((it) => it.namaBarang);
+
+    const items = rawItems.map((it, idx) => {
+      const base = {
+        ...newItem(),
+        namaBarang: it.namaBarang,
+        hsCode: it.hsCode,
+        jenisBarang: "Bahan Baku",
+      };
+      const gotQty = it.qty != null;
+      if (gotQty) base.qty = it.qty;
+      if (it.netto != null) base.netto = it.netto;
+      if (it.satuan) base.satuan = it.satuan;
+      if (idx === 0 && beratMatch) base.bruto = pibNum(beratMatch[1]) || 0;
+      if (idx === 0 && rawItems.length === 1 && gotQty) {
+        const nilaiFob = nilaiFobMatch ? pibNum(nilaiFobMatch[1]) : null;
+        if (nilaiFob != null && base.qty)
+          base.harga = roundNum(nilaiFob / base.qty, 4);
+      }
+      if (!gotQty) {
+        notes.push(
+          `Barang #${idx + 1} ("${it.namaBarang}"): qty/satuan/berat tidak terbaca otomatis dari PDF — isi manual.`,
+        );
+      } else if (rawItems.length > 1) {
+        notes.push(
+          `Barang #${idx + 1} ("${it.namaBarang}"): harga satuan & bruto tidak dihitung otomatis karena PDF ini memuat lebih dari 1 barang — isi manual.`,
+        );
+      }
+      return base;
+    });
+
+    // E-COO sekarang cuma salah satu entri di array skb yang sama (jenis
+    // "E-COO"), bukan field terpisah — digabung ke skbList SEBELUM
+    // ditempel ke barang pertama.
+    if (ecoRow) {
+      skbList.push({
+        jenis: "E-COO",
+        jenisLainnya: "",
+        nomor: ecoRow.nomor,
+        tanggal: pibDateToISO(ecoRow.tanggalDMY),
+      });
+    }
+    if (skbList.length && items.length) items[0].skb = skbList;
+
+    if (!fields.docNo)
+      notes.push(
+        "Nomor & Tanggal Pendaftaran (SPPB) tidak terbaca dari PDF — isi manual.",
+      );
+    if (!fields.vessel)
+      notes.push(
+        "Nama Vessel/Maskapai tidak terbaca otomatis dari PDF — isi manual.",
+      );
+    if (!items.length)
+      notes.push(
+        'Tidak ada baris "Pos Tarif :" / "Uraian :" yang ditemukan di PDF — daftar barang tidak terisi otomatis.',
+      );
+    if (!skbList.length && !ecoRow)
+      notes.push(
+        "Tidak ditemukan entri SKB atau E-COO di lembar Pemenuhan Persyaratan/Fasilitas — cek manual kalau seharusnya ada.",
+      );
+    notes.push(
+      "Hasil baca PDF ini best-effort (posisi teks di PDF tidak selalu berurutan) — mohon cek ulang semua field sebelum simpan, terutama Vessel, Freight/Insurance/NDPBM, dan berat per barang.",
+    );
+
+    return {
+      fields,
+      items,
+      notes,
+      modeHint: "import",
+      source: "pdf",
+      isPib: PIB_TITLE_RE.test(text),
+    };
+  }
+
   $("#fileImportExcel").addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    const isPdf =
+      file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
     const btn = $("#btnImportExcel");
     const originalHtml = btn.innerHTML;
     btn.classList.add("is-loading");
     btn.disabled = true;
-    btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Membaca file...`;
+    btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${isPdf ? "Membaca PDF..." : "Membaca file..."}`;
     try {
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array", cellDates: true });
-      const missing = ["HEADER", "BARANG"].filter((n) => !wb.Sheets[n]);
-      if (missing.length) {
-        showToast(
-          `File ini bukan format dokumen BC yang dikenali (sheet ${missing.join(", ")} tidak ada).`,
-          "danger",
-        );
-        return;
+      let parsed;
+      if (isPdf) {
+        const text = await extractPdfText(file);
+        parsed = parsePibPdfText(text);
+        if (!parsed.isPib && !parsed.fields.docNo && !parsed.items.length) {
+          showToast(
+            "PDF ini sepertinya bukan format PIB BC 2.0 yang dikenali, atau teksnya tidak terbaca (mis. hasil scan/gambar).",
+            "danger",
+          );
+          return;
+        }
+      } else {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array", cellDates: true });
+        const missing = ["HEADER", "BARANG"].filter((n) => !wb.Sheets[n]);
+        if (missing.length) {
+          showToast(
+            `File ini bukan format dokumen BC yang dikenali (sheet ${missing.join(", ")} tidak ada).`,
+            "danger",
+          );
+          return;
+        }
+        parsed = parseBcExcelWorkbook(wb);
       }
-      const parsed = parseBcExcelWorkbook(wb);
       const { summary, notes } = applyImportedBcData(parsed);
       showImportNotes(summary, notes);
       showToast(
@@ -2363,7 +3095,9 @@
     } catch (err) {
       console.error(err);
       showToast(
-        "Gagal membaca file Excel ini. Pastikan formatnya sesuai export dokumen BC (HEADER/BARANG/dst).",
+        isPdf
+          ? "Gagal membaca file PDF ini. Pastikan ini dokumen PIB BC 2.0 (bukan hasil scan/gambar) dan coba lagi."
+          : "Gagal membaca file Excel ini. Pastikan formatnya sesuai export dokumen BC (HEADER/BARANG/dst).",
         "danger",
       );
     } finally {
@@ -2373,7 +3107,63 @@
     }
   });
 
-  function openModal(id) {
+  /* ==================================================================
+     ROUTING: form Tambah/Edit Jadwal sekarang HALAMAN PENUH (bukan modal
+     lagi) supaya tidak dibatasi tinggi/scroll modal. Dikontrol lewat hash
+     URL biar tombol back browser juga jalan sebagaimana mestinya.
+       #/new         -> form tambah jadwal baru
+       #/edit/<id>   -> form edit jadwal (id dicari di mode aktif dahulu,
+                         kalau tidak ketemu dicoba di mode satunya)
+       (selain itu)  -> daftar jadwal (list)
+  ================================================================== */
+  function showListView() {
+    viewFormEl.classList.add("d-none");
+    viewListEl.classList.remove("d-none");
+    $(".mode-tabs").classList.remove("d-none");
+  }
+
+  function showFormView() {
+    viewListEl.classList.add("d-none");
+    viewFormEl.classList.remove("d-none");
+    // Toggle Import/Export di navbar tidak ada gunanya di tengah isi
+    // form (bisa bikin bingung — kelihatannya ganti mode form padahal
+    // yang berubah cuma activeMode buat halaman daftar di belakangnya),
+    // jadi disembunyikan selama form terbuka.
+    $(".mode-tabs").classList.add("d-none");
+    window.scrollTo(0, 0);
+  }
+
+  function goBackToList() {
+    location.hash = "";
+  }
+
+  function router() {
+    const hash = location.hash || "";
+    const editMatch = hash.match(/^#\/edit\/(.+)$/);
+    if (hash === "#/new") {
+      renderFormPage(null);
+      return;
+    }
+    if (editMatch) {
+      const id = decodeURIComponent(editMatch[1]);
+      if (!currentList().some((x) => x.id === id)) {
+        const otherMode = activeMode === "import" ? "export" : "import";
+        if (data[otherMode].some((x) => x.id === id)) switchMode(otherMode);
+      }
+      if (!currentList().some((x) => x.id === id)) {
+        // Data belum termuat atau ID sudah tidak ada — kembali ke daftar
+        // saja daripada menampilkan form kosong yang membingungkan.
+        goBackToList();
+        return;
+      }
+      renderFormPage(id);
+      return;
+    }
+    showListView();
+  }
+  window.addEventListener("hashchange", router);
+
+  function renderFormPage(id) {
     const lbl = ML();
     $("#importNotesBox").classList.add("d-none");
     $("#importNotesSummary").innerHTML = "";
@@ -2429,7 +3219,6 @@
       $("#fPPN").value = s.ppn || "";
       $("#fPPH").value = s.pph || "";
       $("#fPI").value = s.pi || "";
-      $("#fSKB").value = s.skb || (activeMode === "import" ? "PPH" : "");
       $("#fPackage").value = s.package || "";
       $("#fRouteType").value = s.routeType || "direct";
       draftItems = JSON.parse(
@@ -2474,7 +3263,6 @@
       $("#fTransport").value = "laut";
       $("#fStatus").value = "process";
       $("#fIncoterm").value = "FOB";
-      $("#fSKB").value = activeMode === "import" ? "PPH" : "";
       $("#fRouteType").value = "direct";
       draftItems = [newItem()];
       draftStops = [];
@@ -2482,7 +3270,7 @@
     applyTransportLabels();
     renderItemTable();
     renderRouteStopsUI();
-    shipmentModal.show();
+    showFormView();
   }
 
   $("#btnSaveShipment").addEventListener("click", async () => {
@@ -2550,7 +3338,6 @@
       ppn: Number($("#fPPN").value) || 0,
       pph: Number($("#fPPH").value) || 0,
       pi: $("#fPI").value.trim(),
-      skb: $("#fSKB").value.trim(),
       package: $("#fPackage").value.trim(),
     };
 
@@ -2566,7 +3353,7 @@
         await createShipment(payload, cleanItems, cleanStops);
       }
       await loadShipments();
-      shipmentModal.hide();
+      goBackToList();
       showToast("Jadwal berhasil disimpan.", "success");
     } catch (err) {
       console.error(err);
@@ -2582,6 +3369,22 @@
   ================================================================== */
   function fieldPair(label, value, icon) {
     return `<div class="info-item"><div class="info-label">${icon ? `<i class="bi ${icon}"></i> ` : ""}${escapeHtml(label)}</div><div class="info-value">${value || "—"}</div></div>`;
+  }
+
+  // Ringkasan fasilitas 1 barang (SKB & E-COO, bisa banyak, 1 array yang
+  // sama) untuk kolom "Fasilitas" pada tabel Daftar Barang di detail
+  // view (read-only). E-COO tetap dapat ikon beda (patch-check) biar
+  // gampang dibedakan sekilas dari SKB biasa (shield-check).
+  function itemFacilitiesCellHtml(it) {
+    const lines = (it.skb || []).map((sk) => {
+      const isEcoo = sk.jenis === "E-COO";
+      const bits = [skbEntryLabel(sk)];
+      if (hasMeaningfulValue(sk.nomor)) bits.push(sk.nomor);
+      if (sk.tanggal) bits.push(fmtDate(sk.tanggal));
+      const icon = isEcoo ? "bi-patch-check-fill" : "bi-shield-check";
+      return `<div class="detail-fac-line"><i class="bi ${icon}"></i> ${escapeHtml(bits.join(" · "))}</div>`;
+    });
+    return lines.join("") || `<span class="text-muted">—</span>`;
   }
 
   // Daftar terminal transit (read-only) untuk detail view. Kosong sama
@@ -2624,6 +3427,7 @@
         <td>${escapeHtml(it.namaBarang)}</td>
         <td>${escapeHtml(it.hsCode || "—")}</td>
         <td>${escapeHtml(it.jenisBarang || "—")}</td>
+        <td>${itemFacilitiesCellHtml(it)}</td>
         <td class="text-center">${fmtNum(it.qty)}</td>
         <td class="text-center">${escapeHtml(it.satuan || "—")}</td>
         <td class="text-center">${fmtUSD(it.harga)}</td>
@@ -2667,7 +3471,6 @@
           ${fieldPair("PPH", fmtRp(s.pph))}
           ${fieldPair("BM + PDRI", fmtRp(calc.bmPdri))}
           ${fieldPair("Keterangan PI", escapeHtml(dispVal(s.pi)))}
-          ${fieldPair("Fasilitas SKB", escapeHtml(dispVal(s.skb)))}
         </div>`;
     }
 
@@ -2716,7 +3519,7 @@
       <div class="item-table-wrap mb-2">
         <table class="item-table">
           <thead><tr>
-            <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th>
+            <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th><th>Fasilitas</th>
             <th class="text-center">Qty</th><th class="text-center">Satuan</th><th class="text-center">Harga/Unit</th>
             <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">Subtotal</th>
           </tr></thead>
@@ -2748,7 +3551,7 @@
   $("#btnGotoEdit").addEventListener("click", () => {
     const id = currentDetailId;
     detailViewModal.hide();
-    setTimeout(() => openModal(id), 150);
+    location.hash = "#/edit/" + encodeURIComponent(id);
   });
 
   /* ==================================================================
@@ -2994,11 +3797,14 @@
       s.ndpbm = excelNum(first[idx.NDPBM]);
       s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
       s.pi = excelStr(first[idx.PI]);
-      s.skb = excelStr(first[idx.SKB]);
       s.bm = excelNum(first[idx.BM]);
       s.ppn = excelNum(first[idx.PPN]);
       s.pph = excelNum(first[idx.PPH]);
     }
+    // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per
+    // barang) — sebagai perkiraan terbaik, taruh di barang pertama saja
+    // (lihat pemakaian legacySkbText di bawah, setelah `items` terbentuk).
+    const legacySkbText = mode === "import" ? excelStr(first[idx.SKB]) : "";
 
     // BL/AWB: baris pertama = Master. Baris kedua dalam grup (barang ke-2
     // ATAU baris sisipan khusus House) -> House.
@@ -3028,6 +3834,10 @@
         harga: qty ? roundNum(amount / qty, 4) : amount,
       });
     });
+
+    if (legacySkbText && items.length) {
+      items[0].skb = skbTextToEntries(legacySkbText);
+    }
 
     return { shipment: s, items };
   }
