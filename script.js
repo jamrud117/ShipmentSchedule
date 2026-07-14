@@ -2671,25 +2671,14 @@
     return pdfjsLibPromise;
   }
 
-  // Susun ulang item teks PDF (yang datang sebagai daftar potongan kata
-  // dengan koordinat x/y) jadi baris-baris teks mengikuti posisi vertikal
-  // (atas ke bawah), lalu horizontal (kiri ke kanan) dalam 1 baris — jauh
-  // lebih terbaca utk regex daripada sekadar digabung mentah-mentah.
-  //
-  // CATATAN soal spasi: sebagian PDF PIB (terutama kolom "Uraian" isian
-  // barang) menulis teksnya KARAKTER PER KARAKTER — tiap huruf jadi 1
-  // "item" pdf.js sendiri dengan jarak x persis 0 dari huruf sebelumnya
-  // (dipakai dokumen sumbernya utk justify teks supaya pas lebar kolom).
-  // Kalau tiap ganti item SELALU disambung pakai 1 spasi (perilaku lama),
-  // hasilnya rusak: "U r a i a n : B E A D R I N G ..." — bikin SEMUA
-  // regex label di bawah gagal total (termasuk yang nentuin PDF ini
-  // "dikenali" atau tidak). Makanya spasi HANYA disisipkan kalau memang
-  // ada jarak horizontal nyata antar-item, diukur relatif ke ukuran
-  // fontnya (transform[0]) supaya tetap akurat di font besar/kecil —
-  // dari sampel dokumen nyata, jarak antar-huruf dalam 1 kata yang
-  // di-justify = 0, sedangkan jarak spasi asli antar-kata = ~30% ukuran
-  // font, jadi threshold 15% di bawah aman membedakan keduanya.
-  function groupPdfItemsIntoLines(items, yTolerance = 2.5) {
+  // Versi groupPdfItemsIntoLines yang juga membawa koordinat Y & item
+  // mentah tiap baris (bukan cuma teks gabungannya) — dipakai
+  // extractItemDetailColumn() di bawah utk membatasi wilayah pencarian
+  // per kolom x/y. groupPdfItemsIntoLines (versi lama, dipakai di
+  // hampir semua ekstraksi berbasis teks) jadi cuma pembungkus tipis:
+  // ambil field .text-nya saja, tidak ada perubahan perilaku sama
+  // sekali dari sebelumnya.
+  function groupPdfItemsIntoLinesWithMeta(items, yTolerance = 2.5) {
     const sorted = [...items].sort(
       (a, b) =>
         b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
@@ -2720,8 +2709,30 @@
           text += it.str;
           prevEnd = x + (it.width || 0);
         });
-        return text;
+        return { text, y: line[0].transform[5], items: line };
       });
+  }
+
+  // Susun ulang item teks PDF (yang datang sebagai daftar potongan kata
+  // dengan koordinat x/y) jadi baris-baris teks mengikuti posisi vertikal
+  // (atas ke bawah), lalu horizontal (kiri ke kanan) dalam 1 baris — jauh
+  // lebih terbaca utk regex daripada sekadar digabung mentah-mentah.
+  //
+  // CATATAN soal spasi: sebagian PDF PIB (terutama kolom "Uraian" isian
+  // barang) menulis teksnya KARAKTER PER KARAKTER — tiap huruf jadi 1
+  // "item" pdf.js sendiri dengan jarak x persis 0 dari huruf sebelumnya
+  // (dipakai dokumen sumbernya utk justify teks supaya pas lebar kolom).
+  // Kalau tiap ganti item SELALU disambung pakai 1 spasi (perilaku lama),
+  // hasilnya rusak: "U r a i a n : B E A D R I N G ..." — bikin SEMUA
+  // regex label di bawah gagal total (termasuk yang nentuin PDF ini
+  // "dikenali" atau tidak). Makanya spasi HANYA disisipkan kalau memang
+  // ada jarak horizontal nyata antar-item, diukur relatif ke ukuran
+  // fontnya (transform[0]) supaya tetap akurat di font besar/kecil —
+  // dari sampel dokumen nyata, jarak antar-huruf dalam 1 kata yang
+  // di-justify = 0, sedangkan jarak spasi asli antar-kata = ~30% ukuran
+  // font, jadi threshold 15% di bawah aman membedakan keduanya.
+  function groupPdfItemsIntoLines(items, yTolerance = 2.5) {
+    return groupPdfItemsIntoLinesWithMeta(items, yTolerance).map((l) => l.text);
   }
 
   async function extractPdfText(file) {
@@ -2729,12 +2740,14 @@
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const pageTexts = [];
+    const pagesItems = [];
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
       pageTexts.push(groupPdfItemsIntoLines(content.items).join("\n"));
+      pagesItems.push(content.items);
     }
-    return pageTexts.join("\n\n");
+    return { text: pageTexts.join("\n\n"), pagesItems };
   }
 
   function pibDateToISO(dmy) {
@@ -2756,7 +2769,75 @@
   // yang gampang false-negative kalau kolom form-nya berantakan.
   const PIB_TITLE_RE = /PEMBERITAHUAN\s+IMPOR\s+BARANG/i;
 
-  function parsePibPdfText(text) {
+  // Ekstraksi qty/satuan/netto per barang berdasarkan KOORDINAT, bukan
+  // urutan baris teks — field 35 ("Jumlah dan Jenis Satuan Barang" /
+  // "Berat Bersih (Kg)" / "Jumlah dan Jenis Kemasan") pada template
+  // resmi BC 2.0 SELALU ada di kolom x ≈ 393-468, terpisah dari kolom
+  // Uraian (field 32, x kecil) maupun kolom Tarif & Fasilitas (field 34,
+  // x menengah) — koordinat ini stabil karena formnya baku, jauh lebih
+  // bisa diandalkan daripada nebak dari jarak baris teks yang gampang
+  // kena tabrakan kolom sebelah.
+  //
+  // Per barang, kolom field 35 ini SELALU berisi 5 baris berurutan dari
+  // atas ke bawah: [qty, satuan, netto, jumlah kemasan, jenis kemasan].
+  // Wilayah pencariannya dibatasi vertikal per HALAMAN: dari baris
+  // "Pos Tarif :" PALING ATAS di halaman itu (awal daftar barang) sampai
+  // SEBELUM baris "Jenis Pungutan" (tabel BM/PPN/PPh) atau "JAKARTA,"/
+  // "Importir/PPJK" (blok tanda tangan) — mana yang muncul duluan —
+  // supaya tidak ikut kebawa nilai dari tabel pajak atau blok lain yang
+  // kebetulan x-nya nyerempet kolom yang sama.
+  //
+  // Hasilnya CUMA dipakai kalau jumlah baris yang ketemu PAS sama
+  // jumlah barang dikali 5 — kalau ada yang tidak pas (mis. ada baris
+  // ekstra/kurang krn format beda), semua dilewati; lebih aman kosong
+  // (isi manual) daripada salah pasang nilai punya barang lain.
+  function extractItemDetailColumn(pagesItems, nItems) {
+    if (!nItems || !pagesItems || !pagesItems.length) return [];
+    const COL_X_MIN = 393;
+    const COL_X_MAX = 468;
+    const tokens = [];
+    pagesItems.forEach((rawItems) => {
+      if (!rawItems || !rawItems.length) return;
+      const allLines = groupPdfItemsIntoLinesWithMeta(rawItems);
+      const posTarifYs = allLines
+        .filter((l) => /Pos Tarif\s*:/.test(l.text))
+        .map((l) => l.y);
+      if (!posTarifYs.length) return;
+      const yStart = Math.max(...posTarifYs);
+      const endYs = allLines
+        .filter((l) => /Jenis Pungutan|JAKARTA,|Importir\/PPJK/.test(l.text))
+        .map((l) => l.y);
+      const yEnd = endYs.length ? Math.max(...endYs) : -Infinity;
+      const colItems = rawItems.filter((it) => {
+        const x = it.transform[4];
+        const y = it.transform[5];
+        return x >= COL_X_MIN && x <= COL_X_MAX && y <= yStart + 1 && y > yEnd;
+      });
+      groupPdfItemsIntoLinesWithMeta(colItems).forEach((l) =>
+        tokens.push(l.text),
+      );
+    });
+    if (tokens.length !== nItems * 5) return [];
+    const numTok = (s) => {
+      const m = /^-?([\d,]+\.?\d*)$/.exec((s || "").trim());
+      return m ? pibNum(m[1]) : null;
+    };
+    const out = [];
+    for (let i = 0; i < nItems; i++) {
+      const chunk = tokens.slice(i * 5, i * 5 + 5);
+      const qty = numTok(chunk[0]);
+      const satuan = (chunk[1] || "").split("(")[0].trim();
+      const netto = numTok(chunk[2]);
+      out.push(
+        qty != null && qty > 0 && satuan && netto != null
+          ? { qty, satuan, netto }
+          : null,
+      );
+    }
+    return out;
+  }
+
+  function parsePibPdfText(text, pagesItems) {
     const notes = [];
     const grab = (re) => {
       const mm = text.match(re);
@@ -2836,20 +2917,29 @@
         /G\.\s*Nomor dan Tanggal Pendaftaran[\s\S]*?\n(\d{4,})\n(\d{2}-\d{2}-\d{4})/,
       );
 
-    // --- Field berlabel jelas yang isinya 1 baris ---
+    // --- Field berlabel jelas yang isinya 1 baris. Anchor pakai nomor
+    // field resminya (mis. "9.", "11.", "12.") sesuai penomoran form BC
+    // 2.0 — lebih presisi daripada cuma cocokkan nama labelnya sendiri,
+    // karena nomor field itu unik & tidak mungkin ketemu di tempat lain
+    // di dokumen (idenya sama kayak dipakai di label 3/23/24/25 yang
+    // sudah lebih dulu jalan).
     const partyName = stopAtNextField(
       grab(/3\.\s*Nama,\s*Alamat\s*:\s*([^\n]+)/),
     );
-    const pelabuhanMuat = grab(/Pelabuhan Muat\s*:\s*([^\n]+)/);
-    const transportMatch = text.match(/Cara Pengangkutan\s*:\s*(UDARA|LAUT)/i);
+    const pelabuhanMuat = grab(/12\.\s*Pelabuhan Muat\s*:\s*([^\n]+)/);
+    const transportMatch = text.match(
+      /9\.\s*Cara Pengangkutan\s*:\s*(UDARA|LAUT)/i,
+    );
     const etaMatch = text.match(
-      /Perkiraan Tanggal Tiba\s*:\s*(\d{2}-\d{2}-\d{4})/,
+      /11\.\s*Perkiraan Tanggal Tiba\s*:\s*(\d{2}-\d{2}-\d{4})/,
     );
     // Pelabuhan Tujuan sering kepotong jadi 2 baris (nama lalu kode
     // bandara/pelabuhan) — baris ke-2 ikut disambung KALAU memang cuma
     // berisi kode singkat huruf besar (mis. "IDCGK"), supaya tidak asal
     // menempel baris tak terkait kalau formatnya beda.
-    const destM = text.match(/Pelabuhan Tujuan\s*:\s*([^\n]+)\n([^\n]+)/);
+    const destM = text.match(
+      /14\.\s*Pelabuhan Tujuan\s*:\s*([^\n]+)\n([^\n]+)/,
+    );
     let destination = destM ? destM[1].trim() : "";
     if (destM && /^[A-Z]{3,6}$/.test(destM[2].trim()))
       destination += " " + destM[2].trim();
@@ -2864,11 +2954,27 @@
     // muncul tepat sesudah teks "US DOLLAR" (nama lengkap mata uang) —
     // penanda yang jauh lebih stabil daripada jarak baris ke label.
     const ndpbmMatch = text.match(/US DOLLAR\s+([\d,.]+)/i);
-    // Berat Kotor/Berat Bersih TOTAL (field 29/30) — baris bersih tanpa
-    // kolom bersisian, langsung sesudah baris header field 27-30.
+    // Berat Kotor/Berat Bersih TOTAL (field 29/30) + Package (field 28,
+    // "Jumlah, Jenis, dan Merek Kemas", mis. "1 BOX, Tanpa Merk") — satu
+    // baris bersih tanpa kolom bersisian, langsung sesudah baris header
+    // field 27-30, jadi ketiganya diambil sekali jalan dari baris yang
+    // sama: teks di depan = package, dua angka di belakang = bruto/netto.
     const beratMatch = text.match(
-      /Berat Kotor[^\n]*Berat Bersih\s*\n[^\n]*?([\d.]+)\s+([\d.]+)\s*$/m,
+      /Berat Kotor[^\n]*Berat Bersih\s*\n([^\n]*?)\s*([\d.]+)\s+([\d.]+)\s*$/m,
     );
+    const packageDefault = beratMatch ? beratMatch[1].trim() : "";
+    // BM/PPN/PPh (field 37/41/43, tabel "Jenis Pungutan"): tabelnya
+    // punya 6 kolom (Dibayar/Ditanggung/Ditunda/Tidak Dipungut/
+    // Dibebaskan/Telah Dilunasi) — HANYA kolom Dibayar (angka PERTAMA di
+    // baris masing-masing) yang diambil, sesuai permintaan. Anchor pakai
+    // nomor field + label PERSIS (case-sensitive, "PPh" bukan "PPH")
+    // supaya baris "BM KITE"/"PPnBM" (yang juga diawali "BM"/"PPn") tidak
+    // ikut ketangkep — begitu nama field diikuti spasi lalu ANGKA, baris
+    // "BM KITE 0.00..."/"PPnBM 0.00..." otomatis gagal cocok karena kata
+    // "KITE"/"BM" nempel langsung tanpa spasi+angka di posisi itu.
+    const bmM = text.match(/^\d+\.\s*BM\s+([\d,.]+)/m);
+    const ppnM = text.match(/^\d+\.\s*PPN\s+([\d,.]+)/m);
+    const pphM = text.match(/^\d+\.\s*PPh\s+([\d,.]+)/m);
 
     // --- Nama sarana pengangkut & no. voyage/flight (field 10): bendera
     // (2 huruf) nempel langsung di label jadi paling stabil diambil
@@ -2928,29 +3034,59 @@
       ndpbm: ndpbmMatch ? pibNum(ndpbmMatch[1]) : null,
       freight: freightMatch ? pibNum(freightMatch[1]) : null,
       insurance: asuransiMatch ? pibNum(asuransiMatch[1]) : null,
-      bm: null,
-      ppn: null,
-      pph: null,
+      bm: bmM ? pibNum(bmM[1]) : null,
+      ppn: ppnM ? pibNum(ppnM[1]) : null,
+      pph: pphM ? pibNum(pphM[1]) : null,
+      package: packageDefault,
     };
 
     // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif
-    // HS" dulu, baru "Uraian Jenis Barang", lalu "Negara Asal Barang" (1
-    // sel gabungan per barang) — jadi tiap "Pos Tarif :" menandai AWAL 1
-    // barang baru, dan Uraian dicari DI DALAM potongan teks milik barang
-    // itu (dari 1 "Pos Tarif :" ke "Pos Tarif :" berikutnya), bukan
-    // dengan jarak/urutan kaku — supaya tahan terhadap kolom "34. Tarif
-    // dan Fasilitas" di sebelahnya yang sering ikut ke-gabung ke baris
-    // yang sama. Sisa teks kolom itu (mis. "- PREFERENSI TARIF ...")
-    // yang kadang ikut nempel di ujung nama barang dipotong lewat daftar
-    // label baku form yang dikenal.
-    const NAMA_BARANG_CUTOFF =
-      /\s-\s*(KETERANGAN PAJAK|PREFERENSI TARIF|METODE\s*\d|IMPORTASI\s+ASEAN)/i;
+    // HS" dulu, baru "Uraian Jenis Barang, Merek, Tipe, Ukuran,
+    // Spesifikasi lain", lalu "Negara Asal Barang" (1 sel gabungan per
+    // barang) — jadi tiap "Pos Tarif :" menandai AWAL 1 barang baru, dan
+    // field lain dicari DI DALAM potongan teks milik barang itu (dari 1
+    // "Pos Tarif :" ke "Pos Tarif :" berikutnya), bukan dengan jarak/
+    // urutan kaku — supaya tahan terhadap kolom "34. Tarif dan
+    // Fasilitas" di sebelahnya yang sering ikut ke-gabung ke baris yang
+    // sama.
+    //
+    // Nama barang = gabungan Uraian + Merk + Tipe + Ukuran + Spesifikasi
+    // lain (persis sub-baris field 32 itu sendiri), bukan cuma Uraian
+    // saja. Merk/Tipe/Ukuran/Spesifikasi lain masing-masing DILEWATI
+    // (tidak ikut digabung) kalau isinya kosong, "-", "TANPA MEREK",
+    // atau "TANPA TIPE" — dianggap tidak ada isinya. Field-field ini
+    // (Merk:X, Tipe:Y, Ukuran:Z,) dibatasi KOMA jadi presisi walau ada
+    // teks kolom sebelah yang ikut nempel SETELAH koma terakhirnya.
+    // "Uraian" sendiri tidak punya pembatas koma seperti itu, jadi tetap
+    // perlu dipotong pakai TAX_COLUMN_BLEED — daftar pola baku field 34
+    // ("34. Tarif dan Fasilitas") yang sering ikut ke-gabung ke baris
+    // yang sama, mis. "- PREFERENSI TARIF...", "PPH 2.5% 100% BBS",
+    // "METODE 1". Ini pola BLACKLIST (tahu apa yang harus dibuang),
+    // beda dari Merk/Tipe/dst yang WHITELIST (tahu persis batasnya).
+    const TAX_COLUMN_BLEED =
+      /\s+-?\s*(?:KETERANGAN PAJAK\b|PREFERENSI TARIF\b|IMPORTASI\s+[A-Z-]+(?:\s*\([A-Z]+\))?|METODE\s*\d|(?:BM|PPH|PPN|PPnBM|Cukai)\s+\d+(?:[.,]\d+)?\s*%)/i;
+    const isEmptySpecValue = (v) => {
+      const t = (v || "").trim();
+      return (
+        !t ||
+        t === "-" ||
+        /^tanpa\s+merek$/i.test(t) ||
+        /^tanpa\s+tipe$/i.test(t)
+      );
+    };
     const posTarifMatches = [];
     const posTarifRe = /Pos Tarif\s*:\s*(\d+)/g;
     let ptm;
     while ((ptm = posTarifRe.exec(text))) {
       posTarifMatches.push({ index: ptm.index, hsCode: ptm[1].trim() });
     }
+    // Koordinat (lebih diandalkan) dicoba duluan; hasilnya array sepanjang
+    // jumlah barang, tiap slot {qty,satuan,netto} atau null kalau bentuk
+    // kolomnya tidak sesuai dugaan (lihat extractItemDetailColumn).
+    const columnResults = extractItemDetailColumn(
+      pagesItems,
+      posTarifMatches.length,
+    );
     const rawItems = posTarifMatches
       .map((pt, i) => {
         const blockEnd =
@@ -2959,25 +3095,68 @@
             : text.length;
         const block = text.slice(pt.index, blockEnd);
         const uraianM = /Uraian\s*:\s*([^\n]+)/.exec(block);
-        // Qty/Netto/Satuan cuma tertangkap kalau kebetulan berurutan
-        // rapi (tanpa kolom lain nyelip) persis sesudah Pos Tarif —
-        // best-effort murni, wajar sering tidak ketemu (lihat notes).
-        const qtyM =
-          /Pos Tarif\s*:\s*\d+[^\n]*\n\s*([\d.]+)\n\s*([\d.]+)\n\s*(\d+)\n\s*([A-Z]+)\s*\(([A-Z]+)\)/.exec(
+        const mtuM =
+          /Merk:\s*([^,\n]*),\s*Tipe:\s*([^,\n]*),\s*Ukuran:\s*([^,\n]*),/i.exec(
             block,
           );
-        const namaBarang = uraianM
-          ? uraianM[1].trim().split(NAMA_BARANG_CUTOFF)[0].trim()
-          : "";
-        return {
-          namaBarang,
-          hsCode: pt.hsCode,
-          qty: qtyM ? pibNum(qtyM[1]) : null,
-          netto: qtyM ? pibNum(qtyM[2]) : null,
-          satuan: qtyM ? qtyM[4] : "",
-        };
+        const spekM = /Spesifikasi lain:\s*([^,\n]*),/i.exec(block);
+
+        const nameParts = [];
+        if (uraianM) {
+          const uraianClean = uraianM[1]
+            .trim()
+            .split(TAX_COLUMN_BLEED)[0]
+            .trim();
+          if (uraianClean) nameParts.push(uraianClean);
+        }
+        if (mtuM) {
+          if (!isEmptySpecValue(mtuM[1])) nameParts.push(mtuM[1].trim());
+          if (!isEmptySpecValue(mtuM[2])) nameParts.push(mtuM[2].trim());
+          if (!isEmptySpecValue(mtuM[3])) nameParts.push(mtuM[3].trim());
+        }
+        if (spekM && !isEmptySpecValue(spekM[1]))
+          nameParts.push(spekM[1].trim());
+        const namaBarang = nameParts.join(" ");
+
+        // Fallback berbasis teks (jarang cocok krn kolom sering ke-gabung)
+        // — dipakai HANYA kalau extractItemDetailColumn (koordinat, lebih
+        // diandalkan) tidak menghasilkan apa-apa utk barang ini.
+        const col = columnResults[i];
+        let qty = null;
+        let netto = null;
+        let satuan = "";
+        if (col) {
+          qty = col.qty;
+          netto = col.netto;
+          satuan = col.satuan;
+        } else {
+          const qtyM =
+            /Pos Tarif\s*:\s*\d+[^\n]*\n\s*([\d.]+)\n\s*([\d.]+)\n\s*(\d+)\n\s*([A-Z]+)\s*\(([A-Z]+)\)/.exec(
+              block,
+            );
+          if (qtyM) {
+            qty = pibNum(qtyM[1]);
+            netto = pibNum(qtyM[2]);
+            satuan = qtyM[4];
+          }
+        }
+        return { namaBarang, hsCode: pt.hsCode, qty, netto, satuan };
       })
       .filter((it) => it.namaBarang);
+
+    // Berat Kotor (bruto) di form BC 2.0 CUMA ada di level pengiriman
+    // (field 29, total) — tidak ada kolom bruto per barang sama sekali.
+    // Sebagai perkiraan terbaik, total itu dibagi proporsional ke tiap
+    // barang berdasarkan porsi netto-nya (barang yang lebih berat netto
+    // dapat porsi bruto lebih besar) — jauh lebih masuk akal daripada
+    // taruh semua di barang pertama & 0 di sisanya. Kalau netto tidak
+    // diketahui sama sekali (semua barang gagal ke-parse), dibiarkan cara
+    // lama: semua ditaruh di barang pertama saja.
+    const totalBrutoVal = beratMatch ? pibNum(beratMatch[2]) : null;
+    const totalNettoKnown = rawItems.reduce(
+      (sum, it) => sum + (it.netto || 0),
+      0,
+    );
 
     const items = rawItems.map((it, idx) => {
       const base = {
@@ -2990,8 +3169,17 @@
       if (gotQty) base.qty = it.qty;
       if (it.netto != null) base.netto = it.netto;
       if (it.satuan) base.satuan = it.satuan;
-      if (idx === 0 && beratMatch) base.bruto = pibNum(beratMatch[1]) || 0;
-      if (idx === 0 && rawItems.length === 1 && gotQty) {
+      if (totalBrutoVal != null) {
+        if (totalNettoKnown > 0 && it.netto != null) {
+          base.bruto = roundNum(
+            totalBrutoVal * (it.netto / totalNettoKnown),
+            4,
+          );
+        } else if (idx === 0) {
+          base.bruto = totalBrutoVal;
+        }
+      }
+      if (rawItems.length === 1 && gotQty) {
         const nilaiFob = nilaiFobMatch ? pibNum(nilaiFobMatch[1]) : null;
         if (nilaiFob != null && base.qty)
           base.harga = roundNum(nilaiFob / base.qty, 4);
@@ -3000,17 +3188,18 @@
         notes.push(
           `Barang #${idx + 1} ("${it.namaBarang}"): qty/satuan/berat tidak terbaca otomatis dari PDF — isi manual.`,
         );
-      } else if (rawItems.length > 1) {
-        notes.push(
-          `Barang #${idx + 1} ("${it.namaBarang}"): harga satuan & bruto tidak dihitung otomatis karena PDF ini memuat lebih dari 1 barang — isi manual.`,
-        );
       }
       return base;
     });
+    if (rawItems.length > 1 && rawItems.some((it) => it.qty != null)) {
+      notes.push(
+        "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",
+      );
+    }
 
     // E-COO sekarang cuma salah satu entri di array skb yang sama (jenis
     // "E-COO"), bukan field terpisah — digabung ke skbList SEBELUM
-    // ditempel ke barang pertama.
+    // diterapkan ke barang.
     if (ecoRow) {
       skbList.push({
         jenis: "E-COO",
@@ -3019,7 +3208,28 @@
         tanggal: pibDateToISO(ecoRow.tanggalDMY),
       });
     }
-    if (skbList.length && items.length) items[0].skb = skbList;
+    // Lembar Pemenuhan Persyaratan/Fasilitas cuma nyantumin SATU daftar
+    // SKB/E-COO utk 1 dokumen PIB (tidak dipecah per-barang), jadi dari
+    // situ saja tidak bisa tahu SKB/E-COO ini sebenarnya punya barang
+    // yang mana. Default-nya: terapkan ke SEMUA barang dulu (di-clone
+    // per barang, bukan referensi objek yang sama, supaya edit di 1
+    // barang tidak ikut mengubah barang lain) — SKB (BM/PPN/PPH/
+    // Masterlist) memang lazimnya berlaku utk seluruh barang dalam 1
+    // PIB, sedangkan E-COO lazimnya cuma utk barang tertentu (beda asal
+    // / tarif preferensi per barang) tapi tetap diikutkan ke semua
+    // barang sebagai default supaya tidak ada yang kelewat — lebih
+    // aman user tinggal HAPUS lewat tombol Fasilitas pada barang yang
+    // seharusnya tidak dapat, daripada harus nambah manual krn kelewat.
+    if (skbList.length) {
+      items.forEach((it) => {
+        it.skb = skbList.map((sk) => ({ ...sk }));
+      });
+      if (items.length > 1) {
+        notes.push(
+          "Fasilitas SKB/E-COO dari PDF diterapkan ke SEMUA barang secara default (lembar Pemenuhan Persyaratan tidak memisahkan per-barang) — cek tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya dapat (E-COO biasanya cuma berlaku untuk barang tertentu, bukan semua).",
+        );
+      }
+    }
 
     if (!fields.docNo)
       notes.push(
@@ -3064,8 +3274,8 @@
     try {
       let parsed;
       if (isPdf) {
-        const text = await extractPdfText(file);
-        parsed = parsePibPdfText(text);
+        const { text, pagesItems } = await extractPdfText(file);
+        parsed = parsePibPdfText(text, pagesItems);
         if (!parsed.isPib && !parsed.fields.docNo && !parsed.items.length) {
           showToast(
             "PDF ini sepertinya bukan format PIB BC 2.0 yang dikenali, atau teksnya tidak terbaca (mis. hasil scan/gambar).",
@@ -3802,8 +4012,10 @@
       s.pph = excelNum(first[idx.PPH]);
     }
     // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per
-    // barang) — sebagai perkiraan terbaik, taruh di barang pertama saja
-    // (lihat pemakaian legacySkbText di bawah, setelah `items` terbentuk).
+    // barang) — sama seperti import PDF, diterapkan ke SEMUA barang
+    // sebagai default (di-clone per barang), user tinggal hapus lewat
+    // tombol Fasilitas kalau ada yang tidak seharusnya dapat (lihat
+    // pemakaian legacySkbText di bawah, setelah `items` terbentuk).
     const legacySkbText = mode === "import" ? excelStr(first[idx.SKB]) : "";
 
     // BL/AWB: baris pertama = Master. Baris kedua dalam grup (barang ke-2
@@ -3836,7 +4048,10 @@
     });
 
     if (legacySkbText && items.length) {
-      items[0].skb = skbTextToEntries(legacySkbText);
+      const legacyEntries = skbTextToEntries(legacySkbText);
+      items.forEach((it) => {
+        it.skb = legacyEntries.map((sk) => ({ ...sk }));
+      });
     }
 
     return { shipment: s, items };

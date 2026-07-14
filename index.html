@@ -173,7 +173,14 @@
           </button>
         </div>
       </main>
-      <!-- ============ FOOTER ============ -->
+
+      <!-- ============ FOOTER ============
+         Sengaja di DALAM #viewList (bukan sibling di body) supaya ikut
+         disembunyikan/ditampilkan bareng sama sisa halaman daftar oleh
+         showListView()/showFormView() — sebelumnya footer ini ada di
+         LUAR #viewList, jadi tidak pernah ke-toggle: pas form dibuka,
+         footer ini tetap nongol (karena urutannya persis SEBELUM
+         #viewForm di HTML, jadinya malah nampak di ATAS form). -->
       <footer class="app-footer">
         <div class="container">
           <div class="row gy-4">
@@ -235,8 +242,25 @@
           </div>
         </div>
       </div>
-      <div class="page-form-body container mt-5">
+      <div class="page-form-body container">
         <input type="hidden" id="fId" />
+
+        <div class="page-form-import-row">
+          <button
+            type="button"
+            class="btn-import-excel"
+            id="btnImportExcel"
+            title="Isi otomatis dari file Excel dokumen BC (HEADER/ENTITAS/DOKUMEN/BARANG) atau PDF PIB BC 2.0 (khusus import)"
+          >
+            <i class="bi bi-file-earmark-arrow-up"></i> Import Excel/PDF
+          </button>
+          <input
+            type="file"
+            id="fileImportExcel"
+            accept=".xlsx,.xls,.pdf"
+            class="d-none"
+          />
+        </div>
 
         <div id="importNotesBox" class="import-notes-box d-none">
           <span class="import-notes-icon"
@@ -783,25 +807,8 @@
             </div>
           </div>
         </div>
-      </div>
-      <div class="page-form-footer">
-        <div class="page-form-footer-left">
-          <button
-            type="button"
-            class="btn-import-excel"
-            id="btnImportExcel"
-            title="Isi otomatis dari file Excel dokumen BC (HEADER/ENTITAS/DOKUMEN/BARANG) atau PDF PIB BC 2.0 (khusus import)"
-          >
-            <i class="bi bi-file-earmark-arrow-up"></i> Import Excel/PDF
-          </button>
-          <input
-            type="file"
-            id="fileImportExcel"
-            accept=".xlsx,.xls,.pdf"
-            class="d-none"
-          />
-        </div>
-        <div class="page-form-footer-right">
+
+        <div class="page-form-actions-row">
           <button type="button" class="btn btn-form-cancel" id="btnFormCancel">
             Batal
           </button>

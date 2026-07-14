@@ -38,6 +38,22 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* ---- "Sticky footer" klasik: #viewList jadi flex column sendiri
+   (header/hero tetap, main.stat-strip TUMBUH mengisi sisa ruang lewat
+   flex:1 yang sudah ada, footer ikut ketarik ke bawah SETELAHNYA) —
+   dan #viewList/#viewForm keduanya flex:1 supaya yang lagi aktif
+   (yang tidak d-none) selalu tumbuh mengisi minimal setinggi viewport,
+   bukan cuma setinggi kontennya sendiri. Tanpa ini footer akan
+   "mengambang" tanggung di tengah kalau kontennya pendek (mis. state
+   kosong/cuma 1 jadwal), bukan benar-benar nempel di dasar layar. */
+#viewList {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+#viewForm {
+  flex: 1;
+}
 
 /* ================= NAVBAR ================= */
 .main-navbar {
@@ -999,6 +1015,7 @@ body {
    .form-control/.form-select di bawah. */
 .page-form {
   min-height: 100vh;
+  padding-bottom: 48px;
   background: var(--bg);
 }
 .page-form-header {
@@ -1070,49 +1087,42 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* ---- Footer aksi (Import/Batal/Simpan) — sengaja ditaruh DI BAWAH,
-   bukan di header atas, biar sesuai konvensi form pada umumnya (isi dulu
-   dari atas, konfirmasi di bawah) dan tetap meniru modal-footer lama
-   (selalu terlihat di layar, tidak perlu scroll). PAKAI position:fixed,
-   BUKAN sticky — sticky cuma "nempel" kalau kontennya lebih tinggi dari
-   layar (baru aktif pas discroll); kalau konten formnya pendek (mis. tab
-   Kepabeanan & Biaya), sticky malah diam di posisi alirannya sendiri,
-   nyisain area kosong di bawahnya sampai batas layar. Fixed selalu
-   nempel di bawah viewport apa pun tinggi kontennya. */
-.page-form-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
-  padding: 14px 28px;
+/* ---- Import Excel/PDF & aksi Batal/Simpan: BUKAN bar mengambang lagi
+   (position:fixed/sticky sempat dicoba, hasilnya malah terasa
+   "terpisah" dari form) — sekarang keduanya baris BIASA di dalam
+   .page-form-body, ikut lebar & padding container yang sama persis
+   dengan kartu-kartu di atasnya supaya betul-betul terasa "1 section"
+   yang sama, bukan panel/toolbar terpisah. Import di paling atas
+   (sebelum stepper — masuk akal karena ini cara CEPAT isi form,
+   dilakukan sebelum isi manual), Batal & Simpan di paling bawah
+   (setelah konten tab manapun yang aktif — konvensi form pada umumnya:
+   konfirmasi di akhir). */
+.page-form-import-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  box-shadow: 0 -6px 20px -16px rgba(11, 31, 58, 0.4);
+  justify-content: flex-end;
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
 }
-.page-form-footer-left,
-.page-form-footer-right {
+.page-form-actions-row {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  padding-top: 22px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
 }
 .page-form-body {
   max-width: 1120px;
-  padding: 26px 28px 90px;
+  padding: 26px 28px 0;
 }
 @media (max-width: 767.98px) {
   .page-form-header {
     padding: 12px 16px;
   }
   .page-form-body {
-    padding: 18px 14px 116px;
+    padding: 18px 14px 0;
   }
   .page-form-title {
     max-width: 60vw;
@@ -1123,26 +1133,16 @@ body {
     height: 30px;
     font-size: 0.85rem;
   }
-  .page-form-footer {
-    padding: 10px 14px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .page-form-footer-left,
-  .page-form-footer-right {
-    width: 100%;
-  }
-  .page-form-footer-left .btn-import-excel {
+  .page-form-import-row .btn-import-excel {
     width: 100%;
     justify-content: center;
   }
-  .page-form-footer-right {
+  .page-form-actions-row {
     display: grid;
     grid-template-columns: 1fr 1.4fr;
     gap: 8px;
   }
-  .page-form-footer-right .btn {
+  .page-form-actions-row .btn {
     width: 100%;
     justify-content: center;
   }
