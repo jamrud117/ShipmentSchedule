@@ -122,7 +122,7 @@
     return (
       "$" +
       n.toLocaleString("en-US", {
-        minimumFractionDigits: 0,
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
     );
@@ -1480,7 +1480,7 @@
     num: (n, decimals) => {
       const r = roundNum(n, decimals);
       if (r === 0) return "";
-      return String(r); // <-- hapus replace()
+      return String(r).replace(".", ",");
     },
     date: (d) => excelDateFmt(d),
     tarif: (percent) => clipboardFormatter.num(percent, 2),
@@ -1553,34 +1553,26 @@
   // ala Alt+Enter), bukan pecah jadi baris spreadsheet baru.
   function shipmentFacilitiesSummary(items) {
     const seen = new Set();
-    const result = [];
-
+    const parts = [];
+    const addLabel = (label) => {
+      const clean = (label || "").trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      parts.push(clean);
+    };
     (items || []).forEach((it) => {
-      (it.skb || []).forEach((sk) => {
-        console.log(skbEntryLabel(sk));
-        let label = skbEntryLabel(sk).trim();
-
-        // Samakan penulisan
-        if (/^E-?COO$/i.test(label)) label = "COO";
-
-        if (/^MASTERLIST$/i.test(label)) label = "MASTER LIST";
-
-        // hanya ambil yang belum pernah ada
-        if (!seen.has(label)) {
-          seen.add(label);
-          result.push(label);
-        }
-      });
+      (it.skb || []).forEach((sk) => addLabel(skbEntryLabel(sk)));
     });
-    console.log(result);
-    return result.join("\n");
+    return parts.join("\n");
   }
 
   function buildExcelCopyRows(s, formatter) {
     formatter = formatter || clipboardFormatter;
     const calc = computeCustoms(s);
     const items = s.items || [];
-    const facilitiesSummary = shipmentFacilitiesSummary(items).split("\n");
+    const facilitiesSummary = shipmentFacilitiesSummary(items);
 
     const masterBL = (s.masterBL || "").trim();
     const houseBL = (s.houseBL || "").trim();
@@ -1600,9 +1592,7 @@
       3,
       4, // IN FACTORY, SPPB, DATE, AJU, SUPPLIER NAME
       11,
-      12,
-      13,
-      14, // NDPBM, INCOTERMS
+      12, // NDPBM, INCOTERMS
       18,
       19,
       20,
@@ -1642,7 +1632,7 @@
         formatter.num(pphVal, 2), // 21 PPH
         formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
         formatter.text(s.pi), // 23 PI
-        formatter.text(facilitiesSummary[idx] || ""), // 24
+        formatter.text(facilitiesSummary), // 24 FASILITAS / SKB (gabungan 1 pengiriman, tiap jenis 1x)
         formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
         formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
         formatter.text(s.voyage), // 27 VESSEL -> nomor pengangkut
@@ -1654,13 +1644,6 @@
     }
 
     const rows = items.map((it, idx) => buildRowForItem(it, idx));
-    while (rows.length < facilitiesSummary.length) {
-      const blankRow = new Array(29).fill(formatter.blank);
-
-      blankRow[24] = formatter.text(facilitiesSummary[rows.length]);
-
-      rows.push(blankRow);
-    }
 
     if (rows.length >= 1) rows[0][25] = formatter.text(masterBL);
     if (houseBL) {
