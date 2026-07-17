@@ -414,6 +414,9 @@ body {
 .info-item--wide {
   grid-column: span 2;
 }
+.info-value--list div + div {
+  margin-top: 2px;
+}
 .info-label {
   font-family: var(--font-mono);
   font-size: 0.65rem;
@@ -1114,7 +1117,20 @@ body {
   border-top: 1px solid var(--border);
 }
 .page-form-body {
-  max-width: 1120px;
+  /* Diperlebar dari 1120px -> 1600px: tabel Daftar Barang sendiri sudah
+     butuh min-width 1220px (lihat .item-table di bawah), jadi di 1120px
+     tabel selalu lebih lebar dari container-nya dan otomatis scroll
+     horizontal — kolom NAMA BARANG jadi kepepet ke lebar minimalnya
+     (220px) walau di-set 32%. Di 1600px, tabel (width:100%) punya ruang
+     untuk benar-benar melebar sampai proporsi 32%-nya, jadi nama barang
+     lebih kebaca tanpa terlalu sering wrap 2 baris — dan scrollbar
+     horizontal di .item-table-wrap praktis hilang di layar desktop
+     biasa. Cuma pengaruh ke max-width (batas atas), jadi tidak
+     mengubah apa pun di layar sempit/mobile.
+     Sengaja tidak disamakan dengan .container biasa (dipakai #viewList
+     utk daftar kartu) — form Tambah/Edit Jadwal memang lebih padat
+     datanya (tabel banyak kolom) jadi wajar kalau lebih lebar. */
+  max-width: 1600px;
   padding: 26px 28px 0;
 }
 @media (max-width: 767.98px) {
@@ -1560,7 +1576,7 @@ body {
 }
 table.item-table {
   width: 100%;
-  min-width: 1140px;
+  min-width: 1220px;
   border-collapse: collapse;
   font-size: 0.83rem;
 }
@@ -1573,13 +1589,17 @@ table.item-table th {
   color: var(--muted);
   font-weight: 600;
   padding: 9px 8px;
-  text-align: left;
+  text-align: center;
   white-space: nowrap;
+}
+table.item-table th:first-child {
+  text-align: left;
 }
 table.item-table td {
   padding: 6px;
   border-top: 1px solid var(--border);
   vertical-align: middle;
+  text-align: center;
 }
 table.item-table td.text-end {
   text-align: right;
@@ -1592,9 +1612,27 @@ table.item-table select {
   font-size: 0.82rem;
   width: 100%;
   min-width: 90px;
+  text-align: center;
 }
 table.item-table select[data-f="jenisBarang"] {
   min-width: 140px;
+}
+table.item-table textarea.nama-barang-input {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  width: 100%;
+  min-width: 220px;
+  min-height: 32px;
+  max-height: 220px;
+  resize: none;
+  overflow-y: auto;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.35;
+  font-family: inherit;
 }
 table.item-table input.subtotal {
   background: #f7fafd;

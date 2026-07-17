@@ -924,37 +924,43 @@
 
   // Ringkasan fasilitas lintas-barang untuk badge kartu — dihitung dari
   // shipment_items sekarang (bukan lagi dari 1 field skb di shipment).
-  // E-COO DIKECUALIKAN dari hitungan ini (punya badge sendiri) walau
-  // sekarang tersimpan di array yang sama — karena secara aturan
-  // kepabeanan keduanya beda: SKB = bebas pajak, E-COO = tarif
-  // preferensi asal barang.
+  // E-COO DIKECUALIKAN dari hitungan SKB (badge sendiri) walau sekarang
+  // tersimpan di array yang sama — karena secara aturan kepabeanan
+  // keduanya beda: SKB = bebas pajak, E-COO = tarif preferensi asal
+  // barang. Badge SKB sengaja TANPA angka (beberapa jenis SKB — PPH,
+  // Masterlist, dll — bisa tercampur jadi 1 badge, jadi angkanya kurang
+  // representatif); badge E-COO yang pakai angka, karena tiap barang
+  // biasanya 1 sertifikat asal jadi jumlahnya lebih bermakna.
   function totalSkbCount(s) {
     return (s.items || []).reduce(
       (n, it) => n + (it.skb || []).filter((sk) => sk.jenis !== "E-COO").length,
       0,
     );
   }
-  function hasAnyEcoo(s) {
-    return (s.items || []).some((it) =>
-      (it.skb || []).some((sk) => sk.jenis === "E-COO"),
+  function totalEcooCount(s) {
+    return (s.items || []).reduce(
+      (n, it) => n + (it.skb || []).filter((sk) => sk.jenis === "E-COO").length,
+      0,
     );
   }
 
-  // Daftar nama barang buat kartu depan (info-grid) — dipotong kalau
-  // kepanjangan supaya kartu tidak melar, sisanya diringkas "+N lainnya".
+  // Daftar nama barang buat kartu depan (info-grid) — 1 barang 1 baris.
+  // Dipotong kalau kepanjangan supaya kartu tidak melar, sisanya
+  // diringkas "+N lainnya".
   function itemNamesSummary(s, maxShown = 4) {
     const names = (s.items || [])
       .map((it) => (it.namaBarang || "").trim())
       .filter(Boolean);
-    if (!names.length) return "—";
-    if (names.length <= maxShown) return names.join(", ");
-    return `${names.slice(0, maxShown).join(", ")} +${names.length - maxShown} lainnya`;
+    if (!names.length) return ["—"];
+    if (names.length <= maxShown) return names;
+    return [...names.slice(0, maxShown), `+${names.length - maxShown} lainnya`];
   }
 
   function buildTags(s, totals) {
     const lbl = ML();
     const stopCount = routeStopList(s).length;
     const skbCount = totalSkbCount(s);
+    const ecooCount = totalEcooCount(s);
     return [
       s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
       totals.totalUSD
@@ -970,10 +976,10 @@
         ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI</span>`
         : "",
       lbl.showDuty && skbCount
-        ? `<span class="tag tag-skb"><i class="bi bi-shield-check"></i> SKB × ${skbCount}</span>`
+        ? `<span class="tag tag-skb"><i class="bi bi-shield-check"></i> SKB</span>`
         : "",
-      hasAnyEcoo(s)
-        ? `<span class="tag tag-ecoo"><i class="bi bi-patch-check"></i> E-COO</span>`
+      ecooCount
+        ? `<span class="tag tag-ecoo"><i class="bi bi-patch-check"></i> E-COO × ${ecooCount}</span>`
         : "",
     ]
       .filter(Boolean)
@@ -1028,7 +1034,11 @@
         <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>
         <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Netto</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
-        <div class="info-item info-item--wide"><div class="info-label"><i class="bi bi-boxes"></i> Nama Barang</div><div class="info-value">${escapeHtml(itemNamesSummary(s))}</div></div>
+        <div class="info-item info-item--wide"><div class="info-label"><i class="bi bi-boxes"></i> Nama Barang</div><div class="info-value info-value--list">${itemNamesSummary(
+          s,
+        )
+          .map((n) => `<div>${escapeHtml(n)}</div>`)
+          .join("")}</div></div>
       </div>
 
       <div class="tag-row">${buildTags(s, totals)}</div>
@@ -1983,13 +1993,21 @@
       </tr>`;
   }
 
+  // Textarea "Nama Barang" tumbuh otomatis mengikuti isinya (dipanggil
+  // tiap render tabel & tiap kali user ngetik) — supaya nama panjang
+  // wrap ke bawah dengan rapi, bukan discroll horizontal atau kepotong.
+  function autoGrowTextarea(el) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
   function renderItemTable() {
     const tbody = $("#itemTableBody");
     tbody.innerHTML = draftItems
       .map((it, idx) => {
         const mainRow = `
       <tr data-idx="${idx}">
-        <td><input type="text" data-f="namaBarang" value="${escapeAttr(it.namaBarang)}" placeholder="Nama barang"></td>
+        <td><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="Nama barang">${escapeHtml(it.namaBarang)}</textarea></td>
         <td><input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="0000.00.00"></td>
         <td>
           <select data-f="jenisBarang">
@@ -2012,6 +2030,7 @@
         return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
       })
       .join("");
+    tbody.querySelectorAll(".nama-barang-input").forEach(autoGrowTextarea);
     recalcCustoms();
   }
 
@@ -2026,6 +2045,7 @@
       )
         ? Number(e.target.value)
         : e.target.value;
+      if (field === "namaBarang") autoGrowTextarea(e.target);
       const subtotalInput = tr.querySelector(".subtotal");
       subtotalInput.value = fmtUSD(
         (Number(draftItems[idx].qty) || 0) *
@@ -2257,6 +2277,11 @@
        - No. Invoice    <- DOKUMEN (KODE DOKUMEN=380).NOMOR DOKUMEN
        - Master BL/AWB  <- DOKUMEN (KODE DOKUMEN=740 atau 742).NOMOR DOKUMEN
        - House BL/AWB   <- DOKUMEN (KODE DOKUMEN=741 atau 743).NOMOR DOKUMEN
+       - Fasilitas SKB PPH (per barang) <- DOKUMEN (KODE DOKUMEN=457).
+         NOMOR DOKUMEN & TANGGAL DOKUMEN, diterapkan ke semua barang.
+       - Fasilitas SKB COO/E-COO (per barang) <- DOKUMEN (KODE DOKUMEN=860).
+         NOMOR DOKUMEN & TANGGAL DOKUMEN, diterapkan ke semua barang.
+       - Harga/Unit (per barang) <- BARANG.CIF (bukan HARGA SATUAN).
      Sisanya (freight/insurance/ndpbm/pelabuhan/vessel/moda/package/
      kontainer/BM/PPN/PPH/daftar barang) dipetakan sendiri dari sheet
      yang relevan; kalau memang tidak ada datanya di file, field itu
@@ -2332,18 +2357,34 @@
     return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
   }
 
+  // Buang label field ("Tipe :", "Merek :", dst) yang kadang ke-ikut
+  // dalam teks deskripsi (baik dari kolom terpisah maupun ke-ketik
+  // manual jadi 1 kalimat, mis. "Batu Tipe : Bata" -> "Batu Bata") —
+  // dipakai di penggabungan nama barang dari PDF, Excel BC, maupun CIPL
+  // supaya konsisten, sekalian jaring pengaman kalau sumbernya beda-beda.
+  function stripFieldLabels(s) {
+    return (s || "")
+      .replace(
+        /\b(?:Merk|Merek|Tipe|Ukuran|Spesifikasi(?:\s+lain)?)\s*:\s*/gi,
+        "",
+      )
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   // Deskripsi barang: URAIAN + Merk/Tipe (kalau bukan placeholder
-  // "TANPA MEREK" / "TANPA TIPE").
+  // "TANPA MEREK" / "TANPA TIPE") — tanpa label "Merk:"/"Tipe:", cuma
+  // nilainya saja yang digabung.
   function buildImportedNamaBarang(row) {
     let desc = excelStr(row["URAIAN"]);
     const merek = excelStr(row["MEREK"]);
     const tipe = excelStr(row["TIPE"]);
-    const isPlaceholder = (v) => !v || /^TANPA\s/i.test(v);
+    const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
     const parts = [];
-    if (!isPlaceholder(merek)) parts.push(`Merk: ${merek}`);
-    if (!isPlaceholder(tipe)) parts.push(`Tipe: ${tipe}`);
-    if (parts.length) desc += (desc ? " " : "") + parts.join(", ");
-    return desc.trim();
+    if (!isPlaceholder(merek)) parts.push(merek);
+    if (!isPlaceholder(tipe)) parts.push(tipe);
+    if (parts.length) desc += (desc ? " " : "") + parts.join(" ");
+    return stripFieldLabels(desc);
   }
 
   function parseBcExcelWorkbook(wb) {
@@ -2364,6 +2405,11 @@
       );
       return row ? excelStr(row["NOMOR DOKUMEN"]) : "";
     };
+    // Sama seperti findDokumen(), tapi kembalikan baris utuh (bukan cuma
+    // NOMOR DOKUMEN) — dipakai untuk fasilitas SKB PPH/COO yang butuh
+    // TANGGAL DOKUMEN juga, bukan cuma nomornya.
+    const findDokumenRow = (...codes) =>
+      dokumen.find((r) => codes.includes(excelStr(r["KODE DOKUMEN"])));
     const findPungutan = (kode) => {
       const row = pungutan.find(
         (r) => excelStr(r["KODE JENIS PUNGUTAN"]).toUpperCase() === kode,
@@ -2460,7 +2506,7 @@
       hsCode: excelStr(row["HS"]),
       satuan: excelStr(row["KODE SATUAN"]),
       qty: excelNum(row["JUMLAH SATUAN"]),
-      harga: excelNum(row["HARGA SATUAN"]),
+      harga: excelNum(row["CIF"]),
       netto: excelNum(row["NETTO"]),
       bruto: excelNum(row["BRUTO"]),
     }));
@@ -2476,6 +2522,50 @@
       ...it,
       jenisBarang: "Bahan Baku",
     }));
+
+    // Fasilitas per barang (SKB PPH & SKB COO/E-COO) — diambil dari sheet
+    // DOKUMEN: KODE DOKUMEN=457 -> SKB PPH, KODE DOKUMEN=860 -> SKB COO
+    // (disimpan sebagai jenis "E-COO", opsi yang sama dipakai di form
+    // Fasilitas). Sheet DOKUMEN di file BC ini tidak dipecah per-barang
+    // (1 daftar dokumen utk semua barang dalam 1 AJU) — sama seperti
+    // fasilitas dari PDF, jadi diterapkan ke SEMUA barang sebagai
+    // default (di-clone per barang, bukan referensi objek yang sama,
+    // supaya edit di 1 barang tidak ikut mengubah barang lain), user
+    // tinggal HAPUS lewat tombol Fasilitas pada barang yang seharusnya
+    // tidak dapat.
+    const skbList = [];
+    const pphDoc = findDokumenRow("457");
+    if (pphDoc) {
+      skbList.push({
+        jenis: "PPH",
+        jenisLainnya: "",
+        nomor: excelStr(pphDoc["NOMOR DOKUMEN"]),
+        tanggal: excelValueToISODate(pphDoc["TANGGAL DOKUMEN"]),
+      });
+    }
+    const ecooDoc = findDokumenRow("860");
+    if (ecooDoc) {
+      skbList.push({
+        jenis: "E-COO",
+        jenisLainnya: "",
+        nomor: excelStr(ecooDoc["NOMOR DOKUMEN"]),
+        tanggal: excelValueToISODate(ecooDoc["TANGGAL DOKUMEN"]),
+      });
+    }
+    if (skbList.length) {
+      items.forEach((it) => {
+        it.skb = skbList.map((sk) => ({ ...sk }));
+      });
+      if (items.length > 1) {
+        notes.push(
+          "Fasilitas SKB PPH (kode 457) & SKB COO (kode 860) dari sheet DOKUMEN diterapkan ke SEMUA barang secara default (sheet ini tidak memisahkan per-barang) — cek tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya dapat.",
+        );
+      }
+    } else {
+      notes.push(
+        "SKB PPH (kode 457) & SKB COO (kode 860) tidak ditemukan di sheet DOKUMEN — cek manual di tab Daftar Barang kalau seharusnya ada.",
+      );
+    }
 
     if (!items.length) {
       notes.push(
@@ -2504,6 +2594,287 @@
     }
 
     return { fields, items, notes, modeHint, source: "excel" };
+  }
+
+  /* ==================================================================
+     IMPORT DARI EXCEL CIPL (Commercial Invoice + Packing List)
+     Beda dari format Excel BC di atas (yang memang format export/import
+     bawaan aplikasi ini sendiri) — CIPL adalah dokumen niaga yang dibuat
+     SUPPLIER (bentuknya bebas, tapi sheet "CI"/"PL" dengan tata letak
+     form khas — label 1 baris, isinya di baris/kolom sekitarnya —
+     cukup umum dipakai). Field & nomor barang diambil dari SHEET CI
+     (harga per barang) digabung SHEET PL (netto/bruto per barang),
+     dicocokkan berdasarkan nama barang. Kolom Freight/Insurance/NDPBM/
+     BM/PPN/PPH memang tidak ada di CIPL (itu urusan tahap kepabeanan,
+     bukan niaga) — sengaja dibiarkan kosong, isi manual.
+  ================================================================== */
+  function sheetToGrid(wb, name) {
+    const sh = wb.Sheets[name];
+    return sh
+      ? XLSX.utils.sheet_to_json(sh, { header: 1, defval: null, raw: true })
+      : [];
+  }
+  function findGridCell(grid, re) {
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        if (typeof row[c] === "string" && re.test(row[c])) return { r, c };
+      }
+    }
+    return null;
+  }
+  function findAllGridCells(grid, re) {
+    const out = [];
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r] || [];
+      for (let c = 0; c < row.length; c++) {
+        if (typeof row[c] === "string" && re.test(row[c])) out.push({ r, c });
+      }
+    }
+    return out;
+  }
+  function gridCellAt(grid, r, c) {
+    return grid[r] && grid[r][c] != null ? grid[r][c] : null;
+  }
+  function gridStrAt(grid, r, c) {
+    const v = gridCellAt(grid, r, c);
+    return v == null ? "" : String(v).trim();
+  }
+  function gridNumAt(grid, r, c) {
+    const v = gridCellAt(grid, r, c);
+    if (v == null) return null;
+    const n = Number(String(v).replace(/,/g, "").trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  // Tanggal di Excel CIPL bisa berupa objek Date asli (kalau sel-nya
+  // format tanggal beneran, dibaca cellDates:true) ATAU teks bebas ketik
+  // manual (mis. "Jul 13, 2026") — dua-duanya dicoba.
+  function excelCellDateToISO(v) {
+    if (v == null) return "";
+    if (v instanceof Date && !isNaN(v)) {
+      return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+    }
+    const s = String(v).trim();
+    const MONTHS = {
+      jan: 1,
+      feb: 2,
+      mar: 3,
+      apr: 4,
+      may: 5,
+      jun: 6,
+      jul: 7,
+      aug: 8,
+      sep: 9,
+      oct: 10,
+      nov: 11,
+      dec: 12,
+    };
+    let m = /^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/.exec(s);
+    if (m) {
+      const mon = MONTHS[m[1].slice(0, 3).toLowerCase()];
+      if (mon)
+        return `${m[3]}-${String(mon).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    }
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    return "";
+  }
+  function ciplItemsFromGrid(grid, isCi) {
+    const headerPos = findGridCell(grid, /Goods Descriptions/i);
+    if (!headerPos) return [];
+    const out = [];
+    for (let r = headerPos.r + 1; r < grid.length; r++) {
+      const name = gridStrAt(grid, r, headerPos.c);
+      if (!name) continue;
+      if (/HS CODE|^TOTAL\b|^Dimension/i.test(name)) break;
+      const qty = gridNumAt(grid, r, headerPos.c + 3);
+      const satuan = gridStrAt(grid, r, headerPos.c + 4);
+      if (isCi) {
+        const harga = gridNumAt(grid, r, headerPos.c + 6);
+        out.push({ name: stripFieldLabels(name), qty, satuan, harga });
+      } else {
+        const netto = gridNumAt(grid, r, headerPos.c + 5);
+        const bruto = gridNumAt(grid, r, headerPos.c + 7);
+        out.push({ name: stripFieldLabels(name), qty, satuan, netto, bruto });
+      }
+    }
+    return out;
+  }
+
+  function parseCiplWorkbook(wb) {
+    const notes = [];
+    const ciGrid = sheetToGrid(wb, "CI");
+    const plGrid = sheetToGrid(wb, "PL");
+    const mainGrid = ciGrid.length ? ciGrid : plGrid;
+    // Sheet tambahan opsional (mis. nama Korea "입고지" di template
+    // supplier tertentu) berisi MAWB/HAWB — dicek kalau ADA, dilewati
+    // kalau tidak (supplier lain mungkin tidak menyertakannya).
+    const extraSheetName = wb.SheetNames.find((n) =>
+      /입고지|receiving|warehouse/i.test(n),
+    );
+    const extraGrid = extraSheetName ? sheetToGrid(wb, extraSheetName) : [];
+
+    const invLabelPos = findGridCell(mainGrid, /Invoice No\.?\s*and\s*Date/i);
+    const invoiceNo = invLabelPos
+      ? gridStrAt(mainGrid, invLabelPos.r + 1, invLabelPos.c)
+      : "";
+    const invoiceDateRaw = invLabelPos
+      ? gridCellAt(mainGrid, invLabelPos.r + 1, invLabelPos.c + 3)
+      : null;
+
+    const consLabelPos = findGridCell(mainGrid, /^Consignee$/i);
+    const party = consLabelPos
+      ? gridStrAt(mainGrid, consLabelPos.r + 1, consLabelPos.c)
+      : "";
+
+    const depPos = findGridCell(mainGrid, /Departure Date/i);
+    const etd = depPos
+      ? excelCellDateToISO(gridCellAt(mainGrid, depPos.r + 1, depPos.c))
+      : "";
+    const destination = depPos
+      ? gridStrAt(mainGrid, depPos.r + 1, depPos.c + 3)
+      : "";
+
+    const vfPos = findGridCell(mainGrid, /Vessel\s*\/\s*Flight/i);
+    const voyage = vfPos ? gridStrAt(mainGrid, vfPos.r + 1, vfPos.c) : "";
+    const origin = vfPos ? gridStrAt(mainGrid, vfPos.r + 1, vfPos.c + 3) : "";
+
+    // Moda transportasi tidak ditulis eksplisit di CIPL — disimpulkan
+    // dari kata "AIRPORT" di asal/tujuan (umum utk dokumen niaga).
+    const transport =
+      /airport/i.test(origin) || /airport/i.test(destination)
+        ? "udara"
+        : "laut";
+
+    const findLabelValueSameRow = (grid, re, colOffset = 1) => {
+      const pos = findGridCell(grid, re);
+      return pos ? gridStrAt(grid, pos.r, pos.c + colOffset) : "";
+    };
+    const masterBL = findLabelValueSameRow(extraGrid, /MAWB/i);
+    const houseBL = findLabelValueSameRow(extraGrid, /HAWB/i);
+
+    // Baris total (mis. "TOTAL 3 BOX(ES) FCA INCHEON AIRPORT") memuat
+    // incoterm & jumlah kemasan sekaligus.
+    const totalPos = findGridCell(mainGrid, /^TOTAL\s+\d+\s+BOX/i);
+    let incoterm = "";
+    let packageText = "";
+    if (totalPos) {
+      const t = gridStrAt(mainGrid, totalPos.r, totalPos.c);
+      const incotermM = /\b(FOB|FCA|CIF|CFR|EXW|CPT|CIP|DAP|DPU|DDP)\b/i.exec(
+        t,
+      );
+      incoterm = incotermM ? incotermM[1].toUpperCase() : "";
+      const pkgM =
+        /^TOTAL\s+(.+?)\s+(?:FOB|FCA|CIF|CFR|EXW|CPT|CIP|DAP|DPU|DDP)\b/i.exec(
+          t,
+        );
+      packageText = pkgM ? pkgM[1].trim() : "";
+    }
+
+    // HS Code per barang tidak ditulis di kolom tabel, tapi biasanya ada
+    // catatan terpisah "<AWALAN NAMA> HS CODE : <kode>" (mis. "MASTER
+    // MODEL HS CODE : 8480.30.0000") — dicocokkan ke tiap barang lewat
+    // awalan namanya.
+    const hsMap = findAllGridCells(ciGrid, /HS CODE\s*:/i)
+      .map(({ r, c }) => {
+        const m = /^(.+?)\s*HS CODE\s*:\s*([\d.]+)/i.exec(
+          gridStrAt(ciGrid, r, c),
+        );
+        return m
+          ? {
+              prefix: m[1].trim().toLowerCase(),
+              hsCode: m[2].replace(/\./g, ""),
+            }
+          : null;
+      })
+      .filter(Boolean);
+    const findHsCode = (name) => {
+      const lower = name.toLowerCase();
+      const hit = hsMap.find((h) => lower.startsWith(h.prefix));
+      return hit ? hit.hsCode : "";
+    };
+
+    // Barang: gabungan CI (harga per barang) + PL (netto/bruto per
+    // barang), dicocokkan lewat nama (bukan posisi baris) supaya tetap
+    // benar walau urutannya beda antar-sheet.
+    const ciItems = ciplItemsFromGrid(ciGrid, true);
+    const plItems = ciplItemsFromGrid(plGrid, false);
+    const normName = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const plByName = new Map(plItems.map((it) => [normName(it.name), it]));
+
+    // Berat kotor (bruto) di PL cuma ditulis SEKALI per kelompok kemasan
+    // (mis. 1 box isi 2 barang, bruto-nya cuma nempel di barang
+    // pertamanya) — sama seperti PDF PIB, dibagi PROPORSIONAL ke semua
+    // barang sesuai porsi netto-nya supaya tidak ada yang 0 padahal
+    // sebenarnya ikut di 1 box yang sama.
+    const totalBrutoAll = plItems.reduce((sum, it) => sum + (it.bruto || 0), 0);
+    const totalNettoAll = plItems.reduce((sum, it) => sum + (it.netto || 0), 0);
+
+    const items = ciItems.map((ci) => {
+      const pl = plByName.get(normName(ci.name)) || null;
+      const netto = pl ? pl.netto : null;
+      const bruto =
+        totalBrutoAll > 0 && totalNettoAll > 0 && netto != null
+          ? roundNum(totalBrutoAll * (netto / totalNettoAll), 4)
+          : null;
+      return {
+        ...newItem(),
+        namaBarang: ci.name,
+        hsCode: findHsCode(ci.name),
+        jenisBarang: "Bahan Baku",
+        qty: ci.qty != null ? ci.qty : pl ? pl.qty || 0 : 0,
+        satuan: ci.satuan || (pl ? pl.satuan : ""),
+        harga: ci.harga != null ? ci.harga : 0,
+        netto: netto != null ? netto : 0,
+        bruto: bruto != null ? bruto : 0,
+      };
+    });
+
+    if (!items.length) {
+      notes.push(
+        'Tidak ada baris barang yang terbaca dari sheet CI/PL (cari header "Goods Descriptions").',
+      );
+    } else {
+      if (items.some((it) => !it.hsCode)) {
+        notes.push(
+          'Sebagian barang tidak ketemu HS Code-nya (dicocokkan dari catatan "... HS CODE : ..." di sheet CI) — isi manual kalau kosong.',
+        );
+      }
+      if (totalBrutoAll <= 0) {
+        notes.push(
+          "Berat kotor (bruto) tidak terbaca dari sheet PL — isi manual per barang.",
+        );
+      }
+    }
+    if (!masterBL && !houseBL) {
+      notes.push(
+        "Master/House AWB tidak ditemukan (biasanya di sheet info gudang/MAWB-HAWB) — isi manual.",
+      );
+    }
+    notes.push(
+      'Hasil baca CIPL Excel ini best-effort — mohon cek ulang semua field sebelum simpan, terutama moda transportasi (disimpulkan dari kata "AIRPORT"), HS Code, dan berat kotor per barang. Freight/Insurance/NDPBM/BM/PPN/PPH tidak ada di dokumen CIPL — isi manual di tab Kepabeanan.',
+    );
+
+    return {
+      fields: {
+        invoice: invoiceNo,
+        docDate: excelCellDateToISO(invoiceDateRaw),
+        party,
+        masterBL,
+        houseBL,
+        origin,
+        destination,
+        incoterm,
+        transport,
+        voyage,
+        etd,
+        package: packageText,
+      },
+      items,
+      notes,
+      modeHint: "import",
+      source: "cipl",
+    };
   }
 
   function setFieldIfPresent(id, value) {
@@ -3116,7 +3487,7 @@
         }
         if (spekM && !isEmptySpecValue(spekM[1]))
           nameParts.push(spekM[1].trim());
-        const namaBarang = nameParts.join(" ");
+        const namaBarang = stripFieldLabels(nameParts.join(" "));
 
         // Fallback berbasis teks (jarang cocok krn kolom sering ke-gabung)
         // — dipakai HANYA kalau extractItemDetailColumn (koordinat, lebih
@@ -3286,15 +3657,19 @@
       } else {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array", cellDates: true });
-        const missing = ["HEADER", "BARANG"].filter((n) => !wb.Sheets[n]);
-        if (missing.length) {
+        const hasBcFormat = wb.Sheets["HEADER"] && wb.Sheets["BARANG"];
+        const hasCiplFormat = wb.Sheets["CI"] || wb.Sheets["PL"];
+        if (hasBcFormat) {
+          parsed = parseBcExcelWorkbook(wb);
+        } else if (hasCiplFormat) {
+          parsed = parseCiplWorkbook(wb);
+        } else {
           showToast(
-            `File ini bukan format dokumen BC yang dikenali (sheet ${missing.join(", ")} tidak ada).`,
+            "File ini bukan format dokumen BC (sheet HEADER/BARANG) maupun CIPL (sheet CI/PL) yang dikenali.",
             "danger",
           );
           return;
         }
-        parsed = parseBcExcelWorkbook(wb);
       }
       const { summary, notes } = applyImportedBcData(parsed);
       showImportNotes(summary, notes);
@@ -3307,7 +3682,7 @@
       showToast(
         isPdf
           ? "Gagal membaca file PDF ini. Pastikan ini dokumen PIB BC 2.0 (bukan hasil scan/gambar) dan coba lagi."
-          : "Gagal membaca file Excel ini. Pastikan formatnya sesuai export dokumen BC (HEADER/BARANG/dst).",
+          : "Gagal membaca file Excel ini. Pastikan formatnya sesuai export dokumen BC (HEADER/BARANG/dst) atau CIPL (sheet CI/PL).",
         "danger",
       );
     } finally {
@@ -3329,17 +3704,17 @@
   function showListView() {
     viewFormEl.classList.add("d-none");
     viewListEl.classList.remove("d-none");
-    $(".mode-tabs").classList.remove("d-none");
+    $(".main-navbar").classList.remove("d-none");
   }
 
   function showFormView() {
     viewListEl.classList.add("d-none");
     viewFormEl.classList.remove("d-none");
-    // Toggle Import/Export di navbar tidak ada gunanya di tengah isi
-    // form (bisa bikin bingung — kelihatannya ganti mode form padahal
-    // yang berubah cuma activeMode buat halaman daftar di belakangnya),
-    // jadi disembunyikan selama form terbuka.
-    $(".mode-tabs").classList.add("d-none");
+    // Navbar (logo + toggle Import/Export) tidak relevan selama isi
+    // form — disembunyikan total, bukan cuma toggle-nya, biar halaman
+    // form lebih fokus & tidak ada elemen navigasi global yang
+    // mengganggu/membingungkan di tengah proses input data.
+    $(".main-navbar").classList.add("d-none");
     window.scrollTo(0, 0);
   }
 
