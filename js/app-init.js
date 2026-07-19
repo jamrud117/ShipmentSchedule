@@ -1,11 +1,13 @@
-"use strict";
+async function initApp() {
+  cardContainer.innerHTML = `
+    <div class="empty-state">
+      <i class="bi bi-hourglass-split"></i>
+      <p class="mt-3 mb-0">Memuat data dari database...</p>
+    </div>`;
 
-/* ==================================================================
-   INITIAL LOAD (dari Supabase, bukan lagi data hardcode)
-================================================================== */
-cardContainer.innerHTML = `
-  <div class="empty-state">
-    <i class="bi bi-hourglass-split"></i>
-    <p class="mt-3 mb-0">Memuat data dari database...</p>
-  </div>`;
-loadShipments();
+  await loadShipments();
+
+  router();
+}
+
+window.addEventListener("DOMContentLoaded", initApp);

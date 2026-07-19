@@ -27,33 +27,54 @@ function showFormView() {
 }
 
 function goBackToList() {
-  location.hash = "";
+  location.hash = "#/";
 }
 
 function router() {
-  const hash = location.hash || "";
+  const hash = location.hash || "#/";
   const editMatch = hash.match(/^#\/edit\/(.+)$/);
+
+  // ===========================
+  // Tambah Jadwal
+  // ===========================
   if (hash === "#/new") {
     renderFormPage(null);
     return;
   }
+
+  // ===========================
+  // Edit Jadwal
+  // ===========================
   if (editMatch) {
     const id = decodeURIComponent(editMatch[1]);
+
+    // Jika data ada di mode lain, pindahkan mode terlebih dahulu
     if (!currentList().some((x) => x.id === id)) {
       const otherMode = activeMode === "import" ? "export" : "import";
-      if (data[otherMode].some((x) => x.id === id)) switchMode(otherMode);
+
+      if (data[otherMode].some((x) => x.id === id)) {
+        switchMode(otherMode);
+      }
     }
+
+    // Jika tetap tidak ditemukan, kembali ke dashboard
     if (!currentList().some((x) => x.id === id)) {
-      // Data belum termuat atau ID sudah tidak ada — kembali ke daftar
-      // saja daripada menampilkan form kosong yang membingungkan.
-      goBackToList();
+      location.hash = "#/";
       return;
     }
+
     renderFormPage(id);
     return;
   }
+
+  // ===========================
+  // Dashboard
+  // ===========================
   showListView();
+  render();
 }
+
+// Jalankan router ketika URL berubah
 window.addEventListener("hashchange", router);
 
 function renderFormPage(id) {

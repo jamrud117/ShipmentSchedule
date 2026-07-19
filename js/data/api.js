@@ -17,11 +17,13 @@ async function loadShipments() {
 
   data.import = [];
   data.export = [];
+
   (rows || []).forEach((row) => {
     const s = rowToShipment(row);
     if (data[row.mode]) data[row.mode].push(s);
   });
-  render();
+
+  // render() dihapus dari sini
 }
 
 function showDbErrorState() {
