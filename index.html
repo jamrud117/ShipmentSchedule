@@ -977,6 +977,88 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="script.js"></script>
+
+    <!-- ============ APP SCRIPTS (urutan berikut WAJIB dipertahankan -->
+    <!-- persis seperti ini -- setiap file mengandalkan const/function -->
+    <!-- yang didefinisikan oleh file-file sebelumnya di daftar ini). -->
+    <!-- LIBRARY -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- ========================================= -->
+    <!-- CONFIG -->
+    <!-- ========================================= -->
+    <script src="js/config.js"></script>
+
+    <!-- ========================================= -->
+    <!-- CORE -->
+    <!-- ========================================= -->
+    <script src="js/core/helpers.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/core/mapping.js"></script>
+    <script src="js/core/customs.js"></script>
+    <script src="js/core/route-model.js"></script>
+
+    <!-- ========================================= -->
+    <!-- DATA -->
+    <!-- ========================================= -->
+    <script src="js/data/api.js"></script>
+
+    <!-- ========================================= -->
+    <!-- UI -->
+    <!-- ========================================= -->
+    <script src="js/ui/dom.js"></script>
+    <script src="js/ui/feedback.js"></script>
+
+    <!-- ========================================= -->
+    <!-- RENDER -->
+    <!-- ========================================= -->
+    <script src="js/render/cards.js"></script>
+    <script src="js/render/list.js"></script>
+
+    <!-- ========================================= -->
+    <!-- FEATURES -->
+    <!-- ========================================= -->
+    <script src="js/features/excel-row-format.js"></script>
+    <script src="js/features/card-events.js"></script>
+    <script src="js/features/modal-fields.js"></script>
+    <script src="js/features/item-table.js"></script>
+    <script src="js/features/route-stops.js"></script>
+    <script src="js/features/bulk-excel.js"></script>
+
+    <!-- ========================================= -->
+    <!-- IMPORT -->
+    <!-- ========================================= -->
+
+    <!-- Shared Helper -->
+    <script src="js/import/cipl-common.js"></script>
+
+    <!-- PDF Helper -->
+    <script src="js/import/pdf-cipl.js"></script>
+
+    <!-- Excel -->
+    <script src="js/import/excel-bc.js"></script>
+    <script src="js/import/excel-cipl.js"></script>
+
+    <!-- Apply -->
+    <script src="js/import/apply-to-form.js"></script>
+
+    <!-- PDF -->
+    <script src="js/import/pdf.js"></script>
+
+    <!-- Dispatcher -->
+    <script src="js/import/dispatch.js"></script>
+
+    <!-- ========================================= -->
+    <!-- VIEW -->
+    <!-- ========================================= -->
+    <script src="js/views/form-router.js"></script>
+    <script src="js/views/detail-view.js"></script>
+
+    <!-- ========================================= -->
+    <!-- START APP -->
+    <!-- ========================================= -->
+    <script src="js/app-init.js"></script>
   </body>
 </html>
