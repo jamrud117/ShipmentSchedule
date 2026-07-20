@@ -114,16 +114,13 @@ $("#itemTableBody").addEventListener("input", (e) => {
   const idx = Number(tr.dataset.idx);
   const field = e.target.dataset.f;
   if (field) {
-    draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(
-      field,
-    )
+    draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(field)
       ? excelNum(e.target.value)
       : e.target.value;
     if (field === "namaBarang") autoGrowTextarea(e.target);
     const subtotalInput = tr.querySelector(".subtotal");
     subtotalInput.value = fmtUSD(
-      (Number(draftItems[idx].qty) || 0) *
-        (Number(draftItems[idx].harga) || 0),
+      (Number(draftItems[idx].qty) || 0) * (Number(draftItems[idx].harga) || 0),
     );
     recalcCustoms();
     return;

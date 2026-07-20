@@ -31,7 +31,8 @@ function textAt(items) {
   let prevEnd = null;
   sorted.forEach((it) => {
     const x = it.transform[4];
-    const fontSize = Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 1;
+    const fontSize =
+      Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 1;
     const gapThreshold = Math.max(0.5, fontSize * 0.15);
     if (prevEnd !== null && x - prevEnd > gapThreshold) text += " ";
     text += it.str;
@@ -46,9 +47,12 @@ function textAt(items) {
 function reconstructLinesInXRange(pagesItems, xMin, xMax, yTolerance = 2.5) {
   const all = [];
   pagesItems.forEach((items) => all.push(...items));
-  const filtered = all.filter((it) => it.transform[4] >= xMin && it.transform[4] < xMax);
+  const filtered = all.filter(
+    (it) => it.transform[4] >= xMin && it.transform[4] < xMax,
+  );
   const sorted = filtered.sort(
-    (a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
+    (a, b) =>
+      b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
   );
   const lines = [];
   let current = null;
@@ -100,7 +104,10 @@ function findItemTableExcludeThreshold(pagesItems) {
 // di dekat atas dokumen dan PASTI 2 kolom.
 function findTwoColumnThreshold(pagesItems) {
   const leftX = findHeaderItemX(pagesItems, /^Consign(er|ee)/i);
-  const rightX = findHeaderItemX(pagesItems, /Invoice\s*No\.?\s*(and|&)\s*Date/i);
+  const rightX = findHeaderItemX(
+    pagesItems,
+    /Invoice\s*No\.?\s*(and|&)\s*Date/i,
+  );
   if (leftX == null || rightX == null || rightX <= leftX) return 170; // fallback aman
   return (leftX + rightX) / 2;
 }
@@ -142,11 +149,18 @@ function grabNextLine(text, labelRe) {
 function parseCiplPdfCommonFields(fullText, pagesItems) {
   const twoColThreshold = findTwoColumnThreshold(pagesItems);
   const leftLines = reconstructLinesInXRange(pagesItems, 0, twoColThreshold);
-  const rightLines = reconstructLinesInXRange(pagesItems, twoColThreshold, 100000);
+  const rightLines = reconstructLinesInXRange(
+    pagesItems,
+    twoColThreshold,
+    100000,
+  );
   const leftText = leftLines.map((l) => l.text).join("\n");
   const rightText = rightLines.map((l) => l.text).join("\n");
 
-  const invoice = grab(rightText, /Invoice\s*No\.?\s*(?:and|&)\s*Date\s*\n\s*(\S+)/i);
+  const invoice = grab(
+    rightText,
+    /Invoice\s*No\.?\s*(?:and|&)\s*Date\s*\n\s*(\S+)/i,
+  );
   const invDateRaw = grab(
     rightText,
     /Invoice\s*No\.?\s*(?:and|&)\s*Date\s*\n\s*\S+\s+([\d.\/\- A-Za-z,]+)/i,
@@ -158,12 +172,18 @@ function parseCiplPdfCommonFields(fullText, pagesItems) {
   const etdRaw = grabNextLine(leftText, /Departure\s*Date\s*\n\s*([^\n]+)/i);
   const etd = parseFlexibleDateText(etdRaw);
 
-  const destination = grabNextLine(rightText, /Final\s+Destination\s*\n\s*([^\n]+)/i);
+  const destination = grabNextLine(
+    rightText,
+    /Final\s+Destination\s*\n\s*([^\n]+)/i,
+  );
   const originFromPortLoading = grabNextLine(
     rightText,
     /Port\s+of\s+Loading\s*\n\s*([^\n]+)/i,
   );
-  const voyage = grabNextLine(leftText, /Vessel\s*\/\s*Flight\s*\n\s*([^\n]+)/i);
+  const voyage = grabNextLine(
+    leftText,
+    /Vessel\s*\/\s*Flight\s*\n\s*([^\n]+)/i,
+  );
 
   // Baris "Total N Boxes ... FOB <pelabuhan> ... nilai" melebar di 2
   // kolom (teks kiri "Total N Boxes ..." nyambung dg kanan "FOB ... nilai
@@ -198,7 +218,6 @@ function parseCiplPdfCommonFields(fullText, pagesItems) {
   }
 
   const transport = guessTransportFromText(originFromPortLoading, destination);
-
 
   return {
     invoice,
@@ -236,7 +255,10 @@ function parseItemsPlStyle(itemLines) {
     }
     let name = m[1].trim();
     name = name.replace(/^\d{1,3}\s+/, ""); // buang nomor item kalau nempel
-    if (categoryPrefix && !name.toLowerCase().includes(categoryPrefix.toLowerCase())) {
+    if (
+      categoryPrefix &&
+      !name.toLowerCase().includes(categoryPrefix.toLowerCase())
+    ) {
       name = categoryPrefix + " - " + name;
     }
     items.push({
@@ -258,11 +280,14 @@ function parseItemsPlStyle(itemLines) {
 // Price/Amount), BUKAN per baris barang -- dicari terpisah & dipakai utk
 // SEMUA barang.
 function parseItemsCiStyle(itemLines) {
-  const suffixRe = /^(.*?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$/;
+  const suffixRe =
+    /^(.*?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$/;
   const subHeaderM = itemLines
-    .map((l) => /^(PCS?|SET|UNITS?|BOX(?:ES)?|PACK(?:AGES?)?)\s+[A-Z]{3}\s+[A-Z]{3}\s*$/i.exec(
-      l.trim(),
-    ))
+    .map((l) =>
+      /^(PCS?|SET|UNITS?|BOX(?:ES)?|PACK(?:AGES?)?)\s+[A-Z]{3}\s+[A-Z]{3}\s*$/i.exec(
+        l.trim(),
+      ),
+    )
     .find(Boolean);
   const sharedSatuan = subHeaderM ? subHeaderM[1].toUpperCase() : "";
 
@@ -294,15 +319,13 @@ function parseItemsCiStyle(itemLines) {
 
 function extractItemTableLines(pagesItems) {
   const excludeThreshold = findItemTableExcludeThreshold(pagesItems);
-  const lines = reconstructLinesInXRange(
-    pagesItems,
-    excludeThreshold,
-    100000,
-  );
+  const lines = reconstructLinesInXRange(pagesItems, excludeThreshold, 100000);
   const headerIdx = lines.findIndex((l) =>
     /Goods\s+Descriptions|^Item\s/i.test(l.text),
   );
-  const totalIdx = lines.findIndex((l) => /^Total\s+\d+\s+Box/i.test(l.text.trim()));
+  const totalIdx = lines.findIndex((l) =>
+    /^Total\s+\d+\s+Box/i.test(l.text.trim()),
+  );
   if (headerIdx === -1) return [];
   const end = totalIdx === -1 ? lines.length : totalIdx;
   return lines.slice(headerIdx + 1, end).map((l) => l.text);

@@ -36,7 +36,8 @@ cardContainer.addEventListener("click", (e) => {
   if (btn.dataset.action === "edit")
     location.hash = "#/edit/" + encodeURIComponent(id);
   if (btn.dataset.action === "viewDetail") openDetailView(id);
-  if (btn.dataset.action === "copyExcel") handleCopyExcel(id);
+  if (btn.dataset.action === "copyTemplate")
+    copyShipment(btn.dataset.template, id);
   if (btn.dataset.action === "delete") {
     showConfirm("Hapus jadwal pengiriman ini secara permanen?", async () => {
       try {

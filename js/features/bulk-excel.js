@@ -138,8 +138,7 @@ async function handleBulkExport(mode) {
     );
     return;
   }
-  const headers =
-    mode === "import" ? IMPORT_BULK_HEADERS : EXPORT_BULK_HEADERS;
+  const headers = mode === "import" ? IMPORT_BULK_HEADERS : EXPORT_BULK_HEADERS;
   const aoa = [headers];
   list.forEach((s, i) => {
     buildBulkRowsForShipment(s, i + 1, mode, nativeFormatter).forEach((r) =>

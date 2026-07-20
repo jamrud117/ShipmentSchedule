@@ -213,9 +213,7 @@ function parseBcExcelWorkbook(wb) {
   // ambil baris terakhir, karena 1 AJU bisa punya beberapa baris
   // respons dengan kode berbeda. Fallback ke HEADER.TANGGAL DAFTAR
   // kalau baris kode 2003 tidak ditemukan.
-  const sppbRespon = respon.find(
-    (r) => excelStr(r["KODE RESPON"]) === "2003",
-  );
+  const sppbRespon = respon.find((r) => excelStr(r["KODE RESPON"]) === "2003");
   const respTanggal = sppbRespon
     ? excelValueToISODate(sppbRespon["TANGGAL RESPON"])
     : "";
@@ -235,8 +233,7 @@ function parseBcExcelWorkbook(wb) {
     masterBL: findDokumen("740", "742"),
     houseBL: findDokumen("741", "743"),
     freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
-    insurance:
-      header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
+    insurance: header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
     ndpbm: header["NDPBM"] != null ? excelNum(header["NDPBM"]) : null,
     origin: excelStr(header["KODE PELABUHAN MUAT"]),
     destination: excelStr(header["KODE PELABUHAN TUJUAN"]),

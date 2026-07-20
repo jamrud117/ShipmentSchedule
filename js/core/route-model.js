@@ -157,16 +157,14 @@ function laneNodeTitle(nd) {
   const parts = [dispVal(nd.terminal)];
   if (nd.kind === "stop") {
     if (nd.arrivalDate) parts.push("Tiba " + fmtDate(nd.arrivalDate));
-    if (nd.departureDate)
-      parts.push("Berangkat " + fmtDate(nd.departureDate));
+    if (nd.departureDate) parts.push("Berangkat " + fmtDate(nd.departureDate));
     if (hasMeaningfulValue(nd.vessel))
       parts.push(
         (nd.transport === "udara" ? "Pesawat " : "Vessel ") + nd.vessel,
       );
     if (hasMeaningfulValue(nd.voyage))
       parts.push(
-        (nd.transport === "udara" ? "No. Flight " : "No. Voyage ") +
-          nd.voyage,
+        (nd.transport === "udara" ? "No. Flight " : "No. Voyage ") + nd.voyage,
       );
   } else {
     parts.push(fmtDate(nd.date));

@@ -102,7 +102,10 @@ function actionButtons(s) {
     <div class="actions-col">
       <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="Lihat Detail"><i class="bi bi-eye"></i></button>
       <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
-      <button class="icon-btn" data-action="copyExcel" data-id="${s.id}" title="Salin ke Excel"><i class="bi bi-clipboard"></i></button>
+      <div class="dropdown copy-template-dropdown">
+        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Salin ke Excel"><i class="bi bi-clipboard"></i></button>
+        <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
+      </div>
       <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="Hapus"><i class="bi bi-trash3"></i></button>
     </div>`;
 }

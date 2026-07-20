@@ -293,7 +293,7 @@
         <!-- TAB 1: DOKUMEN & UMUM -->
         <div class="tab-pane" data-tabpane="umum">
           <div class="form-section-card form-section-card--ocean">
-            <div class="subsection-title">
+            <div class="subsection-title mb-3">
               <span class="subsection-icon"
                 ><i class="bi bi-file-earmark-text"></i
               ></span>
@@ -396,7 +396,7 @@
           </div>
 
           <div class="form-section-card form-section-card--ocean">
-            <div class="subsection-title">
+            <div class="subsection-title mb-3">
               <span class="subsection-icon"><i class="bi bi-compass"></i></span>
               Transportasi &amp; Rute
             </div>
@@ -561,7 +561,7 @@
         <div class="tab-pane d-none" data-tabpane="barang">
           <div class="form-section-card form-section-card--violet">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <div class="subsection-title mb-0">
+              <div class="subsection-title mb-3">
                 <span class="subsection-icon"><i class="bi bi-boxes"></i></span>
                 Daftar Barang dalam Pengiriman Ini
               </div>
@@ -618,7 +618,7 @@
         <!-- TAB 3: KEPABEANAN & BIAYA -->
         <div class="tab-pane d-none" data-tabpane="pabean">
           <div class="form-section-card form-section-card--amber">
-            <div class="subsection-title">
+            <div class="subsection-title mb-3">
               <span class="subsection-icon"
                 ><i class="bi bi-cash-coin"></i
               ></span>
@@ -974,10 +974,6 @@
       <option value="LEMBAR"></option>
     </datalist>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
     <!-- ============ APP SCRIPTS (urutan berikut WAJIB dipertahankan -->
     <!-- persis seperti ini -- setiap file mengandalkan const/function -->
     <!-- yang didefinisikan oleh file-file sebelumnya di daftar ini). -->
@@ -1021,6 +1017,7 @@
     <!-- FEATURES -->
     <!-- ========================================= -->
     <script src="js/features/excel-row-format.js"></script>
+    <script src="js/features/copy-templates.js"></script>
     <script src="js/features/card-events.js"></script>
     <script src="js/features/modal-fields.js"></script>
     <script src="js/features/item-table.js"></script>

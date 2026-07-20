@@ -91,8 +91,18 @@ function parseFlexibleDateText(v) {
   const str = (v == null ? "" : String(v)).trim();
   if (!str) return "";
   const MONTHS = {
-    jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-    jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12,
   };
   let m = /^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/.exec(str);
   if (m) {
@@ -187,10 +197,7 @@ const CIPL_FIELD_LABELS = {
 };
 
 function normName(s) {
-  return (s || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+  return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 // Menggabungkan beberapa daftar barang "sebagian" (mis. dari sheet CI yang
@@ -239,7 +246,11 @@ function mergeByPosition(sources) {
       const it = list[i] || {};
       ["name", "hsCode", "qty", "satuan", "harga", "netto", "bruto"].forEach(
         (f) => {
-          if ((acc[f] == null || acc[f] === "") && it[f] != null && it[f] !== "")
+          if (
+            (acc[f] == null || acc[f] === "") &&
+            it[f] != null &&
+            it[f] !== ""
+          )
             acc[f] = it[f];
         },
       );

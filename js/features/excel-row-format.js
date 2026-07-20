@@ -253,8 +253,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(s.voyage), // 27 VESSEL -> nomor pengangkut
       formatter.packageNum(s.package), // 28 PACKAGE
     ];
-    if (idx > 0)
-      FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+    if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
     return cols;
   }
 
@@ -318,8 +317,7 @@ function buildExportCopyRows(s, formatter) {
       formatter.text(s.voyage), // 14 VESSEL -> nomor pengangkut
       formatter.packageNum(s.package), // 15 PACKAGE
     ];
-    if (idx > 0)
-      FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+    if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
     return cols;
   }
 
