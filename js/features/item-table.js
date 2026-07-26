@@ -90,9 +90,6 @@ function packageWarnTitle(it) {
     ? ""
     : "Format dimensi: P*L*T, mis. 82*82*75.";
 }
-function packageHintHtml() {
-  return "";
-}
 
 // Textarea "Nama Barang" tumbuh otomatis mengikuti isinya (dipanggil
 // tiap render tabel & tiap kali user ngetik) — supaya nama panjang

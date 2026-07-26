@@ -24,7 +24,17 @@ async function loadShipments() {
     if (data[row.mode]) data[row.mode].push(s);
   });
 
-  // render() dihapus dari sini
+  // PENTING: render() harus dipanggil di sini. router() di app-init.js
+  // memang sudah menggambar halaman lebih dulu (lihat komentarnya di
+  // sana), tapi itu terjadi SEBELUM fetch ini selesai, jadi ia menggambar
+  // dengan data.import/data.export yang masih kosong. Tanpa render() di
+  // sini, tidak ada apa pun yang menggambar ULANG dengan data asli
+  // setelah datang — layar macet di kerangka muat (skeleton) selamanya.
+  // Pemanggil lain (form-router.js setelah simpan, bulk-excel.js setelah
+  // impor/hapus) juga bergantung pada ini untuk menampilkan hasil
+  // terbaru; jangan dihapus lagi dengan alasan "sudah dirender lebih
+  // dulu di tempat lain" — itu justru penyebab bug ini sebelumnya.
+  render();
 }
 
 // Kerangka muat (skeleton). Ditampilkan selama data diambil, meniru

@@ -21,7 +21,6 @@ async function initApp() {
   router();
 
   await loadShipments();
-  router();
 }
 
 window.addEventListener("DOMContentLoaded", initApp);

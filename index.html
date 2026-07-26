@@ -4,7 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EXIM DDI — Pelacakan Jadwal Import &amp; Export</title>
-
+    <!-- Sambungan ke server font & CDN dibuka lebih awal, bersamaan
+         dengan pembacaan HTML. Tanpa ini peramban baru mulai menyambung
+         SETELAH menemukan tautannya, dan jabat tangan TLS ke tiap server
+         (~100-300ms di jaringan kantor) baru dimulai saat itu. -->
+    <style>
+      /* Gaya paling dasar ditanam langsung di halaman supaya warna latar
+         aplikasi sudah benar pada gambar pertama — tidak menunggu CSS
+         dari CDN. Sisanya tetap di style.css. */
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #f8fafc;
+        color: #1e293b;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
@@ -58,13 +74,7 @@
           <svg viewBox="0 0 1200 340" preserveAspectRatio="xMaxYMid slice">
             <g opacity="0.9">
               <!-- rute pelayaran -->
-              <g
-                fill="none"
-                stroke="#fff"
-                stroke-opacity=".22"
-                stroke-dasharray="5 9"
-                stroke-width="1.4"
-              >
+              <g fill="none" stroke="#fff" stroke-opacity=".22" stroke-dasharray="5 9" stroke-width="1.4">
                 <path d="M60 250 C 300 120, 620 90, 1160 150" />
                 <path d="M20 300 C 340 220, 700 200, 1180 236" />
               </g>
@@ -88,22 +98,12 @@
                 <rect x="1024" y="224" width="86" height="26" rx="3" />
               </g>
               <!-- derek pelabuhan -->
-              <g
-                stroke="#fff"
-                stroke-opacity=".16"
-                stroke-width="2.5"
-                fill="none"
-              >
+              <g stroke="#fff" stroke-opacity=".16" stroke-width="2.5" fill="none">
                 <path d="M660 282 L660 128 L860 128" />
                 <path d="M660 152 L604 152" />
               </g>
               <!-- garis air -->
-              <path
-                d="M0 282 H1200"
-                stroke="#fff"
-                stroke-opacity=".14"
-                stroke-width="1.5"
-              />
+              <path d="M0 282 H1200" stroke="#fff" stroke-opacity=".14" stroke-width="1.5" />
             </g>
           </svg>
         </div>
@@ -114,8 +114,8 @@
               Sistem Pelacakan Pengiriman Import &amp; Export
             </div>
             <div class="brand-sub">
-              Pantau ETD, ETA, dokumen kepabeanan, dan perhitungan CIF/FOB dalam
-              satu tampilan.
+              Pantau ETD, ETA, dokumen kepabeanan, dan perhitungan CIF/FOB
+              dalam satu tampilan.
             </div>
           </div>
 
@@ -123,12 +123,7 @@
                hero. Sebelumnya melayang di bawah hero dengan latar putih
                di atas latar terang, sehingga terlihat seperti kotak
                nyasar. Di atas hero gelap, kontrasnya jelas. -->
-          <div
-            class="mode-tabs"
-            id="modeTabs"
-            role="tablist"
-            aria-label="Jenis jadwal"
-          >
+          <div class="mode-tabs" id="modeTabs" role="tablist" aria-label="Jenis jadwal">
             <button class="active" id="tabImport" data-mode="import" role="tab">
               <i class="bi bi-box-arrow-in-down-left"></i>Import
             </button>
@@ -145,7 +140,7 @@
             <div class="stat-card">
               <div class="num" id="statTotal">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--n-400)"></span>Total
+                <span class="dot dot--total"></span>Total
                 Pengiriman
               </div>
             </div>
@@ -154,7 +149,7 @@
             <div class="stat-card">
               <div class="num" id="statProcess">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--amber)"></span
+                <span class="dot dot--process"></span
                 >PROCESS
               </div>
             </div>
@@ -163,8 +158,7 @@
             <div class="stat-card">
               <div class="num" id="statDelay">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--s-danger)"></span
-                >DELAY
+                <span class="dot dot--delay"></span>DELAY
               </div>
             </div>
           </div>
@@ -172,7 +166,7 @@
             <div class="stat-card">
               <div class="num" id="statArrived">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--green)"></span
+                <span class="dot dot--done"></span
                 ><span id="lblArrivedStat">ARRIVED</span>
               </div>
             </div>
@@ -200,11 +194,7 @@
               </select>
             </div>
             <div class="col-6 col-lg-3">
-              <select
-                id="sortDir"
-                class="form-select"
-                aria-label="Urutan jadwal"
-              >
+              <select id="sortDir" class="form-select" aria-label="Urutan jadwal">
                 <option value="eta-asc">ETA Terdekat</option>
                 <option value="eta-desc">ETA Terjauh</option>
                 <option value="etd-asc">ETD Terdekat</option>
@@ -218,25 +208,10 @@
             <div class="col-12 col-lg-6">
               <div class="range-filter">
                 <span class="range-filter-label" id="rangeBasisLabel">ETA</span>
-                <input
-                  type="date"
-                  id="filterDateFrom"
-                  class="form-control"
-                  aria-label="Tanggal mulai"
-                />
+                <input type="date" id="filterDateFrom" class="form-control" aria-label="Tanggal mulai" />
                 <span class="range-filter-sep">s/d</span>
-                <input
-                  type="date"
-                  id="filterDateTo"
-                  class="form-control"
-                  aria-label="Tanggal akhir"
-                />
-                <button
-                  type="button"
-                  class="btn btn-light range-filter-clear d-none"
-                  id="btnClearRange"
-                  title="Hapus rentang tanggal"
-                >
+                <input type="date" id="filterDateTo" class="form-control" aria-label="Tanggal akhir" />
+                <button type="button" class="btn btn-light range-filter-clear d-none" id="btnClearRange" title="Hapus rentang tanggal">
                   <i class="bi bi-x-lg"></i>
                 </button>
               </div>
@@ -357,11 +332,7 @@
       <div class="container page-docnum-body">
         <div class="docnum-shell">
           <nav class="docnum-tabs" id="docNumTabs" aria-label="Jenis dokumen">
-            <button
-              class="docnum-tab active"
-              data-docnum-tab="invoice"
-              type="button"
-            >
+            <button class="docnum-tab active" data-docnum-tab="invoice" type="button">
               <span class="docnum-tab-icon"><i class="bi bi-receipt"></i></span>
               <span class="docnum-tab-text">
                 <b>Invoice Number</b>
@@ -376,18 +347,14 @@
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="fund" type="button">
-              <span class="docnum-tab-icon"
-                ><i class="bi bi-cash-coin"></i
-              ></span>
+              <span class="docnum-tab-icon"><i class="bi bi-cash-coin"></i></span>
               <span class="docnum-tab-text">
                 <b>Fund Request Number</b>
                 <small>Nomor permintaan dana</small>
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="letter" type="button">
-              <span class="docnum-tab-icon"
-                ><i class="bi bi-envelope-paper"></i
-              ></span>
+              <span class="docnum-tab-icon"><i class="bi bi-envelope-paper"></i></span>
               <span class="docnum-tab-text">
                 <b>Letter Number</b>
                 <small>Nomor surat keluar</small>
@@ -397,11 +364,7 @@
 
           <section class="docnum-panels">
             <!-- ---------- Invoice ---------- -->
-            <form
-              class="docnum-panel active"
-              data-docnum-panel="invoice"
-              onsubmit="return false;"
-            >
+            <form class="docnum-panel active" data-docnum-panel="invoice" onsubmit="return false">
               <div class="docnum-panel-head">
                 <h6>Permintaan Nomor Invoice</h6>
                 <span class="docnum-preview">
@@ -410,51 +373,23 @@
               </div>
               <div class="row g-3">
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Jenis Invoice <span class="req">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    data-dn="invoiceKind"
-                    data-dn-subtype
-                    data-dn-required
-                  >
+                  <label class="form-label">Jenis Invoice <span class="req">*</span></label>
+                  <select class="form-select" data-dn="invoiceKind" data-dn-subtype data-dn-required>
                     <option value="Commercial">Commercial</option>
                     <option value="Non-Commercial">Non-Commercial</option>
                   </select>
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Tanggal Permintaan <span class="req">*</span></label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
-                  />
+                  <label class="form-label">Tanggal Permintaan <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Pemohon <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="requester"
-                    data-dn-required
-                    placeholder="Nama pemohon"
-                  />
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required placeholder="Nama pemohon" />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Departemen <span class="req">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    data-dn="department"
-                    data-dn-required
-                  >
+                  <label class="form-label">Departemen <span class="req">*</span></label>
+                  <select class="form-select" data-dn="department" data-dn-required>
                     <option value="">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
@@ -462,16 +397,8 @@
                   </select>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label"
-                    >Customer / Buyer <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="customer"
-                    data-dn-required
-                    placeholder="cth: DYNAMIC DESIGN CO., LTD."
-                  />
+                  <label class="form-label">Customer / Buyer <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="customer" data-dn-required placeholder="cth: DYNAMIC DESIGN CO., LTD." />
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Mata Uang</label>
@@ -482,32 +409,17 @@
                 </div>
                 <div class="col-md-3">
                   <label class="form-label">Nilai</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="amount"
-                    data-dn-number
-                    placeholder="0"
-                  />
+                  <input type="text" class="form-control" data-dn="amount" data-dn-number placeholder="0" />
                 </div>
                 <div class="col-12">
                   <label class="form-label">Keterangan</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                    placeholder="Keperluan penomoran..."
-                  ></textarea>
+                  <textarea class="form-control" rows="2" data-dn="notes" placeholder="Keperluan penomoran..."></textarea>
                 </div>
               </div>
             </form>
 
             <!-- ---------- Delivery Order ---------- -->
-            <form
-              class="docnum-panel"
-              data-docnum-panel="do"
-              onsubmit="return false;"
-            >
+            <form class="docnum-panel" data-docnum-panel="do" onsubmit="return false">
               <div class="docnum-panel-head">
                 <h6>Permintaan Nomor Delivery Order</h6>
                 <span class="docnum-preview">
@@ -516,85 +428,38 @@
               </div>
               <div class="row g-3">
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Tanggal Kirim <span class="req">*</span></label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
-                  />
+                  <label class="form-label">Tanggal Kirim <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Pemohon <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="requester"
-                    data-dn-required
-                    placeholder="Nama pemohon"
-                  />
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required placeholder="Nama pemohon" />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Tujuan / Penerima <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="receiver"
-                    data-dn-required
-                    placeholder="Nama penerima"
-                  />
+                  <label class="form-label">Tujuan / Penerima <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="receiver" data-dn-required placeholder="Nama penerima" />
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">No. Kendaraan</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="vehicle"
-                    placeholder="B 1234 XX"
-                  />
+                  <input type="text" class="form-control" data-dn="vehicle" placeholder="B 1234 XX" />
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Referensi Jadwal</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="reference"
-                    placeholder="No. PEB / Invoice terkait"
-                  />
+                  <input type="text" class="form-control" data-dn="reference" placeholder="No. PEB / Invoice terkait" />
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Jumlah Koli</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="packages"
-                    data-dn-number
-                    placeholder="0"
-                  />
+                  <input type="text" class="form-control" data-dn="packages" data-dn-number placeholder="0" />
                 </div>
                 <div class="col-12">
                   <label class="form-label">Keterangan</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                  ></textarea>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
                 </div>
               </div>
             </form>
 
             <!-- ---------- Fund Request ---------- -->
-            <form
-              class="docnum-panel"
-              data-docnum-panel="fund"
-              onsubmit="return false;"
-            >
+            <form class="docnum-panel" data-docnum-panel="fund" onsubmit="return false">
               <div class="docnum-panel-head">
                 <h6>Permintaan Nomor Permintaan Dana</h6>
                 <span class="docnum-preview">
@@ -603,36 +468,16 @@
               </div>
               <div class="row g-3">
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Tanggal Dibutuhkan <span class="req">*</span></label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
-                  />
+                  <label class="form-label">Tanggal Dibutuhkan <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Pemohon <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="requester"
-                    data-dn-required
-                  />
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Departemen <span class="req">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    data-dn="department"
-                    data-dn-required
-                  >
+                  <label class="form-label">Departemen <span class="req">*</span></label>
+                  <select class="form-select" data-dn="department" data-dn-required>
                     <option value="">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
@@ -640,14 +485,8 @@
                   </select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Jenis Pengeluaran <span class="req">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    data-dn="expenseType"
-                    data-dn-required
-                  >
+                  <label class="form-label">Jenis Pengeluaran <span class="req">*</span></label>
+                  <select class="form-select" data-dn="expenseType" data-dn-required>
                     <option value="">— pilih —</option>
                     <option>Biaya Kepabeanan</option>
                     <option>Freight / Trucking</option>
@@ -662,47 +501,22 @@
                   </select>
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Nominal <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="amount"
-                    data-dn-required
-                    data-dn-number
-                    placeholder="0"
-                  />
+                  <label class="form-label">Nominal <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="amount" data-dn-required data-dn-number placeholder="0" />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label"
-                    >Dibayarkan Kepada <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="payee"
-                    data-dn-required
-                    placeholder="Nama vendor / PPJK"
-                  />
+                  <label class="form-label">Dibayarkan Kepada <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="payee" data-dn-required placeholder="Nama vendor / PPJK" />
                 </div>
                 <div class="col-12">
                   <label class="form-label">Rincian</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                  ></textarea>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
                 </div>
               </div>
             </form>
 
             <!-- ---------- Letter ---------- -->
-            <form
-              class="docnum-panel"
-              data-docnum-panel="letter"
-              onsubmit="return false;"
-            >
+            <form class="docnum-panel" data-docnum-panel="letter" onsubmit="return false">
               <div class="docnum-panel-head">
                 <h6>Permintaan Nomor Surat</h6>
                 <span class="docnum-preview">
@@ -711,25 +525,12 @@
               </div>
               <div class="row g-3">
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Tanggal Surat <span class="req">*</span></label
-                  >
-                  <input
-                    type="date"
-                    class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
-                  />
+                  <label class="form-label">Tanggal Surat <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Jenis Surat <span class="req">*</span></label
-                  >
-                  <select
-                    class="form-select"
-                    data-dn="letterType"
-                    data-dn-required
-                  >
+                  <label class="form-label">Jenis Surat <span class="req">*</span></label>
+                  <select class="form-select" data-dn="letterType" data-dn-required>
                     <option value="">— pilih —</option>
                     <option>Surat Keterangan</option>
                     <option>Surat Kuasa</option>
@@ -738,46 +539,20 @@
                   </select>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label"
-                    >Penanda Tangan <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="signer"
-                    data-dn-required
-                  />
+                  <label class="form-label">Penanda Tangan <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="signer" data-dn-required />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label"
-                    >Kepada <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="recipient"
-                    data-dn-required
-                    placeholder="Instansi / perusahaan tujuan"
-                  />
+                  <label class="form-label">Kepada <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="recipient" data-dn-required placeholder="Instansi / perusahaan tujuan" />
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label"
-                    >Perihal <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="subject"
-                    data-dn-required
-                  />
+                  <label class="form-label">Perihal <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="subject" data-dn-required />
                 </div>
                 <div class="col-12">
                   <label class="form-label">Isi Ringkas</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                  ></textarea>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
                 </div>
               </div>
             </form>
@@ -786,12 +561,9 @@
             <div class="docnum-result d-none" id="docNumResult">
               <div class="docnum-result-main">
                 <div class="docnum-result-label">
-                  <i class="bi bi-check-circle-fill"></i> Nomor berhasil
-                  diterbitkan
+                  <i class="bi bi-check-circle-fill"></i> Nomor berhasil diterbitkan
                 </div>
-                <div class="docnum-result-number" id="docNumResultNumber">
-                  &mdash;
-                </div>
+                <div class="docnum-result-number" id="docNumResultNumber">&mdash;</div>
               </div>
               <button type="button" class="btn btn-light" id="btnCopyDocNum">
                 <i class="bi bi-clipboard"></i> Salin
@@ -800,9 +572,7 @@
 
             <div class="docnum-actions">
               <span class="docnum-hint" id="docNumHint"></span>
-              <button type="button" class="btn btn-light" id="btnDocNumReset">
-                Reset
-              </button>
+              <button type="button" class="btn btn-light" id="btnDocNumReset">Reset</button>
               <button type="button" class="btn btn-teal" id="btnDocNumSubmit">
                 <i class="bi bi-hash"></i> Ajukan Nomor
               </button>
@@ -818,24 +588,12 @@
                 <span class="counter-info" id="counterInfo">&mdash;</span>
               </div>
               <div class="counter-body">
-                <label class="form-label" for="counterNext"
-                  >Nomor berikutnya</label
-                >
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  class="form-control"
-                  id="counterNext"
-                />
+                <label class="form-label" for="counterNext">Nomor berikutnya</label>
+                <input type="number" min="1" step="1" class="form-control" id="counterNext" />
                 <button type="button" class="btn btn-teal" id="btnCounterSave">
                   <i class="bi bi-check2"></i> Simpan
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-danger"
-                  id="btnCounterReset"
-                >
+                <button type="button" class="btn btn-outline-danger" id="btnCounterReset">
                   <i class="bi bi-arrow-counterclockwise"></i> Reset ke 001
                 </button>
               </div>
@@ -844,20 +602,13 @@
                 <b>berikutnya</b> &mdash; misal invoice terakhir 035, isi 036.
                 Berlaku untuk jenis dokumen &amp; periode yang sedang aktif.
               </div>
+
             </div>
 
             <div class="docnum-history">
               <div class="docnum-history-head">
-                <span
-                  ><i class="bi bi-clock-history"></i> Nomor Terakhir
-                  Terbit</span
-                >
-                <button
-                  type="button"
-                  class="btn btn-light btn-sm"
-                  id="btnDocNumRefresh"
-                  title="Muat ulang"
-                >
+                <span><i class="bi bi-clock-history"></i> Nomor Terakhir Terbit</span>
+                <button type="button" class="btn btn-light btn-sm" id="btnDocNumRefresh" title="Muat ulang">
                   <i class="bi bi-arrow-clockwise"></i>
                 </button>
               </div>
@@ -1190,32 +941,29 @@
                 <select class="form-select" id="fStatus"></select>
               </div>
               <div class="col-12 d-none" id="delayBlock">
-                <div class="delay-box">
-                  <div
-                    class="subsection-title mb-2"
-                    style="border: none; padding: 0; margin: 0"
-                  >
-                    <i class="bi bi-clock-history"></i> Tanggal Update Delay
-                  </div>
-                  <div class="row g-3">
-                    <div class="col-md-4">
-                      <label class="form-label">Update ETA</label>
-                      <input type="date" class="form-control" id="fEtaUpdate" />
+                  <div class="delay-box">
+                    <div class="subsection-title mb-2" style="border:none;padding:0;margin:0">
+                      <i class="bi bi-clock-history"></i> Tanggal Update Delay
                     </div>
-                    <div class="col-md-4">
-                      <label class="form-label">Update ETD</label>
-                      <input type="date" class="form-control" id="fEtdUpdate" />
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="form-label">Update ETA</label>
+                        <input type="date" class="form-control" id="fEtaUpdate" />
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label">Update ETD</label>
+                        <input type="date" class="form-control" id="fEtdUpdate" />
+                      </div>
+                      <div class="col-md-4 d-flex align-items-end">
+                        <div class="delay-summary" id="delaySummary"></div>
+                      </div>
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                      <div class="delay-summary" id="delaySummary"></div>
+                    <div class="form-text-note mt-2">
+                      <i class="bi bi-info-circle"></i> Isi tanggal <b>baru</b>
+                      hasil pemunduran. ETD &amp; ETA di atas tetap berisi
+                      rencana semula sebagai pembanding.
                     </div>
                   </div>
-                  <div class="form-text-note mt-2">
-                    <i class="bi bi-info-circle"></i> Isi tanggal <b>baru</b>
-                    hasil pemunduran. ETD &amp; ETA di atas tetap berisi rencana
-                    semula sebagai pembanding.
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -1228,7 +976,7 @@
                     <textarea
                       id="fNoteDraft"
                       rows="2"
-                      placeholder='Tulis kronologi/kejadian… (mis. "Kapal delay 3 hari, ETA mundur ke 25 Jul"). Ctrl+Enter untuk kirim.'
+                      placeholder="Tulis kronologi/kejadian… (mis. &quot;Kapal delay 3 hari, ETA mundur ke 25 Jul&quot;). Ctrl+Enter untuk kirim."
                     ></textarea>
                     <button type="button" class="btn btn-teal" id="btnAddNote">
                       <i class="bi bi-plus-lg"></i> Tambah
@@ -1289,12 +1037,7 @@
             <div class="item-table-foot item-table-foot--split">
               <div class="foot-package">
                 <i class="bi bi-box-seam"></i> Total Package:
-                <input
-                  type="text"
-                  id="fPackage"
-                  data-num
-                  placeholder="cth: 12"
-                />
+                <input type="text" id="fPackage" data-num placeholder="cth: 12" />
                 <input
                   type="text"
                   id="fPackageUnit"
@@ -1354,8 +1097,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fFreight"
-                  data-num
+                  id="fFreight" data-num
                   placeholder="0.00"
                 />
               </div>
@@ -1364,8 +1106,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fInsurance"
-                  data-num
+                  id="fInsurance" data-num
                   placeholder="0.00"
                 />
               </div>
@@ -1374,8 +1115,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fNdpbm"
-                  data-num
+                  id="fNdpbm" data-num
                   placeholder="16250"
                 />
               </div>
@@ -1445,8 +1185,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fTarif"
-                  data-num
+                  id="fTarif" data-num
                   placeholder="5"
                 />
               </div>
@@ -1455,8 +1194,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fBM"
-                  data-num
+                  id="fBM" data-num
                   placeholder="0"
                 />
               </div>
@@ -1465,8 +1203,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fPPN"
-                  data-num
+                  id="fPPN" data-num
                   placeholder="0"
                 />
               </div>
@@ -1475,8 +1212,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fPPH"
-                  data-num
+                  id="fPPH" data-num
                   placeholder="0"
                 />
               </div>

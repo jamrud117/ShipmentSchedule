@@ -132,11 +132,6 @@ function resolveDocNumType(tabKey) {
    database. */
 const docNumSeries = {};
 
-function docNumPeriodKey(typeKey) {
-  const t = resolveDocNumType(typeKey);
-  return docNumSeries[t.key] || "1";
-}
-
 async function muatSeri(docType) {
   const { data, error } = await supabaseClient.rpc("current_document_series", {
     p_doc_type: docType,

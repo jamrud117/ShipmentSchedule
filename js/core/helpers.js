@@ -39,14 +39,11 @@ function fmtDateLong(d) {
     year: "numeric",
   });
 }
-function todayStripped() {
-  const t = new Date();
-  t.setHours(0, 0, 0, 0);
-  return t;
-}
 // isPastOrToday() (dipakai utk auto-arrive) dihapus -- auto-arrive
 // sudah tidak ada lagi (lihat route-model.js / modal-fields.js /
 // card-events.js), jadi fungsi ini sudah tidak dipanggil dari manapun.
+// todayStripped(), helper lain utk fitur yang sama, ikut dihapus dgn
+// alasan yang sama (tidak ada pemanggilnya lagi).
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
@@ -139,18 +136,6 @@ function computeItemCbm(it) {
   const qty = Number(it.qty) || 0;
   const cbm = ((dims.p * dims.l * dims.t) / 1000000) * qty;
   return Math.round(cbm * 1000) / 1000;
-}
-
-// Sisa teks SETELAH angka depan field Kemasan mode Import (mis.
-// "5 BOX" -> "BOX", "1 PKG" -> "PKG") — Jenis Kemasan-nya. Regex sama
-// persis dengan extractLeadingNumber() (excel-row-format.js), cuma
-// yang diambil bagian sisanya, bukan angkanya. Dipakai HANYA utk hint
-// tampilan; Jumlah yang dipakai di kalkulasi Total Package tetap dari
-// extractLeadingNumber() aslinya.
-function packageJenisText(raw) {
-  const s = String(raw || "").trim();
-  const m = s.match(/^-?\d+(?:[.,]\d+)?\s*(.*)$/);
-  return m ? m[1].trim() : s;
 }
 
 // Satu entri SKB dalam daftar per-barang. "jenis" salah satu dari

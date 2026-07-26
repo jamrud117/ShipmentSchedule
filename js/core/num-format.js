@@ -34,13 +34,6 @@ function fmtPibNumber(n, maxDecimals) {
   return (neg ? "-" : "") + grouped + (decPart ? "." + decPart : "");
 }
 
-// Versi yang TIDAK mengosongkan nol — dipakai di tempat yang memang
-// perlu menampilkan angka 0 secara eksplisit (mis. ringkasan di layar).
-function fmtPibNumberZero(n, maxDecimals) {
-  const v = fmtPibNumber(n, maxDecimals);
-  return v === "" ? "0" : v;
-}
-
 /* ------------------------------------------------------------------
    HS CODE (requirement A)
    "Saat HS Code diinput (baik dari hasil ekstraksi otomatis maupun saat

@@ -38,16 +38,15 @@ cardContainer.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-action]");
   if (!btn) return;
   const id = btn.dataset.id;
-  if (btn.dataset.action === "edit")
+  if (btn.dataset.action === "edit") {
     location.hash = "#/edit/" + encodeURIComponent(id);
-  if (btn.dataset.action === "viewDetail") openDetailView(id);
-  if (btn.dataset.action === "addNote") {
+  } else if (btn.dataset.action === "viewDetail") {
+    openDetailView(id);
+  } else if (btn.dataset.action === "addNote") {
     addNoteFromCard(btn.dataset.id);
-    return;
-  }
-  if (btn.dataset.action === "copyTemplate")
+  } else if (btn.dataset.action === "copyTemplate") {
     copyShipment(btn.dataset.template, id);
-  if (btn.dataset.action === "delete") {
+  } else if (btn.dataset.action === "delete") {
     showConfirm("Hapus jadwal pengiriman ini secara permanen?", async () => {
       try {
         const { error } = await supabaseClient

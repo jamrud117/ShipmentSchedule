@@ -5,9 +5,11 @@
      sini; tidak ada lagi angka warna/jarak yang ditulis lepas di
      tengah berkas.
 
-     PALET: netral dingin (slate) sebagai kanvas + SATU warna aksen
-     (teal). Warna lain HANYA dipakai untuk status yang memang harus
-     dibedakan — delay, selesai, bahaya. Bukan hiasan.
+     PALET: netral dingin (slate) sebagai kanvas, NAVY sebagai warna
+     utama/merek, EMAS/BRASS tua sebagai aksen sekunder (link, ikon
+     sekunder, sorotan yang perlu menonjol tanpa berebut perhatian
+     dengan navy). Warna lain HANYA dipakai untuk status yang memang
+     harus dibedakan — proses, delay, selesai. Bukan hiasan.
   ================================================================== */
 
   /* ---- Netral (kanvas, garis, teks) ---- */
@@ -35,6 +37,28 @@
   --p-500: #1a4f80;
   --p-600: #123a63;
   --p-700: #0b1f3a;
+
+  /* ---- Aksen sekunder: RAMP GOLD/BRASS ----
+     Sebelumnya `--teal` cuma alias balik ke ramp navy, jadi "teal" di
+     puluhan tempat sebenarnya tampil navy — itu sumber banyak override
+     "perbaikan kontras" di bagian bawah berkas ini (badge yang navy di
+     atas navy jadi tak kelihatan, lalu ditambal satu per satu). Warna
+     teal aslinya sendiri sudah pernah dicoba & tidak dipakai lagi,
+     jadi aksen sekunder di sini diganti emas/brass tua yang lebih
+     elegan berpasangan dengan navy — sengaja diredupkan (bukan kuning
+     terang) supaya beda jelas dari status PROCESS yang sama-sama di
+     keluarga oranye/kuning. Nama variabel `--teal`/`--teal-dark` tetap
+     dipertahankan di alias di bawah (bukan nama warnanya lagi, cuma
+     ID) supaya puluhan aturan yang sudah memakainya tidak perlu
+     disentuh satu per satu. */
+  --sec-50: #fbf8f4;
+  --sec-100: #f5f0e5;
+  --sec-200: #ecdfc6;
+  --sec-300: #dfc590;
+  --sec-400: #d4a954;
+  --sec-500: #b88a2e;
+  --sec-600: #8a6a28;
+  --sec-700: #634b1d;
 
   /* ---- Permukaan gelap (identitas merek) ---- */
   --d-900: #0b1f3a;
@@ -111,8 +135,8 @@
   --navy: var(--d-900);
   --navy-2: var(--d-800);
   --ocean: var(--d-600);
-  --teal: var(--p-600);
-  --teal-dark: var(--p-700);
+  --teal: var(--sec-600);
+  --teal-dark: var(--sec-700);
   --amber: var(--s-warn);
   --coral: var(--s-danger);
   --green: var(--s-ok);
@@ -137,7 +161,7 @@ body {
   background-image:
     radial-gradient(
       circle at 100% 0%,
-      rgba(15, 181, 174, 0.07),
+      rgba(138, 106, 40, 0.07),
       transparent 45%
     ),
     radial-gradient(circle at 0% 100%, rgba(20, 73, 122, 0.06), transparent 40%);
@@ -177,6 +201,22 @@ body {
   top: 0;
   z-index: 1030;
 }
+.main-navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 10px 12px 10px 20px;
+  box-shadow: 0 14px 30px -22px rgba(11, 31, 58, 0.55);
+  /* Sengaja tanpa backdrop-filter: elemen ini STICKY, dan blur pada
+     elemen yang ikut bergerak saat menggulir memaksa peramban menyusun
+     ulang lapisan di setiap frame. Latar di belakangnya sudah navy
+     pekat, jadi efek buramnya toh tidak akan terlihat. */
+}
 .navbar-brand-custom {
   font-family: var(--font-display);
   font-weight: 700;
@@ -196,18 +236,69 @@ body {
   color: var(--ocean);
 }
 
+/* Nama .site-nav sengaja unik (bukan .page-nav) — kelas itu bentrok
+   dengan tombol PAGINASI daftar yang kebetulan memakai nama & bentuk
+   dasar yang sama (min-width 32px, tinggi 32px, border, latar putih),
+   sehingga dua aturan saling menimpa dan navigasi halaman tampil
+   kacau. Jangan disingkat balik ke .page-nav. */
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.site-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease;
+  border-radius: 10px;
+}
+.site-nav-link i {
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+.site-nav-link:hover {
+  color: var(--navy);
+  background: var(--bg);
+}
+/* Halaman aktif ditandai garis di bawah label, bukan pil berwarna: di
+   dalam pil putih yang sudah terang, pil kedua di dalamnya membuat dua
+   permukaan putih bertumpuk dan batasnya sulit dibaca. */
+.site-nav-link.active {
+  color: var(--navy);
+  background: transparent;
+}
+.site-nav-link.active::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 2px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: var(--teal);
+}
+
 /* Toggle Import/Export — berada DI ATAS hero gelap, jadi wadahnya
-   transparan-berkabut dan tab aktifnya putih pekat. Kombinasi ini yang
-   memberi kontras; versi sebelumnya memakai wadah putih di atas latar
-   terang sehingga tab aktif dan wadahnya sama-sama putih dan batasnya
-   nyaris tak terbaca. */
+   transparan-berkabut dan tab aktifnya putih pekat; wadah putih di atas
+   latar terang membuat tab aktif dan wadahnya sama-sama putih dan
+   batasnya nyaris tak terbaca, jadi kontrasnya sengaja dibalik di sini. */
 .mode-tabs {
   display: inline-flex;
   gap: 4px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
   padding: 5px;
-  border-radius: 14px;
+  border-radius: var(--r-xl);
 }
 .mode-tabs button {
   border: none;
@@ -233,6 +324,21 @@ body {
 }
 .mode-tabs button i {
   margin-right: 5px;
+}
+@media (max-width: 767px) {
+  .main-navbar-inner {
+    padding: 10px 12px;
+  }
+  .site-nav-link span {
+    display: none;
+  }
+  .site-nav-link {
+    padding: 10px 12px 12px;
+  }
+  .site-nav-link.active::after {
+    left: 10px;
+    right: 10px;
+  }
 }
 
 /* ================= TOPBAR / HERO ================= */
@@ -266,10 +372,51 @@ body {
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 50%;
 }
+/* Varian ringkas (halaman Permintaan No. Dokumen — tanpa hero-scene,
+   mode-tabs, atau stat cards). Jarak bawahnya lebih lebar dari versi
+   lengkap karena lengkung .topbar::after bisa memotong baris terakhir
+   teks kalau ruangnya disamakan. */
+.topbar--compact {
+  padding-bottom: 64px;
+}
+
+/* Lapisan gambar pelabuhan (lihat SVG .hero-scene di HTML — digambar
+   langsung sebagai markup, bukan file gambar, supaya tidak menambah
+   unduhan dan tetap tajam di zoom berapa pun). Diredupkan lewat opacity
+   supaya teks .hero-copy di kirinya tetap terbaca. */
+.hero-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.hero-scene svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* Baris atas hero: teks di kiri, toggle Import/Export di kanan atas. */
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.hero-copy {
+  min-width: 0;
+  /* Dibatasi agar barisnya tidak melebar sampai ke bawah gambar
+     pelabuhan di kanan. */
+  max-width: 620px;
+}
+.hero-top .mode-tabs {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 .brand-eyebrow {
   font-family: var(--font-mono);
   letter-spacing: 0.14em;
-  font-size: 0.72rem;
+  font-size: var(--t-xs);
   color: rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
 }
@@ -278,6 +425,18 @@ body {
   font-size: 0.92rem;
   max-width: 640px;
   margin-top: 6px;
+}
+@media (max-width: 767px) {
+  .hero-top {
+    flex-direction: column;
+  }
+  .hero-top .mode-tabs {
+    width: 100%;
+  }
+  .hero-top .mode-tabs button {
+    flex: 1;
+    text-align: center;
+  }
 }
 
 /* ================= STAT CARDS ================= */
@@ -289,7 +448,7 @@ body {
 }
 .stat-card {
   background: var(--surface);
-  border-radius: 14px;
+  border-radius: var(--r-xl);
   padding: 16px 18px;
   box-shadow: 0 10px 30px -14px rgba(11, 31, 58, 0.25);
   border: 1px solid var(--border);
@@ -314,14 +473,31 @@ body {
   display: inline-block;
   margin-right: 6px;
 }
+/* Warna tiap titik status: kelas per makna (bukan style="" inline di
+   HTML) supaya sejalan dengan komponen lain yang semuanya mengambil
+   warna dari token, bukan ditulis lepas di markup. */
+.stat-card .dot--total {
+  background: var(--n-400);
+}
+.stat-card .dot--process {
+  background: var(--amber);
+}
+.stat-card .dot--delay {
+  background: var(--s-danger);
+}
+.stat-card .dot--done {
+  background: var(--green);
+}
 
 /* ================= TOOLBAR ================= */
 .toolbar {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
   padding: 14px 16px;
-  box-shadow: 0 6px 20px -16px rgba(11, 31, 58, 0.2);
+  /* border, radius, dan shadow SENGAJA tidak diulang di sini — kartu
+     ini ikut aturan bersama ".toolbar" di lapisan sistem desain (satu
+     bahasa dengan .stat-card/.ship-card/.form-section-card dkk),
+     jadi menuliskannya lagi di sini cuma jadi kode mati yang tidak
+     pernah kepakai. */
 }
 .toolbar .form-control,
 .toolbar .form-select {
@@ -331,7 +507,7 @@ body {
 .toolbar .form-control:focus,
 .toolbar .form-select:focus {
   border-color: var(--teal);
-  box-shadow: 0 0 0 0.2rem rgba(15, 181, 174, 0.15);
+  box-shadow: 0 0 0 0.2rem rgba(138, 106, 40, 0.15);
 }
 .toolbar-divider {
   height: 1px;
@@ -364,7 +540,7 @@ body {
 }
 .toolbar-actions .btn-teal {
   padding: 9px 22px;
-  font-size: 0.9rem;
+  font-size: var(--t-base);
 }
 @media (max-width: 576px) {
   .toolbar-actions {
@@ -378,6 +554,57 @@ body {
     display: none;
   }
 }
+
+/* ---- Filter rentang tanggal (mengikuti dasar ETA/ETD) ---- */
+.range-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* Penanda kolom mana yang sedang disaring. Monospace + latar tegas
+   supaya terbaca sebagai "label kunci", bukan sekadar tulisan biasa. */
+.range-filter-label {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--p-700);
+  background: var(--p-50);
+  border: 1px solid var(--p-200);
+  border-radius: var(--r-sm);
+  padding: 6px 9px;
+}
+.range-filter-sep {
+  flex-shrink: 0;
+  font-size: var(--t-xs);
+  color: var(--n-400);
+}
+.range-filter .form-control {
+  min-width: 0;
+}
+.range-filter-clear {
+  flex-shrink: 0;
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-md);
+  padding: 7px 10px;
+  color: var(--n-500);
+  background: #fff;
+}
+.range-filter-clear:hover {
+  color: var(--s-danger);
+  border-color: #fecaca;
+  background: var(--s-danger-bg);
+}
+@media (max-width: 575px) {
+  .range-filter {
+    flex-wrap: wrap;
+  }
+  .range-filter .form-control {
+    flex: 1 1 42%;
+  }
+}
+
 .btn-teal {
   background: var(--teal);
   border-color: var(--teal);
@@ -472,9 +699,10 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 4px solid var(--border);
-  border-radius: 14px;
   padding: 20px 22px;
-  box-shadow: 0 8px 24px -18px rgba(11, 31, 58, 0.3);
+  /* border-radius & box-shadow datang dari aturan bersama ".ship-card"
+     di lapisan sistem desain — lihat komentar di sana untuk kenapa
+     border (bukan radius/shadow) TIDAK ikut digabung untuk kartu ini. */
 }
 .ship-card + .ship-card {
   margin-top: 14px;
@@ -626,9 +854,9 @@ body {
   border-color: #dcdafb;
 }
 .tag.tag-transit {
-  background: #e6f7f6;
+  background: var(--sec-50);
   color: var(--teal-dark);
-  border-color: #c7ece9;
+  border-color: var(--sec-200);
 }
 .tag.tag-ecoo {
   background: #e9f9ee;
@@ -664,16 +892,16 @@ body {
   color: #95610c;
 }
 .status-transit {
-  background-color: #e3fbfa;
-  color: #0b8f89;
+  background-color: var(--sec-50);
+  color: var(--teal-dark);
 }
 .status-arrived {
-  background-color: #e5f7ec;
-  color: #1d7a42;
+  background-color: var(--p-50);
+  color: var(--p-700);
 }
 .status-delayed {
-  background-color: #fdeaea;
-  color: #b3211f;
+  background-color: var(--s-danger-bg);
+  color: var(--s-danger);
 }
 .status-select option {
   color: #1b2a41;
@@ -940,13 +1168,13 @@ body {
 .date-field input:focus {
   border-color: var(--teal);
   outline: none;
-  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
 
 /* ================= COLLAPSED CARD (arrived) ================= */
 .ship-card--collapsed {
   padding: 14px 20px;
-  background: #f4fbf7;
+  background: var(--p-50);
 }
 .collapsed-row {
   display: flex;
@@ -1092,7 +1320,7 @@ body {
   border: none;
   border-radius: 10px;
   background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
-  box-shadow: 0 12px 26px -10px rgba(15, 181, 174, 0.55);
+  box-shadow: 0 12px 26px -10px rgba(138, 106, 40, 0.55);
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -1102,12 +1330,12 @@ body {
 }
 .empty-state .btn-teal:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 30px -10px rgba(15, 181, 174, 0.6);
+  box-shadow: 0 16px 30px -10px rgba(138, 106, 40, 0.6);
   color: #fff;
 }
 .empty-state .btn-teal:active {
   transform: translateY(0);
-  box-shadow: 0 8px 18px -10px rgba(15, 181, 174, 0.5);
+  box-shadow: 0 8px 18px -10px rgba(138, 106, 40, 0.5);
 }
 
 /* ================= MODAL ================= */
@@ -1140,7 +1368,7 @@ body {
 .modal .form-control:focus,
 .modal .form-select:focus {
   border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
 .modal .form-control[readonly] {
   background: #f7fafd;
@@ -1257,9 +1485,9 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  /* Header sekarang gelap, jadi ikonnya TIDAK boleh memakai gradasi
-     navy lagi (akan lenyap di latar sewarna). Dipakai teal sebagai
-     aksen tema yang tetap terbaca. */
+  /* Header gelap (gradasi navy), jadi ikon badge ini sengaja pakai
+     aksen sekunder (emas) supaya tetap menonjol — bukan navy, yang
+     akan lenyap di latar sewarna. */
   background: var(--teal);
   color: #fff;
   display: inline-flex;
@@ -1360,9 +1588,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--teal);
-  color: var(--teal-dark);
-  background: rgba(15, 181, 174, 0.08);
+  border: 1px solid var(--p-200);
+  color: var(--p-700);
+  background: var(--p-50);
   border-radius: 9px;
   padding: 8px 14px;
   font-size: 0.79rem;
@@ -1370,9 +1598,9 @@ body {
   transition: all 0.15s ease;
 }
 .btn-import-excel:hover {
-  background: var(--teal-dark);
-  color: #fff;
-  box-shadow: 0 6px 16px -8px rgba(15, 181, 174, 0.7);
+  background: var(--p-100);
+  border-color: var(--p-300);
+  color: var(--p-700);
 }
 .btn-import-excel i {
   font-size: 0.9rem;
@@ -1412,12 +1640,12 @@ body {
 .btn-save-primary {
   padding: 8px 18px;
   border-radius: 9px;
-  box-shadow: 0 8px 18px -8px rgba(15, 181, 174, 0.65);
+  box-shadow: 0 8px 18px -8px rgba(18, 58, 99, 0.65);
   transition: all 0.15s ease;
 }
 .btn-save-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -8px rgba(15, 181, 174, 0.75);
+  box-shadow: 0 10px 22px -8px rgba(18, 58, 99, 0.75);
   color: #fff;
 }
 .btn-save-primary:active {
@@ -1476,8 +1704,12 @@ body {
   color: #d9932c;
 }
 
-/* ---- Tab stepper (1/2/3) — warna aktifnya mengikuti data-tab, selaras
-   dengan warna badge ikon .form-section-card di bawahnya ---- */
+/* ---- Tab stepper (1/2/3) — navy tunggal untuk tab aktif (lihat
+   komentar di bawah kenapa disatukan), TIDAK lagi mengikuti warna
+   .form-section-card per topik seperti sebelumnya. Badge ikon di
+   .form-section-card sendiri tetap per-topik (ocean/violet/amber) —
+   itu konten yang cuma satu terlihat sekaligus, jadi tidak kena
+   masalah "warna berubah-ubah" yang dialami stepper. ---- */
 .nav-detail {
   display: flex;
   gap: 4px;
@@ -1544,10 +1776,6 @@ body {
   background: linear-gradient(135deg, var(--ocean), #123b63);
   color: #fff;
 }
-.nav-detail .nav-link.active .step-num {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
 @media (max-width: 575.98px) {
   .nav-detail .nav-link {
     font-size: 0.68rem;
@@ -1560,11 +1788,11 @@ body {
    berwarna, warnanya senada sama tab aktifnya) ---- */
 .form-section-card {
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 16px;
   padding: 22px 22px 20px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 2px rgba(11, 31, 58, 0.03);
+  /* border, border-radius & box-shadow datang dari aturan bersama
+     ".form-section-card" di lapisan sistem desain — lihat section
+     KARTU untuk kenapa .ship-card jadi pengecualian di sana. */
 }
 .form-section-card:last-child {
   margin-bottom: 0;
@@ -1629,7 +1857,7 @@ body {
 .page-form .form-control:focus,
 .page-form .form-select:focus {
   border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
 .page-form .form-control[readonly] {
   background: #f7fafd;
@@ -1639,7 +1867,7 @@ body {
 }
 .page-form .form-check-input:focus {
   border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(15, 181, 174, 0.15);
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
 .page-form .form-check-input:checked {
   background-color: var(--teal);
@@ -1656,8 +1884,6 @@ body {
 }
 .route-stop-card {
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 10px;
 }
@@ -2005,9 +2231,9 @@ tr.item-fac-row td {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid var(--teal);
-  color: var(--teal-dark);
-  background: rgba(15, 181, 174, 0.08);
+  border: 1px solid var(--p-600);
+  color: #fff;
+  background: var(--p-600);
   border-radius: 7px;
   padding: 5px 10px;
   font-size: 0.73rem;
@@ -2015,7 +2241,8 @@ tr.item-fac-row td {
   white-space: nowrap;
 }
 .btn-add-skb:hover {
-  background: var(--teal);
+  background: var(--p-700);
+  border-color: var(--p-700);
   color: #fff;
 }
 .item-fac-skb-row {
@@ -2067,9 +2294,7 @@ tr.item-fac-row td {
 }
 
 .calc-box {
-  border-radius: 12px;
   padding: 14px;
-  border: 1px solid var(--border);
   background: var(--bg);
   height: 100%;
 }
@@ -2264,7 +2489,7 @@ table.item-table input.pkg-invalid {
 .notes-composer textarea:focus {
   outline: none;
   border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(0, 150, 136, 0.12);
+  box-shadow: 0 0 0 3px rgba(18, 58, 99, 0.12);
 }
 .notes-composer .btn {
   white-space: nowrap;
@@ -2286,8 +2511,8 @@ table.item-table input.pkg-invalid {
 }
 /* Entri terbaru ditandai — inilah yang jadi kolom REMARK di template copy. */
 .note-entry--latest {
-  border-left-color: var(--teal);
-  background: #f3fbfa;
+  border-left-color: var(--p-500);
+  background: var(--p-50);
 }
 .note-entry-head {
   display: flex;
@@ -2459,7 +2684,7 @@ table.item-table input.pkg-invalid {
   color: #a35a00;
 }
 .delay-delta--early {
-  background: #dcf5ec;
+  background: var(--sec-50);
   color: var(--teal-dark);
 }
 
@@ -2519,8 +2744,8 @@ table.item-table input.pkg-invalid {
   gap: 12px;
   padding: 7px 12px;
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(0, 150, 136, 0.1), transparent);
-  border: 1px solid rgba(0, 150, 136, 0.28);
+  background: linear-gradient(90deg, rgba(138, 106, 40, 0.1), transparent);
+  border: 1px solid rgba(138, 106, 40, 0.28);
   overflow: hidden;
 }
 .depart-strip--air {
@@ -2533,7 +2758,7 @@ table.item-table input.pkg-invalid {
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--teal-dark, #00695c);
+  color: var(--teal-dark, #634b1d);
 }
 .depart-strip--air .depart-label {
   color: var(--ocean);
@@ -2565,7 +2790,7 @@ table.item-table input.pkg-invalid {
   top: 50%;
   left: 0;
   font-size: 0.95rem;
-  color: var(--teal, #009688);
+  color: var(--teal, #8a6a28);
   animation: depart-travel 3.4s ease-in-out infinite;
 }
 .depart-strip--air .depart-mover {
@@ -2600,81 +2825,8 @@ table.item-table input.pkg-invalid {
 }
 
 /* ==================================================================
-   NAVBAR SEBAGAI NAVIGASI HALAMAN + HALAMAN PERMINTAAN NO. DOKUMEN
+   HALAMAN PERMINTAAN NO. DOKUMEN
 ================================================================== */
-.main-navbar-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  /* Inilah "pil"-nya: permukaan putih membulat dengan bayangan lembut,
-     mengambang di atas warna halaman. */
-  /* Tanpa backdrop-filter: elemen ini STICKY, dan blur pada elemen yang
-     ikut bergerak saat menggulir memaksa peramban menyusun ulang lapisan
-     di setiap frame. Latar di belakangnya kini navy pekat, jadi efek
-     buramnya toh tidak terlihat — ongkosnya dibayar tanpa hasil. */
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 10px 12px 10px 20px;
-  box-shadow: 0 14px 30px -22px rgba(11, 31, 58, 0.55);
-}
-/* CATATAN PENTING: kelas ini DULU bernama .page-nav — bentrok dengan
-   tombol PAGINASI daftar yang memakai kelas yang sama persis
-   (min-width 32px, tinggi 32px, border, latar putih). Dua aturan itu
-   saling menimpa sehingga navigasi halaman tampil kacau. Sekarang
-   namanya sendiri, .site-nav, jadi tidak bisa bertabrakan lagi. */
-.site-nav {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.site-nav-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px 12px;
-  font-size: 0.83rem;
-  font-weight: 600;
-  color: var(--muted);
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    color 0.18s ease,
-    background 0.18s ease;
-  border-radius: 10px;
-}
-.site-nav-link i {
-  font-size: 0.95rem;
-  opacity: 0.85;
-}
-.site-nav-link:hover {
-  color: var(--navy);
-  background: var(--bg);
-}
-/* Halaman aktif ditandai GARIS TEAL di bawah label, bukan pil berwarna:
-   di dalam pil putih yang sudah terang, pil kedua di dalamnya membuat
-   dua permukaan putih bertumpuk dan batasnya sulit dibaca. */
-.site-nav-link.active {
-  color: var(--navy);
-  background: transparent;
-}
-.site-nav-link.active::after {
-  content: "";
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 2px;
-  height: 2.5px;
-  border-radius: 2px;
-  background: var(--teal);
-}
-
-.topbar--compact {
-  padding-bottom: 34px;
-}
 .page-docnum-body {
   margin-top: -26px;
   padding-bottom: 60px;
@@ -2686,10 +2838,9 @@ table.item-table input.pkg-invalid {
   grid-template-columns: 300px 1fr;
   gap: 0;
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 18px 44px -30px rgba(11, 31, 58, 0.5);
+  /* border, border-radius & box-shadow datang dari aturan bersama
+     ".docnum-shell" di lapisan sistem desain (section KARTU). */
 }
 .docnum-tabs {
   display: flex;
@@ -2820,9 +2971,10 @@ table.item-table input.pkg-invalid {
 }
 .docnum-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
@@ -2873,16 +3025,16 @@ table.item-table input.pkg-invalid {
   gap: 16px;
   margin-top: 18px;
   padding: 14px 18px;
-  border: 1px solid var(--teal);
+  border: 1px solid var(--p-200);
   border-radius: 12px;
-  background: #f1fbf9;
+  background: var(--p-50);
 }
 .docnum-result-label {
   font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--teal-dark, #00695c);
+  color: var(--p-600);
 }
 .docnum-result-number {
   font-family: var(--font-mono);
@@ -2894,12 +3046,6 @@ table.item-table input.pkg-invalid {
   word-break: break-all;
 }
 
-.docnum-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-}
 /* Pesan kesalahan pertama tampil di sebelah kiri tombol; didorong ke
    kiri agar tombol tetap di kanan seperti pola form lain. */
 .docnum-hint {
@@ -2980,75 +3126,6 @@ table.item-table input.pkg-invalid {
 .spin {
   display: inline-block;
   animation: spin-import 0.9s linear infinite;
-}
-
-/* ==================================================================
-   HERO HALAMAN DAFTAR — gambar latar & tata letak atas
-================================================================== */
-
-/* Lapisan gambar pelabuhan. Ditempel di kanan dan diredupkan ke arah
-   kiri lewat mask gradasi, supaya teks di kiri tetap punya latar polos
-   dan terbaca — gambar hanya mengisi ruang kosong, tidak bersaing
-   dengan tulisan. */
-.hero-scene {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  /* Redup ke arah kiri supaya teks tetap terbaca. Dulu dikerjakan lewat
-     <mask> di dalam SVG, yang memaksa peramban menyiapkan buffer
-     terpisah lalu menggabungkannya. Di sini cukup satu lapisan
-     transparansi biasa. */
-  opacity: 0.55;
-}
-.hero-scene svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* Baris atas hero: teks di kiri, toggle Import/Export di KANAN ATAS. */
-.hero-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-.hero-copy {
-  min-width: 0;
-  /* Dibatasi agar barisnya tidak melebar sampai ke bawah gambar
-     pelabuhan di kanan. */
-  max-width: 620px;
-}
-.hero-top .mode-tabs {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-@media (max-width: 767px) {
-  .hero-top {
-    flex-direction: column;
-  }
-  .hero-top .mode-tabs {
-    width: 100%;
-  }
-  .hero-top .mode-tabs button {
-    flex: 1;
-    text-align: center;
-  }
-  .main-navbar-inner {
-    padding: 10px 12px;
-  }
-  .site-nav-link span {
-    display: none;
-  }
-  .site-nav-link {
-    padding: 10px 12px 12px;
-  }
-  .site-nav-link.active::after {
-    left: 10px;
-    right: 10px;
-  }
 }
 
 /* ==================================================================
@@ -3232,7 +3309,14 @@ input::placeholder {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
-/* ---- KARTU ---- */
+/* ---- KARTU ----
+   .ship-card SENGAJA dikeluarkan dari aturan "border" bersama di bawah:
+   kartu ini butuh border-left 4px berwarna status (lihat
+   .ship-card--process dkk di bagian SHIPMENT CARD), sedangkan shorthand
+   "border" mengatur keempat sisi sekaligus — kalau ikut di sini, warna
+   status di sisi kiri selalu ketiban jadi abu-abu polos oleh aturan ini
+   (menang karena datang belakangan). radius/shadow/transition aman
+   dipakai bersama karena tidak bentrok dengan border-left. */
 .stat-card,
 .ship-card,
 .form-section-card,
@@ -3242,16 +3326,28 @@ input::placeholder {
 .route-stop-card,
 .calc-box {
   border-radius: var(--r-xl);
-  border: 1px solid var(--n-200);
   box-shadow: var(--sh-sm);
   transition:
     box-shadow var(--dur-2) var(--ease),
     border-color var(--dur-2) var(--ease),
     transform var(--dur-2) var(--ease);
 }
+.stat-card,
+.form-section-card,
+.toolbar,
+.notes-panel,
+.docnum-shell,
+.route-stop-card,
+.calc-box {
+  border: 1px solid var(--n-200);
+}
 .ship-card:hover {
   box-shadow: var(--sh-lg);
-  border-color: var(--n-300);
+  /* Cuma 3 sisi (bukan shorthand border-color) — sisi kiri tetap warna
+     status, tidak ikut meredup ke abu-abu saat di-hover. */
+  border-top-color: var(--n-300);
+  border-right-color: var(--n-300);
+  border-bottom-color: var(--n-300);
 }
 .stat-card:hover {
   box-shadow: var(--sh-md);
@@ -3438,7 +3534,7 @@ table.item-table tbody tr:hover,
 .ship-card--process::before { background: var(--s-warn); }
 .ship-card--delayed::before { background: var(--s-danger); }
 .ship-card--arrived::before { background: var(--s-ok); }
-.ship-card--transit::before { background: var(--p-600); }
+.ship-card--transit::before { background: var(--teal); }
 
 /* ---- Responsif ---- */
 @media (max-width: 991px) {
@@ -3460,14 +3556,11 @@ table.item-table tbody tr:hover,
    tempat kedua dunia itu bertemu.
 ================================================================== */
 
-/* Ikon judul di header form: dulu teal di atas navy. Kalau ikut jadi
-   navy ia hilang sama sekali — diganti kaca transparan bertepi putih. */
-.page-form-title-icon {
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff;
-  box-shadow: none;
-}
+/* Ikon judul header form dulu pakai override kaca transparan di sini
+   karena --teal saat itu cuma alias ke navy (ikon jadi lenyap di atas
+   header navy). Sekarang --teal genuinely emas (lihat token di :root),
+   jadi aturan dasarnya di bagian HALAMAN FORM sudah benar sendiri —
+   override itu tidak diperlukan lagi. */
 
 /* Garis halaman aktif di navbar: pil-nya putih, jadi navy justru paling
    terbaca di sini. */
@@ -3491,33 +3584,6 @@ table.item-table tbody tr:hover,
   border-color: var(--p-700);
 }
 
-/* Banner nomor terbit: latar tipis + tepi navy. */
-.docnum-result {
-  border-color: var(--p-200);
-  background: var(--p-50);
-}
-.docnum-result-label {
-  color: var(--p-600);
-}
-
-/* Titik status pada kartu statistik & lencana: tiga warna yang benar-
-   benar berbeda — abu (total), amber (proses), merah (delay), navy
-   (selesai). */
-.ship-card--delayed::before { background: var(--s-danger); }
-.ship-card--arrived::before { background: var(--p-600); }
-.ship-card--transit::before { background: var(--p-400); }
-
-.status-arrived {
-  background: var(--p-50);
-  color: var(--p-700);
-  border-color: var(--p-200);
-}
-.status-delayed {
-  background: var(--s-danger-bg);
-  color: var(--s-danger);
-  border-color: #fecaca;
-}
-
 /* Sorotan baris tabel & menu: tint navy paling muda, bukan teal. */
 table.item-table tbody tr:hover,
 .docnum-table tbody tr:hover,
@@ -3527,16 +3593,6 @@ table.item-table tbody tr:hover,
   color: inherit;
 }
 
-/* Tombol import & tepi fokus isian ikut keluarga navy. */
-.btn-import-excel {
-  border-color: var(--p-200);
-  color: var(--p-700);
-  background: var(--p-50);
-}
-.btn-import-excel:hover:not(:disabled) {
-  background: var(--p-100);
-  border-color: var(--p-300);
-}
 .form-control:focus,
 .form-select:focus,
 table.item-table input:focus,
@@ -3546,60 +3602,6 @@ table.item-table textarea:focus,
   border-color: var(--p-500);
 }
 
-/* Catatan terbaru di kronologi. */
-.note-entry--latest {
-  border-left-color: var(--p-500);
-  background: var(--p-50);
-}
-
-/* Hero halaman ringkas (Permintaan No. Dokumen): lengkung bawah hero
-   sempat memotong baris terakhir teksnya. Ruang bawah ditambah supaya
-   tidak ada tulisan yang tertutup. */
-.topbar--compact {
-  padding-bottom: 64px;
-}
-
-/* ---- Filter rentang tanggal (mengikuti dasar ETA/ETD) ---- */
-.range-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-/* Penanda kolom mana yang sedang disaring. Monospace + latar tegas
-   supaya terbaca sebagai "label kunci", bukan sekadar tulisan biasa. */
-.range-filter-label {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--p-700);
-  background: var(--p-50);
-  border: 1px solid var(--p-200);
-  border-radius: var(--r-sm);
-  padding: 6px 9px;
-}
-.range-filter-sep {
-  flex-shrink: 0;
-  font-size: var(--t-xs);
-  color: var(--n-400);
-}
-.range-filter .form-control {
-  min-width: 0;
-}
-.range-filter-clear {
-  flex-shrink: 0;
-  border: 1px solid var(--n-200);
-  border-radius: var(--r-md);
-  padding: 7px 10px;
-  color: var(--n-500);
-  background: #fff;
-}
-.range-filter-clear:hover {
-  color: var(--s-danger);
-  border-color: #fecaca;
-  background: var(--s-danger-bg);
-}
 /* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js),
    jadi kursornya dibuat menunjuk agar terasa memang bisa ditekan. */
 input[type="date"],
@@ -3610,127 +3612,6 @@ input[type="month"] {
 input[type="date"]:disabled,
 input[type="date"][readonly] {
   cursor: not-allowed;
-}
-@media (max-width: 575px) {
-  .range-filter {
-    flex-wrap: wrap;
-  }
-  .range-filter .form-control {
-    flex: 1 1 42%;
-  }
-}
-
-/* ---- Atur / reset nomor urut ---- */
-.counter-box {
-  margin-top: var(--sp-6);
-  padding: var(--sp-4);
-  border: 1px dashed var(--n-300);
-  border-radius: var(--r-lg);
-  background: var(--n-50);
-}
-.counter-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  font-size: var(--t-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--n-600);
-  margin-bottom: var(--sp-3);
-}
-.counter-info {
-  font-family: var(--font-mono);
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--n-500);
-}
-.counter-body {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
-.counter-body .form-label {
-  margin-bottom: var(--sp-1);
-}
-.counter-body .form-control {
-  width: 130px;
-  font-family: var(--font-mono);
-}
-.counter-body .btn {
-  white-space: nowrap;
-}
-.counter-box .form-text-note {
-  margin-top: var(--sp-3);
-}
-@media (max-width: 575px) {
-  .counter-body .form-control { width: 100%; }
-  .counter-body .btn { flex: 1; }
-}
-
-/* ---- Filter rentang tanggal (mengikuti dasar ETA/ETD) ---- */
-.range-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-/* Penanda kolom mana yang sedang disaring. Monospace + latar tegas
-   supaya terbaca sebagai "label kunci", bukan sekadar tulisan biasa. */
-.range-filter-label {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--p-700);
-  background: var(--p-50);
-  border: 1px solid var(--p-200);
-  border-radius: var(--r-sm);
-  padding: 6px 9px;
-}
-.range-filter-sep {
-  flex-shrink: 0;
-  font-size: var(--t-xs);
-  color: var(--n-400);
-}
-.range-filter .form-control {
-  min-width: 0;
-}
-.range-filter-clear {
-  flex-shrink: 0;
-  border: 1px solid var(--n-200);
-  border-radius: var(--r-md);
-  padding: 7px 10px;
-  color: var(--n-500);
-  background: #fff;
-}
-.range-filter-clear:hover {
-  color: var(--s-danger);
-  border-color: #fecaca;
-  background: var(--s-danger-bg);
-}
-/* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js),
-   jadi kursornya dibuat menunjuk agar terasa memang bisa ditekan. */
-input[type="date"],
-input[type="time"],
-input[type="month"] {
-  cursor: pointer;
-}
-input[type="date"]:disabled,
-input[type="date"][readonly] {
-  cursor: not-allowed;
-}
-@media (max-width: 575px) {
-  .range-filter {
-    flex-wrap: wrap;
-  }
-  .range-filter .form-control {
-    flex: 1 1 42%;
-  }
 }
 
 /* ---- Atur / reset nomor urut ---- */

@@ -401,22 +401,3 @@ async function copyToClipboard(text) {
     return false;
   }
 }
-
-async function handleCopyExcel(id) {
-  const s = currentList().find((x) => x.id === id);
-  if (!s) return;
-  if (!s.items || !s.items.length) {
-    showToast("Tidak ada barang untuk disalin.", "danger");
-    return;
-  }
-  const text = buildExcelCopyText(s);
-  const ok = await copyToClipboard(text);
-  if (ok) {
-    showToast(
-      `${s.items.length} baris barang disalin — tinggal paste mulai dari kolom IN FACTORY di Excel.`,
-      "success",
-    );
-  } else {
-    showToast("Gagal menyalin ke clipboard.", "danger");
-  }
-}
