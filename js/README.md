@@ -39,6 +39,7 @@ dependency-nya dulu.
 | `render/cards.js` | Render kartu pengiriman (expanded & collapsed) |
 | `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch |
 | `features/excel-row-format.js` | Format baris Excel (clipboard & native) utk mode Import & Export |
+| `features/copy-templates.js` | Dropdown pilihan template di tombol Copy (All Import/Export, Daily Import/Export, Report) — builder & dispatcher-nya, TANPA mengubah excel-row-format.js |
 | `features/card-events.js` | Delegasi event di kartu (status, tanggal, edit, hapus, dll) |
 | `features/modal-fields.js` | Tab modal, toggle label transport, live feedback auto-arrive, recalc kepabeanan |
 | `features/item-table.js` | Tabel draft barang + panel fasilitas SKB/E-COO |

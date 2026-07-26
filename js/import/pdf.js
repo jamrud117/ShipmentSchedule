@@ -154,55 +154,175 @@ const PIB_TITLE_RE = /PEMBERITAHUAN\s+IMPOR\s+BARANG/i;
 // jumlah barang dikali 5 — kalau ada yang tidak pas (mis. ada baris
 // ekstra/kurang krn format beda), semua dilewati; lebih aman kosong
 // (isi manual) daripada salah pasang nilai punya barang lain.
-function extractItemDetailColumn(pagesItems, nItems) {
+// Blok teks kolom "32. Uraian Jenis Barang" per barang, diambil lewat
+// KOORDINAT. Perlu karena pada teks polos, baris-baris antar kolom saling
+// MENYISIP — nyata ditemui, baris sesudah "Uraian : VERTICAL TURNING
+// CENTER FOR FLOW" bukan sambungannya, melainkan "NUMBER OF METODE 1"
+// milik kolom 35 & 36, sedangkan sambungan aslinya ("PROSES MANUFAKTUR
+// SIDE") baru muncul 2 baris kemudian bercampur teks kolom 33. Akibatnya
+// nama barang selalu terpotong di tengah kalimat. Dengan memotong per
+// rentang x, isi kolom ini bersih dan sambungannya urut.
+function extractItemUraianColumn(pagesItems, nItems) {
   if (!nItems || !pagesItems || !pagesItems.length) return [];
-  const COL_X_MIN = 393;
-  const COL_X_MAX = 468;
-  const tokens = [];
+  const results = [];
   pagesItems.forEach((rawItems) => {
     if (!rawItems || !rawItems.length) return;
     const allLines = groupPdfItemsIntoLinesWithMeta(rawItems);
-    const posTarifYs = allLines
-      .filter((l) => /Pos Tarif\s*:/.test(l.text))
-      .map((l) => l.y);
-    if (!posTarifYs.length) return;
-    const yStart = Math.max(...posTarifYs);
+    const lineTopY = (l) => Math.max(...l.items.map((it) => it.transform[5]));
+    const posTarifLines = allLines.filter((l) => /Pos Tarif\s*:/.test(l.text));
+    if (!posTarifLines.length) return;
+
     const endYs = allLines
       .filter((l) => /Jenis Pungutan|JAKARTA,|Importir\/PPJK/.test(l.text))
-      .map((l) => l.y);
-    const yEnd = endYs.length ? Math.max(...endYs) : -Infinity;
-    const colItems = rawItems.filter((it) => {
-      const x = it.transform[4];
-      const y = it.transform[5];
-      return x >= COL_X_MIN && x <= COL_X_MAX && y <= yStart + 1 && y > yEnd;
+      .map(lineTopY);
+    const pageBottomY = endYs.length ? Math.max(...endYs) : -Infinity;
+
+    const h32 = pdfFindItemOnPage(rawItems, /^32\.\s*-?\s*Pos Tarif/i);
+    const h33 = pdfFindItemOnPage(rawItems, /^33\.\s*Keterangan/i);
+    const xMin = h32 ? h32.x - 8 : 20;
+    const xMax = h33 && h33.x > xMin ? h33.x - 6 : 200;
+
+    posTarifLines.forEach((line, i) => {
+      const yTop = lineTopY(line) + 1;
+      const yBottom =
+        i + 1 < posTarifLines.length
+          ? lineTopY(posTarifLines[i + 1]) + 1
+          : pageBottomY;
+      // Digabung dengan SPASI (bukan baris baru) supaya sub-field yang
+      // terpotong di tengah ("Tipe: MODEL: PUMA" + "V8300R, Ukuran: ...")
+      // menyatu kembali & bisa dibaca satu regex.
+      results.push(
+        pdfLinesInBox(rawItems, xMin, xMax, { yTop, yBottom })
+          .map((l) => l.text.trim())
+          .filter(Boolean)
+          .join(" "),
+      );
     });
-    groupPdfItemsIntoLinesWithMeta(colItems).forEach((l) =>
-      tokens.push(l.text),
-    );
   });
-  if (tokens.length !== nItems * 5) return [];
+  return results.length === nItems ? results : [];
+}
+
+function extractItemDetailColumn(pagesItems, nItems) {
+  if (!nItems || !pagesItems || !pagesItems.length) return [];
+  const results = [];
+
+  pagesItems.forEach((rawItems) => {
+    if (!rawItems || !rawItems.length) return;
+    const allLines = groupPdfItemsIntoLinesWithMeta(rawItems);
+
+    // Y baris "Pos Tarif :" diambil dari Y item TERTINGGI di baris itu,
+    // BUKAN dari l.y (yang isinya Y item paling kiri). Ini bug halus yang
+    // bikin ekstraksi gagal total sebelumnya: dalam 1 baris visual, tiap
+    // kolom bisa beda Y sampai ~2.4pt (mis. nomor urut barang di x=26
+    // ber-Y 713.9 sedangkan angka qty di x=400 ber-Y 716.2). Karena batas
+    // atas jendela dulu dihitung dari Y item paling kiri, angka qty
+    // barang PERTAMA selalu jatuh DI ATAS batas & ikut terbuang — jumlah
+    // token jadi kurang 1 dari yang diharapkan, dan seluruh hasil (qty,
+    // satuan, netto SEMUA barang) dibatalkan.
+    const lineTopY = (l) => Math.max(...l.items.map((it) => it.transform[5]));
+    const posTarifLines = allLines.filter((l) => /Pos Tarif\s*:/.test(l.text));
+    if (!posTarifLines.length) return;
+
+    // Batas bawah wilayah barang: tabel pungutan / blok tanda tangan.
+    const endYs = allLines
+      .filter((l) => /Jenis Pungutan|JAKARTA,|Importir\/PPJK/.test(l.text))
+      .map(lineTopY);
+    const pageBottomY = endYs.length ? Math.max(...endYs) : -Infinity;
+
+    // Batas kolom field 35 dicari dari posisi header-nya sendiri (dulu
+    // di-hardcode 393-468) — ikut menyesuaikan kalau lebar form berbeda.
+    const h35 = pdfFindItemOnPage(rawItems, /^35\.\s*-?\s*Jumlah dan Jenis/i);
+    const h36 = pdfFindItemOnPage(rawItems, /^36\.\s*-?\s*Nilai Pabean/i);
+    const xMin = h35 ? h35.x - 6 : 393;
+    const xMax = h36 && h36.x > xMin ? h36.x - 6 : 468;
+
+    posTarifLines.forEach((line, i) => {
+      const yTop = lineTopY(line) + 1;
+      const yBottom =
+        i + 1 < posTarifLines.length
+          ? lineTopY(posTarifLines[i + 1]) + 1
+          : pageBottomY;
+      const tokens = pdfLinesInBox(rawItems, xMin, xMax, { yTop, yBottom }).map(
+        (l) => l.text.trim(),
+      );
+      results.push(tokens);
+    });
+  });
+
+  if (results.length !== nItems) return [];
+
+  // Token bisa berawalan "-" (varian cetakan CEISA tertentu) dan satuan
+  // bisa TERPECAH jadi beberapa baris ("NUMBER OF" lalu "PACKAGE (PK)").
+  // Karena itu isi kolom TIDAK lagi dibaca berdasarkan urutan baris yang
+  // kaku (dulu wajib persis 5 baris [qty, satuan, netto, jmlKemasan,
+  // jenisKemasan] — begitu satu dokumen memakai satuan 2 baris, SELURUH
+  // hasil dibatalkan). Sekarang token dipilah dulu berdasarkan PERAN:
+  // yang berbentuk angka jadi urutan angka, yang berbentuk teks jadi
+  // urutan satuan. Jauh lebih tahan terhadap variasi cetakan.
   const numTok = (s) => {
-    const m = /^-?([\d,]+\.?\d*)$/.exec((s || "").trim());
+    const m = /^-?\s*([\d,]+\.?\d*)$/.exec((s || "").trim());
     return m ? pibNum(m[1]) : null;
   };
-  const out = [];
-  for (let i = 0; i < nItems; i++) {
-    const chunk = tokens.slice(i * 5, i * 5 + 5);
-    const qty = numTok(chunk[0]);
-    const satuan = (chunk[1] || "").split("(")[0].trim();
-    // Satuan asli selalu kode pendek tanpa spasi (UNIT/KG/SET/PCS/dst) --
-    // kalau yg ke-ekstrak malah berupa frasa (mis. "NUMBER OF", kebaca
-    // dari baris lain yg numpang di rentang koordinat yg sama), dianggap
-    // GAGAL drpd disimpan sbg satuan yg jelas salah.
-    const satuanPlausible = /^[A-Z0-9°%/.\-]{1,12}$/i.test(satuan);
-    const netto = numTok(chunk[2]);
-    out.push(
-      qty != null && qty > 0 && satuan && satuanPlausible && netto != null
-        ? { qty, satuan, netto }
-        : null,
-    );
-  }
-  return out;
+  // "SET (SET)" -> "SET" · "NUMBER OF PACKAGE (PK)" -> "PK"
+  const satuanCode = (s) => {
+    const t = (s || "").trim();
+    const inKurung = /\(([A-Z0-9]{1,12})\)\s*$/i.exec(t);
+    if (inKurung) return inKurung[1].toUpperCase();
+    return t.split("(")[0].trim().toUpperCase();
+  };
+  // Teks satuan yang terpecah disambung: potongan yang BELUM diakhiri
+  // kode dalam kurung dianggap awalan dari potongan sesudahnya.
+  const joinSatuanParts = (texts) => {
+    const out = [];
+    let buf = "";
+    texts.forEach((t) => {
+      const cur = (buf ? buf + " " : "") + t;
+      if (/\([A-Z0-9]{1,12}\)\s*$/i.test(t)) {
+        out.push(cur);
+        buf = "";
+      } else {
+        buf = cur;
+      }
+    });
+    if (buf) out.push(buf);
+    return out;
+  };
+  // Urutan baku field 35 (atas ke bawah, per barang):
+  //   [0] jumlah satuan barang (qty)   [1] jenis satuan, mis. "SET (SET)"
+  //   [2] berat bersih (netto)         [3] jumlah kemasan
+  //   [4] jenis kemasan, mis. "PACKAGE (PK)"
+  return results.map((tokens) => {
+    const nums = [];
+    const texts = [];
+    tokens.forEach((t) => {
+      const n = numTok(t);
+      if (n != null) nums.push(n);
+      else if ((t || "").trim()) texts.push(t.trim().replace(/^-\s*/, ""));
+    });
+    const satuanParts = joinSatuanParts(texts);
+    // Urutan baku field 35: jumlah satuan barang, berat bersih, lalu
+    // jumlah kemasan. Satuan barang = potongan teks pertama, jenis
+    // kemasan = potongan berikutnya (kalau dokumennya memisahkan).
+    const qty = nums.length > 0 ? nums[0] : null;
+    const netto = nums.length > 1 ? nums[1] : null;
+    const pkgQty = nums.length > 2 ? nums[2] : null;
+    const satuan = satuanParts.length ? satuanCode(satuanParts[0]) : "";
+    const pkgJenis =
+      satuanParts.length > 1 ? satuanCode(satuanParts[1]) : satuan;
+    if (qty == null || qty <= 0 || !satuan || netto == null) return null;
+    return {
+      qty,
+      satuan,
+      netto,
+      // Kemasan per barang (requirement C: "Package Per Item (Import):
+      // kalau tidak ada rincian package per item, isi saja di item
+      // pertama"). Di PIB, jumlah kemasan memang cuma diisi di barang
+      // yang "membawa" kemasannya — barang lain 0, dan itu memang benar
+      // apa adanya, jadi diteruskan seperti di dokumen.
+      packageQty: pkgQty,
+      packageJenis: pkgJenis,
+    };
+  });
 }
 
 function parsePibPdfText(text, pagesItems) {
@@ -295,8 +415,25 @@ function parsePibPdfText(text, pagesItems) {
   // karena nomor field itu unik & tidak mungkin ketemu di tempat lain
   // di dokumen (idenya sama kayak dipakai di label 3/23/24/25 yang
   // sudah lebih dulu jalan).
-  const partyName = stopAtNextField(
-    grab(/3\.\s*Nama,\s*Alamat\s*:\s*([^\n]+)/),
+  // PERBAIKAN BUG (requirement A): "Nama Shipper" pada Jadwal Import =
+  // PENGIRIM, yaitu field 1 — BUKAN field 3 (IMPORTIR), yang isinya
+  // justru PT DDI sendiri sebagai penerima barang. Versi sebelumnya
+  // memakai field 3 sehingga Nama Shipper SELALU salah terisi nama
+  // perusahaan sendiri. Field 1a (PENJUAL) dipakai sbg cadangan kalau
+  // PENGIRIM kosong (sebagian PIB cuma mengisi salah satunya).
+  // Kolom kanan ("G. Nomor dan Tanggal Pendaftaran") sering numpang di
+  // baris yang sama, jadi nomor pendaftaran 4+ digit ikut menempel di
+  // ujung nama ("CHANGYOUNG TOOLING CO.,LTD 463276") -- dipotong di sini.
+  const stripTrailingRegNo = (s) => (s || "").replace(/\s+\d{4,}\s*$/, "").trim();
+  const partyName = stripTrailingRegNo(
+    stopAtNextField(grab(/(?:^|\n)1\.\s*Nama,\s*Alamat\s*:\s*([^\n]+)/)) ||
+      stopAtNextField(grab(/1a\.\s*Nama,\s*Alamat\s*:\s*([^\n]+)/)),
+  );
+  // Nama Forwarder diambil dari nama PPJK (field 7). Perhatikan: di
+  // sebagian PIB label ini TIDAK diikuti titik dua ("7. Nama, Alamat
+  // KAY OCEAN INDONESIA"), makanya ":" dibuat opsional.
+  const forwarder = stopAtNextField(
+    grab(/7\.\s*Nama,\s*Alamat\s*:?\s*([^\n]+)/),
   );
   const pelabuhanMuat = grab(/12\.\s*Pelabuhan Muat\s*:\s*([^\n]+)/);
   const transportMatch = text.match(
@@ -408,16 +545,73 @@ function parsePibPdfText(text, pagesItems) {
     if (candidate) vessel = candidate;
   }
 
+  // --- Kontainer & Jenis Muatan (field 27, requirement A: "Kontainer
+  // (biasanya ada di poin 27 PIB)"). Kolom 27 bersebelahan dengan kolom
+  // 28 (Jumlah/Jenis Kemasan) pada Y yang SAMA, jadi kalau dibaca sbg
+  // teks polos isinya nempel ("4 BOX, WOODEN..." punya field 28 ikut
+  // terbaca sbg nomor peti). Dipisah lewat KOORDINAT: batas kanan kolom
+  // 27 = posisi x label "28." itu sendiri. Nomor peti kemas mengikuti
+  // ISO 6346 (4 huruf + 6-7 angka); ukuran/jenis muatan (20/40, FCL/LCL)
+  // ikut diambil kalau ada.
+  const petiKemas = (() => {
+    const out = { container: "", muatan: "" };
+    const hit27 = pdfFindItem(pagesItems, /^27\.\s*Nomor/i);
+    const hit28 = pdfFindItem(pagesItems, /^28\.\s*Jumlah/i);
+    if (!hit27) return out;
+    const pageItems = pagesItems[hit27.page] || [];
+    const xMax = hit28 && hit28.x > hit27.x ? hit28.x - 3 : hit27.x + 200;
+    // Wilayah vertikal: dari baris header 27 ke bawah, berhenti sebelum
+    // header tabel barang (baris "31." / "32. - Pos Tarif HS").
+    const stopY = (() => {
+      const hit = pdfFindItemOnPage(pageItems, /^32\.\s*-?\s*Pos Tarif/i);
+      return hit ? hit.y : -Infinity;
+    })();
+    const lines = pdfLinesInBox(pageItems, hit27.x - 3, xMax, {
+      yTop: hit27.y - 1,
+      yBottom: stopY,
+    });
+    const blob = lines.map((l) => l.text).join(" ");
+    const cont = blob.match(/\b([A-Z]{4}\s?\d{6,7})\b/g);
+    if (cont) out.container = cont.join(", ").replace(/\s+/g, "");
+    const mu = blob.match(/\b(FCL|LCL)\b/i);
+    if (mu) out.muatan = mu[1].toUpperCase();
+    return out;
+  })();
+
+  // --- Tanggal B/L & AWB (dipakai menurunkan ETD — requirement A:
+  // "ETD (dari tanggal Master BL/AWB)"). Baris field 17/18 dibaca
+  // langsung karena di situ nomor & tanggalnya sudah sebaris; tabel
+  // dokumen di lembar lanjutan dipakai sbg cadangan.
+  const masterBlM = text.match(
+    /Master-BL\/AWB\s*:\s*No\.\s*(\S+)\s*Tgl\.\s*(\d{2}-\d{2}-\d{4})/i,
+  );
+  const houseBlM = text.match(
+    /17\.\s*House-BL\/AWB\s*:\s*No\.\s*(\S+)\s*Tgl\.\s*(\d{2}-\d{2}-\d{4})/i,
+  );
+  const masterBlDate =
+    (masterBlM && pibDateToISO(masterBlM[2])) ||
+    (masterRow && pibDateToISO(masterRow.tanggalDMY)) ||
+    "";
+  const houseBlDate =
+    (houseBlM && pibDateToISO(houseBlM[2])) ||
+    (houseRow && pibDateToISO(houseRow.tanggalDMY)) ||
+    "";
+
   const fields = {
     noAju,
     docNo: pendaftaranMatch ? pendaftaranMatch[1] : "",
     docDate: pendaftaranMatch ? pibDateToISO(pendaftaranMatch[2]) : "",
     party: partyName,
+    forwarder,
+    container: petiKemas.container,
+    muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
-    masterBL: masterRow ? masterRow.nomor : "",
-    houseBL: houseRow ? houseRow.nomor : "",
-    origin: pelabuhanMuat,
-    destination,
+    masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
+    houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
+    masterBlDate,
+    houseBlDate,
+    origin: portDisplay(pelabuhanMuat),
+    destination: portDisplay(destination),
     incoterm,
     transport: transportMatch
       ? transportMatch[1].toUpperCase() === "UDARA"
@@ -426,15 +620,44 @@ function parsePibPdfText(text, pagesItems) {
       : "",
     vessel,
     voyage,
-    actual: etaMatch ? pibDateToISO(etaMatch[1]) : "",
     ndpbm: ndpbmMatch ? pibNum(ndpbmMatch[1]) : null,
     freight: freightMatch ? pibNum(freightMatch[1]) : null,
     insurance: asuransiMatch ? pibNum(asuransiMatch[1]) : null,
     bm: bmM ? pibNum(bmM[1]) : null,
     ppn: ppnM ? pibNum(ppnM[1]) : null,
     pph: pphM ? pibNum(pphM[1]) : null,
-    package: packageDefault,
+    // "2 PACKAGE, Tanpa Merk" -> "2 PACKAGE" (merek kemasan bukan bagian
+    // dari jumlah/jenis kemasan yang dipakai Total Package).
+    package: (packageDefault || "")
+      .replace(/,\s*(Tanpa\s+Merk|Tanpa\s+Merek|-)\s*$/i, "")
+      .trim(),
   };
+
+  // --- ETD / ETA / Actual Delivery (requirement A)
+  //   ETD    = tanggal Master BL/AWB (cadangan: House BL/AWB — sebagian
+  //            PIB laut cuma mencantumkan satu B/L)
+  //   ETA    = laut  : ETD + 1 minggu
+  //            udara : hari yang SAMA dengan ETD
+  //   Actual = ETA + 3 hari (laut maupun udara)
+  fields.etd = masterBlDate || houseBlDate || "";
+  fields.eta = deriveEtaFromEtd(fields.etd, fields.transport);
+  fields.actual = deriveActualFromEta(fields.eta);
+  if (!fields.etd) {
+    notes.push(
+      "Tanggal Master/House BL-AWB tidak terbaca, jadi ETD (dan ETA & Actual Delivery yang diturunkan darinya) tidak terisi — isi manual.",
+    );
+  } else {
+    // Field 11 PIB ("Perkiraan Tanggal Tiba") adalah perkiraan versi
+    // dokumen itu sendiri. ETA yang dipakai aplikasi SENGAJA diturunkan
+    // dari ETD sesuai aturan yang diminta — kalau keduanya beda, cukup
+    // diberitahukan supaya user bisa memutuskan mana yang dipakai.
+    const pibEta = etaMatch ? pibDateToISO(etaMatch[1]) : "";
+    if (pibEta && pibEta !== fields.eta) {
+      notes.push(
+        `ETA diisi ${fields.eta} (aturan: ${fields.transport === "udara" ? "sama dengan ETD" : "ETD + 1 minggu"}). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba ${pibEta} di field 11 — ganti manual kalau yang dipakai angka dokumen.`,
+      );
+    }
+  }
 
   // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif
   // HS" dulu, baru "Uraian Jenis Barang, Merek, Tipe, Ukuran,
@@ -487,14 +710,25 @@ function parsePibPdfText(text, pagesItems) {
     pagesItems,
     posTarifMatches.length,
   );
+  const uraianBlocks = extractItemUraianColumn(
+    pagesItems,
+    posTarifMatches.length,
+  );
   const rawItems = posTarifMatches
     .map((pt, i) => {
       const blockEnd =
         i + 1 < posTarifMatches.length
           ? posTarifMatches[i + 1].index
           : text.length;
-      const block = text.slice(pt.index, blockEnd);
-      const uraianM = /Uraian\s*:\s*([^\n]+)/.exec(block);
+      // Blok hasil potong koordinat lebih dipercaya; teks polos cuma
+      // dipakai kalau koordinatnya gagal (mis. PDF hasil scan).
+      const block = uraianBlocks[i] || text.slice(pt.index, blockEnd);
+      // Uraian = teks setelah "Uraian :" sampai sub-field berikutnya.
+      // Karena blok sudah bersih per kolom, sambungan baris otomatis
+      // ikut tergabung tanpa perlu menebak baris mana lanjutannya.
+      const uraianRe =
+        /Uraian\s*:\s*(.+?)(?=\s*(?:Merk\s*:|Kondisi\s*Brg|Negara\s*:|Pos Tarif\s*:)|$)/i;
+      const uraianM = uraianRe.exec(block);
       const mtuM =
         /Merk:\s*([^,\n]*),\s*Tipe:\s*([^,\n]*),\s*Ukuran:\s*([^,\n]*),/i.exec(
           block,
@@ -536,7 +770,15 @@ function parsePibPdfText(text, pagesItems) {
           satuan = qtyM[4];
         }
       }
-      return { namaBarang, hsCode: pt.hsCode, qty, netto, satuan };
+      return {
+        namaBarang,
+        hsCode: pt.hsCode,
+        qty,
+        netto,
+        satuan,
+        packageQty: col ? col.packageQty : null,
+        packageJenis: col ? col.packageJenis : "",
+      };
     })
     .filter((it) => it.namaBarang);
 
@@ -563,15 +805,17 @@ function parsePibPdfText(text, pagesItems) {
     };
     const gotQty = it.qty != null;
     if (gotQty) base.qty = it.qty;
+    // Kemasan PER BARANG dari kolom field 35 ("Jumlah dan Jenis
+    // Kemasan"). Di PIB, jumlah kemasan cuma dicantumkan pada barang
+    // yang "membawa" kemasan itu; barang lain 0 — dibiarkan apa adanya
+    // supaya Total Package (yang menjumlah kolom ini) tidak dobel.
+    if (it.packageQty != null && it.packageQty > 0) {
+      base.package = [fmtPibNumber(it.packageQty, 2), it.packageJenis]
+        .filter(Boolean)
+        .join(" ");
+    }
     if (it.netto != null) base.netto = it.netto;
     if (it.satuan) base.satuan = it.satuan;
-    if (totalBrutoVal != null) {
-      if (totalNettoKnown > 0 && it.netto != null) {
-        base.bruto = roundNum(totalBrutoVal * (it.netto / totalNettoKnown), 4);
-      } else if (idx === 0) {
-        base.bruto = totalBrutoVal;
-      }
-    }
     if (rawItems.length === 1 && gotQty) {
       const nilaiFob = nilaiFobMatch ? pibNum(nilaiFobMatch[1]) : null;
       if (nilaiFob != null && base.qty)
@@ -584,6 +828,15 @@ function parsePibPdfText(text, pagesItems) {
     }
     return base;
   });
+  // Bruto = TOTAL dokumen (field 29), ditaruh di barang pertama saja.
+  applyTotalBrutoToFirstItem(items, totalBrutoVal);
+
+  // Requirement C: "Package Per Item (Import): kalau tidak ada rincian
+  // package per item, isi saja di item pertama."
+  if (items.length && !items.some((it) => (it.package || "").trim())) {
+    if (packageDefault) items[0].package = packageDefault;
+  }
+
   if (rawItems.length > 1 && rawItems.some((it) => it.qty != null)) {
     notes.push(
       "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",

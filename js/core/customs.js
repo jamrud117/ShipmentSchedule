@@ -7,7 +7,9 @@ function itemTotals(shipmentLike) {
   let totalQty = 0,
     totalNetto = 0,
     totalBruto = 0,
-    totalUSD = 0;
+    totalUSD = 0,
+    totalPackageQty = 0,
+    totalCbm = 0;
   (shipmentLike.items || []).forEach((it) => {
     const qty = Number(it.qty) || 0,
       harga = Number(it.harga) || 0,
@@ -17,8 +19,31 @@ function itemTotals(shipmentLike) {
     totalNetto += netto;
     totalBruto += bruto;
     totalUSD += qty * harga;
+    // Total Package (mode Import saja — lihat modal-fields.js): jumlah
+    // angka depan field Kemasan tiap barang, mis. "5 BOX" -> 5. Barang
+    // yang field Kemasan-nya kosong/tidak ada angka depan dihitung 0,
+    // bukan bikin NaN. extractLeadingNumber() ada di
+    // features/excel-row-format.js (dipanggil dari sini, bukan
+    // dipindah/diduplikasi — aman krn dipanggil dari dalam function,
+    // bukan top-level, jadi tidak masalah soal urutan <script> load).
+    const pkgNum = extractLeadingNumber(it.package);
+    if (pkgNum != null) totalPackageQty += pkgNum;
+    // Total CBM (mode Export saja): jumlah meter kubik tiap barang,
+    // computeItemCbm() sudah ada di core/helpers.js (P*L*T/1.000.000 x
+    // Qty barang, dibulatkan 3 desimal per barang). Barang yang field
+    // Kemasan-nya bukan dimensi valid dihitung 0 oleh computeItemCbm()
+    // sendiri, jadi aman dijumlah langsung di sini.
+    totalCbm += computeItemCbm(it);
   });
-  return { totalQty, totalNetto, totalBruto, totalUSD };
+  totalCbm = Math.round(totalCbm * 1000) / 1000;
+  return {
+    totalQty,
+    totalNetto,
+    totalBruto,
+    totalUSD,
+    totalPackageQty,
+    totalCbm,
+  };
 }
 
 // shipmentLike needs: items, incoterm, ndpbm, bm, ppn, pph

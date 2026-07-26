@@ -251,20 +251,10 @@ function buildLaneHtml(s) {
 }
 
 /* ==================================================================
-   AUTO-ARRIVE RULE
-   - ETA yang diubah ke tanggal lewat/hari ini -> otomatis set status
-     ke ARRIVED (satu-satunya auto-arrive yang tersisa).
-   - Actual Delivery SENGAJA tidak lagi punya efek samping ke status —
-     field ini sekarang murni informatif; status harus diubah manual
-     lewat dropdown Status, sesuai permintaan.
-   - Triggered only by the specific field-change event described,
-     never re-applied on generic render/save, so it can't clobber a
-     manually-set "DELAYED" status on unrelated shipments.
+   Auto-arrive (status otomatis pindah ke ARRIVED saat ETA lewat/hari
+   ini) SUDAH DIHAPUS sepenuhnya sesuai permintaan Bgenius. Status
+   sekarang HARUS diubah manual lewat dropdown Status, baik dari form
+   maupun quick-edit di kartu (card-events.js) — tidak ada lagi field
+   tanggal (ETD/ETA/Actual Delivery, atau kombinasi ETD=ETA) yang
+   punya efek samping ke status.
 ================================================================== */
-function applyEtaAutoArrive(shipment, newEtaValue) {
-  shipment.eta = newEtaValue;
-  if (isPastOrToday(newEtaValue) && shipment.status !== "arrived") {
-    shipment.status = "arrived";
-    if (!shipment.actual) shipment.actual = newEtaValue;
-  }
-}

@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EXIM DDI — Pelacakan Jadwal Import &amp; Export</title>
+    <!-- Sambungan ke server font & CDN dibuka lebih awal, bersamaan
+         dengan pembacaan HTML. Tanpa ini peramban baru mulai menyambung
+         SETELAH menemukan tautannya, dan jabat tangan TLS ke tiap server
+         (~100-300ms di jaringan kantor) baru dimulai saat itu. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
@@ -14,27 +21,29 @@
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <!-- ============ NAVBAR ============ -->
+    <!-- Navbar = navigasi ANTAR HALAMAN. Toggle Import/Export sudah TIDAK
+         di sini lagi (dipindah ke halaman Jadwal EXIM), karena aplikasi
+         kini punya lebih dari satu halaman sehingga navbar dipakai untuk
+         perannya yang semestinya: berpindah halaman. -->
     <nav class="main-navbar d-none">
-      <div
-        class="container d-flex justify-content-between align-items-center flex-wrap gap-2"
-      >
-        <a class="navbar-brand-custom" href="#"
+      <div class="container main-navbar-inner">
+        <a class="navbar-brand-custom" href="#/"
           ><i class="bi bi-box-seam"></i> EXIM DDI</a
         >
-        <div class="mode-tabs">
-          <button class="active" id="tabImport" data-mode="import">
-            <i class="bi bi-box-arrow-in-down-left"></i>Import
-          </button>
-          <button id="tabExport" data-mode="export">
-            <i class="bi bi-box-arrow-up-right"></i>Export
-          </button>
+        <div class="site-nav" id="pageNav">
+          <a class="site-nav-link active" href="#/" data-page="schedule">
+            <i class="bi bi-calendar2-week"></i><span>Jadwal EXIM</span>
+          </a>
+          <a class="site-nav-link" href="#/docnum" data-page="docnum">
+            <i class="bi bi-hash"></i><span>Permintaan No. Dokumen</span>
+          </a>
         </div>
       </div>
     </nav>
@@ -43,15 +52,71 @@
     <div id="viewList" class="d-none">
       <!-- ============ HERO ============ -->
       <header class="topbar">
-        <div class="wave-line"></div>
-        <div class="container position-relative">
-          <div class="brand-eyebrow">
-            Sistem Pelacakan Pengiriman Import &amp; Export
+        <!-- Latar hero: pemandangan pelabuhan peti kemas + garis rute
+             pelayaran. Digambar sebagai SVG di dalam halaman, BUKAN file
+             gambar dari internet, supaya tidak menambah unduhan, tidak
+             pecah saat di-zoom, dan tetap tampil walau jaringan mati.
+             aria-hidden karena murni dekorasi. -->
+        <div class="hero-scene" aria-hidden="true">
+          <svg viewBox="0 0 1200 340" preserveAspectRatio="xMaxYMid slice">
+            <g opacity="0.9">
+              <!-- rute pelayaran -->
+              <g fill="none" stroke="#fff" stroke-opacity=".22" stroke-dasharray="5 9" stroke-width="1.4">
+                <path d="M60 250 C 300 120, 620 90, 1160 150" />
+                <path d="M20 300 C 340 220, 700 200, 1180 236" />
+              </g>
+              <g fill="#8fb2d6" fill-opacity=".75">
+                <circle cx="352" cy="150" r="4" />
+                <circle cx="742" cy="106" r="4" />
+                <circle cx="1096" cy="150" r="4" />
+              </g>
+              <!-- dermaga & tumpukan peti kemas -->
+              <g fill="#fff" fill-opacity=".10">
+                <rect x="742" y="252" width="86" height="26" rx="3" />
+                <rect x="742" y="224" width="86" height="26" rx="3" />
+                <rect x="836" y="252" width="86" height="26" rx="3" />
+                <rect x="880" y="196" width="86" height="26" rx="3" />
+                <rect x="930" y="252" width="86" height="26" rx="3" />
+                <rect x="930" y="224" width="86" height="26" rx="3" />
+                <rect x="1024" y="252" width="86" height="26" rx="3" />
+              </g>
+              <g fill="#8fb2d6" fill-opacity=".20">
+                <rect x="836" y="224" width="86" height="26" rx="3" />
+                <rect x="1024" y="224" width="86" height="26" rx="3" />
+              </g>
+              <!-- derek pelabuhan -->
+              <g stroke="#fff" stroke-opacity=".16" stroke-width="2.5" fill="none">
+                <path d="M660 282 L660 128 L860 128" />
+                <path d="M660 152 L604 152" />
+              </g>
+              <!-- garis air -->
+              <path d="M0 282 H1200" stroke="#fff" stroke-opacity=".14" stroke-width="1.5" />
+            </g>
+          </svg>
+        </div>
+
+        <div class="container position-relative hero-top">
+          <div class="hero-copy">
+            <div class="brand-eyebrow">
+              Sistem Pelacakan Pengiriman Import &amp; Export
+            </div>
+            <div class="brand-sub">
+              Pantau ETD, ETA, dokumen kepabeanan, dan perhitungan CIF/FOB
+              dalam satu tampilan.
+            </div>
           </div>
-          <div class="brand-sub">
-            Kelola ETD, ETA, dokumen kepabeanan, daftar barang per pengiriman,
-            hingga perhitungan CIF/FOB — dalam satu tampilan yang rapi dan mudah
-            dibaca.
+
+          <!-- Toggle Import/Export dipindah ke KANAN ATAS, menempel pada
+               hero. Sebelumnya melayang di bawah hero dengan latar putih
+               di atas latar terang, sehingga terlihat seperti kotak
+               nyasar. Di atas hero gelap, kontrasnya jelas. -->
+          <div class="mode-tabs" id="modeTabs" role="tablist" aria-label="Jenis jadwal">
+            <button class="active" id="tabImport" data-mode="import" role="tab">
+              <i class="bi bi-box-arrow-in-down-left"></i>Import
+            </button>
+            <button id="tabExport" data-mode="export" role="tab">
+              <i class="bi bi-box-arrow-up-right"></i>Export
+            </button>
           </div>
         </div>
       </header>
@@ -62,7 +127,7 @@
             <div class="stat-card">
               <div class="num" id="statTotal">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--ocean)"></span>Total
+                <span class="dot" style="background: var(--n-400)"></span>Total
                 Pengiriman
               </div>
             </div>
@@ -78,10 +143,9 @@
           </div>
           <div class="col-6 col-md-3">
             <div class="stat-card">
-              <div class="num" id="statTransit">0</div>
+              <div class="num" id="statDelay">0</div>
               <div class="lbl">
-                <span class="dot" style="background: var(--teal)"></span>IN
-                TRANSIT
+                <span class="dot" style="background: var(--s-danger)"></span>DELAY
               </div>
             </div>
           </div>
@@ -114,17 +178,30 @@
             <div class="col-6 col-lg-3">
               <select id="filterStatus" class="form-select">
                 <option value="">Semua Status</option>
-                <option value="process">PROCESS</option>
-                <option value="transit">IN TRANSIT</option>
-                <option value="arrived">ARRIVED</option>
-                <option value="delayed">DELAYED</option>
               </select>
             </div>
             <div class="col-6 col-lg-3">
-              <select id="sortDir" class="form-select">
-                <option value="asc">Tanggal Terdekat</option>
-                <option value="desc">Tanggal Terjauh</option>
+              <select id="sortDir" class="form-select" aria-label="Urutan jadwal">
+                <option value="eta-asc">ETA Terdekat</option>
+                <option value="eta-desc">ETA Terjauh</option>
+                <option value="etd-asc">ETD Terdekat</option>
+                <option value="etd-desc">ETD Terjauh</option>
               </select>
+            </div>
+            <!-- Rentang tanggal MENGIKUTI dasar urutan di sebelah kiri:
+                 kalau urutannya ETA, rentang ini menyaring ETA; kalau ETD,
+                 menyaring ETD. Labelnya ikut berubah supaya tidak ada
+                 tebak-tebakan sedang menyaring yang mana. -->
+            <div class="col-12 col-lg-6">
+              <div class="range-filter">
+                <span class="range-filter-label" id="rangeBasisLabel">ETA</span>
+                <input type="date" id="filterDateFrom" class="form-control" aria-label="Tanggal mulai" />
+                <span class="range-filter-sep">s/d</span>
+                <input type="date" id="filterDateTo" class="form-control" aria-label="Tanggal akhir" />
+                <button type="button" class="btn btn-light range-filter-clear d-none" id="btnClearRange" title="Hapus rentang tanggal">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -157,17 +234,13 @@
         </div>
         <div id="cardContainer"></div>
         <div id="paginationBar"></div>
-        <div id="emptyState" class="empty-state d-none">
-          <i class="bi bi-inboxes"></i>
-          <h5
-            class="mt-3 mb-1"
-            style="font-family: var(--font-display); color: var(--navy)"
-          >
-            Belum ada jadwal ditemukan
-          </h5>
-          <p class="mb-3">
-            Tambahkan jadwal baru atau ubah filter pencarian Anda.
-          </p>
+        <div id="emptyState" class="state-panel d-none">
+          <div class="state-icon"><i class="bi bi-inboxes"></i></div>
+          <div class="state-title">Belum ada jadwal di sini</div>
+          <div class="state-desc">
+            Tambahkan jadwal pengiriman pertama, atau longgarkan filter
+            pencarian kalau datanya memang sudah ada.
+          </div>
           <button class="btn btn-teal" id="btnAddEmpty">
             <i class="bi bi-plus-lg"></i> Tambah Jadwal
           </button>
@@ -220,8 +293,325 @@
     </div>
     <!-- ============ /HALAMAN DAFTAR ============ -->
 
+    <!-- ============ HALAMAN: PERMINTAAN NOMOR DOKUMEN ============
+         Form ini DATA-DRIVEN sepenuhnya:
+           - tombol tab  : data-docnum-tab="KUNCI"
+           - panel form  : data-docnum-panel="KUNCI"
+           - isian       : data-dn="namaField", tambah data-dn-required
+                           kalau wajib diisi
+         JS-nya (js/views/docnum-view.js) tidak menyimpan daftar field
+         sama sekali — ia membaca atribut di atas. Jadi menambah jenis
+         dokumen baru atau menambah isian cukup dikerjakan di berkas ini,
+         lalu daftarkan kodenya di DOCNUM_TYPES. -->
+    <div id="viewDocNum" class="page-docnum d-none">
+      <header class="topbar topbar--compact">
+        <div class="wave-line"></div>
+        <div class="container position-relative">
+          <div class="brand-eyebrow">Permintaan Nomor Dokumen</div>
+          <div class="brand-sub">
+            Nomor Invoice, Delivery Order, Permintaan Dana, dan Surat &mdash;
+            terbit berurutan dan tercatat.
+          </div>
+        </div>
+      </header>
+
+      <div class="container page-docnum-body">
+        <div class="docnum-shell">
+          <nav class="docnum-tabs" id="docNumTabs" aria-label="Jenis dokumen">
+            <button class="docnum-tab active" data-docnum-tab="invoice" type="button">
+              <span class="docnum-tab-icon"><i class="bi bi-receipt"></i></span>
+              <span class="docnum-tab-text">
+                <b>Invoice Number</b>
+                <small>Nomor invoice penjualan / jasa</small>
+              </span>
+            </button>
+            <button class="docnum-tab" data-docnum-tab="do" type="button">
+              <span class="docnum-tab-icon"><i class="bi bi-truck"></i></span>
+              <span class="docnum-tab-text">
+                <b>Delivery Order Number</b>
+                <small>Nomor surat jalan pengiriman</small>
+              </span>
+            </button>
+            <button class="docnum-tab" data-docnum-tab="fund" type="button">
+              <span class="docnum-tab-icon"><i class="bi bi-cash-coin"></i></span>
+              <span class="docnum-tab-text">
+                <b>Fund Request Number</b>
+                <small>Nomor permintaan dana</small>
+              </span>
+            </button>
+            <button class="docnum-tab" data-docnum-tab="letter" type="button">
+              <span class="docnum-tab-icon"><i class="bi bi-envelope-paper"></i></span>
+              <span class="docnum-tab-text">
+                <b>Letter Number</b>
+                <small>Nomor surat keluar</small>
+              </span>
+            </button>
+          </nav>
+
+          <section class="docnum-panels">
+            <!-- ---------- Invoice ---------- -->
+            <form class="docnum-panel active" data-docnum-panel="invoice" onsubmit="return false">
+              <div class="docnum-panel-head">
+                <h6>Permintaan Nomor Invoice</h6>
+                <span class="docnum-preview">
+                  Nomor berikutnya: <b data-dn-preview="invoice">&mdash;</b>
+                </span>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label">Jenis Invoice <span class="req">*</span></label>
+                  <select class="form-select" data-dn="invoiceKind" data-dn-subtype data-dn-required>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Non-Commercial">Non-Commercial</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Tanggal Permintaan <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required placeholder="Nama pemohon" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Departemen <span class="req">*</span></label>
+                  <select class="form-select" data-dn="department" data-dn-required>
+                    <option value="">— pilih —</option>
+                    <option>EXIM</option>
+                    <option>Finance</option>
+                    <option>Produksi</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Customer / Buyer <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="customer" data-dn-required placeholder="cth: DYNAMIC DESIGN CO., LTD." />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Mata Uang</label>
+                  <select class="form-select" data-dn="currency">
+                    <option>USD</option>
+                    <option>IDR</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Nilai</label>
+                  <input type="text" class="form-control" data-dn="amount" data-dn-number placeholder="0" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Keterangan</label>
+                  <textarea class="form-control" rows="2" data-dn="notes" placeholder="Keperluan penomoran..."></textarea>
+                </div>
+              </div>
+            </form>
+
+            <!-- ---------- Delivery Order ---------- -->
+            <form class="docnum-panel" data-docnum-panel="do" onsubmit="return false">
+              <div class="docnum-panel-head">
+                <h6>Permintaan Nomor Delivery Order</h6>
+                <span class="docnum-preview">
+                  Nomor berikutnya: <b data-dn-preview="do">&mdash;</b>
+                </span>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Tanggal Kirim <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required placeholder="Nama pemohon" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Tujuan / Penerima <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="receiver" data-dn-required placeholder="Nama penerima" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">No. Kendaraan</label>
+                  <input type="text" class="form-control" data-dn="vehicle" placeholder="B 1234 XX" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Referensi Jadwal</label>
+                  <input type="text" class="form-control" data-dn="reference" placeholder="No. PEB / Invoice terkait" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Jumlah Koli</label>
+                  <input type="text" class="form-control" data-dn="packages" data-dn-number placeholder="0" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Keterangan</label>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
+                </div>
+              </div>
+            </form>
+
+            <!-- ---------- Fund Request ---------- -->
+            <form class="docnum-panel" data-docnum-panel="fund" onsubmit="return false">
+              <div class="docnum-panel-head">
+                <h6>Permintaan Nomor Permintaan Dana</h6>
+                <span class="docnum-preview">
+                  Nomor berikutnya: <b data-dn-preview="fund">&mdash;</b>
+                </span>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Tanggal Dibutuhkan <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Pemohon <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="requester" data-dn-required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Departemen <span class="req">*</span></label>
+                  <select class="form-select" data-dn="department" data-dn-required>
+                    <option value="">— pilih —</option>
+                    <option>EXIM</option>
+                    <option>Finance</option>
+                    <option>Produksi</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Jenis Pengeluaran <span class="req">*</span></label>
+                  <select class="form-select" data-dn="expenseType" data-dn-required>
+                    <option value="">— pilih —</option>
+                    <option>Biaya Kepabeanan</option>
+                    <option>Freight / Trucking</option>
+                    <option>Operasional</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Mata Uang</label>
+                  <select class="form-select" data-dn="currency">
+                    <option>IDR</option>
+                    <option>USD</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Nominal <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="amount" data-dn-required data-dn-number placeholder="0" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Dibayarkan Kepada <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="payee" data-dn-required placeholder="Nama vendor / PPJK" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Rincian</label>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
+                </div>
+              </div>
+            </form>
+
+            <!-- ---------- Letter ---------- -->
+            <form class="docnum-panel" data-docnum-panel="letter" onsubmit="return false">
+              <div class="docnum-panel-head">
+                <h6>Permintaan Nomor Surat</h6>
+                <span class="docnum-preview">
+                  Nomor berikutnya: <b data-dn-preview="letter">&mdash;</b>
+                </span>
+              </div>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Tanggal Surat <span class="req">*</span></label>
+                  <input type="date" class="form-control" data-dn="docDate" data-dn-required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Jenis Surat <span class="req">*</span></label>
+                  <select class="form-select" data-dn="letterType" data-dn-required>
+                    <option value="">— pilih —</option>
+                    <option>Surat Keterangan</option>
+                    <option>Surat Kuasa</option>
+                    <option>Surat Permohonan</option>
+                    <option>Surat Pernyataan</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Penanda Tangan <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="signer" data-dn-required />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Kepada <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="recipient" data-dn-required placeholder="Instansi / perusahaan tujuan" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Perihal <span class="req">*</span></label>
+                  <input type="text" class="form-control" data-dn="subject" data-dn-required />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Isi Ringkas</label>
+                  <textarea class="form-control" rows="2" data-dn="notes"></textarea>
+                </div>
+              </div>
+            </form>
+
+            <!-- Hasil penerbitan nomor -->
+            <div class="docnum-result d-none" id="docNumResult">
+              <div class="docnum-result-main">
+                <div class="docnum-result-label">
+                  <i class="bi bi-check-circle-fill"></i> Nomor berhasil diterbitkan
+                </div>
+                <div class="docnum-result-number" id="docNumResultNumber">&mdash;</div>
+              </div>
+              <button type="button" class="btn btn-light" id="btnCopyDocNum">
+                <i class="bi bi-clipboard"></i> Salin
+              </button>
+            </div>
+
+            <div class="docnum-actions">
+              <span class="docnum-hint" id="docNumHint"></span>
+              <button type="button" class="btn btn-light" id="btnDocNumReset">Reset</button>
+              <button type="button" class="btn btn-teal" id="btnDocNumSubmit">
+                <i class="bi bi-hash"></i> Ajukan Nomor
+              </button>
+            </div>
+
+            <!-- Atur / reset nomor urut. Ditaruh SEBELUM riwayat karena
+                 keduanya bicara hal yang sama (deret nomor periode ini),
+                 tapi dipisah sebagai kotak tersendiri agar tidak
+                 tertekan tanpa sengaja saat mengisi form di atas. -->
+            <div class="counter-box">
+              <div class="counter-head">
+                <span><i class="bi bi-123"></i> Atur Nomor Urut</span>
+                <span class="counter-info" id="counterInfo">&mdash;</span>
+              </div>
+              <div class="counter-body">
+                <label class="form-label" for="counterNext">Nomor berikutnya</label>
+                <input type="number" min="1" step="1" class="form-control" id="counterNext" />
+                <button type="button" class="btn btn-teal" id="btnCounterSave">
+                  <i class="bi bi-check2"></i> Simpan
+                </button>
+                <button type="button" class="btn btn-outline-danger" id="btnCounterReset">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset ke 001
+                </button>
+              </div>
+              <div class="form-text-note">
+                <i class="bi bi-info-circle"></i> Isi nomor yang ingin terbit
+                <b>berikutnya</b> &mdash; misal invoice terakhir 035, isi 036.
+                Berlaku untuk jenis dokumen &amp; periode yang sedang aktif.
+              </div>
+
+            </div>
+
+            <div class="docnum-history">
+              <div class="docnum-history-head">
+                <span><i class="bi bi-clock-history"></i> Nomor Terakhir Terbit</span>
+                <button type="button" class="btn btn-light btn-sm" id="btnDocNumRefresh" title="Muat ulang">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </div>
+              <div id="docNumHistory"></div>
+              <div id="docNumPagination"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ HALAMAN: TAMBAH / EDIT JADWAL ============ -->
     <div id="viewForm" class="page-form d-none">
+      <!-- Tiga kolom: tombol kembali (kiri) — judul (TENGAH) — kolom
+           penyeimbang (kanan). Kolom kanan sengaja dibiarkan kosong dan
+           selebar tombol kembali; tanpa itu judul akan tergeser ke kanan
+           sebanyak lebar tombol dan tidak benar-benar di tengah. -->
       <div class="page-form-header">
         <div class="page-form-header-left">
           <button
@@ -232,15 +622,14 @@
           >
             <i class="bi bi-arrow-left"></i>
           </button>
-          <div class="page-form-title-group">
-            <span class="page-form-title-icon"
-              ><i class="bi bi-file-earmark-text"></i
-            ></span>
-            <h5 class="page-form-title" id="modalTitle">
-              Tambah Jadwal Import
-            </h5>
-          </div>
         </div>
+        <div class="page-form-title-group">
+          <span class="page-form-title-icon"
+            ><i class="bi bi-file-earmark-text"></i
+          ></span>
+          <h5 class="page-form-title" id="modalTitle">Tambah Jadwal Import</h5>
+        </div>
+        <div class="page-form-header-spacer"></div>
       </div>
       <div class="page-form-body container">
         <input type="hidden" id="fId" />
@@ -250,7 +639,7 @@
             type="button"
             class="btn-import-excel"
             id="btnImportExcel"
-            title="Isi otomatis dari file Excel dokumen BC (HEADER/ENTITAS/DOKUMEN/BARANG) atau PDF PIB BC 2.0 (khusus import)"
+            title="Isi otomatis dari PDF PIB BC 2.0 / PEB BC 3.0, PDF Commercial Invoice &amp; Packing List, Excel draft CEISA, atau Excel CIPL supplier. Boleh pilih lebih dari satu file sekaligus."
           >
             <i class="bi bi-file-earmark-arrow-up"></i> Import Excel/PDF
           </button>
@@ -258,6 +647,7 @@
             type="file"
             id="fileImportExcel"
             accept=".xlsx,.xls,.pdf"
+            multiple
             class="d-none"
           />
         </div>
@@ -472,7 +862,8 @@
                   type="text"
                   class="form-control"
                   id="fOrigin"
-                  placeholder="Shanghai, China"
+                  list="unlocodeList"
+                  placeholder="cth: KRPUS"
                 />
               </div>
               <div class="col-md-5">
@@ -483,7 +874,8 @@
                   type="text"
                   class="form-control"
                   id="fDestination"
-                  placeholder="Tanjung Priok, Jakarta"
+                  list="unlocodeList"
+                  placeholder="cth: IDTPP"
                 />
               </div>
               <div class="col-12 d-none" id="routeStopsWrap">
@@ -530,29 +922,64 @@
               </div>
               <div class="col-md-4">
                 <label class="form-label">Status</label>
-                <select class="form-select" id="fStatus">
-                  <option value="process">PROCESS</option>
-                  <option value="transit">IN TRANSIT</option>
-                  <option value="arrived">ARRIVED</option>
-                  <option value="delayed">DELAYED</option>
-                </select>
+                <!-- Pilihan diisi ulang per section oleh renderFormPage()
+                     lewat statusOptionsHtml() — lihat js/core/status.js -->
+                <select class="form-select" id="fStatus"></select>
               </div>
-              <div class="col-md-8">
-                <label class="form-label">Catatan</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="fNotes"
-                  placeholder="Catatan tambahan..."
-                />
+              <div class="col-12 d-none" id="delayBlock">
+                  <div class="delay-box">
+                    <div class="subsection-title mb-2" style="border:none;padding:0;margin:0">
+                      <i class="bi bi-clock-history"></i> Tanggal Update Delay
+                    </div>
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="form-label">Update ETA</label>
+                        <input type="date" class="form-control" id="fEtaUpdate" />
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label">Update ETD</label>
+                        <input type="date" class="form-control" id="fEtdUpdate" />
+                      </div>
+                      <div class="col-md-4 d-flex align-items-end">
+                        <div class="delay-summary" id="delaySummary"></div>
+                      </div>
+                    </div>
+                    <div class="form-text-note mt-2">
+                      <i class="bi bi-info-circle"></i> Isi tanggal <b>baru</b>
+                      hasil pemunduran. ETD &amp; ETA di atas tetap berisi
+                      rencana semula sebagai pembanding.
+                    </div>
+                  </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-section-card form-section-card--ocean">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">Kronologi &amp; Catatan</label>
+                <div class="notes-panel">
+                  <div class="notes-composer">
+                    <textarea
+                      id="fNoteDraft"
+                      rows="2"
+                      placeholder="Tulis kronologi/kejadian… (mis. &quot;Kapal delay 3 hari, ETA mundur ke 25 Jul&quot;). Ctrl+Enter untuk kirim."
+                    ></textarea>
+                    <button type="button" class="btn btn-teal" id="btnAddNote">
+                      <i class="bi bi-plus-lg"></i> Tambah
+                    </button>
+                  </div>
+                  <div class="notes-timeline" id="notesTimeline"></div>
+                </div>
+                <div class="form-text-note mt-2">
+                  <i class="bi bi-info-circle"></i> Tiap entri diberi tanggal
+                  &amp; jam otomatis. Entri <b>terbaru</b> dipakai sebagai kolom
+                  REMARK di template copy.
+                </div>
               </div>
             </div>
             <div class="form-text-note mt-2">
-              <i class="bi bi-info-circle"></i> Jika ETA diubah ke tanggal yang
-              sudah lewat atau hari ini, status otomatis berubah menjadi
-              <b>ARRIVED</b>. Mengisi Actual Delivery <u>tidak</u> mengubah
-              status secara otomatis — ubah status secara manual lewat dropdown
-              Status bila memang sudah tiba.
+              <i class="bi bi-info-circle"></i> Pilih <b>DELAY</b> untuk
+              memunculkan kotak Tanggal Update Delay.
             </div>
           </div>
         </div>
@@ -573,44 +1000,54 @@
               <table class="item-table">
                 <thead>
                   <tr>
-                    <th style="width: 32%">Nama Barang</th>
-                    <th style="width: 7%">HS Code</th>
-                    <th style="width: 11%">Jenis Barang</th>
+                    <th style="width: 26%">Nama Barang</th>
+                    <th style="width: 6%">HS Code</th>
+                    <th style="width: 8%">Jenis Barang</th>
                     <th style="width: 6%">Fasilitas</th>
-                    <th style="width: 6%">Qty</th>
-                    <th style="width: 6%">Satuan</th>
-                    <th style="width: 9%">Harga/Unit (USD)</th>
-                    <th style="width: 6%">Netto (Kg)</th>
-                    <th style="width: 6%">Bruto (Kg)</th>
-                    <th style="width: 7%">Subtotal (USD)</th>
-                    <th style="width: 4%"></th>
+                    <th style="width: 5%">Qty</th>
+                    <th style="width: 5%">Satuan</th>
+                    <th style="width: 7%">Harga/Unit (USD)</th>
+                    <th style="width: 5%">Netto (Kg)</th>
+                    <th style="width: 5%">Bruto (Kg)</th>
+                    <th style="width: 10%">Kemasan</th>
+                    <th style="width: 8%" class="cbm-col-static d-none">
+                      CBM (m³)
+                    </th>
+                    <th style="width: 6%">Subtotal (USD)</th>
+                    <th style="width: 3%"></th>
                   </tr>
                 </thead>
                 <tbody id="itemTableBody"></tbody>
               </table>
             </div>
-            <div class="item-table-foot">
-              <div>Total Qty: <b id="footTotalQty">0</b></div>
-              <div>Total Netto: <b id="footTotalNetto">0</b> Kg</div>
-              <div>Total Bruto: <b id="footTotalBruto">0</b> Kg</div>
-              <div>Total Nilai: <b id="footTotalUSD">$0.00</b></div>
-            </div>
-
-            <div class="row g-3 mt-3">
-              <div class="col-md-4">
-                <label class="form-label">Package</label>
+            <div class="item-table-foot item-table-foot--split">
+              <div class="foot-package">
+                <i class="bi bi-box-seam"></i> Total Package:
+                <input type="text" id="fPackage" data-num placeholder="cth: 12" />
                 <input
                   type="text"
-                  class="form-control"
-                  id="fPackage"
-                  placeholder="cth: 2x40' &amp; 1x20', atau 1 PK"
+                  id="fPackageUnit"
+                  class="pkg-unit-input"
+                  list="packageUnitList"
+                  placeholder="BOX"
+                  title="Satuan kemasan — ikut tampil di form, TAPI tidak ikut di hasil template copy (angkanya saja)."
                 />
+              </div>
+              <div class="foot-totals">
+                <div>Total Qty: <b id="footTotalQty">0</b></div>
+                <div>Total Netto: <b id="footTotalNetto">0</b> Kg</div>
+                <div>Total Bruto: <b id="footTotalBruto">0</b> Kg</div>
+                <div>Total Nilai: <b id="footTotalUSD">$0.00</b></div>
+                <div class="cbm-col-static d-none">
+                  Total CBM: <b id="footTotalCbm">0</b> m³
+                </div>
               </div>
             </div>
             <div class="form-text-note mt-1">
-              <i class="bi bi-info-circle"></i> Package menjelaskan
-              kemasan/kontainer untuk keseluruhan pengiriman ini (bukan per
-              barang), misalnya jumlah &amp; ukuran kontainer atau jumlah koli.
+              <i class="bi bi-info-circle"></i> Kolom <b>Kemasan</b> diisi per
+              barang. <b>Import:</b> jumlah + jenis (cth. "5 BOX") — Total
+              Package terjumlah otomatis. <b>Export:</b> dimensi P×L×T cm (cth.
+              "82*82*75") — CBM terhitung otomatis, Total Package diisi manual.
             </div>
           </div>
         </div>
@@ -646,7 +1083,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fFreight"
+                  id="fFreight" data-num
                   placeholder="0.00"
                 />
               </div>
@@ -655,7 +1092,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fInsurance"
+                  id="fInsurance" data-num
                   placeholder="0.00"
                 />
               </div>
@@ -664,7 +1101,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fNdpbm"
+                  id="fNdpbm" data-num
                   placeholder="16250"
                 />
               </div>
@@ -734,7 +1171,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fTarif"
+                  id="fTarif" data-num
                   placeholder="5"
                 />
               </div>
@@ -743,7 +1180,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fBM"
+                  id="fBM" data-num
                   placeholder="0"
                 />
               </div>
@@ -752,7 +1189,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fPPN"
+                  id="fPPN" data-num
                   placeholder="0"
                 />
               </div>
@@ -761,7 +1198,7 @@
                 <input
                   type="text"
                   class="form-control"
-                  id="fPPH"
+                  id="fPPH" data-num
                   placeholder="0"
                 />
               </div>
@@ -862,11 +1299,9 @@
             ></button>
           </div>
           <div class="modal-body">
-            <label class="form-label">Data jadwal</label>
-            <select class="form-select mb-3" id="bulkModeSelect">
-              <option value="import">Jadwal Import</option>
-              <option value="export">Jadwal Export</option>
-            </select>
+            <div class="alert alert-secondary py-2 px-3 mb-3" id="bulkModeInfo">
+              Section aktif
+            </div>
 
             <div id="bulkExportInfo">
               <p class="form-text-note mb-0">
@@ -980,17 +1415,33 @@
     <!-- LIBRARY -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <!-- ========================================= -->
     <!-- CONFIG -->
     <!-- ========================================= -->
+    <datalist id="unlocodeList"></datalist>
+    <datalist id="packageUnitList">
+      <option value="BOX"></option>
+      <option value="CARTON"></option>
+      <option value="CASE"></option>
+      <option value="CRATE"></option>
+      <option value="DRUM"></option>
+      <option value="PACKAGE"></option>
+      <option value="PALLET"></option>
+      <option value="ROLL"></option>
+      <option value="SET"></option>
+      <option value="UNIT"></option>
+    </datalist>
+
     <script src="js/config.js"></script>
 
     <!-- ========================================= -->
     <!-- CORE -->
     <!-- ========================================= -->
     <script src="js/core/helpers.js"></script>
+    <script src="js/core/num-format.js"></script>
+    <script src="js/core/unlocode.js"></script>
+    <script src="js/core/status.js"></script>
     <script src="js/core/state.js"></script>
     <script src="js/core/mapping.js"></script>
     <script src="js/core/customs.js"></script>
@@ -1005,6 +1456,7 @@
     <!-- UI -->
     <!-- ========================================= -->
     <script src="js/ui/dom.js"></script>
+    <script src="js/ui/number-input.js"></script>
     <script src="js/ui/feedback.js"></script>
 
     <!-- ========================================= -->
@@ -1021,6 +1473,7 @@
     <script src="js/features/card-events.js"></script>
     <script src="js/features/modal-fields.js"></script>
     <script src="js/features/item-table.js"></script>
+    <script src="js/features/notes-log.js"></script>
     <script src="js/features/route-stops.js"></script>
     <script src="js/features/bulk-excel.js"></script>
 
@@ -1029,6 +1482,7 @@
     <!-- ========================================= -->
 
     <!-- Shared Helper -->
+    <script src="js/import/pdf-coords.js"></script>
     <script src="js/import/cipl-common.js"></script>
 
     <!-- PDF Helper -->
@@ -1043,6 +1497,7 @@
 
     <!-- PDF -->
     <script src="js/import/pdf.js"></script>
+    <script src="js/import/pdf-peb.js"></script>
 
     <!-- Dispatcher -->
     <script src="js/import/dispatch.js"></script>
@@ -1050,6 +1505,7 @@
     <!-- ========================================= -->
     <!-- VIEW -->
     <!-- ========================================= -->
+    <script src="js/views/docnum-view.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/views/detail-view.js"></script>
 

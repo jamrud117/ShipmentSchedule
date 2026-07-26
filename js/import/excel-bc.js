@@ -92,12 +92,12 @@ function excelValueToISODate(v) {
 function excelStr(v) {
   return v == null ? "" : String(v).trim();
 }
+// Diteruskan ke parseLooseNumber() (js/ui/number-input.js). Cara lama
+// `replace(",", ".")` salah untuk dua bentuk yang justru sering muncul:
+//   "5,000"    -> 5    (harusnya 5000; kesalahan ini tidak terlihat)
+//   "1,234.56" -> NaN  -> 0
 function excelNum(v) {
-  if (v == null || v === "") return 0;
-  if (typeof v === "number") return isFinite(v) ? v : 0;
-  // String angka locale ID (koma desimal) atau biasa (titik desimal).
-  const n = Number(String(v).trim().replace(",", "."));
-  return isFinite(n) ? n : 0;
+  return parseLooseNumber(v);
 }
 function sheetRows(wb, name) {
   if (!wb.Sheets[name]) return [];
@@ -213,7 +213,9 @@ function parseBcExcelWorkbook(wb) {
   // ambil baris terakhir, karena 1 AJU bisa punya beberapa baris
   // respons dengan kode berbeda. Fallback ke HEADER.TANGGAL DAFTAR
   // kalau baris kode 2003 tidak ditemukan.
-  const sppbRespon = respon.find((r) => excelStr(r["KODE RESPON"]) === "2003");
+  const sppbRespon = respon.find(
+    (r) => excelStr(r["KODE RESPON"]) === "2003",
+  );
   const respTanggal = sppbRespon
     ? excelValueToISODate(sppbRespon["TANGGAL RESPON"])
     : "";
@@ -233,7 +235,8 @@ function parseBcExcelWorkbook(wb) {
     masterBL: findDokumen("740", "742"),
     houseBL: findDokumen("741", "743"),
     freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
-    insurance: header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
+    insurance:
+      header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
     ndpbm: header["NDPBM"] != null ? excelNum(header["NDPBM"]) : null,
     origin: excelStr(header["KODE PELABUHAN MUAT"]),
     destination: excelStr(header["KODE PELABUHAN TUJUAN"]),

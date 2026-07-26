@@ -3,9 +3,28 @@
 /* ==================================================================
    GROUPING BY DATE + FILTER/SORT + MAIN RENDER
 ================================================================== */
+/* Dasar tanggal yang sedang dipakai: "eta" atau "etd". Diambil dari
+   pemilih urutan, karena rentang tanggal HARUS menyaring hal yang sama
+   dengan yang sedang diurutkan — kalau daftar diurutkan menurut ETD tapi
+   rentangnya menyaring ETA, hasilnya membingungkan. */
+function sortBasis() {
+  return String(sortDir || "").startsWith("etd") ? "etd" : "eta";
+}
+function sortDirection() {
+  return String(sortDir || "").endsWith("desc") ? "desc" : "asc";
+}
+// Tanggal yang dipakai satu pengiriman pada dasar yang sedang aktif.
+// Keduanya memakai versi EFEKTIF, jadi jadwal yang sudah dimundurkan
+// ikut tersaring & terurut menurut tanggal barunya.
+function basisDateOf(s) {
+  return sortBasis() === "etd" ? effectiveEtd(s) : effectiveEta(s);
+}
+
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const statusFilter = $("#filterStatus").value;
+  const dari = $("#filterDateFrom").value;
+  const sampai = $("#filterDateTo").value;
   return currentList().filter((s) => {
     const hay = [
       s.party,
@@ -22,13 +41,38 @@ function getFiltered() {
       .toLowerCase();
     const matchQ = !q || hay.includes(q);
     const matchStatus = !statusFilter || s.status === statusFilter;
-    return matchQ && matchStatus;
+
+    // Rentang tanggal. Perbandingan memakai teks ISO (yyyy-mm-dd) yang
+    // sudah urut secara alfabet, jadi tidak perlu mengurai Date sama
+    // sekali. Pengiriman yang tanggalnya belum diisi disembunyikan HANYA
+    // kalau rentangnya memang sedang dipakai — kalau tidak, ia tetap
+    // tampil seperti biasa.
+    const tgl = basisDateOf(s);
+    let matchRange = true;
+    if (dari || sampai) {
+      if (!tgl) matchRange = false;
+      else if (dari && tgl < dari) matchRange = false;
+      else if (sampai && tgl > sampai) matchRange = false;
+    }
+    return matchQ && matchStatus && matchRange;
   });
 }
 
+// Requirement D: 'Filter/sort "terdekat-terjauh" berdasarkan ETA, dan
+// pemisah/grouping-nya juga berdasarkan ETA.' Sebelumnya grouping &
+// urutan memakai ETD (atau tanggal actual kalau sudah tiba), sehingga
+// urutan kartu tidak mencerminkan urutan kedatangan yang jadi acuan
+// kerja harian. ETD dipakai HANYA sebagai cadangan kalau ETA benar-benar
+// belum diisi, supaya kartunya tetap punya tempat.
 function groupKeyOf(s) {
-  if (s.status === "arrived" && s.actual) return s.actual;
-  return s.etd || null;
+  // Pemisah tanggal mengikuti DASAR yang sedang dipilih (ETA atau ETD),
+  // memakai versi EFEKTIF — kartu yang mundur ikut pindah ke kelompok
+  // tanggal barunya (lihat effectiveEta/effectiveEtd di core/status.js).
+  // Sisi lain dipakai sebagai cadangan supaya kartu yang salah satunya
+  // kosong tetap punya tempat.
+  return sortBasis() === "etd"
+    ? effectiveEtd(s) || effectiveEta(s) || null
+    : effectiveEta(s) || effectiveEtd(s) || null;
 }
 
 function groupAndSort(list) {
@@ -44,9 +88,8 @@ function groupAndSort(list) {
     groups.get(key).push(s);
   });
   let keys = Array.from(groups.keys());
-  keys.sort((a, b) =>
-    sortDir === "asc" ? new Date(a) - new Date(b) : new Date(b) - new Date(a),
-  );
+  const arah = sortDirection();
+  keys.sort((a, b) => (arah === "asc" ? (a < b ? -1 : 1) : a > b ? -1 : 1));
   const ordered = keys.map((k) => ({ key: k, items: groups.get(k) }));
   if (noDate.length) ordered.push({ key: null, items: noDate });
   return ordered;
@@ -221,8 +264,10 @@ function updateStats() {
   $("#statProcess").textContent = list.filter(
     (s) => s.status === "process",
   ).length;
-  $("#statTransit").textContent = list.filter(
-    (s) => s.status === "transit",
+  // Kartu statistik ketiga sekarang menghitung DELAY (status "transit"
+  // sudah tidak ditawarkan lagi — lihat js/core/status.js).
+  $("#statDelay").textContent = list.filter(
+    (s) => s.status === "delayed",
   ).length;
   $("#statArrived").textContent = list.filter(
     (s) => s.status === "arrived",
@@ -234,6 +279,12 @@ function applyModeLabels() {
   $("#lblAddBtn").textContent = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
   $("#lblArrivedStat").textContent = lbl.arrivedStat;
+  // Pilihan filter status ikut section aktif (requirement D).
+  const cur = $("#filterStatus").value;
+  $("#filterStatus").innerHTML =
+    `<option value="">Semua Status</option>` +
+    statusOptionsHtml(activeMode, "").replace(/ selected/g, "");
+  $("#filterStatus").value = cur;
 }
 
 /* ---- Make each status <select> exactly as wide as its selected text ---- */
@@ -299,12 +350,39 @@ setInterval(refreshLanePositions, 60000);
 ================================================================== */
 $("#tabImport").addEventListener("click", () => switchMode("import"));
 $("#tabExport").addEventListener("click", () => switchMode("export"));
+// Section aktif diingat supaya REFRESH halaman tidak melempar user
+// kembali ke Import (requirement C: "Saat refresh halaman, form harus
+// tetap di section yang sama"). Dipakai juga saat form Tambah/Edit
+// sedang terbuka, karena label & aturan form ikut section ini.
+const ACTIVE_MODE_KEY = "eximddi.activeMode";
+function rememberActiveMode(mode) {
+  try {
+    localStorage.setItem(ACTIVE_MODE_KEY, mode);
+  } catch (err) {
+    /* localStorage bisa diblokir (mode privat) — abaikan, tidak fatal */
+  }
+}
+function restoreActiveMode() {
+  try {
+    const saved = localStorage.getItem(ACTIVE_MODE_KEY);
+    if (saved === "import" || saved === "export") activeMode = saved;
+  } catch (err) {
+    /* abaikan */
+  }
+  $("#tabImport").classList.toggle("active", activeMode === "import");
+  $("#tabExport").classList.toggle("active", activeMode === "export");
+}
+
 function switchMode(mode) {
   activeMode = mode;
+  rememberActiveMode(mode);
   $("#tabImport").classList.toggle("active", mode === "import");
   $("#tabExport").classList.toggle("active", mode === "export");
   $("#searchInput").value = "";
   $("#filterStatus").value = "";
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  applyRangeBasisLabel();
   currentPage = 1;
   render();
 }
@@ -320,9 +398,19 @@ function switchMode(mode) {
 /* ==================================================================
    FILTERS
 ================================================================== */
+/* Mengetik di kotak cari SEBELUMNYA memicu render() penuh tiap ketukan
+   huruf — menyaring, mengurutkan, mengelompokkan, lalu menyusun ulang
+   seluruh HTML kartu. Mengetik "dynamic" berarti 7 kali kerja itu, dan
+   6 di antaranya hasilnya langsung dibuang. Itu penyebab utama terasa
+   berat. Sekarang render ditunda 180ms sejak ketukan TERAKHIR: cukup
+   cepat untuk terasa seketika, tapi hanya sekali kerja. */
+let searchTimer = null;
 $("#searchInput").addEventListener("input", () => {
-  currentPage = 1;
-  render();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentPage = 1;
+    render();
+  }, 180);
 });
 $("#filterStatus").addEventListener("change", () => {
   currentPage = 1;
@@ -331,5 +419,30 @@ $("#filterStatus").addEventListener("change", () => {
 $("#sortDir").addEventListener("change", (e) => {
   sortDir = e.target.value;
   currentPage = 1;
+  applyRangeBasisLabel();
+  render();
+});
+
+// Label rentang ikut berubah (ETA <-> ETD) supaya selalu jelas kolom
+// mana yang sedang disaring.
+function applyRangeBasisLabel() {
+  const el = $("#rangeBasisLabel");
+  if (el) el.textContent = sortBasis().toUpperCase();
+  const ada = $("#filterDateFrom").value || $("#filterDateTo").value;
+  $("#btnClearRange").classList.toggle("d-none", !ada);
+}
+
+["filterDateFrom", "filterDateTo"].forEach((idf) => {
+  $("#" + idf).addEventListener("change", () => {
+    currentPage = 1;
+    applyRangeBasisLabel();
+    render();
+  });
+});
+$("#btnClearRange").addEventListener("click", () => {
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  currentPage = 1;
+  applyRangeBasisLabel();
   render();
 });

@@ -2,114 +2,229 @@
 
 /* ==================================================================
    IMPORT DARI PDF CIPL (Packing List / Commercial Invoice hasil print
-   dari templat CI/PL, BUKAN dokumen PIB/CEISA — lihat pdf.js utk PIB).
+   dari templat CI/PL, BUKAN dokumen PIB/PEB — lihat pdf.js & pdf-peb.js).
 
-   Kenapa ini perlu terpisah dari parser Excel CIPL (excel-cipl.js):
-   PDF hasil print TIDAK datang dlm bentuk grid baris x kolom — hasil
-   ekstraksi PDF.js cuma teks per baris (lihat groupPdfItemsIntoLines
-   di pdf.js). Supaya tetap bisa memisahkan kolom (terutama supaya
-   teks "Shipping Marks" -- nama consignee/pelabuhan yg dicetak di
-   kemasan -- tidak nyampur/"bleed" ke kolom deskripsi barang di baris
-   yg sama), dipakai KOORDINAT X mentah dari PDF.js (pagesItems),
-   BUKAN cuma teks gabungan -- caranya: sisihkan dulu kolom "Shipping
-   Marks" (paling kiri) berdasar posisi x header itu sendiri, susun
-   ulang jadi teks per baris HANYA dari kolom Item+Goods Descriptions+
-   Qty+Berat/Harga dst. Prinsip yg SAMA seperti extractItemDetailColumn
-   di pdf.js utk dokumen PIB.
+   DUA PERUBAHAN BESAR dibanding versi sebelumnya:
 
-   Field header (Consignee, Invoice No, dst) di templat ini terbagi 2
-   KOLOM (kiri x≈37-39, kanan x≈293-303, konsisten persis di 2 sampel
-   nyata PL & CI) -- dipisah dg cara yg sama sebelum dicocokkan ke
-   label lewat CIPL_FIELD_LABELS (cipl-common.js), field yg SAMA dg
-   yg dipakai excel-cipl.js supaya sinonim label (mis. "Sailing on or
-   about" vs "Departure Date") tidak perlu ditulis dua kali.
+   1) PER HALAMAN, bukan per file. Ditemukan nyata (DD-DI26071601_CIPL.pdf):
+      SATU file PDF berisi Commercial Invoice di halaman 1 DAN Packing
+      List di halaman 2. Versi lama cuma mengintip 400 karakter pertama
+      lalu memperlakukan SELURUH file sebagai satu jenis — akibatnya
+      halaman PL diabaikan total dan berat netto/bruto tidak pernah
+      terisi walau datanya ada di file yang sama. Sekarang tiap halaman
+      dideteksi & di-parse sendiri, lalu digabung lewat mergeItemSources()
+      yang sama dipakai excel-cipl.js.
+
+   2) Kolom dipisah lewat KOORDINAT, bukan tebak-tebakan teks. Kolom
+      paling kiri ("Shipping Mark" di PL, "Item" di CI) berisi teks yang
+      BUKAN nama barang — nama consignee/pelabuhan yang dicetak di
+      kemasan, dan nomor PO ("Items of PO / DDI-202600713-01 / ..."). Di
+      PDF, teks itu berada di baris Y yang sama dengan nama barang, jadi
+      kalau dibaca sbg teks polos ia nempel jadi bagian nama barang.
+      Batas kolomnya dihitung dari posisi header masing-masing, jadi
+      tahan terhadap perbedaan lebar kolom antar templat supplier.
 ================================================================== */
 
-function textAt(items) {
-  const sorted = [...items].sort((a, b) => a.transform[4] - b.transform[4]);
-  let text = "";
-  let prevEnd = null;
-  sorted.forEach((it) => {
+// Header kolom pada templat ini POSISINYA DI TENGAH kolom, bukan di
+// tepi kiri — jadi batas kolom TIDAK bisa langsung memakai x header
+// (nama barang mulai jauh di kiri header "Goods Descriptions"). Yang
+// dipakai: ujung KANAN header kolom paling kiri sebagai batas buang,
+// dan tepi KIRI header "Qty." sebagai batas antara nama & angka.
+function ciplPdfColumnSplits(pageItems) {
+  // Sebagian templat punya DUA kolom di kiri nama barang: "Shipping
+  // Marks" DAN "Item" (nomor urut 01/02). Yang dipakai sbg batas buang
+  // adalah yang paling KANAN — kalau memakai yang pertama ketemu,
+  // nomor urut barang ikut masuk jadi bagian nama.
+  const leftCandidates = (pageItems || [])
+    .filter((it) => /^\s*(Shipping\s+Marks?|Items?)\s*$/i.test(it.str))
+    .map((it) => ({ x: it.transform[4], width: it.width || 0 }));
+  const desc = pdfFindItemOnPage(
+    pageItems,
+    /^\s*(Goods\s+)?Descriptions?\s*$/i,
+  );
+  // "Qty." maupun "Quantity" — dua-duanya dipakai di lapangan.
+  const qty = pdfFindItemOnPage(pageItems, /^\s*(Qty\.?|Quantity)\s*$/i);
+  if (!desc || !qty) return null;
+
+  let nameStart = 0;
+  if (leftCandidates.length) {
+    const left = leftCandidates.reduce((a, b) => (b.x > a.x ? b : a));
+    nameStart = left.x + left.width;
+    // Jangan sampai batas ini malah memakan teks nama barang: nama
+    // barang selalu mulai di kiri header "Goods Descriptions".
+    if (desc.x > left.x) nameStart = Math.min(nameStart, desc.x - 5);
+  }
+  // Sebagian templat menaruh SATUAN sebagai sub-label header, bukan di
+  // tiap baris: "Quantity" lalu "SET" di bawahnya, sedangkan sel-nya
+  // cuma berisi angka. Tanpa ini satuan barang ikut kosong walau
+  // dokumennya jelas mencantumkannya.
+  let defaultUnit = "";
+  (pageItems || []).forEach((it) => {
     const x = it.transform[4];
-    const fontSize =
-      Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 1;
-    const gapThreshold = Math.max(0.5, fontSize * 0.15);
-    if (prevEnd !== null && x - prevEnd > gapThreshold) text += " ";
-    text += it.str;
-    prevEnd = x + (it.width || 0);
+    const y = it.transform[5];
+    if (Math.abs(x - qty.x) > 34) return;
+    if (y >= qty.y || qty.y - y > 18) return;
+    const t = (it.str || "").trim();
+    if (!defaultUnit && UNIT_QTY_RE.test(t)) defaultUnit = t.toUpperCase();
   });
-  return text.trim();
+
+  return { nameStart, valueStart: qty.x - 3, headerY: desc.y, defaultUnit };
 }
 
-// Menyusun ULANG baris teks dari item PDF.js yang x-nya berada di dalam
-// [xMin, xMax) saja (dipakai baik utk memotong kolom "Shipping Marks" DI
-// LUAR jangkauan ini, maupun utk memisah 2-kolom field kiri/kanan).
-function reconstructLinesInXRange(pagesItems, xMin, xMax, yTolerance = 2.5) {
-  const all = [];
-  pagesItems.forEach((items) => all.push(...items));
-  const filtered = all.filter(
-    (it) => it.transform[4] >= xMin && it.transform[4] < xMax,
+// Baris tabel barang 1 halaman -> [{ nameText, valueText, y }].
+// Nama & angka diambil dari DUA kotak koordinat terpisah lalu
+// dipasangkan berdasarkan kedekatan Y (toleransi 3pt, sama dengan
+// toleransi pengelompokan baris).
+function ciplPdfTableRows(pageItems) {
+  const split = ciplPdfColumnSplits(pageItems);
+  if (!split) return [];
+
+  const allLines = pdfLines(pageItems);
+  // Batas bawah tabel: baris "TOTAL n BOX(ES) ..." (ringkasan) atau
+  // "DIMENSION: ..." (catatan kemasan) — mana yang lebih dulu muncul.
+  // Blok "Account of Payment" (nama bank, alamat, nomor rekening) berada
+  // DI BAWAH tabel barang tapi DI ATAS baris TOTAL — kalau tidak
+  // dihentikan di sini, baris-barisnya (yang tidak punya angka di kolom
+  // kanan) ikut tersambung sbg lanjutan nama barang terakhir.
+  const stopYs = allLines
+    .filter((l) =>
+      /^(TOTAL\b|DIMENSION\s*:|Account\s+of|Bank\s+name|Signed\s+by)/i.test(
+        l.text.trim(),
+      ),
+    )
+    .map((l) => l.y);
+  const yBottom = stopYs.length ? Math.max(...stopYs) : -Infinity;
+  const yRange = { yTop: split.headerY - 4, yBottom };
+
+  const nameLines = pdfLinesInBox(
+    pageItems,
+    split.nameStart,
+    split.valueStart,
+    yRange,
   );
-  const sorted = filtered.sort(
-    (a, b) =>
-      b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
-  );
-  const lines = [];
-  let current = null;
-  let currentY = null;
-  sorted.forEach((item) => {
-    const y = item.transform[5];
-    if (current === null || Math.abs(y - currentY) > yTolerance) {
-      current = { y, items: [] };
-      lines.push(current);
-      currentY = y;
+  const valueLines = pdfLinesInBox(pageItems, split.valueStart, 100000, yRange);
+
+  return nameLines
+    .map((nl) => {
+      const vl = valueLines.find((v) => Math.abs(v.y - nl.y) <= 3);
+      return {
+        y: nl.y,
+        nameText: nl.text.trim(),
+        valueText: vl ? vl.text.trim() : "",
+        defaultUnit: split.defaultUnit || "",
+      };
+    })
+    .filter((r) => r.nameText);
+}
+
+// Angka pada kolom berat sering terpecah jadi beberapa potongan teks
+// ("1" lalu ".0"), jadi digabung dulu sebelum di-tokenisasi.
+function normalizeCiplValueText(s) {
+  return String(s || "")
+    .replace(/(\d)\s+\.(\d)/g, "$1.$2")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// "1 SET USD 40 USD 40"  (CI) -> { qty:1, satuan:"SET", nums:[40,40] }
+// "1 SET 1.0 KG"         (PL) -> { qty:1, satuan:"SET", nums:[1.0] }
+// Token mata uang (USD/IDR/...) & satuan berat (KG) dilewati; yang
+// dihitung cuma urutan ANGKA-nya, karena arti tiap angka ditentukan
+// jenis dokumennya (harga utk CI, berat utk PL).
+function parseCiplValueTokens(valueText) {
+  const toks = normalizeCiplValueText(valueText).split(/\s+/).filter(Boolean);
+  const nums = [];
+  let satuan = "";
+  toks.forEach((t) => {
+    if (/^[\d,]+\.?\d*$/.test(t)) {
+      const n = Number(t.replace(/,/g, ""));
+      if (isFinite(n)) nums.push(n);
+      return;
     }
-    current.items.push(item);
+    if (CURRENCY_TOKEN_RE.test(t)) return;
+    if (/^KGS?$/i.test(t)) return;
+    if (!satuan && UNIT_QTY_RE.test(t)) satuan = t.toUpperCase();
   });
-  return lines.map((l) => ({ y: l.y, text: textAt(l.items) }));
+  return { qty: nums.length ? nums[0] : null, satuan, nums: nums.slice(1) };
 }
 
-function findHeaderItemX(pagesItems, re) {
-  for (const items of pagesItems) {
-    for (const it of items) {
-      if (re.test(it.str)) return it.transform[4];
+// Baris lanjutan: sebagian templat memecah nama barang panjang ke baris
+// berikutnya TANPA angka apa pun di kolom kanan — baris seperti itu
+// disambung ke nama barang sebelumnya, bukan dianggap barang baru.
+/* Baris nama tanpa angka bisa berperan dua macam:
+   (a) LANJUTAN nama barang di atasnya —
+         "Bead Ring          | 4 | 467.00"
+         "215/65R16 SAVERO SUV"            <- lanjutan
+   (b) JUDUL GRUP untuk barang-barang di bawahnya —
+         "Bead Ring"                        <- judul
+         "215/65R16 SAVERO SUV (4set) | 1 Box | 162 KG"
+         "215/60R17 GITICONTROL P10 (1set) | 1 Box | 82.5 KG"
+   Dibedakan dari POSISINYA: kalau sudah ada barang tepat di atasnya
+   (jarak < 16pt) berarti lanjutan; kalau belum ada, berarti judul grup
+   yang dipakai sbg AWALAN nama semua barang di grup itu. Tanpa aturan
+   ini, Packing List gaya (b) kehilangan kata "Bead Ring" seluruhnya dan
+   namanya tidak lagi cocok dengan Commercial Invoice pasangannya.       */
+function ciplRowsToItems(rows, kind) {
+  const items = [];
+  let lastY = null;
+  let groupPrefix = "";
+  rows.forEach((r) => {
+    const name = r.nameText.trim();
+    // Baris catatan HS Code ("... HS CODE: 9031.80") bukan barang.
+    if (/HS\s*CODE\s*:/i.test(name) && !r.valueText) return;
+
+    const parsed = parseCiplValueTokens(r.valueText);
+    if (parsed.qty == null) {
+      // Baris lanjutan hanya kalau posisinya MASIH menempel di bawah
+      // baris barang sebelumnya. Batasnya 24pt: spasi baris antar templat
+      // berbeda (ada yang ~15pt, ada yang ~20pt), dan kalau dipatok 16pt
+      // sambungan nama pada templat berspasi lebar malah salah dianggap
+      // judul grup lalu nempel ke barang BERIKUTNYA. Tetap ada batas
+      // supaya blok teks yang jauh di bawah tabel tidak ikut tertelan.
+      const nearPrev = lastY != null && Math.abs(lastY - r.y) < 24;
+      if (items.length && name && nearPrev) {
+        items[items.length - 1].name = (
+          items[items.length - 1].name +
+          " " +
+          name
+        ).trim();
+        lastY = r.y;
+      } else if (name) {
+        groupPrefix = name;
+      }
+      return;
     }
-  }
-  return null;
-}
-function findHeaderItemXWidth(pagesItems, re) {
-  for (const items of pagesItems) {
-    for (const it of items) {
-      if (re.test(it.str)) return { x: it.transform[4], width: it.width || 0 };
+    lastY = r.y;
+    const full =
+      groupPrefix && !name.toLowerCase().startsWith(groupPrefix.toLowerCase())
+        ? `${groupPrefix} ${name}`.trim()
+        : name;
+    const it = {
+      name: full,
+      qty: parsed.qty,
+      satuan: parsed.satuan || r.defaultUnit || "",
+    };
+    if (kind === "ci") {
+      if (parsed.nums.length >= 1) it.harga = parsed.nums[0];
+      if (parsed.nums.length >= 2) it.amount = parsed.nums[1];
+    } else {
+      if (parsed.nums.length >= 1) it.netto = parsed.nums[0];
+      if (parsed.nums.length >= 2) it.bruto = parsed.nums[1];
     }
-  }
-  return null;
+    items.push(it);
+  });
+  return items;
 }
 
-// Batas kolom "Shipping Marks" (kiri) vs sisanya (Item/Goods Descriptions/
-// Qty/dst) -- dicari dari posisi header "Shipping Marks" & "Item" sendiri;
-// kalau templat lain tidak punya kolom ini sama sekali, tidak ada yg
-// disisihkan (aman, drpd salah tebak & malah membuang data).
-function findItemTableExcludeThreshold(pagesItems) {
-  const marks = findHeaderItemXWidth(pagesItems, /^Shipping\s+Marks$/i);
-  const item = findHeaderItemX(pagesItems, /^Item$/i);
-  if (!marks || item == null) return 0;
-  const marksEnd = marks.x + marks.width;
-  if (item <= marksEnd) return 0;
-  return (marksEnd + item) / 2;
-}
-
-// Batas kolom kiri/kanan field 2-kolom (Consignee | Terms of Payment, dst)
-// -- dicari dari baris "Consigner:"/"Invoice No..." yg PASTI ada persis 1x
-// di dekat atas dokumen dan PASTI 2 kolom.
-function findTwoColumnThreshold(pagesItems) {
-  const leftX = findHeaderItemX(pagesItems, /^Consign(er|ee)/i);
-  const rightX = findHeaderItemX(
-    pagesItems,
+/* ---- field header (2 kolom kiri/kanan) --------------------------- */
+function findTwoColumnThreshold(pageItems) {
+  const leftX = pdfFindItemOnPage(pageItems, /^Consign(er|ee)/i);
+  const rightX = pdfFindItemOnPage(
+    pageItems,
     /Invoice\s*No\.?\s*(and|&)\s*Date/i,
   );
-  if (leftX == null || rightX == null || rightX <= leftX) return 170; // fallback aman
-  return (leftX + rightX) / 2;
+  if (!leftX || !rightX || rightX.x <= leftX.x) return 170; // fallback aman
+  return (leftX.x + rightX.x) / 2;
 }
 
 function grab(text, re) {
@@ -119,21 +234,22 @@ function grab(text, re) {
 
 // Kalau suatu field nilainya KOSONG di dokumen (mis. Vessel/Flight belum
 // diisi krn kapal belum ditentukan), pola "label lalu baris berikutnya"
-// bisa salah nangkap: baris berikutnya yg ke-baca malah label field LAIN
-// (mis. lompat ke "Shipping Marks" krn baris utk Vessel/Flight sendiri
-// kosong tidak menghasilkan teks apa pun). Nilai yg polanya sendiri cocok
-// dg salah satu label yg dikenal dianggap "sebenarnya kosong", bukan nilai
-// asli.
+// bisa salah nangkap label field LAIN. Nilai yang polanya sendiri cocok
+// dg salah satu label yg dikenal dianggap "sebenarnya kosong".
 const KNOWN_LABEL_RES = [
-  /^Shipping\s+Marks/i,
-  /^Item\s*$/i,
+  /^Shipping\s+Marks?/i,
+  /^Items?\s*$/i,
   /^Goods\s+Descriptions/i,
   /^Consign(er|ee)/i,
-  /^Terms?\s+of\s+Payment/i,
+  /^Seller\s*$/i,
+  /^Notify\s+Party/i,
+  /^Terms?\s+of\s+(Payment|Delivery)/i,
   /^Departure\s*Date/i,
   /^Final\s+Destination/i,
+  /^Other\s+References/i,
   /^Vessel\s*\/\s*Flight/i,
   /^Port\s+of\s+Loading/i,
+  /^From\s*$/i,
   /^Special\s+Item/i,
   /^OBL\s+TYPE/i,
 ];
@@ -146,16 +262,14 @@ function grabNextLine(text, labelRe) {
   return looksLikeAnotherLabel(v) ? "" : v;
 }
 
-function parseCiplPdfCommonFields(fullText, pagesItems) {
-  const twoColThreshold = findTwoColumnThreshold(pagesItems);
-  const leftLines = reconstructLinesInXRange(pagesItems, 0, twoColThreshold);
-  const rightLines = reconstructLinesInXRange(
-    pagesItems,
-    twoColThreshold,
-    100000,
-  );
-  const leftText = leftLines.map((l) => l.text).join("\n");
-  const rightText = rightLines.map((l) => l.text).join("\n");
+function parseCiplPdfPageFields(pageItems, pageText) {
+  const threshold = findTwoColumnThreshold(pageItems);
+  const leftText = pdfLinesInBox(pageItems, 0, threshold)
+    .map((l) => l.text)
+    .join("\n");
+  const rightText = pdfLinesInBox(pageItems, threshold, 100000)
+    .map((l) => l.text)
+    .join("\n");
 
   const invoice = grab(
     rightText,
@@ -167,7 +281,16 @@ function parseCiplPdfCommonFields(fullText, pagesItems) {
   );
   const docDate = parseFlexibleDateText(invDateRaw.replace(/\./g, "-"));
 
-  const party = grabNextLine(leftText, /Consignee\s*\n\s*([^\n]+)/i);
+  // DUA pihak diambil terpisah — lihat pickCiplParty() di cipl-common.js.
+  // "Seller" bukan satu-satunya sebutan penjual — supplier Tiongkok
+  // memakai "Consigner"/"Consignor", sebagian lain "Shipper"/"Exporter".
+  // Ejaannya cuma beda 1-2 huruf dari "Consignee" (penerima), jadi pola
+  // ini dikunci sampai batas kata + boleh diikuti titik dua.
+  const seller = grabNextLine(
+    leftText,
+    /^\s*(?:Seller|Shipper|Exporter|Consignors?|Consigners?)\s*:?\s*\n\s*([^\n]+)/im,
+  );
+  const consignee = grabNextLine(leftText, /Consignee\s*\n\s*([^\n]+)/i);
 
   const etdRaw = grabNextLine(leftText, /Departure\s*Date\s*\n\s*([^\n]+)/i);
   const etd = parseFlexibleDateText(etdRaw);
@@ -176,213 +299,241 @@ function parseCiplPdfCommonFields(fullText, pagesItems) {
     rightText,
     /Final\s+Destination\s*\n\s*([^\n]+)/i,
   );
-  const originFromPortLoading = grabNextLine(
-    rightText,
-    /Port\s+of\s+Loading\s*\n\s*([^\n]+)/i,
-  );
-  const voyage = grabNextLine(
+  const originRaw =
+    grabNextLine(rightText, /Port\s+of\s+Loading\s*\n\s*([^\n]+)/i) ||
+    grabNextLine(rightText, /^\s*From\s*\n\s*([^\n]+)/im);
+  const voyageRaw = grabNextLine(
     leftText,
     /Vessel\s*\/\s*Flight\s*\n\s*([^\n]+)/i,
   );
+  const voyage = /^(0|00:00:00|-)$/.test(voyageRaw.trim()) ? "" : voyageRaw;
 
-  // Baris "Total N Boxes ... FOB <pelabuhan> ... nilai" melebar di 2
-  // kolom (teks kiri "Total N Boxes ..." nyambung dg kanan "FOB ... nilai
-  // ...") -- kalau dicari dari leftText/rightText yg SUDAH terpisah,
-  // baris ini ikut terpotong jadi 2 & incoterm-nya lolos tidak kebaca.
-  // Makanya di sini SENGAJA pakai `fullText` (utuh, satu baris per Y,
-  // TANPA batas kolom) supaya "FOB ..." yg ada di sisi kanan tetap
-  // nyambung ke "Total ..." di sisi kiri.
-  const totalLine = fullText
+  // Baris "TOTAL n BOX(ES) FCA INCHEON AIRPORT" melebar melewati batas
+  // kolom, jadi SENGAJA dicari di teks halaman UTUH (tanpa potong kolom).
+  const totalLine = pageText
     .split("\n")
-    .find((l) => /^Total\s+\d+\s+Box/i.test(l.trim()));
+    .find((l) => /^TOTAL\s+\d/i.test(l.trim()));
   let incoterm = "";
   let packageText = "";
   if (totalLine) {
     incoterm = guessIncotermFromText(totalLine);
     const pkgM = new RegExp(
-      `^Total\\s+(.+?)\\s+(?:${INCOTERM_RE.source})\\b`,
+      `^TOTAL\\s+(.+?)\\s+(?:${INCOTERM_RE.source})\\b`,
       "i",
     ).exec(totalLine.trim());
     packageText = pkgM ? pkgM[1].trim() : "";
     if (!packageText) {
-      // Baris Total tanpa incoterm (mis. dokumen Packing List): berhenti
-      // sebelum angka berat/volume (mis. "0.22 CBM 244.5 KG..."), bukan
-      // ambil semua sisa baris.
-      const pkgOnly = /^Total\s+(.+?)\s+[\d.,]+\s*(?:CBM|KGS?|M3)\b/i.exec(
+      const pkgOnly = /^TOTAL\s+(.+?)\s+[\d.,]+\s*(?:CBM|KGS?|M3)\b/i.exec(
         totalLine.trim(),
       );
-      packageText = pkgOnly
-        ? pkgOnly[1].trim()
-        : (/^Total\s+(.+)$/i.exec(totalLine.trim()) || [, ""])[1].trim();
+      packageText = pkgOnly ? pkgOnly[1].trim() : "";
     }
   }
 
-  const transport = guessTransportFromText(originFromPortLoading, destination);
+  // HS Code sering ditulis sbg CATATAN di bawah tabel, bukan kolom
+  // sendiri: "MOLD BAR GAUGE, BAR GAUGE HS CODE: 9031.80". Dipetakan
+  // ke barang lewat awalan namanya (lihat applyCiplHsNotes()).
+  const hsNotes = [];
+  pageText.split("\n").forEach((line) => {
+    const m = /^(.+?)\s*HS\s*CODE\s*:\s*([\d.\-]+)\s*$/i.exec(line.trim());
+    if (m) {
+      m[1]
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .forEach((prefix) =>
+          hsNotes.push({
+            prefix: prefix.toLowerCase(),
+            hsCode: normalizeHsCodeInput(m[2]),
+          }),
+        );
+    }
+  });
+
+  // Berat TOTAL sering cuma ada di baris ringkasan ("TOTAL 1 BOX(ES) ...
+  // 6.0 KG 6.5 KG" = netto lalu bruto), bukan per barang. Diambil di
+  // sini supaya bisa dibagi proporsional ke tiap barang.
+  let totalNetto = null;
+  let totalBruto = null;
+  if (totalLine) {
+    const kgs = normalizeCiplValueText(totalLine).match(
+      /([\d,]+\.?\d*)\s*KGS?\b/gi,
+    );
+    if (kgs && kgs.length) {
+      const nums = kgs.map((t) => Number(t.replace(/[^\d.]/g, "")));
+      totalNetto = nums[0] != null ? nums[0] : null;
+      totalBruto = nums.length > 1 ? nums[1] : null;
+    }
+  }
 
   return {
     invoice,
     docDate,
-    party,
+    seller,
+    consignee,
     etd,
     destination,
-    origin: originFromPortLoading,
+    origin: originRaw,
     voyage,
     incoterm,
     package: packageText,
-    transport,
+    totalNetto,
+    totalBruto,
+    hsNotes,
   };
 }
 
-// Baris barang PL: "<nama> <qty> <satuan> <netto> KG <bruto> KGS" (satuan
-// umum: Box/Boxes/PCS/SET/Pallet/Carton/dst). "01 Bead Ring" (baris
-// nomor+kategori TANPA angka berat) dipakai sbg prefix kategori kalau
-// muncul SEBELUM baris barang pertama yg beratnya kebaca.
-function parseItemsPlStyle(itemLines) {
-  const suffixRe =
-    /^(.*?)\s+([\d,]+\.?\d*)\s+(PCS?|SET|UNITS?|BOX(?:ES)?|PACK(?:AGES?)?|PALLETS?|PLT|CARTONS?|CTN|BAGS?|DRUMS?|ROLLS?)\s+([\d,]+\.?\d*)\s*KGS?\b\s+([\d,]+\.?\d*)\s*KGS?\s*$/i;
-  const items = [];
-  let categoryPrefix = "";
-  itemLines.forEach((line) => {
-    const t = line.trim();
-    if (!t) return;
-    const m = suffixRe.exec(t);
-    if (!m) {
-      // baris tanpa angka berat: kemungkinan "01 Bead Ring" (nomor+
-      // kategori) -- ambil bagian sesudah nomor itemnya sbg prefix
-      const catM = /^\d{1,3}\s+(.+)$/.exec(t);
-      if (catM && !categoryPrefix) categoryPrefix = catM[1].trim();
-      return;
-    }
-    let name = m[1].trim();
-    name = name.replace(/^\d{1,3}\s+/, ""); // buang nomor item kalau nempel
-    if (
-      categoryPrefix &&
-      !name.toLowerCase().includes(categoryPrefix.toLowerCase())
-    ) {
-      name = categoryPrefix + " - " + name;
-    }
-    items.push({
-      name,
-      qty: Number(m[2].replace(/,/g, "")) || 0,
-      satuan: m[3],
-      netto: Number(m[4].replace(/,/g, "")) || 0,
-      bruto: Number(m[5].replace(/,/g, "")) || 0,
-    });
+// Cocokkan catatan HS Code ke barang lewat awalan nama. Awalan yang
+// lebih PANJANG diprioritaskan supaya "MOLD BAR GAUGE" menang atas
+// "BAR GAUGE" untuk barang "MOLD BAR GAUGE Credo Sunmode 185/65R14".
+function applyCiplHsNotes(items, hsNotes) {
+  if (!hsNotes || !hsNotes.length) return items;
+  const sorted = [...hsNotes].sort((a, b) => b.prefix.length - a.prefix.length);
+  items.forEach((it) => {
+    if (it.hsCode) return;
+    const lower = (it.name || "").toLowerCase();
+    const hit = sorted.find((h) => lower.startsWith(h.prefix));
+    if (hit) it.hsCode = hit.hsCode;
   });
   return items;
 }
 
-// Baris barang CI: "<kategori> <qty> <harga> <amount>" lalu nama model yg
-// lebih spesifik SERING lanjut di baris BERIKUTNYA tanpa angka apa pun
-// (lihat catatan desain di atas) -- digabung sbg 1 nama kalau begitu.
-// Satuan qty (SET/PCS/dst) di templat ini ditulis SEKALI sbg sub-header
-// tabel (mis. baris "SET USD USD" persis di bawah header Quantity/Unit
-// Price/Amount), BUKAN per baris barang -- dicari terpisah & dipakai utk
-// SEMUA barang.
-function parseItemsCiStyle(itemLines) {
-  const suffixRe =
-    /^(.*?)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s*$/;
-  const subHeaderM = itemLines
-    .map((l) =>
-      /^(PCS?|SET|UNITS?|BOX(?:ES)?|PACK(?:AGES?)?)\s+[A-Z]{3}\s+[A-Z]{3}\s*$/i.exec(
-        l.trim(),
-      ),
-    )
-    .find(Boolean);
-  const sharedSatuan = subHeaderM ? subHeaderM[1].toUpperCase() : "";
-
-  const items = [];
-  for (let i = 0; i < itemLines.length; i++) {
-    const t = itemLines[i].trim();
-    if (!t) continue;
-    const m = suffixRe.exec(t);
-    if (!m) continue;
-    let name = m[1].trim().replace(/^\d{1,3}\s+/, "");
-    const qty = Number(m[2].replace(/,/g, "")) || 0;
-    const harga = Number(m[3].replace(/,/g, "")) || 0;
-    const amount = Number(m[4].replace(/,/g, "")) || 0;
-    const next = (itemLines[i + 1] || "").trim();
-    if (next && !suffixRe.test(next) && !/^\d{1,3}\s/.test(next)) {
-      name = name + " " + next;
-      i++; // baris lanjutan sudah dipakai, jangan diproses lagi sbg baris sendiri
-    }
-    items.push({
-      name: name.trim(),
-      qty,
-      satuan: sharedSatuan,
-      harga,
-      amount: amount || null,
-    });
-  }
-  return items;
-}
-
-function extractItemTableLines(pagesItems) {
-  const excludeThreshold = findItemTableExcludeThreshold(pagesItems);
-  const lines = reconstructLinesInXRange(pagesItems, excludeThreshold, 100000);
-  const headerIdx = lines.findIndex((l) =>
-    /Goods\s+Descriptions|^Item\s/i.test(l.text),
-  );
-  const totalIdx = lines.findIndex((l) =>
-    /^Total\s+\d+\s+Box/i.test(l.text.trim()),
-  );
-  if (headerIdx === -1) return [];
-  const end = totalIdx === -1 ? lines.length : totalIdx;
-  return lines.slice(headerIdx + 1, end).map((l) => l.text);
-}
-
 function detectCiplPdfKind(text) {
-  const head = text.slice(0, 400);
-  if (/^\s*PACKING\s+LIST\b/im.test(head)) return "pl";
-  if (/^\s*COMMERCIAL\s+INVOICE\b/im.test(head)) return "ci";
+  const head = (text || "").slice(0, 400);
+  if (/PACKING\s+LIST/i.test(head)) return "pl";
+  if (/COMMERCIAL\s+INVOICE/i.test(head)) return "ci";
   return null;
 }
 
 // Dipanggil dari import/dispatch.js. `text`/`pagesItems` datang dari
-// extractPdfText (pdf.js) -- fungsi ini TIDAK memuat ulang PDF-nya sendiri.
+// extractPdfText (pdf.js) — fungsi ini TIDAK memuat ulang PDF-nya sendiri.
 function parseCiplPdfText(text, pagesItems) {
-  const kind = detectCiplPdfKind(text);
   const notes = [];
-  const fields = parseCiplPdfCommonFields(text, pagesItems);
-  const itemLines = extractItemTableLines(pagesItems);
-  const rawItems =
-    kind === "ci" ? parseItemsCiStyle(itemLines) : parseItemsPlStyle(itemLines);
+  const pages = (pagesItems || []).map((items) => {
+    const pageText = pdfLines(items)
+      .map((l) => l.text)
+      .join("\n");
+    return { items, pageText, kind: detectCiplPdfKind(pageText) };
+  });
+
+  const known = pages.filter((p) => p.kind);
+  const usable = known.length ? known : pages;
+
+  const itemSources = [];
+  const fieldsList = [];
+  const kinds = new Set();
+  const allHsNotes = [];
+
+  usable.forEach((p) => {
+    const kind = p.kind || detectCiplPdfKind(text) || "ci";
+    kinds.add(kind);
+    const f = parseCiplPdfPageFields(p.items, p.pageText);
+    fieldsList.push(f);
+    allHsNotes.push(...(f.hsNotes || []));
+    const rows = ciplPdfTableRows(p.items);
+    const its = ciplRowsToItems(rows, kind);
+    if (its.length) itemSources.push(its);
+  });
+
+  // Field: pakai nilai PERTAMA yang tidak kosong lintas halaman (halaman
+  // CI & PL memuat blok header yang sama persis, jadi aman).
+  const pick = (key) => {
+    for (const f of fieldsList) {
+      if (f[key] != null && String(f[key]).trim() !== "") return f[key];
+    }
+    return "";
+  };
+
+  const merged = mergeItemSources(itemSources);
+  applyCiplHsNotes(merged, allHsNotes);
+
+  // Bruto = TOTAL dari baris ringkasan Packing List ("TOTAL 1 BOX(ES)
+  // ... 6.0 KG 6.5 KG"), ditaruh di barang pertama saja.
+  const totBruto = (() => {
+    for (const f of fieldsList) if (f.totalBruto != null) return f.totalBruto;
+    return null;
+  })();
+  applyTotalBrutoToFirstItem(merged, totBruto);
+
+  const origin = pick("origin");
+  const destination = pick("destination");
+  const modeHint = guessCiplModeFromPorts(origin, destination);
+  const seller = pick("seller");
+  const consignee = pick("consignee");
+
+  // Nilai yang TIDAK ADA di dokumen ini dibiarkan null, JANGAN dijadikan
+  // 0. Kalau dipaksa 0, penggabungan CI + PL yang diupload sebagai dua
+  // file terpisah jadi rusak: mergeItemSources() melihat angka 0 dari
+  // sisi CI sebagai "sudah ada isinya", sehingga berat dari sisi PL tidak
+  // pernah dipakai dan netto/bruto tetap kosong. Pengubahan ke 0 dilakukan
+  // paling akhir di ciplRawItemsToFinalItems() (import/dispatch.js).
+  const rawItems = merged.map((it) => ({
+    name: it.name || "",
+    hsCode: it.hsCode || "",
+    qty: it.qty != null ? it.qty : null,
+    satuan: it.satuan || "",
+    harga: it.harga != null ? it.harga : null,
+    netto: it.netto != null ? it.netto : null,
+    bruto: it.bruto != null ? it.bruto : null,
+  }));
 
   if (!rawItems.length) {
     notes.push(
       "Tidak ada baris barang yang terbaca dari tabel Goods Descriptions.",
     );
   }
-  if (kind === "ci") {
+  const hasCi = kinds.has("ci");
+  const hasPl = kinds.has("pl");
+  if (hasCi && hasPl) {
+    notes.push(
+      "File ini memuat Commercial Invoice DAN Packing List sekaligus — harga & qty diambil dari halaman CI, berat netto/bruto dari halaman PL, lalu digabung otomatis.",
+    );
+  } else if (hasCi) {
     notes.push(
       "PDF ini Commercial Invoice: harga & qty terbaca, TAPI berat netto/bruto TIDAK ada di dokumen ini — kalau ada file Packing List (PL) pasangannya, pilih keduanya sekaligus supaya berat ikut terisi otomatis.",
     );
-  } else if (kind === "pl") {
+  } else if (hasPl) {
     notes.push(
       "PDF ini Packing List: berat netto/bruto & qty terbaca, TAPI harga TIDAK ada di dokumen ini — kalau ada file Commercial Invoice (CI) pasangannya, pilih keduanya sekaligus supaya harga ikut terisi otomatis.",
     );
   }
+  if (rawItems.length && rawItems.some((it) => !it.hsCode)) {
+    notes.push(
+      "Sebagian barang tidak ketemu HS Code-nya (dokumen CIPL sering tidak mencantumkannya sama sekali) — isi manual di tab Daftar Barang.",
+    );
+  }
   notes.push(
-    "Hasil baca PDF CIPL ini best-effort (posisi teks di PDF tidak selalu berurutan) — mohon cek ulang semua field sebelum simpan, terutama moda transportasi, HS Code (dokumen ini biasanya tidak mencantumkan HS Code sama sekali), dan nama barang.",
+    "Hasil baca PDF CIPL ini best-effort — mohon cek ulang moda transportasi, HS Code, dan nama barang sebelum simpan.",
   );
 
   return {
     fields: {
-      invoice: fields.invoice,
-      docDate: fields.docDate,
-      party: fields.party,
-      origin: fields.origin,
-      destination: fields.destination,
-      incoterm: fields.incoterm,
-      transport: fields.transport,
-      voyage: fields.voyage,
-      etd: fields.etd,
-      package: fields.package,
+      invoice: pick("invoice"),
+      docDate: pick("docDate"),
+      party: pickCiplParty(seller, consignee, modeHint || activeMode),
+      seller,
+      consignee,
+      origin: portDisplay(origin),
+      destination: portDisplay(destination),
+      incoterm: pick("incoterm"),
+      transport: guessTransportFromText(origin, destination),
+      voyage: pick("voyage"),
+      etd: pick("etd"),
+      package: pick("package"),
     },
     rawItems,
-    itemsKind: kind,
+    itemsKind: hasCi && hasPl ? "cipl" : hasCi ? "ci" : "pl",
     notes,
-    modeHint: "import",
-    source: kind === "ci" ? "cipl-pdf-ci" : "cipl-pdf-pl",
+    modeHint,
+    source: hasCi && hasPl ? "cipl-pdf" : hasCi ? "cipl-pdf-ci" : "cipl-pdf-pl",
+  };
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    parseCiplPdfText,
+    detectCiplPdfKind,
+    parseCiplValueTokens,
+    ciplPdfTableRows,
   };
 }

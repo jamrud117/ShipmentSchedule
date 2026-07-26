@@ -84,6 +84,25 @@ function guessIncotermFromText(s) {
   return m ? m[1].toUpperCase() : "";
 }
 
+// Dokumen CIPL (PL/CI, Excel maupun PDF) TIDAK pernah bilang eksplisit
+// "ini shipment Import" atau "Export" -- dokumennya sama saja dipakai
+// dua arah. Ditebak dari Port of Loading vs Final Destination/Port of
+// Discharge: yang menyebut "Indonesia" itu sisi MUAT (loading) berarti
+// Export (barang KELUAR dari Indonesia), sisi TUJUAN (destination)
+// berarti Import (barang MASUK ke Indonesia). Kalau dua-duanya ATAU
+// tidak satupun menyebut Indonesia (field kosong/tidak lengkap, atau
+// kasus transit luar negeri-ke-luar negeri), sengaja dikembalikan ""
+// (bukan nebak) -- modeHint kosong artinya pemanggil (apply-to-form.js)
+// tidak menampilkan peringatan mismatch mode sama sekali, drpd salah
+// tebak dan bikin bingung pas mode form-nya sebenarnya sudah benar.
+function guessCiplModeFromPorts(origin, destination) {
+  const originID = /indonesia/i.test(origin || "");
+  const destID = /indonesia/i.test(destination || "");
+  if (originID && !destID) return "export";
+  if (destID && !originID) return "import";
+  return "";
+}
+
 // Tanggal free-text di CIPL: "MAY 20, 2026" / "20 MAY 2026" / ISO / DD-MM-
 // YYYY / DD/MM/YYYY. (Objek Date asli dari cell Excel ditangani terpisah
 // oleh pemanggil SEBELUM sampai ke sini -- fungsi ini cuma utk teks.)
@@ -147,8 +166,15 @@ function isPrimaryCiplSheetName(name) {
   const n = (name || "").trim();
   if (/detail|attachment|lampiran|breakdown|history|riwayat/i.test(n))
     return false;
-  if (/^ci$/i.test(n) || /^pl$/i.test(n)) return true;
-  if (/^ci\s*[,+&/]?\s*pl$/i.test(n) || /^pl\s*[,+&/]?\s*ci$/i.test(n))
+  // "CI" (Commercial Invoice) beberapa supplier tulis lengkap
+  // "INVOICE"/"INV", bukan disingkat "CI" -- ketemu nyata di templat
+  // Dynamic Design (sheet-nya persis bernama "INVOICE"). Disamakan di
+  // sini supaya dianggap sheet utama juga.
+  if (/^(ci|invoice|inv)$/i.test(n) || /^pl$/i.test(n)) return true;
+  if (
+    /^(ci|invoice|inv)\s*[,+&/]?\s*pl$/i.test(n) ||
+    /^pl\s*[,+&/]?\s*(ci|invoice|inv)$/i.test(n)
+  )
     return true;
   return false;
 }
@@ -169,8 +195,17 @@ function isExcludedSheetName(name) {
 const CIPL_COLUMN_LABELS = {
   no: /^No\.?$/i,
   item: /^Item\.?\s*$/i,
-  description: /^(Goods\s+)?Descriptions?\s*$/i,
-  specification: /^Spec(?:ification)?\s*$|^Model\s*$/i,
+  // Sebagian templat pisah "Item" & "Description" jadi 2 kolom, sebagian
+  // gabung jadi 1 header "Item Description" (ketemu nyata di templat
+  // Dynamic Design, sheet PL) -- makanya "(Item\s+)?" opsional di depan.
+  // Tidak bentrok dg cek key "item" di atas: "Item" SENDIRIAN tidak lolos
+  // regex ini krn "\s+" minta ada spasi setelahnya (lihat cipl-common.js
+  // findCiplHeaderBlocks utk urutan pengecekan per key).
+  description: /^(Item\s+)?(Goods\s+)?Descriptions?\s*$/i,
+  // "Spec"/"Specification"/"Model" ATAU "Type" (ketemu nyata dipakai utk
+  // varian/ukuran produk, mis. "NOKIAN ENTRUST 255/45R19" -- kalau tidak
+  // ditangkap di sini, teks itu hilang sama sekali dari nama barang).
+  specification: /^Spec(?:ification)?\s*$|^Model\s*$|^Type\s*$/i,
   brand: /^Brand\s*$/i,
   hsCode: /HS\s*CODE/i,
   qty: /^Qty\.?$|^Quantity$/i,
@@ -179,22 +214,63 @@ const CIPL_COLUMN_LABELS = {
   amount: /^Amount\s*$/i,
   netto: /^N\s*\.?\s*W\.?$|^Net\s*W(?:ei)?g?h?t?\.?$/i,
   bruto: /^G\s*\.?\s*W\.?$|^Gross\s*W(?:ei)?g?h?t?\.?$/i,
+  // Kolom dimensi kemasan per barang, mis. "94 CM x 84 CM x 80 CM" —
+  // dipakai utk isi Kemasan mode Export (lihat extractItemsFromBlock
+  // di excel-cipl.js, yang parse angkanya lewat parsePackageDims() di
+  // core/helpers.js -- parseFloat() otomatis abaikan "CM" di
+  // belakang tiap angka, jadi tidak perlu strip manual).
+  cbm: /^CBM\s*$/i,
   dim: /^DIM\.?$/i,
   remark: /^Remarks?\s*$/i,
 };
 
 const CIPL_FIELD_LABELS = {
   invoiceNoDate: /Invoice\s*No\.?\s*(?:and|&|\/)\s*Date/i,
-  consignee: /^\s*Consignee(?:\s*\/\s*Buyer)?\s*$/i,
+  // Pihak PENJUAL (pengirim barang). Dokumen CI/PL selalu punya dua
+  // pihak: Seller/Shipper/Exporter di kiri atas, Consignee/Buyer di
+  // bawahnya. Keduanya HARUS diambil terpisah -- lihat pickCiplParty().
+  // "Consigner"/"Consignor" dipakai sebagian supplier sbg ganti "Seller".
+  // HATI-HATI: ejaannya cuma beda 1-2 huruf dari "Consignee" (penerima),
+  // jadi polanya dikunci sampai akhir kata — tanpa itu penjual & penerima
+  // saling tertukar.
+  // Templat supplier menuliskan label ini dengan banyak variasi, sering
+  // sebagai gabungan dipisah garis miring: "Seller", "Shipper",
+  // " Shipper/Seller", "Exporter / Shipper", kadang berakhiran titik dua.
+  // Bagian sesudah garis miring dibuat opsional & bebas kata supaya
+  // semuanya tertangkap — sebelumnya hanya bentuk tunggal yang cocok,
+  // sehingga templat ber-label "Shipper/Seller" (mis. ATC_CAM_BOX)
+  // gagal terdeteksi dan Nama Shipper-nya kosong.
+  seller:
+    /^\s*(?:Seller|Shipper|Exporter|Consignor|Consigner)(?:\s*\/\s*[A-Za-z ]+)?\s*:?\s*$/i,
+  consignee:
+    /^\s*(?:Consignee|Buyer|Importer)(?:\s*\/\s*[A-Za-z ]+)?\s*:?\s*$/i,
   departureDate: /^\s*Departure\s*Date\s*$/i,
   sailingOnOrAbout: /Sailing\s+on\s+or\s+about/i,
   vesselFlight: /Vessel\s*\/\s*Flight/i,
-  portOfLoading: /Port\s+of\s+Loading/i,
-  portOfDischarge: /Port\s+of\s+Discharge/i,
+  // Sebagian templat (mis. Dynamic Design) memakai "From" / "To" polos
+  // sebagai ganti "Port of Loading" / "Port of Discharge".
+  portOfLoading: /Port\s+of\s+Loading|^\s*From\s*$/i,
+  portOfDischarge: /Port\s+of\s+Discharge|^\s*To\s*$/i,
   finalDestination: /Final\s+Destination/i,
   termsOfDelivery: /Terms?\s+of\s+Delivery/i,
   totalBoxLine: /^TOTAL\b/i,
 };
+
+// PERBAIKAN BUG (requirement A: "deteksi Nama Shipper/Customer masih
+// salah pada file CIPL/PIB"). Dokumen CIPL memuat DUA pihak sekaligus,
+// dan mana yang dipakai tergantung ARAH pengiriman:
+//   - Jadwal IMPORT -> field "Nama Shipper"          = Seller/Shipper
+//   - Jadwal EXPORT -> field "Nama Buyer / Consignee" = Consignee/Buyer
+// Versi sebelumnya SELALU memakai Consignee, sehingga pada Jadwal Import
+// nama shipper malah terisi nama perusahaan sendiri (PT DDI, yang memang
+// consignee-nya). Kalau salah satu sisi tidak terbaca, dipakai sisi yang
+// ada (lebih baik terisi sesuatu daripada kosong).
+function pickCiplParty(seller, consignee, mode) {
+  const s = (seller || "").trim();
+  const c = (consignee || "").trim();
+  if (mode === "export") return c || s;
+  return s || c;
+}
 
 function normName(s) {
   return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -244,16 +320,19 @@ function mergeByPosition(sources) {
     const acc = {};
     sources.forEach((list) => {
       const it = list[i] || {};
-      ["name", "hsCode", "qty", "satuan", "harga", "netto", "bruto"].forEach(
-        (f) => {
-          if (
-            (acc[f] == null || acc[f] === "") &&
-            it[f] != null &&
-            it[f] !== ""
-          )
-            acc[f] = it[f];
-        },
-      );
+      [
+        "name",
+        "hsCode",
+        "qty",
+        "satuan",
+        "harga",
+        "netto",
+        "bruto",
+        "package",
+      ].forEach((f) => {
+        if ((acc[f] == null || acc[f] === "") && it[f] != null && it[f] !== "")
+          acc[f] = it[f];
+      });
     });
     merged.push(acc);
   }
@@ -279,9 +358,11 @@ function mergeByKey(sources) {
         order.push(key);
       }
       const acc = byKey.get(key);
-      ["hsCode", "qty", "satuan", "harga", "netto", "bruto"].forEach((f) => {
-        if (acc[f] == null && it[f] != null && it[f] !== "") acc[f] = it[f];
-      });
+      ["hsCode", "qty", "satuan", "harga", "netto", "bruto", "package"].forEach(
+        (f) => {
+          if (acc[f] == null && it[f] != null && it[f] !== "") acc[f] = it[f];
+        },
+      );
       if (!acc.name) acc.name = it.name;
     });
   });
@@ -301,20 +382,11 @@ function mergeItemSources(sources) {
     merged = mergeByKey(nonEmpty);
   }
 
-  // Bruto (berat kotor) SERING cuma ada sbg TOTAL per kelompok kemasan,
-  // bukan per barang -- kalau ada barang yang belum dapat bruto tapi ada
-  // total bruto & netto keseluruhan diketahui, bagi PROPORSIONAL sesuai
-  // porsi netto tiap barang (sama seperti dipakai di PDF PIB & CIPL versi
-  // lama), supaya tidak ada yang 0 padahal sebenarnya 1 kemasan yang sama.
-  const totalBrutoKnown = merged.reduce((s, it) => s + (it.bruto || 0), 0);
-  const totalNettoKnown = merged.reduce((s, it) => s + (it.netto || 0), 0);
-  if (totalBrutoKnown > 0 && totalNettoKnown > 0) {
-    merged.forEach((it) => {
-      if (it.bruto == null && it.netto != null) {
-        it.bruto = roundNum(totalBrutoKnown * (it.netto / totalNettoKnown), 4);
-      }
-    });
-  }
+  // CATATAN: pembagian bruto PROPORSIONAL sudah DIHAPUS dari sini.
+  // Bruto sekarang selalu berupa satu angka TOTAL yang dipasang di barang
+  // pertama — dilakukan pemanggil lewat applyTotalBrutoToFirstItem()
+  // (js/core/num-format.js), supaya aturannya seragam untuk PIB, PEB,
+  // CIPL Excel, maupun CIPL PDF.
   return merged;
 }
 
@@ -334,6 +406,7 @@ if (typeof module !== "undefined" && module.exports) {
     joinNameParts,
     guessTransportFromText,
     guessIncotermFromText,
+    guessCiplModeFromPorts,
     parseFlexibleDateText,
     excelCellDateToISO,
     isPrimaryCiplSheetName,

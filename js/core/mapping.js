@@ -27,9 +27,19 @@ const FIELD_MAP = {
   destination: "destination",
   etd: "etd",
   eta: "eta",
+  // TANGGAL UPDATE DELAY (requirement D): jadwal BARU setelah mundur.
+  // ETD/ETA di atas tetap berisi rencana semula sebagai pembanding, jadi
+  // lama delay = tanggal update - jadwal asli.
+  // BUTUH MIGRASI: lihat schema-migration.sql di root paket ini.
+  etaUpdate: "eta_update",
+  etdUpdate: "etd_update",
   actual: "actual",
   status: "status",
   notes: "notes",
+  // Kronologi catatan ber-tanggal & jam (jsonb). Kolom `notes` di atas
+  // TETAP diisi teks entri terbaru supaya template copy (kolom REMARK /
+  // NOTES) tidak perlu diubah. BUTUH MIGRASI: schema-migration.sql.
+  notesLog: "notes_log",
   incoterm: "incoterm",
   freight: "freight",
   insurance: "insurance",
@@ -111,6 +121,10 @@ function itemToRow(it, shipmentId) {
     harga: Number(it.harga) || 0,
     netto: Number(it.netto) || 0,
     bruto: Number(it.bruto) || 0,
+    // Kemasan per barang (Jumlah+Jenis utk import, dimensi P*L*T utk
+    // export — lihat newItem() di core/helpers.js). Kolom shipment_items
+    // .package BARU, butuh migrasi — lihat schema.sql / pesan chat.
+    package: it.package || "",
     // Fasilitas per barang — SKB & E-COO 1 array yang sama (entri
     // dengan jenis "E-COO" = sertifikat asal, sisanya = surat bebas
     // pajak). sanitizeSkbList di sini cuma jaga-jaga field tidak
@@ -135,6 +149,7 @@ function rowToItem(row) {
     harga: Number(row.harga) || 0,
     netto: Number(row.netto) || 0,
     bruto: Number(row.bruto) || 0,
+    package: row.package || "",
     skb: sanitizeSkbList(row.skb),
     _facOpen: false,
   };

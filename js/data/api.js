@@ -4,6 +4,7 @@
    CRUD KE SUPABASE
 ================================================================== */
 async function loadShipments() {
+  showLoadingSkeleton(3);
   const { data: rows, error } = await supabaseClient
     .from("shipments")
     .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)")
@@ -26,13 +27,41 @@ async function loadShipments() {
   // render() dihapus dari sini
 }
 
+// Kerangka muat (skeleton). Ditampilkan selama data diambil, meniru
+// bentuk kartu jadwal supaya tata letaknya TIDAK melompat begitu data
+// datang — pergeseran mendadak itu yang membuat aplikasi terasa kasar.
+function showLoadingSkeleton(jumlah) {
+  emptyState.classList.add("d-none");
+  const satu = `
+    <div class="skeleton-card" aria-hidden="true">
+      <div class="skeleton-line skeleton-line--title"></div>
+      <div class="skeleton-line skeleton-line--wide"></div>
+      <div class="skeleton-line skeleton-line--mid"></div>
+      <div class="skeleton-line skeleton-line--short"></div>
+    </div>`;
+  cardContainer.innerHTML =
+    `<div role="status" aria-live="polite" aria-busy="true">
+       <span class="visually-hidden">Memuat jadwal…</span>
+       ${satu.repeat(jumlah || 3)}
+     </div>`;
+}
+
+// Layar gagal: sebutkan APA yang gagal dan APA langkah berikutnya —
+// bukan sekadar "terjadi kesalahan".
 function showDbErrorState() {
   emptyState.classList.add("d-none");
   cardContainer.innerHTML = `
-    <div class="empty-state">
-      <i class="bi bi-plug"></i>
-      <h5 class="mt-3 mb-1" style="font-family:var(--font-display); color:var(--navy)">Gagal memuat data dari database</h5>
-      <p class="mb-0">Pastikan <code>SUPABASE_URL</code> dan <code>SUPABASE_ANON_KEY</code> di bagian atas <b>script.js</b> sudah diisi dengan benar, dan <b>schema.sql</b> sudah dijalankan lewat Supabase SQL Editor. Cek juga tab Console di browser untuk detail error.</p>
+    <div class="state-panel state-panel--error" role="alert">
+      <div class="state-icon"><i class="bi bi-plug"></i></div>
+      <div class="state-title">Data tidak bisa dimuat</div>
+      <div class="state-desc">
+        Sambungan ke database gagal. Periksa <code>SUPABASE_URL</code> dan
+        <code>SUPABASE_ANON_KEY</code> di <b>js/config.js</b>, lalu pastikan
+        <b>schema-migration.sql</b> sudah dijalankan di Supabase SQL Editor.
+      </div>
+      <button class="btn btn-teal" onclick="loadShipments()">
+        <i class="bi bi-arrow-clockwise"></i> Coba muat ulang
+      </button>
     </div>`;
 }
 

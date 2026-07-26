@@ -1,83 +1,217 @@
 "use strict";
 
-function setFieldIfPresent(id, value) {
-  if (value !== "" && value != null) {
-    $("#" + id).value = value;
-    return true;
+/* ==================================================================
+   TERAPKAN HASIL PARSE KE FORM
+
+   ATURAN TIMPA-MENIMPA (requirement A):
+   "Kalau user import beberapa jenis data berbeda dalam satu form, field
+    yang sudah terisi tidak boleh saling menimpa — KECUALI kombinasi
+    field tertentu yang memang sengaja dibuat saling menimpa."
+
+   Diterapkan lewat PRIORITAS SUMBER, bukan daftar field satu per satu
+   (daftar manual gampang basi tiap ada field baru). Logikanya:
+     - Field yang MASIH KOSONG selalu diisi, sumber apa pun.
+     - Field yang SUDAH TERISI hanya ditimpa kalau sumber baru
+       prioritasnya LEBIH TINGGI dari sumber yang mengisinya tadi.
+   Prioritas: dokumen pabean resmi (PIB/PEB, sudah disahkan Bea Cukai)
+   > draft CEISA > dokumen niaga supplier (CIPL). Jadi urutan impor
+   "CIPL dulu baru PIB" tetap menghasilkan data final versi PIB, tapi
+   "PIB dulu baru CIPL" TIDAK merusak data PIB yang sudah benar.
+
+   Sumber pengisi terakhir tiap field disimpan di importFieldOrigin
+   (per sesi halaman form, direset tiap form dibuka — lihat
+   resetImportFieldOrigins() yang dipanggil renderFormPage()).
+================================================================== */
+
+const IMPORT_SOURCE_PRIORITY = {
+  "pdf": 30, // PIB BC 2.0
+  "pdf-peb": 30, // PEB BC 3.0
+  "excel-bc": 20, // draft CEISA (HEADER/BARANG/ENTITAS/DOKUMEN)
+  "cipl": 10, // CIPL Excel
+  "cipl-pdf": 10, // CIPL PDF (CI+PL 1 file)
+  "cipl-pdf-ci": 10,
+  "cipl-pdf-pl": 10,
+};
+
+let importFieldOrigin = {};
+
+function resetImportFieldOrigins() {
+  importFieldOrigin = {};
+}
+
+function sourcePriority(source) {
+  return IMPORT_SOURCE_PRIORITY[source] != null
+    ? IMPORT_SOURCE_PRIORITY[source]
+    : 15;
+}
+
+// Field mana yang BOLEH diisi oleh sumber ini. Dokumen CIPL sengaja
+// TIDAK boleh mengisi tanggal keberangkatan/kedatangan maupun nomor
+// B/L — requirement A: "CIPL TIDAK mengisi ETD, ETA, Tanggal SPPB, atau
+// Master/House BL/AWB — CIPL hanya berisi info barang dan No CI shipper."
+const CIPL_BLOCKED_FIELDS = new Set([
+  "fEtd",
+  "fEta",
+  "fActual",
+  "fDocDate",
+  "fDocNo",
+  "fMasterBL",
+  "fHouseBL",
+  "fNoAju",
+]);
+
+function isCiplSource(source) {
+  return /^cipl/.test(source || "");
+}
+
+// Satu-satunya pintu penulisan field form dari hasil import.
+function setImportField(id, value, source, opts) {
+  if (value === "" || value == null) return false;
+  if (isCiplSource(source) && CIPL_BLOCKED_FIELDS.has(id)) return false;
+
+  const el = $("#" + id);
+  if (!el) return false;
+
+  const current = String(el.value || "").trim();
+  const prio = sourcePriority(source);
+  const prevPrio = importFieldOrigin[id];
+
+  if (current !== "" && prevPrio != null && prio < prevPrio) return false;
+  // Field terisi yang BELUM pernah disentuh import (artinya diketik user
+  // sendiri atau berasal dari data lama saat edit) tidak ditimpa —
+  // kecuali pemanggil memang minta paksa.
+  if (current !== "" && prevPrio == null && !(opts && opts.force)) return false;
+
+  // Kotak angka ditulis dalam bentuk BERFORMAT (mis. 34200 -> "34,200")
+  // supaya tampilannya sama dengan hasil ketikan manual, dan hasil
+  // salin-tempel ke Excel langsung terbaca sebagai angka.
+  el.value = el.hasAttribute("data-num") ? formatNumberValue(value) : value;
+  importFieldOrigin[id] = prio;
+  return true;
+}
+
+function setImportSelect(id, value, source, notes, labelForNote) {
+  if (!value) return false;
+  const el = $("#" + id);
+  if (!el) return false;
+  const hasOpt = Array.from(el.options).some((o) => o.value === value);
+  if (!hasOpt) {
+    if (notes)
+      notes.push(
+        `${labelForNote || id} "${value}" dari file tidak ada di pilihan dropdown — pilih manual.`,
+      );
+    return false;
   }
-  return false;
+  const prio = sourcePriority(source);
+  const prevPrio = importFieldOrigin[id];
+  if (prevPrio != null && prio < prevPrio) return false;
+  el.value = value;
+  importFieldOrigin[id] = prio;
+  return true;
+}
+
+/* ------------------------------------------------------------------
+   Nama Shipper / Buyer: dokumen memuat DUA pihak sekaligus, dan mana
+   yang benar tergantung section form yang sedang dibuka — bukan
+   tergantung isi dokumennya. Import -> pengirim (seller/shipper),
+   Export -> penerima (buyer/consignee). Lihat pickCiplParty() di
+   cipl-common.js untuk penjelasan bug-nya.
+------------------------------------------------------------------ */
+function resolvePartyForActiveMode(f) {
+  if (f.seller || f.consignee) {
+    return pickCiplParty(f.seller, f.consignee, activeMode);
+  }
+  return f.party || "";
 }
 
 function applyImportedBcData(parsed) {
-  const f = parsed.fields;
-  const notes = parsed.notes.slice();
+  const f = parsed.fields || {};
+  const notes = (parsed.notes || []).slice();
+  const src = parsed.source;
   let filled = 0;
-  const mark = (ok) => {
-    if (ok) filled++;
-    return ok;
+  const put = (id, val, opts) => {
+    if (setImportField(id, val, src, opts)) filled++;
   };
 
-  mark(setFieldIfPresent("fNoAju", f.noAju));
-  mark(setFieldIfPresent("fDocNo", f.docNo));
-  mark(setFieldIfPresent("fDocDate", f.docDate));
-  mark(setFieldIfPresent("fParty", f.party));
-  mark(setFieldIfPresent("fInvoice", f.invoice));
-  mark(setFieldIfPresent("fMasterBL", f.masterBL));
-  mark(setFieldIfPresent("fHouseBL", f.houseBL));
-  mark(setFieldIfPresent("fVessel", f.vessel));
-  mark(setFieldIfPresent("fVoyage", f.voyage));
-  mark(setFieldIfPresent("fContainer", f.container));
-  mark(setFieldIfPresent("fOrigin", f.origin));
-  mark(setFieldIfPresent("fDestination", f.destination));
-  mark(setFieldIfPresent("fActual", f.actual));
-  mark(setFieldIfPresent("fEtd", f.etd));
-  mark(setFieldIfPresent("fPackage", f.package));
+  put("fNoAju", f.noAju);
+  put("fDocNo", f.docNo);
+  put("fDocDate", f.docDate);
+  put("fParty", resolvePartyForActiveMode(f));
+  put("fInvoice", f.invoice);
+  put("fMasterBL", f.masterBL);
+  put("fHouseBL", f.houseBL);
+  put("fForwarder", f.forwarder);
+  put("fVessel", f.vessel);
+  put("fVoyage", f.voyage);
+  put("fContainer", f.container);
+  put("fOrigin", f.origin);
+  put("fDestination", f.destination);
+  put("fEtd", f.etd);
+  put("fEta", f.eta);
+  put("fActual", f.actual);
+  if (f.package) {
+    // Dari file, Total Package datang sbg satu teks ("2 PACKAGE") — dipecah
+    // jadi kotak angka + kotak satuan seperti isian manual.
+    const before = $("#fPackage").value.trim();
+    if (put("fPackage", f.package)) {
+      setPackageFields(f.package);
+    } else if (!before) {
+      setPackageFields(f.package);
+    }
+  }
 
-  if (f.freight != null) {
-    $("#fFreight").value = f.freight;
-    filled++;
-  }
-  if (f.insurance != null) {
-    $("#fInsurance").value = f.insurance;
-    filled++;
-  }
-  if (f.ndpbm != null) {
-    $("#fNdpbm").value = f.ndpbm;
-    filled++;
-  }
-  if (f.bm != null) {
-    $("#fBM").value = f.bm;
-    filled++;
-  }
-  if (f.ppn != null) {
-    $("#fPPN").value = f.ppn;
-    filled++;
-  }
-  if (f.pph != null) {
-    $("#fPPH").value = f.pph;
-    filled++;
-  }
+  ["freight", "insurance", "ndpbm", "bm", "ppn", "pph", "tarif"].forEach(
+    (key) => {
+      const id =
+        "f" +
+        (key === "bm"
+          ? "BM"
+          : key === "ppn"
+            ? "PPN"
+            : key === "pph"
+              ? "PPH"
+              : key === "ndpbm"
+                ? "Ndpbm"
+                : key.charAt(0).toUpperCase() + key.slice(1));
+      if (f[key] != null && f[key] !== "") put(id, f[key]);
+    },
+  );
 
   if (f.transport) {
-    $("#fTransport").value = f.transport;
-    filled++;
+    if (setImportSelect("fTransport", f.transport, src)) filled++;
   }
-
+  if (f.muatan) {
+    if (setImportSelect("fMuatan", f.muatan, src)) filled++;
+  }
   if (f.incoterm) {
-    const hasOpt = Array.from($("#fIncoterm").options).some(
-      (o) => o.value === f.incoterm,
-    );
-    if (hasOpt) {
-      $("#fIncoterm").value = f.incoterm;
+    if (setImportSelect("fIncoterm", f.incoterm, src, notes, "Kode incoterm"))
       filled++;
-    } else
-      notes.push(
-        `Kode incoterm "${f.incoterm}" dari file tidak ada di pilihan dropdown — pilih manual.`,
-      );
   }
 
-  if (parsed.items.length) {
-    draftItems = parsed.items;
+  /* ---- daftar barang ---- */
+  if (parsed.items && parsed.items.length) {
+    // HS Code disimpan sebagai DIGIT saja (requirement A) — titik & strip
+    // dari dokumen/paste manual dibuang di satu tempat ini supaya semua
+    // sumber import konsisten.
+    const cleaned = parsed.items.map((it) => ({
+      ...it,
+      hsCode: normalizeHsCodeInput(it.hsCode),
+    }));
+    // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar
+    // barang yang sudah terisi dari dokumen pabean.
+    const prevPrio = importFieldOrigin.__items;
+    const prio = sourcePriority(src);
+    const hasRealItems = draftItems.some(
+      (it) => (it.namaBarang || "").trim() !== "",
+    );
+    if (!hasRealItems || prevPrio == null || prio >= prevPrio) {
+      draftItems = cleaned;
+      importFieldOrigin.__items = prio;
+    } else {
+      notes.push(
+        `Daftar barang dari file ini TIDAK diterapkan karena tab Daftar Barang sudah terisi dari dokumen yang lebih resmi. Hapus dulu barangnya kalau memang mau diganti.`,
+      );
+    }
   }
 
   if (parsed.modeHint && parsed.modeHint !== activeMode) {
@@ -89,21 +223,26 @@ function applyImportedBcData(parsed) {
   applyTransportLabels();
   renderItemTable();
 
+  const items = parsed.items || [];
   const facParts = [];
-  const skbCount = parsed.items.reduce(
+  const skbCount = items.reduce(
     (n, it) => n + (it.skb || []).filter((sk) => sk.jenis !== "E-COO").length,
     0,
   );
   if (skbCount) facParts.push(`${skbCount} SKB`);
-  if (
-    parsed.items.some((it) => (it.skb || []).some((sk) => sk.jenis === "E-COO"))
-  )
+  if (items.some((it) => (it.skb || []).some((sk) => sk.jenis === "E-COO")))
     facParts.push("E-COO");
-  const facSuffix = facParts.length
-    ? ` (termasuk ${facParts.join(" & ")})`
-    : "";
-  const sourceLabel = /pdf/i.test(parsed.source || "") ? "PDF" : "Excel";
-  const summary = `${filled} field & ${parsed.items.length} barang terisi otomatis dari file ${sourceLabel}${facSuffix}.`;
+  const facSuffix = facParts.length ? ` (termasuk ${facParts.join(" & ")})` : "";
+  const sourceLabel = /pdf/i.test(src || "") ? "PDF" : "Excel";
+  const docLabel =
+    src === "pdf"
+      ? "PIB"
+      : src === "pdf-peb"
+        ? "PEB"
+        : isCiplSource(src)
+          ? "CIPL"
+          : "BC";
+  const summary = `${filled} field & ${items.length} barang terisi otomatis dari file ${docLabel} (${sourceLabel})${facSuffix}.`;
   return { summary, notes };
 }
 

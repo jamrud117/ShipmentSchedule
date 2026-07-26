@@ -20,8 +20,8 @@
      FASILITAS/SKB) tetap diulang di setiap baris.
    - TARIF disalin apa adanya (persen, mis. 5 -> "5"), TIDAK dibagi
      100 — cell TARIF di excel-nya sudah diformat sebagai persen.
-   - VESSEL diisi dari No. Voyage/Flight (nomor pengangkut), BUKAN
-     dari nama vessel/maskapai.
+   - VESSEL: moda laut = nama vessel + no. voyage digabung; moda
+     udara = no. flight saja (vesselNameForTemplate).
    - BL/AWB: Master di baris pertama, House di baris KEDUA (numpang
      di baris barang ke-2 kalau barangnya 2+; kalau barangnya cuma 1,
      baris ke-2 baru dibuat khusus untuk House, kolom lain kosong).
@@ -82,11 +82,11 @@ function extractLeadingNumber(str) {
 //   bagaimana TARIF tersimpan di IMPORT_FORMAT.xlsx.
 const clipboardFormatter = {
   text: (v) => (v == null ? "" : String(v)),
-  num: (n, decimals) => {
-    const r = roundNum(n, decimals);
-    if (r === 0) return "";
-    return String(r); // <-- hapus replace()
-  },
+  // Requirement G: format angka standar PIB — ribuan pakai koma, desimal
+  // pakai titik, dan desimal yang semuanya nol tidak ditampilkan
+  // (3800.0000 -> "3,800"). Nilai 0 tetap jadi sel kosong seperti
+  // sebelumnya. Lihat fmtPibNumber() di js/core/num-format.js.
+  num: (n, decimals) => fmtPibNumber(n, decimals == null ? 2 : decimals),
   date: (d) => excelDateFmt(d),
   tarif: (percent) => clipboardFormatter.num(percent, 2),
   packageNum: (pkg) => {
@@ -97,7 +97,13 @@ const clipboardFormatter = {
 };
 const nativeFormatter = {
   text: (v) => (v == null ? "" : String(v)),
-  num: (n, decimals) => roundNum(n, decimals),
+  // Requirement D (Bulk): "kalau ada data bernilai 0, tampilkan kosong
+  // saja, tidak usah diikutkan" — sel bernilai 0 dibiarkan kosong,
+  // bukan ditulis angka 0 yang bikin sheet penuh nol tak berarti.
+  num: (n, decimals) => {
+    const r = roundNum(n, decimals);
+    return r === 0 ? "" : r;
+  },
   date: (d) => parseLocalDate(d) || "",
   tarif: (percent) => roundNum((Number(percent) || 0) / 100, 4),
   packageNum: (pkg) => {
@@ -138,8 +144,8 @@ const nativeFormatter = {
      tampil di card/detail (lihat computeCustoms): TOTAL BM+PDRI = 0
      kalau BEA MASUK = 0, selain itu = BEA MASUK + PPN + PPH. TIDAK
      tergantung isi Fasilitas SKB.
-   - VESSEL diisi dari No. Voyage/Flight (nomor pengangkut), BUKAN
-     dari nama vessel/maskapai.
+   - VESSEL: moda laut = nama vessel + no. voyage digabung; moda
+     udara = no. flight saja (vesselNameForTemplate).
    - PACKAGE: angka depan saja, tanpa satuan/kode kemasan.
    - BL/AWB: Master di baris pertama, House di baris KEDUA (numpang
      di baris barang ke-2 kalau barangnya 2+; kalau barangnya cuma 1,
@@ -162,7 +168,6 @@ function shipmentFacilitiesSummary(items) {
 
   (items || []).forEach((it) => {
     (it.skb || []).forEach((sk) => {
-      console.log(skbEntryLabel(sk));
       let label = skbEntryLabel(sk).trim();
 
       // Samakan penulisan
@@ -177,7 +182,6 @@ function shipmentFacilitiesSummary(items) {
       }
     });
   });
-  console.log(result);
   return result.join("\n");
 }
 
@@ -250,10 +254,16 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
-      formatter.text(s.voyage), // 27 VESSEL -> nomor pengangkut
+      // VESSEL mengikuti aturan requirement B lewat vesselNameForTemplate():
+      // moda LAUT  -> "<Nama Vessel> <No. Voyage>" digabung
+      // moda UDARA -> No. Flight saja
+      // (dulu kolom ini SELALU diisi nomor pengangkut saja, sehingga
+      //  nama kapal hilang di hasil paste untuk pengiriman laut).
+      formatter.text(vesselNameForTemplate(s)), // 27 VESSEL
       formatter.packageNum(s.package), // 28 PACKAGE
     ];
-    if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+    if (idx > 0)
+      FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
     return cols;
   }
 
@@ -266,16 +276,7 @@ function buildExcelCopyRows(s, formatter) {
     rows.push(blankRow);
   }
 
-  if (rows.length >= 1) rows[0][25] = formatter.text(masterBL);
-  if (houseBL) {
-    if (rows.length >= 2) {
-      rows[1][25] = formatter.text(houseBL);
-    } else {
-      const blankRow = new Array(29).fill(formatter.blank);
-      blankRow[25] = formatter.text(houseBL);
-      rows.push(blankRow);
-    }
-  }
+  applyMasterHouseBL(rows, masterBL, houseBL, 25, 29, formatter);
 
   return rows;
 }
@@ -314,25 +315,17 @@ function buildExportCopyRows(s, formatter) {
       formatter.num(s.insurance, 2), // 11 INSURANCE
       formatter.blank, // 12 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 13 NO. INVOICE / DEL.NOTE
-      formatter.text(s.voyage), // 14 VESSEL -> nomor pengangkut
+      formatter.text(vesselNameForTemplate(s)), // 14 VESSEL (lihat catatan di atas)
       formatter.packageNum(s.package), // 15 PACKAGE
     ];
-    if (idx > 0) FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
+    if (idx > 0)
+      FIRST_ROW_ONLY_IDX.forEach((i) => (cols[i] = formatter.blank));
     return cols;
   }
 
   const rows = items.map((it, idx) => buildRowForItem(it, idx));
 
-  if (rows.length >= 1) rows[0][12] = formatter.text(masterBL);
-  if (houseBL) {
-    if (rows.length >= 2) {
-      rows[1][12] = formatter.text(houseBL);
-    } else {
-      const blankRow = new Array(16).fill(formatter.blank);
-      blankRow[12] = formatter.text(houseBL);
-      rows.push(blankRow);
-    }
-  }
+  applyMasterHouseBL(rows, masterBL, houseBL, 12, 16, formatter);
 
   return rows;
 }
@@ -352,6 +345,33 @@ function buildExcelCopyText(s) {
   return buildExcelCopyRows(s, clipboardFormatter)
     .map((cols) => cols.map(tsvField).join("\t"))
     .join("\n");
+}
+
+/* Salin DUA format sekaligus: HTML (berformat) + teks polos.
+   Email client (Outlook/Gmail) mengambil versi HTML sehingga hasil paste
+   langsung rapi & tebal di tempatnya; aplikasi teks polos mengambil versi
+   teks. Kalau browser tidak mendukung ClipboardItem (Safari lama, atau
+   halaman diakses lewat http:// non-secure), otomatis mundur ke salin
+   teks biasa — isinya tetap lengkap, cuma tanpa format. */
+async function copyRichToClipboard(html, text) {
+  if (
+    navigator.clipboard &&
+    window.isSecureContext &&
+    typeof ClipboardItem !== "undefined"
+  ) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([text], { type: "text/plain" }),
+        }),
+      ]);
+      return true;
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  return copyToClipboard(text);
 }
 
 async function copyToClipboard(text) {

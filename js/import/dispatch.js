@@ -1,42 +1,43 @@
 "use strict";
 
 /* ==================================================================
-   DISPATCH FILE IMPORT: deteksi tipe file yang dipilih (PDF PIB/CEISA,
-   PDF Packing List, PDF Commercial Invoice, Excel format BC, Excel
-   format CIPL) lalu panggil parser yang sesuai. Menyatukan semua modul
-   import/*.js di atas.
+   DISPATCH FILE IMPORT: deteksi tipe file lalu panggil parser yang
+   sesuai. Yang dikenali sekarang:
+     - PDF PIB BC 2.0            -> pdf.js       (Jadwal Import)
+     - PDF PEB BC 3.0            -> pdf-peb.js   (Jadwal Export)  [BARU]
+     - PDF Commercial Invoice /
+       Packing List (CIPL)       -> pdf-cipl.js  (dua-duanya)
+     - Excel draft CEISA (BC)    -> excel-bc.js
+     - Excel CIPL supplier       -> excel-cipl.js
 
-   Boleh pilih LEBIH DARI 1 file sekaligus sekarang (mis. PL.pdf +
-   CI.pdf pasangannya) -- kalau PERSIS 2 file terpilih dan keduanya
-   sama-sama terdeteksi sbg PDF CIPL (1 Packing List + 1 Commercial
-   Invoice), hasilnya digabung OTOMATIS lewat mergeItemSources yang
-   sama dipakai excel-cipl.js (harga & qty dari CI, netto/bruto dari
-   PL, field yang kosong di satu sisi diisi dari sisi lain) -- persis
-   seperti sheet CI+PL digabung otomatis dalam 1 file Excel.
+   Boleh pilih LEBIH DARI 1 file sekaligus: kalau yang terpilih adalah
+   pasangan CI + PL (mau file PDF terpisah, mau Excel), hasilnya digabung
+   otomatis lewat mergeItemSources() — harga & qty dari CI, netto/bruto
+   dari PL. Sejak pdf-cipl.js membaca PER HALAMAN, satu file PDF yang
+   memuat CI dan PL sekaligus juga sudah tergabung sendiri tanpa perlu
+   memilih dua file.
 ================================================================== */
 
-// Item mentah dari PDF CIPL (name/qty/satuan/harga/netto/bruto, TANPA
-// hsCode -- dokumen jenis ini biasanya tidak mencantumkannya) diubah ke
-// bentuk item form yang sama dipakai semua sumber import lain.
-function ciplPdfRawItemsToFinalItems(rawItems) {
+// Item mentah CIPL (name/qty/satuan/harga/netto/bruto) -> bentuk item
+// form yang sama dipakai semua sumber import lain.
+function ciplRawItemsToFinalItems(rawItems) {
   return (rawItems || []).map((it) => ({
     ...newItem(),
     namaBarang: it.name || "",
-    hsCode: "",
-    jenisBarang: "Bahan Baku",
+    hsCode: normalizeHsCodeInput(it.hsCode),
+    jenisBarang: activeMode === "export" ? "Barang Jadi" : "Bahan Baku",
     qty: it.qty != null ? it.qty : 0,
     satuan: it.satuan || "",
     harga: it.harga != null ? it.harga : 0,
     netto: it.netto != null ? it.netto : 0,
     bruto: it.bruto != null ? it.bruto : 0,
+    package: it.package || "",
   }));
 }
 
-// Field dari 2 hasil parse PDF CIPL (PL & CI) digabung: utk tiap field,
-// pakai yang PERTAMA tidak kosong (urutan a lalu b) -- aman krn field yg
-// SAMA-SAMA terisi di kedua sisi (mis. invoice/consignee) memang nilainya
-// sama persis (1 shipment yang sama), dan yang cuma ada di salah satu
-// sisi (mis. incoterm cuma di CI) otomatis terisi dari situ.
+// Gabung field dari 2 hasil parse CIPL: pakai yang PERTAMA tidak kosong.
+// Aman karena field yang sama-sama terisi di kedua sisi (invoice,
+// consignee, dst) memang bernilai sama persis — 1 shipment yang sama.
 function mergeCiplPdfFields(a, b) {
   const out = {};
   new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach((k) => {
@@ -50,32 +51,30 @@ async function parseOneImportFile(file) {
     file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
   if (isPdf) {
     const { text, pagesItems } = await extractPdfText(file);
-    // Judul dokumen dicek DULUAN (murah, cuma cek teks) sebelum nyoba
-    // parser PIB yang jauh lebih berat -- PDF Packing List/Commercial
-    // Invoice sama sekali bukan format PIB, jadi tidak perlu dipaksakan
-    // lewat parsePibPdfText dulu baru gagal.
-    const ciplKind = detectCiplPdfKind(text);
-    if (ciplKind) return parseCiplPdfText(text, pagesItems);
+
+    // Judul dokumen dicek DULUAN (murah, cuma cek teks) sebelum mencoba
+    // parser PIB/PEB yang jauh lebih berat.
+    if (detectCiplPdfKind(text)) return parseCiplPdfText(text, pagesItems);
+
+    // PEB dicek sebelum PIB: keduanya dokumen bea cukai berformat mirip,
+    // tapi judulnya jelas berbeda ("EKSPOR" vs "IMPOR").
+    if (isPebPdfText(text)) return parsePebPdfText(text, pagesItems);
 
     const pib = parsePibPdfText(text, pagesItems);
     if (!pib.isPib && !pib.fields.docNo && !pib.items.length) {
       throw new Error(
-        `"${file.name}" sepertinya bukan format PIB BC 2.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil scan/gambar).`,
+        `"${file.name}" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil scan/gambar).`,
       );
     }
     return pib;
   }
 
+  await ensureXLSX();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const hasBcFormat = wb.Sheets["HEADER"] && wb.Sheets["BARANG"];
   if (hasBcFormat) return parseBcExcelWorkbook(wb);
 
-  // Bukan format BC bawaan aplikasi -- dicoba sbg CIPL (sheet CI/PL
-  // terpisah, sheet gabungan, atau nama lain yg tidak dikenali sekalipun,
-  // krn parseCiplWorkbook sendiri sudah punya fallback scan-semua-sheet).
-  // Cuma dianggap GAGAL kalau benar-benar tidak ketemu barang MAUPUN
-  // field kunci apa pun.
   const cipl = parseCiplWorkbook(wb);
   if (!cipl.items.length && !cipl.fields.invoice && !cipl.fields.party) {
     throw new Error(
@@ -83,6 +82,40 @@ async function parseOneImportFile(file) {
     );
   }
   return cipl;
+}
+
+// Dua hasil CIPL (CI & PL, file terpisah) -> satu hasil gabungan.
+function combineCiplPair(results) {
+  const sources = results.map((r) => r.rawItems || r.items || []);
+  const merged = mergeItemSources(sources);
+  // Bruto ditangani TERPISAH: dari dua file yang digabung, biasanya cuma
+  // Packing List yang memuat berat kotor. Totalnya diambil dari sisi yang
+  // punya angka terbesar (sisi CI umumnya kosong), lalu dipasang di
+  // barang pertama — aturan yang sama dipakai semua parser lain.
+  const totalBruto = Math.max(
+    ...sources.map((list) =>
+      list.reduce((sum, it) => sum + (Number(it.bruto) || 0), 0),
+    ),
+    0,
+  );
+  applyTotalBrutoToFirstItem(merged, totalBruto);
+  const combinedNotes = [
+    "Digabung otomatis dari 2 file yang dipilih sekaligus (Commercial Invoice + Packing List) — harga & qty dari CI, berat dari PL.",
+    ...results.flatMap((r) =>
+      (r.notes || []).filter((n) => !/pasangannya/i.test(n)),
+    ),
+  ];
+  const mergedFields = mergeCiplPdfFields(results[0].fields, results[1].fields);
+  return {
+    fields: mergedFields,
+    items: ciplRawItemsToFinalItems(merged),
+    notes: [...new Set(combinedNotes)],
+    modeHint: guessCiplModeFromPorts(
+      mergedFields.origin,
+      mergedFields.destination,
+    ),
+    source: "cipl-pdf",
+  };
 }
 
 $("#fileImportExcel").addEventListener("change", async (e) => {
@@ -97,59 +130,37 @@ $("#fileImportExcel").addEventListener("change", async (e) => {
     const results = [];
     for (const f of files) results.push(await parseOneImportFile(f));
 
-    let parsed;
-    const isCiplPdfPair =
+    const isCiplPair =
       results.length === 2 &&
-      results.every(
-        (r) => r.source === "cipl-pdf-ci" || r.source === "cipl-pdf-pl",
-      ) &&
+      results.every((r) => /^cipl/.test(r.source || "")) &&
       results[0].source !== results[1].source;
 
-    if (isCiplPdfPair) {
-      const merged = mergeItemSources([
-        results[0].rawItems || [],
-        results[1].rawItems || [],
-      ]);
-      const combinedNotes = [
-        "Digabung otomatis dari 2 file PDF (Packing List + Commercial Invoice) yang dipilih sekaligus -- harga & qty dari Commercial Invoice, berat dari Packing List.",
-        ...results.flatMap((r) =>
-          (r.notes || []).filter((n) => !/pasangannya/i.test(n)),
-        ),
-      ];
-      parsed = {
-        fields: mergeCiplPdfFields(results[0].fields, results[1].fields),
-        items: ciplPdfRawItemsToFinalItems(merged),
-        // Catatan disclaimer umum ("best-effort", dst) SAMA persis di kedua
-        // hasil parse individual -- dihilangkan duplikatnya biar tidak
-        // nongol 2x di daftar catatan.
-        notes: [...new Set(combinedNotes)],
-        modeHint: "import",
-        source: "cipl-pdf",
-      };
+    let toApply;
+    if (isCiplPair) {
+      toApply = [combineCiplPair(results)];
     } else {
-      parsed = results[0];
-      if (parsed.rawItems) {
-        parsed = {
-          ...parsed,
-          items: ciplPdfRawItemsToFinalItems(parsed.rawItems),
-        };
-      }
-      if (results.length > 1) {
-        parsed = {
-          ...parsed,
-          notes: [
-            `${results.length} file dipilih sekaligus, tapi cuma bisa digabung otomatis utk pasangan PDF Packing List + Commercial Invoice -- hanya "${files[0].name}" yang diproses, sisanya diabaikan.`,
-            ...(parsed.notes || []),
-          ],
-        };
-      }
+      // Beberapa file berbeda jenis (mis. PIB + CIPL) diterapkan
+      // BERURUTAN — aturan prioritas sumber di apply-to-form.js yang
+      // menentukan field mana boleh menimpa field mana, jadi tidak perlu
+      // lagi membuang file selain yang pertama seperti versi lama.
+      toApply = results.map((r) =>
+        r.rawItems ? { ...r, items: ciplRawItemsToFinalItems(r.rawItems) } : r,
+      );
     }
 
-    const { summary, notes } = applyImportedBcData(parsed);
-    showImportNotes(summary, notes);
+    const summaries = [];
+    let allNotes = [];
+    toApply.forEach((parsed) => {
+      const { summary, notes } = applyImportedBcData(parsed);
+      summaries.push(summary);
+      allNotes = allNotes.concat(notes);
+    });
+    allNotes = [...new Set(allNotes)];
+
+    showImportNotes(summaries.join(" "), allNotes);
     showToast(
-      `${summary}${notes.length ? " Ada catatan yang perlu dicek di atas form." : ""}`,
-      notes.length ? "warning" : "success",
+      `${summaries.join(" ")}${allNotes.length ? " Ada catatan yang perlu dicek di atas form." : ""}`,
+      allNotes.length ? "warning" : "success",
     );
   } catch (err) {
     console.error(err);

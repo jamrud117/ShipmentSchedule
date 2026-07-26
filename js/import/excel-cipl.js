@@ -139,11 +139,23 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
     blankStreak = 0;
     if (/^TOTAL\b/i.test(rawName) || /^Dimension/i.test(rawName)) break;
     if (/^HS CODE\s*:/i.test(rawName)) continue; // baris catatan, bukan barang
+    // Baris referensi PO ("Items of PO DDI20260708") bukan barang.
+    if (/^Items?\s+of\s+PO\b/i.test(rawName)) continue;
 
     const parts = [];
-    if (colMap.item !== undefined) parts.push(gridStrAt(grid, r, colMap.item));
-    if (colMap.description !== undefined)
+    // PERBAIKAN BUG (requirement A: "Nama item untuk CIPL Excel diambil
+    // dari kolom Goods Description, bukan dari kolom yang isinya 'Items
+    // of PO...' dst"). Di templat Dynamic Design, kolom "Item" (paling
+    // kiri) TIDAK berisi nama barang sama sekali -- isinya nomor PO yang
+    // di-merge menaungi seluruh blok, mis. "Items of PO\nDDI20260708".
+    // Kalau kolom "Goods Descriptions" ADA, dialah satu-satunya sumber
+    // nama; kolom "Item" cuma dipakai kalau kolom deskripsi memang tidak
+    // ada di templat itu (varian supplier lain).
+    if (colMap.description !== undefined) {
       parts.push(gridStrAt(grid, r, colMap.description));
+    } else if (colMap.item !== undefined) {
+      parts.push(gridStrAt(grid, r, colMap.item));
+    }
     if (colMap.specification !== undefined)
       parts.push(gridStrAt(grid, r, colMap.specification));
     if (colMap.brand !== undefined)
@@ -190,6 +202,16 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
     const bruto =
       colMap.bruto !== undefined ? gridNumAt(grid, r, colMap.bruto) : null;
 
+    // Kolom CBM (mis. "94 CM x 84 CM x 80 CM") -> Kemasan per barang
+    // mode Export ("94*84*80", dipakai parsePackageDims()/computeItemCbm()
+    // di core/helpers.js buat hitung meter kubiknya). Kosong kalau
+    // sheet ini tidak punya kolom CBM atau isinya bukan 3 angka.
+    let packageText = "";
+    if (colMap.cbm !== undefined) {
+      const dims = parsePackageDims(gridStrAt(grid, r, colMap.cbm));
+      if (dims) packageText = `${dims.p}*${dims.l}*${dims.t}`;
+    }
+
     items.push({
       name,
       hsCode: normalizeHsCode(hsCodeVal),
@@ -198,6 +220,7 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
       harga,
       netto,
       bruto,
+      package: packageText,
     });
   }
   return items;
@@ -240,10 +263,13 @@ function parseCiplWorkbook(wb) {
     grid: sheetToGrid(wb, n),
   }));
 
-  // Sheet tambahan opsional (mis. nama Korea "입고지" di templat supplier
-  // tertentu) berisi MAWB/HAWB — dicek kalau ADA, dilewati kalau tidak.
+  // Sheet tambahan opsional berisi info yang TIDAK selalu ada di sheet
+  // CI/PL utama: MAWB/HAWB (mis. nama Korea "입고지" di templat supplier
+  // tertentu), dan LCL/FCL (biasanya di sheet "SI"/"Shipping
+  // Instruction" -- ketemu nyata di templat Dynamic Design, field
+  // "Volume"). Dicek kalau ADA, dilewati kalau tidak.
   const extraSheetName = allNames.find((n) =>
-    /입고지|receiving|warehouse/i.test(n),
+    /입고지|receiving|warehouse|shipping\s*instruction|^si$/i.test(n),
   );
   const extraGrid = extraSheetName ? sheetToGrid(wb, extraSheetName) : [];
   const findLabelValueSameRow = (grid, re, colOffset = 1) => {
@@ -252,13 +278,30 @@ function parseCiplWorkbook(wb) {
   };
   const masterBL = findLabelValueSameRow(extraGrid, /MAWB/i);
   const houseBL = findLabelValueSameRow(extraGrid, /HAWB/i);
+  // LCL/FCL: dicari di beberapa kolom ke kanan dari label "Volume"
+  // (BUKAN cuma 1 kolom sesudahnya) karena templat SI biasanya punya
+  // kolom ":" pemisah di antara label & nilainya (mis. "Volume | : |
+  // LCL" -- nilainya di kolom+2, bukan+1). Lebih tahan drpd nebak 1
+  // offset tetap, sama seperti findDateOnSameRow di bawah.
+  const findMuatanNearLabel = (grid, re) => {
+    const pos = findGridCell(grid, re);
+    if (!pos) return "";
+    for (let c = pos.c + 1; c <= pos.c + 3; c++) {
+      const v = gridStrAt(grid, pos.r, c);
+      if (/^FCL$/i.test(v)) return "FCL";
+      if (/^LCL$/i.test(v)) return "LCL";
+    }
+    return "";
+  };
+  const muatan = findMuatanNearLabel(extraGrid, /Volume/i);
 
   // ---- field header: dicoba di tiap sheet utama, dipakai hasil
   // PERTAMA yang ketemu (biasanya semua sheet CI/PL punya salinan header
   // yang sama, jadi cukup ambil dari yang mana saja ketemu duluan).
   let invoiceNo = "",
     invoiceDate = "",
-    party = "",
+    seller = "",
+    consignee = "",
     etd = "",
     destination = "",
     voyage = "",
@@ -273,7 +316,9 @@ function parseCiplWorkbook(wb) {
         invoiceDate = findDateOnSameRow(grid, inv.pos, inv.pos.c + 1);
       }
     }
-    if (!party) party = findFieldValue(grid, CIPL_FIELD_LABELS.consignee).value;
+    if (!consignee)
+      consignee = findFieldValue(grid, CIPL_FIELD_LABELS.consignee).value;
+    if (!seller) seller = findFieldValue(grid, CIPL_FIELD_LABELS.seller).value;
     if (!etd) {
       const depPos = findGridCell(grid, CIPL_FIELD_LABELS.departureDate);
       if (depPos)
@@ -294,9 +339,13 @@ function parseCiplWorkbook(wb) {
     if (!voyage) {
       // "Carrier" (templat gabungan) atau baris Vessel/Flight (templat
       // lama) -- dua-duanya berarti nama kapal/pengangkut.
-      voyage =
+      const voyRaw =
         findFieldValue(grid, /^Carrier\s*$/i).value ||
         findFieldValue(grid, CIPL_FIELD_LABELS.vesselFlight).value;
+      // Sel Vessel/Flight yang BELUM diisi sering menyisakan placeholder
+      // hasil format cell ("0" dari sel numerik kosong, "00:00:00" dari
+      // sel bertipe jam) -- itu bukan nama kapal/penerbangan.
+      voyage = /^(0|00:00:00|0:00:00|-)$/.test(voyRaw.trim()) ? "" : voyRaw;
     }
     if (!incoterm || !packageText) {
       const totalPos = findGridCell(grid, CIPL_FIELD_LABELS.totalBoxLine);
@@ -348,6 +397,7 @@ function parseCiplWorkbook(wb) {
     harga: it.harga != null ? it.harga : 0,
     netto: it.netto != null ? it.netto : 0,
     bruto: it.bruto != null ? it.bruto : 0,
+    package: it.package || "",
   }));
 
   if (!items.length) {
@@ -380,24 +430,43 @@ function parseCiplWorkbook(wb) {
     'Hasil baca CIPL Excel ini best-effort — mohon cek ulang semua field sebelum simpan, terutama moda transportasi (disimpulkan dari kata "AIRPORT" di asal/tujuan), HS Code, dan berat kotor per barang. Freight/Insurance/NDPBM/BM/PPN/PPH tidak ada di dokumen CIPL — isi manual di tab Kepabeanan.',
   );
 
+  // Bruto: satu angka TOTAL di barang pertama (lihat penjelasan di
+  // applyTotalBrutoToFirstItem, js/core/num-format.js).
+  // CIPL Excel tidak punya satu sel "total berat kotor" yang baku antar
+  // templat supplier — jadi totalnya dijumlah dari kolom G.W. per baris
+  // yang sempat terbaca (ditangani di dalam fungsinya saat argumen kedua
+  // null), lalu dipasang di barang pertama.
+  applyTotalBrutoToFirstItem(items, null);
+
+  const modeHint = guessCiplModeFromPorts(origin, destination);
   return {
     fields: {
       invoice: invoiceNo,
       docDate: invoiceDate,
-      party,
+      // party dipilih sesuai ARAH pengiriman (import -> seller, export ->
+      // consignee). seller & consignee tetap dikirim mentah supaya
+      // apply-to-form.js bisa memilih ulang berdasarkan mode form yang
+      // sedang terbuka, bukan cuma tebakan dari pelabuhan.
+      party: pickCiplParty(seller, consignee, modeHint || activeMode),
+      seller,
+      consignee,
       masterBL,
       houseBL,
-      origin,
-      destination,
+      origin: portDisplay(origin),
+      destination: portDisplay(destination),
       incoterm,
       transport,
       voyage,
       etd,
       package: packageText,
+      muatan,
     },
     items,
     notes,
-    modeHint: "import",
+    // Dokumen CIPL sama saja dipakai utk Import & Export, jadi tidak
+    // bisa di-hardcode -- ditebak dari Port of Loading vs Final
+    // Destination (lihat guessCiplModeFromPorts di cipl-common.js).
+    modeHint,
     source: "cipl",
   };
 }

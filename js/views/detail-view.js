@@ -23,6 +23,14 @@ function itemFacilitiesCellHtml(it) {
   return lines.join("") || `<span class="text-muted">—</span>`;
 }
 
+// Cell kolom "Kemasan" di tabel Daftar Barang (detail view, read-only).
+// Cuma teks apa adanya sekarang — hasil hitung CBM-nya (mode Export)
+// sudah punya kolom sendiri (lihat itemRows di buildDetailHtml), tidak
+// digabung lagi di sini.
+function detailPackageCellHtml(it) {
+  return escapeHtml(dispVal(it.package));
+}
+
 // Daftar terminal transit (read-only) untuk detail view. Kosong sama
 // sekali kalau route_type = "direct" (tidak ada perubahan tampilan).
 function buildDetailStopsHtml(s) {
@@ -38,7 +46,7 @@ function buildDetailStopsHtml(s) {
           <div class="detail-stop-name">${escapeHtml(dispVal(st.terminal))}</div>
           <div class="detail-stop-meta">
             <i class="bi ${air ? "bi-airplane" : "bi-water"}"></i> ${escapeHtml(dispVal(st.vessel))}
-            ${hasMeaningfulValue(st.voyage) ? " · " + (air ? "No. Flight " : "No. Voyage ") + escapeHtml(st.voyage) : ""}
+            ${hasMeaningfulValue(st.voyage) ? " · " + (voyageNoun(air ? "udara" : "laut") + " ") + escapeHtml(st.voyage) : ""}
             &nbsp;•&nbsp; Tiba: <b>${fmtDate(st.arrivalDate)}</b>
             &nbsp;·&nbsp; Berangkat: <b>${fmtDate(st.departureDate)}</b>
           </div>
@@ -69,6 +77,8 @@ function buildDetailHtml(s) {
       <td class="text-center">${fmtUSD(it.harga)}</td>
       <td class="text-center">${fmtNum(it.netto)} Kg</td>
       <td class="text-center">${fmtNum(it.bruto)} Kg</td>
+      <td class="text-center">${detailPackageCellHtml(it)}</td>
+      ${activeMode === "export" ? `<td class="text-center">${computeItemCbm(it)}</td>` : ""}
       <td class="text-center">${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}</td>
     </tr>`,
     )
@@ -137,19 +147,32 @@ function buildDetailHtml(s) {
     <div class="subsection-title"><i class="bi bi-compass"></i> Transportasi &amp; Rute</div>
     <div class="info-grid">
       ${fieldPair("Moda Transportasi", s.transport === "udara" ? "Udara" : "Laut")}
-      ${fieldPair(s.transport === "udara" ? (isTransitRoute(s) ? "Maskapai (Leg Terakhir)" : "Maskapai / Pesawat") : isTransitRoute(s) ? "Vessel (Leg Terakhir)" : "Vessel", escapeHtml(dispVal(s.vessel)))}
-      ${fieldPair(s.transport === "udara" ? "No. Flight" : "No. Voyage", escapeHtml(dispVal(s.voyage)))}
+      ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? " (Leg Terakhir)" : ""), escapeHtml(dispVal(s.vessel)))}
+      ${fieldPair(voyageNoun(s.transport), escapeHtml(dispVal(s.voyage)))}
       ${fieldPair("Kontainer", escapeHtml(dispVal(s.container)))}
       ${fieldPair("Jenis Muatan", escapeHtml(s.muatan || "—"))}
       ${fieldPair("Tipe Rute", isTransitRoute(s) ? `Transit (${routeStopList(s).length} Terminal Singgah)` : "Direct")}
-      ${fieldPair(lbl.origin, escapeHtml(dispVal(s.origin)))}
-      ${fieldPair(lbl.destination, escapeHtml(dispVal(s.destination)))}
+      ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(s.origin)))}
+      ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(s.destination)))}
       ${fieldPair("ETD", fmtDate(s.etd))}
       ${fieldPair("ETA", fmtDate(s.eta))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
     </div>
     ${buildDetailStopsHtml(s)}
-    ${hasMeaningfulValue(s.notes) ? `<div class="form-text-note mb-3"><i class="bi bi-sticky"></i> Catatan: ${escapeHtml(s.notes)}</div>` : ""}
+    ${(() => {
+      const log = normalizeNotesLog(s.notesLog, s.notes);
+      if (!log.length) return "";
+      return `<div class="detail-notes mb-3">
+        <div class="detail-notes-head"><i class="bi bi-chat-left-text"></i> Kronologi & Catatan (${log.length})</div>
+        ${[...log]
+          .reverse()
+          .map(
+            (e) =>
+              `<div class="card-note"><div class="card-note-stamp">${escapeHtml(fmtNoteStamp(e.ts))}</div><div class="card-note-text">${escapeHtml(e.text)}</div></div>`,
+          )
+          .join("")}
+      </div>`;
+    })()}
 
     <div class="subsection-title"><i class="bi bi-boxes"></i> Daftar Barang</div>
     <div class="item-table-wrap mb-2">
@@ -157,18 +180,19 @@ function buildDetailHtml(s) {
         <thead><tr>
           <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th><th>Fasilitas</th>
           <th class="text-center">Qty</th><th class="text-center">Satuan</th><th class="text-center">Harga/Unit</th>
-          <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">Subtotal</th>
+          <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">Kemasan</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
     </div>
     <div class="item-table-foot item-table-foot--split mb-3">
-      <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
+      <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
       <div class="foot-totals">
         <div>Total Qty: <b>${fmtNum(calc.totalQty)}</b></div>
         <div>Total Netto: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
         <div>Total Bruto: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
         <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>
+        ${activeMode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
       </div>
     </div>
 

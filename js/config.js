@@ -16,11 +16,14 @@ const supabaseClient = window.supabase.createClient(
 /* ==================================================================
    CONSTANTS
 ================================================================== */
+// Label di sini cuma default; label yang BENAR-BENAR tampil dihitung
+// per mode oleh statusLabel() di js/core/status.js (ARRIVED utk Import,
+// DELIVERED utk Export, DELAY utk keduanya).
 const STATUS_META = {
   process: { label: "PROCESS", class: "status-process" },
   transit: { label: "IN TRANSIT", class: "status-transit" },
   arrived: { label: "ARRIVED", class: "status-arrived" },
-  delayed: { label: "DELAYED", class: "status-delayed" },
+  delayed: { label: "DELAY", class: "status-delayed" },
 };
 
 const MODE_LABELS = {
@@ -35,6 +38,10 @@ const MODE_LABELS = {
     factoryTime: "Jam In Factory",
     origin: "Pelabuhan Asal",
     destination: "Pelabuhan Tujuan",
+    // Versi moda udara — dipakai applyTransportLabels() (requirement B:
+    // "kalau moda udara, ganti jadi Terminal Asal/Terminal Tujuan").
+    originAir: "Terminal Asal",
+    destinationAir: "Terminal Tujuan",
     actual: "Actual Delivery",
     showDuty: true,
     modalTitleNew: "Tambah Jadwal Import",
@@ -52,6 +59,8 @@ const MODE_LABELS = {
     factoryTime: "Jam Stuffing",
     origin: "Pelabuhan Muat",
     destination: "Pelabuhan Tujuan",
+    originAir: "Terminal Muat",
+    destinationAir: "Terminal Tujuan",
     actual: "Actual Shipped Date",
     showDuty: false,
     modalTitleNew: "Tambah Jadwal Export",
@@ -60,7 +69,41 @@ const MODE_LABELS = {
   },
 };
 
-const JENIS_OPTIONS = ["Bahan Baku", "Barang Modal", "Barang Penolong"];
+// "Barang Jadi" ditambahkan untuk mode Export (requirement C) — barang
+// yang diekspor DDI adalah hasil produksi jadi, bukan bahan baku.
+/* ------------------------------------------------------------------
+   LABEL SARANA PENGANGKUT & PELABUHAN MENGIKUTI MODA (requirement B)
+
+   Dipakai BERSAMA oleh form (applyTransportLabels), kartu dashboard,
+   dan modal Detail — dulu tiap tempat menuliskan labelnya sendiri-
+   sendiri, sehingga form sudah benar ("Nama Voyager" untuk moda laut)
+   tapi kartu & modal Detail masih menulis "Vessel". Satu sumber di sini
+   supaya tidak bisa lagi beda antar layar.
+
+   Aturannya:
+     moda LAUT  -> "Voyager"  + "No. Voyage"
+     moda UDARA -> "Vessel"   + "No. Flight"   (BUKAN "Maskapai")
+------------------------------------------------------------------ */
+function vesselNoun(transport) {
+  return transport === "udara" ? "Vessel" : "Voyager";
+}
+function voyageNoun(transport) {
+  return transport === "udara" ? "No. Flight" : "No. Voyage";
+}
+// "Pelabuhan Asal" -> "Terminal Asal" saat moda udara.
+function portNoun(which, transport, mode) {
+  const lbl = MODE_LABELS[mode || activeMode];
+  const air = transport === "udara";
+  if (which === "origin") return air ? lbl.originAir : lbl.origin;
+  return air ? lbl.destinationAir : lbl.destination;
+}
+
+const JENIS_OPTIONS = [
+  "Bahan Baku",
+  "Barang Modal",
+  "Barang Penolong",
+  "Barang Jadi",
+];
 
 // Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap).
 // "Lainnya" selalu jadi opsi terakhir — nilainya bebas (jenisLainnya).
