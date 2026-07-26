@@ -279,6 +279,11 @@ function applyModeLabels() {
   $("#lblAddBtn").textContent = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
   $("#lblArrivedStat").textContent = lbl.arrivedStat;
+  // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog
+  // konfirmasi — supaya tidak perlu ditekan dulu untuk tahu apa yang
+  // akan terhapus.
+  $("#lblDeleteAll").textContent =
+    activeMode === "import" ? "Hapus Semua Import" : "Hapus Semua Export";
   // Pilihan filter status ikut section aktif (requirement D).
   const cur = $("#filterStatus").value;
   $("#filterStatus").innerHTML =

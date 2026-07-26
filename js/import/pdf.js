@@ -480,7 +480,17 @@ function parsePibPdfText(text, pagesItems) {
   const packageTextMatch = berat27to30Window.match(
     /^(\d+\s+(?:PACKAGE|PACKAGES|KEMASAN|COLLI|CARTON|CARTONS|KOLI|PALLET|PALLETS|CRATE|CRATES|DRUM|DRUMS|BOX|BOXES)\b[^\n]*)$/im,
   );
-  const packageDefault = packageTextMatch ? packageTextMatch[1].trim() : "";
+  // Field 28 sering memuat uraian kemasan yang panjang:
+  //   "4 BOX, WOODEN, NATURAL WOOD, ORDINARY,"
+  // Yang dibutuhkan kotak Total Package hanya JUMLAH + JENIS-nya
+  // ("4 BOX"); sisanya keterangan bahan yang justru bikin kotaknya
+  // meluber dan koma menggantung ikut tersimpan.
+  const packageDefault = (() => {
+    const raw = packageTextMatch ? packageTextMatch[1].trim() : "";
+    if (!raw) return "";
+    const m = /^([\d.,]+)\s+([A-Za-z]+)/.exec(raw);
+    return m ? `${m[1]} ${m[2].toUpperCase()}` : raw.replace(/[,\s]+$/, "");
+  })();
   // Angka berat: baris APA PUN dlm jendela ini yg diakhiri PERSIS 2 angka
   // desimal (kotor lalu bersih) -- baik itu masih nempel di baris kemasan
   // (format lama, 1 peti) maupun di baris kode peti (format baru, >1 peti).
@@ -533,16 +543,50 @@ function parsePibPdfText(text, pagesItems) {
       "PPJK",
       "NAMA SARANA",
     ];
-    const candidate = w
-      .split("\n")
-      .map((l) => l.trim())
-      .find(
+    /* Nama sarana pengangkut selalu TEPAT DI BAWAH baris moda
+       ("LAUT 1" / "UDARA 4"), lalu disusul kode bendera, nama negara,
+       dan tanggal perkiraan tiba:
+
+           LAUT 1
+           BELAWAN          <- nama sarana
+           HK               <- kode bendera
+           HONG KONG SAR    <- negara
+           28-07-2026       <- perkiraan tiba
+
+       Aturan lama mencari baris huruf kapital mana pun yang MENGANDUNG
+       SPASI. Syarat spasi itu menyaring kata nyasar, tapi sekaligus
+       menolak nama kapal SATU KATA — dan itu umum sekali ("BELAWAN",
+       "MERATUS", "TIANJIN"). Sekarang POSISI-nya yang jadi patokan,
+       bukan bentuk namanya. */
+    const barisW = w.split("\n").map((l) => l.trim());
+    const idxModa = barisW.findIndex((l) =>
+      /^(LAUT|UDARA|DARAT)\s+\d+$/.test(l),
+    );
+    if (idxModa !== -1) {
+      for (let i = idxModa + 1; i < Math.min(idxModa + 5, barisW.length); i++) {
+        const cand = barisW[i];
+        if (!cand) continue;
+        if (/^[A-Z]{2}$/.test(cand)) continue; // kode bendera, bukan nama
+        if (/^\d{2}-\d{2}-\d{4}$/.test(cand)) break; // sudah sampai tanggal
+        if (
+          /^[A-Z][A-Z0-9\s./&'-]{2,45}$/.test(cand) &&
+          !EXCLUDE_WORDS.some((word) => cand.includes(word))
+        ) {
+          vessel = cand;
+          break;
+        }
+      }
+    }
+    // Cadangan untuk cetakan yang susunannya berbeda.
+    if (!vessel) {
+      const candidate = barisW.find(
         (l) =>
-          /^[A-Z][A-Z\s./&-]{3,40}$/.test(l) &&
-          l.includes(" ") &&
+          /^[A-Z][A-Z0-9\s./&'-]{3,45}$/.test(l) &&
+          !/^\d/.test(l) &&
           !EXCLUDE_WORDS.some((word) => l.includes(word)),
       );
-    if (candidate) vessel = candidate;
+      if (candidate) vessel = candidate;
+    }
   }
 
   // --- Kontainer & Jenis Muatan (field 27, requirement A: "Kontainer

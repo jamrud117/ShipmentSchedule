@@ -484,8 +484,8 @@ async function handleDeleteAll() {
       btn.innerHTML =
         '<span class="spinner-border spinner-border-sm" role="status"></span> Menghapus...';
       try {
-        // Filter "neq id kosong" dipakai supaya delete berlaku ke SEMUA baris
-        // (Supabase/PostgREST butuh minimal satu filter untuk operasi delete).
+        // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka
+        // yang terhapus — section satunya tidak tersentuh.
         const { error } = await supabaseClient
           .from("shipments")
           .delete()
