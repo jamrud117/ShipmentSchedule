@@ -103,6 +103,23 @@ function autoGrowTextarea(el) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
+// Font body (Inter) dimuat dengan `display=swap` (lihat index.html):
+// browser sengaja menampilkan teks pakai font pengganti DULU supaya
+// tidak ada teks tak terlihat saat font custom masih diunduh, baru
+// ditukar begitu font aslinya siap. Kalau autoGrowTextarea() sempat
+// mengukur scrollHeight SEBELUM pertukaran itu terjadi (mis. baru
+// selesai Bulk Import tepat setelah halaman dibuka), tinggi kotak
+// kepasang berdasar lebar huruf font pengganti -- begitu font asli
+// tukar & teksnya melebar/bertambah baris, tidak ada apa pun yang
+// mengukur ulang, dan baris tambahan itu kepotong diam-diam. Ukur
+// ulang SEMUA kotak nama yang sedang ada di layar begitu font siap.
+if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    document
+      .querySelectorAll("textarea.nama-barang-input")
+      .forEach(autoGrowTextarea);
+  });
+}
 
 function renderItemTable() {
   const tbody = $("#itemTableBody");
@@ -204,6 +221,38 @@ $("#itemTableBody").addEventListener("input", (e) => {
       entry[fac] = e.target.value;
     }
   }
+});
+
+// Enter di kotak isian (bukan tombol) -> pindah ke field YANG SAMA di
+// baris BERIKUTNYA, meniru kebiasaan spreadsheet (Excel/Sheets). Tab
+// sengaja TIDAK ditangani di sini: urutan tabindex alami tabel sudah
+// membawanya ke field sebelahnya tanpa perlu kode tambahan. Dibatasi ke
+// elemen [data-f] saja supaya Enter di tombol (toggle fasilitas, hapus
+// baris) tetap berfungsi seperti biasa (mengeklik tombolnya), bukan
+// malah dibajak untuk pindah fokus. Sengaja tidak menjangkau baris
+// panel fasilitas (SKB/E-COO) -- itu di luar cakupan yang diminta.
+//
+// Shift+Enter DIKECUALIKAN (konvensi umum: WhatsApp/Slack/Discord semua
+// begini) -- dibiarkan lewat tanpa dicegat, supaya perilaku bawaan
+// textarea (baris baru DI DALAM nama barang) tetap bisa dipakai kalau
+// memang perlu. Cuma nama-barang-input yang berupa <textarea>; input
+// baris tunggal lain (qty, hsCode, dst.) memang tidak bisa memuat baris
+// baru sama sekali, jadi pengecualian ini otomatis tidak berpengaruh
+// apa-apa di situ.
+$("#itemTableBody").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  const field = e.target.closest("[data-f]");
+  if (!field) return;
+  e.preventDefault();
+  const row = field.closest("tr");
+  const nextRow = $(
+    `#itemTableBody tr[data-idx="${Number(row.dataset.idx) + 1}"]:not(.item-fac-row)`,
+  );
+  if (!nextRow) return; // sudah baris terakhir, tidak ada tujuan
+  const nextField = nextRow.querySelector(`[data-f="${field.dataset.f}"]`);
+  if (!nextField) return;
+  nextField.focus();
+  if (typeof nextField.select === "function") nextField.select();
 });
 
 $("#itemTableBody").addEventListener("change", (e) => {
