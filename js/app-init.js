@@ -1,5 +1,13 @@
+let boardStampDay = "";
+
 async function initApp() {
   restoreActiveMode();
+  // Bentuk tampilan (Manifes/Kartu) & tanggal papan disiapkan SEBELUM
+  // router() menggambar apa pun, supaya tidak ada kedipan "kartu dulu,
+  // baru berubah jadi tabel" pada gambar pertama.
+  restoreViewMode();
+  syncPresetUI();
+  paintTodayStamps();
   // Daftar referensi UN/LOCODE (requirement C) diisi sekali di awal —
   // dipakai sbg saran isian field Pelabuhan/Terminal Asal & Tujuan.
   const dl = $("#unlocodeList");
@@ -21,6 +29,16 @@ async function initApp() {
   router();
 
   await loadShipments();
+
+  // Tanggal papan diperbarui kalau aplikasi dibiarkan terbuka melewati
+  // tengah malam — kalau tidak, seluruh hitung mundur (H-3, HARI INI)
+  // akan salah satu hari penuh sampai halaman dimuat ulang.
+  setInterval(() => {
+    if (boardStampDay === todayISO()) return;
+    boardStampDay = todayISO();
+    paintTodayStamps();
+    render();
+  }, 60000);
 }
 
 window.addEventListener("DOMContentLoaded", initApp);

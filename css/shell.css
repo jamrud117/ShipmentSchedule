@@ -1,0 +1,412 @@
+/* ==================================================================
+   KERANGKA APLIKASI
+
+   Satu bilah navy tipis di paling atas menampung SEMUA navigasi
+   global: merek, pindah halaman, pindah Import/Export, dan pencarian
+   cepat. Versi lama menumpuk tiga pita penuh (navbar + hero + kartu
+   statistik) sebelum baris data pertama muncul — kira-kira 420 px
+   layar terpakai untuk sesuatu yang cuma dilihat sekali. Di sini
+   tingginya 54 px dan tetap menempel saat menggulir.
+================================================================== */
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1040;
+  height: var(--topbar-h);
+  background: var(--d-900);
+  /* Garis kuningan setipis rambut: satu-satunya hiasan di bilah ini,
+     sekaligus penanda merek yang konsisten dengan aksen sekunder. */
+  border-bottom: 1px solid rgba(199, 154, 62, 0.35);
+  color: #fff;
+}
+.app-topbar-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+}
+
+/* ---- Merek ---- */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #fff;
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: block;
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.brand-name span {
+  color: var(--sec-300);
+}
+.brand:hover .brand-name {
+  color: var(--p-200);
+}
+
+/* ---- Navigasi halaman ---- */
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.site-nav::-webkit-scrollbar {
+  display: none;
+}
+.site-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--topbar-h);
+  padding: 0 12px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease);
+}
+.site-nav-link i {
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+.site-nav-link:hover {
+  color: #fff;
+}
+/* Halaman aktif ditandai garis kuningan di dasar bilah — bacaannya
+   sama seperti tab map: menempel pada tepi, bukan pil melayang. */
+.site-nav-link.active {
+  color: #fff;
+}
+.site-nav-link.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--sec-400);
+}
+
+.topbar-spacer {
+  flex: 1;
+}
+
+/* ---- Pemicu pencarian cepat (Ctrl/⌘ + K) ---- */
+.cmd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--r-sm);
+  color: rgba(255, 255, 255, 0.66);
+  font-size: var(--t-sm);
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.cmd-trigger:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.cmd-trigger kbd {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+  border: 0;
+}
+
+/* ---- Sakelar buku Import / Export --------------------------------
+   Tempatnya di KEPALA PAPAN tiap halaman, bukan di bilah atas.
+
+   Bilah atas berisi navigasi: menekan sesuatu di sana memindahkan
+   pengguna ke halaman lain. Sakelar ini tidak melakukan itu — ia
+   mengganti ISI halaman yang sedang dibuka. Menaruh dua jenis
+   perbuatan yang berbeda dalam satu bilah membuat keduanya sama-sama
+   sulit ditebak.
+
+   Ia berdiri tepat di posisi eyebrow yang dulu bertuliskan "BUKU
+   IMPORT" — informasi yang sekarang dinyatakan sakelarnya sendiri
+   lewat segmen yang menyala. */
+.mode-tabs {
+  display: inline-flex;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 3px;
+  border-radius: var(--r-sm);
+  gap: 2px;
+}
+.mode-tabs--board button {
+  font-size: 0.72rem;
+  padding: 6px 15px;
+}
+
+/* Sisi kanan kepala papan: sakelar buku + blok tanggal, sebaris. */
+.board-aside {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  flex-shrink: 0;
+}
+.mode-tabs button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 13px;
+  border-radius: 5px;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.mode-tabs button:hover:not(.active) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.mode-tabs button.active {
+  background: #fff;
+  color: var(--d-900);
+}
+.mode-tabs button i {
+  margin-right: 5px;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 991px) {
+  .cmd-trigger .cmd-trigger-text,
+  .cmd-trigger kbd {
+    display: none;
+  }
+  .cmd-trigger {
+    padding: 0 9px;
+  }
+}
+@media (max-width: 767px) {
+  .app-topbar-inner {
+    gap: var(--sp-3);
+  }
+  .site-nav-link span {
+    display: none;
+  }
+  .site-nav-link {
+    padding: 0 10px;
+  }
+  .site-nav-link.active::after {
+    left: 8px;
+    right: 8px;
+  }
+  .brand-name {
+    display: none;
+  }
+  /* Di bilah atas dulu labelnya disembunyikan karena ruangnya habis.
+     Di kepala papan ruangnya ada, jadi "Import"/"Export" tetap
+     terbaca penuh — sakelar berisi dua ikon tanpa teks adalah
+     tebak-tebakan. */
+  .mode-tabs--board button {
+    padding: 6px 13px;
+  }
+}
+
+/* ==================================================================
+   PAPAN (board) — kepala halaman
+
+   Menggantikan hero bergambar pelabuhan. Isinya bukan hiasan: judul
+   buku besar yang sedang dibuka, tanggal hari ini (acuan semua
+   hitung mundur di bawahnya), dan metrik yang bisa diklik.
+================================================================== */
+.board {
+  background: var(--d-900);
+  color: #fff;
+  padding: var(--sp-8) 0 var(--sp-6);
+  position: relative;
+}
+/* Garis-garis halus sejajar di tepi kanan — mengutip pita cetak
+   dokumen manifes. Sangat samar; ini satu-satunya tekstur di
+   seluruh aplikasi. */
+.board::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(38%, 460px);
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0 1px,
+    transparent 1px 9px
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000);
+  mask-image: linear-gradient(90deg, transparent, #000);
+}
+.board-inner {
+  position: relative;
+  z-index: 1;
+}
+.board-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+.board-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--t-2xl);
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+  margin: 2px 0 0;
+}
+.board-label {
+  color: var(--sec-300);
+}
+.board-sub {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: var(--t-base);
+  margin-top: 6px;
+}
+.board-sub b {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Tanggal hari ini — acuan semua hitung mundur. Sengaja dibuat
+   sebesar judul dan diberi rel kuningan di kiri supaya terbaca
+   sebagai "sekarang jam berapa di papan ini", bukan tempelan. */
+.board-today {
+  text-align: right;
+  padding-left: var(--sp-4);
+  border-left: 2px solid var(--sec-500);
+  flex-shrink: 0;
+}
+/* Judul & sisi kanan diratakan ke TENGAH, bukan ke dasar: sakelar
+   punya tinggi sendiri, dan meratakan semuanya ke garis dasar membuat
+   sakelarnya tampak melorot dibanding judul. */
+.board-head {
+  align-items: center;
+}
+.board-today-label {
+  font-family: var(--font-board);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.board-today-date {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-lg);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+@media (max-width: 767px) {
+  .board {
+    padding: var(--sp-5) 0 var(--sp-4);
+  }
+  .board-head {
+    align-items: flex-start;
+  }
+  .board-title {
+    font-size: var(--t-xl);
+  }
+  .board-aside {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    width: 100%;
+  }
+  .board-today {
+    text-align: left;
+    border-left: 0;
+    border-top: 2px solid var(--sec-500);
+    padding: 8px 0 0;
+  }
+}
+
+/* ==================================================================
+   FOOTER
+================================================================== */
+.app-footer {
+  margin-top: auto;
+  background: var(--d-900);
+  color: rgba(255, 255, 255, 0.62);
+  padding: var(--sp-8) 0 var(--sp-5);
+  font-size: var(--t-sm);
+  border-top: 1px solid rgba(199, 154, 62, 0.3);
+}
+.footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--t-md);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.footer-brand span {
+  color: var(--sec-300);
+}
+.footer-heading {
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--sec-300);
+  margin-bottom: 8px;
+}
+.footer-text {
+  line-height: 1.65;
+  margin: 0;
+}
+.footer-text b {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+.footer-divider {
+  border-color: rgba(255, 255, 255, 0.12);
+  margin: var(--sp-6) 0 var(--sp-4);
+  opacity: 1;
+}
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: rgba(255, 255, 255, 0.45);
+}

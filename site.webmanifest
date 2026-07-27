@@ -1,0 +1,14 @@
+{
+  "name": "EXIM DDI — Papan Jadwal Import & Export",
+  "short_name": "EXIM DDI",
+  "description": "Pelacakan jadwal import & export internal: ETD, ETA, dokumen kepabeanan, dan daftar barang.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a1b33",
+  "theme_color": "#0a1b33",
+  "lang": "id",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,226 @@
+/* ==================================================================
+   PANEL GESER (detail read-only)
+
+   Detail dulu berupa modal di tengah layar: ia menutupi daftar,
+   dan menutupnya berarti kehilangan tempat. Padahal cara kerja
+   sehari-hari adalah MEMBANDINGKAN — buka satu, lihat, tutup, buka
+   yang berikutnya.
+
+   Panel geser memperbaiki dua hal itu sekaligus: daftar tetap
+   terlihat di kiri, dan ada tombol Sebelumnya/Berikutnya di
+   kepalanya sehingga bisa menelusuri seluruh hasil saringan tanpa
+   menutup panel sama sekali.
+================================================================== */
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1055;
+  background: rgba(10, 27, 51, 0.42);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-3) var(--ease);
+}
+.sheet-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1060;
+  width: min(760px, 96vw);
+  background: var(--surface);
+  box-shadow: var(--sh-panel);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--dur-3) var(--ease);
+  visibility: hidden;
+}
+.sheet.is-open {
+  transform: none;
+  visibility: visible;
+}
+
+.sheet-head {
+  flex-shrink: 0;
+  background: var(--d-900);
+  color: #fff;
+  padding: 13px var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  border-bottom: 1px solid rgba(199, 154, 62, 0.35);
+}
+.sheet-head-main {
+  min-width: 0;
+  flex: 1;
+}
+.panel-eyebrow {
+  color: var(--sec-300);
+  display: block;
+}
+.sheet-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-md);
+  line-height: 1.25;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-nav {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.sheet-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: var(--r-sm);
+  font-size: 0.85rem;
+}
+.sheet-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.sheet-btn:disabled {
+  opacity: 0.32;
+}
+.sheet-pos {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-5);
+}
+.sheet-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--n-50);
+  padding: 11px var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+}
+.sheet-foot .sheet-foot-hint {
+  margin-right: auto;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.sheet-foot kbd {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  background: var(--n-200);
+  color: var(--n-700);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+/* Kepala isi panel (nama pihak + status). */
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-4);
+}
+.detail-badge-mode {
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  background: var(--p-50);
+  color: var(--p-600);
+  border: 1px solid var(--p-100);
+  border-radius: var(--r-xs);
+  padding: 4px 9px;
+}
+
+/* Daftar terminal transit di panel detail. */
+.detail-stop-list {
+  border-left: 2px solid var(--p-100);
+  margin-left: 9px;
+  padding-left: var(--sp-4);
+}
+.detail-stop-row {
+  position: relative;
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+}
+.detail-stop-badge {
+  position: absolute;
+  left: calc(var(--sp-4) * -1 - 11px);
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--p-500);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.detail-stop-name {
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+.detail-stop-meta {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  margin-top: 2px;
+}
+.detail-stop-meta b {
+  color: var(--n-700);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .sheet {
+    width: 100%;
+    top: auto;
+    height: 92vh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    transform: translateY(100%);
+  }
+  .sheet.is-open {
+    transform: none;
+  }
+  .sheet-body {
+    padding: var(--sp-4);
+  }
+  .sheet-pos {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-scrim {
+    transition: none;
+  }
+}

@@ -1,0 +1,216 @@
+/* ==================================================================
+   PENCARIAN CEPAT (Ctrl / ⌘ + K)
+
+   Untuk pengguna yang seharian di aplikasi ini, jalur tercepat ke
+   satu pengiriman bukan "gulir, saring, cari" — tapi mengetik nomor
+   ajunya. Kotak ini mencari lintas Import DAN Export sekaligus
+   (daftar utama hanya menampilkan satu mode), lalu langsung membuka
+   detail atau form editnya.
+
+   Perintah halaman ikut masuk daftar yang sama, jadi tidak perlu
+   diingat sebagai fitur terpisah.
+================================================================== */
+.cmdk-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1070;
+  background: rgba(10, 27, 51, 0.5);
+  display: grid;
+  place-items: start center;
+  padding: 11vh 16px 16px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease);
+}
+.cmdk-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cmdk {
+  width: min(640px, 100%);
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+  border: 1px solid var(--n-300);
+  transform: translateY(-8px);
+  transition: transform var(--dur-2) var(--ease);
+}
+.cmdk-scrim.is-open .cmdk {
+  transform: none;
+}
+
+.cmdk-input-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--n-200);
+}
+.cmdk-input-row > i {
+  color: var(--n-400);
+  font-size: 1rem;
+}
+.cmdk-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  height: 58px;
+  font-size: var(--t-md);
+  color: var(--ink);
+  background: transparent;
+  text-overflow: ellipsis;
+}
+/* PENTING — kekhususan selektor.
+
+   css/system.css dimuat PALING AKHIR dan di sana ada aturan
+   `input[type="text"] { border: 1px solid; border-radius: 9px;
+   background: #fff }` untuk seluruh isian form. Aturan itu menang atas
+   `.cmdk-input { border: 0 }` di atas, jadi kotak ini tetap
+   digambar berbingkai dan bersudut membulat — terlihat seperti kolom
+   isian yang ditempel mengambang di dalam panel, dengan tepi yang
+   seolah terpotong oleh baris pembungkusnya.
+
+   Ditulis `.cmdk .cmdk-input` (0,2,0) supaya menang atas
+   `input[type="text"]` (0,1,1). Sengaja TIDAK memakai !important:
+   yang salah bukan aturan globalnya, melainkan kekhususan di sini
+   yang kurang. */
+.cmdk .cmdk-input,
+.cmdk .cmdk-input:hover,
+.cmdk .cmdk-input:focus,
+.cmdk .cmdk-input:focus-visible {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+.cmdk-input::placeholder {
+  color: var(--n-400);
+}
+.cmdk-esc {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--n-500);
+  background: var(--n-100);
+  border: 1px solid var(--n-200);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.cmdk-list {
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding: 8px;
+}
+.cmdk-group {
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--n-400);
+  padding: 10px 10px 5px;
+}
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 11px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+}
+.cmdk-item.is-cursor {
+  background: var(--p-50);
+}
+.cmdk-item-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-xs);
+  background: var(--n-100);
+  color: var(--n-600);
+  font-size: 0.85rem;
+}
+.cmdk-item.is-cursor .cmdk-item-icon {
+  background: var(--p-500);
+  color: #fff;
+}
+.cmdk-item-main {
+  flex: 1;
+  min-width: 0;
+}
+.cmdk-item-title {
+  font-size: var(--t-base);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-item-sub {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-item-tag {
+  flex-shrink: 0;
+  font-family: var(--font-board);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--n-100);
+  color: var(--n-600);
+}
+.cmdk-item-tag--import {
+  background: var(--p-50);
+  color: var(--p-600);
+}
+.cmdk-item-tag--export {
+  background: var(--sec-50);
+  color: var(--sec-700);
+}
+.cmdk-empty {
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--n-500);
+  font-size: var(--t-sm);
+}
+.cmdk-foot {
+  border-top: 1px solid var(--n-200);
+  background: var(--n-50);
+  padding: 8px 14px;
+  display: flex;
+  gap: var(--sp-4);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  flex-wrap: wrap;
+}
+.cmdk-foot kbd {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  background: var(--n-200);
+  color: var(--n-700);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-right: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmdk-scrim,
+  .cmdk {
+    transition: none;
+  }
+}

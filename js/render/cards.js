@@ -134,7 +134,7 @@ function delayStripHtml(s) {
    bahwa kiriman ini berangkat HARI INI dan perlu dipantau.
    Ikonnya mengikuti moda: pesawat untuk udara, kapal untuk laut.
    Animasi dimatikan otomatis bila sistem operasi pengguna meminta
-   "reduce motion" (lihat @media di style.css).
+   "reduce motion" (lihat @media di css/card.css).
 ------------------------------------------------------------------ */
 function isDepartingToday(s) {
   // Pakai ETD EFEKTIF — kalau keberangkatan sudah dimundurkan, penanda
@@ -212,8 +212,15 @@ function renderExpandedCard(s) {
   <div class="ship-card ship-card--${s.status}" data-id="${s.id}">
     <div class="ship-card-top">
       <div class="ship-title-block">
-        <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} Barang</div>
-        <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
+        <!-- Token papan yang SAMA dengan tampilan Manifes. "H-3" harus
+             berarti hal yang persis sama di mana pun ia muncul, supaya
+             berpindah antara Kartu dan Manifes tidak menuntut pengguna
+             belajar dua bahasa. -->
+        <span class="card-board">${boardTokenHtml(s, false)}</span>
+        <div class="ship-title-text">
+          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} Barang</div>
+          <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
+        </div>
       </div>
       <div class="ship-actions-block">
         ${statusSelectHtml(s)}
@@ -260,6 +267,7 @@ function renderCollapsedCard(s) {
   <div class="ship-card ship-card--arrived ship-card--collapsed" data-id="${s.id}">
     <div class="collapsed-row">
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
+      <span class="card-board">${boardTokenHtml(s, false)}</span>
       <div class="collapsed-main">
         <div class="collapsed-party">${escapeHtml(dispVal(s.party))}</div>
         <div class="collapsed-meta">Invoice <b>${escapeHtml(dispVal(s.invoice))}</b> &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(s.factoryDate)}</b></div>

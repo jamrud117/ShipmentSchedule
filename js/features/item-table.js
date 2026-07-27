@@ -122,6 +122,12 @@ if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
 }
 
 function renderItemTable() {
+  // Penanda kelengkapan di bilah simpan ikut diperbarui tiap tabel
+  // barang digambar ulang — "minimal 1 nama barang" adalah salah satu
+  // syarat simpan, jadi penandanya tidak boleh ketinggalan.
+  setTimeout(() => {
+    if (typeof syncFormValidity === "function") syncFormValidity();
+  }, 0);
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
     .map((it, idx) => {
@@ -141,7 +147,7 @@ function renderItemTable() {
       </td>
       <td><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal"></td>
       <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="KG/PCS/SET" list="satuanList"></td>
-      <td><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></td>
+      <td><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
       <td><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
       <td><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
       <td class="pkg-cell">

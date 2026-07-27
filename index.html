@@ -3,328 +3,448 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EXIM DDI — Pelacakan Jadwal Import &amp; Export</title>
-    <!-- Sambungan ke server font & CDN dibuka lebih awal, bersamaan
-         dengan pembacaan HTML. Tanpa ini peramban baru mulai menyambung
-         SETELAH menemukan tautannya, dan jabat tangan TLS ke tiap server
-         (~100-300ms di jaringan kantor) baru dimulai saat itu. -->
+    <title>EXIM DDI — Papan Jadwal Import &amp; Export</title>
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#0a1b33" />
+
+    <!-- Ikon situs. Beberapa ukuran karena tiap tempat memakai yang
+         berbeda: 32px untuk tab peramban, 180px untuk pintasan layar
+         utama iOS, 192/512px untuk Android & PWA. Semuanya dipotong
+         dari berkas yang sama, jadi tidak ada yang bisa lupa
+         diperbarui sendirian. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="manifest" href="site.webmanifest" />
+
+    <!-- Gaya paling dasar ditanam langsung di halaman supaya warna latar
+         sudah benar pada gambar pertama — tidak menunggu CSS dari CDN. -->
     <style>
-      /* Gaya paling dasar ditanam langsung di halaman supaya warna latar
-         aplikasi sudah benar pada gambar pertama — tidak menunggu CSS
-         dari CDN. Sisanya tetap di style.css. */
-      html,
-      body {
+      html, body {
         margin: 0;
         min-height: 100%;
-        background: #f8fafc;
-        color: #1e293b;
+        background: #f5f7fa;
+        color: #0a1b33;
         font-family: Inter, system-ui, -apple-system, sans-serif;
       }
     </style>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
     <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Archivo+Narrow:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css" />
+
+    <!-- ============================================================
+         LEMBAR GAYA — dipecah per peran, mengikuti pola yang sama
+         dengan folder js/. style.css lama berisi 3.740 baris dengan
+         beberapa lapis tambalan bertumpuk di bagian bawah; di sini
+         tiap berkas punya satu tanggung jawab dan urutannya jelas.
+         URUTAN INI PENTING: tokens dulu, sistem terakhir.
+    ============================================================= -->
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/shell.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/manifest.css" />
+    <link rel="stylesheet" href="css/card.css" />
+    <link rel="stylesheet" href="css/overview.css" />
+    <link rel="stylesheet" href="css/panel.css" />
+    <link rel="stylesheet" href="css/palette.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/form.css" />
+    <link rel="stylesheet" href="css/docnum.css" />
+    <link rel="stylesheet" href="css/system.css" />
   </head>
   <body>
-    <!-- ============ NAVBAR ============ -->
-    <!-- Navbar = navigasi ANTAR HALAMAN. Toggle Import/Export sudah TIDAK
-         di sini lagi (dipindah ke halaman Jadwal EXIM), karena aplikasi
-         kini punya lebih dari satu halaman sehingga navbar dipakai untuk
-         perannya yang semestinya: berpindah halaman. -->
-    <nav class="main-navbar d-none">
-      <div class="container main-navbar-inner">
-        <a class="navbar-brand-custom" href="#/"
-          ><i class="bi bi-box-seam"></i> EXIM DDI</a
-        >
+    <!-- ============================================================
+         BILAH ATAS — satu-satunya navigasi global.
+
+         Versi lama menumpuk tiga pita penuh sebelum baris data
+         pertama: navbar "pil" putih, hero bergambar pelabuhan, lalu
+         empat kartu statistik. Kira-kira 420 px layar untuk sesuatu
+         yang hanya dilihat sekali. Di sini semuanya diringkas jadi
+         satu bilah 54 px yang tetap menempel saat menggulir.
+
+         Sakelar Import/Export ikut naik ke sini. Itu bukan filter
+         tampilan — Import dan Export punya label bidang, pilihan
+         status, dan template salin yang berbeda. Praktis dua buku
+         besar. Tempatnya memang di navigasi global.
+    ============================================================= -->
+    <nav class="app-topbar d-none">
+      <div class="container app-topbar-inner">
+        <a class="brand" href="#/" aria-label="EXIM DDI — beranda">
+          <!-- Digambar ulang mengikuti ikon situs: haluan kapal peti
+               kemas, tiang & palang emas di atas lambung terang.
+               Tetap SVG, bukan PNG ikonnya — pada 26px versi bitmap
+               akan buram, dan detail ombak di ikon aslinya sudah tidak
+               terbaca di ukuran ini jadi sengaja tidak ikut digambar. -->
+          <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="11.1" y="2" width="1.8" height="5.4" rx="0.6" fill="#c79a3e" />
+            <rect x="7.8" y="3.5" width="8.4" height="1.8" rx="0.6" fill="#c79a3e" />
+            <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+            <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
+            <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+            <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="#f2f5f9" />
+          </svg>
+          <span class="brand-name">EXIM<span>·</span>DDI</span>
+        </a>
+
         <div class="site-nav" id="pageNav">
+          <a class="site-nav-link" href="#/ringkasan" data-page="overview">
+            <i class="bi bi-columns-gap"></i><span>Ringkasan</span>
+          </a>
           <a class="site-nav-link active" href="#/" data-page="schedule">
-            <i class="bi bi-calendar2-week"></i><span>Jadwal EXIM</span>
+            <i class="bi bi-list-columns-reverse"></i><span>Jadwal</span>
           </a>
           <a class="site-nav-link" href="#/docnum" data-page="docnum">
-            <i class="bi bi-hash"></i><span>Permintaan No. Dokumen</span>
+            <i class="bi bi-hash"></i><span>No. Dokumen</span>
           </a>
         </div>
+
+        <div class="topbar-spacer"></div>
+
+        <button type="button" class="cmd-trigger" id="btnCmdk" title="Cari cepat lintas Import & Export">
+          <i class="bi bi-search"></i>
+          <span class="cmd-trigger-text">Cari cepat</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
       </div>
     </nav>
 
-    <!-- ============ HALAMAN DAFTAR (list jadwal) ============ -->
-    <div id="viewList" class="d-none">
-      <!-- ============ HERO ============ -->
-      <header class="topbar">
-        <!-- Latar hero: pemandangan pelabuhan peti kemas + garis rute
-             pelayaran. Digambar sebagai SVG di dalam halaman, BUKAN file
-             gambar dari internet, supaya tidak menambah unduhan, tidak
-             pecah saat di-zoom, dan tetap tampil walau jaringan mati.
-             aria-hidden karena murni dekorasi. -->
-        <div class="hero-scene" aria-hidden="true">
-          <svg viewBox="0 0 1200 340" preserveAspectRatio="xMaxYMid slice">
-            <g opacity="0.9">
-              <!-- rute pelayaran -->
-              <g fill="none" stroke="#fff" stroke-opacity=".22" stroke-dasharray="5 9" stroke-width="1.4">
-                <path d="M60 250 C 300 120, 620 90, 1160 150" />
-                <path d="M20 300 C 340 220, 700 200, 1180 236" />
-              </g>
-              <g fill="#8fb2d6" fill-opacity=".75">
-                <circle cx="352" cy="150" r="4" />
-                <circle cx="742" cy="106" r="4" />
-                <circle cx="1096" cy="150" r="4" />
-              </g>
-              <!-- dermaga & tumpukan peti kemas -->
-              <g fill="#fff" fill-opacity=".10">
-                <rect x="742" y="252" width="86" height="26" rx="3" />
-                <rect x="742" y="224" width="86" height="26" rx="3" />
-                <rect x="836" y="252" width="86" height="26" rx="3" />
-                <rect x="880" y="196" width="86" height="26" rx="3" />
-                <rect x="930" y="252" width="86" height="26" rx="3" />
-                <rect x="930" y="224" width="86" height="26" rx="3" />
-                <rect x="1024" y="252" width="86" height="26" rx="3" />
-              </g>
-              <g fill="#8fb2d6" fill-opacity=".20">
-                <rect x="836" y="224" width="86" height="26" rx="3" />
-                <rect x="1024" y="224" width="86" height="26" rx="3" />
-              </g>
-              <!-- derek pelabuhan -->
-              <g stroke="#fff" stroke-opacity=".16" stroke-width="2.5" fill="none">
-                <path d="M660 282 L660 128 L860 128" />
-                <path d="M660 152 L604 152" />
-              </g>
-              <!-- garis air -->
-              <path d="M0 282 H1200" stroke="#fff" stroke-opacity=".14" stroke-width="1.5" />
-            </g>
-          </svg>
-        </div>
+    <!-- ============================================================
+         HALAMAN: RINGKASAN HARIAN (baru)
 
-        <div class="container position-relative hero-top">
-          <div class="hero-copy">
-            <div class="brand-eyebrow">
-              Sistem Pelacakan Pengiriman Import &amp; Export
+         Aplikasi lama menjawab "apa saja yang ada di daftar". Tapi
+         pertanyaan pertama tiap pagi bukan itu — yang ditanyakan
+         adalah "apa yang harus saya kerjakan hari ini": mana yang
+         sudah lewat ETA tapi belum tiba, mana yang tiba dua hari
+         lagi tapi No. Aju-nya masih kosong, mana yang mundur.
+
+         Seluruh isi halaman ini dihitung dari data yang SUDAH ada.
+         Tidak ada satu pun kolom baru di database.
+    ============================================================= -->
+    <div id="viewOverview" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" id="ovTitle">Yang perlu ditindak hari ini</h1>
+              <div class="board-sub" id="ovSub">Memuat…</div>
             </div>
-            <div class="brand-sub">
-              Pantau ETD, ETA, dokumen kepabeanan, dan perhitungan CIF/FOB
-              dalam satu tampilan.
+            <!-- Sakelar buku ditaruh di sisi kanan, sebaris dengan blok
+                 tanggal. Sebelumnya ia berdiri sendiri di atas judul dan
+                 terbaca mengambang: kontrol berbingkai yang cukup berat
+                 di pojok kiri-atas, di tempat yang tadinya hanya berisi
+                 eyebrow kecil, tanpa apa pun di sebelahnya. Di sini ia
+                 mengimbangi judul di seberangnya. -->
+            <div class="board-aside">
+              <div class="mode-tabs mode-tabs--board" role="tablist" aria-label="Buku jadwal">
+                  <button class="active" data-mode="import" role="tab" aria-selected="true">
+                    <i class="bi bi-box-arrow-in-down-left"></i><span>Import</span>
+                  </button>
+                  <button data-mode="export" role="tab" aria-selected="false">
+                    <i class="bi bi-box-arrow-up-right"></i><span>Export</span>
+                  </button>
+                </div>
+              <div class="board-today">
+                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-date" id="ovToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container" style="padding-top: 20px">
+        <div class="ov-grid">
+          <div>
+            <section class="panel">
+              <div class="panel-head">
+                <h2><i class="bi bi-exclamation-diamond"></i> Perlu Tindakan</h2>
+                <span class="panel-head-note" id="ovTaskNote"></span>
+              </div>
+              <div class="panel-body panel-body--flush" id="ovTasks"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2><i class="bi bi-calendar3-week"></i> Agenda 7 Hari</h2>
+                <span class="panel-head-note" id="ovAgendaNote">Klik satu hari untuk menyaring jadwal</span>
+              </div>
+              <div class="panel-body">
+                <div class="agenda" id="ovAgenda"></div>
+              </div>
+            </section>
+          </div>
+
+          <div>
+            <section class="panel">
+              <div class="panel-head">
+                <h2><i class="bi bi-graph-down-arrow"></i> Pantauan Delay</h2>
+              </div>
+              <div class="panel-body" id="ovDelay"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2><i class="bi bi-clipboard-check"></i> Kelengkapan Dokumen</h2>
+              </div>
+              <div class="panel-body" id="ovDocs"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2><i class="bi bi-lightning-charge"></i> Aksi Cepat</h2>
+              </div>
+              <div class="panel-body">
+                <div class="quick-actions">
+                  <button type="button" class="quick-action" data-ov-action="new">
+                    <i class="bi bi-plus-lg"></i>
+                    <span><b id="ovQaNewLabel">Tambah Jadwal Import</b><small>Atau isi otomatis dari PDF PIB / PEB</small></span>
+                  </button>
+                  <a class="quick-action" href="#/docnum">
+                    <i class="bi bi-hash"></i>
+                    <span><b>Minta Nomor Dokumen</b><small>Invoice, DO, permintaan dana, surat</small></span>
+                  </a>
+                  <button type="button" class="quick-action" data-ov-action="export">
+                    <i class="bi bi-file-earmark-excel"></i>
+                    <span><b>Bulk Export ke Excel</b><small>Seluruh jadwal pada buku yang aktif</small></span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ============================================================
+         HALAMAN: JADWAL
+    ============================================================= -->
+    <div id="viewList" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" id="lblSectionList">Jadwal Pengiriman Import</h1>
+            </div>
+            <!-- Sakelar buku ditaruh di sisi kanan, sebaris dengan blok
+                 tanggal. Sebelumnya ia berdiri sendiri di atas judul dan
+                 terbaca mengambang: kontrol berbingkai yang cukup berat
+                 di pojok kiri-atas, di tempat yang tadinya hanya berisi
+                 eyebrow kecil, tanpa apa pun di sebelahnya. Di sini ia
+                 mengimbangi judul di seberangnya. -->
+            <div class="board-aside">
+              <div class="mode-tabs mode-tabs--board" role="tablist" aria-label="Buku jadwal">
+                  <button class="active" data-mode="import" role="tab" aria-selected="true">
+                    <i class="bi bi-box-arrow-in-down-left"></i><span>Import</span>
+                  </button>
+                  <button data-mode="export" role="tab" aria-selected="false">
+                    <i class="bi bi-box-arrow-up-right"></i><span>Export</span>
+                  </button>
+                </div>
+              <div class="board-today">
+                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-date" id="boardToday">—</div>
+              </div>
             </div>
           </div>
 
-          <!-- Toggle Import/Export dipindah ke KANAN ATAS, menempel pada
-               hero. Sebelumnya melayang di bawah hero dengan latar putih
-               di atas latar terang, sehingga terlihat seperti kotak
-               nyasar. Di atas hero gelap, kontrasnya jelas. -->
-          <div class="mode-tabs" id="modeTabs" role="tablist" aria-label="Jenis jadwal">
-            <button class="active" id="tabImport" data-mode="import" role="tab">
-              <i class="bi bi-box-arrow-in-down-left"></i>Import
+          <!-- Metrik SEKARANG BISA DIKLIK. Dulu ia memberi tahu "ada 3
+               yang DELAY" lalu membiarkan pengguna mencarinya sendiri
+               lewat dropdown status. -->
+          <div class="metric-row" id="metricRow">
+            <button type="button" class="metric is-active" data-preset="all" style="--metric-hue: var(--n-400)">
+              <span class="metric-label">Total Aktif</span>
+              <span class="metric-num" id="statTotal">0</span>
+              <span class="metric-hint">semua di buku ini</span>
             </button>
-            <button id="tabExport" data-mode="export" role="tab">
-              <i class="bi bi-box-arrow-up-right"></i>Export
+            <button type="button" class="metric" data-preset="today" style="--metric-hue: var(--sec-400)">
+              <span class="metric-label" id="lblTodayStat">Tiba Hari Ini</span>
+              <span class="metric-num" id="statToday">0</span>
+              <span class="metric-hint">perlu dijemput</span>
+            </button>
+            <button type="button" class="metric" data-preset="late" style="--metric-hue: var(--s-danger)">
+              <span class="metric-label">Perlu Tindakan</span>
+              <span class="metric-num" id="statLate">0</span>
+              <span class="metric-hint">lewat ETA / delay</span>
+            </button>
+            <button type="button" class="metric" data-preset="process" style="--metric-hue: var(--s-warn)">
+              <span class="metric-label">Proses</span>
+              <span class="metric-num" id="statProcess">0</span>
+              <span class="metric-hint">sedang berjalan</span>
+            </button>
+            <button type="button" class="metric" data-preset="done" style="--metric-hue: var(--n-300)">
+              <span class="metric-label" id="lblArrivedStat">Arrived</span>
+              <span class="metric-num" id="statArrived">0</span>
+              <span class="metric-hint">sudah selesai</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main class="container stat-strip">
-        <div class="row g-3 mb-4">
-          <div class="col-6 col-md-3">
-            <div class="stat-card">
-              <div class="num" id="statTotal">0</div>
-              <div class="lbl">
-                <span class="dot dot--total"></span>Total
-                Pengiriman
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-card">
-              <div class="num" id="statProcess">0</div>
-              <div class="lbl">
-                <span class="dot dot--process"></span
-                >PROCESS
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-card">
-              <div class="num" id="statDelay">0</div>
-              <div class="lbl">
-                <span class="dot dot--delay"></span>DELAY
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-md-3">
-            <div class="stat-card">
-              <div class="num" id="statArrived">0</div>
-              <div class="lbl">
-                <span class="dot dot--done"></span
-                ><span id="lblArrivedStat">ARRIVED</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- Bilah kendali menempel di bawah bilah atas. Versi lama
+           menaruhnya sebagai kartu yang ikut menggulir, jadi begitu
+           daftar panjang dan pengguna sudah turun tiga layar,
+           mengganti filter berarti menggulir balik ke atas. -->
+      <div class="controlbar">
+        <div class="container controlbar-inner">
+          <!-- ============================================================
+               SUSUNAN BILAH KENDALI
 
-        <div class="toolbar mb-4">
-          <div class="row g-3 align-items-center toolbar-filters">
-            <div class="col-12 col-lg-6">
-              <div class="input-group">
-                <span class="input-group-text bg-white border-end-0"
-                  ><i class="bi bi-search text-muted"></i
-                ></span>
-                <input
-                  type="text"
-                  id="searchInput"
-                  class="form-control border-start-0"
-                  placeholder="Cari item, no. aju, invoice, vessel..."
-                />
-              </div>
-            </div>
-            <div class="col-6 col-lg-3">
-              <select id="filterStatus" class="form-select">
-                <option value="">Semua Status</option>
-              </select>
-            </div>
-            <div class="col-6 col-lg-3">
-              <select id="sortDir" class="form-select" aria-label="Urutan jadwal">
-                <option value="eta-asc">ETA Terdekat</option>
-                <option value="eta-desc">ETA Terjauh</option>
-                <option value="etd-asc">ETD Terdekat</option>
-                <option value="etd-desc">ETD Terjauh</option>
-              </select>
-            </div>
-            <!-- Rentang tanggal MENGIKUTI dasar urutan di sebelah kiri:
-                 kalau urutannya ETA, rentang ini menyaring ETA; kalau ETD,
-                 menyaring ETD. Labelnya ikut berubah supaya tidak ada
-                 tebak-tebakan sedang menyaring yang mana. -->
-            <div class="col-12 col-lg-6">
-              <div class="range-filter">
-                <span class="range-filter-label" id="rangeBasisLabel">ETA</span>
-                <input type="date" id="filterDateFrom" class="form-control" aria-label="Tanggal mulai" />
-                <span class="range-filter-sep">s/d</span>
-                <input type="date" id="filterDateTo" class="form-control" aria-label="Tanggal akhir" />
-                <button type="button" class="btn btn-light range-filter-clear d-none" id="btnClearRange" title="Hapus rentang tanggal">
-                  <i class="bi bi-x-lg"></i>
-                </button>
-              </div>
-            </div>
-          </div>
+               Baris 1 = PANDANGAN + AKSI. Chip saringan cepat pada
+               dasarnya adalah tab: ia memilih himpunan mana yang sedang
+               dilihat. Tab selalu berada di atas alat penyaring, dan
+               tombol aksi utama duduk di ujung kanan baris teratas —
+               pola yang sama dipakai daftar isu GitHub, Linear, dan
+               Jira, jadi tidak perlu dipelajari ulang.
 
-          <div class="toolbar-divider"></div>
+               Baris 2 = SARINGAN, satu kelompok RAPAT di kiri.
+               Susunan sebelumnya memakai space-between di kedua baris
+               dan menghasilkan tata letak "empat sudut" dengan lubang
+               ±560px di tengah layar lebar: kontrol yang saling
+               berhubungan terlihat tidak berhubungan. Toolbar tidak
+               perlu memenuhi lebar layar — sisi kanan yang kosong itu
+               normal dan justru membuat kelompoknya terbaca.
 
-          <div class="toolbar-actions">
-            <div class="toolbar-actions-secondary">
-              <div class="btn-cluster">
-                <button class="btn btn-outline-navy btn-sm" id="btnBulkExport">
-                  <i class="bi bi-file-earmark-excel"></i> Bulk Export
-                </button>
-                <button class="btn btn-outline-navy btn-sm" id="btnBulkImport">
-                  <i class="bi bi-file-earmark-arrow-up"></i> Bulk Import
-                </button>
-              </div>
-              <span class="btn-divider"></span>
-              <button class="btn btn-outline-danger btn-sm" id="btnDeleteAll">
-                <i class="bi bi-trash3"></i>
-                <span id="lblDeleteAll">Hapus Semua Import</span>
+               Urutan di dalam kelompok mengikuti cara bertanya:
+               "cari apa" (pencarian) -> "yang mana" (status) ->
+               "kapan" (rentang tanggal).
+          ============================================================= -->
+          <div class="controlbar-row controlbar-row--filters">
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" id="searchInput" placeholder="Cari barang, no. aju, invoice…" />
+              <button type="button" class="search-clear d-none" id="btnClearSearch" title="Kosongkan pencarian">
+                <i class="bi bi-x-lg"></i>
               </button>
             </div>
-            <button class="btn btn-teal" id="btnAdd">
-              <i class="bi bi-plus-lg"></i>
-              <span id="lblAddBtn">Tambah Jadwal</span>
-            </button>
+
+            <select id="filterStatus" class="control-select" aria-label="Saring status">
+              <option value="">Semua Status</option>
+            </select>
+
+            <div class="range-filter">
+              <select id="rangeBasis" class="range-basis-select" aria-label="Dasar tanggal untuk urutan &amp; rentang">
+                <option value="eta">ETA</option>
+                <option value="etd">ETD</option>
+              </select>
+              <input type="date" id="filterDateFrom" aria-label="Tanggal mulai" />
+              <span class="range-filter-sep">s/d</span>
+              <input type="date" id="filterDateTo" aria-label="Tanggal akhir" />
+              <button type="button" class="range-filter-clear d-none" id="btnClearRange" title="Hapus rentang tanggal">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="controlbar-row controlbar-row--views">
+            <div class="preset-row" id="presetRow">
+              <button type="button" class="chip is-active" data-preset="all">
+                <i class="bi bi-collection"></i> Semua <span class="chip-count" data-count="all">0</span>
+              </button>
+              <button type="button" class="chip chip--alert" data-preset="late">
+                <i class="bi bi-exclamation-triangle"></i> Perlu tindakan <span class="chip-count" data-count="late">0</span>
+              </button>
+              <button type="button" class="chip" data-preset="week">
+                <i class="bi bi-calendar-week"></i> 7 hari ke depan <span class="chip-count" data-count="week">0</span>
+              </button>
+              <button type="button" class="chip" data-preset="nodoc">
+                <i class="bi bi-file-earmark-x"></i> Dokumen kurang <span class="chip-count" data-count="nodoc">0</span>
+              </button>
+              <button type="button" class="chip" data-preset="done">
+                <i class="bi bi-check2-circle"></i> Selesai <span class="chip-count" data-count="done">0</span>
+              </button>
+            </div>
+
+            <div class="controlbar-tail">
+              <div class="view-toggle" id="viewToggle" role="group" aria-label="Bentuk tampilan">
+                <button type="button" data-view="table" class="is-active" title="Tampilan manifes — padat, untuk memindai banyak baris">
+                  <i class="bi bi-list-ul"></i><span>Manifes</span>
+                </button>
+                <button type="button" data-view="card" title="Tampilan kartu — lengkap, untuk membaca satu per satu">
+                  <i class="bi bi-grid-1x2"></i><span>Kartu</span>
+                </button>
+              </div>
+
+              <!-- Aksi jarang & merusak di balik menu ⋯ supaya "Hapus
+                   Semua" tidak berdiri sejajar dengan tombol harian. -->
+              <div class="dropdown">
+                <button type="button" class="btn-more" data-bs-toggle="dropdown" aria-expanded="false" title="Aksi lain">
+                  <i class="bi bi-three-dots"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button class="dropdown-item" type="button" id="btnBulkExport"><i class="bi bi-file-earmark-excel"></i> Bulk Export ke Excel</button></li>
+                  <li><button class="dropdown-item" type="button" id="btnBulkImport"><i class="bi bi-file-earmark-arrow-up"></i> Bulk Import dari Excel</button></li>
+                  <li><hr class="dropdown-divider" /></li>
+                  <li>
+                    <button class="dropdown-item text-danger" type="button" id="btnDeleteAll">
+                      <i class="bi bi-trash3"></i> <span id="lblDeleteAll">Hapus Semua Import</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              <button class="btn-primary-navy" id="btnAdd">
+                <i class="bi bi-plus-lg"></i>
+                <span id="lblAddBtn">Tambah Jadwal</span>
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div class="section-label mb-2" id="lblSectionList">
-          Daftar Jadwal Pengiriman Import
+      <main class="container" style="flex: 1">
+        <div class="list-head">
+          <span class="section-label" id="lblListCaption">Daftar Pengiriman</span>
+          <span class="filter-note d-none" id="filterNote">
+            <span id="filterNoteText"></span>
+            <button type="button" id="btnResetFilters">Bersihkan saringan</button>
+          </span>
         </div>
+
         <div id="cardContainer"></div>
         <div id="paginationBar"></div>
+
         <div id="emptyState" class="state-panel d-none">
           <div class="state-icon"><i class="bi bi-inboxes"></i></div>
           <div class="state-title">Belum ada jadwal di sini</div>
           <div class="state-desc">
-            Tambahkan jadwal pengiriman pertama, atau longgarkan filter
-            pencarian kalau datanya memang sudah ada.
+            Tambahkan jadwal pengiriman pertama, atau longgarkan saringan
+            kalau datanya memang sudah ada.
           </div>
-          <button class="btn btn-teal" id="btnAddEmpty">
+          <button class="btn-teal" id="btnAddEmpty">
             <i class="bi bi-plus-lg"></i> Tambah Jadwal
           </button>
         </div>
       </main>
-
-      <!-- ============ FOOTER ============
-         Sengaja di DALAM #viewList (bukan sibling di body) supaya ikut
-         disembunyikan/ditampilkan bareng sama sisa halaman daftar oleh
-         showListView()/showFormView() — sebelumnya footer ini ada di
-         LUAR #viewList, jadi tidak pernah ke-toggle: pas form dibuka,
-         footer ini tetap nongol (karena urutannya persis SEBELUM
-         #viewForm di HTML, jadinya malah nampak di ATAS form). -->
-      <footer class="app-footer">
-        <div class="container">
-          <div class="row gy-4">
-            <div class="col-md-5">
-              <div class="footer-brand">
-                <i class="bi bi-box-seam"></i> EXIM DDI
-              </div>
-              <p class="footer-text">
-                Sistem pelacakan jadwal import &amp; export internal — ETD, ETA,
-                dokumen kepabeanan, dan daftar barang dalam satu tampilan.
-              </p>
-            </div>
-            <div class="col-md-4">
-              <div class="footer-heading">Catatan Data</div>
-              <p class="footer-text">
-                Data tersimpan permanen di database online (Supabase), bukan
-                lagi di browser. Tombol <b>Bulk Export</b> mengunduh seluruh
-                jadwal (per mode) sebagai file Excel, dan
-                <b>Bulk Import</b> memuatnya kembali dari file Excel dengan
-                format yang sama.
-              </p>
-            </div>
-            <div class="col-md-3">
-              <div class="footer-heading">Info</div>
-              <p class="footer-text">
-                Posisi kapal/pesawat pada garis pelayaran diperbarui otomatis
-                mengikuti ETD &amp; ETA.
-              </p>
-            </div>
-          </div>
-          <hr class="footer-divider" />
-          <div class="footer-bottom">
-            © 2026 EXIM DDI — Internal Import/Export Tracking Tool.
-          </div>
-        </div>
-      </footer>
     </div>
-    <!-- ============ /HALAMAN DAFTAR ============ -->
 
-    <!-- ============ HALAMAN: PERMINTAAN NOMOR DOKUMEN ============
-         Form ini DATA-DRIVEN sepenuhnya:
-           - tombol tab  : data-docnum-tab="KUNCI"
-           - panel form  : data-docnum-panel="KUNCI"
-           - isian       : data-dn="namaField", tambah data-dn-required
-                           kalau wajib diisi
-         JS-nya (js/views/docnum-view.js) tidak menyimpan daftar field
-         sama sekali — ia membaca atribut di atas. Jadi menambah jenis
-         dokumen baru atau menambah isian cukup dikerjakan di berkas ini,
-         lalu daftarkan kodenya di DOCNUM_TYPES. -->
-    <div id="viewDocNum" class="page-docnum d-none">
-      <header class="topbar topbar--compact">
-        <div class="wave-line"></div>
-        <div class="container position-relative">
-          <div class="brand-eyebrow">Permintaan Nomor Dokumen</div>
-          <div class="brand-sub">
-            Nomor Invoice, Delivery Order, Permintaan Dana, dan Surat &mdash;
-            terbit berurutan dan tercatat.
+
+<div id="viewDocNum" class="page-docnum d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <div class="board-label">Permintaan Nomor Dokumen</div>
+              <h1 class="board-title">Nomor terbit berurutan &amp; tercatat</h1>
+              <div class="board-sub">
+                Invoice, Delivery Order, Permintaan Dana, dan Surat — satu
+                sumber nomor untuk seluruh tim.
+              </div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-date" id="docnumToday">—</div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -643,27 +763,33 @@
           ></span>
           <h5 class="page-form-title" id="modalTitle">Tambah Jadwal Import</h5>
         </div>
-        <div class="page-form-header-spacer"></div>
+        <div class="page-form-header-spacer">
+          <!-- Kolom ini dulu sengaja dikosongkan sebagai penyeimbang agar
+               judul benar-benar di tengah. Penyeimbangnya tetap perlu,
+               tapi sekarang ia mengerjakan sesuatu: langkah ke berapa
+               dari tiga. -->
+          <span class="form-progress">
+            <span id="formStepLabel">Langkah 1 dari 3</span>
+            <span class="form-progress-dots" id="formStepDots">
+              <span class="form-progress-dot is-current"></span>
+              <span class="form-progress-dot"></span>
+              <span class="form-progress-dot"></span>
+            </span>
+          </span>
+        </div>
       </div>
       <div class="page-form-body container">
         <input type="hidden" id="fId" />
 
-        <div class="page-form-import-row">
-          <button
-            type="button"
-            class="btn-import-excel"
-            id="btnImportExcel"
-            title="Isi otomatis dari PDF PIB BC 2.0 / PEB BC 3.0, PDF Commercial Invoice &amp; Packing List, Excel draft CEISA, atau Excel CIPL supplier. Boleh pilih lebih dari satu file sekaligus."
-          >
-            <i class="bi bi-file-earmark-arrow-up"></i> Import Excel/PDF
+        <div class="page-form-import-row" id="importZone">
+          <div class="import-zone-copy">
+            <b>Isi otomatis dari dokumen</b>
+            <small>PDF PIB BC 2.0 / PEB BC 3.0, PDF Commercial Invoice &amp; Packing List, Excel draft CEISA, atau Excel CIPL supplier. Boleh beberapa file sekaligus — atau seret ke sini.</small>
+          </div>
+          <button type="button" class="btn-import-excel" id="btnImportExcel">
+            <i class="bi bi-file-earmark-arrow-up"></i> Pilih File
           </button>
-          <input
-            type="file"
-            id="fileImportExcel"
-            accept=".xlsx,.xls,.pdf"
-            multiple
-            class="d-none"
-          />
+          <input type="file" id="fileImportExcel" accept=".xlsx,.xls,.pdf" multiple class="d-none" />
         </div>
 
         <div id="importNotesBox" class="import-notes-box d-none">
@@ -1094,30 +1220,36 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label">Freight (USD)</label>
-                <input
+                <div class="input-affix" data-affix="$">
+                  <input
                   type="text"
                   class="form-control"
                   id="fFreight" data-num
                   placeholder="0.00"
                 />
+                </div>
               </div>
               <div class="col-md-3">
                 <label class="form-label">Insurance (USD)</label>
-                <input
+                <div class="input-affix" data-affix="$">
+                  <input
                   type="text"
                   class="form-control"
                   id="fInsurance" data-num
                   placeholder="0.00"
                 />
+                </div>
               </div>
               <div class="col-md-3">
                 <label class="form-label">NDPBM (Rp)</label>
-                <input
+                <div class="input-affix" data-affix="Rp">
+                  <input
                   type="text"
                   class="form-control"
                   id="fNdpbm" data-num
                   placeholder="16250"
                 />
+                </div>
               </div>
             </div>
             <div class="form-text-note mt-1">
@@ -1125,40 +1257,32 @@
               harga/unit pada tab Daftar Barang.
             </div>
 
-            <div class="row g-3 mt-1" id="calcBoxRow">
-              <div class="col-md-6">
-                <div class="calc-box">
-                  <div class="calc-label">Total Nilai Barang (USD)</div>
-                  <div class="calc-value" id="calcTotalUSD">$0.00</div>
-                </div>
+            <!-- Satu baris untuk ketiganya. Sebelumnya "Total Nilai Barang"
+                 berdiri sendiri di baris atas lalu CIF/FOB di baris
+                 berikutnya — tiga angka yang saling terkait dipisah dua
+                 baris tanpa alasan. Kotaknya melar (flex), jadi ketika
+                 incoterm-nya bukan CIF/FOB dan dua kotak lain sembunyi,
+                 kotak Total otomatis mengisi lebar penuh. -->
+            <div class="calc-row mt-3" id="calcBoxRow">
+              <div class="calc-box">
+                <div class="calc-label">Total Nilai Barang (USD)</div>
+                <div class="calc-value" id="calcTotalUSD">$0.00</div>
               </div>
-            </div>
-            <div class="row g-3 mt-0" id="cifBlock" style="display: none">
-              <div class="col-md-6">
-                <div class="calc-box cif">
-                  <div class="calc-label">CIF (USD)</div>
-                  <div class="calc-value" id="calcCIF">$0.00</div>
-                </div>
+              <div class="calc-box cif calc-box--cif" style="display: none">
+                <div class="calc-label">CIF (USD)</div>
+                <div class="calc-value" id="calcCIF">$0.00</div>
               </div>
-              <div class="col-md-6">
-                <div class="calc-box cif">
-                  <div class="calc-label">CIF Rupiah</div>
-                  <div class="calc-value" id="calcCIFRupiah">Rp 0</div>
-                </div>
+              <div class="calc-box cif calc-box--cif" style="display: none">
+                <div class="calc-label">CIF Rupiah</div>
+                <div class="calc-value" id="calcCIFRupiah">Rp 0</div>
               </div>
-            </div>
-            <div class="row g-3 mt-0" id="fobBlock" style="display: none">
-              <div class="col-md-6">
-                <div class="calc-box fob">
-                  <div class="calc-label">FOB (USD)</div>
-                  <div class="calc-value" id="calcFOB">$0.00</div>
-                </div>
+              <div class="calc-box fob calc-box--fob" style="display: none">
+                <div class="calc-label">FOB (USD)</div>
+                <div class="calc-value" id="calcFOB">$0.00</div>
               </div>
-              <div class="col-md-6">
-                <div class="calc-box fob">
-                  <div class="calc-label">FOB Rupiah</div>
-                  <div class="calc-value" id="calcFOBRupiah">Rp 0</div>
-                </div>
+              <div class="calc-box fob calc-box--fob" style="display: none">
+                <div class="calc-label">FOB Rupiah</div>
+                <div class="calc-value" id="calcFOBRupiah">Rp 0</div>
               </div>
             </div>
             <div
@@ -1182,54 +1306,72 @@
             <div class="row g-3">
               <div class="col-md-2">
                 <label class="form-label">Tarif (%)</label>
-                <input
+                <div class="input-affix input-affix--end" data-affix="%">
+                  <input
                   type="text"
                   class="form-control"
                   id="fTarif" data-num
                   placeholder="5"
                 />
+                </div>
               </div>
               <div class="col-md-2">
                 <label class="form-label">Bea Masuk (Rp)</label>
-                <input
+                <div class="input-affix" data-affix="Rp">
+                  <input
                   type="text"
                   class="form-control"
                   id="fBM" data-num
                   placeholder="0"
                 />
+                </div>
               </div>
               <div class="col-md-2">
                 <label class="form-label">PPN (Rp)</label>
-                <input
+                <div class="input-affix" data-affix="Rp">
+                  <input
                   type="text"
                   class="form-control"
                   id="fPPN" data-num
                   placeholder="0"
                 />
+                </div>
               </div>
               <div class="col-md-2">
                 <label class="form-label">PPH (Rp)</label>
-                <input
+                <div class="input-affix" data-affix="Rp">
+                  <input
                   type="text"
                   class="form-control"
                   id="fPPH" data-num
                   placeholder="0"
                 />
+                </div>
               </div>
               <div class="col-md-4">
                 <label class="form-label">BM + PDRI (Rp)</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="calcBMPDRI"
-                  readonly
-                  value="Rp 0"
-                />
+                <div class="input-affix" data-affix="Rp">
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="calcBMPDRI"
+                    readonly
+                    value="0"
+                  />
+                </div>
               </div>
             </div>
             <div class="form-text-note mt-1">
-              BM + PDRI dihitung otomatis: jika Bea Masuk = 0, maka BM + PDRI =
-              0. Jika tidak, BM + PDRI = Bea Masuk + PPN + PPH.
+              <b>PPN</b> dan <b>PPH</b> terisi otomatis dari Total Nilai Barang
+              × NDPBM — PPN <b>11%</b>, PPH <b>2,5%</b>. <b>Bea Masuk</b> tidak
+              dihitung otomatis karena tarifnya berbeda per HS Code.
+              <br />
+              Angka otomatis tetap bisa ditimpa: begitu diketik manual, kolom
+              itu berhenti ikut berubah. Kosongkan kolomnya untuk kembali
+              otomatis.
+              <br />
+              BM + PDRI: jika Bea Masuk = 0 maka 0; selain itu Bea Masuk + PPN +
+              PPH.
             </div>
             <div class="row g-3 mt-1">
               <div class="col-md-12">
@@ -1252,52 +1394,152 @@
           </div>
         </div>
 
-        <div class="page-form-actions-row">
-          <button type="button" class="btn btn-form-cancel" id="btnFormCancel">
-            Batal
-          </button>
-          <button
-            type="button"
-            class="btn btn-teal btn-save-primary"
-            id="btnSaveShipment"
-          >
-            <i class="bi bi-check-lg"></i> Simpan Jadwal
-          </button>
+      </div>
+
+      <!-- Di LUAR .page-form-body dengan sengaja. Di dalamnya, bilah ini
+           ikut terbatas max-width 1600px dan tampak seperti kartu
+           melayang yang menggantung di tengah halaman. Sebagai anak
+           langsung #viewForm ia selebar layar penuh dan benar-benar
+           menempel di dasar jendela. -->
+      <div class="page-form-actions-row">
+        <div class="page-form-actions-inner">
+          <span class="form-validity" id="formValidity"></span>
+          <!-- Kedua tombol dibungkus jadi satu kelompok. Tanpa itu,
+               justify-content: space-between akan membagi jarak untuk
+               TIGA anak — keterangan di kiri, Batal di tengah, Simpan
+               di kanan — dan Batal berdiri sendirian di tengah kartu. -->
+          <div class="page-form-actions-btns">
+            <button type="button" class="btn btn-form-cancel" id="btnFormCancel">
+              Batal
+            </button>
+            <button
+              type="button"
+              class="btn-primary-navy btn-save-primary"
+              id="btnSaveShipment"
+            >
+              <i class="bi bi-check-lg"></i> Simpan Jadwal
+            </button>
+          </div>
         </div>
       </div>
     </div>
     <!-- ============ /HALAMAN: TAMBAH / EDIT JADWAL ============ -->
 
-    <!-- ============ MODAL: DETAIL (READ-ONLY) ============ -->
-    <div class="modal fade" id="detailViewModal" tabindex="-1">
-      <div
-        class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
-      >
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="bi bi-clipboard-data"></i> Detail Pengiriman
-            </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-            ></button>
-          </div>
-          <div class="modal-body" id="detailViewBody">
-            <!-- diisi oleh JavaScript -->
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-light" data-bs-dismiss="modal">
-              Tutup
-            </button>
-            <button type="button" class="btn btn-teal" id="btnGotoEdit">
-              <i class="bi bi-pencil"></i> Edit Jadwal Ini
-            </button>
-          </div>
+    <!-- ============================================================
+         PANEL GESER — detail pengiriman (read-only)
+
+         Menggantikan modal tengah. Modal menutupi daftar, dan
+         menutupnya berarti kehilangan tempat. Padahal cara kerja
+         sehari-hari adalah membandingkan: buka satu, lihat, lanjut
+         ke berikutnya. Tombol ‹ › di kepala panel menelusuri seluruh
+         hasil saringan tanpa menutup panel sama sekali.
+    ============================================================= -->
+    <div class="sheet-scrim" id="detailScrim" hidden></div>
+    <aside
+      class="sheet"
+      id="detailSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="detailSheetTitle"
+      hidden
+    >
+      <div class="sheet-head">
+        <div class="sheet-head-main">
+          <span class="panel-eyebrow">Detail Pengiriman</span>
+          <div class="sheet-title" id="detailSheetTitle">—</div>
+        </div>
+        <span class="sheet-pos" id="detailSheetPos"></span>
+        <div class="sheet-nav">
+          <button type="button" class="sheet-btn" id="btnDetailPrev" title="Pengiriman sebelumnya (←)">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <button type="button" class="sheet-btn" id="btnDetailNext" title="Pengiriman berikutnya (→)">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+          <button type="button" class="sheet-btn" id="btnDetailClose" title="Tutup (Esc)">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+      <div class="sheet-body" id="detailViewBody"></div>
+      <div class="sheet-foot">
+        <span class="sheet-foot-hint"><kbd>←</kbd> <kbd>→</kbd> pindah pengiriman · <kbd>Esc</kbd> tutup</span>
+        <button type="button" class="btn-quiet" id="btnDetailCloseFoot">Tutup</button>
+        <button type="button" class="btn-primary-navy" id="btnGotoEdit">
+          <i class="bi bi-pencil"></i> Edit Jadwal Ini
+        </button>
+      </div>
+    </aside>
+
+    <!-- ============================================================
+         PENCARIAN CEPAT (Ctrl / ⌘ + K)
+
+         Mencari lintas Import DAN Export sekaligus — daftar utama
+         hanya menampilkan satu buku pada satu waktu, jadi tanpa ini
+         mencari pengiriman di buku sebelah berarti berganti mode
+         dulu dan kehilangan saringan yang sedang dipakai.
+    ============================================================= -->
+    <div class="cmdk-scrim" id="cmdkScrim" hidden>
+      <div class="cmdk" role="dialog" aria-modal="true" aria-label="Cari cepat">
+        <div class="cmdk-input-row">
+          <i class="bi bi-search"></i>
+          <input
+            type="text"
+            class="cmdk-input"
+            id="cmdkInput"
+            placeholder="Cari no. aju, invoice, shipper, vessel — atau ketik perintah…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="cmdk-esc">Esc</span>
+        </div>
+        <div class="cmdk-list" id="cmdkList"></div>
+        <div class="cmdk-foot">
+          <span><kbd>↑</kbd><kbd>↓</kbd> pilih</span>
+          <span><kbd>Enter</kbd> buka detail</span>
+          <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> langsung edit</span>
         </div>
       </div>
     </div>
+
+    <!-- ============================================================
+         FOOTER — satu untuk semua halaman daftar/ringkasan.
+         Disembunyikan otomatis di halaman form oleh showPage().
+    ============================================================= -->
+    <footer class="app-footer" id="appFooter">
+      <div class="container">
+        <div class="row gy-4">
+          <div class="col-md-5">
+            <div class="footer-brand">EXIM<span>·</span>DDI</div>
+            <p class="footer-text">
+              Sistem pelacakan jadwal import &amp; export internal — ETD, ETA,
+              dokumen kepabeanan, dan daftar barang dalam satu papan.
+            </p>
+          </div>
+          <div class="col-md-4">
+            <div class="footer-heading">Catatan Data</div>
+            <p class="footer-text">
+              Data tersimpan permanen di database online (Supabase).
+              <b>Bulk Export</b> mengunduh seluruh jadwal pada buku yang aktif
+              sebagai file Excel, dan <b>Bulk Import</b> memuatnya kembali
+              dengan format yang sama.
+            </p>
+          </div>
+          <div class="col-md-3">
+            <div class="footer-heading">Pintasan</div>
+            <p class="footer-text">
+              <b>Ctrl K</b> cari cepat · <b>/</b> fokus pencarian ·
+              <b>N</b> jadwal baru · <b>V</b> ganti Manifes/Kartu
+            </p>
+          </div>
+        </div>
+        <hr class="footer-divider" />
+        <div class="footer-bottom">
+          <span>© 2026 EXIM DDI — Internal Import/Export Tracking Tool</span>
+          <span id="footerStamp"></span>
+        </div>
+      </div>
+    </footer>
 
     <!-- ============ MODAL: KONFIRMASI (pengganti confirm() native) ============ -->
     <!-- ============ BULK EXPORT/IMPORT (Excel) ============ -->
@@ -1472,12 +1714,15 @@
     <script src="js/ui/dom.js"></script>
     <script src="js/ui/number-input.js"></script>
     <script src="js/ui/feedback.js"></script>
+    <script src="js/ui/board.js"></script>
 
     <!-- ========================================= -->
     <!-- RENDER -->
     <!-- ========================================= -->
     <script src="js/render/cards.js"></script>
+    <script src="js/render/manifest.js"></script>
     <script src="js/render/list.js"></script>
+    <script src="js/features/quick-filters.js"></script>
 
     <!-- ========================================= -->
     <!-- FEATURES -->
@@ -1522,6 +1767,8 @@
     <script src="js/views/docnum-view.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/views/detail-view.js"></script>
+    <script src="js/views/overview-view.js"></script>
+    <script src="js/features/command-palette.js"></script>
 
     <!-- ========================================= -->
     <!-- START APP -->

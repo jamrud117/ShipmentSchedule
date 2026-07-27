@@ -1,0 +1,787 @@
+/* ==================================================================
+   KARTU PENGIRIMAN
+
+   Tampilan Kartu dipertahankan untuk saat pengguna sedang MEMBACA
+   satu pengiriman: semua informasinya terbuka, tanggal bisa diubah
+   di tempat, kronologi bisa ditambah tanpa pindah halaman. Untuk
+   MEMBANDINGKAN banyak pengiriman, tampilan Manifes yang dipakai
+   (lihat manifest.css). Sakelarnya ada di bilah kendali.
+
+   Dibanding versi lama, kartu di sini dirapatkan: jarak info-grid
+   turun dari 25px ke 16px dan padding dari 20/22 ke 16/18, sehingga
+   satu kartu memakan ±120 px lebih sedikit tanpa kehilangan satu
+   pun bidang data.
+================================================================== */
+.ship-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  padding: 19px 21px;
+  /* border-radius & box-shadow datang dari aturan bersama ".ship-card"
+     di lapisan sistem desain — lihat komentar di sana untuk kenapa
+     border (bukan radius/shadow) TIDAK ikut digabung untuk kartu ini. */
+}
+.ship-card + .ship-card {
+  margin-top: 13px;
+}
+.ship-card--process {
+  border-left-color: var(--amber);
+}
+.ship-card--transit {
+  border-left-color: var(--teal);
+}
+.ship-card--delayed {
+  border-left-color: var(--coral);
+}
+.ship-card--arrived {
+  border-left-color: var(--n-300);
+}
+
+.ship-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ship-title-block {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.ship-actions-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.item-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  line-height: 1.25;
+}
+.po-code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* ---- Info grid (route / vessel / container / invoice / factory / weight) ---- */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 17px 22px;
+  padding: 15px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 13px 0;
+}
+.info-item {
+  min-width: 0;
+}
+.info-item--wide {
+  grid-column: span 2;
+}
+.info-value--list div + div {
+  margin-top: 2px;
+}
+.info-label {
+  font-family: var(--font-board);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--n-500);
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.info-label i {
+  color: var(--ocean);
+  font-size: 0.8rem;
+}
+.info-value {
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.info-value.muted-value {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.detail-fac-line {
+  font-size: 0.76rem;
+  color: var(--ink);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.detail-fac-line + .detail-fac-line {
+  margin-top: 3px;
+}
+.detail-fac-line i {
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+
+/* ---- Tag row ---- */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.tag {
+  font-size: 0.71rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--ocean);
+}
+.tag.tag-usd {
+  background: #eef6ff;
+  color: var(--ocean);
+  border-color: #d5e8fb;
+}
+.tag.tag-pi {
+  background: #f3eefe;
+  color: var(--violet);
+  border-color: #e3d9fb;
+}
+.tag.tag-skb {
+  background: #fff3de;
+  color: #95610c;
+  border-color: #f7e2b8;
+}
+.tag.tag-muatan {
+  background: #efeffb;
+  color: #5347c7;
+  border-color: #dcdafb;
+}
+.tag.tag-transit {
+  background: var(--sec-50);
+  color: var(--teal-dark);
+  border-color: var(--sec-200);
+}
+.tag.tag-ecoo {
+  background: #e9f9ee;
+  color: #1f8a4c;
+  border-color: #c9edd6;
+}
+
+/* ---- Status select (auto width, styled as pill) ---- */
+.status-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 30px 7px 14px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+  width: auto;
+  max-width: 100%;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E");
+}
+.status-select:focus {
+  outline: 2px solid rgba(0, 0, 0, 0.15);
+  outline-offset: 1px;
+}
+.status-process {
+  background-color: #fff3de;
+  color: #95610c;
+}
+.status-transit {
+  background-color: var(--sec-50);
+  color: var(--teal-dark);
+}
+.status-arrived {
+  background-color: var(--p-50);
+  color: var(--p-700);
+}
+.status-delayed {
+  background-color: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.status-select option {
+  color: #1b2a41;
+  background: #fff;
+}
+
+/* ---- Action icon buttons ---- */
+.actions-col {
+  display: flex;
+  gap: 7px;
+}
+.icon-btn {
+  width: 33px;
+  height: 33px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.95rem;
+  transition: all 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--bg);
+  color: var(--navy);
+}
+.icon-btn.primary {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+.icon-btn.primary:hover {
+  background: var(--ocean);
+}
+.icon-btn.danger:hover {
+  background: #fdeaea;
+  color: var(--coral);
+  border-color: #f6c6c6;
+}
+
+/* ---- Dropdown pemilih Copy Template ---- */
+.copy-template-menu {
+  min-width: 190px;
+  padding: 6px;
+  margin-top: 6px;
+  border-radius: 12px;
+  border-color: var(--border);
+  box-shadow: 0 12px 28px -12px rgba(11, 31, 58, 0.35);
+}
+.copy-template-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.copy-template-menu .dropdown-item i {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.copy-template-menu .dropdown-item:hover,
+.copy-template-menu .dropdown-item:focus {
+  background: var(--bg);
+  color: var(--navy);
+}
+.copy-template-menu .dropdown-item:hover i,
+.copy-template-menu .dropdown-item:focus i {
+  color: var(--ocean);
+}
+
+/* ---- Shipping lane ---- */
+.lane-title {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.lane {
+  margin-bottom: 16px;
+}
+.lane-track {
+  position: relative;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  margin: 0 6px;
+}
+.lane-track.is-delayed {
+  background: #f3c6c6;
+}
+.lane-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--teal);
+  transition: width 0.5s ease;
+}
+.lane-track.is-delayed .lane-fill {
+  background: var(--coral);
+}
+.lane-track.is-process .lane-fill {
+  background: var(--amber);
+}
+.lane-track.is-arrived .lane-fill {
+  background: var(--green);
+}
+.port-node {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ocean);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.port-node.origin {
+  left: 0;
+}
+.port-node.destination {
+  left: 100%;
+  background: var(--navy);
+}
+.port-node.destination.reached {
+  background: var(--green);
+}
+.port-node.stop {
+  width: 8px;
+  height: 8px;
+  background: var(--violet);
+  cursor: default;
+}
+.port-node.stop.reached {
+  background: var(--green);
+}
+.ship-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -58%);
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: left 0.6s ease;
+  background: #fff;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(11, 31, 58, 0.22);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ship-marker.sailing {
+    animation: bob 2.6s ease-in-out infinite;
+  }
+}
+@keyframes bob {
+  0%,
+  100% {
+    transform: translate(-50%, -58%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -58%) translateY(-3px);
+  }
+}
+.port-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.port-labels .p {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.port-labels .p b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.port-labels .p.text-end {
+  text-align: right;
+}
+.port-labels--multi {
+  position: relative;
+  min-height: 72px;
+  display: block;
+}
+.port-labels--multi .p {
+  position: absolute;
+  transition: top 0.15s ease;
+  white-space: nowrap;
+}
+.port-labels--multi .p--start {
+  transform: translateX(0);
+  text-align: left;
+}
+.port-labels--multi .p--end {
+  transform: translateX(-100%);
+  text-align: right;
+}
+.port-labels--multi .p--center {
+  transform: translateX(-50%);
+  text-align: center;
+}
+.port-labels--multi .p-term {
+  display: block;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+.port-labels--multi .p--start .p-term,
+.port-labels--multi .p--end .p-term {
+  max-width: 120px;
+}
+.delay-flag {
+  font-size: 0.74rem;
+  color: var(--coral);
+  font-weight: 600;
+  margin-top: 8px;
+}
+.delay-flag.ok {
+  color: var(--green);
+}
+
+/* ---- Date strip ---- */
+/* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content
+   input tanggal bawaan peramban (±145px), jadi tiga kolom memaksa
+   ±470px dan meluber di layar ponsel. */
+.date-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.date-field label {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+  display: block;
+}
+.date-field input[type="date"] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  width: 100%;
+  background: #fff;
+}
+.date-field input:focus {
+  border-color: var(--teal);
+  outline: none;
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
+}
+
+/* ================= COLLAPSED CARD (arrived) ================= */
+.ship-card--collapsed {
+  padding: 14px 20px;
+  background: var(--p-50);
+}
+.collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.collapsed-check {
+  font-size: 1.35rem;
+  color: var(--green);
+  flex-shrink: 0;
+}
+.collapsed-main {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.collapsed-party {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--navy);
+}
+.collapsed-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.collapsed-meta b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ==================================================================
+   STRIP JADWAL AWAL DI KARTU (status DELAY)
+================================================================== */
+.delay-strip {
+  margin-top: 8px;
+  border: 1px dashed var(--amber);
+  border-radius: 10px;
+  background: #fffaf0;
+  padding: 8px 12px 10px;
+}
+.delay-strip-head {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #a35a00;
+  margin-bottom: 6px;
+}
+.delay-strip-fields {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.delay-strip-fields .date-field {
+  flex: 1 1 160px;
+}
+.delay-delta {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef2f6;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.delay-delta--late {
+  background: #ffe7cc;
+  color: #a35a00;
+}
+.delay-delta--early {
+  background: var(--sec-50);
+  color: var(--teal-dark);
+}
+
+/* ==================================================================
+   ISI TAMBAHAN DI KARTU SELESAI (ARRIVED / DELIVERED)
+
+   Kartu berstatus selesai sengaja dibuat ringkas (satu baris) karena
+   sudah tidak perlu dipantau harian. Tapi nama barang & kronologinya
+   tetap sering dicari belakangan saat menelusuri riwayat pengiriman —
+   jadi keduanya ditambahkan di bawah baris ringkas itu, dengan gaya
+   yang lebih redup supaya tetap terlihat sekunder dan tidak menyaingi
+   kartu yang masih berjalan.
+================================================================== */
+.collapsed-extra {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.collapsed-items {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.collapsed-items-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.collapsed-items-list {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink);
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.collapsed-items-list > div {
+  word-break: break-word;
+}
+/* Panel kronologi di kartu selesai: jarak atasnya dirapatkan karena
+   sudah ada garis pemisah .collapsed-extra di atasnya. */
+.collapsed-extra .card-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+/* ==================================================================
+   ANIMASI "BERANGKAT HARI INI" (ETD == hari ini)
+================================================================== */
+.depart-strip {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(138, 106, 40, 0.1), transparent);
+  border: 1px solid rgba(138, 106, 40, 0.28);
+  overflow: hidden;
+}
+.depart-strip--air {
+  background: linear-gradient(90deg, rgba(20, 73, 122, 0.1), transparent);
+  border-color: rgba(20, 73, 122, 0.28);
+}
+.depart-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--teal-dark, #634b1d);
+}
+.depart-strip--air .depart-label {
+  color: var(--ocean);
+}
+/* Jalur tempat ikon bergerak. Garis putus-putus dibuat dari repeating
+   gradient supaya tidak perlu elemen tambahan. */
+.depart-track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  min-width: 90px;
+}
+.depart-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(11, 31, 58, 0.18) 0 6px,
+    transparent 6px 12px
+  );
+}
+/* Arah hadap ikon disimpan sebagai variabel, lalu dipakai di dalam
+   keyframes. Dengan begitu jalur geraknya cukup ditulis SEKALI untuk
+   laut dan udara — tidak perlu dua set keyframes yang harus dijaga
+   tetap sama.
+
+   Penting: rotate() ditulis PALING KANAN di dalam transform. Fungsi
+   transform dijalankan dari kanan ke kiri, jadi ikonnya diputar dulu
+   di tempatnya, BARU digeser. Kalau urutannya dibalik, sumbu geser
+   ikut berputar 90 derajat dan pesawatnya melayang keluar jalur.
+   Alasan yang sama membuat properti `rotate:` yang berdiri sendiri
+   tidak dipakai di sini — ia selalu dihitung setelah transform. */
+.depart-mover {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  --mover-rot: 0deg;
+  font-size: 0.95rem;
+  color: var(--teal, #8a6a28);
+  animation: depart-travel 3.4s ease-in-out infinite;
+}
+/* bi-airplane-fill digambar menghadap ATAS. Diputar 90 derajat searah
+   jarum jam supaya hidungnya menghadap ke kanan — searah dengan arah
+   geraknya di sepanjang jalur putus-putus. */
+.depart-strip--air .depart-mover {
+  color: var(--ocean);
+  --mover-rot: 90deg;
+}
+@keyframes depart-travel {
+  0% {
+    left: 0;
+    transform: translate(0, -50%) rotate(var(--mover-rot));
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    transform: translate(-100%, -50%) rotate(var(--mover-rot));
+    opacity: 0;
+  }
+}
+/* Hormati preferensi sistem: kalau pengguna meminta animasi dikurangi,
+   ikonnya tetap tampil tapi berhenti bergerak. */
+@media (prefers-reduced-motion: reduce) {
+  .depart-mover {
+    animation: none;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(var(--mover-rot));
+  }
+}
+
+
+/* ==================================================================
+   TAMBAHAN REDESAIN — KARTU
+
+   Token papan yang sama dengan tampilan Manifes dipasang di kepala
+   kartu. Tujuannya konsistensi: "H-3" berarti hal yang sama di mana
+   pun ia muncul, jadi berpindah antara Kartu dan Manifes tidak
+   membuat pengguna belajar dua bahasa.
+================================================================== */
+.ship-card-top {
+  align-items: center;
+}
+.card-board {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.ship-title-block {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.ship-title-text {
+  min-width: 0;
+}
+
+/* Baris tag dirapatkan & dibuat lebih tenang: dulu tiap tag punya
+   latar berwarna sendiri sehingga satu kartu bisa memuat enam warna
+   sekaligus dan tidak ada yang menonjol. Sekarang hanya tag yang
+   menuntut tindakan (DELAY) yang berwarna kuat. */
+.tag-row {
+  gap: 5px;
+  margin: 10px 0 0;
+}
+.tag {
+  font-size: var(--t-xs);
+  padding: 3px 8px;
+  border-radius: var(--r-xs);
+}
+
+
+/* ---- Kartu di layar sempit ---------------------------------------
+   Tiga kotak tanggal berdampingan tidak akan pernah muat di 390px:
+   input date bawaan peramban punya lebar minimum sendiri yang tidak
+   bisa ditekan. Di bawah 600px mereka ditumpuk. */
+@media (max-width: 599.98px) {
+  .date-strip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .date-field {
+    min-width: 0;
+  }
+  .delay-strip-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

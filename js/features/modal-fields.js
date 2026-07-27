@@ -11,6 +11,8 @@ $$("#detailTabs .nav-link").forEach((btn) => {
     $(`.tab-pane[data-tabpane="${btn.dataset.tab}"]`).classList.remove(
       "d-none",
     );
+    // Penanda langkah di kepala halaman ikut berpindah.
+    if (typeof syncFormStep === "function") syncFormStep();
   });
 });
 
@@ -60,6 +62,41 @@ function applyTransportLabels() {
    INCOTERM / CUSTOMS RECALCULATION (modal)
 ================================================================== */
 $("#fIncoterm").addEventListener("change", recalcCustoms);
+
+/* ------------------------------------------------------------------
+   PPN & PPH: dihitung otomatis, tapi tetap bisa ditimpa
+
+   Aturannya satu kalimat: KOSONG BERARTI OTOMATIS, DIISI BERARTI
+   MANUAL. Begitu pengguna mengetik angka sendiri, kolom itu berhenti
+   ikut berubah saat Total Nilai Barang atau NDPBM berubah — kalau
+   tidak, angka yang baru saja diketik akan tertimpa sendiri dan itu
+   membingungkan. Mengosongkan kolomnya mengembalikannya ke otomatis,
+   jadi tidak ada jalan buntu.
+
+   Penanda ini WAJIB dipasang sebelum recalcCustoms() berjalan, karena
+   recalcCustoms membacanya untuk memutuskan boleh menulis atau tidak.
+   Sebab itu pendengar di bawah didaftarkan lebih dulu.
+------------------------------------------------------------------ */
+const AUTO_DUTY_FIELDS = ["fPPN", "fPPH"];
+AUTO_DUTY_FIELDS.forEach((id) => {
+  $("#" + id).addEventListener("input", (e) => {
+    e.target.dataset.auto = e.target.value.trim() === "" ? "1" : "0";
+  });
+});
+
+function isAutoDuty(el) {
+  return el.dataset.auto !== "0";
+}
+
+// Dipanggil saat form dibuka: nilai yang sudah tersimpan dianggap
+// dimasukkan dengan sengaja, jadi tidak ditimpa hitungan otomatis.
+function initAutoDutyFlags() {
+  AUTO_DUTY_FIELDS.forEach((id) => {
+    const el = $("#" + id);
+    el.dataset.auto = el.value.trim() === "" ? "1" : "0";
+  });
+}
+
 ["fFreight", "fInsurance", "fNdpbm", "fTarif", "fBM", "fPPN", "fPPH"].forEach(
   (id) => {
     $("#" + id).addEventListener("input", recalcCustoms);
@@ -75,14 +112,44 @@ function recalcCustoms() {
     ppn: excelNum($("#fPPN").value),
     pph: excelNum($("#fPPH").value),
   };
+  const calc0 = computeCustoms(tmp);
+
+  /* ---- PPN & PPH otomatis ---------------------------------------
+     Dasar hitungnya Total Nilai Barang (USD) x NDPBM, lalu:
+       PPN = 11%
+       PPH = 2,5%
+     Bea Masuk sengaja TIDAK ikut dihitung: tarifnya berbeda per HS
+     Code, jadi angkanya tidak bisa diturunkan dari data yang ada di
+     form ini. Kolomnya tetap manual.
+
+     Kalau suatu saat dasarnya perlu diubah (mis. ke CIF + Bea Masuk),
+     satu-satunya tempat yang perlu disunting adalah blok ini. */
+  const dasarRupiah = calc0.totalUSD * tmp.ndpbm;
+  const elPpn = $("#fPPN");
+  const elPph = $("#fPPH");
+  if (isAutoDuty(elPpn)) {
+    elPpn.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.11)) : "";
+  }
+  if (isAutoDuty(elPph)) {
+    elPph.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.025)) : "";
+  }
+
+  // Dihitung ulang memakai PPN/PPH terbaru supaya BM + PDRI ikut benar
+  // pada putaran yang sama, bukan tertinggal satu langkah.
+  tmp.ppn = excelNum(elPpn.value);
+  tmp.pph = excelNum(elPph.value);
   const calc = computeCustoms(tmp);
 
   $("#calcTotalUSD").textContent = fmtUSD(calc.totalUSD);
 
   const isCIF = tmp.incoterm === "CIF";
   const isFOB = tmp.incoterm === "FOB";
-  $("#cifBlock").style.display = isCIF ? "flex" : "none";
-  $("#fobBlock").style.display = isFOB ? "flex" : "none";
+  $$(".calc-box--cif").forEach((el) => {
+    el.style.display = isCIF ? "" : "none";
+  });
+  $$(".calc-box--fob").forEach((el) => {
+    el.style.display = isFOB ? "" : "none";
+  });
   $("#noCifFobNote").style.display = !isCIF && !isFOB ? "block" : "none";
 
   if (isCIF) {
@@ -93,7 +160,10 @@ function recalcCustoms() {
     $("#calcFOBRupiah").textContent = fmtRp(calc.fobRupiah);
   }
 
-  $("#calcBMPDRI").value = fmtRp(calc.bmPdri);
+  // Tanpa awalan "Rp" di dalam nilainya — lambangnya digambar sebagai
+  // lapisan oleh .input-affix, jadi isinya tetap angka murni.
+  $("#calcBMPDRI").value = formatNumberValue(calc.bmPdri);
+  syncAffixState();
 
   $("#footTotalQty").textContent = fmtNum(calc.totalQty);
   $("#footTotalNetto").textContent = fmtNum(calc.totalNetto);
@@ -123,3 +193,26 @@ function recalcCustoms() {
     autoSizeInput($("#fPackage"), 58, 190);
   }
 }
+
+
+/* ==================================================================
+   KEADAAN LAMBANG MATA UANG
+
+   Lambang $ / Rp / % meredup saat kolomnya kosong dan menegas begitu
+   terisi. Nilainya sendiri tidak pernah disentuh — lambangnya cuma
+   lapisan CSS (lihat .input-affix di css/form.css), sehingga template
+   salin & Bulk Export tetap menerima angka murni tanpa perlu
+   membersihkan apa pun.
+================================================================== */
+function syncAffixState(scope) {
+  const root = scope || document;
+  root.querySelectorAll(".input-affix").forEach((wrap) => {
+    const inp = wrap.querySelector("input");
+    wrap.classList.toggle("has-value", !!(inp && inp.value.trim()));
+  });
+}
+
+document.addEventListener("input", (e) => {
+  const wrap = e.target.closest && e.target.closest(".input-affix");
+  if (wrap) wrap.classList.toggle("has-value", !!e.target.value.trim());
+});

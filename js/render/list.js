@@ -8,10 +8,12 @@
    dengan yang sedang diurutkan — kalau daftar diurutkan menurut ETD tapi
    rentangnya menyaring ETA, hasilnya membingungkan. */
 function sortBasis() {
-  return String(sortDir || "").startsWith("etd") ? "etd" : "eta";
+  return rangeBasis === "etd" ? "etd" : "eta";
 }
+// Selalu menaik: yang paling dekat di paling atas. Papan operasi tidak
+// punya kegunaan nyata untuk "yang paling jauh dulu".
 function sortDirection() {
-  return String(sortDir || "").endsWith("desc") ? "desc" : "asc";
+  return "asc";
 }
 // Tanggal yang dipakai satu pengiriman pada dasar yang sedang aktif.
 // Keduanya memakai versi EFEKTIF, jadi jadwal yang sudah dimundurkan
@@ -47,6 +49,11 @@ function getFiltered() {
     // sekali. Pengiriman yang tanggalnya belum diisi disembunyikan HANYA
     // kalau rentangnya memang sedang dipakai — kalau tidak, ia tetap
     // tampil seperti biasa.
+    // Preset (chip "Cepat" & ubin metrik) disaring di sini juga supaya
+    // SEMUA jalur — paginasi, hitungan, Bulk Export — melihat daftar
+    // yang sama persis dengan yang tampil di layar.
+    if (!presetTest(s)) return false;
+
     const tgl = basisDateOf(s);
     let matchRange = true;
     if (dari || sampai) {
@@ -95,15 +102,48 @@ function groupAndSort(list) {
   return ordered;
 }
 
+/* ------------------------------------------------------------------
+   URUTAN TAMPIL — satu sumber
+
+   Meratakan hasil pengelompokan jadi satu urutan kartu/baris, sambil
+   tetap mengingat "key" tanggal tiap grup supaya pemisah tanggal
+   tetap benar per halaman.
+
+   Dipakai BERSAMA oleh render() dan panel detail. Sebelumnya panel
+   detail menelusuri getFiltered() apa adanya — yaitu urutan
+   penyimpanan database, BUKAN urutan yang terlihat di layar. Akibatnya
+   tombol "berikutnya" melompat ke pengiriman acak, dan pada baris
+   pertama tombolnya bahkan bisa mati karena kebetulan baris itu
+   elemen terakhir di array. Keduanya sekarang membaca fungsi yang
+   sama, jadi tidak bisa lagi berbeda.
+------------------------------------------------------------------ */
+function flattenGroups(groups) {
+  const flat = [];
+  groups.forEach((g) => {
+    g.items.forEach((s) => flat.push({ key: g.key, shipment: s }));
+  });
+  return flat;
+}
+
+// Daftar pengiriman dalam URUTAN YANG TAMPIL (sudah disaring,
+// dikelompokkan, dan diurutkan) — tanpa potongan per halaman, karena
+// panel detail boleh melewati batas halaman.
+function orderedFiltered() {
+  return flattenGroups(groupAndSort(getFiltered())).map((e) => e.shipment);
+}
+
 function render() {
   applyModeLabels();
+  syncSearchClear();
   const filtered = getFiltered();
+  const totalInBook = currentList().length;
 
   if (filtered.length === 0) {
     cardContainer.innerHTML = "";
     emptyState.classList.remove("d-none");
     renderPaginationBar(0);
     updateStats();
+    renderFilterNote(0, totalInBook);
     return;
   }
   emptyState.classList.add("d-none");
@@ -111,13 +151,7 @@ function render() {
   const groups = groupAndSort(filtered);
   const groupByKey = new Map(groups.map((g) => [g.key, g]));
 
-  // Ratakan jadi satu urutan kartu (dipakai untuk potong per halaman),
-  // tapi tetap ingat "key" tanggal grup-nya masing-masing supaya divider
-  // tanggal tetap bisa ditampilkan dengan benar per halaman.
-  const flat = [];
-  groups.forEach((g) => {
-    g.items.forEach((s) => flat.push({ key: g.key, shipment: s }));
-  });
+  const flat = flattenGroups(groups);
 
   const totalPages = Math.max(1, Math.ceil(flat.length / pageSize));
   if (currentPage > totalPages) currentPage = totalPages;
@@ -125,35 +159,57 @@ function render() {
   const start = (currentPage - 1) * pageSize;
   const pageSlice = flat.slice(start, start + pageSize);
 
+  // Kartu dan Manifes menggambar dari POTONGAN HALAMAN yang sama —
+  // yang berbeda cuma pembungkusnya. Jadi paginasi, pemisah tanggal,
+  // dan urutan tidak mungkin berbeda antara dua bentuk tampilan.
   let html = "";
   let lastKey;
+  let bucket = [];
+
+  const flushBucket = () => {
+    if (!bucket.length) return;
+    html +=
+      viewMode === "table"
+        ? renderManifestGroup(bucket.join(""))
+        : bucket.join("");
+    bucket = [];
+  };
+
   pageSlice.forEach((entry, idx) => {
     if (idx === 0 || entry.key !== lastKey) {
+      flushBucket();
       // anyArrived dihitung dari SELURUH anggota grup (bukan cuma yang
-      // tampil di halaman ini), supaya status badge tanggal konsisten
-      // di halaman berapa pun.
+      // tampil di halaman ini), supaya penanda kelompok tanggal
+      // konsisten di halaman berapa pun.
       const g = groupByKey.get(entry.key);
       const anyArrived = g
         ? g.items.every((s) => s.status === "arrived")
         : false;
+      const jumlah = g ? g.items.length : 0;
       const label = entry.key
         ? fmtDateLong(entry.key)
         : "Tanggal Tidak Diketahui";
       html += `
         <div class="date-section">
-          <span class="date-section-line"></span>
           <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
           <span class="date-section-line"></span>
+          <span class="date-section-count">${jumlah} pengiriman · ${sortBasis().toUpperCase()}</span>
         </div>`;
     }
-    html += renderCard(entry.shipment);
+    bucket.push(
+      viewMode === "table"
+        ? renderManifestRow(entry.shipment)
+        : renderCard(entry.shipment),
+    );
     lastKey = entry.key;
   });
+  flushBucket();
   cardContainer.innerHTML = html;
 
   renderPaginationBar(flat.length);
   fixSelectWidths();
   updateStats();
+  renderFilterNote(flat.length, totalInBook);
 }
 
 /* ==================================================================
@@ -185,7 +241,7 @@ function paginationRange(current, total) {
 }
 
 function scrollToListTop() {
-  const el = $("#lblSectionList");
+  const el = $("#lblListCaption");
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -258,27 +314,14 @@ $("#paginationBar").addEventListener("change", (e) => {
   }
 });
 
-function updateStats() {
-  const list = currentList();
-  $("#statTotal").textContent = list.length;
-  $("#statProcess").textContent = list.filter(
-    (s) => s.status === "process",
-  ).length;
-  // Kartu statistik ketiga sekarang menghitung DELAY (status "transit"
-  // sudah tidak ditawarkan lagi — lihat js/core/status.js).
-  $("#statDelay").textContent = list.filter(
-    (s) => s.status === "delayed",
-  ).length;
-  $("#statArrived").textContent = list.filter(
-    (s) => s.status === "arrived",
-  ).length;
-}
+/* updateStats() sekarang tinggal di js/features/quick-filters.js —
+   angka di ubin papan dan angka di chip saringan HARUS dihitung dari
+   satu tempat, kalau tidak keduanya pasti berbeda cepat atau lambat. */
 
 function applyModeLabels() {
   const lbl = ML();
   $("#lblAddBtn").textContent = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
-  $("#lblArrivedStat").textContent = lbl.arrivedStat;
   // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog
   // konfirmasi — supaya tidak perlu ditekan dulu untuk tahu apa yang
   // akan terhapus.
@@ -353,8 +396,28 @@ setInterval(refreshLanePositions, 60000);
 /* ==================================================================
    MODE SWITCH (navbar)
 ================================================================== */
-$("#tabImport").addEventListener("click", () => switchMode("import"));
-$("#tabExport").addEventListener("click", () => switchMode("export"));
+/* Sakelar buku Import/Export kini muncul di kepala papan SETIAP halaman
+   yang isinya bergantung pada buku aktif (Jadwal & Ringkasan) — bukan
+   lagi satu tombol di bilah atas. Ia mengubah ISI halaman, bukan
+   berpindah halaman, jadi tempatnya memang di kepala halaman itu.
+
+   Karena salinannya lebih dari satu, penangannya didelegasikan dan
+   penyelarasannya menyapu semua salinan sekaligus. Tanpa itu, menekan
+   sakelar di Ringkasan akan meninggalkan sakelar di Jadwal menyala
+   pada buku yang salah. */
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".mode-tabs [data-mode]");
+  if (!btn) return;
+  if (btn.dataset.mode !== activeMode) switchMode(btn.dataset.mode);
+});
+
+function syncModeTabs(mode) {
+  $$(".mode-tabs [data-mode]").forEach((b) => {
+    const aktif = b.dataset.mode === mode;
+    b.classList.toggle("active", aktif);
+    b.setAttribute("aria-selected", aktif ? "true" : "false");
+  });
+}
 // Section aktif diingat supaya REFRESH halaman tidak melempar user
 // kembali ke Import (requirement C: "Saat refresh halaman, form harus
 // tetap di section yang sama"). Dipakai juga saat form Tambah/Edit
@@ -374,22 +437,39 @@ function restoreActiveMode() {
   } catch (err) {
     /* abaikan */
   }
-  $("#tabImport").classList.toggle("active", activeMode === "import");
-  $("#tabExport").classList.toggle("active", activeMode === "export");
+  syncModeTabs(activeMode);
 }
 
 function switchMode(mode) {
   activeMode = mode;
   rememberActiveMode(mode);
-  $("#tabImport").classList.toggle("active", mode === "import");
-  $("#tabExport").classList.toggle("active", mode === "export");
+  syncModeTabs(mode);
   $("#searchInput").value = "";
   $("#filterStatus").value = "";
   $("#filterDateFrom").value = "";
   $("#filterDateTo").value = "";
+  // Preset ikut dilepas: "perlu tindakan" di buku Import bukan
+  // pertanyaan yang sama dengan di buku Export, dan membawa saringan
+  // lama ke buku lain hampir selalu bikin bingung.
+  activePreset = "all";
+  presetDateOverride = "";
+  syncPresetUI();
   applyRangeBasisLabel();
+  syncSearchClear();
   currentPage = 1;
   render();
+
+  /* Halaman Ringkasan TIDAK ikut terbarui sebelumnya: render() hanya
+     menggambar daftar Jadwal, sementara Ringkasan digambar sekali saat
+     rutenya dibuka. Akibatnya menekan EXPORT sementara berada di
+     Ringkasan menyisakan angka & antrean milik buku Import — sakelarnya
+     berpindah, isinya tidak. */
+  if (
+    typeof renderOverview === "function" &&
+    !$("#viewOverview").classList.contains("d-none")
+  ) {
+    renderOverview();
+  }
 }
 
 /* ----------------------------------------------------------------
@@ -421,8 +501,16 @@ $("#filterStatus").addEventListener("change", () => {
   currentPage = 1;
   render();
 });
-$("#sortDir").addEventListener("change", (e) => {
-  sortDir = e.target.value;
+$("#rangeBasis").addEventListener("change", (e) => {
+  rangeBasis = e.target.value;
+  // Agenda 7 hari & token hitung mundur di Ringkasan memakai dasar yang
+  // sama, jadi keduanya ikut digambar ulang.
+  if (
+    typeof renderOverview === "function" &&
+    !$("#viewOverview").classList.contains("d-none")
+  ) {
+    setTimeout(renderOverview, 0);
+  }
   currentPage = 1;
   applyRangeBasisLabel();
   render();
@@ -430,9 +518,11 @@ $("#sortDir").addEventListener("change", (e) => {
 
 // Label rentang ikut berubah (ETA <-> ETD) supaya selalu jelas kolom
 // mana yang sedang disaring.
+// Menyalakan kembali pilihan dasar tanggal pada kontrolnya, dan
+// memperbarui semua tempat yang menyebut "ETA" atau "ETD" sebagai teks.
 function applyRangeBasisLabel() {
-  const el = $("#rangeBasisLabel");
-  if (el) el.textContent = sortBasis().toUpperCase();
+  const el = $("#rangeBasis");
+  if (el && el.value !== sortBasis()) el.value = sortBasis();
   const ada = $("#filterDateFrom").value || $("#filterDateTo").value;
   $("#btnClearRange").classList.toggle("d-none", !ada);
 }

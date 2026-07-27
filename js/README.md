@@ -29,7 +29,7 @@ dependency-nya dulu.
 |---|---|
 | `config.js` | Koneksi Supabase, STATUS_META, MODE_LABELS, JENIS_OPTIONS, SKB_TYPE_OPTIONS |
 | `core/helpers.js` | Formatter tanggal/angka, escapeHtml, factory objek baru (newItem/newSkbEntry/newStop) |
-| `core/state.js` | Satu-satunya tempat state mutable app: `data`, `activeMode`, `draftItems`, `draftStops`, `sortDir`, `currentDetailId`, `currentPage`, `pageSize` |
+| `core/state.js` | Satu-satunya tempat state mutable app: `data`, `activeMode`, `draftItems`, `draftStops`, `rangeBasis`, `currentDetailId`, `currentPage`, `pageSize` |
 | `core/mapping.js` | Konversi baris Supabase (snake_case) <-> objek JS (camelCase) |
 | `data/api.js` | Semua panggilan CRUD ke Supabase (load/create/update/persistFields) |
 | `ui/dom.js` | Shortcut `$`/`$$`, referensi elemen DOM yang sering dipakai |

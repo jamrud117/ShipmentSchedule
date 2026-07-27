@@ -244,7 +244,8 @@ function buildDailyExportCopyRows(s, formatter) {
 
      1. Shipment From <pengirim>            (Export: "Shipment To ...")
         Incoterm: CIF | Mode: LCL           (Export: "Packages: 6")
-        Perkiraan tiba di pabrik: <tgl>     (Export: "Estimasi Stuffing: <tgl>")
+        Perkiraan tiba di pabrik: <tgl>   -> Actual Delivery
+        (Export: "Estimasi Stuffing: <tgl>" -> Tanggal Stuffing)
           • <nama barang>
 
    Dulu semuanya dipadatkan jadi SATU baris panjang dipisah tanda "–",
@@ -293,7 +294,13 @@ function reportDetailPairs(s, mode) {
     const pkg = extractLeadingNumber(s.package);
     return [
       ["Packages", pkg == null ? "0" : String(Math.round(pkg))],
-      ["Estimasi Stuffing", fmtDateLong(effectiveEtd(s))],
+      // Tanggal STUFFING, bukan ETD. Di mode Export, field factoryDate
+      // memang berlabel "Tanggal Stuffing" (lihat MODE_LABELS di
+      // js/config.js) — itu tanggal barang dimuat ke kontainer di
+      // pabrik, dan itulah yang ditunggu penerima laporan. ETD adalah
+      // tanggal kapal berangkat dari pelabuhan; keduanya bisa berselisih
+      // beberapa hari.
+      ["Estimasi Stuffing", fmtDateLong(s.factoryDate)],
     ];
   }
   return [
@@ -310,13 +317,10 @@ function reportHeadline(s, mode) {
 /* Patokan urutan Report = tanggal yang DITAMPILKAN di baris ke-3 tiap
    section, supaya urutan yang dibaca selalu cocok dengan angka yang
    terlihat:
-     Import -> "Perkiraan tiba di pabrik" (actual)
-     Export -> "Estimasi Stuffing"        (ETD efektif)
-   Sisi Export memakai ETD EFEKTIF (ikut Tanggal Update Delay) supaya
-   urutan DAN tanggal yang tercetak di email sama-sama mencerminkan
-   jadwal terbaru, bukan rencana yang sudah tidak berlaku.            */
+     Import -> "Perkiraan tiba di pabrik" (Actual Delivery)
+     Export -> "Estimasi Stuffing"        (Tanggal Stuffing)          */
 function reportSortDate(s, mode) {
-  return (mode === "export" ? effectiveEtd(s) : s.actual) || "";
+  return (mode === "export" ? s.factoryDate : s.actual) || "";
 }
 
 function pendingByMode(mode) {

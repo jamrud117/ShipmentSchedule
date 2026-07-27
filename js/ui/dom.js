@@ -118,8 +118,10 @@ const cardContainer = $("#cardContainer");
 const emptyState = $("#emptyState");
 const viewListEl = $("#viewList");
 const viewFormEl = $("#viewForm");
-const detailViewModalEl = $("#detailViewModal");
-const detailViewModal = new bootstrap.Modal(detailViewModalEl);
+/* Detail read-only sekarang memakai PANEL GESER, bukan modal Bootstrap
+   (lihat js/views/detail-view.js). Modal menutupi daftar, dan
+   menutupnya berarti kehilangan tempat — padahal cara kerja
+   sehari-hari adalah membandingkan satu per satu. */
 const confirmModalEl = $("#confirmModal");
 const confirmModal = new bootstrap.Modal(confirmModalEl);
 const bulkModalEl = $("#bulkModal");

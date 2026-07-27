@@ -200,16 +200,98 @@ function buildDetailHtml(s) {
   `;
 }
 
+/* ==================================================================
+   PANEL GESER — pengendali
+
+   Selain menampilkan isi yang sama seperti dulu, panel ini menambah
+   satu hal yang tidak mungkin dilakukan modal: BERPINDAH. Tombol ‹ ›
+   (dan tombol panah keyboard) menelusuri urutan yang PERSIS SAMA
+   dengan yang tampil di daftar — hasil saringan & urutan yang sedang
+   dipakai — jadi memeriksa sepuluh pengiriman berturut-turut tidak
+   perlu menutup panel sekali pun.
+================================================================== */
+const detailScrimEl = $("#detailScrim");
+const detailSheetEl = $("#detailSheet");
+
+// Urutan telusur = urutan yang BENAR-BENAR tampil di daftar (sudah
+// disaring, dikelompokkan per tanggal, dan diurutkan) — bukan urutan
+// penyimpanan database. Lihat orderedFiltered() di render/list.js.
+function detailNavList() {
+  return orderedFiltered();
+}
+
 function openDetailView(id) {
   const s = currentList().find((x) => x.id === id);
   if (!s) return;
   currentDetailId = id;
+
   $("#detailViewBody").innerHTML = buildDetailHtml(s);
-  detailViewModal.show();
+  $("#detailSheetTitle").textContent = dispVal(s.party);
+
+  const list = detailNavList();
+  const idx = list.findIndex((x) => x.id === id);
+  $("#detailSheetPos").textContent =
+    idx >= 0 ? `${idx + 1} / ${list.length}` : "";
+  $("#btnDetailPrev").disabled = idx <= 0;
+  $("#btnDetailNext").disabled = idx < 0 || idx >= list.length - 1;
+
+  detailScrimEl.hidden = false;
+  detailSheetEl.hidden = false;
+  // Dua putaran gambar dipisah supaya transisi CSS-nya benar-benar
+  // berjalan; kalau kelasnya dipasang di frame yang sama dengan
+  // hidden=false, peramban menganggapnya keadaan awal dan panel
+  // muncul mendadak tanpa gerak.
+  requestAnimationFrame(() => {
+    detailScrimEl.classList.add("is-open");
+    detailSheetEl.classList.add("is-open");
+  });
+  $("#btnDetailClose").focus();
 }
+
+function closeDetailView() {
+  detailScrimEl.classList.remove("is-open");
+  detailSheetEl.classList.remove("is-open");
+  const sembunyikan = () => {
+    detailScrimEl.hidden = true;
+    detailSheetEl.hidden = true;
+  };
+  // Tunggu transisinya selesai dulu; kalau langsung di-hidden,
+  // panelnya hilang seketika dan animasi keluar tidak pernah terlihat.
+  setTimeout(sembunyikan, 300);
+  currentDetailId = null;
+}
+
+function stepDetailView(delta) {
+  const list = detailNavList();
+  const idx = list.findIndex((x) => x.id === currentDetailId);
+  const next = list[idx + delta];
+  if (next) openDetailView(next.id);
+}
+
+function isDetailOpen() {
+  return detailSheetEl && detailSheetEl.classList.contains("is-open");
+}
+
+$("#btnDetailClose").addEventListener("click", closeDetailView);
+$("#btnDetailCloseFoot").addEventListener("click", closeDetailView);
+detailScrimEl.addEventListener("click", closeDetailView);
+$("#btnDetailPrev").addEventListener("click", () => stepDetailView(-1));
+$("#btnDetailNext").addEventListener("click", () => stepDetailView(1));
+
+document.addEventListener("keydown", (e) => {
+  if (!isDetailOpen()) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeDetailView();
+  } else if (e.key === "ArrowLeft") {
+    stepDetailView(-1);
+  } else if (e.key === "ArrowRight") {
+    stepDetailView(1);
+  }
+});
 
 $("#btnGotoEdit").addEventListener("click", () => {
   const id = currentDetailId;
-  detailViewModal.hide();
+  closeDetailView();
   location.hash = "#/edit/" + encodeURIComponent(id);
 });

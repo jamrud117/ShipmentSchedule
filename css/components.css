@@ -1,0 +1,237 @@
+/* ================= MODAL ================= */
+.modal-content {
+  border-radius: 16px;
+  border: none;
+}
+.modal-header {
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--navy);
+}
+.form-label {
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--navy);
+  margin-bottom: 0.25rem;
+}
+.form-text-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.modal .form-control,
+.modal .form-select {
+  font-size: 0.87rem;
+}
+.modal .form-control:focus,
+.modal .form-select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
+}
+.modal .form-control[readonly] {
+  background: #f7fafd;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  padding-left: 20px;
+}
+.modal-header-actions .btn-close {
+  margin: 0 !important;
+}
+
+/* ================= TOAST ================= */
+.toast {
+  min-width: 260px;
+}
+
+/* ==================================================================
+   KRONOLOGI & CATATAN (notes log) — lihat js/features/notes-log.js
+================================================================== */
+
+/* ---- panel di FORM ---- */
+.notes-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfdff;
+  padding: 12px;
+}
+.notes-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.notes-composer textarea {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 52px;
+}
+.notes-composer textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(18, 58, 99, 0.12);
+}
+.notes-composer .btn {
+  white-space: nowrap;
+}
+.notes-timeline {
+  margin-top: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.note-entry {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+}
+/* Entri terbaru ditandai — inilah yang jadi kolom REMARK di template copy. */
+.note-entry--latest {
+  border-left-color: var(--p-500);
+  background: var(--p-50);
+}
+.note-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.note-stamp {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.note-del {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.note-del:hover {
+  background: #fdeeee;
+  color: var(--coral);
+}
+.note-text {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.note-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+  padding: 6px 2px;
+}
+
+/* ---- panel ringkas di KARTU dashboard ---- */
+.card-notes {
+  margin-top: 12px;
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+}
+.card-notes-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.card-notes-more {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.72rem;
+}
+.card-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.card-note {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 6px 9px;
+}
+.card-note-stamp {
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.card-note-text {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.card-note-add {
+  display: flex;
+  gap: 6px;
+}
+.card-note-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  background: #fff;
+}
+.card-note-input:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+.btn-note-send {
+  border: none;
+  background: var(--teal);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn-note-send:hover {
+  filter: brightness(0.94);
+}
+.detail-notes-head {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.detail-notes .card-note + .card-note {
+  margin-top: 6px;
+}

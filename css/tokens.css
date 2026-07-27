@@ -1,0 +1,178 @@
+/* ==================================================================
+   TOKENS — satu sumber untuk warna, tipografi, jarak, radius,
+   bayangan, dan gerak.
+
+   ARAH DESAIN: "papan operasi pelabuhan".
+   Aplikasi ini dipakai 6 jam sehari untuk mencocokkan pengiriman
+   dengan dokumen Bea Cukai. Jadi bahasanya diambil dari dunia itu
+   sendiri: manifes berbaris, nomor dokumen monospace, cap status,
+   dan papan keberangkatan yang menghitung mundur ke ETA. Bukan
+   halaman pemasaran logistik.
+
+   NAVY adalah warna utama — dipakai sebagai TINTA, bukan sebagai
+   gradien hiasan. Kuningan (brass) tetap jadi aksen sekunder untuk
+   sorotan yang perlu menonjol tanpa berebut perhatian dengan navy.
+   Warna lain HANYA untuk status yang memang harus dibedakan.
+
+   PENTING: nama variabel di sini SENGAJA sama dengan versi lama.
+   Seluruh komponen yang sudah ada (form, tabel barang, docnum,
+   kronologi) otomatis ikut palet baru tanpa perlu disentuh satu
+   per satu.
+================================================================== */
+
+:root {
+  /* ---- Netral: kertas & tinta ------------------------------------
+     Sedikit lebih dingin/kebiruan dari slate biasa supaya seluruh
+     permukaan terasa satu keluarga dengan navy, bukan abu-abu netral
+     yang ditempeli navy. */
+  --n-50: #f5f7fa;
+  --n-100: #eef1f6;
+  --n-200: #dfe5ed;
+  --n-300: #c4cedb;
+  --n-400: #93a1b5;
+  /* Diturunkan dari #64748b: pada latar putih, warna itu berhenti di
+     4,43:1 — tepat di bawah ambang WCAG AA (4,5:1) untuk teks kecil.
+     Karena --n-500 adalah warna "teks redup" yang dipakai di puluhan
+     tempat (kepala kolom manifes, info paginasi, catatan kartu),
+     satu setelan di sini memperbaiki semuanya sekaligus. */
+  --n-500: #5a6879;
+  --n-600: #48566b;
+  --n-700: #33415a;
+  --n-800: #1c2b45;
+  --n-900: #0a1b33;
+
+  /* ---- Aksen utama: RAMP NAVY ------------------------------------
+     Ujung TERANG (--p-200/300/400) wajib ada: dipakai di atas
+     permukaan gelap (bilah atas, papan ringkasan, header form) di
+     mana navy tua akan lenyap karena sewarna dengan latarnya. */
+  --p-50: #eef4fa;
+  --p-100: #dae7f4;
+  --p-200: #b4cde6;
+  --p-300: #86aed4;
+  --p-400: #5588bb;
+  --p-500: #1d5188;
+  --p-600: #16375e;
+  --p-700: #0a1b33;
+
+  /* ---- Aksen sekunder: RAMP KUNINGAN (brass) ---------------------
+     Sengaja diredupkan (bukan kuning terang) supaya beda jelas dari
+     status PROCESS yang sama-sama di keluarga oranye/kuning. */
+  --sec-50: #fbf8f1;
+  --sec-100: #f5eedd;
+  --sec-200: #ebdcbb;
+  --sec-300: #dcc286;
+  --sec-400: #c79a3e;
+  --sec-500: #ab7f2b;
+  --sec-600: #8a6524;
+  --sec-700: #644a1c;
+
+  /* ---- Permukaan gelap (identitas merek) ---- */
+  --d-900: #0a1b33;
+  --d-800: #102643;
+  --d-700: #16375e;
+  --d-600: #1d5188;
+
+  /* ---- Status: semantik, bukan dekorasi -------------------------
+     Tiga status harus terbaca sekilas dari seberang meja:
+       PROCESS  = kuning tembaga (sedang berjalan)
+       DELAY    = merah bata     (perlu tindakan)
+       SELESAI  = navy tenang    (sudah beres, boleh mundur ke belakang)
+     "Selesai" sengaja TIDAK diberi warna cerah: kartu yang sudah
+     tuntas harus meredup, bukan ikut berebut perhatian. */
+  --s-warn: #b5730f;
+  --s-warn-bg: #fdf6e9;
+  --s-warn-line: #e9d3a6;
+  --s-danger: #c0392b;
+  --s-danger-bg: #fdf1ef;
+  --s-danger-line: #f0c4bd;
+  --s-ok: var(--p-600);
+  --s-ok-bg: var(--p-50);
+  --s-ok-line: var(--p-200);
+  --s-info: #3f5fb8;
+
+  /* ---- Radius ---- */
+  --r-xs: 5px;
+  --r-sm: 7px;
+  --r-md: 9px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+
+  /* ---- Jarak, kelipatan 4 ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  /* ---- Bayangan: halus & berlapis, bukan blok gelap ---- */
+  --sh-xs: 0 1px 2px rgba(10, 27, 51, 0.05);
+  --sh-sm: 0 1px 3px rgba(10, 27, 51, 0.07), 0 1px 2px rgba(10, 27, 51, 0.04);
+  --sh-md: 0 4px 12px -4px rgba(10, 27, 51, 0.12), 0 2px 4px rgba(10, 27, 51, 0.04);
+  --sh-lg: 0 14px 32px -14px rgba(10, 27, 51, 0.22), 0 4px 8px rgba(10, 27, 51, 0.05);
+  --sh-panel: -22px 0 60px -30px rgba(10, 27, 51, 0.45);
+  --sh-focus: 0 0 0 3px rgba(29, 81, 136, 0.26);
+
+  /* ---- Gerak: satu kurva, tiga durasi ---- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-1: 130ms;
+  --dur-2: 190ms;
+  --dur-3: 280ms;
+
+  /* ---- Tipografi -------------------------------------------------
+     Archivo  : grotesk dengan terminal rata — huruf papan penanda.
+                Dipakai untuk judul, angka besar, dan LABEL STRUKTUR
+                (huruf besar + spasi renggang), bukan untuk kalimat.
+     Archivo Narrow : versi sempitnya. Khusus token papan
+                keberangkatan (H-3 / HARI INI / TELAT 5H) & label
+                kolom manifes — persis seperti papan jadwal
+                sungguhan yang harus muat di kolom sempit.
+     Inter    : muka antarmuka. Terbaik untuk data rapat.
+     JetBrains Mono : PENANDA yang dibaca karakter per karakter —
+                no. aju, B/L, HS Code, kontainer. Fungsional, bukan
+                gaya-gayaan: digit yang sejajar jauh lebih mudah
+                dicocokkan dengan dokumen bea cukai di sebelahnya. */
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-board: "Archivo Narrow", "Archivo", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --t-xs: 0.7rem;
+  --t-sm: 0.78rem;
+  --t-base: 0.86rem;
+  --t-md: 0.95rem;
+  --t-lg: 1.1rem;
+  --t-xl: 1.3rem;
+  --t-2xl: 1.7rem;
+  --t-3xl: 2.3rem;
+
+  /* Jejak label struktur — dipakai di eyebrow, kepala kolom, dan
+     label metrik supaya semuanya berbicara dengan satu suara. */
+  --track-label: 0.1em;
+
+  /* ---- Ukuran kerangka aplikasi ---- */
+  --topbar-h: 54px;
+
+  /* ==================================================================
+     ALIAS — nama lama tetap hidup supaya seluruh aturan CSS yang sudah
+     ada terus berfungsi tanpa disentuh satu per satu.
+  ================================================================== */
+  --navy: var(--d-900);
+  --navy-2: var(--d-800);
+  --ocean: var(--d-600);
+  --teal: var(--sec-600);
+  --teal-dark: var(--sec-700);
+  --amber: var(--s-warn);
+  --coral: var(--s-danger);
+  --green: var(--s-ok);
+  --violet: var(--s-info);
+  --bg: var(--n-50);
+  --surface: #ffffff;
+  --ink: var(--n-900);
+  --muted: var(--n-500);
+  --border: var(--n-200);
+}

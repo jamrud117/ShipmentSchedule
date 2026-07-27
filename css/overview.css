@@ -1,0 +1,387 @@
+/* ==================================================================
+   HALAMAN RINGKASAN
+
+   Halaman baru. Alasannya: aplikasi lama menjawab "apa saja yang ada
+   di daftar", tapi pertanyaan pertama tiap pagi bukan itu. Yang
+   ditanyakan adalah "apa yang harus saya kerjakan hari ini" —
+   mana yang sudah lewat ETA tapi belum tiba, mana yang tiba besok
+   tapi dokumennya belum lengkap, mana yang mundur.
+
+   Semua isi halaman ini dihitung dari data yang SUDAH ada. Tidak ada
+   field baru di database.
+================================================================== */
+.ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  padding-bottom: var(--sp-8);
+}
+@media (max-width: 991px) {
+  .ov-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.panel + .panel {
+  margin-top: var(--sp-4);
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 14px var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+  background: var(--n-50);
+}
+.panel-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--d-900);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-head h2 i {
+  color: var(--sec-600);
+  font-size: 0.9rem;
+}
+.panel-head-note {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.panel-body {
+  padding: var(--sp-5);
+}
+.panel-body--flush {
+  padding: 0;
+}
+
+/* ---- Antrean tindakan -------------------------------------------
+   Satu baris = satu hal yang perlu dikerjakan, dengan ALASANnya
+   ditulis terus terang di sebelah kiri. Tanpa alasan, daftar seperti
+   ini cuma jadi daftar kedua yang harus ditafsirkan sendiri. */
+.task {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 14px var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-left: 3px solid transparent;
+  transition: background var(--dur-1) var(--ease);
+}
+.task:last-child {
+  border-bottom: 0;
+}
+.task:hover {
+  background: var(--p-50);
+}
+.task--late {
+  border-left-color: var(--s-danger);
+}
+.task--soon {
+  border-left-color: var(--s-warn);
+}
+.task--doc {
+  border-left-color: var(--sec-500);
+}
+.task-reason {
+  flex-shrink: 0;
+  width: 92px;
+  font-family: var(--font-board);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.task--late .task-reason {
+  color: var(--s-danger);
+}
+.task--soon .task-reason {
+  color: var(--s-warn);
+}
+.task--doc .task-reason {
+  color: var(--sec-600);
+}
+.task-main {
+  flex: 1;
+  min-width: 0;
+}
+.task-party {
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-detail {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-detail .mono {
+  font-family: var(--font-mono);
+}
+.task-go {
+  flex-shrink: 0;
+  color: var(--n-300);
+  font-size: 0.9rem;
+}
+.task:hover .task-go {
+  color: var(--p-500);
+}
+
+/* ---- Agenda 7 hari ----------------------------------------------
+   Papan mini. Tiap kolom satu hari; angkanya jumlah kedatangan atau
+   keberangkatan pada hari itu. Diklik = daftar tersaring ke tanggal
+   tersebut. */
+.agenda {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.agenda-day {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 6px 10px;
+  text-align: center;
+  background: var(--surface);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+.agenda-day:hover {
+  border-color: var(--p-400);
+  background: var(--p-50);
+}
+.agenda-dow {
+  font-family: var(--font-board);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--n-400);
+}
+.agenda-date {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-md);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-700);
+  line-height: 1.15;
+}
+.agenda-count {
+  margin-top: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  background: var(--n-100);
+  color: var(--n-400);
+}
+.agenda-count.has {
+  background: var(--p-500);
+  color: #fff;
+}
+.agenda-day--today {
+  border-color: var(--sec-500);
+  background: var(--sec-50);
+}
+.agenda-day--today .agenda-dow {
+  color: var(--sec-700);
+}
+.agenda-day--today .agenda-date {
+  color: var(--d-900);
+}
+.agenda-day--weekend .agenda-date {
+  color: var(--n-400);
+}
+
+/* ---- Ringkasan kecil di kolom kanan ---- */
+.stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--n-200);
+  font-size: var(--t-base);
+}
+.stat-line:last-child {
+  border-bottom: 0;
+}
+.stat-line-label {
+  color: var(--n-600);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.stat-line-label i {
+  color: var(--n-400);
+  font-size: 0.85rem;
+}
+.stat-line-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.stat-line-value.is-alert {
+  color: var(--s-danger);
+}
+.stat-line-value.is-quiet {
+  color: var(--n-400);
+}
+
+/* Meteran kelengkapan dokumen. */
+.meter {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  overflow: hidden;
+  margin-top: 3px;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--p-500);
+  transition: width var(--dur-3) var(--ease);
+}
+.meter-fill--warn {
+  background: var(--s-warn);
+}
+.meter-fill--danger {
+  background: var(--s-danger);
+}
+
+/* Aksi cepat di kolom kanan. */
+.quick-actions {
+  display: grid;
+  gap: 7px;
+}
+.quick-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: left;
+  width: 100%;
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+.quick-action:hover {
+  border-color: var(--p-400);
+  background: var(--p-50);
+  color: var(--ink);
+}
+.quick-action i {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--p-50);
+  color: var(--p-600);
+  font-size: 0.9rem;
+}
+.quick-action b {
+  display: block;
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+.quick-action small {
+  display: block;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+/* Keadaan kosong yang lebih tenang untuk panel kecil. */
+.panel-empty {
+  text-align: center;
+  padding: var(--sp-8) var(--sp-4);
+  color: var(--n-500);
+  font-size: var(--t-sm);
+}
+.panel-empty i {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--p-300);
+  margin-bottom: 8px;
+}
+
+
+/* ---- Ringkasan di layar sempit -----------------------------------
+   Kolom alasan selebar 92px memakan seperempat layar ponsel dan
+   menyisakan ruang terlalu sempit untuk nama shipper, sehingga
+   teksnya meluber keluar barisnya. Di sini alasannya naik ke atas
+   sebagai label, dan teksnya memakai lebar penuh. */
+@media (max-width: 575.98px) {
+  .task {
+    flex-wrap: wrap;
+    gap: 4px var(--sp-3);
+    padding: 12px var(--sp-4);
+  }
+  .task-reason {
+    width: auto;
+    flex: 0 0 auto;
+    order: -1;
+  }
+  .task-main {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .task-go {
+    order: 0;
+    margin-left: auto;
+  }
+  .task-party,
+  .task-detail {
+    white-space: normal;
+  }
+  .task-detail {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .agenda {
+    gap: 4px;
+  }
+  .agenda-day {
+    padding: 7px 2px 8px;
+  }
+  .panel-body {
+    padding: var(--sp-4);
+  }
+}

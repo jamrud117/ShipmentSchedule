@@ -14,6 +14,7 @@
 // halaman disembunyikan dulu, lalu satu dinyalakan — mencegah keadaan
 // "dua halaman tampil sekaligus" kalau nanti halamannya bertambah lagi.
 const PAGE_VIEWS = {
+  overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
   form: "#viewForm",
@@ -24,10 +25,13 @@ function showPage(page) {
     const el = $(sel);
     if (el) el.classList.toggle("d-none", key !== page);
   });
-  // Navbar disembunyikan HANYA di halaman form: saat mengisi data, elemen
-  // navigasi global lebih mengganggu daripada menolong (mudah tertekan
-  // dan isian hilang). Di halaman lain navbar justru diperlukan.
-  $(".main-navbar").classList.toggle("d-none", page === "form");
+  // Bilah atas & footer disembunyikan HANYA di halaman form: saat
+  // mengisi data, elemen navigasi global lebih mengganggu daripada
+  // menolong (mudah tertekan dan isian hilang). Halaman form punya
+  // kepala & bilah simpannya sendiri.
+  $(".app-topbar").classList.toggle("d-none", page === "form");
+  const footer = $("#appFooter");
+  if (footer) footer.classList.toggle("d-none", page === "form");
   if (typeof setActivePageNav === "function" && page !== "form") {
     setActivePageNav(page);
   }
@@ -35,6 +39,15 @@ function showPage(page) {
 
 function showListView() {
   showPage("schedule");
+}
+
+function showOverviewView() {
+  showPage("overview");
+  window.scrollTo(0, 0);
+  // Isi halaman disiapkan DI SINI, bukan saat aplikasi dibuka —
+  // hitungannya menelusuri seluruh daftar, dan tidak ada gunanya
+  // dijalankan selama pengguna sedang di halaman lain.
+  renderOverview();
 }
 
 function showDocNumView() {
@@ -62,6 +75,14 @@ function goBackToList() {
 function router() {
   const hash = location.hash || "#/";
   const editMatch = hash.match(/^#\/edit\/(.+)$/);
+
+  // ===========================
+  // Ringkasan harian
+  // ===========================
+  if (hash === "#/ringkasan") {
+    showOverviewView();
+    return;
+  }
 
   // ===========================
   // Permintaan Nomor Dokumen
@@ -206,6 +227,7 @@ function renderFormPage(id) {
     b.classList.toggle("active", i === 0),
   );
   $$(".tab-pane").forEach((p, i) => p.classList.toggle("d-none", i !== 0));
+  syncFormStep();
 
   if (id) {
     const s = currentList().find((x) => x.id === id);
@@ -292,6 +314,9 @@ function renderFormPage(id) {
     $("#fStatus").value = "process";
     $("#fIncoterm").value = "FOB";
     $("#fRouteType").value = "direct";
+    // Tarif bea masuk hampir selalu 5% untuk barang yang dibawa DDI,
+    // jadi diisi lebih dulu. Tetap bisa diubah seperti biasa.
+    $("#fTarif").value = "5";
     draftItems = [newItem()];
     draftNotesLog = [];
     draftStops = [];
@@ -303,8 +328,71 @@ function renderFormPage(id) {
   $("#fNoteDraft").value = "";
   renderItemTable();
   renderRouteStopsUI();
+  /* Urutannya penting:
+     1. initAutoDutyFlags menandai PPN/PPH yang SUDAH berisi nilai
+        tersimpan sebagai "manual", supaya tidak ditimpa hitungan
+        otomatis begitu form dibuka;
+     2. recalcCustoms mengisi yang masih kosong & menghitung BM+PDRI;
+     3. syncAffixState menyalakan lambang $ / Rp pada kolom yang terisi. */
+  initAutoDutyFlags();
+  recalcCustoms();
+  syncAffixState();
+  syncFormValidity();
   showFormView();
 }
+
+/* ------------------------------------------------------------------
+   PENANDA LANGKAH & KELENGKAPAN
+
+   Form ini panjang: tiga tab, tabel barang bisa puluhan baris. Dua
+   hal yang dulu tidak pernah dijawab sampai tombol Simpan ditekan —
+   "saya di langkah berapa" dan "apa yang masih kurang" — sekarang
+   terjawab terus-menerus di kepala halaman dan di bilah simpan.
+------------------------------------------------------------------ */
+function syncFormStep() {
+  const tabs = $$("#detailTabs .nav-link");
+  const idx = Math.max(
+    0,
+    tabs.findIndex((b) => b.classList.contains("active")),
+  );
+  const lbl = $("#formStepLabel");
+  if (lbl) lbl.textContent = `Langkah ${idx + 1} dari ${tabs.length}`;
+  $$("#formStepDots .form-progress-dot").forEach((d, i) => {
+    d.classList.toggle("is-done", i < idx);
+    d.classList.toggle("is-current", i === idx);
+  });
+}
+
+// Syarat yang dipakai di sini SAMA PERSIS dengan yang diperiksa
+// btnSaveShipment sebelum menyimpan. Kalau berbeda, pengguna akan
+// melihat "siap disimpan" lalu ditolak — cara tercepat membuat
+// penanda seperti ini tidak dipercaya lagi.
+function syncFormValidity() {
+  const el = $("#formValidity");
+  if (!el) return;
+  const kurang = [];
+  if (!$("#fEtd").value) kurang.push("ETD");
+  if (!$("#fEta").value) kurang.push("ETA");
+  if (!draftItems.some((it) => (it.namaBarang || "").trim() !== ""))
+    kurang.push("minimal 1 nama barang");
+  if ($("#fRouteType").value === "transit" &&
+      !draftStops.some((st) => (st.terminal || "").trim() !== ""))
+    kurang.push("minimal 1 terminal transit");
+
+  if (!kurang.length) {
+    el.className = "form-validity form-validity--ok";
+    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> Siap disimpan`;
+  } else {
+    el.className = "form-validity form-validity--warn";
+    el.innerHTML = `<i class="bi bi-exclamation-circle"></i> Belum lengkap: ${escapeHtml(kurang.join(", "))}`;
+  }
+}
+
+// Dipantau terus supaya penandanya tidak pernah basi.
+["fEtd", "fEta", "fRouteType"].forEach((idf) => {
+  const el = $("#" + idf);
+  if (el) el.addEventListener("change", syncFormValidity);
+});
 
 /* ------------------------------------------------------------------
    Requirement D: saat status DELAY, tampilkan TANGGAL UPDATE DELAY —
