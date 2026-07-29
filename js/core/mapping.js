@@ -1,11 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   MAPPING: baris database (snake_case) <-> objek JS (camelCase)
-   Tujuannya supaya seluruh kode render/hitung di bawah ini (yang
-   sudah ditulis memakai nama field camelCase seperti sebelumnya)
-   TIDAK perlu diubah sama sekali.
-================================================================== */
+/* MAPPING: baris database (snake_case) <-> objek JS (camelCase) */
 const FIELD_MAP = {
   transport: "transport",
   docNo: "doc_no",
@@ -27,18 +22,13 @@ const FIELD_MAP = {
   destination: "destination",
   etd: "etd",
   eta: "eta",
-  // TANGGAL UPDATE DELAY (requirement D): jadwal BARU setelah mundur.
-  // ETD/ETA di atas tetap berisi rencana semula sebagai pembanding, jadi
-  // lama delay = tanggal update - jadwal asli.
-  // BUTUH MIGRASI: lihat schema-migration.sql di root paket ini.
+  // TANGGAL UPDATE DELAY (requirement D): jadwal BARU setelah mundur
   etaUpdate: "eta_update",
   etdUpdate: "etd_update",
   actual: "actual",
   status: "status",
   notes: "notes",
-  // Kronologi catatan ber-tanggal & jam (jsonb). Kolom `notes` di atas
-  // TETAP diisi teks entri terbaru supaya template copy (kolom REMARK /
-  // NOTES) tidak perlu diubah. BUTUH MIGRASI: schema-migration.sql.
+  // Kronologi catatan ber-tanggal & jam (jsonb)
   notesLog: "notes_log",
   incoterm: "incoterm",
   freight: "freight",
@@ -49,10 +39,7 @@ const FIELD_MAP = {
   ppn: "ppn",
   pph: "pph",
   pi: "pi",
-  // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini — SKB
-  // sekarang dicatat per barang (lihat shipment_items.skb di
-  // itemToRow/rowToItem). Kolom shipments.skb di database dibiarkan ada
-  // untuk data lama, tapi aplikasi tidak baca/tulis ke situ lagi.
+  // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini
   package: "package",
   routeType: "route_type",
 };
@@ -101,9 +88,7 @@ function rowToShipment(row) {
     s[camel] = val;
   });
   s.items = (row.items || []).map(rowToItem);
-  // Terminal transit diurutkan berdasar "seq" di sini (bukan lewat query
-  // Supabase) supaya tidak bergantung pada dukungan order-by-embedded-
-  // resource versi supabase-js tertentu — lebih aman & predictable.
+  // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])
     .map(rowToStop)
     .sort((a, b) => a.seq - b.seq);
@@ -121,19 +106,9 @@ function itemToRow(it, shipmentId) {
     harga: Number(it.harga) || 0,
     netto: Number(it.netto) || 0,
     bruto: Number(it.bruto) || 0,
-    // Kemasan per barang (Jumlah+Jenis utk import, dimensi P*L*T utk
-    // export — lihat newItem() di core/helpers.js). Kolom shipment_items
-    // .package BARU, butuh migrasi — lihat schema.sql / pesan chat.
+    // Kemasan per barang (Jumlah+Jenis utk import, dimensi P*L*T utk export
     package: it.package || "",
-    // Fasilitas per barang — SKB & E-COO 1 array yang sama (entri
-    // dengan jenis "E-COO" = sertifikat asal, sisanya = surat bebas
-    // pajak). sanitizeSkbList di sini cuma jaga-jaga field tidak
-    // lengkap/rusak sebelum dikirim ke Supabase. Entri dengan
-    // nomor+tanggal kosong TETAP disimpan (mis. baru pilih jenisnya,
-    // belum sempat isi nomor) — dibiarkan apa adanya, bukan tugas
-    // layer ini untuk memvalidasi. Kolom e_coo/e_coo_nomor/
-    // e_coo_tanggal di DB sudah DEPRECATED, tidak lagi ditulis dari
-    // sini — lihat migrasi di schema.sql.
+    // Fasilitas per barang — SKB & E-COO 1 array yang sama
     skb: sanitizeSkbList(it.skb),
   };
 }
@@ -155,8 +130,7 @@ function rowToItem(row) {
   };
 }
 
-// Terminal transit (shipment_route_stops) — field transport/vessel/voyage
-// pada 1 baris menjelaskan leg yang MEMBAWA barang TIBA di terminal itu.
+// Terminal transit (shipment_route_stops)
 function stopToRow(st, shipmentId, seq) {
   return {
     shipment_id: shipmentId,

@@ -1,18 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   ITEM TABLE (draft, inside modal)
-   Kolom "Fasilitas" membuka panel per-barang (baris tambahan, penuh
-   lebar) berisi 1 daftar fasilitas per barang, jumlahnya bebas (0, 1,
-   2, atau lebih). E-COO cuma salah satu "jenis" yang bisa dipilih di
-   situ (sama seperti BM/PPN/PPH/Masterlist/Lainnya) — bukan blok
-   terpisah lagi, karena secara input keduanya memang sama: pilih
-   jenis, isi nomor & tanggal dokumen. Re-render penuh hanya untuk
-   perubahan STRUKTUR (buka/tutup panel, tambah/hapus entri, ganti
-   jenis) — mengetik di nomor/tanggal memutasi draftItems langsung
-   tanpa render ulang, supaya fokus tidak hilang (pola yang sama
-   dipakai di seluruh tabel barang & stop transit).
-================================================================== */
+/* ITEM TABLE (draft, inside modal) */
 function skbEntryLabel(sk) {
   if (sk.jenis === "Lainnya")
     return (sk.jenisLainnya || "").trim() || "Lainnya";
@@ -67,17 +55,7 @@ function facilitiesPanelHtml(it, idx) {
     </tr>`;
 }
 
-// Hint kecil di bawah input Kemasan (kolom per barang) — SEKARANG
-// CUMA peringatan kalau isinya tidak bisa dibaca, bukan lagi
-// nampilin hasil hitung (m³/Jumlah-nya sudah ada kolom CBM readonly
-// sendiri di sebelah kanan — lihat renderItemTable()). Kosong total
-// kalau field Kemasan belum diisi user sama sekali.
-// Requirement C: "Hilangkan hint/warning berwarna merah yang muncul saat
-// input di suatu field menyebabkan field tersebut naik/bergeser ke atas."
-// Teks peringatan di BAWAH input bikin tinggi baris berubah begitu user
-// mengetik, sehingga seluruh baris (dan kursor) melompat. Peringatannya
-// tidak dihapus total — dipindah jadi atribut title (tooltip) + kelas
-// penanda di input-nya sendiri, yang TIDAK memengaruhi tata letak.
+// Hint kecil di bawah input Kemasan (kolom per barang)
 function packageWarnTitle(it) {
   const raw = String(it.package || "").trim();
   if (!raw) return "";
@@ -91,28 +69,14 @@ function packageWarnTitle(it) {
     : "Format dimensi: P*L*T, mis. 82*82*75.";
 }
 
-// Textarea "Nama Barang" tumbuh otomatis mengikuti isinya (dipanggil
-// tiap render tabel & tiap kali user ngetik) — supaya nama panjang
-// wrap ke bawah dengan rapi, bukan discroll horizontal atau kepotong.
+// Textarea "Nama Barang" tumbuh otomatis mengikuti isinya
 function autoGrowTextarea(el) {
   el.style.height = "auto";
-  // TANPA batas atas: nama barang bisa sangat panjang ("TYRE MOLD FULL
-  // SET NOKIAN ENTRUST 215/55R18") dan harus kebaca UTUH. Dulu ada
-  // max-height + overflow-y:auto di CSS, jadi nama panjang tetap
-  // kepotong & harus discroll di dalam kotak yang sempit.
+  // TANPA batas atas: nama barang bisa sangat panjang
   el.style.height = `${el.scrollHeight}px`;
 }
 
-// Font body (Inter) dimuat dengan `display=swap` (lihat index.html):
-// browser sengaja menampilkan teks pakai font pengganti DULU supaya
-// tidak ada teks tak terlihat saat font custom masih diunduh, baru
-// ditukar begitu font aslinya siap. Kalau autoGrowTextarea() sempat
-// mengukur scrollHeight SEBELUM pertukaran itu terjadi (mis. baru
-// selesai Bulk Import tepat setelah halaman dibuka), tinggi kotak
-// kepasang berdasar lebar huruf font pengganti -- begitu font asli
-// tukar & teksnya melebar/bertambah baris, tidak ada apa pun yang
-// mengukur ulang, dan baris tambahan itu kepotong diam-diam. Ukur
-// ulang SEMUA kotak nama yang sedang ada di layar begitu font siap.
+// Font body (Inter) dimuat dengan `display=swap` (lihat index.html)
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {
     document
@@ -122,9 +86,7 @@ if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
 }
 
 function renderItemTable() {
-  // Penanda kelengkapan di bilah simpan ikut diperbarui tiap tabel
-  // barang digambar ulang — "minimal 1 nama barang" adalah salah satu
-  // syarat simpan, jadi penandanya tidak boleh ketinggalan.
+  // Penanda kelengkapan di bilah simpan ikut diperbarui tiap tabel barang digambar ulang
   setTimeout(() => {
     if (typeof syncFormValidity === "function") syncFormValidity();
   }, 0);
@@ -177,11 +139,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
   const field = e.target.dataset.f;
   if (field) {
     if (field === "hsCode") {
-      // Requirement A: HS Code disimpan sebagai ANGKA saja — titik &
-      // strip dari hasil paste manual ("8480.71-0000") dibuang seketika,
-      // termasuk memperbaiki isi kotaknya supaya yang dilihat user sama
-      // dengan yang tersimpan. Posisi kursor dijaga di ujung teks agar
-      // pengetikan berurutan tidak melompat-lompat.
+      // Requirement A: HS Code disimpan sebagai ANGKA saja
       const cleaned = normalizeHsCodeInput(e.target.value);
       if (e.target.value !== cleaned) e.target.value = cleaned;
       draftItems[idx][field] = cleaned;
@@ -193,9 +151,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
     if (field === "namaBarang") autoGrowTextarea(e.target);
     if (field === "package") {
       autoSizeInput(e.target, 96, 210);
-      // Peringatan format ditaruh di tooltip + kelas penanda, BUKAN
-      // sebagai elemen baru di bawah input (yang dulu bikin baris
-      // bergeser tiap kali user mengetik).
+      // Peringatan format ditaruh di tooltip + kelas penanda
       const warn = packageWarnTitle(draftItems[idx]);
       e.target.title = warn;
       e.target.classList.toggle("pkg-invalid", !!warn);
@@ -204,17 +160,13 @@ $("#itemTableBody").addEventListener("input", (e) => {
     subtotalInput.value = fmtUSD(
       (Number(draftItems[idx].qty) || 0) * (Number(draftItems[idx].harga) || 0),
     );
-    // CBM dipengaruhi package (dimensi) MAUPUN qty, jadi dihitung ulang
-    // tiap ada perubahan field apapun di baris ini — sama seperti pola
-    // subtotal di atas, bukan cuma waktu field package yang diketik.
+    // CBM dipengaruhi package (dimensi) MAUPUN qty
     const cbmInput = tr.querySelector(".cbm-readonly");
     if (cbmInput) cbmInput.value = computeItemCbm(draftItems[idx]);
     recalcCustoms();
     return;
   }
-  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/E-COO):
-  // mutasi langsung ke draftItems TANPA render ulang, supaya fokus/cursor
-  // tidak hilang saat mengetik.
+  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/E-COO)
   const fac = e.target.dataset.fac;
   if (!fac) return;
   const skIdxAttr = e.target.dataset.skidx;
@@ -229,22 +181,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
   }
 });
 
-// Enter di kotak isian (bukan tombol) -> pindah ke field YANG SAMA di
-// baris BERIKUTNYA, meniru kebiasaan spreadsheet (Excel/Sheets). Tab
-// sengaja TIDAK ditangani di sini: urutan tabindex alami tabel sudah
-// membawanya ke field sebelahnya tanpa perlu kode tambahan. Dibatasi ke
-// elemen [data-f] saja supaya Enter di tombol (toggle fasilitas, hapus
-// baris) tetap berfungsi seperti biasa (mengeklik tombolnya), bukan
-// malah dibajak untuk pindah fokus. Sengaja tidak menjangkau baris
-// panel fasilitas (SKB/E-COO) -- itu di luar cakupan yang diminta.
-//
-// Shift+Enter DIKECUALIKAN (konvensi umum: WhatsApp/Slack/Discord semua
-// begini) -- dibiarkan lewat tanpa dicegat, supaya perilaku bawaan
-// textarea (baris baru DI DALAM nama barang) tetap bisa dipakai kalau
-// memang perlu. Cuma nama-barang-input yang berupa <textarea>; input
-// baris tunggal lain (qty, hsCode, dst.) memang tidak bisa memuat baris
-// baru sama sekali, jadi pengecualian ini otomatis tidak berpengaruh
-// apa-apa di situ.
+// Enter di kotak isian (bukan tombol) -> pindah ke field YANG SAMA di baris BERIKUTNYA
 $("#itemTableBody").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || e.shiftKey) return;
   const field = e.target.closest("[data-f]");

@@ -1,20 +1,10 @@
 "use strict";
 
-/* ==================================================================
-   DOM SHORTCUTS
-================================================================== */
+/* DOM SHORTCUTS */
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
-/* ==================================================================
-   PUSTAKA EXCEL DIMUAT SAAT DIBUTUHKAN
-
-   SheetJS (xlsx.full.min.js) berukuran hampir 1 MB dan DULU ikut
-   diunduh setiap kali halaman dibuka — padahal hanya dipakai saat
-   mengimpor/mengekspor Excel, yang tidak terjadi di sebagian besar
-   kunjungan. Sekarang pustakanya baru diunduh pada saat benar-benar
-   dipanggil, dan hanya sekali (janjinya disimpan).
-================================================================== */
+/* PUSTAKA EXCEL DIMUAT SAAT DIBUTUHKAN */
 const XLSX_CDN =
   "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
 let xlsxPromise = null;
@@ -35,17 +25,34 @@ function ensureXLSX() {
   return xlsxPromise;
 }
 
-/* ==================================================================
-   KOTAK TANGGAL: klik di mana saja membuka pemilih tanggal
+/* ExcelJS — hanya untuk MENULIS berkas.
 
-   Bawaan browser hanya membuka kalender kalau ikon kecil di ujung kanan
-   yang ditekan — target yang sempit dan tidak terduga, apalagi di layar
-   sentuh. Di sini seluruh kotak dibuat bisa diklik lewat showPicker().
+   SheetJS versi komunitas mengabaikan gaya sel saat menulis (font,
+   perataan, warna latar hanya ada di versi berbayarnya), jadi ia tetap
+   dipakai untuk MEMBACA berkas impor, tapi tidak bisa menghasilkan
+   berkas ekspor yang berformat. Diunduh saat dibutuhkan saja, sama
+   seperti SheetJS. */
+const EXCELJS_CDN =
+  "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+let exceljsPromise = null;
+function ensureExcelJS() {
+  if (typeof ExcelJS !== "undefined") return Promise.resolve();
+  if (!exceljsPromise) {
+    exceljsPromise = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = EXCELJS_CDN;
+      el.onload = () => resolve();
+      el.onerror = () => {
+        exceljsPromise = null;
+        reject(new Error("Gagal memuat pustaka Excel. Periksa koneksi."));
+      };
+      document.head.appendChild(el);
+    });
+  }
+  return exceljsPromise;
+}
 
-   Dibungkus try/catch: showPicker() melempar error kalau browsernya
-   belum mendukung, atau kalau dipanggil bukan dari aksi pengguna. Kalau
-   gagal, perilaku bawaan tetap jalan — tidak ada yang rusak.
-================================================================== */
+/* KOTAK TANGGAL: klik di mana saja membuka pemilih tanggal */
 document.addEventListener("click", (e) => {
   const el = e.target.closest(
     'input[type="date"], input[type="time"], input[type="month"]',
@@ -59,20 +66,7 @@ document.addEventListener("click", (e) => {
   }
 });
 
-/* ==================================================================
-   AUTO-LEBAR INPUT
-
-   Lebar <input> tidak bisa mengikuti isinya sendiri lewat CSS biasa.
-   `field-sizing: content` sebenarnya bisa, tapi baru didukung Chrome 123+
-   dan belum ada di Safari/Firefox — jadi lebarnya diukur sendiri di sini.
-
-   Pengukuran memakai satu elemen ukur tersembunyi yang MENIRU font input
-   yang bersangkutan (font-family, size, weight, letter-spacing). Cara ini
-   lebih tepat daripada memperkirakan dari jumlah karakter (satuan `ch`),
-   karena aplikasi ini memakai font proporsional di sebagian field dan
-   monospace di field angka — "56 PACKAGE" dan "10 W" sama-sama 10
-   karakter tapi lebar pikselnya jauh berbeda.
-================================================================== */
+/* AUTO-LEBAR INPUT */
 let __textSizer = null;
 function measureTextWidth(el, text) {
   if (!__textSizer) {
@@ -93,9 +87,7 @@ function measureTextWidth(el, text) {
   return __textSizer.offsetWidth;
 }
 
-// Lebar input = lebar teks + padding + border, dibatasi min/max PIKSEL.
-// Placeholder ikut diukur supaya kotak yang masih kosong pun tidak
-// memotong teks contohnya.
+// Lebar input = lebar teks + padding + border, dibatasi min/max PIKSEL
 function autoSizeInput(el, minPx, maxPx) {
   if (!el) return;
   const cs = getComputedStyle(el);
@@ -118,10 +110,7 @@ const cardContainer = $("#cardContainer");
 const emptyState = $("#emptyState");
 const viewListEl = $("#viewList");
 const viewFormEl = $("#viewForm");
-/* Detail read-only sekarang memakai PANEL GESER, bukan modal Bootstrap
-   (lihat js/views/detail-view.js). Modal menutupi daftar, dan
-   menutupnya berarti kehilangan tempat — padahal cara kerja
-   sehari-hari adalah membandingkan satu per satu. */
+/* Detail read-only sekarang memakai PANEL GESER, bukan modal Bootstrap */
 const confirmModalEl = $("#confirmModal");
 const confirmModal = new bootstrap.Modal(confirmModalEl);
 const bulkModalEl = $("#bulkModal");

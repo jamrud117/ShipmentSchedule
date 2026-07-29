@@ -1,145 +1,44 @@
-/* ==================================================================
-   METRIK PAPAN
+/* METRIK PAPAN */
 
-   Angka-angka ini SEKARANG BISA DIKLIK. Dulu ia cuma memberi tahu
-   "ada 3 yang DELAY" lalu membiarkan pengguna mencarinya sendiri
-   lewat dropdown status. Sekarang menekan ubinnya langsung menyaring
-   daftar di bawahnya, dan ubin yang sedang aktif menyala putih —
-   jadi selalu jelas apa yang sedang dilihat.
-================================================================== */
-.metric-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--sp-4);
-  margin-top: var(--sp-6);
-}
-.metric {
-  position: relative;
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 14px 16px 15px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: var(--r-md);
-  color: #fff;
-  overflow: hidden;
-  transition:
-    background var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease),
-    transform var(--dur-1) var(--ease);
-}
-/* Rel warna status di tepi kiri — satu-satunya tempat warna status
-   muncul di dalam papan navy, jadi maknanya tidak bisa tertukar. */
-.metric::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--metric-hue, var(--n-400));
-}
-.metric:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.24);
-}
-.metric:active {
-  transform: translateY(1px);
-}
-.metric-label {
-  font-family: var(--font-board);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.metric-num {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.85rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
-  margin-top: 2px;
-  display: block;
-}
-.metric-hint {
-  font-size: var(--t-xs);
-  /* 0.45 hanya sampai 4,22:1 di atas ubin — di bawah ambang AA untuk
-     teks sekecil ini. 0.56 membawanya ke 5,4:1 tanpa membuat baris
-     bantu ini berebut perhatian dengan angkanya. */
-  color: rgba(255, 255, 255, 0.56);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* Rel warna status di tepi kiri — satu-satunya tempat warna status */
+
 /* Ubin terpilih = filter sedang aktif. */
-.metric.is-active {
-  background: #fff;
-  border-color: #fff;
-  color: var(--d-900);
-  box-shadow: 0 8px 22px -12px rgba(0, 0, 0, 0.7);
-}
-.metric.is-active .metric-label {
-  color: var(--n-600);
-}
-.metric.is-active .metric-hint {
-  color: var(--n-500);
-}
-/* Dulu ada ikon corong di sini lewat content: "\F62A". Nomor glyph
-   bootstrap-icons berpindah antar versi, jadi di 1.11.3 yang muncul
-   justru tanda "×" — terbaca seperti tombol hapus. Dihapus: ubin yang
-   aktif sudah menyala putih penuh, penandanya tidak mungkin terlewat. */
+
+/* Dulu ada ikon corong di sini lewat content: "\F62A". Nomor glyph */
 
 @media (max-width: 991px) {
-  .metric-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 @media (max-width: 575px) {
-  .metric-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sp-2);
-  }
-  .metric-num {
-    font-size: 1.4rem;
-  }
-  .metric-hint {
-    display: none;
-  }
 }
 
-/* ==================================================================
-   BILAH KENDALI (cari / saring / urut / tampilan)
+/* BILAH KENDALI (cari / saring / urut / tampilan) */
+/* Bilah alat dibuat sebagai KOTAK, bukan pita selebar layar.
 
-   Menempel di bawah bilah atas. Versi lama menaruhnya sebagai kartu
-   yang ikut menggulir, jadi begitu daftar panjang dan pengguna sudah
-   turun 3 layar, mengganti filter berarti menggulir balik ke atas.
-================================================================== */
+   Versi sebelumnya putih dari tepi ke tepi dengan garis bawah, sehingga
+   terbaca sebagai bagian dari kerangka halaman — sama seperti bilah
+   atas. Sekarang latarnya sewarna halaman dan alat-alatnya duduk di
+   dalam kartu putih selebar isi, sejajar dengan kartu jadwal di
+   bawahnya. */
 .controlbar {
   position: sticky;
   top: var(--topbar-h);
   z-index: 1020;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: saturate(1.4) blur(8px);
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--sh-xs);
+  background: transparent;
 }
-/* Jarak antar baris dinaikkan 12 -> 18px, dan ruang di bawah bilah
-   ditambah: baris saringan dan deret tab di bawahnya tadinya terlalu
-   berdempetan sehingga terbaca sebagai satu blok padat, bukan dua
-   kelompok kendali yang berbeda. */
+/* Jarak antar baris dinaikkan 12 -> 18px, dan ruang di bawah bilah */
 .controlbar-inner {
+  padding-top: 14px;
+  padding-bottom: 12px;
+}
+.controlbar-box {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 18px 0 16px;
+  gap: 16px;
+  padding: 15px 17px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-sm);
 }
 .controlbar-row {
   display: flex;
@@ -147,19 +46,13 @@
   gap: var(--sp-3);
   flex-wrap: wrap;
 }
-/* Baris PANDANGAN: chip di kiri, kendali tampilan & aksi utama di
-   kanan — satu-satunya baris yang memakai space-between, karena di
-   sini kedua sisinya memang peran yang berbeda. */
+/* Baris pandangan: chip di kiri, kendali tampilan & aksi utama di kanan */
 .controlbar-row--views {
   justify-content: space-between;
   gap: var(--sp-4);
 }
 
-/* Baris SARINGAN: SATU kelompok rapat di kiri, tidak dipisah.
-   Versi sebelumnya menyebar kontrol ke dua ujung dan meninggalkan
-   lubang ±560px di tengah layar lebar — alat yang saling berhubungan
-   jadi terlihat tidak berhubungan. Sisi kanan yang kosong itu wajar:
-   toolbar tidak perlu memenuhi lebar layar. */
+/* Baris SARINGAN: SATU kelompok rapat di kiri, tidak dipisah */
 .controlbar-row--filters {
   justify-content: flex-start;
 }
@@ -168,17 +61,12 @@
   flex-shrink: 0;
 }
 
-/* Kotak cari: melebar mengisi sisa ruang, tapi tidak lebih dari
-   yang dibutuhkan. */
-/* flex-grow 0: dulu kotak ini melar mengisi sisa ruang. Di susunan
-   baru itu justru menutup jarak tengah yang jadi inti tata letaknya —
-   barisnya kembali terlihat penuh sesak. Ia tetap boleh MENYUSUT
-   (flex-shrink 1) supaya di layar sedang tidak memaksa baris pecah. */
+/* Kotak cari */
+/* flex-grow 0: dulu kotak ini melar mengisi sisa ruang. Di susunan */
 .search-box {
   position: relative;
   flex: 1 1 300px;
-  /* Dibatasi supaya kotak ini tidak melar sampai ujung layar lebar dan
-     menyeret kontrol lain menjauh dari kelompoknya. */
+  /* Dibatasi agar tidak melar sampai ujung layar lebar */
   max-width: 380px;
   min-width: 190px;
 }
@@ -191,12 +79,7 @@
   font-size: 0.9rem;
   pointer-events: none;
 }
-/* Ditulis dengan [type="text"] (0,1,2) supaya menang atas aturan
-   `input[type="text"]` (0,1,1) di css/system.css yang dimuat paling
-   akhir. Kalau ditulis `.search-box input` saja, kekhususannya SERI
-   dan yang belakangan menang — hasilnya radius kotak ini 9px
-   sementara kontrol tetangganya 7px, selisih yang tidak kentara satu
-   per satu tapi membuat deretnya terlihat tidak rapi. */
+/* Ditulis dengan [type="text"] (0,1,2) supaya menang atas aturan */
 .search-box input[type="text"] {
   width: 100%;
   height: 38px;
@@ -235,9 +118,7 @@
   color: var(--s-danger);
 }
 
-/* Pemilih (status, urutan) — tinggi & bahasa visual disamakan dengan
-   kotak cari supaya barisnya terbaca sebagai satu alat, bukan
-   kumpulan kontrol dari tiga zaman berbeda. */
+/* Pemilih status: tinggi & gaya disamakan dengan kotak cari */
 .control-select {
   height: 38px;
   border: 1px solid var(--border);
@@ -259,97 +140,13 @@
   box-shadow: var(--sh-focus);
 }
 
-/* Rentang tanggal — labelnya menyebut kolom yang sedang disaring
-   (ETA atau ETD) supaya tidak ada tebak-tebakan. */
-.range-filter {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex: 0 1 auto;
-}
-/* Dulu ini label mati yang cuma ikut berubah mengikuti dropdown urutan.
-   Sekarang ia KONTROLNYA sendiri: memilih dasar tanggal untuk urutan,
-   pengelompokan, rentang di sebelahnya, dan hitung mundur di kolom
-   Papan. Dibuat bergaya navy pekat supaya terbaca sebagai penentu,
-   bukan sekadar awalan dari dua kotak tanggal di kanannya. */
-.range-basis-select {
-  flex-shrink: 0;
-  height: 38px;
-  font-family: var(--font-board);
-  font-size: var(--t-sm);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #fff;
-  background-color: var(--p-600);
-  border: 1px solid var(--p-600);
-  border-radius: var(--r-sm) 0 0 var(--r-sm);
-  padding: 0 26px 0 11px;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ffffff'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 14px;
-}
-.range-basis-select:hover {
-  background-color: var(--p-700);
-  border-color: var(--p-700);
-}
-.range-basis-select:focus {
-  outline: none;
-  box-shadow: var(--sh-focus);
-}
-/* Kotak tanggal menempel ke pemilihnya — satu alat, bukan tiga kontrol
-   yang kebetulan bersebelahan. */
-.range-filter input[type="date"]:first-of-type {
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  margin-left: -1px;
-}
-.range-filter input[type="date"] {
-  height: 38px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: #fff;
-  font-size: var(--t-sm);
-  color: var(--ink);
-  padding: 0 8px;
-  min-width: 0;
-  width: 132px;
-  font-variant-numeric: tabular-nums;
-}
-.range-filter input[type="date"]:focus {
-  outline: none;
-  border-color: var(--p-400);
-  box-shadow: var(--sh-focus);
-}
-.range-filter-sep {
-  font-size: var(--t-xs);
-  color: var(--n-500);
-  flex-shrink: 0;
-  padding: 0 7px;
-}
-.range-filter-clear {
-  flex-shrink: 0;
-  margin-left: 7px;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: #fff;
-  color: var(--n-500);
-  font-size: 0.7rem;
-}
-.range-filter-clear:hover {
-  color: var(--s-danger);
-  border-color: var(--s-danger-line);
-  background: var(--s-danger-bg);
-}
+/* Rentang tanggal — labelnya menyebut kolom yang sedang disaring */
 
-/* ---- Saringan cepat (preset) -------------------------------------
-   Empat pertanyaan yang benar-benar ditanyakan tiap pagi, dijadikan
-   satu tekan: apa yang perlu ditindak, apa yang jalan minggu ini,
-   apa yang mundur, apa yang sudah beres. */
+/* Dulu ini label mati yang cuma ikut berubah mengikuti dropdown urutan */
+
+/* Kotak tanggal menempel ke pemilihnya — satu alat, bukan tiga kontrol */
+
+/* Saringan cepat (preset) */
 .preset-row {
   display: flex;
   align-items: center;
@@ -357,9 +154,7 @@
   flex-wrap: wrap;
   min-width: 0;
 }
-/* Label "CEPAT" dihapus: chip-nya sudah menjelaskan dirinya sendiri,
-   dan di baris teratas ia justru menggeser tab pertama menjauh dari
-   tepi kiri tempat mata mulai membaca. */
+/* Label "CEPAT" dihapus: chip-nya sudah menjelaskan dirinya sendiri */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -426,40 +221,9 @@
 }
 
 /* ---- Sakelar tampilan Tabel / Kartu ---- */
-.view-toggle {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--n-100);
-  padding: 2px;
-  gap: 2px;
-}
-.view-toggle button {
-  border: 0;
-  background: transparent;
-  color: var(--n-500);
-  height: 29px;
-  padding: 0 12px;
-  border-radius: 5px;
-  font-size: var(--t-xs);
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.view-toggle button:hover {
-  color: var(--p-600);
-}
-.view-toggle button.is-active {
-  background: #fff;
-  color: var(--d-900);
-  box-shadow: var(--sh-xs);
-}
 
 @media (max-width: 1199px) {
-  /* Chip saringan cepat boleh digeser mendatar daripada dipaksa
-     membungkus jadi dua baris — tab yang pecah baris kehilangan
-     bacaan "satu deret pilihan". */
+  /* Chip saringan cepat boleh digeser mendatar daripada dipaksa */
   .preset-row {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -479,14 +243,7 @@
     flex: 1 1 100%;
     max-width: none;
   }
-  .range-filter {
-    flex: 1 1 auto;
-  }
-  .range-filter input[type="date"] {
-    flex: 1;
-    width: auto;
-    min-width: 0;
-  }
+
   .controlbar-row--views {
     flex-wrap: nowrap;
   }
@@ -504,18 +261,9 @@
     flex: 1;
     justify-content: center;
   }
-  .view-toggle button span {
-    display: none;
-  }
 }
 
-/* ==================================================================
-   PEMISAH TANGGAL
-
-   Bukan pil melayang di tengah lagi. Sekarang: label kiri + garis
-   yang membentang + jumlah di kanan — bacaannya sama seperti baris
-   pemisah di papan jadwal.
-================================================================== */
+/* PEMISAH TANGGAL */
 .date-section {
   display: flex;
   align-items: center;
@@ -563,9 +311,7 @@
   flex-shrink: 0;
 }
 
-/* ==================================================================
-   PAGINASI
-================================================================== */
+/* PAGINASI */
 .pagination-bar {
   display: flex;
   align-items: center;
@@ -651,13 +397,7 @@
   }
 }
 
-/* ==================================================================
-   KEADAAN LAYAR: memuat, kosong, gagal
-
-   Layar yang sedang memuat atau kosong adalah momen paling
-   membingungkan. Di situ justru harus jelas apa yang sedang terjadi
-   dan apa langkah berikutnya.
-================================================================== */
+/* KEADAAN LAYAR: memuat, kosong, gagal */
 .state-panel {
   text-align: center;
   padding: var(--sp-12) var(--sp-6);
@@ -703,8 +443,7 @@
   color: var(--p-600);
 }
 
-/* Kerangka muat: meniru bentuk baris manifes supaya tata letaknya
-   tidak melompat begitu data datang. */
+/* Kerangka muat: meniru bentuk baris manifes supaya tata letaknya */
 .skeleton-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -763,9 +502,7 @@
   margin: var(--sp-6) 0 var(--sp-2);
   flex-wrap: wrap;
 }
-.list-head .section-label {
-  color: var(--n-500);
-}
+
 .filter-note {
   font-size: var(--t-sm);
   color: var(--n-500);
@@ -785,4 +522,43 @@
 }
 .filter-note button:hover {
   color: var(--s-danger);
+}
+
+/* Baris saringan: sakelar buku di kiri (tepat di atas deretan chip),
+   cari & status didorong ke kanan. */
+.controlbar-row--filters {
+  justify-content: flex-start;
+}
+.controlbar-row--filters .search-box {
+  margin-left: auto;
+}
+
+/* Judul daftar + jumlah jadwal — menggantikan papan navy berisi ubin
+   metrik, yang mengulang angka yang sudah ada di chip saringan. */
+.list-head {
+  align-items: center;
+}
+.list-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--d-900);
+  margin: 0;
+}
+.list-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--p-600);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
 }

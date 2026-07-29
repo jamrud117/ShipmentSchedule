@@ -1,12 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   ROUTE STOPS / TERMINAL TRANSIT (draft, di dalam modal)
-   Hanya tampil kalau Tipe Rute = "transit". Sama seperti daftar
-   barang: array draft di memori, re-render penuh saat struktur
-   berubah (tambah/hapus/urutkan), mutasi langsung saat isi field
-   diketik supaya fokus/cursor tidak hilang.
-================================================================== */
+/* ROUTE STOPS / TERMINAL TRANSIT (draft, di dalam modal) */
 function stopCardHtml(st, idx, total) {
   const air = st.transport === "udara";
   const isLast = idx === total - 1;
@@ -75,9 +69,7 @@ $("#routeStopsBody").addEventListener("input", (e) => {
   const field = e.target.dataset.f;
   if (!field) return;
   draftStops[idx][field] = e.target.value;
-  // Cuma field Moda yang butuh re-render (label Vessel/Voyage di kartu
-  // ini ikut berubah). Field lain cukup mutasi array saja supaya fokus/
-  // kursor saat mengetik tidak hilang.
+  // Cuma field Moda yang butuh re-render (label Vessel/Voyage di kartu ini ikut berubah)
   if (field === "transport") {
     renderRouteStopsUI();
     applyTransportLabels();

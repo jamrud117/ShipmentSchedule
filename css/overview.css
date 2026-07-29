@@ -1,15 +1,4 @@
-/* ==================================================================
-   HALAMAN RINGKASAN
-
-   Halaman baru. Alasannya: aplikasi lama menjawab "apa saja yang ada
-   di daftar", tapi pertanyaan pertama tiap pagi bukan itu. Yang
-   ditanyakan adalah "apa yang harus saya kerjakan hari ini" —
-   mana yang sudah lewat ETA tapi belum tiba, mana yang tiba besok
-   tapi dokumennya belum lengkap, mana yang mundur.
-
-   Semua isi halaman ini dihitung dari data yang SUDAH ada. Tidak ada
-   field baru di database.
-================================================================== */
+/* HALAMAN RINGKASAN */
 .ov-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
@@ -45,8 +34,7 @@
   font-family: var(--font-display);
   font-size: var(--t-sm);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--d-900);
   margin: 0;
   display: flex;
@@ -68,10 +56,7 @@
   padding: 0;
 }
 
-/* ---- Antrean tindakan -------------------------------------------
-   Satu baris = satu hal yang perlu dikerjakan, dengan ALASANnya
-   ditulis terus terang di sebelah kiri. Tanpa alasan, daftar seperti
-   ini cuma jadi daftar kedua yang harus ditafsirkan sendiri. */
+/* Antrean tindakan */
 .task {
   display: flex;
   align-items: center;
@@ -105,8 +90,7 @@
   font-family: var(--font-board);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 .task--late .task-reason {
   color: var(--s-danger);
@@ -149,10 +133,7 @@
   color: var(--p-500);
 }
 
-/* ---- Agenda 7 hari ----------------------------------------------
-   Papan mini. Tiap kolom satu hari; angkanya jumlah kedatangan atau
-   keberangkatan pada hari itu. Diklik = daftar tersaring ke tanggal
-   tersebut. */
+/* Agenda 7 hari */
 .agenda {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -176,8 +157,7 @@
   font-family: var(--font-board);
   font-size: 0.64rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--n-400);
 }
 .agenda-date {
@@ -340,12 +320,7 @@
   margin-bottom: 8px;
 }
 
-
-/* ---- Ringkasan di layar sempit -----------------------------------
-   Kolom alasan selebar 92px memakan seperempat layar ponsel dan
-   menyisakan ruang terlalu sempit untuk nama shipper, sehingga
-   teksnya meluber keluar barisnya. Di sini alasannya naik ke atas
-   sebagai label, dan teksnya memakai lebar penuh. */
+/* Ringkasan di layar sempit */
 @media (max-width: 575.98px) {
   .task {
     flex-wrap: wrap;

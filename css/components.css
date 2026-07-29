@@ -37,25 +37,12 @@
   color: var(--navy);
 }
 
-.modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-left: auto;
-  padding-left: 20px;
-}
-.modal-header-actions .btn-close {
-  margin: 0 !important;
-}
-
 /* ================= TOAST ================= */
 .toast {
   min-width: 260px;
 }
 
-/* ==================================================================
-   KRONOLOGI & CATATAN (notes log) — lihat js/features/notes-log.js
-================================================================== */
+/* KRONOLOGI & CATATAN (notes log) — lihat js/features/notes-log.js */
 
 /* ---- panel di FORM ---- */
 .notes-panel {
@@ -162,7 +149,6 @@
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -227,11 +213,43 @@
 .detail-notes-head {
   font-size: 0.74rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--muted);
   margin-bottom: 6px;
 }
 .detail-notes .card-note + .card-note {
   margin-top: 6px;
+}
+
+/* Tombol tutup toast: bawaan Bootstrap hanya 16x21px — di bawah ambang
+   sasaran sentuh yang nyaman. */
+.toast-close {
+  width: 32px;
+  height: 32px;
+  margin: auto 10px auto 0;
+  background-size: 12px;
+  opacity: 0.85;
+}
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* Kepala modal disamakan dengan kotak dialog: judul lebih tegas dan
+   jaraknya lebih lega daripada bawaan Bootstrap. */
+.modal-header {
+  padding: var(--sp-5) var(--sp-6) var(--sp-3);
+  border-bottom: 1px solid var(--n-100);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--ink);
+}
+.modal-body {
+  padding: var(--sp-4) var(--sp-6);
+}
+.modal-footer {
+  padding: var(--sp-3) var(--sp-6) var(--sp-5);
+  border-top: 0;
 }

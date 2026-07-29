@@ -1,44 +1,16 @@
-/* ================= HALAMAN FORM TAMBAH/EDIT (dulu modal) =================
-   Supaya input tidak dibatasi tinggi modal, form Tambah/Edit Jadwal
-   sekarang halaman penuh (lihat #viewForm + router() di script.js).
-   Header aksi (kembali/judul/Import/Batal/Simpan) dibuat sticky supaya
-   selalu bisa dijangkau tanpa scroll balik ke atas, meniru modal-footer
-   yang dulu selalu terlihat.
-
-   Redesign: tiap subsection dibungkus ".form-section-card" dengan badge
-   ikon berwarna, warnanya mengikuti TAB induknya (ocean=Dokumen&Umum,
-   violet=Daftar Barang, amber=Kepabeanan&Biaya) dan warna yang sama
-   dipakai lagi di tab aktif stepper-nya — supaya orang bisa langsung
-   tahu "saya lagi di step mana" walau sudah scroll jauh ke bawah form
-   yang panjang. Input/select di halaman ini SEBELUMNYA tidak ada styling
-   khusus (cuma default Bootstrap polos, beda jauh dari versi modal yang
-   sudah rapi) — sekarang disamakan & dirapikan lewat .page-form
-   .form-control/.form-select di bawah. */
+/* HALAMAN FORM TAMBAH/EDIT (dulu modal) */
 .page-form {
   min-height: 100vh;
   padding-bottom: 48px;
   background: var(--bg);
 }
-/* Judul di TENGAH, tombol Back tetap menempel di kiri.
-   Dipakai grid 3 kolom (bukan flex + space-between) supaya judul benar-
-   benar center terhadap LEBAR HALAMAN, bukan center terhadap ruang sisa
-   di sebelah tombol Back — dengan flex, judul akan bergeser ke kanan
-   sebesar lebar tombolnya. Kolom kanan dibiarkan kosong sebagai
-   penyeimbang agar titik tengahnya presisi. */
-/* Header halaman form memakai warna tema (navy -> ocean), bukan putih
-   polos: halaman ini adalah "mode kerja" tersendiri tanpa navbar, jadi
-   bilah gelap di atas menegaskan bahwa pengguna sedang berada di dalam
-   satu tugas, sekaligus membuat tombol kembali dan judulnya terbaca
-   jelas. Grid 1fr auto 1fr menjaga judul TEPAT di tengah tanpa
-   terpengaruh lebar tombol di kiri. */
+/* Judul di TENGAH, tombol Back tetap menempel di kiri */
+/* Header halaman form memakai warna tema (navy -> ocean), bukan putih */
 .page-form-header {
   position: sticky;
   top: 0;
   z-index: 20;
-  /* Navy rata, bukan gradien: warnanya harus SAMA dengan bilah atas di
-     halaman lain supaya kepala halaman terbaca sebagai satu keluarga.
-     Gradien 115deg membuat sisi kanannya lebih terang dan tidak pernah
-     nyambung dengan apa pun di sebelahnya. */
+  /* Navy rata, sewarna dengan bilah atas di halaman lain */
   background: var(--d-900);
   color: #fff;
   border-bottom: 1px solid rgba(199, 154, 62, 0.35);
@@ -63,8 +35,7 @@
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  /* Header sudah bertema navy, jadi tombolnya dibuat transparan-berkabut
-     agar terbaca sebagai tombol tanpa menabrak warna latar di belakangnya. */
+  /* Header sudah bertema navy, jadi tombolnya dibuat transparan-berkabut */
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
@@ -93,9 +64,7 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  /* Header gelap (gradasi navy), jadi ikon badge ini sengaja pakai
-     aksen sekunder (emas) supaya tetap menonjol — bukan navy, yang
-     akan lenyap di latar sewarna. */
+  /* Header gelap (gradasi navy), jadi ikon badge ini sengaja pakai */
   background: var(--teal);
   color: #fff;
   display: inline-flex;
@@ -115,16 +84,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* ---- Import Excel/PDF & aksi Batal/Simpan: BUKAN bar mengambang lagi
-   (position:fixed/sticky sempat dicoba, hasilnya malah terasa
-   "terpisah" dari form) — sekarang keduanya baris BIASA di dalam
-   .page-form-body, ikut lebar & padding container yang sama persis
-   dengan kartu-kartu di atasnya supaya betul-betul terasa "1 section"
-   yang sama, bukan panel/toolbar terpisah. Import di paling atas
-   (sebelum stepper — masuk akal karena ini cara CEPAT isi form,
-   dilakukan sebelum isi manual), Batal & Simpan di paling bawah
-   (setelah konten tab manapun yang aktif — konvensi form pada umumnya:
-   konfirmasi di akhir). */
+/* Import Excel/PDF & aksi Batal/Simpan: BUKAN bar mengambang lagi */
 .page-form-import-row {
   display: flex;
   justify-content: flex-end;
@@ -132,23 +92,9 @@
   margin-bottom: 22px;
   border-bottom: 1px solid var(--border);
 }
-/* Aturan .page-form-actions-row versi lama dihapus, bukan ditimpa:
-   bilah ini sekarang anak langsung #viewForm dengan pembungkus
-   .page-form-actions-inner (lihat bagian TAMBAHAN REDESAIN di bawah). */
+/* Aturan .page-form-actions-row versi lama dihapus, bukan ditimpa */
 .page-form-body {
-  /* Diperlebar dari 1120px -> 1600px: tabel Daftar Barang sendiri sudah
-     butuh min-width 1220px (lihat .item-table di bawah), jadi di 1120px
-     tabel selalu lebih lebar dari container-nya dan otomatis scroll
-     horizontal — kolom NAMA BARANG jadi kepepet ke lebar minimalnya
-     (220px) walau di-set 32%. Di 1600px, tabel (width:100%) punya ruang
-     untuk benar-benar melebar sampai proporsi 32%-nya, jadi nama barang
-     lebih kebaca tanpa terlalu sering wrap 2 baris — dan scrollbar
-     horizontal di .item-table-wrap praktis hilang di layar desktop
-     biasa. Cuma pengaruh ke max-width (batas atas), jadi tidak
-     mengubah apa pun di layar sempit/mobile.
-     Sengaja tidak disamakan dengan .container biasa (dipakai #viewList
-     utk daftar kartu) — form Tambah/Edit Jadwal memang lebih padat
-     datanya (tabel banyak kolom) jadi wajar kalau lebih lebar. */
+  /* Diperlebar dari 1120px -> 1600px: tabel Daftar Barang sendiri sudah */
   max-width: 1600px;
   padding: var(--sp-6) var(--sp-6) 0;
 }
@@ -172,8 +118,7 @@
     width: 100%;
     justify-content: center;
   }
-  /* Di layar sempit kedua tombol berbagi lebar penuh — keterangan
-     kelengkapan disembunyikan, jadi tidak ada yang perlu didorong. */
+  /* Di layar sempit kedua tombol berbagi lebar penuh — keterangan */
   .page-form-actions-btns {
     display: grid;
     grid-template-columns: 1fr 1.4fr;
@@ -310,12 +255,7 @@
   color: #d9932c;
 }
 
-/* ---- Tab stepper (1/2/3) — navy tunggal untuk tab aktif (lihat
-   komentar di bawah kenapa disatukan), TIDAK lagi mengikuti warna
-   .form-section-card per topik seperti sebelumnya. Badge ikon di
-   .form-section-card sendiri tetap per-topik (ocean/violet/amber) —
-   itu konten yang cuma satu terlihat sekaligus, jadi tidak kena
-   masalah "warna berubah-ubah" yang dialami stepper. ---- */
+/* Tab stepper (1/2/3) — navy tunggal untuk tab aktif (lihat */
 .nav-detail {
   display: flex;
   gap: 4px;
@@ -374,10 +314,7 @@
   background: rgba(255, 255, 255, 0.25);
   color: #fff;
 }
-/* SATU warna untuk seluruh step (biru navy). Sebelumnya tiap tab punya
-   warna sendiri (ungu utk Daftar Barang, amber utk Kepabeanan) sehingga
-   warna header berubah-ubah saat berpindah step dan terkesan tidak
-   konsisten. Sekarang cukup satu aturan untuk semua tab. */
+/* SATU warna untuk seluruh step (biru navy). Sebelumnya tiap tab punya */
 .nav-detail .nav-link.active {
   background: linear-gradient(135deg, var(--ocean), #123b63);
   color: #fff;
@@ -390,15 +327,12 @@
   }
 }
 
-/* ---- Kartu tiap subsection (pengelompokan visual + badge ikon
-   berwarna, warnanya senada sama tab aktifnya) ---- */
+/* Kartu tiap subsection (pengelompokan visual + badge ikon */
 .form-section-card {
   background: #fff;
   padding: 22px 22px 20px;
   margin-bottom: 20px;
-  /* border, border-radius & box-shadow datang dari aturan bersama
-     ".form-section-card" di lapisan sistem desain — lihat section
-     KARTU untuk kenapa .ship-card jadi pengecualian di sana. */
+  /* border, border-radius & box-shadow datang dari aturan bersama */
 }
 .form-section-card:last-child {
   margin-bottom: 0;
@@ -442,9 +376,7 @@
   color: var(--navy);
 }
 
-/* ---- Input/select di halaman form: sebelumnya polos (default
-   Bootstrap tanpa override), sekarang disamakan & dirapikan senada
-   dengan versi modal. ---- */
+/* Input/select di halaman form: sebelumnya polos (default */
 .page-form .form-control,
 .page-form .form-select {
   border: 1px solid var(--border);
@@ -470,14 +402,6 @@
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--navy);
-}
-.page-form .form-check-input:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
-}
-.page-form .form-check-input:checked {
-  background-color: var(--teal);
-  border-color: var(--teal);
 }
 
 /* ---- Terminal Transit (dynamic list, modal Transportasi & Rute) ---- */
@@ -603,7 +527,6 @@ table.item-table th {
   background: var(--bg);
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
   font-weight: 600;
@@ -636,29 +559,15 @@ table.item-table select {
 table.item-table select[data-f="jenisBarang"] {
   min-width: 140px;
 }
-/* Kolom "Kemasan" (per barang) — input Jumlah+Jenis (Import) atau
-   dimensi P*L*T (Export), plus hint kecil live di bawahnya (CUMA
-   peringatan kalau belum kebaca/format salah — hasil hitungnya sendiri
-   sekarang di kolom CBM terpisah, lihat td.cbm-col di bawah). */
+/* Kolom Kemasan per barang: Jumlah+Jenis (Import) / dimensi (Export) */
 td.pkg-cell {
   vertical-align: top;
 }
 td.pkg-cell input {
   min-width: 110px;
 }
-.pkg-hint {
-  display: block;
-  margin-top: 3px;
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-.pkg-hint-warn {
-  color: var(--coral);
-}
-/* Kolom "CBM (m³)" (per barang, mode Export) — readonly, hasil hitung
-   otomatis P*L*T/1.000.000 x Qty. Disembunyikan total di mode Import
-   lewat class d-none (lihat item-table.js/form-router.js), jadi cukup
-   samakan gaya dgn .subtotal supaya konsisten sbg "kolom hasil hitung". */
+
+/* Kolom "CBM (m³)" (per barang, mode Export) — readonly, hasil hitung */
 table.item-table input.cbm-readonly {
   background: #f7fafd;
   font-family: var(--font-mono);
@@ -668,16 +577,7 @@ table.item-table input.cbm-readonly {
   text-align: center;
   width: 100%;
 }
-/* NAMA BARANG — harus terbaca UTUH tanpa scroll apa pun.
-   Diterapkan Option A + B sekaligus:
-     A. kolomnya dilebarkan (lihat lebar <th> di index.html: 26%),
-     B. tingginya otomatis mengikuti jumlah baris isinya, diatur
-        autoGrowTextarea() yang menyetel height = scrollHeight.
-   Yang DIHAPUS dari versi sebelumnya:
-     - `max-height: 220px`  -> nama panjang terpotong di kotak sempit,
-     - `overflow-y: auto`   -> memunculkan gagang/scrollbar di dalam sel.
-   Sekarang overflow dimatikan total (vertikal & horizontal) dan teks
-   dibungkus, sehingga tidak ada scroll sama sekali. */
+/* NAMA BARANG — harus terbaca UTUH tanpa scroll apa pun */
 table.item-table textarea.nama-barang-input {
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -752,15 +652,9 @@ table.item-table .rm-row:hover {
   font-family: var(--font-mono);
   color: var(--navy);
 }
-/* Input Total Package (form) — menyatu di dalam .foot-package, jadi
-   dibuat kecil/inline, bukan gaya .form-control lebar penuh biasa.
-   Mode Import: readonly (lihat toggle di form-router.js) — dikasih
-   background abu-abu supaya kelihatan jelas ini hasil hitung otomatis,
-   bukan field yang bisa diketik bebas. */
+/* Input Total Package, menyatu di dalam .foot-package */
 .foot-package input {
-  /* Lebar diatur autoSizeInput() (js/ui/dom.js) mengikuti panjang isi.
-     Dulu dipatok 84px, jadi "56 PACKAGE" selalu terpotong. min/max di
-     sini hanya pagar untuk render awal sebelum JS jalan. */
+  /* Lebar diatur autoSizeInput() (js/ui/dom.js) mengikuti panjang isi */
   width: auto;
   min-width: 58px;
   max-width: 200px;
@@ -915,8 +809,7 @@ tr.item-fac-row td {
 .calc-box .calc-label {
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: var(--muted);
 }
 .calc-box .calc-value {
@@ -927,10 +820,7 @@ tr.item-fac-row td {
   margin-top: 2px;
 }
 
-/* ==================================================================
-   TAMBAHAN: DELAY, SATUAN KEMASAN, PENANDA FORMAT
-   (requirement C & D)
-================================================================== */
+/* TAMBAHAN: DELAY, SATUAN KEMASAN, PENANDA FORMAT */
 
 /* Blok "Jadwal Awal (sebelum delay)" — hanya tampil saat status DELAY. */
 .delay-box {
@@ -962,32 +852,20 @@ tr.item-fac-row td {
 .foot-package input.pkg-unit-input {
   min-width: 64px;
   max-width: 130px;
-  text-transform: uppercase;
   background: #fff;
   color: var(--navy);
   cursor: text;
 }
 
-/* Penanda isi kolom Kemasan yang formatnya belum benar. Sengaja HANYA
-   mengubah warna garis tepi — TIDAK menambah elemen teks di bawah input,
-   supaya tinggi baris tabel tidak berubah saat user mengetik (dulu hint
-   merah di bawah input bikin baris & kursor melompat). Keterangannya
-   ada di tooltip (atribut title) input itu sendiri. */
+/* Penanda isi kolom Kemasan yang formatnya belum benar. Sengaja HANYA */
 table.item-table input.pkg-invalid {
   border-color: var(--coral);
   background: #fff6f6;
 }
 
+/* TAMBAHAN REDESAIN — HALAMAN FORM */
 
-/* ==================================================================
-   TAMBAHAN REDESAIN — HALAMAN FORM
-================================================================== */
-
-/* ---- Petunjuk langkah di kepala halaman -------------------------
-   Menggantikan kolom penyeimbang kosong di sisi kanan header. Ruang
-   itu memang harus terisi supaya judul tetap di tengah; sekarang ia
-   mengerjakan sesuatu: menunjukkan langkah ke berapa dari tiga, dan
-   berapa bidang wajib yang masih kosong. */
+/* Petunjuk langkah di kepala halaman */
 .page-form-header-spacer {
   display: flex;
   align-items: center;
@@ -1001,8 +879,7 @@ table.item-table input.pkg-invalid {
   font-family: var(--font-board);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.6);
   white-space: nowrap;
 }
@@ -1023,11 +900,7 @@ table.item-table input.pkg-invalid {
   background: #fff;
 }
 
-/* ---- Zona isi otomatis dari dokumen -----------------------------
-   Ini pintu masuk yang paling sering dipakai: satu PDF PIB/PEB atau
-   satu Excel CIPL mengisi puluhan bidang sekaligus. Di versi lama ia
-   cuma tombol kecil rata kanan — ukurannya tidak mencerminkan
-   perannya, dan pengguna baru tidak tahu itu ada. */
+/* Zona isi otomatis dari dokumen */
 .page-form-import-row {
   display: flex;
   align-items: center;
@@ -1060,23 +933,8 @@ table.item-table input.pkg-invalid {
   background: var(--p-100);
 }
 
-/* ---- Bilah simpan yang menempel di dasar layar -------------------
-   Form ini panjang (tiga tab, tabel barang bisa puluhan baris).
-   Tombol Simpan yang duduk di ujung bawah dokumen berarti setiap
-   penyimpanan diawali menggulir. Sekarang bilahnya menempel, dan
-   ikut menampilkan apa yang belum lengkap. */
-/* ---- Bilah simpan yang MENGAMBANG ------------------------------
-   Versi sebelumnya setengah jalan: selebar layar penuh dan menempel
-   rapat ke dasar, tapi tetap punya garis atas dan latar sendiri —
-   jadi ia terbaca seperti bagian halaman yang kebetulan lengket,
-   bukan sebagai alat. Sekarang ia benar-benar kartu yang mengambang:
-   melayang di atas isi, punya jarak di keempat sisinya, sudut
-   membulat, dan bayangan.
-
-   Pembungkusnya sendiri tidak terlihat — ia hanya mengurus posisi dan
-   memberi jarak ke isi di atasnya. Isi halaman yang tergulir di
-   bawahnya dilarutkan oleh gradasi tipis supaya teks tidak menabrak
-   tepi kartu. */
+/* Bilah simpan yang menempel di dasar layar */
+/* Bilah simpan yang MENGAMBANG */
 .page-form-actions-row {
   position: sticky;
   bottom: 0;
@@ -1094,12 +952,7 @@ table.item-table input.pkg-invalid {
 }
 .page-form-actions-inner {
   pointer-events: auto;
-  /* Lebarnya DISAMAKAN dengan kartu-kartu form di atasnya.
-     .page-form-body ber-max-width 1600px dengan padding samping 24px,
-     jadi kartunya membentang 1600 - 48 = 1552px dan berada di tengah.
-     Angka itu yang dipakai di sini, dan karena pembungkusnya juga
-     ber-padding samping 24px, pada layar yang lebih sempit keduanya
-     otomatis ikut menyempit bersamaan. */
+  /* Lebarnya DISAMAKAN dengan kartu-kartu form di atasnya */
   width: 100%;
   max-width: 1552px;
   margin: 0 auto;
@@ -1117,10 +970,7 @@ table.item-table input.pkg-invalid {
     0 18px 40px -18px rgba(10, 27, 51, 0.45),
     0 3px 10px -4px rgba(10, 27, 51, 0.12);
 }
-/* Kelompok tombol. margin-left: auto dipasang sebagai pengaman:
-   kalau keterangan kelengkapan sedang disembunyikan (layar sempit),
-   space-between tidak punya anak kedua untuk didorong, dan tanpa ini
-   tombolnya akan melompat ke kiri. */
+/* Kelompok tombol. margin-left: auto dipasang sebagai pengaman */
 .page-form-actions-btns {
   display: flex;
   align-items: center;
@@ -1151,9 +1001,7 @@ table.item-table input.pkg-invalid {
 }
 
 @media (max-width: 767.98px) {
-  /* 14px, disamakan PERSIS dengan padding samping .page-form-body di
-     media query yang sama — supaya tepi kartu simpan tetap segaris
-     dengan kartu form di atasnya, bukan meleset 2px. */
+  /* 14px, sama persis dengan padding samping .page-form-body */
   .page-form-actions-row {
     padding: var(--sp-6) 14px var(--sp-3);
   }
@@ -1176,20 +1024,7 @@ table.item-table input.pkg-invalid {
   }
 }
 
-
-/* ==================================================================
-   LAMBANG MATA UANG PADA ISIAN
-
-   Lambang $ / Rp / % digambar sebagai LAPISAN di atas kotak isian —
-   ia tidak pernah menjadi bagian dari nilainya. Ini penting: seluruh
-   template salin dan Bulk Export membaca `input.value` apa adanya,
-   jadi kalau lambangnya ikut masuk ke nilai, sel Excel akan berisi
-   "Rp 1.200.000" dan berhenti terbaca sebagai angka.
-
-   Digambar lewat ::before/::after dengan content: attr(data-affix),
-   sehingga satu aturan melayani semua lambang dan tidak ada elemen
-   tambahan yang perlu ditulis di HTML.
-================================================================== */
+/* LAMBANG MATA UANG PADA ISIAN */
 .input-affix {
   position: relative;
 }
@@ -1209,16 +1044,7 @@ table.item-table input.pkg-invalid {
   transition: color var(--dur-1) var(--ease);
 }
 
-/* ---- KEKHUSUSAN SELEKTOR — bagian yang paling mudah salah ----
-   `.page-form .form-control` di atas bernilai (0,2,0) dan mengalahkan
-   `.input-affix > input` (0,1,1), jadi `padding: 9px 12px` miliknya
-   yang berlaku dan ruang untuk lambang tidak pernah tersedia —
-   akibatnya "$" menabrak angka pertama. Ditulis dengan `.page-form`
-   di depan (0,2,1) supaya menang.
-
-   Angka paddingnya dihitung, bukan dikira-kira: lambang mulai di 12px,
-   lebar "$" pada JetBrains Mono 0.78rem ±7px, sisakan ±8px jarak baca
-   -> 27px. "Rp" dua karakter ±14px -> 34px. */
+/* Perlu `.page-form` di depan (0,2,1) agar menang atas `.page-form .form-control` (0,2,0) */
 .page-form .input-affix > input {
   padding-left: 27px;
 }
@@ -1226,8 +1052,7 @@ table.item-table input.pkg-invalid {
   padding-left: 34px;
 }
 
-/* Lambang meredup saat kolomnya kosong dan menegas begitu terisi —
-   jadi ia terbaca sebagai petunjuk satuan, bukan sebagai isi. */
+/* Lambang meredup saat kolomnya kosong dan menegas begitu terisi — */
 .input-affix.has-value::before {
   color: var(--p-600);
 }
@@ -1242,12 +1067,7 @@ table.item-table input.pkg-invalid {
   padding-right: 26px;
 }
 
-/* ---- Kolom Harga/Unit di tabel Daftar Barang --------------------
-   Angkanya dibuat rata KANAN (menyusul kolom Subtotal di sebelahnya
-   yang memang sudah rata kanan). Sebelumnya rata tengah, sehingga
-   "$" di tepi kiri dan angka di tengah terlihat seperti dua hal yang
-   tidak berhubungan. Lambang kiri + digit kanan adalah tata letak
-   lajur uang yang lazim — sama seperti format Currency di Excel. */
+/* Kolom Harga/Unit di tabel Daftar Barang */
 .page-form table.item-table .input-affix--tight::before {
   left: 9px;
   font-size: 0.72rem;
@@ -1258,13 +1078,7 @@ table.item-table input.pkg-invalid {
   padding-right: 8px;
 }
 
-/* ==================================================================
-   BARIS KOTAK HITUNG
-
-   Melar mengisi ruang, jadi ketika incoterm-nya bukan CIF maupun FOB
-   dan dua kotak lain disembunyikan, kotak Total otomatis memenuhi
-   lebar tanpa perlu mengganti kelas kolom dari JavaScript.
-================================================================== */
+/* BARIS KOTAK HITUNG */
 .calc-row {
   display: flex;
   flex-wrap: wrap;
@@ -1274,4 +1088,10 @@ table.item-table input.pkg-invalid {
   flex: 1 1 220px;
   min-width: 0;
   margin: 0;
+}
+
+/* Tanggal & Jam Stuffing tidak dipakai di buku Export — tanggal muatnya
+   diisi lewat kolom "Stuffing" (field actual). */
+body.mode-export .factory-field {
+  display: none;
 }

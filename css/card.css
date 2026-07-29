@@ -1,25 +1,10 @@
-/* ==================================================================
-   KARTU PENGIRIMAN
-
-   Tampilan Kartu dipertahankan untuk saat pengguna sedang MEMBACA
-   satu pengiriman: semua informasinya terbuka, tanggal bisa diubah
-   di tempat, kronologi bisa ditambah tanpa pindah halaman. Untuk
-   MEMBANDINGKAN banyak pengiriman, tampilan Manifes yang dipakai
-   (lihat manifest.css). Sakelarnya ada di bilah kendali.
-
-   Dibanding versi lama, kartu di sini dirapatkan: jarak info-grid
-   turun dari 25px ke 16px dan padding dari 20/22 ke 16/18, sehingga
-   satu kartu memakan ±120 px lebih sedikit tanpa kehilangan satu
-   pun bidang data.
-================================================================== */
+/* KARTU PENGIRIMAN */
 .ship-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--border);
   padding: 19px 21px;
-  /* border-radius & box-shadow datang dari aturan bersama ".ship-card"
-     di lapisan sistem desain — lihat komentar di sana untuk kenapa
-     border (bukan radius/shadow) TIDAK ikut digabung untuk kartu ini. */
+  /* border-radius & box-shadow datang dari aturan bersama ".ship-card" */
 }
 .ship-card + .ship-card {
   margin-top: 13px;
@@ -95,8 +80,7 @@
   font-family: var(--font-board);
   font-size: 0.68rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.02em;
   color: var(--n-500);
   margin-bottom: 3px;
   display: flex;
@@ -193,7 +177,6 @@
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   cursor: pointer;
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -299,8 +282,7 @@
 .lane-title {
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.02em;
   color: var(--muted);
   margin-bottom: 10px;
 }
@@ -381,20 +363,80 @@
   justify-content: center;
   box-shadow: 0 2px 6px rgba(11, 31, 58, 0.22);
 }
+/* Penanda bergerak.
+
+   Sebelumnya ia mengambang naik-turun — geraknya tegak lurus terhadap
+   jalur, sehingga malah menutupi tulisan di atasnya dan tidak
+   menyampaikan apa pun soal arah. Sekarang ikonnya menghadap KANAN
+   (searah jalur) dan yang bergerak adalah jejak di belakangnya: semburan
+   untuk pesawat, riak air untuk kapal. */
+.ship-marker {
+  overflow: visible;
+}
+
+/* Jejak di belakang penanda */
+.marker-trail {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
+  pointer-events: none;
+}
+.marker-trail span {
+  display: block;
+  width: 5px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  opacity: 0;
+}
+.is-air .marker-trail span {
+  background: linear-gradient(90deg, transparent, var(--sec-400));
+}
+.is-sea .marker-trail span {
+  background: linear-gradient(90deg, transparent, var(--p-400));
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .ship-marker.sailing {
-    animation: bob 2.6s ease-in-out infinite;
+  .is-moving .marker-trail span {
+    animation: trail-puff 1.1s linear infinite;
+  }
+  .is-moving .marker-trail span:nth-child(2) {
+    animation-delay: 0.22s;
+  }
+  .is-moving .marker-trail span:nth-child(3) {
+    animation-delay: 0.44s;
+  }
+  /* Kapal bergoyang tipis di tempatnya — meniru ombak, tanpa berpindah
+     tegak lurus dari jalur. */
+  .ship-marker.is-moving.is-sea .marker-icon {
+    animation: hull-sway 2.6s ease-in-out infinite;
   }
 }
-@keyframes bob {
+
+@keyframes trail-puff {
+  0% {
+    opacity: 0.75;
+    transform: translateX(0) scaleX(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-14px) scaleX(1.6);
+  }
+}
+@keyframes hull-sway {
   0%,
   100% {
-    transform: translate(-50%, -58%) translateY(0);
+    transform: rotate(-4deg);
   }
   50% {
-    transform: translate(-50%, -58%) translateY(-3px);
+    transform: rotate(4deg);
   }
 }
+
 .port-labels {
   display: flex;
   justify-content: space-between;
@@ -457,9 +499,7 @@
 }
 
 /* ---- Date strip ---- */
-/* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content
-   input tanggal bawaan peramban (±145px), jadi tiga kolom memaksa
-   ±470px dan meluber di layar ponsel. */
+/* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
 .date-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -472,8 +512,7 @@
 .date-field label {
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--muted);
   margin-bottom: 4px;
   display: block;
@@ -529,9 +568,7 @@
   font-weight: 600;
 }
 
-/* ==================================================================
-   STRIP JADWAL AWAL DI KARTU (status DELAY)
-================================================================== */
+/* STRIP JADWAL AWAL DI KARTU (status DELAY) */
 .delay-strip {
   margin-top: 8px;
   border: 1px dashed var(--amber);
@@ -542,7 +579,6 @@
 .delay-strip-head {
   font-size: 0.72rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
   color: #a35a00;
   margin-bottom: 6px;
@@ -574,16 +610,7 @@
   color: var(--teal-dark);
 }
 
-/* ==================================================================
-   ISI TAMBAHAN DI KARTU SELESAI (ARRIVED / DELIVERED)
-
-   Kartu berstatus selesai sengaja dibuat ringkas (satu baris) karena
-   sudah tidak perlu dipantau harian. Tapi nama barang & kronologinya
-   tetap sering dicari belakangan saat menelusuri riwayat pengiriman —
-   jadi keduanya ditambahkan di bawah baris ringkas itu, dengan gaya
-   yang lebih redup supaya tetap terlihat sekunder dan tidak menyaingi
-   kartu yang masih berjalan.
-================================================================== */
+/* ISI TAMBAHAN DI KARTU SELESAI (ARRIVED / DELIVERED) */
 .collapsed-extra {
   margin-top: 10px;
   padding-top: 10px;
@@ -599,7 +626,6 @@
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -613,16 +639,13 @@
 .collapsed-items-list > div {
   word-break: break-word;
 }
-/* Panel kronologi di kartu selesai: jarak atasnya dirapatkan karena
-   sudah ada garis pemisah .collapsed-extra di atasnya. */
+/* Kronologi pada kartu selesai: jarak atas dirapatkan */
 .collapsed-extra .card-notes {
   margin-top: 8px;
   padding-top: 8px;
 }
 
-/* ==================================================================
-   ANIMASI "BERANGKAT HARI INI" (ETD == hari ini)
-================================================================== */
+/* ANIMASI "BERANGKAT HARI INI" (ETD == hari ini) */
 .depart-strip {
   margin-top: 10px;
   display: flex;
@@ -643,14 +666,12 @@
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--teal-dark, #634b1d);
 }
 .depart-strip--air .depart-label {
   color: var(--ocean);
 }
-/* Jalur tempat ikon bergerak. Garis putus-putus dibuat dari repeating
-   gradient supaya tidak perlu elemen tambahan. */
+/* Jalur tempat ikon bergerak. Garis putus-putus dibuat dari repeating */
 .depart-track {
   position: relative;
   flex: 1;
@@ -671,37 +692,22 @@
     transparent 6px 12px
   );
 }
-/* Arah hadap ikon disimpan sebagai variabel, lalu dipakai di dalam
-   keyframes. Dengan begitu jalur geraknya cukup ditulis SEKALI untuk
-   laut dan udara — tidak perlu dua set keyframes yang harus dijaga
-   tetap sama.
-
-   Penting: rotate() ditulis PALING KANAN di dalam transform. Fungsi
-   transform dijalankan dari kanan ke kiri, jadi ikonnya diputar dulu
-   di tempatnya, BARU digeser. Kalau urutannya dibalik, sumbu geser
-   ikut berputar 90 derajat dan pesawatnya melayang keluar jalur.
-   Alasan yang sama membuat properti `rotate:` yang berdiri sendiri
-   tidak dipakai di sini — ia selalu dihitung setelah transform. */
+/* Arah hadap ikon disimpan sebagai variabel, lalu dipakai di dalam */
 .depart-mover {
   position: absolute;
   top: 50%;
   left: 0;
-  --mover-rot: 0deg;
   font-size: 0.95rem;
   color: var(--teal, #8a6a28);
   animation: depart-travel 3.4s ease-in-out infinite;
 }
-/* bi-airplane-fill digambar menghadap ATAS. Diputar 90 derajat searah
-   jarum jam supaya hidungnya menghadap ke kanan — searah dengan arah
-   geraknya di sepanjang jalur putus-putus. */
 .depart-strip--air .depart-mover {
   color: var(--ocean);
-  --mover-rot: 90deg;
 }
 @keyframes depart-travel {
   0% {
     left: 0;
-    transform: translate(0, -50%) rotate(var(--mover-rot));
+    transform: translate(0, -50%);
     opacity: 0;
   }
   12% {
@@ -712,39 +718,24 @@
   }
   100% {
     left: 100%;
-    transform: translate(-100%, -50%) rotate(var(--mover-rot));
+    transform: translate(-100%, -50%);
     opacity: 0;
   }
 }
-/* Hormati preferensi sistem: kalau pengguna meminta animasi dikurangi,
-   ikonnya tetap tampil tapi berhenti bergerak. */
+/* Hormati preferensi sistem: kalau pengguna meminta animasi dikurangi */
 @media (prefers-reduced-motion: reduce) {
   .depart-mover {
     animation: none;
     left: 50%;
-    transform: translate(-50%, -50%) rotate(var(--mover-rot));
+    transform: translate(-50%, -50%);
   }
 }
 
-
-/* ==================================================================
-   TAMBAHAN REDESAIN — KARTU
-
-   Token papan yang sama dengan tampilan Manifes dipasang di kepala
-   kartu. Tujuannya konsistensi: "H-3" berarti hal yang sama di mana
-   pun ia muncul, jadi berpindah antara Kartu dan Manifes tidak
-   membuat pengguna belajar dua bahasa.
-================================================================== */
+/* TAMBAHAN REDESAIN — KARTU */
 .ship-card-top {
   align-items: center;
 }
-.card-board {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  margin-right: 2px;
-}
+
 .ship-title-block {
   display: flex;
   align-items: center;
@@ -754,10 +745,7 @@
   min-width: 0;
 }
 
-/* Baris tag dirapatkan & dibuat lebih tenang: dulu tiap tag punya
-   latar berwarna sendiri sehingga satu kartu bisa memuat enam warna
-   sekaligus dan tidak ada yang menonjol. Sekarang hanya tag yang
-   menuntut tindakan (DELAY) yang berwarna kuat. */
+/* Baris tag dirapatkan & dibuat lebih tenang: dulu tiap tag punya */
 .tag-row {
   gap: 5px;
   margin: 10px 0 0;
@@ -768,11 +756,7 @@
   border-radius: var(--r-xs);
 }
 
-
-/* ---- Kartu di layar sempit ---------------------------------------
-   Tiga kotak tanggal berdampingan tidak akan pernah muat di 390px:
-   input date bawaan peramban punya lebar minimum sendiri yang tidak
-   bisa ditekan. Di bawah 600px mereka ditumpuk. */
+/* Kartu di layar sempit */
 @media (max-width: 599.98px) {
   .date-strip {
     grid-template-columns: minmax(0, 1fr);
@@ -783,5 +767,75 @@
   }
   .delay-strip-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Keterangan sisa hari di sebelah judul jalur */
+.lane-remaining {
+  float: right;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--n-500);
+}
+
+/* Di 0% dan 100% penanda digeser ke dalam supaya tidak setengah
+   menggantung di luar jalur. */
+.ship-marker.at-start {
+  transform: translate(0, -58%);
+}
+.ship-marker.at-end {
+  transform: translate(-100%, -58%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ship-marker.at-start.is-moving.is-sea,
+  .ship-marker.at-end.is-moving.is-sea,
+  .ship-marker.at-start.is-moving.is-air,
+  .ship-marker.at-end.is-moving.is-air {
+    animation: none;
+  }
+}
+
+
+/* Lambang moda: SVG yang sudah menghadap kanan, jadi tidak diputar. */
+.marker-icon svg,
+.depart-mover svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: currentColor;
+}
+.depart-mover svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Denyut radar — menandai penanda sedang bergerak, sama untuk kapal
+   maupun pesawat. Digambar lewat ::after supaya tidak menambah elemen. */
+.ship-marker::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ship-marker.is-moving::after {
+    animation: radar-ping 2.2s cubic-bezier(0, 0.2, 0.3, 1) infinite;
+  }
+}
+@keyframes radar-ping {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.7);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(2.1);
   }
 }

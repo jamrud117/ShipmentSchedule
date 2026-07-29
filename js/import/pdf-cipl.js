@@ -1,40 +1,10 @@
 "use strict";
 
-/* ==================================================================
-   IMPORT DARI PDF CIPL (Packing List / Commercial Invoice hasil print
-   dari templat CI/PL, BUKAN dokumen PIB/PEB — lihat pdf.js & pdf-peb.js).
+/* IMPORT DARI PDF CIPL (Packing List / Commercial Invoice hasil print */
 
-   DUA PERUBAHAN BESAR dibanding versi sebelumnya:
-
-   1) PER HALAMAN, bukan per file. Ditemukan nyata (DD-DI26071601_CIPL.pdf):
-      SATU file PDF berisi Commercial Invoice di halaman 1 DAN Packing
-      List di halaman 2. Versi lama cuma mengintip 400 karakter pertama
-      lalu memperlakukan SELURUH file sebagai satu jenis — akibatnya
-      halaman PL diabaikan total dan berat netto/bruto tidak pernah
-      terisi walau datanya ada di file yang sama. Sekarang tiap halaman
-      dideteksi & di-parse sendiri, lalu digabung lewat mergeItemSources()
-      yang sama dipakai excel-cipl.js.
-
-   2) Kolom dipisah lewat KOORDINAT, bukan tebak-tebakan teks. Kolom
-      paling kiri ("Shipping Mark" di PL, "Item" di CI) berisi teks yang
-      BUKAN nama barang — nama consignee/pelabuhan yang dicetak di
-      kemasan, dan nomor PO ("Items of PO / DDI-202600713-01 / ..."). Di
-      PDF, teks itu berada di baris Y yang sama dengan nama barang, jadi
-      kalau dibaca sbg teks polos ia nempel jadi bagian nama barang.
-      Batas kolomnya dihitung dari posisi header masing-masing, jadi
-      tahan terhadap perbedaan lebar kolom antar templat supplier.
-================================================================== */
-
-// Header kolom pada templat ini POSISINYA DI TENGAH kolom, bukan di
-// tepi kiri — jadi batas kolom TIDAK bisa langsung memakai x header
-// (nama barang mulai jauh di kiri header "Goods Descriptions"). Yang
-// dipakai: ujung KANAN header kolom paling kiri sebagai batas buang,
-// dan tepi KIRI header "Qty." sebagai batas antara nama & angka.
+// Header kolom pada templat ini POSISINYA DI TENGAH kolom, bukan di tepi kiri
 function ciplPdfColumnSplits(pageItems) {
-  // Sebagian templat punya DUA kolom di kiri nama barang: "Shipping
-  // Marks" DAN "Item" (nomor urut 01/02). Yang dipakai sbg batas buang
-  // adalah yang paling KANAN — kalau memakai yang pertama ketemu,
-  // nomor urut barang ikut masuk jadi bagian nama.
+  // Sebagian templat punya DUA kolom di kiri nama barang: "Shipping Marks" DAN "Item"
   const leftCandidates = (pageItems || [])
     .filter((it) => /^\s*(Shipping\s+Marks?|Items?)\s*$/i.test(it.str))
     .map((it) => ({ x: it.transform[4], width: it.width || 0 }));
@@ -50,14 +20,10 @@ function ciplPdfColumnSplits(pageItems) {
   if (leftCandidates.length) {
     const left = leftCandidates.reduce((a, b) => (b.x > a.x ? b : a));
     nameStart = left.x + left.width;
-    // Jangan sampai batas ini malah memakan teks nama barang: nama
-    // barang selalu mulai di kiri header "Goods Descriptions".
+    // Jangan sampai batas ini malah memakan teks nama barang
     if (desc.x > left.x) nameStart = Math.min(nameStart, desc.x - 5);
   }
-  // Sebagian templat menaruh SATUAN sebagai sub-label header, bukan di
-  // tiap baris: "Quantity" lalu "SET" di bawahnya, sedangkan sel-nya
-  // cuma berisi angka. Tanpa ini satuan barang ikut kosong walau
-  // dokumennya jelas mencantumkannya.
+  // Sebagian templat menaruh SATUAN sebagai sub-label header, bukan di tiap baris
   let defaultUnit = "";
   (pageItems || []).forEach((it) => {
     const x = it.transform[4];
@@ -71,21 +37,13 @@ function ciplPdfColumnSplits(pageItems) {
   return { nameStart, valueStart: qty.x - 3, headerY: desc.y, defaultUnit };
 }
 
-// Baris tabel barang 1 halaman -> [{ nameText, valueText, y }].
-// Nama & angka diambil dari DUA kotak koordinat terpisah lalu
-// dipasangkan berdasarkan kedekatan Y (toleransi 3pt, sama dengan
-// toleransi pengelompokan baris).
+// Baris tabel barang 1 halaman -> [{ nameText, valueText, y }]
 function ciplPdfTableRows(pageItems) {
   const split = ciplPdfColumnSplits(pageItems);
   if (!split) return [];
 
   const allLines = pdfLines(pageItems);
-  // Batas bawah tabel: baris "TOTAL n BOX(ES) ..." (ringkasan) atau
-  // "DIMENSION: ..." (catatan kemasan) — mana yang lebih dulu muncul.
-  // Blok "Account of Payment" (nama bank, alamat, nomor rekening) berada
-  // DI BAWAH tabel barang tapi DI ATAS baris TOTAL — kalau tidak
-  // dihentikan di sini, baris-barisnya (yang tidak punya angka di kolom
-  // kanan) ikut tersambung sbg lanjutan nama barang terakhir.
+  // Batas bawah tabel: baris "TOTAL n BOX(ES) ..." (ringkasan) atau "DIMENSION: ..."
   const stopYs = allLines
     .filter((l) =>
       /^(TOTAL\b|DIMENSION\s*:|Account\s+of|Bank\s+name|Signed\s+by)/i.test(
@@ -117,8 +75,7 @@ function ciplPdfTableRows(pageItems) {
     .filter((r) => r.nameText);
 }
 
-// Angka pada kolom berat sering terpecah jadi beberapa potongan teks
-// ("1" lalu ".0"), jadi digabung dulu sebelum di-tokenisasi.
+// Angka pada kolom berat sering terpecah jadi beberapa potongan teks ("1" lalu ".0")
 function normalizeCiplValueText(s) {
   return String(s || "")
     .replace(/(\d)\s+\.(\d)/g, "$1.$2")
@@ -126,11 +83,7 @@ function normalizeCiplValueText(s) {
     .trim();
 }
 
-// "1 SET USD 40 USD 40"  (CI) -> { qty:1, satuan:"SET", nums:[40,40] }
-// "1 SET 1.0 KG"         (PL) -> { qty:1, satuan:"SET", nums:[1.0] }
-// Token mata uang (USD/IDR/...) & satuan berat (KG) dilewati; yang
-// dihitung cuma urutan ANGKA-nya, karena arti tiap angka ditentukan
-// jenis dokumennya (harga utk CI, berat utk PL).
+// "1 SET USD 40 USD 40" (CI) -> { qty:1, satuan:"SET", nums:[40,40] } "1 SET 1.0 KG"
 function parseCiplValueTokens(valueText) {
   const toks = normalizeCiplValueText(valueText).split(/\s+/).filter(Boolean);
   const nums = [];
@@ -148,39 +101,20 @@ function parseCiplValueTokens(valueText) {
   return { qty: nums.length ? nums[0] : null, satuan, nums: nums.slice(1) };
 }
 
-// Baris lanjutan: sebagian templat memecah nama barang panjang ke baris
-// berikutnya TANPA angka apa pun di kolom kanan — baris seperti itu
-// disambung ke nama barang sebelumnya, bukan dianggap barang baru.
-/* Baris nama tanpa angka bisa berperan dua macam:
-   (a) LANJUTAN nama barang di atasnya —
-         "Bead Ring          | 4 | 467.00"
-         "215/65R16 SAVERO SUV"            <- lanjutan
-   (b) JUDUL GRUP untuk barang-barang di bawahnya —
-         "Bead Ring"                        <- judul
-         "215/65R16 SAVERO SUV (4set) | 1 Box | 162 KG"
-         "215/60R17 GITICONTROL P10 (1set) | 1 Box | 82.5 KG"
-   Dibedakan dari POSISINYA: kalau sudah ada barang tepat di atasnya
-   (jarak < 16pt) berarti lanjutan; kalau belum ada, berarti judul grup
-   yang dipakai sbg AWALAN nama semua barang di grup itu. Tanpa aturan
-   ini, Packing List gaya (b) kehilangan kata "Bead Ring" seluruhnya dan
-   namanya tidak lagi cocok dengan Commercial Invoice pasangannya.       */
+// Baris lanjutan: sebagian templat memecah nama barang panjang ke baris berikutnya TANPA angka
+/* Baris nama tanpa angka bisa berperan dua macam */
 function ciplRowsToItems(rows, kind) {
   const items = [];
   let lastY = null;
   let groupPrefix = "";
   rows.forEach((r) => {
     const name = r.nameText.trim();
-    // Baris catatan HS Code ("... HS CODE: 9031.80") bukan barang.
+    // Baris catatan HS Code ("..
     if (/HS\s*CODE\s*:/i.test(name) && !r.valueText) return;
 
     const parsed = parseCiplValueTokens(r.valueText);
     if (parsed.qty == null) {
-      // Baris lanjutan hanya kalau posisinya MASIH menempel di bawah
-      // baris barang sebelumnya. Batasnya 24pt: spasi baris antar templat
-      // berbeda (ada yang ~15pt, ada yang ~20pt), dan kalau dipatok 16pt
-      // sambungan nama pada templat berspasi lebar malah salah dianggap
-      // judul grup lalu nempel ke barang BERIKUTNYA. Tetap ada batas
-      // supaya blok teks yang jauh di bawah tabel tidak ikut tertelan.
+      // Baris lanjutan hanya kalau posisinya MASIH menempel di bawah baris barang sebelumnya
       const nearPrev = lastY != null && Math.abs(lastY - r.y) < 24;
       if (items.length && name && nearPrev) {
         items[items.length - 1].name = (
@@ -232,10 +166,7 @@ function grab(text, re) {
   return m ? m[1].trim() : "";
 }
 
-// Kalau suatu field nilainya KOSONG di dokumen (mis. Vessel/Flight belum
-// diisi krn kapal belum ditentukan), pola "label lalu baris berikutnya"
-// bisa salah nangkap label field LAIN. Nilai yang polanya sendiri cocok
-// dg salah satu label yg dikenal dianggap "sebenarnya kosong".
+// Kalau suatu field nilainya KOSONG di dokumen (mis
 const KNOWN_LABEL_RES = [
   /^Shipping\s+Marks?/i,
   /^Items?\s*$/i,
@@ -281,11 +212,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
   );
   const docDate = parseFlexibleDateText(invDateRaw.replace(/\./g, "-"));
 
-  // DUA pihak diambil terpisah — lihat pickCiplParty() di cipl-common.js.
-  // "Seller" bukan satu-satunya sebutan penjual — supplier Tiongkok
-  // memakai "Consigner"/"Consignor", sebagian lain "Shipper"/"Exporter".
-  // Ejaannya cuma beda 1-2 huruf dari "Consignee" (penerima), jadi pola
-  // ini dikunci sampai batas kata + boleh diikuti titik dua.
+  // DUA pihak diambil terpisah — lihat pickCiplParty() di cipl-common.js
   const seller = grabNextLine(
     leftText,
     /^\s*(?:Seller|Shipper|Exporter|Consignors?|Consigners?)\s*:?\s*\n\s*([^\n]+)/im,
@@ -308,8 +235,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
   );
   const voyage = /^(0|00:00:00|-)$/.test(voyageRaw.trim()) ? "" : voyageRaw;
 
-  // Baris "TOTAL n BOX(ES) FCA INCHEON AIRPORT" melebar melewati batas
-  // kolom, jadi SENGAJA dicari di teks halaman UTUH (tanpa potong kolom).
+  // Baris "TOTAL n BOX(ES) FCA INCHEON AIRPORT" melebar melewati batas kolom
   const totalLine = pageText
     .split("\n")
     .find((l) => /^TOTAL\s+\d/i.test(l.trim()));
@@ -330,9 +256,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
     }
   }
 
-  // HS Code sering ditulis sbg CATATAN di bawah tabel, bukan kolom
-  // sendiri: "MOLD BAR GAUGE, BAR GAUGE HS CODE: 9031.80". Dipetakan
-  // ke barang lewat awalan namanya (lihat applyCiplHsNotes()).
+  // HS Code sering ditulis sbg CATATAN di bawah tabel, bukan kolom sendiri: "MOLD BAR GAUGE
   const hsNotes = [];
   pageText.split("\n").forEach((line) => {
     const m = /^(.+?)\s*HS\s*CODE\s*:\s*([\d.\-]+)\s*$/i.exec(line.trim());
@@ -350,9 +274,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
     }
   });
 
-  // Berat TOTAL sering cuma ada di baris ringkasan ("TOTAL 1 BOX(ES) ...
-  // 6.0 KG 6.5 KG" = netto lalu bruto), bukan per barang. Diambil di
-  // sini supaya bisa dibagi proporsional ke tiap barang.
+  // Berat TOTAL sering cuma ada di baris ringkasan ("TOTAL 1 BOX(ES) ..
   let totalNetto = null;
   let totalBruto = null;
   if (totalLine) {
@@ -383,9 +305,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
   };
 }
 
-// Cocokkan catatan HS Code ke barang lewat awalan nama. Awalan yang
-// lebih PANJANG diprioritaskan supaya "MOLD BAR GAUGE" menang atas
-// "BAR GAUGE" untuk barang "MOLD BAR GAUGE Credo Sunmode 185/65R14".
+// Cocokkan catatan HS Code ke barang lewat awalan nama
 function applyCiplHsNotes(items, hsNotes) {
   if (!hsNotes || !hsNotes.length) return items;
   const sorted = [...hsNotes].sort((a, b) => b.prefix.length - a.prefix.length);
@@ -405,8 +325,7 @@ function detectCiplPdfKind(text) {
   return null;
 }
 
-// Dipanggil dari import/dispatch.js. `text`/`pagesItems` datang dari
-// extractPdfText (pdf.js) — fungsi ini TIDAK memuat ulang PDF-nya sendiri.
+// Dipanggil dari import/dispatch.js
 function parseCiplPdfText(text, pagesItems) {
   const notes = [];
   const pages = (pagesItems || []).map((items) => {
@@ -435,8 +354,7 @@ function parseCiplPdfText(text, pagesItems) {
     if (its.length) itemSources.push(its);
   });
 
-  // Field: pakai nilai PERTAMA yang tidak kosong lintas halaman (halaman
-  // CI & PL memuat blok header yang sama persis, jadi aman).
+  // Field: pakai nilai PERTAMA yang tidak kosong lintas halaman
   const pick = (key) => {
     for (const f of fieldsList) {
       if (f[key] != null && String(f[key]).trim() !== "") return f[key];
@@ -447,8 +365,7 @@ function parseCiplPdfText(text, pagesItems) {
   const merged = mergeItemSources(itemSources);
   applyCiplHsNotes(merged, allHsNotes);
 
-  // Bruto = TOTAL dari baris ringkasan Packing List ("TOTAL 1 BOX(ES)
-  // ... 6.0 KG 6.5 KG"), ditaruh di barang pertama saja.
+  // Bruto = TOTAL dari baris ringkasan Packing List ("TOTAL 1 BOX(ES) ..
   const totBruto = (() => {
     for (const f of fieldsList) if (f.totalBruto != null) return f.totalBruto;
     return null;
@@ -461,12 +378,7 @@ function parseCiplPdfText(text, pagesItems) {
   const seller = pick("seller");
   const consignee = pick("consignee");
 
-  // Nilai yang TIDAK ADA di dokumen ini dibiarkan null, JANGAN dijadikan
-  // 0. Kalau dipaksa 0, penggabungan CI + PL yang diupload sebagai dua
-  // file terpisah jadi rusak: mergeItemSources() melihat angka 0 dari
-  // sisi CI sebagai "sudah ada isinya", sehingga berat dari sisi PL tidak
-  // pernah dipakai dan netto/bruto tetap kosong. Pengubahan ke 0 dilakukan
-  // paling akhir di ciplRawItemsToFinalItems() (import/dispatch.js).
+  // Nilai yang TIDAK ADA di dokumen ini dibiarkan null, JANGAN dijadikan 0
   const rawItems = merged.map((it) => ({
     name: it.name || "",
     hsCode: it.hsCode || "",

@@ -1,26 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   IMPORT DARI EXCEL CIPL (Commercial Invoice + Packing List)
-   Beda dari format Excel BC di atas (yang memang format export/import
-   bawaan aplikasi ini sendiri) — CIPL adalah dokumen niaga yang dibuat
-   SUPPLIER, jadi bentuknya BEBAS tergantung supplier masing-masing.
-   Sudah ketemu (dan didukung) sekurangnya 3 varian nyata:
-     1) Sheet "CI" + "PL" terpisah, header kolom "Description" /
-        "Specification", label "Invoice No. & Date" / "Consignee/Buyer".
-     2) Satu sheet gabungan ("CI,PL"/"CI PL"/dst) berisi BEBERAPA barang,
-        header kolom "Item" + "Description" + "Brand" + "Origin HS CODE"
-        sendiri-sendiri, blok INVOICE lalu blok PACKING LIST bersusun di
-        sheet yang sama.
-     3) Gaya "Goods Descriptions" (dipakai juga oleh versi PDF-nya, lihat
-        pdf-cipl.js) — kalau suatu saat ada juga versi Excel-nya.
-   Field & baris barang TIDAK dicari lewat offset kolom tetap (gampang
-   salah kalau template beda), tapi lewat KLASIFIKASI LABEL per kolom
-   (lihat CIPL_COLUMN_LABELS di cipl-common.js) supaya tahan terhadap
-   variasi tata letak. Kolom Freight/Insurance/NDPBM/BM/PPN/PPH memang
-   tidak ada di CIPL (itu urusan tahap kepabeanan, bukan niaga) —
-   sengaja dibiarkan kosong, isi manual.
-================================================================== */
+/* IMPORT DARI EXCEL CIPL (Commercial Invoice + Packing List) */
 
 function sheetToGrid(wb, name) {
   const sh = wb.Sheets[name];
@@ -54,11 +34,7 @@ function gridStrAt(grid, r, c) {
   const v = gridCellAt(grid, r, c);
   return v == null ? "" : String(v).trim();
 }
-// Lebih toleran dari sekadar Number(): kalau ada satuan nempel di cell yang
-// sama ("2000 KG", "1,868.00 USD") tetap diambil angka di depannya, bukan
-// langsung NaN — templat yang tidak menaruh angka & satuan di kolom
-// terpisah (jarang, tapi lebih aman ditangani drpd bikin barang itu
-// keliatan "kosong" datanya).
+// Lebih toleran dari sekadar Number(): kalau ada satuan nempel di cell yang sama
 function gridNumAt(grid, r, c) {
   const v = gridCellAt(grid, r, c);
   if (v == null) return null;
@@ -68,10 +44,7 @@ function gridNumAt(grid, r, c) {
   const n = Number(m[1].replace(/,/g, ""));
   return Number.isFinite(n) ? n : null;
 }
-// Nilai numerik yang boleh "lompat 1 kolom" kalau kolom yang diminta
-// ternyata isinya label mata uang/satuan (mis. header "Unit Price"/
-// "Amount" di beberapa templat diikuti sub-kolom "USD" duluan, baru
-// angkanya di kolom sesudahnya).
+// Nilai numerik yang boleh "lompat 1 kolom" kalau kolom yang diminta ternyata isinya label mata
 function gridNumSkippingLabel(grid, r, c) {
   const raw = gridStrAt(grid, r, c);
   if (raw && (CURRENCY_TOKEN_RE.test(raw) || UNIT_QTY_RE.test(raw))) {
@@ -80,11 +53,7 @@ function gridNumSkippingLabel(grid, r, c) {
   return gridNumAt(grid, r, c);
 }
 
-/* ---- klasifikasi baris header tabel barang -----------------------
-   Satu grid (sheet) bisa punya LEBIH dari 1 blok tabel barang (mis.
-   sheet gabungan CI,PL: blok INVOICE lalu blok PACKING LIST bersusun
-   di bawahnya) — semua kemunculan header dicari, bukan cuma yang
-   pertama. */
+/* klasifikasi baris header tabel barang */
 function findCiplHeaderBlocks(grid) {
   const NAME_KEYS = ["description", "item"];
   const DATA_KEYS = ["qty", "hsCode", "unitPrice", "amount", "netto", "bruto"];
@@ -108,10 +77,7 @@ function findCiplHeaderBlocks(grid) {
   return blocks;
 }
 
-// HS Code "... HS CODE : 8480.30.0000" ditulis sbg CATATAN TERPISAH di
-// beberapa sel lain (bukan kolom di tabel barang) yang awalannya cocok dg
-// awalan nama barang — dipakai sbg fallback TERAKHIR kalau kolom HS Code
-// khusus tidak ada DAN tidak ada juga yang ke-embed di teks nama.
+// HS Code "..
 function buildHsCodeNoteMap(grid) {
   return findAllGridCells(grid, /HS CODE\s*:/i)
     .map(({ r, c }) => {
@@ -143,14 +109,7 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
     if (/^Items?\s+of\s+PO\b/i.test(rawName)) continue;
 
     const parts = [];
-    // PERBAIKAN BUG (requirement A: "Nama item untuk CIPL Excel diambil
-    // dari kolom Goods Description, bukan dari kolom yang isinya 'Items
-    // of PO...' dst"). Di templat Dynamic Design, kolom "Item" (paling
-    // kiri) TIDAK berisi nama barang sama sekali -- isinya nomor PO yang
-    // di-merge menaungi seluruh blok, mis. "Items of PO\nDDI20260708".
-    // Kalau kolom "Goods Descriptions" ADA, dialah satu-satunya sumber
-    // nama; kolom "Item" cuma dipakai kalau kolom deskripsi memang tidak
-    // ada di templat itu (varian supplier lain).
+    // PERBAIKAN BUG (requirement A
     if (colMap.description !== undefined) {
       parts.push(gridStrAt(grid, r, colMap.description));
     } else if (colMap.item !== undefined) {
@@ -202,10 +161,7 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
     const bruto =
       colMap.bruto !== undefined ? gridNumAt(grid, r, colMap.bruto) : null;
 
-    // Kolom CBM (mis. "94 CM x 84 CM x 80 CM") -> Kemasan per barang
-    // mode Export ("94*84*80", dipakai parsePackageDims()/computeItemCbm()
-    // di core/helpers.js buat hitung meter kubiknya). Kosong kalau
-    // sheet ini tidak punya kolom CBM atau isinya bukan 3 angka.
+    // Kolom CBM (mis
     let packageText = "";
     if (colMap.cbm !== undefined) {
       const dims = parsePackageDims(gridStrAt(grid, r, colMap.cbm));
@@ -226,20 +182,13 @@ function extractItemsFromBlock(grid, block, hsNoteMap) {
   return items;
 }
 
-// Field header (Consignee, Invoice No/Date, dst) dicari lewat LABEL-nya
-// SENDIRI-SENDIRI (bukan offset relatif dari 1 label acuan) karena jarak
-// antar-kolom beda-beda antar templat — polanya konsisten: nilainya ada
-// TEPAT 1 baris di bawah label, kolom yang sama (dicek nyata di 2 templat
-// Excel yang beda jauh strukturnya, keduanya konsisten begini).
+// Field header (Consignee, Invoice No/Date, dst) dicari lewat LABEL-nya SENDIRI-SENDIRI
 function findFieldValue(grid, labelRe) {
   const pos = findGridCell(grid, labelRe);
   if (!pos) return { value: "", pos: null };
   return { value: gridStrAt(grid, pos.r + 1, pos.c), pos };
 }
-// Tanggal Invoice ada di baris yang SAMA dg nomor invoice (r+1 dari
-// label), tapi kolomnya beda-beda jauh antar templat -- disisir beberapa
-// kolom ke kanan dari nilai nomor invoice, ambil sel PERTAMA yang
-// berhasil di-parse sbg tanggal, drpd nebak 1 offset tetap.
+// Tanggal Invoice ada di baris yang SAMA dg nomor invoice (r+1 dari label)
 function findDateOnSameRow(grid, pos, fromCol, maxSpan = 12) {
   if (!pos) return "";
   for (let c = fromCol; c < fromCol + maxSpan; c++) {
@@ -254,8 +203,7 @@ function parseCiplWorkbook(wb) {
   const allNames = wb.SheetNames || [];
   let primaryNames = allNames.filter(isPrimaryCiplSheetName);
   if (!primaryNames.length) {
-    // Fallback: nama sheet tidak cocok pola yang dikenal -- coba SEMUA
-    // sheet KECUALI yang jelas lampiran/detail, drpd langsung menyerah.
+    // Fallback: nama sheet tidak cocok pola yang dikenal
     primaryNames = allNames.filter((n) => !isExcludedSheetName(n));
   }
   const grids = primaryNames.map((n) => ({
@@ -263,11 +211,7 @@ function parseCiplWorkbook(wb) {
     grid: sheetToGrid(wb, n),
   }));
 
-  // Sheet tambahan opsional berisi info yang TIDAK selalu ada di sheet
-  // CI/PL utama: MAWB/HAWB (mis. nama Korea "입고지" di templat supplier
-  // tertentu), dan LCL/FCL (biasanya di sheet "SI"/"Shipping
-  // Instruction" -- ketemu nyata di templat Dynamic Design, field
-  // "Volume"). Dicek kalau ADA, dilewati kalau tidak.
+  // Sheet tambahan opsional berisi info yang TIDAK selalu ada di sheet CI/PL utama: MAWB/HAWB (mis
   const extraSheetName = allNames.find((n) =>
     /입고지|receiving|warehouse|shipping\s*instruction|^si$/i.test(n),
   );
@@ -279,10 +223,6 @@ function parseCiplWorkbook(wb) {
   const masterBL = findLabelValueSameRow(extraGrid, /MAWB/i);
   const houseBL = findLabelValueSameRow(extraGrid, /HAWB/i);
   // LCL/FCL: dicari di beberapa kolom ke kanan dari label "Volume"
-  // (BUKAN cuma 1 kolom sesudahnya) karena templat SI biasanya punya
-  // kolom ":" pemisah di antara label & nilainya (mis. "Volume | : |
-  // LCL" -- nilainya di kolom+2, bukan+1). Lebih tahan drpd nebak 1
-  // offset tetap, sama seperti findDateOnSameRow di bawah.
   const findMuatanNearLabel = (grid, re) => {
     const pos = findGridCell(grid, re);
     if (!pos) return "";
@@ -295,9 +235,7 @@ function parseCiplWorkbook(wb) {
   };
   const muatan = findMuatanNearLabel(extraGrid, /Volume/i);
 
-  // ---- field header: dicoba di tiap sheet utama, dipakai hasil
-  // PERTAMA yang ketemu (biasanya semua sheet CI/PL punya salinan header
-  // yang sama, jadi cukup ambil dari yang mana saja ketemu duluan).
+  // field header: dicoba di tiap sheet utama, dipakai hasil PERTAMA yang ketemu
   let invoiceNo = "",
     invoiceDate = "",
     seller = "",
@@ -337,14 +275,11 @@ function parseCiplWorkbook(wb) {
     if (!origin)
       origin = findFieldValue(grid, CIPL_FIELD_LABELS.portOfLoading).value;
     if (!voyage) {
-      // "Carrier" (templat gabungan) atau baris Vessel/Flight (templat
-      // lama) -- dua-duanya berarti nama kapal/pengangkut.
+      // "Carrier" (templat gabungan) atau baris Vessel/Flight (templat lama)
       const voyRaw =
         findFieldValue(grid, /^Carrier\s*$/i).value ||
         findFieldValue(grid, CIPL_FIELD_LABELS.vesselFlight).value;
-      // Sel Vessel/Flight yang BELUM diisi sering menyisakan placeholder
-      // hasil format cell ("0" dari sel numerik kosong, "00:00:00" dari
-      // sel bertipe jam) -- itu bukan nama kapal/penerbangan.
+      // Sel Vessel/Flight yang BELUM diisi sering menyisakan placeholder hasil format cell
       voyage = /^(0|00:00:00|0:00:00|-)$/.test(voyRaw.trim()) ? "" : voyRaw;
     }
     if (!incoterm || !packageText) {
@@ -371,10 +306,7 @@ function parseCiplWorkbook(wb) {
   }
   const transport = guessTransportFromText(origin, destination);
 
-  // ---- barang: semua blok tabel di SEMUA sheet utama digabung jadi 1
-  // daftar sumber, lalu dicocokkan lewat nama (lihat mergeItemSources di
-  // cipl-common.js) — otomatis menangani baik "CI/PL sheet terpisah"
-  // MAUPUN "1 sheet gabungan dg 2 blok header" tanpa logika berbeda.
+  // barang: semua blok tabel di SEMUA sheet utama digabung jadi 1 daftar sumber
   const itemSources = [];
   let totalBlocksFound = 0;
   for (const { grid } of grids) {
@@ -430,12 +362,7 @@ function parseCiplWorkbook(wb) {
     'Hasil baca CIPL Excel ini best-effort — mohon cek ulang semua field sebelum simpan, terutama moda transportasi (disimpulkan dari kata "AIRPORT" di asal/tujuan), HS Code, dan berat kotor per barang. Freight/Insurance/NDPBM/BM/PPN/PPH tidak ada di dokumen CIPL — isi manual di tab Kepabeanan.',
   );
 
-  // Bruto: satu angka TOTAL di barang pertama (lihat penjelasan di
-  // applyTotalBrutoToFirstItem, js/core/num-format.js).
-  // CIPL Excel tidak punya satu sel "total berat kotor" yang baku antar
-  // templat supplier — jadi totalnya dijumlah dari kolom G.W. per baris
-  // yang sempat terbaca (ditangani di dalam fungsinya saat argumen kedua
-  // null), lalu dipasang di barang pertama.
+  // Bruto: satu angka TOTAL di barang pertama
   applyTotalBrutoToFirstItem(items, null);
 
   const modeHint = guessCiplModeFromPorts(origin, destination);
@@ -443,10 +370,7 @@ function parseCiplWorkbook(wb) {
     fields: {
       invoice: invoiceNo,
       docDate: invoiceDate,
-      // party dipilih sesuai ARAH pengiriman (import -> seller, export ->
-      // consignee). seller & consignee tetap dikirim mentah supaya
-      // apply-to-form.js bisa memilih ulang berdasarkan mode form yang
-      // sedang terbuka, bukan cuma tebakan dari pelabuhan.
+      // party dipilih sesuai ARAH pengiriman (import -> seller, export -> consignee)
       party: pickCiplParty(seller, consignee, modeHint || activeMode),
       seller,
       consignee,
@@ -463,9 +387,7 @@ function parseCiplWorkbook(wb) {
     },
     items,
     notes,
-    // Dokumen CIPL sama saja dipakai utk Import & Export, jadi tidak
-    // bisa di-hardcode -- ditebak dari Port of Loading vs Final
-    // Destination (lihat guessCiplModeFromPorts di cipl-common.js).
+    // Dokumen CIPL sama saja dipakai utk Import & Export, jadi tidak bisa di-hardcode
     modeHint,
     source: "cipl",
   };

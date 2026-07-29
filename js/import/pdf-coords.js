@@ -1,24 +1,8 @@
 "use strict";
 
-/* ==================================================================
-   UTILITAS KOORDINAT PDF (dipakai bersama oleh pdf-peb.js & pdf-cipl.js)
+/* UTILITAS KOORDINAT PDF (dipakai bersama oleh pdf-peb.js & pdf-cipl.js) */
 
-   KENAPA ADA: teks hasil ekstraksi PDF.js datang sebagai potongan kata
-   ber-koordinat, BUKAN baris rapi. Kalau cuma digabung jadi teks, kolom
-   yang bersebelahan (mis. "Uraian Jenis Barang" di sebelah "Jumlah &
-   Jenis Satuan Barang" pada form PEB) nempel jadi satu baris dan semua
-   regex jadi salah tangkap ("bleed" antar kolom). Solusinya: potong dulu
-   berdasarkan RENTANG X tiap kolom, baru disusun jadi baris.
-
-   Batas kolom TIDAK di-hardcode — dicari dari posisi x HEADER kolom itu
-   sendiri (mis. header "51. - Jumlah & Jenis"), jadi tetap benar walau
-   lebar kolom form berubah antar versi dokumen/printer.
-================================================================== */
-
-// Gabung potongan teks 1 baris jadi string. Spasi HANYA disisipkan kalau
-// ada jarak horizontal nyata antar potongan (relatif ke ukuran font) —
-// aturan yang sama persis dipakai groupPdfItemsIntoLines() di pdf.js,
-// karena sebagian PDF menulis teks huruf-per-huruf dengan jarak 0.
+// Gabung potongan teks 1 baris jadi string
 function pdfTextFromItems(items) {
   const sorted = [...items].sort((a, b) => a.transform[4] - b.transform[4]);
   let text = "";
@@ -35,8 +19,7 @@ function pdfTextFromItems(items) {
   return text.trim();
 }
 
-// Potongan teks -> baris (atas ke bawah), tiap baris membawa koordinat Y
-// & item mentahnya supaya pemanggil bisa memotong lagi per rentang Y.
+// Potongan teks -> baris (atas ke bawah)
 function pdfLines(items, yTolerance) {
   const tol = yTolerance == null ? 2.5 : yTolerance;
   const sorted = [...items].sort(
@@ -62,10 +45,7 @@ function pdfLines(items, yTolerance) {
   }));
 }
 
-// Baris teks yang HANYA menyertakan potongan dengan x di [xMin, xMax).
-// Inilah "isolasi kolom" yang bikin teks kolom sebelah tidak ikut
-// nyampur. yRange opsional membatasi juga secara vertikal (mis. cuma
-// wilayah 1 barang).
+// Baris teks yang HANYA menyertakan potongan dengan x di [xMin, xMax)
 function pdfLinesInBox(items, xMin, xMax, yRange, yTolerance) {
   const filtered = items.filter((it) => {
     const x = it.transform[4];
@@ -77,8 +57,7 @@ function pdfLinesInBox(items, xMin, xMax, yRange, yTolerance) {
   return pdfLines(filtered, yTolerance);
 }
 
-// Cari 1 potongan teks yang cocok regex, kembalikan posisi & halamannya.
-// Dipakai utk menemukan header kolom -> batas x-nya.
+// Cari 1 potongan teks yang cocok regex, kembalikan posisi & halamannya
 function pdfFindItem(pagesItems, re) {
   for (let p = 0; p < pagesItems.length; p++) {
     const items = pagesItems[p] || [];
@@ -97,9 +76,7 @@ function pdfFindItem(pagesItems, re) {
   return null;
 }
 
-// Cari header kolom di HALAMAN TERTENTU (form multi-halaman mengulang
-// header yang sama di tiap lembar lanjutan, jadi batas kolomnya harus
-// diambil dari halaman yang sedang diproses, bukan halaman pertama).
+// Cari header kolom di HALAMAN TERTENTU
 function pdfFindItemOnPage(items, re) {
   for (const it of items || []) {
     if (re.test(it.str)) {
@@ -109,10 +86,7 @@ function pdfFindItemOnPage(items, re) {
   return null;
 }
 
-// Susun batas kolom dari daftar regex header yang BERURUTAN kiri->kanan.
-// Hasil: { key: {xMin, xMax} }. Header yang tidak ketemu dilewati, dan
-// batas kanan tiap kolom = batas kiri kolom BERIKUTNYA yang ketemu (jadi
-// tetap benar walau ada 1-2 header yang gagal terbaca).
+// Susun batas kolom dari daftar regex header yang BERURUTAN kiri->kanan
 function pdfColumnBounds(items, headerDefs) {
   const found = headerDefs
     .map((def) => {
@@ -124,7 +98,6 @@ function pdfColumnBounds(items, headerDefs) {
   const bounds = {};
   found.forEach((f, i) => {
     // -2 pt toleransi: isi kolom kadang mulai sedikit di kiri header-nya
-    // (teks rata kiri dg indentasi berbeda antara header & isinya).
     bounds[f.key] = {
       xMin: f.x - 2,
       xMax: i + 1 < found.length ? found[i + 1].x - 2 : 100000,

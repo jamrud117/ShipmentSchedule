@@ -1,50 +1,20 @@
-/* ==================================================================
-   TOKENS — satu sumber untuk warna, tipografi, jarak, radius,
-   bayangan, dan gerak.
-
-   ARAH DESAIN: "papan operasi pelabuhan".
-   Aplikasi ini dipakai 6 jam sehari untuk mencocokkan pengiriman
-   dengan dokumen Bea Cukai. Jadi bahasanya diambil dari dunia itu
-   sendiri: manifes berbaris, nomor dokumen monospace, cap status,
-   dan papan keberangkatan yang menghitung mundur ke ETA. Bukan
-   halaman pemasaran logistik.
-
-   NAVY adalah warna utama — dipakai sebagai TINTA, bukan sebagai
-   gradien hiasan. Kuningan (brass) tetap jadi aksen sekunder untuk
-   sorotan yang perlu menonjol tanpa berebut perhatian dengan navy.
-   Warna lain HANYA untuk status yang memang harus dibedakan.
-
-   PENTING: nama variabel di sini SENGAJA sama dengan versi lama.
-   Seluruh komponen yang sudah ada (form, tabel barang, docnum,
-   kronologi) otomatis ikut palet baru tanpa perlu disentuh satu
-   per satu.
-================================================================== */
+/* TOKENS — satu sumber untuk warna, tipografi, jarak, radius */
 
 :root {
-  /* ---- Netral: kertas & tinta ------------------------------------
-     Sedikit lebih dingin/kebiruan dari slate biasa supaya seluruh
-     permukaan terasa satu keluarga dengan navy, bukan abu-abu netral
-     yang ditempeli navy. */
+  /* Netral: kertas & tinta */
   --n-50: #f5f7fa;
   --n-100: #eef1f6;
   --n-200: #dfe5ed;
   --n-300: #c4cedb;
   --n-400: #93a1b5;
-  /* Diturunkan dari #64748b: pada latar putih, warna itu berhenti di
-     4,43:1 — tepat di bawah ambang WCAG AA (4,5:1) untuk teks kecil.
-     Karena --n-500 adalah warna "teks redup" yang dipakai di puluhan
-     tempat (kepala kolom manifes, info paginasi, catatan kartu),
-     satu setelan di sini memperbaiki semuanya sekaligus. */
+  /* Bukan #64748b: warna itu hanya 4,43:1 di atas putih, gagal AA */
   --n-500: #5a6879;
   --n-600: #48566b;
   --n-700: #33415a;
   --n-800: #1c2b45;
   --n-900: #0a1b33;
 
-  /* ---- Aksen utama: RAMP NAVY ------------------------------------
-     Ujung TERANG (--p-200/300/400) wajib ada: dipakai di atas
-     permukaan gelap (bilah atas, papan ringkasan, header form) di
-     mana navy tua akan lenyap karena sewarna dengan latarnya. */
+  /* Aksen utama: RAMP NAVY */
   --p-50: #eef4fa;
   --p-100: #dae7f4;
   --p-200: #b4cde6;
@@ -54,9 +24,7 @@
   --p-600: #16375e;
   --p-700: #0a1b33;
 
-  /* ---- Aksen sekunder: RAMP KUNINGAN (brass) ---------------------
-     Sengaja diredupkan (bukan kuning terang) supaya beda jelas dari
-     status PROCESS yang sama-sama di keluarga oranye/kuning. */
+  /* Aksen sekunder: RAMP KUNINGAN (brass) */
   --sec-50: #fbf8f1;
   --sec-100: #f5eedd;
   --sec-200: #ebdcbb;
@@ -72,13 +40,7 @@
   --d-700: #16375e;
   --d-600: #1d5188;
 
-  /* ---- Status: semantik, bukan dekorasi -------------------------
-     Tiga status harus terbaca sekilas dari seberang meja:
-       PROCESS  = kuning tembaga (sedang berjalan)
-       DELAY    = merah bata     (perlu tindakan)
-       SELESAI  = navy tenang    (sudah beres, boleh mundur ke belakang)
-     "Selesai" sengaja TIDAK diberi warna cerah: kartu yang sudah
-     tuntas harus meredup, bukan ikut berebut perhatian. */
+  /* Status: semantik, bukan dekorasi */
   --s-warn: #b5730f;
   --s-warn-bg: #fdf6e9;
   --s-warn-line: #e9d3a6;
@@ -123,19 +85,7 @@
   --dur-2: 190ms;
   --dur-3: 280ms;
 
-  /* ---- Tipografi -------------------------------------------------
-     Archivo  : grotesk dengan terminal rata — huruf papan penanda.
-                Dipakai untuk judul, angka besar, dan LABEL STRUKTUR
-                (huruf besar + spasi renggang), bukan untuk kalimat.
-     Archivo Narrow : versi sempitnya. Khusus token papan
-                keberangkatan (H-3 / HARI INI / TELAT 5H) & label
-                kolom manifes — persis seperti papan jadwal
-                sungguhan yang harus muat di kolom sempit.
-     Inter    : muka antarmuka. Terbaik untuk data rapat.
-     JetBrains Mono : PENANDA yang dibaca karakter per karakter —
-                no. aju, B/L, HS Code, kontainer. Fungsional, bukan
-                gaya-gayaan: digit yang sejajar jauh lebih mudah
-                dicocokkan dengan dokumen bea cukai di sebelahnya. */
+  /* Tipografi */
   --font-display: "Archivo", "Inter", system-ui, sans-serif;
   --font-board: "Archivo Narrow", "Archivo", system-ui, sans-serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
@@ -150,17 +100,13 @@
   --t-2xl: 1.7rem;
   --t-3xl: 2.3rem;
 
-  /* Jejak label struktur — dipakai di eyebrow, kepala kolom, dan
-     label metrik supaya semuanya berbicara dengan satu suara. */
+  /* Jejak huruf untuk label struktur */
   --track-label: 0.1em;
 
   /* ---- Ukuran kerangka aplikasi ---- */
-  --topbar-h: 54px;
+  --topbar-h: 64px;
 
-  /* ==================================================================
-     ALIAS — nama lama tetap hidup supaya seluruh aturan CSS yang sudah
-     ada terus berfungsi tanpa disentuh satu per satu.
-  ================================================================== */
+  /* ALIAS — nama lama tetap hidup supaya seluruh aturan CSS yang sudah */
   --navy: var(--d-900);
   --navy-2: var(--d-800);
   --ocean: var(--d-600);
@@ -175,4 +121,16 @@
   --ink: var(--n-900);
   --muted: var(--n-500);
   --border: var(--n-200);
+
+  /* ---- Garis tepi KONTROL ---------------------------------------
+     --border (#dfe5ed) hanya 1,27:1 terhadap putih. Untuk garis
+     PEMISAH itu memang disengaja — pemisah bukan komponen, dan garis
+     tebal di antara baris data justru mengganggu.
+
+     Tapi untuk isian, pemilih, dan tombol, garis tepinya adalah
+     SATU-SATUNYA penanda bahwa benda itu bisa disentuh. WCAG 1.4.11
+     meminta minimal 3:1 untuk batas seperti itu. #7d8b9f mencapai
+     3,46:1 di atas putih dan 3,23:1 di atas kertas — cukup terlihat
+     tanpa berubah jadi kotak bergaris tebal. */
+  --border-control: #7d8b9f;
 }

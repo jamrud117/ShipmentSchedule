@@ -1,12 +1,4 @@
-/* ==================================================================
-   ============  LAPISAN SISTEM DESAIN  ============
-   Ditaruh PALING BAWAH dengan sengaja: aturan di sini menyeragamkan
-   keluarga komponen (tombol, isian, kartu, tabel, modal, toast,
-   status) tanpa perlu membongkar 2.900 baris di atasnya. Selektornya
-   dijaga tetap sederhana — satu kelas, tanpa !important kecuali benar-
-   benar melawan gaya bawaan Bootstrap — supaya masih mudah ditimpa
-   kalau ada kebutuhan khusus per halaman.
-================================================================== */
+/* LAPISAN SISTEM DESAIN */
 
 /* ---- Dasar ---- */
 body {
@@ -19,21 +11,20 @@ body {
   text-rendering: optimizeLegibility;
 }
 h1, h2, h3, h4, h5, h6,
-.page-form-title, .modal-title, .lane-title, .section-label {
+.page-form-title,
+.modal-title,
+.lane-title{
   font-family: var(--font-display);
   letter-spacing: -0.015em;
 }
 
-/* Angka & penanda dokumen selalu monospace + tabular supaya digitnya
-   sejajar antar baris dan mudah dicocokkan dengan dokumen aslinya. */
+/* Angka & penanda dokumen selalu monospace + tabular supaya digitnya */
 .info-value, .metric-num, .docnum-result-number, .dn-num,
 .collapsed-meta, .note-stamp, .card-note-stamp, .delay-delta {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- AKSESIBILITAS: cincin fokus yang jelas & konsisten ----
-   :focus-visible, bukan :focus — pengguna mouse tidak melihat cincin,
-   pengguna keyboard selalu melihatnya. */
+/* AKSESIBILITAS: cincin fokus yang jelas & konsisten */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -165,7 +156,6 @@ input::placeholder {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--n-600);
-  text-transform: uppercase;
 }
 
 /* Validasi: garis merah + latar sangat tipis, tanpa menggeser tata letak. */
@@ -179,14 +169,7 @@ input::placeholder {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
-/* ---- KARTU ----
-   .ship-card SENGAJA dikeluarkan dari aturan "border" bersama di bawah:
-   kartu ini butuh border-left 4px berwarna status (lihat
-   .ship-card--process dkk di bagian SHIPMENT CARD), sedangkan shorthand
-   "border" mengatur keempat sisi sekaligus — kalau ikut di sini, warna
-   status di sisi kiri selalu ketiban jadi abu-abu polos oleh aturan ini
-   (menang karena datang belakangan). radius/shadow/transition aman
-   dipakai bersama karena tidak bentrok dengan border-left. */
+/* KARTU */
 .ship-card,
 .form-section-card,
 .toolbar,
@@ -210,8 +193,7 @@ input::placeholder {
 }
 .ship-card:hover {
   box-shadow: var(--sh-lg);
-  /* Cuma 3 sisi (bukan shorthand border-color) — sisi kiri tetap warna
-     status, tidak ikut meredup ke abu-abu saat di-hover. */
+  /* Cuma 3 sisi (bukan shorthand border-color) — sisi kiri tetap warna */
   border-top-color: var(--n-300);
   border-right-color: var(--n-300);
   border-bottom-color: var(--n-300);
@@ -233,7 +215,6 @@ table.item-table thead th,
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   border-bottom: 1px solid var(--n-200);
 }
 table.item-table tbody tr:nth-child(even),
@@ -277,32 +258,12 @@ table.item-table tbody tr:hover,
   background: var(--p-50);
   color: var(--p-700);
 }
-.tooltip-inner {
-  border-radius: var(--r-sm);
-  background: var(--n-900);
-  font-size: var(--t-xs);
-  padding: var(--sp-2) var(--sp-3);
-}
 
-/* ==================================================================
-   PENYESUAIAN KONTRAS SETELAH AKSEN JADI NAVY
+/* PENYESUAIAN KONTRAS SETELAH AKSEN JADI NAVY */
 
-   Aturan mainnya: aksen navy dipakai di atas permukaan TERANG. Di atas
-   permukaan GELAP (hero, header form, bilah navbar) navy akan sewarna
-   dengan latarnya, jadi di sana penandanya memakai putih atau navy
-   terang (--p-300/400). Semua yang di bawah ini adalah titik-titik
-   tempat kedua dunia itu bertemu.
-================================================================== */
+/* Ikon judul header form dulu pakai override kaca transparan di sini */
 
-/* Ikon judul header form dulu pakai override kaca transparan di sini
-   karena --teal saat itu cuma alias ke navy (ikon jadi lenyap di atas
-   header navy). Sekarang --teal genuinely emas (lihat token di :root),
-   jadi aturan dasarnya di bagian HALAMAN FORM sudah benar sendiri —
-   override itu tidak diperlukan lagi. */
-
-/* Bilah navigasi sekarang navy pekat (lihat shell.css), jadi penanda
-   halaman aktifnya kuningan — navy di atas navy tidak akan terlihat.
-   Aturan lama yang memaksanya jadi navy dihapus, bukan ditimpa lagi. */
+/* Bilah navigasi sekarang navy pekat (lihat shell.css), jadi penanda */
 
 /* Tombol utama & aksi: navy pekat, teks putih. */
 .btn-teal,
@@ -340,8 +301,7 @@ table.item-table textarea:focus,
   border-color: var(--p-500);
 }
 
-/* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js),
-   jadi kursornya dibuat menunjuk agar terasa memang bisa ditekan. */
+/* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js) */
 input[type="date"],
 input[type="time"],
 input[type="month"] {
@@ -368,7 +328,6 @@ input[type="date"][readonly] {
   flex-wrap: wrap;
   font-size: var(--t-xs);
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--n-600);
   margin-bottom: var(--sp-3);
@@ -404,50 +363,9 @@ input[type="date"][readonly] {
   .counter-body .btn { flex: 1; }
 }
 
-/* Blok tindakan merusak: dibedakan tegas dari pengaturan biasa di
-   atasnya supaya tidak tertekan tanpa sengaja. */
-.counter-danger {
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-4);
-  border-top: 1px dashed var(--n-300);
-}
-.counter-danger-head {
-  font-size: var(--t-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--s-danger);
-  margin-bottom: var(--sp-2);
-}
-.counter-danger-desc {
-  font-size: var(--t-sm);
-  color: var(--n-500);
-  margin: 0 0 var(--sp-3);
-  max-width: 62ch;
-  line-height: 1.55;
-}
-.counter-danger .form-control {
-  width: 150px;
-  font-family: var(--font-mono);
-}
-.counter-danger #purgeYear {
-  width: 100px;
-  text-align: center;
-}
-.counter-danger .counter-body > div {
-  display: flex;
-  flex-direction: column;
-}
-@media (max-width: 575px) {
-  .counter-danger .form-control,
-  .counter-danger .counter-body > div {
-    width: 100%;
-  }
-}
+/* Blok tindakan merusak */
 
-/* Bilah paginasi versi ringkas — dipakai riwayat nomor dokumen, yang
-   berada DI DALAM kartu sehingga tidak perlu bayangan & tepi sendiri
-   seperti bilah paginasi daftar jadwal yang berdiri di atas kanvas. */
+/* Bilah paginasi ringkas untuk riwayat nomor dokumen */
 .pagination-bar--compact {
   margin-top: var(--sp-3);
   padding: var(--sp-3) 0 0;
@@ -458,9 +376,7 @@ input[type="date"][readonly] {
   box-shadow: none;
 }
 
-/* Kolom aksi di riwayat nomor: dibuat sesempit mungkin dan tombolnya
-   redup sampai barisnya disorot — menghapus nomor resmi bukan tindakan
-   yang boleh terlihat mengundang. */
+/* Kolom aksi di riwayat nomor: dibuat sesempit mungkin dan tombolnya */
 .docnum-table th.dn-act,
 .docnum-table td.dn-act {
   width: 1%;
@@ -475,4 +391,132 @@ input[type="date"][readonly] {
 .docnum-table tr:hover td.dn-act .icon-btn,
 .docnum-table td.dn-act .icon-btn:focus-visible {
   opacity: 1;
+}
+
+/* ==================================================================
+   LABEL STRUKTUR — huruf besar
+
+   Label kecil (eyebrow, kepala kolom, penanda) lebih terbaca dalam
+   huruf besar berspasi renggang: bentuknya berbeda tegas dari isi
+   datanya. Yang TIDAK ikut adalah kalimat keterangan — itu teks yang
+   dibaca, bukan penanda.
+================================================================== */
+.eyebrow,
+.board-label,
+.panel-eyebrow,
+.board-today-label,
+.brand-name,
+.footer-brand,
+.footer-heading,
+.mode-tabs button,
+.info-label,
+.panel-head h2,
+.task-reason,
+.agenda-dow,
+.cmdk-group,
+.cmdk-item-tag,
+.detail-badge-mode,
+.login-label,
+.prompt-label,
+.user-chip-role,
+.acct-self,
+.form-progress,
+.date-section-badge,
+.status-select {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+/* Judul besar & tombol utama tetap huruf biasa — keduanya kalimat,
+   bukan penanda. */
+.board-title,
+.login-title,
+.btn-primary-navy,
+.btn-quiet,
+.chip {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ==================================================================
+   BATAS KONTROL YANG TERLIHAT
+
+   Isian, pemilih, dan tombol garis-tepi memakai --border-control
+   (3,46:1 terhadap putih), bukan --border yang dipakai garis pemisah
+   (1,27:1). Batas komponen adalah satu-satunya penanda bahwa benda itu
+   bisa disentuh, jadi ia harus benar-benar terlihat.
+
+   Dikumpulkan di satu tempat supaya tidak tersebar dan mudah disetel
+   ulang kalau terasa terlalu tegas.
+================================================================== */
+/* Ditulis dengan selektor beratribut (0,1,1), bukan sekadar kelas
+   (0,1,0): di berkas ini juga ada aturan `input[type="text"] { border:
+   1px solid var(--n-200) }` untuk seluruh isian form. Kekhususannya
+   lebih tinggi, jadi aturan berbasis kelas saja akan kalah — persis
+   jebakan yang sama dengan padding lambang mata uang dulu. */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="date"],
+input[type="time"],
+input[type="month"],
+textarea,
+select,
+.form-control,
+.form-select,
+/* (0,2,0) — menyamai `.page-form .form-control` di css/form.css, dan
+   karena berkas ini dimuat belakangan, yang di sini yang berlaku. */
+.page-form .form-control,
+.page-form .form-select,
+.page-form textarea,
+.login-input,
+.control-select,
+.search-box input[type="text"],
+.pagination-size select,
+.date-field input[type="date"],
+.delay-strip-fields input[type="date"],
+select.acct-role,
+.chip,
+.btn-quiet,
+.btn-more,
+.icon-btn,
+.page-btn,
+.page-nav,
+.agenda-day,
+.quick-action,
+.acct-row .acct-role,
+.btn-form-cancel,
+.btn-import-excel,
+.mode-tabs,
+.docnum-tab,
+.btn-light {
+  border-color: var(--border-control);
+}
+
+/* Isian yang dinonaktifkan / hanya-baca sengaja dibiarkan lebih pucat —
+   di situ justru "tidak bisa disentuh" yang perlu tersampaikan. */
+input[readonly],
+input:disabled,
+textarea:disabled,
+select:disabled,
+.form-control[readonly],
+.form-control:disabled,
+.form-select:disabled {
+  border-color: var(--border);
+}
+
+
+/* ------------------------------------------------------------------
+   Pil status sengaja tanpa garis tepi (border: none) supaya terbaca
+   sebagai cap, bukan kotak isian. Tapi ia sebenarnya DROPDOWN — dan
+   isian pil berwarna sangat muda membuatnya nyaris menyatu dengan
+   kartu putih di belakangnya, jadi tidak ada tanda ia bisa ditekan.
+
+   Diberi garis tepi setipis rambut BERWARNA STATUS: batasnya jadi
+   terlihat, dan warnanya tetap menyampaikan status yang sama.
+------------------------------------------------------------------ */
+.status-select {
+  border: 1px solid currentColor;
 }

@@ -1,42 +1,18 @@
 "use strict";
 
-/* ==================================================================
-   HALAMAN RINGKASAN
-
-   Menjawab pertanyaan pertama tiap pagi: apa yang harus dikerjakan
-   hari ini. Semua yang tampil di sini dihitung dari data yang sudah
-   ada — tidak ada satu pun kolom baru di database.
-
-   Aturan yang dipegang: setiap baris di halaman ini harus BISA
-   DIKLIK dan berujung pada tindakan. Ringkasan yang cuma bisa
-   dipandangi hanya menambah satu layar untuk dilewati.
-================================================================== */
+/* HALAMAN RINGKASAN */
 
 const OV_TASK_LIMIT = 8;
 
-/* ------------------------------------------------------------------
-   ANTREAN TINDAKAN
-
-   Tiga alasan, diurutkan dari yang paling mendesak:
-     TELAT  sudah lewat tanggalnya & belum ditandai selesai
-     DEKAT  jatuh dalam 2 hari tapi dokumennya belum lengkap
-     DOKUMEN  bidang wajib masih kosong
-
-   Alasannya ditulis terus terang di kolom kiri. Tanpa itu, daftar
-   ini cuma jadi daftar kedua yang harus ditafsirkan sendiri.
------------------------------------------------------------------- */
+/* ANTREAN TINDAKAN */
 function buildTaskQueue() {
   const out = [];
   currentList().forEach((s) => {
-    if (s.status === "arrived") return;
+    if (isArrived(s)) return;
     const st = boardState(s);
     const kurang = missingDocs(s);
 
-    // Status DELAY selalu masuk antrean, walau tanggal barunya masih di
-    // depan. Metrik "perlu tindakan" sudah menghitungnya (lihat
-    // needsAction() di ui/board.js); kalau halaman ini tidak, angka di
-    // papan dan isi antrean akan saling bertentangan — persis masalah
-    // dua-sumber-kebenaran yang mau dihindari.
+    // Status DELAY selalu masuk antrean, walau tanggal barunya masih di depan
     if (s.status === "delayed") {
       const info = shipmentDelayInfo(s);
       const mundur = info && info.days > 0 ? info.days : null;
@@ -130,13 +106,7 @@ function renderTaskQueue() {
       : "");
 }
 
-/* ------------------------------------------------------------------
-   AGENDA 7 HARI
-
-   Papan mini: tiap kolom satu hari, angkanya jumlah pengiriman yang
-   jatuh pada hari itu menurut dasar yang sedang dipakai (ETA/ETD).
-   Diklik = halaman Jadwal terbuka, sudah tersaring ke tanggal itu.
------------------------------------------------------------------- */
+/* AGENDA 7 HARI */
 function renderAgenda() {
   const box = $("#ovAgenda");
   if (!box) return;
@@ -152,7 +122,7 @@ function renderAgenda() {
     const dt = parseLocalDate(iso);
     const n = list.filter(
       (s) =>
-        s.status !== "arrived" &&
+        !isArrived(s) &&
         (basisEtd ? effectiveEtd(s) : effectiveEta(s)) === iso,
     ).length;
     const dow = dt.getDay();
@@ -173,9 +143,7 @@ function renderAgenda() {
   box.innerHTML = html.join("");
 }
 
-/* ------------------------------------------------------------------
-   PANTAUAN DELAY
------------------------------------------------------------------- */
+/* PANTAUAN DELAY */
 function renderDelayWatch() {
   const box = $("#ovDelay");
   if (!box) return;
@@ -224,13 +192,11 @@ function renderDelayWatch() {
     }`;
 }
 
-/* ------------------------------------------------------------------
-   KELENGKAPAN DOKUMEN
------------------------------------------------------------------- */
+/* KELENGKAPAN DOKUMEN */
 function renderDocCompleteness() {
   const box = $("#ovDocs");
   if (!box) return;
-  const aktif = currentList().filter((s) => s.status !== "arrived");
+  const aktif = currentList().filter((s) => !isArrived(s));
   if (!aktif.length) {
     box.innerHTML = `<div class="panel-empty"><i class="bi bi-inbox"></i> Belum ada pengiriman aktif.</div>`;
     return;
@@ -264,9 +230,7 @@ function renderDocCompleteness() {
     </div>`;
 }
 
-/* ------------------------------------------------------------------
-   PENGGAMBARAN HALAMAN
------------------------------------------------------------------- */
+/* PENGGAMBARAN HALAMAN */
 function renderOverview() {
   const lbl = ML();
   paintTodayStamps();
@@ -292,16 +256,13 @@ function renderOverview() {
   renderDocCompleteness();
 }
 
-/* ------------------------------------------------------------------
-   PENGKABELAN — setiap baris berujung pada tindakan
------------------------------------------------------------------- */
+/* PENGKABELAN — setiap baris berujung pada tindakan */
 const ovRoot = $("#viewOverview");
 if (ovRoot) {
   ovRoot.addEventListener("click", (e) => {
     const openBtn = e.target.closest("[data-ov-open]");
     if (openBtn) {
-      // Panel detail hanya bisa dibuka dari halaman Jadwal (urutan
-      // telusurnya mengikuti daftar), jadi pindah dulu ke sana.
+      // Panel detail hanya bisa dibuka dari halaman Jadwal (urutan telusurnya mengikuti daftar)
       location.hash = "#/";
       setTimeout(() => openDetailView(openBtn.dataset.ovOpen), 60);
       return;

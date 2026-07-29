@@ -1,11 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   SUPABASE CONFIG
-   Isi 2 nilai di bawah dengan Project URL & anon public key dari
-   project Supabase-mu (Settings > API di dashboard Supabase).
-   Lihat README.md untuk panduan lengkap step-by-step.
-================================================================== */
+/* SUPABASE CONFIG */
 const SUPABASE_URL = "https://nigxxpzgunibuotluapv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZMgHTAl6ELfm4UeR-Gqn6w_by8JbSFd";
 const supabaseClient = window.supabase.createClient(
@@ -13,12 +8,8 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_ANON_KEY,
 );
 
-/* ==================================================================
-   CONSTANTS
-================================================================== */
-// Label di sini cuma default; label yang BENAR-BENAR tampil dihitung
-// per mode oleh statusLabel() di js/core/status.js (ARRIVED utk Import,
-// DELIVERED utk Export, DELAY utk keduanya).
+/* CONSTANTS */
+// Label di sini cuma default
 const STATUS_META = {
   process: { label: "PROCESS", class: "status-process" },
   transit: { label: "IN TRANSIT", class: "status-transit" },
@@ -26,11 +17,24 @@ const STATUS_META = {
   delayed: { label: "DELAY", class: "status-delayed" },
 };
 
+/* Supabase Auth selalu butuh alamat email sebagai identitas — tidak bisa
+   dimatikan. Karena sistem ini internal dan penggantian sandi dilakukan
+   admin, alamatnya DIBENTUK dari username, bukan diminta ke pengguna.
+
+   ".internal" adalah TLD yang memang dicadangkan untuk pemakaian dalam
+   jaringan sendiri, jadi tidak akan pernah bentrok dengan domain nyata.
+   Ubah di sini kalau ingin memakai domain perusahaan. */
+const INTERNAL_MAIL_DOMAIN = "eximddi.internal";
+
+function emailFromUsername(username) {
+  return String(username || "").trim().toLowerCase() + "@" + INTERNAL_MAIL_DOMAIN;
+}
+
 const MODE_LABELS = {
   import: {
     addBtn: "Tambah Jadwal Import",
     section: "Daftar Jadwal Pengiriman Import",
-    arrivedStat: "ARRIVED",
+    arrivedStat: "Arrived",
     docNo: "No. SPPB",
     docDate: "Tanggal SPPB",
     party: "Nama Shipper",
@@ -38,8 +42,7 @@ const MODE_LABELS = {
     factoryTime: "Jam In Factory",
     origin: "Pelabuhan Asal",
     destination: "Pelabuhan Tujuan",
-    // Versi moda udara — dipakai applyTransportLabels() (requirement B:
-    // "kalau moda udara, ganti jadi Terminal Asal/Terminal Tujuan").
+    // Versi moda udara — dipakai applyTransportLabels() (requirement B: "kalau moda udara
     originAir: "Terminal Asal",
     destinationAir: "Terminal Tujuan",
     actual: "Actual Delivery",
@@ -51,7 +54,7 @@ const MODE_LABELS = {
   export: {
     addBtn: "Tambah Jadwal Export",
     section: "Daftar Jadwal Pengiriman Export",
-    arrivedStat: "DELIVERED",
+    arrivedStat: "Delivered",
     docNo: "No. PEB",
     docDate: "Tanggal PEB",
     party: "Nama Buyer / Consignee",
@@ -61,7 +64,7 @@ const MODE_LABELS = {
     destination: "Pelabuhan Tujuan",
     originAir: "Terminal Muat",
     destinationAir: "Terminal Tujuan",
-    actual: "Actual Shipped Date",
+    actual: "Stuffing",
     showDuty: false,
     modalTitleNew: "Tambah Jadwal Export",
     modalTitleEdit: "Edit Jadwal Export",
@@ -69,21 +72,8 @@ const MODE_LABELS = {
   },
 };
 
-// "Barang Jadi" ditambahkan untuk mode Export (requirement C) — barang
-// yang diekspor DDI adalah hasil produksi jadi, bukan bahan baku.
-/* ------------------------------------------------------------------
-   LABEL SARANA PENGANGKUT & PELABUHAN MENGIKUTI MODA (requirement B)
-
-   Dipakai BERSAMA oleh form (applyTransportLabels), kartu dashboard,
-   dan modal Detail — dulu tiap tempat menuliskan labelnya sendiri-
-   sendiri, sehingga form sudah benar ("Nama Voyager" untuk moda laut)
-   tapi kartu & modal Detail masih menulis "Vessel". Satu sumber di sini
-   supaya tidak bisa lagi beda antar layar.
-
-   Aturannya:
-     moda LAUT  -> "Voyager"  + "No. Voyage"
-     moda UDARA -> "Vessel"   + "No. Flight"   (BUKAN "Maskapai")
------------------------------------------------------------------- */
+// "Barang Jadi" ditambahkan untuk mode Export (requirement C)
+/* LABEL SARANA PENGANGKUT & PELABUHAN MENGIKUTI MODA (requirement B) */
 function vesselNoun(transport) {
   return transport === "udara" ? "Vessel" : "Voyager";
 }
@@ -105,6 +95,5 @@ const JENIS_OPTIONS = [
   "Barang Jadi",
 ];
 
-// Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap).
-// "Lainnya" selalu jadi opsi terakhir — nilainya bebas (jenisLainnya).
+// Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap)
 const SKB_TYPE_OPTIONS = ["BM", "PPN", "PPH", "Masterlist", "E-COO", "Lainnya"];

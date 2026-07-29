@@ -1,8 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   CUSTOMS / VALUE CALCULATION (single source of truth)
-================================================================== */
+/* CUSTOMS / VALUE CALCULATION (single source of truth) */
 function itemTotals(shipmentLike) {
   let totalQty = 0,
     totalNetto = 0,
@@ -19,20 +17,10 @@ function itemTotals(shipmentLike) {
     totalNetto += netto;
     totalBruto += bruto;
     totalUSD += qty * harga;
-    // Total Package (mode Import saja — lihat modal-fields.js): jumlah
-    // angka depan field Kemasan tiap barang, mis. "5 BOX" -> 5. Barang
-    // yang field Kemasan-nya kosong/tidak ada angka depan dihitung 0,
-    // bukan bikin NaN. extractLeadingNumber() ada di
-    // features/excel-row-format.js (dipanggil dari sini, bukan
-    // dipindah/diduplikasi — aman krn dipanggil dari dalam function,
-    // bukan top-level, jadi tidak masalah soal urutan <script> load).
+    // Total Package (mode Import saja — lihat modal-fields.js)
     const pkgNum = extractLeadingNumber(it.package);
     if (pkgNum != null) totalPackageQty += pkgNum;
-    // Total CBM (mode Export saja): jumlah meter kubik tiap barang,
-    // computeItemCbm() sudah ada di core/helpers.js (P*L*T/1.000.000 x
-    // Qty barang, dibulatkan 3 desimal per barang). Barang yang field
-    // Kemasan-nya bukan dimensi valid dihitung 0 oleh computeItemCbm()
-    // sendiri, jadi aman dijumlah langsung di sini.
+    // Total CBM (mode Export saja): jumlah meter kubik tiap barang
     totalCbm += computeItemCbm(it);
   });
   totalCbm = Math.round(totalCbm * 1000) / 1000;

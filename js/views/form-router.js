@@ -1,19 +1,9 @@
 "use strict";
 
-/* ==================================================================
-   ROUTING: form Tambah/Edit Jadwal sekarang HALAMAN PENUH (bukan modal
-   lagi) supaya tidak dibatasi tinggi/scroll modal. Dikontrol lewat hash
-   URL biar tombol back browser juga jalan sebagaimana mestinya.
-     #/new         -> form tambah jadwal baru
-     #/edit/<id>   -> form edit jadwal (id dicari di mode aktif dahulu,
-                       kalau tidak ketemu dicoba di mode satunya)
-     #/docnum      -> halaman Permintaan Nomor Dokumen (kerangka)
-     (selain itu)  -> daftar jadwal (list)
-================================================================== */
-// Satu-satunya tempat yang mengatur halaman mana yang tampil. Semua
-// halaman disembunyikan dulu, lalu satu dinyalakan — mencegah keadaan
-// "dua halaman tampil sekaligus" kalau nanti halamannya bertambah lagi.
+/* ROUTING: form Tambah/Edit Jadwal sekarang HALAMAN PENUH (bukan modal */
+// Satu-satunya tempat yang mengatur halaman mana yang tampil
 const PAGE_VIEWS = {
+  accounts: "#viewAccounts",
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
@@ -25,13 +15,14 @@ function showPage(page) {
     const el = $(sel);
     if (el) el.classList.toggle("d-none", key !== page);
   });
-  // Bilah atas & footer disembunyikan HANYA di halaman form: saat
-  // mengisi data, elemen navigasi global lebih mengganggu daripada
-  // menolong (mudah tertekan dan isian hilang). Halaman form punya
-  // kepala & bilah simpannya sendiri.
+  // Bilah atas & footer disembunyikan HANYA di halaman form: saat mengisi data
   $(".app-topbar").classList.toggle("d-none", page === "form");
   const footer = $("#appFooter");
   if (footer) footer.classList.toggle("d-none", page === "form");
+  // Tombol keluar mengambang ikut disembunyikan di halaman form supaya
+  // tidak menutupi bilah simpan.
+  const fab = $("#btnLogout");
+  if (fab) fab.classList.toggle("d-none", page === "form");
   if (typeof setActivePageNav === "function" && page !== "form") {
     setActivePageNav(page);
   }
@@ -44,20 +35,14 @@ function showListView() {
 function showOverviewView() {
   showPage("overview");
   window.scrollTo(0, 0);
-  // Isi halaman disiapkan DI SINI, bukan saat aplikasi dibuka —
-  // hitungannya menelusuri seluruh daftar, dan tidak ada gunanya
-  // dijalankan selama pengguna sedang di halaman lain.
+  // Isi halaman disiapkan DI SINI, bukan saat aplikasi dibuka
   renderOverview();
 }
 
 function showDocNumView() {
   showPage("docnum");
   window.scrollTo(0, 0);
-  // Isi halaman baru disiapkan DI SINI — bukan saat aplikasi dibuka.
-  // Sebelumnya pratinjau & riwayat hanya termuat setelah salah satu tab
-  // diklik, sehingga halaman ini terlihat kosong saat pertama dibuka.
-  // Ditaruh di sini pula supaya kueri-kuerinya TIDAK ikut berjalan saat
-  // pengguna sedang di halaman jadwal.
+  // Isi halaman baru disiapkan DI SINI — bukan saat aplikasi dibuka
   if (typeof showDocNumTab === "function") {
     showDocNumTab(docNumActiveTab || DOCNUM_DEFAULT_TAB);
   }
@@ -76,33 +61,57 @@ function router() {
   const hash = location.hash || "#/";
   const editMatch = hash.match(/^#\/edit\/(.+)$/);
 
-  // ===========================
+  /* Viewer hanya punya akses ke halaman Jadwal. Tautannya memang
+     disembunyikan, tapi URL bisa diketik langsung. */
+  const halamanEximSaja =
+    hash === "#/new" ||
+    hash === "#/akun" ||
+    hash === "#/ringkasan" ||
+    hash === "#/docnum" ||
+    !!editMatch;
+  if (halamanEximSaja && !canEdit()) {
+    showToast("Halaman ini hanya untuk peran EXIM.", "danger");
+    location.hash = "#/";
+    return;
+  }
+
+  if ((hash === "#/new" || editMatch) && !canEdit()) {
+    showToast("Hanya peran EXIM yang boleh mengubah jadwal.", "danger");
+    location.hash = "#/";
+    return;
+  }
+
   // Ringkasan harian
-  // ===========================
   if (hash === "#/ringkasan") {
     showOverviewView();
     return;
   }
 
-  // ===========================
+  /* Kelola akun: hanya exim. Dijaga di sini juga, bukan cuma dengan
+     menyembunyikan tautannya di bilah atas */
+  if (hash === "#/akun") {
+    if (!canEdit()) {
+      showToast("Halaman kelola akun hanya untuk peran EXIM.", "danger");
+      location.hash = "#/";
+      return;
+    }
+    showAccountView();
+    return;
+  }
+
   // Permintaan Nomor Dokumen
-  // ===========================
   if (hash === "#/docnum") {
     showDocNumView();
     return;
   }
 
-  // ===========================
   // Tambah Jadwal
-  // ===========================
   if (hash === "#/new") {
     renderFormPage(null);
     return;
   }
 
-  // ===========================
   // Edit Jadwal
-  // ===========================
   if (editMatch) {
     const id = decodeURIComponent(editMatch[1]);
 
@@ -125,9 +134,7 @@ function router() {
     return;
   }
 
-  // ===========================
   // Dashboard
-  // ===========================
   showListView();
   render();
 }
@@ -138,8 +145,7 @@ window.addEventListener("hashchange", router);
 // "12 BOX" <-> kotak angka + kotak satuan.
 function setPackageFields(raw) {
   const txt = String(raw || "").trim();
-  // Angka boleh ber-pemisah ribuan ("1,200 BOX"), jadi koma & titik di
-  // tengah deretan angka ikut ditangkap sebagai bagian angkanya.
+  // Angka boleh ber-pemisah ribuan ("1,200 BOX")
   const m = txt.match(/^(-?[\d.,]+)\s*(.*)$/);
   $("#fPackage").value = m ? m[1] : txt;
   $("#fPackageUnit").value = m ? m[2].trim() : "";
@@ -149,10 +155,7 @@ function autoSizePackageFooter() {
   autoSizeInput($("#fPackage"), 58, 190);
   autoSizeInput($("#fPackageUnit"), 66, 170);
 }
-// Tanpa listener ini lebar kotak hanya dihitung saat form dibuka, jadi
-// begitu user MENGETIK "56 PACKAGE" kotaknya tetap selebar semula dan
-// teksnya kepotong — inilah penyebab Total Package masih terpotong walau
-// autoSizeInput() sudah dipanggil di beberapa tempat.
+// Tanpa listener ini lebar kotak hanya dihitung saat form dibuka
 ["fPackage", "fPackageUnit"].forEach((idf) => {
   $("#" + idf).addEventListener("input", autoSizePackageFooter);
 });
@@ -165,13 +168,9 @@ function joinPackageFields() {
 
 function renderFormPage(id) {
   const lbl = ML();
-  // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka,
-  // supaya aturan anti-timpa (lihat import/apply-to-form.js) berlaku
-  // per sesi pengisian, bukan menempel selamanya.
+  // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka
   resetImportFieldOrigins();
-  // Dropdown status hanya menampilkan status yang berlaku di section ini
-  // (requirement D): Import = PROCESS/DELAY/ARRIVED, Export =
-  // PROCESS/DELAY/DELIVERED.
+  // Dropdown status hanya menampilkan status yang berlaku di section ini (requirement D)
   const curStatus = id
     ? (currentList().find((x) => x.id === id) || {}).status || "process"
     : "process";
@@ -189,23 +188,9 @@ function renderFormPage(id) {
   $("#lblActual").textContent = lbl.actual;
   $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
 
-  // Total Package (foot-package, sebelah Total Qty/Netto/Bruto/Nilai):
-  // mode Import = hasil hitung otomatis dari kolom Kemasan tiap barang
-  // (readonly di sini, nilainya diisi oleh recalcCustoms() lewat
-  // renderItemTable() di akhir fungsi ini). Mode Export = manual, tetap
-  // bisa diketik bebas — package per barangnya dimensi (P*L*T), tidak
-  // otomatis dijumlah jadi Total Package.
+  // Total Package (foot-package, sebelah Total Qty/Netto/Bruto/Nilai)
   const isImport = activeMode === "import";
-  // Requirement C: Total Package pada Jadwal Import harus punya SATUAN
-  // unit (bukan cuma angka). Angka & satuan dipisah jadi dua kotak
-  // supaya angkanya tetap bisa dihitung otomatis dari kolom Kemasan tiap
-  // barang, sementara satuannya diketik user. Yang disimpan ke database
-  // tetap satu teks gabungan ("12 BOX"); hasil template copy tetap
-  // ANGKA SAJA lewat formatter.packageNum() — lihat excel-row-format.js.
-  // Kotak satuan tampil di KEDUA mode. Sebelumnya disembunyikan saat
-  // Export, padahal setPackageFields() tetap memecah "56 PACKAGE" dan
-  // menaruh "PACKAGE" di kotak tersembunyi itu — datanya ada tapi tidak
-  // bisa dilihat/diedit, dan yang tampak hanya angkanya.
+  // Requirement C: Total Package pada Jadwal Import harus punya SATUAN unit (bukan cuma angka)
   $("#fPackageUnit").classList.remove("d-none");
   $("#fPackage").readOnly = isImport;
   $("#fPackage").placeholder = isImport ? "0" : "cth: 12";
@@ -213,12 +198,7 @@ function renderFormPage(id) {
     ? "Otomatis dari total Jumlah Kemasan semua barang — edit lewat kolom Kemasan di tabel barang."
     : "";
 
-  // Kolom CBM (th tabel barang + Total CBM di footer) cuma relevan di
-  // Export (dimensi kemasan) — disembunyikan total di Import supaya
-  // tidak ada kolom "0.000 m³" yang membingungkan di semua baris. Sel
-  // td-nya sendiri (per baris) sudah menyesuaikan sendiri di
-  // item-table.js waktu render, ini cuma utk elemen statis (th &
-  // footer) yang TIDAK ikut di-render ulang oleh renderItemTable().
+  // Kolom CBM (th tabel barang + Total CBM di footer) cuma relevan di Export
   $$(".cbm-col-static").forEach((el) =>
     el.classList.toggle("d-none", isImport),
   );
@@ -314,8 +294,7 @@ function renderFormPage(id) {
     $("#fStatus").value = "process";
     $("#fIncoterm").value = "FOB";
     $("#fRouteType").value = "direct";
-    // Tarif bea masuk hampir selalu 5% untuk barang yang dibawa DDI,
-    // jadi diisi lebih dulu. Tetap bisa diubah seperti biasa.
+    // Tarif bea masuk hampir selalu 5% untuk barang yang dibawa DDI, jadi diisi lebih dulu
     $("#fTarif").value = "5";
     draftItems = [newItem()];
     draftNotesLog = [];
@@ -328,12 +307,7 @@ function renderFormPage(id) {
   $("#fNoteDraft").value = "";
   renderItemTable();
   renderRouteStopsUI();
-  /* Urutannya penting:
-     1. initAutoDutyFlags menandai PPN/PPH yang SUDAH berisi nilai
-        tersimpan sebagai "manual", supaya tidak ditimpa hitungan
-        otomatis begitu form dibuka;
-     2. recalcCustoms mengisi yang masih kosong & menghitung BM+PDRI;
-     3. syncAffixState menyalakan lambang $ / Rp pada kolom yang terisi. */
+  /* Urutannya penting */
   initAutoDutyFlags();
   recalcCustoms();
   syncAffixState();
@@ -341,14 +315,7 @@ function renderFormPage(id) {
   showFormView();
 }
 
-/* ------------------------------------------------------------------
-   PENANDA LANGKAH & KELENGKAPAN
-
-   Form ini panjang: tiga tab, tabel barang bisa puluhan baris. Dua
-   hal yang dulu tidak pernah dijawab sampai tombol Simpan ditekan —
-   "saya di langkah berapa" dan "apa yang masih kurang" — sekarang
-   terjawab terus-menerus di kepala halaman dan di bilah simpan.
------------------------------------------------------------------- */
+/* PENANDA LANGKAH & KELENGKAPAN */
 function syncFormStep() {
   const tabs = $$("#detailTabs .nav-link");
   const idx = Math.max(
@@ -363,10 +330,7 @@ function syncFormStep() {
   });
 }
 
-// Syarat yang dipakai di sini SAMA PERSIS dengan yang diperiksa
-// btnSaveShipment sebelum menyimpan. Kalau berbeda, pengguna akan
-// melihat "siap disimpan" lalu ditolak — cara tercepat membuat
-// penanda seperti ini tidak dipercaya lagi.
+// Syarat yang dipakai di sini SAMA PERSIS dengan yang diperiksa btnSaveShipment sebelum menyimpan
 function syncFormValidity() {
   const el = $("#formValidity");
   if (!el) return;
@@ -394,13 +358,7 @@ function syncFormValidity() {
   if (el) el.addEventListener("change", syncFormValidity);
 });
 
-/* ------------------------------------------------------------------
-   Requirement D: saat status DELAY, tampilkan TANGGAL UPDATE DELAY —
-   jadwal BARU hasil pemunduran. ETD & ETA di atas SENGAJA dibiarkan
-   berisi rencana semula sebagai pembanding, jadi lama delay = tanggal
-   update dikurangi jadwal asli, dan dibaca "+N hari dari ETA/ETD".
-   Delay bisa dihitung dari ETA MAUPUN ETD — cukup isi salah satu.
------------------------------------------------------------------- */
+/* Requirement D: saat status DELAY, tampilkan TANGGAL UPDATE DELAY — */
 function applyDelayFieldVisibility() {
   const isDelay = $("#fStatus").value === "delayed";
   $("#delayBlock").classList.toggle("d-none", !isDelay);
@@ -432,6 +390,7 @@ $("#fStatus").addEventListener("change", applyDelayFieldVisibility);
 });
 
 $("#btnSaveShipment").addEventListener("click", async () => {
+  if (!requireEdit()) return;
   if (!$("#fEtd").value || !$("#fEta").value) {
     showToast("Mohon isi ETD dan ETA terlebih dahulu.", "danger");
     return;
@@ -445,11 +404,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     return;
   }
   const routeType = $("#fRouteType").value;
-  // Direct = persis 2 terminal (asal & tujuan yang sudah ada), jadi tidak
-  // pernah mengirim baris shipment_route_stops apa pun kalau direct —
-  // walaupun draftStops masih menyimpan kartu yang sempat diisi (biar
-  // tidak hilang kalau user cuma salah pencet dropdown, tapi tidak akan
-  // pernah ikut kesimpan selama masih "direct").
+  // Direct = persis 2 terminal (asal & tujuan yang sudah ada)
   const cleanStops =
     routeType === "transit"
       ? draftStops.filter((st) => st.terminal.trim() !== "")
@@ -489,8 +444,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     actual: $("#fActual").value,
     status: $("#fStatus").value,
     notesLog: draftNotesLog,
-    // `notes` = teks entri terbaru — dipakai kolom REMARK/NOTES di
-    // seluruh template copy & Bulk Export.
+    // `notes` = teks entri terbaru
     notes: notesLogToPlainNotes(draftNotesLog),
     incoterm: $("#fIncoterm").value,
     freight: excelNum($("#fFreight").value),

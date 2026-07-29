@@ -1,9 +1,5 @@
-/* ==================================================================
-   HALAMAN PERMINTAAN NO. DOKUMEN
-================================================================== */
-/* Tidak ada lagi hero melengkung yang harus ditumpangi, jadi offset
-   negatif -26px yang dulu dipakai untuk "menempel" ke lengkungan itu
-   ikut hilang. */
+/* HALAMAN PERMINTAAN NO */
+/* Tidak ada lagi hero melengkung yang harus ditumpangi, jadi offset */
 .page-docnum-body {
   padding: var(--sp-5) 0 var(--sp-10);
 }
@@ -13,8 +9,7 @@
   gap: 0;
   background: #fff;
   overflow: hidden;
-  /* border, border-radius & box-shadow datang dari aturan bersama
-     ".docnum-shell" di lapisan sistem desain (section KARTU). */
+  /* border, border-radius & box-shadow datang dari aturan bersama */
 }
 .docnum-tabs {
   display: flex;
@@ -82,24 +77,7 @@
   padding: 22px 24px 24px;
   min-width: 0;
 }
-.docnum-dummy-note {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  background: #fffaf0;
-  border: 1px dashed var(--amber);
-  border-radius: 11px;
-  padding: 11px 13px;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--navy);
-  margin-bottom: 20px;
-}
-.docnum-dummy-note i {
-  color: #a35a00;
-  font-size: 1rem;
-  margin-top: 1px;
-}
+
 /* Panel tidak aktif disembunyikan; hanya satu yang tampil sekaligus. */
 .docnum-panel {
   display: none;
@@ -174,9 +152,7 @@
   }
 }
 
-/* ==================================================================
-   PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat
-================================================================== */
+/* PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat */
 
 /* Tanda isian wajib di label. */
 .docnum-panel .form-label .req {
@@ -184,8 +160,7 @@
   font-weight: 700;
   margin-left: 2px;
 }
-/* Kotak isian yang gagal validasi ditandai di tempatnya, supaya user
-   tidak perlu mencocokkan pesan kesalahan dengan isian satu per satu. */
+/* Kotak isian yang gagal validasi ditandai di tempatnya, supaya user */
 .docnum-panel .is-invalid {
   border-color: var(--coral) !important;
   background: #fff6f6;
@@ -206,7 +181,6 @@
 .docnum-result-label {
   font-size: 0.76rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--p-600);
 }
@@ -220,8 +194,7 @@
   word-break: break-all;
 }
 
-/* Pesan kesalahan pertama tampil di sebelah kiri tombol; didorong ke
-   kiri agar tombol tetap di kanan seperti pola form lain. */
+/* Pesan kesalahan di kiri tombol */
 .docnum-hint {
   flex: 1;
   font-size: 0.82rem;
@@ -244,7 +217,6 @@
   justify-content: space-between;
   font-size: 0.76rem;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
   margin-bottom: 10px;
@@ -257,7 +229,6 @@
 .docnum-table th {
   text-align: left;
   font-size: 0.7rem;
-  text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
   font-weight: 700;
@@ -294,21 +265,13 @@
   padding: 10px 2px;
 }
 
-/* Ikon berputar saat tombol sedang memproses. Sebelumnya hanya berlaku
-   di tombol import Excel; dijadikan umum karena dipakai juga oleh tombol
-   "Ajukan Nomor". */
+/* Ikon berputar saat tombol sedang memproses. Sebelumnya hanya berlaku */
 .spin {
   display: inline-block;
   animation: spin-import 0.9s linear infinite;
 }
 
-
-/* ---- Halaman No. Dokumen di layar sempit -------------------------
-   .docnum-shell memakai grid 300px + 1fr. Di 390px, kolom pertamanya
-   saja sudah menghabiskan hampir seluruh layar dan panel isinya
-   terdorong keluar. Di bawah 768px keduanya ditumpuk, dan daftar
-   jenis dokumen berubah jadi baris yang bisa digeser mendatar —
-   pola yang sudah akrab dari tab. */
+/* Halaman No. Dokumen di layar sempit */
 @media (max-width: 767.98px) {
   .docnum-shell {
     grid-template-columns: minmax(0, 1fr);

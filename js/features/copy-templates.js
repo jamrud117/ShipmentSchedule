@@ -1,35 +1,12 @@
 "use strict";
 
-/* ==================================================================
-   COPY TEMPLATE PICKER — dropdown pilihan template di tombol Copy.
-
-   Requirement E:
-     - Template yang DITAWARKAN mengikuti section aktif:
-         Jadwal Import -> ALL IMPORT, DAILY IMPORT, REPORT
-         Jadwal Export -> ALL EXPORT, DAILY EXPORT, REPORT
-     - ALL IMPORT  : tambah 1 kolom "NO" paling kiri (dikosongkan).
-     - ALL EXPORT  : 17 kolom, urutan sesuai spesifikasi Bgenius.
-     - DAILY IMPORT: 25 kolom, urutan sesuai spesifikasi Bgenius.
-     - Kolom STATUS di Daily Import/Export memakai nilai hasil pemetaan
-       (ARRIVED/DELIVERED -> "COMPLETED"), lihat statusTemplateValue().
-     - Kalau Master BL/AWB kosong, House BL/AWB TETAP di baris pertama.
-     - Nama vessel di template: udara -> No. Flight saja; laut -> nama
-       vessel + no. voyage digabung (lihat vesselNameForTemplate()).
-================================================================== */
+/* COPY TEMPLATE PICKER — dropdown pilihan template di tombol Copy */
 
 function rowsToClipboardText(rows) {
   return rows.map((cols) => cols.map(tsvField).join("\t")).join("\n");
 }
 
-/* ------------------------------------------------------------------
-   Requirement B — "Nama Vessel untuk template copy: moda udara -> isi
-   dengan No Voyage saja; moda laut -> gabungkan Nama Vessel + No Voyage
-   jadi satu string. Berlaku di semua template copy yang butuh field
-   Nama Vessel."
-   Catatan: aturan ini soal NILAI yang disalin, TERPISAH dari aturan
-   penamaan LABEL di form (requirement B bagian label) — mengubah label
-   tidak mengubah fungsi ini.
------------------------------------------------------------------- */
+/* Requirement B — "Nama Vessel untuk template copy: moda udara -> isi */
 function vesselNameForTemplate(s) {
   const vessel = (s.vessel || "").trim();
   const voyage = (s.voyage || "").trim();
@@ -37,13 +14,7 @@ function vesselNameForTemplate(s) {
   return [vessel, voyage].filter(Boolean).join(" ");
 }
 
-/* ------------------------------------------------------------------
-   Master di baris 1, House di baris 2. KALAU MASTER KOSONG, House naik
-   ke baris PERTAMA (requirement E: "Kalau tidak ada Master BL/AWB,
-   isian tetap di row pertama — JANGAN pindah ke row kedua") — dulu
-   baris pertama dibiarkan kosong dan House turun ke baris 2, bikin
-   kolom BL/AWB kelihatan kosong saat dipaste.
------------------------------------------------------------------- */
+/* Master di baris 1, House di baris 2. KALAU MASTER KOSONG, House naik */
 function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatter) {
   const master = (masterBL || "").trim();
   const house = (houseBL || "").trim();
@@ -65,11 +36,7 @@ function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatte
   }
 }
 
-/* ==================================================================
-   ALL IMPORT — buildExcelCopyRows() yang sudah ada, ditambah 1 kolom
-   "NO" kosong di paling kiri supaya formatnya seragam dengan template
-   lain saat dipaste (requirement E).
-================================================================== */
+/* ALL IMPORT — buildExcelCopyRows() yang sudah ada, ditambah 1 kolom */
 function buildAllImportCopyText(s) {
   const rows = buildExcelCopyRows(s, clipboardFormatter).map((cols) => [
     clipboardFormatter.blank, // kolom NO — sengaja dikosongkan
@@ -78,33 +45,19 @@ function buildAllImportCopyText(s) {
   return rowsToClipboardText(rows);
 }
 
-/* ==================================================================
-   ALL EXPORT — 17 kolom (requirement E):
-   NO · PEB · PEB DATE · AJU · CONSIGNEE · HS CODE · DESCRIPTION · QTY ·
-   AMOUNT · INCOTERMS · FREIGHT · INSURANCE · BL/AWB · NO. INVOICE ·
-   VESSEL NAME · PACKAGE · REMARK
-================================================================== */
+/* ALL EXPORT — 17 kolom (requirement E) */
 const ALL_EXPORT_COLS = 18;
 function buildAllExportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
-  // Kolom yang hanya diisi di BARIS PERTAMA (data tingkat pengiriman).
-  // PACKAGE (16) SENGAJA TIDAK ada di daftar ini: di Jadwal Export,
-  // kolom Kemasan diisi PER BARANG berupa dimensi P*L*T (mis.
-  // "82*82*75"), jadi tiap baris barang punya nilainya sendiri —
-  // bukan satu angka total pengiriman seperti di Jadwal Import.
+  // Kolom yang hanya diisi di BARIS PERTAMA (data tingkat pengiriman)
   const FIRST_ROW_ONLY_IDX = [1, 2, 3, 4, 5, 10, 11, 12, 14, 15, 17];
 
   const rows = items.map((it, idx) => {
     const cols = [
       formatter.blank, // 0  NO — dikosongkan
       // Kolom 1 "PENGIRIMAN DARI PABRIK" ADA di sheet tujuan Bgenius
-      // (di antara NO dan PEB) walau tidak tercantum di daftar 17 kolom
-      // awal. Disertakan supaya hasil paste yang ditempel MULAI DARI
-      // kolom NO langsung lurus dengan sheet-nya — tanpa ini, PEB
-      // mendarat di kolom PENGIRIMAN DARI PABRIK dan semua kolom
-      // sesudahnya bergeser satu.
-      formatter.date(s.factoryDate), // 1  PENGIRIMAN DARI PABRIK
+      formatter.date(s.actual), // 1  PENGIRIMAN DARI PABRIK = tanggal Stuffing
       formatter.text(s.docNo), // 2  PEB
       formatter.date(s.docDate), // 3  PEB DATE
       formatter.text(s.noAju), // 4  AJU
@@ -133,14 +86,7 @@ function buildAllExportCopyText(s) {
   return rowsToClipboardText(buildAllExportCopyRows(s, clipboardFormatter));
 }
 
-/* ==================================================================
-   DAILY IMPORT — 25 kolom (requirement E):
-   NO. · SPPB · SPPB DATE · AJU · STATUS · PELABUHAN/TERMINAL · SHIPPER ·
-   GOODS DESCRIPTION · QTY · BRUTO · BL/AWB · SHIPPER DOC · INVOICE ·
-   VESSEL NAME · FORWARDER · ETD · ETA · ESTIMATE DELIVERY ·
-   IN FACTORY DATE · IN FACTORY TIME · LCL/FCL · CONTAINER · NO. POL ·
-   INCOTERM · NOTES
-================================================================== */
+/* DAILY IMPORT — 25 kolom (requirement E) */
 const DAILY_IMPORT_COLS = 25;
 function buildDailyImportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
@@ -185,11 +131,7 @@ function buildDailyImportCopyRows(s, formatter) {
   return rows;
 }
 
-/* ==================================================================
-   DAILY EXPORT — 19 kolom (urutan dipertahankan dari versi sebelumnya,
-   yang sudah dipakai Bgenius; yang berubah cuma kolom STATUS yang kini
-   terisi otomatis & VESSEL NAME yang mengikuti aturan gabung).
-================================================================== */
+/* DAILY EXPORT — 19 kolom (urutan dipertahankan dari versi sebelumnya */
 const DAILY_EXPORT_COLS = 19;
 function buildDailyExportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
@@ -226,37 +168,9 @@ function buildDailyExportCopyRows(s, formatter) {
   return rows;
 }
 
-/* ==================================================================
-   REPORT — ringkasan SEMUA jadwal (Import + Export) yang belum selesai.
+/* REPORT — ringkasan SEMUA jadwal (Import + Export) yang belum selesai */
 
-   Formatnya dirancang untuk DIKIRIM LEWAT EMAIL, bukan ditempel ke
-   Excel. Karena itu keluarannya DUA versi sekaligus saat disalin:
-
-     - text/html  : versi berformat (judul tebal, penomoran, sub-daftar
-                    barang). Inilah yang diambil Outlook/Gmail/Thunderbird
-                    saat di-paste, sehingga hasilnya langsung rapi tanpa
-                    perlu dirapikan manual lagi.
-     - text/plain : versi teks polos ber-indentasi, dipakai editor yang
-                    tidak menerima HTML (Notepad, kolom komentar, chat).
-
-   Tiap pengiriman ditulis 3 baris + daftar barang, supaya tiap informasi
-   punya labelnya sendiri dan enak dibaca cepat:
-
-     1. Shipment From <pengirim>            (Export: "Shipment To ...")
-        Incoterm: CIF | Mode: LCL           (Export: "Packages: 6")
-        Perkiraan tiba di pabrik: <tgl>   -> Actual Delivery
-        (Export: "Estimasi Stuffing: <tgl>" -> Tanggal Stuffing)
-          • <nama barang>
-
-   Dulu semuanya dipadatkan jadi SATU baris panjang dipisah tanda "–",
-   yang saat dipaste ke email jadi wrap tak beraturan dan susah dibaca.
-================================================================== */
-
-// Nama barang untuk Report: HANYA barang PERTAMA (sesuai permintaan).
-// Report dipakai sebagai ringkasan email — satu baris per pengiriman
-// sudah cukup untuk mengenali kirimannya, dan pengiriman dengan 9 barang
-// tidak membuat emailnya membengkak. Rincian lengkapnya tetap tersedia
-// di template All Import / All Export.
+// Nama barang untuk Report: HANYA barang PERTAMA (sesuai permintaan)
 function reportItemNames(s) {
   const seen = new Set();
   const out = [];
@@ -271,11 +185,7 @@ function reportItemNames(s) {
   return out;
 }
 
-// Satu baris ringkas: nama barang PERTAMA + jumlah sisanya.
-// Laporan ini dikirim lewat email; mencantumkan seluruh nama barang
-// membuat satu pengiriman bisa memakan 9 baris dan isi pentingnya
-// (tanggal & tujuan) jadi tenggelam. Nama pertama sudah cukup untuk
-// mengenali kirimannya, sisanya cukup dihitung.
+// Satu baris ringkas: nama barang PERTAMA + jumlah sisanya
 function reportItemSummary(s) {
   const names = reportItemNames(s);
   if (!names.length) return "";
@@ -283,24 +193,15 @@ function reportItemSummary(s) {
   return sisa > 0 ? `${names[0]} + ${sisa} Items` : names[0];
 }
 
-// Baris ke-2 & ke-3 tiap pengiriman, dipisah label -> nilai supaya bisa
-// dirender tebal di versi HTML dan rata di versi teks.
+// Baris ke-2 & ke-3 tiap pengiriman
 function reportDetailPairs(s, mode) {
-  // Daftar DATAR berisi pasangan [label, nilai]. Semuanya dirangkai jadi
-  // SATU baris dipisah "|", bukan beberapa baris terpisah seperti
-  // sebelumnya — laporan jadi jauh lebih padat dan enak dipindai saat
-  // dibaca lewat email.
+  // Daftar DATAR berisi pasangan [label, nilai]
   if (mode === "export") {
     const pkg = extractLeadingNumber(s.package);
     return [
       ["Packages", pkg == null ? "0" : String(Math.round(pkg))],
-      // Tanggal STUFFING, bukan ETD. Di mode Export, field factoryDate
-      // memang berlabel "Tanggal Stuffing" (lihat MODE_LABELS di
-      // js/config.js) — itu tanggal barang dimuat ke kontainer di
-      // pabrik, dan itulah yang ditunggu penerima laporan. ETD adalah
-      // tanggal kapal berangkat dari pelabuhan; keduanya bisa berselisih
-      // beberapa hari.
-      ["Estimasi Stuffing", fmtDateLong(s.factoryDate)],
+      // Tanggal STUFFING, bukan ETD
+      ["Estimasi Stuffing", fmtDateLong(s.actual)],
     ];
   }
   return [
@@ -314,28 +215,19 @@ function reportHeadline(s, mode) {
   return `Shipment ${mode === "export" ? "To" : "From"} ${dispVal(s.party)}`;
 }
 
-/* Patokan urutan Report = tanggal yang DITAMPILKAN di baris ke-3 tiap
-   section, supaya urutan yang dibaca selalu cocok dengan angka yang
-   terlihat:
-     Import -> "Perkiraan tiba di pabrik" (Actual Delivery)
-     Export -> "Estimasi Stuffing"        (Tanggal Stuffing)          */
+/* Patokan urutan Report = tanggal yang DITAMPILKAN di baris ke-3 tiap */
 function reportSortDate(s, mode) {
-  return (mode === "export" ? s.factoryDate : s.actual) || "";
+  return s.actual || "";
 }
 
 function pendingByMode(mode) {
   return (data[mode] || [])
-    .filter((s) => s.status !== "arrived")
-    // Yang paling DEKAT di paling atas, supaya yang perlu ditindaklanjuti
-    // duluan langsung kebaca di awal email. Tanggal disimpan format ISO
-    // (yyyy-mm-dd) sehingga urutan teks = urutan kronologis, tidak perlu
-    // parsing Date sama sekali.
+    .filter((s) => !isArrived(s))
+    // Yang paling DEKAT di paling atas
     .sort((a, b) => {
       const da = reportSortDate(a, mode);
       const db = reportSortDate(b, mode);
-      // Jadwal yang tanggalnya BELUM diisi ditaruh paling bawah — belum
-      // bisa diurutkan, dan kalau ikut di atas malah tampak paling
-      // mendesak padahal justru belum ada kepastian.
+      // Jadwal yang tanggalnya BELUM diisi ditaruh paling bawah — belum bisa diurutkan
       if (!da && !db) return 0;
       if (!da) return 1;
       if (!db) return -1;
@@ -375,8 +267,7 @@ function buildReportCopyHtml() {
     if (!list.length) return;
     const items = list
       .map((s) => {
-        // Judul & label ditebalkan, nilainya biasa — supaya mata langsung
-        // menangkap strukturnya walau semuanya dalam satu baris.
+        // Judul & label ditebalkan, nilainya biasa
         const detail = reportDetailPairs(s, mode)
           .map(([k, v]) => `<b>${escapeHtml(k)}:</b> ${escapeHtml(v)}`)
           .join(' <span style="color:#94a3b8">|</span> ');
@@ -404,10 +295,7 @@ function buildReportCopyHtml() {
   )}</div>`;
 }
 
-/* ==================================================================
-   REGISTRY TEMPLATE COPY
-   `modes` menentukan template ini muncul di section mana (requirement E).
-================================================================== */
+/* REGISTRY TEMPLATE COPY */
 const COPY_TEMPLATES = [
   {
     id: "AllImport",
@@ -457,8 +345,7 @@ const COPY_TEMPLATES = [
     icon: "bi-file-earmark-text",
     scope: "global",
     modes: ["import", "export"],
-    // Report SENGAJA tidak punya `sheet`: requirement E menyebut Bulk
-    // Export bikin 1 sheet per template copy KECUALI Report.
+    // Report SENGAJA tidak punya `sheet`
     getText: () => buildReportCopyText(),
     // Versi berformat untuk email — lihat copyRichToClipboard().
     getHtml: () => buildReportCopyHtml(),

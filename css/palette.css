@@ -1,15 +1,4 @@
-/* ==================================================================
-   PENCARIAN CEPAT (Ctrl / ⌘ + K)
-
-   Untuk pengguna yang seharian di aplikasi ini, jalur tercepat ke
-   satu pengiriman bukan "gulir, saring, cari" — tapi mengetik nomor
-   ajunya. Kotak ini mencari lintas Import DAN Export sekaligus
-   (daftar utama hanya menampilkan satu mode), lalu langsung membuka
-   detail atau form editnya.
-
-   Perintah halaman ikut masuk daftar yang sama, jadi tidak perlu
-   diingat sebagai fitur terpisah.
-================================================================== */
+/* PENCARIAN CEPAT (Ctrl / ⌘ + K) */
 .cmdk-scrim {
   position: fixed;
   inset: 0;
@@ -62,20 +51,7 @@
   background: transparent;
   text-overflow: ellipsis;
 }
-/* PENTING — kekhususan selektor.
-
-   css/system.css dimuat PALING AKHIR dan di sana ada aturan
-   `input[type="text"] { border: 1px solid; border-radius: 9px;
-   background: #fff }` untuk seluruh isian form. Aturan itu menang atas
-   `.cmdk-input { border: 0 }` di atas, jadi kotak ini tetap
-   digambar berbingkai dan bersudut membulat — terlihat seperti kolom
-   isian yang ditempel mengambang di dalam panel, dengan tepi yang
-   seolah terpotong oleh baris pembungkusnya.
-
-   Ditulis `.cmdk .cmdk-input` (0,2,0) supaya menang atas
-   `input[type="text"]` (0,1,1). Sengaja TIDAK memakai !important:
-   yang salah bukan aturan globalnya, melainkan kekhususan di sini
-   yang kurang. */
+/* (0,2,0) agar menang atas `input[type="text"]` di system.css yang dimuat terakhir */
 .cmdk .cmdk-input,
 .cmdk .cmdk-input:hover,
 .cmdk .cmdk-input:focus,
@@ -108,8 +84,7 @@
   font-family: var(--font-display);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--n-400);
   padding: 10px 10px 5px;
 }
@@ -167,8 +142,7 @@
   font-family: var(--font-board);
   font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   padding: 2px 6px;
   border-radius: 3px;
   background: var(--n-100);

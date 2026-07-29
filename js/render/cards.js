@@ -1,10 +1,8 @@
 "use strict";
 
-/* ==================================================================
-   CARD RENDERING
-================================================================== */
+/* CARD RENDERING */
 function renderCard(s) {
-  return s.status === "arrived"
+  return isArrived(s)
     ? renderCollapsedCard(s)
     : renderExpandedCard(s);
 }
@@ -14,23 +12,12 @@ function hasMeaningfulValue(v) {
   return t !== "" && t !== "-";
 }
 
-// Display fallback for free-text fields: treats "-" the same as empty,
-// showing the placeholder dash instead of a literal "-" typed by the user.
+// Display fallback for free-text fields: treats "-" the same as empty
 function dispVal(v) {
   return hasMeaningfulValue(v) ? v : "—";
 }
 
-// Ringkasan fasilitas lintas-barang untuk badge kartu — dihitung dari
-// shipment_items sekarang (bukan lagi dari 1 field skb di shipment).
-// Setiap jenis SKB dapat badge SENDIRI-SENDIRI (PPH tampil "PPH",
-// Masterlist tampil "Masterlist", dst — bukan digabung jadi 1 badge
-// "SKB" generik seperti sebelumnya). Hitungan ("× N") cuma dipakai
-// utk jenis yang cakupannya lazim beda-beda per barang — E-COO
-// (sertifikat asal per barang) & Masterlist (daftar barang yang
-// disetujui, tidak selalu semua barang masuk); jenis lain (PPH/BM/
-// PPN/Lainnya) biasanya berlaku blanket ke semua barang dalam 1
-// pengiriman sekaligus, jadi angkanya kurang informatif dan badge-nya
-// tanpa angka.
+// Ringkasan fasilitas lintas-barang untuk badge kartu
 const SKB_JENIS_WITH_COUNT = new Set(["E-COO", "Masterlist"]);
 
 function skbCountByJenis(s) {
@@ -50,9 +37,7 @@ function skbTagsHtml(s) {
   return SKB_TYPE_OPTIONS.map((jenis) => {
     const n = counts[jenis] || 0;
     if (!n) return "";
-    // PPH/BM/PPN/Masterlist/Lainnya = fasilitas bea impor, cuma
-    // relevan di mode import (showDuty); E-COO tetap tampil di mode
-    // apa pun (bukan soal bea, tapi asal barang).
+    // PPH/BM/PPN/Masterlist/Lainnya = fasilitas bea impor, cuma relevan di mode import (showDuty)
     if (jenis !== "E-COO" && !lbl.showDuty) return "";
     const isEcoo = jenis === "E-COO";
     const cls = isEcoo ? "tag-ecoo" : "tag-skb";
@@ -62,9 +47,7 @@ function skbTagsHtml(s) {
   }).join("");
 }
 
-// Daftar nama barang buat kartu depan (info-grid) — 1 barang 1 baris.
-// Dipotong kalau kepanjangan supaya kartu tidak melar, sisanya
-// diringkas "+N lainnya".
+// Daftar nama barang buat kartu depan (info-grid) — 1 barang 1 baris
 function itemNamesSummary(s, maxShown = 4) {
   const names = (s.items || [])
     .map((it) => (it.namaBarang || "").trim())
@@ -74,8 +57,7 @@ function itemNamesSummary(s, maxShown = 4) {
   return [...names.slice(0, maxShown), `+${names.length - maxShown} lainnya`];
 }
 
-// Requirement D: "Tampilkan info delay di card dashboard juga: berapa
-// hari delay-nya, dihitung dari ETA awal vs ETA baru."
+// Requirement D: "Tampilkan info delay di card dashboard juga: berapa hari delay-nya
 function delayBadgeHtml(s) {
   if (s.status !== "delayed") return "";
   const info = shipmentDelayInfo(s);
@@ -83,20 +65,7 @@ function delayBadgeHtml(s) {
   return `<span class="tag tag-delay"><i class="bi bi-clock-history"></i> Mundur ${info.days} hari dari ${info.basis}</span>`;
 }
 
-/* ------------------------------------------------------------------
-   STRIP TANGGAL UPDATE DELAY (hanya saat status DELAY)
-
-   Ditaruh TEPAT DI BAWAH date-strip supaya kebaca berpasangan:
-     baris atas  = ETD/ETA rencana semula (tidak diubah),
-     baris ini   = tanggal BARU hasil pemunduran, plus selisihnya
-                   ("+5 hari dari ETA").
-   Keduanya bisa diedit langsung dari kartu lewat jalur
-   data-action="date" yang sama, jadi rencana awal tetap utuh sebagai
-   pembanding dan riwayatnya tidak hilang.
-
-   Dua-duanya ditampilkan (update ETD & update ETA) karena delay bisa
-   bersumber dari mundurnya keberangkatan MAUPUN kedatangan.
------------------------------------------------------------------- */
+/* STRIP TANGGAL UPDATE DELAY (hanya saat status DELAY) */
 function delayDeltaText(baseline, update, basis) {
   const d = delayDaysBetween(baseline, update);
   if (d == null) return "";
@@ -126,19 +95,9 @@ function delayStripHtml(s) {
     </div>`;
 }
 
-/* ------------------------------------------------------------------
-   ANIMASI KEBERANGKATAN (requirement: ETD == hari ini)
-
-   Muncul HANYA pada hari keberangkatan itu sendiri — tidak sebelumnya,
-   tidak sesudahnya. Tujuannya sebagai penanda visual cepat di dashboard
-   bahwa kiriman ini berangkat HARI INI dan perlu dipantau.
-   Ikonnya mengikuti moda: pesawat untuk udara, kapal untuk laut.
-   Animasi dimatikan otomatis bila sistem operasi pengguna meminta
-   "reduce motion" (lihat @media di css/card.css).
------------------------------------------------------------------- */
+/* ANIMASI KEBERANGKATAN (requirement: ETD == hari ini) */
 function isDepartingToday(s) {
-  // Pakai ETD EFEKTIF — kalau keberangkatan sudah dimundurkan, penanda
-  // "berangkat hari ini" tidak boleh lagi muncul di tanggal lamanya.
+  // Pakai ETD EFEKTIF — kalau keberangkatan sudah dimundurkan
   const etd = effectiveEtd(s);
   if (!etd) return false;
   return etd === todayISO();
@@ -153,7 +112,7 @@ function departingTodayHtml(s) {
         <i class="bi bi-broadcast"></i> Berangkat hari ini
       </span>
       <span class="depart-track" aria-hidden="true">
-        <i class="bi ${air ? "bi-airplane-fill" : "bi-water"} depart-mover"></i>
+        <span class="depart-mover">${air ? ICON_PESAWAT : ICON_KAPAL}</span>
       </span>
     </div>`;
 }
@@ -194,12 +153,15 @@ function actionButtons(s) {
     </div>`;
 }
 
-// Dropdown status di kartu: pilihannya mengikuti section aktif
-// (requirement D) — ARRIVED tidak muncul di Export, DELIVERED tidak
-// muncul di Import. Lihat statusOptionsHtml() di js/core/status.js.
+// Dropdown status di kartu: pilihannya mengikuti section aktif (requirement D)
 function statusSelectHtml(s) {
-  return `<select class="status-select ${statusClass(s.status)}" data-action="status" data-id="${s.id}">
-      ${statusOptionsHtml(activeMode, s.status)}
+  /* Yang ditampilkan status EFEKTIF: begitu tanggal Actual Delivery
+     terlewati, dropdown-nya sudah menunjukkan Arrived walau kolom di
+     database belum sempat diperbarui */
+  const st = effectiveStatus(s);
+
+  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}">
+      ${statusOptionsHtml(activeMode, st)}
     </select>`;
 }
 
@@ -209,15 +171,10 @@ function renderExpandedCard(s) {
   const itemCount = (s.items || []).length;
 
   return `
-  <div class="ship-card ship-card--${s.status}" data-id="${s.id}">
+  <div class="ship-card ship-card--${effectiveStatus(s)}" data-id="${s.id}">
     <div class="ship-card-top">
       <div class="ship-title-block">
-        <!-- Token papan yang SAMA dengan tampilan Manifes. "H-3" harus
-             berarti hal yang persis sama di mana pun ia muncul, supaya
-             berpindah antara Kartu dan Manifes tidak menuntut pengguna
-             belajar dua bahasa. -->
-        <span class="card-board">${boardTokenHtml(s, false)}</span>
-        <div class="ship-title-text">
+                <div class="ship-title-text">
           <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} Barang</div>
           <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
         </div>
@@ -267,8 +224,7 @@ function renderCollapsedCard(s) {
   <div class="ship-card ship-card--arrived ship-card--collapsed" data-id="${s.id}">
     <div class="collapsed-row">
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
-      <span class="card-board">${boardTokenHtml(s, false)}</span>
-      <div class="collapsed-main">
+            <div class="collapsed-main">
         <div class="collapsed-party">${escapeHtml(dispVal(s.party))}</div>
         <div class="collapsed-meta">Invoice <b>${escapeHtml(dispVal(s.invoice))}</b> &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(s.factoryDate)}</b></div>
       </div>

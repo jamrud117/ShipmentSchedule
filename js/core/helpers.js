@@ -1,8 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   HELPERS
-================================================================== */
+/* HELPERS */
 function uid(p) {
   return (p || "s") + "_" + Math.random().toString(36).slice(2, 10);
 }
@@ -12,23 +10,21 @@ function parseLocalDate(d) {
   const dt = new Date(d + "T00:00:00");
   return isNaN(dt) ? null : dt;
 }
-// Tanggal HARI INI dalam format ISO (yyyy-mm-dd), memakai zona waktu
-// LOKAL pengguna. Sengaja tidak memakai toISOString(), yang mengubah ke
-// UTC — di Indonesia (UTC+7) itu bisa menggeser tanggal ke hari
-// sebelumnya untuk jam-jam dini hari.
+// Tanggal HARI INI dalam format ISO (yyyy-mm-dd), memakai zona waktu LOKAL pengguna
 function todayISO() {
   const n = new Date();
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
+/* Tanggal tampilan: DD-MM-YYYY.
+   Sengaja disusun sendiri, bukan lewat toLocaleDateString — hasil
+   locale bergantung pada setelan peramban tiap pengguna, dan justru
+   itu yang membuat formatnya berbeda-beda antar komputer. */
 function fmtDate(d) {
   const dt = parseLocalDate(d);
   if (!dt) return "—";
-  return dt.toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${p2(dt.getDate())}-${p2(dt.getMonth() + 1)}-${dt.getFullYear()}`;
 }
 function fmtDateLong(d) {
   const dt = parseLocalDate(d);
@@ -39,11 +35,7 @@ function fmtDateLong(d) {
     year: "numeric",
   });
 }
-// isPastOrToday() (dipakai utk auto-arrive) dihapus -- auto-arrive
-// sudah tidak ada lagi (lihat route-model.js / modal-fields.js /
-// card-events.js), jadi fungsi ini sudah tidak dipanggil dari manapun.
-// todayStripped(), helper lain utk fitur yang sama, ikut dihapus dgn
-// alasan yang sama (tidak ada pemanggilnya lagi).
+// isPastOrToday() (dipakai utk auto-arrive) dihapus -- auto-arrive sudah tidak ada lagi
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
@@ -92,31 +84,16 @@ function newItem() {
     harga: 0,
     netto: 0,
     bruto: 0,
-    // Kemasan PER BARANG (dulu 1 field bebas-teks di level shipment,
-    // sekarang per barang — lihat item-table.js). Artinya beda per mode:
-    //  - Import: teks bebas "Jumlah + Jenis Kemasan", mis. "5 BOX" —
-    //    angka depannya dipakai utk Total Package (lihat itemTotals()),
-    //    lewat extractLeadingNumber() yang sudah ada di
-    //    excel-row-format.js (TIDAK dipindah/diduplikasi di sini).
-    //  - Export: dimensi kemasan "P*L*T" cm, mis. "82*82*75" — dipakai
-    //    utk hitung meter kubik per barang (lihat computeItemCbm() di
-    //    bawah). Total Package utk export SENGAJA tidak dihitung dari
-    //    sini — diisi manual oleh user (lihat foot-package di form).
+    // Kemasan PER BARANG (dulu 1 field bebas-teks di level shipment, sekarang per barang
     package: "",
-    // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama
-    // (skb), bisa berisi berapapun entri. E-COO cuma salah satu "jenis"
-    // di dalamnya (lihat SKB_TYPE_OPTIONS), bukan field terpisah lagi.
+    // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama (skb)
     skb: [],
-    // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di
-    // tabel draft), TIDAK pernah dikirim ke database — lihat itemToRow().
+    // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)
     _facOpen: false,
   };
 }
 
-// Dimensi P x L x T (cm) dari field Kemasan per barang mode Export
-// (mis. "82*82*75" atau "82x82x75" -> {p:82, l:82, t:75}). Pemisah "*"
-// ATAU "x"/"X" (fleksibel karena user bisa ketik salah satu). null
-// kalau tidak ketemu tepat 3 angka.
+// Dimensi P x L x T (cm) dari field Kemasan per barang mode Export (mis
 function parsePackageDims(raw) {
   const parts = String(raw || "")
     .split(/[x*]/i)
@@ -126,10 +103,7 @@ function parsePackageDims(raw) {
   return { p: parts[0], l: parts[1], t: parts[2] };
 }
 
-// Meter kubik 1 barang mode Export: (P x L x T dalam cm) / 1.000.000 x
-// Qty barang (field qty yang sama dipakai utk kolom QTY/AMOUNT barang
-// ini, sesuai rumus dari Bgenius: 82*82*75/1000000*1 = 0.504).
-// Dibulatkan 3 desimal. 0 kalau field Kemasan belum/tidak bisa di-parse.
+// Meter kubik 1 barang mode Export: (P x L x T dalam cm) / 1.000.000 x Qty barang
 function computeItemCbm(it) {
   const dims = parsePackageDims(it.package);
   if (!dims) return 0;
@@ -138,17 +112,12 @@ function computeItemCbm(it) {
   return Math.round(cbm * 1000) / 1000;
 }
 
-// Satu entri SKB dalam daftar per-barang. "jenis" salah satu dari
-// SKB_TYPE_OPTIONS; kalau "Lainnya", teks bebasnya ada di jenisLainnya.
+// Satu entri SKB dalam daftar per-barang
 function newSkbEntry() {
   return { jenis: "PPH", jenisLainnya: "", nomor: "", tanggal: "" };
 }
 
-// Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis. "PPH"
-// atau "PPH, PPN" (dari kolom FASILITAS/SKB di file Excel legacy), jadi
-// daftar entri SKB terstruktur. Dipakai di Bulk Import untuk mengisi SKB
-// barang pertama (data lama tidak punya info per-barang, jadi baris
-// pertama dipakai sebagai perkiraan terbaik).
+// Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis
 function skbTextToEntries(raw) {
   return String(raw || "")
     .split(",")
@@ -164,9 +133,7 @@ function skbTextToEntries(raw) {
     });
 }
 
-// Bersihkan 1 entri SKB (dipakai baik untuk draft di form maupun hasil
-// baca dari Supabase) supaya selalu punya ke-4 key-nya dengan tipe yang
-// benar, jadi kode lain tidak perlu jaga-jaga field hilang/undefined.
+// Bersihkan 1 entri SKB (dipakai baik untuk draft di form maupun hasil baca dari Supabase)
 function sanitizeSkbEntry(sk) {
   const jenis = SKB_TYPE_OPTIONS.includes(sk && sk.jenis)
     ? sk.jenis

@@ -1,45 +1,11 @@
 "use strict";
 
-/* ==================================================================
-   HALAMAN: PERMINTAAN NOMOR DOKUMEN
-
-   Menerbitkan nomor berurutan untuk Invoice, Delivery Order,
-   Permintaan Dana, dan Surat keluar, lalu mencatatnya di database.
-
-   DATA-DRIVEN: berkas ini TIDAK memuat daftar isian tiap jenis dokumen
-   sama sekali. Isian dibaca dari atribut di index.html:
-     data-docnum-panel="<kunci>"  -> panel form
-     data-dn="<namaField>"        -> nilainya ikut terkirim
-     data-dn-required             -> wajib diisi
-     data-dn-number               -> harus berupa angka
-   Menambah isian baru = tambah satu <input> ber-atribut di HTML.
-   Menambah JENIS dokumen baru = tambah tab + panel di HTML, lalu satu
-   baris di DOCNUM_TYPES di bawah.
-
-   FORMAT NOMOR: DDI/<KODE>/<BULAN ROMAWI>/<TAHUN>/<URUT 4 DIGIT>
-   contoh: DDI/INV/VII/2026/0007
-   Bulan & tahun diambil dari TANGGAL DOKUMEN yang diisi user (bukan
-   tanggal hari ini), supaya dokumen yang dibuat mundur tetap memakai
-   periode yang benar.
-================================================================== */
+/* HALAMAN: PERMINTAAN NOMOR DOKUMEN */
 
 const DOCNUM_ORG = "DDI";
 
-/* Sebagian jenis dokumen punya SUB-JENIS yang seri nomornya terpisah.
-   Invoice misalnya: Commercial dan Non-Commercial adalah dokumen yang
-   berbeda secara kepabeanan, jadi masing-masing punya kode dan urutan
-   sendiri — bukan berbagi satu deret. Sub-jenis dipilih lewat isian
-   ber-atribut `data-dn-subtype` di panelnya.
-   Kalau ternyata Bgenius ingin keduanya memakai SATU deret bersama,
-   cukup samakan `key` kedua baris di bawah ini. */
-/* POLA NOMOR
-   Nomor urut TIDAK selalu di ujung — di sebagian format ia berada di
-   tengah, bahkan di awal. Karena itu tiap jenis dokumen menyimpan POLA
-   berisi tiga penanda:
-     {SEQ}  -> nomor urut (3 digit, dipasang di database)
-     {MM}   -> bulan romawi dari tanggal dokumen
-     {YYYY} -> tahun dari tanggal dokumen
-   Menambah/mengubah format cukup mengubah satu baris pola di bawah. */
+/* Sebagian jenis dokumen punya SUB-JENIS yang seri nomornya terpisah */
+/* POLA NOMOR */
 const DOCNUM_SUBTYPES = {
   invoice: {
     Commercial: {
@@ -84,8 +50,7 @@ const ROMAN_MONTHS = [
   "VII", "VIII", "IX", "X", "XI", "XII",
 ];
 
-// Kolom tersendiri di tabel document_numbers; sisanya masuk `payload`
-// (jsonb) supaya jenis dokumen baru tidak perlu kolom baru.
+// Kolom tersendiri di tabel document_numbers
 const DOCNUM_COLUMN_FIELDS = new Set(["docDate", "requester", "department"]);
 
 let docNumActiveTab = DOCNUM_DEFAULT_TAB;
@@ -93,11 +58,7 @@ let docNumBusy = false;
 
 /* ---------- pembentukan nomor ---------- */
 
-// "2026"; kalau suatu saat ada yang perlu reset BULANAN, cukup ubah
-// Jenis dokumen EFEKTIF: gabungan tab yang aktif + sub-jenis yang
-// dipilih. Inilah yang dipakai sebagai kunci penomoran, kode nomor, dan
-// penyaring riwayat — supaya Commercial & Non-Commercial benar-benar
-// berjalan di deret masing-masing.
+// "2026"; kalau suatu saat ada yang perlu reset BULANAN
 function resolveDocNumType(tabKey) {
   const base = DOCNUM_TYPES[tabKey] || {};
   const subs = DOCNUM_SUBTYPES[tabKey];
@@ -106,9 +67,7 @@ function resolveDocNumType(tabKey) {
     const el = panel && panel.querySelector("[data-dn-subtype]");
     const hit = el && subs[el.value];
     if (hit) {
-      // `pattern` WAJIB ikut diteruskan — tanpa ini sub-jenis memakai
-      // pola milik jenis induknya, sehingga Non-Commercial ikut tercetak
-      // dengan format Commercial.
+      // `pattern` WAJIB ikut diteruskan
       return {
         ...base,
         key: hit.key,
@@ -120,16 +79,7 @@ function resolveDocNumType(tabKey) {
   return { ...base, key: tabKey };
 }
 
-/* SERI PENOMORAN
-
-   Nomor TIDAK reset sendiri tiap ganti tahun. Dulu kunci periode diisi
-   tahun dari tanggal dokumen, sehingga deret otomatis mulai 001 setiap
-   Januari — nyaman, tapi memaksakan satu asumsi alur bisnis yang belum
-   tentu bertahan. Sekarang deret berjalan terus sampai direset manual.
-
-   Seri yang sedang berjalan disimpan per jenis dokumen dan disegarkan
-   bersamaan dengan pratinjau, jadi tidak menambah bolak-balik ke
-   database. */
+/* SERI PENOMORAN */
 const docNumSeries = {};
 
 async function muatSeri(docType) {
@@ -142,8 +92,7 @@ async function muatSeri(docType) {
   return seri;
 }
 
-// Pola dengan {MM} & {YYYY} sudah terisi; {SEQ} sengaja DIBIARKAN —
-// diisi di database bersamaan dengan kenaikan counter-nya.
+// Pola dengan {MM} & {YYYY} sudah terisi
 function docNumTemplate(typeKey, isoDate) {
   const t = resolveDocNumType(typeKey);
   const d = parseLocalDate(isoDate) || new Date();
@@ -152,8 +101,7 @@ function docNumTemplate(typeKey, isoDate) {
     .replace(/\{YYYY\}/g, String(d.getFullYear()));
 }
 
-// Dipakai untuk PRATINJAU di layar. Nomor yang benar-benar terbit tetap
-// dibentuk di database dari pola yang sama.
+// Dipakai untuk PRATINJAU di layar
 function docNumFormat(template, seq, pad) {
   return String(template).replace(
     /\{SEQ\}/g,
@@ -177,9 +125,7 @@ function readDocNumForm(typeKey) {
   return out;
 }
 
-// Mengembalikan daftar pesan kesalahan; kosong berarti lolos.
-// Isian yang bermasalah ditandai langsung di kotaknya (kelas
-// `is-invalid`) supaya user tahu yang mana tanpa membaca daftar.
+// Mengembalikan daftar pesan kesalahan; kosong berarti lolos
 function validateDocNumForm(typeKey) {
   const panel = docNumPanelEl(typeKey);
   const errors = [];
@@ -205,9 +151,7 @@ function validateDocNumForm(typeKey) {
       return;
     }
     if (el.hasAttribute("data-dn-number") && nilai) {
-      // excelNum() menerima format Indonesia maupun Inggris ("1.234,56"
-      // dan "1,234.56") — dipakai supaya isian angka di sini konsisten
-      // dengan cara aplikasi membaca angka di tempat lain.
+      // excelNum() menerima format Indonesia maupun Inggris ("1.234,56" dan "1,234.56")
       const angka = excelNum(nilai);
       if (!isFinite(angka) || angka < 0) {
         errors.push(`${label} harus berupa angka (tidak boleh negatif).`);
@@ -216,9 +160,7 @@ function validateDocNumForm(typeKey) {
     }
   });
 
-  // Tanggal dokumen tidak boleh terlalu jauh ke depan: nomor terbit
-  // berurutan, jadi tanggal yang keliru (mis. salah ketik tahun) akan
-  // membuat periode penomoran melompat dan sulit dirapikan lagi.
+  // Tanggal dokumen tidak boleh terlalu jauh ke depan: nomor terbit berurutan
   const isoTanggal = readDocNumForm(typeKey).docDate;
   const tgl = parseLocalDate(isoTanggal);
   if (tgl) {
@@ -236,11 +178,7 @@ function validateDocNumForm(typeKey) {
 
 /* ---------- pratinjau nomor berikutnya ---------- */
 
-// Menampilkan nomor yang AKAN terbit. Angka urutnya dibaca dari counter
-// di database, jadi ini perkiraan — nomor final tetap ditentukan server
-// saat tombol ditekan (lihat catatan race condition di
-// schema-migration.sql). Karena itu tulisannya "berikutnya", bukan
-// "nomor Anda".
+// Menampilkan nomor yang AKAN terbit
 async function refreshDocNumPreview(typeKey) {
   const el = document.querySelector(`[data-dn-preview="${typeKey}"]`);
   if (!el) return;
@@ -267,17 +205,7 @@ async function refreshDocNumPreview(typeKey) {
   }
 }
 
-/* ==================================================================
-   ATUR / RESET NOMOR URUT
-
-   Penomoran ini menggantikan pencatatan manual yang SUDAH berjalan,
-   jadi harus bisa disambung dari nomor terakhir yang sudah dipakai —
-   bukan selalu mulai dari 001.
-
-   Yang diisi pengguna adalah NOMOR BERIKUTNYA (angka yang ingin terbit
-   berikutnya), bukan "last_seq". Itu yang ada di kepala pengguna:
-   "invoice terakhir 035, berarti berikutnya 036".
-================================================================== */
+/* ATUR / RESET NOMOR URUT */
 let counterCtx = { typeKey: null, periodKey: null, lastSeq: 0, pad: 3 };
 
 function renderCounterPanel(t, periodKey, lastSeq) {
@@ -292,10 +220,7 @@ function renderCounterPanel(t, periodKey, lastSeq) {
   input.placeholder = String(1).padStart(t.pad, "0");
 }
 
-// Nomor urut TERTINGGI yang sudah pernah terbit di periode ini. Dipakai
-// mencegah penyetelan mundur yang akan menabrak nomor lama: kolomnya
-// unik, jadi kalau dibiarkan, penerbitan berikutnya pasti gagal di
-// tengah jalan — lebih baik dicegah sekarang dengan pesan yang jelas.
+// Nomor urut TERTINGGI yang sudah pernah terbit di periode ini
 async function maxIssuedSeq(docType, periodKey) {
   const { data, error } = await supabaseClient
     .from("document_numbers")
@@ -343,14 +268,12 @@ async function simpanCounter(nilaiBerikutnya) {
 }
 
 $("#btnCounterSave")?.addEventListener("click", () =>
+  !requireEdit() ? null :
   simpanCounter($("#counterNext").value),
 );
-/* Reset MANUAL. Tidak menolkan counter — itu akan membuat nomor 001 yang
-   baru menabrak 001 yang lama, karena pasangan jenis+seri+urutan harus
-   unik. Yang dilakukan: membuka SERI BARU. Catatan lama tetap utuh di
-   serinya sendiri, deret baru mulai bersih dari 001, dan tidak ada satu
-   pun nomor yang perlu dihapus. */
+/* Reset manual: counter tidak dinolkan agar nomor tidak terbit ganda */
 $("#btnCounterReset")?.addEventListener("click", () => {
+  if (!requireEdit()) return;
   const { typeKey, pad } = counterCtx;
   if (!typeKey) return;
   const jenis = resolveDocNumType(docNumActiveTab);
@@ -419,16 +342,10 @@ async function submitDocNumRequest() {
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Menerbitkan...`;
 
   try {
-    // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset
-    // dari perangkat lain, nomor ini harus masuk ke seri yang baru — bukan
-    // seri lama yang sudah ditutup.
+    // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset dari perangkat lain
     const periodKey = await muatSeri(t.key);
 
-    // LANGKAH 1 — ambil nomor urut dari database.
-    // Penambahan dilakukan di dalam satu pernyataan SQL yang atomik
-    // (lihat next_document_number di schema-migration.sql), jadi dua
-    // pemohon yang menekan tombol bersamaan TIDAK bisa mendapat nomor
-    // kembar. Nomor urut sengaja TIDAK dihitung di sini.
+    // LANGKAH 1 — ambil nomor urut dari database
     const { data: hasil, error: errSeq } = await supabaseClient.rpc(
       "next_document_number",
       {
@@ -471,10 +388,7 @@ async function submitDocNumRequest() {
     showToast(`Nomor ${baris.out_number} berhasil diterbitkan.`, "success");
   } catch (err) {
     console.error(err);
-    // Nomor urut mungkin SUDAH terpakai walau penyimpanan gagal — itu
-    // disengaja: lebih baik ada nomor yang lompat daripada dua dokumen
-    // memakai nomor yang sama. Pesannya dibuat jelas supaya user tidak
-    // menekan tombol berkali-kali.
+    // Nomor urut mungkin SUDAH terpakai walau penyimpanan gagal — itu disengaja
     showToast(
       `Gagal menerbitkan nomor: ${err.message || "kesalahan tidak diketahui"}. Jangan tekan ulang berkali-kali — cek dulu daftar "Nomor Terakhir Terbit" di bawah.`,
       "danger",
@@ -491,9 +405,7 @@ function tampilkanHasilDocNum(nomor) {
   $("#docNumResult").classList.remove("d-none");
 }
 
-// `keepIdentity` mempertahankan nama pemohon & departemen: satu orang
-// biasanya mengajukan beberapa nomor berturut-turut, jadi mengosongkan
-// identitasnya tiap kali justru menambah pekerjaan.
+// `keepIdentity` mempertahankan nama pemohon & departemen
 function resetDocNumForm(typeKey, opts) {
   const panel = docNumPanelEl(typeKey);
   if (!panel) return;
@@ -510,9 +422,7 @@ function resetDocNumForm(typeKey, opts) {
 
 /* ---------- riwayat nomor terbit ---------- */
 
-/* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari;
-   tanpa dibatasi, halaman ini akan memanjang tak terkendali ke bawah dan
-   kotak "Atur Nomor Urut" di atasnya jadi jauh dari pandangan. */
+/* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
 let docNumPage = 1;
 let docNumPageSize = 5;
 
@@ -525,9 +435,7 @@ async function renderDocNumHistory() {
 
   const jenis = resolveDocNumType(docNumActiveTab);
   try {
-    // Ambil HANYA sebanyak satu halaman. Jumlah keseluruhan diminta
-    // terpisah lewat `count: "exact"` — jadi jumlah halaman tetap benar
-    // tanpa harus mengunduh seluruh riwayat ke browser.
+    // Ambil HANYA sebanyak satu halaman
     const dari = (docNumPage - 1) * docNumPageSize;
     const { data, error, count } = await supabaseClient
       .from("document_numbers")
@@ -541,8 +449,7 @@ async function renderDocNumHistory() {
     if (error) throw error;
 
     const total = count || 0;
-    // Halaman terakhir bisa jadi kosong setelah data dihapus; kalau itu
-    // terjadi, mundur ke halaman yang masih ada isinya.
+    // Halaman terakhir bisa jadi kosong setelah data dihapus
     if (total > 0 && (!data || !data.length) && docNumPage > 1) {
       docNumPage = Math.max(1, Math.ceil(total / docNumPageSize));
       return renderDocNumHistory();
@@ -593,9 +500,7 @@ async function renderDocNumHistory() {
   }
 }
 
-// Memakai kelas & susunan yang SAMA dengan paginasi daftar jadwal
-// (.pagination-bar, .page-btn, .page-nav) supaya keduanya terasa satu
-// komponen, bukan dua gaya berbeda di aplikasi yang sama.
+// Memakai kelas & susunan yang SAMA dengan paginasi daftar jadwal (.pagination-bar
 function renderDocNumPagination(total) {
   const bar = $("#docNumPagination");
   if (!bar) return;
@@ -633,8 +538,7 @@ function renderDocNumPagination(total) {
     </div>`;
 }
 
-// Satu pendengar untuk seluruh bilah — isinya dirender ulang tiap kali,
-// jadi tombolnya tidak bisa didaftarkan satu per satu.
+// Satu pendengar untuk seluruh bilah — isinya dirender ulang tiap kali
 $("#docNumPagination")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-dnpage], #dnPagePrev, #dnPageNext");
   if (!btn || btn.disabled) return;
@@ -650,21 +554,9 @@ $("#docNumPagination")?.addEventListener("change", (e) => {
   renderDocNumHistory();
 });
 
-/* ------------------------------------------------------------------
-   HAPUS SATU NOMOR
-
-   Menggantikan pembersihan massal per rentang tanggal, yang ternyata
-   berlebihan: penomoran sudah mereset sendiri tiap pergantian tahun
-   (kunci periodenya memang tahun), jadi yang benar-benar dibutuhkan
-   hanya membuang satu nomor yang salah terbit.
-
-   Penyetelan ulang counter dikerjakan di database dalam transaksi yang
-   sama (lihat delete_document_number di schema-migration.sql): kalau
-   yang dihapus nomor TERAKHIR, nomor itu bisa dipakai lagi sehingga
-   tidak meninggalkan lompatan; kalau yang dihapus nomor di TENGAH,
-   counter tetap di puncak agar nomor berikutnya tidak menabrak.
------------------------------------------------------------------- */
+/* HAPUS SATU NOMOR */
 $("#docNumHistory")?.addEventListener("click", (e) => {
+  if (e.target.closest("[data-del-num]") && !requireEdit()) return;
   const btn = e.target.closest("[data-del-num]");
   if (!btn) return;
   const id = btn.dataset.delNum;
@@ -702,8 +594,7 @@ function showDocNumTab(key) {
   const panels = document.querySelectorAll("[data-docnum-panel]");
   if (!tabs.length) return;
 
-  // Kalau kunci tidak dikenal (mis. hash lama), jatuh ke tab pertama
-  // supaya halaman tidak pernah tampil kosong tanpa panel aktif.
+  // Kalau kunci tidak dikenal (mis
   const known = Array.from(tabs).some((t) => t.dataset.docnumTab === key);
   const active = known ? key : DOCNUM_DEFAULT_TAB;
   docNumActiveTab = active;
@@ -737,15 +628,13 @@ if (docNumTabsEl) {
   });
 }
 
-// Mengubah tanggal berarti mengubah periode penomoran (bulan/tahun di
-// dalam nomor), jadi pratinjaunya ikut dihitung ulang.
+// Mengubah tanggal berarti mengubah periode penomoran (bulan/tahun di dalam nomor)
 document.querySelectorAll('[data-docnum-panel] [data-dn="docDate"]').forEach(
   (el) => {
     el.addEventListener("change", () => refreshDocNumPreview(docNumActiveTab));
   },
 );
-// Mengganti sub-jenis berarti pindah DERET nomor, jadi pratinjau dan
-// riwayatnya ikut dimuat ulang.
+// Mengganti sub-jenis berarti pindah DERET nomor, jadi pratinjau dan riwayatnya ikut dimuat ulang.
 document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
   el.addEventListener("change", () => {
     docNumPage = 1;
@@ -754,7 +643,10 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
   });
 });
 
-$("#btnDocNumSubmit")?.addEventListener("click", submitDocNumRequest);
+$("#btnDocNumSubmit")?.addEventListener("click", () => {
+  if (!requireEdit()) return;
+  submitDocNumRequest();
+});
 $("#btnDocNumReset")?.addEventListener("click", () => {
   resetDocNumForm(docNumActiveTab);
   $("#docNumResult").classList.add("d-none");
@@ -771,11 +663,7 @@ $("#btnCopyDocNum")?.addEventListener("click", async () => {
   showToast(ok ? "Nomor disalin." : "Gagal menyalin nomor.", ok ? "success" : "danger");
 });
 
-/* ------------------------------------------------------------------
-   Penanda halaman aktif di navbar. Dipanggil tiap kali router berpindah
-   halaman, bukan sekali di awal — supaya tetap benar saat pengguna
-   menekan tombol Back/Forward browser.
------------------------------------------------------------------- */
+/* Penanda halaman aktif di navbar. Dipanggil tiap kali router berpindah */
 function setActivePageNav(page) {
   document.querySelectorAll("[data-page]").forEach((el) => {
     el.classList.toggle("active", el.dataset.page === page);

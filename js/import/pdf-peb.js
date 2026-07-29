@@ -1,25 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   IMPORT DARI PDF PEB (Pemberitahuan Ekspor Barang, BC 3.0)
-   Pasangan pdf.js (PIB BC 2.0) untuk sisi EXPORT — requirement A.
-
-   Struktur form BC 3.0 (diverifikasi dari dokumen nyata):
-     - Halaman 1: header 2 kolom (KANTOR PABEAN / EKSPORTIR / PEMBELI /
-       PPJK / DATA PENGANGKUTAN / DATA PELABUHAN / DOKUMEN PELENGKAP /
-       DATA PENYERAHAN / DATA TRANSAKSI / DATA PETI KEMAS / DATA KEMASAN).
-       Hampir semua field bernomor unik (1..58), jadi paling stabil
-       diambil lewat "nomor field + label", bukan lewat posisi baris.
-     - Halaman 2+: "LEMBAR LANJUTAN DATA BARANG EKSPOR" — tabel barang
-       kolom 47..54. Di sini WAJIB pakai koordinat (lihat pdf-coords.js):
-       kolom 48 (Uraian) & kolom 51 (Jumlah/Berat/Kemasan) berada di
-       baris Y yang SAMA, jadi kalau dibaca sbg teks polos, "- 1.0000 SET
-       (SET)" nempel ke nama barang.
-     - Halaman terakhir: "LEMBAR LANJUTAN DOKUMEN PELENGKAP PABEAN" —
-       tabel 1 baris = 1 dokumen (INVOICE / PACKING LIST / B/L / SKB /
-       E-CO). Dari sinilah B/L, invoice, dan fasilitas diambil, sama
-       seperti lembar "Pemenuhan Persyaratan" di PIB.
-================================================================== */
+/* IMPORT DARI PDF PEB (Pemberitahuan Ekspor Barang, BC 3.0) */
 
 const PEB_TITLE_RE = /PEMBERITAHUAN\s+EKSPOR\s+BARANG/i;
 
@@ -27,9 +8,7 @@ function isPebPdfText(text) {
   return PEB_TITLE_RE.test(text || "");
 }
 
-// Tanggal gaya dokumen bea cukai (DD-MM-YYYY) -> ISO. Sama dengan
-// pibDateToISO() di pdf.js; ditulis ulang di sini supaya modul PEB tidak
-// bergantung urutan <script> terhadap modul PIB.
+// Tanggal gaya dokumen bea cukai (DD-MM-YYYY) -> ISO
 function pebDateToISO(dmy) {
   const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec((dmy || "").trim());
   return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
@@ -40,12 +19,7 @@ function pebNum(s) {
   return isFinite(n) ? n : null;
 }
 
-/* ---- tabel "LEMBAR LANJUTAN DOKUMEN PELENGKAP PABEAN" -------------
-   Formatnya: "<no> <JENIS DOKUMEN> <nomor> <tanggal DD-MM-YYYY>".
-   Nama jenis dokumen bisa mengandung spasi & garis miring ("PACKING
-   LIST", "B/L", "SURAT KETERANGAN BEBAS (SKB) PPH"), sedangkan nomor
-   dokumen TIDAK pernah mengandung spasi — jadi pemisahnya: ambil token
-   TERAKHIR sebelum tanggal sebagai nomor, sisanya nama dokumen. */
+/* tabel "LEMBAR LANJUTAN DOKUMEN PELENGKAP PABEAN" */
 function parsePebDocTable(text) {
   const rows = [];
   const re = /^\s*(\d{1,2})\s+([A-Z][A-Z0-9()/.\-\s]*?)\s+(\S+)\s+(\d{2}-\d{2}-\d{4})\s*$/gm;
@@ -60,18 +34,7 @@ function parsePebDocTable(text) {
   return rows;
 }
 
-/* ---- barang (kolom 47..54, halaman lanjutan) ---------------------
-   Tiap barang diawali baris "<n> - <pos tarif 8 digit>" di kolom 48.
-   Isi kolom 48 per barang (4 baris khas):
-     - 84807190
-     - TYRE MOLD FULL SET, Merk: -, Tipe: NOKIAN ENTRUST 255/45R19,
-     Ukuran: - , Kode Barang : -
-     - EKSPOR BIASA
-   Isi kolom 51 per barang:
-     - 1.0000 SET (SET)
-     - 300.0000 Kg
-     - Kemasan: 6 PK
-   Isi kolom 54 per barang: nilai ekspor (mis. "11,229").              */
+/* barang (kolom 47..54, halaman lanjutan) */
 const PEB_ITEM_HEADERS = [
   { key: "no", re: /^47\.$/ },
   { key: "uraian", re: /^48\.\s*-?Pos\s*Tarif/i },
@@ -92,9 +55,7 @@ function isEmptyPebSpec(v) {
   );
 }
 
-// Nama barang dari blok teks kolom 48 satu barang.
-// Formatnya bisa terpotong lintas baris, jadi baris-barisnya digabung
-// dulu jadi 1 string sebelum di-regex.
+// Nama barang dari blok teks kolom 48 satu barang
 function parsePebItemName(blockText) {
   const joined = blockText.replace(/\s+/g, " ").trim();
   // Buang "- <pos tarif>" di depan & "- EKSPOR BIASA/..." di belakang.
@@ -142,9 +103,7 @@ function extractPebItems(pagesItems) {
     });
     if (!starts.length) return;
 
-    // Batas bawah tiap barang = awal barang berikutnya; barang TERAKHIR
-    // dibatasi blok tanda tangan ("JAKARTA, dd-mm-yyyy"/"Eksportir/PPJK")
-    // supaya tidak menyerap teks kaki halaman.
+    // Batas bawah tiap barang = awal barang berikutnya
     const footerY = Math.max(
       ...pdfLines(pageItems)
         .filter((l) => /Eksportir\/PPJK|^JAKARTA,/i.test(l.text.trim()))
@@ -231,19 +190,14 @@ function parsePebPdfText(text, pagesItems) {
     const mm = text.match(re);
     return mm ? mm[1].trim() : "";
   };
-  // Label field lain sering ikut nempel di ujung baris karena form ini
-  // 2 kolom — dipotong sebelum penanda field baru ("14. Alamat :").
+  // Label field lain sering ikut nempel di ujung baris karena form ini 2 kolom
   const stopAtNextField = (s) =>
     (s || "").split(/\s+\d{1,2}[a]?\.\s+(?=[A-Z])/)[0].trim();
 
   /* ---- identitas dokumen ---- */
   const noAju = grab(/Nomor Pengajuan\s*:\s*(\S+)/i);
   const docNo = grab(/1\.\s*Nomor Pendaftaran\s*:\s*(\d+)/i);
-  // "Tanggal :" pendaftaran ada di baris BERBEDA dari nomornya (kolom
-  // kanan "H. KOLOM KHUSUS BEA DAN CUKAI"), dan baris itu ikut memuat
-  // teks kolom kiri. Dicari sebagai tanggal PERTAMA sesudah posisi
-  // "Nomor Pendaftaran" — stabil karena "2. Nomor BC 1.1" di bawahnya
-  // biasanya kosong.
+  // "Tanggal :" pendaftaran ada di baris BERBEDA dari nomornya (kolom kanan "H
   let docDate = "";
   const pendIdx = text.search(/1\.\s*Nomor Pendaftaran/i);
   if (pendIdx !== -1) {
@@ -252,10 +206,7 @@ function parsePebPdfText(text, pagesItems) {
     if (dm) docDate = pebDateToISO(dm[1]);
   }
 
-  /* ---- pihak-pihak ----
-     party (Nama Buyer/Consignee) = PEMBELI (field 15), BUKAN eksportir
-     (field 2 = PT DDI sendiri). Kalau PEMBELI kosong, dipakai PENERIMA
-     (field 18) sebagai cadangan. */
+  /* pihak-pihak */
   const pembeli = stopAtNextField(grab(/15\.\s*Nama\s*:\s*([^\n]+)/i));
   const penerima = stopAtNextField(grab(/18\.\s*Nama\s*:\s*([^\n]+)/i));
   const party = pembeli || penerima;
@@ -272,8 +223,7 @@ function parsePebPdfText(text, pagesItems) {
   const voyage = grab(/23\.\s*No\.\s*Pengangkut[^:\n]*:\s*([^\n]+)/i)
     .split(/\s+\d{1,2}\.\s+/)[0]
     .trim();
-  // Nama sarana pengangkut ada di baris SESUDAH labelnya (labelnya
-  // sendiri cuma diikuti kode bendera 2 huruf, mis. ": KR").
+  // Nama sarana pengangkut ada di baris SESUDAH labelnya
   let vessel = "";
   const saranaIdx = text.search(/22\.\s*Nama\s*&\s*Bendera\s*Sarana\s*Pengangkut/i);
   if (saranaIdx !== -1) {
@@ -303,14 +253,7 @@ function parsePebPdfText(text, pagesItems) {
   const origin = portDisplay(stopAtNextField(originRaw));
   const destination = portDisplay(stopAtNextField(destinationRaw));
 
-  /* ---- peti kemas & kemasan (field 42/43/44) ----
-     Blok ini 2 KOLOM bersebelahan pada Y yang sama: "DATA PETI KEMAS"
-     (field 42/43) di kiri, "DATA KEMASAN" (field 44) di kanan. Dibaca
-     sbg teks polos, isi keduanya nempel jadi satu baris — nyata ketemu:
-     "43. No, Ukuran, Jenis Muatan, & Tipe Peti Kemas 6 PACKAGE/ -",
-     yang bikin "6 PACKAGE" (punya field 44) salah terbaca sbg isi field
-     43. Makanya di sini dipisah lewat KOORDINAT: batas kolomnya = posisi
-     x label "44." itu sendiri. */
+  /* peti kemas & kemasan (field 42/43/44) */
   const petiKemas = (() => {
     const out = { container: "", muatan: "", package: "" };
     const hit44 = pdfFindItem(pagesItems, /^44\.\s*Jenis/i);
@@ -318,8 +261,7 @@ function parsePebPdfText(text, pagesItems) {
     const pageItems = pagesItems[hit44.page] || [];
     const split = hit44.x - 3;
 
-    // Kolom KANAN (field 44) — baris sesudah labelnya = jumlah & jenis
-    // kemasan, mis. "6 PACKAGE/ -".
+    // Kolom KANAN (field 44) — baris sesudah labelnya = jumlah & jenis kemasan, mis
     const rightLines = pdfLinesInBox(pageItems, split, 100000);
     const i44 = rightLines.findIndex((l) => /^44\.\s*Jenis/i.test(l.text));
     if (i44 !== -1) {
@@ -366,11 +308,7 @@ function parsePebPdfText(text, pagesItems) {
     (invoiceRow && invoiceRow.nomor) ||
     grab(/30\.\s*No\s*&\s*Tgl Invoice\s*:\s*No\.\s*(\S+)/i);
 
-  // Di PEB, B/L biasanya cuma SATU baris (dokumen ekspor jarang punya
-  // Master & House sekaligus). Kalau memang cuma satu, dia dianggap
-  // MASTER — sesuai perlakuan template copy yang menaruh Master di baris
-  // pertama (requirement E: "Kalau tidak ada Master BL/AWB, isian tetap
-  // di row pertama").
+  // Di PEB, B/L biasanya cuma SATU baris (dokumen ekspor jarang punya Master & House sekaligus)
   let masterBL = masterRow ? masterRow.nomor : "";
   let houseBL = houseRow ? houseRow.nomor : "";
   if (!masterBL && houseBL) {
@@ -420,8 +358,7 @@ function parsePebPdfText(text, pagesItems) {
         satuan: it.satuan || "",
         netto: it.netto != null ? it.netto : 0,
       };
-      // Harga satuan = Nilai Ekspor barang itu / qty (kolom 54 memang
-      // nilai TOTAL per barang, bukan harga satuan).
+      // Harga satuan = Nilai Ekspor barang itu / qty (kolom 54 memang nilai TOTAL per barang
       if (it.nilai != null && base.qty) {
         base.harga = roundNum(it.nilai / base.qty, 4);
       }

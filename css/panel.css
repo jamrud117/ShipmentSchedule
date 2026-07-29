@@ -1,16 +1,4 @@
-/* ==================================================================
-   PANEL GESER (detail read-only)
-
-   Detail dulu berupa modal di tengah layar: ia menutupi daftar,
-   dan menutupnya berarti kehilangan tempat. Padahal cara kerja
-   sehari-hari adalah MEMBANDINGKAN — buka satu, lihat, tutup, buka
-   yang berikutnya.
-
-   Panel geser memperbaiki dua hal itu sekaligus: daftar tetap
-   terlihat di kiri, dan ada tombol Sebelumnya/Berikutnya di
-   kepalanya sehingga bisa menelusuri seluruh hasil saringan tanpa
-   menutup panel sama sekali.
-================================================================== */
+/* PANEL GESER (detail read-only) */
 .sheet-scrim {
   position: fixed;
   inset: 0;
@@ -149,8 +137,7 @@
   font-family: var(--font-display);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   background: var(--p-50);
   color: var(--p-600);
   border: 1px solid var(--p-100);

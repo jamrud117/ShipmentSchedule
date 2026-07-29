@@ -1,18 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   AKSES KEYBOARD
-
-   Dua hal di berkas ini: kotak pencarian cepat (Ctrl/⌘ + K) dan
-   pintasan global. Keduanya melayani pengguna yang sama — orang yang
-   memakai aplikasi ini berjam-jam dan tidak mau memindahkan tangan
-   ke tetikus untuk hal yang dilakukan lima puluh kali sehari.
-
-   Nilai utama kotak pencarian: ia mencari lintas Import DAN Export
-   sekaligus. Daftar utama hanya menampilkan satu buku pada satu
-   waktu, jadi tanpa ini mencari pengiriman di buku sebelah berarti
-   berganti mode dulu — dan kehilangan saringan yang sedang dipakai.
-================================================================== */
+/* AKSES KEYBOARD */
 
 const cmdkScrimEl = $("#cmdkScrim");
 const cmdkInputEl = $("#cmdkInput");
@@ -21,8 +9,7 @@ const cmdkListEl = $("#cmdkList");
 let cmdkCursor = 0;
 let cmdkResults = [];
 
-// Perintah halaman ikut masuk daftar yang sama supaya tidak perlu
-// diingat sebagai fitur terpisah.
+// Perintah halaman ikut masuk daftar yang sama supaya tidak perlu diingat sebagai fitur terpisah.
 const CMDK_COMMANDS = [
   { type: "cmd", icon: "bi-plus-lg", title: "Tambah jadwal baru", hint: "Buka form kosong", run: () => (location.hash = "#/new") },
   { type: "cmd", icon: "bi-columns-gap", title: "Buka Ringkasan", hint: "Apa yang perlu ditindak hari ini", run: () => (location.hash = "#/ringkasan") },
@@ -108,7 +95,7 @@ function cmdkRender() {
 function cmdkItemHtml(r, idx) {
   const tag =
     r.type === "shipment"
-      ? `<span class="cmdk-item-tag cmdk-item-tag--${r.mode}">${r.mode}</span>`
+      ? `<span class="cmdk-item-tag cmdk-item-tag--${r.mode}">${r.mode === "import" ? "Import" : "Export"}</span>`
       : "";
   return `
     <button type="button" class="cmdk-item ${idx === cmdkCursor ? "is-cursor" : ""}" data-idx="${idx}">
@@ -121,9 +108,7 @@ function cmdkItemHtml(r, idx) {
     </button>`;
 }
 
-// `langsungEdit` dipakai Ctrl+Enter: untuk pengiriman yang sudah
-// diketahui perlu diubah, membuka detail dulu cuma satu langkah
-// tambahan yang selalu diakhiri menekan "Edit".
+// `langsungEdit` dipakai Ctrl+Enter: untuk pengiriman yang sudah diketahui perlu diubah
 function cmdkRun(idx, langsungEdit) {
   const r = cmdkResults[idx];
   if (!r) return;
@@ -187,14 +172,7 @@ cmdkInputEl.addEventListener("keydown", (e) => {
   }
 });
 
-/* ==================================================================
-   PINTASAN GLOBAL
-
-   Semuanya dimatikan saat kursor sedang berada di kotak isian —
-   kalau tidak, mengetik "n" pada nama shipper akan melompat ke form
-   jadwal baru. Ini penyebab paling umum pintasan huruf tunggal
-   terasa "rusak" di aplikasi data.
-================================================================== */
+/* PINTASAN GLOBAL */
 function isTypingTarget(el) {
   if (!el) return false;
   const tag = el.tagName;
@@ -226,13 +204,10 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "n" || e.key === "N") {
     e.preventDefault();
     location.hash = "#/new";
-  } else if ((e.key === "v" || e.key === "V") && diJadwal) {
-    e.preventDefault();
-    setViewMode(viewMode === "table" ? "card" : "table");
   } else if (e.key === "?") {
     e.preventDefault();
     showToast(
-      "Pintasan: Ctrl+K cari cepat · / pencarian · N jadwal baru · V ganti tampilan",
+      "Pintasan: Ctrl+K cari cepat · / pencarian · N jadwal baru",
       "dark",
     );
   }

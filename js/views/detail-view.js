@@ -1,16 +1,11 @@
 "use strict";
 
-/* ==================================================================
-   DETAIL VIEW (read-only)
-================================================================== */
+/* DETAIL VIEW (read-only) */
 function fieldPair(label, value, icon) {
   return `<div class="info-item"><div class="info-label">${icon ? `<i class="bi ${icon}"></i> ` : ""}${escapeHtml(label)}</div><div class="info-value">${value || "—"}</div></div>`;
 }
 
-// Ringkasan fasilitas 1 barang (SKB & E-COO, bisa banyak, 1 array yang
-// sama) untuk kolom "Fasilitas" pada tabel Daftar Barang di detail
-// view (read-only). E-COO tetap dapat ikon beda (patch-check) biar
-// gampang dibedakan sekilas dari SKB biasa (shield-check).
+// Ringkasan fasilitas 1 barang (SKB & E-COO, bisa banyak
 function itemFacilitiesCellHtml(it) {
   const lines = (it.skb || []).map((sk) => {
     const isEcoo = sk.jenis === "E-COO";
@@ -23,16 +18,12 @@ function itemFacilitiesCellHtml(it) {
   return lines.join("") || `<span class="text-muted">—</span>`;
 }
 
-// Cell kolom "Kemasan" di tabel Daftar Barang (detail view, read-only).
-// Cuma teks apa adanya sekarang — hasil hitung CBM-nya (mode Export)
-// sudah punya kolom sendiri (lihat itemRows di buildDetailHtml), tidak
-// digabung lagi di sini.
+// Cell kolom "Kemasan" di tabel Daftar Barang (detail view, read-only)
 function detailPackageCellHtml(it) {
   return escapeHtml(dispVal(it.package));
 }
 
-// Daftar terminal transit (read-only) untuk detail view. Kosong sama
-// sekali kalau route_type = "direct" (tidak ada perubahan tampilan).
+// Daftar terminal transit (read-only) untuk detail view
 function buildDetailStopsHtml(s) {
   const stops = routeStopList(s);
   if (!isTransitRoute(s)) return "";
@@ -200,22 +191,11 @@ function buildDetailHtml(s) {
   `;
 }
 
-/* ==================================================================
-   PANEL GESER — pengendali
-
-   Selain menampilkan isi yang sama seperti dulu, panel ini menambah
-   satu hal yang tidak mungkin dilakukan modal: BERPINDAH. Tombol ‹ ›
-   (dan tombol panah keyboard) menelusuri urutan yang PERSIS SAMA
-   dengan yang tampil di daftar — hasil saringan & urutan yang sedang
-   dipakai — jadi memeriksa sepuluh pengiriman berturut-turut tidak
-   perlu menutup panel sekali pun.
-================================================================== */
+/* PANEL GESER — pengendali */
 const detailScrimEl = $("#detailScrim");
 const detailSheetEl = $("#detailSheet");
 
-// Urutan telusur = urutan yang BENAR-BENAR tampil di daftar (sudah
-// disaring, dikelompokkan per tanggal, dan diurutkan) — bukan urutan
-// penyimpanan database. Lihat orderedFiltered() di render/list.js.
+// Urutan telusur = urutan yang BENAR-BENAR tampil di daftar (sudah disaring
 function detailNavList() {
   return orderedFiltered();
 }
@@ -237,10 +217,7 @@ function openDetailView(id) {
 
   detailScrimEl.hidden = false;
   detailSheetEl.hidden = false;
-  // Dua putaran gambar dipisah supaya transisi CSS-nya benar-benar
-  // berjalan; kalau kelasnya dipasang di frame yang sama dengan
-  // hidden=false, peramban menganggapnya keadaan awal dan panel
-  // muncul mendadak tanpa gerak.
+  // Dua putaran gambar dipisah supaya transisi CSS-nya benar-benar berjalan
   requestAnimationFrame(() => {
     detailScrimEl.classList.add("is-open");
     detailSheetEl.classList.add("is-open");
@@ -255,8 +232,7 @@ function closeDetailView() {
     detailScrimEl.hidden = true;
     detailSheetEl.hidden = true;
   };
-  // Tunggu transisinya selesai dulu; kalau langsung di-hidden,
-  // panelnya hilang seketika dan animasi keluar tidak pernah terlihat.
+  // Tunggu transisinya selesai dulu
   setTimeout(sembunyikan, 300);
   currentDetailId = null;
 }

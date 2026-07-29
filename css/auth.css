@@ -1,0 +1,640 @@
+/* LOGIN & HAK AKSES */
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background: var(--d-900);
+  overflow-y: auto;
+}
+/* Garis halus sejajar, sama seperti tekstur papan */
+.login-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0 1px,
+    transparent 1px 10px
+  );
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000, transparent);
+  mask-image: radial-gradient(120% 90% at 50% 0%, #000, transparent);
+}
+
+.login-card {
+  position: relative;
+  width: min(420px, 100%);
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  padding: var(--sp-8) var(--sp-6) var(--sp-6);
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.7);
+}
+
+.login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--t-md);
+  letter-spacing: 0.04em;
+  color: var(--d-900);
+  margin-bottom: var(--sp-5);
+}
+.login-brand svg {
+  width: 26px;
+  height: 26px;
+  background: var(--d-900);
+  border-radius: 7px;
+  padding: 2px;
+}
+.login-brand span span {
+  color: var(--sec-500);
+}
+
+.login-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--t-xl);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+.login-sub {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  line-height: 1.6;
+  margin: 6px 0 var(--sp-5);
+}
+
+.login-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--n-500);
+  margin-bottom: 5px;
+}
+.login-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--t-md);
+  color: var(--ink);
+  background: #fff;
+  margin-bottom: var(--sp-4);
+}
+.login-input:focus {
+  outline: none;
+  border-color: var(--p-400);
+  box-shadow: var(--sh-focus);
+}
+
+.login-submit {
+  width: 100%;
+  height: 44px;
+  font-size: var(--t-md);
+  margin-top: var(--sp-1);
+}
+
+.login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--t-sm);
+  color: var(--s-danger);
+  background: var(--s-danger-bg);
+  border: 1px solid var(--s-danger-line);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  margin-bottom: var(--sp-4);
+}
+
+.login-note {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  line-height: 1.6;
+  margin: var(--sp-5) 0 0;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--n-100);
+}
+.login-note b {
+  color: var(--n-700);
+}
+
+/* Halaman di belakang layar login tidak boleh ikut tergulir */
+body.is-locked {
+  overflow: hidden;
+}
+
+/* ---- Chip pengguna di bilah atas ---- */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: var(--sp-3);
+  margin-left: 2px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+.user-chip-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.15;
+  min-width: 0;
+}
+.user-chip-name {
+  font-size: var(--t-sm);
+  color: #fff;
+  font-weight: 600;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-chip-role {
+  font-family: var(--font-board);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.55);
+}
+.user-chip-role.is-exim {
+  color: var(--sec-300);
+}
+
+@media (max-width: 991px) {
+  .user-chip-main {
+    display: none;
+  }
+  .user-chip {
+    padding-left: var(--sp-2);
+  }
+}
+
+/* ==================================================================
+   MODE HANYA-LIHAT
+
+   Semua yang mengubah data disembunyikan lewat satu kelas di <body>.
+   Daftar & kartu digambar ulang terus-menerus, jadi mematikan tombol
+   satu per satu tidak akan bertahan; aturan CSS ini otomatis berlaku
+   pada elemen yang baru saja digambar.
+
+   Ini KERAPIAN TAMPILAN, bukan pengamanan. Penegak sebenarnya ada di
+   auth-roles-migration.sql — tanpa berkas itu dijalankan, siapa pun
+   masih bisa memanggil API langsung.
+================================================================== */
+/* ==================================================================
+   MODE HANYA-LIHAT
+
+   Semua yang mengubah data disembunyikan lewat satu kelas di <body>.
+   Kartu digambar ulang terus-menerus, jadi mematikan tombol satu per
+   satu tidak akan bertahan.
+
+   Ini KERAPIAN TAMPILAN, bukan pengamanan — penegaknya di
+   auth-roles-migration.sql.
+================================================================== */
+body.is-viewer .nav-exim-only,
+body.is-viewer .cmd-trigger,
+body.is-viewer #btnAdd,
+body.is-viewer #btnAddEmpty,
+body.is-viewer #btnBulkImport,
+body.is-viewer #btnDeleteAll,
+body.is-viewer [data-action="edit"],
+body.is-viewer [data-action="delete"],
+body.is-viewer [data-ov-action="new"],
+body.is-viewer [data-del-num],
+body.is-viewer .btn-note-send,
+body.is-viewer .btn-add-skb,
+body.is-viewer #docnumFormWrap,
+body.is-viewer .card-note-input {
+  display: none !important;
+}
+
+/* Kontrol yang tetap terlihat supaya isinya terbaca, tapi tidak bisa
+   disentuh — mis. dropdown status pada kartu. */
+body.is-viewer .status-select,
+body.is-viewer .date-field input,
+body.is-viewer .delay-strip-fields input {
+  pointer-events: none;
+  opacity: 0.72;
+  background: var(--n-50);
+}
+
+/* Penanda mode di bilah kendali */
+.viewer-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--t-sm);
+  color: var(--p-600);
+  background: var(--p-50);
+  border: 1px solid var(--p-100);
+  border-radius: var(--r-sm);
+  padding: 7px 12px;
+}
+body.is-viewer .viewer-banner {
+  display: inline-flex;
+}
+.viewer-banner i {
+  color: var(--p-500);
+}
+
+/* HALAMAN KELOLA AKUN */
+.acct-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  padding-bottom: var(--sp-8);
+}
+@media (max-width: 991px) {
+  .acct-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 11px 0;
+  border-bottom: 1px solid var(--n-100);
+}
+.acct-row:last-child {
+  border-bottom: 0;
+}
+.acct-avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--n-100);
+  color: var(--n-600);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.acct-avatar.is-exim {
+  background: var(--p-600);
+  color: #fff;
+}
+.acct-main {
+  flex: 1;
+  min-width: 0;
+}
+.acct-name {
+  display: block;
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-self {
+  font-family: var(--font-board);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--sec-50);
+  color: var(--sec-700);
+  border: 1px solid var(--sec-200);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+.acct-email {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acct-since {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--n-400);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.acct-role {
+  flex-shrink: 0;
+  width: 172px;
+  height: 34px;
+  font-size: var(--t-sm);
+}
+.acct-role:disabled {
+  opacity: 0.55;
+}
+.acct-del {
+  flex-shrink: 0;
+}
+.acct-del:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+@media (max-width: 575px) {
+  .acct-since {
+    display: none;
+  }
+  .acct-row {
+    flex-wrap: wrap;
+  }
+  .acct-role {
+    width: 100%;
+  }
+}
+
+.reg-info {
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  margin-top: var(--sp-3);
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  display: none;
+}
+.reg-info.is-ok,
+.reg-info.is-error {
+  display: block;
+}
+.reg-info.is-ok {
+  color: var(--p-600);
+  background: var(--p-50);
+  border: 1px solid var(--p-100);
+}
+.reg-info.is-error {
+  color: var(--s-danger);
+  background: var(--s-danger-bg);
+  border: 1px solid var(--s-danger-line);
+}
+
+/* Tautan kecil di bawah tombol masuk */
+
+/* Isian sandi dengan tombol mata */
+.pwd-wrap {
+  position: relative;
+}
+.pwd-wrap > input {
+  padding-right: 42px;
+}
+.pwd-eye {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-sm);
+  color: var(--n-400);
+}
+.pwd-eye:hover {
+  color: var(--p-600);
+  background: var(--n-100);
+}
+
+/* Tombol keluar mengambang — bulat saat diam, melebar memunculkan
+   tulisannya saat disorot. Bentuk bulat merah dengan lambang daya
+   sudah cukup dikenali, jadi tulisannya hanya diperlukan sebagai
+   penegasan. Lebarnya dianimasikan lewat max-width, bukan width, agar
+   tetap mengikuti panjang tulisan apa pun bahasanya. */
+.fab-logout {
+  position: fixed;
+  right: var(--sp-5);
+  /* Diangkat di atas footer, bukan menempel di dasar jendela — kalau
+     tidak, ia menutupi tulisan footer saat halaman digulir mentok. */
+  bottom: var(--sp-5);
+  z-index: 1035;
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--s-danger);
+  color: #fff;
+  font-size: var(--t-base);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: 0 12px 28px -10px rgba(192, 57, 43, 0.65);
+  transition:
+    background var(--dur-2) var(--ease),
+    box-shadow var(--dur-2) var(--ease);
+}
+.fab-logout i {
+  width: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+}
+.fab-logout span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-width var(--dur-3) var(--ease),
+    opacity var(--dur-2) var(--ease),
+    padding var(--dur-3) var(--ease);
+}
+.fab-logout:hover,
+.fab-logout:focus-visible {
+  background: #a93226;
+  box-shadow: 0 14px 32px -8px rgba(192, 57, 43, 0.75);
+}
+.fab-logout:hover span,
+.fab-logout:focus-visible span {
+  max-width: 140px;
+  opacity: 1;
+  padding-right: 22px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab-logout span {
+    transition: none;
+  }
+}
+
+/* Kotak isian aplikasi */
+
+.prompt-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  margin: var(--sp-3) 0 5px;
+}
+.prompt-hint {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  margin-top: -8px;
+  margin-bottom: var(--sp-2);
+}
+.prompt-error {
+  font-size: var(--t-sm);
+  color: var(--s-danger);
+  background: var(--s-danger-bg);
+  border: 1px solid var(--s-danger-line);
+  border-radius: var(--r-sm);
+  padding: 8px 11px;
+  margin-top: var(--sp-3);
+}
+
+/* Layar sambutan — menutup jeda antara halaman terbuka dan sesi selesai
+   diperiksa. Tanpa ini yang terlihat cuma footer di layar kosong. */
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  display: grid;
+  place-items: center;
+  background: var(--d-900);
+  transition: opacity var(--dur-3) var(--ease);
+}
+.boot-screen.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+.boot-inner {
+  text-align: center;
+}
+.boot-inner svg {
+  width: 54px;
+  height: 54px;
+}
+.boot-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  margin-top: 10px;
+}
+.boot-name span {
+  color: var(--sec-400);
+}
+.boot-bar {
+  width: 168px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.14);
+  margin: 18px auto 0;
+  overflow: hidden;
+}
+.boot-bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sec-400);
+  animation: boot-slide 1.1s ease-in-out infinite;
+}
+@keyframes boot-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-bar span {
+    animation: none;
+    width: 100%;
+  }
+}
+.boot-note {
+  margin-top: 12px;
+  font-size: var(--t-sm);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ==================================================================
+   KOTAK DIALOG (konfirmasi & isian)
+
+   Ikon dan judul disejajarkan pada satu baris — sebelumnya ikonnya
+   ditumpuk di atas judul, sehingga kotaknya jadi tinggi dan judulnya
+   terdorong jauh dari ikonnya. Lebarnya juga dinaikkan dari modal-sm
+   (300px) ke lebar penuh dialog Bootstrap, karena kalimat konfirmasi
+   sering menyebut nama dokumen dan tanggal.
+================================================================== */
+.dialog-body {
+  padding: var(--sp-6) var(--sp-6) var(--sp-4);
+}
+.dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: var(--sp-3);
+}
+.dialog-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  background: var(--p-50);
+  color: var(--p-600);
+  font-size: 1.15rem;
+}
+.dialog-title {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.25;
+}
+.dialog-text {
+  font-size: var(--t-base);
+  color: var(--n-600);
+  line-height: 1.6;
+  margin: 0;
+}
+.dialog-text:empty {
+  display: none;
+}
+.dialog-foot {
+  border-top: 0;
+  padding: 0 var(--sp-6) var(--sp-6);
+  gap: var(--sp-2);
+}
+.dialog-foot .btn,
+.dialog-foot .btn-quiet,
+.dialog-foot .btn-primary-navy {
+  height: 40px;
+  padding: 0 20px;
+  margin: 0;
+}
+
+/* Ikon daya di kotak konfirmasi keluar dibuat menyerupai tombolnya:
+   bulat, merah, putih di tengah — supaya orang langsung mengenali
+   bahwa yang ditekan tadi memang tombol ini. */
+.dialog-icon.is-power {
+  border-radius: 50%;
+  background: var(--s-danger) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 16px -6px rgba(192, 57, 43, 0.7);
+}
+.dialog-icon.is-power i {
+  font-size: 1.3rem;
+}

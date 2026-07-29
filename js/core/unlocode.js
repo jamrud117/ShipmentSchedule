@@ -1,28 +1,9 @@
 "use strict";
 
-/* ==================================================================
-   REFERENSI UN/LOCODE (requirement C: "Buat daftar referensi UN/LOCODE")
-
-   Dipakai untuk 2 hal:
-     1. Requirement B — Pelabuhan/Bandara Asal & Tujuan ditampilkan
-        sebagai KODE saja (mis. "INCHEON AIRPORT, KOREA" -> "KRICN",
-        "TANJUNG PRIOK" -> "IDTPP"), bukan nama lengkap.
-     2. Datalist saran isian di form (biar user bisa ketik "priok" lalu
-        pilih kodenya, tanpa hafal).
-
-   Daftar ini SENGAJA tidak memuat seluruh UN/LOCODE dunia (puluhan ribu
-   entri, tidak masuk akal ditanam di file statis) — cukup pelabuhan &
-   bandara yang benar-benar dipakai di lalu lintas EXIM DDI: seluruh
-   pelabuhan/bandara utama Indonesia + mitra dagang Asia Timur/Tenggara,
-   Eropa, dan Amerika yang muncul di dokumen PIB/PEB/CIPL. Menambah entri
-   baru = tambah 1 baris di UNLOCODES; `aliases` adalah nama-nama lain
-   yang dipakai dokumen supplier untuk tempat yang sama (dokumen niaga
-   jarang memakai nama resmi yang sama persis, mis. "JAKARTA AIRPORT" vs
-   "SOEKARNO HATTA" vs "CENGKARENG" untuk IDCGK yang sama).
-================================================================== */
+/* REFERENSI UN/LOCODE (requirement C: "Buat daftar referensi UN/LOCODE") */
 
 const UNLOCODES = [
-  // ---- INDONESIA — pelabuhan laut
+  // INDONESIA — pelabuhan laut
   { code: "IDTPP", name: "Tanjung Priok, Jakarta", country: "ID", type: "laut",
     aliases: ["tanjung priok", "priok", "jakarta port", "tg priok", "tg. priok"] },
   { code: "IDJKT", name: "Jakarta", country: "ID", type: "laut", aliases: ["jakarta"] },
@@ -43,7 +24,7 @@ const UNLOCODES = [
   { code: "IDCGD", name: "Cigading", country: "ID", type: "laut", aliases: ["cigading"] },
   { code: "IDPAT", name: "Patimban", country: "ID", type: "laut", aliases: ["patimban"] },
 
-  // ---- INDONESIA — bandara
+  // INDONESIA — bandara
   { code: "IDCGK", name: "Soekarno-Hatta Intl Airport, Jakarta", country: "ID", type: "udara",
     aliases: ["jakarta airport", "soekarno", "soekarno-hatta", "soekarno hatta", "cengkareng", "halim", "jakarta apt", "cgk"] },
   { code: "IDSUB", name: "Juanda Intl Airport, Surabaya", country: "ID", type: "udara",
@@ -53,7 +34,7 @@ const UNLOCODES = [
   { code: "IDKNO", name: "Kualanamu Intl Airport, Medan", country: "ID", type: "udara",
     aliases: ["kualanamu", "medan airport"] },
 
-  // ---- KOREA
+  // KOREA
   { code: "KRPUS", name: "Busan", country: "KR", type: "laut",
     aliases: ["busan", "pusan", "busan (ex pusan)", "ex pusan"] },
   { code: "KRINC", name: "Incheon Port", country: "KR", type: "laut", aliases: ["incheon port", "incheon seaport"] },
@@ -62,7 +43,7 @@ const UNLOCODES = [
   { code: "KRKAN", name: "Gwangju", country: "KR", type: "laut", aliases: ["gwangju", "kwangju"] },
   { code: "KRKPO", name: "Pohang", country: "KR", type: "laut", aliases: ["pohang"] },
 
-  // ---- CHINA / HONG KONG / TAIWAN
+  // CHINA / HONG KONG / TAIWAN
   { code: "CNSHA", name: "Shanghai", country: "CN", type: "laut", aliases: ["shanghai"] },
   { code: "CNNGB", name: "Ningbo", country: "CN", type: "laut", aliases: ["ningbo"] },
   { code: "CNSZX", name: "Shenzhen", country: "CN", type: "laut", aliases: ["shenzhen", "shekou", "yantian"] },
@@ -77,7 +58,7 @@ const UNLOCODES = [
     aliases: ["taipei", "taoyuan", "tpe"] },
   { code: "TWKEL", name: "Keelung", country: "TW", type: "laut", aliases: ["keelung", "chilung"] },
 
-  // ---- JEPANG
+  // JEPANG
   { code: "JPTYO", name: "Tokyo", country: "JP", type: "laut", aliases: ["tokyo"] },
   { code: "JPYOK", name: "Yokohama", country: "JP", type: "laut", aliases: ["yokohama"] },
   { code: "JPOSA", name: "Osaka", country: "JP", type: "laut", aliases: ["osaka"] },
@@ -88,7 +69,7 @@ const UNLOCODES = [
   { code: "JPKIX", name: "Kansai Intl Airport, Osaka", country: "JP", type: "udara",
     aliases: ["kansai", "osaka airport", "kix"] },
 
-  // ---- ASIA TENGGARA
+  // ASIA TENGGARA
   { code: "SGSIN", name: "Singapore", country: "SG", type: "laut", aliases: ["singapore", "singapura", "sin"] },
   { code: "MYPKG", name: "Port Klang", country: "MY", type: "laut", aliases: ["port klang", "klang", "pelabuhan klang"] },
   { code: "MYPEN", name: "Penang", country: "MY", type: "laut", aliases: ["penang", "pinang"] },
@@ -100,12 +81,12 @@ const UNLOCODES = [
   { code: "VNHPH", name: "Haiphong", country: "VN", type: "laut", aliases: ["haiphong", "hai phong"] },
   { code: "PHMNL", name: "Manila", country: "PH", type: "laut", aliases: ["manila"] },
 
-  // ---- INDIA / TIMUR TENGAH
+  // INDIA / TIMUR TENGAH
   { code: "INNSA", name: "Nhava Sheva (JNPT)", country: "IN", type: "laut", aliases: ["nhava sheva", "jnpt", "mumbai"] },
   { code: "INMAA", name: "Chennai", country: "IN", type: "laut", aliases: ["chennai", "madras"] },
   { code: "AEJEA", name: "Jebel Ali, Dubai", country: "AE", type: "laut", aliases: ["jebel ali", "dubai"] },
 
-  // ---- EROPA
+  // EROPA
   { code: "NLRTM", name: "Rotterdam", country: "NL", type: "laut", aliases: ["rotterdam"] },
   { code: "DEHAM", name: "Hamburg", country: "DE", type: "laut", aliases: ["hamburg"] },
   { code: "BEANR", name: "Antwerp", country: "BE", type: "laut", aliases: ["antwerp", "antwerpen"] },
@@ -113,7 +94,7 @@ const UNLOCODES = [
   { code: "ITGOA", name: "Genoa", country: "IT", type: "laut", aliases: ["genoa", "genova"] },
   { code: "FRLEH", name: "Le Havre", country: "FR", type: "laut", aliases: ["le havre"] },
 
-  // ---- AMERIKA & OSEANIA
+  // AMERIKA & OSEANIA
   { code: "USLAX", name: "Los Angeles", country: "US", type: "laut", aliases: ["los angeles", "lax"] },
   { code: "USLGB", name: "Long Beach", country: "US", type: "laut", aliases: ["long beach"] },
   { code: "USNYC", name: "New York", country: "US", type: "laut", aliases: ["new york", "newark"] },
@@ -123,21 +104,13 @@ const UNLOCODES = [
   { code: "AUMEL", name: "Melbourne", country: "AU", type: "laut", aliases: ["melbourne"] },
 ];
 
-// Semua kode yang dikenal (dipakai utk cek "ini sudah berupa kode atau
-// belum" tanpa scan array berulang kali).
+// Semua kode yang dikenal (dipakai utk cek "ini sudah berupa kode atau belum" tanpa scan array
 const UNLOCODE_SET = new Set(UNLOCODES.map((u) => u.code));
 
-// Bentuk kode UN/LOCODE: 2 huruf negara + 3 huruf/angka lokasi (mis.
-// IDTPP, KRICN, USLAX). Dipakai utk mengenali kode yang SUDAH menempel
-// di teks dokumen PIB/PEB (mis. "TANJUNG PRIOK IDTPP") walaupun kodenya
-// kebetulan belum ada di daftar UNLOCODES di atas.
+// Bentuk kode UN/LOCODE: 2 huruf negara + 3 huruf/angka lokasi (mis
 const UNLOCODE_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}$/;
 
-// Kode negara ISO-3166 alpha-2 yang realistis muncul di dokumen EXIM
-// DDI. Dipakai HANYA untuk memvalidasi tebakan "token terakhir adalah
-// kode UN/LOCODE" (langkah 3 di bawah) — tanpa ini, nama pelabuhan yang
-// kebetulan 5 huruf ikut lolos: "TANJUNG PRIOK" -> "PRIOK" (PR = Puerto
-// Rico) padahal maksudnya IDTPP.
+// Kode negara ISO-3166 alpha-2 yang realistis muncul di dokumen EXIM DDI
 const UNLOCODE_COUNTRIES = new Set([
   "ID", "KR", "CN", "HK", "TW", "JP", "SG", "MY", "TH", "VN", "PH", "IN",
   "AE", "SA", "NL", "DE", "BE", "GB", "IT", "FR", "ES", "PL", "TR", "US",
@@ -145,20 +118,7 @@ const UNLOCODE_COUNTRIES = new Set([
   "MM", "LA", "BN",
 ]);
 
-// Teks pelabuhan bebas -> kode UN/LOCODE. Urutan pencarian (PENTING):
-//   1. Sudah berupa kode utuh ("IDTPP") -> pakai apa adanya.
-//   2. Cocokkan nama/alias di daftar referensi. Alias yang lebih panjang
-//      dicek DULUAN supaya "incheon airport" (KRICN, udara) menang atas
-//      "incheon" (KRINC, laut) — kalau yang pendek dicek duluan, semua
-//      pengiriman udara dari Incheon salah jadi kode pelabuhan laut.
-//   3. Baru terakhir: kode yang nempel di belakang nama ("TANJUNG PRIOK
-//      IDTPP", format PIB field 12/14). Ini SENGAJA paling belakang —
-//      kalau dicoba duluan, nama pelabuhan 5 huruf tanpa kode (mis.
-//      "TANJUNG PRIOK" dari dokumen PEB, yang TIDAK mencantumkan kode)
-//      salah dibaca sbg kode "PRIOK". Token terakhir baru dianggap kode
-//      kalau 2 huruf depannya kode negara yang masuk akal.
-// Mengembalikan "" kalau tidak ada yang cocok — pemanggil memutuskan
-// sendiri mau pakai teks aslinya atau dikosongkan (lihat portDisplay()).
+// Teks pelabuhan bebas -> kode UN/LOCODE
 function resolveUnlocode(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
@@ -179,26 +139,44 @@ function resolveUnlocode(raw) {
 
   const lastToken = (upper.match(/\b([A-Z]{2}[A-Z0-9]{3})\s*$/) || [])[1];
   if (lastToken && UNLOCODE_COUNTRIES.has(lastToken.slice(0, 2))) {
-    // Harus ada teks lain di depannya (format "<nama> <kode>"); kalau
-    // seluruh isinya cuma 1 kata, itu nama tempat, bukan kode.
+    // Harus ada teks lain di depannya (format "<nama> <kode>")
     if (upper.replace(lastToken, "").trim()) return lastToken;
   }
   return "";
 }
 
-// Nilai yang DITAMPILKAN/DISIMPAN di field Pelabuhan Asal/Tujuan:
-// kode saja kalau ketemu, kalau tidak ketemu teks aslinya dibiarkan
-// (lebih baik ada info apa adanya daripada field jadi kosong).
+// Nilai yang DITAMPILKAN/DISIMPAN di field Pelabuhan Asal/Tujuan: kode saja kalau ketemu
 function portDisplay(raw) {
   return resolveUnlocode(raw) || String(raw || "").trim();
 }
 
-// Isi <datalist> saran pelabuhan di form.
-function unlocodeDatalistHtml() {
-  return UNLOCODES.map(
-    (u) =>
-      `<option value="${u.code}">${escapeHtml(`${u.code} — ${u.name} (${u.type})`)}</option>`,
-  ).join("");
+/* Saran pelabuhan/bandara, disaring menurut moda transportasi.
+
+   Sebelumnya seluruh daftar disodorkan sekaligus: pengiriman lewat laut
+   ikut menawarkan bandara, dan sebaliknya. Padahal modanya sudah
+   dipilih di kolom tepat di atasnya — jadi separuh daftarnya pasti
+   salah. */
+function unlocodeDatalistHtml(mode) {
+  const pilih =
+    mode === "udara"
+      ? (u) => u.type === "udara"
+      : mode === "laut"
+        ? (u) => u.type === "laut"
+        : () => true;
+  return UNLOCODES.filter(pilih)
+    .map(
+      (u) =>
+        `<option value="${u.code}">${escapeHtml(`${u.code} — ${u.name}`)}</option>`,
+    )
+    .join("");
+}
+
+/* Dipanggil ulang tiap moda berganti. */
+function refreshUnlocodeDatalist() {
+  const dl = document.getElementById("unlocodeList");
+  if (!dl) return;
+  const moda = (document.getElementById("fTransport") || {}).value || "";
+  dl.innerHTML = unlocodeDatalistHtml(moda);
 }
 
 if (typeof module !== "undefined" && module.exports) {

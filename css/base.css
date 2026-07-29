@@ -1,7 +1,4 @@
-/* ==================================================================
-   BASE — reset, kerangka halaman, dan pola tipografi yang dipakai
-   berulang di seluruh aplikasi.
-================================================================== */
+/* BASE — reset, kerangka halaman, dan pola tipografi yang dipakai */
 * {
   box-sizing: border-box;
 }
@@ -9,26 +6,7 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ==================================================================
-   SCROLLBAR DISEMBUNYIKAN, GULIR TETAP JALAN
-
-   Batang gulir peramban dihilangkan dari tampilan tanpa menyentuh
-   perilakunya: roda tetikus, gestur trackpad, Page Up/Down, Home/End,
-   spasi, dan tombol panah semuanya tetap bekerja seperti biasa —
-   yang hilang hanya gambarnya.
-
-   `overflow-y: scroll` pada html sengaja DIPERTAHANKAN meski
-   batangnya tak terlihat: kalau dibiarkan `auto`, halaman pendek
-   (misal form kosong) tidak punya batang gulir dan halaman panjang
-   punya, sehingga lebar isi bergeser beberapa piksel setiap kali
-   berpindah halaman — pergeseran yang sangat kentara pada tabel.
-
-   Catatan: batang gulir juga berfungsi sebagai penunjuk posisi
-   "sudah sampai mana". Menghilangkannya adalah pertukaran yang
-   disengaja atas permintaan; kalau suatu saat terasa
-   membingungkan pada daftar yang sangat panjang, cukup hapus blok
-   ini dan tampilannya kembali seperti semula.
-================================================================== */
+/* Scrollbar disembunyikan, gulir tetap jalan. overflow-y: scroll ditahan agar lebar isi tidak bergeser antar halaman */
 html {
   overflow-y: scroll;
   scrollbar-width: none; /* Firefox */
@@ -41,12 +19,9 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* Wadah yang bisa digulir DI DALAM halaman ikut disamakan supaya
-   tampilannya konsisten — isi panel detail, daftar hasil pencarian
-   cepat, tabel manifes di layar sempit, dan deret chip. */
+/* Wadah gulir di dalam halaman ikut disamakan */
 .sheet-body,
 .cmdk-list,
-.manifest-wrap,
 .item-table-wrap,
 .preset-row,
 .site-nav,
@@ -56,7 +31,6 @@ body::-webkit-scrollbar {
 }
 .sheet-body::-webkit-scrollbar,
 .cmdk-list::-webkit-scrollbar,
-.manifest-wrap::-webkit-scrollbar,
 .item-table-wrap::-webkit-scrollbar,
 .preset-row::-webkit-scrollbar,
 .site-nav::-webkit-scrollbar,
@@ -72,14 +46,10 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* Latar polos. Gradien radial samar di versi lama tidak pernah
-     terlihat di balik konten yang rapat, tapi tetap memaksa peramban
-     menggambar lapisan sebesar layar setiap kali menggulir. */
+  /* Latar polos. Gradien radial samar di versi lama tidak pernah */
 }
 
-/* "Sticky footer" klasik: halaman yang sedang aktif tumbuh mengisi
-   minimal setinggi viewport, sehingga footer benar-benar nempel di
-   dasar layar — bukan mengambang di tengah saat isinya pendek. */
+/* "Sticky footer" klasik: halaman yang sedang aktif tumbuh mengisi */
 #viewList,
 #viewForm,
 #viewDocNum,
@@ -89,9 +59,7 @@ body {
   flex-direction: column;
 }
 
-/* ---- Pola label struktur ----------------------------------------
-   Satu suara untuk semua penanda struktur: eyebrow, kepala kolom,
-   label metrik. Huruf besar + spasi renggang + Archivo. */
+/* Pola label struktur */
 .eyebrow,
 .section-label,
 .board-label,
@@ -99,29 +67,13 @@ body {
   font-family: var(--font-display);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--n-500);
 }
 
-/* ---- Penanda dokumen ---------------------------------------------
-   Nomor aju, B/L, kontainer, HS Code: selalu monospace supaya
-   digitnya sejajar dan mudah dicocokkan dengan dokumen di sebelahnya. */
-.doc-id {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  letter-spacing: -0.01em;
-  color: var(--n-700);
-}
+/* Penanda dokumen */
 
-/* Angka besar (metrik, ringkasan) — Archivo, angka rata lebar supaya
-   tidak "bergoyang" saat nilainya berubah. */
-.numeral {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
+/* Angka besar: Archivo, lebar digit rata */
 
 /* ---- Fokus keyboard: satu perlakuan untuk seluruh aplikasi ---- */
 :focus-visible {
@@ -135,16 +87,7 @@ body {
   outline-color: var(--p-300);
 }
 
-/* Lebar isi — dua tingkat di atas bawaan Bootstrap.
-
-   Aplikasi ini bukan halaman bacaan; layar utamanya tabel manifes 8
-   kolom. Batas 1140px bawaan Bootstrap membuat kolom tanggal & rute
-   berdesakan tanpa alasan, dan pada monitor 2560px isinya berhenti di
-   sepertiga layar sementara tabelnya justru masih perlu digeser.
-
-   Berhenti di 1600px, tidak lebih: di atas itu baris manifes jadi
-   terlalu panjang untuk dipindai — mata kehilangan jejak antara nama
-   shipper di kiri dan tanggal di kanan. */
+/* Lebar isi — dua tingkat di atas bawaan Bootstrap */
 @media (min-width: 1400px) {
   .container {
     max-width: 1320px;
@@ -157,26 +100,8 @@ body {
 }
 
 /* Kelas bantu yang dipakai lintas komponen. */
-.text-num {
-  font-variant-numeric: tabular-nums;
-}
-.u-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-/* ==================================================================
-   TOMBOL
-
-   Tiga peran saja, supaya setiap layar punya satu jawaban jelas untuk
-   "apa aksi utamanya di sini":
-     .btn-primary-navy  — aksi utama (Tambah Jadwal, Simpan)
-     .btn-quiet         — aksi pendukung (Bulk Export, Batal)
-     .btn-danger-quiet  — aksi merusak (Hapus Semua)
-   Nama lama .btn-teal dipertahankan sebagai alias: dipakai oleh HTML
-   yang dirender dari JavaScript (state kosong & layar gagal muat).
-================================================================== */
+/* TOMBOL */
 .btn-primary-navy,
 .btn-teal {
   display: inline-flex;
@@ -255,8 +180,7 @@ body {
   color: #fff;
 }
 
-/* Tombol "lainnya" (⋯) yang menampung aksi jarang & merusak, supaya
-   tidak berdiri sejajar dengan aksi harian. */
+/* Tombol ⋯ untuk aksi jarang & merusak */
 .btn-more {
   width: 34px;
   height: 34px;

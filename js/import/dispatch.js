@@ -1,25 +1,8 @@
 "use strict";
 
-/* ==================================================================
-   DISPATCH FILE IMPORT: deteksi tipe file lalu panggil parser yang
-   sesuai. Yang dikenali sekarang:
-     - PDF PIB BC 2.0            -> pdf.js       (Jadwal Import)
-     - PDF PEB BC 3.0            -> pdf-peb.js   (Jadwal Export)  [BARU]
-     - PDF Commercial Invoice /
-       Packing List (CIPL)       -> pdf-cipl.js  (dua-duanya)
-     - Excel draft CEISA (BC)    -> excel-bc.js
-     - Excel CIPL supplier       -> excel-cipl.js
+/* Deteksi tipe file lalu panggil parser yang sesuai */
 
-   Boleh pilih LEBIH DARI 1 file sekaligus: kalau yang terpilih adalah
-   pasangan CI + PL (mau file PDF terpisah, mau Excel), hasilnya digabung
-   otomatis lewat mergeItemSources() — harga & qty dari CI, netto/bruto
-   dari PL. Sejak pdf-cipl.js membaca PER HALAMAN, satu file PDF yang
-   memuat CI dan PL sekaligus juga sudah tergabung sendiri tanpa perlu
-   memilih dua file.
-================================================================== */
-
-// Item mentah CIPL (name/qty/satuan/harga/netto/bruto) -> bentuk item
-// form yang sama dipakai semua sumber import lain.
+// Item mentah CIPL (name/qty/satuan/harga/netto/bruto) -> bentuk item form yang sama dipakai
 function ciplRawItemsToFinalItems(rawItems) {
   return (rawItems || []).map((it) => ({
     ...newItem(),
@@ -35,9 +18,7 @@ function ciplRawItemsToFinalItems(rawItems) {
   }));
 }
 
-// Gabung field dari 2 hasil parse CIPL: pakai yang PERTAMA tidak kosong.
-// Aman karena field yang sama-sama terisi di kedua sisi (invoice,
-// consignee, dst) memang bernilai sama persis — 1 shipment yang sama.
+// Gabung field dari 2 hasil parse CIPL: pakai yang PERTAMA tidak kosong
 function mergeCiplPdfFields(a, b) {
   const out = {};
   new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach((k) => {
@@ -52,12 +33,10 @@ async function parseOneImportFile(file) {
   if (isPdf) {
     const { text, pagesItems } = await extractPdfText(file);
 
-    // Judul dokumen dicek DULUAN (murah, cuma cek teks) sebelum mencoba
-    // parser PIB/PEB yang jauh lebih berat.
+    // Judul dokumen dicek DULUAN (murah
     if (detectCiplPdfKind(text)) return parseCiplPdfText(text, pagesItems);
 
-    // PEB dicek sebelum PIB: keduanya dokumen bea cukai berformat mirip,
-    // tapi judulnya jelas berbeda ("EKSPOR" vs "IMPOR").
+    // PEB dicek sebelum PIB: keduanya dokumen bea cukai berformat mirip
     if (isPebPdfText(text)) return parsePebPdfText(text, pagesItems);
 
     const pib = parsePibPdfText(text, pagesItems);
@@ -88,10 +67,7 @@ async function parseOneImportFile(file) {
 function combineCiplPair(results) {
   const sources = results.map((r) => r.rawItems || r.items || []);
   const merged = mergeItemSources(sources);
-  // Bruto ditangani TERPISAH: dari dua file yang digabung, biasanya cuma
-  // Packing List yang memuat berat kotor. Totalnya diambil dari sisi yang
-  // punya angka terbesar (sisi CI umumnya kosong), lalu dipasang di
-  // barang pertama — aturan yang sama dipakai semua parser lain.
+  // Bruto ditangani TERPISAH: dari dua file yang digabung
   const totalBruto = Math.max(
     ...sources.map((list) =>
       list.reduce((sum, it) => sum + (Number(it.bruto) || 0), 0),
@@ -139,10 +115,7 @@ $("#fileImportExcel").addEventListener("change", async (e) => {
     if (isCiplPair) {
       toApply = [combineCiplPair(results)];
     } else {
-      // Beberapa file berbeda jenis (mis. PIB + CIPL) diterapkan
-      // BERURUTAN — aturan prioritas sumber di apply-to-form.js yang
-      // menentukan field mana boleh menimpa field mana, jadi tidak perlu
-      // lagi membuang file selain yang pertama seperti versi lama.
+      // Beberapa file berbeda jenis (mis
       toApply = results.map((r) =>
         r.rawItems ? { ...r, items: ciplRawItemsToFinalItems(r.rawItems) } : r,
       );

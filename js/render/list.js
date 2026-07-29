@@ -1,32 +1,20 @@
 "use strict";
 
-/* ==================================================================
-   GROUPING BY DATE + FILTER/SORT + MAIN RENDER
-================================================================== */
-/* Dasar tanggal yang sedang dipakai: "eta" atau "etd". Diambil dari
-   pemilih urutan, karena rentang tanggal HARUS menyaring hal yang sama
-   dengan yang sedang diurutkan — kalau daftar diurutkan menurut ETD tapi
-   rentangnya menyaring ETA, hasilnya membingungkan. */
+/* GROUPING BY DATE + FILTER/SORT + MAIN RENDER */
+/* Dasar tanggal aktif: "eta" atau "etd" */
+/* Urutan & pengelompokan selalu memakai ETA — pemilih ETA/ETD dihapus
+   bersama saringan rentang tanggal. */
 function sortBasis() {
-  return rangeBasis === "etd" ? "etd" : "eta";
+  return "eta";
 }
-// Selalu menaik: yang paling dekat di paling atas. Papan operasi tidak
-// punya kegunaan nyata untuk "yang paling jauh dulu".
+// Selalu menaik: yang paling dekat di paling atas
 function sortDirection() {
   return "asc";
-}
-// Tanggal yang dipakai satu pengiriman pada dasar yang sedang aktif.
-// Keduanya memakai versi EFEKTIF, jadi jadwal yang sudah dimundurkan
-// ikut tersaring & terurut menurut tanggal barunya.
-function basisDateOf(s) {
-  return sortBasis() === "etd" ? effectiveEtd(s) : effectiveEta(s);
 }
 
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const statusFilter = $("#filterStatus").value;
-  const dari = $("#filterDateFrom").value;
-  const sampai = $("#filterDateTo").value;
   return currentList().filter((s) => {
     const hay = [
       s.party,
@@ -44,79 +32,83 @@ function getFiltered() {
     const matchQ = !q || hay.includes(q);
     const matchStatus = !statusFilter || s.status === statusFilter;
 
-    // Rentang tanggal. Perbandingan memakai teks ISO (yyyy-mm-dd) yang
-    // sudah urut secara alfabet, jadi tidak perlu mengurai Date sama
-    // sekali. Pengiriman yang tanggalnya belum diisi disembunyikan HANYA
-    // kalau rentangnya memang sedang dipakai — kalau tidak, ia tetap
-    // tampil seperti biasa.
-    // Preset (chip "Cepat" & ubin metrik) disaring di sini juga supaya
-    // SEMUA jalur — paginasi, hitungan, Bulk Export — melihat daftar
-    // yang sama persis dengan yang tampil di layar.
+    /* Chip saringan cepat ikut menyaring di sini juga, supaya paginasi,
+       hitungan, dan Bulk Export melihat daftar yang sama dengan layar. */
     if (!presetTest(s)) return false;
 
-    const tgl = basisDateOf(s);
-    let matchRange = true;
-    if (dari || sampai) {
-      if (!tgl) matchRange = false;
-      else if (dari && tgl < dari) matchRange = false;
-      else if (sampai && tgl > sampai) matchRange = false;
-    }
-    return matchQ && matchStatus && matchRange;
+    return matchQ && matchStatus;
   });
 }
 
-// Requirement D: 'Filter/sort "terdekat-terjauh" berdasarkan ETA, dan
-// pemisah/grouping-nya juga berdasarkan ETA.' Sebelumnya grouping &
-// urutan memakai ETD (atau tanggal actual kalau sudah tiba), sehingga
-// urutan kartu tidak mencerminkan urutan kedatangan yang jadi acuan
-// kerja harian. ETD dipakai HANYA sebagai cadangan kalau ETA benar-benar
-// belum diisi, supaya kartunya tetap punya tempat.
+// Pemisah tanggal & urutan selalu memakai ETA efektif
+/* Kunci pengelompokan (jadi pemisah tanggal di layar).
+
+   Untuk yang SUDAH TIBA, yang relevan bukan lagi perkiraan tiba
+   melainkan tanggal barang benar-benar masuk pabrik. Kalau tanggal itu
+   kosong (ditandai tiba secara manual), dipakai ETA efektifnya. */
 function groupKeyOf(s) {
-  // Pemisah tanggal mengikuti DASAR yang sedang dipilih (ETA atau ETD),
-  // memakai versi EFEKTIF — kartu yang mundur ikut pindah ke kelompok
-  // tanggal barunya (lihat effectiveEta/effectiveEtd di core/status.js).
-  // Sisi lain dipakai sebagai cadangan supaya kartu yang salah satunya
-  // kosong tetap punya tempat.
-  return sortBasis() === "etd"
-    ? effectiveEtd(s) || effectiveEta(s) || null
-    : effectiveEta(s) || effectiveEtd(s) || null;
-}
+  if (isArrived(s)) return s.actual || effectiveEta(s) || effectiveEtd(s) || null;
 
-function groupAndSort(list) {
-  const groups = new Map();
-  const noDate = [];
-  list.forEach((s) => {
-    const key = groupKeyOf(s);
-    if (!key) {
-      noDate.push(s);
-      return;
-    }
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(s);
-  });
-  let keys = Array.from(groups.keys());
-  const arah = sortDirection();
-  keys.sort((a, b) => (arah === "asc" ? (a < b ? -1 : 1) : a > b ? -1 : 1));
-  const ordered = keys.map((k) => ({ key: k, items: groups.get(k) }));
-  if (noDate.length) ordered.push({ key: null, items: noDate });
-  return ordered;
+  /* Buku EXPORT diurutkan menurut tanggal STUFFING, bukan ETA.
+     Yang dikerjakan tim EXIM untuk sebuah ekspor adalah menyiapkan
+     muatan pada hari stuffing; ETA-nya (tiba di pelabuhan pembeli)
+     baru urusan berminggu-minggu kemudian dan tidak menuntut apa pun
+     dari sisi sini.
+
+     Kolom `actual` di buku Export memang berlabel "Stuffing": selama
+     tanggalnya belum tercapai ia berperan sebagai RENCANA, dan begitu
+     terlewati jadwalnya otomatis dianggap selesai (lihat isArrived). */
+  if (activeMode === "export") {
+    return s.actual || effectiveEtd(s) || effectiveEta(s) || null;
+  }
+  return effectiveEta(s) || effectiveEtd(s) || null;
 }
 
 /* ------------------------------------------------------------------
-   URUTAN TAMPIL — satu sumber
+   URUTAN DAFTAR
 
-   Meratakan hasil pengelompokan jadi satu urutan kartu/baris, sambil
-   tetap mengingat "key" tanggal tiap grup supaya pemisah tanggal
-   tetap benar per halaman.
+   Dua kelompok, bukan satu deret:
 
-   Dipakai BERSAMA oleh render() dan panel detail. Sebelumnya panel
-   detail menelusuri getFiltered() apa adanya — yaitu urutan
-   penyimpanan database, BUKAN urutan yang terlihat di layar. Akibatnya
-   tombol "berikutnya" melompat ke pengiriman acak, dan pada baris
-   pertama tombolnya bahkan bisa mati karena kebetulan baris itu
-   elemen terakhir di array. Keduanya sekarang membaca fungsi yang
-   sama, jadi tidak bisa lagi berbeda.
+     1. BELUM TIBA  — diurutkan dari tanggal terdekat, karena inilah
+                      yang perlu ditindak lebih dulu.
+     2. SUDAH TIBA  — ditaruh di belakang seluruhnya, diurutkan dari
+                      tanggal tiba TERBARU ke terlama.
+
+   Yang sudah tiba tidak lagi menuntut tindakan, jadi tidak ada gunanya
+   ia menyela di tengah daftar hanya karena tanggalnya kebetulan
+   berdekatan. Dan begitu dilihat, yang dicari biasanya "yang baru saja
+   masuk" — karena itu urutannya dibalik.
 ------------------------------------------------------------------ */
+function groupAndSort(list) {
+  const aktif = new Map();
+  const tiba = new Map();
+  const tanpaTanggal = [];
+
+  list.forEach((s) => {
+    const key = groupKeyOf(s);
+    if (!key) {
+      tanpaTanggal.push(s);
+      return;
+    }
+    const wadah = isArrived(s) ? tiba : aktif;
+    if (!wadah.has(key)) wadah.set(key, []);
+    wadah.get(key).push(s);
+  });
+
+  const susun = (peta, menaik) =>
+    Array.from(peta.keys())
+      .sort((a, b) => (menaik ? (a < b ? -1 : 1) : a > b ? -1 : 1))
+      .map((k) => ({ key: k, items: peta.get(k) }));
+
+  const ordered = [
+    ...susun(aktif, sortDirection() === "asc"),
+    ...susun(tiba, false),
+  ];
+  if (tanpaTanggal.length) ordered.push({ key: null, items: tanpaTanggal });
+  return ordered;
+}
+
+/* URUTAN TAMPIL — satu sumber */
 function flattenGroups(groups) {
   const flat = [];
   groups.forEach((g) => {
@@ -125,9 +117,7 @@ function flattenGroups(groups) {
   return flat;
 }
 
-// Daftar pengiriman dalam URUTAN YANG TAMPIL (sudah disaring,
-// dikelompokkan, dan diurutkan) — tanpa potongan per halaman, karena
-// panel detail boleh melewati batas halaman.
+// Urutan yang benar-benar tampil. Dipakai bersama render() & panel detail
 function orderedFiltered() {
   return flattenGroups(groupAndSort(getFiltered())).map((e) => e.shipment);
 }
@@ -159,36 +149,20 @@ function render() {
   const start = (currentPage - 1) * pageSize;
   const pageSlice = flat.slice(start, start + pageSize);
 
-  // Kartu dan Manifes menggambar dari POTONGAN HALAMAN yang sama —
-  // yang berbeda cuma pembungkusnya. Jadi paginasi, pemisah tanggal,
-  // dan urutan tidak mungkin berbeda antara dua bentuk tampilan.
   let html = "";
   let lastKey;
-  let bucket = [];
-
-  const flushBucket = () => {
-    if (!bucket.length) return;
-    html +=
-      viewMode === "table"
-        ? renderManifestGroup(bucket.join(""))
-        : bucket.join("");
-    bucket = [];
-  };
 
   pageSlice.forEach((entry, idx) => {
     if (idx === 0 || entry.key !== lastKey) {
-      flushBucket();
-      // anyArrived dihitung dari SELURUH anggota grup (bukan cuma yang
-      // tampil di halaman ini), supaya penanda kelompok tanggal
-      // konsisten di halaman berapa pun.
+      // anyArrived dihitung dari SELURUH anggota grup (bukan cuma yang tampil di halaman ini)
       const g = groupByKey.get(entry.key);
       const anyArrived = g
-        ? g.items.every((s) => s.status === "arrived")
+        ? g.items.every((s) => isArrived(s))
         : false;
       const jumlah = g ? g.items.length : 0;
       const label = entry.key
         ? fmtDateLong(entry.key)
-        : "Tanggal Tidak Diketahui";
+        : "Tanggal tidak diketahui";
       html += `
         <div class="date-section">
           <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
@@ -196,14 +170,9 @@ function render() {
           <span class="date-section-count">${jumlah} pengiriman · ${sortBasis().toUpperCase()}</span>
         </div>`;
     }
-    bucket.push(
-      viewMode === "table"
-        ? renderManifestRow(entry.shipment)
-        : renderCard(entry.shipment),
-    );
+    html += renderCard(entry.shipment);
     lastKey = entry.key;
   });
-  flushBucket();
   cardContainer.innerHTML = html;
 
   renderPaginationBar(flat.length);
@@ -212,9 +181,7 @@ function render() {
   renderFilterNote(flat.length, totalInBook);
 }
 
-/* ==================================================================
-   PAGINATION
-================================================================== */
+/* PAGINATION */
 function paginationRange(current, total) {
   const delta = 1;
   const range = [];
@@ -314,19 +281,17 @@ $("#paginationBar").addEventListener("change", (e) => {
   }
 });
 
-/* updateStats() sekarang tinggal di js/features/quick-filters.js —
-   angka di ubin papan dan angka di chip saringan HARUS dihitung dari
-   satu tempat, kalau tidak keduanya pasti berbeda cepat atau lambat. */
+/* updateStats() sekarang tinggal di js/features/quick-filters.js — */
 
 function applyModeLabels() {
   const lbl = ML();
+  document.body.classList.toggle("mode-export", activeMode === "export");
+  document.body.classList.toggle("mode-import", activeMode !== "export");
   $("#lblAddBtn").textContent = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
-  // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog
-  // konfirmasi — supaya tidak perlu ditekan dulu untuk tahu apa yang
-  // akan terhapus.
+  // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog konfirmasi
   $("#lblDeleteAll").textContent =
-    activeMode === "import" ? "Hapus Semua Import" : "Hapus Semua Export";
+    activeMode === "import" ? "Hapus semua import" : "Hapus semua export";
   // Pilihan filter status ikut section aktif (requirement D).
   const cur = $("#filterStatus").value;
   $("#filterStatus").innerHTML =
@@ -366,12 +331,7 @@ function fixSelectWidths() {
   $$(".status-select", cardContainer).forEach(sizeSelectToContent);
 }
 
-/* ---- Lightweight periodic refresh: only move markers/fill, keep DOM/focus intact ----
-   Posisi titik terminal (port-node) sendiri tidak perlu digeser ulang di
-   sini karena posisinya tetap (berdasar tanggal masing-masing terminal,
-   bukan "hari ini"). Yang perlu diperbarui tiap tick cuma: lebar fill,
-   posisi ship-marker, ikon leg yang sedang aktif (bisa berpindah moda di
-   tengah transit), dan status "reached" tiap titik. */
+/* Penyegaran ringan: hanya geser penanda, DOM & fokus tidak disentuh */
 function refreshLanePositions() {
   currentList().forEach((s) => {
     const card = cardContainer.querySelector(`.ship-card[data-id="${s.id}"]`);
@@ -380,10 +340,20 @@ function refreshLanePositions() {
     const fill = card.querySelector(".lane-fill");
     const marker = card.querySelector(".ship-marker");
     if (fill) fill.style.width = lane.progress * 100 + "%";
+    const sisa = card.querySelector(".lane-remaining");
+    if (sisa) sisa.textContent = laneRemainingLabel(s);
     if (marker) {
       marker.style.left = lane.progress * 100 + "%";
-      marker.textContent = lane.icon;
-      marker.classList.toggle("sailing", s.status === "transit");
+      const ikon = marker.querySelector(".marker-icon");
+      if (ikon) ikon.innerHTML = lane.icon;
+      /* Kelasnya ikut diperbarui: sebuah pengiriman bisa berangkat atau
+         sampai sementara halaman dibiarkan terbuka */
+      const bergerak = !isArrived(s) && lane.progress > 0.05 && lane.progress < 1;
+      marker.classList.toggle("at-start", lane.progress <= 0.001);
+      marker.classList.toggle("at-end", lane.progress >= 0.999);
+      marker.classList.toggle("is-moving", bergerak);
+      marker.classList.toggle("is-air", !!lane.leg && lane.leg.mode === "udara");
+      marker.classList.toggle("is-sea", !lane.leg || lane.leg.mode !== "udara");
     }
     $$(".port-node", card).forEach((dot, i) => {
       const reached = lane.fractions[i] <= lane.progress + 0.0001;
@@ -393,18 +363,8 @@ function refreshLanePositions() {
 }
 setInterval(refreshLanePositions, 60000);
 
-/* ==================================================================
-   MODE SWITCH (navbar)
-================================================================== */
-/* Sakelar buku Import/Export kini muncul di kepala papan SETIAP halaman
-   yang isinya bergantung pada buku aktif (Jadwal & Ringkasan) — bukan
-   lagi satu tombol di bilah atas. Ia mengubah ISI halaman, bukan
-   berpindah halaman, jadi tempatnya memang di kepala halaman itu.
-
-   Karena salinannya lebih dari satu, penangannya didelegasikan dan
-   penyelarasannya menyapu semua salinan sekaligus. Tanpa itu, menekan
-   sakelar di Ringkasan akan meninggalkan sakelar di Jadwal menyala
-   pada buku yang salah. */
+/* MODE SWITCH (navbar) */
+/* Sakelar buku Import/Export kini muncul di kepala papan SETIAP halaman */
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".mode-tabs [data-mode]");
   if (!btn) return;
@@ -418,10 +378,7 @@ function syncModeTabs(mode) {
     b.setAttribute("aria-selected", aktif ? "true" : "false");
   });
 }
-// Section aktif diingat supaya REFRESH halaman tidak melempar user
-// kembali ke Import (requirement C: "Saat refresh halaman, form harus
-// tetap di section yang sama"). Dipakai juga saat form Tambah/Edit
-// sedang terbuka, karena label & aturan form ikut section ini.
+// Section aktif diingat supaya REFRESH halaman tidak melempar user kembali ke Import
 const ACTIVE_MODE_KEY = "eximddi.activeMode";
 function rememberActiveMode(mode) {
   try {
@@ -446,24 +403,15 @@ function switchMode(mode) {
   syncModeTabs(mode);
   $("#searchInput").value = "";
   $("#filterStatus").value = "";
-  $("#filterDateFrom").value = "";
-  $("#filterDateTo").value = "";
-  // Preset ikut dilepas: "perlu tindakan" di buku Import bukan
-  // pertanyaan yang sama dengan di buku Export, dan membawa saringan
-  // lama ke buku lain hampir selalu bikin bingung.
+  // Preset ikut dilepas: "perlu tindakan" di buku Import bukan pertanyaan yang sama dengan di buku
   activePreset = "all";
   presetDateOverride = "";
   syncPresetUI();
-  applyRangeBasisLabel();
   syncSearchClear();
   currentPage = 1;
   render();
 
-  /* Halaman Ringkasan TIDAK ikut terbarui sebelumnya: render() hanya
-     menggambar daftar Jadwal, sementara Ringkasan digambar sekali saat
-     rutenya dibuka. Akibatnya menekan EXPORT sementara berada di
-     Ringkasan menyisakan angka & antrean milik buku Import — sakelarnya
-     berpindah, isinya tidak. */
+  /* Halaman Ringkasan TIDAK ikut terbarui sebelumnya: render() hanya */
   if (
     typeof renderOverview === "function" &&
     !$("#viewOverview").classList.contains("d-none")
@@ -472,23 +420,10 @@ function switchMode(mode) {
   }
 }
 
-/* ----------------------------------------------------------------
-   FILTERS (search / status / sort dir)
-   Aslinya bagian terpisah jauh di bawah (dekat BULK EXPORT) di
-   script.js lama -- dipindah ke sini karena satu-satunya yang
-   dilakukan cuma reset currentPage lalu panggil render(), jadi
-   lebih make sense hidup bareng logika render/list lainnya.
----------------------------------------------------------------- */
+/* FILTERS (search / status / sort dir) */
 
-/* ==================================================================
-   FILTERS
-================================================================== */
-/* Mengetik di kotak cari SEBELUMNYA memicu render() penuh tiap ketukan
-   huruf — menyaring, mengurutkan, mengelompokkan, lalu menyusun ulang
-   seluruh HTML kartu. Mengetik "dynamic" berarti 7 kali kerja itu, dan
-   6 di antaranya hasilnya langsung dibuang. Itu penyebab utama terasa
-   berat. Sekarang render ditunda 180ms sejak ketukan TERAKHIR: cukup
-   cepat untuk terasa seketika, tapi hanya sekali kerja. */
+/* FILTERS */
+/* Mengetik di kotak cari SEBELUMNYA memicu render() penuh tiap ketukan */
 let searchTimer = null;
 $("#searchInput").addEventListener("input", () => {
   clearTimeout(searchTimer);
@@ -501,43 +436,6 @@ $("#filterStatus").addEventListener("change", () => {
   currentPage = 1;
   render();
 });
-$("#rangeBasis").addEventListener("change", (e) => {
-  rangeBasis = e.target.value;
-  // Agenda 7 hari & token hitung mundur di Ringkasan memakai dasar yang
-  // sama, jadi keduanya ikut digambar ulang.
-  if (
-    typeof renderOverview === "function" &&
-    !$("#viewOverview").classList.contains("d-none")
-  ) {
-    setTimeout(renderOverview, 0);
-  }
-  currentPage = 1;
-  applyRangeBasisLabel();
-  render();
-});
 
-// Label rentang ikut berubah (ETA <-> ETD) supaya selalu jelas kolom
-// mana yang sedang disaring.
-// Menyalakan kembali pilihan dasar tanggal pada kontrolnya, dan
-// memperbarui semua tempat yang menyebut "ETA" atau "ETD" sebagai teks.
-function applyRangeBasisLabel() {
-  const el = $("#rangeBasis");
-  if (el && el.value !== sortBasis()) el.value = sortBasis();
-  const ada = $("#filterDateFrom").value || $("#filterDateTo").value;
-  $("#btnClearRange").classList.toggle("d-none", !ada);
-}
+// Label rentang ikut berubah (ETA <-> ETD) supaya selalu jelas kolom mana yang sedang disaring
 
-["filterDateFrom", "filterDateTo"].forEach((idf) => {
-  $("#" + idf).addEventListener("change", () => {
-    currentPage = 1;
-    applyRangeBasisLabel();
-    render();
-  });
-});
-$("#btnClearRange").addEventListener("click", () => {
-  $("#filterDateFrom").value = "";
-  $("#filterDateTo").value = "";
-  currentPage = 1;
-  applyRangeBasisLabel();
-  render();
-});

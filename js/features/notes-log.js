@@ -1,40 +1,8 @@
 "use strict";
 
-/* ==================================================================
-   KRONOLOGI CATATAN (notes log)
+/* KRONOLOGI CATATAN (notes log) */
 
-   Sebelumnya "Catatan" cuma SATU kotak teks bebas: tiap ada kejadian
-   baru, catatan lama ketimpa atau harus disambung manual, dan tidak ada
-   jejak kapan sesuatu terjadi. Sekarang catatan disimpan sebagai DAFTAR
-   entri, masing-masing ber-tanggal & jam — seperti riwayat chat — supaya
-   kronologi tiap kasus (delay, dokumen kurang, kapal ganti, dsb) bisa
-   dibaca urut dari atas ke bawah.
-
-   BENTUK DATA
-     shipment.notesLog = [{ id, ts, text }, ...]  (terbaru di BAWAH)
-       ts = ISO datetime saat entri dibuat (bukan tanggal kejadian)
-   Disimpan di kolom `shipments.notes_log` (jsonb) — lihat
-   schema-migration.sql.
-
-   KOMPATIBILITAS
-     Kolom lama `shipments.notes` (teks biasa) TETAP ada dan TETAP diisi,
-     berisi teks entri TERBARU. Alasannya: kolom REMARK/NOTES di semua
-     template copy & Bulk Export membaca `s.notes`, jadi dengan cara ini
-     tidak ada satu pun template yang perlu diubah. Data lama yang sudah
-     terlanjur mengisi `notes` otomatis muncul sebagai entri pertama di
-     kronologi (tanpa jam, karena waktunya memang tidak pernah dicatat).
-
-   DI MANA DITARUH (jawaban atas "aku bingung harus ditaruh dimana")
-     1. FORM Tambah/Edit — panel penuh: kotak tulis + timeline + tombol
-        hapus per entri. Tempatnya menggantikan field "Catatan" lama,
-        jadi tidak ada bagian form baru yang bikin form makin panjang.
-     2. KARTU dashboard (tampilan expanded) — timeline ringkas 3 entri
-        terakhir + kotak tulis cepat. Ini yang paling sering dipakai:
-        kejadian harian bisa dicatat tanpa harus buka form edit dulu.
-================================================================== */
-
-// Entri log bisa datang dari database sebagai array, string JSON, atau
-// null (baris lama) — semuanya dinormalkan ke array di satu tempat ini.
+// Entri log bisa datang dari database sebagai array, string JSON, atau null
 function normalizeNotesLog(raw, legacyNotes) {
   let arr = raw;
   if (typeof arr === "string") {
@@ -54,8 +22,7 @@ function normalizeNotesLog(raw, legacyNotes) {
       text: String(e.text).trim(),
     }));
 
-  // Data lama: `notes` berisi teks tanpa riwayat. Ditampilkan sebagai
-  // entri pertama supaya tidak hilang, ditandai tanpa waktu.
+  // Data lama: `notes` berisi teks tanpa riwayat
   const legacy = String(legacyNotes || "").trim();
   if (!out.length && legacy) {
     out.push({ id: uid("note"), ts: "", text: legacy });
@@ -73,8 +40,7 @@ function notesLogToPlainNotes(log) {
   return log[log.length - 1].text;
 }
 
-// "25 Jul 2026 · 14:30" — entri lama tanpa waktu ditandai jelas supaya
-// tidak dikira dicatat hari ini.
+// "25 Jul 2026 · 14:30" — entri lama tanpa waktu ditandai jelas supaya tidak dikira dicatat hari
 function fmtNoteStamp(ts) {
   if (!ts) return "catatan lama (tanpa waktu)";
   const d = new Date(ts);
@@ -91,9 +57,7 @@ function fmtNoteStamp(ts) {
   return `${tgl} · ${jam}`;
 }
 
-/* ------------------------------------------------------------------
-   TIMELINE DI FORM
------------------------------------------------------------------- */
+/* TIMELINE DI FORM */
 function renderNotesTimeline() {
   const box = $("#notesTimeline");
   if (!box) return;
@@ -101,8 +65,7 @@ function renderNotesTimeline() {
     box.innerHTML = `<div class="note-empty">Belum ada catatan. Tulis kronologi pertama di kotak atas — tiap entri otomatis diberi tanggal & jam.</div>`;
     return;
   }
-  // Terbaru DI ATAS saat dibaca, walau di data urutannya kronologis —
-  // yang paling sering dicari user adalah kejadian terakhir.
+  // Terbaru DI ATAS saat dibaca, walau di data urutannya kronologis
   box.innerHTML = [...draftNotesLog]
     .reverse()
     .map(
@@ -147,9 +110,7 @@ $("#notesTimeline").addEventListener("click", (e) => {
   renderNotesTimeline();
 });
 
-/* ------------------------------------------------------------------
-   TIMELINE RINGKAS DI KARTU DASHBOARD
------------------------------------------------------------------- */
+/* TIMELINE RINGKAS DI KARTU DASHBOARD */
 const CARD_NOTES_PREVIEW = 3;
 
 function cardNotesHtml(s) {

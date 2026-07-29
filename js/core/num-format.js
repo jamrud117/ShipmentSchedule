@@ -1,30 +1,13 @@
 "use strict";
 
-/* ==================================================================
-   FORMAT ANGKA STANDAR PIB (requirement G) + normalisasi HS Code +
-   aturan turunan tanggal ETD/ETA/Actual (requirement A).
+/* FORMAT ANGKA STANDAR PIB (requirement G) + normalisasi HS Code + */
 
-   Aturan angka PIB:
-     - pemisah ribuan = koma (,)
-     - pemisah desimal = titik (.)
-     - kalau semua digit di belakang titik desimal NOL (mis. 3800.0000),
-       bagian desimalnya TIDAK ditampilkan sama sekali -> "3,800"
-   Contoh: 3800.0000 -> "3,800" · 4120.5 -> "4,120.5" ·
-           118683107.27 -> "118,683,107.27" · 0 -> ""
-================================================================== */
-
-// Angka -> teks gaya PIB. `maxDecimals` membatasi presisi (default 4,
-// sama dengan presisi berat/qty di dokumen PIB itu sendiri). Nol
-// dikembalikan sebagai "" karena SELURUH template copy memang
-// mengosongkan sel bernilai 0 (lihat clipboardFormatter.num lama &
-// requirement D soal Bulk Import: "kalau ada data bernilai 0, tampilkan
-// kosong saja").
+// Angka -> teks gaya PIB
 function fmtPibNumber(n, maxDecimals) {
   const dec = maxDecimals == null ? 4 : maxDecimals;
   let num = Number(n);
   if (!isFinite(num) || num === 0) return "";
-  // toFixed dulu supaya pembulatan konsisten, baru buang nol di
-  // belakang koma desimal ("3800.0000" -> "3800", "4120.50" -> "4120.5").
+  // toFixed dulu supaya pembulatan konsisten, baru buang nol di belakang koma desimal
   let s = num.toFixed(dec);
   if (s.includes(".")) s = s.replace(/\.?0+$/, "");
   const neg = s.startsWith("-");
@@ -34,27 +17,12 @@ function fmtPibNumber(n, maxDecimals) {
   return (neg ? "-" : "") + grouped + (decPart ? "." + decPart : "");
 }
 
-/* ------------------------------------------------------------------
-   HS CODE (requirement A)
-   "Saat HS Code diinput (baik dari hasil ekstraksi otomatis maupun saat
-   user paste manual ke field), hilangkan tanda '.' dan '-' sehingga
-   hanya angkanya saja yang tersimpan."
-   Semua karakter non-digit dibuang (bukan cuma titik & strip) — spasi &
-   karakter nyasar dari hasil copy-paste PDF ikut hilang sekalian.
------------------------------------------------------------------- */
+/* HS CODE (requirement A) */
 function normalizeHsCodeInput(v) {
   return String(v == null ? "" : v).replace(/\D/g, "");
 }
 
-/* ------------------------------------------------------------------
-   TURUNAN TANGGAL DARI PDF PIB (requirement A)
-     ETD  = tanggal Master BL/AWB (fallback: House BL/AWB kalau Master
-            tidak ada — ketemu nyata di beberapa PIB laut yang cuma
-            mencantumkan satu B/L)
-     ETA  = laut : ETD + 7 hari
-            udara: SAMA dengan ETD (hari yang sama)
-     Actual Delivery = ETA + 3 hari (berlaku laut MAUPUN udara)
------------------------------------------------------------------- */
+/* TURUNAN TANGGAL DARI PDF PIB (requirement A) */
 function addDaysISO(iso, days) {
   const d = parseLocalDate(iso);
   if (!d) return "";
@@ -71,28 +39,11 @@ function deriveActualFromEta(eta) {
   return eta ? addDaysISO(eta, 3) : "";
 }
 
-/* ------------------------------------------------------------------
-   BRUTO: TOTAL SAJA, DITARUH DI SATU BARANG
-
-   Dokumen sumber (PIB field 29, PEB field 45, dan baris TOTAL di Packing
-   List) hanya mencantumkan berat kotor TOTAL satu pengiriman — berat
-   kotor per barang memang tidak ada, karena beberapa barang berbagi satu
-   kemasan yang sama.
-
-   Versi sebelumnya membagi total itu PROPORSIONAL sesuai porsi netto tiap
-   barang. Hasilnya angka pecahan yang kelihatan presisi padahal cuma
-   hasil bagi (mis. 430.0755 / 716.7925 / 383.0189), dan gampang
-   disalahartikan sebagai timbangan asli per barang. Sesuai permintaan,
-   sekarang total dipasang APA ADANYA di barang PERTAMA dan barang
-   lainnya 0 — jumlah totalnya tetap sama persis dengan dokumen, tanpa
-   mengarang angka per barang.
------------------------------------------------------------------- */
+/* BRUTO: TOTAL SAJA, DITARUH DI SATU BARANG */
 function applyTotalBrutoToFirstItem(items, totalBruto) {
   if (!items || !items.length) return items;
   let total = Number(totalBruto);
-  // Kalau total dari dokumen tidak diketahui, pakai jumlah bruto per
-  // barang yang sempat terbaca (mis. Packing List yang mencantumkan G.W.
-  // per baris) — tetap satu angka total, bukan tersebar.
+  // Kalau total dari dokumen tidak diketahui
   if (!isFinite(total) || total <= 0) {
     total = items.reduce((sum, it) => sum + (Number(it.bruto) || 0), 0);
   }

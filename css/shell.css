@@ -1,13 +1,4 @@
-/* ==================================================================
-   KERANGKA APLIKASI
-
-   Satu bilah navy tipis di paling atas menampung SEMUA navigasi
-   global: merek, pindah halaman, pindah Import/Export, dan pencarian
-   cepat. Versi lama menumpuk tiga pita penuh (navbar + hero + kartu
-   statistik) sebelum baris data pertama muncul — kira-kira 420 px
-   layar terpakai untuk sesuatu yang cuma dilihat sekali. Di sini
-   tingginya 54 px dan tetap menempel saat menggulir.
-================================================================== */
+/* KERANGKA APLIKASI */
 
 .app-topbar {
   position: sticky;
@@ -15,8 +6,7 @@
   z-index: 1040;
   height: var(--topbar-h);
   background: var(--d-900);
-  /* Garis kuningan setipis rambut: satu-satunya hiasan di bilah ini,
-     sekaligus penanda merek yang konsisten dengan aksen sekunder. */
+  /* Garis kuningan setipis rambut: satu-satunya hiasan di bilah ini */
   border-bottom: 1px solid rgba(199, 154, 62, 0.35);
   color: #fff;
 }
@@ -37,17 +27,16 @@
   flex-shrink: 0;
 }
 .brand-mark {
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   display: block;
 }
 .brand-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 1.06rem;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   line-height: 1;
 }
 .brand-name span {
@@ -73,25 +62,24 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   height: var(--topbar-h);
-  padding: 0 12px;
-  font-size: var(--t-sm);
+  padding: 0 15px;
+  font-size: var(--t-md);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.68);
   text-decoration: none;
   white-space: nowrap;
   transition: color var(--dur-1) var(--ease);
 }
 .site-nav-link i {
-  font-size: 0.95rem;
+  font-size: 1.1rem;
   opacity: 0.9;
 }
 .site-nav-link:hover {
   color: #fff;
 }
-/* Halaman aktif ditandai garis kuningan di dasar bilah — bacaannya
-   sama seperti tab map: menempel pada tepi, bukan pil melayang. */
+/* Halaman aktif ditandai garis kuningan di dasar bilah — bacaannya */
 .site-nav-link.active {
   color: #fff;
 }
@@ -114,13 +102,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  padding: 0 10px 0 11px;
+  height: 38px;
+  padding: 0 12px 0 13px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
   border-radius: var(--r-sm);
-  color: rgba(255, 255, 255, 0.66);
-  font-size: var(--t-sm);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--t-base);
   transition:
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
@@ -131,7 +119,7 @@
 }
 .cmd-trigger kbd {
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   padding: 2px 5px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.14);
@@ -139,18 +127,7 @@
   border: 0;
 }
 
-/* ---- Sakelar buku Import / Export --------------------------------
-   Tempatnya di KEPALA PAPAN tiap halaman, bukan di bilah atas.
-
-   Bilah atas berisi navigasi: menekan sesuatu di sana memindahkan
-   pengguna ke halaman lain. Sakelar ini tidak melakukan itu — ia
-   mengganti ISI halaman yang sedang dibuka. Menaruh dua jenis
-   perbuatan yang berbeda dalam satu bilah membuat keduanya sama-sama
-   sulit ditebak.
-
-   Ia berdiri tepat di posisi eyebrow yang dulu bertuliskan "BUKU
-   IMPORT" — informasi yang sekarang dinyatakan sakelarnya sendiri
-   lewat segmen yang menyala. */
+/* Sakelar buku Import / Export */
 .mode-tabs {
   display: inline-flex;
   flex-shrink: 0;
@@ -179,8 +156,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   padding: 5px 13px;
   border-radius: 5px;
   white-space: nowrap;
@@ -227,31 +203,20 @@
   .brand-name {
     display: none;
   }
-  /* Di bilah atas dulu labelnya disembunyikan karena ruangnya habis.
-     Di kepala papan ruangnya ada, jadi "Import"/"Export" tetap
-     terbaca penuh — sakelar berisi dua ikon tanpa teks adalah
-     tebak-tebakan. */
+  /* Di bilah atas dulu labelnya disembunyikan karena ruangnya habis */
   .mode-tabs--board button {
     padding: 6px 13px;
   }
 }
 
-/* ==================================================================
-   PAPAN (board) — kepala halaman
-
-   Menggantikan hero bergambar pelabuhan. Isinya bukan hiasan: judul
-   buku besar yang sedang dibuka, tanggal hari ini (acuan semua
-   hitung mundur di bawahnya), dan metrik yang bisa diklik.
-================================================================== */
+/* PAPAN (board) — kepala halaman */
 .board {
   background: var(--d-900);
   color: #fff;
   padding: var(--sp-8) 0 var(--sp-6);
   position: relative;
 }
-/* Garis-garis halus sejajar di tepi kanan — mengutip pita cetak
-   dokumen manifes. Sangat samar; ini satu-satunya tekstur di
-   seluruh aplikasi. */
+/* Garis-garis halus sejajar di tepi kanan — mengutip pita cetak */
 .board::after {
   content: "";
   position: absolute;
@@ -298,18 +263,14 @@
   font-weight: 600;
 }
 
-/* Tanggal hari ini — acuan semua hitung mundur. Sengaja dibuat
-   sebesar judul dan diberi rel kuningan di kiri supaya terbaca
-   sebagai "sekarang jam berapa di papan ini", bukan tempelan. */
+/* Tanggal hari ini — acuan semua hitung mundur. Sengaja dibuat */
 .board-today {
   text-align: right;
   padding-left: var(--sp-4);
   border-left: 2px solid var(--sec-500);
   flex-shrink: 0;
 }
-/* Judul & sisi kanan diratakan ke TENGAH, bukan ke dasar: sakelar
-   punya tinggi sendiri, dan meratakan semuanya ke garis dasar membuat
-   sakelarnya tampak melorot dibanding judul. */
+/* Judul & sisi kanan diratakan ke TENGAH, bukan ke dasar: sakelar */
 .board-head {
   align-items: center;
 }
@@ -317,8 +278,7 @@
   font-family: var(--font-board);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.5);
 }
 .board-today-date {
@@ -353,9 +313,10 @@
   }
 }
 
-/* ==================================================================
-   FOOTER
-================================================================== */
+/* FOOTER */
+/* Footer selalu di dasar layar walau isi halaman pendek — "sticky
+   footer" lewat flex, bukan position: fixed, supaya ia tetap terdorong
+   ke bawah oleh isi yang panjang dan tidak menutupi apa pun. */
 .app-footer {
   margin-top: auto;
   background: var(--d-900);
@@ -372,7 +333,6 @@
   font-weight: 800;
   font-size: var(--t-md);
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: #fff;
   margin-bottom: 8px;
 }
@@ -383,8 +343,7 @@
   font-family: var(--font-display);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--sec-300);
   margin-bottom: 8px;
 }
@@ -409,4 +368,30 @@
   font-family: var(--font-mono);
   font-size: var(--t-xs);
   color: rgba(255, 255, 255, 0.45);
+}
+
+
+/* ------------------------------------------------------------------
+   Sakelar buku di bilah kendali.
+
+   Gaya dasarnya dibuat untuk latar navy: latar putih 8% dan tulisan
+   putih 70%. Di atas bilah kendali yang putih, segmen yang tidak aktif
+   jadi putih-di-atas-putih — hilang sama sekali. Di sini warnanya
+   dibalik untuk latar terang.
+------------------------------------------------------------------ */
+.controlbar .mode-tabs {
+  background: var(--n-100);
+  border-color: var(--border);
+}
+.controlbar .mode-tabs button {
+  color: var(--n-600);
+}
+.controlbar .mode-tabs button:hover:not(.active) {
+  background: #fff;
+  color: var(--p-600);
+}
+.controlbar .mode-tabs button.active {
+  background: var(--p-600);
+  color: #fff;
+  box-shadow: var(--sh-xs);
 }

@@ -1,8 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   CRUD KE SUPABASE
-================================================================== */
+/* CRUD KE SUPABASE */
 async function loadShipments() {
   showLoadingSkeleton(3);
   const { data: rows, error } = await supabaseClient
@@ -24,22 +22,56 @@ async function loadShipments() {
     if (data[row.mode]) data[row.mode].push(s);
   });
 
-  // PENTING: render() harus dipanggil di sini. router() di app-init.js
-  // memang sudah menggambar halaman lebih dulu (lihat komentarnya di
-  // sana), tapi itu terjadi SEBELUM fetch ini selesai, jadi ia menggambar
-  // dengan data.import/data.export yang masih kosong. Tanpa render() di
-  // sini, tidak ada apa pun yang menggambar ULANG dengan data asli
-  // setelah datang — layar macet di kerangka muat (skeleton) selamanya.
-  // Pemanggil lain (form-router.js setelah simpan, bulk-excel.js setelah
-  // impor/hapus) juga bergantung pada ini untuk menampilkan hasil
-  // terbaru; jangan dihapus lagi dengan alasan "sudah dirender lebih
-  // dulu di tempat lain" — itu justru penyebab bug ini sebelumnya.
+  // PENTING: render() harus dipanggil di sini
   render();
+
+  await syncArrivedStatuses();
 }
 
-// Kerangka muat (skeleton). Ditampilkan selama data diambil, meniru
-// bentuk kartu jadwal supaya tata letaknya TIDAK melompat begitu data
-// datang — pergeseran mendadak itu yang membuat aplikasi terasa kasar.
+/* ------------------------------------------------------------------
+   MENYELARASKAN STATUS TIBA
+
+   Tampilan sudah menganggap sebuah jadwal tiba begitu tanggal Actual
+   Delivery terlewati (lihat isArrived() di core/status.js), tapi kolom
+   `status` di database bisa tertinggal. Kalau dibiarkan, Bulk Export dan
+   template salin akan menuliskan PROCESS untuk barang yang di layar
+   sudah ARRIVED — dua sumber kebenaran yang saling bertentangan.
+
+   Dirapikan sekali tiap aplikasi dibuka. Hanya untuk peran exim: viewer
+   tidak punya izin menulis, dan mencobanya hanya akan ditolak RLS.
+------------------------------------------------------------------ */
+async function syncArrivedStatuses() {
+  if (typeof canEdit === "function" && !canEdit()) return;
+
+  const tertinggal = [];
+  ["import", "export"].forEach((mode) => {
+    shipmentsNeedingArrivalSync(data[mode]).forEach((s) =>
+      tertinggal.push({ mode, s }),
+    );
+  });
+  if (!tertinggal.length) return;
+
+  const ids = tertinggal.map((x) => x.s.id);
+  const { error } = await supabaseClient
+    .from("shipments")
+    .update({ status: "arrived" })
+    .in("id", ids);
+
+  if (error) {
+    // Tampilan tetap benar; hanya penyelarasan database yang gagal.
+    console.error("Gagal menyelaraskan status tiba:", error);
+    return;
+  }
+
+  tertinggal.forEach((x) => (x.s.status = "arrived"));
+  render();
+  showToast(
+    `${ids.length} jadwal ditandai tiba — tanggal Actual Delivery-nya sudah terlewati.`,
+    "dark",
+  );
+}
+
+// Kerangka muat (skeleton)
 function showLoadingSkeleton(jumlah) {
   emptyState.classList.add("d-none");
   const satu = `
@@ -56,8 +88,7 @@ function showLoadingSkeleton(jumlah) {
      </div>`;
 }
 
-// Layar gagal: sebutkan APA yang gagal dan APA langkah berikutnya —
-// bukan sekadar "terjadi kesalahan".
+// Layar gagal: sebutkan APA yang gagal dan APA langkah berikutnya
 function showDbErrorState() {
   emptyState.classList.add("d-none");
   cardContainer.innerHTML = `
@@ -109,8 +140,7 @@ async function updateShipmentRecord(id, payload, items, stops) {
     .eq("id", id);
   if (error) throw error;
 
-  // Cara paling sederhana & aman untuk menyamakan daftar barang:
-  // hapus semua item lama, lalu masukkan ulang daftar item yang berlaku sekarang.
+  // Cara paling sederhana & aman untuk menyamakan daftar barang: hapus semua item lama
   const { error: delErr } = await supabaseClient
     .from("shipment_items")
     .delete()
@@ -125,10 +155,7 @@ async function updateShipmentRecord(id, payload, items, stops) {
     if (insErr) throw insErr;
   }
 
-  // Sama persis dengan pola daftar barang di atas: hapus semua terminal
-  // transit lama, lalu masukkan ulang daftar yang berlaku sekarang. Kalau
-  // route_type = "direct", "stops" yang dikirim ke sini sudah dikosongkan
-  // duluan oleh pemanggilnya, jadi baris lama otomatis ikut terhapus.
+  // Sama persis dengan pola daftar barang di atas: hapus semua terminal transit lama
   const { error: delStopErr } = await supabaseClient
     .from("shipment_route_stops")
     .delete()

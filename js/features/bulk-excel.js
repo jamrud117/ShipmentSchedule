@@ -1,11 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   BULK EXPORT / IMPORT (Excel, menggantikan Ekspor JSON & Impor)
-   Format kolom mengikuti IMPORT_FORMAT.xlsx (31 kolom, NO..REMARK)
-   dan EXPORT_FORMAT.xlsx (18 kolom, NO..REMARK), sheet pertama di
-   file = data (sheet SUMMARY di template asli diabaikan).
-================================================================== */
+/* BULK EXPORT / IMPORT (Excel, menggantikan Ekspor JSON & Impor) */
 const IMPORT_BULK_HEADERS = [
   "NO",
   "IN FACTORY",
@@ -39,9 +34,7 @@ const IMPORT_BULK_HEADERS = [
   "PACKAGE",
   "REMARK",
 ];
-// Mengikuti PERSIS urutan kolom template copy "All Export" (17 kolom,
-// requirement E) supaya hasil Bulk Export bisa langsung dipaste ke sheet
-// yang sama dengan hasil tombol Copy.
+// Mengikuti PERSIS urutan kolom template copy "All Export" (17 kolom
 const EXPORT_BULK_HEADERS = [
   "NO",
   "PENGIRIMAN DARI PABRIK",
@@ -62,10 +55,7 @@ const EXPORT_BULK_HEADERS = [
   "PACKAGE",
   "REMARK",
 ];
-// Index kolom (0-based, termasuk NO di depan) buat baca-balik saat Bulk
-// Import — harus sinkron persis dengan urutan header & dengan susunan
-// buildExcelCopyRows()/buildExportCopyRows() (yang tidak termasuk NO
-// & REMARK, makanya semua index di sini +1 dari index di fungsi itu).
+// Index kolom (0-based, termasuk NO di depan) buat baca-balik saat Bulk Import
 const IMPORT_IDX = {
   NO: 0,
   FACTORY: 1,
@@ -118,8 +108,7 @@ const EXPORT_IDX = {
 
 function buildBulkRowsForShipment(s, no, mode, formatter) {
   if (mode === "export") {
-    // buildAllExportCopyRows() SUDAH memuat kolom NO (kosong) & REMARK,
-    // jadi cukup nomor urutnya yang diisi di sini.
+    // buildAllExportCopyRows() SUDAH memuat kolom NO (kosong) & REMARK
     const rows = buildAllExportCopyRows(s, formatter);
     if (rows.length) rows[0][0] = formatter.num(no, 0);
     return rows;
@@ -131,10 +120,7 @@ function buildBulkRowsForShipment(s, no, mode, formatter) {
   ]);
 }
 
-// Baris untuk sheet template SELAIN "All Import"/"All Export" (mis.
-// Daily Import/Daily Export). Sheet-sheet ini murni untuk dibaca/dipaste
-// manusia — Bulk Import tetap membaca sheet pertama saja (format All
-// Import/All Export), lihat handleBulkImport().
+// Baris untuk sheet template SELAIN "All Import"/"All Export" (mis
 function buildTemplateSheetRows(list, tpl, formatter) {
   const builder =
     tpl.id === "DailyImport"
@@ -170,8 +156,74 @@ function headersForTemplate(tplId) {
   return null;
 }
 
+/* ------------------------------------------------------------------
+   TATA LETAK BERKAS EKSPOR
+
+   Ditulis dengan ExcelJS, bukan SheetJS: versi komunitas SheetJS
+   mengabaikan gaya sel saat menulis. SheetJS tetap dipakai untuk
+   MEMBACA berkas impor.
+------------------------------------------------------------------ */
+const XL_NAVY = "FF0A1B33";
+const XL_TEPI = "FFDFE5ED";
+
+function terapkanGayaSheet(ws, jumlahKolom) {
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+
+  ws.eachRow((row, nomor) => {
+    row.height = nomor === 1 ? 26 : 20;
+    for (let c = 1; c <= jumlahKolom; c++) {
+      const sel = row.getCell(c);
+      sel.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: false,
+      };
+      sel.font = {
+        name: "Calibri",
+        size: 12,
+        bold: nomor === 1,
+        color: { argb: nomor === 1 ? "FFFFFFFF" : "FF1C2B45" },
+      };
+      if (nomor === 1) {
+        sel.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: XL_NAVY },
+        };
+      }
+      sel.border = {
+        top: { style: "thin", color: { argb: XL_TEPI } },
+        left: { style: "thin", color: { argb: XL_TEPI } },
+        bottom: { style: "thin", color: { argb: XL_TEPI } },
+        right: { style: "thin", color: { argb: XL_TEPI } },
+      };
+    }
+  });
+}
+
+function isiSheet(ws, headers, rows, opsi) {
+  const o = opsi || {};
+  ws.addRow(headers);
+  rows.forEach((r) => ws.addRow(r));
+
+  ws.columns.forEach((kolom, i) => {
+    kolom.width = Math.max(14, Math.min(30, String(headers[i] || "").length + 6));
+  });
+
+  /* Format tanggal & persen dipasang per kolom supaya angkanya tetap
+     angka di Excel — bukan teks yang kebetulan terlihat seperti tanggal. */
+  (o.kolomTanggal || []).forEach((c) => {
+    ws.getColumn(c + 1).numFmt = "dd-mm-yyyy";
+  });
+  if (o.kolomPersen != null) {
+    ws.getColumn(o.kolomPersen + 1).numFmt = "0.00%";
+  }
+
+  terapkanGayaSheet(ws, headers.length);
+}
+
 async function handleBulkExport(mode) {
-  await ensureXLSX(); // pustaka Excel diunduh saat dibutuhkan saja
+  await ensureExcelJS(); // pustaka Excel diunduh saat dibutuhkan saja
   const list = (data[mode] || []).slice().sort((a, b) => {
     const da = a.docDate || a.factoryDate || "";
     const db = b.docDate || b.factoryDate || "";
@@ -184,72 +236,57 @@ async function handleBulkExport(mode) {
     );
     return;
   }
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "EXIM DDI";
+  wb.created = new Date();
+
   const headers =
     mode === "import" ? IMPORT_BULK_HEADERS : EXPORT_BULK_HEADERS;
-  const aoa = [headers];
+  const rows = [];
   list.forEach((s, i) => {
     buildBulkRowsForShipment(s, i + 1, mode, nativeFormatter).forEach((r) =>
-      aoa.push(r),
+      rows.push(r),
     );
   });
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = headers.map(() => ({ wch: 15 }));
-
-  // Format tanggal & persen supaya file langsung enak dibaca.
-  const dateCols = mode === "import" ? [1, 3] : [EXPORT_IDX.FACTORY, EXPORT_IDX.DATE];
-  const tarifCol = mode === "import" ? IMPORT_IDX.TARIF : null;
-  const range = XLSX.utils.decode_range(ws["!ref"]);
-  for (let r = 1; r <= range.e.r; r++) {
-    dateCols.forEach((c) => {
-      const cell = ws[XLSX.utils.encode_cell({ r, c })];
-      if (cell && cell.v instanceof Date) cell.z = "d-mmm-yy";
-    });
-    if (tarifCol != null) {
-      const cell = ws[XLSX.utils.encode_cell({ r, c: tarifCol })];
-      if (cell && typeof cell.v === "number") cell.z = "0.00%";
-    }
-  }
-
-  const wb = XLSX.utils.book_new();
   const mainSheetName = mode === "import" ? "ALL IMPORT" : "ALL EXPORT";
-  XLSX.utils.book_append_sheet(wb, ws, mainSheetName);
+  isiSheet(wb.addWorksheet(mainSheetName), headers, rows, {
+    kolomTanggal: mode === "import" ? [1, 3] : [EXPORT_IDX.FACTORY, EXPORT_IDX.DATE],
+    kolomPersen: mode === "import" ? IMPORT_IDX.TARIF : null,
+  });
 
-  // Requirement E: "Bulk export: sesuaikan dengan masing-masing template
-  // copy — buat sheet terpisah per nama template copy, KECUALI template
-  // Report (tidak usah ada sheetnya)." Sheet "All Import"/"All Export"
-  // sudah dibuat di atas (dipakai juga sbg format baca Bulk Import);
-  // sisanya (Daily) ditambahkan di sini.
   templatesForMode(mode)
     .filter((tpl) => tpl.sheet && tpl.sheet !== mainSheetName)
     .forEach((tpl) => {
       const tplHeaders = headersForTemplate(tpl.id);
       const tplRows = buildTemplateSheetRows(list, tpl, nativeFormatter);
       if (!tplHeaders || !tplRows) return;
-      const tws = XLSX.utils.aoa_to_sheet([tplHeaders, ...tplRows]);
-      tws["!cols"] = tplHeaders.map(() => ({ wch: 15 }));
-      const trange = XLSX.utils.decode_range(tws["!ref"]);
-      for (let r = 1; r <= trange.e.r; r++) {
-        tplHeaders.forEach((h, c) => {
-          if (!/DATE|ETD|ETA|DELIVERY/i.test(h)) return;
-          const cell = tws[XLSX.utils.encode_cell({ r, c })];
-          if (cell && cell.v instanceof Date) cell.z = "d-mmm-yy";
-        });
-      }
-      XLSX.utils.book_append_sheet(wb, tws, tpl.sheet);
+      const kolomTanggal = tplHeaders
+        .map((h, i) => (/DATE|ETD|ETA|DELIVERY|STUFFING/i.test(h) ? i : -1))
+        .filter((i) => i >= 0);
+      isiSheet(wb.addWorksheet(tpl.sheet), tplHeaders, tplRows, { kolomTanggal });
     });
 
-  const fname = `bulk-${mode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  XLSX.writeFile(wb, fname);
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const tautan = document.createElement("a");
+  tautan.href = URL.createObjectURL(blob);
+  tautan.download = `bulk-${mode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(tautan);
+  tautan.click();
+  document.body.removeChild(tautan);
+  setTimeout(() => URL.revokeObjectURL(tautan.href), 1000);
+
   showToast(
     `File Excel (${list.length} jadwal, mode ${mode === "import" ? "Import" : "Export"}) berhasil diunduh.`,
     "success",
   );
 }
 
-// Kolom VESSEL di file bulk berisi hasil gabungan (lihat
-// vesselNameForTemplate di features/copy-templates.js). Dipecah kembali
-// jadi field terpisah supaya form terisi benar saat Bulk Import.
+// Kolom VESSEL di file bulk berisi hasil gabungan
 function splitVesselCell(raw) {
   const teks = String(raw || "").trim();
   if (!teks) return { vessel: "", voyage: "" };
@@ -296,11 +333,7 @@ function reconstructShipmentFromGroup(group, mode) {
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),
     invoice: excelStr(first[idx.INVOICE]),
-    // Kolom VESSEL kini berisi hasil gabungan vesselNameForTemplate():
-    // moda laut "<Nama Vessel> <No. Voyage>", moda udara "<No. Flight>".
-    // Dipecah balik di sini: token TERAKHIR dianggap nomor pengangkut
-    // (selalu tanpa spasi, mis. "2606S"/"0028N"), sisanya nama vessel.
-    // Kalau isinya cuma satu token, itu nomor pengangkut saja.
+    // Kolom VESSEL kini berisi hasil gabungan vesselNameForTemplate(): moda laut "<Nama Vessel> <No
     ...splitVesselCell(excelStr(first[idx.VESSEL])),
     package: excelStr(first[idx.PACKAGE]),
     notes: excelStr(first[idx.REMARK]),
@@ -313,21 +346,14 @@ function reconstructShipmentFromGroup(group, mode) {
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);
   }
-  // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per
-  // barang) — sama seperti import PDF, diterapkan ke SEMUA barang
-  // sebagai default (di-clone per barang), user tinggal hapus lewat
-  // tombol Fasilitas kalau ada yang tidak seharusnya dapat (lihat
-  // pemakaian legacySkbText di bawah, setelah `items` terbentuk).
+  // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per barang)
   const legacySkbText = mode === "import" ? excelStr(first[idx.SKB]) : "";
 
-  // BL/AWB: baris pertama = Master. Baris kedua dalam grup (barang ke-2
-  // ATAU baris sisipan khusus House) -> House.
+  // BL/AWB: baris pertama = Master
   s.masterBL = excelStr(first[idx.BLAWB]);
   s.houseBL = rows.length >= 2 ? excelStr(rows[1][idx.BLAWB]) : "";
 
-  // ITEMS: baris yang punya data barang asli (deskripsi/HS/qty tidak
-  // kosong semua). Baris sisipan House BL/AWB (semua kolom barang
-  // kosong) dilewati, tidak dihitung sebagai barang.
+  // ITEMS: baris yang punya data barang asli (deskripsi/HS/qty tidak kosong semua)
   const items = [];
   rows.forEach((row) => {
     const desc = excelStr(row[idx.DESC]);
@@ -440,8 +466,7 @@ async function handleBulkImport(mode, file) {
 let bulkAction = "export";
 function openBulkModal(action) {
   bulkAction = action;
-  // Requirement D: "Bulk export/import: hilangkan dropdown konfirmasi
-  // pilihan Import/Export — cukup auto-detect section yang sedang aktif."
+  // Requirement D: "Bulk export/import: hilangkan dropdown konfirmasi pilihan Import/Export
   const modeLabel = activeMode === "import" ? "Import" : "Export";
   $("#bulkModeInfo").textContent = `Section aktif: Jadwal ${modeLabel}`;
   $("#bulkModalTitle").textContent =
@@ -457,12 +482,13 @@ function openBulkModal(action) {
 }
 
 $("#btnBulkExport").addEventListener("click", () => openBulkModal("export"));
-$("#btnBulkImport").addEventListener("click", () => openBulkModal("import"));
+$("#btnBulkImport").addEventListener("click", () => {
+  if (!requireEdit()) return;
+  openBulkModal("import");
+});
 
 /* ---- Hapus Semua Data (Import + Export, permanen dari database) ---- */
-// Requirement D: "Hapus Semua harus per section" — di section Import
-// hanya jadwal Import yang terhapus, begitu pula sebaliknya. Sebelumnya
-// tombol ini menghapus SELURUH data kedua section sekaligus.
+// Requirement D: "Hapus Semua harus per section"
 async function handleDeleteAll() {
   const mode = activeMode;
   const modeLabel = mode === "import" ? "Import" : "Export";
@@ -484,15 +510,13 @@ async function handleDeleteAll() {
       btn.innerHTML =
         '<span class="spinner-border spinner-border-sm" role="status"></span> Menghapus...';
       try {
-        // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka
-        // yang terhapus — section satunya tidak tersentuh.
+        // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka yang terhapus
         const { error } = await supabaseClient
           .from("shipments")
           .delete()
           .eq("mode", mode);
         if (error) throw error;
-        // shipment_items & shipment_route_stops ikut terhapus otomatis
-        // lewat "on delete cascade".
+        // shipment_items & shipment_route_stops ikut terhapus otomatis lewat "on delete cascade".
         data[mode] = [];
         render();
         showToast(`Semua data Jadwal ${modeLabel} berhasil dihapus.`, "dark");
@@ -507,12 +531,23 @@ async function handleDeleteAll() {
     },
   );
 }
-$("#btnDeleteAll").addEventListener("click", handleDeleteAll);
+$("#btnDeleteAll").addEventListener("click", () => {
+  if (!requireEdit()) return;
+  handleDeleteAll();
+});
 
 $("#bulkActionBtn").addEventListener("click", async () => {
   const mode = activeMode;
   if (bulkAction === "export") {
-    await handleBulkExport(mode);
+    /* Pustaka Excel diunduh dari CDN saat dibutuhkan. Kalau jaringannya
+       putus, kegagalannya harus sampai ke pengguna — bukan berhenti diam
+       sebagai unhandled rejection di konsol. */
+    try {
+      await handleBulkExport(mode);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Gagal membuat file Excel.", "danger");
+    }
     bulkModal.hide();
   } else {
     const file = $("#bulkImportFile").files[0];

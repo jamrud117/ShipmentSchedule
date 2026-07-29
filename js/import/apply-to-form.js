@@ -1,27 +1,6 @@
 "use strict";
 
-/* ==================================================================
-   TERAPKAN HASIL PARSE KE FORM
-
-   ATURAN TIMPA-MENIMPA (requirement A):
-   "Kalau user import beberapa jenis data berbeda dalam satu form, field
-    yang sudah terisi tidak boleh saling menimpa — KECUALI kombinasi
-    field tertentu yang memang sengaja dibuat saling menimpa."
-
-   Diterapkan lewat PRIORITAS SUMBER, bukan daftar field satu per satu
-   (daftar manual gampang basi tiap ada field baru). Logikanya:
-     - Field yang MASIH KOSONG selalu diisi, sumber apa pun.
-     - Field yang SUDAH TERISI hanya ditimpa kalau sumber baru
-       prioritasnya LEBIH TINGGI dari sumber yang mengisinya tadi.
-   Prioritas: dokumen pabean resmi (PIB/PEB, sudah disahkan Bea Cukai)
-   > draft CEISA > dokumen niaga supplier (CIPL). Jadi urutan impor
-   "CIPL dulu baru PIB" tetap menghasilkan data final versi PIB, tapi
-   "PIB dulu baru CIPL" TIDAK merusak data PIB yang sudah benar.
-
-   Sumber pengisi terakhir tiap field disimpan di importFieldOrigin
-   (per sesi halaman form, direset tiap form dibuka — lihat
-   resetImportFieldOrigins() yang dipanggil renderFormPage()).
-================================================================== */
+/* TERAPKAN HASIL PARSE KE FORM */
 
 const IMPORT_SOURCE_PRIORITY = {
   "pdf": 30, // PIB BC 2.0
@@ -45,10 +24,7 @@ function sourcePriority(source) {
     : 15;
 }
 
-// Field mana yang BOLEH diisi oleh sumber ini. Dokumen CIPL sengaja
-// TIDAK boleh mengisi tanggal keberangkatan/kedatangan maupun nomor
-// B/L — requirement A: "CIPL TIDAK mengisi ETD, ETA, Tanggal SPPB, atau
-// Master/House BL/AWB — CIPL hanya berisi info barang dan No CI shipper."
+// Field mana yang BOLEH diisi oleh sumber ini
 const CIPL_BLOCKED_FIELDS = new Set([
   "fEtd",
   "fEta",
@@ -77,14 +53,10 @@ function setImportField(id, value, source, opts) {
   const prevPrio = importFieldOrigin[id];
 
   if (current !== "" && prevPrio != null && prio < prevPrio) return false;
-  // Field terisi yang BELUM pernah disentuh import (artinya diketik user
-  // sendiri atau berasal dari data lama saat edit) tidak ditimpa —
-  // kecuali pemanggil memang minta paksa.
+  // Field terisi yang BELUM pernah disentuh import
   if (current !== "" && prevPrio == null && !(opts && opts.force)) return false;
 
-  // Kotak angka ditulis dalam bentuk BERFORMAT (mis. 34200 -> "34,200")
-  // supaya tampilannya sama dengan hasil ketikan manual, dan hasil
-  // salin-tempel ke Excel langsung terbaca sebagai angka.
+  // Kotak angka ditulis dalam bentuk BERFORMAT (mis
   el.value = el.hasAttribute("data-num") ? formatNumberValue(value) : value;
   importFieldOrigin[id] = prio;
   return true;
@@ -110,13 +82,7 @@ function setImportSelect(id, value, source, notes, labelForNote) {
   return true;
 }
 
-/* ------------------------------------------------------------------
-   Nama Shipper / Buyer: dokumen memuat DUA pihak sekaligus, dan mana
-   yang benar tergantung section form yang sedang dibuka — bukan
-   tergantung isi dokumennya. Import -> pengirim (seller/shipper),
-   Export -> penerima (buyer/consignee). Lihat pickCiplParty() di
-   cipl-common.js untuk penjelasan bug-nya.
------------------------------------------------------------------- */
+/* Nama Shipper / Buyer: dokumen memuat DUA pihak sekaligus, dan mana */
 function resolvePartyForActiveMode(f) {
   if (f.seller || f.consignee) {
     return pickCiplParty(f.seller, f.consignee, activeMode);
@@ -150,8 +116,7 @@ function applyImportedBcData(parsed) {
   put("fEta", f.eta);
   put("fActual", f.actual);
   if (f.package) {
-    // Dari file, Total Package datang sbg satu teks ("2 PACKAGE") — dipecah
-    // jadi kotak angka + kotak satuan seperti isian manual.
+    // Dari file, Total Package datang sbg satu teks ("2 PACKAGE")
     const before = $("#fPackage").value.trim();
     if (put("fPackage", f.package)) {
       setPackageFields(f.package);
@@ -190,15 +155,12 @@ function applyImportedBcData(parsed) {
 
   /* ---- daftar barang ---- */
   if (parsed.items && parsed.items.length) {
-    // HS Code disimpan sebagai DIGIT saja (requirement A) — titik & strip
-    // dari dokumen/paste manual dibuang di satu tempat ini supaya semua
-    // sumber import konsisten.
+    // HS Code disimpan sebagai DIGIT saja (requirement A)
     const cleaned = parsed.items.map((it) => ({
       ...it,
       hsCode: normalizeHsCodeInput(it.hsCode),
     }));
-    // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar
-    // barang yang sudah terisi dari dokumen pabean.
+    // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar barang yang sudah terisi
     const prevPrio = importFieldOrigin.__items;
     const prio = sourcePriority(src);
     const hasRealItems = draftItems.some(

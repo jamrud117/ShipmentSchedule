@@ -1,37 +1,91 @@
 "use strict";
 
-/* ==================================================================
-   LANE / TRANSPORT ICON
-================================================================== */
+/* LANE / TRANSPORT ICON */
+/* Posisi penanda pada jalur = bagian waktu yang sudah dilewati antara
+   ETD dan ETA.
+
+   Sebelumnya ada jalan pintas `if (status === "process") return 0.04`
+   yang mengunci penanda di 4% untuk SELURUH pengiriman berstatus
+   process — yaitu hampir semuanya — sehingga perhitungan tanggal di
+   bawahnya praktis tidak pernah dipakai.
+
+   Tanggal yang dipakai adalah tanggal EFEKTIF: kalau jadwal sudah
+   dimundurkan, jalurnya ikut memanjang mengikuti tanggal barunya. */
 function laneProgress(s) {
-  if (s.status === "arrived") return 1;
-  if (s.status === "process") return 0.04;
-  const etd = parseLocalDate(s.etd);
-  const eta = parseLocalDate(s.eta);
-  const today = new Date();
-  if (!etd || !eta || eta <= etd) return 0.5;
-  let frac = (today - etd) / (eta - etd);
-  return Math.min(0.96, Math.max(0.06, frac));
-}
-function iconForMode(mode, status) {
-  const air = mode === "udara";
-  if (status === "arrived") return air ? "🛬" : "⚓";
-  return air ? "✈️" : "🚢";
+  if (isArrived(s)) return 1;
+
+  const etd = parseLocalDate(effectiveEtd(s));
+  const eta = parseLocalDate(effectiveEta(s));
+  if (!etd || !eta) return 0;
+
+  const today = parseLocalDate(todayISO());
+  // Belum berangkat = benar-benar 0. Sebelumnya dipatok 4% supaya
+  // penandanya tidak menggantung di tepi; itu ditangani CSS sekarang.
+  if (today <= etd) return 0;
+  // Sudah sampai terminal, menunggu diantar ke pabrik.
+  if (today >= eta) return 0.96;
+
+  const total = eta - etd;
+  if (total <= 0) return 0.5;
+  return Math.min(0.94, Math.max(0.04, (today - etd) / total));
 }
 
-/* ==================================================================
-   RUTE TRANSIT (multi-terminal)
-   Kalau route_type !== "transit" atau tidak ada routeStops sama sekali,
-   semua fungsi di bawah ini otomatis "collapse" jadi 1 leg
-   origin -> destination — PERSIS seperti shipment direct sebelumnya,
-   tidak ada perubahan tampilan/perilaku untuk data lama.
+/* Keterangan jalur dalam tiga tahap:
+     sebelum ETD   -> menunggu berangkat
+     ETD .. ETA    -> dalam perjalanan ke terminal/bandara
+     setelah ETA   -> menunggu diantar ke pabrik
+   Diringkas supaya muat di satu baris di sebelah judul jalur. */
+function laneRemainingLabel(s) {
+  if (isArrived(s)) return "Selesai";
 
-   Field transport/vessel/voyage pada 1 baris shipment_route_stops
-   menjelaskan alat angkut yang MEMBAWA barang TIBA di terminal
-   tersebut (bukan leg berikutnya). Leg TERAKHIR (dari terminal transit
-   paling akhir menuju s.destination) tetap memakai
-   s.transport / s.vessel / s.voyage — field yang sudah ada dari dulu.
-================================================================== */
+  const etd = parseLocalDate(effectiveEtd(s));
+  const eta = parseLocalDate(effectiveEta(s));
+  const today = parseLocalDate(todayISO());
+  const hari = (a, b) => Math.round((b - a) / 86400000);
+  const simpul = s.transport === "udara" ? "Bandara" : "Terminal";
+
+  if (etd && today < etd) {
+    const n = hari(today, etd);
+    return `Berangkat ${n} Hari Lagi`;
+  }
+  if (etd && eta && today >= etd && today < eta) {
+    const n = hari(today, eta);
+    return n === 0
+      ? `Sampai ${simpul} Hari Ini`
+      : `Sampai ${simpul} ${n} Hari Lagi`;
+  }
+  if (eta && today >= eta) {
+    if (s.actual) {
+      const n = hari(today, parseLocalDate(s.actual));
+      if (n > 0) return `Diantar ${n} Hari Lagi`;
+      if (n === 0) return "Diantar Hari Ini";
+    }
+    const telat = hari(eta, today);
+    return telat > 0 ? `Di ${simpul} · Telat ${telat} Hari` : `Di ${simpul}`;
+  }
+  if (etd && today.getTime() === etd.getTime()) return "Berangkat Hari Ini";
+  return "";
+}
+/* Lambang moda digambar sebagai SVG, bukan emoji.
+
+   Emoji ✈️ dan 🚢 arah hadapnya berbeda-beda antar sistem operasi —
+   ada yang serong kanan-atas, ada yang mendatar — sehingga tidak ada
+   satu sudut putar yang benar untuk semuanya. Sudut 90 derajat yang
+   dipakai sebelumnya membuat pesawatnya menghadap ke BAWAH pada
+   sebagian mesin.
+
+   Kedua gambar di bawah sudah menghadap lurus ke kanan, searah jalur,
+   jadi tidak perlu diputar sama sekali. */
+const ICON_PESAWAT =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 12c0 .6-.5 1.1-1.1 1.1h-4.3l-3.4 5.5a1 1 0 0 1-.9.5h-1.5l1.9-6H8.2l-1.4 2H5l1-3.1-1-3.1h1.8l1.4 2h4.1l-1.9-6h1.5c.4 0 .7.2.9.5l3.4 5.5h4.3c.6 0 1.1.5 1.1 1.1z"/></svg>';
+const ICON_KAPAL =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 9.6h5.1v3.3H6.2zM12.6 10.8h2v2.1h-2z"/><path d="M2.6 14.2h13.7l4.8 2.7-1.4 2.8H5.3z"/></svg>';
+
+function iconForMode(mode) {
+  return mode === "udara" ? ICON_PESAWAT : ICON_KAPAL;
+}
+
+/* RUTE TRANSIT (multi-terminal) */
 function routeStopList(s) {
   return Array.isArray(s.routeStops) ? s.routeStops : [];
 }
@@ -58,12 +112,7 @@ function buildRouteNodes(s) {
   return nodes;
 }
 
-// Ubah tanggal tiap titik jadi posisi 0..1 di sepanjang lane. Titik yang
-// tanggalnya kosong diisi otomatis lewat interpolasi linear terhadap
-// titik bertanggal terdekat kiri/kanan. Kalau rentang keseluruhan tidak
-// valid (sama/mundur), semua titik disebar rata berdasar urutan saja —
-// konsisten dengan cara laneProgress() menangani etd/eta yang tidak
-// valid (fallback ke nilai tetap, bukan NaN).
+// Ubah tanggal tiap titik jadi posisi 0..1 di sepanjang lane
 function computeNodeFractions(nodes) {
   const n = nodes.length;
   const times = nodes.map((nd) => {
@@ -94,16 +143,14 @@ function computeNodeFractions(nodes) {
       Math.min(1, Math.max(0, (t - minT) / (maxT - minT))),
     );
   }
-  // Jaga urutan selalu maju supaya titik di rute tidak pernah terlihat
-  // mundur ke kiri walau ada input tanggal yang keliru.
+  // Jaga urutan selalu maju supaya titik di rute tidak pernah terlihat mundur ke kiri walau ada
   for (let i = 1; i < n; i++) {
     if (fractions[i] < fractions[i - 1]) fractions[i] = fractions[i - 1];
   }
   return fractions;
 }
 
-// Leg mana yang sedang berjalan sekarang, berdasar posisi progress
-// keseluruhan (laneProgress) terhadap fraksi tiap titik.
+// Leg mana yang sedang berjalan sekarang, berdasar posisi progress keseluruhan
 function activeLegIndex(fractions, progress) {
   let idx = 0;
   for (let i = 0; i < fractions.length - 1; i++) {
@@ -112,9 +159,7 @@ function activeLegIndex(fractions, progress) {
   return idx;
 }
 
-// Alat angkut yang dipakai utk 1 leg tertentu. Leg terakhir (menuju
-// destination) selalu pakai field shipments.* yang sudah ada; leg
-// lainnya pakai field milik titik TUJUAN leg tsb (lihat catatan di atas).
+// Alat angkut yang dipakai utk 1 leg tertentu
 function transportForLeg(s, nodes, legIndex) {
   const lastLegIndex = nodes.length - 2;
   if (legIndex >= lastLegIndex) {
@@ -128,15 +173,14 @@ function transportForLeg(s, nodes, legIndex) {
   };
 }
 
-// Satu fungsi terpusat dipakai baik saat render awal card maupun saat
-// refresh posisi berkala (refreshLanePositions) — single source of truth.
+// Satu fungsi terpusat dipakai baik saat render awal card maupun saat refresh posisi berkala
 function computeLaneModel(s) {
   const nodes = buildRouteNodes(s);
   const fractions = computeNodeFractions(nodes);
   const progress = laneProgress(s);
   const legIdx = activeLegIndex(fractions, progress);
   const leg = transportForLeg(s, nodes, legIdx);
-  const icon = iconForMode(leg.mode, s.status);
+  const icon = iconForMode(leg.mode);
   return { nodes, fractions, progress, legIdx, leg, icon };
 }
 
@@ -172,12 +216,7 @@ function laneNodeTitle(nd) {
   return escapeAttr(parts.join(" · "));
 }
 
-// Render seluruh isi ".lane" (judul + track + label tanggal). Untuk
-// shipment direct (2 titik) outputnya PERSIS sama seperti sebelumnya;
-// untuk transit (>2 titik) menampilkan seluruh terminal + leg aktif.
-// Cegah label antar terminal saling tumpuk kalau tanggalnya berdekatan
-// (atau bahkan sama persis): label yang jaraknya terlalu dekat dengan
-// label terakhir di baris atas otomatis digeser ke baris ke-2.
+// Render seluruh isi ".lane" (judul + track + label tanggal)
 function assignLabelRows(fractions) {
   const MIN_GAP = 0.12;
   const lastInRow = [-Infinity, -Infinity];
@@ -197,7 +236,22 @@ function buildLaneHtml(s) {
       : s.status === "process"
         ? "is-process"
         : "";
-  const sailing = s.status === "transit" ? "sailing" : "";
+  /* Kelas penggerak penanda. Sebelumnya `s.status === "transit"`,
+     padahal status "transit" sudah tidak ditawarkan lagi — jadi
+     animasinya tidak pernah sekali pun berjalan.
+
+     Sekarang berdasarkan keadaan nyata: bergerak kalau sudah berangkat
+     dan belum sampai pabrik. Ragam geraknya mengikuti moda ruas yang
+     sedang dilalui (laut bergoyang, udara mengambang). */
+  const bergerak = !isArrived(s) && progress > 0.05 && progress < 1;
+  const markerClass = [
+    progress <= 0.001 ? "at-start" : "",
+    progress >= 0.999 ? "at-end" : "",
+    bergerak ? "is-moving" : "",
+    lane.leg && lane.leg.mode === "udara" ? "is-air" : "is-sea",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const multi = nodes.length > 2;
 
   const dotsHtml = nodes
@@ -234,27 +288,23 @@ function buildLaneHtml(s) {
   let delayFlag = "";
   const today = new Date();
   const etaDate = parseLocalDate(s.eta);
-  if (!s.actual && s.status !== "arrived" && etaDate && today > etaDate) {
+  if (!s.actual && !isArrived(s) && etaDate && today > etaDate) {
     const d = daysBetween(etaDate, today);
     delayFlag = `<div class="delay-flag"><i class="bi bi-exclamation-triangle-fill"></i> Melewati ETA ${d} hari</div>`;
   }
 
   return `
-    <div class="lane-title mt-3">Progres Pengiriman</div>
+    <div class="lane-title mt-3">
+      Progres Pengiriman
+      <span class="lane-remaining">${escapeHtml(laneRemainingLabel(s))}</span>
+    </div>
     <div class="lane-track ${laneClass}">
       <div class="lane-fill" style="width:${progress * 100}%"></div>
       ${dotsHtml}
-      <div class="ship-marker ${sailing}" style="left:${progress * 100}%">${icon}</div>
+      <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + "% perjalanan · " + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
     </div>
     ${labelsHtml}
     ${delayFlag}`;
 }
 
-/* ==================================================================
-   Auto-arrive (status otomatis pindah ke ARRIVED saat ETA lewat/hari
-   ini) SUDAH DIHAPUS sepenuhnya sesuai permintaan Bgenius. Status
-   sekarang HARUS diubah manual lewat dropdown Status, baik dari form
-   maupun quick-edit di kartu (card-events.js) — tidak ada lagi field
-   tanggal (ETD/ETA/Actual Delivery, atau kombinasi ETD=ETA) yang
-   punya efek samping ke status.
-================================================================== */
+/* Auto-arrive (status otomatis pindah ke ARRIVED saat ETA lewat/hari */
