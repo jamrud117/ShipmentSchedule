@@ -253,3 +253,132 @@
   padding: var(--sp-3) var(--sp-6) var(--sp-5);
   border-top: 0;
 }
+
+/* Tombol aksi pada entri kronologi */
+.note-acts {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.note-edit {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-xs);
+  color: var(--n-500);
+  font-size: 0.75rem;
+}
+.note-edit:hover {
+  background: var(--p-50);
+  color: var(--p-600);
+}
+
+/* ==================================================================
+   TOAST
+
+   Kanan-atas, DI BAWAH bilah yang sedang menempel — posisinya dihitung
+   dari tinggi bilah itu, bukan angka tetap, karena bilah kendali
+   membungkus jadi dua baris di layar sempit.
+
+   Seluruh kotaknya TEMBUS KLIK (pointer-events: none); hanya tombol
+   tutupnya yang menangkap tekanan. Jadi walau ia melintas di atas
+   tombol "Tambah Jadwal", tombol itu tetap bisa ditekan menembusnya —
+   toast tidak pernah benar-benar menghalangi apa pun.
+================================================================== */
+.toast-stack {
+  position: fixed;
+  right: var(--sp-5);
+  /* Diatur ulang oleh JS mengikuti tinggi bilah yang sedang menempel —
+     lihat posisikanToast() di js/ui/feedback.js. Nilai ini cadangan
+     kalau JS-nya belum sempat berjalan. */
+  top: calc(var(--topbar-h) + 12px);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  pointer-events: none;
+  max-width: min(420px, calc(100vw - 40px));
+}
+
+.app-toast {
+  --toast-hue: var(--p-500);
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px 13px 15px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--n-200);
+  border-left: 3px solid var(--toast-hue);
+  background: #fff;
+  color: var(--ink);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  box-shadow: 0 16px 36px -16px rgba(10, 27, 51, 0.45);
+  /* Mulai dari luar layar & tembus; kelas .is-open yang memunculkannya. */
+  opacity: 0;
+  transform: translateX(14px) scale(0.98);
+  transition:
+    opacity var(--dur-2) var(--ease),
+    transform var(--dur-2) var(--ease);
+}
+.app-toast.is-open {
+  opacity: 1;
+  transform: none;
+}
+
+.app-toast-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--toast-hue);
+  font-size: 1rem;
+  margin-top: 1px;
+}
+.app-toast-body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.app-toast-close {
+  pointer-events: auto;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-xs);
+  color: var(--n-400);
+  font-size: 0.72rem;
+}
+.app-toast-close:hover {
+  background: var(--n-100);
+  color: var(--ink);
+}
+
+/* Warna mengikuti jenis pesan. */
+.app-toast--success { --toast-hue: #1e7a4d; }
+.app-toast--danger  { --toast-hue: var(--s-danger); }
+.app-toast--warning { --toast-hue: var(--s-warn); }
+.app-toast--info,
+.app-toast--dark    { --toast-hue: var(--p-500); }
+
+@media (max-width: 575px) {
+  .toast-stack {
+    left: var(--sp-3);
+    right: var(--sp-3);
+    max-width: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    transition: none;
+  }
+}

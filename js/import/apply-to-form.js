@@ -142,6 +142,22 @@ function applyImportedBcData(parsed) {
     },
   );
 
+  /* Angka PPN & PPH hasil impor ditandai MANUAL.
+
+     Kalau tidak, recalcCustoms() menganggapnya masih "otomatis" dan
+     langsung menimpanya dengan hitungan Total Nilai x NDPBM. Itulah
+     yang membuat PPH hasil impor CEISA berubah jadi 1.291.004 padahal
+     NILAI BAYAR-nya 0 — angka yang benar tertimpa taksiran.
+
+     Nilai 0 pun ditandai manual: nol yang datang dari dokumen adalah
+     FAKTA (pungutannya dibebaskan), bukan kolom kosong yang menunggu
+     diisi. */
+  ["ppn", "pph"].forEach((key) => {
+    if (f[key] == null || f[key] === "") return;
+    const el = $("#" + (key === "ppn" ? "fPPN" : "fPPH"));
+    if (el) el.dataset.auto = "0";
+  });
+
   if (f.transport) {
     if (setImportSelect("fTransport", f.transport, src)) filled++;
   }

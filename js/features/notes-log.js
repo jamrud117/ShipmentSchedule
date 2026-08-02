@@ -73,9 +73,14 @@ function renderNotesTimeline() {
       <div class="note-entry${i === 0 ? " note-entry--latest" : ""}" data-note-id="${e.id}">
         <div class="note-entry-head">
           <span class="note-stamp"><i class="bi bi-clock"></i> ${escapeHtml(fmtNoteStamp(e.ts))}</span>
-          <button type="button" class="note-del" data-act="del-note" data-note-id="${e.id}" title="Hapus catatan ini">
-            <i class="bi bi-x-lg"></i>
-          </button>
+          <span class="note-acts">
+            <button type="button" class="note-edit" data-act="edit-note" data-note-id="${e.id}" title="Ubah tanggal &amp; isi catatan">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button type="button" class="note-del" data-act="del-note" data-note-id="${e.id}" title="Hapus catatan ini">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </span>
         </div>
         <div class="note-text">${escapeHtml(e.text)}</div>
       </div>`,
@@ -104,11 +109,64 @@ $("#fNoteDraft").addEventListener("keydown", (e) => {
   }
 });
 $("#notesTimeline").addEventListener("click", (e) => {
-  const btn = e.target.closest('[data-act="del-note"]');
-  if (!btn) return;
-  draftNotesLog = draftNotesLog.filter((x) => x.id !== btn.dataset.noteId);
-  renderNotesTimeline();
+  const hapus = e.target.closest('[data-act="del-note"]');
+  if (hapus) {
+    draftNotesLog = draftNotesLog.filter((x) => x.id !== hapus.dataset.noteId);
+    renderNotesTimeline();
+    return;
+  }
+  const ubah = e.target.closest('[data-act="edit-note"]');
+  if (ubah) editDraftNote(ubah.dataset.noteId);
 });
+
+/* ------------------------------------------------------------------
+   UBAH CATATAN
+
+   Tanggal DAN isinya bisa diubah. Kronologi sering ditulis menyusul —
+   "kapal sandar Selasa" baru dicatat hari Kamis — jadi cap waktunya
+   harus bisa dibetulkan, bukan hanya teksnya.
+
+   Jamnya dipertahankan dari entri aslinya kalau ada, supaya urutan
+   antar catatan pada hari yang sama tidak berubah acak.
+------------------------------------------------------------------ */
+function editDraftNote(noteId) {
+  const entri = draftNotesLog.find((x) => x.id === noteId);
+  if (!entri) return;
+
+  const asal = entri.ts ? new Date(entri.ts) : null;
+  const tglAwal =
+    asal && !isNaN(asal) ? asal.toISOString().slice(0, 10) : todayISO();
+
+  showPrompt({
+    title: "Ubah Kronologi",
+    desc: "Perbaiki tanggal atau isi catatan.",
+    icon: "bi-clock-history",
+    okText: "Simpan",
+    fields: [
+      { key: "tgl", label: "Tanggal", type: "date", value: tglAwal },
+      { key: "teks", label: "Isi catatan", value: entri.text || "" },
+    ],
+    onSubmit: (v) => {
+      const teks = (v.teks || "").trim();
+      if (!teks) return "Isi catatan tidak boleh kosong.";
+      const tgl = parseLocalDate(v.tgl);
+      if (!tgl) return "Tanggal tidak valid.";
+
+      // Jam & menit dari entri asli dipertahankan; kalau belum ada,
+      // dipakai jam saat ini supaya urutannya tetap masuk akal.
+      const acuan = asal && !isNaN(asal) ? asal : new Date();
+      tgl.setHours(acuan.getHours(), acuan.getMinutes(), acuan.getSeconds(), 0);
+
+      entri.ts = tgl.toISOString();
+      entri.text = teks;
+      // Diurutkan ulang: mengubah tanggal bisa memindahkan posisinya.
+      draftNotesLog.sort((a, b) => (a.ts || "") .localeCompare(b.ts || ""));
+      renderNotesTimeline();
+      showToast("Kronologi diperbarui.", "dark");
+      return true;
+    },
+  });
+}
 
 /* TIMELINE RINGKAS DI KARTU DASHBOARD */
 const CARD_NOTES_PREVIEW = 3;

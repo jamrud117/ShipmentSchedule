@@ -76,6 +76,25 @@ function autoGrowTextarea(el) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
+/* Menyesuaikan SELURUH kolom nama barang.
+
+   Dipanggil setelah tabel digambar ulang — termasuk setelah data
+   hasil impor masuk. Sebelumnya hanya dipanggil saat pengguna
+   mengetik, jadi nama panjang dari PDF/Excel tetap terpotong sampai
+   kolomnya disentuh. */
+function autoGrowAllItemNames() {
+  document
+    .querySelectorAll("textarea.nama-barang-input")
+    .forEach(autoGrowTextarea);
+}
+
+/* Lebar kolom berubah saat jendela diubah ukurannya; teks yang tadinya
+   dua baris bisa jadi tiga. */
+window.addEventListener("resize", () => {
+  clearTimeout(window.__growTimer);
+  window.__growTimer = setTimeout(autoGrowAllItemNames, 150);
+});
+
 // Font body (Inter) dimuat dengan `display=swap` (lihat index.html)
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {
@@ -86,9 +105,11 @@ if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
 }
 
 function renderItemTable() {
-  // Penanda kelengkapan di bilah simpan ikut diperbarui tiap tabel barang digambar ulang
+  // Penanda kelengkapan & tinggi nama barang ikut diperbarui tiap tabel
+  // digambar ulang — termasuk setelah data hasil impor masuk.
   setTimeout(() => {
     if (typeof syncFormValidity === "function") syncFormValidity();
+    autoGrowAllItemNames();
   }, 0);
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems

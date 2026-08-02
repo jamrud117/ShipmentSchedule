@@ -1,13 +1,71 @@
 "use strict";
 
 /* TOAST / CONFIRM (replaces native alert()/confirm() so it always */
-function showToast(msg, type) {
-  type = type || "danger";
-  const el = $("#appToast");
-  el.className = "toast align-items-center text-white border-0 bg-" + type;
-  $("#toastMsg").textContent = msg;
-  new bootstrap.Toast(el, { delay: 3200 }).show();
+/* Toast sendiri, bukan komponen Bootstrap: yang bawaan memaksa satu
+   warna latar penuh (bg-danger dsb) sehingga pesan biasa pun terlihat
+   seperti peringatan, dan tidak bisa diberi lambang per jenis. */
+const TOAST_IKON = {
+  success: "bi-check-circle-fill",
+  danger: "bi-exclamation-octagon-fill",
+  warning: "bi-exclamation-triangle-fill",
+  info: "bi-info-circle-fill",
+  dark: "bi-info-circle-fill",
+};
+let toastTimer = null;
+
+/* Menaruh toast tepat di bawah bilah yang sedang menempel.
+
+   Diukur, bukan ditebak: bilah kendali membungkus jadi dua baris di
+   layar sempit, dan di halaman form bilah itu tidak ada sama sekali. */
+function posisikanToast() {
+  const stack = document.getElementById("toastStack");
+  if (!stack) return;
+  let bawah = 0;
+  ["#appTopbarEl", ".app-topbar", ".controlbar"].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (!el || el.classList.contains("d-none")) return;
+    const cs = getComputedStyle(el);
+    if (cs.position !== "sticky" && cs.position !== "fixed") return;
+    bawah = Math.max(bawah, el.getBoundingClientRect().bottom);
+  });
+  stack.style.top = Math.max(12, bawah + 12) + "px";
 }
+
+window.addEventListener("resize", posisikanToast);
+window.addEventListener("scroll", posisikanToast, { passive: true });
+
+function showToast(msg, type) {
+  type = TOAST_IKON[type] ? type : "info";
+  posisikanToast();
+  const el = $("#appToast");
+  if (!el) return;
+
+  el.className = "app-toast app-toast--" + type;
+  $("#toastIcon").className = "bi " + TOAST_IKON[type];
+  $("#toastMsg").textContent = msg;
+
+  // Dua putaran gambar dipisah supaya transisinya benar-benar berjalan
+  // saat toast yang sama dimunculkan berturut-turut.
+  el.classList.remove("is-open");
+  requestAnimationFrame(() => el.classList.add("is-open"));
+
+  clearTimeout(toastTimer);
+  // Pesan panjang butuh waktu baca lebih lama; galat ditahan lebih lama
+  // lagi karena biasanya memuat langkah yang harus dikerjakan.
+  const lama = Math.min(
+    9000,
+    Math.max(3200, msg.length * 55 + (type === "danger" ? 2000 : 0)),
+  );
+  toastTimer = setTimeout(hideToast, lama);
+}
+
+function hideToast() {
+  const el = $("#appToast");
+  if (el) el.classList.remove("is-open");
+}
+
+const toastCloseEl = document.getElementById("toastClose");
+if (toastCloseEl) toastCloseEl.addEventListener("click", hideToast);
 
 let confirmCallback = null;
 /* opsi: { confirmText, tone: "danger" | "primary", icon } — kotak ini
@@ -74,7 +132,14 @@ function showPrompt(opsi) {
       (f) => `
       <label class="prompt-label" for="prompt_${f.key}">${escapeHtml(f.label)}</label>
       ${
-        f.type === "password"
+        f.type === "select"
+          ? `<select class="login-input" id="prompt_${f.key}">${(f.options || [])
+              .map(
+                (o) =>
+                  `<option value="${escapeAttr(o.value)}"${o.value === f.value ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
+              )
+              .join("")}</select>`
+          : f.type === "password"
           ? `<div class="pwd-wrap">
                <input class="login-input" id="prompt_${f.key}" type="password"
                  placeholder="${escapeAttr(f.placeholder || "")}" value="${escapeAttr(f.value || "")}" />

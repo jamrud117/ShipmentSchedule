@@ -60,6 +60,10 @@ cardContainer.addEventListener("click", (e) => {
      disembunyikan lewat CSS — ini lapis kedua kalau elemennya dipanggil
      dari konsol atau CSS-nya gagal dimuat */
   const hanyaBaca = ["viewDetail", "copyTemplate"];
+  if (btn.dataset.action === "docStep") {
+    toggleDocStep(id, btn.dataset.step);
+    return;
+  }
   if (!hanyaBaca.includes(btn.dataset.action) && !requireEdit()) return;
   if (btn.dataset.action === "edit") {
     location.hash = "#/edit/" + encodeURIComponent(id);

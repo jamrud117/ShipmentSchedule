@@ -334,10 +334,76 @@ function parsePibPdfText(text, pagesItems) {
   const beratMatch = beratNumMatch
     ? [beratNumMatch[0], packageDefault, beratNumMatch[1], beratNumMatch[2]]
     : null;
-  // BM/PPN/PPh (field 37/41/43, tabel "Jenis Pungutan")
-  const bmM = text.match(/^\d+\.\s*BM\s+([\d,.]+)/m);
-  const ppnM = text.match(/^\d+\.\s*PPN\s+([\d,.]+)/m);
-  const pphM = text.match(/^\d+\.\s*PPh\s+([\d,.]+)/m);
+  /* BM/PPN/PPh dari tabel "Jenis Pungutan" (field 37/41/43).
+
+     Tabel itu punya ENAM kolom:
+       Dibayar | Ditanggung | Ditunda | Tidak Dipungut | Dibebaskan | Telah Dilunasi
+     Yang dicatat aplikasi ini HANYA kolom pertama — Dibayar. PPh yang
+     dibebaskan tetap tercetak di kolom "Dibebaskan" (mis. 1.687.300),
+     tapi itu bukan uang yang dikeluarkan.
+
+     Ada DUA tata letak, tergantung bagaimana PDF-nya diekstrak:
+
+     (a) sebaris —  "41. PPN  7,424,266.00  0.00  0.00 ..."
+
+     (b) TERPISAH — nomor, label, lalu barisan angkanya sendiri:
+           40.  41.  42.  43.  44.
+           Cukai  PPN  PPnBM  PPh  TOTAL
+           0.00 0.00 0.00 0.00 0.00 0.00
+           7,424,266.00 0.00 0.00 0.00 0.00 0.00
+           ...
+         Di sini label dan angkanya cuma bisa dipasangkan lewat URUTAN.
+
+     Bentuk (b) inilah yang membuat versi sebelumnya mengembalikan 0
+     untuk PPN: regex sebarisnya tidak pernah cocok. */
+  const bacaPungutan = () => {
+    const hasil = {};
+    const LABEL = ["BM KITE", "BMT", "BM", "CUKAI", "PPNBM", "PPN", "PPH", "TOTAL"];
+    const baris = text.split(/\r?\n/);
+    const antre = [];
+
+    const cocokLabel = (t) => {
+      const bersih = t.replace(/^\d+\.\s*/, "").trim().toUpperCase();
+      // "BM KITE" & "PPnBM" harus diuji SEBELUM "BM"/"PPN"
+      return LABEL.find((l) => bersih === l) || null;
+    };
+
+    baris.forEach((rawLine) => {
+      const t = rawLine.trim();
+      if (!t) return;
+
+      // (a) label + angka pada satu baris
+      const sebaris = t.match(
+        /^(?:\d+\.\s*)?(BM KITE|BMT|BM|Cukai|PPnBM|PPN|PPh|TOTAL)\s+((?:[\d.,]+\s*)+)$/i,
+      );
+      if (sebaris) {
+        const nama = sebaris[1].toUpperCase().replace(/\s+/g, " ");
+        const angka = sebaris[2].trim().split(/\s+/);
+        if (hasil[nama] == null) hasil[nama] = pibNum(angka[0]);
+        return;
+      }
+
+      // (b) baris berisi LABEL saja -> masuk antrean
+      const label = cocokLabel(t);
+      if (label) {
+        antre.push(label);
+        return;
+      }
+
+      // (b) baris berisi ANGKA saja -> dipasangkan dengan label terdepan
+      if (/^[\d.,]+(?:\s+[\d.,]+)+$/.test(t)) {
+        const nama = antre.shift();
+        if (!nama) return;
+        const angka = t.split(/\s+/);
+        if (hasil[nama] == null) hasil[nama] = pibNum(angka[0]);
+      }
+    });
+    return hasil;
+  };
+  const pungutanMap = bacaPungutan();
+  const bmM = pungutanMap["BM"] != null ? pungutanMap["BM"] : null;
+  const ppnM = pungutanMap["PPN"] != null ? pungutanMap["PPN"] : null;
+  const pphM = pungutanMap["PPH"] != null ? pungutanMap["PPH"] : null;
 
   // --- Nama sarana pengangkut & no
   let vessel = "";
@@ -455,9 +521,9 @@ function parsePibPdfText(text, pagesItems) {
     ndpbm: ndpbmMatch ? pibNum(ndpbmMatch[1]) : null,
     freight: freightMatch ? pibNum(freightMatch[1]) : null,
     insurance: asuransiMatch ? pibNum(asuransiMatch[1]) : null,
-    bm: bmM ? pibNum(bmM[1]) : null,
-    ppn: ppnM ? pibNum(ppnM[1]) : null,
-    pph: pphM ? pibNum(pphM[1]) : null,
+    bm: bmM,
+    ppn: ppnM,
+    pph: pphM,
     // "2 PACKAGE, Tanpa Merk" -> "2 PACKAGE"
     package: (packageDefault || "")
       .replace(/,\s*(Tanpa\s+Merk|Tanpa\s+Merek|-)\s*$/i, "")

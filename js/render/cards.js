@@ -214,6 +214,7 @@ function renderExpandedCard(s) {
 
     ${departingTodayHtml(s)}
     ${delayStripHtml(s)}
+    ${docStepHtml(s)}
     ${cardNotesHtml(s)}
   </div>`;
 }

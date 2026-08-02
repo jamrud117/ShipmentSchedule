@@ -66,8 +66,11 @@ function updateStats() {
   $$("#presetRow [data-count]").forEach((el) => {
     el.textContent = c[el.dataset.count] ?? 0;
   });
+  /* Badge di sebelah judul menghitung yang masih BERJALAN saja.
+     Angka "semua" tetap ada di chip Semua — yang di judul menjawab
+     pertanyaan lain: berapa yang masih harus dipantau. */
   const jumlah = $("#listCount");
-  if (jumlah) jumlah.textContent = c.all;
+  if (jumlah) jumlah.textContent = c.all - c.done;
 }
 
 /* CATATAN SARINGAN */

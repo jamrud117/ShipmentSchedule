@@ -798,7 +798,6 @@
   }
 }
 
-
 /* Lambang moda: SVG yang sudah menghadap kanan, jadi tidak diputar. */
 .marker-icon svg,
 .depart-mover svg {
@@ -838,4 +837,140 @@
     opacity: 0;
     transform: scale(2.1);
   }
+}
+
+/* ==================================================================
+   PROGRES DOKUMEN
+
+   Tujuh tahap dalam satu baris. Yang sudah dikonfirmasi navy pekat,
+   tahap BERIKUTNYA diberi cincin kuningan supaya jelas mana yang
+   menunggu tindakan, sisanya tenang.
+================================================================== */
+.docsteps {
+  border-top: 1px dashed var(--border);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.docsteps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  margin-bottom: 10px;
+}
+.docsteps-head i {
+  color: var(--sec-600);
+}
+.docsteps-count {
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  color: var(--p-600);
+}
+.docsteps-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 0;
+}
+.docsteps-track::-webkit-scrollbar {
+  display: none;
+}
+.docstep-line {
+  flex: 1;
+  min-width: 10px;
+  height: 2px;
+  background: var(--n-200);
+}
+
+.docstep {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+}
+.docstep-dot {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-control);
+  background: #fff;
+  color: var(--n-500);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.docstep-label {
+  font-family: var(--font-board);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  white-space: nowrap;
+}
+
+.docstep.is-done .docstep-dot {
+  background: var(--p-600);
+  border-color: var(--p-600);
+  color: #fff;
+}
+.docstep.is-done .docstep-label {
+  color: var(--p-600);
+}
+.docstep.is-next .docstep-dot {
+  border-color: var(--sec-500);
+  color: var(--sec-700);
+  box-shadow: 0 0 0 3px var(--sec-50);
+}
+.docstep.is-next .docstep-label {
+  color: var(--sec-700);
+}
+/* Setiap tahap bisa ditekan — berkas tidak selalu datang berurutan.
+   Yang belum terisi diberi isyarat lembut saat disorot. */
+.docstep:hover .docstep-dot {
+  transform: scale(1.08);
+  border-color: var(--p-500);
+  color: var(--p-600);
+}
+.docstep.is-done:hover .docstep-dot {
+  border-color: var(--p-700);
+  color: #fff;
+}
+
+/* Viewer tidak boleh mengubah, tapi tetap harus bisa membacanya. */
+body.is-viewer .docstep {
+  pointer-events: none;
+}
+
+/* Tahap yang ditandai TIDAK DIPAKAI — mis. COO untuk barang tanpa
+   fasilitas tarif preferensi. Digambar bergaris putus-putus dan
+   diredupkan: jelas sudah dilewati, jelas pula bukan "selesai". */
+.docstep.is-skipped .docstep-dot {
+  border-style: dashed;
+  border-color: var(--n-300);
+  background: var(--n-50);
+  color: var(--n-400);
+}
+.docstep.is-skipped .docstep-label {
+  color: var(--n-400);
+  text-decoration: line-through;
+  text-decoration-color: var(--n-300);
 }

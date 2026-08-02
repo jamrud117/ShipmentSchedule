@@ -104,9 +104,19 @@ if (typeof module !== "undefined" && module.exports) {
 ------------------------------------------------------------------ */
 function isArrived(s) {
   if (!s) return false;
+  const kini = parseLocalDate(todayISO());
+
+  /* Tanggal In Factory terisi = barang sudah sampai pabrik. Itu tanda
+     paling akhir dalam rantai, jadi ia menang atas apa pun yang lain.
+     Di buku Export kolom ini tidak dipakai (lihat body.mode-export di
+     css/form.css), jadi tidak ada efek di sana. */
+  if (s.factoryDate) {
+    const masuk = parseLocalDate(s.factoryDate);
+    if (masuk && kini && kini >= masuk) return true;
+  }
+
   if (s.actual) {
     const tiba = parseLocalDate(s.actual);
-    const kini = parseLocalDate(todayISO());
     if (tiba && kini && kini >= tiba) return true;
   }
   return s.status === "arrived";

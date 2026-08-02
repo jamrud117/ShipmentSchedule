@@ -27,15 +27,7 @@ async function loadProfile(userId) {
     return null;
   }
   /* Belum punya baris profil: diperlakukan sebagai viewer, bukan exim */
-  return (
-    data || {
-      id: userId,
-      email: "",
-      full_name: "",
-      username: "",
-      role: "viewer",
-    }
-  );
+  return data || { id: userId, email: "", full_name: "", username: "", role: "viewer" };
 }
 
 /* Supabase Auth hanya mengenal email. Username ditukar jadi email lebih
@@ -87,8 +79,7 @@ async function signOut() {
 /* Pesan bawaan Supabase berbahasa Inggris & teknis */
 function pesanLogin(error) {
   const t = (error && error.message ? error.message : "").toLowerCase();
-  if (t.includes("invalid login"))
-    return "Username/email atau kata sandi salah.";
+  if (t.includes("invalid login")) return "Username/email atau kata sandi salah.";
   if (t.includes("email not confirmed"))
     return "Akun belum aktif. Minta admin menjalankan ulang auth-roles-migration.sql.";
   if (t.includes("rate limit") || t.includes("too many"))
@@ -115,7 +106,9 @@ function applyPermissions() {
     /* Email sengaja TIDAK ditampilkan di sini: bilah atas terlihat oleh
        siapa pun yang lewat di depan layar. Cukup nama & peran. */
     $("#userChipName").textContent =
-      authState.profile.full_name || authState.profile.username || "Pengguna";
+      authState.profile.full_name ||
+      authState.profile.username ||
+      "Pengguna";
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
@@ -143,7 +136,10 @@ function lockInputs() {
    penangan; UI-nya memang sudah disembunyikan, ini lapis kedua */
 function requireEdit(pesan) {
   if (canEdit()) return true;
-  showToast(pesan || "Hanya peran EXIM yang boleh mengubah data.", "danger");
+  showToast(
+    pesan || "Hanya peran EXIM yang boleh mengubah data.",
+    "danger",
+  );
   return false;
 }
 
@@ -274,16 +270,12 @@ document.addEventListener("click", (e) => {
 });
 
 $("#btnLogout").addEventListener("click", () => {
-  showConfirm(
-    "Sesi Anda akan ditutup dan halaman kembali ke layar masuk.",
-    () => signOut(),
-    {
-      title: "Keluar dari Aplikasi",
-      confirmText: "Ya, Keluar",
-      tone: "primary",
-      icon: "bi-power",
-    },
-  );
+  showConfirm("Sesi Anda akan ditutup dan halaman kembali ke layar masuk.", () => signOut(), {
+    title: "Keluar dari Aplikasi",
+    confirmText: "Ya, Keluar",
+    tone: "primary",
+    icon: "bi-power",
+  });
 });
 
 /* ------------------------------------------------------------------

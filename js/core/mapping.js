@@ -30,6 +30,7 @@ const FIELD_MAP = {
   notes: "notes",
   // Kronologi catatan ber-tanggal & jam (jsonb)
   notesLog: "notes_log",
+  docProgress: "doc_progress",
   incoterm: "incoterm",
   freight: "freight",
   insurance: "insurance",

@@ -275,17 +275,28 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   font-weight: 600;
-  color: var(--muted);
-  border: none;
+  /* Bukan --muted (#64748b) yang nyaris menyatu dengan latar #eaf0f8:
+     langkah yang belum dibuka tetap harus terbaca sebagai pilihan,
+     bukan sebagai teks nonaktif. */
+  color: var(--n-700);
+  border: 1px solid transparent;
   border-radius: 10px;
-  padding: 10px 10px;
+  padding: 11px 10px;
   background: transparent;
-  transition: all 0.15s ease;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.nav-detail .nav-link:hover:not(.active) {
+  background: #fff;
+  border-color: var(--border-control);
+  color: var(--p-600);
 }
 .nav-detail .step-num {
   flex-shrink: 0;
@@ -306,17 +317,18 @@
   color: var(--navy);
   background: rgba(255, 255, 255, 0.7);
 }
+/* Langkah aktif: navy RATA, bukan gradien. Selain lebih tegas bedanya
+   dari dua langkah lain, warna rata bisa diukur — gradien membuat
+   backgroundColor terbaca transparan sehingga pemeriksaan kontras
+   otomatis tidak bisa menilainya. */
 .nav-detail .nav-link.active {
+  background: var(--p-600);
+  border-color: var(--p-600);
   color: #fff;
   box-shadow: 0 8px 18px -8px rgba(11, 31, 58, 0.55);
 }
 .nav-detail .nav-link.active .step-num {
   background: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-/* SATU warna untuk seluruh step (biru navy). Sebelumnya tiap tab punya */
-.nav-detail .nav-link.active {
-  background: linear-gradient(135deg, var(--ocean), #123b63);
   color: #fff;
 }
 @media (max-width: 575.98px) {
@@ -513,7 +525,8 @@
 }
 
 .item-table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 520px;
   border: 1px solid var(--border);
   border-radius: 12px;
 }
@@ -540,8 +553,15 @@ table.item-table th:first-child {
 table.item-table td {
   padding: 6px;
   border-top: 1px solid var(--border);
-  vertical-align: middle;
+  /* `top`, bukan `middle`: begitu nama barang memakan tiga baris,
+     isian lain di baris itu harus tetap sejajar dengan baris
+     pertamanya — bukan melayang di tengah. */
+  vertical-align: top;
   text-align: center;
+}
+table.item-table td:first-child {
+  text-align: left;
+  min-width: 300px;
 }
 table.item-table td.text-end {
   text-align: right;
@@ -579,14 +599,22 @@ table.item-table input.cbm-readonly {
 }
 /* NAMA BARANG — harus terbaca UTUH tanpa scroll apa pun */
 table.item-table textarea.nama-barang-input {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-control);
   border-radius: 7px;
   padding: 6px 8px;
   font-size: 0.82rem;
   width: 100%;
-  min-width: 240px;
+  min-width: 300px;
   min-height: 34px;
   height: auto;
+  /* Nama barang ditulis UTUH: dibungkus ke baris berikutnya, tidak
+     dipotong. Kolomnya melebar (min-width 300px) dan tabelnya bisa
+     digeser mendatar — lebih baik menggeser daripada kehilangan
+     bagian nama yang justru membedakan satu barang dari lainnya. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  resize: vertical;
   resize: none;
   overflow: hidden;
   text-align: left;

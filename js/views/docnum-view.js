@@ -469,7 +469,7 @@ async function renderDocNumHistory() {
           ${data
             .map((r) => {
               const p = r.payload || {};
-              const ringkas =
+              let ringkas =
                 p.customer ||
                 p.receiver ||
                 p.payee ||
@@ -477,6 +477,12 @@ async function renderDocNumHistory() {
                 p.subject ||
                 p.notes ||
                 "—";
+              /* Surat jalan: alamat ikut ditampilkan di bawah nama
+                 penerima — itu justru yang dicari saat menelusuri
+                 riwayat pengiriman. */
+              if (p.address) {
+                ringkas += " · " + p.address.replace(/\s*\n\s*/g, ", ");
+              }
               return `<tr>
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
                 <td>${escapeHtml(fmtDate(r.doc_date))}</td>

@@ -47,7 +47,13 @@ function getFiltered() {
    melainkan tanggal barang benar-benar masuk pabrik. Kalau tanggal itu
    kosong (ditandai tiba secara manual), dipakai ETA efektifnya. */
 function groupKeyOf(s) {
-  if (isArrived(s)) return s.actual || effectiveEta(s) || effectiveEtd(s) || null;
+  /* Yang sudah tiba dikelompokkan menurut tanggal barang benar-benar
+     masuk pabrik (In Factory), lalu Actual Delivery, baru ETA. */
+  if (isArrived(s)) {
+    return (
+      s.factoryDate || s.actual || effectiveEta(s) || effectiveEtd(s) || null
+    );
+  }
 
   /* Buku EXPORT diurutkan menurut tanggal STUFFING, bukan ETA.
      Yang dikerjakan tim EXIM untuk sebuah ekspor adalah menyiapkan

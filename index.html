@@ -23,9 +23,9 @@
     <link
       rel="apple-touch-icon"
       sizes="180x180"
-      href="aassets/apple-touch-icon.png"
+      href="assets/apple-touch-icon.png"
     />
-    <link rel="manifest" href="site.webmanifest" />
+    <link rel="manifest" href="assets/site.webmanifest" />
 
     <!-- Gaya paling dasar ditanam langsung di halaman supaya warna latar -->
     <style>
@@ -967,6 +967,21 @@
                     data-dn-required
                     placeholder="Nama Penerima"
                   />
+                </div>
+                <!-- Alamat kirim: masuk ke kolom `payload` yang memang
+                     disediakan untuk isian bebas tiap jenis dokumen,
+                     jadi tidak perlu kolom baru di database. -->
+                <div class="col-12">
+                  <label class="form-label"
+                    >Alamat Tujuan <span class="req">*</span></label
+                  >
+                  <textarea
+                    class="form-control"
+                    rows="2"
+                    data-dn="address"
+                    data-dn-required
+                    placeholder="Alamat Lengkap Penerima"
+                  ></textarea>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">No. Kendaraan</label>
@@ -2220,26 +2235,31 @@
       </div>
     </div>
 
-    <!-- ============ TOAST (pengganti alert() native) ============ -->
-    <div
-      class="toast-container position-fixed end-0 p-3"
-      style="z-index: 2000; top: 90px"
-    >
+    <!-- Toast — pengganti alert() bawaan.
+
+         Ditaruh di KIRI-BAWAH, bukan kanan-atas: sudut kanan-atas
+         ditempati chip pengguna & pencarian cepat, dan sudut
+         kanan-bawah sudah dipakai tombol keluar mengambang. -->
+    <div class="toast-stack" id="toastStack">
       <div
         id="appToast"
-        class="toast align-items-center text-white border-0"
+        class="app-toast"
         role="alert"
-        aria-live="assertive"
+        aria-live="polite"
         aria-atomic="true"
       >
-        <div class="d-flex">
-          <div class="toast-body" id="toastMsg">Pesan</div>
-          <button
-            type="button"
-            class="btn-close btn-close-white toast-close"
-            data-bs-dismiss="toast"
-          ></button>
-        </div>
+        <span class="app-toast-icon"
+          ><i class="bi bi-info-circle-fill" id="toastIcon"></i
+        ></span>
+        <span class="app-toast-body" id="toastMsg">Pesan</span>
+        <button
+          type="button"
+          class="app-toast-close"
+          id="toastClose"
+          aria-label="Tutup"
+        >
+          <i class="bi bi-x-lg"></i>
+        </button>
       </div>
     </div>
 
@@ -2327,6 +2347,7 @@
     <script src="js/features/modal-fields.js"></script>
     <script src="js/features/item-table.js"></script>
     <script src="js/features/notes-log.js"></script>
+    <script src="js/features/doc-steps.js"></script>
     <script src="js/features/route-stops.js"></script>
     <script src="js/features/bulk-excel.js"></script>
 

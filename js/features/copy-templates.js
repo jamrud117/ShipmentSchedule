@@ -88,6 +88,19 @@ function buildAllExportCopyText(s) {
 
 /* DAILY IMPORT — 25 kolom (requirement E) */
 const DAILY_IMPORT_COLS = 25;
+/* Qty + satuan digabung jadi satu sel: "25 PCS".
+
+   Di Daily Import/Export kolom QTY berdiri sendiri tanpa kolom satuan,
+   jadi angka telanjang membuat 25 SET dan 25 PCS terbaca sama padahal
+   maknanya jauh berbeda. Angkanya tetap diformat seperti sebelumnya;
+   satuannya cuma ditempel di belakang. */
+function qtyDenganSatuan(it, formatter) {
+  const angka = formatter.num(it.qty, 2);
+  const satuan = (it.satuan || "").toString().trim();
+  if (!satuan) return angka;
+  return `${angka} ${satuan}`;
+}
+
 function buildDailyImportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
@@ -105,7 +118,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.destination), // 5  PELABUHAN / TERMINAL
       formatter.text(s.party), // 6  SHIPPER
       formatter.text(it.namaBarang), // 7  GOODS DESCRIPTION
-      formatter.num(it.qty, 2), // 8  QTY
+      qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
       formatter.num(it.bruto, 2), // 9  BRUTO
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
@@ -148,7 +161,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.text(s.origin), // 5  PELABUHAN MUAT
       formatter.text(s.party), // 6  CUSTOMER
       formatter.text(it.namaBarang), // 7  ITEM NAME
-      formatter.num(it.qty, 2), // 8  QTY
+      qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
       formatter.num(it.bruto, 2), // 9  GROSS WEIGHT
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC

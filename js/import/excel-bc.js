@@ -234,6 +234,17 @@ function parseBcExcelWorkbook(wb) {
       harga: qty ? roundNum(cifSubtotal / qty, 4) : 0,
       netto: excelNum(row["NETTO"]),
       bruto: excelNum(row["BRUTO"]),
+      /* Kemasan PER BARANG ada di sheet BARANG sendiri (kolom JUMLAH
+         KEMASAN + KODE KEMASAN), terpisah dari sheet KEMASAN yang
+         memuat total per pengajuan. Keduanya dipakai: yang ini mengisi
+         kolom Kemasan di tiap baris barang, yang satunya mengisi Total
+         Package di kaki tabel. */
+      package: (() => {
+        const jml = row["JUMLAH KEMASAN"];
+        const kode = excelStr(row["KODE KEMASAN"]);
+        const angka = jml != null && jml !== "" ? excelNum(jml) : "";
+        return [angka === "" ? "" : angka, kode].filter((v) => v !== "").join(" ");
+      })(),
     };
   });
   const anyItemBruto = itemsRaw.some((it) => it.bruto > 0);
