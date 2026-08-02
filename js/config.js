@@ -45,7 +45,7 @@ const MODE_LABELS = {
     // Versi moda udara — dipakai applyTransportLabels() (requirement B: "kalau moda udara
     originAir: "Terminal Asal",
     destinationAir: "Terminal Tujuan",
-    actual: "Actual Delivery",
+    actual: "Estimated Delivery",
     showDuty: true,
     modalTitleNew: "Tambah Jadwal Import",
     modalTitleEdit: "Edit Jadwal Import",

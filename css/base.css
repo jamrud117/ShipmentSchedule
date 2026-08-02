@@ -22,7 +22,6 @@ body::-webkit-scrollbar {
 /* Wadah gulir di dalam halaman ikut disamakan */
 .sheet-body,
 .cmdk-list,
-.item-table-wrap,
 .preset-row,
 .site-nav,
 .docnum-tabs {
@@ -31,7 +30,6 @@ body::-webkit-scrollbar {
 }
 .sheet-body::-webkit-scrollbar,
 .cmdk-list::-webkit-scrollbar,
-.item-table-wrap::-webkit-scrollbar,
 .preset-row::-webkit-scrollbar,
 .site-nav::-webkit-scrollbar,
 .docnum-tabs::-webkit-scrollbar {
@@ -129,32 +127,7 @@ body {
 }
 
 .btn-quiet,
-.btn-outline-navy {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: #fff;
-  color: var(--n-600);
-  font-size: var(--t-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  transition:
-    border-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease),
-    background var(--dur-1) var(--ease);
-}
 .btn-quiet:hover,
-.btn-outline-navy:hover {
-  border-color: var(--p-400);
-  color: var(--p-600);
-  background: var(--p-50);
-}
-
 .btn-danger-quiet,
 .btn-outline-danger {
   display: inline-flex;

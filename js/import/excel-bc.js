@@ -239,12 +239,14 @@ function parseBcExcelWorkbook(wb) {
          memuat total per pengajuan. Keduanya dipakai: yang ini mengisi
          kolom Kemasan di tiap baris barang, yang satunya mengisi Total
          Package di kaki tabel. */
-      package: (() => {
+      /* Jumlah & jenis kemasan masuk ke kolom masing-masing, bukan
+         digabung jadi satu teks — kolom Kemasan sekarang berisi angka
+         saja supaya bisa dijumlahkan per jenis. */
+      packing: (() => {
         const jml = row["JUMLAH KEMASAN"];
-        const kode = excelStr(row["KODE KEMASAN"]);
-        const angka = jml != null && jml !== "" ? excelNum(jml) : "";
-        return [angka === "" ? "" : angka, kode].filter((v) => v !== "").join(" ");
+        return jml != null && jml !== "" ? String(excelNum(jml)) : "";
       })(),
+      packingUnit: excelStr(row["KODE KEMASAN"]),
     };
   });
   const anyItemBruto = itemsRaw.some((it) => it.bruto > 0);

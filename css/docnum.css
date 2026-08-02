@@ -299,3 +299,91 @@
     padding: var(--sp-4) 0 var(--sp-8);
   }
 }
+
+/* Daftar isian pada kotak Detail Pengajuan Nomor */
+.dn-detail {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 6px var(--sp-4);
+  font-size: var(--t-sm);
+}
+.dn-detail dt {
+  color: var(--n-500);
+  font-weight: 500;
+}
+.dn-detail dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ==================================================================
+   RIWAYAT NOMOR PADA LAYAR SEMPIT
+
+   Tabelnya punya lima kolom dan tiga tombol aksi. Di bawah ~900px
+   kolom Tanggal & Pemohon menghimpit isi utamanya sampai tombolnya
+   menindih tulisan.
+
+   Keduanya disembunyikan, bukan dikecilkan — isinya sudah ada di
+   kotak Detail, jadi tidak ada yang benar-benar hilang.
+================================================================== */
+@media (max-width: 900px) {
+  .docnum-table .dn-col-tgl,
+  .docnum-table .dn-col-pemohon {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .docnum-table td,
+  .docnum-table th {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .docnum-table td.dn-act .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+
+/* ==================================================================
+   RIWAYAT NOMOR — DIGESER, BUKAN DIREMAS
+
+   Wadah gulirnya dulu hanya aktif di bawah 640px. Padahal kolom
+   aksinya kini berisi tiga tombol, dan pada layar menengah (±860px)
+   kolom Keterangan sudah terdesak sampai tulisannya menembus tombol.
+
+   Sekarang berlaku di SEMUA lebar: begitu isinya tidak muat, tabelnya
+   digeser mendatar. Nomor dokumen tidak boleh terpotong — ia
+   satu-satunya penanda barisnya.
+================================================================== */
+.docnum-history-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-300) transparent;
+}
+.docnum-history-wrap::-webkit-scrollbar {
+  height: 9px;
+}
+.docnum-history-wrap::-webkit-scrollbar-track {
+  background: var(--n-100);
+  border-radius: var(--r-pill);
+}
+.docnum-history-wrap::-webkit-scrollbar-thumb {
+  background: var(--n-300);
+  border-radius: var(--r-pill);
+}
+.docnum-table {
+  min-width: 720px;
+}
+/* Kolom aksi tidak boleh menyusut — tombolnya berukuran tetap. */
+.docnum-table td.dn-act,
+.docnum-table th.dn-act {
+  width: 1%;
+  min-width: 118px;
+  white-space: nowrap;
+}

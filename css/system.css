@@ -384,6 +384,18 @@ input[type="date"][readonly] {
   text-align: right;
   padding-right: var(--sp-2);
 }
+/* Tombolnya berjajar, bukan bertumpuk.
+
+   `white-space: nowrap` saja tidak cukup: .icon-btn memakai
+   `display: grid` (agar ikonnya rata tengah), dan elemen tingkat blok
+   tetap turun ke baris baru berapa pun aturan spasinya. Selnya yang
+   harus dijadikan baris flex. */
+.docnum-table td.dn-act {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
 .docnum-table td.dn-act .icon-btn {
   opacity: 0.35;
   transition: opacity var(--dur-1) var(--ease);

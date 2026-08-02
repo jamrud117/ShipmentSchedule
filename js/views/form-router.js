@@ -102,6 +102,7 @@ function router() {
   // Permintaan Nomor Dokumen
   if (hash === "#/docnum") {
     showDocNumView();
+    if (typeof isiPilihanJadwal === "function") isiPilihanJadwal();
     return;
   }
 
@@ -143,27 +144,21 @@ function router() {
 window.addEventListener("hashchange", router);
 
 // "12 BOX" <-> kotak angka + kotak satuan.
+/* Satu isian: angka & satuan ditulis apa adanya ("4 BOX"). */
 function setPackageFields(raw) {
-  const txt = String(raw || "").trim();
-  // Angka boleh ber-pemisah ribuan ("1,200 BOX")
-  const m = txt.match(/^(-?[\d.,]+)\s*(.*)$/);
-  $("#fPackage").value = m ? m[1] : txt;
-  $("#fPackageUnit").value = m ? m[2].trim() : "";
+  $("#fPackage").value = String(raw || "").trim();
   autoSizePackageFooter();
 }
 function autoSizePackageFooter() {
-  autoSizeInput($("#fPackage"), 58, 190);
-  autoSizeInput($("#fPackageUnit"), 66, 170);
+  autoSizeInput($("#fPackage"), 92, 210);
 }
 // Tanpa listener ini lebar kotak hanya dihitung saat form dibuka
-["fPackage", "fPackageUnit"].forEach((idf) => {
-  $("#" + idf).addEventListener("input", autoSizePackageFooter);
-});
+$("#fPackage").addEventListener("input", autoSizePackageFooter);
 
+/* Satu isian sekarang — dibiarkan sebagai fungsi supaya pemanggilnya
+   tidak perlu ikut berubah. */
 function joinPackageFields() {
-  const num = $("#fPackage").value.trim();
-  const unit = $("#fPackageUnit").value.trim();
-  return [num, unit].filter(Boolean).join(" ");
+  return $("#fPackage").value.trim();
 }
 
 function renderFormPage(id) {
@@ -190,10 +185,10 @@ function renderFormPage(id) {
 
   // Total Package (foot-package, sebelah Total Qty/Netto/Bruto/Nilai)
   const isImport = activeMode === "import";
-  // Requirement C: Total Package pada Jadwal Import harus punya SATUAN unit (bukan cuma angka)
-  $("#fPackageUnit").classList.remove("d-none");
+  /* Import: terjumlah otomatis dari kolom Kemasan tiap barang, jadi
+     dikunci. Export: diisi manual. */
   $("#fPackage").readOnly = isImport;
-  $("#fPackage").placeholder = isImport ? "0" : "cth: 12";
+  $("#fPackage").placeholder = isImport ? "Terjumlah otomatis" : "Cth: 4 BOX";
   $("#fPackage").title = isImport
     ? "Otomatis dari total Jumlah Kemasan semua barang — edit lewat kolom Kemasan di tabel barang."
     : "";
@@ -287,7 +282,6 @@ function renderFormPage(id) {
       "fPPH",
       "fPI",
       "fPackage",
-      "fPackageUnit",
     ].forEach((fid) => ($("#" + fid).value = ""));
     $("#fMuatan").value = "";
     $("#fTransport").value = "laut";

@@ -86,6 +86,15 @@ function newItem() {
     bruto: 0,
     // Kemasan PER BARANG (dulu 1 field bebas-teks di level shipment, sekarang per barang
     package: "",
+    /* Kemasan HITUNGAN untuk buku Export: "1 BOX", "2 PALLET".
+
+       Terpisah dari `package` karena di Export kolom itu berisi DIMENSI
+       peti (82*82*75) yang dipakai menghitung CBM — bukan jumlah
+       koli. Surat jalan butuh jumlahnya, bukan ukurannya. */
+    packing: "",
+    /* Jenis kemasannya — BOX, PALLET, CRATE. Dipisah dari angkanya
+       supaya bisa dijumlahkan per jenis tanpa mengurai teks. */
+    packingUnit: "",
     // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama (skb)
     skb: [],
     // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)

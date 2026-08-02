@@ -66,7 +66,7 @@ async function syncArrivedStatuses() {
   tertinggal.forEach((x) => (x.s.status = "arrived"));
   render();
   showToast(
-    `${ids.length} jadwal ditandai tiba — tanggal Actual Delivery-nya sudah terlewati.`,
+    `${ids.length} jadwal ditandai tiba — tanggal In Factory / Stuffing-nya sudah terlewati.`,
     "dark",
   );
 }

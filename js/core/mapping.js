@@ -109,6 +109,8 @@ function itemToRow(it, shipmentId) {
     bruto: Number(it.bruto) || 0,
     // Kemasan per barang (Jumlah+Jenis utk import, dimensi P*L*T utk export
     package: it.package || "",
+    packing: it.packing || "",
+    packing_unit: it.packingUnit || "",
     // Fasilitas per barang — SKB & E-COO 1 array yang sama
     skb: sanitizeSkbList(it.skb),
   };
@@ -126,6 +128,8 @@ function rowToItem(row) {
     netto: Number(row.netto) || 0,
     bruto: Number(row.bruto) || 0,
     package: row.package || "",
+    packing: row.packing || "",
+    packingUnit: row.packing_unit || "",
     skb: sanitizeSkbList(row.skb),
     _facOpen: false,
   };

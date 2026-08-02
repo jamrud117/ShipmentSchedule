@@ -25,7 +25,7 @@
       sizes="180x180"
       href="assets/apple-touch-icon.png"
     />
-    <link rel="manifest" href="assets/site.webmanifest" />
+    <link rel="manifest" href="site.webmanifest" />
 
     <!-- Gaya paling dasar ditanam langsung di halaman supaya warna latar -->
     <style>
@@ -992,32 +992,26 @@
                     placeholder="B 1234 XX"
                   />
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label">Referensi Jadwal</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="reference"
-                    placeholder="No. PEB / Invoice Terkait"
-                  />
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Jumlah Koli</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="packages"
-                    data-dn-number
-                    placeholder="0"
-                  />
-                </div>
-                <div class="col-12">
-                  <label class="form-label">Keterangan</label>
-                  <textarea
-                    class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                  ></textarea>
+                <!-- Ditautkan ke jadwal, bukan diketik bebas.
+
+                     Inilah yang membuat surat jalan bisa dicetak lengkap:
+                     nomor invoice dan seluruh daftar barangnya ditarik
+                     dari jadwal yang dipilih di sini. Kalau tetap berupa
+                     teks bebas, tidak ada cara menghubungkannya. -->
+                <div class="col-md-8">
+                  <label class="form-label">Jadwal Terkait</label>
+                  <select
+                    class="form-select"
+                    data-dn="shipmentId"
+                    id="dnShipmentPick"
+                  >
+                    <option value="">— Tidak ditautkan —</option>
+                  </select>
+                  <div class="form-text-note mt-1">
+                    <i class="bi bi-info-circle"></i> Menautkan jadwal membuat
+                    <b>No. Invoice</b> &amp; <b>daftar barang</b> ikut tercetak
+                    di surat jalan.
+                  </div>
                 </div>
               </div>
             </form>
@@ -1266,7 +1260,7 @@
                   class="btn btn-outline-danger"
                   id="btnCounterReset"
                 >
-                  <i class="bi bi-arrow-counterclockwise"></i> Reset ke 001
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </button>
               </div>
               <div class="form-text-note">
@@ -1620,7 +1614,9 @@
                 <input type="date" class="form-control" id="fEta" required />
               </div>
               <div class="col-md-4">
-                <label class="form-label" id="lblActual">Actual Delivery</label>
+                <label class="form-label" id="lblActual"
+                  >Estimated Delivery</label
+                >
                 <input type="date" class="form-control" id="fActual" />
               </div>
               <div class="col-md-4">
@@ -1714,7 +1710,11 @@
                     <th style="width: 7%">Harga/Unit (USD)</th>
                     <th style="width: 5%">Netto (Kg)</th>
                     <th style="width: 5%">Bruto (Kg)</th>
-                    <th style="width: 10%">Kemasan</th>
+                    <!-- Dimensi peti (P×L×T) — dipakai menghitung CBM,
+                         jadi hanya berlaku di buku Export. -->
+                    <th class="dim-col" style="width: 9%">Dimensi</th>
+                    <th style="width: 7%">Kemasan</th>
+                    <th style="width: 9%">Jenis Kemasan</th>
                     <th style="width: 8%" class="cbm-col-static d-none">
                       CBM (m³)
                     </th>
@@ -1728,19 +1728,15 @@
             <div class="item-table-foot item-table-foot--split">
               <div class="foot-package">
                 <i class="bi bi-box-seam"></i> Total Package:
+                <!-- Satu isian, bukan dua. Angka dan satuannya selalu
+                     ditulis & dibaca bersama ("4 BOX"), jadi memecahnya
+                     hanya menambah satu kotak yang harus diisi. -->
                 <input
                   type="text"
                   id="fPackage"
-                  data-num
-                  placeholder="Cth: 12"
-                />
-                <input
-                  type="text"
-                  id="fPackageUnit"
-                  class="pkg-unit-input"
                   list="packageUnitList"
-                  placeholder="BOX"
-                  title="Satuan kemasan — ikut tampil di form, TAPI tidak ikut di hasil template copy (angkanya saja)."
+                  placeholder="Cth: 4 BOX"
+                  title="Total kemasan seluruh barang, mis. 4 BOX"
                 />
               </div>
               <div class="foot-totals">
@@ -1758,6 +1754,11 @@
               barang. <b>Import:</b> jumlah + jenis (cth. "5 BOX") — Total
               Package terjumlah otomatis. <b>Export:</b> dimensi P×L×T cm (cth.
               "82*82*75") — CBM terhitung otomatis, Total Package diisi manual.
+              <br />
+              <b>Kemasan</b> &amp; <b>Jenis Kemasan</b>: isi pada barang PERTAMA
+              sebuah box, lalu <b>kosongkan</b> pada barang berikutnya yang
+              dikemas dalam box yang sama — di surat jalan, baris-baris itu
+              tercetak menyatu jadi satu sel.
             </div>
           </div>
         </div>
@@ -2379,6 +2380,7 @@
     <!-- ========================================= -->
     <!-- VIEW -->
     <!-- ========================================= -->
+    <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/views/docnum-view.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/views/detail-view.js"></script>

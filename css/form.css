@@ -525,8 +525,7 @@
 }
 
 .item-table-wrap {
-  overflow: auto;
-  max-height: 520px;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
 }
@@ -877,13 +876,6 @@ tr.item-fac-row td {
 }
 
 /* Kotak satuan kemasan di sebelah Total Package (mode Import). */
-.foot-package input.pkg-unit-input {
-  min-width: 64px;
-  max-width: 130px;
-  background: #fff;
-  color: var(--navy);
-  cursor: text;
-}
 
 /* Penanda isi kolom Kemasan yang formatnya belum benar. Sengaja HANYA */
 table.item-table input.pkg-invalid {
@@ -1122,4 +1114,62 @@ table.item-table input.pkg-invalid {
    diisi lewat kolom "Stuffing" (field actual). */
 body.mode-export .factory-field {
   display: none;
+}
+
+/* Kolom Dimensi hanya berlaku di buku Export — dipakai menghitung CBM
+   peti. Import tidak memakainya. */
+body.mode-import .dim-col {
+  display: none;
+}
+
+/* Baris yang ikut box di atasnya: isian Koli-nya dibiarkan kosong dan
+   dibuat lebih tenang, supaya terbaca sebagai "menyatu ke atas" —
+   bukan sebagai kolom yang lupa diisi. */
+table.item-table input[data-f="packing"].is-ikut {
+  border-style: dashed;
+  border-color: var(--n-300);
+  background: var(--n-50);
+}
+table.item-table input[data-f="packing"].is-ikut::placeholder {
+  color: var(--n-400);
+  font-style: italic;
+}
+
+/* ==================================================================
+   SCROLLBAR MENDATAR PADA TABEL DAFTAR BARANG
+
+   Tabelnya punya belasan kolom dan hampir selalu lebih lebar dari
+   layar. Tanpa batang gulir yang terlihat, tidak ada tanda bahwa masih
+   ada kolom di sebelah kanan — Kemasan, Koli, CBM, dan Subtotal
+   praktis tersembunyi.
+
+   Hanya arah MENDATAR yang ditampilkan. Tingginya dibiarkan mengalir
+   mengikuti jumlah barang, jadi batang gulir tegak tidak diperlukan.
+================================================================== */
+.item-table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Nilai eksplisit: aturan penyembunyi di css/base.css memakai
+     `scrollbar-width: none` pada wadah gulir lain, dan tabel ini
+     sengaja dikecualikan. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-300) transparent;
+  padding-bottom: 2px;
+}
+.item-table-wrap::-webkit-scrollbar {
+  display: block;
+  height: 10px;
+  width: 0;
+}
+.item-table-wrap::-webkit-scrollbar-track {
+  background: var(--n-100);
+  border-radius: var(--r-pill);
+}
+.item-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--n-300);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--n-100);
+}
+.item-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--n-400);
 }

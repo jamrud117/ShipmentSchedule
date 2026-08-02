@@ -106,19 +106,37 @@ function isArrived(s) {
   if (!s) return false;
   const kini = parseLocalDate(todayISO());
 
-  /* Tanggal In Factory terisi = barang sudah sampai pabrik. Itu tanda
-     paling akhir dalam rantai, jadi ia menang atas apa pun yang lain.
-     Di buku Export kolom ini tidak dipakai (lihat body.mode-export di
-     css/form.css), jadi tidak ada efek di sana. */
-  if (s.factoryDate) {
+  /* IMPORT — yang menentukan tanggal IN FACTORY.
+
+     Kolom `actual` di buku Import berlabel "Estimated Delivery": itu
+     PERKIRAAN, dan perkiraan yang terlewati tidak berarti barangnya
+     sudah sampai. Yang menyatakan barang benar-benar diterima cuma
+     tanggal masuk pabrik.
+
+     EXPORT — kolom yang sama berlabel "Stuffing", dan itu FAKTA:
+     tanggal muatan selesai dinaikkan. Jadi di sana ia tetap menentukan.
+
+     Perbedaan ini disengaja: satu kolom, dua makna, mengikuti bukunya. */
+  /* factoryDate hanya berlaku di buku IMPORT.
+
+     Di Export kolom itu berlabel "Tanggal Stuffing" juga — kolom lama
+     yang kini digantikan `actual`, dan memang sudah disembunyikan dari
+     form. Tapi datanya masih tersimpan pada jadwal lama.
+
+     Selama ia ikut diperiksa untuk Export, membatalkan status tiba
+     tidak pernah berhasil: `actual` dikosongkan, lalu factoryDate yang
+     tertinggal langsung menandainya tiba lagi. Toast-nya bilang
+     berhasil, kartunya tidak berubah. */
+  if (s.mode !== "export" && s.factoryDate) {
     const masuk = parseLocalDate(s.factoryDate);
     if (masuk && kini && kini >= masuk) return true;
   }
 
-  if (s.actual) {
-    const tiba = parseLocalDate(s.actual);
-    if (tiba && kini && kini >= tiba) return true;
+  if (s.mode === "export" && s.actual) {
+    const stuffing = parseLocalDate(s.actual);
+    if (stuffing && kini && kini >= stuffing) return true;
   }
+
   return s.status === "arrived";
 }
 

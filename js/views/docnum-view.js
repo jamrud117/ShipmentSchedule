@@ -1,3 +1,5 @@
+let docNumHistoryRows = [];
+
 "use strict";
 
 /* HALAMAN: PERMINTAAN NOMOR DOKUMEN */
@@ -406,6 +408,29 @@ function tampilkanHasilDocNum(nomor) {
 }
 
 // `keepIdentity` mempertahankan nama pemohon & departemen
+/* Mengisi pemilih "Jadwal Terkait" dari data yang sudah dimuat.
+
+   HANYA jadwal EXPORT. Surat jalan di sini memang bentuk untuk kiriman
+   keluar — menawarkan jadwal Import cuma membuka peluang salah pilih,
+   karena hasil cetaknya nanti ditolak oleh pemeriksa tombol cetak. */
+function isiPilihanJadwal() {
+  const sel = $("#dnShipmentPick");
+  if (!sel) return;
+  const terpilih = sel.value;
+  const opsi = [];
+  ["export"].forEach((mode) => {
+    (data[mode] || []).forEach((s) => {
+      const label = [dispVal(s.invoice), dispVal(s.party)]
+        .filter((v) => v && v !== "—")
+        .join(" · ");
+      opsi.push(`<option value="${escapeAttr(s.id)}">${escapeHtml(label)}</option>`);
+    });
+  });
+  sel.innerHTML =
+    `<option value="">— Tidak ditautkan —</option>` + opsi.join("");
+  if (terpilih) sel.value = terpilih;
+}
+
 function resetDocNumForm(typeKey, opts) {
   const panel = docNumPanelEl(typeKey);
   if (!panel) return;
@@ -448,6 +473,11 @@ async function renderDocNumHistory() {
       .range(dari, dari + docNumPageSize - 1);
     if (error) throw error;
 
+    /* Disimpan supaya tombol cetak tidak perlu memanggil database lagi —
+       barisnya sudah ada di layar. Sengaja dipastikan berupa LARIK:
+       kalau kueri mengembalikan null, .find() akan meledak saat ditekan. */
+    docNumHistoryRows = Array.isArray(data) ? data : [];
+
     const total = count || 0;
     // Halaman terakhir bisa jadi kosong setelah data dihapus
     if (total > 0 && (!data || !data.length) && docNumPage > 1) {
@@ -461,9 +491,10 @@ async function renderDocNumHistory() {
     }
 
     box.innerHTML = `
+      <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>Nomor</th><th>Tanggal</th><th>Pemohon</th><th>Keterangan</th><th class="dn-act"></th></tr>
+          <tr><th>Nomor</th><th class="dn-col-tgl">Tanggal</th><th class="dn-col-pemohon">Pemohon</th><th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || "Keterangan")}</th><th class="dn-act"></th></tr>
         </thead>
         <tbody>
           ${data
@@ -477,18 +508,31 @@ async function renderDocNumHistory() {
                 p.subject ||
                 p.notes ||
                 "—";
-              /* Surat jalan: alamat ikut ditampilkan di bawah nama
-                 penerima — itu justru yang dicari saat menelusuri
-                 riwayat pengiriman. */
-              if (p.address) {
-                ringkas += " · " + p.address.replace(/\s*\n\s*/g, ", ");
-              }
+              /* Alamat & isian lain TIDAK lagi ditempel di sini.
+
+                 Kolom Keterangan tadinya memuat penerima + alamat penuh
+                 dan melebar melewati tabelnya. Semua isian sekarang bisa
+                 dilihat lewat tombol Detail — daftarnya cukup menyebut
+                 satu hal yang membedakan tiap baris. */
               return `<tr>
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
-                <td>${escapeHtml(fmtDate(r.doc_date))}</td>
-                <td>${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
+                <!-- Kelas yang sama dengan kepalanya: menyembunyikan
+                     hanya <th> membuat kolomnya bergeser, bukan hilang. -->
+                <td class="dn-col-tgl">${escapeHtml(fmtDate(r.doc_date))}</td>
+                <td class="dn-col-pemohon">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 <td class="dn-act">
+                  <button type="button" class="icon-btn" data-detail-num="${r.id}"
+                          title="Lihat seluruh isian"><i class="bi bi-list-ul"></i></button>
+                  ${
+                    /* Surat jalan hanya dipakai untuk kiriman EXPORT.
+                       Yang belum ditautkan pun ditawarkan — jadwalnya
+                       bisa dipasang belakangan lewat pengajuan baru. */
+                    jenis.key === "do" && sjBolehCetak(r)
+                      ? `<button type="button" class="icon-btn" data-print-sj="${r.id}"
+                                 title="Cetak surat jalan"><i class="bi bi-printer"></i></button>`
+                      : ""
+                  }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
                           data-num-label="${escapeHtml(r.doc_number)}" title="Hapus nomor ini">
                     <i class="bi bi-trash3"></i>
@@ -498,7 +542,8 @@ async function renderDocNumHistory() {
             })
             .join("")}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
     renderDocNumPagination(total);
   } catch (err) {
     console.error(err);
@@ -562,6 +607,18 @@ $("#docNumPagination")?.addEventListener("change", (e) => {
 
 /* HAPUS SATU NOMOR */
 $("#docNumHistory")?.addEventListener("click", (e) => {
+  const detail = e.target.closest("[data-detail-num]");
+  if (detail) {
+    // Melihat detail tidak mengubah apa pun — viewer pun boleh.
+    tampilkanDetailNomor(detail.dataset.detailNum);
+    return;
+  }
+  const cetak = e.target.closest("[data-print-sj]");
+  if (cetak) {
+    // Mencetak tidak mengubah apa pun, jadi viewer pun boleh.
+    cetakSuratJalan(cetak.dataset.printSj);
+    return;
+  }
   if (e.target.closest("[data-del-num]") && !requireEdit()) return;
   const btn = e.target.closest("[data-del-num]");
   if (!btn) return;
@@ -674,4 +731,103 @@ function setActivePageNav(page) {
   document.querySelectorAll("[data-page]").forEach((el) => {
     el.classList.toggle("active", el.dataset.page === page);
   });
+}
+
+
+/* ------------------------------------------------------------------
+   DETAIL PENGAJUAN NOMOR
+
+   Isian tiap jenis dokumen berbeda-beda, dan menampilkan semuanya di
+   tabel membuat kolom Keterangan melebar melewati lebarnya. Di sini
+   seluruh isian ditampilkan apa adanya — termasuk field yang hanya
+   dipunyai satu jenis dokumen.
+------------------------------------------------------------------ */
+/* Judul kolom keempat mengikuti jenis dokumennya. "Keterangan" terlalu
+   samar padahal isinya selalu satu hal tertentu. */
+const DN_KOLOM_UTAMA = {
+  do: "Tujuan / Penerima",
+  invoice: "Customer",
+  fund: "Dibayarkan Kepada",
+  letter: "Perihal",
+};
+
+const DN_LABEL_FIELD = {
+  packages: "Jumlah Koli",
+  receiver: "Tujuan / Penerima",
+  address: "Alamat Tujuan",
+  vehicle: "No. Kendaraan",
+  shipmentId: "Jadwal Terkait",
+  customer: "Customer",
+  payee: "Dibayarkan Kepada",
+  recipient: "Penerima Surat",
+  subject: "Perihal",
+  amount: "Nilai",
+  currency: "Mata Uang",
+  purpose: "Keperluan",
+  notes: "Keterangan",
+  reference: "Referensi",
+  packages: "Jumlah Koli",
+  quantity: "Jumlah",
+  unit: "Satuan",
+};
+
+function tampilkanDetailNomor(id) {
+  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
+  if (!r) return;
+  const p = r.payload || {};
+
+  const baris = [
+    ["Nomor", r.doc_number],
+    ["Tanggal", fmtDate(r.doc_date)],
+    ["Pemohon", r.requester],
+    ["Departemen", r.department],
+  ].filter(([, v]) => String(v == null ? "" : v).trim() !== "");
+  Object.keys(p).forEach((k) => {
+    let nilai = p[k];
+    if (k === "shipmentId") {
+      const kapal = typeof sjCariShipment === "function" ? sjCariShipment(nilai) : null;
+      nilai = kapal
+        ? [dispVal(kapal.invoice), dispVal(kapal.party)].filter(Boolean).join(" · ")
+        : "(jadwal tidak ditemukan)";
+    }
+    if (String(nilai ?? "").trim() === "") return;
+    /* Kunci yang belum punya label dirapikan sendiri: "packages" ->
+       "Packages". Isian tiap jenis dokumen bisa bertambah, dan yang
+       belum terdaftar tidak boleh tampil sebagai potongan kode. */
+    const label =
+      DN_LABEL_FIELD[k] ||
+      k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    baris.push([label, nilai]);
+  });
+
+  $("#promptTitle").textContent = "Detail Pengajuan Nomor";
+  $("#promptDesc").textContent = "";
+  $("#promptDesc").classList.add("d-none");
+  $("#promptIcon").className = "bi bi-list-ul";
+  $("#promptError").classList.add("d-none");
+  $("#promptFields").innerHTML = `
+    <dl class="dn-detail">
+      ${baris
+        .map(
+          ([k, v]) =>
+            `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd>`,
+        )
+        .join("")}
+    </dl>`;
+  /* Kotak ini hanya membaca: tombol Simpan disembunyikan dan "Batal"
+     diganti "Tutup" — tidak ada yang dibatalkan. */
+  $("#promptOk").classList.add("d-none");
+  const batal = $("#promptModal .modal-footer .btn-quiet");
+  const teksBatal = batal.textContent;
+  batal.textContent = "Tutup";
+  const modal = bootstrap.Modal.getOrCreateInstance($("#promptModal"));
+  $("#promptModal").addEventListener(
+    "hidden.bs.modal",
+    () => {
+      $("#promptOk").classList.remove("d-none");
+      batal.textContent = teksBatal;
+    },
+    { once: true },
+  );
+  modal.show();
 }

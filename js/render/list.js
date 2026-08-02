@@ -47,12 +47,16 @@ function getFiltered() {
    melainkan tanggal barang benar-benar masuk pabrik. Kalau tanggal itu
    kosong (ditandai tiba secara manual), dipakai ETA efektifnya. */
 function groupKeyOf(s) {
-  /* Yang sudah tiba dikelompokkan menurut tanggal barang benar-benar
-     masuk pabrik (In Factory), lalu Actual Delivery, baru ETA. */
+  /* Yang sudah tiba dikelompokkan menurut tanggal KEJADIANNYA:
+       Import -> In Factory (barang masuk pabrik)
+       Export -> Stuffing   (muatan selesai dinaikkan)
+     Estimated Delivery sengaja tidak dipakai — ia perkiraan, dan
+     mengurutkan riwayat menurut perkiraan membuat urutannya meleset
+     dari kejadian sebenarnya. */
   if (isArrived(s)) {
-    return (
-      s.factoryDate || s.actual || effectiveEta(s) || effectiveEtd(s) || null
-    );
+    const nyata =
+      s.mode === "export" ? s.actual || s.factoryDate : s.factoryDate;
+    return nyata || effectiveEta(s) || effectiveEtd(s) || null;
   }
 
   /* Buku EXPORT diurutkan menurut tanggal STUFFING, bukan ETA.

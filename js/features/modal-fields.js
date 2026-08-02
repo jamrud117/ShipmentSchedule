@@ -132,14 +132,14 @@ function recalcCustoms() {
   // Total CBM (mode Export) — beda dari Total Package: ini SELALU hasil hitung otomatis
   $("#footTotalCbm").textContent = fmtNum(calc.totalCbm);
 
-  // Total Package: mode Import HARUS selalu = hasil hitung dari kolom Kemasan tiap barang
+  /* Total Package (Import): dijumlahkan dari kolom Kemasan tiap barang,
+     lengkap dengan jenisnya — "4 BOX", bukan "4".
+
+     Dijumlahkan PER JENIS: 3 BOX dan 1 PALLET tidak mungkin jadi 4 apa
+     pun, jadi hasilnya ditulis "3 BOX · 1 PALLET". */
   if (activeMode === "import") {
-    // Ditulis berformat agar seragam dengan kotak angka lainnya.
-    $("#fPackage").value = formatNumberValue(
-      Math.round(calc.totalPackageQty * 100) / 100,
-    );
-    // Lebar kotak ikut panjang angkanya, supaya tidak kepotong.
-    autoSizeInput($("#fPackage"), 58, 190);
+    $("#fPackage").value = totalKemasanBarang();
+    autoSizeInput($("#fPackage"), 92, 210);
   }
 }
 
@@ -156,3 +156,22 @@ document.addEventListener("input", (e) => {
   const wrap = e.target.closest && e.target.closest(".input-affix");
   if (wrap) wrap.classList.toggle("has-value", !!e.target.value.trim());
 });
+
+
+/* Menjumlahkan kolom Kemasan seluruh barang, dikelompokkan per jenis.
+
+   Barang yang kolom Kemasan-nya dikosongkan dianggap masih satu
+   kemasan dengan barang di atasnya (lihat catatan di tab Daftar
+   Barang), jadi ia memang tidak ikut menambah hitungan. */
+function totalKemasanBarang() {
+  const peta = new Map();
+  (draftItems || []).forEach((it) => {
+    const jml = parseLooseNumber(it.packing);
+    if (!jml) return;
+    const jenis = String(it.packingUnit || "").trim().toUpperCase();
+    peta.set(jenis, (peta.get(jenis) || 0) + jml);
+  });
+  return Array.from(peta.entries())
+    .map(([jenis, n]) => `${fmtNum(n)} ${jenis}`.trim())
+    .join(" · ");
+}

@@ -10,20 +10,28 @@ cardContainer.addEventListener("change", (e) => {
   if (!s) return;
 
   if (t.dataset.action === "status") {
-    /* Statusnya bebas diubah. Tapi kalau tanggal Actual Delivery sudah
-       terlewati, isArrived() akan tetap membacanya sebagai tiba dan
-       statusnya kembali sendiri pada penggambaran berikutnya. Jadi
-       tanggalnya ikut dikosongkan — dengan persetujuan dulu, bukan
-       diam-diam, karena itu data yang pernah diisi sengaja. */
-    if (isArrived(s) && s.actual && t.value !== "arrived") {
+    /* Statusnya bebas diubah. Tapi selama tanggal KEJADIAN masih
+       terisi & terlewati, isArrived() akan tetap membacanya sebagai
+       tiba dan statusnya kembali sendiri pada penggambaran berikutnya.
+
+       Tanggal itu In Factory untuk Import, Stuffing untuk Export —
+       lihat isArrived() di core/status.js. Jadi yang dikosongkan harus
+       yang benar itu, bukan Estimated Delivery. */
+    const kolomFakta = s.mode === "export" ? "actual" : "factoryDate";
+    if (isArrived(s) && s[kolomFakta] && t.value !== "arrived") {
       const semula = t.value;
+      const namaKolom =
+        kolomFakta === "actual" ? ML().actual : ML().factoryDate || "In Factory";
+
       showConfirm(
-        `Tanggal ${ML().actual} (${fmtDate(s.actual)}) akan dikosongkan supaya statusnya bisa kembali ke ${statusLabel(semula, activeMode)}. Lanjutkan?`,
+        `Tanggal ${namaKolom} (${fmtDate(s[kolomFakta])}) akan dikosongkan supaya statusnya bisa kembali ke ${statusLabel(semula, activeMode)}. Lanjutkan?`,
         () => {
-          s.actual = "";
+          s[kolomFakta] = "";
           s.status = semula;
           render();
-          persistFields(id, { status: semula, actual: null });
+          /* persistFields() menerima nama camelCase dan menerjemahkannya
+             sendiri lewat columnFor() — bukan nama kolom database. */
+          persistFields(id, { status: semula, [kolomFakta]: null });
         },
         { confirmText: "Ya, ubah", tone: "primary", icon: "bi-arrow-repeat" },
       );

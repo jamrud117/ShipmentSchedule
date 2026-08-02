@@ -217,6 +217,12 @@ function reportDetailPairs(s, mode) {
       ["Estimasi Stuffing", fmtDateLong(s.actual)],
     ];
   }
+  /* Import: yang dilaporkan PERKIRAAN tiba di pabrik — kolom `actual`
+     yang di buku ini berlabel "Estimated Delivery".
+
+     Sengaja BUKAN In Factory: kolom itu baru terisi setelah barangnya
+     benar-benar masuk, sementara Report justru daftar yang BELUM tiba.
+     Memakainya berarti kolom tanggalnya selalu kosong. */
   return [
     ["Incoterm", dispVal(s.incoterm)],
     ["Mode", dispVal(s.muatan)],
@@ -228,7 +234,13 @@ function reportHeadline(s, mode) {
   return `Shipment ${mode === "export" ? "To" : "From"} ${dispVal(s.party)}`;
 }
 
-/* Patokan urutan Report = tanggal yang DITAMPILKAN di baris ke-3 tiap */
+/* Patokan urutan Report = tanggal yang DITAMPILKAN pada tiap baris,
+   supaya urutannya bisa ditelusuri langsung dari yang terbaca:
+
+     Import -> Estimated Delivery (perkiraan tiba di pabrik)
+     Export -> Stuffing
+
+   Keduanya kolom `actual`, hanya berbeda label per buku. */
 function reportSortDate(s, mode) {
   return s.actual || "";
 }

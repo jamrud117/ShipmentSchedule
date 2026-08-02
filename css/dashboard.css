@@ -7,8 +7,10 @@
 /* Dulu ada ikon corong di sini lewat content: "\F62A". Nomor glyph */
 
 @media (max-width: 991px) {
+
 }
 @media (max-width: 575px) {
+
 }
 
 /* BILAH KENDALI (cari / saring / urut / tampilan) */
@@ -261,6 +263,7 @@
     flex: 1;
     justify-content: center;
   }
+
 }
 
 /* PEMISAH TANGGAL */

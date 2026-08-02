@@ -130,7 +130,20 @@ function buildDetailHtml(s) {
       ${fieldPair("No. Invoice", escapeHtml(dispVal(s.invoice)))}
       ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(dispVal(s.masterBL)))}
       ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(dispVal(s.houseBL)))}
-      ${fieldPair(lbl.factoryDate, s.factoryDate ? fmtDate(s.factoryDate) + (s.factoryTime ? " · " + escapeHtml(s.factoryTime) : "") : "—")}
+      ${
+        /* Hanya Import. Di Export kolom ini tidak dipakai lagi — muatan
+           dicatat lewat kolom Stuffing (s.actual), dan menampilkan
+           keduanya membuat orang menebak-nebak mana yang berlaku. */
+        s.mode === "export"
+          ? ""
+          : fieldPair(
+              lbl.factoryDate,
+              s.factoryDate
+                ? fmtDate(s.factoryDate) +
+                    (s.factoryTime ? " · " + escapeHtml(s.factoryTime) : "")
+                : "—",
+            )
+      }
       ${fieldPair("Nama Forwarder", escapeHtml(dispVal(s.forwarder)))}
       ${fieldPair("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic)))}
     </div>

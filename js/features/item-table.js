@@ -95,6 +95,39 @@ window.addEventListener("resize", () => {
   window.__growTimer = setTimeout(autoGrowAllItemNames, 150);
 });
 
+/* Menempel teks (Ctrl+V).
+
+   Kejadian `paste` menyala SEBELUM isinya masuk ke kotak, jadi tingginya
+   harus dihitung pada putaran gambar berikutnya — kalau tidak, yang
+   terukur masih isi yang lama. */
+document.addEventListener("paste", (e) => {
+  const el = e.target;
+  if (el && el.matches && el.matches("textarea.nama-barang-input")) {
+    setTimeout(() => autoGrowTextarea(el), 0);
+  }
+});
+
+/* Perubahan yang datang dari KODE, bukan dari mengetik.
+
+   Impor PDF/Excel dan tempel-massal mengisi kotak lewat `.value`, dan
+   itu tidak memicu kejadian apa pun. Pengamat ini menangkap saat
+   baris-baris baru masuk ke tabel, lalu menghitung ulang tingginya —
+   inilah sebab nama panjang hasil impor tetap terpotong sebelumnya.
+
+   requestAnimationFrame dipakai supaya pengukuran terjadi setelah
+   peramban selesai menata letaknya; scrollHeight yang dibaca terlalu
+   dini akan mengembalikan tinggi satu baris. */
+function amatiTabelBarang() {
+  const tbody = document.getElementById("itemTableBody");
+  if (!tbody || tbody.dataset.grownObserved) return;
+  tbody.dataset.grownObserved = "1";
+  new MutationObserver(() => {
+    requestAnimationFrame(autoGrowAllItemNames);
+  }).observe(tbody, { childList: true, subtree: true });
+}
+document.addEventListener("DOMContentLoaded", amatiTabelBarang);
+amatiTabelBarang();
+
 // Font body (Inter) dimuat dengan `display=swap` (lihat index.html)
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {
@@ -109,7 +142,8 @@ function renderItemTable() {
   // digambar ulang — termasuk setelah data hasil impor masuk.
   setTimeout(() => {
     if (typeof syncFormValidity === "function") syncFormValidity();
-    autoGrowAllItemNames();
+    amatiTabelBarang();
+    requestAnimationFrame(autoGrowAllItemNames);
   }, 0);
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
@@ -133,9 +167,24 @@ function renderItemTable() {
       <td><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
       <td><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
       <td><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
-      <td class="pkg-cell">
-        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="${activeMode === "import" ? "1 PKG" : "82*82*75"}">
+      <td class="pkg-cell dim-col">
+        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="82*82*75">
 
+      </td>
+      <td>
+        <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}"
+               placeholder="${idx === 0 ? "1" : "↳ ikut"}"
+               title="${
+                 idx === 0
+                   ? "Jumlah kemasan untuk barang ini"
+                   : "Kosongkan kalau barang ini masih satu kemasan dengan baris di atas"
+               }"
+               class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
+      </td>
+      <td>
+        <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}"
+               list="packageUnitList" placeholder="${idx === 0 ? "BOX" : "↳ ikut"}"
+               class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
       <td class="cbm-col text-center ${activeMode === "import" ? "d-none" : ""}">
         <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}">
