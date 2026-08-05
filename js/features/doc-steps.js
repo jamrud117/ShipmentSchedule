@@ -37,6 +37,17 @@ const DOC_STEPS_IMPORT = [
   { key: "bl", label: blLabel, full: blFull },
   { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
+  /* KEDATANGAN — satu-satunya tahap yang bukan berkas.
+
+     Ditambahkan karena mesin prediksi butuh tahu KAPAN alat angkut
+     benar-benar tiba, dan tidak ada dokumen yang bisa menjawab itu
+     dengan pasti. Manifest (BC 1.1) diajukan pengangkut sebelum kapal
+     sandar, jadi memakainya sebagai bukti kedatangan selalu meleset
+     ke arah yang sama — sehari terlalu awal, tiap kali.
+
+     Bagi LCL ini penentu: stripping tidak bisa mulai sebelum kapalnya
+     sandar, secepat apa pun dokumennya diurus. */
+  { key: "berth", label: berthLabel, full: berthFull },
   { key: "pib", label: "PIB", full: "Pemberitahuan Impor Barang" },
   { key: "billing", label: "Billing", full: "Billing / bukti bayar" },
   { key: "sppb", label: "SPPB", full: "Surat Persetujuan Pengeluaran Barang" },
@@ -58,6 +69,18 @@ const DOC_STEPS_EXPORT = [
   { key: "tally", label: "Tally", full: "Tally sheet (hitung fisik saat muat)" },
 ];
 
+/* Kedatangan alat angkut. Untuk laut istilahnya "Sandar"; untuk udara
+   tidak ada padanan yang lazim dipakai orang lapangan, jadi dipakai
+   ATA apa adanya. */
+function berthLabel(s) {
+  return s && s.transport === "udara" ? "ATA" : "Berths";
+}
+function berthFull(s) {
+  return s && s.transport === "udara"
+    ? "Pesawat tiba di bandara tujuan (ATA)"
+    : "Kapal sandar di pelabuhan tujuan / berths (ATA)";
+}
+
 /* Label & nama panjang B/L mengikuti moda pengangkut. */
 function blLabel(s) {
   return s && s.transport === "udara" ? "AWB" : "B/L";
@@ -72,8 +95,25 @@ function blFull(s) {
    itu sendiri, bukan dari buku yang sedang dibuka. Kalau tidak,
    pencarian cepat yang membuka pengiriman Export dari buku Import akan
    menggambar tahap yang salah. */
+/* Urutan TAMPILAN tahap dokumen.
+
+   Kedatangan (Berths / ATA) ditaruh SETELAH SPPB untuk kedua moda.
+   Dokumen kerap rampung sebelum alat angkutnya tiba — PIB diajukan,
+   billing dibayar, bahkan SPPB terbit lebih dulu, baik pada kiriman
+   udara maupun laut. Menampilkannya di tengah membuat stepper terlihat
+   melompat-lompat padahal urutannya wajar.
+
+   Ini hanya urutan gambar. Urutan pengisiannya tetap bebas, dan mesin
+   prediksi tidak membaca posisi ini sama sekali: kedatangan
+   diperlakukan sebagai GERBANG, bukan anak tangga. */
 function docStepsFor(s) {
-  return (s && s.mode) === "export" ? DOC_STEPS_EXPORT : DOC_STEPS_IMPORT;
+  if ((s && s.mode) === "export") return DOC_STEPS_EXPORT;
+
+  const tanpaAta = DOC_STEPS_IMPORT.filter((x) => x.key !== "berth");
+  const ata = DOC_STEPS_IMPORT.find((x) => x.key === "berth");
+  const iSppb = tanpaAta.findIndex((x) => x.key === "sppb");
+  if (!ata || iSppb < 0) return DOC_STEPS_IMPORT;
+  return [...tanpaAta.slice(0, iSppb + 1), ata, ...tanpaAta.slice(iSppb + 1)];
 }
 
 /* Teks tahap bisa berupa fungsi (label dinamis) atau string biasa. */
@@ -173,12 +213,12 @@ async function toggleDocStep(id, stepKey) {
   const st = DAFTAR[idx];
 
   if (progres[stepKey]) {
-    /* Hanya tahap ini yang dibatalkan.
+    /* HANYA tahap ini yang dibatalkan, bukan tahap-tahap sesudahnya.
 
-       Sebelumnya seluruh tahap sesudahnya ikut terhapus — masuk akal
-       selama pengisiannya dipaksa berurutan, tapi sekarang tidak lagi:
-       PIB bisa saja dibetulkan sementara SPPB memang sudah benar-benar
-       di tangan. Menghapusnya berarti membuang catatan yang sah. */
+       Menghapus yang sesudahnya baru masuk akal kalau pengisiannya
+       dipaksa berurutan — dan di sini tidak: PIB bisa saja dibetulkan
+       sementara SPPB memang sudah benar-benar di tangan. Membuangnya
+       berarti membuang catatan yang sah. */
     showConfirm(`Batalkan konfirmasi ${stepText(st.label, s)}?`, () => {
       const tanpa = { ...progres };
       delete tanpa[stepKey];
@@ -188,6 +228,50 @@ async function toggleDocStep(id, stepKey) {
       confirmText: "Ya, Batalkan",
       tone: "primary",
       icon: "bi-arrow-counterclockwise",
+    });
+    return;
+  }
+
+  /* ------------------------------------------------------------------
+     TAHAP YANG MENGGERAKKAN PREDIKSI
+
+     Manifest, PIB, dan SPPB bukan sekadar centang: tanggalnya dipakai
+     mesin prediksi sebagai titik mulai hitungan berikutnya. Karena itu
+     yang ditanyakan tanggal DOKUMEN, bukan sekadar "ya, sudah ada".
+
+     Tanggal konfirmasi tidak bisa menggantikannya. SPPB terbit Jumat
+     sore lalu dicentang Senin pagi akan menggeser seluruh perkiraan
+     dua hari terlalu jauh — tiap kali, ke arah yang sama.
+
+     Daftar tahapnya dibaca dari konfigurasi, bukan ditulis di sini.
+  ------------------------------------------------------------------ */
+  const milestone = predictionMilestoneForStep(stepKey, s);
+  if (milestone) {
+    showPrompt({
+      title: `Konfirmasi ${stepText(st.label, s)}`,
+      desc: `${stepText(st.full, s)}. Isi tanggal yang tertera pada dokumennya — tanggal inilah yang dipakai mesin prediksi.`,
+      icon: "bi-calendar-check",
+      okText: "Simpan",
+      fields: [
+        {
+          key: "tanggal",
+          label: `Tanggal ${stepText(st.label, s)}`,
+          type: "date",
+          value: todayISO(),
+          hint: "Kosongkan kalau tanggal dokumennya belum diketahui — hari ini yang dipakai.",
+        },
+      ],
+      onSubmit: (v) => {
+        simpanDocStep(s, {
+          ...progres,
+          [stepKey]: {
+            at: new Date().toISOString(),
+            by: penggunaSekarang(),
+            date: v.tanggal || todayISO(),
+          },
+        });
+        return true;
+      },
     });
     return;
   }
@@ -244,6 +328,23 @@ async function toggleDocStep(id, stepKey) {
   );
 }
 
+/* Tahap ini termasuk milestone prediksi atau bukan.
+
+   Hanya berlaku di buku Import: mesin prediksi memang khusus jadwal
+   import, dan meminta "tanggal dokumen" pada tahap Export hanya akan
+   menambah langkah tanpa ada yang memakainya. */
+function predictionMilestoneForStep(stepKey, s) {
+  if (typeof PREDICTION_CONFIG === "undefined") return null;
+  if (typeof predictionAppliesTo === "function" && !predictionAppliesTo(s)) {
+    return null;
+  }
+  return (
+    (PREDICTION_CONFIG.milestones || []).find(
+      (m) => m.step === stepKey && m.asksDate,
+    ) || null
+  );
+}
+
 function penggunaSekarang() {
   const p = authState && authState.profile;
   return (p && (p.username || p.full_name)) || "";
@@ -272,6 +373,22 @@ async function simpanDocStep(s, progresBaru) {
     );
     return;
   }
+  /* Milestone baru = ketidakpastian berkurang. Estimated Delivery
+     dihitung ulang di sini, bukan menunggu form dibuka: tahap dokumen
+     dikonfirmasi dari kartu, dan angka di kartu yang sama harus ikut
+     bergerak pada detik itu juga. */
+  let pesanPrediksi = "";
+  if (typeof refreshShipmentPrediction === "function") {
+    const berubah = await refreshShipmentPrediction(s);
+    if (berubah.includes("actual")) {
+      const d = predictDelivery(s);
+      pesanPrediksi = ` Estimated Delivery → ${fmtDate(s.actual)} (${d.sourceLabel}).`;
+    }
+  }
+
   const c = docStepCount(s);
-  showToast(`Progres dokumen: ${c.selesai}/${c.berlaku}.`, "success");
+  showToast(
+    `Progres dokumen: ${c.selesai}/${c.berlaku}.${pesanPrediksi}`,
+    "success",
+  );
 }

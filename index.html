@@ -72,6 +72,7 @@
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
     <link rel="stylesheet" href="css/docnum.css" />
+    <link rel="stylesheet" href="css/prediction.css" />
     <link rel="stylesheet" href="css/system.css" />
   </head>
   <body>
@@ -917,6 +918,128 @@
                     placeholder="Keperluan Penomoran..."
                   ></textarea>
                 </div>
+
+                <!-- ---------- Data untuk cetak CIPL ----------
+                     Seluruhnya OPSIONAL: nomor invoice tetap bisa terbit
+                     tanpa satu pun diisi. Yang tidak diisi hanya membuat
+                     kotaknya kosong di hasil cetak, persis seperti berkas
+                     aslinya yang memang menyisakan kotak kosong. -->
+                <div class="col-12">
+                  <div class="dn-sub">
+                    <i class="bi bi-printer"></i> Data Cetak Commercial Invoice
+                    &amp; Packing List
+                    <span class="dn-sub-note"
+                      >opsional — dipakai tombol Cetak CIPL</span
+                    >
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Jadwal Export Ditautkan</label>
+                  <select
+                    class="form-select"
+                    data-dn="shipmentId"
+                    id="dnInvoiceShipmentPick"
+                  ></select>
+                  <div class="form-text-note">
+                    Daftar barang, berat, dan dimensi diambil dari jadwal ini.
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Alamat Consignee / Buyer</label>
+                  <textarea
+                    class="form-control"
+                    rows="3"
+                    data-dn="consigneeAddress"
+                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
+                  ></textarea>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">PO No.</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="poNo"
+                    placeholder="DD-260724-DDI-01"
+                  />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Tanggal PO</label>
+                  <input type="date" class="form-control" data-dn="poDate" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Terms of Delivery</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="termsDelivery"
+                    placeholder="FOB / DAP / CIF"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Term of Payment</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="termPayment"
+                    value="T/T 60 DAYS"
+                    placeholder="T/T 60 DAYS"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Notify Party</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="notifyParty"
+                    value="SAME AS CONSIGNEE"
+                    placeholder="SAME AS CONSIGNEE"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Port of Loading</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="portLoading"
+                    value="JAKARTA, INDONESIA"
+                    placeholder="JAKARTA, INDONESIA"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Final Destination</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="finalDestination"
+                    placeholder="BUSAN, KOREA"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Carrier</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="carrier"
+                    placeholder="Nama kapal / penerbangan"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Sailing on or About</label>
+                  <input
+                    type="date"
+                    class="form-control"
+                    data-dn="sailingDate"
+                  />
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label">Remarks</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="remarks"
+                    placeholder="Tercetak di kotak Remarks"
+                  />
+                </div>
               </div>
             </form>
 
@@ -1260,7 +1383,7 @@
                   class="btn btn-outline-danger"
                   id="btnCounterReset"
                 >
-                  <i class="bi bi-arrow-counterclockwise"></i> Reset
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset ke 001
                 </button>
               </div>
               <div class="form-text-note">
@@ -1610,14 +1733,119 @@
                 <input type="date" class="form-control" id="fEtd" required />
               </div>
               <div class="col-md-4">
-                <label class="form-label">ETA</label>
-                <input type="date" class="form-control" id="fEta" required />
+                <label class="form-label eta-label">
+                  <span>ETA</span>
+                  <span
+                    class="eta-mode-chip eta-mode-chip--auto"
+                    id="etaModeChip"
+                    ><i class="bi bi-magic"></i> Auto ETA</span
+                  >
+                </label>
+                <div class="eta-input-row">
+                  <input type="date" class="form-control" id="fEta" required />
+                  <div
+                    class="eta-mode-switch"
+                    id="etaModeSwitch"
+                    role="group"
+                    aria-label="Mode ETA"
+                  >
+                    <button
+                      type="button"
+                      class="eta-mode-btn is-active"
+                      data-eta-mode="auto"
+                      title="ETA dihitung mesin dari ETD + lama transit"
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      class="eta-mode-btn"
+                      data-eta-mode="manual"
+                      title="ETA diisi manual dari forwarder — mesin tidak akan menimpanya"
+                    >
+                      Manual
+                    </button>
+                  </div>
+                </div>
               </div>
               <div class="col-md-4">
-                <label class="form-label" id="lblActual"
-                  >Estimated Delivery</label
+                <label class="form-label eta-label" id="lblActual">
+                  <span>Estimated Delivery</span>
+                  <span
+                    class="eta-mode-chip eta-mode-chip--auto"
+                    id="deliveryModeChip"
+                    ><i class="bi bi-magic"></i> Auto</span
+                  >
+                </label>
+                <div class="eta-input-row">
+                  <input type="date" class="form-control" id="fActual" />
+                  <div
+                    class="eta-mode-switch"
+                    id="deliveryModeSwitch"
+                    role="group"
+                    aria-label="Mode Estimated Delivery"
+                  >
+                    <button
+                      type="button"
+                      class="eta-mode-btn is-active"
+                      data-delivery-mode="auto"
+                      title="Dihitung mesin dari ETA & milestone dokumen"
+                    >
+                      Auto
+                    </button>
+                    <button
+                      type="button"
+                      class="eta-mode-btn"
+                      data-delivery-mode="manual"
+                      title="Tanggal dikunci — dipakai untuk laporan, mesin tidak akan menimpanya"
+                    >
+                      Manual
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="form-text-note pred-inline-hint"
+                  id="actualAutoHint"
                 >
-                <input type="date" class="form-control" id="fActual" />
+                  <i class="bi bi-magic"></i> Dihitung otomatis. Pindah ke
+                  <b>Manual</b> kalau tanggalnya harus dikunci untuk laporan.
+                </div>
+              </div>
+              <div class="col-12" id="predictionBlock">
+                <div
+                  class="pred-notice d-none"
+                  id="etaManualNotice"
+                  role="alert"
+                >
+                  <div class="pred-notice-body">
+                    <i class="bi bi-exclamation-circle-fill"></i>
+                    <div>
+                      <b>ETA sedang dalam Mode Manual.</b>
+                      <div class="pred-notice-desc">
+                        ETD, rute, tipe pengiriman, atau direct/transit berubah
+                        — tapi ETA manual tidak ikut dihitung ulang. Pilih salah
+                        satu.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="pred-notice-actions">
+                    <button
+                      type="button"
+                      class="btn-quiet"
+                      id="btnKeepManualEta"
+                    >
+                      Pertahankan ETA Manual
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-teal btn-sm"
+                      id="btnRecalcEtaAuto"
+                    >
+                      <i class="bi bi-magic"></i> Hitung Ulang Otomatis
+                    </button>
+                  </div>
+                </div>
+                <div class="pred-panel" id="predictionPanel"></div>
               </div>
               <div class="col-md-4">
                 <label class="form-label">Status</label>
@@ -2225,7 +2453,12 @@
             <p class="dialog-text" id="confirmMessage"></p>
           </div>
           <div class="modal-footer dialog-foot">
-            <button type="button" class="btn-quiet" data-bs-dismiss="modal">
+            <button
+              type="button"
+              class="btn-quiet"
+              id="confirmCancelBtn"
+              data-bs-dismiss="modal"
+            >
               Batal
             </button>
             <button type="button" class="btn btn-danger" id="confirmActionBtn">
@@ -2318,6 +2551,19 @@
     <script src="js/core/mapping.js"></script>
     <script src="js/core/customs.js"></script>
     <script src="js/core/route-model.js"></script>
+    <!-- MESIN PREDIKSI. Urutannya mengikuti ketergantungan: data dulu,
+         lalu pemilih aturan, lalu lapis 0-4, lalu penerapan ke data. -->
+    <script src="js/core/prediction-config.js"></script>
+    <script src="js/core/prediction-rules.js"></script>
+    <script src="js/core/workdays.js"></script>
+    <script src="js/core/carrier-master.js"></script>
+    <script src="js/core/prediction-route.js"></script>
+    <script src="js/core/prediction-milestones.js"></script>
+    <script src="js/core/prediction-eta.js"></script>
+    <script src="js/core/prediction-confidence.js"></script>
+    <script src="js/core/prediction-schedule.js"></script>
+    <script src="js/core/prediction-learning.js"></script>
+    <script src="js/core/prediction.js"></script>
 
     <!-- ========================================= -->
     <!-- DATA -->
@@ -2381,8 +2627,11 @@
     <!-- VIEW -->
     <!-- ========================================= -->
     <script src="js/features/surat-jalan-print.js"></script>
+    <script src="js/features/cipl-print.js"></script>
     <script src="js/views/docnum-view.js"></script>
     <script src="js/views/form-router.js"></script>
+    <script src="js/render/prediction-view.js"></script>
+    <script src="js/features/prediction-ui.js"></script>
     <script src="js/views/detail-view.js"></script>
     <script src="js/views/overview-view.js"></script>
     <script src="js/features/command-palette.js"></script>

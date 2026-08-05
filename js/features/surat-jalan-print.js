@@ -344,7 +344,11 @@ function suratJalanCss() {
     color: #000;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .sj-sheet { padding: 10mm; }
+  /* Margin "Narrow" — 12,7 mm, sama dengan preset Word/Excel yang
+     dipakai orang kantor. Dipasang sebagai padding, bukan @page margin,
+     karena @page margin harus tetap 0 supaya kop & kaki bawaan peramban
+     tidak ikut tercetak. */
+  .sj-sheet { padding: 12.7mm; }
   /* Seluruh isi dikurung satu bingkai, seperti berkas aslinya. */
   .sj-box { border: 1.5px solid #000; }
 
@@ -422,6 +426,8 @@ function suratJalanCss() {
   }
   /* Label & nama sama-sama rata tengah. */
   .sj-sign-k { text-align: center; }
-  .sj-sign-v { margin-top: 34px; font-size: 8pt; text-align: center; }
+  /* Ruang tanda tangan. 34px terlalu sempit untuk tanda tangan basah
+     di atas kertas — nama di bawahnya tertindih. */
+  .sj-sign-v { margin-top: 62px; font-size: 8pt; text-align: center; }
   `;
 }

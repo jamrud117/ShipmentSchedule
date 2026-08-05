@@ -40,6 +40,77 @@ function isCiplSource(source) {
   return /^cipl/.test(source || "");
 }
 
+/* HARGA SATUAN HANYA BOLEH DATANG DARI CIPL.
+
+   Invoice komersial ADALAH sumber harga. PIB, PEB, dan draft CEISA
+   cuma menyatakannya ulang — kerap sudah dibulatkan, dikonversi, atau
+   dibagi rata ke beberapa pos tarif. Membiarkannya menimpa berarti
+   mengganti angka yang benar dengan turunannya.
+
+   Dokumen kepabeanan tetap boleh MENGISI harga yang masih kosong:
+   angka turunan lebih berguna daripada kolom kosong. Yang dilarang
+   hanya menimpa yang sudah ada. */
+function isPriceAuthority(source) {
+  return isCiplSource(source);
+}
+
+// Nama barang untuk pencocokan: beda spasi & huruf besar bukan beda barang.
+function itemMatchKey(it) {
+  return String((it && it.namaBarang) || (it && it.name) || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
+
+   Dicocokkan berlapis — nama dulu, baru HS Code — karena satu HS Code
+   kerap dipakai beberapa barang sekaligus, sementara namanya jarang
+   sama persis. Tiap barang lama hanya boleh dipakai sekali, supaya dua
+   pos yang ber-HS sama tidak sama-sama mewarisi harga dari satu baris.
+
+   Kalau tidak ada yang cocok sama sekali TAPI jumlah barangnya persis
+   sama, dicocokkan menurut urutan: dokumen kepabeanan hampir selalu
+   menyusun barang dalam urutan yang sama dengan invoice-nya. */
+function preserveUnitPrices(newItems, oldItems) {
+  const lama = (oldItems || []).filter((it) => parseLooseNumber(it.harga) > 0);
+  if (!lama.length || !newItems.length) return { items: newItems, kept: 0 };
+
+  const terpakai = new Set();
+  let kept = 0;
+
+  const ambil = (uji) => {
+    for (let i = 0; i < lama.length; i++) {
+      if (terpakai.has(i)) continue;
+      if (uji(lama[i])) {
+        terpakai.add(i);
+        return lama[i];
+      }
+    }
+    return null;
+  };
+
+  const items = newItems.map((it) => {
+    const nama = itemMatchKey(it);
+    const hs = normalizeHsCodeInput(it.hsCode);
+    const cocok =
+      (nama && ambil((o) => itemMatchKey(o) === nama)) ||
+      (hs && ambil((o) => normalizeHsCodeInput(o.hsCode) === hs));
+    if (!cocok) return it;
+    kept++;
+    return Object.assign({}, it, { harga: cocok.harga });
+  });
+
+  if (!kept && newItems.length === lama.length) {
+    return {
+      items: newItems.map((it, i) => Object.assign({}, it, { harga: lama[i].harga })),
+      kept: newItems.length,
+      byOrder: true,
+    };
+  }
+  return { items, kept };
+}
+
 // Satu-satunya pintu penulisan field form dari hasil import.
 function setImportField(id, value, source, opts) {
   if (value === "" || value == null) return false;
@@ -183,7 +254,17 @@ function applyImportedBcData(parsed) {
       (it) => (it.namaBarang || "").trim() !== "",
     );
     if (!hasRealItems || prevPrio == null || prio >= prevPrio) {
-      draftItems = cleaned;
+      if (isPriceAuthority(src)) {
+        draftItems = cleaned;
+      } else {
+        const jaga = preserveUnitPrices(cleaned, draftItems);
+        draftItems = jaga.items;
+        if (jaga.kept) {
+          notes.push(
+            `Harga satuan ${jaga.kept} barang dipertahankan dari data sebelumnya${jaga.byOrder ? " (dicocokkan menurut urutan)" : ""} — dokumen kepabeanan tidak menimpa harga invoice.`,
+          );
+        }
+      }
       importFieldOrigin.__items = prio;
     } else {
       notes.push(

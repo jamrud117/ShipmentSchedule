@@ -78,10 +78,10 @@ function autoGrowTextarea(el) {
 
 /* Menyesuaikan SELURUH kolom nama barang.
 
-   Dipanggil setelah tabel digambar ulang — termasuk setelah data
-   hasil impor masuk. Sebelumnya hanya dipanggil saat pengguna
-   mengetik, jadi nama panjang dari PDF/Excel tetap terpotong sampai
-   kolomnya disentuh. */
+   Harus dipanggil setiap kali tabel digambar ulang, TERMASUK setelah
+   data hasil impor masuk. Kalau hanya dipanggil saat pengguna
+   mengetik, nama panjang dari PDF/Excel tetap terpotong sampai
+   kolomnya kebetulan disentuh. */
 function autoGrowAllItemNames() {
   document
     .querySelectorAll("textarea.nama-barang-input")
@@ -189,7 +189,7 @@ function renderItemTable() {
       <td class="cbm-col text-center ${activeMode === "import" ? "d-none" : ""}">
         <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}">
       </td>
-      <td><input type="text" class="subtotal" readonly value="${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}"></td>
+      <td><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}"></td>
       <td><button type="button" class="rm-row" data-idx="${idx}" title="Hapus barang ini"><i class="bi bi-x-lg"></i></button></td>
     </tr>`;
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
@@ -228,7 +228,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
     }
     const subtotalInput = tr.querySelector(".subtotal");
     subtotalInput.value = fmtUSD(
-      (Number(draftItems[idx].qty) || 0) * (Number(draftItems[idx].harga) || 0),
+      parseLooseNumber(draftItems[idx].qty) * parseLooseNumber(draftItems[idx].harga),
     );
     // CBM dipengaruhi package (dimensi) MAUPUN qty
     const cbmInput = tr.querySelector(".cbm-readonly");

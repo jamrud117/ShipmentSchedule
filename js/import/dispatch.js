@@ -14,8 +14,41 @@ function ciplRawItemsToFinalItems(rawItems) {
     harga: it.harga != null ? it.harga : 0,
     netto: it.netto != null ? it.netto : 0,
     bruto: it.bruto != null ? it.bruto : 0,
-    package: it.package || "",
+    ...ciplPackagingFor(it),
   }));
+}
+
+/* KEMASAN: satu sumber, dua bentuk, dan bukunya yang menentukan.
+
+   Packing List memberi DUA keterangan sekaligus untuk tiap barang:
+
+     "SIZE :50*42*14(CM) /1BOX"
+            └─ dimensi ┘  └ koli ┘
+
+   IMPORT hanya butuh jumlah kolinya. Kolom `package` di sana dibaca
+   sebagai "5 BOX" — angka depannya dijumlahkan jadi total koli. Mengisi
+   dimensi ke situ membuat "50*42*14" terbaca sebagai 50 koli.
+
+   EXPORT butuh KEDUANYA: dimensi untuk menghitung CBM, jumlah koli
+   untuk surat jalan. Karena itu modelnya memang sudah punya dua kolom
+   terpisah — `package` (dimensi) dan `packing` (koli). Mengisi salah
+   satunya saja berarti membuang keterangan yang sudah terbaca. */
+function ciplPackagingFor(it) {
+  const koli = String(it.package || "").trim();
+  const dims = String(it.dimensions || "").trim();
+
+  if (activeMode !== "export") {
+    return { package: koli || dims, packing: "", packingUnit: "" };
+  }
+
+  // "1 BOX" / "2 PALLET" -> angka & jenisnya dipisah supaya bisa
+  // dijumlahkan per jenis tanpa mengurai teks lagi di hilir.
+  const m = /^(\d+(?:[.,]\d+)?)\s*([A-Za-z]+)?/.exec(koli);
+  return {
+    package: dims || koli,
+    packing: koli,
+    packingUnit: m && m[2] ? m[2].toUpperCase() : "",
+  };
 }
 
 // Gabung field dari 2 hasil parse CIPL: pakai yang PERTAMA tidak kosong

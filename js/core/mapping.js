@@ -25,6 +25,13 @@ const FIELD_MAP = {
   // TANGGAL UPDATE DELAY (requirement D): jadwal BARU setelah mundur
   etaUpdate: "eta_update",
   etdUpdate: "etd_update",
+  /* Cara ETA diperoleh: "auto" (dihitung mesin prediksi) atau "manual"
+     (angka dari forwarder). Bukan tanggal — melainkan penentu apakah
+     mesin boleh menimpa kolom `eta`. Lihat js/core/prediction.js. */
+  etaMode: "eta_mode",
+  /* Cara Estimated Delivery diperoleh: "auto" (dihitung mesin) atau
+     "manual" (tanggal yang dikunci pengguna untuk laporan). */
+  deliveryMode: "delivery_mode",
   actual: "actual",
   status: "status",
   notes: "notes",
@@ -102,11 +109,11 @@ function itemToRow(it, shipmentId) {
     nama_barang: it.namaBarang || "",
     hs_code: it.hsCode || "",
     jenis_barang: it.jenisBarang || "",
-    qty: Number(it.qty) || 0,
+    qty: parseLooseNumber(it.qty),
     satuan: it.satuan || "",
-    harga: Number(it.harga) || 0,
-    netto: Number(it.netto) || 0,
-    bruto: Number(it.bruto) || 0,
+    harga: parseLooseNumber(it.harga),
+    netto: parseLooseNumber(it.netto),
+    bruto: parseLooseNumber(it.bruto),
     // Kemasan per barang (Jumlah+Jenis utk import, dimensi P*L*T utk export
     package: it.package || "",
     packing: it.packing || "",
@@ -122,11 +129,11 @@ function rowToItem(row) {
     namaBarang: row.nama_barang || "",
     hsCode: row.hs_code || "",
     jenisBarang: row.jenis_barang || "",
-    qty: Number(row.qty) || 0,
+    qty: parseLooseNumber(row.qty),
     satuan: row.satuan || "",
-    harga: Number(row.harga) || 0,
-    netto: Number(row.netto) || 0,
-    bruto: Number(row.bruto) || 0,
+    harga: parseLooseNumber(row.harga),
+    netto: parseLooseNumber(row.netto),
+    bruto: parseLooseNumber(row.bruto),
     package: row.package || "",
     packing: row.packing || "",
     packingUnit: row.packing_unit || "",

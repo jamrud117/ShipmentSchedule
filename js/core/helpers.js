@@ -73,6 +73,15 @@ function escapeAttr(str) {
   return escapeHtml(str);
 }
 
+/* "1 EA + 60.000 SET". Satuan kosong ditulis tanpa keterangan supaya
+   barang yang satuannya belum diisi tidak menghilang dari total. */
+function fmtQtyBySatuan(list) {
+  if (!list || !list.length) return "0";
+  return list
+    .map((g) => `${fmtNum(g.qty)}${g.satuan ? " " + g.satuan : ""}`)
+    .join(" + ");
+}
+
 function newItem() {
   return {
     id: uid("it"),
@@ -112,12 +121,24 @@ function parsePackageDims(raw) {
   return { p: parts[0], l: parts[1], t: parts[2] };
 }
 
-// Meter kubik 1 barang mode Export: (P x L x T dalam cm) / 1.000.000 x Qty barang
+/* Meter kubik 1 barang mode Export: (P x L x T dalam cm) / 1.000.000
+   dikali JUMLAH KOLI.
+
+   Yang dikali harus jumlah kolinya, bukan jumlah pieces. Dimensi yang
+   tertulis adalah ukuran satu peti; mengalikannya dengan isi peti
+   memberi angka yang tidak masuk akal — 60.000 pcs dalam 1 box terbaca
+   927 m³, padahal sebenarnya 0,015 m³.
+
+   Jumlah koli diambil dari `packing` ("1 BOX", "2 PALLET") kalau ada.
+   Kalau kosong, dipakai `qty` seperti semula: pada pengisian manual
+   Export, qty memang berarti jumlah peti. Jadi data lama tidak berubah
+   perilakunya sama sekali. */
 function computeItemCbm(it) {
   const dims = parsePackageDims(it.package);
   if (!dims) return 0;
-  const qty = Number(it.qty) || 0;
-  const cbm = ((dims.p * dims.l * dims.t) / 1000000) * qty;
+  const koli = parseLooseNumber(String(it.packing || "").match(/[\d.,]+/) || 0);
+  const jumlah = koli > 0 ? koli : Number(it.qty) || 0;
+  const cbm = ((dims.p * dims.l * dims.t) / 1000000) * jumlah;
   return Math.round(cbm * 1000) / 1000;
 }
 

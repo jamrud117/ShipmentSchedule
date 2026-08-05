@@ -4,10 +4,10 @@
 /* Posisi penanda pada jalur = bagian waktu yang sudah dilewati antara
    ETD dan ETA.
 
-   Sebelumnya ada jalan pintas `if (status === "process") return 0.04`
-   yang mengunci penanda di 4% untuk SELURUH pengiriman berstatus
-   process — yaitu hampir semuanya — sehingga perhitungan tanggal di
-   bawahnya praktis tidak pernah dipakai.
+   JANGAN menambahkan jalan pintas berdasarkan status di sini. Status
+   "process" menempel pada hampir seluruh pengiriman, jadi cabang apa
+   pun yang mengembalikan nilai tetap untuknya akan mematikan seluruh
+   perhitungan tanggal di bawah ini tanpa terlihat rusak.
 
    Tanggal yang dipakai adalah tanggal EFEKTIF: kalau jadwal sudah
    dimundurkan, jalurnya ikut memanjang mengikuti tanggal barunya. */
@@ -19,8 +19,8 @@ function laneProgress(s) {
   if (!etd || !eta) return 0;
 
   const today = parseLocalDate(todayISO());
-  // Belum berangkat = benar-benar 0. Sebelumnya dipatok 4% supaya
-  // penandanya tidak menggantung di tepi; itu ditangani CSS sekarang.
+  // Belum berangkat = benar-benar 0. Kalau penandanya terlihat
+  // menggantung di tepi, itu urusan CSS — bukan urusan angka ini.
   if (today <= etd) return 0;
   // Sudah sampai terminal, menunggu diantar ke pabrik.
   if (today >= eta) return 0.96;
@@ -95,7 +95,11 @@ function isTransitRoute(s) {
 
 // Susun titik-titik rute secara urut: asal -> tiap terminal transit -> tujuan.
 function buildRouteNodes(s) {
-  const nodes = [{ kind: "origin", terminal: s.origin, date: s.etd }];
+  /* Jadwal lama menyimpan "IDTPP", jadwal baru menyimpan "TPP".
+     Diseragamkan saat DIGAMBAR, bukan lewat migrasi database — tidak
+     ada gunanya menulis ulang ribuan baris hanya untuk mengubah
+     tampilan, dan resolvePortEntry() tetap mengenali dua-duanya. */
+  const nodes = [{ kind: "origin", terminal: portCodeLabel(s.origin), date: s.etd }];
   routeStopList(s).forEach((st) => {
     nodes.push({
       kind: "stop",
@@ -108,7 +112,7 @@ function buildRouteNodes(s) {
       voyage: st.voyage,
     });
   });
-  nodes.push({ kind: "destination", terminal: s.destination, date: s.eta });
+  nodes.push({ kind: "destination", terminal: portCodeLabel(s.destination), date: s.eta });
   return nodes;
 }
 
@@ -187,7 +191,7 @@ function computeLaneModel(s) {
 // Teks rute lengkap (dipakai di info-grid card & detail view).
 function routeChainText(s) {
   if (!isTransitRoute(s)) {
-    return `${dispVal(s.origin)} → ${dispVal(s.destination)}`;
+    return `${dispVal(portCodeLabel(s.origin))} → ${dispVal(portCodeLabel(s.destination))}`;
   }
   const names = [
     s.origin,
@@ -236,13 +240,15 @@ function buildLaneHtml(s) {
       : s.status === "process"
         ? "is-process"
         : "";
-  /* Kelas penggerak penanda. Sebelumnya `s.status === "transit"`,
-     padahal status "transit" sudah tidak ditawarkan lagi — jadi
-     animasinya tidak pernah sekali pun berjalan.
+  /* Kelas penggerak penanda, ditentukan KEADAAN NYATA: bergerak kalau
+     sudah berangkat dan belum sampai pabrik.
 
-     Sekarang berdasarkan keadaan nyata: bergerak kalau sudah berangkat
-     dan belum sampai pabrik. Ragam geraknya mengikuti moda ruas yang
-     sedang dilalui (laut bergoyang, udara mengambang). */
+     Jangan mengaitkannya ke nilai `status` tertentu — daftar status
+     berubah, dan animasi yang bergantung pada status yang sudah tidak
+     ditawarkan tidak akan pernah berjalan tanpa ada yang menyadari.
+
+     Ragam geraknya mengikuti moda ruas yang sedang dilalui (laut
+     bergoyang, udara mengambang). */
   const bergerak = !isArrived(s) && progress > 0.05 && progress < 1;
   const markerClass = [
     progress <= 0.001 ? "at-start" : "",
@@ -287,8 +293,24 @@ function buildLaneHtml(s) {
 
   let delayFlag = "";
   const today = new Date();
-  const etaDate = parseLocalDate(s.eta);
-  if (!s.actual && !isArrived(s) && etaDate && today > etaDate) {
+  /* ETA yang BERLAKU, bukan ETA rencana.
+
+     Kotak Tanggal Update Delay berisi jadwal BARU setelah mundur.
+     Memakai ETA rencana membuat papan berteriak "melewati ETA" untuk
+     kiriman yang justru sudah dimundurkan secara resmi — dan angka
+     harinya jadi 0, karena hari ini memang baru saja melewatinya. */
+  const etaDate = parseLocalDate(s.etaUpdate || s.eta);
+  /* Yang dilihat di sini adalah tanggal KEJADIAN, bukan perkiraan.
+
+     Sebelum ada mesin prediksi, `actual` di buku Import memang kosong
+     sampai seseorang mengisinya, jadi memakainya sebagai penanda
+     "belum sampai" masih masuk akal. Sekarang kolom itu SELALU terisi
+     hasil hitungan — kalau tetap dipakai, penanda telat ini tidak akan
+     pernah muncul lagi.
+
+     Import ditandai selesai oleh In Factory; Export oleh Stuffing. */
+  const belumTiba = s.mode === "export" ? !s.actual : !s.factoryDate;
+  if (belumTiba && !isArrived(s) && etaDate && today > etaDate) {
     const d = daysBetween(etaDate, today);
     delayFlag = `<div class="delay-flag"><i class="bi bi-exclamation-triangle-fill"></i> Melewati ETA ${d} hari</div>`;
   }

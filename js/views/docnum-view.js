@@ -414,21 +414,86 @@ function tampilkanHasilDocNum(nomor) {
    keluar — menawarkan jadwal Import cuma membuka peluang salah pilih,
    karena hasil cetaknya nanti ditolak oleh pemeriksa tombol cetak. */
 function isiPilihanJadwal() {
-  const sel = $("#dnShipmentPick");
-  if (!sel) return;
-  const terpilih = sel.value;
   const opsi = [];
-  ["export"].forEach((mode) => {
-    (data[mode] || []).forEach((s) => {
-      const label = [dispVal(s.invoice), dispVal(s.party)]
-        .filter((v) => v && v !== "—")
-        .join(" · ");
-      opsi.push(`<option value="${escapeAttr(s.id)}">${escapeHtml(label)}</option>`);
-    });
+  (data.export || []).forEach((s) => {
+    const label = [dispVal(s.invoice), dispVal(s.party)]
+      .filter((v) => v && v !== "—")
+      .join(" · ");
+    opsi.push(`<option value="${escapeAttr(s.id)}">${escapeHtml(label)}</option>`);
   });
-  sel.innerHTML =
+  const html =
     `<option value="">— Tidak ditautkan —</option>` + opsi.join("");
-  if (terpilih) sel.value = terpilih;
+
+  // Dua pemakai: surat jalan (DO) dan CIPL (Invoice).
+  ["#dnShipmentPick", "#dnInvoiceShipmentPick"].forEach((sel) => {
+    const el = $(sel);
+    if (!el) return;
+    const terpilih = el.value;
+    el.innerHTML = html;
+    if (terpilih) el.value = terpilih;
+  });
+}
+
+/* Isian CIPL yang bisa DITURUNKAN dari jadwal diisikan otomatis saat
+   jadwalnya dipilih — tapi HANYA yang masih kosong.
+
+   Menimpa yang sudah diketik akan menghapus koreksi yang sengaja
+   dibuat: pelabuhan muat pada invoice kerap ditulis berbeda dari kode
+   yang dipakai papan ("JAKARTA, INDONESIA" vs "TPP"). */
+/* Alamat consignee diisikan dari nama buyer-nya.
+
+   Hanya kalau kotaknya masih KOSONG. Alamat yang sudah diketik boleh
+   jadi versi yang sengaja dibetulkan untuk kiriman ini — menimpanya
+   menghapus koreksi tanpa ada yang tahu. */
+function isiAlamatConsignee() {
+  const panel = docNumPanelEl("invoice");
+  if (!panel || typeof ciplAlamatBuyer !== "function") return;
+  const nama = panel.querySelector('[data-dn="customer"]');
+  const alamat = panel.querySelector('[data-dn="consigneeAddress"]');
+  if (!nama || !alamat) return;
+  if (String(alamat.value || "").trim()) return;
+  const isi = ciplAlamatBuyer(nama.value);
+  if (isi) alamat.value = isi;
+}
+
+/* Dipasang sekali di sini, bukan di dalam isiPilihanJadwal() — daftar
+   opsinya digambar ulang tiap kali data berubah, dan memasang
+   pendengar di sana berarti menumpuk pendengar yang sama. */
+const elPickInvoice = $("#dnInvoiceShipmentPick");
+if (elPickInvoice) {
+  elPickInvoice.addEventListener("change", isiOtomatisDariJadwal);
+}
+
+/* `change`, bukan `input`: alamat baru diisi setelah nama buyer selesai
+   diketik. Pada `input`, "D" sudah cukup untuk mencocokkan sesuatu. */
+const elCustomerInv = document.querySelector(
+  '[data-docnum-panel="invoice"] [data-dn="customer"]',
+);
+if (elCustomerInv) {
+  elCustomerInv.addEventListener("change", isiAlamatConsignee);
+}
+
+function isiOtomatisDariJadwal() {
+  const sel = $("#dnInvoiceShipmentPick");
+  if (!sel) return;
+  const s = (data.export || []).find((x) => x.id === sel.value);
+  if (!s) return;
+
+  const panel = docNumPanelEl("invoice");
+  if (!panel) return;
+  const set = (nama, nilai) => {
+    if (!nilai) return;
+    const el = panel.querySelector(`[data-dn="${nama}"]`);
+    if (el && !String(el.value || "").trim()) el.value = nilai;
+  };
+
+  set("customer", s.party);
+  isiAlamatConsignee();
+  set("portLoading", portCodeLabel(s.origin));
+  set("finalDestination", portCodeLabel(s.destination));
+  set("carrier", s.vessel);
+  set("sailingDate", s.etdUpdate || s.etd);
+  set("termsDelivery", s.incoterm);
 }
 
 function resetDocNumForm(typeKey, opts) {
@@ -533,6 +598,15 @@ async function renderDocNumHistory() {
                                  title="Cetak surat jalan"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
+                  ${
+                    /* Satu tombol, dua halaman: Commercial Invoice &
+                       Packing List. Judul halaman pertama mengikuti
+                       jenis invoice yang dipilih saat nomor terbit. */
+                    /^invoice/.test(jenis.key) && ciplBolehCetak(r)
+                      ? `<button type="button" class="icon-btn" data-print-cipl="${r.id}"
+                                 title="Cetak Commercial Invoice & Packing List"><i class="bi bi-printer"></i></button>`
+                      : ""
+                  }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
                           data-num-label="${escapeHtml(r.doc_number)}" title="Hapus nomor ini">
                     <i class="bi bi-trash3"></i>
@@ -617,6 +691,11 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   if (cetak) {
     // Mencetak tidak mengubah apa pun, jadi viewer pun boleh.
     cetakSuratJalan(cetak.dataset.printSj);
+    return;
+  }
+  const cetakCi = e.target.closest("[data-print-cipl]");
+  if (cetakCi) {
+    cetakCipl(cetakCi.dataset.printCipl);
     return;
   }
   if (e.target.closest("[data-del-num]") && !requireEdit()) return;
@@ -769,7 +848,56 @@ const DN_LABEL_FIELD = {
   packages: "Jumlah Koli",
   quantity: "Jumlah",
   unit: "Satuan",
+  // Isian CIPL
+  invoiceKind: "Jenis Invoice",
+  consigneeAddress: "Alamat Consignee",
+  notifyParty: "Notify Party",
+  poNo: "PO No.",
+  poDate: "Tanggal PO",
+  termsDelivery: "Terms of Delivery",
+  termPayment: "Term of Payment",
+  portLoading: "Port of Loading",
+  finalDestination: "Final Destination",
+  carrier: "Carrier",
+  sailingDate: "Sailing on or About",
+  remarks: "Remarks",
 };
+
+/* Urutan tampil di kotak Detail. Yang tidak tersebut di sini ikut di
+   belakang, urut sesuai kemunculannya.
+
+   Tanpa urutan tetap, isian tampil mengikuti urutan kunci JSON — dan
+   itu berubah-ubah mengikuti urutan pengisian, sehingga dua invoice
+   yang isinya sama bisa tampil dengan susunan berbeda. */
+const DN_URUTAN_FIELD = [
+  "invoiceKind",
+  "customer",
+  "consigneeAddress",
+  "notifyParty",
+  "shipmentId",
+  "poNo",
+  "poDate",
+  "termsDelivery",
+  "termPayment",
+  "currency",
+  "amount",
+  "portLoading",
+  "finalDestination",
+  "carrier",
+  "sailingDate",
+  "remarks",
+  "receiver",
+  "address",
+  "vehicle",
+  "packages",
+  "payee",
+  "expenseType",
+  "letterType",
+  "signer",
+  "recipient",
+  "subject",
+  "notes",
+];
 
 function tampilkanDetailNomor(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
@@ -782,7 +910,11 @@ function tampilkanDetailNomor(id) {
     ["Pemohon", r.requester],
     ["Departemen", r.department],
   ].filter(([, v]) => String(v == null ? "" : v).trim() !== "");
-  Object.keys(p).forEach((k) => {
+  const urut = [
+    ...DN_URUTAN_FIELD.filter((k) => k in p),
+    ...Object.keys(p).filter((k) => !DN_URUTAN_FIELD.includes(k)),
+  ];
+  urut.forEach((k) => {
     let nilai = p[k];
     if (k === "shipmentId") {
       const kapal = typeof sjCariShipment === "function" ? sjCariShipment(nilai) : null;
@@ -810,7 +942,7 @@ function tampilkanDetailNomor(id) {
       ${baris
         .map(
           ([k, v]) =>
-            `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd>`,
+            `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v)).replace(/\n/g, "<br>")}</dd>`,
         )
         .join("")}
     </dl>`;

@@ -125,7 +125,7 @@ function recalcCustoms() {
   $("#calcBMPDRI").value = formatNumberValue(calc.bmPdri);
   syncAffixState();
 
-  $("#footTotalQty").textContent = fmtNum(calc.totalQty);
+  $("#footTotalQty").textContent = fmtQtyBySatuan(calc.qtyBySatuan);
   $("#footTotalNetto").textContent = fmtNum(calc.totalNetto);
   $("#footTotalBruto").textContent = fmtNum(calc.totalBruto);
   $("#footTotalUSD").textContent = fmtUSD(calc.totalUSD);
@@ -174,4 +174,26 @@ function totalKemasanBarang() {
   return Array.from(peta.entries())
     .map(([jenis, n]) => `${fmtNum(n)} ${jenis}`.trim())
     .join(" · ");
+}
+
+/* NAMA SHIPPER/BUYER SELALU HURUF BESAR.
+
+   Nama yang sama diketik berbeda-beda — "PT Wide Logistics", "pt wide
+   logistics", "PT WIDE LOGISTICS" — akan terhitung sebagai tiga pihak
+   berbeda saat dikelompokkan di laporan dan papan. Diseragamkan saat
+   diketik, bukan saat disimpan, supaya pengguna langsung melihat
+   bentuk yang akan tersimpan.
+
+   Posisi kursor dijaga: tanpa itu, mengetik di tengah teks akan
+   melemparkan kursor ke ujung tiap huruf. */
+const elParty = $("#fParty");
+if (elParty) {
+  elParty.addEventListener("input", () => {
+    const pos = elParty.selectionStart;
+    const atas = elParty.value.toUpperCase();
+    if (elParty.value !== atas) {
+      elParty.value = atas;
+      elParty.setSelectionRange(pos, pos);
+    }
+  });
 }

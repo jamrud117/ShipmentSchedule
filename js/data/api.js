@@ -22,6 +22,23 @@ async function loadShipments() {
     if (data[row.mode]) data[row.mode].push(s);
   });
 
+  /* PREDIKSI DISELARASKAN DI MEMORI, SEBELUM DIGAMBAR.
+
+     Dengan begitu kartu, panel detail, template salin, dan Bulk Export
+     semuanya membaca s.actual yang sama — tanpa satu pun berkas itu
+     perlu tahu bahwa ada mesin prediksi.
+
+     Tidak ada penulisan ke database di sini. Membuka halaman bukan
+     mengubah data; kolom di Supabase baru diperbarui saat masukannya
+     benar-benar diubah (tanggal di kartu, tahap dokumen, simpan form). */
+  /* Hasil belajar dibuang lebih dulu: cache yang dibangun dari data
+     lama akan tetap dipakai untuk data baru, dan perkiraan basi lebih
+     berbahaya daripada tidak belajar sama sekali — ia terlihat pasti. */
+  if (typeof resetPredictionLearning === "function") resetPredictionLearning();
+  if (typeof applyPredictionToAll === "function") {
+    applyPredictionToAll(data.import);
+  }
+
   // PENTING: render() harus dipanggil di sini
   render();
 

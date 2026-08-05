@@ -78,6 +78,13 @@ function showConfirm(message, onConfirm, opsi) {
 
   const btn = $("#confirmActionBtn");
   btn.textContent = o.confirmText || "Ya, hapus";
+
+  /* Tombol kiri tidak selalu berarti "batal". Pada pilihan yang
+     dua-duanya sah — mis. "Pertahankan ETA Manual" vs "Hitung Ulang
+     Otomatis" — menamainya Batal membuat salah satu pilihan yang benar
+     terlihat seperti membatalkan sesuatu. */
+  const btnBatal = $("#confirmCancelBtn");
+  if (btnBatal) btnBatal.textContent = o.cancelText || "Batal";
   btn.className =
     "btn " + (o.tone === "primary" ? "btn-primary-navy" : "btn-danger");
 

@@ -113,10 +113,13 @@ function isArrived(s) {
      sudah sampai. Yang menyatakan barang benar-benar diterima cuma
      tanggal masuk pabrik.
 
-     EXPORT — kolom yang sama berlabel "Stuffing", dan itu FAKTA:
-     tanggal muatan selesai dinaikkan. Jadi di sana ia tetap menentukan.
+     EXPORT — yang menentukan ETD. Barang dinyatakan terkirim begitu
+     alat angkutnya BERANGKAT, bukan begitu stuffing selesai: muatan
+     yang sudah naik ke kontainer tapi kapalnya belum berlayar masih ada
+     di tangan kita.
 
-     Perbedaan ini disengaja: satu kolom, dua makna, mengikuti bukunya. */
+     Perbedaan ini disengaja: tiap buku memakai tanggal yang benar-benar
+     menandai serah terimanya. */
   /* factoryDate hanya berlaku di buku IMPORT.
 
      Di Export kolom itu berlabel "Tanggal Stuffing" juga — kolom lama
@@ -132,9 +135,10 @@ function isArrived(s) {
     if (masuk && kini && kini >= masuk) return true;
   }
 
-  if (s.mode === "export" && s.actual) {
-    const stuffing = parseLocalDate(s.actual);
-    if (stuffing && kini && kini >= stuffing) return true;
+  if (s.mode === "export") {
+    // ETD yang BERLAKU — kotak delay menang atas jadwal rencana.
+    const berangkat = parseLocalDate(s.etdUpdate || s.etd);
+    if (berangkat && kini && kini >= berangkat) return true;
   }
 
   return s.status === "arrived";

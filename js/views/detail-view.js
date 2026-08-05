@@ -156,13 +156,14 @@ function buildDetailHtml(s) {
       ${fieldPair("Kontainer", escapeHtml(dispVal(s.container)))}
       ${fieldPair("Jenis Muatan", escapeHtml(s.muatan || "—"))}
       ${fieldPair("Tipe Rute", isTransitRoute(s) ? `Transit (${routeStopList(s).length} Terminal Singgah)` : "Direct")}
-      ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(s.origin)))}
-      ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(s.destination)))}
+      ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}
+      ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(portCodeLabel(s.destination))))}
       ${fieldPair("ETD", fmtDate(s.etd))}
       ${fieldPair("ETA", fmtDate(s.eta))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
     </div>
     ${buildDetailStopsHtml(s)}
+    ${predictionDetailHtml(s)}
     ${(() => {
       const log = normalizeNotesLog(s.notesLog, s.notes);
       if (!log.length) return "";
@@ -192,7 +193,7 @@ function buildDetailHtml(s) {
     <div class="item-table-foot item-table-foot--split mb-3">
       <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
       <div class="foot-totals">
-        <div>Total Qty: <b>${fmtNum(calc.totalQty)}</b></div>
+        <div>Total Qty: <b>${escapeHtml(fmtQtyBySatuan(calc.qtyBySatuan))}</b></div>
         <div>Total Netto: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
         <div>Total Bruto: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
         <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>

@@ -245,9 +245,25 @@ function reportSortDate(s, mode) {
   return s.actual || "";
 }
 
+/* Jadwal Export yang stuffing-nya sudah lewat ATAU jatuh HARI INI
+   tidak ikut dilaporkan.
+
+   Report dibaca sebagai daftar "yang masih akan dikerjakan". Muatan
+   yang hari ini sedang di-stuffing sudah ditangani orang di lapangan;
+   memasukkannya membuat penerima laporan menghubungi tim untuk hal
+   yang sedang berjalan saat itu juga.
+
+   Yang stuffing-nya BELUM diisi tetap masuk: belum ada tanggal berarti
+   belum terjadi, dan justru itu yang perlu diingatkan. */
+function exportStuffingBelumLewat(s) {
+  if (!s.actual) return true;
+  return s.actual > todayISO();
+}
+
 function pendingByMode(mode) {
   return (data[mode] || [])
     .filter((s) => !isArrived(s))
+    .filter((s) => (mode === "export" ? exportStuffingBelumLewat(s) : true))
     // Yang paling DEKAT di paling atas
     .sort((a, b) => {
       const da = reportSortDate(a, mode);

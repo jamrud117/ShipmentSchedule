@@ -5,8 +5,34 @@
 const INCOTERM_RE =
   /\b(FOB|FCA|CIF|CFR|EXW|CPT|CIP|DAP|DPU|DDP|DAT|DES|DEQ)\b/i;
 const CURRENCY_TOKEN_RE = /^(USD|IDR|KRW|CNY|RMB|JPY|EUR|SGD|TWD|HKD)$/i;
+/* Satuan yang dikenali di kolom Quantity.
+
+   EA ("each") ada di hampir semua invoice Korea/Cina dan sebelumnya
+   tidak terdaftar — akibatnya kolom Satuan selalu kosong untuk berkas
+   itu, tanpa ada yang bersuara. Satuan yang tidak dikenali tidak
+   menggagalkan barisnya; ia hanya menghilang diam-diam. */
 const UNIT_QTY_RE =
-  /^(PCS?|SET|UNITS?|BOX(?:ES)?|PACK(?:AGES?)?|PALLETS?|PLT|CARTONS?|CTN|BAGS?|DRUMS?|ROLLS?|KG|G|TON|TNE|MT|M3|CBM|SQM|LOT)$/i;
+  /^(PCS?|PCE|EA|EACH|SET|UNITS?|NOS?|PA?I?RS?|DOZ(?:EN)?|DZ|BOX(?:ES)?|PACK(?:AGES?)?|PALLETS?|PLT|CARTONS?|CTNS?|BAGS?|DRUMS?|ROLLS?|COILS?|SHEETS?|KGM?|KGS?|G|TON|TNE|MT|M3|CBM|SQM|LOT)$/i;
+
+/* HS Code yang berdiri sendiri di dalam teks nama barang, TANPA label
+   "HS Code:" — biasanya karena ia punya kolom sendiri yang kebetulan
+   jatuh di kotak nama.
+
+   Sengaja hanya bentuk BERTITIK (6903.10-0000, 8481.40.00.00). Angka
+   polos 8-10 digit tidak diambil: nomor part dan kode internal sering
+   sepanjang itu, dan salah mengambilnya berarti mengisi kolom HS Code
+   dengan angka yang bukan HS Code sama sekali. */
+function extractBareHsCode(text) {
+  const s = String(text || "");
+  const m = /(?:^|[\s(])(\d{4}\.\d{2}(?:[.\-]\d{2}){1,2}|\d{4}\.\d{2}[.\-]\d{4})(?=[\s)]|$)/.exec(s);
+  if (!m) return { hsCode: "", cleaned: s.trim() };
+  return {
+    hsCode: normalizeHsCodeInput(m[1]),
+    cleaned: (s.slice(0, m.index) + " " + s.slice(m.index + m[0].length))
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+  };
+}
 
 // "Origin HS Code: 8458.91-0000" / "HS Code
 function extractEmbeddedHsCode(text) {
@@ -190,6 +216,28 @@ function normName(s) {
 }
 
 // Menggabungkan beberapa daftar barang "sebagian" (mis
+/* Field barang yang ikut terbawa saat CI & PL digabung.
+
+   Ditulis SEKALI di sini, bukan diulang di tiap fungsi merge. Daftar
+   yang disalin dua kali akan berbeda cepat atau lambat — persis yang
+   terjadi pada `dimensions`: ia terbaca dari Packing List, lalu hilang
+   diam-diam begitu CI dan PL diimpor sebagai dua berkas terpisah, dan
+   CBM Export jadi nol tanpa ada yang bersuara.
+
+   Menambah field baru pada barang hasil ekstraksi? Tambahkan di sini
+   juga, atau ia hanya akan selamat pada berkas gabungan. */
+const CIPL_MERGE_FIELDS = [
+  "name",
+  "hsCode",
+  "qty",
+  "satuan",
+  "harga",
+  "netto",
+  "bruto",
+  "package",
+  "dimensions",
+];
+
 function mergeByPosition(sources) {
   const n = sources[0].length;
   const merged = [];
@@ -197,16 +245,7 @@ function mergeByPosition(sources) {
     const acc = {};
     sources.forEach((list) => {
       const it = list[i] || {};
-      [
-        "name",
-        "hsCode",
-        "qty",
-        "satuan",
-        "harga",
-        "netto",
-        "bruto",
-        "package",
-      ].forEach((f) => {
+      CIPL_MERGE_FIELDS.forEach((f) => {
         if ((acc[f] == null || acc[f] === "") && it[f] != null && it[f] !== "")
           acc[f] = it[f];
       });
@@ -235,11 +274,10 @@ function mergeByKey(sources) {
         order.push(key);
       }
       const acc = byKey.get(key);
-      ["hsCode", "qty", "satuan", "harga", "netto", "bruto", "package"].forEach(
-        (f) => {
-          if (acc[f] == null && it[f] != null && it[f] !== "") acc[f] = it[f];
-        },
-      );
+      CIPL_MERGE_FIELDS.forEach((f) => {
+        if (f === "name") return;
+        if (acc[f] == null && it[f] != null && it[f] !== "") acc[f] = it[f];
+      });
       if (!acc.name) acc.name = it.name;
     });
   });

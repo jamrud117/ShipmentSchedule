@@ -532,8 +532,8 @@ function parsePibPdfText(text, pagesItems) {
 
   // --- ETD / ETA / Actual Delivery (requirement A) ETD = tanggal Master BL/AWB (cadangan
   fields.etd = masterBlDate || houseBlDate || "";
-  fields.eta = deriveEtaFromEtd(fields.etd, fields.transport);
-  fields.actual = deriveActualFromEta(fields.eta);
+  fields.eta = deriveEtaFromEtd(fields.etd, fields.transport, fields);
+  fields.actual = deriveActualFromEta(fields.eta, fields);
   if (!fields.etd) {
     notes.push(
       "Tanggal Master/House BL-AWB tidak terbaca, jadi ETD (dan ETA & Actual Delivery yang diturunkan darinya) tidak terisi — isi manual.",
@@ -543,7 +543,7 @@ function parsePibPdfText(text, pagesItems) {
     const pibEta = etaMatch ? pibDateToISO(etaMatch[1]) : "";
     if (pibEta && pibEta !== fields.eta) {
       notes.push(
-        `ETA diisi ${fields.eta} (aturan: ${fields.transport === "udara" ? "sama dengan ETD" : "ETD + 1 minggu"}). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba ${pibEta} di field 11 — ganti manual kalau yang dipakai angka dokumen.`,
+        `ETA diisi ${fields.eta} (hitungan mesin prediksi dari ETD + lama transit rute ini). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba ${pibEta} di field 11 — isi manual kalau yang dipakai angka dokumen; ETA otomatis berpindah ke Mode Manual begitu diketik.`,
       );
     }
   }

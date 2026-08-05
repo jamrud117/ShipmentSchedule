@@ -296,6 +296,12 @@ function renderFormPage(id) {
   }
   applyTransportLabels();
   applyDelayFieldVisibility();
+  /* Mesin prediksi disiapkan SETELAH seluruh isian terpasang: ia membaca
+     ETD, moda, muatan, rute, dan progres dokumen sekaligus. Dipanggil
+     lebih awal, ia akan menghitung dari form yang masih kosong. */
+  if (typeof initPredictionForm === "function") {
+    initPredictionForm(id ? currentList().find((x) => x.id === id) : null);
+  }
   renderNotesTimeline();
   autoSizePackageFooter();
   $("#fNoteDraft").value = "";
@@ -435,6 +441,11 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     eta: $("#fEta").value,
     etaUpdate: $("#fEtaUpdate").value,
     etdUpdate: $("#fEtdUpdate").value,
+    /* Bukan tanggal, melainkan cara ETA di atas diperoleh. Tanpa ini
+       tersimpan, jadwal yang ETA-nya sengaja diketik manual akan
+       ditimpa mesin pada pemuatan berikutnya. */
+    etaMode: typeof formEtaMode === "string" ? formEtaMode : "auto",
+    deliveryMode: typeof formDeliveryMode === "string" ? formDeliveryMode : "auto",
     actual: $("#fActual").value,
     status: $("#fStatus").value,
     notesLog: draftNotesLog,

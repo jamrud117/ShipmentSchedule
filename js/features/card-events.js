@@ -43,9 +43,20 @@ cardContainer.addEventListener("change", (e) => {
     persistFields(id, { status: s.status });
   } else if (t.dataset.action === "date") {
     // Semua field tanggal (ETA termasuk) sekarang field biasa
-    s[t.dataset.field] = t.value;
+    const field = t.dataset.field;
+    s[field] = t.value;
     render();
-    persistFields(id, { [t.dataset.field]: t.value });
+    persistFields(id, { [field]: t.value });
+
+    /* ETD/ETA/kotak delay berubah -> ETA & Estimated Delivery ikut
+       dihitung ulang. Tidak ada tombol segarkan: perubahan masukan
+       itu sendiri yang menggerakkannya. */
+    if (
+      typeof handleCardDateChange === "function" &&
+      ["etd", "eta", "etdUpdate", "etaUpdate", "actual"].includes(field)
+    ) {
+      handleCardDateChange(s, field);
+    }
   }
 });
 

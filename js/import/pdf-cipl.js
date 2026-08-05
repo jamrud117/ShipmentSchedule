@@ -4,9 +4,16 @@
 
 // Header kolom pada templat ini POSISINYA DI TENGAH kolom, bukan di tepi kiri
 function ciplPdfColumnSplits(pageItems) {
-  // Sebagian templat punya DUA kolom di kiri nama barang: "Shipping Marks" DAN "Item"
+  /* Kolom di kiri nama barang dipotong HANYA kalau isinya Shipping
+     Marks — tanda pengapalan memang bukan nama barang.
+
+     Kolom "Item" sebaliknya: ia BAGIAN dari nama. Pada invoice yang
+     memisah "Item" dan "Description", nama lengkapnya tersebar di
+     keduanya ("STAND" + "HS 40*50"). Memotongnya membuang separuh nama
+     barang tanpa ada yang bersuara — yang tersisa cuma keterangan
+     tekniknya. */
   const leftCandidates = (pageItems || [])
-    .filter((it) => /^\s*(Shipping\s+Marks?|Items?)\s*$/i.test(it.str))
+    .filter((it) => /^\s*Shipping\s+Marks?\s*$/i.test(it.str))
     .map((it) => ({ x: it.transform[4], width: it.width || 0 }));
   const desc = pdfFindItemOnPage(
     pageItems,
@@ -37,8 +44,48 @@ function ciplPdfColumnSplits(pageItems) {
   return { nameStart, valueStart: qty.x - 3, headerY: desc.y, defaultUnit };
 }
 
+/* PECAHAN ANGKA DARI PDF.
+
+   Sebagian PDF memecah satu angka jadi beberapa potongan teks yang
+   bersebelahan: "26,400.00" keluar sebagai "2" lalu "6,400.00",
+   "101.00" jadi "1" lalu "01.00". Dibaca apa adanya, potongan pertama
+   terbaca sebagai angka tersendiri dan seluruh kolom setelahnya
+   bergeser — Amount jadi 2, harga jadi Amount, dan seterusnya.
+
+   Digabung berdasarkan KOORDINAT, bukan tebakan atas teksnya: dua
+   potongan disatukan hanya kalau berada di baris yang sama DAN
+   benar-benar berdempet. Menebak dari teks saja akan ikut menyatukan
+   angka yang memang bersebelahan di kolom berbeda. */
+function mergeSplitNumberFragments(pageItems) {
+  const urut = (pageItems || []).slice().sort((a, b) => {
+    const dy = b.transform[5] - a.transform[5];
+    return Math.abs(dy) > 2 ? dy : a.transform[4] - b.transform[4];
+  });
+
+  const hasil = [];
+  urut.forEach((it) => {
+    const prev = hasil[hasil.length - 1];
+    if (prev) {
+      const sebaris = Math.abs(prev.transform[5] - it.transform[5]) <= 2;
+      const jarak = it.transform[4] - (prev.transform[4] + (prev.width || 0));
+      const a = String(prev.str || "");
+      const b = String(it.str || "");
+      if (sebaris && jarak < 1.5 && /\d$/.test(a) && /^[\d,.]/.test(b)) {
+        hasil[hasil.length - 1] = Object.assign({}, prev, {
+          str: a + b,
+          width: (prev.width || 0) + (it.width || 0),
+        });
+        return;
+      }
+    }
+    hasil.push(it);
+  });
+  return hasil;
+}
+
 // Baris tabel barang 1 halaman -> [{ nameText, valueText, y }]
 function ciplPdfTableRows(pageItems) {
+  pageItems = mergeSplitNumberFragments(pageItems);
   const split = ciplPdfColumnSplits(pageItems);
   if (!split) return [];
 
@@ -65,14 +112,45 @@ function ciplPdfTableRows(pageItems) {
   return nameLines
     .map((nl) => {
       const vl = valueLines.find((v) => Math.abs(v.y - nl.y) <= 3);
-      return {
+      return repairSpilledQty({
         y: nl.y,
         nameText: nl.text.trim(),
         valueText: vl ? vl.text.trim() : "",
         defaultUnit: split.defaultUnit || "",
-      };
+      });
     })
     .filter((r) => r.nameText);
+}
+
+/* ANGKA QUANTITY YANG TUMPAH KE KOTAK NAMA.
+
+   Batas kolom diambil dari posisi JUDUL kolom, sementara isinya rata
+   kanan. Nilai yang lebih lebar daripada judulnya — "60,000" di bawah
+   judul "Quantity" — karena itu mulai di sebelah kiri batas, lalu
+   tersedot ke kotak nama. Akibatnya barisnya kehilangan qty dan
+   diperlakukan sebagai baris lanjutan: satu barang hilang sama sekali.
+
+   Diperbaiki dari BENTUK datanya, bukan dari menggeser batas kolom.
+   Menggeser batas menebak seberapa jauh nilai bisa menjorok, dan
+   tebakan yang kelewat longgar akan ikut menyedot kode HS ke kolom
+   nilai. Yang diperiksa di sini pasti: nama berakhir angka SEMENTARA
+   kolom nilainya justru tidak dimulai angka. Angka itu memang milik
+   kolom nilai. */
+function repairSpilledQty(row) {
+  const nama = row.nameText;
+  const nilai = row.valueText;
+  if (!nama || !nilai) return row;
+  if (/^[\d,.]/.test(nilai)) return row;
+
+  const m = /\s([\d][\d,.]*)$/.exec(nama);
+  if (!m) return row;
+  // Kode HS & nomor part berekor huruf bukan quantity.
+  if (!/^\d[\d,]*(\.\d+)?$/.test(m[1])) return row;
+
+  return Object.assign({}, row, {
+    nameText: nama.slice(0, m.index).trim(),
+    valueText: (m[1] + " " + nilai).trim(),
+  });
 }
 
 // Angka pada kolom berat sering terpecah jadi beberapa potongan teks ("1" lalu ".0")
@@ -133,11 +211,17 @@ function ciplRowsToItems(rows, kind) {
       groupPrefix && !name.toLowerCase().startsWith(groupPrefix.toLowerCase())
         ? `${groupPrefix} ${name}`.trim()
         : name;
+    /* HS Code kerap punya kolom sendiri yang jatuh di dalam kotak nama.
+       Dikeluarkan dari namanya, bukan dibiarkan menempel: nama barang
+       yang berekor "6903.10-0000" tidak cocok saat dibandingkan dengan
+       dokumen lain, dan kolom HS Code-nya sendiri tetap kosong. */
+    const hs = extractBareHsCode(full);
     const it = {
-      name: full,
+      name: hs.cleaned,
       qty: parsed.qty,
       satuan: parsed.satuan || r.defaultUnit || "",
     };
+    if (hs.hsCode) it.hsCode = hs.hsCode;
     if (kind === "ci") {
       if (parsed.nums.length >= 1) it.harga = parsed.nums[0];
       if (parsed.nums.length >= 2) it.amount = parsed.nums[1];
@@ -175,11 +259,14 @@ const KNOWN_LABEL_RES = [
   /^Seller\s*$/i,
   /^Notify\s+Party/i,
   /^Terms?\s+of\s+(Payment|Delivery)/i,
-  /^Departure\s*Date/i,
+  // "Depature" bukan salah ketik saya — begitu tertulis di templat
+  // invoice yang beredar, dan berkas yang salah ketik tetap harus terbaca.
+  /^Depa(?:rt|t)ure\s*Date/i,
   /^Final\s+Destination/i,
   /^Other\s+References/i,
   /^Vessel\s*\/\s*Flight/i,
-  /^Port\s+of\s+Loading/i,
+  /^(Port\s+of\s+Loading|Loading\s+Port)/i,
+  /^Final\s+Destination/i,
   /^From\s*$/i,
   /^Special\s+Item/i,
   /^OBL\s+TYPE/i,
@@ -188,6 +275,24 @@ function looksLikeAnotherLabel(s) {
   const t = (s || "").trim();
   return KNOWN_LABEL_RES.some((re) => re.test(t));
 }
+/* Baris pertama SETELAH sebuah label yang berisi tanggal. Baris kosong
+   dan baris label lain dilewati; pencarian berhenti setelah beberapa
+   baris supaya tidak menyeret tanggal milik kotak lain. */
+function grabDateAfterLabel(text, labelRe, maxLines) {
+  const baris = String(text || "").split("\n");
+  const batas = maxLines || 4;
+  for (let i = 0; i < baris.length; i++) {
+    if (!labelRe.test(baris[i].trim())) continue;
+    for (let j = i + 1; j <= i + batas && j < baris.length; j++) {
+      const s = baris[j].trim();
+      if (!s) continue;
+      if (looksLikeAnotherLabel(s)) break;
+      if (parseFlexibleDateText(s)) return s;
+    }
+  }
+  return "";
+}
+
 function grabNextLine(text, labelRe) {
   const v = grab(text, labelRe);
   return looksLikeAnotherLabel(v) ? "" : v;
@@ -217,9 +322,17 @@ function parseCiplPdfPageFields(pageItems, pageText) {
     leftText,
     /^\s*(?:Seller|Shipper|Exporter|Consignors?|Consigners?)\s*:?\s*\n\s*([^\n]+)/im,
   );
-  const consignee = grabNextLine(leftText, /Consignee\s*\n\s*([^\n]+)/i);
+  // "Consignee", "Consignee/Buyer", "Consignee & Buyer" — semuanya dipakai.
+  const consignee = grabNextLine(
+    leftText,
+    /Consignee(?:\s*[\/&]\s*Buyer)?\s*\n\s*([^\n]+)/i,
+  );
 
-  const etdRaw = grabNextLine(leftText, /Departure\s*Date\s*\n\s*([^\n]+)/i);
+  /* Tanggal berangkat kerap dipisahkan satu baris kosong dari
+     labelnya, karena kotak di sebelahnya lebih tinggi. Dicari baris
+     BERISI TANGGAL pertama setelah labelnya, bukan baris berikutnya
+     begitu saja. */
+  const etdRaw = grabDateAfterLabel(leftText, /Depa(?:rt|t)ure\s*date/i);
   const etd = parseFlexibleDateText(etdRaw);
 
   const destination = grabNextLine(
@@ -227,7 +340,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
     /Final\s+Destination\s*\n\s*([^\n]+)/i,
   );
   const originRaw =
-    grabNextLine(rightText, /Port\s+of\s+Loading\s*\n\s*([^\n]+)/i) ||
+    grabNextLine(rightText, /(?:Port\s+of\s+Loading|Loading\s+Port)\s*\n\s*([^\n]+)/i) ||
     grabNextLine(rightText, /^\s*From\s*\n\s*([^\n]+)/im);
   const voyageRaw = grabNextLine(
     leftText,
@@ -239,20 +352,32 @@ function parseCiplPdfPageFields(pageItems, pageText) {
   const totalLine = pageText
     .split("\n")
     .find((l) => /^TOTAL\s+\d/i.test(l.trim()));
-  let incoterm = "";
+  /* Incoterm paling sering ada di baris TOTAL, tapi sebagian templat
+     menaruhnya di kotak sendiri ("Price Condition: EXW"). Baris TOTAL
+     tetap didahulukan — di sana ia menyebut pelabuhannya sekalian. */
+  let incoterm = guessIncotermFromText(pageText) || "";
   let packageText = "";
   if (totalLine) {
-    incoterm = guessIncotermFromText(totalLine);
+    incoterm = guessIncotermFromText(totalLine) || incoterm;
     const pkgM = new RegExp(
       `^TOTAL\\s+(.+?)\\s+(?:${INCOTERM_RE.source})\\b`,
       "i",
     ).exec(totalLine.trim());
     packageText = pkgM ? pkgM[1].trim() : "";
+    /* Yang diambil harus benar-benar SATUAN KEMASAN. Baris
+       "TOTAL 33.8 KGS 34.3 KGS" tidak menyebut jumlah koli sama sekali;
+       tanpa penyaring ini, berat netto masuk ke kolom Package. */
+    if (packageText && !/\b(BOX|CTN|CARTON|PALLET|PLT|CASE|CRATE|DRUM|BAG|ROLL|PKG|PACKAGE)/i.test(packageText)) {
+      packageText = "";
+    }
     if (!packageText) {
       const pkgOnly = /^TOTAL\s+(.+?)\s+[\d.,]+\s*(?:CBM|KGS?|M3)\b/i.exec(
         totalLine.trim(),
       );
       packageText = pkgOnly ? pkgOnly[1].trim() : "";
+      if (packageText && !/\b(BOX|CTN|CARTON|PALLET|PLT|CASE|CRATE|DRUM|BAG|ROLL|PKG|PACKAGE)/i.test(packageText)) {
+        packageText = "";
+      }
     }
   }
 
@@ -306,6 +431,54 @@ function parseCiplPdfPageFields(pageItems, pageText) {
 }
 
 // Cocokkan catatan HS Code ke barang lewat awalan nama
+/* Baris ukuran di bawah TOTAL Packing List:
+
+     SIZE :50*42*14(CM) /1BOX
+     SIZE :46*24*14CM) /1BOX     <- kurung pembuka hilang, sering terjadi
+
+   Yang diambil hanya tiga angkanya. Tanda kurung, satuan, dan jumlah
+   box sengaja diabaikan supaya salah ketik seperti di atas tidak
+   membuat barisnya gagal terbaca sama sekali. */
+function extractCiplSizeLines(pageText) {
+  const out = [];
+  String(pageText || "")
+    .split(/\n/)
+    .forEach((baris) => {
+      const m = /^\s*SIZE\s*:?\s*([\d.,]+)\s*[x*]\s*([\d.,]+)\s*[x*]\s*([\d.,]+)/i.exec(
+        baris,
+      );
+      if (!m) return;
+      /* Jumlah koli ditulis di ekor baris: "/1BOX", "/2 CTN".
+         Diambil terpisah dari dimensinya karena keduanya dipakai untuk
+         hal yang berbeda — lihat applyCiplSizes. */
+      const k = /\/\s*(\d+)\s*([A-Z]+)/i.exec(baris);
+      out.push({
+        dims: `${m[1]}*${m[2]}*${m[3]}`,
+        boxes: k ? `${k[1]} ${k[2].toUpperCase()}` : "",
+        boxCount: k ? Number(k[1]) || 0 : 0,
+      });
+    });
+  return out;
+}
+
+/* Ukuran dipasangkan MENURUT URUTAN, karena baris SIZE tidak menyebut
+   barang mana yang dimaksud. Kalau jumlahnya tidak sama, tidak
+   dipasangkan sama sekali — menebak pasangan lebih buruk daripada
+   membiarkan kosong: dimensi yang salah langsung menyesatkan CBM. */
+function applyCiplSizes(items, sizes) {
+  if (!items.length || !sizes.length) return;
+  if (sizes.length !== items.length) return;
+  items.forEach((it, i) => {
+    /* DUA nilai, bukan satu, karena kolom Kemasan dipakai dua cara:
+       buku Import menghitung total koli dari angka depannya, buku
+       Export menghitung CBM dari dimensinya. Menyimpan dimensi untuk
+       Import berarti "50*42*14" terbaca sebagai 50 koli. Yang memilih
+       nanti ciplRawItemsToFinalItems(), yang memang tahu bukunya. */
+    if (!it.package) it.package = sizes[i].boxes;
+    if (!it.dimensions) it.dimensions = sizes[i].dims;
+  });
+}
+
 function applyCiplHsNotes(items, hsNotes) {
   if (!hsNotes || !hsNotes.length) return items;
   const sorted = [...hsNotes].sort((a, b) => b.prefix.length - a.prefix.length);
@@ -342,6 +515,7 @@ function parseCiplPdfText(text, pagesItems) {
   const fieldsList = [];
   const kinds = new Set();
   const allHsNotes = [];
+  const allSizes = [];
 
   usable.forEach((p) => {
     const kind = p.kind || detectCiplPdfKind(text) || "ci";
@@ -352,6 +526,7 @@ function parseCiplPdfText(text, pagesItems) {
     const rows = ciplPdfTableRows(p.items);
     const its = ciplRowsToItems(rows, kind);
     if (its.length) itemSources.push(its);
+    allSizes.push(...extractCiplSizeLines(p.pageText));
   });
 
   // Field: pakai nilai PERTAMA yang tidak kosong lintas halaman
@@ -364,6 +539,7 @@ function parseCiplPdfText(text, pagesItems) {
 
   const merged = mergeItemSources(itemSources);
   applyCiplHsNotes(merged, allHsNotes);
+  applyCiplSizes(merged, allSizes);
 
   // Bruto = TOTAL dari baris ringkasan Packing List ("TOTAL 1 BOX(ES) ..
   const totBruto = (() => {
@@ -371,6 +547,16 @@ function parseCiplPdfText(text, pagesItems) {
     return null;
   })();
   applyTotalBrutoToFirstItem(merged, totBruto);
+
+  /* Kemasan tingkat pengiriman. Baris "TOTAL n BOX(ES)" tidak selalu
+     ada — sebagian Packing List hanya menyebut berat totalnya. Kalau
+     begitu, jumlah koli dijumlahkan dari baris-baris SIZE. */
+  const totalKoli = allSizes.reduce((n, s) => n + (s.boxCount || 0), 0);
+  const satuanKoli = (allSizes.find((s) => s.boxes) || {}).boxes || "";
+  const packageFallback =
+    totalKoli > 0 && satuanKoli
+      ? `${totalKoli} ${satuanKoli.split(/\s+/).pop()}`
+      : "";
 
   const origin = pick("origin");
   const destination = pick("destination");
@@ -387,6 +573,8 @@ function parseCiplPdfText(text, pagesItems) {
     harga: it.harga != null ? it.harga : null,
     netto: it.netto != null ? it.netto : null,
     bruto: it.bruto != null ? it.bruto : null,
+    package: it.package || "",
+    dimensions: it.dimensions || "",
   }));
 
   if (!rawItems.length) {
@@ -431,7 +619,7 @@ function parseCiplPdfText(text, pagesItems) {
       transport: guessTransportFromText(origin, destination),
       voyage: pick("voyage"),
       etd: pick("etd"),
-      package: pick("package"),
+      package: pick("package") || packageFallback,
     },
     rawItems,
     itemsKind: hasCi && hasPl ? "cipl" : hasCi ? "ci" : "pl",

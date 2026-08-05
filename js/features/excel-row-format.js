@@ -42,7 +42,28 @@ const clipboardFormatter = {
   // Requirement G: format angka standar PIB — ribuan pakai koma, desimal pakai titik
   num: (n, decimals) => fmtPibNumber(n, decimals == null ? 2 : decimals),
   date: (d) => excelDateFmt(d),
-  tarif: (percent) => clipboardFormatter.num(percent, 2),
+  /* TANDA PERSEN IKUT DITULIS, dan itu bukan hiasan.
+
+     Tarif disimpan sebagai bilangan persen apa adanya (5 = 5%). Kalau
+     yang disalin angka polos "5", sel Excel yang SUDAH berformat
+     Persentase membacanya sebagai 5 — lalu menampilkannya 500%.
+
+     Menulis "5.00%" membuat Excel mengurai literalnya sendiri: nilai
+     tersimpan 0,05 dan tampil 5%, apa pun format sel tujuannya. Sel
+     yang masih General pun ikut berubah jadi persentase dengan
+     sendirinya.
+
+     Bandingkan dengan nativeFormatter di bawah: berkas .xlsx dibuat
+     lengkap dengan format selnya, jadi di sana yang ditulis justru
+     0,05 — nilai, bukan teks. */
+  tarif: (percent) => {
+    /* Kolom kosong tetap kosong. fmtPibNumber mengembalikan "" untuk
+       nol, dan menempelkan "%" begitu saja menghasilkan sel berisi
+       tanda persen telanjang — teks, bukan angka, dan Excel akan
+       memperlakukan seluruh kolomnya sebagai teks. */
+    const s = clipboardFormatter.num(percent, 2);
+    return s ? s + "%" : "";
+  },
   packageNum: (pkg) => {
     const n = extractLeadingNumber(pkg);
     return n == null ? "" : clipboardFormatter.num(n, 2);
