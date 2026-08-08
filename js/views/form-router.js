@@ -309,7 +309,10 @@ function renderFormPage(id) {
   renderRouteStopsUI();
   /* Urutannya penting */
   initAutoDutyFlags();
-  recalcCustoms();
+  /* Satu-satunya tempat BM + PDRI dihitung: saat form dibuka, dari data
+     yang SUDAH tersimpan. Selama diketik ia dibiarkan apa adanya —
+     lihat catatan di recalcCustoms(). */
+  recalcCustoms({ hitungBmPdri: true });
   syncAffixState();
   syncFormValidity();
   showFormView();

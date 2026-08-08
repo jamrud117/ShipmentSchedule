@@ -31,7 +31,13 @@ w.supabase = { createClient: () => ({
   }),
   auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({}) },
 }) };
-w.bootstrap = { Modal: class { constructor(){} show(){} hide(){} static getInstance(){ return null; } } };
+w.bootstrap = { Modal: class {
+  constructor(){} show(){} hide(){}
+  static getInstance(){ return null; }
+  // Dipakai kotak Detail Pengajuan Nomor; tanpa ini ia melempar
+  // sesudah isinya tergambar, dan uji melihatnya sebagai kegagalan.
+  static getOrCreateInstance(){ return new w.bootstrap.Modal(); }
+} };
 w.matchMedia = w.matchMedia || (() => ({ matches: false, addEventListener(){}, removeEventListener(){} }));
 // jsdom tidak punya rAF; showToast() memakainya.
 w.requestAnimationFrame = (fn) => w.setTimeout(fn, 0);
@@ -68,6 +74,16 @@ function eq(a, b, m) { if (a !== b) throw new Error((m||"") + ` diharap ${JSON.s
 const $ = (s) => w.document.querySelector(s);
 
 PC = w.eval("PREDICTION_CONFIG");
+
+/* Peran bawaan harness: EXIM.
+
+   Tanpa profil, canEdit() mengembalikan false — dan itu memang benar
+   di produksi. Tapi sebagian besar uji di sini menguji pengalaman
+   orang yang BISA mengubah data; kalau perannya dibiarkan kosong,
+   yang teruji cuma tampilan viewer berulang-ulang.
+
+   Uji viewer membalikkannya sendiri, lalu mengembalikannya. */
+w.eval('authState.profile = { id: "harness", role: "exim" }');
 console.log(`\n${dimuat.length}/${urut.length} berkas JS termuat`);
 
 console.log("\n— MARKUP —");
@@ -234,6 +250,49 @@ t("kartu export TIDAK mengunci Estimated Delivery/Stuffing", () => {
   const h = w.renderCard({ ...contoh, mode: "export", etd: "2099-01-01" });
   if (!h.includes('data-field="actual"')) throw new Error("seharusnya bisa diedit");
   tulis("activeMode", "import");
+});
+
+console.log("— EXPORT DELIVERED: ETD & ETA TETAP TERLIHAT —");
+const exDelivered = { id: "xd1", mode: "export", party: "PT Uji",
+  invoice: "INV-1", etd: "2026-08-01", eta: "2026-08-14", actual: "2026-07-30",
+  items: [{ namaBarang: "A", qty: 1 }], status: "process", docProgress: {} };
+
+t("kartu Delivered tetap menampilkan ETD & ETA", () => {
+  tulis("activeMode", "export");
+  eq(w.isArrived(exDelivered), true);          // ETD sudah lewat
+  const h = w.renderCard(exDelivered);
+  if (!h.includes("collapsed-dates")) throw new Error("blok tanggal tidak ada");
+  if (!h.includes("2026-08-01")) throw new Error("ETD hilang");
+  if (!h.includes("2026-08-14")) throw new Error("ETA hilang");
+  tulis("activeMode", "import");
+});
+t("keduanya HANYA BISA DIBACA", () => {
+  tulis("activeMode", "export");
+  const h = w.renderCard(exDelivered);
+  const blok = h.slice(h.indexOf("collapsed-dates"), h.indexOf("collapsed-items"));
+  eq((blok.match(/readonly/g) || []).length, 2);
+  // Tanpa data-action, klik tidak menyimpan apa pun
+  if (/data-action="date"/.test(blok)) throw new Error("masih bisa diubah dari kartu");
+  tulis("activeMode", "import");
+});
+t("jadwal yang pernah dimundurkan ditandai", () => {
+  tulis("activeMode", "export");
+  const h = w.renderCard({ ...exDelivered, etaUpdate: "2026-08-20" });
+  if (!h.includes("Pernah dimundurkan")) throw new Error("penanda delay hilang");
+  // Yang tampil tetap tanggal RENCANA, sama dengan form
+  if (!h.includes("2026-08-14")) throw new Error("ETA rencana tergeser");
+  tulis("activeMode", "import");
+});
+t("tombol pensil tetap tersedia untuk mengubahnya", () => {
+  tulis("activeMode", "export");
+  const h = w.renderCard(exDelivered);
+  if (!/data-action="edit"/.test(h)) throw new Error("tombol edit hilang dari kartu Delivered");
+  tulis("activeMode", "import");
+});
+t("kartu Import yang sudah tiba tidak ikut berubah", () => {
+  tulis("activeMode", "import");
+  const h = w.renderCard({ ...exDelivered, mode: "import", factoryDate: "2026-08-05" });
+  if (h.includes("collapsed-dates")) throw new Error("blok tanggal bocor ke buku Import");
 });
 
 console.log("— EXPORT: DELIVERED SAAT ETD TERCAPAI —");
@@ -417,6 +476,411 @@ t("seluruh field CIPL punya urutan", () => {
   });
 });
 
+console.log("— CIPL: SATUAN M3 & TATA LETAK TABEL —");
+const rowPL = { id: "pl1", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+t("CBM per baris & total diberi satuan M3", () => {
+  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
+  eq((h.match(/M<sup>3<\/sup>/g) || []).length, 3);   // 2 baris + 1 total
+  if (!h.includes("0.531 M<sup>3</sup>")) throw new Error("CBM baris tanpa satuan");
+  if (!h.includes("2.126 M<sup>3</sup>")) throw new Error("total CBM tanpa satuan");
+});
+t("baris tanpa dimensi tidak diberi satuan kosong", () => {
+  const tanpa = { ...jadwalCipl, items: [
+    { namaBarang: "A - B", qty: 1, satuan: "SET", netto: 5, bruto: 6 } ] };
+  const h = w.ciplHalamanPacking(rowPL, tanpa, w.ciplBarisBarang(tanpa));
+  if (/M<sup>3<\/sup>/.test(h)) throw new Error("M3 muncul padahal CBM kosong");
+});
+t("ruang kosong tanpa garis sama sekali", () => {
+  if (!/\.ci-fill td \{ border: 0; \}/.test(w.ciplCss()))
+    throw new Error("ruang kosong masih bergaris");
+});
+t("sel barang rata tengah mendatar & tegak", () => {
+  const css = w.ciplCss();
+  if (!/\.ci-items tbody td \{[^}]*text-align: center/.test(css))
+    throw new Error("belum rata tengah mendatar");
+  if (!/\.ci-items tbody td \{[^}]*vertical-align: middle/.test(css))
+    throw new Error("belum rata tengah tegak");
+});
+t("kolom Item lebih sempit daripada Type", () => {
+  const css = w.ciplCss();
+  const lebar = (k) =>
+    Number((css.match(new RegExp("\\." + k + " \\{ width: (\\d+)px")) || [])[1] || 0);
+  if (!(lebar("ci-w-item") < lebar("ci-w-type")))
+    throw new Error(`item ${lebar("ci-w-item")} tidak lebih sempit dari type ${lebar("ci-w-type")}`);
+});
+t("sel tabel barang memakai garis bersama", () => {
+  if (!/\.ci-items th, \.ci-items td \{\s*border: var\(--ci-line\)/.test(w.ciplCss()))
+    throw new Error("sel tabel tidak memakai variabel garis");
+});
+t("nama barang ikut rata tengah, bukan rata kiri", () => {
+  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
+  if (/<td>\$?\{?TYRE/.test(h) || h.includes("<td>TYRE"))
+    throw new Error("nama barang masih tanpa kelas rata tengah");
+});
+
+console.log("— ISIAN OTOMATIS DARI KARTU YANG DITAUTKAN —");
+function siapkanPanelInvoice() {
+  tulis("data", { import: [], export: [jadwalCipl] });
+  w.isiPilihanJadwal();
+  const panel = w.docNumPanelEl("invoice");
+  panel.querySelectorAll("[data-dn]").forEach((el) => (el.value = ""));
+  $("#dnInvoiceShipmentPick").value = "sx1";
+  w.isiOtomatisDariJadwal();
+  return panel;
+}
+const isi = (panel, nama) => panel.querySelector(`[data-dn="${nama}"]`).value;
+
+t("Nilai diambil dari total nilai barang di jadwal", () => {
+  const panel = siapkanPanelInvoice();
+  // 1 x 10.490 + 3 x 6.524 = 30.062
+  eq(w.parseLooseNumber(isi(panel, "amount")), 30062);
+});
+t('kotak Nilai berisi "0" tetap diisi — nol sama dengan kosong', () => {
+  const panel = siapkanPanelInvoice();
+  panel.querySelector('[data-dn="amount"]').value = "0";
+  w.isiOtomatisDariJadwal();
+  eq(w.parseLooseNumber(isi(panel, "amount")), 30062);
+});
+t("ganti jadwal -> isian otomatis ikut berubah", () => {
+  const lain = { ...jadwalCipl, id: "sx2", party: "PT LAIN",
+    vessel: "KMTC SHIMIZU 2509S", origin: "IDSUB", destination: "CNSHA",
+    items: [{ namaBarang: "A - B", qty: 2, satuan: "SET", harga: 100 }] };
+  tulis("data", { import: [], export: [jadwalCipl, lain] });
+  w.isiPilihanJadwal();
+  const panel = w.docNumPanelEl("invoice");
+  panel.querySelectorAll("[data-dn]").forEach((el) => (el.value = ""));
+
+  $("#dnInvoiceShipmentPick").value = "sx1";
+  w.isiOtomatisDariJadwal();
+  eq(w.parseLooseNumber(isi(panel, "amount")), 30062);
+  eq(isi(panel, "carrier"), "HMM MIRACLE 0009S");
+
+  // Ditukar -> data jadwal LAMA tidak boleh menempel
+  $("#dnInvoiceShipmentPick").value = "sx2";
+  w.isiOtomatisDariJadwal();
+  eq(w.parseLooseNumber(isi(panel, "amount")), 200);
+  eq(isi(panel, "carrier"), "KMTC SHIMIZU 2509S");
+  eq(isi(panel, "customer"), "PT LAIN");
+});
+t("yang sudah diubah pengguna tetap dipertahankan saat jadwal ditukar", () => {
+  const panel = w.docNumPanelEl("invoice");
+  panel.querySelector('[data-dn="carrier"]').value = "DIKETIK SENDIRI";
+  $("#dnInvoiceShipmentPick").value = "sx1";
+  w.isiOtomatisDariJadwal();
+  eq(isi(panel, "carrier"), "DIKETIK SENDIRI");
+  eq(w.parseLooseNumber(isi(panel, "amount")), 30062);   // yang lain tetap ikut
+});
+t("nilai yang sudah diketik TIDAK ditimpa", () => {
+  const panel = siapkanPanelInvoice();
+  panel.querySelector('[data-dn="amount"]').value = "12.345";
+  w.isiOtomatisDariJadwal();
+  eq(w.parseLooseNumber(isi(panel, "amount")), 12345);
+});
+t("nama buyer & alamatnya ikut dari kartu", () => {
+  const panel = siapkanPanelInvoice();
+  eq(isi(panel, "customer"), "DYNAMIC DESIGN CO., LTD.");
+  if (!isi(panel, "consigneeAddress").includes("Cheomdanyeonsin"))
+    throw new Error("alamat tidak ikut terisi");
+});
+t("pelabuhan & carrier ikut, sailing tetap kosong", () => {
+  const panel = siapkanPanelInvoice();
+  eq(isi(panel, "portLoading"), "TPP");
+  eq(isi(panel, "finalDestination"), "PUS");
+  eq(isi(panel, "carrier"), "HMM MIRACLE 0009S");
+  eq(isi(panel, "termsDelivery"), "FOB");
+  eq(isi(panel, "sailingDate"), "");
+});
+
+console.log("— VIEWER TIDAK MELIHAT MEKANIKA PREDIKSI —");
+const jadwalPred = { id: "vp1", mode: "import", party: "PT Uji",
+  transport: "udara", origin: "ICN", destination: "CGK", routeType: "direct",
+  etd: "2026-08-06", eta: "2026-08-07", etaMode: "auto",
+  deliveryMode: "manual", actual: "2026-08-12",
+  items: [{ namaBarang: "A", qty: 1 }], status: "process", docProgress: {} };
+const jadiViewer = () => w.eval('authState.profile = { id: "u1", role: "viewer" }');
+const jadiExim = () => w.eval('authState.profile = { id: "u1", role: "exim" }');
+
+t("lencana Auto/Manual ETA tidak digambar", () => {
+  jadiViewer();
+  eq(w.etaModeChipHtml("auto"), "");
+  eq(w.etaModeChipHtml("manual"), "");
+  jadiExim();
+  if (!w.etaModeChipHtml("auto").includes("Auto")) throw new Error("EXIM kehilangan lencana");
+});
+t("lencana mode Estimated Delivery tidak digambar", () => {
+  jadiViewer();
+  eq(w.deliveryModeChipHtml("manual"), "");
+  jadiExim();
+  if (!w.deliveryModeChipHtml("manual").includes("Manual"))
+    throw new Error("EXIM kehilangan lencana");
+});
+t("strip sumber & keyakinan tidak digambar", () => {
+  jadiViewer();
+  eq(w.predictionStripHtml(jadwalPred), "");
+  jadiExim();
+  if (!w.predictionStripHtml(jadwalPred).includes("Sumber"))
+    throw new Error("EXIM kehilangan strip");
+});
+t("bagian prediksi di panel detail juga disembunyikan", () => {
+  jadiViewer();
+  eq(w.predictionDetailHtml(jadwalPred), "");
+  jadiExim();
+});
+t("TANGGALNYA tetap tampil untuk viewer", () => {
+  jadiViewer();
+  tulis("activeMode", "import");
+  const h = w.renderCard(jadwalPred);
+  if (!h.includes("2026-08-12")) throw new Error("Estimated Delivery hilang");
+  if (!h.includes("2026-08-07")) throw new Error("ETA hilang");
+  // Tapi tanpa satu pun keterangan mekanikanya
+  if (/AUTO ETA|Diisi Manual|Keyakinan|Sumber/i.test(h))
+    throw new Error("mekanika masih bocor ke kartu viewer");
+  jadiExim();
+});
+
+console.log("— VIEWER TIDAK MELIHAT STEPPER DOKUMEN —");
+t("viewer: stepper tidak digambar sama sekali", () => {
+  w.eval('authState.profile = { id: "u1", role: "viewer" }');
+  const h = w.docStepHtml({ id: "s1", mode: "import", transport: "laut", docProgress: {} });
+  eq(h, "");
+});
+t("EXIM tetap melihatnya lengkap", () => {
+  w.eval('authState.profile = { id: "u1", role: "exim" }');
+  const h = w.docStepHtml({ id: "s1", mode: "import", transport: "laut", docProgress: {} });
+  if (!h.includes("Progres Dokumen")) throw new Error("stepper hilang untuk EXIM");
+  if (!h.includes('data-action="docStep"')) throw new Error("tombol tahap hilang");
+});
+t("tooltip tahap tidak menampilkan kode sumber", () => {
+  /* Nama panjang sebagian tahap berupa fungsi (B/L vs AWB). Kalau
+     tidak dipanggil, tooltipnya berisi teks "function blFull(s) {...}". */
+  const h = w.docStepHtml({ id: "s1", mode: "import", transport: "laut", docProgress: {} });
+  if (/function \w+\(s\)/.test(h)) throw new Error("kode sumber bocor ke tooltip");
+  if (!h.includes("Bill of Lading")) throw new Error("nama panjang B/L tidak muncul");
+  const udara = w.docStepHtml({ id: "s2", mode: "import", transport: "udara", docProgress: {} });
+  if (!udara.includes("Air Waybill")) throw new Error("nama panjang AWB tidak muncul");
+});
+t("judulnya kapital di awal kata, bukan huruf besar semua", () => {
+  const h = w.docStepHtml({ id: "s1", mode: "import", transport: "laut", docProgress: {} });
+  if (!h.includes("Progres Dokumen")) throw new Error("judul berubah");
+  if (/PROGRES DOKUMEN/.test(h)) throw new Error("masih huruf besar semua di sumbernya");
+});
+
+console.log("— SUB-JENIS DOKUMEN -> PANEL —");
+t("kunci sub-jenis dipetakan ke tab induknya", () => {
+  eq(w.docNumTabKeyFor("invoice"), "invoice");
+  eq(w.docNumTabKeyFor("invoice_nc"), "invoice");   // dulu: panel null, diam
+  eq(w.docNumTabKeyFor("do"), "do");
+  eq(w.docNumTabKeyFor("fund"), "fund");
+});
+t("label sub-jenis bisa dikembalikan", () => {
+  eq(w.docNumSubtypeLabelFor("invoice_nc"), "Non-Commercial");
+  eq(w.docNumSubtypeLabelFor("invoice"), "Commercial");
+  eq(w.docNumSubtypeLabelFor("do"), "");
+});
+t("Non-Commercial Invoice bisa dibuka untuk diperbaiki", () => {
+  w.eval('authState.profile = { id: "u1", role: "exim" }');
+  tulis("docNumHistoryRows", [{
+    id: "nc1", doc_type: "invoice_nc", doc_number: "DDI-025/2026-VII-EXIM-LOG",
+    doc_date: "2026-07-14", requester: "Uji",
+    payload: { invoiceKind: "Non-Commercial", poNo: "PO-NC" },
+  }]);
+  w.mulaiUbahDocNum("nc1");
+  eq(w.eval("dnEditingId"), "nc1");
+  const panel = w.docNumPanelEl("invoice");
+  eq(panel.querySelector('[data-dn="poNo"]').value, "PO-NC");
+  // Dropdown sub-jenis dikembalikan, bukan tertinggal di Commercial
+  eq(panel.querySelector("[data-dn-subtype]").value, "Non-Commercial");
+  w.batalUbahDocNum();
+});
+
+console.log("— TOMBOL EDIT: JALUR KLIK —");
+t("klik tombol pensil memicu mode perbaikan", () => {
+  w.eval('authState.profile = { id: "u1", role: "exim" }');
+  tulis("docNumHistoryRows", [{
+    id: "k1", doc_type: "invoice", doc_number: "INV-KLIK", doc_date: "2026-08-05",
+    requester: "Uji", payload: { poNo: "PO-KLIK" },
+  }]);
+  const wadah = $("#docNumHistory");
+  if (!wadah) throw new Error("#docNumHistory tidak ada di DOM");
+  wadah.innerHTML =
+    '<button type="button" data-edit-num="k1"><i class="bi bi-pencil"></i></button>';
+  wadah.querySelector("[data-edit-num] i").dispatchEvent(
+    new w.MouseEvent("click", { bubbles: true }),
+  );
+  eq(w.eval("dnEditingId"), "k1");
+  eq(w.docNumPanelEl("invoice").querySelector('[data-dn="poNo"]').value, "PO-KLIK");
+  w.batalUbahDocNum();
+});
+
+console.log("— PERBAIKI ISIAN NOMOR —");
+/* Perbaikan hanya boleh oleh peran EXIM — harness belum login, jadi
+   perannya dipasang dulu. Kalau tidak, yang teruji cuma penolakannya. */
+w.eval('authState.profile = { id: "u1", role: "exim", full_name: "Uji" }');
+t("Viewer tidak boleh memperbaiki", () => {
+  w.eval('authState.profile = { id: "u1", role: "viewer" }');
+  eq(w.bolehUbahDocNum(), false);
+  w.eval('authState.profile = { id: "u1", role: "exim" }');
+  eq(w.bolehUbahDocNum(), true);
+});
+t("membuka perbaikan mengisi form dari barisnya", () => {
+  tulis("docNumHistoryRows", [{
+    id: "e1", doc_type: "invoice", doc_number: "DDI-CRBM-VIII-040",
+    doc_date: "2026-08-05", requester: "Yogi Firgiawan", department: "EXIM",
+    payload: { customer: "DYNAMIC DESIGN CO., LTD.", poNo: "DD-260724-DDI-01",
+      termsDelivery: "FOB", amount: 30062 },
+  }]);
+  w.mulaiUbahDocNum("e1");
+  const panel = w.docNumPanelEl("invoice");
+  eq(panel.querySelector('[data-dn="requester"]').value, "Yogi Firgiawan");
+  eq(panel.querySelector('[data-dn="poNo"]').value, "DD-260724-DDI-01");
+  eq(panel.querySelector('[data-dn="termsDelivery"]').value, "FOB");
+  eq(w.eval("dnEditingId"), "e1");
+});
+t("tombol berubah & spanduk menyebut nomornya", () => {
+  if (!$("#btnDocNumSubmit").innerHTML.includes("Simpan Perubahan"))
+    throw new Error("tombol masih Ajukan Nomor");
+  eq($("#dnEditBanner").classList.contains("d-none"), false);
+  eq($("#dnEditBannerNum").textContent, "DDI-CRBM-VIII-040");
+});
+t("batal mengembalikan form ke mode pengajuan", () => {
+  w.batalUbahDocNum();
+  eq(w.eval("dnEditingId"), null);
+  eq($("#dnEditBanner").classList.contains("d-none"), true);
+  if (!$("#btnDocNumSubmit").innerHTML.includes("Ajukan Nomor"))
+    throw new Error("tombol tidak kembali");
+});
+t("berpindah jenis dokumen membatalkan perbaikan", () => {
+  w.mulaiUbahDocNum("e1");
+  eq(w.eval("dnEditingId"), "e1");
+  w.showDocNumTab("do");
+  eq(w.eval("dnEditingId"), null);
+  if (!$("#btnDocNumSubmit").innerHTML.includes("Ajukan Nomor"))
+    throw new Error("tombol tidak kembali setelah pindah tab");
+  w.showDocNumTab("invoice");
+});
+t("PENJAGA: kueri riwayat mengambil doc_type", () => {
+  /* Akar bug "edit Surat Jalan malah membuka Invoice": kolomnya tidak
+     ikut di-SELECT, jadi tiap baris punya doc_type undefined dan
+     pemetaan tab jatuh ke tab bawaan. */
+  const src = w.eval("renderDocNumHistory.toString()");
+  if (!/"id, doc_type,/.test(src))
+    throw new Error("doc_type tidak ikut diambil kueri riwayat");
+});
+t("baris tanpa doc_type diperbaiki di tab yang SEDANG dibuka", () => {
+  // Persis bentuk data yang dikembalikan kueri sebelum diperbaiki
+  w.showDocNumTab("do");
+  tulis("docNumHistoryRows", [{
+    id: "x9", doc_number: "021/DDI/EXIM-LOG/VIII/2026", doc_date: "2026-08-05",
+    requester: "Uji", payload: { vehicle: "B 1234 XX" },
+  }]);
+  w.mulaiUbahDocNum("x9");
+  eq(w.eval("docNumActiveTab"), "do");        // dulu melompat ke "invoice"
+  eq(w.docNumPanelEl("do").querySelector('[data-dn="vehicle"]').value, "B 1234 XX");
+  w.batalUbahDocNum();
+  w.showDocNumTab("invoice");
+});
+t("surat jalan juga bisa diperbaiki", () => {
+  tulis("docNumHistoryRows", [{
+    id: "e2", doc_type: "do", doc_number: "021/DDI/EXIM-LOG/VIII/2026",
+    doc_date: "2026-08-05", requester: "Yogi Firgiawan",
+    payload: { receiver: "PT. WIDE LOGISTICS", vehicle: "B 9760 URU" },
+  }]);
+  w.mulaiUbahDocNum("e2");
+  eq(w.eval("docNumActiveTab"), "do");
+  const panel = w.docNumPanelEl("do");
+  eq(panel.querySelector('[data-dn="vehicle"]').value, "B 9760 URU");
+  w.batalUbahDocNum();
+});
+
+console.log("— DETAIL: MATA UANG PADA NILAI —");
+t("Nilai diberi lambang mata uangnya", () => {
+  tulis("docNumHistoryRows", [
+    { id: "n1", doc_number: "INV-1", doc_date: "2026-08-05",
+      payload: { amount: 30062, currency: "USD" } },
+    { id: "n2", doc_number: "INV-2", doc_date: "2026-08-05",
+      payload: { amount: 5000000, currency: "IDR" } },
+  ]);
+  w.tampilkanDetailNomor("n1");
+  let h = $("#promptFields").innerHTML;
+  if (!h.includes("$30.062") && !h.includes("$30,062"))
+    throw new Error("lambang $ tidak muncul: " + h.slice(0, 200));
+  w.tampilkanDetailNomor("n2");
+  h = $("#promptFields").innerHTML;
+  if (!/Rp\s?5/.test(h)) throw new Error("lambang Rp tidak muncul");
+});
+
+console.log("— CIPL: TIDAK ADA GARIS GANDA —");
+t("sel pinggir tidak menggambar di atas bingkai kotak", () => {
+  const css = w.ciplCss();
+  if (!/\.ci-items tr > td:first-child \{ border-left: 0/.test(css))
+    throw new Error("tepi kiri masih tergambar dua kali");
+  if (!/\.ci-items tr > td:last-child \{ border-right: 0/.test(css))
+    throw new Error("tepi kanan masih tergambar dua kali");
+});
+t("judul tabel tidak menambah garis di atas blok pengangkutan", () => {
+  if (!/\.ci-items thead th \{ border-top: 0/.test(w.ciplCss()))
+    throw new Error("garis atas tabel masih ganda");
+});
+t("PENJAGA: seluruh garis memakai SATU nilai", () => {
+  /* Ketebalan yang ditulis terpisah di banyak tempat akan berbeda
+     cepat atau lambat — dan hasilnya garis yang compang-camping. */
+  const css = w.ciplCss();
+  const literal = [...css.matchAll(/([\d.]+(?:pt|px)) solid/g)].map((m) => m[1]);
+  eq([...new Set(literal)].join(","), "1px");   // hanya definisi variabelnya
+  eq(literal.length, 1);
+  if (!/--ci-line: 1px solid/.test(css)) throw new Error("variabel garis hilang");
+});
+t("setiap border memakai variabel itu, bukan angkanya sendiri", () => {
+  const css = w.ciplCss();
+  const pakaiVar = (css.match(/var\(--ci-line\)/g) || []).length;
+  if (pakaiVar < 10) throw new Error("baru " + pakaiVar + " border yang memakai variabel");
+  // Tidak boleh ada border dengan angka ditulis langsung
+  const langsung = css.match(/border[^:]*:\s*[\d.]+(?:pt|px) solid/g) || [];
+  eq(langsung.length, 0);
+});
+t("lebar kolom tabel barang dipatok pasti", () => {
+  if (!/\.ci-items \{ table-layout: fixed/.test(w.ciplCss()))
+    throw new Error("lebar kolom masih dihitung dari isinya");
+});
+
+console.log("— CIPL: LEBAR KOLOM —");
+t("kolom angka uang dipatok lebarnya", () => {
+  const row = { id: "lw", doc_number: "X", doc_date: "2026-08-03", payload: { currency: "USD" } };
+  const h = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
+  // Unit Price, Amount, dan Total sama-sama dipatok
+  eq((h.match(/ci-num ci-w-money/g) || []).length, 5);
+  if (!/\.ci-w-money \{ width: \d+px/.test(w.ciplCss()))
+    throw new Error("lebar kolom uang tidak ditentukan");
+});
+t("Item & Type dapat ruang terbanyak", () => {
+  const css = w.ciplCss();
+  const lebar = (k) =>
+    Number((css.match(new RegExp("\\." + k + " \\{ width: (\\d+)px")) || [])[1] || 0);
+  ["ci-w-hs", "ci-w-qty", "ci-w-unit", "ci-w-wt", "ci-w-money"].forEach((k) => {
+    if (!(lebar(k) < lebar("ci-w-item")))
+      throw new Error(k + " (" + lebar(k) + ") tidak lebih sempit dari Item");
+  });
+  if (!(lebar("ci-w-item") < lebar("ci-w-type")))
+    throw new Error("Item harus lebih sempit daripada Type");
+});
+t("NW/GW dipersempit", () => {
+  const lw = Number((w.ciplCss().match(/\.ci-w-wt \{ width: (\d+)px/) || [])[1]);
+  if (!(lw > 0 && lw <= 40)) throw new Error("lebar NW/GW: " + lw);
+});
+t("nilai CBM tidak boleh membungkus dari satuannya", () => {
+  const css = w.ciplCss();
+  if (!/\.ci-cbm \{ white-space: nowrap/.test(css))
+    throw new Error("0.531 M3 masih bisa pecah dua baris");
+  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
+  eq((h.match(/ci-num ci-cbm/g) || []).length, 3);
+});
+t("dimensi dirapatkan agar muat satu baris", () => {
+  if (!/\.ci-dim \{[^}]*letter-spacing: -/.test(w.ciplCss()))
+    throw new Error("letter-spacing dimensi belum dikurangi");
+  if (!/\.ci-dim \{[^}]*white-space: nowrap/.test(w.ciplCss()))
+    throw new Error("dimensi masih boleh membungkus");
+});
+
 console.log("— CIPL: DESIMAL HANYA UNTUK PECAHAN —");
 t("bulat tanpa desimal, pecahan dengan 2 desimal", () => {
   eq(w.ciplAngka(10490), "10,490");
@@ -499,20 +963,43 @@ t("alamat buyer yang dikenal terisi otomatis", () => {
 t("buyer tak dikenal -> kosong, bukan ditebak", () =>
   eq(w.ciplAlamatBuyer("PT ENTAH SIAPA"), ""));
 
-console.log("— PENANDA TELAT PAKAI ETA DELAY —");
-t("ETA delay yang jadi acuan, bukan ETA rencana", () => {
-  const kemarin = w.addCalendarDaysISO(w.todayISO(), -1);
-  const besok = w.addCalendarDaysISO(w.todayISO(), 1);
-  // ETA rencana sudah lewat TAPI sudah dimundurkan resmi -> tidak telat
-  const h = w.buildLaneHtml({ mode: "import", etd: "2026-07-26",
-    eta: kemarin, etaUpdate: besok, docProgress: {} });
-  if (/Melewati ETA/.test(h)) throw new Error("masih dianggap telat");
+console.log("— BM + PDRI TIDAK REALTIME —");
+t("mengetik tidak mengubah BM + PDRI", () => {
+  $("#calcBMPDRI").value = "1.000.000";
+  w.recalcCustoms();                       // seperti saat mengetik
+  eq($("#calcBMPDRI").value, "1.000.000");
 });
-t("tanpa update delay, ETA rencana tetap dipakai", () => {
+t("dihitung ulang hanya saat diminta", () => {
+  $("#calcBMPDRI").value = "1.000.000";
+  w.recalcCustoms({ hitungBmPdri: true });
+  if ($("#calcBMPDRI").value === "1.000.000")
+    throw new Error("tidak dihitung ulang saat form dibuka");
+});
+t("izin hitung tidak tersisa untuk putaran berikutnya", () => {
+  w.recalcCustoms({ hitungBmPdri: true });
+  const sesudah = $("#calcBMPDRI").value;
+  $("#calcBMPDRI").value = "9.999";
+  w.recalcCustoms();
+  eq($("#calcBMPDRI").value, "9.999");
+  if (sesudah === undefined) throw new Error("nilai tidak terbaca");
+});
+
+console.log("— TIDAK ADA PENANDA MELEWATI ETA —");
+t("papan tidak lagi memperingatkan ETA terlewat", () => {
+  /* Yang dijanjikan ke orang adalah Estimated Delivery, bukan ETA.
+     Kalau memang meleset, Lapis 4 yang menggesernya. */
   const kemarin = w.addCalendarDaysISO(w.todayISO(), -1);
   const h = w.buildLaneHtml({ mode: "import", etd: "2026-07-26",
     eta: kemarin, docProgress: {} });
-  if (!/Melewati ETA/.test(h)) throw new Error("seharusnya telat");
+  if (/Melewati ETA/.test(h)) throw new Error("penanda masih muncul");
+  if (/delay-flag/.test(h)) throw new Error("kelas delay-flag masih tergambar");
+});
+t("keterlambatan tetap terlihat lewat Lapis 4", () => {
+  const d = w.predictDelivery({ mode: "import", transport: "laut", muatan: "FCL",
+    origin: "CNSHA", destination: "IDTPP", routeType: "direct",
+    etaMode: "manual", eta: "2026-06-01", docProgress: {} });
+  eq(d.shifted, true);
+  if (!(d.overdueDays > 0)) throw new Error("keterlambatan tidak terhitung");
 });
 
 console.log("— NAMA SHIPPER/BUYER SELALU HURUF BESAR —");

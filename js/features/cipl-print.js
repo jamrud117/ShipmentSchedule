@@ -374,15 +374,15 @@ function ciplHalamanInvoice(row, shipment, baris) {
       (b, i) => `
       <tr>
         <td class="ci-c">${i + 1}</td>
-        <td>${escapeHtml(b.item)}</td>
+        <td class="ci-c">${escapeHtml(b.item)}</td>
         <td class="ci-c">${escapeHtml(b.type)}</td>
         <td class="ci-c">${escapeHtml(b.hs)}</td>
         <td class="ci-c">${escapeHtml(ciplAngka(b.qty))}</td>
         <td class="ci-c">${escapeHtml(b.satuan)}</td>
         <td class="ci-cur">${escapeHtml(mata)}</td>
-        <td class="ci-num">${escapeHtml(ciplAngka(b.harga, 2))}</td>
+        <td class="ci-num ci-w-money">${escapeHtml(ciplAngka(b.harga, 2))}</td>
         <td class="ci-cur">${escapeHtml(mata)}</td>
-        <td class="ci-num">${escapeHtml(ciplAngka(b.amount, 2))}</td>
+        <td class="ci-num ci-w-money">${escapeHtml(ciplAngka(b.amount, 2))}</td>
       </tr>`,
     )
     .join("");
@@ -412,7 +412,7 @@ function ciplHalamanInvoice(row, shipment, baris) {
             <td colspan="6" class="ci-foot-empty"></td>
             <td colspan="2" class="ci-total-k">Total</td>
             <td class="ci-cur">${escapeHtml(mata)}</td>
-            <td class="ci-num">${escapeHtml(ciplAngka(total, 2))}</td>
+            <td class="ci-num ci-w-money">${escapeHtml(ciplAngka(total, 2))}</td>
           </tr>
           ${ciplBarisTandaTanganHtml(6, 4)}
         </tfoot>
@@ -435,7 +435,7 @@ function ciplHalamanPacking(row, shipment, baris) {
       (b, i) => `
       <tr>
         <td class="ci-c">${i + 1}</td>
-        <td>${escapeHtml(b.item)}</td>
+        <td class="ci-c">${escapeHtml(b.item)}</td>
         <td class="ci-c">${escapeHtml(b.type)}</td>
         <td class="ci-c">${escapeHtml(b.hs)}</td>
         <td class="ci-c">${escapeHtml(ciplAngka(b.qty))}</td>
@@ -443,7 +443,7 @@ function ciplHalamanPacking(row, shipment, baris) {
         <td class="ci-num">${escapeHtml(ciplAngka(b.netto))}</td>
         <td class="ci-num">${escapeHtml(ciplAngka(b.bruto))}</td>
         <td class="ci-c ci-dim">${escapeHtml(b.dimensi)}</td>
-        <td class="ci-num">${escapeHtml(b.cbm ? ciplAngka(b.cbm, 3) : "")}</td>
+        <td class="ci-num ci-cbm">${b.cbm ? escapeHtml(ciplAngka(b.cbm, 3)) + " M<sup>3</sup>" : ""}</td>
       </tr>`,
     )
     .join("");
@@ -475,7 +475,7 @@ function ciplHalamanPacking(row, shipment, baris) {
             <td colspan="2" class="ci-total-k">TOTAL</td>
             <td class="ci-num">${escapeHtml(ciplAngka(totNw))}</td>
             <td class="ci-num">${escapeHtml(ciplAngka(totGw))}</td>
-            <td colspan="2" class="ci-num">${escapeHtml(totCbm ? ciplAngka(totCbm, 3) : "")}</td>
+            <td colspan="2" class="ci-num ci-cbm">${totCbm ? escapeHtml(ciplAngka(totCbm, 3)) + " M<sup>3</sup>" : ""}</td>
           </tr>
           ${ciplBarisTandaTanganHtml(4, 6)}
         </tfoot>
@@ -531,6 +531,19 @@ function cetakCipl(rowId) {
 function ciplCss() {
   return `
   @page { size: A4; margin: 0; }
+
+  /* SATU ANGKA UNTUK SELURUH GARIS.
+
+     Ketebalan yang ditulis terpisah di sepuluh tempat akan berbeda
+     cepat atau lambat — satu diubah, sembilan tertinggal, dan
+     hasilnya garis yang compang-camping.
+
+     1px dipilih, bukan pecahan poin: pecahan harus dibulatkan ke
+     piksel perangkat, dan pembulatan itu jatuh berbeda-beda menurut
+     posisi tiap garis di halaman. Satu garis jadi 1px, tetangganya
+     2px, tanpa ada yang salah di CSS-nya. */
+  :root { --ci-line: 1px solid #000; }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -542,7 +555,10 @@ function ciplCss() {
   /* Halaman kedua dipaksa mulai di lembar baru. Tanpa ini, Packing
      List menyambung di bawah invoice dan keduanya terpotong. */
   .ci-page2 { page-break-before: always; break-before: page; }
-  .ci-box { border: 1px solid #000; }
+  /* Bingkai luar setebal garis dalam. Bingkai yang lebih tebal hanya
+     masuk akal kalau ia berdiri sendiri — begitu sel menempel padanya,
+     bedanya terbaca sebagai cacat. */
+  .ci-box { border: var(--ci-line); }
 
   table { width: 100%; border-collapse: collapse; }
   td, th { vertical-align: top; }
@@ -555,15 +571,15 @@ function ciplCss() {
   .ci-addr { font-size: 7pt; }
 
   .ci-title {
-    border-top: 1px solid #000; border-bottom: 1px solid #000;
+    border-top: var(--ci-line); border-bottom: var(--ci-line);
     text-align: center; font-size: 19pt; font-weight: 700;
     padding: 2px 0; letter-spacing: .5px;
   }
 
-  .ci-parties { border-bottom: 1px solid #000; }
+  .ci-parties { border-bottom: var(--ci-line); }
   .ci-parties > tbody > tr > td { padding: 0; }
-  .ci-left { width: 52%; border-right: 1px solid #000; }
-  .ci-cell { border-bottom: 1px solid #000; padding: 2px 5px; min-height: 15px; }
+  .ci-left { width: 52%; border-right: var(--ci-line); }
+  .ci-cell { border-bottom: var(--ci-line); padding: 2px 5px; min-height: 15px; }
   .ci-left .ci-cell:last-child,
   .ci-right-col .ci-cell:last-child { border-bottom: 0; }
   .ci-k { font-size: 7.5pt; font-weight: 700; }
@@ -573,33 +589,88 @@ function ciplCss() {
   .ci-row-split { display: flex; justify-content: space-between; gap: 8px; }
   .ci-right { text-align: right; }
 
-  .ci-ship { border-bottom: 1px solid #000; }
-  .ci-ship td { border-right: 1px solid #000; padding: 2px 5px; font-size: 8.5pt; }
+  .ci-ship { border-bottom: var(--ci-line); }
+  .ci-ship td { border-right: var(--ci-line); padding: 2px 5px; font-size: 8.5pt; }
   .ci-ship td:last-child { border-right: 0; }
   .ci-ship .ci-k { border-bottom: 0; }
   .ci-ship-val td { height: 26px; vertical-align: middle; }
   .ci-center { text-align: center; }
   .ci-sail { width: 74px; font-size: 7pt; }
 
+  /* Lebar kolom dihormati apa adanya. Tanpa ini, lebar dihitung dari
+     isinya dan berakhir di pecahan piksel — garis tegaknya lalu jatuh
+     di posisi yang tidak bulat, dan tiap kolom membulatkannya sendiri. */
+  .ci-items { table-layout: fixed; }
   .ci-items th, .ci-items td {
-    border: 1px solid #000; padding: 1px 4px; font-size: 8pt;
+    border: var(--ci-line); padding: 1px 4px; font-size: 8pt;
   }
   .ci-items th { text-align: center; font-weight: 700; font-size: 7.5pt; }
-  .ci-items tbody td { height: 15px; }
-  /* Ruang kosong: garis kolom tegak tetap ada, garis mendatar tidak.
-     Itu yang membedakannya dari deretan baris kosong bergaris. */
-  .ci-fill td { border-top: 0; border-bottom: 0; }
+
+  /* ---- GARIS GANDA: dua sumber, dua perbaikan ----
+
+     Garis yang terlihat tebal di sini BUKAN karena ketebalannya —
+     melainkan karena tergambar dua kali, berdempetan, tanpa celah.
+     Menipiskannya tidak menolong: dua garis tipis berdempetan tetap
+     terbaca sebagai satu garis tebal, dan pada beberapa perbesaran
+     malah tampak meleber (bleeding).
+
+     1. TEPI KIRI & KANAN. Kotak luar sudah menggambar bingkainya;
+        sel paling pinggir menggambar garisnya sendiri tepat di
+        sebelahnya. border-collapse tidak menolong — keduanya milik
+        elemen yang berbeda, jadi tidak pernah menyatu. */
+  .ci-items tr > th:first-child,
+  .ci-items tr > td:first-child { border-left: 0; }
+  .ci-items tr > th:last-child,
+  .ci-items tr > td:last-child { border-right: 0; }
+
+  /*   2. GARIS ATAS TABEL. Blok Port of Loading sudah menutup dirinya
+        dengan border-bottom; baris judul tabel barang menambahkan
+        border-top persis di atasnya. */
+  .ci-items thead th { border-top: 0; }
+
+  /* SELURUH sel barang rata tengah, mendatar maupun tegak. Kolom angka
+     tetap rata kanan (lihat .ci-num) — deretan angka yang rata tengah
+     tidak bisa dibandingkan sekilas karena satuannya tidak sejajar. */
+  .ci-items tbody td {
+    height: 15px; text-align: center; vertical-align: middle;
+  }
+
+  /* Ruang kosong: TIDAK ada garis sama sekali — tidak mendatar, tidak
+     tegak. Kolom yang tidak berisi barang tidak digariskan; yang
+     membatasinya cuma kotak luar. */
+  .ci-fill td { border: 0; }
   .ci-c { text-align: center; }
   .ci-num { text-align: right; }
-  .ci-cur { text-align: left; width: 34px; }
-  .ci-dim { font-size: 7pt; white-space: nowrap; }
-  .ci-w-no { width: 26px; }
+  .ci-cur { text-align: left; width: 26px; }
+  /* Kolom angka uang dipatok lebarnya. Tanpa patokan, sisa lebar tabel
+     jatuh ke sana dan justru Item & Type yang terjepit — nama barang
+     terpaksa membungkus dua baris sementara kolom angka menyisakan
+     ruang kosong yang tidak dipakai apa pun. */
+  .ci-w-money { width: 58px; }
+  /* Teks dimensi dirapatkan supaya "81 CM x 81 CM x 81 CM" muat satu
+     baris tanpa harus memperlebar kolomnya. */
+  .ci-dim {
+    font-size: 6.5pt;
+    white-space: nowrap;
+    letter-spacing: -0.3px;
+    width: 116px;
+  }
+  /* Angka CBM tidak boleh terpisah dari satuannya. Tanpa nowrap,
+     "0.531 M3" pecah jadi dua baris dan seluruh barisnya ikut melar. */
+  .ci-cbm { white-space: nowrap; width: 52px; }
+  /* Pangkat 3 pada M3 tanpa menambah tinggi baris. Perilaku bawaan
+     elemen sup menggeser garis dasar dan membuat barisnya melar. */
+  .ci-items sup { font-size: 6pt; vertical-align: super; line-height: 0; }
+  .ci-w-no { width: 24px; }
+  /* Item & Type mendapat sisa lebar terbanyak — keduanya berisi teks
+     yang panjangnya tidak bisa ditebak, sementara kolom lain isinya
+     pendek dan tetap. */
   .ci-w-item { width: 150px; }
-  .ci-w-type { width: 150px; }
-  .ci-w-hs { width: 62px; }
-  .ci-w-qty { width: 34px; }
-  .ci-w-unit { width: 34px; }
-  .ci-w-wt { width: 46px; }
+  .ci-w-type { width: 200px; }
+  .ci-w-hs { width: 58px; }
+  .ci-w-qty { width: 30px; }
+  .ci-w-unit { width: 32px; }
+  .ci-w-wt { width: 38px; }
   /* Sisi kiri baris Total dibiarkan tanpa garis, seperti berkas
      aslinya — kotaknya menyatu dengan area tanda tangan di bawahnya. */
   .ci-foot-empty, .ci-pkg-total { border-left: 0 !important; border-bottom: 0 !important; }
@@ -607,12 +678,32 @@ function ciplCss() {
   .ci-total-k { text-align: center; font-weight: 700; }
   .ci-items tfoot td { height: 20px; vertical-align: middle; }
 
-  /* Sisi kiri baris tanda tangan tanpa garis sama sekali — di berkas
-     aslinya area itu memang kosong melompong sampai tepi kotak luar. */
-  .ci-sign-row .ci-sign-empty {
-    border-left: 0; border-bottom: 0; border-right: 0;
+  /* ---- KOTAK TANDA TANGAN: SATU GARIS, SATU PEMILIK ----
+
+     Sel di sini mewarisi border penuh dari .ci-items td, sehingga tiap
+     garisnya punya DUA pemilik: sisi bawah baris Total dan sisi atas
+     baris tanda tangan menggambar garis yang sama.
+
+     border-collapse memang menyatukan keduanya jadi satu garis — tapi
+     lebar 0,5pt tidak jatuh persis di batas piksel, dan dua deklarasi
+     yang harus dibulatkan bersamaan kerap mendarat di piksel yang
+     berbeda. Hasilnya satu garis tampak 2px sementara sisanya 1px.
+
+     Perbaikannya bukan menipiskan, melainkan MENGHAPUS pemilik kedua:
+     seluruh sel baris ini dikosongkan, lalu hanya garis yang benar-
+     benar belum ada yang digambar.
+
+       atas  <- sudah digambar sisi bawah baris Total
+       kanan <- sudah digambar bingkai .ci-box
+       kiri & bawah <- digambar di sini
+  */
+  .ci-sign-row td { border: 0; }
+  .ci-sign-row .ci-sign-cell {
+    border-left: var(--ci-line);
+    border-bottom: var(--ci-line);
+    padding: 2px 5px;
+    vertical-align: top;
   }
-  .ci-sign-cell { padding: 2px 5px; vertical-align: top; }
   .ci-sign-space { height: 76px; }
   `;
 }

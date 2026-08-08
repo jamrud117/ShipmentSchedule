@@ -401,7 +401,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .dn-sub-note {
@@ -453,3 +452,24 @@
   .dn-detail { grid-template-columns: 1fr; }
   .dn-detail dt { border-right: 0; border-bottom: 0; padding-bottom: 2px; }
 }
+
+/* Spanduk mode perbaikan. Sengaja mencolok: form yang sudah terisi
+   mudah disangka pengajuan baru, dan menekan Ajukan di sana akan
+   menghabiskan satu nomor urut tanpa perlu. */
+.dn-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding: 8px 12px;
+  border: 1px solid var(--s-warn-line);
+  border-left: 3px solid var(--s-warn);
+  border-radius: var(--r-md);
+  background: var(--s-warn-bg);
+  font-size: var(--t-sm);
+  color: var(--n-800);
+}
+.dn-edit-banner i { color: var(--s-warn); margin-right: 4px; }
+.dn-edit-banner b { font-family: var(--font-mono); }

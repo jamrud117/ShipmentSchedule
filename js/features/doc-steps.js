@@ -165,7 +165,15 @@ function docStepHtml(s) {
         ? `${stepText(st.full, s)} — dikonfirmasi ${cap}${entri.by ? " oleh " + entri.by : ""}`
         : kini
           ? `${stepText(st.full, s)} — klik kalau berkasnya sudah ada${st.optional ? " (atau tandai tidak dipakai)" : ""}`
-          : `${st.full} — menunggu tahap sebelumnya`;
+          /* stepText(), BUKAN st.full langsung.
+
+             Nama panjang sebagian tahap berupa FUNGSI — ia menyesuaikan
+             moda ("Bill of Lading" vs "Air Waybill"). Ditempel apa
+             adanya ke template, fungsinya diubah jadi string dan
+             tooltip tahap yang belum tercapai menampilkan kode sumber
+             JavaScript. Tiga cabang lain sudah memanggilnya; yang ini
+             terlewat. */
+          : `${stepText(st.full, s)} — menunggu tahap sebelumnya`;
 
     const isi = dilewati
       ? "–"
@@ -182,6 +190,18 @@ function docStepHtml(s) {
         <span class="docstep-label">${escapeHtml(stepText(st.label, s))}</span>
       </button>`;
   }).join('<span class="docstep-line"></span>');
+
+  /* VIEWER TIDAK MELIHAT STEPPER INI SAMA SEKALI.
+
+     Tiap tahap di sini adalah TOMBOL — satu klik mengubah progres
+     dokumen. Bagi akun yang memang tidak boleh mengubah apa pun,
+     menampilkannya cuma menyodorkan tombol yang akan ditolak: ia
+     mengundang klik, lalu menjawabnya dengan penolakan.
+
+     Yang disembunyikan seluruh baloknya, bukan tombolnya saja.
+     Menyisakan judul "Progres Dokumen" dengan isi kosong justru
+     terbaca seperti data yang gagal dimuat. */
+  if (typeof canEdit === "function" && !canEdit()) return "";
 
   return `
   <div class="docsteps">

@@ -488,15 +488,9 @@
 .port-labels--multi .p--end .p-term {
   max-width: 120px;
 }
-.delay-flag {
-  font-size: 0.74rem;
-  color: var(--coral);
-  font-weight: 600;
-  margin-top: 8px;
-}
-.delay-flag.ok {
-  color: var(--green);
-}
+/* .delay-flag dihapus bersama penanda "Melewati ETA" (lihat
+   js/core/route-model.js) — tidak ada lagi yang memakainya. */
+
 
 /* ---- Date strip ---- */
 /* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
@@ -861,7 +855,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--n-500);
   margin-bottom: 10px;
 }
@@ -974,4 +967,27 @@ body.is-viewer .docstep {
   color: var(--n-400);
   text-decoration: line-through;
   text-decoration-color: var(--n-300);
+}
+
+/* ETD & ETA hanya-baca pada kartu Export yang sudah Delivered. */
+.collapsed-dates {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px dashed var(--border);
+}
+.collapsed-dates .date-field {
+  flex: 0 1 170px;
+  min-width: 140px;
+}
+.collapsed-dates-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-bottom: 6px;
+  font-size: var(--t-xs);
+  color: var(--s-warn);
 }

@@ -291,29 +291,24 @@ function buildLaneHtml(s) {
           .join("")}
       </div>`;
 
-  let delayFlag = "";
-  const today = new Date();
-  /* ETA yang BERLAKU, bukan ETA rencana.
+  /* TIDAK ADA LAGI PENANDA "MELEWATI ETA".
 
-     Kotak Tanggal Update Delay berisi jadwal BARU setelah mundur.
-     Memakai ETA rencana membuat papan berteriak "melewati ETA" untuk
-     kiriman yang justru sudah dimundurkan secara resmi — dan angka
-     harinya jadi 0, karena hari ini memang baru saja melewatinya. */
-  const etaDate = parseLocalDate(s.etaUpdate || s.eta);
-  /* Yang dilihat di sini adalah tanggal KEJADIAN, bukan perkiraan.
+     Dua alasan, dan yang kedua yang menentukan.
 
-     Sebelum ada mesin prediksi, `actual` di buku Import memang kosong
-     sampai seseorang mengisinya, jadi memakainya sebagai penanda
-     "belum sampai" masih masuk akal. Sekarang kolom itu SELALU terisi
-     hasil hitungan — kalau tetap dipakai, penanda telat ini tidak akan
-     pernah muncul lagi.
+     Pertama, ia salah hitung: `new Date()` membawa jam sementara ETA
+     tengah malam, jadi pada hari-H perbandingannya sudah benar dan
+     penandanya menyala sehari lebih awal — "Melewati ETA 1 hari" pada
+     tanggal ETA-nya sendiri.
 
-     Import ditandai selesai oleh In Factory; Export oleh Stuffing. */
-  const belumTiba = s.mode === "export" ? !s.actual : !s.factoryDate;
-  if (belumTiba && !isArrived(s) && etaDate && today > etaDate) {
-    const d = daysBetween(etaDate, today);
-    delayFlag = `<div class="delay-flag"><i class="bi bi-exclamation-triangle-fill"></i> Melewati ETA ${d} hari</div>`;
-  }
+     Kedua, dan ini yang membuatnya dihapus alih-alih diperbaiki: yang
+     dijanjikan ke orang bukan ETA, melainkan Estimated Delivery. ETA
+     lewat sehari tidak berarti apa-apa selama barang tetap sampai
+     pabrik pada tanggal yang diperkirakan — dan kalau memang meleset,
+     Lapis 4 sudah menggeser perkiraannya sendiri, terlihat di panel
+     prediksi lengkap dengan berapa hari telatnya.
+
+     Menyalakan peringatan untuk sesuatu yang tidak dijanjikan hanya
+     melatih orang mengabaikan peringatan. */
 
   return `
     <div class="lane-title mt-3">
@@ -325,8 +320,7 @@ function buildLaneHtml(s) {
       ${dotsHtml}
       <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + "% perjalanan · " + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
     </div>
-    ${labelsHtml}
-    ${delayFlag}`;
+    ${labelsHtml}`;
 }
 
 /* Auto-arrive (status otomatis pindah ke ARRIVED saat ETA lewat/hari */

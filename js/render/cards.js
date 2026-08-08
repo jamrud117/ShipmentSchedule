@@ -231,6 +231,43 @@ function renderExpandedCard(s) {
   </div>`;
 }
 
+/* ETD & ETA pada kiriman Export yang sudah Delivered.
+
+   Tetap ditampilkan karena keduanya masih dipakai: Delivered di buku
+   Export berarti kapalnya sudah berangkat, bukan urusannya selesai —
+   pelanggan masih menanyakan kapan tiba, dan jadwalnya masih dirujuk
+   sampai barang benar-benar sampai.
+
+   HANYA BISA DIBACA. Kartu terkuncup adalah ringkasan; mengubah
+   tanggal di sini terlalu mudah dilakukan tanpa sengaja pada kiriman
+   yang sudah dianggap beres. Yang mau membetulkan masuk lewat tombol
+   pensil, dan di sana perubahannya disengaja.
+
+   Yang ditampilkan tanggal RENCANA, sama persis dengan kotak ETD/ETA
+   di form — kotak Tanggal Update Delay punya tempatnya sendiri, dan
+   menampilkan angka berbeda di bawah label yang sama hanya
+   membingungkan. */
+function collapsedDatesHtml(s) {
+  const mundur =
+    (s.etdUpdate && s.etdUpdate !== s.etd) || (s.etaUpdate && s.etaUpdate !== s.eta);
+  const catatan = mundur
+    ? ` Jadwal ini pernah dimundurkan — lihat Tanggal Update Delay lewat tombol pensil.`
+    : "";
+  const kotak = (label, nilai) => `
+      <div class="date-field date-field--locked">
+        <label>${label}</label>
+        <input type="date" value="${nilai || ""}" readonly
+               title="Hanya baca. Tekan tombol pensil untuk mengubahnya.${catatan}">
+      </div>`;
+
+  return `
+    <div class="collapsed-dates">
+      ${kotak("ETD", s.etd)}
+      ${kotak("ETA", s.eta)}
+      ${mundur ? `<div class="collapsed-dates-note"><i class="bi bi-clock-history"></i> Pernah dimundurkan</div>` : ""}
+    </div>`;
+}
+
 function renderCollapsedCard(s) {
   const lbl = ML();
   return `
@@ -248,6 +285,7 @@ function renderCollapsedCard(s) {
     </div>
 
     <div class="collapsed-extra">
+      ${activeMode === "export" ? collapsedDatesHtml(s) : ""}
       <div class="collapsed-items">
         <div class="collapsed-items-label"><i class="bi bi-boxes"></i> Nama Barang</div>
         <div class="collapsed-items-list">${itemNamesSummary(s)

@@ -74,7 +74,23 @@ function initAutoDutyFlags() {
   },
 );
 
-function recalcCustoms() {
+/* BM + PDRI TIDAK dihitung ulang saat mengetik.
+
+   Angkanya berpindah-pindah tiap ketukan tombol — 0, lalu 4 juta, lalu
+   40 juta — sementara pengguna baru mengetik separuh nilai barang. Yang
+   terbaca bukan hasil hitungan, melainkan tebakan yang berubah-ubah,
+   dan orang berhenti mempercayainya.
+
+   Yang dihitung ulang seketika tetap seluruhnya: total nilai, CIF/FOB,
+   PPN, PPH. Hanya SATU kotak ini yang menunggu, karena hanya ini yang
+   dipakai sebagai angka setoran.
+
+   Diperbarui saat: form dibuka (nilai tersimpan) dan setelah jadwal
+   disimpan. */
+let bmPdriBolehDihitung = false;
+
+function recalcCustoms(opsi) {
+  if (opsi && opsi.hitungBmPdri) bmPdriBolehDihitung = true;
   const tmp = {
     items: draftItems,
     incoterm: $("#fIncoterm").value,
@@ -122,7 +138,10 @@ function recalcCustoms() {
   }
 
   // Tanpa awalan "Rp" di dalam nilainya
-  $("#calcBMPDRI").value = formatNumberValue(calc.bmPdri);
+  if (bmPdriBolehDihitung) {
+    $("#calcBMPDRI").value = formatNumberValue(calc.bmPdri);
+    bmPdriBolehDihitung = false;
+  }
   syncAffixState();
 
   $("#footTotalQty").textContent = fmtQtyBySatuan(calc.qtyBySatuan);

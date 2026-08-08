@@ -310,10 +310,191 @@ $("#btnCounterReset")?.addEventListener("click", () => {
   );
 });
 
+/* ==================================================================
+   MEMPERBAIKI ISIAN NOMOR YANG SUDAH TERBIT
+
+   Yang boleh diubah HANYA isian permintaannya — tanggal, pemohon,
+   departemen, dan seluruh payload. NOMOR dan urutannya tidak ikut,
+   dan itu bukan kelalaian: nomor yang sudah terbit sudah beredar di
+   invoice, surat jalan, dan berkas pihak lain. Mengubahnya di sini
+   menciptakan dua kebenaran yang tidak mungkin dipertemukan lagi.
+
+   Salah nomor diperbaiki dengan menghapus lalu menerbitkan ulang —
+   jalur itu sudah ada, dan ia meninggalkan jejak.
+================================================================== */
+let dnEditingId = null;
+
+function bolehUbahDocNum() {
+  return typeof canEdit !== "function" || canEdit();
+}
+
+/* Kunci TAB dari jenis dokumen yang tersimpan.
+
+   Sebagian jenis punya sub-jenis dengan seri nomor terpisah, dan yang
+   masuk ke kolom doc_type adalah kunci SUB-JENIS-nya — "invoice_nc"
+   untuk Non-Commercial Invoice. Panelnya cuma satu: "invoice".
+
+   Tanpa pemetaan ini, docNumPanelEl("invoice_nc") mengembalikan null
+   dan fungsi yang memanggilnya berhenti tanpa suara — tombolnya
+   ditekan, tidak terjadi apa-apa, tidak ada pesan galat. */
+function docNumTabKeyFor(docType) {
+  if (DOCNUM_TYPES[docType]) return docType;
+  const tab = Object.keys(DOCNUM_SUBTYPES).find((k) =>
+    Object.values(DOCNUM_SUBTYPES[k]).some((s) => s.key === docType),
+  );
+  return tab || DOCNUM_DEFAULT_TAB;
+}
+
+/* Label sub-jenis dari kunci tersimpan — dipakai mengembalikan pilihan
+   dropdown-nya saat isian dibuka untuk diperbaiki. */
+function docNumSubtypeLabelFor(docType) {
+  let hasil = "";
+  Object.keys(DOCNUM_SUBTYPES).forEach((tab) => {
+    Object.keys(DOCNUM_SUBTYPES[tab]).forEach((label) => {
+      if (DOCNUM_SUBTYPES[tab][label].key === docType) hasil = label;
+    });
+  });
+  return hasil;
+}
+
+function mulaiUbahDocNum(id) {
+  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
+  if (!r) return;
+  if (!bolehUbahDocNum()) {
+    showToast("Akun Viewer tidak bisa mengubah data.", "danger");
+    return;
+  }
+
+  /* Pindah ke panel jenis dokumennya dulu, baru isian diisi.
+
+     Kalau doc_type tidak terbawa, yang dipakai TAB YANG SEDANG DIBUKA —
+     bukan tab bawaan. Daftar riwayat selalu disaring per jenis, jadi
+     baris yang sedang dilihat pasti milik tab itu. Jatuh ke tab bawaan
+     berarti membuka form jenis lain tanpa ada yang bersuara. */
+  const tabKey = docNumTabKeyFor(r.doc_type || docNumActiveTab);
+  if (tabKey !== docNumActiveTab) showDocNumTab(tabKey);
+
+  const panel = docNumPanelEl(tabKey);
+  if (!panel) {
+    showToast("Panel jenis dokumen ini tidak ditemukan.", "danger");
+    return;
+  }
+  resetDocNumForm(tabKey);
+  dnIsianOtomatis = {};
+
+  /* Sub-jenis dikembalikan ke pilihan semula. resetDocNumForm sengaja
+     tidak menyentuhnya, tapi ia juga tidak tahu nomor mana yang sedang
+     dibuka — kalau dibiarkan, Non-Commercial Invoice terbuka dengan
+     dropdown menunjuk Commercial. */
+  const subLabel = docNumSubtypeLabelFor(r.doc_type);
+  const elSub = panel.querySelector("[data-dn-subtype]");
+  if (elSub && subLabel) elSub.value = subLabel;
+
+  const isi = (nama, nilai) => {
+    const el = panel.querySelector(`[data-dn="${nama}"]`);
+    if (el && nilai != null) el.value = nilai;
+  };
+  isi("docDate", r.doc_date);
+  isi("requester", r.requester);
+  isi("department", r.department);
+  Object.keys(r.payload || {}).forEach((k) => isi(k, r.payload[k]));
+
+  dnEditingId = r.id;
+  syncModeUbahDocNum(r.doc_number);
+
+  /* Menggulir ke form itu kenyamanan, bukan bagian dari operasinya.
+     Dibiarkan tanpa penjaga, satu peramban yang tidak mendukungnya
+     akan melempar SESUDAH isian terisi — form tampak siap diedit,
+     padahal mode ubahnya tidak pernah selesai dipasang. */
+  if (typeof panel.scrollIntoView === "function") {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* Form berada jauh di atas tabel riwayat. Kalau gulirannya tidak
+     bergerak — halaman pendek, gulir dihentikan pengguna, atau
+     kontainer yang bergulir bukan jendela — tidak ada satu pun tanda
+     bahwa tombolnya bekerja. Toast terlihat di mana pun posisinya. */
+  showToast(
+    `Isian nomor ${r.doc_number} dibuka untuk diperbaiki — form ada di atas.`,
+    "dark",
+  );
+}
+
+function batalUbahDocNum() {
+  const jenis = dnEditingId ? docNumActiveTab : null;
+  dnEditingId = null;
+  syncModeUbahDocNum(null);
+  if (jenis) resetDocNumForm(jenis, { keepIdentity: true });
+}
+
+/* Tombol Ajukan berubah jadi Simpan Perubahan, dan sebuah spanduk
+   menyebutkan nomor mana yang sedang diperbaiki — tanpa itu, form yang
+   sudah terisi mudah disangka pengajuan baru dan ditekan Ajukan. */
+function syncModeUbahDocNum(nomor) {
+  const btn = $("#btnDocNumSubmit");
+  const banner = $("#dnEditBanner");
+  if (btn) {
+    btn.innerHTML = nomor
+      ? '<i class="bi bi-check2"></i> Simpan Perubahan'
+      : '<i class="bi bi-hash"></i> Ajukan Nomor';
+  }
+  if (banner) {
+    banner.classList.toggle("d-none", !nomor);
+    const el = $("#dnEditBannerNum");
+    if (el) el.textContent = nomor || "";
+  }
+}
+
+async function simpanUbahDocNum() {
+  const typeKey = docNumActiveTab;
+  const errors = validateDocNumForm(typeKey);
+  if (errors.length) {
+    showToast(errors[0], "danger");
+    return;
+  }
+
+  const form = readDocNumForm(typeKey);
+  const payload = {};
+  Object.keys(form).forEach((k) => {
+    if (!DOCNUM_COLUMN_FIELDS.has(k) && form[k] !== "") payload[k] = form[k];
+  });
+
+  docNumBusy = true;
+  try {
+    const { error } = await supabaseClient
+      .from("document_numbers")
+      .update({
+        doc_date: form.docDate || null,
+        requester: form.requester || null,
+        department: form.department || null,
+        payload,
+      })
+      .eq("id", dnEditingId);
+    if (error) throw error;
+
+    batalUbahDocNum();
+    await renderDocNumHistory();
+    showToast("Isian nomor berhasil diperbarui.", "success");
+  } catch (err) {
+    console.error(err);
+    showToast(
+      `Gagal menyimpan perubahan: ${err.message || "kesalahan tidak diketahui"}`,
+      "danger",
+    );
+  } finally {
+    docNumBusy = false;
+  }
+}
+
 /* ---------- penerbitan nomor ---------- */
 
 async function submitDocNumRequest() {
   if (docNumBusy) return;
+  // Form yang sedang dipakai memperbaiki tidak boleh menerbitkan nomor baru.
+  if (dnEditingId) {
+    await simpanUbahDocNum();
+    return;
+  }
   const typeKey = docNumActiveTab;
   const t = resolveDocNumType(typeKey);
   if (!t.key) return;
@@ -434,12 +615,19 @@ function isiPilihanJadwal() {
   });
 }
 
-/* Isian CIPL yang bisa DITURUNKAN dari jadwal diisikan otomatis saat
-   jadwalnya dipilih — tapi HANYA yang masih kosong.
+/* Isian CIPL yang bisa DITURUNKAN dari jadwal.
 
-   Menimpa yang sudah diketik akan menghapus koreksi yang sengaja
-   dibuat: pelabuhan muat pada invoice kerap ditulis berbeda dari kode
-   yang dipakai papan ("JAKARTA, INDONESIA" vs "TPP"). */
+   Yang diisi otomatis DICATAT nilainya. Saat jadwal ditukar, kotak
+   yang isinya masih sama persis dengan yang dulu diisikan mesin
+   dianggap belum disentuh dan ikut diperbarui; yang sudah diubah
+   pengguna dibiarkan.
+
+   Tanpa catatan itu, dua perilaku sama-sama salah: menimpa semuanya
+   menghapus koreksi yang sengaja dibuat, sementara mengisi "hanya yang
+   kosong" membuat data jadwal LAMA menempel setelah jadwalnya ditukar
+   — nilai invoice, pelabuhan, dan carrier tetap milik jadwal
+   sebelumnya tanpa ada yang menyadari. */
+let dnIsianOtomatis = {};
 /* Alamat consignee diisikan dari nama buyer-nya.
 
    Hanya kalau kotaknya masih KOSONG. Alamat yang sudah diketik boleh
@@ -451,9 +639,14 @@ function isiAlamatConsignee() {
   const nama = panel.querySelector('[data-dn="customer"]');
   const alamat = panel.querySelector('[data-dn="consigneeAddress"]');
   if (!nama || !alamat) return;
-  if (String(alamat.value || "").trim()) return;
+  const sekarang = String(alamat.value || "").trim();
+  const dulu = String(dnIsianOtomatis.consigneeAddress || "");
+  if (sekarang && sekarang !== dulu) return;
   const isi = ciplAlamatBuyer(nama.value);
-  if (isi) alamat.value = isi;
+  if (isi) {
+    alamat.value = isi;
+    dnIsianOtomatis.consigneeAddress = isi;
+  }
 }
 
 /* Dipasang sekali di sini, bukan di dalam isiPilihanJadwal() — daftar
@@ -482,18 +675,45 @@ function isiOtomatisDariJadwal() {
   const panel = docNumPanelEl("invoice");
   if (!panel) return;
   const set = (nama, nilai) => {
-    if (!nilai) return;
     const el = panel.querySelector(`[data-dn="${nama}"]`);
-    if (el && !String(el.value || "").trim()) el.value = nilai;
+    if (!el) return;
+    const sekarang = String(el.value || "").trim();
+    const dulu = String(dnIsianOtomatis[nama] || "");
+    // Kosong, atau masih persis seperti yang dulu diisikan mesin.
+    if (sekarang && sekarang !== dulu) return;
+    el.value = nilai || "";
+    dnIsianOtomatis[nama] = el.value;
   };
 
   set("customer", s.party);
   isiAlamatConsignee();
+
+  /* Nilai invoice diambil dari total nilai barang di jadwalnya.
+
+     `set()` tidak dipakai di sini: kotak Nilai kerap berisi "0" — bukan
+     kosong — sehingga penjaga "isi hanya kalau kosong" menganggapnya
+     sudah terisi dan angkanya tidak pernah masuk. Nol diperlakukan
+     sama dengan kosong. */
+  const elNilai = panel.querySelector('[data-dn="amount"]');
+  if (elNilai && typeof computeCustoms === "function") {
+    const total = computeCustoms(s).totalUSD;
+    const sekarang = String(elNilai.value || "").trim();
+    const dulu = String(dnIsianOtomatis.amount || "");
+    // Nol diperlakukan sama dengan kosong: kotak ini kerap berisi "0".
+    const belumDisentuh =
+      !sekarang || !parseLooseNumber(sekarang) || sekarang === dulu;
+    if (belumDisentuh) {
+      elNilai.value = total ? formatNumberValue(Math.round(total * 100) / 100) : "";
+      dnIsianOtomatis.amount = elNilai.value;
+    }
+  }
   set("portLoading", portCodeLabel(s.origin));
   set("finalDestination", portCodeLabel(s.destination));
   set("carrier", s.vessel);
-  set("sailingDate", s.etdUpdate || s.etd);
   set("termsDelivery", s.incoterm);
+  /* Sailing on or About SENGAJA tidak diisi dari ETD. Tanggal berlayar
+     di invoice adalah keterangan pengangkut, bukan rencana kita — dan
+     invoice kerap terbit sebelum kapalnya pasti. */
 }
 
 function resetDocNumForm(typeKey, opts) {
@@ -530,7 +750,18 @@ async function renderDocNumHistory() {
     const { data, error, count } = await supabaseClient
       .from("document_numbers")
       .select(
-        "id, doc_number, doc_date, requester, department, payload, created_at",
+        /* doc_type WAJIB ikut diambil.
+
+           Tanpanya, tiap baris di layar punya doc_type undefined —
+           dan siapa pun yang menanyakannya akan mendapat jawaban yang
+           kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
+           undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
+           melompat ke panel Invoice dan mengisi form yang keliru.
+
+           Baris ini memang sudah disaring per jenis di kueri, tapi
+           datanya tetap harus membawa jenisnya sendiri — yang menyaring
+           dan yang membaca bukan bagian kode yang sama. */
+        "id, doc_type, doc_number, doc_date, requester, department, payload, created_at",
         { count: "exact" },
       )
       .eq("doc_type", jenis.key)
@@ -587,6 +818,16 @@ async function renderDocNumHistory() {
                 <td class="dn-col-pemohon">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 <td class="dn-act">
+                  ${
+                    /* Edit hanya untuk isian permintaannya — NOMOR dan
+                       urutannya tidak ikut diubah. Nomor yang sudah
+                       terbit sudah beredar di dokumen lain; menariknya
+                       kembali menciptakan dua kebenaran. */
+                    bolehUbahDocNum()
+                      ? `<button type="button" class="icon-btn" data-edit-num="${r.id}"
+                                 title="Perbaiki isian"><i class="bi bi-pencil"></i></button>`
+                      : ""
+                  }
                   <button type="button" class="icon-btn" data-detail-num="${r.id}"
                           title="Lihat seluruh isian"><i class="bi bi-list-ul"></i></button>
                   ${
@@ -681,6 +922,11 @@ $("#docNumPagination")?.addEventListener("change", (e) => {
 
 /* HAPUS SATU NOMOR */
 $("#docNumHistory")?.addEventListener("click", (e) => {
+  const ubah = e.target.closest("[data-edit-num]");
+  if (ubah) {
+    mulaiUbahDocNum(ubah.dataset.editNum);
+    return;
+  }
   const detail = e.target.closest("[data-detail-num]");
   if (detail) {
     // Melihat detail tidak mengubah apa pun — viewer pun boleh.
@@ -739,6 +985,13 @@ function showDocNumTab(key) {
   // Kalau kunci tidak dikenal (mis
   const known = Array.from(tabs).some((t) => t.dataset.docnumTab === key);
   const active = known ? key : DOCNUM_DEFAULT_TAB;
+  /* Berpindah jenis dokumen membatalkan perbaikan yang sedang berjalan.
+     Form panel lain sudah kosong; membiarkan dnEditingId hidup membuat
+     pengajuan berikutnya diam-diam menimpa nomor yang tadi dibuka. */
+  if (typeof dnEditingId !== "undefined" && dnEditingId && active !== docNumActiveTab) {
+    dnEditingId = null;
+    syncModeUbahDocNum(null);
+  }
   docNumActiveTab = active;
 
   tabs.forEach((t) =>
@@ -784,6 +1037,8 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
     renderDocNumHistory();
   });
 });
+
+$("#btnDnEditCancel")?.addEventListener("click", batalUbahDocNum);
 
 $("#btnDocNumSubmit")?.addEventListener("click", () => {
   if (!requireEdit()) return;
@@ -923,6 +1178,14 @@ function tampilkanDetailNomor(id) {
         : "(jadwal tidak ditemukan)";
     }
     if (String(nilai ?? "").trim() === "") return;
+    /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
+       telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada
+       dokumen ekspor bedanya bukan hal kecil. */
+    if (k === "amount") {
+      const mata = String(p.currency || "USD").toUpperCase();
+      const lambang = mata === "USD" ? "$" : mata === "IDR" ? "Rp " : mata + " ";
+      nilai = lambang + formatNumberValue(parseLooseNumber(nilai));
+    }
     /* Kunci yang belum punya label dirapikan sendiri: "packages" ->
        "Packages". Isian tiap jenis dokumen bisa bertambah, dan yang
        belum terdaftar tidak boleh tampil sebagai potongan kode. */

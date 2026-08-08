@@ -28,7 +28,21 @@ function confidenceChipHtml(conf, prefix) {
   const persen = conf.percent != null ? `${conf.percent}% · ` : "";
   return `<span class="pred-conf pred-conf--${conf.tone}"${rinci ? ` title="${escapeHtml(rinci)}"` : ""}>${escapeHtml((prefix || "") + persen + conf.label)}</span>`;
 }
+/* MEKANIKA MESIN PREDIKSI HANYA UNTUK YANG BISA MENGUBAHNYA.
+
+   Lencana Auto/Manual, sumber prediksi, dan tingkat keyakinan itu
+   keterangan tentang CARA angka diperoleh — berguna bagi orang yang
+   bisa menggeser mode, mengunci tanggal, atau mengonfirmasi milestone.
+
+   Bagi akun yang cuma membaca, semua itu istilah tanpa tindakan: ia
+   menambah yang harus dipahami tanpa menambah yang bisa dikerjakan.
+   Tanggalnya sendiri tetap tampil utuh — itu yang mereka butuhkan. */
+function tampilkanMekanikaPrediksi() {
+  return typeof canEdit !== "function" || canEdit();
+}
+
 function deliveryModeChipHtml(mode) {
+  if (!tampilkanMekanikaPrediksi()) return "";
   const manual = mode === "manual";
   return `<span class="eta-mode-chip eta-mode-chip--${manual ? "manual" : "auto"}">
     <i class="bi ${manual ? "bi-lock-fill" : "bi-magic"}"></i> ${escapeHtml(deliveryModeLabel(mode))}
@@ -64,6 +78,7 @@ function routeLayerHtml(rute) {
   return `<div class="pred-route">${bagian.join(" ")}</div>${celah}`;
 }
 function etaModeChipHtml(mode) {
+  if (!tampilkanMekanikaPrediksi()) return "";
   const manual = mode === "manual";
   return `<span class="eta-mode-chip eta-mode-chip--${manual ? "manual" : "auto"}">
     <i class="bi ${manual ? "bi-pencil-fill" : "bi-magic"}"></i> ${escapeHtml(etaModeLabel(mode))}
@@ -151,6 +166,7 @@ function predStepsHtml(d) {
 ------------------------------------------------------------------ */
 
 function predictionStripHtml(s) {
+  if (!tampilkanMekanikaPrediksi()) return "";
   if (!predictionAppliesTo(s)) return "";
   const d = predictDelivery(s);
 
@@ -180,6 +196,7 @@ function predictionStripHtml(s) {
 ------------------------------------------------------------------ */
 
 function predictionDetailHtml(s) {
+  if (!tampilkanMekanikaPrediksi()) return "";
   if (!predictionAppliesTo(s)) return "";
   const e = predictEta(s);
   const d = predictDelivery(s);

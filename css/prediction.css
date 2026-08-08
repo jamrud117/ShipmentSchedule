@@ -165,6 +165,12 @@
   border-radius: var(--r-md);
   background: linear-gradient(180deg, var(--sec-50), var(--surface));
 }
+  /* Judul ditulis apa adanya di sumbernya: Kapital Di Awal Kata.
+
+     text-transform: uppercase memaksa seluruhnya jadi huruf besar,
+     dan judul yang panjang jadi sulit dibaca — mata kehilangan bentuk
+     kata. Huruf besar disimpan untuk penanda pendek (kode tahap, chip
+     status), bukan untuk judul. */
 .pred-strip-head {
   display: inline-flex;
   align-items: center;
@@ -173,7 +179,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .pred-strip-head i {
@@ -236,7 +241,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
   color: var(--n-500);
   padding-bottom: var(--sp-2);
   margin-bottom: var(--sp-3);
@@ -270,7 +274,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--n-500);
   margin-bottom: 6px;
 }
@@ -436,7 +439,6 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .pred-detail-val {
@@ -476,7 +478,6 @@
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   vertical-align: middle;
 }
 .pred-route {
