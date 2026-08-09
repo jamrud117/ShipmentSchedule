@@ -639,3 +639,21 @@ body.is-viewer .viewer-banner {
 .dialog-icon.is-power i {
   font-size: 1.3rem;
 }
+
+/* Kotak centang "Ingat saya" pada halaman masuk. */
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 var(--sp-3);
+  font-size: var(--t-sm);
+  color: var(--n-600);
+  cursor: pointer;
+  user-select: none;
+}
+.login-remember input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--p-700);
+  cursor: pointer;
+}

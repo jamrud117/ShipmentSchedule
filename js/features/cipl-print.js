@@ -53,6 +53,29 @@ const CIPL_SHIPPER = [
 const CIPL_MIN_BARIS = 14;
 const CIPL_TINGGI_BARIS = 15;
 
+/* LEBAR KOLOM DIDEFINISIKAN DI SINI, BUKAN DI KELAS SEL.
+
+   Dengan table-layout tetap, lebar kolom diambil dari BARIS PERTAMA
+   tabel — dan baris pertama di sini berisi header ber-colspan: "Unit
+   Price", "Amount", "CBM". Kolom yang tertutup colspan tidak punya
+   lebar sendiri, jadi peramban membaginya RATA di antara keduanya.
+
+   Akibatnya lebar yang ditulis pada sel body (.ci-dim, .ci-cur, dst.)
+   diabaikan sepenuhnya: kolom "USD" jadi selebar kolom angkanya, dan
+   kolom dimensi jadi selebar kolom nilai CBM — sehingga teks dimensi
+   terpotong sementara di sebelahnya menganga.
+
+   <colgroup> memberi lebar per kolom terlepas dari colspan di header.
+   Jumlah tiap deret HARUS 100 — ada uji penjaganya. */
+const CIPL_COLS_INVOICE = [3.5, 23, 25, 8.5, 5, 4.5, 4.5, 10, 4.5, 11.5];
+const CIPL_COLS_PACKING = [3.5, 17, 21, 8.5, 5, 4.5, 6, 6, 19, 9.5];
+
+function ciplColgroupHtml(cols) {
+  return `<colgroup>${cols
+    .map((w) => `<col style="width:${w}%">`)
+    .join("")}</colgroup>`;
+}
+
 function ciplRuangKosongHtml(jumlahBaris, kolom) {
   const sisa = Math.max(0, CIPL_MIN_BARIS - jumlahBaris);
   if (!sisa) return "";
@@ -374,8 +397,8 @@ function ciplHalamanInvoice(row, shipment, baris) {
       (b, i) => `
       <tr>
         <td class="ci-c">${i + 1}</td>
-        <td class="ci-c">${escapeHtml(b.item)}</td>
-        <td class="ci-c">${escapeHtml(b.type)}</td>
+        <td class="ci-c ci-item">${escapeHtml(b.item)}</td>
+        <td class="ci-c ci-type">${escapeHtml(b.type)}</td>
         <td class="ci-c">${escapeHtml(b.hs)}</td>
         <td class="ci-c">${escapeHtml(ciplAngka(b.qty))}</td>
         <td class="ci-c">${escapeHtml(b.satuan)}</td>
@@ -394,6 +417,7 @@ function ciplHalamanInvoice(row, shipment, baris) {
       ${ciplPihakHtml(row, shipment)}
       ${ciplAngkutanHtml(row, shipment)}
       <table class="ci-items">
+        ${ciplColgroupHtml(CIPL_COLS_INVOICE)}
         <thead>
           <tr>
             <th class="ci-w-no">No</th>
@@ -435,8 +459,8 @@ function ciplHalamanPacking(row, shipment, baris) {
       (b, i) => `
       <tr>
         <td class="ci-c">${i + 1}</td>
-        <td class="ci-c">${escapeHtml(b.item)}</td>
-        <td class="ci-c">${escapeHtml(b.type)}</td>
+        <td class="ci-c ci-item">${escapeHtml(b.item)}</td>
+        <td class="ci-c ci-type">${escapeHtml(b.type)}</td>
         <td class="ci-c">${escapeHtml(b.hs)}</td>
         <td class="ci-c">${escapeHtml(ciplAngka(b.qty))}</td>
         <td class="ci-c">${escapeHtml(b.satuan)}</td>
@@ -454,7 +478,8 @@ function ciplHalamanPacking(row, shipment, baris) {
       ${ciplKopHtml("PACKING LIST")}
       ${ciplPihakHtml(row, shipment)}
       ${ciplAngkutanHtml(row, shipment)}
-      <table class="ci-items">
+      <table class="ci-items ci-items--pl">
+        ${ciplColgroupHtml(CIPL_COLS_PACKING)}
         <thead>
           <tr>
             <th class="ci-w-no">No</th>
@@ -560,7 +585,24 @@ function ciplCss() {
      bedanya terbaca sebagai cacat. */
   .ci-box { border: var(--ci-line); }
 
-  table { width: 100%; border-collapse: collapse; }
+  /* SATU CARA MENGGAMBAR GARIS UNTUK SELURUH HALAMAN.
+
+     Sebelumnya dua cara bercampur: bingkai kotak, garis judul, dan
+     pembatas blok digambar sebagai border ELEMEN — tergambar penuh di
+     dalam elemennya, jatuh rapi di batas piksel. Sementara garis tabel
+     digambar dengan border-collapse, yang menaruh garis TEPAT DI ATAS
+     batas antar sel: separuh di kiri, separuh di kanan.
+
+     Keduanya sama-sama 1px di CSS, tapi yang kedua mendarat di tengah
+     piksel dan dihaluskan jadi dua piksel setengah-terang. Mata
+     membacanya sebagai garis yang berbeda ketebalan — persis yang
+     terlihat: garis struktur tegas, garis tabel samar.
+
+     Dengan separate, garis tabel ikut tergambar penuh di dalam
+     selnya. Konsekuensinya: tiap batas antar sel harus dimiliki SATU
+     sisi saja, kalau tidak dua border bersebelahan jadi garis ganda.
+     Aturannya di bawah — setiap sel hanya menggambar ATAS dan KIRI. */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; }
   td, th { vertical-align: top; }
 
   .ci-kop td { border: 0; padding: 4px 6px; }
@@ -592,7 +634,6 @@ function ciplCss() {
   .ci-ship { border-bottom: var(--ci-line); }
   .ci-ship td { border-right: var(--ci-line); padding: 2px 5px; font-size: 8.5pt; }
   .ci-ship td:last-child { border-right: 0; }
-  .ci-ship .ci-k { border-bottom: 0; }
   .ci-ship-val td { height: 26px; vertical-align: middle; }
   .ci-center { text-align: center; }
   .ci-sail { width: 74px; font-size: 7pt; }
@@ -601,8 +642,43 @@ function ciplCss() {
      isinya dan berakhir di pecahan piksel — garis tegaknya lalu jatuh
      di posisi yang tidak bulat, dan tiap kolom membulatkannya sendiri. */
   .ci-items { table-layout: fixed; }
+
+  /* ATAS & KIRI SAJA — satu batas, satu pemilik.
+
+     Garis mendatar antar baris digambar baris DI BAWAHNYA; garis tegak
+     antar kolom digambar kolom DI KANANNYA. Yang tidak digambar siapa
+     pun diambil alih bingkai kotak. */
   .ci-items th, .ci-items td {
-    border: var(--ci-line); padding: 1px 4px; font-size: 8pt;
+    border-top: var(--ci-line);
+    border-left: var(--ci-line);
+    padding: 1px 4px;
+    font-size: 8pt;
+    /* SATU BARIS untuk semua kolom. Kolom pendek yang membungkus
+       membuat tinggi baris tidak seragam dan tabel terlihat berantakan.
+
+       overflow: hidden adalah jaring pengaman, bukan solusi: dengan
+       table-layout tetap, teks yang lebih lebar daripada kolomnya akan
+       MENEMBUS garis dan menabrak sel sebelahnya. Lebar kolom di bawah
+       sudah disetel agar isinya muat — ini untuk memastikan kalau suatu
+       saat meleset, yang terjadi terpotong rapi, bukan tabrakan. */
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* DUA kolom yang boleh turun ke baris berikutnya: Item dan Type.
+
+     Keduanya berisi teks bebas yang panjangnya tidak bisa ditebak —
+     "NOKIAN ENTRUST 235/45R19 SAVER" lebih panjang daripada kolomnya,
+     dan memotongnya menghilangkan keterangan barang yang justru
+     paling penting di dokumen ekspor.
+
+     Kolom lain tetap satu baris: isinya pendek dan tetap (kode, angka,
+     satuan), dan membiarkannya membungkus hanya membuat tinggi baris
+     tidak seragam tanpa alasan. */
+  .ci-items td.ci-item,
+  .ci-items td.ci-type {
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
   }
   .ci-items th { text-align: center; font-weight: 700; font-size: 7.5pt; }
 
@@ -618,14 +694,12 @@ function ciplCss() {
         sel paling pinggir menggambar garisnya sendiri tepat di
         sebelahnya. border-collapse tidak menolong — keduanya milik
         elemen yang berbeda, jadi tidak pernah menyatu. */
+  /* Tepi kiri tabel diambil alih bingkai kotak. */
   .ci-items tr > th:first-child,
   .ci-items tr > td:first-child { border-left: 0; }
-  .ci-items tr > th:last-child,
-  .ci-items tr > td:last-child { border-right: 0; }
 
-  /*   2. GARIS ATAS TABEL. Blok Port of Loading sudah menutup dirinya
-        dengan border-bottom; baris judul tabel barang menambahkan
-        border-top persis di atasnya. */
+  /* Tepi atas tabel: blok Port of Loading sudah menutup dirinya dengan
+     border-bottom. */
   .ci-items thead th { border-top: 0; }
 
   /* SELURUH sel barang rata tengah, mendatar maupun tegak. Kolom angka
@@ -638,39 +712,42 @@ function ciplCss() {
   /* Ruang kosong: TIDAK ada garis sama sekali — tidak mendatar, tidak
      tegak. Kolom yang tidak berisi barang tidak digariskan; yang
      membatasinya cuma kotak luar. */
-  .ci-fill td { border: 0; }
+  /* Ruang kosong tetap menggambar garis ATAS — itulah penutup baris
+     barang terakhir. Garis tegaknya yang tidak digambar, sehingga area
+     tanpa barang tidak berkolom. */
+  .ci-fill td { border-left: 0; }
   .ci-c { text-align: center; }
   .ci-num { text-align: right; }
-  .ci-cur { text-align: left; width: 26px; }
+  .ci-cur { text-align: left; }
   /* Kolom angka uang dipatok lebarnya. Tanpa patokan, sisa lebar tabel
      jatuh ke sana dan justru Item & Type yang terjepit — nama barang
      terpaksa membungkus dua baris sementara kolom angka menyisakan
      ruang kosong yang tidak dipakai apa pun. */
-  .ci-w-money { width: 58px; }
-  /* Teks dimensi dirapatkan supaya "81 CM x 81 CM x 81 CM" muat satu
-     baris tanpa harus memperlebar kolomnya. */
-  .ci-dim {
+
+  /* Ditulis td.ci-dim, BUKAN .ci-dim saja.
+
+     Aturan ".ci-items th, .ci-items td" di atas berkekhususan (0,2,2)
+     dan mengalahkan kelas tunggal (0,1,0) — font-size 6,5pt di sini
+     tidak akan pernah berlaku, teksnya tetap 8pt.
+
+     Akibatnya bukan sekadar huruf kebesaran: dengan table-layout
+     tetap, teks yang lebih lebar daripada kolomnya TIDAK memaksa
+     kolom melebar. Digabung nowrap, ia meluber melewati garis dan
+     menabrak angka CBM di sebelahnya.
+
+     Jebakan yang sama pernah dicatat untuk td.sj-ket di surat jalan. */
+  .ci-items td.ci-dim {
     font-size: 6.5pt;
-    white-space: nowrap;
     letter-spacing: -0.3px;
-    width: 116px;
   }
   /* Angka CBM tidak boleh terpisah dari satuannya. Tanpa nowrap,
      "0.531 M3" pecah jadi dua baris dan seluruh barisnya ikut melar. */
-  .ci-cbm { white-space: nowrap; width: 52px; }
+  /* nilai CBM: lebar dari colgroup */
   /* Pangkat 3 pada M3 tanpa menambah tinggi baris. Perilaku bawaan
      elemen sup menggeser garis dasar dan membuat barisnya melar. */
   .ci-items sup { font-size: 6pt; vertical-align: super; line-height: 0; }
-  .ci-w-no { width: 24px; }
-  /* Item & Type mendapat sisa lebar terbanyak — keduanya berisi teks
-     yang panjangnya tidak bisa ditebak, sementara kolom lain isinya
-     pendek dan tetap. */
-  .ci-w-item { width: 150px; }
-  .ci-w-type { width: 200px; }
-  .ci-w-hs { width: 58px; }
-  .ci-w-qty { width: 30px; }
-  .ci-w-unit { width: 32px; }
-  .ci-w-wt { width: 38px; }
+  /* Kelas .ci-w-* hanya penanda kolom untuk keterbacaan markup —
+     lebarnya ditentukan <colgroup>, lihat CIPL_COLS_*. */
   /* Sisi kiri baris Total dibiarkan tanpa garis, seperti berkas
      aslinya — kotaknya menyatu dengan area tanda tangan di bawahnya. */
   .ci-foot-empty, .ci-pkg-total { border-left: 0 !important; border-bottom: 0 !important; }
@@ -698,9 +775,13 @@ function ciplCss() {
        kiri & bawah <- digambar di sini
   */
   .ci-sign-row td { border: 0; }
+  /* TANPA border-bottom. Baris ini yang paling bawah di dalam kotak,
+     jadi sisi bawahnya berimpit dengan bingkai .ci-box — dua garis
+     berdempetan, dan di bagian itu saja garisnya jadi dua kali lebih
+     tebal daripada sisanya. */
   .ci-sign-row .ci-sign-cell {
+    border-top: var(--ci-line);
     border-left: var(--ci-line);
-    border-bottom: var(--ci-line);
     padding: 2px 5px;
     vertical-align: top;
   }

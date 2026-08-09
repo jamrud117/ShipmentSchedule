@@ -979,9 +979,35 @@ body.is-viewer .docstep {
   padding-bottom: var(--sp-3);
   border-bottom: 1px dashed var(--border);
 }
+/* Selebar isinya saja. Kotak tanggal yang melar jauh melewati
+   "05/08/2026" membuat kartu terlihat separuh kosong. */
 .collapsed-dates .date-field {
-  flex: 0 1 170px;
-  min-width: 140px;
+  flex: 0 0 auto;
+}
+/* `width: auto` pada input[type=date] memberi lebar BAWAAN peramban —
+   cukup untuk tanggal terpanjang plus ikon pemilih, bukan untuk teks
+   yang benar-benar ada. Karena kotak ini hanya dibaca, ikonnya
+   disembunyikan dan lebarnya dipatok sepanjang "00/00/0000". */
+.collapsed-dates .date-field input {
+  width: auto;
+  min-width: 0;
+  padding: 4px 8px;
+  field-sizing: content;
+}
+.collapsed-dates .date-field input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+.collapsed-dates .date-field input::-webkit-inner-spin-button {
+  display: none;
+}
+/* Cadangan untuk peramban tanpa field-sizing: 10 karakter + padding. */
+@supports not (field-sizing: content) {
+  .collapsed-dates .date-field input { width: calc(10ch + 18px); }
+}
+.tag-row--collapsed {
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px dashed var(--border);
 }
 .collapsed-dates-note {
   display: inline-flex;

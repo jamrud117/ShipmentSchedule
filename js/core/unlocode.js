@@ -229,9 +229,25 @@ const UNLOCODE_COUNTRIES = new Set([
 
    Langkah 3 memilih alias TERPANJANG yang cocok, supaya "tanjung
    pelepas" tidak kalah oleh "tanjung" yang lebih pendek. */
+/* Hasil pencocokan diingat per teks masukan.
+
+   Tabel referensinya tetap selama aplikasi berjalan, jadi teks yang
+   sama selalu menghasilkan entri yang sama. Nama pelabuhan berulang
+   sangat banyak — satu papan berisi ratusan kartu kerap hanya memakai
+   segelintir pelabuhan — sementara pencocokan alias menyapu seluruh
+   tabel tiap kali dipanggil. */
+const PORT_RESOLVE_CACHE = new Map();
+
 function resolvePortEntry(raw) {
   const s = String(raw || "").trim();
   if (!s) return null;
+  if (PORT_RESOLVE_CACHE.has(s)) return PORT_RESOLVE_CACHE.get(s);
+  const hasil = cariPortEntry(s);
+  PORT_RESOLVE_CACHE.set(s, hasil);
+  return hasil;
+}
+
+function cariPortEntry(s) {
   const upper = s.toUpperCase();
 
   if (UNLOCODE_PATTERN.test(upper)) {

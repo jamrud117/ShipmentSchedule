@@ -22,6 +22,28 @@ const UNIT_QTY_RE =
    polos 8-10 digit tidak diambil: nomor part dan kode internal sering
    sepanjang itu, dan salah mengambilnya berarti mengisi kolom HS Code
    dengan angka yang bukan HS Code sama sekali. */
+/* Teks kolom kiri yang jelas BUKAN nama barang.
+
+   Sebagian templat memakai kolom "Item" untuk keterangan rujukan —
+   "Items of PO DDI-20260807-01" — bukan untuk nama barangnya. Kolom itu
+   ikut terbaca ke dalam nama karena pada templat lain isinya memang
+   bagian dari nama ("STAND" + "HS 40*50").
+
+   Yang dibuang hanya pola yang bentuknya jelas label rujukan. Nama
+   barang yang kebetulan memuat kata "PO" tidak tersentuh. */
+const CIPL_LABEL_BUKAN_NAMA = [
+  /\bItems?\s+of\s+PO\b[\s:.-]*[A-Z0-9\/-]*/gi,
+  /\bC\/NO\s*:\s*[\d\/]+/gi,
+];
+
+function bersihkanLabelNama(nama) {
+  let s = String(nama || "");
+  CIPL_LABEL_BUKAN_NAMA.forEach((re) => {
+    s = s.replace(re, " ");
+  });
+  return s.replace(/\s{2,}/g, " ").trim();
+}
+
 function extractBareHsCode(text) {
   const s = String(text || "");
   const m = /(?:^|[\s(])(\d{4}\.\d{2}(?:[.\-]\d{2}){1,2}|\d{4}\.\d{2}[.\-]\d{4})(?=[\s)]|$)/.exec(s);
@@ -96,9 +118,30 @@ function guessCiplModeFromPorts(origin, destination) {
 }
 
 // Tanggal free-text di CIPL: "MAY 20, 2026" / "20 MAY 2026" / ISO / DD-MM- YYYY / DD/MM/YYYY
+/* Tanggal yang BENAR-BENAR tanggal.
+
+   Sel tanggal kosong pada berkas Excel kerap tercetak sebagai
+   "Jan 00, 1900" — nilai nol pada penanggalan Excel. Diterima apa
+   adanya, ia menghasilkan "1900-01-00": bukan tanggal yang sah, tapi
+   tetap terlihat seperti tanggal, dan setiap hitungan yang menyentuhnya
+   akan salah tanpa bersuara.
+
+   Yang ditolak: hari 00, bulan 00, dan tahun di luar rentang yang
+   masuk akal untuk dokumen pengiriman. */
+function tanggalMasukAkal(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+  if (!m) return false;
+  const th = Number(m[1]),
+    bl = Number(m[2]),
+    hr = Number(m[3]);
+  if (bl < 1 || bl > 12 || hr < 1 || hr > 31) return false;
+  return th >= 2000 && th <= 2100;
+}
+
 function parseFlexibleDateText(v) {
   const str = (v == null ? "" : String(v)).trim();
   if (!str) return "";
+  const saring = (iso) => (tanggalMasukAkal(iso) ? iso : "");
   const MONTHS = {
     jan: 1,
     feb: 2,
@@ -117,16 +160,16 @@ function parseFlexibleDateText(v) {
   if (m) {
     const mon = MONTHS[m[1].slice(0, 3).toLowerCase()];
     if (mon)
-      return `${m[3]}-${String(mon).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+      return saring(`${m[3]}-${String(mon).padStart(2, "0")}-${m[2].padStart(2, "0")}`);
   }
   m = /^(\d{1,2})[.\s]+([A-Za-z]{3,9})\.?,?\s+(\d{4})$/.exec(str);
   if (m) {
     const mon = MONTHS[m[2].slice(0, 3).toLowerCase()];
     if (mon)
-      return `${m[3]}-${String(mon).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      return saring(`${m[3]}-${String(mon).padStart(2, "0")}-${m[1].padStart(2, "0")}`);
   }
   m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (m) return saring(`${m[1]}-${m[2]}-${m[3]}`);
   m = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/.exec(str);
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return "";

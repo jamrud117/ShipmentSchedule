@@ -152,6 +152,26 @@ const CARRIER_MASTER = {
 };
 
 /* ------------------------------------------------------------------
+   INDEKS SIAP PAKAI
+
+   Alias dinormalkan SEKALI saat berkas dimuat, bukan tiap kali sebuah
+   nama kapal dicocokkan. Sebelumnya tiap pencocokan menjalankan satu
+   regex per alias per pelayaran — sekitar seratus regex untuk satu
+   kapal, dikali jumlah kartu di papan, dikali tiap kali papan
+   digambar ulang.
+
+   Urutan daftar tetap dihormati: yang tertulis lebih dulu menang,
+   sama seperti sebelumnya.
+------------------------------------------------------------------ */
+function siapkanAlias(daftar) {
+  daftar.forEach((x) => {
+    x._alias = (x.aliases || []).map(normalisasiTeksKapal).filter(Boolean);
+    x._suffix = (x.suffix || []).map(normalisasiTeksKapal).filter(Boolean);
+  });
+  return daftar;
+}
+
+/* ------------------------------------------------------------------
    PENCOCOKAN NAMA KAPAL
 ------------------------------------------------------------------ */
 function normalisasiTeksKapal(raw) {
@@ -188,7 +208,7 @@ function detectShippingLine(vesselName) {
      bukan tertangkap alias lain yang kebetulan muncul belakangan. */
   for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
     const line = CARRIER_MASTER.shippingLines[i];
-    if ((line.aliases || []).some((a) => normalisasiTeksKapal(a) === kata[0])) {
+    if (line._alias.indexOf(kata[0]) >= 0) {
       return { code: line.code, name: line.name, alias: kata[0], via: "kata pertama" };
     }
   }
@@ -197,10 +217,7 @@ function detectShippingLine(vesselName) {
   // boleh tertangkap dari "MILESTONE".
   for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
     const line = CARRIER_MASTER.shippingLines[i];
-    const cocok = (line.aliases || []).find((a) => {
-      const alias = normalisasiTeksKapal(a);
-      return alias && kata.indexOf(alias) >= 0;
-    });
+    const cocok = line._alias.find((a) => kata.indexOf(a) >= 0);
     if (cocok) {
       return { code: line.code, name: line.name, alias: cocok, via: "kata dalam nama" };
     }
@@ -212,7 +229,7 @@ function detectShippingLine(vesselName) {
   const terakhir = kata[kata.length - 1] || "";
   for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
     const line = CARRIER_MASTER.shippingLines[i];
-    const cocok = (line.suffix || []).find(
+    const cocok = line._suffix.find(
       (sfx) => terakhir === sfx || terakhir.endsWith(sfx),
     );
     if (cocok) {
@@ -229,9 +246,7 @@ function detectCourier(vesselName) {
   const rapat = " " + kata.join(" ") + " ";
   for (let i = 0; i < CARRIER_MASTER.couriers.length; i++) {
     const c = CARRIER_MASTER.couriers[i];
-    const cocok = (c.aliases || []).find(
-      (a) => rapat.indexOf(" " + normalisasiTeksKapal(a) + " ") >= 0,
-    );
+    const cocok = c._alias.find((a) => rapat.indexOf(" " + a + " ") >= 0);
     if (cocok) return { code: c.code, name: c.name, alias: cocok, via: "nama perusahaan kurir" };
   }
   return null;
@@ -240,12 +255,19 @@ function detectCourier(vesselName) {
 /* ------------------------------------------------------------------
    PENCOCOKAN NO. PENERBANGAN
 ------------------------------------------------------------------ */
+siapkanAlias(CARRIER_MASTER.shippingLines);
+siapkanAlias(CARRIER_MASTER.couriers);
+siapkanAlias(CARRIER_MASTER.airlines);
+
 /* Maskapai diurut dari kode terpanjang, supaya kode 3 karakter tidak
    kalah oleh kode 2 karakter yang kebetulan jadi awalannya. */
+/* Diurut sekali, bukan tiap pencocokan. */
+const AIRLINES_BY_CODE_LENGTH = CARRIER_MASTER.airlines
+  .slice()
+  .sort((a, b) => b.code.length - a.code.length);
+
 function airlinesByCodeLength() {
-  return CARRIER_MASTER.airlines
-    .slice()
-    .sort((a, b) => b.code.length - a.code.length);
+  return AIRLINES_BY_CODE_LENGTH;
 }
 
 /* Kode maskapai dicari DI MANA PUN dalam teks, bukan hanya di awal.
@@ -282,7 +304,7 @@ function detectAirline(flightNo) {
   const rapat = " " + kata.join(" ") + " ";
   for (let i = 0; i < daftar.length; i++) {
     const a = daftar[i];
-    const cocok = (a.aliases || []).find((al) => rapat.indexOf(" " + al + " ") >= 0);
+    const cocok = a._alias.find((al) => rapat.indexOf(" " + al + " ") >= 0);
     if (cocok) return { code: a.code, name: a.name, alias: cocok, via: "nama maskapai" };
   }
   return null;
@@ -301,12 +323,14 @@ const COURIER_SERVICES = [
   { code: "ECONOMY", label: "Economy", aliases: ["ECONOMY", "IE", "ECO"] },
 ];
 
+siapkanAlias(COURIER_SERVICES);
+
 function detectCourierService(raw) {
   const kata = normalisasiTeksKapal(raw).split(" ").filter(Boolean);
   if (!kata.length) return "";
   const rapat = " " + kata.join(" ") + " ";
   const m = COURIER_SERVICES.find((s) =>
-    (s.aliases || []).some((a) => rapat.indexOf(" " + a + " ") >= 0),
+    s._alias.some((a) => rapat.indexOf(" " + a + " ") >= 0),
   );
   return m ? m.code : "";
 }

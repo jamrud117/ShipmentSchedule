@@ -100,6 +100,11 @@
           <label class="login-label" for="loginPassword">Kata sandi</label>
           <div class="pwd-wrap"><input type="password" id="loginPassword" class="login-input" autocomplete="current-password" placeholder="••••••••" /><button type="button" class="pwd-eye" data-pwd-toggle="loginPassword" title="Tampilkan Kata Sandi" aria-label="Tampilkan kata sandi"><i class="bi bi-eye"></i></button></div>
 
+          <label class="login-remember">
+            <input type="checkbox" id="loginRemember" checked />
+            <span>Ingat saya di perangkat ini</span>
+          </label>
+
           <button type="button" class="btn-primary-navy login-submit" id="btnLogin">
             <i class="bi bi-box-arrow-in-right"></i> Masuk
           </button>
@@ -1134,12 +1139,7 @@
                     </button>
                   </div>
                   <div class="form-text-note mb-2">
-                    <i class="bi bi-info-circle"></i> Urutan mengikuti urutan
-                    kartu di bawah (dari Pelabuhan Asal menuju Pelabuhan
-                    Tujuan). Moda/Vessel/Voyage pada tiap terminal menjelaskan
-                    alat angkut yang <b>membawa barang tiba</b> di terminal tsb
-                    — leg terakhir menuju Pelabuhan Tujuan tetap pakai field
-                    Moda Transportasi/Vessel/Voyage di atas.
+                    Urutan mengikuti kartu di bawah, dari Pelabuhan Asal ke Tujuan. Moda/Vessel/Voyage tiap terminal = alat angkut yang membawa barang <em>tiba</em> di terminal itu; leg terakhir memakai field di atas.
                   </div>
                   <div id="routeStopsBody"></div>
                 </div>
@@ -1372,16 +1372,8 @@
               </div>
             </div>
             <div class="form-text-note mt-1">
-              <i class="bi bi-info-circle"></i> Kolom <b>Kemasan</b> diisi per
-              barang. <b>Import:</b> jumlah + jenis (cth. "5 BOX") — Total
-              Package terjumlah otomatis. <b>Export:</b> dimensi P×L×T cm (cth.
-              "82*82*75") — CBM terhitung otomatis, Total Package diisi manual.
-              <br />
-              <b>Kemasan</b> &amp; <b>Jenis Kemasan</b>: isi pada barang
-              PERTAMA sebuah box, lalu <b>kosongkan</b> pada barang berikutnya
-              yang dikemas dalam box yang sama — di surat jalan, baris-baris
-              itu tercetak menyatu jadi satu sel.
-            </div>
+                    Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. &quot;5 BOX&quot;), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm (cth. &quot;82*82*75&quot;), CBM otomatis, Total Package manual. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya &mdash; di surat jalan baris itu tercetak menyatu.
+                  </div>
           </div>
         </div>
 
@@ -1550,19 +1542,8 @@
               </div>
             </div>
             <div class="form-text-note mt-1">
-              <b>PPN</b> dan <b>PPH</b> terisi otomatis dari Total Nilai Barang
-              × NDPBM — PPN <b>11%</b>, PPH <b>2,5%</b>. <b>Bea Masuk</b> tidak
-              dihitung otomatis karena tarifnya berbeda per HS Code.
-              <br />
-              Angka otomatis tetap bisa ditimpa: begitu diketik manual, kolom
-              itu berhenti ikut berubah. Kosongkan kolomnya untuk kembali
-              otomatis.
-              <br />
-              Dihitung ulang saat jadwal dibuka, bukan saat mengetik &mdash;
-              simpan dulu untuk melihat angka terbarunya.
-              BM + PDRI: jika Bea Masuk = 0 maka 0; selain itu Bea Masuk + PPN +
-              PPH.
-            </div>
+                    PPN 11% dan PPH 2,5% terisi otomatis dari Total Nilai Barang × NDPBM. Bea Masuk manual &mdash; tarifnya berbeda per HS Code. Mengetik sendiri menghentikan pengisian otomatis; kosongkan untuk mengaktifkannya lagi. BM + PDRI dihitung saat jadwal dibuka, bukan saat mengetik.
+                  </div>
             <div class="row g-3 mt-1">
               <div class="col-md-12">
                 <label class="form-label"
@@ -1751,6 +1732,13 @@
                 accept=".xlsx,.xls"
                 class="form-control"
               />
+              <button type="button" class="btn-quiet mt-2" id="btnBulkTemplate">
+                <i class="bi bi-download"></i> Unduh template Excel kosong
+              </button>
+              <div class="form-text-note mt-1">
+                Kolomnya sudah sesuai, lengkap dengan baris contoh dan lembar
+                cara mengisi.
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -1928,6 +1916,7 @@
     <script src="js/features/doc-steps.js"></script>
     <script src="js/features/route-stops.js"></script>
     <script src="js/features/bulk-excel.js"></script>
+    <script src="js/features/bulk-template.js"></script>
 
     <!-- ========================================= -->
     <!-- IMPORT -->

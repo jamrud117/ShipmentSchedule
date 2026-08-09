@@ -114,6 +114,8 @@ function predictionTypeIsAssumed(src) {
 
 function predictionContext(src) {
   const s = src || {};
+  const carrierInfo =
+    typeof detectCarrier === "function" ? detectCarrier(s) : {};
   const fromPort =
     typeof resolvePortCode === "function" ? resolvePortCode(s.origin) : "";
   const toPort =
@@ -132,10 +134,10 @@ function predictionContext(src) {
     forwarder: s.forwarder || "",
     /* Carrier DITERJEMAHKAN dari nama kapal / no. penerbangan, bukan
        dipilih pengguna. Lihat js/core/carrier-master.js. */
-    carrier:
-      typeof carrierCodeOf === "function" ? carrierCodeOf(s) : "",
-    carrierKind:
-      typeof detectCarrier === "function" ? detectCarrier(s).kind : "",
+    // Satu kali deteksi. carrierCodeOf() dan detectCarrier() dulu
+    // dipanggil terpisah — pekerjaan yang sama dikerjakan dua kali.
+    carrier: carrierInfo.code || "",
+    carrierKind: carrierInfo.kind || "",
     /* Tingkat layanan kurir — Priority / Economy. Menentukan komitmen
        waktu pintu-ke-pintu, jadi ia dimensi pencocokan tersendiri. */
     service:

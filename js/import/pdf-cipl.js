@@ -444,18 +444,33 @@ function extractCiplSizeLines(pageText) {
   String(pageText || "")
     .split(/\n/)
     .forEach((baris) => {
-      const m = /^\s*SIZE\s*:?\s*([\d.,]+)\s*[x*]\s*([\d.,]+)\s*[x*]\s*([\d.,]+)/i.exec(
+      /* Kata pembukanya berbeda-beda antar pemasok:
+
+           SIZE :50*42*14(CM) /1BOX
+           Dimension : 460*380*200 * 1 BOX(ES)
+
+         Yang dicari tiga angka berpemisah x atau *, didahului salah
+         satu kata kunci ukuran. Sisanya — kurung, satuan cm, spasi —
+         diabaikan supaya salah ketik tidak membuat barisnya gagal
+         terbaca sama sekali. */
+      const m = /^\s*(?:SIZE|DIMENSIONS?|UKURAN)\s*:?\s*([\d.,]+)\s*[x*]\s*([\d.,]+)\s*[x*]\s*([\d.,]+)/i.exec(
         baris,
       );
       if (!m) return;
-      /* Jumlah koli ditulis di ekor baris: "/1BOX", "/2 CTN".
-         Diambil terpisah dari dimensinya karena keduanya dipakai untuk
-         hal yang berbeda — lihat applyCiplSizes. */
-      const k = /\/\s*(\d+)\s*([A-Z]+)/i.exec(baris);
+      /* Jumlah koli ditulis di ekor baris, juga dengan dua gaya:
+
+           /1BOX                 -> pemisah garis miring
+           * 1 BOX(ES)           -> pemisah bintang, satuan berkurung
+
+         "(ES)" dibuang: yang disimpan jenis kemasannya, bukan bentuk
+         jamaknya. */
+      const k = /[\/*]\s*(\d+)\s*([A-Z]+)/i.exec(baris.slice(m[0].length - 1));
+      const jenis = k ? k[2].toUpperCase().replace(/\(?ES\)?$/, "") : "";
       out.push({
         dims: `${m[1]}*${m[2]}*${m[3]}`,
-        boxes: k ? `${k[1]} ${k[2].toUpperCase()}` : "",
+        boxes: k ? `${k[1]} ${jenis}` : "",
         boxCount: k ? Number(k[1]) || 0 : 0,
+        unit: jenis,
       });
     });
   return out;
@@ -465,8 +480,28 @@ function extractCiplSizeLines(pageText) {
    barang mana yang dimaksud. Kalau jumlahnya tidak sama, tidak
    dipasangkan sama sekali — menebak pasangan lebih buruk daripada
    membiarkan kosong: dimensi yang salah langsung menyesatkan CBM. */
-function applyCiplSizes(items, sizes) {
-  if (!items.length || !sizes.length) return;
+/* Jumlah & jenis koli dari baris TOTAL: "TOTAL 1 BOX(ES) FCA ...".
+
+   Dipakai saat baris ukuran tidak menyebut kolinya, atau saat barangnya
+   cuma satu — seluruh kemasan kiriman itu memang miliknya. Untuk
+   kiriman berisi banyak barang, angka total TIDAK dibagi rata: menebak
+   pembagian koli lebih buruk daripada membiarkannya kosong. */
+function ciplTotalPackageFromText(pageText) {
+  const m = /^\s*TOTAL\s+(\d+)\s*([A-Z]+)\(?ES\)?/im.exec(String(pageText || ""));
+  if (!m) return null;
+  return { jumlah: Number(m[1]) || 0, unit: m[2].toUpperCase() };
+}
+
+function applyCiplSizes(items, sizes, total) {
+  if (!items.length) return;
+
+  /* Barang tunggal tanpa baris ukuran: kemasannya diambil dari TOTAL. */
+  if (items.length === 1 && total && total.jumlah && !items[0].package) {
+    items[0].package = `${total.jumlah} ${total.unit}`;
+    items[0].packageUnit = total.unit;
+  }
+
+  if (!sizes.length) return;
   if (sizes.length !== items.length) return;
   items.forEach((it, i) => {
     /* DUA nilai, bukan satu, karena kolom Kemasan dipakai dua cara:
@@ -475,6 +510,7 @@ function applyCiplSizes(items, sizes) {
        Import berarti "50*42*14" terbaca sebagai 50 koli. Yang memilih
        nanti ciplRawItemsToFinalItems(), yang memang tahu bukunya. */
     if (!it.package) it.package = sizes[i].boxes;
+    if (!it.packageUnit) it.packageUnit = sizes[i].unit;
     if (!it.dimensions) it.dimensions = sizes[i].dims;
   });
 }
@@ -539,7 +575,7 @@ function parseCiplPdfText(text, pagesItems) {
 
   const merged = mergeItemSources(itemSources);
   applyCiplHsNotes(merged, allHsNotes);
-  applyCiplSizes(merged, allSizes);
+  applyCiplSizes(merged, allSizes, ciplTotalPackageFromText(text));
 
   // Bruto = TOTAL dari baris ringkasan Packing List ("TOTAL 1 BOX(ES) ..
   const totBruto = (() => {
@@ -566,7 +602,13 @@ function parseCiplPdfText(text, pagesItems) {
 
   // Nilai yang TIDAK ADA di dokumen ini dibiarkan null, JANGAN dijadikan 0
   const rawItems = merged.map((it) => ({
-    name: it.name || "",
+    /* Dibersihkan DI SINI, bukan saat baris pertama dibaca.
+
+       Label rujukan seperti "Items of PO ..." datang sebagai baris
+       LANJUTAN dan ditempelkan ke nama setelah baris pertamanya
+       selesai diproses. Membersihkan di awal berarti membersihkan
+       teks yang belum ada. */
+    name: bersihkanLabelNama(it.name || ""),
     hsCode: it.hsCode || "",
     qty: it.qty != null ? it.qty : null,
     satuan: it.satuan || "",

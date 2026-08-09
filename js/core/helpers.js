@@ -36,9 +36,6 @@ function fmtDateLong(d) {
   });
 }
 // isPastOrToday() (dipakai utk auto-arrive) dihapus -- auto-arrive sudah tidak ada lagi
-function daysBetween(a, b) {
-  return Math.round((new Date(b) - new Date(a)) / 86400000);
-}
 function fmtUSD(n) {
   n = Number(n) || 0;
   return (

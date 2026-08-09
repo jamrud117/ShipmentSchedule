@@ -215,12 +215,6 @@ function arrivalInfoOf(s) {
   }
   return { date: eta, label: labelEta, confirmed: false };
 }
-function arrivalBasisOf(s) {
-  return arrivalInfoOf(s).date;
-}
-function arrivalBasisLabelOf(s) {
-  return arrivalInfoOf(s).label;
-}
 
 // Kedatangan sudah PASTI, bukan lagi diturunkan dari dokumen.
 function arrivalConfirmedOf(s) {

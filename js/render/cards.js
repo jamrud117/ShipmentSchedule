@@ -231,12 +231,12 @@ function renderExpandedCard(s) {
   </div>`;
 }
 
-/* ETD & ETA pada kiriman Export yang sudah Delivered.
+/* ETD & ETA pada kartu yang sudah Arrived / Delivered.
 
-   Tetap ditampilkan karena keduanya masih dipakai: Delivered di buku
-   Export berarti kapalnya sudah berangkat, bukan urusannya selesai —
-   pelanggan masih menanyakan kapan tiba, dan jadwalnya masih dirujuk
-   sampai barang benar-benar sampai.
+   Tetap ditampilkan karena keduanya masih dirujuk: Delivered di buku
+   Export berarti kapalnya sudah berangkat, bukan urusannya selesai,
+   dan di buku Import jadwal berangkat-tiba tetap jadi acuan saat
+   menelusuri kiriman lama.
 
    HANYA BISA DIBACA. Kartu terkuncup adalah ringkasan; mengubah
    tanggal di sini terlalu mudah dilakukan tanpa sengaja pada kiriman
@@ -285,7 +285,14 @@ function renderCollapsedCard(s) {
     </div>
 
     <div class="collapsed-extra">
-      ${activeMode === "export" ? collapsedDatesHtml(s) : ""}
+      ${collapsedDatesHtml(s)}
+      ${
+        /* Lencana yang sama dengan kartu aktif: incoterm, nilai, jenis
+           muatan, fasilitas. Kiriman yang sudah selesai justru paling
+           sering dicari ulang untuk angka-angka itu — menyembunyikannya
+           memaksa membuka detail hanya untuk melihat satu nilai. */
+        `<div class="tag-row tag-row--collapsed">${buildTags(s, itemTotals(s))}</div>`
+      }
       <div class="collapsed-items">
         <div class="collapsed-items-label"><i class="bi bi-boxes"></i> Nama Barang</div>
         <div class="collapsed-items-list">${itemNamesSummary(s)

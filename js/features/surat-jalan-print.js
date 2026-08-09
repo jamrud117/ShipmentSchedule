@@ -31,10 +31,11 @@ const SJ_PERUSAHAAN = {
   cabang: "Cabang: JL. BKR No.27 Pasirluyu, Regol 40254 Kota Bandung",
 };
 
-/* Baris kosong ditambahkan sampai tabelnya penuh satu halaman, persis
-   seperti berkas aslinya yang menyisakan baris kosong bergaris sampai
-   baris 21 — supaya tanda tangan selalu jatuh di tempat yang sama. */
+/* Sisa tabel diisi satu ruang kosong setinggi baris yang tersisa,
+   supaya blok Total dan tanda tangan selalu jatuh di tempat yang sama
+   berapa pun jumlah barangnya. */
 const SJ_MIN_BARIS = 10;
+const SJ_TINGGI_BARIS = 19;
 
 /* Surat jalan hanya berlaku untuk kiriman EXPORT — bentuk cetaknya
    memang dirancang untuk itu. Yang belum ditautkan jadwal tetap boleh
@@ -172,7 +173,8 @@ function buildSuratJalanHtml(row, shipment) {
   const p = (row && row.payload) || {};
   const baris = sjBarisBarang(shipment);
   const kosong = Math.max(0, SJ_MIN_BARIS - baris.length);
-  const totalBaris = baris.length + kosong;
+  // Ruang kosong kini SATU baris, jadi rentang sel Keterangan ikut.
+  const totalBaris = baris.length + (kosong ? 1 : 0);
 
   /* Keterangan: satu sel tinggi membentang seluruh tabel, berisi NOMOR
      KENDARAAN — itu yang tercantum pada contoh berkas ("E 1578 MS").
@@ -201,13 +203,20 @@ function buildSuratJalanHtml(row, shipment) {
         ${i === 0 ? selKet : ""}
       </tr>`,
   );
-  const barisKosong = Array.from({ length: kosong }).map(
-    (_, i) => `
-      <tr>
-        <td class="sj-no">&nbsp;</td><td></td><td></td><td></td>
-        ${baris.length === 0 && i === 0 ? selKet : ""}
+  /* SATU ruang kosong setinggi baris yang tersisa — bukan deretan
+     baris bergaris.
+
+     Kolom yang tidak berisi barang tidak digariskan, sama seperti
+     Commercial Invoice. Yang dipertahankan cuma garis ATAS-nya:
+     itulah penutup baris barang terakhir. */
+  const barisKosong = kosong
+    ? [
+        `<tr class="sj-fill" style="height:${kosong * SJ_TINGGI_BARIS}px">
+        <td></td><td></td><td></td><td></td>
+        ${baris.length === 0 ? selKet : ""}
       </tr>`,
-  );
+      ]
+    : [];
 
   const totalQty = sjTotalPerSatuan(baris.map((b) => b.qty));
   /* Dihitung per BOX, bukan per barang — kalau tidak, satu box berisi
@@ -337,6 +346,21 @@ function suratJalanCss() {
      "8/2/26 ... about:blank ... 1/1" itu digambar peramban DI DALAM
      margin halaman, jadi ia lenyap sendiri begitu marginnya nol. */
   @page { size: A4; margin: 0; }
+
+  /* SATU NILAI UNTUK SELURUH GARIS.
+
+     Nilainya ditulis di sini dan TIDAK BOLEH mengacu ke --sj-line
+     lagi: variabel yang menunjuk dirinya sendiri dianggap tidak sah
+     oleh CSS, dan akibatnya bukan garis yang salah tebal melainkan
+     SELURUH garis lenyap.
+
+     separate membuat garis tabel tergambar penuh di dalam selnya,
+     sama seperti border elemen, sehingga tidak ada yang mendarat di
+     tengah piksel lalu terbaca lebih tipis. Konsekuensinya tiap batas
+     harus dimiliki SATU sisi saja — di seluruh berkas ini: ATAS dan
+     KIRI. */
+  :root { --sj-line: 1px solid #000; }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -350,24 +374,30 @@ function suratJalanCss() {
      tidak ikut tercetak. */
   .sj-sheet { padding: 12.7mm; }
   /* Seluruh isi dikurung satu bingkai, seperti berkas aslinya. */
-  .sj-box { border: 1.5px solid #000; }
+  .sj-box { border: var(--sj-line); }
 
-  table { border-collapse: collapse; width: 100%; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; }
 
-  .sj-kop td { border-bottom: 1.5px solid #000; padding: 4px 6px; }
+  .sj-kop td { border-bottom: var(--sj-line); padding: 4px 6px; }
   .sj-kop-logo { width: 74px; vertical-align: middle; text-align: center; }
   .sj-kop-logo img { width: 58px; height: auto; display: inline-block; }
   .sj-kop-teks { text-align: center; padding-right: 74px !important; }
   .sj-company { font-size: 15pt; font-weight: 700; }
   .sj-addr { font-size: 7.5pt; line-height: 1.3; }
 
+  /* TANPA border-bottom. Baris pertama blok meta di bawahnya sudah
+     menggambar border-top di batas yang sama — dua pemilik untuk satu
+     garis, dan di situ saja tebalnya jadi dua kali lipat. */
   .sj-title {
     text-align: center; font-size: 11pt; font-weight: 700;
-    padding: 2px 0; border-bottom: 1.5px solid #000;
+    padding: 2px 0;
   }
 
   /* Blok Kepada / Nomor / Tanggal / Ref — bergaris seperti aslinya. */
-  .sj-meta td { border: 1px solid #000; padding: 3px 6px; font-size: 9pt; }
+  /* Atas+kiri saja. Dengan separate, dua sel bersebelahan yang
+     sama-sama menggambar sisi kanan/kiri menghasilkan garis ganda. */
+  .sj-meta td { border-top: var(--sj-line); border-left: var(--sj-line);
+    padding: 3px 6px; font-size: 9pt; }
   .sj-meta-kiri { width: 55%; vertical-align: top; border-left: 0 !important; }
   .sj-kepada { font-size: 8.5pt; }
   .sj-to { font-weight: 700; font-size: 10pt; margin-top: 2px; }
@@ -375,23 +405,37 @@ function suratJalanCss() {
   .sj-lbl { font-size: 8.5pt; text-align: center; }
   .sj-val { text-align: center; font-size: 9pt; }
   .sj-ref { font-size: 9pt; }
-  .sj-meta tr:last-child td:last-child { border-right: 0; }
-  .sj-meta tr td:last-child { border-right: 0; }
 
   .sj-items { table-layout: fixed; }
+  /* Garis bawah blok meta digambar baris judul tabel barang. */
   .sj-items th, .sj-items td {
-    border: 1px solid #000; padding: 2px 5px; font-size: 8.5pt;
-    vertical-align: top; word-wrap: break-word;
+    border-top: var(--sj-line); border-left: var(--sj-line);
+    padding: 2px 5px; font-size: 8.5pt;
+    vertical-align: top;
+    /* Satu baris untuk semua kolom; overflow: hidden jadi jaring
+       pengaman supaya teks yang kepanjangan terpotong rapi alih-alih
+       menembus garis ke sel sebelahnya. */
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* Nama barang SATU-SATUNYA yang boleh turun ke baris berikutnya. */
+  .sj-items td.sj-nama {
+    white-space: normal;
+    word-break: break-word;
+    overflow: visible;
   }
   .sj-items th {
     text-align: center; font-weight: 400;
     background: #d9d9d9; font-size: 8.5pt;
   }
   .sj-items tbody td { height: 15px; }
+  /* Tepi kiri & kanan diambil alih bingkai kotak. */
   .sj-items tr th:first-child, .sj-items tr td:first-child { border-left: 0; }
-  .sj-items tr th:last-child, .sj-items tr td:last-child { border-right: 0; }
+  /* Ruang kosong: garis tegaknya tidak digambar, garis atasnya iya. */
+  .sj-fill td { border-left: 0; }
+  .sj-fill td.sj-ket { border-left: var(--sj-line); }
   .sj-no  { width: 26px; text-align: center; }
-  .sj-nama { text-align: center; }
+  .sj-items td.sj-nama, .sj-items th.sj-nama { text-align: center; }
   .sj-qty { width: 62px; text-align: center; }
   .sj-pkg { width: 62px; text-align: center; }
   /* Kolom Keterangan dilebarkan (96 -> 132px): isinya bisa berupa nomor
@@ -412,6 +456,11 @@ function suratJalanCss() {
     text-align: center;
     vertical-align: middle;
   }
+  /* Baris Total adalah baris TERAKHIR tabel. Di bawah konvensi
+     atas+kiri, sisi bawahnya tidak dimiliki siapa pun — tidak ada
+     baris berikutnya yang menggambar border-top. Jadi ia menutup
+     dirinya sendiri. */
+  .sj-items tfoot td { border-bottom: var(--sj-line); }
   .sj-total-label { text-align: center; font-weight: 700; }
   /* Baris Total tetap bergaris penuh — sebelumnya border-bottom
      dimatikan sehingga sisi bawahnya menggantung. */
@@ -419,12 +468,18 @@ function suratJalanCss() {
 
   /* Empat kotak tanda tangan, masing-masing berbingkai. */
   .sj-sign { margin: 10px 0; padding: 0 8px; }
+  /* Empat kotak berdampingan: tiap sel menggambar atas & kiri, dan
+     sel terakhir menutup sisi kanannya karena tidak ada tetangga. */
   .sj-sign td {
-    width: 25%; border: 1px solid #555; padding: 6px 4px 4px;
+    width: 25%;
+    border-top: var(--sj-line); border-left: var(--sj-line);
+    border-bottom: var(--sj-line);
+    padding: 6px 4px 4px;
     text-align: center; font-size: 8pt; color: #333;
     height: 62px; vertical-align: top;
   }
   /* Label & nama sama-sama rata tengah. */
+  .sj-sign td:last-child { border-right: var(--sj-line); }
   .sj-sign-k { text-align: center; }
   /* Ruang tanda tangan. 34px terlalu sempit untuk tanda tangan basah
      di atas kertas — nama di bawahnya tertindih. */

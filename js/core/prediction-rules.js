@@ -102,9 +102,10 @@ function predictionMatchScore(match, ctx) {
   const m = match || {};
   let skor = 0;
 
-  const kunci = Object.keys(m);
-  for (let i = 0; i < kunci.length; i++) {
-    const k = kunci[i];
+  /* `for...in`, bukan Object.keys(): yang kedua mengalokasikan array
+     kunci pada TIAP pemanggilan — dan fungsi ini dipanggil sekali per
+     aturan, per kartu, tiap papan digambar ulang. */
+  for (const k in m) {
     const diminta = m[k];
     if (diminta == null || diminta === "") continue;
 
@@ -132,6 +133,14 @@ function predictionMatchScore(match, ctx) {
           const b = String(v || "").toLowerCase();
           return !!b && a.includes(b);
         });
+    } else if (typeof punya === "string" && !Array.isArray(diminta)) {
+      /* Jalur cepat: kode pelabuhan, negara, dan carrier sudah huruf
+         besar di kedua sisi. Perbandingan langsung dulu — toUpperCase()
+         mengalokasikan string baru, dan di sini hampir selalu
+         menghasilkan teks yang sama persis dengan asalnya. */
+      cocok =
+        punya === diminta ||
+        punya.toUpperCase() === String(diminta).toUpperCase();
     } else {
       const a = String(punya || "").toUpperCase();
       cocok = pilihan.some((v) => a === String(v).toUpperCase());
@@ -159,11 +168,19 @@ function predictionMatchScore(match, ctx) {
    Kalau skornya seri, yang lebih dulu tertulis yang menang — jadi
    urutan di berkas ini tetap bermakna. */
 function rankPredictionRules(rules, ctx) {
-  return (rules || [])
-    .map((r, i) => ({ r, skor: predictionMatchScore(r.match, ctx), i }))
-    .filter((x) => x.skor >= 0)
-    .sort((a, b) => b.skor - a.skor || a.i - b.i)
-    .map((x) => x.r);
+  /* Satu lintasan, dan hanya yang COCOK yang dialokasikan.
+
+     Bentuk sebelumnya membuat objek pembungkus untuk SELURUH aturan —
+     tiga puluh objek per kartu — lalu membuang hampir semuanya di
+     tahap filter. Yang cocok biasanya cuma dua atau tiga. */
+  const daftar = rules || [];
+  const cocok = [];
+  for (let i = 0; i < daftar.length; i++) {
+    const skor = predictionMatchScore(daftar[i].match, ctx);
+    if (skor >= 0) cocok.push({ r: daftar[i], skor, i });
+  }
+  if (cocok.length > 1) cocok.sort((a, b) => b.skor - a.skor || a.i - b.i);
+  return cocok.map((x) => x.r);
 }
 
 function pickPredictionRule(rules, ctx) {

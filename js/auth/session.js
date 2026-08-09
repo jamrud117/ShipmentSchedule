@@ -235,6 +235,9 @@ async function handleLoginSubmit() {
   }
   setLoginError("");
   setLoginBusy(true);
+  const ingat = !!($("#loginRemember") && $("#loginRemember").checked);
+  simpanRemember(ingat, user.trim());
+
   const hasil = await signIn(user, sandi);
   setLoginBusy(false);
   if (!hasil.ok) {
@@ -283,12 +286,86 @@ $("#btnLogout").addEventListener("click", () => {
 
    Mengembalikan true kalau sudah ada sesi yang sah.
 ------------------------------------------------------------------ */
+/* ==================================================================
+   "INGAT SAYA DI PERANGKAT INI"
+
+   Supabase menyimpan sesi di localStorage, jadi bawaannya pengguna
+   SELALU tetap masuk sampai menekan Keluar — termasuk di komputer
+   bersama. Kotak centang ini yang menentukan apakah itu yang
+   diinginkan.
+
+   Dicentang   : nama pengguna diingat, sesi bertahan seperti biasa.
+   Tidak       : nama pengguna dilupakan, dan sesi berakhir begitu
+                 peramban ditutup.
+
+   Akhir-sesi dideteksi lewat sessionStorage: penandanya hilang saat
+   peramban ditutup tapi bertahan saat tab dimuat ulang. Jadi menyegarkan
+   halaman tidak akan melempar pengguna keluar — hanya menutup
+   peramban yang melakukannya.
+================================================================== */
+const REMEMBER_KEY = "exim.remember";
+const REMEMBER_USER_KEY = "exim.remember.user";
+const SESSION_ALIVE_KEY = "exim.session-alive";
+
+function bacaRemember() {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) !== "0";
+  } catch (e) {
+    return true;
+  }
+}
+
+function simpanRemember(ingat, username) {
+  try {
+    localStorage.setItem(REMEMBER_KEY, ingat ? "1" : "0");
+    if (ingat && username) localStorage.setItem(REMEMBER_USER_KEY, username);
+    else localStorage.removeItem(REMEMBER_USER_KEY);
+  } catch (e) {
+    /* Mode privat memblokir penyimpanan. Login tetap jalan — yang
+       hilang cuma kenyamanannya, dan itu bukan alasan untuk gagal. */
+  }
+}
+
+/* true kalau peramban baru saja dibuka (bukan sekadar tab dimuat ulang). */
+function perambanBaruDibuka() {
+  try {
+    const ada = sessionStorage.getItem(SESSION_ALIVE_KEY);
+    sessionStorage.setItem(SESSION_ALIVE_KEY, "1");
+    return !ada;
+  } catch (e) {
+    return false;
+  }
+}
+
+function siapkanFormRemember() {
+  const cb = document.getElementById("loginRemember");
+  const inp = document.getElementById("loginUsername");
+  if (cb) cb.checked = bacaRemember();
+  if (inp && bacaRemember()) {
+    try {
+      inp.value = localStorage.getItem(REMEMBER_USER_KEY) || "";
+    } catch (e) {}
+  }
+  // Fokus ke kolom yang memang masih perlu diisi
+  const sandi = document.getElementById("loginPassword");
+  if (inp && sandi && inp.value) sandi.focus();
+}
+
 async function initAuth() {
+  /* Sesi yang tidak diminta bertahan dihapus SEBELUM dibaca — kalau
+     tidak, halaman sempat terbuka dulu baru menendang penggunanya. */
+  if (!bacaRemember() && perambanBaruDibuka()) {
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (e) {}
+  }
+
   const { data } = await supabaseClient.auth.getSession();
   const sesi = data && data.session;
 
   if (!sesi) {
     authState.siap = true;
+    siapkanFormRemember();
     showLoginView();
     return false;
   }

@@ -481,6 +481,14 @@ function openBulkModal(action) {
   bulkModal.show();
 }
 
+
+/* Templat mengikuti section yang sedang dibuka — sama dengan yang
+   dipakai Bulk Import itu sendiri. Kolom Import dan Export berbeda,
+   dan templat yang salah mode akan ditolak saat diunggah kembali. */
+$("#btnBulkTemplate")?.addEventListener("click", () => {
+  unduhTemplateBulk(activeMode === "export" ? "export" : "import");
+});
+
 $("#btnBulkExport").addEventListener("click", () => openBulkModal("export"));
 $("#btnBulkImport").addEventListener("click", () => {
   if (!requireEdit()) return;
