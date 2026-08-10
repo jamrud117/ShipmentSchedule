@@ -280,8 +280,19 @@ function buildLaneHtml(s) {
       <div class="port-labels port-labels--multi">
         ${nodes
           .map((nd, i) => {
-            const align =
-              i === 0 ? "start" : i === nodes.length - 1 ? "end" : "center";
+            /* Perataan mengikuti POSISI, bukan urutan simpul.
+
+               Sebelumnya simpul pertama rata kiri, terakhir rata
+               kanan, sisanya rata tengah. Itu benar selama simpul
+               tengah memang di tengah — dan salah begitu ada transit
+               yang jatuh dekat tepi: label rata-tengah menjorok
+               separuh lebarnya keluar kartu.
+
+               Ambangnya 12% / 88%, kira-kira selebar label pada kartu
+               tersempit. Simpul pertama & terakhir tetap kena aturan
+               yang sama karena posisinya memang 0% dan 100%. */
+            const f = fractions[i];
+            const align = f <= 0.12 ? "start" : f >= 0.88 ? "end" : "center";
             const top = labelRows[i] * 36;
             return `<div class="p p--node p--${align}" style="left:${fractions[i] * 100}%; top:${top}px">
               <span class="p-term" title="${escapeAttr(dispVal(nd.terminal))}">${escapeHtml(dispVal(nd.terminal))}</span>

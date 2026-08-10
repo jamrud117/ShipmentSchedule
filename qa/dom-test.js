@@ -1296,25 +1296,143 @@ t("alamat buyer yang dikenal terisi otomatis", () => {
 t("buyer tak dikenal -> kosong, bukan ditebak", () =>
   eq(w.ciplAlamatBuyer("PT ENTAH SIAPA"), ""));
 
-console.log("— BM + PDRI TIDAK REALTIME —");
-t("mengetik tidak mengubah BM + PDRI", () => {
-  $("#calcBMPDRI").value = "1.000.000";
-  w.recalcCustoms();                       // seperti saat mengetik
-  eq($("#calcBMPDRI").value, "1.000.000");
+console.log("— PPH 0 HARUS BERTAHAN —");
+t("nol ditulis apa adanya, tidak jadi kotak kosong", () => {
+  /* formatNumberValue(0) mengembalikan "" — dan kotak kosong dianggap
+     "belum diisi", lalu diisi ulang otomatis. Itu sebabnya PPH yang
+     disetel 0 kembali terisi tiap jadwal dibuka. */
+  eq(w.nilaiPungutan(0), "0");
+  eq(w.formatNumberValue(0), "");          // pembanding: perilaku umum
+  eq(w.nilaiPungutan(null), "");           // belum pernah diisi -> kosong
+  eq(w.nilaiPungutan(undefined), "");
+  eq(w.nilaiPungutan(11966527), w.formatNumberValue(11966527));
 });
-t("dihitung ulang hanya saat diminta", () => {
-  $("#calcBMPDRI").value = "1.000.000";
-  w.recalcCustoms({ hitungBmPdri: true });
-  if ($("#calcBMPDRI").value === "1.000.000")
-    throw new Error("tidak dihitung ulang saat form dibuka");
+t("kotak berisi 0 dianggap MANUAL, bukan belum diisi", () => {
+  $("#fPPH").value = "0";
+  $("#fPPN").value = "";
+  w.initAutoDutyFlags();
+  eq($("#fPPH").dataset.auto, "0", "PPH 0 harus manual:");
+  eq($("#fPPN").dataset.auto, "1", "PPN kosong harus otomatis:");
 });
-t("izin hitung tidak tersisa untuk putaran berikutnya", () => {
-  w.recalcCustoms({ hitungBmPdri: true });
-  const sesudah = $("#calcBMPDRI").value;
-  $("#calcBMPDRI").value = "9.999";
+t("PPH 0 tidak ditimpa hitungan otomatis", () => {
+  $("#fPPH").value = "0";
+  w.initAutoDutyFlags();
   w.recalcCustoms();
-  eq($("#calcBMPDRI").value, "9.999");
-  if (sesudah === undefined) throw new Error("nilai tidak terbaca");
+  eq($("#fPPH").value, "0");
+});
+
+console.log("— PDRI: SEKETIKA & PENJUMLAHAN BIASA —");
+function ketikAngka(sel, teks) {
+  const el = $(sel);
+  el.value = "";
+  for (const c of teks) {
+    el.value += c;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+  }
+  return el.value;
+}
+t("mengetik sungguhan menghasilkan angka yang benar", () => {
+  /* Saat mengetik digit terakhir, isi kotak sesaat "2,6000" — belum
+     dinormalkan pemformat. Pengurai serbaguna melihat empat digit
+     setelah koma dan menyimpulkan koma itu DESIMAL: 2,6.
+
+     Pemformat memang membetulkannya sesaat kemudian, tapi ia terpasang
+     di document sementara penghitung terpasang di kotaknya sendiri —
+     dan pendengar elemen selalu berjalan lebih dulu. */
+  $("#fIncoterm").value = "CIF";
+  ketikAngka("#fBM", "1000");
+  ketikAngka("#fPPN", "25000");
+  ketikAngka("#fPPH", "26000");
+  eq($("#fPPH").value, "26,000");
+  eq(w.parseLooseNumber($("#calcPDRI").value), 52000);
+});
+t("angka tetap benar di TIAP ketukan, bukan cuma di akhir", () => {
+  $("#fBM").value = "1,000"; $("#fPPN").value = "25,000";
+  const el = $("#fPPH");
+  el.value = "";
+  const harap = [2, 26, 260, 2600, 26000];
+  "26000".split("").forEach((c, i) => {
+    el.value += c;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(w.parseLooseNumber($("#calcPDRI").value), 1000 + 25000 + harap[i],
+       'setelah mengetik "' + el.value + '":');
+  });
+});
+t("kotak angka dibaca dengan aturan tetap, bukan tebakan", () => {
+  $("#fBM").value = "2,6000";        // teks transisi saat mengetik
+  eq(w.nilaiKotakAngka("#fBM"), 26000);
+  $("#fBM").value = "26,002.6";      // sudah rapi, ada desimal
+  eq(w.nilaiKotakAngka("#fBM"), 26002.6);
+  $("#fBM").value = "";
+  eq(w.nilaiKotakAngka("#fBM"), 0);
+});
+t("PDRI = Bea Masuk + PPN + PPH", () => {
+  const c = w.computeCustoms({ items: [], bm: 24625000, ppn: 56883539, pph: 11966527 });
+  eq(c.bmPdri, 93475066);
+});
+t("Bea Masuk 0 TIDAK menolkan PDRI", () => {
+  /* Kiriman berfasilitas SKB: bea masuknya nol, tapi PPN & PPH tetap
+     terutang. Aturan lama menampilkan 0 padahal ada yang disetor. */
+  const c = w.computeCustoms({ items: [], bm: 0, ppn: 56883539, pph: 11966527 });
+  eq(c.bmPdri, 68850066);
+});
+t("PPH 0 ikut terhitung apa adanya", () => {
+  const c = w.computeCustoms({ items: [], bm: 24625000, ppn: 56883539, pph: 0 });
+  eq(c.bmPdri, 81508539);
+});
+t("dihitung ulang SETIAP recalc, tanpa syarat", () => {
+  $("#calcPDRI").value = "1.000.000";
+  w.recalcCustoms();
+  if ($("#calcPDRI").value === "1.000.000")
+    throw new Error("tidak dihitung seketika");
+});
+t("mengetik di kolom pungutan langsung menggerakkannya", () => {
+  ["fBM", "fPPN", "fPPH"].forEach((id) => {
+    $("#calcPDRI").value = "7.777";
+    $("#" + id).dispatchEvent(new w.Event("input"));
+    if ($("#calcPDRI").value === "7.777")
+      throw new Error(id + ": mengetik tidak memicu perhitungan");
+  });
+});
+t("label di layar berbunyi PDRI, bukan BM + PDRI", () => {
+  const html = require("fs").readFileSync(__dirname + "/../index.html", "utf8");
+  if (/BM \+ PDRI/.test(html)) throw new Error("masih ada label BM + PDRI");
+  if (!/>PDRI \(Rp\)</.test(html)) throw new Error("label PDRI tidak ditemukan");
+  if (/calcBMPDRI/.test(html)) throw new Error("id lama masih dipakai");
+});
+
+console.log("— LABEL RUTE TIDAK MELUBER KELUAR KARTU —");
+function laneMulti(stops) {
+  return w.buildLaneHtml({ mode: "import", transport: "udara",
+    origin: "ICN", destination: "CGK", etd: "2026-08-13", eta: "2026-08-14",
+    routeType: "transit", routeStops: stops, docProgress: {} });
+}
+t("transit dekat tepi kiri dirata KIRI, bukan tengah", () => {
+  /* Label rata-tengah menjorok separuh lebarnya ke kiri; pada simpul
+     yang jatuh di ~0% separuh itu keluar dari kartu. */
+  const h = laneMulti([{ terminal: "TSN", date: "2026-08-13" }]);
+  const label = h.match(/<div class="p p--node p--(\w+)"[^>]*left:([\d.]+)%/g) || [];
+  eq(label.length >= 2, true, "label simpul tidak tergambar:");
+  [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)].forEach((m) => {
+    const [, align, kiri] = m;
+    const f = Number(kiri);
+    if (f <= 12 && align !== "start")
+      throw new Error(`simpul di ${f}% dirata ${align} — akan meluber ke kiri`);
+    if (f >= 88 && align !== "end")
+      throw new Error(`simpul di ${f}% dirata ${align} — akan meluber ke kanan`);
+  });
+});
+t("simpul di tengah tetap rata tengah", () => {
+  const h = laneMulti([{ terminal: "SIN", date: "2026-08-13" }]);
+  const tengah = [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)]
+    .filter((m) => Number(m[2]) > 12 && Number(m[2]) < 88);
+  tengah.forEach((m) => eq(m[1], "center", `simpul di ${m[2]}%:`));
+});
+t("ujung rute tetap rata kiri & kanan", () => {
+  const h = laneMulti([{ terminal: "SIN", date: "2026-08-13" }]);
+  const semua = [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)];
+  eq(semua[0][1], "start");
+  eq(semua[semua.length - 1][1], "end");
 });
 
 console.log("— TIDAK ADA PENANDA MELEWATI ETA —");

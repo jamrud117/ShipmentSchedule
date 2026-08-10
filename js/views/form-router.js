@@ -145,6 +145,15 @@ window.addEventListener("hashchange", router);
 
 // "12 BOX" <-> kotak angka + kotak satuan.
 /* Satu isian: angka & satuan ditulis apa adanya ("4 BOX"). */
+/* Nilai pungutan untuk ditampilkan di form. Berbeda dari
+   formatNumberValue() hanya pada satu hal: nol tetap ditulis "0".
+
+   Jadwal BARU tetap mulai kosong — nilainya undefined/null, bukan 0. */
+function nilaiPungutan(v) {
+  if (v === 0) return "0";
+  return formatNumberValue(v);
+}
+
 function setPackageFields(raw) {
   $("#fPackage").value = String(raw || "").trim();
   autoSizePackageFooter();
@@ -238,9 +247,19 @@ function renderFormPage(id) {
     $("#fInsurance").value = formatNumberValue(s.insurance);
     $("#fNdpbm").value = formatNumberValue(s.ndpbm);
     $("#fTarif").value = formatNumberValue(s.tarif);
-    $("#fBM").value = formatNumberValue(s.bm);
-    $("#fPPN").value = formatNumberValue(s.ppn);
-    $("#fPPH").value = formatNumberValue(s.pph);
+    /* NOL DITULIS APA ADANYA, tidak dikosongkan.
+
+       formatNumberValue(0) mengembalikan string kosong — masuk akal
+       untuk kolom biasa, fatal untuk ketiga kolom ini: kotak kosong
+       berarti "belum diisi", dan yang belum diisi akan diisi ulang
+       otomatis. Akibatnya PPH yang sengaja disetel 0 kembali terisi
+       tiap jadwal dibuka.
+
+       Nol yang disengaja dan kotak yang belum pernah disentuh harus
+       bisa dibedakan; hanya yang kedua yang boleh diisi mesin. */
+    $("#fBM").value = nilaiPungutan(s.bm);
+    $("#fPPN").value = nilaiPungutan(s.ppn);
+    $("#fPPH").value = nilaiPungutan(s.pph);
     $("#fPI").value = s.pi || "";
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
@@ -309,10 +328,7 @@ function renderFormPage(id) {
   renderRouteStopsUI();
   /* Urutannya penting */
   initAutoDutyFlags();
-  /* Satu-satunya tempat BM + PDRI dihitung: saat form dibuka, dari data
-     yang SUDAH tersimpan. Selama diketik ia dibiarkan apa adanya —
-     lihat catatan di recalcCustoms(). */
-  recalcCustoms({ hitungBmPdri: true });
+  recalcCustoms();
   syncAffixState();
   syncFormValidity();
   showFormView();

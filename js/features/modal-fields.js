@@ -74,30 +74,39 @@ function initAutoDutyFlags() {
   },
 );
 
-/* BM + PDRI TIDAK dihitung ulang saat mengetik.
+/* NILAI KOTAK ANGKA, dibaca dengan aturan tetap: pemisah ribuan
+   dibuang, titik desimal dipertahankan.
 
-   Angkanya berpindah-pindah tiap ketukan tombol — 0, lalu 4 juta, lalu
-   40 juta — sementara pengguna baru mengetik separuh nilai barang. Yang
-   terbaca bukan hasil hitungan, melainkan tebakan yang berubah-ubah,
-   dan orang berhenti mempercayainya.
+   parseLooseNumber() sengaja serbaguna — ia menebak apakah koma itu
+   pemisah ribuan atau desimal dari jumlah digit sesudahnya. Tebakan
+   itu benar untuk teks yang sudah rapi, tapi kotak ini dibaca SAAT
+   DIKETIK, ketika isinya sesaat belum dinormalkan:
 
-   Yang dihitung ulang seketika tetap seluruhnya: total nilai, CIF/FOB,
-   PPN, PPH. Hanya SATU kotak ini yang menunggu, karena hanya ini yang
-   dipakai sebagai angka setoran.
+     ketik "0" pada "2,600"  ->  isi jadi "2,6000"
+     empat digit sesudah koma -> koma dianggap desimal -> 2,6
 
-   Diperbarui saat: form dibuka (nilai tersimpan) dan setelah jadwal
-   disimpan. */
-let bmPdriBolehDihitung = false;
+   Itulah PDRI yang tiba-tiba jadi 26.002,6.
+
+   Pemformat hidup memang membetulkan isinya sesaat kemudian, tapi ia
+   terpasang di `document` sementara penghitung ini terpasang di
+   kotaknya sendiri — dan pendengar elemen SELALU berjalan lebih dulu
+   daripada pendengar document. Jadi penghitung tidak pernah melihat
+   teks yang sudah rapi, berapa pun urutan berkasnya diatur. */
+function nilaiKotakAngka(sel) {
+  const el = $(sel);
+  if (!el) return 0;
+  const n = Number(String(el.value || "").replace(/[^\d.-]/g, ""));
+  return isFinite(n) ? n : 0;
+}
 
 function recalcCustoms(opsi) {
-  if (opsi && opsi.hitungBmPdri) bmPdriBolehDihitung = true;
   const tmp = {
     items: draftItems,
     incoterm: $("#fIncoterm").value,
-    ndpbm: excelNum($("#fNdpbm").value),
-    bm: excelNum($("#fBM").value),
-    ppn: excelNum($("#fPPN").value),
-    pph: excelNum($("#fPPH").value),
+    ndpbm: nilaiKotakAngka("#fNdpbm"),
+    bm: nilaiKotakAngka("#fBM"),
+    ppn: nilaiKotakAngka("#fPPN"),
+    pph: nilaiKotakAngka("#fPPH"),
   };
   const calc0 = computeCustoms(tmp);
 
@@ -112,9 +121,9 @@ function recalcCustoms(opsi) {
     elPph.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.025)) : "";
   }
 
-  // Dihitung ulang memakai PPN/PPH terbaru supaya BM + PDRI ikut benar pada putaran yang sama
-  tmp.ppn = excelNum(elPpn.value);
-  tmp.pph = excelNum(elPph.value);
+  // Dihitung ulang memakai PPN/PPH terbaru supaya PDRI ikut benar pada putaran yang sama
+  tmp.ppn = nilaiKotakAngka("#fPPN");
+  tmp.pph = nilaiKotakAngka("#fPPH");
   const calc = computeCustoms(tmp);
 
   $("#calcTotalUSD").textContent = fmtUSD(calc.totalUSD);
@@ -138,10 +147,7 @@ function recalcCustoms(opsi) {
   }
 
   // Tanpa awalan "Rp" di dalam nilainya
-  if (bmPdriBolehDihitung) {
-    $("#calcBMPDRI").value = formatNumberValue(calc.bmPdri);
-    bmPdriBolehDihitung = false;
-  }
+  $("#calcPDRI").value = formatNumberValue(calc.bmPdri);
   syncAffixState();
 
   $("#footTotalQty").textContent = fmtQtyBySatuan(calc.qtyBySatuan);

@@ -75,7 +75,13 @@ function computeCustoms(shipmentLike) {
   const bm = Number(shipmentLike.bm) || 0;
   const ppn = Number(shipmentLike.ppn) || 0;
   const pph = Number(shipmentLike.pph) || 0;
-  const bmPdri = bm !== 0 ? bm + ppn + pph : 0;
+  /* PDRI = Bea Masuk + PPN + PPH. Penjumlahan biasa, tanpa syarat.
+
+     Sebelumnya ada aturan "kalau Bea Masuk 0 maka 0" — itu membuat
+     kiriman berfasilitas SKB, yang bea masuknya memang nol tapi PPN
+     dan PPH-nya tetap terutang, menampilkan 0 padahal ada yang harus
+     disetor. */
+  const bmPdri = bm + ppn + pph;
 
   return { ...totals, cifUsd, cifRupiah, fobUsd, fobRupiah, bmPdri };
 }
