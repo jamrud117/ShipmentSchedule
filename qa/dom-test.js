@@ -1401,6 +1401,222 @@ t("label di layar berbunyi PDRI, bukan BM + PDRI", () => {
   if (/calcBMPDRI/.test(html)) throw new Error("id lama masih dipakai");
 });
 
+console.log("— SERET & LEPAS BERKAS IMPOR —");
+t("menyeret berkas menyalakan sorotan", () => {
+  /* Teks di layar menjanjikan "atau seret ke sini" dan CSS
+     .is-dragover sudah ada — tapi tak ada satu pun pendengar yang
+     memasangnya. Janji yang tidak ditepati membuat orang berhenti
+     mempercayai petunjuk lain di layar yang sama. */
+  const zona = $("#importZone");
+  if (!zona) throw new Error("zona impor tidak ada");
+  zona.dispatchEvent(new w.Event("dragover", { bubbles: true }));
+  eq(zona.classList.contains("is-dragover"), true);
+  zona.dispatchEvent(new w.Event("dragleave", { bubbles: true }));
+  eq(zona.classList.contains("is-dragover"), false);
+});
+t("sorotan tidak berkedip saat kursor melintasi elemen anak", () => {
+  const zona = $("#importZone");
+  const anak = zona.querySelector(".import-zone-copy") || zona.firstElementChild;
+  zona.dispatchEvent(new w.Event("dragover", { bubbles: true }));
+  const ev = new w.Event("dragleave", { bubbles: true });
+  Object.defineProperty(ev, "relatedTarget", { value: anak });
+  zona.dispatchEvent(ev);
+  eq(zona.classList.contains("is-dragover"), true, "sorotan padam padahal masih di dalam:");
+  zona.classList.remove("is-dragover");
+});
+t("teks janji & penangannya sama-sama ada", () => {
+  const html = require("fs").readFileSync(__dirname + "/../index.html", "utf8");
+  const janji = /seret ke sini/i.test(html);
+  const src = require("fs").readFileSync(__dirname + "/../js/import/dispatch.js", "utf8");
+  const ada = /addEventListener\("drop"/.test(src);
+  if (janji !== ada)
+    throw new Error(janji ? "dijanjikan tapi tidak ada penangannya" : "penanganan ada tapi tidak dijanjikan");
+});
+t("berkas dipilih & dilepas lewat jalur yang sama", () => {
+  const src = require("fs").readFileSync(__dirname + "/../js/import/dispatch.js", "utf8");
+  eq((src.match(/prosesBerkasImport\(/g) || []).length >= 3, true,
+     "satu penangan dipakai kedua jalur:");
+});
+
+console.log("— BILAH SARINGAN DI LAYAR SEMPIT —");
+const cssDash = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+/* Komentar dibuang: mencari nama properti di dalamnya menghasilkan
+   temuan palsu — catatan yang menjelaskan kenapa sebuah aturan DIHAPUS
+   tetap menyebut nama aturannya. */
+const cssDashBersih = cssDash.replace(/\/\*[\s\S]*?\*\//g, "");
+const blokMedia = (lebar) => {
+  const i = cssDash.indexOf("@media (max-width: " + lebar + "px)");
+  if (i < 0) throw new Error("media query " + lebar + "px tidak ada");
+  let dalam = 0, j = cssDash.indexOf("{", i);
+  for (let k = j; k < cssDash.length; k++) {
+    if (cssDash[k] === "{") dalam++;
+    else if (cssDash[k] === "}") { dalam--; if (!dalam) return cssDash.slice(i, k); }
+  }
+  return "";
+};
+t("chip saringan membungkus, tidak disembunyikan di balik gulir", () => {
+  /* Gulir mendatar di sini mustahil dipakai: scrollbar-nya
+     disembunyikan global di base.css, jadi tak ada penanda maupun cara
+     menggeser dengan tetikus biasa. */
+  const m = blokMedia(991);
+  if (!/\.preset-row \{[^}]*flex: 1 1 auto/.test(m))
+    throw new Error("chip tidak mengambil sisa lebar barisnya");
+  if (!/\.preset-row \{[^}]*flex-wrap: wrap/.test(m))
+    throw new Error("chip tidak boleh turun ke baris berikutnya");
+  if (/overflow-x:\s*auto/.test(cssDashBersih))
+    throw new Error("masih ada gulir mendatar yang scrollbar-nya tersembunyi");
+});
+t("PENJAGA: gulir tersembunyi tidak dipakai untuk isi yang bisa diklik", () => {
+  /* base.css menyembunyikan scrollbar untuk beberapa wadah. Untuk
+     wadah berisi TOMBOL, itu berarti sebagian tombol tak terjangkau. */
+  const base = require("fs").readFileSync(__dirname + "/../css/base.css", "utf8");
+  const i = base.indexOf("scrollbar-width: none");
+  const daftar = base.slice(base.lastIndexOf("*/", i), i);
+  if (/\.preset-row/.test(daftar) && /overflow-x:\s*auto/.test(cssDashBersih))
+    throw new Error("preset-row bergulir sekaligus scrollbar-nya disembunyikan");
+});
+t("urutan baris pencarian: tab, cari, status", () => {
+  /* Urutan DOM menentukan urutan tampil. Saringan status harus SESUDAH
+     kotak cari — kalau tidak, ia muncul di kiri dan susunannya berbeda
+     dari yang dirancang. */
+  const baris = $(".controlbar-row--filters");
+  const anak = [...baris.children];
+  const idx = (sel) => anak.findIndex((el) => el.matches(sel) || el.querySelector(sel));
+  const tab = idx(".mode-tabs, [data-mode]");
+  const cari = idx(".search-box");
+  const status = idx("#filterStatus");
+  if (!(tab < cari && cari < status))
+    throw new Error(`urutan salah — tab:${tab} cari:${cari} status:${status}`);
+});
+t("saringan status sebaris dengan kotak cari", () => {
+  const sel = $("#filterStatus");
+  const baris = sel.closest(".controlbar-row");
+  if (!baris.classList.contains("controlbar-row--filters"))
+    throw new Error("saringan status tidak di baris pencarian");
+  if (!baris.querySelector(".search-box"))
+    throw new Error("tidak sebaris dengan kotak cari");
+  if (sel.closest(".controlbar-tail"))
+    throw new Error("saringan status ikut kelompok tombol");
+});
+t("tombol aksi sebaris dengan chip", () => {
+  const tail = $(".controlbar-tail");
+  const baris = tail.closest(".controlbar-row");
+  if (!baris.querySelector(".preset-row"))
+    throw new Error("kelompok tombol tidak sebaris dengan chip");
+  if (baris.querySelector("#filterStatus"))
+    throw new Error("saringan status ikut turun ke baris chip");
+});
+t("kotak cari didorong ke kanan bersama saringan status", () => {
+  /* Sakelar Import/Export tetap di kiri; keduanya di kanan. */
+  const css = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+  const i = css.indexOf(".search-box {");
+  const blok = css.slice(i, css.indexOf("}", i));
+  if (!/margin-left: auto/.test(blok))
+    throw new Error("kotak cari tidak didorong ke kanan");
+});
+t("tombol bersihkan pencarian terpusat pada inputnya", () => {
+  /* Sebagai inline-block, input menyisakan celah baseline sehingga
+     pembungkusnya lebih tinggi — dan ✕ yang dipusatkan pada
+     pembungkus turun beberapa piksel dari tengah kotak. */
+  const css = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+  const i = css.indexOf('.search-box input[type="text"] {');
+  const blok = css.slice(i, css.indexOf("}", i));
+  if (!/display: block/.test(blok))
+    throw new Error("input masih inline-block, ✕ akan turun dari tengah");
+});
+t("PENJAGA: nowrap & lebar 100% tidak boleh bertemu", () => {
+  /* Dengan flex-wrap: nowrap, item selebar 100% tidak bisa turun ke
+     baris berikutnya — ia menindih tetangganya. Itu yang membuat
+     tombol menumpuk di atas chip pada tampilan mobile. */
+  const bersih = cssDash.replace(/\/\*[\s\S]*?\*\//g, "");
+  const punya = (blok, sel, prop) => {
+    const i = blok.indexOf(sel + " {");
+    if (i < 0) return false;
+    return new RegExp(prop).test(blok.slice(i, blok.indexOf("}", i)));
+  };
+  [767, 991].forEach((lebar) => {
+    const m = blokMedia(lebar).replace(/\/\*[\s\S]*?\*\//g, "");
+    if (!punya(m, ".controlbar-tail", "width: 100%")) return;
+    /* Kelompok kanan kini di baris pencarian. Kalau ia selebar penuh,
+       baris ITU yang wajib boleh membungkus — kalau tidak, ia menindih
+       kotak cari, persis seperti dulu menindih chip. */
+    if (punya(m, ".controlbar-row--filters", "flex-wrap: nowrap"))
+      throw new Error(lebar + "px: kelompok kanan 100% tapi baris pencarian nowrap");
+    if (punya(m, ".controlbar-row--views", "flex-wrap: nowrap"))
+      throw new Error(lebar + "px: baris chip dipaksa nowrap");
+  });
+  if (!bersih) throw new Error("css kosong");
+});
+t("target sentuh di mobile minimal 44px", () => {
+  /* 33px cukup untuk kursor, sempit untuk ujung jari. */
+  const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
+  const i = m.indexOf("min-height: 44px");
+  if (i < 0) throw new Error("tidak ada aturan target sentuh");
+  const selektor = m.slice(m.lastIndexOf("}", i) + 1, m.indexOf("{", m.lastIndexOf("}", i)));
+  [".chip", ".icon-btn", ".btn-more"].forEach((s) => {
+    if (!selektor.includes(s)) throw new Error(s + " tidak ikut dinaikkan");
+  });
+});
+t("kotak cari TIDAK penuh di layar sedang", () => {
+  /* Di lebar split-window semuanya masih muat sebaris. Kotak cari
+     selebar 100% mendorong saringan status & tombol turun, lalu satu
+     baris terpakai hanya untuk tiga kendali kecil. */
+  const m = blokMedia(991).replace(/\/\*[\s\S]*?\*\//g, "");
+  const i = m.indexOf(".search-box {");
+  if (i < 0) throw new Error("aturan kotak cari hilang");
+  if (/flex: 1 1 100%/.test(m.slice(i, m.indexOf("}", i))))
+    throw new Error("kotak cari masih dipenuhkan di layar sedang");
+});
+t("di mobile tiap kendali mendapat barisnya sendiri", () => {
+  /* Menjejalkan dua kendali dalam satu baris di lebar ini selalu
+     berakhir sempit di kedua-duanya. */
+  const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
+  [".search-box", ".preset-row", ".mode-tabs", ".controlbar-tail"].forEach((sel) => {
+    const i = m.indexOf(sel);
+    if (i < 0) throw new Error(sel + " tidak diatur di mobile");
+    const blok = m.slice(i, m.indexOf("}", i));
+    if (!/(flex: 1 1 100%|width: 100%)/.test(blok))
+      throw new Error(sel + " tidak mengambil baris penuh");
+  });
+});
+t("di mobile kelompok kanan turun ke bawah kotak cari", () => {
+  const m = blokMedia(767);
+  if (!/\.controlbar-tail \{[^}]*width: 100%/.test(m))
+    throw new Error("kelompok kanan tidak melebar penuh di mobile");
+});
+t("susunan split-window sama dengan layar besar", () => {
+  /* Tidak ada elemen yang berpindah tempat — orang yang bolak-balik
+     antara layar lebar dan sempit tidak perlu mencari ulang. */
+  const m = blokMedia(991).replace(/\/\*[\s\S]*?\*\//g, "");
+  ["order:", "display: contents", "position: absolute"].forEach((p) => {
+    if (m.includes(p))
+      throw new Error("susunan diubah lewat " + p + " — elemen berpindah tempat");
+  });
+  if (!/#btnAdd #lblAddBtn \{[^}]*display: none/.test(m))
+    throw new Error("label tombol tambah masih tampil");
+});
+t("tombol Tambah Jadwal jadi ikon saja", () => {
+  const m = blokMedia(991);
+  if (!/#btnAdd #lblAddBtn \{[^}]*display: none/.test(m))
+    throw new Error("label tombol masih tampil di layar sempit");
+});
+t("tombol ikon tidak dilebarkan lagi di layar terkecil", () => {
+  const m = blokMedia(767);
+  if (/\.controlbar-tail \.btn-primary-navy \{[^}]*flex: 1;/.test(m))
+    throw new Error("tombol ikon melar setengah layar");
+});
+t("tooltip tombol ikut berpindah buku", () => {
+  tulis("activeMode", "import");
+  w.render();
+  const impor = $("#btnAdd").title;
+  tulis("activeMode", "export");
+  w.render();
+  const ekspor = $("#btnAdd").title;
+  tulis("activeMode", "import");
+  if (!impor || !ekspor) throw new Error("tooltip kosong");
+  if (impor === ekspor) throw new Error("tooltip tidak berubah: " + impor);
+});
+
 console.log("— LABEL RUTE TIDAK MELUBER KELUAR KARTU —");
 function laneMulti(stops) {
   return w.buildLaneHtml({ mode: "import", transport: "udara",

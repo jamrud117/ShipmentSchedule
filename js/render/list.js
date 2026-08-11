@@ -298,6 +298,9 @@ function applyModeLabels() {
   document.body.classList.toggle("mode-export", activeMode === "export");
   document.body.classList.toggle("mode-import", activeMode !== "export");
   $("#lblAddBtn").textContent = lbl.addBtn;
+  /* Tooltip ikut berubah: di layar sempit labelnya disembunyikan dan
+     tooltip jadi satu-satunya keterangan tombol itu. */
+  $("#btnAdd").title = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
   // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog konfirmasi
   $("#lblDeleteAll").textContent =
