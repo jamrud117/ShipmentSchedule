@@ -127,9 +127,54 @@ function combineCiplPair(results) {
   };
 }
 
+/* SERET & LEPAS BERKAS.
+
+   Teks di layar sudah menjanjikannya ("atau seret ke sini") dan CSS
+   .is-dragover sudah ada — tapi tidak ada satu pun pendengar yang
+   memasangnya. Janji yang tidak ditepati lebih buruk daripada tidak
+   dijanjikan: orang mencoba sekali, gagal, lalu berhenti percaya pada
+   petunjuk lain di layar yang sama.
+
+   Berkas yang dilepas diproses lewat jalur yang sama persis dengan
+   yang dipilih lewat tombol — satu penangan, satu perilaku. */
+const importZone = $("#importZone");
+if (importZone) {
+  const tahan = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  ["dragenter", "dragover"].forEach((ev) =>
+    importZone.addEventListener(ev, (e) => {
+      tahan(e);
+      importZone.classList.add("is-dragover");
+    }),
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    importZone.addEventListener(ev, (e) => {
+      tahan(e);
+      /* dragleave juga menyala saat kursor melintas ke elemen ANAK.
+         Tanpa penjaga ini sorotannya berkedip-kedip saat menyeret. */
+      if (ev === "dragleave" && importZone.contains(e.relatedTarget)) return;
+      importZone.classList.remove("is-dragover");
+    }),
+  );
+  importZone.addEventListener("drop", (e) => {
+    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+    if (files.length) prosesBerkasImport(files);
+  });
+}
+
 $("#fileImportExcel").addEventListener("change", async (e) => {
   const files = Array.from(e.target.files || []);
   if (!files.length) return;
+  await prosesBerkasImport(files);
+});
+
+async function prosesBerkasImport(files) {
+  /* Kotak berkas dikosongkan lebih dulu: tanpa ini, memilih berkas
+     yang SAMA dua kali tidak memicu apa-apa karena nilainya tak
+     berubah. */
+  $("#fileImportExcel").value = "";
   const btn = $("#btnImportExcel");
   const originalHtml = btn.innerHTML;
   btn.classList.add("is-loading");
@@ -179,4 +224,4 @@ $("#fileImportExcel").addEventListener("change", async (e) => {
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }
-});
+}

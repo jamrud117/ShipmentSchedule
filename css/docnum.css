@@ -131,27 +131,6 @@
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 767.98px) {
-  .docnum-shell {
-    grid-template-columns: 1fr;
-  }
-  .docnum-tabs {
-    flex-direction: row;
-    overflow-x: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-  .docnum-tab {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    min-width: 120px;
-  }
-  .docnum-tab-text small {
-    display: none;
-  }
-}
-
 /* PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat */
 
 /* Tanda isian wajib di label. */
@@ -240,6 +219,24 @@
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
+/* TIDAK ADA YANG DIBUNGKUS KE BARIS BERIKUTNYA.
+
+   Wadahnya sudah bergulir mendatar (.docnum-history-wrap). Selama
+   tabelnya boleh melebar melewati wadah, membungkus isi sel tidak
+   menghemat apa pun — ia hanya memindahkan kesempitan dari sisi kanan
+   ke bawah, dan "11-08-2026" pecah jadi "11-08-" dan "2026".
+
+   Tanggal yang terbaca dua baris bukan sekadar jelek: nomor dokumen
+   terbit berurutan menurut tanggal, dan yang membacanya sedang
+   mencocokkan urutan itu.
+
+   Konsekuensinya lebar minimum tabel jadi lebih besar daripada 720px
+   pada isi yang panjang — itu memang maksudnya. Yang bergeser
+   tabelnya, bukan isinya. */
+.docnum-table th,
+.docnum-table td {
+  white-space: nowrap;
+}
 .docnum-table tr:last-child td {
   border-bottom: none;
 }
@@ -271,8 +268,14 @@
   animation: spin-import 0.9s linear infinite;
 }
 
-/* Halaman No. Dokumen di layar sempit */
-@media (max-width: 767.98px) {
+/* Halaman No. Dokumen di layar sempit.
+
+   Ambangnya 1199px, bukan 768px. Di lebar split-window sidebar 300px
+   masih berdiri dan menyisakan sekitar 600px untuk form — sementara
+   barisnya memakai kolom Bootstrap yang tetap terbagi empat sejak
+   768px. Hasilnya tiap isian tinggal seperempat dari 600px: labelnya
+   masih terbaca, isinya terpotong. */
+@media (max-width: 1199px) {
   .docnum-shell {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -287,6 +290,21 @@
   .docnum-tabs::-webkit-scrollbar {
     display: none;
   }
+
+  /* Kolom Bootstrap dilepas: col-md-* terbagi empat sejak 768px tanpa
+     memperhatikan lebar wadahnya. Diganti dasar lebar minimum, jadi
+     jumlah kolom per baris menyesuaikan ruang yang benar-benar ada. */
+  .docnum-panel [class*="col-md-"],
+  .docnum-panel [class*="col-lg-"] {
+    flex: 1 1 200px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  /* Isian yang panjang isinya mengambil satu baris penuh. */
+  .docnum-panel .col-12,
+  .docnum-panel [class*="col-md-"]:has(textarea) {
+    flex: 1 1 100%;
+  }
   .docnum-tab {
     flex: 0 0 auto;
     min-width: 0;
@@ -298,6 +316,56 @@
   .page-docnum-body {
     padding: var(--sp-4) 0 var(--sp-8);
   }
+
+  /* ---- Tabel riwayat: ukurannya diperkecil, kolomnya tetap ----
+     Lebar minimum 720px membuatnya selalu bergulir di sini. Yang
+     diperkecil huruf, jarak sel, dan tombol — bukan jumlah kolom,
+     karena tabel yang dipaksa masuk akan memecah nomor dokumen jadi
+     beberapa baris dan justru lebih sulit dibaca. */
+
+  .docnum-table {
+    min-width: 600px;
+    font-size: var(--t-sm);
+  }
+  .docnum-table th,
+  .docnum-table td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .docnum-table .dn-num {
+    font-size: var(--t-sm);
+  }
+  /* Tombol aksi dirapatkan; ukurannya tetap cukup untuk diklik. */
+  .docnum-table .icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+  /* Kolom aksi berdiri sendiri, tidak menumpang di atas kolom
+     Customer.
+
+     Sebelumnya sel tombol tidak punya lebar sendiri, jadi kolom
+     Customer memakai seluruh sisa lebar dan tombolnya tergambar di
+     atas teksnya. */
+  .docnum-table td:last-child,
+  .docnum-table th:last-child {
+    white-space: nowrap;
+    width: 1%;
+    text-align: right;
+    padding-right: 10px;
+  }
+  /* Tombolnya 30px di sini, jadi kolomnya boleh lebih sempit. */
+  .docnum-table td.dn-act,
+  .docnum-table th.dn-act {
+    min-width: 186px;
+  }
+  /* Nama customer TIDAK lagi dipotong dengan elipsis.
+
+     Pemotongan itu dulu jalan keluar dari tabel yang diremas: kolomnya
+     dipatok 190px supaya tombol aksi tidak tergambar di atas tulisan.
+     Sekarang tabelnya digeser, bukan diremas — dan "DYNAMIC DESIGN
+     CO., LTD." yang terbaca "DYNAMIC DESIGN C…" menghilangkan
+     satu-satunya keterangan yang membedakan baris. */
 }
 
 /* Daftar isian pada kotak Detail Pengajuan Nomor */
@@ -380,11 +448,19 @@
 .docnum-table {
   min-width: 720px;
 }
-/* Kolom aksi tidak boleh menyusut — tombolnya berukuran tetap. */
+
+/* Kolom aksi tidak boleh menyusut — tombolnya berukuran tetap.
+
+   Lebarnya harus memuat SELURUH tombol: perbaiki, detail, cetak,
+   Excel, hapus. 118px cukup untuk tiga tombol; begitu tombol Excel
+   ditambahkan, isinya meluber ke sel sebelahnya dan tergambar di atas
+   nama Customer.
+
+   5 x 33px + 4 celah + padding = 205px. */
 .docnum-table td.dn-act,
 .docnum-table th.dn-act {
   width: 1%;
-  min-width: 118px;
+  min-width: 205px;
   white-space: nowrap;
 }
 

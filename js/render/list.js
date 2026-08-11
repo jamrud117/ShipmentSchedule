@@ -4,8 +4,17 @@
 /* Dasar tanggal aktif: "eta" atau "etd" */
 /* Urutan & pengelompokan selalu memakai ETA — pemilih ETA/ETD dihapus
    bersama saringan rentang tanggal. */
+/* Label dasar urutan yang ditampilkan di pemisah tanggal.
+
+   Import diurutkan menurut ESTIMATED DELIVERY — itulah tanggal yang
+   dijanjikan ke bagian lain, dan yang menentukan kapan sebuah kiriman
+   perlu ditindak. ETA hanya tanggal tiba di pelabuhan; masih ada
+   clearance dan pengantaran sesudahnya.
+
+   Export tetap menurut Stuffing: yang dikerjakan tim untuk sebuah
+   ekspor adalah menyiapkan muatan pada hari itu. */
 function sortBasis() {
-  return "eta";
+  return activeMode === "export" ? "stuffing" : "estimasi kirim";
 }
 // Selalu menaik: yang paling dekat di paling atas
 function sortDirection() {
@@ -71,7 +80,16 @@ function groupKeyOf(s) {
   if (activeMode === "export") {
     return s.actual || effectiveEtd(s) || effectiveEta(s) || null;
   }
-  return effectiveEta(s) || effectiveEtd(s) || null;
+  /* IMPORT yang belum tiba: Estimated Delivery.
+
+     `actual` di buku Import berisi Estimated Delivery — hasil mesin
+     prediksi saat mode Auto, atau tanggal yang dipatok pengguna saat
+     mode Manual. Itulah tanggal yang dijanjikan ke bagian lain.
+
+     Jatuh ke ETA lalu ETD kalau belum ada: jadwal yang baru dibuat
+     belum tentu punya perkiraan, dan menaruhnya di kelompok "tanpa
+     tanggal" membuatnya hilang dari pandangan. */
+  return s.actual || effectiveEta(s) || effectiveEtd(s) || null;
 }
 
 /* ------------------------------------------------------------------
@@ -298,6 +316,9 @@ function applyModeLabels() {
   document.body.classList.toggle("mode-export", activeMode === "export");
   document.body.classList.toggle("mode-import", activeMode !== "export");
   $("#lblAddBtn").textContent = lbl.addBtn;
+  /* Tooltip ikut berubah: di layar sempit labelnya disembunyikan dan
+     tooltip jadi satu-satunya keterangan tombol itu. */
+  $("#btnAdd").title = lbl.addBtn;
   $("#lblSectionList").textContent = lbl.section;
   // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog konfirmasi
   $("#lblDeleteAll").textContent =

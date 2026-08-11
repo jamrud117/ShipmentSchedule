@@ -252,6 +252,44 @@ t("kartu export TIDAK mengunci Estimated Delivery/Stuffing", () => {
   tulis("activeMode", "import");
 });
 
+console.log("— URUTAN KARTU MENURUT ESTIMATED DELIVERY —");
+t("Import dikelompokkan menurut Estimated Delivery", () => {
+  /* `actual` di buku Import berisi Estimated Delivery — hasil mesin
+     prediksi (Auto) atau tanggal yang dipatok pengguna (Manual). */
+  tulis("activeMode", "import");
+  eq(w.groupKeyOf({ mode: "import", etd: "2026-08-06", eta: "2026-08-07",
+    actual: "2026-08-12", docProgress: {} }), "2026-08-12");
+});
+t("jatuh ke ETA lalu ETD kalau perkiraan belum ada", () => {
+  /* Jadwal yang baru dibuat belum tentu punya perkiraan; menaruhnya di
+     kelompok "tanpa tanggal" membuatnya hilang dari pandangan. */
+  tulis("activeMode", "import");
+  eq(w.groupKeyOf({ mode: "import", etd: "2026-08-06", eta: "2026-08-07", docProgress: {} }),
+     "2026-08-07");
+  eq(w.groupKeyOf({ mode: "import", etd: "2026-08-06", docProgress: {} }), "2026-08-06");
+});
+t("Export tetap menurut Stuffing", () => {
+  tulis("activeMode", "export");
+  eq(w.groupKeyOf({ mode: "export", etd: "2099-08-06", eta: "2099-08-20",
+    actual: "2099-08-10", docProgress: {} }), "2099-08-10");
+  tulis("activeMode", "import");
+});
+t("yang sudah tiba tetap menurut tanggal kejadiannya", () => {
+  /* Estimated Delivery sengaja tidak dipakai di sini — ia perkiraan,
+     dan mengurutkan riwayat menurut perkiraan membuat urutannya
+     meleset dari kejadian sebenarnya. */
+  tulis("activeMode", "import");
+  eq(w.groupKeyOf({ mode: "import", eta: "2026-08-07", actual: "2026-08-12",
+    factoryDate: "2026-08-09", docProgress: {} }), "2026-08-09");
+});
+t("label pemisah tanggal menyebut dasarnya", () => {
+  tulis("activeMode", "import");
+  eq(w.sortBasis(), "estimasi kirim");
+  tulis("activeMode", "export");
+  eq(w.sortBasis(), "stuffing");
+  tulis("activeMode", "import");
+});
+
 console.log("— EXPORT DELIVERED: ETD & ETA TETAP TERLIHAT —");
 const exDelivered = { id: "xd1", mode: "export", party: "PT Uji",
   invoice: "INV-1", etd: "2026-08-01", eta: "2026-08-14", actual: "2026-07-30",
@@ -649,6 +687,39 @@ t("nama dipecah jadi Item + Type", () => {
   eq(b[0].item, "TYRE MOLD FULL SET");
   eq(b[0].type, "NOKIAN ENTRUST 235/45R19");
 });
+t("jenis barang baku dipisah walau tanpa tanda hubung", () => {
+  /* "TYRE MOLD FULL SET CREDO SUNMODE SUV 215/65R16" ditulis
+     menyambung; batasnya cuma bisa diketahui dari katalog barang. */
+  [["TYRE MOLD FULL SET CREDO SUNMODE SUV 215/65R16",
+    "TYRE MOLD FULL SET", "CREDO SUNMODE SUV 215/65R16"],
+   ["TYRE MOLD SIDE ONLY CREDO SUNMODE 195/55R16",
+    "TYRE MOLD SIDE ONLY", "CREDO SUNMODE 195/55R16"],
+   ["TYRE MOLD TREAD ONLY ENTRUST 235/45R19",
+    "TYRE MOLD TREAD ONLY", "ENTRUST 235/45R19"]]
+    .forEach(([nama, item, type]) => {
+      const r = w.ciplPecahNama(nama);
+      eq(r.item, item, nama + " -> item:");
+      eq(r.type, type, nama + " -> type:");
+    });
+});
+t("tanda hubung tetap didahulukan", () => {
+  /* Kalau penulisnya sudah memisahkan sendiri, itu batas yang paling
+     bisa dipercaya — jangan ditimpa daftar. */
+  const r = w.ciplPecahNama("TYRE MOLD FULL SET - NOKIAN ENTRUST 235/45R19");
+  eq(r.item, "TYRE MOLD FULL SET");
+  eq(r.type, "NOKIAN ENTRUST 235/45R19");
+});
+t("jenis terpanjang menang", () => {
+  /* "TYRE MOLD SIDE ONLY" tidak boleh kalah oleh entri lain yang
+     kebetulan jadi awalannya. */
+  const urut = w.eval("CIPL_JENIS_BARANG").slice().sort((a, b) => b.length - a.length);
+  eq(urut[0].length >= urut[urut.length - 1].length, true);
+  const r = w.ciplPecahNama("TYRE MOLD SIDE ONLY X");
+  eq(r.item, "TYRE MOLD SIDE ONLY");
+});
+t("huruf kecil tetap dikenali", () =>
+  eq(w.ciplPecahNama("Tyre Mold Full Set Credo 215").item, "Tyre Mold Full Set"));
+
 t("tanpa pemisah, Type dibiarkan kosong — bukan ditebak", () => {
   eq(w.ciplPecahNama("DRIVER SERVO TURET").item, "DRIVER SERVO TURET");
   eq(w.ciplPecahNama("DRIVER SERVO TURET").type, "");
@@ -1296,25 +1367,855 @@ t("alamat buyer yang dikenal terisi otomatis", () => {
 t("buyer tak dikenal -> kosong, bukan ditebak", () =>
   eq(w.ciplAlamatBuyer("PT ENTAH SIAPA"), ""));
 
-console.log("— BM + PDRI TIDAK REALTIME —");
-t("mengetik tidak mengubah BM + PDRI", () => {
-  $("#calcBMPDRI").value = "1.000.000";
-  w.recalcCustoms();                       // seperti saat mengetik
-  eq($("#calcBMPDRI").value, "1.000.000");
+console.log("— PPH 0 HARUS BERTAHAN —");
+t("nol ditulis apa adanya, tidak jadi kotak kosong", () => {
+  /* formatNumberValue(0) mengembalikan "" — dan kotak kosong dianggap
+     "belum diisi", lalu diisi ulang otomatis. Itu sebabnya PPH yang
+     disetel 0 kembali terisi tiap jadwal dibuka. */
+  eq(w.nilaiPungutan(0), "0");
+  eq(w.formatNumberValue(0), "");          // pembanding: perilaku umum
+  eq(w.nilaiPungutan(null), "");           // belum pernah diisi -> kosong
+  eq(w.nilaiPungutan(undefined), "");
+  eq(w.nilaiPungutan(11966527), w.formatNumberValue(11966527));
 });
-t("dihitung ulang hanya saat diminta", () => {
-  $("#calcBMPDRI").value = "1.000.000";
-  w.recalcCustoms({ hitungBmPdri: true });
-  if ($("#calcBMPDRI").value === "1.000.000")
-    throw new Error("tidak dihitung ulang saat form dibuka");
+t("kotak berisi 0 dianggap MANUAL, bukan belum diisi", () => {
+  $("#fPPH").value = "0";
+  $("#fPPN").value = "";
+  w.initAutoDutyFlags();
+  eq($("#fPPH").dataset.auto, "0", "PPH 0 harus manual:");
+  eq($("#fPPN").dataset.auto, "1", "PPN kosong harus otomatis:");
 });
-t("izin hitung tidak tersisa untuk putaran berikutnya", () => {
-  w.recalcCustoms({ hitungBmPdri: true });
-  const sesudah = $("#calcBMPDRI").value;
-  $("#calcBMPDRI").value = "9.999";
+t("PPH 0 tidak ditimpa hitungan otomatis", () => {
+  $("#fPPH").value = "0";
+  w.initAutoDutyFlags();
   w.recalcCustoms();
-  eq($("#calcBMPDRI").value, "9.999");
-  if (sesudah === undefined) throw new Error("nilai tidak terbaca");
+  eq($("#fPPH").value, "0");
+});
+
+console.log("— PDRI: SEKETIKA & PENJUMLAHAN BIASA —");
+function ketikAngka(sel, teks) {
+  const el = $(sel);
+  el.value = "";
+  for (const c of teks) {
+    el.value += c;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+  }
+  return el.value;
+}
+t("mengetik sungguhan menghasilkan angka yang benar", () => {
+  /* Saat mengetik digit terakhir, isi kotak sesaat "2,6000" — belum
+     dinormalkan pemformat. Pengurai serbaguna melihat empat digit
+     setelah koma dan menyimpulkan koma itu DESIMAL: 2,6.
+
+     Pemformat memang membetulkannya sesaat kemudian, tapi ia terpasang
+     di document sementara penghitung terpasang di kotaknya sendiri —
+     dan pendengar elemen selalu berjalan lebih dulu. */
+  $("#fIncoterm").value = "CIF";
+  ketikAngka("#fBM", "1000");
+  ketikAngka("#fPPN", "25000");
+  ketikAngka("#fPPH", "26000");
+  eq($("#fPPH").value, "26,000");
+  eq(w.parseLooseNumber($("#calcPDRI").value), 52000);
+});
+t("angka tetap benar di TIAP ketukan, bukan cuma di akhir", () => {
+  $("#fBM").value = "1,000"; $("#fPPN").value = "25,000";
+  const el = $("#fPPH");
+  el.value = "";
+  const harap = [2, 26, 260, 2600, 26000];
+  "26000".split("").forEach((c, i) => {
+    el.value += c;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(w.parseLooseNumber($("#calcPDRI").value), 1000 + 25000 + harap[i],
+       'setelah mengetik "' + el.value + '":');
+  });
+});
+t("kotak angka dibaca dengan aturan tetap, bukan tebakan", () => {
+  $("#fBM").value = "2,6000";        // teks transisi saat mengetik
+  eq(w.nilaiKotakAngka("#fBM"), 26000);
+  $("#fBM").value = "26,002.6";      // sudah rapi, ada desimal
+  eq(w.nilaiKotakAngka("#fBM"), 26002.6);
+  $("#fBM").value = "";
+  eq(w.nilaiKotakAngka("#fBM"), 0);
+});
+t("PDRI = Bea Masuk + PPN + PPH", () => {
+  const c = w.computeCustoms({ items: [], bm: 24625000, ppn: 56883539, pph: 11966527 });
+  eq(c.bmPdri, 93475066);
+});
+t("Bea Masuk 0 TIDAK menolkan PDRI", () => {
+  /* Kiriman berfasilitas SKB: bea masuknya nol, tapi PPN & PPH tetap
+     terutang. Aturan lama menampilkan 0 padahal ada yang disetor. */
+  const c = w.computeCustoms({ items: [], bm: 0, ppn: 56883539, pph: 11966527 });
+  eq(c.bmPdri, 68850066);
+});
+t("PPH 0 ikut terhitung apa adanya", () => {
+  const c = w.computeCustoms({ items: [], bm: 24625000, ppn: 56883539, pph: 0 });
+  eq(c.bmPdri, 81508539);
+});
+t("dihitung ulang SETIAP recalc, tanpa syarat", () => {
+  $("#calcPDRI").value = "1.000.000";
+  w.recalcCustoms();
+  if ($("#calcPDRI").value === "1.000.000")
+    throw new Error("tidak dihitung seketika");
+});
+t("mengetik di kolom pungutan langsung menggerakkannya", () => {
+  ["fBM", "fPPN", "fPPH"].forEach((id) => {
+    $("#calcPDRI").value = "7.777";
+    $("#" + id).dispatchEvent(new w.Event("input"));
+    if ($("#calcPDRI").value === "7.777")
+      throw new Error(id + ": mengetik tidak memicu perhitungan");
+  });
+});
+t("label di layar berbunyi PDRI, bukan BM + PDRI", () => {
+  const html = require("fs").readFileSync(__dirname + "/../index.html", "utf8");
+  if (/BM \+ PDRI/.test(html)) throw new Error("masih ada label BM + PDRI");
+  if (!/>PDRI \(Rp\)</.test(html)) throw new Error("label PDRI tidak ditemukan");
+  if (/calcBMPDRI/.test(html)) throw new Error("id lama masih dipakai");
+});
+
+console.log("— SERET & LEPAS BERKAS IMPOR —");
+t("menyeret berkas menyalakan sorotan", () => {
+  /* Teks di layar menjanjikan "atau seret ke sini" dan CSS
+     .is-dragover sudah ada — tapi tak ada satu pun pendengar yang
+     memasangnya. Janji yang tidak ditepati membuat orang berhenti
+     mempercayai petunjuk lain di layar yang sama. */
+  const zona = $("#importZone");
+  if (!zona) throw new Error("zona impor tidak ada");
+  zona.dispatchEvent(new w.Event("dragover", { bubbles: true }));
+  eq(zona.classList.contains("is-dragover"), true);
+  zona.dispatchEvent(new w.Event("dragleave", { bubbles: true }));
+  eq(zona.classList.contains("is-dragover"), false);
+});
+t("sorotan tidak berkedip saat kursor melintasi elemen anak", () => {
+  const zona = $("#importZone");
+  const anak = zona.querySelector(".import-zone-copy") || zona.firstElementChild;
+  zona.dispatchEvent(new w.Event("dragover", { bubbles: true }));
+  const ev = new w.Event("dragleave", { bubbles: true });
+  Object.defineProperty(ev, "relatedTarget", { value: anak });
+  zona.dispatchEvent(ev);
+  eq(zona.classList.contains("is-dragover"), true, "sorotan padam padahal masih di dalam:");
+  zona.classList.remove("is-dragover");
+});
+t("teks janji & penangannya sama-sama ada", () => {
+  const html = require("fs").readFileSync(__dirname + "/../index.html", "utf8");
+  const janji = /seret ke sini/i.test(html);
+  const src = require("fs").readFileSync(__dirname + "/../js/import/dispatch.js", "utf8");
+  const ada = /addEventListener\("drop"/.test(src);
+  if (janji !== ada)
+    throw new Error(janji ? "dijanjikan tapi tidak ada penangannya" : "penanganan ada tapi tidak dijanjikan");
+});
+t("berkas dipilih & dilepas lewat jalur yang sama", () => {
+  const src = require("fs").readFileSync(__dirname + "/../js/import/dispatch.js", "utf8");
+  eq((src.match(/prosesBerkasImport\(/g) || []).length >= 3, true,
+     "satu penangan dipakai kedua jalur:");
+});
+
+console.log("— SHIPPING INSTRUCTION & EXCEL —");
+const rowSI = { id: "si1", doc_number: "DDI-CRBM-VIII-040", doc_date: "2026-08-03",
+  payload: { invoiceKind: "Commercial", currency: "USD", siNo: "03",
+    siTo: "PT WIDE LOGISTICS", notifyParty: "SAME AS CONSIGNEE",
+    portLoading: "JAKARTA, INDONESIA", finalDestination: "BUSAN, KOREA" } };
+const jadwalSI = { id: "sj1", mode: "export", party: "Dynamic Design CO., LTD.",
+  forwarder: "PT WIDE LOGISTICS", muatan: "LCL", origin: "IDTPP", destination: "KRPUS",
+  items: [{ namaBarang: "TYRE MOLD FULL SET NOKIAN ENTRUST 235/45R19", hsCode: "84807190",
+    qty: 1, satuan: "SET", harga: 10490, netto: 280, bruto: 300,
+    package: "81*81*81", packing: "4 BOX" }] };
+
+t("nomor SI diturunkan dari nomor invoice", () => {
+  /* "DDI-CRBM-VIII-042" -> 42. Nol di depan dibuang karena penomoran
+     SI ditulis apa adanya di berkas aslinya. */
+  eq(w.ciplNoSiDariInvoice("DDI-CRBM-VIII-042"), "42");
+  eq(w.ciplNoSiDariInvoice("DDI-CRBM-VIII-003"), "3");
+  eq(w.ciplNoSiDariInvoice("DDI-025/2026-VII-EXIM-LOG"), "");
+  eq(w.ciplNoSiDariInvoice(""), "");
+});
+t("No. SI yang diisi manual menang atas turunan", () => {
+  const b = w.ciplBarisBarang(jadwalSI);
+  const manual = w.ciplSiData({ ...rowSI, payload: { ...rowSI.payload, siNo: "07" } }, jadwalSI, b);
+  eq(manual.no, "07");
+  const turunan = w.ciplSiData(
+    { ...rowSI, doc_number: "DDI-CRBM-VIII-042", payload: { ...rowSI.payload, siNo: "" } },
+    jadwalSI, b);
+  eq(turunan.no, "42");
+});
+t("satuan berat menyatu dengan angkanya", () => {
+  /* Sebagai sel terpisah ia terlempar jauh ke kanan mengikuti lebar
+     kolom nilai, dan angka dengan satuannya berjarak setengah halaman
+     tidak terbaca sebagai satu keterangan. */
+  const src = w.eval("ciplXlsShippingInstruction.toString()");
+  if (!/def\.satuan && nilai \? `\$\{nilai\}/.test(src))
+    throw new Error("satuan tidak digabung ke sel angkanya");
+  if (/ciplXlsSet\(ws, "G" \+ r, def\.satuan/.test(src))
+    throw new Error("satuan masih ditaruh di kolom terpisah");
+});
+/* Lembar kerja tiruan — cukup untuk membaca GARIS yang benar-benar
+   digambar, tanpa memuat ExcelJS.
+
+   Sel gabungan memakai bersama SATU objek, persis seperti ExcelJS yang
+   memakai bersama satu objek gaya untuk seluruh rentang. Tanpa itu
+   pengujiannya akan lulus pada kode yang menimpa garis sel gabungan —
+   cacat yang justru paling sering terjadi di berkas ini. */
+function wsTiruan() {
+  const sel = new Map();
+  const kunci = (r, c) => r + ":" + c;
+  const buat = (r, c) => {
+    const k = kunci(r, c);
+    if (!sel.has(k)) sel.set(k, { r, c });
+    return sel.get(k);
+  };
+  const urai = (a) => {
+    const m = /^([A-J])(\d+)$/.exec(a);
+    return [Number(m[2]), m[1].charCodeAt(0) - 64];
+  };
+  return {
+    _sel: sel,
+    getColumn: () => ({}),
+    getRow: (r) => ({ getCell: (c) => buat(r, c) }),
+    getCell(a) { const [r, c] = urai(a); return buat(r, c); },
+    mergeCells(rentang) {
+      const [a, b] = rentang.split(":");
+      const [r1, c1] = urai(a), [r2, c2] = urai(b);
+      const induk = buat(r1, c1);
+      for (let r = r1; r <= r2; r++)
+        for (let c = c1; c <= c2; c++) sel.set(kunci(r, c), induk);
+    },
+    addImage() {},
+    at(r, c) { return sel.get(kunci(r, c)) || {}; },
+  };
+}
+
+/* ---- KESAMAAN DENGAN BERKAS RUJUKAN ----
+
+   Hasil unduhan harus sama persis dengan DDI-CRBM-VIII-042.xlsx, yang
+   beredar ke forwarder dan bea cukai negara tujuan. Nomor & tulisan di
+   bawah ini disalin dari sana; berubahnya satu saja berarti dokumen
+   yang dikirim tidak lagi cocok dengan yang mereka harapkan. */
+t("tata letak Excel tetap pada koordinat rujukan", () => {
+  const ws = wsTiruan();
+  const wb = { addWorksheet: () => ws, addImage: () => 1 };
+  w.ciplXlsInvoice(wb, rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
+
+  eq(isi("A9"), "Shipper/Seller");
+  eq(isi("A17"), "Consignee/Buyer");
+  eq(isi("A24"), "Notify Party");
+  eq(isi("E9"), "Invoice No. & Date");
+  eq(isi("E14"), "PO No. & Date");
+  eq(isi("E17"), "Terms of Delivery");
+  eq(isi("E21"), "Term of Payment");
+  eq(isi("E24"), "Remarks");
+  eq(isi("A27"), "Port of Loading");
+  eq(isi("A29"), "No");           // judul tabel di baris 29
+  eq(isi("G46"), "Total");        // baris Total di 46
+  eq(isi("G47"), "Signed by");    // kotak tanda tangan 47-50
+});
+
+t("Packing List memakai judul tabelnya sendiri", () => {
+  const ws = wsTiruan();
+  w.ciplXlsPacking({ addWorksheet: () => ws, addImage: () => 1 },
+    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
+  eq(isi("B29"), "Item Description");
+  eq(isi("D29"), "HS CODE");
+  eq(isi("G29"), "NW");
+  eq(isi("E46"), "TOTAL");
+});
+
+t("tiga sel yang dulu ganjil kini SAMA di kedua lembar", () => {
+  /* Rujukan menuliskannya berbeda antar lembar — "about" vs "About",
+     spasi di depan label invoice, dan Final Destination rata tengah di
+     satu lembar tapi rata kiri di lembar lain. Diseragamkan: sailing
+     ikut bentuk PL, dua lainnya ikut bentuk Invoice.
+
+     Diuji dari KEDUA lembar sekaligus. Menguji satu lembar saja tidak
+     membuktikan keduanya sama, dan justru kesamaan itu yang diminta. */
+  const bikin = (fn) => {
+    const ws = wsTiruan();
+    fn({ addWorksheet: () => ws, addImage: () => 1 },
+      rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+    return (a) => ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
+  };
+  const inv = bikin(w.ciplXlsInvoice);
+  const pl = bikin(w.ciplXlsPacking);
+
+  ["E9", "D27", "E27"].forEach((a) => {
+    eq(inv(a).value, pl(a).value);
+    eq(JSON.stringify(inv(a).alignment || null), JSON.stringify(pl(a).alignment || null));
+    eq(JSON.stringify(inv(a).font || null), JSON.stringify(pl(a).font || null));
+  });
+  eq(inv("E9").value, "Invoice No. & Date");   // tanpa spasi depan
+  eq(inv("D27").value, "Sailing on or About"); // bentuk PL
+  eq(inv("E27").alignment.horizontal, "center");
+  /* Sailing tidak lagi 7pt tebal berbungkus — ikut PL: 8pt biasa. */
+  eq(inv("D27").font.size, 8);
+  eq(!!inv("D27").font.bold, false);
+});
+
+t("rata tengah tegak memakai kosakata ExcelJS", () => {
+  /* ExcelJS memakai top/middle/bottom dan MEMBUANG diam-diam nilai
+     yang tidak dikenalnya. Ditulis "center", perataannya hilang tanpa
+     galat: kode terlihat benar, hasilnya rata bawah. */
+  const src = w.eval("ciplXlsBlokPihak.toString()") +
+              w.eval("ciplXlsInvoice.toString()") +
+              w.eval("ciplXlsShippingInstruction.toString()") +
+              w.eval("XLS_TENGAH.vertical") + w.eval("XLS_TEGAK.vertical");
+  if (/vertical:\s*"center"/.test(src))
+    throw new Error('vertical: "center" diabaikan ExcelJS — pakai "middle"');
+  eq(w.eval("XLS_TENGAH.vertical"), "middle");
+  eq(w.eval("XLS_TEGAK.vertical"), "middle");
+});
+
+t("pengaturan cetak sama dengan rujukan", () => {
+  /* fitToPage BERSAMA skala. Rujukan punya keduanya; tanpa fitToPage
+     Excel memakai skala mentah dan halaman keluar ~2,4% lebih kecil. */
+  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 80, tengah: true });
+  eq(h.paperSize, 9);
+  eq(h.orientation, "portrait");
+  eq(h.scale, 80);
+  eq(h.fitToPage, true);
+  eq(h.horizontalCentered, true);
+  eq(h.printArea, "A1:J51");
+  eq(h.margins.left, 0.3);
+  eq(h.margins.top, 0.4);
+});
+
+t("Excel memasang logo & bingkai seperti cetakan", () => {
+  if (!/ciplXlsLogo/.test(w.eval("ciplXlsKerangka.toString()")))
+    throw new Error("logo tidak dipasang");
+  /* Kegagalan memuat logo tidak boleh menggagalkan seluruh berkas. */
+  if (!/try/.test(w.eval("ciplXlsLogo.toString()")))
+    throw new Error("kegagalan logo tidak dijaga");
+
+  const ws = wsTiruan();
+  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
+    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+
+  /* Nomor baris di bawah ini disalin dari berkas rujukan
+     DDI-CRBM-VIII-042.xlsx. Kalau berubah, hasil unduhan tidak lagi
+     sama dengan berkas yang beredar ke forwarder. */
+  const akhir = 50;  // 30 + 16 baris minimum, Total di 46, ttd 47-50
+  const ada = (r, c, s) => !!(ws.at(r, c).border || {})[s];
+
+  /* SATU bingkai mengelilingi seluruh dokumen, seperti .ci-box. Dulu
+     tiap blok berkotak sendiri dan bagian bawah — ruang kosong, Total,
+     tanda tangan — tidak dilingkupi apa pun. */
+  for (let r = 1; r <= akhir; r++) {
+    if (!ada(r, 1, "left")) throw new Error("bingkai kiri bolong di baris " + r);
+    if (!ada(r, 10, "right")) throw new Error("bingkai kanan bolong di baris " + r);
+  }
+  /* Sisi bawah menguji URUTAN: ciplXlsKotak() menimpa seluruh sisi
+     sebuah sel, jadi bingkainya HARUS digambar setelah isinya. */
+  for (let c = 1; c <= 10; c++)
+    if (!ada(akhir, c, "bottom")) throw new Error("bingkai bawah bolong di kolom " + c);
+
+  /* Sekat di dalam blok pihak, di baris yang sama dengan rujukan. */
+  [16, 23, 26, 28].forEach((r) => {
+    if (!ada(r, 1, "bottom")) throw new Error("sekat selebar halaman hilang di baris " + r);
+  });
+  [13, 20].forEach((r) => {
+    if (!ada(r, 5, "bottom")) throw new Error("sekat kolom kanan hilang di baris " + r);
+  });
+  if (!ada(13, 4, "right")) throw new Error("kolom kiri & kanan tidak dipisah");
+  /* Baris judul tabel & baris Total ada di tempatnya. */
+  if (!ada(29, 2, "bottom")) throw new Error("judul tabel bukan di baris 29");
+  if (!ada(46, 7, "top")) throw new Error("baris Total bukan di baris 46");
+
+  /* Ruang kosong TANPA garis sama sekali — yang membatasinya cuma
+     bingkai luar, sama seperti .ci-fill pada cetakan. */
+  const kosong = ws.at(40, 3).border || {};
+  if (kosong.top || kosong.left || kosong.right || kosong.bottom)
+    throw new Error("ruang kosong ikut digariskan");
+});
+/* ---- KARTU DI LAYAR SEDANG (tablet & split window) ----
+
+   Empat cacat ini ditemukan dengan memotret kartu sungguhan di
+   400-1440px. Dua di antaranya ternyata bukan cacat tablet — sudah
+   salah sejak di layar lebar, hanya belum kentara. Diuji lewat CSS
+   supaya tidak perlu meramban di dalam berkas uji ini. */
+const cssKartu = require("fs").readFileSync(__dirname + "/../css/card.css", "utf8");
+const blokCss = (pemilih) => {
+  const i = cssKartu.indexOf(pemilih + " {");
+  if (i < 0) throw new Error("aturan tidak ada: " + pemilih);
+  return cssKartu.slice(i, cssKartu.indexOf("}", i));
+};
+
+t("kotak tanggal sejajar berapa pun tinggi labelnya", () => {
+  /* Tiga label di baris ini tidak sama tingginya: "ETD" teks polos,
+     "ETA" & "Estimated Delivery" membawa lencana AUTO/MANUAL. Ditumpuk
+     biasa, tinggi label langsung menggeser kotak di bawahnya — ETD
+     naik 4px dari dua lainnya di SEMUA lebar. */
+  const b = blokCss(".date-field");
+  if (!/flex-direction: column/.test(b))
+    throw new Error("kotak tanggal bukan kolom lentur");
+  if (!/margin-top: auto/.test(blokCss('.date-field input[type="date"]')))
+    throw new Error("isian tidak didorong ke dasar kotak");
+});
+
+t("baris tanggal turun kolom SEBELUM labelnya pecah", () => {
+  const b = blokCss(".date-strip");
+  const m = /minmax\((\d+)px/.exec(b);
+  if (!m) throw new Error("baris tanggal masih tiga kolom paksa");
+  /* Diukur: di bawah 200px label "Estimated Delivery" beserta
+     lencananya pecah dua baris. */
+  if (Number(m[1]) < 200)
+    throw new Error("ambang kolom terlalu sempit: " + m[1] + "px");
+});
+
+t("tombol turun ke baris sendiri, judul tidak diremas", () => {
+  /* Blok tombol tidak pernah menyusut (flex-shrink: 0), jadi
+     kekurangan ruang selalu ditanggung judul. Diukur: tombol 276px,
+     judul butuh 354px untuk nama customer + baris No. Aju. */
+  const b = blokCss(".ship-title-block");
+  const m = /flex: 1 1 (\d+)px/.exec(b);
+  if (!m) throw new Error("dasar lebar judul tidak diatur");
+  if (Number(m[1]) < 354)
+    throw new Error("dasar judul di bawah kebutuhannya: " + m[1] + "px");
+  if (!/min-width: min\(/.test(b))
+    throw new Error("judul tidak boleh menyempit di layar telepon");
+});
+
+t("penanda kapal tidak menindih keterangan sisa hari", () => {
+  /* Penanda setinggi 26px dipusatkan pada jalur 3px, jadi menonjol
+     ~11px ke atas. Jarak di bawah 12px membuatnya menindih "Telat 1
+     Hari" — justru saat pengiriman hampir sampai. */
+  const m = /margin-bottom: (\d+)px/.exec(blokCss(".lane-title"));
+  if (!m) throw new Error("jarak judul jalur tidak diatur");
+  if (Number(m[1]) < 12)
+    throw new Error("jarak terlalu rapat: " + m[1] + "px");
+});
+
+t("baris update delay memakai aturan yang benar-benar berlaku", () => {
+  /* .delay-strip-fields memakai FLEX. Aturan responsifnya dulu menulis
+     grid-template-columns — tidak pernah berlaku sama sekali. */
+  const i = cssKartu.indexOf("@media (max-width: 599.98px)");
+  const sempit = cssKartu.slice(i, i + 900);
+  if (/\.delay-strip-fields \{[^}]*grid-template-columns/.test(sempit))
+    throw new Error("aturan grid pada wadah flex — tidak berlaku");
+  if (!/\.delay-strip-fields \{[^}]*flex-direction: column/.test(sempit))
+    throw new Error("baris delay tidak dipaksa satu per baris");
+});
+
+t("riwayat nomor digeser, bukan dibungkus", () => {
+  /* Wadahnya sudah bergulir mendatar. Selama itu benar, membungkus isi
+     sel tidak menghemat apa pun — ia memindahkan kesempitan dari kanan
+     ke bawah, dan "11-08-2026" pecah jadi "11-08-" dan "2026".
+
+     Diperiksa lewat gaya TERHITUNG, bukan pencocokan teks: aturan yang
+     benar di satu tempat masih bisa dikalahkan aturan lain di bawahnya,
+     dan itu justru cara cacat ini kembali. */
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const d = new JSDOM(`<style>${css}</style>
+    <div class="docnum-history-wrap"><table class="docnum-table"><tbody><tr>
+      <td class="dn-num">DDI-CRBM-VIII-042</td>
+      <td class="dn-col-tgl">11-08-2026</td>
+      <td class="dn-col-pemohon">Yogi Firgiawan</td>
+      <td>DYNAMIC DESIGN CO., LTD.</td>
+      <td class="dn-act"></td>
+    </tr></tbody></table></div>`);
+  const W = d.window;
+  [...W.document.querySelectorAll("td")].forEach((td) => {
+    const ws = W.getComputedStyle(td).whiteSpace;
+    if (ws !== "nowrap")
+      throw new Error(`sel .${td.className || "(customer)"} masih boleh dibungkus (${ws})`);
+  });
+  /* Wadah yang tidak bergulir membuat nowrap jadi pemotongan, bukan
+     penggeseran — isinya hilang di balik tepi tanpa cara melihatnya. */
+  if (!/\.docnum-history-wrap\s*\{[^}]*overflow-x:\s*auto/.test(css))
+    throw new Error("wadah riwayat tidak bergulir mendatar");
+  /* Elipsis pada kolom Customer adalah jalan keluar dari tabel yang
+     diremas; tabel yang digeser tidak membutuhkannya. */
+  if (/text-overflow:\s*ellipsis/.test(css))
+    throw new Error("nama customer masih dipotong elipsis");
+});
+
+t("kolom aksi cukup untuk lima tombol", () => {
+  /* Tombolnya: perbaiki, detail, cetak, Excel, hapus. Kolom yang lebih
+     sempit daripada isinya membuat tombolnya meluber ke sel sebelahnya
+     dan tergambar di atas nama Customer. */
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const semua = [...css.matchAll(/\.docnum-table td\.dn-act,[\s\S]{0,120}?min-width: (\d+)px/g)]
+    .map((m) => Number(m[1]));
+  if (!semua.length) throw new Error("lebar kolom aksi tidak diatur");
+  // 5 tombol x 30px + celah, bahkan pada varian layar sempit
+  semua.forEach((lebar) => {
+    if (lebar < 180) throw new Error("kolom aksi " + lebar + "px terlalu sempit");
+  });
+  if (Math.max(...semua) < 200)
+    throw new Error("varian layar besar butuh ~205px (5 x 33px + celah)");
+});
+t("label SI memakai rich text, bukan font sel", () => {
+  /* Menyetel Wingdings ke SELURUH sel membuat labelnya ikut jadi
+     lambang yang tak terbaca. */
+  const v = w.ciplXlsLabelSI("Bill of Lading");
+  eq(Array.isArray(v.richText), true);
+  eq(v.richText[0].font.name, "Wingdings");
+  eq(v.richText[0].text, "T");
+  eq(v.richText[1].font.name, "Arial");
+  if (!v.richText[1].text.includes("Bill of Lading"))
+    throw new Error("label hilang dari rich text");
+});
+t("kolom aksi tabel tidak menindih kolom Customer", () => {
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const i = css.indexOf(".docnum-table td:last-child");
+  if (i < 0) throw new Error("kolom aksi tidak diatur");
+  const blok = css.slice(i, css.indexOf("}", i));
+  if (!/width: 1%/.test(blok))
+    throw new Error("sel tombol tidak punya lebar sendiri");
+});
+t("enam JEDA kelompok tepat di tempat yang benar", () => {
+  /* `garis` sekarang menandai JEDA, bukan garis: sesudah Port of
+     Discharge, Volume, Ocean Freight, Stuffing Date, L/C Number, dan
+     Special instruction. Nomor barisnya dipakai bersama oleh cetakan
+     dan Excel, jadi tetap diuji walau bentuknya berubah. */
+  const peta = w.eval("CIPL_SI_BARIS");
+  const berjeda = peta.filter((x) => x.garis).map((x) => x.k);
+  eq(berjeda.join(" | "),
+     "Port of Discharge | Volume | Ocean Freight | Stuffing Date | L/C Number | Special instruction :");
+  eq(berjeda.length, 6);
+});
+t("SI berbingkai luar, TANPA sekat di dalamnya", () => {
+  /* Berkas rujukan DDI-CRBM-VIII-042.xlsx tidak punya satu garis pun di
+     lembar SI — jaraknya yang memisahkan kelompok. Yang ada hanya
+     bingkai selembar halaman. Garis tambahan membuat surat ini terbaca
+     sebagai formulir. */
+  const css = w.ciplCss();
+  if (/\.si-garis/.test(css))
+    throw new Error("sekat lama masih ada di SI");
+  if (!/\.si-box \{[^}]*min-height/.test(css))
+    throw new Error("bingkai SI tidak setinggi halaman");
+  const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  if (!/class="ci-box si-box"/.test(h))
+    throw new Error("lembar SI tidak dibungkus bingkai luar");
+});
+t("Address jadi sub-label, bukan bagian nilainya", () => {
+  const b = w.ciplBarisBarang(jadwalSI);
+  const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, b);
+  if (!/si-sub[^>]*>Address</.test(h))
+    throw new Error("Address tidak jadi sub-label");
+  // dan hanya untuk Shipper & Consignee
+  eq((h.match(/si-sub/g) || []).length, 2);
+});
+t("cetak & Excel membaca angka yang sama", () => {
+  /* Keduanya lewat ciplSiData — menghitung dua kali berarti dua sumber
+     angka yang akan berbeda pelan-pelan. */
+  const b = w.ciplBarisBarang(jadwalSI);
+  const d = w.ciplSiData(rowSI, jadwalSI, b);
+  eq(d.gw, "300");
+  eq(d.nw, "280");
+  eq(d.koli, "4 PACKAGE");
+  eq(d.hs, "84807190");
+  eq(d.barang, "TYRE MOLD FULL SET");
+});
+t("PENJAGA: pustaka Excel dimuat dulu sebelum dipakai", () => {
+  /* ExcelJS tidak ikut di halaman — dimuat sesuai kebutuhan lewat
+     ensureExcelJS(). Bulk Export memanggilnya lebih dulu, jadi di sana
+     selalu siap; fungsi yang langsung memakai ExcelJS gagal pada klik
+     pertama di sesi yang belum pernah membuka Bulk Export. */
+  ["unduhCiplExcel", "unduhTemplateBulk"].forEach((fn) => {
+    const src = w.eval(fn + ".toString()");
+    if (!/ExcelJS/.test(src)) return;      // tidak memakai pustakanya
+    if (!/ensureExcelJS/.test(src))
+      throw new Error(fn + " memakai ExcelJS tanpa memuatnya dulu");
+  });
+});
+t("kegagalan Excel menyebutkan sebabnya", () => {
+  /* Pesan generik menyembunyikan satu-satunya petunjuk yang dimiliki
+     pengguna — dan juga yang memperbaikinya. */
+  const src = w.eval("unduhCiplExcel.toString()");
+  if (!/err && err\.message/.test(src) && !/err\.message/.test(src))
+    throw new Error("pesan galat tidak menyebut sebabnya");
+});
+t("gabung sel tidak menggagalkan seluruh berkas", () => {
+  const src = w.eval("ciplXlsGabung.toString()");
+  if (!/try/.test(src)) throw new Error("mergeCells tidak dijaga");
+});
+t("unduhan Excel dijaga dari klik ganda", () => {
+  const src = w.eval("unduhCiplExcel.toString()");
+  if (!/ciplXlsSedangDibuat/.test(src))
+    throw new Error("tidak ada penjagaan klik ganda");
+  if (!/finally/.test(src))
+    throw new Error("bendera dilepas tanpa finally — tombol bisa mati selamanya");
+});
+t("halaman ketiga: Shipping Instruction", () => {
+  const b = w.ciplBarisBarang(jadwalSI);
+  const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, b);
+  ["SHIPPING INSTRUCTION", "NO. 03", "PT WIDE LOGISTICS", "Bill of Lading",
+   "Place of Receipt", "Port of Discharge", "TYRE MOLD FULL SET", "LCL",
+   "4 PACKAGE", "84807190", "SIGN &amp; STAMP"].forEach((teks) => {
+    if (!h.includes(teks)) throw new Error("hilang dari SI: " + teks);
+  });
+  if (!h.includes("ci-page2")) throw new Error("SI tidak dipaksa halaman baru");
+});
+t("baris yang diisi forwarder dibiarkan kosong", () => {
+  /* PEB, Booking Number, Vessel, ETD/ETA, Stuffing Date diisi
+     forwarder setelah menerima instruksinya — mengisinya dari tebakan
+     kita menghilangkan gunanya. */
+  const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  ["PEB NUMBER", "Booking Number", "Vessel", "ETD", "ETA", "Stuffing Date"]
+    .forEach((k) => {
+      const i = h.indexOf(">" + k + "<");
+      if (i < 0) throw new Error("baris " + k + " hilang");
+      const sesudah = h.slice(i, i + 260);
+      if (/si-v[^>]*>[^<\s]/.test(sesudah))
+        throw new Error(k + " terisi, seharusnya dikosongkan untuk forwarder");
+    });
+});
+t("tanggal penutup memakai bentuk Indonesia", () =>
+  eq(w.ciplTanggalId("2026-08-03"), "03 Agustus 2026"));
+t("cetakan memuat ketiga halaman", () => {
+  const b = w.ciplBarisBarang(jadwalSI);
+  const semua = w.ciplHalamanInvoice(rowSI, jadwalSI, b) +
+    w.ciplHalamanPacking(rowSI, jadwalSI, b) +
+    w.ciplHalamanShippingInstruction(rowSI, jadwalSI, b);
+  ["COMMERCIAL INVOICE", "PACKING LIST", "SHIPPING INSTRUCTION"].forEach((j) => {
+    if (!semua.includes(j)) throw new Error("halaman hilang: " + j);
+  });
+});
+t("tombol unduh Excel tersedia di baris invoice", () => {
+  const src = w.eval("renderDocNumHistory.toString()");
+  if (!/data-xls-cipl/.test(src)) throw new Error("tombol unduh Excel hilang");
+});
+
+console.log("— HALAMAN NO. DOKUMEN DI LAYAR SEMPIT —");
+t("sidebar mendatar mulai dari lebar split-window", () => {
+  /* Di 960px sidebar 300px masih berdiri dan menyisakan ~600px untuk
+     form — sementara kolomnya tetap terbagi empat sejak 768px. */
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const i = css.indexOf("@media (max-width: 1199px)");
+  if (i < 0) throw new Error("sidebar belum menyusut di lebar split-window");
+  const blok = css.slice(i, css.indexOf("@media", i + 10) < 0 ? css.length : css.indexOf("@media", i + 10));
+  if (!/\.docnum-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(blok))
+    throw new Error("sidebar masih memakan satu kolom tetap");
+  if (!/\.docnum-tabs \{[^}]*flex-direction: row/.test(blok))
+    throw new Error("daftar jenis dokumen tidak jadi mendatar");
+});
+t("kolom form menyesuaikan ruang, bukan terbagi empat", () => {
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const i = css.indexOf("@media (max-width: 1199px)");
+  const blok = css.slice(i);
+  if (!/\[class\*="col-md-"\][\s\S]{0,80}\{[^}]*flex: 1 1 200px/.test(blok))
+    throw new Error("kolom Bootstrap masih menentukan lebar isian");
+});
+t("tidak ada media query kembar di halaman No. Dokumen", () => {
+  /* Dua blok dengan ambang sama saling menimpa dan menyulitkan
+     ditelusuri saat salah satunya diubah. */
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  const ambang = [...css.matchAll(/@media \(max-width: ([\d.]+)px\)/g)].map((m) => m[1]);
+  eq(ambang.length, new Set(ambang).size, "ambang: " + ambang.join(", "));
+});
+
+console.log("— BILAH SARINGAN DI LAYAR SEMPIT —");
+const cssDash = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+/* Komentar dibuang: mencari nama properti di dalamnya menghasilkan
+   temuan palsu — catatan yang menjelaskan kenapa sebuah aturan DIHAPUS
+   tetap menyebut nama aturannya. */
+const cssDashBersih = cssDash.replace(/\/\*[\s\S]*?\*\//g, "");
+const blokMedia = (lebar) => {
+  const i = cssDash.indexOf("@media (max-width: " + lebar + "px)");
+  if (i < 0) throw new Error("media query " + lebar + "px tidak ada");
+  let dalam = 0, j = cssDash.indexOf("{", i);
+  for (let k = j; k < cssDash.length; k++) {
+    if (cssDash[k] === "{") dalam++;
+    else if (cssDash[k] === "}") { dalam--; if (!dalam) return cssDash.slice(i, k); }
+  }
+  return "";
+};
+t("chip saringan membungkus, tidak disembunyikan di balik gulir", () => {
+  /* Gulir mendatar di sini mustahil dipakai: scrollbar-nya
+     disembunyikan global di base.css, jadi tak ada penanda maupun cara
+     menggeser dengan tetikus biasa. */
+  const m = blokMedia(991);
+  if (!/\.preset-row \{[^}]*flex: 1 1 0/.test(m))
+    throw new Error("chip tidak mengambil sisa lebar barisnya");
+  if (!/\.preset-row \{[^}]*flex-wrap: wrap/.test(m))
+    throw new Error("chip tidak boleh turun ke baris berikutnya");
+  if (/overflow-x:\s*auto/.test(cssDashBersih))
+    throw new Error("masih ada gulir mendatar yang scrollbar-nya tersembunyi");
+});
+t("PENJAGA: gulir tersembunyi tidak dipakai untuk isi yang bisa diklik", () => {
+  /* base.css menyembunyikan scrollbar untuk beberapa wadah. Untuk
+     wadah berisi TOMBOL, itu berarti sebagian tombol tak terjangkau. */
+  const base = require("fs").readFileSync(__dirname + "/../css/base.css", "utf8");
+  const i = base.indexOf("scrollbar-width: none");
+  const daftar = base.slice(base.lastIndexOf("*/", i), i);
+  if (/\.preset-row/.test(daftar) && /overflow-x:\s*auto/.test(cssDashBersih))
+    throw new Error("preset-row bergulir sekaligus scrollbar-nya disembunyikan");
+});
+t("urutan baris pencarian: tab, cari, status", () => {
+  /* Urutan DOM menentukan urutan tampil. Saringan status harus SESUDAH
+     kotak cari — kalau tidak, ia muncul di kiri dan susunannya berbeda
+     dari yang dirancang. */
+  const baris = $(".controlbar-row--filters");
+  const anak = [...baris.children];
+  const idx = (sel) => anak.findIndex((el) => el.matches(sel) || el.querySelector(sel));
+  const tab = idx(".mode-tabs, [data-mode]");
+  const cari = idx(".search-box");
+  const status = idx("#filterStatus");
+  if (!(tab < cari && cari < status))
+    throw new Error(`urutan salah — tab:${tab} cari:${cari} status:${status}`);
+});
+t("saringan status sebaris dengan kotak cari", () => {
+  const sel = $("#filterStatus");
+  const baris = sel.closest(".controlbar-row");
+  if (!baris.classList.contains("controlbar-row--filters"))
+    throw new Error("saringan status tidak di baris pencarian");
+  if (!baris.querySelector(".search-box"))
+    throw new Error("tidak sebaris dengan kotak cari");
+  if (sel.closest(".controlbar-tail"))
+    throw new Error("saringan status ikut kelompok tombol");
+});
+t("tombol aksi sebaris dengan chip", () => {
+  const tail = $(".controlbar-tail");
+  const baris = tail.closest(".controlbar-row");
+  if (!baris.querySelector(".preset-row"))
+    throw new Error("kelompok tombol tidak sebaris dengan chip");
+  if (baris.querySelector("#filterStatus"))
+    throw new Error("saringan status ikut turun ke baris chip");
+});
+t("kotak cari didorong ke kanan bersama saringan status", () => {
+  /* Sakelar Import/Export tetap di kiri; keduanya di kanan. */
+  const css = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+  const i = css.indexOf(".search-box {");
+  const blok = css.slice(i, css.indexOf("}", i));
+  if (!/margin-left: auto/.test(blok))
+    throw new Error("kotak cari tidak didorong ke kanan");
+});
+t("tombol bersihkan pencarian terpusat pada inputnya", () => {
+  /* Sebagai inline-block, input menyisakan celah baseline sehingga
+     pembungkusnya lebih tinggi — dan ✕ yang dipusatkan pada
+     pembungkus turun beberapa piksel dari tengah kotak. */
+  const css = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+  const i = css.indexOf('.search-box input[type="text"] {');
+  const blok = css.slice(i, css.indexOf("}", i));
+  if (!/display: block/.test(blok))
+    throw new Error("input masih inline-block, ✕ akan turun dari tengah");
+});
+t("PENJAGA: nowrap & lebar 100% tidak boleh bertemu", () => {
+  /* Dengan flex-wrap: nowrap, item selebar 100% tidak bisa turun ke
+     baris berikutnya — ia menindih tetangganya. Itu yang membuat
+     tombol menumpuk di atas chip pada tampilan mobile. */
+  const bersih = cssDash.replace(/\/\*[\s\S]*?\*\//g, "");
+  const punya = (blok, sel, prop) => {
+    const i = blok.indexOf(sel + " {");
+    if (i < 0) return false;
+    return new RegExp(prop).test(blok.slice(i, blok.indexOf("}", i)));
+  };
+  [767, 991].forEach((lebar) => {
+    const m = blokMedia(lebar).replace(/\/\*[\s\S]*?\*\//g, "");
+    if (!punya(m, ".controlbar-tail", "width: 100%")) return;
+    /* Kelompok kanan kini di baris pencarian. Kalau ia selebar penuh,
+       baris ITU yang wajib boleh membungkus — kalau tidak, ia menindih
+       kotak cari, persis seperti dulu menindih chip. */
+    if (punya(m, ".controlbar-row--filters", "flex-wrap: nowrap"))
+      throw new Error(lebar + "px: kelompok kanan 100% tapi baris pencarian nowrap");
+    if (punya(m, ".controlbar-row--views", "flex-wrap: nowrap"))
+      throw new Error(lebar + "px: baris chip dipaksa nowrap");
+  });
+  if (!bersih) throw new Error("css kosong");
+});
+t("target sentuh di mobile minimal 44px", () => {
+  /* 33px cukup untuk kursor, sempit untuk ujung jari. */
+  const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
+  const i = m.indexOf("min-height: 44px");
+  if (i < 0) throw new Error("tidak ada aturan target sentuh");
+  const selektor = m.slice(m.lastIndexOf("}", i) + 1, m.indexOf("{", m.lastIndexOf("}", i)));
+  [".chip", ".icon-btn", ".btn-more"].forEach((s) => {
+    if (!selektor.includes(s)) throw new Error(s + " tidak ikut dinaikkan");
+  });
+});
+t("kotak cari TIDAK penuh di layar sedang", () => {
+  /* Di lebar split-window semuanya masih muat sebaris. Kotak cari
+     selebar 100% mendorong saringan status & tombol turun, lalu satu
+     baris terpakai hanya untuk tiga kendali kecil. */
+  const m = blokMedia(991).replace(/\/\*[\s\S]*?\*\//g, "");
+  const i = m.indexOf(".search-box {");
+  if (i < 0) throw new Error("aturan kotak cari hilang");
+  if (/flex: 1 1 100%/.test(m.slice(i, m.indexOf("}", i))))
+    throw new Error("kotak cari masih dipenuhkan di layar sedang");
+});
+t("di mobile tiap kendali mendapat barisnya sendiri", () => {
+  /* Menjejalkan dua kendali dalam satu baris di lebar ini selalu
+     berakhir sempit di kedua-duanya. */
+  const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
+  /* Sakelar buku, kotak cari, saringan status, dan chip masing-masing
+     mengambil baris penuh; tombol aksi menempel di kanan bawah chip. */
+  [".mode-tabs", ".search-box", ".control-select"].forEach((sel) => {
+    if (!new RegExp("\\" + sel + "[^{]*\\{[^}]*flex: 1 1 100%").test(m) &&
+        !/flex: 1 1 100%;\s*\n\s*margin-left: 0/.test(m))
+      throw new Error(sel + " tidak mengambil baris penuh");
+  });
+  if (!/\.preset-row \{[^}]*flex: 1 1 100%/.test(m))
+    throw new Error("chip tidak mengambil baris penuh");
+});
+t("di mobile tombol aksi tetap di kanan", () => {
+  const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
+  if (!/\.controlbar-tail \{[^}]*margin-left: auto/.test(m))
+    throw new Error("tombol aksi tidak menempel di kanan");
+});
+t("susunan split-window sama dengan layar besar", () => {
+  /* Tidak ada elemen yang berpindah tempat — orang yang bolak-balik
+     antara layar lebar dan sempit tidak perlu mencari ulang. */
+  const m = blokMedia(991).replace(/\/\*[\s\S]*?\*\//g, "");
+  ["order:", "display: contents", "position: absolute"].forEach((p) => {
+    if (m.includes(p))
+      throw new Error("susunan diubah lewat " + p + " — elemen berpindah tempat");
+  });
+  if (!/#btnAdd #lblAddBtn \{[^}]*display: none/.test(m))
+    throw new Error("label tombol tambah masih tampil");
+});
+t("tombol Tambah Jadwal jadi ikon saja", () => {
+  const m = blokMedia(991);
+  if (!/#btnAdd #lblAddBtn \{[^}]*display: none/.test(m))
+    throw new Error("label tombol masih tampil di layar sempit");
+});
+t("tombol ikon tidak dilebarkan lagi di layar terkecil", () => {
+  const m = blokMedia(767);
+  if (/\.controlbar-tail \.btn-primary-navy \{[^}]*flex: 1;/.test(m))
+    throw new Error("tombol ikon melar setengah layar");
+});
+t("tooltip tombol ikut berpindah buku", () => {
+  tulis("activeMode", "import");
+  w.render();
+  const impor = $("#btnAdd").title;
+  tulis("activeMode", "export");
+  w.render();
+  const ekspor = $("#btnAdd").title;
+  tulis("activeMode", "import");
+  if (!impor || !ekspor) throw new Error("tooltip kosong");
+  if (impor === ekspor) throw new Error("tooltip tidak berubah: " + impor);
+});
+
+console.log("— LABEL RUTE TIDAK MELUBER KELUAR KARTU —");
+function laneMulti(stops) {
+  return w.buildLaneHtml({ mode: "import", transport: "udara",
+    origin: "ICN", destination: "CGK", etd: "2026-08-13", eta: "2026-08-14",
+    routeType: "transit", routeStops: stops, docProgress: {} });
+}
+t("transit dekat tepi kiri dirata KIRI, bukan tengah", () => {
+  /* Label rata-tengah menjorok separuh lebarnya ke kiri; pada simpul
+     yang jatuh di ~0% separuh itu keluar dari kartu. */
+  const h = laneMulti([{ terminal: "TSN", date: "2026-08-13" }]);
+  const label = h.match(/<div class="p p--node p--(\w+)"[^>]*left:([\d.]+)%/g) || [];
+  eq(label.length >= 2, true, "label simpul tidak tergambar:");
+  [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)].forEach((m) => {
+    const [, align, kiri] = m;
+    const f = Number(kiri);
+    if (f <= 12 && align !== "start")
+      throw new Error(`simpul di ${f}% dirata ${align} — akan meluber ke kiri`);
+    if (f >= 88 && align !== "end")
+      throw new Error(`simpul di ${f}% dirata ${align} — akan meluber ke kanan`);
+  });
+});
+t("simpul di tengah tetap rata tengah", () => {
+  const h = laneMulti([{ terminal: "SIN", date: "2026-08-13" }]);
+  const tengah = [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)]
+    .filter((m) => Number(m[2]) > 12 && Number(m[2]) < 88);
+  tengah.forEach((m) => eq(m[1], "center", `simpul di ${m[2]}%:`));
+});
+t("ujung rute tetap rata kiri & kanan", () => {
+  const h = laneMulti([{ terminal: "SIN", date: "2026-08-13" }]);
+  const semua = [...h.matchAll(/p--node p--(\w+)"[^>]*left:([\d.]+)%/g)];
+  eq(semua[0][1], "start");
+  eq(semua[semua.length - 1][1], "end");
 });
 
 console.log("— TIDAK ADA PENANDA MELEWATI ETA —");

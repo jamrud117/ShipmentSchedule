@@ -372,6 +372,7 @@
                 <option value="">Semua Status</option>
               </select>
 
+
             </div>
 
             <div class="controlbar-row controlbar-row--views">
@@ -414,11 +415,15 @@
                   </ul>
                 </div>
 
-                <button class="btn-primary-navy" id="btnAdd">
+                <!-- title dipasang supaya tetap jelas saat labelnya
+                     disembunyikan di layar sempit; teksnya diperbarui
+                     bersama #lblAddBtn saat berpindah buku. -->
+                <button class="btn-primary-navy" id="btnAdd" title="Tambah Jadwal">
                   <i class="bi bi-plus-lg"></i>
                   <span id="lblAddBtn">Tambah Jadwal</span>
                 </button>
               </div>
+
             </div>
             </div>
         </div>
@@ -619,6 +624,26 @@
                 <div class="col-md-3">
                   <label class="form-label">Sailing on or About</label>
                   <input type="date" class="form-control" data-dn="sailingDate" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">SI Ditujukan Ke</label>
+                  <input type="text" class="form-control" data-dn="siTo" placeholder="Nama forwarder" />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">No. SI</label>
+                  <input type="text" class="form-control" data-dn="siNo" placeholder="03" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Bill of Lading</label>
+                  <input type="text" class="form-control" data-dn="blType" value="Original/Telex" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Ocean Freight</label>
+                  <input type="text" class="form-control" data-dn="oceanFreight" placeholder="Kosongkan bila diisi forwarder" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Special Instruction</label>
+                  <input type="text" class="form-control" data-dn="specialInstruction" placeholder="Catatan khusus untuk forwarder" />
                 </div>
                 <div class="col-md-9">
                   <label class="form-label">Remarks</label>
@@ -1529,12 +1554,12 @@
                 </div>
               </div>
               <div class="col-md-4">
-                <label class="form-label">BM + PDRI (Rp)</label>
+                <label class="form-label">PDRI (Rp)</label>
                 <div class="input-affix" data-affix="Rp">
                   <input
                     type="text"
                     class="form-control"
-                    id="calcBMPDRI"
+                    id="calcPDRI"
                     readonly
                     value="0"
                   />
@@ -1542,7 +1567,7 @@
               </div>
             </div>
             <div class="form-text-note mt-1">
-                    PPN 11% dan PPH 2,5% terisi otomatis dari Total Nilai Barang × NDPBM. Bea Masuk manual &mdash; tarifnya berbeda per HS Code. Mengetik sendiri menghentikan pengisian otomatis; kosongkan untuk mengaktifkannya lagi. BM + PDRI dihitung saat jadwal dibuka, bukan saat mengetik.
+                    PPN 11% dan PPH 2,5% terisi otomatis dari Total Nilai Barang × NDPBM. Bea Masuk manual &mdash; tarifnya berbeda per HS Code. Mengetik sendiri menghentikan pengisian otomatis; kosongkan untuk mengaktifkannya lagi. PDRI = Bea Masuk + PPN + PPH, dihitung seketika.
                   </div>
             <div class="row g-3 mt-1">
               <div class="col-md-12">
@@ -1948,6 +1973,7 @@
     <!-- ========================================= -->
     <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/cipl-print.js"></script>
+    <script src="js/features/cipl-excel.js"></script>
     <script src="js/views/docnum-view.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/render/prediction-view.js"></script>

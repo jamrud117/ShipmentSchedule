@@ -30,8 +30,22 @@
   flex-wrap: wrap;
 }
 .ship-title-block {
-  flex: 1 1 260px;
-  min-width: 0;
+  /* Dasar 320px, BUKAN 260px.
+
+     Blok tombol di kanan tidak pernah menyusut (flex-shrink: 0), jadi
+     kekurangan ruang selalu ditanggung judul. Dengan dasar 260px,
+     pada lebar tablet nama customer pecah dua baris dan "No. Aju:"
+     terpisah dari nomornya — padahal .ship-card-top boleh membungkus,
+     dan menurunkan barisan tombol ke baris sendiri jauh lebih terbaca.
+
+     min-width memakai min() supaya di layar telepon judulnya tetap
+     boleh menyempit penuh dan tidak memaksa kartu bergeser mendatar.
+     Angkanya diukur, bukan dikira: barisan tombol selebar 276px dan
+     blok judul butuh 354px untuk menaruh nama customer serta baris
+     "No. SPPB / No. Aju" masing-masing dalam satu baris. 360px memberi
+     sedikit kelonggaran di atas itu. */
+  flex: 1 1 360px;
+  min-width: min(360px, 100%);
 }
 .ship-actions-block {
   display: flex;
@@ -284,7 +298,14 @@
   font-size: 0.66rem;
   letter-spacing: 0.02em;
   color: var(--muted);
-  margin-bottom: 10px;
+  /* 18px, bukan 10px.
+
+     Penanda kapal setinggi 26px dan dipusatkan pada jalur setebal 3px,
+     jadi ia menonjol ~11px ke ATAS jalurnya. Dengan jarak 10px,
+     lingkaran penanda menindih tulisan "Telat 1 Hari" / "Diantar 2
+     Hari Lagi" di kanan atas — justru saat pengiriman hampir sampai,
+     ketika keterangan itu paling dicari. */
+  margin-bottom: 18px;
 }
 .lane {
   margin-bottom: 16px;
@@ -496,12 +517,34 @@
 /* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
 .date-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* auto-fit, bukan repeat(3): tiga kolom hanya selama masing-masing
+     masih muat 200px. Di bawah itu label "Estimated Delivery" beserta
+     lencananya pecah dua baris — jadi barisnya turun ke dua kolom
+     tepat sebelum itu terjadi, bukan setelahnya. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px 14px;
+}
+/* Kotak tanggal: label boleh setinggi apa pun, kotak isiannya TETAP
+   sejajar.
+
+   Tiga label di baris ini tidak sama tingginya — "ETD" teks polos,
+   "ETA" dan "Estimated Delivery" membawa lencana AUTO/MANUAL, dan di
+   layar sempit label terpanjang turun ke baris kedua. Karena dulu
+   label & isian hanya ditumpuk biasa, tinggi label langsung menggeser
+   kotak di bawahnya: ETD naik 4px dari dua lainnya di SEMUA lebar, dan
+   di bawah 660px Estimated Delivery turun 16px sendirian.
+
+   Sekarang tiap kotak jadi kolom lentur setinggi barisnya, dan
+   isiannya didorong ke dasar — berapa pun tinggi labelnya, ketiga
+   kotak tanggal berhenti di garis yang sama. */
+.date-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .date-field label {
   font-family: var(--font-mono);
@@ -509,9 +552,13 @@
   letter-spacing: 0.02em;
   color: var(--muted);
   margin-bottom: 4px;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .date-field input[type="date"] {
+  margin-top: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 8px;
@@ -583,7 +630,9 @@
   flex-wrap: wrap;
 }
 .delay-strip-fields .date-field {
-  flex: 1 1 160px;
+  /* 200px, bukan 160px: di bawah itu kotak tanggal dua kolom lebih
+     sempit daripada isian tanggalnya sendiri. */
+  flex: 1 1 200px;
 }
 .delay-delta {
   font-family: var(--font-mono);
@@ -759,8 +808,12 @@
   .date-field {
     min-width: 0;
   }
+  /* .delay-strip-fields memakai FLEX, bukan grid — aturan
+     grid-template-columns di sini tidak pernah berlaku sama sekali.
+     Yang dibutuhkan pembungkusnya dipaksa satu per baris. */
   .delay-strip-fields {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

@@ -160,11 +160,51 @@ function ciplJudulInvoice(row) {
    kolom Type. Dipecah pada tanda hubung PERTAMA yang diapit spasi;
    tanpa pemisah, seluruhnya masuk kolom Item dan kolom Type dibiarkan
    kosong — bukan ditebak. */
+/* NAMA BARANG BAKU yang menempati kolom Item.
+
+   Sebagian nama memakai tanda hubung sebagai pemisah — "TYRE MOLD FULL
+   SET - NOKIAN ENTRUST 235/45R19" — dan itu sudah cukup jelas. Tapi
+   sebagian lain menuliskannya menyambung tanpa pemisah apa pun:
+
+     TYRE MOLD FULL SET CREDO SUNMODE SUV 215/65R16
+     └──── jenis barang ────┘└──── keterangan ────┘
+
+   Tanpa daftar ini tidak ada cara menebak di mana batasnya: "FULL SET"
+   dan "CREDO SUNMODE" sama-sama huruf besar, sama-sama beberapa kata.
+   Yang tahu batasnya cuma orang yang tahu katalog barangnya.
+
+   Menambah jenis barang baru cukup satu baris di sini. Yang tidak
+   terdaftar TIDAK dipecah — seluruhnya masuk kolom Item dan kolom Type
+   dibiarkan kosong, bukan ditebak. */
+const CIPL_JENIS_BARANG = [
+  "TYRE MOLD FULL SET",
+  "TYRE MOLD SIDE ONLY",
+  "TYRE MOLD TREAD ONLY",
+];
+
 function ciplPecahNama(nama) {
   const s = String(nama || "").trim();
+
+  /* Tanda hubung didahulukan: kalau penulisnya sudah memisahkan
+     sendiri, itu batas yang paling bisa dipercaya. */
   const i = s.indexOf(" - ");
-  if (i < 0) return { item: s, type: "" };
-  return { item: s.slice(0, i).trim(), type: s.slice(i + 3).trim() };
+  if (i >= 0) {
+    return { item: s.slice(0, i).trim(), type: s.slice(i + 3).trim() };
+  }
+
+  /* Jenis TERPANJANG dulu, supaya "TYRE MOLD FULL SET" tidak kalah
+     oleh entri lain yang kebetulan jadi awalannya. */
+  const urut = CIPL_JENIS_BARANG.slice().sort((a, b) => b.length - a.length);
+  const atas = s.toUpperCase();
+  const cocok = urut.find((j) => atas.startsWith(j.toUpperCase()));
+  if (cocok) {
+    return {
+      item: s.slice(0, cocok.length).trim(),
+      type: s.slice(cocok.length).trim(),
+    };
+  }
+
+  return { item: s, type: "" };
 }
 
 /* "81*81*81" -> "81 CM x 81 CM x 81 CM", mengikuti tulisan di berkas
@@ -357,7 +397,7 @@ function ciplAngkutanHtml(row, shipment) {
     <tr>
       <td class="ci-k">Port of Loading</td>
       <td class="ci-k ci-center">Carrier</td>
-      <td class="ci-k ci-center ci-sail">Sailing on<br>or about</td>
+      <td class="ci-k ci-center ci-sail">Sailing on<br>or About</td>
       <td class="ci-k">Final Destination</td>
     </tr>
     <tr class="ci-ship-val">
@@ -510,6 +550,195 @@ function ciplHalamanPacking(row, shipment, baris) {
 }
 
 /* ------------------------------------------------------------------
+   HALAMAN 3 — SHIPPING INSTRUCTION
+
+   Berbeda bentuk dari dua halaman sebelumnya: bukan tabel barang,
+   melainkan daftar instruksi ke forwarder. Karena itu ia tidak
+   memakai potongan bersama — kop pun ditulis ulang tanpa bingkai
+   kotak, mengikuti berkas contohnya.
+
+   Beberapa baris SENGAJA dibiarkan kosong (PEB Number, Booking
+   Number, Vessel, ETD/ETA, Stuffing Date). Itu yang diisi forwarder
+   setelah menerima instruksinya — mengisinya dari tebakan kita
+   justru menghilangkan gunanya.
+------------------------------------------------------------------ */
+
+/* SUSUNAN SHIPPING INSTRUCTION — dipetakan dari berkas aslinya.
+
+   Enam garis pemisah di berkas asli BUKAN border sel, melainkan bentuk
+   gambar 0,75pt yang membentang kolom A-H (baris 32, 35, 45, 51, 53,
+   57). Di sini digambar sebagai border bawah baris; hasilnya sama dan
+   tidak bergantung pada dukungan gambar.
+
+   Penanda di depan tiap label adalah huruf "T" berfont Wingdings pada
+   berkas asli; di HTML dipakai lambang setara.
+
+   `kosong: true` menandai baris yang SENGAJA dibiarkan kosong — diisi
+   forwarder setelah menerima instruksinya. */
+const CIPL_SI_BARIS = [
+  { k: "Bill of Lading", f: "blType", bawaan: "Original/Telex" },
+  { k: "Shipper", alamat: "shipper" },
+  { k: "Consignee", alamat: "consignee" },
+  { k: "Notify Party", f: "notifyParty", bawaan: "SAME AS CONSIGNEE" },
+  { k: "Place of Receipt", f: "portLoading", dari: "origin" },
+  { k: "Port of Discharge", f: "finalDestination", dari: "destination", garis: true },
+
+  { k: "Description of Goods", hitung: "barang", tebal: true },
+  { k: "Volume", hitung: "muatan", garis: true },
+
+  { k: "Gross Weight", hitung: "gw", satuan: "KGS" },
+  { k: "Net Weight", hitung: "nw", satuan: "KGS" },
+  { k: "QTY", hitung: "koli", tebal: true },
+  { k: "PEB NUMBER", kosong: true },
+  { k: "PEB DATE", kosong: true },
+  { k: "CONT + SEAL", kosong: true },
+  { k: "HS CODE", hitung: "hs", tebal: true },
+  { k: "Ocean Freight", f: "oceanFreight", garis: true },
+
+  { k: "Booking Number", kosong: true },
+  { k: "Vessel", kosong: true },
+  { k: "ETD", kosong: true },
+  { k: "ETA", kosong: true },
+  { k: "Stuffing Date", kosong: true, garis: true },
+
+  { k: "L/C Number", kosong: true, garis: true },
+  { k: "Special instruction :", tanpaTitikDua: true, garis: true },
+];
+
+/* Nomor SI diambil dari ekor nomor invoice: "DDI-CRBM-VIII-042" -> 42.
+
+   Nol di depan dibuang karena penomoran SI ditulis apa adanya di
+   berkas aslinya ("NO. 03" untuk urutan ketiga). Kalau kolom No. SI
+   diisi manual, isian itu yang menang — nomor turunan hanya bawaan. */
+function ciplNoSiDariInvoice(nomor) {
+  const m = /(\d+)\s*$/.exec(String(nomor || ""));
+  if (!m) return "";
+  return String(Number(m[1]));
+}
+
+/* Nilai tiap baris dikumpulkan SEKALI di muka, lalu dipakai bersama
+   oleh versi cetak dan versi Excel. Menghitungnya dua kali berarti dua
+   sumber angka yang akan berbeda pelan-pelan — dan yang satu tercetak,
+   yang satu terkirim ke forwarder. */
+function ciplSiData(row, shipment, baris) {
+  const p = row.payload || {};
+  const consignee = [
+    p.customer || (shipment && shipment.party) || "",
+    ...ciplBarisTeks(p.consigneeAddress),
+  ].filter(Boolean);
+  const koli = ciplTotalKoli(shipment);
+
+  return {
+    tujuan: p.siTo || (shipment && shipment.forwarder) || "",
+    no: p.siNo || ciplNoSiDariInvoice(row.doc_number),
+    shipper: CIPL_SHIPPER,
+    consignee: consignee,
+    barang: (baris.find((b) => b.item) || {}).item || "",
+    muatan: (shipment && shipment.muatan) || "",
+    gw: ciplAngka(baris.reduce((s, b) => s + b.bruto, 0)),
+    nw: ciplAngka(baris.reduce((s, b) => s + b.netto, 0)),
+    koli: koli ? ciplAngka(koli) + " PACKAGE" : "",
+    hs: (baris.find((b) => b.hs) || {}).hs || "",
+    tanggal: ciplTanggalId(row.doc_date),
+    payload: p,
+    shipment: shipment,
+  };
+}
+
+function ciplSiNilai(def, d) {
+  if (def.kosong || def.tanpaTitikDua) return "";
+  if (def.hitung) return d[def.hitung] || "";
+  if (def.f) {
+    const v = d.payload[def.f];
+    if (v) return v;
+    if (def.bawaan) return def.bawaan;
+  }
+  if (def.dari && d.shipment) return portCodeLabel(d.shipment[def.dari]);
+  return "";
+}
+
+function ciplHalamanShippingInstruction(row, shipment, baris) {
+  const d = ciplSiData(row, shipment, baris);
+  const teksBaris = (arr) => arr.map((x) => `<div>${escapeHtml(x)}</div>`).join("");
+  const penanda = '<span class="si-b">&#10059;</span>';
+
+  const isiBaris = CIPL_SI_BARIS.map((def) => {
+    /* Kelompok dipisahkan JARAK, bukan garis — mengikuti berkas
+       rujukan, yang tidak punya satu garis pun di lembar ini. */
+    const kelas = def.garis ? "si-jeda" : "";
+    const label = def.tanpaTitikDua
+      ? `${penanda}<u>${escapeHtml(def.k)}</u>`
+      : `${penanda}${escapeHtml(def.k)}`;
+
+    if (def.alamat) {
+      /* "Address" sub-label di baris berikutnya, bukan bagian dari
+         nilainya — mengikuti berkas aslinya. */
+      const isi = d[def.alamat];
+      return `
+      <tr>
+        <td class="si-k">${label}</td>
+        <td class="si-c">:</td>
+        <td class="si-v">${escapeHtml(isi[0] || "")}</td>
+      </tr>
+      <tr class="${kelas}">
+        <td class="si-k si-sub">Address</td>
+        <td class="si-c"></td>
+        <td class="si-v">${teksBaris(isi.slice(1))}</td>
+      </tr>`;
+    }
+
+    const nilai = ciplSiNilai(def, d);
+    return `
+      <tr class="${kelas}">
+        <td class="si-k">${label}</td>
+        <td class="si-c">${def.tanpaTitikDua ? "" : ":"}</td>
+        <td class="si-v${def.tebal ? " si-v-bold" : ""}">${escapeHtml(nilai)}${
+          def.satuan && nilai ? ` &nbsp; ${def.satuan}` : ""
+        }</td>
+      </tr>`;
+  }).join("");
+
+  return `
+  <div class="ci-sheet ci-page2 si-sheet">
+    <div class="ci-box si-box">
+    <table class="ci-kop">
+      <tr>
+        <td class="ci-kop-logo"><img src="${SJ_LOGO}" alt="" /></td>
+        <td class="ci-kop-teks">
+          <div class="ci-company">${escapeHtml(CIPL_PERUSAHAAN.nama)}</div>
+          <div class="ci-addr">${escapeHtml(CIPL_PERUSAHAAN.pusat)}</div>
+          <div class="ci-addr">${escapeHtml(CIPL_PERUSAHAAN.cabang)}</div>
+        </td>
+      </tr>
+    </table>
+
+    <div class="si-to">TO : ${escapeHtml(d.tujuan)}</div>
+    <div class="si-title">SHIPPING INSTRUCTION</div>
+    <div class="si-no">NO. ${escapeHtml(d.no)}</div>
+    <div class="si-lead">Please arrange our shipment per description below :</div>
+
+    <table class="si-list">${isiBaris}</table>
+
+    <div class="si-tutup">
+      <div>Thank you for your good cooperation.</div>
+      <div class="si-kota">Cirebon,&nbsp; ${escapeHtml(d.tanggal)}</div>
+      <div>Regards,</div>
+      <div class="si-ttd">SIGN &amp; STAMP.</div>
+    </div>
+    </div>
+  </div>`;
+}
+
+/* "03 Agustus 2026" — bentuk tanggal Indonesia untuk penutup surat. */
+function ciplTanggalId(iso) {
+  const d = parseLocalDate(iso);
+  if (!d) return "";
+  const bln = ["Januari","Februari","Maret","April","Mei","Juni",
+               "Juli","Agustus","September","Oktober","November","Desember"];
+  return `${String(d.getDate()).padStart(2, "0")} ${bln[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/* ------------------------------------------------------------------
    PEMICU CETAK
 ------------------------------------------------------------------ */
 function cetakCipl(rowId) {
@@ -545,7 +774,7 @@ function cetakCipl(rowId) {
 <html lang="en"><head><meta charset="utf-8">
 <title>${escapeHtml(ciplJudulInvoice(row))} ${escapeHtml(row.doc_number || "")}</title>
 <style>${ciplCss()}</style></head>
-<body>${ciplHalamanInvoice(row, shipment, baris)}${ciplHalamanPacking(row, shipment, baris)}</body></html>`);
+<body>${ciplHalamanInvoice(row, shipment, baris)}${ciplHalamanPacking(row, shipment, baris)}${ciplHalamanShippingInstruction(row, shipment, baris)}</body></html>`);
   w.document.close();
   w.onload = () => {
     w.focus();
@@ -786,5 +1015,68 @@ function ciplCss() {
     vertical-align: top;
   }
   .ci-sign-space { height: 76px; }
+
+  /* ---- SHIPPING INSTRUCTION ----
+     Berbingkai luar seperti Invoice & Packing List, tapi tanpa sekat
+     apa pun di dalamnya: lembar ini surat, bukan formulir berkolom. */
+  .si-sheet { font-size: 8.5pt; }
+  /* Bingkainya setinggi halaman, bukan setinggi isinya.
+
+     Halaman A4 dikurangi padding .ci-sheet 10mm atas & bawah. Tanpa
+     ini kotaknya berhenti di baris terakhir yang terisi, jadi
+     tingginya berubah-ubah mengikuti panjang alamat consignee —
+     dua SI dari pengiriman berbeda tercetak dengan kotak berbeda. */
+  .si-box {
+    padding: 26px 30px 34px;
+    min-height: calc(297mm - 20mm - 2px);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Blok penutup didorong ke bawah kotak. */
+  .si-tutup { margin-top: auto; }
+  .si-to { font-weight: 700; font-size: 7.5pt; margin: 10px 0 18px; }
+  .si-title {
+    text-align: center; font-weight: 700; font-size: 12pt;
+    text-decoration: underline;
+  }
+  .si-no { text-align: center; font-weight: 700; font-size: 9pt; margin-bottom: 14px; }
+  .si-lead { font-size: 7.5pt; margin-bottom: 10px; }
+
+  .si-list { width: 100%; }
+  .si-list td { vertical-align: top; padding: 1px 0; font-size: 8pt; }
+  .si-k { width: 190px; padding-left: 26px !important; }
+  /* Titik dua sejajar di satu kolom sendiri — kalau ditempel ke label,
+     posisinya ikut panjang labelnya dan barisnya terlihat goyah. */
+  .si-c { width: 14px; }
+  .si-v-bold { font-weight: 700; }
+  /* Penanda di depan label — huruf Wingdings "T" pada berkas asli. */
+  .si-b { display: inline-block; width: 14px; font-size: 6.5pt; }
+  /* "Address" sub-label. Disejajarkan dengan LABEL di atasnya —
+     penandanya selebar 14px, jadi teksnya digeser sejauh itu supaya
+     huruf pertamanya lurus dengan "Shipper" dan "Consignee". */
+  .si-sub {
+    padding-left: 40px !important;
+    font-size: 7.5pt;
+  }
+  /* Jeda antar kelompok keterangan — TANPA GARIS.
+
+     Versi sebelumnya menggambar border bawah di sini. Berkas rujukan
+     tidak punya satu garis pun di lembar ini; jaraknya yang memisahkan
+     kelompok, dan garis tambahan membuat surat ini terbaca sebagai
+     formulir. */
+  .si-jeda td { padding-bottom: 6px; }
+  .si-jeda + tr td { padding-top: 10px; }
+
+  .si-tutup { margin-top: 26px; font-size: 8pt; }
+  .si-kota { margin-top: 12px; }
+  /* Ruang untuk materai, tanda tangan basah, dan cap perusahaan.
+     40px hanya cukup untuk tanda tangan; materai 10.000 saja sudah
+     sekitar 2 cm dan capnya lebih besar lagi. */
+  .si-ttd {
+    margin-top: 118px;
+    text-decoration: underline;
+    font-weight: 600;
+  }
   `;
 }

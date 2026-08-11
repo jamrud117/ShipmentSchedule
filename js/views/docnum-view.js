@@ -845,7 +845,9 @@ async function renderDocNumHistory() {
                        jenis invoice yang dipilih saat nomor terbit. */
                     /^invoice/.test(jenis.key) && ciplBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-cipl="${r.id}"
-                                 title="Cetak Commercial Invoice & Packing List"><i class="bi bi-printer"></i></button>`
+                                 title="Cetak Commercial Invoice, Packing List & Shipping Instruction"><i class="bi bi-printer"></i></button>
+                         <button type="button" class="icon-btn" data-xls-cipl="${r.id}"
+                                 title="Unduh Excel (Invoice, PL, SI)"><i class="bi bi-file-earmark-excel"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
@@ -942,6 +944,11 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   const cetakCi = e.target.closest("[data-print-cipl]");
   if (cetakCi) {
     cetakCipl(cetakCi.dataset.printCipl);
+    return;
+  }
+  const xlsCi = e.target.closest("[data-xls-cipl]");
+  if (xlsCi) {
+    unduhCiplExcel(xlsCi.dataset.xlsCipl);
     return;
   }
   if (e.target.closest("[data-del-num]") && !requireEdit()) return;

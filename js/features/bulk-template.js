@@ -112,10 +112,35 @@ function templateCatatanRows(mode) {
   return umum.concat(khusus);
 }
 
+let templateSedangDibuat = false;
+
 async function unduhTemplateBulk(mode) {
+  if (templateSedangDibuat) return;
+  templateSedangDibuat = true;
+  try {
+    return await susunTemplateBulk(mode);
+  } catch (err) {
+    console.error(err);
+    showToast(
+      `Gagal menyusun template: ${err && err.message ? err.message : "kesalahan tidak diketahui"}`,
+      "danger",
+    );
+  } finally {
+    /* Dilepas di finally: kalau gagal dan bendera tetap menyala,
+       tombolnya mati selamanya sampai halaman dimuat ulang. */
+    templateSedangDibuat = false;
+  }
+}
+
+async function susunTemplateBulk(mode) {
   const m = mode === "export" ? "export" : "import";
   const headers = m === "import" ? IMPORT_BULK_HEADERS : EXPORT_BULK_HEADERS;
   const rows = m === "import" ? templateRowsImport() : templateRowsExport();
+
+  /* Pustakanya dimuat sesuai kebutuhan, sama seperti Bulk Export.
+     Tanpa ini, klik pertama di sesi yang belum pernah membuka Bulk
+     Export akan gagal. */
+  await ensureExcelJS();
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "EXIM DDI";

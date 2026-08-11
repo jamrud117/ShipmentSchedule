@@ -6,13 +6,6 @@
 
 /* Dulu ada ikon corong di sini lewat content: "\F62A". Nomor glyph */
 
-@media (max-width: 991px) {
-
-}
-@media (max-width: 575px) {
-
-}
-
 /* BILAH KENDALI (cari / saring / urut / tampilan) */
 /* Bilah alat dibuat sebagai KOTAK, bukan pita selebar layar.
 
@@ -54,7 +47,9 @@
   gap: var(--sp-4);
 }
 
-/* Baris SARINGAN: SATU kelompok rapat di kiri, tidak dipisah */
+/* Baris SARINGAN: kotak cari di kiri, saringan status & tombol aksi di
+   kanan. Chip saringan cepat mendapat barisnya sendiri secara penuh,
+   jadi kelimanya muat sebaris. */
 .controlbar-row--filters {
   justify-content: flex-start;
 }
@@ -67,10 +62,15 @@
 /* flex-grow 0: dulu kotak ini melar mengisi sisa ruang. Di susunan */
 .search-box {
   position: relative;
-  flex: 1 1 300px;
-  /* Dibatasi agar tidak melar sampai ujung layar lebar */
+  /* Didorong ke kanan bersama saringan status; sakelar Import/Export
+     tetap di kiri. */
+  margin-left: auto;
+  /* Menyusut lebih dulu daripada saringan status di sebelahnya: kotak
+     cari yang menyempit masih bisa diketik, dropdown yang menyempit
+     jadi tak terbaca. */
+  flex: 0 1 340px;
   max-width: 380px;
-  min-width: 190px;
+  min-width: 150px;
 }
 .search-box i {
   position: absolute;
@@ -83,6 +83,13 @@
 }
 /* Ditulis dengan [type="text"] (0,1,2) supaya menang atas aturan */
 .search-box input[type="text"] {
+  /* display: block, bukan inline-block bawaan.
+
+     Sebagai inline-block, input menyisakan celah baseline di bawahnya,
+     sehingga pembungkusnya beberapa piksel lebih tinggi daripada input
+     itu sendiri. Tombol ✕ dipusatkan pada PEMBUNGKUS — jadi ia turun
+     beberapa piksel dari tengah kotak yang terlihat. */
+  display: block;
   width: 100%;
   height: 38px;
   padding: 0 34px 0 32px;
@@ -224,46 +231,130 @@
 
 /* ---- Sakelar tampilan Tabel / Kartu ---- */
 
-@media (max-width: 1199px) {
-  /* Chip saringan cepat boleh digeser mendatar daripada dipaksa */
-  .preset-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .preset-row::-webkit-scrollbar {
-    display: none;
-  }
-}
+/* CHIP SARINGAN DIBIARKAN TURUN KE BARIS BERIKUTNYA, BUKAN DIGESER.
 
+   Sebelumnya baris ini dipaksa satu baris dengan overflow-x: auto.
+   Itu tidak pernah bisa dipakai: scrollbar-nya disembunyikan global di
+   base.css, jadi tidak ada penanda bahwa masih ada chip di kanan DAN
+   tidak ada cara menggesernya dengan tetikus biasa — hanya gestur
+   trackpad atau shift+roda, yang tidak ditemukan orang dengan
+   sendirinya.
+
+   Chipnya cuma lima dan pendek-pendek, jadi membungkus ke baris kedua
+   memakan satu baris tambahan dan semuanya langsung bisa diklik.
+   Menyembunyikan isi di balik gulir yang tak terlihat lebih mahal
+   daripada satu baris. */
+
+/* ==================================================================
+   SPLIT WINDOW & TABLET  (<= 991px)
+
+   Susunannya sama dengan layar besar — hanya dirapatkan:
+
+     [tab]  [cari ......................]  [status]
+     [chip chip chip chip chip]          [ ⋯ ] [ + ]
+
+   Yang berubah cuma tiga: kotak cari boleh melar mengisi sisa, label
+   tombol tambah jadi ikon, dan chip boleh turun ke baris kedua kalau
+   memang tidak muat. Tidak ada elemen yang berpindah tempat, sehingga
+   orang yang bolak-balik antara layar lebar dan sempit tidak perlu
+   mencari ulang.
+================================================================== */
 @media (max-width: 991px) {
+  /* SPLIT WINDOW.
+
+     Susunannya dipertahankan seperti layar besar — sakelar buku di
+     kiri, cari & saringan status di kanan, chip dan tombol aksi di
+     baris kedua. Yang berubah cuma keleluasaan menyusut. */
   .controlbar-row--filters {
     flex-wrap: wrap;
   }
   .search-box {
-    flex: 1 1 100%;
     max-width: none;
+    flex: 1 1 200px;
   }
-
-  .controlbar-row--views {
-    flex-wrap: nowrap;
+  /* Saringan status menyusut ikut ruang; teksnya terpotong masih
+     terbaca, tombol yang terpotong tidak. */
+  .controlbar-row--filters .control-select {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  /* Chip membungkus di ruangnya; tombol aksi tetap di kanan. */
+  .preset-row {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  /* Label tombol disembunyikan — ia memakan lebih dari sepertiga
+     bilah, dan ikon plus sudah dikenali. Judulnya tetap lewat tooltip. */
+  #btnAdd #lblAddBtn {
+    display: none;
+  }
+  #btnAdd {
+    padding-left: 11px;
+    padding-right: 11px;
   }
 }
 
+/* ==================================================================
+   MOBILE  (<= 767px)
+
+   Di lebar ini menjejalkan dua kendali dalam satu baris selalu
+   berakhir sempit di kedua-duanya. Jadi tiap baris diberi SATU tugas:
+
+     [    IMPORT    |    EXPORT    ]
+     [ cari .............................. ]
+     [ status ............................ ]
+     [ chip chip chip chip chip ]
+     [                            ⋯     +  ]
+
+   Lebih tinggi, tapi tiap sasaran cukup besar untuk ujung jari dan
+   tidak ada yang terpotong.
+================================================================== */
 @media (max-width: 767px) {
   .controlbar {
     position: static;
   }
-  .controlbar-tail {
+
+  /* MOBILE — tiap kelompok mengambil barisnya sendiri.
+
+     Di lebar ini memaksa dua kendali berdampingan berarti keduanya
+     terlalu sempit untuk dipakai. Lebih baik satu baris per kelompok:
+     sakelar buku, kotak cari, saringan status, chip, lalu tombol. */
+  .mode-tabs,
+  .search-box,
+  .controlbar-row--filters .control-select {
+    flex: 1 1 100%;
     margin-left: 0;
-    width: 100%;
+    max-width: none;
   }
-  .controlbar-tail .btn-primary-navy {
-    flex: 1;
-    justify-content: center;
+  .preset-row {
+    flex: 1 1 100%;
+  }
+  .controlbar-tail {
+    margin-left: auto;
   }
 
+  /* TARGET SENTUH.
+
+     33px cukup untuk kursor tetikus, sempit untuk ujung jari — pedoman
+     yang lazim 44px. Yang dinaikkan tingginya saja, bukan ukuran
+     hurufnya, supaya susunannya tidak berubah. */
+  .chip,
+  .icon-btn,
+  .btn-more,
+  .control-select,
+  .btn-primary-navy {
+    min-height: 44px;
+  }
+  .icon-btn,
+  .btn-more,
+  .controlbar-tail .btn-primary-navy {
+    min-width: 44px;
+  }
+  /* Target 44px yang berdempetan tetap mudah salah tekan. */
+  .preset-row {
+    gap: 9px;
+  }
 }
 
 /* PEMISAH TANGGAL */
