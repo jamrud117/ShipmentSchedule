@@ -14,7 +14,24 @@
 
 function ciplXlsTanggal(iso) {
   const d = parseLocalDate(iso);
-  return d || "";
+  if (!d) return "";
+  /* TENGAH MALAM UTC, BUKAN TENGAH MALAM SETEMPAT.
+
+     ExcelJS mengubah objek Date jadi nomor seri Excel memakai jamnya
+     dalam UTC. parseLocalDate mengembalikan tengah malam waktu
+     setempat — di WIB (UTC+7) itu berarti pukul 17.00 UTC pada HARI
+     SEBELUMNYA. Sel yang formatnya hanya tanggal lalu menampilkan
+     tanggal yang mundur satu hari:
+
+       yang dipilih di aplikasi   12 Aug 2026
+       yang tercetak di Excel     11 Aug 2026
+
+     Ini bukan soal tampilan: yang mundur adalah Tanggal Invoice pada
+     dokumen yang dikirim ke forwarder dan bea cukai negara tujuan.
+
+     Disusun ulang dari komponen tanggalnya — bukan digeser sekian jam
+     — supaya benar juga di zona waktu mana pun berkas ini dibuat. */
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
 /* Menggabung sel tanpa menggagalkan seluruh penyusunan.
@@ -164,6 +181,32 @@ const XLS_KANAN = { horizontal: "right", vertical: "middle" };
    sebanding sel-per-sel dengan rujukan walau tampil sama. */
 const XLS_FMT_TANGGAL = "dd\\ mmm\\ yyyy";
 
+/* FORMAT ANGKA — disalin dari berkas rujukan.
+
+   "Comma Style" bawaan Excel: ribuan berpemisah, negatif dalam kurung,
+   nol jadi tanda hubung, dan ada sedikit lekuk di kanan supaya angkanya
+   tidak menempel garis kolom. Ditulis apa adanya, bukan "#,##0" yang
+   mirip tapi menghasilkan tampilan berbeda pada nilai nol dan minus. */
+const XLS_FMT_UANG = '_(* #,##0_);_(* \\(#,##0\\);_(* "-"_);_(@_)';
+/* Berat: ribuan berpemisah + satu spasi penutup, sepadan lebar dengan
+   lekuk kanan pada format uang di atas. */
+const XLS_FMT_BERAT = "#,##0_ ";
+const XLS_FMT_CBM = "0.000";
+
+/* HURUF LEMBAR SHIPPING INSTRUCTION — 12pt, bukan 8/9pt.
+
+   Lembar ini surat yang dibaca orang lain di layar, bukan formulir
+   berkolom yang dipadatkan ke satu halaman. Ukurannya diambil dari
+   berkas rujukan.
+
+   Label kiri memakai Calibri: sel itu berisi teks kaya (penanda ✻ +
+   tulisannya), dan huruf tingkat selnya memang tertinggal Calibri di
+   berkas aslinya. Ditiru apa adanya — yang terlihat huruf di dalam
+   teks kayanya, bukan yang ini. */
+const XLS_SI = { name: "Arial", size: 12 };
+const XLS_SI_TEBAL = { name: "Arial", size: 12, bold: true };
+const XLS_SI_LABEL = { name: "Calibri", size: 12 };
+
 function ciplXlsBarisTotal(jumlahBarang) {
   return XLS_BARIS_ITEM + Math.max(jumlahBarang, XLS_MIN_BARIS);
 }
@@ -256,7 +299,7 @@ function ciplXlsBlokPihak(ws, row, shipment) {
      Karena itu ketiganya TIDAK lagi jadi parameter per lembar. Sebuah
      parameter yang kedua pemanggilnya mengisi sama hanya menyisakan
      kesan bahwa keduanya boleh berbeda. */
-  ciplXlsSet(ws, "D27", "Sailing on or About", { name: "Arial", size: 8 }, XLS_TENGAH);
+  ciplXlsSet(ws, "D27", "Sailing on or About", XLS_TEBAL, XLS_TENGAH);
   ciplXlsSet(ws, "E27", "Final Destination", XLS_TEBAL, XLS_TENGAH);
   ciplXlsSet(ws, "A28", p.portLoading || (shipment ? portCodeLabel(shipment.origin) : ""),
     XLS_ARIAL, XLS_TENGAH);
@@ -346,7 +389,7 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
   const ws = wb.addWorksheet("INVOICE");
   const mata = (row.payload || {}).currency || "USD";
   ciplXlsKerangka(wb, ws, ciplJudulInvoice(row),
-    [4.5703125, 19.85546875, 30.5703125, 15.42578125, 6.42578125, 5, 7.140625, 10, 7, 15]);
+    [4.5703125, 19.85546875, 30.5703125, 15.42578125, 6.42578125, 5, 7.140625, 10, 7, 10.85546875]);
   ciplXlsBlokPihak(ws, row, shipment);
 
   ciplXlsJudulTabel(ws,
@@ -358,8 +401,16 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
     [i + 1, b.item, b.type, ciplXlsAngka(b.hs), b.qty, b.satuan, mata, b.harga, mata, b.amount]
       .forEach((v, k) => {
         const a = String.fromCharCode(65 + k) + r;
+        /* Kolom H (Unit Price) & J (Amount) TANPA bungkus baris.
+
+           Membungkus baris pada sel angka tidak pernah menolong —
+           angka tidak punya tempat patah — tapi ia mengubah tinggi
+           baris begitu angkanya sedikit lebih panjang dari kolomnya,
+           dan barisnya jadi tidak sama tinggi dengan yang lain. */
+        const angka = k === 7 || k === 9;
         ciplXlsSet(ws, a, v, XLS_ARIAL,
-          { horizontal: "center", vertical: "middle", wrapText: true });
+          { horizontal: "center", vertical: "middle", wrapText: !angka });
+        if (angka) ws.getCell(a).numFmt = XLS_FMT_UANG;
         ciplXlsKotak(ws, a);
       });
   });
@@ -367,20 +418,23 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
   const rt = ciplXlsBarisTotal(baris.length);
   ciplXlsGabung(ws, `G${rt}:H${rt}`);
   ciplXlsSet(ws, "G" + rt, "Total", XLS_TEBAL, XLS_TENGAH);
-  ciplXlsSet(ws, "I" + rt, mata, XLS_ARIAL, XLS_TEGAK);
+  ciplXlsSet(ws, "I" + rt, mata, XLS_ARIAL, XLS_TENGAH);
+  /* Angka Total: Arial 9 BIASA dan rata tengah — bukan Arial 8 tebal
+     rata kanan. Ia sudah berdiri di kotaknya sendiri, jadi tidak butuh
+     penebalan untuk dibedakan. */
   ciplXlsSet(ws, "J" + rt, baris.reduce((s, b) => s + b.amount, 0),
-    XLS_TEBAL, XLS_KANAN);
+    XLS_ARIAL, XLS_TENGAH).numFmt = XLS_FMT_UANG;
   ciplXlsKakiTabel(ws, rt, "G", ["G", "I", "J"]);
 
   ciplXlsBingkaiLuar(ws, rt + 4);
-  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, scale: 80, tengah: true });
+  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, scale: 83, tengah: true });
   return ws;
 }
 
 function ciplXlsPacking(wb, row, shipment, baris) {
   const ws = wb.addWorksheet("PL");
   ciplXlsKerangka(wb, ws, "PACKING LIST",
-    [4.5703125, 19.42578125, 30.140625, 15.140625, 6.42578125, 5, 7.140625,
+    [4.5703125, 19.42578125, 30.140625, 16, 6.42578125, 5, 7.140625,
      8.42578125, 19.42578125, 10.85546875]);
   ciplXlsBlokPihak(ws, row, shipment);
 
@@ -394,9 +448,10 @@ function ciplXlsPacking(wb, row, shipment, baris) {
      b.netto, b.bruto, b.dimensi, b.cbmRaw].forEach((v, k) => {
       const a = String.fromCharCode(65 + k) + r;
       ciplXlsSet(ws, a, v, XLS_ARIAL, XLS_TENGAH);
+      if (k === 6 || k === 7) ws.getCell(a).numFmt = XLS_FMT_BERAT;  // NW, GW
       ciplXlsKotak(ws, a);
     });
-    ws.getCell("J" + r).numFmt = "0.000";
+    ws.getCell("J" + r).numFmt = XLS_FMT_CBM;
   });
 
   const rt = ciplXlsBarisTotal(baris.length);
@@ -405,10 +460,15 @@ function ciplXlsPacking(wb, row, shipment, baris) {
   const koli = ciplTotalKoli(shipment);
   ciplXlsSet(ws, "A" + rt, koli ? koli + " Package" : "", XLS_TEBAL, XLS_TEGAK);
   ciplXlsSet(ws, "E" + rt, "TOTAL", XLS_TEBAL, XLS_TENGAH);
-  ciplXlsSet(ws, "G" + rt, baris.reduce((s, b) => s + b.netto, 0), XLS_TEBAL, XLS_TENGAH);
-  ciplXlsSet(ws, "H" + rt, baris.reduce((s, b) => s + b.bruto, 0), XLS_TEBAL, XLS_TENGAH);
-  ciplXlsSet(ws, "I" + rt, baris.reduce((s, b) => s + b.cbmRaw, 0), XLS_TEBAL,
-    XLS_KANAN).numFmt = "0.000";
+  /* Arial 9 tebal, bukan Arial 8: sebaris dengan angka barang di
+     atasnya, jadi ukurannya mengikuti mereka. */
+  const tebal9 = { name: "Arial", size: 9, bold: true };
+  ciplXlsSet(ws, "G" + rt, baris.reduce((s, b) => s + b.netto, 0), tebal9,
+    XLS_TENGAH).numFmt = XLS_FMT_BERAT;
+  ciplXlsSet(ws, "H" + rt, baris.reduce((s, b) => s + b.bruto, 0), tebal9,
+    XLS_TENGAH).numFmt = XLS_FMT_BERAT;
+  ciplXlsSet(ws, "I" + rt, baris.reduce((s, b) => s + b.cbmRaw, 0), tebal9,
+    XLS_KANAN).numFmt = XLS_FMT_CBM;
   ciplXlsKakiTabel(ws, rt, "E", ["E", "G", "H", "I"]);
 
   ciplXlsBingkaiLuar(ws, rt + 4);
@@ -417,7 +477,10 @@ function ciplXlsPacking(wb, row, shipment, baris) {
      supaya pembandingan sel-per-sel tetap bersih; tanpa ini uji
      kesamaannya berisik dan yang berisik lama-lama tidak dibaca. */
   for (let c = 1; c <= 10; c++) ws.getRow(8).getCell(c).alignment = XLS_TEGAK;
-  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, tengah: true });
+  ws.pageSetup = ciplXlsHalaman({
+    area: `A1:J${rt + 5}`, scale: 72, tengah: true,
+    margins: { left: 0.7, right: 0.3, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
+  });
   return ws;
 }
 
@@ -429,9 +492,23 @@ function ciplXlsPacking(wb, row, shipment, baris) {
 function ciplXlsLabelSI(teks, garisBawah) {
   return {
     richText: [
-      { font: { name: "Wingdings", size: 8 }, text: "T" },
+      /* Ukurannya ada DI DALAM teks kaya, bukan di gaya selnya.
+
+         Menaikkan huruf sel jadi 12pt tidak menyentuh label ini sama
+         sekali: sel berisi rich text memakai ukuran tiap potongannya
+         sendiri, dan gaya sel hanya berlaku untuk sel yang isinya teks
+         biasa. Itu sebabnya label sempat tetap kecil sementara nilai di
+         sebelahnya sudah membesar. */
+      /* charset 2 = himpunan karakter SIMBOL.
+
+         Tanpa penanda itu, huruf "T" Wingdings tercetak sebagai huruf
+         T biasa di pembaca yang tidak menebak sendiri — bukan ✻. Excel
+         di Windows kebetulan menebak benar; LibreOffice dan pembaca di
+         ponsel tidak, dan di situlah dokumennya sering dibuka. Berkas
+         rujukan menyertakannya. */
+      { font: { name: "Wingdings", size: 12, charset: 2 }, text: "T" },
       {
-        font: { name: "Arial", size: 8, bold: true, underline: !!garisBawah },
+        font: { name: "Arial", size: 12, family: 2, bold: true, underline: !!garisBawah },
         text: "\u00a0 " + teks,
       },
     ],
@@ -441,15 +518,25 @@ function ciplXlsLabelSI(teks, garisBawah) {
 function ciplXlsShippingInstruction(wb, row, shipment, baris) {
   const ws = wb.addWorksheet("SI");
   const d = ciplSiData(row, shipment, baris);
-  /* Delapan kolom saja; I ke kanan memakai lebar bawaan lembar. */
-  [36, 4, 46, 10, 8, 8, 8.85546875, 8]
-    .forEach((w, i) => (ws.getColumn(i + 1).width = w));
-  /* Rujukan menuliskan lebar bawaan Excel (9.140625) untuk SELURUH
-     kolom sisanya. Di luar wilayah cetak, jadi tak terlihat di kertas —
-     tapi kolom I & J bersebelahan dengan isi dan ikut disamakan. */
-  [9, 10].forEach((c) => (ws.getColumn(c).width = 9.140625));
+  /* Kolom F sengaja DILEWATI — di berkas rujukan ia memakai lebar
+     bawaan, dan kolom itu memang tidak pernah diisi apa pun. */
+  [[1, 36], [2, 4], [3, 46], [4, 10], [5, 8],
+   [7, 8.85546875], [8, 8], [9, 9.140625]]
+    .forEach(([c, w]) => (ws.getColumn(c).width = w));
   ws.getRow(2).height = 20.25;
-  ws.getRow(10).height = 15.75;
+  /* Tinggi baris 15,75 dari baris 7 sampai bawah.
+
+     Huruf 12pt tidak muat di baris bawaan 15,0 — Excel akan
+     meninggikannya sendiri satu per satu, dan tingginya jadi
+     bergantung pada isi tiap baris. Dipatok supaya jarak antar
+     keterangan tetap sama, terisi atau tidak.
+     Baris 8, 9, 11, dan 12 DILEWATI, mengikuti rujukan: itu jeda di
+     sekitar judul, dan membiarkannya bawaan membuat jaraknya sedikit
+     lebih rapat daripada daftar keterangan di bawahnya. */
+  for (let r = 7; r <= 66; r++) {
+    if (r === 8 || r === 9 || r === 11 || r === 12) continue;
+    ws.getRow(r).height = 15.75;
+  }
   ciplXlsLogo(wb, ws);
 
   /* Kop dipusatkan mulai dari kolom A — bukan B seperti pada Invoice.
@@ -462,15 +549,14 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
   ciplXlsSet(ws, "A4", CIPL_PERUSAHAAN.cabang, XLS_KECIL, XLS_TENGAH);
   ["A2:H2", "A3:H3", "A4:H4"].forEach((r) => ciplXlsGabung(ws, r));
 
-  ciplXlsSet(ws, "A7", "TO :  " + d.tujuan,
-    { name: "Arial", size: 8, bold: true }, XLS_TEGAK);
+  ciplXlsSet(ws, "A7", "TO :  " + d.tujuan, XLS_SI_TEBAL, XLS_TEGAK);
   ciplXlsSet(ws, "A10", "SHIPPING INSTRUCTION",
     { name: "Arial", size: 12, bold: true, underline: true }, XLS_TENGAH);
   ciplXlsSet(ws, "A11", "NO. " + d.no,
     { name: "Arial", size: 9, bold: true }, XLS_TENGAH);
   ["A10:H10", "A11:H11"].forEach((r) => ciplXlsGabung(ws, r));
   ciplXlsSet(ws, "A13", "Please arrange our shipment per description below :",
-    { name: "Arial", size: 8, bold: true }, XLS_TEGAK);
+    XLS_SI_TEBAL, XLS_TEGAK);
 
   /* TIDAK ADA GARIS PEMISAH.
 
@@ -481,17 +567,17 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
   let r = 15;
   CIPL_SI_BARIS.forEach((def) => {
     ciplXlsSet(ws, "A" + r, ciplXlsLabelSI(def.k, !!def.tanpaTitikDua),
-      null, XLS_TEGAK);
-    if (!def.tanpaTitikDua) ciplXlsSet(ws, "B" + r, ":", XLS_ARIAL, XLS_TEGAK);
+      XLS_SI_LABEL, XLS_TEGAK);
+    if (!def.tanpaTitikDua) ciplXlsSet(ws, "B" + r, ":", XLS_SI, XLS_TEGAK);
 
     if (def.alamat) {
       const isi = d[def.alamat];
-      ciplXlsSet(ws, "C" + r, isi[0] || "", XLS_ARIAL, XLS_TEGAK);
+      ciplXlsSet(ws, "C" + r, isi[0] || "", XLS_SI, XLS_TEGAK);
       r += 1;
       /* "Address" sejajar dengan label di atasnya — didorong spasi,
          karena label di atasnya diawali penanda selebar satu huruf. */
-      ciplXlsSet(ws, "A" + r, "          Address", { name: "Arial", size: 8 }, XLS_TEGAK);
-      isi.slice(1).forEach((x, i) => ciplXlsSet(ws, "C" + (r + i), x, XLS_ARIAL, XLS_TEGAK));
+      ciplXlsSet(ws, "A" + r, "          Address", XLS_SI, XLS_TEGAK);
+      isi.slice(1).forEach((x, i) => ciplXlsSet(ws, "C" + (r + i), x, XLS_SI, XLS_TEGAK));
       r += Math.max(isi.length - 1, 1);
       return;
     }
@@ -504,18 +590,18 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
     const isi = def.satuan && nilai ? `${nilai}   ${def.satuan}` : nilai;
     ciplXlsSet(ws, "C" + r,
       def.hitung === "hs" ? ciplXlsAngka(isi) : isi,
-      { name: "Arial", size: 8, bold: !!def.tebal },
+      { name: "Arial", size: 12, bold: !!def.tebal },
       def.hitung === "hs" ? { horizontal: "left", vertical: "middle" } : XLS_TEGAK);
     r += def.garis ? 2 : 1;
   });
 
   r += 1;
-  ciplXlsSet(ws, "A" + r, "Thank you for your good cooperation.", XLS_ARIAL, XLS_TEGAK);
-  ciplXlsSet(ws, "A" + (r + 2), "Cirebon,  " + d.tanggal, XLS_ARIAL, XLS_TEGAK);
-  ciplXlsSet(ws, "A" + (r + 3), "Regards,", XLS_ARIAL, XLS_TEGAK);
+  ciplXlsSet(ws, "A" + r, "Thank you for your good cooperation.", XLS_SI, XLS_TEGAK);
+  ciplXlsSet(ws, "A" + (r + 2), "Cirebon, " + d.tanggal, XLS_SI, XLS_TEGAK);
+  ciplXlsSet(ws, "A" + (r + 3), "Regards,", XLS_SI, XLS_TEGAK);
   /* Ruang materai, tanda tangan basah, dan cap — enam baris (~3 cm). */
-  ciplXlsSet(ws, "A" + (r + 10), "SIGN & STAMP.",
-    { name: "Arial", size: 8, bold: true, underline: true }, XLS_TEGAK);
+  ciplXlsSet(ws, "A" + (r + 10), "SIGN & STAMP",
+    { name: "Arial", size: 12, bold: true, underline: true }, XLS_TEGAK);
   ws.pageSetup = ciplXlsHalaman({
     area: `A1:H${r + 10}`,
     scale: 67,

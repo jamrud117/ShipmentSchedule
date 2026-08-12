@@ -721,9 +721,9 @@ function ciplHalamanShippingInstruction(row, shipment, baris) {
 
     <div class="si-tutup">
       <div>Thank you for your good cooperation.</div>
-      <div class="si-kota">Cirebon,&nbsp; ${escapeHtml(d.tanggal)}</div>
+      <div class="si-kota">Cirebon, ${escapeHtml(d.tanggal)}</div>
       <div>Regards,</div>
-      <div class="si-ttd">SIGN &amp; STAMP.</div>
+      <div class="si-ttd">SIGN &amp; STAMP</div>
     </div>
     </div>
   </div>`;

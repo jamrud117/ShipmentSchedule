@@ -1885,9 +1885,10 @@ t("tiga sel yang dulu ganjil kini SAMA di kedua lembar", () => {
   eq(inv("E9").value, "Invoice No. & Date");   // tanpa spasi depan
   eq(inv("D27").value, "Sailing on or About"); // bentuk PL
   eq(inv("E27").alignment.horizontal, "center");
-  /* Sailing tidak lagi 7pt tebal berbungkus — ikut PL: 8pt biasa. */
+  /* Berkas rujukan yang diperbarui menebalkannya di KEDUA lembar, jadi
+     tebal — yang dijaga di sini kesamaannya, bukan tebal/tidaknya. */
   eq(inv("D27").font.size, 8);
-  eq(!!inv("D27").font.bold, false);
+  eq(!!inv("D27").font.bold, true);
 });
 
 t("rata tengah tegak memakai kosakata ExcelJS", () => {
@@ -1904,13 +1905,51 @@ t("rata tengah tegak memakai kosakata ExcelJS", () => {
   eq(w.eval("XLS_TEGAK.vertical"), "middle");
 });
 
+t("angka memakai format dari rujukan, bukan General", () => {
+  /* Harga & jumlah pakai "Comma Style" bawaan Excel: ribuan
+     berpemisah, negatif dalam kurung, nol jadi tanda hubung. "#,##0"
+     mirip tapi menampilkan nol dan minus dengan cara berbeda. */
+  const ws = wsTiruan();
+  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
+    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  const sel = (a) => ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
+  const UANG = '_(* #,##0_);_(* \\(#,##0\\);_(* "-"_);_(@_)';
+  ["H30", "J30", "J46"].forEach((a) => eq(sel(a).numFmt, UANG, a + ":"));
+  /* Sel angka TIDAK dibungkus baris — angka tidak punya tempat patah,
+     dan membungkusnya membuat tinggi baris berubah-ubah. */
+  eq(sel("H30").alignment.wrapText, false);
+  eq(sel("B30").alignment.wrapText, true);   // pembanding: sel teks
+
+  const pl = wsTiruan();
+  w.ciplXlsPacking({ addWorksheet: () => pl, addImage: () => 1 },
+    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  const selPl = (a) => pl.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
+  ["G30", "H30", "G46", "H46"].forEach((a) => eq(selPl(a).numFmt, "#,##0_ ", a + ":"));
+  ["J30", "I46"].forEach((a) => eq(selPl(a).numFmt, "0.000", a + ":"));
+  /* Angka Total sebaris dengan angka barang, jadi ukurannya mengikuti:
+     Arial 9, bukan 8. */
+  eq(selPl("G46").font.size, 9);
+});
+
+t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {
+  /* ExcelJS mengubah Date jadi nomor seri memakai jam UTC. Tengah
+     malam WIB = pukul 17.00 UTC HARI SEBELUMNYA, jadi sel bertanggal
+     menampilkan tanggal yang mundur satu hari. Yang mundur itu Tanggal
+     Invoice pada dokumen yang dikirim ke bea cukai. */
+  const d = w.ciplXlsTanggal("2026-08-12");
+  eq(d.getUTCFullYear(), 2026);
+  eq(d.getUTCMonth(), 7);      // Agustus
+  eq(d.getUTCDate(), 12);
+  eq(d.getUTCHours(), 0, "harus tengah malam UTC:");
+});
+
 t("pengaturan cetak sama dengan rujukan", () => {
   /* fitToPage BERSAMA skala. Rujukan punya keduanya; tanpa fitToPage
      Excel memakai skala mentah dan halaman keluar ~2,4% lebih kecil. */
-  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 80, tengah: true });
+  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 83, tengah: true });
   eq(h.paperSize, 9);
   eq(h.orientation, "portrait");
-  eq(h.scale, 80);
+  eq(h.scale, 83);
   eq(h.fitToPage, true);
   eq(h.horizontalCentered, true);
   eq(h.printArea, "A1:J51");
