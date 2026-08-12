@@ -305,10 +305,17 @@
      [ cari .............................. ]
      [ status ............................ ]
      [ chip chip chip chip chip ]
-     [                            ⋯     +  ]
+     [ ⋯ |      + Tambah Jadwal           ]
 
    Lebih tinggi, tapi tiap sasaran cukup besar untuk ujung jari dan
    tidak ada yang terpotong.
+
+   BARIS TERAKHIR DULU HAMPIR KOSONG. Dua tombol kecil didorong ke
+   kanan oleh `margin-left: auto`, menyisakan sekitar 70% baris itu
+   melompong — satu baris penuh terpakai untuk dua ikon. Sekarang
+   tombol utamanya melebar mengisi baris tersebut, dan karena melebar
+   ia sanggup membawa tulisannya lagi: "+" sendirian tidak menjelaskan
+   apa yang akan ditambahkan.
 ================================================================== */
 @media (max-width: 767px) {
   .controlbar {
@@ -330,8 +337,23 @@
   .preset-row {
     flex: 1 1 100%;
   }
+
+  /* Baris tombol dipakai penuh, bukan didorong ke kanan. */
   .controlbar-tail {
-    margin-left: auto;
+    width: 100%;
+    margin-left: 0;
+  }
+  .controlbar-tail #btnAdd {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  /* Labelnya kembali: di 991px ia disembunyikan karena memakan
+     sepertiga bilah yang sempit — di sini bilahnya justru kelebihan
+     ruang, dan alasan itu tidak berlaku lagi. Ditulis dengan pemilih
+     yang sama persis supaya menang lewat urutan, bukan lewat
+     !important. */
+  #btnAdd #lblAddBtn {
+    display: inline;
   }
 
   /* TARGET SENTUH.
@@ -351,9 +373,49 @@
   .controlbar-tail .btn-primary-navy {
     min-width: 44px;
   }
-  /* Target 44px yang berdempetan tetap mudah salah tekan. */
+  /* CHIP DIKECUALIKAN DARI 44px.
+
+     Lima chip berdampingan bukan tombol tunggal: pada 390px ketinggian
+     44px membuat mereka pecah jadi TIGA baris compang-camping, dan
+     bilah kendalinya sendiri jadi 402px — lebih dari separuh layar
+     terpakai sebelum satu jadwal pun terlihat.
+
+     Diturunkan ke 36px berikut ikon dan hurufnya, sehingga kelimanya
+     memadat jadi dua baris. Yang berkurang tingginya saja; lebar chip
+     tetap jauh di atas ambang sentuh karena ada tulisannya. */
+  .chip {
+    min-height: 36px;
+    height: 36px;
+    padding: 0 10px;
+    gap: 5px;
+    font-size: var(--t-xs);
+  }
+  .chip i {
+    font-size: 0.7rem;
+  }
+  .chip-count {
+    font-size: 0.62rem;
+    padding: 1px 4px;
+  }
   .preset-row {
-    gap: 9px;
+    gap: 6px;
+  }
+
+  /* TIAP BARIS CHIP TERISI PENUH.
+
+     Yang membuatnya terbaca berantakan bukan jumlah barisnya,
+     melainkan tepi kanan yang bergerigi: pada 390px barisnya jatuh
+     jadi 2 chip / 2 chip / 1 chip, dan baris terakhir menyisakan 233px
+     kosong di sebelah "Selesai" — seperti ada yang belum selesai
+     dimuat.
+
+     flex-grow membagi sisa ruang TIAP BARIS ke chip di baris itu
+     saja, jadi kanannya selalu rata berapa pun lebar layarnya — tanpa
+     mematok jumlah kolom, yang akan salah di lebar lain. Sisi lain:
+     sasaran sentuhnya jadi lebih lebar, bukan lebih sempit. */
+  .preset-row .chip {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 }
 

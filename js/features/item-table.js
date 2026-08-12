@@ -207,6 +207,35 @@ $("#itemTableBody").addEventListener("input", (e) => {
   if (!tr) return;
   const idx = Number(tr.dataset.idx);
   const field = e.target.dataset.f;
+  /* DIRAPIKAN DULU, BARU DIBACA.
+
+     Kotak angka di tabel ini dirapikan oleh pendengar di `document`
+     (number-input.js), sementara pendengar ini menempel di
+     #itemTableBody. Pendengar elemen SELALU berjalan lebih dulu
+     daripada pendengar document, jadi yang terbaca di sini adalah teks
+     yang BELUM dirapikan — lalu kotaknya berubah sesaat kemudian.
+
+     Selama keduanya terbaca sama, tidak ada yang terasa. Tapi tidak
+     selalu sama:
+
+       ketik "11319"
+         setelah 4 huruf kotak jadi "1,131"
+         huruf ke-5 membuat teks mentahnya "1,1319"
+         yang TERSIMPAN  : parseLooseNumber("1,1319") = 1,1319
+         yang TERTULIS   : "11,319"                   = 11.319
+
+     Selisihnya sepuluh ribu kali. Kotaknya menulis 11.319, Subtotal
+     menghitung dari 1,1319 — dan yang ikut ke Invoice, PIB, serta
+     perhitungan bea masuk adalah angka yang tersimpan, bukan yang
+     terbaca di layar.
+
+     Merapikan lebih dulu di sini membuat keduanya PASTI angka yang
+     sama. applyLiveNumberFormat aman dipanggil dua kali: kalau tidak
+     ada yang berubah ia langsung keluar. */
+  if (["qty", "harga", "netto", "bruto"].includes(field) &&
+      typeof applyLiveNumberFormat === "function") {
+    applyLiveNumberFormat(e.target);
+  }
   if (field) {
     if (field === "hsCode") {
       // Requirement A: HS Code disimpan sebagai ANGKA saja
@@ -214,8 +243,14 @@ $("#itemTableBody").addEventListener("input", (e) => {
       if (e.target.value !== cleaned) e.target.value = cleaned;
       draftItems[idx][field] = cleaned;
     } else {
+      /* parseInputNumber, BUKAN parseLooseNumber.
+
+         Isi kotak ini bentuknya ditulis aplikasi sendiri (koma =
+         ribuan, titik = desimal), jadi tidak ada yang perlu ditebak.
+         parseLooseNumber menebak, dan tebakannya salah seribu kali
+         lipat untuk "1.050" — berat 1,05 kg tersimpan jadi 1.050 kg. */
       draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(field)
-        ? parseLooseNumber(e.target.value)
+        ? parseInputNumber(e.target.value)
         : e.target.value;
     }
     if (field === "namaBarang") autoGrowTextarea(e.target);
@@ -228,7 +263,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
     }
     const subtotalInput = tr.querySelector(".subtotal");
     subtotalInput.value = fmtUSD(
-      parseLooseNumber(draftItems[idx].qty) * parseLooseNumber(draftItems[idx].harga),
+      parseInputNumber(draftItems[idx].qty) * parseInputNumber(draftItems[idx].harga),
     );
     // CBM dipengaruhi package (dimensi) MAUPUN qty
     const cbmInput = tr.querySelector(".cbm-readonly");

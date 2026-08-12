@@ -110,8 +110,23 @@ function recalcCustoms(opsi) {
   };
   const calc0 = computeCustoms(tmp);
 
-  /* PPN & PPH otomatis */
-  const dasarRupiah = calc0.totalUSD * tmp.ndpbm;
+  /* PPN & PPH otomatis.
+
+     DASARNYA NILAI PABEAN, BUKAN HARGA BARANG SAJA.
+
+     Sebelumnya dasarnya cuma `totalUSD * ndpbm` — ongkos angkut dan
+     asuransi tidak ikut. Pada kiriman udara ongkos angkutnya bisa
+     lebih dari separuh harga barangnya sendiri (contoh nyata: barang
+     $640, freight $382,40), jadi PPN yang terhitung meleset jauh di
+     bawah yang sebenarnya terutang.
+
+     Freight & asuransi memang sudah lama tersimpan per pengiriman,
+     tapi selama ini hanya dipajang di halaman rincian dan tidak pernah
+     ikut satu pun perhitungan. */
+  const dasarUsd = calc0.totalUSD
+    + nilaiKotakAngka("#fFreight")
+    + nilaiKotakAngka("#fInsurance");
+  const dasarRupiah = dasarUsd * tmp.ndpbm;
   const elPpn = $("#fPPN");
   const elPph = $("#fPPH");
   if (isAutoDuty(elPpn)) {

@@ -819,7 +819,18 @@ t("seluruh garis satu ketebalan & tidak ada yang ganda", () => {
      terhitung tiap elemen dibaca, lalu tiap batas geometris ditelusuri
      pemiliknya. Grid tabel memperhitungkan colspan & rowspan. */
   const { auditGarisCetak } = require(__dirname + "/border-audit.js");
-  const { JSDOM } = require(__dirname + "/../../node_modules/jsdom");
+  /* jsdom diambil dengan cara biasa, BUKAN lewat jalur mutlak
+     "/../../node_modules/jsdom".
+
+     Jalur itu mengharuskan node_modules berada satu tingkat DI ATAS
+     folder proyek. Selama proyeknya kebetulan diletakkan begitu,
+     ujinya lulus; begitu proyeknya dipindah atau dibuka dari salinan
+     zip, uji ini gagal dengan "Cannot find module" — bukan karena
+     garisnya salah, tapi karena letak foldernya berbeda.
+
+     Uji yang gagalnya tergantung lokasi folder lama-lama diabaikan,
+     dan uji yang diabaikan tidak menjaga apa pun. */
+  const { JSDOM } = require("jsdom");
 
   const jadwal = { id: "au1", mode: "export", party: "PT UJI", invoice: "INV-1",
     origin: "IDTPP", destination: "KRPUS", vessel: "KAPAL", etd: "2026-08-10",
@@ -1010,6 +1021,65 @@ t("TANGGALNYA tetap tampil untuk viewer", () => {
     throw new Error("mekanika masih bocor ke kartu viewer");
   jadiExim();
 });
+
+console.log("— KURIR BERNILAI RENDAH TIDAK PAKAI PIB —");
+{
+  const brg = (harga) => [{ namaBarang: "X", qty: "1", satuan: "pcs", harga: String(harga) }];
+  const kurir = (harga, lain) => Object.assign({
+    id: "k1", mode: "import", transport: "udara", forwarder: "FEDEX",
+    vessel: "FEDEX PRIORITY", docProgress: {}, items: brg(harga),
+  }, lain || {});
+
+  t("kurir di bawah USD 1.500: stepper tidak digambar", () => {
+    eq(w.docStepHtml(kurir(680)), "");
+  });
+  t("kurir di atas ambang: stepper tetap ada", () => {
+    if (!w.docStepHtml(kurir(2000))) throw new Error("stepper hilang padahal wajib PIB");
+  });
+  t("tepat USD 1.500 masih wajib PIB", () => {
+    /* Ambangnya di BAWAH 1.500. Kalau ditulis <=, kiriman yang tepat
+       di ambang kehilangan progres dokumennya padahal PIB-nya jalan. */
+    if (!w.docStepHtml(kurir(1500))) throw new Error("nilai tepat ambang ikut disembunyikan");
+  });
+  t("kurir dikenali dari Forwarder maupun Nama Kapal", () => {
+    eq(w.docStepHtml(kurir(680, { vessel: "", forwarder: "DHL" })), "");
+    eq(w.docStepHtml(kurir(680, { forwarder: "", vessel: "UPS EXPRESS" })), "");
+  });
+  t("forwarder lokal BUKAN kurir ekspres, walau ada di daftar kurir", () => {
+    /* WIDE & PRIME terdaftar sebagai "courier" di carrier-master, tapi
+       di riwayat DDI keduanya forwarder untuk kiriman LAUT biasa —
+       WIDE dipakai pada LCL dengan kapal SAWASDEE ALTAIR. Memakai
+       daftar itu apa adanya akan menghapus progres dokumen dari
+       kiriman yang PIB-nya justru sedang berjalan. */
+    ["WIDE", "PRIME"].forEach((f) => {
+      const h = w.docStepHtml(kurir(680, { forwarder: f, vessel: "SAWASDEE ALTAIR", transport: "laut" }));
+      if (!h) throw new Error(f + " ikut disembunyikan padahal forwarder laut");
+    });
+  });
+  t("bukan kurir sama sekali: nilai kecil pun tetap berstepper", () => {
+    const h = w.docStepHtml(kurir(680, { forwarder: "SAMUDERA", vessel: "GARUDA" }));
+    if (!h) throw new Error("kiriman non-kurir ikut disembunyikan");
+  });
+  t("nama kurir sebagai potongan kata tidak dianggap cocok", () => {
+    /* "UPS" gampang muncul di dalam kata lain. Dicocokkan sebagai kata
+       utuh, bukan substring. */
+    const h = w.docStepHtml(kurir(680, { forwarder: "UPSTREAM LOGISTICS", vessel: "" }));
+    if (!h) throw new Error("UPSTREAM salah dikenali sebagai UPS");
+  });
+  t("EXPORT tidak terpengaruh ambang ini", () => {
+    /* USD 1.500 itu batas PIB/CN di jalur impor. Ekspor tetap butuh
+       PEB berapa pun nilainya. */
+    const h = w.docStepHtml(kurir(680, { mode: "export" }));
+    if (!h) throw new Error("ekspor bernilai kecil ikut kehilangan stepper");
+  });
+  t("harga belum diisi bukan berarti kiriman gratis", () => {
+    /* Nilai 0 = kolom harga masih kosong. Menyembunyikan stepper di
+       situ menghilangkan progres dokumen tepat pada pengiriman yang
+       baru dibuat. */
+    const h = w.docStepHtml(kurir(0));
+    if (!h) throw new Error("pengiriman baru kehilangan stepper");
+  });
+}
 
 console.log("— VIEWER TIDAK MELIHAT STEPPER DOKUMEN —");
 t("viewer: stepper tidak digambar sama sekali", () => {
@@ -1392,6 +1462,176 @@ t("PPH 0 tidak ditimpa hitungan otomatis", () => {
   eq($("#fPPH").value, "0");
 });
 
+console.log("— YANG TERSIMPAN = YANG TERTULIS DI KOTAK —");
+{
+  /* Kotak angka dirapikan pendengar di `document`; penyimpan nilainya
+     menempel di #itemTableBody. Pendengar elemen berjalan LEBIH DULU,
+     jadi yang tersimpan adalah teks yang belum dirapikan.
+
+     Diuji lewat perilaku, bukan teks kode: yang penting kedua angkanya
+     sama, bukan bagaimana caranya disamakan. */
+  const kotakPalsu = () => ({
+    value: "", selectionStart: 0, readOnly: false, disabled: false,
+    setSelectionRange(a) { this.selectionStart = a; },
+  });
+  const ketik = (teks, rapikanDulu) => {
+    const el = kotakPalsu();
+    let tersimpan = 0;
+    for (const c of teks) {
+      el.value += c;
+      el.selectionStart = el.value.length;
+      if (rapikanDulu) w.applyLiveNumberFormat(el);
+      tersimpan = w.parseLooseNumber(el.value);
+      if (!rapikanDulu) w.applyLiveNumberFormat(el);
+    }
+    return { tersimpan, tertulis: w.parseLooseNumber(el.value), teks: el.value };
+  };
+
+  t("harga yang diketik tersimpan sama dengan yang tertulis", () => {
+    /* Contoh nyata dari layar Yogi: kotak menulis 11,319 sementara
+       Subtotal menghitung dari 1,1319 — selisih sepuluh ribu kali.
+       Yang ikut ke Invoice & PIB adalah angka yang tersimpan. */
+    const r = ketik("11319", true);
+    eq(r.teks, "11,319");
+    eq(r.tersimpan, 11319);
+    eq(r.tersimpan, r.tertulis, "tersimpan vs tertulis:");
+  });
+
+  t("tanpa dirapikan dulu, keduanya memang berbeda", () => {
+    /* Pembanding: membuktikan ujinya benar-benar menguji sesuatu, dan
+       merekam persis kesalahan yang dulu terjadi. */
+    const r = ketik("11319", false);
+    eq(r.tersimpan, 1.1319);
+    eq(r.tertulis, 11319);
+  });
+
+  t("titik selalu desimal di kotak isian, tidak pernah ribuan", () => {
+    /* Aplikasi ini HANYA pernah menulis koma sebagai pemisah ribuan —
+       formatNumberValue(11319) selalu "11,319". Jadi di kotak isian,
+       titik tidak punya arti lain selain desimal.
+
+       parseLooseNumber menebak, dan tebakannya salah seribu kali lipat
+       tiap titiknya diikuti tepat tiga angka. Berat 1,05 kg tersimpan
+       jadi 1.050 kg — bentuk yang justru paling lazim, karena timbangan
+       menulis tiga desimal. */
+    eq(w.parseInputNumber("1.050"), 1.05);
+    eq(w.parseInputNumber("11.319"), 11.319);
+    eq(w.parseInputNumber("60.000"), 60);
+    /* Koma tetap ribuan. */
+    eq(w.parseInputNumber("11,319"), 11319);
+    eq(w.parseInputNumber("1,234,567"), 1234567);
+    eq(w.parseInputNumber("1,234.56"), 1234.56);
+  });
+
+  t("pembaca serbaguna DIBIARKAN menebak untuk berkas luar", () => {
+    /* Berkas CIPL/PDF dari pihak lain bisa memakai bentuk Eropa
+       ("1.234,56"). Tebakan itu sah di sana — yang salah adalah
+       memakainya untuk kotak yang bentuknya kita tulis sendiri.
+
+       Diuji supaya perbaikan di atas tidak diam-diam dipakai juga di
+       jalur impor, yang akan merusak pembacaan berkas Eropa. */
+    eq(w.parseLooseNumber("1.234,56"), 1234.56);
+    eq(w.parseLooseNumber("60,000"), 60000);
+  });
+
+  t("baris barang memakai pembaca yang ketat", () => {
+    w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"kg", harga:"", netto:"", bruto:"" }]');
+    w.renderItemTable();
+    const el = w.document.querySelector('#itemTableBody input[data-f="netto"]');
+    if (!el) throw new Error("kotak netto tidak ada");
+    for (const c of "1.050") {
+      el.value += c;
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+      el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    }
+    eq(el.value, "1.050", "yang tertulis:");
+    eq(Number(w.eval("draftItems[0].netto")), 1.05, "yang tersimpan:");
+  });
+
+  t("angka yang tidak dirapikan ikut tetap cocok", () => {
+    /* Sebagian besar isian tidak pernah berubah bentuk saat diketik.
+       Perbaikannya tidak boleh menyentuh yang sudah benar. */
+    ["680", "3", "1250.5", "0"].forEach((x) => {
+      const r = ketik(x, true);
+      eq(r.tersimpan, r.tertulis, x + ":");
+    });
+  });
+
+  t("mengetik di kotak harga sungguhan menyimpan angka yang tertulis", () => {
+    /* Uji ini melewati tabel barang yang SEBENARNYA — kotaknya
+       dirender, huruf diketikkan satu per satu, dan kejadian `input`
+       menggelembung persis seperti di peramban. Dua pendengarnya
+       (satu di #itemTableBody, satu di document) ikut berjalan dengan
+       urutan yang sama seperti aslinya.
+
+       Versi pertama uji ini cuma mencari kata "applyLiveNumberFormat"
+       di dalam berkasnya. Ia LULUS walau pemanggilannya dihapus —
+       karena namanya masih tertulis di komentar. Pencarian teks
+       menguji ejaan, bukan perilaku. */
+    w.eval('draftItems = [{ namaBarang:"X", qty:"3", satuan:"set", harga:"", netto:"", bruto:"" }]');
+    w.renderItemTable();
+    const el = w.document.querySelector('#itemTableBody input[data-f="harga"]');
+    if (!el) throw new Error("kotak harga tidak ada di tabel barang");
+    for (const c of "11319") {
+      el.value += c;
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+      el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    }
+    eq(el.value, "11,319", "yang tertulis di kotak:");
+    eq(w.parseLooseNumber(w.eval("draftItems[0].harga")), 11319, "yang tersimpan:");
+    /* Dan Subtotal-nya ikut benar: 3 x 11.319, bukan 3 x 1,1319. */
+    const sub = w.document.querySelector("#itemTableBody .subtotal");
+    if (sub && /^\$3\.4/.test(sub.value))
+      throw new Error("Subtotal masih dihitung dari 1,1319: " + sub.value);
+  });
+}
+
+console.log("— DASAR PPN/PPH = NILAI BARANG + FREIGHT + ASURANSI —");
+t("ongkos angkut & asuransi ikut jadi dasar pungutan", () => {
+  /* Contoh nyata dari layar Yogi: barang $640, freight $382,40,
+     asuransi $5,1, NDPBM 18.062.
+
+       (640 + 382,40 + 5,1) x 18.062 = 18.564.938,--
+       PPN 11%  = 2.042.143
+       PPH 2,5% =   464.123
+
+     Dengan dasar lama (barang saja) PPN cuma 1.271.565 — meleset
+     771 ribu rupiah ke bawah pada satu kiriman. */
+  w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
+  $("#fIncoterm").value = "FOB";
+  $("#fFreight").value = "382.40";
+  $("#fInsurance").value = "5.1";
+  $("#fNdpbm").value = "18,062";
+  $("#fPPN").value = "";
+  $("#fPPH").value = "";
+  w.initAutoDutyFlags();
+  w.recalcCustoms();
+  const dasar = (640 + 382.4 + 5.1) * 18062;
+  eq($("#fPPN").value, w.formatNumberValue(Math.round(dasar * 0.11)));
+  eq($("#fPPH").value, w.formatNumberValue(Math.round(dasar * 0.025)));
+});
+t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
+  w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
+  $("#fFreight").value = "";
+  $("#fInsurance").value = "";
+  $("#fNdpbm").value = "18,062";
+  $("#fPPN").value = "";
+  $("#fPPH").value = "";
+  w.initAutoDutyFlags();
+  w.recalcCustoms();
+  eq($("#fPPN").value, w.formatNumberValue(Math.round(640 * 18062 * 0.11)));
+});
+t("mengetik PPN sendiri tetap menghentikan hitungan otomatis", () => {
+  /* Dasarnya berubah, tapi kendali manualnya tidak boleh ikut hilang. */
+  w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
+  $("#fPPN").value = "1,000,000";
+  $("#fFreight").value = "382.40";
+  $("#fNdpbm").value = "18,062";
+  w.initAutoDutyFlags();
+  w.recalcCustoms();
+  eq($("#fPPN").value, "1,000,000");
+});
+
 console.log("— PDRI: SEKETIKA & PENJUMLAHAN BIASA —");
 function ketikAngka(sel, teks) {
   const el = $(sel);
@@ -1738,6 +1978,104 @@ const blokCss = (pemilih) => {
   return cssKartu.slice(i, cssKartu.indexOf("}", i));
 };
 
+console.log("— BILAH KENDALI DI HP —");
+{
+  const cssBilah = require("fs").readFileSync(__dirname + "/../css/dashboard.css", "utf8");
+  const hp = cssBilah.slice(cssBilah.indexOf("@media (max-width: 767px)"));
+  const blok = (pemilih) => {
+    const i = hp.indexOf(pemilih + " {");
+    if (i < 0) throw new Error("aturan tidak ada di blok HP: " + pemilih);
+    return hp.slice(i, hp.indexOf("}", i));
+  };
+
+  t("baris tombol dipakai penuh, bukan didorong ke kanan", () => {
+    /* Dua tombol kecil dulu didorong `margin-left: auto` ke ujung
+       kanan, menyisakan ~70% baris itu melompong — satu baris penuh
+       terpakai untuk dua ikon. */
+    const b = blok(".controlbar-tail");
+    if (!/width: 100%/.test(b)) throw new Error("baris tombol tidak selebar bilah");
+    if (!/margin-left: 0/.test(b)) throw new Error("tombol masih didorong ke kanan");
+    if (!/flex: 1 1 auto/.test(blok(".controlbar-tail #btnAdd")))
+      throw new Error("tombol utama tidak mengisi baris");
+  });
+
+  t("tombol utama membawa tulisannya lagi di HP", () => {
+    /* Di 991px labelnya disembunyikan karena memakan sepertiga bilah
+       yang sempit. Di HP bilahnya justru kelebihan ruang, dan "+"
+       sendirian tidak menjelaskan apa yang akan ditambahkan.
+
+       Harus MENANG atas aturan 991px — pemilih sama persis, jadi
+       urutannya yang menentukan. */
+    if (!/display: inline/.test(blok("#btnAdd #lblAddBtn")))
+      throw new Error("label tombol tambah masih disembunyikan di HP");
+    if (cssBilah.indexOf("@media (max-width: 767px)") <
+        cssBilah.indexOf("@media (max-width: 991px)"))
+      throw new Error("blok HP di ATAS blok 991px — aturannya akan kalah");
+  });
+
+  t("chip dikecualikan dari 44px", () => {
+    /* Lima chip berdampingan bukan tombol tunggal: pada 390px
+       ketinggian 44px memecahnya jadi tiga baris dan bilahnya jadi
+       402px — lebih dari separuh layar sebelum satu jadwal terlihat. */
+    const m = /height: (\d+)px/.exec(blok(".chip"));
+    if (!m) throw new Error("tinggi chip tidak diatur khusus di HP");
+    if (Number(m[1]) >= 44) throw new Error("chip belum dikecilkan: " + m[1] + "px");
+    if (Number(m[1]) < 32) throw new Error("chip terlalu kecil untuk jempol: " + m[1] + "px");
+  });
+
+  t("tiap baris chip terisi penuh, tepi kanannya rata", () => {
+    /* Yang terbaca berantakan bukan jumlah barisnya, melainkan tepi
+       kanan bergerigi: 2 chip / 2 chip / 1 chip, dengan 233px kosong
+       di sebelah "Selesai" — seperti ada yang belum selesai dimuat.
+
+       flex-grow, bukan jumlah kolom tetap: jumlah kolom yang dipatok
+       akan salah di lebar layar yang lain. */
+    const b = blok(".preset-row .chip");
+    if (!/flex: 1 1 auto/.test(b))
+      throw new Error("chip tidak melebar mengisi barisnya");
+    if (/grid-template-columns/.test(hp.slice(hp.indexOf(".preset-row"))))
+      throw new Error("jumlah kolom dipatok — akan salah di lebar lain");
+  });
+}
+
+t("baris aksi kartu: status berseberangan dengan ikon di HP", () => {
+  /* Sebelumnya blok aksi menempel di kiri mengikuti judul, dan karena
+     tidak boleh menyusut lebarnya terkunci 320px — sementara isi kartu
+     di HP 360px cuma 292px. Barisnya MELUBER keluar kartu, bukan
+     sekadar terlihat sesak. */
+  const i = cssKartu.indexOf("@media (max-width: 599.98px)");
+  const sempit = cssKartu.slice(i);
+  if (!/\.ship-actions-block \{[^}]*justify-content: space-between/.test(sempit))
+    throw new Error("baris aksi tidak berseberangan di HP");
+  if (!/\.ship-actions-block \{[^}]*width: 100%/.test(sempit))
+    throw new Error("baris aksi tidak selebar kartu");
+});
+
+t("ikon kartu diperkecil di HP, tapi tidak jadi titik", () => {
+  /* dashboard.css menaikkan SEMUA .icon-btn jadi 44px demi target
+     sentuh. Di kartu ada empat sekaligus — 4x44 + jarak = 320px.
+     Diperkecil, tapi ada batas bawahnya: tombol 24px tidak bisa
+     ditekan dengan jempol. */
+  const i = cssKartu.indexOf("@media (max-width: 599.98px)");
+  const blok = cssKartu.slice(i);
+  const m = /\.ship-actions-block \.icon-btn \{[^}]*?min-width: (\d+)px/.exec(blok);
+  if (!m) throw new Error("ukuran ikon kartu tidak diatur khusus di HP");
+  const px = Number(m[1]);
+  if (px >= 44) throw new Error("ikon belum diperkecil: " + px + "px");
+  if (px < 32) throw new Error("ikon terlalu kecil untuk jempol: " + px + "px");
+});
+
+t("sel info lebar tidak memaksa kolom kedua di HP", () => {
+  /* auto-fit minmax(180px,1fr) menyusut jadi SATU kolom di bawah
+     ~444px. `span 2` lalu membuat grid MENCIPTAKAN kolom implisit di
+     luar templat — lebarnya melewati kartu, dan seluruh halaman ikut
+     bisa digeser mendatar di 320px. */
+  const i = cssKartu.indexOf("@media (max-width: 599.98px)");
+  const sempit = cssKartu.slice(i);
+  if (!/\.info-item--wide \{[^}]*grid-column: 1 \/ -1/.test(sempit))
+    throw new Error("sel lebar masih minta span 2 di layar sempit");
+});
+
 t("kotak tanggal sejajar berapa pun tinggi labelnya", () => {
   /* Tiga label di baris ini tidak sama tingginya: "ETD" teks polos,
      "ETA" & "Estimated Delivery" membawa lencana AUTO/MANUAL. Ditumpuk
@@ -1786,8 +2124,11 @@ t("penanda kapal tidak menindih keterangan sisa hari", () => {
 t("baris update delay memakai aturan yang benar-benar berlaku", () => {
   /* .delay-strip-fields memakai FLEX. Aturan responsifnya dulu menulis
      grid-template-columns — tidak pernah berlaku sama sekali. */
+  /* Diambil seluruh sisa berkas, bukan 900 karakter pertama: blok
+     media ini bertambah panjang tiap ada perbaikan HP, dan potongan
+     tetap akan diam-diam berhenti memeriksa apa pun. */
   const i = cssKartu.indexOf("@media (max-width: 599.98px)");
-  const sempit = cssKartu.slice(i, i + 900);
+  const sempit = cssKartu.slice(i);
   if (/\.delay-strip-fields \{[^}]*grid-template-columns/.test(sempit))
     throw new Error("aturan grid pada wadah flex — tidak berlaku");
   if (!/\.delay-strip-fields \{[^}]*flex-direction: column/.test(sempit))
@@ -2146,10 +2487,16 @@ t("di mobile tiap kendali mendapat barisnya sendiri", () => {
   if (!/\.preset-row \{[^}]*flex: 1 1 100%/.test(m))
     throw new Error("chip tidak mengambil baris penuh");
 });
-t("di mobile tombol aksi tetap di kanan", () => {
+t("di mobile baris tombol dipakai penuh, tidak menempel di kanan", () => {
+  /* Uji ini dulu MENUNTUT `margin-left: auto` — persis penyebab baris
+     terakhir hampir kosong. Ia mengunci susunan yang salah, jadi
+     tuntutannya dibalik, bukan sekadar dihapus: kalau `auto` kembali,
+     ruang melompong itu ikut kembali. */
   const m = blokMedia(767).replace(/\/\*[\s\S]*?\*\//g, "");
-  if (!/\.controlbar-tail \{[^}]*margin-left: auto/.test(m))
-    throw new Error("tombol aksi tidak menempel di kanan");
+  if (/\.controlbar-tail \{[^}]*margin-left: auto/.test(m))
+    throw new Error("tombol aksi didorong ke kanan lagi — barisnya jadi melompong");
+  if (!/\.controlbar-tail \{[^}]*width: 100%/.test(m))
+    throw new Error("baris tombol tidak dipakai penuh");
 });
 t("susunan split-window sama dengan layar besar", () => {
   /* Tidak ada elemen yang berpindah tempat — orang yang bolak-balik
@@ -2389,6 +2736,58 @@ t("dicentang -> nama pengguna diingat", () => {
   w.simpanRemember(true, "yogi");
   eq(w.bacaRemember(), true);
   eq(w.localStorage.getItem("exim.remember.user"), "yogi");
+});
+t("batas diam mengikuti pilihan Ingat saya", () => {
+  /* Ini inti keluhannya: dulu batasnya 30 menit untuk semua orang,
+     jadi centang "Ingat saya" menjanjikan sesi bertahan lalu dicabut
+     timer setengah jam kemudian. Ditinggal rapat sekali saja sudah
+     harus masuk lagi. */
+  w.simpanRemember(true, "yogi");
+  eq(w.batasDiamMenit(), 480);          // 8 jam
+  w.simpanRemember(false, "yogi");
+  eq(w.batasDiamMenit(), 30);
+});
+t("batas dibaca ulang tiap timer disetel, bukan sekali saat dimuat", () => {
+  /* Kalau nilainya dibekukan ke sebuah const saat berkas dimuat, login
+     pertama setelah pilihannya diubah masih memakai nilai sesi
+     SEBELUMNYA — salah tepat pada saat penggunanya baru saja mengubah
+     pilihan itu. */
+  w.simpanRemember(false, "yogi");
+  eq(w.batasDiamMenit(), 30);
+  w.simpanRemember(true, "yogi");
+  eq(w.batasDiamMenit(), 480, "berubah tanpa muat ulang halaman:");
+});
+t("batasnya TIDAK pernah hilang sama sekali", () => {
+  /* Papan ini dipakai bergantian di komputer yang sama. Sesi yang
+     tidak pernah putus berarti pekerjaan bisa tersimpan atas nama
+     orang yang salah. */
+  [true, false].forEach((ingat) => {
+    w.simpanRemember(ingat, "yogi");
+    const m = w.batasDiamMenit();
+    if (!(m > 0 && isFinite(m))) throw new Error("batas diam hilang saat ingat=" + ingat);
+  });
+});
+t("hitung mundur menyebut lama yang benar, dalam jam", () => {
+  /* "480 menit" benar secara angka tapi tidak terbaca. Dan pesannya
+     harus menyebut batas yang BENAR-BENAR dipakai timer berjalan —
+     bukan menghitung ulang, yang bisa menyebut angka berbeda dari
+     waktu yang sudah berlalu. */
+  w.eval("sesiDiamDipakai = 480");
+  if (!/8 jam/.test(w.pesanHitungMundur()))
+    throw new Error("pesan tidak menyebut 8 jam: " + w.pesanHitungMundur());
+  w.eval("sesiDiamDipakai = 30");
+  if (!/30 menit/.test(w.pesanHitungMundur()))
+    throw new Error("pesan tidak menyebut 30 menit: " + w.pesanHitungMundur());
+  w.eval("sesiDiamDipakai = 90");
+  eq(w.lamaDiamTerbaca(), "1 jam 30 menit");
+});
+t("centang menjelaskan apa yang sebenarnya didapat", () => {
+  /* Tanpa angkanya, centang itu terbaca seperti janji "tidak akan
+     pernah keluar" — lalu batas diam mematahkannya. */
+  const nota = w.document.querySelector(".login-remember-note");
+  if (!nota) throw new Error("keterangan di bawah centang tidak ada");
+  if (!/8 jam/.test(nota.textContent) || !/30 menit/.test(nota.textContent))
+    throw new Error("keterangan tidak menyebut kedua batasnya");
 });
 t("form login terisi ulang dari yang diingat", () => {
   w.simpanRemember(true, "yogi");

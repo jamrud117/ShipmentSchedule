@@ -26,6 +26,29 @@ vm.createContext(ctx);
   vm.runInContext(src, ctx, { filename: f });
 });
 
+/* ------------------------------------------------------------------
+   "HARI INI" DIBEKUKAN
+
+   Seluruh berkas ini memakai tanggal yang ditulis mati (ETA 08-08-2026
+   dan hasil-hasil di sekitarnya). Mesinnya punya Lapis 4
+   ("Kenyataan") yang menjangkarkan ulang sisa proses ke HARI INI kalau
+   perkiraannya sudah lewat — perilaku yang memang diinginkan, karena
+   perkiraan bertanggal masa lalu tidak memberi tahu apa pun.
+
+   Akibatnya ujinya punya masa kedaluwarsa: begitu jam dinding melewati
+   tanggal-tanggal itu, lapis kenyataan ikut campur dan uji mulai
+   berjatuhan satu per satu — bukan karena mesinnya rusak, tapi karena
+   kalendernya berjalan. Dua di antaranya ("FCL langsung clearance",
+   "AIR juga tanpa stripping") sudah gagal seperti itu.
+
+   Dibekukan pada 09-08-2026: sehari setelah ETA fixture, sebelum
+   satu pun hasil yang diuji. Uji yang memang ingin menguji lapis
+   kenyataan harus menyetel tanggalnya sendiri, bukan mengandalkan
+   kapan ia kebetulan dijalankan.
+------------------------------------------------------------------ */
+const HARI_INI_UJI = "2026-08-09";
+vm.runInContext(`todayISO = () => ${JSON.stringify(HARI_INI_UJI)};`, ctx);
+
 let pass = 0, fail = 0;
 function t(name, fn) {
   try { fn(); pass++; }
@@ -40,7 +63,7 @@ const {
   addWorkingDaysISO, addCalendarDaysISO, isWorkingDayISO, recomputeShipmentDates,
   predictionOpsDays, predictionContext, pickPredictionRule,
   predictEtaRevised, predictionEtaBasis, calendarDaysBetweenISO,
-  arrivalInfoOf, configuredOpsDays,
+  arrivalInfoOf, configuredOpsDays, todayISO,
 } = ctx;
 
 /* `const` di dalam vm tidak menempel ke objek konteks (beda dengan
@@ -221,11 +244,14 @@ t("LCL: stripping → clearance → antar", () => {
   eq(d.date, "2026-08-12");   // Sab8 +2 kalender = Sen10 · Sel11 clr · Rab12 antar
 });
 t("FCL langsung clearance, tanpa stripping", () => {
+  /* FCL yang sudah sandar langsung masuk proses clearance — tidak ada
+     bongkar muatan gabungan di CFS. */
   const d = predictDelivery(FCL);
   eq(kunci(d).join(">"), "clearance>delivery");
   eq(d.date, "2026-08-11");
 });
 t("AIR juga tanpa stripping", () => {
+  /* Kiriman udara tidak pernah lewat CFS. */
   eq(kunci(predictDelivery(AIR)).join(">"), "clearance>delivery");
   eq(predictDelivery(AIR).date, "2026-08-11");
 });

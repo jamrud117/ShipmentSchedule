@@ -801,6 +801,77 @@
 
 /* Kartu di layar sempit */
 @media (max-width: 599.98px) {
+  /* BARIS AKSI: STATUS DI KIRI, IKON DI KANAN.
+
+     Sebelumnya blok ini menempel di kiri mengikuti judul, lalu empat
+     tombolnya berjejer rapat di sebelah status — dan karena
+     .ship-actions-block tidak boleh menyusut, lebarnya terkunci 320px
+     sementara isi kartu di HP 360px cuma 292px. Barisnya MELUBER
+     keluar kartu, bukan sekadar terlihat sesak.
+
+     Dengan space-between, sisa ruangnya jatuh di antara status dan
+     ikon — bukan di ujung kanan yang kosong. */
+  .ship-actions-block {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  /* Status boleh menyusut kalau tulisannya panjang; ikon tidak. */
+  .ship-actions-block .status-select {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  /* Empat ikonnya SATU kelompok (.actions-col), jadi space-between
+     memisahkan status dari kelompok itu — bukan menyebar keenam
+     anaknya rata-rata, yang akan menaruh jarak lebar di antara ikon
+     yang seharusnya berdampingan. */
+  .ship-actions-block .actions-col {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  /* IKON DIPERKECIL DI HP.
+
+     dashboard.css menaikkan SEMUA .icon-btn jadi 44px di bawah 767px
+     demi target sentuh. Untuk tombol yang berdiri sendiri itu tepat,
+     tapi di kartu ada empat sekaligus: 4x44 + jarak = 320px, dan
+     ikonnya jadi bagian paling berat di kartu padahal isinya cuma
+     tindakan sekunder.
+
+     36px memang di bawah pedoman 44px. Yang menggantikannya bukan
+     ukuran melainkan JARAK: dengan space-between, tombolnya justru
+     lebih renggang daripada sebelumnya — dan salah tekan lebih sering
+     datang dari target berdempetan daripada dari target kecil.
+
+     Tombol di luar kartu (bilah kendali, "+" dan "...") sengaja
+     dibiarkan 44px: ia sendirian, tidak berdempetan, dan tidak
+     kekurangan ruang. */
+  .ship-actions-block .icon-btn {
+    min-width: 36px;
+    min-height: 36px;
+    width: 36px;
+    height: 36px;
+    font-size: 0.86rem;
+  }
+
+  /* SEL LEBAR TIDAK BOLEH MEMAKSA KOLOM KEDUA.
+
+     .info-grid memakai auto-fit minmax(180px, 1fr) — di bawah ~444px
+     ia menyusut jadi SATU kolom. Tapi .info-item--wide minta
+     `span 2`, dan grid menuruti permintaan itu dengan MEMBUAT kolom
+     implisit yang tidak ada di templat. Kolom tambahan itu tidak
+     ikut aturan 1fr, jadi lebar isinya melewati kartu: di 320px
+     grid-nya 292px di dalam ruang 254px, dan seluruh halaman ikut
+     bisa digeser mendatar.
+
+     `1 / -1` meminta hal yang sebenarnya dimaksud — "selebar yang
+     ada" — tanpa menuntut jumlah kolom tertentu. Di 2 kolom hasilnya
+     sama persis dengan span 2; di 1 kolom ia berhenti di situ. */
+  .info-item--wide {
+    grid-column: 1 / -1;
+  }
+
   .date-strip {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;

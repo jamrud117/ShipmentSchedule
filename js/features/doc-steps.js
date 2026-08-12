@@ -149,7 +149,69 @@ function docStepCount(s) {
   return { selesai, berlaku };
 }
 
+/* ------------------------------------------------------------------
+   KIRIMAN KURIR EKSPRES BERNILAI RENDAH — TIDAK PAKAI PIB
+
+   Kiriman lewat kurir ekspres yang nilainya di bawah USD 1.500
+   diselesaikan dengan Consignment Note, bukan PIB. Tidak ada Manifest
+   BC 1.1, tidak ada No. Aju, tidak ada SPPB — jadi deretan tahap yang
+   menuju ke sana tidak punya arti apa pun untuk kiriman itu, dan
+   tujuh lingkaran yang tidak akan pernah terisi cuma membuat papan ini
+   terbaca seperti ada berkas yang tertinggal.
+
+   HANYA TIGA PERUSAHAAN INI, bukan seluruh CARRIER_MASTER.couriers.
+
+   Daftar kurir di carrier-master juga memuat PRIME, WIDE, dan TNT.
+   PRIME & WIDE adalah forwarder lokal yang di riwayat DDI dipakai
+   untuk kiriman LAUT biasa — WIDE muncul sebagai forwarder pada
+   kiriman LCL dengan kapal SAWASDEE ALTAIR. Memakai daftar itu apa
+   adanya akan menghapus progres dokumen dari kiriman laut yang
+   PIB-nya justru sedang berjalan.
+
+   Yang menghapus kewajiban PIB adalah rezim CN pada kurir ekspres
+   terintegrasi, bukan kata "kurir" di daftar pengangkut.
+
+   HANYA IMPORT. Ambang USD 1.500 itu batas PIB/CN pada jalur impor;
+   ekspor tetap butuh PEB berapa pun nilainya.
+
+   Ambangnya PERSIS di bawah 1.500 — nilai tepat 1.500 masih wajib PIB.
+
+   Nilai barang saja, tanpa freight & asuransi: ambang CN dihitung dari
+   harga barang, bukan dari nilai pabean.
+------------------------------------------------------------------ */
+const AMBANG_KURIR_TANPA_PIB = 1500;
+const KURIR_EKSPRES_TANPA_PIB = ["FEDEX", "FEDERAL EXPRESS", "DHL", "UPS"];
+
+function isKurirEkspres(teks) {
+  const kata = " " + String(teks || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim() + " ";
+  if (kata.trim() === "") return false;
+  /* Kata UTUH: "UPS" tidak boleh cocok dengan "UPSTREAM", dan nama
+     kapal "DHL AIR" tetap terbaca sebagai kurir. */
+  return KURIR_EKSPRES_TANPA_PIB.some((n) => kata.indexOf(" " + n + " ") >= 0);
+}
+
+function isKurirNilaiRendah(s) {
+  if (!s || s.mode !== "import") return false;
+  /* Dibaca dari kolom Forwarder MAUPUN Nama Kapal: pada kiriman kurir
+     keduanya kerap berisi hal yang sama ("FEDEX" / "FEDEX PRIORITY"),
+     tapi tidak selalu — ada yang hanya mengisi salah satunya. */
+  if (!isKurirEkspres(s.forwarder) && !isKurirEkspres(s.vessel)) return false;
+  const nilai = itemTotals(s).totalUSD;
+  /* Nilai 0 berarti harga barang BELUM DIISI, bukan kiriman gratis.
+     Menyembunyikan stepper karena kolom yang masih kosong akan
+     menghilangkan progres dokumen tepat pada pengiriman yang baru
+     dibuat — saat papan ini justru paling dibutuhkan. */
+  if (!nilai) return false;
+  return nilai < AMBANG_KURIR_TANPA_PIB;
+}
+
 function docStepHtml(s) {
+  /* Kiriman kurir bernilai rendah tidak lewat PIB — lihat
+     isKurirNilaiRendah(). Diperiksa PALING DULU, sebelum tahap apa pun
+     dihitung: yang disembunyikan seluruh baloknya, bukan lingkarannya
+     saja. */
+  if (isKurirNilaiRendah(s)) return "";
+
   const p = docProgressOf(s);
   const berikut = docNextIndex(s);
 

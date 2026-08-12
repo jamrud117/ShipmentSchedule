@@ -2,7 +2,40 @@
 
 /* ANGKA BERPEMISAH RIBUAN SAAT DIKETIK */
 
-/* PEMBACA ANGKA SERBAGUNA */
+/* PEMBACA ANGKA UNTUK KOTAK ISIAN APLIKASI SENDIRI
+
+   Aturannya PASTI, bukan tebakan: koma = pemisah ribuan, titik =
+   pemisah desimal. Itu memang satu-satunya bentuk yang pernah ditulis
+   aplikasi ini — formatNumberValue(11319) selalu "11,319" dan
+   formatNumberValue(1.05) selalu "1.05".
+
+   parseLooseNumber di bawah menebak, dan tebakannya SELALU salah untuk
+   bentuk itu ketika titiknya diikuti tepat tiga angka:
+
+     "1.050"   dibaca 1050    seharusnya 1,05    (berat 1,05 kg jadi 1 ton)
+     "11.319"  dibaca 11319   seharusnya 11,319
+     "60.000"  dibaca 60000   seharusnya 60
+
+   Tebakan itu ada karena berkas CIPL/PDF dari luar bisa memakai
+   bentuk Eropa ("1.234,56"). Itu alasan yang sah — untuk teks yang
+   datang dari berkas orang lain. Untuk kotak yang bentuknya ditulis
+   aplikasi ini sendiri, tidak ada yang perlu ditebak, dan menebak
+   berarti sesekali salah seribu kali lipat.
+
+   Karena itu dua pembaca, bukan satu yang dipaksa melayani keduanya:
+   yang ini untuk isian pengguna, parseLooseNumber untuk hasil impor. */
+function parseInputNumber(v) {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  const s = String(v).trim().replace(/,/g, "");   // koma = ribuan, dibuang
+  if (!s) return 0;
+  const n = Number(s.replace(/[^\d.-]/g, ""));
+  return isFinite(n) ? n : 0;
+}
+
+/* PEMBACA ANGKA SERBAGUNA — untuk teks dari berkas luar (CIPL/PDF/Excel),
+   yang bentuknya tidak kita kendalikan. Menebak koma vs titik dari
+   susunan angkanya. */
 function parseLooseNumber(v) {
   if (v == null || v === "") return 0;
   if (typeof v === "number") return isFinite(v) ? v : 0;
