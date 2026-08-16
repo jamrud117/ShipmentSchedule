@@ -149,8 +149,21 @@ function isiEstimatedDeliveryForm() {
   if (!predictionAktifDiForm()) return null;
 
   const d = predictDelivery(predictionFormSource());
-  // Mode manual: nilainya milik pengguna, jangan disentuh.
-  if (formDeliveryMode !== "manual") el.value = d.ok ? d.date : "";
+  /* Mode manual: nilainya milik pengguna, jangan disentuh —
+
+     KECUALI kalau yang mengembalikan tanggal itu Tanggal In Factory.
+     Itu bukan hasil hitungan yang menimpa pilihan pengguna, melainkan
+     fakta yang menggantikan perkiraan tentang fakta yang sama. Mode
+     Manual menahan mesin dari MENGHITUNG ULANG; ia tidak dimaksudkan
+     untuk menahan kenyataan.
+
+     Tanpa pengecualian ini, jadwal bermode Manual tetap menampilkan
+     perkiraan lama walau barangnya sudah diterima — dan itu keadaan
+     yang paling sering, karena tanggal yang sudah dipatok tangan
+     jarang disentuh lagi. */
+  if (formDeliveryMode !== "manual" || d.source === "actual") {
+    el.value = d.ok ? d.date : "";
+  }
   return d;
 }
 function setFormDeliveryMode(mode, opsi) {

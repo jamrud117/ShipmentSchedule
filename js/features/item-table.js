@@ -236,6 +236,20 @@ $("#itemTableBody").addEventListener("input", (e) => {
       typeof applyLiveNumberFormat === "function") {
     applyLiveNumberFormat(e.target);
   }
+  /* NAMA BARANG SELALU HURUF BESAR.
+
+     Dirapikan SEBELUM dibaca, dengan alasan yang sama seperti angka di
+     atas: kalau diubah sesudahnya, yang tersimpan huruf kecil sementara
+     yang tertulis huruf besar.
+
+     Berlaku untuk ketikan MAUPUN tempelan — kejadian `input` menyala
+     untuk keduanya, jadi tidak perlu penangan `paste` tersendiri.
+     Justru tempelan yang paling butuh: nama yang disalin dari invoice
+     pemasok datang dengan huruf campur, dan "Tyre Mold" dengan "TYRE
+     MOLD" terhitung dua barang berbeda saat dikelompokkan di laporan. */
+  if (field === "namaBarang" && typeof jadikanHurufBesar === "function") {
+    jadikanHurufBesar(e.target);
+  }
   if (field) {
     if (field === "hsCode") {
       // Requirement A: HS Code disimpan sebagai ANGKA saja

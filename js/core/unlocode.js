@@ -199,8 +199,6 @@ UNLOCODES.forEach((u) => {
   if (!PORT_BY_UNLOCODE.has(u.unlocode)) PORT_BY_UNLOCODE.set(u.unlocode, u);
 });
 
-const UNLOCODE_SET = new Set(UNLOCODES.map((u) => u.code));
-
 // Bentuk kode UN/LOCODE: 2 huruf negara + 3 huruf/angka lokasi (IDCGK)
 const UNLOCODE_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}$/;
 

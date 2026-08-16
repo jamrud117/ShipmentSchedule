@@ -148,8 +148,95 @@ const CARRIER_MASTER = {
     { code: "7C", name: "Jeju Air" },
     { code: "TR", name: "Scoot" },
     { code: "LJ", name: "Jin Air" },
+
+    /* Ditambahkan supaya SARAN di kotak Nama Pesawat cukup lengkap
+       untuk rute yang benar-benar dipakai DDI — Korea, Cina, Taiwan,
+       Vietnam, dan Asia Tenggara. Deteksi otomatis ikut menguat dengan
+       sendirinya: tiap baris di sini juga sebuah kode yang dikenali. */
+    { code: "BX", name: "Air Busan" },
+    { code: "ZE", name: "Eastar Jet" },
+    { code: "RS", name: "Air Seoul" },
+    { code: "MF", name: "Xiamen Air" },
+    { code: "ZH", name: "Shenzhen Airlines" },
+    { code: "3U", name: "Sichuan Airlines" },
+    { code: "HU", name: "Hainan Airlines" },
+    { code: "SC", name: "Shandong Airlines" },
+    { code: "9C", name: "Spring Airlines" },
+    { code: "JX", name: "Starlux Airlines" },
+    { code: "IT", name: "Tigerair Taiwan" },
+    { code: "B7", name: "Uni Air" },
+    { code: "VJ", name: "VietJet Air" },
+    { code: "QH", name: "Bamboo Airways" },
+    { code: "PR", name: "Philippine Airlines" },
+    { code: "5J", name: "Cebu Pacific" },
+    { code: "HX", name: "Hong Kong Airlines" },
+    { code: "UO", name: "HK Express" },
+    { code: "AK", name: "AirAsia" },
+    { code: "FD", name: "Thai AirAsia" },
+    { code: "SL", name: "Thai Lion Air" },
+    { code: "OD", name: "Batik Air Malaysia" },
+    { code: "ID", name: "Batik Air" },
+    { code: "SJ", name: "Sriwijaya Air" },
+    { code: "IU", name: "Super Air Jet" },
+    { code: "IN", name: "Nam Air" },
+
+    /* Maskapai KARGO murni — tidak mengangkut penumpang, jadi mudah
+       terlewat kalau daftarnya disusun dari jadwal penerbangan biasa. */
+    { code: "CK", name: "China Cargo Airlines", aliases: ["CHINA CARGO"] },
+    { code: "O3", name: "SF Airlines", aliases: ["SF AIRLINES"] },
+    { code: "Y8", name: "Suparna Airlines", aliases: ["SUPARNA"] },
+    { code: "LD", name: "Air Hong Kong" },
+    { code: "RU", name: "AirBridgeCargo" },
+    { code: "PO", name: "Polar Air Cargo", aliases: ["POLAR AIR"] },
+    { code: "5Y", name: "Atlas Air", aliases: ["ATLAS AIR"] },
+    { code: "QY", name: "European Air Transport", aliases: ["EAT"] },
+    { code: "8K", name: "K-Mile Air" },
+    { code: "MB", name: "MNG Airlines" },
   ],
 };
+
+/* ------------------------------------------------------------------
+   SARAN UNTUK KOTAK NAMA KAPAL / NAMA PESAWAT
+
+   Daftar di berkas ini sudah lama dipakai untuk MENGENALI carrier dari
+   nama yang diketik — tapi tidak pernah DITAWARKAN. Orang harus hafal
+   bahwa SQ itu Singapore Airlines dan TR itu Scoot, dan yang salah
+   ketik satu huruf tidak akan terdeteksi sama sekali: prediksinya
+   diam-diam turun ke angka rata-rata tanpa memberi tahu siapa pun.
+
+   Disaring menurut moda, karena isinya memang dua daftar yang tidak
+   berhubungan: pelayaran untuk laut, maskapai untuk udara. Kurir
+   masuk ke KEDUANYA — kiriman kurir bisa lewat udara maupun darat, dan
+   kolom Nama Kapal-nya memang diisi nama perusahaan.
+
+   Nilai yang dimasukkan adalah KODE-nya, bukan nama panjangnya:
+   itu yang dibaca detectCarrier(), dan itu pula yang sudah tertulis di
+   ribuan jadwal lama.
+------------------------------------------------------------------ */
+function carrierDatalistHtml(mode) {
+  const daftar =
+    mode === "udara"
+      ? CARRIER_MASTER.airlines
+      : mode === "laut"
+        ? CARRIER_MASTER.shippingLines
+        : CARRIER_MASTER.airlines.concat(CARRIER_MASTER.shippingLines);
+  const semua = CARRIER_MASTER.couriers.concat(daftar);
+  const sudah = new Set();
+  return semua
+    .filter((c) => {
+      const k = c.code + "|" + c.name;
+      if (sudah.has(k)) return false;
+      sudah.add(k);
+      return true;
+    })
+    .map(
+      (c) =>
+        /* Nama lengkap ditulis di label supaya bisa dicari lewat
+           namanya juga — datalist mencocokkan label, bukan cuma nilai. */
+        `<option value="${escapeAttr(c.code)}">${escapeHtml(c.code + " — " + c.name)}</option>`,
+    )
+    .join("");
+}
 
 /* ------------------------------------------------------------------
    INDEKS SIAP PAKAI

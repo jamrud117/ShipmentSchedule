@@ -68,6 +68,28 @@ urut.forEach((f) => {
   else console.log("      ^ di " + f);
 });
 
+/* ------------------------------------------------------------------
+   "HARI INI" DIBEKUKAN
+
+   Sebagian uji di berkas ini memakai tanggal yang ditulis mati (ETA
+   06-08-2026 dan seterusnya). Mesinnya punya Lapis 4 ("Kenyataan")
+   yang menjangkarkan ulang sisa proses ke HARI INI begitu perkiraannya
+   sudah lewat — perilaku yang memang diinginkan, karena perkiraan
+   bertanggal masa lalu tidak memberi tahu apa pun.
+
+   Akibatnya uji-uji itu punya masa kedaluwarsa: begitu jam dinding
+   melewati tanggalnya, lapis kenyataan ikut campur dan uji mulai
+   berjatuhan — bukan karena ada yang rusak, tapi karena kalendernya
+   berjalan. Tiga uji komitmen kurir sudah gagal seperti itu tepat saat
+   tanggal berganti di tengah pengerjaan.
+
+   engine-test.js sudah dibekukan lebih dulu dengan alasan yang sama;
+   berkas ini menyusul, pada tanggal yang sama supaya keduanya bercerita
+   tentang hari yang sama.
+------------------------------------------------------------------ */
+const HARI_INI_UJI = "2026-08-09";
+w.eval(`todayISO = () => ${JSON.stringify(HARI_INI_UJI)};`);
+
 let pass = 0, fail = 0;
 function t(name, fn) { try { fn(); pass++; } catch (e) { fail++; console.log("  ✗ " + name + "\n      " + e.message); } }
 function eq(a, b, m) { if (a !== b) throw new Error((m||"") + ` diharap ${JSON.stringify(b)}, dapat ${JSON.stringify(a)}`); }
@@ -1460,6 +1482,249 @@ t("PPH 0 tidak ditimpa hitungan otomatis", () => {
   w.initAutoDutyFlags();
   w.recalcCustoms();
   eq($("#fPPH").value, "0");
+});
+
+console.log("— SARAN MASKAPAI & PELAYARAN DI KOTAK NAMA KAPAL —");
+{
+  const isiCarrier = () => ["Laut", "Udara"].forEach((m) => {
+    const dl = w.document.getElementById("carrierList" + m);
+    if (dl) dl.innerHTML = w.carrierDatalistHtml(m.toLowerCase());
+  });
+  const pilihModa = (moda) => {
+    isiCarrier();
+    $("#fTransport").value = moda;
+    w.applyTransportLabels();
+    return $("#fVessel");
+  };
+
+  t("kotak Nama Kapal/Pesawat punya saran", () => {
+    /* Daftar carrier sudah lama ada di carrier-master.js, tapi cuma
+       dipakai untuk MENGENALI nama yang diketik — tidak pernah
+       ditawarkan. Orang harus hafal bahwa SQ itu Singapore Airlines,
+       dan yang salah ketik satu huruf tidak terdeteksi sama sekali:
+       prediksinya diam-diam turun ke angka rata-rata. */
+    const el = pilihModa("laut");
+    const dl = w.document.getElementById(el.getAttribute("list"));
+    if (!dl || !dl.querySelectorAll("option").length)
+      throw new Error("kotak Nama Kapal tanpa saran");
+  });
+
+  t("saran mengikuti moda: pelayaran vs maskapai", () => {
+    eq(pilihModa("laut").getAttribute("list"), "carrierListLaut");
+    eq(pilihModa("udara").getAttribute("list"), "carrierListUdara");
+    const kode = (m) => [...w.document.getElementById("carrierList" + m)
+      .querySelectorAll("option")].map((o) => o.value);
+    const laut = kode("Laut");
+    const udara = kode("Udara");
+    if (udara.includes("MSC")) throw new Error("pelayaran muncul di daftar udara");
+    if (laut.includes("SQ")) throw new Error("maskapai muncul di daftar laut");
+  });
+
+  t("kode yang dipakai DDI ada di daftarnya", () => {
+    /* SQ, TR, TW — kode yang benar-benar muncul di jadwal DDI. */
+    isiCarrier();
+    const dl = w.document.getElementById("carrierListUdara");
+    ["SQ", "TR", "TW", "KE", "FX"].forEach((k) => {
+      const o = [...dl.querySelectorAll("option")].find((x) => x.value === k);
+      if (!o) throw new Error("kode " + k + " tidak ditawarkan");
+      if (!/ — .+/.test(o.textContent))
+        throw new Error("kode " + k + " tidak menyebut nama maskapainya");
+    });
+  });
+
+  t("kurir muncul di KEDUA daftar", () => {
+    /* Kiriman kurir bisa lewat udara maupun darat, dan kolom Nama
+       Kapal-nya memang diisi nama perusahaan. */
+    isiCarrier();
+    ["Laut", "Udara"].forEach((m) => {
+      const kode = [...w.document.getElementById("carrierList" + m)
+        .querySelectorAll("option")].map((o) => o.value);
+      ["DHL", "FEDEX", "UPS"].forEach((k) => {
+        if (!kode.includes(k)) throw new Error(k + " tidak ada di daftar " + m);
+      });
+    });
+  });
+
+  t("nilai yang dimasukkan KODE-nya, bukan nama panjangnya", () => {
+    /* detectCarrier() membaca kode, dan kode itu pula yang sudah
+       tertulis di ribuan jadwal lama. */
+    isiCarrier();
+    const o = [...w.document.getElementById("carrierListUdara")
+      .querySelectorAll("option")].find((x) => x.value === "SQ");
+    eq(o.value, "SQ");
+    if (o.value === o.textContent)
+      throw new Error("label tidak menyebut nama maskapainya");
+  });
+}
+
+console.log("— SARAN PELABUHAN UNTUK TERMINAL TRANSIT —");
+{
+  const siapkan = (moda) => {
+    $("#fRouteType").value = "transit";
+    ["unlocodeList", "unlocodeListLaut", "unlocodeListUdara"].forEach((id, i) => {
+      const dl = w.document.getElementById(id);
+      if (dl) dl.innerHTML = w.unlocodeDatalistHtml(["", "laut", "udara"][i]);
+    });
+    w.eval(`draftStops = [{ terminal:"", transport:"${moda}", vessel:"", voyage:"", arrivalDate:"", departureDate:"" }]`);
+    w.renderRouteStopsUI();
+    return w.document.querySelector('#routeStopsBody [data-f="terminal"]');
+  };
+
+  t("kotak terminal transit punya saran pelabuhan", () => {
+    /* Pelabuhan Asal & Tujuan sudah lama punya saran; terminal transit
+       tidak punya `list` sama sekali — nama pelabuhannya harus diketik
+       hafalan, dan salah ketik satu huruf membuat rutenya tidak cocok
+       dengan mana pun. */
+    const el = siapkan("laut");
+    if (!el) throw new Error("kotak terminal tidak ada");
+    const id = el.getAttribute("list");
+    if (!id) throw new Error("kotak terminal tanpa saran sama sekali");
+    const dl = w.document.getElementById(id);
+    if (!dl) throw new Error("daftar saran " + id + " tidak ada di halaman");
+    if (!dl.querySelectorAll("option").length)
+      throw new Error("daftar saran " + id + " kosong");
+  });
+
+  t("sarannya mengikuti moda BARIS ITU, bukan moda pengiriman", () => {
+    /* Satu perjalanan bisa laut sampai Singapura lalu udara ke
+       Jakarta. Memakai #unlocodeList — yang disaring menurut moda di
+       bagian atas form — akan menawarkan daftar bandara untuk terminal
+       laut. */
+    eq(siapkan("laut").getAttribute("list"), "unlocodeListLaut");
+    eq(siapkan("udara").getAttribute("list"), "unlocodeListUdara");
+  });
+
+  t("daftar laut & udara benar-benar berbeda isinya", () => {
+    siapkan("laut");
+    const laut = [...w.document.getElementById("unlocodeListLaut")
+      .querySelectorAll("option")].map((o) => o.value);
+    const udara = [...w.document.getElementById("unlocodeListUdara")
+      .querySelectorAll("option")].map((o) => o.value);
+    if (!laut.length || !udara.length) throw new Error("salah satu daftar kosong");
+    if (laut.length === udara.length && laut.join() === udara.join())
+      throw new Error("kedua daftar identik — penyaringannya tidak jalan");
+  });
+
+  t("ganti moda baris ikut mengganti daftarnya", () => {
+    /* Baris digambar ulang tiap modanya diganti — kalau suatu saat
+       render ulang itu dihilangkan, sarannya diam-diam jadi salah. */
+    siapkan("laut");
+    const sel = w.document.querySelector('#routeStopsBody [data-f="transport"]');
+    sel.value = "udara";
+    sel.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(w.document.querySelector('#routeStopsBody [data-f="terminal"]')
+      .getAttribute("list"), "unlocodeListUdara");
+  });
+}
+
+console.log("— NAMA BARANG SELALU HURUF BESAR —");
+t("diketik & DITEMPEL sama-sama jadi huruf besar", () => {
+  /* Kejadian `input` menyala untuk ketikan MAUPUN tempelan, jadi satu
+     penangan cukup — tidak perlu penangan `paste` tersendiri. Justru
+     tempelan yang paling butuh: nama yang disalin dari invoice pemasok
+     datang dengan huruf campur. */
+  w.eval('draftItems = [{ namaBarang:"", qty:"1", satuan:"pcs", harga:"" }]');
+  w.renderItemTable();
+  const el = w.document.querySelector('#itemTableBody [data-f="namaBarang"]');
+  if (!el) throw new Error("kotak nama barang tidak ada");
+  el.value = "Tyre Mold Full Set";                    // seperti hasil tempel
+  el.dispatchEvent(new w.Event("input", { bubbles: true }));
+  eq(el.value, "TYRE MOLD FULL SET", "yang tertulis:");
+  eq(w.eval("draftItems[0].namaBarang"), "TYRE MOLD FULL SET", "yang tersimpan:");
+});
+t("huruf besar dipasang SEBELUM nilainya dibaca", () => {
+  /* Kalau diubah sesudahnya, yang tersimpan huruf kecil sementara yang
+     tertulis huruf besar — cacat yang sama seperti kotak angka. */
+  const src = w.eval("$(\"#itemTableBody\")") && require("fs")
+    .readFileSync(__dirname + "/../js/features/item-table.js", "utf8");
+  const i = src.indexOf('$("#itemTableBody").addEventListener("input"');
+  const blok = src.slice(i, i + 3500).replace(/\/\*[\s\S]*?\*\//g, "");
+  const iBesar = blok.indexOf("jadikanHurufBesar");
+  const iSimpan = blok.indexOf("draftItems[idx][field] =");
+  if (iBesar < 0) throw new Error("nama barang tidak dijadikan huruf besar");
+  if (iSimpan > -1 && iBesar > iSimpan)
+    throw new Error("dijadikan huruf besar SESUDAH disimpan");
+});
+t("kursor tidak melompat ke ujung saat menyunting di tengah", () => {
+  /* Tanpa penjagaan posisi kursor, tiap huruf yang diketik di tengah
+     teks melemparkan kursor ke akhir — kotaknya jadi tidak bisa
+     disunting sama sekali. */
+  const src = w.eval("jadikanHurufBesar.toString()");
+  if (!/selectionStart/.test(src) || !/setSelectionRange/.test(src))
+    throw new Error("posisi kursor tidak dijaga");
+  if (!/try/.test(src))
+    throw new Error("pengaturan kursor tidak dijaga dari galat");
+});
+t("impor berkas & impor massal dua-duanya huruf besar", () => {
+  /* Impor massal punya jalurnya sendiri dan TIDAK lewat
+     apply-to-form.js — satu-satunya jalur yang memasukkan ratusan baris
+     sekaligus justru yang paling gampang terlewat. */
+  const fs2 = require("fs");
+  const funnel = fs2.readFileSync(__dirname + "/../js/import/apply-to-form.js", "utf8");
+  if (!/namaBarang: String\(it\.namaBarang \|\| ""\)\.toUpperCase\(\)/.test(funnel))
+    throw new Error("impor berkas tidak menyeragamkan huruf");
+  const bulk = fs2.readFileSync(__dirname + "/../js/features/bulk-excel.js", "utf8");
+  if (!/namaBarang: String\(desc \|\| ""\)\.toUpperCase\(\)/.test(bulk))
+    throw new Error("impor massal tidak menyeragamkan huruf");
+});
+
+console.log("— MUAT YANG BERTUMPANG TIDAK SALING MENIMPA —");
+t("jawaban muat yang usang dibuang, bukan digambar", () => {
+  /* loadShipments() dipanggil dari delapan tempat dan tidak ada yang
+     menunggu yang lain. Dua muat yang bertumpang berarti jawaban yang
+     datang TERAKHIR yang menang — bukan yang paling baru diminta, dan
+     urutan datangnya tidak dijamin. Akibatnya papan bisa menampilkan
+     data yang lebih lama daripada yang sudah ada di layar. */
+  const src = w.eval("loadShipments.toString()");
+  if (!/\+\+muatKe/.test(src))
+    throw new Error("permintaan muat tidak bernomor urut");
+  if (!/nomor !== muatKe/.test(src))
+    throw new Error("jawaban usang tidak dibuang");
+  /* Galatnya juga harus ikut dibuang: layar gagal dari permintaan usang
+     akan menghapus data yang barusan berhasil dimuat. */
+  const iJaga = src.indexOf("nomor !== muatKe");
+  const iGalat = src.indexOf("showDbErrorState");
+  if (iGalat > -1 && iJaga > iGalat)
+    throw new Error("layar gagal digambar sebelum penjaga sempat bekerja");
+});
+
+console.log("— KOTAK ANGKA APLIKASI PAKAI PEMBACA KETAT —");
+t("tujuh kotak bea & pajak tidak lagi ditebak", () => {
+  /* excelNum() hanyalah parseLooseNumber dengan nama lain dan tinggal
+     di js/import/ — pembaca untuk teks berkas orang lain. Dipakai di
+     form, ia meleset seribu kali lipat pada "16.500", dan yang kena
+     termasuk NDPBM, Bea Masuk, PPN, PPH: seluruh dasar PDRI. */
+  const src = require("fs").readFileSync(__dirname + "/../js/views/form-router.js", "utf8");
+  const bersih = src.replace(/\/\*[\s\S]*?\*\//g, "");
+  ["fFreight", "fInsurance", "fNdpbm", "fTarif", "fBM", "fPPN", "fPPH"].forEach((id) => {
+    if (bersih.includes('excelNum($("#' + id + '")'))
+      throw new Error(id + " masih dibaca dengan penebak");
+    if (!bersih.includes('parseInputNumber($("#' + id + '")'))
+      throw new Error(id + " tidak dibaca dengan pembaca ketat");
+  });
+});
+t("penebak TETAP dipakai di jalur impor", () => {
+  /* Berkas PIB memakai bentuk Indonesia ("1.234,56"). Menyeragamkan
+     seluruhnya ke pembaca ketat akan merusak pembacaan berkas itu. */
+  eq(w.parseLooseNumber("1.234,56"), 1234.56);
+  eq(w.parseInputNumber("1,234.56"), 1234.56);
+});
+
+console.log("— IN FACTORY MENGGANTIKAN PERKIRAAN DI FORM —");
+t("kotak Estimated Delivery ikut terisi walau mode Manual", () => {
+  /* Mesin sudah mengembalikan tanggal In Factory; yang dulu menahan
+     adalah form, yang menolak menulis apa pun saat mode Manual. */
+  const src = w.eval("isiEstimatedDeliveryForm.toString()");
+  if (!/d\.source === "actual"/.test(src))
+    throw new Error("form masih menolak menulis saat mode Manual");
+});
+t("mode Manual tetap menahan hitungan biasa", () => {
+  /* Pengecualiannya HANYA untuk fakta. Kalau syaratnya dilonggarkan
+     jadi selalu menulis, tanggal patokan pengguna akan ditimpa tiap
+     kali form disentuh. */
+  const src = w.eval("isiEstimatedDeliveryForm.toString()");
+  if (!/formDeliveryMode !== "manual"/.test(src))
+    throw new Error("mode Manual tidak lagi menahan apa pun");
 });
 
 console.log("— YANG TERSIMPAN = YANG TERTULIS DI KOTAK —");

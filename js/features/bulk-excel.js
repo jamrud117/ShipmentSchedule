@@ -363,7 +363,12 @@ function reconstructShipmentFromGroup(group, mode) {
     const amount = excelNum(row[idx.AMOUNT]);
     items.push({
       ...newItem(),
-      namaBarang: desc,
+      /* Huruf besar, sama seperti impor berkas tunggal. Impor massal
+         punya jalurnya sendiri dan TIDAK lewat apply-to-form.js, jadi
+         aturannya harus disebut lagi di sini — kalau tidak, satu-satunya
+         jalur yang memasukkan ratusan baris sekaligus justru yang
+         terlewat. */
+      namaBarang: String(desc || "").toUpperCase(),
       hsCode: normalizeHsCodeInput(hs),
       jenisBarang:
         mode === "import"

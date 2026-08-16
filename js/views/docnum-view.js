@@ -4,8 +4,6 @@ let docNumHistoryRows = [];
 
 /* HALAMAN: PERMINTAAN NOMOR DOKUMEN */
 
-const DOCNUM_ORG = "DDI";
-
 /* Sebagian jenis dokumen punya SUB-JENIS yang seri nomornya terpisah */
 /* POLA NOMOR */
 const DOCNUM_SUBTYPES = {
@@ -153,8 +151,10 @@ function validateDocNumForm(typeKey) {
       return;
     }
     if (el.hasAttribute("data-dn-number") && nilai) {
-      // excelNum() menerima format Indonesia maupun Inggris ("1.234,56" dan "1,234.56")
-      const angka = excelNum(nilai);
+      /* parseInputNumber: kotak ini milik aplikasi, bentuknya kita
+         sendiri yang tulis (koma ribuan, titik desimal). excelNum()
+         menebak, dan tebakannya untuk "1.050" meleset seribu kali. */
+      const angka = parseInputNumber(nilai);
       if (!isFinite(angka) || angka < 0) {
         errors.push(`${label} harus berupa angka (tidak boleh negatif).`);
         el.classList.add("is-invalid");
@@ -1191,7 +1191,7 @@ function tampilkanDetailNomor(id) {
     if (k === "amount") {
       const mata = String(p.currency || "USD").toUpperCase();
       const lambang = mata === "USD" ? "$" : mata === "IDR" ? "Rp " : mata + " ";
-      nilai = lambang + formatNumberValue(parseLooseNumber(nilai));
+      nilai = lambang + formatNumberValue(parseInputNumber(nilai));
     }
     /* Kunci yang belum punya label dirapikan sendiri: "packages" ->
        "Packages". Isian tiap jenis dokumen bisa bertambah, dan yang

@@ -459,6 +459,35 @@ function predictDelivery(src) {
       extra,
     );
 
+  /* ---- FAKTA MENGALAHKAN PERKIRAAN ----
+
+     Tanggal In Factory adalah tanggal barang BENAR-BENAR masuk pabrik.
+     Estimated Delivery adalah perkiraan kejadian yang sama. Begitu
+     faktanya diketahui, perkiraannya tidak berlaku lagi — termasuk
+     perkiraan yang dipatok tangan. Mode Manual berarti "jangan
+     dihitung ulang", bukan "abaikan kenyataan".
+
+     Diperiksa SEBELUM cabang manual. Sebelumnya cabang manual berdiri
+     lebih dulu, jadi jadwal bermode Manual tetap menampilkan tanggal
+     perkiraan lama walau barangnya sudah diterima — dan itu justru
+     keadaan yang paling sering: tanggal yang pernah dipatok manual
+     jarang disentuh lagi.
+
+     HANYA IMPORT. Di buku Export kolom yang sama berarti Tanggal
+     Stuffing, bukan kedatangan di pabrik — memakainya untuk menimpa
+     kolom Stuffing akan menyamakan dua tanggal yang memang berbeda. */
+  if (s.mode !== "export" && s.factoryDate) {
+    return bungkus({
+      date: s.factoryDate,
+      source: "actual",
+      sourceLabel: PREDICTION_SOURCE_LABEL.actual,
+      confidence: predictionConfidencePercent({ baseKey: "actual", routeResolved: true }),
+      base: s.factoryDate,
+      baseLabel: "Tanggal In Factory",
+      arrived: true,
+    });
+  }
+
   /* ---- MANUAL — dihormati sepenuhnya, tidak dihitung apa pun ---- */
   if (deliveryModeOf(s) === "manual") {
     return bungkus({
@@ -474,7 +503,9 @@ function predictDelivery(src) {
     });
   }
 
-  /* ---- LAPIS 3/4 dilewati: sudah sampai pabrik ---- */
+  /* ---- LAPIS 3/4 dilewati: sudah sampai pabrik ----
+     Yang sampai di sini hanya buku Export; jalur Import sudah ditangani
+     di atas, sebelum cabang manual. */
   if (s.factoryDate) {
     return bungkus({
       date: s.factoryDate,

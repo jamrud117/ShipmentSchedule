@@ -117,7 +117,7 @@ function buildRouteNodes(s) {
 }
 
 // Ubah tanggal tiap titik jadi posisi 0..1 di sepanjang lane
-function computeNodeFractions(nodes) {
+function computeNodeFractionsRaw(nodes) {
   const n = nodes.length;
   const times = nodes.map((nd) => {
     const dt = parseLocalDate(nd.date);
@@ -154,6 +154,122 @@ function computeNodeFractions(nodes) {
   return fractions;
 }
 
+/* Pecahan simpul yang SIAP DIGAMBAR, berikut posisi kapal yang sudah
+   dipetakan ke skala yang sama. */
+function computeNodeFractions(nodes) {
+  return beriJarakMinimum(computeNodeFractionsRaw(nodes));
+}
+
+/* JARAK MINIMUM ANTAR SIMPUL
+
+   Posisi simpul dihitung dari TANGGALNYA, dan itu memang yang
+   diinginkan — transit yang jatuh di akhir perjalanan harus terlihat di
+   akhir. Tapi tanggal transit sering SAMA dengan tanggal berangkat:
+   sambungan hari yang sama, atau tanggal transit yang memang dicatat
+   sama dengan keberangkatan.
+
+   Waktu tempuhnya nol, jadi pecahannya nol juga — simpul transit
+   mendarat persis di atas simpul asal. Titiknya bertumpuk dan
+   labelnya terpaksa turun ke baris kedua:
+
+     TSN 13-08          <- asal
+     SIN 13-08          <- transit, tertumpuk di bawahnya
+                                            CGK 15-08
+
+   Rute tiga pelabuhan jadi terbaca seperti dua, dan yang paling ingin
+   dilihat orang — DI MANA barangnya sekarang — justru hilang.
+
+   Simpul yang berdempetan didorong terpisah sampai sejauh JARAK_MIN,
+   dari kiri lalu dirapikan dari kanan supaya yang terakhir tidak
+   terdorong melewati 1. Urutannya tidak pernah berubah: yang bergeser
+   hanya jarak antar simpul, bukan siapa mendahului siapa.
+
+   0,14 kira-kira selebar satu label pada kartu tersempit — sedikit di
+   atas ambang 0,12 yang dipakai assignLabelRows() untuk memutuskan
+   penumpukan, jadi label tidak perlu turun baris lagi. */
+const LANE_JARAK_MIN = 0.14;
+
+/* Simpul yang tanggalnya SAMA PERSIS dibagi rata.
+
+   Kalau dua simpul jatuh di pecahan yang identik, tanggalnya tidak
+   memberi tahu apa pun tentang posisi — waktu tempuhnya nol. Mendorong
+   yang belakangan sejauh jarak minimum akan menaruhnya di 0,14: lepas
+   dari tumpukan, tapi mengaku-ngaku bahwa transitnya "di awal
+   perjalanan" padahal datanya tidak berkata begitu.
+
+   Yang jujur adalah membaginya rata di antara simpul berbeda yang
+   mengapitnya: TSN · SIN · CGK jadi 0 · 0,5 · 1. Itu menyatakan
+   "tiga pelabuhan, urutannya begini" tanpa mengarang ketepatan yang
+   tidak ada.
+
+   Simpul yang tanggalnya memang berbeda TIDAK disentuh di sini —
+   posisinya masih membawa keterangan, dan yang dibutuhkannya cuma
+   ruang, yang diberikan beriJarakMinimum() di bawah. */
+function ratakanSimpulSeri(f) {
+  const n = f.length;
+  const out = f.slice();
+  let i = 0;
+  while (i < n) {
+    let j = i;
+    while (j + 1 < n && out[j + 1] === out[i]) j++;
+    if (j > i) {
+      const kiri = out[i];
+      const kanan = j + 1 < n ? out[j + 1] : 1;
+      const langkah = (kanan - kiri) / (j + 1 - i);
+      for (let k = i + 1; k <= j; k++) out[k] = kiri + langkah * (k - i);
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
+function beriJarakMinimum(f) {
+  const n = f.length;
+  if (n < 3) return f;
+  /* Yang seri dibagi rata DULU; sisanya tinggal diberi ruang. */
+  const out = ratakanSimpulSeri(f);
+  /* Kalau simpulnya terlalu banyak untuk diberi jarak segitu, jarak
+     dibagi rata — memaksakan 0,14 akan mendorong semuanya keluar. */
+  const jarak = Math.min(LANE_JARAK_MIN, 1 / (n - 1));
+
+  for (let i = 1; i < n; i++) {
+    if (out[i] - out[i - 1] < jarak) out[i] = out[i - 1] + jarak;
+  }
+  /* Dorongan di atas bisa melewati ujung kanan. Dirapikan mundur:
+     simpul terakhir dikembalikan ke 1, lalu yang di kirinya digeser
+     seperlunya. Simpul pertama tetap di 0. */
+  out[n - 1] = 1;
+  for (let i = n - 2; i > 0; i--) {
+    if (out[i + 1] - out[i] < jarak) out[i] = out[i + 1] - jarak;
+    if (out[i] < 0) out[i] = 0;
+  }
+  return out;
+}
+
+/* Memetakan posisi berbasis waktu ke skala simpul yang sudah diberi
+   jarak.
+
+   Tanpa ini penanda kapal dan titik pelabuhan memakai dua skala
+   berbeda: kapal yang baru berangkat akan tampak SUDAH MELEWATI
+   transit, karena transitnya digeser ke tengah sementara kapalnya
+   tidak. Pemetaannya sepotong-sepotong per ruas, jadi kapal selalu
+   berada di ruas yang benar dan pada bagian yang sebanding di
+   dalamnya. */
+function petakanProgres(progress, asli, baru) {
+  const n = asli.length;
+  if (n < 3 || !isFinite(progress)) return progress;
+  for (let i = 0; i < n - 1; i++) {
+    const a = asli[i];
+    const b = asli[i + 1];
+    if (progress > b && i < n - 2) continue;
+    const rentang = b - a;
+    const bagian = rentang > 0 ? (progress - a) / rentang : 0;
+    const hasil = baru[i] + (baru[i + 1] - baru[i]) * Math.min(1, Math.max(0, bagian));
+    return Math.min(1, Math.max(0, hasil));
+  }
+  return progress;
+}
+
 // Leg mana yang sedang berjalan sekarang, berdasar posisi progress keseluruhan
 function activeLegIndex(fractions, progress) {
   let idx = 0;
@@ -180,9 +296,13 @@ function transportForLeg(s, nodes, legIndex) {
 // Satu fungsi terpusat dipakai baik saat render awal card maupun saat refresh posisi berkala
 function computeLaneModel(s) {
   const nodes = buildRouteNodes(s);
-  const fractions = computeNodeFractions(nodes);
-  const progress = laneProgress(s);
-  const legIdx = activeLegIndex(fractions, progress);
+  const asli = computeNodeFractionsRaw(nodes);
+  const fractions = beriJarakMinimum(asli);
+  /* Ruas yang sedang dilalui ditentukan dari pecahan ASLI — itu yang
+     berbasis waktu. Yang dipetakan hanya posisi gambarnya. */
+  const progresWaktu = laneProgress(s);
+  const legIdx = activeLegIndex(asli, progresWaktu);
+  const progress = petakanProgres(progresWaktu, asli, fractions);
   const leg = transportForLeg(s, nodes, legIdx);
   const icon = iconForMode(leg.mode);
   return { nodes, fractions, progress, legIdx, leg, icon };

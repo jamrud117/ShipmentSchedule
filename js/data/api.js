@@ -1,12 +1,36 @@
 "use strict";
 
 /* CRUD KE SUPABASE */
+
+/* Nomor urut permintaan muat.
+
+   loadShipments() dipanggil dari delapan tempat — masuk aplikasi,
+   simpan form, impor massal, tombol coba lagi, dan penangan galat
+   persistFields. Tidak ada satu pun yang menunggu yang lain selesai.
+
+   Dua muat yang bertumpang berarti jawaban yang datang TERAKHIR yang
+   menang, bukan yang paling baru diminta. Urutan itu tidak dijamin:
+   permintaan pertama bisa saja lebih lambat sampai. Akibatnya papan
+   menampilkan data yang lebih lama daripada yang sudah ada di layar —
+   perubahan yang baru disimpan tampak hilang, lalu muncul lagi saat
+   muat berikutnya.
+
+   Nomor urut ini membuat jawaban yang sudah kedaluwarsa dibuang
+   diam-diam: yang menang selalu permintaan TERBARU. */
+let muatKe = 0;
+
 async function loadShipments() {
+  const nomor = ++muatKe;
   showLoadingSkeleton(3);
   const { data: rows, error } = await supabaseClient
     .from("shipments")
     .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)")
     .order("created_at", { ascending: true });
+
+  /* Sudah ada permintaan yang lebih baru — jawaban ini punah. Termasuk
+     galatnya: menampilkan layar gagal untuk permintaan usang akan
+     menghapus data yang barusan berhasil dimuat. */
+  if (nomor !== muatKe) return;
 
   if (error) {
     console.error(error);

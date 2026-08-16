@@ -471,13 +471,30 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     // `notes` = teks entri terbaru
     notes: notesLogToPlainNotes(draftNotesLog),
     incoterm: $("#fIncoterm").value,
-    freight: excelNum($("#fFreight").value),
-    insurance: excelNum($("#fInsurance").value),
-    ndpbm: excelNum($("#fNdpbm").value),
-    tarif: excelNum($("#fTarif").value),
-    bm: excelNum($("#fBM").value),
-    ppn: excelNum($("#fPPN").value),
-    pph: excelNum($("#fPPH").value),
+    /* parseInputNumber, BUKAN excelNum.
+
+       excelNum() hanyalah parseLooseNumber dengan nama lain, dan ia
+       tinggal di js/import/ — pembaca untuk teks dari berkas ORANG
+       LAIN, yang menebak arti koma dan titik dari susunan angkanya.
+
+       Tujuh kotak ini milik aplikasi sendiri: isinya selalu ditulis
+       dengan koma sebagai pemisah ribuan, jadi tidak ada yang perlu
+       ditebak. Tebakan itu meleset seribu kali lipat tiap titiknya
+       diikuti tepat tiga angka — dan yang kena termasuk NDPBM, Bea
+       Masuk, PPN, dan PPH, yaitu seluruh dasar perhitungan PDRI.
+
+         diketik  16.500   tersimpan  16500   seharusnya  16,5
+         diketik  11.319   tersimpan  11319   seharusnya  11,319
+
+       Ketertukaran ini gampang terjadi karena namanya tidak
+       menyebutkan asal datanya. */
+    freight: parseInputNumber($("#fFreight").value),
+    insurance: parseInputNumber($("#fInsurance").value),
+    ndpbm: parseInputNumber($("#fNdpbm").value),
+    tarif: parseInputNumber($("#fTarif").value),
+    bm: parseInputNumber($("#fBM").value),
+    ppn: parseInputNumber($("#fPPN").value),
+    pph: parseInputNumber($("#fPPH").value),
     pi: $("#fPI").value.trim(),
     package: joinPackageFields(),
   };

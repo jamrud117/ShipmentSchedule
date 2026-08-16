@@ -20,7 +20,10 @@ vm.createContext(ctx);
  "js/core/prediction-eta.js",
  "js/core/prediction-confidence.js",
  "js/core/prediction-schedule.js",
- "js/core/prediction.js"].forEach((f) => {
+ "js/core/prediction.js",
+ /* Model jalur rute: posisi simpul & penanda kapal. Uji posisinya
+    aritmetika murni, jadi tempatnya di sini, bukan di dom-test. */
+ "js/core/route-model.js"].forEach((f) => {
   const src = fs.readFileSync(path.join(ROOT, f), "utf8");
   ctx.module = { exports: {} };
   vm.runInContext(src, ctx, { filename: f });
@@ -64,6 +67,7 @@ const {
   predictionOpsDays, predictionContext, pickPredictionRule,
   predictEtaRevised, predictionEtaBasis, calendarDaysBetweenISO,
   arrivalInfoOf, configuredOpsDays, todayISO,
+  beriJarakMinimum, petakanProgres,
 } = ctx;
 
 /* `const` di dalam vm tidak menempel ke objek konteks (beda dengan
@@ -200,6 +204,37 @@ t("In Factory mengalahkan semuanya", () => {
   eq(d.date, "2026-08-25");
   eq(d.confidence.label, "Final");
 });
+t("In Factory mengalahkan tanggal yang dipatok MANUAL", () => {
+  /* "Semuanya" dulu tidak termasuk mode Manual: cabang manual berdiri
+     lebih dulu, jadi jadwal bermode Manual tetap memajang perkiraan
+     lama walau barangnya sudah diterima. Justru itu keadaan yang
+     paling sering — tanggal yang pernah dipatok tangan jarang
+     disentuh lagi.
+
+     Mode Manual berarti "jangan dihitung ulang", bukan "abaikan
+     kenyataan". */
+  const d = predictDelivery({ ...withEta, deliveryMode: "manual",
+    actual: "2026-08-13", factoryDate: "2026-08-25" });
+  eq(d.date, "2026-08-25");
+  eq(d.source, "actual");
+  eq(d.arrived, true);
+});
+t("tanpa In Factory, mode Manual tetap tak tersentuh", () => {
+  /* Pembanding: perubahan di atas TIDAK boleh membuat mesin mulai
+     menimpa tanggal patokan pengguna di keadaan biasa. */
+  const d = predictDelivery({ ...withEta, deliveryMode: "manual", actual: "2026-08-13" });
+  eq(d.date, "2026-08-13");
+  eq(d.source, "manual");
+});
+t("EXPORT tidak ikut — di sana kolom itu Tanggal Stuffing", () => {
+  /* Di buku Export kolom yang sama berarti Tanggal Stuffing, bukan
+     kedatangan di pabrik. Memakainya untuk menimpa kolom Stuffing
+     akan menyamakan dua tanggal yang memang berbeda. */
+  const d = predictDelivery({ ...withEta, mode: "export", deliveryMode: "manual",
+    actual: "2026-08-13", factoryDate: "2026-08-25" });
+  eq(d.date, "2026-08-13");
+  eq(d.source, "manual");
+});
 t("COO TIDAK mempengaruhi apa pun", () => {
   const a = predictDelivery(withEta).date;
   const b = predictDelivery({ ...withEta, docProgress: { coo: { date: "2026-08-01" } } }).date;
@@ -254,6 +289,51 @@ t("AIR juga tanpa stripping", () => {
   /* Kiriman udara tidak pernah lewat CFS. */
   eq(kunci(predictDelivery(AIR)).join(">"), "clearance>delivery");
   eq(predictDelivery(AIR).date, "2026-08-11");
+});
+
+console.log("— POSISI SIMPUL DI JALUR RUTE —");
+t("transit setanggal berangkat DIBAGI RATA, bukan ditumpuk", () => {
+  /* Kasus nyata: TSN 13-08 · SIN 13-08 · CGK 15-08. Waktu tempuh ke
+     SIN nol, jadi pecahannya nol — simpulnya mendarat persis di atas
+     simpul asal dan labelnya terpaksa turun ke baris kedua. Rute tiga
+     pelabuhan jadi terbaca seperti dua. */
+  const f = beriJarakMinimum([0, 0, 1]);
+  eq(f.join(","), "0,0.5,1");
+});
+t("transit yang tanggalnya BEDA tetap sesuai waktunya", () => {
+  /* Yang seri saja yang dibagi rata. Posisi yang membawa keterangan
+     tidak boleh dihapus — transit di pertengahan harus tetap di
+     pertengahan. */
+  eq(beriJarakMinimum([0, 0.5, 1]).join(","), "0,0.5,1");
+  eq(beriJarakMinimum([0, 0.3, 1])[1], 0.3);
+});
+t("simpul yang berdempetan diberi ruang, urutannya tetap", () => {
+  /* 0,98 bukan seri — keterangannya nyata, yang kurang cuma ruang.
+     Digeser secukupnya supaya labelnya tidak bertindih, tidak
+     dipindah ke tengah. */
+  const f = beriJarakMinimum([0, 0.98, 1]);
+  if (!(f[1] > 0.7 && f[1] < 0.95)) throw new Error("posisi transit tidak masuk akal: " + f[1]);
+  eq(f[0], 0);
+  eq(f[2], 1);
+});
+t("urutan & ujung jalur tidak pernah berubah", () => {
+  [[0,0,1],[0,0,0,1],[0,0,0,0,1],[0,0.98,1],[0,1,1]].forEach((asal) => {
+    const f = beriJarakMinimum(asal);
+    eq(f[0], 0, "ujung kiri:");
+    eq(f[f.length - 1], 1, "ujung kanan:");
+    for (let i = 1; i < f.length; i++)
+      if (f[i] < f[i - 1]) throw new Error("simpul mundur ke kiri: " + f.join(","));
+  });
+});
+t("penanda kapal ikut skala yang sama dengan simpulnya", () => {
+  /* Kalau kapal memakai skala waktu sementara simpulnya digeser, kapal
+     yang baru berangkat akan tampak SUDAH MELEWATI transit. */
+  const asli = [0, 0, 1];
+  const baru = beriJarakMinimum(asli);
+  eq(petakanProgres(0, asli, baru), 0);
+  eq(petakanProgres(1, asli, baru), 1);
+  const tengah = petakanProgres(0.5, asli, baru);
+  if (!(tengah > baru[1])) throw new Error("kapal tertinggal di belakang transit");
 });
 
 console.log("— DETEKSI CARRIER —");

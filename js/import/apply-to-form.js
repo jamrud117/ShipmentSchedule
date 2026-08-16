@@ -243,8 +243,20 @@ function applyImportedBcData(parsed) {
   /* ---- daftar barang ---- */
   if (parsed.items && parsed.items.length) {
     // HS Code disimpan sebagai DIGIT saja (requirement A)
+    /* NAMA BARANG DISERAGAMKAN KE HURUF BESAR.
+
+       Dipasang di sini karena SEMUA impor berkas lewat titik ini —
+       CIPL Excel, CIPL PDF, PIB, PEB. Menaruhnya di tiap parser berarti
+       empat salinan aturan yang sama, dan parser yang ditambahkan nanti
+       akan terlewat tanpa ada yang menyadarinya.
+
+       Nama dari invoice pemasok datang dengan huruf campur-campur.
+       "Tyre Mold Full Set" dan "TYRE MOLD FULL SET" terhitung sebagai
+       dua barang berbeda saat dikelompokkan di laporan — dan itu baru
+       ketahuan berbulan-bulan kemudian, saat jumlahnya tidak cocok. */
     const cleaned = parsed.items.map((it) => ({
       ...it,
+      namaBarang: String(it.namaBarang || "").toUpperCase(),
       hsCode: normalizeHsCodeInput(it.hsCode),
     }));
     // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar barang yang sudah terisi

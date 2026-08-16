@@ -1085,6 +1085,7 @@
                   type="text"
                   class="form-control"
                   id="fVessel"
+                  list="carrierListLaut"
                   placeholder="MV Ever Given"
                 />
               </div>
@@ -1876,6 +1877,21 @@
     <!-- CONFIG -->
     <!-- ========================================= -->
     <datalist id="unlocodeList"></datalist>
+    <!-- Saran pelabuhan untuk TERMINAL TRANSIT.
+
+         Dua daftar terpisah, bukan satu seperti Pelabuhan Asal/Tujuan:
+         tiap terminal transit punya modanya SENDIRI, yang boleh berbeda
+         dari moda pengiriman di bagian atas form (mis. laut ke
+         Singapura lalu udara ke Jakarta). Memakai #unlocodeList akan
+         menawarkan daftar yang disaring menurut moda yang salah. -->
+    <datalist id="unlocodeListLaut"></datalist>
+    <datalist id="unlocodeListUdara"></datalist>
+    <!-- Saran pelayaran (laut) & maskapai (udara) untuk kotak Nama
+         Kapal / Nama Pesawat. Dipisah per moda dengan alasan yang sama
+         seperti daftar pelabuhan di atas: tiap terminal transit punya
+         modanya sendiri. -->
+    <datalist id="carrierListLaut"></datalist>
+    <datalist id="carrierListUdara"></datalist>
     <datalist id="packageUnitList">
       <option value="BOX"></option>
       <option value="CARTON"></option>

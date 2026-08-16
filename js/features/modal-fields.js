@@ -33,6 +33,10 @@ function applyTransportLabels() {
   $("#lblOrigin").textContent = portNoun("origin", transport);
   $("#lblDestination").textContent = portNoun("destination", transport);
   $("#fVessel").placeholder = air ? "Garuda Cargo" : "MV Ever Given";
+  /* Saran carrier ikut moda: pelayaran untuk laut, maskapai untuk
+     udara. Tanpa ini kotak Nama Pesawat menawarkan daftar pelayaran —
+     sarannya justru menghalangi. */
+  $("#fVessel").setAttribute("list", air ? "carrierListUdara" : "carrierListLaut");
   $("#fVoyage").placeholder = air ? "GA880/04JUL" : "V.023E";
   $("#lblMasterBL").textContent = air ? "Master AWB" : "Master B/L";
   $("#lblHouseBL").textContent = air ? "House AWB" : "House B/L";
@@ -226,14 +230,27 @@ function totalKemasanBarang() {
 
    Posisi kursor dijaga: tanpa itu, mengetik di tengah teks akan
    melemparkan kursor ke ujung tiap huruf. */
+
+/* Dipakai bersama oleh Nama Pihak dan Nama Barang. Ditaruh di satu
+   tempat, bukan disalin: dua salinan aturan huruf besar akan berbeda
+   perlakuannya begitu salah satunya diperbaiki. */
+function jadikanHurufBesar(el) {
+  if (!el) return;
+  const pos = el.selectionStart;
+  const atas = String(el.value).toUpperCase();
+  if (el.value === atas) return;
+  el.value = atas;
+  /* Sebagian jenis kotak (mis. type=email) melempar saat kursornya
+     diatur. Nama barang & pihak bukan salah satunya, tapi penjaga ini
+     membuat helper-nya aman dipakai di kotak mana pun nanti. */
+  try {
+    el.setSelectionRange(pos, pos);
+  } catch (err) {
+    /* abaikan — kotak yang tidak mendukung pengaturan kursor */
+  }
+}
+
 const elParty = $("#fParty");
 if (elParty) {
-  elParty.addEventListener("input", () => {
-    const pos = elParty.selectionStart;
-    const atas = elParty.value.toUpperCase();
-    if (elParty.value !== atas) {
-      elParty.value = atas;
-      elParty.setSelectionRange(pos, pos);
-    }
-  });
+  elParty.addEventListener("input", () => jadikanHurufBesar(elParty));
 }
