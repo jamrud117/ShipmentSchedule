@@ -60,7 +60,9 @@ const CARRIER_MASTER = {
     { code: "ONE", name: "Ocean Network Express", aliases: ["ONE"] },
     /* Deretan kapal "XIN <kota>" (XIN QIN HUANG DAO, XIN BEIJING)
        memakai penamaan COSCO. Muncul di riwayat DDI. */
-    { code: "COSCO", name: "COSCO Shipping", aliases: ["COSCO", "XIN"] },
+    /* "CSCL" ikut ke sini: China Shipping melebur ke COSCO pada 2016,
+       tapi namanya masih terpakai di dokumen dan lambung kapal. */
+    { code: "COSCO", name: "COSCO Shipping", aliases: ["COSCO", "XIN", "CSCL", "COSCON"] },
     { code: "HMM", name: "HMM (Hyundai Merchant Marine)", aliases: ["HMM", "HYUNDAI"] },
     { code: "CMA", name: "CMA CGM", aliases: ["CMA", "APL"] },
     { code: "OOCL", name: "Orient Overseas Container Line", aliases: ["OOCL"] },
@@ -80,7 +82,15 @@ const CARRIER_MASTER = {
     /* RCL menamai banyak kapalnya dengan awalan SAWASDEE. Silakan
        dicek ulang kalau di dokumen Anda tertulis operator lain. */
     { code: "RCL", name: "Regional Container Lines", aliases: ["RCL", "SAWASDEE"] },
-    { code: "HAIAN", name: "Hai An Transport", aliases: ["HAIAN", "HAI"] },
+    /* Alias "HAI" yang berdiri sendiri SENGAJA DIBUANG. Kata itu
+       muncul di banyak nama kapal Cina yang bukan Hai An sama sekali —
+       "ZHONG GU BO HAI", "ZHONG GU NAN HAI", "XIN HAI TONG" — dan
+       seluruhnya ikut tercatat sebagai Hai An. Riwayat yang tercampur
+       begitu lebih buruk daripada tidak terdeteksi: mesin belajar dari
+       angka kapal lain tanpa ada yang tahu.
+
+       Frasa "HAI AN" menutup kembali penulisan yang terpisah. */
+    { code: "HAIAN", name: "Hai An Transport", aliases: ["HAIAN", "HAI AN"] },
     { code: "HEUNGA", name: "Heung-A Line", aliases: ["HEUNG", "HEUNGA"] },
 
     /* DERETAN "… VOYAGER" — QINGDAO, TIANJIN, CHENNAI, KWANGYANG,
@@ -102,8 +112,76 @@ const CARRIER_MASTER = {
       aliases: [],
       suffix: ["VOYAGER", "VOYAGE"],
     },
+    /* ================================================================
+       PELAYARAN CINA
+
+       Rute Cina -> Indonesia banyak dilayani operator dalam negeri
+       Cina yang tidak pernah muncul di daftar pelayaran global. Nama
+       kapalnya ditulis TERPISAH ("HONG TAI 658", "ZHONG GU BO HAI"),
+       jadi hampir semuanya butuh alias frasa.
+    ================================================================ */
+    /* Pemicu penambahan ini: HONG TAI 658 dari TXG ke Tanjung Priok
+       tidak terdeteksi sama sekali. Kapalnya nyata — berbendera Cina,
+       IMO 1125871 — dan sekapal armada dengan HONG TAI 639 dan
+       HONG TAI 656 milik Xiamen Hongtai Shipping. */
+    { code: "HONGTAI", name: "Xiamen Hongtai Shipping", aliases: ["HONGTAI", "HONG TAI"] },
+    /* Pengangkut peti kemas pesisir terbesar di Cina, dan sekarang
+       merambah intra-Asia. Seluruh kapalnya berawalan "ZHONG GU". */
+    { code: "ZHONGGU", name: "Zhonggu Logistics", aliases: ["ZHONGGU", "ZHONG GU"] },
+    { code: "ANTONG", name: "Antong Holdings (ANT Lines)",
+      aliases: ["ANTONG", "AN TONG", "ANSHENG", "AN SHENG"] },
+    { code: "CULINES", name: "China United Lines",
+      aliases: ["CULINES", "CU LINES"], prefix: ["CUL"] },
+    /* Armada "XIN MING ZHOU" milik Jinjiang. Ditulis sebagai frasa
+       supaya tidak tertelan alias "XIN" milik COSCO di atas. */
+    { code: "JINJIANG", name: "Shanghai Jinjiang Shipping",
+      aliases: ["JINJIANG", "JIN JIANG", "XIN MING ZHOU"] },
+    { code: "SINOLINES", name: "Sinotrans Container Lines",
+      aliases: ["SINOLINES", "SINOTRANS", "SINO LINES"] },
+    { code: "BAL", name: "BAL Container Line", aliases: [], prefix: ["BAL"] },
+    { code: "TRANSFAR", name: "Transfar Shipping", aliases: ["TRANSFAR"] },
+    { code: "SEALEAD", name: "SeaLead Shipping", aliases: ["SEALEAD", "SEA LEAD"] },
+    /* Tanda hubungnya hilang saat teks dinormalkan, jadi "X-PRESS"
+       masuk sebagai frasa dua kata. */
+    { code: "XPRESS", name: "X-Press Feeders", aliases: ["XPRESS", "X PRESS"] },
+    { code: "INTERASIA", name: "Interasia Lines", aliases: ["INTERASIA", "INTER ASIA"] },
+    { code: "SMLINE", name: "SM Line", aliases: ["SMLINE", "SM LINE"], prefix: ["SM"] },
+
+    /* ================================================================
+       PELAYARAN VIETNAM
+    ================================================================ */
+    { code: "VIMC", name: "VIMC Lines (Vinalines)", aliases: ["VIMC", "VINALINES"] },
+    { code: "TANCANG", name: "Tan Cang Shipping", aliases: ["TANCANG", "TAN CANG"] },
+    { code: "VSICO", name: "VSICO Shipping", aliases: ["VSICO"] },
+    { code: "VINAFCO", name: "Vinafco Shipping", aliases: ["VINAFCO"] },
+    { code: "BIENDONG", name: "Bien Dong Shipping", aliases: ["BIENDONG", "BIEN DONG"] },
+    { code: "VOSCO", name: "Vietnam Ocean Shipping (VOSCO)", aliases: ["VOSCO"] },
+
+    /* ================================================================
+       PELAYARAN RUSIA
+
+       FESCO satu-satunya yang menyentuh Indonesia langsung: kapalnya
+       pernah sandar di Tanjung Priok lewat FESCO Intra Asia Service,
+       dan jalur Vladivostok - Vietnam dipakai rutin.
+
+       CATATAN PENTING. FESCO banyak MENCARTER kapal, dan kapal
+       carteran memakai nama pemiliknya — "A HOUOU", "BAL BOAN" —
+       bukan "FESCO ...". Jadi alias di bawah hanya menangkap kapal
+       milik sendiri. Kalau B/L Anda menyebut FESCO tapi nama kapalnya
+       lain, kapal itu memang tidak akan terbaca FESCO.
+    ================================================================ */
+    { code: "FESCO", name: "FESCO Transportation Group", aliases: ["FESCO"] },
+    { code: "SASCO", name: "Sakhalin Shipping (SASCO)", aliases: ["SASCO"] },
+    { code: "RUSCON", name: "Ruscon (Delo Group)", aliases: ["RUSCON"] },
+
     { code: "SPIL", name: "Salam Pacific Indonesia Lines", aliases: ["SPIL"] },
     { code: "TEMAS", name: "Temas Line", aliases: ["TEMAS"] },
+    /* Sisi Indonesia — untuk arah sebaliknya, ekspor keluar. Armada
+       Samudera dinamai "SINAR <tempat>", jadi alias itu ikut. */
+    { code: "MERATUS", name: "Meratus Line", aliases: ["MERATUS"] },
+    { code: "TANTO", name: "Tanto Intim Line", aliases: ["TANTO"] },
+    { code: "SAMUDERA", name: "Samudera Shipping Line",
+      aliases: ["SAMUDERA"], prefix: ["SINAR"] },
   ],
 
   /* ----------------------------------------------------------------
@@ -192,6 +270,76 @@ const CARRIER_MASTER = {
     { code: "QY", name: "European Air Transport", aliases: ["EAT"] },
     { code: "8K", name: "K-Mile Air" },
     { code: "MB", name: "MNG Airlines" },
+
+    /* ----------------------------------------------------------------
+       MASKAPAI CINA TAMBAHAN
+
+       Yang disaring: yang benar-benar terbang ke Indonesia atau
+       mengangkut kargo lintas negara. Maskapai perintis dalam negeri
+       Cina sengaja tidak dimasukkan — ia tidak akan pernah muncul di
+       AWB DDI, dan hanya memenuhi kotak saran.
+    ---------------------------------------------------------------- */
+    { code: "FM", name: "Shanghai Airlines" },
+    { code: "HO", name: "Juneyao Air" },
+    { code: "JD", name: "Beijing Capital Airlines" },
+    { code: "GS", name: "Tianjin Airlines" },
+    { code: "KN", name: "China United Airlines" },
+    { code: "GJ", name: "Loong Air" },
+    { code: "8L", name: "Lucky Air" },
+    { code: "KY", name: "Kunming Airlines" },
+    { code: "EU", name: "Chengdu Airlines" },
+    { code: "DZ", name: "Donghai Airlines" },
+    { code: "BK", name: "Okay Airways" },
+    { code: "G5", name: "China Express Airlines" },
+    { code: "GX", name: "Beibu Gulf Airlines" },
+    { code: "QW", name: "Qingdao Airlines" },
+    /* Kargo murni. YTO dan Pos Cina rutin membawa muatan
+       e-commerce Cina - Jakarta. */
+    { code: "YG", name: "YTO Cargo Airlines", aliases: ["YTO"] },
+    { code: "CF", name: "China Postal Airlines", aliases: ["CHINA POSTAL"] },
+
+    /* ----------------------------------------------------------------
+       MASKAPAI RUSIA
+
+       Sebagian besar masuk lewat Denpasar, bukan Jakarta — itu pun
+       tetap dicatat, karena kolomnya sama dan salah ketik satu huruf
+       tetap harus terbaca.
+    ---------------------------------------------------------------- */
+    { code: "S7", name: "S7 Airlines" },
+    { code: "U6", name: "Ural Airlines" },
+    { code: "N4", name: "Nordwind Airlines" },
+    { code: "ZF", name: "AZUR air" },
+    { code: "FV", name: "Rossiya Airlines" },
+    { code: "DP", name: "Pobeda" },
+    { code: "UT", name: "Utair" },
+    { code: "WZ", name: "Red Wings" },
+    { code: "5N", name: "Smartavia" },
+    { code: "VI", name: "Volga-Dnepr Airlines", aliases: ["VOLGA DNEPR"] },
+
+    /* ----------------------------------------------------------------
+       MASKAPAI VIETNAM TAMBAHAN
+    ---------------------------------------------------------------- */
+    { code: "BL", name: "Pacific Airlines" },
+    { code: "VU", name: "Vietravel Airlines" },
+    { code: "0V", name: "VASCO" },
+
+    /* ----------------------------------------------------------------
+       KARGO INDONESIA — untuk arah sebaliknya, ekspor keluar.
+
+       2Y sudah dipastikan dari empat sumber yang saling bebas (CAPA,
+       Wikidata, Plane Finder, Flightera).
+
+       GM MASIH BERSELISIH. Sebagian besar sumber menulis GM, satu
+       direktori menulis GY. Yang TIDAK berselisih adalah kode ICAO
+       (TMG), nama, dan callsign (TRILINES) — jadi nama perusahaannya
+       ikut didaftarkan sebagai alias. Kalau kodenya ternyata salah,
+       AWB yang menulis "ASIA CARGO" atau "TRI-MG" tetap terbaca.
+       Perusahaannya berganti nama jadi Asia Cargo Airlines pada 2021,
+       tapi dokumen lama masih menulis Tri-MG.
+    ---------------------------------------------------------------- */
+    { code: "2Y", name: "My Indo Airlines", aliases: ["MY INDO", "MYINDO"] },
+    { code: "GM", name: "Asia Cargo Airlines (d/h Tri-MG)",
+      aliases: ["ASIA CARGO", "TRI MG", "TRIMG", "TRILINES"] },
   ],
 };
 
@@ -250,9 +398,31 @@ function carrierDatalistHtml(mode) {
    Urutan daftar tetap dihormati: yang tertulis lebih dulu menang,
    sama seperti sebelumnya.
 ------------------------------------------------------------------ */
+/* ALIAS SATU KATA vs ALIAS FRASA.
+
+   Nama operator Asia Timur sering ditulis TERPISAH: "HONG TAI 658",
+   "ZHONG GU BO HAI", "TAN CANG 09", "X-PRESS MEKONG". Pencocokan lama
+   membandingkan alias dengan tiap KATA satu per satu, jadi alias yang
+   mengandung spasi tidak akan pernah sama dengan kata mana pun —
+   diam-diam tidak berlaku, tanpa pesan galat.
+
+   Karena itu alias dipisah saat dimuat: `_word` untuk yang satu kata,
+   `_phrase` untuk yang lebih. `_alias` tetap berisi keduanya, karena
+   pencocokan kurir dan maskapai memang sudah bekerja pada teks utuh
+   dan sudah benar menangani frasa. */
 function siapkanAlias(daftar) {
   daftar.forEach((x) => {
     x._alias = (x.aliases || []).map(normalisasiTeksKapal).filter(Boolean);
+    x._word = x._alias.filter((a) => a.indexOf(" ") < 0);
+    x._phrase = x._alias.filter((a) => a.indexOf(" ") >= 0);
+    /* `prefix` = alias yang HANYA sah sebagai kata pertama.
+
+       Untuk singkatan sependek "SM" atau "BAL", pencocokan di tengah
+       nama lebih sering salah daripada benar: armadanya toh selalu
+       diawali singkatan itu ("SM QINGDAO", "BAL BOAN"), sedangkan
+       kapal lain bisa saja memuat dua huruf yang sama di tengah.
+       Kembarannya `suffix`, dari sisi yang berlawanan. */
+    x._prefix = (x.prefix || []).map(normalisasiTeksKapal).filter(Boolean);
     x._suffix = (x.suffix || []).map(normalisasiTeksKapal).filter(Boolean);
   });
   return daftar;
@@ -290,13 +460,39 @@ function detectShippingLine(vesselName) {
   const teks = normalisasiTeksKapal(vesselName);
   if (!teks) return null;
   const kata = bersihkanNamaKapal(teks);
+  /* Dibingkai spasi di kedua ujung supaya frasa tetap dicocokkan
+     sebagai rangkaian KATA UTUH, sama seperti alias satu kata. */
+  const rapat = " " + kata.join(" ") + " ";
+
+  /* FRASA DI AWAL NAMA — paling khusus, jadi diperiksa paling dulu.
+
+     "XIN MING ZHOU 68" itu Jinjiang, bukan COSCO, walau kata
+     pertamanya "XIN" persis alias COSCO. Yang cocok lebih panjang
+     harus menang; kalau tidak, satu alias pendek akan menelan seluruh
+     armada operator lain. */
+  for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
+    const line = CARRIER_MASTER.shippingLines[i];
+    const cocok = line._phrase.find((f) => rapat.indexOf(" " + f + " ") === 0);
+    if (cocok) {
+      return { code: line.code, name: line.name, alias: cocok, via: "frasa awal nama" };
+    }
+  }
 
   /* Kata PERTAMA lebih dulu. "EVER GIVEN" harus terbaca Evergreen,
      bukan tertangkap alias lain yang kebetulan muncul belakangan. */
   for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
     const line = CARRIER_MASTER.shippingLines[i];
-    if (line._alias.indexOf(kata[0]) >= 0) {
+    if (line._word.indexOf(kata[0]) >= 0 || line._prefix.indexOf(kata[0]) >= 0) {
       return { code: line.code, name: line.name, alias: kata[0], via: "kata pertama" };
+    }
+  }
+
+  // Frasa di mana pun, sebelum kata tunggal — alasan yang sama.
+  for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
+    const line = CARRIER_MASTER.shippingLines[i];
+    const cocok = line._phrase.find((f) => rapat.indexOf(" " + f + " ") >= 0);
+    if (cocok) {
+      return { code: line.code, name: line.name, alias: cocok, via: "frasa dalam nama" };
     }
   }
 
@@ -304,7 +500,7 @@ function detectShippingLine(vesselName) {
   // boleh tertangkap dari "MILESTONE".
   for (let i = 0; i < CARRIER_MASTER.shippingLines.length; i++) {
     const line = CARRIER_MASTER.shippingLines[i];
-    const cocok = line._alias.find((a) => kata.indexOf(a) >= 0);
+    const cocok = line._word.find((a) => kata.indexOf(a) >= 0);
     if (cocok) {
       return { code: line.code, name: line.name, alias: cocok, via: "kata dalam nama" };
     }
