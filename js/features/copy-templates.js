@@ -36,13 +36,30 @@ function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatte
   }
 }
 
+/* KOLOM "NO" DIBUANG SAAT DISALIN — TAPI HANYA SAAT DISALIN.
+
+   Kolom itu selalu kosong di hasil salin, dan sel kosong yang ditempel
+   ke Excel TETAP MENIMPA isi sel tujuan. Akibatnya penomoran dokumen
+   yang sudah ada di sheet ikut terhapus setiap kali menempel. Menggeser
+   satu kolom ke kanan sebelum menempel bisa dilupakan; membuang
+   kolomnya tidak bisa.
+
+   JANGAN dibuang dari pembangun barisnya. Baris yang sama dipakai
+   ulang oleh Bulk Excel (js/features/bulk-excel.js), dan di sana kolom
+   NO justru DIISI nomor sungguhan — lalu dibaca balik lewat
+   IMPORT_IDX.NO = 0 saat Bulk Import. Menghapusnya di hulu akan
+   menggeser SELURUH indeks kolom di kedua arah itu. */
+function tanpaKolomNo(rows) {
+  return rows.map((cols) => cols.slice(1));
+}
+
 /* ALL IMPORT — buildExcelCopyRows() yang sudah ada, ditambah 1 kolom */
 function buildAllImportCopyText(s) {
   const rows = buildExcelCopyRows(s, clipboardFormatter).map((cols) => [
-    clipboardFormatter.blank, // kolom NO — sengaja dikosongkan
+    clipboardFormatter.blank, // kolom NO — diisi Bulk Excel, dibuang saat disalin
     ...cols,
   ]);
-  return rowsToClipboardText(rows);
+  return rowsToClipboardText(tanpaKolomNo(rows));
 }
 
 /* ALL EXPORT — 17 kolom (requirement E) */
@@ -83,7 +100,7 @@ function buildAllExportCopyRows(s, formatter) {
   return rows;
 }
 function buildAllExportCopyText(s) {
-  return rowsToClipboardText(buildAllExportCopyRows(s, clipboardFormatter));
+  return rowsToClipboardText(tanpaKolomNo(buildAllExportCopyRows(s, clipboardFormatter)));
 }
 
 /* DAILY IMPORT — 25 kolom (requirement E) */
@@ -366,7 +383,7 @@ const COPY_TEMPLATES = [
     modes: ["import"],
     sheet: "DAILY IMPORT",
     getText: (s) =>
-      rowsToClipboardText(buildDailyImportCopyRows(s, clipboardFormatter)),
+      rowsToClipboardText(tanpaKolomNo(buildDailyImportCopyRows(s, clipboardFormatter))),
     successMsg: () => "Template Daily Import berhasil disalin ke Clipboard.",
   },
   {
@@ -377,7 +394,7 @@ const COPY_TEMPLATES = [
     modes: ["export"],
     sheet: "DAILY EXPORT",
     getText: (s) =>
-      rowsToClipboardText(buildDailyExportCopyRows(s, clipboardFormatter)),
+      rowsToClipboardText(tanpaKolomNo(buildDailyExportCopyRows(s, clipboardFormatter))),
     successMsg: () => "Template Daily Export berhasil disalin ke Clipboard.",
   },
   {

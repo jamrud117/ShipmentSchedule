@@ -353,7 +353,7 @@ function parsePebPdfText(text, pagesItems) {
         ...newItem(),
         namaBarang: it.name || "",
         hsCode: normalizeHsCodeInput(it.hsCode),
-        jenisBarang: "Barang Jadi",
+        jenisBarang: "BARANG JADI",
         qty: it.qty != null ? it.qty : 0,
         satuan: it.satuan || "",
         netto: it.netto != null ? it.netto : 0,

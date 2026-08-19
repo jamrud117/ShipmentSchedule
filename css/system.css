@@ -19,7 +19,7 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* Angka & penanda dokumen selalu monospace + tabular supaya digitnya */
-.info-value, .metric-num, .docnum-result-number, .dn-num,
+.info-value, .docnum-result-number, .dn-num,
 .collapsed-meta, .note-stamp, .card-note-stamp, .delay-delta {
   font-variant-numeric: tabular-nums;
 }
@@ -51,7 +51,6 @@ textarea:focus-visible,
 /* ---- TOMBOL: satu bahasa untuk semua ---- */
 .btn,
 .btn-teal,
-.btn-outline-navy,
 .btn-outline-danger,
 .btn-import-excel,
 .btn-save-primary,
@@ -172,7 +171,6 @@ input::placeholder {
 /* KARTU */
 .ship-card,
 .form-section-card,
-.toolbar,
 .notes-panel,
 .docnum-shell,
 .route-stop-card,

@@ -69,8 +69,32 @@ function packageWarnTitle(it) {
     : "Format dimensi: P*L*T, mis. 82*82*75.";
 }
 
-// Textarea "Nama Barang" tumbuh otomatis mengikuti isinya
+/* Textarea "Nama Barang" tumbuh otomatis mengikuti isinya.
+
+   TIDAK BISA DIUKUR SAAT TERSEMBUNYI. Tabel ini tinggal di dalam
+   tab-pane "barang", dan tab yang tidak aktif memakai `d-none` —
+   yaitu display:none. Elemen tanpa tata letak mengembalikan
+   scrollHeight 0.
+
+   Dulu tingginya tetap ditulis walau nol, dan itu justru MERUSAK:
+   "0px" menimpa tinggi benar yang sudah dihitung sebelumnya. Impor
+   PDF/Excel biasanya berjalan saat tab Umum yang terbuka, jadi seluruh
+   kolom nama diukur dalam keadaan tersembunyi, dapat nol, lalu
+   dikunci di situ. Begitu tab Data Barang dibuka, kotaknya sudah
+   terlanjur pendek — dan baru betul setelah diketik, karena mengetik
+   memicu perhitungan ulang saat elemennya sudah kelihatan.
+
+   Sekarang pengukuran dilewati kalau elemennya belum tergambar, dan
+   dihitung ulang begitu tabnya benar-benar terbuka. */
+function terlihat(el) {
+  /* getClientRects kosong = tidak tergambar sama sekali. Lebih jujur
+     daripada memeriksa offsetParent, yang juga null untuk elemen
+     position:fixed padahal elemen itu terlihat. */
+  return !!(el && el.getClientRects && el.getClientRects().length);
+}
+
 function autoGrowTextarea(el) {
+  if (!terlihat(el)) return;
   el.style.height = "auto";
   // TANPA batas atas: nama barang bisa sangat panjang
   el.style.height = `${el.scrollHeight}px`;
@@ -81,11 +105,27 @@ function autoGrowTextarea(el) {
    Harus dipanggil setiap kali tabel digambar ulang, TERMASUK setelah
    data hasil impor masuk. Kalau hanya dipanggil saat pengguna
    mengetik, nama panjang dari PDF/Excel tetap terpotong sampai
-   kolomnya kebetulan disentuh. */
+   kolomnya kebetulan disentuh.
+
+   DIKERJAKAN BERKELOMPOK, bukan satu-satu. Memanggil autoGrowTextarea
+   berulang kali menyelang-nyeling TULIS dan BACA: menyetel height
+   membatalkan tata letak, lalu membaca scrollHeight memaksa peramban
+   menghitungnya ulang saat itu juga. Satu kiriman berisi 60 barang
+   berarti 60 perhitungan paksa berturut-turut — dan itu terasa
+   sebagai jeda saat tab Data Barang dibuka.
+
+   Di sini semuanya ditulis dulu, baru semuanya dibaca, baru semuanya
+   ditulis lagi. Peramban cukup menghitung sekali. */
 function autoGrowAllItemNames() {
+  const kotak = [];
   document
     .querySelectorAll("textarea.nama-barang-input")
-    .forEach(autoGrowTextarea);
+    .forEach((el) => { if (terlihat(el)) kotak.push(el); });
+  if (!kotak.length) return;
+
+  kotak.forEach((el) => (el.style.height = "auto"));       // tulis semua
+  const tinggi = kotak.map((el) => el.scrollHeight);        // baca semua
+  kotak.forEach((el, i) => (el.style.height = `${tinggi[i]}px`));
 }
 
 /* Lebar kolom berubah saat jendela diubah ukurannya; teks yang tadinya
@@ -128,6 +168,29 @@ function amatiTabelBarang() {
 document.addEventListener("DOMContentLoaded", amatiTabelBarang);
 amatiTabelBarang();
 
+/* SAAT TABNYA DIBUKA.
+
+   Inilah pasangan dari penjagaan di autoGrowTextarea. Selama tabnya
+   tertutup tidak ada yang bisa diukur, jadi perhitungannya ditunda
+   sampai di sini — momen pertama kotak-kotak itu punya ukuran.
+
+   Yang diamati atribut `class` pada pane-nya, bukan klik tombol tab.
+   Klik hanyalah SALAH SATU jalan menuju terbuka; berpindah lewat kode
+   atau apa pun yang mencabut `d-none` nanti akan ikut tertangkap tanpa
+   perlu diingat-ingat. */
+function amatiPaneBarang() {
+  const pane = document.querySelector('.tab-pane[data-tabpane="barang"]');
+  if (!pane || pane.dataset.growPaneObserved) return;
+  pane.dataset.growPaneObserved = "1";
+  new MutationObserver(() => {
+    if (!pane.classList.contains("d-none")) {
+      requestAnimationFrame(autoGrowAllItemNames);
+    }
+  }).observe(pane, { attributes: true, attributeFilter: ["class"] });
+}
+document.addEventListener("DOMContentLoaded", amatiPaneBarang);
+amatiPaneBarang();
+
 // Font body (Inter) dimuat dengan `display=swap` (lihat index.html)
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {
@@ -154,7 +217,7 @@ function renderItemTable() {
       <td><input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric"></td>
       <td>
         <select data-f="jenisBarang">
-          ${JENIS_OPTIONS.map((o) => `<option value="${o}" ${o === it.jenisBarang ? "selected" : ""}>${o}</option>`).join("")}
+          ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${o}</option>`).join("")}
         </select>
       </td>
       <td class="text-center">

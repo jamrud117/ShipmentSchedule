@@ -738,17 +738,28 @@ function ciplTanggalId(iso) {
   return `${String(d.getDate()).padStart(2, "0")} ${bln[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/* Cari baris riwayat nomor dokumen, atau beri tahu kalau tidak ada.
+
+   Dipakai bersama oleh pencetakan DAN pengunduhan Excel. Dulu keduanya
+   punya salinan pencariannya sendiri, termasuk perbandingan
+   String(id) === String(rowId) dan bunyi pesannya. Perbandingan itu
+   sengaja longgar karena id bisa datang sebagai angka dari database
+   atau sebagai teks dari atribut DOM — persis jenis aturan yang tidak
+   boleh hidup di dua tempat. */
+function ciplCariBarisRiwayat(rowId) {
+  const row = (docNumHistoryRows || []).find(
+    (r) => String(r.id) === String(rowId),
+  );
+  if (!row) showToast("Data invoice tidak ditemukan.", "danger");
+  return row || null;
+}
+
 /* ------------------------------------------------------------------
    PEMICU CETAK
 ------------------------------------------------------------------ */
 function cetakCipl(rowId) {
-  const row = (docNumHistoryRows || []).find(
-    (r) => String(r.id) === String(rowId),
-  );
-  if (!row) {
-    showToast("Data invoice tidak ditemukan.", "danger");
-    return;
-  }
+  const row = ciplCariBarisRiwayat(rowId);
+  if (!row) return;
 
   const tautId = (row.payload || {}).shipmentId;
   const shipment = ciplCariShipment(tautId);

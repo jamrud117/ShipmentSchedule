@@ -84,7 +84,7 @@ function newItem() {
     id: uid("it"),
     namaBarang: "",
     hsCode: "",
-    jenisBarang: "Bahan Baku",
+    jenisBarang: "BAHAN BAKU",
     qty: 0,
     satuan: "PCS",
     harga: 0,

@@ -433,6 +433,26 @@ function deliveryModeOf(s) {
 function deliveryModeLabel(mode) {
   return mode === "manual" ? "Manual" : "Auto";
 }
+/* Sudah sampai pabrik — tanggalnya FAKTA, bukan ramalan.
+
+   Dipakai dua kali: sekali untuk buku Import (yang keluar lebih awal,
+   sebelum cabang manual) dan sekali untuk Export. Dulu keduanya
+   menuliskan objek yang sama persis. Kalau salah satunya diperbaiki
+   sendirian — labelnya, atau cara keyakinannya dihitung — dua buku
+   yang seharusnya sama jadi menjawab berbeda, dan tidak ada yang
+   memberi tahu. */
+function sudahSampaiPabrik(bungkus, s) {
+  return bungkus({
+    date: s.factoryDate,
+    source: "actual",
+    sourceLabel: PREDICTION_SOURCE_LABEL.actual,
+    confidence: predictionConfidencePercent({ baseKey: "actual", routeResolved: true }),
+    base: s.factoryDate,
+    baseLabel: "Tanggal In Factory",
+    arrived: true,
+  });
+}
+
 function predictDelivery(src) {
   const s = src || {};
   const rute = resolveRouteLayer(s);
@@ -477,15 +497,7 @@ function predictDelivery(src) {
      Stuffing, bukan kedatangan di pabrik — memakainya untuk menimpa
      kolom Stuffing akan menyamakan dua tanggal yang memang berbeda. */
   if (s.mode !== "export" && s.factoryDate) {
-    return bungkus({
-      date: s.factoryDate,
-      source: "actual",
-      sourceLabel: PREDICTION_SOURCE_LABEL.actual,
-      confidence: predictionConfidencePercent({ baseKey: "actual", routeResolved: true }),
-      base: s.factoryDate,
-      baseLabel: "Tanggal In Factory",
-      arrived: true,
-    });
+    return sudahSampaiPabrik(bungkus, s);
   }
 
   /* ---- MANUAL — dihormati sepenuhnya, tidak dihitung apa pun ---- */
@@ -507,15 +519,7 @@ function predictDelivery(src) {
      Yang sampai di sini hanya buku Export; jalur Import sudah ditangani
      di atas, sebelum cabang manual. */
   if (s.factoryDate) {
-    return bungkus({
-      date: s.factoryDate,
-      source: "actual",
-      sourceLabel: PREDICTION_SOURCE_LABEL.actual,
-      confidence: predictionConfidencePercent({ baseKey: "actual", routeResolved: true }),
-      base: s.factoryDate,
-      baseLabel: "Tanggal In Factory",
-      arrived: true,
-    });
+    return sudahSampaiPabrik(bungkus, s);
   }
 
   /* ---- LAPIS 2 & 3 — jadwal proses darat, berjangkar pada kedatangan ---- */

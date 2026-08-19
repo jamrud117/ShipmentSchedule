@@ -442,6 +442,73 @@ t("yang belum diketahui TIDAK ditebak", () => {
     .forEach((v) => eq(detectCarrier({ transport: "laut", vessel: v }).detected, false, v + ":"));
 });
 
+console.log("— NAMA OPERATOR YANG DITULIS TERPISAH —");
+/* Kasus pemicu: HONG TAI 658 dari TXG ke Tanjung Priok terbaca
+   "Pelayaran tidak dikenali", karena alias yang mengandung spasi
+   dibandingkan dengan satu kata dan tidak akan pernah sama. */
+t("frasa dua kata terbaca, bukan cuma yang dirapatkan", () => {
+  eq(detectShippingLine("HONG TAI 658").code, "HONGTAI");
+  eq(detectShippingLine("HONG TAI 658 007S").code, "HONGTAI");
+  eq(detectShippingLine("HONGTAI 639").code, "HONGTAI");
+});
+t("frasa MENGALAHKAN alias satu kata yang lebih pendek", () => {
+  /* "XIN" itu COSCO, tapi "XIN MING ZHOU" itu Jinjiang. Tanpa
+     urutan ini, seluruh armada Jinjiang tercatat sebagai COSCO. */
+  eq(detectShippingLine("XIN MING ZHOU 68").code, "JINJIANG");
+  eq(detectShippingLine("XIN QIN HUANG DAO V.126S").code, "COSCO");
+});
+t('"HAI" yang berdiri sendiri tidak lagi menyeret kapal Cina ke Hai An', () => {
+  /* Deretan Zhonggu semuanya berakhiran "... HAI". Sebelum ini
+     semuanya tercatat Hai An — riwayat tercampur diam-diam. */
+  ["ZHONG GU BO HAI", "ZHONG GU NAN HAI 8", "ZHONG GU HUANG HAI"]
+    .forEach((v) => eq(detectShippingLine(v).code, "ZHONGGU", v + ":"));
+  // Hai An sendiri tetap terbaca, dirapatkan maupun terpisah.
+  eq(detectShippingLine("HAIAN OPUS 0013S").code, "HAIAN");
+  eq(detectShippingLine("HAI AN CITY").code, "HAIAN");
+});
+t("pelayaran Cina, Vietnam, Rusia & Indonesia terbaca", () => {
+  [["ZHONG GU BO HAI", "ZHONGGU"], ["AN TONG 6", "ANTONG"],
+   ["CUL NANSHA", "CULINES"], ["X-PRESS MEKONG", "XPRESS"],
+   ["SEA LEAD SHANGHAI", "SEALEAD"], ["INTERASIA HORIZON", "INTERASIA"],
+   ["TAN CANG 09", "TANCANG"], ["BIEN DONG NAVIGATOR", "BIENDONG"],
+   ["VIMC UNITY", "VIMC"], ["FESCO DIOMID", "FESCO"],
+   ["MERATUS JAYAKARTA", "MERATUS"], ["SINAR BANDA", "SAMUDERA"]]
+    .forEach(([v, k]) => eq(detectCarrier({ transport: "laut", vessel: v }).code, k, v + ":"));
+});
+t("maskapai Cina, Rusia & Vietnam terbaca dari no. penerbangan", () => {
+  [["HO1385", "HO"], ["JD 458", "JD"], ["YG7891", "YG"], ["FM833", "FM"],
+   ["S71234", "S7"], ["ZF 2721", "ZF"], ["N49611", "N4"], ["U6 2915", "U6"],
+   ["BL123", "BL"], ["VU 208", "VU"]]
+    .forEach(([v, k]) => eq(detectCarrier({ transport: "udara", vessel: v }).code, k, v + ":"));
+});
+t("singkatan pendek hanya sah sebagai KATA PERTAMA", () => {
+  /* "SM QINGDAO" itu SM Line. "MORNING SM" bukan apa-apa —
+     armada SM Line selalu diawali singkatannya. */
+  eq(detectShippingLine("SM QINGDAO").code, "SMLINE");
+  eq(detectShippingLine("MORNING SM"), null);
+  eq(detectShippingLine("BAL BOAN").code, "BAL");
+  eq(detectShippingLine("OCEAN BAL"), null);
+  eq(detectShippingLine("SINAR BANDA").code, "SAMUDERA");
+  eq(detectShippingLine("GOLDEN SINAR"), null);
+});
+t("nama maskapai jadi jaring pengaman saat kodenya meragukan", () => {
+  /* Kode IATA Asia Cargo masih berselisih antar sumber (GM vs GY).
+     Nama perusahaannya tidak — jadi AWB yang menulis namanya tetap
+     terbaca walau kodenya nanti ternyata salah. */
+  eq(detectAirline("ASIA CARGO AIRLINES").code, "GM");
+  eq(detectAirline("TRI-MG GM1234").code, "GM");
+  eq(detectAirline("MY INDO AIRLINES").code, "2Y");
+  eq(detectAirline("2Y0812").code, "2Y");
+});
+t("tambahan alias tidak merusak pencocokan kata utuh", () => {
+  /* Penjaga: satu alias pendek yang salah — "SM", "BAL", "SINAR" —
+     bisa menangkap nama kapal yang sama sekali lain. */
+  eq(detectShippingLine("MILESTONE STAR"), null);
+  eq(detectShippingLine("BLUESTONE"), null);
+  eq(detectAirline("ABCDEF"), null);
+  eq(detectAirline("KEABC"), null);
+});
+
 console.log("— PRIORITAS RUTE: CARRIER > PELABUHAN > NEGARA —");
 const BUSAN = { etd: "2026-08-03", origin: "KRPUS", destination: "TPP",
   routeType: "direct", transport: "laut", muatan: "FCL" };

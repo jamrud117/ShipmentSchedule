@@ -3085,13 +3085,16 @@ t("hitung mundur menyebut lama yang benar, dalam jam", () => {
   w.eval("sesiDiamDipakai = 90");
   eq(w.lamaDiamTerbaca(), "1 jam 30 menit");
 });
-t("centang menjelaskan apa yang sebenarnya didapat", () => {
-  /* Tanpa angkanya, centang itu terbaca seperti janji "tidak akan
-     pernah keluar" — lalu batas diam mematahkannya. */
-  const nota = w.document.querySelector(".login-remember-note");
-  if (!nota) throw new Error("keterangan di bawah centang tidak ada");
-  if (!/8 jam/.test(nota.textContent) || !/30 menit/.test(nota.textContent))
-    throw new Error("keterangan tidak menyebut kedua batasnya");
+t("batas diam TIDAK diumumkan di layar masuk", () => {
+  /* Dulu ada keterangan "8 jam / 30 menit" di bawah centang. DIHAPUS
+     ATAS PERMINTAAN, dan uji ini dibalik supaya tidak dikembalikan
+     tanpa sengaja oleh siapa pun yang membaca CSS-nya dan mengira
+     ada yang hilang.
+
+     Angkanya sendiri tetap dijaga uji-uji di atas: yang berubah cuma
+     apakah ia ditulis di layar masuk, bukan apakah batasnya benar. */
+  if (w.document.querySelector(".login-remember-note"))
+    throw new Error("keterangan batas diam muncul lagi di layar masuk");
 });
 t("form login terisi ulang dari yang diingat", () => {
   w.simpanRemember(true, "yogi");
@@ -4036,5 +4039,551 @@ t("etaMode <-> eta_mode", () => {
   eq(w.rowToShipment({ id: "1", mode: "import", eta_mode: "auto" }).etaMode, "auto");
 });
 
-console.log(`\n${pass} lulus, ${fail} gagal\n`);
-process.exit(fail ? 1 : 0);
+console.log("\u2014 PENCARIAN RIWAYAT NOMOR: SATU SALINAN \u2014");
+t("cetak & unduh Excel memakai pencarian yang sama", () => {
+  if (typeof w.ciplCariBarisRiwayat !== "function")
+    throw new Error("helper bersama tidak ada");
+  const fs = require("fs"), path = require("path");
+  const dir = path.join(__dirname, "..", "js", "features");
+  ["cipl-print.js", "cipl-excel.js"].forEach((f) => {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    const salinan = (src.match(/docNumHistoryRows \|\| \[\]\)\.find/g) || []).length;
+    if (salinan > (f === "cipl-print.js" ? 1 : 0))
+      throw new Error(f + " masih punya pencarian sendiri");
+  });
+});
+t("id angka & id teks sama-sama ketemu", () => {
+  /* id datang sebagai angka dari database, atau teks dari atribut DOM.
+     Perbandingannya sengaja longgar — dan sekarang cuma di satu tempat. */
+  const simpan = w.eval("docNumHistoryRows");
+  w.eval('docNumHistoryRows = [{ id: 42, payload: {} }]');
+  try {
+    if (!w.ciplCariBarisRiwayat(42)) throw new Error("id angka tidak ketemu");
+    if (!w.ciplCariBarisRiwayat("42")) throw new Error("id teks tidak ketemu");
+    if (w.ciplCariBarisRiwayat(99)) throw new Error("id asing malah ketemu");
+  } finally {
+    w.eval("docNumHistoryRows = " + JSON.stringify(simpan || []));
+  }
+});
+
+console.log("\u2014 KOLOM NO DI TEMPLATE SALIN \u2014");
+/* Sel kosong yang ditempel ke Excel TETAP menimpa isi sel tujuan, jadi
+   kolom NO yang selalu kosong menghapus penomoran dokumen yang sudah
+   ada di sheet. Dibuang dari hasil salin — TAPI TIDAK dari pembangun
+   barisnya, karena Bulk Excel mengisi kolom itu dengan nomor sungguhan
+   dan Bulk Import membacanya balik lewat IMPORT_IDX.NO = 0. */
+function jadwalUji() {
+  return {
+    factoryDate: "2026-08-20", ndpbm: 16000,
+    docNo: "SPPB-1", docDate: "2026-08-01", noAju: "AJU-9", party: "PT UJI",
+    invoice: "INV-1", vessel: "KAPAL UJI", masterBL: "MBL1", houseBL: "HBL1",
+    incoterm: "FOB", status: "Process", destination: "TPP", origin: "TXG",
+    etd: "2026-08-01", eta: "2026-08-10", actual: "2026-08-12", notes: "",
+    items: [{ namaBarang: "BARANG A", hsCode: "6406", qty: 2, satuan: "PCE",
+              harga: 10, netto: 1, bruto: 2, skb: [] }],
+  };
+}
+function selPertama(teks) {
+  return teks.split("\n")[0].split("\t")[0];
+}
+t("hasil salin dimulai dari kolom DATA, bukan sel kosong", () => {
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  /* All Import: kolom pertama setelah NO adalah IN FACTORY. Diperiksa
+     ISINYA, bukan sekadar "tidak kosong" — sel kosong juga muncul
+     kalau datanya yang kebetulan kosong, dan itu akan membuat uji ini
+     lulus/gagal karena alasan yang salah. */
+  eq(selPertama(w.buildAllImportCopyText(s)), f.date("2026-08-20"), "All Import:");
+  // All Export: kolom pertama setelah NO adalah PENGIRIMAN DARI PABRIK.
+  eq(selPertama(w.buildAllExportCopyText(s)), f.date(s.actual), "All Export:");
+});
+t("Daily Import & Daily Export juga tanpa kolom NO", () => {
+  const s = jadwalUji();
+  [["DailyImport", w.buildDailyImportCopyRows],
+   ["DailyExport", w.buildDailyExportCopyRows]].forEach(([nama, builder]) => {
+    const penuh = builder(s, baca("clipboardFormatter"));
+    const dipotong = w.tanpaKolomNo(penuh);
+    eq(dipotong[0].length, penuh[0].length - 1, nama + " jumlah kolom:");
+    eq(dipotong[0][0], penuh[0][1], nama + " kolom pertama sekarang:");
+  });
+});
+t("pembangun baris TETAP punya kolom NO — Bulk Excel mengandalkannya", () => {
+  /* Penjaga terpenting. Kalau kolomnya dibuang di hulu, Bulk Excel
+     kehilangan tempat menaruh nomor DAN seluruh indeks kolom bergeser
+     satu — Bulk Import lalu salah membaca setiap kolom. */
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  eq(w.buildAllExportCopyRows(s, f)[0].length, baca("ALL_EXPORT_COLS"), "All Export:");
+  eq(w.buildDailyImportCopyRows(s, f)[0].length, baca("DAILY_IMPORT_COLS"), "Daily Import:");
+  eq(w.buildDailyExportCopyRows(s, f)[0].length, baca("DAILY_EXPORT_COLS"), "Daily Export:");
+  // Kolom 0 memang disediakan kosong untuk diisi Bulk Excel.
+  eq(w.buildAllExportCopyRows(s, f)[0][0], f.blank, "slot NO:");
+});
+t("kolom setelah NO tidak ikut tergeser atau hilang", () => {
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  const penuh = w.buildAllExportCopyRows(s, f);
+  const dipotong = w.tanpaKolomNo(penuh);
+  // Isi harus sama persis, cuma bergeser satu ke kiri.
+  eq(dipotong[0].join("\u0001"), penuh[0].slice(1).join("\u0001"));
+  if (dipotong[0].indexOf(f.text ? "PT UJI" : "PT UJI") < 0)
+    throw new Error("data pengiriman ikut terpotong");
+});
+
+console.log("\u2014 KEMASAN PIB MASUK KE KOLOM YANG TAMPIL \u2014");
+/* Kolom `package` sekarang bernama "Dimensi" dan disembunyikan di buku
+   Import (body.mode-import .dim-col { display:none }). Kemasan yang
+   ditulis ke situ terbaca dari PDF tapi tidak pernah terlihat. */
+t("kolom Dimensi memang disembunyikan di buku Import", () => {
+  const css = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "css", "form.css"), "utf8");
+  if (!/body\.mode-import\s+\.dim-col\s*\{[^}]*display:\s*none/.test(css))
+    throw new Error("dim-col tidak lagi disembunyikan — alasan perbaikan ini gugur");
+});
+t("importir PIB menulis packing/packingUnit, bukan package", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "import", "pdf.js"), "utf8");
+  if (/base\.package\s*=/.test(src))
+    throw new Error("PIB masih menulis ke kolom Dimensi");
+  if (/items\[0\]\.package\s*=/.test(src))
+    throw new Error("cadangan field 28 masih menulis ke kolom Dimensi");
+  if (!/base\.packing\s*=/.test(src) || !/base\.packingUnit\s*=/.test(src))
+    throw new Error("packing/packingUnit tidak diisi");
+});
+t("Total Package dihitung dari kolom Kemasan yang tampil", () => {
+  /* Data hasil Excel BC menulis ke `packing`. Kalau totalnya masih
+     dijumlahkan dari `package`, angkanya selalu nol. */
+  const c = w.computeCustoms({ items: [
+    { packing: "2", packingUnit: "CS" },
+    { packing: "" }, { packing: "" },
+  ] });
+  eq(c.totalPackageQty, 2, "dari packing:");
+});
+t("jadwal LAMA yang menyimpan '5 BOX' di package tidak jadi nol", () => {
+  const c = w.computeCustoms({ items: [{ package: "5 BOX" }, { package: "3 PALLET" }] });
+  eq(c.totalPackageQty, 8, "cadangan untuk data lama:");
+});
+t("packing menang atas package kalau dua-duanya terisi", () => {
+  const c = w.computeCustoms({ items: [{ packing: "2", package: "99 BOX" }] });
+  eq(c.totalPackageQty, 2);
+});
+
+console.log("\u2014 KERANGKA PITA BARANG PIB \u2014");
+/* Dua kolom PIB dulu punya salinan geometrinya masing-masing. Yang
+   diuji di sini: pita dipotong di tempat yang benar, dan KEDUA kolom
+   memakai potongan yang sama. */
+function pibHalamanPalsu() {
+  const p = (str, x, y) => ({ str, width: str.length * 5, transform: [9, 0, 0, 9, x, y] });
+  return [
+    p("32. - Pos Tarif", 30, 760), p("35. - Jumlah dan Jenis", 400, 760),
+    p("33. Keterangan", 210, 760), p("36. - Nilai Pabean", 476, 760),
+    p("Pos Tarif : 6406", 30, 700), p("10 SET", 400, 700),
+    p("URAIAN SATU", 30, 688),      p("NETTO 5", 400, 688),
+    p("Pos Tarif : 3926", 30, 640), p("20 PCS", 400, 640),
+    p("URAIAN DUA", 30, 628),       p("NETTO 9", 400, 628),
+    p("Jenis Pungutan", 30, 560),
+  ];
+}
+t("pita dipotong per 'Pos Tarif', tidak bocor ke barang berikutnya", () => {
+  const hal = [pibHalamanPalsu()];
+  const uraian = w.extractItemUraianColumn(hal, 2);
+  eq(uraian.length, 2, "jumlah barang:");
+  eq(uraian[0], "Pos Tarif : 6406 URAIAN SATU", "barang 1:");
+  eq(uraian[1], "Pos Tarif : 3926 URAIAN DUA", "barang 2:");
+});
+t("kolom kanan memakai potongan pita yang SAMA", () => {
+  /* Diuji lewat kerangka bersamanya langsung. extractItemDetailColumn
+     mengubah token jadi objek qty/satuan/netto, jadi ia menguji
+     penguraian angka — bukan geometri pita yang jadi pokok di sini. */
+  const hal = [pibHalamanPalsu()];
+  const kanan = w.pibPitaBarang(hal, 2, {
+    headerKiri: /^35\.\s*-?\s*Jumlah dan Jenis/i,
+    headerKanan: /^36\.\s*-?\s*Nilai Pabean/i,
+    geserKiri: 6, xMinCadangan: 393, xMaxCadangan: 468,
+    ambil: (lines) => lines.map((l) => l.text.trim()),
+  });
+  eq(kanan.length, 2, "jumlah barang:");
+  eq(kanan[0].join("/"), "10 SET/NETTO 5", "barang 1:");
+  eq(kanan[1].join("/"), "20 PCS/NETTO 9", "barang 2:");
+});
+t("kedua kolom memotong pita di Y yang sama persis", () => {
+  /* Inilah yang dijaga penyatuan ini: dulu geometrinya ditulis dua
+     kali, dan bisa bercabang tanpa ada yang tahu. */
+  const hal = [pibHalamanPalsu()];
+  const pita = (xMin, xMax) => w.pibPitaBarang(hal, 2, {
+    headerKiri: /tidak ada/, headerKanan: /tidak ada/,
+    geserKiri: 0, xMinCadangan: xMin, xMaxCadangan: xMax,
+    ambil: (lines) => lines.length,
+  });
+  eq(JSON.stringify(pita(20, 200)), JSON.stringify(pita(393, 468)),
+    "jumlah baris per pita di kedua kolom:");
+});
+t("jumlah barang tidak cocok -> kosong, bukan tebakan", () => {
+  eq(w.extractItemUraianColumn([pibHalamanPalsu()], 5).length, 0);
+  eq(w.extractItemUraianColumn([], 2).length, 0);
+  eq(w.extractItemUraianColumn(null, 2).length, 0);
+});
+
+console.log("\u2014 PILIHAN JENIS BARANG \u2014");
+/* CATATAN UNTUK NANTI. Uji-uji di bawah sengaja TIDAK mencocokkan
+   daftar lengkap kata demi kata. Menambah jenis barang baru cukup
+   dengan menempelkannya di js/config.js — tidak perlu menyentuh
+   berkas ini. Yang dijaga sifatnya, bukan isinya:
+
+     - empat jenis yang diminta harus ADA
+     - daftarnya harus SELALU terurut
+     - urutannya harus DIHITUNG, bukan ditulis rapi oleh tangan
+*/
+t("empat jenis yang diminta ada di daftar", () => {
+  const daftar = baca("JENIS_OPTIONS");
+  ["BAHAN BAKU", "BARANG MODAL", "BARANG PENOLONG", "SPAREPART"]
+    .forEach((j) => {
+      if (daftar.indexOf(j) < 0) throw new Error(j + " hilang dari daftar");
+    });
+});
+t("daftar selalu terurut, berapa pun isinya", () => {
+  const kini = baca("JENIS_OPTIONS");
+  const urut = kini.slice().sort((a, b) => a.localeCompare(b, "id"));
+  eq(kini.join("|"), urut.join("|"), "daftar tidak terurut:");
+});
+t("urutannya DIHITUNG, bukan ditulis rapi oleh tangan", () => {
+  /* Penjaga terpenting di sini. Daftar yang kebetulan sudah rapi akan
+     lolos uji "selalu terurut" — lalu berantakan diam-diam begitu
+     jenis berikutnya ditempel di bawah. Jadi yang diperiksa
+     pembungkusnya, bukan hasilnya. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "config.js"), "utf8");
+  if (!/const JENIS_OPTIONS\s*=\s*urutkanJenis\(/.test(src))
+    throw new Error("JENIS_OPTIONS tidak lagi melewati urutkanJenis()");
+  if (!/urutkanJenis\(JENIS_OPTIONS\.concat/.test(src))
+    throw new Error("pilihan tambahan tidak ikut diurutkan");
+});
+t("pengurutan tidak mengaduk daftar aslinya", () => {
+  const asal = ["ZETA", "ALFA"];
+  eq(w.urutkanJenis(asal).join(","), "ALFA,ZETA", "hasil:");
+  eq(asal.join(","), "ZETA,ALFA", "daftar asal ikut berubah:");
+});
+t("ejaan lama tetap dikenali, tidak jatuh ke pilihan pertama", () => {
+  /* Jadwal lama menyimpan "Bahan Baku". Tanpa pembakuan, kotak
+     pilihan meleset dan jatuh ke BARANG MODAL — jenis barang berubah
+     diam-diam begitu jadwalnya dibuka. */
+  eq(w.normalisasiJenisBarang("Bahan Baku"), "BAHAN BAKU");
+  eq(w.normalisasiJenisBarang("  barang penolong "), "BARANG PENOLONG");
+  eq(w.normalisasiJenisBarang(null), "");
+  eq(w.rowToItem({ jenis_barang: "Barang Modal" }).jenisBarang, "BARANG MODAL");
+});
+t("nilai di luar daftar IKUT ditampilkan, bukan dibuang", () => {
+  /* "BARANG JADI" dipakai jadwal Export tapi tidak ada di daftar.
+     Kalau tidak ikut ditampilkan, nilainya hilang dari data begitu
+     barisnya tersentuh. */
+  const opsi = w.jenisOptionsUntuk("Barang Jadi");
+  const daftar = baca("JENIS_OPTIONS");
+  eq(opsi.length, daftar.length + 1, "jumlah pilihan:");
+  if (opsi.indexOf("BARANG JADI") < 0)
+    throw new Error("nilai di luar daftar dibuang");
+  // Ikut diurutkan, bukan ditempel di ujung.
+  eq(opsi.join("|"), opsi.slice().sort((a, b) => a.localeCompare(b, "id")).join("|"),
+    "pilihan tambahan tidak ikut terurut:");
+  // Nilai yang memang ada di daftar tidak menggandakan apa pun.
+  eq(w.jenisOptionsUntuk("BAHAN BAKU").length, daftar.length);
+  eq(w.jenisOptionsUntuk("").length, daftar.length);
+});
+t("kotak pilihan menandai nilai tersimpan yang ejaannya lama", () => {
+  /* Diuji lewat tabel yang benar-benar digambar, bukan potongan HTML —
+     inilah yang dilihat pengguna saat membuka jadwal lama. */
+  const simpan = baca("draftItems");
+  w.eval('draftItems = [{ namaBarang: "X", jenisBarang: "Bahan Baku", skb: [] },\n' +
+         '               { namaBarang: "Y", jenisBarang: "Barang Jadi", skb: [] }]');
+  try {
+    w.renderItemTable();
+    const html = w.document.getElementById("itemTableBody").innerHTML;
+    if (!/<option value="BAHAN BAKU"[^>]*selected/.test(html))
+      throw new Error("nilai lama tidak tertandai di kotak pilihan");
+    if (!/<option value="BARANG JADI"[^>]*selected/.test(html))
+      throw new Error("nilai di luar daftar hilang dari kotak pilihan");
+  } finally {
+    w.eval("draftItems = " + JSON.stringify(simpan || []));
+    w.renderItemTable();
+  }
+});
+
+console.log("\u2014 SATU PEMBACA BARIS PDF, BUKAN DUA \u2014");
+t("dua pembaca baris PDF sudah jadi satu", () => {
+  /* Berkas pdf.js dulu punya salinan sendiri dari algoritma penyusun
+     baris di pdf-coords.js. Ambang spasinya (15% ukuran font) hasil
+     penyetelan terhadap PDF PIB sungguhan — dua salinan berarti
+     penyetelan berikutnya cuma masuk ke salah satunya. */
+  if (typeof w.groupPdfItemsIntoLinesWithMeta === "function")
+    throw new Error("salinan kedua hidup lagi");
+  if (typeof w.pdfLines !== "function")
+    throw new Error("pdfLines hilang — groupPdfItemsIntoLines tidak punya sandaran");
+});
+t("penyusun baris tetap benar: urutan acak, jarak, dan pemisahan baris", () => {
+  /* Potongan PDF datang dalam urutan acak. Yang diuji: dikembalikan
+     ke atas-bawah lalu kiri-kanan, dan spasi hanya muncul di jarak
+     yang lebih lebar dari 15% ukuran font. */
+  const p = (str, x, y, lebar, font) => ({
+    str, width: lebar, transform: [font, 0, 0, font, x, y],
+  });
+  const items = [
+    p("DUNIA", 60, 700, 30, 10),     // baris 1, ada jarak lebar sebelumnya
+    p("HALO", 20, 700.9, 25, 10),    // baris 1, masih dalam toleransi 2.5
+    p("KE", 20, 680, 12, 10),        // baris 2
+    p("DUA", 32.4, 680, 18, 10),     // baris 2, jarak sempit -> menempel
+  ];
+  const baris = w.pdfLines(items);
+  eq(baris.length, 2, "jumlah baris:");
+  eq(baris[0].text, "HALO DUNIA", "baris 1:");
+  eq(baris[1].text, "KEDUA", "baris 2:");
+  // groupPdfItemsIntoLines harus memberi teks yang sama persis
+  eq(w.groupPdfItemsIntoLines(items).join("|"), "HALO DUNIA|KEDUA", "lewat pdf.js:");
+});
+
+console.log("\u2014 PERHITUNGAN PAKSA TATA LETAK \u2014");
+/* Menyetel style.height membatalkan tata letak; membaca scrollHeight
+   memaksa peramban menghitungnya ulang SAAT ITU JUGA. Kalau keduanya
+   diselang-seling per baris, satu kiriman 60 barang berarti 60
+   perhitungan paksa berturut-turut.
+
+   jsdom tidak punya mesin tata letak, jadi yang diukur bukan waktu —
+   melainkan POLA AKSESNYA: berapa kali baca terjadi SESUDAH tulis.
+   Itu persis yang menentukan jumlah perhitungan paksa di peramban. */
+function pasangPencatatAkses(jumlah) {
+  const jejak = [];
+  const kotak = [];
+  for (let i = 0; i < jumlah; i++) {
+    const el = w.document.createElement("textarea");
+    el.className = "nama-barang-input";
+    el.getClientRects = () => [{ width: 300, height: 20 }];
+    Object.defineProperty(el, "scrollHeight", {
+      get() { jejak.push("baca"); return 40; }, configurable: true,
+    });
+    const gaya = el.style;
+    Object.defineProperty(el, "style", {
+      get() {
+        return new Proxy(gaya, {
+          set(t, k, v) { if (k === "height") jejak.push("tulis"); t[k] = v; return true; },
+        });
+      }, configurable: true,
+    });
+    kotak.push(el);
+  }
+  const asli = w.document.querySelectorAll.bind(w.document);
+  w.document.querySelectorAll = (sel) =>
+    sel === "textarea.nama-barang-input" ? kotak : asli(sel);
+  return { jejak, pulihkan: () => { w.document.querySelectorAll = asli; } };
+}
+function hitungPerhitunganPaksa(jejak) {
+  // Satu perhitungan paksa = baca pertama sesudah rentetan tulis.
+  let n = 0, adaTulis = false;
+  jejak.forEach((a) => {
+    if (a === "tulis") adaTulis = true;
+    else if (a === "baca" && adaTulis) { n++; adaTulis = false; }
+  });
+  return n;
+}
+t("60 baris = SATU perhitungan paksa, bukan 60", () => {
+  const { jejak, pulihkan } = pasangPencatatAkses(60);
+  try {
+    w.autoGrowAllItemNames();
+    const n = hitungPerhitunganPaksa(jejak);
+    if (n > 2) throw new Error(n + " perhitungan paksa untuk 60 baris — tulis & baca masih berselang-seling");
+  } finally { pulihkan(); }
+});
+t("tinggi tetap benar walau dikerjakan berkelompok", () => {
+  const { jejak, pulihkan } = pasangPencatatAkses(3);
+  try {
+    w.autoGrowAllItemNames();
+    // 3 tulis "auto" + 3 baca + 3 tulis hasil = 9 akses
+    eq(jejak.filter((a) => a === "baca").length, 3, "jumlah baca:");
+    eq(jejak.filter((a) => a === "tulis").length, 6, "jumlah tulis:");
+  } finally { pulihkan(); }
+});
+t("getComputedStyle tidak dipanggil dua kali per kotak", () => {
+  /* autoSizeInput butuh padding, measureTextWidth butuh font — dulu
+     masing-masing memanggil getComputedStyle pada elemen yang SAMA. */
+  const el = w.document.createElement("input");
+  el.value = "5 BOX";
+  w.document.body.appendChild(el);
+  let n = 0;
+  const asli = w.getComputedStyle;
+  w.getComputedStyle = (x) => { n++; return asli(x); };
+  try { w.autoSizeInput(el, 96, 210); } finally { w.getComputedStyle = asli; }
+  el.remove();
+  if (n > 1) throw new Error("getComputedStyle dipanggil " + n + "x untuk satu kotak");
+});
+
+t("lebar kotak status: ukur sekali per teks, bukan sekali per kartu", () => {
+  /* Isi kotak status cuma segelintir. Papan berisi banyak kartu harus
+     tetap butuh sedikit pengukuran — kalau jumlahnya ikut naik
+     sebanding jumlah kartu, hasilnya tidak dipakai ulang lagi. */
+  const wadah = w.document.getElementById("cardContainer");
+  if (!wadah) throw new Error("cardContainer tidak ada");
+  const simpan = wadah.innerHTML;
+  const status = ["Process", "In Transit", "Arrived"];
+  wadah.innerHTML = Array.from({ length: 60 }, (_, i) =>
+    `<select class="status-select"><option selected>${status[i % 3]}</option></select>`
+  ).join("");
+
+  let diukur = 0;
+  const proto = w.HTMLElement.prototype;
+  const asli = proto.getBoundingClientRect;
+  proto.getBoundingClientRect = function () { diukur++; return { width: 80, height: 20 }; };
+  try { w.fixSelectWidths(); } finally { proto.getBoundingClientRect = asli; }
+  wadah.innerHTML = simpan;
+
+  if (diukur > 6)
+    throw new Error(diukur + " pengukuran untuk 60 kartu / 3 teks — hasilnya tidak dipakai ulang");
+});
+
+console.log("\u2014 LEBAR KOLOM NAMA BARANG \u2014");
+t("dua min-width kolom nama barang tetap sepasang", () => {
+  /* Lebar kolom ditentukan DUA aturan: sel-nya dan textarea di
+     dalamnya. Kalau salah satu diubah sendirian, yang berlaku adalah
+     yang terbesar — kolomnya melebar tapi kotaknya tidak, atau
+     sebaliknya. Angkanya sendiri bebas; yang dijaga kesamaannya. */
+  const css = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "css", "form.css"), "utf8");
+  const sel = /table\.item-table td:first-child\s*\{[^}]*min-width:\s*(\d+)px/.exec(css);
+  const kotak = /table\.item-table textarea\.nama-barang-input\s*\{[^}]*min-width:\s*(\d+)px/.exec(css);
+  if (!sel) throw new Error("min-width td:first-child tidak ditemukan");
+  if (!kotak) throw new Error("min-width textarea.nama-barang-input tidak ditemukan");
+  eq(sel[1], kotak[1], "sel " + sel[1] + "px vs kotak " + kotak[1] + "px:");
+});
+
+console.log("\u2014 KODE DOKUMEN MASTER vs HOUSE \u2014");
+/* Daftar UN/EDIFACT 1001 yang dipakai BC 2.0:
+     704 Master B/L · 741 Master AWB · 705 B/L · 740 AWB
+   Sebelumnya master memakai 740/742 dan house 741/743 — terbalik untuk
+   udara, karena 741 justru MASTER AWB. */
+function wbDokumenPalsu(baris) {
+  return { SheetNames: ["HEADER", "DOKUMEN"], Sheets: { HEADER: {}, DOKUMEN: {} },
+    __rows: baris };
+}
+t("704 & 741 masuk ke masterBL, 705 & 740 ke houseBL", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "import", "excel-bc.js"), "utf8");
+  const m = /masterBL:\s*findDokumen\(([^)]*)\)/.exec(src);
+  const h = /houseBL:\s*findDokumen\(([^)]*)\)/.exec(src);
+  if (!m || !h) throw new Error("masterBL/houseBL tidak ditemukan");
+  eq(m[1].replace(/[\s"]/g, ""), "704,741", "masterBL:");
+  eq(h[1].replace(/[\s"]/g, ""), "705,740", "houseBL:");
+});
+t("741 TIDAK lagi dipakai sebagai house — itu Master AWB", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "import", "excel-bc.js"), "utf8");
+  if (/houseBL:\s*findDokumen\([^)]*"741"/.test(src))
+    throw new Error("741 (Master AWB) masih dipetakan ke houseBL");
+  if (/masterBL:\s*findDokumen\([^)]*"740"/.test(src))
+    throw new Error("740 (AWB house) masih dipetakan ke masterBL");
+});
+t("pesan peringatan menyebut kode yang benar-benar dicari", () => {
+  /* Pesan yang menyebut kode lain menyesatkan orang yang mengeceknya
+     ke sheet DOKUMEN. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "import", "excel-bc.js"), "utf8");
+  const pesan = /Master\/House BL\/AWB tidak ditemukan[^"]*/.exec(src);
+  if (!pesan) throw new Error("pesan peringatan tidak ditemukan");
+  ["704", "741", "705", "740"].forEach((k) => {
+    if (pesan[0].indexOf(k) < 0) throw new Error("pesan tidak menyebut kode " + k);
+  });
+  ["742", "743"].forEach((k) => {
+    if (pesan[0].indexOf(k) >= 0) throw new Error("pesan masih menyebut kode lama " + k);
+  });
+});
+
+console.log("\u2014 TINGGI NAMA BARANG: TAB TERTUTUP \u2014");
+/* Tabel barang tinggal di tab-pane "barang", dan tab yang tidak aktif
+   memakai d-none. Elemen tanpa tata letak mengembalikan scrollHeight 0,
+   jadi mengukurnya di situ bukan cuma sia-sia — hasilnya menimpa tinggi
+   benar yang sudah ada. Itulah sebabnya nama panjang hasil impor tampak
+   terpotong sampai kotaknya diketik.
+
+   jsdom TIDAK menghitung tata letak: getClientRects selalu kosong dan
+   scrollHeight selalu 0. Jadi keduanya dipalsukan di sini — yang diuji
+   keputusan "ukur atau lewati", bukan angka tingginya. */
+function textareaPalsu(tergambar, tinggiIsi) {
+  const ta = w.document.createElement("textarea");
+  ta.className = "nama-barang-input";
+  ta.getClientRects = () => (tergambar ? [{ width: 200, height: 20 }] : []);
+  Object.defineProperty(ta, "scrollHeight", {
+    value: tinggiIsi, configurable: true,
+  });
+  return ta;
+}
+t("tinggi TIDAK ditimpa saat elemennya belum tergambar", () => {
+  const ta = textareaPalsu(false, 0);
+  ta.style.height = "88px";          // hasil hitungan yang sudah benar
+  w.autoGrowTextarea(ta);
+  eq(ta.style.height, "88px");       // bukan "0px", bukan "auto"
+});
+t("tinggi dihitung begitu elemennya tergambar", () => {
+  const ta = textareaPalsu(true, 88);
+  w.autoGrowTextarea(ta);
+  eq(ta.style.height, "88px");
+});
+t("elemen tanpa getClientRects tidak melempar", () => {
+  // Peramban lama / elemen lepas: lebih baik dilewati daripada galat.
+  const polos = { style: {} };
+  w.autoGrowTextarea(polos);
+  eq(polos.style.height, undefined);
+});
+t("pane tab barang diamati, bukan tombol tabnya", () => {
+  /* Klik hanya SALAH SATU jalan menuju terbuka. Yang diamati kelas
+     pane-nya, supaya jalan lain ikut tertangkap. */
+  const pane = $('.tab-pane[data-tabpane="barang"]');
+  if (!pane) throw new Error("pane barang tidak ada di index.html");
+  eq(pane.dataset.growPaneObserved, "1");
+});
+
+/* Bagian terakhir: MutationObserver jsdom menyala lewat microtask, jadi
+   ringkasannya menunggu.
+
+   MENUNGGU TENANG DULU. Berkas ini punya blok async lain yang berjalan
+   bersamaan dan ikut menggambar ulang tabel; rAF yang dijadwalkannya
+   mendarat kapan saja. Versi pertama uji ini menghitung panggilan dalam
+   jendela waktu tetap dan LULUS PALSU — pengamat pane-nya dicabut, tes
+   tetap hijau, karena yang terhitung sebenarnya kerjaan blok lain.
+   Jadi sekarang ditunggu sampai benar-benar sepi lebih dulu. */
+(async () => {
+  console.log("\u2014 MEMBUKA TAB MENGHITUNG ULANG \u2014");
+  const pane = $('.tab-pane[data-tabpane="barang"]');
+  if (pane) {
+    let dihitung = 0;
+    const asli = w.autoGrowAllItemNames;
+    w.autoGrowAllItemNames = () => { dihitung++; };
+    const jeda = (ms) => new Promise((r) => w.setTimeout(r, ms));
+
+    pane.classList.add("d-none");
+
+    // Sepi = dua putaran berturut-turut tanpa satu pun panggilan.
+    let sepi = false;
+    for (let i = 0; i < 60 && !sepi; i++) {
+      dihitung = 0;
+      await jeda(25);
+      sepi = dihitung === 0;
+    }
+    t("keadaan bisa ditenangkan sebelum diukur", () => {
+      if (!sepi) throw new Error("masih ada panggilan latar — uji di bawah tidak dapat dipercaya");
+    });
+
+    dihitung = 0;
+    pane.classList.remove("d-none");            // tab dibuka
+    await jeda(25);
+    t("membuka tab memicu perhitungan ulang", () => {
+      if (dihitung < 1) throw new Error("tidak ada perhitungan ulang saat pane dibuka");
+    });
+
+    dihitung = 0;
+    pane.classList.add("d-none");               // tab ditutup lagi
+    await jeda(25);
+    t("menutup tab TIDAK memicu pengukuran sia-sia", () => {
+      eq(dihitung, 0);
+    });
+
+    w.autoGrowAllItemNames = asli;
+  }
+
+  console.log(`\n${pass} lulus, ${fail} gagal\n`);
+  process.exit(fail ? 1 : 0);
+})();

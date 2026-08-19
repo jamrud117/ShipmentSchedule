@@ -15,45 +15,23 @@ function ensurePdfJs() {
   return pdfjsLibPromise;
 }
 
-// Versi groupPdfItemsIntoLines yang juga membawa koordinat Y & item mentah tiap baris
-function groupPdfItemsIntoLinesWithMeta(items, yTolerance = 2.5) {
-  const sorted = [...items].sort(
-    (a, b) =>
-      b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4],
-  );
-  const lines = [];
-  let current = null;
-  let currentY = null;
-  sorted.forEach((item) => {
-    const y = item.transform[5];
-    if (current === null || Math.abs(y - currentY) > yTolerance) {
-      current = [];
-      lines.push(current);
-      currentY = y;
-    }
-    current.push(item);
-  });
-  return lines
-    .map((line) => line.sort((a, b) => a.transform[4] - b.transform[4]))
-    .map((line) => {
-      let text = "";
-      let prevEnd = null;
-      line.forEach((it) => {
-        const x = it.transform[4];
-        const fontSize =
-          Math.abs(it.transform[0]) || Math.abs(it.transform[3]) || 1;
-        const gapThreshold = Math.max(0.5, fontSize * 0.15);
-        if (prevEnd !== null && x - prevEnd > gapThreshold) text += " ";
-        text += it.str;
-        prevEnd = x + (it.width || 0);
-      });
-      return { text, y: line[0].transform[5], items: line };
-    });
-}
+/* Susun ulang item teks PDF.
 
-// Susun ulang item teks PDF
+   Pengelompokan baris & penyusunan teksnya ada di pdfLines()
+   (js/import/pdf-coords.js), yang dimuat lebih dulu.
+
+   Dulu berkas ini punya SALINANNYA SENDIRI — groupPdfItemsIntoLinesWithMeta,
+   30-an baris yang mengerjakan hal yang sama persis: mengurutkan potongan
+   dari atas ke bawah lalu kiri ke kanan, dan menyisipkan spasi kalau jarak
+   antar potongan melebihi 15% ukuran font. Ambang 15% itu hasil
+   penyetelan terhadap PDF PIB yang sesungguhnya; dua salinan berarti
+   penyetelan berikutnya cuma masuk ke salah satunya, dan yang satu lagi
+   diam-diam tetap salah.
+
+   Keduanya sudah dibuktikan mengeluarkan hasil yang identik sebelum
+   disatukan — lihat uji "dua pembaca baris PDF sudah jadi satu". */
 function groupPdfItemsIntoLines(items, yTolerance = 2.5) {
-  return groupPdfItemsIntoLinesWithMeta(items, yTolerance).map((l) => l.text);
+  return pdfLines(items, yTolerance).map((l) => l.text);
 }
 
 async function extractPdfText(file) {
@@ -85,54 +63,33 @@ function pibNum(s) {
 // Dipakai handler file-change utk memutuskan "PDF ini PIB atau bukan" TANPA bergantung ke field
 const PIB_TITLE_RE = /PEMBERITAHUAN\s+IMPOR\s+BARANG/i;
 
-// Ekstraksi qty/satuan/netto per barang berdasarkan KOORDINAT, bukan urutan baris teks
-function extractItemUraianColumn(pagesItems, nItems) {
+/* PITA BARANG DI HALAMAN PIB — kerangka bersama.
+
+   Dua kolom PIB dibaca dengan cara yang sama persis: temukan tiap baris
+   "Pos Tarif :", jadikan Y-nya batas ATAS sebuah pita, dan Y baris
+   "Pos Tarif" berikutnya jadi batas BAWAH-nya. Pita terakhir ditutup
+   oleh tabel pungutan / blok tanda tangan di kaki halaman.
+
+   Yang BERBEDA cuma dua: header mana yang menentukan batas kiri-kanan,
+   dan apa yang dilakukan pada baris-baris di dalam pita. Sisanya —
+   geometri pitanya — sama, dan dulu ditulis dua kali. Geometri seperti
+   ini justru yang paling berbahaya kalau bercabang: perbaikan di satu
+   kolom tidak ikut ke kolom lain, dan hasilnya baru ketahuan sebagai
+   angka netto yang meleset di satu jenis cetakan PIB saja.
+
+   `ambil` menerima array baris dalam satu pita dan mengembalikan satu
+   hasil untuk barang itu. */
+function pibPitaBarang(pagesItems, nItems, opsi) {
   if (!nItems || !pagesItems || !pagesItems.length) return [];
   const results = [];
   pagesItems.forEach((rawItems) => {
     if (!rawItems || !rawItems.length) return;
-    const allLines = groupPdfItemsIntoLinesWithMeta(rawItems);
-    const lineTopY = (l) => Math.max(...l.items.map((it) => it.transform[5]));
-    const posTarifLines = allLines.filter((l) => /Pos Tarif\s*:/.test(l.text));
-    if (!posTarifLines.length) return;
+    const allLines = pdfLines(rawItems);
 
-    const endYs = allLines
-      .filter((l) => /Jenis Pungutan|JAKARTA,|Importir\/PPJK/.test(l.text))
-      .map(lineTopY);
-    const pageBottomY = endYs.length ? Math.max(...endYs) : -Infinity;
-
-    const h32 = pdfFindItemOnPage(rawItems, /^32\.\s*-?\s*Pos Tarif/i);
-    const h33 = pdfFindItemOnPage(rawItems, /^33\.\s*Keterangan/i);
-    const xMin = h32 ? h32.x - 8 : 20;
-    const xMax = h33 && h33.x > xMin ? h33.x - 6 : 200;
-
-    posTarifLines.forEach((line, i) => {
-      const yTop = lineTopY(line) + 1;
-      const yBottom =
-        i + 1 < posTarifLines.length
-          ? lineTopY(posTarifLines[i + 1]) + 1
-          : pageBottomY;
-      // Digabung dengan SPASI (bukan baris baru) supaya sub-field yang terpotong di tengah
-      results.push(
-        pdfLinesInBox(rawItems, xMin, xMax, { yTop, yBottom })
-          .map((l) => l.text.trim())
-          .filter(Boolean)
-          .join(" "),
-      );
-    });
-  });
-  return results.length === nItems ? results : [];
-}
-
-function extractItemDetailColumn(pagesItems, nItems) {
-  if (!nItems || !pagesItems || !pagesItems.length) return [];
-  const results = [];
-
-  pagesItems.forEach((rawItems) => {
-    if (!rawItems || !rawItems.length) return;
-    const allLines = groupPdfItemsIntoLinesWithMeta(rawItems);
-
-    // Y baris "Pos Tarif :" diambil dari Y item TERTINGGI di baris itu, BUKAN dari l.y
+    /* Y baris "Pos Tarif :" diambil dari Y item TERTINGGI di baris itu,
+       BUKAN dari l.y — satu baris bisa memuat potongan dengan Y yang
+       sedikit berbeda, dan yang menentukan batas pita adalah yang
+       paling atas. */
     const lineTopY = (l) => Math.max(...l.items.map((it) => it.transform[5]));
     const posTarifLines = allLines.filter((l) => /Pos Tarif\s*:/.test(l.text));
     if (!posTarifLines.length) return;
@@ -143,11 +100,12 @@ function extractItemDetailColumn(pagesItems, nItems) {
       .map(lineTopY);
     const pageBottomY = endYs.length ? Math.max(...endYs) : -Infinity;
 
-    // Batas kolom field 35 dicari dari posisi header-nya sendiri (dulu di-hardcode 393-468)
-    const h35 = pdfFindItemOnPage(rawItems, /^35\.\s*-?\s*Jumlah dan Jenis/i);
-    const h36 = pdfFindItemOnPage(rawItems, /^36\.\s*-?\s*Nilai Pabean/i);
-    const xMin = h35 ? h35.x - 6 : 393;
-    const xMax = h36 && h36.x > xMin ? h36.x - 6 : 468;
+    /* Batas kolom dicari dari posisi header-nya sendiri, bukan angka
+       tetap — lebar kolom berbeda antar cetakan CEISA. */
+    const kiri = pdfFindItemOnPage(rawItems, opsi.headerKiri);
+    const kanan = pdfFindItemOnPage(rawItems, opsi.headerKanan);
+    const xMin = kiri ? kiri.x - opsi.geserKiri : opsi.xMinCadangan;
+    const xMax = kanan && kanan.x > xMin ? kanan.x - 6 : opsi.xMaxCadangan;
 
     posTarifLines.forEach((line, i) => {
       const yTop = lineTopY(line) + 1;
@@ -155,11 +113,36 @@ function extractItemDetailColumn(pagesItems, nItems) {
         i + 1 < posTarifLines.length
           ? lineTopY(posTarifLines[i + 1]) + 1
           : pageBottomY;
-      const tokens = pdfLinesInBox(rawItems, xMin, xMax, { yTop, yBottom }).map(
-        (l) => l.text.trim(),
-      );
-      results.push(tokens);
+      results.push(opsi.ambil(pdfLinesInBox(rawItems, xMin, xMax, { yTop, yBottom })));
     });
+  });
+  return results;
+}
+
+// Ekstraksi qty/satuan/netto per barang berdasarkan KOORDINAT, bukan urutan baris teks
+function extractItemUraianColumn(pagesItems, nItems) {
+  const results = pibPitaBarang(pagesItems, nItems, {
+    headerKiri: /^32\.\s*-?\s*Pos Tarif/i,
+    headerKanan: /^33\.\s*Keterangan/i,
+    geserKiri: 8,
+    xMinCadangan: 20,
+    xMaxCadangan: 200,
+    // Digabung dengan SPASI (bukan baris baru) supaya sub-field yang terpotong di tengah
+    ambil: (lines) =>
+      lines.map((l) => l.text.trim()).filter(Boolean).join(" "),
+  });
+  return results.length === nItems ? results : [];
+}
+
+function extractItemDetailColumn(pagesItems, nItems) {
+  const results = pibPitaBarang(pagesItems, nItems, {
+    // Batas kolom field 35 dari posisi header-nya (dulu di-hardcode 393-468)
+    headerKiri: /^35\.\s*-?\s*Jumlah dan Jenis/i,
+    headerKanan: /^36\.\s*-?\s*Nilai Pabean/i,
+    geserKiri: 6,
+    xMinCadangan: 393,
+    xMaxCadangan: 468,
+    ambil: (lines) => lines.map((l) => l.text.trim()),
   });
 
   if (results.length !== nItems) return [];
@@ -647,15 +630,27 @@ function parsePibPdfText(text, pagesItems) {
       ...newItem(),
       namaBarang: it.namaBarang,
       hsCode: it.hsCode,
-      jenisBarang: "Bahan Baku",
+      jenisBarang: "BAHAN BAKU",
     };
     const gotQty = it.qty != null;
     if (gotQty) base.qty = it.qty;
-    // Kemasan PER BARANG dari kolom field 35 ("Jumlah dan Jenis Kemasan")
+    /* Kemasan PER BARANG dari kolom field 35 ("Jumlah dan Jenis Kemasan").
+
+       MASUK KE `packing` + `packingUnit`, BUKAN `package`. Kolom
+       `package` sekarang bernama "Dimensi" dan hanya berlaku di buku
+       Export — di buku Import ia disembunyikan lewat CSS. Dulu hasil
+       baca PIB ditulis ke situ sebagai satu teks "2 CS", jadi angkanya
+       memang terbaca dari PDF tapi mendarat di kolom yang tidak
+       kelihatan. Dari sisi pengguna: kemasannya "tidak terekstrak".
+
+       Nilai 0 SENGAJA dibiarkan kosong. Di PIB, jumlah kemasan
+       ditulis penuh pada satu barang dan 0 pada sisanya karena
+       barang-barang itu berbagi peti yang sama — dan kolom Kemasan
+       yang kosong memang berarti "ikut baris di atas". Menulis "0" di
+       situ justru mengaburkan artinya. */
     if (it.packageQty != null && it.packageQty > 0) {
-      base.package = [fmtPibNumber(it.packageQty, 2), it.packageJenis]
-        .filter(Boolean)
-        .join(" ");
+      base.packing = fmtPibNumber(it.packageQty, 2);
+      base.packingUnit = it.packageJenis || "";
     }
     if (it.netto != null) base.netto = it.netto;
     if (it.satuan) base.satuan = it.satuan;
@@ -674,9 +669,20 @@ function parsePibPdfText(text, pagesItems) {
   // Bruto = TOTAL dokumen (field 29), ditaruh di barang pertama saja.
   applyTotalBrutoToFirstItem(items, totalBrutoVal);
 
-  // Requirement C: "Package Per Item (Import): kalau tidak ada rincian package per item
-  if (items.length && !items.some((it) => (it.package || "").trim())) {
-    if (packageDefault) items[0].package = packageDefault;
+  /* Cadangan: kalau field 35 tidak memuat rincian kemasan per barang,
+     dipakai total dokumen dari field 28 ("2 PACKAGE, Tanpa Merk"),
+     ditaruh di barang pertama.
+
+     Ikut pindah ke `packing` + `packingUnit` dengan alasan yang sama
+     seperti di atas — `package` sekarang kolom Dimensi, tidak tampil
+     di buku Import. Angka dan jenisnya dipisah di sini supaya kolom
+     Kemasan berisi bilangan yang bisa dijumlahkan, bukan teks. */
+  if (items.length && !items.some((it) => (it.packing || "").trim())) {
+    const m = /^\s*(\d+(?:[.,]\d+)?)\s*([A-Za-z][A-Za-z\s]*)?/.exec(packageDefault || "");
+    if (m) {
+      items[0].packing = m[1];
+      items[0].packingUnit = (m[2] || "").trim().toUpperCase();
+    }
   }
 
   if (rawItems.length > 1 && rawItems.some((it) => it.qty != null)) {

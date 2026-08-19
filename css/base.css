@@ -58,8 +58,6 @@ body {
 }
 
 /* Pola label struktur */
-.eyebrow,
-.section-label,
 .board-label,
 .panel-eyebrow {
   font-family: var(--font-display);
@@ -79,7 +77,6 @@ body {
   outline-offset: 2px;
   border-radius: var(--r-xs);
 }
-.on-dark :focus-visible,
 .app-topbar :focus-visible,
 .board :focus-visible {
   outline-color: var(--p-300);
@@ -128,7 +125,6 @@ body {
 
 .btn-quiet,
 .btn-quiet:hover,
-.btn-danger-quiet,
 .btn-outline-danger {
   display: inline-flex;
   align-items: center;

@@ -68,7 +68,13 @@ document.addEventListener("click", (e) => {
 
 /* AUTO-LEBAR INPUT */
 let __textSizer = null;
-function measureTextWidth(el, text) {
+/* `gaya` boleh diberikan kalau pemanggilnya SUDAH menghitungnya.
+
+   getComputedStyle memaksa peramban menyelesaikan perhitungan gaya
+   saat itu juga. Dulu autoSizeInput memanggilnya sekali untuk padding,
+   lalu fungsi ini memanggilnya LAGI untuk font — pada elemen yang
+   sama, dua kali kerja yang sama per baris tabel. */
+function measureTextWidth(el, text, gaya) {
   if (!__textSizer) {
     __textSizer = document.createElement("span");
     __textSizer.setAttribute("aria-hidden", "true");
@@ -76,7 +82,7 @@ function measureTextWidth(el, text) {
       "position:absolute;left:-9999px;top:-9999px;white-space:pre;visibility:hidden;padding:0;margin:0;border:0";
     document.body.appendChild(__textSizer);
   }
-  const cs = getComputedStyle(el);
+  const cs = gaya || getComputedStyle(el);
   __textSizer.style.fontFamily = cs.fontFamily;
   __textSizer.style.fontSize = cs.fontSize;
   __textSizer.style.fontWeight = cs.fontWeight;
@@ -100,7 +106,7 @@ function autoSizeInput(el, minPx, maxPx) {
     // Sisa 3px: mencegah karakter terakhir tertutup caret.
     3;
   const text = el.value || el.placeholder || "";
-  const needed = measureTextWidth(el, text) + chrome;
+  const needed = measureTextWidth(el, text, cs) + chrome;
   const min = minPx == null ? 72 : minPx;
   const max = maxPx == null ? 240 : maxPx;
   el.style.width = `${Math.min(max, Math.max(min, Math.ceil(needed)))}px`;
@@ -108,8 +114,6 @@ function autoSizeInput(el, minPx, maxPx) {
 
 const cardContainer = $("#cardContainer");
 const emptyState = $("#emptyState");
-const viewListEl = $("#viewList");
-const viewFormEl = $("#viewForm");
 /* Detail read-only sekarang memakai PANEL GESER, bukan modal Bootstrap */
 const confirmModalEl = $("#confirmModal");
 const confirmModal = new bootstrap.Modal(confirmModalEl);
