@@ -173,8 +173,18 @@ function parseBcExcelWorkbook(wb) {
     incoterm: excelStr(header["KODE INCOTERM"]).toUpperCase(),
     party: shipper ? excelStr(shipper["NAMA ENTITAS"]) : "",
     invoice: findDokumen("380"),
-    masterBL: findDokumen("740", "742"),
-    houseBL: findDokumen("741", "743"),
+    /* KODE DOKUMEN mengikuti daftar UN/EDIFACT 1001 yang dipakai BC 2.0:
+
+         704  Master bill of lading      (laut, tingkat master)
+         741  Master air waybill         (udara, tingkat master)
+         705  Bill of lading             (laut, tingkat house)
+         740  Air waybill                (udara, tingkat house)
+
+       Sebelumnya master memakai 740/742 dan house 741/743 — TERBALIK
+       untuk moda udara, karena 741 justru Master AWB sementara 740
+       yang house. Dokumen udara jadi tertukar tingkatannya. */
+    masterBL: findDokumen("704", "741"),
+    houseBL: findDokumen("705", "740"),
     freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
     insurance:
       header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
@@ -261,7 +271,7 @@ function parseBcExcelWorkbook(wb) {
     return {
       ...newItem(),
       ...rest,
-      jenisBarang: "Bahan Baku",
+      jenisBarang: "BAHAN BAKU",
       skb: (skbBySeriBarang.get(seriBarang) || []).map((sk) => ({ ...sk })),
     };
   });
@@ -288,7 +298,7 @@ function parseBcExcelWorkbook(wb) {
   }
   if (!fields.masterBL && !fields.houseBL) {
     notes.push(
-      "Master/House BL/AWB tidak ditemukan di sheet DOKUMEN (kode 740/741/742/743).",
+      "Master/House BL/AWB tidak ditemukan di sheet DOKUMEN (kode 704/741 untuk master, 705/740 untuk house).",
     );
   }
   if (!transport) {

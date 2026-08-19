@@ -560,7 +560,10 @@ table.item-table td {
 }
 table.item-table td:first-child {
   text-align: left;
-  min-width: 300px;
+  /* Sepasang dengan min-width di textarea.nama-barang-input di bawah.
+     Kalau salah satu diubah sendirian, lebar kolomnya jadi yang
+     terbesar di antara keduanya — bukan yang dimaksud. */
+  min-width: 400px;
 }
 table.item-table td.text-end {
   text-align: right;
@@ -603,22 +606,19 @@ table.item-table textarea.nama-barang-input {
   padding: 6px 8px;
   font-size: 0.82rem;
   width: 100%;
-  min-width: 300px;
+  min-width: 400px;
   min-height: 34px;
   height: auto;
   /* Nama barang ditulis UTUH: dibungkus ke baris berikutnya, tidak
-     dipotong. Kolomnya melebar (min-width 300px) dan tabelnya bisa
-     digeser mendatar — lebih baik menggeser daripada kehilangan
-     bagian nama yang justru membedakan satu barang dari lainnya. */
+     dipotong. Kolomnya melebar (min-width 400px, sepasang dengan
+     td:first-child di atas) dan tabelnya bisa digeser mendatar —
+     lebih baik menggeser daripada kehilangan bagian nama yang justru
+     membedakan satu barang dari lainnya. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow: hidden;
-  resize: vertical;
   resize: none;
-  overflow: hidden;
   text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
   word-break: normal;
   line-height: 1.4;
   font-family: inherit;

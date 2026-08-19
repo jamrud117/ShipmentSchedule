@@ -8,7 +8,7 @@ function ciplRawItemsToFinalItems(rawItems) {
     ...newItem(),
     namaBarang: it.name || "",
     hsCode: normalizeHsCodeInput(it.hsCode),
-    jenisBarang: activeMode === "export" ? "Barang Jadi" : "Bahan Baku",
+    jenisBarang: activeMode === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: it.qty != null ? it.qty : 0,
     satuan: it.satuan || "",
     harga: it.harga != null ? it.harga : 0,

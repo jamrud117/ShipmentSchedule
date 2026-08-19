@@ -72,7 +72,6 @@ const MODE_LABELS = {
   },
 };
 
-// "Barang Jadi" ditambahkan untuk mode Export (requirement C)
 /* LABEL SARANA PENGANGKUT & PELABUHAN MENGIKUTI MODA (requirement B) */
 function vesselNoun(transport) {
   return transport === "udara" ? "Vessel" : "Voyager";
@@ -88,12 +87,52 @@ function portNoun(which, transport, mode) {
   return air ? lbl.destinationAir : lbl.destination;
 }
 
-const JENIS_OPTIONS = [
-  "Bahan Baku",
-  "Barang Modal",
-  "Barang Penolong",
-  "Barang Jadi",
-];
+/* Diurutkan sendiri saat dimuat, BUKAN ditulis berurutan di sini.
+
+   Menambah jenis baru cukup dengan menempelkannya di mana saja dalam
+   daftar ini — urutan tampilnya tetap alfabetis. Daftar yang harus
+   ditulis rapi oleh tangan pada akhirnya selalu berantakan, dan yang
+   berantakan bikin orang ragu apakah urutannya punya arti.
+
+   localeCompare, bukan sort() polos: sort() polos membandingkan kode
+   karakter, jadi huruf beraksen atau angka di awal nama akan mendarat
+   di tempat yang tidak diduga. */
+const JENIS_OPTIONS = urutkanJenis([
+  "BARANG MODAL",
+  "SPAREPART",
+  "BAHAN BAKU",
+  "BARANG PENOLONG",
+]);
+
+function urutkanJenis(daftar) {
+  return daftar.slice().sort((a, b) => a.localeCompare(b, "id"));
+}
+
+/* Nilai lama tersimpan dalam Huruf Kapital Di Awal ("Bahan Baku"),
+   daftar di atas HURUF BESAR SEMUA. Perbandingan biasa akan meleset,
+   dan kotak pilihan lalu jatuh ke pilihan pertama — jadwal lama
+   diam-diam berubah jenis barangnya begitu dibuka.
+
+   Semua perbandingan lewat sini, jadi ejaan lama tetap dikenali. */
+function normalisasiJenisBarang(v) {
+  return String(v == null ? "" : v).trim().toUpperCase();
+}
+
+/* Daftar pilihan untuk SATU baris barang.
+
+   Kalau nilai tersimpan tidak ada di daftar — "BARANG JADI" dari
+   jadwal Export, atau apa pun yang ditulis sebelum daftar ini
+   dirapikan — nilai itu IKUT DITAMPILKAN, bukan dibuang. Menghapusnya
+   dari daftar berarti menghapusnya dari data begitu barisnya
+   tersentuh, tanpa ada yang tahu. */
+function jenisOptionsUntuk(nilai) {
+  const kini = normalisasiJenisBarang(nilai);
+  if (!kini || JENIS_OPTIONS.indexOf(kini) >= 0) return JENIS_OPTIONS;
+  /* Nilai tambahan ikut diurutkan, tidak ditempel di ujung. Satu
+     baris yang tidak alfabetis di antara yang alfabetis terbaca
+     seperti kerusakan, bukan seperti penanda. */
+  return urutkanJenis(JENIS_OPTIONS.concat([kini]));
+}
 
 // Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap)
 const SKB_TYPE_OPTIONS = ["BM", "PPN", "PPH", "Masterlist", "E-COO", "Lainnya"];

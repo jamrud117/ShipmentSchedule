@@ -35,8 +35,21 @@ function itemTotals(shipmentLike) {
     totalNetto += netto;
     totalBruto += bruto;
     totalUSD += qty * harga;
-    // Total Package (mode Import saja — lihat modal-fields.js)
-    const pkgNum = extractLeadingNumber(it.package);
+    /* Total Package (mode Import saja — lihat modal-fields.js).
+
+       DIHITUNG DARI `packing`, kolom "Kemasan" yang benar-benar
+       tampil. Dulu dari `package` — kolom yang sekarang bernama
+       "Dimensi" dan disembunyikan di buku Import. Akibatnya Total
+       Package selalu 0 untuk data yang diimpor lewat Excel BC, yang
+       memang sudah menulis ke `packing`.
+
+       `package` tetap dipakai sebagai cadangan supaya jadwal LAMA —
+       yang menyimpan "5 BOX" di kolom itu — totalnya tidak mendadak
+       jadi nol. Di buku Export kolom itu berisi dimensi ("82*42*14"),
+       tapi Total Package memang tidak ditampilkan di sana. */
+    const pkgNum = extractLeadingNumber(
+      String(it.packing || "").trim() ? it.packing : it.package,
+    );
     if (pkgNum != null) totalPackageQty += pkgNum;
     // Total CBM (mode Export saja): jumlah meter kubik tiap barang
     totalCbm += computeItemCbm(it);

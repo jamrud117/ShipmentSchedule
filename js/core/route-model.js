@@ -154,12 +154,6 @@ function computeNodeFractionsRaw(nodes) {
   return fractions;
 }
 
-/* Pecahan simpul yang SIAP DIGAMBAR, berikut posisi kapal yang sudah
-   dipetakan ke skala yang sama. */
-function computeNodeFractions(nodes) {
-  return beriJarakMinimum(computeNodeFractionsRaw(nodes));
-}
-
 /* JARAK MINIMUM ANTAR SIMPUL
 
    Posisi simpul dihitung dari TANGGALNYA, dan itu memang yang

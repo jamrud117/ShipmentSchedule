@@ -370,10 +370,13 @@ function reconstructShipmentFromGroup(group, mode) {
          terlewat. */
       namaBarang: String(desc || "").toUpperCase(),
       hsCode: normalizeHsCodeInput(hs),
+      /* Isian dari Excel dibakukan juga: pengguna bisa menulis
+         "bahan baku" huruf kecil, dan tanpa dibakukan nilai itu
+         tidak akan cocok dengan daftar pilihan di kotak jenis. */
       jenisBarang:
         mode === "import"
-          ? excelStr(row[idx.ITEM]) || "Bahan Baku"
-          : "Barang Jadi",
+          ? normalisasiJenisBarang(excelStr(row[idx.ITEM])) || "BAHAN BAKU"
+          : "BARANG JADI",
       qty,
       satuan: mode === "import" ? excelStr(row[idx.SAT]) : "",
       package: excelStr(row[idx.PACKAGE]),

@@ -65,13 +65,73 @@ function ciplXlsSet(ws, alamat, nilai, font, rata) {
    bergeser begitu jumlah baris alamat berbeda — dan seluruh blok kanan
    ikut melenceng, karena ia disandingkan menurut nomor baris. */
 /* Logo perusahaan. SJ_LOGO berupa data URL; ExcelJS meminta base64
-   tanpa awalan "data:...;base64,". */
+   tanpa awalan "data:...;base64,".
+
+   UKURAN & POSISI DISALIN DARI BERKAS RUJUKAN, bukan dikira-kira.
+   Diambil dari DDI-CRBM/VIII/044, lembar INVOICE:
+
+     <xdr:from> col 0, colOff 9139, row 0, rowOff 66675
+     <xdr:ext>  cx 886211, cy 881310
+
+   KENAPA rowOff TIDAK NOL. Rujukan sebelumnya (DDI-026) memakai
+   rowOff 0: sisi atas gambar tepat di y=0, menindih garis batas atas
+   lembar. Di layar tidak kelihatan, tapi SAAT DICETAK border atasnya
+   terpotong. Tujuh piksel jarak inilah yang menyelamatkannya —
+   jadi jangan dibulatkan jadi nol supaya "rapat ke atas".
+
+   TEPI BAWAHNYA YANG DIJAGA, BUKAN TEPI ATASNYA. Di ketiga lembar
+   rujukan yang benar, rowOff + cy selalu jatuh di 947985 EMU:
+
+     DDI-CRBM/044 INVOICE   66675 + 881310 = 947985
+     DDI-CRBM/044 PL        95250 + 852735 = 947985
+     DDI-026     INVOICE        0 + 947985 = 947985
+
+   Artinya logo diseragamkan dari BAWAH, dan yang berbeda-beda cuma
+   seberapa jauh sisi atasnya turun. Kalau suatu saat tingginya
+   diubah, geser rowOff-nya supaya jumlahnya tetap 947985.
+
+   LEMBAR PL DI RUJUKAN LAGI-LAGI BERBEDA — cy 852735, rowOff 95250.
+   Tidak diikuti: yang dipakai lembar INVOICE, untuk SEMUA lembar.
+   Dua kop yang logonya beda tinggi terlihat seperti salah cetak.
+
+   DITULIS DALAM EMU, satuan asli berkas Excel. Sebelumnya ukurannya
+   ditulis 52x52 piksel dan posisinya sebagai pecahan kolom
+   (col: 0.2) — pecahan kolom ikut bergerak begitu lebar kolomnya
+   berubah, jadi logo di Invoice dan di Packing List tidak pernah
+   benar-benar sejajar. EMU tidak bergantung pada apa pun. */
+const XLS_LOGO_EMU = {
+  colOff: 9139,
+  rowOff: 66675,
+  lebar: 886211,
+  tinggi: 881310,
+};
+
+/* ExcelJS menerima `ext` dalam PIKSEL lalu mengubahnya dengan
+   Math.floor(px * 9525). Menambah setengah EMU sebelum dibagi
+   memastikan pembulatan ke bawahnya mendarat pas di angka yang
+   diminta, bukan meleset satu EMU karena galat pecahan. */
+const EMU_PER_PIKSEL = 9525;
+function pikselDariEmu(emu) {
+  return (emu + 0.5) / EMU_PER_PIKSEL;
+}
+
 function ciplXlsLogo(wb, ws) {
   try {
     const m = /^data:image\/(\w+);base64,(.+)$/.exec(SJ_LOGO || "");
     if (!m) return;
     const id = wb.addImage({ base64: m[2], extension: m[1] });
-    ws.addImage(id, { tl: { col: 0.2, row: 0.3 }, ext: { width: 52, height: 52 } });
+    ws.addImage(id, {
+      tl: {
+        nativeCol: 0,
+        nativeColOff: XLS_LOGO_EMU.colOff,
+        nativeRow: 0,
+        nativeRowOff: XLS_LOGO_EMU.rowOff,
+      },
+      ext: {
+        width: pikselDariEmu(XLS_LOGO_EMU.lebar),
+        height: pikselDariEmu(XLS_LOGO_EMU.tinggi),
+      },
+    });
   } catch (e) {
     /* Logo hanya hiasan kop — kegagalan memuatnya tidak boleh
        menggagalkan seluruh berkas. */
@@ -621,13 +681,8 @@ let ciplXlsSedangDibuat = false;
 async function unduhCiplExcel(rowId) {
   if (ciplXlsSedangDibuat) return;
 
-  const row = (docNumHistoryRows || []).find(
-    (r) => String(r.id) === String(rowId),
-  );
-  if (!row) {
-    showToast("Data invoice tidak ditemukan.", "danger");
-    return;
-  }
+  const row = ciplCariBarisRiwayat(rowId);
+  if (!row) return;
   const shipment = ciplCariShipment((row.payload || {}).shipmentId);
   const baris = ciplBarisBarang(shipment);
 

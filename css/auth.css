@@ -56,14 +56,6 @@
   color: var(--sec-500);
 }
 
-.login-title {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: var(--t-xl);
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  margin: 0;
-}
 .login-sub {
   font-size: var(--t-sm);
   color: var(--n-500);
@@ -650,16 +642,6 @@ body.is-viewer .viewer-banner {
   color: var(--n-600);
   cursor: pointer;
   user-select: none;
-}
-/* Keterangan di bawah centang "Ingat saya". Sengaja tidak dibuat
-   sekecil cetakan halus: angkanya yang membuat centang di atasnya
-   berhenti terasa seperti janji kosong. */
-.login-remember-note {
-  margin: -6px 0 var(--sp-3);
-  padding-left: 23px;          /* sejajar dengan tulisan, bukan kotaknya */
-  font-size: var(--t-xs);
-  line-height: 1.45;
-  color: var(--n-500);
 }
 .login-remember input {
   width: 15px;

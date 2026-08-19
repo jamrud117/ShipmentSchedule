@@ -128,7 +128,10 @@ function rowToItem(row) {
     id: row.id,
     namaBarang: row.nama_barang || "",
     hsCode: row.hs_code || "",
-    jenisBarang: row.jenis_barang || "",
+    /* Dibakukan di sini, satu pintu. Jadwal lama menyimpan
+       "Bahan Baku"; tanpa ini ia tidak akan cocok dengan daftar
+       pilihan yang sekarang huruf besar semua. */
+    jenisBarang: normalisasiJenisBarang(row.jenis_barang),
     qty: parseLooseNumber(row.qty),
     satuan: row.satuan || "",
     harga: parseLooseNumber(row.harga),

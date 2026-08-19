@@ -344,22 +344,61 @@ function getMeasurer() {
   document.body.appendChild(measurerEl);
   return measurerEl;
 }
-function sizeSelectToContent(selectEl) {
-  const opt = selectEl.options[selectEl.selectedIndex];
-  if (!opt) return;
-  const m = getMeasurer();
-  const cs = getComputedStyle(selectEl);
-  m.style.fontFamily = cs.fontFamily;
-  m.style.fontSize = cs.fontSize;
-  m.style.fontWeight = cs.fontWeight;
-  m.style.letterSpacing = cs.letterSpacing;
-  m.style.textTransform = cs.textTransform;
-  m.textContent = opt.text;
-  const textWidth = m.getBoundingClientRect().width;
-  selectEl.style.width = Math.ceil(textWidth) + 46 + "px";
-}
+/* LEBAR KOTAK STATUS — diukur berkelompok, bukan satu per satu.
+
+   Versi lama mengerjakan tiap kotak sampai tuntas: baca gaya, tulis ke
+   pengukur, baca lebarnya, tulis lebar kotaknya. Tulis-baca yang
+   berselang-seling memaksa peramban menghitung ulang tata letak SETIAP
+   PUTARAN — papan berisi 200 kartu berarti 200 perhitungan paksa.
+
+   Dua hal yang diperbaiki:
+
+   1. Dipisah jadi tiga tahap — baca semua, ukur, baru tulis semua.
+   2. Hasil ukuran DIPAKAI ULANG. Isi kotak status cuma segelintir
+      ("Process", "In Transit", "Arrived"...), jadi 200 kartu paling
+      butuh beberapa pengukuran, bukan 200.
+
+   Ingatannya sengaja hanya sepanjang satu panggilan: font halaman
+   dimuat dengan `display=swap`, dan ukuran yang disimpan lintas render
+   bisa jadi hasil pengukuran memakai font sementara. */
 function fixSelectWidths() {
-  $$(".status-select", cardContainer).forEach(sizeSelectToContent);
+  const kotak = $$(".status-select", cardContainer);
+  if (!kotak.length) return;
+
+  // 1. BACA semua dulu — tanpa satu pun tulis di antaranya.
+  const tugas = [];
+  kotak.forEach((el) => {
+    const opt = el.options[el.selectedIndex];
+    if (!opt) return;
+    const cs = getComputedStyle(el);
+    tugas.push({
+      el,
+      teks: opt.text,
+      cs,
+      kunci: [cs.fontFamily, cs.fontSize, cs.fontWeight,
+        cs.letterSpacing, cs.textTransform, opt.text].join("|"),
+    });
+  });
+  if (!tugas.length) return;
+
+  // 2. UKUR hanya yang belum pernah diukur di panggilan ini.
+  const m = getMeasurer();
+  const lebar = new Map();
+  tugas.forEach((t) => {
+    if (lebar.has(t.kunci)) return;
+    m.style.fontFamily = t.cs.fontFamily;
+    m.style.fontSize = t.cs.fontSize;
+    m.style.fontWeight = t.cs.fontWeight;
+    m.style.letterSpacing = t.cs.letterSpacing;
+    m.style.textTransform = t.cs.textTransform;
+    m.textContent = t.teks;
+    lebar.set(t.kunci, m.getBoundingClientRect().width);
+  });
+
+  // 3. TULIS semua.
+  tugas.forEach((t) => {
+    t.el.style.width = Math.ceil(lebar.get(t.kunci)) + 46 + "px";
+  });
 }
 
 /* Penyegaran ringan: hanya geser penanda, DOM & fokus tidak disentuh */

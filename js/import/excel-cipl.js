@@ -323,7 +323,7 @@ function parseCiplWorkbook(wb) {
     ...newItem(),
     namaBarang: it.name,
     hsCode: it.hsCode || "",
-    jenisBarang: "Bahan Baku",
+    jenisBarang: "BAHAN BAKU",
     qty: it.qty != null ? it.qty : 0,
     satuan: it.satuan || "",
     harga: it.harga != null ? it.harga : 0,
