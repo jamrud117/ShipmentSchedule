@@ -4066,6 +4066,73 @@ t("id angka & id teks sama-sama ketemu", () => {
   }
 });
 
+<<<<<<< HEAD
+=======
+console.log("\u2014 KOLOM NO DI TEMPLATE SALIN \u2014");
+/* Sel kosong yang ditempel ke Excel TETAP menimpa isi sel tujuan, jadi
+   kolom NO yang selalu kosong menghapus penomoran dokumen yang sudah
+   ada di sheet. Dibuang dari hasil salin — TAPI TIDAK dari pembangun
+   barisnya, karena Bulk Excel mengisi kolom itu dengan nomor sungguhan
+   dan Bulk Import membacanya balik lewat IMPORT_IDX.NO = 0. */
+function jadwalUji() {
+  return {
+    factoryDate: "2026-08-20", ndpbm: 16000,
+    docNo: "SPPB-1", docDate: "2026-08-01", noAju: "AJU-9", party: "PT UJI",
+    invoice: "INV-1", vessel: "KAPAL UJI", masterBL: "MBL1", houseBL: "HBL1",
+    incoterm: "FOB", status: "Process", destination: "TPP", origin: "TXG",
+    etd: "2026-08-01", eta: "2026-08-10", actual: "2026-08-12", notes: "",
+    items: [{ namaBarang: "BARANG A", hsCode: "6406", qty: 2, satuan: "PCE",
+              harga: 10, netto: 1, bruto: 2, skb: [] }],
+  };
+}
+function selPertama(teks) {
+  return teks.split("\n")[0].split("\t")[0];
+}
+t("hasil salin dimulai dari kolom DATA, bukan sel kosong", () => {
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  /* All Import: kolom pertama setelah NO adalah IN FACTORY. Diperiksa
+     ISINYA, bukan sekadar "tidak kosong" — sel kosong juga muncul
+     kalau datanya yang kebetulan kosong, dan itu akan membuat uji ini
+     lulus/gagal karena alasan yang salah. */
+  eq(selPertama(w.buildAllImportCopyText(s)), f.date("2026-08-20"), "All Import:");
+  // All Export: kolom pertama setelah NO adalah PENGIRIMAN DARI PABRIK.
+  eq(selPertama(w.buildAllExportCopyText(s)), f.date(s.actual), "All Export:");
+});
+t("Daily Import & Daily Export juga tanpa kolom NO", () => {
+  const s = jadwalUji();
+  [["DailyImport", w.buildDailyImportCopyRows],
+   ["DailyExport", w.buildDailyExportCopyRows]].forEach(([nama, builder]) => {
+    const penuh = builder(s, baca("clipboardFormatter"));
+    const dipotong = w.tanpaKolomNo(penuh);
+    eq(dipotong[0].length, penuh[0].length - 1, nama + " jumlah kolom:");
+    eq(dipotong[0][0], penuh[0][1], nama + " kolom pertama sekarang:");
+  });
+});
+t("pembangun baris TETAP punya kolom NO — Bulk Excel mengandalkannya", () => {
+  /* Penjaga terpenting. Kalau kolomnya dibuang di hulu, Bulk Excel
+     kehilangan tempat menaruh nomor DAN seluruh indeks kolom bergeser
+     satu — Bulk Import lalu salah membaca setiap kolom. */
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  eq(w.buildAllExportCopyRows(s, f)[0].length, baca("ALL_EXPORT_COLS"), "All Export:");
+  eq(w.buildDailyImportCopyRows(s, f)[0].length, baca("DAILY_IMPORT_COLS"), "Daily Import:");
+  eq(w.buildDailyExportCopyRows(s, f)[0].length, baca("DAILY_EXPORT_COLS"), "Daily Export:");
+  // Kolom 0 memang disediakan kosong untuk diisi Bulk Excel.
+  eq(w.buildAllExportCopyRows(s, f)[0][0], f.blank, "slot NO:");
+});
+t("kolom setelah NO tidak ikut tergeser atau hilang", () => {
+  const s = jadwalUji();
+  const f = baca("clipboardFormatter");
+  const penuh = w.buildAllExportCopyRows(s, f);
+  const dipotong = w.tanpaKolomNo(penuh);
+  // Isi harus sama persis, cuma bergeser satu ke kiri.
+  eq(dipotong[0].join("\u0001"), penuh[0].slice(1).join("\u0001"));
+  if (dipotong[0].indexOf(f.text ? "PT UJI" : "PT UJI") < 0)
+    throw new Error("data pengiriman ikut terpotong");
+});
+
+>>>>>>> 1e5bef1 (updates 19-08-2026)
 console.log("\u2014 KEMASAN PIB MASUK KE KOLOM YANG TAMPIL \u2014");
 /* Kolom `package` sekarang bernama "Dimensi" dan disembunyikan di buku
    Import (body.mode-import .dim-col { display:none }). Kemasan yang
