@@ -4066,8 +4066,6 @@ t("id angka & id teks sama-sama ketemu", () => {
   }
 });
 
-<<<<<<< HEAD
-=======
 console.log("\u2014 KOLOM NO DI TEMPLATE SALIN \u2014");
 /* Sel kosong yang ditempel ke Excel TETAP menimpa isi sel tujuan, jadi
    kolom NO yang selalu kosong menghapus penomoran dokumen yang sudah
@@ -4132,7 +4130,6 @@ t("kolom setelah NO tidak ikut tergeser atau hilang", () => {
     throw new Error("data pengiriman ikut terpotong");
 });
 
->>>>>>> 1e5bef1 (updates 19-08-2026)
 console.log("\u2014 KEMASAN PIB MASUK KE KOLOM YANG TAMPIL \u2014");
 /* Kolom `package` sekarang bernama "Dimensi" dan disembunyikan di buku
    Import (body.mode-import .dim-col { display:none }). Kemasan yang
