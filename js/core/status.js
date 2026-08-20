@@ -7,6 +7,18 @@ const STATUS_OPTIONS_BY_MODE = {
   export: ["process", "delayed", "arrived"],
 };
 
+/* Filter status yang dipakai saat halaman baru dibuka, di kedua buku.
+
+   Alasannya: yang dikerjakan sehari-hari adalah kiriman yang masih
+   berjalan. Membuka halaman ke "Semua Status" berarti daftar teratas
+   penuh kiriman yang sudah selesai, dan yang perlu ditindak justru
+   terdorong ke bawah.
+
+   Bukan berarti saringannya disembunyikan — catatan "disaring: status
+   Process" tetap muncul di atas daftar, supaya jelas kenapa ada
+   kiriman yang tidak terlihat. */
+const FILTER_STATUS_DEFAULT = "process";
+
 // Label per key, dibedakan per mode HANYA untuk "arrived".
 function statusLabel(statusKey, mode) {
   const m = mode || activeMode;
@@ -102,45 +114,61 @@ if (typeof module !== "undefined" && module.exports) {
    Dipakai bersama oleh papan, jalur progres, metrik, saringan, dan
    halaman Ringkasan supaya semuanya sepakat.
 ------------------------------------------------------------------ */
-function isArrived(s) {
-  if (!s) return false;
-  const kini = parseLocalDate(todayISO());
+/* Kolom tanggal yang SEDANG membuat jadwal ini terbaca tiba.
 
-  /* IMPORT — yang menentukan tanggal IN FACTORY.
+   Dikembalikan sebagai daftar, bukan cuma benar/salah, karena yang
+   membatalkan status tiba harus mengosongkan kolom YANG BENAR. Dulu
+   pemanggilnya menebak sendiri: di buku Export ia mengosongkan
+   `actual` (berlabel "Stuffing") padahal yang menentukan ETD. Tanggal
+   Stuffing hilang, statusnya melompat balik ke Delivered, dan
+   pesannya tetap bilang berhasil.
+
+   Daftar kosong berarti statusnya cuma tersimpan di kolom status —
+   bebas diubah tanpa mengorbankan tanggal apa pun.
+
+   IMPORT — yang menentukan tanggal IN FACTORY.
 
      Kolom `actual` di buku Import berlabel "Estimated Delivery": itu
      PERKIRAAN, dan perkiraan yang terlewati tidak berarti barangnya
      sudah sampai. Yang menyatakan barang benar-benar diterima cuma
      tanggal masuk pabrik.
 
-     EXPORT — yang menentukan ETD. Barang dinyatakan terkirim begitu
+   EXPORT — yang menentukan ETD. Barang dinyatakan terkirim begitu
      alat angkutnya BERANGKAT, bukan begitu stuffing selesai: muatan
-     yang sudah naik ke kontainer tapi kapalnya belum berlayar masih ada
-     di tangan kita.
+     yang sudah naik ke kontainer tapi kapalnya belum berlayar masih
+     ada di tangan kita. Revisi ETD menang atas jadwal rencana.
 
-     Perbedaan ini disengaja: tiap buku memakai tanggal yang benar-benar
-     menandai serah terimanya. */
-  /* factoryDate hanya berlaku di buku IMPORT.
-
-     Di Export kolom itu berlabel "Tanggal Stuffing" juga — kolom lama
-     yang kini digantikan `actual`, dan memang sudah disembunyikan dari
-     form. Tapi datanya masih tersimpan pada jadwal lama.
-
-     Selama ia ikut diperiksa untuk Export, membatalkan status tiba
-     tidak pernah berhasil: `actual` dikosongkan, lalu factoryDate yang
-     tertinggal langsung menandainya tiba lagi. Toast-nya bilang
-     berhasil, kartunya tidak berubah. */
-  if (s.mode !== "export" && s.factoryDate) {
-    const masuk = parseLocalDate(s.factoryDate);
-    if (masuk && kini && kini >= masuk) return true;
-  }
+   factoryDate hanya berlaku di buku IMPORT. Di Export kolom itu
+   berlabel "Tanggal Stuffing" juga — kolom lama yang kini digantikan
+   `actual`, dan sudah disembunyikan dari form, tapi datanya masih ada
+   pada jadwal lama. Selama ia ikut diperiksa untuk Export,
+   membatalkan status tiba tidak pernah berhasil. */
+function kolomPenyebabTiba(s) {
+  if (!s) return [];
+  const kini = parseLocalDate(todayISO());
+  if (!kini) return [];
+  const sudahLewat = (v) => {
+    const d = parseLocalDate(v);
+    return !!(d && kini >= d);
+  };
 
   if (s.mode === "export") {
-    // ETD yang BERLAKU — kotak delay menang atas jadwal rencana.
-    const berangkat = parseLocalDate(s.etdUpdate || s.etd);
-    if (berangkat && kini && kini >= berangkat) return true;
+    if (!sudahLewat(s.etdUpdate || s.etd)) return [];
+    /* Keduanya dikembalikan supaya pengosongan tidak menyisakan
+       jadwal rencana yang langsung menandainya tiba lagi. Yang memang
+       sudah kosong tidak ikut disebut. */
+    return ["etdUpdate", "etd"].filter((k) => s[k]);
   }
 
+  return sudahLewat(s.factoryDate) ? ["factoryDate"] : [];
+}
+
+function isArrived(s) {
+  if (!s) return false;
+  /* Sengaja lewat kolomPenyebabTiba() supaya aturan tanggalnya hanya
+     ada di SATU tempat. Dua salinan aturan ini pernah bercabang, dan
+     akibatnya baru terlihat sebagai status yang tidak bisa diubah. */
+  if (kolomPenyebabTiba(s).length) return true;
   return s.status === "arrived";
 }
 

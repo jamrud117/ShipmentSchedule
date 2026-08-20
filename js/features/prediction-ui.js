@@ -456,7 +456,8 @@ function initPredictionForm(s) {
    karena di kartu tidak ada tempat untuk spanduk.
 ================================================================== */
 async function handleCardDateChange(s, field) {
-  if (!predictionAppliesTo(s)) return;
+  // ETA dihitung ulang di KEDUA buku; yang import-saja cuma Estimated Delivery.
+  if (!etaPredictionAppliesTo(s)) return;
 
   const mempengaruhiEta = field === "etd";
   if (mempengaruhiEta && etaModeOf(s) === "manual") {

@@ -4066,6 +4066,140 @@ t("id angka & id teks sama-sama ketemu", () => {
   }
 });
 
+console.log("\u2014 MEMBATALKAN STATUS TIBA MENINGGALKAN JEJAK \u2014");
+t("tanggal yang dihapus dicatat ke kronologi", () => {
+  /* Membatalkan Delivered di Export harus mengosongkan ETD — tanggal
+     yang sudah lama dipakai. Kalau hilang tanpa jejak, tidak ada yang
+     bisa memastikan angka semula. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "card-events.js"), "utf8");
+  if (!/newNoteEntry\(/.test(src))
+    throw new Error("pengosongan tanggal tidak dicatat ke kronologi");
+  if (!/patch\.notesLog\s*=/.test(src))
+    throw new Error("catatan tidak ikut disimpan ke database");
+  if (!/LABEL_KOLOM_TIBA/.test(src))
+    throw new Error("jejaknya tidak menyebut nama kolom yang dihapus");
+});
+t("label kolom penanda tiba lengkap", () => {
+  /* Pesan konfirmasi & jejak kronologi memakai peta ini. Kolom yang
+     tidak ada namanya akan tampil sebagai nama teknis. */
+  const label = baca("LABEL_KOLOM_TIBA");
+  ["factoryDate", "etd", "etdUpdate"].forEach((k) => {
+    if (!label[k]) throw new Error("label untuk " + k + " belum ada");
+  });
+});
+console.log("\u2014 ETA OTOMATIS DI BUKU EXPORT \u2014");
+t("chip mode ETA muncul di Export, chip Estimated Delivery tidak", () => {
+  const ex = { mode: "export" };
+  eq(w.etaPredictionAppliesTo(ex), true, "ETA:");
+  eq(w.deliveryPredictionAppliesTo(ex), false, "Estimated Delivery:");
+});
+t("panel mekanika prediksi tetap khusus Import", () => {
+  /* Panel itu seluruhnya menghitung Estimated Delivery. Dibiarkan
+     Import-saja untuk sekarang — ETA otomatis Export tetap jalan. */
+  eq(w.predictionDetailHtml({ mode: "export", etd: "2026-08-22" }), "");
+});
+
+console.log("\u2014 JANGKAUAN PENCARIAN \u2014");
+/* Nomor B/L & AWB adalah yang PALING sering dipakai mencari — dari
+   e-mail forwarder atau dokumen di tangan — tapi dulu tidak ikut
+   dicari sama sekali. Nomornya jelas tertulis di kartu, pencariannya
+   mengembalikan kosong. */
+function cariDi(jadwal, kata) {
+  const el = $("#searchInput");
+  const simpanQ = el.value, simpanSt = $("#filterStatus").value;
+  // Sumber daftarnya `data`, bukan `shipments` — lihat currentList().
+  const mode = baca("activeMode");
+  const daftar = baca("data")[mode];
+  w.eval("data." + mode + " = " + JSON.stringify([jadwal]));
+  el.value = kata;
+  $("#filterStatus").value = "";
+  const hasil = w.getFiltered().length;
+  w.eval("data." + mode + " = " + JSON.stringify(daftar));
+  el.value = simpanQ; $("#filterStatus").value = simpanSt;
+  return hasil;
+}
+t("nomor Master/House B-L & AWB ikut tercari", () => {
+  const j = { id: "u1", status: "process", party: "PT X",
+    masterBL: "FGLQA2608005", houseBL: "PFSX260480", items: [] };
+  eq(cariDi(j, "FGLQA2608005"), 1, "master AWB:");
+  eq(cariDi(j, "PFSX260480"), 1, "house B/L:");
+  eq(cariDi(j, "fglqa2608005"), 1, "huruf kecil:");
+});
+t("tanda pisah tidak menghalangi", () => {
+  /* "PFSX-260480" di e-mail vs "PFSX260480" di data — harus ketemu. */
+  const j = { id: "u2", status: "process", party: "PT X",
+    houseBL: "PFSX-260480", items: [] };
+  eq(cariDi(j, "PFSX260480"), 1, "dicari tanpa tanda pisah:");
+  eq(cariDi(j, "PFSX-260480"), 1, "dicari dengan tanda pisah:");
+});
+t("kolom lain di kartu ikut tercari", () => {
+  const j = { id: "u3", status: "process", party: "PT X", container: "TCLU1234567",
+    origin: "TXG", destination: "TPP", forwarder: "PRIME", notes: "titip kirim",
+    items: [{ namaBarang: "SPINDLE", hsCode: "84669390" }] };
+  [["TCLU1234567", "kontainer"], ["84669390", "HS Code"],
+   ["PRIME", "forwarder"], ["titip", "catatan"], ["SPINDLE", "nama barang"]]
+    .forEach(([q, ket]) => eq(cariDi(j, q), 1, ket + ":"));
+});
+t("yang TIDAK cocok tetap tidak ketemu", () => {
+  /* Penjaga: pencarian yang menjangkau lebih banyak kolom mudah
+     berubah jadi pencarian yang cocok dengan apa saja. */
+  const j = { id: "u4", status: "process", party: "PT X",
+    masterBL: "FGLQA2608005", items: [] };
+  eq(cariDi(j, "ZZZZ9999"), 0);
+});
+
+console.log("\u2014 FILTER STATUS BAWAAN \u2014");
+t("halaman dibuka dengan filter status Process", () => {
+  /* Yang dikerjakan sehari-hari adalah kiriman yang masih berjalan.
+     Membuka ke "Semua Status" mendorong yang perlu ditindak ke bawah. */
+  eq($("#filterStatus").value, baca("FILTER_STATUS_DEFAULT"));
+  eq(baca("FILTER_STATUS_DEFAULT"), "process", "nilai bawaan:");
+});
+t("Process tersedia di KEDUA buku", () => {
+  /* Nilai bawaan yang tidak ada di daftar pilihan akan membuat
+     <select> diam-diam jadi kosong. */
+  const opsi = baca("STATUS_OPTIONS_BY_MODE");
+  ["import", "export"].forEach((m) => {
+    if (!opsi[m].includes(baca("FILTER_STATUS_DEFAULT")))
+      throw new Error("nilai bawaan tidak ada di buku " + m);
+  });
+});
+t("pilihan pengguna TIDAK dilompat balik saat daftar digambar ulang", () => {
+  /* Penjaga terpenting. applyModeLabels() mengisi ulang <option> tiap
+     kali render, jadi kalau nilai bawaan dipasang setiap kali, pilihan
+     pengguna hilang sendiri sedetik setelah dipilih. */
+  const el = $("#filterStatus");
+  const simpan = el.value;
+  el.value = "arrived";
+  w.render();
+  eq(el.value, "arrived", "setelah render ulang:");
+  el.value = "";
+  w.render();
+  eq(el.value, "", '"Semua Status" juga harus bertahan:');
+  el.value = simpan;
+  w.render();
+});
+t("pindah buku memulai lagi dari Process", () => {
+  const el = $("#filterStatus");
+  const modeAwal = baca("activeMode");
+  el.value = "arrived";
+  w.switchMode(modeAwal === "import" ? "export" : "import");
+  eq(el.value, "process", "setelah pindah buku:");
+  w.switchMode(modeAwal);
+  eq(el.value, "process", "setelah kembali:");
+});
+t("Reset filter tetap MEMBERSIHKAN, bukan kembali ke Process", () => {
+  /* Tombolnya berbunyi "reset": kalau ia menyisakan saringan status,
+     catatan "disaring: ..." tidak hilang dan tombolnya terasa rusak. */
+  const el = $("#filterStatus");
+  el.value = "arrived";
+  w.resetAllFilters();
+  eq(el.value, "", "setelah reset:");
+  el.value = "process";
+  w.render();
+});
+
 console.log("\u2014 KOLOM NO DI TEMPLATE SALIN \u2014");
 /* Sel kosong yang ditempel ke Excel TETAP menimpa isi sel tujuan, jadi
    kolom NO yang selalu kosong menghapus penomoran dokumen yang sudah
@@ -4273,13 +4407,18 @@ t("ejaan lama tetap dikenali, tidak jatuh ke pilihan pertama", () => {
   eq(w.rowToItem({ jenis_barang: "Barang Modal" }).jenisBarang, "BARANG MODAL");
 });
 t("nilai di luar daftar IKUT ditampilkan, bukan dibuang", () => {
-  /* "BARANG JADI" dipakai jadwal Export tapi tidak ada di daftar.
-     Kalau tidak ikut ditampilkan, nilainya hilang dari data begitu
-     barisnya tersentuh. */
-  const opsi = w.jenisOptionsUntuk("Barang Jadi");
+  /* Nilai apa pun yang tersimpan tapi tidak ada di daftar — ejaan
+     lama, jenis yang pernah dipakai lalu dicabut — harus ikut
+     ditampilkan. Kalau tidak, nilainya hilang dari data begitu
+     barisnya tersentuh.
+
+     Dipakai nilai karangan, BUKAN salah satu isi daftar: "BARANG JADI"
+     dulu di luar daftar lalu dimasukkan, dan uji ini ikut lulus palsu
+     karenanya. */
+  const opsi = w.jenisOptionsUntuk("Barang Lawas");
   const daftar = baca("JENIS_OPTIONS");
   eq(opsi.length, daftar.length + 1, "jumlah pilihan:");
-  if (opsi.indexOf("BARANG JADI") < 0)
+  if (opsi.indexOf("BARANG LAWAS") < 0)
     throw new Error("nilai di luar daftar dibuang");
   // Ikut diurutkan, bukan ditempel di ujung.
   eq(opsi.join("|"), opsi.slice().sort((a, b) => a.localeCompare(b, "id")).join("|"),

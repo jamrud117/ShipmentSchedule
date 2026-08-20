@@ -10,6 +10,9 @@ vm.createContext(ctx);
 
 // Hanya potongan helpers yang dibutuhkan mesin (helpers.js penuh butuh DOM-less saja, aman)
 ["js/core/helpers.js",
+ /* Model status ikut dimuat: aturan "kolom mana yang menandai tiba"
+    murni aritmetika tanggal, jadi tempatnya di sini. */
+ "js/core/status.js",
  "js/core/unlocode.js",
  "js/core/prediction-config.js",
  "js/core/prediction-rules.js",
@@ -68,6 +71,8 @@ const {
   predictEtaRevised, predictionEtaBasis, calendarDaysBetweenISO,
   arrivalInfoOf, configuredOpsDays, todayISO,
   beriJarakMinimum, petakanProgres,
+  isArrived, kolomPenyebabTiba,
+  etaPredictionAppliesTo, deliveryPredictionAppliesTo,
 } = ctx;
 
 /* `const` di dalam vm tidak menempel ke objek konteks (beda dengan
@@ -440,6 +445,56 @@ t("yang belum diketahui TIDAK ditebak", () => {
   // lebih baik kosong daripada salah menyebut pelayaran.
   ["BELAWAN 2508S", "HAPPY LUCKY 0619S"]
     .forEach((v) => eq(detectCarrier({ transport: "laut", vessel: v }).detected, false, v + ":"));
+});
+
+console.log("— KOLOM PENYEBAB STATUS TIBA —");
+/* Buku Export dinyatakan terkirim begitu ETD terlewati. Yang harus
+   dikosongkan untuk membatalkannya juga ETD — bukan `actual`, yang di
+   Export berlabel "Stuffing". Salah kolom = tanggal Stuffing hilang,
+   status melompat balik ke Delivered, pesan tetap bilang berhasil. */
+t("Export: yang menandai tiba itu ETD, bukan Stuffing", () => {
+  const kartu = { mode: "export", status: "arrived", etd: "2026-08-01",
+    etdUpdate: "", actual: "2026-08-01" };
+  eq(kolomPenyebabTiba(kartu).join(","), "etd", "kolom penyebab:");
+  // Mengosongkan Stuffing TIDAK membatalkan status tiba.
+  eq(isArrived({ ...kartu, actual: "", status: "process" }), true, "Stuffing dikosongkan:");
+  // Mengosongkan ETD baru berhasil.
+  eq(isArrived({ ...kartu, etd: "", status: "process" }), false, "ETD dikosongkan:");
+});
+t("Export: revisi ETD ikut disebut supaya tidak menandai tiba lagi", () => {
+  const kartu = { mode: "export", status: "arrived", etd: "2026-08-01",
+    etdUpdate: "2026-08-05" };
+  eq(kolomPenyebabTiba(kartu).join(","), "etdUpdate,etd", "kedua kolom:");
+  // Kalau hanya revisinya dikosongkan, jadwal rencana menandainya tiba lagi.
+  eq(isArrived({ ...kartu, etdUpdate: "", status: "process" }), true, "sisa etd:");
+  eq(isArrived({ ...kartu, etdUpdate: "", etd: "", status: "process" }), false, "keduanya:");
+});
+t("ETD yang BELUM lewat tidak menandai tiba", () => {
+  const kartu = { mode: "export", status: "process", etd: "2026-12-31" };
+  eq(kolomPenyebabTiba(kartu).length, 0, "belum berangkat:");
+  eq(isArrived(kartu), false);
+});
+t("status 'arrived' tanpa tanggal bisa diubah tanpa mengorbankan apa pun", () => {
+  /* Daftar kosong = tidak ada tanggal yang perlu dihapus, jadi
+     dropdown-nya bebas diubah tanpa dialog konfirmasi. */
+  const kartu = { mode: "export", status: "arrived", etd: "2026-12-31" };
+  eq(kolomPenyebabTiba(kartu).length, 0);
+  eq(isArrived(kartu), true, "tetap terbaca tiba dari kolom status:");
+  eq(isArrived({ ...kartu, status: "process" }), false, "begitu statusnya diubah:");
+});
+t("Import: yang menandai tiba tetap In Factory", () => {
+  const kartu = { mode: "import", status: "arrived", factoryDate: "2026-08-01",
+    actual: "2026-08-01", etd: "2026-08-01" };
+  eq(kolomPenyebabTiba(kartu).join(","), "factoryDate", "kolom penyebab:");
+  // ETD yang lewat TIDAK menandai import tiba — itu aturan Export.
+  eq(isArrived({ ...kartu, factoryDate: "", status: "process" }), false);
+});
+t("factoryDate lama di jadwal Export tidak ikut menandai tiba", () => {
+  /* Kolom warisan yang masih tersimpan pada jadwal lama. */
+  const kartu = { mode: "export", status: "process", factoryDate: "2026-08-01",
+    etd: "2026-12-31" };
+  eq(kolomPenyebabTiba(kartu).length, 0);
+  eq(isArrived(kartu), false);
 });
 
 console.log("— NAMA OPERATOR YANG DITULIS TERPISAH —");
@@ -1009,11 +1064,45 @@ t("In Factory terisi -> rentang hilang", () =>
   eq(predictDelivery({ mode: "import", ...R("CNCAN"), etaMode: "auto",
     eta: "2026-08-13", factoryDate: "2026-08-18" }).range, null));
 
-console.log("— EXPORT TIDAK DISENTUH —");
-t("buku export: recompute tidak menghasilkan apa-apa", () => {
-  const s = { mode: "export", etaMode: "auto", ...KR, transport: "laut", muatan: "FCL", actual: "2026-09-09" };
-  eq(Object.keys(recomputeShipmentDates(s)).length, 0);
+console.log("— EXPORT: ETA DIHITUNG, STUFFING TIDAK —");
+/* Dulu seluruh mesin dimatikan untuk Export dengan satu saklar.
+   Alasannya benar tapi terlalu lebar: yang tidak boleh disentuh cuma
+   `actual` (di Export berlabel STUFFING — fakta yang direncanakan
+   orang). ETA dari ETD + lama perjalanan sama masuk akalnya untuk
+   barang yang keluar maupun masuk. */
+t("export: ETA dihitung, Stuffing TIDAK ikut ditulis", () => {
+  const s = { mode: "export", etaMode: "auto", ...KR, transport: "laut",
+    muatan: "FCL", actual: "2026-09-09" };
+  const patch = recomputeShipmentDates(s);
+  if (!patch.eta) throw new Error("ETA export tidak dihitung");
+  if ("actual" in patch)
+    throw new Error("Stuffing ikut ditulis mesin — itu fakta milik pengguna");
+  eq(s.actual, "2026-09-09", "Stuffing di objek asli:");
 });
+t("export: ETA yang SUDAH diisi tangan tidak ditimpa", () => {
+  /* Penjaga data. Jadwal export lama punya ETA yang diketik manual
+     tanpa etaMode tersimpan; etaModeOf() membacanya sebagai manual.
+     Kalau penjaga itu lepas, seluruh ETA export lama tertimpa diam-diam
+     begitu aplikasi dibuka. */
+  const s = { mode: "export", ...KR, transport: "laut", muatan: "FCL",
+    eta: "2026-09-01" };
+  eq(etaModeOf(s), "manual", "mode terbaca:");
+  eq(Object.keys(recomputeShipmentDates(s)).length, 0, "tidak ada yang diubah:");
+});
+t("import tetap dapat KEDUANYA", () => {
+  const s = { mode: "import", etaMode: "auto", ...KR, transport: "laut", muatan: "FCL" };
+  const patch = recomputeShipmentDates(s);
+  if (!patch.eta) throw new Error("ETA import hilang");
+  if (!patch.actual) throw new Error("Estimated Delivery import hilang");
+});
+t("gerbangnya dua, bukan satu", () => {
+  const ex = { mode: "export" }, im = { mode: "import" };
+  eq(etaPredictionAppliesTo(ex), true, "ETA export:");
+  eq(etaPredictionAppliesTo(im), true, "ETA import:");
+  eq(deliveryPredictionAppliesTo(ex), false, "Estimated Delivery export:");
+  eq(deliveryPredictionAppliesTo(im), true, "Estimated Delivery import:");
+});
+
 
 console.log("— KONFIGURASI, BUKAN KODE —");
 t("mengubah angka konfigurasi mengubah hasil", () => {

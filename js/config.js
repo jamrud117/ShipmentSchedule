@@ -99,6 +99,7 @@ function portNoun(which, transport, mode) {
    di tempat yang tidak diduga. */
 const JENIS_OPTIONS = urutkanJenis([
   "BARANG MODAL",
+  "BARANG JADI",
   "SPAREPART",
   "BAHAN BAKU",
   "BARANG PENOLONG",

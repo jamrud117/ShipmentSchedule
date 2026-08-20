@@ -417,7 +417,12 @@ async function toggleDocStep(id, stepKey) {
    menambah langkah tanpa ada yang memakainya. */
 function predictionMilestoneForStep(stepKey, s) {
   if (typeof PREDICTION_CONFIG === "undefined") return null;
-  if (typeof predictionAppliesTo === "function" && !predictionAppliesTo(s)) {
+  /* Tetap khusus Import: milestone di sini dokumen pabean impor, dan
+     yang memakainya perhitungan Estimated Delivery. */
+  if (
+    typeof deliveryPredictionAppliesTo === "function" &&
+    !deliveryPredictionAppliesTo(s)
+  ) {
     return null;
   }
   return (

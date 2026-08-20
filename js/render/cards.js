@@ -212,14 +212,14 @@ function renderExpandedCard(s) {
 
     <div class="date-strip">
       <div class="date-field"><label>ETD</label><input type="date" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
-      <div class="date-field"><label>ETA ${predictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
+      <div class="date-field"><label>ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
       ${
         /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
            sini mengunci tanggalnya ke mode Manual. Kalau terpikir
            menguncinya supaya tidak ada dua sumber kebenaran: laporan
            butuh tanggal yang bisa dipatok, dan mode Manual itulah
            jawabannya. */
-        `<div class="date-field${predictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label>${lbl.actual} ${predictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
+        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label>${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
       }
     </div>
 

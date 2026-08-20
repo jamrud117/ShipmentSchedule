@@ -167,7 +167,10 @@ function predStepsHtml(d) {
 
 function predictionStripHtml(s) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  if (!predictionAppliesTo(s)) return "";
+  /* Baris ini seluruhnya tentang Estimated Delivery, yang tidak berlaku
+     di Export. ETA otomatis Export tetap jalan — hanya papan
+     mekanikanya yang belum menampilkannya. */
+  if (!deliveryPredictionAppliesTo(s)) return "";
   const d = predictDelivery(s);
 
   if (!d.ok) {
@@ -197,7 +200,8 @@ function predictionStripHtml(s) {
 
 function predictionDetailHtml(s) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  if (!predictionAppliesTo(s)) return "";
+  // Lihat catatan di predictionStripHtml().
+  if (!deliveryPredictionAppliesTo(s)) return "";
   const e = predictEta(s);
   const d = predictDelivery(s);
   const mode = etaModeOf(s);

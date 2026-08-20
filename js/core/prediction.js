@@ -43,10 +43,26 @@
      etd_update     kotak delay, milik pengguna
 ================================================================== */
 
-// Mesin ini KHUSUS buku Import. Di Export kolom `actual` berarti
-// Stuffing — fakta yang direncanakan orang, bukan perkiraan.
+/* DUA GERBANG, BUKAN SATU.
 
-function predictionAppliesTo(s) {
+   Dulu seluruh mesin dimatikan untuk buku Export dengan satu saklar,
+   alasannya benar tapi terlalu lebar: di Export kolom `actual` berarti
+   STUFFING — fakta yang direncanakan orang, bukan perkiraan, jadi
+   mesin memang tidak boleh menimpanya.
+
+   Tapi ETA bukan `actual`. Menghitung ETA dari ETD + lama perjalanan
+   sama masuk akalnya untuk barang yang keluar maupun yang masuk;
+   yang tidak berlaku di Export cuma bagian Estimated Delivery-nya.
+   Satu saklar untuk dua hal berbeda membuat ETA otomatis di Export
+   diam-diam tidak pernah jalan — tanpa pesan, tanpa jejak. */
+
+// ETA dihitung untuk KEDUA buku.
+function etaPredictionAppliesTo(s) {
+  return !!s;
+}
+
+// Estimated Delivery hanya berlaku di Import — di Export itu Stuffing.
+function deliveryPredictionAppliesTo(s) {
   return !!s && s.mode !== "export";
 }
 /* Nilai baru untuk sebuah pengiriman. Hanya berisi kolom yang BERUBAH,
@@ -54,11 +70,11 @@ function predictionAppliesTo(s) {
 
 function recomputeShipmentDates(s) {
   const patch = {};
-  if (!predictionAppliesTo(s)) return patch;
+  if (!s) return patch;
 
   let dasar = s;
 
-  if (etaModeOf(s) === "auto") {
+  if (etaPredictionAppliesTo(s) && etaModeOf(s) === "auto") {
     const p = predictEta(s);
     if (p.ok && p.eta && p.eta !== s.eta) {
       patch.eta = p.eta;
@@ -69,6 +85,7 @@ function recomputeShipmentDates(s) {
 
   /* Mode manual: kolom Estimated Delivery milik pengguna sepenuhnya.
      Tidak dihitung, tidak ditimpa, tidak "diperbaiki diam-diam". */
+  if (!deliveryPredictionAppliesTo(s)) return patch;
   if (deliveryModeOf(s) === "manual") return patch;
 
   const d = predictDelivery(dasar);

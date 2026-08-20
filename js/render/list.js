@@ -21,24 +21,51 @@ function sortDirection() {
   return "asc";
 }
 
+/* Tanda pisah dibuang supaya "PFSX-260480" dan "PFSX260480" saling
+   ketemu. Hanya dipakai sebagai pencocokan CADANGAN — pencarian apa
+   adanya tetap dicoba lebih dulu, supaya spasi yang sengaja diketik
+   pengguna masih berarti. */
+function tanpaPemisah(t) {
+  return String(t || "").replace(/[\s./_-]+/g, "");
+}
+
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const statusFilter = $("#filterStatus").value;
   return currentList().filter((s) => {
+    /* Pencarian menjangkau SEMUA yang terbaca di kartu & panel detail.
+
+       Master/House B/L-AWB dulu tidak ikut, padahal nomor itulah yang
+       paling sering dipakai mencari — dari e-mail forwarder atau dari
+       dokumen di tangan. Mencari "FGLQA2608005" mengembalikan kosong
+       walau nomornya jelas tertulis di kartunya.
+
+       Nomor B/L, kontainer, dan HS Code kerap ditulis dengan tanda
+       pisah yang berbeda-beda ("PFSX-260480" vs "PFSX260480"), jadi
+       pencarian dicocokkan DUA KALI: apa adanya, dan setelah tanda
+       baca dibuang di kedua sisi. */
     const hay = [
       s.party,
       s.docNo,
       s.noAju,
       s.invoice,
+      s.masterBL,
+      s.houseBL,
       s.vessel,
       s.voyage,
+      s.container,
       s.forwarder,
       s.forwarderPic,
-      ...(s.items || []).map((i) => i.namaBarang),
+      s.origin,
+      s.destination,
+      s.incoterm,
+      s.muatan,
+      s.notes,
+      ...(s.items || []).flatMap((i) => [i.namaBarang, i.hsCode]),
     ]
       .join(" ")
       .toLowerCase();
-    const matchQ = !q || hay.includes(q);
+    const matchQ = !q || hay.includes(q) || tanpaPemisah(hay).includes(tanpaPemisah(q));
     const matchStatus = !statusFilter || s.status === statusFilter;
 
     /* Chip saringan cepat ikut menyaring di sini juga, supaya paginasi,
@@ -311,6 +338,7 @@ $("#paginationBar").addEventListener("change", (e) => {
 
 /* updateStats() sekarang tinggal di js/features/quick-filters.js — */
 
+let filterStatusPernahDisetel = false;
 function applyModeLabels() {
   const lbl = ML();
   document.body.classList.toggle("mode-export", activeMode === "export");
@@ -328,7 +356,26 @@ function applyModeLabels() {
   $("#filterStatus").innerHTML =
     `<option value="">Semua Status</option>` +
     statusOptionsHtml(activeMode, "").replace(/ selected/g, "");
-  $("#filterStatus").value = cur;
+  /* Pilihan yang sedang aktif dikembalikan setelah daftarnya diisi
+     ulang — KECUALI pada gambar pertama, yang dimulai dari nilai
+     bawaan. Sesudah itu pilihan pengguna dihormati; kalau tidak,
+     saringannya akan melompat balik ke Process setiap kali daftar
+     digambar ulang. */
+  $("#filterStatus").value = filterStatusPernahDisetel
+    ? cur
+    : nilaiFilterStatusBawaan();
+  filterStatusPernahDisetel = true;
+}
+
+/* Nilai bawaan hanya dipakai kalau memang ADA pilihannya di buku ini.
+   Kalau suatu saat "process" dihapus dari salah satu buku, lebih baik
+   jatuh ke "Semua Status" daripada menyetel nilai yang tidak ada —
+   <select> yang nilainya asing akan diam-diam jadi kosong. */
+function nilaiFilterStatusBawaan() {
+  const ada = (STATUS_OPTIONS_BY_MODE[activeMode] || []).includes(
+    FILTER_STATUS_DEFAULT,
+  );
+  return ada ? FILTER_STATUS_DEFAULT : "";
 }
 
 /* ---- Make each status <select> exactly as wide as its selected text ---- */
@@ -472,7 +519,8 @@ function switchMode(mode) {
   rememberActiveMode(mode);
   syncModeTabs(mode);
   $("#searchInput").value = "";
-  $("#filterStatus").value = "";
+  // Pindah buku = membuka daftar yang lain; mulai dari bawaan lagi.
+  $("#filterStatus").value = nilaiFilterStatusBawaan();
   // Preset ikut dilepas: "perlu tindakan" di buku Import bukan pertanyaan yang sama dengan di buku
   activePreset = "all";
   presetDateOverride = "";

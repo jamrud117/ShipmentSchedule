@@ -1,5 +1,14 @@
 "use strict";
 
+/* Nama yang dibaca pengguna untuk tiap kolom penanda tiba. Ditulis
+   seperti labelnya di form, supaya pesan konfirmasi menunjuk kotak
+   yang benar-benar bisa mereka lihat. */
+const LABEL_KOLOM_TIBA = {
+  factoryDate: "In Factory",
+  etd: "ETD",
+  etdUpdate: "ETD revisi",
+};
+
 /* CARD EVENT DELEGATION */
 cardContainer.addEventListener("change", (e) => {
   if (!requireEdit()) return;
@@ -14,24 +23,54 @@ cardContainer.addEventListener("change", (e) => {
        terisi & terlewati, isArrived() akan tetap membacanya sebagai
        tiba dan statusnya kembali sendiri pada penggambaran berikutnya.
 
-       Tanggal itu In Factory untuk Import, Stuffing untuk Export —
-       lihat isArrived() di core/status.js. Jadi yang dikosongkan harus
-       yang benar itu, bukan Estimated Delivery. */
-    const kolomFakta = s.mode === "export" ? "actual" : "factoryDate";
-    if (isArrived(s) && s[kolomFakta] && t.value !== "arrived") {
+       Kolom mananya TIDAK ditebak di sini — ditanyakan ke
+       kolomPenyebabTiba() di core/status.js, sumber aturan yang sama
+       yang dipakai isArrived(). Sebelumnya buku Export mengosongkan
+       `actual` (berlabel "Stuffing") padahal yang menentukan ETD:
+       tanggal Stuffing hilang, status melompat balik ke Delivered,
+       dan pesannya tetap bilang berhasil. */
+    const kolomFakta = kolomPenyebabTiba(s);
+    if (kolomFakta.length && t.value !== "arrived") {
       const semula = t.value;
-      const namaKolom =
-        kolomFakta === "actual" ? ML().actual : ML().factoryDate || "In Factory";
+      const namaKolom = kolomFakta
+        .map((k) => LABEL_KOLOM_TIBA[k] || k)
+        .join(" & ");
+      const tanggal = fmtDate(s[kolomFakta[0]]);
 
       showConfirm(
-        `Tanggal ${namaKolom} (${fmtDate(s[kolomFakta])}) akan dikosongkan supaya statusnya bisa kembali ke ${statusLabel(semula, activeMode)}. Lanjutkan?`,
+        `Tanggal ${namaKolom} (${tanggal}) akan dikosongkan supaya statusnya bisa kembali ke ${statusLabel(semula, activeMode)}. Lanjutkan?`,
         () => {
-          s[kolomFakta] = "";
+          const patch = { status: semula };
+          /* Tanggal yang dihapus DICATAT ke kronologi sebelum hilang.
+
+             Tanpa ini, tanggal berangkat yang sudah lama dipakai lenyap
+             tanpa jejak dan tidak ada yang bisa memastikan angka
+             semula. Kronologi memang sudah bertanggal & berjam otomatis
+             — tempat yang tepat untuk keputusan seperti ini. */
+          const jejak = kolomFakta
+            .map((k) => `${LABEL_KOLOM_TIBA[k] || k} ${fmtDate(s[k])}`)
+            .join(", ");
+          kolomFakta.forEach((k) => {
+            s[k] = "";
+            patch[k] = null;
+          });
           s.status = semula;
+
+          const log = normalizeNotesLog(s.notesLog, s.notes);
+          log.push(
+            newNoteEntry(
+              `Status dikembalikan ke ${statusLabel(semula, activeMode)}. ${jejak} dikosongkan.`,
+            ),
+          );
+          s.notesLog = log;
+          s.notes = notesLogToPlainNotes(log);
+          patch.notesLog = s.notesLog;
+          patch.notes = s.notes;
+
           render();
           /* persistFields() menerima nama camelCase dan menerjemahkannya
              sendiri lewat columnFor() — bukan nama kolom database. */
-          persistFields(id, { status: semula, [kolomFakta]: null });
+          persistFields(id, patch);
         },
         { confirmText: "Ya, ubah", tone: "primary", icon: "bi-arrow-repeat" },
       );
