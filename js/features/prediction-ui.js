@@ -63,7 +63,18 @@ let formEtaMode = "auto";
 /* Mode Estimated Delivery yang sedang berlaku di form. */
 
 let formDeliveryMode = "auto";
-function predictionAktifDiForm() {
+/* DUA GERBANG DI FORM, sejajar dengan etaPredictionAppliesTo() &
+   deliveryPredictionAppliesTo() di core/prediction.js.
+
+   Mesinnya sudah dipisah lebih dulu, tapi form masih punya SATU
+   saklarnya sendiri — jadi ETA otomatis Export tetap tidak menyala
+   walau mesinnya sanggup. Gerbang yang tercecer di dua tempat memang
+   begitu: yang satu diperbaiki, yang lain diam saja. */
+function etaAktifDiForm() {
+  return true;   // ETA berlaku di kedua buku
+}
+function deliveryAktifDiForm() {
+  // Di Export kolom ini Stuffing — fakta milik pengguna, bukan hitungan.
   return activeMode !== "export";
 }
 /* Objek serupa-shipment dari isian form yang belum tersimpan. */
@@ -126,7 +137,7 @@ function tampilkanNoticeEta() {
 
 function hitungUlangEtaForm(opsi) {
   const o = opsi || {};
-  if (!predictionAktifDiForm()) return;
+  if (!etaAktifDiForm()) return;
   if (formEtaMode !== "auto" && !o.paksa) return;
 
   const p = predictEta(predictionFormSource());
@@ -146,7 +157,7 @@ function hitungUlangEtaForm(opsi) {
 function isiEstimatedDeliveryForm() {
   const el = $("#fActual");
   if (!el) return null;
-  if (!predictionAktifDiForm()) return null;
+  if (!deliveryAktifDiForm()) return null;
 
   const d = predictDelivery(predictionFormSource());
   /* Mode manual: nilainya milik pengguna, jangan disentuh —
@@ -219,10 +230,13 @@ function manualDeliveryRefHtml(src) {
 function syncPredictionForm() {
   const blok = $("#predictionBlock");
   const alih = $("#etaModeSwitch");
-  const aktif = predictionAktifDiForm();
+  /* Sakelar Auto/Manual ETA ikut buku Export sekarang — ia yang
+     menentukan boleh-tidaknya mesin mengisi kotak ETA. */
+  const aktifEta = etaAktifDiForm();
+  const aktif = deliveryAktifDiForm();
 
-  if (blok) blok.classList.toggle("d-none", !aktif);
-  if (alih) alih.classList.toggle("d-none", !aktif);
+  if (blok) blok.classList.toggle("d-none", !aktifEta);
+  if (alih) alih.classList.toggle("d-none", !aktifEta);
 
   const el = $("#fActual");
   if (el) {
@@ -239,7 +253,11 @@ function syncPredictionForm() {
   const hint = $("#actualAutoHint");
   if (hint) hint.classList.toggle("d-none", !aktif);
 
+  /* Papan mekanika (Lapis 0-4) seluruhnya menjelaskan Estimated
+     Delivery, jadi di Export ia dikosongkan — TAPI hitungan ETA-nya
+     sudah dijalankan di atas lewat hitungUlangEtaForm(). */
   if (!aktif) {
+    hitungUlangEtaForm();
     const panel = $("#predictionPanel");
     if (panel) panel.innerHTML = "";
     return;
@@ -330,7 +348,7 @@ ETA_INPUT_FIELDS.forEach((idf) => {
   const el = $("#" + idf);
   if (!el) return;
   const dengar = () => {
-    if (!predictionAktifDiForm()) return;
+    if (!etaAktifDiForm()) return;
     if (formEtaMode === "manual") {
       /* Mode manual: mesin TIDAK boleh menimpa. Pengguna yang
          memutuskan — sesuai permintaan fitur. */
@@ -350,7 +368,7 @@ ETA_INPUT_FIELDS.forEach((idf) => {
 const elEtaForm = $("#fEta");
 if (elEtaForm) {
   elEtaForm.addEventListener("change", () => {
-    if (predSedangMengisi || !predictionAktifDiForm()) return;
+    if (predSedangMengisi || !etaAktifDiForm()) return;
     if (formEtaMode === "auto" && $("#fEta").value) {
       setFormEtaMode("manual", { recalc: false });
       showToast("ETA diketik manual — mode ETA berpindah ke Manual.", "dark");
@@ -399,7 +417,7 @@ if (alihDelivery) {
 const elActualForm = $("#fActual");
 if (elActualForm) {
   elActualForm.addEventListener("change", () => {
-    if (predSedangMengisi || !predictionAktifDiForm()) return;
+    if (predSedangMengisi || !deliveryAktifDiForm()) return;
     if (formDeliveryMode === "auto" && $("#fActual").value) {
       const d = predictDelivery(
         Object.assign(predictionFormSource(), { deliveryMode: "auto" }),

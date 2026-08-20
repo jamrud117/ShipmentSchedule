@@ -939,11 +939,20 @@
                 </div>
                 <div class="col-md-6">
                   <label class="form-label">Jadwal Export Ditautkan</label>
-                  <select
-                    class="form-select"
-                    data-dn="shipmentId"
-                    id="dnInvoiceShipmentPick"
-                  ></select>
+                  <!-- Kotak ketik + datalist, bukan dropdown biasa:
+                       daftar jadwal tumbuh terus, dan menggulir mencari
+                       satu nomor di antara ratusan lebih lambat daripada
+                       mengetik tiga huruf. Id jadwalnya disimpan di kotak
+                       tersembunyi di bawah — yang terlihat hanya labelnya. -->
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="dnInvoiceShipmentSearch"
+                    list="dnShipmentList"
+                    autocomplete="off"
+                    placeholder="Ketik no. invoice atau nama buyer…"
+                  />
+                  <input type="hidden" data-dn="shipmentId" id="dnInvoiceShipmentPick" />
                   <div class="form-text-note">
                     Daftar barang, berat, dan dimensi diambil dari jadwal ini.
                   </div>
@@ -1172,13 +1181,15 @@
                      teks bebas, tidak ada cara menghubungkannya. -->
                 <div class="col-md-8">
                   <label class="form-label">Jadwal Terkait</label>
-                  <select
-                    class="form-select"
-                    data-dn="shipmentId"
-                    id="dnShipmentPick"
-                  >
-                    <option value="">— Tidak ditautkan —</option>
-                  </select>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="dnShipmentSearch"
+                    list="dnShipmentList"
+                    autocomplete="off"
+                    placeholder="Ketik no. invoice atau nama buyer…"
+                  />
+                  <input type="hidden" data-dn="shipmentId" id="dnShipmentPick" />
                   <div class="form-text-note mt-1">
                     <i class="bi bi-info-circle"></i> Menautkan jadwal membuat
                     <b>No. Invoice</b> &amp; <b>daftar barang</b> ikut tercetak
@@ -2581,6 +2592,7 @@
     <!-- ========================================= -->
     <!-- CONFIG -->
     <!-- ========================================= -->
+    <datalist id="dnShipmentList"></datalist>
     <datalist id="unlocodeList"></datalist>
     <!-- Saran pelabuhan untuk TERMINAL TRANSIT.
 

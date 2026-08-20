@@ -38,9 +38,12 @@ const path = require("path");
    Lembar PL di berkas yang sama memakai cy 852735 dan rowOff 95250.
    Itu SENGAJA tidak diikuti — lihat catatan di cipl-excel.js.
 ------------------------------------------------------------------ */
-const ACUAN = { colOff: 9139, rowOff: 66675, cx: 886211, cy: 881310 };
+const ACUAN = { colOff: 66675, rowOff: 85725, cx: 886211, cy: 881310 };
 const ACUAN_PL_RUJUKAN = { colOff: 9139, rowOff: 95250, cx: 886211, cy: 852735 };
-/* Tepi bawah yang diseragamkan di seluruh rujukan yang benar. */
+/* Tepi bawah pada berkas rujukan. TIDAK lagi jadi patokan wajib —
+   logo sekarang digeser turun supaya tidak menimpa garis atas, jadi
+   tepi bawahnya ikut turun. Angkanya disimpan hanya untuk uji
+   keseragaman antar-lembar di berkas rujukan. */
 const TEPI_BAWAH_EMU = 947985;
 /* Geometri lama yang terbukti terpotong saat dicetak. */
 const GEOMETRI_TERPOTONG = { rowOff: 0, cy: 947985 };
@@ -93,11 +96,58 @@ t("sisi atas TIDAK menempel di y=0 — itu yang memotong border saat cetak", () 
   if (angkaDariSumber("tinggi") === GEOMETRI_TERPOTONG.cy)
     throw new Error("tinggi kembali ke geometri lama yang terpotong");
 });
-t("tepi bawah logo tetap di garis yang sama dengan rujukan", () => {
-  /* Logo diseragamkan dari BAWAH. Kalau tingginya diubah tanpa
-     menggeser rowOff, kopnya naik-turun tanpa ada yang sadar. */
-  eq(angkaDariSumber("rowOff") + angkaDariSumber("tinggi"), TEPI_BAWAH_EMU,
-    "rowOff + tinggi:");
+t("logo BERJARAK dari keempat garis pita kop", () => {
+  /* Aturan sebenarnya, menggantikan patokan tepi-bawah yang lama.
+
+     Logo ini menutupi apa pun di bawahnya. Menempel di garis mana pun
+     berarti garis itu hilang saat dicetak — sudah dua kali kejadian:
+     garis ATAS (rowOff 0), lalu garis KIRI (colOff 9139, kurang dari
+     satu piksel).
+
+     Yang diperiksa jaraknya, bukan angkanya. Dengan begitu posisinya
+     boleh disetel ulang kapan saja selama tidak menyentuh garis. */
+  const EMU = 9525;
+  const JARAK_MIN_PX = 3;
+  const px = (e) => e / EMU;
+
+  const kiri = px(angkaDariSumber("colOff"));
+  const atas = px(angkaDariSumber("rowOff"));
+  const bawah = atas + px(angkaDariSumber("tinggi"));
+  const kanan = kiri + px(angkaDariSumber("lebar"));
+
+  /* Tinggi pita kop dihitung dari tinggi barisnya sendiri, dibaca dari
+     sumber — bukan angka mati di sini, supaya keduanya tidak bisa
+     bercabang. */
+  const src2 = fs.readFileSync(
+    path.join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
+  const mKop = /XLS_BARIS_KOP = \{([^}]*)\}/.exec(src2);
+  if (!mKop) throw new Error("XLS_BARIS_KOP tidak ditemukan");
+  const tinggiKhusus = {};
+  mKop[1].replace(/(\d+)\s*:\s*([\d.]+)/g,
+    (_, r, h) => (tinggiKhusus[+r] = Number(h)));
+  const mAkhir = /XLS_PITA_KOP_BARIS_TERAKHIR = (\d+)/.exec(src2);
+  const mBawaan = /XLS_TINGGI_BARIS_BAWAAN = ([\d.]+)/.exec(src2);
+  if (!mAkhir || !mBawaan) throw new Error("batas pita kop tidak ditemukan");
+  let pt = 0;
+  for (let r = 1; r <= Number(mAkhir[1]); r++) {
+    pt += tinggiKhusus[r] || Number(mBawaan[1]);
+  }
+  const tinggiKop = (pt * 4) / 3;
+
+  if (atas < JARAK_MIN_PX)
+    throw new Error(`menempel garis ATAS (${atas.toFixed(2)}px)`);
+  if (kiri < JARAK_MIN_PX)
+    throw new Error(`menempel garis KIRI (${kiri.toFixed(2)}px)`);
+  if (tinggiKop - bawah < JARAK_MIN_PX)
+    throw new Error(
+      `menembus garis BAWAH kop — tepi bawah ${bawah.toFixed(2)}px, ` +
+      `pita kop ${tinggiKop.toFixed(2)}px`);
+  /* Kolom A saja tidak cukup lebar; logonya memang melewati ke kolom B,
+     sama seperti di berkas rujukan. Yang dijaga: jangan sampai ia
+     menyentuh nama perusahaan yang dipusatkan mulai kolom B. */
+  const lebarAB = Math.round(4.5703125 * 7) + 5 + Math.round(22.140625 * 7) + 5;
+  if (kanan > lebarAB)
+    throw new Error(`logo melewati kolom B (${kanan.toFixed(2)}px > ${lebarAB}px)`);
 });
 t("ukuran lama 52x52 piksel sudah tidak dipakai", () => {
   if (/ext:\s*\{\s*width:\s*52\s*,\s*height:\s*52\s*\}/.test(src))
@@ -239,34 +289,142 @@ async function ujiBerkasRujukan(berkas) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(berkas);
 
-  t("ACUAN masih sama dengan lembar INVOICE di berkas rujukan", () => {
-    const g = wb.getWorksheet("INVOICE").getImages()[0];
-    eq(g.range.tl.nativeColOff, ACUAN.colOff, "colOff:");
-    eq(g.range.tl.nativeRowOff, ACUAN.rowOff, "rowOff:");
-    eq(emuHasilExcelJs(g.range.ext.width), ACUAN.cx, "cx:");
-    eq(emuHasilExcelJs(g.range.ext.height), ACUAN.cy, "cy:");
-  });
-  t("lembar PL rujukan memang BERBEDA — itu yang sengaja tidak diikuti", () => {
-    const g = wb.getWorksheet("PL").getImages()[0];
-    eq(g.range.tl.nativeRowOff, ACUAN_PL_RUJUKAN.rowOff, "rowOff PL:");
-    eq(emuHasilExcelJs(g.range.ext.height), ACUAN_PL_RUJUKAN.cy, "cy PL:");
-    if (ACUAN_PL_RUJUKAN.cy === ACUAN.cy)
-      throw new Error("PL dan INVOICE ternyata sama — catatan di kode perlu dicabut");
-  });
-  t("kedua lembar rujukan menyeragamkan TEPI BAWAH logo", () => {
-    /* Pembenaran untuk aturan di cipl-excel.js: yang dijaga tepi
-       bawahnya, bukan tepi atasnya. Kalau rujukan berikutnya ternyata
-       tidak begitu, aturan itu harus ditinjau ulang — bukan dipakai
-       diam-diam pada berkas yang tidak mematuhinya. */
+  /* TOLERANSI, dan alasannya.
+
+     Berkas rujukan digambar orang, bukan mesin. Membandingkan
+     DDI-CRBM/044 dengan /045 memperlihatkan: ukuran logo (cx/cy) dan
+     jarak turunnya (rowOff) SAMA PERSIS di semua lembar — itu yang
+     memang disepakati. Yang berbeda hanya geseran mendatarnya:
+     9139 / 66289 / 76375 EMU, yaitu 1 sampai 8 piksel, dan berbeda-beda
+     antar lembar di dalam SATU berkas.
+
+     Itu jejak logo yang tergeser saat diseret, bukan keputusan tata
+     letak. Menuntutnya sama persis membuat uji ini gagal setiap kali
+     ada berkas rujukan baru — tanpa ada yang benar-benar rusak. */
+  const SATU_EMU = 1;          // Excel kerap meleset satu EMU saat menyimpan
+  const GESER_MENDATAR_MAKS = 9525 * 10;   // 10 piksel
+
+  t("UKURAN logo sama persis dengan rujukan", () => {
+    /* Ukurannya yang harus sama — itu yang terlihat orang. */
     ["INVOICE", "PL"].forEach((nm) => {
-      const g = wb.getWorksheet(nm).getImages()[0];
-      eq(g.range.tl.nativeRowOff + emuHasilExcelJs(g.range.ext.height),
-        TEPI_BAWAH_EMU, nm + " tepi bawah:");
+      const ws = wb.getWorksheet(nm);
+      if (!ws) return;
+      const g = ws.getImages()[0];
+      if (!g) throw new Error(nm + ": tidak ada logo di berkas rujukan");
+      eq(emuHasilExcelJs(g.range.ext.width), ACUAN.cx, nm + " cx:");
+      eq(emuHasilExcelJs(g.range.ext.height), ACUAN.cy, nm + " cy:");
     });
+  });
+  t("POSISI sengaja berbeda dari rujukan — dan itu memang disengaja", () => {
+    /* Berkas rujukan menaruh logo 7px dari atas dan 1-8px dari kiri.
+       Yang 1px itu menimpa garis bingkai dan memotongnya saat dicetak.
+       Aplikasi memberi jarak lebih: 9px dari atas, 7px dari kiri.
+
+       Uji ini ada supaya penyimpangan itu TERCATAT sebagai keputusan.
+       Kalau suatu saat ada yang "membetulkannya" agar sama persis
+       dengan rujukan, ia akan berbunyi lebih dulu. */
+    const ws = wb.getWorksheet("INVOICE");
+    if (!ws) return;
+    const g = ws.getImages()[0];
+    if (g.range.tl.nativeRowOff >= ACUAN.rowOff)
+      throw new Error(
+        "rujukan ternyata sudah menaruh logo serendah aplikasi (" +
+        g.range.tl.nativeRowOff + ") — catatan di cipl-excel.js perlu ditinjau");
+  });
+  t("geseran mendatar masih dalam batas wajar", () => {
+    /* Bukan dituntut sama, tapi juga tidak dibiarkan bebas: kalau suatu
+       saat logonya bergeser sepuluh piksel atau lebih, itu bukan lagi
+       jejak seretan dan pantas diperiksa orang. */
+    ["INVOICE", "PL"].forEach((nm) => {
+      const ws = wb.getWorksheet(nm);
+      if (!ws) return;
+      const g = ws.getImages()[0];
+      const beda = Math.abs(g.range.tl.nativeColOff - ACUAN.colOff);
+      if (beda > GESER_MENDATAR_MAKS)
+        throw new Error(nm + ": logo bergeser " + (beda / 9525).toFixed(1) + " piksel dari acuan");
+    });
+  });
+  t("tepi bawah logo seragam di seluruh lembar rujukan", () => {
+    const bawah = [];
+    ["INVOICE", "PL", "SI"].forEach((nm) => {
+      const ws = wb.getWorksheet(nm);
+      if (!ws) return;
+      const g = ws.getImages()[0];
+      if (g) bawah.push(g.range.tl.nativeRowOff + emuHasilExcelJs(g.range.ext.height));
+    });
+    if (!bawah.length) throw new Error("tidak ada logo di berkas rujukan");
+    const maks = Math.max(...bawah), min = Math.min(...bawah);
+    if (maks - min > SATU_EMU)
+      throw new Error("tepi bawah tidak seragam: " + bawah.join(", "));
+    if (Math.abs(maks - TEPI_BAWAH_EMU) > SATU_EMU)
+      throw new Error("tepi bawah rujukan berubah jadi " + maks + " — tinjau ACUAN");
+  });
+}
+
+/* ------------------------------------------------------------------
+   5. TATA LETAK LEMBAR — lebar kolom, skala, garis bantu
+
+   Angka-angka ini disalin dari DDI-CRBM-VIII-045. Diperiksa terhadap
+   SUMBERNYA, bukan terhadap berkas hasil, supaya ia tetap berguna
+   walau berkas rujukannya tidak ikut dibawa.
+------------------------------------------------------------------ */
+const TATA_LETAK = {
+  INVOICE: {
+    lebar: [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125,
+      5, 7.140625, 10, 7, 10.85546875],
+  },
+  PL: {
+    lebar: [4.5703125, 22.28515625, 26.140625, 16, 6.42578125, 5,
+      7.140625, 8.42578125, 19.42578125, 10.85546875],
+  },
+};
+
+function ujiTataLetak() {
+  console.log("\u2014 TATA LETAK LEMBAR \u2014");
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
+  const rapat = src.replace(/\s+/g, " ");
+
+  t("lebar kolom INVOICE & PL sama dengan rujukan", () => {
+    Object.entries(TATA_LETAK).forEach(([nama, cfg]) => {
+      const petik = cfg.lebar.join(", ");
+      if (rapat.indexOf(petik) < 0)
+        throw new Error(nama + ": lebar kolom tidak cocok — cari [" + petik + "]");
+    });
+  });
+  t("skala cetak sama dengan rujukan", () => {
+    eq(/scale: 80/.test(src), true, "INVOICE 80%:");
+    eq(/scale: 73/.test(src), true, "PL 73%:");
+    eq(/scale: 67/.test(src), true, "SI 67%:");
+    // Angka lama tidak boleh tertinggal.
+    eq(/scale: 83/.test(src), false, "skala INVOICE lama (83) masih ada:");
+    eq(/scale: 72/.test(src), false, "skala PL lama (72) masih ada:");
+  });
+  t("garis bantu dimatikan HANYA di lembar PL", () => {
+    const jml = (src.match(/showGridLines: false/g) || []).length;
+    eq(jml, 1, "jumlah lembar tanpa garis bantu:");
+    const i = src.indexOf("showGridLines: false");
+    if (src.slice(Math.max(0, i - 500), i).indexOf('addWorksheet("PL"') < 0)
+      throw new Error("yang dimatikan bukan lembar PL");
+  });
+  t('indentasi "Address" di lembar SI lima spasi', () => {
+    if (src.indexOf('"     Address"') < 0)
+      throw new Error("indentasi Address tidak lima spasi");
+    if (src.indexOf('"          Address"') >= 0)
+      throw new Error("indentasi sepuluh spasi masih ada");
+  });
+  t("tinggi baris barang DIBIARKAN otomatis", () => {
+    /* Rujukan memasang 24pt pada baris barang PERTAMA di INVOICE saja.
+       SENGAJA tidak ditiru: selnya wrapText, dan tinggi tetap akan
+       MEMOTONG nama barang yang turun ke baris ketiga — persis jenis
+       kesalahan yang tidak terlihat salah oleh siapa pun. */
+    if (/getRow\(XLS_BARIS_ITEM\)\.height/.test(src))
+      throw new Error("tinggi baris barang dipatok — nama panjang bisa terpotong");
   });
 }
 
 (async () => {
+  ujiTataLetak();
   await ujiKeluaranNyata();
   await ujiBerkasRujukan(process.argv[2]);
   console.log("\n" + lulus + " lulus, " + gagal + " gagal\n");

@@ -11,7 +11,11 @@ const DOCNUM_SUBTYPES = {
     Commercial: {
       key: "invoice",
       label: "Commercial Invoice",
-      pattern: "DDI-CRBM-{MM}-{SEQ}",
+      /* Spasi di kiri-kanan tanda pisah memang disengaja —
+         "DDI - CRBM - VIII - 045". Nomor lama tetap tersimpan tanpa
+         spasi; pencarian sudah mengabaikan tanda pisah, jadi kedua
+         bentuk itu saling ketemu. */
+      pattern: "DDI - CRBM - {MM} - {SEQ}",
     },
     "Non-Commercial": {
       key: "invoice_nc",
@@ -25,7 +29,8 @@ const DOCNUM_TYPES = {
   invoice: {
     label: "Invoice",
     pad: 3,
-    pattern: "DDI-CRBM-{MM}-{SEQ}",
+    // Cadangan kalau sub-jenisnya tidak terpilih — bentuknya harus sama.
+    pattern: "DDI - CRBM - {MM} - {SEQ}",
   },
   do: {
     label: "Delivery Order / Surat Jalan",
@@ -398,6 +403,11 @@ function mulaiUbahDocNum(id) {
   isi("requester", r.requester);
   isi("department", r.department);
   Object.keys(r.payload || {}).forEach((k) => isi(k, r.payload[k]));
+  /* Kotak tersembunyi sudah terisi id-nya oleh isi() di atas, tapi
+     kotak yang DITERLIHAT pengguna masih kosong — tanpa baris ini,
+     membuka nomor lama untuk diubah menampilkan tautan jadwal sebagai
+     kosong padahal datanya ada. */
+  DN_PEMILIH_JADWAL.forEach((pas) => dnSegarkanLabelPemilih(pas));
 
   dnEditingId = r.id;
   syncModeUbahDocNum(r.doc_number);
@@ -594,26 +604,97 @@ function tampilkanHasilDocNum(nomor) {
    HANYA jadwal EXPORT. Surat jalan di sini memang bentuk untuk kiriman
    keluar — menawarkan jadwal Import cuma membuka peluang salah pilih,
    karena hasil cetaknya nanti ditolak oleh pemeriksa tombol cetak. */
+/* Pasangan pemilih: kotak yang DITULIS pengguna, dan kotak tersembunyi
+   yang menyimpan id jadwalnya. */
+const DN_PEMILIH_JADWAL = [
+  { cari: "#dnShipmentSearch", id: "#dnShipmentPick" },        // surat jalan
+  { cari: "#dnInvoiceShipmentSearch", id: "#dnInvoiceShipmentPick" }, // CIPL
+];
+
+/* Label -> id. Dibangun ulang tiap kali daftar jadwal berubah. */
+let dnPetaJadwal = new Map();
+
+/* Label yang ditulis di daftar saran. Harus UNIK: dua jadwal dengan
+   nomor invoice & buyer yang sama akan saling menimpa di peta, dan
+   pengguna memilih satu tapi mendapat yang lain — tanpa ada tanda apa
+   pun. Yang bentrok dibedakan dengan tanggal ETD-nya. */
+function dnLabelJadwal(s) {
+  return [dispVal(s.invoice), dispVal(s.party)]
+    .filter((v) => v && v !== "—")
+    .join(" · ");
+}
+
 function isiPilihanJadwal() {
+  const peta = new Map();
   const opsi = [];
   (data.export || []).forEach((s) => {
-    const label = [dispVal(s.invoice), dispVal(s.party)]
-      .filter((v) => v && v !== "—")
-      .join(" · ");
-    opsi.push(`<option value="${escapeAttr(s.id)}">${escapeHtml(label)}</option>`);
+    let label = dnLabelJadwal(s) || "(tanpa nomor)";
+    if (peta.has(label)) {
+      const beda = s.etd ? fmtDate(s.etd) : String(s.id).slice(0, 6);
+      label = `${label} · ETD ${beda}`;
+    }
+    /* Masih bentrok juga — dibubuhi id supaya tetap bisa dipilih.
+       Jelek dibaca, tapi jauh lebih baik daripada dua baris identik
+       yang salah satunya tidak pernah bisa terpilih. */
+    while (peta.has(label)) label += "·";
+    peta.set(label, s.id);
+    opsi.push(`<option value="${escapeAttr(label)}"></option>`);
   });
-  const html =
-    `<option value="">— Tidak ditautkan —</option>` + opsi.join("");
+  dnPetaJadwal = peta;
 
-  // Dua pemakai: surat jalan (DO) dan CIPL (Invoice).
-  ["#dnShipmentPick", "#dnInvoiceShipmentPick"].forEach((sel) => {
-    const el = $(sel);
-    if (!el) return;
-    const terpilih = el.value;
-    el.innerHTML = html;
-    if (terpilih) el.value = terpilih;
+  const dl = $("#dnShipmentList");
+  if (dl) dl.innerHTML = opsi.join("");
+
+  // Kotak yang sudah terisi disegarkan labelnya (nomor invoice bisa berubah).
+  DN_PEMILIH_JADWAL.forEach((pas) => dnSegarkanLabelPemilih(pas));
+}
+
+/* Menulis ulang label yang terlihat dari id yang tersimpan. */
+function dnSegarkanLabelPemilih(pas) {
+  const elId = $(pas.id);
+  const elCari = $(pas.cari);
+  if (!elId || !elCari) return;
+  if (!elId.value) {
+    elCari.value = "";
+    return;
+  }
+  const s = (data.export || []).find((x) => String(x.id) === String(elId.value));
+  if (!s) return;                       // jadwalnya terhapus — biarkan apa adanya
+  for (const [label, id] of dnPetaJadwal) {
+    if (String(id) === String(s.id)) {
+      elCari.value = label;
+      return;
+    }
+  }
+}
+
+/* Menerjemahkan yang diketik jadi id, lalu memberi tahu pendengar yang
+   sudah ada lewat event `change` pada kotak tersembunyi. */
+function dnPasangPemilihJadwal() {
+  DN_PEMILIH_JADWAL.forEach((pas) => {
+    const elCari = $(pas.cari);
+    const elId = $(pas.id);
+    if (!elCari || !elId || elCari.dataset.dnTerpasang) return;
+    elCari.dataset.dnTerpasang = "1";
+
+    const terapkan = () => {
+      const teks = String(elCari.value || "").trim();
+      const idBaru = teks ? dnPetaJadwal.get(teks) || "" : "";
+      /* Kotak yang diisi tapi tidak cocok ditandai merah, bukan
+         diam-diam dianggap "tidak ditautkan" — salah ketik satu huruf
+         akan mencetak surat jalan tanpa daftar barang. */
+      elCari.classList.toggle("is-invalid", !!teks && !idBaru);
+      if (String(elId.value) === String(idBaru)) return;
+      elId.value = idBaru;
+      elId.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    // `input` supaya pilihan dari daftar saran langsung terbaca.
+    elCari.addEventListener("input", terapkan);
+    elCari.addEventListener("change", terapkan);
   });
 }
+document.addEventListener("DOMContentLoaded", dnPasangPemilihJadwal);
+dnPasangPemilihJadwal();
 
 /* Isian CIPL yang bisa DITURUNKAN dari jadwal.
 
@@ -727,6 +808,14 @@ function resetDocNumForm(typeKey, opts) {
     if (el.hasAttribute("data-dn-subtype")) return;
     el.value = "";
     el.classList.remove("is-invalid");
+  });
+  /* Kotak ketik pemilih jadwal tidak ber-data-dn (yang ber-data-dn
+     kotak tersembunyinya), jadi ia tidak ikut terhapus di atas. */
+  DN_PEMILIH_JADWAL.forEach((pas) => {
+    const elCari = $(pas.cari);
+    if (!elCari) return;
+    elCari.value = "";
+    elCari.classList.remove("is-invalid");
   });
 }
 

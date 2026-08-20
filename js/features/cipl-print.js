@@ -68,11 +68,32 @@ const CIPL_TINGGI_BARIS = 15;
    <colgroup> memberi lebar per kolom terlepas dari colspan di header.
    Jumlah tiap deret HARUS 100 — ada uji penjaganya. */
 const CIPL_COLS_INVOICE = [3.5, 23, 25, 8.5, 5, 4.5, 4.5, 10, 4.5, 11.5];
-const CIPL_COLS_PACKING = [3.5, 17, 21, 8.5, 5, 4.5, 6, 6, 19, 9.5];
+/* Packing List: No, Item, Type, HS, Qty, Unit, NW, GW, Dimensi, CBM.
 
-function ciplColgroupHtml(cols) {
+   Item dinaikkan 17 -> 20 dan Dimensi diturunkan 19 -> 16. Alasannya
+   terlihat pada cetakan: "80 CM x 80 CM x 56 CM" duduk longgar di
+   kolom dimensi sementara "TYRE MOLD TREAD ONLY" — sama-sama sekitar
+   20 huruf — terpotong di kolom sebelahnya. Ruangnya ada, cuma salah
+   tempat.
+
+   Type ikut turun 21 -> 20: isinya ("CREDO SUNMODE 195/65R15") memang
+   sedikit lebih panjang, tapi ia sudah muat dengan lega sedangkan Item
+   tidak. */
+const CIPL_COLS_PACKING = [3.5, 20, 20, 8.5, 5, 4.5, 6, 6, 16, 10.5];
+
+/* `peran` menandai kolom mana yang boleh MELEBAR mengikuti isinya dan
+   kolom mana yang MENYUMBANG lebarnya. Ditulis sebagai atribut di
+   markup, bukan sebagai nomor indeks di dalam skrip pengepas — indeks
+   yang ditulis di dua tempat akan bergeser sendiri begitu ada kolom
+   disisipkan, dan yang melebar jadi kolom yang salah. */
+function ciplColgroupHtml(cols, peran) {
+  const p = peran || {};
   return `<colgroup>${cols
-    .map((w) => `<col style="width:${w}%">`)
+    .map((w, i) => {
+      const tanda =
+        p.item === i ? ' data-pas="item"' : p.penyumbang === i ? ' data-pas="sumbang"' : "";
+      return `<col style="width:${w}%"${tanda}>`;
+    })
     .join("")}</colgroup>`;
 }
 
@@ -519,7 +540,7 @@ function ciplHalamanPacking(row, shipment, baris) {
       ${ciplPihakHtml(row, shipment)}
       ${ciplAngkutanHtml(row, shipment)}
       <table class="ci-items ci-items--pl">
-        ${ciplColgroupHtml(CIPL_COLS_PACKING)}
+        ${ciplColgroupHtml(CIPL_COLS_PACKING, { item: 1, penyumbang: 8 })}
         <thead>
           <tr>
             <th class="ci-w-no">No</th>
@@ -785,16 +806,130 @@ function cetakCipl(rowId) {
 <html lang="en"><head><meta charset="utf-8">
 <title>${escapeHtml(ciplJudulInvoice(row))} ${escapeHtml(row.doc_number || "")}</title>
 <style>${ciplCss()}</style></head>
-<body>${ciplHalamanInvoice(row, shipment, baris)}${ciplHalamanPacking(row, shipment, baris)}${ciplHalamanShippingInstruction(row, shipment, baris)}</body></html>`);
+<body>${ciplHalamanInvoice(row, shipment, baris)}${ciplHalamanPacking(row, shipment, baris)}${ciplHalamanShippingInstruction(row, shipment, baris)}${ciplSkripPasKolom()}</body></html>`);
   w.document.close();
   w.onload = () => {
+    /* Penyesuaian huruf dijalankan LEBIH DULU, baru dicetak. Kalau
+       urutannya terbalik, yang tercetak masih ukuran semula — dan di
+       layar hasilnya terlihat benar, jadi kesalahannya cuma muncul di
+       kertas. */
+    if (typeof w.ciplPasKolom === "function") w.ciplPasKolom();
     w.focus();
     w.print();
   };
 }
 
+/* PENGEPAS KOLOM — melebarkan kolom nama barang, DALAM BATAS.
+
+   Aturannya:
+     - kalau nama terpanjang muat pada lebar sekarang, tidak ada yang
+       diubah;
+     - kalau tidak muat, kolomnya dilebarkan secukupnya — sebanyak yang
+       bisa disumbangkan kolom Dimensi tanpa turun di bawah lantainya;
+     - kalau pada lebar maksimum pun masih tidak muat, namanya
+       MEMBUNGKUS. CSS sudah melakukannya sendiri; tidak ada yang perlu
+       dikerjakan di sini.
+
+   SATU BATAS, BUKAN DUA. Semula ada juga ambang persen tersendiri
+   untuk kolom nama. Ternyata ia TIDAK PERNAH TERCAPAI: pertumbuhannya
+   sudah lebih dulu dihentikan lantai kolom penyumbang, jadi angka itu
+   hanya terlihat seperti pengaman padahal tidak menjaga apa pun.
+   Menaikkannya sampai 100 pun tidak mengubah hasil — dan uji yang
+   memeriksanya ikut lulus tanpa arti. Sekarang lantai penyumbang yang
+   menjadi satu-satunya batas, dan batas itu nyata.
+
+   KENAPA DIBATASI, tidak dibiarkan melebar bebas. Kolom yang mengikuti
+   isinya sepenuhnya membuat dua Packing List dari pengiriman berbeda
+   tercetak dengan tabel yang berbeda bentuk. Untuk dokumen yang
+   dikirim ke pembeli, tabel yang selalu sama bentuknya lebih penting
+   daripada memaksakan setiap nama muat dalam satu baris.
+
+   Dengan Dimensi 16% dan lantai 10%, kolom nama tumbuh paling jauh
+   dari 20% ke 26%.
+
+   Dijalankan DI DALAM jendela cetak: lebar sebenarnya baru bisa
+   diukur setelah gaya di sana selesai diterapkan.
+
+   Diukur dengan canvas, bukan scrollWidth. Untuk sel tabel dengan
+   table-layout: fixed, scrollWidth tidak dapat diandalkan — teksnya
+   terpotong tapi selisihnya tidak pernah terbaca, jadi pengepasnya
+   diam saja. Itu yang membuat versi sebelumnya tidak pernah bekerja. */
+function ciplSkripPasKolom() {
+  return `<script>
+  function ciplPasKolom() {
+    var LANTAI_SUMBANG = 10;   // satu-satunya batas: kolom penyumbang
+    var AMAN = 1.02;           // sedikit kelebihan supaya huruf terakhir tidak mepet
+
+    var kanvas = document.createElement("canvas");
+    var alat = kanvas.getContext("2d");
+    var tabel = document.querySelectorAll("table.ci-items");
+
+    for (var t = 0; t < tabel.length; t++) {
+      var tb = tabel[t];
+      var kolItem = tb.querySelector('col[data-pas="item"]');
+      var kolSumbang = tb.querySelector('col[data-pas="sumbang"]');
+      if (!kolItem) continue;
+
+      var sel = tb.querySelectorAll("td.ci-item");
+      var lebarTabel = tb.clientWidth;
+      if (!(lebarTabel > 0)) continue;
+
+      /* SEMUA DIUKUR DULU, baru ditulis. Menyelang-nyeling baca dan
+         tulis memaksa peramban menghitung tata letak tiap putaran. */
+      var butuhPx = 0;
+      var selipan = 0;
+      for (var i = 0; i < sel.length; i++) {
+        var el = sel[i];
+        var teks = el.textContent.trim();
+        if (!teks) continue;
+        var cs = getComputedStyle(el);
+        if (!selipan) {
+          selipan = parseFloat(cs.paddingLeft || 0) + parseFloat(cs.paddingRight || 0);
+        }
+        alat.font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+        var w = alat.measureText(teks).width;
+        if (w > butuhPx) butuhPx = w;
+      }
+      if (!butuhPx) continue;
+
+      var persenKini = parseFloat(kolItem.style.width) || 0;
+      var persenButuh = ((butuhPx * AMAN + selipan) / lebarTabel) * 100;
+      if (persenButuh <= persenKini) continue;      // sudah muat
+
+      if (!kolSumbang) continue;      // tanpa penyumbang, jumlahnya tidak lagi 100%
+      var sumbangKini = parseFloat(kolSumbang.style.width) || 0;
+      /* Yang bisa disumbangkan mungkin lebih sedikit daripada yang
+         diminta. Ambil sebanyak yang ada; jangan sampai kolom
+         penyumbang menyusut melewati lantainya — di situ isinya
+         sendiri yang mulai terpotong. Kalau masih kurang juga, nama
+         barangnya membungkus, dan itu memang jalan keluarnya. */
+      var tambah = Math.min(
+        persenButuh - persenKini,
+        Math.max(0, sumbangKini - LANTAI_SUMBANG),
+      );
+      if (tambah <= 0) continue;
+      kolSumbang.style.width = (sumbangKini - tambah).toFixed(2) + "%";
+      kolItem.style.width = (persenKini + tambah).toFixed(2) + "%";
+    }
+  }
+  <\/script>`;
+}
+
 function ciplCss() {
   return `
+  /* MARGIN @page NOL — DISENGAJA, dan bukan berarti tanpa margin.
+
+     Peramban menggambar kop & kaki cetakannya sendiri (tanggal, judul
+     tab, "about:blank", nomor halaman) DI DALAM area margin @page.
+     Tidak ada CSS yang bisa mematikannya. Satu-satunya cara: tidak
+     menyisakan ruang untuk digambari — yaitu margin nol.
+
+     Jarak ke tepi kertas tetap ada, hanya dipindah ke padding
+     .ci-sheet di bawah. Hasil cetaknya sama, tanpa tulisan peramban.
+
+     PERNAH DICOBA SEBALIKNYA dan gagal: memindahkan margin narrow ke
+     @page memang membuat pratinjau menampilkan angka yang benar, tapi
+     kop & kaki peramban langsung muncul di keempat sisinya. */
   @page { size: A4; margin: 0; }
 
   /* SATU ANGKA UNTUK SELURUH GARIS.
@@ -816,7 +951,13 @@ function ciplCss() {
     color: #000;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .ci-sheet { padding: 10mm; }
+  /* JARAK KE TEPI KERTAS — preset "Narrow" Excel, dalam milimeter.
+
+     Excel menyimpannya dalam inci: kiri & kanan 0,25" = 6,35 mm; atas
+     & bawah 0,75" = 19,05 mm. Kalau salah satu diubah, ubah
+     pasangannya di cipl-excel.js (XLS_MARGIN_NARROW) — ada uji yang
+     memastikan keduanya tetap sepasang. */
+  .ci-sheet { padding: 19.05mm 6.35mm; }
   /* Halaman kedua dipaksa mulai di lembar baru. Tanpa ini, Packing
      List menyambung di bawah invoice dan keduanya terpotong. */
   .ci-page2 { page-break-before: always; break-before: page; }
@@ -914,6 +1055,20 @@ function ciplCss() {
      Kolom lain tetap satu baris: isinya pendek dan tetap (kode, angka,
      satuan), dan membiarkannya membungkus hanya membuat tinggi baris
      tidak seragam tanpa alasan. */
+  /* SATU BARIS KALAU MUAT, MEMBUNGKUS KALAU TIDAK.
+
+     Ini perilaku bawaan CSS, dan memang itu yang diinginkan. Yang
+     ditambahkan aplikasi cuma satu: LEBAR KOLOMNYA ikut menyesuaikan
+     nama barang, sampai batas tertentu (lihat ciplSkripPasKolom).
+
+     Sempat dicoba nowrap + mengecilkan huruf otomatis. Hasilnya
+     terlihat cacat: satu baris 6pt, baris di bawahnya 7,5pt, dalam
+     tabel yang sama. Ukuran huruf yang berbeda-beda antar baris lebih
+     mengganggu daripada satu nama yang turun ke baris kedua.
+
+     word-break dipertahankan untuk nama tanpa spasi sama sekali —
+     kode barang panjang tidak punya tempat untuk dipatahkan, dan tanpa
+     ini ia menembus garis kolom. */
   .ci-items td.ci-item,
   .ci-items td.ci-type {
     white-space: normal;
@@ -1033,13 +1188,17 @@ function ciplCss() {
   .si-sheet { font-size: 8.5pt; }
   /* Bingkainya setinggi halaman, bukan setinggi isinya.
 
-     Halaman A4 dikurangi padding .ci-sheet 10mm atas & bawah. Tanpa
-     ini kotaknya berhenti di baris terakhir yang terisi, jadi
-     tingginya berubah-ubah mengikuti panjang alamat consignee —
+     Halaman A4 dikurangi padding .ci-sheet 19,05mm atas & bawah. Angka
+     ini HARUS ikut kalau paddingnya diubah — kalau tidak, kotaknya lebih
+     tinggi daripada ruang yang tersisa dan mendorong satu halaman
+     kosong di belakangnya.
+
+     Tanpa min-height, kotaknya berhenti di baris terakhir yang terisi,
+     jadi tingginya berubah-ubah mengikuti panjang alamat consignee —
      dua SI dari pengiriman berbeda tercetak dengan kotak berbeda. */
   .si-box {
     padding: 26px 30px 34px;
-    min-height: calc(297mm - 20mm - 2px);
+    min-height: calc(297mm - 38.1mm - 2px);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;

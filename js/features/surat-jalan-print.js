@@ -379,9 +379,25 @@ function suratJalanCss() {
   table { border-collapse: separate; border-spacing: 0; width: 100%; }
 
   .sj-kop td { border-bottom: var(--sj-line); padding: 4px 6px; }
-  .sj-kop-logo { width: 74px; vertical-align: middle; text-align: center; }
-  .sj-kop-logo img { width: 58px; height: auto; display: inline-block; }
-  .sj-kop-teks { text-align: center; padding-right: 74px !important; }
+  /* LOGO DIPERBESAR — 58px -> 72px.
+
+     Tiga angka ini HARUS bergerak bersama:
+       - lebar sel logo
+       - lebar gambarnya
+       - padding kanan sel teks
+
+     Yang terakhir sering terlupa. Nama perusahaan dipusatkan pada sel
+     di sebelah kanan logo; padding kanan itulah yang menyeimbangkannya
+     supaya terlihat di tengah HALAMAN, bukan di tengah selnya sendiri.
+     Kalau logonya diperbesar tanpa paddingnya ikut, judulnya bergeser
+     ke kiri — halus, dan justru karena halus tidak ada yang menyadari.
+
+     Selnya 88px dengan padding 6px di kiri-kanan, jadi ruang isinya
+     76px: gambar 72px masih menyisakan 4px dan tidak menyentuh garis
+     bawah kop. Ada ujinya. */
+  .sj-kop-logo { width: 88px; vertical-align: middle; text-align: center; }
+  .sj-kop-logo img { width: 72px; height: auto; display: inline-block; }
+  .sj-kop-teks { text-align: center; padding-right: 88px !important; }
   .sj-company { font-size: 15pt; font-weight: 700; }
   .sj-addr { font-size: 7.5pt; line-height: 1.3; }
 

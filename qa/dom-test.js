@@ -234,14 +234,45 @@ t("In Factory diisi -> Estimated Delivery = tanggal itu", () => {
 });
 
 console.log("— MODE EXPORT —");
-t("buku export: panel & pengalih disembunyikan, Actual bisa diketik", () => {
+t("buku export: sakelar ETA MUNCUL, papan mekanika kosong", () => {
+  /* ETA otomatis berlaku di kedua buku, jadi sakelar Auto/Manual harus
+     terlihat — tanpa itu tidak ada cara menyalakannya, dan itulah
+     sebabnya ETA export dulu tidak pernah menyala walau mesinnya
+     sanggup.
+
+     Papan mekanikanya lain: isinya seluruhnya menjelaskan Estimated
+     Delivery, yang di Export berarti Stuffing — fakta milik pengguna. */
   tulis("activeMode", "export");
   w.syncPredictionForm();
-  eq($("#predictionBlock").classList.contains("d-none"), true);
-  eq($("#etaModeSwitch").classList.contains("d-none"), true);
-  eq($("#fActual").readOnly, false);
+  eq($("#etaModeSwitch").classList.contains("d-none"), false, "sakelar ETA:");
+  eq($("#predictionBlock").classList.contains("d-none"), false, "blok ETA:");
+  eq($("#predictionPanel").innerHTML, "", "papan mekanika:");
+  eq($("#deliveryModeSwitch").classList.contains("d-none"), true, "sakelar Delivery:");
+  eq($("#fActual").readOnly, false, "Stuffing tetap bisa diketik:");
   tulis("activeMode", "import");
   w.syncPredictionForm();
+});
+t("buku export: mengisi ETD MENGISI ETA", () => {
+  /* Inti keluhannya: ETD diisi, ETA tetap kosong. */
+  tulis("activeMode", "export");
+  const simpan = { etd: $("#fEtd").value, eta: $("#fEta").value,
+    tr: $("#fTransport").value, o: $("#fOrigin").value, d: $("#fDestination").value };
+  $("#fEta").value = "";
+  $("#fEtd").value = "2026-08-22";
+  $("#fTransport").value = "udara";
+  $("#fOrigin").value = "CGK";
+  $("#fDestination").value = "ICN";
+  w.setFormEtaMode("auto", { recalc: false });
+  w.hitungUlangEtaForm();
+  const terisi = $("#fEta").value;
+  $("#fEtd").value = simpan.etd; $("#fEta").value = simpan.eta;
+  $("#fTransport").value = simpan.tr; $("#fOrigin").value = simpan.o;
+  $("#fDestination").value = simpan.d;
+  tulis("activeMode", "import");
+  w.syncPredictionForm();
+  if (!terisi) throw new Error("ETA export tetap kosong setelah ETD diisi");
+  if (terisi <= "2026-08-22")
+    throw new Error("ETA export tidak masuk akal: " + terisi);
 });
 
 console.log("— KARTU & DETAIL —");
@@ -419,17 +450,20 @@ t("PENJAGA: aturan sel tidak dikalahkan aturan umum tabelnya", () => {
   cek(w.suratJalanCss(), ".sj-items th, .sj-items td",
       [".sj-items td.sj-ket"]);
 });
-t("Item DAN Type boleh turun ke bawah", () => {
-  /* Keduanya teks bebas yang panjangnya tak tertebak. Memotong Type
-     menghilangkan keterangan barang — di gambar sebelumnya "NOKIAN
-     ENTRUST 235/45R19 SAVER" terpotong jadi "...SAVEF". */
+t("Item & Type: satu baris kalau muat, MEMBUNGKUS kalau tidak", () => {
+  /* Sempat dipaksa satu baris dengan mengecilkan huruf otomatis.
+     Hasilnya terlihat cacat: satu baris 6pt, baris di bawahnya 7,5pt,
+     dalam tabel yang sama. Sekarang yang menyesuaikan LEBAR KOLOMNYA;
+     kalau sudah mentok, teksnya membungkus seperti biasa. */
   const css = w.ciplCss();
   const i = css.indexOf(".ci-items td.ci-item");
   const blok = css.slice(i, css.indexOf("}", i));
   if (!/\.ci-items td\.ci-type/.test(css.slice(i, i + 120)))
-    throw new Error("kolom Type tidak ikut dikecualikan");
-  if (!/white-space: normal/.test(blok)) throw new Error("masih dipaksa satu baris");
-  if (!/word-break/.test(blok)) throw new Error("teks tanpa spasi tidak akan terpecah");
+    throw new Error("kolom Type tidak ikut diatur");
+  if (!/white-space: normal/.test(blok))
+    throw new Error("masih dipaksa satu baris — nama panjang akan terpotong");
+  if (/text-overflow:\s*clip/.test(blok))
+    throw new Error("masih memotong teks alih-alih membungkusnya");
 
   const row = { id: "wr", doc_number: "X", doc_date: "2026-08-05", payload: {} };
   const jad = { id: "wr1", mode: "export", items: [{
@@ -453,22 +487,89 @@ t("kolom selain Item & Type tetap satu baris", () => {
   });
 });
 
-t("hanya nama barang yang boleh turun ke bawah", () => {
-  [["ciplCss", ".ci-items th, .ci-items td", ".ci-items td.ci-item"],
-   ["suratJalanCss", ".sj-items th, .sj-items td", ".sj-items td.sj-nama"]]
-    .forEach(([fn, umum, nama]) => {
-      const css = w[fn]();
-      const blokUmum = css.slice(css.indexOf(umum), css.indexOf("}", css.indexOf(umum)));
-      if (!/white-space: nowrap/.test(blokUmum))
-        throw new Error(fn + ": kolom lain masih boleh membungkus");
-      if (!/overflow: hidden/.test(blokUmum))
-        throw new Error(fn + ": tanpa jaring pengaman, teks panjang menembus garis");
-      const blokNama = css.slice(css.indexOf(nama), css.indexOf("}", css.indexOf(nama)));
-      if (!/white-space: normal/.test(blokNama))
-        throw new Error(fn + ": nama barang tidak boleh dipaksa satu baris");
-      if (!/word-break/.test(blokNama))
-        throw new Error(fn + ": nama tanpa spasi tidak akan terpecah");
-    });
+t("Surat Jalan TIDAK ikut berubah — nama barangnya tetap membungkus", () => {
+  /* Yang diminta hanya Packing List. Surat jalan dokumen lain dengan
+     lebar kolom lain; mengubahnya sekalian berarti mengubah cetakan
+     yang tidak dikeluhkan siapa pun. */
+  const css = w.suratJalanCss();
+  const umum = ".sj-items th, .sj-items td";
+  const nama = ".sj-items td.sj-nama";
+  const blokUmum = css.slice(css.indexOf(umum), css.indexOf("}", css.indexOf(umum)));
+  if (!/white-space: nowrap/.test(blokUmum))
+    throw new Error("kolom lain surat jalan masih boleh membungkus");
+  const blokNama = css.slice(css.indexOf(nama), css.indexOf("}", css.indexOf(nama)));
+  if (!/white-space: normal/.test(blokNama))
+    throw new Error("nama barang surat jalan ikut dipaksa satu baris");
+});
+t("pengepas KOLOM ikut terkirim ke jendela cetak", () => {
+  const skrip = w.ciplSkripPasKolom();
+  if (!/function ciplPasKolom/.test(skrip))
+    throw new Error("pengepas tidak ada di dokumen cetak");
+  /* Diukur dengan canvas, bukan scrollWidth. Untuk sel tabel dengan
+     table-layout: fixed, scrollWidth tidak dapat diandalkan — teksnya
+     terpotong tapi selisihnya tidak pernah terbaca, jadi pengepasnya
+     diam saja. Itu yang membuat versi sebelumnya tidak pernah bekerja. */
+  if (!/measureText\(/.test(skrip))
+    throw new Error("pengepas tidak mengukur teksnya");
+  if (/scrollWidth/.test(skrip))
+    throw new Error("kembali memakai scrollWidth — tidak andal di sel tabel");
+  // Yang diubah lebar kolom, BUKAN ukuran huruf.
+  if (/style\.fontSize/.test(skrip))
+    throw new Error("masih mengecilkan huruf — baris jadi beda-beda ukurannya");
+  if (!/kolItem\.style\.width/.test(skrip))
+    throw new Error("lebar kolom tidak pernah diubah");
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-print.js"), "utf8");
+  const iPas = src.indexOf("ciplPasKolom()");
+  const iPrint = src.indexOf("w.print()");
+  if (iPas < 0 || iPas > iPrint)
+    throw new Error("pengepas dipanggil setelah print — yang tercetak lebar lama");
+});
+t("pelebaran kolom DIBATASI — dan batasnya benar-benar mengikat", () => {
+  /* Semula ada DUA batas: ambang persen untuk kolom nama, dan lantai
+     kolom penyumbang. Yang pertama tidak pernah tercapai — menaikkannya
+     sampai 100 pun hasilnya sama, dan uji yang memeriksanya ikut lulus
+     tanpa arti. Sekarang satu batas, dan uji ini menghitung batas
+     EFEKTIFNYA, bukan sekadar memastikan angkanya ada. */
+  const skrip = w.ciplSkripPasKolom();
+  const lantai = /LANTAI_SUMBANG = (\d+)/.exec(skrip);
+  if (!lantai) throw new Error("kolom penyumbang tidak punya lantai");
+  if (/PERSEN_MAKS/.test(skrip))
+    throw new Error("batas kedua muncul lagi — pastikan ia benar-benar mengikat");
+
+  const c = baca("CIPL_COLS_PACKING");
+  const awalItem = c[1], awalSumbang = c[8];
+  const maksEfektif = awalItem + Math.max(0, awalSumbang - Number(lantai[1]));
+
+  if (maksEfektif <= awalItem)
+    throw new Error("kolom nama tidak bisa melebar sama sekali");
+  if (maksEfektif > 30)
+    throw new Error(
+      `kolom nama bisa tumbuh sampai ${maksEfektif}% — terlalu bebas, ` +
+      "dua Packing List akan tercetak dengan tabel berbeda bentuk");
+});
+t("jumlah lebar tetap 100% setelah kolom melebar", () => {
+  /* Penjaga aritmetika: yang ditambahkan ke kolom nama harus PERSIS
+     yang diambil dari penyumbang. Kalau tidak, tabelnya meluber atau
+     menyisakan celah di kanan. */
+  const skrip = w.ciplSkripPasKolom();
+  if (!/kolSumbang\.style\.width = \(sumbangKini - tambah\)/.test(skrip))
+    throw new Error("penyumbang tidak dikurangi sebanyak yang ditambahkan");
+  if (!/kolItem\.style\.width = \(persenKini \+ tambah\)/.test(skrip))
+    throw new Error("kolom nama tidak ditambah sebanyak yang disumbangkan");
+  if (!/if \(!kolSumbang\) continue/.test(skrip))
+    throw new Error("tanpa penyumbang, kolom nama tetap melebar dan jumlahnya lewat 100%");
+});
+t("kolom yang melebar & menyumbang ditandai di markup, bukan nomor indeks", () => {
+  /* Indeks yang ditulis di dua tempat akan bergeser sendiri begitu ada
+     kolom disisipkan, dan yang melebar jadi kolom yang salah. */
+  const row = { id: "cg", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const h = w.ciplHalamanPacking(row, null, []);
+  if (!/data-pas="item"/.test(h)) throw new Error("kolom nama tidak ditandai");
+  if (!/data-pas="sumbang"/.test(h)) throw new Error("kolom penyumbang tidak ditandai");
+  // Invoice tidak ikut — kolom namanya sudah lebar.
+  if (/data-pas=/.test(w.ciplHalamanInvoice(row, null, [])))
+    throw new Error("Invoice ikut ditandai padahal tidak diminta");
 });
 t("PENJAGA: lebar kolom berjumlah tepat 100%", () => {
   /* Kurang dari 100 -> sisanya dibagi proporsional, kolom angka melar.
@@ -490,7 +591,8 @@ t("PENJAGA: lebar dipasang lewat colgroup, bukan kelas sel", () => {
   [w.ciplHalamanInvoice(row, null, []), w.ciplHalamanPacking(row, null, [])]
     .forEach((h, i) => {
       const nama = i ? "Packing List" : "Invoice";
-      const cols = (h.match(/<col style="width:[\d.]+%">/g) || []);
+      // Kolom bertanda data-pas punya atribut tambahan — jangan dipatok.
+      const cols = (h.match(/<col style="width:[\d.]+%"[^>]*>/g) || []);
       eq(cols.length, 10, nama + " jumlah <col>:");
       if (h.indexOf("<colgroup>") > h.indexOf("<thead>"))
         throw new Error(nama + ": colgroup harus sebelum thead");
@@ -2208,18 +2310,24 @@ t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {
   eq(d.getUTCHours(), 0, "harus tengah malam UTC:");
 });
 
-t("pengaturan cetak sama dengan rujukan", () => {
+t("pengaturan cetak: kertas, skala & margin narrow", () => {
   /* fitToPage BERSAMA skala. Rujukan punya keduanya; tanpa fitToPage
-     Excel memakai skala mentah dan halaman keluar ~2,4% lebih kecil. */
-  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 83, tengah: true });
+     Excel memakai skala mentah dan halaman keluar ~2,4% lebih kecil.
+
+     Margin bawaannya kini preset Narrow — DIUBAH ATAS PERMINTAAN, dan
+     ini satu-satunya hal yang menyimpang dari berkas rujukan
+     DDI-CRBM-VIII-045 (di sana INVOICE 0,3/0,4). */
+  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 80, tengah: true });
   eq(h.paperSize, 9);
   eq(h.orientation, "portrait");
-  eq(h.scale, 83);
+  eq(h.scale, 80);
   eq(h.fitToPage, true);
   eq(h.horizontalCentered, true);
   eq(h.printArea, "A1:J51");
-  eq(h.margins.left, 0.3);
-  eq(h.margins.top, 0.4);
+  eq(h.margins.left, 0.25, "kiri narrow:");
+  eq(h.margins.right, 0.25, "kanan narrow:");
+  eq(h.margins.top, 0.75, "atas narrow:");
+  eq(h.margins.bottom, 0.75, "bawah narrow:");
 });
 
 t("Excel memasang logo & bingkai seperti cetakan", () => {
@@ -4098,6 +4206,234 @@ t("panel mekanika prediksi tetap khusus Import", () => {
   /* Panel itu seluruhnya menghitung Estimated Delivery. Dibiarkan
      Import-saja untuk sekarang — ETA otomatis Export tetap jalan. */
   eq(w.predictionDetailHtml({ mode: "export", etd: "2026-08-22" }), "");
+});
+
+console.log("\u2014 LEBAR KOLOM PACKING LIST \u2014");
+t("jumlah lebar kolom tetap 100%", () => {
+  const jml = (n) => n.reduce((a, b) => a + b, 0);
+  eq(Math.round(jml(baca("CIPL_COLS_PACKING")) * 10) / 10, 100, "Packing List:");
+  eq(Math.round(jml(baca("CIPL_COLS_INVOICE")) * 10) / 10, 100, "Invoice:");
+});
+t("kolom Item Description tidak lebih sempit dari kolom Dimensi", () => {
+  /* Keduanya memuat teks sepanjang ±20 huruf ("TYRE MOLD TREAD ONLY"
+     vs "80 CM x 80 CM x 56 CM"). Selama Dimensi lebih lebar, yang
+     terpotong selalu nama barang — sementara di sebelahnya menganga. */
+  const c = baca("CIPL_COLS_PACKING");
+  const item = c[1], dimensi = c[8];
+  if (item < dimensi)
+    throw new Error(`Item ${item}% lebih sempit dari Dimensi ${dimensi}%`);
+});
+t("kolom Item Description memang DILEBARKAN", () => {
+  const c = baca("CIPL_COLS_PACKING");
+  if (c[1] <= 17) throw new Error("Item masih " + c[1] + "% — belum dilebarkan");
+});
+
+console.log("\u2014 MARGIN NARROW: WEB & EXCEL SAMA \u2014");
+t("margin @page NOL — supaya kop & kaki peramban tidak tercetak", () => {
+  /* Peramban menggambar tanggal, judul tab, "about:blank", dan nomor
+     halaman DI DALAM area margin @page. Tidak ada CSS yang bisa
+     mematikannya; satu-satunya cara adalah tidak menyisakan ruang.
+
+     Pernah dicoba sebaliknya — margin narrow dipindah ke @page — dan
+     kop & kaki peramban langsung muncul di keempat sisinya. */
+  [["ciplCss", w.ciplCss()], ["suratJalanCss", w.suratJalanCss()]]
+    .forEach(([nama, css]) => {
+      if (!/@page \{[^}]*margin:\s*0\s*;/.test(css))
+        throw new Error(nama + ": margin @page bukan nol — kop peramban akan tercetak");
+    });
+});
+t("jarak ke tepi kertas dipindah ke padding, bukan hilang", () => {
+  const css = w.ciplCss();
+  const m = /\.ci-sheet \{[^}]*padding:\s*([\d.]+)mm\s+([\d.]+)mm/.exec(css);
+  if (!m) throw new Error("padding .ci-sheet tidak ditemukan");
+  eq(m[1], "19.05", "atas/bawah (0,75 inci):");
+  eq(m[2], "6.35", "kiri/kanan (0,25 inci):");
+});
+t("tinggi kotak SI ikut margin yang baru", () => {
+  /* Kalau angka ini tertinggal di 20mm sementara marginnya 38,1mm,
+     kotaknya lebih tinggi daripada ruang tersisa dan mendorong satu
+     halaman kosong di belakangnya. */
+  const css = w.ciplCss();
+  const m = /\.si-box \{[^}]*min-height:\s*calc\(297mm - ([\d.]+)mm/.exec(css);
+  if (!m) throw new Error("min-height .si-box tidak ditemukan");
+  eq(m[1], "38.1", "297mm dikurangi:");
+});
+t("angka web & Excel benar-benar sepasang", () => {
+  /* Penjaga terpenting di sini: dua berkas, satu maksud. Kalau salah
+     satu diubah sendirian, cetakan dari web dan dari Excel jatuh di
+     tempat berbeda — dan bedanya cuma beberapa milimeter, jenis
+     selisih yang tidak disadari sampai dokumennya sudah dikirim. */
+  const fs = require("fs"), path = require("path");
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
+  const blok = /XLS_MARGIN_NARROW = \{([\s\S]*?)\}/.exec(src);
+  if (!blok) throw new Error("XLS_MARGIN_NARROW tidak ditemukan");
+  const nilai = {};
+  blok[1].replace(/(\w+):\s*([\d.]+)/g, (_, k, v) => (nilai[k] = Number(v)));
+  eq(nilai.left, 0.25, "kiri:");
+  eq(nilai.right, 0.25, "kanan:");
+  eq(nilai.top, 0.75, "atas:");
+  eq(nilai.bottom, 0.75, "bawah:");
+  // inci -> mm, dibandingkan dengan padding .ci-sheet
+  const css = w.ciplCss();
+  const m = /\.ci-sheet \{[^}]*padding:\s*([\d.]+)mm\s+([\d.]+)mm/.exec(css);
+  eq(Number(m[1]).toFixed(2), (nilai.top * 25.4).toFixed(2), "atas web vs Excel:");
+  eq(Number(m[2]).toFixed(2), (nilai.left * 25.4).toFixed(2), "kiri web vs Excel:");
+});
+t("ketiga lembar Excel memakai margin yang SAMA", () => {
+  /* Dulu 0,3 / 0,7 / 0,7 di kiri — warisan berkas yang disetel satu
+     per satu oleh tangan. */
+  const fs = require("fs"), path = require("path");
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
+  const sisa = src.match(/margins:\s*\{[^}]*left:/g) || [];
+  eq(sisa.length, 0, "masih ada lembar dengan margin sendiri:");
+  // SI ikut dipusatkan, kalau tidak ia berdiri sendiri di antara dua lembar lain.
+  const jml = (src.match(/tengah: true/g) || []).length;
+  eq(jml, 3, "jumlah lembar yang dipusatkan:");
+});
+
+console.log("\u2014 LOGO SURAT JALAN \u2014");
+t("tiga angka logo kop bergerak bersama", () => {
+  /* Nama perusahaan dipusatkan pada sel di sebelah kanan logo; padding
+     kanan sel teks itulah yang menyeimbangkannya supaya terlihat di
+     tengah HALAMAN. Kalau logonya diperbesar tanpa paddingnya ikut,
+     judulnya bergeser ke kiri — halus, dan justru karena halus tidak
+     ada yang menyadari. */
+  const css = w.suratJalanCss();
+  const sel = /\.sj-kop-logo \{[^}]*width:\s*(\d+)px/.exec(css);
+  const gbr = /\.sj-kop-logo img \{[^}]*width:\s*(\d+)px/.exec(css);
+  const teks = /\.sj-kop-teks \{[^}]*padding-right:\s*(\d+)px/.exec(css);
+  if (!sel || !gbr || !teks) throw new Error("angka lebar kop tidak ditemukan");
+  eq(sel[1], teks[1], "lebar sel logo vs padding kanan sel teks:");
+  const lebarSel = Number(sel[1]), lebarGbr = Number(gbr[1]);
+  // padding 6px kiri-kanan (lihat .sj-kop td)
+  if (lebarGbr > lebarSel - 12)
+    throw new Error(`gambar ${lebarGbr}px tidak muat di sel ${lebarSel}px (padding 6px)`);
+});
+t("logo surat jalan memang LEBIH BESAR dari sebelumnya", () => {
+  const css = w.suratJalanCss();
+  const gbr = Number(/\.sj-kop-logo img \{[^}]*width:\s*(\d+)px/.exec(css)[1]);
+  if (gbr <= 58) throw new Error("logo belum diperbesar (masih " + gbr + "px)");
+  /* Batas atas: kop yang terlalu tinggi mendorong isi surat jalan ke
+     halaman kedua. */
+  if (gbr > 96) throw new Error("logo terlalu besar — kop akan mendorong isi (" + gbr + "px)");
+});
+t("logo CIPL cetak TIDAK ikut membesar", () => {
+  /* Yang diminta hanya surat jalan. Mengubah CIPL sekalian berarti
+     mengubah cetakan yang tidak dikeluhkan siapa pun. */
+  const gbr = Number(/\.ci-kop-logo img \{[^}]*width:\s*(\d+)px/.exec(w.ciplCss())[1]);
+  eq(gbr, 52, "lebar logo CIPL cetak:");
+});
+
+console.log("\u2014 PEMILIH JADWAL YANG BISA DIKETIK \u2014");
+t("dropdown diganti kotak ketik + daftar saran", () => {
+  ["dnShipmentSearch", "dnInvoiceShipmentSearch"].forEach((id) => {
+    const el = $("#" + id);
+    if (!el) throw new Error(id + " tidak ada");
+    eq(el.getAttribute("list"), "dnShipmentList", id + " tidak tersambung ke daftar:");
+  });
+  // Id jadwalnya tetap dibaca dari [data-dn], jadi penyimpanan tak berubah.
+  ["dnShipmentPick", "dnInvoiceShipmentPick"].forEach((id) => {
+    const el = $("#" + id);
+    if (!el) throw new Error(id + " tidak ada");
+    eq(el.dataset.dn, "shipmentId", id + ":");
+    eq(el.type, "hidden", id + " harus tersembunyi:");
+  });
+});
+t("mengetik label mengisi id jadwalnya", () => {
+  const simpan = baca("data").export;
+  w.eval('data.export = [{ id: "x1", invoice: "INV-A", party: "PT SATU" },' +
+         '               { id: "x2", invoice: "INV-B", party: "PT DUA" }]');
+  try {
+    w.isiPilihanJadwal();
+    const dl = $("#dnShipmentList");
+    eq(dl.querySelectorAll("option").length, 2, "jumlah saran:");
+    const cari = $("#dnInvoiceShipmentSearch"), simpanId = $("#dnInvoiceShipmentPick");
+    cari.value = "INV-B · PT DUA";
+    cari.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(simpanId.value, "x2", "id terisi:");
+    eq(cari.classList.contains("is-invalid"), false, "tidak ditandai salah:");
+    // Dikosongkan -> tautannya lepas.
+    cari.value = "";
+    cari.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(simpanId.value, "", "id dilepas:");
+  } finally {
+    w.eval("data.export = " + JSON.stringify(simpan || []));
+    w.isiPilihanJadwal();
+  }
+});
+t("ketikan yang TIDAK cocok ditandai, bukan diam-diam dianggap kosong", () => {
+  /* Salah ketik satu huruf akan mencetak surat jalan tanpa daftar
+     barang. Lebih baik terlihat merah daripada diam. */
+  const simpan = baca("data").export;
+  w.eval('data.export = [{ id: "y1", invoice: "INV-A", party: "PT SATU" }]');
+  try {
+    w.isiPilihanJadwal();
+    const cari = $("#dnInvoiceShipmentSearch"), simpanId = $("#dnInvoiceShipmentPick");
+    cari.value = "INV-Z · PT ENTAH";
+    cari.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(simpanId.value, "", "id tetap kosong:");
+    eq(cari.classList.contains("is-invalid"), true, "ditandai salah:");
+    cari.value = "";
+    cari.dispatchEvent(new w.Event("input", { bubbles: true }));
+  } finally {
+    w.eval("data.export = " + JSON.stringify(simpan || []));
+    w.isiPilihanJadwal();
+  }
+});
+t("dua jadwal berlabel sama tetap bisa dibedakan", () => {
+  /* Tanpa pembeda, keduanya menunjuk satu id — pengguna memilih yang
+     satu dan mendapat yang lain, tanpa tanda apa pun. */
+  const simpan = baca("data").export;
+  w.eval('data.export = [{ id: "z1", invoice: "INV-S", party: "PT SAMA", etd: "2026-08-01" },' +
+         '               { id: "z2", invoice: "INV-S", party: "PT SAMA", etd: "2026-09-01" }]');
+  try {
+    w.isiPilihanJadwal();
+    const opsi = [...$("#dnShipmentList").querySelectorAll("option")].map((o) => o.value);
+    eq(opsi.length, 2, "jumlah saran:");
+    if (opsi[0] === opsi[1]) throw new Error("dua saran identik — salah satunya mustahil dipilih");
+  } finally {
+    w.eval("data.export = " + JSON.stringify(simpan || []));
+    w.isiPilihanJadwal();
+  }
+});
+
+console.log("\u2014 FORMAT NOMOR INVOICE \u2014");
+t("Commercial Invoice memakai spasi di tanda pisah", () => {
+  const tpl = w.docNumTemplate("invoice", "2026-08-20");
+  eq(w.docNumFormat(tpl, 45, 3), "DDI - CRBM - VIII - 045");
+});
+t("sub-jenis & cadangan memberi bentuk yang SAMA", () => {
+  /* Pola invoice ditulis dua kali: di sub-jenis Commercial dan sebagai
+     cadangan di DOCNUM_TYPES. Kalau cuma satu yang diubah, nomor yang
+     keluar berbeda tergantung sub-jenisnya terpilih atau tidak. */
+  const sub = baca("DOCNUM_SUBTYPES").invoice.Commercial.pattern;
+  const utama = baca("DOCNUM_TYPES").invoice.pattern;
+  eq(sub, utama, "pola sub-jenis vs cadangan:");
+});
+t("Non-Commercial TIDAK ikut berubah", () => {
+  /* Bentuknya memang lain sejak awal — bukan pola yang sama. */
+  eq(baca("DOCNUM_SUBTYPES").invoice["Non-Commercial"].pattern,
+    "DDI-{SEQ}/{YYYY}-{MM}-EXIM-LOG");
+});
+t("nomor lama & baru saling ketemu saat dicari", () => {
+  /* Nomor lama tersimpan tanpa spasi. Tanpa pengabaian tanda pisah di
+     pencarian, mengetik bentuk yang satu tidak akan menemukan yang lain. */
+  const lama = { id: "n1", status: "process", party: "PT X",
+    docNo: "DDI-CRBM-VIII-044", items: [] };
+  const baru = { id: "n2", status: "process", party: "PT X",
+    docNo: "DDI - CRBM - VIII - 045", items: [] };
+  eq(cariDi(lama, "DDI - CRBM - VIII - 044"), 1, "nomor lama dicari bentuk baru:");
+  eq(cariDi(baru, "DDI-CRBM-VIII-045"), 1, "nomor baru dicari bentuk lama:");
+});
+t("nama berkas unduhan dirapatkan, bukan berspasi", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
+  if (!/tautan\.download = `\$\{namaBerkas\}\.xlsx`/.test(src))
+    throw new Error("nama berkas masih memakai nomor mentah");
+  const rapat = "DDI - CRBM - VIII - 045".replace(/\s*-\s*/g, "-").replace(/\s+/g, "_");
+  eq(rapat, "DDI-CRBM-VIII-045");
 });
 
 console.log("\u2014 JANGKAUAN PENCARIAN \u2014");

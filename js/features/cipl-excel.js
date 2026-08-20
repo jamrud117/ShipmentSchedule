@@ -67,44 +67,53 @@ function ciplXlsSet(ws, alamat, nilai, font, rata) {
 /* Logo perusahaan. SJ_LOGO berupa data URL; ExcelJS meminta base64
    tanpa awalan "data:...;base64,".
 
-   UKURAN & POSISI DISALIN DARI BERKAS RUJUKAN, bukan dikira-kira.
-   Diambil dari DDI-CRBM/VIII/044, lembar INVOICE:
-
-     <xdr:from> col 0, colOff 9139, row 0, rowOff 66675
-     <xdr:ext>  cx 886211, cy 881310
-
-   KENAPA rowOff TIDAK NOL. Rujukan sebelumnya (DDI-026) memakai
-   rowOff 0: sisi atas gambar tepat di y=0, menindih garis batas atas
-   lembar. Di layar tidak kelihatan, tapi SAAT DICETAK border atasnya
-   terpotong. Tujuh piksel jarak inilah yang menyelamatkannya —
-   jadi jangan dibulatkan jadi nol supaya "rapat ke atas".
-
-   TEPI BAWAHNYA YANG DIJAGA, BUKAN TEPI ATASNYA. Di ketiga lembar
-   rujukan yang benar, rowOff + cy selalu jatuh di 947985 EMU:
-
-     DDI-CRBM/044 INVOICE   66675 + 881310 = 947985
-     DDI-CRBM/044 PL        95250 + 852735 = 947985
-     DDI-026     INVOICE        0 + 947985 = 947985
-
-   Artinya logo diseragamkan dari BAWAH, dan yang berbeda-beda cuma
-   seberapa jauh sisi atasnya turun. Kalau suatu saat tingginya
-   diubah, geser rowOff-nya supaya jumlahnya tetap 947985.
-
-   LEMBAR PL DI RUJUKAN LAGI-LAGI BERBEDA — cy 852735, rowOff 95250.
-   Tidak diikuti: yang dipakai lembar INVOICE, untuk SEMUA lembar.
-   Dua kop yang logonya beda tinggi terlihat seperti salah cetak.
-
-   DITULIS DALAM EMU, satuan asli berkas Excel. Sebelumnya ukurannya
-   ditulis 52x52 piksel dan posisinya sebagai pecahan kolom
+   UKURAN & POSISI DALAM EMU, satuan asli berkas Excel. Sebelumnya
+   ukurannya ditulis 52x52 piksel dan posisinya sebagai pecahan kolom
    (col: 0.2) — pecahan kolom ikut bergerak begitu lebar kolomnya
    berubah, jadi logo di Invoice dan di Packing List tidak pernah
-   benar-benar sejajar. EMU tidak bergantung pada apa pun. */
+   benar-benar sejajar.
+
+   POSISINYA DIJAGA JARAK DARI GARIS, bukan dirapatkan ke sudut.
+
+   Logo ini bukan gambar transparan sepenuhnya: sisi-sisinya menutupi
+   apa pun di bawahnya. Ditaruh menempel di sudut, ia menimpa garis
+   bingkai — di layar tidak kelihatan karena garisnya tipis, tapi
+   SAAT DICETAK potongan garis itu benar-benar hilang.
+
+   Dua kali sudah kejadian: pertama rowOff 0 memotong garis ATAS, lalu
+   colOff 9139 (kurang dari 1 piksel) memotong garis KIRI. Sekarang
+   keduanya diberi jarak 7-9 piksel.
+
+   BATASNYA PITA KOP, yaitu baris 1 sampai 5 — garis bawahnya digambar
+   di baris 5 (lihat ciplXlsGarisBawah). Tingginya 107 px, logonya
+   92,53 px, jadi seluruh ruang gerak ke bawah cuma sekitar 14 px.
+   Karena itu geseran ke bawah ditahan di 9 px: masih menyisakan 5,5 px
+   sebelum menyentuh garis bawah. Menggesernya lebih jauh menukar satu
+   masalah dengan masalah yang sama di sisi berlawanan.
+
+   Ada uji yang menghitung ulang keempat jaraknya — kalau angka di sini
+   diubah sampai menyentuh garis, uji itu yang berbunyi. */
 const XLS_LOGO_EMU = {
-  colOff: 9139,
-  rowOff: 66675,
-  lebar: 886211,
-  tinggi: 881310,
+  colOff: 66675,   // 7 px dari garis kiri
+  rowOff: 85725,   // 9 px dari garis atas
+  lebar: 886211,   // 93,04 px — TIDAK diubah
+  tinggi: 881310,  // 92,53 px — TIDAK diubah
 };
+
+/* Tinggi pita kop dalam piksel, dihitung dari tinggi barisnya sendiri.
+
+   Ditulis sebagai perhitungan, bukan angka mati: kalau suatu saat
+   tinggi baris kop diubah, jarak amannya ikut terhitung ulang dan uji
+   di qa/logo-geometry-test.js langsung tahu. */
+const XLS_TINGGI_BARIS_BAWAAN = 15;          // poin
+const XLS_PITA_KOP_BARIS_TERAKHIR = 5;       // garis bawah kop
+function xlsTinggiPitaKopPx() {
+  let pt = 0;
+  for (let r = 1; r <= XLS_PITA_KOP_BARIS_TERAKHIR; r++) {
+    pt += XLS_BARIS_KOP[r] || XLS_TINGGI_BARIS_BAWAAN;
+  }
+  return (pt * 4) / 3;                        // poin -> piksel (96/72)
+}
 
 /* ExcelJS menerima `ext` dalam PIKSEL lalu mengubahnya dengan
    Math.floor(px * 9525). Menambah setengah EMU sebelum dibagi
@@ -423,6 +432,30 @@ function ciplXlsJudulTabel(ws, judul, gabung) {
    fitToPage. Keduanya sama-sama memuatkan halaman, tapi fitToPage
    menyerahkan angkanya ke Excel dan hasilnya bergeser mengikuti
    pengandar pencetak yang sedang terpasang. */
+/* MARGIN "NARROW" — sama persis dengan preset bawaan Excel.
+
+   Angkanya dalam INCI, karena begitulah Excel menyimpan margin. Preset
+   Narrow: kiri & kanan 0,25"; atas & bawah 0,75"; header & footer 0,3".
+
+   Dipakai ketiga lembar, supaya Invoice, Packing List, dan Shipping
+   Instruction jatuh di area yang sama pada kertas. Sebelumnya ketiganya
+   berbeda-beda (0,3 / 0,7 / 0,7 di kiri), warisan dari berkas yang
+   disetel satu per satu oleh tangan.
+
+   CATATAN. Ini MENYIMPANG dari berkas rujukan DDI-CRBM-VIII-045 —
+   margin justru satu-satunya hal yang sudah sama persis di sana.
+   Diubah atas permintaan; kalau suatu saat ingin kembali menyamai
+   rujukan, angka lamanya: INVOICE 0,3/0,3/0,4/0,4/0/0 · PL
+   0,7/0,3/0,75/0,75/0,3/0,3 · SI 0,7/0,7/0,75/0,75/0,3/0,3. */
+const XLS_MARGIN_NARROW = {
+  left: 0.25,
+  right: 0.25,
+  top: 0.75,
+  bottom: 0.75,
+  header: 0.3,
+  footer: 0.3,
+};
+
 function ciplXlsHalaman(o) {
   const h = {
     paperSize: 9, // A4
@@ -436,9 +469,7 @@ function ciplXlsHalaman(o) {
        rujukan, jadi keduanya ditulis. */
     fitToPage: true,
     printArea: o.area,
-    margins: o.margins || {
-      left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0, footer: 0,
-    },
+    margins: o.margins || XLS_MARGIN_NARROW,
   };
   if (o.scale) h.scale = o.scale;
   if (o.tengah) h.horizontalCentered = true;
@@ -449,7 +480,7 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
   const ws = wb.addWorksheet("INVOICE");
   const mata = (row.payload || {}).currency || "USD";
   ciplXlsKerangka(wb, ws, ciplJudulInvoice(row),
-    [4.5703125, 19.85546875, 30.5703125, 15.42578125, 6.42578125, 5, 7.140625, 10, 7, 10.85546875]);
+    [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875]);
   ciplXlsBlokPihak(ws, row, shipment);
 
   ciplXlsJudulTabel(ws,
@@ -487,14 +518,19 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
   ciplXlsKakiTabel(ws, rt, "G", ["G", "I", "J"]);
 
   ciplXlsBingkaiLuar(ws, rt + 4);
-  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, scale: 83, tengah: true });
+  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, scale: 80, tengah: true });
   return ws;
 }
 
 function ciplXlsPacking(wb, row, shipment, baris) {
-  const ws = wb.addWorksheet("PL");
+  /* Garis bantu dimatikan HANYA di lembar ini — begitu adanya di berkas
+     rujukan. Hanya memengaruhi tampilan di layar, bukan hasil cetak
+     (itu diatur printGridLines yang memang mati di ketiga lembar). */
+  const ws = wb.addWorksheet("PL", {
+    views: [{ showGridLines: false }],
+  });
   ciplXlsKerangka(wb, ws, "PACKING LIST",
-    [4.5703125, 19.42578125, 30.140625, 16, 6.42578125, 5, 7.140625,
+    [4.5703125, 22.28515625, 26.140625, 16, 6.42578125, 5, 7.140625,
      8.42578125, 19.42578125, 10.85546875]);
   ciplXlsBlokPihak(ws, row, shipment);
 
@@ -538,8 +574,7 @@ function ciplXlsPacking(wb, row, shipment, baris) {
      kesamaannya berisik dan yang berisik lama-lama tidak dibaca. */
   for (let c = 1; c <= 10; c++) ws.getRow(8).getCell(c).alignment = XLS_TEGAK;
   ws.pageSetup = ciplXlsHalaman({
-    area: `A1:J${rt + 5}`, scale: 72, tengah: true,
-    margins: { left: 0.7, right: 0.3, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
+    area: `A1:J${rt + 5}`, scale: 73, tengah: true,
   });
   return ws;
 }
@@ -635,8 +670,10 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
       ciplXlsSet(ws, "C" + r, isi[0] || "", XLS_SI, XLS_TEGAK);
       r += 1;
       /* "Address" sejajar dengan label di atasnya — didorong spasi,
-         karena label di atasnya diawali penanda selebar satu huruf. */
-      ciplXlsSet(ws, "A" + r, "          Address", XLS_SI, XLS_TEGAK);
+         karena label di atasnya diawali penanda selebar satu huruf.
+         LIMA spasi, dihitung dari berkas rujukan; sebelumnya sepuluh,
+         dan barisnya menjorok dua kali lebih jauh daripada seharusnya. */
+      ciplXlsSet(ws, "A" + r, "     Address", XLS_SI, XLS_TEGAK);
       isi.slice(1).forEach((x, i) => ciplXlsSet(ws, "C" + (r + i), x, XLS_SI, XLS_TEGAK));
       r += Math.max(isi.length - 1, 1);
       return;
@@ -665,7 +702,11 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
   ws.pageSetup = ciplXlsHalaman({
     area: `A1:H${r + 10}`,
     scale: 67,
-    margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
+    /* IKUT DIPUSATKAN — dulu tidak. Selama margin kirinya 0,7" lembar
+       ini kebetulan terlihat rapi di tengah; dengan margin narrow
+       (0,25") ia akan terdorong ke kiri hampir 12 mm dan berdiri
+       sendiri di antara dua lembar lain yang dipusatkan. */
+    tengah: true,
   });
   return ws;
 }
@@ -711,7 +752,15 @@ async function unduhCiplExcel(rowId) {
     });
     const tautan = document.createElement("a");
     tautan.href = URL.createObjectURL(blob);
-    tautan.download = `${row.doc_number || "CIPL"}.xlsx`;
+    /* Nomor dokumen kini memuat spasi ("DDI - CRBM - VIII - 045").
+       Untuk NAMA BERKAS spasinya dirapatkan: berkas ini sering
+       dilampirkan ke e-mail dan diunggah ke portal, dan nama berspasi
+       sering berubah jadi %20 atau terpotong di tengah jalan.
+       Isi dokumennya tetap memakai nomor asli, berspasi. */
+    const namaBerkas = String(row.doc_number || "CIPL")
+      .replace(/\s*-\s*/g, "-")
+      .replace(/\s+/g, "_");
+    tautan.download = `${namaBerkas}.xlsx`;
     document.body.appendChild(tautan);
     tautan.click();
     document.body.removeChild(tautan);
