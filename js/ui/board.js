@@ -33,22 +33,33 @@ function boardState(s) {
 }
 
 /* KELENGKAPAN DOKUMEN */
-const REQUIRED_DOC_FIELDS = [
-  { key: "docNo", label: "No. dokumen pabean" },
-  { key: "noAju", label: "No. Aju" },
-  { key: "invoice", label: "No. Invoice" },
-];
+/* BERKAS YANG BELUM TERKUMPUL, dibaca dari Progres Dokumen.
 
+   Sumbernya TAHAPAN STEPPER (CI/PL, BL, COO, Manifest, PIB, Billing,
+   SPPB, ATA), bukan kolom isian seperti No. Aju atau No. Invoice.
+   Alasannya: nomor-nomor itu cuma catatan administratif yang menyusul
+   sendiri, sementara tahapan stepper adalah berkas yang benar-benar
+   harus diurus dan menghambat barang kalau tertinggal. "Belum ada
+   COO, PIB, SPPB" memberi tahu apa yang harus dikejar; "belum ada No.
+   Aju" tidak.
+
+   Tahap yang DILEWATI (skipped) tidak dihitung -- berkasnya memang
+   tidak ada dalam pengiriman ini, jadi bukan sesuatu yang tertinggal.
+   Tahap opsional ikut dilaporkan: COO sering wajib bagi pembeli walau
+   bukan syarat kepabeanan. */
 function missingDocs(s) {
-  return REQUIRED_DOC_FIELDS.filter(
-    (f) => !hasMeaningfulValue(s[f.key]),
-  ).map((f) => f.label);
+  if (typeof docStepsFor !== "function") return [];
+  const p = typeof docProgressOf === "function" ? docProgressOf(s) : {};
+  return docStepsFor(s)
+    .filter((st) => {
+      const e = p[st.key];
+      if (e) return false;
+      // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
+      return st.key !== "berth";
+    })
+    .map((st) => (typeof stepText === "function" ? stepText(st.label, s) : st.label));
 }
-function hasMissingDocs(s) {
-  return !isArrived(s) && missingDocs(s).length > 0;
-}
-
-// "Perlu tindakan" = satu definisi, dipakai metrik, chip, dan halaman Ringkasan
+// "Perlu tindakan" = satu definisi, dipakai metrik, saringan cepat, dan halaman Ringkasan
 function needsAction(s) {
   if (isArrived(s)) return false;
   if (s.status === "delayed") return true;
@@ -71,7 +82,7 @@ function fmtDateBoard(iso) {
 // Isi semua penanda "hari ini" di seluruh halaman sekaligus.
 function paintTodayStamps() {
   const teks = fmtDateBoard(todayISO());
-  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday"].forEach((sel) => {
+  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday"].forEach((sel) => {
     const el = $(sel);
     if (el) el.textContent = teks;
   });

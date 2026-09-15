@@ -188,7 +188,7 @@ function arrivalInfoOf(s) {
   const labelEta = s && s.etaUpdate
     ? "ETA Delay (Update ETA)"
     : dariEtdMundur
-      ? "ETA dihitung dari ETD Delay"
+      ? t("s.eta.dihitung.dari.etd.delay")
       : etaModeOf(s) === "manual"
         ? "ETA (Manual)"
         : "ETA (Auto)";
@@ -207,11 +207,11 @@ function arrivalInfoOf(s) {
      memang meleset dan Manifest yang lebih layak dipercaya. */
   if (manifest && eta) {
     return manifest > eta
-      ? { date: manifest, label: "Kedatangan (perkiraan dari Manifest)", confirmed: false }
+      ? { date: manifest, label: t("s.kedatangan.perkiraan.dari.manifest"), confirmed: false }
       : { date: eta, label: labelEta, confirmed: false };
   }
   if (manifest) {
-    return { date: manifest, label: "Kedatangan (perkiraan dari Manifest)", confirmed: false };
+    return { date: manifest, label: t("s.kedatangan.perkiraan.dari.manifest"), confirmed: false };
   }
   return { date: eta, label: labelEta, confirmed: false };
 }
@@ -315,7 +315,7 @@ function buildDeliverySchedule(s, ops, ctx) {
     if (ops.delivery > 0) {
       langkah.push({
         key: "delivery",
-        label: "Antar ke pabrik",
+        label: t("v.antar.ke.pabrik"),
         days: ops.delivery,
         unit: legUnitLabel("delivery"),
         from: mulai,
@@ -395,7 +395,7 @@ function buildDeliverySchedule(s, ops, ctx) {
     const sesudah = advanceLeg(cur, ops.delivery, "delivery");
     langkah.push({
       key: "delivery",
-      label: "Antar ke pabrik",
+      label: t("v.antar.ke.pabrik"),
       days: ops.delivery,
       unit: legUnitLabel("delivery"),
       from: cur,
@@ -487,11 +487,10 @@ function predictDelivery(src) {
      perkiraan yang dipatok tangan. Mode Manual berarti "jangan
      dihitung ulang", bukan "abaikan kenyataan".
 
-     Diperiksa SEBELUM cabang manual. Sebelumnya cabang manual berdiri
-     lebih dulu, jadi jadwal bermode Manual tetap menampilkan tanggal
-     perkiraan lama walau barangnya sudah diterima — dan itu justru
-     keadaan yang paling sering: tanggal yang pernah dipatok manual
-     jarang disentuh lagi.
+     Diperiksa SEBELUM cabang manual. Kalau cabang manual didahulukan,
+     jadwal bermode Manual akan tetap menampilkan tanggal perkiraan
+     lama walau barangnya sudah diterima — dan itu justru keadaan yang
+     paling sering: tanggal yang dipatok manual jarang disentuh lagi.
 
      HANYA IMPORT. Di buku Export kolom yang sama berarti Tanggal
      Stuffing, bukan kedatangan di pabrik — memakainya untuk menimpa
@@ -511,7 +510,7 @@ function predictDelivery(src) {
       base: s.actual || "",
       baseLabel: "Diisi manual",
       arrived: !!s.factoryDate,
-      reason: s.actual ? "" : "Mode manual, tanggal belum diisi.",
+      reason: s.actual ? "" : t("s.mode.manual.tanggal.belum.diisi"),
     });
   }
 
@@ -550,7 +549,7 @@ function predictDelivery(src) {
       }),
       base: "",
       baseLabel: "ETA",
-      reason: "ETA belum ada, jadi Estimated Delivery belum bisa dihitung.",
+      reason: t("s.eta.belum.ada.jadi.estimated.delivery.belum.bi"),
     });
   }
 
@@ -589,7 +588,7 @@ function predictDelivery(src) {
       if (penyangga > 0) {
         sisa.push({
           key: "buffer",
-          label: `Penyangga keterlambatan (${telat} hari telat)`,
+          label: t("x.penyangga.keterlambatan", { n: telat }),
           days: penyangga,
         });
       }

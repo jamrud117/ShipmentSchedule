@@ -47,7 +47,7 @@ function renderAccounts() {
   ).length;
 
   if (!rows.length) {
-    box.innerHTML = `<div class="panel-empty"><i class="bi bi-person-x"></i> Tidak ada akun yang cocok.</div>`;
+    box.innerHTML = `<div class="panel-empty"><i class="bi bi-person-x"></i> ${t("c.tidak.ada.akun.yang.cocok")}</div>`;
     return;
   }
 
@@ -65,10 +65,13 @@ function renderAccounts() {
           <span class="acct-name">${escapeHtml(r.full_name || "—")}${
             isSelf ? ' <span class="acct-self">Anda</span>' : ""
           }</span>
+          <!-- Email SELALU ditampilkan. Menyembunyikannya saat
+               berdomain internal membuat akun baru terlihat "tidak
+               punya email" sementara akun lama (yang domainnya belum
+               ikut berubah) menampilkannya -- dua baris yang bentuknya
+               berbeda tanpa alasan yang bisa dilihat pengguna. -->
           <span class="acct-email">@${escapeHtml(r.username || "—")}${
-            r.email && !r.email.endsWith(INTERNAL_MAIL_DOMAIN)
-              ? " · " + escapeHtml(r.email)
-              : ""
+            r.email ? " · " + escapeHtml(r.email) : ""
           }</span>
         </div>
         <span class="acct-since">${r.created_at ? fmtDate(r.created_at.slice(0, 10)) : ""}</span>
@@ -76,21 +79,21 @@ function renderAccounts() {
           isSelf ? "disabled" : ""
         } title="${
           isSelf
-            ? "Peran sendiri tidak bisa diubah dari sini"
-            : "Ubah peran akun ini"
+            ? t("s.peran.sendiri.tidak.bisa.diubah.dari.sini")
+            : t("a.ubah.peran.akun.ini")
         }">
           <option value="viewer" ${!exim ? "selected" : ""}>Viewer — hanya lihat</option>
           <option value="exim" ${exim ? "selected" : ""}>EXIM — bisa ubah</option>
         </select>
-        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="Ubah nama & username">
+        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title=t("a.ubah.nama.username")>
           <i class="bi bi-pencil"></i>
         </button>
-        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title="Setel ulang kata sandi">
+        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title=t("a.setel.ulang.kata.sandi")>
           <i class="bi bi-key"></i>
         </button>
         <button type="button" class="icon-btn danger acct-del" data-del-acct="${r.id}"
           ${isSelf ? "disabled" : ""}
-          title="${isSelf ? "Akun sendiri tidak bisa dihapus" : "Hapus akun ini"}">
+          title="${isSelf ? t("s.akun.sendiri.tidak.bisa.dihapus") : t("a.hapus.akun.ini")}">
           <i class="bi bi-trash3"></i>
         </button>
       </div>`;
@@ -104,7 +107,7 @@ function renderAccounts() {
 async function changeAccountRole(id, peranBaru) {
   if (!requireEdit()) return;
   if (authState.user && id === authState.user.id) {
-    showToast("Peran sendiri tidak bisa diubah dari halaman ini.", "danger");
+    showToast(t("m.peran.sendiri.tidak.bisa.diubah.dari.halaman.i"), "danger");
     renderAccounts();
     return;
   }
@@ -116,7 +119,7 @@ async function changeAccountRole(id, peranBaru) {
 
   if (error) {
     console.error(error);
-    showToast("Gagal mengubah peran. Perubahan dibatalkan.", "danger");
+    showToast(t("m.gagal.mengubah.peran.perubahan.dibatalkan"), "danger");
     renderAccounts();
     return;
   }
@@ -145,12 +148,12 @@ async function editAccount(id) {
   if (!r) return;
 
   showPrompt({
-    title: "Ubah data akun",
-    desc: "Nama lengkap dan username yang dipakai untuk masuk.",
+    title: t("a.ubah.data.akun"),
+    desc: t("s.nama.lengkap.dan.username.yang.dipakai.untuk.m"),
     icon: "bi-person-gear",
     okText: "Simpan",
     fields: [
-      { key: "nama", label: "Nama lengkap", value: r.full_name || "", placeholder: "Nama lengkap pengguna" },
+      { key: "nama", label: t("a.nama.lengkap"), value: r.full_name || "", placeholder: "Nama lengkap pengguna" },
       { key: "user", label: "Username", value: r.username || "", placeholder: "huruf kecil, tanpa spasi" },
     ],
     onSubmit: (v) => {
@@ -159,7 +162,7 @@ async function editAccount(id) {
       if (!/^[a-z0-9._-]{3,}$/.test(u))
         return "Username minimal 3 karakter: huruf, angka, titik, garis.";
       if (accountRows.some((x) => x.id !== id && (x.username || "").toLowerCase() === u))
-        return "Username itu sudah dipakai akun lain.";
+        return t("s.username.itu.sudah.dipakai.akun.lain");
 
       simpanProfil(id, v.nama.trim(), u);
       return true;
@@ -174,7 +177,7 @@ async function simpanProfil(id, nama, username) {
     .eq("id", id);
   if (error) {
     console.error(error);
-    showToast("Gagal menyimpan perubahan.", "danger");
+    showToast(t("m.gagal.menyimpan.perubahan"), "danger");
     return;
   }
   const r = accountRows.find((x) => x.id === id);
@@ -183,7 +186,7 @@ async function simpanProfil(id, nama, username) {
     r.username = username;
   }
   renderAccounts();
-  showToast("Nama & username diperbarui.", "dark");
+  showToast(t("m.nama.username.diperbarui"), "dark");
 }
 
 /* Setel kata sandi langsung oleh admin — tanpa email sama sekali. */
@@ -193,17 +196,17 @@ async function resetAccountPassword(id) {
   if (!r) return;
 
   showPrompt({
-    title: "Setel kata sandi",
-    desc: `Kata sandi baru untuk "${r.username || r.email}". Sampaikan langsung ke yang bersangkutan — tidak ada email yang dikirim.`,
+    title: t("a.setel.kata.sandi"),
+    desc: t("w.kata.sandi.baru.untuk", { x: r.username || r.email }),
     icon: "bi-key",
-    okText: "Setel sandi",
+    okText: t("a.setel.sandi"),
     fields: [
       { key: "sandi", label: "Kata sandi baru", type: "password", placeholder: "minimal 8 karakter" },
       { key: "ulang", label: "Ulangi kata sandi", type: "password", placeholder: "ketik ulang" },
     ],
     onSubmit: (v) => {
-      if ((v.sandi || "").length < 8) return "Kata sandi minimal 8 karakter.";
-      if (v.sandi !== v.ulang) return "Kedua kata sandi belum sama.";
+      if ((v.sandi || "").length < 8) return t("a.kata.sandi.minimal.8.karakter");
+      if (v.sandi !== v.ulang) return t("s.kedua.kata.sandi.belum.sama");
       kirimSandiBaru(id, v.sandi, r);
       return true;
     },
@@ -219,13 +222,13 @@ async function kirimSandiBaru(id, sandi, r) {
     console.error(error);
     showToast(
       (error.message || "").includes("could not find")
-        ? "Fungsi setel sandi belum ada. Jalankan ulang auth-roles-migration.sql."
-        : error.message || "Gagal menyetel kata sandi.",
+        ? t("a.fungsi.setel.sandi.belum.ada.jalankan.ulang.au")
+        : error.message || t("z.gagal.menyetel.kata.sandi"),
       "danger",
     );
     return;
   }
-  showToast(`Kata sandi "${r.username || r.email}" berhasil diganti.`, "dark");
+  showToast(t("x.kata.sandi.berhasil.diganti", { nama: r.username || r.email }), "dark");
 }
 
 /* ------------------------------------------------------------------
@@ -256,21 +259,21 @@ async function deleteAccount(id) {
       }
       accountRows = accountRows.filter((r) => r.id !== id);
       renderAccounts();
-      showToast(`Akun "${baris.username || baris.email}" dihapus.`, "dark");
+      showToast(t("x.akun.dihapus", { nama: baris.username || baris.email }), "dark");
     },
-    { confirmText: "Ya, hapus akun" },
+    { confirmText: t("a.ya.hapus.akun") },
   );
 }
 
 function pesanHapusAkun(error) {
   const t = (error.message || "").toLowerCase();
   if (t.includes("satu-satunya"))
-    return "Ini satu-satunya akun EXIM — naikkan akun lain dulu sebelum menghapusnya.";
-  if (t.includes("sendiri")) return "Akun sendiri tidak bisa dihapus.";
-  if (t.includes("tidak ditemukan")) return "Akun sudah tidak ada.";
+    return t("s.ini.satu.satunya.akun.exim.naikkan.akun.lain.d");
+  if (t.includes("sendiri")) return t("s.akun.sendiri.tidak.bisa.dihapus");
+  if (t.includes(t("w.tidak.ditemukan"))) return t("s.akun.sudah.tidak.ada");
   if (t.includes("could not find") || t.includes("does not exist"))
-    return "Fungsi hapus akun belum ada. Jalankan ulang auth-roles-migration.sql.";
-  return error.message || "Gagal menghapus akun.";
+    return t("a.fungsi.hapus.akun.belum.ada.jalankan.ulang.aut");
+  return error.message || t("a.gagal.menghapus.akun");
 }
 
 /* ------------------------------------------------------------------
@@ -299,49 +302,63 @@ async function registerAccount() {
     info.textContent = t;
   };
   if (!nama || !username || !sandi)
-    return gagal("Nama, username, dan kata sandi harus diisi.");
+    return gagal(t("s.nama.username.dan.kata.sandi.harus.diisi"));
   if (!/^[a-z0-9._-]{3,}$/.test(username))
-    return gagal("Username minimal 3 karakter, hanya huruf/angka/titik/garis.");
+    return gagal(t("v.username.minimal.3.karakter.hanya.huruf.angka."));
   if (accountRows.some((r) => (r.username || "").toLowerCase() === username))
-    return gagal("Username itu sudah dipakai.");
-  if (sandi.length < 8) return gagal("Kata sandi minimal 8 karakter.");
+    return gagal(t("s.username.itu.sudah.dipakai"));
+  if (sandi.length < 8) return gagal(t("a.kata.sandi.minimal.8.karakter"));
 
   const btn = $("#btnRegister");
   btn.disabled = true;
-  btn.textContent = "Mendaftarkan…";
+  btn.textContent = t("a.mendaftarkan");
 
   /* Sesi yang sedang berjalan disimpan dulu. Kalau konfirmasi email
      dimatikan di Supabase, signUp() langsung memasang sesi milik akun
      BARU — admin yang sedang membuat akun akan terlempar keluar tanpa
-     sadar. Sesinya dipulihkan setelah pendaftaran selesai. */
+     sadar. Sesinya dipulihkan setelah pendaftaran selesai.
+
+     PEMULIHAN & TOMBOL DI DALAM finally. Kalau salah satu panggilan di
+     bawah MELEMPAR (jaringan putus di tengah jalan), tanpa finally dua
+     hal buruk terjadi sekaligus: tombolnya terkunci selamanya, dan
+     admin tertinggal memakai sesi akun yang baru dibuat tanpa tahu. */
   const { data: sesiLama } = await supabaseClient.auth.getSession();
 
-  const { data, error } = await supabaseClient.auth.signUp({
-    email,
-    password: sandi,
-    options: { data: { full_name: nama, username } },
-  });
-
-  if (sesiLama && sesiLama.session) {
-    await supabaseClient.auth.setSession({
-      access_token: sesiLama.session.access_token,
-      refresh_token: sesiLama.session.refresh_token,
-    });
+  let data, error;
+  try {
+    ({ data, error } = await supabaseClient.auth.signUp({
+      email,
+      password: sandi,
+      options: { data: { full_name: nama, username } },
+    }));
+  } catch (err) {
+    console.error(err);
+    error = err;
+  } finally {
+    if (sesiLama && sesiLama.session) {
+      try {
+        await supabaseClient.auth.setSession({
+          access_token: sesiLama.session.access_token,
+          refresh_token: sesiLama.session.refresh_token,
+        });
+      } catch (err2) {
+        console.error(err2);
+      }
+    }
+    btn.disabled = false;
+    btn.innerHTML = `<i class="bi bi-person-plus"></i> ${t("a.daftarkan.akun")}`;
   }
-
-  btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-person-plus"></i> Daftarkan Akun';
 
   if (error) {
     const t = (error.message || "").toLowerCase();
     if (t.includes("already registered") || t.includes("already been"))
-      return gagal("Email itu sudah terdaftar.");
+      return gagal(t("s.email.itu.sudah.terdaftar"));
     if (t.includes("signups not allowed") || t.includes("disabled"))
       return gagal(
-        "Pendaftaran dimatikan di Supabase. Nyalakan di Authentication → Providers → Email, atau buat akun lewat Add user.",
+        t("v.pendaftaran.dimatikan.di.supabase.nyalakan.di."),
       );
     if (t.includes("password"))
-      return gagal("Kata sandi terlalu lemah. Gunakan minimal 8 karakter.");
+      return gagal(t("a.kata.sandi.terlalu.lemah.gunakan.minimal.8.kar"));
     return gagal(error.message || "Pendaftaran gagal.");
   }
 
@@ -349,7 +366,7 @@ async function registerAccount() {
   info.textContent =
     data && data.user && !data.session
       ? `Akun "${username}" dibuat. Kalau login-nya masih ditolak, jalankan ulang auth-roles-migration.sql.`
-      : `Akun "${username}" dibuat dengan peran Viewer. Naikkan ke EXIM di daftar sebelah bila perlu.`;
+      : t("x.akun.dibuat.viewer", { nama: username });
 
   ["#regName", "#regUsername", "#regPassword"].forEach(
     (sel) => ($(sel).value = ""),

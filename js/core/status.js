@@ -86,9 +86,9 @@ function effectiveEtd(s) {
 function delayDeltaLabel(baselineDate, updateDate, basis) {
   const d = delayDaysBetween(baselineDate, updateDate);
   if (d == null) return "";
-  if (d > 0) return `+${d} hari dari ${basis}`;
-  if (d < 0) return `${Math.abs(d)} hari lebih cepat`;
-  return `sama dengan ${basis}`;
+  if (d > 0) return t("x.hari.dari.basis", { n: d, basis });
+  if (d < 0) return t("x.hari.lebih.cepat", { n: Math.abs(d) });
+  return t("x.sama.dengan.basis", { basis });
 }
 
 if (typeof module !== "undefined" && module.exports) {

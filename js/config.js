@@ -24,51 +24,73 @@ const STATUS_META = {
    ".internal" adalah TLD yang memang dicadangkan untuk pemakaian dalam
    jaringan sendiri, jadi tidak akan pernah bentrok dengan domain nyata.
    Ubah di sini kalau ingin memakai domain perusahaan. */
-const INTERNAL_MAIL_DOMAIN = "eximddi.internal";
+const INTERNAL_MAIL_DOMAIN = "dynamicdesign.id";
 
 function emailFromUsername(username) {
   return String(username || "").trim().toLowerCase() + "@" + INTERNAL_MAIL_DOMAIN;
 }
 
-const MODE_LABELS = {
+/* Dibangun ULANG tiap dipanggil, bukan objek tetap.
+
+   Isinya lewat t(), dan t() membaca bahasa yang sedang aktif. Objek
+   yang dinilai sekali saat berkas dimuat akan MEMBEKU pada bahasa saat
+   itu — mengganti bahasa tidak akan mengubah satu label pun sampai
+   halaman dimuat ulang.
+
+   Namanya dipertahankan (MODE_LABELS) lewat getter di bawah supaya
+   pemanggil yang sudah ada tidak perlu diubah. */
+function buildModeLabels() {
+  return {
   import: {
-    addBtn: "Tambah Jadwal Import",
-    section: "Daftar Jadwal Pengiriman Import",
+    addBtn: t("f.tambah.jadwal.import"),
+    section: t("f.daftar.jadwal.pengiriman.import"),
     arrivedStat: "Arrived",
-    docNo: "No. SPPB",
-    docDate: "Tanggal SPPB",
-    party: "Nama Shipper",
-    factoryDate: "Tanggal In Factory",
-    factoryTime: "Jam In Factory",
-    origin: "Pelabuhan Asal",
-    destination: "Pelabuhan Tujuan",
+    docNo: t("f.no.sppb"),
+    docDate: t("f.tanggal.sppb"),
+    party: t("f.nama.shipper"),
+    factoryDate: t("f.tanggal.in.factory"),
+    factoryTime: t("f.jam.in.factory"),
+    origin: t("f.pelabuhan.asal"),
+    destination: t("f.pelabuhan.tujuan"),
     // Versi moda udara — dipakai applyTransportLabels() (requirement B: "kalau moda udara
-    originAir: "Terminal Asal",
-    destinationAir: "Terminal Tujuan",
+    originAir: t("f.terminal.asal"),
+    destinationAir: t("f.terminal.tujuan"),
     actual: "Estimated Delivery",
     showDuty: true,
-    modalTitleNew: "Tambah Jadwal Import",
-    modalTitleEdit: "Edit Jadwal Import",
+    modalTitleNew: t("f.tambah.jadwal.import"),
+    modalTitleEdit: t("f.edit.jadwal.import"),
     arrivedNoun: "arrived",
   },
   export: {
-    addBtn: "Tambah Jadwal Export",
-    section: "Daftar Jadwal Pengiriman Export",
+    addBtn: t("f.tambah.jadwal.export"),
+    section: t("f.daftar.jadwal.pengiriman.export"),
     arrivedStat: "Delivered",
     docNo: "No. PEB",
     docDate: "Tanggal PEB",
-    party: "Nama Buyer / Consignee",
-    factoryDate: "Tanggal Stuffing",
-    factoryTime: "Jam Stuffing",
-    origin: "Pelabuhan Muat",
-    destination: "Pelabuhan Tujuan",
-    originAir: "Terminal Muat",
-    destinationAir: "Terminal Tujuan",
+    party: t("f.nama.buyer.consignee"),
+    factoryDate: t("f.tanggal.stuffing"),
+    factoryTime: t("f.jam.stuffing"),
+    origin: t("f.pelabuhan.muat"),
+    destination: t("f.pelabuhan.tujuan"),
+    originAir: t("f.terminal.muat"),
+    destinationAir: t("f.terminal.tujuan"),
     actual: "Stuffing",
     showDuty: false,
-    modalTitleNew: "Tambah Jadwal Export",
-    modalTitleEdit: "Edit Jadwal Export",
+    modalTitleNew: t("f.tambah.jadwal.export"),
+    modalTitleEdit: t("f.edit.jadwal.export"),
     arrivedNoun: "delivered",
+  },
+  };
+}
+
+/* Getter: MODE_LABELS.import tetap bisa dibaca seperti objek biasa,
+   tapi nilainya selalu dari bahasa yang sedang aktif. */
+const MODE_LABELS = {
+  get import() {
+    return buildModeLabels().import;
+  },
+  get export() {
+    return buildModeLabels().export;
   },
 };
 

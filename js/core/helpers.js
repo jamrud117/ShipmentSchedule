@@ -10,6 +10,16 @@ function parseLocalDate(d) {
   const dt = new Date(d + "T00:00:00");
   return isNaN(dt) ? null : dt;
 }
+/* Tanggal + jam LOKAL, kalau jamnya ada — kalau tidak, jatuh ke tengah
+   malam seperti parseLocalDate() biasa (isi jam OPSIONAL: banyak
+   jadwal lama/tanpa moda udara tidak akan pernah mengisinya, dan itu
+   harus tetap berperilaku persis seperti sebelum fitur jam ada). Jam
+   "HH:MM" dari <input type="time">, jadi selalu 2 digit. */
+function parseLocalDateTime(d, jam) {
+  if (!d) return null;
+  const dt = new Date(d + "T" + (jam && /^\d{2}:\d{2}/.test(jam) ? jam : "00:00") + ":00");
+  return isNaN(dt) ? null : dt;
+}
 // Tanggal HARI INI dalam format ISO (yyyy-mm-dd), memakai zona waktu LOKAL pengguna
 function todayISO() {
   const n = new Date();
@@ -80,13 +90,19 @@ function fmtQtyBySatuan(list) {
 }
 
 function newItem() {
+  /* Nilai bawaan BEDA per buku, jadi dibaca dari activeMode:
+       Import : jenis BAHAN BAKU  (bahan yang didatangkan untuk diolah)
+       Export : jenis BARANG JADI (hasil olahan yang dikirim keluar)
+     Satuan (SET) & jenis kemasan (BOX) sama untuk kedua buku.
+     Semuanya cuma NILAI AWAL — tetap bisa diganti per barang. */
+  const modeKini = typeof activeMode === "string" ? activeMode : "import";
   return {
     id: uid("it"),
     namaBarang: "",
     hsCode: "",
-    jenisBarang: "BAHAN BAKU",
+    jenisBarang: modeKini === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: 0,
-    satuan: "PCS",
+    satuan: "SET",
     harga: 0,
     netto: 0,
     bruto: 0,
@@ -100,7 +116,7 @@ function newItem() {
     packing: "",
     /* Jenis kemasannya — BOX, PALLET, CRATE. Dipisah dari angkanya
        supaya bisa dijumlahkan per jenis tanpa mengurai teks. */
-    packingUnit: "",
+    packingUnit: "BOX",
     // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama (skb)
     skb: [],
     // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)

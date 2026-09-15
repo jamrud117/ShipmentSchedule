@@ -310,20 +310,19 @@ function buildSuratJalanHtml(row, shipment) {
 function cetakSuratJalan(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
-    showToast("Data surat jalan tidak ditemukan.", "danger");
+    showToast(t("m.data.surat.jalan.tidak.ditemukan"), "danger");
     return;
   }
   const shipment = sjCariShipment((row.payload || {}).shipmentId);
   if ((row.payload || {}).shipmentId && !shipment) {
-    showToast(
-      "Jadwal yang ditautkan tidak ditemukan — daftar barang dikosongkan.",
+    showToast(t("m.jadwal.yang.ditautkan.tidak.ditemukan.daftar.b"),
       "warning",
     );
   }
 
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast("Jendela cetak diblokir peramban. Izinkan pop-up dulu.", "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
     return;
   }
   w.document.write(`<!doctype html>
@@ -478,8 +477,8 @@ function suratJalanCss() {
      dirinya sendiri. */
   .sj-items tfoot td { border-bottom: var(--sj-line); }
   .sj-total-label { text-align: center; font-weight: 700; }
-  /* Baris Total tetap bergaris penuh — sebelumnya border-bottom
-     dimatikan sehingga sisi bawahnya menggantung. */
+  /* Baris Total tetap bergaris penuh — mematikan border-bottom-nya
+     membuat sisi bawahnya menggantung. */
   .sj-items tfoot td { font-weight: 700; }
 
   /* Empat kotak tanda tangan, masing-masing berbingkai. */

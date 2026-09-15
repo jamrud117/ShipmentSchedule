@@ -250,7 +250,17 @@ function ciplBarisBarang(shipment) {
   return items
     .filter((it) => String(it.namaBarang || "").trim())
     .map((it) => {
-      const n = ciplPecahNama(it.namaBarang);
+      /* Kolom Size (data baru — lihat body.mode-import .size-col,
+         form.css) didahulukan kalau terisi: sumbernya sekarang field
+         SENDIRI, bukan tebakan dari gabungan teks lagi. ciplPecahNama()
+         (menebak dari " - " atau daftar CIPL_JENIS_BARANG) tinggal
+         jadi cadangan untuk barang lama yang dibuat sebelum kolom Size
+         ada, atau saat Size sengaja dikosongkan (masih digabung manual
+         di Nama Barang/Uraian). */
+      const sizeTerisi = String(it.size || "").trim();
+      const n = sizeTerisi
+        ? { item: String(it.namaBarang || "").trim(), type: sizeTerisi }
+        : ciplPecahNama(it.namaBarang);
       const qty = parseLooseNumber(it.qty);
       const harga = parseLooseNumber(it.harga);
       return {
@@ -406,7 +416,7 @@ function ciplAngkutanHtml(row, shipment) {
   const pol = p.portLoading || (shipment ? portCodeLabel(shipment.origin) : "");
   const dest =
     p.finalDestination || (shipment ? portCodeLabel(shipment.destination) : "");
-  const carrier = p.carrier || (shipment && shipment.vessel) || "";
+  const carrier = p.carrier || (shipment && carrierNameFromShipment(shipment)) || "";
   /* Sailing on or about SENGAJA tidak diturunkan dari ETD jadwal.
      Tanggal berlayar di invoice adalah keterangan pengangkut, bukan
      rencana kita — dan invoice kerap terbit sebelum kapalnya pasti.
@@ -573,7 +583,7 @@ function ciplHalamanPacking(row, shipment, baris) {
 /* ------------------------------------------------------------------
    HALAMAN 3 — SHIPPING INSTRUCTION
 
-   Berbeda bentuk dari dua halaman sebelumnya: bukan tabel barang,
+   Berbeda bentuk dari dua halaman di atas: bukan tabel barang,
    melainkan daftar instruksi ke forwarder. Karena itu ia tidak
    memakai potongan bersama — kop pun ditulis ulang tanpa bingkai
    kotak, mengikuti berkas contohnya.
@@ -771,7 +781,7 @@ function ciplCariBarisRiwayat(rowId) {
   const row = (docNumHistoryRows || []).find(
     (r) => String(r.id) === String(rowId),
   );
-  if (!row) showToast("Data invoice tidak ditemukan.", "danger");
+  if (!row) showToast(t("m.data.invoice.tidak.ditemukan"), "danger");
   return row || null;
 }
 
@@ -785,13 +795,11 @@ function cetakCipl(rowId) {
   const tautId = (row.payload || {}).shipmentId;
   const shipment = ciplCariShipment(tautId);
   if (tautId && !shipment) {
-    showToast(
-      "Jadwal yang ditautkan tidak ditemukan — daftar barang dikosongkan.",
+    showToast(t("m.jadwal.yang.ditautkan.tidak.ditemukan.daftar.b"),
       "warning",
     );
   } else if (!tautId) {
-    showToast(
-      "Invoice ini belum ditautkan ke jadwal Export — daftar barang tercetak kosong.",
+    showToast(t("m.invoice.ini.belum.ditautkan.ke.jadwal.export.d"),
       "warning",
     );
   }
@@ -799,7 +807,7 @@ function cetakCipl(rowId) {
   const baris = ciplBarisBarang(shipment);
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast("Jendela cetak diblokir peramban. Izinkan pop-up dulu.", "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
     return;
   }
   w.document.write(`<!doctype html>
@@ -853,7 +861,7 @@ function cetakCipl(rowId) {
    Diukur dengan canvas, bukan scrollWidth. Untuk sel tabel dengan
    table-layout: fixed, scrollWidth tidak dapat diandalkan — teksnya
    terpotong tapi selisihnya tidak pernah terbaca, jadi pengepasnya
-   diam saja. Itu yang membuat versi sebelumnya tidak pernah bekerja. */
+   diam saja.  */
 function ciplSkripPasKolom() {
   return `<script>
   function ciplPasKolom() {
@@ -968,11 +976,10 @@ function ciplCss() {
 
   /* SATU CARA MENGGAMBAR GARIS UNTUK SELURUH HALAMAN.
 
-     Sebelumnya dua cara bercampur: bingkai kotak, garis judul, dan
-     pembatas blok digambar sebagai border ELEMEN — tergambar penuh di
-     dalam elemennya, jatuh rapi di batas piksel. Sementara garis tabel
-     digambar dengan border-collapse, yang menaruh garis TEPAT DI ATAS
-     batas antar sel: separuh di kiri, separuh di kanan.
+     Mencampur dua cara akan merusaknya: border ELEMEN tergambar penuh
+     di dalam elemennya, jatuh rapi di batas piksel, sementara
+     border-collapse menaruh garis TEPAT DI ATAS batas antar sel —
+     separuh di kiri, separuh di kanan.
 
      Keduanya sama-sama 1px di CSS, tapi yang kedua mendarat di tengah
      piksel dan dihaluskan jadi dua piksel setengah-terang. Mata
@@ -1061,8 +1068,8 @@ function ciplCss() {
      ditambahkan aplikasi cuma satu: LEBAR KOLOMNYA ikut menyesuaikan
      nama barang, sampai batas tertentu (lihat ciplSkripPasKolom).
 
-     Sempat dicoba nowrap + mengecilkan huruf otomatis. Hasilnya
-     terlihat cacat: satu baris 6pt, baris di bawahnya 7,5pt, dalam
+     nowrap + mengecilkan huruf otomatis TIDAK dipakai: hasilnya
+     terlihat cacat — satu baris 6pt, baris di bawahnya 7,5pt, dalam
      tabel yang sama. Ukuran huruf yang berbeda-beda antar baris lebih
      mengganggu daripada satu nama yang turun ke baris kedua.
 
@@ -1231,10 +1238,9 @@ function ciplCss() {
   }
   /* Jeda antar kelompok keterangan — TANPA GARIS.
 
-     Versi sebelumnya menggambar border bawah di sini. Berkas rujukan
-     tidak punya satu garis pun di lembar ini; jaraknya yang memisahkan
-     kelompok, dan garis tambahan membuat surat ini terbaca sebagai
-     formulir. */
+     Berkas rujukan tidak punya satu garis pun di lembar ini; jaraknya
+     yang memisahkan kelompok. Border bawah di sini membuat surat ini
+     terbaca sebagai formulir. */
   .si-jeda td { padding-bottom: 6px; }
   .si-jeda + tr td { padding-top: 10px; }
 

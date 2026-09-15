@@ -9,7 +9,10 @@ const ctx = { console, module: { exports: {} } };
 vm.createContext(ctx);
 
 // Hanya potongan helpers yang dibutuhkan mesin (helpers.js penuh butuh DOM-less saja, aman)
-["js/core/helpers.js",
+["js/core/i18n.js",
+ /* i18n PALING AWAL, sama seperti urutan <script> di index.html:
+    berkas lain memanggil t() dan kamusnya harus sudah ada. */
+ "js/core/helpers.js",
  /* Model status ikut dimuat: aturan "kolom mana yang menandai tiba"
     murni aritmetika tanggal, jadi tempatnya di sini. */
  "js/core/status.js",
@@ -377,6 +380,22 @@ t("tidak dikenali dilaporkan, bukan ditebak", () => {
 t("huruf yang bukan kode maskapai tidak dianggap kode", () => {
   eq(detectAirline("ABCDEF"), null);
   eq(detectAirline("KEABC"), null);   // sisanya harus angka
+});
+
+console.log("— CARRIER GABUNGAN UNTUK CIPL —");
+const { carrierNameFromShipment } = ctx;
+
+t("Carrier CIPL = Nama Voyager/Vessel + No. Voyage/Flight digabung", () => {
+  eq(carrierNameFromShipment({ transport: "laut", vessel: "MSC LORENA", voyage: "056S" }),
+    "MSC LORENA 056S");
+  eq(carrierNameFromShipment({ transport: "udara", vessel: "Garuda Cargo", voyage: "GA880/04JUL" }),
+    "Garuda Cargo GA880/04JUL");
+});
+t("salah satu kolom kosong -> yang ada saja, tanpa spasi nyasar", () => {
+  eq(carrierNameFromShipment({ vessel: "MSC LORENA", voyage: "" }), "MSC LORENA");
+  eq(carrierNameFromShipment({ vessel: "", voyage: "056S" }), "056S");
+  eq(carrierNameFromShipment({ vessel: "", voyage: "" }), "");
+  eq(carrierNameFromShipment({}), "");
 });
 
 console.log("— NAMA KAPAL NYATA DARI RIWAYAT DDI —");

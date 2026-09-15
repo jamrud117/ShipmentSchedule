@@ -123,7 +123,7 @@
         </svg>
         <div class="boot-name">EXIM<span>·</span>DDI</div>
         <div class="boot-bar"><span></span></div>
-        <div class="boot-note">Menyiapkan Papan Jadwal…</div>
+        <div class="boot-note" data-i18n="u.menyiapkan.papan.jadwal">Menyiapkan Papan Jadwal…</div>
       </div>
     </div>
 
@@ -179,20 +179,18 @@
           </svg>
           <span>EXIM<span>·</span>DDI</span>
         </div>
-        <p class="login-sub">
-          Pelacakan jadwal internal. Gunakan akun yang diberikan admin.
-        </p>
+        <p class="login-sub" data-i18n="u.pelacakan.jadwal.internal.gunakan.akun.yang.di">Pelacakan jadwal internal. Gunakan akun yang diberikan admin.</p>
 
         <div id="loginError" class="login-error d-none" role="alert"></div>
 
-        <div id="loginPanel">
+        <div>
           <label class="login-label" for="loginUsername">Username</label>
           <input
             type="text"
             id="loginUsername"
             class="login-input"
             autocomplete="username"
-            placeholder="Username atau Email"
+            placeholder="Username atau Email" data-i18n-ph="ph.username.atau.email"
           />
 
           <label class="login-label" for="loginPassword">Password</label>
@@ -216,21 +214,34 @@
 
           <label class="login-remember">
             <input type="checkbox" id="loginRemember" checked />
-            <span>Ingat saya di perangkat ini</span>
+            <span data-i18n="u.ingat.saya.di.perangkat.ini">Ingat saya di perangkat ini</span>
           </label>
           <button
             type="button"
             class="btn-primary-navy login-submit"
             id="btnLogin"
           >
-            <i class="bi bi-box-arrow-in-right"></i> Masuk
+            <i class="bi bi-box-arrow-in-right"></i>
+            <span data-i18n="c.masuk">Masuk</span>
           </button>
         </div>
 
-        <p class="login-note">
+        <p class="login-note" data-i18n="login.note">
           Lupa Password? Hubungi admin — password disetel ulang langsung tanpa
           email.
         </p>
+
+        <!-- Pilihan bahasa DI LAYAR MASUK: dipilih sebelum melihat isi
+             aplikasi, bukan setelah terlanjur membaca yang tidak
+             dimengerti. Tombol yang sama juga ada di menu akun untuk
+             mengubahnya di tengah jalan. -->
+        <div class="login-lang">
+          <span data-i18n="menu.language">Bahasa</span>
+          <div class="lang-switch">
+            <button type="button" data-lang-pick="id">ID</button>
+            <button type="button" data-lang-pick="en">EN</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -288,30 +299,41 @@
           <span class="brand-name">EXIM<span>·</span>DDI</span>
         </a>
 
-        <div class="site-nav" id="pageNav">
+        <div class="site-nav">
           <a
             class="site-nav-link nav-exim-only"
             href="#/ringkasan"
             data-page="overview"
           >
-            <i class="bi bi-columns-gap"></i><span>Ringkasan</span>
+            <i class="bi bi-columns-gap"></i><span data-i18n="nav.overview">Ringkasan</span>
           </a>
           <a class="site-nav-link active" href="#/" data-page="schedule">
-            <i class="bi bi-list-columns-reverse"></i><span>Jadwal</span>
+            <i class="bi bi-list-columns-reverse"></i><span data-i18n="nav.schedule">Jadwal</span>
           </a>
           <a
             class="site-nav-link nav-exim-only"
             href="#/docnum"
             data-page="docnum"
           >
-            <i class="bi bi-hash"></i><span>No. Dokumen</span>
+            <i class="bi bi-hash"></i><span data-i18n="nav.docnum">No. Dokumen</span>
+          </a>
+          <!-- Tanpa nav-exim-only: viewer boleh MEMBUKA & MENCARI HS
+               Code (RLS-nya memang mengizinkan SELECT untuk semua
+               peran). Yang dicegah cuma menambah/mengubah -- lihat
+               tombolnya sendiri di halaman itu. -->
+          <a
+            class="site-nav-link"
+            href="#/hscode"
+            data-page="hscode"
+          >
+            <i class="bi bi-upc-scan"></i><span data-i18n="nav.hscode">HS Code</span>
           </a>
           <a
             class="site-nav-link nav-exim-only"
             href="#/akun"
             data-page="accounts"
           >
-            <i class="bi bi-people"></i><span>Akun</span>
+            <i class="bi bi-people"></i><span data-i18n="nav.accounts">Akun</span>
           </a>
         </div>
 
@@ -321,17 +343,40 @@
           type="button"
           class="cmd-trigger"
           id="btnCmdk"
-          title="Cari Cepat Lintas Import & Export"
+          title="Cari Cepat Lintas Import & Export" data-i18n-title="ti.cari.cepat.lintas.import.export"
         >
           <i class="bi bi-search"></i>
-          <span class="cmd-trigger-text">Cari cepat</span>
+          <span class="cmd-trigger-text" data-i18n="u.cari.cepat">Cari cepat</span>
           <kbd>Ctrl K</kbd>
         </button>
 
         <div class="user-chip" id="userChip">
+          <div class="user-chip-avatar"><i class="bi bi-person-circle"></i></div>
           <div class="user-chip-main">
             <span class="user-chip-name" id="userChipName">—</span>
             <span class="user-chip-role" id="userChipRole">—</span>
+          </div>
+
+          <!-- Menu akun — menggantikan tombol keluar mengambang di
+               sudut kanan-bawah (dulu .fab-logout). Ditempel di bawah
+               chip ini lewat position:absolute, jadi ikut berpindah
+               kalau chip-nya bergeser. -->
+          <div class="user-menu d-none" id="userMenu">
+            <div class="user-menu-head">
+              <span class="user-menu-name" id="userMenuName">—</span>
+              <span class="user-menu-email" id="userMenuEmail">—</span>
+            </div>
+            <div class="user-menu-lang">
+              <span class="user-menu-lang-label" data-i18n="menu.language">Bahasa</span>
+              <div class="lang-switch">
+                <button type="button" data-lang-pick="id">ID</button>
+                <button type="button" data-lang-pick="en">EN</button>
+              </div>
+            </div>
+            <button type="button" class="user-menu-item danger" id="btnLogoutMenu">
+              <i class="bi bi-box-arrow-right"></i>
+              <span data-i18n="menu.logout">Keluar</span>
+            </button>
           </div>
         </div>
       </div>
@@ -343,9 +388,7 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
-              <h1 class="board-title" id="ovTitle">
-                Yang perlu ditindak hari ini
-              </h1>
+              <h1 class="board-title" id="ovTitle" data-i18n="u.yang.perlu.ditindak.hari.ini">Yang perlu ditindak hari ini</h1>
               <div class="board-sub" id="ovSub">Memuat…</div>
             </div>
             <!-- Sakelar buku ditaruh di sisi kanan, sebaris dengan blok -->
@@ -369,7 +412,7 @@
                 </button>
               </div>
               <div class="board-today">
-                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-label" data-i18n="u.hari.ini">Hari ini</div>
                 <div class="board-today-date" id="ovToday">—</div>
               </div>
             </div>
@@ -434,7 +477,7 @@
                     <i class="bi bi-plus-lg"></i>
                     <span
                       ><b id="ovQaNewLabel">Tambah Jadwal Import</b
-                      ><small>Atau isi otomatis dari PDF PIB / PEB</small></span
+                      ><small data-i18n="u.atau.isi.otomatis.dari.pdf.pib.peb">Atau isi otomatis dari PDF PIB / PEB</small></span
                     >
                   </button>
                   <a class="quick-action" href="#/docnum">
@@ -452,7 +495,7 @@
                     <i class="bi bi-file-earmark-excel"></i>
                     <span
                       ><b>Bulk Export ke Excel</b
-                      ><small>Seluruh jadwal pada buku yang aktif</small></span
+                      ><small data-i18n="u.seluruh.jadwal.pada.buku.yang.aktif">Seluruh jadwal pada buku yang aktif</small></span
                     >
                   </button>
                 </div>
@@ -470,7 +513,7 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
-              <h1 class="board-title">Kelola akun &amp; hak akses</h1>
+              <h1 class="board-title" data-i18n="u.kelola.akun.hak.akses">Kelola akun &amp; hak akses</h1>
               <div class="board-sub">
                 <b id="accountCountExim">0</b> akun EXIM ·
                 <b id="accountCountViewer">0</b> akun Viewer
@@ -478,7 +521,7 @@
             </div>
             <div class="board-aside">
               <div class="board-today">
-                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-label" data-i18n="u.hari.ini">Hari ini</div>
                 <div class="board-today-date" id="accountToday">—</div>
               </div>
             </div>
@@ -492,7 +535,7 @@
             <div class="panel-head">
               <h2><i class="bi bi-people"></i> Daftar akun</h2>
               <button type="button" class="btn-quiet" id="btnAccountRefresh">
-                <i class="bi bi-arrow-clockwise"></i> Muat ulang
+                <i class="bi bi-arrow-clockwise"></i> <span data-i18n="hscode.reload">Muat ulang</span>
               </button>
             </div>
             <div class="panel-body">
@@ -505,7 +548,7 @@
                   type="text"
                   id="accountSearch"
                   autocomplete="off"
-                  placeholder="Cari Nama atau Email…"
+                  placeholder="Cari Nama atau Email…" data-i18n-ph="ph.cari.nama.atau.email"
                 />
               </div>
               <div id="accountList"></div>
@@ -517,12 +560,12 @@
               <h2><i class="bi bi-person-plus"></i> Daftarkan akun baru</h2>
             </div>
             <div class="panel-body">
-              <label class="login-label" for="regName">Nama lengkap</label>
+              <label class="login-label" for="regName" data-i18n="u.nama.lengkap">Nama lengkap</label>
               <input
                 type="text"
                 id="regName"
                 class="login-input"
-                placeholder="Nama Lengkap Pengguna"
+                placeholder="Nama Lengkap Pengguna" data-i18n-ph="ph.nama.lengkap.pengguna"
               />
 
               <label class="login-label" for="regUsername">Username</label>
@@ -530,7 +573,7 @@
                 type="text"
                 id="regUsername"
                 class="login-input"
-                placeholder="Huruf Kecil, Tanpa Spasi"
+                placeholder="Huruf Kecil, Tanpa Spasi" data-i18n-ph="ph.huruf.kecil.tanpa.spasi"
               />
 
               <label class="login-label" for="regPassword"
@@ -541,7 +584,7 @@
                   type="password"
                   id="regPassword"
                   class="login-input"
-                  placeholder="Minimal 8 Karakter"
+                  placeholder="Minimal 8 Karakter" data-i18n-ph="ph.minimal.8.karakter"
                 /><button
                   type="button"
                   class="pwd-eye"
@@ -581,11 +624,78 @@
       </main>
     </div>
 
+    <div id="viewHsCode" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title">Database HS Code</h1>
+              <div class="board-sub">
+                <b id="hsCodeCount">0</b> <span data-i18n="hscode.count">HS Code tersimpan</span>
+              </div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label" data-i18n="u.hari.ini">Hari ini</div>
+                <div class="board-today-date" id="hsCodeToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container" style="padding-top: 20px">
+        <div class="acct-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <h2><i class="bi bi-upc-scan"></i> <span data-i18n="hscode.list.title">Daftar HS Code</span></h2>
+              <button type="button" class="btn-quiet" id="btnHsCodeRefresh">
+                <i class="bi bi-arrow-clockwise"></i> Muat ulang
+              </button>
+            </div>
+            <div class="panel-body">
+              <div
+                class="search-box"
+                style="max-width: none; margin-bottom: 14px"
+              >
+                <i class="bi bi-search"></i>
+                <input
+                  type="text"
+                  id="hsCodeSearch"
+                  autocomplete="off"
+                  placeholder="Cari Nama Barang atau HS Code…"
+                  data-i18n-ph="hscode.search"
+                />
+              </div>
+              <div id="hsCodeList"></div>
+              <div id="hsCodePagination"></div>
+            </div>
+          </section>
+
+          <section class="panel" id="hsCodeAddPanel">
+            <div class="panel-head">
+              <h2><i class="bi bi-plus-circle"></i> <span data-i18n="hscode.add.title">Tambah HS Code</span></h2>
+            </div>
+            <div class="panel-body">
+              <p class="form-text-note" style="margin-top: 0" data-i18n="hscode.add.help">
+                Simpan pasangan nama barang &amp; HS Code yang sudah pernah dipakai
+                &mdash; nanti bisa dicari lagi lewat tombol cari di sebelah kolom HS
+                Code pada Daftar Barang, tanpa perlu mengetik ulang dari awal.
+              </p>
+              <button type="button" class="btn-teal w-100" id="btnHsCodeAdd">
+                <i class="bi bi-plus-lg"></i> <span data-i18n="hscode.add.button">Tambah HS Code Baru</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
     <div id="viewList" class="d-none">
       <div class="controlbar">
         <div class="container controlbar-inner">
           <div class="controlbar-box">
-            <div class="controlbar-row controlbar-row--filters">
+            <div class="controlbar-row controlbar-row--top">
               <div class="mode-tabs" role="tablist" aria-label="Buku jadwal">
                 <button
                   class="active"
@@ -608,7 +718,7 @@
                   id="searchInput"
                   autocomplete="off"
                   spellcheck="false"
-                  placeholder="Cari Barang, No. Aju, Invoice…"
+                  placeholder="Cari Barang, No. Aju, Invoice…" data-i18n-ph="ph.cari.barang.no.aju.invoice"
                 />
                 <button
                   type="button"
@@ -625,41 +735,106 @@
                 class="control-select"
                 aria-label="Saring status"
               >
-                <option value="">Semua Status</option>
+                <option value="" data-i18n="f.semua.status">Semua Status</option>
               </select>
+
             </div>
 
-            <div class="controlbar-row controlbar-row--views">
-              <div class="preset-row" id="presetRow">
-                <button type="button" class="chip is-active" data-preset="all">
-                  <i class="bi bi-collection"></i> Semua
-                  <span class="chip-count" data-count="all">0</span>
+            <!-- Baris BAWAH: rentang tanggal & basisnya di kiri;
+                 tombol aksi (⋯, Tambah Jadwal) didorong ke kanan. -->
+            <div class="controlbar-row controlbar-row--bottom">
+              <div class="date-range-picker" id="dateRangePicker">
+                <button
+                  type="button"
+                  class="date-range-trigger"
+                  id="dateRangeTrigger"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  <span class="date-range-trigger-icon"
+                    ><i class="bi bi-calendar3"></i
+                  ></span>
+                  <span id="dateRangeTriggerText" data-i18n="u.pilih.rentang.tanggal">Pilih Rentang Tanggal</span>
+                  <i class="bi bi-chevron-down date-range-trigger-caret"></i>
                 </button>
                 <button
                   type="button"
-                  class="chip chip--alert"
-                  data-preset="late"
+                  class="date-range-clear d-none"
+                  id="btnClearDateRange"
+                  title="Hapus rentang tanggal" data-i18n-title="ti.hapus.rentang.tanggal"
                 >
-                  <i class="bi bi-exclamation-triangle"></i> Perlu Tindakan
-                  <span class="chip-count" data-count="late">0</span>
+                  <i class="bi bi-x-lg"></i>
                 </button>
-                <button type="button" class="chip" data-preset="week">
-                  <i class="bi bi-calendar-week"></i> 7 Hari ke Depan
-                  <span class="chip-count" data-count="week">0</span>
-                </button>
-                <button type="button" class="chip" data-preset="nodoc">
-                  <i class="bi bi-file-earmark-x"></i> Dokumen Kurang
-                  <span class="chip-count" data-count="nodoc">0</span>
-                </button>
-                <button type="button" class="chip" data-preset="done">
-                  <i class="bi bi-check2-circle"></i> Selesai
-                  <span class="chip-count" data-count="done">0</span>
-                </button>
+
+                <!-- Sumber kebenaran sesungguhnya -- lihat catatan di
+                     date-range-picker.js. Disembunyikan, bukan
+                     type="hidden": beberapa test & kode lain memang
+                     mengandalkan tipenya date. -->
+                <input type="date" id="filterDateFrom" class="d-none" />
+                <input type="date" id="filterDateTo" class="d-none" />
+
+                <div class="drp-popover d-none" id="dateRangePopover">
+                  <!-- Jalan pintas: mengisi filterDateFrom/To yang
+                       sama seperti diketik manual (lihat
+                       isiRentangHariIni() di quick-filters.js). Ada di
+                       DALAM panel kalender, bukan lagi tombol
+                       terpisah di bilah kendali -- baris tunggal di
+                       atas cuma cukup untuk kendali utamanya. -->
+                  <div class="drp-quick-row">
+                    <button type="button" class="quick-date-btn" id="btnQuickToday" data-i18n="u.hari.ini">Hari Ini</button>
+                    <button type="button" class="quick-date-btn" id="btnQuickWeek" data-i18n="u.minggu.ini">Minggu Ini</button>
+                    <button type="button" class="quick-date-btn" id="btnQuickNextWeek">
+                      Minggu Depan
+                    </button>
+                  </div>
+                  <div class="drp-header">
+                    <button
+                      type="button"
+                      class="drp-nav"
+                      id="drpNavPrev"
+                      aria-label="Bulan sebelumnya"
+                    >
+                      <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <div class="drp-months">
+                      <div class="drp-month-label" id="drpMonthLabel0"></div>
+                      <div class="drp-month-label" id="drpMonthLabel1"></div>
+                    </div>
+                    <button
+                      type="button"
+                      class="drp-nav"
+                      id="drpNavNext"
+                      aria-label="Bulan berikutnya"
+                    >
+                      <i class="bi bi-chevron-right"></i>
+                    </button>
+                  </div>
+                  <div class="drp-grids" id="drpGrids">
+                    <div class="drp-grid" id="drpGrid0"></div>
+                    <div class="drp-grid drp-grid--second" id="drpGrid1"></div>
+                  </div>
+                  <div class="drp-footer">
+                    <button type="button" class="drp-reset" id="drpReset">
+                      Reset
+                    </button>
+                    <button type="button" class="drp-apply" id="drpApply">
+                      Terapkan
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <span class="viewer-banner" title="Peran Anda Hanya Bisa Melihat">
-                <i class="bi bi-eye"></i> Mode Lihat Saja
-              </span>
+              <div class="basis-select-wrap">
+                <i class="bi bi-truck"></i>
+                <select
+                  id="filterDateBasis"
+                  aria-label="Kolom tanggal yang disaring"
+                >
+                  <option value="eta" data-i18n="f.eta.estimasi.tiba">ETA (Estimasi Tiba)</option>
+                  <option value="etd" data-i18n="f.etd.estimasi.berangkat">ETD (Estimasi Berangkat)</option>
+                  <option value="actual" selected>Estimated Delivery</option>
+                </select>
+              </div>
 
               <div class="controlbar-tail">
                 <div class="dropdown">
@@ -701,7 +876,7 @@
                         id="btnDeleteAll"
                       >
                         <i class="bi bi-trash3"></i>
-                        <span id="lblDeleteAll">Hapus Semua Import</span>
+                        <span id="lblDeleteAll" data-i18n="u.hapus.semua.import">Hapus Semua Import</span>
                       </button>
                     </li>
                   </ul>
@@ -713,13 +888,64 @@
                 <button
                   class="btn-primary-navy"
                   id="btnAdd"
-                  title="Tambah Jadwal"
+                  title="Tambah Jadwal" data-i18n-title="ti.tambah.jadwal"
                 >
                   <i class="bi bi-plus-lg"></i>
-                  <span id="lblAddBtn">Tambah Jadwal</span>
+                  <span id="lblAddBtn" data-i18n="u.tambah.jadwal">Tambah Jadwal</span>
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-bar">
+        <div class="container">
+          <div class="stats-bar-inner">
+          <div class="stat-item">
+            <span class="stat-icon stat-icon--total"
+              ><i class="bi bi-calendar2-check"></i
+            ></span>
+            <span class="stat-text">
+              <span class="stat-label" data-i18n="u.total.jadwal">Total Jadwal</span>
+              <span class="stat-value"
+                ><span id="statTotal">0</span> Jadwal</span
+              >
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon stat-icon--process"
+              ><i class="bi bi-arrow-repeat"></i
+            ></span>
+            <span class="stat-text">
+              <span class="stat-label">In Process</span>
+              <span class="stat-value"
+                ><span id="statProcess">0</span> Jadwal</span
+              >
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon stat-icon--delayed"
+              ><i class="bi bi-exclamation-triangle"></i
+            ></span>
+            <span class="stat-text">
+              <span class="stat-label">Delayed</span>
+              <span class="stat-value"
+                ><span id="statDelayed">0</span> Jadwal</span
+              >
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-icon stat-icon--arrived"
+              ><i class="bi bi-check2-circle"></i
+            ></span>
+            <span class="stat-text">
+              <span class="stat-label" id="lblStatArrived">Arrived</span>
+              <span class="stat-value"
+                ><span id="statArrived">0</span> Jadwal</span
+              >
+            </span>
+          </div>
           </div>
         </div>
       </div>
@@ -743,11 +969,8 @@
 
         <div id="emptyState" class="state-panel d-none">
           <div class="state-icon"><i class="bi bi-inboxes"></i></div>
-          <div class="state-title">Belum Ada Jadwal di Sini</div>
-          <div class="state-desc">
-            Tambahkan jadwal pengiriman pertama, atau longgarkan saringan kalau
-            datanya memang sudah ada.
-          </div>
+          <div class="state-title" data-i18n="u.belum.ada.jadwal.di.sini">Belum Ada Jadwal di Sini</div>
+          <div class="state-desc" data-i18n="u.tambahkan.jadwal.pengiriman.pertama.atau.longg">Tambahkan jadwal pengiriman pertama, atau longgarkan saringan kalau datanya memang sudah ada.</div>
           <button class="btn-teal" id="btnAddEmpty">
             <i class="bi bi-plus-lg"></i> Tambah Jadwal
           </button>
@@ -760,16 +983,13 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
-              <div class="board-label">Permintaan nomor dokumen</div>
-              <h1 class="board-title">Nomor terbit berurutan &amp; tercatat</h1>
-              <div class="board-sub">
-                Invoice, Delivery Order, Permintaan Dana, dan Surat — satu
-                sumber nomor untuk seluruh tim.
-              </div>
+              <div class="board-label" data-i18n="u.permintaan.nomor.dokumen">Permintaan nomor dokumen</div>
+              <h1 class="board-title" data-i18n="u.nomor.terbit.berurutan.tercatat">Nomor terbit berurutan &amp; tercatat</h1>
+              <div class="board-sub" data-i18n="u.invoice.delivery.order.permintaan.dana.dan.sur">Invoice, Delivery Order, Permintaan Dana, dan Surat — satu sumber nomor untuk seluruh tim.</div>
             </div>
             <div class="board-aside">
               <div class="board-today">
-                <div class="board-today-label">Hari ini</div>
+                <div class="board-today-label" data-i18n="u.hari.ini">Hari ini</div>
                 <div class="board-today-date" id="docnumToday">—</div>
               </div>
             </div>
@@ -788,14 +1008,14 @@
               <span class="docnum-tab-icon"><i class="bi bi-receipt"></i></span>
               <span class="docnum-tab-text">
                 <b>Invoice Number</b>
-                <small>Nomor invoice penjualan / jasa</small>
+                <small data-i18n="u.nomor.invoice.penjualan.jasa">Nomor invoice penjualan / jasa</small>
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="do" type="button">
               <span class="docnum-tab-icon"><i class="bi bi-truck"></i></span>
               <span class="docnum-tab-text">
                 <b>Delivery Order Number</b>
-                <small>Nomor surat jalan pengiriman</small>
+                <small data-i18n="u.nomor.surat.jalan.pengiriman">Nomor surat jalan pengiriman</small>
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="fund" type="button">
@@ -804,7 +1024,7 @@
               ></span>
               <span class="docnum-tab-text">
                 <b>Fund Request Number</b>
-                <small>Nomor permintaan dana</small>
+                <small data-i18n="u.nomor.permintaan.dana">Nomor permintaan dana</small>
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="letter" type="button">
@@ -813,7 +1033,7 @@
               ></span>
               <span class="docnum-tab-text">
                 <b>Letter Number</b>
-                <small>Nomor surat keluar</small>
+                <small data-i18n="u.nomor.surat.keluar">Nomor surat keluar</small>
               </span>
             </button>
           </nav>
@@ -826,7 +1046,7 @@
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
-                <h6>Permintaan Nomor Invoice</h6>
+                <h6 data-i18n="u.permintaan.nomor.invoice">Permintaan Nomor Invoice</h6>
                 <span class="docnum-preview">
                   Nomor berikutnya: <b data-dn-preview="invoice">&mdash;</b>
                 </span>
@@ -866,7 +1086,7 @@
                     class="form-control"
                     data-dn="requester"
                     data-dn-required
-                    placeholder="Nama Pemohon"
+                    placeholder="Nama Pemohon" data-i18n-ph="ph.nama.pemohon"
                   />
                 </div>
                 <div class="col-md-3">
@@ -878,7 +1098,7 @@
                     data-dn="department"
                     data-dn-required
                   >
-                    <option value="">— pilih —</option>
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
                     <option>Produksi</option>
@@ -893,18 +1113,18 @@
                     class="form-control"
                     data-dn="customer"
                     data-dn-required
-                    placeholder="Nama perusahaan penerima"
+                    placeholder="Nama perusahaan penerima" data-i18n-ph="ph.nama.perusahaan.penerima"
                   />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label">Mata Uang</label>
+                  <label class="form-label" data-i18n="f.mata.uang">Mata Uang</label>
                   <select class="form-select" data-dn="currency">
                     <option>USD</option>
                     <option>IDR</option>
                   </select>
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label">Nilai</label>
+                  <label class="form-label" data-i18n="f.nilai">Nilai</label>
                   <input
                     type="text"
                     class="form-control"
@@ -914,12 +1134,12 @@
                   />
                 </div>
                 <div class="col-12">
-                  <label class="form-label">Keterangan</label>
+                  <label class="form-label" data-i18n="f.keterangan">Keterangan</label>
                   <textarea
                     class="form-control"
                     rows="2"
                     data-dn="notes"
-                    placeholder="Keperluan Penomoran..."
+                    placeholder="Keperluan Penomoran..." data-i18n-ph="ph.keperluan.penomoran"
                   ></textarea>
                 </div>
 
@@ -938,7 +1158,7 @@
                   </div>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Jadwal Export Ditautkan</label>
+                  <label class="form-label" data-i18n="f.jadwal.export.ditautkan">Jadwal Export Ditautkan</label>
                   <!-- Kotak ketik + datalist, bukan dropdown biasa:
                        daftar jadwal tumbuh terus, dan menggulir mencari
                        satu nomor di antara ratusan lebih lambat daripada
@@ -950,20 +1170,18 @@
                     id="dnInvoiceShipmentSearch"
                     list="dnShipmentList"
                     autocomplete="off"
-                    placeholder="Ketik no. invoice atau nama buyer…"
+                    placeholder="Ketik no. invoice atau nama buyer…" data-i18n-ph="ph.ketik.no.invoice.atau.nama.buyer"
                   />
                   <input type="hidden" data-dn="shipmentId" id="dnInvoiceShipmentPick" />
-                  <div class="form-text-note">
-                    Daftar barang, berat, dan dimensi diambil dari jadwal ini.
-                  </div>
+                  <div class="form-text-note" data-i18n="u.daftar.barang.berat.dan.dimensi.diambil.dari.j">Daftar barang, berat, dan dimensi diambil dari jadwal ini.</div>
                 </div>
                 <div class="col-md-6">
-                  <label class="form-label">Alamat Consignee / Buyer</label>
+                  <label class="form-label" data-i18n="f.alamat.consignee.buyer">Alamat Consignee / Buyer</label>
                   <textarea
                     class="form-control"
                     rows="3"
                     data-dn="consigneeAddress"
-                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
+                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal" data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"
                   ></textarea>
                 </div>
                 <div class="col-md-4">
@@ -972,11 +1190,11 @@
                     type="text"
                     class="form-control"
                     data-dn="poNo"
-                    placeholder="Nomor PO pembeli"
+                    placeholder="Nomor PO pembeli" data-i18n-ph="ph.nomor.po.pembeli"
                   />
                 </div>
                 <div class="col-md-2">
-                  <label class="form-label">Tanggal PO</label>
+                  <label class="form-label" data-i18n="f.tanggal.po">Tanggal PO</label>
                   <input type="date" class="form-control" data-dn="poDate" />
                 </div>
                 <div class="col-md-3">
@@ -985,7 +1203,7 @@
                     type="text"
                     class="form-control"
                     data-dn="termsDelivery"
-                    placeholder="Incoterm, mis. FOB"
+                    placeholder="Incoterm" data-i18n-ph="ph.incoterm"
                   />
                 </div>
                 <div class="col-md-3">
@@ -995,7 +1213,7 @@
                     class="form-control"
                     data-dn="termPayment"
                     value="T/T 60 DAYS"
-                    placeholder="Cara &amp; tenggat pembayaran"
+                    placeholder="Cara &amp; tenggat pembayaran" data-i18n-ph="ph.cara.tenggat.pembayaran"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1005,7 +1223,7 @@
                     class="form-control"
                     data-dn="notifyParty"
                     value="SAME AS CONSIGNEE"
-                    placeholder="SAME AS CONSIGNEE"
+                    placeholder="Pihak yang diberi tahu" data-i18n-ph="ph.pihak.yang.diberi.tahu"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1015,7 +1233,7 @@
                     class="form-control"
                     data-dn="portLoading"
                     value="JAKARTA, INDONESIA"
-                    placeholder="Kota, negara pelabuhan muat"
+                    placeholder="Kota, negara pelabuhan muat" data-i18n-ph="ph.kota.negara.pelabuhan.muat"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1024,7 +1242,7 @@
                     type="text"
                     class="form-control"
                     data-dn="finalDestination"
-                    placeholder="Kota, negara tujuan akhir"
+                    placeholder="Kota, negara tujuan akhir" data-i18n-ph="ph.kota.negara.tujuan.akhir"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1033,7 +1251,7 @@
                     type="text"
                     class="form-control"
                     data-dn="carrier"
-                    placeholder="Nama kapal atau nomor penerbangan"
+                    placeholder="Nama kapal atau nomor penerbangan" data-i18n-ph="ph.nama.kapal.atau.nomor.penerbangan"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1045,21 +1263,21 @@
                   />
                 </div>
                 <div class="col-md-3">
-                  <label class="form-label">SI Ditujukan Ke</label>
+                  <label class="form-label" data-i18n="f.si.ditujukan.ke">SI Ditujukan Ke</label>
                   <input
                     type="text"
                     class="form-control"
                     data-dn="siTo"
-                    placeholder="Nama forwarder"
+                    placeholder="Nama forwarder" data-i18n-ph="ph.nama.forwarder"
                   />
                 </div>
                 <div class="col-md-2">
-                  <label class="form-label">No. SI</label>
+                  <label class="form-label" data-i18n="f.no.si">No. SI</label>
                   <input
                     type="text"
                     class="form-control"
                     data-dn="siNo"
-                    placeholder="03"
+                    placeholder="Nomor SI" data-i18n-ph="ph.nomor.si"
                   />
                 </div>
                 <div class="col-md-3">
@@ -1077,7 +1295,7 @@
                     type="text"
                     class="form-control"
                     data-dn="oceanFreight"
-                    placeholder="Kosongkan bila diisi forwarder"
+                    placeholder="Kosongkan bila diisi forwarder" data-i18n-ph="ph.kosongkan.bila.diisi.forwarder"
                   />
                 </div>
                 <div class="col-12">
@@ -1086,7 +1304,7 @@
                     type="text"
                     class="form-control"
                     data-dn="specialInstruction"
-                    placeholder="Catatan khusus untuk forwarder"
+                    placeholder="Catatan khusus untuk forwarder" data-i18n-ph="ph.catatan.khusus.untuk.forwarder"
                   />
                 </div>
                 <div class="col-md-9">
@@ -1095,7 +1313,7 @@
                     type="text"
                     class="form-control"
                     data-dn="remarks"
-                    placeholder="Catatan tambahan pada dokumen"
+                    placeholder="Catatan tambahan pada dokumen" data-i18n-ph="ph.catatan.tambahan.pada.dokumen"
                   />
                 </div>
               </div>
@@ -1108,7 +1326,7 @@
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
-                <h6>Permintaan Nomor Delivery Order</h6>
+                <h6 data-i18n="u.permintaan.nomor.delivery.order">Permintaan Nomor Delivery Order</h6>
                 <span class="docnum-preview">
                   Nomor berikutnya: <b data-dn-preview="do">&mdash;</b>
                 </span>
@@ -1134,7 +1352,7 @@
                     class="form-control"
                     data-dn="requester"
                     data-dn-required
-                    placeholder="Nama Pemohon"
+                    placeholder="Nama Pemohon" data-i18n-ph="ph.nama.pemohon"
                   />
                 </div>
                 <div class="col-md-4">
@@ -1146,7 +1364,7 @@
                     class="form-control"
                     data-dn="receiver"
                     data-dn-required
-                    placeholder="Nama Penerima"
+                    placeholder="Nama Penerima" data-i18n-ph="ph.nama.penerima"
                   />
                 </div>
                 <!-- Alamat kirim: masuk ke kolom `payload` yang memang
@@ -1161,16 +1379,16 @@
                     rows="2"
                     data-dn="address"
                     data-dn-required
-                    placeholder="Alamat Lengkap Penerima"
+                    placeholder="Alamat Lengkap Penerima" data-i18n-ph="ph.alamat.lengkap.penerima"
                   ></textarea>
                 </div>
                 <div class="col-md-4">
-                  <label class="form-label">No. Kendaraan</label>
+                  <label class="form-label" data-i18n="f.no.kendaraan">No. Kendaraan</label>
                   <input
                     type="text"
                     class="form-control"
                     data-dn="vehicle"
-                    placeholder="B 1234 XX"
+                    placeholder="Nomor polisi kendaraan" data-i18n-ph="ph.nomor.polisi.kendaraan"
                   />
                 </div>
                 <!-- Ditautkan ke jadwal, bukan diketik bebas.
@@ -1180,19 +1398,19 @@
                      dari jadwal yang dipilih di sini. Kalau tetap berupa
                      teks bebas, tidak ada cara menghubungkannya. -->
                 <div class="col-md-8">
-                  <label class="form-label">Jadwal Terkait</label>
+                  <label class="form-label" data-i18n="f.jadwal.terkait">Jadwal Terkait</label>
                   <input
                     type="text"
                     class="form-control"
                     id="dnShipmentSearch"
                     list="dnShipmentList"
                     autocomplete="off"
-                    placeholder="Ketik no. invoice atau nama buyer…"
+                    placeholder="Ketik no. invoice atau nama buyer…" data-i18n-ph="ph.ketik.no.invoice.atau.nama.buyer"
                   />
                   <input type="hidden" data-dn="shipmentId" id="dnShipmentPick" />
                   <div class="form-text-note mt-1">
                     <i class="bi bi-info-circle"></i> Menautkan jadwal membuat
-                    <b>No. Invoice</b> &amp; <b>daftar barang</b> ikut tercetak
+                    <b>No. Invoice</b> &amp; <b data-i18n="u.daftar.barang">daftar barang</b> ikut tercetak
                     di surat jalan.
                   </div>
                 </div>
@@ -1206,7 +1424,7 @@
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
-                <h6>Permintaan Nomor Permintaan Dana</h6>
+                <h6 data-i18n="u.permintaan.nomor.permintaan.dana">Permintaan Nomor Permintaan Dana</h6>
                 <span class="docnum-preview">
                   Nomor berikutnya: <b data-dn-preview="fund">&mdash;</b>
                 </span>
@@ -1227,12 +1445,15 @@
                   <label class="form-label"
                     >Pemohon <span class="req">*</span></label
                   >
-                  <input
-                    type="text"
-                    class="form-control"
+                  <select
+                    class="form-select"
                     data-dn="requester"
                     data-dn-required
-                  />
+                  >
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option>Ahmad Riyan A</option>
+                    <option>Yogi Firgiawan</option>
+                  </select>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label"
@@ -1243,7 +1464,7 @@
                     data-dn="department"
                     data-dn-required
                   >
-                    <option value="">— pilih —</option>
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
                     <option>Produksi</option>
@@ -1258,31 +1479,19 @@
                     data-dn="expenseType"
                     data-dn-required
                   >
-                    <option value="">— pilih —</option>
-                    <option>Biaya Kepabeanan</option>
-                    <option>Freight / Trucking</option>
-                    <option>Operasional</option>
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option value="Billing">Billing</option>
+                    <option value="Freight">Freight</option>
+                    <option value="Storage">Storage</option>
+                    <option value="Lainnya" data-i18n="f.lainnya">Lainnya</option>
                   </select>
                 </div>
                 <div class="col-md-2">
-                  <label class="form-label">Mata Uang</label>
+                  <label class="form-label" data-i18n="f.mata.uang">Mata Uang</label>
                   <select class="form-select" data-dn="currency">
-                    <option>IDR</option>
+                    <option selected>IDR</option>
                     <option>USD</option>
                   </select>
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label"
-                    >Nominal <span class="req">*</span></label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="amount"
-                    data-dn-required
-                    data-dn-number
-                    placeholder="0"
-                  />
                 </div>
                 <div class="col-md-3">
                   <label class="form-label"
@@ -1293,16 +1502,174 @@
                     class="form-control"
                     data-dn="payee"
                     data-dn-required
-                    placeholder="Nama Vendor / PPJK"
+                    placeholder="Nama Vendor / PPJK" data-i18n-ph="ph.nama.vendor.ppjk"
                   />
                 </div>
+                <!-- Nomor Billing & Nomor Invoice BERGANTIAN, mengikuti
+                     Jenis Pengeluaran: tagihan Billing dirujuk lewat nomor
+                     billing, sisanya lewat nomor invoice. Keduanya tetap
+                     ada di DOM (bukan dibuat ulang) supaya isinya tidak
+                     hilang kalau pengguna berganti pilihan lalu kembali. -->
+                <div class="col-md-3" data-dn-when="Billing">
+                  <label class="form-label" data-i18n="f.nomor.billing">Nomor Billing</label>
+                  <input type="text" class="form-control" data-dn="billingNo" />
+                </div>
+                <div class="col-md-3" data-dn-when="!Billing">
+                  <label class="form-label" data-i18n="f.no.invoice">No. Invoice</label>
+                  <input type="text" class="form-control" data-dn="invoiceNo" />
+                </div>
                 <div class="col-12">
-                  <label class="form-label">Rincian</label>
+                  <label class="form-label" data-i18n="f.rincian">Rincian</label>
                   <textarea
                     class="form-control"
                     rows="2"
                     data-dn="notes"
                   ></textarea>
+                  <div class="form-text-note mt-1" data-i18n="form.note.fundSubject"></div>
+                </div>
+
+                <!-- Rincian pungutan: OPSIONAL. Kalau ketiganya kosong,
+                     Form Pengajuan Dana mencetak satu baris memakai Jenis
+                     Pengeluaran & Nominal di atas. Kalau diisi, ketiganya
+                     jadi baris tersendiri dan Nominal di atas tidak
+                     dipakai -- TOTAL dijumlahkan dari sini. -->
+                <!-- FORMAT LAMA (Billing): tagihan bea cukai memang cuma
+                     tiga pos, jadi tiga kotak sudah cukup. Jenis lain
+                     memakai tabel rincian di bawahnya. -->
+                <div class="col-12 row g-3" data-dn-when="Billing">
+                <div class="col-12">
+                  <div class="form-subhead">
+                    Rincian Pungutan <span class="muted">(opsional)</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Bea Masuk</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="feeBm"
+                    data-dn-number
+                    placeholder="0"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">PPN Import</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="feePpn"
+                    data-dn-number
+                    placeholder="0"
+                  />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">PPH Import</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="feePph"
+                    data-dn-number
+                    placeholder="0"
+                  />
+                </div>
+                </div>
+                <!-- FORMAT RINCI (selain Billing): satu tagihan forwarder
+                     berisi banyak pos, sebagian dipungut PPN dan sebagian
+                     tidak, jadi tarifnya diisi per baris. -->
+                <div class="col-12" data-dn-when="!Billing">
+                  <div class="form-subhead">
+                    <span data-i18n="f.rincian.biaya">Rincian Biaya</span>
+                  </div>
+                  <div class="fund-lines-wrap">
+                    <table class="fund-lines" id="fundLinesTable">
+                      <thead>
+                        <tr>
+                          <th class="fl-no">No.</th>
+                          <th data-i18n="f.uraian">Uraian</th>
+                          <th class="fl-amt" data-i18n="f.nilai.rp">Nilai (Rp)</th>
+                          <th class="fl-rate">PPN</th>
+                          <th class="fl-amt">PPN (Rp)</th>
+                          <th class="fl-act"></th>
+                        </tr>
+                      </thead>
+                      <tbody id="fundLinesBody"></tbody>
+                    </table>
+                  </div>
+                  <button type="button" class="btn-quiet mt-2" id="btnFundLineAdd">
+                    <i class="bi bi-plus-lg"></i>
+                    <span data-i18n="f.tambah.baris">Tambah Baris</span>
+                  </button>
+                  <div class="fund-lines-foot" id="fundLinesFoot"></div>
+                </div>
+
+
+                <!-- Blok tanda tangan. Namanya WAJIB bisa diubah: orangnya
+                     berganti, dan jabatannya pun bisa berbeda antar surat. -->
+                <div class="col-12">
+                  <div class="form-subhead">Penanda Tangan</div>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.lampiran">Lampiran</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="attachment"
+                    value="1 Set"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.checked.by.nama">Checked By &mdash; Nama</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="checkedByName"
+                    value="Rangga"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.checked.by.jabatan">Checked By &mdash; Jabatan</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="checkedByRole"
+                    value="Accounting"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.approved.by.1.nama">Approved By 1 &mdash; Nama</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="approver1Name"
+                    value="Mr. Kim Taewan"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.approved.by.1.jabatan">Approved By 1 &mdash; Jabatan</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="approver1Role"
+                    value="Chief Financial Officer"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.approved.by.2.nama">Approved By 2 &mdash; Nama</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="approver2Name"
+                    value="Mr. Jeon Jeongho"
+                  />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.approved.by.2.jabatan">Approved By 2 &mdash; Jabatan</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="approver2Role"
+                    value="President Director"
+                  />
                 </div>
               </div>
             </form>
@@ -1314,7 +1681,7 @@
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
-                <h6>Permintaan Nomor Surat</h6>
+                <h6 data-i18n="u.permintaan.nomor.surat">Permintaan Nomor Surat</h6>
                 <span class="docnum-preview">
                   Nomor berikutnya: <b data-dn-preview="letter">&mdash;</b>
                 </span>
@@ -1340,7 +1707,7 @@
                     data-dn="letterType"
                     data-dn-required
                   >
-                    <option value="">— pilih —</option>
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Surat Keterangan</option>
                     <option>Surat Kuasa</option>
                     <option>Surat Permohonan</option>
@@ -1367,7 +1734,7 @@
                     class="form-control"
                     data-dn="recipient"
                     data-dn-required
-                    placeholder="Instansi / Perusahaan Tujuan"
+                    placeholder="Instansi / Perusahaan Tujuan" data-i18n-ph="ph.instansi.perusahaan.tujuan"
                   />
                 </div>
                 <div class="col-md-6">
@@ -1382,7 +1749,7 @@
                   />
                 </div>
                 <div class="col-12">
-                  <label class="form-label">Isi Ringkas</label>
+                  <label class="form-label" data-i18n="f.isi.ringkas">Isi Ringkas</label>
                   <textarea
                     class="form-control"
                     rows="2"
@@ -1414,9 +1781,7 @@
                 Memperbaiki isian nomor <b id="dnEditBannerNum"></b> &mdash;
                 nomornya sendiri tidak berubah.
               </span>
-              <button type="button" class="btn-quiet" id="btnDnEditCancel">
-                Batal
-              </button>
+              <button type="button" class="btn-quiet" id="btnDnEditCancel" data-i18n="u.batal">Batal</button>
             </div>
             <div class="docnum-actions">
               <span class="docnum-hint" id="docNumHint"></span>
@@ -1495,7 +1860,7 @@
             type="button"
             class="btn-back"
             id="btnFormBack"
-            title="Kembali ke Daftar"
+            title="Kembali ke Daftar" data-i18n-title="ti.kembali.ke.daftar"
           >
             <i class="bi bi-arrow-left"></i>
           </button>
@@ -1504,12 +1869,12 @@
           <span class="page-form-title-icon"
             ><i class="bi bi-file-earmark-text"></i
           ></span>
-          <h5 class="page-form-title" id="modalTitle">Tambah Jadwal Import</h5>
+          <h5 class="page-form-title" id="modalTitle" data-i18n="u.tambah.jadwal.import">Tambah Jadwal Import</h5>
         </div>
         <div class="page-form-header-spacer">
           <!-- Kolom ini dulu sengaja dikosongkan sebagai penyeimbang agar -->
           <span class="form-progress">
-            <span id="formStepLabel">Langkah 1 dari 3</span>
+            <span id="formStepLabel" data-i18n="u.langkah.1.dari.3">Langkah 1 dari 3</span>
             <span class="form-progress-dots" id="formStepDots">
               <span class="form-progress-dot is-current"></span>
               <span class="form-progress-dot"></span>
@@ -1523,7 +1888,7 @@
 
         <div class="page-form-import-row" id="importZone">
           <div class="import-zone-copy">
-            <b>Isi otomatis dari dokumen</b>
+            <b data-i18n="u.isi.otomatis.dari.dokumen">Isi otomatis dari dokumen</b>
             <small
               >PDF PIB BC 2.0 / PEB BC 3.0, PDF Commercial Invoice &amp; Packing
               List, Excel draft CEISA, atau Excel CIPL supplier. Boleh beberapa
@@ -1581,43 +1946,43 @@
             </div>
             <div class="row g-3">
               <div class="col-md-3">
-                <label class="form-label" id="lblDocNo">No. SPPB</label>
+                <label class="form-label" id="lblDocNo" data-i18n="f.no.sppb">No. SPPB</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fDocNo"
-                  placeholder="SPPB-000123"
+                  placeholder="Nomor SPPB" data-i18n-ph="ph.nomor.sppb"
                 />
               </div>
               <div class="col-md-3">
-                <label class="form-label" id="lblDocDate">Tanggal SPPB</label>
+                <label class="form-label" id="lblDocDate" data-i18n="f.tanggal.sppb">Tanggal SPPB</label>
                 <input type="date" class="form-control" id="fDocDate" />
               </div>
               <div class="col-md-3">
-                <label class="form-label">No. Aju</label>
+                <label class="form-label" data-i18n="f.no.aju">No. Aju</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fNoAju"
-                  placeholder="000123456789012345678901"
+                  placeholder="Nomor aju" data-i18n-ph="ph.nomor.aju"
                 />
               </div>
               <div class="col-md-3">
-                <label class="form-label" id="lblParty">Nama Shipper</label>
+                <label class="form-label" id="lblParty" data-i18n="f.nama.shipper">Nama Shipper</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fParty"
-                  placeholder="Nama Perusahaan"
+                  placeholder="Nama Perusahaan" data-i18n-ph="ph.nama.perusahaan"
                 />
               </div>
               <div class="col-md-4">
-                <label class="form-label">No. Invoice</label>
+                <label class="form-label" data-i18n="f.no.invoice">No. Invoice</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fInvoice"
-                  placeholder="INV-2026-0451"
+                  placeholder="Nomor invoice" data-i18n-ph="ph.nomor.invoice"
                 />
               </div>
               <div class="col-md-4">
@@ -1628,7 +1993,7 @@
                   type="text"
                   class="form-control"
                   id="fMasterBL"
-                  placeholder="MBL-889021"
+                  placeholder="Nomor Master B/L atau AWB" data-i18n-ph="ph.nomor.master.b.l.atau.awb"
                 />
               </div>
               <div class="col-md-4">
@@ -1639,7 +2004,7 @@
                   type="text"
                   class="form-control"
                   id="fHouseBL"
-                  placeholder="HBL-114520"
+                  placeholder="Nomor House B/L atau AWB" data-i18n-ph="ph.nomor.house.b.l.atau.awb"
                 />
               </div>
               <div class="col-md-3 factory-field">
@@ -1655,21 +2020,21 @@
                 <input type="time" class="form-control" id="fFactoryTime" />
               </div>
               <div class="col-md-3">
-                <label class="form-label">Nama Forwarder</label>
+                <label class="form-label" data-i18n="f.nama.forwarder">Nama Forwarder</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fForwarder"
-                  placeholder="Nama Forwarder"
+                  placeholder="Nama Forwarder" data-i18n-ph="ph.nama.forwarder"
                 />
               </div>
               <div class="col-md-3">
-                <label class="form-label">PIC Forwarder</label>
+                <label class="form-label" data-i18n="f.pic.forwarder">PIC Forwarder</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fForwarderPic"
-                  placeholder="Nama PIC"
+                  placeholder="Nama PIC" data-i18n-ph="ph.nama.pic"
                 />
               </div>
             </div>
@@ -1682,10 +2047,10 @@
             </div>
             <div class="row g-3">
               <div class="col-md-3">
-                <label class="form-label">Moda Transportasi</label>
+                <label class="form-label" data-i18n="f.moda.transportasi">Moda Transportasi</label>
                 <select class="form-select" id="fTransport">
-                  <option value="laut">Laut (Vessel)</option>
-                  <option value="udara">Udara (Pesawat)</option>
+                  <option value="laut" data-i18n="f.laut.vessel">Laut (Vessel)</option>
+                  <option value="udara" data-i18n="f.udara.pesawat">Udara (Pesawat)</option>
                 </select>
               </div>
               <div class="col-md-3">
@@ -1703,7 +2068,7 @@
                   class="form-control"
                   id="fVessel"
                   list="carrierListLaut"
-                  placeholder="MV Ever Given"
+                  placeholder="Nama kapal atau pesawat" data-i18n-ph="ph.nama.kapal.atau.pesawat"
                 />
               </div>
               <div class="col-md-2">
@@ -1720,20 +2085,20 @@
                   type="text"
                   class="form-control"
                   id="fVoyage"
-                  placeholder="V.023E"
+                  placeholder="Nomor voyage atau penerbangan" data-i18n-ph="ph.nomor.voyage.atau.penerbangan"
                 />
               </div>
-              <div class="col-md-2">
-                <label class="form-label">Kontainer</label>
+              <div class="col-md-2" id="fContainerWrap">
+                <label class="form-label" data-i18n="f.kontainer">Kontainer</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fContainer"
-                  placeholder="TCLU1234567"
+                  placeholder="Nomor kontainer" data-i18n-ph="ph.nomor.kontainer"
                 />
               </div>
               <div class="col-md-2">
-                <label class="form-label">Jenis Muatan</label>
+                <label class="form-label" data-i18n="f.jenis.muatan">Jenis Muatan</label>
                 <select class="form-select" id="fMuatan">
                   <option value="">—</option>
                   <option value="FCL">FCL</option>
@@ -1741,20 +2106,23 @@
                 </select>
               </div>
               <div class="col-md-2">
-                <label class="form-label">Tipe Rute</label>
+                <label class="form-label" data-i18n="f.tipe.rute">Tipe Rute</label>
                 <select class="form-select" id="fRouteType">
-                  <option value="direct">Direct</option>
-                  <option value="transit">Transit (Singgah)</option>
+                  <option value="direct" data-i18n="f.direct">Direct</option>
+                  <option value="transit" data-i18n="f.transit.singgah">Transit (Singgah)</option>
                 </select>
               </div>
               <div class="col-md-5">
+                <!-- TANPA data-i18n: teksnya ditulis applyTransportLabels() lewat
+                     portNoun() dan berganti jadi "Terminal Asal" saat moda
+                     udara. Menandainya akan menimpanya dengan teks generik. -->
                 <label class="form-label" id="lblOrigin">Pelabuhan Asal</label>
                 <input
                   type="text"
                   class="form-control"
                   id="fOrigin"
                   list="unlocodeList"
-                  placeholder="Kode atau nama pelabuhan asal"
+                  placeholder="Kode atau nama pelabuhan asal" data-i18n-ph="ph.kode.atau.nama.pelabuhan.asal"
                 />
               </div>
               <div class="col-md-5">
@@ -1766,7 +2134,7 @@
                   class="form-control"
                   id="fDestination"
                   list="unlocodeList"
-                  placeholder="Kode atau nama pelabuhan tujuan"
+                  placeholder="Kode atau nama pelabuhan tujuan" data-i18n-ph="ph.kode.atau.nama.pelabuhan.tujuan"
                 />
               </div>
               <div class="col-12 d-none" id="routeStopsWrap">
@@ -1822,7 +2190,7 @@
                       type="button"
                       class="eta-mode-btn is-active"
                       data-eta-mode="auto"
-                      title="ETA dihitung mesin dari ETD + lama transit"
+                      title="ETA dihitung mesin dari ETD + lama transit" data-i18n-title="ti.eta.dihitung.mesin.dari.etd.lama.transit"
                     >
                       Auto
                     </button>
@@ -1830,7 +2198,7 @@
                       type="button"
                       class="eta-mode-btn"
                       data-eta-mode="manual"
-                      title="ETA diisi manual dari forwarder — mesin tidak akan menimpanya"
+                      title="ETA diisi manual dari forwarder — mesin tidak akan menimpanya" data-i18n-title="ti.eta.diisi.manual.dari.forwarder.mesin.tidak.ak"
                     >
                       Manual
                     </button>
@@ -1866,7 +2234,7 @@
                       type="button"
                       class="eta-mode-btn"
                       data-delivery-mode="manual"
-                      title="Tanggal dikunci — dipakai untuk laporan, mesin tidak akan menimpanya"
+                      title="Tanggal dikunci — dipakai untuk laporan, mesin tidak akan menimpanya" data-i18n-title="ti.tanggal.dikunci.dipakai.untuk.laporan.mesin.ti"
                     >
                       Manual
                     </button>
@@ -1880,6 +2248,22 @@
                   <b>Manual</b> kalau tanggalnya harus dikunci untuk laporan.
                 </div>
               </div>
+              <!-- Jam ETD/ETA -- OPSIONAL, terpisah dari tanggalnya (pola
+                   yang sama dengan Tanggal/Jam In Factory di atas). Baris
+                   sendiri, bukan disisipkan di kolom ETD/ETA yang sudah
+                   penuh (ETA & Estimated Delivery sudah punya sakelar
+                   Auto/Manual sendiri) -- supaya tidak menyempitkan itu.
+                   Paling berguna untuk penerbangan yang ETD & ETA-nya
+                   tanggal SAMA: tanpa jam, keduanya kelihatan seperti
+                   sudah tiba begitu tanggalnya dimulai. -->
+              <div class="col-md-3 col-6">
+                <label class="form-label" data-i18n="f.jam.etd">Jam ETD</label>
+                <input type="time" class="form-control" id="fEtdTime" />
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label" data-i18n="f.jam.eta">Jam ETA</label>
+                <input type="time" class="form-control" id="fEtaTime" />
+              </div>
               <div class="col-12" id="predictionBlock">
                 <div
                   class="pred-notice d-none"
@@ -1889,12 +2273,8 @@
                   <div class="pred-notice-body">
                     <i class="bi bi-exclamation-circle-fill"></i>
                     <div>
-                      <b>ETA sedang dalam Mode Manual.</b>
-                      <div class="pred-notice-desc">
-                        ETD, rute, tipe pengiriman, atau direct/transit berubah
-                        — tapi ETA manual tidak ikut dihitung ulang. Pilih salah
-                        satu.
-                      </div>
+                      <b data-i18n="u.eta.sedang.dalam.mode.manual">ETA sedang dalam Mode Manual.</b>
+                      <div class="pred-notice-desc" data-i18n="u.etd.rute.tipe.pengiriman.atau.direct.transit.b">ETD, rute, tipe pengiriman, atau direct/transit berubah — tapi ETA manual tidak ikut dihitung ulang. Pilih salah satu.</div>
                     </div>
                   </div>
                   <div class="pred-notice-actions">
@@ -1902,9 +2282,7 @@
                       type="button"
                       class="btn-quiet"
                       id="btnKeepManualEta"
-                    >
-                      Pertahankan ETA Manual
-                    </button>
+                     data-i18n="u.pertahankan.eta.manual">Pertahankan ETA Manual</button>
                     <button
                       type="button"
                       class="btn btn-teal btn-sm"
@@ -1917,7 +2295,7 @@
                 <div class="pred-panel" id="predictionPanel"></div>
               </div>
               <div class="col-md-4">
-                <label class="form-label">Status</label>
+                <label class="form-label" data-i18n="f.status">Status</label>
                 <!-- Pilihan diisi ulang per section oleh renderFormPage() -->
                 <select class="form-select" id="fStatus"></select>
               </div>
@@ -1931,11 +2309,11 @@
                   </div>
                   <div class="row g-3">
                     <div class="col-md-4">
-                      <label class="form-label">Update ETA</label>
+                      <label class="form-label" data-i18n="f.update.eta">Update ETA</label>
                       <input type="date" class="form-control" id="fEtaUpdate" />
                     </div>
                     <div class="col-md-4">
-                      <label class="form-label">Update ETD</label>
+                      <label class="form-label" data-i18n="f.update.etd">Update ETD</label>
                       <input type="date" class="form-control" id="fEtdUpdate" />
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
@@ -1954,13 +2332,13 @@
           <div class="form-section-card form-section-card--ocean">
             <div class="row g-3">
               <div class="col-12">
-                <label class="form-label">Kronologi &amp; Catatan</label>
+                <label class="form-label" data-i18n="f.kronologi.catatan">Kronologi &amp; Catatan</label>
                 <div class="notes-panel">
                   <div class="notes-composer">
                     <textarea
                       id="fNoteDraft"
                       rows="2"
-                      placeholder='Tulis kronologi/kejadian… (mis. "Kapal delay 3 hari, ETA mundur ke 25 Jul"). Ctrl+Enter untuk kirim.'
+                      placeholder="Tulis kronologi atau kejadian… Ctrl+Enter untuk kirim." data-i18n-ph="ph.tulis.kronologi.atau.kejadian.ctrl.enter.untuk"
                     ></textarea>
                     <button type="button" class="btn btn-teal" id="btnAddNote">
                       <i class="bi bi-plus-lg"></i> Tambah
@@ -1994,33 +2372,62 @@
                 <i class="bi bi-plus-lg"></i> Tambah Barang
               </button>
             </div>
+
             <div class="item-table-wrap">
               <table class="item-table">
                 <thead>
                   <tr>
-                    <th style="width: 26%">Nama Barang</th>
+                    <th style="width: 4%" title="Nomor urut barang, mengikuti urutan baris" data-i18n-title="ti.nomor.urut.barang.mengikuti.urutan.baris" data-i18n="f.seri">Seri</th>
+                    <th class="namabarang-col" id="thNamaBarang" style="width: 16%" data-i18n="f.nama.barang">Nama Barang</th>
+                    <!-- Size (ukuran/spesifikasi barang, mis. "235/55R20")
+                         — kolom TERPISAH dari Nama Barang/Uraian, HANYA
+                         berlaku di buku Export (lihat body.mode-import
+                         .size-col di form.css). Lebih lebar dari kolom
+                         lain di sekitarnya: isinya bisa sepanjang
+                         "CREDO SUNMODE SUV 205/70R15" (dari kolom TIPE
+                         CEISA yang gabung merek+ukuran), bukan cuma
+                         kode ukuran murni yang pendek. -->
+                    <th class="size-col" style="width: 14%">Size</th>
                     <th style="width: 6%">HS Code</th>
-                    <th style="width: 8%">Jenis Barang</th>
-                    <th style="width: 6%">Fasilitas</th>
+                    <th style="width: 8%" data-i18n="f.jenis.barang">Jenis Barang</th>
+                    <th style="width: 6%" data-i18n="f.fasilitas">Fasilitas</th>
                     <th style="width: 5%">Qty</th>
-                    <th style="width: 5%">Satuan</th>
-                    <th style="width: 7%">Harga/Unit (USD)</th>
-                    <th style="width: 5%">Netto (Kg)</th>
-                    <th style="width: 5%">Bruto (Kg)</th>
+                    <th style="width: 5%" data-i18n="f.satuan">Satuan</th>
+                    <th style="width: 7%" data-i18n="f.harga.unit.usd">Harga/Unit (USD)</th>
+                    <th style="width: 5%" data-i18n="f.netto.kg">Netto (Kg)</th>
+                    <th style="width: 5%" data-i18n="f.bruto.kg">Bruto (Kg)</th>
                     <!-- Dimensi peti (P×L×T) — dipakai menghitung CBM,
                          jadi hanya berlaku di buku Export. -->
-                    <th class="dim-col" style="width: 9%">Dimensi</th>
-                    <th style="width: 7%">Kemasan</th>
-                    <th style="width: 9%">Jenis Kemasan</th>
+                    <th class="dim-col" style="width: 9%" data-i18n="f.dimensi">Dimensi</th>
+                    <th style="width: 7%" data-i18n="f.kemasan">Kemasan</th>
+                    <th style="width: 9%" data-i18n="f.jenis.kemasan">Jenis Kemasan</th>
                     <th style="width: 8%" class="cbm-col-static d-none">
                       CBM (m³)
                     </th>
-                    <th style="width: 6%">Subtotal (USD)</th>
+                    <th style="width: 6%" data-i18n="f.subtotal.usd">Subtotal (USD)</th>
                     <th style="width: 3%"></th>
                   </tr>
                 </thead>
                 <tbody id="itemTableBody"></tbody>
               </table>
+            </div>
+
+            <!-- Popover cari HS Code — SATU elemen, dipakai bergantian
+                 untuk baris mana pun yang tombol kacanya diklik (lihat
+                 hscode-lookup.js), bukan satu per baris. Diposisikan
+                 lewat JS (position: fixed, dari getBoundingClientRect
+                 tombolnya) tiap kali dibuka. -->
+            <div class="hscode-lookup-pop d-none" id="hscodeLookupPop">
+              <div class="hscode-lookup-search">
+                <i class="bi bi-search"></i>
+                <input
+                  type="text"
+                  id="hscodeLookupInput"
+                  placeholder="Ketik nama barang…" data-i18n-ph="ph.ketik.nama.barang"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="hscode-lookup-results" id="hscodeLookupResults"></div>
             </div>
             <div class="item-table-foot item-table-foot--split">
               <div class="foot-package">
@@ -2032,28 +2439,21 @@
                   type="text"
                   id="fPackage"
                   list="packageUnitList"
-                  placeholder="Cth: 4 BOX"
-                  title="Total kemasan seluruh barang, mis. 4 BOX"
+                  placeholder="Jumlah &amp; jenis kemasan" data-i18n-ph="ph.jumlah.jenis.kemasan"
+                  title="Total kemasan seluruh barang, mis. 4 BOX" data-i18n-title="ti.total.kemasan.seluruh.barang.mis.4.box"
                 />
               </div>
               <div class="foot-totals">
                 <div>Total Qty: <b id="footTotalQty">0</b></div>
-                <div>Total Netto: <b id="footTotalNetto">0</b> Kg</div>
-                <div>Total Bruto: <b id="footTotalBruto">0</b> Kg</div>
+                <div><span data-i18n="f.total.netto">Total Netto</span>: <b id="footTotalNetto">0</b> Kg</div>
+                <div><span data-i18n="f.total.bruto">Total Bruto</span>: <b id="footTotalBruto">0</b> Kg</div>
                 <div>Total Nilai: <b id="footTotalUSD">$0.00</b></div>
                 <div class="cbm-col-static d-none">
                   Total CBM: <b id="footTotalCbm">0</b> m³
                 </div>
               </div>
             </div>
-            <div class="form-text-note mt-1">
-              Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth.
-              &quot;5 BOX&quot;), Total Package terjumlah otomatis.
-              <b>Export</b>: dimensi P×L×T cm (cth. &quot;82*82*75&quot;), CBM
-              otomatis, Total Package manual. Barang yang berbagi satu box: isi
-              pada baris pertama, kosongkan sisanya &mdash; di surat jalan baris
-              itu tercetak menyatu.
-            </div>
+            <div class="form-text-note mt-1" data-i18n="form.note.itemPackaging"></div>
           </div>
         </div>
 
@@ -2084,7 +2484,7 @@
                 </select>
               </div>
               <div class="col-md-3">
-                <label class="form-label">Freight (USD)</label>
+                <label class="form-label" data-i18n="f.freight.usd">Freight (USD)</label>
                 <div class="input-affix" data-affix="$">
                   <input
                     type="text"
@@ -2096,7 +2496,7 @@
                 </div>
               </div>
               <div class="col-md-3">
-                <label class="form-label">Insurance (USD)</label>
+                <label class="form-label" data-i18n="f.insurance.usd">Insurance (USD)</label>
                 <div class="input-affix" data-affix="$">
                   <input
                     type="text"
@@ -2115,20 +2515,17 @@
                     class="form-control"
                     id="fNdpbm"
                     data-num
-                    placeholder="16250"
+                    placeholder="Kurs NDPBM" data-i18n-ph="ph.kurs.ndpbm"
                   />
                 </div>
               </div>
             </div>
-            <div class="form-text-note mt-1">
-              Total nilai barang (USD) diambil otomatis dari penjumlahan qty ×
-              harga/unit pada tab Daftar Barang.
-            </div>
+            <div class="form-text-note mt-1" data-i18n="form.note.totalValue"></div>
 
-            <!-- Satu baris untuk ketiganya. Sebelumnya "Total Nilai Barang" -->
-            <div class="calc-row mt-3" id="calcBoxRow">
+            <!-- Satu baris untuk ketiganya. -->
+            <div class="calc-row mt-3">
               <div class="calc-box">
-                <div class="calc-label">Total Nilai Barang (USD)</div>
+                <div class="calc-label" data-i18n="u.total.nilai.barang.usd">Total Nilai Barang (USD)</div>
                 <div class="calc-value" id="calcTotalUSD">$0.00</div>
               </div>
               <div class="calc-box cif calc-box--cif" style="display: none">
@@ -2139,6 +2536,10 @@
                 <div class="calc-label">CIF Rupiah</div>
                 <div class="calc-value" id="calcCIFRupiah">Rp 0</div>
               </div>
+              <div class="calc-box">
+                <div class="calc-label" data-i18n="f.nilai.pabean.rp">Nilai Pabean (Rp)</div>
+                <div class="calc-value" id="calcNilaiPabean">Rp 0</div>
+              </div>
               <div class="calc-box fob calc-box--fob" style="display: none">
                 <div class="calc-label">FOB (USD)</div>
                 <div class="calc-value" id="calcFOB">$0.00</div>
@@ -2148,6 +2549,7 @@
                 <div class="calc-value" id="calcFOBRupiah">Rp 0</div>
               </div>
             </div>
+            <div class="form-text-note mt-1 mb-0" data-i18n="form.note.customsBasis"></div>
             <div
               class="form-text-note mt-2 mb-0"
               id="noCifFobNote"
@@ -2168,14 +2570,14 @@
             </div>
             <div class="row g-3">
               <div class="col-md-2">
-                <label class="form-label">Tarif (%)</label>
+                <label class="form-label" data-i18n="f.tarif">Tarif (%)</label>
                 <div class="input-affix input-affix--end" data-affix="%">
                   <input
                     type="text"
                     class="form-control"
                     id="fTarif"
                     data-num
-                    placeholder="5"
+                    placeholder="Tarif bea masuk" data-i18n-ph="ph.tarif.bea.masuk"
                   />
                 </div>
               </div>
@@ -2228,13 +2630,7 @@
                 </div>
               </div>
             </div>
-            <div class="form-text-note mt-1">
-              PPN 11% dan PPH 2,5% terisi otomatis dari (Total Nilai Barang +
-              Freight + Insurance) × NDPBM. Bea Masuk manual &mdash; tarifnya
-              berbeda per HS Code. Mengetik sendiri menghentikan pengisian
-              otomatis; kosongkan untuk mengaktifkannya lagi. PDRI = Bea Masuk +
-              PPN + PPH, dihitung seketika.
-            </div>
+            <div class="form-text-note mt-1" data-i18n="form.note.duty"></div>
             <div class="row g-3 mt-1">
               <div class="col-md-12">
                 <label class="form-label"
@@ -2244,14 +2640,14 @@
                   type="text"
                   class="form-control"
                   id="fPI"
-                  placeholder="Contoh: PI No. 04.PI-31.00-xxxxx berlaku s.d. ..."
+                  placeholder="Keterangan Pemberitahuan Impor" data-i18n-ph="ph.keterangan.pemberitahuan.impor"
                 />
               </div>
             </div>
             <div class="form-text-note mt-1">
               <i class="bi bi-info-circle"></i> Fasilitas SKB / Masterlist
               sekarang dicatat per barang — lihat tombol <b>Fasilitas</b> pada
-              tiap baris di tab <b>2. Daftar Barang</b>.
+              tiap baris di tab <b data-i18n="u.2.daftar.barang">2. Daftar Barang</b>.
             </div>
           </div>
         </div>
@@ -2267,9 +2663,7 @@
               type="button"
               class="btn btn-form-cancel"
               id="btnFormCancel"
-            >
-              Batal
-            </button>
+             data-i18n="u.batal">Batal</button>
             <button
               type="button"
               class="btn-primary-navy btn-save-primary"
@@ -2295,7 +2689,7 @@
     >
       <div class="sheet-head">
         <div class="sheet-head-main">
-          <span class="panel-eyebrow">Detail pengiriman</span>
+          <span class="panel-eyebrow" data-i18n="u.detail.pengiriman">Detail pengiriman</span>
           <div class="sheet-title" id="detailSheetTitle">—</div>
         </div>
         <span class="sheet-pos" id="detailSheetPos"></span>
@@ -2304,7 +2698,7 @@
             type="button"
             class="sheet-btn"
             id="btnDetailPrev"
-            title="Pengiriman Sebelumnya (←)"
+            title="Pengiriman Sebelumnya (←)" data-i18n-title="ti.pengiriman.sebelumnya"
           >
             <i class="bi bi-chevron-left"></i>
           </button>
@@ -2312,7 +2706,7 @@
             type="button"
             class="sheet-btn"
             id="btnDetailNext"
-            title="Pengiriman Berikutnya (→)"
+            title="Pengiriman Berikutnya (→)" data-i18n-title="ti.pengiriman.berikutnya"
           >
             <i class="bi bi-chevron-right"></i>
           </button>
@@ -2320,7 +2714,7 @@
             type="button"
             class="sheet-btn"
             id="btnDetailClose"
-            title="Tutup (Esc)"
+            title="Tutup (Esc)" data-i18n-title="ti.tutup.esc"
           >
             <i class="bi bi-x-lg"></i>
           </button>
@@ -2332,9 +2726,7 @@
           ><kbd>←</kbd> <kbd>→</kbd> pindah pengiriman ·
           <kbd>Esc</kbd> tutup</span
         >
-        <button type="button" class="btn-quiet" id="btnDetailCloseFoot">
-          Tutup
-        </button>
+        <button type="button" class="btn-quiet" id="btnDetailCloseFoot" data-i18n="u.tutup">Tutup</button>
         <button type="button" class="btn-primary-navy" id="btnGotoEdit">
           <i class="bi bi-pencil"></i> Edit Jadwal Ini
         </button>
@@ -2350,7 +2742,7 @@
             type="text"
             class="cmdk-input"
             id="cmdkInput"
-            placeholder="Cari no. aju, invoice, shipper, vessel — atau ketik perintah…"
+            placeholder="Cari no. aju, invoice, shipper, vessel — atau ketik perintah…" data-i18n-ph="ph.cari.no.aju.invoice.shipper.vessel.atau.ketik."
             autocomplete="off"
             spellcheck="false"
           />
@@ -2366,31 +2758,15 @@
     </div>
 
     <!-- FOOTER — satu untuk semua halaman daftar/ringkasan -->
-    <!-- Tombol keluar mengambang di pojok kanan bawah: jarang ditekan,
-         jadi tidak perlu menempati ruang di bilah atas — tapi harus
-         selalu bisa dijangkau tanpa menggulir. -->
-    <button
-      type="button"
-      class="fab-logout d-none"
-      id="btnLogout"
-      title="Keluar dari Aplikasi"
-    >
-      <i class="bi bi-power"></i>
-      <span>Keluar</span>
-    </button>
-
-    <footer class="app-footer d-none" id="appFooter">
+        <footer class="app-footer d-none" id="appFooter">
       <div class="container">
         <div class="row gy-4">
           <div class="col-md-5">
             <div class="footer-brand">EXIM<span>·</span>DDI</div>
-            <p class="footer-text">
-              Sistem pelacakan jadwal import &amp; export internal — ETD, ETA,
-              dokumen kepabeanan, dan daftar barang dalam satu papan.
-            </p>
+            <p class="footer-text" data-i18n="u.sistem.pelacakan.jadwal.import.export.internal">Sistem pelacakan jadwal import &amp; export internal — ETD, ETA, dokumen kepabeanan, dan daftar barang dalam satu papan.</p>
           </div>
           <div class="col-md-4">
-            <div class="footer-heading">Catatan data</div>
+            <div class="footer-heading" data-i18n="u.catatan.data">Catatan data</div>
             <p class="footer-text">
               Data tersimpan permanen di database online (Supabase).
               <b>Bulk Export</b> mengunduh seluruh jadwal pada buku yang aktif
@@ -2399,7 +2775,7 @@
             </p>
           </div>
           <div class="col-md-3">
-            <div class="footer-heading">Pintasan</div>
+            <div class="footer-heading" data-i18n="u.pintasan">Pintasan</div>
             <p class="footer-text">
               <b>Ctrl K</b> cari cepat · <b>/</b> fokus pencarian ·
               <b>N</b> jadwal baru ·
@@ -2427,9 +2803,7 @@
             ></button>
           </div>
           <div class="modal-body">
-            <div class="alert alert-secondary py-2 px-3 mb-3" id="bulkModeInfo">
-              Section aktif
-            </div>
+            <div class="alert alert-secondary py-2 px-3 mb-3" id="bulkModeInfo" data-i18n="u.section.aktif">Section aktif</div>
 
             <div id="bulkExportInfo">
               <p class="form-text-note mb-0">
@@ -2442,7 +2816,7 @@
             <div id="bulkImportSection" class="d-none">
               <p class="form-text-note mb-2">
                 <i class="bi bi-exclamation-triangle"></i> Ini akan
-                <b>MENGGANTI</b> seluruh jadwal mode yang dipilih di database
+                <b data-i18n="u.mengganti">MENGGANTI</b> seluruh jadwal mode yang dipilih di database
                 dengan isi file Excel ini. Pastikan formatnya sesuai template.
               </p>
               <input
@@ -2454,10 +2828,7 @@
               <button type="button" class="btn-quiet mt-2" id="btnBulkTemplate">
                 <i class="bi bi-download"></i> Unduh template Excel kosong
               </button>
-              <div class="form-text-note mt-1">
-                Kolomnya sudah sesuai, lengkap dengan baris contoh dan lembar
-                cara mengisi.
-              </div>
+              <div class="form-text-note mt-1" data-i18n="u.kolomnya.sudah.sesuai.lengkap.dengan.baris.con">Kolomnya sudah sesuai, lengkap dengan baris contoh dan lembar cara mengisi.</div>
             </div>
           </div>
           <div class="modal-footer">
@@ -2465,16 +2836,12 @@
               type="button"
               class="btn btn-light btn-sm"
               data-bs-dismiss="modal"
-            >
-              Batal
-            </button>
+             data-i18n="u.batal">Batal</button>
             <button
               type="button"
               class="btn btn-teal btn-sm"
               id="bulkActionBtn"
-            >
-              Unduh Excel
-            </button>
+             data-i18n="u.unduh.excel">Unduh Excel</button>
           </div>
         </div>
       </div>
@@ -2490,19 +2857,15 @@
               <div class="dialog-icon">
                 <i class="bi bi-pencil-square" id="promptIcon"></i>
               </div>
-              <h6 class="dialog-title" id="promptTitle">Isian</h6>
+              <h6 class="dialog-title" id="promptTitle" data-i18n="u.isian">Isian</h6>
             </div>
             <p class="dialog-text" id="promptDesc"></p>
             <div id="promptFields"></div>
             <div class="prompt-error d-none" id="promptError"></div>
           </div>
           <div class="modal-footer dialog-foot">
-            <button type="button" class="btn-quiet" data-bs-dismiss="modal">
-              Batal
-            </button>
-            <button type="button" class="btn-primary-navy" id="promptOk">
-              Simpan
-            </button>
+            <button type="button" class="btn-quiet" data-bs-dismiss="modal" data-i18n="u.batal">Batal</button>
+            <button type="button" class="btn-primary-navy" id="promptOk" data-i18n="u.simpan">Simpan</button>
           </div>
         </div>
       </div>
@@ -2516,7 +2879,7 @@
               <div class="dialog-icon">
                 <i class="bi bi-exclamation-triangle-fill" id="confirmIcon"></i>
               </div>
-              <h6 class="dialog-title" id="confirmTitle">Konfirmasi</h6>
+              <h6 class="dialog-title" id="confirmTitle" data-i18n="u.konfirmasi">Konfirmasi</h6>
             </div>
             <p class="dialog-text" id="confirmMessage"></p>
           </div>
@@ -2526,16 +2889,26 @@
               class="btn-quiet"
               id="confirmCancelBtn"
               data-bs-dismiss="modal"
-            >
-              Batal
-            </button>
-            <button type="button" class="btn btn-danger" id="confirmActionBtn">
-              Ya, Hapus
-            </button>
+             data-i18n="u.batal">Batal</button>
+            <button type="button" class="btn btn-danger" id="confirmActionBtn" data-i18n="u.ya.hapus">Ya, Hapus</button>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Kembali ke atas -- ikon saja, tanpa teks. Ditumpuk di ATAS
+         tombol keluar (bukan di sisi lain) supaya keduanya tetap satu
+         kolom rapi di sudut kanan-bawah, bukan dua elemen mengambang
+         terpisah yang harus dipindai sendiri-sendiri. -->
+    <button
+      type="button"
+      class="fab-top d-none"
+      id="btnScrollTop"
+      title="Kembali ke Atas" data-i18n-title="ti.kembali.ke.atas"
+      aria-label="Kembali ke Atas"
+    >
+      <i class="bi bi-arrow-up"></i>
+    </button>
 
     <!-- Toast — pengganti alert() bawaan.
 
@@ -2553,7 +2926,7 @@
         <span class="app-toast-icon"
           ><i class="bi bi-info-circle-fill" id="toastIcon"></i
         ></span>
-        <span class="app-toast-body" id="toastMsg">Pesan</span>
+        <span class="app-toast-body" id="toastMsg" data-i18n="u.pesan">Pesan</span>
         <button
           type="button"
           class="app-toast-close"
@@ -2622,6 +2995,9 @@
       <option value="UNIT"></option>
     </datalist>
 
+    <!-- SEBELUM config.js: MODE_LABELS memanggil t() saat dibangun,
+         jadi kamusnya harus sudah ada lebih dulu. -->
+    <script src="js/core/i18n.js"></script>
     <script src="js/config.js"></script>
 
     <!-- ========================================= -->
@@ -2668,6 +3044,7 @@
     <script src="js/render/cards.js"></script>
     <script src="js/render/list.js"></script>
     <script src="js/features/quick-filters.js"></script>
+    <script src="js/features/date-range-picker.js"></script>
 
     <!-- ========================================= -->
     <!-- FEATURES -->
@@ -2712,6 +3089,8 @@
     <!-- VIEW -->
     <!-- ========================================= -->
     <script src="js/features/surat-jalan-print.js"></script>
+    <script src="js/features/fund-lines.js"></script>
+    <script src="js/features/fund-request-print.js"></script>
     <script src="js/features/cipl-print.js"></script>
     <script src="js/features/cipl-excel.js"></script>
     <script src="js/views/docnum-view.js"></script>
@@ -2722,6 +3101,8 @@
     <script src="js/views/overview-view.js"></script>
     <script src="js/features/command-palette.js"></script>
     <script src="js/views/accounts-view.js"></script>
+    <script src="js/views/hscode-view.js"></script>
+    <script src="js/features/hscode-lookup.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 

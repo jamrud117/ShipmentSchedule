@@ -122,7 +122,7 @@ async function unduhTemplateBulk(mode) {
   } catch (err) {
     console.error(err);
     showToast(
-      `Gagal menyusun template: ${err && err.message ? err.message : "kesalahan tidak diketahui"}`,
+      `Gagal menyusun template: ${err && err.message ? err.message : t("s.kesalahan.tidak.diketahui")}`,
       "danger",
     );
   } finally {

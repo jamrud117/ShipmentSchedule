@@ -334,32 +334,32 @@ function parseCiplWorkbook(wb) {
 
   if (!items.length) {
     notes.push(
-      'Tidak ada baris barang yang terbaca dari sheet CI/PL (dicari lewat header kolom "Description"/"Item"/"Goods Descriptions").',
+      t("w.tidak.ada.baris.sheet.cipl"),
     );
   } else {
     if (items.some((it) => !it.hsCode)) {
       notes.push(
-        'Sebagian barang tidak ketemu HS Code-nya (dicoba dari kolom HS Code, teks "Origin HS Code: ..." yang menyatu di deskripsi, dan catatan terpisah) — isi manual kalau kosong.',
+        t("w.sebagian.barang.tanpa.hs.code"),
       );
     }
     if (items.some((it) => !it.bruto)) {
       notes.push(
-        "Berat kotor (bruto) sebagian/semua barang tidak terbaca — isi manual per barang.",
+        t("w.berat.kotor.bruto.sebagian.semua.barang.tidak."),
       );
     }
     if (totalBlocksFound <= 1) {
       notes.push(
-        "Hanya 1 blok tabel barang yang terbaca (harga ATAU berat, bukan keduanya) — kalau file ini seharusnya punya sheet/bagian PL atau CI satunya lagi, cek lagi apakah sheet itu ada & tidak salah nama.",
+        t("y.hanya.1.blok.tabel.barang"),
       );
     }
   }
   if (!masterBL && !houseBL) {
     notes.push(
-      "Master/House AWB tidak ditemukan (biasanya di sheet info gudang/MAWB-HAWB) — isi manual.",
+      t("w.master.house.awb.tidak.ditemukan.biasanya.di.s"),
     );
   }
   notes.push(
-    'Hasil baca CIPL Excel ini best-effort — mohon cek ulang semua field sebelum simpan, terutama moda transportasi (disimpulkan dari kata "AIRPORT" di asal/tujuan), HS Code, dan berat kotor per barang. Freight/Insurance/NDPBM/BM/PPN/PPH tidak ada di dokumen CIPL — isi manual di tab Kepabeanan.',
+    t("y.hasil.baca.cipl.best.effort"),
   );
 
   // Bruto: satu angka TOTAL di barang pertama

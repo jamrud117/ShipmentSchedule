@@ -17,22 +17,28 @@ let toastTimer = null;
 
    Diukur, bukan ditebak: bilah kendali membungkus jadi dua baris di
    layar sempit, dan di halaman form bilah itu tidak ada sama sekali. */
+/* Toast diposisikan tepat di bawah BILAH ATAS saja.
+
+   Bilah kendali (.controlbar) SENGAJA tidak ikut diukur: ia cuma ada
+   di halaman Jadwal, jadi mengukurnya membuat posisi toast berbeda
+   antar halaman. Bilah atas ada di semua halaman dan tingginya tetap,
+   jadi hasilnya sama di mana pun.
+
+   Tidak ada pendengar "scroll": bilah atas itu sticky, posisinya tidak
+   berubah saat digulir — menghitung ulang tiap kali digulir cuma
+   membuat toast bergeser-geser halus tanpa alasan. */
 function posisikanToast() {
   const stack = document.getElementById("toastStack");
   if (!stack) return;
+  const topbar = document.querySelector(".app-topbar");
   let bawah = 0;
-  ["#appTopbarEl", ".app-topbar", ".controlbar"].forEach((sel) => {
-    const el = document.querySelector(sel);
-    if (!el || el.classList.contains("d-none")) return;
-    const cs = getComputedStyle(el);
-    if (cs.position !== "sticky" && cs.position !== "fixed") return;
-    bawah = Math.max(bawah, el.getBoundingClientRect().bottom);
-  });
+  if (topbar && !topbar.classList.contains("d-none")) {
+    bawah = topbar.getBoundingClientRect().bottom;
+  }
   stack.style.top = Math.max(12, bawah + 12) + "px";
 }
 
 window.addEventListener("resize", posisikanToast);
-window.addEventListener("scroll", posisikanToast, { passive: true });
 
 function showToast(msg, type) {
   type = TOAST_IKON[type] ? type : "info";
@@ -77,18 +83,18 @@ function showConfirm(message, onConfirm, opsi) {
   $("#confirmMessage").textContent = message;
 
   const btn = $("#confirmActionBtn");
-  btn.textContent = o.confirmText || "Ya, hapus";
+  btn.textContent = o.confirmText || t("u.ya.hapus");
 
   /* Tombol kiri tidak selalu berarti "batal". Pada pilihan yang
      dua-duanya sah — mis. "Pertahankan ETA Manual" vs "Hitung Ulang
      Otomatis" — menamainya Batal membuat salah satu pilihan yang benar
      terlihat seperti membatalkan sesuatu. */
   const btnBatal = $("#confirmCancelBtn");
-  if (btnBatal) btnBatal.textContent = o.cancelText || "Batal";
+  if (btnBatal) btnBatal.textContent = o.cancelText || t("a.batal");
   btn.className =
     "btn " + (o.tone === "primary" ? "btn-primary-navy" : "btn-danger");
 
-  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? "Konfirmasi" : "Hapus Data");
+  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : "Hapus Data");
 
   const ikon = $("#confirmIcon");
   ikon.className = "bi " + (o.icon || "bi-exclamation-triangle-fill");

@@ -33,24 +33,24 @@ function predictionConfidencePercent(info) {
     alasan.push({ delta: -n, text: teks });
   };
 
-  if (!info.routeResolved) kurangi(cfg.penalties.routeUnresolved, "Rute belum dikenali");
+  if (!info.routeResolved) kurangi(cfg.penalties.routeUnresolved, t("s.rute.belum.dikenali"));
   if (info.typeAssumed) kurangi(cfg.penalties.typeAssumed, "Jenis muatan masih diasumsikan");
   if (info.ruleFallback) kurangi(cfg.penalties.ruleFallback, "Rute memakai angka cadangan");
 
   if (info.rangeWidth > 0) {
     kurangi(
       Math.min(cfg.penalties.maxWideRange, info.rangeWidth * cfg.penalties.wideRangePerDay),
-      `Lama transit masih rentang ${info.rangeWidth} hari`,
+      t("x.lama.transit.rentang", { n: info.rangeWidth }),
     );
   }
   if (info.overdueDays > 0) {
     kurangi(
       Math.min(cfg.penalties.maxOverdue, info.overdueDays * cfg.penalties.overduePerDay),
-      `Terlambat ${info.overdueDays} hari dari perkiraan`,
+      t("x.terlambat.hari.dari.perkiraan", { n: info.overdueDays }),
     );
   }
   if (info.realityShifted) {
-    kurangi(cfg.penalties.realityShifted, "Dasar hitungan digeser ke hari ini");
+    kurangi(cfg.penalties.realityShifted, t("v.dasar.hitungan.digeser.ke.hari.ini"));
   }
   if (info.learned) {
     nilai += cfg.bonuses.learned;
@@ -65,7 +65,7 @@ function predictionConfidencePercent(info) {
     nilai += cfg.bonuses.arrivalConfirmed;
     alasan.push({
       delta: cfg.bonuses.arrivalConfirmed,
-      text: "Kedatangan sudah dikonfirmasi",
+      text: t("s.kedatangan.sudah.dikonfirmasi"),
     });
   }
 

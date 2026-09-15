@@ -96,6 +96,119 @@
     transform: none;
   }
 }
+/* Pemisah kelompok DI DALAM satu panel — memecah form panjang jadi
+   bagian yang terbaca, tanpa menjadikannya panel tersendiri. */
+.form-subhead {
+  font-family: var(--font-board);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-600);
+  padding-top: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.form-subhead .muted {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--n-500);
+}
+
+/* TABEL RINCIAN BIAYA (pengajuan dana, jenis selain Billing) */
+.fund-lines-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+table.fund-lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+table.fund-lines th {
+  background: var(--n-50);
+  color: var(--n-600);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+/* Judul kolom angka dipusatkan: isinya rata kanan, jadi judul rata
+   kanan ikut menempel ke tepi dan terbaca seperti bagian dari kolom
+   sebelahnya. */
+table.fund-lines th.fl-amt,
+table.fund-lines th.fl-rate {
+  text-align: center;
+}
+table.fund-lines td {
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+table.fund-lines input,
+table.fund-lines select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: var(--t-sm);
+}
+.fund-lines .fl-no {
+  width: 38px;
+  text-align: center;
+  color: var(--n-500);
+  font-family: var(--font-mono);
+}
+.fund-lines .fl-amt {
+  width: 150px;
+  text-align: right;
+}
+.fund-lines .fl-rate {
+  width: 90px;
+}
+/* Kolom PPN dihitung, bukan diketik -- ditampilkan sebagai teks supaya
+   tidak terlihat seperti isian yang bisa diubah. */
+.fund-lines td.fl-ppn {
+  font-family: var(--font-mono);
+  color: var(--n-600);
+  white-space: nowrap;
+}
+.fund-lines .fl-act {
+  width: 40px;
+  text-align: center;
+}
+.fund-lines-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-top: var(--sp-3);
+  font-size: var(--t-sm);
+}
+.fl-sum {
+  display: flex;
+  gap: var(--sp-4);
+  justify-content: space-between;
+  min-width: 260px;
+}
+.fl-sum span {
+  color: var(--n-600);
+}
+.fl-sum--minus b {
+  color: var(--s-danger);
+}
+.fl-sum--total {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: var(--t-base);
+}
+
 .docnum-panel-head {
   display: flex;
   align-items: baseline;
@@ -262,7 +375,7 @@
   padding: 10px 2px;
 }
 
-/* Ikon berputar saat tombol sedang memproses. Sebelumnya hanya berlaku */
+/* Ikon berputar saat tombol sedang memproses. */
 .spin {
   display: inline-block;
   animation: spin-import 0.9s linear infinite;
@@ -344,7 +457,7 @@
   /* Kolom aksi berdiri sendiri, tidak menumpang di atas kolom
      Customer.
 
-     Sebelumnya sel tombol tidak punya lebar sendiri, jadi kolom
+     Tanpa lebar sendiri pada sel tombol, kolom
      Customer memakai seluruh sisa lebar dan tombolnya tergambar di
      atas teksnya. */
   .docnum-table td:last-child,
@@ -399,9 +512,28 @@
 ================================================================== */
 @media (max-width: 900px) {
   .docnum-table .dn-col-tgl,
-  .docnum-table .dn-col-pemohon {
+  .docnum-table .dn-col-pemohon,
+  /* Keterangan pengajuan dana ikut disembunyikan lebih dulu: ia kalimat
+     terpanjang di baris itu, jadi paling cepat membuat kolom lain
+     terhimpit. Nomor Billing dipertahankan -- justru itu penanda yang
+     dicari saat memindai daftar. */
+  .docnum-table .dn-col-ket {
     display: none;
   }
+}
+
+/* Kolom khusus daftar Pengajuan Dana. */
+.docnum-table .dn-col-billing {
+  white-space: nowrap;
+}
+/* nowrap tanpa elipsis, sama seperti kolom lain di tabel ini: wadahnya
+   bergulir mendatar, jadi memotong isi cuma menyembunyikannya tanpa
+   cara melihatnya. Panjang teksnya sudah dibatasi di tempat baris ini
+   dibuat (80 karakter, docnum-view.js), dan kalimat penuhnya ada di
+   tooltip. */
+.docnum-table .dn-col-ket {
+  white-space: nowrap;
+  color: var(--n-600);
 }
 
 @media (max-width: 640px) {

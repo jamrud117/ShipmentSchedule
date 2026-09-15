@@ -115,7 +115,7 @@ function predictEta(src, etdOverride) {
     return {
       ok: false,
       eta: "",
-      reason: "ETD belum diisi.",
+      reason: t("s.etd.belum.diisi"),
       ctx: ctx,
       transit: transit,
     };

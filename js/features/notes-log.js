@@ -62,7 +62,7 @@ function renderNotesTimeline() {
   const box = $("#notesTimeline");
   if (!box) return;
   if (!draftNotesLog.length) {
-    box.innerHTML = `<div class="note-empty">Belum ada catatan. Tulis kronologi pertama di kotak atas — tiap entri otomatis diberi tanggal & jam.</div>`;
+    box.innerHTML = `<div class="note-empty">${t("v.belum.ada.catatan.tulis.kronologi.pertama.di.k")}</div>`;
     return;
   }
   // Terbaru DI ATAS saat dibaca, walau di data urutannya kronologis
@@ -74,7 +74,7 @@ function renderNotesTimeline() {
         <div class="note-entry-head">
           <span class="note-stamp"><i class="bi bi-clock"></i> ${escapeHtml(fmtNoteStamp(e.ts))}</span>
           <span class="note-acts">
-            <button type="button" class="note-edit" data-act="edit-note" data-note-id="${e.id}" title="Ubah tanggal &amp; isi catatan">
+            <button type="button" class="note-edit" data-act="edit-note" data-note-id="${e.id}" title=t("v.ubah.tanggal.amp.isi.catatan")>
               <i class="bi bi-pencil"></i>
             </button>
             <button type="button" class="note-del" data-act="del-note" data-note-id="${e.id}" title="Hapus catatan ini">
@@ -92,7 +92,7 @@ function addDraftNote() {
   const el = $("#fNoteDraft");
   const text = el.value.trim();
   if (!text) {
-    showToast("Tulis dulu isi catatannya.", "dark");
+    showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
     return;
   }
   draftNotesLog.push(newNoteEntry(text));
@@ -138,8 +138,8 @@ function editDraftNote(noteId) {
     asal && !isNaN(asal) ? asal.toISOString().slice(0, 10) : todayISO();
 
   showPrompt({
-    title: "Ubah Kronologi",
-    desc: "Perbaiki tanggal atau isi catatan.",
+    title: t("c.ubah.kronologi"),
+    desc: t("s.perbaiki.tanggal.atau.isi.catatan"),
     icon: "bi-clock-history",
     okText: "Simpan",
     fields: [
@@ -148,9 +148,9 @@ function editDraftNote(noteId) {
     ],
     onSubmit: (v) => {
       const teks = (v.teks || "").trim();
-      if (!teks) return "Isi catatan tidak boleh kosong.";
+      if (!teks) return t("s.isi.catatan.tidak.boleh.kosong");
       const tgl = parseLocalDate(v.tgl);
-      if (!tgl) return "Tanggal tidak valid.";
+      if (!tgl) return t("s.tanggal.tidak.valid");
 
       // Jam & menit dari entri asli dipertahankan; kalau belum ada,
       // dipakai jam saat ini supaya urutannya tetap masuk akal.
@@ -162,7 +162,7 @@ function editDraftNote(noteId) {
       // Diurutkan ulang: mengubah tanggal bisa memindahkan posisinya.
       draftNotesLog.sort((a, b) => (a.ts || "") .localeCompare(b.ts || ""));
       renderNotesTimeline();
-      showToast("Kronologi diperbarui.", "dark");
+      showToast(t("m.kronologi.diperbarui"), "dark");
       return true;
     },
   });
@@ -186,7 +186,7 @@ function cardNotesHtml(s) {
         </div>`,
         )
         .join("")
-    : `<div class="note-empty">Belum ada kronologi.</div>`;
+    : `<div class="note-empty">${t("v.belum.ada.kronologi")}</div>`;
 
   return `
   <div class="card-notes">
@@ -213,7 +213,7 @@ async function addNoteFromCard(id) {
   if (!input) return;
   const text = input.value.trim();
   if (!text) {
-    showToast("Tulis dulu isi catatannya.", "dark");
+    showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
     return;
   }
   const log = normalizeNotesLog(s.notesLog, s.notes);
@@ -223,5 +223,5 @@ async function addNoteFromCard(id) {
   input.value = "";
   render();
   await persistFields(id, { notesLog: s.notesLog, notes: s.notes });
-  showToast("Catatan ditambahkan.", "success");
+  showToast(t("m.catatan.ditambahkan"), "success");
 }

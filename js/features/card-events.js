@@ -25,7 +25,7 @@ cardContainer.addEventListener("change", (e) => {
 
        Kolom mananya TIDAK ditebak di sini — ditanyakan ke
        kolomPenyebabTiba() di core/status.js, sumber aturan yang sama
-       yang dipakai isArrived(). Sebelumnya buku Export mengosongkan
+       yang dipakai isArrived(). Buku Export TIDAK boleh mengosongkan
        `actual` (berlabel "Stuffing") padahal yang menentukan ETD:
        tanggal Stuffing hilang, status melompat balik ke Delivered,
        dan pesannya tetap bilang berhasil. */
@@ -38,7 +38,7 @@ cardContainer.addEventListener("change", (e) => {
       const tanggal = fmtDate(s[kolomFakta[0]]);
 
       showConfirm(
-        `Tanggal ${namaKolom} (${tanggal}) akan dikosongkan supaya statusnya bisa kembali ke ${statusLabel(semula, activeMode)}. Lanjutkan?`,
+        t("x.tanggal.akan.dikosongkan", { kolom: namaKolom, tgl: tanggal, status: statusLabel(semula, activeMode) }),
         () => {
           const patch = { status: semula };
           /* Tanggal yang dihapus DICATAT ke kronologi sebelum hilang.
@@ -141,10 +141,10 @@ cardContainer.addEventListener("click", (e) => {
         if (error) throw error;
         data[activeMode] = currentList().filter((x) => x.id !== id);
         render();
-        showToast("Jadwal berhasil dihapus.", "dark");
+        showToast(t("m.jadwal.berhasil.dihapus"), "dark");
       } catch (err) {
         console.error(err);
-        showToast("Gagal menghapus data dari database.", "danger");
+        showToast(t("m.gagal.menghapus.data.dari.database"), "danger");
       }
     });
   }

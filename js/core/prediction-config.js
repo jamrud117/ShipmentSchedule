@@ -387,7 +387,12 @@ const PREDICTION_CONFIG = {
        merepotkan daripada yang kelewat hati-hati. */
     {
       id: "default",
-      label: "Bawaan (rute belum terdaftar)",
+      /* getter, bukan nilai tetap: objek ini dinilai SEKALI saat
+         berkas dimuat, jadi t() yang dipanggil langsung akan membeku
+         pada bahasa saat itu dan tidak ikut berganti. */
+      get label() {
+        return t("s.bawaan.rute.belum.terdaftar");
+      },
       match: {},
       days: {
         AIR: { direct: 2, transit: 4 },
@@ -577,7 +582,13 @@ const PREDICTION_CONFIG = {
        di kolom itu kalau yang dipakai layanan ekonomi. */
     {
       id: "fedex-default",
-      label: "FedEx (layanan tidak disebut — dianggap Priority)",
+      /* getter, sama dengan label rute bawaan di atas: berkas ini
+         dimuat SEBELUM kamus, jadi memanggil t() langsung di sini
+         membuat seluruh berkas gagal dimuat -- bukan cuma labelnya
+         yang salah. Getter menunda pemanggilannya sampai dibaca. */
+      get label() {
+        return t("v.fedex.layanan.tidak.disebut.dianggap.priority");
+      },
       match: { carrier: "FEDEX" },
       workingDays: 3,
     },

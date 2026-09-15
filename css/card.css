@@ -71,21 +71,40 @@
   margin-top: 3px;
 }
 
-/* ---- Info grid (route / vessel / container / invoice / factory / weight) ---- */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 17px 22px;
+/* ---- Badan kartu: rincian di KIRI, daftar nama barang di KANAN ----
+
+   Daftar nama barang bisa lima baris sementara rincian di atasnya cuma
+   satu baris. Ditaruh melintang penuh di bawah rincian, sisi kanannya
+   jadi kosong sepanjang lima baris itu. Di sini rincian dipadatkan jadi
+   dua baris empat kolom, dan nama barang mengisi kolom kanan sejajar
+   dengannya. */
+.ship-body-split {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
   padding: 15px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   margin: 13px 0;
 }
-.info-item {
+.info-grid {
+  display: grid;
+  /* Empat kolom TETAP, bukan auto-fit: dengan auto-fit kedelapan
+     rincian muat sebaris di layar lebar, dan blok kirinya jadi setinggi
+     satu baris lagi — persis keadaan yang dihindari di atas. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 17px 22px;
+  flex: 1 1 0;
   min-width: 0;
 }
-.info-item--wide {
-  grid-column: span 2;
+.info-names {
+  /* Selebar kira-kira seperempat kartu, dibatasi supaya nama barang
+     yang panjang tidak menggencet rincian di kirinya. */
+  flex: 0 0 clamp(240px, 26%, 400px);
+  min-width: 0;
+}
+.info-item {
+  min-width: 0;
 }
 .info-value--list div + div {
   margin-top: 2px;
@@ -386,11 +405,11 @@
 }
 /* Penanda bergerak.
 
-   Sebelumnya ia mengambang naik-turun — geraknya tegak lurus terhadap
-   jalur, sehingga malah menutupi tulisan di atasnya dan tidak
-   menyampaikan apa pun soal arah. Sekarang ikonnya menghadap KANAN
-   (searah jalur) dan yang bergerak adalah jejak di belakangnya: semburan
-   untuk pesawat, riak air untuk kapal. */
+   Ikonnya menghadap KANAN (searah jalur) dan yang bergerak adalah
+   jejak di belakangnya: semburan untuk pesawat, riak air untuk kapal.
+   Gerak naik-turun sengaja dihindari — arahnya tegak lurus terhadap
+   jalur, jadi menutupi tulisan di atasnya tanpa menyampaikan apa pun
+   soal arah. */
 .ship-marker {
   overflow: visible;
 }
@@ -419,6 +438,12 @@
 }
 .is-sea .marker-trail span {
   background: linear-gradient(90deg, transparent, var(--p-400));
+}
+/* Mobil — jejak netral (abu-abu, bukan biru/oranye milik laut/udara),
+   dan SENGAJA tidak ikut hull-sway di bawah: mobil tidak berayun
+   seperti kapal. */
+.is-road .marker-trail span {
+  background: linear-gradient(90deg, transparent, var(--n-400));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -533,12 +558,11 @@
 
    Tiga label di baris ini tidak sama tingginya — "ETD" teks polos,
    "ETA" dan "Estimated Delivery" membawa lencana AUTO/MANUAL, dan di
-   layar sempit label terpanjang turun ke baris kedua. Karena dulu
-   label & isian hanya ditumpuk biasa, tinggi label langsung menggeser
-   kotak di bawahnya: ETD naik 4px dari dua lainnya di SEMUA lebar, dan
-   di bawah 660px Estimated Delivery turun 16px sendirian.
+   layar sempit label terpanjang turun ke baris kedua. Kalau label &
+   isian sekadar ditumpuk biasa, tinggi label langsung menggeser kotak
+   di bawahnya sampai ketiganya tidak sejajar.
 
-   Sekarang tiap kotak jadi kolom lentur setinggi barisnya, dan
+   Tiap kotak jadi kolom lentur setinggi barisnya, dan
    isiannya didorong ke dasar — berapa pun tinggi labelnya, ketiga
    kotak tanggal berhenti di garis yang sama. */
 .date-field {
@@ -659,28 +683,13 @@
   padding-top: 10px;
   border-top: 1px dashed var(--border);
 }
-.collapsed-items {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.collapsed-items-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.collapsed-items-list {
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--ink);
-  flex: 1 1 240px;
-  min-width: 0;
-}
-.collapsed-items-list > div {
-  word-break: break-word;
+/* Rincian & nama barang memakai blok yang sama dengan kartu berjalan
+   (cardBodySplitHtml). Di sini garis atas pemisahnya saja yang perlu
+   dirapatkan, karena blok itu sudah punya jaraknya sendiri. */
+.collapsed-extra .ship-body-split {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
 }
 /* Kronologi pada kartu selesai: jarak atas dirapatkan */
 .collapsed-extra .card-notes {
@@ -788,7 +797,7 @@
   min-width: 0;
 }
 
-/* Baris tag dirapatkan & dibuat lebih tenang: dulu tiap tag punya */
+
 .tag-row {
   gap: 5px;
   margin: 10px 0 0;
@@ -800,17 +809,33 @@
 }
 
 /* Kartu di layar sempit */
+/* Belahan kiri-kanan cuma masuk akal selama kartunya lebar. Di bawah
+   ini keduanya ditumpuk -- dipaksa berdampingan, kolom rincian jadi
+   terlalu sempit sementara nama barang tetap butuh lebarnya. */
+@media (max-width: 1199.98px) {
+  .ship-body-split {
+    flex-direction: column;
+    gap: 15px;
+  }
+  .info-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .info-names {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
 @media (max-width: 599.98px) {
   /* BARIS AKSI: STATUS DI KIRI, IKON DI KANAN.
 
-     Sebelumnya blok ini menempel di kiri mengikuti judul, lalu empat
-     tombolnya berjejer rapat di sebelah status — dan karena
-     .ship-actions-block tidak boleh menyusut, lebarnya terkunci 320px
-     sementara isi kartu di HP 360px cuma 292px. Barisnya MELUBER
-     keluar kartu, bukan sekadar terlihat sesak.
-
      Dengan space-between, sisa ruangnya jatuh di antara status dan
-     ikon — bukan di ujung kanan yang kosong. */
+     ikon — bukan di ujung kanan yang kosong.
+
+     Menempelkan blok ini ke kiri mengikuti judul akan mengunci
+     lebarnya di 320px, sementara isi kartu di HP 360px cuma 292px:
+     barisnya MELUBER keluar kartu, bukan sekadar terlihat sesak. */
   .ship-actions-block {
     width: 100%;
     justify-content: space-between;
@@ -840,8 +865,8 @@
      tindakan sekunder.
 
      36px memang di bawah pedoman 44px. Yang menggantikannya bukan
-     ukuran melainkan JARAK: dengan space-between, tombolnya justru
-     lebih renggang daripada sebelumnya — dan salah tekan lebih sering
+     ukuran melainkan JARAK: dengan space-between tombolnya renggang,
+     dan salah tekan lebih sering
      datang dari target berdempetan daripada dari target kecil.
 
      Tombol di luar kartu (bilah kendali, "+" dan "...") sengaja
@@ -855,21 +880,29 @@
     font-size: 0.86rem;
   }
 
-  /* SEL LEBAR TIDAK BOLEH MEMAKSA KOLOM KEDUA.
-
-     .info-grid memakai auto-fit minmax(180px, 1fr) — di bawah ~444px
-     ia menyusut jadi SATU kolom. Tapi .info-item--wide minta
-     `span 2`, dan grid menuruti permintaan itu dengan MEMBUAT kolom
-     implisit yang tidak ada di templat. Kolom tambahan itu tidak
-     ikut aturan 1fr, jadi lebar isinya melewati kartu: di 320px
-     grid-nya 292px di dalam ruang 254px, dan seluruh halaman ikut
-     bisa digeser mendatar.
-
-     `1 / -1` meminta hal yang sebenarnya dimaksud — "selebar yang
-     ada" — tanpa menuntut jumlah kolom tertentu. Di 2 kolom hasilnya
-     sama persis dengan span 2; di 1 kolom ia berhenti di situ. */
-  .info-item--wide {
-    grid-column: 1 / -1;
+  /* Di HP belahan kiri-kanan itu tidak muat: keduanya ditumpuk, dan
+     rincian dipadatkan jadi dua kolom. minmax(0, 1fr) — bukan 1fr —
+     supaya sel yang isinya panjang tidak melebarkan kolomnya melewati
+     kartu; batas bawah `auto` pada 1fr memakai lebar min-content,
+     dan itu yang membuat seluruh halaman bisa digeser mendatar. */
+  .ship-body-split {
+    flex-direction: column;
+    gap: 15px;
+  }
+  /* auto-fit, bukan dua kolom tetap: di 600px dua kolom menyisakan
+     ruang kosong selebar hampir satu kolom lagi, sementara di 320px
+     tiga kolom akan memotong nomor dokumen. Ambang 150px membuatnya
+     memilih sendiri -- tiga kolom di HP besar/tablet kecil, dua di HP
+     sempit. minmax dengan batas bawah TETAP (bukan 1fr) supaya sel
+     berisi teks panjang tidak melebarkan kolomnya melewati kartu. */
+  .info-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 13px 14px;
+    width: 100%;
+  }
+  .info-names {
+    flex: 1 1 auto;
+    width: 100%;
   }
 
   .date-strip {

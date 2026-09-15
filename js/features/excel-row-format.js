@@ -148,6 +148,33 @@ function buildExcelCopyRows(s, formatter) {
   ];
 
   function buildRowForItem(it, idx) {
+    const amount = (Number(it.qty) || 0) * (Number(it.harga) || 0);
+    /* CIF/FOB Rupiah PER BARIS, dari Amount baris itu sendiri — BUKAN
+       calc.cifUsd/fobRupiah/cifRupiah, yang nilainya level pengiriman
+       (itu dipakai di tab Kepabeanan). Memakai angka level pengiriman
+       di sini membuat totalnya terbaca seperti nilai satu barang.
+
+       TIDAK ada kolom "FOB" (USD) tersendiri — sudah dicek langsung ke
+       IMPORT_FORMAT.xlsx yang sungguhan: yang ada cuma CIF, FOB
+       RUPIAH, CIF RUPIAH (31 kolom pas, NO s.d. REMARK). Kolom "CIF"
+       itu sendiri dipakai sebagai nilai USD barangnya APA PUN Terms-nya
+       — termasuk saat Terms=FOB, nilai FOB-nya tetap masuk ke kolom
+       CIF ini (bukan dikosongkan) — karena memang tidak ada kolom USD
+       lain untuk menampungnya; kolom AMOUNT (di atas) sudah menunjukkan
+       angka yang sama, tapi kolom CIF di sini tetap diisi supaya
+       sejajar dengan kolom Rupiah di sebelahnya.
+
+       Yang BENAR-BENAR bergantung pada Terms cuma dua kolom Rupiah-nya
+       (itu yang mewakili dasar kepabeanan sungguhan, cuma satu yang
+       berlaku sesuai Incoterm): Terms=FOB -> FOB Rupiah=Amount×NDPBM,
+       CIF Rupiah=0. Terms lain -> CIF Rupiah=Amount×NDPBM, FOB
+       Rupiah=0. */
+    const isFob = String(s.incoterm || "").trim().toUpperCase() === "FOB";
+    const cifUsdBaris = amount;
+    const ndpbmVal = Number(s.ndpbm) || 0;
+    const cifRupiahBaris = isFob ? 0 : amount * ndpbmVal;
+    const fobRupiahBaris = isFob ? amount * ndpbmVal : 0;
+
     const cols = [
       formatter.date(s.factoryDate), // 0  IN FACTORY
       formatter.text(s.docNo), // 1  SPPB
@@ -159,14 +186,14 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(it.namaBarang), // 7  DESCRIPTION
       formatter.num(it.qty, 2), // 8  QTY
       formatter.text(it.satuan), // 9  SAT
-      formatter.num((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 10 AMOUNT
+      formatter.num(amount, 2), // 10 AMOUNT
       formatter.num(s.ndpbm, 2), // 11 NDPBM
       formatter.text(s.incoterm), // 12 INCOTERMS
       formatter.num(s.freight, 2), // 13 FREIGHT
       formatter.num(s.insurance, 2), // 14 INSURANCE
-      formatter.num(calc.cifUsd, 2), // 15 CIF
-      formatter.num(calc.fobRupiah, 2), // 16 FOB RUPIAH
-      formatter.num(calc.cifRupiah, 2), // 17 CIF RUPIAH
+      formatter.num(cifUsdBaris, 2), // 15 CIF
+      formatter.num(fobRupiahBaris, 2), // 16 FOB RUPIAH
+      formatter.num(cifRupiahBaris, 2), // 17 CIF RUPIAH
       formatter.tarif(s.tarif), // 18 TARIF
       formatter.num(bmVal, 2), // 19 BEA MASUK
       formatter.num(ppnVal, 2), // 20 PPN 11%

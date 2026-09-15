@@ -179,14 +179,14 @@ function resolveRouteLayer(src) {
   const ctx = predictionContext(src);
   const gaps = [];
 
-  if (!ctx.origin) gaps.push("Pelabuhan/bandara asal belum diisi");
-  else if (!ctx.fromPort) gaps.push(`Asal "${ctx.origin}" tidak dikenali`);
+  if (!ctx.origin) gaps.push(t("s.pelabuhan.bandara.asal.belum.diisi"));
+  else if (!ctx.fromPort) gaps.push(t("x.asal.tidak.dikenali", { x: ctx.origin }));
 
-  if (!ctx.destination) gaps.push("Pelabuhan/bandara tujuan belum diisi");
-  else if (!ctx.toPort) gaps.push(`Tujuan "${ctx.destination}" tidak dikenali`);
+  if (!ctx.destination) gaps.push(t("s.pelabuhan.bandara.tujuan.belum.diisi"));
+  else if (!ctx.toPort) gaps.push(t("x.tujuan.tidak.dikenali", { x: ctx.destination }));
 
-  if (predictionTypeIsAssumed(src)) gaps.push("Jenis Muatan belum diisi");
-  if (!ctx.etd) gaps.push("ETD belum diisi");
+  if (predictionTypeIsAssumed(src)) gaps.push(t("s.jenis.muatan.belum.diisi"));
+  if (!ctx.etd) gaps.push(t("s.etd.belum.diisi"));
 
   return {
     ...ctx,

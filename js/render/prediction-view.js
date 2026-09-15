@@ -56,7 +56,7 @@ function routeLayerHtml(rute) {
   const sisi = (kode, nama, negara) =>
     kode
       ? `<b>${escapeHtml(kode)}</b>${nama ? ` <span class="pred-muted">${escapeHtml(nama)}</span>` : ""}`
-      : `<span class="pred-muted">belum dikenali</span>`;
+      : `<span class="pred-muted">${t("c.belum.dikenali")}</span>`;
   bagian.push(
     `${sisi(rute.fromPort, rute.originName)} → ${sisi(rute.toPort, rute.destinationName)}`,
   );
@@ -107,7 +107,7 @@ function transitSourceHtml(e) {
   if (tr.learned) {
     bagian.push(
       `<span class="pred-src-tag pred-src-tag--learned" title="${escapeHtml(
-        `Rata-rata ${tr.learned.avg} hari · min ${tr.learned.min} · maks ${tr.learned.max} · simpangan baku ${tr.learned.stdDev} · ${tr.learned.dropped} pencilan dibuang · metode ${tr.learned.method}`,
+        t("z.ringkasan.belajar", { avg: tr.learned.avg, min: tr.learned.min, maks: tr.learned.max, sd: tr.learned.stdDev, buang: tr.learned.dropped, metode: tr.learned.method }),
       )}"><i class="bi bi-mortarboard-fill"></i> Riwayat ${tr.learned.samples} pengiriman${tr.learned.scope === "carrier" ? " (pelayaran ini)" : ""} · ${tr.learned.min}–${tr.learned.max} hari</span>`,
     );
   }
@@ -217,7 +217,7 @@ function predictionDetailHtml(s) {
     <div class="pred-detail">
       <div class="pred-detail-row">
         <div class="pred-detail-key">Tipe Pengiriman</div>
-        <div class="pred-detail-val">${escapeHtml(tipe)}${predictionTypeIsAssumed(s) ? ' <span class="pred-muted">(Jenis Muatan belum diisi — dianggap FCL)</span>' : ""}</div>
+        <div class="pred-detail-val">${escapeHtml(tipe)}${predictionTypeIsAssumed(s) ? ' <span class="pred-muted">${t("c.jenis.muatan.belum.diisi.dianggap.fcl")}</span>' : ""}</div>
       </div>
       <div class="pred-detail-row">
         <div class="pred-detail-key">ETA Hitungan Mesin</div>
@@ -236,7 +236,7 @@ function predictionDetailHtml(s) {
         </div>
       </div>
       ${d.ok && !d.arrived ? `<div class="pred-detail-row pred-detail-row--full">${predStepsHtml(d)}</div>` : ""}
-      ${d.arrived ? `<div class="pred-note-final"><i class="bi bi-check-circle-fill"></i> Barang sudah masuk pabrik — perkiraan digantikan tanggal sebenarnya.</div>` : ""}
+      ${d.arrived ? `<div class="pred-note-final"><i class="bi bi-check-circle-fill"></i> ${t("w.barang.sudah.masuk.pabrik")}</div>` : ""}
       ${
         d.source === "manual"
           ? (() => {
@@ -268,7 +268,7 @@ function sisaPekerjaanHtml(src, d) {
       ${
         sisa.length
           ? `<span class="pred-muted">· Belum dikonfirmasi: ${escapeHtml(sisa.map((m) => m.label).join(", "))}</span>`
-          : `<span class="pred-muted">· Semua milestone sudah dikonfirmasi</span>`
+          : `<span class="pred-muted">${t("c.semua.milestone.sudah.dikonfirmasi")}</span>`
       }
     </div>`;
 }

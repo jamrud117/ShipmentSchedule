@@ -127,7 +127,7 @@ function ringkasSampel(angka) {
   const butuh = cfg.minSamples || 8;
 
   if (angka.length < butuh) {
-    return { cukup: false, samples: angka.length, need: butuh, reason: "belum cukup" };
+    return { cukup: false, samples: angka.length, need: butuh, reason: t("w.belum.cukup") };
   }
 
   const bersih =
@@ -162,7 +162,7 @@ function ringkasSampel(angka) {
     min: Math.min.apply(null, bersih),
     max: Math.max.apply(null, bersih),
     stdDev: Math.round(sd * 10) / 10,
-    method: cfg.method === "median" ? "median" : "rata-rata (pencilan dibuang)",
+    method: cfg.method === "median" ? "median" : t("z.rata.rata.pencilan.dibuang"),
   };
 }
 

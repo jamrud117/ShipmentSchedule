@@ -22,7 +22,6 @@ body::-webkit-scrollbar {
 /* Wadah gulir di dalam halaman ikut disamakan */
 .sheet-body,
 .cmdk-list,
-.preset-row,
 .site-nav,
 .docnum-tabs {
   scrollbar-width: none;
@@ -30,7 +29,6 @@ body::-webkit-scrollbar {
 }
 .sheet-body::-webkit-scrollbar,
 .cmdk-list::-webkit-scrollbar,
-.preset-row::-webkit-scrollbar,
 .site-nav::-webkit-scrollbar,
 .docnum-tabs::-webkit-scrollbar {
   width: 0;
@@ -44,7 +42,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  /* Latar polos. Gradien radial samar di versi lama tidak pernah */
+  /* Latar polos. */
 }
 
 /* "Sticky footer" klasik: halaman yang sedang aktif tumbuh mengisi */
@@ -82,15 +80,22 @@ body {
   outline-color: var(--p-300);
 }
 
-/* Lebar isi — dua tingkat di atas bawaan Bootstrap */
-@media (min-width: 1400px) {
-  .container {
-    max-width: 1320px;
-  }
+/* Lebar isi — MENGISI PENUH lebar layar, bukan kotak di tengah dengan
+   ruang kosong di kiri-kanan.
+
+   Aplikasi ini isinya tabel lebar (Daftar Barang belasan kolom,
+   jadwal dengan banyak kolom) — membatasinya di 1320/1600px berarti
+   memaksa gulir mendatar di layar yang sebenarnya masih punya ruang.
+   Padding tepi tetap ada supaya isinya tidak menempel ke sisi layar. */
+.container {
+  max-width: 100%;
+  padding-left: var(--sp-5);
+  padding-right: var(--sp-5);
 }
-@media (min-width: 1800px) {
+@media (max-width: 767px) {
   .container {
-    max-width: 1600px;
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
   }
 }
 
@@ -140,7 +145,6 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
-.btn-danger-quiet:hover,
 .btn-outline-danger:hover,
 .btn-outline-danger:active,
 .btn-outline-danger:focus {

@@ -14,20 +14,36 @@
 function laneProgress(s) {
   if (isArrived(s)) return 1;
 
-  const etd = parseLocalDate(effectiveEtd(s));
-  const eta = parseLocalDate(effectiveEta(s));
+  const etdDate = effectiveEtd(s);
+  const etaDate = effectiveEta(s);
+  if (!etdDate || !etaDate) return 0;
+
+  /* Presisi jam HANYA dipakai kalau ETD *dan* ETA dua-duanya punya jam
+     terisi — satu ada satu tidak akan membandingkan jam+menit di satu
+     sisi dengan tengah malam di sisi lain, lebih menyesatkan daripada
+     berguna. Kalau salah satu/keduanya kosong (jadwal lama, atau
+     memang belum diisi), jatuh PERSIS ke perhitungan per-hari seperti
+     sebelum fitur jam ini ada — supaya jadwal yang belum pernah
+     mengisi jam tidak diam-diam berubah perilakunya. */
+  const punyaJam = !!(s.etdTime && s.etaTime);
+  const etd = punyaJam
+    ? parseLocalDateTime(etdDate, s.etdTime)
+    : parseLocalDate(etdDate);
+  const eta = punyaJam
+    ? parseLocalDateTime(etaDate, s.etaTime)
+    : parseLocalDate(etaDate);
   if (!etd || !eta) return 0;
 
-  const today = parseLocalDate(todayISO());
+  const now = punyaJam ? new Date() : parseLocalDate(todayISO());
   // Belum berangkat = benar-benar 0. Kalau penandanya terlihat
   // menggantung di tepi, itu urusan CSS — bukan urusan angka ini.
-  if (today <= etd) return 0;
+  if (now <= etd) return 0;
   // Sudah sampai terminal, menunggu diantar ke pabrik.
-  if (today >= eta) return 0.96;
+  if (now >= eta) return 0.96;
 
   const total = eta - etd;
   if (total <= 0) return 0.5;
-  return Math.min(0.94, Math.max(0.04, (today - etd) / total));
+  return Math.min(0.94, Math.max(0.04, (now - etd) / total));
 }
 
 /* Keterangan jalur dalam tiga tahap:
@@ -58,31 +74,67 @@ function laneRemainingLabel(s) {
     if (s.actual) {
       const n = hari(today, parseLocalDate(s.actual));
       if (n > 0) return `Diantar ${n} Hari Lagi`;
-      if (n === 0) return "Diantar Hari Ini";
+      if (n === 0) return t("c.diantar.hari.ini");
     }
     const telat = hari(eta, today);
     return telat > 0 ? `Di ${simpul} · Telat ${telat} Hari` : `Di ${simpul}`;
   }
-  if (etd && today.getTime() === etd.getTime()) return "Berangkat Hari Ini";
+  if (etd && today.getTime() === etd.getTime()) return t("c.berangkat.hari.ini");
   return "";
 }
 /* Lambang moda digambar sebagai SVG, bukan emoji.
 
    Emoji ✈️ dan 🚢 arah hadapnya berbeda-beda antar sistem operasi —
    ada yang serong kanan-atas, ada yang mendatar — sehingga tidak ada
-   satu sudut putar yang benar untuk semuanya. Sudut 90 derajat yang
-   dipakai sebelumnya membuat pesawatnya menghadap ke BAWAH pada
-   sebagian mesin.
+   satu sudut putar yang benar untuk semuanya.
 
    Kedua gambar di bawah sudah menghadap lurus ke kanan, searah jalur,
    jadi tidak perlu diputar sama sekali. */
+/* Lambang moda — MULTI-WARNA (bukan cuma currentColor) supaya terasa
+   lebih hidup/bergambar, bukan garis tunggal datar. fill eksplisit di
+   tiap elemen MENANG atas fill:currentColor yang diwariskan dari
+   .marker-icon svg di card.css — presentation attribute pada elemen
+   itu sendiri selalu didahulukan atas nilai yang diwariskan dari
+   induk. Bentuk dasarnya tidak diubah (sudah terbukti benar &
+   menghadap kanan), cuma ditambah warna & sedikit detail (jendela,
+   bendera). */
 const ICON_PESAWAT =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 12c0 .6-.5 1.1-1.1 1.1h-4.3l-3.4 5.5a1 1 0 0 1-.9.5h-1.5l1.9-6H8.2l-1.4 2H5l1-3.1-1-3.1h1.8l1.4 2h4.1l-1.9-6h1.5c.4 0 .7.2.9.5l3.4 5.5h4.3c.6 0 1.1.5 1.1 1.1z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--p-600)" d="M21.6 12c0 .6-.5 1.1-1.1 1.1h-4.3l-3.4 5.5a1 1 0 0 1-.9.5h-1.5l1.9-6H8.2l-1.4 2H5l1-3.1-1-3.1h1.8l1.4 2h4.1l-1.9-6h1.5c.4 0 .7.2.9.5l3.4 5.5h4.3c.6 0 1.1.5 1.1 1.1z"/><circle cx="11.3" cy="12" r="0.7" fill="var(--p-300)"/><circle cx="13.6" cy="12" r="0.7" fill="var(--p-300)"/></svg>';
 const ICON_KAPAL =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 9.6h5.1v3.3H6.2zM12.6 10.8h2v2.1h-2z"/><path d="M2.6 14.2h13.7l4.8 2.7-1.4 2.8H5.3z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--p-700)" d="M2.6 14.2h13.7l4.8 2.7-1.4 2.8H5.3z"/><path fill="var(--p-300)" d="M6.2 9.6h5.1v3.3H6.2zM12.6 10.8h2v2.1h-2z"/><rect x="8.5" y="7.2" width="0.6" height="2.6" fill="var(--sec-500)"/><path fill="var(--sec-400)" d="M9.1 7.2l2.4.9-2.4.9z"/></svg>';
+/* Mobil — ANTAR DARAT ke pabrik, setelah tiba di terminal/bandara
+   (lihat sudahTibaTerminal() di bawah). Dibangun dari bentuk dasar
+   (rect + circle), bukan path custom seperti dua di atas — supaya
+   pasti tergambar benar tanpa perlu menghitung kurva jalur tangan. */
+const ICON_MOBIL =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7.5" width="9" height="4.5" rx="1" fill="var(--p-300)"/><rect x="3" y="12" width="18" height="3.5" rx="1" fill="var(--sec-400)"/><circle cx="7.5" cy="16.5" r="1.8" fill="var(--p-700)"/><circle cx="16.5" cy="16.5" r="1.8" fill="var(--p-700)"/></svg>';
 
 function iconForMode(mode) {
   return mode === "udara" ? ICON_PESAWAT : ICON_KAPAL;
+}
+
+/* Sudah tiba di terminal/bandara tujuan (lewat ETA-nya), menunggu
+   diantar ke pabrik — leg AKHIR perjalanan sekarang darat, jadi
+   penandanya ganti jadi mobil, apa pun moda internasionalnya (udara
+   atau laut). Dipakai bersama, bukan diulang: computeLaneModel() (buat
+   ikonnya) dan laneProgress() (batas 0,96 — lihat komentarnya sendiri
+   di atas) harus selalu sepakat kapan fase ini dimulai, kalau tidak
+   ikonnya bisa ganti mobil padahal penandanya masih di tengah jalur,
+   atau sebaliknya. */
+function sudahTibaTerminal(s) {
+  if (isArrived(s)) return true;
+  const etaDate = effectiveEta(s);
+  if (!etaDate) return false;
+  // Sama persis dengan laneProgress() -- keduanya harus selalu sepakat
+  // kapan fase "sudah di terminal" dimulai, kalau tidak ikon & posisi
+  // penanda bisa berselisih (satu bilang sudah, satu bilang belum).
+  const punyaJam = !!(s.etdTime && s.etaTime);
+  const eta = punyaJam
+    ? parseLocalDateTime(etaDate, s.etaTime)
+    : parseLocalDate(etaDate);
+  if (!eta) return false;
+  const now = punyaJam ? new Date() : parseLocalDate(todayISO());
+  return now >= eta;
 }
 
 /* RUTE TRANSIT (multi-terminal) */
@@ -298,7 +350,8 @@ function computeLaneModel(s) {
   const legIdx = activeLegIndex(asli, progresWaktu);
   const progress = petakanProgres(progresWaktu, asli, fractions);
   const leg = transportForLeg(s, nodes, legIdx);
-  const icon = iconForMode(leg.mode);
+  // Mobil begitu sudah tiba terminal/bandara — lihat sudahTibaTerminal() di atas.
+  const icon = sudahTibaTerminal(s) ? ICON_MOBIL : iconForMode(leg.mode);
   return { nodes, fractions, progress, legIdx, leg, icon };
 }
 
@@ -368,7 +421,10 @@ function buildLaneHtml(s) {
     progress <= 0.001 ? "at-start" : "",
     progress >= 0.999 ? "at-end" : "",
     bergerak ? "is-moving" : "",
-    lane.leg && lane.leg.mode === "udara" ? "is-air" : "is-sea",
+    // Mobil dapat jejak & gerak sendiri (is-road) — bukan is-air/is-sea
+    // ruas internasionalnya, yang tidak lagi cocok begitu sudah ganti
+    // ikon (goyangan kapal & semburan pesawat tidak masuk akal untuk mobil).
+    sudahTibaTerminal(s) ? "is-road" : lane.leg && lane.leg.mode === "udara" ? "is-air" : "is-sea",
   ]
     .filter(Boolean)
     .join(" ");
@@ -387,8 +443,8 @@ function buildLaneHtml(s) {
   const labelsHtml = !multi
     ? `
       <div class="port-labels">
-        <div class="p">ETD <b>${fmtDate(s.etd)}</b></div>
-        <div class="p text-end">ETA <b>${fmtDate(s.eta)}</b></div>
+        <div class="p">ETD <b>${fmtDate(s.etd)}${s.etdTime ? " · " + escapeHtml(s.etdTime) : ""}</b></div>
+        <div class="p text-end">ETA <b>${fmtDate(s.eta)}${s.etaTime ? " · " + escapeHtml(s.etaTime) : ""}</b></div>
       </div>`
     : `
       <div class="port-labels port-labels--multi">
@@ -396,11 +452,10 @@ function buildLaneHtml(s) {
           .map((nd, i) => {
             /* Perataan mengikuti POSISI, bukan urutan simpul.
 
-               Sebelumnya simpul pertama rata kiri, terakhir rata
-               kanan, sisanya rata tengah. Itu benar selama simpul
-               tengah memang di tengah — dan salah begitu ada transit
-               yang jatuh dekat tepi: label rata-tengah menjorok
-               separuh lebarnya keluar kartu.
+               Meratakan berdasar urutan (pertama kiri, terakhir kanan,
+               sisanya tengah) salah begitu ada transit yang jatuh dekat
+               tepi: label rata-tengah menjorok separuh lebarnya keluar
+               kartu.
 
                Ambangnya 12% / 88%, kira-kira selebar label pada kartu
                tersempit. Simpul pertama & terakhir tetap kena aturan

@@ -27,7 +27,7 @@ function itemTotals(shipmentLike) {
        menghasilkan bilangan yang tidak mewakili apa-apa, dan justru
        terlihat meyakinkan karena berupa angka bulat.
 
-       totalQty yang lama tetap dihitung: sebagian tempat memang cuma
+       totalQty tetap dihitung: sebagian tempat memang cuma
        butuh satu bilangan (mis. pengurutan), dan menghapusnya berarti
        menyentuh lebih banyak berkas daripada yang perlu. */
     const sat = String(it.satuan || "").trim().toUpperCase();
@@ -90,7 +90,7 @@ function computeCustoms(shipmentLike) {
   const pph = Number(shipmentLike.pph) || 0;
   /* PDRI = Bea Masuk + PPN + PPH. Penjumlahan biasa, tanpa syarat.
 
-     Sebelumnya ada aturan "kalau Bea Masuk 0 maka 0" — itu membuat
+     Aturan "kalau Bea Masuk 0 maka 0" TIDAK dipakai: itu membuat
      kiriman berfasilitas SKB, yang bea masuknya memang nol tapi PPN
      dan PPH-nya tetap terutang, menampilkan 0 padahal ada yang harus
      disetor. */
