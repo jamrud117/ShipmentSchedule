@@ -9,7 +9,10 @@ const ctx = { console, module: { exports: {} } };
 vm.createContext(ctx);
 
 // Hanya potongan helpers yang dibutuhkan mesin (helpers.js penuh butuh DOM-less saja, aman)
-["js/core/helpers.js",
+["js/core/i18n.js",
+ /* i18n PALING AWAL, sama seperti urutan <script> di index.html:
+    berkas lain memanggil t() dan kamusnya harus sudah ada. */
+ "js/core/helpers.js",
  /* Model status ikut dimuat: aturan "kolom mana yang menandai tiba"
     murni aritmetika tanggal, jadi tempatnya di sini. */
  "js/core/status.js",
@@ -377,6 +380,22 @@ t("tidak dikenali dilaporkan, bukan ditebak", () => {
 t("huruf yang bukan kode maskapai tidak dianggap kode", () => {
   eq(detectAirline("ABCDEF"), null);
   eq(detectAirline("KEABC"), null);   // sisanya harus angka
+});
+
+console.log("— CARRIER GABUNGAN UNTUK CIPL —");
+const { carrierNameFromShipment } = ctx;
+
+t("Carrier CIPL = Nama Voyager/Vessel + No. Voyage/Flight digabung", () => {
+  eq(carrierNameFromShipment({ transport: "laut", vessel: "MSC LORENA", voyage: "056S" }),
+    "MSC LORENA 056S");
+  eq(carrierNameFromShipment({ transport: "udara", vessel: "Garuda Cargo", voyage: "GA880/04JUL" }),
+    "Garuda Cargo GA880/04JUL");
+});
+t("salah satu kolom kosong -> yang ada saja, tanpa spasi nyasar", () => {
+  eq(carrierNameFromShipment({ vessel: "MSC LORENA", voyage: "" }), "MSC LORENA");
+  eq(carrierNameFromShipment({ vessel: "", voyage: "056S" }), "056S");
+  eq(carrierNameFromShipment({ vessel: "", voyage: "" }), "");
+  eq(carrierNameFromShipment({}), "");
 });
 
 console.log("— NAMA KAPAL NYATA DARI RIWAYAT DDI —");
@@ -966,6 +985,7 @@ console.log("— BENTUK KODE: PANJANG & PENDEK —");
 const { resolvePortCode, resolvePortCountry, resolveUnlocode, portCodeLabel } = ctx;
 // `const UNLOCODES` binding leksikal — tidak menempel ke objek konteks.
 const UNLOCODES = vm.runInContext("UNLOCODES", ctx);
+const CARRIER_MASTER = vm.runInContext("CARRIER_MASTER", ctx);
 
 t("UN/LOCODE dari dokumen tetap dikenali", () => {
   eq(resolvePortCode("IDCGK"), "CGK");
@@ -979,8 +999,84 @@ t("bentuk pendek dikenali", () => {
 });
 t("nama & alias dikenali", () => {
   eq(resolvePortCode("Soekarno-Hatta"), "CGK");
-  eq(resolvePortCode("Cat Lai"), "SGN");
+  /* Cat Lai kini punya kodenya SENDIRI (VNCLI) -- itu yang tercetak di
+     B/L, terpisah dari kode kota VNSGN. Perkiraan ETA-nya tetap jalan
+     karena seluruh terminal Ho Chi Minh didaftar bersama di aturan
+     rutenya (lihat vn-sea-sgn-tpp). */
+  eq(resolvePortCode("Cat Lai"), "CLI");
+  eq(resolvePortCode("Ho Chi Minh"), "SGN");
+  eq(resolvePortCode("Dinh Vu"), "DVU");
+  eq(resolvePortCode("Cai Mep"), "CMT");
   eq(resolvePortCode("Vostochny"), "VYP");
+});
+t("kode & alias pelayaran tidak ada yang kembar", () => {
+  /* Alias kembar membuat salah satu pelayaran tidak pernah terpilih:
+     pencocokan berhenti di yang pertama ditemukan. */
+  const kode = {};
+  const alias = {};
+  const bentrok = [];
+  CARRIER_MASTER.shippingLines.forEach((c) => {
+    if (kode[c.code]) bentrok.push("kode " + c.code);
+    kode[c.code] = true;
+    (c.aliases || []).forEach((a) => {
+      if (alias[a]) bentrok.push(`alias ${a} (${alias[a]} & ${c.code})`);
+      alias[a] = c.code;
+    });
+  });
+  if (bentrok.length) throw new Error(bentrok.join(" | "));
+});
+t("pelayaran Vietnam & intra-Asia dikenali dari nama kapalnya", () => {
+  /* Nama kapal hampir selalu diawali nama operatornya. */
+  const uji = {
+    "HAIAN ROSE": "HAIAN",
+    "VIETSUN INTEGRITY": "VIETSUN",
+    "SITC HAIPHONG": "SITC",
+    "KMTC SURABAYA": "KMTC",
+    "CNC JUPITER": "CNC",
+    "GOLD STAR VENUS": "GOLDSTAR",
+    "DONGJIN FORTUNE": "DONGJIN",
+  };
+  Object.keys(uji).forEach((kapal) => {
+    const hit = detectShippingLine(kapal);
+    eq(hit && hit.code, uji[kapal], kapal + ":");
+  });
+});
+t("SETIAP terminal Vietnam yang dikenali punya aturan rute ke Priok", () => {
+  /* Menambah kode pelabuhan tanpa mendaftarkannya di aturan rute
+     membuat kiriman dari terminal itu berhenti mendapat perkiraan ETA
+     -- diam-diam, tanpa pesan galat. */
+  const terminal = {
+    "Cat Lai": "CLI", "Sai Gon Port": "CSG", VICT: "VIC", "Hiep Phuoc": "HPP",
+    "Ho Chi Minh": "SGN", "Dinh Vu": "DVU", "Chua Ve": "CVE",
+    "Doan Xa": "DXA", Transvina: "TVN", Haiphong: "HPH",
+  };
+  const tanpaAturan = [];
+  Object.keys(terminal).forEach((nama) => {
+    const kode = resolvePortCode(nama);
+    eq(kode, terminal[nama], nama + ":");
+    const ada = PREDICTION_CONFIG.routes.some((r) => {
+      const m = r.match || {};
+      const dari = Array.isArray(m.fromPort) ? m.fromPort : [m.fromPort];
+      return m.fromCountry === "VN" && dari.includes(kode) && m.toPort === "TPP";
+    });
+    if (!ada) tanpaAturan.push(nama + " (" + kode + ")");
+  });
+  if (tanpaAturan.length)
+    throw new Error("tanpa aturan rute: " + tanpaAturan.join(", "));
+});
+t("kode pelabuhan tidak bertabrakan satu sama lain", () => {
+  /* Dua pelabuhan berbeda dengan kode pendek yang sama membuat salah
+     satunya tidak pernah terpilih. */
+  const pendek = {};
+  const tabrakan = [];
+  UNLOCODES.forEach((u) => {
+    const k = u.code;
+    if (pendek[k] && pendek[k] !== u.unlocode) {
+      tabrakan.push(`${k}: ${pendek[k]} vs ${u.unlocode}`);
+    }
+    pendek[k] = u.unlocode;
+  });
+  if (tabrakan.length) throw new Error(tabrakan.join(" | "));
 });
 t("negara diambil dari tabel, bukan dari memotong kode", () => {
   eq(resolvePortCountry("CGK"), "ID");   // bukan "CG" (Kongo)
@@ -997,11 +1093,26 @@ t("tabrakan TPP diselesaikan: Priok=TPP, Pelepas=PTP", () => {
   eq(resolvePortCode("MYTPP"), "PTP");
   eq(resolvePortCode("Tanjung Pelepas"), "PTP");
 });
-t("label hanya menyeragamkan KODE, nama dibiarkan", () => {
-  eq(portCodeLabel("IDTPP"), "TPP");
-  eq(portCodeLabel("CGK"), "CGK");
+t("label menyeragamkan KODE ke bentuk panjang, nama dibiarkan", () => {
+  /* Bentuk panjang inilah yang tercetak di PIB/PEB/B/L, dan ia menyebut
+     negaranya -- "TPP" saja bisa terbaca Tanjung Priok maupun Tanjung
+     Pelepas. */
+  eq(portCodeLabel("IDTPP"), "IDTPP");
+  eq(portCodeLabel("TPP"), "IDTPP", "bentuk pendek dinaikkan:");
+  eq(portCodeLabel("CGK"), "IDCGK");
+  eq(portCodeLabel("CLI"), "VNCLI");
+  /* Nama bebas dibiarkan apa adanya: permintaannya mengganti format
+     kode, bukan mengganti nama jadi kode di belakang punggung. */
   eq(portCodeLabel("Tanjung Priok"), "Tanjung Priok");
   eq(portCodeLabel(""), "");
+});
+t("jadwal lama tetap terbaca & tetap cocok dengan aturan rute", () => {
+  /* Yang DISIMPAN tidak diubah -- kedua bentuk harus tetap dikenali,
+     kalau tidak seluruh jadwal lama kehilangan perkiraan ETA-nya. */
+  eq(resolvePortCode("CGK"), "CGK");
+  eq(resolvePortCode("IDCGK"), "CGK");
+  eq(resolvePortCountry("IDCGK"), "ID");
+  eq(resolvePortCountry("CGK"), "ID");
 });
 t("PENJAGA: tidak ada kode pendek dipakai dua negara", () => {
   const peta = new Map();

@@ -76,16 +76,32 @@ function stripFieldLabels(s) {
 }
 
 // Deskripsi barang: URAIAN + Merk/Tipe
-function buildImportedNamaBarang(row) {
+/* Uraian & Size (Export) TERPISAH sejak sekarang -- lihat komentar
+   panjang di body.mode-import .size-col, form.css. Diverifikasi ke
+   berkas CEISA Export sungguhan: MEREK di sana SELALU "-" (placeholder,
+   tidak pernah benar-benar diisi), dan TIPE berisi kode
+   model+ukurannya sekaligus (mis. "MAGNETAR A/T 235/55R20") -- itu
+   padanan CEISA yang paling dekat dengan "Size" yang dimaksud,
+   walau isinya bukan cuma angka ukuran murni.
+     Import  : URAIAN + MEREK + TIPE digabung jadi satu (tidak
+               ada kolom Size di Import).
+     Export  : namaBarang = URAIAN (+ MEREK kalau bukan placeholder),
+               size = TIPE — dua field terpisah, bukan digabung. */
+function buildImportedNamaBarang(row, modeHint) {
   let desc = excelStr(row["URAIAN"]);
   const merek = excelStr(row["MEREK"]);
   const tipe = excelStr(row["TIPE"]);
   const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
   const parts = [];
   if (!isPlaceholder(merek)) parts.push(merek);
-  if (!isPlaceholder(tipe)) parts.push(tipe);
+  if (modeHint !== "export" && !isPlaceholder(tipe)) parts.push(tipe);
   if (parts.length) desc += (desc ? " " : "") + parts.join(" ");
   return stripFieldLabels(desc);
+}
+function buildImportedSize(row) {
+  const tipe = excelStr(row["TIPE"]);
+  const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
+  return isPlaceholder(tipe) ? "" : stripFieldLabels(tipe);
 }
 
 function parseBcExcelWorkbook(wb) {
@@ -99,7 +115,23 @@ function parseBcExcelWorkbook(wb) {
   const kontainer = sheetRows(wb, "KONTAINER");
   const barangTarif = sheetRows(wb, "BARANGTARIF");
   const barangDokumen = sheetRows(wb, "BARANGDOKUMEN");
-  const barang = sheetRows(wb, "BARANG");
+  /* Ascending NUMERIK berdasar SERI BARANG, bukan urutan baris apa
+     adanya di sheet BARANG. Baris mentah CEISA TIDAK selalu berurutan
+     (nemu di data sungguhan: 1, 4, 3, 2, 6, ... — bukan salah baca,
+     memang begitu urutan exportnya), dan Seri Barang non-numerik
+     (jarang, tapi mungkin) didorong ke BELAKANG lewat Infinity supaya
+     tidak ikut menyerobot ke depan cuma karena NaN < angka bernilai
+     false di sort(). Ini urutan yang lalu dipakai APA ADANYA untuk
+     nomor Seri Barang yang ditampilkan (lihat item-table.js — dihitung
+     dari POSISI baris, bukan disimpan ulang di sini), jadi sortir di
+     sinilah yang menentukan baris mana jadi "Seri Barang 1" dst. */
+  const barang = sheetRows(wb, "BARANG")
+    .slice()
+    .sort((a, b) => {
+      const sa = Number(a["SERI BARANG"]);
+      const sb = Number(b["SERI BARANG"]);
+      return (isFinite(sa) ? sa : Infinity) - (isFinite(sb) ? sb : Infinity);
+    });
 
   const findDokumen = (...codes) => {
     const row = dokumen.find((r) =>
@@ -162,8 +194,52 @@ function parseBcExcelWorkbook(wb) {
     : "";
   if (respon.length && !sppbRespon) {
     notes.push(
-      "Baris respons dengan KODE RESPON=2003 (SPPB terbit) tidak ditemukan di sheet RESPON — Tanggal SPPB fallback ke HEADER.TANGGAL DAFTAR, cek manual.",
+      t("y.respon.2003.tidak.ditemukan"),
     );
+  }
+
+  const bmTarif = sumBarangTarif("BM");
+  const ppnTarif = sumBarangTarif("PPN");
+  const pphTarif = sumBarangTarif("PPH");
+  /* CADANGAN rumus saat salah satu (atau ketiganya) tidak punya baris
+     di BARANGTARIF -- HANYA untuk Import. Export tidak kena BM/PPN/PPH
+     sama sekali, jadi BARANGTARIF kosong di sana itu WAJAR, bukan data
+     yang hilang (lihat catatan di bawah, tidak dipaksa dihitung).
+
+     Nilai Pabean = (CIF + Freight + Asuransi) x NDPBM. Diverifikasi
+     lewat berkas CEISA sungguhan: kolom "CIF" pada HEADER/BARANG
+     ternyata cuma nilai barangnya saja (BUKAN sudah termasuk ongkos
+     kirim & asuransi seperti namanya) — freight & asuransi memang
+     ditambahkan terpisah untuk sampai ke Nilai Pabean, dan hasil
+     rumus ini cocok PERSIS dengan kolom "CIF RUPIAH" yang sudah
+     dihitung CEISA sendiri di berkas ujinya.
+       BM  = Nilai Pabean x 5%
+       PPN = (Nilai Pabean + BM) x 11%  -- BM 0 -> sama saja x 11% saja
+       PPH = Nilai Pabean x 2,5%
+     Tarifnya (5% / 11% / 2,5%) tetap seperti diminta, bukan dibaca
+     dari kolom TARIF di BARANGTARIF — baris itu sendiri yang kosong,
+     jadi tidak ada tarif sungguhan untuk dibaca. Kalau BARANGTARIF
+     ADA datanya untuk salah satu jenis pungutan, nilai dari sana yang
+     dipakai apa adanya (bmTarif/ppnTarif/pphTarif di atas); rumus ini
+     murni pengisi celah yang kosong saja, per jenis pungutan sendiri
+     -sendiri — bukan "kalau satu kosong, buang semua". */
+  let bmFinal = bmTarif,
+    ppnFinal = ppnTarif,
+    pphFinal = pphTarif,
+    dutyDihitungRumus = false;
+  if (modeHint === "import" && (bmTarif == null || ppnTarif == null || pphTarif == null)) {
+    const cifUsd = header["CIF"] != null ? excelNum(header["CIF"]) : 0;
+    const freightUsd = header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : 0;
+    const asuransiUsd = header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : 0;
+    const ndpbmUntukPabean = header["NDPBM"] != null ? excelNum(header["NDPBM"]) : 0;
+    if (ndpbmUntukPabean && (cifUsd || freightUsd || asuransiUsd)) {
+      const nilaiPabean = (cifUsd + freightUsd + asuransiUsd) * ndpbmUntukPabean;
+      if (bmFinal == null) bmFinal = roundNum(nilaiPabean * 0.05, 2);
+      if (pphFinal == null) pphFinal = roundNum(nilaiPabean * 0.025, 2);
+      if (ppnFinal == null)
+        ppnFinal = roundNum((nilaiPabean + (bmFinal || 0)) * 0.11, 2);
+      dutyDihitungRumus = true;
+    }
   }
 
   const fields = {
@@ -180,17 +256,16 @@ function parseBcExcelWorkbook(wb) {
          705  Bill of lading             (laut, tingkat house)
          740  Air waybill                (udara, tingkat house)
 
-       Sebelumnya master memakai 740/742 dan house 741/743 — TERBALIK
-       untuk moda udara, karena 741 justru Master AWB sementara 740
-       yang house. Dokumen udara jadi tertukar tingkatannya. */
+       HATI-HATI untuk moda udara: 741 itu Master AWB dan 740 yang
+       house — gampang tertukar kalau ditebak dari urutan angkanya. */
     masterBL: findDokumen("704", "741"),
     houseBL: findDokumen("705", "740"),
     freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
     insurance:
       header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
     ndpbm: header["NDPBM"] != null ? excelNum(header["NDPBM"]) : null,
-    origin: excelStr(header["KODE PELABUHAN MUAT"]),
-    destination: excelStr(header["KODE PELABUHAN TUJUAN"]),
+    origin: portDisplay(excelStr(header["KODE PELABUHAN MUAT"])),
+    destination: portDisplay(excelStr(header["KODE PELABUHAN TUJUAN"])),
     actual: excelValueToISODate(header["TANGGAL TIBA"]),
     etd: excelValueToISODate(header["TANGGAL BERANGKAT"]),
     vessel: excelStr(pengangkut["NAMA PENGANGKUT"]),
@@ -198,9 +273,9 @@ function parseBcExcelWorkbook(wb) {
     transport,
     package: packageStr,
     container: containerStr,
-    bm: sumBarangTarif("BM"),
-    ppn: sumBarangTarif("PPN"),
-    pph: sumBarangTarif("PPH"),
+    bm: bmFinal,
+    ppn: ppnFinal,
+    pph: pphFinal,
   };
 
   // Fasilitas per barang (SKB PPH & SKB COO/E-COO) — dipetakan lewat BARANGDOKUMEN
@@ -233,15 +308,31 @@ function parseBcExcelWorkbook(wb) {
   const headerBruto = excelNum(header["BRUTO"]);
   const itemsRaw = barang.map((row) => {
     const qty = excelNum(row["JUMLAH SATUAN"]);
-    const cifSubtotal = excelNum(row["CIF"]);
+    /* Harga satuan = nilai TOTAL per baris barang dibagi JUMLAH SATUAN.
+       Pembilangnya beda menurut mode:
+         - EXPORT: kolom FOB kalau termsnya FOB, CIF untuk selain itu
+           (termasuk KODE INCOTERM kosong/tidak dikenal).
+         - IMPORT: SELALU kolom CIF, apa pun termsnya — nilai pabean
+           impor dasarnya CIF (lihat recalcCustoms(), PPN/PPH juga
+           dari dasar CIF).
+       Berlaku khusus untuk import Excel CEISA ini; sumber lain (CIPL,
+       dst.) punya jalur sendiri. */
+    const nilaiTotal = excelNum(
+      modeHint === "export" && fields.incoterm === "FOB"
+        ? row["FOB"]
+        : row["CIF"],
+    );
     return {
       seriBarang:
         row["SERI BARANG"] != null ? String(row["SERI BARANG"]).trim() : "",
-      namaBarang: buildImportedNamaBarang(row),
+      namaBarang: buildImportedNamaBarang(row, modeHint),
+      // Size cuma relevan (dan cuma tampil) di Export -- lihat komentar
+      // panjang di buildImportedNamaBarang() barusan.
+      size: modeHint === "export" ? buildImportedSize(row) : "",
       hsCode: excelStr(row["HS"]),
       satuan: excelStr(row["KODE SATUAN"]),
       qty,
-      harga: qty ? roundNum(cifSubtotal / qty, 4) : 0,
+      harga: qty ? roundNum(nilaiTotal / qty, 4) : 0,
       netto: excelNum(row["NETTO"]),
       bruto: excelNum(row["BRUTO"]),
       /* Kemasan PER BARANG ada di sheet BARANG sendiri (kolom JUMLAH
@@ -263,7 +354,7 @@ function parseBcExcelWorkbook(wb) {
   if (!anyItemBruto && headerBruto > 0 && itemsRaw.length) {
     itemsRaw[0].bruto = headerBruto;
     notes.push(
-      `Bruto per barang tidak ada di file ini — total Bruto dari HEADER (${fmtNum(headerBruto)} Kg) ditaruh di baris barang pertama, sesuaikan manual per barang kalau perlu.`,
+      t("y.bruto.per.barang.tidak.ada", { n: fmtNum(headerBruto) }),
     );
   }
   const items = itemsRaw.map((it) => {
@@ -278,38 +369,57 @@ function parseBcExcelWorkbook(wb) {
 
   if (skbBySeriBarang.size) {
     notes.push(
-      "Fasilitas SKB PPH (kode 457) & SKB COO/E-COO (kode 860) diisi per barang sesuai pemetaan di sheet BARANGDOKUMEN — cek tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
+      t("y.fasilitas.diisi.per.barang"),
     );
   } else {
     notes.push(
-      "SKB PPH (kode 457) & SKB COO (kode 860) tidak ditemukan lewat pemetaan BARANGDOKUMEN+DOKUMEN — cek manual di tab Daftar Barang kalau seharusnya ada.",
+      t("y.skb.tidak.ditemukan.pemetaan"),
     );
   }
 
   if (!items.length) {
     notes.push(
-      "Sheet BARANG kosong/tidak ditemukan — daftar barang tidak terisi otomatis, tambahkan manual.",
+      t("w.sheet.barang.kosong.tidak.ditemukan.daftar.bar"),
+    );
+  }
+  if (
+    modeHint === "export" &&
+    fields.incoterm === "FOB" &&
+    barang.length &&
+    barang.every((row) => row["FOB"] == null || row["FOB"] === "")
+  ) {
+    notes.push(
+      t("w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh"),
     );
   }
   if (!fields.party) {
     notes.push(
-      "Nama Shipper (KODE ENTITAS=9) tidak ditemukan di sheet ENTITAS.",
+      t("w.nama.shipper.kode.entitas.9.tidak.ditemukan.di"),
     );
   }
   if (!fields.masterBL && !fields.houseBL) {
     notes.push(
-      "Master/House BL/AWB tidak ditemukan di sheet DOKUMEN (kode 704/741 untuk master, 705/740 untuk house).",
+      t("w.master.house.bl.awb.tidak.ditemukan.di.sheet.d"),
     );
   }
   if (!transport) {
     notes.push(
-      "Moda transportasi tidak terdeteksi dari KODE CARA ANGKUT — cek manual di tab Transportasi.",
+      t("w.moda.transportasi.tidak.terdeteksi.dari.kode.c"),
     );
   }
-  if (!fields.bm && sumBarangTarif("BM") == null) {
-    notes.push(
-      "Bea Masuk/PPN/PPH tidak ditemukan di sheet BARANGTARIF — isi manual di tab Kepabeanan.",
-    );
+  /* Export tidak kena BM/PPN/PPH sama sekali -- BARANGTARIF kosong di
+     sana itu wajar, jadi TIDAK diberi catatan apa pun (beda dari
+     dulu, yang ikut memperingatkan Export juga). */
+  if (modeHint === "import" && (bmTarif == null || ppnTarif == null || pphTarif == null)) {
+    if (dutyDihitungRumus) {
+      notes.push(
+        t("y.pungutan.dihitung.otomatis"),
+      );
+    } else {
+      notes.push(
+        t("y.pungutan.tidak.cukup.dihitung"),
+      );
+    }
   }
 
   return { fields, items, notes, modeHint, source: "excel" };

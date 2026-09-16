@@ -19,6 +19,11 @@
    diam-diam: yang menang selalu permintaan TERBARU. */
 let muatKe = 0;
 
+/* Penanda apakah jadwal sudah selesai dimuat dari database.
+   Dibaca router(): sebelum ini true, #/edit/<id> yang tidak ketemu
+   BUKAN berarti jadwalnya tidak ada -- datanya memang belum sampai. */
+let shipmentsLoaded = false;
+
 async function loadShipments() {
   const nomor = ++muatKe;
   showLoadingSkeleton(3);
@@ -64,6 +69,7 @@ async function loadShipments() {
   }
 
   // PENTING: render() harus dipanggil di sini
+  shipmentsLoaded = true;
   render();
 
   await syncArrivedStatuses();
@@ -107,7 +113,7 @@ async function syncArrivedStatuses() {
   tertinggal.forEach((x) => (x.s.status = "arrived"));
   render();
   showToast(
-    `${ids.length} jadwal ditandai tiba — tanggal In Factory / Stuffing-nya sudah terlewati.`,
+    t("x.jadwal.ditandai.tiba", { n: ids.length }),
     "dark",
   );
 }
@@ -223,8 +229,7 @@ async function persistFields(id, patch) {
     .eq("id", id);
   if (error) {
     console.error(error);
-    showToast(
-      "Gagal menyimpan perubahan ke database — memuat ulang data.",
+    showToast(t("m.gagal.menyimpan.perubahan.ke.database.memuat.u"),
       "danger",
     );
     loadShipments();

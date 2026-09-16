@@ -1,9 +1,12 @@
 "use strict";
 
 /* GROUPING BY DATE + FILTER/SORT + MAIN RENDER */
-/* Dasar tanggal aktif: "eta" atau "etd" */
-/* Urutan & pengelompokan selalu memakai ETA — pemilih ETA/ETD dihapus
-   bersama saringan rentang tanggal. */
+/* Urutan & pengelompokan SELALU memakai sortBasis() di bawah — tidak
+   ada pemilih ETA/ETD untuk itu (dihapus di masa lalu, lihat git log).
+   Saringan rentang tanggal (#filterDateBasis dkk., di bawah dekat
+   getFiltered()) sengaja dibuat LEPAS dari urutan/pengelompokan ini —
+   filter boleh menyaring ETD sementara daftar tetap terurut menurut
+   sortBasis() mode aktif; keduanya operasi yang berbeda. */
 /* Label dasar urutan yang ditampilkan di pemisah tanggal.
 
    Import diurutkan menurut ESTIMATED DELIVERY — itulah tanggal yang
@@ -29,16 +32,32 @@ function tanpaPemisah(t) {
   return String(t || "").replace(/[\s./_-]+/g, "");
 }
 
+/* SARINGAN RENTANG TANGGAL (#filterDateBasis + #filterDateFrom/To)
+
+   Independen dari sortBasis() di atas — lihat komentar di sana. Basis
+   ETA/ETD memakai versi EFEKTIF (effectiveEta/effectiveEtd dari
+   core/status.js) supaya jadwal yang tanggalnya sudah dimundurkan ikut
+   tersaring menurut tanggal BARUNYA, bukan rencana lama. "Estimasi
+   Delivery" memakai `actual` apa adanya — kolom itu sendiri sudah
+   berarti "Stuffing" di buku Export (lihat MODE_LABELS di config.js). */
+function dateRangeBasisValue(s, basis) {
+  if (basis === "etd") return effectiveEtd(s);
+  if (basis === "actual") return s.actual || "";
+  return effectiveEta(s);
+}
+
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const statusFilter = $("#filterStatus").value;
+  const dateBasis = $("#filterDateBasis").value || "actual";
+  const dateFrom = $("#filterDateFrom").value;
+  const dateTo = $("#filterDateTo").value;
   return currentList().filter((s) => {
     /* Pencarian menjangkau SEMUA yang terbaca di kartu & panel detail.
 
-       Master/House B/L-AWB dulu tidak ikut, padahal nomor itulah yang
-       paling sering dipakai mencari — dari e-mail forwarder atau dari
-       dokumen di tangan. Mencari "FGLQA2608005" mengembalikan kosong
-       walau nomornya jelas tertulis di kartunya.
+       Master/House B/L-AWB WAJIB ikut: nomor itulah yang paling sering
+       dipakai mencari, entah dari e-mail forwarder atau dari dokumen di
+       tangan.
 
        Nomor B/L, kontainer, dan HS Code kerap ditulis dengan tanda
        pisah yang berbeda-beda ("PFSX-260480" vs "PFSX260480"), jadi
@@ -61,19 +80,104 @@ function getFiltered() {
       s.incoterm,
       s.muatan,
       s.notes,
-      ...(s.items || []).flatMap((i) => [i.namaBarang, i.hsCode]),
+      /* Size, Pattern, Mold No & PO No ikut dicari: orang gudang
+         menelusuri kiriman lewat nomor cetakan atau nomor PO, bukan
+         cuma nama barangnya. */
+      ...(s.items || []).flatMap((i) => [
+        i.namaBarang, i.hsCode, i.size, i.pattern, i.moldNo, i.poNo,
+      ]),
     ]
       .join(" ")
       .toLowerCase();
     const matchQ = !q || hay.includes(q) || tanpaPemisah(hay).includes(tanpaPemisah(q));
     const matchStatus = !statusFilter || s.status === statusFilter;
 
-    /* Chip saringan cepat ikut menyaring di sini juga, supaya paginasi,
-       hitungan, dan Bulk Export melihat daftar yang sama dengan layar. */
-    if (!presetTest(s)) return false;
+    /* Rentang tanggal. Perbandingan memakai teks ISO (yyyy-mm-dd), yang
+       sudah urut secara alfabet, jadi tidak perlu mengurai Date sama
+       sekali. Kiriman yang tanggal basisnya belum diisi disembunyikan
+       HANYA kalau rentangnya memang sedang dipakai — kalau tidak, ia
+       tetap tampil seperti biasa. */
+    let matchRange = true;
+    if (dateFrom || dateTo) {
+      const tgl = dateRangeBasisValue(s, dateBasis);
+      if (!tgl) matchRange = false;
+      else if (dateFrom && tgl < dateFrom) matchRange = false;
+      else if (dateTo && tgl > dateTo) matchRange = false;
+    }
 
-    return matchQ && matchStatus;
+    /* "Perlu Tindakan" (Ringkasan/command palette) ikut menyaring di
+       sini juga, supaya paginasi, hitungan, dan Bulk Export melihat
+       daftar yang sama dengan layar. */
+    if (onlyNeedsAction && !needsAction(s)) return false;
+
+    return matchQ && matchStatus && matchRange;
   });
+}
+
+/* Label opsi dropdown basis, dipakai juga oleh catatan saringan di
+   bawah — supaya teksnya PERSIS sama dengan yang tertulis di
+   dropdown-nya sendiri (termasuk "Estimasi Delivery" vs "Stuffing"
+   yang berbeda per mode lewat ML().actual). */
+function dateRangeBasisLabel(basis) {
+  if (basis === "etd") return "ETD";
+  if (basis === "actual") return ML().actual;
+  return "ETA";
+}
+
+function dateRangeSummaryBit() {
+  const dateFrom = ($("#filterDateFrom") || {}).value || "";
+  const dateTo = ($("#filterDateTo") || {}).value || "";
+  if (!dateFrom && !dateTo) return "";
+  const basis = ($("#filterDateBasis") || {}).value || "actual";
+  const rentang = [dateFrom, dateTo].filter(Boolean).map(fmtDate).join(" s/d ");
+  return `${dateRangeBasisLabel(basis)} ${rentang}`;
+}
+
+function applyDateRangeClearVisibility() {
+  const ada = $("#filterDateFrom").value || $("#filterDateTo").value;
+  $("#btnClearDateRange").classList.toggle("d-none", !ada);
+}
+
+// Dipakai resetAllFilters() (quick-filters.js) & switchMode() di bawah.
+function resetDateRangeFilter() {
+  $("#filterDateBasis").value = "actual";
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  applyDateRangeClearVisibility();
+}
+
+/* Dipakai halaman Ringkasan (klik satu hari di agenda 7 hari) untuk
+   menyaring daftar ke SATU tanggal lewat mekanisme yang sama dengan
+   filter rentang di atas, bukan lewat jalur penyaringan tanggal
+   terpisah. Saringan status ikut dikosongkan supaya jumlahnya cocok dengan yang dihitung agenda —
+   lihat renderAgenda() di views/overview-view.js, basis & syarat
+   !isArrived(s)-nya harus sama persis dengan di sini. */
+/* Menyaring daftar ke SATU kata kunci -- dipakai dari daftar "Perlu
+   Tindakan" di Ringkasan untuk membuka kartu lewat nomor House
+   B/L-AWB-nya.
+
+   Saringan lain ikut dilepas (status & rentang tanggal): kiriman yang
+   dicari bisa saja berstatus apa pun dan tanggalnya di luar rentang
+   yang kebetulan sedang aktif -- kalau tidak dilepas, hasilnya nol
+   kartu padahal nomornya jelas ada. */
+function jumpToSearch(kataKunci) {
+  $("#searchInput").value = kataKunci;
+  $("#filterStatus").value = "";
+  resetDateRangeFilter();
+  if (typeof onlyNeedsAction !== "undefined") onlyNeedsAction = false;
+  currentPage = 1;
+  syncSearchClear();
+  render();
+}
+
+function jumpToDateFilter(basis, iso) {
+  $("#filterDateBasis").value = basis;
+  $("#filterDateFrom").value = iso;
+  $("#filterDateTo").value = iso;
+  $("#filterStatus").value = "";
+  applyDateRangeClearVisibility();
+  currentPage = 1;
+  render();
 }
 
 // Pemisah tanggal & urutan selalu memakai ETA efektif
@@ -129,7 +233,7 @@ function groupKeyOf(s) {
      2. SUDAH TIBA  — ditaruh di belakang seluruhnya, diurutkan dari
                       tanggal tiba TERBARU ke terlama.
 
-   Yang sudah tiba tidak lagi menuntut tindakan, jadi tidak ada gunanya
+   Yang sudah tiba tidak menuntut tindakan, jadi tidak ada gunanya
    ia menyela di tengah daftar hanya karena tanggalnya kebetulan
    berdekatan. Dan begitu dilihat, yang dicari biasanya "yang baru saja
    masuk" — karena itu urutannya dibalik.
@@ -187,7 +291,7 @@ function render() {
     cardContainer.innerHTML = "";
     emptyState.classList.remove("d-none");
     renderPaginationBar(0);
-    updateStats();
+    updateStats(0);
     renderFilterNote(0, totalInBook);
     return;
   }
@@ -217,7 +321,7 @@ function render() {
       const jumlah = g ? g.items.length : 0;
       const label = entry.key
         ? fmtDateLong(entry.key)
-        : "Tanggal tidak diketahui";
+        : t("s.tanggal.tidak.diketahui");
       html += `
         <div class="date-section">
           <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
@@ -232,7 +336,7 @@ function render() {
 
   renderPaginationBar(flat.length);
   fixSelectWidths();
-  updateStats();
+  updateStats(flat.length);
   renderFilterNote(flat.length, totalInBook);
 }
 
@@ -262,8 +366,14 @@ function paginationRange(current, total) {
   return withDots;
 }
 
+/* Digulir ke JUDUL daftar, bukan ke elemen yang sudah tidak ada.
+
+   Sebelum ini sasarannya #lblListCaption -- id yang tidak pernah ada di
+   halaman. Karena dijaga `if (el)`, tidak ada yang error: pindah
+   halaman sekadar diam di posisi gulir yang lama, sehingga baris
+   pertama halaman baru berada di luar layar. */
 function scrollToListTop() {
-  const el = $("#lblListCaption");
+  const el = $(".list-head") || $("#lblSectionList");
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -350,7 +460,7 @@ function applyModeLabels() {
   $("#lblSectionList").textContent = lbl.section;
   // Cakupan tombol hapus disebutkan di labelnya, bukan hanya di dialog konfirmasi
   $("#lblDeleteAll").textContent =
-    activeMode === "import" ? "Hapus semua import" : "Hapus semua export";
+    activeMode === "import" ? t("v.hapus.semua.import") : t("v.hapus.semua.export");
   // Pilihan filter status ikut section aktif (requirement D).
   const cur = $("#filterStatus").value;
   $("#filterStatus").innerHTML =
@@ -365,6 +475,11 @@ function applyModeLabels() {
     ? cur
     : nilaiFilterStatusBawaan();
   filterStatusPernahDisetel = true;
+  /* Opsi ke-3 dropdown rentang tanggal mengikuti label `actual` per
+     mode: "Estimated Delivery" (Import) / "Stuffing" (Export). ETA/ETD
+     tidak berubah nama antar mode, jadi cukup opsi ini saja. */
+  const optActual = $('#filterDateBasis option[value="actual"]');
+  if (optActual) optActual.textContent = lbl.actual;
 }
 
 /* Nilai bawaan hanya dipakai kalau memang ADA pilihannya di buku ini.
@@ -393,12 +508,11 @@ function getMeasurer() {
 }
 /* LEBAR KOTAK STATUS — diukur berkelompok, bukan satu per satu.
 
-   Versi lama mengerjakan tiap kotak sampai tuntas: baca gaya, tulis ke
-   pengukur, baca lebarnya, tulis lebar kotaknya. Tulis-baca yang
-   berselang-seling memaksa peramban menghitung ulang tata letak SETIAP
-   PUTARAN — papan berisi 200 kartu berarti 200 perhitungan paksa.
-
-   Dua hal yang diperbaiki:
+   Mengerjakan tiap kotak sampai tuntas (baca gaya, tulis ke pengukur,
+   baca lebarnya, tulis lebar kotaknya) membuat tulis-baca
+   berselang-seling, dan itu memaksa peramban menghitung ulang tata
+   letak SETIAP PUTARAN — papan berisi 200 kartu berarti 200
+   perhitungan paksa. Dua hal yang menghindarinya:
 
    1. Dipisah jadi tiga tahap — baca semua, ukur, baru tulis semua.
    2. Hasil ukuran DIPAKAI ULANG. Isi kotak status cuma segelintir
@@ -521,15 +635,15 @@ function switchMode(mode) {
   $("#searchInput").value = "";
   // Pindah buku = membuka daftar yang lain; mulai dari bawaan lagi.
   $("#filterStatus").value = nilaiFilterStatusBawaan();
-  // Preset ikut dilepas: "perlu tindakan" di buku Import bukan pertanyaan yang sama dengan di buku
-  activePreset = "all";
-  presetDateOverride = "";
-  syncPresetUI();
+  // Rentang tanggal ikut dilepas — rentang di buku Import bukan pertanyaan yang sama dengan di buku Export.
+  resetDateRangeFilter();
+  // "Perlu tindakan" ikut dilepas: itu di buku Import bukan pertanyaan yang sama dengan di buku Export.
+  onlyNeedsAction = false;
   syncSearchClear();
   currentPage = 1;
   render();
 
-  /* Halaman Ringkasan TIDAK ikut terbarui sebelumnya: render() hanya */
+  
   if (
     typeof renderOverview === "function" &&
     !$("#viewOverview").classList.contains("d-none")
@@ -541,7 +655,7 @@ function switchMode(mode) {
 /* FILTERS (search / status / sort dir) */
 
 /* FILTERS */
-/* Mengetik di kotak cari SEBELUMNYA memicu render() penuh tiap ketukan */
+
 let searchTimer = null;
 $("#searchInput").addEventListener("input", () => {
   clearTimeout(searchTimer);
@@ -555,5 +669,19 @@ $("#filterStatus").addEventListener("change", () => {
   render();
 });
 
-// Label rentang ikut berubah (ETA <-> ETD) supaya selalu jelas kolom mana yang sedang disaring
+// Rentang tanggal: ganti basis atau tanggal -> saring ulang dari halaman 1
+["filterDateBasis", "filterDateFrom", "filterDateTo"].forEach((id) => {
+  $("#" + id).addEventListener("change", () => {
+    currentPage = 1;
+    applyDateRangeClearVisibility();
+    render();
+  });
+});
+$("#btnClearDateRange").addEventListener("click", () => {
+  $("#filterDateFrom").value = "";
+  $("#filterDateTo").value = "";
+  currentPage = 1;
+  applyDateRangeClearVisibility();
+  render();
+});
 

@@ -11,10 +11,7 @@
    muncul satu menit sebelum waktunya habis, lengkap dengan hitung
    mundur — bukan tiba-tiba terlempar keluar di tengah mengisi form.
 
-   BATASNYA MENGIKUTI PILIHAN "INGAT SAYA".
-
-   Sebelumnya batasnya 30 menit untuk semua orang, tanpa memandang
-   centang "Ingat saya di perangkat ini". Akibatnya centang itu terasa
+   BATASNYA MENGIKUTI PILIHAN "INGAT SAYA". Akibatnya centang itu terasa
    tidak berguna: ia menjanjikan sesi yang bertahan, lalu timer ini
    mencabutnya setengah jam kemudian — ditinggal rapat sekali saja
    sudah harus masuk lagi.
@@ -98,14 +95,14 @@ function mulaiPeringatanSesi() {
     if (sesiSisaDetik <= 0) {
       clearInterval(sesiTimerHitung);
       tutupKotakKonfirmasi();
-      showToast("Sesi berakhir karena tidak ada aktivitas.", "danger");
+      showToast(t("m.sesi.berakhir.karena.tidak.ada.aktivitas"), "danger");
       setTimeout(signOut, 400);
     }
   }, 1000);
 }
 
 function pesanHitungMundur() {
-  return `Tidak ada aktivitas selama ${lamaDiamTerbaca()}. Anda akan keluar otomatis dalam ${sesiSisaDetik} detik.`;
+  return t("x.tidak.ada.aktivitas", { lama: lamaDiamTerbaca(), detik: sesiSisaDetik });
 }
 
 /* "8 jam", bukan "480 menit". */
@@ -121,7 +118,7 @@ function lanjutkanSesi() {
   sesiPeringatanTampil = false;
   clearInterval(sesiTimerHitung);
   resetIdleTimer();
-  showToast("Sesi dilanjutkan.", "dark");
+  showToast(t("m.sesi.dilanjutkan"), "dark");
 }
 
 function tutupKotakKonfirmasi() {

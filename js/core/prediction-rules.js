@@ -170,7 +170,7 @@ function predictionMatchScore(match, ctx) {
 function rankPredictionRules(rules, ctx) {
   /* Satu lintasan, dan hanya yang COCOK yang dialokasikan.
 
-     Bentuk sebelumnya membuat objek pembungkus untuk SELURUH aturan —
+     Membuat objek pembungkus untuk SELURUH aturan —
      tiga puluh objek per kartu — lalu membuang hampir semuanya di
      tahap filter. Yang cocok biasanya cuma dua atau tiga. */
   const daftar = rules || [];

@@ -207,9 +207,9 @@ function manualDeliveryRefHtml(src) {
   let banding = "";
   if (d.ok && dipatok) {
     const selisih = calendarDaysBetweenISO(d.date, dipatok);
-    if (selisih === 0) banding = "sama dengan hitungan mesin";
-    else if (selisih > 0) banding = `${selisih} hari lebih mundur dari hitungan mesin`;
-    else banding = `${Math.abs(selisih)} hari lebih maju dari hitungan mesin`;
+    if (selisih === 0) banding = t("v.sama.dengan.hitungan.mesin");
+    else if (selisih > 0) banding = t("x.hari.lebih.mundur", { n: selisih });
+    else banding = t("x.hari.lebih.maju", { n: Math.abs(selisih) });
   }
 
   return `
@@ -245,7 +245,7 @@ function syncPredictionForm() {
        dipatok, dan jawabannya mode Manual — bukan kotak yang mati. */
     el.readOnly = false;
     el.title = aktif && formDeliveryMode === "auto"
-      ? "Dihitung otomatis dari ETA & milestone dokumen. Ketik untuk mengunci tanggalnya (mode Manual)."
+      ? t("s.dihitung.otomatis.dari.eta.milestone.dokumen.k")
       : "";
   }
   const alihDel = $("#deliveryModeSwitch");
@@ -277,7 +277,7 @@ function syncPredictionForm() {
          ETD Delay ${fmtDate(revisi.etdUsed)} → ETA <b>${fmtDate(revisi.eta)}</b>
          <span class="pred-muted">${
            $("#fEtaUpdate").value
-             ? "· Update ETA yang diisi yang dipakai sebagai acuan"
+             ? t("v.update.eta.yang.diisi.yang.dipakai.sebagai.acu")
              : "· dipakai sebagai acuan proses darat"
          }</span></div>`
     : "";
@@ -293,7 +293,7 @@ function syncPredictionForm() {
   panel.innerHTML = `
     <div class="pred-panel-head">
       <span><i class="bi bi-graph-up-arrow"></i> Mesin Prediksi</span>
-      <span class="pred-panel-type">${escapeHtml(tipe)}${predictionTypeIsAssumed(src) ? " · muatan belum diisi" : ""}</span>
+      <span class="pred-panel-type">${escapeHtml(tipe)}${predictionTypeIsAssumed(src) ? t("w.muatan.belum.diisi") : ""}</span>
     </div>
     <div class="pred-layer">
       <span class="pred-layer-tag">Lapis 0 · Rute</span>
@@ -333,7 +333,7 @@ function syncPredictionForm() {
         ${d && d.ok && !d.arrived && formDeliveryMode !== "manual" ? predStepsHtml(d) : ""}
         ${d && d.ok && !d.arrived ? sisaPekerjaanHtml(src, d) : ""}
         ${formDeliveryMode === "manual" ? manualDeliveryRefHtml(src) : ""}
-        ${d && d.arrived ? `<div class="pred-note-final"><i class="bi bi-check-circle-fill"></i> Tanggal In Factory sudah terisi — perkiraan digantikan tanggal sebenarnya.</div>` : ""}
+        ${d && d.arrived ? `<div class="pred-note-final"><i class="bi bi-check-circle-fill"></i> ${t("c.tanggal.in.factory.sudah.terisi")}</div>` : ""}
       </div>
     </div>`;
 }
@@ -371,7 +371,7 @@ if (elEtaForm) {
     if (predSedangMengisi || !etaAktifDiForm()) return;
     if (formEtaMode === "auto" && $("#fEta").value) {
       setFormEtaMode("manual", { recalc: false });
-      showToast("ETA diketik manual — mode ETA berpindah ke Manual.", "dark");
+      showToast(t("m.eta.diketik.manual.mode.eta.berpindah.ke.manua"), "dark");
       return;
     }
     syncPredictionForm();
@@ -407,7 +407,7 @@ if (alihDelivery) {
     if (!btn) return;
     setFormDeliveryMode(btn.dataset.deliveryMode);
     if (btn.dataset.deliveryMode === "auto") {
-      showToast("Estimated Delivery dihitung ulang otomatis.", "success");
+      showToast(t("m.estimated.delivery.dihitung.ulang.otomatis"), "success");
     }
   });
 }
@@ -425,7 +425,7 @@ if (elActualForm) {
       // Hanya berpindah kalau nilainya BEDA dari hitungan mesin.
       if (!d.ok || d.date !== $("#fActual").value) {
         setFormDeliveryMode("manual");
-        showToast("Estimated Delivery dikunci — mode berpindah ke Manual.", "dark");
+        showToast(t("m.estimated.delivery.dikunci.mode.berpindah.ke.m"), "dark");
       }
     }
   });
@@ -441,7 +441,7 @@ const btnRecalc = $("#btnRecalcEtaAuto");
 if (btnRecalc) {
   btnRecalc.addEventListener("click", () => {
     setFormEtaMode("auto");
-    showToast("ETA dihitung ulang otomatis.", "success");
+    showToast(t("m.eta.dihitung.ulang.otomatis"), "success");
   });
 }
 /* ------------------------------------------------------------------
@@ -480,12 +480,12 @@ async function handleCardDateChange(s, field) {
   const mempengaruhiEta = field === "etd";
   if (mempengaruhiEta && etaModeOf(s) === "manual") {
     showConfirm(
-      `ETA jadwal ini sedang dalam Mode Manual (${fmtDate(s.eta)}). ETD baru tidak otomatis mengubahnya.`,
+      t("x.eta.mode.manual", { tgl: fmtDate(s.eta) }),
       async () => {
         s.etaMode = "auto";
         await persistFields(s.id, { etaMode: "auto" });
         await refreshShipmentPrediction(s);
-        showToast("ETA dihitung ulang otomatis.", "success");
+        showToast(t("m.eta.dihitung.ulang.otomatis"), "success");
       },
       {
         title: "ETA Mode Manual",
@@ -507,7 +507,7 @@ async function handleCardDateChange(s, field) {
     if (deliveryModeOf(s) === "auto" && s.actual) {
       s.deliveryMode = "manual";
       await persistFields(s.id, { deliveryMode: "manual" });
-      showToast("Estimated Delivery dikunci (mode Manual).", "dark");
+      showToast(t("m.estimated.delivery.dikunci.mode.manual"), "dark");
       render();
     }
     return;
@@ -517,7 +517,7 @@ async function handleCardDateChange(s, field) {
   if (field === "eta" && etaModeOf(s) === "auto" && s.eta) {
     s.etaMode = "manual";
     await persistFields(s.id, { etaMode: "manual" });
-    showToast("ETA diketik manual — mode ETA jadwal ini berpindah ke Manual.", "dark");
+    showToast(t("m.eta.diketik.manual.mode.eta.jadwal.ini.berpind"), "dark");
   }
 
   await refreshShipmentPrediction(s);

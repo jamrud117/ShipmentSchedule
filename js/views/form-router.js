@@ -4,6 +4,7 @@
 // Satu-satunya tempat yang mengatur halaman mana yang tampil
 const PAGE_VIEWS = {
   accounts: "#viewAccounts",
+  hscode: "#viewHsCode",
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
@@ -19,10 +20,9 @@ function showPage(page) {
   $(".app-topbar").classList.toggle("d-none", page === "form");
   const footer = $("#appFooter");
   if (footer) footer.classList.toggle("d-none", page === "form");
-  // Tombol keluar mengambang ikut disembunyikan di halaman form supaya
-  // tidak menutupi bilah simpan.
-  const fab = $("#btnLogout");
-  if (fab) fab.classList.toggle("d-none", page === "form");
+  // Menu akun ikut ditutup saat berpindah halaman -- kalau tidak, ia
+  // tetap menggantung terbuka di atas halaman yang baru.
+  if (typeof tutupUserMenu === "function") tutupUserMenu();
   if (typeof setActivePageNav === "function" && page !== "form") {
     setActivePageNav(page);
   }
@@ -66,17 +66,19 @@ function router() {
   const halamanEximSaja =
     hash === "#/new" ||
     hash === "#/akun" ||
+    /* "#/hscode" TIDAK di sini: viewer boleh membukanya untuk mencari
+       HS Code. Pembatasan tambah/ubahnya ada di tombolnya sendiri. */
     hash === "#/ringkasan" ||
     hash === "#/docnum" ||
     !!editMatch;
   if (halamanEximSaja && !canEdit()) {
-    showToast("Halaman ini hanya untuk peran EXIM.", "danger");
+    showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
     location.hash = "#/";
     return;
   }
 
   if ((hash === "#/new" || editMatch) && !canEdit()) {
-    showToast("Hanya peran EXIM yang boleh mengubah jadwal.", "danger");
+    showToast(t("m.hanya.peran.exim.yang.boleh.mengubah.jadwal"), "danger");
     location.hash = "#/";
     return;
   }
@@ -91,11 +93,26 @@ function router() {
      menyembunyikan tautannya di bilah atas */
   if (hash === "#/akun") {
     if (!canEdit()) {
-      showToast("Halaman kelola akun hanya untuk peran EXIM.", "danger");
+      showToast(t("m.halaman.kelola.akun.hanya.untuk.peran.exim"), "danger");
       location.hash = "#/";
       return;
     }
     showAccountView();
+    return;
+  }
+
+  /* Database HS Code: sama seperti Kelola Akun, hanya exim yang boleh
+     MEMBUKA HALAMANNYA (menambah/mengubah/menghapus). Fitur cari HS
+     Code di Daftar Barang tetap jalan untuk viewer — itu query
+     langsung ke hs_code_master, bukan lewat halaman ini (lihat RLS di
+     migration-hs-code-database.sql: SELECT boleh semua peran). */
+  /* Viewer BOLEH membuka halaman ini: mencari HS Code adalah bagian
+     dari membaca jadwal, dan RLS-nya memang mengizinkan SELECT untuk
+     semua peran (lihat migration-hs-code-database.sql). Yang dicegah
+     cuma menambah/mengubah/menghapus -- dijaga di tombolnya sendiri
+     lewat requireEdit(), dan di database lewat RLS. */
+  if (hash === "#/hscode") {
+    showHsCodeView();
     return;
   }
 
@@ -125,8 +142,23 @@ function router() {
       }
     }
 
-    // Jika tetap tidak ditemukan, kembali ke dashboard
     if (!currentList().some((x) => x.id === id)) {
+      /* BELUM DIMUAT != TIDAK ADA.
+
+         Saat halaman baru dibuka, router() jalan sebelum jadwalnya
+         selesai diambil dari database. Melempar balik ke dashboard di
+         sini membuat memuat ulang halaman saat mengubah jadwal selalu
+         membuang halamannya.
+
+         Daftar ditampilkan dulu (lengkap dengan kerangka muatnya) dan
+         alamatnya dibiarkan apa adanya; initApp() memanggil router()
+         sekali lagi begitu datanya sampai, dan saat itu formnya
+         terbuka. Kalau ternyata id-nya memang tidak ada, panggilan
+         kedua itulah yang melempar balik. */
+      if (typeof shipmentsLoaded !== "undefined" && !shipmentsLoaded) {
+        showListView();
+        return;
+      }
       location.hash = "#/";
       return;
     }
@@ -199,7 +231,7 @@ function renderFormPage(id) {
   $("#fPackage").readOnly = isImport;
   $("#fPackage").placeholder = isImport ? "Terjumlah otomatis" : "Cth: 4 BOX";
   $("#fPackage").title = isImport
-    ? "Otomatis dari total Jumlah Kemasan semua barang — edit lewat kolom Kemasan di tabel barang."
+    ? t("v.otomatis.dari.total.jumlah.kemasan.semua.baran")
     : "";
 
   // Kolom CBM (th tabel barang + Total CBM di footer) cuma relevan di Export
@@ -237,6 +269,8 @@ function renderFormPage(id) {
     $("#fDestination").value = s.destination || "";
     $("#fEtd").value = s.etd || "";
     $("#fEta").value = s.eta || "";
+    $("#fEtdTime").value = s.etdTime || "";
+    $("#fEtaTime").value = s.etaTime || "";
     $("#fEtaUpdate").value = s.etaUpdate || "";
     $("#fEtdUpdate").value = s.etdUpdate || "";
     $("#fActual").value = s.actual || "";
@@ -342,7 +376,7 @@ function syncFormStep() {
     tabs.findIndex((b) => b.classList.contains("active")),
   );
   const lbl = $("#formStepLabel");
-  if (lbl) lbl.textContent = `Langkah ${idx + 1} dari ${tabs.length}`;
+  if (lbl) lbl.textContent = t("x.langkah.dari", { n: idx + 1, total: tabs.length });
   $$("#formStepDots .form-progress-dot").forEach((d, i) => {
     d.classList.toggle("is-done", i < idx);
     d.classList.toggle("is-current", i === idx);
@@ -391,17 +425,17 @@ function applyDelayFieldVisibility() {
   const el = $("#delaySummary");
   if (!info) {
     el.textContent =
-      "Isi Update ETA dan/atau Update ETD untuk menghitung lama delay.";
+      t("s.isi.update.eta.dan.atau.update.etd.untuk.mengh");
     return;
   }
   const d = info.days;
   const rentang = `${fmtDate(info.from)} → ${fmtDate(info.to)}`;
   el.textContent =
     d > 0
-      ? `Mundur ${d} hari dari ${info.basis} (${rentang}).`
+      ? t("x.mundur.hari.dari", { n: d, basis: info.basis, rentang })
       : d < 0
-        ? `Lebih cepat ${Math.abs(d)} hari dari ${info.basis} (${rentang}).`
-        : `Tidak ada perubahan dari ${info.basis} (${rentang}).`;
+        ? t("x.lebih.cepat.hari.dari", { n: Math.abs(d), basis: info.basis, rentang })
+        : t("x.tidak.ada.perubahan.dari", { basis: info.basis, rentang });
 }
 $("#fStatus").addEventListener("change", applyDelayFieldVisibility);
 ["fEta", "fEtd", "fEtaUpdate", "fEtdUpdate"].forEach((idf) => {
@@ -411,13 +445,12 @@ $("#fStatus").addEventListener("change", applyDelayFieldVisibility);
 $("#btnSaveShipment").addEventListener("click", async () => {
   if (!requireEdit()) return;
   if (!$("#fEtd").value || !$("#fEta").value) {
-    showToast("Mohon isi ETD dan ETA terlebih dahulu.", "danger");
+    showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger");
     return;
   }
   const cleanItems = draftItems.filter((it) => it.namaBarang.trim() !== "");
   if (cleanItems.length === 0) {
-    showToast(
-      "Mohon isi minimal 1 nama barang pada tab Daftar Barang.",
+    showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"),
       "danger",
     );
     return;
@@ -458,6 +491,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     destination: $("#fDestination").value.trim(),
     etd: $("#fEtd").value,
     eta: $("#fEta").value,
+    etdTime: $("#fEtdTime").value,
+    etaTime: $("#fEtaTime").value,
     etaUpdate: $("#fEtaUpdate").value,
     etdUpdate: $("#fEtdUpdate").value,
     /* Bukan tanggal, melainkan cara ETA di atas diperoleh. Tanpa ini
@@ -512,10 +547,10 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     }
     await loadShipments();
     goBackToList();
-    showToast("Jadwal berhasil disimpan.", "success");
+    showToast(t("m.jadwal.berhasil.disimpan"), "success");
   } catch (err) {
     console.error(err);
-    showToast("Gagal menyimpan jadwal ke database.", "danger");
+    showToast(t("m.gagal.menyimpan.jadwal.ke.database"), "danger");
   } finally {
     btn.disabled = false;
     btn.innerHTML = originalLabel;

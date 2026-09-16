@@ -108,7 +108,7 @@ const CARRIER_MASTER = {
        Begitu operatornya diketahui, ganti `name` dan `code` di sini. */
     {
       code: "VOYAGER-SERIES",
-      name: 'Deretan kapal "… VOYAGER" (operator belum dipastikan)',
+      name: t("w.operator.belum.dipastikan"),
       aliases: [],
       suffix: ["VOYAGER", "VOYAGE"],
     },
@@ -147,6 +147,18 @@ const CARRIER_MASTER = {
     { code: "INTERASIA", name: "Interasia Lines", aliases: ["INTERASIA", "INTER ASIA"] },
     { code: "SMLINE", name: "SM Line", aliases: ["SMLINE", "SM LINE"], prefix: ["SM"] },
 
+    /* Tambahan pelayaran intra-Asia yang lazim di rute Korea/China ke
+       Indonesia & Vietnam. Sebagian besar beroperasi sebagai feeder:
+       namanya muncul di B/L walau kapalnya milik operator lain. */
+    { code: "CNC", name: "CNC (Cheng Lie Navigation)", aliases: ["CNC", "CHENG LIE"] },
+    { code: "GOLDSTAR", name: "Gold Star Line", aliases: ["GOLDSTAR", "GOLD STAR", "GSL"] },
+    { code: "DONGJIN", name: "Dongjin Shipping", aliases: ["DONGJIN", "DONG JIN"] },
+    { code: "CKLINE", name: "CK Line", aliases: ["CKLINE", "CK LINE"] },
+    { code: "PANCON", name: "Pan Continental Shipping", aliases: ["PANCON", "PAN CON"] },
+    { code: "TAIYOUNG", name: "Taiyoung Shipping", aliases: ["TAIYOUNG", "TAI YOUNG"] },
+    { code: "HASCO", name: "Shanghai Hai Hua (HASCO)", aliases: ["HASCO", "HAI HUA"] },
+    { code: "EMIRATES", name: "Emirates Shipping Line", aliases: ["ESL", "EMIRATES SHIPPING"] },
+
     /* ================================================================
        PELAYARAN VIETNAM
     ================================================================ */
@@ -156,6 +168,9 @@ const CARRIER_MASTER = {
     { code: "VINAFCO", name: "Vinafco Shipping", aliases: ["VINAFCO"] },
     { code: "BIENDONG", name: "Bien Dong Shipping", aliases: ["BIENDONG", "BIEN DONG"] },
     { code: "VOSCO", name: "Vietnam Ocean Shipping (VOSCO)", aliases: ["VOSCO"] },
+    { code: "VIETSUN", name: "Vietsun Shipping", aliases: ["VIETSUN", "VIET SUN"] },
+    { code: "GEMADEPT", name: "Gemadept Shipping", aliases: ["GEMADEPT", "GMD"] },
+    { code: "NASICO", name: "Nam Trieu Shipping (NASICO)", aliases: ["NASICO", "NAM TRIEU"] },
 
     /* ================================================================
        PELAYARAN RUSIA
@@ -214,9 +229,9 @@ const CARRIER_MASTER = {
     { code: "SU", name: "Aeroflot" },
     { code: "AM", name: "Aeromexico" },
 
-    /* KARGO & KURIR — muncul di riwayat nyata DDI, dan sebelumnya
-       tidak satu pun terdeteksi. Kurir sering ditulis dengan NAMA,
-       bukan kode ("FEDEX", "DHL FLIGHT"), jadi ditambahi `aliases`. */
+    /* KARGO & KURIR — muncul di riwayat nyata DDI. Kurir sering
+       ditulis dengan NAMA, bukan kode ("FEDEX", "DHL FLIGHT"), jadi
+       ditambahi `aliases`. */
     { code: "FX", name: "FedEx Express", aliases: ["FEDEX", "FEDERAL EXPRESS"] },
     { code: "5X", name: "UPS Airlines", aliases: ["UPS"] },
     { code: "D0", name: "DHL Air", aliases: ["DHL"] },
@@ -390,13 +405,12 @@ function carrierDatalistHtml(mode) {
    INDEKS SIAP PAKAI
 
    Alias dinormalkan SEKALI saat berkas dimuat, bukan tiap kali sebuah
-   nama kapal dicocokkan. Sebelumnya tiap pencocokan menjalankan satu
+   nama kapal dicocokkan. Menormalkan saat pencocokan berarti satu
    regex per alias per pelayaran — sekitar seratus regex untuk satu
-   kapal, dikali jumlah kartu di papan, dikali tiap kali papan
-   digambar ulang.
+   kapal, dikali jumlah kartu di papan, dikali tiap kali papan digambar
+   ulang.
 
-   Urutan daftar tetap dihormati: yang tertulis lebih dulu menang,
-   sama seperti sebelumnya.
+   Urutan daftar tetap dihormati: yang tertulis lebih dulu menang.
 ------------------------------------------------------------------ */
 /* ALIAS SATU KATA vs ALIAS FRASA.
 
@@ -645,8 +659,8 @@ function detectCarrier(s) {
           kind: "airline",
           detected: false,
           reason: src.vessel || src.voyage
-            ? "Kode maskapai tidak dikenali"
-            : "No. penerbangan belum diisi",
+            ? t("s.kode.maskapai.tidak.dikenali")
+            : t("s.no.penerbangan.belum.diisi"),
         };
   }
 
@@ -658,12 +672,32 @@ function detectCarrier(s) {
         name: "",
         kind: "shipping",
         detected: false,
-        reason: src.vessel ? "Pelayaran tidak dikenali" : "Nama kapal belum diisi",
+        reason: src.vessel ? t("s.pelayaran.tidak.dikenali") : t("s.nama.kapal.belum.diisi"),
       };
 }
 
 function carrierCodeOf(s) {
   return detectCarrier(s).code || "";
+}
+
+/* ------------------------------------------------------------------
+   CARRIER TERTULIS untuk CIPL
+
+   Field "Carrier" pada invoice/packing list BUKAN kode hasil deteksi
+   di atas (MSC, ONE, KE, ...) — itu untuk mesin prediksi. Yang dibaca
+   bea cukai & buyer adalah apa yang diketik pengguna: Nama
+   Voyager/Vessel digabung No. Voyage/Flight, apa pun modanya —
+   "MSC LORENA 056S" atau "GARUDA CARGO GA880/04JUL".
+
+   BEDA dengan vesselNameForTemplate() di copy-templates.js: itu untuk
+   templat copy-paste forwarder (requirement B), dan sengaja membuang
+   Nama Vessel saat udara. Di sini keduanya SELALU digabung — tidak ada
+   berkas eksternal berformat tetap yang harus diikuti. */
+function carrierNameFromShipment(s) {
+  const src = s || {};
+  const vessel = String(src.vessel || "").trim();
+  const voyage = String(src.voyage || "").trim();
+  return [vessel, voyage].filter(Boolean).join(" ");
 }
 
 if (typeof module !== "undefined" && module.exports) {
@@ -675,5 +709,6 @@ if (typeof module !== "undefined" && module.exports) {
     detectAirline,
     detectCarrier,
     carrierCodeOf,
+    carrierNameFromShipment,
   };
 }

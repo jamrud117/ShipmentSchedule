@@ -55,7 +55,7 @@ async function resolveLoginEmail(masukan) {
 async function signIn(masukan, password) {
   const email = await resolveLoginEmail(masukan);
   if (!email) {
-    return { ok: false, message: "Username atau email itu tidak terdaftar." };
+    return { ok: false, message: t("s.username.atau.email.itu.tidak.terdaftar") };
   }
   const { data, error } = await supabaseClient.auth.signInWithPassword({
     email,
@@ -79,13 +79,13 @@ async function signOut() {
 /* Pesan bawaan Supabase berbahasa Inggris & teknis */
 function pesanLogin(error) {
   const t = (error && error.message ? error.message : "").toLowerCase();
-  if (t.includes("invalid login")) return "Username/email atau kata sandi salah.";
+  if (t.includes("invalid login")) return t("s.username.email.atau.kata.sandi.salah");
   if (t.includes("email not confirmed"))
-    return "Akun belum aktif. Minta admin menjalankan ulang auth-roles-migration.sql.";
+    return t("s.akun.belum.aktif.minta.admin.menjalankan.ulang");
   if (t.includes("rate limit") || t.includes("too many"))
     return "Terlalu banyak percobaan. Coba lagi beberapa menit.";
   if (t.includes("failed to fetch") || t.includes("network"))
-    return "Tidak bisa menghubungi server. Periksa koneksi.";
+    return t("s.tidak.bisa.menghubungi.server.periksa.koneksi");
   return error && error.message ? error.message : "Login gagal.";
 }
 
@@ -137,7 +137,7 @@ function lockInputs() {
 function requireEdit(pesan) {
   if (canEdit()) return true;
   showToast(
-    pesan || "Hanya peran EXIM yang boleh mengubah data.",
+    pesan || t("s.hanya.peran.exim.yang.boleh.mengubah.data"),
     "danger",
   );
   return false;
@@ -146,38 +146,6 @@ function requireEdit(pesan) {
 /* ------------------------------------------------------------------
    LAYAR LOGIN
 ------------------------------------------------------------------ */
-function toggleFabLogout(tampil) {
-  const fab = $("#btnLogout");
-  if (fab) fab.classList.toggle("d-none", !tampil);
-}
-
-/* Tombol keluar dijaga selalu DI ATAS footer. Diukur, bukan ditebak:
-   tinggi footer berubah mengikuti panjang teksnya dan lebar layar. */
-function liftFabAboveFooter() {
-  const fab = $("#btnLogout");
-  const footer = $("#appFooter");
-  if (!fab) return;
-  if (!footer || footer.classList.contains("d-none")) {
-    fab.style.bottom = "";
-    return;
-  }
-  const r = footer.getBoundingClientRect();
-  const terlihat = Math.max(0, window.innerHeight - r.top);
-  fab.style.bottom = terlihat + 20 + "px";
-}
-
-window.addEventListener("scroll", liftFabAboveFooter, { passive: true });
-window.addEventListener("resize", liftFabAboveFooter);
-
-/* Tinggi halaman berubah setelah data termuat, setelah saringan
-   ditekan, dan setiap kali daftar digambar ulang. Tanpa pemantau ini,
-   posisi tombol dihitung SEKALI saat halaman masih kosong — footernya
-   waktu itu masih tinggi di layar, jadi tombolnya ikut terangkat jauh
-   ke atas dan tidak pernah turun lagi. */
-if (typeof ResizeObserver !== "undefined") {
-  const pantau = new ResizeObserver(() => liftFabAboveFooter());
-  pantau.observe(document.body);
-}
 
 function hideBootScreen() {
   const b = $("#bootScreen");
@@ -189,7 +157,7 @@ function hideBootScreen() {
 function showLoginView() {
   hideBootScreen();
   $("#viewLogin").classList.remove("d-none");
-  toggleFabLogout(false);
+  tutupUserMenu();
   document.body.classList.add("is-locked");
   ["#viewList", "#viewForm", "#viewDocNum", "#viewOverview"].forEach((sel) => {
     const el = $(sel);
@@ -204,8 +172,6 @@ function showLoginView() {
 function hideLoginView() {
   hideBootScreen();
   $("#viewLogin").classList.add("d-none");
-  toggleFabLogout(true);
-  setTimeout(liftFabAboveFooter, 50);
   document.body.classList.remove("is-locked");
   $(".app-topbar").classList.remove("d-none");
   const footer = $("#appFooter");
@@ -222,15 +188,15 @@ function setLoginBusy(sibuk) {
   const btn = $("#btnLogin");
   btn.disabled = sibuk;
   btn.innerHTML = sibuk
-    ? '<span class="spinner-border spinner-border-sm"></span> Masuk…'
-    : '<i class="bi bi-box-arrow-in-right"></i> Masuk';
+    ? `<span class="spinner-border spinner-border-sm"></span> ${t("c.masuk.2")}`
+    : `<i class="bi bi-box-arrow-in-right"></i> ${t("c.masuk")}`;
 }
 
 async function handleLoginSubmit() {
   const user = $("#loginUsername").value;
   const sandi = $("#loginPassword").value;
   if (!user.trim() || !sandi) {
-    setLoginError("Username/email dan kata sandi harus diisi.");
+    setLoginError(t("s.username.email.dan.kata.sandi.harus.diisi"));
     return;
   }
   setLoginError("");
@@ -238,8 +204,19 @@ async function handleLoginSubmit() {
   const ingat = !!($("#loginRemember") && $("#loginRemember").checked);
   simpanRemember(ingat, user.trim());
 
-  const hasil = await signIn(user, sandi);
-  setLoginBusy(false);
+  /* try/finally: tanpa ini, sekali saja signIn() MELEMPAR error
+     (jaringan putus, Supabase tak terjangkau) barisnya terlewat dan
+     tombolnya berputar selamanya -- pengguna tidak punya cara mencoba
+     lagi selain memuat ulang halaman. */
+  let hasil;
+  try {
+    hasil = await signIn(user, sandi);
+  } catch (err) {
+    console.error(err);
+    hasil = { ok: false, message: t("s.tidak.bisa.menghubungi.server.periksa.koneksi") };
+  } finally {
+    setLoginBusy(false);
+  }
   if (!hasil.ok) {
     setLoginError(hasil.message);
     $("#loginPassword").select();
@@ -248,8 +225,12 @@ async function handleLoginSubmit() {
   hideLoginView();
   applyPermissions();
   if (typeof resetIdleTimer === "function") resetIdleTimer();
+  /* Dua kali, sama seperti initApp(): yang pertama menampilkan
+     halamannya supaya layar tidak kosong selama data diambil, yang
+     kedua membuka #/edit/<id> setelah jadwalnya ada. */
   router();
   await loadShipments();
+  router();
 }
 
 $("#btnLogin").addEventListener("click", handleLoginSubmit);
@@ -272,14 +253,103 @@ document.addEventListener("click", (e) => {
   inp.focus();
 });
 
-$("#btnLogout").addEventListener("click", () => {
-  showConfirm("Sesi Anda akan ditutup dan halaman kembali ke layar masuk.", () => signOut(), {
-    title: "Keluar dari Aplikasi",
-    confirmText: "Ya, Keluar",
-    tone: "primary",
-    icon: "bi-power",
+/* ------------------------------------------------------------------
+   MENU AKUN (di bawah nama pengguna, bilah atas)
+
+   Menggantikan tombol keluar mengambang di sudut kanan-bawah. */
+function tutupUserMenu() {
+  const menu = $("#userMenu");
+  const chip = $("#userChip");
+  if (menu) menu.classList.add("d-none");
+  if (chip) chip.classList.remove("is-open");
+}
+
+/* Isi menu diperbarui tiap kali dibuka, bukan sekali saat halaman
+   dimuat: profilnya baru tersedia setelah sesi terbaca. */
+function isiUserMenu() {
+  if (!authState.profile) return;
+  /* Email boleh tampil di sini karena menu ini baru terbuka kalau
+     pemiliknya sendiri yang membukanya. Chip-nya sendiri sengaja cuma
+     nama & peran: bilah atas terlihat siapa pun yang lewat di depan
+     layar. */
+  const nm = $("#userMenuName");
+  const em = $("#userMenuEmail");
+  if (nm) {
+    nm.textContent =
+      authState.profile.full_name || authState.profile.username || "Pengguna";
+  }
+  if (em) {
+    em.textContent =
+      (authState.user && authState.user.email) ||
+      authState.profile.username ||
+      "";
+  }
+}
+
+function bukaUserMenu() {
+  const menu = $("#userMenu");
+  const chip = $("#userChip");
+  if (!menu || !chip) return;
+  menu.classList.remove("d-none");
+  chip.classList.add("is-open");
+  isiUserMenu();
+}
+
+const userChipEl = $("#userChip");
+if (userChipEl) {
+  /* DIBUKA SAAT KURSOR MELINTAS, bukan hanya saat diklik.
+
+     Klik TETAP dipertahankan, bukan diganti: perangkat sentuh tidak
+     punya hover sama sekali, jadi menu yang hanya mengandalkan hover
+     tidak akan pernah bisa dibuka di ponsel.
+
+     Penutupannya diberi jeda pendek -- kursor yang bergerak dari chip
+     ke menu sempat keluar dari keduanya di sela-sela, dan tanpa jeda
+     menunya menutup tepat saat hendak diklik. Jembatan tak terlihat
+     (.user-menu::before di auth.css) menutup celah itu secara visual;
+     jeda ini menjaganya saat kursor bergerak cepat. */
+  let tundaTutup = null;
+  userChipEl.addEventListener("mouseenter", () => {
+    clearTimeout(tundaTutup);
+    bukaUserMenu();
   });
+  userChipEl.addEventListener("mouseleave", () => {
+    clearTimeout(tundaTutup);
+    tundaTutup = setTimeout(tutupUserMenu, 220);
+  });
+
+  userChipEl.addEventListener("click", (e) => {
+    // Klik DI DALAM menunya sendiri tidak boleh ikut menutup/membuka lagi.
+    if (e.target.closest("#userMenu")) return;
+    clearTimeout(tundaTutup);
+    const menu = $("#userMenu");
+    if (!menu) return;
+    const akanBuka = menu.classList.contains("d-none");
+    menu.classList.toggle("d-none", !akanBuka);
+    userChipEl.classList.toggle("is-open", akanBuka);
+    if (akanBuka) isiUserMenu();
+  });
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#userChip")) tutupUserMenu();
 });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") tutupUserMenu();
+});
+
+const btnLogoutMenuEl = $("#btnLogoutMenu");
+if (btnLogoutMenuEl) {
+  btnLogoutMenuEl.addEventListener("click", () => {
+    tutupUserMenu();
+    showConfirm(t("s.sesi.anda.akan.ditutup.dan.halaman.kembali.ke."), () => signOut(), {
+      title: t("s.keluar.dari.aplikasi"),
+      confirmText: "Ya, Keluar",
+      tone: "primary",
+      icon: "bi-power",
+    });
+  });
+}
 
 /* ------------------------------------------------------------------
    INISIALISASI

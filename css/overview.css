@@ -101,9 +101,42 @@
 .task--doc .task-reason {
   color: var(--sec-600);
 }
+/* TIGA TINGKAT: perusahaan / keterangan / nama barang.
+
+   Ketiganya <span>, jadi tanpa flex-column mereka mengalir sebaris dan
+   kalimatnya menyambung tanpa jeda yang bisa dibaca. */
 .task-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* Nama barang -- baris pengenal, bukan daftar isi. Dibedakan warnanya
+   dari keterangan di atasnya supaya ketiganya terbaca bertingkat. */
+.task-goods {
+  font-size: var(--t-xs);
+  color: var(--n-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Pengatur halaman daftar tugas. */
+.task-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: 10px 0 2px;
+}
+.task-pageinfo {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.task-pager .page-nav:disabled {
+  opacity: 0.4;
+  pointer-events: none;
 }
 .task-party {
   font-weight: 600;

@@ -18,6 +18,15 @@ function facilitiesButtonLabel(it) {
   return parts.join(" · ");
 }
 
+/* SERI BARANG — nomor urut barang, dari POSISI baris (idx+1), BUKAN
+   field tersimpan sendiri. Sengaja begitu: kalau field-nya sendiri
+   disimpan lalu barisnya diurutkan ulang atau satu barang dihapus di
+   tengah, nomor yang tersimpan langsung tidak lagi mewakili urutan
+   yang sebenarnya. Dihitung ulang setiap
+   renderItemTable() dipanggil, jadi SELALU 1, 2, 3, ... berurutan
+   mengikuti apa yang benar-benar tampil saat itu — termasuk sesudah
+   Import CEISA yang baris BARANG-nya sudah diurutkan numerik menurut
+   Seri Barang aslinya (lihat excel-bc.js). */
 function facilitiesPanelHtml(it, idx) {
   const skbList = it.skb || [];
   const skbRowsHtml = skbList.length
@@ -39,11 +48,11 @@ function facilitiesPanelHtml(it, idx) {
         </div>`,
         )
         .join("")
-    : `<div class="item-fac-empty">Belum ada fasilitas untuk barang ini.</div>`;
+    : `<div class="item-fac-empty">${t("c.belum.ada.fasilitas.untuk.barang.ini")}</div>`;
 
   return `
     <tr class="item-fac-row" data-idx="${idx}">
-      <td colspan="13">
+      <td colspan="15">
         <div class="item-fac-panel">
           <div class="item-fac-skb-head">
             <b>Fasilitas (SKB &amp; E-COO)</b>
@@ -61,7 +70,7 @@ function packageWarnTitle(it) {
   if (!raw) return "";
   if (activeMode === "import") {
     return extractLeadingNumber(raw) == null
-      ? "Jumlah kemasan tidak terbaca — awali dengan angka, mis. \"5 BOX\"."
+      ? t("w.jumlah.kemasan.tidak.terbaca")
       : "";
   }
   return parsePackageDims(raw)
@@ -76,8 +85,8 @@ function packageWarnTitle(it) {
    yaitu display:none. Elemen tanpa tata letak mengembalikan
    scrollHeight 0.
 
-   Dulu tingginya tetap ditulis walau nol, dan itu justru MERUSAK:
-   "0px" menimpa tinggi benar yang sudah dihitung sebelumnya. Impor
+   Menulis tingginya walau nol justru MERUSAK: "0px" menimpa tinggi
+   benar yang sudah dihitung. Impor
    PDF/Excel biasanya berjalan saat tab Umum yang terbuka, jadi seluruh
    kolom nama diukur dalam keadaan tersembunyi, dapat nol, lalu
    dikunci di situ. Begitu tab Data Barang dibuka, kotaknya sudah
@@ -104,7 +113,7 @@ function autoGrowTextarea(el) {
 
    Harus dipanggil setiap kali tabel digambar ulang, TERMASUK setelah
    data hasil impor masuk. Kalau hanya dipanggil saat pengguna
-   mengetik, nama panjang dari PDF/Excel tetap terpotong sampai
+   mengetik, nama panjang dari PDF/Excel akan terpotong sampai
    kolomnya kebetulan disentuh.
 
    DIKERJAKAN BERKELOMPOK, bukan satu-satu. Memanggil autoGrowTextarea
@@ -151,8 +160,7 @@ document.addEventListener("paste", (e) => {
 
    Impor PDF/Excel dan tempel-massal mengisi kotak lewat `.value`, dan
    itu tidak memicu kejadian apa pun. Pengamat ini menangkap saat
-   baris-baris baru masuk ke tabel, lalu menghitung ulang tingginya —
-   inilah sebab nama panjang hasil impor tetap terpotong sebelumnya.
+   baris-baris baru masuk ke tabel, lalu menghitung ulang tingginya.
 
    requestAnimationFrame dipakai supaya pengukuran terjadi setelah
    peramban selesai menata letaknya; scrollHeight yang dibaca terlalu
@@ -208,13 +216,32 @@ function renderItemTable() {
     amatiTabelBarang();
     requestAnimationFrame(autoGrowAllItemNames);
   }, 0);
+  /* Header kolom pertama: "Uraian" di Export (dipasangkan dengan
+     kolom Size di sebelahnya), "Nama Barang" di Import (field yang
+     SAMA, cuma labelnya beda -- tidak ada kolom Size di Import, jadi
+     tidak perlu dipisah). */
+  const thNama = $("#thNamaBarang");
+  if (thNama) thNama.textContent = activeMode === "export" ? "Uraian" : t("c.nama.barang");
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
     .map((it, idx) => {
       const mainRow = `
     <tr data-idx="${idx}">
-      <td><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="Nama barang">${escapeHtml(it.namaBarang)}</textarea></td>
-      <td><input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric"></td>
+      <td class="seri-col text-center" title="Nomor urut barang, mengikuti urutan baris">${idx + 1}</td>
+      <td class="namabarang-col"><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="${activeMode === "export" ? "Uraian barang" : "Nama barang"}">${escapeHtml(it.namaBarang)}</textarea></td>
+      <td class="size-col"><input type="text" data-f="size" placeholder="Size" value="${escapeAttr(it.size)}"></td>
+      <td class="export-col"><input type="text" data-f="pattern" placeholder="Pattern" value="${escapeAttr(it.pattern)}"></td>
+      <td class="export-col"><input type="text" data-f="moldNo" placeholder="Mold No." value="${escapeAttr(it.moldNo)}"></td>
+      <td class="export-col"><input type="text" data-f="poNo" placeholder="PO No." value="${escapeAttr(it.poNo)}"></td>
+      <td class="export-col"><input type="text" data-f="marks" placeholder="otomatis" value="${escapeAttr(it.marks)}"></td>
+      <td>
+        <div class="hscode-cell">
+          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">
+          <button type="button" class="hscode-lookup-btn" data-hscode-lookup="${idx}" title=t("s.cari.hs.code.dari.database.berdasarkan.nama.ba")>
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </td>
       <td>
         <select data-f="jenisBarang">
           ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${o}</option>`).join("")}
@@ -226,12 +253,12 @@ function renderItemTable() {
         </button>
       </td>
       <td><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal"></td>
-      <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="KG/PCS/SET" list="satuanList"></td>
+      <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="Satuan" list="satuanList"></td>
       <td><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
       <td><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
       <td><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
       <td class="pkg-cell dim-col">
-        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="82*82*75">
+        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)">
 
       </td>
       <td>
@@ -239,8 +266,8 @@ function renderItemTable() {
                placeholder="${idx === 0 ? "1" : "↳ ikut"}"
                title="${
                  idx === 0
-                   ? "Jumlah kemasan untuk barang ini"
-                   : "Kosongkan kalau barang ini masih satu kemasan dengan baris di atas"
+                   ? t("s.jumlah.kemasan.untuk.barang.ini")
+                   : t("s.kosongkan.kalau.barang.ini.masih.satu.kemasan.")
                }"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
@@ -264,7 +291,6 @@ function renderItemTable() {
     .forEach((el) => autoSizeInput(el, 96, 210));
   recalcCustoms();
 }
-
 $("#itemTableBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr");
   if (!tr) return;
@@ -370,10 +396,24 @@ $("#itemTableBody").addEventListener("keydown", (e) => {
   if (!field) return;
   e.preventDefault();
   const row = field.closest("tr");
+  const idx = Number(row.dataset.idx);
+
+  /* DI BARIS TERAKHIR, Enter MENAMBAH barang baru.
+
+     Mengisi daftar barang berarti menyalin pos demi pos dari dokumen;
+     berhenti di baris terakhir memaksa meraih tetikus untuk menekan
+     "Tambah Barang" lalu kembali mengetik. Kalau masih ada baris di
+     bawahnya, Enter tetap sekadar berpindah -- menyisipkan baris baru
+     di tengah daftar bukan yang dimaksud. */
+  if (idx === draftItems.length - 1) {
+    draftItems.push(newItem());
+    renderItemTable();
+  }
+
   const nextRow = $(
-    `#itemTableBody tr[data-idx="${Number(row.dataset.idx) + 1}"]:not(.item-fac-row)`,
+    `#itemTableBody tr[data-idx="${idx + 1}"]:not(.item-fac-row)`,
   );
-  if (!nextRow) return; // sudah baris terakhir, tidak ada tujuan
+  if (!nextRow) return;
   const nextField = nextRow.querySelector(`[data-f="${field.dataset.f}"]`);
   if (!nextField) return;
   nextField.focus();
@@ -405,7 +445,7 @@ $("#itemTableBody").addEventListener("click", (e) => {
   const rmRow = e.target.closest(".rm-row");
   if (rmRow) {
     if (draftItems.length <= 1) {
-      showToast("Minimal harus ada 1 barang dalam pengiriman ini.", "danger");
+      showToast(t("m.minimal.harus.ada.1.barang.dalam.pengiriman.in"), "danger");
       return;
     }
     draftItems.splice(Number(rmRow.dataset.idx), 1);

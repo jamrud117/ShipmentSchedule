@@ -231,7 +231,7 @@ async function handleBulkExport(mode) {
   });
   if (!list.length) {
     showToast(
-      `Tidak ada data jadwal ${mode === "import" ? "Import" : "Export"} untuk diekspor.`,
+      t("w.tidak.ada.data.jadwal.untuk.diekspor", { mode: mode === "import" ? "Import" : "Export" }),
       "danger",
     );
     return;
@@ -281,7 +281,7 @@ async function handleBulkExport(mode) {
   setTimeout(() => URL.revokeObjectURL(tautan.href), 1000);
 
   showToast(
-    `File Excel (${list.length} jadwal, mode ${mode === "import" ? "Import" : "Export"}) berhasil diunduh.`,
+    t("x.berkas.excel.berhasil.diunduh", { n: list.length, mode: mode === "import" ? "Import" : "Export" }),
     "success",
   );
 }
@@ -402,7 +402,7 @@ async function handleBulkImport(mode, file) {
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
     const sheetName = wb.SheetNames[0];
     if (!sheetName) {
-      showToast("File Excel ini tidak punya sheet sama sekali.", "danger");
+      showToast(t("m.file.excel.ini.tidak.punya.sheet.sama.sekali"), "danger");
       return;
     }
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
@@ -411,16 +411,14 @@ async function handleBulkImport(mode, file) {
       raw: true,
     });
     if (rows.length < 2) {
-      showToast(
-        "File Excel ini tidak punya data (cuma header atau kosong).",
+      showToast(t("m.file.excel.ini.tidak.punya.data.cuma.header.at"),
         "danger",
       );
       return;
     }
     const groups = groupBulkRows(rows.slice(1), mode);
     if (!groups.length) {
-      showToast(
-        "Tidak ada baris yang bisa dikenali — pastikan kolom AJU terisi di baris pertama tiap jadwal.",
+      showToast(t("m.tidak.ada.baris.yang.bisa.dikenali.pastikan.ko"),
         "danger",
       );
       return;
@@ -430,15 +428,14 @@ async function handleBulkImport(mode, file) {
       .filter((r) => r.items.length);
 
     if (!reconstructed.length) {
-      showToast(
-        "Tidak ada jadwal dengan barang yang valid di file ini.",
+      showToast(t("m.tidak.ada.jadwal.dengan.barang.yang.valid.di.f"),
         "danger",
       );
       return;
     }
 
     showConfirm(
-      `File ini punya ${reconstructed.length} jadwal ${modeLabel}. Ini akan MENGGANTI seluruh jadwal ${modeLabel} yang tersimpan di database dengan isi file ini. Lanjutkan?`,
+      t("x.berkas.akan.mengganti", { n: reconstructed.length, mode: modeLabel }),
       async () => {
         try {
           const { error: delErr } = await supabaseClient
@@ -451,20 +448,19 @@ async function handleBulkImport(mode, file) {
           }
           await loadShipments();
           showToast(
-            `${reconstructed.length} jadwal ${modeLabel} berhasil diimpor.`,
+            t("x.jadwal.berhasil.diimpor", { n: reconstructed.length, mode: modeLabel }),
             "success",
           );
         } catch (err) {
           console.error(err);
-          showToast("Gagal mengimpor data ke database.", "danger");
+          showToast(t("m.gagal.mengimpor.data.ke.database"), "danger");
           loadShipments();
         }
       },
     );
   } catch (err) {
     console.error(err);
-    showToast(
-      "Gagal membaca file Excel ini. Pastikan formatnya sesuai template Bulk Export.",
+    showToast(t("m.gagal.membaca.file.excel.ini.pastikan.formatny"),
       "danger",
     );
   }
@@ -511,14 +507,12 @@ async function handleDeleteAll() {
   const total = (data[mode] || []).length;
 
   if (!total) {
-    showToast(`Tidak ada data Jadwal ${modeLabel} untuk dihapus.`, "dark");
+    showToast(t("x.tidak.ada.data.untuk.dihapus", { mode: modeLabel }), "dark");
     return;
   }
 
   showConfirm(
-    `Anda akan menghapus SELURUH data Jadwal ${modeLabel} secara permanen: ${total} jadwal ` +
-      `beserta seluruh daftar barang di dalamnya. Jadwal ${mode === "import" ? "Export" : "Import"} TIDAK ikut terhapus. ` +
-      `Tindakan ini TIDAK BISA dibatalkan. Lanjutkan?`,
+    t("x.hapus.seluruh.data", { mode: modeLabel, n: total, lain: mode === "import" ? "Export" : "Import" }),
     async () => {
       const btn = $("#btnDeleteAll");
       const originalLabel = btn.innerHTML;
@@ -535,10 +529,10 @@ async function handleDeleteAll() {
         // shipment_items & shipment_route_stops ikut terhapus otomatis lewat "on delete cascade".
         data[mode] = [];
         render();
-        showToast(`Semua data Jadwal ${modeLabel} berhasil dihapus.`, "dark");
+        showToast(t("x.semua.data.berhasil.dihapus", { mode: modeLabel }), "dark");
       } catch (err) {
         console.error(err);
-        showToast("Gagal menghapus data dari database.", "danger");
+        showToast(t("m.gagal.menghapus.data.dari.database"), "danger");
         loadShipments();
       } finally {
         btn.disabled = false;
@@ -562,13 +556,13 @@ $("#bulkActionBtn").addEventListener("click", async () => {
       await handleBulkExport(mode);
     } catch (err) {
       console.error(err);
-      showToast(err.message || "Gagal membuat file Excel.", "danger");
+      showToast(err.message || t("z.gagal.membuat.berkas.excel"), "danger");
     }
     bulkModal.hide();
   } else {
     const file = $("#bulkImportFile").files[0];
     if (!file) {
-      showToast("Pilih file Excel dulu.", "danger");
+      showToast(t("m.pilih.file.excel.dulu"), "danger");
       return;
     }
     bulkModal.hide();

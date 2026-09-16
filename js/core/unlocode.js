@@ -123,9 +123,63 @@ const UNLOCODES_RAW = [
   { unlocode: "THBKK", name: "Bangkok", country: "TH", type: "laut", aliases: ["bangkok"] },
   { unlocode: "THLCH", name: "Laem Chabang", country: "TH", type: "laut", aliases: ["laem chabang"] },
   { unlocode: "VNSGN", name: "Ho Chi Minh City", country: "VN", type: "laut",
-    aliases: ["ho chi minh", "hochiminh", "saigon", "cat lai"] },
+    aliases: ["ho chi minh", "hochiminh", "saigon"] },
   { unlocode: "VNHPH", name: "Haiphong", country: "VN", type: "laut", aliases: ["haiphong", "hai phong"] },
   { unlocode: "VNDAD", name: "Da Nang", country: "VN", type: "laut", aliases: ["da nang", "danang"] },
+
+  /* TERMINAL PETI KEMAS VIETNAM.
+
+     Dokumen dari forwarder Vietnam menulis nama TERMINAL, bukan nama
+     kotanya -- "CAT LAI", "CAI MEP", "DINH VU". Tanpa entri ini,
+     pembacaan PIB/PEB/CIPL berhenti mengenali pelabuhannya dan
+     kolomnya dibiarkan kosong.
+
+     Alias "cat lai" dipindahkan dari VNSGN ke VNCLI: keduanya di Ho
+     Chi Minh, tapi Cat Lai punya kodenya sendiri dan itu yang tercetak
+     di B/L. */
+  { unlocode: "VNCLI", name: "Cat Lai Terminal, Ho Chi Minh City", country: "VN", type: "laut",
+    aliases: ["cat lai", "catlai", "cang cat lai"] },
+  { unlocode: "VNCSG", name: "Sai Gon Port, Ho Chi Minh City", country: "VN", type: "laut",
+    aliases: ["sai gon port", "saigon port", "cang sai gon"] },
+  { unlocode: "VNVIC", name: "VICT Terminal, Ho Chi Minh City", country: "VN", type: "laut",
+    aliases: ["vict", "vietnam international container terminal"] },
+  { unlocode: "VNHPP", name: "Tan Cang Hiep Phuoc, Ho Chi Minh City", country: "VN", type: "laut",
+    aliases: ["hiep phuoc", "tan cang hiep phuoc"] },
+
+  /* Cai Mep - Thi Vai: terminal laut dalam untuk kapal besar, dipakai
+     rute jarak jauh yang tidak bisa masuk sungai ke Cat Lai. */
+  { unlocode: "VNCMT", name: "Cai Mep Intl Terminal, Ba Ria-Vung Tau", country: "VN", type: "laut",
+    aliases: ["cai mep", "caimep", "cmit", "thi vai", "tcit", "tctt", "gemalink"] },
+  { unlocode: "VNVUT", name: "Vung Tau", country: "VN", type: "laut",
+    aliases: ["vung tau", "vungtau"] },
+  { unlocode: "VNPHU", name: "Phu My, Ba Ria-Vung Tau", country: "VN", type: "laut",
+    aliases: ["phu my", "phumy"] },
+
+  // Haiphong: kota pelabuhannya satu, terminalnya beberapa.
+  { unlocode: "VNDVU", name: "Dinh Vu Terminal, Haiphong", country: "VN", type: "laut",
+    aliases: ["dinh vu", "dinhvu"] },
+  { unlocode: "VNCVE", name: "Chua Ve Terminal, Haiphong", country: "VN", type: "laut",
+    aliases: ["chua ve", "chuave"] },
+  { unlocode: "VNDXA", name: "Doan Xa Terminal, Haiphong", country: "VN", type: "laut",
+    aliases: ["doan xa", "doanxa"] },
+  { unlocode: "VNTVN", name: "Transvina Terminal, Haiphong", country: "VN", type: "laut",
+    aliases: ["transvina"] },
+  { unlocode: "VNCLN", name: "Cai Lan, Quang Ninh", country: "VN", type: "laut",
+    aliases: ["cai lan", "cailan", "quang ninh"] },
+
+  // Vietnam tengah & selatan
+  { unlocode: "VNDTS", name: "Tien Sa Terminal, Da Nang", country: "VN", type: "laut",
+    aliases: ["tien sa", "tiensa"] },
+  { unlocode: "VNCMY", name: "Chan May Port", country: "VN", type: "laut",
+    aliases: ["chan may", "chanmay"] },
+  { unlocode: "VNDQT", name: "Dung Quat", country: "VN", type: "laut",
+    aliases: ["dung quat", "dungquat"] },
+  { unlocode: "VNUIH", name: "Qui Nhon", country: "VN", type: "laut",
+    aliases: ["qui nhon", "quy nhon", "quynhon"] },
+  { unlocode: "VNCXR", name: "Cam Ranh", country: "VN", type: "laut",
+    aliases: ["cam ranh", "camranh"] },
+  { unlocode: "VNVCA", name: "Can Tho", country: "VN", type: "laut",
+    aliases: ["can tho", "cantho"] },
   { unlocode: "VNSGN", name: "Tan Son Nhat Intl Airport, Ho Chi Minh City", country: "VN", type: "udara",
     aliases: ["tan son nhat", "tansonnhat", "ho chi minh airport", "saigon airport", "sgn"] },
   { unlocode: "VNHAN", name: "Noi Bai Intl Airport, Hanoi", country: "VN", type: "udara",
@@ -316,13 +370,24 @@ function portCodeLabel(raw) {
   const s = String(raw || "").trim();
   if (!s) return s;
   const upper = s.toUpperCase();
+  /* BENTUK PANJANG yang ditampilkan (IDCGK, VNCLI), bukan bentuk
+     pendeknya.
+
+     Inilah yang tercetak di PIB, PEB, dan B/L. Menampilkan CGK memaksa
+     pembacanya menerjemahkan sendiri saat mencocokkan layar dengan
+     dokumen di tangan -- dan tiga huruf itu tidak menyebut negaranya,
+     jadi TPP bisa terbaca Tanjung Priok maupun Tanjung Pelepas.
+
+     Yang DISIMPAN tidak diubah: bentuk pendek maupun panjang sama-sama
+     dikenali resolvePortCode(), jadi jadwal lama tetap terbaca dan
+     aturan rutenya tetap cocok. */
   if (UNLOCODE_PATTERN.test(upper)) {
     const e = PORT_BY_UNLOCODE.get(upper);
-    if (e) return e.code;
+    if (e) return e.unlocode;
   }
   if (PORTCODE_PATTERN.test(upper)) {
     const e = PORT_BY_CODE.get(upper);
-    if (e) return e.code;
+    if (e) return e.unlocode;
   }
   return s;
 }
@@ -346,7 +411,10 @@ function unlocodeDatalistHtml(mode) {
         /* UN/LOCODE ikut ditulis di label supaya pengguna yang hafal
            bentuk lama ("IDCGK") tetap bisa menemukannya lewat ketikan —
            datalist mencocokkan teks label, bukan cuma nilainya. */
-        `<option value="${u.code}">${escapeHtml(`${u.code} — ${u.name} (${u.unlocode})`)}</option>`,
+        /* value = bentuk panjang, sama dengan yang ditampilkan di
+           kartu -- supaya yang diketik, yang tersimpan, dan yang
+           terbaca di layar tidak pernah berbeda bentuk. */
+        `<option value="${u.unlocode}">${escapeHtml(`${u.unlocode} — ${u.name}`)}</option>`,
     )
     .join("");
 }

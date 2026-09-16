@@ -67,11 +67,10 @@ function ciplXlsSet(ws, alamat, nilai, font, rata) {
 /* Logo perusahaan. SJ_LOGO berupa data URL; ExcelJS meminta base64
    tanpa awalan "data:...;base64,".
 
-   UKURAN & POSISI DALAM EMU, satuan asli berkas Excel. Sebelumnya
-   ukurannya ditulis 52x52 piksel dan posisinya sebagai pecahan kolom
-   (col: 0.2) — pecahan kolom ikut bergerak begitu lebar kolomnya
-   berubah, jadi logo di Invoice dan di Packing List tidak pernah
-   benar-benar sejajar.
+   UKURAN & POSISI DALAM EMU, satuan asli berkas Excel. Piksel dan
+   pecahan kolom (col: 0.2) TIDAK dipakai: pecahan kolom ikut bergerak
+   begitu lebar kolomnya berubah, sehingga logo di Invoice dan di
+   Packing List tidak akan pernah benar-benar sejajar.
 
    POSISINYA DIJAGA JARAK DARI GARIS, bukan dirapatkan ke sudut.
 
@@ -107,14 +106,6 @@ const XLS_LOGO_EMU = {
    di qa/logo-geometry-test.js langsung tahu. */
 const XLS_TINGGI_BARIS_BAWAAN = 15;          // poin
 const XLS_PITA_KOP_BARIS_TERAKHIR = 5;       // garis bawah kop
-function xlsTinggiPitaKopPx() {
-  let pt = 0;
-  for (let r = 1; r <= XLS_PITA_KOP_BARIS_TERAKHIR; r++) {
-    pt += XLS_BARIS_KOP[r] || XLS_TINGGI_BARIS_BAWAAN;
-  }
-  return (pt * 4) / 3;                        // poin -> piksel (96/72)
-}
-
 /* ExcelJS menerima `ext` dalam PIKSEL lalu mengubahnya dengan
    Math.floor(px * 9525). Menambah setengah EMU sebelum dibagi
    memastikan pembulatan ke bawahnya mendarat pas di angka yang
@@ -372,7 +363,7 @@ function ciplXlsBlokPihak(ws, row, shipment) {
   ciplXlsSet(ws, "E27", "Final Destination", XLS_TEBAL, XLS_TENGAH);
   ciplXlsSet(ws, "A28", p.portLoading || (shipment ? portCodeLabel(shipment.origin) : ""),
     XLS_ARIAL, XLS_TENGAH);
-  ciplXlsSet(ws, "C28", p.carrier || (shipment && shipment.vessel) || "",
+  ciplXlsSet(ws, "C28", p.carrier || (shipment && carrierNameFromShipment(shipment)) || "",
     XLS_ARIAL, XLS_TENGAH);
   ciplXlsSet(ws, "D28", ciplXlsTanggal(p.sailingDate), XLS_ARIAL, XLS_TENGAH);
   ciplXlsSet(ws, "E28", p.finalDestination || (shipment ? portCodeLabel(shipment.destination) : ""),
@@ -438,8 +429,8 @@ function ciplXlsJudulTabel(ws, judul, gabung) {
    Narrow: kiri & kanan 0,25"; atas & bawah 0,75"; header & footer 0,3".
 
    Dipakai ketiga lembar, supaya Invoice, Packing List, dan Shipping
-   Instruction jatuh di area yang sama pada kertas. Sebelumnya ketiganya
-   berbeda-beda (0,3 / 0,7 / 0,7 di kiri), warisan dari berkas yang
+   Instruction jatuh di area yang sama pada kertas. Margin per-lembar
+   yang berbeda-beda (0,3 / 0,7 / 0,7 di kiri) adalah warisan dari berkas yang
    disetel satu per satu oleh tangan.
 
    CATATAN. Ini MENYIMPANG dari berkas rujukan DDI-CRBM-VIII-045 —
@@ -582,8 +573,8 @@ function ciplXlsPacking(wb, row, shipment, baris) {
 /* Penanda pada berkas asli adalah RICH TEXT dalam satu sel: huruf "T"
    berfont Wingdings, lalu labelnya berfont biasa.
 
-   Menyetel Wingdings ke SELURUH sel membuat labelnya ikut jadi lambang
-   yang tak terbaca — itu yang terjadi pada percobaan sebelumnya. */
+   Menyetel Wingdings ke SELURUH sel akan membuat labelnya ikut jadi
+   lambang yang tak terbaca. */
 function ciplXlsLabelSI(teks, garisBawah) {
   return {
     richText: [
@@ -592,8 +583,8 @@ function ciplXlsLabelSI(teks, garisBawah) {
          Menaikkan huruf sel jadi 12pt tidak menyentuh label ini sama
          sekali: sel berisi rich text memakai ukuran tiap potongannya
          sendiri, dan gaya sel hanya berlaku untuk sel yang isinya teks
-         biasa. Itu sebabnya label sempat tetap kecil sementara nilai di
-         sebelahnya sudah membesar. */
+         biasa — kalau tidak diatur di sini, labelnya tetap kecil
+         sementara nilai di sebelahnya membesar. */
       /* charset 2 = himpunan karakter SIMBOL.
 
          Tanpa penanda itu, huruf "T" Wingdings tercetak sebagai huruf
@@ -655,10 +646,9 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
 
   /* TIDAK ADA GARIS PEMISAH.
 
-     Versi sebelumnya menggambar border bawah di beberapa kelompok
-     keterangan. Berkas rujukan tidak punya satu garis pun di lembar
-     ini — jaraknya yang memisahkan kelompok, dan garis tambahan
-     membuat lembarnya tidak lagi sama dengan yang beredar. */
+     Berkas rujukan tidak punya satu garis pun di lembar ini —
+     jaraknya yang memisahkan kelompok. Border bawah antar kelompok
+     keterangan membuat lembarnya tidak sama dengan yang beredar. */
   let r = 15;
   CIPL_SI_BARIS.forEach((def) => {
     ciplXlsSet(ws, "A" + r, ciplXlsLabelSI(def.k, !!def.tanpaTitikDua),
@@ -671,8 +661,7 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
       r += 1;
       /* "Address" sejajar dengan label di atasnya — didorong spasi,
          karena label di atasnya diawali penanda selebar satu huruf.
-         LIMA spasi, dihitung dari berkas rujukan; sebelumnya sepuluh,
-         dan barisnya menjorok dua kali lebih jauh daripada seharusnya. */
+         LIMA spasi, dihitung dari berkas rujukan. */
       ciplXlsSet(ws, "A" + r, "     Address", XLS_SI, XLS_TEGAK);
       isi.slice(1).forEach((x, i) => ciplXlsSet(ws, "C" + (r + i), x, XLS_SI, XLS_TEGAK));
       r += Math.max(isi.length - 1, 1);
@@ -742,9 +731,18 @@ async function unduhCiplExcel(rowId) {
     const wb = new ExcelJS.Workbook();
     wb.creator = "EXIM DDI";
     wb.created = new Date();
-    ciplXlsInvoice(wb, row, shipment, baris);
-    ciplXlsPacking(wb, row, shipment, baris);
-    ciplXlsShippingInstruction(wb, row, shipment, baris);
+    /* Bentuk berkas mengikuti PROFIL PEMBELI, sama seperti lembar
+       cetaknya. Percabangan di satu titik ini saja -- kedua penyusun
+       tidak perlu tahu keberadaan satu sama lain. */
+    const prof = ciplProfil((row.payload || {}).customer || (shipment && shipment.party));
+    if (prof.layout === "vn" && typeof ciplVnExcelInvoice === "function") {
+      ciplVnExcelInvoice(wb, row, shipment);
+      ciplVnExcelPacking(wb, row, shipment);
+    } else {
+      ciplXlsInvoice(wb, row, shipment, baris);
+      ciplXlsPacking(wb, row, shipment, baris);
+      ciplXlsShippingInstruction(wb, row, shipment, baris);
+    }
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {
@@ -772,7 +770,7 @@ async function unduhCiplExcel(rowId) {
     /* Sebabnya ikut ditulis. Pesan generik menyembunyikan satu-satunya
        petunjuk yang dimiliki pengguna — dan juga yang memperbaikinya. */
     showToast(
-      `Gagal menyusun berkas Excel: ${err && err.message ? err.message : "kesalahan tidak diketahui"}`,
+      t("x.gagal.menyusun.excel", { err: err && err.message ? err.message : t("s.kesalahan.tidak.diketahui") }),
       "danger",
     );
   } finally {

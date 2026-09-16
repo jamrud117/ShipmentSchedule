@@ -75,7 +75,7 @@ async function parseOneImportFile(file) {
     const pib = parsePibPdfText(text, pagesItems);
     if (!pib.isPib && !pib.fields.docNo && !pib.items.length) {
       throw new Error(
-        `"${file.name}" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil scan/gambar).`,
+        t("y.bukan.format.dikenali", { nama: file.name }),
       );
     }
     return pib;
@@ -90,7 +90,7 @@ async function parseOneImportFile(file) {
   const cipl = parseCiplWorkbook(wb);
   if (!cipl.items.length && !cipl.fields.invoice && !cipl.fields.party) {
     throw new Error(
-      `"${file.name}" tidak terbaca sbg format dokumen BC (sheet HEADER/BARANG) maupun CIPL manapun yang dikenali.`,
+      t("y.tidak.terbaca.bc.maupun.cipl", { nama: file.name }),
     );
   }
   return cipl;
@@ -109,7 +109,7 @@ function combineCiplPair(results) {
   );
   applyTotalBrutoToFirstItem(merged, totalBruto);
   const combinedNotes = [
-    "Digabung otomatis dari 2 file yang dipilih sekaligus (Commercial Invoice + Packing List) — harga & qty dari CI, berat dari PL.",
+    t("w.digabung.otomatis.dari.2.berkas"),
     ...results.flatMap((r) =>
       (r.notes || []).filter((n) => !/pasangannya/i.test(n)),
     ),
@@ -210,13 +210,13 @@ async function prosesBerkasImport(files) {
 
     showImportNotes(summaries.join(" "), allNotes);
     showToast(
-      `${summaries.join(" ")}${allNotes.length ? " Ada catatan yang perlu dicek di atas form." : ""}`,
+      `${summaries.join(" ")}${allNotes.length ? t("y.ada.catatan.perlu.dicek") : ""}`,
       allNotes.length ? "warning" : "success",
     );
   } catch (err) {
     console.error(err);
     showToast(
-      (err && err.message) || "Gagal membaca file yang dipilih. Coba lagi.",
+      (err && err.message) || t("v.gagal.membaca.file.yang.dipilih.coba.lagi"),
       "danger",
     );
   } finally {

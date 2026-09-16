@@ -22,6 +22,14 @@ const FIELD_MAP = {
   destination: "destination",
   etd: "etd",
   eta: "eta",
+  /* Jam ETD/ETA — OPSIONAL, field TERPISAH dari tanggalnya (pola sama
+     dengan factoryTime di atas: teks "HH:MM" polos, bukan digabung
+     jadi satu datetime). Kosong = seperti sebelum fitur ini ada,
+     seluruh perhitungan yang berbasis tanggal (laneProgress() di
+     route-model.js, dst.) tetap jatuh ke presisi hari seperti biasa —
+     lihat komentarnya sendiri di sana. */
+  etdTime: "etd_time",
+  etaTime: "eta_time",
   // TANGGAL UPDATE DELAY (requirement D): jadwal BARU setelah mundur
   etaUpdate: "eta_update",
   etdUpdate: "etd_update",
@@ -107,6 +115,18 @@ function itemToRow(it, shipmentId) {
   return {
     shipment_id: shipmentId,
     nama_barang: it.namaBarang || "",
+    // Size (ukuran/spesifikasi, mis. "235/55R20") -- field BARU, HANYA
+    // dipakai/ditampilkan di buku Export (lihat body.mode-import
+    // .size-col, form.css). Butuh kolom `size` di tabel shipment_items
+    // -- lihat migrasi SQL yang disertakan.
+    size: it.size || "",
+    /* Kolom cetakan (Export). Pattern & Mold No ikut membentuk nama
+       yang ditampilkan; PO No tidak -- lihat itemDisplayName().
+       Butuh kolom baru di shipment_items, lihat migrasi SQL. */
+    pattern: it.pattern || "",
+    mold_no: it.moldNo || "",
+    po_no: it.poNo || "",
+    marks: it.marks || "",
     hs_code: it.hsCode || "",
     jenis_barang: it.jenisBarang || "",
     qty: parseLooseNumber(it.qty),
@@ -127,6 +147,11 @@ function rowToItem(row) {
   return {
     id: row.id,
     namaBarang: row.nama_barang || "",
+    size: row.size || "",
+    pattern: row.pattern || "",
+    moldNo: row.mold_no || "",
+    poNo: row.po_no || "",
+    marks: row.marks || "",
     hsCode: row.hs_code || "",
     /* Dibakukan di sini, satu pintu. Jadwal lama menyimpan
        "Bahan Baku"; tanpa ini ia tidak akan cocok dengan daftar

@@ -12,12 +12,12 @@ let cmdkResults = [];
 // Perintah halaman ikut masuk daftar yang sama supaya tidak perlu diingat sebagai fitur terpisah.
 const CMDK_COMMANDS = [
   { type: "cmd", icon: "bi-plus-lg", title: "Tambah jadwal baru", hint: "Buka form kosong", run: () => (location.hash = "#/new") },
-  { type: "cmd", icon: "bi-columns-gap", title: "Buka Ringkasan", hint: "Apa yang perlu ditindak hari ini", run: () => (location.hash = "#/ringkasan") },
+  { type: "cmd", icon: "bi-columns-gap", title: "Buka Ringkasan", hint: t("s.apa.yang.perlu.ditindak.hari.ini"), run: () => (location.hash = "#/ringkasan") },
   { type: "cmd", icon: "bi-list-columns-reverse", title: "Buka Jadwal", hint: "Daftar pengiriman", run: () => (location.hash = "#/") },
   { type: "cmd", icon: "bi-hash", title: "Permintaan Nomor Dokumen", hint: "Invoice, DO, dana, surat", run: () => (location.hash = "#/docnum") },
   { type: "cmd", icon: "bi-arrow-left-right", title: "Ganti buku Import / Export", hint: "Pindah antar mode", run: () => switchMode(activeMode === "import" ? "export" : "import") },
-  { type: "cmd", icon: "bi-exclamation-triangle", title: "Saring: perlu tindakan", hint: "Lewat ETA atau delay", run: () => { location.hash = "#/"; setTimeout(() => setPreset("late"), 60); } },
-  { type: "cmd", icon: "bi-file-earmark-excel", title: "Bulk Export ke Excel", hint: "Buku yang sedang aktif", run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
+  { type: "cmd", icon: "bi-exclamation-triangle", title: "Saring: perlu tindakan", hint: t("s.lewat.eta.atau.delay"), run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
+  { type: "cmd", icon: "bi-file-earmark-excel", title: "Bulk Export ke Excel", hint: t("s.buku.yang.sedang.aktif"), run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
 ];
 
 function cmdkSearchShipments(q) {
@@ -37,7 +37,10 @@ function cmdkSearchShipments(q) {
         s.voyage,
         s.container,
         s.forwarder,
-        ...(s.items || []).map((i) => i.namaBarang),
+        // Ikut nomor cetakan & nomor PO -- lihat catatan di list.js.
+        ...(s.items || []).flatMap((i) => [
+          i.namaBarang, i.size, i.pattern, i.moldNo, i.poNo,
+        ]),
       ]
         .join(" ")
         .toLowerCase();
@@ -206,8 +209,7 @@ document.addEventListener("keydown", (e) => {
     location.hash = "#/new";
   } else if (e.key === "?") {
     e.preventDefault();
-    showToast(
-      "Pintasan: Ctrl+K cari cepat · / pencarian · N jadwal baru",
+    showToast(t("m.pintasan.ctrl.k.cari.cepat.pencarian.n.jadwal."),
       "dark",
     );
   }

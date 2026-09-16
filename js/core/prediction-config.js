@@ -265,14 +265,29 @@ const PREDICTION_CONFIG = {
     /* ---- LAUT FCL → Tanjung Priok ---- */
     {
       id: "vn-sea-sgn-tpp",
-      label: "Cat Lai (Ho Chi Minh) → Tanjung Priok",
-      match: { fromCountry: "VN", fromPort: "SGN", toPort: "TPP" },
+      label: "Ho Chi Minh (Cat Lai & sekitarnya) → Tanjung Priok",
+      /* SELURUH TERMINAL SATU KOMPLEKS didaftar bersama.
+
+         Cat Lai, Sai Gon Port, VICT, dan Hiep Phuoc semuanya di sungai
+         yang sama di Ho Chi Minh dan berbagi angka transit yang sama.
+         Dokumen forwarder menulis nama terminalnya, bukan nama
+         kotanya -- tanpa didaftar di sini, kiriman dari "CAT LAI"
+         berhenti mendapat perkiraan ETA sama sekali. */
+      match: {
+        fromCountry: "VN",
+        fromPort: ["SGN", "CLI", "CSG", "VIC", "HPP"],
+        toPort: "TPP",
+      },
       days: { SEA_FCL: { direct: 6, transit: 8 } },
     },
     {
       id: "vn-sea-hph-tpp",
-      label: "Hai Phong → Tanjung Priok",
-      match: { fromCountry: "VN", fromPort: "HPH", toPort: "TPP" },
+      label: "Hai Phong (Dinh Vu & sekitarnya) → Tanjung Priok",
+      match: {
+        fromCountry: "VN",
+        fromPort: ["HPH", "DVU", "CVE", "DXA", "TVN"],
+        toPort: "TPP",
+      },
       days: { SEA_FCL: { direct: 7, transit: 9 } },
     },
     {
@@ -387,7 +402,12 @@ const PREDICTION_CONFIG = {
        merepotkan daripada yang kelewat hati-hati. */
     {
       id: "default",
-      label: "Bawaan (rute belum terdaftar)",
+      /* getter, bukan nilai tetap: objek ini dinilai SEKALI saat
+         berkas dimuat, jadi t() yang dipanggil langsung akan membeku
+         pada bahasa saat itu dan tidak ikut berganti. */
+      get label() {
+        return t("s.bawaan.rute.belum.terdaftar");
+      },
       match: {},
       days: {
         AIR: { direct: 2, transit: 4 },
@@ -577,7 +597,13 @@ const PREDICTION_CONFIG = {
        di kolom itu kalau yang dipakai layanan ekonomi. */
     {
       id: "fedex-default",
-      label: "FedEx (layanan tidak disebut — dianggap Priority)",
+      /* getter, sama dengan label rute bawaan di atas: berkas ini
+         dimuat SEBELUM kamus, jadi memanggil t() langsung di sini
+         membuat seluruh berkas gagal dimuat -- bukan cuma labelnya
+         yang salah. Getter menunda pemanggilannya sampai dibaca. */
+      get label() {
+        return t("v.fedex.layanan.tidak.disebut.dianggap.priority");
+      },
       match: { carrier: "FEDEX" },
       workingDays: 3,
     },

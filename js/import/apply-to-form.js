@@ -62,6 +62,50 @@ function itemMatchKey(it) {
     .trim();
 }
 
+/* CEISA (excel-bc.js) TIDAK PERNAH mengisi `package` (dimensi P*L*T) --
+   sheet BARANG di file itu memang tidak punya kolomnya sama sekali
+   (beda dari Packing List, yang punya). Tanpa penjagaan ini, meng-
+   import ulang excel CEISA ke draft Export yang dimensinya sudah
+   diisi manual akan MENGHAPUS dimensi itu: item baru dari CEISA tidak
+   membawa `package` apa pun, jadi field itu ikut ke nilai kosong
+   begitu item lama ditimpa oleh preserveUnitPrices() di atas.
+
+   Dicocokkan lewat nama/HS yang SAMA persis dengan preserveUnitPrices,
+   supaya dimensi menempel ke barang yang benar walau urutan barisnya
+   berubah — bukan sekadar berdasar posisi baris.
+
+   Khusus Export saja: di Import, `package` berarti JUMLAH KOLI ("5
+   BOX"), bukan dimensi -- konsep yang beda sama sekali (lihat
+   ciplPackagingFor() di import/dispatch.js), dan itu di luar yang
+   diminta di sini. */
+function preserveDimensionsForCeisa(newItems, oldItems, src) {
+  if (src !== "excel" || activeMode !== "export") return newItems;
+  const lama = (oldItems || []).filter((it) => String(it.package || "").trim());
+  if (!lama.length || !newItems.length) return newItems;
+
+  const terpakai = new Set();
+  const ambil = (uji) => {
+    for (let i = 0; i < lama.length; i++) {
+      if (terpakai.has(i)) continue;
+      if (uji(lama[i])) {
+        terpakai.add(i);
+        return lama[i];
+      }
+    }
+    return null;
+  };
+
+  return newItems.map((it) => {
+    if (String(it.package || "").trim()) return it; // sudah terisi, jangan timpa
+    const nama = itemMatchKey(it);
+    const hs = normalizeHsCodeInput(it.hsCode);
+    const cocok =
+      (nama && ambil((o) => itemMatchKey(o) === nama)) ||
+      (hs && ambil((o) => normalizeHsCodeInput(o.hsCode) === hs));
+    return cocok ? Object.assign({}, it, { package: cocok.package }) : it;
+  });
+}
+
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
    Dicocokkan berlapis — nama dulu, baru HS Code — karena satu HS Code
@@ -141,7 +185,7 @@ function setImportSelect(id, value, source, notes, labelForNote) {
   if (!hasOpt) {
     if (notes)
       notes.push(
-        `${labelForNote || id} "${value}" dari file tidak ada di pilihan dropdown — pilih manual.`,
+        t("w.nilai.tidak.ada.di.dropdown", { label: labelForNote || id, nilai: value }),
       );
     return false;
   }
@@ -209,24 +253,48 @@ function applyImportedBcData(parsed) {
               : key === "ndpbm"
                 ? "Ndpbm"
                 : key.charAt(0).toUpperCase() + key.slice(1));
-      if (f[key] != null && f[key] !== "") put(id, f[key]);
+      /* BM/PPN/PPH DIPAKSA menimpa isi kotak.
+
+         Kotak yang sudah terisi biasanya TIDAK ditimpa impor -- itu
+         yang melindungi ketikan pengguna. Tapi untuk tiga pungutan
+         ini, dokumen kepabeanan justru sumber yang paling berwenang:
+         angkanya keluar dari CEISA, bukan dikarang.
+
+         Tanpa paksaan ini, mengubah jadwal yang sudah tersimpan
+         dengan PPN 0 tidak akan pernah memperbarui PPN-nya: kotaknya
+         berisi "0" (nilaiPungutan menulis nol apa adanya, bukan
+         kosong), jadi terbaca "sudah diisi" dan impor menolak
+         menyentuhnya. */
+      const paksa = key === "bm" || key === "ppn" || key === "pph";
+      if (f[key] != null && f[key] !== "") put(id, f[key], paksa ? { force: true } : undefined);
     },
   );
 
-  /* Angka PPN & PPH hasil impor ditandai MANUAL.
+  /* Angka BM, PPN & PPH hasil impor: NOL DITULIS "0", lalu ditandai
+     MANUAL.
 
-     Kalau tidak, recalcCustoms() menganggapnya masih "otomatis" dan
-     langsung menimpanya dengan hitungan Total Nilai x NDPBM. Itulah
-     yang membuat PPH hasil impor CEISA berubah jadi 1.291.004 padahal
-     NILAI BAYAR-nya 0 — angka yang benar tertimpa taksiran.
+     Aturan "kosong = otomatis, diisi = manual" (AUTO_DUTY_FIELDS di
+     modal-fields.js) membaca ISI KOTAK. Padahal formatNumberValue()
+     menulis 0 sebagai kotak kosong — konvensi yang benar untuk Freight
+     & Asuransi (kosong di situ berarti "tidak ada"), tapi salah untuk
+     pungutan: nol dari dokumen adalah FAKTA (tarifnya 0% atau
+     dibebaskan fasilitas), bukan kolom yang menunggu diisi.
 
-     Nilai 0 pun ditandai manual: nol yang datang dari dokumen adalah
-     FAKTA (pungutannya dibebaskan), bukan kolom kosong yang menunggu
-     diisi. */
-  ["ppn", "pph"].forEach((key) => {
+     Dibiarkan kosong, penandanya cuma bertahan selama form terbuka.
+     initAutoDutyFlags() jalan lagi setiap form dibuka, membaca kotak
+     kosong itu sebagai "otomatis", lalu recalcCustoms() menimpanya
+     dengan 5% x Nilai Pabean — angka dari dokumen berubah sendiri
+     hanya karena jadwalnya dibuka ulang.
+
+     Ditulis "0", ketiganya jadi benar tanpa bergantung pada penanda:
+     kotak terisi = manual, sekarang maupun nanti. Sama dengan yang
+     dilakukan nilaiPungutan() saat memuat jadwal tersimpan. */
+  ["bm", "ppn", "pph"].forEach((key) => {
     if (f[key] == null || f[key] === "") return;
-    const el = $("#" + (key === "ppn" ? "fPPN" : "fPPH"));
-    if (el) el.dataset.auto = "0";
+    const el = $("#f" + key.toUpperCase());
+    if (!el) return;
+    if (Number(f[key]) === 0) el.value = "0";
+    el.dataset.auto = "0";
   });
 
   if (f.transport) {
@@ -270,24 +338,24 @@ function applyImportedBcData(parsed) {
         draftItems = cleaned;
       } else {
         const jaga = preserveUnitPrices(cleaned, draftItems);
-        draftItems = jaga.items;
+        draftItems = preserveDimensionsForCeisa(jaga.items, draftItems, src);
         if (jaga.kept) {
           notes.push(
-            `Harga satuan ${jaga.kept} barang dipertahankan dari data sebelumnya${jaga.byOrder ? " (dicocokkan menurut urutan)" : ""} — dokumen kepabeanan tidak menimpa harga invoice.`,
+            t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? " (dicocokkan menurut urutan)" : "" }),
           );
         }
       }
       importFieldOrigin.__items = prio;
     } else {
       notes.push(
-        `Daftar barang dari file ini TIDAK diterapkan karena tab Daftar Barang sudah terisi dari dokumen yang lebih resmi. Hapus dulu barangnya kalau memang mau diganti.`,
+        t("y.daftar.barang.tidak.diterapkan"),
       );
     }
   }
 
   if (parsed.modeHint && parsed.modeHint !== activeMode) {
     notes.push(
-      `File ini sepertinya dokumen ${parsed.modeHint === "import" ? "IMPORT" : "EXPORT"}, tapi form yang terbuka sekarang mode ${activeMode === "import" ? "IMPORT" : "EXPORT"} — cek lagi sebelum simpan.`,
+      t("y.berkas.mode.berbeda", { dokumen: parsed.modeHint === "import" ? "IMPORT" : "EXPORT", form: activeMode === "import" ? "IMPORT" : "EXPORT" }),
     );
   }
 
@@ -313,7 +381,7 @@ function applyImportedBcData(parsed) {
         : isCiplSource(src)
           ? "CIPL"
           : "BC";
-  const summary = `${filled} field & ${items.length} barang terisi otomatis dari file ${docLabel} (${sourceLabel})${facSuffix}.`;
+  const summary = t("x.field.barang.terisi.otomatis", { f: filled, b: items.length, dok: docLabel, sumber: sourceLabel, fac: facSuffix });
   return { summary, notes };
 }
 

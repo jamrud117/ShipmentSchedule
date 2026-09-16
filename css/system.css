@@ -440,10 +440,8 @@ input[type="date"][readonly] {
 /* Judul besar & tombol utama tetap huruf biasa — keduanya kalimat,
    bukan penanda. */
 .board-title,
-.login-title,
 .btn-primary-navy,
-.btn-quiet,
-.chip {
+.btn-quiet {
   text-transform: none;
   letter-spacing: normal;
 }
@@ -488,7 +486,6 @@ select,
 .date-field input[type="date"],
 .delay-strip-fields input[type="date"],
 select.acct-role,
-.chip,
 .btn-quiet,
 .btn-more,
 .icon-btn,

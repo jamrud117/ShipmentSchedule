@@ -7,8 +7,8 @@ const INCOTERM_RE =
 const CURRENCY_TOKEN_RE = /^(USD|IDR|KRW|CNY|RMB|JPY|EUR|SGD|TWD|HKD)$/i;
 /* Satuan yang dikenali di kolom Quantity.
 
-   EA ("each") ada di hampir semua invoice Korea/Cina dan sebelumnya
-   tidak terdaftar — akibatnya kolom Satuan selalu kosong untuk berkas
+   EA ("each") ada di hampir semua invoice Korea/Cina — tanpa
+   mendaftarkannya, kolom Satuan selalu kosong untuk berkas
    itu, tanpa ada yang bersuara. Satuan yang tidak dikenali tidak
    menggagalkan barisnya; ia hanya menghilang diam-diam. */
 const UNIT_QTY_RE =
@@ -340,7 +340,6 @@ function mergeItemSources(sources) {
     merged = mergeByKey(nonEmpty);
   }
 
-  // CATATAN: pembagian bruto PROPORSIONAL sudah DIHAPUS dari sini
   return merged;
 }
 

@@ -49,8 +49,10 @@ function skbTagsHtml(s) {
 
 // Daftar nama barang buat kartu depan (info-grid) — 1 barang 1 baris
 function itemNamesSummary(s, maxShown = 4) {
+  /* itemDisplayName: Uraian + Size + Pattern + Mold No, kolom kosong
+     dilewati. Dipakai bersama copy template -- lihat helpers.js. */
   const names = (s.items || [])
-    .map((it) => (it.namaBarang || "").trim())
+    .map((it) => itemDisplayName(it))
     .filter(Boolean);
   if (!names.length) return ["—"];
   if (names.length <= maxShown) return names;
@@ -146,7 +148,7 @@ function actionButtons(s) {
       <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="Lihat Detail"><i class="bi bi-eye"></i></button>
       <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
       <div class="dropdown copy-template-dropdown">
-        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Salin ke Excel"><i class="bi bi-clipboard"></i></button>
+        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title=t("v.salin.ke.excel")><i class="bi bi-clipboard"></i></button>
         <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
       </div>
       <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="Hapus"><i class="bi bi-trash3"></i></button>
@@ -165,6 +167,39 @@ function statusSelectHtml(s) {
     </select>`;
 }
 
+/* BADAN KARTU — rincian di kiri, nama barang di kanan.
+
+   SATU fungsi untuk kartu berjalan MAUPUN kartu yang sudah tiba.
+   Kiriman yang sudah selesai justru paling sering dibuka lagi untuk
+   mencari nomor B/L, forwarder, atau rutenya; menyusun ulang blok ini
+   khusus untuk kartu tiba membuat keduanya perlahan berbeda isi tanpa
+   ada yang berniat membedakannya. */
+function cardBodySplitHtml(s, totals) {
+  const lbl = ML();
+  return `
+    <div class="ship-body-split">
+    <div class="info-grid">
+      <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> ${t("f.rute")}</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">PIC: ${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
+      <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${vesselNoun(s.transport)}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${voyageNoun(s.transport)} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> ${t("f.kontainer")}</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
+      ${
+        activeMode === "export"
+          ? ""
+          : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>`
+      }
+      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.netto")}</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
+    </div>
+    <div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${itemNamesSummary(
+      s,
+    )
+      .map((n) => `<div>${escapeHtml(n)}</div>`)
+      .join("")}</div></div>
+    </div>`;
+}
+
 function renderExpandedCard(s) {
   const lbl = ML();
   const totals = itemTotals(s);
@@ -175,7 +210,7 @@ function renderExpandedCard(s) {
     <div class="ship-card-top">
       <div class="ship-title-block">
                 <div class="ship-title-text">
-          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} Barang</div>
+          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} ${t("f.barang")}</div>
           <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
         </div>
       </div>
@@ -185,24 +220,7 @@ function renderExpandedCard(s) {
       </div>
     </div>
 
-    <div class="info-grid">
-      <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> Rute</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">PIC: ${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
-      <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${vesselNoun(s.transport)}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${voyageNoun(s.transport)} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> Kontainer</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
-      ${
-        activeMode === "export"
-          ? ""
-          : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>`
-      }
-      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> Total Netto</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
-      <div class="info-item info-item--wide"><div class="info-label"><i class="bi bi-boxes"></i> Nama Barang</div><div class="info-value info-value--list">${itemNamesSummary(
-        s,
-      )
-        .map((n) => `<div>${escapeHtml(n)}</div>`)
-        .join("")}</div></div>
-    </div>
+${cardBodySplitHtml(s, totals)}
 
     <div class="tag-row">${delayBadgeHtml(s)}${buildTags(s, totals)}</div>
 
@@ -243,10 +261,10 @@ function renderExpandedCard(s) {
    yang sudah dianggap beres. Yang mau membetulkan masuk lewat tombol
    pensil, dan di sana perubahannya disengaja.
 
-   Yang ditampilkan tanggal RENCANA, sama persis dengan kotak ETD/ETA
-   di form — kotak Tanggal Update Delay punya tempatnya sendiri, dan
-   menampilkan angka berbeda di bawah label yang sama hanya
-   membingungkan. */
+   Yang ditampilkan tanggal TERBARU (effectiveEtd/Eta): kalau jadwalnya
+   pernah dimundurkan, angka yang berlaku adalah tanggal update delay,
+   bukan rencana awal yang sudah diketahui meleset. Rencana awalnya
+   tetap bisa dilihat lewat tombol pensil. */
 function collapsedDatesHtml(s) {
   const mundur =
     (s.etdUpdate && s.etdUpdate !== s.etd) || (s.etaUpdate && s.etaUpdate !== s.eta);
@@ -262,8 +280,14 @@ function collapsedDatesHtml(s) {
 
   return `
     <div class="collapsed-dates">
-      ${kotak("ETD", s.etd)}
-      ${kotak("ETA", s.eta)}
+      ${kotak("ETD", effectiveEtd(s))}
+      ${kotak("ETA", effectiveEta(s))}
+      ${
+        /* Estimated Delivery ikut ditampilkan: itu tanggal barang
+           benar-benar sampai di pabrik, dan justru itu yang dicari
+           saat menelusuri kiriman lama. */
+        kotak(ML().actual, s.actual)
+      }
       ${mundur ? `<div class="collapsed-dates-note"><i class="bi bi-clock-history"></i> Pernah dimundurkan</div>` : ""}
     </div>`;
 }
@@ -275,8 +299,8 @@ function renderCollapsedCard(s) {
     <div class="collapsed-row">
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
             <div class="collapsed-main">
-        <div class="collapsed-party">${escapeHtml(dispVal(s.party))}</div>
-        <div class="collapsed-meta">Invoice <b>${escapeHtml(dispVal(s.invoice))}</b> &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(activeMode === "export" ? s.actual : s.factoryDate)}</b></div>
+        <div class="collapsed-party">${escapeHtml(dispVal(s.party))} · ${(s.items || []).length} ${t("f.barang")}</div>
+        <div class="collapsed-meta">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;·&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))} &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(activeMode === "export" ? s.actual : s.factoryDate)}</b></div>
       </div>
       <div class="ship-actions-block">
         ${statusSelectHtml(s)}
@@ -293,12 +317,15 @@ function renderCollapsedCard(s) {
            memaksa membuka detail hanya untuk melihat satu nilai. */
         `<div class="tag-row tag-row--collapsed">${buildTags(s, itemTotals(s))}</div>`
       }
-      <div class="collapsed-items">
-        <div class="collapsed-items-label"><i class="bi bi-boxes"></i> Nama Barang</div>
-        <div class="collapsed-items-list">${itemNamesSummary(s)
-          .map((n) => `<div>${escapeHtml(n)}</div>`)
-          .join("")}</div>
-      </div>
+      ${
+        /* Rincian LENGKAP, sama dengan kartu berjalan: rute, forwarder,
+           sarana angkut, kontainer, invoice, House B/L, dan nama
+           barang. Kiriman yang sudah tiba paling sering dibuka lagi
+           justru untuk angka-angka itu -- menyembunyikannya memaksa
+           membuka panel detail hanya untuk membaca satu nomor. */
+        cardBodySplitHtml(s, itemTotals(s))
+      }
+      ${docStepHtml(s)}
       ${cardNotesHtml(s)}
     </div>
   </div>`;

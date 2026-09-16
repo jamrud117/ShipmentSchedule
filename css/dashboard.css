@@ -7,13 +7,11 @@
 /* Dulu ada ikon corong di sini lewat content: "\F62A". Nomor glyph */
 
 /* BILAH KENDALI (cari / saring / urut / tampilan) */
-/* Bilah alat dibuat sebagai KOTAK, bukan pita selebar layar.
-
-   Versi sebelumnya putih dari tepi ke tepi dengan garis bawah, sehingga
-   terbaca sebagai bagian dari kerangka halaman — sama seperti bilah
-   atas. Sekarang latarnya sewarna halaman dan alat-alatnya duduk di
-   dalam kartu putih selebar isi, sejajar dengan kartu jadwal di
-   bawahnya. */
+/* Bilah alat dibuat sebagai KOTAK, bukan pita selebar layar: latarnya
+   sewarna halaman, alat-alatnya duduk di dalam kartu putih selebar
+   isi, sejajar dengan kartu jadwal di bawahnya. Pita putih dari tepi
+   ke tepi akan terbaca sebagai bagian dari kerangka halaman — sama
+   seperti bilah atas. */
 .controlbar {
   position: sticky;
   top: var(--topbar-h);
@@ -41,36 +39,40 @@
   gap: var(--sp-3);
   flex-wrap: wrap;
 }
-/* Baris pandangan: chip di kiri, kendali tampilan & aksi utama di kanan */
-.controlbar-row--views {
-  justify-content: space-between;
-  gap: var(--sp-4);
-}
+/* DUA BARIS, masing-masing "kelompok kiri ... kelompok kanan":
 
-/* Baris SARINGAN: kotak cari di kiri, saringan status & tombol aksi di
-   kanan. Chip saringan cepat mendapat barisnya sendiri secara penuh,
-   jadi kelimanya muat sebaris. */
-.controlbar-row--filters {
+     Baris ATAS  : [Import|Export]  ......  [cari] [status]
+     Baris BAWAH : [rentang tanggal] [basis]  ......  [⋯] [+ Tambah]
+
+   Kelompok kanannya didorong lewat margin-left:auto pada anak pertama
+   kelompok itu (.search-box di baris atas, .controlbar-tail di baris
+   bawah) — BUKAN justify-content: space-between. Dengan anak yang
+   tidak selalu ada semua (banner "Lihat Saja" cuma muncul untuk
+   viewer) dan lebarnya berbeda-beda, space-between menyebar celah
+   tidak merata; auto-margin di SATU titik selalu konsisten.
+
+   Tombol cepat Hari Ini/Minggu Ini/Minggu Depan TIDAK ada di sini —
+   pindah ke DALAM panel kalender (.drp-quick-row). */
+.controlbar-row--top,
+.controlbar-row--bottom {
   justify-content: flex-start;
+  gap: var(--sp-3);
 }
-.controlbar-row--filters > * {
-  min-width: 0;
-  flex-shrink: 0;
+.controlbar-row--top .search-box {
+  margin-left: auto;
 }
 
-/* Kotak cari */
-/* flex-grow 0: dulu kotak ini melar mengisi sisa ruang. Di susunan */
+/* Kotak cari. Pendorongnya ke kanan diatur di aturan
+   .controlbar-row--top .search-box di atas, bukan di sini — supaya
+   hanya berlaku pada baris yang memang membutuhkannya. */
 .search-box {
   position: relative;
-  /* Didorong ke kanan bersama saringan status; sakelar Import/Export
-     tetap di kiri. */
-  margin-left: auto;
   /* Menyusut lebih dulu daripada saringan status di sebelahnya: kotak
      cari yang menyempit masih bisa diketik, dropdown yang menyempit
      jadi tak terbaca. */
-  flex: 0 1 340px;
-  max-width: 380px;
-  min-width: 150px;
+  flex: 0 1 260px;
+  max-width: 320px;
+  min-width: 140px;
 }
 .search-box i {
   position: absolute;
@@ -148,77 +150,293 @@
   box-shadow: var(--sh-focus);
 }
 
-/* Rentang tanggal — labelnya menyebut kolom yang sedang disaring */
+/* Dropdown basis tanggal (ETA/ETD/Estimasi Delivery) dengan ikon di
+   kirinya, dibungkus supaya jadi SATU kotak (ikon + select) — sama
+   seperti pola .search-box (ikon + input) di sebelahnya, bukan select
+   polos seperti #filterStatus, karena kotak ini butuh ikon truk untuk
+   membedakan dirinya dari saringan status yang bentuknya mirip. */
+.basis-select-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.basis-select-wrap > i {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--n-500);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.basis-select-wrap select {
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: #fff;
+  font-size: var(--t-base);
+  color: var(--ink);
+  padding: 0 30px 0 32px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2364748b'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 15px;
+}
+.basis-select-wrap select:focus {
+  outline: none;
+  border-color: var(--p-400);
+  box-shadow: var(--sh-focus);
+}
 
-/* Dulu ini label mati yang cuma ikut berubah mengikuti dropdown urutan */
-
-/* Kotak tanggal menempel ke pemilihnya — satu alat, bukan tiga kontrol */
-
-/* Saringan cepat (preset) */
-.preset-row {
+/* Rentang tanggal — ikon + dua tanggal + tombol hapus dalam satu
+   kotak. Basis ETA/ETD/Estimasi Delivery sengaja dropdown TERPISAH di
+   sebelahnya, supaya bisa dipilih tanpa membuka kotak tanggal dulu.
+   Tinggi & radius disamakan dengan .control-select di sebelahnya
+   supaya sejajar rapi di baris yang sama. */
+/* PEMILIH RENTANG TANGGAL — kalender dua bulan (lihat
+   date-range-picker.js). #filterDateFrom/To yang sesungguhnya
+   dipakai getFiltered() disembunyikan di sini (.d-none pada elemen
+   itu sendiri) — yang tampil cuma tombol pemicu & panel kalendernya. */
+.date-range-picker {
+  position: relative;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  min-width: 0;
+  gap: 6px;
 }
-/* Label "CEPAT" dihapus: chip-nya sudah menjelaskan dirinya sendiri */
-.chip {
-  display: inline-flex;
+.date-range-trigger {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  height: 33px;
-  padding: 0 13px;
+  gap: 10px;
+  height: 40px;
+  padding: 0 14px 0 8px;
   border: 1px solid var(--border);
+  border-radius: 999px;
   background: #fff;
-  border-radius: var(--r-pill);
-  font-size: var(--t-sm);
-  font-weight: 500;
-  color: var(--n-600);
+  color: var(--ink);
+  font-size: var(--t-base);
   white-space: nowrap;
   transition:
-    background var(--dur-1) var(--ease),
     border-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease);
+    box-shadow var(--dur-1) var(--ease);
 }
-.chip i {
-  font-size: 0.8rem;
-  opacity: 0.75;
+.date-range-trigger:hover {
+  border-color: var(--p-300);
 }
-.chip:hover {
+.date-range-trigger.is-open {
+  border-color: var(--p-400);
+  box-shadow: var(--sh-focus);
+}
+.date-range-trigger:not(.has-value) {
+  color: var(--n-500);
+}
+.date-range-trigger-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  background: var(--n-100);
+  color: var(--n-600);
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  flex: 0 0 auto;
+}
+.date-range-trigger-caret {
+  color: var(--n-400);
+  font-size: 0.7rem;
+  transition: transform var(--dur-1) var(--ease);
+}
+.date-range-trigger.is-open .date-range-trigger-caret {
+  transform: rotate(180deg);
+}
+.date-range-clear {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  color: var(--n-400);
+  font-size: 0.72rem;
+  flex: 0 0 auto;
+}
+.date-range-clear i {
+  display: block;
+  line-height: 1;
+}
+
+/* Panel kalender. z-index disamakan dengan .dropdown-menu Bootstrap
+   (1000-an) supaya tidak ketiban elemen lain di halaman. */
+.drp-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1030;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  padding: var(--sp-4);
+  width: max-content;
+}
+/* Hari Ini/Minggu Ini/Minggu Depan — ditaruh DI DALAM panel kalender
+   supaya bilah kendali di luar tetap ringkas. Baris sendiri di atas
+   kalender, dipisah garis, karena ini jalan pintas MENGISI kalender di
+   bawahnya, bukan bagian dari kalendernya sendiri. */
+.drp-quick-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.drp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.drp-nav {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--n-600);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.drp-nav:hover {
   border-color: var(--p-300);
   color: var(--p-600);
 }
-.chip.is-active {
-  background: var(--d-900);
-  border-color: var(--d-900);
-  color: #fff;
-  font-weight: 600;
+.drp-months {
+  display: flex;
+  gap: var(--sp-6);
 }
-.chip.is-active i {
-  opacity: 1;
-  color: var(--sec-300);
-}
-.chip-count {
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
+.drp-month-label {
   font-weight: 700;
-  padding: 1px 5px;
-  border-radius: var(--r-pill);
-  background: var(--n-100);
+  color: var(--ink);
+  min-width: 190px;
+  text-align: center;
+}
+.drp-grids {
+  display: flex;
+  gap: var(--sp-5);
+}
+.drp-grid {
+  width: 190px;
+}
+.drp-dow-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+.drp-dow {
+  text-align: center;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.drp-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.drp-day {
+  width: 26px;
+  height: 26px;
+  margin: 2px auto;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-sm);
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.drp-day:hover {
+  background: var(--p-50);
+}
+.drp-day--muted {
+  color: var(--n-300);
+}
+.drp-day--endpoint {
+  background: var(--p-600);
+  color: #fff;
+  font-weight: 700;
+}
+.drp-day--inrange {
+  background: var(--p-50);
+  border-radius: 0;
+}
+.drp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.drp-reset {
+  border: 0;
+  background: transparent;
   color: var(--n-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  padding: 8px 6px;
 }
-.chip.is-active .chip-count {
-  background: rgba(255, 255, 255, 0.16);
+.drp-reset:hover {
+  color: var(--ink);
+}
+.drp-apply {
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--p-600);
   color: #fff;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  padding: 9px 20px;
 }
-.chip--alert .chip-count {
-  background: var(--s-danger-bg);
-  color: var(--s-danger);
+.drp-apply:hover {
+  background: var(--p-700);
 }
-.chip--alert.is-active .chip-count {
-  background: var(--s-danger);
-  color: #fff;
+
+/* Tombol cepat "Hari Ini" / "Minggu Ini" / "Minggu Depan" — cuma jalan
+   pintas mengisi filterDateFrom/To (lihat quick-filters.js), BUKAN
+   saringan sendiri.
+
+   Sengaja begitu: saringan yang jadi kondisi AND tersendiri gampang
+   diam-diam bentrok dengan saringan lain sampai menghasilkan daftar
+   kosong tanpa keterangan. Tombol yang cuma mengisi kotak tanggal yang
+   SAMA dengan yang bisa diketik manual tidak punya celah itu sama
+   sekali. Wadahnya .drp-quick-row, di dalam panel kalender. */
+.quick-date-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--n-600);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.quick-date-btn:hover {
+  border-color: var(--p-300);
+  color: var(--p-600);
+}
+.quick-date-btn.is-active {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--p-700);
+  font-weight: 600;
 }
 
 .controlbar-tail {
@@ -228,60 +446,130 @@
   gap: var(--sp-2);
 }
 
+/* ---- Bilah ringkasan (Total/In Process/Delayed/Arrived) ----
+
+   Kartunya sendiri, terpisah dari .controlbar-box, karena isinya
+   ringkasan HASIL (angka), bukan kendali yang mengubah apa yang
+   tampil — menyatukannya ke kotak kendali bikin orang mengira ke-4
+   angka ini juga bisa diklik untuk menyaring. Lebar & jarak dari tepi
+   disamakan (.container yang sama) supaya tetap terasa satu kelompok
+   dengan bilah kendali di atasnya. */
+.stats-bar {
+  padding: 0 0 var(--sp-5);
+}
+.stats-bar-inner {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-sm);
+  padding: var(--sp-4) var(--sp-5);
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex: 1 1 180px;
+  min-width: 0;
+  padding-right: var(--sp-5);
+  border-right: 1px solid var(--border);
+}
+.stat-item:last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  flex: 0 0 auto;
+}
+.stat-icon--total {
+  background: var(--p-50);
+  color: var(--p-600);
+}
+.stat-icon--process {
+  background: #fff4e0;
+  color: #b26a00;
+}
+.stat-icon--delayed {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.stat-icon--arrived {
+  background: #e3f6ea;
+  color: #1a8a4d;
+}
+.stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.stat-label {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.stat-value span:first-child {
+  font-family: var(--font-mono);
+}
+
 /* ---- Sakelar tampilan Tabel / Kartu ---- */
-
-/* CHIP SARINGAN DIBIARKAN TURUN KE BARIS BERIKUTNYA, BUKAN DIGESER.
-
-   Sebelumnya baris ini dipaksa satu baris dengan overflow-x: auto.
-   Itu tidak pernah bisa dipakai: scrollbar-nya disembunyikan global di
-   base.css, jadi tidak ada penanda bahwa masih ada chip di kanan DAN
-   tidak ada cara menggesernya dengan tetikus biasa — hanya gestur
-   trackpad atau shift+roda, yang tidak ditemukan orang dengan
-   sendirinya.
-
-   Chipnya cuma lima dan pendek-pendek, jadi membungkus ke baris kedua
-   memakan satu baris tambahan dan semuanya langsung bisa diklik.
-   Menyembunyikan isi di balik gulir yang tak terlihat lebih mahal
-   daripada satu baris. */
 
 /* ==================================================================
    SPLIT WINDOW & TABLET  (<= 991px)
 
-   Susunannya sama dengan layar besar — hanya dirapatkan:
+   Susunannya sama dengan layar besar — hanya dirapatkan, dan baris
+   tunggalnya dibiarkan membungkus (flex-wrap sudah bawaan
+   .controlbar-row) kalau memang tidak muat sekaligus:
 
-     [tab]  [cari ......................]  [status]
-     [chip chip chip chip chip]          [ ⋯ ] [ + ]
+     [tab] [Lihat Saja?] [rentang tanggal] [basis] [cari] [status] [Delayed]  [ ⋯ ] [ + ]
 
-   Yang berubah cuma tiga: kotak cari boleh melar mengisi sisa, label
-   tombol tambah jadi ikon, dan chip boleh turun ke baris kedua kalau
-   memang tidak muat. Tidak ada elemen yang berpindah tempat, sehingga
+   Yang berubah cuma keleluasaan menyusut: kotak cari boleh menyempit,
+   tombol pemicu rentang tanggal boleh memotong teksnya, label tombol
+   tambah jadi ikon. Tidak ada elemen yang berpindah tempat, sehingga
    orang yang bolak-balik antara layar lebar dan sempit tidak perlu
    mencari ulang.
 ================================================================== */
 @media (max-width: 991px) {
-  /* SPLIT WINDOW.
-
-     Susunannya dipertahankan seperti layar besar — sakelar buku di
-     kiri, cari & saringan status di kanan, chip dan tombol aksi di
-     baris kedua. Yang berubah cuma keleluasaan menyusut. */
-  .controlbar-row--filters {
-    flex-wrap: wrap;
-  }
   .search-box {
     max-width: none;
-    flex: 1 1 200px;
+    flex: 1 1 160px;
   }
-  /* Saringan status menyusut ikut ruang; teksnya terpotong masih
-     terbaca, tombol yang terpotong tidak. */
-  .controlbar-row--filters .control-select {
+  /* Saringan status & basis tanggal menyusut ikut ruang; teksnya
+     terpotong masih terbaca, tombol yang terpotong tidak. */
+  .control-select,
+  .basis-select-wrap select {
     flex: 0 1 auto;
     min-width: 0;
   }
-  /* Chip membungkus di ruangnya; tombol aksi tetap di kanan. */
-  .preset-row {
-    flex: 1 1 0;
+  /* Tombol pemicu rentang tanggal boleh menyusut & memotong teksnya
+     (elipsis): tulisan lengkap "01 Jun 2026 – 30 Jun 2026" masih
+     terbaca walau terpotong. Dropdown status tidak boleh — isinya cuma
+     satu kata, sekali terpotong jadi tidak berarti. */
+  .date-range-trigger {
+    flex: 0 1 auto;
     min-width: 0;
-    flex-wrap: wrap;
+  }
+  .date-range-trigger span:not(.date-range-trigger-icon) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   /* Label tombol disembunyikan — ia memakan lebih dari sepertiga
      bilah, dan ikon plus sudah dikenali. Judulnya tetap lewat tooltip. */
@@ -292,6 +580,14 @@
     padding-left: 11px;
     padding-right: 11px;
   }
+  /* Empat kartu jadi 2×2: dengan ikon + dua baris teks, empat kartu
+     berdampingan di lebar ini membuat tiap kartu terlalu sempit dan
+     labelnya terpotong. */
+  .stat-item {
+    flex: 1 1 calc(50% - var(--sp-5));
+    border-right: 0;
+    padding-right: 0;
+  }
 }
 
 /* ==================================================================
@@ -301,15 +597,20 @@
    berakhir sempit di kedua-duanya. Jadi tiap baris diberi SATU tugas:
 
      [    IMPORT    |    EXPORT    ]
+     [ rentang tanggal ................... ]
+     [ basis tanggal ...................... ]
      [ cari .............................. ]
      [ status ............................ ]
-     [ chip chip chip chip chip ]
      [ ⋯ |      + Tambah Jadwal           ]
+
+   (Hari Ini/Minggu Ini/Minggu Depan tidak perlu diatur di sini —
+   sudah pindah ke DALAM panel kalender, .drp-quick-row, yang urusan
+   lebarnya sendiri ada di bawah.)
 
    Lebih tinggi, tapi tiap sasaran cukup besar untuk ujung jari dan
    tidak ada yang terpotong.
 
-   BARIS TERAKHIR DULU HAMPIR KOSONG. Dua tombol kecil didorong ke
+   BARIS TOMBOL DULU HAMPIR KOSONG. Dua tombol kecil didorong ke
    kanan oleh `margin-left: auto`, menyisakan sekitar 70% baris itu
    melompong — satu baris penuh terpakai untuk dua ikon. Sekarang
    tombol utamanya melebar mengisi baris tersebut, dan karena melebar
@@ -321,20 +622,217 @@
     position: static;
   }
 
-  /* MOBILE — tiap kelompok mengambil barisnya sendiri.
+  /* MOBILE — PADAT, bukan satu kendali per baris.
 
-     Di lebar ini memaksa dua kendali berdampingan berarti keduanya
-     terlalu sempit untuk dipakai. Lebih baik satu baris per kelompok:
-     sakelar buku, kotak cari, saringan status, chip, lalu tombol. */
-  .mode-tabs,
-  .search-box,
-  .controlbar-row--filters .control-select {
-    flex: 1 1 100%;
-    margin-left: 0;
-    max-width: none;
+     Menumpuk tiap kendali jadi barisnya sendiri membuat bilah ini
+     setinggi enam baris sebelum satu kartu pun terlihat. Di sini yang
+     jarang diubah dikecilkan jadi ikon, dan yang sering dibaca
+     (saringan status, basis tanggal) tetap bertulisan:
+
+       [    IMPORT     |     EXPORT     ]
+       [ 🔍 ] [ status ........................ ]
+       [ 📅 ] [ basis ......................... ]
+       [ ⋯  ] [ + Tambah Jadwal ............... ]
+  */
+  .controlbar-box {
+    gap: 10px;
+    padding: 12px;
   }
-  .preset-row {
+  .controlbar-row--top,
+  .controlbar-row--bottom {
+    gap: 8px;
+  }
+  /* Sakelar buku tetap sebaris penuh: ini penentu konteks seluruh
+     halaman, bukan sekadar saringan. */
+  .mode-tabs {
     flex: 1 1 100%;
+  }
+  /* Kedua tombol MENGISI lebar pembungkusnya. Tanpa ini wadahnya saja
+     yang melebar penuh sementara IMPORT & EXPORT tetap sekecil
+     tulisannya, menyisakan bidang abu-abu kosong di sebelah kanan. */
+  .mode-tabs button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+
+  /* KOTAK CARI — ikon saja, melebar sendiri saat disentuh.
+
+     Kotak cari melebar penuh permanen memakan satu baris utuh padahal
+     jarang dipakai. Di sini ia menyusut jadi tombol ikon dan baru
+     melebar begitu difokus (:focus-within) — dan TETAP lebar selama
+     masih ada isinya (.has-query, dipasang syncSearchClear() di
+     quick-filters.js), supaya kata kunci yang sedang aktif tidak
+     hilang dari pandangan begitu papan ketik ditutup.
+
+     DIBATASI ke .controlbar. Ada kotak cari lain di halaman Kelola Akun
+     & Database HS Code, dan di sana tidak ada kendali lain yang harus
+     berbagi baris -- menciutkannya jadi ikon di sana cuma membuat
+     kotaknya sempit tanpa alasan. */
+  .controlbar .search-box {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+    overflow: hidden;
+    transition: flex-basis var(--dur-2) var(--ease);
+  }
+  .controlbar-row--top .search-box {
+    margin-left: 0;
+  }
+  .controlbar .search-box:focus-within,
+  .controlbar .search-box.has-query {
+    flex: 1 1 100%;
+  }
+  /* Saringan status mengisi sisa baris di sebelah ikon cari. */
+  .controlbar-row--top .control-select {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* RENTANG TANGGAL — ikon saja SELAMA BELUM ADA rentang dipilih.
+     Begitu dipilih, tanggalnya muncul (kelas .has-value dari
+     drpSyncTriggerFromFilter) — rentang yang sedang aktif terlalu
+     penting untuk disembunyikan di balik ikon. */
+  .date-range-picker {
+    flex: 0 0 auto;
+    margin-left: 0;
+  }
+  .date-range-trigger:not(.has-value) #dateRangeTriggerText,
+  .date-range-trigger:not(.has-value) .date-range-trigger-caret {
+    display: none;
+  }
+  /* Begitu isinya tinggal ikon, latar abu-abu di balik ikonnya jadi
+     "tombol di dalam tombol" -- dilepas supaya yang terlihat cuma satu
+     kotak. */
+  .date-range-trigger:not(.has-value) .date-range-trigger-icon {
+    background: transparent;
+    width: auto;
+    height: auto;
+  }
+
+  /* SATU RAIL IKON DI KIRI.
+
+     Cari, rentang tanggal, dan "aksi lain" bertumpuk sekolom di tepi
+     kiri. Ketiganya datang dari komponen yang berbeda dan bawaannya
+     beda-beda -- pil, kotak membulat, dan tombol ikon -- jadi kalau
+     tidak disamakan di sini, kolomnya terlihat seperti tiga tombol
+     asing yang kebetulan bertumpuk. Ukuran & radiusnya dikunci sama. */
+  .controlbar .search-box,
+  .date-range-picker {
+    flex: 0 0 44px;
+  }
+  .controlbar .search-box input[type="text"],
+  .date-range-trigger:not(.has-value),
+  .controlbar-tail .btn-more {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: var(--r-sm);
+    display: grid;
+    place-items: center;
+  }
+  /* Ikon kaca pembesar dipusatkan di kotaknya, bukan menempel kiri
+     seperti saat kotaknya masih lebar. */
+  .controlbar .search-box:not(:focus-within):not(.has-query) i {
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .controlbar .search-box:not(:focus-within):not(.has-query) .search-clear {
+    display: none;
+  }
+  /* Isi kotak disembunyikan selama kotaknya masih seukuran ikon --
+     baik placeholder maupun kata kunci yang sedang aktif. Keduanya
+     tetap dirender di balik ikon kaca pembesar dan terbaca sebagai
+     coretan yang menembus tombol.
+
+     color: transparent, bukan visibility/display: nilainya tetap ada
+     dan tetap menyaring daftar -- yang disembunyikan cuma tampilannya
+     selama tidak ada ruang untuk membacanya. Begitu kotaknya melebar
+     (difokus atau .has-query), warnanya kembali sendiri. */
+  .controlbar .search-box:not(:focus-within):not(.has-query) input[type="text"],
+  .controlbar .search-box:not(:focus-within):not(.has-query) input[type="text"]::placeholder {
+    color: transparent;
+  }
+  /* Begitu melebar, kembali ke bentuk kotak cari biasa. */
+  .controlbar .search-box:focus-within input[type="text"],
+  .controlbar .search-box.has-query input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    padding: 0 34px 0 32px;
+    display: block;
+  }
+  /* Basis tanggal mengisi sisa baris di sebelah ikon kalender. */
+  .basis-select-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .basis-select-wrap select {
+    width: 100%;
+  }
+  /* Panel kalender: satu bulan saja (dua bulan berdampingan seperti di
+     layar besar tidak akan muat di lebar ini), dan lebarnya mengikuti
+     tombol pemicu alih-alih lebar tetap dua kolom. Dibuka sebagai
+     lembar yang menempel di bawah tombolnya sendiri (masih di dalam
+     alur halaman via position: absolute yang sama), bukan modal layar
+     penuh — cukup untuk satu bulan dan tetap terasa seperti bagian
+     dari bilah kendali, bukan halaman terpisah. */
+  /* Lebarnya diikat ke LAYAR, bukan ke pembungkusnya.
+
+     Di lebar ini .date-range-picker menyusut jadi tombol ikon 44px.
+     Popover yang position: absolute mengambil lebar dari pembungkus
+     itu, jadi `left:0; right:0` menghasilkan panel selebar 44px dan
+     seluruh isinya (kalender 280px) tumpah keluar kotak putihnya.
+
+     max-height + .drp-grids yang menggulir menjaga panel tetap muat di
+     layar pendek tanpa membuat Reset/Terapkan ikut terdorong keluar. */
+  .drp-popover {
+    left: 0;
+    right: auto;
+    width: calc(100vw - 32px);
+    max-width: 340px;
+    max-height: 78vh;
+    padding: var(--sp-3);
+    /* Flex column supaya kalendernya yang menggulir, bukan seluruh
+       panel -- Reset & Terapkan tetap terlihat tanpa perlu digulir. */
+    display: flex;
+    flex-direction: column;
+  }
+  .drp-grids {
+    overflow-y: auto;
+    /* Batas bawah `auto` pada anak flex adalah tinggi isinya, jadi
+       tanpa ini ia menolak menyusut dan max-height di atas tidak
+       berpengaruh sama sekali. */
+    min-height: 0;
+  }
+  .drp-quick-row {
+    flex-wrap: wrap;
+  }
+  .drp-grids {
+    justify-content: center;
+  }
+  .drp-grid--second,
+  #drpMonthLabel1 {
+    display: none;
+  }
+  .drp-months {
+    flex: 1;
+    justify-content: center;
+  }
+  .drp-month-label {
+    min-width: 0;
+  }
+  .drp-grid {
+    width: 100%;
+    max-width: 280px;
+  }
+  .drp-day {
+    width: 40px;
+    height: 40px;
+    margin: 1px auto;
+    font-size: var(--t-base);
   }
 
   /* Baris tombol dipakai penuh, bukan didorong ke kanan. */
@@ -359,11 +857,16 @@
 
      33px cukup untuk kursor tetikus, sempit untuk ujung jari — pedoman
      yang lazim 44px. Yang dinaikkan tingginya saja, bukan ukuran
-     hurufnya, supaya susunannya tidak berubah. */
-  .chip,
+     hurufnya, supaya susunannya tidak berubah. Tombol cepat di dalam
+     panel kalender (.quick-date-btn) SENGAJA dikecualikan: konteksnya
+     sudah berbeda (di dalam popover yang kompak, bukan di bilah utama
+     yang lega), dan .drp-day di sana sendiri sudah 40px. */
   .icon-btn,
   .btn-more,
   .control-select,
+  .basis-select-wrap select,
+  .date-range-trigger,
+  .drp-nav,
   .btn-primary-navy {
     min-height: 44px;
   }
@@ -372,49 +875,9 @@
   .controlbar-tail .btn-primary-navy {
     min-width: 44px;
   }
-  /* CHIP DIKECUALIKAN DARI 44px.
-
-     Lima chip berdampingan bukan tombol tunggal: pada 390px ketinggian
-     44px membuat mereka pecah jadi TIGA baris compang-camping, dan
-     bilah kendalinya sendiri jadi 402px — lebih dari separuh layar
-     terpakai sebelum satu jadwal pun terlihat.
-
-     Diturunkan ke 36px berikut ikon dan hurufnya, sehingga kelimanya
-     memadat jadi dua baris. Yang berkurang tingginya saja; lebar chip
-     tetap jauh di atas ambang sentuh karena ada tulisannya. */
-  .chip {
-    min-height: 36px;
-    height: 36px;
-    padding: 0 10px;
-    gap: 5px;
-    font-size: var(--t-xs);
-  }
-  .chip i {
-    font-size: 0.7rem;
-  }
-  .chip-count {
-    font-size: 0.62rem;
-    padding: 1px 4px;
-  }
-  .preset-row {
-    gap: 6px;
-  }
-
-  /* TIAP BARIS CHIP TERISI PENUH.
-
-     Yang membuatnya terbaca berantakan bukan jumlah barisnya,
-     melainkan tepi kanan yang bergerigi: pada 390px barisnya jatuh
-     jadi 2 chip / 2 chip / 1 chip, dan baris terakhir menyisakan 233px
-     kosong di sebelah "Selesai" — seperti ada yang belum selesai
-     dimuat.
-
-     flex-grow membagi sisa ruang TIAP BARIS ke chip di baris itu
-     saja, jadi kanannya selalu rata berapa pun lebar layarnya — tanpa
-     mematok jumlah kolom, yang akan salah di lebar lain. Sisi lain:
-     sasaran sentuhnya jadi lebih lebar, bukan lebih sempit. */
-  .preset-row .chip {
-    flex: 1 1 auto;
-    justify-content: center;
+  .drp-apply,
+  .drp-reset {
+    min-height: 44px;
   }
 }
 
@@ -550,6 +1013,33 @@
     width: 100%;
     text-align: center;
   }
+  /* Satu kolom penuh: 2×2 pada 576-767px sudah pas, tapi di bawah itu
+     ikon + dua baris teks kembali berdesakan dalam setengah lebar. */
+  /* TETAP 2x2, bukan satu kolom -- empat kartu bertumpuk memakan
+     hampir setinggi layar sebelum satu jadwal pun terlihat. Ikon &
+     jaraknya yang dikecilkan supaya dua kolom tetap muat di 360px. */
+  .stats-bar-inner {
+    padding: var(--sp-3);
+    gap: var(--sp-3);
+  }
+  .stat-item {
+    flex: 1 1 calc(50% - var(--sp-3));
+    border-right: 0;
+    padding-right: 0;
+    gap: 9px;
+  }
+  .stat-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+  .stat-value {
+    font-size: 1rem;
+  }
+  .stat-item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
 }
 
 /* KEADAAN LAYAR: memuat, kosong, gagal */
@@ -677,15 +1167,6 @@
 }
 .filter-note button:hover {
   color: var(--s-danger);
-}
-
-/* Baris saringan: sakelar buku di kiri (tepat di atas deretan chip),
-   cari & status didorong ke kanan. */
-.controlbar-row--filters {
-  justify-content: flex-start;
-}
-.controlbar-row--filters .search-box {
-  margin-left: auto;
 }
 
 /* Judul daftar + jumlah jadwal — menggantikan papan navy berisi ubin

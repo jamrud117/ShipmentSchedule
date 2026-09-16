@@ -128,13 +128,32 @@ function sjJenisCadangan(shipment) {
   return m ? m[1].trim() : "";
 }
 
+/* Baris barang untuk surat jalan LOKAL.
+
+   Kiriman lokal tidak punya jadwal maupun CIPL, jadi daftarnya diketik
+   sendiri di form (lihat js/features/do-lines.js). Bentuk keluarannya
+   dibuat sama persis dengan yang dari jadwal supaya bagian pencetak di
+   bawah tidak perlu tahu asal datanya. */
+function sjBarisManual(payload) {
+  return ((payload && payload.items) || [])
+    .filter((it) => String(it.nama || "").trim())
+    .map((it) => ({
+      nama: it.nama,
+      qty: [it.qty, it.satuan].filter((v) => v !== "" && v != null).join(" "),
+      /* Kolom Package dikosongkan: daftar manual tidak mencatat jumlah
+         kemasan per barang. Keterangan bebasnya dipakai di sana supaya
+         ruang itu tidak terbuang. */
+      package: String(it.ket || "").trim(),
+    }));
+}
+
 function sjBarisBarang(shipment) {
   const items = (shipment && shipment.items) || [];
   const jenisCadangan = sjJenisCadangan(shipment);
   return items
     .filter((it) => (it.namaBarang || "").trim())
     .map((it) => ({
-      nama: it.namaBarang,
+      nama: itemDisplayName(it),
       qty: [it.qty, it.satuan].filter((v) => v !== "" && v != null).join(" "),
       /* Kolom Package = jumlah + jenis kemasan ("1 BOX"), BUKAN kolom
          `package` yang di buku Export berisi dimensi peti (82*82*75).
@@ -171,7 +190,12 @@ function sjKotakTtd(label, nama) {
 
 function buildSuratJalanHtml(row, shipment) {
   const p = (row && row.payload) || {};
-  const baris = sjBarisBarang(shipment);
+  /* Sumber daftar barang: jadwal kalau ada yang ditautkan (Export),
+     ketikan sendiri kalau tidak (Lokal). Dipilih di SATU tempat supaya
+     bagian pencetak di bawah tidak perlu tahu asalnya. */
+  const baris = shipment
+    ? sjBarisBarang(shipment)
+    : sjBarisManual(row.payload);
   const kosong = Math.max(0, SJ_MIN_BARIS - baris.length);
   // Ruang kosong kini SATU baris, jadi rentang sel Keterangan ikut.
   const totalBaris = baris.length + (kosong ? 1 : 0);
@@ -310,27 +334,40 @@ function buildSuratJalanHtml(row, shipment) {
 function cetakSuratJalan(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
-    showToast("Data surat jalan tidak ditemukan.", "danger");
+    showToast(t("m.data.surat.jalan.tidak.ditemukan"), "danger");
     return;
   }
-  const shipment = sjCariShipment((row.payload || {}).shipmentId);
-  if ((row.payload || {}).shipmentId && !shipment) {
-    showToast(
-      "Jadwal yang ditautkan tidak ditemukan — daftar barang dikosongkan.",
+  /* LEMBAR LOKAL PUNYA TEMPLAT SENDIRI.
+
+     Bentuknya berbeda menyeluruh dari surat jalan Export -- kop
+     berlogo, dua kotak alamat, tabel bergaris jingga. Percabangan
+     ditaruh di SINI, di satu titik masuk, supaya kedua templat tidak
+     saling mengetahui isi satu sama lain. */
+  const lokal =
+    (row.payload || {}).doKind === "Lokal" ||
+    String(row.doc_type || "") === "do_lokal";
+
+  const shipment = lokal ? null : sjCariShipment((row.payload || {}).shipmentId);
+  if (!lokal && (row.payload || {}).shipmentId && !shipment) {
+    showToast(t("m.jadwal.yang.ditautkan.tidak.ditemukan.daftar.b"),
       "warning",
     );
   }
 
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast("Jendela cetak diblokir peramban. Izinkan pop-up dulu.", "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
     return;
   }
+  const gaya = lokal ? suratJalanLokalCss() : suratJalanCss();
+  const isi = lokal
+    ? buildSuratJalanLokalHtml(row)
+    : buildSuratJalanHtml(row, shipment);
   w.document.write(`<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Surat Jalan ${escapeHtml(row.doc_number || "")}</title>
-<style>${suratJalanCss()}</style></head>
-<body>${buildSuratJalanHtml(row, shipment)}</body></html>`);
+<style>${gaya}</style></head>
+<body>${isi}</body></html>`);
   w.document.close();
   // Menunggu tata letaknya selesai digambar sebelum kotak cetak muncul;
   // tanpa ini sebagian peramban mencetak halaman yang masih kosong.
@@ -478,8 +515,8 @@ function suratJalanCss() {
      dirinya sendiri. */
   .sj-items tfoot td { border-bottom: var(--sj-line); }
   .sj-total-label { text-align: center; font-weight: 700; }
-  /* Baris Total tetap bergaris penuh — sebelumnya border-bottom
-     dimatikan sehingga sisi bawahnya menggantung. */
+  /* Baris Total tetap bergaris penuh — mematikan border-bottom-nya
+     membuat sisi bawahnya menggantung. */
   .sj-items tfoot td { font-weight: 700; }
 
   /* Empat kotak tanda tangan, masing-masing berbingkai. */

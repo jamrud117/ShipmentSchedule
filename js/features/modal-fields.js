@@ -27,7 +27,10 @@ function applyTransportLabels() {
   const lbl = ML();
   // Requirement B (label dinamis): moda LAUT -> "Nama Vessel" jadi "Nama Voyager", "No
   const transport = air ? "udara" : "laut";
-  $("#lblVesselText").textContent = "Nama " + vesselNoun(transport);
+  /* Awalannya lewat kamus, kata bendanya dari vesselNoun (Vessel /
+     Voyager -- sudah sama di kedua bahasa). Digabung lewat sisipan
+     supaya urutan katanya bisa berbeda antar bahasa. */
+  $("#lblVesselText").textContent = t("c.nama.sarana", { x: vesselNoun(transport) });
   $("#lblVoyageText").textContent = voyageNoun(transport);
   // Pelabuhan -> Terminal saat moda udara.
   $("#lblOrigin").textContent = portNoun("origin", transport);
@@ -40,6 +43,17 @@ function applyTransportLabels() {
   $("#fVoyage").placeholder = air ? "GA880/04JUL" : "V.023E";
   $("#lblMasterBL").textContent = air ? "Master AWB" : "Master B/L";
   $("#lblHouseBL").textContent = air ? "House AWB" : "House B/L";
+  /* FCL/LCL & kontainer itu konsep laut — muatan udara tidak dikapalkan
+     dalam kontainer. Udara -> Jenis Muatan dikunci ke LCL, kolom
+     Kontainer disembunyikan & dikosongkan supaya tidak ada data
+     kontainer nyasar ikut tersimpan pada jadwal pesawat. */
+  const elMuatan = $("#fMuatan");
+  $("#fContainerWrap").classList.toggle("d-none", air);
+  elMuatan.disabled = air;
+  if (air) {
+    $("#fContainer").value = "";
+    elMuatan.value = "LCL";
+  }
   // Vessel/Voyage di atas hanya "leg terakhir" kalau rutenya transit DAN sudah ada minimal 1 kartu
   const showFinalLegHint =
     $("#fRouteType").value === "transit" && draftStops.length > 0;
@@ -47,13 +61,12 @@ function applyTransportLabels() {
   $("#finalLegHintVoyage").classList.toggle("d-none", !showFinalLegHint);
 }
 
-// Auto-arrive (ETA lewat/hari ini -> status otomatis ARRIVED) SUDAH DIHAPUS sesuai permintaan
 
 /* INCOTERM / CUSTOMS RECALCULATION (modal) */
 $("#fIncoterm").addEventListener("change", recalcCustoms);
 
-/* PPN & PPH otomatis. Aturannya: kosong = otomatis, diisi = manual */
-const AUTO_DUTY_FIELDS = ["fPPN", "fPPH"];
+/* Bea Masuk, PPN & PPH otomatis. Aturannya: kosong = otomatis, diisi = manual */
+const AUTO_DUTY_FIELDS = ["fBM", "fPPN", "fPPH"];
 AUTO_DUTY_FIELDS.forEach((id) => {
   $("#" + id).addEventListener("input", (e) => {
     e.target.dataset.auto = e.target.value.trim() === "" ? "1" : "0";
@@ -114,33 +127,51 @@ function recalcCustoms(opsi) {
   };
   const calc0 = computeCustoms(tmp);
 
-  /* PPN & PPH otomatis.
+  /* DASAR PUNGUTAN = NILAI PABEAN, BUKAN HARGA BARANG SAJA.
 
-     DASARNYA NILAI PABEAN, BUKAN HARGA BARANG SAJA.
-
-     Sebelumnya dasarnya cuma `totalUSD * ndpbm` — ongkos angkut dan
-     asuransi tidak ikut. Pada kiriman udara ongkos angkutnya bisa
-     lebih dari separuh harga barangnya sendiri (contoh nyata: barang
-     $640, freight $382,40), jadi PPN yang terhitung meleset jauh di
-     bawah yang sebenarnya terutang.
-
-     Freight & asuransi memang sudah lama tersimpan per pengiriman,
-     tapi selama ini hanya dipajang di halaman rincian dan tidak pernah
-     ikut satu pun perhitungan. */
+     Ongkos angkut & asuransi WAJIB ikut. Pada kiriman udara ongkos
+     angkutnya bisa lebih dari separuh harga barangnya sendiri (barang
+     $640 dengan freight $382,40 bukan hal aneh), jadi memakai
+     `totalUSD * ndpbm` saja membuat pungutannya meleset jauh di bawah
+     yang sebenarnya terutang. */
   const dasarUsd = calc0.totalUSD
     + nilaiKotakAngka("#fFreight")
     + nilaiKotakAngka("#fInsurance");
   const dasarRupiah = dasarUsd * tmp.ndpbm;
+
+  /* Urutannya penting: BM dulu, karena PPN memakai hasilnya.
+
+       Nilai Pabean = (Total Nilai Barang + Freight + Asuransi) × NDPBM
+       BM  = Nilai Pabean × 5%
+       PPN = (Nilai Pabean + BM) × 11%   <- BUKAN Nilai Pabean saja
+       PPH = Nilai Pabean × 2,5%
+
+     Kalau BM diisi manual (tarif HS Code tertentu memang bukan 5%),
+     PPN tetap memakai nilai manual itu, bukan hasil 5% di atas —
+     yang penting PPN selalu dihitung dari BM yang BENAR-BENAR
+     berlaku, bukan yang seharusnya. */
+  const elBm = $("#fBM");
+  if (isAutoDuty(elBm)) {
+    elBm.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.05)) : "";
+  }
+  const bmBerlaku = nilaiKotakAngka("#fBM");
+
   const elPpn = $("#fPPN");
   const elPph = $("#fPPH");
   if (isAutoDuty(elPpn)) {
-    elPpn.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.11)) : "";
+    elPpn.value = dasarRupiah
+      ? formatNumberValue(Math.round((dasarRupiah + bmBerlaku) * 0.11))
+      : "";
   }
   if (isAutoDuty(elPph)) {
     elPph.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.025)) : "";
   }
+  // Nilai Pabean ditampilkan apa adanya — dasar yang sama persis yang
+  // baru saja dipakai menghitung BM/PPN/PPH di atas, bukan dihitung ulang.
+  $("#calcNilaiPabean").textContent = fmtRp(dasarRupiah);
 
-  // Dihitung ulang memakai PPN/PPH terbaru supaya PDRI ikut benar pada putaran yang sama
+  // Dihitung ulang memakai BM/PPN/PPH terbaru supaya PDRI ikut benar pada putaran yang sama
+  tmp.bm = nilaiKotakAngka("#fBM");
   tmp.ppn = nilaiKotakAngka("#fPPN");
   tmp.pph = nilaiKotakAngka("#fPPH");
   const calc = computeCustoms(tmp);
@@ -176,15 +207,14 @@ function recalcCustoms(opsi) {
   // Total CBM (mode Export) — beda dari Total Package: ini SELALU hasil hitung otomatis
   $("#footTotalCbm").textContent = fmtNum(calc.totalCbm);
 
-  /* Total Package (Import): dijumlahkan dari kolom Kemasan tiap barang,
-     lengkap dengan jenisnya — "4 BOX", bukan "4".
+  /* Total Package: dijumlahkan dari kolom Kemasan tiap barang, lengkap
+     dengan jenisnya — "4 BOX", bukan "4". Berlaku Import MAUPUN Export
+     lewat fungsi yang sama (totalKemasanBarang() di bawah).
 
-     Dijumlahkan PER JENIS: 3 BOX dan 1 PALLET tidak mungkin jadi 4 apa
-     pun, jadi hasilnya ditulis "3 BOX · 1 PALLET". */
-  if (activeMode === "import") {
-    $("#fPackage").value = totalKemasanBarang();
-    autoSizeInput($("#fPackage"), 92, 210);
-  }
+     Masih boleh ditimpa manual sesudahnya (tidak readonly), bukan
+     dikunci total. */
+  $("#fPackage").value = totalKemasanBarang();
+  autoSizeInput($("#fPackage"), 92, 210);
 }
 
 /* KEADAAN LAMBANG MATA UANG */

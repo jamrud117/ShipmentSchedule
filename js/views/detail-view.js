@@ -59,7 +59,7 @@ function buildDetailHtml(s) {
     .map(
       (it) => `
     <tr>
-      <td>${escapeHtml(it.namaBarang)}</td>
+      <td>${escapeHtml(itemDisplayName(it))}</td>
       <td>${escapeHtml(it.hsCode || "—")}</td>
       <td>${escapeHtml(it.jenisBarang || "—")}</td>
       <td>${itemFacilitiesCellHtml(it)}</td>
@@ -158,8 +158,8 @@ function buildDetailHtml(s) {
       ${fieldPair("Tipe Rute", isTransitRoute(s) ? `Transit (${routeStopList(s).length} Terminal Singgah)` : "Direct")}
       ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}
       ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(portCodeLabel(s.destination))))}
-      ${fieldPair("ETD", fmtDate(s.etd))}
-      ${fieldPair("ETA", fmtDate(s.eta))}
+      ${fieldPair("ETD", fmtDate(s.etd) + (s.etdTime ? " · " + escapeHtml(s.etdTime) : ""))}
+      ${fieldPair("ETA", fmtDate(s.eta) + (s.etaTime ? " · " + escapeHtml(s.etaTime) : ""))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
     </div>
     ${buildDetailStopsHtml(s)}
@@ -194,8 +194,8 @@ function buildDetailHtml(s) {
       <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
       <div class="foot-totals">
         <div>Total Qty: <b>${escapeHtml(fmtQtyBySatuan(calc.qtyBySatuan))}</b></div>
-        <div>Total Netto: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
-        <div>Total Bruto: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
+        <div>${t("f.total.netto")}: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
+        <div>${t("f.total.bruto")}: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
         <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>
         ${activeMode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
       </div>

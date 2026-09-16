@@ -17,7 +17,7 @@ function ensureXLSX() {
       el.onload = () => resolve();
       el.onerror = () => {
         xlsxPromise = null; // biar percobaan berikutnya tidak ikut gagal
-        reject(new Error("Gagal memuat pustaka Excel. Periksa koneksi."));
+        reject(new Error(t("z.gagal.memuat.pustaka.excel")));
       };
       document.head.appendChild(el);
     });
@@ -44,7 +44,7 @@ function ensureExcelJS() {
       el.onload = () => resolve();
       el.onerror = () => {
         exceljsPromise = null;
-        reject(new Error("Gagal memuat pustaka Excel. Periksa koneksi."));
+        reject(new Error(t("z.gagal.memuat.pustaka.excel")));
       };
       document.head.appendChild(el);
     });

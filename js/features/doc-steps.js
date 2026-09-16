@@ -48,14 +48,14 @@ const DOC_STEPS_IMPORT = [
      Bagi LCL ini penentu: stripping tidak bisa mulai sebelum kapalnya
      sandar, secepat apa pun dokumennya diurus. */
   { key: "berth", label: berthLabel, full: berthFull },
-  { key: "pib", label: "PIB", full: "Pemberitahuan Impor Barang" },
+  { key: "pib", label: "PIB", full: t("c.pemberitahuan.impor.barang") },
   { key: "billing", label: "Billing", full: "Billing / bukti bayar" },
   { key: "sppb", label: "SPPB", full: "Surat Persetujuan Pengeluaran Barang" },
 ];
 
 const DOC_STEPS_EXPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List" },
-  { key: "peb", label: "PEB", full: "Pemberitahuan Ekspor Barang" },
+  { key: "peb", label: "PEB", full: t("c.pemberitahuan.ekspor.barang") },
   { key: "npe", label: "NPE", full: "Nota Pelayanan Ekspor" },
   { key: "bl", label: blLabel, full: blFull },
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
@@ -106,7 +106,7 @@ function blFull(s) {
    Ini hanya urutan gambar. Urutan pengisiannya tetap bebas, dan mesin
    prediksi tidak membaca posisi ini sama sekali: kedatangan
    diperlakukan sebagai GERBANG, bukan anak tangga. */
-function docStepsFor(s) {
+function docStepsForDasar(s) {
   if ((s && s.mode) === "export") return DOC_STEPS_EXPORT;
 
   const tanpaAta = DOC_STEPS_IMPORT.filter((x) => x.key !== "berth");
@@ -114,6 +114,21 @@ function docStepsFor(s) {
   const iSppb = tanpaAta.findIndex((x) => x.key === "sppb");
   if (!ata || iSppb < 0) return DOC_STEPS_IMPORT;
   return [...tanpaAta.slice(0, iSppb + 1), ata, ...tanpaAta.slice(iSppb + 1)];
+}
+
+/* Kurir ekspres (FedEx/DHL/UPS — lihat isKurirEkspres() di bawah)
+   tidak menerbitkan Manifest BC 1.1: proses kepabeanannya sendiri
+   terintegrasi, apa pun nilai kirimannya. Beda dari isKurirNilaiRendah()
+   di bawah, yang di bawah USD 1.500 menyembunyikan SELURUH balok
+   karena rezimnya CN (bukan PIB sama sekali) — ini cuma tahap
+   Manifest-nya saja yang dibuang, berlaku pada kiriman kurir berapa
+   pun nilainya dan pada Import maupun Export (isKurirEkspres() dibaca
+   dari daftar KURIR_EKSPRES_TANPA_PIB, definisi "kurir" untuk kedua
+   keperluan ini sengaja sama). */
+function docStepsFor(s) {
+  const dasar = docStepsForDasar(s);
+  if (!pakaiKurirEkspres(s)) return dasar;
+  return dasar.filter((x) => x.key !== "manifest");
 }
 
 /* Teks tahap bisa berupa fungsi (label dinamis) atau string biasa. */
@@ -205,6 +220,14 @@ function isKurirNilaiRendah(s) {
   return nilai < AMBANG_KURIR_TANPA_PIB;
 }
 
+/* Sama seperti pemeriksaan Forwarder/Nama Kapal di isKurirNilaiRendah()
+   di atas, tapi TANPA syarat nilai atau moda — dipakai docStepsFor()
+   untuk membuang tahap Manifest saja (lihat komentar di sana). */
+function pakaiKurirEkspres(s) {
+  if (!s) return false;
+  return isKurirEkspres(s.forwarder) || isKurirEkspres(s.vessel);
+}
+
 function docStepHtml(s) {
   /* Kiriman kurir bernilai rendah tidak lewat PIB — lihat
      isKurirNilaiRendah(). Diperiksa PALING DULU, sebelum tahap apa pun
@@ -222,11 +245,11 @@ function docStepHtml(s) {
     const kini = i === berikut;
     const cap = entri && entri.at ? fmtNoteStamp(entri.at) : "";
     const judul = dilewati
-      ? `${stepText(st.full, s)} — ditandai tidak dipakai ${cap}`
+      ? t("x.ditandai.tidak.dipakai", { x: stepText(st.full, s), cap })
       : sudah
         ? `${stepText(st.full, s)} — dikonfirmasi ${cap}${entri.by ? " oleh " + entri.by : ""}`
         : kini
-          ? `${stepText(st.full, s)} — klik kalau berkasnya sudah ada${st.optional ? " (atau tandai tidak dipakai)" : ""}`
+          ? t("x.klik.kalau.berkasnya.ada", { x: stepText(st.full, s), opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" })
           /* stepText(), BUKAN st.full langsung.
 
              Nama panjang sebagian tahap berupa FUNGSI — ia menyesuaikan
@@ -306,7 +329,7 @@ async function toggleDocStep(id, stepKey) {
       delete tanpa[stepKey];
       simpanDocStep(s, tanpa);
     }, {
-      title: "Batalkan Tahap Dokumen",
+      title: t("c.batalkan.tahap.dokumen"),
       confirmText: "Ya, Batalkan",
       tone: "primary",
       icon: "bi-arrow-counterclockwise",
@@ -330,8 +353,8 @@ async function toggleDocStep(id, stepKey) {
   const milestone = predictionMilestoneForStep(stepKey, s);
   if (milestone) {
     showPrompt({
-      title: `Konfirmasi ${stepText(st.label, s)}`,
-      desc: `${stepText(st.full, s)}. Isi tanggal yang tertera pada dokumennya — tanggal inilah yang dipakai mesin prediksi.`,
+      title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
+      desc: t("x.isi.tanggal.dokumen", { x: stepText(st.full, s) }),
       icon: "bi-calendar-check",
       okText: "Simpan",
       fields: [
@@ -340,7 +363,7 @@ async function toggleDocStep(id, stepKey) {
           label: `Tanggal ${stepText(st.label, s)}`,
           type: "date",
           value: todayISO(),
-          hint: "Kosongkan kalau tanggal dokumennya belum diketahui — hari ini yang dipakai.",
+          hint: t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
         },
       ],
       onSubmit: (v) => {
@@ -364,7 +387,7 @@ async function toggleDocStep(id, stepKey) {
   if (st.optional) {
     showPrompt({
       title: `Tahap ${stepText(st.label, s)}`,
-      desc: `${stepText(st.full, s)}. Tandai sudah diterima, atau nyatakan tidak dipakai untuk pengiriman ini.`,
+      desc: t("x.tandai.sudah.diterima", { x: stepText(st.full, s) }),
       icon: "bi-patch-question",
       okText: "Simpan",
       fields: [
@@ -395,14 +418,14 @@ async function toggleDocStep(id, stepKey) {
   }
 
   showConfirm(
-    `Konfirmasi bahwa berkas ${stepText(st.full, s)} sudah diterima?`,
+    t("x.konfirmasi.berkas.diterima", { x: stepText(st.full, s) }),
     () =>
       simpanDocStep(s, {
         ...progres,
         [stepKey]: { at: new Date().toISOString(), by: penggunaSekarang() },
       }),
     {
-      title: `Konfirmasi ${stepText(st.label, s)}`,
+      title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
       confirmText: "Ya, Sudah Ada",
       tone: "primary",
       icon: "bi-check2-circle",
@@ -454,8 +477,8 @@ async function simpanDocStep(s, progresBaru) {
     render();
     showToast(
       (error.message || "").includes("doc_progress")
-        ? "Kolom doc_progress belum ada. Jalankan ulang schema-migration.sql."
-        : "Gagal menyimpan progres dokumen.",
+        ? t("v.kolom.doc.progress.belum.ada.jalankan.ulang.sc")
+        : t("z.gagal.menyimpan.progres.dokumen"),
       "danger",
     );
     return;

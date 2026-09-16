@@ -376,16 +376,16 @@ function parsePebPdfText(text, pagesItems) {
 
   /* ---- catatan ---- */
   if (!docNo)
-    notes.push("Nomor & Tanggal Pendaftaran (PEB) tidak terbaca dari PDF — isi manual.");
+    notes.push(t("w.nomor.tanggal.pendaftaran.peb.tidak.terbaca.da"));
   if (!vessel)
-    notes.push("Nama Vessel/Sarana Pengangkut tidak terbaca otomatis dari PDF — isi manual.");
+    notes.push(t("w.nama.vessel.sarana.pengangkut.tidak.terbaca.ot"));
   if (!items.length)
     notes.push(
-      'Tidak ada baris barang yang terbaca dari lembar lanjutan "DATA BARANG EKSPOR" — isi manual di tab Daftar Barang.',
+      t("w.tidak.ada.baris.lembar.lanjutan"),
     );
   if (!container && !muatan)
     notes.push(
-      "Peti kemas (field 43) kosong di dokumen ini — Kontainer & Jenis Muatan (FCL/LCL) tidak terisi, isi manual kalau memang ada.",
+      t("w.peti.kemas.kosong"),
     );
   notes.push(
     "Hasil baca PDF PEB ini best-effort — mohon cek ulang Vessel, Freight/Asuransi, dan berat per barang sebelum simpan.",

@@ -162,6 +162,109 @@ body.is-locked {
 .user-chip-role.is-exim {
   color: var(--sec-300);
 }
+/* Bisa diklik (membuka menu akun), jadi diberi penanda visual yang
+   jelas bahwa ini bukan sekadar label pasif.
+
+   Sorotannya setinggi bilah atas (align-self: stretch) dan bersudut
+   siku, jadi terbaca sebagai satu segmen bilah — bukan pil kecil yang
+   mengambang di tengahnya. */
+.user-chip {
+  position: relative;
+  cursor: pointer;
+  align-self: stretch;
+  padding-right: var(--sp-4);
+  transition: background var(--dur-1) var(--ease);
+}
+.user-chip:hover,
+.user-chip.is-open {
+  background: rgba(255, 255, 255, 0.08);
+}
+.user-chip-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+/* Menu akun — tempat tombol Keluar. */
+/* Jembatan tak terlihat menutup celah antara chip & menunya. Menu ini
+   terbuka saat kursor melintas (lihat session.js); tanpa jembatan,
+   kursor yang bergerak ke bawah keluar dari chip sesaat sebelum masuk
+   menu, dan menunya menutup tepat saat hendak diklik. */
+.user-menu::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.user-menu {
+  position: absolute;
+  /* Menempel tepat di bawah bilah atas (chip-nya kini setinggi bilah),
+     bukan 8px di bawahnya -- jarak itu menyisakan celah yang membuat
+     menunya terlihat lepas dari bilahnya. */
+  top: 100%;
+  right: 0;
+  z-index: 1050;
+  min-width: 220px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  padding: 6px;
+  cursor: default;
+}
+.user-menu-head {
+  padding: 9px 11px 11px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.user-menu-name {
+  display: block;
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-menu-email {
+  display: block;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  text-align: left;
+}
+.user-menu-item:hover {
+  background: var(--n-100);
+}
+.user-menu-item.danger {
+  color: var(--s-danger);
+}
+.user-menu-item.danger:hover {
+  background: var(--s-danger-bg);
+}
 
 @media (max-width: 991px) {
   .user-chip-main {
@@ -169,6 +272,7 @@ body.is-locked {
   }
   .user-chip {
     padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
   }
 }
 
@@ -202,8 +306,14 @@ body.is-viewer #btnBulkImport,
 body.is-viewer #btnDeleteAll,
 body.is-viewer [data-action="edit"],
 body.is-viewer [data-action="delete"],
+body.is-viewer .copy-template-dropdown,
 body.is-viewer [data-ov-action="new"],
 body.is-viewer [data-del-num],
+/* Halaman HS Code TERBUKA untuk viewer (mencari HS Code bagian dari
+   membaca jadwal), tapi yang mengubah isinya tidak. */
+body.is-viewer #hsCodeAddPanel,
+body.is-viewer [data-edit-hscode],
+body.is-viewer [data-del-hscode],
 body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
 body.is-viewer #docnumFormWrap,
@@ -219,25 +329,6 @@ body.is-viewer .delay-strip-fields input {
   pointer-events: none;
   opacity: 0.72;
   background: var(--n-50);
-}
-
-/* Penanda mode di bilah kendali */
-.viewer-banner {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--t-sm);
-  color: var(--p-600);
-  background: var(--p-50);
-  border: 1px solid var(--p-100);
-  border-radius: var(--r-sm);
-  padding: 7px 12px;
-}
-body.is-viewer .viewer-banner {
-  display: inline-flex;
-}
-.viewer-banner i {
-  color: var(--p-500);
 }
 
 /* HALAMAN KELOLA AKUN */
@@ -327,6 +418,134 @@ body.is-viewer .viewer-banner {
   height: 34px;
   font-size: var(--t-sm);
 }
+
+/* Halaman Database HS Code — pola yang sama dengan .acct-row di atas,
+   disederhanakan (tanpa avatar/dropdown peran). */
+/* Bilah urutkan + keterangan "1-12 dari 40" di atas daftar. */
+.hscode-sortbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.hscode-shown {
+  margin-left: auto;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.hscode-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.hscode-pageinfo {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.hscode-pager .btn-quiet:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Pemilih bahasa — dipakai di layar masuk & menu akun. */
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 2px;
+}
+.lang-switch button {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--n-500);
+}
+.lang-switch button.active {
+  background: var(--p-600);
+  color: #fff;
+}
+.login-lang {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: var(--sp-4);
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.user-menu-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 11px 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.user-menu-lang-label {
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+
+.hscode-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 11px 0;
+  border-bottom: 1px solid var(--n-100);
+}
+.hscode-row:last-child {
+  border-bottom: 0;
+}
+.hscode-main {
+  flex: 1;
+  min-width: 0;
+}
+.hscode-name {
+  display: block;
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hscode-notes {
+  display: block;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hscode-code {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--t-sm);
+  color: var(--p-600);
+  background: var(--p-50);
+  border-radius: var(--r-xs);
+  padding: 4px 9px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.hscode-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .acct-role:disabled {
   opacity: 0.55;
 }
@@ -399,65 +618,51 @@ body.is-viewer .viewer-banner {
   background: var(--n-100);
 }
 
-/* Tombol keluar mengambang — bulat saat diam, melebar memunculkan
-   tulisannya saat disorot. Bentuk bulat merah dengan lambang daya
-   sudah cukup dikenali, jadi tulisannya hanya diperlukan sebagai
-   penegasan. Lebarnya dianimasikan lewat max-width, bukan width, agar
-   tetap mengikuti panjang tulisan apa pun bahasanya. */
-.fab-logout {
+/* Kembali ke atas -- ikon saja. Sekarang SATU-SATUNYA tombol
+   mengambang (tombol keluar sudah pindah ke menu akun di bilah atas),
+   jadi duduk langsung di sudut kanan-bawah -- bukan lagi diangkat
+   52px+10px untuk memberi ruang tombol keluar di bawahnya, yang
+   membuatnya terlihat menggantung di tengah-tengah tanpa sebab.
+   Transparan & tak bisa diklik sampai halaman digulir (lihat
+   app-init.js) -- tombolnya cuma berguna kalau ada yang perlu
+   "kembali ke atas", jadi tidak perlu selalu terlihat. */
+.fab-top {
   position: fixed;
   right: var(--sp-5);
-  /* Diangkat di atas footer, bukan menempel di dasar jendela — kalau
-     tidak, ia menutupi tulisan footer saat halaman digulir mentok. */
   bottom: var(--sp-5);
   z-index: 1035;
-  display: inline-flex;
-  align-items: center;
-  height: 52px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-pill);
-  background: var(--s-danger);
-  color: #fff;
-  font-size: var(--t-base);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  box-shadow: 0 12px 28px -10px rgba(192, 57, 43, 0.65);
-  transition:
-    background var(--dur-2) var(--ease),
-    box-shadow var(--dur-2) var(--ease);
-}
-.fab-logout i {
-  width: 52px;
-  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--n-600);
   display: grid;
   place-items: center;
-  font-size: 1.25rem;
-}
-.fab-logout span {
-  max-width: 0;
+  font-size: 1.1rem;
+  box-shadow: var(--sh-md);
   opacity: 0;
-  overflow: hidden;
+  transform: translateY(6px);
+  pointer-events: none;
   transition:
-    max-width var(--dur-3) var(--ease),
     opacity var(--dur-2) var(--ease),
-    padding var(--dur-3) var(--ease);
+    transform var(--dur-2) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
 }
-.fab-logout:hover,
-.fab-logout:focus-visible {
-  background: #a93226;
-  box-shadow: 0 14px 32px -8px rgba(192, 57, 43, 0.75);
-}
-.fab-logout:hover span,
-.fab-logout:focus-visible span {
-  max-width: 140px;
+.fab-top.is-visible {
   opacity: 1;
-  padding-right: 22px;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.fab-top:hover {
+  border-color: var(--p-300);
+  color: var(--p-600);
 }
 @media (prefers-reduced-motion: reduce) {
-  .fab-logout span {
-    transition: none;
+  .fab-top {
+    transition: opacity var(--dur-1) linear;
+    transform: none;
   }
 }
 
@@ -562,11 +767,11 @@ body.is-viewer .viewer-banner {
 /* ==================================================================
    KOTAK DIALOG (konfirmasi & isian)
 
-   Ikon dan judul disejajarkan pada satu baris — sebelumnya ikonnya
-   ditumpuk di atas judul, sehingga kotaknya jadi tinggi dan judulnya
-   terdorong jauh dari ikonnya. Lebarnya juga dinaikkan dari modal-sm
-   (300px) ke lebar penuh dialog Bootstrap, karena kalimat konfirmasi
-   sering menyebut nama dokumen dan tanggal.
+   Ikon dan judul disejajarkan pada satu baris, bukan ditumpuk —
+   menumpuknya membuat kotak jadi tinggi dan judulnya terdorong jauh
+   dari ikonnya. Lebarnya memakai lebar penuh dialog Bootstrap (bukan
+   modal-sm 300px) karena kalimat konfirmasi sering menyebut nama
+   dokumen dan tanggal.
 ================================================================== */
 .dialog-body {
   padding: var(--sp-6) var(--sp-6) var(--sp-4);

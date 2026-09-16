@@ -3,6 +3,8 @@
 /* HALAMAN RINGKASAN */
 
 const OV_TASK_LIMIT = 8;
+/* Halaman daftar "Perlu Tindakan" yang sedang dilihat. */
+let ovTaskPage = 1;
 
 /* ANTREAN TINDAKAN */
 function buildTaskQueue() {
@@ -18,12 +20,12 @@ function buildTaskQueue() {
       const mundur = info && info.days > 0 ? info.days : null;
       out.push({
         kind: "late",
-        reason: mundur ? `Mundur ${mundur}h` : "Delay",
+        reason: mundur ? t("w.reason.mundur", { n: mundur }) : t("w.reason.delay"),
         rank: 2000 + (mundur || 0),
         s,
         detail: info
-          ? `${info.basis} ${fmtDate(info.from)} → ${fmtDate(info.to)}${kurang.length ? " · belum ada " + kurang.join(", ") : ""}`
-          : `Ditandai DELAY tapi tanggal update belum diisi`,
+          ? `${info.basis} ${fmtDate(info.from)} → ${fmtDate(info.to)}${kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""}`
+          : t("w.ditandai.delay.tanpa.tanggal"),
       });
       return;
     }
@@ -31,30 +33,36 @@ function buildTaskQueue() {
     if (st.kind === "late") {
       out.push({
         kind: "late",
-        reason: `Telat ${Math.abs(st.days)}h`,
+        reason: t("w.reason.telat", { n: Math.abs(st.days) }),
         rank: 1000 - st.days,
         s,
-        detail: `${st.basis} ${fmtDate(st.iso)} sudah lewat — statusnya masih ${statusLabel(s.status, activeMode)}`,
+        /* Berkas yang belum ada IKUT disebut, sama seperti cabang
+           Delay & Dokumen. Kiriman yang lewat ETA justru paling
+           mendesak diurus berkasnya -- tanpa daftar ini barisnya cuma
+           memberi tahu "telat", bukan apa yang harus dikerjakan. */
+        detail: t("w.sudah.lewat.statusnya.masih", { basis: st.basis, tgl: fmtDate(st.iso), status: statusLabel(s.status, activeMode) }) + `${
+          kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""
+        }`,
       });
       return;
     }
     if (st.days != null && st.days <= 2 && kurang.length) {
       out.push({
         kind: "soon",
-        reason: st.days === 0 ? "Hari ini" : `H-${st.days}`,
+        reason: st.days === 0 ? t("w.reason.hari.ini") : t("w.reason.hmin", { n: st.days }),
         rank: 500 - st.days,
         s,
-        detail: `Tiba sebentar lagi tapi belum ada ${kurang.join(", ")}`,
+        detail: t("w.tiba.sebentar.lagi.tapi.belum.ada", { x: kurang.join(", ") }),
       });
       return;
     }
     if (kurang.length) {
       out.push({
         kind: "doc",
-        reason: "Dokumen",
+        reason: t("w.reason.dokumen"),
         rank: 100 - (st.days ?? 99),
         s,
-        detail: `Belum ada ${kurang.join(", ")}`,
+        detail: t("w.belum.ada.x", { x: kurang.join(", ") }),
       });
     }
   });
@@ -83,26 +91,57 @@ function renderTaskQueue() {
     return;
   }
 
-  box.innerHTML = tasks
-    .slice(0, OV_TASK_LIMIT)
-    .map(
-      (t) => `
-      <button type="button" class="task task--${t.kind}" data-ov-open="${t.s.id}">
+  /* Halaman aktif dijepit ke jumlah yang ADA -- daftarnya menyusut
+     sendiri begitu satu tugas diselesaikan, dan tanpa penjepitan
+     layarnya jadi kosong padahal tugas lain masih menunggu. */
+  const totalHalaman = Math.max(1, Math.ceil(tasks.length / OV_TASK_LIMIT));
+  ovTaskPage = Math.min(Math.max(1, ovTaskPage), totalHalaman);
+  const mulai = (ovTaskPage - 1) * OV_TASK_LIMIT;
+  const potong = tasks.slice(mulai, mulai + OV_TASK_LIMIT);
+
+  box.innerHTML =
+    potong
+      .map((t) => {
+        /* Nomor B/L penelusuran: label mengikuti MODA, bukan tetap
+           "HBL". Kiriman udara memakai House Air Waybill (HAWB) --
+           menyebutnya HBL membuat nomornya dicari di sistem yang
+           salah saat menghubungi forwarder. */
+        const labelHouse = t.s.transport === "udara" ? "HAWB" : "HBL";
+        const punyaHouse = hasMeaningfulValue(t.s.houseBL);
+        /* Nama barang di baris ketiga: satu nama saja. Baris ini untuk
+           mengenali "kiriman yang mana", bukan menampilkan isi
+           lengkapnya -- daftar penuhnya ada di kartunya sendiri. */
+        const barang = itemNamesSummary(t.s, 1)[0];
+        return `
+      <button type="button" class="task task--${t.kind}" data-ov-open="${t.s.id}"${
+          punyaHouse ? ` data-ov-house="${escapeAttr(t.s.houseBL)}"` : ""
+        }>
         <span class="task-reason">${escapeHtml(t.reason)}</span>
         <span class="task-main">
           <span class="task-party">${escapeHtml(dispVal(t.s.party))}</span>
-          <span class="task-detail">${escapeHtml(t.detail)} · <span class="mono">${escapeHtml(dispVal(t.s.docNo))}</span></span>
+          <span class="task-detail">${escapeHtml(t.detail)}${
+            punyaHouse
+              ? ` · ${labelHouse} <span class="mono">${escapeHtml(t.s.houseBL)}</span>`
+              : ""
+          }</span>
+          <span class="task-goods">${escapeHtml(barang)}</span>
         </span>
         <i class="bi bi-chevron-right task-go"></i>
-      </button>`,
-    )
-    .join("") +
-    (tasks.length > OV_TASK_LIMIT
-      ? `<button type="button" class="task" data-ov-action="late">
-           <span class="task-reason"></span>
-           <span class="task-main"><span class="task-detail">+${tasks.length - OV_TASK_LIMIT} lagi — buka daftar lengkapnya</span></span>
-           <i class="bi bi-arrow-right task-go"></i>
-         </button>`
+      </button>`;
+      })
+      .join("") +
+    (totalHalaman > 1
+      ? `<div class="task-pager">
+           <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage - 1}"
+                   ${ovTaskPage <= 1 ? "disabled" : ""} title="Sebelumnya">
+             <i class="bi bi-chevron-left"></i>
+           </button>
+           <span class="task-pageinfo">${mulai + 1}\u2013${mulai + potong.length} dari ${tasks.length}</span>
+           <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage + 1}"
+                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="Berikutnya">
+             <i class="bi bi-chevron-right"></i>
+           </button>
+         </div>`
       : "");
 }
 
@@ -111,20 +150,26 @@ function renderAgenda() {
   const box = $("#ovAgenda");
   if (!box) return;
   const list = currentList();
-  const basisEtd = sortBasis() === "etd";
   const note = $("#ovAgendaNote");
-  if (note)
-    note.textContent = `Berdasarkan ${basisEtd ? "ETD" : "ETA"} · klik untuk menyaring`;
+  /* BASISNYA ESTIMATED DELIVERY, bukan ETA/ETD.
+
+     Agenda ini menjawab "hari apa barang sampai di pabrik" — itu yang
+     menentukan kesiapan penerimaan. ETA cuma kedatangan di
+     pelabuhan/bandara; jaraknya ke pabrik bisa berhari-hari karena
+     masih menunggu berkas dan pengantaran darat.
+
+     Label kolomnya ikut ML() supaya jadi "Stuffing" di buku Export --
+     field yang sama, arti yang berbeda per buku. */
+  const lblBasis = ML().actual;
+  if (note) {
+    note.textContent = t("x.berdasarkan.klik.menyaring", { basis: lblBasis });
+  }
 
   const html = [];
   for (let i = 0; i < 7; i++) {
     const iso = addDaysISO(todayISO(), i);
     const dt = parseLocalDate(iso);
-    const n = list.filter(
-      (s) =>
-        !isArrived(s) &&
-        (basisEtd ? effectiveEtd(s) : effectiveEta(s)) === iso,
-    ).length;
+    const n = list.filter((s) => !isArrived(s) && s.actual === iso).length;
     const dow = dt.getDay();
     const cls = [
       "agenda-day",
@@ -182,7 +227,7 @@ function renderDelayWatch() {
              <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> Paling lama</span>
              <span class="stat-line-value">${terparah.info.days} hari</span>
            </div>
-           <div class="task task--late" style="border-bottom:0;padding-left:0;padding-right:0">
+           <div class="task task--late" style="border-bottom:0;padding-right:0">
              <span class="task-main">
                <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>
                <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
@@ -198,7 +243,7 @@ function renderDocCompleteness() {
   if (!box) return;
   const aktif = currentList().filter((s) => !isArrived(s));
   if (!aktif.length) {
-    box.innerHTML = `<div class="panel-empty"><i class="bi bi-inbox"></i> Belum ada pengiriman aktif.</div>`;
+    box.innerHTML = `<div class="panel-empty"><i class="bi bi-inbox"></i> ${t("v.belum.ada.pengiriman.aktif")}</div>`;
     return;
   }
   const lengkap = aktif.filter((s) => !missingDocs(s).length).length;
@@ -206,10 +251,24 @@ function renderDocCompleteness() {
   const fillCls =
     persen >= 80 ? "" : persen >= 50 ? "meter-fill--warn" : "meter-fill--danger";
 
-  const perField = REQUIRED_DOC_FIELDS.map((f) => ({
-    label: f.label,
-    kurang: aktif.filter((s) => !hasMeaningfulValue(s[f.key])).length,
-  }));
+  /* Dihitung dari TAHAPAN STEPPER, sumber yang sama dengan
+     missingDocs() -- kalau panel ini memakai daftar sendiri, angkanya
+     akan berbeda dari daftar "Perlu Tindakan" di sebelahnya tanpa ada
+     yang bisa menjelaskan kenapa.
+
+     Tahapnya dikumpulkan dari pengiriman yang ADA, bukan dari daftar
+     tetap: Import & Export punya tahap berbeda, dan kurir ekspres
+     tidak memakai Manifest sama sekali. */
+  const hitung = new Map();
+  aktif.forEach((s) => {
+    missingDocs(s).forEach((label) => {
+      hitung.set(label, (hitung.get(label) || 0) + 1);
+    });
+  });
+  const perField = [...hitung.entries()]
+    .map(([label, kurang]) => ({ label, kurang }))
+    .sort((a, b) => b.kurang - a.kurang)
+    .slice(0, 6);
 
   box.innerHTML = `
     <div class="stat-line" style="border-bottom:0;padding-bottom:2px">
@@ -240,12 +299,21 @@ function renderOverview() {
   const sub = $("#ovSub");
   if (judul) {
     judul.textContent = tasks.length
-      ? `${tasks.length} hal perlu ditindak hari ini`
+      ? t("x.hal.perlu.ditindak", { n: tasks.length })
       : "Semua terkendali hari ini";
   }
   if (sub) {
-    const c = presetCounts();
-    sub.innerHTML = `Buku <b>${activeMode === "import" ? "Import" : "Export"}</b> · <b>${c.all}</b> pengiriman · <b>${c.today}</b> jatuh hari ini · <b>${c.done}</b> selesai`;
+    /* Dulu lewat presetCounts().all — sejak "Semua" berarti "belum
+       Arrived" (bukan lagi segala status), c.all bukan total lagi.
+       Dihitung langsung di sini supaya "N pengiriman" tetap TOTAL yang
+       sebenarnya, bukan cuma yang belum tiba. */
+    const list = currentList();
+    const totalSemua = list.length;
+    const jatuhHariIni = list.filter(
+      (s) => !isArrived(s) && boardState(s).kind === "today",
+    ).length;
+    const selesai = list.filter((s) => isArrived(s)).length;
+    sub.innerHTML = `Buku <b>${activeMode === "import" ? "Import" : "Export"}</b> · <b>${totalSemua}</b> pengiriman · <b>${jatuhHariIni}</b> jatuh hari ini · <b>${selesai}</b> selesai`;
   }
   const qa = $("#ovQaNewLabel");
   if (qa) qa.textContent = lbl.addBtn;
@@ -264,14 +332,36 @@ if (ovRoot) {
     if (openBtn) {
       // Panel detail hanya bisa dibuka dari halaman Jadwal (urutan telusurnya mengikuti daftar)
       location.hash = "#/";
+      /* Punya nomor House B/L -> BUKA DAFTAR yang sudah disaring ke
+         nomor itu, bukan panel detail. Nomor B/L unik per kiriman,
+         jadi hasilnya tepat satu kartu -- dengan seluruh kendali
+         kartu (ubah status, salin, cetak) yang tidak ada di panel
+         detail. */
+      const house = openBtn.dataset.ovHouse;
+      if (house) {
+        location.hash = "#/";
+        setTimeout(() => jumpToSearch(house), 60);
+        return;
+      }
       setTimeout(() => openDetailView(openBtn.dataset.ovOpen), 60);
+      return;
+    }
+
+    const pageBtn = e.target.closest("[data-ov-task-page]");
+    if (pageBtn) {
+      ovTaskPage = Number(pageBtn.dataset.ovTaskPage) || 1;
+      renderTaskQueue();
       return;
     }
 
     const dayBtn = e.target.closest("[data-ov-date]");
     if (dayBtn) {
       location.hash = "#/";
-      setTimeout(() => setPreset("all", { date: dayBtn.dataset.ovDate }), 60);
+      /* Basis "actual" = Estimated Delivery, sama dengan yang dipakai
+         menghitung badge di atas. Kalau keduanya berbeda, angka di
+         lencana tidak akan cocok dengan jumlah kartu yang muncul
+         sesudah diklik. */
+      setTimeout(() => jumpToDateFilter("actual", dayBtn.dataset.ovDate), 60);
       return;
     }
 
@@ -282,7 +372,7 @@ if (ovRoot) {
       location.hash = "#/new";
     } else if (which === "late") {
       location.hash = "#/";
-      setTimeout(() => setPreset("late"), 60);
+      setTimeout(() => setOnlyNeedsAction(true), 60);
     } else if (which === "export") {
       location.hash = "#/";
       setTimeout(() => $("#btnBulkExport").click(), 60);

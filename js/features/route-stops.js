@@ -23,7 +23,7 @@ function stopCardHtml(st, idx, total) {
                bandara untuk terminal laut membuat sarannya lebih
                menghalangi daripada menolong. Baris digambar ulang tiap
                modanya diganti, jadi daftarnya ikut berganti. -->
-          <input type="text" class="form-control form-control-sm" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? "mis. Singapore Changi, Incheon" : "mis. Singapore, Port Klang"}">
+          <input type="text" class="form-control form-control-sm" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? "Nama bandara transit" : "Nama pelabuhan transit"}">
         </div>
         <div class="col-md-2">
           <label class="form-label">Moda</label>
@@ -34,7 +34,7 @@ function stopCardHtml(st, idx, total) {
         </div>
         <div class="col-md-3">
           <label class="form-label">${air ? "Nama Pesawat/Maskapai" : "Nama Vessel"}</label>
-          <input type="text" class="form-control form-control-sm" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? "mis. SQ, KE" : "mis. MSC, ONE"}">
+          <input type="text" class="form-control form-control-sm" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? "Nama maskapai" : "Nama pelayaran"}">
         </div>
         <div class="col-md-2">
           <label class="form-label">${air ? "No. Flight" : "No. Voyage"}</label>

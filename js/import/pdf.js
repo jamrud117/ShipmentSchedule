@@ -337,8 +337,8 @@ function parsePibPdfText(text, pagesItems) {
            ...
          Di sini label dan angkanya cuma bisa dipasangkan lewat URUTAN.
 
-     Bentuk (b) inilah yang membuat versi sebelumnya mengembalikan 0
-     untuk PPN: regex sebarisnya tidak pernah cocok. */
+     Bentuk (b) itulah yang membuat regex sebaris mengembalikan 0
+     untuk PPN. */
   const bacaPungutan = () => {
     const hasil = {};
     const LABEL = ["BM KITE", "BMT", "BM", "CUKAI", "PPNBM", "PPN", "PPH", "TOTAL"];
@@ -519,14 +519,14 @@ function parsePibPdfText(text, pagesItems) {
   fields.actual = deriveActualFromEta(fields.eta, fields);
   if (!fields.etd) {
     notes.push(
-      "Tanggal Master/House BL-AWB tidak terbaca, jadi ETD (dan ETA & Actual Delivery yang diturunkan darinya) tidak terisi — isi manual.",
+      t("w.tanggal.bl.awb.tidak.terbaca"),
     );
   } else {
     // Field 11 PIB ("Perkiraan Tanggal Tiba") adalah perkiraan versi dokumen itu sendiri
     const pibEta = etaMatch ? pibDateToISO(etaMatch[1]) : "";
     if (pibEta && pibEta !== fields.eta) {
       notes.push(
-        `ETA diisi ${fields.eta} (hitungan mesin prediksi dari ETD + lama transit rute ini). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba ${pibEta} di field 11 — isi manual kalau yang dipakai angka dokumen; ETA otomatis berpindah ke Mode Manual begitu diketik.`,
+        t("y.eta.diisi.hitungan.mesin", { eta: fields.eta, pibEta }),
       );
     }
   }
@@ -661,7 +661,7 @@ function parsePibPdfText(text, pagesItems) {
     }
     if (!gotQty) {
       notes.push(
-        `Barang #${idx + 1} ("${it.namaBarang}"): qty/satuan/berat tidak terbaca otomatis dari PDF — isi manual.`,
+        t("w.barang.qty.tidak.terbaca", { n: idx + 1, nama: it.namaBarang }),
       );
     }
     return base;
@@ -687,7 +687,7 @@ function parsePibPdfText(text, pagesItems) {
 
   if (rawItems.length > 1 && rawItems.some((it) => it.qty != null)) {
     notes.push(
-      "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",
+      t("y.harga.satuan.tidak.dihitung"),
     );
   }
 
@@ -707,29 +707,29 @@ function parsePibPdfText(text, pagesItems) {
     });
     if (items.length > 1) {
       notes.push(
-        "Fasilitas SKB/E-COO dari PDF diterapkan ke SEMUA barang secara default (lembar Pemenuhan Persyaratan tidak memisahkan per-barang) — cek tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya dapat (E-COO biasanya cuma berlaku untuk barang tertentu, bukan semua).",
+        t("y.fasilitas.diterapkan.semua.barang"),
       );
     }
   }
 
   if (!fields.docNo)
     notes.push(
-      "Nomor & Tanggal Pendaftaran (SPPB) tidak terbaca dari PDF — isi manual.",
+      t("w.nomor.tanggal.pendaftaran.sppb.tidak.terbaca.d"),
     );
   if (!fields.vessel)
     notes.push(
-      "Nama Vessel/Maskapai tidak terbaca otomatis dari PDF — isi manual.",
+      t("w.nama.vessel.maskapai.tidak.terbaca.otomatis.da"),
     );
   if (!items.length)
     notes.push(
-      'Tidak ada baris "Pos Tarif :" / "Uraian :" yang ditemukan di PDF — daftar barang tidak terisi otomatis.',
+      t("w.tidak.ada.baris.pos.tarif"),
     );
   if (!skbList.length && !ecoRow)
     notes.push(
-      "Tidak ditemukan entri SKB atau E-COO di lembar Pemenuhan Persyaratan/Fasilitas — cek manual kalau seharusnya ada.",
+      t("w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar"),
     );
   notes.push(
-    "Hasil baca PDF ini best-effort (posisi teks di PDF tidak selalu berurutan) — mohon cek ulang semua field sebelum simpan, terutama Vessel, Freight/Insurance/NDPBM, dan berat per barang.",
+    t("y.hasil.baca.pdf.best.effort"),
   );
 
   return {

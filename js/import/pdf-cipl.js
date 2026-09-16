@@ -621,27 +621,27 @@ function parseCiplPdfText(text, pagesItems) {
 
   if (!rawItems.length) {
     notes.push(
-      "Tidak ada baris barang yang terbaca dari tabel Goods Descriptions.",
+      t("w.tidak.ada.baris.barang.yang.terbaca.dari.tabel"),
     );
   }
   const hasCi = kinds.has("ci");
   const hasPl = kinds.has("pl");
   if (hasCi && hasPl) {
     notes.push(
-      "File ini memuat Commercial Invoice DAN Packing List sekaligus — harga & qty diambil dari halaman CI, berat netto/bruto dari halaman PL, lalu digabung otomatis.",
+      t("y.berkas.memuat.ci.dan.pl"),
     );
   } else if (hasCi) {
     notes.push(
-      "PDF ini Commercial Invoice: harga & qty terbaca, TAPI berat netto/bruto TIDAK ada di dokumen ini — kalau ada file Packing List (PL) pasangannya, pilih keduanya sekaligus supaya berat ikut terisi otomatis.",
+      t("y.pdf.ini.commercial.invoice"),
     );
   } else if (hasPl) {
     notes.push(
-      "PDF ini Packing List: berat netto/bruto & qty terbaca, TAPI harga TIDAK ada di dokumen ini — kalau ada file Commercial Invoice (CI) pasangannya, pilih keduanya sekaligus supaya harga ikut terisi otomatis.",
+      t("y.pdf.ini.packing.list"),
     );
   }
   if (rawItems.length && rawItems.some((it) => !it.hsCode)) {
     notes.push(
-      "Sebagian barang tidak ketemu HS Code-nya (dokumen CIPL sering tidak mencantumkannya sama sekali) — isi manual di tab Daftar Barang.",
+      t("y.sebagian.tanpa.hs.code.cipl"),
     );
   }
   notes.push(
