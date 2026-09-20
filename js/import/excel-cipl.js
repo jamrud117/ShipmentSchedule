@@ -323,7 +323,8 @@ function parseCiplWorkbook(wb) {
     ...newItem(),
     namaBarang: it.name,
     hsCode: it.hsCode || "",
-    jenisBarang: "BAHAN BAKU",
+    /* Jenis barang dari newItem() (ikut buku yang dibuka), bukan nilai
+       mati -- lihat alasannya di excel-bc.js. */
     qty: it.qty != null ? it.qty : 0,
     satuan: it.satuan || "",
     harga: it.harga != null ? it.harga : 0,

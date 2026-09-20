@@ -63,13 +63,23 @@ async function bukaHscodeLookup(idx, tombol) {
   input.focus();
   renderHscodeLookupResults(hsCodeRows);
 
-  // Muat database-nya SEKALI kalau belum pernah -- lalu saring ulang
-  // begitu selesai, siapa tahu pengguna sudah sempat mengetik sesuatu.
-  if (!hsCodeRows.length) {
-    renderHscodeLookupResults([]); // "memuat" tersirat lewat kosong dulu, bukan pesan tersendiri
-    await pastikanHsCodeTermuat();
-    if (hscodeLookupUntukIdx === idx) saringHscodeLookup();
-  }
+  /* SELALU DISEGARKAN SAAT DIBUKA, bukan cuma saat masih kosong.
+
+     HS Code sering ditambah dari tab lain (satu tab untuk jadwal, satu
+     untuk database HS Code) atau dari perangkat orang lain. Daftar yang
+     dimuat sekali lalu dipegang terus membuat kode yang baru ditambah
+     tidak pernah muncul di sini sampai halamannya dimuat ulang -- dan
+     dari sisi pengguna itu terbaca sebagai "kodenya tidak tersimpan".
+
+     Yang sudah ada tetap ditampilkan selama pengambilan berjalan, jadi
+     tidak ada kedipan; hasilnya disaring ulang begitu datang, siapa
+     tahu pengguna sudah sempat mengetik. */
+  const segarkan =
+    typeof segarkanHsCodeDiam === "function"
+      ? segarkanHsCodeDiam()
+      : pastikanHsCodeTermuat();
+  await segarkan;
+  if (hscodeLookupUntukIdx === idx) saringHscodeLookup();
 }
 
 const itemTableBodyElHscode = $("#itemTableBody");

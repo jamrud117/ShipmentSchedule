@@ -630,7 +630,11 @@ function parsePibPdfText(text, pagesItems) {
       ...newItem(),
       namaBarang: it.namaBarang,
       hsCode: it.hsCode,
-      jenisBarang: "BAHAN BAKU",
+      /* Jenis barang dibiarkan mengikuti buku (newItem()). PIB memang
+         dokumen impor, jadi hasilnya sama saja -- tapi nilai mati di
+         sini akan salah begitu berkasnya dibuka dari buku Export,
+         dan kesalahan seperti itu sudah pernah terjadi lewat jalur
+         Excel CEISA. */
     };
     const gotQty = it.qty != null;
     if (gotQty) base.qty = it.qty;

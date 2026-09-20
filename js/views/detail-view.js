@@ -181,7 +181,7 @@ function buildDetailHtml(s) {
 
     <div class="subsection-title"><i class="bi bi-boxes"></i> Daftar Barang</div>
     <div class="item-table-wrap mb-2">
-      <table class="item-table">
+      <table class="item-table item-table--detail">
         <thead><tr>
           <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th><th>Fasilitas</th>
           <th class="text-center">Qty</th><th class="text-center">Satuan</th><th class="text-center">Harga/Unit</th>

@@ -159,11 +159,35 @@ function showPrompt(opsi) {
                <button type="button" class="pwd-eye" data-pwd-toggle="prompt_${f.key}"><i class="bi bi-eye"></i></button>
              </div>`
           : `<input class="login-input" id="prompt_${f.key}" type="${f.type || "text"}"
-               placeholder="${escapeAttr(f.placeholder || "")}" value="${escapeAttr(f.value || "")}" />`
+               placeholder="${escapeAttr(f.placeholder || "")}" value="${escapeAttr(f.value || "")}"
+               ${f.inputmode ? `inputmode="${escapeAttr(f.inputmode)}"` : ""} />`
       }
       ${f.hint ? `<div class="prompt-hint">${escapeHtml(f.hint)}</div>` : ""}`,
     )
     .join("");
+
+  /* PENYARING KETIKAN.
+
+     Isian yang memberi `filter` merapikan nilainya saat diketik --
+     dipakai HS Code untuk menahan ketikan di 8 angka. Disaring di
+     sini, bukan cuma diperiksa saat Simpan: menolak setelah selesai
+     mengetik berarti pengguna baru tahu kelebihannya ketika sudah
+     terlanjur mengetik semuanya. */
+  fields.forEach((f) => {
+    if (typeof f.filter !== "function") return;
+    const el = $("#prompt_" + f.key);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const posisi = el.selectionStart;
+      const asli = el.value;
+      const rapi = f.filter(asli);
+      if (rapi === asli) return;
+      el.value = rapi;
+      // Kursor dikembalikan supaya tidak melompat ke ujung saat menyaring.
+      const geser = rapi.length - asli.length;
+      el.setSelectionRange(Math.max(0, posisi + geser), Math.max(0, posisi + geser));
+    });
+  });
 
   promptSubmit = () => {
     const nilai = {};

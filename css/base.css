@@ -102,6 +102,11 @@ body {
 /* Kelas bantu yang dipakai lintas komponen. */
 
 /* TOMBOL */
+/* Tombol yang mengisi lebar induknya (mis. tombol utama di dalam
+   panel sempit). */
+.btn-block {
+  width: 100%;
+}
 .btn-primary-navy,
 .btn-teal {
   display: inline-flex;

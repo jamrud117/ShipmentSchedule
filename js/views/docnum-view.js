@@ -280,10 +280,24 @@ function readDocNumForm(typeKey) {
      data-dn="poNo" di atas -- pemisahan ini yang membuat pengajuan
      lama tetap terbaca tanpa migrasi. */
   if (typeof poNoKotakTambahan === "function") {
-    const tambahan = poNoKotakTambahan()
-      .map((el) => String(el.value || "").trim())
-      .filter(Boolean);
-    if (tambahan.length) out.poNoExtra = tambahan;
+    /* Nomor & tanggal disaring BERPASANGAN, bukan masing-masing.
+
+       Menyaring kosong secara terpisah akan menggeser pasangannya:
+       baris kedua yang nomornya kosong membuat tanggal baris ketiga
+       naik jadi tanggal baris kedua. Yang dibuang adalah baris yang
+       nomornya kosong -- tanggal tanpa nomor tidak menerangkan apa
+       pun. */
+    const tgl = typeof poTglKotakTambahan === "function" ? poTglKotakTambahan() : [];
+    const pasangan = poNoKotakTambahan()
+      .map((el, i) => ({
+        no: String(el.value || "").trim(),
+        tanggal: String((tgl[i] && tgl[i].value) || "").trim(),
+      }))
+      .filter((x) => x.no);
+    if (pasangan.length) {
+      out.poNoExtra = pasangan.map((x) => x.no);
+      out.poDateExtra = pasangan.map((x) => x.tanggal);
+    }
   }
   if (typeof doLines !== "undefined" && typeKey === "do" && out.doKind === "Lokal") {
     const bersih = doLinesBersih(doLines);
@@ -355,29 +369,64 @@ function validateDocNumForm(typeKey) {
 /* ---------- pratinjau nomor berikutnya ---------- */
 
 // Menampilkan nomor yang AKAN terbit
+/* NOMOR URUT PERMINTAAN PRATINJAU.
+
+   Berganti sub-jenis dua kali beruntun (Export -> Lokal -> Export)
+   melepas dua permintaan yang tidak saling menunggu. Yang menang
+   adalah jawaban yang datang TERAKHIR, bukan yang paling baru diminta
+   -- dan urutan datangnya tidak dijamin. Kalau yang menang jawaban
+   lama, pratinjau DAN counterCtx menunjuk deret yang sudah tidak
+   dipilih lagi: tombol Simpan di panel "Atur Nomor Urut" lalu menyetel
+   nomor milik deret sebelah tanpa ada yang terlihat salah.
+
+   Pola yang sama dengan `muatKe` di data/api.js. */
+let dnPratinjauKe = 0;
+
+/* Parameter jenis dokumen sengaja TIDAK bernama `t`: nama itu menutupi
+   fungsi terjemahan global, dan memanggil t("...") di dalam sini akan
+   melempar TypeError yang -- karena fungsinya asinkron -- cuma muncul
+   di konsol. Persis jebakan yang sudah pernah kena di
+   renderCounterPanel(). */
 async function refreshDocNumPreview(typeKey) {
   const el = document.querySelector(`[data-dn-preview="${typeKey}"]`);
   if (!el) return;
-  const t = resolveDocNumType(typeKey);
+  const nomorMinta = ++dnPratinjauKe;
+  const jenis = resolveDocNumType(typeKey);
   const isoDate = readDocNumForm(typeKey).docDate;
   const template = docNumTemplate(typeKey, isoDate);
 
-  el.textContent = docNumFormat(template, 1, t.pad); // tampilan sementara
+  el.textContent = docNumFormat(template, 1, jenis.pad); // tampilan sementara
   try {
-    const periodKey = await muatSeri(t.key);
+    const periodKey = await muatSeri(jenis.key);
     const { data, error } = await supabaseClient
       .from("document_number_counters")
       .select("last_seq")
-      .eq("doc_type", t.key)
+      .eq("doc_type", jenis.key)
       .eq("period_key", periodKey)
       .maybeSingle();
     if (error) throw error;
+    if (nomorMinta !== dnPratinjauKe) return; // sub-jenis sudah berganti lagi
     const berikut = (data ? data.last_seq : 0) + 1;
-    el.textContent = docNumFormat(template, berikut, t.pad);
-    renderCounterPanel(t, periodKey, data ? data.last_seq : 0);
+    el.textContent = docNumFormat(template, berikut, jenis.pad);
+    renderCounterPanel(jenis, periodKey, data ? data.last_seq : 0);
+    /* Kotak No. SI dibiarkan KOSONG, bukan diisi otomatis: nomor SI
+       bawaannya memang nomor urut CIPL, dan mengisikannya ke kotak
+       akan menyimpannya sebagai isian manual — nomor itu lalu ikut
+       terbawa ke pengajuan berikutnya. Yang ditulis cuma ancar-ancar
+       di placeholder-nya. */
+    if (typeKey === "invoice") {
+      const elSi = docNumPanelEl("invoice")?.querySelector('[data-dn="siNo"]');
+      if (elSi) elSi.placeholder = t("ph.no.si.otomatis", { n: berikut });
+    }
   } catch (err) {
     console.error(err);
-    el.textContent = docNumFormat(template, 1, t.pad);
+    if (nomorMinta !== dnPratinjauKe) return;
+    el.textContent = docNumFormat(template, 1, jenis.pad);
+    /* Panel "Atur Nomor Urut" tetap ditunjuk ke seri yang BENAR walau
+       angkanya gagal dibaca. Tanpa ini counterCtx masih menyimpan seri
+       yang tadi dibuka, dan tombol Simpan di panel itu akan menyetel
+       nomor milik jenis dokumen yang salah. */
+    renderCounterPanel(jenis, docNumSeries[jenis.key] || "-", 0);
   }
 }
 
@@ -395,7 +444,13 @@ function renderCounterPanel(jenis, periodKey, lastSeq) {
   const info = $("#counterInfo");
   const input = $("#counterNext");
   if (!info || !input) return;
-  info.textContent = `Seri ${periodKey} · nomor terakhir terbit: ${
+  /* NAMA SERINYA DISEBUT, bukan cuma periodenya.
+
+     Surat Jalan Export & Lokal -- juga Commercial & Non-Commercial
+     Invoice -- berbagi satu panel ini tapi BERBEDA deret nomor. Tanpa
+     namanya tertulis, tidak ada cara membedakan sedang menyetel yang
+     mana, dan angka yang diketik gampang mendarat di deret sebelah. */
+  info.textContent = `${jenis.label} · seri ${periodKey} · nomor terakhir terbit: ${
     lastSeq ? String(lastSeq).padStart(jenis.pad, "0") : t("w.belum.ada.nomor")
   }`;
   input.value = String((lastSeq || 0) + 1);
@@ -570,7 +625,27 @@ function mulaiUbahDocNum(id) {
 
   const isi = (nama, nilai) => {
     const el = panel.querySelector(`[data-dn="${nama}"]`);
-    if (el && nilai != null) el.value = nilai;
+    if (!el || nilai == null) return;
+    /* NILAI LAMA YANG TIDAK ADA DI DAFTAR PILIHAN TETAP DIPERTAHANKAN.
+
+       Isian Pemohon dulu kotak ketik bebas, jadi pengajuan lama bisa
+       menyimpan nama mana pun -- termasuk ejaan yang tidak persis sama
+       dengan pilihan sekarang. Menyetel .value ke nilai yang tidak ada
+       pilihannya membuat <select> diam-diam jatuh ke kosong: membuka
+       nomor lama untuk memperbaiki SATU isian lalu menyimpannya akan
+       menghapus nama pemohonnya tanpa ada yang terlihat berubah. */
+    if (el.tagName === "SELECT" && !dnPunyaPilihan(el, nilai)) {
+      const opsi = document.createElement("option");
+      opsi.value = nilai;
+      opsi.textContent = nilai;
+      /* Ditandai supaya bisa dibuang lagi saat form dikosongkan --
+         tanpa itu daftar pilihannya memanjang terus setiap satu nomor
+         lama dibuka, dan nama yang sudah tidak dipakai ikut ditawarkan
+         untuk pengajuan baru. */
+      opsi.dataset.dnLawas = "1";
+      el.appendChild(opsi);
+    }
+    el.value = nilai;
   };
   isi("docDate", r.doc_date);
   isi("requester", r.requester);
@@ -586,7 +661,10 @@ function mulaiUbahDocNum(id) {
      isi() di atas melewatinya diam-diam -- membuka nomor lama untuk
      diubah menampilkan tabel kosong padahal datanya tersimpan. */
   if (typeof setPoNoExtra === "function") {
-    setPoNoExtra((r.payload && r.payload.poNoExtra) || []);
+    setPoNoExtra(
+      (r.payload && r.payload.poNoExtra) || [],
+      (r.payload && r.payload.poDateExtra) || [],
+    );
   }
   if (typeof setDoLines === "function" && String(r.doc_type || "").startsWith("do")) {
     setDoLines((r.payload && r.payload.items) || []);
@@ -603,6 +681,21 @@ function mulaiUbahDocNum(id) {
 
   dnEditingId = r.id;
   syncModeUbahDocNum(r.doc_number);
+
+  /* DERET NOMOR IKUT BERPINDAH KE SUB-JENIS YANG BARU DIBUKA.
+
+     Sub-jenis di atas disetel lewat kode (elSub.value = ...), dan
+     menyetel .value TIDAK memicu event `change` -- jadi pendengar yang
+     biasanya menyegarkan pratinjau tidak pernah berjalan. Akibatnya
+     membuka satu nomor Surat Jalan LOKAL meninggalkan pratinjau dan
+     panel "Atur Nomor Urut" menunjuk deret EXPORT: nomor berikutnya
+     yang tampil milik deret sebelah, dan menekan Simpan di panel itu
+     menyetel deret sebelah pula.
+
+     Riwayatnya ikut dilepas dari sub-tab yang dipilih sebelumnya
+     supaya tab, form, dan panel nomor urut menunjuk deret yang sama. */
+  docNumHistorySub = null;
+  refreshDocNumPreview(tabKey);
 
   /* Menggulir ke form itu kenyamanan, bukan bagian dari operasinya.
      Dibiarkan tanpa penjaga, satu peramban yang tidak mendukungnya
@@ -1037,10 +1130,16 @@ function syncDocNumConditional(panel) {
   });
 }
 
+function dnPunyaPilihan(sel, nilai) {
+  return [...sel.options].some((o) => o.value === String(nilai));
+}
+
 function resetDocNumForm(typeKey, opts) {
   const panel = docNumPanelEl(typeKey);
   if (!panel) return;
   const keep = opts && opts.keepIdentity;
+  // Pilihan sisipan dari nomor lama yang tadi dibuka (lihat isi()).
+  panel.querySelectorAll("option[data-dn-lawas]").forEach((o) => o.remove());
   panel.querySelectorAll("[data-dn]").forEach((el) => {
     if (keep && (el.dataset.dn === "requester" || el.dataset.dn === "department"))
       return;
@@ -1072,7 +1171,7 @@ function resetDocNumForm(typeKey, opts) {
     elCari.value = "";
     elCari.classList.remove("is-invalid");
   });
-  if (typeof setPoNoExtra === "function") setPoNoExtra([]);
+  if (typeof setPoNoExtra === "function") setPoNoExtra([], []);
   if (typeof setDoLines === "function" && typeKey === "do") setDoLines([]);
   if (typeof setFundLines === "function" && typeKey === "fund") setFundLines([]);
   syncDocNumConditional(panel);
@@ -1088,6 +1187,29 @@ document.addEventListener("click", (e) => {
   if (!tab) return;
   docNumHistorySub = tab.dataset.dnSubtab;
   docNumPage = 1;
+
+  /* SUB-TAB MEMINDAHKAN FORM-nya juga -- untuk jenis yang sub-jenisnya
+     memang deret nomor tersendiri (Surat Jalan Export/Lokal, Invoice
+     Commercial/Non-Commercial).
+
+     Tanpa ini ada DUA penunjuk deret yang bisa berselisih: tab riwayat
+     menunjuk Lokal sementara form (dan panel "Atur Nomor Urut") masih
+     menunjuk Export. Yang mana yang sedang disetel jadi soal tebakan,
+     dan nomor yang diketik mendarat di deret yang salah.
+
+     Sub-tab Pengajuan Dana TIDAK termasuk: ia menyaring isi payload
+     (Jenis Pengeluaran), bukan memilih deret -- seluruh pengajuan dana
+     memakai satu urutan. */
+  const subs = DOCNUM_SUBTYPES[docNumActiveTab];
+  if (subs && subs[docNumHistorySub]) {
+    const panel = docNumPanelEl(docNumActiveTab);
+    const elSub = panel && panel.querySelector("[data-dn-subtype]");
+    if (elSub && elSub.value !== docNumHistorySub) {
+      elSub.value = docNumHistorySub;
+      syncDocNumConditional(panel);
+      refreshDocNumPreview(docNumActiveTab);
+    }
+  }
   renderDocNumHistory();
 });
 document.addEventListener("input", (e) => {
@@ -1128,7 +1250,11 @@ async function renderDocNumHistory() {
            Baris ini memang sudah disaring per jenis di kueri, tapi
            datanya tetap harus membawa jenisnya sendiri — yang menyaring
            dan yang membaca bukan bagian kode yang sama. */
-        "id, doc_type, doc_number, doc_date, requester, department, payload, created_at",
+        /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
+           lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
+           tebakan dari ekor nomor invoice, yang untuk pola Kumho
+           menghasilkan tanggalnya. */
+        "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
         { count: "exact" },
       )
       .eq("doc_type", docNumHistoryKey())
@@ -1457,10 +1583,17 @@ document.querySelectorAll('[data-docnum-panel] [data-dn="docDate"]').forEach(
     el.addEventListener("change", () => refreshDocNumPreview(docNumActiveTab));
   },
 );
-// Mengganti sub-jenis berarti pindah DERET nomor, jadi pratinjau dan riwayatnya ikut dimuat ulang.
+/* Mengganti sub-jenis berarti pindah DERET nomor: pratinjau, panel
+   nomor urut, dan riwayatnya ikut dimuat ulang.
+
+   `docNumHistorySub` dilepas supaya riwayat mengikuti form. Kalau
+   dibiarkan, riwayat tetap menampilkan deret yang tadi dipilih lewat
+   sub-tab padahal formnya sudah pindah -- dua penunjuk deret yang
+   saling membantah di satu layar. */
 document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
   el.addEventListener("change", () => {
     docNumPage = 1;
+    docNumHistorySub = null;
     refreshDocNumPreview(docNumActiveTab);
     renderDocNumHistory();
   });
@@ -1537,10 +1670,8 @@ const DN_LABEL_FIELD = {
   feePph: "PPH Import",
   checkedByName: "Checked By",
   checkedByRole: "Jabatan Checked By",
-  approver1Name: "Approved By 1",
-  approver1Role: "Jabatan Approved By 1",
-  approver2Name: "Approved By 2",
-  approver2Role: "Jabatan Approved By 2",
+  approver1Name: "Approved By",
+  approver1Role: "Jabatan Approved By",
   packages: "Jumlah Koli",
   quantity: "Jumlah",
   unit: "Satuan",
@@ -1550,6 +1681,7 @@ const DN_LABEL_FIELD = {
   notifyParty: "Notify Party",
   poNo: "PO No.",
   poDate: "Tanggal PO",
+  poNoExtra: "PO No. lainnya",
   termsDelivery: "Terms of Delivery",
   termPayment: "Term of Payment",
   portLoading: "Port of Loading",
@@ -1645,6 +1777,18 @@ function tampilkanDetailNomor(id) {
        Rincian biaya & daftar barang tersimpan sebagai larik objek.
        String(objek) menghasilkan "[object Object]" -- terlihat seperti
        kerusakan data padahal isinya utuh. */
+    /* Tanggal PO tambahan sudah ikut tercetak bersama nomornya di
+       baris "PO No. lainnya" -- barisnya sendiri cuma akan menampilkan
+       deretan tanggal tanpa keterangan milik PO yang mana. */
+    if (k === "poDateExtra") return;
+    if (k === "poNoExtra") {
+      const tglLain = p.poDateExtra || [];
+      nilai = (nilai || [])
+        .map((no, i) =>
+          tglLain[i] ? `${no} · ${fmtDate(tglLain[i])}` : String(no),
+        )
+        .join("\n");
+    }
     if (Array.isArray(nilai)) {
       nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
     }

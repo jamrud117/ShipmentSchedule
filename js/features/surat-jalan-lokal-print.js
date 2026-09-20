@@ -4,7 +4,7 @@
    SURAT JALAN LOKAL — lembar cetak tersendiri
 
    Bentuknya BERBEDA dari surat jalan Export, bukan sekadar beda isi:
-   kop berlogo dengan pita bergaris, dua kotak alamat (Sold To /
+   kop berlogo dengan pita bergaris, dua kotak alamat (Sold From /
    Delivered To), blok keterangan di kanan, tabel bergaris jingga, dan
    dua kotak tanda tangan. Menumpangkannya ke templat Export lewat
    percabangan akan membuat kedua lembar saling mengganggu setiap kali
@@ -111,7 +111,7 @@ function buildSuratJalanLokalHtml(row) {
 
     <div class="l-atas">
       <div class="l-kotak l-sold">
-        <div class="l-kotak-judul">SOLD TO :</div>
+        <div class="l-kotak-judul">SOLD FROM :</div>
         <div class="l-kotak-nama">${escapeHtml(SJ_PERUSAHAAN.nama)}</div>
       </div>
       <div class="l-judul">DELIVERY ORDER</div>

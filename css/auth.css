@@ -419,41 +419,6 @@ body.is-viewer .delay-strip-fields input {
   font-size: var(--t-sm);
 }
 
-/* Halaman Database HS Code — pola yang sama dengan .acct-row di atas,
-   disederhanakan (tanpa avatar/dropdown peran). */
-/* Bilah urutkan + keterangan "1-12 dari 40" di atas daftar. */
-.hscode-sortbar {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--sp-3);
-}
-.hscode-shown {
-  margin-left: auto;
-  font-size: var(--t-sm);
-  color: var(--n-500);
-  white-space: nowrap;
-}
-.hscode-pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
-}
-.hscode-pageinfo {
-  font-size: var(--t-sm);
-  color: var(--n-500);
-  white-space: nowrap;
-}
-.hscode-pager .btn-quiet:disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
 /* Pemilih bahasa — dipakai di layar masuk & menu akun. */
 .lang-switch {
   display: inline-flex;

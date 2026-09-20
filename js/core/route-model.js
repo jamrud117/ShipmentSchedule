@@ -151,7 +151,9 @@ function buildRouteNodes(s) {
      Diseragamkan saat DIGAMBAR, bukan lewat migrasi database — tidak
      ada gunanya menulis ulang ribuan baris hanya untuk mengubah
      tampilan, dan resolvePortEntry() tetap mengenali dua-duanya. */
-  const nodes = [{ kind: "origin", terminal: portCodeLabel(s.origin), date: s.etd }];
+  const nodes = [
+    { kind: "origin", terminal: portCodeLabel(s.origin), date: effectiveEtd(s) },
+  ];
   routeStopList(s).forEach((st) => {
     nodes.push({
       kind: "stop",
@@ -164,7 +166,11 @@ function buildRouteNodes(s) {
       voyage: st.voyage,
     });
   });
-  nodes.push({ kind: "destination", terminal: portCodeLabel(s.destination), date: s.eta });
+  nodes.push({
+    kind: "destination",
+    terminal: portCodeLabel(s.destination),
+    date: effectiveEta(s),
+  });
   return nodes;
 }
 
@@ -443,8 +449,16 @@ function buildLaneHtml(s) {
   const labelsHtml = !multi
     ? `
       <div class="port-labels">
-        <div class="p">ETD <b>${fmtDate(s.etd)}${s.etdTime ? " · " + escapeHtml(s.etdTime) : ""}</b></div>
-        <div class="p text-end">ETA <b>${fmtDate(s.eta)}${s.etaTime ? " · " + escapeHtml(s.etaTime) : ""}</b></div>
+        <!-- TANGGAL EFEKTIF, bukan tanggal awal.
+
+             Penanda di jalur sudah dihitung dari tanggal update delay
+             (lihat laneProgress di atas), jadi label yang menyebut
+             tanggal ASLI membuat keduanya saling membantah: penanda
+             menunjukkan perjalanan baru dimulai, sementara labelnya
+             menyebut ETD yang sudah lewat seminggu. Yang dibaca orang
+             harus tanggal yang sama dengan yang dipakai menghitung. -->
+        <div class="p">ETD <b>${fmtDate(effectiveEtd(s))}${s.etdTime ? " · " + escapeHtml(s.etdTime) : ""}</b></div>
+        <div class="p text-end">ETA <b>${fmtDate(effectiveEta(s))}${s.etaTime ? " · " + escapeHtml(s.etaTime) : ""}</b></div>
       </div>`
     : `
       <div class="port-labels port-labels--multi">

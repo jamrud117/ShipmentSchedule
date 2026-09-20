@@ -97,7 +97,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.text(s.noAju), // 4  AJU
       formatter.text(s.party), // 5  CONSIGNEE (BUYER NAME)
       formatter.text(it.hsCode), // 6  HS CODE
-      formatter.text(namaBarangDenganSize(it)), // 7  DESCRIPTION (+ Size kalau ada)
+      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (Uraian+Pattern+Size+Mold No)
       formatter.num(it.qty, 2), // 8  QTY
       formatter.num((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 9 AMOUNT
       formatter.text(s.incoterm), // 10 INCOTERMS
@@ -219,7 +219,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.text(statusTemplateValue(s.status)), // 4  STATUS
       formatter.text(s.origin), // 5  PELABUHAN MUAT
       formatter.text(s.party), // 6  CUSTOMER
-      formatter.text(namaBarangDenganSize(it)), // 7  ITEM NAME (+ Size kalau ada)
+      formatter.text(itemDisplayName(it)), // 7  ITEM NAME (Uraian+Pattern+Size+Mold No)
       qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
       formatter.num(it.bruto, 2), // 9  GROSS WEIGHT
       formatter.blank, // 10 BL/AWB — diisi terpisah

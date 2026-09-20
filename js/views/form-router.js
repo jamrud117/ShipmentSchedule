@@ -67,8 +67,12 @@ function router() {
     hash === "#/new" ||
     hash === "#/akun" ||
     /* "#/hscode" TIDAK di sini: viewer boleh membukanya untuk mencari
-       HS Code. Pembatasan tambah/ubahnya ada di tombolnya sendiri. */
-    hash === "#/ringkasan" ||
+       HS Code. Pembatasan tambah/ubahnya ada di tombolnya sendiri.
+
+       "#/ringkasan" juga tidak: halaman itu cuma membaca jadwal yang
+       memang sudah boleh dilihat viewer, disusun ulang jadi "apa yang
+       perlu ditindak". Aksi yang mengubah data di sana disembunyikan
+       lewat body.is-viewer, sama seperti di halaman Jadwal. */
     hash === "#/docnum" ||
     !!editMatch;
   if (halamanEximSaja && !canEdit()) {
@@ -491,8 +495,13 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     destination: $("#fDestination").value.trim(),
     etd: $("#fEtd").value,
     eta: $("#fEta").value,
-    etdTime: $("#fEtdTime").value,
-    etaTime: $("#fEtaTime").value,
+    /* Dirapikan SEKALI LAGI di sini. Kotaknya memang sudah merapikan
+       sendiri saat selesai diisi, tapi menekan Simpan tepat setelah
+       mengetik -- tanpa kotaknya kehilangan fokus lebih dulu -- bisa
+       melewati perapian itu, dan yang tersimpan jadi "930" yang tidak
+       terbaca sebagai jam oleh perhitungan mana pun. */
+    etdTime: normalkanJam($("#fEtdTime").value),
+    etaTime: normalkanJam($("#fEtaTime").value),
     etaUpdate: $("#fEtaUpdate").value,
     etdUpdate: $("#fEtdUpdate").value,
     /* Bukan tanggal, melainkan cara ETA di atas diperoleh. Tanpa ini
