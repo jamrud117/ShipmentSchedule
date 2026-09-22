@@ -64,11 +64,13 @@ let drpViewMonth = 0; // bulan PERTAMA dari dua yang ditampilkan (0-11)
 let drpTempFrom = "";
 let drpTempTo = "";
 
-function drpMonthGridHtml(year, month) {
+/* `dari`/`sampai` bawaannya status pemilih di halaman Jadwal; pemilih
+   lain (lihat buatRentangTanggal() di bawah) mengirim rentangnya
+   sendiri, jadi kotak-kotak ini tidak perlu tahu milik siapa. */
+function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
   const sel = drpBuildMonthCells(year, month);
   const baris = [];
   for (let i = 0; i < sel.length; i += 7) baris.push(sel.slice(i, i + 7));
-  const dari = drpTempFrom, sampai = drpTempTo;
   const min = dari && sampai ? (dari < sampai ? dari : sampai) : "";
   const maks = dari && sampai ? (dari < sampai ? sampai : dari) : "";
 
@@ -238,3 +240,162 @@ document.addEventListener("keydown", (e) => {
   if (el) el.addEventListener("change", drpSyncTriggerFromFilter);
 });
 drpSyncTriggerFromFilter();
+
+/* ------------------------------------------------------------------
+   PEMILIH RENTANG YANG BISA DIPASANG DI MANA SAJA
+
+   Pemilih di atas terikat ke halaman Jadwal: ID-nya tetap, statusnya
+   global, dan sumber kebenarannya #filterDateFrom/To. Untuk tempat
+   lain (Ringkasan per Vendor di Pengajuan Dana) dibuat INSTANS
+   sendiri lewat fungsi ini -- statusnya milik instans itu, dan
+   kotak-kotak kalendernya memakai drpMonthGridHtml() yang sama,
+   jadi tampilan & cara memilihnya identik dengan yang sudah dikenal.
+
+   Tombol jalan pintas ditentukan pemanggil (`opsi.pintas`), karena
+   yang berguna berbeda per tempat: di jadwal \"Minggu Depan\", di
+   ringkasan biaya \"Bulan Ini\" / \"Bulan Lalu\".
+------------------------------------------------------------------ */
+function drpAwalMinggu(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // mundur ke Senin
+  return x;
+}
+const drpIso = (d) => drpIsoOf(d.getFullYear(), d.getMonth(), d.getDate());
+
+/* Rentang siap pakai. Dihitung SAAT diklik, bukan saat halaman dimuat:
+   halaman yang dibiarkan terbuka melewati tengah malam tetap
+   menghasilkan \"hari ini\" yang benar. */
+const RENTANG_PINTAS = {
+  hariIni: () => { const t = new Date(); return [drpIso(t), drpIso(t)]; },
+  mingguIni: () => {
+    const a = drpAwalMinggu(new Date());
+    const b = new Date(a); b.setDate(a.getDate() + 6);
+    return [drpIso(a), drpIso(b)];
+  },
+  bulanIni: () => {
+    const t = new Date();
+    return [drpIsoOf(t.getFullYear(), t.getMonth(), 1), drpIsoOf(t.getFullYear(), t.getMonth() + 1, 0)];
+  },
+  bulanLalu: () => {
+    const t = new Date();
+    return [drpIsoOf(t.getFullYear(), t.getMonth() - 1, 1), drpIsoOf(t.getFullYear(), t.getMonth(), 0)];
+  },
+  tahunIni: () => {
+    const y = new Date().getFullYear();
+    return [drpIsoOf(y, 0, 1), drpIsoOf(y, 11, 31)];
+  },
+};
+
+function buatRentangTanggal(akar, opsi) {
+  const o = opsi || {};
+  const pintas = o.pintas || [];
+  let dari = (o.awal && o.awal[0]) || "";
+  let sampai = (o.awal && o.awal[1]) || "";
+  let tDari = "", tSampai = "";
+  let lihatTahun = 0, lihatBulan = 0;
+
+  akar.classList.add("date-range-picker");
+  akar.innerHTML = `
+    <button type="button" class="date-range-trigger" aria-haspopup="true" aria-expanded="false" data-rt="pemicu">
+      <span class="date-range-trigger-icon"><i class="bi bi-calendar3"></i></span>
+      <span data-rt="teks"></span>
+      <i class="bi bi-chevron-down date-range-trigger-caret"></i>
+    </button>
+    <div class="drp-popover d-none" data-rt="popover">
+      ${pintas.length ? `<div class="drp-quick-row">${pintas
+        .map((p, i) => `<button type="button" class="quick-date-btn" data-rt-pintas="${i}">${escapeHtml(p.label)}</button>`)
+        .join("")}</div>` : ""}
+      <div class="drp-header">
+        <button type="button" class="drp-nav" data-rt="mundur" aria-label="Bulan sebelumnya"><i class="bi bi-chevron-left"></i></button>
+        <div class="drp-months">
+          <div class="drp-month-label" data-rt="label0"></div>
+          <div class="drp-month-label" data-rt="label1"></div>
+        </div>
+        <button type="button" class="drp-nav" data-rt="maju" aria-label="Bulan berikutnya"><i class="bi bi-chevron-right"></i></button>
+      </div>
+      <div class="drp-grids" data-rt="grids">
+        <div class="drp-grid" data-rt="grid0"></div>
+        <div class="drp-grid drp-grid--second" data-rt="grid1"></div>
+      </div>
+      <div class="drp-footer">
+        <button type="button" class="drp-reset" data-rt="reset">Reset</button>
+        <button type="button" class="drp-apply" data-rt="terapkan">Terapkan</button>
+      </div>
+    </div>`;
+
+  const q = (n) => akar.querySelector(`[data-rt="${n}"]`);
+  const urut = (a, b) => (a && b && a > b ? [b, a] : [a, b]);
+  const teksRentang = (a, b) =>
+    a && b ? `${drpFmtDisplay(a)}  –  ${drpFmtDisplay(b)}` : a ? `${drpFmtDisplay(a)}  –  …` : "Pilih Rentang Tanggal";
+
+  function gambarPemicu() {
+    q("teks").textContent = teksRentang(dari, sampai);
+    q("pemicu").classList.toggle("has-value", !!(dari && sampai));
+    // Tombol pintas yang cocok dengan rentang aktif ikut menyala.
+    akar.querySelectorAll("[data-rt-pintas]").forEach((btn) => {
+      const [a, b] = pintas[+btn.dataset.rtPintas].rentang();
+      // .is-active -- kelas yang sama dengan tombol pintas di halaman Jadwal.
+      btn.classList.toggle("is-active", a === dari && b === sampai);
+    });
+  }
+  function gambarKalender() {
+    const nama = (m) => `${BULAN_PANJANG[((m % 12) + 12) % 12]} ${lihatTahun + Math.floor(m / 12)}`;
+    q("label0").textContent = nama(lihatBulan);
+    q("label1").textContent = nama(lihatBulan + 1);
+    const [a, b] = urut(tDari, tSampai);
+    q("grid0").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan, a, b || a);
+    q("grid1").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan + 1, a, b || a);
+    q("teks").textContent = teksRentang(tDari, tSampai);
+  }
+  const terbuka = () => !q("popover").classList.contains("d-none");
+  function buka() {
+    tDari = dari; tSampai = sampai;
+    const acuan = parseLocalDate(dari) || new Date();
+    lihatTahun = acuan.getFullYear(); lihatBulan = acuan.getMonth();
+    gambarKalender();
+    q("popover").classList.remove("d-none");
+    q("pemicu").setAttribute("aria-expanded", "true");
+    q("pemicu").classList.add("is-open");
+  }
+  function tutup() {
+    q("popover").classList.add("d-none");
+    q("pemicu").setAttribute("aria-expanded", "false");
+    q("pemicu").classList.remove("is-open");
+    gambarPemicu();
+  }
+  function terapkan(a, b) {
+    [dari, sampai] = urut(a || "", b || a || "");
+    tutup();
+    if (typeof o.onApply === "function") o.onApply(dari, sampai);
+  }
+
+  q("pemicu").addEventListener("click", () => (terbuka() ? tutup() : buka()));
+  q("grids").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-drp-day]");
+    if (!btn) return;
+    e.stopPropagation(); // lihat catatan KRUSIAL pada pemilih halaman Jadwal
+    const iso = btn.dataset.drpDay;
+    if (!tDari || (tDari && tSampai)) { tDari = iso; tSampai = ""; }
+    else [tDari, tSampai] = urut(tDari, iso);
+    gambarKalender();
+  });
+  q("mundur").addEventListener("click", (e) => { e.stopPropagation(); lihatBulan--; gambarKalender(); });
+  q("maju").addEventListener("click", (e) => { e.stopPropagation(); lihatBulan++; gambarKalender(); });
+  q("terapkan").addEventListener("click", () => terapkan(tDari, tSampai));
+  q("reset").addEventListener("click", () => terapkan("", ""));
+  akar.querySelectorAll("[data-rt-pintas]").forEach((btn) =>
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const [a, b] = pintas[+btn.dataset.rtPintas].rentang();
+      terapkan(a, b); // jalan pintas langsung berlaku, tanpa perlu Terapkan
+    }),
+  );
+  document.addEventListener("click", (e) => { if (terbuka() && !akar.contains(e.target)) tutup(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && terbuka()) tutup(); });
+
+  gambarPemicu();
+  return {
+    ambil: () => [dari, sampai],
+    setel: (a, b) => { [dari, sampai] = urut(a || "", b || ""); gambarPemicu(); },
+  };
+}

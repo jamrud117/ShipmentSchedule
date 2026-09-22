@@ -107,6 +107,20 @@ function frTotal(baris) {
   return baris.reduce((t, b) => t + (Number(b.nilai) || 0), 0);
 }
 
+/* JUMLAH AKHIR SATU PENGAJUAN -- angka yang sama dengan "Terbilang"
+   di surat cetaknya.
+
+   Format rinci (p.lines) -> grandTotal-nya (sudah termasuk PPN dan
+   sudah dipotong PPH 23). Format lama -> jumlah Bea Masuk + PPN + PPH,
+   atau Nominal kalau ketiganya kosong. Satu tempat, supaya Ringkasan
+   per Vendor tidak pernah menjumlahkan angka yang berbeda dari yang
+   tertulis di surat pengajuannya sendiri. */
+function frTotalPengajuan(p) {
+  const d = p || {};
+  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines).grandTotal;
+  return frTotal(frBarisRincian(d));
+}
+
 /* Angka pada surat: "Rp. 6.975.012". Nilai nol dicetak sebagai "-",
    seperti pada berkas rujukan — bukan "Rp. 0", yang terbaca seolah
    memang ada tagihan sebesar nol.
@@ -278,7 +292,7 @@ function buildFundRequestHtml(row) {
     </table>`}
 
     <div class="terbilang">Terbilang : ${escapeHtml(
-      terbilangRupiah(pakaiRinci ? fundLineTotals(p.lines).grandTotal : total),
+      terbilangRupiah(frTotalPengajuan(p)),
     )}</div>
 
     <div class="penutup">

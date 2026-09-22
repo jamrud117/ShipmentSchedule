@@ -733,3 +733,76 @@ table.fund-lines select {
 }
 .dn-edit-banner i { color: var(--s-warn); margin-right: 4px; }
 .dn-edit-banner b { font-family: var(--font-mono); }
+
+/* ------------------------------------------------------------------
+   RINGKASAN BIAYA PER VENDOR (Pengajuan Dana)
+------------------------------------------------------------------ */
+.docnum-history-aksi {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fsum-bilah {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-3);
+}
+.fsum-dasar {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+/* Tabel bisa digeser mendatar di layar sempit, bukan dipaksa pecah. */
+.fsum-wrap {
+  overflow-x: auto;
+}
+.fsum-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.fsum-tabel th,
+.fsum-tabel td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+/* Rata kiri untuk kolom teks -- kepala tabel bawaan rata tengah, dan
+   judul "Vendor" yang melayang di tengah tidak segaris dengan nama
+   vendor di bawahnya. Kolom angka ditimpa .fsum-angka (rata kanan). */
+.fsum-tabel thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--n-600);
+  background: var(--n-50);
+  white-space: nowrap;
+}
+.fsum-tabel tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--n-300);
+  border-bottom: 0;
+}
+/* Angka rata kanan & lebar digit seragam: kolom rupiah yang panjangnya
+   berbeda-beda tetap segaris satuan-puluhan-ratusannya. */
+/* Selektor sengaja dibuat setara .fsum-tabel thead th: tanpa itu aturan
+   rata kiri kepala tabel menang, dan judul "Total IDR" rata kiri
+   sementara angka di bawahnya rata kanan. */
+.fsum-tabel .fsum-angka {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fsum-vendor {
+  font-weight: 600;
+}
+.fsum-cust {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--n-500);
+  line-height: 1.5;
+}
+.fsum-cust-nilai {
+  font-variant-numeric: tabular-nums;
+}

@@ -1299,7 +1299,16 @@ async function renderDocNumHistory() {
           ${data
             .map((r) => {
               const p = r.payload || {};
+              /* PENGAJUAN DANA: kolom ini berjudul "Dibayarkan Kepada",
+                 jadi isinya VENDOR (payee) -- bukan Customer.
+
+                 Sejak pengajuan dana punya isian Customer sendiri,
+                 urutan cadangan di bawah (customer lebih dulu) akan
+                 menampilkan nama customer di bawah judul Vendor.
+                 Customer & Vendor dua pihak yang berbeda: yang satu
+                 menanggung biayanya, yang lain ditagih pembayarannya. */
               let ringkas =
+                (jenis.key === "fund" ? p.payee : "") ||
                 p.customer ||
                 p.receiver ||
                 p.payee ||
@@ -1557,6 +1566,9 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
+  // Ringkasan per Vendor hanya bermakna untuk Pengajuan Dana.
+  const btnRingkas = $("#btnFundSummary");
+  if (btnRingkas) btnRingkas.classList.toggle("d-none", active !== "fund");
 
   // Tanggal dokumen default = hari ini, biar tidak perlu diketik tiap kali.
   const panel = docNumPanelEl(active);
@@ -1664,6 +1676,8 @@ const DN_LABEL_FIELD = {
   // Isian Form Pengajuan Dana
   billingNo: "Nomor Billing",
   invoiceNo: "Nomor Invoice",
+  invoiceDate: "Tanggal Invoice",
+  invoiceDueDate: "Due Date Invoice",
   attachment: "Lampiran",
   feeBm: "Bea Masuk",
   feePpn: "PPN Import",
@@ -1719,6 +1733,8 @@ const DN_URUTAN_FIELD = [
   "vehicle",
   "packages",
   "payee",
+  "invoiceDate",
+  "invoiceDueDate",
   "expenseType",
   "letterType",
   "signer",
@@ -1726,6 +1742,12 @@ const DN_URUTAN_FIELD = [
   "subject",
   "notes",
 ];
+
+/* Isian bertipe tanggal: disimpan ISO ("2026-09-20"), ditampilkan
+   sebagai tanggal biasa di kotak Detail. */
+const DN_FIELD_TANGGAL = new Set([
+  "poDate", "sailingDate", "invoiceDate", "invoiceDueDate",
+]);
 
 /* Satu baris larik payload -> teks terbaca.
 
@@ -1792,6 +1814,7 @@ function tampilkanDetailNomor(id) {
     if (Array.isArray(nilai)) {
       nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
     }
+    if (DN_FIELD_TANGGAL.has(k) && nilai) nilai = fmtDate(nilai);
     if (String(nilai ?? "").trim() === "") return;
     /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
        telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada

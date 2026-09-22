@@ -2165,6 +2165,84 @@ t("tab sub-jenis digambar untuk jenis yang serinya terpisah, disembunyikan untuk
     w.renderDocNumSubTabs();
   }
 });
+console.log("\u2014 PENGAJUAN DANA: RINGKASAN PER VENDOR \u2014");
+const barisDana = (id, p, docDate) => ({ id, doc_type: "fund", doc_number: id, doc_date: docDate || "2026-09-01", payload: p });
+t("Customer & Vendor dua isian berbeda di form Pengajuan Dana", () => {
+  const panel = w.document.querySelector('[data-docnum-panel="fund"]');
+  ["payee", "customer", "invoiceDate", "invoiceDueDate"].forEach((k) => {
+    if (!panel.querySelector(`[data-dn="${k}"]`)) throw new Error("isian " + k + " tidak ada");
+  });
+  eq(panel.querySelector('[data-dn="invoiceDate"]').type, "date");
+  eq(panel.querySelector('[data-dn="invoiceDueDate"]').type, "date");
+  if (panel.querySelector('[data-dn="customer"]') === panel.querySelector('[data-dn="payee"]'))
+    throw new Error("Customer & Vendor memakai isian yang sama");
+});
+t("kolom 'Dibayarkan Kepada' di riwayat menampilkan VENDOR, bukan Customer", () => {
+  /* Urutan cadangan lama (customer || ... || payee) akan menampilkan
+     customer di bawah judul Vendor begitu pengajuan dana punya
+     isian Customer. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
+  if (!/\(jenis\.key === "fund" \? p\.payee : ""\) \|\|\s*p\.customer/.test(src))
+    throw new Error("riwayat pengajuan dana tidak mendahulukan payee");
+});
+t("ringkasan: dikelompokkan per VENDOR, jumlahnya = Terbilang di surat", () => {
+  const rows = [
+    barisDana("1", { payee: "FedEx", customer: "KUMHO", invoiceDate: "2026-09-05", currency: "IDR", amount: "1000000" }),
+    barisDana("2", { payee: "FEDEX ", customer: "DYNAMIC", invoiceDate: "2026-09-10", currency: "IDR", amount: "500000" }),
+    barisDana("3", { payee: "DHL", customer: "KUMHO", invoiceDate: "2026-09-12", currency: "USD", amount: "200" }),
+    barisDana("4", { payee: "FedEx", invoiceDate: "2026-08-30", currency: "IDR", amount: "999" }), // di luar rentang
+  ];
+  const h = w.fsumHitung(rows, "2026-09-01", "2026-09-30");
+  eq(h.jumlahPengajuan, 3, "pengajuan dalam rentang:");
+  eq(h.daftar.length, 2, "vendor (FedEx & FEDEX digabung):");
+  const fedex = h.daftar[0];
+  eq(fedex.jumlah, 2);
+  eq(fedex.total.IDR, 1500000, "total FedEx:");
+  eq([...fedex.customer.keys()].sort().join(","), "DYNAMIC,KUMHO", "customer di bawah FedEx:");
+  eq(h.daftar[1].total.USD, 200, "USD tidak dicampur ke IDR:");
+  eq(h.totalSemua.IDR, 1500000);
+  eq(h.mataUang.join(","), "IDR,USD", "IDR selalu kolom pertama:");
+  // Jumlah per pengajuan = frTotalPengajuan (yang juga dipakai Terbilang).
+  const rinci = { payee: "X", invoiceDate: "2026-09-02", currency: "IDR",
+    lines: [{ desc: "Freight", amount: "1000000", ppnRate: "1.1" }] };
+  const hr = w.fsumHitung([barisDana("5", rinci)], "", "");
+  eq(hr.daftar[0].total.IDR, w.frTotalPengajuan(rinci), "format rinci:");
+});
+t("ringkasan: patokan Tanggal Invoice, cadangan tanggal surat untuk data lama", () => {
+  const rows = [
+    // invoice Agustus, suratnya terbit September -> masuk AGUSTUS
+    barisDana("a", { payee: "V", invoiceDate: "2026-08-28", amount: "100" }, "2026-09-03"),
+    // pengajuan lama tanpa Tanggal Invoice -> pakai tanggal surat
+    barisDana("b", { payee: "V", amount: "50" }, "2026-08-15"),
+  ];
+  eq(w.fsumHitung(rows, "2026-08-01", "2026-08-31").jumlahPengajuan, 2, "Agustus:");
+  eq(w.fsumHitung(rows, "2026-09-01", "2026-09-30").jumlahPengajuan, 0, "September:");
+});
+t("pintas rentang: Bulan Ini & Bulan Lalu menutup bulan penuh", () => {
+  const [a, b] = baca("RENTANG_PINTAS").bulanIni();
+  const hariIni = new Date();
+  eq(a.slice(8), "01", "awal bulan ini:");
+  eq(Number(b.slice(8)), new Date(hariIni.getFullYear(), hariIni.getMonth() + 1, 0).getDate(), "akhir bulan ini:");
+  const [c, d] = baca("RENTANG_PINTAS").bulanLalu();
+  if (!(c < a && d < a)) throw new Error("bulan lalu tidak mendahului bulan ini");
+  eq(c.slice(8), "01");
+});
+t("pemilih rentang instans baru: jalan pintas langsung berlaku", () => {
+  const akar = w.document.createElement("div");
+  w.document.body.appendChild(akar);
+  let diterapkan = null;
+  const pem = w.buatRentangTanggal(akar, {
+    pintas: [{ label: "Bulan Ini", rentang: baca("RENTANG_PINTAS").bulanIni }],
+    onApply: (a, b) => { diterapkan = [a, b]; },
+  });
+  akar.querySelector("[data-rt-pintas]").click();
+  eq(JSON.stringify(diterapkan), JSON.stringify(baca("RENTANG_PINTAS").bulanIni()), "rentang terkirim:");
+  eq(JSON.stringify(pem.ambil()), JSON.stringify(baca("RENTANG_PINTAS").bulanIni()), "rentang tersimpan:");
+  if (!akar.querySelector("[data-rt-pintas]").classList.contains("is-active"))
+    throw new Error("tombol pintas yang aktif tidak menyala");
+  akar.remove();
+});
 t("Report berbahasa Inggris, dibuka sapaan, Export lebih dulu", () => {
   const simpan = { e: baca("data.export"), i: baca("data.import") };
   try {

@@ -1803,6 +1803,35 @@
                   >
                   <input type="text" class="form-control" data-dn="invoiceNo" />
                 </div>
+                <!-- Tanggal & jatuh tempo tagihan, plus customer yang
+                     menanggung biayanya. Tanggal Invoice-lah yang dipakai
+                     menyaring Ringkasan per Vendor -- bukan tanggal surat
+                     pengajuan, yang bisa terbit berminggu-minggu kemudian. -->
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.tanggal.invoice"
+                    >Tanggal Invoice</label
+                  >
+                  <input type="date" class="form-control" data-dn="invoiceDate" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.due.date.invoice"
+                    >Due Date Invoice</label
+                  >
+                  <input type="date" class="form-control" data-dn="invoiceDueDate" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" data-i18n="f.customer"
+                    >Customer</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="customer"
+                    list="dnFundCustomerList"
+                    autocomplete="off"
+                  />
+                  <datalist id="dnFundCustomerList"></datalist>
+                </div>
                 <div class="col-12">
                   <label class="form-label" data-i18n="f.rincian"
                     >Rincian</label
@@ -2133,14 +2162,24 @@
                   ><i class="bi bi-clock-history"></i> Nomor Terakhir
                   Terbit</span
                 >
-                <button
-                  type="button"
-                  class="btn btn-light btn-sm"
-                  id="btnDocNumRefresh"
-                  title="Muat Ulang"
-                >
-                  <i class="bi bi-arrow-clockwise"></i>
-                </button>
+                <div class="docnum-history-aksi">
+                  <button
+                    type="button"
+                    class="btn btn-light btn-sm d-none"
+                    id="btnFundSummary"
+                  >
+                    <i class="bi bi-bar-chart-line"></i>
+                    <span data-i18n="u.ringkasan.vendor">Ringkasan Vendor</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-light btn-sm"
+                    id="btnDocNumRefresh"
+                    title="Muat Ulang"
+                  >
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
+                </div>
               </div>
               <!-- Tab sub-jenis riwayat: tampil hanya untuk jenis dokumen
                    yang serinya memang terpisah (Surat Jalan Export/Lokal,
@@ -3276,6 +3315,32 @@
     </footer>
 
     <!-- ============ BULK EXPORT/IMPORT (Excel) ============ -->
+    <!-- RINGKASAN BIAYA PER VENDOR (Pengajuan Dana) -->
+    <div class="modal fade" id="fundSummaryModal" tabindex="-1">
+      <!-- Tanpa modal-dialog-scrollable: badan modal yang menggulung
+           memotong panel kalender (position:absolute) di tepinya.
+           Tanpa itu yang menggulung adalah modalnya sendiri. -->
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" data-i18n="u.ringkasan.biaya.per.vendor">
+              Ringkasan Biaya per Vendor
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="fsum-bilah">
+              <div id="fundSummaryRange"></div>
+              <span class="fsum-dasar" data-i18n="u.berdasarkan.tanggal.invoice"
+                >Berdasarkan Tanggal Invoice</span
+              >
+            </div>
+            <div id="fundSummaryBody"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="bulkModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -3639,6 +3704,7 @@
     <script src="js/features/cipl-vn-excel.js"></script>
     <script src="js/features/cipl-excel.js"></script>
     <script src="js/views/docnum-view.js"></script>
+    <script src="js/features/fund-summary.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/render/prediction-view.js"></script>
     <script src="js/features/prediction-ui.js"></script>
