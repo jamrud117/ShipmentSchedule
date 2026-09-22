@@ -714,15 +714,30 @@ const CIPL_SI_BARIS = [
   { k: "Special instruction :", tanpaTitikDua: true, garis: true },
 ];
 
-/* Nomor SI diambil dari ekor nomor invoice: "DDI-CRBM-VIII-042" -> 42.
+/* NOMOR SI = NOMOR URUT CIPL-nya sendiri.
 
-   Nol di depan dibuang karena penomoran SI ditulis apa adanya di
-   berkas aslinya ("NO. 03" untuk urutan ketiga). Kalau kolom No. SI
-   diisi manual, isian itu yang menang — nomor turunan hanya bawaan. */
+   Yang dipakai kolom `seq` pada baris nomor dokumen — urutan yang
+   diterbitkan database saat nomor invoice dibuat. Itulah "nomor urut
+   CIPL" yang dimaksud, dan ia benar untuk SEMUA bentuk nomor.
+
+   Ekor nomor invoice dipakai HANYA kalau seq tidak terbawa (baris
+   lama yang dimuat sebelum kolomnya ikut diambil). Ekor itu tidak
+   bisa jadi sumber utama: pola Kumho berakhir dengan TANGGAL —
+   "DDI - CRBM - IX - 051 - 20260924" — sehingga yang terbaca
+   20260924, bukan 51.
+
+   Kalau kolom No. SI diisi manual, isian itu yang menang; nomor
+   turunan ini hanya bawaan. */
 function ciplNoSiDariInvoice(nomor) {
   const m = /(\d+)\s*$/.exec(String(nomor || ""));
   if (!m) return "";
   return String(Number(m[1]));
+}
+
+function ciplNoSiBawaan(row) {
+  const seq = Number(row && row.seq);
+  if (isFinite(seq) && seq > 0) return String(seq);
+  return ciplNoSiDariInvoice(row && row.doc_number);
 }
 
 /* Nilai tiap baris dikumpulkan SEKALI di muka, lalu dipakai bersama
@@ -739,7 +754,7 @@ function ciplSiData(row, shipment, baris) {
 
   return {
     tujuan: p.siTo || (shipment && shipment.forwarder) || "",
-    no: p.siNo || ciplNoSiDariInvoice(row.doc_number),
+    no: p.siNo || ciplNoSiBawaan(row),
     shipper: CIPL_SHIPPER,
     consignee: consignee,
     barang: (baris.find((b) => b.item) || {}).item || "",

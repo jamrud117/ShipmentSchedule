@@ -16,7 +16,20 @@
 
 /* Baris penambal supaya blok TOTAL & tanda tangan selalu jatuh di
    tempat yang sama, berapa pun jumlah barangnya. */
-const CIPL_VN_MIN_BARIS = 14;
+
+/* TANGGAL BENTUK VIETNAM: "24/09/2026".
+
+   Punya sendiri, BUKAN ciplTanggal() yang dipakai lembar Korea
+   ("24 Sep 2026"). Keduanya mengikuti berkas rujukannya masing-masing,
+   dan lembar Korea tidak boleh ikut berubah karena lembar ini
+   dirapikan. */
+function ciplVnTanggal(iso) {
+  const d = parseLocalDate(iso);
+  if (!d) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
 
 /* MARKS: "C# : 8-1" .. "C# : 8-8".
 
@@ -96,7 +109,7 @@ function ciplVnDimensi(baris) {
    BAGIAN-BAGIAN LEMBAR
 ------------------------------------------------------------------ */
 
-function ciplVnBlokKiri(row, shipment) {
+function ciplVnBlokKiri(row, shipment, isPacking) {
   const p = row.payload || {};
   const prof = ciplProfil(p.customer || (shipment && shipment.party));
   const consigneeNama = p.customer || (shipment && shipment.party) || "";
@@ -104,22 +117,29 @@ function ciplVnBlokKiri(row, shipment) {
     ? ciplBarisTeks(p.consigneeAddress)
     : prof.lines || [];
 
-  const kotak = (judul, baris, tebalPertama) => `
+  /* Judul kotak tebal, ISINYA tidak -- termasuk nama consignee.
+     Berkas rujukan menulis seluruh isi kotak dengan huruf biasa. */
+  const kotak = (judul, baris) => `
     <div class="vn-box">
       <div class="vn-box-k">${escapeHtml(judul)}</div>
       ${baris
         .filter((x) => String(x || "").trim())
-        .map(
-          (x, i) =>
-            `<div class="vn-box-v${i === 0 && tebalPertama ? " vn-b" : ""}">${escapeHtml(x)}</div>`,
-        )
+        .map((x) => `<div class="vn-box-v">${escapeHtml(x)}</div>`)
         .join("")}
     </div>`;
 
+  /* LEMBAR PACKING LIST MENULIS SELLER TANPA BARIS E-MAIL.
+
+     Begitu adanya di berkas rujukan -- kotak Seller pada PL enam
+     baris, pada CI tujuh. Bedanya bukan salah ketik yang perlu
+     dirapikan: seluruh garis di bawahnya pada PL memang jatuh 15 px
+     lebih tinggi daripada CI, dan menyeragamkannya membuat lembar PL
+     tidak lagi sama dengan aslinya. Ekspor Excel-nya pun sudah
+     mengikuti aturan yang sama. */
   return (
-    kotak("Seller", CIPL_VN_SELLER, false) +
-    kotak("Shipper", CIPL_VN_SHIPPER, false) +
-    kotak("Consignee", [consigneeNama, ...consigneeAlamat], true)
+    kotak("Seller", isPacking ? CIPL_VN_SELLER.slice(0, 5) : CIPL_VN_SELLER) +
+    kotak("Shipper", CIPL_VN_SHIPPER) +
+    kotak("Consignee", [consigneeNama, ...consigneeAlamat])
   );
 }
 
@@ -146,16 +166,18 @@ const CIPL_VN_SHIPPER = [
 
 function ciplVnBlokKanan(row, shipment) {
   const p = row.payload || {};
-  const poSemua =
-    typeof poNoSemua === "function" ? poNoSemua(p) : [p.poNo].filter(Boolean);
 
   /* Keterangan lain: baris bertanda bintang, mengikuti berkas aslinya.
-     Yang kosong DILEWATI -- baris "*P/O NO. :" tanpa isi terbaca
-     seperti isian yang lupa diisi. */
+     Yang kosong DILEWATI -- baris "*PRICE TERM :" tanpa isi terbaca
+     seperti isian yang lupa diisi.
+
+     BARIS *P/O NO. DAN * HS-CODE SENGAJA TIDAK ADA di lembar Kumho.
+     Isiannya di form tetap dipakai -- nomor PO & HS Code masih
+     tersimpan dan ikut ke dokumen lain -- tapi lembar CIPL untuk
+     Kumho tidak mencantumkannya. */
   const lain = [
     ["*SHIPPER", "PT Dynamic Design Indonesia"],
     ["*COUNTRY OF ORIGIN", "INDONESIA"],
-    ["*P/O NO.", poSemua.join(", ")],
     ["*PACKING", p.packing || "WOODEN PACKING"],
     ["*PRICE TERM", p.termsDelivery || ""],
     ["*BANKER", "Citibank Korea Inc"],
@@ -163,34 +185,54 @@ function ciplVnBlokKanan(row, shipment) {
     ["", "(SWIFT : CITIKRSX)"],
     ["*ACCOUNT NO.", "1-089331-143-01"],
     ["", "DYNAMIC DESIGN CO.,LTD"],
-    ["* HS-CODE", p.hsCode || "8480.71 (Tire Mold)"],
   ].filter(([k, v]) => String(v || "").trim() || !k);
 
+  /* KOTAK TERMS JATUH DI KAKI KOLOM (margin-top:auto di CSS), sejajar
+     dengan baris Vessel/Flight di kolom kiri -- susunan yang sama
+     dengan berkas rujukan. Kalau ditaruh menempel di bawah daftar
+     keterangan, ia menggantung di tengah dan kolom kanannya
+     menyisakan ruang kosong di bawah. */
   return `
     <div class="vn-box vn-box-split">
       <div class="vn-box-k">Invoice No. and Date</div>
       <div class="vn-split">
-        <span class="vn-b">${escapeHtml(row.doc_number || "")}</span>
-        <span>${escapeHtml(ciplTanggal(row.doc_date))}</span>
+        <span>${escapeHtml(row.doc_number || "")}</span>
+        <span>${escapeHtml(ciplVnTanggal(row.doc_date))}</span>
       </div>
     </div>
     <div class="vn-box"><div class="vn-box-k">L/C No. and Date</div><div class="vn-box-v">&nbsp;</div></div>
-    <div class="vn-box">
+    <div class="vn-box vn-box-ref">
       <div class="vn-box-k">Notify(if other than consignee)</div>
       <div class="vn-box-v">${escapeHtml(p.notifyParty || "SAME AS CONSIGNEE")}</div>
       <div class="vn-box-k">Other references</div>
       ${lain
         .map(
           ([k, v]) =>
-            `<div class="vn-ref"><span class="vn-ref-k">${escapeHtml(k)}</span>${
-              k ? " : " : ""
-            }<span>${escapeHtml(v)}</span></div>`,
+            /* Tanpa label = baris LANJUTAN dari keterangan di atasnya
+               (alamat bank, nama pemilik rekening). Dijorokkan supaya
+               terbaca menyambung, bukan sebagai keterangan baru yang
+               labelnya lupa ditulis. */
+            k
+              ? `<div class="vn-ref">${escapeHtml(k)} : ${escapeHtml(v)}</div>`
+              : `<div class="vn-ref vn-ref-lanjut">${escapeHtml(v)}</div>`,
         )
         .join("")}
+    </div>
+    <div class="vn-box vn-box-terms">
+      <div class="vn-box-k">Terms of delivery and payment</div>
+      <div class="vn-box-v">${escapeHtml(p.termPayment || "T/T 60 days after B/L date")}</div>
     </div>`;
 }
 
-/* Blok pengangkutan: tiga baris kotak, mengikuti berkas aslinya. */
+/* Blok pengangkutan: DUA kolom, dan ia tinggal DI DALAM kolom kiri.
+
+   Berkas rujukan menaruh Departure date, Port of Loading/Discharge, dan
+   Vessel/Final Destination di bawah kotak Consignee -- selebar kolom
+   kiri saja, bukan selebar kertas. Yang di sebelah kanannya adalah
+   lanjutan kotak keterangan, lalu Terms of delivery and payment.
+
+   Label dan nilainya di BARIS TERPISAH (label rata kiri, nilai rata
+   tengah), sama seperti aslinya. */
 function ciplVnAngkutan(row, shipment) {
   const p = row.payload || {};
   const prof = ciplProfil(p.customer || (shipment && shipment.party));
@@ -204,62 +246,63 @@ function ciplVnAngkutan(row, shipment) {
   const kapal = p.carrier || (shipment && carrierNameFromShipment(shipment)) || "";
   const berangkat = p.sailingDate || (shipment ? shipment.etd : "") || "";
 
+  /* Label dan nilainya SATU SEL, bertumpuk -- bukan dua baris tabel.
+
+     Di berkas rujukan tidak ada garis di antara "Port of Loading" dan
+     "JAKARTA": keduanya isi sel yang sama. Memecahnya jadi dua baris
+     menambah garis yang tidak ada di sana, dan blok angkutannya jadi
+     lima baris bergaris padahal aslinya tiga. */
+  /* Nilai RATA KIRI, sejajar dengan labelnya -- bukan rata tengah.
+     "JAKARTA, INDONESIA" yang melayang di tengah sel sementara "Port
+     of Loading" menempel di tepi kiri terbaca seperti dua isian yang
+     tidak berhubungan. */
+  const sel = (label, nilai) =>
+    `<td><div class="vn-k">${escapeHtml(label)}</div>
+         <div class="vn-nilai">${escapeHtml(nilai)}</div></td>`;
+
   return `
   <table class="vn-ship">
     <tr>
-      <td class="vn-k" colspan="2">Departure date</td>
-      <td class="vn-c vn-b" colspan="2">${escapeHtml(ciplTanggal(berangkat))}</td>
+      <td class="vn-k">Departure date</td>
+      <td class="vn-c">${escapeHtml(ciplVnTanggal(berangkat))}</td>
     </tr>
     <tr>
-      <td class="vn-k">Port of Loading</td>
-      <td class="vn-k" colspan="3">Port of Discharge</td>
+      ${sel("Port of Loading", pol)}
+      ${sel("Port of Discharge", pod)}
     </tr>
-    <tr>
-      <td class="vn-c vn-b">${escapeHtml(pol)}</td>
-      <td class="vn-c vn-b" colspan="3">${escapeHtml(pod)}</td>
-    </tr>
-    <tr>
-      <td class="vn-k">Vessel/Flight</td>
-      <td class="vn-k">Final Destination</td>
-      <td class="vn-k" colspan="2">Terms of delivery and payment</td>
-    </tr>
-    <tr>
-      <td class="vn-c vn-b">${escapeHtml(kapal)}</td>
-      <td class="vn-c vn-b">${escapeHtml(dest)}</td>
-      <td class="vn-c" colspan="2">${escapeHtml(p.termsPayment || "T/T 60 days after B/L date")}</td>
+    <tr class="vn-ship-akhir">
+      ${sel("Vessel/Flight", kapal)}
+      ${sel("Final Destination", dest)}
     </tr>
   </table>`;
 }
 
-/* Blok penutup: penanda pengapalan di kiri, nomor booking di tengah,
-   kotak tanda tangan di kanan. */
-function ciplVnPenutup(row, shipment, total, satuan, isPacking) {
+/* Blok penutup: penanda pengapalan di kiri, kotak tanda tangan di
+   kanan.
+
+   Sekat tegak di antara keduanya JATUH DI TEMPAT YANG SAMA dengan
+   sekat kolom kepala (47%) -- di berkas rujukan garis itu satu garis
+   lurus dari atas sampai bawah lembar, bukan dua garis yang
+   kebetulan berdekatan.
+
+   Nomor booking (BK NO.) tidak lagi dicetak maupun disimpan. */
+function ciplVnPenutup(row, shipment) {
   const p = row.payload || {};
   const consignee = p.customer || (shipment && shipment.party) || "";
-  const bk = String(p.bookingNo || "").trim();
-
-  const nilaiTotal = isPacking
-    ? `<td class="vn-c vn-b">${escapeHtml(ciplAngka(total.netto, 0))}</td>
-       <td class="vn-c">KGS</td>
-       <td class="vn-c vn-b">${escapeHtml(ciplAngka(total.bruto, 0))}</td>
-       <td class="vn-c">KGS</td>`
-    : `<td class="vn-c vn-b" colspan="3">USD</td>
-       <td class="vn-c vn-b">${escapeHtml(ciplAngka(total.nilai, 2))}</td>`;
 
   return `
-  <table class="vn-akhir">
-    <tr>
-      <td class="vn-akhir-kiri" rowspan="2">
+  <div class="vn-akhir">
+    <div class="vn-akhir-kiri">
+      <div class="vn-akhir-marks">
         <div>Dynamic Design</div>
         <div>${escapeHtml(consignee)}</div>
         <div>${escapeHtml(row.doc_number || "")}</div>
-      </td>
-      <td class="vn-akhir-bk">${bk ? "BK NO. " + escapeHtml(bk) : "&nbsp;"}</td>
-    </tr>
-    <tr>
-      <td class="vn-akhir-ttd"><div class="vn-k">signed by</div><div class="vn-ttd-ruang"></div></td>
-    </tr>
-  </table>`;
+      </div>
+    </div>
+    <div class="vn-akhir-kanan">
+      <div class="vn-akhir-ttd">signed by</div>
+    </div>
+  </div>`;
 }
 
 /* ------------------------------------------------------------------
@@ -270,7 +313,6 @@ function ciplVnHalaman(row, shipment, isPacking) {
   const baris = ciplVnBaris(shipment);
   const total = ciplVnTotal(baris);
   const p = row.payload || {};
-  const satuan = baris.length ? baris[0].satuan : "";
   const judul = isPacking ? "PACKING LIST" : "COMMERCIAL INVOICE";
 
   /* Kolom berbeda antar lembar: Invoice memakai harga & jumlah uang,
@@ -283,10 +325,10 @@ function ciplVnHalaman(row, shipment, isPacking) {
 
   const selNilai = (b) =>
     isPacking
-      ? `<td class="vn-r">${escapeHtml(ciplAngka(b.netto, 0))}</td><td class="vn-satuan">KG</td>
-         <td class="vn-r">${escapeHtml(ciplAngka(b.bruto, 0))}</td><td class="vn-satuan">KG</td>`
-      : `<td class="vn-satuan">USD</td><td class="vn-r">${escapeHtml(ciplAngka(b.harga, 2))}</td>
-         <td class="vn-satuan">USD</td><td class="vn-r">${escapeHtml(ciplAngka(b.qty * b.harga, 2))}</td>`;
+      ? `<td class="vn-r">${escapeHtml(ciplAngka(b.netto, 0))}</td><td class="vn-satuan vn-lanjut">KG</td>
+         <td class="vn-r">${escapeHtml(ciplAngka(b.bruto, 0))}</td><td class="vn-satuan vn-lanjut">KG</td>`
+      : `<td class="vn-satuan">USD</td><td class="vn-r vn-lanjut">${escapeHtml(ciplAngka(b.harga, 2))}</td>
+         <td class="vn-satuan">USD</td><td class="vn-r vn-lanjut">${escapeHtml(ciplAngka(b.qty * b.harga, 2))}</td>`;
 
   const barisHtml = baris
     .map(
@@ -295,7 +337,7 @@ function ciplVnHalaman(row, shipment, isPacking) {
         <td class="vn-marks">${escapeHtml(b.marks)}</td>
         <td class="vn-desc">${escapeHtml(b.uraian)}</td>
         <td class="vn-r">${escapeHtml(ciplAngka(b.qty, 0))}</td>
-        <td class="vn-satuan">${escapeHtml(b.satuan)}</td>
+        <td class="vn-satuan vn-lanjut">${escapeHtml(b.satuan)}</td>
         ${selNilai(b)}
       </tr>`,
     )
@@ -306,34 +348,67 @@ function ciplVnHalaman(row, shipment, isPacking) {
         .map(
           (teks) =>
             `<tr><td class="vn-marks"></td><td class="vn-desc vn-dim">${escapeHtml(teks)}</td>
-             <td></td><td></td><td></td><td></td><td></td><td></td></tr>`,
+             <td></td><td class="vn-lanjut"></td><td></td><td class="vn-lanjut"></td>
+             <td></td><td class="vn-lanjut"></td></tr>`,
         )
         .join("")
     : "";
 
-  const kosong = Math.max(0, CIPL_VN_MIN_BARIS - baris.length - (isPacking ? 2 : 0));
-  const kosongHtml = Array.from(
-    { length: kosong },
-    () =>
-      `<tr class="vn-kosong"><td class="vn-marks">&nbsp;</td><td class="vn-desc"></td>
-       <td></td><td></td><td></td><td></td><td></td><td></td></tr>`,
-  ).join("");
+  /* SATU baris pengisi yang memanjang, bukan sejumlah baris kosong.
 
-  const totalNilai = isPacking
-    ? `<td class="vn-r vn-b">${escapeHtml(ciplAngka(total.netto, 0))}</td><td class="vn-satuan vn-b">KGS</td>
-       <td class="vn-r vn-b">${escapeHtml(ciplAngka(total.bruto, 0))}</td><td class="vn-satuan vn-b">KGS</td>`
-    : `<td class="vn-satuan vn-b">USD</td><td class="vn-r vn-b" colspan="3">${escapeHtml(ciplAngka(total.nilai, 2))}</td>`;
+     Dulu bidang barang dipenuhi 14 baris kosong supaya tingginya
+     lumayan tetap. Dengan bingkai yang tingginya sudah dipatok
+     setinggi rujukan, cara itu justru berbahaya: pengapalan dengan
+     banyak barang akan mendorong baris TOTAL keluar dari bingkai.
+     Baris ini menyerap SISA tinggi berapa pun sisanya -- termasuk nol. */
+  const kosongHtml = `<tr class="vn-isi"><td colspan="8"></td></tr>`;
+
+  /* BARIS TOTAL PUNYA TATA LETAKNYA SENDIRI.
+
+     Di berkas rujukan baris ini TIDAK mengikuti kolom tabel di
+     atasnya: "TOTAL :" berakhir di 37% lebar bingkai, angka jumlahnya
+     di 44%, dan "BOX WOODEN PACKING" mulai di 50% -- semuanya jatuh di
+     tengah kolom Goods Description, bukan di batas kolom mana pun.
+
+     Karena itu isinya satu sel melintang dengan pembagian sendiri,
+     bukan delapan sel mengikuti colgroup. Dipaksa mengikuti kolom,
+     "BOX WOODEN PACKING" tidak muat di jatahnya dan melimpah menempel
+     ke "USD" di sebelahnya. */
+  const totalEkor = isPacking
+    ? `<span class="vn-t-n1">${escapeHtml(ciplAngka(total.netto, 0))}</span>
+       <span class="vn-t-s1">KGS</span>
+       <span class="vn-t-n2">${escapeHtml(ciplAngka(total.bruto, 0))}</span>
+       <span class="vn-t-s2">KGS</span>`
+    : `<span class="vn-t-usd">USD</span>
+       <span class="vn-t-nilai">${escapeHtml(ciplAngka(total.nilai, 2))}</span>`;
 
   return `
-  <div class="vn-sheet">
+  <div class="vn-sheet${isPacking ? " vn-sheet--pl" : ""}">
    <div class="vn-bingkai">
     <div class="vn-judul">${escapeHtml(judul)}</div>
     <div class="vn-kepala">
-      <div class="vn-kepala-kiri">${ciplVnBlokKiri(row, shipment)}</div>
+      <div class="vn-kepala-kiri">
+        ${ciplVnBlokKiri(row, shipment, isPacking)}
+        ${ciplVnAngkutan(row, shipment)}
+      </div>
       <div class="vn-kepala-kanan">${ciplVnBlokKanan(row, shipment)}</div>
     </div>
-    ${ciplVnAngkutan(row, shipment)}
-    <table class="vn-items">
+    <table class="vn-items${isPacking ? " vn-items--pl" : ""}">
+      <!-- Lebar kolom lewat <colgroup>, bukan lewat sel pertama:
+           kolom angka dipakai bergantian oleh baris barang, baris
+           dimensi, dan baris TOTAL yang ber-colspan berbeda-beda --
+           menempelkan lebar pada sel membuat kolomnya berubah-ubah
+           mengikuti baris mana yang kebetulan ada. -->
+      <colgroup>
+        <col class="vn-marks" />
+        <col class="vn-desc" />
+        <col class="vn-qty-num" />
+        <col class="vn-qty-sat" />
+        <col class="vn-n1-sat" />
+        <col class="vn-n1-num" />
+        <col class="vn-n2-sat" />
+        <col class="vn-n2-num" />
+      </colgroup>
       <thead>
         <tr>
           <th class="vn-marks">Marks &amp; No. PKGS</th>
@@ -355,17 +430,21 @@ function ciplVnHalaman(row, shipment, isPacking) {
       <tfoot>
         <tr class="vn-total">
           <td class="vn-marks"></td>
-          <td class="vn-desc vn-r vn-b">TOTAL :</td>
-          <td class="vn-r vn-b">${escapeHtml(ciplAngka(total.qty, 0))}</td>
           <!-- Keterangan kemasan TIDAK boleh membungkus: sekali pecah
-               jadi tiga baris, tinggi baris TOTAL berubah dan seluruh
+               jadi dua baris, tinggi baris TOTAL berubah dan seluruh
                blok di bawahnya ikut bergeser turun. -->
-          <td class="vn-kemasan vn-b">BOX ${escapeHtml(p.packing || "WOODEN PACKING")}</td>
-          ${totalNilai}
+          <td colspan="7" class="vn-b">
+            <div class="vn-total-isi">
+              <span class="vn-t-label">TOTAL :</span>
+              <span class="vn-t-qty">${escapeHtml(ciplAngka(total.qty, 0))}</span>
+              <span class="vn-t-kemasan">BOX ${escapeHtml(p.packing || "WOODEN PACKING")}</span>
+              ${totalEkor}
+            </div>
+          </td>
         </tr>
       </tfoot>
     </table>
-    ${ciplVnPenutup(row, shipment, total, satuan, isPacking)}
+    ${ciplVnPenutup(row, shipment)}
    </div>
   </div>`;
 }
@@ -392,39 +471,126 @@ function ciplVnCss() {
   /* BINGKAI LUAR mengelilingi seluruh lembar, termasuk judulnya --
      sama seperti berkas aslinya. Dipasang pada pembungkus, bukan pada
      tiap blok, supaya sudutnya menyatu tanpa garis ganda. */
+  /* UKURAN & LETAK BINGKAI DIAMBIL DARI BERKAS RUJUKAN.
+
+     Diukur dari PDF Kumho pada 110 dpi: tepi atas bingkai di 64 px
+     (14,8 mm), tepi kiri 56 px (12,9 mm), tepi kanan 850 px
+     (196,3 mm), tepi bawah 1137 px (262,6 mm). Angka-angka itu yang
+     ditulis di sini -- jadi cetakannya jatuh di tempat yang sama di
+     atas kertas, bukan sekadar "mirip".
+
+     Tingginya DIPATOK, tidak mengikuti isi: pada berkas aslinya
+     bingkai selalu setinggi itu dan bidang barang yang kosong
+     memanjang sampai kaki lembar. Kalau tingginya mengikuti isi,
+     pengapalan dengan 3 barang menghasilkan lembar pendek yang
+     bentuknya sama sekali lain dari yang 8 barang. */
   .vn-sheet {
-    width: 100%;
-    padding: 10mm 12mm;
+    width: 210mm;
+    height: 297mm;
+    padding: 14.8mm 13.7mm 34.4mm 12.9mm;
     page-break-after: always;
     break-after: page;
   }
-  .vn-bingkai { border: 1px solid #000; }
+  /* Bingkai Packing List berakhir lebih tinggi daripada Commercial
+     Invoice (1098 px vs 1137 px pada rujukan) -- wilayah cetak kedua
+     lembar itu memang berbeda di berkas aslinya. */
+  .vn-sheet--pl { padding-bottom: 43.5mm; }
+  /* TEBAL GARIS MENGIKUTI PENGUKURAN BERKAS RUJUKAN (110 dpi):
+       bingkai luar  3 px -> 0.7 mm
+       garis tegas   2 px -> 0.45 mm  (pemisah blok utama & sekat kolom)
+       garis tipis   1 px -> 0.25 mm  (pemisah antar baris)
+
+     Ditulis dalam MILIMETER, bukan px atau pt. px layar bukan px
+     printer, dan 1pt (1,333 px CSS) jatuh tepat di tengah antara 1
+     dan 2 piksel pada 110 dpi -- pembulatannya lalu berbeda-beda
+     antar sisi, jadi garis yang seharusnya sama tebal tampil belang. */
+  .vn-bingkai {
+    border: 0.7mm solid #000;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
   .vn-sheet:last-child { page-break-after: auto; break-after: auto; }
 
+  /* Judul: tinggi kotaknya 38 px (8,8 mm) pada rujukan, hurufnya 24pt
+     -- sama dengan berkas Excel aslinya. */
   .vn-judul {
-    border-bottom: 1px solid #000;
+    border-bottom: 0.25mm solid #000;
     text-align: center;
-    font-size: 19pt;
+    font-size: 24pt;
     font-weight: 700;
-    padding: 1.5mm 0;
+    line-height: 8.35mm;
     letter-spacing: 0.5px;
   }
 
   /* Kepala: dua kolom sejajar, tepi luarnya menyatu dengan judul &
      tabel di bawahnya -- karena itu border dipasang per sisi, bukan
      keliling, supaya tidak ada garis ganda di pertemuannya. */
-  .vn-kepala { display: flex; border-bottom: 1px solid #000; }
-  .vn-kepala-kiri { width: 47%; border-right: 1px solid #000; }
-  .vn-kepala-kanan { width: 53%; }
-  .vn-box { border-bottom: 1px solid #000; padding: 0.6mm 1.2mm; }
-  .vn-kepala-kiri .vn-box:last-child,
-  .vn-kepala-kanan .vn-box:last-child { border-bottom: 0; }
-  .vn-box-k { font-weight: 700; font-size: 7.5pt; }
-  .vn-box-v { font-size: 7.5pt; line-height: 1.25; }
+  /* KEDUA KOLOM SAMA TINGGI, dan itu yang membuat kotak Terms di kanan
+     sejajar dengan baris Vessel/Flight di kiri: kolom kanan adalah
+     flex tegak, kotak terakhirnya didorong ke kaki lewat margin-top
+     auto. Menyetel tingginya dengan angka tetap akan meleset begitu
+     alamat consignee bertambah satu baris. */
+  /* SEKAT KOLOM DI 51,1%, bukan di tengah.
+
+     Diukur dari rujukan: bingkai membentang x=56..849 (793 px) dan
+     sekatnya di x=462 -> (462-56)/793 = 51,1%. Kolom kiri memang
+     lebih lebar daripada kanan, dan menaruhnya di 47% membuat seluruh
+     kotak Seller/Shipper/Consignee menyempit 3 cm dari aslinya.
+
+     Tebalnya 0,5 mm: pada rujukan ia setebal bingkai luar (2 px),
+     bukan setipis pemisah baris. */
+  .vn-kepala { display: flex; border-bottom: 0.25mm solid #000; }
+  .vn-kepala-kiri {
+    width: 51.1%;
+    border-right: 0.5mm solid #000;
+    display: flex;
+    flex-direction: column;
+  }
+  .vn-kepala-kanan { width: 48.9%; display: flex; flex-direction: column; }
+  .vn-box { border-bottom: 0.25mm solid #000; padding: 0 1.2mm; }
+  /* Pemisah Shipper|Consignee & kaki blok consignee lebih tegas
+     (2 px pada rujukan) daripada pemisah Seller|Shipper (1 px). */
+  .vn-kepala-kiri .vn-box:nth-child(2),
+  .vn-kepala-kiri .vn-box:nth-child(3) { border-bottom-width: 0.5mm; }
+  .vn-kepala-kiri > :last-child,
+  .vn-kepala-kanan > :last-child { border-bottom: 0; }
+  /* Kotak keterangan tidak bergaris bawah: pemisahnya garis ATAS
+     kotak Terms -- satu garis, bukan dua yang berhimpit. */
+  .vn-box-ref { border-bottom: 0; }
+  .vn-box-terms { margin-top: auto; border-top: 0.25mm solid #000; }
+  /* SATU IRAMA BARIS untuk seluruh blok kepala.
+
+     Berkas aslinya lembar Excel: tiap baris teks setinggi satu baris
+     sel, dan garis pemisahnya jatuh persis di batas baris. Tanpa
+     irama yang sama, garis-garis itu meleset beberapa milimeter dari
+     tempatnya di rujukan walaupun urutannya benar. */
+  /* Tinggi baris diukur dari rujukan: kotak Seller memakai baris yang
+     sedikit lebih tinggi (18,9 px) daripada blok lainnya (16,5 px) --
+     begitu adanya di berkas aslinya, dan menyeragamkannya membuat
+     seluruh garis di bawahnya meleset beberapa milimeter. */
+  .vn-box-k,
+  .vn-box-v,
+  .vn-ref,
+  .vn-split { line-height: 3.76mm; }
+  .vn-kepala-kiri .vn-box:first-child .vn-box-k,
+  .vn-kepala-kiri .vn-box:first-child .vn-box-v { line-height: 4.3mm; }
+  /* HANYA Seller/Shipper/Consignee yang ditebalkan.
+
+     Di berkas rujukan label lain -- "Invoice No. and Date", "Notify",
+     "Other references", "Port of Loading", "Terms of delivery and
+     payment", termasuk baris kepala tabel barang -- semuanya huruf
+     biasa. Menebalkan semuanya membuat lembar ini terlihat jauh lebih
+     "gelap" daripada aslinya, dan tiga judul kotak yang memang
+     seharusnya menonjol jadi tidak menonjol lagi. */
+  .vn-box-k { font-weight: 400; font-size: 7.5pt; }
+  .vn-kepala-kiri .vn-box-k { font-weight: 700; }
+  .vn-box-v { font-size: 7.5pt; }
   .vn-b { font-weight: 700; }
   .vn-split { display: flex; justify-content: space-between; font-size: 7.5pt; }
-  .vn-ref { font-size: 7.5pt; line-height: 1.25; }
-  .vn-ref-k { display: inline-block; min-width: 26mm; }
+  .vn-ref { font-size: 7.5pt; }
+  /* Baris lanjutan menjorok sejajar dengan nilai di atasnya. */
+  .vn-ref-lanjut { padding-left: 18mm; }
 
   /* Tabel di dalam bingkai: tepi kiri & kanannya dilepas supaya
      menyatu dengan bingkai, bukan menggambar garis kedua di sebelahnya. */
@@ -437,52 +603,200 @@ function ciplVnCss() {
   .vn-akhir tr > td:last-child { border-right: 0; }
   .vn-akhir tr:last-child td { border-bottom: 0; }
 
+  /* Tabel angkutan berada DI DALAM kolom kiri, jadi lebarnya mengikuti
+     kolom itu -- bukan lebar kertas. Baris terakhirnya tidak menggambar
+     garis bawah: yang menutup blok kepala adalah .vn-kepala sendiri. */
   .vn-ship { width: 100%; border-collapse: collapse; }
-  .vn-ship td { border: 1px solid #000; padding: 0.5mm 1.2mm; font-size: 7.5pt; }
-  .vn-k { font-weight: 700; font-size: 7.5pt; }
+  .vn-ship td {
+    border: 0.25mm solid #000;
+    padding: 0 1.2mm;
+    font-size: 7.5pt;
+    width: 50%;
+    line-height: 3.76mm;
+  }
+  /* Nilai Port/Vessel: rata kiri, sedikit menjorok dari labelnya. */
+  .vn-nilai { padding-left: 3mm; }
+  .vn-ship tr > td:first-child { border-left: 0; }
+  .vn-ship tr > td:last-child { border-right: 0; }
+  .vn-ship .vn-ship-akhir td { border-bottom: 0; }
+  /* Label blok angkutan huruf biasa -- lihat alasannya di .vn-box-k. */
+  .vn-k { font-weight: 400; font-size: 7.5pt; }
   .vn-c { text-align: center; }
   .vn-r { text-align: right; }
 
-  .vn-items { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  /* TABEL BARANG — GARIS DIPASANG, BUKAN DIMATIKAN.
+
+     Semula tiap sel bergaris penuh lalu sebagiannya disembunyikan
+     dengan warna transparan. Cara itu tidak bisa dipakai di sini:
+     warna bukan gaya garis, jadi sel tetangga tetap membawa garis
+     solid -- dan pada border-collapse, solid SELALU menang atas
+     dotted. Sekat bertitik yang diminta berkas rujukan tidak akan
+     pernah terlihat.
+
+     Jadi bawaannya nol garis, dan yang perlu saja dipasang:
+     kepala (atas/bawah), sekat kepala (bertitik), dan garis di atas
+     TOTAL (bertitik). Badan tabel memang sepenuhnya kosong -- sama
+     seperti aslinya. */
+  /* Tabel barang MEMANJANG mengisi sisa tinggi bingkai (flex: 1),
+     dengan satu baris pengisi di ekor badan tabel yang menyerap
+     kelebihannya. Itulah yang menahan baris TOTAL & blok penutup
+     tetap di kaki lembar berapa pun jumlah barangnya -- sama seperti
+     berkas aslinya. */
+  .vn-items {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    flex: 1 1 auto;
+    height: 1px; /* dasar flex; tinggi sebenarnya dari flex-grow */
+  }
   .vn-items th, .vn-items td {
-    border: 1px solid #000;
+    border: 0;
     padding: 0.4mm 1.2mm;
     font-size: 7.5pt;
     vertical-align: top;
   }
-  .vn-items th { text-align: center; font-weight: 700; }
-  /* Baris barang tanpa garis mendatar di dalamnya: daftar pos terbaca
-     sebagai satu bidang, sama seperti berkas aslinya. Garis TEGAK
-     tetap utuh -- disembunyikan lewat warna, bukan lebar 0, supaya
-     tidak kalah saat batasnya diperebutkan border-collapse. */
-  .vn-items tbody td {
-    border-top-color: transparent;
-    border-bottom-color: transparent;
+  /* TANPA garis atas: yang menutup blok kepala adalah border-bottom
+     milik .vn-kepala. Dua garis bersebelahan menghasilkan garis tebal
+     ganda yang tidak ada di rujukan. */
+  .vn-items th {
+    text-align: center;
+    font-weight: 400;
+    border-bottom: 0.5mm solid #000;
+    height: 3.9mm;
   }
-  .vn-items tbody tr:first-child td { border-top-color: #000; }
-  .vn-items tfoot td { border-top: 1.2px solid #000; }
+  .vn-isi td { height: 100%; }
+  .vn-items thead th + th { border-left: 0.18mm dotted #000; }
+  /* 0,18 mm (=0,5pt): ukuran titik yang digambar peramban MENGIKUTI
+     tebal garisnya -- makin tipis garisnya, makin kecil titiknya dan
+     makin rapat jaraknya. Ini batas praktis; di bawah ini sebagian
+     peramban membulatkannya kembali ke satu piksel dan titiknya justru
+     menyatu jadi garis penuh. */
+  .vn-items tfoot td { border-top: 0.18mm dotted #000; }
   /* LEBAR KOLOM DIJATAH DARI LEBAR KERTAS.
 
      Isi lembar = 210mm - 24mm padding = 186mm. Jatahnya:
      Marks 22 + Desc 56 + Qty 12 + Satuan 12 + (14+18)x2 = 186mm.
      Tanpa jatah tetap, satu uraian panjang melebarkan kolomnya dan
      mendorong kolom angka sampai membungkus. */
-  .vn-marks { width: 22mm; text-align: center; white-space: nowrap; }
-  .vn-desc { width: 56mm; }
-  .vn-satuan { width: 12mm; text-align: center; white-space: nowrap; }
-  .vn-items .vn-r { width: 18mm; white-space: nowrap; }
+  /* Kolom Quantity, Unit Price & Amount masing-masing dibagi DUA sel
+     (angka + satuannya) supaya angkanya sejajar. Pembagian itu alat
+     bantu perataan, bukan kolom: kepalanya tetap satu sel ber-colspan,
+     dan badan tabelnya memang tidak bergaris sama sekali. */
+
+  /* Marks dilebarkan: "Marks & No. PKGS" terpotong pada 22mm dan
+     hurufnya menabrak garis kolom di sebelahnya. */
+  /* LEBAR KOLOM DIUKUR DARI BERKAS RUJUKAN.
+
+     Sekat kolom pada lembar CI jatuh di 22,9% / 62,7% / 72,3% / 85,2%
+     dari lebar bingkai; pada lembar PL di 22,9% / 61,4% / 74,1% /
+     89,3% (kolomnya berbeda: Net Wt. & Gross Wt., bukan Unit Price &
+     Amount). Persentase, bukan milimeter: lebar bingkainya sendiri
+     sudah dipatok, jadi persen jatuh di tempat yang sama sekaligus
+     ikut benar kalau kertasnya suatu saat bukan A4.
+
+     Tiap kolom angka dibagi DUA sel (satuan + angkanya) supaya
+     angkanya sejajar; jumlah keduanya = lebar kolom pada rujukan. */
+  .vn-marks { width: 22.9%; text-align: center; white-space: nowrap; }
+  .vn-desc { width: 39.8%; }
+  .vn-items { --vn-sat: 5.3%; --vn-num: 4.3%; }
+  .vn-satuan { width: var(--vn-sat); text-align: center; white-space: nowrap; }
+  .vn-items .vn-r { width: var(--vn-num); white-space: nowrap; }
+  /* Kolom Quantity: angka lalu satuannya. */
+  .vn-items col.vn-qty-num { width: 4.3%; }
+  .vn-items col.vn-qty-sat { width: 5.3%; }
+  .vn-items col.vn-n1-sat { width: 4.5%; }
+  .vn-items col.vn-n1-num { width: 8.4%; }
+  .vn-items col.vn-n2-sat { width: 4.5%; }
+  .vn-items col.vn-n2-num { width: 10.3%; }
+  /* Lembar Packing List: tiga kolom terakhir berbeda lebarnya. */
+  .vn-items--pl col.vn-qty-num { width: 6%; }
+  .vn-items--pl col.vn-qty-sat { width: 6.7%; }
+  .vn-items--pl col.vn-n1-sat { width: 9%; }
+  .vn-items--pl col.vn-n1-num { width: 6.2%; }
+  .vn-items--pl col.vn-n2-sat { width: 6%; }
+  .vn-items--pl col.vn-n2-num { width: 4.7%; }
   .vn-items th.vn-c { white-space: nowrap; }
   .vn-nowrap { white-space: nowrap; }
   /* Kolom keterangan kemasan pada baris TOTAL: melebar dari kolom
      satuan + harga, jadi "BOX WOODEN PACKING" muat sebaris. */
-  .vn-kemasan { white-space: nowrap; text-align: left; }
-  .vn-info td { border-top-color: #000; }
+  /* Jatah tiap bagian baris TOTAL, dihitung dari letaknya di berkas
+     rujukan (persen di bawah relatif terhadap sel, yang mulai di 22,9%
+     lebar bingkai). Lembar PL berbeda: ekornya empat bagian (netto,
+     KGS, bruto, KGS), bukan dua. */
+  /* display:flex dipasang pada DIV di dalam sel, bukan pada <td>-nya.
+     <td> yang diubah jadi flex keluar dari perhitungan lebar tabel,
+     dan seluruh baris TOTAL menciut mengikuti isinya. */
+  .vn-total-isi { display: flex; white-space: nowrap; }
+  .vn-t-label { width: 18.8%; text-align: right; }
+  .vn-t-qty { width: 10.5%; text-align: right; }
+  .vn-t-kemasan { width: 51.4%; padding-left: 8%; }
+  .vn-t-usd { width: 6.4%; text-align: center; }
+  .vn-t-nilai { width: 12.9%; text-align: right; }
+  .vn-items--pl .vn-t-kemasan { width: 36.4%; }
+  .vn-t-n1 { width: 10.4%; text-align: right; }
+  .vn-t-s1 { width: 11%; padding-left: 2.5%; }
+  .vn-t-n2 { width: 7.6%; text-align: right; }
+  .vn-t-s2 { width: 5.3%; padding-left: 1.5%; }
+  /* Baris "#Description Info" bagian dari bidang kosong di bawah
+     kepala, bukan baris tabel tersendiri. */
+  .vn-info td { border: 0; }
   .vn-dim { font-size: 7pt; }
 
-  .vn-akhir { width: 100%; border-collapse: collapse; }
-  .vn-akhir td { border: 1px solid #000; padding: 1mm 1.2mm; font-size: 7.5pt; }
-  .vn-akhir-kiri { width: 47%; text-align: center; vertical-align: top; }
-  .vn-akhir-bk { font-weight: 700; padding-bottom: 3mm !important; }
-  .vn-ttd-ruang { height: 14mm; }
+  /* BLOK PENUTUP: dua kolom dengan sekat di 47% -- titik yang sama
+     dengan sekat blok kepala, jadi garisnya menyambung lurus dari
+     atas lembar sampai bawah. */
+  /* Tinggi blok penutup diambil dari rujukan: baris TOTAL berakhir di
+     935 px dan bingkai bawah di 1137 px -> 202 px = 46,6 mm. */
+  .vn-akhir { display: flex; height: 46.6mm; }
+  /* TANPA sekat tegak di sini.
+
+     Garis tegak yang memanjang dari baris TOTAL sampai kaki lembar
+     tidak memisahkan apa pun: di atas kotak tanda tangan kedua sisinya
+     sama-sama kosong. Yang perlu bergaris hanya kotak tanda tangannya
+     sendiri -- sekat tegaknya dipasang di .vn-akhir-ttd, jadi
+     panjangnya persis setinggi kotak itu. */
+  .vn-akhir-kiri {
+    width: 51.1%;
+    padding: 1mm 0;
+    font-size: 7.5pt;
+  }
+  /* PENANDA PENGAPALAN SELEBAR KOLOM MARKS, bukan selebar kolom kiri.
+
+     Diukur dari rujukan: teksnya jatuh di 2,4%-21,9% lebar bingkai --
+     seluruhnya di dalam kolom "Marks & No. PKGS" (0-22,9%), persis di
+     bawah penanda koli yang didaftarnya. Dibentangkan selebar kolom
+     kiri (51,1%), teksnya bergeser ke kanan sampai menggantung di
+     tengah-tengah kolom Goods Description dan tidak lagi segaris
+     dengan apa pun.
+
+     Lebarnya 44,8% = 22,9/51,1 -- bagian kolom Marks terhadap kolom
+     kiri tempatnya bernaung. */
+  .vn-akhir-marks {
+    width: 44.8%;
+    text-align: center;
+    /* 9pt, lebih besar daripada isi lembar lainnya (7,5pt) -- diukur
+       dari rujukan: tinggi barisnya 13 px lawan 11 px. Begitu adanya
+       di berkas aslinya; penanda pengapalan memang ditulis lebih besar
+       supaya terbaca dari jarak baca peti. */
+    font-size: 9pt;
+    line-height: 4.2mm;
+  }
+  .vn-akhir-kanan { width: 48.9%; display: flex; flex-direction: column; }
+  /* Kotak tanda tangan menempel ke kaki lembar, dan TINGGINYA dipatok
+     mengikuti rujukan (garis atasnya di 1006 px, bingkai bawah di
+     1137 px -> 131 px = 30,2 mm). Dengan tinggi mengikuti isi, letak
+     garis atasnya berubah-ubah mengikuti panjang penanda pengapalan
+     di kolom sebelah. */
+  /* Kotak tanda tangan: bergaris ATAS dan KIRI, menempel ke kaki
+     lembar. Garis kirinya jatuh tepat di sekat kolom (51,1%) -- itulah
+     satu-satunya bagian sekat tegak yang tersisa di blok penutup. */
+  .vn-akhir-ttd {
+    margin-top: auto;
+    height: 30.2mm;
+    border-top: 0.5mm solid #000;
+    border-left: 0.5mm solid #000;
+    padding: 0.4mm 1.2mm;
+    font-size: 7.5pt;
+  }
   `;
 }

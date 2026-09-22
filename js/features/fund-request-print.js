@@ -152,16 +152,39 @@ function frBarisRujukan(p, kolom) {
 }
 
 function frKotakTtd(label, nama, jabatan) {
+  /* Nama & jabatan dibungkus SATU blok (.ttd-blok), bukan dua baris
+     lepas. Blok itu menempel di tepi kiri selnya -- sejajar dengan
+     labelnya ("Made by ;") -- sementara di DALAM blok keduanya rata
+     tengah satu sama lain, jadi jabatan tetap duduk di tengah nama.
+
+     Merata-tengahkan keduanya terhadap SEL membuat nama melayang jauh
+     dari labelnya: label di tepi kiri, nama di tengah kolom. */
   return `<td class="ttd-cell">
     <div class="ttd-label">${escapeHtml(label)}</div>
     <div class="ttd-ruang"></div>
-    <div class="ttd-nama">${escapeHtml(nama || "")}</div>
-    <div class="ttd-jabatan">${escapeHtml(jabatan || "")}</div>
+    <div class="ttd-blok">
+      <div class="ttd-nama"><span>${escapeHtml(nama || "")}</span></div>
+      <div class="ttd-jabatan">${escapeHtml(jabatan || "")}</div>
+    </div>
   </td>`;
 }
 
 /* ---------- lembar ---------- */
 
+/* TIGA PENANDA TANGAN, bukan empat.
+
+   Kotak persetujuan kedua dihapus karena jalur persetujuannya memang
+   sudah tidak lewat sana lagi. Pengajuan LAMA yang terlanjur menyimpan
+   isian itu TIDAK ikut tercetak: kotak yang tidak akan ditandatangani
+   siapa pun lebih menyesatkan daripada tidak ada sama sekali.
+
+   Lebarnya dibagi rata bertiga (33,33% lewat table-layout: fixed di
+   CSS), jadi jarak antar tanda tangan sama besar.
+
+   Keterangan ini sengaja komentar JS, bukan komentar HTML di dalam
+   templat: apa pun yang ditulis di dalam templat ikut terbawa ke
+   sumber halaman cetak -- termasuk nama jabatan yang justru sudah
+   tidak dipakai lagi, yang lalu muncul lagi saat orang mencarinya. */
 function buildFundRequestHtml(row) {
   const p = row.payload || {};
   /* DUA BENTUK TABEL.
@@ -218,10 +241,12 @@ function buildFundRequestHtml(row) {
       <div>안녕하세요.</div>
     </div>
 
+    <!-- SATU BARIS SAJA. "Sincerely," sebagai pembuka memang keliru
+         (itu salam penutup), dan Subject-nya sudah tertulis utuh di
+         blok No Surat di atas -- mengulangnya di sini cuma menambah
+         satu baris yang dibaca dua kali. -->
     <div class="pembuka">
-      <div>Sincerely,</div>
-      <div>${escapeHtml(p.notes || "")}</div>
-      <div>The details are as follows :</div>
+      <div>Please find the details below :</div>
     </div>
 
     ${pakaiRinci ? frTabelRinci(p, mataUang) : `
@@ -266,9 +291,8 @@ function buildFundRequestHtml(row) {
     <table class="ttd">
       <tr>
         ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
-        ${frKotakTtd("Checked By ;", p.checkedByName, p.checkedByRole || "Accounting")}
-        ${frKotakTtd("Approved by :", p.approver1Name, p.approver1Role || "Chief Financial Officer")}
-        ${frKotakTtd("Approved by :", p.approver2Name, p.approver2Role || "President Director")}
+        ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
+        ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Nara", p.approver1Role || "Chief Marketing Officer")}
       </tr>
     </table>
 
@@ -544,12 +568,22 @@ function fundRequestCss() {
   .penutup { margin-bottom: 6mm; }
   .tempat-tanggal { margin-bottom: 7mm; }
 
-  .ttd { width: 100%; border-collapse: collapse; }
-  .ttd-cell { width: 25%; vertical-align: top; }
+  /* table-layout: fixed supaya ketiga kolom benar-benar SAMA LEBAR.
+     Tanpa itu lebarnya mengikuti isi, dan kotak dengan jabatan
+     terpanjang ("Chief Marketing Officer") merebut ruang dari
+     tetangganya -- jaraknya jadi tidak rata. */
+  .ttd { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .ttd-cell { width: 33.33%; vertical-align: top; }
   .ttd-label { margin-bottom: 1.5mm; }
   /* Ruang tanda tangan basah. */
   .ttd-ruang { height: 24mm; }
-  .ttd-nama { font-weight: 700; text-decoration: underline; }
+  /* Blok nama+jabatan SEJAJAR DENGAN LABELNYA (rata kiri sel), dan di
+     dalamnya keduanya rata tengah satu sama lain. Garis bawah ikut
+     selebar namanya saja -- garis yang memanjang sampai tepi kolom
+     terbaca seperti garis tabel, bukan garis tanda tangan. */
+  .ttd-blok { display: inline-block; text-align: center; }
+  .ttd-nama { font-weight: 700; }
+  .ttd-nama span { text-decoration: underline; }
   .ttd-jabatan { font-size: 9pt; }
 
   .catatan { margin-top: 9mm; font-size: 8.5pt; }

@@ -106,6 +106,103 @@ function preserveDimensionsForCeisa(newItems, oldItems, src) {
   });
 }
 
+/* NAMA BARANG YANG SUDAH DIKETIK SENDIRI TIDAK DITIMPA IMPOR CEISA.
+
+   Berkas CEISA menulis nama barang sebagai SATU teks gabungan; di
+   aplikasi ini nama itu terbagi empat kolom (Uraian, Pattern, Size,
+   Mold No) yang dipakai membentuk nama di kartu, CIPL, dan template
+   salinan. Tidak ada aturan yang bisa memecah teks CEISA jadi empat
+   kolom itu -- sudah dicoba dan selalu meleset, karena susunannya
+   bergantung kebiasaan penulis berkas.
+
+   Jadi arahnya dibalik: yang sudah diketik orang DIPERTAHANKAN, dan
+   teks dari CEISA hanya dipakai untuk baris yang keempat kolomnya
+   masih kosong. Impor CEISA memang dilakukan untuk mengambil angka
+   kepabeanannya (HS, nilai, berat, kemasan) -- bukan namanya.
+
+   PENCOCOKANNYA MENURUT URUTAN, bukan nama. Nama justru yang berbeda
+   antara kedua sisi -- itu seluruh alasan fungsi ini ada -- jadi
+   mencocokkan lewat nama pasti gagal. Urutan baris dipakai hanya
+   kalau jumlah barangnya sama persis; kalau berbeda, dicocokkan lewat
+   HS Code sekali pakai, dan baris yang tak berpasangan memakai nama
+   dari berkas apa adanya.
+
+   Khusus Export: di Import keempat kolom itu tidak ada. */
+const ITEM_NAMA_FIELD = ["namaBarang", "pattern", "size", "moldNo"];
+
+function punyaNamaManual(it) {
+  return ITEM_NAMA_FIELD.some((k) => String((it && it[k]) || "").trim());
+}
+
+function salinNama(baru, lama) {
+  const out = Object.assign({}, baru);
+  ITEM_NAMA_FIELD.forEach((k) => {
+    out[k] = lama[k] || "";
+  });
+  return out;
+}
+
+/* Baris yang BENAR-BENAR dipakai, bukan baris kosong di ekor tabel.
+
+   Tabel barang selalu menyisakan satu baris kosong di bawah (ditambah
+   sendiri begitu baris terakhir mulai diisi). Baris itu bagian dari
+   cara mengisi, bukan barang -- tapi ia tetap masuk hitungan panjang
+   daftar, dan dulu itu yang menggagalkan pencocokan menurut urutan:
+   2 barang terisi + 1 baris kosong tidak pernah sama dengan 2 barang
+   dari berkas CEISA. */
+function barisBarangTerisi(it) {
+  if (!it) return false;
+  if (punyaNamaManual(it)) return true;
+  if (String(it.hsCode || "").trim()) return true;
+  return ["qty", "harga", "netto", "bruto"].some(
+    (k) => parseLooseNumber(it[k]) > 0,
+  );
+}
+
+function preserveNamesForCeisa(newItems, oldItems, src) {
+  if (src !== "excel" || activeMode !== "export") return { items: newItems, kept: 0 };
+  const lamaIsi = (oldItems || []).filter(barisBarangTerisi);
+  const lama = lamaIsi.filter(punyaNamaManual);
+  if (!lama.length || !newItems.length) return { items: newItems, kept: 0 };
+
+  let kept = 0;
+
+  /* URUTAN LEBIH DULU, dan tanpa syarat HS Code.
+
+     Orang mengimpor CEISA justru UNTUK mengambil HS Code, nilai, dan
+     beratnya -- jadi baris yang baru saja diketik namanya biasanya
+     BELUM ber-HS Code sama sekali. Pencocokan lewat HS Code karena itu
+     tidak pernah kena pada kasus yang paling sering terjadi, dan nama
+     yang sudah diketik ikut tertimpa. Urutan barislah yang bisa
+     diandalkan: berkas CEISA disusun dari invoice yang sama. */
+  if (lamaIsi.length === newItems.length) {
+    return {
+      items: newItems.map((it, i) => {
+        if (!punyaNamaManual(lamaIsi[i])) return it;
+        kept++;
+        return salinNama(it, lamaIsi[i]);
+      }),
+      kept,
+      byOrder: true,
+    };
+  }
+
+  const terpakai = new Set();
+  const items = newItems.map((it) => {
+    const hs = normalizeHsCodeInput(it.hsCode);
+    if (!hs) return it;
+    for (let i = 0; i < lama.length; i++) {
+      if (terpakai.has(i)) continue;
+      if (normalizeHsCodeInput(lama[i].hsCode) !== hs) continue;
+      terpakai.add(i);
+      kept++;
+      return salinNama(it, lama[i]);
+    }
+    return it;
+  });
+  return { items, kept };
+}
+
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
    Dicocokkan berlapis — nama dulu, baru HS Code — karena satu HS Code
@@ -337,7 +434,20 @@ function applyImportedBcData(parsed) {
       if (isPriceAuthority(src)) {
         draftItems = cleaned;
       } else {
-        const jaga = preserveUnitPrices(cleaned, draftItems);
+        /* Nama dipertahankan LEBIH DULU: pencocokan harga & dimensi di
+           bawah memakai nama sebagai kunci, jadi urutannya penting --
+           setelah nama manual dikembalikan, keduanya bisa mencocokkan
+           lewat nama alih-alih jatuh ke pencocokan urutan. */
+        const jagaNama = preserveNamesForCeisa(cleaned, draftItems, src);
+        if (jagaNama.kept) {
+          notes.push(
+            t("w.nama.barang.dipertahankan", {
+              n: jagaNama.kept,
+              urut: jagaNama.byOrder ? " (dicocokkan menurut urutan)" : "",
+            }),
+          );
+        }
+        const jaga = preserveUnitPrices(jagaNama.items, draftItems);
         draftItems = preserveDimensionsForCeisa(jaga.items, draftItems, src);
         if (jaga.kept) {
           notes.push(

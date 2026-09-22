@@ -74,6 +74,12 @@
   max-width: 320px;
   min-width: 140px;
 }
+/* Di dalam panel (Akun, HS Code) kotak cari mengisi lebar penuh --
+   batas lebar bawaannya dibuat untuk bilah atas daftar jadwal. */
+.search-box--wide {
+  max-width: none;
+  margin-bottom: 14px;
+}
 .search-box i {
   position: absolute;
   left: 11px;

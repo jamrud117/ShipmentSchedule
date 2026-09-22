@@ -75,33 +75,32 @@ function stripFieldLabels(s) {
     .trim();
 }
 
-// Deskripsi barang: URAIAN + Merk/Tipe
-/* Uraian & Size (Export) TERPISAH sejak sekarang -- lihat komentar
-   panjang di body.mode-import .size-col, form.css. Diverifikasi ke
-   berkas CEISA Export sungguhan: MEREK di sana SELALU "-" (placeholder,
-   tidak pernah benar-benar diisi), dan TIPE berisi kode
-   model+ukurannya sekaligus (mis. "MAGNETAR A/T 235/55R20") -- itu
-   padanan CEISA yang paling dekat dengan "Size" yang dimaksud,
-   walau isinya bukan cuma angka ukuran murni.
-     Import  : URAIAN + MEREK + TIPE digabung jadi satu (tidak
-               ada kolom Size di Import).
-     Export  : namaBarang = URAIAN (+ MEREK kalau bukan placeholder),
-               size = TIPE — dua field terpisah, bukan digabung. */
-function buildImportedNamaBarang(row, modeHint) {
+/* Deskripsi barang: URAIAN + MEREK + TIPE, digabung jadi SATU teks --
+   sama untuk kedua buku.
+
+   TIDAK DIPECAH KE Size/Pattern/Mold No, walau di buku Export ketiga
+   kolom itu ada. Sempat dicoba: TIPE dipakai sebagai Size, karena
+   isinya yang paling dekat. Tapi TIPE di berkas CEISA memuat model
+   DAN ukuran sekaligus ("MAGNETAR A/T 235/55R20") dan tidak ada aturan
+   yang bisa dipakai untuk memisahnya -- mana model, mana ukuran,
+   mana nomor cetakan, semuanya bergantung kebiasaan penulis berkas.
+   Menebaknya berarti Size terisi setengah benar, dan yang setengah
+   salah itu ikut ke nama barang di kartu, CIPL, dan seluruh template
+   salinan.
+
+   Jadi seluruh teksnya masuk ke Uraian apa adanya, dan Size, Pattern
+   & Mold No DIBIARKAN KOSONG untuk diisi sendiri. Kosong itu jujur:
+   terlihat jelas belum diisi. Terisi tapi salah tidak. */
+function buildImportedNamaBarang(row) {
   let desc = excelStr(row["URAIAN"]);
   const merek = excelStr(row["MEREK"]);
   const tipe = excelStr(row["TIPE"]);
   const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
   const parts = [];
   if (!isPlaceholder(merek)) parts.push(merek);
-  if (modeHint !== "export" && !isPlaceholder(tipe)) parts.push(tipe);
+  if (!isPlaceholder(tipe)) parts.push(tipe);
   if (parts.length) desc += (desc ? " " : "") + parts.join(" ");
   return stripFieldLabels(desc);
-}
-function buildImportedSize(row) {
-  const tipe = excelStr(row["TIPE"]);
-  const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
-  return isPlaceholder(tipe) ? "" : stripFieldLabels(tipe);
 }
 
 function parseBcExcelWorkbook(wb) {
@@ -325,10 +324,11 @@ function parseBcExcelWorkbook(wb) {
     return {
       seriBarang:
         row["SERI BARANG"] != null ? String(row["SERI BARANG"]).trim() : "",
-      namaBarang: buildImportedNamaBarang(row, modeHint),
-      // Size cuma relevan (dan cuma tampil) di Export -- lihat komentar
-      // panjang di buildImportedNamaBarang() barusan.
-      size: modeHint === "export" ? buildImportedSize(row) : "",
+      namaBarang: buildImportedNamaBarang(row),
+      /* Size / Pattern / Mold No sengaja TIDAK diisi dari sini --
+         lihat buildImportedNamaBarang(). Nilainya ikut newItem()
+         (kosong), jadi tetap bisa diisi sendiri tanpa harus
+         membatalkan tebakan lebih dulu. */
       hsCode: excelStr(row["HS"]),
       satuan: excelStr(row["KODE SATUAN"]),
       qty,
@@ -362,7 +362,12 @@ function parseBcExcelWorkbook(wb) {
     return {
       ...newItem(),
       ...rest,
-      jenisBarang: "BAHAN BAKU",
+      /* Jenis barang TIDAK dipaksa di sini -- newItem() sudah
+         memilihnya dari buku yang sedang dibuka: BARANG JADI untuk
+         Export, BAHAN BAKU untuk Import. Nilai mati "BAHAN BAKU" di
+         baris ini dulu menimpa pilihan itu, jadi berkas CEISA yang
+         diimpor ke buku Export selalu mendarat sebagai bahan baku dan
+         harus dibetulkan satu per satu. */
       skb: (skbBySeriBarang.get(seriBarang) || []).map((sk) => ({ ...sk })),
     };
   });

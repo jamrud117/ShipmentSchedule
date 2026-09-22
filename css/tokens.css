@@ -1,5 +1,25 @@
 /* TOKENS — satu sumber untuk warna, tipografi, jarak, radius */
 
+/* GAYA PALING DASAR.
+
+   Dulu ditanam sebagai <style> di dalam index.html supaya warna latar
+   & huruf sudah benar sebelum lembar gaya besar selesai dimuat.
+   Sekarang tinggal di sini: tokens.css adalah lembar gaya PERTAMA yang
+   dipanggil halaman, jadi urutannya tetap sama -- tapi tidak ada lagi
+   satu pun aturan CSS yang hidup di dalam HTML.
+
+   Nilainya ditulis sebagai angka, bukan var(--n-50)/var(--n-900):
+   variabelnya baru lahir di blok :root di bawah, dan aturan yang
+   memakainya sebelum itu tidak akan mendapat apa-apa. */
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: #f5f7fa;
+  color: #0a1b33;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
 :root {
   /* Netral: kertas & tinta */
   --n-50: #f5f7fa;

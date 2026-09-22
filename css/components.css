@@ -17,6 +17,11 @@
   color: var(--navy);
   margin-bottom: 0.25rem;
 }
+/* Varian tanpa jarak atas: dipakai saat catatannya jadi elemen
+   PERTAMA di dalam kotaknya, bukan penjelasan di bawah sebuah isian. */
+.form-text-note--flush {
+  margin-top: 0;
+}
 .form-text-note {
   font-size: 0.72rem;
   color: var(--muted);

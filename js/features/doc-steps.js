@@ -67,7 +67,35 @@ const DOC_STEPS_EXPORT = [
     optional: true,
   },
   { key: "tally", label: "Tally", full: "Tally sheet (hitung fisik saat muat)" },
+  /* BERANGKAT — seperti Berths/ATA di buku Import, ini tahap yang
+     bukan berkas: tanggal kapal/pesawat benar-benar meninggalkan
+     pelabuhan muat.
+
+     Ditaruh PALING AKHIR karena memang kejadian terakhir yang masih
+     diurus tim EXIM; sesudahnya barang dalam perjalanan. Tally
+     (hitung fisik saat muat) mendahuluinya: barang dihitung dulu,
+     baru alat angkutnya berangkat. */
+  { key: "sailing", label: sailingLabel, full: sailingFull },
 ];
+
+/* Keberangkatan alat angkut. Istilahnya berbeda per moda, sama
+   seperti B/L vs AWB dan Berths vs ATA.
+
+   UDARA MEMAKAI "ATD", bukan "Sailing": kapal berlayar, pesawat tidak.
+   ATD dipilih karena ia pasangan langsung dari "ATA" yang sudah
+   dipakai tahap kedatangan pada kiriman udara di buku Import -- satu
+   pasang istilah yang sudah dikenal tim, bukan istilah ketiga yang
+   harus dihafal. Padanan lain yang lazim di angkutan udara: "Flown",
+   "Uplift", atau "Departure"; ketiganya sama-sama benar, tapi tidak
+   berpasangan dengan ATA. */
+function sailingLabel(s) {
+  return s && s.transport === "udara" ? "ATD" : "Sailing";
+}
+function sailingFull(s) {
+  return s && s.transport === "udara"
+    ? "Pesawat berangkat dari bandara muat (ATD)"
+    : "Kapal berangkat dari pelabuhan muat (ATD)";
+}
 
 /* Kedatangan alat angkut. Untuk laut istilahnya "Sandar"; untuk udara
    tidak ada padanan yang lazim dipakai orang lapangan, jadi dipakai

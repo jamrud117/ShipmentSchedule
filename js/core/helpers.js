@@ -102,8 +102,21 @@ function fmtQtyBySatuan(list) {
    pencocokan teks saat ditempel ke Excel.
 
    Dipakai kartu, panel detail, DAN copy template -- satu tempat, supaya
-   nama yang terlihat di layar selalu sama dengan yang tersalin. */
-const ITEM_NAMA_BAGIAN = ["namaBarang", "size", "pattern", "moldNo"];
+   nama yang terlihat di layar selalu sama dengan yang tersalin.
+
+   URUTANNYA: Uraian, Pattern, Size, Mold No.
+
+   Sempat ada dua urutan: yang ini untuk layar, satu lagi khusus
+   template salinan Export. Disatukan lagi begitu kartu pun diminta
+   memakai bentuk yang sama -- kalau tidak, nama di kartu berbeda
+   susunannya dari nama yang tersalin ke Excel untuk pengiriman yang
+   sama persis.
+
+   Import TIDAK terpengaruh: Pattern, Size & Mold No hanya diisi di
+   buku Export (lihat body.mode-import .size-col di form.css). Di
+   Import ketiganya kosong, jadi urutan apa pun menghasilkan teks yang
+   sama -- hanya Uraian. */
+const ITEM_NAMA_BAGIAN = ["namaBarang", "pattern", "size", "moldNo"];
 
 function itemDisplayName(it) {
   if (!it) return "";

@@ -180,13 +180,19 @@ function recalcCustoms(opsi) {
 
   const isCIF = tmp.incoterm === "CIF";
   const isFOB = tmp.incoterm === "FOB";
+  /* Disembunyikan lewat KELAS, bukan el.style.display.
+
+     Dengan gaya sebaris, keadaan awal "tersembunyi" harus ditulis di
+     HTML sebagai style="display:none" -- dan gaya sebaris tidak bisa
+     hidup di berkas CSS. Kelas d-none bisa: HTML tinggal membawanya
+     sejak awal, dan di sini ia dinyalakan/dimatikan. */
   $$(".calc-box--cif").forEach((el) => {
-    el.style.display = isCIF ? "" : "none";
+    el.classList.toggle("d-none", !isCIF);
   });
   $$(".calc-box--fob").forEach((el) => {
-    el.style.display = isFOB ? "" : "none";
+    el.classList.toggle("d-none", !isFOB);
   });
-  $("#noCifFobNote").style.display = !isCIF && !isFOB ? "block" : "none";
+  $("#noCifFobNote").classList.toggle("d-none", isCIF || isFOB);
 
   if (isCIF) {
     $("#calcCIF").textContent = fmtUSD(calc.cifUsd);

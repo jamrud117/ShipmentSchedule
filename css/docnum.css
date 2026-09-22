@@ -238,15 +238,27 @@ table.fund-lines select {
 }
 
 /* Baris nomor PO tambahan: kotak + tombol hapus sebaris. */
+/* Satu baris PO = nomor + tanggalnya, sejajar. Kotak tanggal diberi
+   jatah tetap supaya kolom tanggal seluruh baris lurus ke bawah --
+   dengan flex bebas, baris yang nomornya panjang akan menyempitkan
+   tanggalnya sendiri dan kolomnya bergerigi. */
+.po-row,
 .po-extra-row {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+.po-extra-row {
   margin-top: 6px;
 }
+.po-row input,
 .po-extra-row input {
   flex: 1 1 auto;
   min-width: 0;
+}
+.po-row .po-tgl,
+.po-extra-row .po-tgl {
+  flex: 0 0 40%;
 }
 
 .docnum-panel-head {

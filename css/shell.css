@@ -1,5 +1,14 @@
 /* KERANGKA APLIKASI */
 
+/* Badan halaman di bawah bilah judul. --grow dipakai halaman Jadwal,
+   yang isinya harus mendorong kaki halaman ke bawah layar. */
+.page-main {
+  padding-top: 20px;
+}
+.page-main--grow {
+  flex: 1;
+}
+
 .app-topbar {
   position: sticky;
   top: 0;
