@@ -1615,6 +1615,76 @@ t("PERBANDINGAN lebar kolom Excel mengikuti berkas rujukan", () => {
     eq(lebar[k], harap, "lebar kolom " + k + ":");
   });
 });
+t("blok angkutan Excel: garis mengikuti berkas asli, bukan tiap baris", () => {
+  /* Dulu tiap baris blok angkutan diberi garis bawah selebar A-K.
+     Akibatnya label & nilai pelabuhan/kapal terpisah garis, dan kotak
+     Other references di kolom kanan terpotong-potong. Di berkas asli
+     (dibandingkan garis demi garis, 0 beda setelah perbaikan):
+       Departure date  -> garis bawah A-D saja
+       label pelabuhan -> tanpa garis bawah (sekotak dengan nilainya)
+       nilai pelabuhan -> garis bawah A-K
+       label kapal     -> tanpa garis bawah
+       nilai kapal     -> garis bawah A-K
+     dan sekat kolom E menerus di kelima barisnya. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  const i = src.indexOf("function vnxlBlokAngkutan");
+  const blok = src.slice(i, src.indexOf("\nfunction ", i + 10));
+  if (/vnxlGarisBaris\(ws, r \+ i, 1, 11, "b"\)/.test(blok))
+    throw new Error("garis bawah masih dipasang di SETIAP baris blok angkutan");
+  ["vnxlGarisBaris(ws, r, 1, 4, \"b\")",
+   "vnxlGarisBaris(ws, r + 2, 1, 11, \"b\")",
+   "vnxlGarisBaris(ws, r + 4, 1, 11, \"b\")"].forEach((g) => {
+    if (!blok.includes(g)) throw new Error("garis yang semestinya ada hilang: " + g);
+  });
+  if (/vnxlGarisBaris\(ws, r \+ (1|3), /.test(blok))
+    throw new Error("ada garis di antara label dan nilainya");
+});
+t("Excel CIPL Kumho selebar kertas A4 di Excel (dibatasi LEBAR, bukan tinggi)", () => {
+  /* Pratinjau cetak Excel pengguna: bingkai 154 mm, tinggi sudah
+     memenuhi halaman, 43 mm di kanan kosong -- dibatasi TINGGI. Supaya
+     selebar kertas, lembar harus cukup lebar untuk dibatasi LEBAR
+     halaman. Diperiksa dengan rumus lebar kolom resmi Excel (MDW
+     Calibri 11 = 7 px @96 dpi) dan tinggi baris dalam poin. */
+  const lebarKol = (w) => Math.trunc(((256 * w + Math.trunc(128 / 7)) / 256) * 7);
+  const cek = (nama, tabel) => {
+    const px = "ABCDEFGHIJK".split("").reduce((n, k) => n + lebarKol(tabel[k]), 0);
+    const lebarMm = (px / 96) * 25.4;
+    // Lebar alami harus melebihi lebar cetak (185 mm) dengan selisih aman:
+    // di Excel pengguna kolom tergambar ~11% lebih sempit dari rumus.
+    if (lebarMm * 0.89 < 183)
+      throw new Error(`${nama}: lebar alami ${lebarMm.toFixed(0)} mm -- di Excel pengguna tidak akan selebar kertas`);
+  };
+  cek("CI", baca("VNXL_LEBAR"));
+  cek("PL", baca("VNXL_LEBAR_PL"));
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  if (/height = 10\.65/.test(src))
+    throw new Error("tinggi baris 10,65pt dibulatkan Excel ke 11,25pt -- pakai 10,5");
+  if (!/horizontalCentered: true/.test(src))
+    throw new Error("lembar tidak diratatengahkan di halaman");
+});
+t("lembar PL memakai lebar kolomnya sendiri dari berkas asli", () => {
+  /* Kolom H & J (Net Wt./Gross Wt.) di PL 5,66; di CI 3,78. Dengan
+     lebar CI, berat berdesimal ("378,70") tampil sebagai "###". */
+  const pl = baca("VNXL_LEBAR_ASLI_PL");
+  const ci = baca("VNXL_LEBAR_ASLI");
+  eq(pl.H, 5.66, "PL kolom H:");
+  eq(pl.J, 5.66, "PL kolom J:");
+  if (pl.H <= ci.H) throw new Error("kolom berat PL harus lebih lebar daripada kolom USD CI");
+});
+t("gaya sel blok angkutan & baris barang mengikuti berkas asli", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  /* Nilai pelabuhan/kapal rata tengah; kapal & tujuan akhir 9pt. */
+  if (/VNXL_KIRI_JOROK/.test(src))
+    throw new Error("nilai angkutan masih menjorok rata kiri");
+  if (!/finalDestination[\s\S]{0,120}VNXL_FONT_KECIL, VNXL_TENGAH/.test(src))
+    throw new Error("tujuan akhir harus 9pt rata tengah");
+  /* Berat PL dua desimal. */
+  if (!/b\.netto, VNXL_FONT, VNXL_KANAN, VNXL_FMT_BERAT/.test(src))
+    throw new Error("berat bersih PL tidak berformat dua desimal");
+});
 t("penanda pengapalan membuang akhiran badan hukum", () => {
   const src = require("fs").readFileSync(
     require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
