@@ -35,12 +35,12 @@ const DOCNUM_SUBTYPES = {
   do: {
     Export: {
       key: "do",
-      label: "Surat Jalan Export",
+      get label() { return tt("Surat Jalan Export", "Export Delivery Note"); },
       pattern: "{SEQ}/DDI/EXIM-LOG/{MM}/{YYYY}",
     },
     Lokal: {
       key: "do_lokal",
-      label: "Surat Jalan Lokal",
+      get label() { return tt("Surat Jalan Lokal", "Local Delivery Note"); },
       pattern: "{SEQ}/EXIM-LOG/{MM}/{YYYY}",
     },
   },
@@ -54,17 +54,17 @@ const DOCNUM_TYPES = {
     pattern: "DDI - CRBM - {MM} - {SEQ}",
   },
   do: {
-    label: "Delivery Order / Surat Jalan",
+    get label() { return tt("Delivery Order / Surat Jalan", "Delivery Order / Delivery Note"); },
     pad: 3,
     pattern: "{SEQ}/DDI/EXIM-LOG/{MM}/{YYYY}",
   },
   fund: {
-    label: "Permintaan Dana",
+    get label() { return tt("Permintaan Dana", "Fund Request"); },
     pad: 3,
     pattern: "{SEQ}/EXIM/DDI/{MM}/{YYYY}",
   },
   letter: {
-    label: "Surat Keluar",
+    get label() { return tt("Surat Keluar", "Outgoing Letter"); },
     pad: 3,
     pattern: "DDI-{SEQ}/EXIM-LOG/{MM}/{YYYY}",
   },
@@ -141,6 +141,39 @@ const DOCNUM_HISTORY_FILTERS = {
    .filter() supaya bisa disebar; kalau tidak ada saringan, memakai
    pembanding yang selalu benar -- lebih aman daripada mencabangkan
    rantai kueri di dua tempat. */
+/* ------------------------------------------------------------------
+   PENCARIAN RIWAYAT
+
+   Dikirim ke DATABASE, bukan menyaring baris di layar: riwayatnya
+   berhalaman di server (5-50 baris per halaman), jadi saringan di
+   layar hanya mencari di halaman yang kebetulan sedang tampil --
+   nomor yang dicari di halaman 3 tidak akan pernah ketemu. Jumlah &
+   halamannya ikut mengikuti hasil pencarian.
+
+   Kolom yang dicari mencakup isian semua jenis dokumen sekaligus
+   (penerima invoice, surat jalan, pengajuan dana, surat keluar); isian
+   yang tidak dimiliki suatu jenis bernilai kosong dan tidak pernah
+   cocok. Nilai pengajuan tidak ikut -- ia dihitung di aplikasi, tidak
+   tersimpan sebagai teks yang bisa dicari.
+------------------------------------------------------------------ */
+let docNumCari = "";
+const DN_KOLOM_CARI = [
+  "doc_number", "requester", "department",
+  "payload->>payee", "payload->>customer", "payload->>receiver",
+  "payload->>recipient", "payload->>subject", "payload->>notes",
+  "payload->>invoiceNo", "payload->>billingNo", "payload->>poNo",
+];
+/* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
+   arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
+   terbalik -- dan wildcard (%, *) dibuang: kata kunci "PT (Persero)"
+   tidak boleh memecah filternya jadi potongan yang tidak valid.
+   Nilainya dikutip ganda supaya titik & spasi aman. */
+function dnFilterCari(q) {
+  const bersih = String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
+  if (!bersih) return null;
+  return DN_KOLOM_CARI.map((k) => `${k}.ilike."%${bersih}%"`).join(",");
+}
+
 function docNumPayloadFilter() {
   const saring = DOCNUM_HISTORY_FILTERS[docNumActiveTab];
   if (!saring || !docNumHistorySub) return ["id", "not.is", null];
@@ -175,11 +208,35 @@ function renderDocNumSubTabs() {
   box.innerHTML = [null, ...saring.options]
     .map((label) => {
       const nilai = label === null ? "" : label;
-      const teks = label === null ? semua : label;
+      // Nilai tab tetap nilai tersimpan; hanya teksnya yang diterjemahkan.
+      const teks = label === null ? semua : label === "Lainnya" ? tt("Lainnya", "Other") : label;
       const aktif = (docNumHistorySub || "") === nilai;
       return `<button type="button" class="docnum-subtab${aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(nilai)}">${escapeHtml(teks)}</button>`;
     })
+    /* Tab Summary: seluruh pengajuan dana dalam satu tabel + pivot.
+       Nilainya penanda khusus, bukan jenis pengeluaran -- ia tidak
+       menyaring riwayat, melainkan mengganti isinya (lihat
+       renderDocNumHistory). */
+    .concat(
+      docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined"
+        ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === FSUM_TAB ? " active" : ""}" data-dn-subtab="${FSUM_TAB}"><i class="bi bi-table"></i> Summary</button>`]
+        : [],
+    )
     .join("");
+  dnTabAktifTerlihat(box);
+}
+
+/* Di ponsel baris tab ini digeser mendatar (lihat .docnum-subtabs di
+   docnum.css). Setiap kali digambar ulang -- ganti bahasa, simpan
+   nomor -- posisi gesernya kembali ke awal, dan tab aktif di ujung
+   kanan (Summary) bisa tersembunyi di luar layar padahal sedang
+   dipakai. Digeser LEWAT scrollLeft baris ini sendiri, bukan
+   scrollIntoView: yang terakhir juga menggulir halaman kalau barisnya
+   sedang di luar layar. */
+function dnTabAktifTerlihat(baris) {
+  const aktif = baris.querySelector(".docnum-subtab.active");
+  if (!aktif || baris.scrollWidth <= baris.clientWidth) return;
+  baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
 }
 
 function resolveDocNumType(tabKey) {
@@ -334,7 +391,7 @@ function validateDocNumForm(typeKey) {
       .trim();
 
     if (el.hasAttribute("data-dn-required") && !nilai) {
-      errors.push(`${label} wajib diisi.`);
+      errors.push(tt(`${label} wajib diisi.`, `${label} is required.`));
       el.classList.add("is-invalid");
       return;
     }
@@ -450,9 +507,11 @@ function renderCounterPanel(jenis, periodKey, lastSeq) {
      Invoice -- berbagi satu panel ini tapi BERBEDA deret nomor. Tanpa
      namanya tertulis, tidak ada cara membedakan sedang menyetel yang
      mana, dan angka yang diketik gampang mendarat di deret sebelah. */
-  info.textContent = `${jenis.label} · seri ${periodKey} · nomor terakhir terbit: ${
-    lastSeq ? String(lastSeq).padStart(jenis.pad, "0") : t("w.belum.ada.nomor")
-  }`;
+  const terakhir = lastSeq ? String(lastSeq).padStart(jenis.pad, "0") : t("w.belum.ada.nomor");
+  info.textContent = tt(
+    `${jenis.label} · seri ${periodKey} · nomor terakhir terbit: ${terakhir}`,
+    `${jenis.label} · series ${periodKey} · last issued number: ${terakhir}`,
+  );
   input.value = String((lastSeq || 0) + 1);
   input.placeholder = String(1).padStart(jenis.pad, "0");
 }
@@ -494,7 +553,7 @@ async function simpanCounter(nilaiBerikutnya) {
     });
     if (error) throw error;
     showToast(
-      `Nomor berikutnya disetel ke ${String(berikut).padStart(pad, "0")}.`,
+      tt(`Nomor berikutnya disetel ke ${String(berikut).padStart(pad, "0")}.`, `Next number set to ${String(berikut).padStart(pad, "0")}.`),
       "success",
     );
     refreshDocNumPreview(docNumActiveTab);
@@ -526,7 +585,7 @@ $("#btnCounterReset")?.addEventListener("click", () => {
         if (error) throw error;
         docNumSeries[typeKey] = String(data == null ? "1" : data);
         showToast(
-          `Penomoran ${jenis.label} dimulai ulang (seri ${docNumSeries[typeKey]}).`,
+          tt(`Penomoran ${jenis.label} dimulai ulang (seri ${docNumSeries[typeKey]}).`, `${jenis.label} numbering restarted (series ${docNumSeries[typeKey]}).`),
           "success",
         );
         docNumPage = 1;
@@ -557,9 +616,117 @@ $("#btnCounterReset")?.addEventListener("click", () => {
 ================================================================== */
 let dnEditingId = null;
 
+/* EXIM & marketing: memperbaiki isian nomor yang sudah ada & menandai
+   status bayar. Mengajukan nomor BARU, menghapus nomor, dan mengatur
+   nomor urut TIDAK memakai ini -- ketiganya requireEdit() (khusus EXIM). */
 function bolehUbahDocNum() {
-  return typeof canEdit !== "function" || canEdit();
+  return typeof canEditDocNum !== "function" || canEditDocNum();
 }
+
+/* ------------------------------------------------------------------
+   STATUS PEMBAYARAN PENGAJUAN DANA
+
+   Disimpan di payload (paidAt = tanggal bayar, paidBy = yang menandai),
+   jadi tidak butuh kolom database baru. Bukan isian form: ditandai
+   langsung dari daftar riwayat, dan jalur Ubah Isian membawanya
+   (lihat simpanUbahDocNum) supaya tidak terhapus.
+------------------------------------------------------------------ */
+const DN_FIELD_BAYAR = ["paidAt", "paidBy"];
+
+function dnSudahBayar(r) {
+  return !!(r && r.payload && r.payload.paidAt);
+}
+
+/* Lencana status. Yang boleh mengubah (EXIM) mendapat tombol; viewer
+   hanya melihat lencananya -- status bayar bukan sesuatu yang boleh
+   diubah sembarang pembaca. */
+function dnTombolBayar(r) {
+  const lunas = dnSudahBayar(r);
+  const p = r.payload || {};
+  const teks = lunas
+    ? `<i class="bi bi-check-circle-fill"></i> ${escapeHtml(tt("Lunas", "Paid"))}<span class="dn-bayar-tgl">${escapeHtml(fmtDate(p.paidAt))}</span>`
+    : `<i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("Belum Lunas", "Unpaid"))}`;
+  const kelas = `dn-bayar ${lunas ? "dn-bayar--lunas" : "dn-bayar--belum"}`;
+  if (!bolehUbahDocNum()) return `<span class="${kelas}">${teks}</span>`;
+  const judul = lunas
+    ? tt(`Ditandai lunas${p.paidBy ? " oleh " + p.paidBy : ""}. Klik untuk membatalkan.`,
+         `Marked paid${p.paidBy ? " by " + p.paidBy : ""}. Click to undo.`)
+    : tt("Klik untuk menandai sudah dibayar", "Click to mark as paid");
+  return `<button type="button" class="${kelas}" data-bayar-num="${r.id}" title="${escapeAttr(judul)}">${teks}</button>`;
+}
+
+/* Menulis status bayar: payload TERBARU dibaca dulu dari database, baru
+   digabung. Menulis dari salinan di layar akan menimpa perubahan yang
+   dibuat orang lain sejak daftar ini dimuat. */
+async function dnSetelBayar(id, tanggal) {
+  const { data, error } = await supabaseClient
+    .from("document_numbers")
+    .select("payload")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  const payload = Object.assign({}, (data && data.payload) || {});
+  if (tanggal) {
+    payload.paidAt = tanggal;
+    const pr = (typeof authState !== "undefined" && authState.profile) || {};
+    payload.paidBy = pr.full_name || pr.username || "";
+  } else {
+    DN_FIELD_BAYAR.forEach((k) => delete payload[k]);
+  }
+  const { error: galat } = await supabaseClient
+    .from("document_numbers")
+    .update({ payload })
+    .eq("id", id);
+  if (galat) throw galat;
+  const baris = docNumHistoryRows.find((r) => r.id === id);
+  if (baris) baris.payload = payload;
+}
+
+function dnKlikBayar(id) {
+  const r = docNumHistoryRows.find((x) => x.id === id);
+  if (!r || !bolehUbahDocNum()) return;
+  const simpan = async (tanggal, pesan) => {
+    try {
+      await dnSetelBayar(id, tanggal);
+      await renderDocNumHistory();
+      showToast(pesan, "success");
+    } catch (err) {
+      console.error(err);
+      showToast(
+        t("x.gagal.menyimpan.perubahan.err", { err: err.message || t("s.kesalahan.tidak.diketahui") }),
+        "danger",
+      );
+    }
+  };
+  if (dnSudahBayar(r)) {
+    /* Membatalkan butuh konfirmasi: satu klik tak sengaja di daftar
+       tidak boleh menghapus catatan pembayaran. */
+    showConfirm(
+      tt(`Batalkan status lunas ${r.doc_number}?`, `Undo the paid status of ${r.doc_number}?`),
+      () => simpan(null, tt(`${r.doc_number} ditandai belum lunas.`, `${r.doc_number} marked as unpaid.`)),
+      { confirmText: tt("Ya, batalkan", "Yes, undo"), tone: "primary", icon: "bi-arrow-counterclockwise" },
+    );
+    return;
+  }
+  /* Tanggal bayar ditanyakan (bawaan hari ini): pembayaran kerap
+     ditandai sehari-dua sesudah uangnya keluar, dan tanggal yang
+     sebenarnya yang dipakai laporan. */
+  showPrompt({
+    title: tt("Tandai Sudah Dibayar", "Mark as Paid"),
+    desc: `${r.doc_number}${r.payload && r.payload.payee ? " · " + r.payload.payee : ""}`,
+    fields: [{ key: "tgl", label: tt("Tanggal bayar", "Payment date"), type: "date", value: todayISO() }],
+    okText: tt("Tandai Lunas", "Mark Paid"),
+    onSubmit: (v) => {
+      if (!v.tgl) return tt("Tanggal bayar wajib diisi.", "Payment date is required.");
+      simpan(v.tgl, tt(`${r.doc_number} ditandai lunas.`, `${r.doc_number} marked as paid.`));
+    },
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest && e.target.closest("[data-bayar-num]");
+  if (btn) dnKlikBayar(btn.dataset.bayarNum);
+});
 
 /* Kunci TAB dari jenis dokumen yang tersimpan.
 
@@ -728,10 +895,19 @@ function batalUbahDocNum() {
 function syncModeUbahDocNum(nomor) {
   const btn = $("#btnDocNumSubmit");
   const banner = $("#dnEditBanner");
+  /* Penanda mode perbaikan. Marketing hanya melihat panel isian selama
+     penanda ini ada (lihat auth.css) -- di luar itu form berarti
+     "ajukan nomor baru", yang bukan haknya.
+
+     Dipasang di section.docnum-panels karena form ini TIDAK punya satu
+     pembungkus: panel isian, baris tombol, dan riwayat bersaudara di
+     dalam section itu. */
+  const panel = document.querySelector(".docnum-panels");
+  if (panel) panel.classList.toggle("is-editing", !!nomor);
   if (btn) {
     btn.innerHTML = nomor
-      ? '<i class="bi bi-check2"></i> Simpan Perubahan'
-      : '<i class="bi bi-hash"></i> Ajukan Nomor';
+      ? '<i class="bi bi-check2"></i> ' + tt("Simpan Perubahan", "Save Changes")
+      : '<i class="bi bi-hash"></i> ' + tt("Ajukan Nomor", "Request Number");
   }
   if (banner) {
     banner.classList.toggle("d-none", !nomor);
@@ -752,6 +928,16 @@ async function simpanUbahDocNum() {
   const payload = {};
   Object.keys(form).forEach((k) => {
     if (!DOCNUM_COLUMN_FIELDS.has(k) && form[k] !== "") payload[k] = form[k];
+  });
+  /* STATUS PEMBAYARAN DIBAWA, bukan dibangun ulang dari form.
+
+     Payload di atas dirakit HANYA dari isian form, dan status lunas
+     bukan isian form -- ia ditandai dari daftar riwayat. Tanpa baris
+     ini, memperbaiki satu salah ketik di pengajuan yang sudah lunas
+     diam-diam mengembalikannya jadi "belum lunas". */
+  const lama = (docNumHistoryRows.find((r) => r.id === dnEditingId) || {}).payload || {};
+  DN_FIELD_BAYAR.forEach((k) => {
+    if (lama[k] != null && lama[k] !== "") payload[k] = lama[k];
   });
 
   docNumBusy = true;
@@ -913,7 +1099,7 @@ function isiPilihanJadwal() {
   const peta = new Map();
   const opsi = [];
   (data.export || []).forEach((s) => {
-    let label = dnLabelJadwal(s) || "(tanpa nomor)";
+    let label = dnLabelJadwal(s) || tt("(tanpa nomor)", "(no number)");
     if (peta.has(label)) {
       const beda = s.etd ? fmtDate(s.etd) : String(s.id).slice(0, 6);
       label = `${label} · ETD ${beda}`;
@@ -1229,14 +1415,20 @@ async function renderDocNumHistory() {
   const bar = $("#docNumPagination");
   if (!box) return;
   renderDocNumSubTabs();
-  box.innerHTML = `<div class="docnum-empty">Memuat…</div>`;
+  /* Tab Summary TIDAK memakai kueri berhalaman di bawah: ia butuh
+     seluruh pengajuan, dan penanda tab-nya bukan jenis pengeluaran --
+     dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
+  if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
+    return renderRingkasanDana(box, bar);
+  }
+  box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
   if (bar) bar.innerHTML = "";
 
   const jenis = resolveDocNumType(docNumActiveTab);
   try {
     // Ambil HANYA sebanyak satu halaman
     const dari = (docNumPage - 1) * docNumPageSize;
-    const { data, error, count } = await supabaseClient
+    let kueri = supabaseClient
       .from("document_numbers")
       .select(
         /* doc_type WAJIB ikut diambil.
@@ -1258,7 +1450,10 @@ async function renderDocNumHistory() {
         { count: "exact" },
       )
       .eq("doc_type", docNumHistoryKey())
-      .filter(...docNumPayloadFilter())
+      .filter(...docNumPayloadFilter());
+    const saringCari = dnFilterCari(docNumCari);
+    if (saringCari) kueri = kueri.or(saringCari);
+    const { data, error, count } = await kueri
       .order("created_at", { ascending: false })
       .range(dari, dari + docNumPageSize - 1);
     if (error) throw error;
@@ -1276,7 +1471,9 @@ async function renderDocNumHistory() {
     }
 
     if (!total) {
-      box.innerHTML = `<div class="docnum-empty">Belum ada nomor ${escapeHtml(jenis.label)} yang diterbitkan.</div>`;
+      box.innerHTML = docNumCari
+        ? `<div class="docnum-empty">${tt(`Tidak ada nomor yang cocok dengan “${escapeHtml(docNumCari)}”.`, `No numbers match “${escapeHtml(docNumCari)}”.`)}</div>`
+        : `<div class="docnum-empty">${tt(`Belum ada nomor ${escapeHtml(jenis.label)} yang diterbitkan.`, `No ${escapeHtml(jenis.label)} numbers issued yet.`)}</div>`;
       return;
     }
 
@@ -1284,15 +1481,19 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>Nomor</th><th class="dn-col-tgl">Tanggal</th><th class="dn-col-pemohon">Pemohon</th>${
+          <tr><th>${tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
             jenis.key === "fund"
               ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th>`
               : ""
-          }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || "Keterangan")}</th>${
-            jenis.key === "fund" ? `<th class="dn-col-ket">Keterangan</th>` : ""
+          }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
+            jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
+          }${
+            jenis.key === "fund" ? `<th class="dn-col-ket">${tt("Keterangan", "Notes")}</th>` : ""
+          }${
+            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment")}</th>` : ""
           }<th class="dn-act"></th></tr>
         </thead>
         <tbody>
@@ -1339,6 +1540,13 @@ async function renderDocNumHistory() {
                 }
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 ${
+                  /* Nilai = jumlah akhir pengajuan, angka yang sama dengan
+                     "Terbilang" di surat cetaknya (frTotalPengajuan). */
+                  jenis.key === "fund"
+                    ? `<td class="dn-col-nilai">${escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR"))}</td>`
+                    : ""
+                }
+                ${
                   /* Rincian = Subject pada surat yang dicetak, jadi di
                      sinilah terbaca "pembayaran billing import apa".
                      Dipotong 80: lebih panjang dari kolom lain karena
@@ -1347,6 +1555,7 @@ async function renderDocNumHistory() {
                     ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</td>`
                     : ""
                 }
+                ${jenis.key === "fund" ? `<td class="dn-col-bayar">${dnTombolBayar(r)}</td>` : ""}
                 <td class="dn-act">
                   ${
                     /* Edit hanya untuk isian permintaannya — NOMOR dan
@@ -1355,11 +1564,11 @@ async function renderDocNumHistory() {
                        kembali menciptakan dua kebenaran. */
                     bolehUbahDocNum()
                       ? `<button type="button" class="icon-btn" data-edit-num="${r.id}"
-                                 title="Perbaiki isian"><i class="bi bi-pencil"></i></button>`
+                                 title="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn" data-detail-num="${r.id}"
-                          title="Lihat seluruh isian"><i class="bi bi-list-ul"></i></button>
+                          title="${tt("Lihat seluruh isian", "View all fields")}"><i class="bi bi-list-ul"></i></button>
                   ${
                     /* Surat jalan hanya dipakai untuk kiriman EXPORT.
                        Yang belum ditautkan pun ditawarkan — jadwalnya
@@ -1369,7 +1578,7 @@ async function renderDocNumHistory() {
                        untuk seluruh surat jalan Lokal. */
                     String(jenis.key || "").startsWith("do") && sjBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-sj="${r.id}"
-                                 title="Cetak surat jalan"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak surat jalan", "Print delivery note")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -1378,7 +1587,7 @@ async function renderDocNumHistory() {
                        sendiri, jadi setiap nomor "fund" bisa dicetak. */
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
-                                 title="Cetak Form Pengajuan Dana"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -1387,13 +1596,13 @@ async function renderDocNumHistory() {
                        jenis invoice yang dipilih saat nomor terbit. */
                     /^invoice/.test(jenis.key) && ciplBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-cipl="${r.id}"
-                                 title="Cetak Commercial Invoice, Packing List & Shipping Instruction"><i class="bi bi-printer"></i></button>
+                                 title="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-xls-cipl="${r.id}"
-                                 title="Unduh Excel (Invoice, PL, SI)"><i class="bi bi-file-earmark-excel"></i></button>`
+                                 title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
-                          data-num-label="${escapeHtml(r.doc_number)}" title="Hapus nomor ini">
+                          data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
                   </button>
                 </td>
@@ -1406,7 +1615,7 @@ async function renderDocNumHistory() {
     renderDocNumPagination(total);
   } catch (err) {
     console.error(err);
-    box.innerHTML = `<div class="docnum-empty">Gagal memuat riwayat: ${escapeHtml(err.message || t("s.kesalahan.tidak.diketahui"))}</div>`;
+    box.innerHTML = `<div class="docnum-empty">${tt("Gagal memuat riwayat", "Failed to load history")}: ${escapeHtml(err.message || t("s.kesalahan.tidak.diketahui"))}</div>`;
   }
 }
 
@@ -1429,14 +1638,14 @@ function renderDocNumPagination(total) {
 
   bar.className = "pagination-bar pagination-bar--compact";
   bar.innerHTML = `
-    <div class="pagination-info">Menampilkan <b>${awal}–${akhir}</b> dari <b>${total}</b> nomor</div>
+    <div class="pagination-info">${tt(`Menampilkan <b>${awal}–${akhir}</b> dari <b>${total}</b> nomor`, `Showing <b>${awal}–${akhir}</b> of <b>${total}</b> numbers`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="Halaman sebelumnya"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
       <div class="page-numbers">${tombolHal}</div>
-      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="Halaman berikutnya"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
     </div>
     <div class="pagination-size">
-      <label for="dnPageSize">Per halaman</label>
+      <label for="dnPageSize">${tt("Per halaman", "Per page")}</label>
       <select id="dnPageSize">
         ${[5, 10, 20, 50, 100]
           .map(
@@ -1549,6 +1758,13 @@ function showDocNumTab(key) {
      "Lokal" tidak ada di jenis lain, dan membiarkannya membuat riwayat
      tampil kosong tanpa alasan yang terlihat. */
   docNumHistorySub = null;
+  // Jenis dokumen lain = data lain: kata kunci yang tertinggal hanya
+  // membuat riwayatnya tampak kosong tanpa sebab yang terlihat.
+  if (active !== docNumActiveTab) {
+    docNumCari = "";
+    const kotakCari = $("#docNumSearch");
+    if (kotakCari) kotakCari.value = "";
+  }
   docNumActiveTab = active;
   try {
     localStorage.setItem(DOCNUM_TAB_KEY, active);
@@ -1566,9 +1782,6 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
-  // Ringkasan per Vendor hanya bermakna untuk Pengajuan Dana.
-  const btnRingkas = $("#btnFundSummary");
-  if (btnRingkas) btnRingkas.classList.toggle("d-none", active !== "fund");
 
   // Tanggal dokumen default = hari ini, biar tidak perlu diketik tiap kali.
   const panel = docNumPanelEl(active);
@@ -1614,7 +1827,9 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
 $("#btnDnEditCancel")?.addEventListener("click", batalUbahDocNum);
 
 $("#btnDocNumSubmit")?.addEventListener("click", () => {
-  if (!requireEdit()) return;
+  /* Tombol yang sama dipakai dua jalur: menyimpan PERBAIKAN (EXIM &
+     marketing) dan mengajukan nomor BARU (khusus EXIM). */
+  if (dnEditingId ? !requireEditDocNum() : !requireEdit()) return;
   submitDocNumRequest();
 });
 $("#btnDocNumReset")?.addEventListener("click", () => {
@@ -1652,57 +1867,58 @@ function setActivePageNav(page) {
 /* Judul kolom keempat mengikuti jenis dokumennya. "Keterangan" terlalu
    samar padahal isinya selalu satu hal tertentu. */
 const DN_KOLOM_UTAMA = {
-  do: "Tujuan / Penerima",
-  invoice: "Customer",
-  fund: "Dibayarkan Kepada",
-  letter: "Perihal",
+  get do() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
+  get invoice() { return tt("Customer", "Customer"); },
+  get fund() { return tt("Dibayarkan Kepada", "Paid To"); },
+  get letter() { return tt("Perihal", "Subject"); },
 };
 
 const DN_LABEL_FIELD = {
-  packages: "Jumlah Koli",
-  receiver: "Tujuan / Penerima",
-  address: "Alamat Tujuan",
-  vehicle: "No. Kendaraan",
-  shipmentId: "Jadwal Terkait",
-  customer: "Customer",
-  payee: "Dibayarkan Kepada",
-  recipient: "Penerima Surat",
-  subject: "Perihal",
-  amount: "Nilai",
-  currency: "Mata Uang",
-  purpose: "Keperluan",
-  notes: "Keterangan",
-  reference: "Referensi",
+  get packages() { return tt("Jumlah Koli", "Number of Packages"); },
+  get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
+  get address() { return tt("Alamat Tujuan", "Destination Address"); },
+  get vehicle() { return tt("No. Kendaraan", "Vehicle No."); },
+  get shipmentId() { return tt("Jadwal Terkait", "Linked Schedule"); },
+  get customer() { return tt("Customer", "Customer"); },
+  get payee() { return tt("Dibayarkan Kepada", "Paid To"); },
+  get recipient() { return tt("Penerima Surat", "Letter Recipient"); },
+  get subject() { return tt("Perihal", "Subject"); },
+  get amount() { return tt("Nilai", "Amount"); },
+  get currency() { return tt("Mata Uang", "Currency"); },
+  get purpose() { return tt("Keperluan", "Purpose"); },
+  get notes() { return tt("Keterangan", "Notes"); },
+  get reference() { return tt("Referensi", "Reference"); },
   // Isian Form Pengajuan Dana
-  billingNo: "Nomor Billing",
-  invoiceNo: "Nomor Invoice",
-  invoiceDate: "Tanggal Invoice",
-  invoiceDueDate: "Due Date Invoice",
-  attachment: "Lampiran",
-  feeBm: "Bea Masuk",
-  feePpn: "PPN Import",
-  feePph: "PPH Import",
-  checkedByName: "Checked By",
-  checkedByRole: "Jabatan Checked By",
-  approver1Name: "Approved By",
-  approver1Role: "Jabatan Approved By",
-  packages: "Jumlah Koli",
-  quantity: "Jumlah",
-  unit: "Satuan",
+  get billingNo() { return tt("Nomor Billing", "Billing Number"); },
+  get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
+  get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
+  get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
+  get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
+  get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
+  get attachment() { return tt("Lampiran", "Attachment"); },
+  get feeBm() { return tt("Bea Masuk", "Import Duty"); },
+  get feePpn() { return tt("PPN Import", "Import VAT (PPN)"); },
+  get feePph() { return tt("PPH Import", "Import Income Tax (PPH)"); },
+  get checkedByName() { return tt("Checked By", "Checked By"); },
+  get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
+  get approver1Name() { return tt("Approved By", "Approved By"); },
+  get approver1Role() { return tt("Jabatan Approved By", "Approved By Position"); },
+  get quantity() { return tt("Jumlah", "Quantity"); },
+  get unit() { return tt("Satuan", "Unit"); },
   // Isian CIPL
-  invoiceKind: "Jenis Invoice",
-  consigneeAddress: "Alamat Consignee",
-  notifyParty: "Notify Party",
-  poNo: "PO No.",
-  poDate: "Tanggal PO",
-  poNoExtra: "PO No. lainnya",
-  termsDelivery: "Terms of Delivery",
-  termPayment: "Term of Payment",
-  portLoading: "Port of Loading",
-  finalDestination: "Final Destination",
-  carrier: "Carrier",
-  sailingDate: "Sailing on or About",
-  remarks: "Remarks",
+  get invoiceKind() { return tt("Jenis Invoice", "Invoice Type"); },
+  get consigneeAddress() { return tt("Alamat Consignee", "Consignee Address"); },
+  get notifyParty() { return tt("Notify Party", "Notify Party"); },
+  get poNo() { return tt("PO No.", "PO No."); },
+  get poDate() { return tt("Tanggal PO", "PO Date"); },
+  get poNoExtra() { return tt("PO No. lainnya", "Other PO No."); },
+  get termsDelivery() { return tt("Terms of Delivery", "Terms of Delivery"); },
+  get termPayment() { return tt("Term of Payment", "Term of Payment"); },
+  get portLoading() { return tt("Port of Loading", "Port of Loading"); },
+  get finalDestination() { return tt("Final Destination", "Final Destination"); },
+  get carrier() { return tt("Carrier", "Carrier"); },
+  get sailingDate() { return tt("Sailing on or About", "Sailing on or About"); },
+  get remarks() { return tt("Remarks", "Remarks"); },
 };
 
 /* Urutan tampil di kotak Detail. Yang tidak tersebut di sini ikut di
@@ -1777,10 +1993,10 @@ function tampilkanDetailNomor(id) {
   const p = r.payload || {};
 
   const baris = [
-    ["Nomor", r.doc_number],
-    ["Tanggal", fmtDate(r.doc_date)],
-    ["Pemohon", r.requester],
-    ["Departemen", r.department],
+    [tt("Nomor", "Number"), r.doc_number],
+    [tt("Tanggal", "Date"), fmtDate(r.doc_date)],
+    [tt("Pemohon", "Requester"), r.requester],
+    [tt("Departemen", "Department"), r.department],
   ].filter(([, v]) => String(v == null ? "" : v).trim() !== "");
   const urut = [
     ...DN_URUTAN_FIELD.filter((k) => k in p),
@@ -1833,7 +2049,7 @@ function tampilkanDetailNomor(id) {
     baris.push([label, nilai]);
   });
 
-  $("#promptTitle").textContent = "Detail Pengajuan Nomor";
+  $("#promptTitle").textContent = tt("Detail Pengajuan Nomor", "Number Request Details");
   $("#promptDesc").textContent = "";
   $("#promptDesc").classList.add("d-none");
   $("#promptIcon").className = "bi bi-list-ul";
@@ -1864,3 +2080,21 @@ function tampilkanDetailNomor(id) {
   );
   modal.show();
 }
+
+/* Ketikan di kotak cari: ditunda 300ms supaya tiap huruf tidak
+   memanggil database. Di tab Summary datanya sudah termuat semua, jadi
+   cukup menyaring ulang di tempat -- tanpa memuat ulang. */
+let dnCariTunda = null;
+document.addEventListener("input", (e) => {
+  if (!e.target || e.target.id !== "docNumSearch") return;
+  clearTimeout(dnCariTunda);
+  dnCariTunda = setTimeout(() => {
+    docNumCari = e.target.value.trim();
+    if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
+      if (typeof fsumGambarHasil === "function") fsumGambarHasil();
+      return;
+    }
+    docNumPage = 1;
+    renderDocNumHistory();
+  }, 300);
+});

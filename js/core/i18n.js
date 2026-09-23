@@ -241,13 +241,6 @@ const I18N = {
     "u.bulan.ini": "Bulan Ini",
     "u.bulan.lalu": "Bulan Lalu",
     "u.tahun.ini": "Tahun Ini",
-    "u.ringkasan.vendor": "Ringkasan Vendor",
-    "u.ringkasan.biaya.per.vendor": "Ringkasan Biaya per Vendor",
-    "u.berdasarkan.tanggal.invoice": "Berdasarkan Tanggal Invoice",
-    "u.tidak.ada.pengajuan.dana.pada.rentang.ini": "Tidak ada pengajuan dana pada rentang ini.",
-    "u.tanpa.vendor": "(tanpa vendor)",
-    "u.jml.pengajuan": "Jml Pengajuan",
-    "u.ringkasan.gagal.dimuat": "Ringkasan gagal dimuat. Coba lagi.",
     "f.tanggal.invoice": "Tanggal Invoice",
     "f.due.date.invoice": "Due Date Invoice",
     "f.customer": "Customer",
@@ -626,7 +619,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM. From there: <b>Bea Masuk</b> = Customs Value × 5%, <b>PPN</b> = (Customs Value + Bea Masuk) × 11%, <b>PPH</b> = Customs Value × 2.5% — all filled automatically. Typing your own value stops the automatic fill for that box; clear it to turn it back on. If Bea Masuk is entered manually (some HS Codes are not 5%), PPN uses that manual value too. PDRI = Bea Masuk + PPN + PPH, calculated instantly.",
+      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM. From there: <b>Import Duty (BM)</b> = Customs Value × 5%, <b>PPN</b> = (Customs Value + Import Duty) × 11%, <b>PPH</b> = Customs Value × 2.5% — all filled automatically. Typing your own value stops the automatic fill for that box; clear it to turn it back on. If Import Duty is entered manually (some HS Codes are not 5%), PPN uses that manual value too. PDRI = Import Duty + PPN + PPH, calculated instantly.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form.",
     "form.note.totalValue":
@@ -812,13 +805,6 @@ const I18N = {
     "u.bulan.ini": "This Month",
     "u.bulan.lalu": "Last Month",
     "u.tahun.ini": "This Year",
-    "u.ringkasan.vendor": "Vendor Summary",
-    "u.ringkasan.biaya.per.vendor": "Cost Summary per Vendor",
-    "u.berdasarkan.tanggal.invoice": "By invoice date",
-    "u.tidak.ada.pengajuan.dana.pada.rentang.ini": "No fund requests in this range.",
-    "u.tanpa.vendor": "(no vendor)",
-    "u.jml.pengajuan": "Requests",
-    "u.ringkasan.gagal.dimuat": "Summary failed to load. Please try again.",
     "f.tanggal.invoice": "Invoice Date",
     "f.due.date.invoice": "Invoice Due Date",
     "f.customer": "Customer",
@@ -1143,8 +1129,8 @@ const I18N = {
     "y.sebagian.tanpa.hs.code.cipl": "Some items had no HS Code found (CIPL documents often omit them entirely) — please fill them in on the Item List tab.",
     "y.bruto.per.barang.tidak.ada": "This file has no per-item gross weight — the HEADER total ({n} Kg) was placed on the first item row; adjust it per item if needed.",
     "y.fasilitas.diisi.per.barang": "The SKB PPH (code 457) & SKB COO/E-COO (code 860) facilities were filled in per item according to the BARANGDOKUMEN sheet mapping — check each item via the Facilities button if anything needs adjusting.",
-    "y.pungutan.dihitung.otomatis": "Some or all of the Bea Masuk/PPN/PPH values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
-    "y.pungutan.tidak.cukup.dihitung": "Bea Masuk/PPN/PPH were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
+    "y.pungutan.dihitung.otomatis": "Some or all of the Import Duty/VAT/Income Tax (BM/PPN/PPH) values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
+    "y.pungutan.tidak.cukup.dihitung": "Import Duty/VAT/Income Tax (BM/PPN/PPH) were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
     "y.respon.2003.tidak.ditemukan": "No response row with KODE RESPON=2003 (SPPB issued) was found in the RESPON sheet — the SPPB date falls back to HEADER.TANGGAL DAFTAR; please check it manually.",
     "y.skb.tidak.ditemukan.pemetaan": "SKB PPH (code 457) & SKB COO (code 860) were not found via the BARANGDOKUMEN+DOKUMEN mapping — check the Item List tab manually if they should be there.",
     "f.lainnya": "Other",
@@ -1195,6 +1181,56 @@ function t(kunci, ganti) {
   return teks;
 }
 
+/* TERJEMAHAN SEBARIS: tt("Simpan", "Save").
+
+   Untuk teks pendek sekali-pakai -- label, pesan, tombol -- yang cuma
+   muncul di SATU tempat. Memberi ratusan teks seperti itu kunci kamus
+   masing-masing hanya memindahkan teksnya jauh dari tempat ia dipakai:
+   yang membaca kode harus bolak-balik ke kamus untuk tahu apa yang
+   tampil di layar. Di sini kedua bahasa berdiri berdampingan.
+
+   Kamus I18N di atas tetap dipakai untuk teks panjang (panduan) dan
+   teks yang muncul di banyak tempat. `ganti` sama seperti di t(). */
+function tt(id, en, ganti) {
+  let teks = activeLang === "en" && en != null ? en : id;
+  if (ganti) {
+    Object.keys(ganti).forEach((k) => {
+      teks = String(teks).split("{" + k + "}").join(ganti[k]);
+    });
+  }
+  return teks;
+}
+
+/* Padanan tt() untuk HTML: atribut data-en berisi terjemahan Inggris,
+   isi elemen tetap bahasa Indonesia. Teks Indonesia aslinya disimpan
+   di data-id saat pertama kali disapu, supaya bisa kembali ketika
+   bahasa dipindah lagi ke Indonesia.
+
+     data-en        -> isi elemen
+     data-en-ph     -> placeholder
+     data-en-title  -> title
+     data-en-aria   -> aria-label (dibacakan pembaca layar) */
+const I18N_ATRIBUT_EN = [
+  ["en", null],
+  ["enPh", "placeholder"],
+  ["enTitle", "title"],
+  ["enAria", "aria-label"],
+];
+function applyI18nSebaris() {
+  I18N_ATRIBUT_EN.forEach(([kunci, atribut]) => {
+    const sel = "[data-" + kunci.replace(/[A-Z]/g, (h) => "-" + h.toLowerCase()) + "]";
+    document.querySelectorAll(sel).forEach((el) => {
+      const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
+      if (el.dataset[simpan] == null) {
+        el.dataset[simpan] = atribut ? el.getAttribute(atribut) || "" : el.innerHTML;
+      }
+      const teks = activeLang === "en" ? el.dataset[kunci] : el.dataset[simpan];
+      if (atribut) el.setAttribute(atribut, teks);
+      else el.innerHTML = teks;
+    });
+  });
+}
+
 /* Menyapu seluruh halaman dan mengisi ulang tiap elemen ber-data-i18n.
 
    data-i18n       -> isi elemen (HTML, supaya <b> di dalam kalimat
@@ -1211,6 +1247,7 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     el.setAttribute("title", t(el.dataset.i18nTitle));
   });
+  applyI18nSebaris();
   document.documentElement.lang = activeLang;
 }
 
@@ -1238,6 +1275,23 @@ function setLang(kode) {
     const layar = document.getElementById("viewHsCode");
     if (layar && !layar.classList.contains("d-none")) renderHsCodes();
   }
+  /* Halaman lain yang isinya DIRAKIT JavaScript -- tanpa digambar ulang
+     di sini, ganti bahasa baru terlihat setelah halamannya dibuka lagi.
+     Hanya yang sedang tampil yang digambar ulang; yang tersembunyi akan
+     tergambar dengan bahasa baru begitu dibuka. */
+  const tampil = (id) => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("d-none");
+  };
+  if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
+  if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
+  if (tampil("viewDocNum")) {
+    if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();
+    if (typeof renderDocNumHistory === "function") renderDocNumHistory();
+    if (typeof refreshDocNumPreview === "function" && typeof docNumActiveTab !== "undefined")
+      refreshDocNumPreview(docNumActiveTab);
+  }
+
   document.querySelectorAll("[data-lang-pick]").forEach((el) => {
     el.classList.toggle("active", el.dataset.langPick === kode);
   });

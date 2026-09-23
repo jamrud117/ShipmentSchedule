@@ -472,15 +472,15 @@ function openBulkModal(action) {
   bulkAction = action;
   // Requirement D: "Bulk export/import: hilangkan dropdown konfirmasi pilihan Import/Export
   const modeLabel = activeMode === "import" ? "Import" : "Export";
-  $("#bulkModeInfo").textContent = `Section aktif: Jadwal ${modeLabel}`;
+  $("#bulkModeInfo").textContent = tt(`Section aktif: Jadwal ${modeLabel}`, `Active section: ${modeLabel} Schedule`);
   $("#bulkModalTitle").textContent =
     action === "export"
-      ? `Bulk Export Excel — Jadwal ${modeLabel}`
-      : `Bulk Import Excel — Jadwal ${modeLabel}`;
+      ? tt(`Bulk Export Excel — Jadwal ${modeLabel}`, `Bulk Export Excel — ${modeLabel} Schedule`)
+      : tt(`Bulk Import Excel — Jadwal ${modeLabel}`, `Bulk Import Excel — ${modeLabel} Schedule`);
   $("#bulkExportInfo").classList.toggle("d-none", action !== "export");
   $("#bulkImportSection").classList.toggle("d-none", action !== "import");
   $("#bulkActionBtn").textContent =
-    action === "export" ? "Unduh Excel" : "Proses Import";
+    action === "export" ? tt("Unduh Excel", "Download Excel") : tt("Proses Import", "Run Import");
   $("#bulkImportFile").value = "";
   bulkModal.show();
 }
@@ -518,7 +518,7 @@ async function handleDeleteAll() {
       const originalLabel = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML =
-        '<span class="spinner-border spinner-border-sm" role="status"></span> Menghapus...';
+        '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menghapus...", "Deleting...");
       try {
         // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka yang terhapus
         const { error } = await supabaseClient

@@ -73,8 +73,13 @@ function router() {
        memang sudah boleh dilihat viewer, disusun ulang jadi "apa yang
        perlu ditindak". Aksi yang mengubah data di sana disembunyikan
        lewat body.is-viewer, sama seperti di halaman Jadwal. */
-    hash === "#/docnum" ||
     !!editMatch;
+  /* Nomor Dokumen: EXIM & marketing. Viewer tetap tidak. */
+  if (hash === "#/docnum" && !canEditDocNum()) {
+    showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
+    location.hash = "#/";
+    return;
+  }
   if (halamanEximSaja && !canEdit()) {
     showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
     location.hash = "#/";
@@ -395,7 +400,7 @@ function syncFormValidity() {
   if (!$("#fEtd").value) kurang.push("ETD");
   if (!$("#fEta").value) kurang.push("ETA");
   if (!draftItems.some((it) => (it.namaBarang || "").trim() !== ""))
-    kurang.push("minimal 1 nama barang");
+    kurang.push(tt("minimal 1 nama barang", "at least 1 item name"));
   if ($("#fRouteType").value === "transit" &&
       !draftStops.some((st) => (st.terminal || "").trim() !== ""))
     kurang.push("minimal 1 terminal transit");
@@ -405,7 +410,7 @@ function syncFormValidity() {
     el.innerHTML = `<i class="bi bi-check-circle-fill"></i> Siap disimpan`;
   } else {
     el.className = "form-validity form-validity--warn";
-    el.innerHTML = `<i class="bi bi-exclamation-circle"></i> Belum lengkap: ${escapeHtml(kurang.join(", "))}`;
+    el.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${tt("Belum lengkap", "Incomplete")}: ${escapeHtml(kurang.join(", "))}`;
   }
 }
 
@@ -467,7 +472,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
       : [];
   if (routeType === "transit" && cleanStops.length === 0) {
     showToast(
-      'Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".',
+      tt('Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".', 'Please add at least 1 Transit Terminal, or change the Route Type to "Direct".'),
       "danger",
     );
     return;
@@ -547,7 +552,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   const originalLabel = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML =
-    '<span class="spinner-border spinner-border-sm" role="status"></span> Menyimpan...';
+    '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menyimpan...", "Saving...");
   try {
     if (id) {
       await updateShipmentRecord(id, payload, cleanItems, cleanStops);

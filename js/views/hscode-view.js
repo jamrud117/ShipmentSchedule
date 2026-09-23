@@ -31,8 +31,8 @@ function batasiHsCode(teks) {
 
 function periksaHsCode(kode) {
   const angka = (String(kode || "").match(/\d/g) || []).length;
-  if (!angka) return "HS Code harus diisi.";
-  if (angka > HSCODE_MAKS_ANGKA) return "HS Code paling banyak 8 angka.";
+  if (!angka) return tt("HS Code harus diisi.", "HS Code is required.");
+  if (angka > HSCODE_MAKS_ANGKA) return tt("HS Code paling banyak 8 angka.", "HS Code can have at most 8 digits.");
   return null;
 }
 
@@ -180,10 +180,10 @@ function renderHsCodes() {
         </div>
         <span class="hscode-code">${escapeHtml(r.hs_code)}</span>
         <div class="hscode-actions">
-          <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="Ubah">
+          <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
             <i class="bi bi-pencil"></i>
           </button>
-          <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="Hapus">
+          <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
             <i class="bi bi-trash3"></i>
           </button>
         </div>
@@ -204,24 +204,24 @@ async function pastikanHsCodeTermuat() {
 function tambahHsCodeBaru() {
   if (!requireEdit()) return;
   showPrompt({
-    title: "Tambah HS Code",
+    title: tt("Tambah HS Code", "Add HS Code"),
     desc: t("s.nama.barang.hs.code.yang.sudah.pernah.dipakai."),
     icon: "bi-upc-scan",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: "Nama barang", placeholder: "Cth: Sole Material" },
+      { key: "nama", label: tt("Nama barang", "Item name"), placeholder: tt("Cth: Sole Material", "e.g. Sole Material") },
       {
         key: "kode",
         label: "HS Code",
         placeholder: "Cth: 6404.19.00",
-        hint: "Maksimal 8 angka (titik hanya pemisah).",
+        hint: tt("Maksimal 8 angka (titik hanya pemisah).", "At most 8 digits (dots are only separators)."),
         inputmode: "numeric",
         filter: batasiHsCode,
       },
-      { key: "catatan", label: "Catatan (opsional)", placeholder: "Cth: EVA Sole" },
+      { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), placeholder: tt("Cth: EVA Sole", "e.g. EVA Sole") },
     ],
     onSubmit: (v) => {
-      if (!(v.nama || "").trim()) return "Nama barang harus diisi.";
+      if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
       simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());
@@ -257,23 +257,23 @@ function editHsCode(id) {
   const r = hsCodeRows.find((x) => x.id === id);
   if (!r) return;
   showPrompt({
-    title: "Ubah HS Code",
+    title: tt("Ubah HS Code", "Edit HS Code"),
     icon: "bi-pencil-square",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: "Nama barang", value: r.item_name || "" },
+      { key: "nama", label: tt("Nama barang", "Item name"), value: r.item_name || "" },
       {
         key: "kode",
         label: "HS Code",
         value: r.hs_code || "",
-        hint: "Maksimal 8 angka (titik hanya pemisah).",
+        hint: tt("Maksimal 8 angka (titik hanya pemisah).", "At most 8 digits (dots are only separators)."),
         inputmode: "numeric",
         filter: batasiHsCode,
       },
-      { key: "catatan", label: "Catatan (opsional)", value: r.notes || "" },
+      { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), value: r.notes || "" },
     ],
     onSubmit: (v) => {
-      if (!(v.nama || "").trim()) return "Nama barang harus diisi.";
+      if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
       simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());

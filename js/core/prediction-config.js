@@ -172,50 +172,50 @@ const PREDICTION_CONFIG = {
     /* ---- UDARA → Soekarno-Hatta ---- */
     {
       id: "vn-air-cgk",
-      label: "Ho Chi Minh / Hanoi → Jakarta (udara)",
+      get label() { return tt("Ho Chi Minh / Hanoi → Jakarta (udara)", "Ho Chi Minh / Hanoi → Jakarta (air)"); },
       match: { fromCountry: "VN", fromPort: ["SGN", "HAN"], toPort: "CGK" },
       days: { AIR: { direct: 1, transit: 3 } },
     },
     {
       id: "cn-air-south-cgk",
-      label: "Pudong / Hongqiao / Baiyun → Jakarta (udara)",
+      get label() { return tt("Pudong / Hongqiao / Baiyun → Jakarta (udara)", "Pudong / Hongqiao / Baiyun → Jakarta (air)"); },
       match: { fromCountry: "CN", fromPort: ["PVG", "SHA", "CAN"], toPort: "CGK" },
       days: { AIR: { direct: 2, transit: 4 } },
     },
     {
       id: "cn-air-szx-cgk",
-      label: "Shenzhen Bao'an → Jakarta (udara)",
+      get label() { return tt("Shenzhen Bao'an → Jakarta (udara)", "Shenzhen Bao'an → Jakarta (air)"); },
       match: { fromCountry: "CN", fromPort: "SZX", toPort: "CGK" },
       days: { AIR: { direct: 2, transit: 5 } },
     },
     {
       id: "cn-air-north-cgk",
-      label: "Beijing Capital / Qingdao Jiaodong → Jakarta (udara)",
+      get label() { return tt("Beijing Capital / Qingdao Jiaodong → Jakarta (udara)", "Beijing Capital / Qingdao Jiaodong → Jakarta (air)"); },
       match: { fromCountry: "CN", fromPort: ["PEK", "TAO"], toPort: "CGK" },
       days: { AIR: { direct: 3, transit: 5 } },
     },
     {
       id: "ru-air-mow-cgk",
-      label: "Sheremetyevo / Domodedovo → Jakarta (udara)",
+      get label() { return tt("Sheremetyevo / Domodedovo → Jakarta (udara)", "Sheremetyevo / Domodedovo → Jakarta (air)"); },
       match: { fromCountry: "RU", fromPort: ["SVO", "DME"], toPort: "CGK" },
       days: { AIR: { direct: 4, transit: 7 } },
     },
     {
       // Hanya transit — tidak ada penerbangan langsung Pulkovo → Jakarta.
       id: "ru-air-led-cgk",
-      label: "St Petersburg Pulkovo → Jakarta (udara, transit)",
+      get label() { return tt("St Petersburg Pulkovo → Jakarta (udara, transit)", "St Petersburg Pulkovo → Jakarta (air, transit)"); },
       match: { fromCountry: "RU", fromPort: "LED", toPort: "CGK" },
       days: { AIR: { transit: 8 } },
     },
     {
       id: "mx-air-mex-cgk",
-      label: "Mexico City → Jakarta (udara, transit)",
+      get label() { return tt("Mexico City → Jakarta (udara, transit)", "Mexico City → Jakarta (air, transit)"); },
       match: { fromCountry: "MX", fromPort: "MEX", toPort: "CGK" },
       days: { AIR: { transit: 6 } },
     },
     {
       id: "mx-air-mty-gdl-cgk",
-      label: "Monterrey / Guadalajara → Jakarta (udara, transit)",
+      get label() { return tt("Monterrey / Guadalajara → Jakarta (udara, transit)", "Monterrey / Guadalajara → Jakarta (air, transit)"); },
       match: { fromCountry: "MX", fromPort: ["MTY", "GDL"], toPort: "CGK" },
       days: { AIR: { transit: 7 } },
     },
@@ -257,7 +257,7 @@ const PREDICTION_CONFIG = {
     },
     {
       id: "sea-pus-tpp",
-      label: "Busan → Tanjung Priok (pelayaran lain)",
+      get label() { return tt("Busan → Tanjung Priok (pelayaran lain)", "Busan → Tanjung Priok (other carriers)"); },
       match: { fromPort: "PUS", toPort: "TPP" },
       days: { SEA_FCL: 10, SEA_LCL: 13 },
     },
@@ -265,7 +265,7 @@ const PREDICTION_CONFIG = {
     /* ---- LAUT FCL → Tanjung Priok ---- */
     {
       id: "vn-sea-sgn-tpp",
-      label: "Ho Chi Minh (Cat Lai & sekitarnya) → Tanjung Priok",
+      get label() { return tt("Ho Chi Minh (Cat Lai & sekitarnya) → Tanjung Priok", "Ho Chi Minh (Cat Lai & surroundings) → Tanjung Priok"); },
       /* SELURUH TERMINAL SATU KOMPLEKS didaftar bersama.
 
          Cat Lai, Sai Gon Port, VICT, dan Hiep Phuoc semuanya di sungai
@@ -282,7 +282,7 @@ const PREDICTION_CONFIG = {
     },
     {
       id: "vn-sea-hph-tpp",
-      label: "Hai Phong (Dinh Vu & sekitarnya) → Tanjung Priok",
+      get label() { return tt("Hai Phong (Dinh Vu & sekitarnya) → Tanjung Priok", "Hai Phong (Dinh Vu & surroundings) → Tanjung Priok"); },
       match: {
         fromCountry: "VN",
         fromPort: ["HPH", "DVU", "CVE", "DXA", "TVN"],
@@ -377,7 +377,7 @@ const PREDICTION_CONFIG = {
     },
     {
       id: "ru-id",
-      label: "Rusia → Indonesia",
+      get label() { return tt("Rusia → Indonesia", "Russia → Indonesia"); },
       match: { fromCountry: "RU", toCountry: "ID" },
       days: {
         AIR: { direct: [3, 5], transit: [5, 8] },
@@ -387,7 +387,7 @@ const PREDICTION_CONFIG = {
     },
     {
       id: "mx-id",
-      label: "Meksiko → Indonesia",
+      get label() { return tt("Meksiko → Indonesia", "Mexico → Indonesia"); },
       match: { fromCountry: "MX", toCountry: "ID" },
       days: {
         AIR: { direct: [2, 4], transit: [5, 7] },
@@ -440,7 +440,7 @@ const PREDICTION_CONFIG = {
   operations: [
     {
       id: "default",
-      label: "Bawaan",
+      get label() { return tt("Bawaan", "Default"); },
       match: {},
       days: {
         AIR: { stripping: 0, clearance: 1, delivery: 1 },
@@ -530,11 +530,11 @@ const PREDICTION_CONFIG = {
      level dipakai untuk mengurutkan & mewarnai, bukan untuk menghitung.
   ---------------------------------------------------------------- */
   confidence: {
-    low: { label: "Rendah", level: 1, tone: "low" },
-    medium: { label: "Sedang", level: 2, tone: "medium" },
-    medhigh: { label: "Cukup Tinggi", level: 3, tone: "medhigh" },
-    high: { label: "Tinggi", level: 4, tone: "high" },
-    veryhigh: { label: "Sangat Tinggi", level: 5, tone: "veryhigh" },
+    low: { get label() { return tt("Rendah", "Low"); }, level: 1, tone: "low" },
+    medium: { get label() { return tt("Sedang", "Medium"); }, level: 2, tone: "medium" },
+    medhigh: { get label() { return tt("Cukup Tinggi", "Fairly High"); }, level: 3, tone: "medhigh" },
+    high: { get label() { return tt("Tinggi", "High"); }, level: 4, tone: "high" },
+    veryhigh: { get label() { return tt("Sangat Tinggi", "Very High"); }, level: 5, tone: "veryhigh" },
     final: { label: "Final", level: 6, tone: "final" },
   },
 

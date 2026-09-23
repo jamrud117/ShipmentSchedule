@@ -94,7 +94,7 @@ function showConfirm(message, onConfirm, opsi) {
   btn.className =
     "btn " + (o.tone === "primary" ? "btn-primary-navy" : "btn-danger");
 
-  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : "Hapus Data");
+  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : tt("Hapus Data", "Delete Data"));
 
   const ikon = $("#confirmIcon");
   ikon.className = "bi " + (o.icon || "bi-exclamation-triangle-fill");
@@ -136,7 +136,7 @@ function showPrompt(opsi) {
   $("#promptFields").classList.toggle("mt-3", !!o.desc);
   $("#promptIcon").className = "bi " + (o.icon || "bi-pencil-square");
   $("#promptTitle").textContent = o.title || "Isian";
-  $("#promptOk").textContent = o.okText || "Simpan";
+  $("#promptOk").textContent = o.okText || tt("Simpan", "Save");
   $("#promptError").classList.add("d-none");
 
   const fields = o.fields || [];

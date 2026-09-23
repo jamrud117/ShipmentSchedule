@@ -38,8 +38,9 @@ function fmtDate(d) {
 }
 function fmtDateLong(d) {
   const dt = parseLocalDate(d);
-  if (!dt) return "Tanggal Tidak Diketahui";
-  return dt.toLocaleDateString("id-ID", {
+  if (!dt) return tt("Tanggal Tidak Diketahui", "Unknown Date");
+  // Nama bulan mengikuti bahasa tampilan ("Agustus" / "August").
+  return dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
     day: "2-digit",
     month: "long",
     year: "numeric",

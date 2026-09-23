@@ -14,20 +14,28 @@
    seperti biasa, lalu event "change" bawaannya yang dipakai di sini
    untuk menyegarkan teks di tombol pemicu. */
 
-const BULAN_PENDEK = [
-  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
-];
-const BULAN_PANJANG = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
-];
-const HARI_PENDEK = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+/* Nama bulan & hari MENGIKUTI BAHASA TAMPILAN, jadi dipilih saat
+   dipakai -- bukan tabel tetap yang dibaca sekali saat dimuat. */
+const DRP_NAMA = {
+  id: {
+    pendek: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"],
+    panjang: ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"],
+    hari: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
+  },
+  en: {
+    pendek: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    panjang: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    hari: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  },
+};
+const drpNama = () => DRP_NAMA[activeLang === "en" ? "en" : "id"];
+const bulanPendek = (i) => drpNama().pendek[i];
+const bulanPanjang = (i) => drpNama().panjang[((i % 12) + 12) % 12];
 
 function drpFmtDisplay(iso) {
   const dt = parseLocalDate(iso);
   if (!dt) return "";
-  return `${String(dt.getDate()).padStart(2, "0")} ${BULAN_PENDEK[dt.getMonth()]} ${dt.getFullYear()}`;
+  return `${String(dt.getDate()).padStart(2, "0")} ${bulanPendek(dt.getMonth())} ${dt.getFullYear()}`;
 }
 
 function drpIsoOf(year, month, day) {
@@ -74,7 +82,7 @@ function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
   const min = dari && sampai ? (dari < sampai ? dari : sampai) : "";
   const maks = dari && sampai ? (dari < sampai ? sampai : dari) : "";
 
-  const kepala = HARI_PENDEK.map((h) => `<div class="drp-dow">${h}</div>`).join("");
+  const kepala = drpNama().hari.map((h) => `<div class="drp-dow">${h}</div>`).join("");
   const badan = baris
     .map(
       (mgg) =>
@@ -93,9 +101,9 @@ function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
 }
 
 function drpRenderCalendars() {
-  $("#drpMonthLabel0").textContent = `${BULAN_PANJANG[((drpViewMonth % 12) + 12) % 12]} ${drpViewYear + Math.floor(drpViewMonth / 12)}`;
+  $("#drpMonthLabel0").textContent = `${bulanPanjang(drpViewMonth)} ${drpViewYear + Math.floor(drpViewMonth / 12)}`;
   const m1 = drpViewMonth + 1;
-  $("#drpMonthLabel1").textContent = `${BULAN_PANJANG[((m1 % 12) + 12) % 12]} ${drpViewYear + Math.floor(m1 / 12)}`;
+  $("#drpMonthLabel1").textContent = `${bulanPanjang(m1)} ${drpViewYear + Math.floor(m1 / 12)}`;
   $("#drpGrid0").innerHTML = drpMonthGridHtml(drpViewYear, drpViewMonth);
   $("#drpGrid1").innerHTML = drpMonthGridHtml(drpViewYear, drpViewMonth + 1);
   drpSyncTriggerPreview();
@@ -111,7 +119,7 @@ function drpSyncTriggerPreview() {
   } else if (drpTempFrom) {
     teks.textContent = `${drpFmtDisplay(drpTempFrom)}  –  …`;
   } else {
-    teks.textContent = "Pilih Rentang Tanggal";
+    teks.textContent = tt("Pilih Rentang Tanggal", "Choose Date Range");
   }
 }
 
@@ -185,7 +193,7 @@ function drpSyncTriggerFromFilter() {
   if (dari && sampai) {
     teks.textContent = `${drpFmtDisplay(dari)}  –  ${drpFmtDisplay(sampai)}`;
   } else {
-    teks.textContent = "Pilih Rentang Tanggal";
+    teks.textContent = tt("Pilih Rentang Tanggal", "Choose Date Range");
   }
   $("#dateRangeTrigger").classList.toggle("has-value", !!(dari && sampai));
   $("#btnClearDateRange").classList.toggle("d-none", !(dari || sampai));
@@ -303,32 +311,47 @@ function buatRentangTanggal(akar, opsi) {
     </button>
     <div class="drp-popover d-none" data-rt="popover">
       ${pintas.length ? `<div class="drp-quick-row">${pintas
-        .map((p, i) => `<button type="button" class="quick-date-btn" data-rt-pintas="${i}">${escapeHtml(p.label)}</button>`)
+        .map((p, i) => `<button type="button" class="quick-date-btn" data-rt-pintas="${i}"></button>`)
         .join("")}</div>` : ""}
       <div class="drp-header">
-        <button type="button" class="drp-nav" data-rt="mundur" aria-label="Bulan sebelumnya"><i class="bi bi-chevron-left"></i></button>
+        <button type="button" class="drp-nav" data-rt="mundur" aria-label="${tt("Bulan sebelumnya", "Previous month")}"><i class="bi bi-chevron-left"></i></button>
         <div class="drp-months">
           <div class="drp-month-label" data-rt="label0"></div>
-          <div class="drp-month-label" data-rt="label1"></div>
+          <div class="drp-month-label drp-month-label--second" data-rt="label1"></div>
         </div>
-        <button type="button" class="drp-nav" data-rt="maju" aria-label="Bulan berikutnya"><i class="bi bi-chevron-right"></i></button>
+        <button type="button" class="drp-nav" data-rt="maju" aria-label="${tt("Bulan berikutnya", "Next month")}"><i class="bi bi-chevron-right"></i></button>
       </div>
       <div class="drp-grids" data-rt="grids">
         <div class="drp-grid" data-rt="grid0"></div>
         <div class="drp-grid drp-grid--second" data-rt="grid1"></div>
       </div>
       <div class="drp-footer">
-        <button type="button" class="drp-reset" data-rt="reset">Reset</button>
-        <button type="button" class="drp-apply" data-rt="terapkan">Terapkan</button>
+        <button type="button" class="drp-reset" data-rt="reset"></button>
+        <button type="button" class="drp-apply" data-rt="terapkan"></button>
       </div>
     </div>`;
 
   const q = (n) => akar.querySelector(`[data-rt="${n}"]`);
   const urut = (a, b) => (a && b && a > b ? [b, a] : [a, b]);
   const teksRentang = (a, b) =>
-    a && b ? `${drpFmtDisplay(a)}  –  ${drpFmtDisplay(b)}` : a ? `${drpFmtDisplay(a)}  –  …` : "Pilih Rentang Tanggal";
+    a && b ? `${drpFmtDisplay(a)}  –  ${drpFmtDisplay(b)}` : a ? `${drpFmtDisplay(a)}  –  …` : tt("Pilih Rentang Tanggal", "Choose Date Range");
 
+  /* Teks tetap di panel ini (tombol pintas, Reset, Terapkan) ditulis
+     ulang TIAP kali digambar, bukan sekali saat dibuat: instans ini
+     hidup selama halaman terbuka, dan bahasa bisa diganti di tengahnya.
+     Label pintas boleh berupa fungsi supaya ikut bahasa yang aktif. */
+  const labelPintas = (p) => (typeof p.label === "function" ? p.label() : p.label);
+  function tulisTeksTetap() {
+    akar.querySelectorAll("[data-rt-pintas]").forEach((btn) => {
+      btn.textContent = labelPintas(pintas[+btn.dataset.rtPintas]);
+    });
+    q("reset").textContent = "Reset";
+    q("terapkan").textContent = tt("Terapkan", "Apply");
+    q("mundur").setAttribute("aria-label", tt("Bulan sebelumnya", "Previous month"));
+    q("maju").setAttribute("aria-label", tt("Bulan berikutnya", "Next month"));
+  }
   function gambarPemicu() {
+    tulisTeksTetap();
     q("teks").textContent = teksRentang(dari, sampai);
     q("pemicu").classList.toggle("has-value", !!(dari && sampai));
     // Tombol pintas yang cocok dengan rentang aktif ikut menyala.
@@ -339,26 +362,68 @@ function buatRentangTanggal(akar, opsi) {
     });
   }
   function gambarKalender() {
-    const nama = (m) => `${BULAN_PANJANG[((m % 12) + 12) % 12]} ${lihatTahun + Math.floor(m / 12)}`;
+    const nama = (m) => `${bulanPanjang(m)} ${lihatTahun + Math.floor(m / 12)}`;
     q("label0").textContent = nama(lihatBulan);
     q("label1").textContent = nama(lihatBulan + 1);
     const [a, b] = urut(tDari, tSampai);
     q("grid0").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan, a, b || a);
     q("grid1").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan + 1, a, b || a);
     q("teks").textContent = teksRentang(tDari, tSampai);
+    if (!q("popover").classList.contains("d-none")) posisikan();
   }
   const terbuka = () => !q("popover").classList.contains("d-none");
+
+  /* PANEL MENGAMBANG, BUKAN MENEMPEL DI DALAM WADAHNYA.
+
+     Dengan position:absolute panel ini ikut terpotong oleh wadah mana
+     pun di atasnya yang ber-overflow:hidden -- di tab Summary itu kartu
+     .docnum-shell (dipotong demi sudut membulatnya). Saat hasil
+     saringannya kosong, isi kartunya pendek, dan separuh bawah panel --
+     tempat Reset & Terapkan -- terpotong di luar kartu: tidak bisa
+     diklik sama sekali. position:fixed lepas dari semua wadah itu;
+     posisinya dihitung dari tombol pemicunya, dan dihitung ulang saat
+     halaman digulir atau diubah ukurannya. */
+  const JARAK = 8;
+  function posisikan() {
+    const pop = q("popover");
+    const r = q("pemicu").getBoundingClientRect();
+    pop.style.position = "fixed";
+    pop.style.right = "auto";
+    pop.style.bottom = "auto";
+    const lebar = pop.offsetWidth;
+    const tinggi = pop.offsetHeight;
+    // Tidak menembus tepi kanan layar.
+    const kiri = Math.max(JARAK, Math.min(r.left, innerWidth - lebar - JARAK));
+    // Di bawah tombol kalau muat; kalau tidak dan ruang di atas lebih
+    // lega, di atasnya.
+    const muatBawah = r.bottom + JARAK + tinggi <= innerHeight;
+    const lebihLegaAtas = r.top > innerHeight - r.bottom;
+    const atas = !muatBawah && lebihLegaAtas
+      ? Math.max(JARAK, r.top - JARAK - tinggi)
+      : r.bottom + JARAK;
+    pop.style.left = kiri + "px";
+    pop.style.top = atas + "px";
+  }
+  const ikutiPemicu = () => { if (terbuka()) posisikan(); };
+
   function buka() {
+    tulisTeksTetap();
     tDari = dari; tSampai = sampai;
     const acuan = parseLocalDate(dari) || new Date();
     lihatTahun = acuan.getFullYear(); lihatBulan = acuan.getMonth();
     gambarKalender();
     q("popover").classList.remove("d-none");
+    posisikan();
+    // capture: gulir di wadah mana pun (bukan cuma halaman) ikut dihitung.
+    addEventListener("scroll", ikutiPemicu, true);
+    addEventListener("resize", ikutiPemicu);
     q("pemicu").setAttribute("aria-expanded", "true");
     q("pemicu").classList.add("is-open");
   }
   function tutup() {
     q("popover").classList.add("d-none");
+    removeEventListener("scroll", ikutiPemicu, true);
+    removeEventListener("resize", ikutiPemicu);
     q("pemicu").setAttribute("aria-expanded", "false");
     q("pemicu").classList.remove("is-open");
     gambarPemicu();
@@ -390,12 +455,24 @@ function buatRentangTanggal(akar, opsi) {
       terapkan(a, b); // jalan pintas langsung berlaku, tanpa perlu Terapkan
     }),
   );
-  document.addEventListener("click", (e) => { if (terbuka() && !akar.contains(e.target)) tutup(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && terbuka()) tutup(); });
+  /* Pendengar di `document` disimpan supaya bisa DILEPAS. Instans yang
+     digambar ulang berkali-kali (mis. tab Summary Pengajuan Dana, tiap
+     ganti tab atau bahasa) tanpa melepasnya akan menumpuk pendengar
+     yang terus menunjuk ke elemen yang sudah tidak ada di halaman. */
+  const diLuar = (e) => { if (terbuka() && !akar.contains(e.target)) tutup(); };
+  const tombolEsc = (e) => { if (e.key === "Escape" && terbuka()) tutup(); };
+  document.addEventListener("click", diLuar);
+  document.addEventListener("keydown", tombolEsc);
 
   gambarPemicu();
   return {
     ambil: () => [dari, sampai],
     setel: (a, b) => { [dari, sampai] = urut(a || "", b || ""); gambarPemicu(); },
+    lepas: () => {
+      document.removeEventListener("click", diLuar);
+      document.removeEventListener("keydown", tombolEsc);
+      removeEventListener("scroll", ikutiPemicu, true);
+      removeEventListener("resize", ikutiPemicu);
+    },
   };
 }

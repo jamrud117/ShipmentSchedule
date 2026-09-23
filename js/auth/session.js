@@ -4,14 +4,32 @@
 
 const authState = { user: null, profile: null, siap: false };
 
-/* Peran 'exim' boleh mengubah data; sisanya hanya melihat */
+/* PERAN
+     exim      -- mengubah semua data
+     marketing -- hanya MELIHAT di seluruh aplikasi, KECUALI Nomor
+                  Dokumen: boleh memperbaiki isian nomor yang SUDAH ada dan
+                  menandai status bayar. Mengajukan nomor baru, menghapus
+                  nomor & mengatur nomor urut tetap khusus EXIM --
+                  ketiganya menambah atau mengubah penomoran.
+     viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
+
+   canEdit() tetap berarti "EXIM" -- dipakai di seluruh aplikasi untuk
+   perubahan data umum. Hak khusus Nomor Dokumen punya pemeriksanya
+   sendiri, supaya membuka satu halaman untuk marketing tidak diam-diam
+   membuka tombol ubah di halaman lain. */
+function peranSaya() {
+  return (authState.profile && authState.profile.role) || "";
+}
 function canEdit() {
-  return !!authState.profile && authState.profile.role === "exim";
+  return peranSaya() === "exim";
+}
+function canEditDocNum() {
+  return peranSaya() === "exim" || peranSaya() === "marketing";
 }
 
 function currentRoleLabel() {
   if (!authState.profile) return "—";
-  return authState.profile.role === "exim" ? "EXIM" : "Viewer";
+  return { exim: "EXIM", marketing: "Marketing" }[peranSaya()] || "Viewer";
 }
 
 /* Ambil profil (berisi peran) milik akun yang sedang login */
@@ -83,10 +101,10 @@ function pesanLogin(error) {
   if (t.includes("email not confirmed"))
     return t("s.akun.belum.aktif.minta.admin.menjalankan.ulang");
   if (t.includes("rate limit") || t.includes("too many"))
-    return "Terlalu banyak percobaan. Coba lagi beberapa menit.";
+    return tt("Terlalu banyak percobaan. Coba lagi beberapa menit.", "Too many attempts. Try again in a few minutes.");
   if (t.includes("failed to fetch") || t.includes("network"))
     return t("s.tidak.bisa.menghubungi.server.periksa.koneksi");
-  return error && error.message ? error.message : "Login gagal.";
+  return error && error.message ? error.message : tt("Login gagal.", "Sign-in failed.");
 }
 
 /* ------------------------------------------------------------------
@@ -100,6 +118,9 @@ function applyPermissions() {
   const boleh = canEdit();
   document.body.classList.toggle("is-viewer", !boleh);
   document.body.classList.toggle("is-editor", boleh);
+  /* Marketing = viewer di semua halaman; kelas ini hanya membuka
+     kembali Nomor Dokumen (lihat auth.css). */
+  document.body.classList.toggle("is-marketing", peranSaya() === "marketing");
 
   const chip = $("#userChip");
   if (chip && authState.profile) {
@@ -108,10 +129,11 @@ function applyPermissions() {
     $("#userChipName").textContent =
       authState.profile.full_name ||
       authState.profile.username ||
-      "Pengguna";
+      tt("Pengguna", "User");
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
+    badge.classList.toggle("is-marketing", peranSaya() === "marketing");
   }
 
   /* Isian yang sudah tergambar dimatikan juga — CSS bisa menyembunyikan
@@ -120,20 +142,38 @@ function applyPermissions() {
 }
 
 function lockInputs() {
-  document
-    .querySelectorAll(
-      "#cardContainer input, #cardContainer select, #cardContainer textarea," +
-        " #viewDocNum input, #viewDocNum select, #viewDocNum textarea",
-    )
-    .forEach((el) => {
-      if (el.dataset.viewerLocked) return;
-      el.dataset.viewerLocked = "1";
-      el.disabled = true;
+  /* Isian Nomor Dokumen TIDAK dikunci untuk marketing: ia boleh
+     memperbaiki isian nomor yang sudah ada. Dulu seluruh #viewDocNum
+     dikunci untuk semua yang bukan EXIM -- tidak masalah selama viewer
+     memang tak bisa membuka halaman itu, tapi begitu marketing boleh
+     masuk, form perbaikannya tampil dengan setiap isian mati. */
+  const docnumTerkunci = !canEditDocNum();
+  const pilih =
+    "#cardContainer input, #cardContainer select, #cardContainer textarea" +
+    (docnumTerkunci ? ", #viewDocNum input, #viewDocNum select, #viewDocNum textarea" : "");
+  document.querySelectorAll(pilih).forEach((el) => {
+    if (el.dataset.viewerLocked) return;
+    el.dataset.viewerLocked = "1";
+    el.disabled = true;
+  });
+  // Yang sempat terkunci sebelum profilnya termuat dibuka lagi.
+  if (!docnumTerkunci) {
+    document.querySelectorAll("#viewDocNum [data-viewer-locked]").forEach((el) => {
+      delete el.dataset.viewerLocked;
+      el.disabled = false;
     });
+  }
 }
 
 /* Penjaga untuk aksi yang mengubah data. Dipanggil di awal tiap
    penangan; UI-nya memang sudah disembunyikan, ini lapis kedua */
+/* Penjaga aksi di halaman Nomor Dokumen: EXIM & marketing. */
+function requireEditDocNum(pesan) {
+  if (canEditDocNum()) return true;
+  showToast(pesan || t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger");
+  return false;
+}
+
 function requireEdit(pesan) {
   if (canEdit()) return true;
   showToast(
@@ -249,7 +289,7 @@ document.addEventListener("click", (e) => {
   const buka = inp.type === "password";
   inp.type = buka ? "text" : "password";
   btn.querySelector("i").className = buka ? "bi bi-eye-slash" : "bi bi-eye";
-  btn.title = buka ? "Sembunyikan kata sandi" : "Tampilkan kata sandi";
+  btn.title = buka ? tt("Sembunyikan kata sandi", "Hide password") : tt("Tampilkan kata sandi", "Show password");
   inp.focus();
 });
 
@@ -276,7 +316,7 @@ function isiUserMenu() {
   const em = $("#userMenuEmail");
   if (nm) {
     nm.textContent =
-      authState.profile.full_name || authState.profile.username || "Pengguna";
+      authState.profile.full_name || authState.profile.username || tt("Pengguna", "User");
   }
   if (em) {
     em.textContent =
@@ -344,7 +384,7 @@ if (btnLogoutMenuEl) {
     tutupUserMenu();
     showConfirm(t("s.sesi.anda.akan.ditutup.dan.halaman.kembali.ke."), () => signOut(), {
       title: t("s.keluar.dari.aplikasi"),
-      confirmText: "Ya, Keluar",
+      confirmText: tt("Ya, Keluar", "Yes, sign out"),
       tone: "primary",
       icon: "bi-power",
     });

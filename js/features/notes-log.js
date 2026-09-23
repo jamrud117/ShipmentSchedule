@@ -42,10 +42,10 @@ function notesLogToPlainNotes(log) {
 
 // "25 Jul 2026 · 14:30" — entri lama tanpa waktu ditandai jelas supaya tidak dikira dicatat hari
 function fmtNoteStamp(ts) {
-  if (!ts) return "catatan lama (tanpa waktu)";
+  if (!ts) return tt("catatan lama (tanpa waktu)", "old note (no timestamp)");
   const d = new Date(ts);
-  if (isNaN(d)) return "catatan lama (tanpa waktu)";
-  const tgl = d.toLocaleDateString("id-ID", {
+  if (isNaN(d)) return tt("catatan lama (tanpa waktu)", "old note (no timestamp)");
+  const tgl = d.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -74,10 +74,10 @@ function renderNotesTimeline() {
         <div class="note-entry-head">
           <span class="note-stamp"><i class="bi bi-clock"></i> ${escapeHtml(fmtNoteStamp(e.ts))}</span>
           <span class="note-acts">
-            <button type="button" class="note-edit" data-act="edit-note" data-note-id="${e.id}" title=t("v.ubah.tanggal.amp.isi.catatan")>
+            <button type="button" class="note-edit" data-act="edit-note" data-note-id="${e.id}" title="${t("v.ubah.tanggal.amp.isi.catatan").replace(/"/g, "&quot;")}">
               <i class="bi bi-pencil"></i>
             </button>
-            <button type="button" class="note-del" data-act="del-note" data-note-id="${e.id}" title="Hapus catatan ini">
+            <button type="button" class="note-del" data-act="del-note" data-note-id="${e.id}" title="${tt("Hapus catatan ini", "Delete this note")}">
               <i class="bi bi-x-lg"></i>
             </button>
           </span>
@@ -141,10 +141,10 @@ function editDraftNote(noteId) {
     title: t("c.ubah.kronologi"),
     desc: t("s.perbaiki.tanggal.atau.isi.catatan"),
     icon: "bi-clock-history",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "tgl", label: "Tanggal", type: "date", value: tglAwal },
-      { key: "teks", label: "Isi catatan", value: entri.text || "" },
+      { key: "tgl", label: tt("Tanggal", "Date"), type: "date", value: tglAwal },
+      { key: "teks", label: tt("Isi catatan", "Note text"), value: entri.text || "" },
     ],
     onSubmit: (v) => {
       const teks = (v.teks || "").trim();
@@ -191,13 +191,13 @@ function cardNotesHtml(s) {
   return `
   <div class="card-notes">
     <div class="card-notes-head">
-      <span><i class="bi bi-chat-left-text"></i> Kronologi &amp; Catatan${log.length ? ` (${log.length})` : ""}</span>
-      ${sisa > 0 ? `<span class="card-notes-more">+${sisa} lagi — buka Edit untuk lihat semua</span>` : ""}
+      <span><i class="bi bi-chat-left-text"></i> ${tt("Kronologi &amp; Catatan", "Timeline &amp; Notes")}${log.length ? ` (${log.length})` : ""}</span>
+      ${sisa > 0 ? `<span class="card-notes-more">${tt(`+${sisa} lagi — buka Edit untuk lihat semua`, `+${sisa} more — open Edit to see all`)}</span>` : ""}
     </div>
     <div class="card-notes-list">${list}</div>
     <div class="card-note-add">
       <input type="text" class="card-note-input" data-note-input="${s.id}"
-             placeholder="Tambah kronologi (tanggal &amp; jam otomatis)..." />
+             placeholder="${tt("Tambah kronologi (tanggal &amp; jam otomatis)...", "Add a timeline entry (date &amp; time automatic)...")}" />
       <button type="button" class="btn-note-send" data-action="addNote" data-id="${s.id}">
         <i class="bi bi-send"></i>
       </button>

@@ -443,7 +443,7 @@ function applyImportedBcData(parsed) {
           notes.push(
             t("w.nama.barang.dipertahankan", {
               n: jagaNama.kept,
-              urut: jagaNama.byOrder ? " (dicocokkan menurut urutan)" : "",
+              urut: jagaNama.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "",
             }),
           );
         }
@@ -451,7 +451,7 @@ function applyImportedBcData(parsed) {
         draftItems = preserveDimensionsForCeisa(jaga.items, draftItems, src);
         if (jaga.kept) {
           notes.push(
-            t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? " (dicocokkan menurut urutan)" : "" }),
+            t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),
           );
         }
       }

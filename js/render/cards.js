@@ -42,7 +42,9 @@ function skbTagsHtml(s) {
     const isEcoo = jenis === "E-COO";
     const cls = isEcoo ? "tag-ecoo" : "tag-skb";
     const icon = isEcoo ? "bi-patch-check" : "bi-shield-check";
-    const label = SKB_JENIS_WITH_COUNT.has(jenis) ? `${jenis} × ${n}` : jenis;
+    // "Lainnya" adalah nilai tersimpan; yang diterjemahkan hanya tampilannya.
+    const nama = jenis === "Lainnya" ? tt("Lainnya", "Other") : jenis;
+    const label = SKB_JENIS_WITH_COUNT.has(jenis) ? `${nama} × ${n}` : nama;
     return `<span class="tag ${cls}"><i class="bi ${icon}"></i> ${escapeHtml(label)}</span>`;
   }).join("");
 }
@@ -56,7 +58,7 @@ function itemNamesSummary(s, maxShown = 4) {
     .filter(Boolean);
   if (!names.length) return ["—"];
   if (names.length <= maxShown) return names;
-  return [...names.slice(0, maxShown), `+${names.length - maxShown} lainnya`];
+  return [...names.slice(0, maxShown), tt(`+${names.length - maxShown} lainnya`, `+${names.length - maxShown} more`)];
 }
 
 // Requirement D: "Tampilkan info delay di card dashboard juga: berapa hari delay-nya
@@ -64,7 +66,7 @@ function delayBadgeHtml(s) {
   if (s.status !== "delayed") return "";
   const info = shipmentDelayInfo(s);
   if (!info || info.days <= 0) return "";
-  return `<span class="tag tag-delay"><i class="bi bi-clock-history"></i> Mundur ${info.days} hari dari ${info.basis}</span>`;
+  return `<span class="tag tag-delay"><i class="bi bi-clock-history"></i> ${tt(`Mundur ${info.days} hari dari ${info.basis}`, `Delayed ${info.days} days from ${info.basis}`)}</span>`;
 }
 
 /* STRIP TANGGAL UPDATE DELAY (hanya saat status DELAY) */
@@ -145,13 +147,13 @@ function buildTags(s, totals) {
 function actionButtons(s) {
   return `
     <div class="actions-col">
-      <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="Lihat Detail"><i class="bi bi-eye"></i></button>
+      <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${tt("Lihat Detail", "View Details")}"><i class="bi bi-eye"></i></button>
       <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
       <div class="dropdown copy-template-dropdown">
-        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title=t("v.salin.ke.excel")><i class="bi bi-clipboard"></i></button>
+        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(t("v.salin.ke.excel"))}"><i class="bi bi-clipboard"></i></button>
         <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
       </div>
-      <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="Hapus"><i class="bi bi-trash3"></i></button>
+      <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${tt("Hapus", "Delete")}"><i class="bi bi-trash3"></i></button>
     </div>`;
 }
 
@@ -269,13 +271,14 @@ function collapsedDatesHtml(s) {
   const mundur =
     (s.etdUpdate && s.etdUpdate !== s.etd) || (s.etaUpdate && s.etaUpdate !== s.eta);
   const catatan = mundur
-    ? ` Jadwal ini pernah dimundurkan — lihat Tanggal Update Delay lewat tombol pensil.`
+    ? tt(` Jadwal ini pernah dimundurkan — lihat Tanggal Update Delay lewat tombol pensil.`,
+        ` This schedule has been postponed — see the Delay Update Dates via the pencil button.`)
     : "";
   const kotak = (label, nilai) => `
       <div class="date-field date-field--locked">
         <label>${label}</label>
         <input type="date" value="${nilai || ""}" readonly
-               title="Hanya baca. Tekan tombol pensil untuk mengubahnya.${catatan}">
+               title="${tt("Hanya baca. Tekan tombol pensil untuk mengubahnya.", "Read-only. Press the pencil button to change it.")}${catatan}">
       </div>`;
 
   return `

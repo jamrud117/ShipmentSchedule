@@ -230,6 +230,41 @@ table.fund-lines select {
   color: var(--p-600);
   border-bottom-color: var(--p-600);
 }
+/* PONSEL: baris tab digeser mendatar, tidak dipotong atau dipecah.
+   Enam tab Pengajuan Dana (Semua ... Summary) butuh ~450px; di layar
+   390px tab terakhir hilang begitu saja di luar tepi. Tab aktif
+   digeser ke dalam pandangan oleh dnTabAktifTerlihat(). */
+@media (max-width: 575px) {
+  .docnum-subtabs {
+    overflow-x: auto;
+    padding-left: var(--sp-2);
+    padding-right: var(--sp-2);
+    scrollbar-width: none;
+  }
+  .docnum-subtabs::-webkit-scrollbar {
+    display: none;
+  }
+  .docnum-subtab {
+    padding: 7px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  /* Kotak cari riwayat selebar baris di bawah judulnya, tombol muat
+     ulang tetap di sampingnya -- 300px tidak muat bersama judul. */
+  .docnum-history-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .docnum-history-aksi {
+    flex: 1 1 100%;
+  }
+  .dn-cari {
+    flex: 1;
+  }
+  .dn-cari input {
+    width: 100%;
+  }
+}
 
 /* Bilah "sedang memperbaiki nomor ..." — diberi jarak dari isian di
    atasnya supaya tidak terbaca menempel pada baris Penanda Tangan. */
@@ -370,8 +405,10 @@ table.fund-lines select {
   border-collapse: collapse;
   font-size: 0.84rem;
 }
+/* SELURUH TABEL RIWAYAT RATA TENGAH, kepala & isi, mendatar & tegak. */
 .docnum-table th {
-  text-align: left;
+  text-align: center;
+  vertical-align: middle;
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   color: var(--muted);
@@ -382,7 +419,8 @@ table.fund-lines select {
 .docnum-table td {
   padding: 7px 10px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  text-align: center;
+  vertical-align: middle;
 }
 /* TIDAK ADA YANG DIBUNGKUS KE BARIS BERIKUTNYA.
 
@@ -516,7 +554,7 @@ table.fund-lines select {
   .docnum-table th:last-child {
     white-space: nowrap;
     width: 1%;
-    text-align: right;
+    text-align: center;
     padding-right: 10px;
   }
   /* Tombolnya 30px di sini, jadi kolomnya boleh lebih sempit. */
@@ -735,28 +773,81 @@ table.fund-lines select {
 .dn-edit-banner b { font-family: var(--font-mono); }
 
 /* ------------------------------------------------------------------
-   RINGKASAN BIAYA PER VENDOR (Pengajuan Dana)
+   TAB SUMMARY — Pengajuan Dana (penyaring + pivot + rincian)
 ------------------------------------------------------------------ */
 .docnum-history-aksi {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.fsum-bilah {
-  display: flex;
+/* Tab Summary sedikit terpisah dari tab jenis pengeluaran: ia bukan
+   saringan seperti tetangganya, melainkan cara pandang lain. */
+.docnum-subtab--summary {
+  margin-left: auto;
+  display: inline-flex;
   align-items: center;
+  gap: 6px;
+}
+.fsum-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.fsum-saring {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--sp-3);
+  background: var(--n-50);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.fsum-saring-atas {
+  display: flex;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--sp-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--sp-3);
 }
-.fsum-dasar {
-  font-size: var(--t-sm);
+/* auto-fit + minmax: 5 kolom di layar lebar, 3 di tablet, 2 di ponsel
+   -- tanpa satu pun titik henti yang harus dirawat. */
+.fsum-saring-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px var(--sp-3);
+}
+.fsum-saring-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+}
+.fsum-saring-label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--n-500);
+}
+.fsum-reset {
+  flex-shrink: 0;
+}
+.fsum-judul {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--n-700);
+  margin: var(--sp-2) 0 6px;
 }
 /* Tabel bisa digeser mendatar di layar sempit, bukan dipaksa pecah. */
 .fsum-wrap {
   overflow-x: auto;
+}
+/* Rincian bisa ratusan baris: digulung di dalam kotaknya sendiri,
+   dengan kepala tabel tetap terlihat, supaya kotak pivot di atasnya
+   tidak ikut tergulung hilang. */
+.fsum-wrap--rinci {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 .fsum-tabel {
   width: 100%;
@@ -769,40 +860,188 @@ table.fund-lines select {
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
-/* Rata kiri untuk kolom teks -- kepala tabel bawaan rata tengah, dan
-   judul "Vendor" yang melayang di tengah tidak segaris dengan nama
-   vendor di bawahnya. Kolom angka ditimpa .fsum-angka (rata kanan). */
+/* Rata kiri untuk kolom teks; kolom angka ditimpa .fsum-angka. */
 .fsum-tabel thead th {
   text-align: left;
   font-weight: 600;
   color: var(--n-600);
   background: var(--n-50);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .fsum-tabel tfoot td {
   font-weight: 700;
   border-top: 2px solid var(--n-300);
   border-bottom: 0;
+  background: #fff;
+  position: sticky;
+  bottom: 0;
 }
-/* Angka rata kanan & lebar digit seragam: kolom rupiah yang panjangnya
-   berbeda-beda tetap segaris satuan-puluhan-ratusannya. */
-/* Selektor sengaja dibuat setara .fsum-tabel thead th: tanpa itu aturan
-   rata kiri kepala tabel menang, dan judul "Total IDR" rata kiri
-   sementara angka di bawahnya rata kanan. */
+/* Selektor setara .fsum-tabel thead th: tanpa itu aturan rata kiri
+   kepala tabel menang, dan judul "Total IDR" rata kiri sementara angka
+   di bawahnya rata kanan. */
 .fsum-tabel .fsum-angka {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.fsum-vendor {
-  font-weight: 600;
+.fsum-pivot-baris {
+  cursor: pointer;
 }
-.fsum-cust {
-  margin-top: 2px;
-  font-size: 12px;
+.fsum-pivot-baris:hover td {
+  background: var(--n-50);
+}
+.fsum-nowrap {
+  white-space: nowrap;
+}
+.fsum-mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12.5px;
+}
+.fsum-detail {
+  min-width: 280px;
+}
+/* Tanggal surat yang dipakai sebagai cadangan Tanggal Invoice. */
+.fsum-redup,
+.fsum-kosong {
   color: var(--n-500);
-  line-height: 1.5;
 }
-.fsum-cust-nilai {
+/* Pemicu kalender di bilah penyaring setinggi kotak pilihan di
+   sebelahnya (form-select-sm) -- tingginya yang bawaan membuat label
+   "Invoice Date" naik sendiri, tidak sebaris dengan label lainnya. */
+.fsum-saring .date-range-trigger {
+  height: 31px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 13px;
+}
+.fsum-saring .date-range-trigger-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* ------------------------------------------------------------------
+   NILAI & STATUS BAYAR di riwayat Pengajuan Dana
+------------------------------------------------------------------ */
+.docnum-table .dn-col-nilai {
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+.dn-col-bayar {
+  white-space: nowrap;
+}
+/* Lencana sekaligus tombol (untuk EXIM). Warna dipakai bersama bentuk
+   ikon -- centang vs jam pasir -- supaya tetap terbedakan tanpa warna. */
+.dn-bayar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  background: none;
+}
+button.dn-bayar {
+  cursor: pointer;
+}
+.dn-bayar--lunas {
+  color: #146c43;
+  background: #e8f5ee;
+  border-color: #b7e0c8;
+}
+.dn-bayar--belum {
+  color: #8a5a00;
+  background: #fff7e6;
+  border-color: #f1d9a6;
+}
+button.dn-bayar--belum:hover {
+  background: #ffefcc;
+}
+button.dn-bayar--lunas:hover {
+  background: #d6efe1;
+}
+.dn-bayar-tgl {
+  font-weight: 500;
+  opacity: 0.85;
+  margin-left: 2px;
+}
+
+/* ------------------------------------------------------------------
+   TABEL RINCIAN (tab Summary): seluruhnya rata tengah
+
+   Kepala dan isi rata tengah, mendatar & tegak -- termasuk Details.
+
+   Selektor sengaja .fsum-tabel.fsum-rinci (dua kelas): aturan umum
+   .fsum-tabel .fsum-angka (rata kanan untuk kolom angka) berbobot dua
+   kelas juga, dan tanpa bobot yang setara kolom Cost & No tetap rata
+   kanan. Tabel pivot tidak memakai .fsum-rinci, jadi tidak terkena.
+------------------------------------------------------------------ */
+.fsum-tabel.fsum-rinci thead th,
+.fsum-tabel.fsum-rinci tbody td {
+  text-align: center;
+  vertical-align: middle;
+}
+/* Total Cost di kaki tabel sejajar dengan kolomnya yang kini rata
+   tengah; label TOTAL tetap di kiri sebagai judul baris. */
+.fsum-tabel.fsum-rinci tfoot td.fsum-angka {
+  text-align: center;
+}
+
+/* TABEL RINCIAN BERGULIR MENDATAR, BUKAN DIPERAS.
+
+   Sembilan kolom tidak muat di layar tablet/ponsel. Tanpa lebar
+   minimum, tabel menyesuaikan diri dengan memeras kolom paling lentur
+   -- Details -- sampai satu kalimat pendek terpecah jadi tiga-empat
+   baris dan tiap baris tabel setinggi paragraf. Dengan lebar minimum,
+   kolomnya tetap terbaca dan tabelnya yang digeser. Di layar lebar
+   (>1080px) tidak ada bedanya. */
+.fsum-tabel.fsum-rinci {
+  min-width: 1080px;
+}
+@media (max-width: 767px) {
+  .fsum-tabel th,
+  .fsum-tabel td {
+    padding: 6px 8px;
+    font-size: 12.5px;
+  }
+  .fsum-wrap--rinci {
+    max-height: 65vh;
+  }
+}
+
+/* ------------------------------------------------------------------
+   KOTAK CARI RIWAYAT NOMOR
+------------------------------------------------------------------ */
+.dn-cari {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+.dn-cari i {
+  position: absolute;
+  left: 10px;
+  font-size: 13px;
+  color: var(--n-500);
+  pointer-events: none;
+}
+.dn-cari input {
+  width: 300px;
+  height: 32px;
+  padding: 0 10px 0 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--n-800);
+}
+.dn-cari input:focus {
+  outline: none;
+  border-color: var(--p-600);
+  box-shadow: 0 0 0 3px rgba(20, 45, 90, 0.12);
 }

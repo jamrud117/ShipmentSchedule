@@ -700,18 +700,23 @@
      Begitu dipilih, tanggalnya muncul (kelas .has-value dari
      drpSyncTriggerFromFilter) — rentang yang sedang aktif terlalu
      penting untuk disembunyikan di balik ikon. */
-  .date-range-picker {
+  /* Aturan pemicu-jadi-ikon di bawah ini DIBATASI ke .controlbar
+     (halaman Jadwal). Ditulis dengan kelas umum, ia ikut mengecilkan
+     pemilih rentang di tempat lain (tab Summary Pengajuan Dana) jadi
+     kotak ikon 44px -- sementara teksnya, yang di sini disembunyikan
+     lewat ID khusus Jadwal, meluber keluar kotak itu. */
+  .controlbar .date-range-picker {
     flex: 0 0 auto;
     margin-left: 0;
   }
-  .date-range-trigger:not(.has-value) #dateRangeTriggerText,
-  .date-range-trigger:not(.has-value) .date-range-trigger-caret {
+  .controlbar .date-range-trigger:not(.has-value) #dateRangeTriggerText,
+  .controlbar .date-range-trigger:not(.has-value) .date-range-trigger-caret {
     display: none;
   }
   /* Begitu isinya tinggal ikon, latar abu-abu di balik ikonnya jadi
      "tombol di dalam tombol" -- dilepas supaya yang terlihat cuma satu
      kotak. */
-  .date-range-trigger:not(.has-value) .date-range-trigger-icon {
+  .controlbar .date-range-trigger:not(.has-value) .date-range-trigger-icon {
     background: transparent;
     width: auto;
     height: auto;
@@ -725,11 +730,11 @@
      tidak disamakan di sini, kolomnya terlihat seperti tiga tombol
      asing yang kebetulan bertumpuk. Ukuran & radiusnya dikunci sama. */
   .controlbar .search-box,
-  .date-range-picker {
+  .controlbar .date-range-picker {
     flex: 0 0 44px;
   }
   .controlbar .search-box input[type="text"],
-  .date-range-trigger:not(.has-value),
+  .controlbar .date-range-trigger:not(.has-value),
   .controlbar-tail .btn-more {
     width: 44px;
     min-width: 44px;
@@ -819,8 +824,12 @@
   .drp-grids {
     justify-content: center;
   }
+  /* Satu bulan saja di layar sempit -- berlaku untuk SEMUA pemilih
+     rentang: label bulan kedua disembunyikan lewat kelas (pemilih
+     buatan buatRentangTanggal tidak punya #drpMonthLabel1). */
   .drp-grid--second,
-  #drpMonthLabel1 {
+  #drpMonthLabel1,
+  .drp-month-label--second {
     display: none;
   }
   .drp-months {

@@ -162,6 +162,11 @@ body.is-locked {
 .user-chip-role.is-exim {
   color: var(--sec-300);
 }
+/* Marketing: warna sendiri, supaya di bilah atas langsung terbaca
+   bahwa akun ini bukan EXIM walau bisa mengubah Nomor Dokumen. */
+.user-chip-role.is-marketing {
+  color: #9ec5fe;
+}
 /* Bisa diklik (membuka menu akun), jadi diberi penanda visual yang
    jelas bahwa ini bukan sekadar label pasif.
 
@@ -270,9 +275,30 @@ body.is-locked {
   .user-chip-main {
     display: none;
   }
+  /* AVATAR DI TENGAH antara garis pemisah dan tepi layar.
+
+     Chip ini elemen terakhir bilah atas, dan .container menyisakan
+     20px di kanannya. Dengan jarak dalam chip yang sama kiri-kanan
+     (8px), avatar tetap tampak menempel ke garis pemisah: 8px di kiri,
+     8+20px di kanan. Chip dibentangkan sampai tepi layar (margin kanan
+     negatif selebar jarak .container) dengan jarak dalam yang sama di
+     kedua sisi -- sorotan hover-nya pun jadi segmen penuh sampai tepi,
+     sesuai niat "satu segmen bilah" di atas. */
   .user-chip {
-    padding-left: var(--sp-2);
-    padding-right: var(--sp-2);
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+    margin-right: calc(-1 * var(--sp-5));
+  }
+  /* Menu akun tidak ikut menempel ke tepi layar. */
+  .user-menu {
+    right: var(--sp-2);
+  }
+}
+@media (max-width: 767px) {
+  .user-chip {
+    padding-left: var(--sp-3);
+    padding-right: var(--sp-3);
+    margin-right: calc(-1 * var(--sp-3));
   }
 }
 
@@ -316,8 +342,34 @@ body.is-viewer [data-edit-hscode],
 body.is-viewer [data-del-hscode],
 body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
-body.is-viewer #docnumFormWrap,
 body.is-viewer .card-note-input {
+  display: none !important;
+}
+
+/* NOMOR DOKUMEN: tertutup untuk viewer, TERBUKA untuk marketing.
+   Marketing membawa .is-viewer juga (hanya-baca di halaman lain), jadi
+   pengecualiannya ditulis di sini -- bukan dengan melepas .is-viewer,
+   yang akan membuka tombol ubah di seluruh aplikasi.
+
+   Form Nomor Dokumen tidak punya satu pembungkus: panel isian per
+   jenis ([data-docnum-panel]), baris tombol (.docnum-actions), dan
+   riwayat bersaudara di dalam section.docnum-panels. Yang disembunyikan
+   karena itu panel & tombolnya, bukan section-nya -- riwayat tetap
+   harus terbaca. (Aturan lama menunjuk ke #docnumFormWrap, elemen yang
+   tidak pernah ada, jadi tidak pernah menyembunyikan apa pun.) */
+body.is-viewer:not(.is-marketing) .nav-docnum,
+body.is-viewer:not(.is-marketing) [data-docnum-panel],
+body.is-viewer:not(.is-marketing) .docnum-actions,
+body.is-viewer:not(.is-marketing) .counter-box {
+  display: none !important;
+}
+/* Marketing TIDAK mengajukan nomor baru: panel isian & tombolnya hanya
+   tampil selama ia memperbaiki nomor yang sudah ada (tombol pensil di
+   riwayat memasang .is-editing). Atur Nomor Urut mengubah penomoran
+   semua orang -- khusus EXIM. */
+body.is-marketing .docnum-panels:not(.is-editing) [data-docnum-panel],
+body.is-marketing .docnum-panels:not(.is-editing) .docnum-actions,
+body.is-marketing .counter-box {
   display: none !important;
 }
 
@@ -370,6 +422,10 @@ body.is-viewer .delay-strip-fields input {
 .acct-avatar.is-exim {
   background: var(--p-600);
   color: #fff;
+}
+.acct-avatar.is-marketing {
+  background: #e7f0ff;
+  color: #1d4ed8;
 }
 .acct-main {
   flex: 1;
