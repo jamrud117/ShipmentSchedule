@@ -822,6 +822,78 @@ t("aturan ini TIDAK berlaku di buku Import", () =>
   eq(w.isArrived({ mode: "import", etd: "2026-08-01" }), false));
 
 console.log("— REPORT EXPORT: SARING STUFFING —");
+t("ganti bahasa selagi form Export terbuka: label tetap label Export", () => {
+  /* Label form ditulis JS sesuai buku; terjemahan tetap di HTML (untuk
+     Import) dulu menimpanya saat bahasa diganti -- form Export tiba-tiba
+     berlabel "No. SPPB" dan "Tanggal In Factory". */
+  const simpan = { mode: baca("activeMode"), lang: baca("activeLang") };
+  const label = () => ["lblFactoryDate", "lblDocNo"].map((i) => w.document.getElementById(i).textContent.trim()).join(" | ");
+  const form = w.document.getElementById("viewForm");
+  const tersembunyi = form.classList.contains("d-none");
+  try {
+    w.eval('activeMode = "export"');
+    form.classList.remove("d-none");
+    w.renderFormPage(null);
+    eq(label(), "Tanggal Stuffing | No. PEB", "dibuka:");
+    w.setLang("en");
+    eq(label(), "Stuffing Date | No. PEB", "Inggris:");
+    w.setLang("id");
+    eq(label(), "Tanggal Stuffing | No. PEB", "kembali Indonesia:");
+  } finally {
+    w.setLang(simpan.lang);
+    w.eval("activeMode = " + JSON.stringify(simpan.mode));
+    if (tersembunyi) form.classList.add("d-none");
+  }
+});
+t("buku Export tidak punya isian tersembunyi: Tanggal Stuffing lama dilebur ke isian Stuffing", () => {
+  /* Kotak Tanggal & Jam Stuffing tersembunyi di form Export, tapi
+     nilainya dulu tetap tersimpan dan tetap dibaca (daftar, prediksi,
+     Report). Bulk Import mengisinya dari kolom tanggal stuffing. Sekarang
+     lapisan data meleburnya ke isian Stuffing yang terlihat. */
+  const baris = (kol) => w.rowToShipment(Object.assign({ id: "e1", mode: "export", party: "X", status: "process" }, kol));
+  const a = baris({ actual: null, factory_date: "2026-09-23", factory_time: "08:00" });
+  eq(a.actual + "|" + a.factoryDate + "|" + a.factoryTime, "2026-09-23||", "dilebur & dikosongkan:");
+  const b = baris({ actual: "2026-09-30", factory_date: "2026-09-23" });
+  eq(b.actual, "2026-09-30", "isian Stuffing yang terisi tetap menang:");
+  // Import TIDAK tersentuh -- di sana kolom itu Tanggal In Factory sungguhan.
+  const imp = w.rowToShipment({ id: "i1", mode: "import", actual: null, factory_date: "2026-09-23", status: "process" });
+  eq(imp.factoryDate, "2026-09-23", "Import:");
+  // Menyimpan jadwal Export selalu mengosongkan kolomnya di database.
+  const row = w.shipmentToRow({ actual: "2026-09-23", factoryDate: "2026-09-01", factoryTime: "08:00" }, "export");
+  eq(String(row.factory_date) + "|" + String(row.factory_time), "null|null", "disimpan:");
+  eq(w.shipmentToRow({ factoryDate: "2026-09-01" }, "import").factory_date, "2026-09-01", "Import disimpan apa adanya:");
+});
+t("Report: jadwal yang stuffing-nya hari ini tidak tersalin, termasuk yang tanggalnya dari data lama", () => {
+  /* Kasus yang dilaporkan: tanggal stuffing tersimpan di kolom
+     tersembunyi (hasil Bulk Import), isian Stuffing kosong. Lewat
+     lapisan data, tanggal itu menjadi isian Stuffing dan Report
+     membuangnya seperti seharusnya. ETD minggu depan supaya yang diuji
+     memang aturan stuffing, bukan aturan ETD (isArrived). */
+  const simpan = { e: baca("data.export"), i: baca("data.import") };
+  const hari = w.todayISO();
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  const nanti = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const ikut = (kol) => {
+    const s = w.rowToShipment(Object.assign({ id: "e1", mode: "export", party: "KUMHO", etd: nanti, eta: nanti, status: "process" }, kol));
+    w.__jadwalUji = s;
+    w.eval("data.export = [window.__jadwalUji]; data.import = []");
+    return /KUMHO/.test(w.buildReportCopyText());
+  };
+  try {
+    eq(ikut({ actual: hari }), false, "isian Stuffing hari ini:");
+    eq(ikut({ actual: null, factory_date: hari }), false, "tanggal lama di kolom tersembunyi, hari ini:");
+    eq(ikut({ actual: nanti }), true, "stuffing minggu depan:");
+    eq(ikut({ actual: null }), true, "belum diisi sama sekali:");
+  } finally {
+    tulis("data.export", simpan.e);
+    tulis("data.import", simpan.i);
+  }
+});
+t("Bulk Import buku Export: kolom tanggal stuffing masuk ke isian Stuffing", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "features", "bulk-excel.js"), "utf8");
+  if (!/mode === "export"\s*\?\s*\{ actual: excelValueToISODate\(first\[idx\.FACTORY\]\) \}/.test(src))
+    throw new Error("kolom tanggal stuffing Export masih masuk ke isian tersembunyi");
+});
 t("stuffing yang sudah lewat / hari ini tidak dilaporkan", () => {
   const kemarin = w.addCalendarDaysISO(w.todayISO(), -1);
   const besok = w.addCalendarDaysISO(w.todayISO(), 1);
@@ -2278,9 +2350,9 @@ const denganPeran = (peran, fn) => {
     w.applyPermissions();
   }
 };
-t("matriks hak: EXIM semua, marketing hanya Nomor Dokumen, viewer tidak ada", () => {
+t("matriks hak: EXIM mengubah; marketing hanya MEMBUKA Nomor Dokumen; viewer tidak keduanya", () => {
   const baris = (peran) => denganPeran(peran, () =>
-    [w.canEdit(), w.canEditDocNum(), w.currentRoleLabel()].join(","));
+    [w.canEdit(), w.canViewDocNum(), w.currentRoleLabel()].join(","));
   eq(baris("exim"), "true,true,EXIM");
   eq(baris("marketing"), "false,true,Marketing");
   eq(baris("viewer"), "false,false,Viewer");
@@ -2309,46 +2381,39 @@ t("halaman: marketing boleh Nomor Dokumen, tidak boleh Akun / tambah jadwal", ()
   eq(buka("marketing", "#/new"), "#/", "marketing -> tambah jadwal ditolak:");
   w.location.hash = "#/";
 });
-t("Nomor Dokumen: marketing MEMPERBAIKI isian, tapi tidak mengajukan / menghapus / mengatur nomor urut", () => {
+t("Nomor Dokumen: marketing hanya membaca -- tidak mengajukan, memperbaiki, atau menandai lunas", () => {
   denganPeran("marketing", () => {
-    if (!w.bolehUbahDocNum()) throw new Error("marketing tidak bisa memperbaiki isian");
+    if (w.bolehUbahDocNum()) throw new Error("marketing masih bisa mengubah di Nomor Dokumen");
     const lencana = w.dnTombolBayar({ id: "x", payload: {} });
-    if (!/^<button/.test(lencana)) throw new Error("marketing tidak bisa menandai status bayar");
+    if (/^<button/.test(lencana)) throw new Error("marketing masih bisa menandai status bayar");
+  });
+  denganPeran("exim", () => {
+    if (!w.bolehUbahDocNum()) throw new Error("EXIM tidak bisa mengubah");
   });
   const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
-  // Tombol yang sama: perbaikan (EXIM & marketing) vs nomor BARU (khusus EXIM).
-  if (!/btnDocNumSubmit[\s\S]{0,260}dnEditingId \? !requireEditDocNum\(\) : !requireEdit\(\)/.test(src))
-    throw new Error("pengajuan nomor baru tidak dibatasi ke EXIM");
-  if (!/\[data-del-num\]"\) && !requireEdit\(\)/.test(src))
-    throw new Error("hapus nomor tidak lagi khusus EXIM");
-  if (!/btnCounterSave[\s\S]{0,80}!requireEdit\(\)/.test(src))
-    throw new Error("atur nomor urut tidak lagi khusus EXIM");
-});
-t("marketing hanya melihat form saat memperbaiki -- penanda .is-editing di section panel", () => {
-  const panel = w.document.querySelector(".docnum-panels");
-  if (!panel) throw new Error("section .docnum-panels tidak ada");
-  w.syncModeUbahDocNum("301/EXIM/DDI/IX/2026");
-  if (!panel.classList.contains("is-editing")) throw new Error("mode perbaikan tidak ditandai");
-  w.syncModeUbahDocNum(null);
-  if (panel.classList.contains("is-editing")) throw new Error("penanda tidak dilepas");
+  if (!/btnDocNumSubmit[\s\S]{0,80}if \(!requireEdit\(\)\) return;/.test(src))
+    throw new Error("tombol Ajukan / Simpan Perubahan tidak dijaga khusus EXIM");
   const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
-  if (!/body\.is-marketing \.docnum-panels:not\(\.is-editing\) \[data-docnum-panel\]/.test(css))
-    throw new Error("panel isian tidak disembunyikan dari marketing di luar mode perbaikan");
-  // Komentar diabaikan: yang dicari SELEKTOR yang masih menunjuk ke sana.
-  if (/#docnumFormWrap/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")))
-    throw new Error("masih ada aturan untuk #docnumFormWrap -- elemen itu tidak ada");
+  ["\\[data-docnum-panel\\]", "\\.docnum-actions", "\\.counter-box"].forEach((sel) => {
+    if (!new RegExp("body\\.is-viewer " + sel).test(css))
+      throw new Error("form Nomor Dokumen tidak disembunyikan untuk marketing/viewer: " + sel);
+  });
+  if (/is-editing/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")))
+    throw new Error("sisa aturan mode perbaikan marketing masih ada");
 });
-t("isian Nomor Dokumen tidak dikunci untuk marketing, tetap dikunci untuk viewer", () => {
-  const box = w.document.getElementById("viewDocNum");
-  const input = w.document.createElement("input");
-  box.appendChild(input);
+t("kotak cari riwayat tidak dikunci untuk marketing; isian form tetap dikunci", () => {
+  const cari = w.document.getElementById("docNumSearch");
+  const isian = w.document.querySelector('#viewDocNum [data-docnum-panel] input');
+  const simpan = [cari.disabled, isian.disabled];
   try {
-    denganPeran("viewer", () => { w.lockInputs(); });
-    eq(input.disabled, true, "viewer:");
+    cari.disabled = false; delete cari.dataset.viewerLocked;
+    isian.disabled = false; delete isian.dataset.viewerLocked;
     denganPeran("marketing", () => { w.lockInputs(); });
-    eq(input.disabled, false, "marketing (dibuka lagi setelah sempat terkunci):");
+    eq(cari.disabled, false, "kotak cari (alat membaca):");
+    eq(isian.disabled, true, "isian form:");
   } finally {
-    input.remove();
+    cari.disabled = simpan[0]; delete cari.dataset.viewerLocked;
+    isian.disabled = simpan[1]; delete isian.dataset.viewerLocked;
   }
 });
 t("halaman Akun menawarkan peran Marketing", () => {
@@ -2371,6 +2436,11 @@ t("migrasi database peran marketing ikut di paket", () => {
     throw new Error("migrasi masih memberi marketing hak menambah nomor");
   if (!/drop policy if exists "marketing tambah nomor dokumen"/.test(sql))
     throw new Error("hak tambah nomor dari versi sebelumnya tidak dicabut");
+  // Marketing juga tidak mengubah isian: kebijakan UPDATE-nya dicabut.
+  if (/for update to authenticated[\s\S]{0,80}peran_saya\(\) = 'marketing'/.test(sql))
+    throw new Error("migrasi masih memberi marketing hak mengubah isian");
+  if (!/drop policy if exists "marketing ubah nomor dokumen"/.test(sql))
+    throw new Error("hak ubah isian dari versi sebelumnya tidak dicabut");
 });
 
 console.log("\u2014 PENGAJUAN DANA: NILAI & STATUS BAYAR \u2014");
@@ -2452,6 +2522,190 @@ t("Summary: saring & kelompokkan per status bayar", () => {
   const pv = w.fsumPivot(k, "bayar");
   eq(pv.grup.find((g) => g.kunci === "belum").total.IDR, 100, "total yang masih harus dibayar:");
 });
+console.log("\u2014 DISKON SEBAGAI BARIS & RUMUS DI RINCIAN BIAYA \u2014");
+const pos = (amount, ppnRate, desc) => ({ desc: desc || "Freight Charge", amount, ppnRate });
+const diskon = (amount, discType, ppnRate) => ({ jenis: "diskon", desc: "Base Discount", amount, discType, ppnRate });
+t("baris diskon persen: dari pos di atasnya; PPN & PPH 23 ikut berkurang", () => {
+  const lines = [pos("2.200.000", 11), diskon("10", "pct", 11)];
+  eq(w.fundLineValues(lines).join("|"), "2200000|-220000", "nilai bertanda:");
+  eq(w.fundLinePpnNilai(-220000, lines[1]), -24200, "PPN baris diskon (mengurangi):");
+  const r = w.fundLineTotals(lines);
+  eq([r.totalNilai, r.totalDiskon, r.totalNet, r.totalPpn, r.pph].join("|"),
+     "2200000|220000|1980000|217800|39600", "total:");
+  eq(r.grandTotal, 1980000 + 217800 - 39600, "TOTAL = sama dengan PPN dari nilai setelah diskon:");
+});
+t("baris diskon rupiah; tarif '—' berarti dasar pajak tidak berkurang; minus diabaikan", () => {
+  eq(w.fundLineTotals([pos("2.200.000", 11), diskon("200.000", "rp", 11)]).grandTotal,
+     2000000 + 220000 - 40000, "tarif sama dengan posnya:");
+  eq(w.fundLineTotals([pos("2.200.000", 11), diskon("200.000", "rp", 0)]).grandTotal,
+     2000000 + 242000 - 44000, "tarif '—':");
+  eq(w.fundLineValues([pos("1.000", 11), diskon("-200", "rp", 11)])[1], -200, "minus dibaca diskon biasa:");
+});
+t("diskon persen memakai pos BIAYA terdekat di atasnya", () => {
+  const v = w.fundLineValues([pos("1.000.000", 11, "A"), pos("500.000", 11, "B"), diskon("10", "pct", 11)]);
+  eq(v[2], -50000, "10% dari pos B:");
+});
+t("data lama berkolom diskon dipecah jadi pos + baris diskon, totalnya sama", () => {
+  const lama = [{ desc: "Freight Charge", amount: "2.200.000", disc: "10", discType: "pct", ppnRate: 11 }];
+  const baru = w.normalisasiBarisDana(lama);
+  eq(baru.length, 2, "jumlah baris:");
+  eq(baru[1].jenis + "|" + baru[1].discType + "|" + baru[1].amount, "diskon|pct|10", "baris diskon:");
+  if ("disc" in baru[0]) throw new Error("kolom diskon lama masih menempel di pos");
+  eq(w.fundLineTotals(lama).grandTotal, 2158200, "total data lama:");
+});
+t("form: Tambah Diskon -> baris diskon bertarif pos di atasnya, mengetik memperbarui semuanya", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval('fundLines = [{ desc: "Freight Charge", amount: "2.200.000", ppnRate: 11 }]; renderFundLines()');
+    w.document.getElementById("btnFundDiscAdd").click();
+    const lines = baca("fundLines");
+    eq(lines[1].jenis + "|" + lines[1].ppnRate, "diskon|11", "baris baru:");
+    const tr = w.document.querySelector('#fundLinesBody [data-fl="1"]');
+    if (!tr.classList.contains("fl-row-diskon")) throw new Error("baris diskon tidak ditandai");
+    const kotak = tr.querySelector('[data-fl-f="amount"]');
+    kotak.value = "200000";
+    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak.value, "200.000", "format rupiah:");
+    eq(tr.querySelector(".fl-ppn").textContent, "- 22.000", "PPN baris diskon:");
+    const kaki = w.document.getElementById("fundLinesFoot").textContent.replace(/\s+/g, " ");
+    if (!/Total Diskon\s*- Rp\. 200\.000/.test(kaki)) throw new Error("Total Diskon: " + kaki);
+    if (!/TOTAL\s*Rp\. 2\.180\.000/.test(kaki)) throw new Error("TOTAL: " + kaki);
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("nominal diskon di kotak baca-saja sebaris, ikut berubah saat pos di atasnya diubah", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval(`fundLines = [{ desc: "Freight Charge", amount: "5.678.432", ppnRate: 1.1 },
+      { jenis: "diskon", desc: "Base Discount", amount: "35", discType: "pct", ppnRate: 1.1 }]; renderFundLines()`);
+    const nominal = () => w.document.querySelector('#fundLinesBody [data-fl="1"] .fl-disc-nominal');
+    if (!nominal().readOnly) throw new Error("kotak nominal bisa diketik");
+    if (nominal().dataset.flF) throw new Error("kotak nominal ikut dibaca sebagai isian");
+    eq(nominal().value, "- 1.987.451", "35% dari 5.678.432:");
+    const pos = w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
+    pos.value = "1000000";
+    pos.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(nominal().value, "- 350.000", "setelah pos di atasnya diubah:");
+    if (w.document.querySelector("#fundLinesBody .fl-disc-hasil")) throw new Error("keterangan lama di bawah kotak masih ada");
+    // Kedua tombol tambah dalam satu wadah sebaris.
+    const aksi = w.document.querySelector(".fl-aksi");
+    if (!aksi || !aksi.querySelector("#btnFundLineAdd") || !aksi.querySelector("#btnFundDiscAdd"))
+      throw new Error("tombol Tambah Baris & Tambah Diskon tidak sebaris");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("hitungRumus: operator, kurung, persen, dan yang tidak valid", () => {
+  const kasus = { "=1.000+1.000": 2000, "=(1.500+500)*3": 6000, "=2.200.000*10%": 220000,
+    "=10.000/4": 2500, "=1000x2": 2000, "=10:4": 2.5, "=-500+1000": 500, "=2,5*4": 10 };
+  Object.entries(kasus).forEach(([r, v]) => eq(w.hitungRumus(r), v, r + ":"));
+  ["=1000+", "=1000/0", "=abc", "=(1+2", "=", "=1000);alert(1)"].forEach((r) => {
+    if (!isNaN(w.hitungRumus(r))) throw new Error("seharusnya tidak valid: " + r);
+  });
+});
+t("rumus di kotak nilai: utuh saat diketik, dihitung saat Enter; yang salah ditandai & diblokir", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  const enter = (el) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  try {
+    w.eval('fundLines = [{ desc: "Freight", amount: "", ppnRate: 11 }, { desc: "Handling", amount: "", ppnRate: 11 }]; renderFundLines()');
+    const kotak = () => w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
+    kotak().value = "=1000+1000";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak().value, "=1000+1000", "tidak dirusak pemformat saat diketik:");
+    enter(kotak());
+    eq(kotak().value, "2.000", "setelah Enter:");
+    eq(baca("fundLines")[0].amount, "2.000", "tersimpan sebagai angka:");
+    kotak().value = "=2.200.000*10%";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    enter(kotak());
+    eq(kotak().value, "220.000", "persen:");
+    kotak().value = "=1000+";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    enter(kotak());
+    eq(kotak().value, "=1000+", "rumus salah dibiarkan untuk diperbaiki:");
+    if (!kotak().classList.contains("fl-rumus-salah")) throw new Error("rumus salah tidak ditandai");
+    if (!w.fundLinesRumusGagal(baca("fundLines"))) throw new Error("rumus salah tidak terdeteksi");
+    if (!w.validateDocNumForm("fund").some((m) => /rumus/i.test(m))) throw new Error("penyimpanan tidak diblokir");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("surat cetak: baris diskon bertanda minus, tanpa keterangan diskon di samping pos", () => {
+  const html = w.frTabelRinci({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }, "IDR");
+  if (/c-diskon|&minus; diskon/.test(html)) throw new Error("masih ada keterangan diskon di samping pos");
+  if (!/Base Discount/.test(html)) throw new Error("baris diskon tidak tercetak");
+  if (!/- Rp\. 220\.000/.test(html)) throw new Error("nilai diskon tidak bertanda minus");
+  if (!/1\.980\.000/.test(html)) throw new Error("subtotal setelah diskon tidak tercetak");
+  eq(w.frTotalPengajuan({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }), 2158200, "nilai pengajuan:");
+});
+
+console.log("\u2014 REKAP BULANAN & FORMAT NOMINAL \u2014");
+t("rekap bulanan: 12 bulan, jumlah & total per bulan, tahun lain tidak ikut", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "A", invoiceDate: "2026-01-10", amount: "125000000" }),
+    barisDana("2", { payee: "B", invoiceDate: "2026-01-20", amount: "5000000" }),
+    barisDana("3", { payee: "C", invoiceDate: "2026-02-03", amount: "56000000" }),
+    barisDana("4", { payee: "D", invoiceDate: "2026-02-04", currency: "USD", amount: "420" }),
+    barisDana("5", { payee: "E", invoiceDate: "2025-12-30", amount: "999" }),
+  ]);
+  const r = w.fsumRekapBulanan(k, "2026");
+  eq(r.bulan.length, 12, "jumlah baris:");
+  eq(r.bulan[0].jumlah + "|" + r.bulan[0].total.IDR, "2|130000000", "Januari:");
+  eq(r.bulan[1].jumlah + "|" + r.bulan[1].total.IDR + "|" + r.bulan[1].total.USD, "2|56000000|420", "Februari:");
+  eq(r.bulan[11].jumlah, 0, "Desember 2026 kosong (yang 2025 tidak ikut):");
+  eq(r.jumlahTahun, 4, "total setahun:");
+  eq(r.mataUang.join(","), "IDR,USD");
+});
+t("pilihan tahun = tahun di data + tahun berjalan, terbaru dulu", () => {
+  const k = kolomDana([
+    barisDana("1", { invoiceDate: "2024-05-01", amount: "1" }),
+    barisDana("2", { invoiceDate: "2025-05-01", amount: "1" }),
+  ]);
+  const ini = String(new Date().getFullYear());
+  const daftar = w.fsumDaftarTahun(k);
+  eq(daftar[0], ini, "tahun berjalan paling atas (bawaan):");
+  if (!daftar.includes("2024") || !daftar.includes("2025")) throw new Error("tahun dari data tidak muncul");
+  eq(daftar.join(","), [...daftar].sort().reverse().join(","), "urut menurun:");
+});
+t("rekap tetap tampil walau rentang tanggal tidak memuat apa pun, judul ikut tahunnya", () => {
+  const box = w.document.createElement("div");
+  w.document.body.appendChild(box);
+  try {
+    w.eval(`fsumBaris = ${JSON.stringify([
+      barisDana("1", { payee: "FEDEX", invoiceDate: "2025-03-05", amount: "1000" }),
+    ])}`);
+    w.eval('fsumSaringan.dari = "2025-09-01"; fsumSaringan.sampai = "2025-09-06"; fsumSaringan.tahun = "2025"');
+    w.fsumGambarPanel(box);
+    if (!box.querySelector("#fsumHasil .panel-empty")) throw new Error("rincian seharusnya kosong");
+    const judul = box.querySelector(".fsum-rekap .fsum-judul").textContent;
+    if (!/2025/.test(judul)) throw new Error("judul tidak mengikuti tahun: " + judul);
+    const maret = [...box.querySelectorAll(".fsum-rekap-tabel tbody tr")][2].textContent;
+    if (!/\b1\b/.test(maret)) throw new Error("rekap mengikuti rentang tanggal (Maret hilang)");
+  } finally {
+    box.remove();
+    w.eval("Object.assign(fsumSaringan, FSUM_SARINGAN_AWAL); fsumPemilih && fsumPemilih.lepas(); fsumPemilih = null; fsumBaris = null");
+  }
+});
+t("Amount di Rincian Biaya diformat titik ribuan saat diketik, dan terbaca kembali tepat", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval('fundLines = [{ desc: "", amount: "", ppnRate: 1.1 }]; renderFundLines()');
+    const kotak = w.document.querySelector('#fundLinesBody [data-fl-f="amount"]');
+    kotak.value = "133434343";
+    kotak.setSelectionRange(9, 9);
+    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak.value, "133.434.343", "tampilan:");
+    eq(kotak.selectionStart, 11, "kursor tetap di ujung:");
+    eq(w.fundLineAmount(baca("fundLines")[0]), 133434343, "nilai yang dihitung:");
+    // Nilai lama yang tersimpan tanpa titik tampil berformat saat digambar.
+    w.eval('fundLines = [{ desc: "", amount: "6262200", ppnRate: 1.1 }]; renderFundLines()');
+    eq(w.document.querySelector('#fundLinesBody [data-fl-f="amount"]').value, "6.262.200", "nilai lama:");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+
 console.log("\u2014 CARI DI RIWAYAT NOMOR \u2014");
 t("kata kunci dibersihkan dari tanda yang merusak filter", () => {
   const f = w.dnFilterCari('PT (Persero), "kas" 50%*');

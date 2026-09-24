@@ -1265,6 +1265,13 @@ function setLang(kode) {
      halaman. Kartu jadwal, label per-buku (MODE_LABELS), dan daftar HS
      Code semuanya dirakit dari string, jadi harus digambar ulang. */
   if (typeof applyModeLabels === "function") applyModeLabels();
+  /* Label form per buku (No. SPPB/No. PEB, Tanggal In Factory/Tanggal
+     Stuffing, ...) ditulis ulang SEBELUM label moda di bawah: yang di
+     bawah menyesuaikan sebagian darinya lagi untuk kiriman udara. */
+  const layarForm = document.getElementById("viewForm");
+  if (layarForm && !layarForm.classList.contains("d-none") && typeof terapkanLabelForm === "function") {
+    terapkanLabelForm();
+  }
   /* Label yang bergantung MODA (Nama Vessel/Voyager, No. Flight/Voyage,
      Pelabuhan/Terminal) ditulis dari JS, bukan lewat data-i18n --
      menandainya di HTML justru akan menimpanya dengan teks generik

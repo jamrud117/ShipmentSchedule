@@ -84,7 +84,7 @@ function renderAccounts() {
             : t("a.ubah.peran.akun.ini")
         }">
           <option value="viewer" ${!exim && !marketing ? "selected" : ""}>${tt("Viewer — hanya lihat", "Viewer — read only")}</option>
-          <option value="marketing" ${marketing ? "selected" : ""}>${tt("Marketing — ubah No. Dokumen saja", "Marketing — edits Doc. Number only")}</option>
+          <option value="marketing" ${marketing ? "selected" : ""}>${tt("Marketing — lihat saja, termasuk No. Dokumen", "Marketing — view only, incl. Doc. Number")}</option>
           <option value="exim" ${exim ? "selected" : ""}>${tt("EXIM — bisa ubah", "EXIM — can edit")}</option>
         </select>
         <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="${escapeAttr(t("a.ubah.nama.username"))}">

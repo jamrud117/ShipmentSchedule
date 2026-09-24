@@ -74,8 +74,8 @@ function router() {
        perlu ditindak". Aksi yang mengubah data di sana disembunyikan
        lewat body.is-viewer, sama seperti di halaman Jadwal. */
     !!editMatch;
-  /* Nomor Dokumen: EXIM & marketing. Viewer tetap tidak. */
-  if (hash === "#/docnum" && !canEditDocNum()) {
+  /* Nomor Dokumen: EXIM mengubah, marketing membaca. Viewer tidak. */
+  if (hash === "#/docnum" && !canViewDocNum()) {
     showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
     location.hash = "#/";
     return;
@@ -211,6 +211,28 @@ function joinPackageFields() {
   return $("#fPackage").value.trim();
 }
 
+/* LABEL FORM PER BUKU -- Import & Export memakai kotak yang SAMA
+   dengan nama berbeda: "Tanggal In Factory" di Import adalah "Tanggal
+   Stuffing" di Export, "No. SPPB" adalah "No. PEB", dan seterusnya.
+
+   Dipisah jadi fungsi karena dipanggil DUA tempat: saat form dibuka,
+   dan saat bahasa diganti (setLang). Tanpa panggilan kedua, ganti
+   bahasa selagi form Export terbuka menimpa label-label ini dengan
+   terjemahan tetap di HTML -- yang ditulis untuk Import -- sehingga form
+   Export tiba-tiba berlabel "No. SPPB" dan "Tanggal In Factory". */
+function terapkanLabelForm() {
+  const lbl = ML();
+  $("#lblDocNo").textContent = lbl.docNo;
+  $("#lblDocDate").textContent = lbl.docDate;
+  $("#lblParty").textContent = lbl.party;
+  $("#lblFactoryDate").textContent = lbl.factoryDate;
+  $("#lblFactoryTime").textContent = lbl.factoryTime;
+  $("#lblOrigin").textContent = lbl.origin;
+  $("#lblDestination").textContent = lbl.destination;
+  $("#lblActual").textContent = lbl.actual;
+  $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
+}
+
 function renderFormPage(id) {
   const lbl = ML();
   // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka
@@ -223,15 +245,7 @@ function renderFormPage(id) {
   $("#importNotesBox").classList.add("d-none");
   $("#importNotesSummary").innerHTML = "";
   $("#importNotesList").innerHTML = "";
-  $("#lblDocNo").textContent = lbl.docNo;
-  $("#lblDocDate").textContent = lbl.docDate;
-  $("#lblParty").textContent = lbl.party;
-  $("#lblFactoryDate").textContent = lbl.factoryDate;
-  $("#lblFactoryTime").textContent = lbl.factoryTime;
-  $("#lblOrigin").textContent = lbl.origin;
-  $("#lblDestination").textContent = lbl.destination;
-  $("#lblActual").textContent = lbl.actual;
-  $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
+  terapkanLabelForm();
 
   // Total Package (foot-package, sebelah Total Qty/Netto/Bruto/Nilai)
   const isImport = activeMode === "import";

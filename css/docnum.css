@@ -1045,3 +1045,122 @@ button.dn-bayar--lunas:hover {
   border-color: var(--p-600);
   box-shadow: 0 0 0 3px rgba(20, 45, 90, 0.12);
 }
+
+/* ------------------------------------------------------------------
+   REKAP BULANAN (tab Summary)
+------------------------------------------------------------------ */
+.fsum-rekap {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px dashed var(--border);
+}
+.fsum-rekap-kepala {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.fsum-rekap-kepala .fsum-judul {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.fsum-rekap-catatan {
+  font-size: 12px;
+  color: var(--n-500);
+  margin-top: 2px;
+}
+.fsum-rekap-tahun {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  min-width: 110px;
+}
+/* Seluruh tabel rekap rata tengah, sama dengan tabel rincian. */
+.fsum-tabel.fsum-rekap-tabel th,
+.fsum-tabel.fsum-rekap-tabel td {
+  text-align: center;
+  vertical-align: middle;
+}
+/* Bulan tanpa pengajuan diredupkan: dua belas baris tetap tampil
+   supaya urutan bulannya utuh, tapi yang kosong tidak bersaing
+   perhatian dengan yang berisi. */
+.fsum-rekap-kosong td {
+  color: var(--n-400, #9aa4b2);
+}
+
+/* ------------------------------------------------------------------
+   DISKON (baris sendiri) & RUMUS di Rincian Biaya Pengajuan Dana
+------------------------------------------------------------------ */
+.fl-row-diskon td {
+  background: #fff8f7;
+}
+.fl-desc-diskon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fl-desc-diskon input {
+  flex: 1;
+  min-width: 0;
+}
+.fl-tag-diskon {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fde7e4;
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.fl-row-diskon .fl-ppn {
+  color: #b42318;
+}
+/* Baris diskon: kotak isian, pilihan Rp/%, dan kotak nominal SEBARIS --
+   setinggi baris lain, semua kotak sejajar. */
+.fl-disc-in {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fl-disc-in input[data-fl-f="amount"] {
+  flex: 1 1 64px;
+  min-width: 56px;
+}
+.fl-disc-in select {
+  flex: 0 0 58px;
+}
+/* Nominal diskon: hasil hitungan, jadi tampil sebagai kotak baca-saja
+   (latar redup, tanpa kursor ketik) supaya tidak dikira bisa diisi. */
+.fl-disc-in .fl-disc-nominal {
+  flex: 1.5 1 110px;
+  min-width: 100px;
+  text-align: right;
+  color: #b42318;
+  background: var(--n-50);
+  cursor: default;
+  font-variant-numeric: tabular-nums;
+}
+.fl-disc-in .fl-disc-nominal:focus {
+  outline: none;
+  box-shadow: none;
+}
+/* Tambah Baris & Tambah Diskon berdampingan dalam satu baris. */
+.fl-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+/* Rumus yang tidak bisa dihitung: kotaknya ditandai, teksnya dibiarkan. */
+.fl-rumus-salah {
+  border-color: #d92d20 !important;
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.12) !important;
+}
+.fl-petunjuk {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--n-500);
+}

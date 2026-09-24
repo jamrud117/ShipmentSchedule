@@ -377,6 +377,15 @@ function validateDocNumForm(typeKey) {
   panel.querySelectorAll(".is-invalid").forEach((el) =>
     el.classList.remove("is-invalid"),
   );
+  /* Rumus di Rincian Biaya yang belum valid ("=1000+") tidak boleh ikut
+     tersimpan sebagai teks -- nilainya dihitung 0, jadi total pengajuan
+     diam-diam kurang. */
+  if (typeKey === "fund" && typeof fundLinesRumusGagal === "function" && fundLinesRumusGagal(fundLines)) {
+    errors.push(tt(
+      "Ada rumus di Rincian Biaya yang belum valid (kotak bertanda merah).",
+      "A formula in the Cost Breakdown is not valid yet (red box).",
+    ));
+  }
 
   panel.querySelectorAll("[data-dn]").forEach((el) => {
     // Isian tersembunyi tidak boleh dituntut wajib diisi.
@@ -616,11 +625,10 @@ $("#btnCounterReset")?.addEventListener("click", () => {
 ================================================================== */
 let dnEditingId = null;
 
-/* EXIM & marketing: memperbaiki isian nomor yang sudah ada & menandai
-   status bayar. Mengajukan nomor BARU, menghapus nomor, dan mengatur
-   nomor urut TIDAK memakai ini -- ketiganya requireEdit() (khusus EXIM). */
+/* Mengubah apa pun di Nomor Dokumen -- mengajukan, memperbaiki isian,
+   menandai status bayar -- khusus EXIM. Marketing hanya membaca. */
 function bolehUbahDocNum() {
-  return typeof canEditDocNum !== "function" || canEditDocNum();
+  return typeof canEdit !== "function" || canEdit();
 }
 
 /* ------------------------------------------------------------------
@@ -895,15 +903,6 @@ function batalUbahDocNum() {
 function syncModeUbahDocNum(nomor) {
   const btn = $("#btnDocNumSubmit");
   const banner = $("#dnEditBanner");
-  /* Penanda mode perbaikan. Marketing hanya melihat panel isian selama
-     penanda ini ada (lihat auth.css) -- di luar itu form berarti
-     "ajukan nomor baru", yang bukan haknya.
-
-     Dipasang di section.docnum-panels karena form ini TIDAK punya satu
-     pembungkus: panel isian, baris tombol, dan riwayat bersaudara di
-     dalam section itu. */
-  const panel = document.querySelector(".docnum-panels");
-  if (panel) panel.classList.toggle("is-editing", !!nomor);
   if (btn) {
     btn.innerHTML = nomor
       ? '<i class="bi bi-check2"></i> ' + tt("Simpan Perubahan", "Save Changes")
@@ -1827,9 +1826,7 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
 $("#btnDnEditCancel")?.addEventListener("click", batalUbahDocNum);
 
 $("#btnDocNumSubmit")?.addEventListener("click", () => {
-  /* Tombol yang sama dipakai dua jalur: menyimpan PERBAIKAN (EXIM &
-     marketing) dan mengajukan nomor BARU (khusus EXIM). */
-  if (dnEditingId ? !requireEditDocNum() : !requireEdit()) return;
+  if (!requireEdit()) return;
   submitDocNumRequest();
 });
 $("#btnDocNumReset")?.addEventListener("click", () => {

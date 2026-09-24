@@ -1348,7 +1348,10 @@ table.item-table input.pkg-invalid {
 }
 
 /* Tanggal & Jam Stuffing tidak dipakai di buku Export — tanggal muatnya
-   diisi lewat kolom "Stuffing" (field actual). */
+   diisi lewat kolom "Stuffing" (field actual). Menyembunyikan kotaknya
+   saja TIDAK cukup: nilainya dikosongkan di lapisan data
+   (lepasIsianPabrikExport di mapping.js), supaya tidak ada nilai yang
+   tak terlihat tapi tetap dibaca. */
 body.mode-export .factory-field {
   display: none;
 }

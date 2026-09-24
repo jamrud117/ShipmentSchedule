@@ -328,7 +328,13 @@ function reconstructShipmentFromGroup(group, mode) {
     docNo: excelStr(first[idx.DOCNO]),
     docDate: excelValueToISODate(first[idx.DATE]),
     party: excelStr(first[idx.PARTY]),
-    factoryDate: excelValueToISODate(first[idx.FACTORY]),
+    /* Kolom ke-2 berkas Export berisi tanggal STUFFING (ditulis dari
+       isian Stuffing oleh Bulk Export) -- masuknya ke isian yang sama,
+       bukan ke Tanggal Stuffing tersembunyi. Di Import kolom itu
+       memang Tanggal In Factory. */
+    ...(mode === "export"
+      ? { actual: excelValueToISODate(first[idx.FACTORY]) }
+      : { factoryDate: excelValueToISODate(first[idx.FACTORY]) }),
     incoterm: excelStr(first[idx.INCOTERM]),
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),

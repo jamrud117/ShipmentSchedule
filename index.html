@@ -1918,14 +1918,21 @@
                       <tbody id="fundLinesBody"></tbody>
                     </table>
                   </div>
-                  <button
-                    type="button"
-                    class="btn-quiet mt-2"
-                    id="btnFundLineAdd"
-                  >
-                    <i class="bi bi-plus-lg"></i>
-                    <span data-i18n="f.tambah.baris">Tambah Baris</span>
-                  </button>
+                  <!-- Dua tombol tambah, sebaris berdampingan. Diskon = baris
+                       sendiri yang MENGURANGI (fund-lines.js). -->
+                  <div class="fl-aksi">
+                    <button type="button" class="btn-quiet" id="btnFundLineAdd">
+                      <i class="bi bi-plus-lg"></i>
+                      <span data-i18n="f.tambah.baris">Tambah Baris</span>
+                    </button>
+                    <button type="button" class="btn-quiet" id="btnFundDiscAdd">
+                      <i class="bi bi-dash-lg"></i>
+                      <span data-en="Add Discount">Tambah Diskon</span>
+                    </button>
+                  </div>
+                  <div class="fl-petunjuk" data-en="Amounts accept formulas: start with = , e.g. =1.000+500 or =2.200.000*10%, then press Enter.">
+                    Kotak nilai menerima rumus: awali dengan = , mis. =1.000+500 atau =2.200.000*10%, lalu tekan Enter.
+                  </div>
                   <div class="fund-lines-foot" id="fundLinesFoot"></div>
                 </div>
 
@@ -2392,14 +2399,12 @@
                 />
               </div>
               <div class="col-md-3 factory-field">
-                <label class="form-label" id="lblFactoryDate"
-                   data-en="In Factory Date">Tanggal In Factory</label
+                <label class="form-label" id="lblFactoryDate">Tanggal In Factory</label
                 >
                 <input type="date" class="form-control" id="fFactoryDate" />
               </div>
               <div class="col-md-3 factory-field">
-                <label class="form-label" id="lblFactoryTime"
-                   data-en="In Factory Time">Jam In Factory</label
+                <label class="form-label" id="lblFactoryTime">Jam In Factory</label
                 >
                 <input type="time" class="form-control" id="fFactoryTime" />
               </div>
@@ -2521,7 +2526,7 @@
                 <!-- TANPA data-i18n: teksnya ditulis applyTransportLabels() lewat
                      portNoun() dan berganti jadi "Terminal Asal" saat moda
                      udara. Menandainya akan menimpanya dengan teks generik. -->
-                <label class="form-label" id="lblOrigin" data-en="Port of Origin">Pelabuhan Asal</label>
+                <label class="form-label" id="lblOrigin">Pelabuhan Asal</label>
                 <input
                   type="text"
                   class="form-control"
@@ -2532,8 +2537,7 @@
                 />
               </div>
               <div class="col-md-5">
-                <label class="form-label" id="lblDestination"
-                   data-en="Port of Destination">Pelabuhan Tujuan</label
+                <label class="form-label" id="lblDestination">Pelabuhan Tujuan</label
                 >
                 <input
                   type="text"

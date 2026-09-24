@@ -346,30 +346,19 @@ body.is-viewer .card-note-input {
   display: none !important;
 }
 
-/* NOMOR DOKUMEN: tertutup untuk viewer, TERBUKA untuk marketing.
-   Marketing membawa .is-viewer juga (hanya-baca di halaman lain), jadi
-   pengecualiannya ditulis di sini -- bukan dengan melepas .is-viewer,
-   yang akan membuka tombol ubah di seluruh aplikasi.
+/* NOMOR DOKUMEN: tertutup untuk viewer, TERBUKA untuk marketing -- tapi
+   hanya untuk MEMBACA (riwayat & Summary). Marketing membawa .is-viewer
+   juga, jadi panel isian, tombol Ajukan, dan Atur Nomor Urut tersembunyi
+   baginya lewat aturan yang sama dengan viewer.
 
-   Form Nomor Dokumen tidak punya satu pembungkus: panel isian per
-   jenis ([data-docnum-panel]), baris tombol (.docnum-actions), dan
-   riwayat bersaudara di dalam section.docnum-panels. Yang disembunyikan
-   karena itu panel & tombolnya, bukan section-nya -- riwayat tetap
-   harus terbaca. (Aturan lama menunjuk ke #docnumFormWrap, elemen yang
-   tidak pernah ada, jadi tidak pernah menyembunyikan apa pun.) */
+   Form ini tidak punya satu pembungkus: panel isian per jenis
+   ([data-docnum-panel]), baris tombol (.docnum-actions), dan riwayat
+   bersaudara di dalam section.docnum-panels -- jadi yang disembunyikan
+   panel & tombolnya, bukan section-nya. */
 body.is-viewer:not(.is-marketing) .nav-docnum,
-body.is-viewer:not(.is-marketing) [data-docnum-panel],
-body.is-viewer:not(.is-marketing) .docnum-actions,
-body.is-viewer:not(.is-marketing) .counter-box {
-  display: none !important;
-}
-/* Marketing TIDAK mengajukan nomor baru: panel isian & tombolnya hanya
-   tampil selama ia memperbaiki nomor yang sudah ada (tombol pensil di
-   riwayat memasang .is-editing). Atur Nomor Urut mengubah penomoran
-   semua orang -- khusus EXIM. */
-body.is-marketing .docnum-panels:not(.is-editing) [data-docnum-panel],
-body.is-marketing .docnum-panels:not(.is-editing) .docnum-actions,
-body.is-marketing .counter-box {
+body.is-viewer [data-docnum-panel],
+body.is-viewer .docnum-actions,
+body.is-viewer .counter-box {
   display: none !important;
 }
 

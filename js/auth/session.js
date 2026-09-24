@@ -6,24 +6,23 @@ const authState = { user: null, profile: null, siap: false };
 
 /* PERAN
      exim      -- mengubah semua data
-     marketing -- hanya MELIHAT di seluruh aplikasi, KECUALI Nomor
-                  Dokumen: boleh memperbaiki isian nomor yang SUDAH ada dan
-                  menandai status bayar. Mengajukan nomor baru, menghapus
-                  nomor & mengatur nomor urut tetap khusus EXIM --
-                  ketiganya menambah atau mengubah penomoran.
+     marketing -- hanya MELIHAT di seluruh aplikasi, termasuk Nomor
+                  Dokumen (riwayat & Summary) yang tidak bisa dibuka
+                  viewer. Tidak ada satu pun yang bisa ia ubah di sana:
+                  mengajukan, memperbaiki isian, menandai status bayar,
+                  menghapus, dan mengatur nomor urut -- khusus EXIM.
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
-   canEdit() tetap berarti "EXIM" -- dipakai di seluruh aplikasi untuk
-   perubahan data umum. Hak khusus Nomor Dokumen punya pemeriksanya
-   sendiri, supaya membuka satu halaman untuk marketing tidak diam-diam
-   membuka tombol ubah di halaman lain. */
+   canEdit() berarti "EXIM" -- satu-satunya peran yang mengubah data,
+   di halaman mana pun. canViewDocNum() hanya menjawab siapa yang boleh
+   MEMBUKA halaman Nomor Dokumen. */
 function peranSaya() {
   return (authState.profile && authState.profile.role) || "";
 }
 function canEdit() {
   return peranSaya() === "exim";
 }
-function canEditDocNum() {
+function canViewDocNum() {
   return peranSaya() === "exim" || peranSaya() === "marketing";
 }
 
@@ -142,38 +141,26 @@ function applyPermissions() {
 }
 
 function lockInputs() {
-  /* Isian Nomor Dokumen TIDAK dikunci untuk marketing: ia boleh
-     memperbaiki isian nomor yang sudah ada. Dulu seluruh #viewDocNum
-     dikunci untuk semua yang bukan EXIM -- tidak masalah selama viewer
-     memang tak bisa membuka halaman itu, tapi begitu marketing boleh
-     masuk, form perbaikannya tampil dengan setiap isian mati. */
-  const docnumTerkunci = !canEditDocNum();
-  const pilih =
-    "#cardContainer input, #cardContainer select, #cardContainer textarea" +
-    (docnumTerkunci ? ", #viewDocNum input, #viewDocNum select, #viewDocNum textarea" : "");
-  document.querySelectorAll(pilih).forEach((el) => {
-    if (el.dataset.viewerLocked) return;
-    el.dataset.viewerLocked = "1";
-    el.disabled = true;
-  });
-  // Yang sempat terkunci sebelum profilnya termuat dibuka lagi.
-  if (!docnumTerkunci) {
-    document.querySelectorAll("#viewDocNum [data-viewer-locked]").forEach((el) => {
-      delete el.dataset.viewerLocked;
-      el.disabled = false;
+  /* Yang dikunci di Nomor Dokumen hanya isian FORM-nya (panel per jenis
+     dokumen & Atur Nomor Urut) -- bukan seluruh halaman. Marketing boleh
+     membuka halaman itu untuk membaca, dan kotak cari riwayat serta
+     penyaring tab Summary justru alat membacanya; dulu seluruh
+     #viewDocNum dikunci, dan kotak cari ikut mati. */
+  document
+    .querySelectorAll(
+      "#cardContainer input, #cardContainer select, #cardContainer textarea," +
+        " #viewDocNum [data-docnum-panel] input, #viewDocNum [data-docnum-panel] select," +
+        " #viewDocNum [data-docnum-panel] textarea, #viewDocNum .counter-box input",
+    )
+    .forEach((el) => {
+      if (el.dataset.viewerLocked) return;
+      el.dataset.viewerLocked = "1";
+      el.disabled = true;
     });
-  }
 }
 
 /* Penjaga untuk aksi yang mengubah data. Dipanggil di awal tiap
    penangan; UI-nya memang sudah disembunyikan, ini lapis kedua */
-/* Penjaga aksi di halaman Nomor Dokumen: EXIM & marketing. */
-function requireEditDocNum(pesan) {
-  if (canEditDocNum()) return true;
-  showToast(pesan || t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger");
-  return false;
-}
-
 function requireEdit(pesan) {
   if (canEdit()) return true;
   showToast(

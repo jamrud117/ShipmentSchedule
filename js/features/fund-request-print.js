@@ -324,21 +324,27 @@ function buildFundRequestHtml(row) {
    nilai, PPN, lalu jumlah per baris — supaya angkanya bisa dicocokkan
    baris per baris dengan invoice aslinya saat diperiksa. */
 function frTabelRinci(p, mataUang) {
-  const daftar = p.lines || [];
+  /* Diskon adalah BARIS SENDIRI yang nilainya negatif (fund-lines.js) --
+     tercetak sebagai baris biasa dengan tanda minus, tanpa keterangan
+     tambahan di samping pos lain. Data lama berkolom diskon per pos
+     dipecah dulu oleh normalisasiBarisDana(), jadi tercetak sama. */
+  const daftar = normalisasiBarisDana(p.lines || []);
+  const nilaiBaris = fundLineValues(daftar);
   const r = fundLineTotals(daftar);
   const KOLOM = 6;
+  const uang = (v) => (v < 0 ? "- " + frNilai(-v, mataUang) : frNilai(v, mataUang));
 
   const baris = daftar
     .map((b, i) => {
-      const nilai = fundLineAmount(b);
-      const ppn = fundLinePpn(b);
+      const nilai = nilaiBaris[i];
+      const ppn = fundLinePpnNilai(nilai, b);
       const tarif = fundLineRate(b);
       return `<tr class="baris-pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.desc || "")}</td>
-        <td class="c-amt">${escapeHtml(frNilai(nilai, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(uang(nilai))}</td>
         <td class="c-rate">${tarif ? tarif + "%" : "-"}</td>
-        <td class="c-amt">${escapeHtml(frNilai(ppn, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(uang(ppn))}</td>
         <td class="c-amt"></td>
       </tr>`;
     })
@@ -363,10 +369,10 @@ function frTabelRinci(p, mataUang) {
       <tr class="baris-subtotal">
         <td class="c-no"></td>
         <td class="c-desc">TOTAL :</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNilai, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(frNilai(r.totalNet, mataUang))}</td>
         <td class="c-rate"></td>
         <td class="c-amt">${escapeHtml(frNilai(r.totalPpn, mataUang))}</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNilai + r.totalPpn, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(frNilai(r.totalNet + r.totalPpn, mataUang))}</td>
       </tr>
       <tr class="baris-potongan">
         <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%)</td>

@@ -201,7 +201,7 @@ function groupKeyOf(s) {
      dari kejadian sebenarnya. */
   if (isArrived(s)) {
     const nyata =
-      s.mode === "export" ? s.actual || s.factoryDate : s.factoryDate;
+      s.mode === "export" ? s.actual : s.factoryDate;
     return nyata || effectiveEta(s) || effectiveEtd(s) || null;
   }
 

@@ -514,13 +514,6 @@ function predictDelivery(src) {
     });
   }
 
-  /* ---- LAPIS 3/4 dilewati: sudah sampai pabrik ----
-     Yang sampai di sini hanya buku Export; jalur Import sudah ditangani
-     di atas, sebelum cabang manual. */
-  if (s.factoryDate) {
-    return sudahSampaiPabrik(bungkus, s);
-  }
-
   /* ---- LAPIS 2 & 3 — jadwal proses darat, berjangkar pada kedatangan ---- */
   const jadwal = buildDeliverySchedule(s, ops, ctx);
 

@@ -157,7 +157,7 @@ function showDbErrorState() {
 }
 
 async function createShipment(payload, items, stops) {
-  const row = shipmentToRow(payload);
+  const row = shipmentToRow(payload, activeMode);
   row.mode = activeMode;
   const { data: inserted, error } = await supabaseClient
     .from("shipments")
@@ -183,7 +183,7 @@ async function createShipment(payload, items, stops) {
 }
 
 async function updateShipmentRecord(id, payload, items, stops) {
-  const row = shipmentToRow(payload);
+  const row = shipmentToRow(payload, activeMode);
   const { error } = await supabaseClient
     .from("shipments")
     .update(row)
