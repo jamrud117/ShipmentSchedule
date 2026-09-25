@@ -3348,12 +3348,77 @@ t("ruang kosong satu blok, bukan grid kotak", () => {
   eq((h.match(/ci-fill/g) || []).length, 1);
   if (/ci-blank/.test(h)) throw new Error("masih menggambar baris kosong bergaris");
 });
-t("tinggi ruang kosong menyusut saat barang bertambah", () => {
-  const sedikit = w.ciplRuangKosongHtml(2, 10);
-  const banyak = w.ciplRuangKosongHtml(10, 10);
-  const tinggi = (s) => Number((s.match(/height:(\d+)px/) || [])[1] || 0);
-  if (!(tinggi(sedikit) > tinggi(banyak))) throw new Error("tidak menyusut");
-  eq(w.ciplRuangKosongHtml(20, 10), "");   // penuh -> tidak ada ruang sisa
+t("baris pengisi SELALU ada & tanpa tinggi tetap -- memanjang lewat CSS", () => {
+  const h = w.ciplRuangKosongHtml(10);
+  eq((h.match(/<td><\/td>/g) || []).length, 10, "jumlah sel:");
+  if (/height:/.test(h)) throw new Error("pengisi masih bertinggi tetap");
+  // Juga pada daftar barang yang panjang -- tanpa pengisi, sisa tinggi
+  // halaman dibagikan ke baris-baris barang.
+  const row = { id: "d5b", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const banyak = Array.from({ length: 25 }, () => barisCipl()[0]);
+  if (!/ci-fill/.test(w.ciplHalamanInvoice(row, jadwalCipl, banyak))) throw new Error("pengisi hilang saat barang banyak");
+});
+t("cetak CIPL: bingkai setinggi kertas, jarak bawah = jarak atas (Dynamic Design & Kumho)", () => {
+  const css = w.ciplCss();
+  if (!/\.ci-sheet \{ width: 210mm; padding: 19\.05mm 6\.35mm; \}/.test(css)) throw new Error("lembar tidak selebar kertas");
+  if (!/min-height: calc\(297mm - 38\.1mm - 2px\)/.test(css.split(".ci-sheet:not(.si-sheet) > .ci-box")[1] || ""))
+    throw new Error("bingkai Invoice/PL tidak setinggi bidang cetak");
+  if (!/\.ci-items tr\.ci-fill td \{ height: 100%; \}/.test(css)) throw new Error("pengisi tidak memanjang");
+  // Total & tanda tangan di <tbody> yang sama dengan barang: tidak terulang di
+  // tiap halaman (tfoot), dan tidak ikut membengkak (kelompok baris terpisah).
+  const rowCi = { id: "d5c", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  [w.ciplHalamanInvoice(rowCi, jadwalCipl, barisCipl()), w.ciplHalamanPacking(rowCi, jadwalCipl, barisCipl())].forEach((h) => {
+    if (/<tfoot/.test(h)) throw new Error("Total masih di <tfoot>");
+    const badan = h.slice(h.indexOf('<tbody>', h.indexOf('class="ci-items')), h.lastIndexOf("</tbody>"));
+    if (!/ci-total-row/.test(badan) || !/ci-sign-row/.test(badan)) throw new Error("Total/tanda tangan tidak di tbody barang");
+  });
+  const vn = w.ciplVnCss();
+  if (!/padding: 14\.8mm 13\.7mm 14\.8mm 12\.9mm;/.test(vn)) throw new Error("jarak bawah Kumho tidak sama dengan atasnya");
+  if (/vn-sheet--pl/.test(vn)) throw new Error("jarak bawah khusus Packing List masih ada");
+});
+t("kotak tanda tangan muat stempel perusahaan: 50 mm di kertas (cetak & Excel, kedua format)", () => {
+  if (!/\.ci-sign-space \{ height: 45\.6mm; \}/.test(w.ciplCss())) throw new Error("kotak cetak Dynamic Design");
+  if (!/\.vn-akhir-ttd \{[\s\S]*?height: 50mm;/.test(w.ciplVnCss())) throw new Error("kotak cetak Kumho");
+  eq(baca("XLS_TTD_MM"), 50, "Excel:");
+  // Tinggi baris dihitung dari skala cetaknya, jadi di KERTAS tepat 50 mm.
+  const lebar = [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875];
+  const baris = {};
+  const ws = {
+    pageSetup: { printArea: "A1:J50", margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75 } },
+    getRow: (r) => (baris[r] = baris[r] || {}),
+    getColumn: (c) => ({ width: lebar[c - 1] }),
+  };
+  w.ciplXlsTinggiTercetak(ws, 47, 50, 50);
+  const pt = [47, 48, 49, 50].reduce((s, r) => s + baris[r].height, 0);
+  const mm = (pt * w.ciplXlsSkalaCetak(ws)) / 72 * 25.4;
+  if (Math.abs(mm - 50) > 0.2) throw new Error("tercetak " + mm.toFixed(2) + " mm");
+});
+t("Excel CIPL: selalu ada baris kosong di atas Total; 15 barang ke bawah tidak bergeser", () => {
+  eq(w.ciplXlsBarisTotal(8), 46, "8 barang:");
+  eq(w.ciplXlsBarisTotal(15), 46, "15 barang:");
+  eq(w.ciplXlsBarisTotal(16), 47, "16 barang (dulu 46, tanpa baris kosong):");
+});
+t("Excel CIPL: tinggi isi dipas dengan skala cetaknya -> setinggi kertas A4", () => {
+  // Lembar tiruan: 10 kolom selebar lembar INVOICE, 51 baris 15pt, margin Narrow.
+  const lebar = [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875];
+  const baris = {};
+  const ws = {
+    pageSetup: { printArea: "A1:J50", margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75 } },
+    properties: { defaultRowHeight: 15 },
+    getRow: (r) => (baris[r] = baris[r] || {}),
+    getColumn: (c) => ({ width: lebar[c - 1] }),
+  };
+  const tambah = w.ciplXlsPenuhiHalaman(ws, 45);
+  if (!(tambah > 0)) throw new Error("tidak ada tinggi yang ditambahkan");
+  let tinggi = 0;
+  for (let r = 1; r <= 50; r++) tinggi += baris[r].height || 15;
+  const lebarPt = lebar.reduce((s, x) => s + w.ciplXlsKolomPt(x), 0);
+  const skala = Math.min(1, (595.28 - 36) / lebarPt);
+  const tercetakMm = (tinggi * skala) / 72 * 25.4;
+  const bidangMm = (841.89 - 108) / 72 * 25.4;
+  if (Math.abs(tercetakMm - bidangMm) > 1) throw new Error(`tinggi tercetak ${tercetakMm.toFixed(1)} mm, bidang ${bidangMm.toFixed(1)} mm`);
+  // Lebar kolom saat dicetak memakai lebar angka Calibri yang sebenarnya.
+  if (Math.abs(w.ciplXlsKolomPt(10) - 10 * 7.4336 * 0.75) > 0.01) throw new Error("konversi lebar kolom");
 });
 t("tanda tangan jadi baris tabel, segaris dengan Total", () => {
   const row = { id: "d6", doc_number: "X", doc_date: "2026-08-03", payload: {} };
@@ -4268,6 +4333,33 @@ t("angka memakai format dari rujukan, bukan General", () => {
   /* Angka Total sebaris dengan angka barang, jadi ukurannya mengikuti:
      Arial 9, bukan 8. */
   eq(selPl("G46").font.size, 9);
+});
+t("kotak tanda tangan Invoice & Packing List SAMA LEBAR -- cetak & Excel Dynamic Design", () => {
+  const porsi = (l, k) => l.slice(k).reduce((a, b) => a + b, 0) / l.reduce((a, b) => a + b, 0);
+  // CETAK: Invoice D..J, Packing List E..J -- porsi bingkainya sama.
+  eq(porsi(baca("CIPL_COLS_INVOICE"), 3).toFixed(4), porsi(baca("CIPL_COLS_PACKING"), 4).toFixed(4), "cetak:");
+  const row = { id: "d7", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const hCi = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
+  if (!/<td colspan="3" class="ci-sign-empty">/.test(hCi) || !/<td colspan="7" class="ci-sign-cell">/.test(hCi))
+    throw new Error("kotak tanda tangan Invoice cetak tidak mulai di kolom D");
+  if (!/<td colspan="5" class="ci-total-k">Total<\/td>/.test(hCi))
+    throw new Error("label Total Invoice cetak tidak mulai di kolom D");
+  // EXCEL: keduanya D..J, porsinya sama.
+  const lembar = (fn) => {
+    const ws = wsTiruan(), kol = {}, bar = {}, asliRow = ws.getRow;
+    ws.getColumn = (c) => (kol[c] = kol[c] || {});
+    ws.getRow = (r) => (bar[r] = bar[r] || asliRow(r));
+    fn({ addWorksheet: () => ws, addImage: () => 1 }, rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+    return { ws, lebar: Array.from({ length: 10 }, (_, i) => (kol[i + 1] || {}).width) };
+  };
+  const ci = lembar(w.ciplXlsInvoice), pl = lembar(w.ciplXlsPacking);
+  const rt = w.ciplXlsBarisTotal(w.ciplBarisBarang(jadwalSI).length);
+  const awal = (x) => [...Array(10).keys()].map((i) => i + 1).find((c) => /signed by/i.test(String(x.ws.at(rt + 1, c).value || "")));
+  eq(awal(ci), 4, "Excel Invoice mulai di D:");
+  eq(awal(pl), 4, "Excel Packing List mulai di D:");
+  eq(porsi(ci.lebar, 3).toFixed(4), porsi(pl.lebar, 3).toFixed(4), "Excel:");
+  // Kolom D Packing List TIDAK dipersempit: ia juga menampung "Sailing on or About".
+  eq(pl.lebar[3], 16, "lebar kolom D Packing List:");
 });
 
 t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {

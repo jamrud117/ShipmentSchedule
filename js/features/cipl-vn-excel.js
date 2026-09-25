@@ -424,7 +424,11 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
      PL sendiri, lihat VNXL_LEBAR_ASLI_PL), jadi fitToPage memperkecil
      lembarnya lebih banyak dan tingginya ikut menyusut. Baris
      tambahan mengembalikan tinggi cetaknya ke ~238 mm. */
-  const rTotal = Math.max(rAkhir + dimensi.length + 1, rk + (isPacking ? 26 : 22));
+  /* +2: SELALU tersisa satu baris kosong di antara barang terakhir dan
+     baris dimensi -- baris itu yang dipanjangkan ciplXlsPenuhiHalaman()
+     supaya lembarnya setinggi kertas. Untuk jumlah barang biasa yang
+     menentukan tetap jarak minimumnya, jadi tidak ada yang bergeser. */
+  const rTotal = Math.max(rAkhir + dimensi.length + 2, rk + (isPacking ? 26 : 22));
   // Baris pengisi & baris TOTAL ikut irama yang sama.
   for (let r = rk + 1; r <= rTotal; r++) {
     if (ws.getRow(r).height == null) ws.getRow(r).height = 10.5;
@@ -448,7 +452,7 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
   // Garis bertitik sebagai sisi ATAS baris TOTAL (berkas asli: row 56 "t.").
   vnxlGarisBaris(ws, rTotal, 1, 11, "t", "dotted");
 
-  return { rTotal, total, jumlah: baris.length };
+  return { rTotal, total, jumlah: baris.length, rPengisi: rTotal - dimensi.length - 1 };
 }
 
 /* Baris TOTAL + blok penutup (penanda pengapalan, signed by). */
@@ -578,6 +582,19 @@ function vnxlLembar(wb, row, shipment, isPacking) {
      ikut terbawa dan mendorong terbitnya satu halaman kosong di
      antara CI dan PL. */
   ws.pageSetup.printArea = "A1:K" + barisAkhir;
+  /* Setinggi kertas: jarak ke tepi bawah sama dengan ke tepi atas (margin
+     0,59" keduanya), bukan berhenti di tengah kertas. */
+  /* Kotak tanda tangan (rt+5..rt+9) setinggi 50 mm di kertas, muat
+     stempel perusahaan. rt+5 -- baris "signed by" -- tidak diubah: ia
+     juga baris terakhir blok penanda pengapalan di kiri (A:B gabung
+     rt..rt+5), dan memanjangkannya menggeser teks penanda itu.
+     Tambahannya masuk ke empat baris di bawahnya. */
+  if (typeof ciplXlsTinggiTercetak === "function") {
+    const rt = info.rTotal;
+    const labelMm = ((ws.getRow(rt + 5).height || 15) / 72) * 25.4 * ciplXlsSkalaCetak(ws);
+    ciplXlsTinggiTercetak(ws, rt + 6, rt + 9, XLS_TTD_MM - labelMm);
+  }
+  if (typeof ciplXlsPenuhiHalaman === "function") ciplXlsPenuhiHalaman(ws, info.rPengisi);
   return ws;
 }
 
