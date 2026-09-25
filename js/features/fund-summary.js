@@ -40,7 +40,11 @@ let fsumPemilih = null; // pemilih rentang tanggal milik tab ini
 /* tahun: "" = tahun BERJALAN, dibaca saat digambar -- bukan dipatok
    saat halaman dimuat, supaya halaman yang dibiarkan terbuka melewati
    tahun baru ikut berpindah ke tahun yang baru. */
-const FSUM_SARINGAN_AWAL = { dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", kelompok: "company", tahun: "" };
+const FSUM_SARINGAN_AWAL = {
+  dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", kelompok: "company",
+  tahun: "",
+  dasarRekap: "invoice", // tanggal yang dipakai rekap bulanan: "invoice" | "bayar"
+};
 const fsumSaringan = Object.assign({}, FSUM_SARINGAN_AWAL);
 
 function fsumTanggal(row) {
@@ -193,20 +197,36 @@ function fsumPivot(kolom, kelompok) {
 const fsumTahunIni = () => String(new Date().getFullYear());
 const fsumTahunDipilih = () => fsumSaringan.tahun || fsumTahunIni();
 
-function fsumDaftarTahun(kolom) {
+/* DASAR TANGGAL REKAP: Tanggal Invoice (bawaan), atau Tanggal Bayar --
+   tanggal yang diisi saat pengajuan ditandai lunas. Dengan Tanggal
+   Bayar, pengajuan yang belum lunas tidak punya tanggal, jadi tidak
+   masuk bulan mana pun: rekapnya menjawab "berapa yang sudah dibayar
+   tiap bulan". */
+const fsumTanggalRekap = (k, dasar) => (dasar === "bayar" ? k.tglBayar : k.tanggal) || "";
+
+/* Pilihan tahun: tahun-tahun yang ada di data (menurut dasar tanggal
+   yang dipilih) + tahun berjalan + tahun yang sedang dipilih. Yang
+   terakhir supaya pilihan di layar tetap cocok dengan isi tabelnya
+   ketika dasar tanggal diganti ke dasar yang tidak punya tahun itu. */
+function fsumDaftarTahun(kolom, dasar, terpilih) {
   const tahun = new Set([fsumTahunIni()]);
-  kolom.forEach((k) => { if (/^\d{4}/.test(k.tanggal || "")) tahun.add(k.tanggal.slice(0, 4)); });
+  if (terpilih) tahun.add(String(terpilih));
+  kolom.forEach((k) => {
+    const tgl = fsumTanggalRekap(k, dasar);
+    if (/^\d{4}/.test(tgl)) tahun.add(tgl.slice(0, 4));
+  });
   return [...tahun].sort((a, b) => b.localeCompare(a));
 }
 
-function fsumRekapBulanan(kolom, tahun) {
+function fsumRekapBulanan(kolom, tahun, dasar) {
   const bulan = Array.from({ length: 12 }, (_, i) => ({ bulan: i, jumlah: 0, total: {} }));
   const totalTahun = {};
   let jumlahTahun = 0;
   const mataUang = [];
   kolom.forEach((k) => {
-    if (!k.tanggal || k.tanggal.slice(0, 4) !== String(tahun)) return;
-    const b = bulan[Number(k.tanggal.slice(5, 7)) - 1];
+    const tgl = fsumTanggalRekap(k, dasar);
+    if (!tgl || tgl.slice(0, 4) !== String(tahun)) return;
+    const b = bulan[Number(tgl.slice(5, 7)) - 1];
     if (!b) return;
     b.jumlah += 1;
     b.total[k.mataUang] = (b.total[k.mataUang] || 0) + k.nilai;
@@ -221,13 +241,22 @@ function fsumRekapBulanan(kolom, tahun) {
 
 function fsumRekapHtml(semua, saringan) {
   const tahun = fsumTahunDipilih();
+  const dasarTgl = fsumSaringan.dasarRekap === "bayar" ? "bayar" : "invoice";
   // Semua penyaring berlaku, KECUALI rentang tanggal (lihat di atas).
   const dasar = fsumSaring(semua, Object.assign({}, saringan, { dari: "", sampai: "" }));
-  const r = fsumRekapBulanan(dasar, tahun);
+  const r = fsumRekapBulanan(dasar, tahun, dasarTgl);
   const uang = (obj, m) => (obj[m] ? fsumUang(obj[m], m) : "—");
-  const opsiTahun = fsumDaftarTahun(semua)
+  const opsiTahun = fsumDaftarTahun(semua, dasarTgl, tahun)
     .map((y) => `<option value="${y}" ${y === tahun ? "selected" : ""}>${y}</option>`)
     .join("");
+  const opsiDasar = [["invoice", tt("Tanggal Invoice", "Invoice Date")], ["bayar", tt("Tanggal Bayar", "Paid Date")]]
+    .map(([v, teks]) => `<option value="${v}" ${v === dasarTgl ? "selected" : ""}>${escapeHtml(teks)}</option>`)
+    .join("");
+  const catatan = dasarTgl === "bayar"
+    ? tt("Jumlah invoice & total cost per bulan menurut Tanggal Bayar — hanya pengajuan yang sudah lunas. Penyaring di atas berlaku, kecuali rentang tanggal.",
+         "Invoice count & total cost per month by Paid Date — paid requests only. The filters above apply, except the date range.")
+    : tt("Jumlah invoice & total cost per bulan menurut Tanggal Invoice. Penyaring di atas berlaku, kecuali rentang tanggal.",
+         "Invoice count & total cost per month by Invoice Date. The filters above apply, except the date range.");
   const baris = r.bulan.map((b) => `
     <tr class="${b.jumlah ? "" : "fsum-rekap-kosong"}">
       <td>${escapeHtml(bulanPanjang(b.bulan))}</td>
@@ -239,15 +268,18 @@ function fsumRekapHtml(semua, saringan) {
       <div class="fsum-rekap-kepala">
         <div>
           <div class="fsum-judul">${escapeHtml(tt(`Rekap Bulanan Tahun ${tahun}`, `Monthly Recap ${tahun}`))}</div>
-          <div class="fsum-rekap-catatan">${escapeHtml(tt(
-            "Jumlah invoice & total cost per bulan menurut Tanggal Invoice. Penyaring di atas berlaku, kecuali rentang tanggal.",
-            "Invoice count & total cost per month by Invoice Date. The filters above apply, except the date range.",
-          ))}</div>
+          <div class="fsum-rekap-catatan">${escapeHtml(catatan)}</div>
         </div>
-        <label class="fsum-rekap-tahun">
-          <span class="fsum-saring-label">${escapeHtml(tt("Tahun", "Year"))}</span>
-          <select class="form-select form-select-sm" data-fsum="tahun">${opsiTahun}</select>
-        </label>
+        <div class="fsum-rekap-pilih">
+          <label class="fsum-rekap-tahun">
+            <span class="fsum-saring-label">${escapeHtml(tt("Berdasarkan", "Based on"))}</span>
+            <select class="form-select form-select-sm" data-fsum="dasarRekap">${opsiDasar}</select>
+          </label>
+          <label class="fsum-rekap-tahun">
+            <span class="fsum-saring-label">${escapeHtml(tt("Tahun", "Year"))}</span>
+            <select class="form-select form-select-sm" data-fsum="tahun">${opsiTahun}</select>
+          </label>
+        </div>
       </div>
       <div class="fsum-wrap">
         <table class="fsum-tabel fsum-rekap-tabel">

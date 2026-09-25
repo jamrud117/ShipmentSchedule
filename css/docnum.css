@@ -1164,3 +1164,14 @@ button.dn-bayar--lunas:hover {
   font-size: 12px;
   color: var(--n-500);
 }
+
+/* Pilihan dasar tanggal & tahun rekap, berdampingan di kanan judulnya. */
+.fsum-rekap-pilih {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.fsum-rekap-pilih .fsum-rekap-tahun:first-child {
+  min-width: 150px;
+}

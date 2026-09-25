@@ -2687,6 +2687,41 @@ t("rekap tetap tampil walau rentang tanggal tidak memuat apa pun, judul ikut tah
     w.eval("Object.assign(fsumSaringan, FSUM_SARINGAN_AWAL); fsumPemilih && fsumPemilih.lepas(); fsumPemilih = null; fsumBaris = null");
   }
 });
+t("rekap bulanan berdasarkan Tanggal Bayar: per bulan pembayarannya, yang belum lunas tidak masuk", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "A", invoiceDate: "2026-01-20", paidAt: "2026-02-03", amount: "100" }),
+    barisDana("2", { payee: "B", invoiceDate: "2026-01-25", paidAt: "2026-03-10", amount: "40" }),
+    barisDana("3", { payee: "C", invoiceDate: "2026-01-28", amount: "60" }), // belum lunas
+  ]);
+  const inv = w.fsumRekapBulanan(k, "2026", "invoice");
+  eq(inv.bulan[0].jumlah, 3, "Tanggal Invoice: ketiganya di Januari:");
+  const bayar = w.fsumRekapBulanan(k, "2026", "bayar");
+  eq([bayar.bulan[0].jumlah, bayar.bulan[1].jumlah, bayar.bulan[2].jumlah].join("|"), "0|1|1", "Tanggal Bayar:");
+  eq(bayar.jumlahTahun, 2, "yang belum lunas tidak masuk:");
+});
+t("pilihan tahun mengikuti dasar tanggalnya, dan tetap memuat tahun yang sedang dipilih", () => {
+  const k = kolomDana([barisDana("1", { invoiceDate: "2024-05-01", paidAt: "2025-01-10", amount: "1" })]);
+  const inv = w.fsumDaftarTahun(k, "invoice");
+  const bayar = w.fsumDaftarTahun(k, "bayar");
+  if (!inv.includes("2024") || inv.includes("2025")) throw new Error("dasar invoice: " + inv);
+  if (!bayar.includes("2025") || bayar.includes("2024")) throw new Error("dasar bayar: " + bayar);
+  if (!w.fsumDaftarTahun(k, "bayar", "2020").includes("2020")) throw new Error("tahun terpilih hilang dari pilihan");
+});
+t("tahun baru muncul SENDIRI: jam sistem di 2027 -> 2027 ada di pilihan, paling atas", () => {
+  const DateAsli = w.Date;
+  try {
+    w.eval(`(() => { const Asli = Date; window.__DateAsli = Asli;
+      Date = class extends Asli { constructor(...a) { super(...(a.length ? a : ["2027-01-02T09:00:00"])); } };
+      Date.now = () => new Asli("2027-01-02T09:00:00").getTime(); })()`);
+    const k = kolomDana([barisDana("1", { invoiceDate: "2026-12-20", amount: "1" })]);
+    const daftar = w.fsumDaftarTahun(k, "invoice");
+    eq(daftar[0], "2027", "paling atas:");
+    eq(w.eval("fsumTahunDipilih()"), "2027", "pilihan bawaan:");
+  } finally {
+    w.eval("Date = window.__DateAsli");
+    if (w.Date !== DateAsli) w.Date = DateAsli;
+  }
+});
 t("Amount di Rincian Biaya diformat titik ribuan saat diketik, dan terbaca kembali tepat", () => {
   const simpan = w.eval("JSON.stringify(fundLines)");
   try {
