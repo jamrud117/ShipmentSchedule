@@ -258,11 +258,21 @@ table.fund-lines select {
   .docnum-history-aksi {
     flex: 1 1 100%;
   }
-  .dn-cari {
+  /* Berawalan .docnum-history-head: aturan dasarnya (.dn-cari input
+     { width: 300px }) ditulis LEBIH BAWAH di berkas ini, dan dengan
+     kekhususan setara yang terakhir yang menang -- kotak cari tetap
+     300px di ponsel dan meluber keluar layar bersama tombol muat ulang.
+     min-width 0: tanpa itu kotak cari tidak mau menyusut di bawah lebar
+     bawaannya. */
+  .docnum-history-head .dn-cari {
     flex: 1;
+    min-width: 0;
   }
-  .dn-cari input {
+  .docnum-history-head .dn-cari input {
     width: 100%;
+  }
+  .docnum-history-head .docnum-history-aksi > button {
+    flex-shrink: 0;
   }
 }
 
@@ -1015,8 +1025,25 @@ button.dn-bayar--lunas:hover {
 }
 
 /* ------------------------------------------------------------------
-   KOTAK CARI RIWAYAT NOMOR
+   KOTAK CARI & SARINGAN STATUS BAYAR RIWAYAT NOMOR
 ------------------------------------------------------------------ */
+.dn-saring-bayar {
+  margin: 0;
+}
+.dn-saring-bayar select {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: #fff;
+  font-size: 13px;
+  color: var(--n-800);
+}
+.dn-saring-bayar select:focus {
+  outline: none;
+  border-color: var(--p-600);
+  box-shadow: 0 0 0 3px rgba(20, 45, 90, 0.12);
+}
 .dn-cari {
   position: relative;
   display: flex;

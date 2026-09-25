@@ -170,27 +170,71 @@ function renderHsCodes() {
 
   renderHsCodePagination(terurut.length);
 
-  box.innerHTML = rows
-    .map(
-      (r) => `
-      <div class="hscode-row" data-hscode="${r.id}">
-        <div class="hscode-main">
-          <span class="hscode-name">${escapeHtml(r.item_name)}</span>
-          ${r.notes ? `<span class="hscode-notes">${escapeHtml(r.notes)}</span>` : ""}
-        </div>
-        <span class="hscode-code">${escapeHtml(r.hs_code)}</span>
-        <div class="hscode-actions">
-          <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
-            <i class="bi bi-trash3"></i>
-          </button>
-        </div>
-      </div>`,
-    )
-    .join("");
+  /* TABEL selebar halaman: nama barang, HS Code, catatan, aksi. Di
+     ponsel tiap baris jadi kartu ringkas (hs-panel di auth.css). HS Code
+     berupa tombol: sekali klik tersalin, siap ditempel ke CEISA atau
+     Daftar Barang tanpa memilih teksnya dulu. */
+  const salinJudul = escapeAttr(tt("Klik untuk menyalin", "Click to copy"));
+  box.innerHTML = `
+    <div class="hs-tabel-wrap">
+      <table class="hs-tabel">
+        <thead><tr>
+          <th class="hs-kol-nama">${tt("Nama Barang", "Item Name")}</th>
+          <th class="hs-kol-kode">HS Code</th>
+          <th class="hs-kol-catatan">${tt("Catatan", "Notes")}</th>
+          <th class="hs-kol-aksi"></th>
+        </tr></thead>
+        <tbody>${rows
+          .map(
+            (r) => `
+          <tr data-hscode="${r.id}">
+            <td class="hs-kol-nama"><span class="hscode-name">${escapeHtml(r.item_name)}</span></td>
+            <td class="hs-kol-kode">
+              <button type="button" class="hscode-code" data-salin-hs="${escapeAttr(r.hs_code)}" title="${salinJudul}">${escapeHtml(r.hs_code)}</button>
+            </td>
+            <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
+            <td class="hs-kol-aksi">
+              <div class="hscode-actions">
+                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`,
+          )
+          .join("")}</tbody>
+      </table>
+    </div>`;
 }
+
+/* Salin HS Code sekali klik. Cadangan execCommand untuk peramban tanpa
+   Clipboard API (atau halaman yang dibuka bukan lewat https). */
+async function salinHsCode(kode) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(kode);
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = kode;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    showToast(tt(`HS Code ${kode} disalin.`, `HS Code ${kode} copied.`), "success");
+  } catch (err) {
+    showToast(tt("Gagal menyalin HS Code.", "Failed to copy the HS Code."), "danger");
+  }
+}
+document.addEventListener("click", (e) => {
+  const tombol = e.target.closest && e.target.closest("[data-salin-hs]");
+  if (tombol) salinHsCode(tombol.dataset.salinHs);
+});
 
 /* Dipakai juga dari luar halaman ini -- tombol cari HS Code di Daftar
    Barang (item-table.js) mencari lewat array yang sama, tanpa perlu

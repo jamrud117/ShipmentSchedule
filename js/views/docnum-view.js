@@ -157,6 +157,28 @@ const DOCNUM_HISTORY_FILTERS = {
    tersimpan sebagai teks yang bisa dicari.
 ------------------------------------------------------------------ */
 let docNumCari = "";
+
+/* SARINGAN STATUS BAYAR (Pengajuan Dana): "" semua, "lunas", "belum".
+   Dikirim ke database seperti kotak cari -- riwayatnya berhalaman di
+   server, dan menyaring baris di layar hanya menyaring halaman yang
+   sedang tampil. Lunas = payload.paidAt terisi; membatalkan lunas
+   MENGHAPUS kuncinya (dnSetelBayar), jadi "belum" = kosong. */
+let docNumSaringBayar = "";
+function dnTerapkanSaringBayar(kueri) {
+  if (docNumActiveTab !== "fund") return kueri;
+  if (docNumSaringBayar === "lunas") return kueri.not("payload->>paidAt", "is", null);
+  if (docNumSaringBayar === "belum") return kueri.is("payload->>paidAt", null);
+  return kueri;
+}
+/* Pilihannya hanya tampil di Pengajuan Dana, dan TIDAK di tab Summary --
+   Summary punya saringan Status Bayar sendiri; dua pilihan untuk hal
+   yang sama di satu layar hanya menunggu saatnya saling bertentangan. */
+function dnTampilkanSaringBayar() {
+  const wadah = document.querySelector(".dn-saring-bayar");
+  if (!wadah) return;
+  const summary = typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB;
+  wadah.classList.toggle("d-none", docNumActiveTab !== "fund" || summary);
+}
 const DN_KOLOM_CARI = [
   "doc_number", "requester", "department",
   "payload->>payee", "payload->>customer", "payload->>receiver",
@@ -640,6 +662,25 @@ function bolehUbahDocNum() {
    (lihat simpanUbahDocNum) supaya tidak terhapus.
 ------------------------------------------------------------------ */
 const DN_FIELD_BAYAR = ["paidAt", "paidBy"];
+
+/* NILAI INVOICE di riwayat Invoice Number: angka yang SAMA dengan baris
+   Total di Commercial Invoice cetaknya -- dihitung dengan fungsi yang
+   sama (barang jadwal yang ditautkan, jumlah x harga; mata uang dari
+   isian invoice, bawaan USD), bukan disalin ke tempat lain yang bisa
+   berbeda. null kalau invoice belum ditautkan ke jadwal atau jadwalnya
+   tidak ada di data yang termuat. */
+function dnNilaiInvoice(r) {
+  const p = (r && r.payload) || {};
+  if (!p.shipmentId || typeof ciplCariShipment !== "function") return null;
+  const jadwal = ciplCariShipment(p.shipmentId);
+  if (!jadwal) return null;
+  const total = ciplBarisBarang(jadwal).reduce((s, b) => s + b.amount, 0);
+  return { mata: p.currency || "USD", total };
+}
+const dnTeksNilaiInvoice = (r) => {
+  const v = dnNilaiInvoice(r);
+  return v ? `${v.mata} ${ciplAngka(v.total, 2)}` : "\u2014";
+};
 
 function dnSudahBayar(r) {
   return !!(r && r.payload && r.payload.paidAt);
@@ -1414,6 +1455,7 @@ async function renderDocNumHistory() {
   const bar = $("#docNumPagination");
   if (!box) return;
   renderDocNumSubTabs();
+  dnTampilkanSaringBayar();
   /* Tab Summary TIDAK memakai kueri berhalaman di bawah: ia butuh
      seluruh pengajuan, dan penanda tab-nya bukan jenis pengeluaran --
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
@@ -1452,6 +1494,7 @@ async function renderDocNumHistory() {
       .filter(...docNumPayloadFilter());
     const saringCari = dnFilterCari(docNumCari);
     if (saringCari) kueri = kueri.or(saringCari);
+    kueri = dnTerapkanSaringBayar(kueri);
     const { data, error, count } = await kueri
       .order("created_at", { ascending: false })
       .range(dari, dari + docNumPageSize - 1);
@@ -1470,8 +1513,11 @@ async function renderDocNumHistory() {
     }
 
     if (!total) {
+      const teksBayar = docNumSaringBayar === "lunas" ? tt("Lunas", "Paid") : tt("Belum Lunas", "Unpaid");
       box.innerHTML = docNumCari
         ? `<div class="docnum-empty">${tt(`Tidak ada nomor yang cocok dengan “${escapeHtml(docNumCari)}”.`, `No numbers match “${escapeHtml(docNumCari)}”.`)}</div>`
+        : docNumActiveTab === "fund" && docNumSaringBayar
+        ? `<div class="docnum-empty">${tt(`Tidak ada pengajuan berstatus ${teksBayar}.`, `No ${teksBayar.toLowerCase()} requests.`)}</div>`
         : `<div class="docnum-empty">${tt(`Belum ada nomor ${escapeHtml(jenis.label)} yang diterbitkan.`, `No ${escapeHtml(jenis.label)} numbers issued yet.`)}</div>`;
       return;
     }
@@ -1480,7 +1526,7 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>${tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th>${
+          <tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
@@ -1489,6 +1535,8 @@ async function renderDocNumHistory() {
               : ""
           }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
             jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
+          }${
+            jenis.key === "invoice" ? `<th class="dn-col-nilai">Amount</th>` : ""
           }${
             jenis.key === "fund" ? `<th class="dn-col-ket">${tt("Keterangan", "Notes")}</th>` : ""
           }${
@@ -1543,6 +1591,12 @@ async function renderDocNumHistory() {
                      "Terbilang" di surat cetaknya (frTotalPengajuan). */
                   jenis.key === "fund"
                     ? `<td class="dn-col-nilai">${escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR"))}</td>`
+                    : ""
+                }
+                ${
+                  // Amount = baris Total di Commercial Invoice cetaknya.
+                  jenis.key === "invoice"
+                    ? `<td class="dn-col-nilai">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
                     : ""
                 }
                 ${
@@ -1763,6 +1817,9 @@ function showDocNumTab(key) {
     docNumCari = "";
     const kotakCari = $("#docNumSearch");
     if (kotakCari) kotakCari.value = "";
+    docNumSaringBayar = "";
+    const pilihBayar = $("#docNumBayar");
+    if (pilihBayar) pilihBayar.value = "";
   }
   docNumActiveTab = active;
   try {
@@ -2094,4 +2151,11 @@ document.addEventListener("input", (e) => {
     docNumPage = 1;
     renderDocNumHistory();
   }, 300);
+});
+
+document.addEventListener("change", (e) => {
+  if (!e.target || e.target.id !== "docNumBayar") return;
+  docNumSaringBayar = e.target.value;
+  docNumPage = 1;
+  renderDocNumHistory();
 });

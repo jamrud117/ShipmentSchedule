@@ -575,8 +575,10 @@
                   type="text"
                   id="accountSearch"
                   autocomplete="off"
-                  placeholder="Cari Nama atau Email…"
-                  data-i18n-ph="ph.cari.nama.atau.email"
+                  placeholder="Cari"
+                  data-i18n-ph="ph.cari"
+                  aria-label="Cari nama atau email akun"
+                  data-en-aria="Search account name or email"
                 />
               </div>
               <div id="accountList"></div>
@@ -683,57 +685,54 @@
       </header>
 
       <main class="container page-main">
-        <div class="acct-grid">
-          <section class="panel">
-            <div class="panel-head">
+        <!-- SATU PANEL SELEBAR HALAMAN. Bilah atasnya memuat judul, kotak
+             cari, muat ulang, dan TAMBAH HS CODE -- di ponsel semuanya
+             terlihat tanpa menggulir melewati daftar (dulu tombol Tambah
+             ada di kartu kanan, yang di ponsel jatuh ke bawah daftar). -->
+        <section class="panel hs-panel">
+          <div class="panel-head hs-bar">
+            <div class="hs-bar-judul">
               <h2>
                 <i class="bi bi-upc-scan"></i>
                 <span data-i18n="hscode.list.title">Daftar HS Code</span>
               </h2>
-              <button type="button" class="btn-quiet" id="btnHsCodeRefresh" data-en="<i class=&quot;bi bi-arrow-clockwise&quot;></i> Reload">
-                <i class="bi bi-arrow-clockwise"></i> Muat ulang
-              </button>
+              <p class="hs-bar-sub" data-i18n="hscode.sub">
+                Pasangan nama barang &amp; HS Code &mdash; dicari lewat tombol cari di kolom HS Code pada Daftar Barang.
+              </p>
             </div>
-            <div class="panel-body">
-              <div class="search-box search-box--wide">
+            <div class="hs-bar-aksi">
+              <div class="search-box hs-cari">
                 <i class="bi bi-search"></i>
                 <input
                   type="text"
                   id="hsCodeSearch"
                   autocomplete="off"
-                  placeholder="Cari Nama Barang atau HS Code…"
-                  data-i18n-ph="hscode.search"
+                  placeholder="Cari"
+                  data-i18n-ph="ph.cari"
+                  aria-label="Cari nama barang atau HS Code"
+                  data-en-aria="Search item name or HS Code"
                 />
               </div>
-              <div id="hsCodeList"></div>
-              <div id="hsCodePagination"></div>
-            </div>
-          </section>
-
-          <section class="panel" id="hsCodeAddPanel">
-            <div class="panel-head">
-              <h2>
-                <i class="bi bi-plus-circle"></i>
-                <span data-i18n="hscode.add.title">Tambah HS Code</span>
-              </h2>
-            </div>
-            <div class="panel-body">
-              <p
-                class="form-text-note form-text-note--flush"
-                data-i18n="hscode.add.help"
+              <button
+                type="button"
+                class="btn-quiet hs-muat"
+                id="btnHsCodeRefresh"
+                title="Muat ulang"
+                data-en-title="Reload"
+                aria-label="Muat ulang"
+                data-en-aria="Reload"
               >
-                Simpan pasangan nama barang &amp; HS Code yang sudah pernah
-                dipakai &mdash; nanti bisa dicari lagi lewat tombol cari di
-                sebelah kolom HS Code pada Daftar Barang, tanpa perlu mengetik
-                ulang dari awal.
-              </p>
-              <button type="button" class="btn-teal w-100" id="btnHsCodeAdd">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+              <button type="button" class="btn-teal hs-tambah" id="btnHsCodeAdd">
                 <i class="bi bi-plus-lg"></i>
-                <span data-i18n="hscode.add.button">Tambah HS Code Baru</span>
+                <span data-i18n="hscode.add.button">Tambah HS Code</span>
               </button>
             </div>
-          </section>
-        </div>
+          </div>
+          <div id="hsCodeList"></div>
+          <div id="hsCodePagination" class="hs-halaman"></div>
+        </section>
       </main>
     </div>
 
@@ -764,8 +763,10 @@
                   id="searchInput"
                   autocomplete="off"
                   spellcheck="false"
-                  placeholder="Cari Barang, No. Aju, Invoice…"
-                  data-i18n-ph="ph.cari.barang.no.aju.invoice"
+                  placeholder="Cari"
+                  data-i18n-ph="ph.cari"
+                  aria-label="Cari barang, No. Aju, atau invoice"
+                  data-en-aria="Search items, AJU No., or invoice"
                 />
                 <button
                   type="button"
@@ -2172,6 +2173,16 @@
                   Terbit</span
                 >
                 <div class="docnum-history-aksi">
+                  <!-- Saringan status bayar -- hanya Pengajuan Dana, dan
+                       tidak di tab Summary (punya saringannya sendiri).
+                       Dikirim ke database seperti kotak cari. -->
+                  <label class="dn-saring-bayar d-none">
+                    <select id="docNumBayar" aria-label="Saring status bayar" data-en-aria="Filter by payment status">
+                      <option value="" data-en="All payments">Semua status bayar</option>
+                      <option value="lunas" data-en="Paid">Lunas</option>
+                      <option value="belum" data-en="Unpaid">Belum Lunas</option>
+                    </select>
+                  </label>
                   <!-- Mencari di SELURUH riwayat jenis dokumen yang aktif,
                        bukan cuma halaman yang sedang tampil -- lihat
                        dnFilterCari() di docnum-view.js. -->
@@ -2181,8 +2192,8 @@
                       type="search"
                       id="docNumSearch"
                       autocomplete="off"
-                      placeholder="Cari nomor, pemohon, penerima, catatan…"
-                      data-en-ph="Search number, requester, recipient, notes…"
+                      placeholder="Cari"
+                      data-i18n-ph="ph.cari"
                       aria-label="Cari di riwayat nomor"
                       data-en-aria="Search the number history"
                     />

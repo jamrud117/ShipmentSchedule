@@ -457,13 +457,48 @@ function fundRequestCss() {
      antar mesin. Lebar kolom, padding sel, dan ukuran logo tetap px --
      itu detail di dalam tabel yang relatif terhadap ukuran huruf,
      bukan terhadap kertas. */
-  .sheet { width: 100%; padding: 14mm 15mm; }
+  /* MARGIN A4: 15 mm atas, 20 mm kiri & kanan. Dulu 14 mm atas & 15 mm
+     kiri-kanan, angka tanggung yang tidak sama di sisi mana pun. Kop
+     surat memang lazim duduk tinggi di kertas.
 
-  .kop { display: flex; align-items: center; gap: 10px; justify-content: center; }
-  .kop img { width: 78px; height: auto; }
+     TANPA padding bawah -- DISENGAJA. Padding bawah ikut dihitung
+     sebagai isi lembar: surat yang isinya masih muat di kertas (14-16
+     pos biaya, berakhir 6-10 mm dari tepi) tetap mendorong padding itu
+     ke HALAMAN KEDUA YANG KOSONG. Surat biasa tidak berubah apa pun --
+     bagian bawahnya memang ruang kosong -- dan surat panjang tidak lagi
+     menghasilkan halaman kosong. */
+  .sheet { width: 100%; padding: 15mm 20mm 0; }
+
+  /* KOP SURAT: logo, nama, dan alamat berukuran surat resmi, ditutup
+     garis kop tebal-tipis.
+
+     Dulu logonya 15 mm dan namanya 16pt -- seluruh kop hanya setinggi
+     15 mm dan selebar separuh kertas, jadi terlihat seperti catatan di
+     pojok, bukan kepala surat. Ukurannya dalam MILIMETER & POIN (satuan
+     kertas), sama dengan jarak-jarak lain di lembar ini. */
+  .kop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.7mm solid #000;
+    position: relative;
+  }
+  /* Garis tipis kedua di bawah garis tebal -- bentuk garis kop surat
+     resmi. Selebar garis tebalnya (seluruh lebar isi). */
+  .kop::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1.4mm;
+    border-bottom: 0.25mm solid #000;
+  }
+  .kop img { height: 22mm; width: auto; }
   .kop-teks { text-align: center; }
-  .kop-nama { font-size: 16pt; font-weight: 700; letter-spacing: .3px; }
-  .kop-alamat { font-size: 8pt; line-height: 1.35; }
+  .kop-nama { font-size: 20pt; font-weight: 700; letter-spacing: .3px; line-height: 1.2; }
+  .kop-alamat { font-size: 9.5pt; line-height: 1.35; }
 
   .judul {
     text-align: center;
@@ -480,8 +515,8 @@ function fundRequestCss() {
        Atas lebih besar daripada bawah: judul ini memisahkan kop surat
        (blok besar bergaris tebal) dari blok No Surat, jadi sisi
        atasnya butuh lebih banyak ruang supaya tidak terbaca menempel
-       pada alamat perusahaan. */
-    margin: 13mm 0 10mm;
+       pada garis kop. */
+    margin: 11mm 0 9mm;
     font-size: 11pt;
   }
 

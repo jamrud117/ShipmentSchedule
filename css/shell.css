@@ -111,6 +111,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* Tidak pernah membungkus: dijepit di layar menengah, "Quick search"
+     patah jadi dua baris dan "Ctrl K" jadi "Ctrl" di atas "K". */
+  white-space: nowrap;
+  flex-shrink: 0;
   height: 38px;
   padding: 0 12px 0 13px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -186,7 +190,14 @@
   font-size: 0.8rem;
 }
 
-@media (max-width: 991px) {
+/* NAVBAR MERINGKAS BERTAHAP -- diukur, bukan dikira: navbar lengkap
+   (brand, lima tautan berlabel, Quick search bertulisan, nama akun)
+   butuh ~1.250 px. Di bawah itu -- jendela terbelah (Win + panah),
+   laptop 1.024-1.200 px -- tautan terakhir terpotong dan tulisan Quick
+   search patah dua baris. Tahap 1 (< 1.320 px -- ambang label bahasa
+   Inggris, yang lebih panjang): Quick search jadi tombol ikon, chip
+   akun jadi avatar (auth.css). */
+@media (max-width: 1319px) {
   .cmd-trigger .cmd-trigger-text,
   .cmd-trigger kbd {
     display: none;
@@ -195,11 +206,11 @@
     padding: 0 9px;
   }
 }
-@media (max-width: 767px) {
-  .app-topbar-inner {
-    gap: var(--sp-3);
-  }
-  .site-nav-link span {
+/* Tahap 2 (< 1.100 px -- ambang label bahasa Inggris, yang lebih
+   panjang): nama brand disembunyikan (logonya tetap), jarak antar
+   tautan dirapatkan. */
+@media (max-width: 1099px) {
+  .brand-name {
     display: none;
   }
   .site-nav-link {
@@ -209,12 +220,43 @@
     left: 8px;
     right: 8px;
   }
-  .brand-name {
+}
+/* Tahap 3 (< 900 px): tautan tinggal ikon. Dulu baru di bawah 768 px,
+   dan di antaranya tautan terakhir terpotong. */
+@media (max-width: 899px) {
+  .site-nav-link span {
     display: none;
+  }
+}
+@media (max-width: 767px) {
+  .app-topbar-inner {
+    gap: var(--sp-3);
   }
   /* Di bilah atas dulu labelnya disembunyikan karena ruangnya habis */
   .mode-tabs--board button {
     padding: 6px 13px;
+  }
+}
+/* Tahap 4 (< 420 px, ponsel kecil): lima ikon + logo + tombol cari +
+   avatar kurang beberapa piksel di layar 360-375 px, dan ikon terakhir
+   terpotong. Jarak antar ikon dirapatkan. */
+@media (max-width: 419px) {
+  .site-nav-link {
+    padding: 0 7px;
+  }
+  .site-nav-link.active::after {
+    left: 5px;
+    right: 5px;
+  }
+}
+/* Tahap 5 (< 360 px, ponsel sangat kecil): jarak antar bagian bilah
+   ikut dirapatkan. */
+@media (max-width: 359px) {
+  .app-topbar-inner {
+    gap: var(--sp-2);
+  }
+  .site-nav-link {
+    padding: 0 5px;
   }
 }
 

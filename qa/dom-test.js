@@ -2522,6 +2522,21 @@ t("Summary: saring & kelompokkan per status bayar", () => {
   const pv = w.fsumPivot(k, "bayar");
   eq(pv.grup.find((g) => g.kunci === "belum").total.IDR, 100, "total yang masih harus dibayar:");
 });
+console.log("\u2014 KOP & MARGIN SURAT PENGAJUAN DANA \u2014");
+t("kop surat berukuran surat resmi, bergaris kop tebal-tipis", () => {
+  const css = w.fundRequestCss();
+  if (!/\.kop img \{ height: 22mm; width: auto; \}/.test(css)) throw new Error("logo kop tidak 22 mm");
+  if (!/\.kop-nama \{ font-size: 20pt;/.test(css)) throw new Error("nama perusahaan tidak 20pt");
+  if (!/\.kop-alamat \{ font-size: 9\.5pt;/.test(css)) throw new Error("alamat tidak 9,5pt");
+  if (!/\.kop \{[\s\S]*?border-bottom: 0\.7mm solid #000;/.test(css)) throw new Error("garis kop tebal hilang");
+  if (!/\.kop::after \{[\s\S]*?border-bottom: 0\.25mm solid #000;/.test(css)) throw new Error("garis kop tipis hilang");
+});
+t("margin A4 15/20 mm tanpa padding bawah -- surat panjang tidak memunculkan halaman kosong", () => {
+  const css = w.fundRequestCss();
+  if (!/\.sheet \{ width: 100%; padding: 15mm 20mm 0; \}/.test(css)) throw new Error("margin lembar berubah");
+  if (!/@page \{ size: A4; margin: 0; \}/.test(css)) throw new Error("@page harus A4 bermargin nol (kop & kaki peramban)");
+});
+
 console.log("\u2014 DISKON SEBAGAI BARIS & RUMUS DI RINCIAN BIAYA \u2014");
 const pos = (amount, ppnRate, desc) => ({ desc: desc || "Freight Charge", amount, ppnRate });
 const diskon = (amount, discType, ppnRate) => ({ jenis: "diskon", desc: "Base Discount", amount, discType, ppnRate });
@@ -2797,6 +2812,99 @@ t("tabel riwayat nomor rata tengah seluruhnya", () => {
   if (!/text-align: center/.test(blok(".docnum-table th"))) throw new Error("kepala tabel tidak rata tengah");
   if (!/text-align: center/.test(blok(".docnum-table td"))) throw new Error("isi tabel tidak rata tengah");
   if (/text-align: right/.test(blok(".docnum-table .dn-col-nilai"))) throw new Error("kolom Nilai masih rata kanan");
+});
+t("riwayat Invoice Number: kolom No. Invoice paling depan & Amount = Total di invoice cetaknya", async () => {
+  const simpan = { e: baca("data.export"), tab: baca("docNumActiveTab") };
+  const asli = w.eval("supabaseClient.from");
+  try {
+    const kirim = { id: "e9", mode: "export", party: "KUMHO", items: [
+      { namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", harga: 9918.97, hsCode: "84807190" },
+      { namaBarang: "TYRE MOLD", qty: 2, satuan: "SET", harga: 6200, hsCode: "84807190" } ] };
+    tulis("data.export", [kirim]);
+    const tertaut = { id: "i1", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 059", doc_date: "2026-09-25",
+      requester: "Yogi", department: "EXIM", payload: { shipmentId: "e9", customer: "KUMHO TIRE (VIETNAM) CO., LTD" } };
+    const lepas = { id: "i2", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 060", doc_date: "2026-09-26",
+      requester: "Yogi", department: "EXIM", payload: { customer: "X" } };
+    // Sama dengan Total di Commercial Invoice cetak (Dynamic Design & Kumho).
+    const v = w.dnNilaiInvoice(tertaut);
+    eq(v.mata + " " + v.total.toFixed(2), "USD 22318.97", "nilai:");
+    const cetak = w.ciplHalamanInvoice(tertaut, kirim, w.ciplBarisBarang(kirim));
+    if (!cetak.includes(w.ciplAngka(v.total, 2))) throw new Error("berbeda dari Total di invoice cetak Dynamic Design");
+    if (!w.ciplVnHalamanInvoice(tertaut, kirim).includes(w.ciplAngka(v.total, 2))) throw new Error("berbeda dari Total invoice Kumho");
+    eq(w.eval("dnTeksNilaiInvoice")(lepas), "\u2014", "belum ditautkan:");
+    // Tabel riwayat.
+    w.__barisUji = [tertaut, lepas];
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c, or: () => c, order: () => c,
+      range: async () => ({ data: window.__barisUji, error: null, count: 2 }) }; return c; }`);
+    w.eval('docNumActiveTab = "invoice"; docNumHistorySub = null; docNumCari = ""');
+    await w.renderDocNumHistory();
+    const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim());
+    eq(kepala[0], "No. Invoice", "kolom paling depan:");
+    if (!kepala.includes("Amount")) throw new Error("kolom Amount tidak ada");
+    const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
+    eq(sel[0], "DDI - CRBM - IX - 059", "nomor invoice di depan:");
+    if (!sel.includes("USD 22,318.97")) throw new Error("Amount tidak tampil: " + sel.join(" | "));
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    tulis("data.export", simpan.e);
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
+  }
+});
+t("saringan Lunas / Belum Lunas dikirim ke DATABASE, hanya di Pengajuan Dana", async () => {
+  const asli = w.eval("supabaseClient.from");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub") };
+  const kirim = (tab, bayar) => {
+    const catat = [];
+    w.__catat = (x) => catat.push(x);
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c, or: () => c, order: () => c,
+      not: (k, op, v) => { window.__catat("not " + k + " " + op + " " + v); return c; },
+      is: (k, v) => { window.__catat("is " + k + " " + v); return c; },
+      range: async () => ({ data: [], error: null, count: 0 }) }; return c; }`);
+    w.eval(`docNumActiveTab = ${JSON.stringify(tab)}; docNumHistorySub = null; docNumCari = ""; docNumSaringBayar = ${JSON.stringify(bayar)}`);
+    return w.renderDocNumHistory().then(() => catat.join(" | "));
+  };
+  try {
+    eq(await kirim("fund", "lunas"), "not payload->>paidAt is null", "Lunas:");
+    eq(await kirim("fund", "belum"), "is payload->>paidAt null", "Belum Lunas:");
+    eq(await kirim("fund", ""), "", "semua:");
+    eq(await kirim("invoice", "lunas"), "", "jenis lain tidak disaring:");
+    if (!/Tidak ada pengajuan berstatus/.test(await kirim("fund", "belum").then(() => w.document.getElementById("docNumHistory").textContent)))
+      throw new Error("pesan kosong tidak menyebut saringannya");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli; docNumSaringBayar = ''");
+    w.eval(`docNumActiveTab = ${JSON.stringify(simpan.tab)}; docNumHistorySub = ${JSON.stringify(simpan.sub)}`);
+  }
+});
+t("pilihan status bayar: tampil di Pengajuan Dana, tersembunyi di Summary & jenis lain; direset saat ganti jenis", () => {
+  const wadah = w.document.querySelector(".dn-saring-bayar");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub") };
+  try {
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), false, "Pengajuan Dana:");
+    w.eval('docNumHistorySub = FSUM_TAB'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), true, "tab Summary:");
+    w.eval('docNumActiveTab = "invoice"; docNumHistorySub = null'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), true, "Invoice:");
+    w.showDocNumTab("fund");
+    w.eval('docNumSaringBayar = "lunas"'); w.document.getElementById("docNumBayar").value = "lunas";
+    w.showDocNumTab("invoice");
+    eq(baca("docNumSaringBayar"), "", "direset:");
+    eq(w.document.getElementById("docNumBayar").value, "", "pilihan direset:");
+  } finally {
+    w.showDocNumTab(simpan.tab);
+    w.eval(`docNumHistorySub = ${JSON.stringify(simpan.sub)}`);
+  }
+});
+t("ponsel: aturan kotak cari riwayat menang atas aturan dasarnya (tidak meluber keluar layar)", () => {
+  /* Aturan dasar .dn-cari input { width: 300px } ada LEBIH BAWAH di
+     docnum.css daripada blok ponsel; aturan ponselnya harus lebih khusus,
+     bukan setara -- dengan kekhususan setara yang terakhir yang menang. */
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "docnum.css"), "utf8");
+  const ponsel = css.slice(css.indexOf("@media (max-width: 575px)"));
+  if (!/\.docnum-history-head \.dn-cari input \{\s*width: 100%;/.test(ponsel)) throw new Error("kotak cari ponsel kalah dari aturan dasar");
+  if (!/\.docnum-history-head \.dn-cari \{\s*flex: 1;\s*min-width: 0;/.test(ponsel)) throw new Error("kotak cari ponsel tidak bisa menyusut");
 });
 t("jendela Vendor Summary lama sudah tidak ada (digantikan tab Summary)", () => {
   if (w.document.getElementById("btnFundSummary")) throw new Error("tombol Vendor Summary masih ada");
@@ -7312,13 +7420,41 @@ t("ada jembatan tak terlihat antara chip & menunya", () => {
   if (!/\.user-menu::before \{[^}]*top:\s*-/.test(css))
     throw new Error("tidak ada jembatan penutup celah di atas menu");
 });
-t("di mobile nama & peran disembunyikan, sisakan avatar saja", () => {
+t("layar menengah & sempit: nama & peran disembunyikan, sisakan avatar saja", () => {
+  /* Mulai di bawah 1.320 px (bukan 991 px lagi): navbar lengkap butuh
+     ~1.320 px dengan label bahasa Inggris, dan di jendela terbelah
+     (Win + panah) tautan terakhir terpotong. */
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
-  const i = css.indexOf("@media (max-width: 991px)");
-  if (i < 0) throw new Error("breakpoint 991px tidak ditemukan");
-  if (!/\.user-chip-main \{[^}]*display: none/.test(css.slice(i)))
-    throw new Error("nama & peran tidak disembunyikan di layar sempit");
+  const i = css.indexOf("@media (max-width: 1319px)");
+  if (i < 0) throw new Error("breakpoint 1319px tidak ditemukan");
+  if (!/^\s*\.user-chip-main \{[^}]*display: none/.test(css.slice(i + "@media (max-width: 1319px) {".length)))
+    throw new Error("nama & peran tidak disembunyikan di layar menengah");
+});
+t("navbar meringkas bertahap: tidak ada yang terpotong atau patah di layar menengah", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "shell.css"), "utf8");
+  const blok = (lebar) => { const i = css.indexOf(`@media (max-width: ${lebar}px) {`); return i < 0 ? "" : css.slice(i, css.indexOf("\n}\n", i)); };
+  if (!/\.cmd-trigger \{[\s\S]*?white-space: nowrap;[\s\S]*?flex-shrink: 0;/.test(css)) throw new Error("tulisan Quick search bisa patah");
+  if (!/\.cmd-trigger-text/.test(blok(1319))) throw new Error("tahap 1: Quick search tidak jadi ikon di < 1.320 px");
+  if (!/\.brand-name \{\s*display: none;/.test(blok(1099))) throw new Error("tahap 2: nama brand");
+  if (!/\.site-nav-link span \{\s*display: none;/.test(blok(899))) throw new Error("tahap 3: label tautan");
+  if (!/\.site-nav-link \{\s*padding: 0 7px;/.test(blok(419))) throw new Error("tahap 4: ponsel kecil");
+});
+t("kotak cari di luar navbar ber-placeholder singkat 'Cari' / 'Search'", () => {
+  ["searchInput", "hsCodeSearch", "accountSearch", "docNumSearch"].forEach((id) => {
+    const el = w.document.getElementById(id);
+    eq(el.getAttribute("data-i18n-ph"), "ph.cari", id + ":");
+    if (!el.getAttribute("aria-label")) throw new Error(id + " kehilangan label aksesibilitas");
+  });
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    eq(w.document.getElementById("hsCodeSearch").placeholder, "Search", "Inggris:");
+    w.setLang("id");
+    eq(w.document.getElementById("hsCodeSearch").placeholder, "Cari", "Indonesia:");
+  } finally {
+    w.setLang(simpan);
+  }
 });
 t("menu akun menempel langsung di bawah bilah, tanpa celah menggantung", () => {
   const css = require("fs").readFileSync(
@@ -7347,7 +7483,7 @@ t("kolom Nomor Billing & Keterangan HANYA muncul di daftar jenis fund", () => {
   /* Dua kolom ini khusus pengajuan dana -- jenis lain tidak punya
      billingNo, jadi kolomnya cuma jadi ruang kosong di sana. */
   // Jangkar = kepala kolom Nomor (kini berlabel dua bahasa lewat tt()).
-  const kepala = src.indexOf('<th>${tt("Nomor", "Number")}</th>');
+  const kepala = src.indexOf('<tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th>');
   if (kepala < 0) throw new Error("kepala tabel riwayat tidak ditemukan");
   const potongan = src.slice(kepala, kepala + 1400);
   if (!/jenis\.key === "fund"[\s\S]{0,120}dn-col-billing/.test(potongan))
@@ -10229,6 +10365,43 @@ function pakaiHsCodeHalaman(jumlah, jalankan) {
 function namaHsTampil() {
   return [...w.document.querySelectorAll("#hsCodeList .hscode-name")].map((el) => el.textContent);
 }
+t("halaman HS Code: satu panel -- Tambah di bilah ATAS, bukan kartu terpisah di bawah daftar", () => {
+  const panel = w.document.querySelector("#viewHsCode .hs-panel");
+  if (!panel) throw new Error("panel HS Code tidak ada");
+  const bilah = panel.querySelector(".hs-bar");
+  ["#btnHsCodeAdd", "#hsCodeSearch", "#btnHsCodeRefresh"].forEach((id) => {
+    if (!bilah.querySelector(id)) throw new Error(id + " tidak di bilah atas");
+  });
+  // Bilah atas mendahului daftar -- di ponsel terlihat tanpa menggulir.
+  const urutan = [...panel.querySelectorAll(".hs-bar, #hsCodeList")].map((el) => el.className || el.id);
+  eq(urutan[0], "panel-head hs-bar", "bilah atas lebih dulu:");
+  if (w.document.getElementById("hsCodeAddPanel")) throw new Error("kartu Tambah lama masih ada");
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
+  if (!/body\.is-viewer #btnHsCodeAdd,\s*\n\s*body\.is-viewer \.hs-kol-aksi,/.test(css))
+    throw new Error("tombol Tambah / kolom aksi tidak disembunyikan untuk viewer & marketing");
+});
+t("tabel HS Code: nama, kode (tombol salin), catatan, aksi", async () => {
+  const simpan = w.eval("JSON.stringify(hsCodeRows)");
+  const salinAsli = w.navigator.clipboard;
+  let tersalin = null;
+  try {
+    w.eval(`hsCodeRows = [{ id: "a", item_name: "BAR GAUGE", hs_code: "90318090", notes: "Alat ukur tapak" },
+      { id: "b", item_name: "CLAY", hs_code: "34070010", notes: "" }]`);
+    w.renderHsCodes();
+    const kepala = [...w.document.querySelectorAll("#hsCodeList thead th")].map((th) => th.textContent.trim());
+    eq(kepala.slice(0, 3).join(" | "), "Nama Barang | HS Code | Catatan", "kolom:");
+    const baris = w.document.querySelectorAll("#hsCodeList tbody tr");
+    eq(baris[0].querySelector(".hs-kol-catatan").textContent.trim(), "Alat ukur tapak", "catatan tampil:");
+    if (!baris[1].querySelector(".hs-kol-catatan").classList.contains("hs-tanpa-catatan")) throw new Error("catatan kosong tidak ditandai");
+    Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: { writeText: async (v) => { tersalin = v; } } });
+    baris[0].querySelector("[data-salin-hs]").click();
+    await new Promise((r) => setTimeout(r, 20));
+    eq(tersalin, "90318090", "tersalin:");
+  } finally {
+    Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: salinAsli });
+    w.eval("hsCodeRows = " + simpan + "; renderHsCodes()");
+  }
+});
 t("selalu urut Nama Barang A-Z, tanpa perlu memilih apa pun", () => {
   /* Tidak ada dropdown urutkan: satu urutan yang masuk akal dipakai
      terus, jadi tidak ada kendali tambahan yang harus diatur pengguna. */

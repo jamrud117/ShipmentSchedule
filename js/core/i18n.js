@@ -35,15 +35,12 @@ const I18N = {
       "Lupa Password? Hubungi admin — password disetel ulang langsung tanpa email.",
 
     // -- Halaman HS Code
-    "hscode.search": "Cari Nama Barang atau HS Code…",
     "hscode.list.title": "Daftar HS Code",
     "hscode.reload": "Muat ulang",
-    "hscode.add.title": "Tambah HS Code",
-    "hscode.add.button": "Tambah HS Code Baru",
-    "hscode.add.help":
-      "Simpan pasangan nama barang & HS Code yang sudah pernah dipakai — nanti bisa dicari lagi lewat tombol cari di sebelah kolom HS Code pada Daftar Barang, tanpa perlu mengetik ulang dari awal.",
+    "hscode.add.button": "Tambah HS Code",
+    "hscode.sub": "Pasangan nama barang &amp; HS Code — dicari lewat tombol cari di kolom HS Code pada Daftar Barang.",
     "hscode.empty.search": "Tidak ada yang cocok dengan pencarian.",
-    "hscode.empty.none": "Belum ada data HS Code. Tambahkan lewat panel di samping.",
+    "hscode.empty.none": "Belum ada data HS Code. Tambahkan lewat tombol Tambah HS Code di atas.",
     "hscode.loading": "Memuat database HS Code…",
     "hscode.loadFail":
       "Gagal memuat database HS Code. Pastikan migration-hs-code-database.sql sudah dijalankan.",
@@ -195,8 +192,7 @@ const I18N = {
     "m.tulis.dulu.isi.catatannya": "Tulis dulu isi catatannya.",
 
     // -- Kalimat panduan, tombol & placeholder
-    "ph.cari.barang.no.aju.invoice": "Cari Barang, No. Aju, Invoice…",
-    "ph.cari.nama.atau.email": "Cari Nama atau Email…",
+    "ph.cari": "Cari",
     "ph.cari.no.aju.invoice.shipper.vessel.atau.ketik.": "Cari no. aju, invoice, shipper, vessel — atau ketik perintah…",
     "ph.ketik.nama.barang": "Ketik nama barang…",
     "ph.ketik.no.invoice.atau.nama.buyer": "Ketik no. invoice atau nama buyer…",
@@ -600,15 +596,12 @@ const I18N = {
     "login.note":
       "Forgot your password? Contact an admin — it is reset directly, no email involved.",
 
-    "hscode.search": "Search item name or HS Code…",
     "hscode.list.title": "HS Code List",
     "hscode.reload": "Reload",
-    "hscode.add.title": "Add HS Code",
-    "hscode.add.button": "Add New HS Code",
-    "hscode.add.help":
-      "Save item name & HS Code pairs you have used before — you can look them up later from the search button next to the HS Code column in the Item List, without retyping them.",
+    "hscode.add.button": "Add HS Code",
+    "hscode.sub": "Item name &amp; HS Code pairs — looked up from the search button next to the HS Code column in the Item List.",
     "hscode.empty.search": "Nothing matches your search.",
-    "hscode.empty.none": "No HS Code data yet. Add one from the panel beside this.",
+    "hscode.empty.none": "No HS Code data yet. Add one with the Add HS Code button above.",
     "hscode.loading": "Loading HS Code database…",
     "hscode.loadFail":
       "Failed to load the HS Code database. Make sure migration-hs-code-database.sql has been run.",
@@ -759,8 +752,7 @@ const I18N = {
     "m.tulis.dulu.isi.catatannya": "Please write the note first.",
 
     // -- Kalimat panduan, tombol & placeholder
-    "ph.cari.barang.no.aju.invoice": "Search items, AJU No., invoice…",
-    "ph.cari.nama.atau.email": "Search name or email…",
+    "ph.cari": "Search",
     "ph.cari.no.aju.invoice.shipper.vessel.atau.ketik.": "Search AJU no., invoice, shipper, vessel — or type a command…",
     "ph.ketik.nama.barang": "Type an item name…",
     "ph.ketik.no.invoice.atau.nama.buyer": "Type an invoice no. or buyer name…",
