@@ -19,6 +19,12 @@
 function sortBasis() {
   return activeMode === "export" ? "stuffing" : "estimasi kirim";
 }
+/* Label TAMPILAN untuk sortBasis(). Nilai aslinya tetap dipakai sebagai
+   kunci (board.js membandingkannya), jadi yang diterjemahkan hanya
+   teks yang tampil di kepala kelompok tanggal. */
+function sortBasisLabel() {
+  return sortBasis() === "stuffing" ? tt("stuffing", "stuffing") : tt("estimasi kirim", "est. delivery");
+}
 // Selalu menaik: yang paling dekat di paling atas
 function sortDirection() {
   return "asc";
@@ -195,7 +201,7 @@ function groupKeyOf(s) {
      dari kejadian sebenarnya. */
   if (isArrived(s)) {
     const nyata =
-      s.mode === "export" ? s.actual || s.factoryDate : s.factoryDate;
+      s.mode === "export" ? s.actual : s.factoryDate;
     return nyata || effectiveEta(s) || effectiveEtd(s) || null;
   }
 
@@ -326,7 +332,7 @@ function render() {
         <div class="date-section">
           <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
           <span class="date-section-line"></span>
-          <span class="date-section-count">${jumlah} pengiriman · ${sortBasis().toUpperCase()}</span>
+          <span class="date-section-count">${tt(`${jumlah} pengiriman`, `${jumlah} shipment${jumlah === 1 ? "" : "s"}`)} · ${sortBasisLabel().toUpperCase()}</span>
         </div>`;
     }
     html += renderCard(entry.shipment);
@@ -399,14 +405,14 @@ function renderPaginationBar(totalItems) {
 
   bar.className = "pagination-bar";
   bar.innerHTML = `
-    <div class="pagination-info">Menampilkan <b>${startIdx}–${endIdx}</b> dari <b>${totalItems}</b> pengiriman</div>
+    <div class="pagination-info">${tt(`Menampilkan <b>${startIdx}–${endIdx}</b> dari <b>${totalItems}</b> pengiriman`, `Showing <b>${startIdx}–${endIdx}</b> of <b>${totalItems}</b> shipments`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="Halaman sebelumnya"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
       <div class="page-numbers">${pageBtns}</div>
-      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="Halaman berikutnya"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
     </div>
     <div class="pagination-size">
-      <label for="pageSizeSelect">Per halaman</label>
+      <label for="pageSizeSelect">${tt("Per halaman", "Per page")}</label>
       <select id="pageSizeSelect">
         ${[5, 10, 20, 50]
           .map(
@@ -464,7 +470,7 @@ function applyModeLabels() {
   // Pilihan filter status ikut section aktif (requirement D).
   const cur = $("#filterStatus").value;
   $("#filterStatus").innerHTML =
-    `<option value="">Semua Status</option>` +
+    `<option value="">${tt("Semua Status", "All Statuses")}</option>` +
     statusOptionsHtml(activeMode, "").replace(/ selected/g, "");
   /* Pilihan yang sedang aktif dikembalikan setelah daftarnya diisi
      ulang — KECUALI pada gambar pertama, yang dimulai dari nilai

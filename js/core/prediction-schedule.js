@@ -139,7 +139,7 @@ function courierCommitmentFor(s, ctx) {
   );
   if (!rule || !(Number(rule.workingDays) > 0)) return null;
   return {
-    label: rule.label || "Komitmen kurir",
+    label: rule.label || tt("Komitmen kurir", "Courier commitment"),
     workingDays: Number(rule.workingDays),
   };
 }
@@ -168,14 +168,14 @@ function courierCommitmentFor(s, ctx) {
 
 function arrivalInfoOf(s) {
   if (s && s.ata) {
-    return { date: s.ata, label: "ATA (Aktual)", confirmed: true };
+    return { date: s.ata, label: tt("ATA (Aktual)", "ATA (Actual)"), confirmed: true };
   }
 
   const berth = milestoneDateOf(s, "berth");
   if (berth) {
     return {
       date: berth,
-      label: s && s.transport === "udara" ? "Mendarat (ATA)" : "Sandar (ATA)",
+      label: s && s.transport === "udara" ? tt("Mendarat (ATA)", "Landed (ATA)") : tt("Sandar (ATA)", "Berthed (ATA)"),
       confirmed: true,
     };
   }
@@ -231,7 +231,7 @@ function legUsesCalendarDays(key) {
   return (PREDICTION_CONFIG.calendarDayLegs || []).indexOf(key) >= 0;
 }
 function legUnitLabel(key) {
-  return legUsesCalendarDays(key) ? "hari kalender" : "hari kerja";
+  return legUsesCalendarDays(key) ? tt("hari kalender", "calendar days") : tt("hari kerja", "working days");
 }
 /* Maju sekian hari menurut satuan langkah itu sendiri. */
 
@@ -281,7 +281,7 @@ function buildDeliverySchedule(s, ops, ctx) {
           key: "courier",
           label: komitmen.label,
           days: komitmen.workingDays,
-          unit: "hari kerja",
+          unit: tt("hari kerja", "working days"),
           from: mulai,
           to: akhir,
         },
@@ -304,7 +304,7 @@ function buildDeliverySchedule(s, ops, ctx) {
     if (kedatangan.date && kedatangan.date > mulai) {
       langkah.push({
         key: "waitArrival",
-        label: kedatangan.confirmed ? "Menunggu kedatangan" : "Menunggu kedatangan (perkiraan)",
+        label: kedatangan.confirmed ? tt("Menunggu kedatangan", "Waiting for arrival") : tt("Menunggu kedatangan (perkiraan)", "Waiting for arrival (estimated)"),
         days: null,
         from: mulai,
         to: kedatangan.date,
@@ -326,7 +326,7 @@ function buildDeliverySchedule(s, ops, ctx) {
       ok: true,
       date: akhir,
       base: sppb,
-      baseLabel: "Tanggal SPPB",
+      baseLabel: tt("Tanggal SPPB", "SPPB Date"),
       steps: langkah,
     };
   }
@@ -345,7 +345,7 @@ function buildDeliverySchedule(s, ops, ctx) {
     const sesudah = advanceLeg(cur, ops.stripping, "stripping");
     langkah.push({
       key: "stripping",
-      label: "Stripping di CFS",
+      label: tt("Stripping di CFS", "Stripping at CFS"),
       days: ops.stripping,
       unit: legUnitLabel("stripping"),
       from: cur,
@@ -366,7 +366,7 @@ function buildDeliverySchedule(s, ops, ctx) {
       const m = (PREDICTION_CONFIG.milestones || []).find((x) => x.key === gk);
       langkah.push({
         key: "wait_" + gk,
-        label: "Menunggu " + ((m && m.label) || gk),
+        label: tt("Menunggu ", "Waiting for ") + ((m && m.label) || gk),
         days: null,
         from: cur,
         to: tgl,
@@ -448,7 +448,7 @@ function sudahSampaiPabrik(bungkus, s) {
     sourceLabel: PREDICTION_SOURCE_LABEL.actual,
     confidence: predictionConfidencePercent({ baseKey: "actual", routeResolved: true }),
     base: s.factoryDate,
-    baseLabel: "Tanggal In Factory",
+    baseLabel: tt("Tanggal In Factory", "In Factory Date"),
     arrived: true,
   });
 }
@@ -508,17 +508,10 @@ function predictDelivery(src) {
       sourceLabel: PREDICTION_SOURCE_LABEL.manual,
       confidence: predictionConfidencePercent({ baseKey: "manual", routeResolved: true }),
       base: s.actual || "",
-      baseLabel: "Diisi manual",
+      baseLabel: tt("Diisi manual", "Entered manually"),
       arrived: !!s.factoryDate,
       reason: s.actual ? "" : t("s.mode.manual.tanggal.belum.diisi"),
     });
-  }
-
-  /* ---- LAPIS 3/4 dilewati: sudah sampai pabrik ----
-     Yang sampai di sini hanya buku Export; jalur Import sudah ditangani
-     di atas, sebelum cabang manual. */
-  if (s.factoryDate) {
-    return sudahSampaiPabrik(bungkus, s);
   }
 
   /* ---- LAPIS 2 & 3 — jadwal proses darat, berjangkar pada kedatangan ---- */
@@ -593,7 +586,7 @@ function predictDelivery(src) {
         });
       }
       hasil = jalankanLangkahKerja(hariIni, sisa);
-      baseLabel = "Hari ini (perkiraan sebelumnya terlewat)";
+      baseLabel = tt("Hari ini (perkiraan sebelumnya terlewat)", "Today (previous estimate passed)");
     }
   }
 
@@ -623,7 +616,7 @@ function predictDelivery(src) {
     range: rentang,
     source: digeser ? "today" : sumber,
     sourceLabel: digeser
-      ? `${PREDICTION_SOURCE_LABEL.today} (dari ${PREDICTION_SOURCE_LABEL[sumber] || sumber})`
+      ? `${PREDICTION_SOURCE_LABEL.today} (${tt("dari", "from")} ${PREDICTION_SOURCE_LABEL[sumber] || sumber})`
       : PREDICTION_SOURCE_LABEL[sumber] || sumber,
     confidence: predictionConfidencePercent({
       baseKey: baseKey,

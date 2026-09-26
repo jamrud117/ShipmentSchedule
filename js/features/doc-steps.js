@@ -48,25 +48,29 @@ const DOC_STEPS_IMPORT = [
      Bagi LCL ini penentu: stripping tidak bisa mulai sebelum kapalnya
      sandar, secepat apa pun dokumennya diurus. */
   { key: "berth", label: berthLabel, full: berthFull },
-  { key: "pib", label: "PIB", full: t("c.pemberitahuan.impor.barang") },
-  { key: "billing", label: "Billing", full: "Billing / bukti bayar" },
-  { key: "sppb", label: "SPPB", full: "Surat Persetujuan Pengeluaran Barang" },
+  /* `full` berupa FUNGSI, bukan teks: daftar ini dibuat sekali saat
+     halaman dimuat. Teks biasa -- termasuk hasil t() -- akan terkunci
+     di bahasa saat itu, dan ganti bahasa tidak lagi mengubahnya.
+     stepText() memanggil fungsinya saat ditampilkan. */
+  { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang") },
+  { key: "billing", label: "Billing", full: () => tt("Billing / bukti bayar", "Billing / proof of payment") },
+  { key: "sppb", label: "SPPB", full: () => tt("Surat Persetujuan Pengeluaran Barang", "Goods Release Approval (SPPB)") },
 ];
 
 const DOC_STEPS_EXPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List" },
-  { key: "peb", label: "PEB", full: t("c.pemberitahuan.ekspor.barang") },
-  { key: "npe", label: "NPE", full: "Nota Pelayanan Ekspor" },
+  { key: "peb", label: "PEB", full: () => t("c.pemberitahuan.ekspor.barang") },
+  { key: "npe", label: "NPE", full: () => tt("Nota Pelayanan Ekspor", "Export Service Note (NPE)") },
   { key: "bl", label: blLabel, full: blFull },
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
   { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
   {
     key: "fumigasi",
-    label: "Fumigasi",
-    full: "Sertifikat Fumigasi & ISPM-15",
+    label: () => tt("Fumigasi", "Fumigation"),
+    full: () => tt("Sertifikat Fumigasi & ISPM-15", "Fumigation & ISPM-15 Certificate"),
     optional: true,
   },
-  { key: "tally", label: "Tally", full: "Tally sheet (hitung fisik saat muat)" },
+  { key: "tally", label: "Tally", full: () => tt("Tally sheet (hitung fisik saat muat)", "Tally sheet (physical count at loading)") },
   /* BERANGKAT — seperti Berths/ATA di buku Import, ini tahap yang
      bukan berkas: tanggal kapal/pesawat benar-benar meninggalkan
      pelabuhan muat.
@@ -93,8 +97,8 @@ function sailingLabel(s) {
 }
 function sailingFull(s) {
   return s && s.transport === "udara"
-    ? "Pesawat berangkat dari bandara muat (ATD)"
-    : "Kapal berangkat dari pelabuhan muat (ATD)";
+    ? tt("Pesawat berangkat dari bandara muat (ATD)", "Aircraft departed from the origin airport (ATD)")
+    : tt("Kapal berangkat dari pelabuhan muat (ATD)", "Vessel departed from the port of loading (ATD)");
 }
 
 /* Kedatangan alat angkut. Untuk laut istilahnya "Sandar"; untuk udara
@@ -105,8 +109,8 @@ function berthLabel(s) {
 }
 function berthFull(s) {
   return s && s.transport === "udara"
-    ? "Pesawat tiba di bandara tujuan (ATA)"
-    : "Kapal sandar di pelabuhan tujuan / berths (ATA)";
+    ? tt("Pesawat tiba di bandara tujuan (ATA)", "Aircraft arrived at the destination airport (ATA)")
+    : tt("Kapal sandar di pelabuhan tujuan / berths (ATA)", "Vessel berthed at the destination port (ATA)");
 }
 
 /* Label & nama panjang B/L mengikuti moda pengangkut. */
@@ -275,7 +279,7 @@ function docStepHtml(s) {
     const judul = dilewati
       ? t("x.ditandai.tidak.dipakai", { x: stepText(st.full, s), cap })
       : sudah
-        ? `${stepText(st.full, s)} — dikonfirmasi ${cap}${entri.by ? " oleh " + entri.by : ""}`
+        ? tt(`${stepText(st.full, s)} — dikonfirmasi ${cap}${entri.by ? " oleh " + entri.by : ""}`, `${stepText(st.full, s)} — confirmed ${cap}${entri.by ? " by " + entri.by : ""}`)
         : kini
           ? t("x.klik.kalau.berkasnya.ada", { x: stepText(st.full, s), opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" })
           /* stepText(), BUKAN st.full langsung.
@@ -286,7 +290,7 @@ function docStepHtml(s) {
              tooltip tahap yang belum tercapai menampilkan kode sumber
              JavaScript. Tiga cabang lain sudah memanggilnya; yang ini
              terlewat. */
-          : `${stepText(st.full, s)} — menunggu tahap sebelumnya`;
+          : tt(`${stepText(st.full, s)} — menunggu tahap sebelumnya`, `${stepText(st.full, s)} — waiting for the previous step`);
 
     const isi = dilewati
       ? "–"
@@ -319,7 +323,7 @@ function docStepHtml(s) {
   return `
   <div class="docsteps">
     <div class="docsteps-head">
-      <span><i class="bi bi-files"></i> Progres Dokumen</span>
+      <span><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
       <span class="docsteps-count">${docStepCount(s).selesai} / ${docStepCount(s).berlaku}</span>
     </div>
     <div class="docsteps-track">${langkah}</div>
@@ -352,13 +356,13 @@ async function toggleDocStep(id, stepKey) {
        dipaksa berurutan — dan di sini tidak: PIB bisa saja dibetulkan
        sementara SPPB memang sudah benar-benar di tangan. Membuangnya
        berarti membuang catatan yang sah. */
-    showConfirm(`Batalkan konfirmasi ${stepText(st.label, s)}?`, () => {
+    showConfirm(tt(`Batalkan konfirmasi ${stepText(st.label, s)}?`, `Cancel the ${stepText(st.label, s)} confirmation?`), () => {
       const tanpa = { ...progres };
       delete tanpa[stepKey];
       simpanDocStep(s, tanpa);
     }, {
       title: t("c.batalkan.tahap.dokumen"),
-      confirmText: "Ya, Batalkan",
+      confirmText: tt("Ya, Batalkan", "Yes, cancel"),
       tone: "primary",
       icon: "bi-arrow-counterclockwise",
     });
@@ -384,11 +388,11 @@ async function toggleDocStep(id, stepKey) {
       title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
       desc: t("x.isi.tanggal.dokumen", { x: stepText(st.full, s) }),
       icon: "bi-calendar-check",
-      okText: "Simpan",
+      okText: tt("Simpan", "Save"),
       fields: [
         {
           key: "tanggal",
-          label: `Tanggal ${stepText(st.label, s)}`,
+          label: tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`),
           type: "date",
           value: todayISO(),
           hint: t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
@@ -414,19 +418,19 @@ async function toggleDocStep(id, stepKey) {
      tidak ada untuk pengiriman ini". */
   if (st.optional) {
     showPrompt({
-      title: `Tahap ${stepText(st.label, s)}`,
+      title: tt(`Tahap ${stepText(st.label, s)}`, `Step: ${stepText(st.label, s)}`),
       desc: t("x.tandai.sudah.diterima", { x: stepText(st.full, s) }),
       icon: "bi-patch-question",
-      okText: "Simpan",
+      okText: tt("Simpan", "Save"),
       fields: [
         {
           key: "pilih",
-          label: "Status dokumen",
+          label: tt("Status dokumen", "Document status"),
           type: "select",
           value: "ada",
           options: [
-            { value: "ada", label: "Sudah diterima" },
-            { value: "lewati", label: "Tidak dipakai — lewati tahap ini" },
+            { value: "ada", label: tt("Sudah diterima", "Received") },
+            { value: "lewati", label: tt("Tidak dipakai — lewati tahap ini", "Not used — skip this step") },
           ],
         },
       ],
@@ -454,7 +458,7 @@ async function toggleDocStep(id, stepKey) {
       }),
     {
       title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
-      confirmText: "Ya, Sudah Ada",
+      confirmText: tt("Ya, Sudah Ada", "Yes, it's here"),
       tone: "primary",
       icon: "bi-check2-circle",
     },
@@ -526,7 +530,7 @@ async function simpanDocStep(s, progresBaru) {
 
   const c = docStepCount(s);
   showToast(
-    `Progres dokumen: ${c.selesai}/${c.berlaku}.${pesanPrediksi}`,
+    tt(`Progres dokumen: ${c.selesai}/${c.berlaku}.${pesanPrediksi}`, `Document progress: ${c.selesai}/${c.berlaku}.${pesanPrediksi}`),
     "success",
   );
 }

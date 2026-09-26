@@ -135,34 +135,19 @@ function qtyDenganSatuan(it, formatter) {
   return `${angka} ${satuan}`;
 }
 
-// Kolom "KGS" (BRUTO, Daily Import): dipakai juga di tempat lain kalau nanti perlu.
-function totalKgsUntukDailyImport(s) {
-  const items = s.items || [];
-  /* NETTO didahulukan — LEBIH AKURAT dari Bruto (tidak ikut berat
-     kemasan) — tapi CUMA kalau LENGKAP diisi di SEMUA barang; satu
-     saja yang kosong/nol bikin totalnya sudah tidak mewakili berat
-     bersih sungguhan (barang yang kelewat tidak ikut kehitung), jadi
-     lebih aman jatuh balik ke Total Bruto se-pengiriman yang sudah
-     ada (computeCustoms(), core/customs.js) daripada dipakai
-     setengah-setengah. */
-  const nettoLengkap =
-    items.length > 0 && items.every((it) => parseLooseNumber(it.netto) > 0);
-  if (nettoLengkap) {
-    return items.reduce((sum, it) => sum + parseLooseNumber(it.netto), 0);
-  }
-  return computeCustoms(s).totalBruto;
-}
-
 function buildDailyImportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
-  /* BRUTO (kolom 9, dipakai sebagai "KGS") sekarang Total se-PENGIRIMAN
-     (Netto kalau lengkap, kalau tidak Total Bruto — lihat
-     totalKgsUntukDailyImport() di atas), bukan berat barang per baris
-     — makanya ikut masuk FIRST_ROW_ONLY_IDX di bawah, sebaris dengan
-     field level-pengiriman lain (SPPB, AJU, dst.): sekali tampil di
-     baris pertama, bukan diulang di semua baris. */
-  const totalKgs = totalKgsUntukDailyImport(s);
+  /* BRUTO (kolom 9, dipakai sebagai "KGS") = TOTAL BRUTO se-pengiriman,
+     langsung -- jumlah Bruto semua barang (computeCustoms(),
+     core/customs.js). Dulu Netto didahulukan kalau terisi di semua
+     barang; kolom ini memang kolom BRUTO, jadi isinya Bruto.
+
+     Total se-PENGIRIMAN, bukan berat barang per baris -- makanya ikut
+     masuk FIRST_ROW_ONLY_IDX di bawah, sebaris dengan field level-
+     pengiriman lain (SPPB, AJU, dst.): sekali tampil di baris pertama,
+     bukan diulang di semua baris. */
+  const totalKgs = computeCustoms(s).totalBruto;
   const FIRST_ROW_ONLY_IDX = [
     1, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
   ];
@@ -178,7 +163,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.party), // 6  SHIPPER
       formatter.text(itemDisplayName(it)), // 7  GOODS DESCRIPTION (+ Size/Pattern/Mold No)
       qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
-      formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Netto kalau lengkap, jika tidak Total Bruto)
+      formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Total Bruto se-pengiriman)
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
       formatter.text(s.invoice), // 12 INVOICE
@@ -289,7 +274,8 @@ function reportItemSummary(s) {
   const names = reportItemNames(s);
   if (!names.length) return "";
   const sisa = names.length - 1;
-  return sisa > 0 ? `${names[0]} + ${sisa} Items` : names[0];
+  // Bahasa Inggris: "1 Item", "2 Items" -- bukan "1 Items".
+  return sisa > 0 ? `${names[0]} + ${sisa} ${sisa === 1 ? "Item" : "Items"}` : names[0];
 }
 
 // Baris ke-2 & ke-3 tiap pengiriman
@@ -303,10 +289,10 @@ function reportDetailPairs(s, mode) {
          kalau ada, kalau tidak jatuh ke jadwal awal. Report dikirim
          supaya penerimanya tahu keadaan sekarang -- melaporkan jadwal
          lama yang sudah diketahui meleset justru menyesatkan. */
-      ["ETD", fmtDateLong(effectiveEtd(s))],
-      ["ETA", fmtDateLong(effectiveEta(s))],
+      ["ETD", fmtTanggalReport(effectiveEtd(s))],
+      ["ETA", fmtTanggalReport(effectiveEta(s))],
       // Tanggal STUFFING, bukan ETD
-      ["Estimasi Stuffing", fmtDateLong(s.actual)],
+      ["Estimated Stuffing", fmtTanggalReport(s.actual)],
     ];
   }
   /* Import: yang dilaporkan PERKIRAAN tiba di pabrik — kolom `actual`
@@ -318,11 +304,39 @@ function reportDetailPairs(s, mode) {
   return [
     ["Incoterm", dispVal(s.incoterm)],
     ["Mode", dispVal(s.muatan)],
-    ["ETD", fmtDateLong(effectiveEtd(s))],
-    ["ETA", fmtDateLong(effectiveEta(s))],
-    ["Perkiraan Tiba di Pabrik", fmtDateLong(s.actual)],
+    ["ETD", fmtTanggalReport(effectiveEtd(s))],
+    ["ETA", fmtTanggalReport(effectiveEta(s))],
+    ["Estimated Arrival at Factory", fmtTanggalReport(s.actual)],
   ];
 }
+
+/* TANGGAL REPORT DALAM BAHASA INGGRIS: "21 September 2026".
+
+   Report dikirim ke penerima berbahasa Inggris, jadi tidak memakai
+   fmtDateLong() -- yang itu berlokal id-ID ("21 Agustus 2026") dan
+   tetap dipakai tampilan aplikasi yang berbahasa Indonesia. Tanggal
+   kosong ditulis "TBA" (to be advised), istilah baku di surel
+   pengapalan, bukan "Tanggal Tidak Diketahui". */
+function fmtTanggalReport(d) {
+  const dt = parseLocalDate(d);
+  if (!dt) return "TBA";
+  return dt.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/* Pembuka surel Report. Satu sumber untuk versi teks & HTML supaya
+   keduanya tidak pernah berbeda kalimat. */
+const REPORT_SAPAAN = "Dear Mr Shin,";
+const REPORT_PENGANTAR = "Please find schedule for Export and Import as below";
+
+/* URUTAN BAGIAN: Export dulu, baru Import -- mengikuti kalimat
+   pengantarnya sendiri ("for Export and Import"). Membaca "Export and
+   Import" lalu mendapati IMPORT di urutan pertama membuat penerima
+   mencari-cari bagian yang disebut duluan. */
+const REPORT_URUTAN_BUKU = ["export", "import"];
 
 function reportHeadline(s, mode) {
   return `Shipment ${mode === "export" ? "To" : "From"} ${dispVal(s.party)}`;
@@ -338,6 +352,7 @@ function reportHeadline(s, mode) {
 function reportSortDate(s, mode) {
   return s.actual || "";
 }
+
 
 /* Jadwal Export yang stuffing-nya sudah lewat ATAU jatuh HARI INI
    tidak ikut dilaporkan.
@@ -373,7 +388,7 @@ function pendingByMode(mode) {
 /* ---- versi TEKS POLOS ---- */
 function buildReportCopyText() {
   const blocks = [];
-  ["import", "export"].forEach((mode) => {
+  REPORT_URUTAN_BUKU.forEach((mode) => {
     const list = pendingByMode(mode);
     if (!list.length) return;
     const lines = [mode.toUpperCase(), ""];
@@ -391,13 +406,16 @@ function buildReportCopyText() {
     });
     blocks.push(lines.join("\n"));
   });
-  return blocks.join("\n\n");
+  // Tanpa jadwal apa pun, pembukanya ikut tidak ditulis: surel yang
+  // cuma berisi sapaan tanpa isi lebih membingungkan daripada kosong.
+  if (!blocks.length) return "";
+  return [REPORT_SAPAAN, "", REPORT_PENGANTAR, "", blocks.join("\n\n")].join("\n");
 }
 
 /* ---- versi HTML (yang dipakai email) ---- */
 function buildReportCopyHtml() {
   const sections = [];
-  ["import", "export"].forEach((mode) => {
+  REPORT_URUTAN_BUKU.forEach((mode) => {
     const list = pendingByMode(mode);
     if (!list.length) return;
     const items = list
@@ -425,7 +443,10 @@ function buildReportCopyHtml() {
     );
   });
   if (!sections.length) return "";
-  return `<div style="font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#111">${sections.join(
+  const pembuka =
+    `<p style="margin:0 0 12px">${escapeHtml(REPORT_SAPAAN)}</p>` +
+    `<p style="margin:0 0 16px">${escapeHtml(REPORT_PENGANTAR)}</p>`;
+  return `<div style="font-family:'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#111">${pembuka}${sections.join(
     "",
   )}</div>`;
 }

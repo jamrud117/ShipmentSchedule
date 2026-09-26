@@ -18,28 +18,68 @@ const VNXL_FONT_B = { name: "Times New Roman", size: 10, bold: true };
 const VNXL_FONT_KECIL = { name: "Times New Roman", size: 9 };
 const VNXL_JUDUL = { name: "Times New Roman", size: 24, bold: true };
 
-/* LEBAR KOLOM — PERBANDINGANNYA dari berkas asli, UKURANNYA disetel
-   supaya lembar ini tercetak selebar lembar cetak CIPL (183,1 mm).
+/* LEBAR KOLOM — dibaca langsung dari berkas Kumho aslinya, apa adanya.
 
-   Angka mentah dari berkas asli hanya menghasilkan 139,9 mm -- diukur
-   dari hasil cetaknya, bukan dikira-kira. Selisihnya tetap 1,309x di
-   semua kolom, jadi yang dikalikan cukup satu faktor dan perbandingan
-   antar kolom tidak berubah: sekat kolomnya tetap jatuh di 50,7%
-   seperti aslinya.
-
-   Kolom B DIBERI lebar eksplisit (dulu dibiarkan bawaan Excel): kalau
-   ia satu-satunya yang tidak ikut diperbesar, perbandingan kolom
-   kirinya melenceng dan sekatnya bergeser. */
-const VNXL_SKALA = 1.309;
+   Kolom B 9,78 (bukan bawaan Excel 8,43): itu yang tertulis di sana.
+   Pernah dikira B memakai bawaan, dan seluruh kolom sempat dikalikan
+   1,309 untuk mengejar lebar cetak yang kurang -- keduanya keliru.
+   Lebarnya tidak pernah kurang; yang bikin mengecil adalah fitToPage
+   (lihat VNXL_HALAMAN di bawah). */
 const VNXL_LEBAR_ASLI = {
-  A: 9.78, B: 8.43, C: 12.22, D: 11.89, E: 9.78, F: 4.11, G: 4.0, H: 3.78,
-  I: 7.22, J: 3.78, K: 8.78, L: 8.89, N: 9.78, O: 10.89, P: 13.44,
+  A: 9.78, B: 9.78, C: 12.22, D: 11.89, E: 9.78, F: 4.11, G: 4.0, H: 3.78,
+  I: 7.22, J: 3.78, K: 8.78, L: 8.89, M: 8.89, N: 9.78, O: 10.89, P: 13.44,
   Q: 8.89, R: 11.22, S: 8.89,
 };
-const VNXL_LEBAR = Object.fromEntries(
-  Object.entries(VNXL_LEBAR_ASLI).map(([k, v]) => [k, Math.round(v * VNXL_SKALA * 100) / 100]),
-);
 
+/* SATUAN LEBAR KOLOM EXCEL BERGANTUNG PADA HURUF BAWAAN BERKAS.
+
+   Angkanya bukan milimeter melainkan "berapa angka 0 yang muat" pada
+   huruf normal buku kerja. Berkas Kumho memakai 돋움 (Dotum) 11 sebagai
+   huruf normal; berkas yang kita hasilkan memakai Calibri 11, yang
+   angkanya lebih sempit. Lebar 9,78 yang sama karena itu tercetak
+   183 mm di sana dan hanya 157 mm di sini.
+
+   Yang disamakan HASIL CETAKNYA, bukan angkanya: seluruh kolom
+   dikalikan satu faktor. Perbandingan antar kolom tidak berubah, jadi
+   sekat kolomnya tetap jatuh di tempat yang sama.
+
+   FAKTORNYA DIKALIBRASI DARI CETAKAN EXCEL SUNGGUHAN, bukan LibreOffice.
+   Faktor lama (1,096) diukur lewat konversi LibreOffice dan di sana
+   menghasilkan 183 mm -- tapi Excel menggambar kolom lebih sempit
+   daripada LibreOffice untuk berkas yang sama: di pratinjau cetak
+   pengguna bingkainya hanya 154 mm, tingginya sudah memenuhi halaman,
+   dan 43 mm di kanan kosong. Dikali 1,2 lagi, lembarnya jadi cukup
+   lebar untuk dibatasi LEBAR halaman (bukan tingginya) di Excel,
+   sehingga selebar kertas.
+
+   Akibatnya di LibreOffice lembar ini sedikit lebih pendek daripada
+   halaman (ia menggambar kolom lebih lebar, jadi diperkecil lebih
+   banyak). Yang diutamakan Excel: di situlah berkas ini dibuka dan
+   dicetak, oleh tim maupun oleh pembeli. */
+const VNXL_SKALA_HURUF = 1.315;
+/* LEMBAR PL PUNYA LEBAR KOLOMNYA SENDIRI di berkas asli -- bukan
+   salinan lembar CI. Kolom H & J (Net Wt. / Gross Wt.) di sana 5,66,
+   sementara di CI kolom yang sama (USD / USD) cuma 3,78.
+
+   Dulu kedua lembar memakai lebar CI, dan berat berdesimal seperti
+   "378,70" tidak muat di kolom 3,78: Excel menampilkannya sebagai
+   "###". */
+const VNXL_LEBAR_ASLI_PL = {
+  A: 9.78, B: 11.33, C: 13.0, D: 13.33, E: 10.44, F: 6.0, G: 4.78,
+  H: 5.66, I: 7.22, J: 5.66, K: 4.78,
+};
+
+const vnxlSkalakan = (tabel) =>
+  Object.fromEntries(
+    Object.entries(tabel).map(([k, v]) => [
+      k,
+      Math.round(v * VNXL_SKALA_HURUF * 100) / 100,
+    ]),
+  );
+const VNXL_LEBAR = vnxlSkalakan(VNXL_LEBAR_ASLI);
+const VNXL_LEBAR_PL = vnxlSkalakan(VNXL_LEBAR_ASLI_PL);
+
+const VNXL_FMT_BERAT = "#,##0.00";
 const VNXL_FMT_UANG = '#,##0.00_);[Red](#,##0.00)';
 /* dd/mm/yyyy -- sama dengan lembar cetaknya (ciplVnTanggal). Bentuk
    mm-dd-yy dari berkas asli terbaca sebagai tanggal yang SAMA SEKALI
@@ -58,9 +98,9 @@ function vnxlSet(ws, alamat, nilai, font, rata, fmt) {
 const VNXL_TENGAH = { horizontal: "center", vertical: "middle" };
 const VNXL_KIRI = { horizontal: "left", vertical: "middle" };
 const VNXL_KANAN = { horizontal: "right", vertical: "middle" };
-/* Nilai pelabuhan/kapal menjorok satu huruf dari labelnya -- padanan
-   padding-left 3mm pada .vn-nilai di lembar cetak. */
-const VNXL_KIRI_JOROK = { horizontal: "left", vertical: "middle", indent: 1 };
+/* Hanya perataan TEGAK -- untuk label yang di berkas asli memakai
+   perataan mendatar bawaan (General) tapi tetap di tengah baris. */
+const VNXL_TENGAH_V = { vertical: "middle" };
 
 /* Garis tipis pada sisi tertentu saja. Menyetel keliling pada tiap sel
    menghasilkan garis ganda di pertemuannya -- berkas aslinya memakai
@@ -96,16 +136,29 @@ function vnxlBingkaiLuar(ws, barisAkhir) {
   }
 }
 
-function vnxlKerangka(ws, judul) {
-  Object.keys(VNXL_LEBAR).forEach((k) => {
-    ws.getColumn(k).width = VNXL_LEBAR[k];
+function vnxlKerangka(ws, judul, isPacking) {
+  const lebar = isPacking ? VNXL_LEBAR_PL : VNXL_LEBAR;
+  Object.keys(lebar).forEach((k) => {
+    ws.getColumn(k).width = lebar[k];
   });
-  ws.getRow(1).height = 28.5;
-  for (let r = 2; r <= 29; r++) ws.getRow(r).height = 12.75;
+  /* IRAMA BARIS MENGIKUTI LEMBAR CETAK, bukan angka mentah berkas
+     asli. Berkas asli memakai 12,75pt (4,5 mm) untuk blok kepala;
+     lembar cetak 3,76 mm.
+
+     10,5pt, bukan 10,65: Excel menggambar tinggi baris dalam kelipatan
+     piksel (0,75pt pada 96 dpi). 10,65 bukan kelipatannya dan dibulatkan
+     ke atas jadi 11,25 -- tiap baris 6% lebih tinggi, dan lembarnya
+     jadi terlalu tinggi sampai dibatasi tinggi halaman. 10,5 = 14 px,
+     tidak ada yang dibulatkan. Memakai 12,75pt membuat blok kepalanya 16 mm
+     lebih tinggi daripada cetakan, dan sisanya terdorong sampai
+     tumpah ke halaman kedua. */
+  ws.getRow(1).height = 25;
+  for (let r = 2; r <= 29; r++) ws.getRow(r).height = 10.5;
 
   ws.mergeCells("A1:K1");
   vnxlSet(ws, "A1", judul, VNXL_JUDUL, VNXL_TENGAH);
-  vnxlGarisBaris(ws, 1, 1, 11, "tb");
+  // Kotak judul bergaris MEDIUM atas & bawah (berkas asli: row 1 tM bM).
+  vnxlGarisBaris(ws, 1, 1, 11, "tb", "medium");
   vnxlSisi(ws, "A1", "l");
   vnxlSisi(ws, "K1", "r");
 }
@@ -182,7 +235,10 @@ function vnxlBlokAtas(ws, row, shipment, isPacking) {
   vnxlGarisBaris(ws, 5, 5, 11, "b");
   vnxlGarisBaris(ws, 9 - g, 1, 4, "b");
   vnxlGarisBaris(ws, 16 - g, 1, 4, "b");
-  vnxlGarisBaris(ws, rAkhir, 1, 11, "b");
+  /* Kaki kotak Consignee: A-D saja. Kolom kanan (Other references)
+     masih berlanjut ke bawah tanpa putus -- garis selebar lembar di
+     sini memotong kotak keterangan jadi dua. */
+  vnxlGarisBaris(ws, rAkhir, 1, 4, "b");
 }
 
 /* Blok pengangkutan. barisMulai berbeda antar lembar: CI mulai 25,
@@ -192,7 +248,7 @@ function vnxlBlokAngkutan(ws, row, shipment, barisMulai) {
   const prof = ciplProfil(p.customer || (shipment && shipment.party));
   const r = barisMulai;
 
-  vnxlSet(ws, "A" + r, "Departure date");
+  vnxlSet(ws, "A" + r, "Departure date", VNXL_FONT, VNXL_TENGAH_V);
   ws.mergeCells(`C${r}:D${r}`);
   vnxlSet(
     ws,
@@ -203,50 +259,70 @@ function vnxlBlokAngkutan(ws, row, shipment, barisMulai) {
     VNXL_FMT_TGL,
   );
 
-  vnxlSet(ws, "A" + (r + 1), "Port of Loading");
-  vnxlSet(ws, "C" + (r + 1), "Port of Discharge");
+  vnxlSet(ws, "A" + (r + 1), "Port of Loading", VNXL_FONT, VNXL_KIRI);
+  vnxlSet(ws, "C" + (r + 1), "Port of Discharge", VNXL_FONT, VNXL_KIRI);
   ws.mergeCells(`A${r + 2}:B${r + 2}`);
   ws.mergeCells(`C${r + 2}:D${r + 2}`);
   vnxlSet(
     ws, "A" + (r + 2),
     p.portLoading || prof.portLoading || "",
-    VNXL_FONT, VNXL_KIRI_JOROK,
+    VNXL_FONT, VNXL_TENGAH,
   );
   vnxlSet(
     ws, "C" + (r + 2),
     p.portDischarge || prof.portDischarge || "",
-    VNXL_FONT, VNXL_KIRI_JOROK,
+    VNXL_FONT, VNXL_TENGAH,
   );
 
-  vnxlSet(ws, "A" + (r + 3), "Vessel/Flight                        ");
-  vnxlSet(ws, "C" + (r + 3), "Final Destination                       ");
-  vnxlSet(ws, "E" + (r + 3), "Terms of delivery and payment");
+  vnxlSet(ws, "A" + (r + 3), "Vessel/Flight                        ", VNXL_FONT, VNXL_TENGAH_V);
+  vnxlSet(ws, "C" + (r + 3), "Final Destination                       ", VNXL_FONT, VNXL_TENGAH_V);
+  vnxlSet(ws, "E" + (r + 3), "Terms of delivery and payment", VNXL_FONT, VNXL_KIRI);
   ws.mergeCells(`A${r + 4}:B${r + 4}`);
   ws.mergeCells(`C${r + 4}:D${r + 4}`);
   vnxlSet(
     ws, "A" + (r + 4),
     p.carrier || (shipment && carrierNameFromShipment(shipment)) || "",
-    VNXL_FONT, VNXL_KIRI_JOROK,
+    VNXL_FONT_KECIL, VNXL_TENGAH,
   );
   vnxlSet(
     ws, "C" + (r + 4),
     p.finalDestination || prof.finalDestination || "",
-    VNXL_FONT, VNXL_KIRI_JOROK,
+    VNXL_FONT_KECIL, VNXL_TENGAH,
   );
   /* Rata KIRI, tanpa gabungan sel: teksnya lebih panjang dari kolom E,
      dan di Excel teks rata kiri meluber ke kolom kosong di kanannya.
      Dirata-tengahkan, ia terpotong di kedua sisi -- "T/T 60 " hilang
      dan yang terbaca cuma "days after B/L date". */
   vnxlSet(ws, "E" + (r + 4), p.termPayment || "T/T 60 days after B/L date",
-    VNXL_FONT, VNXL_KIRI_JOROK);
+    VNXL_FONT, VNXL_KIRI);
 
+  /* GARIS BLOK ANGKUTAN — DIPETAKAN DARI BERKAS ASLI, garis demi garis.
+
+     Dulu setiap baris blok ini diberi garis bawah selebar A-K. Di
+     berkas asli tidak begitu:
+
+       baris r   Departure date      garis bawah hanya A-D -- kolom
+                                     kanan (Other references) tetap
+                                     satu kotak yang utuh
+       baris r+1 label pelabuhan     TANPA garis bawah: label & nilainya
+       baris r+2 nilai pelabuhan     berbagi satu kotak; garis bawahnya
+                                     selebar A-K (atap kotak Terms)
+       baris r+3 label kapal         TANPA garis bawah, sama alasannya
+       baris r+4 nilai kapal         garis bawah A-K
+
+     Sekat tegak kiri-kanan (kolom E) menerus dari r sampai r+4;
+     sebelumnya hanya r+3..r+4, jadi di baris Departure & pelabuhan
+     kolom kiri dan kanan menyatu tanpa sekat. Sekat antara dua kolom
+     pelabuhan/kapal (kolom C) mulai di r+1. */
   for (let i = 0; i <= 4; i++) {
     vnxlSisi(ws, "A" + (r + i), "l");
     vnxlSisi(ws, "K" + (r + i), "r");
-    vnxlGarisBaris(ws, r + i, 1, 11, "b");
+    vnxlSisi(ws, "E" + (r + i), "l");
   }
+  vnxlGarisBaris(ws, r, 1, 4, "b");
+  vnxlGarisBaris(ws, r + 2, 1, 11, "b");
+  vnxlGarisBaris(ws, r + 4, 1, 11, "b");
   for (let i = 1; i <= 4; i++) vnxlSisi(ws, "C" + (r + i), "l");
-  for (let i = 3; i <= 4; i++) vnxlSisi(ws, "E" + (r + i), "l");
 }
 
 /* Tabel barang + baris penutup.
@@ -274,9 +350,8 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
      lembar cetak. Kolom A tidak ikut: sisi kirinya bagian dari bingkai
      luar, bukan sekat antar kolom. */
   ["C", "F", "H", "J"].forEach((k) => vnxlSisi(ws, k + rk, "l", "dotted"));
-  vnxlGarisBaris(ws, rk, 1, 11, "t");
-  // Garis bawah kepala lebih tegas (2 px pada rujukan).
-  vnxlGarisBaris(ws, rk, 1, 11, "b", "medium");
+  // Atas & bawah kepala TIPIS -- begitu di berkas asli (row 30: ttbt).
+  vnxlGarisBaris(ws, rk, 1, 11, "tb");
 
   vnxlSet(ws, "C" + (rk + 1), "#Description Info : SIZE, PTN, MOLD NO, PO", VNXL_FONT_B);
 
@@ -297,29 +372,36 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
   }
   baris.forEach((b, i) => {
     const r = r0 + i;
-    /* 11pt (3,9 mm): sedekat mungkin dengan baris barang di lembar
-       cetak. 13,5pt membuat blok barangnya jauh lebih longgar
-       daripada cetakan untuk jumlah barang yang sama. */
     ws.getRow(r).height = 11;
     ws.mergeCells(`A${r}:B${r}`);
     vnxlSet(ws, "A" + r, b.marks, VNXL_FONT, VNXL_TENGAH);
     /* Uraian dipecah dua sel: SIZE+PATTERN di C, MOLD NO di D --
        pembeli menyaring kolom D untuk mencocokkan cetakannya. */
+    /* PERATAAN & UKURAN HURUF DIBACA DARI BERKAS ASLI, sel demi sel.
+
+       Semuanya sempat rata tengah. Di berkas asli uraian & nomor
+       cetakan RATA KIRI (C, D), dan Size+Pattern di lembar CI memakai
+       9pt sementara di PL 10pt. Rata tengah membuat kolom uraian
+       bergerigi: "225/50R17  PS72" dan "205/55R16  HS52" tidak lagi
+       berawal di garis yang sama. */
     vnxlSet(ws, "C" + r, [b.size, b.pattern].filter(Boolean).join("  "),
-      VNXL_FONT_KECIL, VNXL_TENGAH);
-    vnxlSet(ws, "D" + r, b.moldNo || "", VNXL_FONT_KECIL, VNXL_TENGAH);
+      isPacking ? VNXL_FONT : VNXL_FONT_KECIL, VNXL_KIRI);
+    vnxlSet(ws, "D" + r, b.moldNo || "", VNXL_FONT, VNXL_KIRI);
     vnxlSet(ws, "F" + r, b.qty, VNXL_FONT, VNXL_KANAN);
-    vnxlSet(ws, "G" + r, b.satuan, VNXL_FONT, VNXL_TENGAH);
+    vnxlSet(ws, "G" + r, b.satuan, VNXL_FONT, isPacking ? VNXL_TENGAH : VNXL_KIRI);
     if (isPacking) {
-      vnxlSet(ws, "H" + r, b.netto, VNXL_FONT, VNXL_KANAN);
-      vnxlSet(ws, "I" + r, "KG", VNXL_FONT, VNXL_TENGAH);
-      vnxlSet(ws, "J" + r, b.bruto, VNXL_FONT, VNXL_KANAN);
-      vnxlSet(ws, "K" + r, "KG", VNXL_FONT, VNXL_TENGAH);
+      /* Berat dengan DUA desimal ("378,70"), bukan bilangan bulat --
+         berat per barang jarang bulat, dan membulatkannya membuat
+         jumlah per barang tidak lagi cocok dengan totalnya. */
+      vnxlSet(ws, "H" + r, b.netto, VNXL_FONT, VNXL_KANAN, VNXL_FMT_BERAT);
+      vnxlSet(ws, "I" + r, "KG", VNXL_FONT, VNXL_KIRI);
+      vnxlSet(ws, "J" + r, b.bruto, VNXL_FONT, VNXL_KANAN, VNXL_FMT_BERAT);
+      vnxlSet(ws, "K" + r, "KG", VNXL_FONT, VNXL_KIRI);
     } else {
       vnxlSet(ws, "H" + r, "USD", VNXL_FONT, VNXL_TENGAH);
       vnxlSet(ws, "I" + r, b.harga, VNXL_FONT, VNXL_KANAN, VNXL_FMT_UANG);
-      vnxlSet(ws, "J" + r, "USD", VNXL_FONT, VNXL_TENGAH);
-      vnxlSet(ws, "K" + r, b.qty * b.harga, VNXL_FONT, VNXL_KANAN, VNXL_FMT_UANG);
+      vnxlSet(ws, "J" + r, "USD", VNXL_FONT_KECIL, VNXL_KANAN);
+      vnxlSet(ws, "K" + r, b.qty * b.harga, VNXL_FONT, VNXL_TENGAH, VNXL_FMT_UANG);
     }
     vnxlSisi(ws, "A" + r, "l");
     vnxlSisi(ws, "K" + r, "r");
@@ -334,7 +416,23 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
      SETINGGI lembar cetaknya: CI ~248 mm, PL ~238 mm (PL memang lebih
      pendek -- wilayah cetaknya begitu di berkas rujukan). Diukur dari
      hasil konversi ke PDF, bukan dikira-kira. */
-  const rTotal = Math.max(rAkhir + dimensi.length + 1, rk + (isPacking ? 23 : 26));
+  /* Jarak baris TOTAL dari baris kepala. Berkas asli memakai 26 (CI)
+     dan 18 (PL) pada baris 12,75pt; dengan irama 10,5pt di sini
+     jaraknya disetel ulang supaya bidang barangnya seluas cetakan
+     (~80 mm) dan kaki lembarnya jatuh di tempat yang sama. */
+  /* PL diberi lebih banyak baris pengisi: kolomnya lebih lebar (lebar
+     PL sendiri, lihat VNXL_LEBAR_ASLI_PL), jadi fitToPage memperkecil
+     lembarnya lebih banyak dan tingginya ikut menyusut. Baris
+     tambahan mengembalikan tinggi cetaknya ke ~238 mm. */
+  /* +2: SELALU tersisa satu baris kosong di antara barang terakhir dan
+     baris dimensi -- baris itu yang dipanjangkan ciplXlsPenuhiHalaman()
+     supaya lembarnya setinggi kertas. Untuk jumlah barang biasa yang
+     menentukan tetap jarak minimumnya, jadi tidak ada yang bergeser. */
+  const rTotal = Math.max(rAkhir + dimensi.length + 2, rk + (isPacking ? 26 : 22));
+  // Baris pengisi & baris TOTAL ikut irama yang sama.
+  for (let r = rk + 1; r <= rTotal; r++) {
+    if (ws.getRow(r).height == null) ws.getRow(r).height = 10.5;
+  }
 
   /* Baris DIMENSION ditaruh TEPAT DI ATAS baris TOTAL, bukan menempel
      di bawah barangnya -- begitu susunannya pada berkas aslinya, dan
@@ -351,10 +449,10 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
     vnxlSisi(ws, "A" + r, "l");
     vnxlSisi(ws, "K" + r, "r");
   }
-  // Garis bertitik tepat di atas baris TOTAL.
-  vnxlGarisBaris(ws, rTotal - 1, 1, 11, "b", "dotted");
+  // Garis bertitik sebagai sisi ATAS baris TOTAL (berkas asli: row 56 "t.").
+  vnxlGarisBaris(ws, rTotal, 1, 11, "t", "dotted");
 
-  return { rTotal, total, jumlah: baris.length };
+  return { rTotal, total, jumlah: baris.length, rPengisi: rTotal - dimensi.length - 1 };
 }
 
 /* Baris TOTAL + blok penutup (penanda pengapalan, signed by). */
@@ -383,9 +481,10 @@ function vnxlPenutup(ws, row, shipment, info, isPacking) {
   vnxlSet(ws, "D" + rt, info.total.qty, VNXL_FONT, VNXL_TENGAH);
   vnxlSet(ws, "E" + rt, "BOX " + (p.packing || "WOODEN PACKING"), VNXL_FONT, VNXL_KIRI);
   if (isPacking) {
-    vnxlSet(ws, "H" + rt, info.total.netto, VNXL_FONT_B, VNXL_KANAN);
+    // Total berat ikut dua desimal, sama dengan berat per barangnya.
+    vnxlSet(ws, "H" + rt, info.total.netto, VNXL_FONT_B, VNXL_KANAN, VNXL_FMT_BERAT);
     vnxlSet(ws, "I" + rt, "KGS", VNXL_FONT_B, VNXL_TENGAH);
-    vnxlSet(ws, "J" + rt, info.total.bruto, VNXL_FONT_B, VNXL_KANAN);
+    vnxlSet(ws, "J" + rt, info.total.bruto, VNXL_FONT_B, VNXL_KANAN, VNXL_FMT_BERAT);
     vnxlSet(ws, "K" + rt, "KGS", VNXL_FONT_B, VNXL_TENGAH);
   } else {
     vnxlSet(ws, "J" + rt, "USD", VNXL_FONT, VNXL_TENGAH);
@@ -401,7 +500,12 @@ function vnxlPenutup(ws, row, shipment, info, isPacking) {
      tepi ATAS kotak -- sama seperti lembar cetak. Ditulis di baris
      terakhir, ia tampil di dasar kotak seolah tanda tangannya
      ditaruh di bawah keterangannya. */
-  vnxlSet(ws, "E" + (rt + 3), "signed by", VNXL_FONT, { vertical: "top" });
+  /* Kotak tanda tangan mulai LIMA baris di bawah TOTAL dan berakhir di
+     baris ke-sembilan -- persis seperti berkas asli (CI: TOTAL 56,
+     atap kotak 61, kaki bingkai 65; PL: 47 / 52 / 56). Dulu kotaknya
+     hanya tiga baris, jadi bingkai bawahnya berhenti terlalu tinggi
+     dan ruang tanda tangannya lebih sempit daripada aslinya. */
+  vnxlSet(ws, "E" + (rt + 5), "signed by", VNXL_FONT, { vertical: "top" });
 
   /* Kotak penutup: tepi luar sampai baris terakhir.
 
@@ -409,45 +513,62 @@ function vnxlPenutup(ws, row, shipment, info, isPacking) {
      sepanjang kotak tanda tangan, bukan dari baris TOTAL. Di atas
      kotak itu kedua sisinya sama-sama kosong, jadi garisnya tidak
      memisahkan apa pun -- sama dengan lembar cetaknya. */
-  for (let r = rt + 1; r <= rt + 5; r++) {
+  for (let r = rt + 1; r <= rt + 9; r++) {
     vnxlSisi(ws, "A" + r, "l");
     vnxlSisi(ws, "K" + r, "r");
   }
-  for (let r = rt + 3; r <= rt + 5; r++) vnxlSisi(ws, "E" + r, "l");
-  // Garis mendatar di atas "signed by" -- atap kotak tanda tangan.
-  vnxlGarisBaris(ws, rt + 2, 5, 11, "b");
-  vnxlGarisBaris(ws, rt + 5, 1, 11, "b");
-  return rt + 5;
+  /* Sisi kiri kotak tanda tangan MEDIUM, sama tebal dengan bingkai
+     luar -- begitu di berkas asli (E61..E65 semuanya lM). */
+  for (let r = rt + 5; r <= rt + 9; r++) vnxlSisi(ws, "E" + r, "l", "medium");
+  /* Atap kotak tanda tangan: MEDIUM, dipasang sebagai sisi ATAS baris
+     kotaknya (berkas asli: row 61 E..K semuanya tM). */
+  vnxlGarisBaris(ws, rt + 5, 5, 11, "t", "medium");
+  vnxlGarisBaris(ws, rt + 9, 1, 11, "b", "medium");
+  return rt + 9;
 }
 
 function vnxlLembar(wb, row, shipment, isPacking) {
   const ws = wb.addWorksheet(isPacking ? "PL" : "CI", {
-    /* MARGIN & WILAYAH CETAK MENGIKUTI LEMBAR CETAK CIPL.
+    /* PENGATURAN HALAMAN DARI BERKAS ASLI, ANGKA DEMI ANGKA.
 
-       Diukur dari berkas rujukan: bingkai mulai 12,9 mm dari tepi kiri
-       (0,508"), 14,8 mm dari atas (0,583"), dan berakhir 13,7 mm dari
-       tepi kanan (0,539"). Tanpa wilayah cetak, kolom L-S -- yang ada
-       di berkas asli tapi di luar bingkai -- ikut terbawa ke halaman
-       kedua. */
-    pageSetup: {
-      paperSize: 9,
-      orientation: "portrait",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 1,
-      printArea: "A1:K61",
-      margins: {
-        left: 0.508, right: 0.539, top: 0.583, bottom: 0.394,
-        header: 0, footer: 0,
+       fitToPage MATI dan skalanya 94% -- itu kuncinya. Dengan
+       fitToPage menyala + fitToHeight 1, lembar yang lebih tinggi dari
+       satu halaman diperkecil sampai muat, dan LEBARNYA ikut menyusut:
+       bingkai yang seharusnya 183 mm tercetak 140 mm. Bukan lebar
+       kolomnya yang kurang, melainkan halamannya yang diperkecil.
+
+       Wilayah cetak menahan kolom L-S -- ada di berkas asli tapi di
+       luar bingkai -- supaya tidak ikut ke halaman berikutnya. */
+    pageSetup: Object.assign(
+      {
+        paperSize: 9,
+        orientation: "portrait",
+        /* fitToPage sebagai JARING PENGAMAN, bukan alat ukur: lebar &
+           tinggi sudah disetel supaya muat satu halaman pada 100%,
+           dan fitToPage hanya memperkecil kalau ternyata lewat --
+           mencegah satu baris tambahan melempar separuh lembar ke
+           halaman berikutnya. */
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 1,
+        /* Kalau di suatu aplikasi lembarnya tetap sedikit lebih sempit
+           daripada kertas, sisa ruangnya dibagi rata ke kiri & kanan --
+           bukan menumpuk di kanan seperti potongan yang terlupa. */
+        horizontalCentered: true,
+        margins: {
+          left: 0.5118, right: 0.4724, top: 0.5906, bottom: 0.5906,
+          header: 0.4331, footer: 0.5512,
+        },
       },
-    },
+      // printArea disetel setelah isinya jadi -- lihat vnxlLembar().
+    ),
     /* GARIS KISI DIMATIKAN. Lembar ini sudah punya garis tabelnya
        sendiri; kisi bawaan Excel menambah garis kedua di seluruh
        halaman dan membuat kotaknya tidak lagi terbaca sebagai bentuk
        dokumen. */
     views: [{ showGridLines: false }],
   });
-  vnxlKerangka(ws, isPacking ? "PACKING LIST" : "COMMERCIAL INVOICE");
+  vnxlKerangka(ws, isPacking ? "PACKING LIST" : "COMMERCIAL INVOICE", isPacking);
   vnxlBlokAtas(ws, row, shipment, isPacking);
   /* CI mulai baris 25, PL 24 -- mengikuti berkas aslinya. */
   const rAngkut = isPacking ? 24 : 25;
@@ -455,6 +576,25 @@ function vnxlLembar(wb, row, shipment, isPacking) {
   const info = vnxlTabel(ws, row, shipment, rAngkut + 5, isPacking);
   const barisAkhir = vnxlPenutup(ws, row, shipment, info, isPacking);
   vnxlBingkaiLuar(ws, barisAkhir);
+  /* WILAYAH CETAK PERSIS SEBATAS ISINYA.
+
+     Dipatok ke baris tetap (A1:K65), baris kosong di bawah bingkai
+     ikut terbawa dan mendorong terbitnya satu halaman kosong di
+     antara CI dan PL. */
+  ws.pageSetup.printArea = "A1:K" + barisAkhir;
+  /* Setinggi kertas: jarak ke tepi bawah sama dengan ke tepi atas (margin
+     0,59" keduanya), bukan berhenti di tengah kertas. */
+  /* Kotak tanda tangan (rt+5..rt+9) setinggi 50 mm di kertas, muat
+     stempel perusahaan. rt+5 -- baris "signed by" -- tidak diubah: ia
+     juga baris terakhir blok penanda pengapalan di kiri (A:B gabung
+     rt..rt+5), dan memanjangkannya menggeser teks penanda itu.
+     Tambahannya masuk ke empat baris di bawahnya. */
+  if (typeof ciplXlsTinggiTercetak === "function") {
+    const rt = info.rTotal;
+    const labelMm = ((ws.getRow(rt + 5).height || 15) / 72) * 25.4 * ciplXlsSkalaCetak(ws);
+    ciplXlsTinggiTercetak(ws, rt + 6, rt + 9, XLS_TTD_MM - labelMm);
+  }
+  if (typeof ciplXlsPenuhiHalaman === "function") ciplXlsPenuhiHalaman(ws, info.rPengisi);
   return ws;
 }
 

@@ -38,8 +38,8 @@ function buildDetailStopsHtml(s) {
           <div class="detail-stop-meta">
             <i class="bi ${air ? "bi-airplane" : "bi-water"}"></i> ${escapeHtml(dispVal(st.vessel))}
             ${hasMeaningfulValue(st.voyage) ? " · " + (voyageNoun(air ? "udara" : "laut") + " ") + escapeHtml(st.voyage) : ""}
-            &nbsp;•&nbsp; Tiba: <b>${fmtDate(st.arrivalDate)}</b>
-            &nbsp;·&nbsp; Berangkat: <b>${fmtDate(st.departureDate)}</b>
+            &nbsp;•&nbsp; ${tt("Tiba", "Arrives")}: <b>${fmtDate(st.arrivalDate)}</b>
+            &nbsp;·&nbsp; ${tt("Berangkat", "Departs")}: <b>${fmtDate(st.departureDate)}</b>
           </div>
         </div>
       </div>`;
@@ -76,38 +76,38 @@ function buildDetailHtml(s) {
     .join("");
 
   let customsHtml = `
-    <div class="subsection-title"><i class="bi bi-cash-coin"></i> Incoterm &amp; Nilai Barang</div>
+    <div class="subsection-title"><i class="bi bi-cash-coin"></i> ${tt("Incoterm &amp; Nilai Barang", "Incoterm &amp; Goods Value")}</div>
     <div class="info-grid">
       ${fieldPair("Incoterms", escapeHtml(s.incoterm || "—"))}
       ${fieldPair("Freight (USD)", fmtUSD(s.freight))}
       ${fieldPair("Insurance (USD)", fmtUSD(s.insurance))}
       ${fieldPair("NDPBM", fmtRp(s.ndpbm))}
-      ${fieldPair("Total Nilai Barang (USD)", fmtUSD(calc.totalUSD))}
+      ${fieldPair(tt("Total Nilai Barang (USD)", "Total Goods Value (USD)"), fmtUSD(calc.totalUSD))}
       ${
         s.incoterm === "CIF"
           ? fieldPair("CIF (USD)", fmtUSD(calc.cifUsd)) +
-            fieldPair("CIF Rupiah", fmtRp(calc.cifRupiah))
+            fieldPair(tt("CIF Rupiah", "CIF (IDR)"), fmtRp(calc.cifRupiah))
           : s.incoterm === "FOB"
             ? fieldPair("FOB (USD)", fmtUSD(calc.fobUsd)) +
-              fieldPair("FOB Rupiah", fmtRp(calc.fobRupiah))
+              fieldPair(tt("FOB Rupiah", "FOB (IDR)"), fmtRp(calc.fobRupiah))
             : ""
       }
     </div>`;
 
   if (s.incoterm !== "CIF" && s.incoterm !== "FOB") {
-    customsHtml += `<div class="form-text-note mb-2">Incoterm ini bukan CIF maupun FOB — nilai CIF, CIF Rupiah, dan FOB Rupiah otomatis 0.</div>`;
+    customsHtml += `<div class="form-text-note mb-2">${tt("Incoterm ini bukan CIF maupun FOB — nilai CIF, CIF Rupiah, dan FOB Rupiah otomatis 0.", "This incoterm is neither CIF nor FOB — CIF, CIF Rupiah and FOB Rupiah are 0.")}</div>`;
   }
 
   if (lbl.showDuty) {
     customsHtml += `
-      <div class="subsection-title"><i class="bi bi-receipt"></i> Bea &amp; Pajak Impor</div>
+      <div class="subsection-title"><i class="bi bi-receipt"></i> ${tt("Bea &amp; Pajak Impor", "Import Duties &amp; Taxes")}</div>
       <div class="info-grid">
-        ${fieldPair("Tarif", (Number(s.tarif) || 0) + " %")}
-        ${fieldPair("Bea Masuk", fmtRp(s.bm))}
+        ${fieldPair(tt("Tarif", "Tariff"), (Number(s.tarif) || 0) + " %")}
+        ${fieldPair(tt("Bea Masuk", "Import Duty"), fmtRp(s.bm))}
         ${fieldPair("PPN", fmtRp(s.ppn))}
         ${fieldPair("PPH", fmtRp(s.pph))}
         ${fieldPair("PDRI", fmtRp(calc.bmPdri))}
-        ${fieldPair("Keterangan PI", escapeHtml(dispVal(s.pi)))}
+        ${fieldPair(tt("Keterangan PI", "PI Notes"), escapeHtml(dispVal(s.pi)))}
       </div>`;
   }
 
@@ -123,7 +123,7 @@ function buildDetailHtml(s) {
       </div>
     </div>
 
-    <div class="subsection-title"><i class="bi bi-file-earmark-text"></i> Dokumen &amp; Umum</div>
+    <div class="subsection-title"><i class="bi bi-file-earmark-text"></i> ${tt("Dokumen &amp; Umum", "Documents &amp; General")}</div>
     <div class="info-grid">
       ${fieldPair("No. Aju", escapeHtml(dispVal(s.noAju)))}
       ${fieldPair(lbl.party, escapeHtml(dispVal(s.party)))}
@@ -144,18 +144,18 @@ function buildDetailHtml(s) {
                 : "—",
             )
       }
-      ${fieldPair("Nama Forwarder", escapeHtml(dispVal(s.forwarder)))}
+      ${fieldPair(tt("Nama Forwarder", "Forwarder Name"), escapeHtml(dispVal(s.forwarder)))}
       ${fieldPair("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic)))}
     </div>
 
-    <div class="subsection-title"><i class="bi bi-compass"></i> Transportasi &amp; Rute</div>
+    <div class="subsection-title"><i class="bi bi-compass"></i> ${tt("Transportasi &amp; Rute", "Transport &amp; Route")}</div>
     <div class="info-grid">
-      ${fieldPair("Moda Transportasi", s.transport === "udara" ? "Udara" : "Laut")}
-      ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? " (Leg Terakhir)" : ""), escapeHtml(dispVal(s.vessel)))}
+      ${fieldPair(tt("Moda Transportasi", "Transport Mode"), s.transport === "udara" ? tt("Udara", "Air") : tt("Laut", "Sea"))}
+      ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(s.vessel)))}
       ${fieldPair(voyageNoun(s.transport), escapeHtml(dispVal(s.voyage)))}
-      ${fieldPair("Kontainer", escapeHtml(dispVal(s.container)))}
-      ${fieldPair("Jenis Muatan", escapeHtml(s.muatan || "—"))}
-      ${fieldPair("Tipe Rute", isTransitRoute(s) ? `Transit (${routeStopList(s).length} Terminal Singgah)` : "Direct")}
+      ${fieldPair(tt("Kontainer", "Container"), escapeHtml(dispVal(s.container)))}
+      ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
+      ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
       ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}
       ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(portCodeLabel(s.destination))))}
       ${fieldPair("ETD", fmtDate(s.etd) + (s.etdTime ? " · " + escapeHtml(s.etdTime) : ""))}
@@ -168,7 +168,7 @@ function buildDetailHtml(s) {
       const log = normalizeNotesLog(s.notesLog, s.notes);
       if (!log.length) return "";
       return `<div class="detail-notes mb-3">
-        <div class="detail-notes-head"><i class="bi bi-chat-left-text"></i> Kronologi & Catatan (${log.length})</div>
+        <div class="detail-notes-head"><i class="bi bi-chat-left-text"></i> ${tt("Kronologi & Catatan", "Timeline & Notes")} (${log.length})</div>
         ${[...log]
           .reverse()
           .map(
@@ -179,13 +179,13 @@ function buildDetailHtml(s) {
       </div>`;
     })()}
 
-    <div class="subsection-title"><i class="bi bi-boxes"></i> Daftar Barang</div>
+    <div class="subsection-title"><i class="bi bi-boxes"></i> ${tt("Daftar Barang", "Item List")}</div>
     <div class="item-table-wrap mb-2">
       <table class="item-table item-table--detail">
         <thead><tr>
-          <th>Nama Barang</th><th>HS Code</th><th>Jenis Barang</th><th>Fasilitas</th>
-          <th class="text-center">Qty</th><th class="text-center">Satuan</th><th class="text-center">Harga/Unit</th>
-          <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">Kemasan</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
+          <th>${tt("Nama Barang", "Item Name")}</th><th>HS Code</th><th>${tt("Jenis Barang", "Goods Type")}</th><th>${tt("Fasilitas", "Facility")}</th>
+          <th class="text-center">Qty</th><th class="text-center">${tt("Satuan", "Unit")}</th><th class="text-center">${tt("Harga/Unit", "Unit Price")}</th>
+          <th class="text-center">${tt("Netto", "Net Wt.")}</th><th class="text-center">${tt("Bruto", "Gross Wt.")}</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
@@ -196,7 +196,7 @@ function buildDetailHtml(s) {
         <div>Total Qty: <b>${escapeHtml(fmtQtyBySatuan(calc.qtyBySatuan))}</b></div>
         <div>${t("f.total.netto")}: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
         <div>${t("f.total.bruto")}: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
-        <div>Total Nilai: <b>${fmtUSD(calc.totalUSD)}</b></div>
+        <div>${tt("Total Nilai", "Total Value")}: <b>${fmtUSD(calc.totalUSD)}</b></div>
         ${activeMode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
       </div>
     </div>

@@ -125,7 +125,6 @@ function recalcCustoms(opsi) {
     ppn: nilaiKotakAngka("#fPPN"),
     pph: nilaiKotakAngka("#fPPH"),
   };
-  const calc0 = computeCustoms(tmp);
 
   /* DASAR PUNGUTAN = NILAI PABEAN, BUKAN HARGA BARANG SAJA.
 
@@ -134,41 +133,43 @@ function recalcCustoms(opsi) {
      $640 dengan freight $382,40 bukan hal aneh), jadi memakai
      `totalUSD * ndpbm` saja membuat pungutannya meleset jauh di bawah
      yang sebenarnya terutang. */
-  const dasarUsd = calc0.totalUSD
-    + nilaiKotakAngka("#fFreight")
-    + nilaiKotakAngka("#fInsurance");
-  const dasarRupiah = dasarUsd * tmp.ndpbm;
+  /* BM, PPN, PPh DIHITUNG PERSIS SEPERTI PIB CEISA -- per seri barang,
+     dengan aturan pembulatannya masing-masing. Lihat
+     hitungPungutanImpor() di core/customs.js.
 
-  /* Urutannya penting: BM dulu, karena PPN memakai hasilnya.
+     Tarif BM dari kotak Tarif (%). Dulu kotak itu diabaikan dan BM
+     selalu 5%. Kotak yang kosong (jadwal lama) tetap dianggap 5%; "0"
+     berarti 0% (mis. fasilitas FTA).
 
-       Nilai Pabean = (Total Nilai Barang + Freight + Asuransi) × NDPBM
-       BM  = Nilai Pabean × 5%
-       PPN = (Nilai Pabean + BM) × 11%   <- BUKAN Nilai Pabean saja
-       PPH = Nilai Pabean × 2,5%
-
-     Kalau BM diisi manual (tarif HS Code tertentu memang bukan 5%),
-     PPN tetap memakai nilai manual itu, bukan hasil 5% di atas —
-     yang penting PPN selalu dihitung dari BM yang BENAR-BENAR
-     berlaku, bukan yang seharusnya. */
+     Kalau BM diisi manual (tarif HS Code tertentu), PPN & PPh memakai
+     nilai manual itu -- yang penting keduanya dihitung dari BM yang
+     BENAR-BENAR berlaku. */
   const elBm = $("#fBM");
+  const tarifTeks = String($("#fTarif").value || "").trim();
+  const pungutan = hitungPungutanImpor({
+    nilaiSeriUsd: nilaiSeriUsd(draftItems),
+    freightUsd: nilaiKotakAngka("#fFreight"),
+    asuransiUsd: nilaiKotakAngka("#fInsurance"),
+    ndpbm: tmp.ndpbm,
+    tarifBm: tarifTeks === "" ? 5 : nilaiKotakAngka("#fTarif"),
+    bmManual: isAutoDuty(elBm) ? null : nilaiKotakAngka("#fBM"),
+  });
+  const dasarRupiah = pungutan.nilaiPabean;
   if (isAutoDuty(elBm)) {
-    elBm.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.05)) : "";
+    elBm.value = dasarRupiah ? formatNumberValue(pungutan.bm) : "";
   }
-  const bmBerlaku = nilaiKotakAngka("#fBM");
 
   const elPpn = $("#fPPN");
   const elPph = $("#fPPH");
   if (isAutoDuty(elPpn)) {
-    elPpn.value = dasarRupiah
-      ? formatNumberValue(Math.round((dasarRupiah + bmBerlaku) * 0.11))
-      : "";
+    elPpn.value = dasarRupiah ? formatNumberValue(pungutan.ppn) : "";
   }
   if (isAutoDuty(elPph)) {
-    elPph.value = dasarRupiah ? formatNumberValue(Math.round(dasarRupiah * 0.025)) : "";
+    elPph.value = dasarRupiah ? formatNumberValue(pungutan.pph) : "";
   }
   // Nilai Pabean ditampilkan apa adanya — dasar yang sama persis yang
   // baru saja dipakai menghitung BM/PPN/PPH di atas, bukan dihitung ulang.
-  $("#calcNilaiPabean").textContent = fmtRp(dasarRupiah);
+  $("#calcNilaiPabean").textContent = fmtRpPresisi(dasarRupiah);
 
   // Dihitung ulang memakai BM/PPN/PPH terbaru supaya PDRI ikut benar pada putaran yang sama
   tmp.bm = nilaiKotakAngka("#fBM");
@@ -177,8 +178,11 @@ function recalcCustoms(opsi) {
   const calc = computeCustoms(tmp);
 
   $("#calcTotalUSD").textContent = fmtUSD(calc.totalUSD);
+  // Nilai CIF = barang + freight + asuransi, apa pun Incoterm-nya.
+  $("#calcCIF").textContent = fmtUSD(
+    calc.totalUSD + nilaiKotakAngka("#fFreight") + nilaiKotakAngka("#fInsurance"),
+  );
 
-  const isCIF = tmp.incoterm === "CIF";
   const isFOB = tmp.incoterm === "FOB";
   /* Disembunyikan lewat KELAS, bukan el.style.display.
 
@@ -186,18 +190,10 @@ function recalcCustoms(opsi) {
      HTML sebagai style="display:none" -- dan gaya sebaris tidak bisa
      hidup di berkas CSS. Kelas d-none bisa: HTML tinggal membawanya
      sejak awal, dan di sini ia dinyalakan/dimatikan. */
-  $$(".calc-box--cif").forEach((el) => {
-    el.classList.toggle("d-none", !isCIF);
-  });
   $$(".calc-box--fob").forEach((el) => {
     el.classList.toggle("d-none", !isFOB);
   });
-  $("#noCifFobNote").classList.toggle("d-none", isCIF || isFOB);
-
-  if (isCIF) {
-    $("#calcCIF").textContent = fmtUSD(calc.cifUsd);
-    $("#calcCIFRupiah").textContent = fmtRp(calc.cifRupiah);
-  } else if (isFOB) {
+  if (isFOB) {
     $("#calcFOB").textContent = fmtUSD(calc.fobUsd);
     $("#calcFOBRupiah").textContent = fmtRp(calc.fobRupiah);
   }

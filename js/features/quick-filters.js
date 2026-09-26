@@ -101,9 +101,9 @@ function syncQuickDateActive() {
 /* CATATAN SARINGAN */
 function activeFilterSummary() {
   const bits = [];
-  if (onlyNeedsAction) bits.push("Perlu tindakan");
+  if (onlyNeedsAction) bits.push(tt("Perlu tindakan", "Needs action"));
   const q = ($("#searchInput") || {}).value || "";
-  if (q.trim()) bits.push(`pencarian “${q.trim()}”`);
+  if (q.trim()) bits.push(tt(`pencarian “${q.trim()}”`, `search “${q.trim()}”`));
   const st = ($("#filterStatus") || {}).value || "";
   if (st) bits.push(`status ${statusLabel(st, activeMode)}`);
   const rentang = dateRangeSummaryBit();

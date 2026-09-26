@@ -6,7 +6,9 @@
 const LABEL_KOLOM_TIBA = {
   factoryDate: "In Factory",
   etd: "ETD",
-  etdUpdate: "ETD revisi",
+  get etdUpdate() {
+    return tt("ETD revisi", "Revised ETD");
+  },
 };
 
 /* CARD EVENT DELEGATION */
@@ -59,7 +61,7 @@ cardContainer.addEventListener("change", (e) => {
           const log = normalizeNotesLog(s.notesLog, s.notes);
           log.push(
             newNoteEntry(
-              `Status dikembalikan ke ${statusLabel(semula, activeMode)}. ${jejak} dikosongkan.`,
+              tt(`Status dikembalikan ke ${statusLabel(semula, activeMode)}. ${jejak} dikosongkan.`, `Status reverted to ${statusLabel(semula, activeMode)}. ${jejak} cleared.`),
             ),
           );
           s.notesLog = log;
@@ -72,7 +74,7 @@ cardContainer.addEventListener("change", (e) => {
              sendiri lewat columnFor() — bukan nama kolom database. */
           persistFields(id, patch);
         },
-        { confirmText: "Ya, ubah", tone: "primary", icon: "bi-arrow-repeat" },
+        { confirmText: tt("Ya, ubah", "Yes, change"), tone: "primary", icon: "bi-arrow-repeat" },
       );
       render();
       return;
@@ -132,7 +134,7 @@ cardContainer.addEventListener("click", (e) => {
   } else if (btn.dataset.action === "copyTemplate") {
     copyShipment(btn.dataset.template, id);
   } else if (btn.dataset.action === "delete") {
-    showConfirm("Hapus jadwal pengiriman ini secara permanen?", async () => {
+    showConfirm(tt("Hapus jadwal pengiriman ini secara permanen?", "Permanently delete this shipment schedule?"), async () => {
       try {
         const { error } = await supabaseClient
           .from("shipments")

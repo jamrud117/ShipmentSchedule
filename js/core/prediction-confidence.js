@@ -34,8 +34,8 @@ function predictionConfidencePercent(info) {
   };
 
   if (!info.routeResolved) kurangi(cfg.penalties.routeUnresolved, t("s.rute.belum.dikenali"));
-  if (info.typeAssumed) kurangi(cfg.penalties.typeAssumed, "Jenis muatan masih diasumsikan");
-  if (info.ruleFallback) kurangi(cfg.penalties.ruleFallback, "Rute memakai angka cadangan");
+  if (info.typeAssumed) kurangi(cfg.penalties.typeAssumed, tt("Jenis muatan masih diasumsikan", "Load type is still assumed"));
+  if (info.ruleFallback) kurangi(cfg.penalties.ruleFallback, tt("Rute memakai angka cadangan", "Route uses fallback figures"));
 
   if (info.rangeWidth > 0) {
     kurangi(
@@ -54,7 +54,7 @@ function predictionConfidencePercent(info) {
   }
   if (info.learned) {
     nilai += cfg.bonuses.learned;
-    alasan.push({ delta: cfg.bonuses.learned, text: "Memakai riwayat pengiriman nyata" });
+    alasan.push({ delta: cfg.bonuses.learned, text: tt("Memakai riwayat pengiriman nyata", "Uses real shipment history") });
   }
 
   /* Kedatangan yang dikonfirmasi menghapus ketidakpastian TERBESAR —

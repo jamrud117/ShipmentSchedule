@@ -267,8 +267,112 @@ const XLS_SI = { name: "Arial", size: 12 };
 const XLS_SI_TEBAL = { name: "Arial", size: 12, bold: true };
 const XLS_SI_LABEL = { name: "Calibri", size: 12 };
 
+/* +1: SELALU tersisa satu baris kosong di atas Total, juga saat barangnya
+   16 atau lebih -- baris itulah yang dipanjangkan ciplXlsPenuhiHalaman()
+   supaya lembarnya setinggi kertas. Untuk 15 barang atau kurang tidak
+   ada yang bergeser (Total tetap di baris 46). */
 function ciplXlsBarisTotal(jumlahBarang) {
-  return XLS_BARIS_ITEM + Math.max(jumlahBarang, XLS_MIN_BARIS);
+  return XLS_BARIS_ITEM + Math.max(jumlahBarang + 1, XLS_MIN_BARIS);
+}
+
+/* ------------------------------------------------------------------
+   LEMBAR SETINGGI KERTAS A4 -- dipakai Excel Dynamic Design & Kumho.
+
+   fitToPage hanya MEMPERKECIL; Excel tidak pernah memperbesar isi untuk
+   memenuhi kertas. Lembar yang lebih pendek daripada rasio bidang
+   cetaknya tercetak selebar kertas tapi berhenti di tengah, menyisakan
+   kaki kertas kosong. Jarak ke tepi bawah baru sama dengan ke tepi atas
+   kalau tinggi isinya PAS dengan skala yang dipakai.
+
+   Skala itu ditentukan lebar: lebar bidang cetak / lebar kolom.
+   Tinggi isi yang dibutuhkan = tinggi bidang cetak / skala. Kekurangannya
+   ditambahkan ke SATU baris kosong di atas Total -- bidang barang yang
+   kosong memanjang, persis seperti lembar cetaknya.
+
+   LEBAR KOLOM SAAT DICETAK = lebar (satuan karakter) x lebar angka
+   huruf Normal yang SEBENARNYA. Bukan rumus layar Excel (7 px bulat
+   per angka Calibri 11): saat mencetak, lebar huruf dipakai tanpa
+   dibulatkan. Angka Calibri (dan Carlito, kembarannya) selebar
+   1038/2048 em = 7,4336 px pada 11pt -- 6% lebih lebar daripada 7 px.
+   Dengan 7 px, lembarnya dikira muat pada skala 87%, padahal dicetak
+   82%, dan kaki kertasnya tetap kosong 2 cm. Diperiksa terhadap PDF
+   hasil cetak: skala yang diramalkan 0,8226, yang terukur 0,822.
+
+   Kurang 0,25% sebagai pengaman: sedikit lebih pendek menyisakan jarak
+   bawah beberapa persepuluh milimeter lebih lebar; sedikit lebih tinggi
+   membuat fitToPage memperkecil SELURUH lembar, termasuk lebarnya.
+
+   Bidang cetak berakhir TEPAT di garis bawah bingkai (dulu satu baris
+   kosong di bawahnya ikut tercetak, warisan berkas rujukan) -- seperti
+   tepi atasnya yang juga garis bingkai di baris 1. */
+const XLS_A4_PT = { w: 595.28, h: 841.89 };
+const XLS_LEBAR_HURUF_PX = (1038 / 2048) * 11 * (96 / 72); // 7,4336
+
+function ciplXlsKolomPt(lebar) {
+  const w = lebar == null ? 8.43 : lebar;
+  return w * XLS_LEBAR_HURUF_PX * 0.75;
+}
+
+/* KOTAK TANDA TANGAN MUAT STEMPEL PERUSAHAAN.
+
+   Stempel perusahaan umumnya bundar 40-45 mm dan tanda tangannya
+   menimpa stempel itu; kotak setinggi 50 mm DI KERTAS memberi ruang
+   untuk keduanya. Dipakai Excel Dynamic Design & Kumho, dan sama
+   dengan lembar cetaknya (CIPL_TTD_MM di cipl-print.js).
+
+   Tinggi di kertas = tinggi baris x skala cetak, dan skalanya
+   ditentukan lebar kolom -- jadi tinggi baris dihitung dari skala itu,
+   bukan dipatok dalam poin. Dipanggil SEBELUM ciplXlsPenuhiHalaman(),
+   supaya bidang barang yang kosong ikut menyusut sebanyak kotak ini
+   bertambah dan lembarnya tetap setinggi kertas. */
+const XLS_TTD_MM = 50;
+
+function ciplXlsSkalaCetak(ws) {
+  const m = /^\$?([A-Z]+)\$?\d+:\$?([A-Z]+)\$?\d+$/.exec(String(ws.pageSetup.printArea || ""));
+  if (!m) return 1;
+  const nomorKolom = (s) => s.split("").reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
+  let lebar = 0;
+  for (let c = nomorKolom(m[1]); c <= nomorKolom(m[2]); c++) lebar += ciplXlsKolomPt(ws.getColumn(c).width);
+  const mg = ws.pageSetup.margins || XLS_MARGIN_NARROW;
+  return Math.min(1, (XLS_A4_PT.w - (mg.left + mg.right) * 72) / lebar);
+}
+
+/* Baris r1..r2 dibagi rata sampai kotaknya setinggi `mm` di kertas. */
+function ciplXlsTinggiTercetak(ws, r1, r2, mm) {
+  const total = ((mm / 25.4) * 72) / ciplXlsSkalaCetak(ws);
+  const tiap = Math.round((total / (r2 - r1 + 1)) * 100) / 100;
+  for (let r = r1; r <= r2; r++) ws.getRow(r).height = tiap;
+}
+
+function ciplXlsPenuhiHalaman(ws, barisPengisi) {
+  const m = /^\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/.exec(String(ws.pageSetup.printArea || ""));
+  if (!m || !barisPengisi) return 0;
+  const nomorKolom = (s) => s.split("").reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);
+  const tinggiBaku = (ws.properties && ws.properties.defaultRowHeight) || 15;
+  /* TINGGI SETIAP BARIS DITULIS EKSPLISIT. Baris tanpa tinggi tertulis
+     digambar Excel setinggi bawaan (15pt), tapi LibreOffice, Google
+     Sheets, dan WPS menyesuaikannya dengan hurufnya sendiri -- lembar
+     Dynamic Design punya 48 baris seperti itu, dan di aplikasi-aplikasi
+     itu kaki lembarnya naik 20 mm dari hitungan. Di Excel tidak ada yang
+     berubah: nilainya sama dengan yang sudah dipakainya. */
+  for (let r = Number(m[2]); r <= Number(m[4]); r++) {
+    const b = ws.getRow(r);
+    if (b.height == null) b.height = tinggiBaku;
+  }
+  const tinggiBaris = (r) => ws.getRow(r).height || tinggiBaku;
+  let lebar = 0;
+  for (let c = nomorKolom(m[1]); c <= nomorKolom(m[3]); c++) lebar += ciplXlsKolomPt(ws.getColumn(c).width);
+  let tinggi = 0;
+  for (let r = Number(m[2]); r <= Number(m[4]); r++) tinggi += tinggiBaris(r);
+  const mg = ws.pageSetup.margins || XLS_MARGIN_NARROW;
+  const bidangW = XLS_A4_PT.w - (mg.left + mg.right) * 72;
+  const bidangH = XLS_A4_PT.h - (mg.top + mg.bottom) * 72;
+  const skala = Math.min(1, bidangW / lebar);
+  const kurang = (bidangH / skala) * 0.9975 - tinggi;
+  if (kurang <= 0) return 0;
+  const baris = ws.getRow(barisPengisi);
+  baris.height = Math.round((tinggiBaris(barisPengisi) + kurang) * 100) / 100;
+  return kurang;
 }
 
 /* Angka yang ditulis SEBAGAI ANGKA, bukan teks.
@@ -498,18 +602,22 @@ function ciplXlsInvoice(wb, row, shipment, baris) {
   });
 
   const rt = ciplXlsBarisTotal(baris.length);
-  ciplXlsGabung(ws, `G${rt}:H${rt}`);
-  ciplXlsSet(ws, "G" + rt, "Total", XLS_TEBAL, XLS_TENGAH);
+  /* Total & kotak tanda tangan mulai di kolom D (HS Code), selebar
+     kotak Packing List -- keduanya 53,0% lebar bingkai. */
+  ciplXlsGabung(ws, `D${rt}:H${rt}`);
+  ciplXlsSet(ws, "D" + rt, "Total", XLS_TEBAL, XLS_TENGAH);
   ciplXlsSet(ws, "I" + rt, mata, XLS_ARIAL, XLS_TENGAH);
   /* Angka Total: Arial 9 BIASA dan rata tengah — bukan Arial 8 tebal
      rata kanan. Ia sudah berdiri di kotaknya sendiri, jadi tidak butuh
      penebalan untuk dibedakan. */
   ciplXlsSet(ws, "J" + rt, baris.reduce((s, b) => s + b.amount, 0),
     XLS_ARIAL, XLS_TENGAH).numFmt = XLS_FMT_UANG;
-  ciplXlsKakiTabel(ws, rt, "G", ["G", "I", "J"]);
+  ciplXlsKakiTabel(ws, rt, "D", ["D", "I", "J"]);
 
   ciplXlsBingkaiLuar(ws, rt + 4);
-  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 5}`, scale: 80, tengah: true });
+  ws.pageSetup = ciplXlsHalaman({ area: `A1:J${rt + 4}`, scale: 80, tengah: true });
+  ciplXlsTinggiTercetak(ws, rt + 1, rt + 4, XLS_TTD_MM);
+  ciplXlsPenuhiHalaman(ws, rt - 1);
   return ws;
 }
 
@@ -521,8 +629,15 @@ function ciplXlsPacking(wb, row, shipment, baris) {
     views: [{ showGridLines: false }],
   });
   ciplXlsKerangka(wb, ws, "PACKING LIST",
-    [4.5703125, 22.28515625, 26.140625, 16, 6.42578125, 5, 7.140625,
-     8.42578125, 19.42578125, 10.85546875]);
+    /* Kolom I (paruh kiri CBM, I..J) 19,43 -> 13.1303 dan Type 26,14 ->
+       32.4361: kotak tanda tangan (D..J) jadi PERSIS 53,044% lebar
+       bingkai, sama dengan Invoice (D..J), jadi keduanya tercetak sama
+       lebar. CBM tetap 24 karakter untuk angka seperti "1.234"; Type --
+       yang isinya panjang ("AUTOGRAPH ULTRA 5 SUV 255/55R18") -- mendapat
+       ruangnya. BUKAN kolom D yang dipersempit: D juga menampung judul
+       "Sailing on or About" & tanggalnya di blok angkutan, dan terpotong. */
+    [4.5703125, 22.28515625, 32.4361, 16, 6.42578125, 5, 7.140625,
+     8.42578125, 13.1303, 10.85546875]);
   ciplXlsBlokPihak(ws, row, shipment);
 
   ciplXlsJudulTabel(ws,
@@ -542,11 +657,11 @@ function ciplXlsPacking(wb, row, shipment, baris) {
   });
 
   const rt = ciplXlsBarisTotal(baris.length);
-  ["A" + rt + ":D" + rt, "E" + rt + ":F" + rt, "I" + rt + ":J" + rt]
+  ["A" + rt + ":C" + rt, "D" + rt + ":F" + rt, "I" + rt + ":J" + rt]
     .forEach((g) => ciplXlsGabung(ws, g));
   const koli = ciplTotalKoli(shipment);
   ciplXlsSet(ws, "A" + rt, koli ? koli + " Package" : "", XLS_TEBAL, XLS_TEGAK);
-  ciplXlsSet(ws, "E" + rt, "TOTAL", XLS_TEBAL, XLS_TENGAH);
+  ciplXlsSet(ws, "D" + rt, "TOTAL", XLS_TEBAL, XLS_TENGAH);
   /* Arial 9 tebal, bukan Arial 8: sebaris dengan angka barang di
      atasnya, jadi ukurannya mengikuti mereka. */
   const tebal9 = { name: "Arial", size: 9, bold: true };
@@ -556,7 +671,7 @@ function ciplXlsPacking(wb, row, shipment, baris) {
     XLS_TENGAH).numFmt = XLS_FMT_BERAT;
   ciplXlsSet(ws, "I" + rt, baris.reduce((s, b) => s + b.cbmRaw, 0), tebal9,
     XLS_KANAN).numFmt = XLS_FMT_CBM;
-  ciplXlsKakiTabel(ws, rt, "E", ["E", "G", "H", "I"]);
+  ciplXlsKakiTabel(ws, rt, "D", ["D", "G", "H", "I"]);
 
   ciplXlsBingkaiLuar(ws, rt + 4);
   /* Baris 8 rata tengah tegak di lembar ini tapi tidak di INVOICE —
@@ -565,8 +680,10 @@ function ciplXlsPacking(wb, row, shipment, baris) {
      kesamaannya berisik dan yang berisik lama-lama tidak dibaca. */
   for (let c = 1; c <= 10; c++) ws.getRow(8).getCell(c).alignment = XLS_TEGAK;
   ws.pageSetup = ciplXlsHalaman({
-    area: `A1:J${rt + 5}`, scale: 73, tengah: true,
+    area: `A1:J${rt + 4}`, scale: 73, tengah: true,
   });
+  ciplXlsTinggiTercetak(ws, rt + 1, rt + 4, XLS_TTD_MM);
+  ciplXlsPenuhiHalaman(ws, rt - 1);
   return ws;
 }
 

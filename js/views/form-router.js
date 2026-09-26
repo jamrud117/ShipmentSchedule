@@ -73,8 +73,13 @@ function router() {
        memang sudah boleh dilihat viewer, disusun ulang jadi "apa yang
        perlu ditindak". Aksi yang mengubah data di sana disembunyikan
        lewat body.is-viewer, sama seperti di halaman Jadwal. */
-    hash === "#/docnum" ||
     !!editMatch;
+  /* Nomor Dokumen: EXIM mengubah, marketing membaca. Viewer tidak. */
+  if (hash === "#/docnum" && !canViewDocNum()) {
+    showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
+    location.hash = "#/";
+    return;
+  }
   if (halamanEximSaja && !canEdit()) {
     showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
     location.hash = "#/";
@@ -206,6 +211,28 @@ function joinPackageFields() {
   return $("#fPackage").value.trim();
 }
 
+/* LABEL FORM PER BUKU -- Import & Export memakai kotak yang SAMA
+   dengan nama berbeda: "Tanggal In Factory" di Import adalah "Tanggal
+   Stuffing" di Export, "No. SPPB" adalah "No. PEB", dan seterusnya.
+
+   Dipisah jadi fungsi karena dipanggil DUA tempat: saat form dibuka,
+   dan saat bahasa diganti (setLang). Tanpa panggilan kedua, ganti
+   bahasa selagi form Export terbuka menimpa label-label ini dengan
+   terjemahan tetap di HTML -- yang ditulis untuk Import -- sehingga form
+   Export tiba-tiba berlabel "No. SPPB" dan "Tanggal In Factory". */
+function terapkanLabelForm() {
+  const lbl = ML();
+  $("#lblDocNo").textContent = lbl.docNo;
+  $("#lblDocDate").textContent = lbl.docDate;
+  $("#lblParty").textContent = lbl.party;
+  $("#lblFactoryDate").textContent = lbl.factoryDate;
+  $("#lblFactoryTime").textContent = lbl.factoryTime;
+  $("#lblOrigin").textContent = lbl.origin;
+  $("#lblDestination").textContent = lbl.destination;
+  $("#lblActual").textContent = lbl.actual;
+  $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
+}
+
 function renderFormPage(id) {
   const lbl = ML();
   // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka
@@ -218,22 +245,14 @@ function renderFormPage(id) {
   $("#importNotesBox").classList.add("d-none");
   $("#importNotesSummary").innerHTML = "";
   $("#importNotesList").innerHTML = "";
-  $("#lblDocNo").textContent = lbl.docNo;
-  $("#lblDocDate").textContent = lbl.docDate;
-  $("#lblParty").textContent = lbl.party;
-  $("#lblFactoryDate").textContent = lbl.factoryDate;
-  $("#lblFactoryTime").textContent = lbl.factoryTime;
-  $("#lblOrigin").textContent = lbl.origin;
-  $("#lblDestination").textContent = lbl.destination;
-  $("#lblActual").textContent = lbl.actual;
-  $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
+  terapkanLabelForm();
 
   // Total Package (foot-package, sebelah Total Qty/Netto/Bruto/Nilai)
   const isImport = activeMode === "import";
   /* Import: terjumlah otomatis dari kolom Kemasan tiap barang, jadi
      dikunci. Export: diisi manual. */
   $("#fPackage").readOnly = isImport;
-  $("#fPackage").placeholder = isImport ? "Terjumlah otomatis" : "Cth: 4 BOX";
+  $("#fPackage").placeholder = isImport ? tt("Terjumlah otomatis", "Summed automatically") : tt("Cth: 4 BOX", "e.g. 4 BOX");
   $("#fPackage").title = isImport
     ? t("v.otomatis.dari.total.jumlah.kemasan.semua.baran")
     : "";
@@ -395,17 +414,17 @@ function syncFormValidity() {
   if (!$("#fEtd").value) kurang.push("ETD");
   if (!$("#fEta").value) kurang.push("ETA");
   if (!draftItems.some((it) => (it.namaBarang || "").trim() !== ""))
-    kurang.push("minimal 1 nama barang");
+    kurang.push(tt("minimal 1 nama barang", "at least 1 item name"));
   if ($("#fRouteType").value === "transit" &&
       !draftStops.some((st) => (st.terminal || "").trim() !== ""))
-    kurang.push("minimal 1 terminal transit");
+    kurang.push(tt("minimal 1 terminal transit", "at least 1 transit terminal"));
 
   if (!kurang.length) {
     el.className = "form-validity form-validity--ok";
-    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> Siap disimpan`;
+    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${tt("Siap disimpan", "Ready to save")}`;
   } else {
     el.className = "form-validity form-validity--warn";
-    el.innerHTML = `<i class="bi bi-exclamation-circle"></i> Belum lengkap: ${escapeHtml(kurang.join(", "))}`;
+    el.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${tt("Belum lengkap", "Incomplete")}: ${escapeHtml(kurang.join(", "))}`;
   }
 }
 
@@ -467,7 +486,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
       : [];
   if (routeType === "transit" && cleanStops.length === 0) {
     showToast(
-      'Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".',
+      tt('Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".', 'Please add at least 1 Transit Terminal, or change the Route Type to "Direct".'),
       "danger",
     );
     return;
@@ -547,7 +566,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   const originalLabel = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML =
-    '<span class="spinner-border spinner-border-sm" role="status"></span> Menyimpan...';
+    '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menyimpan...", "Saving...");
   try {
     if (id) {
       await updateShipmentRecord(id, payload, cleanItems, cleanStops);

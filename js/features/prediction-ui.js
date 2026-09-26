@@ -214,12 +214,12 @@ function manualDeliveryRefHtml(src) {
 
   return `
     <div class="pred-note-manual">
-      <i class="bi bi-lock-fill"></i> Tanggal dikunci untuk laporan. Mesin tidak akan menimpanya.
+      <i class="bi bi-lock-fill"></i> ${tt("Tanggal dikunci untuk laporan. Mesin tidak akan menimpanya.", "Date locked for reporting. The engine will not overwrite it.")}
     </div>
     ${
       d.ok
         ? `<div class="pred-compare">
-             <span class="pred-muted">Hitungan mesin saat ini:</span>
+             <span class="pred-muted">${tt("Hitungan mesin saat ini", "Current engine calculation")}:</span>
              <b>${fmtDate(d.date)}</b>
              <span class="pred-muted">· ${escapeHtml(d.sourceLabel)}</span>
              ${banding ? `<span class="pred-compare-diff">${escapeHtml(banding)}</span>` : ""}
@@ -278,56 +278,59 @@ function syncPredictionForm() {
          <span class="pred-muted">${
            $("#fEtaUpdate").value
              ? t("v.update.eta.yang.diisi.yang.dipakai.sebagai.acu")
-             : "· dipakai sebagai acuan proses darat"
+             : tt("· dipakai sebagai acuan proses darat", "· used as the basis for land processing")
          }</span></div>`
     : "";
 
   const barisEta = e.ok
-    ? `ETD ${fmtDate(e.ctx.etd)} + <b>${predDaysText(e)} kalender</b> → <b>${fmtDate(e.eta)}</b>
+    ? `ETD ${fmtDate(e.ctx.etd)} + <b>${predDaysText(e)} ${tt("kalender", "calendar")}</b> → <b>${fmtDate(e.eta)}</b>
        <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"})</span>
        ${transitSourceHtml(e)}
-       ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest, "Paling cepat–paling lambat") : ""}`
+       ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest, tt("Paling cepat–paling lambat", "Earliest–latest")) : ""}`
     : `<span class="pred-muted">${escapeHtml(e.reason)}</span>`;
 
   const rute = resolveRouteLayer(src);
   panel.innerHTML = `
     <div class="pred-panel-head">
-      <span><i class="bi bi-graph-up-arrow"></i> Mesin Prediksi</span>
+      <span><i class="bi bi-graph-up-arrow"></i> ${tt("Mesin Prediksi", "Prediction Engine")}</span>
       <span class="pred-panel-type">${escapeHtml(tipe)}${predictionTypeIsAssumed(src) ? t("w.muatan.belum.diisi") : ""}</span>
     </div>
     <div class="pred-layer">
-      <span class="pred-layer-tag">Lapis 0 · Rute</span>
+      <span class="pred-layer-tag">${tt("Lapis 0 · Rute", "Layer 0 · Route")}</span>
       ${routeLayerHtml(rute)}
     </div>
     <div class="pred-panel-grid">
       <div class="pred-panel-col">
-        <div class="pred-panel-label"><span class="pred-layer-tag">Lapis 1</span> Prediksi ETA ${etaModeChipHtml(formEtaMode)}</div>
+        <div class="pred-panel-label"><span class="pred-layer-tag">${tt("Lapis 1", "Layer 1")}</span> ${tt("Prediksi ETA", "ETA Prediction")} ${etaModeChipHtml(formEtaMode)}</div>
         <div class="pred-panel-val">${barisEta}</div>
         ${barisDelay}
         ${
           formEtaMode === "manual" && e.ok && e.eta !== $("#fEta").value
-            ? `<div class="pred-muted mt-1">Hitungan mesin ${fmtDate(e.eta)} — ETA manual dibiarkan apa adanya.</div>`
+            ? `<div class="pred-muted mt-1">${tt(`Hitungan mesin ${fmtDate(e.eta)} — ETA manual dibiarkan apa adanya.`, `Engine calculation ${fmtDate(e.eta)} — the manual ETA is left as is.`)}</div>`
             : ""
         }
       </div>
       <div class="pred-panel-col">
         <div class="pred-panel-label">
-          <span class="pred-layer-tag">Lapis 2–4</span> Estimated Delivery
+          <span class="pred-layer-tag">${tt("Lapis 2–4", "Layers 2–4")}</span> Estimated Delivery
           ${deliveryModeChipHtml(formDeliveryMode)}
           ${d && d.ok ? confidenceChipHtml(d.confidence, "") : ""}
         </div>
         <div class="pred-panel-val">
           ${
             d && d.ok
-              ? `<b>${fmtDate(d.date)}</b> <span class="pred-muted">· Sumber: ${escapeHtml(d.sourceLabel)}</span>
+              ? `<b>${fmtDate(d.date)}</b> <span class="pred-muted">· ${tt("Sumber", "Source")}: ${escapeHtml(d.sourceLabel)}</span>
                  ${deliveryBaseHtml(d)}
-                 ${d.range ? predRangeHtml(d.range.earliest, d.range.latest, "Paling cepat–paling lambat") : ""}`
-              : `<span class="pred-muted">${escapeHtml((d && d.reason) || "Belum bisa dihitung.")}</span>`
+                 ${d.range ? predRangeHtml(d.range.earliest, d.range.latest, tt("Paling cepat–paling lambat", "Earliest–latest")) : ""}`
+              : `<span class="pred-muted">${escapeHtml((d && d.reason) || tt("Belum bisa dihitung.", "Cannot be calculated yet."))}</span>`
           }
         </div>
         ${
           d && d.shifted
-            ? `<div class="pred-late"><i class="bi bi-clock-history"></i> Perkiraan sebelumnya sudah terlewat ${d.overdueDays} hari — dasar hitungan digeser ke hari ini${d.delayBuffer ? `, plus penyangga ${d.delayBuffer} hari kerja` : ""}.</div>`
+            ? `<div class="pred-late"><i class="bi bi-clock-history"></i> ${tt(
+              `Perkiraan sebelumnya sudah terlewat ${d.overdueDays} hari — dasar hitungan digeser ke hari ini${d.delayBuffer ? `, plus penyangga ${d.delayBuffer} hari kerja` : ""}.`,
+              `The previous estimate passed ${d.overdueDays} days ago — the basis was moved to today${d.delayBuffer ? `, plus a ${d.delayBuffer}-working-day buffer` : ""}.`,
+            )}</div>`
             : ""
         }
         ${d && d.ok && !d.arrived && formDeliveryMode !== "manual" ? predStepsHtml(d) : ""}
@@ -488,9 +491,9 @@ async function handleCardDateChange(s, field) {
         showToast(t("m.eta.dihitung.ulang.otomatis"), "success");
       },
       {
-        title: "ETA Mode Manual",
-        confirmText: "Hitung Ulang Otomatis",
-        cancelText: "Pertahankan ETA Manual",
+        title: tt("ETA Mode Manual", "Manual ETA Mode"),
+        confirmText: tt("Hitung Ulang Otomatis", "Recalculate Automatically"),
+        cancelText: tt("Pertahankan ETA Manual", "Keep Manual ETA"),
         tone: "primary",
         icon: "bi-magic",
       },

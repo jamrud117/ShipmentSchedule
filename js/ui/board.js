@@ -17,19 +17,19 @@ function boardState(s) {
   const iso = basis === "ETD" ? effectiveEtd(s) : effectiveEta(s);
 
   if (isArrived(s)) {
-    return { kind: "done", days: null, iso, basis, label: "Selesai" };
+    return { kind: "done", days: null, iso, basis, label: tt("Selesai", "Done") };
   }
   const d = daysFromToday(iso);
   if (d == null) {
-    return { kind: "none", days: null, iso: "", basis, label: "Tanpa tgl" };
+    return { kind: "none", days: null, iso: "", basis, label: tt("Tanpa tgl", "No date") };
   }
   if (d < 0) {
-    return { kind: "late", days: d, iso, basis, label: `Telat ${Math.abs(d)}h` };
+    return { kind: "late", days: d, iso, basis, label: tt(`Telat ${Math.abs(d)}h`, `${Math.abs(d)}d late`) };
   }
   if (d === 0) {
-    return { kind: "today", days: 0, iso, basis, label: "Hari ini" };
+    return { kind: "today", days: 0, iso, basis, label: tt("Hari ini", "Today") };
   }
-  return { kind: "future", days: d, iso, basis, label: `H-${d}` };
+  return { kind: "future", days: d, iso, basis, label: tt(`H-${d}`, `D-${d}`) };
 }
 
 /* KELENGKAPAN DOKUMEN */
@@ -71,7 +71,7 @@ function needsAction(s) {
 function fmtDateBoard(iso) {
   const dt = parseLocalDate(iso || todayISO());
   if (!dt) return "—";
-  return dt.toLocaleDateString("id-ID", {
+  return dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
     weekday: "long",
     day: "numeric",
     month: "long",

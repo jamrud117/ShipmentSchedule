@@ -35,15 +35,12 @@ const I18N = {
       "Lupa Password? Hubungi admin — password disetel ulang langsung tanpa email.",
 
     // -- Halaman HS Code
-    "hscode.search": "Cari Nama Barang atau HS Code…",
     "hscode.list.title": "Daftar HS Code",
     "hscode.reload": "Muat ulang",
-    "hscode.add.title": "Tambah HS Code",
-    "hscode.add.button": "Tambah HS Code Baru",
-    "hscode.add.help":
-      "Simpan pasangan nama barang & HS Code yang sudah pernah dipakai — nanti bisa dicari lagi lewat tombol cari di sebelah kolom HS Code pada Daftar Barang, tanpa perlu mengetik ulang dari awal.",
+    "hscode.add.button": "Tambah HS Code",
+    "hscode.sub": "Pasangan nama barang &amp; HS Code — dicari lewat tombol cari di kolom HS Code pada Daftar Barang.",
     "hscode.empty.search": "Tidak ada yang cocok dengan pencarian.",
-    "hscode.empty.none": "Belum ada data HS Code. Tambahkan lewat panel di samping.",
+    "hscode.empty.none": "Belum ada data HS Code. Tambahkan lewat tombol Tambah HS Code di atas.",
     "hscode.loading": "Memuat database HS Code…",
     "hscode.loadFail":
       "Gagal memuat database HS Code. Pastikan migration-hs-code-database.sql sudah dijalankan.",
@@ -55,13 +52,13 @@ const I18N = {
     "form.note.itemPackaging":
       "Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. “5 BOX”), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm, CBM otomatis — kolom Kemasan-nya sendiri tetap diisi seperti Import, dan Total Package-nya ikut terjumlah otomatis. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya — di surat jalan baris itu tercetak menyatu.",
     "form.note.duty":
-      "Nilai Pabean = (Total Nilai Barang + Freight + Insurance) × NDPBM. Dari situ: <b>Bea Masuk</b> = Nilai Pabean × 5%, <b>PPN</b> = (Nilai Pabean + Bea Masuk) × 11%, <b>PPH</b> = Nilai Pabean × 2,5% — semuanya terisi otomatis. Mengetik sendiri menghentikan pengisian otomatis pada kotak itu; kosongkan untuk mengaktifkannya lagi. Kalau Bea Masuk diisi manual (tarif HS Code tertentu memang bukan 5%), PPN ikut memakai nilai manual itu. PDRI = Bea Masuk + PPN + PPH, dihitung seketika.",
+      "Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
       "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak.",
     "form.note.totalValue":
       "Total nilai barang (USD) diambil otomatis dari penjumlahan qty × harga/unit pada tab Daftar Barang.",
     "form.note.customsBasis":
-      "Nilai Pabean = (Total Nilai Barang + Freight + Insurance) × NDPBM — dasar penghitungan PPN &amp; PPH otomatis di bawah, berlaku apa pun Incoterm-nya (bukan cuma CIF).",
+      "CIF = Total Nilai Barang + Freight + Insurance. Nilai Pabean = CIF × NDPBM — dasar BM, PPN, dan PPH di bawah.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
     "f.alamat.consignee.buyer": "Alamat Consignee / Buyer",
@@ -195,8 +192,7 @@ const I18N = {
     "m.tulis.dulu.isi.catatannya": "Tulis dulu isi catatannya.",
 
     // -- Kalimat panduan, tombol & placeholder
-    "ph.cari.barang.no.aju.invoice": "Cari Barang, No. Aju, Invoice…",
-    "ph.cari.nama.atau.email": "Cari Nama atau Email…",
+    "ph.cari": "Cari",
     "ph.cari.no.aju.invoice.shipper.vessel.atau.ketik.": "Cari no. aju, invoice, shipper, vessel — atau ketik perintah…",
     "ph.ketik.nama.barang": "Ketik nama barang…",
     "ph.ketik.no.invoice.atau.nama.buyer": "Ketik no. invoice atau nama buyer…",
@@ -238,6 +234,12 @@ const I18N = {
     "u.langkah.1.dari.3": "Langkah 1 dari 3",
     "u.menyiapkan.papan.jadwal": "Menyiapkan Papan Jadwal…",
     "u.minggu.ini": "Minggu Ini",
+    "u.bulan.ini": "Bulan Ini",
+    "u.bulan.lalu": "Bulan Lalu",
+    "u.tahun.ini": "Tahun Ini",
+    "f.tanggal.invoice": "Tanggal Invoice",
+    "f.due.date.invoice": "Due Date Invoice",
+    "f.customer": "Customer",
     "u.nomor.invoice.penjualan.jasa": "Nomor invoice penjualan / jasa",
     "u.nomor.permintaan.dana": "Nomor permintaan dana",
     "u.nomor.surat.jalan.pengiriman": "Nomor surat jalan pengiriman",
@@ -594,15 +596,12 @@ const I18N = {
     "login.note":
       "Forgot your password? Contact an admin — it is reset directly, no email involved.",
 
-    "hscode.search": "Search item name or HS Code…",
     "hscode.list.title": "HS Code List",
     "hscode.reload": "Reload",
-    "hscode.add.title": "Add HS Code",
-    "hscode.add.button": "Add New HS Code",
-    "hscode.add.help":
-      "Save item name & HS Code pairs you have used before — you can look them up later from the search button next to the HS Code column in the Item List, without retyping them.",
+    "hscode.add.button": "Add HS Code",
+    "hscode.sub": "Item name &amp; HS Code pairs — looked up from the search button next to the HS Code column in the Item List.",
     "hscode.empty.search": "Nothing matches your search.",
-    "hscode.empty.none": "No HS Code data yet. Add one from the panel beside this.",
+    "hscode.empty.none": "No HS Code data yet. Add one with the Add HS Code button above.",
     "hscode.loading": "Loading HS Code database…",
     "hscode.loadFail":
       "Failed to load the HS Code database. Make sure migration-hs-code-database.sql has been run.",
@@ -613,13 +612,13 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM. From there: <b>Bea Masuk</b> = Customs Value × 5%, <b>PPN</b> = (Customs Value + Bea Masuk) × 11%, <b>PPH</b> = Customs Value × 2.5% — all filled automatically. Typing your own value stops the automatic fill for that box; clear it to turn it back on. If Bea Masuk is entered manually (some HS Codes are not 5%), PPN uses that manual value too. PDRI = Bea Masuk + PPN + PPH, calculated instantly.",
+      "Filled automatically like the CEISA PIB, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form.",
     "form.note.totalValue":
       "Total goods value (USD) is taken automatically from the sum of qty × unit price on the Item List tab.",
     "form.note.customsBasis":
-      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM — the basis for the automatic PPN &amp; PPH below, whatever the Incoterm is (not only CIF).",
+      "CIF = Total Goods Value + Freight + Insurance. Customs Value = CIF × NDPBM — the basis for BM, PPN, and PPH below.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
     "f.alamat.consignee.buyer": "Consignee / Buyer Address",
@@ -753,8 +752,7 @@ const I18N = {
     "m.tulis.dulu.isi.catatannya": "Please write the note first.",
 
     // -- Kalimat panduan, tombol & placeholder
-    "ph.cari.barang.no.aju.invoice": "Search items, AJU No., invoice…",
-    "ph.cari.nama.atau.email": "Search name or email…",
+    "ph.cari": "Search",
     "ph.cari.no.aju.invoice.shipper.vessel.atau.ketik.": "Search AJU no., invoice, shipper, vessel — or type a command…",
     "ph.ketik.nama.barang": "Type an item name…",
     "ph.ketik.no.invoice.atau.nama.buyer": "Type an invoice no. or buyer name…",
@@ -796,6 +794,12 @@ const I18N = {
     "u.langkah.1.dari.3": "Step 1 of 3",
     "u.menyiapkan.papan.jadwal": "Preparing the schedule board…",
     "u.minggu.ini": "This Week",
+    "u.bulan.ini": "This Month",
+    "u.bulan.lalu": "Last Month",
+    "u.tahun.ini": "This Year",
+    "f.tanggal.invoice": "Invoice Date",
+    "f.due.date.invoice": "Invoice Due Date",
+    "f.customer": "Customer",
     "u.nomor.invoice.penjualan.jasa": "Sales / service invoice number",
     "u.nomor.permintaan.dana": "Fund request number",
     "u.nomor.surat.jalan.pengiriman": "Delivery note number",
@@ -1117,8 +1121,8 @@ const I18N = {
     "y.sebagian.tanpa.hs.code.cipl": "Some items had no HS Code found (CIPL documents often omit them entirely) — please fill them in on the Item List tab.",
     "y.bruto.per.barang.tidak.ada": "This file has no per-item gross weight — the HEADER total ({n} Kg) was placed on the first item row; adjust it per item if needed.",
     "y.fasilitas.diisi.per.barang": "The SKB PPH (code 457) & SKB COO/E-COO (code 860) facilities were filled in per item according to the BARANGDOKUMEN sheet mapping — check each item via the Facilities button if anything needs adjusting.",
-    "y.pungutan.dihitung.otomatis": "Some or all of the Bea Masuk/PPN/PPH values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
-    "y.pungutan.tidak.cukup.dihitung": "Bea Masuk/PPN/PPH were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
+    "y.pungutan.dihitung.otomatis": "Some or all of the Import Duty/VAT/Income Tax (BM/PPN/PPH) values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
+    "y.pungutan.tidak.cukup.dihitung": "Import Duty/VAT/Income Tax (BM/PPN/PPH) were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
     "y.respon.2003.tidak.ditemukan": "No response row with KODE RESPON=2003 (SPPB issued) was found in the RESPON sheet — the SPPB date falls back to HEADER.TANGGAL DAFTAR; please check it manually.",
     "y.skb.tidak.ditemukan.pemetaan": "SKB PPH (code 457) & SKB COO (code 860) were not found via the BARANGDOKUMEN+DOKUMEN mapping — check the Item List tab manually if they should be there.",
     "f.lainnya": "Other",
@@ -1169,6 +1173,56 @@ function t(kunci, ganti) {
   return teks;
 }
 
+/* TERJEMAHAN SEBARIS: tt("Simpan", "Save").
+
+   Untuk teks pendek sekali-pakai -- label, pesan, tombol -- yang cuma
+   muncul di SATU tempat. Memberi ratusan teks seperti itu kunci kamus
+   masing-masing hanya memindahkan teksnya jauh dari tempat ia dipakai:
+   yang membaca kode harus bolak-balik ke kamus untuk tahu apa yang
+   tampil di layar. Di sini kedua bahasa berdiri berdampingan.
+
+   Kamus I18N di atas tetap dipakai untuk teks panjang (panduan) dan
+   teks yang muncul di banyak tempat. `ganti` sama seperti di t(). */
+function tt(id, en, ganti) {
+  let teks = activeLang === "en" && en != null ? en : id;
+  if (ganti) {
+    Object.keys(ganti).forEach((k) => {
+      teks = String(teks).split("{" + k + "}").join(ganti[k]);
+    });
+  }
+  return teks;
+}
+
+/* Padanan tt() untuk HTML: atribut data-en berisi terjemahan Inggris,
+   isi elemen tetap bahasa Indonesia. Teks Indonesia aslinya disimpan
+   di data-id saat pertama kali disapu, supaya bisa kembali ketika
+   bahasa dipindah lagi ke Indonesia.
+
+     data-en        -> isi elemen
+     data-en-ph     -> placeholder
+     data-en-title  -> title
+     data-en-aria   -> aria-label (dibacakan pembaca layar) */
+const I18N_ATRIBUT_EN = [
+  ["en", null],
+  ["enPh", "placeholder"],
+  ["enTitle", "title"],
+  ["enAria", "aria-label"],
+];
+function applyI18nSebaris() {
+  I18N_ATRIBUT_EN.forEach(([kunci, atribut]) => {
+    const sel = "[data-" + kunci.replace(/[A-Z]/g, (h) => "-" + h.toLowerCase()) + "]";
+    document.querySelectorAll(sel).forEach((el) => {
+      const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
+      if (el.dataset[simpan] == null) {
+        el.dataset[simpan] = atribut ? el.getAttribute(atribut) || "" : el.innerHTML;
+      }
+      const teks = activeLang === "en" ? el.dataset[kunci] : el.dataset[simpan];
+      if (atribut) el.setAttribute(atribut, teks);
+      else el.innerHTML = teks;
+    });
+  });
+}
+
 /* Menyapu seluruh halaman dan mengisi ulang tiap elemen ber-data-i18n.
 
    data-i18n       -> isi elemen (HTML, supaya <b> di dalam kalimat
@@ -1185,6 +1239,7 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
     el.setAttribute("title", t(el.dataset.i18nTitle));
   });
+  applyI18nSebaris();
   document.documentElement.lang = activeLang;
 }
 
@@ -1202,6 +1257,13 @@ function setLang(kode) {
      halaman. Kartu jadwal, label per-buku (MODE_LABELS), dan daftar HS
      Code semuanya dirakit dari string, jadi harus digambar ulang. */
   if (typeof applyModeLabels === "function") applyModeLabels();
+  /* Label form per buku (No. SPPB/No. PEB, Tanggal In Factory/Tanggal
+     Stuffing, ...) ditulis ulang SEBELUM label moda di bawah: yang di
+     bawah menyesuaikan sebagian darinya lagi untuk kiriman udara. */
+  const layarForm = document.getElementById("viewForm");
+  if (layarForm && !layarForm.classList.contains("d-none") && typeof terapkanLabelForm === "function") {
+    terapkanLabelForm();
+  }
   /* Label yang bergantung MODA (Nama Vessel/Voyager, No. Flight/Voyage,
      Pelabuhan/Terminal) ditulis dari JS, bukan lewat data-i18n --
      menandainya di HTML justru akan menimpanya dengan teks generik
@@ -1212,6 +1274,23 @@ function setLang(kode) {
     const layar = document.getElementById("viewHsCode");
     if (layar && !layar.classList.contains("d-none")) renderHsCodes();
   }
+  /* Halaman lain yang isinya DIRAKIT JavaScript -- tanpa digambar ulang
+     di sini, ganti bahasa baru terlihat setelah halamannya dibuka lagi.
+     Hanya yang sedang tampil yang digambar ulang; yang tersembunyi akan
+     tergambar dengan bahasa baru begitu dibuka. */
+  const tampil = (id) => {
+    const el = document.getElementById(id);
+    return el && !el.classList.contains("d-none");
+  };
+  if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
+  if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
+  if (tampil("viewDocNum")) {
+    if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();
+    if (typeof renderDocNumHistory === "function") renderDocNumHistory();
+    if (typeof refreshDocNumPreview === "function" && typeof docNumActiveTab !== "undefined")
+      refreshDocNumPreview(docNumActiveTab);
+  }
+
   document.querySelectorAll("[data-lang-pick]").forEach((el) => {
     el.classList.toggle("active", el.dataset.langPick === kode);
   });

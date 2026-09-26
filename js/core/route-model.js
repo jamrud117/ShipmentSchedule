@@ -52,32 +52,34 @@ function laneProgress(s) {
      setelah ETA   -> menunggu diantar ke pabrik
    Diringkas supaya muat di satu baris di sebelah judul jalur. */
 function laneRemainingLabel(s) {
-  if (isArrived(s)) return "Selesai";
+  if (isArrived(s)) return tt("Selesai", "Done");
 
   const etd = parseLocalDate(effectiveEtd(s));
   const eta = parseLocalDate(effectiveEta(s));
   const today = parseLocalDate(todayISO());
   const hari = (a, b) => Math.round((b - a) / 86400000);
-  const simpul = s.transport === "udara" ? "Bandara" : "Terminal";
+  const simpul = s.transport === "udara" ? tt("Bandara", "Airport") : "Terminal";
 
   if (etd && today < etd) {
     const n = hari(today, etd);
-    return `Berangkat ${n} Hari Lagi`;
+    return tt(`Berangkat ${n} Hari Lagi`, `Departs in ${n} Day${n === 1 ? "" : "s"}`);
   }
   if (etd && eta && today >= etd && today < eta) {
     const n = hari(today, eta);
     return n === 0
-      ? `Sampai ${simpul} Hari Ini`
-      : `Sampai ${simpul} ${n} Hari Lagi`;
+      ? tt(`Sampai ${simpul} Hari Ini`, `Arrives at ${simpul} Today`)
+      : tt(`Sampai ${simpul} ${n} Hari Lagi`, `Arrives at ${simpul} in ${n} Day${n === 1 ? "" : "s"}`);
   }
   if (eta && today >= eta) {
     if (s.actual) {
       const n = hari(today, parseLocalDate(s.actual));
-      if (n > 0) return `Diantar ${n} Hari Lagi`;
+      if (n > 0) return tt(`Diantar ${n} Hari Lagi`, `Delivered in ${n} Day${n === 1 ? "" : "s"}`);
       if (n === 0) return t("c.diantar.hari.ini");
     }
     const telat = hari(eta, today);
-    return telat > 0 ? `Di ${simpul} · Telat ${telat} Hari` : `Di ${simpul}`;
+    return telat > 0
+    ? tt(`Di ${simpul} · Telat ${telat} Hari`, `At ${simpul} · ${telat} Day${telat === 1 ? "" : "s"} Late`)
+    : tt(`Di ${simpul}`, `At ${simpul}`);
   }
   if (etd && today.getTime() === etd.getTime()) return t("c.berangkat.hari.ini");
   return "";
@@ -377,15 +379,15 @@ function routeChainText(s) {
 function laneNodeTitle(nd) {
   const parts = [dispVal(nd.terminal)];
   if (nd.kind === "stop") {
-    if (nd.arrivalDate) parts.push("Tiba " + fmtDate(nd.arrivalDate));
-    if (nd.departureDate) parts.push("Berangkat " + fmtDate(nd.departureDate));
+    if (nd.arrivalDate) parts.push(tt("Tiba ", "Arrives ") + fmtDate(nd.arrivalDate));
+    if (nd.departureDate) parts.push(tt("Berangkat ", "Departs ") + fmtDate(nd.departureDate));
     if (hasMeaningfulValue(nd.vessel))
       parts.push(
-        (nd.transport === "udara" ? "Pesawat " : "Vessel ") + nd.vessel,
+        (nd.transport === "udara" ? tt("Pesawat ", "Aircraft ") : "Vessel ") + nd.vessel,
       );
     if (hasMeaningfulValue(nd.voyage))
       parts.push(
-        (nd.transport === "udara" ? "No. Flight " : "No. Voyage ") + nd.voyage,
+        (nd.transport === "udara" ? tt("No. Flight ", "Flight No. ") : tt("No. Voyage ", "Voyage No. ")) + nd.voyage,
       );
   } else {
     parts.push(fmtDate(nd.date));
@@ -506,13 +508,13 @@ function buildLaneHtml(s) {
 
   return `
     <div class="lane-title mt-3">
-      Progres Pengiriman
+      ${tt("Progres Pengiriman", "Shipment Progress")}
       <span class="lane-remaining">${escapeHtml(laneRemainingLabel(s))}</span>
     </div>
     <div class="lane-track ${laneClass}">
       <div class="lane-fill" style="width:${progress * 100}%"></div>
       ${dotsHtml}
-      <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + "% perjalanan · " + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
+      <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + tt("% perjalanan · ", "% of the journey · ") + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
     </div>
     ${labelsHtml}`;
 }

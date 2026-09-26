@@ -4,14 +4,31 @@
 
 const authState = { user: null, profile: null, siap: false };
 
-/* Peran 'exim' boleh mengubah data; sisanya hanya melihat */
+/* PERAN
+     exim      -- mengubah semua data
+     marketing -- hanya MELIHAT di seluruh aplikasi, termasuk Nomor
+                  Dokumen (riwayat & Summary) yang tidak bisa dibuka
+                  viewer. Tidak ada satu pun yang bisa ia ubah di sana:
+                  mengajukan, memperbaiki isian, menandai status bayar,
+                  menghapus, dan mengatur nomor urut -- khusus EXIM.
+     viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
+
+   canEdit() berarti "EXIM" -- satu-satunya peran yang mengubah data,
+   di halaman mana pun. canViewDocNum() hanya menjawab siapa yang boleh
+   MEMBUKA halaman Nomor Dokumen. */
+function peranSaya() {
+  return (authState.profile && authState.profile.role) || "";
+}
 function canEdit() {
-  return !!authState.profile && authState.profile.role === "exim";
+  return peranSaya() === "exim";
+}
+function canViewDocNum() {
+  return peranSaya() === "exim" || peranSaya() === "marketing";
 }
 
 function currentRoleLabel() {
   if (!authState.profile) return "—";
-  return authState.profile.role === "exim" ? "EXIM" : "Viewer";
+  return { exim: "EXIM", marketing: "Marketing" }[peranSaya()] || "Viewer";
 }
 
 /* Ambil profil (berisi peran) milik akun yang sedang login */
@@ -83,10 +100,10 @@ function pesanLogin(error) {
   if (t.includes("email not confirmed"))
     return t("s.akun.belum.aktif.minta.admin.menjalankan.ulang");
   if (t.includes("rate limit") || t.includes("too many"))
-    return "Terlalu banyak percobaan. Coba lagi beberapa menit.";
+    return tt("Terlalu banyak percobaan. Coba lagi beberapa menit.", "Too many attempts. Try again in a few minutes.");
   if (t.includes("failed to fetch") || t.includes("network"))
     return t("s.tidak.bisa.menghubungi.server.periksa.koneksi");
-  return error && error.message ? error.message : "Login gagal.";
+  return error && error.message ? error.message : tt("Login gagal.", "Sign-in failed.");
 }
 
 /* ------------------------------------------------------------------
@@ -100,6 +117,9 @@ function applyPermissions() {
   const boleh = canEdit();
   document.body.classList.toggle("is-viewer", !boleh);
   document.body.classList.toggle("is-editor", boleh);
+  /* Marketing = viewer di semua halaman; kelas ini hanya membuka
+     kembali Nomor Dokumen (lihat auth.css). */
+  document.body.classList.toggle("is-marketing", peranSaya() === "marketing");
 
   const chip = $("#userChip");
   if (chip && authState.profile) {
@@ -108,10 +128,11 @@ function applyPermissions() {
     $("#userChipName").textContent =
       authState.profile.full_name ||
       authState.profile.username ||
-      "Pengguna";
+      tt("Pengguna", "User");
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
+    badge.classList.toggle("is-marketing", peranSaya() === "marketing");
   }
 
   /* Isian yang sudah tergambar dimatikan juga — CSS bisa menyembunyikan
@@ -120,10 +141,16 @@ function applyPermissions() {
 }
 
 function lockInputs() {
+  /* Yang dikunci di Nomor Dokumen hanya isian FORM-nya (panel per jenis
+     dokumen & Atur Nomor Urut) -- bukan seluruh halaman. Marketing boleh
+     membuka halaman itu untuk membaca, dan kotak cari riwayat serta
+     penyaring tab Summary justru alat membacanya; dulu seluruh
+     #viewDocNum dikunci, dan kotak cari ikut mati. */
   document
     .querySelectorAll(
       "#cardContainer input, #cardContainer select, #cardContainer textarea," +
-        " #viewDocNum input, #viewDocNum select, #viewDocNum textarea",
+        " #viewDocNum [data-docnum-panel] input, #viewDocNum [data-docnum-panel] select," +
+        " #viewDocNum [data-docnum-panel] textarea, #viewDocNum .counter-box input",
     )
     .forEach((el) => {
       if (el.dataset.viewerLocked) return;
@@ -249,7 +276,7 @@ document.addEventListener("click", (e) => {
   const buka = inp.type === "password";
   inp.type = buka ? "text" : "password";
   btn.querySelector("i").className = buka ? "bi bi-eye-slash" : "bi bi-eye";
-  btn.title = buka ? "Sembunyikan kata sandi" : "Tampilkan kata sandi";
+  btn.title = buka ? tt("Sembunyikan kata sandi", "Hide password") : tt("Tampilkan kata sandi", "Show password");
   inp.focus();
 });
 
@@ -276,7 +303,7 @@ function isiUserMenu() {
   const em = $("#userMenuEmail");
   if (nm) {
     nm.textContent =
-      authState.profile.full_name || authState.profile.username || "Pengguna";
+      authState.profile.full_name || authState.profile.username || tt("Pengguna", "User");
   }
   if (em) {
     em.textContent =
@@ -344,7 +371,7 @@ if (btnLogoutMenuEl) {
     tutupUserMenu();
     showConfirm(t("s.sesi.anda.akan.ditutup.dan.halaman.kembali.ke."), () => signOut(), {
       title: t("s.keluar.dari.aplikasi"),
-      confirmText: "Ya, Keluar",
+      confirmText: tt("Ya, Keluar", "Yes, sign out"),
       tone: "primary",
       icon: "bi-power",
     });

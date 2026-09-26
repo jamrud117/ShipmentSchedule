@@ -328,7 +328,13 @@ function reconstructShipmentFromGroup(group, mode) {
     docNo: excelStr(first[idx.DOCNO]),
     docDate: excelValueToISODate(first[idx.DATE]),
     party: excelStr(first[idx.PARTY]),
-    factoryDate: excelValueToISODate(first[idx.FACTORY]),
+    /* Kolom ke-2 berkas Export berisi tanggal STUFFING (ditulis dari
+       isian Stuffing oleh Bulk Export) -- masuknya ke isian yang sama,
+       bukan ke Tanggal Stuffing tersembunyi. Di Import kolom itu
+       memang Tanggal In Factory. */
+    ...(mode === "export"
+      ? { actual: excelValueToISODate(first[idx.FACTORY]) }
+      : { factoryDate: excelValueToISODate(first[idx.FACTORY]) }),
     incoterm: excelStr(first[idx.INCOTERM]),
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),
@@ -472,15 +478,15 @@ function openBulkModal(action) {
   bulkAction = action;
   // Requirement D: "Bulk export/import: hilangkan dropdown konfirmasi pilihan Import/Export
   const modeLabel = activeMode === "import" ? "Import" : "Export";
-  $("#bulkModeInfo").textContent = `Section aktif: Jadwal ${modeLabel}`;
+  $("#bulkModeInfo").textContent = tt(`Section aktif: Jadwal ${modeLabel}`, `Active section: ${modeLabel} Schedule`);
   $("#bulkModalTitle").textContent =
     action === "export"
-      ? `Bulk Export Excel — Jadwal ${modeLabel}`
-      : `Bulk Import Excel — Jadwal ${modeLabel}`;
+      ? tt(`Bulk Export Excel — Jadwal ${modeLabel}`, `Bulk Export Excel — ${modeLabel} Schedule`)
+      : tt(`Bulk Import Excel — Jadwal ${modeLabel}`, `Bulk Import Excel — ${modeLabel} Schedule`);
   $("#bulkExportInfo").classList.toggle("d-none", action !== "export");
   $("#bulkImportSection").classList.toggle("d-none", action !== "import");
   $("#bulkActionBtn").textContent =
-    action === "export" ? "Unduh Excel" : "Proses Import";
+    action === "export" ? tt("Unduh Excel", "Download Excel") : tt("Proses Import", "Run Import");
   $("#bulkImportFile").value = "";
   bulkModal.show();
 }
@@ -518,7 +524,7 @@ async function handleDeleteAll() {
       const originalLabel = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML =
-        '<span class="spinner-border spinner-border-sm" role="status"></span> Menghapus...';
+        '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menghapus...", "Deleting...");
       try {
         // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka yang terhapus
         const { error } = await supabaseClient

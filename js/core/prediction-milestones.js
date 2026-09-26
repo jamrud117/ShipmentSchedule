@@ -55,15 +55,15 @@ function remainingMilestonesOf(s) {
     .map((m) => ({ key: m.key, label: m.label }));
 }
 const PREDICTION_SOURCE_LABEL = {
-  actual: "In Factory (Aktual)",
+  get actual() { return tt("In Factory (Aktual)", "In Factory (Actual)"); },
   sppb: "SPPB",
   pib: "PIB",
   manifest: "Manifest",
   eta: "ETA",
   billing: "Billing BC 2.0",
   berth: "ATA",
-  today: "Hari Ini",
-  manual: "Diisi Manual",
+  get today() { return tt("Hari Ini", "Today"); },
+  get manual() { return tt("Diisi Manual", "Entered Manually"); },
 };
 
 if (typeof module !== "undefined" && module.exports) {

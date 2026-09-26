@@ -130,7 +130,7 @@ function showLoadingSkeleton(jumlah) {
     </div>`;
   cardContainer.innerHTML =
     `<div role="status" aria-live="polite" aria-busy="true">
-       <span class="visually-hidden">Memuat jadwal…</span>
+       <span class="visually-hidden">${tt("Memuat jadwal…", "Loading schedules…")}</span>
        ${satu.repeat(jumlah || 3)}
      </div>`;
 }
@@ -141,20 +141,23 @@ function showDbErrorState() {
   cardContainer.innerHTML = `
     <div class="state-panel state-panel--error" role="alert">
       <div class="state-icon"><i class="bi bi-plug"></i></div>
-      <div class="state-title">Data tidak bisa dimuat</div>
-      <div class="state-desc">
-        Sambungan ke database gagal. Periksa <code>SUPABASE_URL</code> dan
+      <div class="state-title">${tt("Data tidak bisa dimuat", "Data could not be loaded")}</div>
+      <div class="state-desc">${tt(
+        `Sambungan ke database gagal. Periksa <code>SUPABASE_URL</code> dan
         <code>SUPABASE_ANON_KEY</code> di <b>js/config.js</b>, lalu pastikan
-        <b>schema-migration.sql</b> sudah dijalankan di Supabase SQL Editor.
-      </div>
+        <b>schema-migration.sql</b> sudah dijalankan di Supabase SQL Editor.`,
+        `The database connection failed. Check <code>SUPABASE_URL</code> and
+        <code>SUPABASE_ANON_KEY</code> in <b>js/config.js</b>, then make sure
+        <b>schema-migration.sql</b> has been run in the Supabase SQL Editor.`,
+      )}</div>
       <button class="btn btn-teal" onclick="loadShipments()">
-        <i class="bi bi-arrow-clockwise"></i> Coba muat ulang
+        <i class="bi bi-arrow-clockwise"></i> ${tt("Coba muat ulang", "Try reloading")}
       </button>
     </div>`;
 }
 
 async function createShipment(payload, items, stops) {
-  const row = shipmentToRow(payload);
+  const row = shipmentToRow(payload, activeMode);
   row.mode = activeMode;
   const { data: inserted, error } = await supabaseClient
     .from("shipments")
@@ -180,7 +183,7 @@ async function createShipment(payload, items, stops) {
 }
 
 async function updateShipmentRecord(id, payload, items, stops) {
-  const row = shipmentToRow(payload);
+  const row = shipmentToRow(payload, activeMode);
   const { error } = await supabaseClient
     .from("shipments")
     .update(row)

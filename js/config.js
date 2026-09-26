@@ -66,7 +66,7 @@ function buildModeLabels() {
     section: t("f.daftar.jadwal.pengiriman.export"),
     arrivedStat: "Delivered",
     docNo: "No. PEB",
-    docDate: "Tanggal PEB",
+    docDate: tt("Tanggal PEB", "PEB Date"),
     party: t("f.nama.buyer.consignee"),
     factoryDate: t("f.tanggal.stuffing"),
     factoryTime: t("f.jam.stuffing"),
@@ -99,7 +99,7 @@ function vesselNoun(transport) {
   return transport === "udara" ? "Vessel" : "Voyager";
 }
 function voyageNoun(transport) {
-  return transport === "udara" ? "No. Flight" : "No. Voyage";
+  return transport === "udara" ? tt("No. Flight", "Flight No.") : tt("No. Voyage", "Voyage No.");
 }
 // "Pelabuhan Asal" -> "Terminal Asal" saat moda udara.
 function portNoun(which, transport, mode) {
@@ -148,6 +148,20 @@ function normalisasiJenisBarang(v) {
    dirapikan — nilai itu IKUT DITAMPILKAN, bukan dibuang. Menghapusnya
    dari daftar berarti menghapusnya dari data begitu barisnya
    tersentuh, tanpa ada yang tahu. */
+/* Teks TAMPILAN jenis barang. Nilai yang tersimpan & dipakai dokumen
+   pabean tetap istilah aslinya ("BAHAN BAKU") -- yang berganti hanya
+   teks pilihannya saat aplikasi berbahasa Inggris. */
+const JENIS_BARANG_EN = {
+  "BARANG MODAL": "CAPITAL GOODS",
+  "BARANG JADI": "FINISHED GOODS",
+  "SPAREPART": "SPARE PART",
+  "BAHAN BAKU": "RAW MATERIAL",
+  "BARANG PENOLONG": "AUXILIARY GOODS",
+};
+function labelJenisBarang(nilai) {
+  return tt(nilai, JENIS_BARANG_EN[nilai] || nilai);
+}
+
 function jenisOptionsUntuk(nilai) {
   const kini = normalisasiJenisBarang(nilai);
   if (!kini || JENIS_OPTIONS.indexOf(kini) >= 0) return JENIS_OPTIONS;

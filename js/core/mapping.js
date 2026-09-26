@@ -74,7 +74,32 @@ function columnFor(camelField) {
 }
 
 // Payload form (camelCase) -> baris siap INSERT/UPDATE (snake_case)
-function shipmentToRow(payload) {
+/* ISIAN TERSEMBUNYI DI BUKU EXPORT: Tanggal & Jam Stuffing
+   (factory_date / factory_time).
+
+   Kotaknya disembunyikan di form Export (form.css) karena tanggal
+   stuffing Export diisi lewat isian "Stuffing" (actual). Tapi dulu
+   nilainya tetap tersimpan dan tetap DIBACA -- oleh urutan daftar,
+   mesin prediksi, dan Report -- tanpa pernah terlihat atau bisa diubah.
+   Bulk Import bahkan mengisinya: kolom tanggal stuffing di berkas
+   Bulk Export mendarat di sini, bukan di isian Stuffing. Hasilnya
+   jadwal yang tampak berstuffing hari ini tetap ikut tersalin ke
+   Report, karena isian yang dibaca Report kosong.
+
+   Sekarang ditegakkan di SATU titik: saat dibaca, nilai lama dilebur
+   ke isian Stuffing yang terlihat (hanya kalau isian itu kosong --
+   sama dengan cara daftar dulu menampilkannya), lalu dikosongkan; saat
+   disimpan, kolomnya selalu ditulis kosong untuk Export. Data lama
+   ikut bersih sendiri begitu jadwalnya disimpan ulang. */
+function lepasIsianPabrikExport(s) {
+  if (!s || s.mode !== "export") return s;
+  if (!s.actual && s.factoryDate) s.actual = s.factoryDate;
+  s.factoryDate = "";
+  s.factoryTime = "";
+  return s;
+}
+
+function shipmentToRow(payload, mode) {
   const row = {};
   Object.keys(FIELD_MAP).forEach((camel) => {
     if (!(camel in payload)) return;
@@ -87,6 +112,10 @@ function shipmentToRow(payload) {
     }
     row[col] = val;
   });
+  if (mode === "export") {
+    row.factory_date = null;
+    row.factory_time = null;
+  }
   return row;
 }
 
@@ -103,6 +132,7 @@ function rowToShipment(row) {
     }
     s[camel] = val;
   });
+  lepasIsianPabrikExport(s);
   s.items = (row.items || []).map(rowToItem);
   // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])

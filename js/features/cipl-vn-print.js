@@ -383,7 +383,7 @@ function ciplVnHalaman(row, shipment, isPacking) {
        <span class="vn-t-nilai">${escapeHtml(ciplAngka(total.nilai, 2))}</span>`;
 
   return `
-  <div class="vn-sheet${isPacking ? " vn-sheet--pl" : ""}">
+  <div class="vn-sheet">
    <div class="vn-bingkai">
     <div class="vn-judul">${escapeHtml(judul)}</div>
     <div class="vn-kepala">
@@ -487,14 +487,14 @@ function ciplVnCss() {
   .vn-sheet {
     width: 210mm;
     height: 297mm;
-    padding: 14.8mm 13.7mm 34.4mm 12.9mm;
+    /* Jarak bawah = jarak atas (14,8mm): bingkai memanjang sampai kaki
+       kertas. Dulu 34,4mm (Invoice) & 43,5mm (Packing List), mengikuti
+       wilayah cetak berkas rujukan -- yang menyisakan kaki kertas
+       kosong. */
+    padding: 14.8mm 13.7mm 14.8mm 12.9mm;
     page-break-after: always;
     break-after: page;
   }
-  /* Bingkai Packing List berakhir lebih tinggi daripada Commercial
-     Invoice (1098 px vs 1137 px pada rujukan) -- wilayah cetak kedua
-     lembar itu memang berbeda di berkas aslinya. */
-  .vn-sheet--pl { padding-bottom: 43.5mm; }
   /* TEBAL GARIS MENGIKUTI PENGUKURAN BERKAS RUJUKAN (110 dpi):
        bingkai luar  3 px -> 0.7 mm
        garis tegas   2 px -> 0.45 mm  (pemisah blok utama & sekat kolom)
@@ -747,7 +747,10 @@ function ciplVnCss() {
      atas lembar sampai bawah. */
   /* Tinggi blok penutup diambil dari rujukan: baris TOTAL berakhir di
      935 px dan bingkai bawah di 1137 px -> 202 px = 46,6 mm. */
-  .vn-akhir { display: flex; height: 46.6mm; }
+  /* 66,4 mm = 46,6 mm rujukan + 19,8 mm tambahan kotak tanda tangan
+     (30,2 -> 50 mm): celah di antara baris TOTAL dan atap kotak tetap
+     16,4 mm seperti rujukan; yang menyusut bidang barang yang kosong. */
+  .vn-akhir { display: flex; height: 66.4mm; }
   /* TANPA sekat tegak di sini.
 
      Garis tegak yang memanjang dari baris TOTAL sampai kaki lembar
@@ -792,7 +795,10 @@ function ciplVnCss() {
      satu-satunya bagian sekat tegak yang tersisa di blok penutup. */
   .vn-akhir-ttd {
     margin-top: auto;
-    height: 30.2mm;
+    /* MUAT STEMPEL PERUSAHAAN: 50 mm (dulu 30,2 mm dari rujukan) --
+       stempel bundar umumnya 40-45 mm, dan tanda tangannya menimpa
+       stempel. Sama dengan Excel-nya (XLS_TTD_MM). */
+    height: 50mm;
     border-top: 0.5mm solid #000;
     border-left: 0.5mm solid #000;
     padding: 0.4mm 1.2mm;

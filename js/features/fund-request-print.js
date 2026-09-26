@@ -107,6 +107,20 @@ function frTotal(baris) {
   return baris.reduce((t, b) => t + (Number(b.nilai) || 0), 0);
 }
 
+/* JUMLAH AKHIR SATU PENGAJUAN -- angka yang sama dengan "Terbilang"
+   di surat cetaknya.
+
+   Format rinci (p.lines) -> grandTotal-nya (sudah termasuk PPN dan
+   sudah dipotong PPH 23). Format lama -> jumlah Bea Masuk + PPN + PPH,
+   atau Nominal kalau ketiganya kosong. Satu tempat, supaya Ringkasan
+   per Vendor tidak pernah menjumlahkan angka yang berbeda dari yang
+   tertulis di surat pengajuannya sendiri. */
+function frTotalPengajuan(p) {
+  const d = p || {};
+  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines).grandTotal;
+  return frTotal(frBarisRincian(d));
+}
+
 /* Angka pada surat: "Rp. 6.975.012". Nilai nol dicetak sebagai "-",
    seperti pada berkas rujukan — bukan "Rp. 0", yang terbaca seolah
    memang ada tagihan sebesar nol.
@@ -278,7 +292,7 @@ function buildFundRequestHtml(row) {
     </table>`}
 
     <div class="terbilang">Terbilang : ${escapeHtml(
-      terbilangRupiah(pakaiRinci ? fundLineTotals(p.lines).grandTotal : total),
+      terbilangRupiah(frTotalPengajuan(p)),
     )}</div>
 
     <div class="penutup">
@@ -310,21 +324,27 @@ function buildFundRequestHtml(row) {
    nilai, PPN, lalu jumlah per baris — supaya angkanya bisa dicocokkan
    baris per baris dengan invoice aslinya saat diperiksa. */
 function frTabelRinci(p, mataUang) {
-  const daftar = p.lines || [];
+  /* Diskon adalah BARIS SENDIRI yang nilainya negatif (fund-lines.js) --
+     tercetak sebagai baris biasa dengan tanda minus, tanpa keterangan
+     tambahan di samping pos lain. Data lama berkolom diskon per pos
+     dipecah dulu oleh normalisasiBarisDana(), jadi tercetak sama. */
+  const daftar = normalisasiBarisDana(p.lines || []);
+  const nilaiBaris = fundLineValues(daftar);
   const r = fundLineTotals(daftar);
   const KOLOM = 6;
+  const uang = (v) => (v < 0 ? "- " + frNilai(-v, mataUang) : frNilai(v, mataUang));
 
   const baris = daftar
     .map((b, i) => {
-      const nilai = fundLineAmount(b);
-      const ppn = fundLinePpn(b);
+      const nilai = nilaiBaris[i];
+      const ppn = fundLinePpnNilai(nilai, b);
       const tarif = fundLineRate(b);
       return `<tr class="baris-pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.desc || "")}</td>
-        <td class="c-amt">${escapeHtml(frNilai(nilai, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(uang(nilai))}</td>
         <td class="c-rate">${tarif ? tarif + "%" : "-"}</td>
-        <td class="c-amt">${escapeHtml(frNilai(ppn, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(uang(ppn))}</td>
         <td class="c-amt"></td>
       </tr>`;
     })
@@ -349,10 +369,10 @@ function frTabelRinci(p, mataUang) {
       <tr class="baris-subtotal">
         <td class="c-no"></td>
         <td class="c-desc">TOTAL :</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNilai, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(frNilai(r.totalNet, mataUang))}</td>
         <td class="c-rate"></td>
         <td class="c-amt">${escapeHtml(frNilai(r.totalPpn, mataUang))}</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNilai + r.totalPpn, mataUang))}</td>
+        <td class="c-amt">${escapeHtml(frNilai(r.totalNet + r.totalPpn, mataUang))}</td>
       </tr>
       <tr class="baris-potongan">
         <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%)</td>
@@ -437,13 +457,48 @@ function fundRequestCss() {
      antar mesin. Lebar kolom, padding sel, dan ukuran logo tetap px --
      itu detail di dalam tabel yang relatif terhadap ukuran huruf,
      bukan terhadap kertas. */
-  .sheet { width: 100%; padding: 14mm 15mm; }
+  /* MARGIN A4: 15 mm atas, 20 mm kiri & kanan. Dulu 14 mm atas & 15 mm
+     kiri-kanan, angka tanggung yang tidak sama di sisi mana pun. Kop
+     surat memang lazim duduk tinggi di kertas.
 
-  .kop { display: flex; align-items: center; gap: 10px; justify-content: center; }
-  .kop img { width: 78px; height: auto; }
+     TANPA padding bawah -- DISENGAJA. Padding bawah ikut dihitung
+     sebagai isi lembar: surat yang isinya masih muat di kertas (14-16
+     pos biaya, berakhir 6-10 mm dari tepi) tetap mendorong padding itu
+     ke HALAMAN KEDUA YANG KOSONG. Surat biasa tidak berubah apa pun --
+     bagian bawahnya memang ruang kosong -- dan surat panjang tidak lagi
+     menghasilkan halaman kosong. */
+  .sheet { width: 100%; padding: 15mm 20mm 0; }
+
+  /* KOP SURAT: logo, nama, dan alamat berukuran surat resmi, ditutup
+     garis kop tebal-tipis.
+
+     Dulu logonya 15 mm dan namanya 16pt -- seluruh kop hanya setinggi
+     15 mm dan selebar separuh kertas, jadi terlihat seperti catatan di
+     pojok, bukan kepala surat. Ukurannya dalam MILIMETER & POIN (satuan
+     kertas), sama dengan jarak-jarak lain di lembar ini. */
+  .kop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.7mm solid #000;
+    position: relative;
+  }
+  /* Garis tipis kedua di bawah garis tebal -- bentuk garis kop surat
+     resmi. Selebar garis tebalnya (seluruh lebar isi). */
+  .kop::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1.4mm;
+    border-bottom: 0.25mm solid #000;
+  }
+  .kop img { height: 22mm; width: auto; }
   .kop-teks { text-align: center; }
-  .kop-nama { font-size: 16pt; font-weight: 700; letter-spacing: .3px; }
-  .kop-alamat { font-size: 8pt; line-height: 1.35; }
+  .kop-nama { font-size: 20pt; font-weight: 700; letter-spacing: .3px; line-height: 1.2; }
+  .kop-alamat { font-size: 9.5pt; line-height: 1.35; }
 
   .judul {
     text-align: center;
@@ -460,8 +515,8 @@ function fundRequestCss() {
        Atas lebih besar daripada bawah: judul ini memisahkan kop surat
        (blok besar bergaris tebal) dari blok No Surat, jadi sisi
        atasnya butuh lebih banyak ruang supaya tidak terbaca menempel
-       pada alamat perusahaan. */
-    margin: 13mm 0 10mm;
+       pada garis kop. */
+    margin: 11mm 0 9mm;
     font-size: 11pt;
   }
 

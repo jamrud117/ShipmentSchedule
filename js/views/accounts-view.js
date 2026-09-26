@@ -6,7 +6,7 @@ let accountRows = [];
 
 async function loadAccounts() {
   const box = $("#accountList");
-  box.innerHTML = `<div class="panel-empty"><i class="bi bi-hourglass"></i> Memuat daftar akun…</div>`;
+  box.innerHTML = `<div class="panel-empty"><i class="bi bi-hourglass"></i> ${tt("Memuat daftar akun…", "Loading accounts…")}</div>`;
 
   const { data, error } = await supabaseClient
     .from("profiles")
@@ -19,8 +19,8 @@ async function loadAccounts() {
     box.innerHTML = `
       <div class="panel-empty">
         <i class="bi bi-exclamation-triangle"></i>
-        Gagal memuat daftar akun. Pastikan
-        <code>auth-roles-migration.sql</code> sudah dijalankan.
+        ${tt("Gagal memuat daftar akun. Pastikan <code>auth-roles-migration.sql</code> sudah dijalankan.",
+            "Failed to load accounts. Make sure <code>auth-roles-migration.sql</code> has been run.")}
       </div>`;
     return;
   }
@@ -39,11 +39,11 @@ function renderAccounts() {
       (r.full_name || "").toLowerCase().includes(q),
   );
 
-  $("#accountCountExim").textContent = accountRows.filter(
-    (r) => r.role === "exim",
-  ).length;
+  $("#accountCountExim").textContent = accountRows.filter((r) => r.role === "exim").length;
+  $("#accountCountMarketing").textContent = accountRows.filter((r) => r.role === "marketing").length;
+  // Viewer = selain EXIM & marketing (termasuk peran lama/kosong).
   $("#accountCountViewer").textContent = accountRows.filter(
-    (r) => r.role !== "exim",
+    (r) => r.role !== "exim" && r.role !== "marketing",
   ).length;
 
   if (!rows.length) {
@@ -56,14 +56,15 @@ function renderAccounts() {
     .map((r) => {
       const isSelf = r.id === sendiri;
       const exim = r.role === "exim";
+      const marketing = r.role === "marketing";
       return `
       <div class="acct-row" data-acct="${r.id}">
-        <div class="acct-avatar ${exim ? "is-exim" : ""}">${escapeHtml(
+        <div class="acct-avatar ${exim ? "is-exim" : marketing ? "is-marketing" : ""}">${escapeHtml(
           (r.full_name || r.email || "?").trim().charAt(0).toUpperCase(),
         )}</div>
         <div class="acct-main">
           <span class="acct-name">${escapeHtml(r.full_name || "—")}${
-            isSelf ? ' <span class="acct-self">Anda</span>' : ""
+            isSelf ? ` <span class="acct-self">${tt("Anda", "You")}</span>` : ""
           }</span>
           <!-- Email SELALU ditampilkan. Menyembunyikannya saat
                berdomain internal membuat akun baru terlihat "tidak
@@ -82,13 +83,14 @@ function renderAccounts() {
             ? t("s.peran.sendiri.tidak.bisa.diubah.dari.sini")
             : t("a.ubah.peran.akun.ini")
         }">
-          <option value="viewer" ${!exim ? "selected" : ""}>Viewer — hanya lihat</option>
-          <option value="exim" ${exim ? "selected" : ""}>EXIM — bisa ubah</option>
+          <option value="viewer" ${!exim && !marketing ? "selected" : ""}>${tt("Viewer — hanya lihat", "Viewer — read only")}</option>
+          <option value="marketing" ${marketing ? "selected" : ""}>${tt("Marketing — lihat saja, termasuk No. Dokumen", "Marketing — view only, incl. Doc. Number")}</option>
+          <option value="exim" ${exim ? "selected" : ""}>${tt("EXIM — bisa ubah", "EXIM — can edit")}</option>
         </select>
-        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title=t("a.ubah.nama.username")>
+        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="${escapeAttr(t("a.ubah.nama.username"))}">
           <i class="bi bi-pencil"></i>
         </button>
-        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title=t("a.setel.ulang.kata.sandi")>
+        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title="${escapeAttr(t("a.setel.ulang.kata.sandi"))}">
           <i class="bi bi-key"></i>
         </button>
         <button type="button" class="icon-btn danger acct-del" data-del-acct="${r.id}"
@@ -104,6 +106,8 @@ function renderAccounts() {
 /* Peran sendiri sengaja tidak bisa diubah dari halaman ini. Kalau satu-
    satunya exim menurunkan dirinya jadi viewer, tidak ada lagi yang bisa
    menaikkan siapa pun dan pemulihannya harus lewat SQL Editor. */
+const LABEL_PERAN = { exim: "EXIM", marketing: "Marketing", viewer: "Viewer" };
+
 async function changeAccountRole(id, peranBaru) {
   if (!requireEdit()) return;
   if (authState.user && id === authState.user.id) {
@@ -128,9 +132,10 @@ async function changeAccountRole(id, peranBaru) {
   if (baris) baris.role = peranBaru;
   renderAccounts();
   showToast(
-    `Peran ${baris ? baris.email : "akun"} diubah menjadi ${
-      peranBaru === "exim" ? "EXIM" : "Viewer"
-    }.`,
+    tt(
+      `Peran ${baris ? baris.email : "akun"} diubah menjadi ${LABEL_PERAN[peranBaru] || "Viewer"}.`,
+      `Role of ${baris ? baris.email : "the account"} changed to ${LABEL_PERAN[peranBaru] || "Viewer"}.`,
+    ),
     "dark",
   );
 }
@@ -151,16 +156,16 @@ async function editAccount(id) {
     title: t("a.ubah.data.akun"),
     desc: t("s.nama.lengkap.dan.username.yang.dipakai.untuk.m"),
     icon: "bi-person-gear",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: t("a.nama.lengkap"), value: r.full_name || "", placeholder: "Nama lengkap pengguna" },
-      { key: "user", label: "Username", value: r.username || "", placeholder: "huruf kecil, tanpa spasi" },
+      { key: "nama", label: t("a.nama.lengkap"), value: r.full_name || "", placeholder: tt("Nama lengkap pengguna", "User's full name") },
+      { key: "user", label: "Username", value: r.username || "", placeholder: tt("huruf kecil, tanpa spasi", "lowercase, no spaces") },
     ],
     onSubmit: (v) => {
       const u = (v.user || "").trim().toLowerCase();
-      if (!(v.nama || "").trim()) return "Nama lengkap harus diisi.";
+      if (!(v.nama || "").trim()) return tt("Nama lengkap harus diisi.", "Full name is required.");
       if (!/^[a-z0-9._-]{3,}$/.test(u))
-        return "Username minimal 3 karakter: huruf, angka, titik, garis.";
+        return tt("Username minimal 3 karakter: huruf, angka, titik, garis.", "Username must be at least 3 characters: letters, digits, dots, dashes.");
       if (accountRows.some((x) => x.id !== id && (x.username || "").toLowerCase() === u))
         return t("s.username.itu.sudah.dipakai.akun.lain");
 
@@ -201,8 +206,8 @@ async function resetAccountPassword(id) {
     icon: "bi-key",
     okText: t("a.setel.sandi"),
     fields: [
-      { key: "sandi", label: "Kata sandi baru", type: "password", placeholder: "minimal 8 karakter" },
-      { key: "ulang", label: "Ulangi kata sandi", type: "password", placeholder: "ketik ulang" },
+      { key: "sandi", label: tt("Kata sandi baru", "New password"), type: "password", placeholder: tt("minimal 8 karakter", "at least 8 characters") },
+      { key: "ulang", label: tt("Ulangi kata sandi", "Repeat password"), type: "password", placeholder: tt("ketik ulang", "type it again") },
     ],
     onSubmit: (v) => {
       if ((v.sandi || "").length < 8) return t("a.kata.sandi.minimal.8.karakter");
@@ -247,7 +252,8 @@ async function deleteAccount(id) {
   if (!baris) return;
 
   showConfirm(
-    `Hapus akun "${baris.username || baris.email}" secara permanen? Pengguna ini langsung kehilangan akses.`,
+    tt(`Hapus akun "${baris.username || baris.email}" secara permanen? Pengguna ini langsung kehilangan akses.`,
+      `Permanently delete the account "${baris.username || baris.email}"? This user loses access immediately.`),
     async () => {
       const { error } = await supabaseClient.rpc("admin_delete_user", {
         p_id: id,
@@ -359,13 +365,14 @@ async function registerAccount() {
       );
     if (t.includes("password"))
       return gagal(t("a.kata.sandi.terlalu.lemah.gunakan.minimal.8.kar"));
-    return gagal(error.message || "Pendaftaran gagal.");
+    return gagal(error.message || tt("Pendaftaran gagal.", "Registration failed."));
   }
 
   info.className = "reg-info is-ok";
   info.textContent =
     data && data.user && !data.session
-      ? `Akun "${username}" dibuat. Kalau login-nya masih ditolak, jalankan ulang auth-roles-migration.sql.`
+      ? tt(`Akun "${username}" dibuat. Kalau login-nya masih ditolak, jalankan ulang auth-roles-migration.sql.`,
+          `Account "${username}" created. If its sign-in is still rejected, re-run auth-roles-migration.sql.`)
       : t("x.akun.dibuat.viewer", { nama: username });
 
   ["#regName", "#regUsername", "#regPassword"].forEach(

@@ -81,8 +81,8 @@ function mulaiPeringatanSesi() {
   sesiSisaDetik = SESI_PERINGATAN_DETIK;
 
   showConfirm(pesanHitungMundur(), lanjutkanSesi, {
-    title: "Sesi Akan Berakhir",
-    confirmText: "Lanjutkan Sesi",
+    title: tt("Sesi Akan Berakhir", "Session Expiring"),
+    confirmText: tt("Lanjutkan Sesi", "Continue Session"),
     tone: "primary",
     icon: "bi-clock-history",
   });
@@ -108,10 +108,12 @@ function pesanHitungMundur() {
 /* "8 jam", bukan "480 menit". */
 function lamaDiamTerbaca() {
   const m = sesiDiamDipakai;
-  if (m < 60) return `${m} menit`;
+  if (m < 60) return tt(`${m} menit`, `${m} minutes`);
   const jam = m / 60;
   const sisa = m % 60;
-  return sisa === 0 ? `${jam} jam` : `${Math.floor(jam)} jam ${sisa} menit`;
+  return sisa === 0
+    ? tt(`${jam} jam`, `${jam} hour${jam === 1 ? "" : "s"}`)
+    : tt(`${Math.floor(jam)} jam ${sisa} menit`, `${Math.floor(jam)} h ${sisa} min`);
 }
 
 function lanjutkanSesi() {

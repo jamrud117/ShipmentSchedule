@@ -822,6 +822,78 @@ t("aturan ini TIDAK berlaku di buku Import", () =>
   eq(w.isArrived({ mode: "import", etd: "2026-08-01" }), false));
 
 console.log("— REPORT EXPORT: SARING STUFFING —");
+t("ganti bahasa selagi form Export terbuka: label tetap label Export", () => {
+  /* Label form ditulis JS sesuai buku; terjemahan tetap di HTML (untuk
+     Import) dulu menimpanya saat bahasa diganti -- form Export tiba-tiba
+     berlabel "No. SPPB" dan "Tanggal In Factory". */
+  const simpan = { mode: baca("activeMode"), lang: baca("activeLang") };
+  const label = () => ["lblFactoryDate", "lblDocNo"].map((i) => w.document.getElementById(i).textContent.trim()).join(" | ");
+  const form = w.document.getElementById("viewForm");
+  const tersembunyi = form.classList.contains("d-none");
+  try {
+    w.eval('activeMode = "export"');
+    form.classList.remove("d-none");
+    w.renderFormPage(null);
+    eq(label(), "Tanggal Stuffing | No. PEB", "dibuka:");
+    w.setLang("en");
+    eq(label(), "Stuffing Date | No. PEB", "Inggris:");
+    w.setLang("id");
+    eq(label(), "Tanggal Stuffing | No. PEB", "kembali Indonesia:");
+  } finally {
+    w.setLang(simpan.lang);
+    w.eval("activeMode = " + JSON.stringify(simpan.mode));
+    if (tersembunyi) form.classList.add("d-none");
+  }
+});
+t("buku Export tidak punya isian tersembunyi: Tanggal Stuffing lama dilebur ke isian Stuffing", () => {
+  /* Kotak Tanggal & Jam Stuffing tersembunyi di form Export, tapi
+     nilainya dulu tetap tersimpan dan tetap dibaca (daftar, prediksi,
+     Report). Bulk Import mengisinya dari kolom tanggal stuffing. Sekarang
+     lapisan data meleburnya ke isian Stuffing yang terlihat. */
+  const baris = (kol) => w.rowToShipment(Object.assign({ id: "e1", mode: "export", party: "X", status: "process" }, kol));
+  const a = baris({ actual: null, factory_date: "2026-09-23", factory_time: "08:00" });
+  eq(a.actual + "|" + a.factoryDate + "|" + a.factoryTime, "2026-09-23||", "dilebur & dikosongkan:");
+  const b = baris({ actual: "2026-09-30", factory_date: "2026-09-23" });
+  eq(b.actual, "2026-09-30", "isian Stuffing yang terisi tetap menang:");
+  // Import TIDAK tersentuh -- di sana kolom itu Tanggal In Factory sungguhan.
+  const imp = w.rowToShipment({ id: "i1", mode: "import", actual: null, factory_date: "2026-09-23", status: "process" });
+  eq(imp.factoryDate, "2026-09-23", "Import:");
+  // Menyimpan jadwal Export selalu mengosongkan kolomnya di database.
+  const row = w.shipmentToRow({ actual: "2026-09-23", factoryDate: "2026-09-01", factoryTime: "08:00" }, "export");
+  eq(String(row.factory_date) + "|" + String(row.factory_time), "null|null", "disimpan:");
+  eq(w.shipmentToRow({ factoryDate: "2026-09-01" }, "import").factory_date, "2026-09-01", "Import disimpan apa adanya:");
+});
+t("Report: jadwal yang stuffing-nya hari ini tidak tersalin, termasuk yang tanggalnya dari data lama", () => {
+  /* Kasus yang dilaporkan: tanggal stuffing tersimpan di kolom
+     tersembunyi (hasil Bulk Import), isian Stuffing kosong. Lewat
+     lapisan data, tanggal itu menjadi isian Stuffing dan Report
+     membuangnya seperti seharusnya. ETD minggu depan supaya yang diuji
+     memang aturan stuffing, bukan aturan ETD (isArrived). */
+  const simpan = { e: baca("data.export"), i: baca("data.import") };
+  const hari = w.todayISO();
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  const nanti = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const ikut = (kol) => {
+    const s = w.rowToShipment(Object.assign({ id: "e1", mode: "export", party: "KUMHO", etd: nanti, eta: nanti, status: "process" }, kol));
+    w.__jadwalUji = s;
+    w.eval("data.export = [window.__jadwalUji]; data.import = []");
+    return /KUMHO/.test(w.buildReportCopyText());
+  };
+  try {
+    eq(ikut({ actual: hari }), false, "isian Stuffing hari ini:");
+    eq(ikut({ actual: null, factory_date: hari }), false, "tanggal lama di kolom tersembunyi, hari ini:");
+    eq(ikut({ actual: nanti }), true, "stuffing minggu depan:");
+    eq(ikut({ actual: null }), true, "belum diisi sama sekali:");
+  } finally {
+    tulis("data.export", simpan.e);
+    tulis("data.import", simpan.i);
+  }
+});
+t("Bulk Import buku Export: kolom tanggal stuffing masuk ke isian Stuffing", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "features", "bulk-excel.js"), "utf8");
+  if (!/mode === "export"\s*\?\s*\{ actual: excelValueToISODate\(first\[idx\.FACTORY\]\) \}/.test(src))
+    throw new Error("kolom tanggal stuffing Export masih masuk ke isian tersembunyi");
+});
 t("stuffing yang sudah lewat / hari ini tidak dilaporkan", () => {
   const kemarin = w.addCalendarDaysISO(w.todayISO(), -1);
   const besok = w.addCalendarDaysISO(w.todayISO(), 1);
@@ -1605,16 +1677,85 @@ t("PERBANDINGAN lebar kolom Excel mengikuti berkas rujukan", () => {
      semua kolom, sekat kolomnya tetap jatuh di tempat yang sama. */
   const asli = baca("VNXL_LEBAR_ASLI");
   const lebar = baca("VNXL_LEBAR");
-  const skala = baca("VNXL_SKALA");
+  const skala = baca("VNXL_SKALA_HURUF");
   eq(asli.A, 9.78);
+  eq(asli.B, 9.78, "kolom B (berkas asli menulisnya, bukan bawaan Excel):");
   eq(asli.C, 12.22);
   eq(asli.K, 8.78);
-  if (!("B" in asli))
-    throw new Error("kolom B harus ikut diberi lebar, kalau tidak sekatnya bergeser");
   Object.keys(asli).forEach((k) => {
     const harap = Math.round(asli[k] * skala * 100) / 100;
     eq(lebar[k], harap, "lebar kolom " + k + ":");
   });
+});
+t("blok angkutan Excel: garis mengikuti berkas asli, bukan tiap baris", () => {
+  /* Dulu tiap baris blok angkutan diberi garis bawah selebar A-K.
+     Akibatnya label & nilai pelabuhan/kapal terpisah garis, dan kotak
+     Other references di kolom kanan terpotong-potong. Di berkas asli
+     (dibandingkan garis demi garis, 0 beda setelah perbaikan):
+       Departure date  -> garis bawah A-D saja
+       label pelabuhan -> tanpa garis bawah (sekotak dengan nilainya)
+       nilai pelabuhan -> garis bawah A-K
+       label kapal     -> tanpa garis bawah
+       nilai kapal     -> garis bawah A-K
+     dan sekat kolom E menerus di kelima barisnya. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  const i = src.indexOf("function vnxlBlokAngkutan");
+  const blok = src.slice(i, src.indexOf("\nfunction ", i + 10));
+  if (/vnxlGarisBaris\(ws, r \+ i, 1, 11, "b"\)/.test(blok))
+    throw new Error("garis bawah masih dipasang di SETIAP baris blok angkutan");
+  ["vnxlGarisBaris(ws, r, 1, 4, \"b\")",
+   "vnxlGarisBaris(ws, r + 2, 1, 11, \"b\")",
+   "vnxlGarisBaris(ws, r + 4, 1, 11, \"b\")"].forEach((g) => {
+    if (!blok.includes(g)) throw new Error("garis yang semestinya ada hilang: " + g);
+  });
+  if (/vnxlGarisBaris\(ws, r \+ (1|3), /.test(blok))
+    throw new Error("ada garis di antara label dan nilainya");
+});
+t("Excel CIPL Kumho selebar kertas A4 di Excel (dibatasi LEBAR, bukan tinggi)", () => {
+  /* Pratinjau cetak Excel pengguna: bingkai 154 mm, tinggi sudah
+     memenuhi halaman, 43 mm di kanan kosong -- dibatasi TINGGI. Supaya
+     selebar kertas, lembar harus cukup lebar untuk dibatasi LEBAR
+     halaman. Diperiksa dengan rumus lebar kolom resmi Excel (MDW
+     Calibri 11 = 7 px @96 dpi) dan tinggi baris dalam poin. */
+  const lebarKol = (w) => Math.trunc(((256 * w + Math.trunc(128 / 7)) / 256) * 7);
+  const cek = (nama, tabel) => {
+    const px = "ABCDEFGHIJK".split("").reduce((n, k) => n + lebarKol(tabel[k]), 0);
+    const lebarMm = (px / 96) * 25.4;
+    // Lebar alami harus melebihi lebar cetak (185 mm) dengan selisih aman:
+    // di Excel pengguna kolom tergambar ~11% lebih sempit dari rumus.
+    if (lebarMm * 0.89 < 183)
+      throw new Error(`${nama}: lebar alami ${lebarMm.toFixed(0)} mm -- di Excel pengguna tidak akan selebar kertas`);
+  };
+  cek("CI", baca("VNXL_LEBAR"));
+  cek("PL", baca("VNXL_LEBAR_PL"));
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  if (/height = 10\.65/.test(src))
+    throw new Error("tinggi baris 10,65pt dibulatkan Excel ke 11,25pt -- pakai 10,5");
+  if (!/horizontalCentered: true/.test(src))
+    throw new Error("lembar tidak diratatengahkan di halaman");
+});
+t("lembar PL memakai lebar kolomnya sendiri dari berkas asli", () => {
+  /* Kolom H & J (Net Wt./Gross Wt.) di PL 5,66; di CI 3,78. Dengan
+     lebar CI, berat berdesimal ("378,70") tampil sebagai "###". */
+  const pl = baca("VNXL_LEBAR_ASLI_PL");
+  const ci = baca("VNXL_LEBAR_ASLI");
+  eq(pl.H, 5.66, "PL kolom H:");
+  eq(pl.J, 5.66, "PL kolom J:");
+  if (pl.H <= ci.H) throw new Error("kolom berat PL harus lebih lebar daripada kolom USD CI");
+});
+t("gaya sel blok angkutan & baris barang mengikuti berkas asli", () => {
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "features", "cipl-vn-excel.js"), "utf8");
+  /* Nilai pelabuhan/kapal rata tengah; kapal & tujuan akhir 9pt. */
+  if (/VNXL_KIRI_JOROK/.test(src))
+    throw new Error("nilai angkutan masih menjorok rata kiri");
+  if (!/finalDestination[\s\S]{0,120}VNXL_FONT_KECIL, VNXL_TENGAH/.test(src))
+    throw new Error("tujuan akhir harus 9pt rata tengah");
+  /* Berat PL dua desimal. */
+  if (!/b\.netto, VNXL_FONT, VNXL_KANAN, VNXL_FMT_BERAT/.test(src))
+    throw new Error("berat bersih PL tidak berformat dua desimal");
 });
 t("penanda pengapalan membuang akhiran badan hukum", () => {
   const src = require("fs").readFileSync(
@@ -2010,8 +2151,8 @@ t("Pengajuan Dana bertab per Jenis Pengeluaran, dengan tab Semua", () => {
     w.renderDocNumSubTabs();
     const tombol = [...box.querySelectorAll("[data-dn-subtab]")];
     eq(tombol.map((b) => b.dataset.dnSubtab).join(","),
-       ",Billing,Freight,Storage,Lainnya",
-       "urutan tab (yang pertama = Semua):");
+       ",Billing,Freight,Storage,Lainnya,__ringkasan__",
+       "urutan tab (yang pertama = Semua, Summary paling akhir):");
     eq(tombol[0].classList.contains("active"), true, "Semua jadi bawaan:");
   } finally {
     w.eval("docNumHistorySub = null");
@@ -2094,6 +2235,886 @@ t("tab sub-jenis digambar untuk jenis yang serinya terpisah, disembunyikan untuk
   } finally {
     w.eval("docNumActiveTab = " + JSON.stringify(simpanTab));
     w.renderDocNumSubTabs();
+  }
+});
+console.log("\u2014 PENGAJUAN DANA: RINGKASAN PER VENDOR \u2014");
+const barisDana = (id, p, docDate) => ({ id, doc_type: "fund", doc_number: id, doc_date: docDate || "2026-09-01", payload: p });
+t("Customer & Vendor dua isian berbeda di form Pengajuan Dana", () => {
+  const panel = w.document.querySelector('[data-docnum-panel="fund"]');
+  ["payee", "customer", "invoiceDate", "invoiceDueDate"].forEach((k) => {
+    if (!panel.querySelector(`[data-dn="${k}"]`)) throw new Error("isian " + k + " tidak ada");
+  });
+  eq(panel.querySelector('[data-dn="invoiceDate"]').type, "date");
+  eq(panel.querySelector('[data-dn="invoiceDueDate"]').type, "date");
+  if (panel.querySelector('[data-dn="customer"]') === panel.querySelector('[data-dn="payee"]'))
+    throw new Error("Customer & Vendor memakai isian yang sama");
+});
+t("kolom 'Dibayarkan Kepada' di riwayat menampilkan VENDOR, bukan Customer", () => {
+  /* Urutan cadangan lama (customer || ... || payee) akan menampilkan
+     customer di bawah judul Vendor begitu pengajuan dana punya
+     isian Customer. */
+  const src = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
+  if (!/\(jenis\.key === "fund" \? p\.payee : ""\) \|\|\s*p\.customer/.test(src))
+    throw new Error("riwayat pengajuan dana tidak mendahulukan payee");
+});
+const kolomDana = (rows) => rows.map((r) => w.fsumKolom(r));
+t("Summary: kolom rincian persis urutan yang diminta", () => {
+  const box = w.document.createElement("div");
+  w.document.body.appendChild(box);
+  try {
+    w.eval(`fsumBaris = ${JSON.stringify([
+      barisDana("1", { payee: "FedEx", customer: "KUMHO", invoiceNo: "872941820", invoiceDate: "2026-09-05",
+        invoiceDueDate: "2026-10-05", currency: "IDR", amount: "1000000", notes: "Freight Import Motor" }),
+    ])}`);
+    w.fsumGambarPanel(box);
+    const kepala = [...box.querySelectorAll(".fsum-rinci thead th")].map((th) => th.textContent.trim());
+    eq(kepala.join(" | "), "No | Invoice Date | Invoice/Bill Number | Company | Cost | Customer | Details | Due Date | Status Bayar");
+    const sel = [...box.querySelectorAll(".fsum-rinci tbody td")].map((td) => td.textContent.trim());
+    eq(sel[2], "872941820", "Invoice/Bill Number:");
+    eq(sel[3], "FedEx", "Company = Dibayarkan Kepada:");
+    eq(sel[5], "KUMHO", "Customer:");
+    eq(sel[6], "Freight Import Motor", "Details = Notes:");
+  } finally {
+    box.remove();
+    w.eval("fsumPemilih && fsumPemilih.lepas(); fsumPemilih = null; fsumBaris = null");
+  }
+});
+t("Summary: pivot per Company menggabung ejaan berbeda; Cost = Terbilang di surat", () => {
+  const rows = [
+    barisDana("1", { payee: "FedEx", customer: "KUMHO", invoiceDate: "2026-09-05", currency: "IDR", amount: "1000000" }),
+    barisDana("2", { payee: "FEDEX ", customer: "DYNAMIC", invoiceDate: "2026-09-10", currency: "IDR", amount: "500000" }),
+    barisDana("3", { payee: "DHL", customer: "KUMHO", invoiceDate: "2026-09-12", currency: "USD", amount: "200" }),
+  ];
+  const k = kolomDana(rows);
+  const pv = w.fsumPivot(k, "company");
+  eq(pv.grup.length, 2, "FedEx & FEDEX satu kelompok:");
+  eq(pv.grup[0].total.IDR, 1500000, "total FedEx:");
+  eq(pv.grup[1].total.USD, 200, "USD tidak dicampur ke IDR:");
+  eq(pv.mataUang.join(","), "IDR,USD", "IDR selalu kolom pertama:");
+  const pc = w.fsumPivot(k, "customer");
+  eq(pc.grup.find((g) => g.kunci === "KUMHO").jumlah, 2, "per Customer:");
+  // Cost per baris = fungsi yang sama dengan Terbilang di surat cetak.
+  const rinci = { payee: "X", invoiceDate: "2026-09-02", currency: "IDR",
+    lines: [{ desc: "Freight", amount: "1000000", ppnRate: "1.1" }] };
+  eq(w.fsumKolom(barisDana("5", rinci)).nilai, w.frTotalPengajuan(rinci), "format rinci:");
+});
+t("Summary: pivot per Jenis & per Bulan, dan klik kelompok menyaring rinciannya", () => {
+  const rows = [
+    barisDana("1", { payee: "A", expenseType: "Freight", invoiceDate: "2026-08-20", amount: "100" }),
+    barisDana("2", { payee: "B", expenseType: "Billing", invoiceDate: "2026-09-02", amount: "50" }),
+    barisDana("3", { payee: "C", expenseType: "Freight", invoiceDate: "2026-09-15", amount: "70" }),
+  ];
+  const k = kolomDana(rows);
+  const pj = w.fsumPivot(k, "jenis");
+  eq(pj.grup.find((g) => g.kunci === "Freight").total.IDR, 170, "per Jenis:");
+  const pb = w.fsumPivot(k, "bulan");
+  eq(pb.grup.map((g) => g.kunci).join(","), "2026-09,2026-08", "per Bulan, terbaru dulu:");
+  // Klik baris "2026-08" -> rentang tanggal Agustus penuh.
+  const f = baca("FSUM_KELOMPOK").bulan.saring("2026-08");
+  eq(f.dari + ".." + f.sampai, "2026-08-01..2026-08-31", "saring bulan:");
+  const saringan = Object.assign({ dari: "", sampai: "", company: "", customer: "", jenis: "" }, f);
+  eq(w.fsumSaring(k, saringan).length, 1, "rincian tersaring ke Agustus:");
+});
+t("Summary: patokan Tanggal Invoice, cadangan tanggal surat untuk data lama", () => {
+  const rows = [
+    // invoice Agustus, suratnya terbit September -> masuk AGUSTUS
+    barisDana("a", { payee: "V", invoiceDate: "2026-08-28", amount: "100" }, "2026-09-03"),
+    // pengajuan lama tanpa Tanggal Invoice -> pakai tanggal surat
+    barisDana("b", { payee: "V", amount: "50" }, "2026-08-15"),
+  ];
+  const k = kolomDana(rows);
+  const f = (dari, sampai) => ({ dari, sampai, company: "", customer: "", jenis: "" });
+  eq(w.fsumSaring(k, f("2026-08-01", "2026-08-31")).length, 2, "Agustus:");
+  eq(w.fsumSaring(k, f("2026-09-01", "2026-09-30")).length, 0, "September:");
+  eq(k[1].adaTglInvoice, false, "baris lama ditandai tanpa Tanggal Invoice:");
+});
+t("Summary: pilihan penyaring dari SELURUH data, Company & Customer tidak tercampur", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "FedEx", customer: "KUMHO", amount: "1" }),
+    barisDana("2", { payee: "DHL", customer: "DYNAMIC", amount: "1" }),
+  ]);
+  const company = w.fsumPilihan(k, (x) => x.company).map((p) => p[1]).join(",");
+  const customer = w.fsumPilihan(k, (x) => x.customer).map((p) => p[1]).join(",");
+  eq(company, "DHL,FedEx");
+  eq(customer, "DYNAMIC,KUMHO");
+});
+console.log("\u2014 PERAN MARKETING \u2014");
+const denganPeran = (peran, fn) => {
+  const simpan = w.eval("JSON.stringify(authState.profile || null)");
+  try {
+    w.eval(`authState.profile = ${JSON.stringify(peran ? { id: "u", role: peran, full_name: "Uji" } : null)}`);
+    return fn();
+  } finally {
+    w.eval("authState.profile = " + simpan);
+    w.applyPermissions();
+  }
+};
+t("matriks hak: EXIM mengubah; marketing hanya MEMBUKA Nomor Dokumen; viewer tidak keduanya", () => {
+  const baris = (peran) => denganPeran(peran, () =>
+    [w.canEdit(), w.canViewDocNum(), w.currentRoleLabel()].join(","));
+  eq(baris("exim"), "true,true,EXIM");
+  eq(baris("marketing"), "false,true,Marketing");
+  eq(baris("viewer"), "false,false,Viewer");
+});
+t("marketing: hanya-baca di seluruh aplikasi (is-viewer) + penanda is-marketing", () => {
+  denganPeran("marketing", () => {
+    w.applyPermissions();
+    const b = w.document.body.classList;
+    if (!b.contains("is-viewer")) throw new Error("marketing tidak ikut hanya-baca di halaman lain");
+    if (!b.contains("is-marketing")) throw new Error("penanda is-marketing tidak terpasang");
+  });
+  denganPeran("exim", () => {
+    w.applyPermissions();
+    if (w.document.body.classList.contains("is-marketing")) throw new Error("is-marketing bocor ke EXIM");
+  });
+});
+t("halaman: marketing boleh Nomor Dokumen, tidak boleh Akun / tambah jadwal", () => {
+  const buka = (peran, hash) => denganPeran(peran, () => {
+    w.location.hash = hash;
+    w.router();
+    return w.location.hash;
+  });
+  eq(buka("marketing", "#/docnum"), "#/docnum", "marketing -> Nomor Dokumen:");
+  eq(buka("viewer", "#/docnum"), "#/", "viewer -> Nomor Dokumen ditolak:");
+  eq(buka("marketing", "#/akun"), "#/", "marketing -> Akun ditolak:");
+  eq(buka("marketing", "#/new"), "#/", "marketing -> tambah jadwal ditolak:");
+  w.location.hash = "#/";
+});
+t("Nomor Dokumen: marketing hanya membaca -- tidak mengajukan, memperbaiki, atau menandai lunas", () => {
+  denganPeran("marketing", () => {
+    if (w.bolehUbahDocNum()) throw new Error("marketing masih bisa mengubah di Nomor Dokumen");
+    const lencana = w.dnTombolBayar({ id: "x", payload: {} });
+    if (/^<button/.test(lencana)) throw new Error("marketing masih bisa menandai status bayar");
+  });
+  denganPeran("exim", () => {
+    if (!w.bolehUbahDocNum()) throw new Error("EXIM tidak bisa mengubah");
+  });
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
+  if (!/btnDocNumSubmit[\s\S]{0,80}if \(!requireEdit\(\)\) return;/.test(src))
+    throw new Error("tombol Ajukan / Simpan Perubahan tidak dijaga khusus EXIM");
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
+  ["\\[data-docnum-panel\\]", "\\.docnum-actions", "\\.counter-box"].forEach((sel) => {
+    if (!new RegExp("body\\.is-viewer " + sel).test(css))
+      throw new Error("form Nomor Dokumen tidak disembunyikan untuk marketing/viewer: " + sel);
+  });
+  if (/is-editing/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")))
+    throw new Error("sisa aturan mode perbaikan marketing masih ada");
+});
+t("kotak cari riwayat tidak dikunci untuk marketing; isian form tetap dikunci", () => {
+  const cari = w.document.getElementById("docNumSearch");
+  const isian = w.document.querySelector('#viewDocNum [data-docnum-panel] input');
+  const simpan = [cari.disabled, isian.disabled];
+  try {
+    cari.disabled = false; delete cari.dataset.viewerLocked;
+    isian.disabled = false; delete isian.dataset.viewerLocked;
+    denganPeran("marketing", () => { w.lockInputs(); });
+    eq(cari.disabled, false, "kotak cari (alat membaca):");
+    eq(isian.disabled, true, "isian form:");
+  } finally {
+    cari.disabled = simpan[0]; delete cari.dataset.viewerLocked;
+    isian.disabled = simpan[1]; delete isian.dataset.viewerLocked;
+  }
+});
+t("halaman Akun menawarkan peran Marketing", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "accounts-view.js"), "utf8");
+  if (!/<option value="marketing"/.test(src)) throw new Error("pilihan Marketing tidak ada");
+  if (!w.document.getElementById("accountCountMarketing")) throw new Error("hitungan akun Marketing tidak ada");
+});
+t("migrasi database peran marketing ikut di paket", () => {
+  const sql = require("fs").readFileSync(require("path").join(__dirname, "..", "migration-role-marketing.sql"), "utf8");
+  ["'marketing'", "peran_saya", "next_document_number"].forEach((k) => {
+    if (!sql.includes(k)) throw new Error("migrasi tidak memuat " + k);
+  });
+  // Yang SENGAJA tidak dibuka tidak boleh ikut disunting migrasinya.
+  const bag4 = sql.slice(sql.indexOf("-- ---- 4."), sql.indexOf("-- ---- 5."));
+  if (/proname (in \(|= ')[^)]*(delete_document_number|set_document_counter|admin_)/.test(bag4))
+    throw new Error("migrasi menyunting fungsi yang harus tetap khusus EXIM");
+  // Marketing tidak mengajukan nomor: tidak ada kebijakan INSERT untuknya,
+  // dan yang dibuat versi sebelumnya dicabut.
+  if (/for insert to authenticated[\s\S]{0,80}peran_saya\(\) = 'marketing'/.test(sql.slice(0, sql.indexOf("-- ---- 5."))))
+    throw new Error("migrasi masih memberi marketing hak menambah nomor");
+  if (!/drop policy if exists "marketing tambah nomor dokumen"/.test(sql))
+    throw new Error("hak tambah nomor dari versi sebelumnya tidak dicabut");
+  // Marketing juga tidak mengubah isian: kebijakan UPDATE-nya dicabut.
+  if (/for update to authenticated[\s\S]{0,80}peran_saya\(\) = 'marketing'/.test(sql))
+    throw new Error("migrasi masih memberi marketing hak mengubah isian");
+  if (!/drop policy if exists "marketing ubah nomor dokumen"/.test(sql))
+    throw new Error("hak ubah isian dari versi sebelumnya tidak dicabut");
+});
+
+console.log("\u2014 PENGAJUAN DANA: NILAI & STATUS BAYAR \u2014");
+t("lencana bayar: EXIM dapat tombol, viewer hanya lencana; lunas menyebut tanggalnya", () => {
+  const simpanProfil = w.eval("JSON.stringify(authState.profile || null)");
+  try {
+    w.eval('authState.profile = { id: "u1", role: "exim", full_name: "Yogi" }');
+    const lunas = w.dnTombolBayar({ id: "x", payload: { paidAt: "2026-09-21", paidBy: "Yogi" } });
+    if (!/^<button/.test(lunas) || !/data-bayar-num="x"/.test(lunas)) throw new Error("EXIM tidak mendapat tombol");
+    if (!lunas.includes("21-09-2026")) throw new Error("tanggal bayar tidak ditampilkan");
+    const belum = w.dnTombolBayar({ id: "y", payload: {} });
+    if (!/dn-bayar--belum/.test(belum)) throw new Error("status belum lunas salah");
+    w.eval('authState.profile = { id: "u2", role: "viewer" }');
+    const viewer = w.dnTombolBayar({ id: "x", payload: { paidAt: "2026-09-21" } });
+    if (/<button/.test(viewer)) throw new Error("viewer bisa mengubah status bayar");
+  } finally {
+    w.eval("authState.profile = " + simpanProfil);
+  }
+});
+t("ubah isian TIDAK menghapus status lunas", async () => {
+  /* Payload ubah-isian dirakit dari form; status lunas bukan isian form
+     dan dulu ikut hilang setiap kali pengajuannya diperbaiki. */
+  const simpan = { tab: baca("docNumActiveTab"), prof: w.eval("JSON.stringify(authState.profile || null)") };
+  let terkirim = null;
+  const asli = w.eval("supabaseClient.from");
+  try {
+    w.eval('authState.profile = { id: "u1", role: "exim" }');
+    w.eval('docNumActiveTab = "fund"');
+    tulis("docNumHistoryRows", [{ id: "f9", doc_type: "fund", doc_number: "301/EXIM/DDI/IX/2026",
+      doc_date: "2026-09-21", requester: "Yogi Firgiawan", department: "EXIM",
+      payload: { payee: "KAS NEGARA", expenseType: "Billing", billingNo: "640260906211153",
+        notes: "Billing Import", paidAt: "2026-09-22", paidBy: "Yogi" } }]);
+    w.mulaiUbahDocNum("f9");
+    w.__tangkap = (u) => { terkirim = u; };
+    w.eval(`supabaseClient.from = () => ({ update: (u) => { window.__tangkap(u); return { eq: async () => ({ error: null }) }; },
+      select: () => { const c = { eq: () => c, order: () => c, range: async () => ({ data: [], error: null, count: 0 }),
+        maybeSingle: async () => ({ data: null, error: null }), filter: () => c, then: (r) => r({ data: [], error: null, count: 0 }) }; return c; } })`);
+    await w.simpanUbahDocNum();
+    if (!terkirim) throw new Error("perubahan tidak terkirim");
+    eq(terkirim.payload.paidAt, "2026-09-22", "tanggal bayar terbawa:");
+    eq(terkirim.payload.paidBy, "Yogi", "penanda terbawa:");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    w.batalUbahDocNum();
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
+    w.eval("authState.profile = " + simpan.prof);
+  }
+});
+t("menandai lunas membaca payload TERBARU dulu -- tidak menimpa perubahan orang lain", async () => {
+  let terkirim = null;
+  const asli = w.eval("supabaseClient.from");
+  try {
+    tulis("docNumHistoryRows", [{ id: "f8", doc_type: "fund", doc_number: "300", payload: { payee: "LAMA" } }]);
+    w.__tangkap = (u) => { terkirim = u; };
+    // Di database, isiannya sudah diubah orang lain sejak daftar dimuat.
+    w.eval(`supabaseClient.from = () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { payload: { payee: "BARU DARI ORANG LAIN", notes: "x" } }, error: null }) }) }),
+      update: (u) => { window.__tangkap(u); return { eq: async () => ({ error: null }) }; } })`);
+    await w.dnSetelBayar("f8", "2026-09-23");
+    eq(terkirim.payload.payee, "BARU DARI ORANG LAIN", "perubahan orang lain dipertahankan:");
+    eq(terkirim.payload.paidAt, "2026-09-23");
+    await w.dnSetelBayar("f8", null);
+    if ("paidAt" in terkirim.payload || "paidBy" in terkirim.payload) throw new Error("status lunas tidak terhapus saat dibatalkan");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+  }
+});
+t("Summary: saring & kelompokkan per status bayar", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "A", amount: "100", paidAt: "2026-09-10" }),
+    barisDana("2", { payee: "B", amount: "40" }),
+    barisDana("3", { payee: "C", amount: "60" }),
+  ]);
+  const f = (bayar) => ({ dari: "", sampai: "", company: "", customer: "", jenis: "", bayar });
+  eq(w.fsumSaring(k, f("belum")).length, 2, "belum lunas:");
+  eq(w.fsumSaring(k, f("lunas")).length, 1, "lunas:");
+  const pv = w.fsumPivot(k, "bayar");
+  eq(pv.grup.find((g) => g.kunci === "belum").total.IDR, 100, "total yang masih harus dibayar:");
+});
+console.log("\u2014 KOP & MARGIN SURAT PENGAJUAN DANA \u2014");
+t("kop surat berukuran surat resmi, bergaris kop tebal-tipis", () => {
+  const css = w.fundRequestCss();
+  if (!/\.kop img \{ height: 22mm; width: auto; \}/.test(css)) throw new Error("logo kop tidak 22 mm");
+  if (!/\.kop-nama \{ font-size: 20pt;/.test(css)) throw new Error("nama perusahaan tidak 20pt");
+  if (!/\.kop-alamat \{ font-size: 9\.5pt;/.test(css)) throw new Error("alamat tidak 9,5pt");
+  if (!/\.kop \{[\s\S]*?border-bottom: 0\.7mm solid #000;/.test(css)) throw new Error("garis kop tebal hilang");
+  if (!/\.kop::after \{[\s\S]*?border-bottom: 0\.25mm solid #000;/.test(css)) throw new Error("garis kop tipis hilang");
+});
+t("margin A4 15/20 mm tanpa padding bawah -- surat panjang tidak memunculkan halaman kosong", () => {
+  const css = w.fundRequestCss();
+  if (!/\.sheet \{ width: 100%; padding: 15mm 20mm 0; \}/.test(css)) throw new Error("margin lembar berubah");
+  if (!/@page \{ size: A4; margin: 0; \}/.test(css)) throw new Error("@page harus A4 bermargin nol (kop & kaki peramban)");
+});
+
+console.log("\u2014 DISKON SEBAGAI BARIS & RUMUS DI RINCIAN BIAYA \u2014");
+const pos = (amount, ppnRate, desc) => ({ desc: desc || "Freight Charge", amount, ppnRate });
+const diskon = (amount, discType, ppnRate) => ({ jenis: "diskon", desc: "Base Discount", amount, discType, ppnRate });
+t("baris diskon persen: dari pos di atasnya; PPN & PPH 23 ikut berkurang", () => {
+  const lines = [pos("2.200.000", 11), diskon("10", "pct", 11)];
+  eq(w.fundLineValues(lines).join("|"), "2200000|-220000", "nilai bertanda:");
+  eq(w.fundLinePpnNilai(-220000, lines[1]), -24200, "PPN baris diskon (mengurangi):");
+  const r = w.fundLineTotals(lines);
+  eq([r.totalNilai, r.totalDiskon, r.totalNet, r.totalPpn, r.pph].join("|"),
+     "2200000|220000|1980000|217800|39600", "total:");
+  eq(r.grandTotal, 1980000 + 217800 - 39600, "TOTAL = sama dengan PPN dari nilai setelah diskon:");
+});
+t("baris diskon rupiah; tarif '—' berarti dasar pajak tidak berkurang; minus diabaikan", () => {
+  eq(w.fundLineTotals([pos("2.200.000", 11), diskon("200.000", "rp", 11)]).grandTotal,
+     2000000 + 220000 - 40000, "tarif sama dengan posnya:");
+  eq(w.fundLineTotals([pos("2.200.000", 11), diskon("200.000", "rp", 0)]).grandTotal,
+     2000000 + 242000 - 44000, "tarif '—':");
+  eq(w.fundLineValues([pos("1.000", 11), diskon("-200", "rp", 11)])[1], -200, "minus dibaca diskon biasa:");
+});
+t("diskon persen memakai pos BIAYA terdekat di atasnya", () => {
+  const v = w.fundLineValues([pos("1.000.000", 11, "A"), pos("500.000", 11, "B"), diskon("10", "pct", 11)]);
+  eq(v[2], -50000, "10% dari pos B:");
+});
+t("data lama berkolom diskon dipecah jadi pos + baris diskon, totalnya sama", () => {
+  const lama = [{ desc: "Freight Charge", amount: "2.200.000", disc: "10", discType: "pct", ppnRate: 11 }];
+  const baru = w.normalisasiBarisDana(lama);
+  eq(baru.length, 2, "jumlah baris:");
+  eq(baru[1].jenis + "|" + baru[1].discType + "|" + baru[1].amount, "diskon|pct|10", "baris diskon:");
+  if ("disc" in baru[0]) throw new Error("kolom diskon lama masih menempel di pos");
+  eq(w.fundLineTotals(lama).grandTotal, 2158200, "total data lama:");
+});
+t("form: Tambah Diskon -> baris diskon bertarif pos di atasnya, mengetik memperbarui semuanya", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval('fundLines = [{ desc: "Freight Charge", amount: "2.200.000", ppnRate: 11 }]; renderFundLines()');
+    w.document.getElementById("btnFundDiscAdd").click();
+    const lines = baca("fundLines");
+    eq(lines[1].jenis + "|" + lines[1].ppnRate, "diskon|11", "baris baru:");
+    const tr = w.document.querySelector('#fundLinesBody [data-fl="1"]');
+    if (!tr.classList.contains("fl-row-diskon")) throw new Error("baris diskon tidak ditandai");
+    const kotak = tr.querySelector('[data-fl-f="amount"]');
+    kotak.value = "200000";
+    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak.value, "200.000", "format rupiah:");
+    eq(tr.querySelector(".fl-ppn").textContent, "- 22.000", "PPN baris diskon:");
+    const kaki = w.document.getElementById("fundLinesFoot").textContent.replace(/\s+/g, " ");
+    if (!/Total Diskon\s*- Rp\. 200\.000/.test(kaki)) throw new Error("Total Diskon: " + kaki);
+    if (!/TOTAL\s*Rp\. 2\.180\.000/.test(kaki)) throw new Error("TOTAL: " + kaki);
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("nominal diskon di kotak baca-saja sebaris, ikut berubah saat pos di atasnya diubah", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval(`fundLines = [{ desc: "Freight Charge", amount: "5.678.432", ppnRate: 1.1 },
+      { jenis: "diskon", desc: "Base Discount", amount: "35", discType: "pct", ppnRate: 1.1 }]; renderFundLines()`);
+    const nominal = () => w.document.querySelector('#fundLinesBody [data-fl="1"] .fl-disc-nominal');
+    if (!nominal().readOnly) throw new Error("kotak nominal bisa diketik");
+    if (nominal().dataset.flF) throw new Error("kotak nominal ikut dibaca sebagai isian");
+    eq(nominal().value, "- 1.987.451", "35% dari 5.678.432:");
+    const pos = w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
+    pos.value = "1000000";
+    pos.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(nominal().value, "- 350.000", "setelah pos di atasnya diubah:");
+    if (w.document.querySelector("#fundLinesBody .fl-disc-hasil")) throw new Error("keterangan lama di bawah kotak masih ada");
+    // Kedua tombol tambah dalam satu wadah sebaris.
+    const aksi = w.document.querySelector(".fl-aksi");
+    if (!aksi || !aksi.querySelector("#btnFundLineAdd") || !aksi.querySelector("#btnFundDiscAdd"))
+      throw new Error("tombol Tambah Baris & Tambah Diskon tidak sebaris");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("hitungRumus: operator, kurung, persen, dan yang tidak valid", () => {
+  const kasus = { "=1.000+1.000": 2000, "=(1.500+500)*3": 6000, "=2.200.000*10%": 220000,
+    "=10.000/4": 2500, "=1000x2": 2000, "=10:4": 2.5, "=-500+1000": 500, "=2,5*4": 10 };
+  Object.entries(kasus).forEach(([r, v]) => eq(w.hitungRumus(r), v, r + ":"));
+  ["=1000+", "=1000/0", "=abc", "=(1+2", "=", "=1000);alert(1)"].forEach((r) => {
+    if (!isNaN(w.hitungRumus(r))) throw new Error("seharusnya tidak valid: " + r);
+  });
+});
+t("rumus di kotak nilai: utuh saat diketik, dihitung saat Enter; yang salah ditandai & diblokir", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  const enter = (el) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  try {
+    w.eval('fundLines = [{ desc: "Freight", amount: "", ppnRate: 11 }, { desc: "Handling", amount: "", ppnRate: 11 }]; renderFundLines()');
+    const kotak = () => w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
+    kotak().value = "=1000+1000";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak().value, "=1000+1000", "tidak dirusak pemformat saat diketik:");
+    enter(kotak());
+    eq(kotak().value, "2.000", "setelah Enter:");
+    eq(baca("fundLines")[0].amount, "2.000", "tersimpan sebagai angka:");
+    kotak().value = "=2.200.000*10%";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    enter(kotak());
+    eq(kotak().value, "220.000", "persen:");
+    kotak().value = "=1000+";
+    kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
+    enter(kotak());
+    eq(kotak().value, "=1000+", "rumus salah dibiarkan untuk diperbaiki:");
+    if (!kotak().classList.contains("fl-rumus-salah")) throw new Error("rumus salah tidak ditandai");
+    if (!w.fundLinesRumusGagal(baca("fundLines"))) throw new Error("rumus salah tidak terdeteksi");
+    if (!w.validateDocNumForm("fund").some((m) => /rumus/i.test(m))) throw new Error("penyimpanan tidak diblokir");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+t("surat cetak: baris diskon bertanda minus, tanpa keterangan diskon di samping pos", () => {
+  const html = w.frTabelRinci({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }, "IDR");
+  if (/c-diskon|&minus; diskon/.test(html)) throw new Error("masih ada keterangan diskon di samping pos");
+  if (!/Base Discount/.test(html)) throw new Error("baris diskon tidak tercetak");
+  if (!/- Rp\. 220\.000/.test(html)) throw new Error("nilai diskon tidak bertanda minus");
+  if (!/1\.980\.000/.test(html)) throw new Error("subtotal setelah diskon tidak tercetak");
+  eq(w.frTotalPengajuan({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }), 2158200, "nilai pengajuan:");
+});
+
+console.log("\u2014 REKAP BULANAN & FORMAT NOMINAL \u2014");
+t("rekap bulanan: 12 bulan, jumlah & total per bulan, tahun lain tidak ikut", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "A", invoiceDate: "2026-01-10", amount: "125000000" }),
+    barisDana("2", { payee: "B", invoiceDate: "2026-01-20", amount: "5000000" }),
+    barisDana("3", { payee: "C", invoiceDate: "2026-02-03", amount: "56000000" }),
+    barisDana("4", { payee: "D", invoiceDate: "2026-02-04", currency: "USD", amount: "420" }),
+    barisDana("5", { payee: "E", invoiceDate: "2025-12-30", amount: "999" }),
+  ]);
+  const r = w.fsumRekapBulanan(k, "2026");
+  eq(r.bulan.length, 12, "jumlah baris:");
+  eq(r.bulan[0].jumlah + "|" + r.bulan[0].total.IDR, "2|130000000", "Januari:");
+  eq(r.bulan[1].jumlah + "|" + r.bulan[1].total.IDR + "|" + r.bulan[1].total.USD, "2|56000000|420", "Februari:");
+  eq(r.bulan[11].jumlah, 0, "Desember 2026 kosong (yang 2025 tidak ikut):");
+  eq(r.jumlahTahun, 4, "total setahun:");
+  eq(r.mataUang.join(","), "IDR,USD");
+});
+t("pilihan tahun = tahun di data + tahun berjalan, terbaru dulu", () => {
+  const k = kolomDana([
+    barisDana("1", { invoiceDate: "2024-05-01", amount: "1" }),
+    barisDana("2", { invoiceDate: "2025-05-01", amount: "1" }),
+  ]);
+  const ini = String(new Date().getFullYear());
+  const daftar = w.fsumDaftarTahun(k);
+  eq(daftar[0], ini, "tahun berjalan paling atas (bawaan):");
+  if (!daftar.includes("2024") || !daftar.includes("2025")) throw new Error("tahun dari data tidak muncul");
+  eq(daftar.join(","), [...daftar].sort().reverse().join(","), "urut menurun:");
+});
+t("rekap tetap tampil walau rentang tanggal tidak memuat apa pun, judul ikut tahunnya", () => {
+  const box = w.document.createElement("div");
+  w.document.body.appendChild(box);
+  try {
+    w.eval(`fsumBaris = ${JSON.stringify([
+      barisDana("1", { payee: "FEDEX", invoiceDate: "2025-03-05", amount: "1000" }),
+    ])}`);
+    w.eval('fsumSaringan.dari = "2025-09-01"; fsumSaringan.sampai = "2025-09-06"; fsumSaringan.tahun = "2025"');
+    w.fsumGambarPanel(box);
+    if (!box.querySelector("#fsumHasil .panel-empty")) throw new Error("rincian seharusnya kosong");
+    const judul = box.querySelector(".fsum-rekap .fsum-judul").textContent;
+    if (!/2025/.test(judul)) throw new Error("judul tidak mengikuti tahun: " + judul);
+    const maret = [...box.querySelectorAll(".fsum-rekap-tabel tbody tr")][2].textContent;
+    if (!/\b1\b/.test(maret)) throw new Error("rekap mengikuti rentang tanggal (Maret hilang)");
+  } finally {
+    box.remove();
+    w.eval("Object.assign(fsumSaringan, FSUM_SARINGAN_AWAL); fsumPemilih && fsumPemilih.lepas(); fsumPemilih = null; fsumBaris = null");
+  }
+});
+t("rekap bulanan berdasarkan Tanggal Bayar: per bulan pembayarannya, yang belum lunas tidak masuk", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "A", invoiceDate: "2026-01-20", paidAt: "2026-02-03", amount: "100" }),
+    barisDana("2", { payee: "B", invoiceDate: "2026-01-25", paidAt: "2026-03-10", amount: "40" }),
+    barisDana("3", { payee: "C", invoiceDate: "2026-01-28", amount: "60" }), // belum lunas
+  ]);
+  const inv = w.fsumRekapBulanan(k, "2026", "invoice");
+  eq(inv.bulan[0].jumlah, 3, "Tanggal Invoice: ketiganya di Januari:");
+  const bayar = w.fsumRekapBulanan(k, "2026", "bayar");
+  eq([bayar.bulan[0].jumlah, bayar.bulan[1].jumlah, bayar.bulan[2].jumlah].join("|"), "0|1|1", "Tanggal Bayar:");
+  eq(bayar.jumlahTahun, 2, "yang belum lunas tidak masuk:");
+});
+t("pilihan tahun mengikuti dasar tanggalnya, dan tetap memuat tahun yang sedang dipilih", () => {
+  const k = kolomDana([barisDana("1", { invoiceDate: "2024-05-01", paidAt: "2025-01-10", amount: "1" })]);
+  const inv = w.fsumDaftarTahun(k, "invoice");
+  const bayar = w.fsumDaftarTahun(k, "bayar");
+  if (!inv.includes("2024") || inv.includes("2025")) throw new Error("dasar invoice: " + inv);
+  if (!bayar.includes("2025") || bayar.includes("2024")) throw new Error("dasar bayar: " + bayar);
+  if (!w.fsumDaftarTahun(k, "bayar", "2020").includes("2020")) throw new Error("tahun terpilih hilang dari pilihan");
+});
+t("tahun baru muncul SENDIRI: jam sistem di 2027 -> 2027 ada di pilihan, paling atas", () => {
+  const DateAsli = w.Date;
+  try {
+    w.eval(`(() => { const Asli = Date; window.__DateAsli = Asli;
+      Date = class extends Asli { constructor(...a) { super(...(a.length ? a : ["2027-01-02T09:00:00"])); } };
+      Date.now = () => new Asli("2027-01-02T09:00:00").getTime(); })()`);
+    const k = kolomDana([barisDana("1", { invoiceDate: "2026-12-20", amount: "1" })]);
+    const daftar = w.fsumDaftarTahun(k, "invoice");
+    eq(daftar[0], "2027", "paling atas:");
+    eq(w.eval("fsumTahunDipilih()"), "2027", "pilihan bawaan:");
+  } finally {
+    w.eval("Date = window.__DateAsli");
+    if (w.Date !== DateAsli) w.Date = DateAsli;
+  }
+});
+t("Amount di Rincian Biaya diformat titik ribuan saat diketik, dan terbaca kembali tepat", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    w.eval('fundLines = [{ desc: "", amount: "", ppnRate: 1.1 }]; renderFundLines()');
+    const kotak = w.document.querySelector('#fundLinesBody [data-fl-f="amount"]');
+    kotak.value = "133434343";
+    kotak.setSelectionRange(9, 9);
+    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(kotak.value, "133.434.343", "tampilan:");
+    eq(kotak.selectionStart, 11, "kursor tetap di ujung:");
+    eq(w.fundLineAmount(baca("fundLines")[0]), 133434343, "nilai yang dihitung:");
+    // Nilai lama yang tersimpan tanpa titik tampil berformat saat digambar.
+    w.eval('fundLines = [{ desc: "", amount: "6262200", ppnRate: 1.1 }]; renderFundLines()');
+    eq(w.document.querySelector('#fundLinesBody [data-fl-f="amount"]').value, "6.262.200", "nilai lama:");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
+});
+
+console.log("\u2014 CARI DI RIWAYAT NOMOR \u2014");
+t("kata kunci dibersihkan dari tanda yang merusak filter", () => {
+  const f = w.dnFilterCari('PT (Persero), "kas" 50%*');
+  // Kata kunci di antara wildcard pembuka & penutup, persis tanpa tanda khusus.
+  eq(f.match(/^doc_number\.ilike\."%(.*?)%"/)[1], "PT Persero kas 50", "kata kunci bersih:");
+  if (!f.includes("payload->>notes.ilike.")) throw new Error("catatan tidak ikut dicari");
+  eq(w.dnFilterCari("   "), null, "kotak kosong -> tanpa filter:");
+});
+t("pencarian dikirim ke DATABASE (bukan menyaring halaman di layar)", async () => {
+  let orDipanggil = null;
+  const asli = w.eval("supabaseClient.from");
+  const tab = baca("docNumActiveTab");
+  try {
+    w.__catatOr = (s) => { orDipanggil = s; };
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c,
+      or: (s) => { window.__catatOr(s); return c; }, order: () => c,
+      range: async () => ({ data: [], error: null, count: 0 }) }; return c; }`);
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumCari = "fedex"');
+    await w.renderDocNumHistory();
+    if (!orDipanggil || !orDipanggil.includes('"%fedex%"')) throw new Error("kata kunci tidak sampai ke kueri");
+    const box = w.document.getElementById("docNumHistory");
+    if (!/fedex/.test(box.textContent)) throw new Error("pesan kosong tidak menyebut kata kuncinya");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli; docNumCari = ''");
+    w.eval("docNumActiveTab = " + JSON.stringify(tab));
+  }
+});
+t("ganti jenis dokumen mengosongkan pencarian", () => {
+  const tab = baca("docNumActiveTab");
+  const kotak = w.document.getElementById("docNumSearch");
+  try {
+    w.showDocNumTab("fund");
+    w.eval('docNumCari = "kas"');
+    kotak.value = "kas";
+    w.showDocNumTab("invoice");
+    eq(baca("docNumCari"), "", "kata kunci:");
+    eq(kotak.value, "", "isi kotak:");
+  } finally {
+    w.showDocNumTab(tab);
+  }
+});
+t("Summary ikut tersaring kotak cari", () => {
+  const k = kolomDana([
+    barisDana("1", { payee: "FEDEX", notes: "Freight Motor", amount: "1" }),
+    barisDana("2", { payee: "DHL", notes: "Duty", amount: "1" }),
+  ]);
+  const f = { dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", q: "motor" };
+  eq(w.fsumSaring(k, f).length, 1);
+});
+t("tabel riwayat nomor rata tengah seluruhnya", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "docnum.css"), "utf8");
+  const blok = (sel) => (css.match(new RegExp(sel.replace(/[.]/g, "\\.") + " \\{[^}]*\\}")) || [""])[0];
+  if (!/text-align: center/.test(blok(".docnum-table th"))) throw new Error("kepala tabel tidak rata tengah");
+  if (!/text-align: center/.test(blok(".docnum-table td"))) throw new Error("isi tabel tidak rata tengah");
+  if (/text-align: right/.test(blok(".docnum-table .dn-col-nilai"))) throw new Error("kolom Nilai masih rata kanan");
+});
+t("riwayat Invoice Number: kolom No. Invoice paling depan & Amount = Total di invoice cetaknya", async () => {
+  const simpan = { e: baca("data.export"), tab: baca("docNumActiveTab") };
+  const asli = w.eval("supabaseClient.from");
+  try {
+    const kirim = { id: "e9", mode: "export", party: "KUMHO", items: [
+      { namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", harga: 9918.97, hsCode: "84807190" },
+      { namaBarang: "TYRE MOLD", qty: 2, satuan: "SET", harga: 6200, hsCode: "84807190" } ] };
+    tulis("data.export", [kirim]);
+    const tertaut = { id: "i1", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 059", doc_date: "2026-09-25",
+      requester: "Yogi", department: "EXIM", payload: { shipmentId: "e9", customer: "KUMHO TIRE (VIETNAM) CO., LTD" } };
+    const lepas = { id: "i2", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 060", doc_date: "2026-09-26",
+      requester: "Yogi", department: "EXIM", payload: { customer: "X" } };
+    // Sama dengan Total di Commercial Invoice cetak (Dynamic Design & Kumho).
+    const v = w.dnNilaiInvoice(tertaut);
+    eq(v.mata + " " + v.total.toFixed(2), "USD 22318.97", "nilai:");
+    const cetak = w.ciplHalamanInvoice(tertaut, kirim, w.ciplBarisBarang(kirim));
+    if (!cetak.includes(w.ciplAngka(v.total, 2))) throw new Error("berbeda dari Total di invoice cetak Dynamic Design");
+    if (!w.ciplVnHalamanInvoice(tertaut, kirim).includes(w.ciplAngka(v.total, 2))) throw new Error("berbeda dari Total invoice Kumho");
+    eq(w.eval("dnTeksNilaiInvoice")(lepas), "\u2014", "belum ditautkan:");
+    // Tabel riwayat.
+    w.__barisUji = [tertaut, lepas];
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c, or: () => c, order: () => c,
+      range: async () => ({ data: window.__barisUji, error: null, count: 2 }) }; return c; }`);
+    w.eval('docNumActiveTab = "invoice"; docNumHistorySub = null; docNumCari = ""');
+    await w.renderDocNumHistory();
+    const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim());
+    eq(kepala[0], "No. Invoice", "kolom paling depan:");
+    if (!kepala.includes("Amount")) throw new Error("kolom Amount tidak ada");
+    const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
+    eq(sel[0], "DDI - CRBM - IX - 059", "nomor invoice di depan:");
+    if (!sel.includes("USD 22,318.97")) throw new Error("Amount tidak tampil: " + sel.join(" | "));
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    tulis("data.export", simpan.e);
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
+  }
+});
+t("saringan Lunas / Belum Lunas dikirim ke DATABASE, hanya di Pengajuan Dana", async () => {
+  const asli = w.eval("supabaseClient.from");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub") };
+  const kirim = (tab, bayar) => {
+    const catat = [];
+    w.__catat = (x) => catat.push(x);
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c, or: () => c, order: () => c,
+      not: (k, op, v) => { window.__catat("not " + k + " " + op + " " + v); return c; },
+      is: (k, v) => { window.__catat("is " + k + " " + v); return c; },
+      range: async () => ({ data: [], error: null, count: 0 }) }; return c; }`);
+    w.eval(`docNumActiveTab = ${JSON.stringify(tab)}; docNumHistorySub = null; docNumCari = ""; docNumSaringBayar = ${JSON.stringify(bayar)}`);
+    return w.renderDocNumHistory().then(() => catat.join(" | "));
+  };
+  try {
+    eq(await kirim("fund", "lunas"), "not payload->>paidAt is null", "Lunas:");
+    eq(await kirim("fund", "belum"), "is payload->>paidAt null", "Belum Lunas:");
+    eq(await kirim("fund", ""), "", "semua:");
+    eq(await kirim("invoice", "lunas"), "", "jenis lain tidak disaring:");
+    if (!/Tidak ada pengajuan berstatus/.test(await kirim("fund", "belum").then(() => w.document.getElementById("docNumHistory").textContent)))
+      throw new Error("pesan kosong tidak menyebut saringannya");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli; docNumSaringBayar = ''");
+    w.eval(`docNumActiveTab = ${JSON.stringify(simpan.tab)}; docNumHistorySub = ${JSON.stringify(simpan.sub)}`);
+  }
+});
+t("pilihan status bayar: tampil di Pengajuan Dana, tersembunyi di Summary & jenis lain; direset saat ganti jenis", () => {
+  const wadah = w.document.querySelector(".dn-saring-bayar");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub") };
+  try {
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), false, "Pengajuan Dana:");
+    w.eval('docNumHistorySub = FSUM_TAB'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), true, "tab Summary:");
+    w.eval('docNumActiveTab = "invoice"; docNumHistorySub = null'); w.dnTampilkanSaringBayar();
+    eq(wadah.classList.contains("d-none"), true, "Invoice:");
+    w.showDocNumTab("fund");
+    w.eval('docNumSaringBayar = "lunas"'); w.document.getElementById("docNumBayar").value = "lunas";
+    w.showDocNumTab("invoice");
+    eq(baca("docNumSaringBayar"), "", "direset:");
+    eq(w.document.getElementById("docNumBayar").value, "", "pilihan direset:");
+  } finally {
+    w.showDocNumTab(simpan.tab);
+    w.eval(`docNumHistorySub = ${JSON.stringify(simpan.sub)}`);
+  }
+});
+t("ponsel: aturan kotak cari riwayat menang atas aturan dasarnya (tidak meluber keluar layar)", () => {
+  /* Aturan dasar .dn-cari input { width: 300px } ada LEBIH BAWAH di
+     docnum.css daripada blok ponsel; aturan ponselnya harus lebih khusus,
+     bukan setara -- dengan kekhususan setara yang terakhir yang menang. */
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "docnum.css"), "utf8");
+  const ponsel = css.slice(css.indexOf("@media (max-width: 575px)"));
+  if (!/\.docnum-history-head \.dn-cari input \{\s*width: 100%;/.test(ponsel)) throw new Error("kotak cari ponsel kalah dari aturan dasar");
+  if (!/\.docnum-history-head \.dn-cari \{\s*flex: 1;\s*min-width: 0;/.test(ponsel)) throw new Error("kotak cari ponsel tidak bisa menyusut");
+});
+t("pungutan impor persis PIB CEISA: per seri, BM ke atas ribuan, PPN ke bawah rupiah, PPh per seri", () => {
+  const H = w.hitungPungutanImpor;
+  // PIB sungguhan: CIP USD 4.780 (2 seri), NDPBM 17.707, BM 5%.
+  const pib = H({ nilaiSeriUsd: [2390, 2390], ndpbm: 17707, tarifBm: 5 });
+  eq([pib.nilaiPabean, pib.bm, pib.ppn, pib.pph].join(" | "), "84639460 | 4232000 | 9775857 | 2221750", "PIB:");
+  // Per SERI, bukan total: 1 seri dengan nilai yang sama memberi PPh berbeda.
+  eq(H({ nilaiSeriUsd: [4780], ndpbm: 17707, tarifBm: 5 }).pph, 2221775, "PPh 1 seri:");
+  // Contoh materi PPJK: NP 101.706.000, BM 20%, PPh 7,5%.
+  const ppjk = H({ nilaiSeriUsd: [6356.625], ndpbm: 16000, tarifBm: 20, tarifPph: 7.5 });
+  eq([ppjk.bm, ppjk.ppn, ppjk.pph].join(" | "), "20342000 | 13425192 | 9153525", "contoh PPJK:");
+  // Contoh DDTC: BM 1.506.882,069 -> 1.507.000.
+  eq(H({ nilaiSeriUsd: [1506882.069 / 0.05], ndpbm: 1, tarifBm: 5 }).bm, 1507000, "pembulatan BM:");
+  // Pecahan biner tidak boleh mendorong BM ke ribuan berikutnya: tepat 1.000 tetap 1.000.
+  eq(H({ nilaiSeriUsd: [0.1, 0.2], ndpbm: 20000 / 0.3 * 0.3 / 0.3 * 0.3 / 0.3, tarifBm: 5 }).bm % 1000, 0, "kelipatan ribuan:");
+  eq(H({ nilaiSeriUsd: [10000], ndpbm: 2, tarifBm: 5 }).bm, 1000, "tepat seribu tetap seribu:");
+  // BM manual dipakai apa adanya dan menjadi dasar PPN.
+  const manual = H({ nilaiSeriUsd: [4780], ndpbm: 17707, bmManual: 4232000 });
+  eq([manual.bm, manual.ppn].join(" | "), "4232000 | 9775860", "BM manual:");
+  eq(H({ nilaiSeriUsd: [], ndpbm: 17707, tarifBm: 5 }).bm, 0, "tanpa barang & ongkos:");
+});
+t("form jadwal: BM/PPN/PPh terisi otomatis dengan aturan CEISA, dan kotak Tarif dipakai", () => {
+  const simpan = w.eval("JSON.stringify(draftItems)");
+  const KOTAK = ["fNdpbm", "fFreight", "fInsurance", "fTarif", "fBM", "fPPN", "fPPH"];
+  const semula = KOTAK.map((id) => { const el = w.document.getElementById(id); return [el.value, el.dataset.auto]; });
+  const nilai = (id) => w.document.getElementById(id).value;
+  const isi = (id, v) => { w.document.getElementById(id).value = v; };
+  try {
+    w.eval(`draftItems = [{ namaBarang: "A", qty: 1, harga: 2390 }, { namaBarang: "B", qty: 1, harga: 2390 }]`);
+    isi("fNdpbm", "17707"); isi("fFreight", ""); isi("fInsurance", ""); isi("fTarif", "5");
+    ["fBM", "fPPN", "fPPH"].forEach((id) => { isi(id, ""); w.document.getElementById(id).dataset.auto = "1"; });
+    w.recalcCustoms();
+    eq([nilai("fBM"), nilai("fPPN"), nilai("fPPH")].join(" | "), "4,232,000 | 9,775,857 | 2,221,750", "tarif 5%:");
+    isi("fTarif", "10");
+    w.recalcCustoms();
+    eq(nilai("fBM"), "8,464,000", "tarif 10% (dulu tetap 5%):");
+    isi("fTarif", "");
+    w.recalcCustoms();
+    eq(nilai("fBM"), "4,232,000", "kotak Tarif kosong = 5%:");
+  } finally {
+    w.eval("draftItems = " + simpan);
+    KOTAK.forEach((id, i) => {
+      const el = w.document.getElementById(id);
+      el.value = semula[i][0];
+      if (semula[i][1] == null) delete el.dataset.auto; else el.dataset.auto = semula[i][1];
+    });
+  }
+});
+t("jendela Vendor Summary lama sudah tidak ada (digantikan tab Summary)", () => {
+  if (w.document.getElementById("btnFundSummary")) throw new Error("tombol Vendor Summary masih ada");
+  if (w.document.getElementById("fundSummaryModal")) throw new Error("jendela Vendor Summary masih ada");
+});
+t("pintas rentang: Bulan Ini & Bulan Lalu menutup bulan penuh", () => {
+  const [a, b] = baca("RENTANG_PINTAS").bulanIni();
+  const hariIni = new Date();
+  eq(a.slice(8), "01", "awal bulan ini:");
+  eq(Number(b.slice(8)), new Date(hariIni.getFullYear(), hariIni.getMonth() + 1, 0).getDate(), "akhir bulan ini:");
+  const [c, d] = baca("RENTANG_PINTAS").bulanLalu();
+  if (!(c < a && d < a)) throw new Error("bulan lalu tidak mendahului bulan ini");
+  eq(c.slice(8), "01");
+});
+t("panel kalender mengambang (fixed) -- tidak terpotong wadah ber-overflow:hidden", () => {
+  /* Dengan position:absolute, panelnya terpotong kartu .docnum-shell.
+     Saat hasil Summary kosong, isi kartunya pendek dan tombol Reset &
+     Terapkan terpotong di luar kartu -- tidak bisa diklik. */
+  const akar = w.document.createElement("div");
+  w.document.body.appendChild(akar);
+  const pem = w.buatRentangTanggal(akar, { pintas: [] });
+  try {
+    akar.querySelector('[data-rt="pemicu"]').click();
+    eq(akar.querySelector('[data-rt="popover"]').style.position, "fixed", "posisi panel:");
+    akar.querySelector('[data-rt="terapkan"]').click();
+    if (!akar.querySelector('[data-rt="popover"]').classList.contains("d-none"))
+      throw new Error("panel tidak tertutup setelah Terapkan");
+  } finally {
+    pem.lepas();
+    akar.remove();
+  }
+});
+t("pemilih rentang instans baru: jalan pintas langsung berlaku", () => {
+  const akar = w.document.createElement("div");
+  w.document.body.appendChild(akar);
+  let diterapkan = null;
+  const pem = w.buatRentangTanggal(akar, {
+    pintas: [{ label: "Bulan Ini", rentang: baca("RENTANG_PINTAS").bulanIni }],
+    onApply: (a, b) => { diterapkan = [a, b]; },
+  });
+  akar.querySelector("[data-rt-pintas]").click();
+  eq(JSON.stringify(diterapkan), JSON.stringify(baca("RENTANG_PINTAS").bulanIni()), "rentang terkirim:");
+  eq(JSON.stringify(pem.ambil()), JSON.stringify(baca("RENTANG_PINTAS").bulanIni()), "rentang tersimpan:");
+  if (!akar.querySelector("[data-rt-pintas]").classList.contains("is-active"))
+    throw new Error("tombol pintas yang aktif tidak menyala");
+  akar.remove();
+});
+t("Report berbahasa Inggris, dibuka sapaan, Export lebih dulu", () => {
+  const simpan = { e: baca("data.export"), i: baca("data.import") };
+  try {
+    tulis("data.export", [{
+      id: "e1", mode: "export", party: "KUMHO", package: "8 BOX",
+      etd: "2099-10-02", eta: "2099-10-09", actual: "2099-09-30",
+      // Nama BERBEDA: nama kembar dihitung satu oleh reportItemNames().
+      items: [{ namaBarang: "TYRE MOLD", moldNo: "S08" }, { namaBarang: "TYRE MOLD", moldNo: "S07" }],
+    }]);
+    tulis("data.import", [{
+      id: "i1", mode: "import", party: "SIEMENS", incoterm: "FOB",
+      muatan: "LCL", etd: "2099-09-25", eta: "", actual: "",
+      items: [{ namaBarang: "MOTOR SENSOR" }],
+    }]);
+    const teks = w.buildReportCopyText();
+    const baris = teks.split("\n");
+    eq(baris[0], "Dear Mr Shin,", "baris pertama:");
+    eq(baris[2], "Please find schedule for Export and Import as below", "pengantar:");
+    if (teks.indexOf("EXPORT") > teks.indexOf("IMPORT"))
+      throw new Error("Export harus mendahului Import, sesuai kalimat pengantarnya");
+    /* Tidak boleh ada sisa bahasa Indonesia -- label maupun nama bulan. */
+    ["Estimasi", "Perkiraan", "Tanggal Tidak", "Oktober", "Desember", "Agustus"]
+      .forEach((k) => { if (teks.includes(k)) throw new Error("masih berbahasa Indonesia: " + k); });
+    if (!/Estimated Stuffing: 30 September 2099/.test(teks)) throw new Error("label/tanggal Export salah");
+    if (!/ETA: TBA/.test(teks)) throw new Error("tanggal kosong harus TBA");
+    if (!/\+ 1 Item\b/.test(teks) || /\+ 1 Items/.test(teks))
+      throw new Error("tunggal-jamak salah: harus '+ 1 Item'");
+    // Versi HTML (surel) memakai sapaan yang sama.
+    const html = w.buildReportCopyHtml();
+    if (!html.includes("Dear Mr Shin,") || !html.includes("Please find schedule for Export and Import as below"))
+      throw new Error("versi HTML tidak memuat sapaan yang sama");
+  } finally {
+    tulis("data.export", simpan.e);
+    tulis("data.import", simpan.i);
+  }
+});
+t("Report kosong tidak menulis sapaan tanpa isi", () => {
+  const simpan = { e: baca("data.export"), i: baca("data.import") };
+  try {
+    tulis("data.export", []);
+    tulis("data.import", []);
+    eq(w.buildReportCopyText(), "", "teks:");
+    eq(w.buildReportCopyHtml(), "", "html:");
+  } finally {
+    tulis("data.export", simpan.e);
+    tulis("data.import", simpan.i);
+  }
+});
+console.log("\u2014 BAHASA INGGRIS: SELURUH TAMPILAN \u2014");
+t("tt() mengikuti bahasa aktif, dan data-en berganti bolak-balik", () => {
+  const simpan = baca("activeLang");
+  try {
+    w.eval('activeLang = "en"');
+    eq(w.tt("Simpan", "Save"), "Save");
+    eq(w.tt("{n} hari", "{n} days", { n: 3 }), "3 days", "dengan pengganti:");
+    const el = w.document.createElement("span");
+    el.setAttribute("data-en", "Save");
+    el.textContent = "Simpan";
+    w.document.body.appendChild(el);
+    w.applyI18n();
+    eq(el.textContent, "Save", "ke Inggris:");
+    w.eval('activeLang = "id"');
+    w.applyI18n();
+    eq(el.textContent, "Simpan", "kembali ke Indonesia:");
+    el.remove();
+  } finally {
+    w.eval("activeLang = " + JSON.stringify(simpan));
+    w.applyI18n();
+  }
+});
+t("tidak ada t(...) yang tertulis mentah di atribut HTML", () => {
+  /* Bug lama: title=t("a.ubah.nama.username") -- tanpa ${...} fungsinya
+     tidak pernah dijalankan dan tooltip-nya menampilkan kode mentah di
+     KEDUA bahasa. */
+  const fs = require("fs"), path = require("path");
+  const akar = path.join(__dirname, "..", "js");
+  const salah = [];
+  (function jelajah(d) {
+    fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) return jelajah(p);
+      if (!p.endsWith(".js")) return;
+      const s = fs.readFileSync(p, "utf8");
+      if (/\b(?:title|placeholder|aria-label)=t\(/.test(s)) salah.push(path.relative(akar, p));
+    });
+  })(akar);
+  if (salah.length) throw new Error("t() mentah di atribut: " + salah.join(", "));
+});
+t("label yang dibuat sekali saat dimuat tetap ikut ganti bahasa", () => {
+  /* Peta label (Detail nomor dokumen, langkah dokumen, konfigurasi
+     prediksi) dievaluasi SEKALI saat halaman dimuat. Tanpa getter,
+     ganti bahasa tidak mengubahnya sampai halaman dimuat ulang. */
+  const simpan = baca("activeLang");
+  try {
+    w.eval('activeLang = "en"');
+    eq(baca("DN_LABEL_FIELD").payee, "Paid To", "label Detail:");
+    eq(baca("DN_KOLOM_UTAMA").fund, "Paid To", "kolom riwayat:");
+    const sppb = w.docStepsFor({ mode: "import" }).find((x) => x.key === "sppb");
+    eq(w.stepText(sppb.full, {}), "Goods Release Approval (SPPB)", "langkah dokumen:");
+    eq(baca("PREDICTION_SOURCE_LABEL").today, "Today", "sumber prediksi:");
+    w.eval('activeLang = "id"');
+    eq(baca("DN_LABEL_FIELD").payee, "Dibayarkan Kepada", "kembali ke Indonesia:");
+  } finally {
+    w.eval("activeLang = " + JSON.stringify(simpan));
+  }
+});
+t("jenis barang: teks pilihan diterjemahkan, NILAI tersimpan tidak", () => {
+  const simpan = baca("activeLang");
+  try {
+    w.eval('activeLang = "en"');
+    eq(w.labelJenisBarang("BAHAN BAKU"), "RAW MATERIAL");
+    // Nilai pilihan tetap istilah pabean -- itu yang tersimpan & dicetak.
+    const opsi = w.jenisOptionsUntuk("BAHAN BAKU");
+    if (!opsi.includes("BAHAN BAKU")) throw new Error("nilai tersimpan ikut berubah");
+  } finally {
+    w.eval("activeLang = " + JSON.stringify(simpan));
   }
 });
 t("tidak ada CSS yang hidup di dalam index.html", () => {
@@ -2482,12 +3503,77 @@ t("ruang kosong satu blok, bukan grid kotak", () => {
   eq((h.match(/ci-fill/g) || []).length, 1);
   if (/ci-blank/.test(h)) throw new Error("masih menggambar baris kosong bergaris");
 });
-t("tinggi ruang kosong menyusut saat barang bertambah", () => {
-  const sedikit = w.ciplRuangKosongHtml(2, 10);
-  const banyak = w.ciplRuangKosongHtml(10, 10);
-  const tinggi = (s) => Number((s.match(/height:(\d+)px/) || [])[1] || 0);
-  if (!(tinggi(sedikit) > tinggi(banyak))) throw new Error("tidak menyusut");
-  eq(w.ciplRuangKosongHtml(20, 10), "");   // penuh -> tidak ada ruang sisa
+t("baris pengisi SELALU ada & tanpa tinggi tetap -- memanjang lewat CSS", () => {
+  const h = w.ciplRuangKosongHtml(10);
+  eq((h.match(/<td><\/td>/g) || []).length, 10, "jumlah sel:");
+  if (/height:/.test(h)) throw new Error("pengisi masih bertinggi tetap");
+  // Juga pada daftar barang yang panjang -- tanpa pengisi, sisa tinggi
+  // halaman dibagikan ke baris-baris barang.
+  const row = { id: "d5b", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const banyak = Array.from({ length: 25 }, () => barisCipl()[0]);
+  if (!/ci-fill/.test(w.ciplHalamanInvoice(row, jadwalCipl, banyak))) throw new Error("pengisi hilang saat barang banyak");
+});
+t("cetak CIPL: bingkai setinggi kertas, jarak bawah = jarak atas (Dynamic Design & Kumho)", () => {
+  const css = w.ciplCss();
+  if (!/\.ci-sheet \{ width: 210mm; padding: 19\.05mm 6\.35mm; \}/.test(css)) throw new Error("lembar tidak selebar kertas");
+  if (!/min-height: calc\(297mm - 38\.1mm - 2px\)/.test(css.split(".ci-sheet:not(.si-sheet) > .ci-box")[1] || ""))
+    throw new Error("bingkai Invoice/PL tidak setinggi bidang cetak");
+  if (!/\.ci-items tr\.ci-fill td \{ height: 100%; \}/.test(css)) throw new Error("pengisi tidak memanjang");
+  // Total & tanda tangan di <tbody> yang sama dengan barang: tidak terulang di
+  // tiap halaman (tfoot), dan tidak ikut membengkak (kelompok baris terpisah).
+  const rowCi = { id: "d5c", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  [w.ciplHalamanInvoice(rowCi, jadwalCipl, barisCipl()), w.ciplHalamanPacking(rowCi, jadwalCipl, barisCipl())].forEach((h) => {
+    if (/<tfoot/.test(h)) throw new Error("Total masih di <tfoot>");
+    const badan = h.slice(h.indexOf('<tbody>', h.indexOf('class="ci-items')), h.lastIndexOf("</tbody>"));
+    if (!/ci-total-row/.test(badan) || !/ci-sign-row/.test(badan)) throw new Error("Total/tanda tangan tidak di tbody barang");
+  });
+  const vn = w.ciplVnCss();
+  if (!/padding: 14\.8mm 13\.7mm 14\.8mm 12\.9mm;/.test(vn)) throw new Error("jarak bawah Kumho tidak sama dengan atasnya");
+  if (/vn-sheet--pl/.test(vn)) throw new Error("jarak bawah khusus Packing List masih ada");
+});
+t("kotak tanda tangan muat stempel perusahaan: 50 mm di kertas (cetak & Excel, kedua format)", () => {
+  if (!/\.ci-sign-space \{ height: 45\.6mm; \}/.test(w.ciplCss())) throw new Error("kotak cetak Dynamic Design");
+  if (!/\.vn-akhir-ttd \{[\s\S]*?height: 50mm;/.test(w.ciplVnCss())) throw new Error("kotak cetak Kumho");
+  eq(baca("XLS_TTD_MM"), 50, "Excel:");
+  // Tinggi baris dihitung dari skala cetaknya, jadi di KERTAS tepat 50 mm.
+  const lebar = [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875];
+  const baris = {};
+  const ws = {
+    pageSetup: { printArea: "A1:J50", margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75 } },
+    getRow: (r) => (baris[r] = baris[r] || {}),
+    getColumn: (c) => ({ width: lebar[c - 1] }),
+  };
+  w.ciplXlsTinggiTercetak(ws, 47, 50, 50);
+  const pt = [47, 48, 49, 50].reduce((s, r) => s + baris[r].height, 0);
+  const mm = (pt * w.ciplXlsSkalaCetak(ws)) / 72 * 25.4;
+  if (Math.abs(mm - 50) > 0.2) throw new Error("tercetak " + mm.toFixed(2) + " mm");
+});
+t("Excel CIPL: selalu ada baris kosong di atas Total; 15 barang ke bawah tidak bergeser", () => {
+  eq(w.ciplXlsBarisTotal(8), 46, "8 barang:");
+  eq(w.ciplXlsBarisTotal(15), 46, "15 barang:");
+  eq(w.ciplXlsBarisTotal(16), 47, "16 barang (dulu 46, tanpa baris kosong):");
+});
+t("Excel CIPL: tinggi isi dipas dengan skala cetaknya -> setinggi kertas A4", () => {
+  // Lembar tiruan: 10 kolom selebar lembar INVOICE, 51 baris 15pt, margin Narrow.
+  const lebar = [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875];
+  const baris = {};
+  const ws = {
+    pageSetup: { printArea: "A1:J50", margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75 } },
+    properties: { defaultRowHeight: 15 },
+    getRow: (r) => (baris[r] = baris[r] || {}),
+    getColumn: (c) => ({ width: lebar[c - 1] }),
+  };
+  const tambah = w.ciplXlsPenuhiHalaman(ws, 45);
+  if (!(tambah > 0)) throw new Error("tidak ada tinggi yang ditambahkan");
+  let tinggi = 0;
+  for (let r = 1; r <= 50; r++) tinggi += baris[r].height || 15;
+  const lebarPt = lebar.reduce((s, x) => s + w.ciplXlsKolomPt(x), 0);
+  const skala = Math.min(1, (595.28 - 36) / lebarPt);
+  const tercetakMm = (tinggi * skala) / 72 * 25.4;
+  const bidangMm = (841.89 - 108) / 72 * 25.4;
+  if (Math.abs(tercetakMm - bidangMm) > 1) throw new Error(`tinggi tercetak ${tercetakMm.toFixed(1)} mm, bidang ${bidangMm.toFixed(1)} mm`);
+  // Lebar kolom saat dicetak memakai lebar angka Calibri yang sebenarnya.
+  if (Math.abs(w.ciplXlsKolomPt(10) - 10 * 7.4336 * 0.75) > 0.01) throw new Error("konversi lebar kolom");
 });
 t("tanda tangan jadi baris tabel, segaris dengan Total", () => {
   const row = { id: "d6", doc_number: "X", doc_date: "2026-08-03", payload: {} };
@@ -2973,27 +4059,28 @@ t("ongkos angkut & asuransi ikut jadi dasar pungutan", () => {
   /* Contoh nyata dari layar Yogi: barang $640, freight $382,40,
      asuransi $5,1, NDPBM 18.062.
 
-       (640 + 382,40 + 5,1) x 18.062 = 18.564.938,--
-       PPN 11%  = 2.042.143
-       PPH 2,5% =   464.123
+       Nilai Pabean (640 + 382,40 + 5,1) x 18.062 = 18.558.705
+       BM 5% = 927.935,25       -> dibulatkan ke atas ribuan 928.000
+       Nilai Impor = 18.558.705 + 927.935,25 (BM SEBELUM dibulatkan)
+       PPN 11% = 2.143.530,43   -> ke bawah rupiah   2.143.530
+       PPh 2,5% x 19.486.000 (Nilai Impor ke bawah ribuan) = 487.150
 
-     Dengan dasar lama (barang saja) PPN cuma 1.271.565 — meleset
-     771 ribu rupiah ke bawah pada satu kiriman. */
+     Dengan dasar lama (barang saja) PPN meleset ratusan ribu rupiah
+     ke bawah pada satu kiriman. */
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
   $("#fIncoterm").value = "FOB";
   $("#fFreight").value = "382.40";
   $("#fInsurance").value = "5.1";
   $("#fNdpbm").value = "18,062";
+  $("#fTarif").value = "5";
+  $("#fBM").value = "";
   $("#fPPN").value = "";
   $("#fPPH").value = "";
   w.initAutoDutyFlags();
   w.recalcCustoms();
-  const dasar = (640 + 382.4 + 5.1) * 18062;
-  const bm = Math.round(dasar * 0.05);
-  eq($("#fBM").value, w.formatNumberValue(bm), "BM (Pabean x 5%):");
-  // PPN memakai (Pabean + BM), bukan Pabean saja -- lihat recalcCustoms().
-  eq($("#fPPN").value, w.formatNumberValue(Math.round((dasar + bm) * 0.11)));
-  eq($("#fPPH").value, w.formatNumberValue(Math.round(dasar * 0.025)));
+  eq($("#fBM").value, "928,000", "BM (Pabean x 5%, ke atas ribuan):");
+  eq($("#fPPN").value, "2,143,530", "PPN (Pabean + BM sebelum dibulatkan) x 11%, ke bawah rupiah:");
+  eq($("#fPPH").value, "487,150", "PPh 2,5% x Nilai Impor ke bawah ribuan:");
 });
 t("Nilai Pabean ditampilkan di kotak sendiri, dasar yang SAMA dengan PPN/PPH otomatis", () => {
   /* Angka dari tangkapan layar Yogi sendiri: barang $5.600, freight
@@ -3014,6 +4101,29 @@ t("Nilai Pabean ditampilkan di kotak sendiri, dasar yang SAMA dengan PPN/PPH oto
   w.recalcCustoms();
   eq($("#calcNilaiPabean").textContent, w.fmtRp(dasar), "tetap tampil walau Incoterm bukan CIF/FOB:");
 });
+t("Nilai CIF = barang + freight + asuransi (apa pun Incoterm-nya); Nilai Pabean presisi 2 desimal", () => {
+  /* Angka dari layar Yogi: FCA, barang $1.280, freight $688,62,
+     asuransi $9,84, NDPBM 17.707. CIF $1.978,46 x 17.707 = 35.032.591,22 */
+  w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"1280" }]');
+  $("#fIncoterm").value = "FCA";
+  $("#fFreight").value = "688.62";
+  $("#fInsurance").value = "9.84";
+  $("#fNdpbm").value = "17,707";
+  w.recalcCustoms();
+  eq($("#calcCIF").textContent, "$1,978.46", "Nilai CIF:");
+  eq($("#calcNilaiPabean").textContent, "Rp 35.032.591,22", "Nilai Pabean bersen:");
+  // Bulat -> tanpa ",00".
+  $("#fFreight").value = ""; $("#fInsurance").value = "";
+  w.recalcCustoms();
+  eq($("#calcCIF").textContent, "$1,280", "CIF tanpa ongkos:");
+  eq($("#calcNilaiPabean").textContent, "Rp 22.664.960", "Nilai Pabean bulat:");
+  // Kotak CIF Rupiah (= Nilai Pabean) & catatan "CIF dianggap 0" sudah tidak ada.
+  if (w.document.getElementById("calcCIFRupiah")) throw new Error("kotak CIF Rupiah masih ada");
+  if (w.document.getElementById("noCifFobNote")) throw new Error("catatan 'CIF dianggap 0' masih ada");
+  eq(w.fmtRpPresisi(84639460), "Rp 84.639.460", "pemformat, bulat:");
+  eq(w.fmtRpPresisi(1234.5), "Rp 1.234,50", "pemformat, bersen:");
+  eq(w.fmtRpPresisi(1234.567), "Rp 1.234,57", "pemformat, maks 2 desimal:");
+});
 t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
   $("#fFreight").value = "";
@@ -3028,10 +4138,11 @@ t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
   const bmPolos = Math.round(dasarPolos * 0.05);
   eq($("#fPPN").value, w.formatNumberValue(Math.round((dasarPolos + bmPolos) * 0.11)));
 });
-t("Bea Masuk kini terisi otomatis 5% dari Nilai Pabean (dulu selalu manual)", () => {
+t("Bea Masuk terisi otomatis dari Tarif; PPh dari Nilai Impor (Pabean + BM), bukan Pabean saja", () => {
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"1000" }]');
   $("#fFreight").value = "";
   $("#fInsurance").value = "";
+  $("#fTarif").value = "5";
   $("#fNdpbm").value = "10,000";
   $("#fBM").value = "";
   $("#fPPN").value = "";
@@ -3041,7 +4152,7 @@ t("Bea Masuk kini terisi otomatis 5% dari Nilai Pabean (dulu selalu manual)", ()
   const pabean = 1000 * 10000; // 10.000.000
   eq($("#fBM").value, w.formatNumberValue(Math.round(pabean * 0.05)), "BM = Pabean x 5%:");
   eq($("#fPPN").value, w.formatNumberValue(Math.round(pabean * 1.05 * 0.11)), "PPN = (Pabean+BM) x 11%:");
-  eq($("#fPPH").value, w.formatNumberValue(Math.round(pabean * 0.025)), "PPH = Pabean x 2,5%:");
+  eq($("#fPPH").value, w.formatNumberValue(pabean * 1.05 * 0.025), "PPH = (Pabean+BM) x 2,5%:");
 });
 t("BM diisi MANUAL: PPN memakai BM manual itu, bukan hasil 5% otomatis", () => {
   /* Tarif HS Code tertentu memang bukan 5% -- yang penting PPN selalu
@@ -3402,6 +4513,33 @@ t("angka memakai format dari rujukan, bukan General", () => {
   /* Angka Total sebaris dengan angka barang, jadi ukurannya mengikuti:
      Arial 9, bukan 8. */
   eq(selPl("G46").font.size, 9);
+});
+t("kotak tanda tangan Invoice & Packing List SAMA LEBAR -- cetak & Excel Dynamic Design", () => {
+  const porsi = (l, k) => l.slice(k).reduce((a, b) => a + b, 0) / l.reduce((a, b) => a + b, 0);
+  // CETAK: Invoice D..J, Packing List E..J -- porsi bingkainya sama.
+  eq(porsi(baca("CIPL_COLS_INVOICE"), 3).toFixed(4), porsi(baca("CIPL_COLS_PACKING"), 4).toFixed(4), "cetak:");
+  const row = { id: "d7", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const hCi = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
+  if (!/<td colspan="3" class="ci-sign-empty">/.test(hCi) || !/<td colspan="7" class="ci-sign-cell">/.test(hCi))
+    throw new Error("kotak tanda tangan Invoice cetak tidak mulai di kolom D");
+  if (!/<td colspan="5" class="ci-total-k">Total<\/td>/.test(hCi))
+    throw new Error("label Total Invoice cetak tidak mulai di kolom D");
+  // EXCEL: keduanya D..J, porsinya sama.
+  const lembar = (fn) => {
+    const ws = wsTiruan(), kol = {}, bar = {}, asliRow = ws.getRow;
+    ws.getColumn = (c) => (kol[c] = kol[c] || {});
+    ws.getRow = (r) => (bar[r] = bar[r] || asliRow(r));
+    fn({ addWorksheet: () => ws, addImage: () => 1 }, rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+    return { ws, lebar: Array.from({ length: 10 }, (_, i) => (kol[i + 1] || {}).width) };
+  };
+  const ci = lembar(w.ciplXlsInvoice), pl = lembar(w.ciplXlsPacking);
+  const rt = w.ciplXlsBarisTotal(w.ciplBarisBarang(jadwalSI).length);
+  const awal = (x) => [...Array(10).keys()].map((i) => i + 1).find((c) => /signed by/i.test(String(x.ws.at(rt + 1, c).value || "")));
+  eq(awal(ci), 4, "Excel Invoice mulai di D:");
+  eq(awal(pl), 4, "Excel Packing List mulai di D:");
+  eq(porsi(ci.lebar, 3).toFixed(4), porsi(pl.lebar, 3).toFixed(4), "Excel:");
+  // Kolom D Packing List TIDAK dipersempit: ia juga menampung "Sailing on or About".
+  eq(pl.lebar[3], 16, "lebar kolom D Packing List:");
 });
 
 t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {
@@ -6354,13 +7492,41 @@ t("ada jembatan tak terlihat antara chip & menunya", () => {
   if (!/\.user-menu::before \{[^}]*top:\s*-/.test(css))
     throw new Error("tidak ada jembatan penutup celah di atas menu");
 });
-t("di mobile nama & peran disembunyikan, sisakan avatar saja", () => {
+t("layar menengah & sempit: nama & peran disembunyikan, sisakan avatar saja", () => {
+  /* Mulai di bawah 1.320 px (bukan 991 px lagi): navbar lengkap butuh
+     ~1.320 px dengan label bahasa Inggris, dan di jendela terbelah
+     (Win + panah) tautan terakhir terpotong. */
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
-  const i = css.indexOf("@media (max-width: 991px)");
-  if (i < 0) throw new Error("breakpoint 991px tidak ditemukan");
-  if (!/\.user-chip-main \{[^}]*display: none/.test(css.slice(i)))
-    throw new Error("nama & peran tidak disembunyikan di layar sempit");
+  const i = css.indexOf("@media (max-width: 1319px)");
+  if (i < 0) throw new Error("breakpoint 1319px tidak ditemukan");
+  if (!/^\s*\.user-chip-main \{[^}]*display: none/.test(css.slice(i + "@media (max-width: 1319px) {".length)))
+    throw new Error("nama & peran tidak disembunyikan di layar menengah");
+});
+t("navbar meringkas bertahap: tidak ada yang terpotong atau patah di layar menengah", () => {
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "shell.css"), "utf8");
+  const blok = (lebar) => { const i = css.indexOf(`@media (max-width: ${lebar}px) {`); return i < 0 ? "" : css.slice(i, css.indexOf("\n}\n", i)); };
+  if (!/\.cmd-trigger \{[\s\S]*?white-space: nowrap;[\s\S]*?flex-shrink: 0;/.test(css)) throw new Error("tulisan Quick search bisa patah");
+  if (!/\.cmd-trigger-text/.test(blok(1319))) throw new Error("tahap 1: Quick search tidak jadi ikon di < 1.320 px");
+  if (!/\.brand-name \{\s*display: none;/.test(blok(1099))) throw new Error("tahap 2: nama brand");
+  if (!/\.site-nav-link span \{\s*display: none;/.test(blok(899))) throw new Error("tahap 3: label tautan");
+  if (!/\.site-nav-link \{\s*padding: 0 7px;/.test(blok(419))) throw new Error("tahap 4: ponsel kecil");
+});
+t("kotak cari di luar navbar ber-placeholder singkat 'Cari' / 'Search'", () => {
+  ["searchInput", "hsCodeSearch", "accountSearch", "docNumSearch"].forEach((id) => {
+    const el = w.document.getElementById(id);
+    eq(el.getAttribute("data-i18n-ph"), "ph.cari", id + ":");
+    if (!el.getAttribute("aria-label")) throw new Error(id + " kehilangan label aksesibilitas");
+  });
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    eq(w.document.getElementById("hsCodeSearch").placeholder, "Search", "Inggris:");
+    w.setLang("id");
+    eq(w.document.getElementById("hsCodeSearch").placeholder, "Cari", "Indonesia:");
+  } finally {
+    w.setLang(simpan);
+  }
 });
 t("menu akun menempel langsung di bawah bilah, tanpa celah menggantung", () => {
   const css = require("fs").readFileSync(
@@ -6388,8 +7554,10 @@ t("kolom Nomor Billing & Keterangan HANYA muncul di daftar jenis fund", () => {
     require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
   /* Dua kolom ini khusus pengajuan dana -- jenis lain tidak punya
      billingNo, jadi kolomnya cuma jadi ruang kosong di sana. */
-  const kepala = src.indexOf('<th>Nomor</th>');
-  const potongan = src.slice(kepala, kepala + 900);
+  // Jangkar = kepala kolom Nomor (kini berlabel dua bahasa lewat tt()).
+  const kepala = src.indexOf('<tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th>');
+  if (kepala < 0) throw new Error("kepala tabel riwayat tidak ditemukan");
+  const potongan = src.slice(kepala, kepala + 1400);
   if (!/jenis\.key === "fund"[\s\S]{0,120}dn-col-billing/.test(potongan))
     throw new Error("kolom Nomor Billing tidak dibatasi ke jenis fund");
   if (!/jenis\.key === "fund"[\s\S]{0,120}dn-col-ket/.test(potongan))
@@ -7850,11 +9018,10 @@ t("Report: barang yang BENAR-BENAR sama (nama & size sama persis) tetap ke-dedup
   });
   eq(w.reportItemNames(s).length, 1);
 });
-t("Daily Import: KGS pakai Total Bruto kalau Netto TIDAK lengkap (ada yang kosong/nol)", () => {
+t("Daily Import: kolom BRUTO = Total Bruto se-pengiriman, sekali di baris pertama", () => {
   /* Barang 1 100kg + Barang 2 250kg + Barang 3 150kg = Total 500kg --
      dan ditampilkan SEKALI di baris pertama (level pengiriman, sama
-     seperti SPPB/AJU/dst.), bukan diulang tiap baris. Netto sengaja
-     tidak diisi sama sekali di sini -> "tidak lengkap", jatuh ke Bruto. */
+     seperti SPPB/AJU/dst.), bukan diulang tiap baris. */
   const s = Object.assign({}, jadwalUji(), {
     items: [
       { namaBarang: "A", qty: 1, satuan: "PCE", bruto: 100 },
@@ -7867,7 +9034,9 @@ t("Daily Import: KGS pakai Total Bruto kalau Netto TIDAK lengkap (ada yang koson
   eq(rows[1][9], "", "baris 2 -- kosong, bukan berat barang B (250) sendiri:");
   eq(rows[2][9], "", "baris 3 -- kosong, bukan berat barang C (150) sendiri:");
 });
-t("Daily Import: KGS pakai Total NETTO kalau lengkap di SEMUA barang (lebih akurat dari Bruto)", () => {
+t("Daily Import: Netto yang terisi lengkap TIDAK menggantikan Total Bruto", () => {
+  /* Dulu Netto didahulukan kalau terisi di semua barang. Kolom ini
+     kolom BRUTO: isinya Total Bruto, apa pun isi Netto-nya. */
   const s = Object.assign({}, jadwalUji(), {
     items: [
       { namaBarang: "A", qty: 1, satuan: "PCE", netto: 80, bruto: 100 },
@@ -7876,18 +9045,7 @@ t("Daily Import: KGS pakai Total NETTO kalau lengkap di SEMUA barang (lebih akur
     ],
   });
   const rows = w.buildDailyImportCopyRows(s, baca("clipboardFormatter"));
-  eq(rows[0][9], "400", "Total Netto (80+200+120), BUKAN Total Bruto (500):");
-});
-t("Daily Import: satu barang saja netto-nya kosong -> tetap jatuh ke Total Bruto, bukan netto sebagian", () => {
-  const s = Object.assign({}, jadwalUji(), {
-    items: [
-      { namaBarang: "A", qty: 1, satuan: "PCE", netto: 80, bruto: 100 },
-      { namaBarang: "B", qty: 1, satuan: "PCE", bruto: 250 }, // netto kosong
-      { namaBarang: "C", qty: 1, satuan: "PCE", netto: 120, bruto: 150 },
-    ],
-  });
-  const rows = w.buildDailyImportCopyRows(s, baca("clipboardFormatter"));
-  eq(rows[0][9], "500", "jatuh ke Total Bruto (100+250+150), BUKAN netto sebagian (80+120=200):");
+  eq(rows[0][9], "500", "Total Bruto (100+250+150), BUKAN Total Netto (400):");
 });
 t("kolom setelah NO tidak ikut tergeser atau hilang", () => {
   const s = jadwalUji();
@@ -9269,6 +10427,77 @@ function pakaiHsCodeHalaman(jumlah, jalankan) {
 function namaHsTampil() {
   return [...w.document.querySelectorAll("#hsCodeList .hscode-name")].map((el) => el.textContent);
 }
+t("pengatur halaman HS Code tetap berjarak dari tepi panel (kelas tidak ditimpa)", () => {
+  const simpan = w.eval("JSON.stringify(hsCodeRows)");
+  try {
+    w.eval(`hsCodeRows = Array.from({ length: 3 }, (_, i) => ({ id: "p" + i, item_name: "B" + i, hs_code: "1234567" + i, notes: "" }))`);
+    w.renderHsCodes();
+    const bar = w.document.getElementById("hsCodePagination");
+    if (!bar.classList.contains("pagination-bar") || !bar.classList.contains("hs-halaman"))
+      throw new Error("kelas pemberi jarak hilang: " + bar.className);
+  } finally {
+    w.eval("hsCodeRows = " + simpan + "; renderHsCodes()");
+  }
+});
+t("mode Inggris: teks yang dulu terlewat kini ikut diterjemahkan", () => {
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    w.showPrompt({ fields: [] });
+    eq(w.document.getElementById("promptTitle").textContent, "Input", "judul dialog bawaan:");
+    eq(baca("LABEL_KOLOM_TIBA").etdUpdate, "Revised ETD", "label ETD revisi:");
+    const strip = w.delayStripHtml({ id: "x", status: "delayed", etd: "2026-09-01", eta: "2026-09-10" });
+    if (!/Delay Update Dates/.test(strip) || !/Updated ETD/.test(strip)) throw new Error("strip Delay masih Indonesia");
+    if (/Berangkat|Tanggal Update/.test(strip)) throw new Error("sisa teks Indonesia di strip Delay");
+    w.setLang("id");
+    eq(baca("LABEL_KOLOM_TIBA").etdUpdate, "ETD revisi", "kembali ke Indonesia:");
+  } finally {
+    w.setLang(simpan);
+    w.eval("bootstrap.Modal.getOrCreateInstance(document.getElementById('promptModal')).hide()");
+  }
+});
+t("halaman HS Code: satu panel -- Tambah di bilah ATAS, bukan kartu terpisah di bawah daftar", () => {
+  const panel = w.document.querySelector("#viewHsCode .hs-panel");
+  if (!panel) throw new Error("panel HS Code tidak ada");
+  const bilah = panel.querySelector(".hs-bar");
+  ["#btnHsCodeAdd", "#hsCodeSearch", "#btnHsCodeRefresh"].forEach((id) => {
+    if (!bilah.querySelector(id)) throw new Error(id + " tidak di bilah atas");
+  });
+  // Bilah atas mendahului daftar -- di ponsel terlihat tanpa menggulir.
+  const urutan = [...panel.querySelectorAll(".hs-bar, #hsCodeList")].map((el) => el.className || el.id);
+  eq(urutan[0], "panel-head hs-bar", "bilah atas lebih dulu:");
+  if (w.document.getElementById("hsCodeAddPanel")) throw new Error("kartu Tambah lama masih ada");
+  const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
+  if (!/body\.is-viewer #btnHsCodeAdd,\s*\n\s*body\.is-viewer \.hs-kol-aksi,/.test(css))
+    throw new Error("tombol Tambah / kolom aksi tidak disembunyikan untuk viewer & marketing");
+});
+t("tabel HS Code: nama, kode (tombol salin), catatan, aksi", async () => {
+  const simpan = w.eval("JSON.stringify(hsCodeRows)");
+  const salinAsli = w.navigator.clipboard;
+  let tersalin = null;
+  try {
+    w.eval(`hsCodeRows = [{ id: "a", item_name: "BAR GAUGE", hs_code: "90318090", notes: "Alat ukur tapak" },
+      { id: "b", item_name: "CLAY", hs_code: "34070010", notes: "" }]`);
+    w.renderHsCodes();
+    const kepala = [...w.document.querySelectorAll("#hsCodeList thead th")].map((th) => th.textContent.trim());
+    eq(kepala.slice(0, 3).join(" | "), "Nama Barang | HS Code | Catatan", "kolom:");
+    const baris = w.document.querySelectorAll("#hsCodeList tbody tr");
+    eq(baris[0].querySelector(".hs-kol-catatan").textContent.trim(), "Alat ukur tapak", "catatan tampil:");
+    if (!baris[1].querySelector(".hs-kol-catatan").classList.contains("hs-tanpa-catatan")) throw new Error("catatan kosong tidak ditandai");
+    Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: { writeText: async (v) => { tersalin = v; } } });
+    const tombol = baris[0].querySelector("[data-salin-hs]");
+    if (!tombol.querySelector("i.bi-clipboard")) throw new Error("ikon salin tidak terlihat");
+    eq(tombol.querySelector(".hscode-kode").textContent, "90318090", "kode di tombol:");
+    tombol.click();
+    await new Promise((r) => setTimeout(r, 20));
+    eq(tersalin, "90318090", "tersalin:");
+    if (!tombol.classList.contains("is-tersalin") || !tombol.querySelector("i.bi-clipboard-check"))
+      throw new Error("tidak ada tanda berhasil di tombolnya");
+  } finally {
+    Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: salinAsli });
+    w.eval("hsCodeRows = " + simpan + "; renderHsCodes()");
+  }
+});
 t("selalu urut Nama Barang A-Z, tanpa perlu memilih apa pun", () => {
   /* Tidak ada dropdown urutkan: satu urutan yang masuk akal dipakai
      terus, jadi tidak ada kendali tambahan yang harus diatur pengguna. */

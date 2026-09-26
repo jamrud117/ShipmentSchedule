@@ -3,13 +3,13 @@
 /* ITEM TABLE (draft, inside modal) */
 function skbEntryLabel(sk) {
   if (sk.jenis === "Lainnya")
-    return (sk.jenisLainnya || "").trim() || "Lainnya";
+    return (sk.jenisLainnya || "").trim() || tt("Lainnya", "Other");
   return sk.jenis;
 }
 
 function facilitiesButtonLabel(it) {
   const list = it.skb || [];
-  if (!list.length) return "Fasilitas";
+  if (!list.length) return tt("Fasilitas", "Facility");
   const ecooCount = list.filter((sk) => sk.jenis === "E-COO").length;
   const skbCount = list.length - ecooCount;
   const parts = [];
@@ -35,16 +35,16 @@ function facilitiesPanelHtml(it, idx) {
           (sk, skIdx) => `
         <div class="item-fac-skb-row">
           <select data-fac="jenis" data-idx="${idx}" data-skidx="${skIdx}">
-            ${SKB_TYPE_OPTIONS.map((o) => `<option value="${o}" ${o === sk.jenis ? "selected" : ""}>${o}</option>`).join("")}
+            ${SKB_TYPE_OPTIONS.map((o) => `<option value="${o}" ${o === sk.jenis ? "selected" : ""}>${o === "Lainnya" ? tt("Lainnya", "Other") : o}</option>`).join("")}
           </select>
           ${
             sk.jenis === "Lainnya"
-              ? `<input type="text" class="skb-lainnya" data-fac="jenisLainnya" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.jenisLainnya)}" placeholder="Sebutkan jenisnya">`
+              ? `<input type="text" class="skb-lainnya" data-fac="jenisLainnya" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.jenisLainnya)}" placeholder="${tt("Sebutkan jenisnya", "Specify the type")}">`
               : ""
           }
-          <input type="text" data-fac="nomor" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.nomor)}" placeholder="${sk.jenis === "E-COO" ? "Nomor E-COO" : "Nomor SKB"}">
+          <input type="text" data-fac="nomor" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.nomor)}" placeholder="${sk.jenis === "E-COO" ? tt("Nomor E-COO", "E-COO number") : tt("Nomor SKB", "SKB number")}">
           <input type="date" data-fac="tanggal" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.tanggal)}">
-          <button type="button" class="rm-skb" data-idx="${idx}" data-skidx="${skIdx}" title="Hapus fasilitas ini"><i class="bi bi-x-lg"></i></button>
+          <button type="button" class="rm-skb" data-idx="${idx}" data-skidx="${skIdx}" title="${tt("Hapus fasilitas ini", "Remove this facility")}"><i class="bi bi-x-lg"></i></button>
         </div>`,
         )
         .join("")
@@ -55,8 +55,8 @@ function facilitiesPanelHtml(it, idx) {
       <td colspan="15">
         <div class="item-fac-panel">
           <div class="item-fac-skb-head">
-            <b>Fasilitas (SKB &amp; E-COO)</b>
-            <button type="button" class="btn-add-skb" data-idx="${idx}"><i class="bi bi-plus-lg"></i> Tambah Fasilitas</button>
+            <b>${tt("Fasilitas (SKB &amp; E-COO)", "Facilities (SKB &amp; E-COO)")}</b>
+            <button type="button" class="btn-add-skb" data-idx="${idx}"><i class="bi bi-plus-lg"></i> ${tt("Tambah Fasilitas", "Add Facility")}</button>
           </div>
           ${skbRowsHtml}
         </div>
@@ -75,7 +75,7 @@ function packageWarnTitle(it) {
   }
   return parsePackageDims(raw)
     ? ""
-    : "Format dimensi: P*L*T, mis. 82*82*75.";
+    : tt("Format dimensi: P*L*T, mis. 82*82*75.", "Dimension format: L*W*H, e.g. 82*82*75.");
 }
 
 /* Textarea "Nama Barang" tumbuh otomatis mengikuti isinya.
@@ -221,14 +221,14 @@ function renderItemTable() {
      SAMA, cuma labelnya beda -- tidak ada kolom Size di Import, jadi
      tidak perlu dipisah). */
   const thNama = $("#thNamaBarang");
-  if (thNama) thNama.textContent = activeMode === "export" ? "Uraian" : t("c.nama.barang");
+  if (thNama) thNama.textContent = activeMode === "export" ? tt("Uraian", "Description") : t("c.nama.barang");
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
     .map((it, idx) => {
       const mainRow = `
     <tr data-idx="${idx}">
-      <td class="seri-col text-center" title="Nomor urut barang, mengikuti urutan baris">${idx + 1}</td>
-      <td class="namabarang-col"><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="${activeMode === "export" ? "Uraian barang" : "Nama barang"}">${escapeHtml(it.namaBarang)}</textarea></td>
+      <td class="seri-col text-center" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
+      <td class="namabarang-col"><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="${activeMode === "export" ? tt("Uraian barang", "Item description") : tt("Nama barang", "Item name")}">${escapeHtml(it.namaBarang)}</textarea></td>
       <td class="size-col"><input type="text" data-f="size" placeholder="Size" value="${escapeAttr(it.size)}"></td>
       <td class="export-col"><input type="text" data-f="pattern" placeholder="Pattern" value="${escapeAttr(it.pattern)}"></td>
       <td class="export-col"><input type="text" data-f="moldNo" placeholder="Mold No." value="${escapeAttr(it.moldNo)}"></td>
@@ -237,14 +237,14 @@ function renderItemTable() {
       <td>
         <div class="hscode-cell">
           <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">
-          <button type="button" class="hscode-lookup-btn" data-hscode-lookup="${idx}" title=t("s.cari.hs.code.dari.database.berdasarkan.nama.ba")>
+          <button type="button" class="hscode-lookup-btn" data-hscode-lookup="${idx}" title="${escapeAttr(t("s.cari.hs.code.dari.database.berdasarkan.nama.ba"))}">
             <i class="bi bi-search"></i>
           </button>
         </div>
       </td>
       <td>
         <select data-f="jenisBarang">
-          ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${o}</option>`).join("")}
+          ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
         </select>
       </td>
       <td class="text-center">
@@ -253,7 +253,7 @@ function renderItemTable() {
         </button>
       </td>
       <td><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal"></td>
-      <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="Satuan" list="satuanList"></td>
+      <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList"></td>
       <td><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
       <td><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
       <td><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
@@ -263,7 +263,7 @@ function renderItemTable() {
       </td>
       <td>
         <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}"
-               placeholder="${idx === 0 ? "1" : "↳ ikut"}"
+               placeholder="${idx === 0 ? "1" : tt("↳ ikut", "↳ same")}"
                title="${
                  idx === 0
                    ? t("s.jumlah.kemasan.untuk.barang.ini")
@@ -273,14 +273,14 @@ function renderItemTable() {
       </td>
       <td>
         <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}"
-               list="packageUnitList" placeholder="${idx === 0 ? "BOX" : "↳ ikut"}"
+               list="packageUnitList" placeholder="${idx === 0 ? "BOX" : tt("↳ ikut", "↳ same")}"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
       <td class="cbm-col text-center ${activeMode === "import" ? "d-none" : ""}">
         <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}">
       </td>
       <td><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}"></td>
-      <td><button type="button" class="rm-row" data-idx="${idx}" title="Hapus barang ini"><i class="bi bi-x-lg"></i></button></td>
+      <td><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg"></i></button></td>
     </tr>`;
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
     })

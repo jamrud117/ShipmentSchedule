@@ -48,10 +48,10 @@ const CIPL_SHIPPER = [
    satu per satu menghasilkan grid kotak-kotak yang tidak ada di
    dokumen aslinya.
 
-   Tingginya tetap dihitung dari jumlah baris supaya blok Total dan
-   tanda tangan selalu jatuh di tempat yang sama. */
-const CIPL_MIN_BARIS = 14;
-const CIPL_TINGGI_BARIS = 15;
+   Tingginya TIDAK dihitung dari jumlah baris: baris ini memanjang
+   menyerap sisa tinggi halaman (.ci-fill di ciplCss), jadi blok Total
+   dan tanda tangan selalu jatuh di kaki kertas -- dengan jarak ke tepi
+   bawah sama dengan jarak ke tepi atas -- berapa pun jumlah barangnya. */
 
 /* LEBAR KOLOM DIDEFINISIKAN DI SINI, BUKAN DI KELAS SEL.
 
@@ -79,7 +79,19 @@ const CIPL_COLS_INVOICE = [3.5, 23, 25, 8.5, 5, 4.5, 4.5, 10, 4.5, 11.5];
    Type ikut turun 21 -> 20: isinya ("CREDO SUNMODE 195/65R15") memang
    sedikit lebih panjang, tapi ia sudah muat dengan lega sedangkan Item
    tidak. */
-const CIPL_COLS_PACKING = [3.5, 20, 20, 8.5, 5, 4.5, 6, 6, 16, 10.5];
+/* KOTAK TANDA TANGAN INVOICE & PACKING LIST SAMA LEBAR.
+
+   Kotaknya terikat ke kolom (supaya sudutnya bertemu tepat dengan sel
+   Total di atasnya): Invoice D..J, Packing List E..J. Keduanya
+   dipatok 48,5% lebar bingkai -- Invoice 8,5+5+4,5+4,5+10+4,5+11,5,
+   Packing List 5+4,5+6+6+16+11. Karena itu HS turun 8,5 -> 8 dan CBM
+   naik 10,5 -> 11: tanpa itu kotak Packing List 1 mm lebih sempit.
+
+   Pengepas kolom (ciplPasKolom) yang melebarkan Item dengan menyumbang
+   dari Dimensi akan MENYEMPITKAN kotak Packing List sebanyak yang
+   disumbangkan -- Dimensi ada di dalam rentang kotaknya. Itu hanya
+   terjadi pada nama barang yang tidak muat di kolomnya. */
+const CIPL_COLS_PACKING = [3.5, 20, 20, 8, 5, 4.5, 6, 6, 16, 11];
 
 /* `peran` menandai kolom mana yang boleh MELEBAR mengikuti isinya dan
    kolom mana yang MENYUMBANG lebarnya. Ditulis sebagai atribut di
@@ -97,13 +109,16 @@ function ciplColgroupHtml(cols, peran) {
     .join("")}</colgroup>`;
 }
 
-function ciplRuangKosongHtml(jumlahBaris, kolom) {
-  const sisa = Math.max(0, CIPL_MIN_BARIS - jumlahBaris);
-  if (!sisa) return "";
+/* SELALU ada, juga saat barangnya banyak: tanpa baris ini, sisa tinggi
+   halaman dibagikan peramban ke SEMUA baris barang dan tiap baris jadi
+   renggang. Barang yang melebihi satu halaman membuat sisanya nol --
+   baris ini lalu setinggi nol dan tabelnya menyambung ke halaman
+   berikutnya seperti biasa. */
+function ciplRuangKosongHtml(kolom) {
   const sel = Array.from({ length: kolom })
     .map(() => "<td></td>")
     .join("");
-  return `<tr class="ci-fill" style="height:${sisa * CIPL_TINGGI_BARIS}px">${sel}</tr>`;
+  return `<tr class="ci-fill">${sel}</tr>`;
 }
 
 /* ------------------------------------------------------------------
@@ -579,16 +594,16 @@ function ciplHalamanInvoice(row, shipment, baris) {
             <th colspan="2">Amount</th>
           </tr>
         </thead>
-        <tbody>${isi}${ciplRuangKosongHtml(baris.length, 10)}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="6" class="ci-foot-empty"></td>
-            <td colspan="2" class="ci-total-k">Total</td>
+        <tbody>
+          ${isi}${ciplRuangKosongHtml(10)}
+          <tr class="ci-total-row">
+            <td colspan="3" class="ci-foot-empty"></td>
+            <td colspan="5" class="ci-total-k">Total</td>
             <td class="ci-cur">${escapeHtml(mata)}</td>
             <td class="ci-num ci-w-money">${escapeHtml(ciplAngka(total, 2))}</td>
           </tr>
-          ${ciplBarisTandaTanganHtml(6, 4)}
-        </tfoot>
+          ${ciplBarisTandaTanganHtml(3, 7)}
+        </tbody>
       </table>
     </div>
   </div>`;
@@ -642,9 +657,9 @@ function ciplHalamanPacking(row, shipment, baris) {
             <th colspan="2">CBM</th>
           </tr>
         </thead>
-        <tbody>${isi}${ciplRuangKosongHtml(baris.length, 10)}</tbody>
-        <tfoot>
-          <tr>
+        <tbody>
+          ${isi}${ciplRuangKosongHtml(10)}
+          <tr class="ci-total-row">
             <td colspan="4" class="ci-pkg-total">${koli ? escapeHtml(ciplAngka(koli)) + " Package" : ""}</td>
             <td colspan="2" class="ci-total-k">TOTAL</td>
             <td class="ci-num">${escapeHtml(ciplAngka(totNw))}</td>
@@ -652,7 +667,7 @@ function ciplHalamanPacking(row, shipment, baris) {
             <td colspan="2" class="ci-num ci-cbm">${totCbm ? escapeHtml(ciplAngka(totCbm, 3)) + " M<sup>3</sup>" : ""}</td>
           </tr>
           ${ciplBarisTandaTanganHtml(4, 6)}
-        </tfoot>
+        </tbody>
       </table>
     </div>
   </div>`;
@@ -1074,7 +1089,39 @@ function ciplCss() {
      & bawah 0,75" = 19,05 mm. Kalau salah satu diubah, ubah
      pasangannya di cipl-excel.js (XLS_MARGIN_NARROW) — ada uji yang
      memastikan keduanya tetap sepasang. */
-  .ci-sheet { padding: 19.05mm 6.35mm; }
+  /* LEBAR LEMBAR DIPATOK selebar kertas, bukan selebar jendela. Jendela
+     cetak 900px, kertas A4 794px: tanpa patokan, tata letak di layar
+     (tempat pengepas kolom mengukur) berbeda dari yang tercetak. */
+  .ci-sheet { width: 210mm; padding: 19.05mm 6.35mm; }
+  /* BINGKAI INVOICE & PACKING LIST SETINGGI BIDANG CETAK -- jarak ke
+     tepi bawah kertas sama dengan ke tepi atas (19,05mm), bukan
+     berhenti di baris terakhir yang terisi.
+
+     Kotaknya kolom flex dengan tinggi MINIMUM satu bidang cetak; tabel
+     barang memanjang mengisinya (flex-grow), dan baris .ci-fill di ekor
+     badan tabel menyerap kelebihannya -- baris barang tetap setinggi
+     isinya. MINIMUM, bukan tinggi tetap: barang yang lebih dari satu
+     halaman membuat kotaknya ikut memanjang ke halaman berikutnya alih-
+     alih meluber keluar bingkai. -2px: pengaman pembulatan, supaya
+     tidak ada halaman kosong terdorong di belakangnya (sama dengan
+     .si-box). */
+  .ci-sheet:not(.si-sheet) > .ci-box {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(297mm - 38.1mm - 2px);
+  }
+  .ci-box > .ci-items { flex: 1 0 auto; }
+  /* TOTAL & TANDA TANGAN DI <tbody> YANG SAMA DENGAN BARANG, bukan <tfoot>.
+
+     Sebagai <tfoot>, peramban mengulangnya di kaki SETIAP halaman saat
+     barangnya lebih dari satu halaman -- baris "Total" berisi total
+     keseluruhan ikut tercetak di halaman pertama, padahal barangnya
+     masih berlanjut. Sebagai kelompok baris TERPISAH (tfoot yang
+     dijadikan row-group), sisa tinggi tabel yang memanjang dibagi ke
+     KEDUA kelompok: kotak tanda tangan membengkak jadi 97 mm dan baris
+     Total 10 mm. Dalam satu kelompok, seluruh sisa jatuh ke baris
+     pengisi yang tingginya 100%. */
+  .ci-items tr.ci-fill td { height: 100%; }
   /* Halaman kedua dipaksa mulai di lembar baru. Tanpa ini, Packing
      List menyambung di bawah invoice dan keduanya terpotong. */
   .ci-page2 { page-break-before: always; break-before: page; }
@@ -1264,7 +1311,15 @@ function ciplCss() {
   .ci-foot-empty, .ci-pkg-total { border-left: 0 !important; border-bottom: 0 !important; }
   .ci-pkg-total { text-align: left; font-weight: 700; font-size: 8.5pt; }
   .ci-total-k { text-align: center; font-weight: 700; }
-  .ci-items tfoot td { height: 20px; vertical-align: middle; }
+  /* Baris Total & tanda tangan tinggal di <tbody> (lihat .ci-box >
+     .ci-items), jadi aturan sel barang -- tinggi 15px, rata tengah --
+     dikembalikan di sini ke bentuknya sendiri. */
+  .ci-items tbody tr.ci-total-row td { height: 20px; vertical-align: middle; text-align: start; }
+  .ci-items tbody tr.ci-total-row td.ci-num { text-align: right; }
+  .ci-items tbody tr.ci-total-row td.ci-cur { text-align: left; }
+  .ci-items tbody tr.ci-total-row td.ci-total-k { text-align: center; }
+  .ci-items tbody tr.ci-total-row td.ci-pkg-total { text-align: left; }
+  .ci-items tbody tr.ci-sign-row td { height: auto; text-align: start; }
 
   /* ---- KOTAK TANDA TANGAN: SATU GARIS, SATU PEMILIK ----
 
@@ -1296,7 +1351,18 @@ function ciplCss() {
     padding: 2px 5px;
     vertical-align: top;
   }
-  .ci-sign-space { height: 76px; }
+  /* MUAT STEMPEL PERUSAHAAN: kotak setinggi 50 mm -- stempel bundar
+     umumnya 40-45 mm dan tanda tangannya menimpa stempel. Sama dengan
+     Excel-nya (XLS_TTD_MM). Bingkai tetap setinggi kertas: yang
+     menyusut bidang kosong barang (.ci-fill), bukan halamannya yang
+     bertambah.
+
+     Tingginya dibentuk ISI sel (ruang kosong di bawah "Signed by"),
+     BUKAN height pada <td>. Sel tabel bertinggi tetap ikut dibagi sisa
+     tinggi tabel yang memanjang -- kotaknya jadi 97 mm, bukan 50 --
+     sedangkan sel yang tingginya dari isi dibiarkan; seluruh sisanya
+     jatuh ke baris pengisi. 50 mm = ruang 45,6 mm + label & padding. */
+  .ci-sign-space { height: 45.6mm; }
 
   /* ---- SHIPPING INSTRUCTION ----
      Berbingkai luar seperti Invoice & Packing List, tapi tanpa sekat

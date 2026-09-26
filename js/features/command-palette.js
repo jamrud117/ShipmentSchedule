@@ -11,13 +11,13 @@ let cmdkResults = [];
 
 // Perintah halaman ikut masuk daftar yang sama supaya tidak perlu diingat sebagai fitur terpisah.
 const CMDK_COMMANDS = [
-  { type: "cmd", icon: "bi-plus-lg", title: "Tambah jadwal baru", hint: "Buka form kosong", run: () => (location.hash = "#/new") },
-  { type: "cmd", icon: "bi-columns-gap", title: "Buka Ringkasan", hint: t("s.apa.yang.perlu.ditindak.hari.ini"), run: () => (location.hash = "#/ringkasan") },
-  { type: "cmd", icon: "bi-list-columns-reverse", title: "Buka Jadwal", hint: "Daftar pengiriman", run: () => (location.hash = "#/") },
-  { type: "cmd", icon: "bi-hash", title: "Permintaan Nomor Dokumen", hint: "Invoice, DO, dana, surat", run: () => (location.hash = "#/docnum") },
-  { type: "cmd", icon: "bi-arrow-left-right", title: "Ganti buku Import / Export", hint: "Pindah antar mode", run: () => switchMode(activeMode === "import" ? "export" : "import") },
-  { type: "cmd", icon: "bi-exclamation-triangle", title: "Saring: perlu tindakan", hint: t("s.lewat.eta.atau.delay"), run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
-  { type: "cmd", icon: "bi-file-earmark-excel", title: "Bulk Export ke Excel", hint: t("s.buku.yang.sedang.aktif"), run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
+  { type: "cmd", icon: "bi-plus-lg", get title() { return tt("Tambah jadwal baru", "Add new schedule"); }, get hint() { return tt("Buka form kosong", "Open a blank form"); }, run: () => (location.hash = "#/new") },
+  { type: "cmd", icon: "bi-columns-gap", get title() { return tt("Buka Ringkasan", "Open Overview"); }, get hint() { return t("s.apa.yang.perlu.ditindak.hari.ini"); }, run: () => (location.hash = "#/ringkasan") },
+  { type: "cmd", icon: "bi-list-columns-reverse", get title() { return tt("Buka Jadwal", "Open Schedule"); }, get hint() { return tt("Daftar pengiriman", "Shipment list"); }, run: () => (location.hash = "#/") },
+  { type: "cmd", icon: "bi-hash", get title() { return tt("Permintaan Nomor Dokumen", "Request Document Number"); }, get hint() { return tt("Invoice, DO, dana, surat", "Invoice, DO, fund, letter"); }, run: () => (location.hash = "#/docnum") },
+  { type: "cmd", icon: "bi-arrow-left-right", get title() { return tt("Ganti buku Import / Export", "Switch Import / Export book"); }, get hint() { return tt("Pindah antar mode", "Switch between modes"); }, run: () => switchMode(activeMode === "import" ? "export" : "import") },
+  { type: "cmd", icon: "bi-exclamation-triangle", get title() { return tt("Saring: perlu tindakan", "Filter: needs action"); }, get hint() { return t("s.lewat.eta.atau.delay"); }, run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
+  { type: "cmd", icon: "bi-file-earmark-excel", get title() { return tt("Bulk Export ke Excel", "Bulk Export to Excel"); }, get hint() { return t("s.buku.yang.sedang.aktif"); }, run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
 ];
 
 function cmdkSearchShipments(q) {
@@ -71,20 +71,20 @@ function cmdkRender() {
   if (cmdkCursor >= cmdkResults.length) cmdkCursor = 0;
 
   if (!cmdkResults.length) {
-    cmdkListEl.innerHTML = `<div class="cmdk-empty">Tidak ada yang cocok dengan “${escapeHtml(q)}”.</div>`;
+    cmdkListEl.innerHTML = `<div class="cmdk-empty">${tt(`Tidak ada yang cocok dengan “${escapeHtml(q)}”.`, `Nothing matches “${escapeHtml(q)}”.`)}</div>`;
     return;
   }
 
   let html = "";
   let n = 0;
   if (kapal.length) {
-    html += `<div class="cmdk-group">Pengiriman</div>`;
+    html += `<div class="cmdk-group">${tt("Pengiriman", "Shipments")}</div>`;
     kapal.forEach((r) => {
       html += cmdkItemHtml(r, n++);
     });
   }
   if (perintah.length) {
-    html += `<div class="cmdk-group">Perintah</div>`;
+    html += `<div class="cmdk-group">${tt("Perintah", "Commands")}</div>`;
     perintah.forEach((r) => {
       html += cmdkItemHtml(r, n++);
     });

@@ -31,8 +31,8 @@ function batasiHsCode(teks) {
 
 function periksaHsCode(kode) {
   const angka = (String(kode || "").match(/\d/g) || []).length;
-  if (!angka) return "HS Code harus diisi.";
-  if (angka > HSCODE_MAKS_ANGKA) return "HS Code paling banyak 8 angka.";
+  if (!angka) return tt("HS Code harus diisi.", "HS Code is required.");
+  if (angka > HSCODE_MAKS_ANGKA) return tt("HS Code paling banyak 8 angka.", "HS Code can have at most 8 digits.");
   return null;
 }
 
@@ -170,27 +170,90 @@ function renderHsCodes() {
 
   renderHsCodePagination(terurut.length);
 
-  box.innerHTML = rows
-    .map(
-      (r) => `
-      <div class="hscode-row" data-hscode="${r.id}">
-        <div class="hscode-main">
-          <span class="hscode-name">${escapeHtml(r.item_name)}</span>
-          ${r.notes ? `<span class="hscode-notes">${escapeHtml(r.notes)}</span>` : ""}
-        </div>
-        <span class="hscode-code">${escapeHtml(r.hs_code)}</span>
-        <div class="hscode-actions">
-          <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="Ubah">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="Hapus">
-            <i class="bi bi-trash3"></i>
-          </button>
-        </div>
-      </div>`,
-    )
-    .join("");
+  /* TABEL selebar halaman: nama barang, HS Code, catatan, aksi. Di
+     ponsel tiap baris jadi kartu ringkas (hs-panel di auth.css). HS Code
+     berupa tombol: sekali klik tersalin, siap ditempel ke CEISA atau
+     Daftar Barang tanpa memilih teksnya dulu. */
+  const salinJudul = escapeAttr(tt("Salin HS Code", "Copy HS Code"));
+  box.innerHTML = `
+    <div class="hs-tabel-wrap">
+      <table class="hs-tabel">
+        <thead><tr>
+          <th class="hs-kol-nama">${tt("Nama Barang", "Item Name")}</th>
+          <th class="hs-kol-kode">HS Code</th>
+          <th class="hs-kol-catatan">${tt("Catatan", "Notes")}</th>
+          <th class="hs-kol-aksi"></th>
+        </tr></thead>
+        <tbody>${rows
+          .map(
+            (r) => `
+          <tr data-hscode="${r.id}">
+            <td class="hs-kol-nama"><span class="hscode-name">${escapeHtml(r.item_name)}</span></td>
+            <td class="hs-kol-kode">
+              <button type="button" class="hscode-code" data-salin-hs="${escapeAttr(r.hs_code)}" title="${salinJudul}"
+                aria-label="${escapeAttr(tt(`Salin HS Code ${r.hs_code}`, `Copy HS Code ${r.hs_code}`))}">
+                <span class="hscode-kode">${escapeHtml(r.hs_code)}</span>
+                <i class="bi bi-clipboard" aria-hidden="true"></i>
+              </button>
+            </td>
+            <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
+            <td class="hs-kol-aksi">
+              <div class="hscode-actions">
+                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </td>
+          </tr>`,
+          )
+          .join("")}</tbody>
+      </table>
+    </div>`;
 }
+
+/* Salin HS Code sekali klik. Cadangan execCommand untuk peramban tanpa
+   Clipboard API (atau halaman yang dibuka bukan lewat https).
+
+   Tanda berhasil di TOMBOLNYA SENDIRI -- ikon papan klip jadi centang,
+   pil sesaat hijau -- bukan hanya pesan di pojok layar: mata sedang
+   melihat tombol yang baru diklik, dan di ponsel pesannya mudah
+   tertutup jari. */
+async function salinHsCode(kode, tombol) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(kode);
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = kode;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    showToast(tt(`HS Code ${kode} disalin.`, `HS Code ${kode} copied.`), "success");
+    if (tombol) {
+      const ikon = tombol.querySelector("i");
+      tombol.classList.add("is-tersalin");
+      if (ikon) ikon.className = "bi bi-clipboard-check";
+      clearTimeout(tombol._tundaSalin);
+      tombol._tundaSalin = setTimeout(() => {
+        tombol.classList.remove("is-tersalin");
+        if (ikon) ikon.className = "bi bi-clipboard";
+      }, 1500);
+    }
+  } catch (err) {
+    showToast(tt("Gagal menyalin HS Code.", "Failed to copy the HS Code."), "danger");
+  }
+}
+document.addEventListener("click", (e) => {
+  const tombol = e.target.closest && e.target.closest("[data-salin-hs]");
+  if (tombol) salinHsCode(tombol.dataset.salinHs, tombol);
+});
 
 /* Dipakai juga dari luar halaman ini -- tombol cari HS Code di Daftar
    Barang (item-table.js) mencari lewat array yang sama, tanpa perlu
@@ -204,24 +267,24 @@ async function pastikanHsCodeTermuat() {
 function tambahHsCodeBaru() {
   if (!requireEdit()) return;
   showPrompt({
-    title: "Tambah HS Code",
+    title: tt("Tambah HS Code", "Add HS Code"),
     desc: t("s.nama.barang.hs.code.yang.sudah.pernah.dipakai."),
     icon: "bi-upc-scan",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: "Nama barang", placeholder: "Cth: Sole Material" },
+      { key: "nama", label: tt("Nama barang", "Item name"), placeholder: tt("Cth: Sole Material", "e.g. Sole Material") },
       {
         key: "kode",
         label: "HS Code",
-        placeholder: "Cth: 6404.19.00",
-        hint: "Maksimal 8 angka (titik hanya pemisah).",
+        placeholder: tt("Cth: 6404.19.00", "e.g. 6404.19.00"),
+        hint: tt("Maksimal 8 angka (titik hanya pemisah).", "At most 8 digits (dots are only separators)."),
         inputmode: "numeric",
         filter: batasiHsCode,
       },
-      { key: "catatan", label: "Catatan (opsional)", placeholder: "Cth: EVA Sole" },
+      { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), placeholder: tt("Cth: EVA Sole", "e.g. EVA Sole") },
     ],
     onSubmit: (v) => {
-      if (!(v.nama || "").trim()) return "Nama barang harus diisi.";
+      if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
       simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());
@@ -257,23 +320,23 @@ function editHsCode(id) {
   const r = hsCodeRows.find((x) => x.id === id);
   if (!r) return;
   showPrompt({
-    title: "Ubah HS Code",
+    title: tt("Ubah HS Code", "Edit HS Code"),
     icon: "bi-pencil-square",
-    okText: "Simpan",
+    okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: "Nama barang", value: r.item_name || "" },
+      { key: "nama", label: tt("Nama barang", "Item name"), value: r.item_name || "" },
       {
         key: "kode",
         label: "HS Code",
         value: r.hs_code || "",
-        hint: "Maksimal 8 angka (titik hanya pemisah).",
+        hint: tt("Maksimal 8 angka (titik hanya pemisah).", "At most 8 digits (dots are only separators)."),
         inputmode: "numeric",
         filter: batasiHsCode,
       },
-      { key: "catatan", label: "Catatan (opsional)", value: r.notes || "" },
+      { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), value: r.notes || "" },
     ],
     onSubmit: (v) => {
-      if (!(v.nama || "").trim()) return "Nama barang harus diisi.";
+      if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
       simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());
@@ -353,8 +416,12 @@ if (hsCodeSearchEl) {
 function renderHsCodePagination(totalItems) {
   const bar = $("#hsCodePagination");
   if (!bar) return;
+  /* Kelas hs-halaman DIPERTAHANKAN: ia yang memberi jarak kiri-kanan
+     (panel HS Code tidak berpadding). Dulu className ditimpa jadi
+     "pagination-bar" saja, dan teks "Showing ..." / "Per page" menempel
+     ke tepi panel. */
   if (!totalItems) {
-    bar.className = "";
+    bar.className = "hs-halaman";
     bar.innerHTML = "";
     return;
   }
@@ -369,7 +436,7 @@ function renderHsCodePagination(totalItems) {
     )
     .join("");
 
-  bar.className = "pagination-bar";
+  bar.className = "pagination-bar hs-halaman";
   bar.innerHTML = `
     <div class="pagination-info">${t("hscode.pager.showing", {
       awal: `<b>${awal}\u2013${akhir}</b>`,

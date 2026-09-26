@@ -77,7 +77,7 @@ function renderTaskQueue() {
 
   if (note) {
     note.textContent = tasks.length
-      ? `${tasks.length} hal · buku ${activeMode === "import" ? "Import" : "Export"}`
+      ? tt(`${tasks.length} hal · buku ${activeMode === "import" ? "Import" : "Export"}`, `${tasks.length} items · ${activeMode === "import" ? "Import" : "Export"} book`)
       : "";
   }
 
@@ -85,8 +85,8 @@ function renderTaskQueue() {
     box.innerHTML = `
       <div class="panel-empty">
         <i class="bi bi-check2-circle"></i>
-        Tidak ada yang tertunda. Semua jadwal di buku ini masih sesuai
-        rencana dan dokumennya lengkap.
+        ${tt("Tidak ada yang tertunda. Semua jadwal di buku ini masih sesuai rencana dan dokumennya lengkap.",
+            "Nothing pending. Every schedule in this book is on plan and its documents are complete.")}
       </div>`;
     return;
   }
@@ -133,12 +133,12 @@ function renderTaskQueue() {
     (totalHalaman > 1
       ? `<div class="task-pager">
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage - 1}"
-                   ${ovTaskPage <= 1 ? "disabled" : ""} title="Sebelumnya">
+                   ${ovTaskPage <= 1 ? "disabled" : ""} title="${tt("Sebelumnya", "Previous")}">
              <i class="bi bi-chevron-left"></i>
            </button>
-           <span class="task-pageinfo">${mulai + 1}\u2013${mulai + potong.length} dari ${tasks.length}</span>
+           <span class="task-pageinfo">${mulai + 1}\u2013${mulai + potong.length} ${tt("dari", "of")} ${tasks.length}</span>
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage + 1}"
-                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="Berikutnya">
+                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="${tt("Berikutnya", "Next")}">
              <i class="bi bi-chevron-right"></i>
            </button>
          </div>`
@@ -180,7 +180,7 @@ function renderAgenda() {
       .join(" ");
     html.push(`
       <button type="button" class="${cls}" data-ov-date="${iso}" title="${escapeAttr(fmtDateBoard(iso))}">
-        <span class="agenda-dow">${dt.toLocaleDateString("id-ID", { weekday: "short" })}</span>
+        <span class="agenda-dow">${dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", { weekday: "short" })}</span>
         <span class="agenda-date">${dt.getDate()}</span>
         <span class="agenda-count ${n ? "has" : ""}">${n}</span>
       </button>`);
@@ -198,7 +198,7 @@ function renderDelayWatch() {
     box.innerHTML = `
       <div class="panel-empty">
         <i class="bi bi-emoji-smile"></i>
-        Tidak ada pengiriman berstatus DELAY.
+        ${tt("Tidak ada pengiriman berstatus DELAY.", "No shipments with DELAY status.")}
       </div>`;
     return;
   }
@@ -214,18 +214,18 @@ function renderDelayWatch() {
 
   box.innerHTML = `
     <div class="stat-line">
-      <span class="stat-line-label"><i class="bi bi-hourglass-split"></i> Sedang delay</span>
+      <span class="stat-line-label"><i class="bi bi-hourglass-split"></i> ${tt("Sedang delay", "Currently delayed")}</span>
       <span class="stat-line-value is-alert">${delayed.length}</span>
     </div>
     <div class="stat-line">
-      <span class="stat-line-label"><i class="bi bi-calendar-x"></i> Total hari mundur</span>
-      <span class="stat-line-value">${total} hari</span>
+      <span class="stat-line-label"><i class="bi bi-calendar-x"></i> ${tt("Total hari mundur", "Total days delayed")}</span>
+      <span class="stat-line-value">${tt(`${total} hari`, `${total} days`)}</span>
     </div>
     ${
       terparah
         ? `<div class="stat-line">
-             <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> Paling lama</span>
-             <span class="stat-line-value">${terparah.info.days} hari</span>
+             <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> ${tt("Paling lama", "Longest")}</span>
+             <span class="stat-line-value">${tt(`${terparah.info.days} hari`, `${terparah.info.days} days`)}</span>
            </div>
            <div class="task task--late" style="border-bottom:0;padding-right:0">
              <span class="task-main">
@@ -272,7 +272,7 @@ function renderDocCompleteness() {
 
   box.innerHTML = `
     <div class="stat-line" style="border-bottom:0;padding-bottom:2px">
-      <span class="stat-line-label"><i class="bi bi-file-earmark-check"></i> Lengkap</span>
+      <span class="stat-line-label"><i class="bi bi-file-earmark-check"></i> ${tt("Lengkap", "Complete")}</span>
       <span class="stat-line-value">${lengkap}/${aktif.length} · ${persen}%</span>
     </div>
     <div class="meter"><div class="meter-fill ${fillCls}" style="width:${persen}%"></div></div>
@@ -282,7 +282,7 @@ function renderDocCompleteness() {
           (f) => `
         <div class="stat-line">
           <span class="stat-line-label">${escapeHtml(f.label)}</span>
-          <span class="stat-line-value ${f.kurang ? "is-alert" : "is-quiet"}">${f.kurang ? `${f.kurang} kosong` : "lengkap"}</span>
+          <span class="stat-line-value ${f.kurang ? "is-alert" : "is-quiet"}">${f.kurang ? tt(`${f.kurang} kosong`, `${f.kurang} missing`) : tt("lengkap", "complete")}</span>
         </div>`,
         )
         .join("")}
@@ -300,7 +300,7 @@ function renderOverview() {
   if (judul) {
     judul.textContent = tasks.length
       ? t("x.hal.perlu.ditindak", { n: tasks.length })
-      : "Semua terkendali hari ini";
+      : tt("Semua terkendali hari ini", "Everything under control today");
   }
   if (sub) {
     /* Dulu lewat presetCounts().all — sejak "Semua" berarti "belum
@@ -313,7 +313,11 @@ function renderOverview() {
       (s) => !isArrived(s) && boardState(s).kind === "today",
     ).length;
     const selesai = list.filter((s) => isArrived(s)).length;
-    sub.innerHTML = `Buku <b>${activeMode === "import" ? "Import" : "Export"}</b> · <b>${totalSemua}</b> pengiriman · <b>${jatuhHariIni}</b> jatuh hari ini · <b>${selesai}</b> selesai`;
+    const buku = activeMode === "import" ? "Import" : "Export";
+    sub.innerHTML = tt(
+      `Buku <b>${buku}</b> · <b>${totalSemua}</b> pengiriman · <b>${jatuhHariIni}</b> jatuh hari ini · <b>${selesai}</b> selesai`,
+      `<b>${buku}</b> book · <b>${totalSemua}</b> shipments · <b>${jatuhHariIni}</b> due today · <b>${selesai}</b> done`,
+    );
   }
   const qa = $("#ovQaNewLabel");
   if (qa) qa.textContent = lbl.addBtn;

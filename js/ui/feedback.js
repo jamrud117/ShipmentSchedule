@@ -94,7 +94,7 @@ function showConfirm(message, onConfirm, opsi) {
   btn.className =
     "btn " + (o.tone === "primary" ? "btn-primary-navy" : "btn-danger");
 
-  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : "Hapus Data");
+  $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : tt("Hapus Data", "Delete Data"));
 
   const ikon = $("#confirmIcon");
   ikon.className = "bi " + (o.icon || "bi-exclamation-triangle-fill");
@@ -130,13 +130,12 @@ let promptSubmit = null;
 
 function showPrompt(opsi) {
   const o = opsi || {};
-  $("#promptTitle").textContent = o.title || "Isian";
   $("#promptDesc").textContent = o.desc || "";
   $("#promptDesc").classList.toggle("d-none", !o.desc);
   $("#promptFields").classList.toggle("mt-3", !!o.desc);
   $("#promptIcon").className = "bi " + (o.icon || "bi-pencil-square");
-  $("#promptTitle").textContent = o.title || "Isian";
-  $("#promptOk").textContent = o.okText || "Simpan";
+  $("#promptTitle").textContent = o.title || tt("Isian", "Input");
+  $("#promptOk").textContent = o.okText || tt("Simpan", "Save");
   $("#promptError").classList.add("d-none");
 
   const fields = o.fields || [];

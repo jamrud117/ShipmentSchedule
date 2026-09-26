@@ -90,7 +90,7 @@ function etaModeChipHtml(mode) {
 
 function predRangeHtml(dari, sampai, label) {
   if (!dari || !sampai || dari === sampai) return "";
-  return `<span class="pred-range"><i class="bi bi-arrows-expand-vertical"></i> ${escapeHtml(label || "Rentang")} ${fmtDate(dari)} – ${fmtDate(sampai)}</span>`;
+  return `<span class="pred-range"><i class="bi bi-arrows-expand-vertical"></i> ${escapeHtml(label || tt("Rentang", "Range"))} ${fmtDate(dari)} – ${fmtDate(sampai)}</span>`;
 }
 /* DARI MANA angka transit itu datang.
 
@@ -108,7 +108,10 @@ function transitSourceHtml(e) {
     bagian.push(
       `<span class="pred-src-tag pred-src-tag--learned" title="${escapeHtml(
         t("z.ringkasan.belajar", { avg: tr.learned.avg, min: tr.learned.min, maks: tr.learned.max, sd: tr.learned.stdDev, buang: tr.learned.dropped, metode: tr.learned.method }),
-      )}"><i class="bi bi-mortarboard-fill"></i> Riwayat ${tr.learned.samples} pengiriman${tr.learned.scope === "carrier" ? " (pelayaran ini)" : ""} · ${tr.learned.min}–${tr.learned.max} hari</span>`,
+      )}"><i class="bi bi-mortarboard-fill"></i> ${tt(
+        `Riwayat ${tr.learned.samples} pengiriman${tr.learned.scope === "carrier" ? " (pelayaran ini)" : ""} · ${tr.learned.min}–${tr.learned.max} hari`,
+        `History of ${tr.learned.samples} shipments${tr.learned.scope === "carrier" ? " (this carrier)" : ""} · ${tr.learned.min}–${tr.learned.max} days`,
+      )}</span>`,
     );
   }
   /* Riwayat yang BELUM cukup tetap ditulis. Tanpa ini, pengguna cuma
@@ -118,8 +121,10 @@ function transitSourceHtml(e) {
     const lp = tr.learningProgress;
     const teks =
       lp.reason === "terlalu berayun"
-        ? `Riwayat ${lp.samples} kiriman terlalu berayun (galat ±${lp.stdError} hari) — asumsi konfigurasi dipakai`
-        : `Riwayat ${lp.samples}/${lp.need} kiriman — belum cukup untuk dipakai`;
+        ? tt(`Riwayat ${lp.samples} kiriman terlalu berayun (galat ±${lp.stdError} hari) — asumsi konfigurasi dipakai`,
+             `History of ${lp.samples} shipments varies too much (error ±${lp.stdError} days) — configured assumptions are used`)
+        : tt(`Riwayat ${lp.samples}/${lp.need} kiriman — belum cukup untuk dipakai`,
+             `History ${lp.samples}/${lp.need} shipments — not enough to use yet`);
     bagian.push(
       `<span class="pred-src-tag pred-src-tag--unknown"><i class="bi bi-hourglass-split"></i> ${escapeHtml(teks)}</span>`,
     );
@@ -127,7 +132,7 @@ function transitSourceHtml(e) {
   if (tr.carrierDays) {
     const tanda = tr.carrierDays > 0 ? "+" : "";
     bagian.push(
-      `<span class="pred-src-tag pred-src-tag--carrier"><i class="bi bi-truck"></i> ${tanda}${tr.carrierDays} hari — ${escapeHtml(tr.carrierLabel || "penyesuaian carrier")}</span>`,
+      `<span class="pred-src-tag pred-src-tag--carrier"><i class="bi bi-truck"></i> ${tanda}${tr.carrierDays} ${tt("hari", "days")} — ${escapeHtml(tr.carrierLabel || tt("penyesuaian carrier", "carrier adjustment"))}</span>`,
     );
   }
   return bagian.join(" ");
@@ -135,7 +140,7 @@ function transitSourceHtml(e) {
 
 // Lama transit: "8–12 hari" kalau rentang, "11 hari" kalau angka pasti.
 function predDaysText(e) {
-  return e.hasRange ? `${e.daysMin}–${e.daysMax} hari` : `${e.days} hari`;
+  return e.hasRange ? `${e.daysMin}–${e.daysMax} ${tt("hari", "days")}` : `${e.days} ${tt("hari", "days")}`;
 }
 
 // Rincian "ETA + 2 hari kerja + 2 hari kerja" yang bisa ditelusuri pengguna.
@@ -153,7 +158,7 @@ function predStepsHtml(d) {
     const durasi =
       st.days == null
         ? ""
-        : ` <em>${st.days} ${escapeHtml(st.unit || "hari kerja")}</em>`;
+        : ` <em>${st.days} ${escapeHtml(st.unit || tt("hari kerja", "working days"))}</em>`;
     baris.push(
       `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}</span>
        <span class="pred-step-date">${fmtDate(st.to)}</span></li>`,
@@ -187,11 +192,11 @@ function predictionStripHtml(s) {
     <span class="pred-strip-head"><i class="bi bi-graph-up-arrow"></i> Estimated Delivery</span>
     <span class="pred-strip-date">${fmtDate(d.date)}</span>
     ${d.range ? predRangeHtml(d.range.earliest, d.range.latest) : ""}
-    <span class="pred-strip-src">Sumber: <b>${escapeHtml(d.sourceLabel)}</b></span>
+    <span class="pred-strip-src">${tt("Sumber", "Source")}: <b>${escapeHtml(d.sourceLabel)}</b></span>
     ${d.source === "eta" ? etaModeChipHtml(modeEta) : ""}
     ${d.source === "manual" ? deliveryModeChipHtml("manual") : ""}
     ${confidenceChipHtml(d.confidence, "")}
-    ${d.shifted ? `<span class="pred-late"><i class="bi bi-clock-history"></i> Telat ${d.overdueDays} hari — dihitung ulang dari hari ini</span>` : ""}
+    ${d.shifted ? `<span class="pred-late"><i class="bi bi-clock-history"></i> ${tt(`Telat ${d.overdueDays} hari — dihitung ulang dari hari ini`, `${d.overdueDays} days late — recalculated from today`)}</span>` : ""}
   </div>`;
 }
 /* ------------------------------------------------------------------
@@ -208,30 +213,30 @@ function predictionDetailHtml(s) {
   const tipe = predictionShipmentTypeLabel(predictionShipmentType(s));
 
   const barisEta = e.ok
-    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"} · ETD + ${predDaysText(e)} kalender)</span>
+    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"} · ETD + ${predDaysText(e)} ${tt("kalender", "calendar days")})</span>
        ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest) : ""}`
     : `<span class="pred-muted">${escapeHtml(e.reason)}</span>`;
 
   return `
-    <div class="subsection-title"><i class="bi bi-graph-up-arrow"></i> Prediksi Kedatangan</div>
+    <div class="subsection-title"><i class="bi bi-graph-up-arrow"></i> ${tt("Prediksi Kedatangan", "Arrival Prediction")}</div>
     <div class="pred-detail">
       <div class="pred-detail-row">
-        <div class="pred-detail-key">Tipe Pengiriman</div>
+        <div class="pred-detail-key">${tt("Tipe Pengiriman", "Shipment Type")}</div>
         <div class="pred-detail-val">${escapeHtml(tipe)}${predictionTypeIsAssumed(s) ? ' <span class="pred-muted">${t("c.jenis.muatan.belum.diisi.dianggap.fcl")}</span>' : ""}</div>
       </div>
       <div class="pred-detail-row">
-        <div class="pred-detail-key">ETA Hitungan Mesin</div>
+        <div class="pred-detail-key">${tt("ETA Hitungan Mesin", "Engine-calculated ETA")}</div>
         <div class="pred-detail-val">${barisEta}</div>
       </div>
       <div class="pred-detail-row">
-        <div class="pred-detail-key">ETA Dipakai</div>
+        <div class="pred-detail-key">${tt("ETA Dipakai", "ETA Used")}</div>
         <div class="pred-detail-val">${fmtDate(predictionEtaBasis(s))} ${etaModeChipHtml(mode)}</div>
       </div>
       <div class="pred-detail-row">
         <div class="pred-detail-key">Estimated Delivery</div>
         <div class="pred-detail-val">
           ${d.ok ? `<b>${fmtDate(d.date)}</b>` : `<span class="pred-muted">${escapeHtml(d.reason)}</span>`}
-          ${d.ok ? `<span class="pred-muted">Sumber: ${escapeHtml(d.sourceLabel)}</span> ${confidenceChipHtml(d.confidence, "Keyakinan: ")}` : ""}
+          ${d.ok ? `<span class="pred-muted">${tt("Sumber", "Source")}: ${escapeHtml(d.sourceLabel)}</span> ${confidenceChipHtml(d.confidence, tt("Keyakinan: ", "Confidence: "))}` : ""}
           ${d.range ? predRangeHtml(d.range.earliest, d.range.latest) : ""}
         </div>
       </div>
@@ -242,7 +247,7 @@ function predictionDetailHtml(s) {
           ? (() => {
               const auto = predictDelivery(Object.assign({}, s, { deliveryMode: "auto" }));
               return auto.ok
-                ? `<div class="pred-detail-row"><div class="pred-detail-key">Hitungan Mesin</div>
+                ? `<div class="pred-detail-row"><div class="pred-detail-key">${tt("Hitungan Mesin", "Engine Calculation")}</div>
                      <div class="pred-detail-val"><span class="pred-muted">${fmtDate(auto.date)} · ${escapeHtml(auto.sourceLabel)}</span></div></div>`
                 : "";
             })()
@@ -264,10 +269,10 @@ function sisaPekerjaanHtml(src, d) {
     : [];
   return `
     <div class="pred-remaining">
-      <span><b>${hari}</b> hari proses tersisa</span>
+      <span>${tt(`<b>${hari}</b> hari proses tersisa`, `<b>${hari}</b> processing days left`)}</span>
       ${
         sisa.length
-          ? `<span class="pred-muted">· Belum dikonfirmasi: ${escapeHtml(sisa.map((m) => m.label).join(", "))}</span>`
+          ? `<span class="pred-muted">· ${tt("Belum dikonfirmasi", "Not yet confirmed")}: ${escapeHtml(sisa.map((m) => m.label).join(", "))}</span>`
           : `<span class="pred-muted">${t("c.semua.milestone.sudah.dikonfirmasi")}</span>`
       }
     </div>`;
@@ -276,6 +281,6 @@ function sisaPekerjaanHtml(src, d) {
 
 function deliveryBaseHtml(d) {
   return d && d.baseLabel
-    ? `<span class="pred-muted">· Acuan: ${escapeHtml(d.baseLabel)} ${fmtDate(d.base)}</span>`
+    ? `<span class="pred-muted">· ${tt("Acuan", "Basis")}: ${escapeHtml(d.baseLabel)} ${fmtDate(d.base)}</span>`
     : "";
 }

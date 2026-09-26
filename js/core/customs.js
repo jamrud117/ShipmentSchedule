@@ -67,6 +67,69 @@ function itemTotals(shipmentLike) {
   };
 }
 
+/* ------------------------------------------------------------------
+   PUNGUTAN IMPOR PERSIS SEPERTI PIB CEISA
+
+   Aturannya (PMK 190/2022 Pasal 22, dan ketentuan perpajakan untuk
+   PDRI):
+   1. Semua pungutan dihitung PER SERI BARANG -- tiap baris Daftar
+      Barang -- lalu dijumlahkan per jenis pungutan.
+   2. Nilai Pabean seri = porsi nilai barangnya x (Total Nilai Barang +
+      Freight + Asuransi) x NDPBM.
+   3. BM seri = Nilai Pabean seri x tarif. TOTAL BM satu PIB dibulatkan
+      KE ATAS ke ribuan rupiah (Rp1.506.882,069 -> Rp1.507.000).
+   4. Nilai Impor seri = Nilai Pabean seri + BM seri SEBELUM dibulatkan.
+   5. PPN = Nilai Impor x 11% (12% x DPP nilai lain 11/12, PMK
+      131/2024). TOTAL PPN dibulatkan KE BAWAH ke rupiah penuh.
+   6. PPh 22 = Nilai Impor seri DIBULATKAN KE BAWAH ke ribuan x tarif
+      (2,5% untuk importir ber-API), dijumlahkan.
+
+   Diperiksa terhadap PIB sungguhan (CIP USD 4.780, 2 seri, NDPBM
+   17.707, BM 5%): BM 4.232.000, PPN 9.775.857, PPh 2.221.750 -- tepat
+   ketiganya. Rumus lama (tingkat total, tanpa aturan pembulatan, PPh
+   dari Nilai Pabean saja) meleset: 4.231.973 / 9.775.858 / 2.115.987.
+
+   bmManual: BM yang diketik sendiri (tarif HS Code tertentu). Dibagi ke
+   seri menurut porsinya, dan dipakai APA ADANYA sebagai dasar PPN &
+   PPh -- ia biasanya sudah angka yang dibulatkan dari PIB, jadi PPN-
+   nya bisa selisih beberapa rupiah dari CEISA. */
+const TARIF_PPN_IMPOR = 11;
+const TARIF_PPH_IMPOR = 2.5;
+
+// Nilai USD tiap seri -- hitungan yang sama dengan Total Nilai Barang.
+function nilaiSeriUsd(items) {
+  return (items || []).map((it) => parseLooseNumber(it.qty) * parseLooseNumber(it.harga));
+}
+
+function hitungPungutanImpor(o) {
+  /* Dibersihkan ke 4 desimal sebelum dibulatkan: 4.231.999,99999998
+     hasil pecahan biner semestinya 4.232.000, bukan naik ke 4.233.000. */
+  const bersih = (x) => Math.round(x * 1e4) / 1e4;
+  const nilai = (o.nilaiSeriUsd || []).filter((v) => v > 0);
+  const totalBarang = nilai.reduce((a, b) => a + b, 0);
+  const nilaiPabean = (totalBarang + (o.freightUsd || 0) + (o.asuransiUsd || 0)) * (o.ndpbm || 0);
+  if (!nilaiPabean) return { nilaiPabean: 0, bm: 0, ppn: 0, pph: 0 };
+  const tarifPpn = o.tarifPpn == null ? TARIF_PPN_IMPOR : o.tarifPpn;
+  const tarifPph = o.tarifPph == null ? TARIF_PPH_IMPOR : o.tarifPph;
+  // Tanpa barang bernilai (hanya freight?), seluruhnya dianggap satu seri.
+  const porsi = totalBarang ? nilai.map((v) => v / totalBarang) : [1];
+  let bm = 0, ppn = 0, pph = 0;
+  porsi.forEach((p) => {
+    const npSeri = nilaiPabean * p;
+    const bmSeri = o.bmManual != null ? o.bmManual * p : (npSeri * (o.tarifBm || 0)) / 100;
+    const niSeri = bersih(npSeri + bmSeri);
+    bm += bmSeri;
+    ppn += (niSeri * tarifPpn) / 100;
+    pph += (Math.floor(niSeri / 1000) * 1000 * tarifPph) / 100;
+  });
+  return {
+    nilaiPabean,
+    bm: o.bmManual != null ? o.bmManual : Math.ceil(bersih(bm) / 1000) * 1000,
+    ppn: Math.floor(bersih(ppn)),
+    pph: Math.floor(bersih(pph)),
+  };
+}
+
 // shipmentLike needs: items, incoterm, ndpbm, bm, ppn, pph
 function computeCustoms(shipmentLike) {
   const totals = itemTotals(shipmentLike);
