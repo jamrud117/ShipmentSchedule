@@ -2259,6 +2259,32 @@ t("kolom 'Dibayarkan Kepada' di riwayat menampilkan VENDOR, bukan Customer", () 
     throw new Error("riwayat pengajuan dana tidak mendahulukan payee");
 });
 const kolomDana = (rows) => rows.map((r) => w.fsumKolom(r));
+t("riwayat Pengajuan Dana: kolom BL/AWB & kepala Drafter / Vendor / Payment Status", async () => {
+  const asli = w.eval("supabaseClient.from");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub"), bahasa: baca("activeLang") };
+  try {
+    w.__barisUji = [{ id: "f1", doc_type: "fund", doc_number: "307/EXIM/DDI/IX/2026", doc_date: "2026-09-29", requester: "Yogi", department: "EXIM",
+      payload: { payee: "FEDEX", invoiceNo: "872941820", blAwb: "876822543558", expenseType: "Freight", amount: "9684124", notes: "Freight Sensor" } }];
+    w.eval(`supabaseClient.from = () => { const c = { select: () => c, eq: () => c, filter: () => c, or: () => c, order: () => c,
+      not: () => c, is: () => c, range: async () => ({ data: window.__barisUji, error: null, count: 1 }) }; return c; }`);
+    w.setLang("en");
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumCari = ""; docNumSaringBayar = ""');
+    await w.renderDocNumHistory();
+    const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim()).filter(Boolean);
+    eq(kepala.join(" | "), "Number | Date | Drafter | Billing/Invoice Number | BL/AWB | Vendor | Value | Notes | Payment Status", "kepala:");
+    const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
+    eq(sel[4], "876822543558", "BL/AWB:");
+    // Jenis dokumen lain tetap "Requester".
+    w.eval('docNumActiveTab = "letter"');
+    await w.renderDocNumHistory();
+    if (!/Requester/.test(w.document.querySelector("#docNumHistory thead").textContent)) throw new Error("jenis lain ikut jadi Drafter");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    w.setLang(simpan.bahasa);
+    w.eval(`docNumActiveTab = ${JSON.stringify(simpan.tab)}; docNumHistorySub = ${JSON.stringify(simpan.sub)}`);
+  }
+});
 t("BL/AWB: isian form Pengajuan Dana, ikut tersimpan, tampil di Detail, dan bisa dicari", () => {
   const panel = w.document.querySelector('[data-docnum-panel="fund"]');
   const isian = panel.querySelector('[data-dn="blAwb"]');
@@ -3114,7 +3140,7 @@ t("label yang dibuat sekali saat dimuat tetap ikut ganti bahasa", () => {
   try {
     w.eval('activeLang = "en"');
     eq(baca("DN_LABEL_FIELD").payee, "Paid To", "label Detail:");
-    eq(baca("DN_KOLOM_UTAMA").fund, "Paid To", "kolom riwayat:");
+    eq(baca("DN_KOLOM_UTAMA").do, "Destination / Recipient", "kolom riwayat:");
     const sppb = w.docStepsFor({ mode: "import" }).find((x) => x.key === "sppb");
     eq(w.stepText(sppb.full, {}), "Goods Release Approval (SPPB)", "langkah dokumen:");
     eq(baca("PREDICTION_SOURCE_LABEL").today, "Today", "sumber prediksi:");
@@ -7588,20 +7614,24 @@ t("Keterangan diambil dari Rincian -- isi yang sama dengan Subject pada surat", 
   if (!/dn-col-ket[\s\S]{0,200}p\.notes/.test(src))
     throw new Error("kolom Keterangan tidak membaca p.notes");
 });
-t("kolom baru tidak memakai elipsis -- tabelnya bergulir, bukan memotong", () => {
-  /* Aturan yang sama dengan kolom lain di tabel ini (lihat tes
-     "riwayat nomor digeser, bukan dibungkus"). */
+t("kolom Keterangan dibungkus dalam 220-280px, tanpa elipsis -- tidak memotong isi", () => {
+  /* Dulu satu baris panjang (nowrap). Sejak ada kolom BL/AWB, itu
+     membuat tabel meluber di layar 1.650px dan tombol aksi tersembunyi
+     di balik gulir -- jadi keterangan kini MEMBUNGKUS dalam lebar
+     terbatas. Tetap tanpa elipsis: seluruh teksnya terlihat. Kolom
+     tanggal/nomor tetap tidak boleh patah (tes "riwayat nomor digeser,
+     bukan dibungkus"). */
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "docnum.css"), "utf8");
-  /* lastIndexOf: kemunculan PERTAMA ada di dalam media query (yang cuma
-     menyembunyikan kolomnya di layar sempit), bukan aturan gayanya. */
   const i = css.lastIndexOf(".docnum-table .dn-col-ket {");
   if (i < 0) throw new Error(".dn-col-ket tidak ditemukan");
-  const blok = css.slice(i, css.indexOf("}", i));
-  if (/text-overflow/.test(blok))
+  if (/text-overflow/.test(css.slice(i, css.indexOf("}", i))))
     throw new Error("kolom Keterangan memotong isinya dengan elipsis");
-  if (!/white-space:\s*nowrap/.test(blok))
-    throw new Error("kolom Keterangan boleh dibungkus -- barisnya jadi tinggi tidak rata");
+  const j = css.indexOf(".docnum-table .dn-ket-isi {");
+  if (j < 0) throw new Error("pembungkus keterangan tidak ditemukan");
+  const isi = css.slice(j, css.indexOf("}", j));
+  if (!/min-width: 220px;/.test(isi) || !/max-width: 280px;/.test(isi) || !/white-space: normal;/.test(isi))
+    throw new Error("keterangan tidak dibungkus dalam 220-280px");
 });
 
 console.log("\u2014 PENGAJUAN DANA: ISIAN & LEMBAR CETAK \u2014");

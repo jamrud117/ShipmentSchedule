@@ -629,14 +629,25 @@ table.fund-lines select {
 .docnum-table .dn-col-billing {
   white-space: nowrap;
 }
-/* nowrap tanpa elipsis, sama seperti kolom lain di tabel ini: wadahnya
-   bergulir mendatar, jadi memotong isi cuma menyembunyikannya tanpa
-   cara melihatnya. Panjang teksnya sudah dibatasi di tempat baris ini
-   dibuat (80 karakter, docnum-view.js), dan kalimat penuhnya ada di
-   tooltip. */
+/* Keterangan MEMBUNGKUS paling lebar 280px, bukan satu baris panjang.
+   Sejak ada kolom BL/AWB, keterangan satu baris (sampai 455px) membuat
+   tabel meluber 168px di layar 1.650px dan tombol aksinya tersembunyi
+   di balik gulir. Dibungkus, bukan dipotong: seluruh teksnya tetap
+   terlihat. Batasnya di elemen dalam -- max-width pada sel tabel tidak
+   dipatuhi peramban. Panjang teks dibatasi 80 karakter di tempat baris
+   dibuat (docnum-view.js); kalimat penuhnya di tooltip. */
 .docnum-table .dn-col-ket {
-  white-space: nowrap;
   color: var(--n-600);
+}
+/* min-width: kolom yang boleh membungkus dihimpit peramban sekecil
+   mungkin -- di layar 1.440px sampai 79px, satu keterangan jadi lima
+   baris sempit. Lebih baik tabelnya bergulir sedikit. */
+.docnum-table .dn-ket-isi {
+  min-width: 220px;
+  max-width: 280px;
+  margin: 0 auto;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 @media (max-width: 640px) {

@@ -1527,12 +1527,12 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th>${
+          <tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
             jenis.key === "fund"
-              ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th>`
+              ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th><th class="dn-col-billing">BL/AWB</th>`
               : ""
           }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
             jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
@@ -1541,7 +1541,7 @@ async function renderDocNumHistory() {
           }${
             jenis.key === "fund" ? `<th class="dn-col-ket">${tt("Keterangan", "Notes")}</th>` : ""
           }${
-            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment")}</th>` : ""
+            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment Status")}</th>` : ""
           }<th class="dn-act"></th></tr>
         </thead>
         <tbody>
@@ -1583,7 +1583,8 @@ async function renderDocNumHistory() {
                          billing untuk Billing, invoice untuk sisanya. Membaca
                          billingNo saja membuat kolomnya kosong untuk jenis
                          lain padahal nomornya tersimpan. */
-                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || p.invoiceNo || "\u2014")}</td>`
+                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || p.invoiceNo || "\u2014")}</td>` +
+                      `<td class="dn-col-billing dn-num">${escapeHtml(p.blAwb || "\u2014")}</td>`
                     : ""
                 }
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
@@ -1606,7 +1607,7 @@ async function renderDocNumHistory() {
                      Dipotong 80: lebih panjang dari kolom lain karena
                      memang kalimat, bukan satu nama. */
                   jenis.key === "fund"
-                    ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</td>`
+                    ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}"><div class="dn-ket-isi">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</div></td>`
                     : ""
                 }
                 ${jenis.key === "fund" ? `<td class="dn-col-bayar">${dnTombolBayar(r)}</td>` : ""}
@@ -1924,7 +1925,7 @@ function setActivePageNav(page) {
 const DN_KOLOM_UTAMA = {
   get do() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get invoice() { return tt("Customer", "Customer"); },
-  get fund() { return tt("Dibayarkan Kepada", "Paid To"); },
+  get fund() { return "Vendor"; },
   get letter() { return tt("Perihal", "Subject"); },
 };
 
