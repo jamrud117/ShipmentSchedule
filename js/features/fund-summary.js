@@ -4,7 +4,7 @@
    RINGKASAN PENGAJUAN DANA — tab "Summary" di riwayat Pengajuan Dana
 
    Seluruh pengajuan dana dalam satu tabel:
-     No | Invoice Date | Invoice/Bill Number | Company | Cost |
+     No | Invoice Date | Invoice/Bill Number | BL/AWB | Company | Cost |
      Customer | Details | Due Date
    ditambah penyaring (rentang tanggal, Company, Customer, Jenis
    Pengeluaran) dan PENGELOMPOKAN ala pivot table: total nilai per
@@ -68,6 +68,7 @@ function fsumKolom(row) {
     tanggal: fsumTanggal(row),
     adaTglInvoice: !!p.invoiceDate,
     nomor: [p.invoiceNo, p.billingNo].map((x) => String(x || "").trim()).filter(Boolean).join(" / "),
+    blAwb: String(p.blAwb || "").trim(),
     company: String(p.payee || "").trim(),
     customer: String(p.customer || "").trim(),
     jenis: String(p.expenseType || "").trim(),
@@ -91,7 +92,7 @@ function fsumSaring(kolom, f) {
     if (f.bayar === "belum" && k.lunas) return false;
     // Kotak cari riwayat ikut berlaku di sini, di seluruh kolom teks.
     if (f.q) {
-      const isi = [k.nomorSurat, k.nomor, k.company, k.customer, k.detail, k.jenis].join(" ").toLowerCase();
+      const isi = [k.nomorSurat, k.nomor, k.blAwb, k.company, k.customer, k.detail, k.jenis].join(" ").toLowerCase();
       if (!isi.includes(String(f.q).toLowerCase())) return false;
     }
     return true;
@@ -430,6 +431,7 @@ function fsumRinciHtml(kolom, totalSemua, mataUang) {
       <td class="fsum-angka">${i + 1}</td>
       <td class="fsum-nowrap">${tgl(k)}</td>
       <td class="fsum-nowrap fsum-mono">${escapeHtml(k.nomor || "—")}</td>
+      <td class="fsum-nowrap fsum-mono">${escapeHtml(k.blAwb || "—")}</td>
       <td class="fsum-nowrap">${escapeHtml(k.company || "—")}</td>
       <td class="fsum-angka">${fsumUang(k.nilai, k.mataUang)}</td>
       <td class="fsum-nowrap">${escapeHtml(k.customer || "—")}</td>
@@ -447,6 +449,7 @@ function fsumRinciHtml(kolom, totalSemua, mataUang) {
           <th class="fsum-angka">No</th>
           <th>Invoice Date</th>
           <th>Invoice/Bill Number</th>
+          <th>BL/AWB</th>
           <th>Company</th>
           <th class="fsum-angka">Cost</th>
           <th>Customer</th>
@@ -456,7 +459,7 @@ function fsumRinciHtml(kolom, totalSemua, mataUang) {
         </tr></thead>
         <tbody>${baris}</tbody>
         <tfoot><tr>
-          <td colspan="4">TOTAL</td>
+          <td colspan="5">TOTAL</td>
           <td class="fsum-angka">${fsumTotalSel(totalSemua, mataUang)}</td>
           <td colspan="4"></td>
         </tr></tfoot>

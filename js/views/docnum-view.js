@@ -184,6 +184,7 @@ const DN_KOLOM_CARI = [
   "payload->>payee", "payload->>customer", "payload->>receiver",
   "payload->>recipient", "payload->>subject", "payload->>notes",
   "payload->>invoiceNo", "payload->>billingNo", "payload->>poNo",
+  "payload->>blAwb",
 ];
 /* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
    arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
@@ -1947,6 +1948,7 @@ const DN_LABEL_FIELD = {
   get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
   get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
   get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
+  get blAwb() { return "BL/AWB"; },
   get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
   get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
   get attachment() { return tt("Lampiran", "Attachment"); },
@@ -2005,6 +2007,7 @@ const DN_URUTAN_FIELD = [
   "payee",
   "invoiceDate",
   "invoiceDueDate",
+  "blAwb",
   "expenseType",
   "letterType",
   "signer",

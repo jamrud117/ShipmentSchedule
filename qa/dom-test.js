@@ -2259,22 +2259,41 @@ t("kolom 'Dibayarkan Kepada' di riwayat menampilkan VENDOR, bukan Customer", () 
     throw new Error("riwayat pengajuan dana tidak mendahulukan payee");
 });
 const kolomDana = (rows) => rows.map((r) => w.fsumKolom(r));
+t("BL/AWB: isian form Pengajuan Dana, ikut tersimpan, tampil di Detail, dan bisa dicari", () => {
+  const panel = w.document.querySelector('[data-docnum-panel="fund"]');
+  const isian = panel.querySelector('[data-dn="blAwb"]');
+  if (!isian) throw new Error("isian BL/AWB tidak ada di form");
+  const simpan = isian.value;
+  try {
+    isian.value = "MAEU123456789";
+    eq(w.readDocNumForm("fund").blAwb, "MAEU123456789", "ikut dikumpulkan saat disimpan:");
+  } finally {
+    isian.value = simpan;
+  }
+  eq(baca("DN_LABEL_FIELD").blAwb, "BL/AWB", "label di kotak Detail:");
+  if (!baca("DN_URUTAN_FIELD").includes("blAwb")) throw new Error("BL/AWB tidak punya urutan di kotak Detail");
+  if (!w.dnFilterCari("MAEU").includes('payload->>blAwb.ilike."%MAEU%"')) throw new Error("BL/AWB tidak ikut dicari di riwayat");
+  // Kotak cari juga menyaring tabel Summary lewat BL/AWB.
+  const k = w.fsumKolom(barisDana("9", { payee: "WIDE", blAwb: "SNKO0123", amount: "1" }));
+  eq(w.fsumSaring([k], { q: "snko0123" }).length, 1, "cari Summary:");
+});
 t("Summary: kolom rincian persis urutan yang diminta", () => {
   const box = w.document.createElement("div");
   w.document.body.appendChild(box);
   try {
     w.eval(`fsumBaris = ${JSON.stringify([
       barisDana("1", { payee: "FedEx", customer: "KUMHO", invoiceNo: "872941820", invoiceDate: "2026-09-05",
-        invoiceDueDate: "2026-10-05", currency: "IDR", amount: "1000000", notes: "Freight Import Motor" }),
+        invoiceDueDate: "2026-10-05", currency: "IDR", amount: "1000000", notes: "Freight Import Motor", blAwb: "876822543558" }),
     ])}`);
     w.fsumGambarPanel(box);
     const kepala = [...box.querySelectorAll(".fsum-rinci thead th")].map((th) => th.textContent.trim());
-    eq(kepala.join(" | "), "No | Invoice Date | Invoice/Bill Number | Company | Cost | Customer | Details | Due Date | Status Bayar");
+    eq(kepala.join(" | "), "No | Invoice Date | Invoice/Bill Number | BL/AWB | Company | Cost | Customer | Details | Due Date | Status Bayar");
     const sel = [...box.querySelectorAll(".fsum-rinci tbody td")].map((td) => td.textContent.trim());
     eq(sel[2], "872941820", "Invoice/Bill Number:");
-    eq(sel[3], "FedEx", "Company = Dibayarkan Kepada:");
-    eq(sel[5], "KUMHO", "Customer:");
-    eq(sel[6], "Freight Import Motor", "Details = Notes:");
+    eq(sel[3], "876822543558", "BL/AWB:");
+    eq(sel[4], "FedEx", "Company = Dibayarkan Kepada:");
+    eq(sel[6], "KUMHO", "Customer:");
+    eq(sel[7], "Freight Import Motor", "Details = Notes:");
   } finally {
     box.remove();
     w.eval("fsumPemilih && fsumPemilih.lepas(); fsumPemilih = null; fsumBaris = null");
