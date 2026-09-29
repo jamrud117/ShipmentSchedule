@@ -135,34 +135,19 @@ function qtyDenganSatuan(it, formatter) {
   return `${angka} ${satuan}`;
 }
 
-// Kolom "KGS" (BRUTO, Daily Import): dipakai juga di tempat lain kalau nanti perlu.
-function totalKgsUntukDailyImport(s) {
-  const items = s.items || [];
-  /* NETTO didahulukan — LEBIH AKURAT dari Bruto (tidak ikut berat
-     kemasan) — tapi CUMA kalau LENGKAP diisi di SEMUA barang; satu
-     saja yang kosong/nol bikin totalnya sudah tidak mewakili berat
-     bersih sungguhan (barang yang kelewat tidak ikut kehitung), jadi
-     lebih aman jatuh balik ke Total Bruto se-pengiriman yang sudah
-     ada (computeCustoms(), core/customs.js) daripada dipakai
-     setengah-setengah. */
-  const nettoLengkap =
-    items.length > 0 && items.every((it) => parseLooseNumber(it.netto) > 0);
-  if (nettoLengkap) {
-    return items.reduce((sum, it) => sum + parseLooseNumber(it.netto), 0);
-  }
-  return computeCustoms(s).totalBruto;
-}
-
 function buildDailyImportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
-  /* BRUTO (kolom 9, dipakai sebagai "KGS") sekarang Total se-PENGIRIMAN
-     (Netto kalau lengkap, kalau tidak Total Bruto — lihat
-     totalKgsUntukDailyImport() di atas), bukan berat barang per baris
-     — makanya ikut masuk FIRST_ROW_ONLY_IDX di bawah, sebaris dengan
-     field level-pengiriman lain (SPPB, AJU, dst.): sekali tampil di
-     baris pertama, bukan diulang di semua baris. */
-  const totalKgs = totalKgsUntukDailyImport(s);
+  /* BRUTO (kolom 9, dipakai sebagai "KGS") = TOTAL BRUTO se-pengiriman,
+     langsung -- jumlah Bruto semua barang (computeCustoms(),
+     core/customs.js). Dulu Netto didahulukan kalau terisi di semua
+     barang; kolom ini memang kolom BRUTO, jadi isinya Bruto.
+
+     Total se-PENGIRIMAN, bukan berat barang per baris -- makanya ikut
+     masuk FIRST_ROW_ONLY_IDX di bawah, sebaris dengan field level-
+     pengiriman lain (SPPB, AJU, dst.): sekali tampil di baris pertama,
+     bukan diulang di semua baris. */
+  const totalKgs = computeCustoms(s).totalBruto;
   const FIRST_ROW_ONLY_IDX = [
     1, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
   ];
@@ -178,7 +163,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.party), // 6  SHIPPER
       formatter.text(itemDisplayName(it)), // 7  GOODS DESCRIPTION (+ Size/Pattern/Mold No)
       qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
-      formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Netto kalau lengkap, jika tidak Total Bruto)
+      formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Total Bruto se-pengiriman)
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
       formatter.text(s.invoice), // 12 INVOICE

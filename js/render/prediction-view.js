@@ -192,7 +192,7 @@ function predictionStripHtml(s) {
     <span class="pred-strip-head"><i class="bi bi-graph-up-arrow"></i> Estimated Delivery</span>
     <span class="pred-strip-date">${fmtDate(d.date)}</span>
     ${d.range ? predRangeHtml(d.range.earliest, d.range.latest) : ""}
-    <span class="pred-strip-src">Sumber: <b>${escapeHtml(d.sourceLabel)}</b></span>
+    <span class="pred-strip-src">${tt("Sumber", "Source")}: <b>${escapeHtml(d.sourceLabel)}</b></span>
     ${d.source === "eta" ? etaModeChipHtml(modeEta) : ""}
     ${d.source === "manual" ? deliveryModeChipHtml("manual") : ""}
     ${confidenceChipHtml(d.confidence, "")}
@@ -213,7 +213,7 @@ function predictionDetailHtml(s) {
   const tipe = predictionShipmentTypeLabel(predictionShipmentType(s));
 
   const barisEta = e.ok
-    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"} · ETD + ${predDaysText(e)} kalender)</span>
+    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"} · ETD + ${predDaysText(e)} ${tt("kalender", "calendar days")})</span>
        ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest) : ""}`
     : `<span class="pred-muted">${escapeHtml(e.reason)}</span>`;
 
@@ -236,7 +236,7 @@ function predictionDetailHtml(s) {
         <div class="pred-detail-key">Estimated Delivery</div>
         <div class="pred-detail-val">
           ${d.ok ? `<b>${fmtDate(d.date)}</b>` : `<span class="pred-muted">${escapeHtml(d.reason)}</span>`}
-          ${d.ok ? `<span class="pred-muted">Sumber: ${escapeHtml(d.sourceLabel)}</span> ${confidenceChipHtml(d.confidence, "Keyakinan: ")}` : ""}
+          ${d.ok ? `<span class="pred-muted">${tt("Sumber", "Source")}: ${escapeHtml(d.sourceLabel)}</span> ${confidenceChipHtml(d.confidence, tt("Keyakinan: ", "Confidence: "))}` : ""}
           ${d.range ? predRangeHtml(d.range.earliest, d.range.latest) : ""}
         </div>
       </div>
@@ -247,7 +247,7 @@ function predictionDetailHtml(s) {
           ? (() => {
               const auto = predictDelivery(Object.assign({}, s, { deliveryMode: "auto" }));
               return auto.ok
-                ? `<div class="pred-detail-row"><div class="pred-detail-key">Hitungan Mesin</div>
+                ? `<div class="pred-detail-row"><div class="pred-detail-key">${tt("Hitungan Mesin", "Engine Calculation")}</div>
                      <div class="pred-detail-val"><span class="pred-muted">${fmtDate(auto.date)} · ${escapeHtml(auto.sourceLabel)}</span></div></div>`
                 : "";
             })()
@@ -281,6 +281,6 @@ function sisaPekerjaanHtml(src, d) {
 
 function deliveryBaseHtml(d) {
   return d && d.baseLabel
-    ? `<span class="pred-muted">· Acuan: ${escapeHtml(d.baseLabel)} ${fmtDate(d.base)}</span>`
+    ? `<span class="pred-muted">· ${tt("Acuan", "Basis")}: ${escapeHtml(d.baseLabel)} ${fmtDate(d.base)}</span>`
     : "";
 }

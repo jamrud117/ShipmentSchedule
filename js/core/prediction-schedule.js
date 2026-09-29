@@ -139,7 +139,7 @@ function courierCommitmentFor(s, ctx) {
   );
   if (!rule || !(Number(rule.workingDays) > 0)) return null;
   return {
-    label: rule.label || "Komitmen kurir",
+    label: rule.label || tt("Komitmen kurir", "Courier commitment"),
     workingDays: Number(rule.workingDays),
   };
 }

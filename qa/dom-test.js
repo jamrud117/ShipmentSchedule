@@ -2906,6 +2906,53 @@ t("ponsel: aturan kotak cari riwayat menang atas aturan dasarnya (tidak meluber 
   if (!/\.docnum-history-head \.dn-cari input \{\s*width: 100%;/.test(ponsel)) throw new Error("kotak cari ponsel kalah dari aturan dasar");
   if (!/\.docnum-history-head \.dn-cari \{\s*flex: 1;\s*min-width: 0;/.test(ponsel)) throw new Error("kotak cari ponsel tidak bisa menyusut");
 });
+t("pungutan impor persis PIB CEISA: per seri, BM ke atas ribuan, PPN ke bawah rupiah, PPh per seri", () => {
+  const H = w.hitungPungutanImpor;
+  // PIB sungguhan: CIP USD 4.780 (2 seri), NDPBM 17.707, BM 5%.
+  const pib = H({ nilaiSeriUsd: [2390, 2390], ndpbm: 17707, tarifBm: 5 });
+  eq([pib.nilaiPabean, pib.bm, pib.ppn, pib.pph].join(" | "), "84639460 | 4232000 | 9775857 | 2221750", "PIB:");
+  // Per SERI, bukan total: 1 seri dengan nilai yang sama memberi PPh berbeda.
+  eq(H({ nilaiSeriUsd: [4780], ndpbm: 17707, tarifBm: 5 }).pph, 2221775, "PPh 1 seri:");
+  // Contoh materi PPJK: NP 101.706.000, BM 20%, PPh 7,5%.
+  const ppjk = H({ nilaiSeriUsd: [6356.625], ndpbm: 16000, tarifBm: 20, tarifPph: 7.5 });
+  eq([ppjk.bm, ppjk.ppn, ppjk.pph].join(" | "), "20342000 | 13425192 | 9153525", "contoh PPJK:");
+  // Contoh DDTC: BM 1.506.882,069 -> 1.507.000.
+  eq(H({ nilaiSeriUsd: [1506882.069 / 0.05], ndpbm: 1, tarifBm: 5 }).bm, 1507000, "pembulatan BM:");
+  // Pecahan biner tidak boleh mendorong BM ke ribuan berikutnya: tepat 1.000 tetap 1.000.
+  eq(H({ nilaiSeriUsd: [0.1, 0.2], ndpbm: 20000 / 0.3 * 0.3 / 0.3 * 0.3 / 0.3, tarifBm: 5 }).bm % 1000, 0, "kelipatan ribuan:");
+  eq(H({ nilaiSeriUsd: [10000], ndpbm: 2, tarifBm: 5 }).bm, 1000, "tepat seribu tetap seribu:");
+  // BM manual dipakai apa adanya dan menjadi dasar PPN.
+  const manual = H({ nilaiSeriUsd: [4780], ndpbm: 17707, bmManual: 4232000 });
+  eq([manual.bm, manual.ppn].join(" | "), "4232000 | 9775860", "BM manual:");
+  eq(H({ nilaiSeriUsd: [], ndpbm: 17707, tarifBm: 5 }).bm, 0, "tanpa barang & ongkos:");
+});
+t("form jadwal: BM/PPN/PPh terisi otomatis dengan aturan CEISA, dan kotak Tarif dipakai", () => {
+  const simpan = w.eval("JSON.stringify(draftItems)");
+  const KOTAK = ["fNdpbm", "fFreight", "fInsurance", "fTarif", "fBM", "fPPN", "fPPH"];
+  const semula = KOTAK.map((id) => { const el = w.document.getElementById(id); return [el.value, el.dataset.auto]; });
+  const nilai = (id) => w.document.getElementById(id).value;
+  const isi = (id, v) => { w.document.getElementById(id).value = v; };
+  try {
+    w.eval(`draftItems = [{ namaBarang: "A", qty: 1, harga: 2390 }, { namaBarang: "B", qty: 1, harga: 2390 }]`);
+    isi("fNdpbm", "17707"); isi("fFreight", ""); isi("fInsurance", ""); isi("fTarif", "5");
+    ["fBM", "fPPN", "fPPH"].forEach((id) => { isi(id, ""); w.document.getElementById(id).dataset.auto = "1"; });
+    w.recalcCustoms();
+    eq([nilai("fBM"), nilai("fPPN"), nilai("fPPH")].join(" | "), "4,232,000 | 9,775,857 | 2,221,750", "tarif 5%:");
+    isi("fTarif", "10");
+    w.recalcCustoms();
+    eq(nilai("fBM"), "8,464,000", "tarif 10% (dulu tetap 5%):");
+    isi("fTarif", "");
+    w.recalcCustoms();
+    eq(nilai("fBM"), "4,232,000", "kotak Tarif kosong = 5%:");
+  } finally {
+    w.eval("draftItems = " + simpan);
+    KOTAK.forEach((id, i) => {
+      const el = w.document.getElementById(id);
+      el.value = semula[i][0];
+      if (semula[i][1] == null) delete el.dataset.auto; else el.dataset.auto = semula[i][1];
+    });
+  }
+});
 t("jendela Vendor Summary lama sudah tidak ada (digantikan tab Summary)", () => {
   if (w.document.getElementById("btnFundSummary")) throw new Error("tombol Vendor Summary masih ada");
   if (w.document.getElementById("fundSummaryModal")) throw new Error("jendela Vendor Summary masih ada");
@@ -4012,27 +4059,28 @@ t("ongkos angkut & asuransi ikut jadi dasar pungutan", () => {
   /* Contoh nyata dari layar Yogi: barang $640, freight $382,40,
      asuransi $5,1, NDPBM 18.062.
 
-       (640 + 382,40 + 5,1) x 18.062 = 18.564.938,--
-       PPN 11%  = 2.042.143
-       PPH 2,5% =   464.123
+       Nilai Pabean (640 + 382,40 + 5,1) x 18.062 = 18.558.705
+       BM 5% = 927.935,25       -> dibulatkan ke atas ribuan 928.000
+       Nilai Impor = 18.558.705 + 927.935,25 (BM SEBELUM dibulatkan)
+       PPN 11% = 2.143.530,43   -> ke bawah rupiah   2.143.530
+       PPh 2,5% x 19.486.000 (Nilai Impor ke bawah ribuan) = 487.150
 
-     Dengan dasar lama (barang saja) PPN cuma 1.271.565 — meleset
-     771 ribu rupiah ke bawah pada satu kiriman. */
+     Dengan dasar lama (barang saja) PPN meleset ratusan ribu rupiah
+     ke bawah pada satu kiriman. */
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
   $("#fIncoterm").value = "FOB";
   $("#fFreight").value = "382.40";
   $("#fInsurance").value = "5.1";
   $("#fNdpbm").value = "18,062";
+  $("#fTarif").value = "5";
+  $("#fBM").value = "";
   $("#fPPN").value = "";
   $("#fPPH").value = "";
   w.initAutoDutyFlags();
   w.recalcCustoms();
-  const dasar = (640 + 382.4 + 5.1) * 18062;
-  const bm = Math.round(dasar * 0.05);
-  eq($("#fBM").value, w.formatNumberValue(bm), "BM (Pabean x 5%):");
-  // PPN memakai (Pabean + BM), bukan Pabean saja -- lihat recalcCustoms().
-  eq($("#fPPN").value, w.formatNumberValue(Math.round((dasar + bm) * 0.11)));
-  eq($("#fPPH").value, w.formatNumberValue(Math.round(dasar * 0.025)));
+  eq($("#fBM").value, "928,000", "BM (Pabean x 5%, ke atas ribuan):");
+  eq($("#fPPN").value, "2,143,530", "PPN (Pabean + BM sebelum dibulatkan) x 11%, ke bawah rupiah:");
+  eq($("#fPPH").value, "487,150", "PPh 2,5% x Nilai Impor ke bawah ribuan:");
 });
 t("Nilai Pabean ditampilkan di kotak sendiri, dasar yang SAMA dengan PPN/PPH otomatis", () => {
   /* Angka dari tangkapan layar Yogi sendiri: barang $5.600, freight
@@ -4053,6 +4101,29 @@ t("Nilai Pabean ditampilkan di kotak sendiri, dasar yang SAMA dengan PPN/PPH oto
   w.recalcCustoms();
   eq($("#calcNilaiPabean").textContent, w.fmtRp(dasar), "tetap tampil walau Incoterm bukan CIF/FOB:");
 });
+t("Nilai CIF = barang + freight + asuransi (apa pun Incoterm-nya); Nilai Pabean presisi 2 desimal", () => {
+  /* Angka dari layar Yogi: FCA, barang $1.280, freight $688,62,
+     asuransi $9,84, NDPBM 17.707. CIF $1.978,46 x 17.707 = 35.032.591,22 */
+  w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"1280" }]');
+  $("#fIncoterm").value = "FCA";
+  $("#fFreight").value = "688.62";
+  $("#fInsurance").value = "9.84";
+  $("#fNdpbm").value = "17,707";
+  w.recalcCustoms();
+  eq($("#calcCIF").textContent, "$1,978.46", "Nilai CIF:");
+  eq($("#calcNilaiPabean").textContent, "Rp 35.032.591,22", "Nilai Pabean bersen:");
+  // Bulat -> tanpa ",00".
+  $("#fFreight").value = ""; $("#fInsurance").value = "";
+  w.recalcCustoms();
+  eq($("#calcCIF").textContent, "$1,280", "CIF tanpa ongkos:");
+  eq($("#calcNilaiPabean").textContent, "Rp 22.664.960", "Nilai Pabean bulat:");
+  // Kotak CIF Rupiah (= Nilai Pabean) & catatan "CIF dianggap 0" sudah tidak ada.
+  if (w.document.getElementById("calcCIFRupiah")) throw new Error("kotak CIF Rupiah masih ada");
+  if (w.document.getElementById("noCifFobNote")) throw new Error("catatan 'CIF dianggap 0' masih ada");
+  eq(w.fmtRpPresisi(84639460), "Rp 84.639.460", "pemformat, bulat:");
+  eq(w.fmtRpPresisi(1234.5), "Rp 1.234,50", "pemformat, bersen:");
+  eq(w.fmtRpPresisi(1234.567), "Rp 1.234,57", "pemformat, maks 2 desimal:");
+});
 t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
   $("#fFreight").value = "";
@@ -4067,10 +4138,11 @@ t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
   const bmPolos = Math.round(dasarPolos * 0.05);
   eq($("#fPPN").value, w.formatNumberValue(Math.round((dasarPolos + bmPolos) * 0.11)));
 });
-t("Bea Masuk kini terisi otomatis 5% dari Nilai Pabean (dulu selalu manual)", () => {
+t("Bea Masuk terisi otomatis dari Tarif; PPh dari Nilai Impor (Pabean + BM), bukan Pabean saja", () => {
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"1000" }]');
   $("#fFreight").value = "";
   $("#fInsurance").value = "";
+  $("#fTarif").value = "5";
   $("#fNdpbm").value = "10,000";
   $("#fBM").value = "";
   $("#fPPN").value = "";
@@ -4080,7 +4152,7 @@ t("Bea Masuk kini terisi otomatis 5% dari Nilai Pabean (dulu selalu manual)", ()
   const pabean = 1000 * 10000; // 10.000.000
   eq($("#fBM").value, w.formatNumberValue(Math.round(pabean * 0.05)), "BM = Pabean x 5%:");
   eq($("#fPPN").value, w.formatNumberValue(Math.round(pabean * 1.05 * 0.11)), "PPN = (Pabean+BM) x 11%:");
-  eq($("#fPPH").value, w.formatNumberValue(Math.round(pabean * 0.025)), "PPH = Pabean x 2,5%:");
+  eq($("#fPPH").value, w.formatNumberValue(pabean * 1.05 * 0.025), "PPH = (Pabean+BM) x 2,5%:");
 });
 t("BM diisi MANUAL: PPN memakai BM manual itu, bukan hasil 5% otomatis", () => {
   /* Tarif HS Code tertentu memang bukan 5% -- yang penting PPN selalu
@@ -7616,7 +7688,7 @@ t("bawaan: mata uang IDR & Checked By M. Rangga", () => {
   eq(panel.querySelector('[data-dn="checkedByName"]').defaultValue, "M. Rangga");
   eq(
     panel.querySelector('[data-dn="approver1Name"]').defaultValue,
-    "Mr. Shin Nara",
+    "Mr. Shin Na Ra",
   );
   eq(
     panel.querySelector('[data-dn="approver1Role"]').defaultValue,
@@ -8264,7 +8336,7 @@ t("Nomor Billing jadi baris judul DI ATAS rincian, bukan di kaki tabel", () => {
 });
 t("nama & jabatan penanda tangan bisa diubah, dengan bawaan kalau dikosongkan", () => {
   const bawaan = w.buildFundRequestHtml(barisFundUji({}));
-  ["Drafter", "Accounting", "M. Rangga", "Mr. Shin Nara", "Chief Marketing Officer"]
+  ["Drafter", "Accounting", "M. Rangga", "Mr. Shin Na Ra", "Chief Marketing Officer"]
     .forEach((j) => {
       if (!bawaan.includes(j)) throw new Error("bawaan " + j + " tidak tercetak");
     });
@@ -8946,11 +9018,10 @@ t("Report: barang yang BENAR-BENAR sama (nama & size sama persis) tetap ke-dedup
   });
   eq(w.reportItemNames(s).length, 1);
 });
-t("Daily Import: KGS pakai Total Bruto kalau Netto TIDAK lengkap (ada yang kosong/nol)", () => {
+t("Daily Import: kolom BRUTO = Total Bruto se-pengiriman, sekali di baris pertama", () => {
   /* Barang 1 100kg + Barang 2 250kg + Barang 3 150kg = Total 500kg --
      dan ditampilkan SEKALI di baris pertama (level pengiriman, sama
-     seperti SPPB/AJU/dst.), bukan diulang tiap baris. Netto sengaja
-     tidak diisi sama sekali di sini -> "tidak lengkap", jatuh ke Bruto. */
+     seperti SPPB/AJU/dst.), bukan diulang tiap baris. */
   const s = Object.assign({}, jadwalUji(), {
     items: [
       { namaBarang: "A", qty: 1, satuan: "PCE", bruto: 100 },
@@ -8963,7 +9034,9 @@ t("Daily Import: KGS pakai Total Bruto kalau Netto TIDAK lengkap (ada yang koson
   eq(rows[1][9], "", "baris 2 -- kosong, bukan berat barang B (250) sendiri:");
   eq(rows[2][9], "", "baris 3 -- kosong, bukan berat barang C (150) sendiri:");
 });
-t("Daily Import: KGS pakai Total NETTO kalau lengkap di SEMUA barang (lebih akurat dari Bruto)", () => {
+t("Daily Import: Netto yang terisi lengkap TIDAK menggantikan Total Bruto", () => {
+  /* Dulu Netto didahulukan kalau terisi di semua barang. Kolom ini
+     kolom BRUTO: isinya Total Bruto, apa pun isi Netto-nya. */
   const s = Object.assign({}, jadwalUji(), {
     items: [
       { namaBarang: "A", qty: 1, satuan: "PCE", netto: 80, bruto: 100 },
@@ -8972,18 +9045,7 @@ t("Daily Import: KGS pakai Total NETTO kalau lengkap di SEMUA barang (lebih akur
     ],
   });
   const rows = w.buildDailyImportCopyRows(s, baca("clipboardFormatter"));
-  eq(rows[0][9], "400", "Total Netto (80+200+120), BUKAN Total Bruto (500):");
-});
-t("Daily Import: satu barang saja netto-nya kosong -> tetap jatuh ke Total Bruto, bukan netto sebagian", () => {
-  const s = Object.assign({}, jadwalUji(), {
-    items: [
-      { namaBarang: "A", qty: 1, satuan: "PCE", netto: 80, bruto: 100 },
-      { namaBarang: "B", qty: 1, satuan: "PCE", bruto: 250 }, // netto kosong
-      { namaBarang: "C", qty: 1, satuan: "PCE", netto: 120, bruto: 150 },
-    ],
-  });
-  const rows = w.buildDailyImportCopyRows(s, baca("clipboardFormatter"));
-  eq(rows[0][9], "500", "jatuh ke Total Bruto (100+250+150), BUKAN netto sebagian (80+120=200):");
+  eq(rows[0][9], "500", "Total Bruto (100+250+150), BUKAN Total Netto (400):");
 });
 t("kolom setelah NO tidak ikut tergeser atau hilang", () => {
   const s = jadwalUji();
@@ -10365,6 +10427,35 @@ function pakaiHsCodeHalaman(jumlah, jalankan) {
 function namaHsTampil() {
   return [...w.document.querySelectorAll("#hsCodeList .hscode-name")].map((el) => el.textContent);
 }
+t("pengatur halaman HS Code tetap berjarak dari tepi panel (kelas tidak ditimpa)", () => {
+  const simpan = w.eval("JSON.stringify(hsCodeRows)");
+  try {
+    w.eval(`hsCodeRows = Array.from({ length: 3 }, (_, i) => ({ id: "p" + i, item_name: "B" + i, hs_code: "1234567" + i, notes: "" }))`);
+    w.renderHsCodes();
+    const bar = w.document.getElementById("hsCodePagination");
+    if (!bar.classList.contains("pagination-bar") || !bar.classList.contains("hs-halaman"))
+      throw new Error("kelas pemberi jarak hilang: " + bar.className);
+  } finally {
+    w.eval("hsCodeRows = " + simpan + "; renderHsCodes()");
+  }
+});
+t("mode Inggris: teks yang dulu terlewat kini ikut diterjemahkan", () => {
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    w.showPrompt({ fields: [] });
+    eq(w.document.getElementById("promptTitle").textContent, "Input", "judul dialog bawaan:");
+    eq(baca("LABEL_KOLOM_TIBA").etdUpdate, "Revised ETD", "label ETD revisi:");
+    const strip = w.delayStripHtml({ id: "x", status: "delayed", etd: "2026-09-01", eta: "2026-09-10" });
+    if (!/Delay Update Dates/.test(strip) || !/Updated ETD/.test(strip)) throw new Error("strip Delay masih Indonesia");
+    if (/Berangkat|Tanggal Update/.test(strip)) throw new Error("sisa teks Indonesia di strip Delay");
+    w.setLang("id");
+    eq(baca("LABEL_KOLOM_TIBA").etdUpdate, "ETD revisi", "kembali ke Indonesia:");
+  } finally {
+    w.setLang(simpan);
+    w.eval("bootstrap.Modal.getOrCreateInstance(document.getElementById('promptModal')).hide()");
+  }
+});
 t("halaman HS Code: satu panel -- Tambah di bilah ATAS, bukan kartu terpisah di bawah daftar", () => {
   const panel = w.document.querySelector("#viewHsCode .hs-panel");
   if (!panel) throw new Error("panel HS Code tidak ada");
@@ -10394,9 +10485,14 @@ t("tabel HS Code: nama, kode (tombol salin), catatan, aksi", async () => {
     eq(baris[0].querySelector(".hs-kol-catatan").textContent.trim(), "Alat ukur tapak", "catatan tampil:");
     if (!baris[1].querySelector(".hs-kol-catatan").classList.contains("hs-tanpa-catatan")) throw new Error("catatan kosong tidak ditandai");
     Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: { writeText: async (v) => { tersalin = v; } } });
-    baris[0].querySelector("[data-salin-hs]").click();
+    const tombol = baris[0].querySelector("[data-salin-hs]");
+    if (!tombol.querySelector("i.bi-clipboard")) throw new Error("ikon salin tidak terlihat");
+    eq(tombol.querySelector(".hscode-kode").textContent, "90318090", "kode di tombol:");
+    tombol.click();
     await new Promise((r) => setTimeout(r, 20));
     eq(tersalin, "90318090", "tersalin:");
+    if (!tombol.classList.contains("is-tersalin") || !tombol.querySelector("i.bi-clipboard-check"))
+      throw new Error("tidak ada tanda berhasil di tombolnya");
   } finally {
     Object.defineProperty(w.navigator, "clipboard", { configurable: true, value: salinAsli });
     w.eval("hsCodeRows = " + simpan + "; renderHsCodes()");

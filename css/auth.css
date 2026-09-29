@@ -625,8 +625,12 @@ body.is-viewer .delay-strip-fields input {
   font-size: var(--t-base);
   color: var(--ink);
 }
-/* HS Code = tombol salin. Tampil sebagai pil kode, bukan tombol biasa. */
+/* HS Code = tombol salin: pil kode berikon papan klip -- terlihat bisa
+   diklik tanpa harus menunggu tooltip (yang di ponsel tidak ada). */
 .hscode-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--t-sm);
@@ -641,12 +645,25 @@ body.is-viewer .delay-strip-fields input {
 .hscode-code:hover {
   border-color: var(--p-200);
 }
+.hscode-code i {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+.hscode-code.is-tersalin {
+  color: #146c43;
+  background: #e8f5ee;
+  border-color: #b7e0c8;
+}
 .hscode-actions {
   display: flex;
   gap: 4px;
   justify-content: flex-end;
 }
-.hs-halaman:not(:empty) {
+/* Dua kelas: menang atas .pagination-bar umum (dashboard.css), yang
+   berjarak atas-bawah tapi TANPA jarak kiri-kanan -- di panel tanpa
+   padding, teksnya menempel ke tepi. */
+.pagination-bar.hs-halaman {
+  margin: 0;
   padding: 12px var(--sp-5);
   border-top: 1px solid var(--n-100);
 }
@@ -692,7 +709,7 @@ body.is-viewer .delay-strip-fields input {
   .hs-tabel td.hs-kol-catatan { grid-area: catatan; font-size: var(--t-xs); }
   .hs-tabel td.hs-kol-aksi { grid-area: aksi; align-self: center; width: auto; }
   .hs-tabel td.hs-tanpa-catatan { display: none; }
-  .hs-halaman:not(:empty) {
+  .pagination-bar.hs-halaman {
     padding: 10px var(--sp-4);
   }
 }

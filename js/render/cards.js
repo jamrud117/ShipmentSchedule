@@ -84,15 +84,15 @@ function delayStripHtml(s) {
   return `
     <div class="delay-strip">
       <div class="delay-strip-head">
-        <i class="bi bi-clock-history"></i> Tanggal Update Delay
+        <i class="bi bi-clock-history"></i> ${tt("Tanggal Update Delay", "Delay Update Dates")}
       </div>
       <div class="delay-strip-fields">
         <div class="date-field">
-          <label>Update ETD ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
+          <label>${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
           <input type="date" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
         </div>
         <div class="date-field">
-          <label>Update ETA ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
+          <label>${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
           <input type="date" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
         </div>
       </div>
@@ -113,7 +113,7 @@ function departingTodayHtml(s) {
   return `
     <div class="depart-strip depart-strip--${air ? "air" : "sea"}">
       <span class="depart-label">
-        <i class="bi bi-broadcast"></i> Berangkat hari ini
+        <i class="bi bi-broadcast"></i> ${tt("Berangkat hari ini", "Departs today")}
       </span>
       <span class="depart-track" aria-hidden="true">
         <span class="depart-mover">${air ? ICON_PESAWAT : ICON_KAPAL}</span>
@@ -291,7 +291,7 @@ function collapsedDatesHtml(s) {
            saat menelusuri kiriman lama. */
         kotak(ML().actual, s.actual)
       }
-      ${mundur ? `<div class="collapsed-dates-note"><i class="bi bi-clock-history"></i> Pernah dimundurkan</div>` : ""}
+      ${mundur ? `<div class="collapsed-dates-note"><i class="bi bi-clock-history"></i> ${tt("Pernah dimundurkan", "Previously postponed")}</div>` : ""}
     </div>`;
 }
 

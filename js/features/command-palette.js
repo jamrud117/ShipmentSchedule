@@ -84,7 +84,7 @@ function cmdkRender() {
     });
   }
   if (perintah.length) {
-    html += `<div class="cmdk-group">Perintah</div>`;
+    html += `<div class="cmdk-group">${tt("Perintah", "Commands")}</div>`;
     perintah.forEach((r) => {
       html += cmdkItemHtml(r, n++);
     });

@@ -52,13 +52,13 @@ const I18N = {
     "form.note.itemPackaging":
       "Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. “5 BOX”), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm, CBM otomatis — kolom Kemasan-nya sendiri tetap diisi seperti Import, dan Total Package-nya ikut terjumlah otomatis. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya — di surat jalan baris itu tercetak menyatu.",
     "form.note.duty":
-      "Nilai Pabean = (Total Nilai Barang + Freight + Insurance) × NDPBM. Dari situ: <b>Bea Masuk</b> = Nilai Pabean × 5%, <b>PPN</b> = (Nilai Pabean + Bea Masuk) × 11%, <b>PPH</b> = Nilai Pabean × 2,5% — semuanya terisi otomatis. Mengetik sendiri menghentikan pengisian otomatis pada kotak itu; kosongkan untuk mengaktifkannya lagi. Kalau Bea Masuk diisi manual (tarif HS Code tertentu memang bukan 5%), PPN ikut memakai nilai manual itu. PDRI = Bea Masuk + PPN + PPH, dihitung seketika.",
+      "Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
       "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak.",
     "form.note.totalValue":
       "Total nilai barang (USD) diambil otomatis dari penjumlahan qty × harga/unit pada tab Daftar Barang.",
     "form.note.customsBasis":
-      "Nilai Pabean = (Total Nilai Barang + Freight + Insurance) × NDPBM — dasar penghitungan PPN &amp; PPH otomatis di bawah, berlaku apa pun Incoterm-nya (bukan cuma CIF).",
+      "CIF = Total Nilai Barang + Freight + Insurance. Nilai Pabean = CIF × NDPBM — dasar BM, PPN, dan PPH di bawah.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
     "f.alamat.consignee.buyer": "Alamat Consignee / Buyer",
@@ -612,13 +612,13 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM. From there: <b>Import Duty (BM)</b> = Customs Value × 5%, <b>PPN</b> = (Customs Value + Import Duty) × 11%, <b>PPH</b> = Customs Value × 2.5% — all filled automatically. Typing your own value stops the automatic fill for that box; clear it to turn it back on. If Import Duty is entered manually (some HS Codes are not 5%), PPN uses that manual value too. PDRI = Import Duty + PPN + PPH, calculated instantly.",
+      "Filled automatically like the CEISA PIB, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form.",
     "form.note.totalValue":
       "Total goods value (USD) is taken automatically from the sum of qty × unit price on the Item List tab.",
     "form.note.customsBasis":
-      "Customs Value = (Total Goods Value + Freight + Insurance) × NDPBM — the basis for the automatic PPN &amp; PPH below, whatever the Incoterm is (not only CIF).",
+      "CIF = Total Goods Value + Freight + Insurance. Customs Value = CIF × NDPBM — the basis for BM, PPN, and PPH below.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
     "f.alamat.consignee.buyer": "Consignee / Buyer Address",

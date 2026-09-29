@@ -1983,7 +1983,7 @@
                     type="text"
                     class="form-control"
                     data-dn="approver1Name"
-                    value="Mr. Shin Nara"
+                    value="Mr. Shin Na Ra"
                   />
                 </div>
                 <div class="col-md-3">
@@ -3040,7 +3040,7 @@
               data-i18n="form.note.totalValue"
             ></div>
 
-            <!-- Satu baris untuk ketiganya. -->
+            <!-- Satu baris: barang, CIF, Nilai Pabean (+ FOB untuk incoterm FOB). -->
             <div class="calc-row mt-3">
               <div class="calc-box">
                 <div class="calc-label" data-i18n="u.total.nilai.barang.usd">
@@ -3048,13 +3048,12 @@
                 </div>
                 <div class="calc-value" id="calcTotalUSD">$0.00</div>
               </div>
-              <div class="calc-box cif calc-box--cif d-none">
-                <div class="calc-label">CIF (USD)</div>
-                <div class="calc-value" id="calcCIF">$0.00</div>
-              </div>
-              <div class="calc-box cif calc-box--cif d-none">
-                <div class="calc-label">CIF Rupiah</div>
-                <div class="calc-value" id="calcCIFRupiah">Rp 0</div>
+              <!-- Nilai CIF = Total Nilai Barang + Freight + Insurance, APA PUN
+                   Incoterm-nya. Urutan kotak mengikuti alur hitungannya: barang
+                   -> CIF -> x NDPBM -> Nilai Pabean. -->
+              <div class="calc-box">
+                <div class="calc-label" data-en="CIF Value (USD)">Nilai CIF (USD)</div>
+                <div class="calc-value" id="calcCIF">$0</div>
               </div>
               <div class="calc-box">
                 <div class="calc-label" data-i18n="f.nilai.pabean.rp">
@@ -3075,10 +3074,6 @@
               class="form-text-note mt-1 mb-0"
               data-i18n="form.note.customsBasis"
             ></div>
-            <div class="form-text-note mt-2 mb-0 d-none" id="noCifFobNote" data-en="<i class=&quot;bi bi-info-circle&quot;></i> This incoterm is neither CIF nor FOB — CIF, CIF Rupiah and FOB Rupiah are treated as 0.">
-              <i class="bi bi-info-circle"></i> Incoterm ini bukan CIF maupun
-              FOB — nilai CIF, CIF Rupiah, dan FOB Rupiah otomatis dianggap 0.
-            </div>
           </div>
 
           <div
@@ -3152,7 +3147,7 @@
                 </div>
               </div>
             </div>
-            <div class="form-text-note mt-1" data-i18n="form.note.duty"></div>
+            <div class="form-text-note mt-1" data-i18n="form.note.duty">Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.</div>
             <div class="row g-3 mt-1">
               <div class="col-md-12">
                 <label class="form-label"

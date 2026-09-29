@@ -6,7 +6,9 @@
 const LABEL_KOLOM_TIBA = {
   factoryDate: "In Factory",
   etd: "ETD",
-  etdUpdate: "ETD revisi",
+  get etdUpdate() {
+    return tt("ETD revisi", "Revised ETD");
+  },
 };
 
 /* CARD EVENT DELEGATION */

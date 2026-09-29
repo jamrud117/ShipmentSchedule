@@ -292,7 +292,7 @@ function syncPredictionForm() {
   const rute = resolveRouteLayer(src);
   panel.innerHTML = `
     <div class="pred-panel-head">
-      <span><i class="bi bi-graph-up-arrow"></i> Mesin Prediksi</span>
+      <span><i class="bi bi-graph-up-arrow"></i> ${tt("Mesin Prediksi", "Prediction Engine")}</span>
       <span class="pred-panel-type">${escapeHtml(tipe)}${predictionTypeIsAssumed(src) ? t("w.muatan.belum.diisi") : ""}</span>
     </div>
     <div class="pred-layer">
@@ -301,7 +301,7 @@ function syncPredictionForm() {
     </div>
     <div class="pred-panel-grid">
       <div class="pred-panel-col">
-        <div class="pred-panel-label"><span class="pred-layer-tag">Lapis 1</span> Prediksi ETA ${etaModeChipHtml(formEtaMode)}</div>
+        <div class="pred-panel-label"><span class="pred-layer-tag">${tt("Lapis 1", "Layer 1")}</span> ${tt("Prediksi ETA", "ETA Prediction")} ${etaModeChipHtml(formEtaMode)}</div>
         <div class="pred-panel-val">${barisEta}</div>
         ${barisDelay}
         ${
@@ -491,9 +491,9 @@ async function handleCardDateChange(s, field) {
         showToast(t("m.eta.dihitung.ulang.otomatis"), "success");
       },
       {
-        title: "ETA Mode Manual",
+        title: tt("ETA Mode Manual", "Manual ETA Mode"),
         confirmText: tt("Hitung Ulang Otomatis", "Recalculate Automatically"),
-        cancelText: "Pertahankan ETA Manual",
+        cancelText: tt("Pertahankan ETA Manual", "Keep Manual ETA"),
         tone: "primary",
         icon: "bi-magic",
       },

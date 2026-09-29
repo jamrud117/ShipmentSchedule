@@ -23,7 +23,7 @@ function stopCardHtml(st, idx, total) {
                bandara untuk terminal laut membuat sarannya lebih
                menghalangi daripada menolong. Baris digambar ulang tiap
                modanya diganti, jadi daftarnya ikut berganti. -->
-          <input type="text" class="form-control form-control-sm" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? "Nama bandara transit" : "Nama pelabuhan transit"}">
+          <input type="text" class="form-control form-control-sm" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? tt("Nama bandara transit", "Transit airport name") : tt("Nama pelabuhan transit", "Transit port name")}">
         </div>
         <div class="col-md-2">
           <label class="form-label">${tt("Moda", "Mode")}</label>
@@ -34,7 +34,7 @@ function stopCardHtml(st, idx, total) {
         </div>
         <div class="col-md-3">
           <label class="form-label">${air ? tt("Nama Pesawat/Maskapai", "Aircraft/Airline Name") : tt("Nama Vessel", "Vessel Name")}</label>
-          <input type="text" class="form-control form-control-sm" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? "Nama maskapai" : "Nama pelayaran"}">
+          <input type="text" class="form-control form-control-sm" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? tt("Nama maskapai", "Airline name") : tt("Nama pelayaran", "Shipping line name")}">
         </div>
         <div class="col-md-2">
           <label class="form-label">${air ? "No. Flight" : "No. Voyage"}</label>
@@ -51,7 +51,7 @@ function stopCardHtml(st, idx, total) {
       </div>
       ${
         isLast
-          ? `<div class="form-text-note mt-1"><i class="bi bi-arrow-return-right"></i> Leg setelah terminal ini (menuju Pelabuhan Tujuan) memakai field Moda Transportasi/Vessel/Voyage di bagian atas form.</div>`
+          ? `<div class="form-text-note mt-1"><i class="bi bi-arrow-return-right"></i> ${tt("Leg setelah terminal ini (menuju Pelabuhan Tujuan) memakai field Moda Transportasi/Vessel/Voyage di bagian atas form.", "The leg after this terminal (to the Port of Destination) uses the Transport Mode/Vessel/Voyage fields at the top of the form.")}</div>`
           : ""
       }
     </div>`;

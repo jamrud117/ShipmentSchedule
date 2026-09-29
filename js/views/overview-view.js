@@ -77,7 +77,7 @@ function renderTaskQueue() {
 
   if (note) {
     note.textContent = tasks.length
-      ? `${tasks.length} hal · buku ${activeMode === "import" ? "Import" : "Export"}`
+      ? tt(`${tasks.length} hal · buku ${activeMode === "import" ? "Import" : "Export"}`, `${tasks.length} items · ${activeMode === "import" ? "Import" : "Export"} book`)
       : "";
   }
 
@@ -272,7 +272,7 @@ function renderDocCompleteness() {
 
   box.innerHTML = `
     <div class="stat-line" style="border-bottom:0;padding-bottom:2px">
-      <span class="stat-line-label"><i class="bi bi-file-earmark-check"></i> Lengkap</span>
+      <span class="stat-line-label"><i class="bi bi-file-earmark-check"></i> ${tt("Lengkap", "Complete")}</span>
       <span class="stat-line-value">${lengkap}/${aktif.length} · ${persen}%</span>
     </div>
     <div class="meter"><div class="meter-fill ${fillCls}" style="width:${persen}%"></div></div>

@@ -61,6 +61,14 @@ function fmtRp(n) {
   n = Math.round(Number(n) || 0);
   return "Rp " + n.toLocaleString("id-ID");
 }
+/* Rupiah PRESISI: desimal ditampilkan hanya kalau memang ada, paling
+   banyak 2 angka -- Rp 35.032.591,22, tapi Rp 84.639.460 (bukan
+   84.639.460,00). Untuk Nilai Pabean, yang di PIB pun bersen. */
+function fmtRpPresisi(n) {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  const bulat = Number.isInteger(v);
+  return "Rp " + v.toLocaleString("id-ID", { minimumFractionDigits: bulat ? 0 : 2, maximumFractionDigits: 2 });
+}
 function fmtNum(n) {
   return (Number(n) || 0).toLocaleString("id-ID");
 }

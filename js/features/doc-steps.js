@@ -323,7 +323,7 @@ function docStepHtml(s) {
   return `
   <div class="docsteps">
     <div class="docsteps-head">
-      <span><i class="bi bi-files"></i> Progres Dokumen</span>
+      <span><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
       <span class="docsteps-count">${docStepCount(s).selesai} / ${docStepCount(s).berlaku}</span>
     </div>
     <div class="docsteps-track">${langkah}</div>
@@ -418,14 +418,14 @@ async function toggleDocStep(id, stepKey) {
      tidak ada untuk pengiriman ini". */
   if (st.optional) {
     showPrompt({
-      title: `Tahap ${stepText(st.label, s)}`,
+      title: tt(`Tahap ${stepText(st.label, s)}`, `Step: ${stepText(st.label, s)}`),
       desc: t("x.tandai.sudah.diterima", { x: stepText(st.full, s) }),
       icon: "bi-patch-question",
       okText: tt("Simpan", "Save"),
       fields: [
         {
           key: "pilih",
-          label: "Status dokumen",
+          label: tt("Status dokumen", "Document status"),
           type: "select",
           value: "ada",
           options: [

@@ -86,10 +86,10 @@ function buildDetailHtml(s) {
       ${
         s.incoterm === "CIF"
           ? fieldPair("CIF (USD)", fmtUSD(calc.cifUsd)) +
-            fieldPair("CIF Rupiah", fmtRp(calc.cifRupiah))
+            fieldPair(tt("CIF Rupiah", "CIF (IDR)"), fmtRp(calc.cifRupiah))
           : s.incoterm === "FOB"
             ? fieldPair("FOB (USD)", fmtUSD(calc.fobUsd)) +
-              fieldPair("FOB Rupiah", fmtRp(calc.fobRupiah))
+              fieldPair(tt("FOB Rupiah", "FOB (IDR)"), fmtRp(calc.fobRupiah))
             : ""
       }
     </div>`;
@@ -185,7 +185,7 @@ function buildDetailHtml(s) {
         <thead><tr>
           <th>${tt("Nama Barang", "Item Name")}</th><th>HS Code</th><th>${tt("Jenis Barang", "Goods Type")}</th><th>${tt("Fasilitas", "Facility")}</th>
           <th class="text-center">Qty</th><th class="text-center">${tt("Satuan", "Unit")}</th><th class="text-center">${tt("Harga/Unit", "Unit Price")}</th>
-          <th class="text-center">Netto</th><th class="text-center">Bruto</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
+          <th class="text-center">${tt("Netto", "Net Wt.")}</th><th class="text-center">${tt("Bruto", "Gross Wt.")}</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
       </table>

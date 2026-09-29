@@ -130,12 +130,11 @@ let promptSubmit = null;
 
 function showPrompt(opsi) {
   const o = opsi || {};
-  $("#promptTitle").textContent = o.title || "Isian";
   $("#promptDesc").textContent = o.desc || "";
   $("#promptDesc").classList.toggle("d-none", !o.desc);
   $("#promptFields").classList.toggle("mt-3", !!o.desc);
   $("#promptIcon").className = "bi " + (o.icon || "bi-pencil-square");
-  $("#promptTitle").textContent = o.title || "Isian";
+  $("#promptTitle").textContent = o.title || tt("Isian", "Input");
   $("#promptOk").textContent = o.okText || tt("Simpan", "Save");
   $("#promptError").classList.add("d-none");
 

@@ -252,7 +252,7 @@ function renderFormPage(id) {
   /* Import: terjumlah otomatis dari kolom Kemasan tiap barang, jadi
      dikunci. Export: diisi manual. */
   $("#fPackage").readOnly = isImport;
-  $("#fPackage").placeholder = isImport ? "Terjumlah otomatis" : "Cth: 4 BOX";
+  $("#fPackage").placeholder = isImport ? tt("Terjumlah otomatis", "Summed automatically") : tt("Cth: 4 BOX", "e.g. 4 BOX");
   $("#fPackage").title = isImport
     ? t("v.otomatis.dari.total.jumlah.kemasan.semua.baran")
     : "";
@@ -417,11 +417,11 @@ function syncFormValidity() {
     kurang.push(tt("minimal 1 nama barang", "at least 1 item name"));
   if ($("#fRouteType").value === "transit" &&
       !draftStops.some((st) => (st.terminal || "").trim() !== ""))
-    kurang.push("minimal 1 terminal transit");
+    kurang.push(tt("minimal 1 terminal transit", "at least 1 transit terminal"));
 
   if (!kurang.length) {
     el.className = "form-validity form-validity--ok";
-    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> Siap disimpan`;
+    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${tt("Siap disimpan", "Ready to save")}`;
   } else {
     el.className = "form-validity form-validity--warn";
     el.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${tt("Belum lengkap", "Incomplete")}: ${escapeHtml(kurang.join(", "))}`;

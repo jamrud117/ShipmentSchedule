@@ -64,7 +64,7 @@ function renderAccounts() {
         )}</div>
         <div class="acct-main">
           <span class="acct-name">${escapeHtml(r.full_name || "—")}${
-            isSelf ? ' <span class="acct-self">Anda</span>' : ""
+            isSelf ? ` <span class="acct-self">${tt("Anda", "You")}</span>` : ""
           }</span>
           <!-- Email SELALU ditampilkan. Menyembunyikannya saat
                berdomain internal membuat akun baru terlihat "tidak
@@ -158,14 +158,14 @@ async function editAccount(id) {
     icon: "bi-person-gear",
     okText: tt("Simpan", "Save"),
     fields: [
-      { key: "nama", label: t("a.nama.lengkap"), value: r.full_name || "", placeholder: "Nama lengkap pengguna" },
+      { key: "nama", label: t("a.nama.lengkap"), value: r.full_name || "", placeholder: tt("Nama lengkap pengguna", "User's full name") },
       { key: "user", label: "Username", value: r.username || "", placeholder: tt("huruf kecil, tanpa spasi", "lowercase, no spaces") },
     ],
     onSubmit: (v) => {
       const u = (v.user || "").trim().toLowerCase();
       if (!(v.nama || "").trim()) return tt("Nama lengkap harus diisi.", "Full name is required.");
       if (!/^[a-z0-9._-]{3,}$/.test(u))
-        return "Username minimal 3 karakter: huruf, angka, titik, garis.";
+        return tt("Username minimal 3 karakter: huruf, angka, titik, garis.", "Username must be at least 3 characters: letters, digits, dots, dashes.");
       if (accountRows.some((x) => x.id !== id && (x.username || "").toLowerCase() === u))
         return t("s.username.itu.sudah.dipakai.akun.lain");
 

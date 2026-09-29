@@ -20,7 +20,7 @@ function renderHscodeLookupResults(daftar) {
   if (!box) return;
   if (!daftar.length) {
     box.innerHTML = `<div class="hscode-lookup-empty">
-      ${hsCodeRows.length ? t("s.tidak.ada.yang.cocok") : "Database HS Code masih kosong — tambahkan lewat menu HS Code."}
+      ${hsCodeRows.length ? t("s.tidak.ada.yang.cocok") : tt("Database HS Code masih kosong — tambahkan lewat menu HS Code.", "The HS Code database is empty — add entries from the HS Code menu.")}
     </div>`;
     return;
   }

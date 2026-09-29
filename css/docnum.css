@@ -165,8 +165,11 @@ table.fund-lines select {
   color: var(--n-500);
   font-family: var(--font-mono);
 }
+/* 320px: baris diskon memuat TIGA kotak di kolom ini (nilai, Rp/%,
+   nominal). Dengan 150px kotak nilainya tergencet ke 56px dan angka
+   seperti 4.762.450 terbaca "4.762." -- terpotong. */
 .fund-lines .fl-amt {
-  width: 150px;
+  width: 320px;
   text-align: right;
 }
 .fund-lines .fl-rate {
@@ -1152,9 +1155,11 @@ button.dn-bayar--lunas:hover {
   align-items: center;
   gap: 4px;
 }
+/* Kotak nilai & kotak nominal berbagi rata -- keduanya memuat angka
+   jutaan utuh. */
 .fl-disc-in input[data-fl-f="amount"] {
-  flex: 1 1 64px;
-  min-width: 56px;
+  flex: 1 1 0;
+  min-width: 104px;
 }
 .fl-disc-in select {
   flex: 0 0 58px;
@@ -1162,8 +1167,8 @@ button.dn-bayar--lunas:hover {
 /* Nominal diskon: hasil hitungan, jadi tampil sebagai kotak baca-saja
    (latar redup, tanpa kursor ketik) supaya tidak dikira bisa diisi. */
 .fl-disc-in .fl-disc-nominal {
-  flex: 1.5 1 110px;
-  min-width: 100px;
+  flex: 1 1 0;
+  min-width: 104px;
   text-align: right;
   color: #b42318;
   background: var(--n-50);

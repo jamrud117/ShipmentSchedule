@@ -174,7 +174,7 @@ function renderHsCodes() {
      ponsel tiap baris jadi kartu ringkas (hs-panel di auth.css). HS Code
      berupa tombol: sekali klik tersalin, siap ditempel ke CEISA atau
      Daftar Barang tanpa memilih teksnya dulu. */
-  const salinJudul = escapeAttr(tt("Klik untuk menyalin", "Click to copy"));
+  const salinJudul = escapeAttr(tt("Salin HS Code", "Copy HS Code"));
   box.innerHTML = `
     <div class="hs-tabel-wrap">
       <table class="hs-tabel">
@@ -190,7 +190,11 @@ function renderHsCodes() {
           <tr data-hscode="${r.id}">
             <td class="hs-kol-nama"><span class="hscode-name">${escapeHtml(r.item_name)}</span></td>
             <td class="hs-kol-kode">
-              <button type="button" class="hscode-code" data-salin-hs="${escapeAttr(r.hs_code)}" title="${salinJudul}">${escapeHtml(r.hs_code)}</button>
+              <button type="button" class="hscode-code" data-salin-hs="${escapeAttr(r.hs_code)}" title="${salinJudul}"
+                aria-label="${escapeAttr(tt(`Salin HS Code ${r.hs_code}`, `Copy HS Code ${r.hs_code}`))}">
+                <span class="hscode-kode">${escapeHtml(r.hs_code)}</span>
+                <i class="bi bi-clipboard" aria-hidden="true"></i>
+              </button>
             </td>
             <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
             <td class="hs-kol-aksi">
@@ -211,8 +215,13 @@ function renderHsCodes() {
 }
 
 /* Salin HS Code sekali klik. Cadangan execCommand untuk peramban tanpa
-   Clipboard API (atau halaman yang dibuka bukan lewat https). */
-async function salinHsCode(kode) {
+   Clipboard API (atau halaman yang dibuka bukan lewat https).
+
+   Tanda berhasil di TOMBOLNYA SENDIRI -- ikon papan klip jadi centang,
+   pil sesaat hijau -- bukan hanya pesan di pojok layar: mata sedang
+   melihat tombol yang baru diklik, dan di ponsel pesannya mudah
+   tertutup jari. */
+async function salinHsCode(kode, tombol) {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(kode);
     else {
@@ -227,13 +236,23 @@ async function salinHsCode(kode) {
       ta.remove();
     }
     showToast(tt(`HS Code ${kode} disalin.`, `HS Code ${kode} copied.`), "success");
+    if (tombol) {
+      const ikon = tombol.querySelector("i");
+      tombol.classList.add("is-tersalin");
+      if (ikon) ikon.className = "bi bi-clipboard-check";
+      clearTimeout(tombol._tundaSalin);
+      tombol._tundaSalin = setTimeout(() => {
+        tombol.classList.remove("is-tersalin");
+        if (ikon) ikon.className = "bi bi-clipboard";
+      }, 1500);
+    }
   } catch (err) {
     showToast(tt("Gagal menyalin HS Code.", "Failed to copy the HS Code."), "danger");
   }
 }
 document.addEventListener("click", (e) => {
   const tombol = e.target.closest && e.target.closest("[data-salin-hs]");
-  if (tombol) salinHsCode(tombol.dataset.salinHs);
+  if (tombol) salinHsCode(tombol.dataset.salinHs, tombol);
 });
 
 /* Dipakai juga dari luar halaman ini -- tombol cari HS Code di Daftar
@@ -257,7 +276,7 @@ function tambahHsCodeBaru() {
       {
         key: "kode",
         label: "HS Code",
-        placeholder: "Cth: 6404.19.00",
+        placeholder: tt("Cth: 6404.19.00", "e.g. 6404.19.00"),
         hint: tt("Maksimal 8 angka (titik hanya pemisah).", "At most 8 digits (dots are only separators)."),
         inputmode: "numeric",
         filter: batasiHsCode,
@@ -397,8 +416,12 @@ if (hsCodeSearchEl) {
 function renderHsCodePagination(totalItems) {
   const bar = $("#hsCodePagination");
   if (!bar) return;
+  /* Kelas hs-halaman DIPERTAHANKAN: ia yang memberi jarak kiri-kanan
+     (panel HS Code tidak berpadding). Dulu className ditimpa jadi
+     "pagination-bar" saja, dan teks "Showing ..." / "Per page" menempel
+     ke tepi panel. */
   if (!totalItems) {
-    bar.className = "";
+    bar.className = "hs-halaman";
     bar.innerHTML = "";
     return;
   }
@@ -413,7 +436,7 @@ function renderHsCodePagination(totalItems) {
     )
     .join("");
 
-  bar.className = "pagination-bar";
+  bar.className = "pagination-bar hs-halaman";
   bar.innerHTML = `
     <div class="pagination-info">${t("hscode.pager.showing", {
       awal: `<b>${awal}\u2013${akhir}</b>`,

@@ -514,7 +514,7 @@ function buildLaneHtml(s) {
     <div class="lane-track ${laneClass}">
       <div class="lane-fill" style="width:${progress * 100}%"></div>
       ${dotsHtml}
-      <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + "% perjalanan · " + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
+      <div class="ship-marker ${markerClass}" style="left:${progress * 100}%" title="${escapeAttr(Math.round(progress * 100) + tt("% perjalanan · ", "% of the journey · ") + laneRemainingLabel(s))}"><span class="marker-trail"><span></span><span></span><span></span></span><span class="marker-icon">${icon}</span></div>
     </div>
     ${labelsHtml}`;
 }

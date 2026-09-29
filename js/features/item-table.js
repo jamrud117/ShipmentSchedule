@@ -263,7 +263,7 @@ function renderItemTable() {
       </td>
       <td>
         <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}"
-               placeholder="${idx === 0 ? "1" : "↳ ikut"}"
+               placeholder="${idx === 0 ? "1" : tt("↳ ikut", "↳ same")}"
                title="${
                  idx === 0
                    ? t("s.jumlah.kemasan.untuk.barang.ini")
@@ -273,7 +273,7 @@ function renderItemTable() {
       </td>
       <td>
         <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}"
-               list="packageUnitList" placeholder="${idx === 0 ? "BOX" : "↳ ikut"}"
+               list="packageUnitList" placeholder="${idx === 0 ? "BOX" : tt("↳ ikut", "↳ same")}"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
       <td class="cbm-col text-center ${activeMode === "import" ? "d-none" : ""}">

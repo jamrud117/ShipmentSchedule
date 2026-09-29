@@ -1043,7 +1043,7 @@ async function submitDocNumRequest() {
   const htmlAsli = btn.innerHTML;
   docNumBusy = true;
   btn.disabled = true;
-  btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Menerbitkan...`;
+  btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menerbitkan...", "Issuing...")}`;
 
   try {
     // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset dari perangkat lain
