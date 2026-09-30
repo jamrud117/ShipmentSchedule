@@ -11539,30 +11539,85 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
 
   console.log("— JADWAL KAPAL / SHIPMENT SCHEDULE —");
   const VS_CONTOH = `[
-      { id: "a", customer: "PT A", packages: "1x40HC", vessel: "EVER / 01N", etd: "2026-10-05", eta: "2026-10-12", port_from: "JAKARTA", port_to: "BUSAN" },
-      { id: "b", customer: "PT B", packages: "5 PLT", vessel: "MSC / 02S", etd: "2026-10-01", eta: "2026-10-08", port_from: "HOCHIMINH", port_to: "JAKARTA" },
+      { id: "a", customer: "PT A", packages: "1x40HC", vessel: "HMM HARVEST 0015N", stuffing_date: "2026-10-03", etd: "2026-10-05", eta: "2026-10-12", port_from: "JAKARTA", port_to: "BUSAN" },
+      { id: "b", customer: "PT B", packages: "5 PLT", vessel: "MSC / 02S", stuffing_date: null, etd: "2026-10-01", eta: "2026-10-08", port_from: "HOCHIMINH", port_to: "JAKARTA" },
     ]`;
   const bukaVs = () => {
     w.location.hash = "#/shipment-schedule";
     w.router();
-    w.eval(`vsFilter = { from: "", to: "" }; vsRows = ${VS_CONTOH}; renderVesselSchedules();`);
+    ["vsFrom", "vsTo", "vsSearch"].forEach((id) => (w.document.getElementById(id).value = ""));
+    w.eval(`vsRows = ${VS_CONTOH}; renderVesselSchedules();`);
   };
   const teksKepala = () => [...w.document.querySelectorAll("#vsList thead th")].map((th) => th.textContent.trim()).filter(Boolean).join("|");
-  t("Jadwal Kapal: rute, dropdown Dari/Ke, saring lewat tombol Cari", () => {
+  const jumlahBaris = () => w.document.querySelectorAll("#vsList tbody tr").length;
+  const ketik = (teks) => {
+    const el = w.document.getElementById("vsSearch");
+    el.value = teks;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+  };
+  const pilih = (id, nilai) => {
+    const el = w.document.getElementById(id);
+    el.value = nilai;
+    el.dispatchEvent(new w.Event("change", { bubbles: true }));
+  };
+  t("Jadwal Kapal: tombol Cari diganti kotak cari; Dari/Ke menyaring begitu diganti", () => {
     bukaVs();
-    if (w.document.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error("halaman tidak tampil");
-    const opsi = [...w.document.querySelectorAll("#vsFrom option")].map((o) => o.value);
+    const d = w.document;
+    if (d.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error("halaman tidak tampil");
+    if (d.getElementById("btnVsSearch")) throw new Error("tombol Cari masih ada");
+    eq(d.getElementById("vsSearch").type, "text", "kotak cari:");
+    const opsi = [...d.querySelectorAll("#vsFrom option")].map((o) => o.value);
     eq(JSON.stringify(opsi), JSON.stringify(["", "JAKARTA", "BUSAN", "HOCHIMINH"]), "isi dropdown Dari:");
-    eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, "tanpa saringan:");
-    w.document.getElementById("vsFrom").value = "JAKARTA";
-    eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, "belum Cari, belum tersaring:");
-    w.document.getElementById("btnVsSearch").click();
-    const baris = w.document.querySelectorAll("#vsList tbody tr");
-    eq(baris.length, 1, "setelah Cari:");
-    eq(baris[0].querySelector(".vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "Dari : JAKARTA Ke : BUSAN", "kolom Rute:");
+    eq(jumlahBaris(), 2, "tanpa saringan:");
+
+    pilih("vsFrom", "JAKARTA");
+    eq(jumlahBaris(), 1, "Dari langsung menyaring, tanpa tombol:");
+    eq(d.querySelector("#vsList tbody .vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "Dari : JAKARTA Ke : BUSAN", "kolom Rute:");
+    pilih("vsFrom", "");
+    pilih("vsTo", "JAKARTA");
+    eq(jumlahBaris(), 1, "Ke langsung menyaring:");
+    pilih("vsTo", "");
+
+    ketik("msc");
+    eq(jumlahBaris(), 1, "cari nama vessel (huruf kecil):");
+    ketik("hmm busan");
+    eq(jumlahBaris(), 1, "dua kata: vessel HMM + tujuan BUSAN:");
+    ketik("hmm hochiminh");
+    eq(jumlahBaris(), 0, "dua kata yang tidak ada di jadwal yang sama:");
+    if (!/Tidak ada jadwal yang cocok/.test(d.getElementById("vsList").textContent)) throw new Error("pesan tidak ada yang cocok");
+    ketik("03-10-2026");
+    eq(jumlahBaris(), 1, "cari tanggal Stuffing seperti yang tampil:");
+    ketik("pt");
+    pilih("vsFrom", "HOCHIMINH");
+    eq(jumlahBaris(), 1, "kotak cari & Dari berlaku bersamaan:");
+    w.location.hash = "#/";
+  });
+  t("Jadwal Kapal: kolom & isian Stuffing (opsional, tidak boleh setelah ETD)", () => {
+    bukaVs();
+    const d = w.document;
+    const baris = [...d.querySelectorAll("#vsList tbody tr")];
+    const stuf = (tr) => tr.querySelector(".vs-kol-stuf");
+    // Urut ETD: PT B (01-10) dulu, tanpa Stuffing -> tanda pisah.
+    eq(stuf(baris[0]).textContent.trim(), "\u2014", "Stuffing kosong:");
+    eq(stuf(baris[1]).textContent.trim(), "03-10-2026", "Stuffing terisi:");
+    eq(stuf(baris[1]).dataset.label, "Stuffing", "label kartu ponsel:");
+    const isian = w.eval("vsFields({})").map((f) => f.key).join(",");
+    eq(isian, "customer,packages,vessel,stuffing,etd,eta,from,to", "urutan isian Tambah Data:");
+    const dasar = "customer: 'X', etd: '2026-10-05', eta: '2026-10-12', from: 'JAKARTA', to: 'BUSAN'";
+    eq(w.eval(`periksaVs({ ${dasar} })`), null, "Stuffing boleh kosong:");
+    eq(w.eval(`periksaVs({ ${dasar}, stuffing: '2026-10-05' })`), null, "Stuffing = ETD boleh:");
+    eq(w.eval(`periksaVs({ ${dasar}, stuffing: '2026-10-06' })`) !== null, true, "Stuffing setelah ETD ditolak:");
+    eq(w.eval(`barisVs({ ${dasar}, stuffing: '2026-10-03', customer: ' X ' })`).stuffing_date, "2026-10-03", "tersimpan ke stuffing_date:");
+    eq(w.eval(`barisVs({ ${dasar}, stuffing: '' })`).stuffing_date, null, "kosong disimpan NULL:");
     eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-05', eta: '2026-10-01', from: 'JAKARTA', to: 'BUSAN' })") !== null, true, "ETA < ETD ditolak:");
     eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-01', eta: '2026-10-05', from: 'BUSAN', to: 'BUSAN' })") !== null, true, "Dari = Ke ditolak:");
+    const sql = require("fs").readFileSync(require("path").join(__dirname, "..", "migration-vessel-schedule.sql"), "utf8");
+    if (!/add column if not exists stuffing_date date/.test(sql)) throw new Error("migrasi kolom stuffing_date untuk tabel yang sudah ada");
     w.location.hash = "#/";
+  });
+  t("Jadwal Kapal: label Dari/Ke rata tengah", () => {
+    const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "vessel.css"), "utf8");
+    if (!/\.vs-port span \{[^}]*text-align: center/.test(css)) throw new Error("label Dari/Ke tidak rata tengah");
   });
   t("Jadwal Kapal: ganti bahasa menggambar ulang seluruh halaman tanpa muat ulang", () => {
     const simpan = baca("activeLang");
@@ -11570,30 +11625,41 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       w.setLang("id");
       bukaVs();
       const d = w.document;
-      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|ETD|ETA|Rute", "kepala tabel (ID):");
+      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|Stuffing|ETD|ETA|Rute", "kepala tabel (ID):");
       eq(d.querySelector('[data-page="vessel"] span').textContent, "Jadwal Kapal", "menu (ID):");
       eq(d.querySelector("#viewVesselSchedule .board-title").textContent.trim(), "Jadwal Kapal", "judul (ID):");
       eq(d.querySelector("#vsFrom").closest("label").querySelector("span").textContent, "Dari", "label Dari:");
       eq(d.querySelector("#vsFrom option").textContent, "Semua", "opsi pertama (ID):");
+      eq(d.getElementById("vsSearch").placeholder, "Cari customer, vessel\u2026", "petunjuk kotak cari (ID):");
       eq(d.querySelector("#btnVsAdd span").textContent, "Tambah Data", "tombol tambah (ID):");
-      d.getElementById("vsTo").value = "BUSAN";
+      eq(w.eval("vsFields({})").find((f) => f.key === "stuffing").label, "Tanggal Stuffing", "label isian Stuffing (ID):");
+      pilih("vsTo", "BUSAN");
+      ketik("pt");
 
       w.setLang("en");
-      eq(teksKepala(), "No.|Customer|Packages|Vessel/Voyager|ETD|ETA|Route", "kepala tabel (EN):");
+      eq(teksKepala(), "No.|Customer|Packages|Vessel/Voyager|Stuffing|ETD|ETA|Route", "kepala tabel (EN):");
       eq(d.querySelector('[data-page="vessel"] span').textContent, "Shipment Schedule", "menu (EN):");
       eq(d.querySelector("#viewVesselSchedule .board-title").textContent.trim(), "Shipment Schedule", "judul (EN):");
       eq(d.querySelector("#vsFrom").closest("label").querySelector("span").textContent, "From", "label From:");
       eq(d.querySelector("#vsTo").closest("label").querySelector("span").textContent, "To", "label To:");
       eq(d.querySelector("#vsFrom option").textContent, "All", "opsi pertama (EN):");
-      eq(d.querySelector("#btnVsSearch span").textContent, "Search", "tombol cari (EN):");
+      eq(d.getElementById("vsSearch").placeholder, "Search customer, vessel\u2026", "petunjuk kotak cari (EN):");
       eq(d.querySelector("#btnVsAdd span").textContent, "Add Data", "tombol tambah (EN):");
+      eq(w.eval("vsFields({})").find((f) => f.key === "stuffing").label, "Stuffing Date", "label isian Stuffing (EN):");
       eq(d.getElementById("vsTo").value, "BUSAN", "pilihan dropdown tidak hilang saat ganti bahasa:");
-      eq(d.querySelector("#vsList tbody .vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "From : HOCHIMINH To : JAKARTA", "kolom Route (EN):");
+      eq(d.getElementById("vsSearch").value, "pt", "isi kotak cari tidak hilang saat ganti bahasa:");
+      eq(jumlahBaris(), 1, "saringan tetap berlaku setelah ganti bahasa:");
+      eq(d.querySelector("#vsList tbody .vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "From : JAKARTA To : BUSAN", "kolom Route (EN):");
       // Label kartu ponsel (data-label) ikut bahasa aktif.
       eq(d.querySelector("#vsList tbody .vs-kol-pkg").dataset.label, "Packages", "label kartu ponsel (EN):");
       if (!/Showing/.test(d.getElementById("vsPagination").textContent)) throw new Error("paginasi tidak ikut berbahasa Inggris");
       if (!/[A-Z][a-z]+day/.test(d.getElementById("vsToday").textContent)) throw new Error("tanggal Hari ini tertinggal di bahasa lama: " + d.getElementById("vsToday").textContent);
       eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-01', eta: '2026-10-05', from: 'BUSAN', to: 'BUSAN' })"), "From and To cannot be the same.", "pesan galat (EN):");
+      eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-01', eta: '2026-10-05', from: 'JAKARTA', to: 'BUSAN', stuffing: '2026-10-02' })"), "Stuffing date cannot be after ETD.", "pesan galat Stuffing (EN):");
+      ketik("zzz");
+      eq(d.getElementById("vsList").textContent.trim(), "No matching schedules.", "pesan tidak ada yang cocok (EN):");
+      ketik("");
+      pilih("vsTo", "");
       eq(d.getElementById("vsCountLabel").textContent, "schedules saved", "jamak (EN):");
       w.eval("vsRows = vsRows.slice(0, 1); renderVesselSchedules();");
       eq(d.getElementById("vsCountLabel").textContent, "schedule saved", "tunggal (EN):");
@@ -11601,7 +11667,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         throw new Error("paginasi tunggal (EN): " + d.querySelector("#vsPagination .pagination-info").textContent.trim());
 
       w.setLang("id");
-      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|ETD|ETA|Rute", "kembali ke ID:");
+      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|Stuffing|ETD|ETA|Rute", "kembali ke ID:");
       eq(d.querySelector("#vsList tbody .vs-kol-pkg").dataset.label, "Jumlah Koli", "label kartu ponsel (ID):");
       eq(d.querySelector("#vsFrom option").textContent, "Semua", "opsi pertama kembali ke ID:");
     } finally {
@@ -11622,9 +11688,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         bukaVs();
         eq(w.location.hash, "#/shipment-schedule", peran + " dilempar keluar:");
         if (w.document.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error(peran + ": halaman tidak tampil");
-        eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, peran + " melihat datanya:");
-        if (w.document.getElementById("vsFrom").disabled || w.document.getElementById("btnVsSearch").disabled)
-          throw new Error(peran + ": saringan Dari/Ke terkunci");
+        eq(jumlahBaris(), 2, peran + " melihat datanya:");
+        if (w.document.getElementById("vsFrom").disabled || w.document.getElementById("vsSearch").disabled)
+          throw new Error(peran + ": saringan Dari/Ke atau kotak cari terkunci");
+        ketik("msc");
+        eq(jumlahBaris(), 1, peran + " bisa mencari:");
+        ketik("");
         eq(w.requireEdit(), false, peran + " lolos requireEdit:");
       });
     });

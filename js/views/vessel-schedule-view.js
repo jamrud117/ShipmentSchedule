@@ -1,7 +1,10 @@
 "use strict";
 
 /* HALAMAN JADWAL KAPAL / SHIPMENT SCHEDULE — jadwal kapal per rute
-   (Customer, Jumlah Koli, Vessel/Voyager, ETD, ETA, Dari -> Ke).
+   (Customer, Jumlah Koli, Vessel/Voyager, Stuffing, ETD, ETA, Dari -> Ke).
+
+   Penyaringan langsung, tanpa tombol: kotak cari menyaring tiap kali
+   diketik, dropdown Dari/Ke tiap kali diganti.
 
    Semua peran (EXIM, marketing, viewer) boleh MEMBUKA & MENCARI;
    hanya exim yang boleh menambah/mengubah/menghapus -- dijaga
@@ -27,9 +30,28 @@ const vsLabel = {
 let vsRows = [];
 let vsPage = 1;
 let vsPageSize = 10;
-/* Saringan yang BERLAKU. Dropdown bisa diubah tanpa langsung menyaring;
-   baru dipakai setelah tombol Cari ditekan. */
-let vsFilter = { from: "", to: "" };
+
+/* Saringan dibaca langsung dari kotaknya tiap kali menggambar -- tidak
+   ada salinan keadaan yang bisa tertinggal dari yang terlihat. */
+function vsSaringan() {
+  return {
+    from: ($("#vsFrom") || {}).value || "",
+    to: ($("#vsTo") || {}).value || "",
+    q: (($("#vsSearch") || {}).value || "").trim().toLowerCase(),
+  };
+}
+
+/* Cocok kalau SEMUA kata yang diketik ada di salah satu kolom: "hmm
+   busan" menemukan kapal HMM tujuan BUSAN. Tanggal dicari dalam bentuk
+   yang tampil di tabel (08-10-2026). */
+function vsCocokTeks(r, q) {
+  if (!q) return true;
+  const isi = [
+    r.customer, r.packages, r.vessel, r.port_from, r.port_to,
+    r.stuffing_date && fmtDate(r.stuffing_date), fmtDate(r.etd), fmtDate(r.eta),
+  ].filter(Boolean).join(" ").toLowerCase();
+  return q.split(/\s+/).every((kata) => isi.includes(kata));
+}
 
 function vsPortOptions(nilai, denganSemua) {
   const semua = denganSemua ? `<option value="">${escapeHtml(tt("Semua", "All"))}</option>` : "";
@@ -55,7 +77,7 @@ async function loadVesselSchedules() {
   }
   const { data, error } = await supabaseClient
     .from("vessel_schedules")
-    .select("id, customer, packages, vessel, etd, eta, port_from, port_to, created_at")
+    .select("id, customer, packages, vessel, stuffing_date, etd, eta, port_from, port_to, created_at")
     .order("etd", { ascending: true });
   if (error) {
     console.error(error);
@@ -75,8 +97,9 @@ function renderVesselSchedules() {
   const box = $("#vsList");
   if (!box) return;
 
+  const f = vsSaringan();
   const cocok = vsRows
-    .filter((r) => (!vsFilter.from || r.port_from === vsFilter.from) && (!vsFilter.to || r.port_to === vsFilter.to))
+    .filter((r) => (!f.from || r.port_from === f.from) && (!f.to || r.port_to === f.to) && vsCocokTeks(r, f.q))
     .sort(
       (a, b) =>
         String(a.etd || "").localeCompare(String(b.etd || "")) ||
@@ -92,7 +115,7 @@ function renderVesselSchedules() {
 
   if (!cocok.length) {
     box.innerHTML = vsRows.length
-      ? `<div class="panel-empty"><i class="bi bi-search"></i> ${tt("Tidak ada jadwal untuk rute ini.", "No schedule for this route.")}</div>`
+      ? `<div class="panel-empty"><i class="bi bi-search"></i> ${tt("Tidak ada jadwal yang cocok.", "No matching schedules.")}</div>`
       : `<div class="panel-empty"><i class="bi bi-water"></i> ${tt(
           "Belum ada data. Tambahkan lewat tombol Tambah Data di atas.",
           "No data yet. Add one with the Add Data button above.",
@@ -115,6 +138,7 @@ function renderVesselSchedules() {
           <th class="vs-kol-cust">Customer</th>
           <th class="vs-kol-pkg">${vsLabel.packages}</th>
           <th class="vs-kol-vsl">Vessel/Voyager</th>
+          <th class="vs-kol-tgl">Stuffing</th>
           <th class="vs-kol-tgl">ETD</th>
           <th class="vs-kol-tgl">ETA</th>
           <th class="vs-kol-rute">${tt("Rute", "Route")}</th>
@@ -128,6 +152,7 @@ function renderVesselSchedules() {
             <td class="vs-kol-cust"><span class="vs-cust">${escapeHtml(r.customer)}</span></td>
             <td class="vs-kol-pkg" data-label="${escapeAttr(vsLabel.packages)}">${r.packages ? escapeHtml(r.packages) : "\u2014"}</td>
             <td class="vs-kol-vsl" data-label="Vessel/Voyager">${r.vessel ? escapeHtml(r.vessel) : "\u2014"}</td>
+            <td class="vs-kol-tgl vs-kol-stuf" data-label="Stuffing">${fmtDate(r.stuffing_date)}</td>
             <td class="vs-kol-tgl vs-kol-etd" data-label="ETD">${fmtDate(r.etd)}</td>
             <td class="vs-kol-tgl vs-kol-eta" data-label="ETA">${fmtDate(r.eta)}</td>
             <td class="vs-kol-rute">
@@ -193,14 +218,16 @@ function renderVsPagination(totalItems) {
    dipakai -- biasanya data baru ditambah untuk rute yang sedang dilihat. */
 function vsFields(r) {
   const opsiPort = VS_PORTS.map((p) => ({ value: p, label: p }));
+  const f = vsSaringan();
   return [
     { key: "customer", label: "Customer", value: r.customer || "", placeholder: tt("Cth: PT ABC", "e.g. PT ABC") },
     { key: "packages", label: vsLabel.packages, value: r.packages || "", placeholder: tt("Cth: 1x40HC / 12 PLT", "e.g. 1x40HC / 12 PLT") },
     { key: "vessel", label: "Vessel/Voyager", value: r.vessel || "", placeholder: tt("Cth: EVER GIVEN / 0123N", "e.g. EVER GIVEN / 0123N") },
+    { key: "stuffing", label: t("f.tanggal.stuffing"), type: "date", value: r.stuffing_date || "" },
     { key: "etd", label: "ETD", type: "date", value: r.etd || "" },
     { key: "eta", label: "ETA", type: "date", value: r.eta || "" },
-    { key: "from", label: vsLabel.from, type: "select", options: opsiPort, value: r.port_from || vsFilter.from || VS_PORTS[0] },
-    { key: "to", label: vsLabel.to, type: "select", options: opsiPort, value: r.port_to || vsFilter.to || VS_PORTS[1] },
+    { key: "from", label: vsLabel.from, type: "select", options: opsiPort, value: r.port_from || f.from || VS_PORTS[0] },
+    { key: "to", label: vsLabel.to, type: "select", options: opsiPort, value: r.port_to || f.to || VS_PORTS[1] },
   ];
 }
 
@@ -209,6 +236,10 @@ function periksaVs(v) {
   if (!v.etd) return tt("ETD harus diisi.", "ETD is required.");
   if (!v.eta) return tt("ETA harus diisi.", "ETA is required.");
   if (v.eta < v.etd) return tt("ETA tidak boleh sebelum ETD.", "ETA cannot be before ETD.");
+  /* Opsional -- tapi kalau diisi, muatan distuffing SEBELUM kapalnya
+     berangkat. */
+  if (v.stuffing && v.stuffing > v.etd)
+    return tt("Tanggal Stuffing tidak boleh setelah ETD.", "Stuffing date cannot be after ETD.");
   if (v.from === v.to) return tt("Dari dan Ke tidak boleh sama.", "From and To cannot be the same.");
   return null;
 }
@@ -218,6 +249,7 @@ function barisVs(v) {
     customer: v.customer.trim(),
     packages: (v.packages || "").trim() || null,
     vessel: (v.vessel || "").trim() || null,
+    stuffing_date: v.stuffing || null,
     etd: v.etd,
     eta: v.eta,
     port_from: v.from,
@@ -314,12 +346,6 @@ function deleteVesselSchedule(id) {
   );
 }
 
-function cariVesselSchedule() {
-  vsFilter = { from: ($("#vsFrom") || {}).value || "", to: ($("#vsTo") || {}).value || "" };
-  vsPage = 1;
-  renderVesselSchedules();
-}
-
 function showVesselScheduleView() {
   showPage("vessel");
   window.scrollTo(0, 0);
@@ -327,8 +353,19 @@ function showVesselScheduleView() {
   loadVesselSchedules();
 }
 
-const btnVsSearch = $("#btnVsSearch");
-if (btnVsSearch) btnVsSearch.addEventListener("click", cariVesselSchedule);
+/* Menyaring langsung: tiap ketikan di kotak cari, tiap ganti Dari/Ke.
+   Selalu kembali ke halaman 1 -- halaman 3 dari hasil lama bisa jadi
+   tidak ada lagi di hasil baru. */
+function saringUlangVs() {
+  vsPage = 1;
+  renderVesselSchedules();
+}
+["#vsFrom", "#vsTo"].forEach((sel) => {
+  const el = $(sel);
+  if (el) el.addEventListener("change", saringUlangVs);
+});
+const vsSearchEl = $("#vsSearch");
+if (vsSearchEl) vsSearchEl.addEventListener("input", saringUlangVs);
 const btnVsAdd = $("#btnVsAdd");
 if (btnVsAdd) btnVsAdd.addEventListener("click", tambahVesselSchedule);
 

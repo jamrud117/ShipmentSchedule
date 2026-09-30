@@ -776,6 +776,18 @@
               </h2>
             </div>
             <div class="vs-aksi">
+              <div class="search-box vs-cari">
+                <i class="bi bi-search"></i>
+                <input
+                  type="text"
+                  id="vsSearch"
+                  autocomplete="off"
+                  placeholder="Cari customer, vessel…"
+                  data-en-ph="Search customer, vessel…"
+                  aria-label="Cari jadwal kapal"
+                  data-en-aria="Search shipment schedules"
+                />
+              </div>
               <label class="vs-port">
                 <span data-en="From">Dari</span>
                 <select id="vsFrom" class="control-select"></select>
@@ -784,10 +796,6 @@
                 <span data-en="To">Ke</span>
                 <select id="vsTo" class="control-select"></select>
               </label>
-              <button type="button" class="btn-quiet vs-cari" id="btnVsSearch">
-                <i class="bi bi-search"></i>
-                <span data-en="Search">Cari</span>
-              </button>
               <button type="button" class="btn-teal hs-tambah" id="btnVsAdd">
                 <i class="bi bi-plus-lg"></i>
                 <span data-en="Add Data">Tambah Data</span>
