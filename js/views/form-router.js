@@ -5,6 +5,7 @@
 const PAGE_VIEWS = {
   accounts: "#viewAccounts",
   hscode: "#viewHsCode",
+  vessel: "#viewVesselSchedule",
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
@@ -122,6 +123,12 @@ function router() {
      lewat requireEdit(), dan di database lewat RLS. */
   if (hash === "#/hscode") {
     showHsCodeView();
+    return;
+  }
+
+  // Shipment Schedule: semua peran boleh membuka (sama seperti HS Code)
+  if (hash === "#/shipment-schedule") {
+    showVesselScheduleView();
     return;
   }
 

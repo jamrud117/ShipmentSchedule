@@ -271,7 +271,8 @@ body.is-locked {
   background: var(--s-danger-bg);
 }
 
-@media (max-width: 1319px) {
+/* Sama dengan tahap 1 navbar di shell.css -- ubah keduanya bersamaan. */
+@media (max-width: 1439px) {
   .user-chip-main {
     display: none;
   }
@@ -341,6 +342,9 @@ body.is-viewer #btnHsCodeAdd,
 body.is-viewer .hs-kol-aksi,
 body.is-viewer [data-edit-hscode],
 body.is-viewer [data-del-hscode],
+/* Shipment Schedule: sama seperti HS Code. */
+body.is-viewer #btnVsAdd,
+body.is-viewer .vs-kol-aksi,
 body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
 body.is-viewer .card-note-input {

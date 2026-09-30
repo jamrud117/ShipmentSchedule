@@ -7538,24 +7538,26 @@ t("ada jembatan tak terlihat antara chip & menunya", () => {
     throw new Error("tidak ada jembatan penutup celah di atas menu");
 });
 t("layar menengah & sempit: nama & peran disembunyikan, sisakan avatar saja", () => {
-  /* Mulai di bawah 1.320 px (bukan 991 px lagi): navbar lengkap butuh
-     ~1.320 px dengan label bahasa Inggris, dan di jendela terbelah
-     (Win + panah) tautan terakhir terpotong. */
+  /* Mulai di bawah 1.440 px: dengan enam tautan (termasuk Jadwal Kapal /
+     Shipment Schedule), navbar lengkap berlabel bahasa Inggris tidak muat
+     lagi di 1.366 px -- tautan Akun terpotong. Sama dengan tahap 1 di
+     shell.css. */
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
-  const i = css.indexOf("@media (max-width: 1319px)");
-  if (i < 0) throw new Error("breakpoint 1319px tidak ditemukan");
-  if (!/^\s*\.user-chip-main \{[^}]*display: none/.test(css.slice(i + "@media (max-width: 1319px) {".length)))
+  const i = css.indexOf("@media (max-width: 1439px) {");
+  if (i < 0) throw new Error("breakpoint 1439px tidak ditemukan");
+  if (!/^\s*\.user-chip-main \{[^}]*display: none/.test(css.slice(i + "@media (max-width: 1439px) {".length)))
     throw new Error("nama & peran tidak disembunyikan di layar menengah");
 });
 t("navbar meringkas bertahap: tidak ada yang terpotong atau patah di layar menengah", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "shell.css"), "utf8");
   const blok = (lebar) => { const i = css.indexOf(`@media (max-width: ${lebar}px) {`); return i < 0 ? "" : css.slice(i, css.indexOf("\n}\n", i)); };
   if (!/\.cmd-trigger \{[\s\S]*?white-space: nowrap;[\s\S]*?flex-shrink: 0;/.test(css)) throw new Error("tulisan Quick search bisa patah");
-  if (!/\.cmd-trigger-text/.test(blok(1319))) throw new Error("tahap 1: Quick search tidak jadi ikon di < 1.320 px");
-  if (!/\.brand-name \{\s*display: none;/.test(blok(1099))) throw new Error("tahap 2: nama brand");
-  if (!/\.site-nav-link span \{\s*display: none;/.test(blok(899))) throw new Error("tahap 3: label tautan");
-  if (!/\.site-nav-link \{\s*padding: 0 7px;/.test(blok(419))) throw new Error("tahap 4: ponsel kecil");
+  if (!/\.cmd-trigger-text/.test(blok(1439))) throw new Error("tahap 1: Quick search tidak jadi ikon di < 1.440 px");
+  if (!/\.brand-name \{\s*display: none;/.test(blok(1219))) throw new Error("tahap 2: nama brand");
+  if (!/\.site-nav-link span \{\s*display: none;/.test(blok(1059))) throw new Error("tahap 3: label tautan");
+  if (!/\.site-nav-link \{\s*padding: 0 5px;/.test(blok(439))) throw new Error("tahap 4: ponsel");
+  if (!/\.site-nav-link \{\s*padding: 0 3px;/.test(blok(359))) throw new Error("tahap 5: ponsel sangat kecil");
 });
 t("kotak cari di luar navbar ber-placeholder singkat 'Cari' / 'Search'", () => {
   ["searchInput", "hsCodeSearch", "accountSearch", "docNumSearch"].forEach((id) => {
@@ -10035,6 +10037,59 @@ t("tanpa update delay, Report jatuh ke jadwal awalnya", () => {
   eq(pasangan.ETD, w.fmtDateLong("2026-09-10"));
   eq(pasangan.ETA, w.fmtDateLong("2026-09-14"));
 });
+
+console.log("\u2014 TEMPLATE SALIN: ETD/ETA TERBARU SAAT DELAY \u2014");
+/* jadwalUji(): ETD 01-08-2026, ETA 10-08-2026. Dimundurkan ke 05-08 & 15-08. */
+const jadwalDelay = (over) =>
+  Object.assign(jadwalUji(), { status: "delayed", etdUpdate: "2026-08-05", etaUpdate: "2026-08-15" }, over || {});
+t("Daily Import & Daily Export: yang disalin Update ETD/ETA, bukan jadwal awal", () => {
+  const f = baca("clipboardFormatter");
+  [["Daily Import", w.buildDailyImportCopyRows], ["Daily Export", w.buildDailyExportCopyRows]].forEach(([nama, builder]) => {
+    const r = builder(jadwalDelay(), f)[0];
+    eq(r[15], f.date("2026-08-05"), nama + " ETD:");
+    eq(r[16], f.date("2026-08-15"), nama + " ETA:");
+  });
+});
+t("jalur tombol Copy sungguhan (tanpa kolom NO) ikut tanggal terbaru", () => {
+  const f = baca("clipboardFormatter");
+  ["DailyImport", "DailyExport"].forEach((id) => {
+    const tpl = baca("COPY_TEMPLATES").find((x) => x.id === id);
+    const sel = tpl.getText(jadwalDelay()).split("\n")[0].split("\t");
+    eq(sel[14], f.date("2026-08-05"), id + " ETD:");
+    eq(sel[15], f.date("2026-08-15"), id + " ETA:");
+  });
+});
+t("hanya Update ETD yang terisi: ETD terbaru, ETA tetap jadwal awal", () => {
+  const f = baca("clipboardFormatter");
+  const r = w.buildDailyImportCopyRows(jadwalDelay({ etaUpdate: "" }), f)[0];
+  eq(r[15], f.date("2026-08-05"), "ETD:");
+  eq(r[16], f.date("2026-08-10"), "ETA awal:");
+});
+t("tanpa delay: tetap jadwal awal", () => {
+  const f = baca("clipboardFormatter");
+  const r = w.buildDailyExportCopyRows(jadwalUji(), f)[0];
+  eq(r[15], f.date("2026-08-01"), "ETD:");
+  eq(r[16], f.date("2026-08-10"), "ETA:");
+});
+t("Info Barang Baru: ETD/ETA terbaru", () => {
+  const s = jadwalDelay();
+  s.items = [{ namaBarang: "BARANG A" }];
+  const baris = w.buildImportAnnouncementText(s).split("\n").pop();
+  eq(baris, "ETD : 05-08-2026, ETA : 15-08-2026, Estimasi sampai pabrik : 12-08-2026");
+});
+t("sheet Daily di Bulk Export memakai builder yang sama -> ikut tanggal terbaru", () => {
+  const f = baca("nativeFormatter");
+  const r = w.buildDailyImportCopyRows(jadwalDelay(), f)[0];
+  eq(r[15].getTime(), f.date("2026-08-05").getTime(), "ETD:");
+  eq(r[16].getTime(), f.date("2026-08-15").getTime(), "ETA:");
+});
+t("menyalin tidak mengubah jadwal awal yang tersimpan", () => {
+  const s = jadwalDelay();
+  w.buildDailyImportCopyRows(s, baca("clipboardFormatter"));
+  w.buildImportAnnouncementText(s);
+  eq(s.etd, "2026-08-01", "etd:");
+  eq(s.eta, "2026-08-10", "eta:");
+});
 t("label House pada kartu ikut moda: House AWB untuk udara", () => {
   const udara = w.renderExpandedCard({ id: "c1", transport: "udara", houseBL: "SRE1", items: [], docProgress: {} });
   if (!udara.includes("House AWB")) throw new Error("kartu udara tidak berlabel House AWB");
@@ -11481,6 +11536,100 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
 
     w.autoGrowAllItemNames = asli;
   }
+
+  console.log("— JADWAL KAPAL / SHIPMENT SCHEDULE —");
+  const VS_CONTOH = `[
+      { id: "a", customer: "PT A", packages: "1x40HC", vessel: "EVER / 01N", etd: "2026-10-05", eta: "2026-10-12", port_from: "JAKARTA", port_to: "BUSAN" },
+      { id: "b", customer: "PT B", packages: "5 PLT", vessel: "MSC / 02S", etd: "2026-10-01", eta: "2026-10-08", port_from: "HOCHIMINH", port_to: "JAKARTA" },
+    ]`;
+  const bukaVs = () => {
+    w.location.hash = "#/shipment-schedule";
+    w.router();
+    w.eval(`vsFilter = { from: "", to: "" }; vsRows = ${VS_CONTOH}; renderVesselSchedules();`);
+  };
+  const teksKepala = () => [...w.document.querySelectorAll("#vsList thead th")].map((th) => th.textContent.trim()).filter(Boolean).join("|");
+  t("Jadwal Kapal: rute, dropdown Dari/Ke, saring lewat tombol Cari", () => {
+    bukaVs();
+    if (w.document.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error("halaman tidak tampil");
+    const opsi = [...w.document.querySelectorAll("#vsFrom option")].map((o) => o.value);
+    eq(JSON.stringify(opsi), JSON.stringify(["", "JAKARTA", "BUSAN", "HOCHIMINH"]), "isi dropdown Dari:");
+    eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, "tanpa saringan:");
+    w.document.getElementById("vsFrom").value = "JAKARTA";
+    eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, "belum Cari, belum tersaring:");
+    w.document.getElementById("btnVsSearch").click();
+    const baris = w.document.querySelectorAll("#vsList tbody tr");
+    eq(baris.length, 1, "setelah Cari:");
+    eq(baris[0].querySelector(".vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "Dari : JAKARTA Ke : BUSAN", "kolom Rute:");
+    eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-05', eta: '2026-10-01', from: 'JAKARTA', to: 'BUSAN' })") !== null, true, "ETA < ETD ditolak:");
+    eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-01', eta: '2026-10-05', from: 'BUSAN', to: 'BUSAN' })") !== null, true, "Dari = Ke ditolak:");
+    w.location.hash = "#/";
+  });
+  t("Jadwal Kapal: ganti bahasa menggambar ulang seluruh halaman tanpa muat ulang", () => {
+    const simpan = baca("activeLang");
+    try {
+      w.setLang("id");
+      bukaVs();
+      const d = w.document;
+      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|ETD|ETA|Rute", "kepala tabel (ID):");
+      eq(d.querySelector('[data-page="vessel"] span').textContent, "Jadwal Kapal", "menu (ID):");
+      eq(d.querySelector("#viewVesselSchedule .board-title").textContent.trim(), "Jadwal Kapal", "judul (ID):");
+      eq(d.querySelector("#vsFrom").closest("label").querySelector("span").textContent, "Dari", "label Dari:");
+      eq(d.querySelector("#vsFrom option").textContent, "Semua", "opsi pertama (ID):");
+      eq(d.querySelector("#btnVsAdd span").textContent, "Tambah Data", "tombol tambah (ID):");
+      d.getElementById("vsTo").value = "BUSAN";
+
+      w.setLang("en");
+      eq(teksKepala(), "No.|Customer|Packages|Vessel/Voyager|ETD|ETA|Route", "kepala tabel (EN):");
+      eq(d.querySelector('[data-page="vessel"] span').textContent, "Shipment Schedule", "menu (EN):");
+      eq(d.querySelector("#viewVesselSchedule .board-title").textContent.trim(), "Shipment Schedule", "judul (EN):");
+      eq(d.querySelector("#vsFrom").closest("label").querySelector("span").textContent, "From", "label From:");
+      eq(d.querySelector("#vsTo").closest("label").querySelector("span").textContent, "To", "label To:");
+      eq(d.querySelector("#vsFrom option").textContent, "All", "opsi pertama (EN):");
+      eq(d.querySelector("#btnVsSearch span").textContent, "Search", "tombol cari (EN):");
+      eq(d.querySelector("#btnVsAdd span").textContent, "Add Data", "tombol tambah (EN):");
+      eq(d.getElementById("vsTo").value, "BUSAN", "pilihan dropdown tidak hilang saat ganti bahasa:");
+      eq(d.querySelector("#vsList tbody .vs-kol-rute").textContent.replace(/\s+/g, " ").trim(), "From : HOCHIMINH To : JAKARTA", "kolom Route (EN):");
+      // Label kartu ponsel (data-label) ikut bahasa aktif.
+      eq(d.querySelector("#vsList tbody .vs-kol-pkg").dataset.label, "Packages", "label kartu ponsel (EN):");
+      if (!/Showing/.test(d.getElementById("vsPagination").textContent)) throw new Error("paginasi tidak ikut berbahasa Inggris");
+      if (!/[A-Z][a-z]+day/.test(d.getElementById("vsToday").textContent)) throw new Error("tanggal Hari ini tertinggal di bahasa lama: " + d.getElementById("vsToday").textContent);
+      eq(w.eval("periksaVs({ customer: 'X', etd: '2026-10-01', eta: '2026-10-05', from: 'BUSAN', to: 'BUSAN' })"), "From and To cannot be the same.", "pesan galat (EN):");
+      eq(d.getElementById("vsCountLabel").textContent, "schedules saved", "jamak (EN):");
+      w.eval("vsRows = vsRows.slice(0, 1); renderVesselSchedules();");
+      eq(d.getElementById("vsCountLabel").textContent, "schedule saved", "tunggal (EN):");
+      if (!/of 1 schedule$/.test(d.querySelector("#vsPagination .pagination-info").textContent.trim()))
+        throw new Error("paginasi tunggal (EN): " + d.querySelector("#vsPagination .pagination-info").textContent.trim());
+
+      w.setLang("id");
+      eq(teksKepala(), "No|Customer|Jumlah Koli|Vessel/Voyager|ETD|ETA|Rute", "kembali ke ID:");
+      eq(d.querySelector("#vsList tbody .vs-kol-pkg").dataset.label, "Jumlah Koli", "label kartu ponsel (ID):");
+      eq(d.querySelector("#vsFrom option").textContent, "Semua", "opsi pertama kembali ke ID:");
+    } finally {
+      w.setLang(simpan);
+      w.location.hash = "#/";
+    }
+  });
+  t("Jadwal Kapal: viewer & marketing boleh membuka dan mencari, tidak boleh mengubah", () => {
+    const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
+    ["#btnVsAdd", "\\.vs-kol-aksi"].forEach((sel) => {
+      if (!new RegExp("body\\.is-viewer " + sel).test(css)) throw new Error("tidak disembunyikan untuk viewer/marketing: " + sel);
+    });
+    if (w.document.querySelector('[data-page="vessel"]').classList.contains("nav-exim-only"))
+      throw new Error("tautan menu tersembunyi untuk viewer/marketing");
+    ["viewer", "marketing"].forEach((peran) => {
+      denganPeran(peran, () => {
+        w.applyPermissions();
+        bukaVs();
+        eq(w.location.hash, "#/shipment-schedule", peran + " dilempar keluar:");
+        if (w.document.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error(peran + ": halaman tidak tampil");
+        eq(w.document.querySelectorAll("#vsList tbody tr").length, 2, peran + " melihat datanya:");
+        if (w.document.getElementById("vsFrom").disabled || w.document.getElementById("btnVsSearch").disabled)
+          throw new Error(peran + ": saringan Dari/Ke terkunci");
+        eq(w.requireEdit(), false, peran + " lolos requireEdit:");
+      });
+    });
+    w.location.hash = "#/";
+  });
 
   // Rantai uji asinkron ditunggu dulu -- lihat catatan di fungsi t().
   await rantaiAsync;

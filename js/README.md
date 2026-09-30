@@ -50,6 +50,7 @@ dependency-nya dulu.
 | `import/pdf.js` | Parser PDF PIB BC 2.0 (pakai pdf.js, dimuat lazy) |
 | `import/dispatch.js` | Deteksi file PDF vs Excel BC vs Excel CIPL, panggil parser yang sesuai |
 | `views/form-router.js` | Routing hash (#/new, #/edit/:id), render & simpan halaman form |
+| `views/vessel-schedule-view.js` | Halaman Shipment Schedule (#/shipment-schedule): daftar jadwal kapal per rute, saring From/To + tombol Cari, tambah/ubah/hapus. Tabel `vessel_schedules` (migration-vessel-schedule.sql) |
 | `views/detail-view.js` | Modal detail pengiriman (read-only) |
 | `features/bulk-excel.js` | Bulk export/import seluruh data lewat file Excel |
 | `app-init.js` | Titik masuk aplikasi — memanggil `loadShipments()` |

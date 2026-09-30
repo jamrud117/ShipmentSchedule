@@ -58,6 +58,7 @@
     <link rel="stylesheet" href="css/panel.css" />
     <link rel="stylesheet" href="css/palette.css" />
     <link rel="stylesheet" href="css/auth.css" />
+    <link rel="stylesheet" href="css/vessel.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
     <link rel="stylesheet" href="css/docnum.css" />
@@ -327,6 +328,12 @@
           <a class="site-nav-link" href="#/hscode" data-page="hscode">
             <i class="bi bi-upc-scan"></i
             ><span data-i18n="nav.hscode">HS Code</span>
+          </a>
+          <!-- Viewer boleh membuka & mencari; tambah/ubah/hapus dijaga
+               requireEdit() di tombolnya dan RLS di database. -->
+          <a class="site-nav-link" href="#/shipment-schedule" data-page="vessel">
+            <i class="bi bi-water"></i
+            ><span data-i18n="nav.vessel">Jadwal Kapal</span>
           </a>
           <a
             class="site-nav-link nav-exim-only"
@@ -732,6 +739,63 @@
           </div>
           <div id="hsCodeList"></div>
           <div id="hsCodePagination" class="hs-halaman"></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="viewVesselSchedule" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" data-en="Shipment Schedule">Jadwal Kapal</h1>
+              <div class="board-sub">
+                <b id="vsCount">0</b>
+                <span id="vsCountLabel" data-en="schedules saved">jadwal tersimpan</span>
+              </div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label" data-i18n="u.hari.ini">
+                  Hari ini
+                </div>
+                <div class="board-today-date" id="vsToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container page-main">
+        <section class="panel hs-panel">
+          <div class="panel-head hs-bar vs-bar">
+            <div class="hs-bar-judul">
+              <h2>
+                <i class="bi bi-water"></i>
+                <span data-en="Shipment schedule list">Daftar jadwal kapal</span>
+              </h2>
+            </div>
+            <div class="vs-aksi">
+              <label class="vs-port">
+                <span data-en="From">Dari</span>
+                <select id="vsFrom" class="control-select"></select>
+              </label>
+              <label class="vs-port">
+                <span data-en="To">Ke</span>
+                <select id="vsTo" class="control-select"></select>
+              </label>
+              <button type="button" class="btn-quiet vs-cari" id="btnVsSearch">
+                <i class="bi bi-search"></i>
+                <span data-en="Search">Cari</span>
+              </button>
+              <button type="button" class="btn-teal hs-tambah" id="btnVsAdd">
+                <i class="bi bi-plus-lg"></i>
+                <span data-en="Add Data">Tambah Data</span>
+              </button>
+            </div>
+          </div>
+          <div id="vsList"></div>
+          <div id="vsPagination" class="hs-halaman"></div>
         </section>
       </main>
     </div>
@@ -3722,6 +3786,7 @@
     <script src="js/views/accounts-view.js"></script>
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
+    <script src="js/views/vessel-schedule-view.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 
