@@ -648,37 +648,35 @@ const PREDICTION_CONFIG = {
   learning: {
     enabled: true,
 
-    /* JUMLAH SAMPEL MINIMAL — lantai keras.
+    /* JUMLAH SAMPEL MINIMAL sebelum riwayat ikut menarik angka.
 
-       Spesifikasi menyebut 30. Untuk operasi berskala besar itu tepat;
-       untuk DDI tidak. Seluruh riwayat laut berjumlah ~47 kiriman yang
-       tersebar di 20-an kapal, jadi 30 berarti pembelajaran per
-       pelayaran TIDAK AKAN PERNAH aktif — fitur yang menyala di
-       konfigurasi tapi mati di kenyataan.
+       Dulu 8, dan riwayat bersifat semua-atau-tidak: di bawah 8 diabaikan,
+       dari 8 menggantikan konfigurasi sepenuhnya. Dengan ~47 kiriman laut
+       yang tersebar di 20-an pelayaran, kebanyakan rute tidak pernah
+       sampai 8 -- bukti yang sudah ada tidak pernah terpakai.
 
-       8 dipilih karena di situlah ketelitiannya sudah cukup: dengan
-       sebaran yang terukur di riwayat DDI (simpangan baku ~1,5 hari),
-       galat baku rata-rata pada n=8 turun ke ~0,5 hari — di bawah satu
-       hari, dan satuan yang dipakai memang hari bulat.
+       Sekarang riwayat DIGABUNG dengan asumsi (lihat ringkasSampel di
+       prediction-learning.js), jadi dua kiriman sudah boleh ikut bicara;
+       seberapa keras ditentukan bobotnya, bukan gerbang ini. Satu kiriman
+       saja masih terlalu mudah kebetulan. */
+    minSamples: 2,
 
-       Angka ini yang membuat mesin bisa MENGOREKSI DIRINYA. Rute yang
-       angkanya masih tebakan akan tergantikan angka nyata begitu
-       delapan kiriman terkumpul, tanpa siapa pun harus mengubah
-       konfigurasi. */
-    minSamples: 8,
+    /* SEBERAPA RAGU KITA PADA ANGKA KONFIGURASI (hari, simpangan baku).
+       Makin besar, makin cepat riwayat mengambil alih. Laut 2 hari:
+       tabel rute memang tebakan per wilayah, meleset 1-3 hari biasa.
+       Udara 1 hari. "ops" untuk clearance & antar ke pabrik (hari kerja). */
+    priorSpreadDays: { AIR: 1, SEA_FCL: 2, SEA_LCL: 2, ops: 1, default: 2 },
 
-    /* GERBANG KETELITIAN — pelengkap jumlah sampel.
+    /* SEBARAN WAJAR riwayat (hari) -- dipakai menimbang saat sampel rute
+       masih di bawah tiga dan sebarannya belum bisa diukur sendiri.
+       Laut ~1,5 hari sesuai yang terukur di riwayat DDI. */
+    typicalSpreadDays: { AIR: 0.8, SEA_FCL: 1.5, SEA_LCL: 1.5, ops: 1, default: 1.5 },
 
-       Delapan kiriman yang hasilnya 9, 9, 10, 10, 11, 11, 12, 12 hari
-       memberi tahu sesuatu. Delapan kiriman yang hasilnya 4, 9, 14, 20,
-       6, 25, 11, 30 tidak — rata-ratanya angka yang terdengar pasti
-       padahal tidak berdasar apa-apa.
-
-       Yang diperiksa galat baku rata-rata (simpangan baku dibagi akar
-       n). Kalau di atas ambang ini, riwayatnya diabaikan dan asumsi
-       konfigurasi tetap dipakai. Lebih baik mengakui belum tahu
-       daripada menyodorkan angka yang kebetulan. */
-    maxStdError: 1.5,
+    /* PARUH UMUR (hari). Kiriman setua ini berbobot setengah, dua kali
+       ini seperempat. Jadwal pelayaran, alur Bea Cukai, dan rekanan
+       trucking berubah -- kiriman bulan lalu lebih mewakili daripada
+       kiriman tahun lalu, tanpa membuang yang lama sama sekali. */
+    halfLifeDays: 240,
 
     /* Jadwal pelayaran berubah. 540 hari menampung satu putaran musim
        penuh plus pengulangannya — dipertahankan justru karena volume

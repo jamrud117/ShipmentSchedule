@@ -26,6 +26,7 @@ const I18N = {
     "nav.schedule": "Jadwal",
     "nav.docnum": "No. Dokumen",
     "nav.hscode": "HS Code",
+    "nav.vessel": "Jadwal Kapal",
     "nav.accounts": "Akun",
     "menu.language": "Bahasa",
     "menu.logout": "Keluar",
@@ -588,6 +589,7 @@ const I18N = {
     "nav.schedule": "Schedule",
     "nav.docnum": "Doc. Number",
     "nav.hscode": "HS Code",
+    "nav.vessel": "Shipment Schedule",
     "nav.accounts": "Accounts",
     "menu.language": "Language",
     "menu.logout": "Sign out",
@@ -1284,6 +1286,15 @@ function setLang(kode) {
   };
   if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
   if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
+  if (tampil("viewVesselSchedule") && typeof renderVesselSchedules === "function") {
+    if (typeof isiDropdownVs === "function") isiDropdownVs();
+    renderVesselSchedules();
+  }
+  /* Tanggal "Hari ini" di kepala tiap halaman ikut nama hari & bulan
+     bahasa aktif ("Rabu" / "Wednesday"). Tanpa ini, di halaman yang
+     tidak menggambar ulang penandanya sendiri (Jadwal, HS Code, Jadwal
+     Kapal), tanggalnya tertinggal di bahasa lama. */
+  if (typeof paintTodayStamps === "function") paintTodayStamps();
   if (tampil("viewDocNum")) {
     if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();
     if (typeof renderDocNumHistory === "function") renderDocNumHistory();

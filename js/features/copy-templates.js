@@ -120,6 +120,19 @@ function buildAllExportCopyText(s) {
   return rowsToClipboardText(tanpaKolomNo(buildAllExportCopyRows(s, clipboardFormatter)));
 }
 
+/* ETD & ETA DI SEMUA TEMPLATE SALIN = TANGGAL TERBARU.
+
+   effectiveEtd/Eta(): kalau jadwalnya pernah dimundurkan (Update ETD /
+   Update ETA di kotak Tanggal Update Delay terisi), yang disalin tanggal
+   update itu; kalau tidak, jadwal awalnya. Aturan yang sama sudah
+   dipakai Report dan tampilan kartu -- template yang ditempel ke laporan
+   harian tidak boleh melaporkan jadwal lama yang sudah diketahui
+   meleset. Masing-masing berdiri sendiri: Update ETD saja yang terisi
+   -> ETD terbaru, ETA tetap jadwal awalnya.
+
+   Jadwal awalnya sendiri tidak diubah: tetap tersimpan di kolom etd/eta
+   dan tetap terlihat lewat tombol pensil. */
+
 /* DAILY IMPORT — 25 kolom (requirement E) */
 const DAILY_IMPORT_COLS = 25;
 /* Qty + satuan digabung jadi satu sel: "25 PCS".
@@ -169,8 +182,8 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.invoice), // 12 INVOICE
       formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
       formatter.text(s.forwarder), // 14 FORWARDER
-      formatter.date(s.etd), // 15 ETD
-      formatter.date(s.eta), // 16 ETA
+      formatter.date(effectiveEtd(s)), // 15 ETD (terbaru, lihat di atas)
+      formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
       formatter.date(s.actual), // 17 ESTIMATE DELIVERY
       formatter.date(s.factoryDate), // 18 IN FACTORY DATE
       formatter.text(s.factoryTime), // 19 IN FACTORY TIME
@@ -212,8 +225,8 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.text(s.invoice), // 12 INVOICE
       formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
       formatter.text(s.forwarder), // 14 FORWARDER
-      formatter.date(s.etd), // 15 ETD
-      formatter.date(s.eta), // 16 ETA
+      formatter.date(effectiveEtd(s)), // 15 ETD (terbaru)
+      formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
       formatter.text(s.incoterm), // 17 INCOTERM
       formatter.text(s.notes), // 18 NOTES
     ];
@@ -229,7 +242,8 @@ function buildDailyExportCopyRows(s, formatter) {
    baru, dibuat dari satu Card (bukan agregat seperti Report). Daftar
    barang ikut urutan Daftar Barang di Card itu, TANPA di-dedupe
    (reportItemNames() yang meringkas jadi satu baris). Tiga
-   tanggalnya dari Card yang sama: ETD, ETA, dan "Estimasi sampai
+   tanggalnya dari Card yang sama: ETD & ETA terbaru (effectiveEtd/Eta,
+   lihat catatan di atas DAILY IMPORT), dan "Estimasi sampai
    pabrik" = kolom Estimasi Delivery (field `actual` -- sama seperti
    dipakai Report untuk arti yang sama, lihat reportDetailPairs()). */
 function buildImportAnnouncementText(s) {
@@ -245,7 +259,7 @@ function buildImportAnnouncementText(s) {
     daftarBarang.map((nama) => `* ${nama}`).join("\n"),
     "",
     "",
-    `ETD : ${fmtDate(s.etd)}, ETA : ${fmtDate(s.eta)}, Estimasi sampai pabrik : ${fmtDate(s.actual)}`,
+    `ETD : ${fmtDate(effectiveEtd(s))}, ETA : ${fmtDate(effectiveEta(s))}, Estimasi sampai pabrik : ${fmtDate(s.actual)}`,
   ].join("\n");
 }
 
@@ -497,7 +511,9 @@ const COPY_TEMPLATES = [
   },
   {
     id: "ImportAnnouncement",
-    label: "Info Barang Baru",
+    /* Getter: label menu ikut bahasa aktif. Isi pesannya sendiri tetap
+       bahasa Indonesia -- ditempel ke grup kerja, bukan teks layar. */
+    get label() { return tt("Info Barang Baru", "New Goods Notice"); },
     icon: "bi-file-earmark-text",
     scope: "shipment",
     modes: ["import"],
@@ -516,8 +532,9 @@ const COPY_TEMPLATES = [
     // Versi berformat untuk email — lihat copyRichToClipboard().
     getHtml: () => buildReportCopyHtml(),
     successMsg: () => t("v.template.report.berhasil.disalin.ke.clipboard"),
-    emptyMsg:
-      t("s.tidak.ada.jadwal.pending.semua.sudah.delivered"),
+    /* Getter, bukan nilai: dulu dihitung SEKALI saat berkas dimuat, jadi
+       tetap berbahasa awal walau bahasanya sudah diganti. */
+    get emptyMsg() { return t("s.tidak.ada.jadwal.pending.semua.sudah.delivered"); },
   },
 ];
 

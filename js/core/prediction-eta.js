@@ -38,29 +38,34 @@ function predictionTransitDays(ctx) {
   }
   let rentang = normalizeDayRange(nilai != null ? nilai : 0);
 
-  /* RIWAYAT MENGALAHKAN KONFIGURASI.
+  /* PENYESUAIAN CARRIER/FORWARDER dari konfigurasi masuk ke ASUMSI
+     awal, bukan ditambahkan di atas hasil riwayat: begitu kiriman
+     forwarder itu sendiri terkumpul, riwayatnya yang menentukan, dan
+     penyesuaian manual itu tidak terhitung dua kali. */
+  const aturanCarrier = pickPredictionRule(PREDICTION_CONFIG.carrierAdjustments || [], ctx);
+  const tambahanAturan = aturanCarrier ? Number(aturanCarrier.days) || 0 : 0;
+  const asumsi = nilai != null ? planningDayValue(rentang) + tambahanAturan : null;
 
-     Kalau rute ini sudah punya cukup pengiriman selesai, angka yang
-     benar-benar terjadi menggantikan asumsi — dan rentangnya runtuh
-     jadi satu angka, karena yang dipakai bukan lagi tebakan. */
-  /* Lapis belajar SELALU mengembalikan objek — juga saat riwayatnya
+  /* RIWAYAT MENARIK ASUMSI KE KENYATAAN.
+
+     Lapis belajar SELALU mengembalikan objek — juga saat riwayatnya
      belum memenuhi syarat — supaya layar bisa menunjukkan progresnya.
-     Karena itu yang diperiksa `.cukup`, bukan sekadar "ada". */
+     Karena itu yang diperiksa `.cukup`, bukan sekadar "ada". Begitu
+     dipakai, rentangnya runtuh jadi satu angka: yang dipakai bukan
+     lagi tebakan konfigurasi. */
   const riwayat =
-    typeof learnedTransitDays === "function" ? learnedTransitDays(ctx) : null;
+    typeof learnedTransitDays === "function" ? learnedTransitDays(ctx, asumsi) : null;
   const belajar = riwayat && riwayat.cukup ? riwayat : null;
   if (belajar) {
-    rentang = { min: belajar.min, max: belajar.max, hasRange: false };
+    rentang = {
+      min: Math.min(belajar.min, belajar.days),
+      max: Math.max(belajar.max, belajar.days),
+      hasRange: false,
+    };
   }
 
-  /* PENYESUAIAN CARRIER. Ditambahkan SETELAH riwayat, bukan sebelumnya:
-     riwayat sudah memuat kebiasaan forwarder yang dipakai selama ini,
-     jadi menambahkan penyesuaian di depan akan menghitungnya dua kali.
-     Yang di sini berlaku untuk forwarder yang belum punya riwayat. */
-  const carrier = belajar
-    ? null
-    : pickPredictionRule(PREDICTION_CONFIG.carrierAdjustments || [], ctx);
-  const tambahan = carrier ? Number(carrier.days) || 0 : 0;
+  const carrier = belajar ? null : aturanCarrier;
+  const tambahan = carrier ? tambahanAturan : 0;
 
   const dasar = belajar ? belajar.days : planningDayValue(rentang);
 

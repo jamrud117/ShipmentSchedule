@@ -283,7 +283,7 @@ function syncPredictionForm() {
     : "";
 
   const barisEta = e.ok
-    ? `ETD ${fmtDate(e.ctx.etd)} + <b>${predDaysText(e)} ${tt("kalender", "calendar")}</b> → <b>${fmtDate(e.eta)}</b>
+    ? `ETD ${fmtDate(e.ctx.etd)} + <b>${predHariKalender(e)}</b> → <b>${fmtDate(e.eta)}</b>
        <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"})</span>
        ${transitSourceHtml(e)}
        ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest, tt("Paling cepat–paling lambat", "Earliest–latest")) : ""}`
@@ -453,6 +453,7 @@ if (btnRecalc) {
 
 function initPredictionForm(s) {
   formDocProgress = (s && s.docProgress) || {};
+  if (typeof resetRuteOtomatis === "function") resetRuteOtomatis(s);
   formEtaMode = s ? etaModeOf(s) : "auto";
   sembunyikanNoticeEta();
   $$("#etaModeSwitch .eta-mode-btn").forEach((b) =>

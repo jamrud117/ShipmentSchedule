@@ -35,6 +35,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <!-- supabase-js & server datanya: tanpa ini, DNS + TLS ke keduanya
+         baru dimulai setelah seluruh skrip aplikasi selesai dibaca. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://nigxxpzgunibuotluapv.supabase.co" crossorigin />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
@@ -58,6 +62,7 @@
     <link rel="stylesheet" href="css/panel.css" />
     <link rel="stylesheet" href="css/palette.css" />
     <link rel="stylesheet" href="css/auth.css" />
+    <link rel="stylesheet" href="css/vessel.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
     <link rel="stylesheet" href="css/docnum.css" />
@@ -247,7 +252,7 @@
     <!-- BILAH ATAS — satu-satunya navigasi global -->
     <nav class="app-topbar d-none">
       <div class="container app-topbar-inner">
-        <a class="brand" href="#/" aria-label="EXIM DDI — beranda">
+        <a class="brand" href="#/" aria-label="EXIM DDI — beranda" data-en-aria="EXIM DDI — home">
           <!-- Digambar ulang mengikuti ikon situs: haluan kapal peti -->
           <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
             <rect
@@ -327,6 +332,12 @@
           <a class="site-nav-link" href="#/hscode" data-page="hscode">
             <i class="bi bi-upc-scan"></i
             ><span data-i18n="nav.hscode">HS Code</span>
+          </a>
+          <!-- Viewer boleh membuka & mencari; tambah/ubah/hapus dijaga
+               requireEdit() di tombolnya dan RLS di database. -->
+          <a class="site-nav-link" href="#/shipment-schedule" data-page="vessel">
+            <i class="bi bi-water"></i
+            ><span data-i18n="nav.vessel">Jadwal Kapal</span>
           </a>
           <a
             class="site-nav-link nav-exim-only"
@@ -469,7 +480,7 @@
           <div>
             <section class="panel">
               <div class="panel-head">
-                <h2><i class="bi bi-graph-down-arrow"></i> Pantauan delay</h2>
+                <h2 data-en="<i class=&quot;bi bi-graph-down-arrow&quot;></i> Delay watch"><i class="bi bi-graph-down-arrow"></i> Pantauan delay</h2>
               </div>
               <div class="panel-body" id="ovDelay"></div>
             </section>
@@ -485,7 +496,14 @@
 
             <section class="panel">
               <div class="panel-head">
-                <h2><i class="bi bi-lightning-charge"></i> Aksi cepat</h2>
+                <h2 data-en="<i class=&quot;bi bi-bullseye&quot;></i> Prediction accuracy"><i class="bi bi-bullseye"></i> Akurasi prediksi</h2>
+              </div>
+              <div class="panel-body" id="ovAccuracy"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-en="<i class=&quot;bi bi-lightning-charge&quot;></i> Quick actions"><i class="bi bi-lightning-charge"></i> Aksi cepat</h2>
               </div>
               <div class="panel-body">
                 <div class="quick-actions">
@@ -736,6 +754,71 @@
       </main>
     </div>
 
+    <div id="viewVesselSchedule" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" data-en="Shipment Schedule">Jadwal Kapal</h1>
+              <div class="board-sub">
+                <b id="vsCount">0</b>
+                <span id="vsCountLabel" data-en="schedules saved">jadwal tersimpan</span>
+              </div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label" data-i18n="u.hari.ini">
+                  Hari ini
+                </div>
+                <div class="board-today-date" id="vsToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container page-main">
+        <section class="panel hs-panel">
+          <div class="panel-head hs-bar vs-bar">
+            <div class="hs-bar-judul">
+              <h2>
+                <i class="bi bi-water"></i>
+                <span data-en="Shipment schedule list">Daftar jadwal kapal</span>
+              </h2>
+            </div>
+            <div class="vs-aksi">
+              <div class="search-box vs-cari">
+                <i class="bi bi-search"></i>
+                <input
+                  type="text"
+                  id="vsSearch"
+                  autocomplete="off"
+                  placeholder="Cari customer, vessel…"
+                  data-en-ph="Search customer, vessel…"
+                  aria-label="Cari jadwal kapal"
+                  data-en-aria="Search shipment schedules"
+                />
+              </div>
+              <label class="vs-port">
+                <span data-en="From">Dari</span>
+                <select id="vsFrom" class="control-select"></select>
+              </label>
+              <label class="vs-port">
+                <span data-en="To">Ke</span>
+                <select id="vsTo" class="control-select"></select>
+              </label>
+              <button type="button" class="btn-teal hs-tambah" id="btnVsAdd">
+                <i class="bi bi-plus-lg"></i>
+                <span data-en="Add Data">Tambah Data</span>
+              </button>
+            </div>
+          </div>
+          <div id="vsList"></div>
+          <div id="vsPagination" class="hs-halaman"></div>
+        </section>
+      </main>
+    </div>
+
     <div id="viewList" class="d-none">
       <div class="controlbar">
         <div class="container controlbar-inner">
@@ -782,6 +865,7 @@
                 id="filterStatus"
                 class="control-select"
                 aria-label="Saring status"
+                data-en-aria="Filter status"
               >
                 <option value="" data-i18n="f.semua.status">
                   Semua Status
@@ -889,7 +973,7 @@
                     <button type="button" class="drp-reset" id="drpReset">
                       Reset
                     </button>
-                    <button type="button" class="drp-apply" id="drpApply">
+                    <button type="button" class="drp-apply" id="drpApply" data-en="Apply">
                       Terapkan
                     </button>
                   </div>
@@ -1219,7 +1303,7 @@
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
-                    <option>Produksi</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
                 <div class="col-md-6">
@@ -1528,7 +1612,7 @@
                     data-dn-required
                   >
                     <option value="Export">Export</option>
-                    <option value="Lokal">Lokal</option>
+                    <option value="Lokal" data-en="Local">Lokal</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -1746,7 +1830,7 @@
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
-                    <option>Produksi</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -1834,6 +1918,20 @@
                     autocomplete="off"
                   />
                   <datalist id="dnFundCustomerList"></datalist>
+                </div>
+                <!-- Nomor BL (laut) / AWB (udara) dokumen angkut yang
+                     ditagihkan -- mencocokkan tagihan forwarder dengan
+                     kirimannya, dan bisa dicari dari kotak cari riwayat. -->
+                <div class="col-md-3">
+                  <label class="form-label">BL/AWB</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="blAwb"
+                    placeholder="No. BL / AWB"
+                    data-en-ph="BL / AWB number"
+                    autocomplete="off"
+                  />
                 </div>
                 <div class="col-12">
                   <label class="form-label" data-i18n="f.rincian"
@@ -1940,7 +2038,7 @@
                 <!-- Blok tanda tangan. Namanya WAJIB bisa diubah: orangnya
                      berganti, dan jabatannya pun bisa berbeda antar surat. -->
                 <div class="col-12">
-                  <div class="form-subhead">Penanda Tangan</div>
+                  <div class="form-subhead" data-en="Signatories">Penanda Tangan</div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label" data-i18n="f.lampiran"
@@ -1983,7 +2081,7 @@
                     type="text"
                     class="form-control"
                     data-dn="approver1Name"
-                    value="Mr. Shin Nara"
+                    value="Mr. Shin Na Ra"
                   />
                 </div>
                 <div class="col-md-3">
@@ -2044,7 +2142,7 @@
                 </div>
                 <div class="col-md-4">
                   <label class="form-label"
-                    >Penanda Tangan <span class="req">*</span></label
+                    data-en="Signatory <span class=&quot;req&quot;>*</span>">Penanda Tangan <span class="req">*</span></label
                   >
                   <input
                     type="text"
@@ -2302,7 +2400,7 @@
         <ul class="nav nav-detail" id="detailTabs">
           <li class="nav-item">
             <button class="nav-link active" data-tab="umum" type="button">
-              <span class="step-num">1</span> Dokumen &amp; Umum
+              <span class="step-num">1</span> <span data-en="Documents &amp; General">Dokumen &amp; Umum</span>
             </button>
           </li>
           <li class="nav-item">
@@ -2324,7 +2422,7 @@
               <span class="subsection-icon"
                 ><i class="bi bi-file-earmark-text"></i
               ></span>
-              Dokumen
+              <span data-en="Documents">Dokumen</span>
             </div>
             <div class="row g-3">
               <div class="col-md-3">
@@ -2559,6 +2657,7 @@
                   data-i18n-ph="ph.kode.atau.nama.pelabuhan.tujuan"
                 />
               </div>
+              <div class="col-12 form-text-note route-auto-hint d-none" id="routeAutoHint"></div>
               <div class="col-12 d-none" id="routeStopsWrap">
                 <div class="route-stops-box">
                   <div
@@ -3622,6 +3721,8 @@
     <script src="js/core/prediction-schedule.js"></script>
     <script src="js/core/prediction-learning.js"></script>
     <script src="js/core/prediction.js"></script>
+    <script src="js/core/prediction-backtest.js"></script>
+    <script src="js/core/route-inference.js"></script>
 
     <!-- ========================================= -->
     <!-- DATA -->
@@ -3656,6 +3757,7 @@
     <script src="js/features/notes-log.js"></script>
     <script src="js/features/doc-steps.js"></script>
     <script src="js/features/route-stops.js"></script>
+    <script src="js/features/route-auto.js"></script>
     <script src="js/features/bulk-excel.js"></script>
     <script src="js/features/bulk-template.js"></script>
 
@@ -3708,6 +3810,7 @@
     <script src="js/views/accounts-view.js"></script>
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
+    <script src="js/views/vessel-schedule-view.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 

@@ -133,6 +133,17 @@ function predictionMatchScore(match, ctx) {
           const b = String(v || "").toLowerCase();
           return !!b && a.includes(b);
         });
+    } else if ((k === "fromPort" || k === "toPort") && ctx[k === "fromPort" ? "fromMetro" : "toMetro"]) {
+      /* Pelabuhan dicocokkan juga lewat INDUKNYA: aturan "SZX" berlaku
+         untuk Shekou & Yantian, aturan "SGN" untuk Cat Lai -- terminal
+         yang punya kode sendiri tapi lama pelayarannya sama. */
+      const induk = ctx[k === "fromPort" ? "fromMetro" : "toMetro"];
+      const a = String(punya || "").toUpperCase();
+      const b = String(induk).toUpperCase();
+      cocok = pilihan.some((v) => {
+        const x = String(v).toUpperCase();
+        return x === a || x === b;
+      });
     } else if (typeof punya === "string" && !Array.isArray(diminta)) {
       /* Jalur cepat: kode pelabuhan, negara, dan carrier sudah huruf
          besar di kedua sisi. Perbandingan langsung dulu — toUpperCase()

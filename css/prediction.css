@@ -325,6 +325,11 @@
   font-size: var(--t-sm);
   border-bottom: 1px dashed var(--n-100);
 }
+.pred-step-src {
+  margin-left: 6px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
 .pred-steps li:last-child {
   border-bottom: 0;
   font-weight: 700;
@@ -427,6 +432,13 @@
 }
 .pred-detail-row--full {
   grid-template-columns: 1fr;
+}
+/* Rincian langkah di dalam baris Detail: garis atas & jaraknya sendiri
+   dilepas -- garis bawah baris sebelumnya sudah memisahkan. Dengan
+   keduanya, tergambar dua garis putus-putus berpita kosong. */
+.pred-detail-row--full > .pred-steps {
+  margin-top: 0;
+  border-top: 0;
 }
 @media (max-width: 720px) {
   .pred-detail-row {

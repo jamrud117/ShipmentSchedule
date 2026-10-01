@@ -1,9 +1,14 @@
 /* KERANGKA APLIKASI */
 
 /* Badan halaman di bawah bilah judul. --grow dipakai halaman Jadwal,
-   yang isinya harus mendorong kaki halaman ke bawah layar. */
+   yang isinya harus mendorong kaki halaman ke bawah layar.
+
+   Jarak BAWAH di sini, bukan di tiap halaman: dulu hanya Ringkasan &
+   Akun yang memberinya sendiri (lewat .ov-grid / .acct-grid), sehingga
+   panel HS Code dan Jadwal Kapal menempel langsung ke kaki halaman. */
 .page-main {
   padding-top: 20px;
+  padding-bottom: var(--sp-8);
 }
 .page-main--grow {
   flex: 1;
@@ -190,14 +195,16 @@
   font-size: 0.8rem;
 }
 
-/* NAVBAR MERINGKAS BERTAHAP -- diukur, bukan dikira: navbar lengkap
-   (brand, lima tautan berlabel, Quick search bertulisan, nama akun)
-   butuh ~1.250 px. Di bawah itu -- jendela terbelah (Win + panah),
-   laptop 1.024-1.200 px -- tautan terakhir terpotong dan tulisan Quick
-   search patah dua baris. Tahap 1 (< 1.320 px -- ambang label bahasa
-   Inggris, yang lebih panjang): Quick search jadi tombol ikon, chip
-   akun jadi avatar (auth.css). */
-@media (max-width: 1319px) {
+/* NAVBAR MERINGKAS BERTAHAP -- diukur, bukan dikira. Semua ambang di
+   bawah diukur untuk kasus TERLEBAR: akun EXIM (enam tautan, termasuk
+   Akun), label bahasa Inggris, dan scrollbar Windows 17 px. Viewer &
+   marketing punya lebih sedikit tautan, jadi ikut aman.
+
+   Sejak tautan Jadwal Kapal / Shipment Schedule ditambahkan, ambang lama
+   (1.320 / 1.100 / 900 px) tidak cukup lagi: di 1.366 px -- lebar laptop
+   paling umum -- tautan Akun terpotong. Tahap 1 (< 1.440 px): Quick
+   search jadi tombol ikon, chip akun jadi avatar (auth.css). */
+@media (max-width: 1439px) {
   .cmd-trigger .cmd-trigger-text,
   .cmd-trigger kbd {
     display: none;
@@ -206,10 +213,9 @@
     padding: 0 9px;
   }
 }
-/* Tahap 2 (< 1.100 px -- ambang label bahasa Inggris, yang lebih
-   panjang): nama brand disembunyikan (logonya tetap), jarak antar
-   tautan dirapatkan. */
-@media (max-width: 1099px) {
+/* Tahap 2 (< 1.220 px): nama brand disembunyikan (logonya tetap),
+   jarak antar tautan dirapatkan. */
+@media (max-width: 1219px) {
   .brand-name {
     display: none;
   }
@@ -221,9 +227,8 @@
     right: 8px;
   }
 }
-/* Tahap 3 (< 900 px): tautan tinggal ikon. Dulu baru di bawah 768 px,
-   dan di antaranya tautan terakhir terpotong. */
-@media (max-width: 899px) {
+/* Tahap 3 (< 1.060 px): tautan tinggal ikon. */
+@media (max-width: 1059px) {
   .site-nav-link span {
     display: none;
   }
@@ -237,26 +242,33 @@
     padding: 6px 13px;
   }
 }
-/* Tahap 4 (< 420 px, ponsel kecil): lima ikon + logo + tombol cari +
-   avatar kurang beberapa piksel di layar 360-375 px, dan ikon terakhir
-   terpotong. Jarak antar ikon dirapatkan. */
-@media (max-width: 419px) {
+/* Tahap 4 (< 440 px, ponsel): enam ikon + logo + tombol cari + avatar
+   tidak muat di layar 360-390 px, dan ikon terakhir terpotong; di
+   420-440 px sisanya tinggal 1-2 px. Jarak antar ikon & antar bagian
+   bilah dirapatkan. */
+@media (max-width: 439px) {
+  .app-topbar-inner {
+    gap: var(--sp-2);
+  }
   .site-nav-link {
-    padding: 0 7px;
+    padding: 0 5px;
   }
   .site-nav-link.active::after {
     left: 5px;
     right: 5px;
   }
 }
-/* Tahap 5 (< 360 px, ponsel sangat kecil): jarak antar bagian bilah
-   ikut dirapatkan. */
+/* Tahap 5 (< 360 px, ponsel sangat kecil): dirapatkan sekali lagi. */
 @media (max-width: 359px) {
   .app-topbar-inner {
-    gap: var(--sp-2);
+    gap: var(--sp-1);
   }
   .site-nav-link {
-    padding: 0 5px;
+    padding: 0 3px;
+  }
+  .site-nav-link.active::after {
+    left: 3px;
+    right: 3px;
   }
 }
 

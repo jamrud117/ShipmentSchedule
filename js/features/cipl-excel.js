@@ -788,7 +788,7 @@ function ciplXlsShippingInstruction(wb, row, shipment, baris) {
     const nilai = ciplSiNilai(def, d);
     /* Satuan ditulis DI DALAM sel yang sama dengan angkanya. Sebagai
        sel terpisah ia terlempar jauh ke kanan mengikuti lebar kolom
-       nilai, dan "1.200" dengan "KGS" berjarak setengah halaman tidak
+       nilai, dan "1.200" dengan "KG" berjarak setengah halaman tidak
        terbaca sebagai satu keterangan. */
     const isi = def.satuan && nilai ? `${nilai}   ${def.satuan}` : nilai;
     ciplXlsSet(ws, "C" + r,

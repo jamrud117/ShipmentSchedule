@@ -24,13 +24,37 @@ let muatKe = 0;
    BUKAN berarti jadwalnya tidak ada -- datanya memang belum sampai. */
 let shipmentsLoaded = false;
 
-async function loadShipments() {
-  const nomor = ++muatKe;
-  showLoadingSkeleton(3);
-  const { data: rows, error } = await supabaseClient
+function kueriShipments() {
+  return supabaseClient
     .from("shipments")
     .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)")
     .order("created_at", { ascending: true });
+}
+
+/* AMBIL LEBIH AWAL. Jadwal tidak bergantung pada profil pengguna --
+   RLS membaca sesinya -- jadi permintaannya dimulai begitu sesi
+   diketahui, BERSAMAAN dengan pengambilan profil, bukan sesudahnya.
+   Satu perjalanan bolak-balik ke server lebih sedikit sebelum papan
+   terisi; dari Indonesia ke server Supabase itu ratusan milidetik.
+
+   `.then()` yang memulainya: kueri Supabase baru berjalan saat
+   ditunggu. Hasilnya hanya dipakai SATU KALI oleh loadShipments()
+   berikutnya; kalau login ternyata ditolak, initApp membuangnya. */
+let ambilAwalShipments = null;
+function mulaiAmbilShipments() {
+  if (ambilAwalShipments || typeof supabaseClient === "undefined" || !supabaseClient) return;
+  ambilAwalShipments = kueriShipments().then((hasil) => hasil);
+}
+function buangAmbilAwalShipments() {
+  ambilAwalShipments = null;
+}
+
+async function loadShipments() {
+  const nomor = ++muatKe;
+  showLoadingSkeleton(3);
+  const permintaan = ambilAwalShipments || kueriShipments();
+  ambilAwalShipments = null;
+  const { data: rows, error } = await permintaan;
 
   /* Sudah ada permintaan yang lebih baru — jawaban ini punah. Termasuk
      galatnya: menampilkan layar gagal untuk permintaan usang akan
@@ -64,6 +88,8 @@ async function loadShipments() {
      lama akan tetap dipakai untuk data baru, dan perkiraan basi lebih
      berbahaya daripada tidak belajar sama sekali — ia terlihat pasti. */
   if (typeof resetPredictionLearning === "function") resetPredictionLearning();
+  // Saran kapal/pesawat dari riwayat baru bisa disusun setelah datanya sampai
+  if (typeof refreshCarrierDatalists === "function") refreshCarrierDatalists();
   if (typeof applyPredictionToAll === "function") {
     applyPredictionToAll(data.import);
   }

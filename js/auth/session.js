@@ -468,6 +468,8 @@ async function initAuth() {
   }
 
   authState.user = sesi.user;
+  // Jadwal mulai diambil sekarang, sambil menunggu profil (lihat api.js)
+  if (typeof mulaiAmbilShipments === "function") mulaiAmbilShipments();
   authState.profile = await loadProfile(sesi.user.id);
   authState.siap = true;
   hideLoginView();

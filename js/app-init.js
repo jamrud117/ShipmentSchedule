@@ -22,7 +22,11 @@ async function initApp() {
   /* Login diperiksa SEBELUM apa pun digambar atau diambil. Tanpa sesi,
      router() & loadShipments() tidak dijalankan sama sekali */
   const masuk = await initAuth();
-  if (!masuk) return;
+  if (!masuk) {
+    // Jadwal yang sempat diambil dengan sesi yang ternyata ditolak
+    if (typeof buangAmbilAwalShipments === "function") buangAmbilAwalShipments();
+    return;
+  }
 
   /* ROUTER DUA KALI, dan itu disengaja.
 

@@ -1,0 +1,298 @@
+/* ------------------------------------------------------------------
+   HALAMAN SHIPMENT SCHEDULE -- bilah atas (kotak cari, Dari, Ke, Tambah)
+   + tabel selebar halaman. Kerangka panel & paginasi memakai kelas
+   halaman HS Code (hs-bar, hs-halaman, hs-tambah) di auth.css.
+------------------------------------------------------------------ */
+.vs-aksi {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.vs-port {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+}
+.vs-port span {
+  text-align: center;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.vs-port .control-select {
+  min-width: 140px;
+}
+/* Kotak cari memakai .search-box yang sama dengan daftar jadwal & HS
+   Code (dashboard.css); di sini cukup lebarnya. */
+.vs-aksi .vs-cari {
+  flex: 0 1 260px;
+  min-width: 180px;
+}
+
+.vs-tabel-wrap {
+  overflow-x: auto;
+}
+.vs-tabel {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vs-tabel th {
+  padding: 10px var(--sp-4);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  border-bottom: 1px solid var(--n-100);
+  text-align: center;
+  white-space: nowrap;
+}
+/* Seluruh isi tabel rata tengah, termasuk tombol aksi. Kartu ponsel di
+   bawah tetap rata kiri. */
+.vs-tabel td {
+  padding: 9px var(--sp-4);
+  border-bottom: 1px solid var(--n-100);
+  vertical-align: middle;
+  font-size: var(--t-sm);
+  text-align: center;
+}
+.vs-tabel .hscode-actions {
+  justify-content: center;
+}
+.vs-tabel tbody tr:last-child td {
+  border-bottom: 0;
+}
+.vs-tabel tbody tr:hover td {
+  background: var(--n-50);
+}
+.vs-tabel .vs-kol-no,
+.vs-tabel .vs-kol-aksi {
+  width: 1%;
+  white-space: nowrap;
+}
+.vs-tabel td.vs-kol-no {
+  color: var(--n-500);
+}
+.vs-tabel .vs-kol-tgl,
+.vs-tabel .vs-kol-rute {
+  white-space: nowrap;
+}
+.vs-tabel td.vs-kol-tgl {
+  font-family: var(--font-mono);
+}
+.vs-cust {
+  font-weight: 600;
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+.vs-lbl-rute {
+  color: var(--n-500);
+}
+.vs-rute b {
+  color: var(--p-600);
+}
+/* Tiap pasangan (Dari : X / Ke : Y) satu blok utuh dengan jarak
+   SIMETRIS di kedua sisinya -- isinya tetap tepat di tengah, baik
+   sebaris maupun saat kolomnya menyempit dan pasangan kedua turun ke
+   baris berikutnya. */
+.vs-rute {
+  display: inline-block;
+  margin: 0 5px;
+  white-space: nowrap;
+}
+
+/* LAYAR MENENGAH (992-1199 px: laptop kecil, jendela terbelah): sel
+   dirapatkan dan kolom Rute boleh terlipat jadi dua baris. Tanpa ini
+   tabel melebar melewati panel dan tombol ubah/hapus tersembunyi di
+   balik gulir samping. */
+@media (max-width: 1199px) {
+  .vs-tabel th,
+  .vs-tabel td {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .vs-tabel .vs-kol-rute {
+    white-space: normal;
+  }
+}
+
+/* TABLET: bilah saringan turun ke baris sendiri di bawah judul panel --
+   dibuat selebar panel, kotak cari yang mengisi sisanya. */
+@media (max-width: 991px) {
+  .vs-aksi {
+    flex: 1 1 100%;
+  }
+  .vs-aksi .vs-cari {
+    flex: 1 1 auto;
+  }
+}
+
+/* PONSEL: bilah saringan. */
+@media (max-width: 767px) {
+  /* Bilah saringan: GRID dua kolom, bukan flex-wrap -- susunannya
+     selalu sama di lebar berapa pun: kotak cari selebar penuh, Dari |
+     Ke di bawahnya, lalu Tambah Data selebar penuh (EXIM saja). */
+  .vs-aksi {
+    flex: 1 1 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .vs-port .control-select {
+    min-width: 0;
+    width: 100%;
+  }
+  .vs-aksi .vs-cari,
+  .vs-aksi .hs-tambah {
+    grid-column: 1 / -1;
+  }
+  .vs-aksi .vs-cari {
+    min-width: 0;
+  }
+  /* Setinggi dropdown di sebelahnya: dashboard.css menaikkan
+     .control-select jadi 44px di ponsel, kotak cari tidak. */
+  .vs-aksi .vs-cari input[type="text"] {
+    height: 44px;
+  }
+}
+
+/* KARTU (di bawah 992 px -- ponsel & tablet): tiap baris jadi kartu.
+   Customer jadi judul kartu dengan tombol aksi di pojok kanannya;
+   rincian di bawahnya dua kolom,
+   masing-masing berlabel di atas nilainya. Vessel selebar penuh --
+   nama kapal + voyage paling panjang di antara semuanya:
+
+     CUSTOMER                        [ubah] [hapus]
+     VESSEL/VOYAGER
+     JUMLAH KOLI         STUFFING
+     ETD                 ETA
+     DARI                KE
+
+   Nomor urut tidak dibutuhkan di bentuk kartu. Dimulai di 992 px,
+   bukan 768: di bawah itu tabel sembilan kolom tidak muat lagi dan
+   tombol ubah/hapus tersembunyi di balik gulir samping. */
+@media (max-width: 991px) {
+  .vs-tabel thead {
+    display: none;
+  }
+  .vs-tabel,
+  .vs-tabel tbody,
+  .vs-tabel td {
+    display: block;
+  }
+  /* minmax(0, 1fr), bukan 1fr: nama vessel yang panjang membungkus di
+     kolomnya sendiri, tidak melebarkan kolom & mendorong kartu keluar
+     layar. */
+  .vs-tabel tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "cust cust"
+      "vsl vsl"
+      "pkg stuf"
+      "etd eta"
+      "rute rute";
+    gap: 12px 14px;
+    padding: 14px var(--sp-4);
+    border-bottom: 1px solid var(--n-100);
+  }
+  .vs-tabel tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .vs-tabel td {
+    padding: 0;
+    border: 0;
+    text-align: left;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+  }
+  .vs-tabel tbody tr:hover td {
+    background: none;
+  }
+  .vs-tabel td.vs-kol-no {
+    display: none;
+  }
+  .vs-tabel td.vs-kol-cust {
+    grid-area: cust;
+    align-self: center;
+  }
+  .vs-tabel td.vs-kol-vsl { grid-area: vsl; }
+  .vs-tabel td.vs-kol-pkg { grid-area: pkg; }
+  .vs-tabel td.vs-kol-stuf { grid-area: stuf; }
+  .vs-tabel td.vs-kol-etd { grid-area: etd; }
+  .vs-tabel td.vs-kol-eta { grid-area: eta; }
+
+  /* Tombol aksi menumpang di area judul, rapat kanan. Customer diberi
+     ruang kanan selebar dua tombol supaya nama panjang membungkus
+     sebelum tertimpa -- hanya untuk EXIM; viewer & marketing tidak
+     punya tombolnya. */
+  .vs-tabel td.vs-kol-aksi {
+    grid-area: cust;
+    justify-self: end;
+    align-self: center;
+    width: auto;
+  }
+  body:not(.is-viewer) .vs-tabel td.vs-kol-cust {
+    padding-right: 88px;
+  }
+  .vs-tabel .hscode-actions {
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  /* dashboard.css menaikkan semua .icon-btn jadi 44px di ponsel. Dua
+     tombol 44px memakan hampir sepertiga lebar kartu; 36px -- sama
+     seperti tombol di kartu jadwal (card.css) -- dan jaraknya yang
+     menjaga dari salah tekan. */
+  .vs-tabel .icon-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.86rem;
+  }
+
+  /* Rute dipecah jadi dua isian (Dari | Ke) yang sejajar dengan kolom
+     di atasnya: lebar & jarak kolomnya sama dengan grid kartu. */
+  .vs-tabel td.vs-kol-rute {
+    grid-area: rute;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 14px;
+    white-space: normal;
+  }
+  .vs-rute {
+    margin: 0;
+  }
+  .vs-titik {
+    display: none;
+  }
+
+  /* Label di atas nilai -- gaya sama dengan label Dari/Ke di bilah
+     atas panel. */
+  .vs-tabel td[data-label]::before {
+    content: attr(data-label);
+  }
+  .vs-tabel td[data-label]::before,
+  .vs-lbl-rute {
+    display: block;
+    margin-bottom: 3px;
+    font-family: var(--font-body);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  .vs-tabel td.vs-kol-vsl,
+  .vs-tabel td.vs-kol-pkg,
+  .vs-tabel td.vs-kol-tgl,
+  .vs-rute b {
+    font-weight: 600;
+  }
+}

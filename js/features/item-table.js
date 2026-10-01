@@ -233,7 +233,7 @@ function renderItemTable() {
       <td class="export-col"><input type="text" data-f="pattern" placeholder="Pattern" value="${escapeAttr(it.pattern)}"></td>
       <td class="export-col"><input type="text" data-f="moldNo" placeholder="Mold No." value="${escapeAttr(it.moldNo)}"></td>
       <td class="export-col"><input type="text" data-f="poNo" placeholder="PO No." value="${escapeAttr(it.poNo)}"></td>
-      <td class="export-col"><input type="text" data-f="marks" placeholder="otomatis" value="${escapeAttr(it.marks)}"></td>
+      <td class="export-col"><input type="text" data-f="marks" placeholder="${tt("otomatis", "auto")}" value="${escapeAttr(it.marks)}"></td>
       <td>
         <div class="hscode-cell">
           <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">

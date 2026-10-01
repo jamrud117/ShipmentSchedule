@@ -122,7 +122,8 @@ async function unduhTemplateBulk(mode) {
   } catch (err) {
     console.error(err);
     showToast(
-      `Gagal menyusun template: ${err && err.message ? err.message : t("s.kesalahan.tidak.diketahui")}`,
+      tt("Gagal menyusun template: ", "Failed to build the template: ") +
+        (err && err.message ? err.message : t("s.kesalahan.tidak.diketahui")),
       "danger",
     );
   } finally {
@@ -175,7 +176,10 @@ async function susunTemplateBulk(mode) {
   setTimeout(() => URL.revokeObjectURL(tautan.href), 1000);
 
   showToast(
-    `Template Bulk ${m === "import" ? "Import" : "Export"} diunduh. Isi lembar "${namaSheet}", jangan ubah urutan kolomnya.`,
+    tt(
+      `Template Bulk ${m === "import" ? "Import" : "Export"} diunduh. Isi lembar "${namaSheet}", jangan ubah urutan kolomnya.`,
+      `Bulk ${m === "import" ? "Import" : "Export"} template downloaded. Fill in the "${namaSheet}" sheet and keep the column order.`,
+    ),
     "success",
   );
 }

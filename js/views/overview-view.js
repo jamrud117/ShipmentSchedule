@@ -223,15 +223,13 @@ function renderDelayWatch() {
     </div>
     ${
       terparah
-        ? `<div class="stat-line">
+        ? `<div class="stat-line stat-line--lead">
              <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> ${tt("Paling lama", "Longest")}</span>
              <span class="stat-line-value">${tt(`${terparah.info.days} hari`, `${terparah.info.days} days`)}</span>
            </div>
-           <div class="task task--late" style="border-bottom:0;padding-right:0">
-             <span class="task-main">
-               <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>
-               <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
-             </span>
+           <div class="stat-callout">
+             <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>
+             <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
            </div>`
         : ""
     }`;
@@ -326,6 +324,67 @@ function renderOverview() {
   renderAgenda();
   renderDelayWatch();
   renderDocCompleteness();
+  renderPredictionAccuracy();
+}
+
+/* AKURASI PREDIKSI — hasil uji mundur (prediction-backtest.js) pada
+   seluruh kiriman yang kenyataannya sudah tercatat.
+
+   Dihitung SESUDAH halaman tampil, saat peramban senggang: uji mundur
+   menjalankan mesin prediksi sekali per kiriman, dan Ringkasan adalah
+   halaman pertama yang dibuka -- ia tidak boleh menunggu angka ini.
+   Hasilnya disimpan sampai data berubah. */
+let akurasiTertunda = false;
+function renderPredictionAccuracy() {
+  const box = $("#ovAccuracy");
+  if (!box || typeof predictionAccuracy !== "function") return;
+  if (UJI_MUNDUR.hasil && UJI_MUNDUR.generasi === GENERASI_BELAJAR) {
+    gambarAkurasi(box, UJI_MUNDUR.hasil);
+    return;
+  }
+  box.innerHTML = `<div class="ov-muted">${tt("Menghitung dari riwayat…", "Calculating from history…")}</div>`;
+  if (akurasiTertunda || typeof shipmentsLoaded === "undefined" || !shipmentsLoaded) return;
+  akurasiTertunda = true;
+  const jalan = () => {
+    akurasiTertunda = false;
+    const hasil = predictionAccuracy();
+    const b = $("#ovAccuracy");
+    if (b) gambarAkurasi(b, hasil);
+  };
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(jalan, { timeout: 2000 });
+  else setTimeout(jalan, 300);
+}
+
+function gambarAkurasi(box, hasil) {
+  const baris = [
+    ["bi-water", tt("ETA laut", "Sea ETA"), hasil.eta.laut],
+    ["bi-airplane", tt("ETA udara", "Air ETA"), hasil.eta.udara],
+    ["bi-truck", tt("Estimasi delivery laut", "Sea estimated delivery"), hasil.delivery.laut],
+    ["bi-truck", tt("Estimasi delivery udara", "Air estimated delivery"), hasil.delivery.udara],
+  ];
+  const isi = baris
+    .map(([ikon, label, r]) => {
+      const nilai = r.n ? `${r.tepat1}%` : "—";
+      const rinci = r.n
+        ? tt(
+            `meleset rata-rata ${String(r.mae).replace(".", ",")} hari · ${r.n} kiriman`,
+            `off by ${r.mae} days on average · ${r.n} shipments`,
+          )
+        : tt("belum ada kiriman selesai", "no completed shipments yet");
+      return `<div class="stat-line">
+          <span class="stat-line-label"><i class="bi ${ikon}"></i> ${escapeHtml(label)}
+            <small class="acc-detail">${escapeHtml(rinci)}</small></span>
+          <span class="stat-line-value${r.n ? "" : " is-quiet"}">${nilai}</span>
+        </div>`;
+    })
+    .join("");
+  box.innerHTML = `
+    <div class="acc-head">${tt("Tepat ±1 hari", "Within ±1 day")}</div>
+    ${isi}
+    <div class="acc-note">${tt(
+      "Tiap kiriman yang sudah tiba diprediksi ulang hanya dari riwayat sebelum ETD-nya, lalu dibandingkan dengan kenyataannya.",
+      "Each arrived shipment is re-predicted using only the history before its ETD, then compared with what actually happened.",
+    )}</div>`;
 }
 
 /* PENGKABELAN — setiap baris berujung pada tindakan */

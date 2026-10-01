@@ -710,8 +710,8 @@ const CIPL_SI_BARIS = [
   { k: "Description of Goods", hitung: "barang", tebal: true },
   { k: "Volume", hitung: "muatan", garis: true },
 
-  { k: "Gross Weight", hitung: "gw", satuan: "KGS" },
-  { k: "Net Weight", hitung: "nw", satuan: "KGS" },
+  { k: "Gross Weight", hitung: "gw", satuan: "KG" },
+  { k: "Net Weight", hitung: "nw", satuan: "KG" },
   { k: "QTY", hitung: "koli", tebal: true },
   { k: "PEB NUMBER", kosong: true },
   { k: "PEB DATE", kosong: true },

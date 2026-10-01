@@ -150,6 +150,11 @@ function predictionContext(src) {
     destination: s.destination || "",
     fromPort: fromPort,
     toPort: toPort,
+    /* Pelabuhan INDUK (Shekou -> Shenzhen, Cat Lai -> Ho Chi Minh).
+       Dipakai untuk mencocokkan RIWAYAT & menebak rute: terminal yang
+       berbeda di kota yang sama tetap satu rute. */
+    fromMetro: typeof resolvePortMetro === "function" ? resolvePortMetro(s.origin) || fromPort : fromPort,
+    toMetro: typeof resolvePortMetro === "function" ? resolvePortMetro(s.destination) || toPort : toPort,
     /* Negara diambil dari TABEL referensi, bukan dari memotong dua
        huruf pertama kode. Bentuk pendek tidak lagi membawa negaranya —
        memotong "CGK" akan menghasilkan "CG", Republik Kongo. */

@@ -4,7 +4,6 @@
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
   gap: var(--sp-4);
   align-items: start;
-  padding-bottom: var(--sp-8);
 }
 @media (max-width: 991px) {
   .ov-grid {
@@ -56,8 +55,13 @@
   padding: 0;
 }
 
-/* Antrean tindakan */
+/* Antrean tindakan.
+
+   border: 0 DULU: barisnya <button>, dan border bawaan peramban
+   (abu-abu tua, sisi atas & kanan) tergambar di setiap baris --
+   bertabrakan dengan tepi panel sehingga batas baris tak terbaca. */
 .task {
+  border: 0;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
@@ -268,6 +272,51 @@
 }
 .stat-line-value.is-quiet {
   color: var(--n-400);
+}
+/* Kiriman yang dimaksud baris "Paling lama": kotak tersendiri yang
+   menempel ke barisnya. Dulu baris tugas tanpa wadah -- garis merahnya
+   mengambang di bawah garis putus-putus dan tidak jelas milik siapa. */
+.stat-line--lead {
+  border-bottom: 0;
+  padding-bottom: 6px;
+}
+/* Akurasi prediksi */
+.acc-head {
+  text-align: right;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  margin-bottom: 2px;
+}
+/* Label baris berupa flex: rinciannya turun ke baris kedua, sejajar
+   dengan teks label (melewati lebar ikon). */
+#ovAccuracy .stat-line-label {
+  flex-wrap: wrap;
+}
+.acc-detail {
+  flex-basis: 100%;
+  padding-left: 22px;
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.acc-note {
+  margin-top: 10px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  line-height: 1.5;
+}
+.stat-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1px solid rgba(192, 57, 43, 0.22);
+  border-left: 3px solid var(--s-danger);
+  border-radius: var(--r-sm);
+  background: var(--s-danger-bg);
 }
 
 /* Meteran kelengkapan dokumen. */

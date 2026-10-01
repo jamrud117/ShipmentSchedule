@@ -184,12 +184,24 @@ const DN_KOLOM_CARI = [
   "payload->>payee", "payload->>customer", "payload->>receiver",
   "payload->>recipient", "payload->>subject", "payload->>notes",
   "payload->>invoiceNo", "payload->>billingNo", "payload->>poNo",
+  "payload->>blAwb",
+  "payload->>termsDelivery", "payload->>termPayment",
+  "payload->>finalDestination", "payload->>carrier",
 ];
 /* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
    arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
    terbalik -- dan wildcard (%, *) dibuang: kata kunci "PT (Persero)"
    tidak boleh memecah filternya jadi potongan yang tidak valid.
    Nilainya dikutip ganda supaya titik & spasi aman. */
+/* Carrier untuk tabel riwayat invoice: isian Carrier di data cetak
+   CIPL; kalau kosong, kapal/pesawat + voyage dari Jadwal Terkait --
+   sumber yang sama yang dipakai cetakannya. */
+function dnCarrierInvoice(p) {
+  if (p.carrier) return p.carrier;
+  const jadwal = p.shipmentId && typeof ciplCariShipment === "function" ? ciplCariShipment(p.shipmentId) : null;
+  return jadwal ? [jadwal.vessel, jadwal.voyage].filter(Boolean).join(" ") : "";
+}
+
 function dnFilterCari(q) {
   const bersih = String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
   if (!bersih) return null;
@@ -220,7 +232,7 @@ function renderDocNumSubTabs() {
     box.innerHTML = Object.keys(subs)
       .map(
         (label) =>
-          `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label)}</button>`,
+          `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label === "Lokal" ? tt("Lokal", "Local") : label)}</button>`,
       )
       .join("");
     return;
@@ -956,6 +968,107 @@ function syncModeUbahDocNum(nomor) {
   }
 }
 
+/* ---------- tagihan ganda (Pengajuan Dana) ---------- */
+
+/* SATU TAGIHAN HANYA BOLEH DIAJUKAN SEKALI -- pengajuan kedua untuk
+   invoice yang sama berarti tagihannya dibayar dua kali. Berlaku juga
+   untuk Nomor Billing (jenis Billing): isian itu menggantikan No.
+   Invoice, dan membayar kode billing yang sama dua kali sama salahnya.
+
+   Satu isian kadang memuat beberapa nomor untuk satu pembayaran
+   ("INV-01, INV-02"); tiap nomornya diperiksa sendiri, jadi pengajuan
+   berikutnya untuk INV-02 saja tetap tertahan. Pemisahnya hanya koma &
+   titik koma -- garis miring bagian dari nomornya (INV/2026/001).
+
+   Dibandingkan tanpa beda huruf besar/kecil dan spasi berlebih. Tanda
+   baca lain TIDAK diabaikan: "INV-001" dan "INV001" bisa saja tagihan
+   yang berbeda. Vendornya tidak ikut dibandingkan -- nama vendor
+   diketik bebas, jadi "PT DSV" dan "DSV" akan lolos sebagai dua
+   tagihan padahal satu. */
+const DN_NOMOR_TAGIHAN = [
+  { field: "invoiceNo", get label() { return tt("Nomor invoice", "Invoice number"); } },
+  { field: "billingNo", get label() { return tt("Nomor billing", "Billing number"); } },
+];
+
+function dnPecahNomorTagihan(nilai) {
+  return String(nilai || "")
+    .split(/[,;\n]/)
+    .map((x) => x.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+function dnKunciNomorTagihan(no) {
+  return String(no || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/* Pengajuan Dana LAIN yang sudah memakai nomor tagihan di form ini,
+   atau null. `kecualiId` = pengajuan yang sedang diperbaiki; ia tidak
+   dihitung ganda dengan dirinya sendiri.
+
+   Database hanya MENYEMPITKAN calon: tanda yang punya arti khusus di
+   filter/LIKE diganti wildcard satu huruf, jadi kuerinya bisa
+   mengembalikan lebih banyak, tidak pernah melewatkan yang sama persis.
+   Kecocokan pastinya diputuskan di sini. */
+async function dnCariTagihanGanda(form, kecualiId) {
+  const jenis = DN_NOMOR_TAGIHAN.find((j) => form[j.field]);
+  if (!jenis) return null;
+  const nomor = dnPecahNomorTagihan(form[jenis.field]);
+  if (!nomor.length) return null;
+  const pola = (no) => no.replace(/[,()"\\%*_]/g, "_").replace(/\s+/g, "%");
+  const { data, error } = await supabaseClient
+    .from("document_numbers")
+    .select("id, doc_number, doc_date, payload")
+    .eq("doc_type", "fund")
+    .or(nomor.map((no) => `payload->>${jenis.field}.ilike."%${pola(no)}%"`).join(","))
+    // Yang pertama kali memakai nomornya -- itu yang disebut di pesan.
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const dicari = new Set(nomor.map(dnKunciNomorTagihan));
+  for (const r of data || []) {
+    if (kecualiId && r.id === kecualiId) continue;
+    const sama = dnPecahNomorTagihan((r.payload || {})[jenis.field]).find((no) =>
+      dicari.has(dnKunciNomorTagihan(no)),
+    );
+    if (sama) return { jenis, nomor: sama, baris: r };
+  }
+  return null;
+}
+
+/* Pop-up penolakan + isiannya ditandai merah. */
+function dnTolakTagihanGanda(temuan) {
+  const r = temuan.baris;
+  const p = r.payload || {};
+  const rincian = [r.doc_date ? fmtDate(r.doc_date) : "", p.payee ? tt(`kepada ${p.payee}`, `to ${p.payee}`) : ""]
+    .filter(Boolean)
+    .join(", ");
+  const di = `${r.doc_number}${rincian ? ` (${rincian})` : ""}`;
+  const label = temuan.jenis.label;
+  const panel = docNumPanelEl("fund");
+  const kotak = panel && panel.querySelector(`[data-dn="${temuan.jenis.field}"]`);
+  if (kotak) kotak.classList.add("is-invalid");
+  const hint = $("#docNumHint");
+  if (hint) {
+    hint.textContent = tt(`${label} ${temuan.nomor} sudah diajukan di ${r.doc_number}.`,
+      `${label} ${temuan.nomor} was already submitted in ${r.doc_number}.`);
+    hint.classList.add("docnum-hint--error");
+  }
+  showConfirm(
+    tt(
+      `${label} ${temuan.nomor} sudah diajukan di Permintaan Dana ${di}. Satu tagihan hanya bisa diajukan sekali supaya tidak dibayar dua kali — kalau pengajuan itu batal, perbaiki atau hapus dulu di riwayat.`,
+      `${label} ${temuan.nomor} has already been submitted in Fund Request ${di}. Each bill can only be submitted once so it is not paid twice — if that request was cancelled, edit or delete it in the history first.`,
+    ),
+    null,
+    {
+      title: temuan.jenis.field === "billingNo"
+        ? tt("Nomor Billing Sudah Diajukan", "Billing Number Already Submitted")
+        : tt("Nomor Invoice Sudah Diajukan", "Invoice Number Already Submitted"),
+      icon: "bi-exclamation-triangle-fill",
+      tone: "warning",
+      tanpaBatal: true,
+      confirmText: tt("Mengerti", "OK"),
+    },
+  );
+}
+
 async function simpanUbahDocNum() {
   const typeKey = docNumActiveTab;
   const errors = validateDocNumForm(typeKey);
@@ -982,6 +1095,13 @@ async function simpanUbahDocNum() {
 
   docNumBusy = true;
   try {
+    if (typeKey === "fund") {
+      const ganda = await dnCariTagihanGanda(form, dnEditingId);
+      if (ganda) {
+        dnTolakTagihanGanda(ganda);
+        return;
+      }
+    }
     const { error } = await supabaseClient
       .from("document_numbers")
       .update({
@@ -1017,8 +1137,11 @@ async function submitDocNumRequest() {
     return;
   }
   const typeKey = docNumActiveTab;
-  const t = resolveDocNumType(typeKey);
-  if (!t.key) return;
+  /* Bukan `t`: nama itu menutupi fungsi terjemahan global, dan setiap
+     t("...") di bawah -- termasuk pesan "Nomor ... berhasil diterbitkan"
+     -- melempar TypeError. */
+  const jenis = resolveDocNumType(typeKey);
+  if (!jenis.key) return;
 
   const errors = validateDocNumForm(typeKey);
   const hint = $("#docNumHint");
@@ -1046,17 +1169,27 @@ async function submitDocNumRequest() {
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menerbitkan...", "Issuing...")}`;
 
   try {
+    /* Tagihan yang sudah pernah diajukan ditolak SEBELUM nomor urut
+       diambil. Menolaknya sesudah itu meninggalkan nomor bolong. */
+    if (typeKey === "fund") {
+      const ganda = await dnCariTagihanGanda(form);
+      if (ganda) {
+        dnTolakTagihanGanda(ganda);
+        return;
+      }
+    }
+
     // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset dari perangkat lain
-    const periodKey = await muatSeri(t.key);
+    const periodKey = await muatSeri(jenis.key);
 
     // LANGKAH 1 — ambil nomor urut dari database
     const { data: hasil, error: errSeq } = await supabaseClient.rpc(
       "next_document_number",
       {
-        p_doc_type: t.key,
+        p_doc_type: jenis.key,
         p_period_key: periodKey,
         p_template: template,
-        p_pad: t.pad,
+        p_pad: jenis.pad,
       },
     );
     if (errSeq) throw errSeq;
@@ -1074,7 +1207,7 @@ async function submitDocNumRequest() {
     const { error: errInsert } = await supabaseClient
       .from("document_numbers")
       .insert({
-        doc_type: t.key,
+        doc_type: jenis.key,
         doc_number: baris.out_number,
         period_key: periodKey,
         seq: baris.out_seq,
@@ -1526,26 +1659,33 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th>${
+          <tr>${jenis.key === "invoice" ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
             jenis.key === "fund"
-              ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th>`
+              ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th><th class="dn-col-billing">BL/AWB</th>`
               : ""
           }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
+            /* Invoice: syarat & tujuan pengiriman yang dicetak di CIPL,
+               supaya tiap invoice bisa dikenali tanpa membuka Detail. */
+            jenis.key === "invoice"
+              ? `<th class="dn-col-inv">Terms of Delivery</th><th class="dn-col-inv">Final Destination</th>` +
+                `<th class="dn-col-inv">Terms of Payment</th><th class="dn-col-inv">Carrier</th>`
+              : ""
+          }${
             jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
           }${
             jenis.key === "invoice" ? `<th class="dn-col-nilai">Amount</th>` : ""
           }${
             jenis.key === "fund" ? `<th class="dn-col-ket">${tt("Keterangan", "Notes")}</th>` : ""
           }${
-            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment")}</th>` : ""
+            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment Status")}</th>` : ""
           }<th class="dn-act"></th></tr>
         </thead>
         <tbody>
           ${data
-            .map((r) => {
+            .map((r, idx) => {
               const p = r.payload || {};
               /* PENGAJUAN DANA: kolom ini berjudul "Dibayarkan Kepada",
                  jadi isinya VENDOR (payee) -- bukan Customer.
@@ -1571,6 +1711,7 @@ async function renderDocNumHistory() {
                  dilihat lewat tombol Detail — daftarnya cukup menyebut
                  satu hal yang membedakan tiap baris. */
               return `<tr>
+                ${jenis.key === "invoice" ? `<td class="dn-col-no">${(docNumPage - 1) * docNumPageSize + idx + 1}</td>` : ""}
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
@@ -1582,10 +1723,18 @@ async function renderDocNumHistory() {
                          billing untuk Billing, invoice untuk sisanya. Membaca
                          billingNo saja membuat kolomnya kosong untuk jenis
                          lain padahal nomornya tersimpan. */
-                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || p.invoiceNo || "\u2014")}</td>`
+                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || p.invoiceNo || "\u2014")}</td>` +
+                      `<td class="dn-col-billing dn-num">${escapeHtml(p.blAwb || "\u2014")}</td>`
                     : ""
                 }
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
+                ${
+                  jenis.key === "invoice"
+                    ? [p.termsDelivery, p.finalDestination, p.termPayment, dnCarrierInvoice(p)]
+                        .map((v) => `<td class="dn-col-inv">${escapeHtml(v || "\u2014")}</td>`)
+                        .join("")
+                    : ""
+                }
                 ${
                   /* Nilai = jumlah akhir pengajuan, angka yang sama dengan
                      "Terbilang" di surat cetaknya (frTotalPengajuan). */
@@ -1605,11 +1754,11 @@ async function renderDocNumHistory() {
                      Dipotong 80: lebih panjang dari kolom lain karena
                      memang kalimat, bukan satu nama. */
                   jenis.key === "fund"
-                    ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</td>`
+                    ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}"><div class="dn-ket-isi">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</div></td>`
                     : ""
                 }
                 ${jenis.key === "fund" ? `<td class="dn-col-bayar">${dnTombolBayar(r)}</td>` : ""}
-                <td class="dn-act">
+                <td class="dn-act"><div class="dn-act-tombol">
                   ${
                     /* Edit hanya untuk isian permintaannya — NOMOR dan
                        urutannya tidak ikut diubah. Nomor yang sudah
@@ -1658,7 +1807,7 @@ async function renderDocNumHistory() {
                           data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
                   </button>
-                </td>
+                </div></td>
               </tr>`;
             })
             .join("")}
@@ -1765,7 +1914,7 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-del-num]");
   if (!btn) return;
   const id = btn.dataset.delNum;
-  const label = btn.dataset.numLabel || "nomor ini";
+  const label = btn.dataset.numLabel || tt("nomor ini", "this number");
   showConfirm(
     t("w.hapus.nomor", { label }),
     async () => {
@@ -1923,7 +2072,7 @@ function setActivePageNav(page) {
 const DN_KOLOM_UTAMA = {
   get do() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get invoice() { return tt("Customer", "Customer"); },
-  get fund() { return tt("Dibayarkan Kepada", "Paid To"); },
+  get fund() { return "Vendor"; },
   get letter() { return tt("Perihal", "Subject"); },
 };
 
@@ -1947,6 +2096,7 @@ const DN_LABEL_FIELD = {
   get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
   get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
   get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
+  get blAwb() { return "BL/AWB"; },
   get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
   get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
   get attachment() { return tt("Lampiran", "Attachment"); },
@@ -2005,6 +2155,7 @@ const DN_URUTAN_FIELD = [
   "payee",
   "invoiceDate",
   "invoiceDueDate",
+  "blAwb",
   "expenseType",
   "letterType",
   "signer",

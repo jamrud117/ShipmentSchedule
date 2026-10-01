@@ -48,8 +48,8 @@ function configuredOpsDays(ctx) {
     ruleLabel: (rule && rule.label) || "",
   };
 }
-/* Angka yang BENAR-BENAR dipakai: konfigurasi, ditimpa riwayat kalau
-   datanya sudah cukup. */
+/* Angka yang BENAR-BENAR dipakai: konfigurasi, ditarik ke riwayat
+   sesuai banyak & konsistensi kirimannya (lihat prediction-learning.js). */
 
 function predictionOpsDays(ctx) {
   const dasar = configuredOpsDays(ctx);
@@ -58,12 +58,12 @@ function predictionOpsDays(ctx) {
   const dipelajari = [];
 
   if (typeof learnedOpsDays === "function") {
-    const bClr = learnedOpsDays(ctx, "clearance");
+    const bClr = learnedOpsDays(ctx, "clearance", dasar.clearance);
     if (bClr && bClr.cukup) {
       clearance = bClr.days;
       dipelajari.push({ leg: "clearance", ...bClr });
     }
-    const bDel = learnedOpsDays(ctx, "delivery");
+    const bDel = learnedOpsDays(ctx, "delivery", dasar.delivery);
     if (bDel && bDel.cukup) {
       delivery = bDel.days;
       dipelajari.push({ leg: "delivery", ...bDel });

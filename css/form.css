@@ -1060,10 +1060,6 @@ tr.item-fac-row td {
   background: var(--bg);
   height: 100%;
 }
-.calc-box.cif {
-  border-color: #d5e8fb;
-  background: #eef6ff;
-}
 .calc-box.fob {
   border-color: #fce6c2;
   background: #fff7e9;

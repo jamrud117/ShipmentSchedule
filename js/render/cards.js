@@ -212,7 +212,7 @@ function renderExpandedCard(s) {
     <div class="ship-card-top">
       <div class="ship-title-block">
                 <div class="ship-title-text">
-          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} ${t("f.barang")}</div>
+          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} ${itemCount === 1 ? tt("Barang", "Item") : t("f.barang")}</div>
           <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
         </div>
       </div>
@@ -302,7 +302,7 @@ function renderCollapsedCard(s) {
     <div class="collapsed-row">
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
             <div class="collapsed-main">
-        <div class="collapsed-party">${escapeHtml(dispVal(s.party))} · ${(s.items || []).length} ${t("f.barang")}</div>
+        <div class="collapsed-party">${escapeHtml(dispVal(s.party))} · ${(s.items || []).length} ${(s.items || []).length === 1 ? tt("Barang", "Item") : t("f.barang")}</div>
         <div class="collapsed-meta">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;·&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))} &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(activeMode === "export" ? s.actual : s.factoryDate)}</b></div>
       </div>
       <div class="ship-actions-block">

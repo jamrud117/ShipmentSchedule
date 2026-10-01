@@ -306,7 +306,7 @@ function buildFundRequestHtml(row) {
       <tr>
         ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
         ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
-        ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Nara", p.approver1Role || "Chief Marketing Officer")}
+        ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
       </tr>
     </table>
 
