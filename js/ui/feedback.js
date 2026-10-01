@@ -90,9 +90,17 @@ function showConfirm(message, onConfirm, opsi) {
      Otomatis" — menamainya Batal membuat salah satu pilihan yang benar
      terlihat seperti membatalkan sesuatu. */
   const btnBatal = $("#confirmCancelBtn");
-  if (btnBatal) btnBatal.textContent = o.cancelText || t("a.batal");
-  btn.className =
-    "btn " + (o.tone === "primary" ? "btn-primary-navy" : "btn-danger");
+  if (btnBatal) {
+    btnBatal.textContent = o.cancelText || t("a.batal");
+    /* PEMBERITAHUAN (tanpaBatal): satu tombol saja -- tidak ada yang
+       bisa dibatalkan, jadi tombol Batal di sebelahnya cuma membingungkan.
+       Dipulihkan lagi pada panggilan berikutnya yang tidak memintanya. */
+    btnBatal.classList.toggle("d-none", !!o.tanpaBatal);
+  }
+  /* tone "warning": peringatan yang bukan tindakan merusak -- tombolnya
+     navy (bukan merah "hapus"), ikonnya kuning. */
+  const navy = o.tone === "primary" || o.tone === "warning";
+  btn.className = "btn " + (navy ? "btn-primary-navy" : "btn-danger");
 
   $("#confirmTitle").textContent = o.title || (o.tone === "primary" ? t("a.konfirmasi") : tt("Hapus Data", "Delete Data"));
 
@@ -100,8 +108,12 @@ function showConfirm(message, onConfirm, opsi) {
   ikon.className = "bi " + (o.icon || "bi-exclamation-triangle-fill");
   const kotak = ikon.parentElement;
   kotak.classList.toggle("is-power", o.icon === "bi-power");
-  kotak.style.background = o.tone === "primary" ? "var(--p-50)" : "var(--s-danger-bg)";
-  kotak.style.color = o.tone === "primary" ? "var(--p-600)" : "var(--s-danger)";
+  const warna = {
+    primary: ["var(--p-50)", "var(--p-600)"],
+    warning: ["var(--s-warn-bg)", "var(--s-warn)"],
+  }[o.tone] || ["var(--s-danger-bg)", "var(--s-danger)"];
+  kotak.style.background = warna[0];
+  kotak.style.color = warna[1];
 
   confirmCallback = onConfirm;
   confirmModal.show();

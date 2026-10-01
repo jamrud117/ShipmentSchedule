@@ -957,6 +957,107 @@ function syncModeUbahDocNum(nomor) {
   }
 }
 
+/* ---------- tagihan ganda (Pengajuan Dana) ---------- */
+
+/* SATU TAGIHAN HANYA BOLEH DIAJUKAN SEKALI -- pengajuan kedua untuk
+   invoice yang sama berarti tagihannya dibayar dua kali. Berlaku juga
+   untuk Nomor Billing (jenis Billing): isian itu menggantikan No.
+   Invoice, dan membayar kode billing yang sama dua kali sama salahnya.
+
+   Satu isian kadang memuat beberapa nomor untuk satu pembayaran
+   ("INV-01, INV-02"); tiap nomornya diperiksa sendiri, jadi pengajuan
+   berikutnya untuk INV-02 saja tetap tertahan. Pemisahnya hanya koma &
+   titik koma -- garis miring bagian dari nomornya (INV/2026/001).
+
+   Dibandingkan tanpa beda huruf besar/kecil dan spasi berlebih. Tanda
+   baca lain TIDAK diabaikan: "INV-001" dan "INV001" bisa saja tagihan
+   yang berbeda. Vendornya tidak ikut dibandingkan -- nama vendor
+   diketik bebas, jadi "PT DSV" dan "DSV" akan lolos sebagai dua
+   tagihan padahal satu. */
+const DN_NOMOR_TAGIHAN = [
+  { field: "invoiceNo", get label() { return tt("Nomor invoice", "Invoice number"); } },
+  { field: "billingNo", get label() { return tt("Nomor billing", "Billing number"); } },
+];
+
+function dnPecahNomorTagihan(nilai) {
+  return String(nilai || "")
+    .split(/[,;\n]/)
+    .map((x) => x.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+function dnKunciNomorTagihan(no) {
+  return String(no || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/* Pengajuan Dana LAIN yang sudah memakai nomor tagihan di form ini,
+   atau null. `kecualiId` = pengajuan yang sedang diperbaiki; ia tidak
+   dihitung ganda dengan dirinya sendiri.
+
+   Database hanya MENYEMPITKAN calon: tanda yang punya arti khusus di
+   filter/LIKE diganti wildcard satu huruf, jadi kuerinya bisa
+   mengembalikan lebih banyak, tidak pernah melewatkan yang sama persis.
+   Kecocokan pastinya diputuskan di sini. */
+async function dnCariTagihanGanda(form, kecualiId) {
+  const jenis = DN_NOMOR_TAGIHAN.find((j) => form[j.field]);
+  if (!jenis) return null;
+  const nomor = dnPecahNomorTagihan(form[jenis.field]);
+  if (!nomor.length) return null;
+  const pola = (no) => no.replace(/[,()"\\%*_]/g, "_").replace(/\s+/g, "%");
+  const { data, error } = await supabaseClient
+    .from("document_numbers")
+    .select("id, doc_number, doc_date, payload")
+    .eq("doc_type", "fund")
+    .or(nomor.map((no) => `payload->>${jenis.field}.ilike."%${pola(no)}%"`).join(","))
+    // Yang pertama kali memakai nomornya -- itu yang disebut di pesan.
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  const dicari = new Set(nomor.map(dnKunciNomorTagihan));
+  for (const r of data || []) {
+    if (kecualiId && r.id === kecualiId) continue;
+    const sama = dnPecahNomorTagihan((r.payload || {})[jenis.field]).find((no) =>
+      dicari.has(dnKunciNomorTagihan(no)),
+    );
+    if (sama) return { jenis, nomor: sama, baris: r };
+  }
+  return null;
+}
+
+/* Pop-up penolakan + isiannya ditandai merah. */
+function dnTolakTagihanGanda(temuan) {
+  const r = temuan.baris;
+  const p = r.payload || {};
+  const rincian = [r.doc_date ? fmtDate(r.doc_date) : "", p.payee ? tt(`kepada ${p.payee}`, `to ${p.payee}`) : ""]
+    .filter(Boolean)
+    .join(", ");
+  const di = `${r.doc_number}${rincian ? ` (${rincian})` : ""}`;
+  const label = temuan.jenis.label;
+  const panel = docNumPanelEl("fund");
+  const kotak = panel && panel.querySelector(`[data-dn="${temuan.jenis.field}"]`);
+  if (kotak) kotak.classList.add("is-invalid");
+  const hint = $("#docNumHint");
+  if (hint) {
+    hint.textContent = tt(`${label} ${temuan.nomor} sudah diajukan di ${r.doc_number}.`,
+      `${label} ${temuan.nomor} was already submitted in ${r.doc_number}.`);
+    hint.classList.add("docnum-hint--error");
+  }
+  showConfirm(
+    tt(
+      `${label} ${temuan.nomor} sudah diajukan di Permintaan Dana ${di}. Satu tagihan hanya bisa diajukan sekali supaya tidak dibayar dua kali — kalau pengajuan itu batal, perbaiki atau hapus dulu di riwayat.`,
+      `${label} ${temuan.nomor} has already been submitted in Fund Request ${di}. Each bill can only be submitted once so it is not paid twice — if that request was cancelled, edit or delete it in the history first.`,
+    ),
+    null,
+    {
+      title: temuan.jenis.field === "billingNo"
+        ? tt("Nomor Billing Sudah Diajukan", "Billing Number Already Submitted")
+        : tt("Nomor Invoice Sudah Diajukan", "Invoice Number Already Submitted"),
+      icon: "bi-exclamation-triangle-fill",
+      tone: "warning",
+      tanpaBatal: true,
+      confirmText: tt("Mengerti", "OK"),
+    },
+  );
+}
+
 async function simpanUbahDocNum() {
   const typeKey = docNumActiveTab;
   const errors = validateDocNumForm(typeKey);
@@ -983,6 +1084,13 @@ async function simpanUbahDocNum() {
 
   docNumBusy = true;
   try {
+    if (typeKey === "fund") {
+      const ganda = await dnCariTagihanGanda(form, dnEditingId);
+      if (ganda) {
+        dnTolakTagihanGanda(ganda);
+        return;
+      }
+    }
     const { error } = await supabaseClient
       .from("document_numbers")
       .update({
@@ -1018,8 +1126,11 @@ async function submitDocNumRequest() {
     return;
   }
   const typeKey = docNumActiveTab;
-  const t = resolveDocNumType(typeKey);
-  if (!t.key) return;
+  /* Bukan `t`: nama itu menutupi fungsi terjemahan global, dan setiap
+     t("...") di bawah -- termasuk pesan "Nomor ... berhasil diterbitkan"
+     -- melempar TypeError. */
+  const jenis = resolveDocNumType(typeKey);
+  if (!jenis.key) return;
 
   const errors = validateDocNumForm(typeKey);
   const hint = $("#docNumHint");
@@ -1047,17 +1158,27 @@ async function submitDocNumRequest() {
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menerbitkan...", "Issuing...")}`;
 
   try {
+    /* Tagihan yang sudah pernah diajukan ditolak SEBELUM nomor urut
+       diambil. Menolaknya sesudah itu meninggalkan nomor bolong. */
+    if (typeKey === "fund") {
+      const ganda = await dnCariTagihanGanda(form);
+      if (ganda) {
+        dnTolakTagihanGanda(ganda);
+        return;
+      }
+    }
+
     // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset dari perangkat lain
-    const periodKey = await muatSeri(t.key);
+    const periodKey = await muatSeri(jenis.key);
 
     // LANGKAH 1 — ambil nomor urut dari database
     const { data: hasil, error: errSeq } = await supabaseClient.rpc(
       "next_document_number",
       {
-        p_doc_type: t.key,
+        p_doc_type: jenis.key,
         p_period_key: periodKey,
         p_template: template,
-        p_pad: t.pad,
+        p_pad: jenis.pad,
       },
     );
     if (errSeq) throw errSeq;
@@ -1075,7 +1196,7 @@ async function submitDocNumRequest() {
     const { error: errInsert } = await supabaseClient
       .from("document_numbers")
       .insert({
-        doc_type: t.key,
+        doc_type: jenis.key,
         doc_number: baris.out_number,
         period_key: periodKey,
         seq: baris.out_seq,

@@ -54,6 +54,13 @@ w.supabase = { createClient: () => ({
           jejakDocNumFilter[kolom] = op === "eq" ? nilai : op + ":" + nilai;
           return rantai;
         },
+        /* .or(filter) -- pemeriksa tagihan ganda Pengajuan Dana. Dicatat
+           saja; barisnya tetap semua baris doc_type itu, kecocokan
+           pastinya memang diputuskan di sisi aplikasi. */
+        or: (f) => {
+          jejakDocNumFilter.or = f;
+          return rantai;
+        },
         order: () => rantai,
         range: hasil,
         limit: () => rantai,
@@ -2522,7 +2529,8 @@ t("ubah isian TIDAK menghapus status lunas", async () => {
     w.__tangkap = (u) => { terkirim = u; };
     w.eval(`supabaseClient.from = () => ({ update: (u) => { window.__tangkap(u); return { eq: async () => ({ error: null }) }; },
       select: () => { const c = { eq: () => c, order: () => c, range: async () => ({ data: [], error: null, count: 0 }),
-        maybeSingle: async () => ({ data: null, error: null }), filter: () => c, then: (r) => r({ data: [], error: null, count: 0 }) }; return c; } })`);
+        maybeSingle: async () => ({ data: null, error: null }), filter: () => c, or: () => c,
+        then: (r) => r({ data: [], error: null, count: 0 }) }; return c; } })`);
     await w.simpanUbahDocNum();
     if (!terkirim) throw new Error("perubahan tidak terkirim");
     eq(terkirim.payload.paidAt, "2026-09-22", "tanggal bayar terbawa:");
@@ -2555,6 +2563,116 @@ t("menandai lunas membaca payload TERBARU dulu -- tidak menimpa perubahan orang 
     w.eval("supabaseClient.from = window.supabaseClient_from_asli");
   }
 });
+console.log("\u2014 PENGAJUAN DANA: NOMOR INVOICE / BILLING GANDA \u2014");
+t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & spasi", () => {
+  eq(JSON.stringify(w.dnPecahNomorTagihan(" INV-01,inv-02 ; INV  03 ")), JSON.stringify(["INV-01", "inv-02", "INV 03"]));
+  eq(JSON.stringify(w.dnPecahNomorTagihan("INV/2026/001")), JSON.stringify(["INV/2026/001"]), "garis miring bukan pemisah:");
+  eq(w.dnKunciNomorTagihan(" Inv  03 "), "inv 03");
+});
+{
+  const BARIS_DANA = [
+    { id: "f1", doc_type: "fund", doc_number: "305/EXIM/DDI/IX/2026", doc_date: "2026-09-22", requester: "Yogi Firgiawan",
+      department: "EXIM", payload: { expenseType: "Freight", invoiceNo: "INV-001, INV-002", payee: "PT DSV" } },
+    { id: "f2", doc_type: "fund", doc_number: "306/EXIM/DDI/IX/2026", doc_date: "2026-09-23", requester: "Yogi Firgiawan",
+      department: "EXIM", payload: { expenseType: "Billing", billingNo: "640260906211153", payee: "KAS NEGARA" } },
+    { id: "f3", doc_type: "fund", doc_number: "307/EXIM/DDI/IX/2026", doc_date: "2026-09-24", requester: "Yogi Firgiawan",
+      department: "EXIM", payload: { expenseType: "Freight", invoiceNo: "INV_777", payee: "PT LAIN" } },
+  ];
+  const panelDana = () => w.document.querySelector('[data-docnum-panel="fund"]');
+  const isiFormDana = (isi) => {
+    const panel = panelDana();
+    const set = (k, v) => (panel.querySelector(`[data-dn="${k}"]`).value = v);
+    set("docDate", w.todayISO());
+    set("requester", "Yogi Firgiawan");
+    set("department", "EXIM");
+    set("expenseType", isi.expenseType || "Freight");
+    set("payee", "PT UJI");
+    w.syncDocNumConditional(panel);
+    if (isi.invoiceNo != null) set("invoiceNo", isi.invoiceNo);
+    if (isi.billingNo != null) set("billingNo", isi.billingNo);
+  };
+  const judulPopup = () => w.document.getElementById("confirmTitle").textContent;
+  const nomorDiambil = (sejak) => jejakRpc.slice(sejak).filter((x) => x.nama === "next_document_number").length;
+  const denganDana = async (fn) => {
+    const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, prof: w.eval("JSON.stringify(authState.profile || null)"),
+      lang: baca("activeLang") };
+    try {
+      w.setLang("id");
+      w.eval('authState.profile = { id: "u1", role: "exim" }');
+      w.eval('docNumActiveTab = "fund"');
+      w.jejakDocNum = BARIS_DANA;
+      tulis("docNumHistoryRows", BARIS_DANA);
+      w.document.getElementById("confirmMessage").textContent = "";
+      await fn();
+    } finally {
+      if (baca("dnEditingId")) w.batalUbahDocNum();
+      w.jejakDocNum = simpan.rows;
+      w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
+      w.eval("authState.profile = " + simpan.prof);
+      w.setLang(simpan.lang);
+    }
+  };
+
+  t("Ajukan Nomor: nomor invoice yang sudah diajukan ditolak lewat pop-up, SEBELUM nomor urut diambil", async () => denganDana(async () => {
+    isiFormDana({ invoiceNo: " inv-002 " }); // salah satu dari "INV-001, INV-002", beda huruf & spasi
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 0, "nomor urut tidak boleh terambil:");
+    const pesan = w.document.getElementById("confirmMessage").textContent;
+    if (!pesan.includes("INV-002") || !pesan.includes("305/EXIM/DDI/IX/2026") || !pesan.includes("PT DSV"))
+      throw new Error("isi pop-up: " + pesan);
+    eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
+    eq(w.document.getElementById("confirmCancelBtn").classList.contains("d-none"), true, "pemberitahuan satu tombol:");
+    eq(panelDana().querySelector('[data-dn="invoiceNo"]').classList.contains("is-invalid"), true, "isian ditandai merah:");
+    // Konfirmasi biasa sesudahnya kembali punya tombol Batal.
+    w.showConfirm("uji", null, {});
+    eq(w.document.getElementById("confirmCancelBtn").classList.contains("d-none"), false, "tombol Batal kembali:");
+  }));
+  t("Ajukan Nomor: nomor invoice baru lolos -- nomor terbit & pesan berhasil muncul", async () => denganDana(async () => {
+    /* "INV-777" bukan "INV_777": di LIKE, _ cocok dengan huruf apa pun,
+       jadi kecocokan pastinya harus diputuskan aplikasi. */
+    isiFormDana({ invoiceNo: 'INV-777, INV"(9)' });
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 1, "nomor urut terambil:");
+    eq(w.document.getElementById("confirmMessage").textContent, "", "tidak boleh ada pop-up:");
+    // Dulu `t` di fungsi ini menutupi fungsi terjemahan -> pesan ini melempar TypeError.
+    eq(w.document.getElementById("toastMsg").textContent, w.t("x.nomor.berhasil.diterbitkan", { nomor: "001/UJI" }), "pesan berhasil:");
+    /* Tanda kutip & kurung tidak boleh bocor ke sintaks filter PostgREST. */
+    const f = jejakDocNumFilter.or || "";
+    eq(f, 'payload->>invoiceNo.ilike."%INV-777%",payload->>invoiceNo.ilike."%INV__9_%"', "filter database:");
+  }));
+  t("jenis Billing: nomor billing yang sama juga ditolak", async () => denganDana(async () => {
+    isiFormDana({ expenseType: "Billing", billingNo: "640260906211153" });
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 0, "nomor urut tidak boleh terambil:");
+    eq(judulPopup(), "Nomor Billing Sudah Diajukan", "judul pop-up:");
+  }));
+  t("Ubah Isian: pengajuan itu sendiri tidak dihitung ganda; memakai nomor milik pengajuan lain ditolak", async () => denganDana(async () => {
+    const n = jejakUpdate.length;
+    w.mulaiUbahDocNum("f1");
+    await w.simpanUbahDocNum();
+    eq(jejakUpdate.length, n + 1, "menyimpan ulang dirinya sendiri lolos:");
+    eq(w.document.getElementById("confirmMessage").textContent, "", "tidak boleh ada pop-up:");
+
+    w.mulaiUbahDocNum("f3");
+    panelDana().querySelector('[data-dn="invoiceNo"]').value = "INV-001";
+    await w.simpanUbahDocNum();
+    eq(jejakUpdate.length, n + 1, "tidak boleh tersimpan:");
+    eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
+  }));
+  t("pop-up ikut bahasa Inggris", async () => denganDana(async () => {
+    w.setLang("en");
+    isiFormDana({ invoiceNo: "INV-001" });
+    await w.submitDocNumRequest();
+    eq(judulPopup(), "Invoice Number Already Submitted", "judul (EN):");
+    if (!/^Invoice number INV-001 has already been submitted in Fund Request 305\/EXIM\/DDI\/IX\/2026/.test(
+      w.document.getElementById("confirmMessage").textContent))
+      throw new Error("pesan (EN): " + w.document.getElementById("confirmMessage").textContent);
+    eq(w.document.getElementById("confirmActionBtn").textContent, "OK", "tombol (EN):");
+  }));
+}
 t("Summary: saring & kelompokkan per status bayar", () => {
   const k = kolomDana([
     barisDana("1", { payee: "A", amount: "100", paidAt: "2026-09-10" }),
