@@ -645,7 +645,10 @@ function parseCiplPdfText(text, pagesItems) {
     );
   }
   notes.push(
-    "Hasil baca PDF CIPL ini best-effort — mohon cek ulang moda transportasi, HS Code, dan nama barang sebelum simpan.",
+    tt(
+      "Hasil baca PDF CIPL ini best-effort — mohon cek ulang moda transportasi, HS Code, dan nama barang sebelum simpan.",
+      "This CIPL PDF was read on a best-effort basis — please double-check the transport mode, HS Codes and item names before saving.",
+    ),
   );
 
   return {

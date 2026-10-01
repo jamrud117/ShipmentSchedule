@@ -139,9 +139,20 @@ function transitSourceHtml(e) {
 }
 
 // Lama transit: "8–12 hari" kalau rentang, "11 hari" kalau angka pasti.
-function predDaysText(e) {
-  return e.hasRange ? `${e.daysMin}–${e.daysMax} ${tt("hari", "days")}` : `${e.days} ${tt("hari", "days")}`;
+/* "8–12 hari kalender" / "8–12 calendar days". Dulu jumlah hari &
+   akhirannya dirangkai terpisah, dan bahasa Inggrisnya jadi
+   "8–12 days calendar days". */
+function predHariKalender(e) {
+  const n = e.hasRange ? `${e.daysMin}–${e.daysMax}` : `${e.days}`;
+  return tt(`${n} hari kalender`, `${n} ${e.days === 1 && !e.hasRange ? "calendar day" : "calendar days"}`);
 }
+/* Bahasa Inggris membedakan tunggal: "1 working day", bukan "1 working days". */
+function satuanHariTunggal(n, satuan) {
+  return Number(n) === 1 && typeof activeLang !== "undefined" && activeLang === "en"
+    ? String(satuan).replace(/days$/, "day")
+    : satuan;
+}
+
 
 // Rincian "ETA + 2 hari kerja + 2 hari kerja" yang bisa ditelusuri pengguna.
 function predStepsHtml(d) {
@@ -158,7 +169,7 @@ function predStepsHtml(d) {
     const durasi =
       st.days == null
         ? ""
-        : ` <em>${st.days} ${escapeHtml(st.unit || tt("hari kerja", "working days"))}</em>`;
+        : ` <em>${st.days} ${escapeHtml(satuanHariTunggal(st.days, st.unit || tt("hari kerja", "working days")))}</em>`;
     baris.push(
       `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}</span>
        <span class="pred-step-date">${fmtDate(st.to)}</span></li>`,
@@ -213,7 +224,7 @@ function predictionDetailHtml(s) {
   const tipe = predictionShipmentTypeLabel(predictionShipmentType(s));
 
   const barisEta = e.ok
-    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : "Direct"} · ETD + ${predDaysText(e)} ${tt("kalender", "calendar days")})</span>
+    ? `${fmtDate(e.eta)} <span class="pred-muted">(${escapeHtml(e.ruleLabel)} · ${e.kind === "transit" ? "Transit" : tt("Langsung", "Direct")} · ETD + ${predHariKalender(e)})</span>
        ${e.hasRange ? predRangeHtml(e.etaEarliest, e.etaLatest) : ""}`
     : `<span class="pred-muted">${escapeHtml(e.reason)}</span>`;
 

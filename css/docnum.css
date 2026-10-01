@@ -73,9 +73,32 @@
   color: var(--muted);
   line-height: 1.3;
 }
+/* Jarak isi kolom kanan. Disimpan sebagai variabel karena paginasi
+   riwayat (di bawah) membatalkannya untuk menempel ke tepi kartu. */
 .docnum-panels {
-  padding: 22px 24px 24px;
+  --dn-pad-x: 24px;
+  --dn-pad-b: 24px;
+  padding: 22px var(--dn-pad-x) var(--dn-pad-b);
   min-width: 0;
+}
+
+/* PAGINASI RIWAYAT = KAKI KARTU, seperti di HS Code & Jadwal Kapal.
+
+   Dulu ia mengambang di ruang putih antara tabel dan dasar kartu --
+   tanpa garis, tanpa latar, dengan ruang kosong 40px di bawahnya --
+   sehingga dasar halaman terlihat belum selesai. Sekarang ia pita
+   berlatar abu muda yang menempel ke dasar kartu, selebar kolom isi:
+   margin negatif membatalkan jarak .docnum-panels. */
+#docNumPagination.pagination-bar--compact {
+  margin: var(--sp-4) calc(-1 * var(--dn-pad-x)) calc(-1 * var(--dn-pad-b));
+  padding: 12px var(--dn-pad-x);
+  background: var(--n-50);
+  border-top: 1px solid var(--border);
+}
+/* Saat memuat, kosong, atau di tab Summary isinya dikosongkan --
+   pitanya jangan tersisa sebagai pita abu tanpa isi. */
+#docNumPagination:empty {
+  display: none;
 }
 
 /* Panel tidak aktif disembunyikan; hanya satu yang tampil sekaligus. */
@@ -674,7 +697,12 @@ table.fund-lines select {
    digeser mendatar. Nomor dokumen tidak boleh terpotong — ia
    satu-satunya penanda barisnya.
 ================================================================== */
+/* BERBINGKAI. Saat tabel lebih lebar dari layar, kolom terpotong di
+   tepi wadah dan scrollbar muncul di bawahnya -- tanpa bingkai, tidak
+   terlihat di mana tabel berakhir dan scrollbar itu milik siapa. */
 .docnum-history-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -693,6 +721,14 @@ table.fund-lines select {
 }
 .docnum-table {
   min-width: 720px;
+}
+/* Di dalam bingkai: garis atas kepala & garis bawah baris terakhir
+   sudah diwakili bingkainya -- dua garis berimpit terbaca tebal. */
+.docnum-history-wrap .docnum-table thead th {
+  border-top: 0;
+}
+.docnum-history-wrap .docnum-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 /* Kolom aksi tidak boleh menyusut — tombolnya berukuran tetap.
@@ -861,8 +897,13 @@ table.fund-lines select {
   margin: var(--sp-2) 0 6px;
 }
 /* Tabel bisa digeser mendatar di layar sempit, bukan dipaksa pecah. */
+/* Semua tabel Summary berbingkai -- dulu hanya tabel Rincian, sehingga
+   tabel Total per Perusahaan & Rekap Bulanan tampak menyatu dengan
+   judul dan tabel di sekitarnya. */
 .fsum-wrap {
   overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 /* Rincian bisa ratusan baris: digulung di dalam kotaknya sendiri,
    dengan kepala tabel tetap terlihat, supaya kotak pivot di atasnya
@@ -870,8 +911,6 @@ table.fund-lines select {
 .fsum-wrap--rinci {
   max-height: 520px;
   overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
 }
 .fsum-tabel {
   width: 100%;

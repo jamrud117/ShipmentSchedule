@@ -428,6 +428,13 @@
 .pred-detail-row--full {
   grid-template-columns: 1fr;
 }
+/* Rincian langkah di dalam baris Detail: garis atas & jaraknya sendiri
+   dilepas -- garis bawah baris sebelumnya sudah memisahkan. Dengan
+   keduanya, tergambar dua garis putus-putus berpita kosong. */
+.pred-detail-row--full > .pred-steps {
+  margin-top: 0;
+  border-top: 0;
+}
 @media (max-width: 720px) {
   .pred-detail-row {
     grid-template-columns: 1fr;

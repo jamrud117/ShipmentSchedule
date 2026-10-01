@@ -221,7 +221,7 @@ function renderDocNumSubTabs() {
     box.innerHTML = Object.keys(subs)
       .map(
         (label) =>
-          `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label)}</button>`,
+          `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label === "Lokal" ? tt("Lokal", "Local") : label)}</button>`,
       )
       .join("");
     return;
@@ -1732,7 +1732,7 @@ async function renderDocNumHistory() {
                     : ""
                 }
                 ${jenis.key === "fund" ? `<td class="dn-col-bayar">${dnTombolBayar(r)}</td>` : ""}
-                <td class="dn-act">
+                <td class="dn-act"><div class="dn-act-tombol">
                   ${
                     /* Edit hanya untuk isian permintaannya — NOMOR dan
                        urutannya tidak ikut diubah. Nomor yang sudah
@@ -1781,7 +1781,7 @@ async function renderDocNumHistory() {
                           data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
                   </button>
-                </td>
+                </div></td>
               </tr>`;
             })
             .join("")}
@@ -1888,7 +1888,7 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-del-num]");
   if (!btn) return;
   const id = btn.dataset.delNum;
-  const label = btn.dataset.numLabel || "nomor ini";
+  const label = btn.dataset.numLabel || tt("nomor ini", "this number");
   showConfirm(
     t("w.hapus.nomor", { label }),
     async () => {

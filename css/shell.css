@@ -1,9 +1,14 @@
 /* KERANGKA APLIKASI */
 
 /* Badan halaman di bawah bilah judul. --grow dipakai halaman Jadwal,
-   yang isinya harus mendorong kaki halaman ke bawah layar. */
+   yang isinya harus mendorong kaki halaman ke bawah layar.
+
+   Jarak BAWAH di sini, bukan di tiap halaman: dulu hanya Ringkasan &
+   Akun yang memberinya sendiri (lewat .ov-grid / .acct-grid), sehingga
+   panel HS Code dan Jadwal Kapal menempel langsung ke kaki halaman. */
 .page-main {
   padding-top: 20px;
+  padding-bottom: var(--sp-8);
 }
 .page-main--grow {
   flex: 1;

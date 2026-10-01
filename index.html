@@ -248,7 +248,7 @@
     <!-- BILAH ATAS — satu-satunya navigasi global -->
     <nav class="app-topbar d-none">
       <div class="container app-topbar-inner">
-        <a class="brand" href="#/" aria-label="EXIM DDI — beranda">
+        <a class="brand" href="#/" aria-label="EXIM DDI — beranda" data-en-aria="EXIM DDI — home">
           <!-- Digambar ulang mengikuti ikon situs: haluan kapal peti -->
           <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
             <rect
@@ -476,7 +476,7 @@
           <div>
             <section class="panel">
               <div class="panel-head">
-                <h2><i class="bi bi-graph-down-arrow"></i> Pantauan delay</h2>
+                <h2 data-en="<i class=&quot;bi bi-graph-down-arrow&quot;></i> Delay watch"><i class="bi bi-graph-down-arrow"></i> Pantauan delay</h2>
               </div>
               <div class="panel-body" id="ovDelay"></div>
             </section>
@@ -492,7 +492,7 @@
 
             <section class="panel">
               <div class="panel-head">
-                <h2><i class="bi bi-lightning-charge"></i> Aksi cepat</h2>
+                <h2 data-en="<i class=&quot;bi bi-lightning-charge&quot;></i> Quick actions"><i class="bi bi-lightning-charge"></i> Aksi cepat</h2>
               </div>
               <div class="panel-body">
                 <div class="quick-actions">
@@ -854,6 +854,7 @@
                 id="filterStatus"
                 class="control-select"
                 aria-label="Saring status"
+                data-en-aria="Filter status"
               >
                 <option value="" data-i18n="f.semua.status">
                   Semua Status
@@ -961,7 +962,7 @@
                     <button type="button" class="drp-reset" id="drpReset">
                       Reset
                     </button>
-                    <button type="button" class="drp-apply" id="drpApply">
+                    <button type="button" class="drp-apply" id="drpApply" data-en="Apply">
                       Terapkan
                     </button>
                   </div>
@@ -1291,7 +1292,7 @@
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
-                    <option>Produksi</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
                 <div class="col-md-6">
@@ -1600,7 +1601,7 @@
                     data-dn-required
                   >
                     <option value="Export">Export</option>
-                    <option value="Lokal">Lokal</option>
+                    <option value="Lokal" data-en="Local">Lokal</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -1818,7 +1819,7 @@
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>EXIM</option>
                     <option>Finance</option>
-                    <option>Produksi</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -2026,7 +2027,7 @@
                 <!-- Blok tanda tangan. Namanya WAJIB bisa diubah: orangnya
                      berganti, dan jabatannya pun bisa berbeda antar surat. -->
                 <div class="col-12">
-                  <div class="form-subhead">Penanda Tangan</div>
+                  <div class="form-subhead" data-en="Signatories">Penanda Tangan</div>
                 </div>
                 <div class="col-md-3">
                   <label class="form-label" data-i18n="f.lampiran"
@@ -2130,7 +2131,7 @@
                 </div>
                 <div class="col-md-4">
                   <label class="form-label"
-                    >Penanda Tangan <span class="req">*</span></label
+                    data-en="Signatory <span class=&quot;req&quot;>*</span>">Penanda Tangan <span class="req">*</span></label
                   >
                   <input
                     type="text"
@@ -2388,7 +2389,7 @@
         <ul class="nav nav-detail" id="detailTabs">
           <li class="nav-item">
             <button class="nav-link active" data-tab="umum" type="button">
-              <span class="step-num">1</span> Dokumen &amp; Umum
+              <span class="step-num">1</span> <span data-en="Documents &amp; General">Dokumen &amp; Umum</span>
             </button>
           </li>
           <li class="nav-item">
@@ -2410,7 +2411,7 @@
               <span class="subsection-icon"
                 ><i class="bi bi-file-earmark-text"></i
               ></span>
-              Dokumen
+              <span data-en="Documents">Dokumen</span>
             </div>
             <div class="row g-3">
               <div class="col-md-3">

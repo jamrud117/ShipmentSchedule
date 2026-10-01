@@ -511,7 +511,9 @@ const COPY_TEMPLATES = [
   },
   {
     id: "ImportAnnouncement",
-    label: "Info Barang Baru",
+    /* Getter: label menu ikut bahasa aktif. Isi pesannya sendiri tetap
+       bahasa Indonesia -- ditempel ke grup kerja, bukan teks layar. */
+    get label() { return tt("Info Barang Baru", "New Goods Notice"); },
     icon: "bi-file-earmark-text",
     scope: "shipment",
     modes: ["import"],
@@ -530,8 +532,9 @@ const COPY_TEMPLATES = [
     // Versi berformat untuk email — lihat copyRichToClipboard().
     getHtml: () => buildReportCopyHtml(),
     successMsg: () => t("v.template.report.berhasil.disalin.ke.clipboard"),
-    emptyMsg:
-      t("s.tidak.ada.jadwal.pending.semua.sudah.delivered"),
+    /* Getter, bukan nilai: dulu dihitung SEKALI saat berkas dimuat, jadi
+       tetap berbahasa awal walau bahasanya sudah diganti. */
+    get emptyMsg() { return t("s.tidak.ada.jadwal.pending.semua.sudah.delivered"); },
   },
 ];
 

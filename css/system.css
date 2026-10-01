@@ -364,12 +364,14 @@ input[type="date"][readonly] {
 /* Blok tindakan merusak */
 
 /* Bilah paginasi ringkas untuk riwayat nomor dokumen */
+/* Tanpa garis atas: tabel riwayat di atasnya sudah berbingkai, dan
+   garis ini dulu tergambar 13px di bawah bingkai itu -- dua garis
+   sejajar yang membuat batas tabel & paginasi bercampur. */
 .pagination-bar--compact {
   margin-top: var(--sp-3);
-  padding: var(--sp-3) 0 0;
+  padding: 0;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--n-200);
   border-radius: 0;
   box-shadow: none;
 }
@@ -386,9 +388,14 @@ input[type="date"][readonly] {
 
    `white-space: nowrap` saja tidak cukup: .icon-btn memakai
    `display: grid` (agar ikonnya rata tengah), dan elemen tingkat blok
-   tetap turun ke baris baru berapa pun aturan spasinya. Selnya yang
-   harus dijadikan baris flex. */
-.docnum-table td.dn-act {
+   tetap turun ke baris baru berapa pun aturan spasinya.
+
+   Yang dijadikan baris flex adalah PEMBUNGKUS di dalam sel, bukan
+   <td>-nya. Sel yang diberi display:flex keluar dari susunan tabel:
+   tingginya tidak lagi mengikuti baris (terukur 3px lebih pendek),
+   jadi garis pemisah di kolom aksi tidak segaris dengan garis baris
+   dan tepi kanan tabel tampak mengambang. */
+.docnum-table td.dn-act .dn-act-tombol {
   display: flex;
   justify-content: flex-end;
   align-items: center;

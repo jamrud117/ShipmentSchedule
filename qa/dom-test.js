@@ -11655,6 +11655,68 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     w.autoGrowAllItemNames = asli;
   }
 
+  console.log("— MODE INGGRIS: SISA TEKS INDONESIA & BATAS ELEMEN —");
+  t("mode Inggris: teks yang dulu tertinggal berbahasa Indonesia", () => {
+    const simpan = baca("activeLang");
+    const d = w.document;
+    try {
+      w.setLang("en");
+      const judul = [...d.querySelectorAll("#viewOverview .panel-head h2")].map((h) => h.textContent.trim());
+      ["Delay watch", "Quick actions"].forEach((x) => { if (!judul.includes(x)) throw new Error("judul panel Ringkasan: " + judul.join(" | ")); });
+      eq(d.getElementById("filterStatus").getAttribute("aria-label"), "Filter status", "label saringan status:");
+      eq(d.getElementById("drpApply").textContent.trim(), "Apply", "tombol kalender:");
+      eq(d.querySelector(".brand").getAttribute("aria-label"), "EXIM DDI — home", "logo:");
+      eq(d.querySelector('#detailTabs [data-tab="umum"]').textContent.replace(/\s+/g, " ").trim(), "1 Documents & General", "tab form:");
+      const subjudul = [...d.querySelectorAll('[data-docnum-panel="fund"] .form-subhead')].map((x) => x.textContent.trim());
+      if (!subjudul.includes("Signatories") || subjudul.includes("Penanda Tangan")) throw new Error("Pengajuan Dana: " + subjudul.join(" | "));
+      const produksi = [...d.querySelectorAll('select[data-dn="department"] option[value="Produksi"]')];
+      eq(produksi.length, 2, "opsi Produksi di dua form:");
+      produksi.forEach((o) => eq(o.textContent.trim(), "Production", "tulisan departemen:"));
+      const lokal = d.querySelector('[data-dn="doKind"] option[value="Lokal"]');
+      eq(lokal.textContent.trim(), "Local", "Surat Jalan Lokal:");
+      const tpl = baca("COPY_TEMPLATES").find((x) => x.id === "ImportAnnouncement");
+      eq(tpl.label, "New Goods Notice", "menu Copy:");
+      const report = baca("COPY_TEMPLATES").find((x) => x.id === "Report");
+      eq(report.emptyMsg, w.t("s.tidak.ada.jadwal.pending.semua.sudah.delivered"), "pesan Report ikut bahasa aktif:");
+      eq(w.predHariKalender({ hasRange: true, daysMin: 8, daysMax: 12 }), "8–12 calendar days", "rentang hari kalender:");
+      eq(w.satuanHariTunggal(1, "working days"), "working day", "tunggal:");
+      eq(w.satuanHariTunggal(2, "working days"), "working days", "jamak:");
+      w.setLang("id");
+      eq(produksi[0].textContent.trim(), "Produksi", "kembali ke Indonesia:");
+      eq(produksi[0].value, "Produksi", "nilai tersimpan tidak berubah:");
+      eq(w.predHariKalender({ hasRange: true, daysMin: 8, daysMax: 12 }), "8–12 hari kalender", "rentang (ID):");
+      eq(tpl.label, "Info Barang Baru", "menu Copy (ID):");
+    } finally {
+      w.setLang(simpan);
+    }
+  });
+  t("batas elemen: sel aksi riwayat nomor tetap sel tabel; baris tugas tanpa border bawaan; kotak Paling lama", () => {
+    const css = (f) => require("fs").readFileSync(require("path").join(__dirname, "..", "css", f), "utf8");
+    if (/\.docnum-table td\.dn-act \{\s*display: flex/.test(css("system.css")))
+      throw new Error("<td> aksi masih display:flex -- keluar dari susunan tabel");
+    if (!/\.docnum-table td\.dn-act \.dn-act-tombol \{\s*display: flex/.test(css("system.css")))
+      throw new Error("pembungkus tombol aksi tidak berbaris flex");
+    if (!/\.docnum-history-wrap \{\s*border: 1px solid/.test(css("docnum.css"))) throw new Error("wadah riwayat nomor tidak berbingkai");
+    if (!/\.fsum-wrap \{[^}]*border: 1px solid/.test(css("docnum.css"))) throw new Error("tabel Summary tidak berbingkai");
+    if (!/\.task \{\s*border: 0;/.test(css("overview.css"))) throw new Error("baris tugas masih memakai border bawaan <button>");
+    if (!/\.pred-detail-row--full > \.pred-steps \{[^}]*border-top: 0/.test(css("prediction.css"))) throw new Error("garis ganda di panel prediksi");
+    // Kaki halaman: semua halaman ber-.page-main berjarak dari footer (dulu HS Code & Jadwal Kapal menempel)
+    if (!/\.page-main \{[^}]*padding-bottom: var\(--sp-8\)/.test(css("shell.css"))) throw new Error("jarak bawah halaman ke footer");
+    if (/\.(ov|acct)-grid \{[^}]*padding-bottom/.test(css("overview.css") + css("auth.css"))) throw new Error("jarak bawah ganda di Ringkasan/Akun");
+    // Paginasi HS Code & Jadwal Kapal = kaki panel; paginasi riwayat nomor tanpa garis ganda
+    if (!/\.pagination-bar\.hs-halaman \{[^}]*background: var\(--n-50\)/.test(css("auth.css"))) throw new Error("paginasi HS Code masih terbaca sebagai baris tabel");
+    if (/\.pagination-bar--compact \{[^}]*border-top/.test(css("system.css"))) throw new Error("garis atas paginasi riwayat nomor menggandakan bingkai tabel");
+    // Paginasi riwayat nomor = kaki kartu yang menempel ke dasarnya; pita kosong tidak boleh tersisa
+    if (!/#docNumPagination\.pagination-bar--compact \{[^}]*margin: var\(--sp-4\) calc\(-1 \* var\(--dn-pad-x\)\) calc\(-1 \* var\(--dn-pad-b\)\)[^}]*background: var\(--n-50\)/.test(css("docnum.css")))
+      throw new Error("paginasi riwayat nomor tidak menempel ke dasar kartu");
+    if (!/#docNumPagination:empty \{\s*display: none/.test(css("docnum.css"))) throw new Error("pita paginasi kosong tersisa saat memuat / Summary");
+    // Markup: tombol aksi di dalam pembungkus, kotak Paling lama memakai .stat-callout
+    const src = (f) => require("fs").readFileSync(require("path").join(__dirname, "..", "js", f), "utf8");
+    if (!/<td class="dn-act"><div class="dn-act-tombol">/.test(src("views/docnum-view.js"))) throw new Error("markup sel aksi");
+    if (!/class="stat-callout"/.test(src("views/overview-view.js"))) throw new Error("kotak Paling lama");
+    if (/task task--late" style=/.test(src("views/overview-view.js"))) throw new Error("baris tugas lama masih dipakai di Pantauan Delay");
+  });
+
   console.log("— JADWAL KAPAL / SHIPMENT SCHEDULE —");
   const VS_CONTOH = `[
       { id: "a", customer: "PT A", packages: "1x40HC", vessel: "HMM HARVEST 0015N", stuffing_date: "2026-10-03", etd: "2026-10-05", eta: "2026-10-12", port_from: "JAKARTA", port_to: "BUSAN" },

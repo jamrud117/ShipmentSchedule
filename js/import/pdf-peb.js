@@ -388,7 +388,10 @@ function parsePebPdfText(text, pagesItems) {
       t("w.peti.kemas.kosong"),
     );
   notes.push(
-    "Hasil baca PDF PEB ini best-effort — mohon cek ulang Vessel, Freight/Asuransi, dan berat per barang sebelum simpan.",
+    tt(
+      "Hasil baca PDF PEB ini best-effort — mohon cek ulang Vessel, Freight/Asuransi, dan berat per barang sebelum simpan.",
+      "This PEB PDF was read on a best-effort basis — please double-check the Vessel, Freight/Insurance and per-item weights before saving.",
+    ),
   );
 
   return {

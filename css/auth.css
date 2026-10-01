@@ -383,7 +383,6 @@ body.is-viewer .delay-strip-fields input {
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: var(--sp-4);
   align-items: start;
-  padding-bottom: var(--sp-8);
 }
 @media (max-width: 991px) {
   .acct-grid {
@@ -666,10 +665,16 @@ body.is-viewer .delay-strip-fields input {
 /* Dua kelas: menang atas .pagination-bar umum (dashboard.css), yang
    berjarak atas-bawah tapi TANPA jarak kiri-kanan -- di panel tanpa
    padding, teksnya menempel ke tepi. */
+/* KAKI PANEL, bukan baris tabel: berlatar abu muda dan bergaris lebih
+   tegas. Dulu garisnya setipis pemisah baris dan latarnya sama putih,
+   jadi paginasinya terbaca sebagai satu baris tabel lagi. Sudut
+   bawahnya ikut melengkung karena .panel memotong isinya
+   (overflow: hidden). */
 .pagination-bar.hs-halaman {
   margin: 0;
   padding: 12px var(--sp-5);
-  border-top: 1px solid var(--n-100);
+  background: var(--n-50);
+  border-top: 1px solid var(--border);
 }
 /* PONSEL: bilah atas bertumpuk (judul, lalu cari + muat ulang + Tambah
    sebaris), dan tiap baris tabel jadi kartu ringkas: nama & kode di

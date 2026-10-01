@@ -223,15 +223,13 @@ function renderDelayWatch() {
     </div>
     ${
       terparah
-        ? `<div class="stat-line">
+        ? `<div class="stat-line stat-line--lead">
              <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> ${tt("Paling lama", "Longest")}</span>
              <span class="stat-line-value">${tt(`${terparah.info.days} hari`, `${terparah.info.days} days`)}</span>
            </div>
-           <div class="task task--late" style="border-bottom:0;padding-right:0">
-             <span class="task-main">
-               <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>
-               <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
-             </span>
+           <div class="stat-callout">
+             <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>
+             <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
            </div>`
         : ""
     }`;
