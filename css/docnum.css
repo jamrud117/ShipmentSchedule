@@ -3,9 +3,17 @@
 .page-docnum-body {
   padding: var(--sp-5) 0 var(--sp-10);
 }
+/* JENIS DOKUMEN DI ATAS, BUKAN SIDEBAR -- di semua lebar layar.
+
+   Dulu di layar lebar daftarnya kolom kiri 300px. Isinya hanya empat
+   tombol di puncak halaman, tapi kolomnya (berlatar & bergaris kanan)
+   ikut memanjang sepanjang form, Atur Nomor Urut, dan riwayat -- di
+   bawah halaman yang terlihat cuma lajur kosong di samping tabel.
+   Sebaris di atas: tidak ada lajur kosong, dan tabel riwayat mendapat
+   lebar 300px lebih. */
 .docnum-shell {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   background: #fff;
   overflow: hidden;
@@ -13,13 +21,23 @@
 }
 .docnum-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px;
+  flex-direction: row;
+  gap: 8px;
+  padding: 12px 16px;
   background: #f7fafd;
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.docnum-tabs::-webkit-scrollbar {
+  display: none;
+}
+/* Di layar lebar keempatnya berbagi lebar sama rata, lengkap dengan
+   keterangannya; di bawah 1200px menyusut ke lebar isinya (lihat
+   media query di bawah). */
 .docnum-tab {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: 11px;
@@ -509,25 +527,14 @@ table.fund-lines select {
 
 /* Halaman No. Dokumen di layar sempit.
 
-   Ambangnya 1199px, bukan 768px. Di lebar split-window sidebar 300px
-   masih berdiri dan menyisakan sekitar 600px untuk form — sementara
-   barisnya memakai kolom Bootstrap yang tetap terbagi empat sejak
-   768px. Hasilnya tiap isian tinggal seperempat dari 600px: labelnya
-   masih terbaca, isinya terpotong. */
+   Ambangnya 1199px, bukan 768px: di lebar split-window form ini tinggal
+   sekitar 900px, sementara barisnya memakai kolom Bootstrap yang tetap
+   terbagi empat sejak 768px -- labelnya masih terbaca, isinya
+   terpotong. Tombol jenis dokumen juga menyusut ke lebar isinya
+   (keterangannya disembunyikan) dan barisnya digeser mendatar. */
 @media (max-width: 1199px) {
-  .docnum-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .docnum-tabs {
-    flex-direction: row;
-    overflow-x: auto;
-    scrollbar-width: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
     padding: 10px 12px;
-  }
-  .docnum-tabs::-webkit-scrollbar {
-    display: none;
   }
 
   /* Kolom Bootstrap dilepas: col-md-* terbagi empat sejak 768px tanpa

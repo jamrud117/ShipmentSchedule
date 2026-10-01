@@ -5120,17 +5120,17 @@ t("tombol unduh Excel tersedia di baris invoice", () => {
 });
 
 console.log("— HALAMAN NO. DOKUMEN DI LAYAR SEMPIT —");
-t("sidebar mendatar mulai dari lebar split-window", () => {
-  /* Di 960px sidebar 300px masih berdiri dan menyisakan ~600px untuk
-     form — sementara kolomnya tetap terbagi empat sejak 768px. */
+t("jenis dokumen sebaris di atas di SEMUA lebar -- tidak ada lajur sidebar kosong", () => {
+  /* Dulu kolom kiri 300px di layar lebar: isinya empat tombol di puncak,
+     tapi lajurnya memanjang kosong sampai dasar kartu, di samping tabel
+     riwayat. */
   const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
-  const i = css.indexOf("@media (max-width: 1199px)");
-  if (i < 0) throw new Error("sidebar belum menyusut di lebar split-window");
-  const blok = css.slice(i, css.indexOf("@media", i + 10) < 0 ? css.length : css.indexOf("@media", i + 10));
-  if (!/\.docnum-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(blok))
-    throw new Error("sidebar masih memakan satu kolom tetap");
-  if (!/\.docnum-tabs \{[^}]*flex-direction: row/.test(blok))
-    throw new Error("daftar jenis dokumen tidak jadi mendatar");
+  const dasar = css.slice(0, css.indexOf("@media"));
+  if (!/\.docnum-shell \{[^}]*grid-template-columns: minmax\(0, 1fr\)/.test(dasar))
+    throw new Error("kartu masih dibagi kolom sidebar");
+  if (!/\.docnum-tabs \{[^}]*flex-direction: row/.test(dasar))
+    throw new Error("daftar jenis dokumen tidak sebaris");
+  if (/grid-template-columns: 300px/.test(css)) throw new Error("kolom sidebar 300px masih ada");
 });
 t("kolom form menyesuaikan ruang, bukan terbagi empat", () => {
   const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
