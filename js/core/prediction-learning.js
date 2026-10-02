@@ -23,10 +23,8 @@
      clearance         tanggal PIB -> tanggal SPPB (hari kerja).
      antar ke pabrik   tanggal SPPB -> Tanggal In Factory (hari kerja).
 
-   MEDIAN, BUKAN RATA-RATA. Satu kiriman yang tertahan enam minggu
-   karena sengketa dokumen akan menarik rata-rata jauh dari kenyataan
-   sehari-hari. Median mengabaikannya tanpa perlu aturan pembuang
-   pencilan tersendiri.
+   Riwayat DIGABUNG dengan angka konfigurasi, berbobot menurut jumlah,
+   kebaruan, dan konsistensi kirimannya -- lihat ringkasSampel().
 
    Hasilnya di-cache per tanda-tangan rute. Tanpa cache, menggambar
    seratus kartu berarti menyapu seluruh riwayat seratus kali.
@@ -57,12 +55,13 @@ function denganPenjagaRekursi(fn) {
   }
 }
 
-/* Sumber riwayat. Biasanya seluruh jadwal Import yang sudah dimuat;
-   bisa diganti untuk pengujian. */
+/* Sumber riwayat. Biasanya seluruh jadwal yang sudah dimuat -- Import
+   DAN Export (lama transit rute ekspor ikut belajar; proses darat
+   hanya dari Import); bisa diganti untuk pengujian & uji mundur. */
 function predictionHistory() {
   if (PREDICTION_HISTORY_OVERRIDE) return PREDICTION_HISTORY_OVERRIDE;
   if (typeof data !== "undefined" && data && Array.isArray(data.import)) {
-    return data.import;
+    return Array.isArray(data.export) ? data.import.concat(data.export) : data.import;
   }
   return [];
 }
@@ -72,10 +71,23 @@ function setPredictionHistory(list) {
   resetPredictionLearning();
 }
 
+/* GENERASI DATA. Sampel per kiriman (sampelKiriman) berlaku selama
+   generasinya sama; begitu data berubah, semuanya dihitung ulang. */
+let GENERASI_BELAJAR = 0;
+
 /* Dipanggil tiap kali data berubah. Hasil belajar yang basi lebih
    berbahaya daripada tidak belajar sama sekali: ia terlihat pasti. */
 function resetPredictionLearning() {
+  GENERASI_BELAJAR++;
+  kosongkanRingkasanBelajar();
+}
+
+/* Hanya ringkasan per rute yang dibuang -- sampel per kiriman tetap.
+   Dipakai saat yang berubah cuma PILIHAN riwayatnya (uji mundur),
+   bukan isi kirimannya. */
+function kosongkanRingkasanBelajar() {
   PREDICTION_LEARN_CACHE.clear();
+  ACUAN_BELAJAR.ms = null;
 }
 
 function learningConfig() {
@@ -93,75 +105,152 @@ function medianOf(angka) {
   return urut.length % 2 ? urut[t] : (urut[t - 1] + urut[t]) / 2;
 }
 
-function rataRata(a) {
-  return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+/* ------------------------------------------------------------------
+   TANGGAL ACUAN "SEKARANG"
+
+   Umur sampel (untuk relevansi & bobot kebaruan) dihitung dari tanggal
+   ini. Biasanya hari ini; uji mundur menyetelnya ke ETD kiriman yang
+   sedang diuji, supaya riwayat dibaca seperti saat kiriman itu
+   direncanakan -- bukan dengan pengetahuan dari masa depannya.
+------------------------------------------------------------------ */
+let PREDICTION_LEARN_ASOF = null;
+const ACUAN_BELAJAR = { ms: null };
+
+function setPredictionAsOf(iso) {
+  PREDICTION_LEARN_ASOF = iso || null;
+  kosongkanRingkasanBelajar();
 }
 
-function simpanganBaku(a) {
-  if (a.length < 2) return 0;
-  const m = rataRata(a);
-  return Math.sqrt(rataRata(a.map((x) => (x - m) * (x - m))));
+// Dihitung sekali per ringkasan, bukan per kiriman yang disapu.
+function acuanBelajarMs() {
+  if (ACUAN_BELAJAR.ms == null) {
+    const d = PREDICTION_LEARN_ASOF ? parseLocalDate(PREDICTION_LEARN_ASOF) : null;
+    ACUAN_BELAJAR.ms = d ? d.getTime() : Date.now();
+  }
+  return ACUAN_BELAJAR.ms;
 }
 
-/* Membuang pencilan sebelum dirata-rata.
+const msTanggal = (iso) => {
+  const d = iso ? parseLocalDate(iso) : null;
+  return d ? d.getTime() : null;
+};
 
-   Satu kiriman yang tertahan enam minggu karena sengketa dokumen akan
-   menarik rata-rata jauh dari kenyataan sehari-hari — lalu angka itu
-   dipakai untuk memprediksi kiriman berikutnya yang normal. */
-function buangPencilan(angka, sigma) {
-  if (!sigma || angka.length < 4) return angka;
-  const m = rataRata(angka);
-  const sd = simpanganBaku(angka);
-  if (!sd) return angka;
-  const sisa = angka.filter((x) => Math.abs(x - m) <= sigma * sd);
-  return sisa.length >= Math.max(3, Math.floor(angka.length / 2)) ? sisa : angka;
+/* Rentang "berayun" yang wajar, per tipe pengiriman. Dipakai saat
+   sampelnya terlalu sedikit untuk mengukur sebarannya sendiri. */
+function sebaranTipe(peta, tipe) {
+  if (peta && typeof peta === "object") {
+    if (peta[tipe] != null) return Number(peta[tipe]);
+    if (peta.default != null) return Number(peta.default);
+  }
+  return 1.5;
 }
 
-/* Selalu mengembalikan objek, tidak pernah null.
+function medianBerbobot(sampel) {
+  const urut = sampel.slice().sort((a, b) => a.n - b.n);
+  const total = urut.reduce((x, y) => x + y.w, 0);
+  let jalan = 0;
+  for (let i = 0; i < urut.length; i++) {
+    jalan += urut[i].w;
+    if (jalan >= total / 2) return urut[i].n;
+  }
+  return urut.length ? urut[urut.length - 1].n : null;
+}
 
-   `cukup: false` tetap membawa jumlah sampel yang sudah terkumpul,
-   supaya layar bisa menunjukkan "riwayat 5/8" — pengguna melihat mesin
-   sedang mengumpulkan, bukan menyangka fiturnya rusak. */
-function ringkasSampel(angka) {
+/* PENCILAN DIBUANG DENGAN MEDIAN & MAD, bukan rata-rata & simpangan baku.
+
+   Aturan "lebih dari 2 simpangan baku dari rata-rata" punya titik buta:
+   pencilannya sendiri ikut menggelembungkan rata-rata dan simpangan
+   bakunya, sehingga ia lolos dari saringan yang dibuat untuk
+   menangkapnya. Median dan MAD (simpangan mutlak dari median) tidak
+   terpengaruh satu-dua angka ekstrem. 1,4826 menyetarakan MAD dengan
+   simpangan baku pada sebaran normal, jadi outlierSigma tetap terbaca
+   "sekian simpangan baku". */
+function buangPencilan(sampel, sigma) {
+  if (!sigma || sampel.length < 4) return sampel;
+  const angka = sampel.map((x) => x.n);
+  const med = medianOf(angka);
+  const mad = medianOf(angka.map((x) => Math.abs(x - med))) * 1.4826;
+  // Lantai setengah hari: tanpa ini, riwayat yang hampir seragam
+  // (MAD 0) akan membuang setiap angka yang meleset sehari saja.
+  const batas = sigma * Math.max(mad, 0.5);
+  const sisa = sampel.filter((x) => Math.abs(x.n - med) <= batas);
+  return sisa.length >= Math.max(2, Math.ceil(sampel.length / 2)) ? sisa : sampel;
+}
+
+/* ------------------------------------------------------------------
+   INTI BELAJAR — riwayat DITARIK ke asumsi, bukan menggantikannya.
+
+   Dulu riwayat bersifat semua-atau-tidak: di bawah 8 kiriman diabaikan
+   sepenuhnya, dari kiriman ke-8 menggantikan angka konfigurasi
+   sepenuhnya. Dengan volume DDI (puluhan kiriman tersebar di belasan
+   rute & pelayaran) kebanyakan rute TIDAK PERNAH mencapai 8, sehingga
+   bukti nyata yang sudah ada -- 3, 5, 7 kiriman yang konsisten
+   meleset dari konfigurasi -- tidak pernah dipakai.
+
+   Sekarang keduanya digabung, dengan bobot sesuai seberapa banyak dan
+   seberapa konsisten buktinya:
+
+     hasil = w * rata-rata riwayat + (1 - w) * asumsi
+     w     = n / (n + (sebaran / ketidakpastian asumsi)^2)
+
+   - n kiriman TERKINI berbobot penuh; yang lebih tua menyusut separuh
+     tiap halfLifeDays -- jadwal pelayaran berubah.
+   - Riwayat yang konsisten (sebaran kecil) cepat dipercaya: dua-tiga
+     kiriman sudah menarik angkanya. Riwayat yang berayun liar perlu
+     jauh lebih banyak kiriman sebelum berpengaruh -- pengganti gerbang
+     "terlalu berayun" yang dulu menolaknya mentah-mentah.
+   - Asumsi konfigurasi tidak pernah hilang sama sekali, tapi pada
+     puluhan kiriman konsisten bobotnya tinggal beberapa persen.
+
+   Ini bentuk baku penggabungan dugaan awal dengan pengamatan (model
+   normal-normal). Selalu mengembalikan objek: `cukup: false` membawa
+   jumlah sampel yang sudah terkumpul, supaya layar bisa menunjukkan
+   "riwayat 1/2" -- pengguna melihat mesin sedang mengumpulkan.
+------------------------------------------------------------------ */
+function ringkasSampel(sampel, prior, tipe) {
   const cfg = learningConfig();
-  const butuh = cfg.minSamples || 8;
+  const butuh = cfg.minSamples || 2;
 
-  if (angka.length < butuh) {
-    return { cukup: false, samples: angka.length, need: butuh, reason: t("w.belum.cukup") };
+  if (sampel.length < butuh) {
+    return { cukup: false, samples: sampel.length, need: butuh, reason: t("w.belum.cukup") };
   }
 
-  const bersih =
-    cfg.method === "median" ? angka : buangPencilan(angka, cfg.outlierSigma);
-  const nilai = cfg.method === "median" ? medianOf(bersih) : rataRata(bersih);
+  const bersih = buangPencilan(sampel, cfg.outlierSigma);
+  const totalBobot = bersih.reduce((x, y) => x + y.w, 0) || 1;
+  const rata = bersih.reduce((x, y) => x + y.w * y.n, 0) / totalBobot;
+  const pusat = cfg.method === "median" ? medianBerbobot(bersih) : rata;
+  const sd =
+    bersih.length > 1
+      ? Math.sqrt(bersih.reduce((x, y) => x + y.w * (y.n - rata) * (y.n - rata), 0) / totalBobot)
+      : 0;
 
-  /* GERBANG KETELITIAN. Galat baku rata-rata = simpangan baku / akar n.
-     Di atas ambang, riwayatnya tidak cukup teratur untuk dipercaya. */
-  const sd = simpanganBaku(bersih);
-  const galatBaku = bersih.length ? sd / Math.sqrt(bersih.length) : Infinity;
-  const ambang = cfg.maxStdError == null ? Infinity : cfg.maxStdError;
-  if (galatBaku > ambang) {
-    return {
-      cukup: false,
-      samples: angka.length,
-      need: butuh,
-      stdError: Math.round(galatBaku * 100) / 100,
-      maxStdError: ambang,
-      reason: "terlalu berayun",
-    };
-  }
+  // Sebaran yang dipakai menimbang: diukur sendiri kalau sampelnya
+  // cukup (>= 3), kalau tidak memakai sebaran wajar tipe ini.
+  const sebaran = bersih.length >= 3 ? Math.max(sd, 0.5) : sebaranTipe(cfg.typicalSpreadDays, tipe);
+  const ragu = sebaranTipe(cfg.priorSpreadDays, tipe);
+  const k = prior == null ? 0 : (sebaran * sebaran) / (ragu * ragu);
+  const bobotRiwayat = totalBobot / (totalBobot + k);
+  const nilai = prior == null ? pusat : bobotRiwayat * pusat + (1 - bobotRiwayat) * prior;
+  const nilaiBersih = bersih.map((x) => x.n);
 
   return {
     cukup: true,
     days: Math.max(0, Math.round(nilai)),
-    stdError: Math.round(galatBaku * 100) / 100,
+    exact: Math.round(nilai * 100) / 100,
+    // Seberapa besar riwayat menentukan angkanya (0-1); sisanya asumsi.
+    weight: Math.round(bobotRiwayat * 100) / 100,
+    prior: prior == null ? null : Math.round(prior * 10) / 10,
+    center: Math.round(pusat * 10) / 10,
     // Statistik lengkap, diminta spesifikasi & dipakai tampilan.
-    samples: angka.length,
+    samples: sampel.length,
     used: bersih.length,
-    dropped: angka.length - bersih.length,
-    avg: Math.round(rataRata(bersih) * 10) / 10,
-    min: Math.min.apply(null, bersih),
-    max: Math.max.apply(null, bersih),
+    dropped: sampel.length - bersih.length,
+    effective: Math.round(totalBobot * 10) / 10,
+    avg: Math.round(rata * 10) / 10,
+    min: Math.min.apply(null, nilaiBersih),
+    max: Math.max.apply(null, nilaiBersih),
     stdDev: Math.round(sd * 10) / 10,
+    stdError: Math.round((sd / Math.sqrt(totalBobot)) * 100) / 100,
     method: cfg.method === "median" ? "median" : t("z.rata.rata.pencilan.dibuang"),
   };
 }
@@ -170,87 +259,195 @@ function ringkasSampel(angka) {
 function masihRelevan(s) {
   const cfg = learningConfig();
   const batas = cfg.maxAgeDays || 540;
-  const acuan = s.etd || s.eta;
-  if (!acuan) return false;
-  const d = parseLocalDate(acuan);
-  if (!d) return false;
-  const umur = (Date.now() - d.getTime()) / 86400000;
+  const t = sampelKiriman(s).tAcuan;
+  if (t == null) return false;
+  const umur = (acuanBelajarMs() - t) / 86400000;
   return umur >= 0 && umur <= batas;
+}
+
+/* Bobot kebaruan: kiriman setua halfLifeDays dihitung setengah. */
+function bobotKebaruan(tMs) {
+  const cfg = learningConfig();
+  const paruh = cfg.halfLifeDays || 0;
+  if (!paruh || tMs == null) return 1;
+  const umur = (acuanBelajarMs() - tMs) / 86400000;
+  return Math.pow(0.5, Math.max(0, umur) / paruh);
 }
 
 const selisihKalender = (a, b) => calendarDaysBetweenISO(a, b);
 
 /* ------------------------------------------------------------------
-   LAMA TRANSIT DARI RIWAYAT
+   SAMPEL PER KIRIMAN, DIHITUNG SEKALI.
+
+   Setiap rute yang diprediksi menyapu SELURUH riwayat, dan tiap kiriman
+   di riwayat butuh konteks rute (resolusi pelabuhan & carrier) serta
+   hitungan hari kerja (perulangan per hari dengan kalender libur).
+   Seratus kartu x tiga lapis x ratusan kiriman riwayat = ratusan ribu
+   perhitungan yang hasilnya sama terus.
+
+   Yang bergantung pada KIRIMANNYA saja (bukan pada rute yang sedang
+   diprediksi) dihitung sekali per GENERASI data: resetPredictionLearning()
+   -- dipanggil tiap data dimuat ulang atau sebuah kiriman diubah --
+   membuat semuanya dihitung ulang.
 ------------------------------------------------------------------ */
-function learnedTransitDays(ctx) {
-  return denganPenjagaRekursi(() => hitungTransitDariRiwayat(ctx));
+/* Kunci forwarder: "PT. Freight Express Indonesia" dan "FREIGHT
+   EXPRESS" adalah forwarder yang sama. Bentuk badan usaha & kata yang
+   ditempel di hampir semua nama dibuang, sisanya dibandingkan utuh. */
+function kunciForwarder(nama) {
+  return String(nama || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .split(" ")
+    .filter((k) => k && ["PT", "CV", "TBK", "LTD", "CO", "INDONESIA", "INTERNATIONAL", "INTL"].indexOf(k) < 0)
+    .join(" ");
 }
 
-function hitungTransitDariRiwayat(ctx) {
+const SAMPEL_KIRIMAN = new WeakMap();
+function sampelKiriman(s) {
+  const ada = SAMPEL_KIRIMAN.get(s);
+  if (ada && ada.gen === GENERASI_BELAJAR) return ada;
+
+  const tgl = (k) => milestoneDateOf(s, k);
+  const ctx = predictionContext(s);
+  const etdNyata = s.etdUpdate || s.etd || "";
+  const out = {
+    gen: GENERASI_BELAJAR, ctx, etdNyata, transit: null, clearance: null, delivery: null,
+    fwd: kunciForwarder(s.forwarder),
+    tAcuan: msTanggal(s.etd || s.eta), tEtd: msTanggal(etdNyata), tSppb: null, tPabrik: null,
+  };
+
+  // Transit: ETD berlaku -> kedatangan nyata (lihat hitungTransitDariRiwayat)
+  const tiba =
+    s.ata || tgl("berth") || tgl("manifest") || (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "");
+  if (etdNyata && tiba) {
+    const n = selisihKalender(etdNyata, tiba);
+    if (n != null && n >= 0 && n <= 200) out.transit = n;
+  }
+
+  if (s.mode !== "export") {
+    const tibaNyata = s.ata || tgl("berth") || tgl("manifest");
+    const sppb = tgl("sppb");
+    if (tibaNyata && sppb) {
+      const ops = configuredOpsDays(ctx);
+      const siap = predictionStrippingApplies(ctx) ? advanceLeg(tibaNyata, ops.stripping, "stripping") : tibaNyata;
+      const pib = tgl("pib");
+      const dari = pib && pib > siap ? pib : siap;
+      const n = workingDaysBetweenISO(dari, sppb);
+      if (n != null && n >= 0 && n <= 60) out.clearance = n;
+    }
+    if (sppb && s.factoryDate) {
+      const n = workingDaysBetweenISO(sppb, s.factoryDate);
+      if (n != null && n >= 0 && n <= 60) out.delivery = n;
+    }
+    out.tSppb = msTanggal(sppb);
+    out.tPabrik = msTanggal(s.factoryDate);
+  }
+
+  SAMPEL_KIRIMAN.set(s, out);
+  return out;
+}
+
+/* Transit yang DISENGAJA: berlabel Transit DAN terminal transitnya
+   diisi. Label Direct tidak membuktikan apa-apa -- ia nilai bawaan. */
+function transitSengaja(s) {
+  return (
+    !!s &&
+    s.routeType === "transit" &&
+    (s.routeStops || []).some((x) => String((x && x.terminal) || "").trim())
+  );
+}
+
+/* ------------------------------------------------------------------
+   LAMA TRANSIT DARI RIWAYAT
+
+   `prior` = angka konfigurasi untuk rute ini, SUDAH termasuk
+   penyesuaian carrier/forwarder kalau ada. Riwayat menariknya ke arah
+   kenyataan -- penyesuaian manual itu berangsur tergantikan begitu
+   kiriman forwarder tersebut terkumpul, tanpa dihitung dua kali.
+------------------------------------------------------------------ */
+function learnedTransitDays(ctx, prior) {
+  return denganPenjagaRekursi(() => hitungTransitDariRiwayat(ctx, prior));
+}
+
+function hitungTransitDariRiwayat(ctx, prior) {
   const cfg = learningConfig();
   if (!cfg.enabled) return null;
 
-  const kunci = `transit|${ctx.carrier}|${ctx.fromPort}|${ctx.toPort}|${ctx.fromCountry}|${ctx.toCountry}|${ctx.shipmentType}|${ctx.routeType}`;
+  const dari = ctx.fromMetro || ctx.fromPort;
+  const ke = ctx.toMetro || ctx.toPort;
+  const kunci = `transit|${ctx.carrier}|${dari}|${ke}|${ctx.fromCountry}|${ctx.toCountry}|${ctx.shipmentType}|${ctx.routeType}|${prior}`;
   if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
 
-  /* PRIORITAS: riwayat CARRIER pada rute ini lebih dulu, baru riwayat
-     rute tanpa membedakan pelayaran.
-
-     Selisih antar pelayaran pada rute yang sama bisa beberapa hari —
-     HMM 9 hari, MSC 11 hari untuk Busan → Priok. Mencampurnya jadi
-     satu angka menghasilkan perkiraan yang tidak pernah tepat untuk
-     pelayaran mana pun. */
-  const angka = [];
+  /* Impor DAN ekspor. Rute ekspor (Jakarta -> Busan) dulu tidak pernah
+     belajar karena riwayatnya disaring keluar; kedatangannya tercatat
+     lewat ETA manual dari forwarder, bukti yang sama sahnya. */
+  const sampelRute = [];
   predictionHistory().forEach((s) => {
-    if (!s || s.mode === "export" || !(s.etdUpdate || s.etd)) return;
+    if (!s || !(s.etdUpdate || s.etd)) return;
     if (!masihRelevan(s)) return;
 
-    const c = predictionContext(s);
+    const k = sampelKiriman(s);
+    if (k.transit == null) return;
+    const c = k.ctx;
     if (c.shipmentType !== ctx.shipmentType) return;
-    if (c.routeType !== ctx.routeType) return;
-    // Rute dicocokkan per pelabuhan kalau keduanya diketahui,
-    // kalau tidak turun ke tingkat negara.
-    if (ctx.fromPort && ctx.toPort) {
-      if (c.fromPort !== ctx.fromPort || c.toPort !== ctx.toPort) return;
+    // Rute dicocokkan per pelabuhan INDUK kalau keduanya diketahui
+    // (Shekou & Yantian = Shenzhen), kalau tidak turun ke tingkat negara.
+    if (dari && ke) {
+      if ((c.fromMetro || c.fromPort) !== dari || (c.toMetro || c.toPort) !== ke) return;
     } else {
       if (c.fromCountry !== ctx.fromCountry || c.toCountry !== ctx.toCountry) return;
     }
 
-    /* Tahap SANDAR lebih dulu daripada Manifest: itu tanggal ATA yang
-       sebenarnya, sementara BC 1.1 diajukan sebelum kapal sandar.
-       Belajar dari angka yang meleset sehari akan mengunci kesalahan
-       itu ke dalam seluruh perkiraan rute. */
-    // Tahap 1: hanya carrier yang sama (kalau carrier-nya terdeteksi)
-    if (ctx.carrier && c.carrier !== ctx.carrier) return;
-
-    const tiba =
-      s.ata ||
-      milestoneDateOf(s, "berth") ||
-      milestoneDateOf(s, "manifest") ||
-      (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "");
-    if (!tiba) return;
-
-    /* Diukur dari ETD yang BERLAKU. Kapal yang berangkat lima hari
-       telat lalu berlayar 20 hari akan tercatat "transit 25 hari"
-       kalau diukur dari jadwal rencana — dan angka itu kemudian
-       dipakai untuk memprediksi kapal yang berangkat tepat waktu. */
-    const etdNyata = s.etdUpdate || s.etd;
-    const n = selisihKalender(etdNyata, tiba);
-    if (n == null || n < 0 || n > 200) return;
-    angka.push(n);
+    /* Angkanya (sampelKiriman): ETD BERLAKU -> kedatangan nyata.
+       Kedatangan = ATA, tahap Sandar, lalu Manifest -- Sandar lebih
+       dulu karena BC 1.1 diajukan sebelum kapal sandar. ETA otomatis
+       sengaja TIDAK dipakai: mempelajari keluaran sendiri hanya
+       meneguhkan asumsi awal berulang-ulang. ETD berlaku, bukan
+       rencana: kapal yang berangkat lima hari telat lalu berlayar 20
+       hari akan tercatat "transit 25 hari" kalau diukur dari rencana. */
+    sampelRute.push({ n: k.transit, w: bobotKebaruan(k.tEtd), carrier: c.carrier, transitSengaja: transitSengaja(s) });
   });
 
-  let hasil = ringkasSampel(angka);
-  hasil = { ...hasil, scope: ctx.carrier ? "carrier" : "rute" };
+  /* TIPE RUTE YANG TERCATAT TIDAK DIPERCAYA BUTA.
 
-  /* Tahap 2: kalau riwayat per-carrier belum cukup, ulangi tanpa
-     menyaring carrier. Lebih baik angka rute yang tercampur daripada
-     mundur ke asumsi konfigurasi. */
-  if (!hasil.cukup && ctx.carrier) {
-    const tanpaCarrier = hitungTransitDariRiwayat({ ...ctx, carrier: "" });
-    if (tanpaCarrier && tanpaCarrier.cukup) {
-      hasil = { ...tanpaCarrier, scope: "rute" };
+     "Direct" adalah nilai bawaan form -- di riwayat DDI hampir semua
+     kiriman tercatat Direct karena rute aslinya memang tidak diketahui
+     saat diisi, bukan karena kapalnya benar-benar langsung. Yang PASTI
+     disengaja hanya Transit yang terminal transitnya diisi.
+
+     Lama transit yang dipelajari diukur dari tanggal nyata (ETD ->
+     kedatangan), jadi sudah mencerminkan apakah kirimannya singgah atau
+     tidak -- apa pun label rutenya. Karena itu:
+
+       prediksi Direct  : semua riwayat KECUALI Transit yang disengaja;
+       prediksi Transit : Transit yang disengaja kalau cukup; kalau
+                          belum, seluruh riwayat rute ini (yang tercatat
+                          Direct bisa saja sebenarnya singgah).
+
+     Dulu riwayat dipisah mentah menurut labelnya: begitu sebuah kiriman
+     ditandai Transit -- misalnya oleh Rute Otomatis -- ia tidak lagi
+     belajar dari satu pun kiriman lamanya, semuanya berlabel Direct. */
+  const butuh = learningConfig().minSamples || 2;
+  const sengaja = sampelRute.filter((x) => x.transitSengaja);
+  const terpakai =
+    ctx.routeType === "transit"
+      ? sengaja.length >= butuh
+        ? sengaja
+        : sampelRute
+      : sampelRute.filter((x) => !x.transitSengaja);
+
+  /* DUA TINGKAT. Rute (semua pelayaran) ditarik ke angka konfigurasi;
+     pelayaran yang dicari ditarik ke hasil rute itu. Selisih antar
+     pelayaran pada rute yang sama bisa beberapa hari -- HMM 9 hari, MSC
+     11 hari untuk Busan -> Priok -- tapi dua kiriman HMM saja belum
+     cukup untuk mengabaikan apa yang diketahui tentang rutenya. */
+  const rute = ringkasSampel(terpakai, prior, ctx.shipmentType);
+  let hasil = { ...rute, scope: "rute" };
+  if (rute.cukup && ctx.carrier) {
+    const milikCarrier = terpakai.filter((x) => x.carrier === ctx.carrier);
+    const perCarrier = ringkasSampel(milikCarrier, rute.exact, ctx.shipmentType);
+    if (perCarrier.cukup) {
+      hasil = { ...perCarrier, prior: prior == null ? null : Math.round(prior * 10) / 10, routeDays: rute.exact, scope: "carrier" };
     }
   }
 
@@ -263,6 +460,7 @@ function hitungTransitDariRiwayat(ctx) {
 
    `leg` = "clearance" atau "delivery". Dihitung dalam HARI KERJA, sama
    seperti konfigurasinya, supaya angkanya bisa langsung menggantikan.
+   `prior` = angka konfigurasi leg itu (configuredOpsDays).
 
    Clearance diukur dari BARANG SIAP DIURUS, bukan dari PIB diajukan:
 
@@ -274,59 +472,50 @@ function hitungTransitDariRiwayat(ctx) {
    terbaca sebagai "clearance sembilan hari", lalu angka itu dipakai
    untuk seluruh rute — kesalahan yang membesar sendiri.
 ------------------------------------------------------------------ */
-function learnedOpsDays(ctx, leg) {
-  return denganPenjagaRekursi(() => hitungOpsDariRiwayat(ctx, leg));
+function learnedOpsDays(ctx, leg, prior) {
+  return denganPenjagaRekursi(() => hitungOpsDariRiwayat(ctx, leg, prior));
 }
 
-function hitungOpsDariRiwayat(ctx, leg) {
+function hitungOpsDariRiwayat(ctx, leg, prior) {
   const cfg = learningConfig();
   if (!cfg.enabled) return null;
 
-  const kunci = `ops|${leg}|${ctx.shipmentType}|${ctx.toPort || ctx.toCountry}`;
+  const tujuan = ctx.toMetro || ctx.toPort || ctx.toCountry;
+  const fwd = kunciForwarder(ctx.forwarder);
+  const kunci = `ops|${leg}|${ctx.shipmentType}|${tujuan}|${fwd}|${prior}`;
   if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
 
-  const angka = [];
+  const sampel = [];
   predictionHistory().forEach((s) => {
     if (!s || s.mode === "export") return;
     if (!masihRelevan(s)) return;
 
-    const c = predictionContext(s);
+    const k = sampelKiriman(s);
+    const n = leg === "clearance" ? k.clearance : leg === "delivery" ? k.delivery : null;
+    if (n == null) return;
+    const c = k.ctx;
     if (c.shipmentType !== ctx.shipmentType) return;
-    const tujuan = ctx.toPort || ctx.toCountry;
-    if (tujuan && (c.toPort || c.toCountry) !== tujuan) return;
-
-    let dari = "";
-    let sampai = "";
-    if (leg === "clearance") {
-      const tiba =
-        s.ata || milestoneDateOf(s, "berth") || milestoneDateOf(s, "manifest");
-      const sppb = milestoneDateOf(s, "sppb");
-      if (!tiba || !sppb) return;
-      // configuredOpsDays, BUKAN predictionOpsDays: yang belajar tidak
-      // boleh bertanya pada yang sudah belajar.
-      const ops = configuredOpsDays(c);
-      /* advanceLeg, bukan addWorkingDaysISO: stripping memakai hari
-         kalender. Salah satuan di sini akan mencatat akhir pekan
-         sebagai waktu kepabeanan, lalu angka itu dipakai untuk seluruh
-         rute — kesalahan yang mengajari dirinya sendiri. */
-      const siap = predictionStrippingApplies(c)
-        ? advanceLeg(tiba, ops.stripping, "stripping")
-        : tiba;
-      const pib = milestoneDateOf(s, "pib");
-      dari = pib && pib > siap ? pib : siap;
-      sampai = sppb;
-    } else if (leg === "delivery") {
-      dari = milestoneDateOf(s, "sppb");
-      sampai = s.factoryDate || "";
-    }
-    if (!dari || !sampai) return;
-
-    const n = workingDaysBetweenISO(dari, sampai);
-    if (n == null || n < 0 || n > 60) return;
-    angka.push(n);
+    if (tujuan && (c.toMetro || c.toPort || c.toCountry) !== tujuan) return;
+    sampel.push({ n, w: bobotKebaruan(leg === "clearance" ? k.tSppb : k.tPabrik), fwd: k.fwd });
   });
 
-  const hasil = ringkasSampel(angka);
+  /* DUA TINGKAT, seperti lama transit per pelayaran: rute (semua
+     forwarder) ditarik ke konfigurasi, forwarder yang dipakai ditarik
+     ke hasil rute itu.
+
+     Kecepatan pengurusan berbeda per forwarder: ada yang SPPB-nya
+     keluar sehari setelah sandar, ada yang tiga hari; ada yang truknya
+     siap begitu SPPB terbit, ada yang menunggu jadwal armada. Rata-rata
+     semua forwarder meleset untuk masing-masing. */
+  const rute = ringkasSampel(sampel, prior, "ops");
+  let hasil = { ...rute, scope: "rute" };
+  if (rute.cukup && fwd) {
+    const milikFwd = sampel.filter((x) => x.fwd === fwd);
+    const perFwd = ringkasSampel(milikFwd, rute.exact, "ops");
+    if (perFwd.cukup) {
+      hasil = { ...perFwd, prior: prior == null ? null : Math.round(prior * 10) / 10, routeDays: rute.exact, scope: "forwarder" };
+    }
+  }
   PREDICTION_LEARN_CACHE.set(kunci, hasil);
   return hasil;
 }
@@ -334,6 +523,7 @@ function hitungOpsDariRiwayat(ctx, leg) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     setPredictionHistory,
+    setPredictionAsOf,
     resetPredictionLearning,
     learnedTransitDays,
     learnedOpsDays,

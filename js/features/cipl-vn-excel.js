@@ -353,7 +353,7 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
   // Atas & bawah kepala TIPIS -- begitu di berkas asli (row 30: ttbt).
   vnxlGarisBaris(ws, rk, 1, 11, "tb");
 
-  vnxlSet(ws, "C" + (rk + 1), "#Description Info : SIZE, PTN, MOLD NO, PO", VNXL_FONT_B);
+  vnxlSet(ws, "C" + (rk + 1), "#Description Info : PTN, SIZE, MOLD NO", VNXL_FONT_B);
 
   /* Barang mulai DUA baris di bawah kepala: satu baris keterangan,
      satu baris kosong -- sama seperti berkas aslinya. */
@@ -375,8 +375,9 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
     ws.getRow(r).height = 11;
     ws.mergeCells(`A${r}:B${r}`);
     vnxlSet(ws, "A" + r, b.marks, VNXL_FONT, VNXL_TENGAH);
-    /* Uraian dipecah dua sel: SIZE+PATTERN di C, MOLD NO di D --
-       pembeli menyaring kolom D untuk mencocokkan cetakannya. */
+    /* Uraian dipecah dua sel: nama (Description + Pattern + Size) di C,
+       MOLD NO di D -- pembeli menyaring kolom D untuk mencocokkan
+       cetakannya. */
     /* PERATAAN & UKURAN HURUF DIBACA DARI BERKAS ASLI, sel demi sel.
 
        Semuanya sempat rata tengah. Di berkas asli uraian & nomor
@@ -384,7 +385,9 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
        9pt sementara di PL 10pt. Rata tengah membuat kolom uraian
        bergerigi: "225/50R17  PS72" dan "205/55R16  HS52" tidak lagi
        berawal di garis yang sama. */
-    vnxlSet(ws, "C" + r, [b.size, b.pattern].filter(Boolean).join("  "),
+    /* Nama barang = Description + Pattern + Size (+ Mold No di D) --
+       urutan yang sama dengan lembar cetaknya (ciplVnUraian). */
+    vnxlSet(ws, "C" + r, b.namaTanpaMold,
       isPacking ? VNXL_FONT : VNXL_FONT_KECIL, VNXL_KIRI);
     vnxlSet(ws, "D" + r, b.moldNo || "", VNXL_FONT, VNXL_KIRI);
     vnxlSet(ws, "F" + r, b.qty, VNXL_FONT, VNXL_KANAN);
@@ -483,9 +486,9 @@ function vnxlPenutup(ws, row, shipment, info, isPacking) {
   if (isPacking) {
     // Total berat ikut dua desimal, sama dengan berat per barangnya.
     vnxlSet(ws, "H" + rt, info.total.netto, VNXL_FONT_B, VNXL_KANAN, VNXL_FMT_BERAT);
-    vnxlSet(ws, "I" + rt, "KGS", VNXL_FONT_B, VNXL_TENGAH);
+    vnxlSet(ws, "I" + rt, "KG", VNXL_FONT_B, VNXL_TENGAH);
     vnxlSet(ws, "J" + rt, info.total.bruto, VNXL_FONT_B, VNXL_KANAN, VNXL_FMT_BERAT);
-    vnxlSet(ws, "K" + rt, "KGS", VNXL_FONT_B, VNXL_TENGAH);
+    vnxlSet(ws, "K" + rt, "KG", VNXL_FONT_B, VNXL_TENGAH);
   } else {
     vnxlSet(ws, "J" + rt, "USD", VNXL_FONT, VNXL_TENGAH);
     vnxlSet(ws, "K" + rt, info.total.nilai, VNXL_FONT, VNXL_KANAN, "#,##0.00_ ");

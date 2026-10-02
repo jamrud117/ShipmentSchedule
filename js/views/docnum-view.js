@@ -132,7 +132,7 @@ function docNumHistoryKey() {
 const DOCNUM_HISTORY_FILTERS = {
   fund: {
     field: "expenseType",
-    options: ["Billing", "Freight", "Storage", "Lainnya"],
+    options: ["Billing", "Freight", "Storage", "Tax Advance", "Lainnya"],
   },
 };
 
@@ -185,12 +185,33 @@ const DN_KOLOM_CARI = [
   "payload->>recipient", "payload->>subject", "payload->>notes",
   "payload->>invoiceNo", "payload->>billingNo", "payload->>poNo",
   "payload->>blAwb",
+  "payload->>termsDelivery", "payload->>termPayment",
+  "payload->>finalDestination", "payload->>carrier",
+  "payload->>transactionType",
 ];
 /* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
    arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
    terbalik -- dan wildcard (%, *) dibuang: kata kunci "PT (Persero)"
    tidak boleh memecah filternya jadi potongan yang tidak valid.
    Nilainya dikutip ganda supaya titik & spasi aman. */
+/* Jenis Transaksi di tabel riwayat: ikon moda + istilahnya. Pengajuan
+   lama yang belum punya isian ini tampil "—". */
+function dnTeksTransaksi(v) {
+  const teks = String(v || "").trim();
+  if (!teks) return "\u2014";
+  const ikon = /^Sea/.test(teks) ? "bi-water" : /^Air/.test(teks) ? "bi-airplane" : "bi-shop";
+  return `<span class="dn-transaksi"><i class="bi ${ikon}"></i> ${escapeHtml(teks)}</span>`;
+}
+
+/* Carrier untuk tabel riwayat invoice: isian Carrier di data cetak
+   CIPL; kalau kosong, kapal/pesawat + voyage dari Jadwal Terkait --
+   sumber yang sama yang dipakai cetakannya. */
+function dnCarrierInvoice(p) {
+  if (p.carrier) return p.carrier;
+  const jadwal = p.shipmentId && typeof ciplCariShipment === "function" ? ciplCariShipment(p.shipmentId) : null;
+  return jadwal ? [jadwal.vessel, jadwal.voyage].filter(Boolean).join(" ") : "";
+}
+
 function dnFilterCari(q) {
   const bersih = String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
   if (!bersih) return null;
@@ -1648,7 +1669,7 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
+          <tr>${jenis.key === "invoice" ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
@@ -1656,6 +1677,15 @@ async function renderDocNumHistory() {
               ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th><th class="dn-col-billing">BL/AWB</th>`
               : ""
           }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
+            /* Invoice: syarat & tujuan pengiriman yang dicetak di CIPL,
+               supaya tiap invoice bisa dikenali tanpa membuka Detail. */
+            jenis.key === "invoice"
+              ? `<th class="dn-col-inv">Terms of Delivery</th><th class="dn-col-inv">Final Destination</th>` +
+                `<th class="dn-col-inv">Terms of Payment</th><th class="dn-col-inv">Carrier</th>`
+              : ""
+          }${
+            jenis.key === "fund" ? `<th class="dn-col-transaksi">${tt("Transaksi", "Transaction")}</th>` : ""
+          }${
             jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
           }${
             jenis.key === "invoice" ? `<th class="dn-col-nilai">Amount</th>` : ""
@@ -1667,7 +1697,7 @@ async function renderDocNumHistory() {
         </thead>
         <tbody>
           ${data
-            .map((r) => {
+            .map((r, idx) => {
               const p = r.payload || {};
               /* PENGAJUAN DANA: kolom ini berjudul "Dibayarkan Kepada",
                  jadi isinya VENDOR (payee) -- bukan Customer.
@@ -1693,6 +1723,7 @@ async function renderDocNumHistory() {
                  dilihat lewat tombol Detail — daftarnya cukup menyebut
                  satu hal yang membedakan tiap baris. */
               return `<tr>
+                ${jenis.key === "invoice" ? `<td class="dn-col-no">${(docNumPage - 1) * docNumPageSize + idx + 1}</td>` : ""}
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
@@ -1709,6 +1740,14 @@ async function renderDocNumHistory() {
                     : ""
                 }
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
+                ${
+                  jenis.key === "invoice"
+                    ? [p.termsDelivery, p.finalDestination, p.termPayment, dnCarrierInvoice(p)]
+                        .map((v) => `<td class="dn-col-inv">${escapeHtml(v || "\u2014")}</td>`)
+                        .join("")
+                    : ""
+                }
+                ${jenis.key === "fund" ? `<td class="dn-col-transaksi">${dnTeksTransaksi(p.transactionType)}</td>` : ""}
                 ${
                   /* Nilai = jumlah akhir pengajuan, angka yang sama dengan
                      "Terbilang" di surat cetaknya (frTotalPengajuan). */
@@ -2051,6 +2090,7 @@ const DN_KOLOM_UTAMA = {
 };
 
 const DN_LABEL_FIELD = {
+  get transactionType() { return tt("Jenis Transaksi", "Transaction Type"); },
   get packages() { return tt("Jumlah Koli", "Number of Packages"); },
   get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get address() { return tt("Alamat Tujuan", "Destination Address"); },
@@ -2131,6 +2171,7 @@ const DN_URUTAN_FIELD = [
   "invoiceDueDate",
   "blAwb",
   "expenseType",
+  "transactionType",
   "letterType",
   "signer",
   "recipient",

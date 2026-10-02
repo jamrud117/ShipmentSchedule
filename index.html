@@ -35,6 +35,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <!-- supabase-js & server datanya: tanpa ini, DNS + TLS ke keduanya
+         baru dimulai setelah seluruh skrip aplikasi selesai dibaca. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://nigxxpzgunibuotluapv.supabase.co" crossorigin />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css"
@@ -488,6 +492,13 @@
                 </h2>
               </div>
               <div class="panel-body" id="ovDocs"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-en="<i class=&quot;bi bi-bullseye&quot;></i> Prediction accuracy"><i class="bi bi-bullseye"></i> Akurasi prediksi</h2>
+              </div>
+              <div class="panel-body" id="ovAccuracy"></div>
             </section>
 
             <section class="panel">
@@ -1822,7 +1833,7 @@
                     <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                   <label class="form-label"
                      data-en="Expense Type <span class=&quot;req&quot;>*</span>">Jenis Pengeluaran <span class="req">*</span></label
                   >
@@ -1835,9 +1846,26 @@
                     <option value="Billing">Billing</option>
                     <option value="Freight">Freight</option>
                     <option value="Storage">Storage</option>
+                    <option value="Tax Advance">Tax Advance</option>
                     <option value="Lainnya" data-i18n="f.lainnya">
                       Lainnya
                     </option>
+                  </select>
+                </div>
+                <!-- JENIS TRANSAKSI: kegiatan yang dibiayai pengajuan ini.
+                     Bukan "Jenis Pengiriman" -- Local Sale bukan kiriman
+                     laut/udara. Nilainya istilah baku perdagangan, sama di
+                     kedua bahasa (seperti Billing/Freight). Tidak wajib:
+                     pengajuan lama tidak punya isian ini. -->
+                <div class="col-md-2">
+                  <label class="form-label" data-en="Transaction Type">Jenis Transaksi</label>
+                  <select class="form-select" data-dn="transactionType">
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option value="Sea Import">Sea Import</option>
+                    <option value="Sea Export">Sea Export</option>
+                    <option value="Air Import">Air Import</option>
+                    <option value="Air Export">Air Export</option>
+                    <option value="Local Sale">Local Sale</option>
                   </select>
                 </div>
                 <div class="col-md-2">
@@ -2646,6 +2674,7 @@
                   data-i18n-ph="ph.kode.atau.nama.pelabuhan.tujuan"
                 />
               </div>
+              <div class="col-12 form-text-note route-auto-hint d-none" id="routeAutoHint"></div>
               <div class="col-12 d-none" id="routeStopsWrap">
                 <div class="route-stops-box">
                   <div
@@ -3709,6 +3738,8 @@
     <script src="js/core/prediction-schedule.js"></script>
     <script src="js/core/prediction-learning.js"></script>
     <script src="js/core/prediction.js"></script>
+    <script src="js/core/prediction-backtest.js"></script>
+    <script src="js/core/route-inference.js"></script>
 
     <!-- ========================================= -->
     <!-- DATA -->
@@ -3743,6 +3774,7 @@
     <script src="js/features/notes-log.js"></script>
     <script src="js/features/doc-steps.js"></script>
     <script src="js/features/route-stops.js"></script>
+    <script src="js/features/route-auto.js"></script>
     <script src="js/features/bulk-excel.js"></script>
     <script src="js/features/bulk-template.js"></script>
 

@@ -1818,12 +1818,34 @@ t("baris DIMENSION dikelompokkan menurut ukuran yang sama", () => {
   if (!h.includes("DIMENSION : 90 * 102 * 68 (cm) * 4 BX"))
     throw new Error("kelompok dimensi kedua salah");
 });
-t("uraian barang = SIZE + PATTERN + MOLD NO, tanpa jenis barangnya", () => {
-  /* Jenisnya sudah disebut sekali di baris #Description Info. */
-  eq(w.ciplVnUraian({ size: "225/50R17", pattern: "PS72", moldNo: "S08" }),
-     "225/50R17  PS72  S08");
-  eq(w.ciplVnUraian({ size: "225/50R17", pattern: "", moldNo: "S08" }),
-     "225/50R17  S08", "kolom kosong dilewati:");
+t("nama barang Kumho = Description + Pattern + Size + Mold No", () => {
+  eq(w.ciplVnUraian({ namaBarang: "TIRE MOLD", size: "225/50R17", pattern: "PS72", moldNo: "S08" }),
+     "TIRE MOLD  PS72  225/50R17  S08");
+  eq(w.ciplVnUraian({ namaBarang: "TIRE MOLD", size: "225/50R17", pattern: "", moldNo: "S08" }),
+     "TIRE MOLD  225/50R17  S08", "kolom kosong dilewati:");
+  // Yang sudah tertulis di Description tidak diulang
+  eq(w.ciplVnUraian({ namaBarang: "TIRE MOLD 225/50R17", size: "225/50R17", pattern: "PS72", moldNo: "S08" }),
+     "TIRE MOLD 225/50R17  PS72  S08", "tidak berulang:");
+  // Lembar Excel: Mold No di kolomnya sendiri (D), sisanya di C dengan urutan yang sama
+  const b = w.ciplVnBaris({ items: [{ namaBarang: "TIRE MOLD", size: "225/50R17", pattern: "PS72", moldNo: "S08", qty: 1 }] })[0];
+  eq(b.namaTanpaMold, "TIRE MOLD  PS72  225/50R17", "kolom C Excel:");
+  eq(b.moldNo, "S08", "kolom D Excel:");
+});
+t("CIPL: satuan berat KG (bukan KGS) & judul uraian PTN, SIZE, MOLD NO", () => {
+  const kirim = { id: "e1", mode: "export", items: [
+    { namaBarang: "TIRE MOLD", size: "225/50R17", pattern: "PS72", moldNo: "S08", qty: 1, satuan: "SET", harga: 9000, netto: 275, bruto: 295 } ] };
+  const row = { doc_number: "DDI - CRBM - IX - 051", doc_date: "2026-09-24", payload: { packing: "WOODEN PACKING" } };
+  const pl = w.ciplVnHalamanPacking(row, kirim);
+  if (/\bKGS\b/.test(pl)) throw new Error("Packing List Kumho masih menulis KGS");
+  if (!/>KG</.test(pl)) throw new Error("satuan KG tidak tampil di baris TOTAL");
+  if (!pl.includes("#Description Info : PTN, SIZE, MOLD NO")) throw new Error("judul uraian belum diganti");
+  const src = (f) => require("fs").readFileSync(require("path").join(__dirname, "..", "js", "features", f), "utf8");
+  if (/"KGS"/.test(src("cipl-vn-excel.js")) || /"KGS"/.test(src("cipl-print.js"))) throw new Error("KGS masih ada di CIPL standar / Excel Kumho");
+});
+t("Packing List Kumho: DIMENSION di dasar bidang barang, tepat di atas TOTAL", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "features", "cipl-vn-print.js"), "utf8");
+  const i = src.indexOf("${barisHtml}"), k = src.indexOf("${kosongHtml}", i), d = src.indexOf("${dimensi}", i);
+  if (!(i > 0 && k > i && d > k)) throw new Error("baris DIMENSION masih menempel di bawah barang terakhir");
 });
 t("BK NO. & P/O NO. tidak muncul di lembar Kumho", () => {
   /* Keduanya dihapus atas permintaan: BK NO. beserta isiannya, P/O NO.
@@ -2158,7 +2180,7 @@ t("Pengajuan Dana bertab per Jenis Pengeluaran, dengan tab Semua", () => {
     w.renderDocNumSubTabs();
     const tombol = [...box.querySelectorAll("[data-dn-subtab]")];
     eq(tombol.map((b) => b.dataset.dnSubtab).join(","),
-       ",Billing,Freight,Storage,Lainnya,__ringkasan__",
+       ",Billing,Freight,Storage,Tax Advance,Lainnya,__ringkasan__",
        "urutan tab (yang pertama = Semua, Summary paling akhir):");
     eq(tombol[0].classList.contains("active"), true, "Semua jadi bawaan:");
   } finally {
@@ -2278,7 +2300,7 @@ t("riwayat Pengajuan Dana: kolom BL/AWB & kepala Drafter / Vendor / Payment Stat
     w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumCari = ""; docNumSaringBayar = ""');
     await w.renderDocNumHistory();
     const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim()).filter(Boolean);
-    eq(kepala.join(" | "), "Number | Date | Drafter | Billing/Invoice Number | BL/AWB | Vendor | Value | Notes | Payment Status", "kepala:");
+    eq(kepala.join(" | "), "Number | Date | Drafter | Billing/Invoice Number | BL/AWB | Vendor | Transaction | Value | Notes | Payment Status", "kepala:");
     const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
     eq(sel[4], "876822543558", "BL/AWB:");
     // Jenis dokumen lain tetap "Requester".
@@ -3002,10 +3024,13 @@ t("riwayat Invoice Number: kolom No. Invoice paling depan & Amount = Total di in
     w.eval('docNumActiveTab = "invoice"; docNumHistorySub = null; docNumCari = ""');
     await w.renderDocNumHistory();
     const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim());
-    eq(kepala[0], "No. Invoice", "kolom paling depan:");
+    // Nomor urut paling depan, lalu No. Invoice
+    eq(kepala[0], "No", "kolom paling depan:");
+    eq(kepala[1], "No. Invoice", "kolom kedua:");
     if (!kepala.includes("Amount")) throw new Error("kolom Amount tidak ada");
     const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
-    eq(sel[0], "DDI - CRBM - IX - 059", "nomor invoice di depan:");
+    eq(sel[0], "1", "nomor urut:");
+    eq(sel[1], "DDI - CRBM - IX - 059", "nomor invoice sesudah nomor urut:");
     if (!sel.includes("USD 22,318.97")) throw new Error("Amount tidak tampil: " + sel.join(" | "));
   } finally {
     w.supabaseClient_from_asli = asli;
@@ -3831,10 +3856,9 @@ console.log("— SARAN MASKAPAI & PELAYARAN DI KOTAK NAMA KAPAL —");
     isiCarrier();
     const dl = w.document.getElementById("carrierListUdara");
     ["SQ", "TR", "TW", "KE", "FX"].forEach((k) => {
-      const o = [...dl.querySelectorAll("option")].find((x) => x.value === k);
+      const o = [...dl.querySelectorAll("option")].find((x) => new RegExp(": " + k + "$").test(x.textContent));
       if (!o) throw new Error("kode " + k + " tidak ditawarkan");
-      if (!/ — .+/.test(o.textContent))
-        throw new Error("kode " + k + " tidak menyebut nama maskapainya");
+      if (!o.value || o.value === k) throw new Error("kode " + k + " tidak mengisikan nama maskapainya");
     });
   });
 
@@ -3843,23 +3867,25 @@ console.log("— SARAN MASKAPAI & PELAYARAN DI KOTAK NAMA KAPAL —");
        Kapal-nya memang diisi nama perusahaan. */
     isiCarrier();
     ["Laut", "Udara"].forEach((m) => {
-      const kode = [...w.document.getElementById("carrierList" + m)
-        .querySelectorAll("option")].map((o) => o.value);
+      const ket = [...w.document.getElementById("carrierList" + m)
+        .querySelectorAll("option")].map((o) => o.textContent);
       ["DHL", "FEDEX", "UPS"].forEach((k) => {
-        if (!kode.includes(k)) throw new Error(k + " tidak ada di daftar " + m);
+        if (!ket.some((x) => x.endsWith(": " + k))) throw new Error(k + " tidak ada di daftar " + m);
       });
     });
   });
 
-  t("nilai yang dimasukkan KODE-nya, bukan nama panjangnya", () => {
-    /* detectCarrier() membaca kode, dan kode itu pula yang sudah
-       tertulis di ribuan jadwal lama. */
+  t("nilai yang dimasukkan NAMA-nya, kodenya jadi keterangan", () => {
+    /* Kode maskapai diketik di No. Flight (SQ833) -- kotak nama diisi
+       nama maskapainya. detectCarrier() mengenali nama lengkap itu, dan
+       kode di jadwal lama tetap terbaca seperti biasa. */
     isiCarrier();
     const o = [...w.document.getElementById("carrierListUdara")
-      .querySelectorAll("option")].find((x) => x.value === "SQ");
-    eq(o.value, "SQ");
-    if (o.value === o.textContent)
-      throw new Error("label tidak menyebut nama maskapainya");
+      .querySelectorAll("option")].find((x) => /: SQ$/.test(x.textContent));
+    eq(o.value, "Singapore Airlines");
+    eq(w.detectCarrier({ transport: "udara", vessel: o.value }).code, "SQ");
+    // Jadwal lama: kode di No. Flight tetap terbaca
+    eq(w.detectCarrier({ transport: "udara", vessel: "", voyage: "SQ833" }).code, "SQ", "jadwal lama:");
   });
 }
 
@@ -6883,38 +6909,75 @@ function riwayatVariasi(n, hariList) {
 const CTX_FCL = w.predictionContext({ transport: "laut", muatan: "FCL",
   origin: "CNSHA", destination: "IDTPP", routeType: "direct" });
 
-t("di bawah 8 sampel: tidak dipakai, TAPI progresnya dilaporkan", () => {
-  w.setPredictionHistory(riwayatVariasi(5, [11, 12, 11, 13, 12]));
-  const r = w.learnedTransitDays(CTX_FCL);
+t("satu sampel: belum dipakai, TAPI progresnya dilaporkan", () => {
+  w.setPredictionHistory(riwayatVariasi(1, [13]));
+  const r = w.learnedTransitDays(CTX_FCL, 10);
   eq(r.cukup, false);
-  eq(r.samples, 5);
-  eq(r.need, 8);
+  eq(r.samples, 1);
+  eq(r.need, 2);
   eq(r.reason, "belum cukup");
   eq(w.predictionTransitDays(CTX_FCL).days, 10);   // tetap angka konfigurasi
   w.setPredictionHistory(null);
 });
 t("8 sampel yang konsisten: dipakai", () => {
   w.setPredictionHistory(riwayatVariasi(8, [11, 12, 11, 13, 12, 11, 12, 12]));
-  const r = w.learnedTransitDays(CTX_FCL);
+  const r = w.learnedTransitDays(CTX_FCL, 10);
   eq(r.cukup, true);
   eq(r.days, 12);
-  if (r.stdError > 1.5) throw new Error("galat baku seharusnya kecil");
+  if (r.weight < 0.8) throw new Error("riwayat konsisten seharusnya berbobot besar, dapat " + r.weight);
   eq(w.predictionTransitDays(CTX_FCL).days, 12);
   w.setPredictionHistory(null);
 });
-t("cukup sampel tapi terlalu berayun: DITOLAK", () => {
-  /* Delapan kiriman 4/9/14/20/6/25/11/30 hari punya rata-rata yang
-     terdengar pasti padahal tidak berdasar apa-apa. */
+t("beberapa kiriman konsisten sudah menarik angka (dulu diabaikan sampai 8)", () => {
+  /* Tiga kiriman 14 hari semua, konfigurasi bilang 10. Dulu tidak
+     dipakai sama sekali; sekarang angkanya bergeser ke arah 14. */
+  w.setPredictionHistory(riwayatVariasi(3, [14, 14, 14]));
+  const d = w.predictionTransitDays(CTX_FCL).days;
+  if (!(d >= 13 && d <= 14)) throw new Error("seharusnya tertarik ke 14, dapat " + d);
+  w.setPredictionHistory(null);
+});
+t("riwayat berayun liar: bobotnya kecil, angka tetap dekat konfigurasi", () => {
+  /* Dulu ditolak mentah-mentah ("terlalu berayun"). Sekarang dipakai,
+     tapi sebarannya yang besar membuat bobotnya kecil -- bandingkan
+     dengan riwayat konsisten berjumlah sama. */
   w.setPredictionHistory(riwayatVariasi(16, [4, 9, 14, 20, 6, 25, 11, 30]));
-  const r = w.learnedTransitDays(CTX_FCL);
-  eq(r.cukup, false);
-  eq(r.reason, "terlalu berayun");
-  if (!(r.stdError > 1.5)) throw new Error("galat baku seharusnya besar");
-  eq(w.predictionTransitDays(CTX_FCL).days, 10);   // mundur ke konfigurasi
+  const liar = w.learnedTransitDays(CTX_FCL, 10);
+  eq(liar.cukup, true);
+  if (!(liar.weight < 0.5)) throw new Error("bobot riwayat berayun seharusnya kecil, dapat " + liar.weight);
+  const d = w.predictionTransitDays(CTX_FCL).days;
+  if (!(d >= 10 && d <= 13)) throw new Error("seharusnya tetap dekat konfigurasi 10, dapat " + d);
+  w.setPredictionHistory(riwayatVariasi(16, [15]));
+  const rapi = w.learnedTransitDays(CTX_FCL, 10);
+  if (!(rapi.weight > 0.9)) throw new Error("riwayat konsisten seharusnya berbobot besar, dapat " + rapi.weight);
+  eq(w.predictionTransitDays(CTX_FCL).days, 15);
+  w.setPredictionHistory(null);
+});
+t("pencilan dibuang dengan median, bukan rata-rata", () => {
+  // Sembilan kiriman 11 hari + satu yang tertahan 40 hari
+  w.setPredictionHistory(riwayatVariasi(10, [11, 11, 11, 11, 11, 11, 11, 11, 11, 40]));
+  const r = w.learnedTransitDays(CTX_FCL, 10);
+  eq(r.dropped, 1);
+  eq(r.days, 11);
+  w.setPredictionHistory(null);
+});
+t("kiriman terbaru berbobot lebih besar", () => {
+  /* Delapan kiriman lama (dua tahun lebih dari setahun lalu) 20 hari,
+     delapan kiriman baru 12 hari: jadwalnya sudah berubah. */
+  const lama = riwayatVariasi(8, [20]).map((s) => {
+    const etd = w.addCalendarDaysISO(w.todayISO(), -420);
+    return { ...s, etd, docProgress: { manifest: { date: w.addCalendarDaysISO(etd, 20) } } };
+  });
+  const baru = riwayatVariasi(8, [12]).map((s) => {
+    const etd = w.addCalendarDaysISO(w.todayISO(), -30);
+    return { ...s, etd, docProgress: { manifest: { date: w.addCalendarDaysISO(etd, 12) } } };
+  });
+  w.setPredictionHistory(lama.concat(baru));
+  const d = w.predictionTransitDays(CTX_FCL).days;
+  if (!(d <= 14)) throw new Error("seharusnya mengikuti kiriman terbaru (12), dapat " + d);
   w.setPredictionHistory(null);
 });
 t("progres tampil di panel prediksi", () => {
-  w.setPredictionHistory(riwayatVariasi(5, [11, 12, 11, 13, 12]));
+  w.setPredictionHistory(riwayatVariasi(1, [12]));
   w.resetPredictionLearning();
   tulis("activeMode", "import");
   w.initPredictionForm(null);
@@ -6923,21 +6986,359 @@ t("progres tampil di panel prediksi", () => {
   $("#fRouteType").value = "direct"; $("#fVessel").value = ""; $("#fForwarder").value = "";
   $("#fEtd").value = "2026-08-03";
   $("#fEtd").dispatchEvent(new w.Event("change"));
-  if (!$("#predictionPanel").innerHTML.includes("5/8 kiriman"))
+  if (!$("#predictionPanel").innerHTML.includes("1/2 kiriman"))
     throw new Error("progres tidak ditampilkan");
   w.setPredictionHistory(null);
 });
-t("riwayat per-pelayaran kurang -> turun ke riwayat rute", () => {
+t("bobot riwayat tampil di panel prediksi", () => {
+  w.setPredictionHistory(riwayatVariasi(8, [11, 12, 11, 13, 12, 11, 12, 12]));
+  w.resetPredictionLearning();
+  w.initPredictionForm(null);
+  $("#fTransport").value = "laut"; $("#fMuatan").value = "FCL";
+  $("#fOrigin").value = "CNSHA"; $("#fDestination").value = "IDTPP";
+  $("#fRouteType").value = "direct"; $("#fVessel").value = ""; $("#fForwarder").value = "";
+  $("#fEtd").value = "2026-08-03";
+  $("#fEtd").dispatchEvent(new w.Event("change"));
+  if (!/bobot \d+%/.test($("#predictionPanel").innerHTML)) throw new Error("bobot riwayat tidak ditampilkan");
+  w.setPredictionHistory(null);
+});
+t("riwayat per-pelayaran baru satu -> pakai riwayat rute", () => {
   const campur = riwayatVariasi(10, [11, 12, 11, 13, 12, 11, 12, 12, 11, 12]);
-  campur.slice(0, 3).forEach((s) => (s.vessel = "HMM MIRACLE 0009S"));
+  campur[0].vessel = "HMM MIRACLE 0009S";
   w.setPredictionHistory(campur);
   const ctxHmm = w.predictionContext({ transport: "laut", muatan: "FCL",
     origin: "CNSHA", destination: "IDTPP", routeType: "direct", vessel: "HMM MIRACLE 0009S" });
   eq(ctxHmm.carrier, "HMM");
-  const r = w.learnedTransitDays(ctxHmm);
+  const r = w.learnedTransitDays(ctxHmm, 10);
   eq(r.cukup, true);
-  eq(r.scope, "rute");        // 3 sampel HMM kurang -> pakai 10 sampel rute
+  eq(r.scope, "rute");
   w.setPredictionHistory(null);
+});
+t("riwayat per-pelayaran ditarik dari hasil rute, bukan menggantikannya", () => {
+  /* Tujuh kiriman rute ~12 hari; tiga kiriman HMM 16 hari. Hasil HMM
+     condong ke 16, tapi asal-usulnya (rute) tetap ikut menimbang. */
+  const campur = riwayatVariasi(7, [12]).concat(riwayatVariasi(3, [16]).map((s) => ({ ...s, vessel: "HMM MIRACLE 0009S" })));
+  w.setPredictionHistory(campur);
+  const ctxHmm = w.predictionContext({ transport: "laut", muatan: "FCL",
+    origin: "CNSHA", destination: "IDTPP", routeType: "direct", vessel: "HMM MIRACLE 0009S" });
+  const r = w.learnedTransitDays(ctxHmm, 10);
+  eq(r.scope, "carrier");
+  if (!(r.days >= 14 && r.days <= 16)) throw new Error("seharusnya condong ke 16, dapat " + r.days);
+  w.setPredictionHistory(null);
+});
+t("rute ekspor ikut belajar dari ETA manual forwarder", () => {
+  const riwayat = [];
+  for (let i = 0; i < 6; i++) {
+    const etd = w.addCalendarDaysISO("2026-06-01", i * 7);
+    riwayat.push({ mode: "export", transport: "laut", muatan: "FCL", origin: "Jakarta", destination: "Busan",
+      routeType: "direct", etd, etaMode: "manual", eta: w.addCalendarDaysISO(etd, 18), docProgress: {} });
+  }
+  w.setPredictionHistory(riwayat);
+  const e = w.predictEta({ mode: "export", transport: "laut", muatan: "FCL", origin: "Jakarta", destination: "Busan",
+    routeType: "direct", etd: "2026-09-01" });
+  if (!(e.days >= 17 && e.days <= 18)) throw new Error("seharusnya belajar ~18 hari dari riwayat ekspor, dapat " + e.days);
+  w.setPredictionHistory(null);
+});
+t("uji mundur: tanpa mengintip masa depan, dan keadaan dipulihkan", () => {
+  const riwayat = [];
+  for (let i = 0; i < 12; i++) {
+    const etd = w.addCalendarDaysISO("2026-03-02", i * 10);
+    const tiba = w.addCalendarDaysISO(etd, 14);
+    riwayat.push({ mode: "import", transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP",
+      routeType: "direct", etd, docProgress: { berth: { date: tiba }, sppb: { date: w.addWorkingDaysISO(tiba, 2) } },
+      factoryDate: w.addWorkingDaysISO(tiba, 3) });
+  }
+  const todaySebelum = w.todayISO();
+  const h = w.predictionBacktest(riwayat);
+  eq(h.eta.laut.n, 12, "semua kiriman diuji:");
+  // Yang pertama belum punya riwayat (konfigurasi 10 vs kenyataan 14);
+  // makin ke belakang makin tepat -- rata-rata melesetnya di bawah konfigurasi murni.
+  if (!(h.eta.laut.mae < 4)) throw new Error("rata-rata meleset terlalu besar: " + h.eta.laut.mae);
+  eq(h.delivery.laut.n, 12, "delivery diuji:");
+  eq(w.todayISO(), todaySebelum, "todayISO dipulihkan:");
+  eq(w.eval("PREDICTION_HISTORY_OVERRIDE"), null, "riwayat dipulihkan:");
+  eq(w.eval("PREDICTION_LEARN_ASOF"), null, "tanggal acuan dipulihkan:");
+});
+t("panel Akurasi prediksi menampilkan hasil uji mundur", () => {
+  const box = w.document.getElementById("ovAccuracy");
+  w.gambarAkurasi(box, { eta: { laut: { n: 40, mae: 1.6, tepat1: 68 }, udara: { n: 0 } },
+    delivery: { laut: { n: 30, mae: 2.1, tepat1: 52 }, udara: { n: 5, mae: 0.8, tepat1: 80 } } });
+  const teks = box.textContent.replace(/\s+/g, " ");
+  if (!/68%/.test(teks) || !/40/.test(teks)) throw new Error("angka ETA laut tidak tampil: " + teks);
+  if (!/belum ada kiriman selesai|no completed shipments yet/.test(teks)) throw new Error("baris kosong tidak dijelaskan");
+});
+
+console.log("— PELABUHAN TAMBAHAN & RUTE OTOMATIS —");
+t("pelabuhan & bandara baru terbaca, terminal kembali ke pelabuhan induknya", () => {
+  eq(w.resolvePortCode("Shekou"), "SHK");
+  eq(w.resolvePortMetro("Shekou"), "SZX");
+  eq(w.resolvePortMetro("CNYTN"), "SZX");
+  eq(w.resolvePortMetro("Cat Lai"), "SGN");
+  eq(w.resolvePortMetro("Busan"), "PUS");            // pelabuhan biasa: dirinya sendiri
+  eq(w.resolvePortCode("Kertajati"), "KJT");
+  eq(w.resolvePortCountry("Kertajati"), "ID");
+  eq(w.resolvePortCode("Knevichi"), "VVO");
+  eq(w.resolvePortCode("Pyeongtaek"), "PTK");
+  eq(w.resolvePortCode("Changi"), "SIN");
+  eq(w.resolvePortEntry("KRKAN").name, "Gwangyang");
+});
+t("aturan rute pelabuhan induk berlaku untuk terminalnya", () => {
+  // Aturan "SZX" (Yantian/Shenzhen) ikut berlaku untuk Shekou & Yantian
+  ["Yantian", "Shekou", "CNSHK"].forEach((asal) => {
+    const e = w.predictEta({ etd: "2026-08-03", origin: asal, destination: "IDTPP", routeType: "direct", transport: "laut", muatan: "FCL" });
+    eq(e.transit.ruleId, "cn-sea-szx-xmn-tpp", asal + ":");
+  });
+});
+t("udara: maskapai negara ketiga -> transit lewat hub-nya", () => {
+  w.setPredictionHistory([]);
+  const r = w.inferRoute({ transport: "udara", vessel: "SINGAPORE AIRLINES", voyage: "SQ 833", origin: "CNPVG", destination: "IDCGK" });
+  eq(r.routeType, "transit");
+  eq(JSON.stringify(r.via), JSON.stringify(["SGSIN"]));
+  eq(r.source, "maskapai");
+  w.setPredictionHistory(null);
+});
+t("udara: maskapai negara asal dari bandara bukan hub -> transit lewat hub", () => {
+  w.setPredictionHistory([]);
+  const r = w.inferRoute({ transport: "udara", vessel: "KOREAN AIR", voyage: "KE 2861", origin: "Gimhae", destination: "IDCGK" });
+  eq(r.routeType, "transit");
+  eq(JSON.stringify(r.via), JSON.stringify(["KRICN"]));
+  // Dari hub-nya sendiri: tidak ada bukti -> kolom tidak disentuh
+  eq(w.inferRoute({ transport: "udara", vessel: "KOREAN AIR", voyage: "KE 627", origin: "KRICN", destination: "IDCGK" }), null);
+  w.setPredictionHistory(null);
+});
+t("laut: Rusia <-> Indonesia -> transit", () => {
+  w.setPredictionHistory([]);
+  eq(w.inferRoute({ transport: "laut", vessel: "FESCO DALNEGORSK", origin: "Vladivostok", destination: "IDTPP" }).routeType, "transit");
+  eq(w.inferRoute({ transport: "laut", vessel: "MSC ANNA", origin: "CNSHA", destination: "IDTPP" }), null);
+  w.setPredictionHistory(null);
+});
+t("riwayat kapal yang sama menang, termasuk tempat transitnya", () => {
+  const h = (rt, stop, vessel) => ({ id: "r" + Math.random(), mode: "import", transport: "laut", muatan: "FCL",
+    origin: "Ningbo", destination: "IDTPP", vessel, routeType: rt, routeStops: stop ? [{ terminal: stop }] : [], etd: "2026-06-01" });
+  w.setPredictionHistory([h("transit", "SGSIN", "HMM HARVEST 0012N"), h("transit", "SGSIN", "HMM HARVEST 0014N"), h("direct", "", "MSC ANNA")]);
+  const r = w.inferRoute({ transport: "laut", vessel: "HMM HARVEST 0016N", origin: "Ningbo", destination: "Jakarta" });
+  eq(r.routeType, "transit");
+  eq(JSON.stringify(r.via), JSON.stringify(["SGSIN"]));
+  eq(r.source, "sarana");
+  // Direct di riwayat BUKAN bukti -- itu nilai bawaan form
+  eq(w.inferRoute({ transport: "laut", vessel: "MSC ANNA 088S", origin: "Ningbo", destination: "IDTPP" }), null);
+  // Kiriman yang sedang diubah tidak dihitung sebagai bukti untuk dirinya sendiri
+  const satu = h("transit", "SGSIN", "ONE APUS");
+  w.setPredictionHistory([satu]);
+  eq(w.inferRoute({ transport: "laut", vessel: "ONE APUS", origin: "Ningbo", destination: "IDTPP" }, { kecualiId: satu.id }), null);
+  w.setPredictionHistory(null);
+});
+t("form: memilih pesawat langsung mengisi Tipe Rute & terminal transit; pilihan tangan menang", () => {
+  w.setPredictionHistory([]);
+  tulis("activeMode", "import");
+  w.initPredictionForm(null);
+  w.eval("draftStops = []");
+  const isi = (id, v) => { $("#" + id).value = v; $("#" + id).dispatchEvent(new w.Event("change", { bubbles: true })); };
+  $("#fRouteType").value = "direct";
+  isi("fTransport", "udara");
+  isi("fOrigin", "Gimhae");
+  isi("fDestination", "IDCGK");
+  isi("fVessel", "KOREAN AIR");
+  isi("fVoyage", "KE 2861");
+  eq($("#fRouteType").value, "transit", "tipe rute:");
+  eq(w.eval("draftStops.length"), 1, "terminal transit:");
+  eq(w.eval("draftStops[0].terminal"), "KRICN", "hub:");
+  if (!/Rute otomatis|Automatic route/.test($("#routeAutoHint").textContent)) throw new Error("petunjuk tidak tampil");
+  // Diubah tangan -> berhenti mengubah
+  isi("fRouteType", "direct");
+  isi("fVoyage", "KE 2863");
+  eq($("#fRouteType").value, "direct", "pilihan tangan tetap:");
+  if (!/manual/i.test($("#routeAutoHint").textContent)) throw new Error("petunjuk manual tidak tampil");
+  w.setPredictionHistory(null);
+  w.eval("draftStops = []");
+});
+t("riwayat yang semuanya tercatat Direct tidak membatalkan pola hub maskapai", () => {
+  /* Keadaan nyata DDI: transit tidak pernah diisi, semua kiriman
+     tercatat Direct. Riwayat itu tidak boleh "membuktikan" bahwa Korean
+     Air dari Busan terbang langsung ke Jakarta. */
+  const riwayat = [];
+  for (let i = 0; i < 6; i++) {
+    riwayat.push({ id: "ke" + i, mode: "import", transport: "udara", vessel: "KOREAN AIR", voyage: "KE 2861",
+      origin: "Gimhae", destination: "IDCGK", routeType: "direct", routeStops: [], etd: w.addCalendarDaysISO("2026-06-01", i * 9) });
+  }
+  w.setPredictionHistory(riwayat);
+  const r = w.inferRoute({ transport: "udara", vessel: "KOREAN AIR", voyage: "KE 2861", origin: "Gimhae", destination: "IDCGK" });
+  eq(r.routeType, "transit");
+  eq(r.source, "maskapai");
+  w.setPredictionHistory(null);
+});
+t("prediksi Transit tetap belajar dari kiriman lama berlabel Direct", () => {
+  /* Kiriman lama rute ini semuanya berlabel Direct (bawaan), padahal
+     lamanya nyata 16 hari. Kiriman baru yang ditandai Transit tidak
+     boleh kehilangan seluruh riwayat itu dan mundur ke angka
+     konfigurasi. */
+  const riwayat = riwayatVariasi(8, [16]).map((x) => ({ ...x, routeType: "direct" }));
+  w.setPredictionHistory(riwayat);
+  const ctxTransit = w.predictionContext({ transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP", routeType: "transit" });
+  const d = w.predictionTransitDays(ctxTransit).days;
+  if (!(d >= 15 && d <= 16)) throw new Error("seharusnya belajar ~16 hari dari riwayat, dapat " + d);
+  w.setPredictionHistory(null);
+});
+t("transit yang disengaja tidak mencemari prediksi Direct", () => {
+  const langsung = riwayatVariasi(8, [10]);
+  const singgah = riwayatVariasi(8, [20]).map((x) => ({ ...x, routeType: "transit", routeStops: [{ terminal: "KRPUS" }] }));
+  w.setPredictionHistory(langsung.concat(singgah));
+  eq(w.predictionTransitDays(CTX_FCL).days, 10, "direct:");
+  const ctxTransit = w.predictionContext({ transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP", routeType: "transit" });
+  eq(w.predictionTransitDays(ctxTransit).days, 20, "transit memakai yang disengaja:");
+  w.setPredictionHistory(null);
+});
+t("form: bukti transit hilang -> yang diisi otomatis dikembalikan ke Direct", () => {
+  w.setPredictionHistory([]);
+  tulis("activeMode", "import");
+  w.initPredictionForm(null);
+  w.eval("draftStops = []");
+  const isi = (id, v) => { $("#" + id).value = v; $("#" + id).dispatchEvent(new w.Event("change", { bubbles: true })); };
+  $("#fRouteType").value = "direct";
+  isi("fTransport", "udara"); isi("fDestination", "IDCGK"); isi("fVessel", "KOREAN AIR"); isi("fVoyage", "KE 2861");
+  isi("fOrigin", "Gimhae");
+  eq($("#fRouteType").value, "transit", "dari Busan:");
+  isi("fOrigin", "KRICN");                  // dari hub-nya sendiri: tidak ada bukti transit
+  eq($("#fRouteType").value, "direct", "kembali Direct:");
+  eq(w.eval("draftStops.length"), 0, "terminal otomatis dibuang:");
+  w.setPredictionHistory(null);
+  w.eval("draftStops = []");
+});
+t("saran kapal/pesawat menawarkan nama dari riwayat sendiri", () => {
+  const simpan = baca("data");
+  try {
+    tulis("data", { import: [{ id: "q1", transport: "laut", vessel: "HAIAN OPUS", origin: "VNHPH", destination: "IDTPP", routeType: "direct", etd: "2026-09-01" }], export: [] });
+    const html = w.carrierDatalistHtml("laut");
+    if (!html.includes('value="HAIAN OPUS"')) throw new Error("nama kapal dari riwayat tidak ditawarkan");
+    if (!/HPH→TPP · 1x/.test(html)) throw new Error("rute riwayat tidak dijelaskan");
+    if (/Direct/.test(html.split("HAIAN OPUS")[1] || "")) throw new Error("label Direct bawaan ikut ditulis sebagai keterangan");
+    if (w.carrierDatalistHtml("udara").includes("HAIAN OPUS")) throw new Error("kapal ikut ditawarkan di kotak pesawat");
+  } finally {
+    tulis("data", simpan);
+  }
+});
+
+console.log("— FORWARDER, SARAN NAMA, KOLOM INVOICE —");
+t("Estimasi Delivery belajar kecepatan per forwarder", () => {
+  /* Dua forwarder di rute yang sama: A mengeluarkan SPPB 1 hari kerja
+     setelah barang siap, B 4 hari. Rata-rata keduanya (2-3 hari) salah
+     untuk masing-masing. */
+  const cepat = riwayatLengkap(8, 1, 1).map((s) => ({ ...s, forwarder: "PT. Freight Express Indonesia" }));
+  const lambat = riwayatLengkap(8, 4, 3).map((s) => ({ ...s, forwarder: "Lambat Logistik" }));
+  w.setPredictionHistory(cepat.concat(lambat));
+  const ctx = (fwd) => w.predictionContext({ transport: "laut", muatan: "LCL", origin: "CNSHA", destination: "IDTPP", forwarder: fwd });
+  const a = w.predictionOpsDays(ctx("FREIGHT EXPRESS"));   // nama ditulis berbeda, forwarder sama
+  const b = w.predictionOpsDays(ctx("LAMBAT LOGISTIK"));
+  eq(a.clearance, 1, "clearance forwarder cepat:");
+  eq(a.delivery, 1, "antar forwarder cepat:");
+  eq(b.clearance, 4, "clearance forwarder lambat:");
+  eq(b.delivery, 3, "antar forwarder lambat:");
+  eq(a.learned.find((x) => x.leg === "clearance").scope, "forwarder");
+  // Forwarder baru tanpa riwayat: pakai angka seluruh rute
+  const c = w.predictionOpsDays(ctx("FORWARDER BARU"));
+  eq(c.learned.find((x) => x.leg === "clearance").scope, "rute");
+  if (!(c.clearance >= 2 && c.clearance <= 3)) throw new Error("forwarder baru seharusnya memakai rata-rata rute, dapat " + c.clearance);
+  w.setPredictionHistory(null);
+});
+t("rincian Estimasi Delivery menyebut angka dari riwayat forwarder", () => {
+  w.setPredictionHistory(riwayatLengkap(8, 2, 2).map((s) => ({ ...s, forwarder: "FREIGHT EXPRESS" })));
+  const d = w.predictDelivery({ mode: "import", transport: "laut", muatan: "LCL", origin: "CNSHA", destination: "IDTPP",
+    forwarder: "PT Freight Express", etd: "2026-08-01", eta: "2026-08-12", etaMode: "manual", docProgress: {} });
+  const html = w.predStepsHtml(d);
+  if (!/riwayat forwarder ini|this forwarder's history/.test(html)) throw new Error("sumber angka tidak disebut: " + html.slice(0, 300));
+  w.setPredictionHistory(null);
+});
+t("saran kotak Nama Pesawat/Kapal mengisi NAMA, kodenya jadi keterangan", () => {
+  const udara = w.carrierDatalistHtml("udara");
+  if (!/<option value="Asiana Airlines">(Kode flight|Flight code): OZ<\/option>/.test(udara)) throw new Error("Asiana tidak terisi sebagai nama");
+  if (/<option value="OZ">/.test(udara)) throw new Error("kode masih terisi sebagai nilai");
+  const laut = w.carrierDatalistHtml("laut");
+  if (!/<option value="Mediterranean Shipping Company">(Kode|Code): MSC<\/option>/.test(laut)) throw new Error("MSC tidak terisi sebagai nama");
+  if (/SERIES/.test(laut)) throw new Error("entri semu ikut ditawarkan");
+  // Nama lengkap yang terisi tetap dikenali sebagai carrier-nya
+  eq(w.detectCarrier({ transport: "udara", vessel: "Asiana Airlines" }).code, "OZ");
+  eq(w.detectCarrier({ transport: "udara", vessel: "Vietnam Airlines", voyage: "VN 631" }).code, "VN");
+  eq(w.detectCarrier({ transport: "laut", vessel: "Ocean Network Express" }).code, "ONE");
+  eq(w.detectCarrier({ transport: "laut", vessel: "HMM HARVEST" }).code, "HMM");
+});
+t("riwayat Invoice: kolom No, Terms of Delivery, Final Destination, Terms of Payment, Carrier", async () => {
+  const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, page: baca("docNumPage") };
+  try {
+    w.eval('docNumActiveTab = "invoice"; docNumPage = 1;');
+    w.jejakDocNum = [{ id: "inv1", doc_type: "invoice", doc_number: "DDI - CRBM - X - 061", doc_date: "2026-09-29",
+      requester: "Yogi Firgiawan", department: "EXIM", created_at: "2026-09-29T03:00:00Z",
+      payload: { customer: "DYNAMIC DESIGN CO., LTD.", termsDelivery: "FOB JAKARTA", finalDestination: "BUSAN, KOREA",
+        termPayment: "T/T 60 DAYS", carrier: "HMM BLESSING 022W", currency: "USD", amount: "46900" } }];
+    await w.renderDocNumHistory();
+    const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim()).filter(Boolean);
+    ["No", "Terms of Delivery", "Final Destination", "Terms of Payment", "Carrier"].forEach((k) => {
+      if (!kepala.includes(k)) throw new Error("kolom " + k + " tidak ada: " + kepala.join(" | "));
+    });
+    const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
+    eq(sel[0], "1", "nomor urut:");
+    ["FOB JAKARTA", "BUSAN, KOREA", "T/T 60 DAYS", "HMM BLESSING 022W"].forEach((v) => {
+      if (!sel.includes(v)) throw new Error("isi " + v + " tidak tampil: " + sel.join(" | "));
+    });
+  } finally {
+    w.jejakDocNum = simpan.rows;
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab) + "; docNumPage = " + simpan.page + ";");
+  }
+});
+
+console.log("— PENGAJUAN DANA: JENIS TRANSAKSI & TAX ADVANCE —");
+t("form Pengajuan Dana punya dropdown Jenis Transaksi; tersimpan & terbaca ulang", () => {
+  const panel = w.document.querySelector('[data-docnum-panel="fund"]');
+  const sel = panel.querySelector('select[data-dn="transactionType"]');
+  if (!sel) throw new Error("dropdown Jenis Transaksi tidak ada");
+  eq([...sel.options].map((o) => o.value).filter(Boolean).join(","), "Sea Import,Sea Export,Air Import,Air Export,Local Sale");
+  /* Uji peran viewer/marketing sebelumnya mengunci isian form (lockInputs)
+     dan halaman tidak dimuat ulang di antara uji -- buka sebentar. */
+  const terkunci = sel.disabled;
+  sel.disabled = false;
+  sel.value = "Air Export";
+  eq(w.readDocNumForm("fund").transactionType, "Air Export", "ikut tersimpan di payload:");
+  sel.value = "";
+  sel.disabled = terkunci;
+  // Label ikut bahasa
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    eq(sel.closest("div").querySelector(".form-label").textContent.trim(), "Transaction Type");
+    w.setLang("id");
+    eq(sel.closest("div").querySelector(".form-label").textContent.trim(), "Jenis Transaksi");
+  } finally { w.setLang(simpan); }
+});
+t("riwayat Pengajuan Dana: kolom Transaksi; pengajuan lama tampil —", async () => {
+  const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, sub: baca("docNumHistorySub") };
+  try {
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = ""; docNumPage = 1;');
+    w.jejakDocNum = [
+      { id: "t1", doc_type: "fund", doc_number: "311/EXIM/DDI/X/2026", doc_date: "2026-10-01", requester: "Yogi Firgiawan", department: "EXIM",
+        created_at: "2026-10-01T03:00:00Z", payload: { expenseType: "Tax Advance", transactionType: "Sea Import", payee: "KAS NEGARA", currency: "IDR" } },
+      { id: "t2", doc_type: "fund", doc_number: "300/EXIM/DDI/IX/2026", doc_date: "2026-09-21", requester: "Yogi Firgiawan", department: "EXIM",
+        created_at: "2026-09-21T03:00:00Z", payload: { expenseType: "Freight", payee: "FEDEX", currency: "IDR" } },
+    ];
+    await w.renderDocNumHistory();
+    const sel = (i) => [...w.document.querySelectorAll(`#docNumHistory tbody tr:nth-child(${i}) td.dn-col-transaksi`)].map((td) => td.textContent.trim())[0];
+    eq(sel(1), "Sea Import", "baris berisi:");
+    eq(sel(2), "\u2014", "pengajuan lama:");
+    const tab = [...w.document.querySelectorAll(".docnum-subtab")].map((b) => b.textContent.trim());
+    if (!tab.includes("Tax Advance")) throw new Error("tab Tax Advance tidak ada: " + tab.join(" | "));
+  } finally {
+    w.jejakDocNum = simpan.rows;
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab) + "; docNumHistorySub = " + JSON.stringify(simpan.sub) + ";");
+  }
+});
+t("Summary: saring & kelompokkan per Jenis Transaksi", () => {
+  const kolom = [
+    { transactionType: "Sea Import", payee: "A", amount: 100 }, { transactionType: "Sea Import", payee: "B" },
+    { transactionType: "Air Export", payee: "C" }, { payee: "D" },
+  ].map((p, i) => w.fsumKolom({ id: "k" + i, doc_number: "N" + i, doc_date: "2026-09-0" + (i + 1), payload: p }));
+  eq(w.fsumSaring(kolom, { transaksi: "Sea Import" }).length, 2, "saring:");
+  const def = w.eval("FSUM_KELOMPOK.transaksi");
+  const kunci = [...new Set(kolom.map(def.kunci))].sort();
+  eq(JSON.stringify(kunci), JSON.stringify(["", "Air Export", "Sea Import"]), "kelompok:");
+  eq(def.tampil(kolom[3]), "\u2014", "tanpa isian:");
 });
 
 console.log("— PENYIMPANAN KE DATABASE —");
@@ -7720,9 +8121,10 @@ t("kolom Nomor Billing & Keterangan HANYA muncul di daftar jenis fund", () => {
   /* Dua kolom ini khusus pengajuan dana -- jenis lain tidak punya
      billingNo, jadi kolomnya cuma jadi ruang kosong di sana. */
   // Jangkar = kepala kolom Nomor (kini berlabel dua bahasa lewat tt()).
-  const kepala = src.indexOf('<tr><th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th>');
+  const kepala = src.indexOf('<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th>');
   if (kepala < 0) throw new Error("kepala tabel riwayat tidak ditemukan");
-  const potongan = src.slice(kepala, kepala + 1400);
+  // Jendela lebih lebar sejak kepala tabel invoice punya kolom CIPL
+  const potongan = src.slice(kepala, kepala + 2400);
   if (!/jenis\.key === "fund"[\s\S]{0,120}dn-col-billing/.test(potongan))
     throw new Error("kolom Nomor Billing tidak dibatasi ke jenis fund");
   if (!/jenis\.key === "fund"[\s\S]{0,120}dn-col-ket/.test(potongan))
@@ -8281,10 +8683,10 @@ t("mereset form mengembalikan nilai BAWAAN, bukan mengosongkannya", () => {
     eq(el.value, el.defaultValue, "data-dn=" + el.dataset.dn + ":");
   });
 });
-t("pilihan Jenis Pengeluaran: Billing, Freight, Storage, Lainnya", () => {
+t("pilihan Jenis Pengeluaran: Billing, Freight, Storage, Tax Advance, Lainnya", () => {
   const sel = w.document.querySelector('[data-docnum-panel="fund"] [data-dn="expenseType"]');
   const nilai = [...sel.options].map((o) => o.value).filter(Boolean);
-  eq(nilai.join(","), "Billing,Freight,Storage,Lainnya");
+  eq(nilai.join(","), "Billing,Freight,Storage,Tax Advance,Lainnya");
 });
 t("Billing menampilkan Nomor Billing; pilihan lain menampilkan Nomor Invoice", () => {
   const panel = w.document.querySelector('[data-docnum-panel="fund"]');

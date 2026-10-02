@@ -729,6 +729,18 @@ table.fund-lines select {
 .docnum-table {
   min-width: 720px;
 }
+/* Nomor urut riwayat invoice: sesempit isinya. Kolom isian CIPL di
+   sebelahnya TIDAK dipotong -- tabelnya digeser, bukan diremas. */
+.dn-transaksi {
+  white-space: nowrap;
+}
+.dn-transaksi .bi {
+  color: var(--n-500);
+}
+.docnum-table .dn-col-no {
+  width: 1%;
+  color: var(--n-500);
+}
 /* Di dalam bingkai: garis atas kepala & garis bawah baris terakhir
    sudah diwakili bingkainya -- dua garis berimpit terbaca tebal. */
 .docnum-history-wrap .docnum-table thead th {
@@ -1164,9 +1176,13 @@ button.dn-bayar--lunas:hover {
   margin: 0;
   min-width: 110px;
 }
-/* Seluruh tabel rekap rata tengah, sama dengan tabel rincian. */
+/* Seluruh tabel rekap & tabel Total per ... rata tengah, sama dengan
+   tabel rincian -- termasuk kaki TOTAL-nya. Dua kelas, supaya setara
+   dengan .fsum-tabel .fsum-angka yang rata kanan. */
 .fsum-tabel.fsum-rekap-tabel th,
-.fsum-tabel.fsum-rekap-tabel td {
+.fsum-tabel.fsum-rekap-tabel td,
+.fsum-tabel.fsum-pivot th,
+.fsum-tabel.fsum-pivot td {
   text-align: center;
   vertical-align: middle;
 }

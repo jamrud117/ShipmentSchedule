@@ -109,8 +109,8 @@ function transitSourceHtml(e) {
       `<span class="pred-src-tag pred-src-tag--learned" title="${escapeHtml(
         t("z.ringkasan.belajar", { avg: tr.learned.avg, min: tr.learned.min, maks: tr.learned.max, sd: tr.learned.stdDev, buang: tr.learned.dropped, metode: tr.learned.method }),
       )}"><i class="bi bi-mortarboard-fill"></i> ${tt(
-        `Riwayat ${tr.learned.samples} pengiriman${tr.learned.scope === "carrier" ? " (pelayaran ini)" : ""} · ${tr.learned.min}–${tr.learned.max} hari`,
-        `History of ${tr.learned.samples} shipments${tr.learned.scope === "carrier" ? " (this carrier)" : ""} · ${tr.learned.min}–${tr.learned.max} days`,
+        `Riwayat ${tr.learned.samples} pengiriman${tr.learned.scope === "carrier" ? " (pelayaran ini)" : ""} · ${tr.learned.min}–${tr.learned.max} hari · bobot ${Math.round((tr.learned.weight != null ? tr.learned.weight : 1) * 100)}%`,
+        `History of ${tr.learned.samples} shipments${tr.learned.scope === "carrier" ? " (this carrier)" : ""} · ${tr.learned.min}–${tr.learned.max} days · weight ${Math.round((tr.learned.weight != null ? tr.learned.weight : 1) * 100)}%`,
       )}</span>`,
     );
   }
@@ -119,12 +119,8 @@ function transitSourceHtml(e) {
      padahal ia sedang mengumpulkan. */
   if (tr.learningProgress) {
     const lp = tr.learningProgress;
-    const teks =
-      lp.reason === "terlalu berayun"
-        ? tt(`Riwayat ${lp.samples} kiriman terlalu berayun (galat ±${lp.stdError} hari) — asumsi konfigurasi dipakai`,
-             `History of ${lp.samples} shipments varies too much (error ±${lp.stdError} days) — configured assumptions are used`)
-        : tt(`Riwayat ${lp.samples}/${lp.need} kiriman — belum cukup untuk dipakai`,
-             `History ${lp.samples}/${lp.need} shipments — not enough to use yet`);
+    const teks = tt(`Riwayat ${lp.samples}/${lp.need} kiriman — belum cukup untuk dipakai`,
+      `History ${lp.samples}/${lp.need} shipments — not enough to use yet`);
     bagian.push(
       `<span class="pred-src-tag pred-src-tag--unknown"><i class="bi bi-hourglass-split"></i> ${escapeHtml(teks)}</span>`,
     );
@@ -170,8 +166,19 @@ function predStepsHtml(d) {
       st.days == null
         ? ""
         : ` <em>${st.days} ${escapeHtml(satuanHariTunggal(st.days, st.unit || tt("hari kerja", "working days")))}</em>`;
+    /* Clearance & antar ke pabrik yang angkanya dari riwayat: dari
+       riwayat FORWARDER kiriman ini, atau dari seluruh forwarder di
+       rute yang sama. */
+    const asal = ((d.ops && d.ops.learned) || []).find((x) => x.leg === st.key);
+    const sumber = asal
+      ? ` <span class="pred-step-src">${escapeHtml(
+          asal.scope === "forwarder"
+            ? tt(`riwayat forwarder ini · ${asal.samples} kiriman`, `this forwarder's history · ${asal.samples} shipments`)
+            : tt(`riwayat rute · ${asal.samples} kiriman`, `route history · ${asal.samples} shipments`),
+        )}</span>`
+      : "";
     baris.push(
-      `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}</span>
+      `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}${sumber}</span>
        <span class="pred-step-date">${fmtDate(st.to)}</span></li>`,
     );
   });

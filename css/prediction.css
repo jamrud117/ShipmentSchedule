@@ -325,6 +325,11 @@
   font-size: var(--t-sm);
   border-bottom: 1px dashed var(--n-100);
 }
+.pred-step-src {
+  margin-left: 6px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
 .pred-steps li:last-child {
   border-bottom: 0;
   font-weight: 700;

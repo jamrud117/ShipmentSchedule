@@ -195,6 +195,9 @@ const CARRIER_MASTER = {
        Samudera dinamai "SINAR <tempat>", jadi alias itu ikut. */
     { code: "MERATUS", name: "Meratus Line", aliases: ["MERATUS"] },
     { code: "TANTO", name: "Tanto Intim Line", aliases: ["TANTO"] },
+    /* Tambahan 2026-10 */
+    { code: "PANOCEAN", name: "Pan Ocean", aliases: ["PAN OCEAN", "PANOCEAN"] },
+    { code: "NBOSCO", name: "Ningbo Ocean Shipping (NBOSCO)", aliases: ["NBOSCO", "NINGBO OCEAN"] },
     { code: "SAMUDERA", name: "Samudera Shipping Line",
       aliases: ["SAMUDERA"], prefix: ["SINAR"] },
   ],
@@ -353,10 +356,73 @@ const CARRIER_MASTER = {
        tapi dokumen lama masih menulis Tri-MG.
     ---------------------------------------------------------------- */
     { code: "2Y", name: "My Indo Airlines", aliases: ["MY INDO", "MYINDO"] },
+    /* Tambahan 2026-10 */
+    { code: "QG", name: "Citilink" },
+    { code: "YP", name: "Air Premia" },
+    { code: "KJ", name: "Air Incheon", aliases: ["AIR INCHEON"] },
+    { code: "OQ", name: "Chongqing Airlines" },
+    { code: "HZ", name: "Aurora Airlines" },
+    { code: "R3", name: "Yakutia Airlines" },
+    { code: "Y7", name: "NordStar Airlines" },
     { code: "GM", name: "Asia Cargo Airlines (d/h Tri-MG)",
       aliases: ["ASIA CARGO", "TRI MG", "TRIMG", "TRILINES"] },
   ],
 };
+
+/* ------------------------------------------------------------------
+   JARINGAN MASKAPAI — negara asal & bandara hub
+
+   Dipakai menebak rute (route-inference.js). Polanya stabil walau
+   jadwal penerbangannya berganti tiap musim:
+
+     - maskapai NEGARA KETIGA (Singapore Airlines untuk Shanghai ->
+       Jakarta) hampir selalu membawa kargo lewat hub-nya: transit;
+     - maskapai negara asal/tujuan yang berangkat dari bandara BUKAN
+       hub-nya (Korean Air dari Busan) singgah dulu di hub (Incheon).
+
+   Hanya maskapai yang hub-nya jelas. Integrator (FedEx, DHL, UPS)
+   sengaja tidak didaftarkan -- jaringannya tidak mengikuti pola ini.
+   Kode hub = kode IATA, sama dengan bentuk pendek di unlocode.js.
+------------------------------------------------------------------ */
+const AIRLINE_NETWORK = {
+  // Korea
+  KE: { country: "KR", hubs: ["ICN"] }, OZ: { country: "KR", hubs: ["ICN"] },
+  KJ: { country: "KR", hubs: ["ICN"] }, YP: { country: "KR", hubs: ["ICN"] },
+  BX: { country: "KR", hubs: ["PUS"] },
+  // Cina daratan
+  CZ: { country: "CN", hubs: ["CAN"] }, MU: { country: "CN", hubs: ["PVG"] },
+  CA: { country: "CN", hubs: ["PEK"] }, MF: { country: "CN", hubs: ["XMN"] },
+  "3U": { country: "CN", hubs: ["CTU"] }, HU: { country: "CN", hubs: ["HAK"] },
+  ZH: { country: "CN", hubs: ["SZX"] }, CK: { country: "CN", hubs: ["PVG"] },
+  O3: { country: "CN", hubs: ["SZX"] }, FM: { country: "CN", hubs: ["PVG"] },
+  HO: { country: "CN", hubs: ["PVG"] }, "9C": { country: "CN", hubs: ["PVG"] },
+  OQ: { country: "CN", hubs: ["CKG"] },
+  // Hong Kong & Taiwan
+  CX: { country: "HK", hubs: ["HKG"] }, LD: { country: "HK", hubs: ["HKG"] },
+  HX: { country: "HK", hubs: ["HKG"] }, UO: { country: "HK", hubs: ["HKG"] },
+  CI: { country: "TW", hubs: ["TPE"] }, BR: { country: "TW", hubs: ["TPE"] },
+  // Vietnam
+  VN: { country: "VN", hubs: ["HAN", "SGN"] }, VJ: { country: "VN", hubs: ["SGN", "HAN"] },
+  QH: { country: "VN", hubs: ["HAN"] },
+  // Rusia
+  SU: { country: "RU", hubs: ["SVO"] }, S7: { country: "RU", hubs: ["OVB"] },
+  U6: { country: "RU", hubs: ["SVX"] }, FV: { country: "RU", hubs: ["LED"] },
+  HZ: { country: "RU", hubs: ["VVO"] },
+  // Indonesia
+  GA: { country: "ID", hubs: ["CGK"] }, QG: { country: "ID", hubs: ["CGK"] },
+  JT: { country: "ID", hubs: ["CGK"] }, ID: { country: "ID", hubs: ["CGK"] },
+  // Hub negara ketiga yang lazim dipakai kargo ke/dari Indonesia
+  SQ: { country: "SG", hubs: ["SIN"] }, TR: { country: "SG", hubs: ["SIN"] },
+  MH: { country: "MY", hubs: ["KUL"] }, TG: { country: "TH", hubs: ["BKK"] },
+  EK: { country: "AE", hubs: ["DXB"] }, QR: { country: "QA", hubs: ["DOH"] },
+  TK: { country: "TR", hubs: ["IST"] },
+  JL: { country: "JP", hubs: ["NRT"] }, NH: { country: "JP", hubs: ["NRT"] },
+  KZ: { country: "JP", hubs: ["NRT"] },
+};
+
+function airlineNetwork(code) {
+  return (code && AIRLINE_NETWORK[code]) || null;
+}
 
 /* ------------------------------------------------------------------
    SARAN UNTUK KOTAK NAMA KAPAL / NAMA PESAWAT
@@ -376,7 +442,47 @@ const CARRIER_MASTER = {
    itu yang dibaca detectCarrier(), dan itu pula yang sudah tertulis di
    ribuan jadwal lama.
 ------------------------------------------------------------------ */
+/* NAMA KAPAL & PESAWAT DARI RIWAYAT SENDIRI.
+
+   Daftar kapal dan nomor penerbangan yang nyata berubah tiap musim --
+   tidak ada daftar tetap yang bisa dijaga benar. Yang PASTI benar
+   adalah yang pernah dipakai DDI sendiri: nama-nama itu ditawarkan
+   lebih dulu, yang terbaru di atas, lengkap dengan rute yang pernah
+   dilaluinya. */
+function saranSaranaRiwayat(mode) {
+  if (typeof data === "undefined" || !data) return [];
+  const semua = (data.import || []).concat(data.export || []);
+  const peta = new Map();
+  semua.forEach((s) => {
+    const nama = String(s.vessel || "").trim();
+    if (!nama || (mode && (s.transport || "laut") !== mode)) return;
+    const kunci = nama.toUpperCase();
+    const tgl = s.etd || s.eta || "";
+    const ada = peta.get(kunci);
+    // Kode pendek (HPH→TPP): ringkas untuk label saran
+    const label = (x) => (typeof resolvePortCode === "function" ? resolvePortCode(x) : x);
+    const rute = [label(s.origin), label(s.destination)].filter(Boolean).join("→");
+    /* Rute ditulis "Transit via X" hanya kalau transitnya DICATAT
+       (terminal diisi). Label Direct tidak ditulis: itu nilai bawaan
+       form, bukan keterangan bahwa kapalnya langsung. */
+    const st = s.routeType === "transit" && (s.routeStops || []).find((x) => String((x && x.terminal) || "").trim());
+    const via = st ? label(st.terminal) : "";
+    if (!ada) peta.set(kunci, { nama, tgl, n: 1, rute, via });
+    else {
+      ada.n++;
+      if (tgl > ada.tgl) Object.assign(ada, { tgl, rute, via });
+    }
+  });
+  return [...peta.values()].sort((a, b) => (a.tgl < b.tgl ? 1 : -1)).slice(0, 60);
+}
+
 function carrierDatalistHtml(mode) {
+  const riwayat = saranSaranaRiwayat(mode)
+    .map((x) => {
+      const ket = [x.rute, x.via ? `Transit via ${x.via}` : "", `${x.n}x`].filter(Boolean).join(" · ");
+      return `<option value="${escapeAttr(x.nama)}">${escapeHtml(x.nama + " — " + ket)}</option>`;
+    })
+    .join("");
   const daftar =
     mode === "udara"
       ? CARRIER_MASTER.airlines
@@ -385,8 +491,11 @@ function carrierDatalistHtml(mode) {
         : CARRIER_MASTER.airlines.concat(CARRIER_MASTER.shippingLines);
   const semua = CARRIER_MASTER.couriers.concat(daftar);
   const sudah = new Set();
-  return semua
+  // Riwayat sendiri lebih dulu: itu sarana yang PASTI pernah dipakai DDI
+  return riwayat + semua
     .filter((c) => {
+      // Entri semu ("deretan kapal … VOYAGER") tidak punya nama untuk diisikan
+      if (/SERIES/.test(c.code || "")) return false;
       const k = c.code + "|" + c.name;
       if (sudah.has(k)) return false;
       sudah.add(k);
@@ -394,11 +503,23 @@ function carrierDatalistHtml(mode) {
     })
     .map(
       (c) =>
-        /* Nama lengkap ditulis di label supaya bisa dicari lewat
-           namanya juga — datalist mencocokkan label, bukan cuma nilai. */
-        `<option value="${escapeAttr(c.code)}">${escapeHtml(c.code + " — " + c.name)}</option>`,
+        /* NAMA yang terisi, kodenya hanya keterangan: kode maskapai
+           dipakai di No. Flight (OZ761), bukan di kotak nama. Mengetik
+           kodenya tetap menemukan sarannya -- keterangan ikut dicari. */
+        `<option value="${escapeAttr(c.name)}">${escapeHtml(
+          (CARRIER_MASTER.airlines.indexOf(c) >= 0 ? tt("Kode flight: ", "Flight code: ") : tt("Kode: ", "Code: ")) + c.code,
+        )}</option>`,
     )
     .join("");
+}
+
+/* Diisi ulang setelah data dimuat -- saat aplikasi dibuka, datalist
+   sudah diisi SEBELUM riwayat sampai. */
+function refreshCarrierDatalists() {
+  const laut = typeof document !== "undefined" && document.getElementById("carrierListLaut");
+  const udara = typeof document !== "undefined" && document.getElementById("carrierListUdara");
+  if (laut) laut.innerHTML = carrierDatalistHtml("laut");
+  if (udara) udara.innerHTML = carrierDatalistHtml("udara");
 }
 
 /* ------------------------------------------------------------------
@@ -424,9 +545,24 @@ function carrierDatalistHtml(mode) {
    `_phrase` untuk yang lebih. `_alias` tetap berisi keduanya, karena
    pencocokan kurir dan maskapai memang sudah bekerja pada teks utuh
    dan sudah benar menangani frasa. */
+/* Nama lengkap ikut dikenali sebagai frasa: saran di kotak Nama Kapal /
+   Pesawat mengisi NAMA ("Asiana Airlines", "Mediterranean Shipping
+   Company"), bukan kode -- kodenya dipakai di No. Flight (OZ761).
+   Hanya bentuk yang berupa FRASA (lebih dari satu kata), supaya satu
+   kata umum dalam nama tidak menelan nama kapal lain. */
+function variasiNama(x) {
+  const nama = String(x.name || "");
+  if (!nama || /SERIES/.test(x.code || "") || nama.indexOf("…") >= 0) return [];
+  const dalamKurung = (nama.match(/\(([^)]+)\)/) || [])[1] || "";
+  const tanpaKurung = nama.replace(/\([^)]*\)/g, " ");
+  return [nama, tanpaKurung, dalamKurung]
+    .map(normalisasiTeksKapal)
+    .filter((v) => v && v.indexOf(" ") > 0);
+}
+
 function siapkanAlias(daftar) {
   daftar.forEach((x) => {
-    x._alias = (x.aliases || []).map(normalisasiTeksKapal).filter(Boolean);
+    x._alias = [...new Set((x.aliases || []).map(normalisasiTeksKapal).concat(variasiNama(x)))].filter(Boolean);
     x._word = x._alias.filter((a) => a.indexOf(" ") < 0);
     x._phrase = x._alias.filter((a) => a.indexOf(" ") >= 0);
     /* `prefix` = alias yang HANYA sah sebagai kata pertama.

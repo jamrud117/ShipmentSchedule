@@ -27,7 +27,7 @@ const UNLOCODES_RAW = [
   // INDONESIA — pelabuhan laut
   { unlocode: "IDTPP", name: "Tanjung Priok, Jakarta", country: "ID", type: "laut",
     aliases: ["tanjung priok", "priok", "jakarta port", "tg priok", "tg. priok"] },
-  { unlocode: "IDJKT", name: "Jakarta", country: "ID", type: "laut", aliases: ["jakarta"] },
+  { unlocode: "IDJKT", name: "Jakarta", country: "ID", type: "laut", metro: "IDTPP", aliases: ["jakarta"] },
   { unlocode: "IDSUB", name: "Tanjung Perak, Surabaya", country: "ID", type: "laut",
     aliases: ["tanjung perak", "perak", "surabaya"] },
   { unlocode: "IDSRG", name: "Tanjung Emas, Semarang", country: "ID", type: "laut",
@@ -63,18 +63,22 @@ const UNLOCODES_RAW = [
   { unlocode: "KRINC", name: "Incheon Port", country: "KR", type: "laut", aliases: ["incheon port", "incheon seaport"] },
   { unlocode: "KRICN", name: "Incheon Intl Airport, Seoul", country: "KR", type: "udara",
     aliases: ["incheon airport", "incheon intl apt", "incheon", "seoul airport", "seoul", "icn"] },
-  { unlocode: "KRKAN", name: "Gwangju", country: "KR", type: "laut", aliases: ["gwangju", "kwangju"] },
+  { unlocode: "KRKAN", name: "Gwangyang", country: "KR", type: "laut",
+    /* Dulu tertulis "Gwangju" -- kota pedalaman tanpa pelabuhan. KRKAN
+       adalah Gwangyang. Alias lama dipertahankan supaya teks yang dulu
+       diketik tetap terbaca ke entri yang sama. */
+    aliases: ["gwangyang", "kwangyang", "gwangju", "kwangju"] },
   { unlocode: "KRKPO", name: "Pohang", country: "KR", type: "laut", aliases: ["pohang"] },
 
   // CHINA / HONG KONG / TAIWAN
   { unlocode: "CNSHA", name: "Shanghai", country: "CN", type: "laut", aliases: ["shanghai"] },
   { unlocode: "CNNGB", name: "Ningbo", country: "CN", type: "laut", aliases: ["ningbo"] },
-  { unlocode: "CNSZX", name: "Shenzhen", country: "CN", type: "laut", aliases: ["shenzhen", "shekou", "yantian"] },
+  { unlocode: "CNSZX", name: "Shenzhen", country: "CN", type: "laut", aliases: ["shenzhen"] },
   { unlocode: "CNTAO", name: "Qingdao", country: "CN", type: "laut", aliases: ["qingdao", "tsingtao"] },
   { unlocode: "CNTSN", name: "Tianjin / Xingang", country: "CN", type: "laut", aliases: ["tianjin", "xingang"] },
   { unlocode: "CNCAN", name: "Guangzhou", country: "CN", type: "laut", aliases: ["guangzhou", "canton", "nansha"] },
   { unlocode: "CNXMN", name: "Xiamen", country: "CN", type: "laut", aliases: ["xiamen", "amoy"] },
-  { unlocode: "CNTXG", name: "Xingang, Tianjin", country: "CN", type: "laut",
+  { unlocode: "CNTXG", name: "Xingang, Tianjin", country: "CN", type: "laut", metro: "CNTSN",
     aliases: ["xingang", "xin gang", "tianjin xingang", "txg"] },
   { unlocode: "CNPVG", name: "Pudong Intl Airport, Shanghai", country: "CN", type: "udara",
     aliases: ["pudong", "shanghai airport", "pvg"] },
@@ -137,38 +141,38 @@ const UNLOCODES_RAW = [
      Alias "cat lai" dipindahkan dari VNSGN ke VNCLI: keduanya di Ho
      Chi Minh, tapi Cat Lai punya kodenya sendiri dan itu yang tercetak
      di B/L. */
-  { unlocode: "VNCLI", name: "Cat Lai Terminal, Ho Chi Minh City", country: "VN", type: "laut",
+  { unlocode: "VNCLI", name: "Cat Lai Terminal, Ho Chi Minh City", country: "VN", type: "laut", metro: "VNSGN",
     aliases: ["cat lai", "catlai", "cang cat lai"] },
-  { unlocode: "VNCSG", name: "Sai Gon Port, Ho Chi Minh City", country: "VN", type: "laut",
+  { unlocode: "VNCSG", name: "Sai Gon Port, Ho Chi Minh City", country: "VN", type: "laut", metro: "VNSGN",
     aliases: ["sai gon port", "saigon port", "cang sai gon"] },
-  { unlocode: "VNVIC", name: "VICT Terminal, Ho Chi Minh City", country: "VN", type: "laut",
+  { unlocode: "VNVIC", name: "VICT Terminal, Ho Chi Minh City", country: "VN", type: "laut", metro: "VNSGN",
     aliases: ["vict", "vietnam international container terminal"] },
-  { unlocode: "VNHPP", name: "Tan Cang Hiep Phuoc, Ho Chi Minh City", country: "VN", type: "laut",
+  { unlocode: "VNHPP", name: "Tan Cang Hiep Phuoc, Ho Chi Minh City", country: "VN", type: "laut", metro: "VNSGN",
     aliases: ["hiep phuoc", "tan cang hiep phuoc"] },
 
   /* Cai Mep - Thi Vai: terminal laut dalam untuk kapal besar, dipakai
      rute jarak jauh yang tidak bisa masuk sungai ke Cat Lai. */
-  { unlocode: "VNCMT", name: "Cai Mep Intl Terminal, Ba Ria-Vung Tau", country: "VN", type: "laut",
+  { unlocode: "VNCMT", name: "Cai Mep Intl Terminal, Ba Ria-Vung Tau", country: "VN", type: "laut", metro: "VNVUT",
     aliases: ["cai mep", "caimep", "cmit", "thi vai", "tcit", "tctt", "gemalink"] },
   { unlocode: "VNVUT", name: "Vung Tau", country: "VN", type: "laut",
     aliases: ["vung tau", "vungtau"] },
-  { unlocode: "VNPHU", name: "Phu My, Ba Ria-Vung Tau", country: "VN", type: "laut",
+  { unlocode: "VNPHU", name: "Phu My, Ba Ria-Vung Tau", country: "VN", type: "laut", metro: "VNVUT",
     aliases: ["phu my", "phumy"] },
 
   // Haiphong: kota pelabuhannya satu, terminalnya beberapa.
-  { unlocode: "VNDVU", name: "Dinh Vu Terminal, Haiphong", country: "VN", type: "laut",
+  { unlocode: "VNDVU", name: "Dinh Vu Terminal, Haiphong", country: "VN", type: "laut", metro: "VNHPH",
     aliases: ["dinh vu", "dinhvu"] },
-  { unlocode: "VNCVE", name: "Chua Ve Terminal, Haiphong", country: "VN", type: "laut",
+  { unlocode: "VNCVE", name: "Chua Ve Terminal, Haiphong", country: "VN", type: "laut", metro: "VNHPH",
     aliases: ["chua ve", "chuave"] },
-  { unlocode: "VNDXA", name: "Doan Xa Terminal, Haiphong", country: "VN", type: "laut",
+  { unlocode: "VNDXA", name: "Doan Xa Terminal, Haiphong", country: "VN", type: "laut", metro: "VNHPH",
     aliases: ["doan xa", "doanxa"] },
-  { unlocode: "VNTVN", name: "Transvina Terminal, Haiphong", country: "VN", type: "laut",
+  { unlocode: "VNTVN", name: "Transvina Terminal, Haiphong", country: "VN", type: "laut", metro: "VNHPH",
     aliases: ["transvina"] },
   { unlocode: "VNCLN", name: "Cai Lan, Quang Ninh", country: "VN", type: "laut",
     aliases: ["cai lan", "cailan", "quang ninh"] },
 
   // Vietnam tengah & selatan
-  { unlocode: "VNDTS", name: "Tien Sa Terminal, Da Nang", country: "VN", type: "laut",
+  { unlocode: "VNDTS", name: "Tien Sa Terminal, Da Nang", country: "VN", type: "laut", metro: "VNDAD",
     aliases: ["tien sa", "tiensa"] },
   { unlocode: "VNCMY", name: "Chan May Port", country: "VN", type: "laut",
     aliases: ["chan may", "chanmay"] },
@@ -235,6 +239,101 @@ const UNLOCODES_RAW = [
   { unlocode: "USHOU", name: "Houston", country: "US", type: "laut", aliases: ["houston"] },
   { unlocode: "AUSYD", name: "Sydney", country: "AU", type: "laut", aliases: ["sydney"] },
   { unlocode: "AUMEL", name: "Melbourne", country: "AU", type: "laut", aliases: ["melbourne"] },
+  /* ==================================================================
+     TAMBAHAN 2026-10 — rute Indonesia <-> Cina, Korea, Vietnam, Rusia,
+     plus bandara hub tempat kargo maskapai asing singgah.
+
+     `metro` = pelabuhan induk sekota. Terminal punya kodenya sendiri
+     (itu yang tercetak di B/L), tapi untuk BELAJAR dari riwayat dan
+     menebak rute, Shekou/Yantian/Chiwan dihitung satu kelompok dengan
+     Shenzhen -- kapal yang sama, lama pelayaran yang sama. Tanpa ini,
+     riwayat satu pelabuhan terpecah ke beberapa kode dan tidak pernah
+     cukup untuk dipelajari.
+  ================================================================== */
+  { unlocode: "CNSHK", name: "Shekou, Shenzhen", country: "CN", type: "laut", metro: "CNSZX", aliases: ["shekou"] },
+  { unlocode: "CNYTN", name: "Yantian, Shenzhen", country: "CN", type: "laut", metro: "CNSZX", aliases: ["yantian"] },
+  { unlocode: "CNCWN", name: "Chiwan, Shenzhen", country: "CN", type: "laut", metro: "CNSZX", aliases: ["chiwan"] },
+  { unlocode: "CNHUA", name: "Huangpu, Guangzhou", country: "CN", type: "laut", metro: "CNCAN", aliases: ["huangpu"] },
+  { unlocode: "CNDLC", name: "Dalian", country: "CN", type: "laut", aliases: ["dalian"] },
+  { unlocode: "CNLYG", name: "Lianyungang", country: "CN", type: "laut", aliases: ["lianyungang"] },
+  { unlocode: "CNFOC", name: "Fuzhou", country: "CN", type: "laut", aliases: ["fuzhou", "mawei"] },
+  { unlocode: "CNZJG", name: "Zhangjiagang", country: "CN", type: "laut", aliases: ["zhangjiagang"] },
+  { unlocode: "CNTAC", name: "Taicang", country: "CN", type: "laut", aliases: ["taicang"] },
+  { unlocode: "CNNKG", name: "Nanjing", country: "CN", type: "laut", aliases: ["nanjing"] },
+  { unlocode: "CNNTG", name: "Nantong", country: "CN", type: "laut", aliases: ["nantong"] },
+  { unlocode: "CNWUH", name: "Wuhan", country: "CN", type: "laut", aliases: ["wuhan"] },
+  { unlocode: "CNZUH", name: "Zhuhai", country: "CN", type: "laut", aliases: ["zhuhai", "gaolan"] },
+  { unlocode: "CNJMN", name: "Jiangmen", country: "CN", type: "laut", aliases: ["jiangmen"] },
+  { unlocode: "CNSWA", name: "Shantou", country: "CN", type: "laut", aliases: ["shantou"] },
+  { unlocode: "CNQZH", name: "Qinzhou", country: "CN", type: "laut", aliases: ["qinzhou"] },
+  { unlocode: "CNFAN", name: "Fangchenggang", country: "CN", type: "laut", aliases: ["fangcheng", "fangchenggang"] },
+  { unlocode: "CNBHY", name: "Beihai", country: "CN", type: "laut", aliases: ["beihai"] },
+  { unlocode: "CNHAK", name: "Haikou", country: "CN", type: "laut", aliases: ["haikou"] },
+  { unlocode: "CNRZH", name: "Rizhao", country: "CN", type: "laut", aliases: ["rizhao"] },
+  { unlocode: "CNYNT", name: "Yantai", country: "CN", type: "laut", aliases: ["yantai"] },
+  { unlocode: "CNWEI", name: "Weihai", country: "CN", type: "laut", aliases: ["weihai"] },
+  { unlocode: "CNYIK", name: "Yingkou", country: "CN", type: "laut", aliases: ["yingkou"] },
+  { unlocode: "CNPKX", name: "Daxing Intl Airport, Beijing", country: "CN", type: "udara", aliases: ["daxing", "beijing daxing", "pkx"] },
+  { unlocode: "CNXMN", name: "Gaoqi Intl Airport, Xiamen", country: "CN", type: "udara", aliases: ["gaoqi", "xiamen airport"] },
+  { unlocode: "CNCTU", name: "Shuangliu Intl Airport, Chengdu", country: "CN", type: "udara", aliases: ["chengdu", "shuangliu", "ctu"] },
+  { unlocode: "CNTFU", name: "Tianfu Intl Airport, Chengdu", country: "CN", type: "udara", aliases: ["tianfu", "tfu"] },
+  { unlocode: "CNCKG", name: "Jiangbei Intl Airport, Chongqing", country: "CN", type: "udara", aliases: ["chongqing", "ckg"] },
+  { unlocode: "CNHGH", name: "Xiaoshan Intl Airport, Hangzhou", country: "CN", type: "udara", aliases: ["hangzhou", "hgh"] },
+  { unlocode: "CNNKG", name: "Lukou Intl Airport, Nanjing", country: "CN", type: "udara", aliases: ["lukou", "nanjing airport"] },
+  { unlocode: "CNTSN", name: "Binhai Intl Airport, Tianjin", country: "CN", type: "udara", aliases: ["tianjin airport", "binhai"] },
+  { unlocode: "CNDLC", name: "Zhoushuizi Intl Airport, Dalian", country: "CN", type: "udara", aliases: ["dalian airport"] },
+  { unlocode: "CNWUH", name: "Tianhe Intl Airport, Wuhan", country: "CN", type: "udara", aliases: ["wuhan airport", "tianhe"] },
+  { unlocode: "CNCGO", name: "Xinzheng Intl Airport, Zhengzhou", country: "CN", type: "udara", aliases: ["zhengzhou", "cgo"] },
+  { unlocode: "CNEHU", name: "Huahu Airport, Ezhou", country: "CN", type: "udara", aliases: ["ezhou", "huahu", "ehu"] },
+  { unlocode: "CNKMG", name: "Changshui Intl Airport, Kunming", country: "CN", type: "udara", aliases: ["kunming", "kmg"] },
+  { unlocode: "CNXIY", name: "Xianyang Intl Airport, Xi'an", country: "CN", type: "udara", aliases: ["xi'an", "xian", "xiy"] },
+  { unlocode: "CNFOC", name: "Changle Intl Airport, Fuzhou", country: "CN", type: "udara", aliases: ["fuzhou airport", "changle"] },
+  { unlocode: "CNNNG", name: "Wuxu Intl Airport, Nanning", country: "CN", type: "udara", aliases: ["nanning", "nng"] },
+  { unlocode: "CNHAK", name: "Meilan Intl Airport, Haikou", country: "CN", type: "udara", aliases: ["haikou airport", "meilan"] },
+  { unlocode: "HKHKG", name: "Hong Kong Intl Airport", country: "HK", type: "udara", aliases: ["chek lap kok", "hong kong airport"] },
+  { unlocode: "KRPTK", name: "Pyeongtaek", country: "KR", type: "laut", aliases: ["pyeongtaek", "pyongtaek"] },
+  { unlocode: "KRUSN", name: "Ulsan", country: "KR", type: "laut", aliases: ["ulsan"] },
+  { unlocode: "KRMAS", name: "Masan", country: "KR", type: "laut", aliases: ["masan", "changwon"] },
+  { unlocode: "KRKUV", name: "Gunsan", country: "KR", type: "laut", aliases: ["gunsan", "kunsan"] },
+  { unlocode: "KRMOK", name: "Mokpo", country: "KR", type: "laut", aliases: ["mokpo"] },
+  { unlocode: "KRGMP", name: "Gimpo Intl Airport, Seoul", country: "KR", type: "udara", aliases: ["gimpo", "kimpo", "gmp"] },
+  { unlocode: "KRPUS", name: "Gimhae Intl Airport, Busan", country: "KR", type: "udara", aliases: ["gimhae", "kimhae", "busan airport"] },
+  { unlocode: "KRCJU", name: "Jeju Intl Airport", country: "KR", type: "udara", aliases: ["jeju", "cju"] },
+  { unlocode: "VNDAD", name: "Da Nang Intl Airport", country: "VN", type: "udara", aliases: ["da nang airport"] },
+  { unlocode: "VNHPH", name: "Cat Bi Intl Airport, Haiphong", country: "VN", type: "udara", aliases: ["cat bi", "haiphong airport"] },
+  { unlocode: "VNCXR", name: "Cam Ranh Intl Airport", country: "VN", type: "udara", aliases: ["cam ranh airport"] },
+  { unlocode: "RUNJK", name: "Nakhodka", country: "RU", type: "laut", aliases: ["nakhodka"] },
+  { unlocode: "RUKGD", name: "Kaliningrad", country: "RU", type: "laut", aliases: ["kaliningrad"] },
+  { unlocode: "RUULU", name: "Ust-Luga", country: "RU", type: "laut", aliases: ["ust-luga", "ust luga"] },
+  { unlocode: "RUMMK", name: "Murmansk", country: "RU", type: "laut", aliases: ["murmansk"] },
+  { unlocode: "RUVVO", name: "Knevichi Intl Airport, Vladivostok", country: "RU", type: "udara", aliases: ["knevichi", "vladivostok airport"] },
+  { unlocode: "RUOVB", name: "Tolmachevo Airport, Novosibirsk", country: "RU", type: "udara", aliases: ["novosibirsk", "tolmachevo", "ovb"] },
+  { unlocode: "RUKJA", name: "Yemelyanovo Airport, Krasnoyarsk", country: "RU", type: "udara", aliases: ["krasnoyarsk", "kja"] },
+  { unlocode: "RUKHV", name: "Khabarovsk Novy Airport", country: "RU", type: "udara", aliases: ["khabarovsk", "khv"] },
+  { unlocode: "RUSVX", name: "Koltsovo Airport, Yekaterinburg", country: "RU", type: "udara", aliases: ["yekaterinburg", "ekaterinburg", "koltsovo", "svx"] },
+  { unlocode: "IDBDJ", name: "Banjarmasin", country: "ID", type: "laut", aliases: ["banjarmasin", "trisakti"] },
+  { unlocode: "IDDUM", name: "Dumai", country: "ID", type: "laut", aliases: ["dumai"] },
+  { unlocode: "IDGRE", name: "Gresik", country: "ID", type: "laut", aliases: ["gresik"] },
+  { unlocode: "IDSRI", name: "Samarinda", country: "ID", type: "laut", aliases: ["samarinda"] },
+  { unlocode: "IDKDI", name: "Kendari", country: "ID", type: "laut", aliases: ["kendari"] },
+  { unlocode: "IDAMQ", name: "Ambon", country: "ID", type: "laut", aliases: ["ambon"] },
+  { unlocode: "IDSOQ", name: "Sorong", country: "ID", type: "laut", aliases: ["sorong"] },
+  { unlocode: "IDTRK", name: "Tarakan", country: "ID", type: "laut", aliases: ["tarakan"] },
+  { unlocode: "IDDJJ", name: "Jayapura", country: "ID", type: "laut", aliases: ["jayapura"] },
+  { unlocode: "IDKJT", name: "Kertajati Intl Airport, Majalengka", country: "ID", type: "udara", aliases: ["kertajati", "bijb", "majalengka"] },
+  { unlocode: "IDYIA", name: "Yogyakarta Intl Airport", country: "ID", type: "udara", aliases: ["yogyakarta", "kulon progo", "yia"] },
+  { unlocode: "IDUPG", name: "Sultan Hasanuddin Intl Airport, Makassar", country: "ID", type: "udara", aliases: ["hasanuddin", "makassar airport"] },
+  { unlocode: "IDBPN", name: "Sepinggan Intl Airport, Balikpapan", country: "ID", type: "udara", aliases: ["sepinggan", "balikpapan airport"] },
+  { unlocode: "IDBTH", name: "Hang Nadim Intl Airport, Batam", country: "ID", type: "udara", aliases: ["hang nadim", "batam airport"] },
+  { unlocode: "IDSRG", name: "Ahmad Yani Intl Airport, Semarang", country: "ID", type: "udara", aliases: ["ahmad yani", "semarang airport"] },
+  { unlocode: "IDPLM", name: "Sultan Mahmud Badaruddin II Airport, Palembang", country: "ID", type: "udara", aliases: ["palembang airport"] },
+  { unlocode: "IDMDC", name: "Sam Ratulangi Intl Airport, Manado", country: "ID", type: "udara", aliases: ["manado", "sam ratulangi"] },
+  { unlocode: "SGSIN", name: "Changi Airport, Singapore", country: "SG", type: "udara", aliases: ["changi", "singapore airport"] },
+  { unlocode: "MYKUL", name: "Kuala Lumpur Intl Airport", country: "MY", type: "udara", aliases: ["klia", "kuala lumpur", "kul"] },
+  { unlocode: "THBKK", name: "Suvarnabhumi Airport, Bangkok", country: "TH", type: "udara", aliases: ["suvarnabhumi", "bangkok airport"] },
+  { unlocode: "AEDXB", name: "Dubai Intl Airport", country: "AE", type: "udara", aliases: ["dubai", "dxb"] },
+  { unlocode: "QADOH", name: "Hamad Intl Airport, Doha", country: "QA", type: "udara", aliases: ["doha", "hamad", "doh"] },
+  { unlocode: "TRIST", name: "Istanbul Airport", country: "TR", type: "udara", aliases: ["istanbul", "ist"] },
 ];
 
 /* Bentuk pendek diturunkan dari UN/LOCODE dengan memangkas dua huruf
@@ -264,7 +363,7 @@ const UNLOCODE_COUNTRIES = new Set([
   "ID", "KR", "CN", "HK", "TW", "JP", "SG", "MY", "TH", "VN", "PH", "IN",
   "AE", "SA", "NL", "DE", "BE", "GB", "IT", "FR", "ES", "PL", "TR", "US",
   "CA", "MX", "BR", "AU", "NZ", "ZA", "EG", "RU", "BD", "PK", "LK", "KH",
-  "MM", "LA", "BN",
+  "MM", "LA", "BN", "QA",
 ]);
 
 /* Teks pelabuhan bebas -> ENTRI referensinya.
@@ -344,6 +443,19 @@ function resolvePortCode(raw) {
 // Diambil dari TABEL, bukan dari memotong dua huruf pertama kode.
 // Bentuk pendek tidak lagi membawa negaranya, jadi memotong string akan
 // mengubah "CGK" jadi negara "CG" — Republik Kongo.
+/* PELABUHAN INDUK. Terminal sekota (Shekou -> Shenzhen, Cat Lai -> Ho
+   Chi Minh) dikembalikan ke induknya; pelabuhan biasa ke dirinya
+   sendiri. Dipakai untuk membandingkan RUTE (belajar dari riwayat,
+   menebak direct/transit), bukan untuk tampilan. */
+function resolvePortMetro(raw) {
+  const e = resolvePortEntry(raw);
+  if (!e) return "";
+  const induk = e.metro ? PORT_BY_UNLOCODE.get(e.metro) : null;
+  // Bentuk PENDEK, sama dengan resolvePortCode -- itu yang dipakai
+  // aturan rute & pencocokan riwayat.
+  return (induk || e).code;
+}
+
 function resolvePortCountry(raw) {
   const e = resolvePortEntry(raw);
   return e ? e.country : "";
@@ -433,6 +545,7 @@ if (typeof module !== "undefined" && module.exports) {
     resolvePortEntry,
     resolvePortCode,
     resolvePortCountry,
+    resolvePortMetro,
     resolveUnlocode,
     portDisplay,
     portCodeLabel,

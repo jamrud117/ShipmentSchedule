@@ -125,6 +125,10 @@ function applyPredictionToAll(list) {
    ada yang berubah tidak ada permintaan yang dikirim sama sekali. */
 async function refreshShipmentPrediction(s, opsi) {
   const o = opsi || {};
+  /* Tanggal/tahap kiriman ini baru berubah -- riwayat yang dipelajari
+     ikut berubah. Tanpa ini, angkanya baru segar setelah halaman
+     dimuat ulang. */
+  if (typeof resetPredictionLearning === "function") resetPredictionLearning();
   const berubah = applyPredictionToShipment(s);
   if (!berubah.length) return berubah;
 

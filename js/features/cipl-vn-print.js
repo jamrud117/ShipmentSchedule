@@ -44,14 +44,24 @@ function ciplVnMarks(it, idx, total) {
   return `C# : ${total}-${idx + 1}`;
 }
 
-/* Uraian barang pada lembar ini: SIZE, PATTERN, MOLD NO -- tanpa jenis
-   barangnya, karena jenisnya sudah disebut sekali di baris
-   "#Description Info" di atas tabel. */
-function ciplVnUraian(it) {
-  return [it.size, it.pattern, it.moldNo]
+/* NAMA BARANG = Description + Pattern + Size + Mold No, berurutan,
+   dipisah dua spasi seperti berkas aslinya. Dipakai lembar cetak CI &
+   PL dan lembar Excel-nya.
+
+   Bagian yang SUDAH tertulis di Description tidak diulang: nama barang
+   yang terlanjur diketik lengkap ("TIRE MOLD 225/50R17") tidak menjadi
+   "TIRE MOLD 225/50R17  PS72  225/50R17". */
+function ciplVnBagianNama(it) {
+  const desc = String(it.namaBarang || "").trim();
+  const sudah = desc.toUpperCase().replace(/\s+/g, " ");
+  const lain = [it.pattern, it.size, it.moldNo]
     .map((x) => String(x || "").trim())
-    .filter(Boolean)
-    .join("  ");
+    .filter((x) => x && sudah.indexOf(x.toUpperCase().replace(/\s+/g, " ")) < 0);
+  return { desc, lain };
+}
+function ciplVnUraian(it) {
+  const b = ciplVnBagianNama(it);
+  return [b.desc].concat(b.lain).filter(Boolean).join("  ");
 }
 
 function ciplVnBaris(shipment) {
@@ -62,9 +72,14 @@ function ciplVnBaris(shipment) {
   return items.map((it, i) => ({
     marks: ciplVnMarks(it, i, total),
     uraian: ciplVnUraian(it),
-    /* Dipisah JUGA per bagian: lembar Excel menaruh SIZE+PATTERN dan
-       MOLD NO di dua kolom berbeda, karena pembeli menyaring kolom
+    /* Dipisah JUGA per bagian: lembar Excel menaruh nama tanpa Mold No
+       dan Mold No di dua kolom berbeda, karena pembeli menyaring kolom
        mold-nya untuk mencocokkan cetakan. */
+    namaTanpaMold: (() => {
+      const bag = ciplVnBagianNama(it);
+      const mold = String(it.moldNo || "").trim();
+      return [bag.desc].concat(bag.lain.filter((x) => x !== mold)).filter(Boolean).join("  ");
+    })(),
     size: String(it.size || "").trim(),
     pattern: String(it.pattern || "").trim(),
     moldNo: String(it.moldNo || "").trim(),
@@ -376,9 +391,9 @@ function ciplVnHalaman(row, shipment, isPacking) {
      ke "USD" di sebelahnya. */
   const totalEkor = isPacking
     ? `<span class="vn-t-n1">${escapeHtml(ciplAngka(total.netto, 0))}</span>
-       <span class="vn-t-s1">KGS</span>
+       <span class="vn-t-s1">KG</span>
        <span class="vn-t-n2">${escapeHtml(ciplAngka(total.bruto, 0))}</span>
-       <span class="vn-t-s2">KGS</span>`
+       <span class="vn-t-s2">KG</span>`
     : `<span class="vn-t-usd">USD</span>
        <span class="vn-t-nilai">${escapeHtml(ciplAngka(total.nilai, 2))}</span>`;
 
@@ -418,14 +433,18 @@ function ciplVnHalaman(row, shipment, isPacking) {
         </tr>
         <tr class="vn-info">
           <td></td>
-          <td class="vn-desc vn-c vn-b vn-nowrap" colspan="3">#Description Info : SIZE, PTN, MOLD NO, PO</td>
+          <td class="vn-desc vn-c vn-b vn-nowrap" colspan="3">#Description Info : PTN, SIZE, MOLD NO</td>
           <td colspan="4"></td>
         </tr>
       </thead>
       <tbody>
         ${barisHtml}
-        ${dimensi}
+        <!-- Pengisi DULU, baru DIMENSION: di berkas rujukan baris
+             ukuran peti duduk di dasar bidang barang, tepat di atas
+             baris TOTAL -- bukan menempel di bawah barang terakhir.
+             Sama dengan lembar Excel-nya. -->
         ${kosongHtml}
+        ${dimensi}
       </tbody>
       <tfoot>
         <tr class="vn-total">
@@ -722,7 +741,7 @@ function ciplVnCss() {
   /* Jatah tiap bagian baris TOTAL, dihitung dari letaknya di berkas
      rujukan (persen di bawah relatif terhadap sel, yang mulai di 22,9%
      lebar bingkai). Lembar PL berbeda: ekornya empat bagian (netto,
-     KGS, bruto, KGS), bukan dua. */
+     KG, bruto, KG), bukan dua. */
   /* display:flex dipasang pada DIV di dalam sel, bukan pada <td>-nya.
      <td> yang diubah jadi flex keluar dari perhitungan lebar tabel,
      dan seluruh baris TOTAL menciut mengikuti isinya. */

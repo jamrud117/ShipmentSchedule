@@ -453,6 +453,7 @@ if (btnRecalc) {
 
 function initPredictionForm(s) {
   formDocProgress = (s && s.docProgress) || {};
+  if (typeof resetRuteOtomatis === "function") resetRuteOtomatis(s);
   formEtaMode = s ? etaModeOf(s) : "auto";
   sembunyikanNoticeEta();
   $$("#etaModeSwitch .eta-mode-btn").forEach((b) =>

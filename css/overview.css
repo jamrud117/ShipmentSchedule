@@ -280,6 +280,34 @@
   border-bottom: 0;
   padding-bottom: 6px;
 }
+/* Akurasi prediksi */
+.acc-head {
+  text-align: right;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  margin-bottom: 2px;
+}
+/* Label baris berupa flex: rinciannya turun ke baris kedua, sejajar
+   dengan teks label (melewati lebar ikon). */
+#ovAccuracy .stat-line-label {
+  flex-wrap: wrap;
+}
+.acc-detail {
+  flex-basis: 100%;
+  padding-left: 22px;
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.acc-note {
+  margin-top: 10px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  line-height: 1.5;
+}
 .stat-callout {
   display: flex;
   flex-direction: column;
