@@ -731,6 +731,12 @@ table.fund-lines select {
 }
 /* Nomor urut riwayat invoice: sesempit isinya. Kolom isian CIPL di
    sebelahnya TIDAK dipotong -- tabelnya digeser, bukan diremas. */
+.dn-transaksi {
+  white-space: nowrap;
+}
+.dn-transaksi .bi {
+  color: var(--n-500);
+}
 .docnum-table .dn-col-no {
   width: 1%;
   color: var(--n-500);
@@ -1273,4 +1279,270 @@ button.dn-bayar--lunas:hover {
 }
 .fsum-rekap-pilih .fsum-rekap-tahun:first-child {
   min-width: 150px;
+}
+
+/* ------------------------------------------------------------------
+   LAPORAN PENGELUARAN EXIM (fund-report.js)
+------------------------------------------------------------------ */
+/* Bilah saringan: tahun, periode, jenis pengeluaran, lalu tombol unduh
+   di ujung kanan -- setinggi kotak pilihannya, sejajar di bawah. */
+.lap-saring-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+}
+.lap-saring-baris .fsum-saring-item {
+  width: 150px;
+}
+.lap-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 31px;
+}
+.lap-chips .fsum-saring-label {
+  width: 100%;
+  margin-bottom: 2px;
+}
+.lap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-sm);
+  margin: 0;
+}
+.lap-unduh {
+  margin-left: auto;
+  height: 31px;
+  padding: 0 16px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lap-kepala {
+  margin: 20px 0 6px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0f2440, #1e3a5f);
+  color: #fff;
+}
+.lap-kepala-judul {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.lap-kepala-sub {
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  opacity: 0.85;
+}
+.lap-bagian {
+  margin-top: 26px;
+}
+.lap-judul {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--n-200);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.lap-no {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #1e3a5f;
+  color: #fff;
+  font-size: var(--t-sm);
+}
+.lap-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.lap-kpi {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  text-align: center;
+}
+.lap-kpi--sorot {
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+.lap-kpi-judul {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.lap-kpi--sorot .lap-kpi-judul,
+.lap-kpi--sorot .lap-kpi-banding {
+  color: rgba(255, 255, 255, 0.8);
+}
+.lap-kpi-nilai {
+  margin: 6px 0 4px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.lap-kpi--sorot .lap-kpi-nilai {
+  color: #fff;
+}
+.lap-kpi-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lap-kpi-banding {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+/* Ini biaya: naik = merah, turun = hijau. */
+.lap-naik {
+  color: #b91c1c !important;
+}
+.lap-turun {
+  color: #15803d !important;
+}
+.lap-wawasan {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid #1e3a5f;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.lap-wawasan ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.lap-wawasan li {
+  margin: 3px 0;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+.lap-blok {
+  margin-bottom: 22px;
+}
+/* Tabel sesudah grafik diberi jarak -- tidak menempel ke kotak grafik */
+.lap-grafik + .lap-blok,
+.lap-grafik-dua + .lap-blok,
+.lap-dua-tabel + .lap-blok {
+  margin-top: 22px;
+}
+.lap-blok-judul {
+  margin-bottom: 6px;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.lap-blok-judul small {
+  margin-left: 6px;
+  font-weight: 500;
+  color: var(--n-500);
+}
+/* RATA TENGAH SEMUA -- kepala, isi, dan total -- supaya kolom angka
+   mudah dibandingkan sebaris. */
+.fsum-tabel.lap-tabel th,
+.fsum-tabel.lap-tabel td {
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.lap-tabel tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+.lap-tabel tfoot td {
+  font-weight: 700;
+}
+.lap-tebal {
+  font-weight: 600;
+}
+.lap-grafik {
+  margin-top: 12px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.lap-grafik svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* Grafik selalu selebar halaman, satu per baris -- besar & mudah dibaca. */
+.lap-grafik-dua {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+.lap-kosong {
+  padding: 14px;
+  color: var(--n-500);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+.lap-ubah-anggaran {
+  margin-top: 10px;
+}
+.lap-catatan {
+  margin-top: 6px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+/* Dua tabel kecil berdampingan (per jenis & per moda) */
+.lap-dua-tabel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+/* Detail untuk analisis: terlipat, supaya yang dibaca dulu tetap ringkas */
+.lap-detail {
+  margin-top: 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.lap-detail > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lap-detail > summary::-webkit-details-marker {
+  display: none;
+}
+.lap-detail > summary .bi {
+  transition: transform 0.15s ease;
+}
+.lap-detail[open] > summary .bi {
+  transform: rotate(90deg);
+}
+.lap-detail > summary small {
+  font-weight: 500;
+  color: var(--n-500);
+}
+.lap-detail[open] {
+  padding: 0 16px 16px;
+}
+.lap-detail[open] > summary {
+  padding-left: 0;
+  padding-right: 0;
 }

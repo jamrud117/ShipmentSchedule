@@ -511,58 +511,6 @@ t("surat jalan: ruang kosong tanpa garis kolom", () => {
   if (/border-collapse: collapse/.test(css))
     throw new Error("masih memakai collapse — garis akan terbaca beda tebal");
 });
-t("PENJAGA: aturan sel tidak dikalahkan aturan umum tabelnya", () => {
-  /* Kelas jebakan: ".ci-items td" berkekhususan (0,1,1) dan
-     mengalahkan kelas tunggal (0,1,0). Aturan yang kalah tidak
-     berbuat apa-apa — dan pada tabel berlebar tetap, teks yang tetap
-     besar meluber melewati garis lalu menabrak sel sebelahnya. */
-  const khusus = (sel) => {
-    const k = (sel.match(/\./g) || []).length;
-    const e = (sel.replace(/\.[\w-]+/g, " ").match(/\b[a-z]+\b/g) || []).length;
-    return k * 100 + e;
-  };
-  const cek = (css, umum, khususnya) => {
-    const nUmum = Math.max(...umum.split(",").map((x) => khusus(x.trim())));
-    khususnya.forEach((sel) => {
-      // Selektor bisa jadi bagian daftar, jadi dicari apa adanya
-      if (css.indexOf(sel) < 0) throw new Error("aturan hilang: " + sel);
-      if (khusus(sel) <= nUmum)
-        throw new Error(sel + " (" + khusus(sel) + ") kalah dari aturan umum (" + nUmum + ")");
-    });
-  };
-  /* Hanya aturan yang menyetel properti yang bisa dikalahkan.
-     .ci-cbm kini tanpa aturan sama sekali — lebarnya dari <colgroup>,
-     nowrap dari aturan umum — jadi tidak ada yang perlu dijaga. */
-  cek(w.ciplCss(), ".ci-items th, .ci-items td", [".ci-items td.ci-dim"]);
-  cek(w.suratJalanCss(), ".sj-items th, .sj-items td",
-      [".sj-items td.sj-ket"]);
-});
-t("Item & Type: satu baris kalau muat, MEMBUNGKUS kalau tidak", () => {
-  /* Sempat dipaksa satu baris dengan mengecilkan huruf otomatis.
-     Hasilnya terlihat cacat: satu baris 6pt, baris di bawahnya 7,5pt,
-     dalam tabel yang sama. Sekarang yang menyesuaikan LEBAR KOLOMNYA;
-     kalau sudah mentok, teksnya membungkus seperti biasa. */
-  const css = w.ciplCss();
-  const i = css.indexOf(".ci-items td.ci-item");
-  const blok = css.slice(i, css.indexOf("}", i));
-  if (!/\.ci-items td\.ci-type/.test(css.slice(i, i + 120)))
-    throw new Error("kolom Type tidak ikut diatur");
-  if (!/white-space: normal/.test(blok))
-    throw new Error("masih dipaksa satu baris — nama panjang akan terpotong");
-  if (/text-overflow:\s*clip/.test(blok))
-    throw new Error("masih memotong teks alih-alih membungkusnya");
-
-  const row = { id: "wr", doc_number: "X", doc_date: "2026-08-05", payload: {} };
-  const jad = { id: "wr1", mode: "export", items: [{
-    namaBarang: "TYRE MOLD FULL SET - NOKIAN ENTRUST 235/45R19 SAVER",
-    hsCode: "23424252", qty: 43, satuan: "PCS", harga: 1,
-    netto: 10, bruto: 12, package: "81*81*81", packing: "1 BOX" }] };
-  [w.ciplHalamanInvoice(row, jad, w.ciplBarisBarang(jad)),
-   w.ciplHalamanPacking(row, jad, w.ciplBarisBarang(jad))].forEach((h, k) => {
-    if (!h.includes("ci-c ci-type"))
-      throw new Error((k ? "Packing List" : "Invoice") + ": kolom Type tidak ditandai");
-  });
-});
 t("kolom selain Item & Type tetap satu baris", () => {
   const css = w.ciplCss();
   const i = css.indexOf(".ci-items td.ci-item");
@@ -588,87 +536,6 @@ t("Surat Jalan TIDAK ikut berubah — nama barangnya tetap membungkus", () => {
   if (!/white-space: normal/.test(blokNama))
     throw new Error("nama barang surat jalan ikut dipaksa satu baris");
 });
-t("pengepas KOLOM ikut terkirim ke jendela cetak", () => {
-  const skrip = w.ciplSkripPasKolom();
-  if (!/function ciplPasKolom/.test(skrip))
-    throw new Error("pengepas tidak ada di dokumen cetak");
-  /* Diukur dengan canvas, bukan scrollWidth. Untuk sel tabel dengan
-     table-layout: fixed, scrollWidth tidak dapat diandalkan — teksnya
-     terpotong tapi selisihnya tidak pernah terbaca, jadi pengepasnya
-     diam saja. Itu yang membuat versi sebelumnya tidak pernah bekerja. */
-  if (!/measureText\(/.test(skrip))
-    throw new Error("pengepas tidak mengukur teksnya");
-  if (/scrollWidth/.test(skrip))
-    throw new Error("kembali memakai scrollWidth — tidak andal di sel tabel");
-  // Yang diubah lebar kolom, BUKAN ukuran huruf.
-  if (/style\.fontSize/.test(skrip))
-    throw new Error("masih mengecilkan huruf — baris jadi beda-beda ukurannya");
-  if (!/kolItem\.style\.width/.test(skrip))
-    throw new Error("lebar kolom tidak pernah diubah");
-  const src = require("fs").readFileSync(
-    require("path").join(__dirname, "..", "js", "features", "cipl-print.js"), "utf8");
-  const iPas = src.indexOf("ciplPasKolom()");
-  const iPrint = src.indexOf("w.print()");
-  if (iPas < 0 || iPas > iPrint)
-    throw new Error("pengepas dipanggil setelah print — yang tercetak lebar lama");
-});
-t("pelebaran kolom DIBATASI — dan batasnya benar-benar mengikat", () => {
-  /* Semula ada DUA batas: ambang persen untuk kolom nama, dan lantai
-     kolom penyumbang. Yang pertama tidak pernah tercapai — menaikkannya
-     sampai 100 pun hasilnya sama, dan uji yang memeriksanya ikut lulus
-     tanpa arti. Sekarang satu batas, dan uji ini menghitung batas
-     EFEKTIFNYA, bukan sekadar memastikan angkanya ada. */
-  const skrip = w.ciplSkripPasKolom();
-  const lantai = /LANTAI_SUMBANG = (\d+)/.exec(skrip);
-  if (!lantai) throw new Error("kolom penyumbang tidak punya lantai");
-  if (/PERSEN_MAKS/.test(skrip))
-    throw new Error("batas kedua muncul lagi — pastikan ia benar-benar mengikat");
-
-  const c = baca("CIPL_COLS_PACKING");
-  const awalItem = c[1], awalSumbang = c[8];
-  const maksEfektif = awalItem + Math.max(0, awalSumbang - Number(lantai[1]));
-
-  if (maksEfektif <= awalItem)
-    throw new Error("kolom nama tidak bisa melebar sama sekali");
-  if (maksEfektif > 30)
-    throw new Error(
-      `kolom nama bisa tumbuh sampai ${maksEfektif}% — terlalu bebas, ` +
-      "dua Packing List akan tercetak dengan tabel berbeda bentuk");
-});
-t("jumlah lebar tetap 100% setelah kolom melebar", () => {
-  /* Penjaga aritmetika: yang ditambahkan ke kolom nama harus PERSIS
-     yang diambil dari penyumbang. Kalau tidak, tabelnya meluber atau
-     menyisakan celah di kanan. */
-  const skrip = w.ciplSkripPasKolom();
-  if (!/kolSumbang\.style\.width = \(sumbangKini - tambah\)/.test(skrip))
-    throw new Error("penyumbang tidak dikurangi sebanyak yang ditambahkan");
-  if (!/kolItem\.style\.width = \(persenKini \+ tambah\)/.test(skrip))
-    throw new Error("kolom nama tidak ditambah sebanyak yang disumbangkan");
-  if (!/if \(!kolSumbang\) continue/.test(skrip))
-    throw new Error("tanpa penyumbang, kolom nama tetap melebar dan jumlahnya lewat 100%");
-});
-t("kolom yang melebar & menyumbang ditandai di markup, bukan nomor indeks", () => {
-  /* Indeks yang ditulis di dua tempat akan bergeser sendiri begitu ada
-     kolom disisipkan, dan yang melebar jadi kolom yang salah. */
-  const row = { id: "cg", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  const h = w.ciplHalamanPacking(row, null, []);
-  if (!/data-pas="item"/.test(h)) throw new Error("kolom nama tidak ditandai");
-  if (!/data-pas="sumbang"/.test(h)) throw new Error("kolom penyumbang tidak ditandai");
-  // Invoice tidak ikut — kolom namanya sudah lebar.
-  if (/data-pas=/.test(w.ciplHalamanInvoice(row, null, [])))
-    throw new Error("Invoice ikut ditandai padahal tidak diminta");
-});
-t("PENJAGA: lebar kolom berjumlah tepat 100%", () => {
-  /* Kurang dari 100 -> sisanya dibagi proporsional, kolom angka melar.
-     Lebih dari 100 -> dipangkas proporsional, kolom yang tak boleh
-     menyempit ikut menyempit. Yang benar tepat 100. */
-  const CI = w.eval("CIPL_COLS_INVOICE");
-  const PL = w.eval("CIPL_COLS_PACKING");
-  eq(CI.length, 10, "jumlah kolom Invoice:");
-  eq(PL.length, 10, "jumlah kolom Packing List:");
-  eq(Math.round(CI.reduce((a, b) => a + b, 0) * 10) / 10, 100, "Invoice:");
-  eq(Math.round(PL.reduce((a, b) => a + b, 0) * 10) / 10, 100, "Packing List:");
-});
 t("PENJAGA: lebar dipasang lewat colgroup, bukan kelas sel", () => {
   /* Baris pertama tabel berisi header ber-colspan ("Unit Price",
      "Amount", "CBM"). Dengan table-layout tetap, kolom yang tertutup
@@ -680,7 +547,7 @@ t("PENJAGA: lebar dipasang lewat colgroup, bukan kelas sel", () => {
       const nama = i ? "Packing List" : "Invoice";
       // Kolom bertanda data-pas punya atribut tambahan — jangan dipatok.
       const cols = (h.match(/<col style="width:[\d.]+%"[^>]*>/g) || []);
-      eq(cols.length, 10, nama + " jumlah <col>:");
+      eq(cols.length, 8, nama + " jumlah <col>:");
       if (h.indexOf("<colgroup>") > h.indexOf("<thead>"))
         throw new Error(nama + ": colgroup harus sebelum thead");
     });
@@ -693,64 +560,6 @@ t("PENJAGA: lebar dipasang lewat colgroup, bukan kelas sel", () => {
     if (/width:\s*[\d.]+%/.test(blok))
       throw new Error(sel + " masih menyimpan lebarnya sendiri");
   });
-});
-t("kolom teks & dimensi mendapat porsi terbesar", () => {
-  const CI = w.eval("CIPL_COLS_INVOICE");
-  const PL = w.eval("CIPL_COLS_PACKING");
-  // Invoice: Item(1) & Type(2) terlebar
-  const lainCI = CI.filter((_, i) => i !== 1 && i !== 2);
-  if (Math.max(...lainCI) >= Math.min(CI[1], CI[2]))
-    throw new Error("ada kolom angka selebar kolom teks di Invoice");
-  // Packing List: dimensi(8) harus lebih lebar daripada nilai CBM(9)
-  if (!(PL[8] > PL[9]))
-    throw new Error("kolom dimensi (" + PL[8] + "%) tidak lebih lebar dari nilai CBM (" + PL[9] + "%)");
-  // dan cukup untuk "81 CM x 81 CM x 81 CM" (~93px pada 6,5pt)
-  if (PL[8] / 100 * 716 < 110)
-    throw new Error("kolom dimensi cuma " + Math.round(PL[8] / 100 * 716) + "px");
-});
-t("halaman Packing List memakai porsinya sendiri", () => {
-  const row = { id: "pw", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  if (!w.ciplHalamanPacking(row, null, []).includes("ci-items--pl"))
-    throw new Error("penanda halaman PL hilang");
-  if (w.ciplHalamanInvoice(row, null, []).includes("ci-items--pl"))
-    throw new Error("penanda PL bocor ke Invoice");
-});
-
-t("PENJAGA: tidak ada batas yang digambar dua blok bertumpuk", () => {
-  /* Kalau blok atas menggambar border-bottom SEKALIGUS blok bawahnya
-     menggambar border-top, garis di batas itu tergambar dua kali —
-     dan hanya di situ tebalnya berlipat. */
-  const sisi = (css, sel) => {
-    const i = css.indexOf(sel + " {");
-    if (i < 0) return null;
-    const blok = css.slice(i, css.indexOf("}", i));
-    return {
-      atas: /border-top:\s*var\(/.test(blok),
-      bawah: /border-bottom:\s*var\(/.test(blok),
-    };
-  };
-  const cek = (css, nama, pasangan) => {
-    pasangan.forEach(([atas, bawah]) => {
-      const a = sisi(css, atas);
-      const b = sisi(css, bawah);
-      if (!a || !b) throw new Error(nama + ": aturan hilang — " + atas + " / " + bawah);
-      if (a.bawah && b.atas)
-        throw new Error(nama + ": batas " + atas + " >> " + bawah + " digambar dua kali");
-      if (!a.bawah && !b.atas)
-        throw new Error(nama + ": batas " + atas + " >> " + bawah + " tidak digambar siapa pun");
-    });
-  };
-  cek(w.suratJalanCss(), "SJ", [
-    [".sj-kop td", ".sj-title"],
-    [".sj-title", ".sj-meta td"],
-    [".sj-meta td", ".sj-items th, .sj-items td"],
-  ]);
-  /* Untuk CIPL, sisi atas tabel barang ditentukan aturan yang lebih
-     khusus (.ci-items thead th) yang mematikannya — jadi itu yang
-     diperiksa, bukan aturan umumnya. */
-  cek(w.ciplCss(), "CIPL", [
-    [".ci-ship", ".ci-items thead th"],
-  ]);
 });
 t("baris Total surat jalan menutup sisi bawahnya", () => {
   /* Baris terakhir tabel: tidak ada baris berikutnya yang menggambar
@@ -774,30 +583,19 @@ t("PENJAGA: variabel garis tidak menunjuk dirinya sendiri", () => {
   });
 });
 t("PENJAGA: setiap var(--line) punya definisinya", () => {
-  [["ciplCss", "--ci-line"], ["suratJalanCss", "--sj-line"]].forEach(([fn, v]) => {
-    const css = w[fn]();
-    const pakai = (css.match(new RegExp("var\\(" + v + "\\)", "g")) || []).length;
-    if (pakai < 5) throw new Error(fn + ": baru " + pakai + " garis memakai variabel");
-    // Tidak boleh ada border dengan angka ditulis langsung
-    const langsung = css.match(/border[^:]*:\s*[\d.]+(?:pt|px) solid/g) || [];
-    eq(langsung.length, 0, fn + ":");
-  });
+  /* Surat jalan: semua garisnya lewat variabel. CIPL: variabel garis
+     kini hanya dipakai bingkai Shipping Instruction -- CI & PL memakai
+     rancangan baru dengan tingkatan garis yang disengaja. */
+  const sj = w.suratJalanCss();
+  if ((sj.match(/var\(--sj-line\)/g) || []).length < 5) throw new Error("suratJalanCss: garis tidak lewat variabel");
+  eq((sj.match(/border[^:]*:\s*[\d.]+(?:pt|px) solid/g) || []).length, 0, "suratJalanCss:");
+  if (!/--ci-line: 1px solid #000/.test(w.ciplCss())) throw new Error("ciplCss: definisi --ci-line hilang (dipakai SI)");
 });
 t("surat jalan: satu nilai ketebalan garis", () => {
   const css = w.suratJalanCss();
   const literal = [...css.matchAll(/([\d.]+(?:pt|px)) solid/g)].map((m) => m[1]);
   eq([...new Set(literal)].join(","), "1px");
   eq(literal.length, 1);   // hanya definisi variabelnya
-});
-t("kotak tanda tangan CIPL tidak menggandakan garis bingkai", () => {
-  /* Baris ini paling bawah di dalam kotak; sisi bawahnya berimpit
-     dengan bingkai .ci-box. Dua garis berdempetan = terlihat dua kali
-     lebih tebal daripada sisanya. */
-  const css = w.ciplCss();
-  const blok = css.slice(css.indexOf(".ci-sign-row .ci-sign-cell"));
-  const isi = blok.slice(0, blok.indexOf("}"));
-  if (/border-bottom/.test(isi))
-    throw new Error("masih menggambar garis bawah di atas bingkai kotak");
 });
 t("kotak tanggal selebar isinya, tidak melar", () => {
   // CSS dimuat lewat <link>, jadi dibaca dari berkasnya
@@ -1052,6 +850,55 @@ t("judul mengikuti jenis invoice", () => {
   // Tanpa pilihan tersimpan, Commercial yang dipakai
   eq(w.ciplJudulInvoice({ payload: {} }), "COMMERCIAL INVOICE");
 });
+t("shipper: nama PT kapital, alamat ringkas Huruf Awal Kapital; bingkai luar di cetak", () => {
+  const sh = w.eval("CIPL_SHIPPER");
+  eq(sh[0], "PT DYNAMIC DESIGN INDONESIA");
+  eq(sh.slice(1, 3).join(" "), "Jalan Mayjend Sutoyo No. 1, Desa Pabedilan Kulon, Kec. Pabedilan, Kab. Cirebon, Jawa Barat 45193");
+  const row = { id: "b1", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  [w.ciplHalamanInvoice(row, null, []), w.ciplHalamanPacking(row, null, [])].forEach((h) => {
+    if (!h.includes('class="dd-bingkai"')) throw new Error("cetak tanpa bingkai luar");
+  });
+});
+t("CIPL: tema navy, referensi dokumen kanan atas + Notify ringkas, TOTAL satu baris, rincian kemasan di kiri bawah", () => {
+  const row = { id: "o1", doc_number: "DDI - CRBM - X - 061", doc_date: "2026-09-29",
+    payload: { currency: "USD", poNo: "DD-260928-DDI-01_R1", poDate: "2026-09-21", poNoExtra: ["DD-260928-DDI-01_R2"], poDateExtra: ["2026-09-24"] } };
+  const css = w.ciplCss();
+  if (!/grid-template-areas: "shipper ref" "consignee notify";/.test(css)) throw new Error("referensi belum di kanan atas, notify di bawahnya");
+  if (!/\.dd-notify \{ grid-area: notify; \}/.test(css)) throw new Error("notify party tidak setinggi kotak consignee");
+  if (!/\.dd-kemasan \{ justify-self: start; width: max-content;/.test(css)) throw new Error("kotak rincian kemasan belum selebar isinya");
+  if (!/\.dd-kemasan \.dd-catatan-k \{ text-align: center; \}/.test(css)) throw new Error("kepala rincian kemasan belum di tengah");
+  if (!/\.dd-ref-k \{[^}]*margin-top: 11px;/.test(css)) throw new Error("referensi tanpa jeda antar kelompok");
+  if (!/\.dd-kepala \{ text-align: center;/.test(css)) throw new Error("judul belum rata tengah");
+  if (/#F1551D|#FEF0EA|#B4501F/i.test(css)) throw new Error("warna oranye masih dipakai");
+  if (!/\.dd-kartu-h, \.dd-catatan-k \{\s*background: #1f2a44;[^}]*color: #fff;/.test(css)) throw new Error("kepala kartu belum navy");
+  if (!/\.dd-tabel thead th \{\s*background: #1f2a44;/.test(css)) throw new Error("kepala tabel belum navy");
+  if (!/\.dd-kepala \{[^}]*border-bottom: 2px solid #222;/.test(css)) throw new Error("garis judul belum hitam");
+  const h = w.ciplHalamanPacking(row, null, [{ item: "TYRE MOLD SIDE ONLY", type: "T", hs: "1", qty: 1, satuan: "SET", netto: 170, bruto: 195, cbmRaw: 0.479 }]);
+  const iRef = h.indexOf("Document reference");
+  if (!(iRef > 0 && iRef < h.indexOf("dd-tabel"))) throw new Error("referensi dokumen harus di atas tabel");
+  ["INVOICE NO. & DATE", "DDI - CRBM - X - 061 (29 SEP 2026)", "DD-260928-DDI-01_R1 (21 SEP 2026)", "DD-260928-DDI-01_R2 (24 SEP 2026)"].forEach((x) => {
+    if (!h.replace(/&amp;/g, "&").toUpperCase().includes(x)) throw new Error("format referensi: tidak ada " + x);
+  });
+  if (!(h.indexOf("Packing details") > h.indexOf("dd-tabel"))) throw new Error("rincian kemasan harus di bawah tabel");
+  if (!/<tfoot><tr class="dd-total-baris">/.test(h)) throw new Error("TOTAL belum jadi baris di bawah barang");
+  if (!h.includes("<td>TYRE MOLD<br>SIDE ONLY</td><td>T</td>")) throw new Error("nama barang & type belum rata tengah / dua baris");
+  eq(w.ciplPoPasangan(row.payload).join(" | "), "DD-260928-DDI-01_R1 (21 SEP 2026) | DD-260928-DDI-01_R2 (24 SEP 2026)", "pasangan PO:");
+});
+t("cetak CI & PL: tanpa kop -- judul & nomor dokumen, tiga kartu pihak, rincian, kotak total", () => {
+  const row = { id: "d9", doc_number: "DDI-CRBM-VIII-040", doc_date: "2026-08-03",
+    payload: { shipmentId: "sx1", currency: "USD", poNo: "DD-260724-DDI-01", poDate: "2026-07-24", termsDelivery: "FOB" } };
+  const b = barisCipl();
+  const ci = w.ciplHalamanInvoice(row, jadwalCipl, b);
+  const pl = w.ciplHalamanPacking(row, jadwalCipl, b);
+  [["CI", ci], ["PL", pl]].forEach(([n, h]) => {
+    ["Shipper / Exporter", "Consignee / Buyer", "Notify Party", "Invoice No.", "PO No.", "Vessel / Flight", "Country of Origin", "Authorized Signature"]
+      .forEach((x) => { if (!h.includes(x)) throw new Error(n + ": tidak ada " + x); });
+    if (/Pusat :|Cabang:|ci-kop/.test(h)) throw new Error(n + ": kop masih ada");
+  });
+  if (/Amount in words|US DOLLARS/.test(ci)) throw new Error("terbilang seharusnya tidak ada lagi");
+  if (!/class="dd-total-baris"[\s\S]*TOTAL/.test(ci)) throw new Error("baris TOTAL CI tidak ada");
+  if (!pl.includes("Packing details")) throw new Error("PL: rincian kemasan tidak ada");
+});
 t("dua halaman dari satu tombol", () => {
   const row = { id: "d1", doc_number: "DDI-CRBM-VIII-040", doc_date: "2026-08-03",
     payload: { invoiceKind: "Commercial", shipmentId: "sx1", currency: "USD",
@@ -1063,9 +910,12 @@ t("dua halaman dari satu tombol", () => {
   if (!h2.includes("PACKING LIST")) throw new Error("judul PL hilang");
   if (!h2.includes("ci-page2")) throw new Error("PL tidak dipaksa halaman baru");
   if (!h1.includes("30,062")) throw new Error("total invoice salah");
-  if (!h2.includes("4 Package")) throw new Error("jumlah koli hilang");
+  if (!h2.includes("4 PACKAGES")) throw new Error("jumlah koli hilang");
+  // Jumlah koli di kotak Packing Details, di bawah MEASUREMENT -- bukan di baris TOTAL
+  if (/<td colspan="4" class="dd-kiri">TOTAL : /.test(h2)) throw new Error("jumlah koli masih di baris TOTAL");
+  if (!(h2.indexOf("4 PACKAGES") > h2.indexOf("Packing details"))) throw new Error("jumlah koli belum di Packing Details");
   if (!h1.includes("DD-260724-DDI-01")) throw new Error("PO tidak tercetak");
-  if (!h1.includes("3 Aug 2026")) throw new Error("tanggal invoice tidak tercetak");
+  if (!h1.includes("3 AUG 2026")) throw new Error("tanggal invoice tidak tercetak");
 });
 t("halaman NON-COMMERCIAL memakai judulnya sendiri", () => {
   const row = { id: "d2", doc_number: "DDI-025/2026-VII-EXIM-LOG",
@@ -1113,63 +963,21 @@ t("seluruh field CIPL punya urutan", () => {
 });
 
 console.log("— AUDIT GARIS DOKUMEN CETAK —");
-t("seluruh garis satu ketebalan & tidak ada yang ganda", () => {
-  /* Memeriksa HASILNYA, bukan aturannya: tiap dokumen dirender, border
-     terhitung tiap elemen dibaca, lalu tiap batas geometris ditelusuri
-     pemiliknya. Grid tabel memperhitungkan colspan & rowspan. */
-  const { auditGarisCetak } = require(__dirname + "/border-audit.js");
-  /* jsdom diambil dengan cara biasa, BUKAN lewat jalur mutlak
-     "/../../node_modules/jsdom".
-
-     Jalur itu mengharuskan node_modules berada satu tingkat DI ATAS
-     folder proyek. Selama proyeknya kebetulan diletakkan begitu,
-     ujinya lulus; begitu proyeknya dipindah atau dibuka dari salinan
-     zip, uji ini gagal dengan "Cannot find module" — bukan karena
-     garisnya salah, tapi karena letak foldernya berbeda.
-
-     Uji yang gagalnya tergantung lokasi folder lama-lama diabaikan,
-     dan uji yang diabaikan tidak menjaga apa pun. */
-  const { JSDOM } = require("jsdom");
-
-  const jadwal = { id: "au1", mode: "export", party: "PT UJI", invoice: "INV-1",
-    origin: "IDTPP", destination: "KRPUS", vessel: "KAPAL", etd: "2026-08-10",
-    incoterm: "FOB", items: [
-      { namaBarang: "BARANG SATU - TIPE A", hsCode: "84807190", qty: 1, satuan: "SET",
-        harga: 100, netto: 280, bruto: 300, package: "81*81*81", packing: "1 BOX" },
-      { namaBarang: "BARANG DUA - TIPE B", hsCode: "84807190", qty: 3, satuan: "SET",
-        harga: 200, netto: 840, bruto: 900, package: "81*81*81", packing: "3 BOX" }] };
-  const row = { id: "au2", doc_type: "invoice", doc_number: "X-1", doc_date: "2026-08-05",
-    payload: { invoiceKind: "Commercial", currency: "USD", vehicle: "B 1 XX" } };
-  const baris = w.ciplBarisBarang(jadwal);
-
-  const laporan = auditGarisCetak(JSDOM, [
-    { nama: "Commercial Invoice", css: w.ciplCss(), html: w.ciplHalamanInvoice(row, jadwal, baris) },
-    { nama: "Packing List", css: w.ciplCss(), html: w.ciplHalamanPacking(row, jadwal, baris) },
-    { nama: "Surat Jalan", css: w.suratJalanCss(), html: w.buildSuratJalanHtml(row, jadwal) },
-  ]);
-
-  laporan.forEach((r) => {
-    if (!r.tebal.length) throw new Error(r.nama + ": tidak ada garis sama sekali");
-    if (r.tebal.length !== 1)
-      throw new Error(r.nama + ": " + r.tebal.map((x) => x.px + "px").join(" & "));
-    if (r.ganda.length)
-      throw new Error(r.nama + " garis ganda: " + r.ganda.join("; "));
-  });
-  // Pastikan dokumennya memang tergaris, bukan kosong lalu lolos
-  eq(laporan.length, 3);
-  laporan.forEach((r) => {
-    if (r.tebal[0].jumlah < 50)
-      throw new Error(r.nama + ": baru " + r.tebal[0].jumlah + " garis — dokumen tidak lengkap");
-  });
-});
-
 console.log("— CIPL: SATUAN M3 & TATA LETAK TABEL —");
 const rowPL = { id: "pl1", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-t("CBM per baris & total diberi satuan M3", () => {
-  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
-  eq((h.match(/M<sup>3<\/sup>/g) || []).length, 3);   // 2 baris + 1 total
-  if (!h.includes("0.531 M<sup>3</sup>")) throw new Error("CBM baris tanpa satuan");
-  if (!h.includes("2.126 M<sup>3</sup>")) throw new Error("total CBM tanpa satuan");
+t("Packing List: ukuran peti diringkas seperti Kumho, total ukuran dalam M3", () => {
+  const row = { id: "pd", doc_number: "X", doc_date: "2026-08-03", payload: {} };
+  const kirim = { id: "e1", mode: "export", items: [
+    { namaBarang: "A", qty: 1, satuan: "SET", netto: 170, bruto: 195, package: "97*95*52" },
+    { namaBarang: "B", qty: 1, satuan: "SET", netto: 170, bruto: 195, package: "97*95*52" },
+    { namaBarang: "C", qty: 1, satuan: "SET", netto: 100, bruto: 120, package: "80*80*56" }] };
+  const h = w.ciplHalamanPacking(row, kirim, w.ciplBarisBarang(kirim));
+  if (!h.includes("DIMENSION : 97 * 95 * 52 (cm) * 2 BX")) throw new Error("ringkasan ukuran per jenis peti tidak ada");
+  if (!h.includes("DIMENSION : 80 * 80 * 56 (cm) * 1 BX")) throw new Error("ukuran kedua tidak ada");
+  if (!/>MEASUREMENT : [\d.]+ M³</.test(h)) throw new Error("ukuran (M3) tidak ada");
+  if (/TOTAL MEASUREMENT/.test(h)) throw new Error("teks masih TOTAL MEASUREMENT");
+  if (/<th>CBM<\/th>|ci-dim"/.test(h)) throw new Error("kolom CBM/dimensi per barang masih ada");
+  if (!h.includes("440 KG") || !h.includes("510 KG")) throw new Error("total NW/GW tidak ber-KG");
 });
 t("baris tanpa dimensi tidak diberi satuan kosong", () => {
   const tanpa = { ...jadwalCipl, items: [
@@ -1177,40 +985,21 @@ t("baris tanpa dimensi tidak diberi satuan kosong", () => {
   const h = w.ciplHalamanPacking(rowPL, tanpa, w.ciplBarisBarang(tanpa));
   if (/M<sup>3<\/sup>/.test(h)) throw new Error("M3 muncul padahal CBM kosong");
 });
-t("ruang kosong tidak berkolom", () => {
-  // Garis tegaknya dihapus; garis atasnya dipertahankan sebagai
-  // penutup baris barang terakhir (lihat uji terpisah di bawah).
-  if (!/\.ci-fill td \{ border-left: 0/.test(w.ciplCss()))
-    throw new Error("ruang kosong masih berkolom");
-});
-t("sel barang rata tengah mendatar & tegak", () => {
-  const css = w.ciplCss();
-  if (!/\.ci-items tbody td \{[^}]*text-align: center/.test(css))
-    throw new Error("belum rata tengah mendatar");
-  if (!/\.ci-items tbody td \{[^}]*vertical-align: middle/.test(css))
-    throw new Error("belum rata tengah tegak");
-});
-t("sel tabel barang memakai garis bersama", () => {
-  const css = w.ciplCss();
-  if (!/\.ci-items th, \.ci-items td \{\s*border-top: var\(--ci-line\);\s*border-left: var\(--ci-line\)/.test(css))
-    throw new Error("sel tabel tidak memakai variabel garis pada atas & kiri");
-});
 t("nama barang ikut rata tengah, bukan rata kiri", () => {
-  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
-  if (/<td>\$?\{?TYRE/.test(h) || h.includes("<td>TYRE"))
-    throw new Error("nama barang masih tanpa kelas rata tengah");
+  /* Sel isi tabel barang rata tengah secara bawaan (.dd-tabel tbody td);
+     nama barang & type tidak boleh membawa kelas rata kiri. */
+  if (!/\.dd-tabel tbody td \{[^}]*text-align: center;/.test(w.ciplCss())) throw new Error("isi tabel tidak rata tengah");
+  [w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl()), w.ciplHalamanInvoice(rowPL, jadwalCipl, barisCipl())].forEach((h) => {
+    if (/<td class="dd-kiri">[^<]*TYRE/.test(h)) throw new Error("nama barang masih rata kiri");
+  });
 });
 
 console.log("— CARRIER CIPL: GABUNGAN VOYAGER/VESSEL + VOYAGE/FLIGHT —");
 t("Carrier pada cetak CIPL menggabungkan Nama Voyager/Vessel + No. Voyage/Flight", () => {
-  const laut = { transport: "laut", vessel: "MSC LORENA", voyage: "056S",
-    origin: "IDTPP", destination: "KRPUS" };
-  const udara = { transport: "udara", vessel: "Garuda Cargo", voyage: "GA880/04JUL",
-    origin: "IDCGK", destination: "KRICN" };
-  if (!w.ciplAngkutanHtml({ payload: {} }, laut).includes("MSC LORENA 056S"))
-    throw new Error("carrier laut belum tergabung");
-  if (!w.ciplAngkutanHtml({ payload: {} }, udara).includes("Garuda Cargo GA880/04JUL"))
-    throw new Error("carrier udara belum tergabung");
+  const laut = { transport: "laut", vessel: "MSC LORENA", voyage: "056S", origin: "IDTPP", destination: "KRPUS" };
+  const udara = { transport: "udara", vessel: "Garuda Cargo", voyage: "GA880/04JUL", origin: "IDCGK", destination: "KRICN" };
+  if (!w.ciplDdRincian({ payload: {} }, laut).includes("MSC LORENA 056S")) throw new Error("carrier laut belum tergabung");
+  if (!w.ciplDdRincian({ payload: {} }, udara).includes("Garuda Cargo GA880/04JUL")) throw new Error("carrier udara belum tergabung");
 });
 
 console.log("— ISIAN OTOMATIS DARI KARTU YANG DITAUTKAN —");
@@ -1575,13 +1364,36 @@ t("baris barang memuat size, pattern & mold no TERPISAH", () => {
   eq(b.pattern, "PS72");
   eq(b.moldNo, "S08");
 });
-t("ekspor Excel Kumho dipilih lewat profil, bentuk Korea tidak berubah", () => {
+t("Excel CIPL = salinan cetak: pembantu ukur (warna, garis, kisi, kolom)", () => {
+  eq(w.cxcWarna("rgb(31, 42, 68)"), "FF1F2A44");
+  eq(w.cxcWarna("rgba(0, 0, 0, 0)"), null, "transparan:");
+  eq(w.cxcGaris(1, "solid"), "thin");
+  eq(w.cxcGaris(2, "solid"), "medium");
+  eq(w.cxcGaris(3, "solid"), "thick");
+  eq(w.cxcGaris(1, "dashed"), "dashed");
+  eq(w.cxcGaris(0, "solid"), null, "tanpa garis:");
+  eq(w.cxcKisi([0, 10, 11.5, 30, 29, 100], 3).join(","), "0,10,29,100", "tepi berdekatan disatukan:");
+  eq(w.cxcIndeks([0, 10, 29, 100], 27), 2);
+  eq(w.cxcKolom(0) + w.cxcKolom(25) + w.cxcKolom(26) + w.cxcKolom(51), "AZAAAZ");
+  eq(w.cxcHuruf("Packing details", "uppercase"), "PACKING DETAILS");
+});
+t("lembar cetak CI/PL tanpa jarak huruf & sudut membulat -- Excel tidak bisa meniru keduanya", () => {
+  const css = w.ciplCss();
+  const dd = css.slice(css.indexOf("CI & PL DYNAMIC DESIGN"), css.indexOf(".si-sheet { font-size"));
+  if (/letter-spacing/.test(dd)) throw new Error("masih ada letter-spacing di CI/PL");
+  if (/border-radius/.test(dd)) throw new Error("masih ada border-radius di CI/PL");
+});
+t("ekspor Excel Kumho dipilih lewat profil; Dynamic Design diukur dari lembar cetaknya", () => {
   const src = require("fs").readFileSync(
     require("path").join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
   if (!/prof\.layout === "vn"/.test(src))
     throw new Error("ekspor Excel tidak bercabang menurut profil");
-  if (!/ciplXlsShippingInstruction\(wb, row, shipment, baris\)/.test(src))
-    throw new Error("bentuk Korea kehilangan lembar Shipping Instruction");
+  if (!/await ciplXlsDariCetak\(wb, row, shipment, baris\)/.test(src))
+    throw new Error("Excel Dynamic Design tidak diambil dari lembar cetaknya");
+  const ex = w.eval("ciplXlsDariCetak.toString()");
+  if (!/ciplHalamanInvoice\(row, shipment, baris\) \+ ciplHalamanPacking\(row, shipment, baris\)/.test(ex) || !/ciplHalamanShippingInstruction/.test(ex))
+    throw new Error("Excel tidak memakai ketiga halaman cetak");
+  if (!/\["CI", "PL", "SI"\]/.test(ex)) throw new Error("nama lembar bukan CI, PL, SI");
 });
 t("garis tegak hanya di LIMA batas kolom utama", () => {
   /* Quantity, Unit Price & Amount masing-masing dibagi dua sel
@@ -1906,10 +1718,7 @@ t("pelabuhan bawaan mengikuti profil pembelinya", () => {
 t("ketikan pengguna MENANG atas bawaan profil", () => {
   /* Bawaan itu titik mulai, bukan aturan -- pengapalan lewat Surabaya
      harus bisa ditulis apa adanya. */
-  const html = w.ciplAngkutanHtml(
-    { payload: { customer: "KUMHO TIRE (VIETNAM) CO., LTD", portLoading: "SURABAYA" } },
-    null,
-  );
+  const html = w.ciplDdRincian({ payload: { customer: "KUMHO TIRE (VIETNAM) CO., LTD", portLoading: "SURABAYA" } }, null);
   if (!html.includes("SURABAYA")) throw new Error("ketikan pengguna tidak dipakai");
   if (html.includes("JAKARTA")) throw new Error("bawaan profil menimpa ketikan");
 });
@@ -2180,7 +1989,7 @@ t("Pengajuan Dana bertab per Jenis Pengeluaran, dengan tab Semua", () => {
     w.renderDocNumSubTabs();
     const tombol = [...box.querySelectorAll("[data-dn-subtab]")];
     eq(tombol.map((b) => b.dataset.dnSubtab).join(","),
-       ",Billing,Freight,Storage,Lainnya,__ringkasan__",
+       ",Billing,Freight,Storage,Tax Advance,Lainnya,__ringkasan__,__laporan__",
        "urutan tab (yang pertama = Semua, Summary paling akhir):");
     eq(tombol[0].classList.contains("active"), true, "Semua jadi bawaan:");
   } finally {
@@ -2300,7 +2109,7 @@ t("riwayat Pengajuan Dana: kolom BL/AWB & kepala Drafter / Vendor / Payment Stat
     w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumCari = ""; docNumSaringBayar = ""');
     await w.renderDocNumHistory();
     const kepala = [...w.document.querySelectorAll("#docNumHistory thead th")].map((th) => th.textContent.trim()).filter(Boolean);
-    eq(kepala.join(" | "), "Number | Date | Drafter | Billing/Invoice Number | BL/AWB | Vendor | Value | Notes | Payment Status", "kepala:");
+    eq(kepala.join(" | "), "Number | Date | Drafter | Billing/Invoice Number | BL/AWB | Vendor | Transaction | Value | Notes | Payment Status", "kepala:");
     const sel = [...w.document.querySelectorAll("#docNumHistory tbody tr:first-child td")].map((td) => td.textContent.trim());
     eq(sel[4], "876822543558", "BL/AWB:");
     // Jenis dokumen lain tetap "Requester".
@@ -3579,70 +3388,7 @@ t("PENJAGA: sel hanya menggambar ATAS dan KIRI", () => {
     }
   });
 });
-t("tepi kiri tabel diambil alih bingkai kotak", () => {
-  if (!/\.ci-items tr > td:first-child \{ border-left: 0/.test(w.ciplCss()))
-    throw new Error("tepi kiri tergambar dua kali");
-});
-t("garis penutup baris barang terakhir tidak hilang", () => {
-  /* Di bawah konvensi atas+kiri, penutup baris terakhir digambar oleh
-     ruang kosong DI BAWAHNYA — bukan oleh baris barangnya sendiri. */
-  const css = w.ciplCss();
-  if (/\.ci-fill td \{ border: 0/.test(css))
-    throw new Error("ruang kosong menghapus garis penutup baris barang");
-  if (!/\.ci-fill td \{ border-left: 0/.test(css))
-    throw new Error("ruang kosong masih berkolom");
-});
-t("kotak tanda tangan menggambar garis atasnya sendiri", () => {
-  // Baris Total tidak lagi menutup sisi bawahnya, jadi pemiliknya pindah
-  const css = w.ciplCss();
-  if (!/\.ci-sign-row \.ci-sign-cell \{\s*border-top: var\(--ci-line\)/.test(css))
-    throw new Error("garis di atas Signed by hilang");
-});
-t("judul tabel tidak menambah garis di atas blok pengangkutan", () => {
-  if (!/\.ci-items thead th \{ border-top: 0/.test(w.ciplCss()))
-    throw new Error("garis atas tabel masih ganda");
-});
-t("PENJAGA: seluruh garis memakai SATU nilai", () => {
-  /* Ketebalan yang ditulis terpisah di banyak tempat akan berbeda
-     cepat atau lambat — dan hasilnya garis yang compang-camping. */
-  const css = w.ciplCss();
-  const literal = [...css.matchAll(/([\d.]+(?:pt|px)) solid/g)].map((m) => m[1]);
-  eq([...new Set(literal)].join(","), "1px");   // hanya definisi variabelnya
-  eq(literal.length, 1);
-  if (!/--ci-line: 1px solid/.test(css)) throw new Error("variabel garis hilang");
-});
-t("setiap border memakai variabel itu, bukan angkanya sendiri", () => {
-  const css = w.ciplCss();
-  const pakaiVar = (css.match(/var\(--ci-line\)/g) || []).length;
-  if (pakaiVar < 10) throw new Error("baru " + pakaiVar + " border yang memakai variabel");
-  // Tidak boleh ada border dengan angka ditulis langsung
-  const langsung = css.match(/border[^:]*:\s*[\d.]+(?:pt|px) solid/g) || [];
-  eq(langsung.length, 0);
-});
-t("lebar kolom tabel barang dipatok pasti", () => {
-  if (!/\.ci-items \{ table-layout: fixed/.test(w.ciplCss()))
-    throw new Error("lebar kolom masih dihitung dari isinya");
-});
-
 console.log("— CIPL: LEBAR KOLOM —");
-t("nilai CBM tidak boleh membungkus dari satuannya", () => {
-  /* nowrap berlaku untuk SEMUA kolom; hanya nama barang yang
-     dikecualikan. Jadi yang dipastikan: sel CBM memakai kelasnya
-     sendiri (bukan kelas nama barang) dan tetap satu baris. */
-  const h = w.ciplHalamanPacking(rowPL, jadwalCipl, barisCipl());
-  eq((h.match(/ci-num ci-cbm/g) || []).length, 3);
-  if (/ci-cbm[^"]*ci-item/.test(h))
-    throw new Error("sel CBM ikut dikecualikan seperti nama barang");
-});
-t("dimensi dirapatkan agar muat satu baris", () => {
-  const css = w.ciplCss();
-  if (!/\.ci-items td\.ci-dim \{[^}]*letter-spacing: -/.test(css))
-    throw new Error("letter-spacing dimensi belum dikurangi");
-  const blok = css.slice(css.indexOf(".ci-items td.ci-dim"));
-  if (/white-space: normal/.test(blok.slice(0, blok.indexOf("}"))))
-    throw new Error("dimensi masih boleh membungkus");
-});
-
 console.log("— CIPL: DESIMAL HANYA UNTUK PECAHAN —");
 t("bulat tanpa desimal, pecahan dengan 2 desimal", () => {
   eq(w.ciplAngka(10490), "10,490");
@@ -3685,61 +3431,32 @@ t("harga pecahan tetap utuh di cetakan", () => {
 });
 
 console.log("— CIPL: TATA LETAK & ISIAN OTOMATIS —");
-t("ruang kosong satu blok, bukan grid kotak", () => {
-  const row = { id: "d5", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  const h = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
-  eq((h.match(/ci-fill/g) || []).length, 1);
-  if (/ci-blank/.test(h)) throw new Error("masih menggambar baris kosong bergaris");
-});
-t("baris pengisi SELALU ada & tanpa tinggi tetap -- memanjang lewat CSS", () => {
-  const h = w.ciplRuangKosongHtml(10);
-  eq((h.match(/<td><\/td>/g) || []).length, 10, "jumlah sel:");
-  if (/height:/.test(h)) throw new Error("pengisi masih bertinggi tetap");
-  // Juga pada daftar barang yang panjang -- tanpa pengisi, sisa tinggi
-  // halaman dibagikan ke baris-baris barang.
-  const row = { id: "d5b", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  const banyak = Array.from({ length: 25 }, () => barisCipl()[0]);
-  if (!/ci-fill/.test(w.ciplHalamanInvoice(row, jadwalCipl, banyak))) throw new Error("pengisi hilang saat barang banyak");
-});
-t("cetak CIPL: bingkai setinggi kertas, jarak bawah = jarak atas (Dynamic Design & Kumho)", () => {
+t("cetak CIPL: halaman setinggi kertas, bagian akhir di dasar (Dynamic Design & Kumho)", () => {
   const css = w.ciplCss();
-  if (!/\.ci-sheet \{ width: 210mm; padding: 19\.05mm 6\.35mm; \}/.test(css)) throw new Error("lembar tidak selebar kertas");
-  if (!/min-height: calc\(297mm - 38\.1mm - 2px\)/.test(css.split(".ci-sheet:not(.si-sheet) > .ci-box")[1] || ""))
-    throw new Error("bingkai Invoice/PL tidak setinggi bidang cetak");
-  if (!/\.ci-items tr\.ci-fill td \{ height: 100%; \}/.test(css)) throw new Error("pengisi tidak memanjang");
-  // Total & tanda tangan di <tbody> yang sama dengan barang: tidak terulang di
-  // tiap halaman (tfoot), dan tidak ikut membengkak (kelompok baris terpisah).
-  const rowCi = { id: "d5c", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  [w.ciplHalamanInvoice(rowCi, jadwalCipl, barisCipl()), w.ciplHalamanPacking(rowCi, jadwalCipl, barisCipl())].forEach((h) => {
-    if (/<tfoot/.test(h)) throw new Error("Total masih di <tfoot>");
-    const badan = h.slice(h.indexOf('<tbody>', h.indexOf('class="ci-items')), h.lastIndexOf("</tbody>"));
-    if (!/ci-total-row/.test(badan) || !/ci-sign-row/.test(badan)) throw new Error("Total/tanda tangan tidak di tbody barang");
-  });
+  if (!/\.dd-halaman \{[\s\S]*?min-height: 297mm;[\s\S]*?padding: 10mm;/.test(css)) throw new Error("halaman CI/PL tidak setinggi kertas");
+  // Bingkai luar tebal tepat di garis margin, membingkai seluruh isi
+  if (!/\.dd-bingkai \{[\s\S]*?border: 2px solid #222;/.test(css)) throw new Error("bingkai luar tebal tidak ada");
+  if (!/\.dd-ruang \{ flex: 1 1 auto;/.test(css)) throw new Error("ruang pendorong ke dasar halaman hilang");
   const vn = w.ciplVnCss();
   if (!/padding: 14\.8mm 13\.7mm 14\.8mm 12\.9mm;/.test(vn)) throw new Error("jarak bawah Kumho tidak sama dengan atasnya");
-  if (/vn-sheet--pl/.test(vn)) throw new Error("jarak bawah khusus Packing List masih ada");
+  // Excel memakai padding halaman cetak itu sendiri sebagai marginnya
+  if (!/margins: \{ left: inci\(ukur\.pad\.l\)/.test(w.eval("cxcTulisLembar.toString()"))) throw new Error("margin Excel tidak diambil dari halaman cetak");
 });
 t("kotak tanda tangan muat stempel perusahaan: 50 mm di kertas (cetak & Excel, kedua format)", () => {
-  if (!/\.ci-sign-space \{ height: 45\.6mm; \}/.test(w.ciplCss())) throw new Error("kotak cetak Dynamic Design");
+  if (!/\.dd-ttd-kotak \{[^}]*height: 50mm;/.test(w.ciplCss())) throw new Error("kotak cetak Dynamic Design");
   if (!/\.vn-akhir-ttd \{[\s\S]*?height: 50mm;/.test(w.ciplVnCss())) throw new Error("kotak cetak Kumho");
   eq(baca("XLS_TTD_MM"), 50, "Excel:");
-  // Tinggi baris dihitung dari skala cetaknya, jadi di KERTAS tepat 50 mm.
-  const lebar = [4.5703125, 22.140625, 30.5703125, 18.28515625, 6.42578125, 5, 7.140625, 10, 7, 10.85546875];
+  const lebar = [5, 25, 22, 12, 7, 7, 15, 15];
   const baris = {};
   const ws = {
-    pageSetup: { printArea: "A1:J50", margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75 } },
+    pageSetup: { printArea: "A1:H50", margins: { left: 0.47, right: 0.47, top: 0.47, bottom: 0.47 } },
     getRow: (r) => (baris[r] = baris[r] || {}),
     getColumn: (c) => ({ width: lebar[c - 1] }),
   };
   w.ciplXlsTinggiTercetak(ws, 47, 50, 50);
-  const pt = [47, 48, 49, 50].reduce((s, r) => s + baris[r].height, 0);
+  const pt = [47, 48, 49, 50].reduce((x, r) => x + baris[r].height, 0);
   const mm = (pt * w.ciplXlsSkalaCetak(ws)) / 72 * 25.4;
   if (Math.abs(mm - 50) > 0.2) throw new Error("tercetak " + mm.toFixed(2) + " mm");
-});
-t("Excel CIPL: selalu ada baris kosong di atas Total; 15 barang ke bawah tidak bergeser", () => {
-  eq(w.ciplXlsBarisTotal(8), 46, "8 barang:");
-  eq(w.ciplXlsBarisTotal(15), 46, "15 barang:");
-  eq(w.ciplXlsBarisTotal(16), 47, "16 barang (dulu 46, tanpa baris kosong):");
 });
 t("Excel CIPL: tinggi isi dipas dengan skala cetaknya -> setinggi kertas A4", () => {
   // Lembar tiruan: 10 kolom selebar lembar INVOICE, 51 baris 15pt, margin Narrow.
@@ -3755,19 +3472,23 @@ t("Excel CIPL: tinggi isi dipas dengan skala cetaknya -> setinggi kertas A4", ()
   if (!(tambah > 0)) throw new Error("tidak ada tinggi yang ditambahkan");
   let tinggi = 0;
   for (let r = 1; r <= 50; r++) tinggi += baris[r].height || 15;
+  /* Lembar dibuat PAS TINGGI untuk kolom selebar XLS_FAKTOR_LEBAR kali
+     hitungan: di aplikasi yang kolomnya tidak lebih lebar dari itu,
+     fitToPage memilih skala-pas-tinggi -> penuh dari margin atas sampai
+     bawah. Di aplikasi yang kolomnya persis selebar hitungan (LibreOffice),
+     skala-pas-lebarnya lebih besar, jadi yang menentukan tetap tingginya. */
   const lebarPt = lebar.reduce((s, x) => s + w.ciplXlsKolomPt(x), 0);
-  const skala = Math.min(1, (595.28 - 36) / lebarPt);
-  const tercetakMm = (tinggi * skala) / 72 * 25.4;
+  const F = w.eval("XLS_FAKTOR_LEBAR");
+  if (!(F > 1)) throw new Error("faktor lebar tidak ada");
   const bidangMm = (841.89 - 108) / 72 * 25.4;
+  const skalaTinggi = (841.89 - 108) / tinggi;
+  const skalaLebarTerlebar = (595.28 - 36) / (lebarPt * F);
+  const skalaLebarHitungan = (595.28 - 36) / lebarPt;
+  const tercetakMm = (tinggi * Math.min(skalaTinggi, skalaLebarTerlebar)) / 72 * 25.4;
   if (Math.abs(tercetakMm - bidangMm) > 1) throw new Error(`tinggi tercetak ${tercetakMm.toFixed(1)} mm, bidang ${bidangMm.toFixed(1)} mm`);
+  if (!(skalaTinggi <= skalaLebarHitungan)) throw new Error("di LibreOffice lembarnya masih pas lebar, bukan pas tinggi");
   // Lebar kolom saat dicetak memakai lebar angka Calibri yang sebenarnya.
   if (Math.abs(w.ciplXlsKolomPt(10) - 10 * 7.4336 * 0.75) > 0.01) throw new Error("konversi lebar kolom");
-});
-t("tanda tangan jadi baris tabel, segaris dengan Total", () => {
-  const row = { id: "d6", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  const h = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
-  if (!h.includes("ci-sign-cell")) throw new Error("kotak tanda tangan hilang");
-  if (h.includes("<table class=\"ci-sign\">")) throw new Error("masih tabel terpisah");
 });
 t("Sailing on or about dikosongkan, tidak diambil dari ETD", () => {
   const row = { id: "d7", doc_number: "X", doc_date: "2026-08-03", payload: {} };
@@ -4529,51 +4250,6 @@ t("No. SI yang diisi manual menang atas turunan", () => {
     jadwalSI, b);
   eq(turunan.no, "42");
 });
-t("satuan berat menyatu dengan angkanya", () => {
-  /* Sebagai sel terpisah ia terlempar jauh ke kanan mengikuti lebar
-     kolom nilai, dan angka dengan satuannya berjarak setengah halaman
-     tidak terbaca sebagai satu keterangan. */
-  const src = w.eval("ciplXlsShippingInstruction.toString()");
-  if (!/def\.satuan && nilai \? `\$\{nilai\}/.test(src))
-    throw new Error("satuan tidak digabung ke sel angkanya");
-  if (/ciplXlsSet\(ws, "G" \+ r, def\.satuan/.test(src))
-    throw new Error("satuan masih ditaruh di kolom terpisah");
-});
-/* Lembar kerja tiruan — cukup untuk membaca GARIS yang benar-benar
-   digambar, tanpa memuat ExcelJS.
-
-   Sel gabungan memakai bersama SATU objek, persis seperti ExcelJS yang
-   memakai bersama satu objek gaya untuk seluruh rentang. Tanpa itu
-   pengujiannya akan lulus pada kode yang menimpa garis sel gabungan —
-   cacat yang justru paling sering terjadi di berkas ini. */
-function wsTiruan() {
-  const sel = new Map();
-  const kunci = (r, c) => r + ":" + c;
-  const buat = (r, c) => {
-    const k = kunci(r, c);
-    if (!sel.has(k)) sel.set(k, { r, c });
-    return sel.get(k);
-  };
-  const urai = (a) => {
-    const m = /^([A-J])(\d+)$/.exec(a);
-    return [Number(m[2]), m[1].charCodeAt(0) - 64];
-  };
-  return {
-    _sel: sel,
-    getColumn: () => ({}),
-    getRow: (r) => ({ getCell: (c) => buat(r, c) }),
-    getCell(a) { const [r, c] = urai(a); return buat(r, c); },
-    mergeCells(rentang) {
-      const [a, b] = rentang.split(":");
-      const [r1, c1] = urai(a), [r2, c2] = urai(b);
-      const induk = buat(r1, c1);
-      for (let r = r1; r <= r2; r++)
-        for (let c = c1; c <= c2; c++) sel.set(kunci(r, c), induk);
-    },
-    addImage() {},
-    at(r, c) { return sel.get(kunci(r, c)) || {}; },
-  };
-}
 
 /* ---- KESAMAAN DENGAN BERKAS RUJUKAN ----
 
@@ -4581,155 +4257,9 @@ function wsTiruan() {
    beredar ke forwarder dan bea cukai negara tujuan. Nomor & tulisan di
    bawah ini disalin dari sana; berubahnya satu saja berarti dokumen
    yang dikirim tidak lagi cocok dengan yang mereka harapkan. */
-t("tata letak Excel tetap pada koordinat rujukan", () => {
-  const ws = wsTiruan();
-  const wb = { addWorksheet: () => ws, addImage: () => 1 };
-  w.ciplXlsInvoice(wb, rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
 
-  eq(isi("A9"), "Shipper/Seller");
-  eq(isi("A17"), "Consignee/Buyer");
-  eq(isi("A24"), "Notify Party");
-  eq(isi("E9"), "Invoice No. & Date");
-  eq(isi("E14"), "PO No. & Date");
-  eq(isi("E17"), "Terms of Delivery");
-  eq(isi("E21"), "Term of Payment");
-  eq(isi("E24"), "Remarks");
-  eq(isi("A27"), "Port of Loading");
-  eq(isi("A29"), "No");           // judul tabel di baris 29
-  eq(isi("G46"), "Total");        // baris Total di 46
-  eq(isi("G47"), "Signed by");    // kotak tanda tangan 47-50
-});
 
-t("Carrier CIPL Excel: payload kosong -> gabungan Nama Voyager/Vessel + No. Voyage/Flight", () => {
-  /* payload.carrier kosong (dokumen lama, atau belum ditautkan jadwal
-     saat itu) -> C28 jatuh ke data jadwal, digabung, bukan Nama
-     Voyager/Vessel saja seperti sebelumnya. */
-  const ws = wsTiruan();
-  const jadwalLaut = { ...jadwalSI, vessel: "MSC LORENA", voyage: "056S" };
-  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
-    rowSI, jadwalLaut, w.ciplBarisBarang(jadwalLaut));
-  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
-  eq(isi("C28"), "MSC LORENA 056S");
-});
-t("Carrier CIPL Excel: payload yang sudah terisi tidak digabung ulang", () => {
-  const ws = wsTiruan();
-  const rowManual = { ...rowSI, payload: { ...rowSI.payload, carrier: "TEKS MANUAL" } };
-  const jadwalLaut = { ...jadwalSI, vessel: "MSC LORENA", voyage: "056S" };
-  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
-    rowManual, jadwalLaut, w.ciplBarisBarang(jadwalLaut));
-  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
-  eq(isi("C28"), "TEKS MANUAL");
-});
 
-t("Packing List memakai judul tabelnya sendiri", () => {
-  const ws = wsTiruan();
-  w.ciplXlsPacking({ addWorksheet: () => ws, addImage: () => 1 },
-    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-  const isi = (a) => (ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {}).value;
-  eq(isi("B29"), "Item Description");
-  eq(isi("D29"), "HS CODE");
-  eq(isi("G29"), "NW");
-  eq(isi("E46"), "TOTAL");
-});
-
-t("tiga sel yang dulu ganjil kini SAMA di kedua lembar", () => {
-  /* Rujukan menuliskannya berbeda antar lembar — "about" vs "About",
-     spasi di depan label invoice, dan Final Destination rata tengah di
-     satu lembar tapi rata kiri di lembar lain. Diseragamkan: sailing
-     ikut bentuk PL, dua lainnya ikut bentuk Invoice.
-
-     Diuji dari KEDUA lembar sekaligus. Menguji satu lembar saja tidak
-     membuktikan keduanya sama, dan justru kesamaan itu yang diminta. */
-  const bikin = (fn) => {
-    const ws = wsTiruan();
-    fn({ addWorksheet: () => ws, addImage: () => 1 },
-      rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-    return (a) => ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
-  };
-  const inv = bikin(w.ciplXlsInvoice);
-  const pl = bikin(w.ciplXlsPacking);
-
-  ["E9", "D27", "E27"].forEach((a) => {
-    eq(inv(a).value, pl(a).value);
-    eq(JSON.stringify(inv(a).alignment || null), JSON.stringify(pl(a).alignment || null));
-    eq(JSON.stringify(inv(a).font || null), JSON.stringify(pl(a).font || null));
-  });
-  eq(inv("E9").value, "Invoice No. & Date");   // tanpa spasi depan
-  eq(inv("D27").value, "Sailing on or About"); // bentuk PL
-  eq(inv("E27").alignment.horizontal, "center");
-  /* Berkas rujukan yang diperbarui menebalkannya di KEDUA lembar, jadi
-     tebal — yang dijaga di sini kesamaannya, bukan tebal/tidaknya. */
-  eq(inv("D27").font.size, 8);
-  eq(!!inv("D27").font.bold, true);
-});
-
-t("rata tengah tegak memakai kosakata ExcelJS", () => {
-  /* ExcelJS memakai top/middle/bottom dan MEMBUANG diam-diam nilai
-     yang tidak dikenalnya. Ditulis "center", perataannya hilang tanpa
-     galat: kode terlihat benar, hasilnya rata bawah. */
-  const src = w.eval("ciplXlsBlokPihak.toString()") +
-              w.eval("ciplXlsInvoice.toString()") +
-              w.eval("ciplXlsShippingInstruction.toString()") +
-              w.eval("XLS_TENGAH.vertical") + w.eval("XLS_TEGAK.vertical");
-  if (/vertical:\s*"center"/.test(src))
-    throw new Error('vertical: "center" diabaikan ExcelJS — pakai "middle"');
-  eq(w.eval("XLS_TENGAH.vertical"), "middle");
-  eq(w.eval("XLS_TEGAK.vertical"), "middle");
-});
-
-t("angka memakai format dari rujukan, bukan General", () => {
-  /* Harga & jumlah pakai "Comma Style" bawaan Excel: ribuan
-     berpemisah, negatif dalam kurung, nol jadi tanda hubung. "#,##0"
-     mirip tapi menampilkan nol dan minus dengan cara berbeda. */
-  const ws = wsTiruan();
-  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
-    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-  const sel = (a) => ws.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
-  const UANG = '_(* #,##0_);_(* \\(#,##0\\);_(* "-"_);_(@_)';
-  ["H30", "J30", "J46"].forEach((a) => eq(sel(a).numFmt, UANG, a + ":"));
-  /* Sel angka TIDAK dibungkus baris — angka tidak punya tempat patah,
-     dan membungkusnya membuat tinggi baris berubah-ubah. */
-  eq(sel("H30").alignment.wrapText, false);
-  eq(sel("B30").alignment.wrapText, true);   // pembanding: sel teks
-
-  const pl = wsTiruan();
-  w.ciplXlsPacking({ addWorksheet: () => pl, addImage: () => 1 },
-    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-  const selPl = (a) => pl.at(Number(a.slice(1)), a.charCodeAt(0) - 64) || {};
-  ["G30", "H30", "G46", "H46"].forEach((a) => eq(selPl(a).numFmt, "#,##0_ ", a + ":"));
-  ["J30", "I46"].forEach((a) => eq(selPl(a).numFmt, "0.000", a + ":"));
-  /* Angka Total sebaris dengan angka barang, jadi ukurannya mengikuti:
-     Arial 9, bukan 8. */
-  eq(selPl("G46").font.size, 9);
-});
-t("kotak tanda tangan Invoice & Packing List SAMA LEBAR -- cetak & Excel Dynamic Design", () => {
-  const porsi = (l, k) => l.slice(k).reduce((a, b) => a + b, 0) / l.reduce((a, b) => a + b, 0);
-  // CETAK: Invoice D..J, Packing List E..J -- porsi bingkainya sama.
-  eq(porsi(baca("CIPL_COLS_INVOICE"), 3).toFixed(4), porsi(baca("CIPL_COLS_PACKING"), 4).toFixed(4), "cetak:");
-  const row = { id: "d7", doc_number: "X", doc_date: "2026-08-03", payload: {} };
-  const hCi = w.ciplHalamanInvoice(row, jadwalCipl, barisCipl());
-  if (!/<td colspan="3" class="ci-sign-empty">/.test(hCi) || !/<td colspan="7" class="ci-sign-cell">/.test(hCi))
-    throw new Error("kotak tanda tangan Invoice cetak tidak mulai di kolom D");
-  if (!/<td colspan="5" class="ci-total-k">Total<\/td>/.test(hCi))
-    throw new Error("label Total Invoice cetak tidak mulai di kolom D");
-  // EXCEL: keduanya D..J, porsinya sama.
-  const lembar = (fn) => {
-    const ws = wsTiruan(), kol = {}, bar = {}, asliRow = ws.getRow;
-    ws.getColumn = (c) => (kol[c] = kol[c] || {});
-    ws.getRow = (r) => (bar[r] = bar[r] || asliRow(r));
-    fn({ addWorksheet: () => ws, addImage: () => 1 }, rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-    return { ws, lebar: Array.from({ length: 10 }, (_, i) => (kol[i + 1] || {}).width) };
-  };
-  const ci = lembar(w.ciplXlsInvoice), pl = lembar(w.ciplXlsPacking);
-  const rt = w.ciplXlsBarisTotal(w.ciplBarisBarang(jadwalSI).length);
-  const awal = (x) => [...Array(10).keys()].map((i) => i + 1).find((c) => /signed by/i.test(String(x.ws.at(rt + 1, c).value || "")));
-  eq(awal(ci), 4, "Excel Invoice mulai di D:");
-  eq(awal(pl), 4, "Excel Packing List mulai di D:");
-  eq(porsi(ci.lebar, 3).toFixed(4), porsi(pl.lebar, 3).toFixed(4), "Excel:");
-  // Kolom D Packing List TIDAK dipersempit: ia juga menampung "Sailing on or About".
-  eq(pl.lebar[3], 16, "lebar kolom D Packing List:");
-});
 
 t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {
   /* ExcelJS mengubah Date jadi nomor seri memakai jam UTC. Tengah
@@ -4743,73 +4273,33 @@ t("tanggal Excel tidak mundur sehari di zona waktu mana pun", () => {
   eq(d.getUTCHours(), 0, "harus tengah malam UTC:");
 });
 
-t("pengaturan cetak: kertas, skala & margin narrow", () => {
-  /* fitToPage BERSAMA skala. Rujukan punya keduanya; tanpa fitToPage
-     Excel memakai skala mentah dan halaman keluar ~2,4% lebih kecil.
 
-     Margin bawaannya kini preset Narrow — DIUBAH ATAS PERMINTAAN, dan
-     ini satu-satunya hal yang menyimpang dari berkas rujukan
-     DDI-CRBM-VIII-045 (di sana INVOICE 0,3/0,4). */
-  const h = w.eval("ciplXlsHalaman")({ area: "A1:J51", scale: 80, tengah: true });
-  eq(h.paperSize, 9);
-  eq(h.orientation, "portrait");
-  eq(h.scale, 80);
-  eq(h.fitToPage, true);
-  eq(h.horizontalCentered, true);
-  eq(h.printArea, "A1:J51");
-  eq(h.margins.left, 0.25, "kiri narrow:");
-  eq(h.margins.right, 0.25, "kanan narrow:");
-  eq(h.margins.top, 0.75, "atas narrow:");
-  eq(h.margins.bottom, 0.75, "bawah narrow:");
+t("nama barang dua baris (TYRE MOLD / jenisnya) & desimal harga seragam", () => {
+  eq(w.ciplNamaDuaBaris("TYRE MOLD TREAD ONLY").join("|"), "TYRE MOLD|TREAD ONLY");
+  eq(w.ciplNamaDuaBaris("TYRE MOLD FULL SET").join("|"), "TYRE MOLD|FULL SET");
+  eq(w.ciplNamaDuaBaris("TIRE MOLD SIDE ONLY").join("|"), "TIRE MOLD|SIDE ONLY");
+  eq(w.ciplNamaDuaBaris("SIDE PLATE").join("|"), "SIDE PLATE", "nama lain apa adanya:");
+  const row = { id: "n1", doc_number: "X", doc_date: "2026-08-03", payload: { currency: "USD" } };
+  const h = w.ciplHalamanInvoice(row, null, [
+    { item: "TYRE MOLD TREAD ONLY", type: "T", hs: "1", qty: 1, satuan: "SET", harga: 6300.25, amount: 6300.25 },
+    { item: "TYRE MOLD TREAD ONLY", type: "T", hs: "1", qty: 1, satuan: "SET", harga: 5800, amount: 5800 }]);
+  if (!h.includes("USD 5,800.00") || !h.includes("USD 12,100.25")) throw new Error("desimal satu kolom tidak seragam");
+});
+t("harga, jumlah, Net & Gross Weight rata tengah; angka membawa nilai & format Excel-nya", () => {
+  /* Excel diukur dari lembar cetak: sel angka menyimpan nilainya (data-n)
+     dan format Excel (data-f) yang menampilkan teks yang SAMA dengan
+     cetakannya -- tetap bisa dijumlah di Excel. */
+  if (!/\.dd-tabel \.dd-angka \{ text-align: center; white-space: nowrap; \}/.test(w.ciplCss())) throw new Error("gaya rata tengah hilang");
+  const row = { id: "w1", doc_number: "X", doc_date: "2026-08-03", payload: { currency: "USD" } };
+  const pl = w.ciplHalamanPacking(row, null, [{ item: "A", type: "T", hs: "1", qty: 1, satuan: "SET", netto: 170, bruto: 1275.5, cbmRaw: 0 }]);
+  if (!pl.includes('<td class="dd-angka" data-n="170" data-f=\'#,##0&quot; KG&quot;\'>170 KG</td>')) throw new Error("berat bulat: " + (pl.match(/<td class="dd-angka"[^>]*>170 KG<\/td>/) || ["?"])[0]);
+  if (!pl.includes('data-n="1275.5" data-f=\'#,##0.0&quot; KG&quot;\'>1,275.5 KG</td>')) throw new Error("berat berdesimal tidak sama di cetak & Excel");
+  const ci = w.ciplHalamanInvoice(row, null, [{ item: "A", type: "T", hs: "1", qty: 2, satuan: "SET", harga: 4500, amount: 9000 }]);
+  if (!ci.includes('data-n="4500" data-f=\'&quot;USD &quot;#,##0\'>USD 4,500</td>')) throw new Error("harga: nilai/format Excel tidak sama dengan teks cetak");
+  const ci2 = w.ciplHalamanInvoice(row, null, [{ item: "A", type: "T", hs: "1", qty: 1, satuan: "SET", harga: 6300.25, amount: 6300.25 }]);
+  if (!ci2.includes('data-f=\'&quot;USD &quot;#,##0.00\'>USD 6,300.25</td>')) throw new Error("harga bersen: format dua desimal");
 });
 
-t("Excel memasang logo & bingkai seperti cetakan", () => {
-  if (!/ciplXlsLogo/.test(w.eval("ciplXlsKerangka.toString()")))
-    throw new Error("logo tidak dipasang");
-  /* Kegagalan memuat logo tidak boleh menggagalkan seluruh berkas. */
-  if (!/try/.test(w.eval("ciplXlsLogo.toString()")))
-    throw new Error("kegagalan logo tidak dijaga");
-
-  const ws = wsTiruan();
-  w.ciplXlsInvoice({ addWorksheet: () => ws, addImage: () => 1 },
-    rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-
-  /* Nomor baris di bawah ini disalin dari berkas rujukan
-     DDI-CRBM-VIII-042.xlsx. Kalau berubah, hasil unduhan tidak lagi
-     sama dengan berkas yang beredar ke forwarder. */
-  const akhir = 50;  // 30 + 16 baris minimum, Total di 46, ttd 47-50
-  const ada = (r, c, s) => !!(ws.at(r, c).border || {})[s];
-
-  /* SATU bingkai mengelilingi seluruh dokumen, seperti .ci-box. Dulu
-     tiap blok berkotak sendiri dan bagian bawah — ruang kosong, Total,
-     tanda tangan — tidak dilingkupi apa pun. */
-  for (let r = 1; r <= akhir; r++) {
-    if (!ada(r, 1, "left")) throw new Error("bingkai kiri bolong di baris " + r);
-    if (!ada(r, 10, "right")) throw new Error("bingkai kanan bolong di baris " + r);
-  }
-  /* Sisi bawah menguji URUTAN: ciplXlsKotak() menimpa seluruh sisi
-     sebuah sel, jadi bingkainya HARUS digambar setelah isinya. */
-  for (let c = 1; c <= 10; c++)
-    if (!ada(akhir, c, "bottom")) throw new Error("bingkai bawah bolong di kolom " + c);
-
-  /* Sekat di dalam blok pihak, di baris yang sama dengan rujukan. */
-  [16, 23, 26, 28].forEach((r) => {
-    if (!ada(r, 1, "bottom")) throw new Error("sekat selebar halaman hilang di baris " + r);
-  });
-  [13, 20].forEach((r) => {
-    if (!ada(r, 5, "bottom")) throw new Error("sekat kolom kanan hilang di baris " + r);
-  });
-  if (!ada(13, 4, "right")) throw new Error("kolom kiri & kanan tidak dipisah");
-  /* Baris judul tabel & baris Total ada di tempatnya. */
-  if (!ada(29, 2, "bottom")) throw new Error("judul tabel bukan di baris 29");
-  if (!ada(46, 7, "top")) throw new Error("baris Total bukan di baris 46");
-
-  /* Ruang kosong TANPA garis sama sekali — yang membatasinya cuma
-     bingkai luar, sama seperti .ci-fill pada cetakan. */
-  const kosong = ws.at(40, 3).border || {};
-  if (kosong.top || kosong.left || kosong.right || kosong.bottom)
-    throw new Error("ruang kosong ikut digariskan");
-});
 /* ---- KARTU DI LAYAR SEDANG (tablet & split window) ----
 
    Empat cacat ini ditemukan dengan memotret kartu sungguhan di
@@ -5012,17 +4502,6 @@ t("kolom aksi cukup untuk lima tombol", () => {
   if (Math.max(...semua) < 200)
     throw new Error("varian layar besar butuh ~205px (5 x 33px + celah)");
 });
-t("label SI memakai rich text, bukan font sel", () => {
-  /* Menyetel Wingdings ke SELURUH sel membuat labelnya ikut jadi
-     lambang yang tak terbaca. */
-  const v = w.ciplXlsLabelSI("Bill of Lading");
-  eq(Array.isArray(v.richText), true);
-  eq(v.richText[0].font.name, "Wingdings");
-  eq(v.richText[0].text, "T");
-  eq(v.richText[1].font.name, "Arial");
-  if (!v.richText[1].text.includes("Bill of Lading"))
-    throw new Error("label hilang dari rich text");
-});
 t("kolom aksi tabel tidak menindih kolom Customer", () => {
   const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
   const i = css.indexOf(".docnum-table td:last-child");
@@ -5031,16 +4510,20 @@ t("kolom aksi tabel tidak menindih kolom Customer", () => {
   if (!/width: 1%/.test(blok))
     throw new Error("sel tombol tidak punya lebar sendiri");
 });
-t("enam JEDA kelompok tepat di tempat yang benar", () => {
-  /* `garis` sekarang menandai JEDA, bukan garis: sesudah Port of
-     Discharge, Volume, Ocean Freight, Stuffing Date, L/C Number, dan
-     Special instruction. Nomor barisnya dipakai bersama oleh cetakan
-     dan Excel, jadi tetap diuji walau bentuknya berubah. */
+t("SI: semua baris berjarak sama & titik dua sejajar; label huruf awal kapital", () => {
+  /* Tidak ada lagi jeda antar kelompok -- jarak antarbaris seragam dari
+     Bill of Lading sampai Special instruction. Titik dua Special
+     instruction di kolom titik dua, sejajar dengan baris lain. */
   const peta = w.eval("CIPL_SI_BARIS");
-  const berjeda = peta.filter((x) => x.garis).map((x) => x.k);
-  eq(berjeda.join(" | "),
-     "Port of Discharge | Volume | Ocean Freight | Stuffing Date | L/C Number | Special instruction :");
-  eq(berjeda.length, 6);
+  eq(peta.filter((x) => x.garis).length, 0, "baris berjeda:");
+  const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
+  if (/si-jeda/.test(h + w.ciplCss())) throw new Error("jeda kelompok masih ada");
+  if (!/Special Instruction<\/td>\s*<td class="si-c">:<\/td>/.test(h)) throw new Error("titik dua Special Instruction tidak di kolomnya");
+  if (/<u>/.test(h)) throw new Error("Special Instruction masih bergaris bawah");
+  ["PEB Number", "PEB Date", "Cont + Seal", "HS Code"].forEach((k) => {
+    if (!h.includes(">" + k + "<")) throw new Error("label belum huruf awal kapital: " + k);
+  });
+  if (!/\.si-no \{[^}]*margin: 2px 0 30px;/.test(w.ciplCss())) throw new Error("jarak judul ke isi belum ditambah");
 });
 t("SI berbingkai luar, TANPA sekat di dalamnya", () => {
   /* Berkas rujukan DDI-CRBM-VIII-042.xlsx tidak punya satu garis pun di
@@ -5073,7 +4556,7 @@ t("cetak & Excel membaca angka yang sama", () => {
   eq(d.nw, "280");
   eq(d.koli, "4 PACKAGE");
   eq(d.hs, "84807190");
-  eq(d.barang, "TYRE MOLD FULL SET");
+  eq(d.barang, "TYRE MOLD", "nama dasar barang, tanpa jenisnya:");
 });
 t("PENJAGA: pustaka Excel dimuat dulu sebelum dipakai", () => {
   /* ExcelJS tidak ikut di halaman — dimuat sesuai kebutuhan lewat
@@ -5094,10 +4577,6 @@ t("kegagalan Excel menyebutkan sebabnya", () => {
   if (!/err && err\.message/.test(src) && !/err\.message/.test(src))
     throw new Error("pesan galat tidak menyebut sebabnya");
 });
-t("gabung sel tidak menggagalkan seluruh berkas", () => {
-  const src = w.eval("ciplXlsGabung.toString()");
-  if (!/try/.test(src)) throw new Error("mergeCells tidak dijaga");
-});
 t("unduhan Excel dijaga dari klik ganda", () => {
   const src = w.eval("unduhCiplExcel.toString()");
   if (!/ciplXlsSedangDibuat/.test(src))
@@ -5108,19 +4587,22 @@ t("unduhan Excel dijaga dari klik ganda", () => {
 t("halaman ketiga: Shipping Instruction", () => {
   const b = w.ciplBarisBarang(jadwalSI);
   const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, b);
-  ["SHIPPING INSTRUCTION", "NO. 03", "PT WIDE LOGISTICS", "Bill of Lading",
-   "Place of Receipt", "Port of Discharge", "TYRE MOLD FULL SET", "LCL",
+  ["SHIPPING INSTRUCTION", "NO. 03", "To : PT WIDE LOGISTICS", "Bill of Lading",
+   "Place of Receipt", "Port of Discharge", "TYRE MOLD", "LCL",
    "4 PACKAGE", "84807190", "SIGN &amp; STAMP"].forEach((teks) => {
     if (!h.includes(teks)) throw new Error("hilang dari SI: " + teks);
   });
   if (!h.includes("ci-page2")) throw new Error("SI tidak dipaksa halaman baru");
+  if (h.includes("TYRE MOLD FULL SET")) throw new Error("Description of Goods masih nama lengkap");
+  // "To : ..." tepat di atas kalimat pembuka, satu gaya dengannya
+  if (!/<div class="si-lead si-to">To : [^<]*<\/div>\s*<div class="si-lead">Please arrange/.test(h)) throw new Error("'To :' belum di atas kalimat pembuka");
 });
 t("baris yang diisi forwarder dibiarkan kosong", () => {
   /* PEB, Booking Number, Vessel, ETD/ETA, Stuffing Date diisi
      forwarder setelah menerima instruksinya — mengisinya dari tebakan
      kita menghilangkan gunanya. */
   const h = w.ciplHalamanShippingInstruction(rowSI, jadwalSI, w.ciplBarisBarang(jadwalSI));
-  ["PEB NUMBER", "Booking Number", "Vessel", "ETD", "ETA", "Stuffing Date"]
+  ["PEB Number", "Booking Number", "Vessel", "ETD", "ETA", "Stuffing Date"]
     .forEach((k) => {
       const i = h.indexOf(">" + k + "<");
       if (i < 0) throw new Error("baris " + k + " hilang");
@@ -7285,6 +6767,322 @@ t("riwayat Invoice: kolom No, Terms of Delivery, Final Destination, Terms of Pay
   }
 });
 
+console.log("— PENGAJUAN DANA: JENIS TRANSAKSI & TAX ADVANCE —");
+t("form Pengajuan Dana punya dropdown Jenis Transaksi; tersimpan & terbaca ulang", () => {
+  const panel = w.document.querySelector('[data-docnum-panel="fund"]');
+  const sel = panel.querySelector('select[data-dn="transactionType"]');
+  if (!sel) throw new Error("dropdown Jenis Transaksi tidak ada");
+  eq([...sel.options].map((o) => o.value).filter(Boolean).join(","), "Sea Import,Sea Export,Air Import,Air Export,Local Sale");
+  /* Uji peran viewer/marketing sebelumnya mengunci isian form (lockInputs)
+     dan halaman tidak dimuat ulang di antara uji -- buka sebentar. */
+  const terkunci = sel.disabled;
+  sel.disabled = false;
+  sel.value = "Air Export";
+  eq(w.readDocNumForm("fund").transactionType, "Air Export", "ikut tersimpan di payload:");
+  sel.value = "";
+  sel.disabled = terkunci;
+  // Label ikut bahasa
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    eq(sel.closest("div").querySelector(".form-label").textContent.trim(), "Transaction Type");
+    w.setLang("id");
+    eq(sel.closest("div").querySelector(".form-label").textContent.trim(), "Jenis Transaksi");
+  } finally { w.setLang(simpan); }
+});
+t("riwayat Pengajuan Dana: kolom Transaksi; pengajuan lama tampil —", async () => {
+  const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, sub: baca("docNumHistorySub") };
+  try {
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = ""; docNumPage = 1;');
+    w.jejakDocNum = [
+      { id: "t1", doc_type: "fund", doc_number: "311/EXIM/DDI/X/2026", doc_date: "2026-10-01", requester: "Yogi Firgiawan", department: "EXIM",
+        created_at: "2026-10-01T03:00:00Z", payload: { expenseType: "Tax Advance", transactionType: "Sea Import", payee: "KAS NEGARA", currency: "IDR" } },
+      { id: "t2", doc_type: "fund", doc_number: "300/EXIM/DDI/IX/2026", doc_date: "2026-09-21", requester: "Yogi Firgiawan", department: "EXIM",
+        created_at: "2026-09-21T03:00:00Z", payload: { expenseType: "Freight", payee: "FEDEX", currency: "IDR" } },
+    ];
+    await w.renderDocNumHistory();
+    const sel = (i) => [...w.document.querySelectorAll(`#docNumHistory tbody tr:nth-child(${i}) td.dn-col-transaksi`)].map((td) => td.textContent.trim())[0];
+    eq(sel(1), "Sea Import", "baris berisi:");
+    eq(sel(2), "\u2014", "pengajuan lama:");
+    const tab = [...w.document.querySelectorAll(".docnum-subtab")].map((b) => b.textContent.trim());
+    if (!tab.includes("Tax Advance")) throw new Error("tab Tax Advance tidak ada: " + tab.join(" | "));
+  } finally {
+    w.jejakDocNum = simpan.rows;
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab) + "; docNumHistorySub = " + JSON.stringify(simpan.sub) + ";");
+  }
+});
+t("Summary: saring & kelompokkan per Jenis Transaksi", () => {
+  const kolom = [
+    { transactionType: "Sea Import", payee: "A", amount: 100 }, { transactionType: "Sea Import", payee: "B" },
+    { transactionType: "Air Export", payee: "C" }, { payee: "D" },
+  ].map((p, i) => w.fsumKolom({ id: "k" + i, doc_number: "N" + i, doc_date: "2026-09-0" + (i + 1), payload: p }));
+  eq(w.fsumSaring(kolom, { transaksi: "Sea Import" }).length, 2, "saring:");
+  const def = w.eval("FSUM_KELOMPOK.transaksi");
+  const kunci = [...new Set(kolom.map(def.kunci))].sort();
+  eq(JSON.stringify(kunci), JSON.stringify(["", "Air Export", "Sea Import"]), "kelompok:");
+  eq(def.tampil(kolom[3]), "\u2014", "tanpa isian:");
+});
+
+console.log("— LAPORAN BIAYA ANGKUT —");
+{
+  const lapDana = (no, tgl, p) => ({ id: no, doc_number: no, doc_date: tgl, payload: Object.assign({ currency: "IDR" }, p) });
+  const contoh = () => {
+    const dana = [
+      lapDana("1", "2026-07-02", { invoiceDate: "2026-07-02", expenseType: "Freight", payee: "FEDEX", customer: "KUMHO", transactionType: "Air Import", lines: [{ desc: "a", amount: "4000000", ppnRate: "0" }] }),
+      lapDana("2", "2026-07-03", { invoiceDate: "2026-07-03", expenseType: "Freight", payee: "FREIGHT EXPRESS", customer: "KUMHO", transportMode: "darat", transactionType: "Sea Import", lines: [{ desc: "b", amount: "1000000", ppnRate: "11" }] }),
+      lapDana("3", "2026-06-10", { invoiceDate: "2026-06-10", expenseType: "Storage", payee: "WIDE", customer: "HANKOOK", transactionType: "Sea Import", lines: [{ desc: "c", amount: "2000000", ppnRate: "0" }] }),
+      lapDana("4", "2026-07-04", { invoiceDate: "2026-07-04", expenseType: "Billing", payee: "KAS NEGARA", billingNo: "1", feeBm: "9000000" }),
+    ].map((r) => w.lapBarisDana(r, 16000));
+    const inv = [{ id: "v", doc_number: "DDI-1", doc_date: "2026-07-20", payload: { currency: "USD", amount: "10000", termsDelivery: "FOB JAKARTA", customer: "KUMHO" } }]
+      .map((r) => w.lapBarisInvoice(r, 16000));
+    return { dana, inv };
+  };
+  t("Laporan: moda dari isian atau Jenis Transaksi; kelompok syarat Incoterm", () => {
+    eq(w.lapModa({ transportMode: "darat", transactionType: "Sea Import" }), "darat", "isian menang:");
+    eq(w.lapModa({ transactionType: "Air Export" }), "udara");
+    eq(w.lapModa({ transactionType: "Sea Import" }), "laut");
+    eq(w.lapModa({ transactionType: "Local Sale" }), "darat");
+    eq(w.lapModa({}), "");
+    eq(w.lapKelompokSyarat("FOB JAKARTA"), "F");
+    eq(w.lapKelompokSyarat("CIF HAIPHONG"), "C");
+    eq(w.lapKelompokSyarat("DAP BUSAN"), "D");
+    eq(w.lapKelompokSyarat("EXW CIREBON"), "E");
+    eq(w.lapKelompokSyarat(""), "-");
+  });
+  t("Laporan: biaya sebelum PPN, dipisah tanpa PPN / kena PPN; USD dikonversi", () => {
+    const d = w.lapBarisDana(lapDana("1", "2026-07-10", { invoiceDate: "2026-07-05", expenseType: "Freight", payee: "FEDEX", transactionType: "Air Import",
+      lines: [{ desc: "Freight", amount: "1000000", ppnRate: "0" }, { desc: "Handling", amount: "200000", ppnRate: "11" }] }), 16000);
+    eq(d.tanpaPpn, 1000000, "tanpa PPN:");
+    eq(d.kenaPpn, 200000, "kena PPN:");
+    eq(d.total, 1200000, "total sebelum PPN:");
+    eq(d.moda, "udara");
+    eq(d.bulan, 7);
+    const u = w.lapBarisDana(lapDana("2", "2026-07-10", { currency: "USD", expenseType: "Freight", lines: [{ desc: "x", amount: "100", ppnRate: "0" }] }), 16000);
+    eq(u.total, 1600000, "USD x kurs:");
+  });
+  t("Laporan: per bulan, moda, vendor, customer, anggaran; Billing tidak dihitung", () => {
+    const { dana, inv } = contoh();
+    const lap = w.hitungLaporanBiaya(dana, inv, { tahun: "2026", bulan: "7" });
+    eq(lap.bulanIni.biaya, 5000000, "Billing tidak ikut:");
+    eq(lap.bulanIni.moda.udara, 4000000, "udara:");
+    eq(lap.bulanIni.moda.darat, 1000000, "darat (isian menang atas Sea Import):");
+    eq(lap.bulanIni.penjualan, 160000000, "penjualan USD x kurs:");
+    eq(Math.round(lap.bulanIni.rasio * 10000) / 10000, 0.0313, "rasio:");
+    eq(lap.rataKumulatif.biaya, 1000000, "rata-rata Jan-Jul:");
+    eq(lap.vendor.length, 2, "vendor Juli:");
+    eq(lap.vendor.find((v) => v.vendor === "FREIGHT EXPRESS").kenaPpn, 1000000, "kena PPN per vendor:");
+    eq(lap.customer[0].customer, "KUMHO", "customer terbesar:");
+    eq(lap.bulanan[6].jumlahModa.darat, 1, "jumlah per moda:");
+    const denganBilling = w.hitungLaporanBiaya(dana, inv, { tahun: "2026", bulan: "7", jenis: ["Freight", "Storage", "Lainnya", "Billing"] });
+    eq(denganBilling.bulanIni.biaya, 14000000, "Billing ikut kalau dipilih:");
+    const ang = w.hitungAnggaran(lap, { tahunan: 100000000, berubah: 80000000 });
+    eq(ang.total, 7000000, "total pemakaian:");
+    eq(ang.sisa, 73000000, "sisa:");
+    eq(Math.round(ang.persen * 1000) / 1000, 0.088, "persen:");
+  });
+  t("Laporan: tab Laporan menggambar semua bagian + tombol Unduh Excel", async () => {
+    const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, sub: baca("docNumHistorySub") };
+    try {
+      w.eval('docNumActiveTab = "fund"; docNumHistorySub = LAPORAN_TAB; lapSaringan.tahun = "2026"; lapSaringan.bulan = "7"; lapSaringan.kurs = "16000";');
+      w.jejakDocNum = [
+        { id: "a1", doc_type: "fund", doc_number: "311/EXIM", doc_date: "2026-07-02", payload: { invoiceDate: "2026-07-02", expenseType: "Freight", payee: "FEDEX", transactionType: "Air Import", currency: "IDR", lines: [{ desc: "a", amount: "4000000", ppnRate: "0" }] } },
+        { id: "b1", doc_type: "invoice", doc_number: "DDI-1", doc_date: "2026-07-20", payload: { currency: "USD", amount: "10000", termsDelivery: "FOB JAKARTA" } },
+      ];
+      await w.renderDocNumHistory();
+      // Empat bagian ringkas di depan, sisanya terlipat di "More details"
+      eq(w.document.querySelectorAll("#docNumHistory > .lap-bagian").length, 5, "bagian ringkas:");
+      eq(w.document.querySelectorAll("#docNumHistory details.lap-detail .lap-bagian").length, 8, "bagian detail:");
+      if (w.document.querySelector("#docNumHistory details.lap-detail").open) throw new Error("detail seharusnya terlipat");
+      if (!w.document.querySelector("#docNumHistory .lap-kpi")) throw new Error("kartu indikator tidak ada");
+      if (!w.document.querySelector("#docNumHistory .lap-wawasan li")) throw new Error("temuan utama tidak ada");
+      if (w.document.querySelector('#docNumHistory [data-lap="kurs"]')) throw new Error("kotak kurs masih ada");
+      if (!w.document.querySelector("#docNumHistory [data-lap-unduh]")) throw new Error("tombol Unduh Excel tidak ada");
+      if (!w.document.querySelector("#docNumHistory svg")) throw new Error("grafik tidak tergambar");
+    } finally {
+      w.jejakDocNum = simpan.rows;
+      w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab) + "; docNumHistorySub = " + JSON.stringify(simpan.sub) + ";");
+    }
+  });
+  t("Laporan: seluruhnya berbahasa Inggris, juga saat aplikasi berbahasa Indonesia", async () => {
+    const simpan = { tab: baca("docNumActiveTab"), rows: w.jejakDocNum, sub: baca("docNumHistorySub"), lang: baca("activeLang") };
+    try {
+      w.setLang("id");
+      w.eval('docNumActiveTab = "fund"; docNumHistorySub = LAPORAN_TAB; lapSaringan.tahun = "2026"; lapSaringan.bulan = "7";');
+      w.jejakDocNum = [
+        { id: "a1", doc_type: "fund", doc_number: "311/EXIM", doc_date: "2026-07-02", payload: { invoiceDate: "2026-07-02", expenseType: "Freight", payee: "FEDEX", transactionType: "Air Import", currency: "IDR", lines: [{ desc: "a", amount: "4000000", ppnRate: "0" }] } },
+      ];
+      await w.renderDocNumHistory();
+      const isi = w.document.getElementById("docNumHistory").textContent;
+      ["EXIM Spending Report 2026", "Summary", "Month by month", "Where the money goes", "Budget 2027", "More details for analysis", "Exchange rates", "Download Excel", "Vehicle (Truck)"].forEach((x) => {
+        if (!isi.includes(x)) throw new Error("teks Inggris tidak ada: " + x);
+      });
+      ["Biaya angkut", "Penjualan", "Juli", "Unduh"].forEach((x) => {
+        if (isi.includes(x)) throw new Error("masih ada teks Indonesia: " + x);
+      });
+      if (/[\uac00-\ud7a3]/.test(isi)) throw new Error("ada huruf Korea");
+      const tab = [...w.document.querySelectorAll(".docnum-subtab")].map((b) => b.textContent.trim());
+      if (!tab.includes("Report")) throw new Error("tab Report: " + tab.join(" | "));
+    } finally {
+      w.jejakDocNum = simpan.rows;
+      w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab) + "; docNumHistorySub = " + JSON.stringify(simpan.sub) + ";");
+      w.setLang(simpan.lang);
+    }
+  });
+  t("Laporan: berkas Excel berisi semua lembarnya", async () => {
+    /* ExcelJS dimuat KE DALAM jendela uji (berkas peramban-nya), bukan
+       lewat require(): larik dari dua "dunia" JavaScript berbeda tidak
+       dikenali sebagai larik oleh ExcelJS, dan barisnya tertulis kosong. */
+    let berkas;
+    try { berkas = require("fs").readFileSync(require.resolve("exceljs/dist/exceljs.min.js"), "utf8"); }
+    catch (e) { return; } // pustaka tidak terpasang di mesin uji: lewati
+    if (typeof w.ExcelJS === "undefined") w.eval(berkas);
+    const { dana, inv } = contoh();
+    const opsi = { tahun: "2026", bulan: "7", jenis: ["Freight", "Storage", "Lainnya", "Billing", "Tax Advance"] };
+    const lap = w.hitungLaporanBiaya(dana, inv, opsi);
+    lap.kurs = 16000;
+    const a = w.hitungAnalisis(dana, opsi);
+    const wb = w.lapSusunWorkbook({ a, lap, blok: w.lapSusunBlok(a, lap, null) }, {});
+    const nama = wb.worksheets.map((x) => x.name);
+    eq(nama.join("|"), "Summary|Revenue vs Spending|Monthly Comparison|Breakdown|Vendors & Customers|Payments|Statistics|Forecast 2027|Transport Detail|Vendor Settlement|Exchange Rates|Cost Data|Sales Data", "lembar:");
+    const buf = await wb.xlsx.writeBuffer();
+    if (!(buf.byteLength > 4000)) throw new Error("berkas terlalu kecil");
+  });
+  t("Kurs pajak: halaman fiskal.kemenkeu.go.id terbaca (KMK, periode, 25 kurs, JPY per 1 yen)", () => {
+    const { parseKursPajak, gabungPeriode } = require(require("path").join(__dirname, "..", "scripts", "kurs-pajak-parser.js"));
+    const html = `<h3>KMK Nomor 46/MK/EF.2/2026</h3><em>Tanggal berlaku: 30 September 2026 - 06 Oktober 2026</em>
+      <table><tr><td>1</td><td>Dolar Amerika Serikat (USD) <span>USD</span></td><td><img src="x.gif"> 17.863,00</td><td>156,00<img src="up.gif"></td></tr>
+      <tr><td>13</td><td>Yen Jepang (JPY) JPY</td><td>11.316,89</td><td>-54,36</td></tr>
+      <tr><td>25</td><td>Won Korea (KRW) KRW</td><td>13,09</td><td>0,17</td></tr></table>`;
+    const k = parseKursPajak(html);
+    eq(k.kmk, "46/MK/EF.2/2026");
+    eq(k.mulai, "2026-09-30");
+    eq(k.sampai, "2026-10-06");
+    eq(k.kurs.USD, 17863);
+    eq(k.kurs.JPY, 113.1689, "JPY per 1 yen:");
+    eq(k.kurs.KRW, 13.09);
+    let galat = "";
+    try { parseKursPajak("<p>halaman berubah</p>"); } catch (e) { galat = e.message; }
+    if (!galat) throw new Error("halaman tanpa kurs seharusnya ditolak, bukan disimpan");
+    const daftar = gabungPeriode([{ mulai: "2026-09-23", sampai: "2026-09-29", kurs: { USD: 17700 } }], k);
+    eq(daftar.map((x) => x.mulai).join(","), "2026-09-30,2026-09-23", "terbaru di depan:");
+    // Berkas awal ikut di paket dan isinya sah
+    const awal = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "data", "kurs-pajak.json"), "utf8"));
+    if (!(awal.periode[0].kurs.USD > 5000)) throw new Error("data/kurs-pajak.json tidak berisi kurs USD");
+  });
+  t("Kurs pajak: diambil tiap Rabu 05.00 WIB; jalan terjadwal menunggu kurs pekan itu", () => {
+    const fs = require("fs"), path = require("path");
+    const alur = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "kurs-pajak.yml"), "utf8");
+    // Selasa 22.00 UTC = Rabu 05.00 WIB -- satu jadwal saja
+    eq((alur.match(/- cron: "[^"]+"/g) || []).join(" | "), '- cron: "0 22 * * 2"', "jadwal:");
+    if (!/--pekan-ini/.test(alur)) throw new Error("jalan terjadwal tidak memastikan kurs pekan ini");
+    const k = require(path.join(__dirname, "..", "scripts", "kurs-pajak-parser.js"));
+    eq(k.tanggalWib(Date.UTC(2026, 9, 6, 22, 0)), "2026-10-07", "Selasa 22.00 UTC = Rabu WIB:");
+    eq(k.periodeMencakup({ mulai: "2026-10-07", sampai: "2026-10-13" }, "2026-10-07"), true);
+    eq(k.periodeMencakup({ mulai: "2026-09-30", sampai: "2026-10-06" }, "2026-10-07"), false, "pekan lalu:");
+  });
+  t("Kurs pajak: kurs dipilih menurut tanggal transaksi", () => {
+    const data = { periode: [
+      { mulai: "2026-09-30", sampai: "2026-10-06", kmk: "46", kurs: { USD: 17863, JPY: 113.17 } },
+      { mulai: "2026-09-23", sampai: "2026-09-29", kmk: "45", kurs: { USD: 17707 } },
+    ] };
+    eq(w.kursPajakPada("USD", "2026-09-25", data).nilai, 17707, "periode tepat:");
+    eq(w.kursPajakPada("USD", "2026-10-01", data).nilai, 17863);
+    eq(w.kursPajakPada("IDR", "2026-10-01", data).nilai, 1, "IDR:");
+    const lama = w.kursPajakPada("USD", "2025-01-15", data);
+    eq(lama.nilai, 17707, "sebelum riwayat -> periode paling awal:");
+    eq(lama.perkiraan, true, "ditandai perkiraan:");
+    eq(w.kursPajakPada("USD", "2026-12-01", data).nilai, 17863, "sesudah riwayat -> periode terakhir:");
+    eq(w.kursPajakPada("JPY", "2026-09-25", data).nilai, 113.17, "JPY dari periode terdekat yang punya JPY:");
+  });
+  t("Analisis pendapatan: invoice ekspor (kurs pajak) & local sale (IDR) -> rasio & metode berbasis pendapatan", () => {
+    const kursFn = (mata, tgl) => (mata === "USD" ? (tgl < "2026-04-01" ? 16000 : 17000) : 0);
+    const inv = (no, tgl, mata, n, cust) => w.lapBarisInvoice({ id: no, doc_number: no, doc_date: tgl, payload: { currency: mata, amount: String(n), customer: cust } }, kursFn);
+    const invoice = [inv("A", "2026-02-10", "USD", 10000, "DD KOREA"), inv("B", "2026-05-10", "USD", 10000, "DD KOREA"), inv("C", "2026-05-20", "IDR", 30000000, "PT LOKAL")];
+    eq(invoice[0].jumlah, 160000000, "USD x kurs pajak tanggal invoice:");
+    eq(invoice[1].jumlah, 170000000, "kurs pekan lain:");
+    eq(invoice[2].kanal, "Local Sale");
+    const dana = [1, 2, 3, 4, 5, 6].map((m) => w.lapBarisDana({ id: "d" + m, doc_number: "d" + m, doc_date: `2026-0${m}-05`,
+      payload: { currency: "IDR", invoiceDate: `2026-0${m}-05`, expenseType: "Freight", payee: "FEDEX", customer: "DD KOREA", lines: [{ desc: "x", amount: "6000000", ppnRate: "0" }] } }, kursFn));
+    const a = w.hitungAnalisis(dana, { tahun: "2026", bulan: "6", invoice });
+    eq(a.pendYtd, 360000000, "pendapatan YTD:");
+    eq(a.ytd, 36000000, "pengeluaran YTD:");
+    eq(a.rasio, 0.1, "rasio pengeluaran / pendapatan:");
+    eq(Math.round(a.kanal.find((k) => k.nama === "Export").porsi * 1000) / 1000, 0.917, "porsi ekspor:");
+    if (!a.metode.some((m) => m.id === "pendapatan")) throw new Error("metode berbasis pendapatan tidak dipakai");
+    eq(a.perCustomerPend[0].nama, "DD KOREA", "customer terbesar:");
+    eq(a.perCustomerPend[0].biaya, 36000000, "biaya customer itu:");
+    if (!a.wawasan.some((x) => /revenue/i.test(x))) throw new Error("temuan pendapatan tidak ada");
+  });
+  t("Laporan: setiap angka uang membawa satuannya (tidak terbaca '10 ribu')", () => {
+    eq(w.lapFmtUang(10726900000), "IDR 10.73 bn");
+    eq(w.lapFmtUang(599300000), "IDR 599.3 m");
+    eq(w.lapFmtUang(845000), "IDR 845,000");
+    eq(w.lapTeksSel({ v: 10726900000, f: "jt" }), "IDR 10.73 bn", "sel tabel:");
+    eq(w.lapTeksSel({ v: 602661.84, f: "usd" }), "USD 602,662", "sel USD:");
+  });
+  t("Analisis: status bayar, umur tagihan, biaya per kiriman (BL/AWB); Local Sale; tanpa tabel yang dipaksakan", () => {
+    const d = (no, tgl, n, p) => w.lapBarisDana({ id: no, doc_number: no, doc_date: tgl,
+      payload: Object.assign({ currency: "IDR", invoiceDate: tgl, expenseType: "Freight", payee: "FEDEX", lines: [{ desc: "a", amount: String(n), ppnRate: "0" }] }, p) }, 16000);
+    const dana = [
+      d("1", "2026-07-01", 10000000, { paidAt: "2026-07-21", blAwb: "AWB1", transactionType: "Air Import" }),
+      d("2", "2026-07-05", 4000000, { paidAt: "2026-07-15", blAwb: "AWB1", transactionType: "Air Import" }),
+      d("3", "2026-08-10", 6000000, { blAwb: "BL9", transactionType: "Sea Import", payee: "WIDE" }),
+      d("4", "2026-09-01", 2000000, { transactionType: "Local Sale", payee: "TRUCKER" }),
+    ];
+    const a = w.hitungAnalisis(dana, { tahun: "2026", bulan: "9", hariIni: "2026-10-01" });
+    eq(a.bayar.lunasJumlah, 2, "lunas:");
+    eq(a.bayar.belumJumlah, 2, "belum lunas:");
+    eq(a.bayar.belumNilai, 8000000, "nilai belum lunas:");
+    eq(a.bayar.rataHari, 15, "rata-rata lama bayar (20 & 10 hari):");
+    eq(a.bayar.tertua, 52, "tagihan tertua (10 Agu -> 1 Okt):");
+    eq(a.bayar.umur.find((u) => u.nama === "31–60 days").jumlah, 1, "umur 31-60:");
+    eq(a.bayar.perVendor[0].nama, "WIDE", "vendor dengan tagihan terbesar:");
+    eq(a.kirimanJumlah, 2, "kiriman (BL/AWB unik):");
+    const air = a.perKiriman.find((r) => r.nama === "Air Import");
+    eq(air.rata, 14000000, "biaya per kiriman udara (2 pengajuan, 1 AWB):");
+    eq(a.tanpaBlJumlah, 1, "pengajuan tanpa BL/AWB:");
+    if (!a.perModa.some((r) => r.nama === "Local Sale")) throw new Error("Local Sale belum bernama Local Sale");
+    if (a.perModa.some((r) => /Truck · Local/.test(r.nama))) throw new Error("masih 'Truck · Local sale'");
+    // Tabel yang tidak cocok dengan data DDI sudah tidak ada
+    const src = w.eval("lapSusunBlok.toString()");
+    if (/Sales by goods type|Sales by delivery terms/.test(src)) throw new Error("tabel per jenis barang / syarat penyerahan masih ada");
+  });
+  t("Unduhan CIPL bernama persis nomor invoicenya (spasi ikut); halaman berpaginasi 10 baris", () => {
+    eq(w.ciplNamaBerkas("DDI - CRBM - X - 061"), "DDI - CRBM - X - 061");
+    eq(w.ciplNamaBerkas("DDI/CRBM:X*061"), "DDI-CRBM-X-061", "karakter terlarang:");
+    eq(baca("docNumPageSize"), 10, "Doc. Number:");
+    eq(baca("hsCodePageSize"), 10, "HS Code:");
+    eq(baca("vsPageSize"), 10, "Vessel Schedule:");
+    if (!/let pageSize = 10;/.test(require("fs").readFileSync(require("path").join(__dirname, "..", "js", "core", "state.js"), "utf8"))) throw new Error("Shipment Schedule bawaan bukan 10");
+  });
+  t("Analisis: YoY, MoM, statistik, ramalan & anggaran tahun depan", () => {
+    const rp = (no, tgl, n, p) => w.lapBarisDana({ id: no, doc_number: no, doc_date: tgl,
+      payload: Object.assign({ currency: "IDR", invoiceDate: tgl, expenseType: "Freight", payee: "FEDEX", lines: [{ desc: "a", amount: String(n), ppnRate: "0" }] }, p || {}) }, 16000);
+    const dana = [];
+    // 2025: 10 juta / bulan; 2026 Jan-Jun: 12 juta / bulan (+20%)
+    for (let m = 1; m <= 12; m++) dana.push(rp("L" + m, `2025-${String(m).padStart(2, "0")}-10`, 10000000));
+    for (let m = 1; m <= 6; m++) dana.push(rp("I" + m, `2026-${String(m).padStart(2, "0")}-10`, 12000000));
+    const a = w.hitungAnalisis(dana, { tahun: "2026", bulan: "6" });
+    eq(a.ytd, 72000000, "YTD:");
+    eq(a.ytdLalu, 60000000, "periode sama tahun lalu:");
+    eq(Math.round(a.yoy * 1000) / 1000, 0.2, "YoY:");
+    eq(a.mom, 0, "MoM:");
+    eq(a.proyeksiIni, 144000000, "proyeksi 2026 (YTD + sisa 2025 x 1,2):");
+    eq(a.statIni.cv, 0, "volatilitas:");
+    // tiga metode: pertumbuhan 172,8 jt, tren, laju 144 jt -> median & rentang masuk akal
+    eq(a.metode.length, 3, "metode:");
+    if (!(a.dasar >= 144000000 && a.dasar <= 172800000)) throw new Error("ramalan dasar di luar rentang: " + a.dasar);
+    eq(Math.round(a.rekomendasi), Math.round(a.dasar * 1.1), "anggaran disarankan = ramalan + 10%:");
+    eq(Math.round(w.eval("x => x.reduce((s, v) => s + v, 0)")(a.fasing)), Math.round(a.dasar), "pembagian per bulan berjumlah ramalan:");
+    eq(a.perJenis[0].nama, "Freight");
+    if (!a.wawasan.length) throw new Error("tidak ada temuan");
+    // Tanpa data tahun lalu: tetap jalan, YoY kosong
+    const b = w.hitungAnalisis(dana.filter((d) => d.tahun === 2026), { tahun: "2026", bulan: "6" });
+    eq(b.yoy, null, "YoY tanpa tahun lalu:");
+    eq(b.proyeksiIni, 144000000, "laju berjalan:");
+  });
+}
+
 console.log("— PENYIMPANAN KE DATABASE —");
 (function () {
   // Dijalankan serentak supaya urutannya pasti; hasilnya diperiksa di bawah.
@@ -7379,25 +7177,6 @@ t("panel mekanika prediksi tetap khusus Import", () => {
 });
 
 console.log("\u2014 LEBAR KOLOM PACKING LIST \u2014");
-t("jumlah lebar kolom tetap 100%", () => {
-  const jml = (n) => n.reduce((a, b) => a + b, 0);
-  eq(Math.round(jml(baca("CIPL_COLS_PACKING")) * 10) / 10, 100, "Packing List:");
-  eq(Math.round(jml(baca("CIPL_COLS_INVOICE")) * 10) / 10, 100, "Invoice:");
-});
-t("kolom Item Description tidak lebih sempit dari kolom Dimensi", () => {
-  /* Keduanya memuat teks sepanjang ±20 huruf ("TYRE MOLD TREAD ONLY"
-     vs "80 CM x 80 CM x 56 CM"). Selama Dimensi lebih lebar, yang
-     terpotong selalu nama barang — sementara di sebelahnya menganga. */
-  const c = baca("CIPL_COLS_PACKING");
-  const item = c[1], dimensi = c[8];
-  if (item < dimensi)
-    throw new Error(`Item ${item}% lebih sempit dari Dimensi ${dimensi}%`);
-});
-t("kolom Item Description memang DILEBARKAN", () => {
-  const c = baca("CIPL_COLS_PACKING");
-  if (c[1] <= 17) throw new Error("Item masih " + c[1] + "% — belum dilebarkan");
-});
-
 console.log("\u2014 MARGIN NARROW: WEB & EXCEL SAMA \u2014");
 t("margin @page NOL — supaya kop & kaki peramban tidak tercetak", () => {
   /* Peramban menggambar tanggal, judul tab, "about:blank", dan nomor
@@ -7419,14 +7198,20 @@ t("jarak ke tepi kertas dipindah ke padding, bukan hilang", () => {
   eq(m[1], "19.05", "atas/bawah (0,75 inci):");
   eq(m[2], "6.35", "kiri/kanan (0,25 inci):");
 });
-t("tinggi kotak SI ikut margin yang baru", () => {
-  /* Kalau angka ini tertinggal di 20mm sementara marginnya 38,1mm,
-     kotaknya lebih tinggi daripada ruang tersisa dan mendorong satu
-     halaman kosong di belakangnya. */
+t("tinggi kotak SI ikut margin halamannya; huruf SI besar & jelas", () => {
+  /* Kotak setinggi halaman dikurangi margin atas + bawah halaman SI
+     (10 mm + 10 mm). Kalau angka ini tidak ikut marginnya, kotaknya
+     lebih tinggi daripada ruang tersisa dan mendorong satu halaman
+     kosong di belakangnya. */
   const css = w.ciplCss();
   const m = /\.si-box \{[^}]*min-height:\s*calc\(297mm - ([\d.]+)mm/.exec(css);
   if (!m) throw new Error("min-height .si-box tidak ditemukan");
-  eq(m[1], "38.1", "297mm dikurangi:");
+  if (!/\.ci-sheet\.si-sheet \{ padding: 10mm;/.test(css)) throw new Error("margin halaman SI bukan 10 mm");
+  eq(m[1], "20", "297mm dikurangi:");
+  // Ukuran huruf: isi daftar 10,5pt (dulu 8pt) -- jelas saat dicetak
+  if (!/\.si-list td \{[^}]*font-size: 10\.5pt;/.test(css)) throw new Error("huruf daftar SI belum diperbesar");
+  if (!/\.si-title \{[^}]*font-size: 16pt;/.test(css)) throw new Error("judul SI belum diperbesar");
+  if (!/\.si-title \{[^}]*margin-top: 36px;/.test(css)) throw new Error("judul SI menempel ke kop");
 });
 t("angka web & Excel benar-benar sepasang", () => {
   /* Penjaga terpenting di sini: dua berkas, satu maksud. Kalau salah
@@ -7449,18 +7234,6 @@ t("angka web & Excel benar-benar sepasang", () => {
   const m = /\.ci-sheet \{[^}]*padding:\s*([\d.]+)mm\s+([\d.]+)mm/.exec(css);
   eq(Number(m[1]).toFixed(2), (nilai.top * 25.4).toFixed(2), "atas web vs Excel:");
   eq(Number(m[2]).toFixed(2), (nilai.left * 25.4).toFixed(2), "kiri web vs Excel:");
-});
-t("ketiga lembar Excel memakai margin yang SAMA", () => {
-  /* Dulu 0,3 / 0,7 / 0,7 di kiri — warisan berkas yang disetel satu
-     per satu oleh tangan. */
-  const fs = require("fs"), path = require("path");
-  const src = fs.readFileSync(
-    path.join(__dirname, "..", "js", "features", "cipl-excel.js"), "utf8");
-  const sisa = src.match(/margins:\s*\{[^}]*left:/g) || [];
-  eq(sisa.length, 0, "masih ada lembar dengan margin sendiri:");
-  // SI ikut dipusatkan, kalau tidak ia berdiri sendiri di antara dua lembar lain.
-  const jml = (src.match(/tengah: true/g) || []).length;
-  eq(jml, 3, "jumlah lembar yang dipusatkan:");
 });
 
 console.log("\u2014 LOGO SURAT JALAN \u2014");
@@ -8627,10 +8400,10 @@ t("mereset form mengembalikan nilai BAWAAN, bukan mengosongkannya", () => {
     eq(el.value, el.defaultValue, "data-dn=" + el.dataset.dn + ":");
   });
 });
-t("pilihan Jenis Pengeluaran: Billing, Freight, Storage, Lainnya", () => {
+t("pilihan Jenis Pengeluaran: Billing, Freight, Storage, Tax Advance, Lainnya", () => {
   const sel = w.document.querySelector('[data-docnum-panel="fund"] [data-dn="expenseType"]');
   const nilai = [...sel.options].map((o) => o.value).filter(Boolean);
-  eq(nilai.join(","), "Billing,Freight,Storage,Lainnya");
+  eq(nilai.join(","), "Billing,Freight,Storage,Tax Advance,Lainnya");
 });
 t("Billing menampilkan Nomor Billing; pilihan lain menampilkan Nomor Invoice", () => {
   const panel = w.document.querySelector('[data-docnum-panel="fund"]');

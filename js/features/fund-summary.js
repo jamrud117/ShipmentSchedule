@@ -41,7 +41,7 @@ let fsumPemilih = null; // pemilih rentang tanggal milik tab ini
    saat halaman dimuat, supaya halaman yang dibiarkan terbuka melewati
    tahun baru ikut berpindah ke tahun yang baru. */
 const FSUM_SARINGAN_AWAL = {
-  dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", kelompok: "company",
+  dari: "", sampai: "", company: "", customer: "", jenis: "", transaksi: "", bayar: "", kelompok: "company",
   tahun: "",
   dasarRekap: "invoice", // tanggal yang dipakai rekap bulanan: "invoice" | "bayar"
 };
@@ -72,6 +72,7 @@ function fsumKolom(row) {
     company: String(p.payee || "").trim(),
     customer: String(p.customer || "").trim(),
     jenis: String(p.expenseType || "").trim(),
+    transaksi: String(p.transactionType || "").trim(),
     detail: String(p.notes || "").trim(),
     jatuhTempo: p.invoiceDueDate || "",
     lunas: !!p.paidAt,
@@ -88,11 +89,12 @@ function fsumSaring(kolom, f) {
     if (f.company && fsumKunci(k.company) !== f.company) return false;
     if (f.customer && fsumKunci(k.customer) !== f.customer) return false;
     if (f.jenis && k.jenis !== f.jenis) return false;
+    if (f.transaksi && k.transaksi !== f.transaksi) return false;
     if (f.bayar === "lunas" && !k.lunas) return false;
     if (f.bayar === "belum" && k.lunas) return false;
     // Kotak cari riwayat ikut berlaku di sini, di seluruh kolom teks.
     if (f.q) {
-      const isi = [k.nomorSurat, k.nomor, k.blAwb, k.company, k.customer, k.detail, k.jenis].join(" ").toLowerCase();
+      const isi = [k.nomorSurat, k.nomor, k.blAwb, k.company, k.customer, k.detail, k.jenis, k.transaksi].join(" ").toLowerCase();
       if (!isi.includes(String(f.q).toLowerCase())) return false;
     }
     return true;
@@ -105,6 +107,9 @@ function fsumTeksBulan(kunci) {
   const [y, m] = kunci.split("-").map(Number);
   return `${bulanPanjang(m - 1)} ${y}`;
 }
+
+/* Pilihan Jenis Transaksi -- sama dengan dropdown di form Pengajuan Dana. */
+const FUND_JENIS_TRANSAKSI = ["Sea Import", "Sea Export", "Air Import", "Air Export", "Local Sale"];
 
 /* Cara mengelompokkan. `kunci` menentukan baris mana yang digabung,
    `tampil` teks yang ditulis, `saring` penyaring yang dipasang saat
@@ -127,6 +132,14 @@ const FSUM_KELOMPOK = {
     kunci: (k) => k.jenis,
     tampil: (k) => fsumTeksJenis(k.jenis),
     saring: (kunci) => ({ jenis: kunci }),
+  },
+  /* Sea Import / Air Export / Local Sale ... -- pengajuan lama tanpa
+     isian ini terkumpul di satu baris "—". */
+  transaksi: {
+    label: () => tt("Jenis Transaksi", "Transaction Type"),
+    kunci: (k) => k.transaksi,
+    tampil: (k) => k.transaksi || "\u2014",
+    saring: (kunci) => ({ transaksi: kunci }),
   },
   /* Lunas vs belum lunas -- pertanyaan "berapa yang masih harus
      dibayar" dijawab satu baris di sini, tanpa menjumlah manual. */
@@ -372,6 +385,11 @@ function fsumPanelHtml(kolom) {
         <label class="fsum-saring-item">
           <span class="fsum-saring-label">${escapeHtml(tt("Jenis Pengeluaran", "Expense Type"))}</span>
           <select class="form-select form-select-sm" data-fsum="jenis">${semua}${opsi(jenisDaftar, f.jenis)}</select>
+        </label>
+        <label class="fsum-saring-item">
+          <span class="fsum-saring-label">${escapeHtml(tt("Jenis Transaksi", "Transaction Type"))}</span>
+          <select class="form-select form-select-sm" data-fsum="transaksi">${semua}${opsi(
+            FUND_JENIS_TRANSAKSI.map((j) => [j, j]), f.transaksi)}</select>
         </label>
         <label class="fsum-saring-item">
           <span class="fsum-saring-label">${escapeHtml(tt("Status Bayar", "Payment"))}</span>

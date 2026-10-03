@@ -132,7 +132,7 @@ function docNumHistoryKey() {
 const DOCNUM_HISTORY_FILTERS = {
   fund: {
     field: "expenseType",
-    options: ["Billing", "Freight", "Storage", "Lainnya"],
+    options: ["Billing", "Freight", "Storage", "Tax Advance", "Lainnya"],
   },
 };
 
@@ -176,7 +176,9 @@ function dnTerapkanSaringBayar(kueri) {
 function dnTampilkanSaringBayar() {
   const wadah = document.querySelector(".dn-saring-bayar");
   if (!wadah) return;
-  const summary = typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB;
+  const summary =
+    (typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) ||
+    (typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB);
   wadah.classList.toggle("d-none", docNumActiveTab !== "fund" || summary);
 }
 const DN_KOLOM_CARI = [
@@ -187,12 +189,22 @@ const DN_KOLOM_CARI = [
   "payload->>blAwb",
   "payload->>termsDelivery", "payload->>termPayment",
   "payload->>finalDestination", "payload->>carrier",
+  "payload->>transactionType",
 ];
 /* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
    arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
    terbalik -- dan wildcard (%, *) dibuang: kata kunci "PT (Persero)"
    tidak boleh memecah filternya jadi potongan yang tidak valid.
    Nilainya dikutip ganda supaya titik & spasi aman. */
+/* Jenis Transaksi di tabel riwayat: ikon moda + istilahnya. Pengajuan
+   lama yang belum punya isian ini tampil "—". */
+function dnTeksTransaksi(v) {
+  const teks = String(v || "").trim();
+  if (!teks) return "\u2014";
+  const ikon = /^Sea/.test(teks) ? "bi-water" : /^Air/.test(teks) ? "bi-airplane" : "bi-shop";
+  return `<span class="dn-transaksi"><i class="bi ${ikon}"></i> ${escapeHtml(teks)}</span>`;
+}
+
 /* Carrier untuk tabel riwayat invoice: isian Carrier di data cetak
    CIPL; kalau kosong, kapal/pesawat + voyage dari Jadwal Terkait --
    sumber yang sama yang dipakai cetakannya. */
@@ -253,7 +265,13 @@ function renderDocNumSubTabs() {
        renderDocNumHistory). */
     .concat(
       docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined"
-        ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === FSUM_TAB ? " active" : ""}" data-dn-subtab="${FSUM_TAB}"><i class="bi bi-table"></i> Summary</button>`]
+        ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === FSUM_TAB ? " active" : ""}" data-dn-subtab="${FSUM_TAB}"><i class="bi bi-table"></i> Summary</button>`].concat(
+            /* Laporan Biaya Angkut (fund-report.js): padanan laporan
+               transportasi DD Korea, bisa diunduh sebagai Excel. */
+            typeof LAPORAN_TAB !== "undefined"
+              ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === LAPORAN_TAB ? " active" : ""}" data-dn-subtab="${LAPORAN_TAB}"><i class="bi bi-bar-chart-line"></i> Report</button>`]
+              : [],
+          )
         : [],
     )
     .join("");
@@ -1581,7 +1599,7 @@ document.addEventListener("input", (e) => {
 
 /* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
 let docNumPage = 1;
-let docNumPageSize = 5;
+let docNumPageSize = 10;
 
 async function renderDocNumHistory() {
   const box = $("#docNumHistory");
@@ -1594,6 +1612,9 @@ async function renderDocNumHistory() {
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
   if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
     return renderRingkasanDana(box, bar);
+  }
+  if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) {
+    return renderLaporanBiaya(box, bar);
   }
   box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
   if (bar) bar.innerHTML = "";
@@ -1674,6 +1695,8 @@ async function renderDocNumHistory() {
                 `<th class="dn-col-inv">Terms of Payment</th><th class="dn-col-inv">Carrier</th>`
               : ""
           }${
+            jenis.key === "fund" ? `<th class="dn-col-transaksi">${tt("Transaksi", "Transaction")}</th>` : ""
+          }${
             jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
           }${
             jenis.key === "invoice" ? `<th class="dn-col-nilai">Amount</th>` : ""
@@ -1735,6 +1758,7 @@ async function renderDocNumHistory() {
                         .join("")
                     : ""
                 }
+                ${jenis.key === "fund" ? `<td class="dn-col-transaksi">${dnTeksTransaksi(p.transactionType)}</td>` : ""}
                 ${
                   /* Nilai = jumlah akhir pengajuan, angka yang sama dengan
                      "Terbilang" di surat cetaknya (frTotalPengajuan). */
@@ -1870,7 +1894,7 @@ $("#docNumPagination")?.addEventListener("click", (e) => {
 });
 $("#docNumPagination")?.addEventListener("change", (e) => {
   if (e.target.id !== "dnPageSize") return;
-  docNumPageSize = parseInt(e.target.value, 10) || 5;
+  docNumPageSize = parseInt(e.target.value, 10) || 10;
   docNumPage = 1; // jumlah baris berubah -> nomor halaman lama tidak lagi bermakna
   renderDocNumHistory();
 });
@@ -2077,6 +2101,8 @@ const DN_KOLOM_UTAMA = {
 };
 
 const DN_LABEL_FIELD = {
+  get transportMode() { return tt("Moda Angkut", "Transport Mode"); },
+  get transactionType() { return tt("Jenis Transaksi", "Transaction Type"); },
   get packages() { return tt("Jumlah Koli", "Number of Packages"); },
   get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get address() { return tt("Alamat Tujuan", "Destination Address"); },
@@ -2157,6 +2183,8 @@ const DN_URUTAN_FIELD = [
   "invoiceDueDate",
   "blAwb",
   "expenseType",
+  "transactionType",
+  "transportMode",
   "letterType",
   "signer",
   "recipient",
@@ -2236,6 +2264,11 @@ function tampilkanDetailNomor(id) {
       nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
     }
     if (DN_FIELD_TANGGAL.has(k) && nilai) nilai = fmtDate(nilai);
+    /* Popup Detail ikut bahasa aplikasi (laporannya sendiri selalu
+       berbahasa Inggris -- lihat fund-report.js). */
+    if (k === "transportMode" && nilai) {
+      nilai = { udara: tt("Udara", "Air"), laut: tt("Laut", "Sea"), darat: tt("Darat (Truk)", "Vehicle (Truck)") }[nilai] || nilai;
+    }
     if (String(nilai ?? "").trim() === "") return;
     /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
        telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada
@@ -2299,6 +2332,8 @@ document.addEventListener("input", (e) => {
       if (typeof fsumGambarHasil === "function") fsumGambarHasil();
       return;
     }
+    // Laporan tidak memakai kotak cari: angkanya selalu seluruh pengajuan
+    if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) return;
     docNumPage = 1;
     renderDocNumHistory();
   }, 300);

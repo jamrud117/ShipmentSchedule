@@ -1,0 +1,52 @@
+# Kurs pajak (KMK) mingguan dari fiskal.kemenkeu.go.id -> data/kurs-pajak.json
+# KMK baru berlaku tiap Rabu; dijalankan sekali seminggu: RABU 05.00 WIB.
+# Jadwal GitHub memakai UTC: Selasa 22.00 UTC = Rabu 05.00 WIB. GitHub bisa
+# memulainya beberapa menit terlambat pada jam sibuk.
+# Kalau halaman Kemenkeu belum memuat kurs pekan ini, skrip mencoba lagi
+# tiap 30 menit (paling lama 2 jam) sebelum menyerah dengan pesan jelas --
+# data lama tidak disentuh, dan GitHub mengirim surel kegagalan.
+# Bisa juga dijalankan manual dari tab Actions, termasuk mengisi riwayat.
+name: Kurs pajak mingguan
+
+on:
+  schedule:
+    - cron: "0 22 * * 2"
+  workflow_dispatch:
+    inputs:
+      sejak:
+        description: "Isi riwayat mundur sampai tanggal (YYYY-MM-DD), kosongkan kalau tidak perlu"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  ambil:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Baca halaman kurs pajak
+        run: |
+          if [ -n "${{ github.event.inputs.sejak }}" ]; then
+            node scripts/ambil-kurs-pajak.mjs --sejak "${{ github.event.inputs.sejak }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            # Jalan terjadwal Rabu pagi: pastikan yang terbaca kurs PEKAN INI
+            node scripts/ambil-kurs-pajak.mjs --pekan-ini
+          else
+            node scripts/ambil-kurs-pajak.mjs
+          fi
+      - name: Simpan kalau ada perubahan
+        run: |
+          if git diff --quiet -- data/kurs-pajak.json; then
+            echo "Tidak ada periode baru."
+            exit 0
+          fi
+          git config user.name "kurs-pajak-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/kurs-pajak.json
+          git commit -m "Kurs pajak: periode terbaru"
+          git push

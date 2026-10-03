@@ -1833,7 +1833,7 @@
                     <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                   <label class="form-label"
                      data-en="Expense Type <span class=&quot;req&quot;>*</span>">Jenis Pengeluaran <span class="req">*</span></label
                   >
@@ -1846,12 +1846,41 @@
                     <option value="Billing">Billing</option>
                     <option value="Freight">Freight</option>
                     <option value="Storage">Storage</option>
+                    <option value="Tax Advance">Tax Advance</option>
                     <option value="Lainnya" data-i18n="f.lainnya">
                       Lainnya
                     </option>
                   </select>
                 </div>
+                <!-- JENIS TRANSAKSI: kegiatan yang dibiayai pengajuan ini.
+                     Bukan "Jenis Pengiriman" -- Local Sale bukan kiriman
+                     laut/udara. Nilainya istilah baku perdagangan, sama di
+                     kedua bahasa (seperti Billing/Freight). Tidak wajib:
+                     pengajuan lama tidak punya isian ini. -->
                 <div class="col-md-2">
+                  <label class="form-label" data-en="Transaction Type">Jenis Transaksi</label>
+                  <select class="form-select" data-dn="transactionType">
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option value="Sea Import">Sea Import</option>
+                    <option value="Sea Export">Sea Export</option>
+                    <option value="Air Import">Air Import</option>
+                    <option value="Air Export">Air Export</option>
+                    <option value="Local Sale">Local Sale</option>
+                  </select>
+                </div>
+                <!-- MODA ANGKUT: untuk Laporan Biaya Angkut (per moda Udara /
+                     Laut / Darat, seperti laporan DD Korea). Kosong = ikut
+                     Jenis Transaksi; trucking untuk kiriman laut diisi Darat. -->
+                <div class="col-md-2">
+                  <label class="form-label" data-en="Transport Mode">Moda Angkut</label>
+                  <select class="form-select" data-dn="transportMode">
+                    <option value="" data-en="— follows Transaction —">— ikut Jenis Transaksi —</option>
+                    <option value="udara" data-en="Air">Udara</option>
+                    <option value="laut" data-en="Sea">Laut</option>
+                    <option value="darat" data-en="Vehicle (Truck)">Darat (Truk)</option>
+                  </select>
+                </div>
+                <div class="col-md-1">
                   <label class="form-label" data-i18n="f.mata.uang"
                     >Mata Uang</label
                   >
@@ -1860,7 +1889,7 @@
                     <option>USD</option>
                   </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                   <label class="form-label"
                      data-en="Paid To <span class=&quot;req&quot;>*</span>">Dibayarkan Kepada <span class="req">*</span></label
                   >
@@ -3799,8 +3828,11 @@
     <script src="js/features/cipl-print.js"></script>
     <script src="js/features/cipl-vn-excel.js"></script>
     <script src="js/features/cipl-excel.js"></script>
+    <script src="js/features/cipl-excel-cetak.js"></script>
     <script src="js/views/docnum-view.js"></script>
     <script src="js/features/fund-summary.js"></script>
+    <script src="js/core/kurs-pajak.js"></script>
+    <script src="js/features/fund-report.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/render/prediction-view.js"></script>
     <script src="js/features/prediction-ui.js"></script>

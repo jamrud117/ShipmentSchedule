@@ -446,7 +446,7 @@ $("#paginationBar").addEventListener("click", (e) => {
 });
 $("#paginationBar").addEventListener("change", (e) => {
   if (e.target.id === "pageSizeSelect") {
-    pageSize = Number(e.target.value) || 5;
+    pageSize = Number(e.target.value) || 10;
     currentPage = 1;
     render();
   }
