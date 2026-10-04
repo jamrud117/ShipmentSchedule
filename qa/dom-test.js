@@ -6837,8 +6837,10 @@ console.log("— LAPORAN BIAYA ANGKUT —");
       .map((r) => w.lapBarisInvoice(r, 16000));
     return { dana, inv };
   };
-  t("Laporan: moda dari isian atau Jenis Transaksi; kelompok syarat Incoterm", () => {
-    eq(w.lapModa({ transportMode: "darat", transactionType: "Sea Import" }), "darat", "isian menang:");
+  t("Laporan: moda dari Jenis Transaksi; kelompok syarat Incoterm", () => {
+    // Jenis Transaksi menentukan moda; isian Moda Angkut lama tidak bisa menimpanya
+    eq(w.lapModa({ transportMode: "darat", transactionType: "Sea Import" }), "laut", "Jenis Transaksi menang:");
+    eq(w.lapModa({ transportMode: "udara" }), "udara", "data lama tanpa Jenis Transaksi:");
     eq(w.lapModa({ transactionType: "Air Export" }), "udara");
     eq(w.lapModa({ transactionType: "Sea Import" }), "laut");
     eq(w.lapModa({ transactionType: "Local Sale" }), "darat");
@@ -6865,14 +6867,14 @@ console.log("— LAPORAN BIAYA ANGKUT —");
     const lap = w.hitungLaporanBiaya(dana, inv, { tahun: "2026", bulan: "7" });
     eq(lap.bulanIni.biaya, 5000000, "Billing tidak ikut:");
     eq(lap.bulanIni.moda.udara, 4000000, "udara:");
-    eq(lap.bulanIni.moda.darat, 1000000, "darat (isian menang atas Sea Import):");
+    eq(lap.bulanIni.moda.laut, 1000000, "laut (Sea Import; isian Moda Angkut lama diabaikan):");
     eq(lap.bulanIni.penjualan, 160000000, "penjualan USD x kurs:");
     eq(Math.round(lap.bulanIni.rasio * 10000) / 10000, 0.0313, "rasio:");
     eq(lap.rataKumulatif.biaya, 1000000, "rata-rata Jan-Jul:");
     eq(lap.vendor.length, 2, "vendor Juli:");
     eq(lap.vendor.find((v) => v.vendor === "FREIGHT EXPRESS").kenaPpn, 1000000, "kena PPN per vendor:");
     eq(lap.customer[0].customer, "KUMHO", "customer terbesar:");
-    eq(lap.bulanan[6].jumlahModa.darat, 1, "jumlah per moda:");
+    eq(lap.bulanan[6].jumlahModa.laut, 1, "jumlah per moda (trucking Sea Import ikut laut):");
     const denganBilling = w.hitungLaporanBiaya(dana, inv, { tahun: "2026", bulan: "7", jenis: ["Freight", "Storage", "Lainnya", "Billing"] });
     eq(denganBilling.bulanIni.biaya, 14000000, "Billing ikut kalau dipilih:");
     const ang = w.hitungAnggaran(lap, { tahunan: 100000000, berubah: 80000000 });
@@ -6890,7 +6892,7 @@ console.log("— LAPORAN BIAYA ANGKUT —");
       ];
       await w.renderDocNumHistory();
       // Empat bagian ringkas di depan, sisanya terlipat di "More details"
-      eq(w.document.querySelectorAll("#docNumHistory > .lap-bagian").length, 5, "bagian ringkas:");
+      eq(w.document.querySelectorAll("#docNumHistory > .lap-bagian").length, 6, "bagian ringkas:");
       eq(w.document.querySelectorAll("#docNumHistory details.lap-detail .lap-bagian").length, 8, "bagian detail:");
       if (w.document.querySelector("#docNumHistory details.lap-detail").open) throw new Error("detail seharusnya terlipat");
       if (!w.document.querySelector("#docNumHistory .lap-kpi")) throw new Error("kartu indikator tidak ada");
@@ -6943,7 +6945,7 @@ console.log("— LAPORAN BIAYA ANGKUT —");
     const a = w.hitungAnalisis(dana, opsi);
     const wb = w.lapSusunWorkbook({ a, lap, blok: w.lapSusunBlok(a, lap, null) }, {});
     const nama = wb.worksheets.map((x) => x.name);
-    eq(nama.join("|"), "Summary|Revenue vs Spending|Monthly Comparison|Breakdown|Vendors & Customers|Payments|Statistics|Forecast 2027|Transport Detail|Vendor Settlement|Exchange Rates|Cost Data|Sales Data", "lembar:");
+    eq(nama.join("|"), "Summary|Revenue vs Spending|Monthly Comparison|Breakdown|Vendors & Customers|Vendor Comparison|Payments|Statistics|Forecast 2027|Transport Detail|Vendor Settlement|Exchange Rates|Cost Data|Sales Data", "lembar:");
     const buf = await wb.xlsx.writeBuffer();
     if (!(buf.byteLength > 4000)) throw new Error("berkas terlalu kecil");
   });
@@ -7047,6 +7049,34 @@ console.log("— LAPORAN BIAYA ANGKUT —");
     const src = w.eval("lapSusunBlok.toString()");
     if (/Sales by goods type|Sales by delivery terms/.test(src)) throw new Error("tabel per jenis barang / syarat penyerahan masih ada");
   });
+  t("Perbandingan vendor: per jalur, tanpa bea & pajak, per kiriman & per kg (GW), termurah ditandai", () => {
+    const d = (no, tgl, n, p) => w.lapBarisDana({ id: no, doc_number: no, doc_date: tgl,
+      payload: Object.assign({ currency: "IDR", invoiceDate: tgl, expenseType: "Freight", lines: [{ desc: "a", amount: String(n), ppnRate: "0" }] }, p) }, 16000);
+    const dana = [
+      d("1", "2026-07-01", 6000000, { payee: "FEDEX", blAwb: "AWB0000001", transactionType: "Air Import" }),
+      d("2", "2026-07-09", 4000000, { payee: "FEDEX", blAwb: "AWB0000002", transactionType: "Air Import" }),
+      d("3", "2026-08-01", 3000000, { payee: "DHL", blAwb: "AWB0000003", transactionType: "Air Import" }),
+      d("4", "2026-08-02", 9000000, { payee: "KAS NEGARA", blAwb: "AWB0000003", transactionType: "Air Import", expenseType: "Tax Advance" }),
+      d("5", "2026-08-05", 13631273, { payee: "WIDE", blAwb: "WLS O260 9882 6", transactionType: "Sea Export" }),
+    ];
+    const kiriman = [
+      { id: "k1", masterBL: "AWB0000001", items: [{ qty: 1, bruto: 60 }] },
+      { id: "k2", masterBL: "AWB-0000-002", items: [{ qty: 1, bruto: 40 }] },
+      { id: "k3", masterBL: "AWB0000003", items: [{ qty: 1, bruto: 20 }] },
+    ];
+    const b = w.lapBandingVendor(dana, 2026, 9, kiriman);
+    const air = b.find((j) => j.jalur === "Air Import");
+    eq(air.dasar, "kg", "dasar pembanding:");
+    eq(air.vendor.map((v) => v.vendor).join(","), "FEDEX,DHL", "urutan termurah dulu:");
+    eq(air.vendor[0].perKg, 100000, "FEDEX: 10 jt / 100 kg:");
+    eq(air.vendor[1].perKg, 150000, "DHL: 3 jt / 20 kg (Tax Advance tidak dihitung):");
+    eq(air.vendor[0].termurah, true);
+    eq(air.vendor[0].perKiriman, 5000000, "rata-rata per kiriman:");
+    if (b.some((j) => j.vendor.some((v) => v.vendor === "KAS NEGARA"))) throw new Error("bea & pajak ikut dibandingkan");
+    const laut = b.find((j) => j.jalur === "Sea Export");
+    eq(laut.vendor.length, 1, "jalur dengan satu vendor:");
+    eq(!!laut.vendor[0].termurah, false, "tidak ada pembanding -> tidak ditandai termurah:");
+  });
   t("Unduhan CIPL bernama persis nomor invoicenya (spasi ikut); halaman berpaginasi 10 baris", () => {
     eq(w.ciplNamaBerkas("DDI - CRBM - X - 061"), "DDI - CRBM - X - 061");
     eq(w.ciplNamaBerkas("DDI/CRBM:X*061"), "DDI-CRBM-X-061", "karakter terlarang:");
@@ -7080,6 +7110,447 @@ console.log("— LAPORAN BIAYA ANGKUT —");
     const b = w.hitungAnalisis(dana.filter((d) => d.tahun === 2026), { tahun: "2026", bulan: "6" });
     eq(b.yoy, null, "YoY tanpa tahun lalu:");
     eq(b.proyeksiIni, 144000000, "laju berjalan:");
+  });
+}
+
+console.log("— BIAYA PER KIRIMAN (LANDED COST) —");
+t("BL/AWB dicocokkan tanpa spasi & tanda hubung; satu pengajuan boleh beberapa nomor", () => {
+  eq(w.bkKunciDana({ blAwb: "877144218723/877334611529" }).join(","), "877144218723,877334611529");
+  eq(w.bkKunciDana({ blAwb: "SRE 453834" }).join(","), "SRE453834");
+  const kirim = { masterBL: "877-1442-18723", houseBL: "" };
+  const rows = [
+    { id: "a", payload: { blAwb: "877144218723/877334611529" } },
+    { id: "b", payload: { blAwb: "SRE453834" } },
+    { id: "c", payload: {} },
+  ];
+  eq(w.bkCocokkan(kirim, rows).map((r) => r.id).join(","), "a");
+  eq(w.bkCocokkan({ masterBL: "", houseBL: "" }, rows).length, 0, "tanpa BL/AWB:");
+});
+t("Biaya per kiriman: total dikeluarkan TERMASUK pajak = bea & pajak + biaya logistik", () => {
+  const kirim = { id: "k1", mode: "import", incoterm: "CIF", ndpbm: 16000, masterBL: "BL12345",
+    items: [{ qty: 2, harga: 5000, netto: 900, bruto: 1000 }] };              // USD 10.000 -> Rp 160 jt
+  const pf = { expenseType: "Freight", currency: "IDR", invoiceDate: "2026-08-01", payee: "FEDEX", paidAt: "2026-08-10",
+    lines: [{ desc: "Freight", amount: "4000000", ppnRate: "0" }, { desc: "Handling", amount: "1000000", ppnRate: "11" }] };
+  const rows = [
+    { id: "f", doc_number: "1/EXIM", doc_date: "2026-08-01", payload: pf },
+    { id: "b", doc_number: "2/EXIM", doc_date: "2026-08-02", payload: { expenseType: "Billing", currency: "IDR", payee: "KAS NEGARA",
+      feeBm: "2000000", feePpn: "3000000", feePph: "1000000" } },
+    { id: "t", doc_number: "3/EXIM", doc_date: "2026-08-03", payload: { expenseType: "Tax Advance", currency: "IDR", payee: "KAS NEGARA",
+      lines: [{ desc: "PPh", amount: "500000", ppnRate: "0" }] } },
+  ];
+  const h = w.hitungBiayaKiriman(kirim, rows, () => 0);
+  const freight = w.frTotalPengajuan(pf);                                   // termasuk PPN jasa
+  eq(h.pajak, 6500000, "bea & pajak (Billing 6 jt + Tax Advance 0,5 jt):");
+  eq(h.logistik, freight, "biaya logistik (nilai dibayar):");
+  eq(h.total, freight + 6500000, "total dikeluarkan termasuk pajak:");
+  eq(h.nilaiBarang, 160000000, "nilai barang CIF x NDPBM:");
+  eq(h.belumJumlah, 2, "belum lunas:");
+  const simpan = baca("activeLang");
+  let html;
+  try { w.setLang("id"); html = w.bkHtml(kirim, h); } finally { w.setLang(simpan); }
+  ["Total dikeluarkan", "Bea &amp; pajak", "Biaya logistik"].forEach((x) => { if (!html.includes(x)) throw new Error("tidak ada: " + x); });
+  if (/Landed cost|dikreditkan|per kg/i.test(html)) throw new Error("istilah yang membingungkan masih tampil");
+  // Biaya logistik = nilai akhir dibayar: DPP + PPN - potongan PPh 23 (sama dengan Total Dibayar pengajuan)
+  const tl = w.fundLineTotals(pf.lines);
+  eq(h.logistik, tl.totalNet + tl.totalPpn - tl.pph, "biaya logistik sudah dipotong PPh 23:");
+  if (/\(\+PPN\)|\(\+VAT\)/.test(html)) throw new Error("keterangan masih '+PPN'");
+  if (!html.includes("Freight, Storage, Other Charge")) throw new Error("keterangan biaya logistik bukan 'Freight, Storage, Other Charge'");
+  if (/\/ kg/.test(html)) throw new Error("hitungan per kg seharusnya tidak ada lagi");
+});
+t("Panel detail jadwal memuat bagian biaya kiriman; simpan pengajuan menyegarkan angkanya", () => {
+  const html = w.buildDetailHtml({ id: "x9", mode: "import", items: [], party: "A" });
+  if (!html.includes('id="detailBiaya"')) throw new Error("bagian biaya kiriman tidak ada di panel detail");
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "docnum-view.js"), "utf8");
+  eq((src.match(/bkLupakan\(\)/g) || []).length, 3, "penyegar cache di simpan/ubah/status bayar:");
+});
+
+console.log("— PENGAJUAN DANA DARI INVOICE VENDOR (PDF) —");
+const fiksInvoice = (n) => require("fs").readFileSync(require("path").join(__dirname, "fixtures", n + ".txt"), "utf8");
+t("invoice FedEx (1 AWB): komponen Freight / Base Discount / Fuel Surcharge, PPN 1,1% per AWB, total tepat", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-fedex-872921966"), ["FEDEX", "WIDE"]);
+  eq(h.payee, "FEDEX");
+  eq(h.invoiceNo, "872921966");
+  eq(h.invoiceDate, "2026-08-24");
+  eq(h.invoiceDueDate, "2026-09-23");
+  eq(h.blAwb, "875599457076");
+  eq(h.expenseType, "Freight");
+  eq(h.transactionType, "Air Import");
+  eq(h.lines.map((l) => (l.jenis === "diskon" ? "-" : "") + l.amount).join(","), "8659000,-4762450,1792413", "komponen:");
+  eq(h.lines[0].desc, "Freight Charges – AWB 875599457076 (12.7 kg)");
+  eq(h.lines[1].desc, "Base Discount – AWB 875599457076 (12.7 kg)");
+  eq(h.dpp, 5688963, "DPP setelah diskon:");
+  eq(h.ppn, 62579, "PPN dibulatkan sekali per AWB:");
+  eq(h.cocok, true, "DPP + PPN = Grand Total invoice:");
+});
+t("invoice FedEx (2 AWB): komponen per AWB termasuk Demand Surcharge; PPN tepat sampai rupiah terakhir", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-fedex-873034830"), ["FEDEX"]);
+  eq(h.blAwb, "877144218723/877334611529");
+  eq(h.lines.length, 8, "4 komponen x 2 AWB:");
+  eq(h.lines.map((l) => l.desc.split(" – ")[0]).join("|"),
+    "Freight Charges|Base Discount|Fuel Surcharge|Demand Surcharge|Freight Charges|Base Discount|Fuel Surcharge|Demand Surcharge");
+  eq(h.lines.filter((l) => l.jenis === "diskon").length, 2, "baris diskon:");
+  // Tanpa pembulatan berkelompok PPN-nya 89.695 (lebih Rp 2); FedEx: 60.956 + 28.737
+  eq(h.ppn, 89693, "PPN:");
+  eq(h.dpp + h.ppn, 8243644, "total invoice:");
+  eq(h.cocok, true);
+});
+t("PPN berkelompok: dibulatkan sekali per grup, dibagi ke baris, total baris = total grup", () => {
+  const baris = [
+    { desc: "Freight", amount: "8188000", ppnRate: 1.1, grupPpn: "A" },
+    { jenis: "diskon", desc: "Disc", amount: "4503400", discType: "rp", ppnRate: 1.1, grupPpn: "A" },
+    { desc: "Fuel", amount: "1822359", ppnRate: 1.1, grupPpn: "A" },
+    { desc: "Demand", amount: "34500", ppnRate: 1.1, grupPpn: "A" },
+  ];
+  const nilai = w.fundLineValues(baris);
+  const ppn = w.fundLinePpnDaftar(baris, nilai);
+  eq(ppn.reduce((x, y) => x + y, 0), 60956, "satu pembulatan per AWB (FedEx):");
+  eq(w.fundLineTotals(baris).totalPpn, 60956);
+  // Tanpa grup: tetap dibulatkan per baris seperti semula
+  const tanpa = baris.map(({ grupPpn, ...b }) => b);
+  eq(w.fundLineTotals(tanpa).totalPpn, 60957, "per baris (perilaku lama tidak berubah):");
+});
+t("invoice forwarder (WIDE): tabel Description..Total, Tax Advance, Sea Import, B/L tanpa spasi", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-wide-IN-WL2609-00159"), ["WIDE", "FEDEX"]);
+  eq(h.payee, "WIDE", "nama vendor yang sudah dipakai sebelumnya:");
+  eq(h.invoiceNo, "IN-WL2609-00159");
+  eq(h.invoiceDate, "2026-09-30");
+  eq(h.invoiceDueDate, "2026-10-30");
+  eq(h.blAwb, "SREBUS45056JKT", "spasi nomor B/L dirapatkan:");
+  eq(h.expenseType, "Tax Advance");
+  eq(h.transactionType, "Sea Import");
+  eq(JSON.stringify(h.lines), '[{"desc":"TAX (Advance)","amount":"22210551","ppnRate":0}]');
+  eq(h.cocok, true);
+});
+t("invoice forwarder ekspor CIF (WIDE, 14 komponen): semua baris, PPN 1,1%, PPh 23 dipotong, Freight", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-wide-IN-WL2610-00005"), ["WIDE", "FEDEX"]);
+  eq(h.invoiceNo, "IN-WL2610-00005");
+  eq(h.invoiceDate, "2026-10-02");
+  eq(h.invoiceDueDate, "2026-11-01");
+  eq(h.transactionType, "Sea Export");
+  eq(h.blAwb, "WLSO26098826", "B/L tanpa spasi:");
+  eq(h.expenseType, "Freight", "biaya forwarder = Freight:");
+  eq(h.lines.length, 14, "semua komponen biaya:");
+  eq(h.lines.map((l) => l.desc).join("|"), "Administration Fee|Agency Fee|Certificate of Original ( CO ) Fee|Clearence Charge|CY-CFS Charge|Document Fee|EMERGENCY FUEL SURCHARGE|Fumigation|Insurance Fee|ISPM CHARGE|Manifest Fee|Ocean Freight|PE/PEB Charge|Trucking Charge");
+  if (!h.lines.every((l) => l.ppnRate === 1.1)) throw new Error("tarif PPN tiap baris harus 1,1%");
+  eq(h.dpp, 13631273, "DPP:");
+  eq(h.ppn, 149944, "PPN:");
+  eq(h.pphInvoice, 272625, "PPh 23 di invoice:");
+  eq(h.cocok, true, "DPP + PPN - PPh 23 = total invoice:");
+  // Potongan PPh 23 di form (2%) sama dengan yang dipotong forwarder
+  const tl = w.fundLineTotals(h.lines);
+  eq(tl.totalNet + tl.totalPpn - tl.pph, 13508592, "total form = total invoice:");
+});
+t("form Pengajuan Dana tanpa isian Moda Angkut -- moda tersirat di Jenis Transaksi", () => {
+  const panel = w.docNumPanelEl("fund");
+  if (panel.querySelector('[data-dn="transportMode"]')) throw new Error("isian Moda Angkut / Trucking masih ada");
+  const pilihan = [...panel.querySelector('[data-dn="transactionType"]').options].map((o) => o.value).filter(Boolean);
+  eq(pilihan.join("|"), "Sea Import|Sea Export|Air Import|Air Export|Local Sale");
+  eq(w.lapModa({ transactionType: "Local Sale" }), "darat", "Local Sale = truk:");
+});
+t("invoice DHL Express (2 AWB): Standard Charge, Fuel Surcharge, GoGreen + diskonnya per baris DHL, PPN tepat", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-dhl-JKTIR01026324"), ["DHL", "FEDEX", "WIDE"]);
+  eq(h.payee, "DHL");
+  eq(h.invoiceNo, "JKTIR01026324");
+  eq(h.invoiceDate, "2026-08-18", "tanggal hari-bulan-tahun:");
+  eq(h.invoiceDueDate, "2026-09-17", "jatuh tempo 30 hari:");
+  eq(h.blAwb, "8481290532/3187381116");
+  eq(h.expenseType, "Freight");
+  eq(h.transactionType, "Air Import", "INBOUND:");
+  eq(h.lines.map((l) => (l.jenis === "diskon" ? "-" : "") + l.amount).join(","),
+    "4841000,-2420500,1851683,-925842,19500,2972000,-1486000,1136790,-568395,9000", "komponen & diskon:");
+  eq(h.lines[0].desc, "Standard Charge – AWB 8481290532 (6.50 kg)");
+  eq(h.lines[2].desc, "Fuel Surcharge – AWB 8481290532 (6.50 kg)");
+  eq(h.lines[4].desc, "Gogreen Plus - Carbon Reduced – AWB 8481290532 (6.50 kg)", "nama lengkap dari Analysis of Extra Charges:");
+  eq(h.dpp, 5429236, "DPP (Taxable Total):");
+  eq(h.ppn, 59722, "PPN per baris DHL:");
+  eq(h.cocok, true, "total 5.488.958:");
+});
+t("invoice DHL Inbound Charges: Non-Routine Entry PPN 11%, HWB, tanggal hari/bulan/tahun", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-dhl-D000842585"), ["DHL", "FEDEX"]);
+  eq(h.payee, "DHL");
+  eq(h.invoiceNo, "D000842585");
+  eq(h.invoiceDate, "2026-10-02", "02/10/2026 = 2 Oktober:");
+  eq(h.invoiceDueDate, "2026-10-02");
+  eq(h.blAwb, "9642681930");
+  eq(h.expenseType, "Lainnya", "seperti pengajuan DHL Non-Routine Entry sebelumnya:");
+  eq(h.transactionType, "Air Import");
+  eq(JSON.stringify(h.lines), '[{"desc":"Non-Routine Entry","amount":"175000","ppnRate":11}]');
+  eq(h.dpp + h.ppn, 194250);
+  eq(h.cocok, true);
+});
+t("billing DJBC: Nomor Billing, tanggal & jatuh tempo, akun PPN Impor -> isian Billing, Sea Import (Tanjung Priok)", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("billing-djbc-640261006322394"), ["KAS NEGARA", "WIDE"]);
+  eq(h.jenisDokumen, "billing");
+  eq(h.payee, "KAS NEGARA");
+  eq(h.expenseType, "Billing");
+  eq(h.billingNo, "640261006322394");
+  eq(h.noAju, "000020DYL45520260928002020", "nomor aju PIB:");
+  eq(h.invoiceDate, "2026-10-02", "02 Oktober 2026:");
+  eq(h.invoiceDueDate, "2026-10-06");
+  eq(h.transactionType, "Sea Import", "kantor Tanjung Priok:");
+  eq(JSON.stringify(h.fee), '{"feeBm":0,"feePpn":37229287,"feePph":0}');
+  eq(h.cocok, true, "jumlah akun = total billing:");
+});
+t("Rincian bawaan: 'Payment Request Invoice <Vendor>' / 'Payment Request Billing Import'; ketikan sendiri tidak ditimpa", () => {
+  eq(w.danaRincianBawaan({ payee: "WIDE" }), "Payment Request Invoice Wide");
+  eq(w.danaRincianBawaan({ payee: "FEDEX" }), "Payment Request Invoice FedEx");
+  eq(w.danaRincianBawaan({ payee: "DHL" }), "Payment Request Invoice DHL");
+  eq(w.danaRincianBawaan({ payee: "FREIGHT EXPRESS" }), "Payment Request Invoice Freight Express");
+  eq(w.danaRincianBawaan({ jenisDokumen: "billing", payee: "KAS NEGARA" }), "Payment Request Billing Import");
+  const panel = w.docNumPanelEl("fund");
+  const catatan = panel.querySelector('[data-dn="notes"]');
+  // Billing mengisi isian Billing + Rincian bawaannya
+  w.danaIsiForm(w.bacaInvoiceVendor(fiksInvoice("billing-djbc-640261006322394"), ["KAS NEGARA"]));
+  const nilai = (k) => panel.querySelector(`[data-dn="${k}"]`).value;
+  eq(nilai("expenseType"), "Billing");
+  eq(nilai("billingNo"), "640261006322394");
+  eq(nilai("feePpn").replace(/[^\d]/g, ""), "37229287", "PPN Impor (diformat isian angka):");
+  eq(nilai("payee"), "KAS NEGARA");
+  eq(catatan.value, "Payment Request Billing Import");
+  // Rincian yang diketik pengguna dipertahankan
+  catatan.value = "Bayar PPN impor mold Kumho";
+  w.danaIsiForm(w.bacaInvoiceVendor(fiksInvoice("invoice-wide-IN-WL2609-00159"), ["WIDE"]));
+  eq(catatan.value, "Bayar PPN impor mold Kumho", "ketikan sendiri:");
+  w.resetDocNumForm("fund");
+});
+t("pembantu baca invoice: tanggal, angka, tarif PPN, jenis baris", () => {
+  eq(w.danaTanggalIso("30 - September - 2026"), "2026-09-30");
+  eq(w.danaTanggalIso("09/15/2026"), "2026-09-15", "gaya bulan/hari/tahun:");
+  eq(w.danaAngka("(4,503,400)"), -4503400);
+  eq(w.danaAngka("5.688.963,00"), 5688963, "format Indonesia:");
+  eq(w.danaTarifPpn(60956, 5541459), 1.1);
+  eq(w.danaTarifPpn(110000, 1000000), 11);
+  eq(w.danaJenisBaris("Storage / Penumpukan"), "Storage");
+  eq(w.danaJenisBaris("Ocean Freight"), "Freight");
+  eq(w.danaJenisBaris("Admin fee"), "Lainnya");
+});
+t("tombol 'Isi dari Invoice Vendor' ada di form Pengajuan Dana & mengisi isiannya", () => {
+  const panel = w.docNumPanelEl("fund");
+  if (!panel.querySelector("#btnDanaDariInvoice") || !w.document.getElementById("inpDanaDariInvoice")) throw new Error("tombol unggah invoice tidak ada");
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-fedex-873034830"), ["FEDEX"]);
+  w.danaIsiForm(h);
+  const nilai = (k) => panel.querySelector(`[data-dn="${k}"]`).value;
+  eq(nilai("payee"), "FEDEX");
+  eq(nilai("expenseType"), "Freight");
+  eq(nilai("transactionType"), "Air Import");
+  eq(nilai("invoiceNo"), "873034830");
+  eq(nilai("invoiceDate"), "2026-09-28");
+  eq(nilai("blAwb"), "877144218723/877334611529");
+  eq(baca("fundLines").length, 8, "baris rincian (komponen per AWB):");
+  eq(nilai("notes"), "Payment Request Invoice FedEx", "Rincian (subject cetak) bawaan:");
+  w.resetDocNumForm("fund");
+});
+
+console.log("— PENGAJUAN DANA: BEBERAPA INVOICE / DEBIT NOTE —");
+t("dua dokumen dalam satu pengajuan: rincian dikelompokkan per invoice / debit note (form & cetak)", () => {
+  const panel = w.docNumPanelEl("fund");
+  w.resetDocNumForm("fund");
+  panel.querySelector('[data-dn="invoiceNo"]').value = "AI2602094";
+  w.setFundDokumen([{ id: "d2", jenis: "invoice", nomor: "AI2602095", tanggal: "2026-10-01" }]);
+  w.setFundLines([
+    { desc: "FREIGHT CHARGE", amount: "4000000", ppnRate: 1.1 },
+    { desc: "TPS STORAGE", amount: "650000", ppnRate: 1.1, dok: "d2" },
+    { desc: "CUSTOMS CLEARANCE", amount: "750000", ppnRate: 1.1 },
+  ]);
+  // Form: judul kelompok + baris di bawah dokumennya masing-masing (diurutkan per dokumen)
+  const urutan = [...w.document.querySelectorAll("#fundLinesBody tr")].map((tr) =>
+    tr.dataset.flGrup !== undefined ? "#" + (tr.querySelector(".fl-grup-nomor") || {}).textContent : (tr.querySelector("[data-fl-f='desc']") || {}).value);
+  eq(urutan.join(" | "), "#AI2602094 | FREIGHT CHARGE | CUSTOMS CLEARANCE | #AI2602095 | TPS STORAGE");
+  eq(baca("fundLines").map((b) => b.desc).join(","), "FREIGHT CHARGE,CUSTOMS CLEARANCE,TPS STORAGE", "larik ikut berurutan per dokumen:");
+  // Tersimpan: dokumen + baris ber-dok
+  [...panel.querySelectorAll("[data-dn]")].forEach((el) => (el.disabled = false));
+  panel.querySelector('[data-dn="expenseType"]').value = "Freight";
+  const out = w.readDocNumForm("fund");
+  eq(JSON.stringify(out.dokumen), '[{"id":"d2","jenis":"invoice","nomor":"AI2602095","tanggal":"2026-10-01"}]');
+  eq(out.lines.map((b) => b.dok || "-").join(","), "-,-,d2");
+  eq(w.fundSemuaNomor({ invoiceNo: "AI2602094", dokumen: out.dokumen }).join(" / "), "AI2602094 / AI2602095");
+  // Cetak: judul "Nomor Invoice : ..." per dokumen, totalnya tetap satu
+  const html = w.frTabelRinci({ invoiceNo: "AI2602094", lines: out.lines, dokumen: [{ id: "d2", jenis: "debit", nomor: "DN-0101" }] }, "IDR");
+  const i1 = html.indexOf("Nomor Invoice : AI2602094");
+  const i2 = html.indexOf("Nomor Debit Note : DN-0101");
+  if (!(i1 > 0 && i2 > i1)) throw new Error("judul kelompok cetak tidak berurutan");
+  if (!(html.indexOf("CUSTOMS CLEARANCE") < i2 && html.indexOf("TPS STORAGE") > i2)) throw new Error("pos tidak di bawah dokumennya");
+  eq((html.match(/baris-rujukan/g) || []).length, 2, "satu judul per dokumen (tanpa baris rujukan ganda):");
+  w.resetDocNumForm("fund");
+  eq(baca("fundDokumen").length, 0, "reset mengosongkan dokumen tambahan:");
+});
+
+t("unggah invoice kedua dari vendor yang sama -> ditambahkan sebagai dokumen kedua, bukan menimpa", () => {
+  const panel = w.docNumPanelEl("fund");
+  w.resetDocNumForm("fund");
+  w.danaIsiForm(w.bacaInvoiceVendor(fiksInvoice("invoice-fedex-872921966"), ["FEDEX"]));
+  const h2 = w.bacaInvoiceVendor(fiksInvoice("invoice-fedex-873034830"), ["FEDEX"]);
+  eq(w.danaTambahSebagaiDokumen(h2), true);
+  eq(panel.querySelector('[data-dn="invoiceNo"]').value, "872921966", "invoice utama tetap:");
+  eq(baca("fundDokumen").map((d) => d.nomor).join(","), "873034830", "dokumen kedua:");
+  eq(baca("fundLines").length, 3 + 8, "baris kedua invoice:");
+  eq(panel.querySelector('[data-dn="blAwb"]').value, "875599457076/877144218723/877334611529", "BL/AWB digabung:");
+  // PPN tetap per AWB masing-masing (grup tidak bertabrakan antar dokumen)
+  eq(w.fundLineTotals(baca("fundLines")).totalPpn, 62579 + 89693, "PPN kedua invoice:");
+  w.resetDocNumForm("fund");
+});
+
+t("konfirmasi Pengajuan Dana memakai kotak aplikasi (bukan confirm bawaan); tombol kiri bisa jadi pilihan kedua", () => {
+  ["fund-lines.js", "fund-invoice-import.js"].forEach((f) => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "features", f), "utf8");
+    if (/window\.confirm\(|[^.\w]confirm\(/.test(src)) throw new Error(f + ": masih memakai confirm() bawaan peramban");
+  });
+  let pilih = "";
+  w.showConfirm("uji", () => (pilih = "tambah"), { title: "Uji", confirmText: "Tambahkan", cancelText: "Ganti Isi Form", tone: "primary", onCancel: () => (pilih = "ganti") });
+  eq(w.document.getElementById("confirmCancelBtn").textContent, "Ganti Isi Form");
+  w.document.getElementById("confirmCancelBtn").click();
+  eq(pilih, "ganti", "tombol kiri menjalankan pilihan kedua:");
+  w.showConfirm("uji", () => (pilih = "tambah"), { onCancel: () => (pilih = "ganti") });
+  w.document.getElementById("confirmActionBtn").click();
+  eq(pilih, "tambah", "tombol utama:");
+  // Hapus dokumen berisi rincian -> kotak konfirmasi aplikasi, baru terhapus setelah dikonfirmasi
+  w.resetDocNumForm("fund");
+  w.setFundDokumen([{ id: "dx", jenis: "debit", nomor: "DN-77" }]);
+  w.setFundLines([{ desc: "A", amount: "1000", ppnRate: 0 }, { desc: "B", amount: "2000", ppnRate: 0, dok: "dx" }]);
+  w.document.querySelector('#fundDokList [data-fd-del="dx"]').click();
+  eq(baca("fundDokumen").length, 1, "belum terhapus sebelum dikonfirmasi:");
+  if (!/Debit Note DN-77/.test(w.document.getElementById("confirmMessage").textContent)) throw new Error("pesan konfirmasi tidak menyebut dokumennya");
+  w.document.getElementById("confirmActionBtn").click();
+  eq(baca("fundDokumen").length, 0, "terhapus setelah dikonfirmasi:");
+  eq(baca("fundLines").map((b) => b.desc).join(","), "A", "baris dokumennya ikut terhapus:");
+  w.resetDocNumForm("fund");
+});
+
+console.log("— SURAT BEA CUKAI (TANPA BUKTI BAYAR & FUNGSI BARANG) —");
+t("Surat Jalan Export: isian khusus Lokal tersembunyi begitu tab dibuka (tanpa harus mengganti jenis dulu)", () => {
+  const panel = w.docNumPanelEl("do");
+  const jenis = panel.querySelector('[data-dn="doKind"]');
+  jenis.value = "Export";
+  // keadaan "baru dimuat": blok Lokal tampak seperti di HTML
+  panel.querySelectorAll('[data-dn-when="Lokal"]').forEach((x) => x.classList.remove("d-none"));
+  w.showDocNumTab("do");
+  const tampak = [...panel.querySelectorAll('[data-dn-when="Lokal"]')].filter((x) => !x.classList.contains("d-none")).length;
+  eq(tampak, 0, "blok Lokal yang tampil pada Export:");
+});
+t("Pemohon bawaan Yogi Firgiawan & Departemen EXIM di setiap form permintaan nomor", () => {
+  ["invoice", "do", "fund"].forEach((k) => {
+    const panel = w.docNumPanelEl(k);
+    w.resetDocNumForm(k);
+    const req = panel.querySelector('[data-dn="requester"]');
+    if (req) eq(req.value, "Yogi Firgiawan", k + " pemohon:");
+    const dept = panel.querySelector('[data-dn="department"]');
+    if (dept) eq(dept.value, "EXIM", k + " departemen:");
+  });
+});
+{
+  const jadwalAju = {
+    id: "imp-aju", mode: "import", noAju: "000020-029142-20260901-201942", invoice: "DD-DDI2026090101", party: "DYNAMIC DESIGN CO., LTD",
+    masterBL: "876555101407", houseBL: "", origin: "KRICN", vessel: "FX6068", voyage: "", eta: "2026-09-03", package: "1 PACKAGE",
+    items: [{ namaBarang: "IKR GUIDE", hsCode: "84779039", qty: 1, harga: 1170, bruto: 8.1, netto: 7 },
+      { namaBarang: "MINI PLUG", hsCode: "84807190", qty: 1, harga: 2000, bruto: 11.5, netto: 10 }],
+  };
+  t("Jenis Surat baru & isian bersyarat: nomor aju untuk keduanya, nilai/tanggal bayar & tabel barang sesuai jenisnya", () => {
+    const panel = w.docNumPanelEl("letter");
+    const jenis = panel.querySelector('[data-dn="letterType"]');
+    const nilai = [...jenis.options].map((o) => o.value);
+    ["Certificate of No Proof of Payment", "Certificate of Function and Use of Goods"].forEach((v) => {
+      if (nilai.indexOf(v) < 0) throw new Error("jenis surat tidak ada: " + v);
+    });
+    const tampak = (sel) => !panel.querySelector(sel).closest("[data-dn-when]").classList.contains("d-none")
+      && !panel.querySelector(sel).closest(".col-12.row").classList.contains("d-none");
+    jenis.value = "Certificate of No Proof of Payment";
+    w.syncDocNumConditional(panel);
+    eq(tampak("#dnSuratAju"), true, "nomor aju (tanpa bukti bayar):");
+    eq(!panel.querySelector('[data-dn="tglBayar"]').closest("[data-dn-when]").classList.contains("d-none"), true, "tanggal bayar:");
+    eq(panel.querySelector("#suratBarangBody").closest("[data-dn-when]").classList.contains("d-none"), true, "tabel barang tersembunyi:");
+    jenis.value = "Certificate of Function and Use of Goods";
+    w.syncDocNumConditional(panel);
+    eq(panel.querySelector("#suratBarangBody").closest("[data-dn-when]").classList.contains("d-none"), false, "tabel barang (fungsi):");
+    eq(panel.querySelector('[data-dn="tglBayar"]').closest("[data-dn-when]").classList.contains("d-none"), true, "tanggal bayar tersembunyi:");
+    jenis.value = "";
+    w.syncDocNumConditional(panel);
+    eq(panel.querySelector("#dnSuratAju").closest(".dn-surat-bc").classList.contains("d-none"), true, "jenis lain: bagian tersembunyi:");
+  });
+  t("data surat dari jadwal impor (lewat nomor aju): shipper, AWB, koli/berat, barang, negara asal, flight & tiba, nilai", () => {
+    const d = w.suratDataDariJadwal(jadwalAju);
+    eq(d.shipper, "DYNAMIC DESIGN CO., LTD");
+    eq(d.invoiceRef, "DD-DDI2026090101");
+    eq(d.awb, "876555101407");
+    eq(d.koliBerat, "1 PACKAGE / 19.6 KG");
+    eq(d.namaBarang, "IKR GUIDE dan MINI PLUG");
+    eq(d.negaraAsal, "KOREA SELATAN");
+    eq(d.flightTiba, "FX6068 / 03 September 2026");
+    eq(d.nilaiBarang, "USD 3,170");
+    eq(d.barang.map((b) => b.nama + "|" + b.hs).join(","), "IKR GUIDE|84779039,MINI PLUG|84807190");
+    eq(w.suratTanggalPanjang("2026-11-07"), "07 November 2026");
+  });
+  t("pilih nomor aju -> isian terisi (dicari tanpa tanda hubung); ketikan pengguna dipertahankan; barang ikut tersimpan", () => {
+    const D = w.eval("data");
+    D.import.push(jadwalAju);
+    try {
+      w.resetDocNumForm("letter");
+      const panel = w.docNumPanelEl("letter");
+      const jenis = panel.querySelector('[data-dn="letterType"]');
+      jenis.value = "Certificate of Function and Use of Goods";
+      jenis.dispatchEvent(new w.Event("change", { bubbles: true }));
+      const nilai = (k) => panel.querySelector(`[data-dn="${k}"]`).value;
+      eq(nilai("signer"), "Shin Nara", "penanda tangan bawaan:");
+      eq(nilai("signerTitle"), "Chief Marketing Officer");
+      eq(nilai("subject"), "Keterangan Fungsi Barang", "perihal bawaan:");
+      w.isiPilihanAju();
+      if (!w.document.querySelector('#dnAjuList option[value="000020-029142-20260901-201942"]')) throw new Error("nomor aju tidak ada di daftar pilihan");
+      eq(w.suratIsiDariAju("00002002914220260901201942"), true, "cocok tanpa tanda hubung:");
+      eq(nilai("shipper"), "DYNAMIC DESIGN CO., LTD");
+      eq(nilai("negaraAsal"), "KOREA SELATAN");
+      eq(baca("suratBarang").length, 2, "barang dari jadwal:");
+      // diubah pengguna -> tidak ditimpa saat aju dipilih ulang
+      panel.querySelector('[data-dn="shipper"]').value = "DYNAMIC DESIGN CO.,LTD (KOREA)";
+      w.suratIsiDariAju("000020-029142-20260901-201942");
+      eq(nilai("shipper"), "DYNAMIC DESIGN CO.,LTD (KOREA)", "ketikan pengguna:");
+      const isian = panel.querySelector('[data-dn="noAju"]');
+      const semula = isian.disabled;
+      [...panel.querySelectorAll("[data-dn]")].forEach((el) => (el.disabled = false));
+      w.syncDocNumConditional(panel);
+      const out = w.readDocNumForm("letter");
+      isian.disabled = semula;
+      eq((out.itemsFungsi || []).map((b) => b.nama).join(","), "IKR GUIDE,MINI PLUG", "barang ikut tersimpan:");
+    } finally {
+      D.import.splice(D.import.indexOf(jadwalAju), 1);
+      w.resetDocNumForm("letter");
+    }
+  });
+  t("cetak surat: berkop, nomor, isi resmi; tanpa bukti bayar ber-meterai; fungsi barang bertabel foto", () => {
+    const dasar = { id: "L1", doc_type: "letter", doc_number: "012/EXIM/DDI/X/2026", doc_date: "2026-10-02" };
+    const tb = Object.assign({}, dasar, { payload: { letterType: "Certificate of No Proof of Payment", signer: "Shin Nara", signerTitle: "Chief Marketing Officer",
+      noAju: "000020", awb: "02353493381", namaBarang: "IKR GUIDE dan MINI PLUG", koliBerat: "2 PACKAGE / 19.6 KG", flightTiba: "10 September 2026",
+      negaraAsal: "KOREA SELATAN", nilaiBarang: "USD 3,170", tglBayar: "2026-11-07" } });
+    eq(w.suratBcBolehCetak(tb), true);
+    const h1 = w.suratBcHtml(tb);
+    ["PT DYNAMIC DESIGN INDONESIA", "Pusat :", "SURAT PERNYATAAN TANPA BUKTI BAYAR", "Nomor : 012/EXIM/DDI/X/2026",
+     "02353493381", "USD 3,170", "07 November 2026", "SHIN NARA", "Chief Marketing Officer", "Cirebon, 02 Oktober 2026"]
+      .forEach((x) => { if (!h1.includes(x)) throw new Error("tanpa bukti bayar: tidak ada " + x); });
+    if (/Meterai/.test(h1)) throw new Error("tanda meterai seharusnya tidak ada (ruangnya dibiarkan kosong)");
+    // Kop sama dengan Form Pengajuan Dana: garis tebal-tipis
+    if (!/\.kop \{[^}]*border-bottom: 0\.7mm solid #000;/.test(w.suratBcCss()) || !/\.kop::after/.test(w.suratBcCss())) throw new Error("kop tidak sama dengan Form Pengajuan Dana");
+    const fb = Object.assign({}, dasar, { payload: { letterType: "Certificate of Function and Use of Goods", signer: "Shin Nara", signerTitle: "Chief Marketing Officer",
+      recipient: "Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta", subject: "Keterangan Fungsi Barang",
+      itemsFungsi: [{ nama: "IKR GUIDE", hs: "84779039", fungsi: "Pemandu posisi bagian cetakan.", foto: "data:image/jpeg;base64,AAAA" }] } });
+    const h2 = w.suratBcHtml(fb);
+    ["SURAT KETERANGAN FUNGSI BARANG", "Perihal", "Lampiran", "Foto barang", "Menunjuk Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta perihal",
+     "HS Code : 84779039", "Pemandu posisi bagian cetakan.", '<img src="data:image/jpeg;base64,AAAA"']
+      .forEach((x) => { if (!h2.includes(x)) throw new Error("fungsi barang: tidak ada " + x); });
+    if (/Kepada Yth|Tempat/.test(h2)) throw new Error("blok Kepada Yth. ... di Tempat seharusnya dihapus");
+    // Tanda tangan tanpa nama PT; Perihal tidak tebal
+    [h1, h2].forEach((h) => {
+      const ttd = h.slice(h.indexOf('class="ttd"'));
+      if (/DYNAMIC DESIGN/.test(ttd)) throw new Error("nama PT masih di blok tanda tangan");
+    });
+    if (!h2.includes("<td>Keterangan Fungsi Barang</td>")) throw new Error("Perihal masih tebal");
+    if (/Menunjuk surat|\(Aju\)/.test(h2)) throw new Error("kata 'surat' / '(Aju)' seharusnya sudah dihapus");
+    if (!h2.includes(">Nomor Pengajuan<")) throw new Error("label Nomor Pengajuan");
+    if (!/\.ttd \{ width: max-content;[^}]*margin: 7mm 0 0 auto;/.test(w.suratBcCss())) throw new Error("tanda tangan belum menempel ke margin kanan");
+    // Label angkut: udara "Flight", laut "Sail"
+    if (!h2.includes("Flight &amp; Tanggal Tiba") && !h2.includes("Flight & Tanggal Tiba")) throw new Error("label Flight (udara)");
+    const laut = w.suratBcHtml(Object.assign({}, fb, { payload: Object.assign({}, fb.payload, { moda: "laut" }) }));
+    if (!/Sail &(amp;)? Tanggal Tiba/.test(laut)) throw new Error("kiriman laut harus 'Sail & Tanggal Tiba'");
+    const lautTb = w.suratBcHtml(Object.assign({}, tb, { payload: Object.assign({}, tb.payload, { moda: "laut" }) }));
+    if (!lautTb.includes("Sail / Tanggal")) throw new Error("surat pernyataan kiriman laut harus 'Sail / Tanggal'");
+    eq(w.suratBcBolehCetak(Object.assign({}, dasar, { payload: { letterType: "Surat Kuasa" } })), false, "jenis surat lain:");
   });
 }
 
@@ -8101,7 +8572,8 @@ t("daftar nomor menampilkan nomor invoice untuk jenis selain Billing", () => {
   const i = src.indexOf('dn-col-billing dn-num');
   if (i < 0) throw new Error("kolom nomor rujukan tidak ditemukan");
   const potongan = src.slice(i - 400, i + 200);
-  if (!/p\.billingNo \|\| p\.invoiceNo/.test(potongan))
+  // Billing dulu, lalu SEMUA nomor invoice / debit note pengajuan itu
+  if (!/p\.billingNo \|\| \(typeof fundSemuaNomor === "function" \? fundSemuaNomor\(p\)\.join\(" \/ "\) : p\.invoiceNo\)/.test(potongan))
     throw new Error("kolom tidak jatuh ke nomor invoice");
 });
 t("judul kolomnya menyebut kedua jenis nomor", () => {

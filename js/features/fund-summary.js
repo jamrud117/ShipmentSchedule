@@ -67,7 +67,8 @@ function fsumKolom(row) {
     nomorSurat: row.doc_number || "",
     tanggal: fsumTanggal(row),
     adaTglInvoice: !!p.invoiceDate,
-    nomor: [p.invoiceNo, p.billingNo].map((x) => String(x || "").trim()).filter(Boolean).join(" / "),
+    nomor: (typeof fundSemuaNomor === "function" ? fundSemuaNomor(p) : [p.invoiceNo]).concat([p.billingNo])
+      .map((x) => String(x || "").trim()).filter(Boolean).join(" / "),
     blAwb: String(p.blAwb || "").trim(),
     company: String(p.payee || "").trim(),
     customer: String(p.customer || "").trim(),

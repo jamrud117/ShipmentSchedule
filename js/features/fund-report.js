@@ -72,14 +72,16 @@ let lapData = null;
 
 /* Moda angkut sebuah pengajuan: isiannya sendiri; kalau kosong, dari
    Jenis Transaksi (Sea -> Laut, Air -> Udara, Local Sale -> Darat). */
+/* Moda dari JENIS TRANSAKSI: Sea -> laut, Air -> udara, Local Sale ->
+   darat (truk). Isian Moda Angkut lama hanya dibaca untuk pengajuan
+   terdahulu yang tidak punya Jenis Transaksi. */
 function lapModa(p) {
   const m = String((p && p.transportMode) || "").toLowerCase();
-  if (LAP_MODA.indexOf(m) >= 0) return m;
   const t = String((p && p.transactionType) || "");
   if (/^air/i.test(t)) return "udara";
   if (/^sea/i.test(t)) return "laut";
   if (/local/i.test(t)) return "darat";
-  return "";
+  return LAP_MODA.indexOf(m) >= 0 ? m : "";
 }
 
 /* Terms of Delivery -> kelompok Incoterm (E/F/C/D), seperti trade terms. */
@@ -191,10 +193,8 @@ function lapKursBawaan() {
 
 const lapModaKosong = () => ({ udara: 0, laut: 0, darat: 0, lain: 0 });
 
-/* MODA + ARAH: "Air Import", "Sea Export", "Truck · Local sale" ...
-   Moda dari isian Moda Angkut (atau Jenis Transaksi); arah dari Jenis
-   Transaksi. Laut/udara selalu jelas impor atau ekspornya. */
-const LAP_URUT_MODA_ARAH = ["Air Import", "Air Export", "Sea Import", "Sea Export", "Truck · Import", "Truck · Export", "Local Sale"];
+/* MODA + ARAH: "Air Import", "Sea Export", "Local Sale" -- semuanya dari
+   Jenis Transaksi. Laut/udara selalu jelas impor atau ekspornya. */
 function lapArah(transaksi) {
   const t = String(transaksi || "");
   if (/import/i.test(t)) return "Import";
@@ -208,7 +208,7 @@ function lapModaArah(d) {
   if (arah === "Local Sale") return "Local Sale";
   if (d.moda === "udara") return arah ? `Air ${arah}` : "Air (direction not set)";
   if (d.moda === "laut") return arah ? `Sea ${arah}` : "Sea (direction not set)";
-  if (d.moda === "darat") return arah ? `Truck · ${arah}` : "Truck";
+  if (d.moda === "darat") return "Truck";
   return "Mode not set";
 }
 const lapKeyModa = (m) => (LAP_MODA.indexOf(m) >= 0 ? m : "lain");
@@ -457,6 +457,65 @@ function lapRamal(ini, lalu, M, Y, mulai) {
   return { ytd, ytdLalu, totalLalu, yoy, g, runRate, proyeksiIni, metode, dasar, rendah: urut[0], tinggi: urut[urut.length - 1], bulanEfektif };
 }
 
+/* PERBANDINGAN VENDOR -- siapa lebih murah untuk jalur yang sama.
+
+   Hanya biaya JASA vendor (Freight, Storage, Lainnya): bea & pajak
+   (Billing, Tax Advance) adalah titipan negara, bukan harga vendor.
+   Per jalur (Air Import, Sea Export, ...) dan per vendor:
+     kiriman      = nomor BL/AWB berbeda yang ditagih (pengajuan tanpa
+                    BL/AWB dihitung satu kiriman masing-masing)
+     total        = DPP (sebelum PPN) semua pengajuannya
+     per kiriman  = total / kiriman
+     per kg (GW)  = total pengajuan yang BL/AWB-nya cocok dengan jadwal
+                    / gross weight jadwal-jadwal itu -- GW dipakai
+                    sebagai berat tagih akhir.
+   Termurah: per kg kalau minimal dua vendor di jalur itu punya angka per
+   kg; kalau tidak, rata-rata per kiriman. */
+function lapBandingVendor(baris, Y, M, kiriman) {
+  const norm = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const pecah = (x) => String(x || "").split(/[\/,;|\r\n]+/).map(norm).filter((k) => k.length >= 5);
+  const gwKunci = new Map();
+  (kiriman || []).forEach((s) => {
+    const gw = typeof computeCustoms === "function" ? Number(computeCustoms(s).totalBruto) || 0
+      : (s.items || []).reduce((x, it) => x + (Number(it.bruto) || 0), 0);
+    pecah([s.masterBL, s.houseBL].filter(Boolean).join("/")).forEach((k) => gwKunci.set(k, { id: s.id, gw }));
+  });
+  const grup = new Map();
+  (baris || [])
+    .filter((d) => d.tahun === Y && d.bulan <= M && d.vendor && ["Billing", "Tax Advance"].indexOf(d.jenis) < 0)
+    .forEach((d) => {
+      const jalur = lapModaArah(d);
+      const kunci = jalur + "|" + fsumKunci(d.vendor);
+      const g = grup.get(kunci) || { jalur, vendor: d.vendor, total: 0, bl: new Set(), tanpaBl: 0, totalCocok: 0, gwKiriman: new Map() };
+      g.total += d.total;
+      const bl = pecah(d.blAwb);
+      if (!bl.length) g.tanpaBl += 1;
+      bl.forEach((k) => g.bl.add(k));
+      const cocok = bl.map((k) => gwKunci.get(k)).filter((x) => x && x.gw > 0);
+      if (cocok.length) {
+        g.totalCocok += d.total;
+        cocok.forEach((x) => g.gwKiriman.set(x.id, x.gw));
+      }
+      grup.set(kunci, g);
+    });
+  const perJalur = new Map();
+  grup.forEach((g) => {
+    const kirimanN = g.bl.size + g.tanpaBl;
+    const gw = [...g.gwKiriman.values()].reduce((x, v) => x + v, 0);
+    const v = { vendor: g.vendor, kiriman: kirimanN, total: g.total, perKiriman: kirimanN ? g.total / kirimanN : null, gw, perKg: gw ? g.totalCocok / gw : null };
+    if (!perJalur.has(g.jalur)) perJalur.set(g.jalur, []);
+    perJalur.get(g.jalur).push(v);
+  });
+  return [...perJalur.entries()].map(([jalur, vendor]) => {
+    const pakaiKg = vendor.filter((v) => v.perKg != null).length >= 2;
+    const ukur = (v) => (pakaiKg ? v.perKg : v.perKiriman);
+    vendor.sort((a, b) => (ukur(a) == null) - (ukur(b) == null) || (ukur(a) || 0) - (ukur(b) || 0) || b.total - a.total);
+    const banding = vendor.filter((v) => ukur(v) != null);
+    if (banding.length >= 2) banding[0].termurah = true;
+    return { jalur, dasar: pakaiKg ? "kg" : "kiriman", vendor };
+  }).sort((a, b) => b.vendor.reduce((x, v) => x + v.total, 0) - a.vendor.reduce((x, v) => x + v.total, 0));
+}
+
 function hitungAnalisis(dana, opsi) {
   const o = opsi || {};
   const Y = Number(o.tahun);
@@ -689,6 +748,7 @@ function hitungAnalisis(dana, opsi) {
     metode, dasar, rendah: urutM[0], tinggi: urutM[urutM.length - 1], cadangan, rekomendasi, porsiBulan, fasing,
     perJenis, perModa, perVendor, perCustomer, statistik, bayar, perKiriman,
     kirimanJumlah: petaKirim.size, tanpaBlJumlah: tanpaBl.length, tanpaBlNilai: lapJumlah(tanpaBl.map((d) => d.total)),
+    bandingVendor: lapBandingVendor(baris, Y, M, o.kiriman || []),
     pend, pendLalu, pendYtd, pendYtdLalu, pendUsdYtd, pendUsd, pendUsdIdr, pendUsdLalu,
     pendUsdYtdLalu: lapJumlah(pendUsdLalu.slice(0, M)),
     jumlahInvoice: jual.filter((v) => v.tahun === Y && v.bulan <= M).length,
@@ -854,6 +914,22 @@ function lapSusunBlok(a, lap, ang) {
     sub: per,
     kepala: ["Vendor", "Requests", `Spending ${Y}`, "Share"],
     baris: a.perVendor.filter((r) => r.ini).slice(0, 5).map((r) => [sel(r.nama), sel(r.jumlah, "n"), sel(r.ini, "jt"), sel(r.porsi, "pct")]),
+  };
+  B.bandingVendor = {
+    judul: "Which vendor is cheaper",
+    sub: `${per} · vendor charges only (Freight, Storage, Other), before VAT`,
+    kepala: ["Lane", "Vendor", "Shipments", "Total", "Avg per shipment", "Gross weight (kg)", "Per kg (GW)", ""],
+    baris: a.bandingVendor.flatMap((j) => j.vendor.map((v, i) => [
+      sel(i ? "" : j.jalur, "txt", { b: !i }),
+      sel(v.vendor, "txt", { b: !!v.termurah }),
+      sel(v.kiriman, "n"),
+      sel(v.total, "jt"),
+      sel(v.perKiriman, "jt", { b: !!v.termurah && j.dasar === "kiriman" }),
+      sel(v.gw || null, "n"),
+      sel(v.perKg, "jt", { b: !!v.termurah && j.dasar === "kg" }),
+      sel(v.termurah ? (j.dasar === "kg" ? "✓ Cheapest per kg" : "✓ Cheapest per shipment") : ""),
+    ])),
+    catatan: "Duties & taxes (Billing, Tax Advance) are left out — they are not vendor prices. Per kg = requests whose BL/AWB matches a schedule ÷ that schedule's gross weight (GW, the billed weight). The cheapest is judged per kg when at least two vendors on the lane have it, otherwise per shipment.",
   };
   B.perKiriman = {
     judul: "EXIM cost per shipment (by BL/AWB)",
@@ -1287,7 +1363,9 @@ function lapHitungSekarang() {
     dataKurs.diperbarui ? `Kurs Pajak last updated ${String(dataKurs.diperbarui).slice(0, 10)} from fiskal.kemenkeu.go.id.` : "",
   ].filter(Boolean).join(" ");
   const anggaran = lapData.anggaran && !lapData.anggaran.gagal ? lapData.anggaran : null;
-  const a = hitungAnalisis(dana, Object.assign({ anggaran, invoice }, opsi));
+  // Jadwal kiriman (gross weight per BL/AWB) untuk perbandingan per kg antar vendor
+  const kiriman = typeof data !== "undefined" && data ? [].concat(data.import || [], data.export || []) : [];
+  const a = hitungAnalisis(dana, Object.assign({ anggaran, invoice, kiriman }, opsi));
   const ang = anggaran ? hitungAnggaran(lap, anggaran) : null;
   return { a, lap, ang, blok: lapSusunBlok(a, lap, ang) };
 }
@@ -1368,8 +1446,9 @@ function lapGambar(box) {
       ${tombolAnggaran}`)}
     ${bagian(2, "Month by month", `${lapTabelHtml(B.ringkasBulan)}${grafik(graf.yoy)}`)}
     ${bagian(3, "Where the money goes", `<div class="lap-dua-tabel">${lapTabelHtml(B.jenisRingkas)}${lapTabelHtml(B.modaRingkas)}</div>${lapTabelHtml(B.vendorTop)}${lapTabelHtml(B.perKiriman)}`)}
-    ${bagian(4, "Payments", `${lapTabelHtml(B.bayarStatus)}<div class="lap-dua-tabel">${lapTabelHtml(B.bayarUmur)}${lapTabelHtml(B.bayarVendor)}</div>`)}
-    ${bagian(5, `Budget ${a.Y + 1}`, `${lapTabelHtml(B.anggaranRingkas)}${lapTabelHtml(B.rencanaBulan)}`)}
+    ${bagian(4, "Vendor comparison", lapTabelHtml(B.bandingVendor))}
+    ${bagian(5, "Payments", `${lapTabelHtml(B.bayarStatus)}<div class="lap-dua-tabel">${lapTabelHtml(B.bayarUmur)}${lapTabelHtml(B.bayarVendor)}</div>`)}
+    ${bagian(6, `Budget ${a.Y + 1}`, `${lapTabelHtml(B.anggaranRingkas)}${lapTabelHtml(B.rencanaBulan)}`)}
     <details class="lap-detail">
       <summary><i class="bi bi-chevron-right"></i> More details for analysis <small>revenue by customer, monthly comparison, statistics, forecast methods, transport detail, exchange rates</small></summary>
       ${bagian("A", "Revenue vs spending", `${lapTabelHtml(B.pendapatan)}<div class="lap-grafik-dua">${grafik(graf.pendapatan)}${grafik(graf.rasio)}</div>${lapTabelHtml(B.kanal)}${lapTabelHtml(B.custPend)}`)}
@@ -1625,6 +1704,7 @@ function lapSusunWorkbook(hasil, gambar) {
   lembar("Monthly Comparison", [B.bulanan], [g.kumulatif]);
   lembar("Breakdown", [B.jenis, B.jenisBulan, B.moda], [g.moda]);
   lembar("Vendors & Customers", [B.vendor, B.customer, B.perKiriman]);
+  lembar("Vendor Comparison", [B.bandingVendor]);
   lembar("Payments", [B.bayarStatus, B.bayarUmur, B.bayarVendor]);
   lembar("Statistics", [B.statistik]);
   lembar(`Forecast ${a.Y + 1}`, [B.anggaranSaran, B.metode].concat(B.ramalPend ? [B.ramalPend] : []).concat([B.fasing]), [g.ramalan]);

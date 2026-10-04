@@ -1,0 +1,23 @@
+KEMENTERIAN KEUANGAN REPUBLIK INDONESIA 02/10/2026 08:47 AM
+DIREKTORAT JENDERAL BEA DAN CUKAI
+BILLING DJBC
+Nomor Billing : 640261006322394
+Tanggal : 02 Oktober 2026
+Tgl Jt Tempo : 06 Oktober 2026 22:00:00 WIB
+Kantor : 040300 - KANTOR PELAYANAN UTAMA BEA DAN CUKAI TIPE A
+TANJUNG PRIOK
+Dokumen : 01-PIB Bayar
+Nomor : 000020DYL45520260928002020
+Tanggal : 02 Oktober 2026
+Wajib Bayar
+NPWP : 0656319779061000
+NITKU : 0656319779061000000000
+Nama : PT DYNAMIC DESIGN INDONESIA
+Pembayaran
+Total : Rp. 37,229,287
+Terbilang : Tiga Puluh Tujuh Juta Dua Ratus Dua Puluh Sembilan Ribu Dua Ratus
+Delapan Puluh Tujuh Rupiah
+Akun NPWP/NITKU Nilai (Rp.)
+411212 - PPN Impor 0656319779061000/0656319779061000000000 37,229,287
+"Apabila terdapat perbedaan antara struk billing dengan sistem DJBC, maka yang menjadi acuan adalah data yang ada pada
+sistem DJBC"

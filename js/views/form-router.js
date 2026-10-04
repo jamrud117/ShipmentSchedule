@@ -136,6 +136,7 @@ function router() {
   if (hash === "#/docnum") {
     showDocNumView();
     if (typeof isiPilihanJadwal === "function") isiPilihanJadwal();
+    if (typeof isiPilihanAju === "function") isiPilihanAju();
     return;
   }
 

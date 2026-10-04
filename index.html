@@ -1288,7 +1288,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
-                    <option>Yogi Firgiawan</option>
+                    <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
                 <div class="col-md-3">
@@ -1301,7 +1301,7 @@
                     data-dn-required
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
-                    <option>EXIM</option>
+                    <option selected>EXIM</option>
                     <option>Finance</option>
                     <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
@@ -1637,7 +1637,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
-                    <option>Yogi Firgiawan</option>
+                    <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -1788,6 +1788,14 @@
                 <h6 data-i18n="u.permintaan.nomor.permintaan.dana">
                   Permintaan Nomor Permintaan Dana
                 </h6>
+                <!-- Unggah PDF tagihan vendor -> form terisi otomatis
+                     (js/features/fund-invoice-import.js). Tetap diperiksa
+                     dulu sebelum disimpan. -->
+                <button type="button" class="btn btn-sm btn-outline-primary dn-dari-invoice" id="btnDanaDariInvoice"
+                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF)">
+                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF)
+                </button>
+                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf" hidden />
                 <span class="docnum-preview">
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="fund">&mdash;</b>
                 </span>
@@ -1815,7 +1823,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
-                    <option>Yogi Firgiawan</option>
+                    <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -1828,7 +1836,7 @@
                     data-dn-required
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
-                    <option>EXIM</option>
+                    <option selected>EXIM</option>
                     <option>Finance</option>
                     <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
@@ -1866,18 +1874,6 @@
                     <option value="Air Import">Air Import</option>
                     <option value="Air Export">Air Export</option>
                     <option value="Local Sale">Local Sale</option>
-                  </select>
-                </div>
-                <!-- MODA ANGKUT: untuk Laporan Biaya Angkut (per moda Udara /
-                     Laut / Darat, seperti laporan DD Korea). Kosong = ikut
-                     Jenis Transaksi; trucking untuk kiriman laut diisi Darat. -->
-                <div class="col-md-2">
-                  <label class="form-label" data-en="Transport Mode">Moda Angkut</label>
-                  <select class="form-select" data-dn="transportMode">
-                    <option value="" data-en="— follows Transaction —">— ikut Jenis Transaksi —</option>
-                    <option value="udara" data-en="Air">Udara</option>
-                    <option value="laut" data-en="Sea">Laut</option>
-                    <option value="darat" data-en="Vehicle (Truck)">Darat (Truk)</option>
                   </select>
                 </div>
                 <div class="col-md-1">
@@ -2029,6 +2025,21 @@
                   <div class="form-subhead">
                     <span data-i18n="f.rincian.biaya">Rincian Biaya</span>
                   </div>
+                  <!-- DOKUMEN TAGIHAN TAMBAHAN: satu pengajuan untuk dua invoice,
+                       atau invoice + debit note. Rincian di bawah dikelompokkan
+                       per dokumen (fund-lines.js). -->
+                  <div class="fd-wadah">
+                    <div id="fundDokList"></div>
+                    <div class="fd-aksi">
+                      <button type="button" class="btn-quiet" id="btnFundTambahInvoice">
+                        <i class="bi bi-plus-lg"></i> Invoice
+                      </button>
+                      <button type="button" class="btn-quiet" id="btnFundTambahDebit">
+                        <i class="bi bi-plus-lg"></i> Debit Note
+                      </button>
+                      <span class="fd-petunjuk" data-en="One request for several bills? Add the next invoice or debit note — the cost lines are grouped per document.">Satu pengajuan untuk beberapa tagihan? Tambahkan invoice atau debit note berikutnya — rincian biaya dikelompokkan per dokumen.</span>
+                    </div>
+                  </div>
                   <div class="fund-lines-wrap">
                     <table class="fund-lines" id="fundLinesTable">
                       <thead>
@@ -2167,6 +2178,10 @@
                     <option data-en="Power of Attorney">Surat Kuasa</option>
                     <option data-en="Request Letter">Surat Permohonan</option>
                     <option data-en="Statement Letter">Surat Pernyataan</option>
+                    <!-- Surat untuk Bea Cukai: tercetak berkop, datanya dari
+                         jadwal impor lewat nomor aju (js/features/surat-bc.js) -->
+                    <option value="Certificate of No Proof of Payment" data-en="Certificate of No Proof of Payment">Surat Pernyataan Tanpa Bukti Bayar</option>
+                    <option value="Certificate of Function and Use of Goods" data-en="Certificate of Function and Use of Goods">Surat Keterangan Fungsi Barang</option>
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -2179,6 +2194,10 @@
                     data-dn="signer"
                     data-dn-required
                   />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" data-en="Signatory Title">Jabatan Penanda Tangan</label>
+                  <input type="text" class="form-control" data-dn="signerTitle" />
                 </div>
                 <div class="col-md-6">
                   <label class="form-label"
@@ -2213,6 +2232,72 @@
                     rows="2"
                     data-dn="notes"
                   ></textarea>
+                </div>
+                <!-- SURAT UNTUK BEA CUKAI: pilih nomor aju (bisa dicari) ->
+                     data diambil dari jadwal impornya. -->
+                <div class="col-12 row g-3 dn-surat-bc" data-dn-when="Certificate of No Proof of Payment|Certificate of Function and Use of Goods">
+                  <div class="col-12"><div class="form-subhead" data-en="Shipment Data">Data Kiriman</div></div>
+                  <div class="col-md-6">
+                    <label class="form-label" for="dnSuratAju" data-en="Customs Submission No. (Aju)">Nomor Aju</label>
+                    <input type="text" class="form-control" id="dnSuratAju" data-dn="noAju" list="dnAjuList" autocomplete="off"
+                      placeholder="Ketik untuk mencari nomor aju…" data-en-ph="Type to search the aju number…" />
+                    <datalist id="dnAjuList"></datalist>
+                    <div class="form-text" data-en="Pick from the list — the fields below are filled from that import schedule.">Pilih dari daftar — isian di bawah terisi dari jadwal impor tersebut.</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label" data-en="Invoice No. &amp; Date">No. &amp; Tanggal Invoice</label>
+                    <input type="text" class="form-control" data-dn="invoiceRef" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Shipper</label>
+                    <input type="text" class="form-control" data-dn="shipper" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">AWB / BL</label>
+                    <input type="text" class="form-control" data-dn="awb" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" data-en="Packages / Weight">Koli / Berat</label>
+                    <input type="text" class="form-control" data-dn="koliBerat" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" data-en="Goods">Nama Barang</label>
+                    <input type="text" class="form-control" data-dn="namaBarang" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label" data-en="Country of Origin">Negara Asal</label>
+                    <input type="text" class="form-control" data-dn="negaraAsal" />
+                  </div>
+                  <div class="col-md-4">
+                    <!-- "Flight" untuk kiriman udara, "Sail" untuk kapal -- ikut jadwal nomor aju -->
+                    <label class="form-label" data-label-angkut>Flight &amp; Tanggal Tiba</label>
+                    <input type="text" class="form-control" data-dn="flightTiba" />
+                    <input type="hidden" data-dn="moda" />
+                  </div>
+                  <div class="col-md-4" data-dn-when="Certificate of No Proof of Payment">
+                    <label class="form-label" data-en="Goods Value">Nilai Barang</label>
+                    <input type="text" class="form-control" data-dn="nilaiBarang" />
+                  </div>
+                  <div class="col-md-4" data-dn-when="Certificate of No Proof of Payment">
+                    <label class="form-label" data-en="Payment Will Be Made On">Tanggal Pembayaran Akan Dilakukan</label>
+                    <input type="date" class="form-control" data-dn="tglBayar" />
+                  </div>
+                  <div class="col-12" data-dn-when="Certificate of Function and Use of Goods">
+                    <label class="form-label" data-en="Goods, Function &amp; Photo">Barang, Fungsi &amp; Foto</label>
+                    <div class="sb-wrap">
+                      <table class="sb-tabel">
+                        <thead><tr>
+                          <th class="sb-no">No.</th>
+                          <th data-en="Item / HS Code">Barang / HS Code</th>
+                          <th data-en="Function &amp; Use">Fungsi &amp; Kegunaan</th>
+                          <th data-en="Photo">Foto</th>
+                          <th></th>
+                        </tr></thead>
+                        <tbody id="suratBarangBody"></tbody>
+                      </table>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-light mt-2" id="btnSuratTambahBarang" data-en="+ Add Item">+ Tambah Barang</button>
+                  </div>
                 </div>
               </div>
             </form>
@@ -3833,6 +3918,9 @@
     <script src="js/features/fund-summary.js"></script>
     <script src="js/core/kurs-pajak.js"></script>
     <script src="js/features/fund-report.js"></script>
+    <script src="js/features/shipment-cost.js"></script>
+    <script src="js/features/fund-invoice-import.js"></script>
+    <script src="js/features/surat-bc.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/render/prediction-view.js"></script>
     <script src="js/features/prediction-ui.js"></script>

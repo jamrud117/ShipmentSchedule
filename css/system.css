@@ -534,3 +534,87 @@ select:disabled,
 .status-select {
   border: 1px solid currentColor;
 }
+
+/* Biaya per kiriman (panel detail jadwal): tabel ringkas selebar panel */
+.bk-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.bk-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.bk-tabel th,
+.bk-tabel td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+.bk-tabel th {
+  background: var(--n-50);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--n-600);
+}
+.bk-tabel th:first-child,
+.bk-tabel td:first-child {
+  text-align: left;
+}
+.bk-tabel tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+/* Tiga angka ringkas di atas tabel: total, bea & pajak, logistik */
+.bk-ringkas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.bk-kotak {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+}
+.bk-kotak--utama {
+  background: var(--n-50);
+  border-color: var(--n-300);
+}
+.bk-kotak-judul {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--n-600);
+}
+.bk-kotak-nilai {
+  margin: 2px 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.bk-kotak--utama .bk-kotak-nilai {
+  font-size: 1.25rem;
+}
+.bk-kotak-ket {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+@media (max-width: 640px) {
+  .bk-ringkas {
+    grid-template-columns: 1fr;
+  }
+}
+/* Status bayar tiap pengajuan */
+.bk-lunas {
+  color: #15803d;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bk-belum {
+  color: #b45309;
+  font-weight: 600;
+  white-space: nowrap;
+}

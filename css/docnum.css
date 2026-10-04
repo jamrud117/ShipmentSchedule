@@ -1546,3 +1546,101 @@ button.dn-bayar--lunas:hover {
   padding-left: 0;
   padding-right: 0;
 }
+
+/* Surat Bea Cukai: tabel barang, fungsi & foto (js/features/surat-bc.js) */
+.sb-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sb-tabel {
+  width: 100%;
+  border-collapse: collapse;
+}
+.sb-tabel th,
+.sb-tabel td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.sb-tabel th {
+  background: var(--n-50);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  text-align: left;
+}
+.sb-tabel .sb-no {
+  width: 40px;
+  text-align: center;
+}
+.sb-tabel td:nth-child(2) {
+  width: 26%;
+}
+.sb-tabel .sb-foto {
+  width: 170px;
+}
+.sb-tabel .sb-foto img {
+  display: block;
+  max-width: 150px;
+  max-height: 110px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+}
+.sb-tabel .sb-aksi {
+  width: 40px;
+}
+
+/* Pengajuan Dana: invoice / debit note tambahan & judul kelompok rincian */
+.fd-wadah {
+  margin-bottom: 8px;
+}
+.fd-baris {
+  display: grid;
+  grid-template-columns: 110px 1fr 170px 34px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.fd-jenis {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--n-50);
+  border: 1px solid var(--border);
+}
+.fd-jenis--debit {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+.fd-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.fd-petunjuk {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.fund-lines tr.fl-grup td {
+  background: var(--n-50);
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+}
+.fl-grup-judul {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--n-600);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.fl-grup-nomor {
+  margin: 0 10px 0 4px;
+}
+.fl-grup-tambah {
+  font-size: var(--t-xs);
+  padding: 2px 8px;
+}

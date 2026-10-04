@@ -202,6 +202,7 @@ function buildDetailHtml(s) {
     </div>
 
     ${customsHtml}
+    ${typeof biayaKirimanKerangka === "function" ? biayaKirimanKerangka(s) : ""}
   `;
 }
 
@@ -220,6 +221,8 @@ function openDetailView(id) {
   currentDetailId = id;
 
   $("#detailViewBody").innerHTML = buildDetailHtml(s);
+  // Biaya per kiriman dari Pengajuan Dana -- dimuat menyusul (database)
+  if (typeof isiBiayaKiriman === "function") isiBiayaKiriman(s);
   $("#detailSheetTitle").textContent = dispVal(s.party);
 
   const list = detailNavList();
