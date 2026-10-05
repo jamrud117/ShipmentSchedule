@@ -330,16 +330,16 @@ function frTabelRinci(p, mataUang) {
      dipecah dulu oleh normalisasiBarisDana(), jadi tercetak sama. */
   const daftar = normalisasiBarisDana(p.lines || []);
   const nilaiBaris = fundLineValues(daftar);
+  const ppnBaris = fundLinePpnDaftar(daftar, nilaiBaris);
   const r = fundLineTotals(daftar);
   const KOLOM = 6;
   const uang = (v) => (v < 0 ? "- " + frNilai(-v, mataUang) : frNilai(v, mataUang));
 
-  const baris = daftar
-    .map((b, i) => {
-      const nilai = nilaiBaris[i];
-      const ppn = fundLinePpnNilai(nilai, b);
-      const tarif = fundLineRate(b);
-      return `<tr class="baris-pos">
+  const barisPos = (b, i) => {
+    const nilai = nilaiBaris[i];
+    const ppn = ppnBaris[i];
+    const tarif = fundLineRate(b);
+    return `<tr class="baris-pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.desc || "")}</td>
         <td class="c-amt">${escapeHtml(uang(nilai))}</td>
@@ -347,13 +347,26 @@ function frTabelRinci(p, mataUang) {
         <td class="c-amt">${escapeHtml(uang(ppn))}</td>
         <td class="c-amt"></td>
       </tr>`;
-    })
-    .join("");
+  };
+  /* BEBERAPA DOKUMEN (invoice + invoice / debit note): pos dicetak per
+     dokumennya, masing-masing di bawah judul "Nomor Invoice : ..." /
+     "Nomor Debit Note : ...". Satu dokumen saja -> bentuk lama, dengan
+     satu baris rujukan di atas. */
+  const dokumen = (Array.isArray(p.dokumen) ? p.dokumen : []).filter((d) => d && d.id);
+  const kelompok = [{ id: "", jenis: "invoice", nomor: p.invoiceNo }].concat(dokumen);
+  const adaKelompok = new Set(kelompok.map((d) => d.id));
+  const judulKelompok = (d) =>
+    `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}"><b>${escapeHtml(d.jenis === "debit" ? "Nomor Debit Note" : "Nomor Invoice")} : ${escapeHtml(d.nomor || "-")}</b></td></tr>`;
+  const baris = dokumen.length
+    ? kelompok.map((d) => judulKelompok(d) + daftar
+      .map((b, i) => (String(b.dok || "") === d.id || (!d.id && !adaKelompok.has(String(b.dok || ""))) ? barisPos(b, i) : ""))
+      .join("")).join("")
+    : daftar.map(barisPos).join("");
 
   /* Penambal dibatasi: tabel rinci bisa berisi belasan pos, dan
      menambahkan baris kosong di atasnya membuat lembarnya tumbuh
      melewati satu halaman padahal ruangnya masih cukup. */
-  const kosong = Math.max(0, 6 - daftar.length);
+  const kosong = Math.max(0, 6 - daftar.length - (dokumen.length ? kelompok.length : 0));
   const kosongHtml = Array.from(
     { length: kosong },
     () =>
@@ -398,7 +411,7 @@ function frTabelRinci(p, mataUang) {
         </tr>
       </thead>
       <tbody>
-        ${frBarisRujukan(p, KOLOM)}
+        ${dokumen.length ? "" : frBarisRujukan(p, KOLOM)}
         ${baris}
         ${kosongHtml}
         ${subtotal}

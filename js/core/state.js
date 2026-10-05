@@ -15,4 +15,4 @@ let draftNotesLog = [];
 let draftStops = [];
 let currentDetailId = null;
 let currentPage = 1;
-let pageSize = 5;
+let pageSize = 10;

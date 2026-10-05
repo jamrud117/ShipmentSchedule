@@ -176,7 +176,9 @@ function dnTerapkanSaringBayar(kueri) {
 function dnTampilkanSaringBayar() {
   const wadah = document.querySelector(".dn-saring-bayar");
   if (!wadah) return;
-  const summary = typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB;
+  const summary =
+    (typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) ||
+    (typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB);
   wadah.classList.toggle("d-none", docNumActiveTab !== "fund" || summary);
 }
 const DN_KOLOM_CARI = [
@@ -263,7 +265,13 @@ function renderDocNumSubTabs() {
        renderDocNumHistory). */
     .concat(
       docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined"
-        ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === FSUM_TAB ? " active" : ""}" data-dn-subtab="${FSUM_TAB}"><i class="bi bi-table"></i> Summary</button>`]
+        ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === FSUM_TAB ? " active" : ""}" data-dn-subtab="${FSUM_TAB}"><i class="bi bi-table"></i> Summary</button>`].concat(
+            /* Laporan Biaya Angkut (fund-report.js): padanan laporan
+               transportasi DD Korea, bisa diunduh sebagai Excel. */
+            typeof LAPORAN_TAB !== "undefined"
+              ? [`<button type="button" class="docnum-subtab docnum-subtab--summary${docNumHistorySub === LAPORAN_TAB ? " active" : ""}" data-dn-subtab="${LAPORAN_TAB}"><i class="bi bi-bar-chart-line"></i> Report</button>`]
+              : [],
+          )
         : [],
     )
     .join("");
@@ -408,6 +416,12 @@ function readDocNumForm(typeKey) {
     const pakaiRinci = out.expenseType && out.expenseType !== "Billing";
     const bersih = pakaiRinci ? fundLinesBersih(fundLines) : [];
     if (bersih.length) out.lines = bersih;
+    // Invoice / debit note tambahan dalam pengajuan yang sama
+    if (pakaiRinci && typeof fundDokumenBersih === "function" && fundDokumen.length) out.dokumen = fundDokumenBersih();
+  }
+  // Surat Keterangan Fungsi Barang: daftar barang, fungsi & fotonya
+  if (typeKey === "letter" && typeof suratBarangBersih === "function" && out.letterType === SURAT_BC_FUNGSI) {
+    out.itemsFungsi = suratBarangBersih();
   }
   return out;
 }
@@ -744,6 +758,7 @@ async function dnSetelBayar(id, tanggal) {
   } else {
     DN_FIELD_BAYAR.forEach((k) => delete payload[k]);
   }
+  if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
   const { error: galat } = await supabaseClient
     .from("document_numbers")
     .update({ payload })
@@ -908,7 +923,13 @@ function mulaiUbahDocNum(id) {
     setDoLines((r.payload && r.payload.items) || []);
   }
   if (typeof setFundLines === "function" && r.doc_type === "fund") {
+    // Dokumen dulu: pengelompokan baris rincian bergantung padanya
+    if (typeof setFundDokumen === "function") setFundDokumen((r.payload && r.payload.dokumen) || []);
     setFundLines((r.payload && r.payload.lines) || []);
+  }
+  if (typeof setSuratBarang === "function" && r.doc_type === "letter") {
+    setSuratBarang((r.payload && r.payload.itemsFungsi) || []);
+    suratPerbaruiLabelAngkut(panel);
   }
 
   /* Dijalankan SESUDAH semuanya terisi: isian mana yang tampil
@@ -1112,6 +1133,7 @@ async function simpanUbahDocNum() {
         return;
       }
     }
+    if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
     const { error } = await supabaseClient
       .from("document_numbers")
       .update({
@@ -1214,6 +1236,7 @@ async function submitDocNumRequest() {
       if (!DOCNUM_COLUMN_FIELDS.has(k) && form[k] !== "") payload[k] = form[k];
     });
 
+    if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
     const { error: errInsert } = await supabaseClient
       .from("document_numbers")
       .insert({
@@ -1466,7 +1489,8 @@ function syncDocNumConditional(panel) {
      Jalan (Delivery Order). Keduanya memakai data-dn-when yang sama. */
   const pilih =
     panel.querySelector('[data-dn="expenseType"]') ||
-    panel.querySelector('[data-dn="doKind"]');
+    panel.querySelector('[data-dn="doKind"]') ||
+    panel.querySelector('[data-dn="letterType"]');
   if (!pilih) return;
   const nilai = pilih.value;
 
@@ -1490,8 +1514,9 @@ function syncDocNumConditional(panel) {
   panel.querySelectorAll("[data-dn-when]").forEach((el) => {
     const syarat = el.dataset.dnWhen;
     const negasi = syarat.startsWith("!");
-    const target = negasi ? syarat.slice(1) : syarat;
-    const cocok = negasi ? nilai !== target : nilai === target;
+    // "A|B" = cocok bila nilainya salah satu dari A atau B
+    const target = (negasi ? syarat.slice(1) : syarat).split("|");
+    const cocok = negasi ? target.indexOf(nilai) < 0 : target.indexOf(nilai) >= 0;
     el.classList.toggle("d-none", !cocok);
     el.querySelectorAll("[data-dn]").forEach((f) => {
       f.disabled = !cocok;
@@ -1542,13 +1567,21 @@ function resetDocNumForm(typeKey, opts) {
   });
   if (typeof setPoNoExtra === "function") setPoNoExtra([], []);
   if (typeof setDoLines === "function" && typeKey === "do") setDoLines([]);
-  if (typeof setFundLines === "function" && typeKey === "fund") setFundLines([]);
+  if (typeof setFundLines === "function" && typeKey === "fund") {
+    if (typeof setFundDokumen === "function") setFundDokumen([]);
+    setFundLines([]);
+  }
+  if (typeof setSuratBarang === "function" && typeKey === "letter") {
+    setSuratBarang([]);
+    suratIsianOtomatis = {};
+    suratPerbaruiLabelAngkut(panel);
+  }
   syncDocNumConditional(panel);
 }
 
 /* Pilihan jenis pengeluaran menentukan isian mana yang tampil. */
 document.addEventListener("change", (e) => {
-  const pilih = e.target.closest('[data-dn="expenseType"], [data-dn="doKind"]');
+  const pilih = e.target.closest('[data-dn="expenseType"], [data-dn="doKind"], [data-dn="letterType"]');
   if (pilih) syncDocNumConditional(pilih.closest("[data-docnum-panel]") || document);
 });
 document.addEventListener("click", (e) => {
@@ -1591,7 +1624,7 @@ document.addEventListener("input", (e) => {
 
 /* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
 let docNumPage = 1;
-let docNumPageSize = 5;
+let docNumPageSize = 10;
 
 async function renderDocNumHistory() {
   const box = $("#docNumHistory");
@@ -1604,6 +1637,9 @@ async function renderDocNumHistory() {
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
   if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
     return renderRingkasanDana(box, bar);
+  }
+  if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) {
+    return renderLaporanBiaya(box, bar);
   }
   box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
   if (bar) bar.innerHTML = "";
@@ -1735,7 +1771,7 @@ async function renderDocNumHistory() {
                          billing untuk Billing, invoice untuk sisanya. Membaca
                          billingNo saja membuat kolomnya kosong untuk jenis
                          lain padahal nomornya tersimpan. */
-                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || p.invoiceNo || "\u2014")}</td>` +
+                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || (typeof fundSemuaNomor === "function" ? fundSemuaNomor(p).join(" / ") : p.invoiceNo) || "\u2014")}</td>` +
                       `<td class="dn-col-billing dn-num">${escapeHtml(p.blAwb || "\u2014")}</td>`
                     : ""
                 }
@@ -1803,6 +1839,16 @@ async function renderDocNumHistory() {
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
                                  title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
+                      : ""
+                  }
+                  ${
+                    /* Surat untuk Bea Cukai (Tanpa Bukti Bayar / Fungsi
+                       Barang): surat resmi berkop. */
+                    typeof suratBcBolehCetak === "function" && suratBcBolehCetak(r)
+                      ? `<button type="button" class="icon-btn" data-print-surat="${r.id}"
+                                 title="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
+                         <button type="button" class="icon-btn" data-word-surat="${r.id}"
+                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
                       : ""
                   }
                   ${
@@ -1883,7 +1929,7 @@ $("#docNumPagination")?.addEventListener("click", (e) => {
 });
 $("#docNumPagination")?.addEventListener("change", (e) => {
   if (e.target.id !== "dnPageSize") return;
-  docNumPageSize = parseInt(e.target.value, 10) || 5;
+  docNumPageSize = parseInt(e.target.value, 10) || 10;
   docNumPage = 1; // jumlah baris berubah -> nomor halaman lama tidak lagi bermakna
   renderDocNumHistory();
 });
@@ -1910,6 +1956,17 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   const cetakFund = e.target.closest("[data-print-fund]");
   if (cetakFund) {
     cetakFundRequest(cetakFund.dataset.printFund);
+    return;
+  }
+
+  const cetakSurat = e.target.closest("[data-print-surat]");
+  if (cetakSurat) {
+    cetakSuratBc(cetakSurat.dataset.printSurat);
+    return;
+  }
+  const wordSurat = e.target.closest("[data-word-surat]");
+  if (wordSurat) {
+    unduhSuratWord(wordSurat.dataset.wordSurat);
     return;
   }
 
@@ -2005,6 +2062,11 @@ function showDocNumTab(key) {
   const panel = docNumPanelEl(active);
   const tglEl = panel && panel.querySelector('[data-dn="docDate"]');
   if (tglEl && !tglEl.value) tglEl.value = todayISO();
+  /* Isian bersyarat diselaraskan SETIAP kali panel dibuka. Tanpa ini
+     panel tampil dengan keadaan HTML-nya: isian khusus Lokal (PO,
+     Category Work, Total Notes, Item List) ikut muncul pada Surat Jalan
+     Export sampai jenisnya diganti. */
+  if (panel) syncDocNumConditional(panel);
 
   docNumPage = 1;
   refreshDocNumPreview(active);
@@ -2099,6 +2161,18 @@ const DN_LABEL_FIELD = {
   get customer() { return tt("Customer", "Customer"); },
   get payee() { return tt("Dibayarkan Kepada", "Paid To"); },
   get recipient() { return tt("Penerima Surat", "Letter Recipient"); },
+  get signerTitle() { return tt("Jabatan Penanda Tangan", "Signatory Title"); },
+  get noAju() { return tt("Nomor Aju", "Aju No."); },
+  get invoiceRef() { return tt("No. & Tanggal Invoice", "Invoice No. & Date"); },
+  get shipper() { return "Shipper"; },
+  get awb() { return "AWB / BL"; },
+  get koliBerat() { return tt("Koli / Berat", "Packages / Weight"); },
+  get namaBarang() { return tt("Nama Barang", "Goods"); },
+  get negaraAsal() { return tt("Negara Asal", "Country of Origin"); },
+  get flightTiba() { return tt("Flight & Tanggal Tiba", "Flight & Arrival Date"); },
+  get nilaiBarang() { return tt("Nilai Barang", "Goods Value"); },
+  get tglBayar() { return tt("Tanggal Pembayaran", "Payment Date"); },
+  get itemsFungsi() { return tt("Barang & Fungsi", "Goods & Function"); },
   get subject() { return tt("Perihal", "Subject"); },
   get amount() { return tt("Nilai", "Amount"); },
   get currency() { return tt("Mata Uang", "Currency"); },
@@ -2108,6 +2182,7 @@ const DN_LABEL_FIELD = {
   // Isian Form Pengajuan Dana
   get billingNo() { return tt("Nomor Billing", "Billing Number"); },
   get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
+  get dokumen() { return tt("Invoice / Debit Note Tambahan", "Additional Invoice / Debit Note"); },
   get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
   get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
   get blAwb() { return "BL/AWB"; },
@@ -2174,7 +2249,20 @@ const DN_URUTAN_FIELD = [
   "transactionType",
   "letterType",
   "signer",
+  "signerTitle",
   "recipient",
+  "noAju",
+  "invoiceRef",
+  "shipper",
+  "awb",
+  "koliBerat",
+  "namaBarang",
+  "negaraAsal",
+  "flightTiba",
+  "nilaiBarang",
+  "tglBayar",
+  "itemsFungsi",
+  "dokumen",
   "subject",
   "notes",
 ];
@@ -2182,7 +2270,7 @@ const DN_URUTAN_FIELD = [
 /* Isian bertipe tanggal: disimpan ISO ("2026-09-20"), ditampilkan
    sebagai tanggal biasa di kotak Detail. */
 const DN_FIELD_TANGGAL = new Set([
-  "poDate", "sailingDate", "invoiceDate", "invoiceDueDate",
+  "poDate", "sailingDate", "invoiceDate", "invoiceDueDate", "tglBayar",
 ]);
 
 /* Satu baris larik payload -> teks terbaca.
@@ -2251,6 +2339,15 @@ function tampilkanDetailNomor(id) {
       nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
     }
     if (DN_FIELD_TANGGAL.has(k) && nilai) nilai = fmtDate(nilai);
+    /* Popup Detail ikut bahasa aplikasi (laporannya sendiri selalu
+       berbahasa Inggris -- lihat fund-report.js). */
+    /* Moda angkut kini tersirat di Jenis Transaksi (Sea/Air = laut/udara,
+       Local Sale = darat); isian lama di pengajuan terdahulu tidak
+       ditampilkan lagi. */
+    if (k === "transportMode") return;
+    if (k === "dokumen" && Array.isArray(nilai)) {
+      nilai = nilai.map((d) => [d.jenis === "debit" ? "Debit Note" : "Invoice", d.nomor, d.tanggal ? `(${fmtDate(d.tanggal)})` : ""].filter(Boolean).join(" "));
+    }
     if (String(nilai ?? "").trim() === "") return;
     /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
        telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada
@@ -2314,6 +2411,8 @@ document.addEventListener("input", (e) => {
       if (typeof fsumGambarHasil === "function") fsumGambarHasil();
       return;
     }
+    // Laporan tidak memakai kotak cari: angkanya selalu seluruh pengajuan
+    if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) return;
     docNumPage = 1;
     renderDocNumHistory();
   }, 300);

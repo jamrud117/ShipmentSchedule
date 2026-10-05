@@ -74,6 +74,7 @@ const toastCloseEl = document.getElementById("toastClose");
 if (toastCloseEl) toastCloseEl.addEventListener("click", hideToast);
 
 let confirmCallback = null;
+let confirmBatalCallback = null;
 /* opsi: { confirmText, tone: "danger" | "primary", icon } — kotak ini
    dipakai untuk menghapus DAN untuk hal biasa seperti keluar, jadi
    tombolnya tidak boleh selalu bertuliskan "Ya, Hapus" dengan segitiga
@@ -116,13 +117,25 @@ function showConfirm(message, onConfirm, opsi) {
   kotak.style.color = warna[1];
 
   confirmCallback = onConfirm;
+  /* onCancel: tombol kiri sebagai PILIHAN kedua (mis. "Ganti Isi Form"),
+     bukan sekadar batal. Menutup lewat X / klik di luar tidak memanggilnya. */
+  confirmBatalCallback = typeof o.onCancel === "function" ? o.onCancel : null;
   confirmModal.show();
 }
 $("#confirmActionBtn").addEventListener("click", () => {
   confirmModal.hide();
+  confirmBatalCallback = null;
   if (typeof confirmCallback === "function") confirmCallback();
   confirmCallback = null;
 });
+if ($("#confirmCancelBtn")) {
+  $("#confirmCancelBtn").addEventListener("click", () => {
+    const cb = confirmBatalCallback;
+    confirmBatalCallback = null;
+    confirmCallback = null;
+    if (typeof cb === "function") cb();
+  });
+}
 
 
 /* ------------------------------------------------------------------

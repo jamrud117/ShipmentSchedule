@@ -241,7 +241,7 @@ function buildDailyExportCopyRows(s, formatter) {
 /* INFO BARANG BARU — pesan siap kirim ke tim saat ada kiriman IMPORT
    baru, dibuat dari satu Card (bukan agregat seperti Report). Daftar
    barang ikut urutan Daftar Barang di Card itu, TANPA di-dedupe
-   (reportItemNames() yang meringkas jadi satu baris). Tiga
+   (reportItemNames() menyatukan nama kembar). Tiga
    tanggalnya dari Card yang sama: ETD & ETA terbaru (effectiveEtd/Eta,
    lihat catatan di atas DAILY IMPORT), dan "Estimasi sampai
    pabrik" = kolom Estimasi Delivery (field `actual` -- sama seperti
@@ -283,14 +283,6 @@ function reportItemNames(s) {
   return out;
 }
 
-// Satu baris ringkas: nama barang PERTAMA + jumlah sisanya
-function reportItemSummary(s) {
-  const names = reportItemNames(s);
-  if (!names.length) return "";
-  const sisa = names.length - 1;
-  // Bahasa Inggris: "1 Item", "2 Items" -- bukan "1 Items".
-  return sisa > 0 ? `${names[0]} + ${sisa} ${sisa === 1 ? "Item" : "Items"}` : names[0];
-}
 
 // Baris ke-2 & ke-3 tiap pengiriman
 function reportDetailPairs(s, mode) {
@@ -414,8 +406,8 @@ function buildReportCopyText() {
         .map(([k, v]) => `${k}: ${v}`)
         .join(" | ");
       lines.push(`${no} ${reportHeadline(s, mode)} | ${detail}`);
-      const barang = reportItemSummary(s);
-      if (barang) lines.push(`${pad}o ${barang}`);
+      // SEMUA barang, satu per baris (bukan "barang pertama + N Items")
+      reportItemNames(s).forEach((nama) => lines.push(`${pad}o ${nama}`));
       if (i < list.length - 1) lines.push("");
     });
     blocks.push(lines.join("\n"));
@@ -438,10 +430,11 @@ function buildReportCopyHtml() {
         const detail = reportDetailPairs(s, mode)
           .map(([k, v]) => `<b>${escapeHtml(k)}:</b> ${escapeHtml(v)}`)
           .join(' <span style="color:#94a3b8">|</span> ');
-        const barang = reportItemSummary(s);
-        const daftar = barang
+        // SEMUA barang, satu butir per barang
+        const barang = reportItemNames(s);
+        const daftar = barang.length
           ? `<ul style="margin:4px 0 0;padding-left:18px;list-style:circle">
-               <li style="margin:1px 0">${escapeHtml(barang)}</li>
+               ${barang.map((nama) => `<li style="margin:1px 0">${escapeHtml(nama)}</li>`).join("")}
              </ul>`
           : "";
         return `<li style="margin-bottom:10px">

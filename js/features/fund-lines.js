@@ -300,11 +300,49 @@ function fundLinePpn(baris) {
   return barisDiskon(baris) ? 0 : fundLinePpnNilai(fundLineAmount(baris), baris);
 }
 
+/* PPN PER BARIS -- dengan KELOMPOK PEMBULATAN.
+
+   Biasanya tiap baris dibulatkan sendiri (seperti tagihan forwarder,
+   yang menulis PPN per baris). Baris ber-grupPpn sama -- komponen satu
+   AWB FedEx: freight, diskon, surcharge -- dibulatkan SEKALI dari
+   jumlahnya, persis cara vendor itu menghitung PPN-nya, lalu dibagikan
+   lagi ke tiap baris (sisa pembulatan terbesar dulu). Kolom PPN per
+   baris tetap menjumlah tepat ke total, dan totalnya sama dengan
+   invoice sampai rupiah terakhir. */
+function fundLinePpnDaftar(daftar, nilai) {
+  const hasil = daftar.map((b, i) => fundLinePpnNilai(nilai[i], b));
+  const grup = new Map();
+  daftar.forEach((b, i) => {
+    const g = String((b && b.grupPpn) || "").trim();
+    if (!g) return;
+    const k = g + "|" + fundLineRate(b);
+    if (!grup.has(k)) grup.set(k, []);
+    grup.get(k).push(i);
+  });
+  grup.forEach((idx) => {
+    if (idx.length < 2) return;
+    const tarif = fundLineRate(daftar[idx[0]]);
+    const mentah = idx.map((i) => (nilai[i] * tarif) / 100);
+    let selisih = Math.round(mentah.reduce((x, y) => x + y, 0)) - idx.reduce((x, i) => x + hasil[i], 0);
+    const urut = idx
+      .map((i, j) => ({ i, sisa: mentah[j] - hasil[i] }))
+      .sort((a, b) => (selisih > 0 ? b.sisa - a.sisa : a.sisa - b.sisa));
+    for (let n = 0; selisih !== 0 && n < urut.length * 2; n++) {
+      const x = urut[n % urut.length];
+      const langkah = selisih > 0 ? 1 : -1;
+      hasil[x.i] += langkah;
+      selisih -= langkah;
+    }
+  });
+  return hasil.map((v) => (v === 0 ? 0 : v));
+}
+
 /* Seluruh angka lembar rincian, dihitung dari satu tempat supaya form
    dan surat cetak tidak mungkin menampilkan total yang berbeda. */
 function fundLineTotals(lines) {
   const daftar = normalisasiBarisDana(lines);
   const nilai = fundLineValues(daftar);
+  const ppnBaris = fundLinePpnDaftar(daftar, nilai);
   let totalNilai = 0;
   let totalDiskon = 0;
   let totalPpn = 0;
@@ -313,7 +351,7 @@ function fundLineTotals(lines) {
     const v = nilai[i];
     if (v >= 0) totalNilai += v;
     else totalDiskon -= v;
-    totalPpn += fundLinePpnNilai(v, b);
+    totalPpn += ppnBaris[i];
     // Hanya baris yang dipungut PPN yang masuk dasar PPH 23 -- dengan
     // nilai bertandanya, jadi diskon ikut mengurangi dasarnya.
     if (fundLineRate(b) > 0) dppPph += v;
@@ -369,6 +407,8 @@ if (typeof module !== "undefined" && module.exports) {
     fundLineAmount,
     fundLineRate,
     fundLinePpn,
+    fundLinePpnDaftar,
+    fundSemuaNomor,
     fundLineValues,
     fundLineTotals,
     fundLineBaru,
@@ -410,7 +450,7 @@ function pilihanTarifHtml(b) {
    kotaknya sendiri; di mode Rp ia menegaskan tanda minusnya. */
 const teksNominalDiskon = (v) => (v ? "- " + formatRupiah(-v) : "0");
 
-function barisRincianHtml(b, i, v) {
+function barisRincianHtml(b, i, v, ppn) {
   const tombolHapus = `
         <td class="fl-act">
           <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}">
@@ -425,7 +465,7 @@ function barisRincianHtml(b, i, v) {
         <td><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>
         <td class="fl-amt">${kotakNilai}</td>
         <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(fundLinePpnNilai(v, b))}</td>${tombolHapus}
+        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
       </tr>`;
   }
   return `
@@ -452,8 +492,90 @@ function barisRincianHtml(b, i, v) {
           </div>
         </td>
         <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(fundLinePpnNilai(v, b))}</td>${tombolHapus}
+        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
       </tr>`;
+}
+
+/* ==================================================================
+   DOKUMEN TAGIHAN DALAM SATU PENGAJUAN
+   Satu pengajuan bisa membayar beberapa tagihan: dua invoice, atau
+   invoice + debit note. Dokumen UTAMA = isian No. Invoice; tambahannya
+   di fundDokumen. Tiap baris rincian membawa `dok` (id dokumennya;
+   kosong = dokumen utama) dan rincian ditampilkan & dicetak berkelompok
+   per dokumen ("Nomor Invoice : AI2602094" lalu pos-posnya).
+================================================================== */
+let fundDokumen = [];
+
+const fundDokJudul = (jenis) => (jenis === "debit" ? "Nomor Debit Note" : "Nomor Invoice");
+const fundDokNama = (jenis) => (jenis === "debit" ? "Debit Note" : "Invoice");
+
+/* Nomor dokumen utama, dibaca langsung dari isian No. Invoice */
+function fundDokNomorUtama() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="invoiceNo"]');
+  return el ? String(el.value || "").trim() : "";
+}
+
+/* Kelompok berurutan: utama dulu, lalu dokumen tambahan */
+function fundDokKelompok() {
+  return [{ id: "", jenis: "invoice", nomor: fundDokNomorUtama() }].concat(fundDokumen);
+}
+
+/* Baris diurutkan per kelompok (urutan stabil di dalam kelompok) --
+   urutan larik = urutan tampil = urutan cetak, jadi diskon persen
+   tetap mengacu ke pos di atasnya dalam kelompok yang sama. */
+function fundLinesUrutkan() {
+  const urut = fundDokKelompok().map((d) => d.id);
+  const posisi = (b) => {
+    const i = urut.indexOf(String((b && b.dok) || ""));
+    return i < 0 ? 0 : i;
+  };
+  fundLines = fundLines.map((b, i) => ({ b, i })).sort((x, y) => posisi(x.b) - posisi(y.b) || x.i - y.i).map((x) => x.b);
+}
+
+function setFundDokumen(list) {
+  fundDokumen = (Array.isArray(list) ? list : [])
+    .filter((d) => d && d.id)
+    .map((d) => ({ id: String(d.id), jenis: d.jenis === "debit" ? "debit" : "invoice", nomor: String(d.nomor || ""), tanggal: String(d.tanggal || "") }));
+  renderFundDokumen();
+}
+
+function fundDokumenBersih() {
+  return fundDokumen.map((d) => ({ id: d.id, jenis: d.jenis, nomor: d.nomor.trim(), tanggal: d.tanggal }));
+}
+
+/* Semua nomor tagihan sebuah pengajuan (utama + tambahan) */
+function fundSemuaNomor(p) {
+  return [String((p && p.invoiceNo) || "").trim()]
+    .concat(((p && p.dokumen) || []).map((d) => String((d && d.nomor) || "").trim()))
+    .filter(Boolean);
+}
+
+function tambahFundDokumen(jenis, nomor, tanggal) {
+  const id = "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  fundDokumen.push({ id, jenis: jenis === "debit" ? "debit" : "invoice", nomor: String(nomor || ""), tanggal: String(tanggal || "") });
+  return id;
+}
+
+function renderFundDokumen() {
+  const wadah = document.getElementById("fundDokList");
+  if (!wadah) return;
+  wadah.innerHTML = fundDokumen.map((d) => `
+    <div class="fd-baris" data-fd="${escapeAttr(d.id)}">
+      <span class="fd-jenis fd-jenis--${d.jenis}">${escapeHtml(fundDokNama(d.jenis))}</span>
+      <input type="text" class="form-control form-control-sm" data-fd-f="nomor" value="${escapeAttr(d.nomor)}"
+        placeholder="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}">
+      <input type="date" class="form-control form-control-sm" data-fd-f="tanggal" value="${escapeAttr(d.tanggal)}"
+        title="${escapeAttr(tt("Tanggal dokumen", "Document date"))}">
+      <button type="button" class="rm-row" data-fd-del="${escapeAttr(d.id)}" title="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}"><i class="bi bi-x-lg"></i></button>
+    </div>`).join("");
+}
+
+/* Judul kelompok di tabel rincian -- diperbarui saat nomornya diketik */
+function perbaruiJudulKelompok() {
+  fundDokKelompok().forEach((d) => {
+    const el = document.querySelector(`#fundLinesBody [data-fl-grup="${d.id}"] .fl-grup-nomor`);
+    if (el) el.textContent = d.nomor || tt("(nomor belum diisi)", "(number not filled)");
+  });
 }
 
 function renderFundLines() {
@@ -461,8 +583,24 @@ function renderFundLines() {
   if (!body) return;
   fundLines = normalisasiBarisDana(fundLines);
   if (!fundLines.length) fundLines = [fundLineBaru()];
+  if (fundDokumen.length) fundLinesUrutkan();
   const nilai = fundLineValues(fundLines);
-  body.innerHTML = fundLines.map((b, i) => barisRincianHtml(b, i, nilai[i])).join("");
+  const ppn = fundLinePpnDaftar(fundLines, nilai);
+  const baris = (b, i) => barisRincianHtml(b, i, nilai[i], ppn[i]);
+  if (!fundDokumen.length) {
+    body.innerHTML = fundLines.map(baris).join("");
+  } else {
+    const ada = new Set(fundDokKelompok().map((d) => d.id));
+    body.innerHTML = fundDokKelompok().map((d) => `
+      <tr class="fl-grup" data-fl-grup="${escapeAttr(d.id)}">
+        <td colspan="6">
+          <span class="fl-grup-judul">${escapeHtml(fundDokJudul(d.jenis))} :</span>
+          <b class="fl-grup-nomor">${escapeHtml(d.nomor || tt("(nomor belum diisi)", "(number not filled)"))}</b>
+          <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-tambah="${escapeAttr(d.id)}"><i class="bi bi-plus-lg"></i> ${escapeHtml(tt("Baris", "Row"))}</button>
+          <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-diskon="${escapeAttr(d.id)}"><i class="bi bi-dash-lg"></i> ${escapeHtml(tt("Diskon", "Discount"))}</button>
+        </td>
+      </tr>${fundLines.map((b, i) => (String(b.dok || "") === d.id || (!d.id && !ada.has(String(b.dok || ""))) ? baris(b, i) : "")).join("")}`).join("");
+  }
   gambarKakiRincian();
 }
 
@@ -472,11 +610,12 @@ function renderFundLines() {
    bergantung pada pos di atasnya. */
 function perbaruiHitunganRincian() {
   const nilai = fundLineValues(fundLines);
+  const ppnBaris = fundLinePpnDaftar(fundLines, nilai);
   fundLines.forEach((b, i) => {
     const tr = document.querySelector(`#fundLinesBody [data-fl="${i}"]`);
     if (!tr) return;
     const ppn = tr.querySelector(".fl-ppn");
-    if (ppn) ppn.textContent = teksPpnSel(fundLinePpnNilai(nilai[i], b));
+    if (ppn) ppn.textContent = teksPpnSel(ppnBaris[i]);
     const nominal = tr.querySelector(".fl-disc-nominal");
     if (nominal) nominal.value = teksNominalDiskon(nilai[i]);
   });
@@ -600,7 +739,8 @@ if (fundLinesBodyEl) {
 const btnFundLineAddEl = document.getElementById("btnFundLineAdd");
 if (btnFundLineAddEl) {
   btnFundLineAddEl.addEventListener("click", () => {
-    fundLines.push(fundLineBaru());
+    // Dengan beberapa dokumen: baris baru masuk ke kelompok TERAKHIR
+    fundLines.push(Object.assign(fundLineBaru(), { dok: fundDokumen.length ? fundDokumen[fundDokumen.length - 1].id : "" }));
     renderFundLines();
     const kotak = fundLinesBodyEl.querySelector("tr:last-child [data-fl-f='desc']");
     if (kotak) kotak.focus();
@@ -613,11 +753,77 @@ const btnFundDiscAddEl = document.getElementById("btnFundDiscAdd");
 if (btnFundDiscAddEl) {
   btnFundDiscAddEl.addEventListener("click", () => {
     const posTerakhir = [...fundLines].reverse().find((b) => !barisDiskon(b));
-    fundLines.push(fundLineDiskonBaru(posTerakhir ? fundLineRate(posTerakhir) : 0));
+    fundLines.push(Object.assign(fundLineDiskonBaru(posTerakhir ? fundLineRate(posTerakhir) : 0),
+      { dok: fundDokumen.length ? fundDokumen[fundDokumen.length - 1].id : "" }));
     renderFundLines();
     const kotak = fundLinesBodyEl.querySelector("tr:last-child [data-fl-f='amount']");
     if (kotak) kotak.focus();
   });
 }
+
+/* Tombol "+ Baris" / "- Diskon" di judul tiap kelompok dokumen */
+if (fundLinesBodyEl) {
+  fundLinesBodyEl.addEventListener("click", (e) => {
+    const tambah = e.target.closest("[data-fl-grup-tambah]");
+    const diskon = e.target.closest("[data-fl-grup-diskon]");
+    if (!tambah && !diskon) return;
+    const dok = tambah ? tambah.dataset.flGrupTambah : diskon.dataset.flGrupDiskon;
+    if (tambah) fundLines.push(Object.assign(fundLineBaru(), { dok }));
+    else {
+      const pos = [...fundLines].reverse().find((b) => !barisDiskon(b) && String(b.dok || "") === dok);
+      fundLines.push(Object.assign(fundLineDiskonBaru(pos ? fundLineRate(pos) : 0), { dok }));
+    }
+    renderFundLines();
+  });
+}
+
+/* + Invoice / + Debit Note: dokumen tambahan, langsung dengan satu baris kosongnya */
+["invoice", "debit"].forEach((jenis) => {
+  const tombol = document.getElementById(jenis === "debit" ? "btnFundTambahDebit" : "btnFundTambahInvoice");
+  if (!tombol) return;
+  tombol.addEventListener("click", () => {
+    const id = tambahFundDokumen(jenis);
+    fundLines.push(Object.assign(fundLineBaru(), { dok: id }));
+    renderFundDokumen();
+    renderFundLines();
+    const kotak = document.querySelector(`#fundDokList [data-fd="${id}"] [data-fd-f="nomor"]`);
+    if (kotak) kotak.focus();
+  });
+});
+
+const fundDokListEl = document.getElementById("fundDokList");
+if (fundDokListEl) {
+  fundDokListEl.addEventListener("input", (e) => {
+    const f = e.target.closest("[data-fd-f]");
+    if (!f) return;
+    const d = fundDokumen.find((x) => x.id === f.closest("[data-fd]").dataset.fd);
+    if (d) d[f.dataset.fdF] = f.value;
+    perbaruiJudulKelompok();
+  });
+  fundDokListEl.addEventListener("click", (e) => {
+    const del = e.target.closest("[data-fd-del]");
+    if (!del) return;
+    const id = del.dataset.fdDel;
+    const dok = fundDokumen.find((d) => d.id === id);
+    const isi = fundLines.filter((b) => String(b.dok || "") === id && (String(b.desc || "").trim() || parseRupiah(b.amount)));
+    const hapus = () => {
+      fundDokumen = fundDokumen.filter((d) => d.id !== id);
+      fundLines = fundLines.filter((b) => String(b.dok || "") !== id);
+      renderFundDokumen();
+      renderFundLines();
+    };
+    if (!isi.length || typeof showConfirm !== "function") return hapus();
+    const nama = `${fundDokNama(dok.jenis)}${dok.nomor ? " " + dok.nomor : ""}`;
+    showConfirm(
+      tt(`${nama} beserta ${isi.length} baris rinciannya akan dihapus dari pengajuan ini. Dokumen lain tidak berubah.`,
+        `${nama} and its ${isi.length} cost line(s) will be removed from this request. Other documents stay as they are.`),
+      hapus,
+      { title: tt(`Hapus ${fundDokNama(dok.jenis)}?`, `Remove ${fundDokNama(dok.jenis)}?`), confirmText: tt("Ya, Hapus", "Yes, Remove"), icon: "bi-trash3" });
+  });
+}
+// Nomor invoice utama diketik -> judul kelompok utama ikut
+document.addEventListener("input", (e) => {
+  if (e.target.closest('[data-docnum-panel="fund"] [data-dn="invoiceNo"]') && fundDokumen.length) perbaruiJudulKelompok();
+});
 
 renderFundLines();
