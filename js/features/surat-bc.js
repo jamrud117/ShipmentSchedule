@@ -163,7 +163,7 @@ function suratPerihalBawaan(jenis) {
 function suratBawaanPenandaTangan(panel) {
   const nama = panel.querySelector('[data-dn="signer"]');
   const jabatan = panel.querySelector('[data-dn="signerTitle"]');
-  if (nama && !nama.value.trim()) nama.value = "Shin Nara";
+  if (nama && !nama.value.trim()) nama.value = "Shin Na Ra";
   if (jabatan && !jabatan.value.trim()) jabatan.value = "Chief Marketing Officer";
   const kepada = panel.querySelector('[data-dn="recipient"]');
   if (kepada && !kepada.value.trim()) kepada.value = "Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta";

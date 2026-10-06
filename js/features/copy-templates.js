@@ -189,7 +189,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.factoryTime), // 19 IN FACTORY TIME
       formatter.text(s.muatan), // 20 LCL/FCL
       formatter.text(s.container), // 21 CONTAINER
-      formatter.blank, // 22 NO. POL — tidak ada field-nya
+      formatter.text(s.vehicleNo), // 22 NO. POL — nomor kendaraan
       formatter.text(s.incoterm), // 23 INCOTERM
       formatter.text(s.notes), // 24 NOTES
     ];

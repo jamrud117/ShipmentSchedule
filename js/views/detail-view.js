@@ -154,6 +154,7 @@ function buildDetailHtml(s) {
       ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(s.vessel)))}
       ${fieldPair(voyageNoun(s.transport), escapeHtml(dispVal(s.voyage)))}
       ${fieldPair(tt("Kontainer", "Container"), escapeHtml(dispVal(s.container)))}
+      ${fieldPair(tt("No. Kendaraan", "Vehicle No."), escapeHtml(dispVal(s.vehicleNo)))}
       ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
       ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
       ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}

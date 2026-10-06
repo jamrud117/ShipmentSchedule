@@ -192,7 +192,8 @@ function cardBodySplitHtml(s, totals) {
           ? ""
           : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>`
       }
-      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.netto")}</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.bruto")}</div><div class="info-value">${fmtNum(totals.totalBruto)} Kg</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-truck-front"></i> ${escapeHtml(tt("No. Kendaraan", "Vehicle No."))}</div><div class="info-value">${escapeHtml(dispVal(s.vehicleNo))}</div></div>
     </div>
     <div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${itemNamesSummary(
       s,

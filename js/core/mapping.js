@@ -17,6 +17,9 @@ const FIELD_MAP = {
   vessel: "vessel",
   voyage: "voyage",
   container: "container",
+  /* Nomor kendaraan / nomor polisi truk pengangkut (mis. "B 9123 KXT").
+     Kolom baru -- migration-vehicle-no.sql. */
+  vehicleNo: "vehicle_no",
   muatan: "muatan",
   origin: "origin",
   destination: "destination",

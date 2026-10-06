@@ -2,9 +2,9 @@
 
 /* UNDUH CIPL SEBAGAI EXCEL
 
-   Dynamic Design (CI, PL, SI): lembar Excel DIUKUR dari lembar cetaknya
-   (cipl-excel-cetak.js) -- tata letak, huruf, warna, dan angkanya sama
-   persis dengan cetakan, tanpa penyusun kedua yang bisa berbeda.
+   Dynamic Design (CI, PL, SI): kisi rapi yang mudah disunting
+   (cipl-excel-rapi.js) -- tampilannya mengikuti cetakan, datanya dari
+   pembangun yang sama (ciplRefBaris, ciplDdRincianData, ciplFormat*).
    Kumho: penyusunnya sendiri (cipl-vn-excel.js), meniru berkas rujukan
    pembeli; pembantu tinggi & skala halaman di bawah dipakai bersama.
 */
@@ -223,8 +223,8 @@ async function unduhCiplExcel(rowId) {
       ciplVnExcelInvoice(wb, row, shipment);
       ciplVnExcelPacking(wb, row, shipment);
     } else {
-      // CI, PL, SI diukur dari lembar cetaknya -- sama persis (cipl-excel-cetak.js)
-      await ciplXlsDariCetak(wb, row, shipment, baris);
+      // CI, PL, SI dengan kisi rapi yang mudah disunting (cipl-excel-rapi.js)
+      ciplXlsRapi(wb, row, shipment, baris);
     }
 
     const buf = await wb.xlsx.writeBuffer();

@@ -295,6 +295,7 @@ function renderFormPage(id) {
     $("#fVessel").value = s.vessel || "";
     $("#fVoyage").value = s.voyage || "";
     $("#fContainer").value = s.container || "";
+    $("#fVehicleNo").value = s.vehicleNo || "";
     $("#fMuatan").value = s.muatan || "";
     $("#fOrigin").value = s.origin || "";
     $("#fDestination").value = s.destination || "";
@@ -350,6 +351,7 @@ function renderFormPage(id) {
       "fVessel",
       "fVoyage",
       "fContainer",
+      "fVehicleNo",
       "fOrigin",
       "fDestination",
       "fEtd",
@@ -516,6 +518,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     vessel: $("#fVessel").value.trim(),
     voyage: $("#fVoyage").value.trim(),
     container: $("#fContainer").value.trim(),
+    // Nomor polisi ditulis kapital & berspasi tunggal: "b  9123 kxt" -> "B 9123 KXT"
+    vehicleNo: $("#fVehicleNo").value.trim().replace(/\s+/g, " ").toUpperCase(),
     muatan: $("#fMuatan").value,
     routeType: routeType,
     origin: $("#fOrigin").value.trim(),
