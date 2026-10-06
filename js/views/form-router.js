@@ -512,7 +512,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     masterBL: $("#fMasterBL").value.trim(),
     houseBL: $("#fHouseBL").value.trim(),
     factoryDate: $("#fFactoryDate").value,
-    factoryTime: $("#fFactoryTime").value,
+    factoryTime: normalkanJam($("#fFactoryTime").value),
     forwarder: $("#fForwarder").value.trim(),
     forwarderPic: $("#fForwarderPic").value.trim(),
     vessel: $("#fVessel").value.trim(),

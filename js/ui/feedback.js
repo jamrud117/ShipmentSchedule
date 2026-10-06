@@ -145,9 +145,14 @@ if ($("#confirmCancelBtn")) {
    bisa ditata, tidak bisa memuat lebih dari satu isian, dan di
    sebagian peramban bisa diblokir pengguna tanpa pemberitahuan.
 
-   fields: [{ key, label, type, value, placeholder, hint }]
+   fields: [{ key, label, type, value, placeholder, hint, lebar }]
    onSubmit(nilai) -> kembalikan string pesan galat untuk menahan, atau
    apa pun yang bukan string untuk menutup.
+
+   lebar: "setengah" -> dua isian per baris. Dipakai kotak yang isiannya
+   banyak (Jadwal Kapal: 8 isian): ditumpuk satu-satu kotaknya lebih
+   tinggi dari layar laptop dan tombol Simpan baru terlihat setelah
+   menggulir. Kotaknya ikut melebar sedikit supaya tiap isian tetap lega.
 ------------------------------------------------------------------ */
 const promptModalEl = $("#promptModal");
 const promptModal = promptModalEl ? new bootstrap.Modal(promptModalEl) : null;
@@ -164,9 +169,12 @@ function showPrompt(opsi) {
   $("#promptError").classList.add("d-none");
 
   const fields = o.fields || [];
+  const duaKolom = fields.some((f) => f.lebar === "setengah");
+  promptModalEl.querySelector(".modal-dialog").classList.toggle("prompt-dialog--lebar", duaKolom);
   $("#promptFields").innerHTML = fields
     .map(
       (f) => `
+      <div class="prompt-field${f.lebar === "setengah" ? " prompt-field--half" : ""}">
       <label class="prompt-label" for="prompt_${f.key}">${escapeHtml(f.label)}</label>
       ${
         f.type === "select"
@@ -186,7 +194,8 @@ function showPrompt(opsi) {
                placeholder="${escapeAttr(f.placeholder || "")}" value="${escapeAttr(f.value || "")}"
                ${f.inputmode ? `inputmode="${escapeAttr(f.inputmode)}"` : ""} />`
       }
-      ${f.hint ? `<div class="prompt-hint">${escapeHtml(f.hint)}</div>` : ""}`,
+      ${f.hint ? `<div class="prompt-hint">${escapeHtml(f.hint)}</div>` : ""}
+      </div>`,
     )
     .join("");
 
@@ -234,6 +243,12 @@ function showPrompt(opsi) {
 }
 
 if (promptModalEl) {
+  /* Lebar dua-kolom milik kotak yang memintanya saja: dilepas saat
+     ditutup supaya pemakai berikutnya (mis. Detail Pengajuan Nomor,
+     yang mengisi #promptFields sendiri) tidak mewarisinya. */
+  promptModalEl.addEventListener("hidden.bs.modal", () => {
+    promptModalEl.querySelector(".modal-dialog").classList.remove("prompt-dialog--lebar");
+  });
   $("#promptOk").addEventListener("click", () => promptSubmit && promptSubmit());
   promptModalEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && promptSubmit) {

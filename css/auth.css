@@ -384,6 +384,16 @@ body.is-viewer .delay-strip-fields input {
   gap: var(--sp-4);
   align-items: start;
 }
+/* Dua panel ini BERDAMPINGAN, jaraknya dari `gap` kisi. Aturan umum
+   `.panel + .panel { margin-top }` (panel yang ditumpuk) ikut mengenai
+   panel kedua dan menurunkannya 16px dari panel pertama. */
+.acct-grid > .panel + .panel {
+  margin-top: 0;
+}
+/* Kepala kedua panel sama tinggi walau hanya satu yang membawa tombol. */
+.acct-grid .panel-head {
+  min-height: 67px;
+}
 @media (max-width: 991px) {
   .acct-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -844,6 +854,32 @@ body.is-viewer .delay-strip-fields input {
 
 /* Kotak isian aplikasi */
 
+/* Isian kotak ini tersusun di kisi dua lajur. Bawaannya tiap isian
+   selebar kotak; .prompt-field--half (lebar: "setengah" di showPrompt)
+   memakai satu lajur. Jarak antarisian datang dari `gap` kisi -- bukan
+   dari margin label/kotak, yang dulu membuat jaraknya berbeda antara
+   isian yang punya petunjuk dan yang tidak. */
+#promptFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin-top: var(--sp-1);
+}
+#promptFields > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+#promptFields > .prompt-field--half {
+  grid-column: span 1;
+}
+.prompt-dialog--lebar {
+  max-width: 600px;
+}
+@media (max-width: 479.98px) {
+  #promptFields > .prompt-field--half {
+    grid-column: 1 / -1;
+  }
+}
 .prompt-label {
   display: block;
   font-family: var(--font-display);
@@ -852,13 +888,23 @@ body.is-viewer .delay-strip-fields input {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--n-500);
-  margin: var(--sp-3) 0 5px;
+  margin: 0 0 5px;
+}
+/* Kotak isian di sini setinggi & sebesar huruf isian form lain (40px,
+   --t-base); margin bawah milik halaman login tidak dipakai. */
+.prompt-field .login-input {
+  height: 40px;
+  margin-bottom: 0;
+  font-size: var(--t-base);
+}
+/* Tombol mata dipusatkan terhadap kotak 40px (di login kotaknya 42px). */
+.prompt-field .pwd-eye {
+  top: 5px;
 }
 .prompt-hint {
   font-size: var(--t-xs);
   color: var(--n-500);
-  margin-top: -8px;
-  margin-bottom: var(--sp-2);
+  margin-top: 5px;
 }
 .prompt-error {
   font-size: var(--t-sm);

@@ -163,7 +163,7 @@ function suratPerihalBawaan(jenis) {
 function suratBawaanPenandaTangan(panel) {
   const nama = panel.querySelector('[data-dn="signer"]');
   const jabatan = panel.querySelector('[data-dn="signerTitle"]');
-  if (nama && !nama.value.trim()) nama.value = "Shin Na Ra";
+  if (nama && !nama.value.trim()) nama.value = "Shin Nara";
   if (jabatan && !jabatan.value.trim()) jabatan.value = "Chief Marketing Officer";
   const kepada = panel.querySelector('[data-dn="recipient"]');
   if (kepada && !kepada.value.trim()) kepada.value = "Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta";
@@ -197,7 +197,7 @@ function renderSuratBarang() {
       <td><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
       <td class="sb-foto">
         ${b.foto ? `<img src="${escapeAttr(b.foto)}" alt="">` : ""}
-        <label class="btn btn-sm btn-light sb-pilih-foto">
+        <label class="btn-quiet sb-pilih-foto">
           <i class="bi bi-image"></i> ${escapeHtml(b.foto ? tt("Ganti", "Change") : tt("Foto", "Photo"))}
           <input type="file" accept="image/*" data-sb-foto="${i}" hidden>
         </label>

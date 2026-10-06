@@ -4686,12 +4686,159 @@ t("jenis dokumen sebaris di atas di SEMUA lebar -- tidak ada lajur sidebar koson
     throw new Error("daftar jenis dokumen tidak sebaris");
   if (/grid-template-columns: 300px/.test(css)) throw new Error("kolom sidebar 300px masih ada");
 });
-t("kolom form menyesuaikan ruang, bukan terbagi empat", () => {
-  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
-  const i = css.indexOf("@media (max-width: 1199px)");
-  const blok = css.slice(i);
-  if (!/\[class\*="col-md-"\][\s\S]{0,80}\{[^}]*flex: 1 1 200px/.test(blok))
-    throw new Error("kolom Bootstrap masih menentukan lebar isian");
+t("kolom form menyesuaikan ruang: kisi .fgrid, bukan kolom Bootstrap terbagi empat", () => {
+  // Form No. Dokumen memakai kisi isian bersama -- tanpa satu pun kolom Bootstrap
+  const html = require("fs").readFileSync(__dirname + "/../index.html", "utf8");
+  ["invoice", "do", "fund", "letter"].forEach((k) => {
+    const a = html.indexOf(`data-docnum-panel="${k}"`), b = html.indexOf("</form>", a);
+    const isi = html.slice(a, b);
+    if (!/class="fgrid"/.test(isi)) throw new Error(k + ": tidak memakai .fgrid");
+    if (/class="[^"]*\b(row|col-(md|lg|xl)-\d+)\b/.test(isi.replace(/po-row/g, ""))) throw new Error(k + ": masih ada kolom Bootstrap");
+  });
+  /* Kisinya menyesuaikan lebar: seperempat -> setengah (<1080px) -> penuh
+     (<768px). Ambangnya 1080, bukan 1200: laptop 1366px berskala 125%
+     lebarnya 1093px dan harus tetap empat kolom. */
+  const css = require("fs").readFileSync(__dirname + "/../css/components.css", "utf8");
+  if (!/@media \(max-width: 1079\.98px\) \{\s*\.fgrid > \*,\s*\.fgrid > \.s4 \{\s*grid-column: span 6;/.test(css)) throw new Error("kisi tidak menjadi dua kolom di layar sedang");
+  if (!/@media \(max-width: 767\.98px\) \{\s*\.fgrid > \*,\s*\.fgrid > \.s4,\s*\.fgrid > \.m4 \{\s*grid-column: 1 \/ -1;/.test(css)) throw new Error("kisi tidak menjadi satu kolom di layar sempit");
+  if (/@media \((min|max)-width: 1(199\.98|200)px\)[^{]*\{\s*[^}]*fgrid/.test(css)) throw new Error("ambang 1200px lama masih dipakai kisi");
+  // Aturan pelebar bersyarat memakai ambang yang sama dengan kisinya
+  ["form.css", "docnum.css"].forEach((f) => {
+    const isi = require("fs").readFileSync(__dirname + "/../css/" + f, "utf8");
+    if (!/@media \(min-width: 1080px\)/.test(isi)) throw new Error(f + ": aturan pelebar tidak di ambang 1080px");
+  });
+});
+t("pesan wajib diisi menyebut label isiannya, bukan nama kuncinya", () => {
+  /* Labelnya dicari dari sel kisi (.fgrid > *) tempat isian itu berada.
+     Kalau selnya tidak ketemu, pesannya jatuh ke nama kunci ("receiver
+     wajib diisi") -- tidak berarti apa-apa bagi yang mengisi. */
+  ["invoice", "do", "fund", "letter"].forEach((k) => {
+    w.docNumPanelEl(k).querySelectorAll("[data-dn]").forEach((el) => {
+      if (!el.closest(".fgrid > *")?.querySelector(".form-label"))
+        throw new Error(k + ": isian " + el.dataset.dn + " tidak punya label di selnya");
+    });
+  });
+  const panel = w.docNumPanelEl("do");
+  const el = panel.querySelector('[data-dn="receiver"]');
+  /* Uji lain bisa meninggalkan panel terkunci; isian terkunci memang
+     dilewati validasi, jadi dibuka dulu dan dikembalikan sesudahnya. */
+  const lama = el.value, terkunci = el.disabled;
+  el.value = "";
+  el.disabled = false;
+  try {
+    const pesan = w.validateDocNumForm("do");
+    if (pesan.some((m) => /^receiver\b/.test(m))) throw new Error("pesan memakai nama kunci: " + pesan.join(" | "));
+    if (!pesan.some((m) => /^(Tujuan \/ Penerima|Destination \/ Recipient) /.test(m)))
+      throw new Error("label tidak ikut di pesan: " + pesan.join(" | "));
+  } finally {
+    el.value = lama;
+    el.disabled = terkunci;
+    panel.querySelectorAll(".is-invalid").forEach((x) => x.classList.remove("is-invalid"));
+  }
+});
+console.log("— TATA LETAK ISIAN: KOMPONEN BERSAMA —");
+t("dropdown form punya panah: shorthand background tidak lagi menghapusnya", () => {
+  /* `background: #fff` di system.css menghapus gambar panah Bootstrap,
+     jadi dropdown tampil seperti kotak teks. Panahnya digambar ulang
+     SESUDAH aturan itu, dengan kekhususan yang menang atas padding
+     `.page-form .form-select` di form.css. */
+  const css = require("fs").readFileSync(__dirname + "/../css/system.css", "utf8");
+  const dasar = css.indexOf("select {\n  border-radius: var(--r-md);");
+  const panah = css.indexOf("select.form-select,\nselect.form-select.is-invalid,");
+  if (dasar < 0 || panah < 0) throw new Error("aturan dasar / aturan panah tidak ditemukan");
+  if (panah < dasar) throw new Error("aturan panah ditulis sebelum shorthand background yang menghapusnya");
+  const blok = css.slice(panah, css.indexOf("}", panah));
+  [".page-form select.form-select", ".docnum-panel select.form-select", "select.login-input", "table.fund-lines select"].forEach((x) => {
+    if (blok.indexOf(x) < 0) throw new Error("dropdown tanpa panah: " + x);
+  });
+  if (!/background-image: url\("data:image\/svg\+xml/.test(blok)) throw new Error("gambar panah tidak ada");
+  if (!/appearance: none/.test(blok) || !/padding-right: \d+px/.test(blok)) throw new Error("panah bawaan belum dimatikan / teks bisa menimpa panah");
+});
+t("isian form No. Dokumen bergaris tepi sama tegas dengan form jadwal", () => {
+  const css = require("fs").readFileSync(__dirname + "/../css/system.css", "utf8");
+  const i = css.indexOf("border-color: var(--border-control);");
+  const daftar = css.slice(css.lastIndexOf("}", i), i);
+  [".page-form .form-control,", ".docnum-panel .form-control,", ".docnum-panel .form-select,"].forEach((x) => {
+    if (daftar.indexOf(x) < 0) throw new Error("tidak ikut --border-control: " + x);
+  });
+});
+t("tombol hapus baris (x) berbentuk sama di semua daftar isian", () => {
+  // Aturannya umum (.rm-row), bukan hanya untuk table.item-table
+  const css = require("fs").readFileSync(__dirname + "/../css/components.css", "utf8");
+  const blok = cariAturan(css, "\n.rm-row {");
+  if (!blok || !/width: 30px/.test(blok) || !/border: 1px solid/.test(blok)) throw new Error("aturan umum .rm-row tidak ada");
+  const form = require("fs").readFileSync(__dirname + "/../css/form.css", "utf8");
+  if (/table\.item-table \.rm-row/.test(form)) throw new Error("aturan khusus item-table masih ada (kembar)");
+  // Semua daftar memakai kelas yang sama
+  ["fund-lines.js", "do-lines.js", "surat-bc.js", "po-list.js", "item-table.js"].forEach((f) => {
+    const js = require("fs").readFileSync(__dirname + "/../js/features/" + f, "utf8");
+    if (!/class="rm-row"/.test(js)) throw new Error(f + ": tombol hapus tidak memakai .rm-row");
+  });
+});
+t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris", () => {
+  const modal = w.document.getElementById("promptModal");
+  const dialog = modal.querySelector(".modal-dialog");
+  try {
+    w.showPrompt({ fields: [{ key: "a", label: "A" }, { key: "b", label: "B", hint: "petunjuk" }] });
+    const isi = w.document.querySelectorAll("#promptFields > .prompt-field");
+    eq(isi.length, 2, "tiap isian dibungkus:");
+    if (isi[0].classList.contains("prompt-field--half")) throw new Error("isian biasa ikut jadi setengah");
+    if (!isi[1].querySelector(".prompt-hint")) throw new Error("petunjuk tidak di dalam bungkus isiannya");
+    if (dialog.classList.contains("prompt-dialog--lebar")) throw new Error("kotak satu kolom ikut melebar");
+
+    w.showPrompt({ fields: [{ key: "a", label: "A", lebar: "setengah" }, { key: "b", label: "B", lebar: "setengah" }] });
+    eq(w.document.querySelectorAll("#promptFields > .prompt-field--half").length, 2, "isian setengah:");
+    if (!dialog.classList.contains("prompt-dialog--lebar")) throw new Error("kotak dua kolom tidak melebar");
+    // Nilainya tetap terbaca lewat id yang sama
+    w.document.getElementById("prompt_a").value = "x";
+    eq(w.document.getElementById("prompt_a").value, "x", "isian terbaca:");
+    // Ditutup: lebarnya dilepas supaya tidak diwarisi pemakai berikutnya
+    modal.dispatchEvent(new w.Event("hidden.bs.modal"));
+    if (dialog.classList.contains("prompt-dialog--lebar")) throw new Error("lebar dua kolom tertinggal setelah ditutup");
+  } finally {
+    w.eval("bootstrap.Modal.getOrCreateInstance(document.getElementById('promptModal')).hide()");
+  }
+  const css = require("fs").readFileSync(__dirname + "/../css/auth.css", "utf8");
+  if (!/#promptFields \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css)) throw new Error("kisi dua lajur tidak ada");
+  if (!/#promptFields > \* \{\s*grid-column: 1 \/ -1;/.test(css)) throw new Error("isi bawaan tidak selebar kotak (Detail Pengajuan Nomor bisa terbelah)");
+});
+t("Jadwal Kapal: delapan isian tersusun dua per baris", () => {
+  const isian = w.eval("vsFields({})");
+  eq(isian.length, 8, "jumlah isian:");
+  if (!isian.every((f) => f.lebar === "setengah")) throw new Error("ada isian yang selebar kotak: " + isian.filter((f) => f.lebar !== "setengah").map((f) => f.key));
+});
+t("surat: label Flight/Sail mengikuti bahasa sejak panel dibuka", () => {
+  const simpan = { lang: baca("activeLang"), tab: baca("docNumActiveTab") };
+  const label = () => w.docNumPanelEl("letter").querySelector("[data-label-angkut]").textContent.trim();
+  try {
+    w.setLang("en");
+    w.showDocNumTab("letter");
+    eq(label(), "Flight & Arrival Date", "Inggris:");
+    w.docNumPanelEl("letter").querySelector('[data-dn="moda"]').value = "laut";
+    w.setLang("id");
+    eq(label(), "Sail & Tanggal Tiba", "Indonesia, kiriman laut:");
+  } finally {
+    w.docNumPanelEl("letter").querySelector('[data-dn="moda"]').value = "";
+    w.setLang(simpan.lang);
+    w.showDocNumTab(simpan.tab);
+  }
+});
+t("penataan kecil: panel Akun sejajar, Summary & Report berdampingan, tabel isian tidak tergencet", () => {
+  const baca_ = (f) => require("fs").readFileSync(__dirname + "/../css/" + f, "utf8");
+  // .panel + .panel { margin-top } menurunkan panel kanan halaman Akun
+  if (!/\.acct-grid > \.panel \+ \.panel \{\s*margin-top: 0;/.test(baca_("auth.css"))) throw new Error("panel kedua halaman Akun masih turun 16px");
+  const dn = baca_("docnum.css");
+  if (!/\.docnum-subtab--summary ~ \.docnum-subtab--summary \{\s*margin-left: 0;/.test(dn)) throw new Error("Summary & Report masih terpisah jauh");
+  if (!/#fundLinesTable \{\s*min-width: \d+px;/.test(dn) || !/#doLinesTable \{\s*min-width: \d+px;/.test(dn)) throw new Error("tabel isian tanpa lebar terkecil");
+  if (!/\.fund-lines th\.fl-ppn,\s*\.fund-lines td\.fl-ppn \{\s*width: 170px;/.test(dn)) throw new Error("kolom PPN (Rp) masih selebar kolom Nilai");
+  const th = w.document.querySelector("#fundLinesTable thead th.fl-ppn");
+  if (!th) throw new Error("kepala kolom PPN (Rp) tanpa kelas lebarnya");
+  // Petunjuk "Pilih DELAY" hilang begitu kotak Update Delay terbuka
+  if (!w.document.querySelector("#fStatus ~ .status-hint")) throw new Error("petunjuk status tanpa penanda");
+  if (!/\.fgrid:has\(> #delayBlock:not\(\.d-none\)\) \.status-hint \{\s*display: none;/.test(baca_("form.css"))) throw new Error("petunjuk status tidak disembunyikan saat Delay");
+  // Kartu transit: tiga isian alat angkut sebaris di layar sedang
+  const kartu = w.stopCardHtml({ terminal: "", transport: "laut", vessel: "", voyage: "" }, 0, 1);
+  eq((kartu.match(/class="(?:s6 )?m4"/g) || []).length, 3, "isian .m4 di kartu transit:");
 });
 t("tidak ada media query kembar di halaman No. Dokumen", () => {
   /* Dua blok dengan ambang sama saling menimpa dan menyulitkan
@@ -7498,7 +7645,7 @@ t("Pemohon bawaan Yogi Firgiawan & Departemen EXIM di setiap form permintaan nom
       if (nilai.indexOf(v) < 0) throw new Error("jenis surat tidak ada: " + v);
     });
     const tampak = (sel) => !panel.querySelector(sel).closest("[data-dn-when]").classList.contains("d-none")
-      && !panel.querySelector(sel).closest(".col-12.row").classList.contains("d-none");
+      && !panel.querySelector(sel).closest(".dn-surat-bc").classList.contains("d-none");
     jenis.value = "Certificate of No Proof of Payment";
     w.syncDocNumConditional(panel);
     eq(tampak("#dnSuratAju"), true, "nomor aju (tanpa bukti bayar):");
@@ -7535,7 +7682,7 @@ t("Pemohon bawaan Yogi Firgiawan & Departemen EXIM di setiap form permintaan nom
       jenis.value = "Certificate of Function and Use of Goods";
       jenis.dispatchEvent(new w.Event("change", { bubbles: true }));
       const nilai = (k) => panel.querySelector(`[data-dn="${k}"]`).value;
-      eq(nilai("signer"), "Shin Na Ra", "penanda tangan bawaan:");
+      eq(nilai("signer"), "Shin Nara", "penanda tangan bawaan:");
       eq(nilai("signerTitle"), "Chief Marketing Officer");
       eq(nilai("subject"), "Keterangan Fungsi Barang", "perihal bawaan:");
       w.isiPilihanAju();
@@ -7562,18 +7709,18 @@ t("Pemohon bawaan Yogi Firgiawan & Departemen EXIM di setiap form permintaan nom
   });
   t("cetak surat: berkop, nomor, isi resmi; tanpa bukti bayar ber-meterai; fungsi barang bertabel foto", () => {
     const dasar = { id: "L1", doc_type: "letter", doc_number: "012/EXIM/DDI/X/2026", doc_date: "2026-10-02" };
-    const tb = Object.assign({}, dasar, { payload: { letterType: "Certificate of No Proof of Payment", signer: "Shin Na Ra", signerTitle: "Chief Marketing Officer",
+    const tb = Object.assign({}, dasar, { payload: { letterType: "Certificate of No Proof of Payment", signer: "Shin Nara", signerTitle: "Chief Marketing Officer",
       noAju: "000020", awb: "02353493381", namaBarang: "IKR GUIDE dan MINI PLUG", koliBerat: "2 PACKAGE / 19.6 KG", flightTiba: "10 September 2026",
       negaraAsal: "KOREA SELATAN", nilaiBarang: "USD 3,170", tglBayar: "2026-11-07" } });
     eq(w.suratBcBolehCetak(tb), true);
     const h1 = w.suratBcHtml(tb);
     ["PT DYNAMIC DESIGN INDONESIA", "Pusat :", "SURAT PERNYATAAN TANPA BUKTI BAYAR", "Nomor : 012/EXIM/DDI/X/2026",
-     "02353493381", "USD 3,170", "07 November 2026", "SHIN NA RA", "Chief Marketing Officer", "Cirebon, 02 Oktober 2026"]
+     "02353493381", "USD 3,170", "07 November 2026", "SHIN NARA", "Chief Marketing Officer", "Cirebon, 02 Oktober 2026"]
       .forEach((x) => { if (!h1.includes(x)) throw new Error("tanpa bukti bayar: tidak ada " + x); });
     if (/Meterai/.test(h1)) throw new Error("tanda meterai seharusnya tidak ada (ruangnya dibiarkan kosong)");
     // Kop sama dengan Form Pengajuan Dana: garis tebal-tipis
     if (!/\.kop \{[^}]*border-bottom: 0\.7mm solid #000;/.test(w.suratBcCss()) || !/\.kop::after/.test(w.suratBcCss())) throw new Error("kop tidak sama dengan Form Pengajuan Dana");
-    const fb = Object.assign({}, dasar, { payload: { letterType: "Certificate of Function and Use of Goods", signer: "Shin Na Ra", signerTitle: "Chief Marketing Officer",
+    const fb = Object.assign({}, dasar, { payload: { letterType: "Certificate of Function and Use of Goods", signer: "Shin Nara", signerTitle: "Chief Marketing Officer",
       recipient: "Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta", subject: "Keterangan Fungsi Barang",
       itemsFungsi: [{ nama: "IKR GUIDE", hs: "84779039", fungsi: "Pemandu posisi bagian cetakan.", foto: "data:image/jpeg;base64,AAAA" }] } });
     const h2 = w.suratBcHtml(fb);
@@ -8156,8 +8303,11 @@ t('"Minggu Depan" mengisi rentang 7 hari setelah "Minggu Ini" (hari ke-7 s.d. ke
     const hariIni = new Date(baca("todayISO()") + "T00:00:00");
     const dariHarap = new Date(hariIni); dariHarap.setDate(dariHarap.getDate() + 7);
     const sampaiHarap = new Date(hariIni); sampaiHarap.setDate(sampaiHarap.getDate() + 13);
-    eq(dari.value, dariHarap.toISOString().slice(0, 10), "dari:");
-    eq(sampai.value, sampaiHarap.toISOString().slice(0, 10), "sampai:");
+    // Tanggal setempat, bukan toISOString() (UTC): di zona UTC+7 tengah malam
+    // setempat jatuh di hari sebelumnya menurut UTC.
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    eq(dari.value, iso(dariHarap), "dari:");
+    eq(sampai.value, iso(sampaiHarap), "sampai:");
   } finally {
     dari.value = simpan.dari; sampai.value = simpan.sampai;
     w.applyDateRangeClearVisibility();
@@ -10298,7 +10448,7 @@ function cariAturan(css, selectorPersis) {
 t("form utama: .form-control & .form-select punya min-height yang SAMA", () => {
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "form.css"), "utf8");
-  const blok = cariAturan(css, ".page-form .form-control,\n.page-form .form-select {");
+  const blok = cariAturan(css, ".page-form .form-control,\n.page-form .form-select,\n.docnum-panel .form-control,\n.docnum-panel .form-select {");
   if (!blok) throw new Error("aturan .page-form .form-control/.form-select tidak ditemukan");
   if (!/min-height:\s*40px/.test(blok))
     throw new Error("min-height 40px tidak ditemukan di .form-control/.form-select");
@@ -10306,7 +10456,7 @@ t("form utama: .form-control & .form-select punya min-height yang SAMA", () => {
 t("Terminal Transit (form-control-sm/form-select-sm) DISAMAKAN, bukan dibiarkan ukuran -sm bawaan Bootstrap", () => {
   const css = require("fs").readFileSync(
     require("path").join(__dirname, "..", "css", "form.css"), "utf8");
-  const blok = cariAturan(css, ".page-form .form-control-sm,\n.page-form .form-select-sm {");
+  const blok = cariAturan(css, ".page-form .form-control-sm,\n.page-form .form-select-sm,\n.docnum-panel .form-control-sm,\n.docnum-panel .form-select-sm {");
   if (!blok) throw new Error("penyamaan form-control-sm/form-select-sm tidak ditemukan");
   if (!/min-height:\s*40px/.test(blok))
     throw new Error("min-height Terminal Transit tidak disamakan dengan field form biasa (40px)");

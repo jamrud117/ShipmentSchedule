@@ -450,7 +450,7 @@ function validateDocNumForm(typeKey) {
     if (el.disabled) return;
     const nilai = String(el.value || "").trim();
     const label = (
-      el.closest(".col-md-2, .col-md-3, .col-md-4, .col-md-6, .col-12")
+      el.closest(".fgrid > *")
         ?.querySelector(".form-label")
         ?.textContent || el.dataset.dn
     )
@@ -2067,6 +2067,10 @@ function showDocNumTab(key) {
      Category Work, Total Notes, Item List) ikut muncul pada Surat Jalan
      Export sampai jenisnya diganti. */
   if (panel) syncDocNumConditional(panel);
+  /* Label "Flight/Sail & Tanggal Tiba" ditulis dari JS (ikut moda dan
+     bahasa). Tanpa disegarkan saat panel dibuka, form surat yang baru
+     tampil dengan teks HTML-nya -- berbahasa Indonesia di mode Inggris. */
+  if (active === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
 
   docNumPage = 1;
   refreshDocNumPreview(active);

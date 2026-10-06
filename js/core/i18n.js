@@ -1300,6 +1300,9 @@ function setLang(kode) {
     if (typeof renderDocNumHistory === "function") renderDocNumHistory();
     if (typeof refreshDocNumPreview === "function" && typeof docNumActiveTab !== "undefined")
       refreshDocNumPreview(docNumActiveTab);
+    // Label ber-moda di form Surat (Flight/Sail & Tanggal Tiba) ikut bahasa
+    if (typeof suratPerbaruiLabelAngkut === "function" && typeof docNumPanelEl === "function")
+      suratPerbaruiLabelAngkut(docNumPanelEl("letter"));
   }
 
   document.querySelectorAll("[data-lang-pick]").forEach((el) => {

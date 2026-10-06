@@ -219,6 +219,8 @@ function renderVsPagination(totalItems) {
 function vsFields(r) {
   const opsiPort = VS_PORTS.map((p) => ({ value: p, label: p }));
   const f = vsSaringan();
+  /* Delapan isian, dua per baris: Customer | Koli, Vessel | Stuffing,
+     ETD | ETA, Dari | Ke. Urutannya tetap urutan kolom tabelnya. */
   return [
     { key: "customer", label: "Customer", value: r.customer || "", placeholder: tt("Cth: PT ABC", "e.g. PT ABC") },
     { key: "packages", label: vsLabel.packages, value: r.packages || "", placeholder: tt("Cth: 1x40HC / 12 PLT", "e.g. 1x40HC / 12 PLT") },
@@ -228,7 +230,7 @@ function vsFields(r) {
     { key: "eta", label: "ETA", type: "date", value: r.eta || "" },
     { key: "from", label: vsLabel.from, type: "select", options: opsiPort, value: r.port_from || f.from || VS_PORTS[0] },
     { key: "to", label: vsLabel.to, type: "select", options: opsiPort, value: r.port_to || f.to || VS_PORTS[1] },
-  ];
+  ].map((isian) => Object.assign(isian, { lebar: "setengah" }));
 }
 
 function periksaVs(v) {

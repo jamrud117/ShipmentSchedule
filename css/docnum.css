@@ -156,6 +156,13 @@
   letter-spacing: 0;
   color: var(--n-500);
 }
+/* Judul kelompok yang LANGSUNG diikuti isinya di sel yang sama (Rincian
+   Biaya, Daftar Barang): diberi jarak, supaya garis bawah judul tidak
+   menempel ke tombol / melebur dengan bingkai tabel di bawahnya. Judul
+   yang berdiri di selnya sendiri sudah berjarak lewat `gap` kisi. */
+.form-subhead + * {
+  margin-top: 12px;
+}
 
 /* TABEL RINCIAN BIAYA (pengajuan dana, jenis selain Billing) */
 .fund-lines-wrap {
@@ -167,6 +174,16 @@ table.fund-lines {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--t-sm);
+}
+/* LEBAR TERKECIL TABEL ISIAN. Di layar sempit tabelnya tidak dipaksa
+   muat -- kolomnya tergencet sampai kotak Qty tinggal 26px dan isi
+   dropdown PPN hilang. Lebarnya dijaga dan pembungkusnya yang digulir
+   mendatar (.fund-lines-wrap / .sb-wrap sudah overflow-x: auto). */
+#fundLinesTable {
+  min-width: 860px;
+}
+#doLinesTable {
+  min-width: 620px;
 }
 table.fund-lines th {
   background: var(--n-50);
@@ -223,8 +240,15 @@ table.fund-lines select {
   color: var(--n-600);
   white-space: nowrap;
 }
+/* Kolom PPN (Rp) memuat SATU angka hasil hitungan -- tidak butuh 320px
+   seperti kolom Nilai (yang di baris diskon memuat tiga kotak). Sisanya
+   dikembalikan ke Uraian, satu-satunya kolom yang isinya kalimat. */
+.fund-lines th.fl-ppn,
+.fund-lines td.fl-ppn {
+  width: 170px;
+}
 .fund-lines .fl-act {
-  width: 40px;
+  width: 46px;
   text-align: center;
 }
 .fund-lines-foot {
@@ -318,6 +342,12 @@ table.fund-lines select {
   .docnum-history-head .docnum-history-aksi > button {
     flex-shrink: 0;
   }
+  /* Kepala panel terlipat jadi beberapa baris: tombol unggah ikut rata
+     kiri, tidak terdorong sendirian ke kanan. Berawalan .docnum-panel
+     supaya menang atas aturan dasarnya yang ditulis lebih bawah. */
+  .docnum-panel .docnum-panel-head .dn-dari-invoice {
+    margin-left: 0;
+  }
 }
 
 /* Bilah "sedang memperbaiki nomor ..." — diberi jarak dari isian di
@@ -331,34 +361,48 @@ table.fund-lines select {
    jatah tetap supaya kolom tanggal seluruh baris lurus ke bawah --
    dengan flex bebas, baris yang nomornya panjang akan menyempitkan
    tanggalnya sendiri dan kolomnya bergerigi. */
-.po-row,
-.po-extra-row {
-  display: flex;
+.po-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
   gap: 6px;
   align-items: center;
+}
+.po-row input {
+  min-width: 0;
+}
+/* Baris tambahan membawa tombol hapus di lajur ketiga. Baris PERTAMA
+   tidak punya tombol itu -- begitu ada baris tambahan, lajurnya ikut
+   disisihkan di baris pertama, supaya kotak nomor & tanggal seluruh
+   baris sama lebar dan kolom tanggalnya lurus ke bawah. */
+.po-extra-row,
+#poNoList:has(.po-extra-row) > .po-row {
+  grid-template-columns: minmax(0, 1fr) 170px 30px;
 }
 .po-extra-row {
   margin-top: 6px;
 }
-.po-row input,
-.po-extra-row input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.po-row .po-tgl,
-.po-extra-row .po-tgl {
-  flex: 0 0 40%;
-}
 
 .docnum-panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  /* Tinggi SAMA di keempat panel: panel Pengajuan Dana membawa tombol
+     unggah (34px) di kepala ini, panel lain tidak -- tanpa tinggi yang
+     sama, isi form bergeser naik-turun tiap berpindah jenis dokumen.
+     47px = tombol 34 + padding bawah 12 + garis 1 (border-box). */
+  min-height: 47px;
   padding-bottom: 12px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--border);
+}
+/* Tombol "Isi dari Invoice / Billing" mengelompok di kanan bersama
+   "Nomor berikutnya", bukan mengambang di tengah kepala panel. */
+.docnum-panel-head .dn-dari-invoice {
+  margin-left: auto;
+  height: 34px;
+  padding: 0 12px;
 }
 .docnum-panel-head h6 {
   margin: 0;
@@ -384,14 +428,46 @@ table.fund-lines select {
   padding-top: 18px;
   border-top: 1px solid var(--border);
 }
+/* Reset (netral) & Ajukan Nomor (utama) sama tinggi dan sama besar
+   hurufnya -- dulu Reset memakai .btn-light Bootstrap yang hurufnya
+   lebih besar dari tombol di sebelahnya. */
+.docnum-actions .btn,
+.docnum-result .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 18px;
+  font-size: var(--t-base);
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 /* PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat */
 
-/* Tanda isian wajib di label. */
+/* BARIS YANG ISINYA BERGANTUNG JENIS DOKUMEN -- tetap penuh 12 lajur.
+   Hanya di layar lebar; di bawahnya kisi sudah dua kolom/satu kolom.
+   - Surat Jalan Lokal: Alamat Tujuan berbagi baris dengan Keterangan
+     Total (Export: alamat selebar baris).
+   - Surat Fungsi Barang: tidak punya Nilai Barang & Tanggal Bayar, jadi
+     Negara Asal & Flight/Sail mengisi baris ketiga berdua. */
+@media (min-width: 1080px) {
+  .fgrid:has(> .dn-total:not(.d-none)) > .dn-alamat {
+    grid-column: span 9;
+  }
+  .fgrid:has(> .sb-tanpabayar.d-none) > .sb-negara,
+  .fgrid:has(> .sb-tanpabayar.d-none) > .sb-tiba {
+    grid-column: span 6;
+  }
+}
+
+/* Tanda isian wajib di label. Labelnya flex berjarak 6px (.fgrid),
+   jadi tandanya ditarik sedikit ke kiri supaya menempel ke teksnya. */
 .docnum-panel .form-label .req {
   color: var(--coral);
   font-weight: 700;
-  margin-left: 2px;
+  margin-left: -3px;
 }
 /* Kotak isian yang gagal validasi ditandai di tempatnya, supaya user */
 .docnum-panel .is-invalid {
@@ -525,31 +601,13 @@ table.fund-lines select {
   animation: spin-import 0.9s linear infinite;
 }
 
-/* Halaman No. Dokumen di layar sempit.
-
-   Ambangnya 1199px, bukan 768px: di lebar split-window form ini tinggal
-   sekitar 900px, sementara barisnya memakai kolom Bootstrap yang tetap
-   terbagi empat sejak 768px -- labelnya masih terbaca, isinya
-   terpotong. Tombol jenis dokumen juga menyusut ke lebar isinya
-   (keterangannya disembunyikan) dan barisnya digeser mendatar. */
+/* Halaman No. Dokumen di layar sempit (split-window ~900px). Isiannya
+   sendiri sudah menyesuaikan lewat kisi .fgrid (components.css); di sini
+   tombol jenis dokumen menyusut ke lebar isinya (keterangannya
+   disembunyikan) dan barisnya digeser mendatar. */
 @media (max-width: 1199px) {
   .docnum-tabs {
     padding: 10px 12px;
-  }
-
-  /* Kolom Bootstrap dilepas: col-md-* terbagi empat sejak 768px tanpa
-     memperhatikan lebar wadahnya. Diganti dasar lebar minimum, jadi
-     jumlah kolom per baris menyesuaikan ruang yang benar-benar ada. */
-  .docnum-panel [class*="col-md-"],
-  .docnum-panel [class*="col-lg-"] {
-    flex: 1 1 200px;
-    max-width: 100%;
-    min-width: 0;
-  }
-  /* Isian yang panjang isinya mengambil satu baris penuh. */
-  .docnum-panel .col-12,
-  .docnum-panel [class*="col-md-"]:has(textarea) {
-    flex: 1 1 100%;
   }
   .docnum-tab {
     flex: 0 0 auto;
@@ -867,6 +925,12 @@ table.fund-lines select {
   align-items: center;
   gap: 6px;
 }
+/* Hanya yang PERTAMA yang didorong ke kanan. Dengan margin auto di
+   keduanya, ruang kosongnya dibagi dua: Summary mengambang di tengah
+   baris dan Report sendirian di ujung. */
+.docnum-subtab--summary ~ .docnum-subtab--summary {
+  margin-left: 0;
+}
 .fsum-panel {
   display: flex;
   flex-direction: column;
@@ -906,8 +970,13 @@ table.fund-lines select {
   font-weight: 600;
   color: var(--n-500);
 }
-.fsum-reset {
+/* Setinggi pemicu kalender & kotak pilihan di bilah ini (31px), bukan
+   38px bawaan tombol -- supaya dasar tombol dan dasar kalender di
+   sebelahnya segaris. */
+.fsum-reset,
+.fsum-reset:hover {
   flex-shrink: 0;
+  height: 31px;
 }
 .fsum-judul {
   font-size: var(--t-sm);
@@ -1555,19 +1624,41 @@ button.dn-bayar--lunas:hover {
 }
 .sb-tabel {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
 }
 .sb-tabel th,
 .sb-tabel td {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
+.sb-tabel tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* Kepala tabel sama dengan Rincian Biaya (table.fund-lines th). */
 .sb-tabel th {
   background: var(--n-50);
+  color: var(--n-600);
   font-size: var(--t-xs);
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   text-align: left;
+  white-space: nowrap;
+}
+.sb-tabel td.sb-no {
+  padding-top: 18px;
+  color: var(--n-500);
+  font-family: var(--font-mono);
+}
+.sb-tabel td.sb-aksi {
+  padding-top: 13px;
+  text-align: center;
+}
+.sb-tabel .sb-pilih-foto {
+  height: 34px;
+  cursor: pointer;
 }
 .sb-tabel .sb-no {
   width: 40px;
@@ -1587,7 +1678,7 @@ button.dn-bayar--lunas:hover {
   border-radius: 4px;
 }
 .sb-tabel .sb-aksi {
-  width: 40px;
+  width: 46px;
 }
 
 /* Pengajuan Dana: invoice / debit note tambahan & judul kelompok rincian */
