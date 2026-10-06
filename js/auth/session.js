@@ -5,31 +5,89 @@
 const authState = { user: null, profile: null, siap: false };
 
 /* PERAN
-     exim      -- mengubah semua data
-     marketing -- hanya MELIHAT di seluruh aplikasi, termasuk Nomor
-                  Dokumen (riwayat & Summary) yang tidak bisa dibuka
-                  viewer. Tidak ada satu pun yang bisa ia ubah di sana:
+
+   SATU TABEL untuk semuanya: nama tampil, boleh mengubah data atau
+   tidak, dan HALAMAN mana yang boleh dibuka. Menambah peran baru =
+   menambah satu baris di sini (plus nilainya di database -- lihat
+   migration-role-finance.sql sebagai contohnya). Router, navbar, palet
+   perintah, dan halaman Akun semuanya membaca dari sini.
+
+     exim      -- mengubah semua data, membuka semua halaman
+     marketing -- hanya MELIHAT; semua halaman baca, termasuk Nomor
+                  Dokumen (riwayat & Summary) yang tertutup bagi viewer.
+                  Tidak ada satu pun yang bisa ia ubah di sana:
                   mengajukan, memperbaiki isian, menandai status bayar,
                   menghapus, dan mengatur nomor urut -- khusus EXIM.
+     finance   -- hanya MELIHAT, dan hanya DUA halaman: Jadwal dan Nomor
+                  Dokumen. Di Nomor Dokumen ia sama dengan marketing.
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
-   canEdit() berarti "EXIM" -- satu-satunya peran yang mengubah data,
-   di halaman mana pun. canViewDocNum() hanya menjawab siapa yang boleh
-   MEMBUKA halaman Nomor Dokumen. */
+   `halaman: null` = semua halaman. Kuncinya sama dengan PAGE_VIEWS di
+   form-router.js. "form" (tambah/ubah jadwal) dan "accounts" tidak
+   pernah masuk daftar peran hanya-baca. "schedule" ada di SEMUA peran:
+   ke sanalah router melempar balik alamat yang tertutup.
+
+   `ket` = keterangan di pemilih peran halaman Akun.
+
+   Peran yang tidak dikenal -- kolomnya kosong, atau peran baru yang
+   belum dikenal versi aplikasi ini -- diperlakukan sebagai viewer,
+   bukan exim. */
+const PERAN = {
+  exim: {
+    label: "EXIM",
+    ubah: true,
+    halaman: null,
+    get ket() { return tt("bisa ubah", "can edit"); },
+  },
+  marketing: {
+    label: "Marketing",
+    ubah: false,
+    halaman: ["overview", "schedule", "docnum", "hscode", "vessel", "masterlist"],
+    get ket() { return tt("lihat saja, termasuk No. Dokumen", "view only, incl. Doc. Number"); },
+  },
+  finance: {
+    label: "Finance",
+    ubah: false,
+    halaman: ["schedule", "docnum"],
+    get ket() { return tt("lihat saja: Jadwal & No. Dokumen", "view only: Schedule & Doc. Number"); },
+  },
+  viewer: {
+    label: "Viewer",
+    ubah: false,
+    halaman: ["overview", "schedule", "hscode", "vessel", "masterlist"],
+    get ket() { return tt("hanya lihat", "read only"); },
+  },
+};
+
 function peranSaya() {
   return (authState.profile && authState.profile.role) || "";
 }
+/* Aturan sebuah peran; tanpa argumen = peran akun yang sedang masuk. */
+function aturanPeran(peran) {
+  const kunci = peran == null ? peranSaya() : peran;
+  return (Object.prototype.hasOwnProperty.call(PERAN, kunci) && PERAN[kunci]) || PERAN.viewer;
+}
+/* canEdit() berarti "EXIM" -- satu-satunya peran yang mengubah data, di
+   halaman mana pun. */
 function canEdit() {
-  return peranSaya() === "exim";
+  return aturanPeran().ubah;
+}
+/* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
+function bolehBuka(halaman) {
+  const daftar = aturanPeran().halaman;
+  return !daftar || daftar.indexOf(halaman) >= 0;
 }
 function canViewDocNum() {
-  return peranSaya() === "exim" || peranSaya() === "marketing";
+  return bolehBuka("docnum");
 }
 
 function currentRoleLabel() {
   if (!authState.profile) return "—";
-  return { exim: "EXIM", marketing: "Marketing" }[peranSaya()] || "Viewer";
+  return aturanPeran().label;
 }
+/* Peran yang punya warna lencana & kelas penanda sendiri: semua selain
+   exim (is-exim / is-editor) dan viewer (tanpa penanda). */
+const PERAN_BERPENANDA = Object.keys(PERAN).filter((p) => p !== "exim" && p !== "viewer");
 
 /* Ambil profil (berisi peran) milik akun yang sedang login */
 async function loadProfile(userId) {
@@ -115,11 +173,16 @@ function pesanLogin(error) {
 ------------------------------------------------------------------ */
 function applyPermissions() {
   const boleh = canEdit();
+  const peran = peranSaya();
   document.body.classList.toggle("is-viewer", !boleh);
   document.body.classList.toggle("is-editor", boleh);
-  /* Marketing = viewer di semua halaman; kelas ini hanya membuka
-     kembali Nomor Dokumen (lihat auth.css). */
-  document.body.classList.toggle("is-marketing", peranSaya() === "marketing");
+  /* Peran hanya-baca selain viewer membawa penandanya sendiri
+     (is-marketing, is-finance) di samping is-viewer. */
+  PERAN_BERPENANDA.forEach((p) => document.body.classList.toggle("is-" + p, peran === p));
+  /* Halaman yang TERTUTUP untuk peran ini: body.tutup-<halaman>
+     menyembunyikan tautannya (auth.css). Dari tabel PERAN, jadi peran
+     baru tidak butuh aturan CSS baru. */
+  Object.keys(PAGE_VIEWS).forEach((h) => document.body.classList.toggle("tutup-" + h, !bolehBuka(h)));
 
   const chip = $("#userChip");
   if (chip && authState.profile) {
@@ -132,7 +195,7 @@ function applyPermissions() {
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
-    badge.classList.toggle("is-marketing", peranSaya() === "marketing");
+    PERAN_BERPENANDA.forEach((p) => badge.classList.toggle("is-" + p, peran === p));
   }
 
   /* Isian yang sudah tergambar dimatikan juga — CSS bisa menyembunyikan

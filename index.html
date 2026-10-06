@@ -304,10 +304,16 @@
         </a>
 
         <div class="site-nav">
-          <!-- Tanpa nav-exim-only: Ringkasan hanya MEMBACA data yang
-               sama dengan halaman Jadwal. Yang mengubah data di
-               halaman itu (tombol Tambah Jadwal, tautan ke Nomor
-               Dokumen) disembunyikan sendiri lewat body.is-viewer. -->
+          <!-- SIAPA MELIHAT TAUTAN MANA diputuskan tabel PERAN di
+               js/auth/session.js: applyPermissions() memasang
+               body.tutup-<data-page> untuk halaman yang tertutup bagi
+               peran yang sedang masuk, dan auth.css menyembunyikan
+               tautannya. Tidak ada kelas per-peran di tautan ini.
+
+               Ringkasan, HS Code, dan Jadwal Kapal terbuka untuk
+               viewer & marketing: isinya hanya DIBACA, dan yang
+               mengubah data di sana disembunyikan sendiri lewat
+               body.is-viewer. -->
           <a class="site-nav-link" href="#/ringkasan" data-page="overview">
             <i class="bi bi-columns-gap"></i
             ><span data-i18n="nav.overview">Ringkasan</span>
@@ -316,34 +322,19 @@
             <i class="bi bi-list-columns-reverse"></i
             ><span data-i18n="nav.schedule">Jadwal</span>
           </a>
-          <!-- nav-docnum: tampil untuk EXIM & marketing (lihat auth.css). -->
-          <a
-            class="site-nav-link nav-docnum"
-            href="#/docnum"
-            data-page="docnum"
-          >
+          <a class="site-nav-link" href="#/docnum" data-page="docnum">
             <i class="bi bi-hash"></i
             ><span data-i18n="nav.docnum">No. Dokumen</span>
           </a>
-          <!-- Tanpa nav-exim-only: viewer boleh MEMBUKA & MENCARI HS
-               Code (RLS-nya memang mengizinkan SELECT untuk semua
-               peran). Yang dicegah cuma menambah/mengubah -- lihat
-               tombolnya sendiri di halaman itu. -->
           <a class="site-nav-link" href="#/hscode" data-page="hscode">
             <i class="bi bi-upc-scan"></i
             ><span data-i18n="nav.hscode">HS Code</span>
           </a>
-          <!-- Viewer boleh membuka & mencari; tambah/ubah/hapus dijaga
-               requireEdit() di tombolnya dan RLS di database. -->
           <a class="site-nav-link" href="#/shipment-schedule" data-page="vessel">
             <i class="bi bi-water"></i
             ><span data-i18n="nav.vessel">Jadwal Kapal</span>
           </a>
-          <a
-            class="site-nav-link nav-exim-only"
-            href="#/akun"
-            data-page="accounts"
-          >
+          <a class="site-nav-link" href="#/akun" data-page="accounts">
             <i class="bi bi-people"></i
             ><span data-i18n="nav.accounts">Akun</span>
           </a>
@@ -561,6 +552,7 @@
               <div class="board-sub">
                 <b id="accountCountExim">0</b> <span data-en="EXIM accounts ·">akun EXIM ·</span>
                 <b id="accountCountMarketing">0</b> <span data-en="Marketing accounts ·">akun Marketing ·</span>
+                <b id="accountCountFinance">0</b> <span data-en="Finance accounts ·">akun Finance ·</span>
                 <b id="accountCountViewer">0</b> <span data-en="Viewer accounts">akun Viewer</span>
               </div>
             </div>
@@ -1951,9 +1943,31 @@
                     autocomplete="off"
                   />
                 </div>
-                <!-- Rincian (Subject surat) & Lampiran sebaris: keduanya
-                     tercetak di kepala Form Pengajuan Dana. -->
-                <div class="s9">
+                <!-- Doc No, Rincian (Subject surat) & Lampiran sebaris --
+                     urutannya sama dengan kepala Form Pengajuan Dana yang
+                     dicetak: No Surat, Doc No, Subject, Lampiran.
+
+                     DOC NO diketik manual, untuk semua vendor KECUALI yang
+                     ada di daftar "tanpa Doc No" (bawaannya PRIME & WIDE;
+                     diatur dari kotak Aturan Doc No di bawah form -- lihat
+                     js/features/fund-docno.js). Untuk vendor di daftar itu
+                     kotaknya disembunyikan dan Rincian melebar mengisi
+                     tempatnya (.fund-rincian di docnum.css), jadi barisnya
+                     tetap penuh. -->
+                <div class="fund-docno" id="fundDocNoWrap">
+                  <label class="form-label" for="fundDocNo">Doc No</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fundDocNo"
+                    data-dn="docNo"
+                    autocomplete="off"
+                  />
+                  <div class="form-text-note" data-en="Printed under No Surat on the form.">
+                    Tercetak di bawah No Surat pada form.
+                  </div>
+                </div>
+                <div class="s6 fund-rincian">
                   <label class="form-label" data-i18n="f.rincian"
                     >Rincian</label
                   >
@@ -2343,7 +2357,10 @@
               </button>
             </div>
 
-            <!-- Atur / reset nomor urut. Ditaruh SEBELUM riwayat karena -->
+            <!-- PENGATURAN (khusus EXIM): Atur Nomor Urut, dan -- di tab
+                 Pengajuan Dana -- Aturan Doc No di sebelahnya. Ditaruh
+                 SEBELUM riwayat. -->
+            <div class="dn-pengaturan">
             <div class="counter-box">
               <div class="counter-head">
                 <span data-en="<i class=&quot;bi bi-123&quot;></i> Set Sequence Number"><i class="bi bi-123"></i> Atur Nomor Urut</span>
@@ -2376,6 +2393,47 @@
                 <b>berikutnya</b> &mdash; misal invoice terakhir 035, isi 036.
                 Berlaku untuk jenis dokumen &amp; periode yang sedang aktif.
               </div>
+            </div>
+
+            <!-- ATURAN DOC NO: vendor yang TIDAK memakai Doc No di Form
+                 Pengajuan Dana. Bisa ditambah & dihapus di sini, jadi
+                 pengecualian berikutnya tidak butuh perubahan kode
+                 (js/features/fund-docno.js). Tampil hanya di tab
+                 Pengajuan Dana; untuk peran hanya-baca ikut tersembunyi
+                 bersama kotak Atur Nomor Urut (.counter-box di auth.css). -->
+            <div class="counter-box dn-aturan d-none" id="fundDocNoBox">
+              <div class="counter-head">
+                <span data-en="<i class=&quot;bi bi-sliders&quot;></i> Doc No Rule"><i class="bi bi-sliders"></i> Aturan Doc No</span>
+                <span class="counter-info" id="fundDocNoInfo">&mdash;</span>
+              </div>
+              <div class="dn-aturan-isi">
+                <span class="dn-aturan-label" data-en="No Doc No for:">Tanpa Doc No untuk:</span>
+                <div class="dn-aturan-daftar" id="fundDocNoDaftar"></div>
+              </div>
+              <div class="dn-aturan-tambah">
+                <input
+                  type="text"
+                  class="form-control"
+                  id="fundDocNoBaru"
+                  maxlength="60"
+                  autocomplete="off"
+                  placeholder="Nama vendor, mis. FEDEX"
+                  data-en-ph="Vendor name, e.g. FEDEX"
+                  aria-label="Vendor tanpa Doc No"
+                  data-en-aria="Vendor without Doc No"
+                />
+                <button type="button" class="btn btn-teal" id="btnFundDocNoTambah" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add">
+                  <i class="bi bi-plus-lg"></i> Tambah
+                </button>
+              </div>
+              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No appears on the form and is printed under No Surat for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+                <i class="bi bi-info-circle"></i> Doc No tampil di form dan
+                tercetak di bawah No Surat untuk semua vendor
+                <b>kecuali</b> yang ada di daftar ini. Dicocokkan per kata
+                dengan &ldquo;Dibayarkan Kepada&rdquo;: <b>PRIME</b> mengenai
+                &ldquo;PT PRIME CARGO&rdquo;, tidak mengenai &ldquo;PRIMERA&rdquo;.
+              </div>
+            </div>
             </div>
 
             <div class="docnum-history">
@@ -3658,6 +3716,29 @@
       </div>
     </div>
 
+    <!-- DETAIL PENGAJUAN NOMOR ("Lihat seluruh isian" di riwayat No.
+         Dokumen). Kepala & badannya diisi js/features/docnum-detail.js.
+         modal-dialog-scrollable: kepala (nomor) dan tombol Tutup tetap
+         di tempat, hanya badannya yang digulir. -->
+    <div class="modal fade" id="dnDetailModal" tabindex="-1" aria-labelledby="dnDetailNomor">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable dnd-dialog">
+        <div class="modal-content">
+          <div class="dnd-kepala" id="dnDetailKepala"></div>
+          <div class="modal-body dnd-badan" id="dnDetailBadan"></div>
+          <div class="modal-footer dialog-foot dnd-kaki">
+            <button
+              type="button"
+              class="btn-quiet"
+              data-bs-dismiss="modal"
+              data-i18n="a.tutup"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Kotak isian aplikasi — menggantikan prompt() bawaan peramban,
          yang tampilannya berbeda di tiap peramban dan tidak bisa ditata. -->
     <div class="modal fade" id="promptModal" tabindex="-1">
@@ -3943,6 +4024,7 @@
     <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/po-list.js"></script>
     <script src="js/features/fund-lines.js"></script>
+    <script src="js/features/fund-docno.js"></script>
     <script src="js/features/do-lines.js"></script>
     <script src="js/features/fund-request-print.js"></script>
     <script src="js/features/cipl-vn-print.js"></script>
@@ -3951,6 +4033,7 @@
     <script src="js/features/cipl-excel.js"></script>
     <script src="js/features/cipl-excel-rapi.js"></script>
     <script src="js/views/docnum-view.js"></script>
+    <script src="js/features/docnum-detail.js"></script>
     <script src="js/features/fund-summary.js"></script>
     <script src="js/core/kurs-pajak.js"></script>
     <script src="js/features/fund-report.js"></script>

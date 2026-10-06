@@ -47,6 +47,8 @@ function showDocNumView() {
   if (typeof showDocNumTab === "function") {
     showDocNumTab(docNumActiveTab || DOCNUM_DEFAULT_TAB);
   }
+  // Aturan Doc No (vendor tanpa Doc No) dimuat ulang tiap halaman dibuka
+  if (typeof fundDocNoMuat === "function") fundDocNoMuat();
 }
 
 function showFormView() {
@@ -58,37 +60,47 @@ function goBackToList() {
   location.hash = "#/";
 }
 
+/* Alamat -> kunci halaman (kunci yang sama dengan PAGE_VIEWS dan dengan
+   daftar `halaman` tiap peran di session.js). Alamat yang tidak dikenal
+   jatuh ke Jadwal, sama seperti router(). */
+const HALAMAN_HASH = {
+  "#/ringkasan": "overview",
+  "#/akun": "accounts",
+  "#/hscode": "hscode",
+  "#/shipment-schedule": "vessel",
+  "#/docnum": "docnum",
+  "#/new": "form",
+};
+function halamanDariHash(hash) {
+  if (/^#\/edit\/.+/.test(hash)) return "form";
+  return HALAMAN_HASH[hash] || "schedule";
+}
+
 function router() {
   const hash = location.hash || "#/";
   const editMatch = hash.match(/^#\/edit\/(.+)$/);
 
-  /* Viewer hanya punya akses ke halaman Jadwal. Tautannya memang
-     disembunyikan, tapi URL bisa diketik langsung. */
-  const halamanEximSaja =
-    hash === "#/new" ||
-    hash === "#/akun" ||
-    /* "#/hscode" TIDAK di sini: viewer boleh membukanya untuk mencari
-       HS Code. Pembatasan tambah/ubahnya ada di tombolnya sendiri.
+  /* SATU PENJAGA untuk semua halaman. Tautan ke halaman yang tertutup
+     memang sudah disembunyikan, tapi alamatnya bisa diketik langsung.
 
-       "#/ringkasan" juga tidak: halaman itu cuma membaca jadwal yang
-       memang sudah boleh dilihat viewer, disusun ulang jadi "apa yang
-       perlu ditindak". Aksi yang mengubah data di sana disembunyikan
-       lewat body.is-viewer, sama seperti di halaman Jadwal. */
-    !!editMatch;
-  /* Nomor Dokumen: EXIM mengubah, marketing membaca. Viewer tidak. */
-  if (hash === "#/docnum" && !canViewDocNum()) {
-    showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
-    location.hash = "#/";
-    return;
-  }
-  if (halamanEximSaja && !canEdit()) {
-    showToast(t("m.halaman.ini.hanya.untuk.peran.exim"), "danger");
-    location.hash = "#/";
-    return;
-  }
+     Siapa boleh membuka apa ada di tabel PERAN (session.js): viewer &
+     marketing boleh membuka HS Code, Jadwal Kapal, dan Ringkasan untuk
+     MEMBACA (yang mengubah data di sana disembunyikan lewat
+     body.is-viewer dan ditolak requireEdit() serta RLS); finance hanya
+     Jadwal & Nomor Dokumen; form jadwal dan Akun khusus EXIM.
 
-  if ((hash === "#/new" || editMatch) && !canEdit()) {
-    showToast(t("m.hanya.peran.exim.yang.boleh.mengubah.jadwal"), "danger");
+     Dilempar balik ke Jadwal -- satu-satunya halaman yang terbuka untuk
+     semua peran, jadi lemparannya tidak mungkin berputar. */
+  const halaman = halamanDariHash(hash);
+  if (!bolehBuka(halaman)) {
+    showToast(
+      halaman === "form"
+        ? t("m.hanya.peran.exim.yang.boleh.mengubah.jadwal")
+        : halaman === "accounts"
+          ? t("m.halaman.kelola.akun.hanya.untuk.peran.exim")
+          : tt("Halaman ini tidak tersedia untuk peran Anda.", "This page is not available for your role."),
+      "danger",
+    );
     location.hash = "#/";
     return;
   }
@@ -99,34 +111,22 @@ function router() {
     return;
   }
 
-  /* Kelola akun: hanya exim. Dijaga di sini juga, bukan cuma dengan
-     menyembunyikan tautannya di bilah atas */
   if (hash === "#/akun") {
-    if (!canEdit()) {
-      showToast(t("m.halaman.kelola.akun.hanya.untuk.peran.exim"), "danger");
-      location.hash = "#/";
-      return;
-    }
     showAccountView();
     return;
   }
 
-  /* Database HS Code: sama seperti Kelola Akun, hanya exim yang boleh
-     MEMBUKA HALAMANNYA (menambah/mengubah/menghapus). Fitur cari HS
-     Code di Daftar Barang tetap jalan untuk viewer — itu query
-     langsung ke hs_code_master, bukan lewat halaman ini (lihat RLS di
-     migration-hs-code-database.sql: SELECT boleh semua peran). */
-  /* Viewer BOLEH membuka halaman ini: mencari HS Code adalah bagian
-     dari membaca jadwal, dan RLS-nya memang mengizinkan SELECT untuk
-     semua peran (lihat migration-hs-code-database.sql). Yang dicegah
-     cuma menambah/mengubah/menghapus -- dijaga di tombolnya sendiri
-     lewat requireEdit(), dan di database lewat RLS. */
+  /* Database HS Code. Mencari HS Code adalah bagian dari membaca
+     jadwal, dan RLS-nya memang mengizinkan SELECT untuk semua peran
+     (lihat migration-hs-code-database.sql). Menambah/mengubah/menghapus
+     dijaga di tombolnya sendiri lewat requireEdit(), dan di database
+     lewat RLS. */
   if (hash === "#/hscode") {
     showHsCodeView();
     return;
   }
 
-  // Shipment Schedule: semua peran boleh membuka (sama seperti HS Code)
+  // Shipment Schedule
   if (hash === "#/shipment-schedule") {
     showVesselScheduleView();
     return;

@@ -1522,6 +1522,9 @@ function syncDocNumConditional(panel) {
       f.disabled = !cocok;
     });
   });
+  /* Sesudah "Dibayarkan Kepada" diisikan di atas (KAS NEGARA untuk
+     Billing): Doc No bergantung pada nama vendornya (fund-docno.js). */
+  fundSelaraskanDocNo(panel);
 }
 
 function dnPunyaPilihan(sel, nilai) {
@@ -1617,7 +1620,10 @@ document.addEventListener("click", (e) => {
 document.addEventListener("input", (e) => {
   // Begitu diketik sendiri, isinya milik pengguna -- jangan ditimpa lagi.
   const el = e.target.closest('[data-dn="payee"]');
-  if (el) delete el.dataset.autoFill;
+  if (!el) return;
+  delete el.dataset.autoFill;
+  // Nama vendor berubah -> Doc No ikut tampil / sembunyi
+  fundSelaraskanDocNo(el.closest("[data-docnum-panel]"));
 });
 
 /* ---------- riwayat nomor terbit ---------- */
@@ -2057,6 +2063,8 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
+  // Kotak "Aturan Doc No" hanya milik Pengajuan Dana
+  fundDocNoTampilkanKotak(active);
 
   // Tanggal dokumen default = hari ini, biar tidak perlu diketik tiap kali.
   const panel = docNumPanelEl(active);
@@ -2138,14 +2146,9 @@ function setActivePageNav(page) {
 }
 
 
-/* ------------------------------------------------------------------
-   DETAIL PENGAJUAN NOMOR
+/* Kotak Detail Pengajuan Nomor ("Lihat seluruh isian") ada di
+   js/features/docnum-detail.js. */
 
-   Isian tiap jenis dokumen berbeda-beda, dan menampilkan semuanya di
-   tabel membuat kolom Keterangan melebar melewati lebarnya. Di sini
-   seluruh isian ditampilkan apa adanya — termasuk field yang hanya
-   dipunyai satu jenis dokumen.
------------------------------------------------------------------- */
 /* Judul kolom keempat mengikuti jenis dokumennya. "Keterangan" terlalu
    samar padahal isinya selalu satu hal tertentu. */
 const DN_KOLOM_UTAMA = {
@@ -2154,253 +2157,6 @@ const DN_KOLOM_UTAMA = {
   get fund() { return "Vendor"; },
   get letter() { return tt("Perihal", "Subject"); },
 };
-
-const DN_LABEL_FIELD = {
-  get transactionType() { return tt("Jenis Transaksi", "Transaction Type"); },
-  get packages() { return tt("Jumlah Koli", "Number of Packages"); },
-  get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
-  get address() { return tt("Alamat Tujuan", "Destination Address"); },
-  get vehicle() { return tt("No. Kendaraan", "Vehicle No."); },
-  get shipmentId() { return tt("Jadwal Terkait", "Linked Schedule"); },
-  get customer() { return tt("Customer", "Customer"); },
-  get payee() { return tt("Dibayarkan Kepada", "Paid To"); },
-  get recipient() { return tt("Penerima Surat", "Letter Recipient"); },
-  get signerTitle() { return tt("Jabatan Penanda Tangan", "Signatory Title"); },
-  get noAju() { return tt("Nomor Aju", "Aju No."); },
-  get invoiceRef() { return tt("No. & Tanggal Invoice", "Invoice No. & Date"); },
-  get shipper() { return "Shipper"; },
-  get awb() { return "AWB / BL"; },
-  get koliBerat() { return tt("Koli / Berat", "Packages / Weight"); },
-  get namaBarang() { return tt("Nama Barang", "Goods"); },
-  get negaraAsal() { return tt("Negara Asal", "Country of Origin"); },
-  get flightTiba() { return tt("Flight & Tanggal Tiba", "Flight & Arrival Date"); },
-  get nilaiBarang() { return tt("Nilai Barang", "Goods Value"); },
-  get tglBayar() { return tt("Tanggal Pembayaran", "Payment Date"); },
-  get itemsFungsi() { return tt("Barang & Fungsi", "Goods & Function"); },
-  get subject() { return tt("Perihal", "Subject"); },
-  get amount() { return tt("Nilai", "Amount"); },
-  get currency() { return tt("Mata Uang", "Currency"); },
-  get purpose() { return tt("Keperluan", "Purpose"); },
-  get notes() { return tt("Keterangan", "Notes"); },
-  get reference() { return tt("Referensi", "Reference"); },
-  // Isian Form Pengajuan Dana
-  get billingNo() { return tt("Nomor Billing", "Billing Number"); },
-  get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
-  get dokumen() { return tt("Invoice / Debit Note Tambahan", "Additional Invoice / Debit Note"); },
-  get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
-  get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
-  get blAwb() { return "BL/AWB"; },
-  get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
-  get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
-  get attachment() { return tt("Lampiran", "Attachment"); },
-  get feeBm() { return tt("Bea Masuk", "Import Duty"); },
-  get feePpn() { return tt("PPN Import", "Import VAT (PPN)"); },
-  get feePph() { return tt("PPH Import", "Import Income Tax (PPH)"); },
-  get checkedByName() { return tt("Checked By", "Checked By"); },
-  get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
-  get approver1Name() { return tt("Approved By", "Approved By"); },
-  get approver1Role() { return tt("Jabatan Approved By", "Approved By Position"); },
-  get quantity() { return tt("Jumlah", "Quantity"); },
-  get unit() { return tt("Satuan", "Unit"); },
-  // Isian CIPL
-  get invoiceKind() { return tt("Jenis Invoice", "Invoice Type"); },
-  get consigneeAddress() { return tt("Alamat Consignee", "Consignee Address"); },
-  get notifyParty() { return tt("Notify Party", "Notify Party"); },
-  get poNo() { return tt("PO No.", "PO No."); },
-  get poDate() { return tt("Tanggal PO", "PO Date"); },
-  get poNoExtra() { return tt("PO No. lainnya", "Other PO No."); },
-  get termsDelivery() { return tt("Terms of Delivery", "Terms of Delivery"); },
-  get termPayment() { return tt("Term of Payment", "Term of Payment"); },
-  get portLoading() { return tt("Port of Loading", "Port of Loading"); },
-  get finalDestination() { return tt("Final Destination", "Final Destination"); },
-  get carrier() { return tt("Carrier", "Carrier"); },
-  get sailingDate() { return tt("Sailing on or About", "Sailing on or About"); },
-  get remarks() { return tt("Remarks", "Remarks"); },
-};
-
-/* Urutan tampil di kotak Detail. Yang tidak tersebut di sini ikut di
-   belakang, urut sesuai kemunculannya.
-
-   Tanpa urutan tetap, isian tampil mengikuti urutan kunci JSON — dan
-   itu berubah-ubah mengikuti urutan pengisian, sehingga dua invoice
-   yang isinya sama bisa tampil dengan susunan berbeda. */
-const DN_URUTAN_FIELD = [
-  "invoiceKind",
-  "customer",
-  "consigneeAddress",
-  "notifyParty",
-  "shipmentId",
-  "poNo",
-  "poDate",
-  "termsDelivery",
-  "termPayment",
-  "currency",
-  "amount",
-  "portLoading",
-  "finalDestination",
-  "carrier",
-  "sailingDate",
-  "remarks",
-  "receiver",
-  "address",
-  "vehicle",
-  "packages",
-  "payee",
-  "invoiceDate",
-  "invoiceDueDate",
-  "blAwb",
-  "expenseType",
-  "transactionType",
-  "letterType",
-  "signer",
-  "signerTitle",
-  "recipient",
-  "noAju",
-  "invoiceRef",
-  "shipper",
-  "awb",
-  "koliBerat",
-  "namaBarang",
-  "negaraAsal",
-  "flightTiba",
-  "nilaiBarang",
-  "tglBayar",
-  "itemsFungsi",
-  "dokumen",
-  "subject",
-  "notes",
-];
-
-/* Isian bertipe tanggal: disimpan ISO ("2026-09-20"), ditampilkan
-   sebagai tanggal biasa di kotak Detail. */
-const DN_FIELD_TANGGAL = new Set([
-  "poDate", "sailingDate", "invoiceDate", "invoiceDueDate", "tglBayar",
-]);
-
-/* Satu baris larik payload -> teks terbaca.
-
-   Bentuknya berbeda antar jenis dokumen (rincian biaya punya
-   desc/amount, daftar barang punya nama/qty/satuan), jadi yang
-   dikumpulkan adalah nilai yang ADA, bukan susunan tetap. */
-function dnRingkasBarisPayload(b) {
-  if (b == null) return "";
-  if (typeof b !== "object") return String(b);
-  const bagian = [
-    b.desc || b.nama || "",
-    [b.qty, b.satuan].filter((v) => String(v ?? "").trim()).join(" "),
-    b.amount != null && String(b.amount).trim()
-      ? (typeof formatRupiah === "function"
-          ? "Rp " + formatRupiah(parseRupiah(b.amount))
-          : String(b.amount))
-      : "",
-    b.ppnRate ? "PPN " + b.ppnRate + "%" : "",
-    b.ket || "",
-  ].filter((v) => String(v).trim());
-  return bagian.join(" · ");
-}
-
-function tampilkanDetailNomor(id) {
-  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
-  if (!r) return;
-  const p = r.payload || {};
-
-  const baris = [
-    [tt("Nomor", "Number"), r.doc_number],
-    [tt("Tanggal", "Date"), fmtDate(r.doc_date)],
-    [tt("Pemohon", "Requester"), r.requester],
-    [tt("Departemen", "Department"), r.department],
-  ].filter(([, v]) => String(v == null ? "" : v).trim() !== "");
-  const urut = [
-    ...DN_URUTAN_FIELD.filter((k) => k in p),
-    ...Object.keys(p).filter((k) => !DN_URUTAN_FIELD.includes(k)),
-  ];
-  urut.forEach((k) => {
-    let nilai = p[k];
-    if (k === "shipmentId") {
-      const kapal = typeof sjCariShipment === "function" ? sjCariShipment(nilai) : null;
-      nilai = kapal
-        ? [dispVal(kapal.invoice), dispVal(kapal.party)].filter(Boolean).join(" · ")
-        : t("s.jadwal.tidak.ditemukan");
-    }
-    /* LARIK ISIAN DIRINGKAS JADI BARIS TEKS.
-
-       Rincian biaya & daftar barang tersimpan sebagai larik objek.
-       String(objek) menghasilkan "[object Object]" -- terlihat seperti
-       kerusakan data padahal isinya utuh. */
-    /* Tanggal PO tambahan sudah ikut tercetak bersama nomornya di
-       baris "PO No. lainnya" -- barisnya sendiri cuma akan menampilkan
-       deretan tanggal tanpa keterangan milik PO yang mana. */
-    if (k === "poDateExtra") return;
-    if (k === "poNoExtra") {
-      const tglLain = p.poDateExtra || [];
-      nilai = (nilai || [])
-        .map((no, i) =>
-          tglLain[i] ? `${no} · ${fmtDate(tglLain[i])}` : String(no),
-        )
-        .join("\n");
-    }
-    if (Array.isArray(nilai)) {
-      nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
-    }
-    if (DN_FIELD_TANGGAL.has(k) && nilai) nilai = fmtDate(nilai);
-    /* Popup Detail ikut bahasa aplikasi (laporannya sendiri selalu
-       berbahasa Inggris -- lihat fund-report.js). */
-    /* Moda angkut kini tersirat di Jenis Transaksi (Sea/Air = laut/udara,
-       Local Sale = darat); isian lama di pengajuan terdahulu tidak
-       ditampilkan lagi. */
-    if (k === "transportMode") return;
-    if (k === "dokumen" && Array.isArray(nilai)) {
-      nilai = nilai.map((d) => [d.jenis === "debit" ? "Debit Note" : "Invoice", d.nomor, d.tanggal ? `(${fmtDate(d.tanggal)})` : ""].filter(Boolean).join(" "));
-    }
-    if (String(nilai ?? "").trim() === "") return;
-    /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
-       telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada
-       dokumen ekspor bedanya bukan hal kecil. */
-    if (k === "amount") {
-      const mata = String(p.currency || "USD").toUpperCase();
-      const lambang = mata === "USD" ? "$" : mata === "IDR" ? "Rp " : mata + " ";
-      nilai = lambang + formatNumberValue(parseInputNumber(nilai));
-    }
-    /* Kunci yang belum punya label dirapikan sendiri: "packages" ->
-       "Packages". Isian tiap jenis dokumen bisa bertambah, dan yang
-       belum terdaftar tidak boleh tampil sebagai potongan kode. */
-    const label =
-      DN_LABEL_FIELD[k] ||
-      k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    baris.push([label, nilai]);
-  });
-
-  $("#promptTitle").textContent = tt("Detail Pengajuan Nomor", "Number Request Details");
-  $("#promptDesc").textContent = "";
-  $("#promptDesc").classList.add("d-none");
-  $("#promptIcon").className = "bi bi-list-ul";
-  $("#promptError").classList.add("d-none");
-  $("#promptFields").innerHTML = `
-    <dl class="dn-detail">
-      ${baris
-        .map(
-          ([k, v]) =>
-            `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v)).replace(/\n/g, "<br>")}</dd>`,
-        )
-        .join("")}
-    </dl>`;
-  /* Kotak ini hanya membaca: tombol Simpan disembunyikan dan "Batal"
-     diganti "Tutup" — tidak ada yang dibatalkan. */
-  $("#promptOk").classList.add("d-none");
-  const batal = $("#promptModal .modal-footer .btn-quiet");
-  const teksBatal = batal.textContent;
-  batal.textContent = t("a.tutup");
-  const modal = bootstrap.Modal.getOrCreateInstance($("#promptModal"));
-  $("#promptModal").addEventListener(
-    "hidden.bs.modal",
-    () => {
-      $("#promptOk").classList.remove("d-none");
-      batal.textContent = teksBatal;
-    },
-    { once: true },
-  );
-  modal.show();
-}
 
 /* Ketikan di kotak cari: ditunda 300ms supaya tiap huruf tidak
    memanggil database. Di tab Summary datanya sudah termuat semua, jadi

@@ -169,6 +169,9 @@ function showPrompt(opsi) {
   $("#promptError").classList.add("d-none");
 
   const fields = o.fields || [];
+  /* Lebar dua kolom ditentukan ulang tiap kali kotak dibuka. Hanya
+     showPrompt() yang mengisi kotak ini, jadi tidak ada lebar yang
+     perlu dilepas saat ditutup. */
   const duaKolom = fields.some((f) => f.lebar === "setengah");
   promptModalEl.querySelector(".modal-dialog").classList.toggle("prompt-dialog--lebar", duaKolom);
   $("#promptFields").innerHTML = fields
@@ -243,12 +246,6 @@ function showPrompt(opsi) {
 }
 
 if (promptModalEl) {
-  /* Lebar dua-kolom milik kotak yang memintanya saja: dilepas saat
-     ditutup supaya pemakai berikutnya (mis. Detail Pengajuan Nomor,
-     yang mengisi #promptFields sendiri) tidak mewarisinya. */
-  promptModalEl.addEventListener("hidden.bs.modal", () => {
-    promptModalEl.querySelector(".modal-dialog").classList.remove("prompt-dialog--lebar");
-  });
   $("#promptOk").addEventListener("click", () => promptSubmit && promptSubmit());
   promptModalEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && promptSubmit) {

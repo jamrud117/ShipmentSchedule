@@ -949,21 +949,258 @@ t("kunci payload punya label yang terbaca", () => {
    ["sailingDate", "Sailing on or About"], ["remarks", "Remarks"]]
     .forEach(([k, v]) => eq(L[k], v, k + ":"));
 });
-t("urutan tampil tetap, tidak ikut urutan pengisian", () => {
-  const U = w.eval("DN_URUTAN_FIELD");
-  const i = (k) => U.indexOf(k);
-  if (!(i("invoiceKind") < i("customer"))) throw new Error("jenis invoice harus paling atas");
-  if (!(i("customer") < i("consigneeAddress"))) throw new Error("alamat menyusul customer");
-  if (!(i("poNo") < i("poDate"))) throw new Error("PO no sebelum tanggalnya");
-  if (!(i("notes") === U.length - 1)) throw new Error("keterangan paling bawah");
+/* Kunci yang punya tempat di kotak Detail sebuah jenis dokumen: isian
+   bagian-bagiannya, kunci yang dipakai blok tabelnya, dan yang tampil
+   di kepala kotak. Selain itu jatuh ke bagian "Lainnya". */
+const dndTempat = (tab) => {
+  const kunci = new Set(baca("DN_DETAIL_TERPAKAI"));
+  baca("DN_DETAIL_SUSUNAN")[tab].forEach((b) =>
+    (b.khusus ? b.memakai : b.isian.map((x) => (typeof x === "string" ? x : x.k))).forEach((k) => kunci.add(k)));
+  return kunci;
+};
+/* Membuka kotak Detail untuk satu baris riwayat. */
+const dndBuka = (baris) => {
+  tulis("docNumHistoryRows", [baris]);
+  w.tampilkanDetailNomor(baris.id);
+  return { kepala: $("#dnDetailKepala"), badan: $("#dnDetailBadan") };
+};
+const dndIsian = (badan) => [...badan.querySelectorAll("[data-dnd]")].map((el) => el.dataset.dnd);
+const dndNilaiIsian = (badan, k) => {
+  const el = badan.querySelector(`[data-dnd="${k}"] dd`);
+  return el ? el.textContent.replace(/\s+/g, " ").trim() : null;
+};
+const dndJudul = (badan) => [...badan.querySelectorAll(".dnd-bagian > h3")].map((h) => h.textContent);
+const dndDana = (nomor, payload) => ({ id: nomor, doc_type: "fund", doc_number: nomor, doc_date: "2026-10-06", payload });
+const dndSel = (tr) => [...tr.children].map((td) => td.textContent.replace(/\s+/g, " ").trim());
+const dndJumlah = (badan) =>
+  [...badan.querySelectorAll(".dnd-jumlah .fl-sum")].map((el) => [...el.children].map((c) => c.textContent.trim()).join(" "));
+
+t("kotak Detail punya kotaknya sendiri, tidak menumpang kotak isian", () => {
+  /* Dulu isinya dituang ke #promptFields (kotak isian umum): tombol
+     Simpan disembunyikan, judul diganti, lalu semuanya dipulihkan saat
+     ditutup -- dan isinya terpaksa berupa daftar dua kolom sempit. */
+  $("#promptFields").innerHTML = "";
+  const { kepala, badan } = dndBuka({ id: "k1", doc_type: "do", doc_number: "021/DDI/EXIM-LOG/VIII/2026",
+    doc_date: "2026-08-05", requester: "Yogi", department: "EXIM", payload: { vehicle: "B 1 XX" } });
+  eq($("#promptFields").innerHTML, "", "kotak isian tidak disentuh:");
+  if (!$("#dnDetailModal").contains(badan)) throw new Error("badan di luar kotaknya");
+  eq(kepala.querySelector("#dnDetailNomor").textContent, "021/DDI/EXIM-LOG/VIII/2026", "nomor di kepala:");
+  eq($("#dnDetailModal").getAttribute("aria-labelledby"), "dnDetailNomor", "kotak dinamai nomornya:");
+  eq(kepala.querySelector("[data-dnd-salin]").dataset.dndSalin, "021/DDI/EXIM-LOG/VIII/2026", "tombol salin membawa nomornya:");
+  eq([...kepala.querySelectorAll(".dnd-meta > span")].map((s) => s.textContent).join("|"), "05-08-2026|Yogi|EXIM", "tanggal, pemohon, departemen:");
+  eq(kepala.querySelector(".dnd-jenis span").textContent, "Surat Jalan Export", "jenis dokumen:");
+  // Sisa-sisa cara lama tidak boleh tertinggal
+  const sumber = ["js/views/docnum-view.js", "js/features/docnum-detail.js", "js/ui/feedback.js", "css/docnum.css"]
+    .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
+  if (/DN_URUTAN_FIELD|dn-detail\b/.test(sumber)) throw new Error("daftar urutan / gaya tabel dua kolom lama masih ada");
 });
-t("seluruh field CIPL punya urutan", () => {
-  const U = w.eval("DN_URUTAN_FIELD");
+t("isian tampil menurut susunan dokumennya, bukan urutan pengisian", () => {
+  const { badan } = dndBuka({ id: "u1", doc_type: "invoice", doc_number: "INV-9", doc_date: "2026-08-05",
+    payload: { remarks: "MADE IN INDONESIA", notes: "catatan", termsDelivery: "CIF", consigneeAddress: "Jl. A",
+               customer: "KUMHO", currency: "USD", invoiceKind: "Commercial" } });
+  eq(dndIsian(badan).join(","), "customer,currency,notes,consigneeAddress,termsDelivery,remarks");
+  eq(dndJudul(badan).join(" | "), "Invoice | Data Cetak Commercial Invoice & Packing List");
+  // Label di atas nilainya -- bukan baris tabel
+  const isian = badan.querySelector('[data-dnd="termsDelivery"]');
+  eq(isian.querySelector("dt").textContent, "Terms of Delivery");
+  eq(isian.querySelector("dd").textContent, "CIF");
+  // Isian panjang selebar kotak
+  if (!badan.querySelector('[data-dnd="consigneeAddress"]').classList.contains("dnd-isian--lebar"))
+    throw new Error("alamat consignee tidak selebar kotak");
+});
+t("isian kosong dilewati; bagian tanpa isi tidak meninggalkan judul", () => {
+  const { badan } = dndBuka({ id: "u2", doc_type: "invoice", doc_number: "INV-10", doc_date: "2026-08-05",
+    payload: { customer: "KUMHO", currency: "", notes: "   ", remarks: null, poNo: "" } });
+  eq(dndIsian(badan).join(","), "customer");
+  eq(dndJudul(badan).join(" | "), "Invoice");
+  const kosong = dndBuka({ id: "u3", doc_type: "do", doc_number: "X", doc_date: "2026-08-05", payload: {} }).badan;
+  if (!kosong.querySelector(".dnd-kosong")) throw new Error("payload kosong tidak diberi keterangan");
+});
+t("seluruh isian CIPL punya tempat di kotak Detail", () => {
+  const tempat = dndTempat("invoice");
   ["invoiceKind", "consigneeAddress", "notifyParty", "poNo", "poDate",
    "termsDelivery", "termPayment", "portLoading", "finalDestination",
    "carrier", "sailingDate", "remarks"].forEach((k) => {
-    if (U.indexOf(k) < 0) throw new Error("belum diurutkan: " + k);
+    if (!tempat.has(k)) throw new Error("belum punya tempat: " + k);
   });
+});
+t("setiap isian form keempat jenis dokumen punya tempat di kotak Detail", () => {
+  /* Isian baru di form yang lupa didaftarkan tetap tampil (di bagian
+     "Lainnya"), tapi tanpa label dan tanpa kelompoknya. Uji ini yang
+     mengingatkan untuk memberinya tempat. */
+  ["invoice", "do", "fund", "letter"].forEach((tab) => {
+    const tempat = dndTempat(tab);
+    const kunci = [...w.document.querySelectorAll(`[data-docnum-panel="${tab}"] [data-dn]`)].map((el) => el.dataset.dn);
+    if (!kunci.length) throw new Error(tab + ": panel tidak punya isian (pemilihnya berubah?)");
+    const hilang = [...new Set(kunci)].filter((k) => !tempat.has(k));
+    if (hilang.length) throw new Error(tab + ": isian tanpa tempat: " + hilang.join(", "));
+    // ... dan semuanya punya label yang terbaca
+    const L = baca("DN_LABEL_FIELD");
+    const tanpaLabel = [...tempat].filter((k) => !L[k] && !baca("DN_DETAIL_TERPAKAI").has(k));
+    if (tanpaLabel.length) throw new Error(tab + ": tanpa label: " + tanpaLabel.join(", "));
+  });
+});
+t("isian yang belum terdaftar jatuh ke 'Lainnya' dengan label yang dirapikan", () => {
+  const { badan } = dndBuka({ id: "u4", doc_type: "do", doc_number: "X", doc_date: "2026-08-05",
+    payload: { vehicle: "B 1 XX", isianBaruSekali: "nilai", daftarBaru: [{ nama: "BEAD RING", qty: "10", satuan: "PCS" }] } });
+  eq(dndJudul(badan).join(" | "), "Pengiriman | Lainnya");
+  const baru = badan.querySelector('[data-dnd="isianBaruSekali"]');
+  eq(baru.querySelector("dt").textContent, "Isian Baru Sekali", "label dari nama kunci:");
+  eq(baru.querySelector("dd").textContent, "nilai");
+  const larik = badan.querySelector('[data-dnd="daftarBaru"]');
+  eq(larik.querySelector("dd").textContent, "BEAD RING · 10 PCS", "larik diringkas:");
+  if (!larik.classList.contains("dnd-isian--lebar")) throw new Error("larik tidak selebar kotak");
+});
+t("Detail Pengajuan Dana: kepala memuat status & total, rincian biaya jadi tabel bertotal", () => {
+  const p = {
+    expenseType: "Freight", transactionType: "Air Import", currency: "IDR", payee: "FEDEX",
+    invoiceNo: "872969839", docNo: "DOC-2610-0042", notes: "Payment Request", attachment: "1 Set",
+    lines: [
+      { desc: "Freight Charges", amount: "18.389.000", ppnRate: 1.1, grupPpn: "A" },
+      { jenis: "diskon", desc: "Base Discount", amount: "10.113.950", discType: "rp", ppnRate: 1.1, grupPpn: "A" },
+      { desc: "Fuel Surcharge", amount: "3.599.647", ppnRate: 1.1, grupPpn: "A" },
+      { desc: "Handling", amount: "250.000", ppnRate: 0 },
+    ],
+  };
+  const { kepala, badan } = dndBuka(Object.assign(dndDana("318/EXIM/DDI/X/2026", p), { requester: "Yogi" }));
+  const tot = w.fundLineTotals(p.lines);
+  // Kepala: jenis + penjelasnya, status bayar, total pengajuan
+  eq([...kepala.querySelectorAll(".dnd-cip")].map((c) => c.textContent).join("|"), "Freight|Air Import");
+  if (!kepala.querySelector(".dn-bayar--belum")) throw new Error("status Belum Lunas tidak tampil");
+  eq(kepala.querySelector(".dnd-sisi-nilai").textContent, w.frNilai(tot.grandTotal, "IDR"), "total di kepala = TOTAL surat cetak:");
+  eq(kepala.querySelector(".dnd-sisi-nilai").textContent, w.frNilai(w.frTotalPengajuan(p), "IDR"));
+  // Bagian-bagiannya
+  eq(dndJudul(badan).join(" | "), "Tagihan | Kepala Surat | Rincian Biaya | Penanda Tangan");
+  eq(dndNilaiIsian(badan, "docNo"), "DOC-2610-0042", "Doc No tampil di Tagihan:");
+  eq(badan.querySelector('[data-dnd="docNo"] dt').textContent, "Doc No");
+  eq(badan.querySelector('[data-dnd="notes"] dt').textContent, "Rincian (Subject)", "Keterangan dinamai seperti di formnya:");
+  // Rincian biaya: satu baris per pos, angka polos (satuannya di kepala kolom)
+  const tabel = badan.querySelector("table.dnd-tabel--biaya");
+  eq([...tabel.querySelectorAll("thead th")].map((th) => th.textContent.replace(/\s+/g, " ").trim()).join("|"),
+     "No.|Uraian|Nilai (Rp)|PPN|PPN (Rp)");
+  const baris = [...tabel.querySelectorAll("tbody tr")];
+  eq(baris.length, 4, "jumlah baris:");
+  const nilai = w.fundLineValues(w.normalisasiBarisDana(p.lines));
+  const ppn = w.fundLinePpnDaftar(w.normalisasiBarisDana(p.lines), nilai);
+  eq(dndSel(baris[0]).slice(0, 4).join("|"), "1|Freight Charges|18.389.000|1.1%");
+  eq(baris[0].children[4].firstChild.textContent, w.formatRupiah(ppn[0]), "PPN baris 1:");
+  eq(dndSel(baris[1])[2], "- 10.113.950", "diskon bertanda minus:");
+  if (!baris[1].classList.contains("dnd-diskon")) throw new Error("baris diskon tidak ditandai");
+  eq(dndSel(baris[3]).slice(2).join("|"), "250.000|—|—", "tanpa PPN ditulis tanda pisah:");
+  if (/Rp/.test(tabel.querySelector("tbody").textContent)) throw new Error("'Rp' masih diulang di tiap sel");
+  // Tarif ikut di sel PPN untuk ponsel (kolom tarifnya disembunyikan di sana)
+  eq(baris[0].querySelector(".dnd-tarif-kecil").textContent, "1.1%");
+  if (baris[3].querySelector(".dnd-tarif-kecil")) throw new Error("pos tanpa PPN diberi tarif");
+  // Total: fungsi yang sama dengan form & surat cetak
+  eq(dndJumlah(badan).join(" | "), [
+    "Total Nilai " + w.frNilai(tot.totalNet, "IDR"),
+    "Total PPN " + w.frNilai(tot.totalPpn, "IDR"),
+    "Potongan PPH 23 (2%) - " + w.frNilai(tot.pph, "IDR"),
+    "TOTAL " + w.frNilai(tot.grandTotal, "IDR"),
+  ].join(" | "));
+  // Kunci yang sudah jadi tabel tidak muncul lagi sebagai isian
+  if (badan.querySelector('[data-dnd="lines"]')) throw new Error("rincian biaya tampil dua kali");
+  // Penanda tangan: tiga kotak, bawaannya sama dengan surat cetak
+  eq([...badan.querySelectorAll(".dnd-ttd-kotak b")].map((b) => b.textContent).join("|"), "Yogi|M. Rangga|Mr. Shin Na Ra");
+});
+t("Detail Pengajuan Dana: pos dikelompokkan per invoice / debit note", () => {
+  const p = {
+    payee: "PT WIDE INDONESIA", currency: "IDR", invoiceNo: "IN-1",
+    dokumen: [{ id: "dx1", jenis: "debit", nomor: "DN-2", tanggal: "2026-10-03" }],
+    lines: [{ desc: "Ocean Freight", amount: "8.500.000", ppnRate: 1.1 },
+            { desc: "Storage", amount: "1.250.000", ppnRate: 0, dok: "dx1" }],
+    paidAt: "2026-10-06", paidBy: "Yogi",
+  };
+  const { kepala, badan } = dndBuka(dndDana("317/EXIM/DDI/X/2026", p));
+  const baris = [...badan.querySelectorAll("table.dnd-tabel--biaya tbody tr")];
+  eq(baris.map((tr) => (tr.classList.contains("dnd-grup") ? "[" + tr.textContent.trim() + "]" : dndSel(tr)[1])).join(" > "),
+     "[Invoice IN-1] > Ocean Freight > [Debit Note DN-2] > Storage");
+  eq(dndNilaiIsian(badan, "dokumen"), "Debit Note DN-2 03-10-2026", "dokumen tambahan di Tagihan:");
+  // PRIME & WIDE tidak punya Doc No
+  if (badan.querySelector('[data-dnd="docNo"]')) throw new Error("Doc No tampil untuk WIDE");
+  // Lunas: lencana di kepala + bagian Pembayaran
+  if (!kepala.querySelector(".dn-bayar--lunas")) throw new Error("status Lunas tidak tampil");
+  eq(dndJudul(badan).slice(-1)[0], "Pembayaran");
+  eq(dndNilaiIsian(badan, "paidAt"), "06-10-2026");
+  eq(dndNilaiIsian(badan, "paidBy"), "Yogi");
+});
+t("Detail Pengajuan Dana format lama / Billing: tabel pungutan + TOTAL", () => {
+  const p = { expenseType: "Billing", payee: "KAS NEGARA", currency: "IDR", billingNo: "640261006322394",
+              feeBm: "9.780.000", feePpn: "22.591.800", feePph: "5.134.500" };
+  const { kepala, badan } = dndBuka(dndDana("316/EXIM/DDI/X/2026", p));
+  const baris = [...badan.querySelectorAll(".dnd-tabel tbody tr")].map((tr) => dndSel(tr).join("|"));
+  eq(baris.join(" > "), "1|Bea Masuk|9.780.000 > 2|PPN Import|22.591.800 > 3|PPH Import|5.134.500");
+  eq(dndJumlah(badan).join(" | "), "TOTAL Rp. 37.506.300");
+  eq(kepala.querySelector(".dnd-sisi-nilai").textContent, "Rp. 37.506.300");
+  if (badan.querySelector('[data-dnd="feeBm"]')) throw new Error("pungutan tampil dua kali");
+  // Nominal format lama (tanpa rincian): satu baris bernama jenis pengeluarannya
+  const lama = dndBuka(dndDana("9/EXIM", { expenseType: "Handling", payee: "PRIME", amount: "1.500.000" })).badan;
+  eq([...lama.querySelectorAll(".dnd-tabel tbody tr")].map((tr) => dndSel(tr).join("|")).join(" > "), "1|Handling|1.500.000");
+  if (lama.querySelector('[data-dnd="amount"]')) throw new Error("nominal tampil dua kali");
+});
+t("Detail Surat Jalan Lokal & Surat: daftar barang jadi tabel", () => {
+  const sj = dndBuka({ id: "s1", doc_type: "do_lokal", doc_number: "012/EXIM-LOG/X/2026", doc_date: "2026-10-05",
+    payload: { receiver: "PT HANKOOK", poNo: "4500081234", poDate: "2026-10-01", poNoExtra: ["4500081299"], poDateExtra: [""],
+               items: [{ nama: "TYRE MOLD", qty: "1", satuan: "SET", ket: "Cradle" }, { nama: "SIDE PLATE", qty: "2", satuan: "PCS", ket: "" }] } });
+  eq(sj.kepala.querySelector(".dnd-jenis span").textContent, "Surat Jalan Lokal");
+  eq([...sj.badan.querySelectorAll(".dnd-tabel--barang tbody tr")].map((tr) => dndSel(tr).join("|")).join(" > "),
+     "1|TYRE MOLD|1|SET|Cradle > 2|SIDE PLATE|2|PCS|");
+  // PO: nomor & tanggalnya berpasangan, yang tambahan ikut
+  eq([...sj.badan.querySelectorAll('[data-dnd="poNo"] .dnd-butir')].map((b) => b.textContent.replace(/\s+/g, " ").trim()).join("|"),
+     "4500081234 01-10-2026|4500081299");
+  if (sj.badan.querySelector('[data-dnd="poDate"], [data-dnd="poNoExtra"], [data-dnd="items"]'))
+    throw new Error("tanggal PO / PO tambahan / daftar barang tampil dua kali");
+
+  const surat = dndBuka({ id: "s2", doc_type: "letter", doc_number: "DDI-021/EXIM-LOG/X/2026", doc_date: "2026-10-03",
+    payload: { letterType: "Certificate of Function and Use of Goods", recipient: "KPU BC", flightTiba: "EVER 012 / 05-10-2026", moda: "laut",
+               noAju: "000020-029142-20260905-201955",
+               itemsFungsi: [{ nama: "IKR GUIDE", hs: "84807190", fungsi: "Pengarah", foto: "data:image/png;base64,AAAA" }] } });
+  eq(surat.kepala.querySelector(".dnd-cip").textContent, "Certificate of Function and Use of Goods");
+  const brs = surat.badan.querySelector(".dnd-tabel--fungsi tbody tr");
+  eq(brs.children[1].firstChild.textContent, "IKR GUIDE");
+  eq(brs.children[1].querySelector(".dnd-mono").textContent, "84807190", "HS Code di bawah nama barangnya:");
+  eq(dndSel(brs)[2], "Pengarah");
+  eq(brs.querySelector(".dnd-foto img").getAttribute("src"), "data:image/png;base64,AAAA");
+  // Label angkutan mengikuti moda kirimannya, seperti di form & cetakannya
+  eq(surat.badan.querySelector('[data-dnd="flightTiba"] dt').textContent, "Sail & Tanggal Tiba");
+  eq(baca("suratLabelAngkut")("laut", " & Tanggal Tiba"), "Sail & Tanggal Tiba", "sama dengan label di form & cetakannya:");
+  if (surat.badan.querySelector('[data-dnd="moda"]')) throw new Error("penanda moda ikut tampil sebagai isian");
+  // Nomor aju 26 digit diberi dua kolom supaya tidak terpotong
+  if (!surat.badan.querySelector('[data-dnd="noAju"]').classList.contains("dnd-isian--dua")) throw new Error("nomor aju tidak dua kolom");
+});
+t("kotak Detail ikut berbahasa Inggris", () => {
+  const simpan = baca("activeLang");
+  try {
+    w.setLang("en");
+    const { kepala, badan } = dndBuka(dndDana("1/EXIM", { payee: "FEDEX", currency: "IDR", notes: "x",
+      lines: [{ desc: "Freight", amount: "1.000.000", ppnRate: 1.1 }] }));
+    eq(dndJudul(badan).join(" | "), "Bill | Letter Heading | Cost Breakdown | Signatories");
+    eq(badan.querySelector('[data-dnd="payee"] dt').textContent, "Paid To");
+    eq(kepala.querySelector(".dnd-sisi-label").textContent, "Request total");
+    eq(kepala.querySelector(".dn-bayar").textContent.trim(), "Unpaid");
+    eq(badan.querySelector("table.dnd-tabel--biaya thead th:nth-child(3)").textContent.replace(/\s+/g, " ").trim(), "Amount (Rp)");
+  } finally {
+    w.setLang(simpan);
+  }
+});
+t("gaya kotak Detail: kisi isian, dua kolom aman di ponsel, tidak menempel tepi layar", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css", "docnum.css"), "utf8");
+  if (!/\.dnd-kisi \{[^}]*grid-template-columns: repeat\(auto-fill, minmax\(200px, 1fr\)\)/.test(css))
+    throw new Error("kisi isian tidak menyesuaikan lebar kotak");
+  if (!/\.dnd-isian--dua \{\s*grid-column: span 2;/.test(css)) throw new Error("isian dua kolom tidak ada");
+  /* "span 2" pada kisi satu kolom memunculkan kolom kedua yang meluber:
+     di ponsel isian itu harus selebar kotak. */
+  const awal = css.indexOf("@media (max-width: 575px)");
+  if (awal < 0) throw new Error("blok ponsel tidak ditemukan");
+  const ponsel = css.slice(awal);
+  const blok = ponsel.slice(0, ponsel.indexOf("\n}\n"));
+  if (!/\.dnd-dialog \.dnd-isian--dua \{\s*grid-column: 1 \/ -1;/.test(blok)) throw new Error("isian dua kolom meluber di ponsel");
+  if (!/\.dnd-dialog \.dnd-tabel--biaya \.dnd-tarif \{\s*display: none;/.test(blok)) throw new Error("kolom tarif tidak disembunyikan di ponsel");
+  if (!/\.dnd-dialog \.dnd-tarif-kecil \{\s*display: block;/.test(blok)) throw new Error("tarif pengganti tidak tampil di ponsel");
+  if (!/\.dnd-dialog \{\s*max-width: min\(800px, calc\(100% - 2 \* var\(--bs-modal-margin\)\)\);/.test(css))
+    throw new Error("kotak selebar 800px menempel tepi jendela sempit");
+  // Angka: huruf mono hanya di sel, bukan di kepala kolom
+  if (!/\.dnd-tabel td\.dnd-angka \{[^}]*font-variant-numeric: tabular-nums;/.test(css)) throw new Error("angka tidak selebar tetap");
 });
 
 console.log("— AUDIT GARIS DOKUMEN CETAK —");
@@ -2122,7 +2359,7 @@ t("BL/AWB: isian form Pengajuan Dana, ikut tersimpan, tampil di Detail, dan bisa
     isian.value = simpan;
   }
   eq(baca("DN_LABEL_FIELD").blAwb, "BL/AWB", "label di kotak Detail:");
-  if (!baca("DN_URUTAN_FIELD").includes("blAwb")) throw new Error("BL/AWB tidak punya urutan di kotak Detail");
+  if (!dndTempat("fund").has("blAwb")) throw new Error("BL/AWB tidak punya tempat di kotak Detail");
   if (!w.dnFilterCari("MAEU").includes('payload->>blAwb.ilike."%MAEU%"')) throw new Error("BL/AWB tidak ikut dicari di riwayat");
   // Kotak cari juga menyaring tabel Summary lewat BL/AWB.
   const k = w.fsumKolom(barisDana("9", { payee: "WIDE", blAwb: "SNKO0123", amount: "1" }));
@@ -2287,9 +2524,158 @@ t("kotak cari riwayat tidak dikunci untuk marketing; isian form tetap dikunci", 
   }
 });
 t("halaman Akun menawarkan peran Marketing", () => {
-  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "accounts-view.js"), "utf8");
-  if (!/<option value="marketing"/.test(src)) throw new Error("pilihan Marketing tidak ada");
+  // Pilihan perannya dirakit dari tabel PERAN (lihat uji peran Finance di bawah)
+  if (w.urutanPilihanPeran().indexOf("marketing") < 0) throw new Error("pilihan Marketing tidak ada");
+  eq(baca("PERAN").marketing.label + " — " + baca("PERAN").marketing.ket, "Marketing — lihat saja, termasuk No. Dokumen");
   if (!w.document.getElementById("accountCountMarketing")) throw new Error("hitungan akun Marketing tidak ada");
+});
+console.log("\u2014 PERAN FINANCE & TABEL PERAN \u2014");
+/* Alamat tempat router() berakhir untuk sebuah peran. Yang diuji
+   PENJAGA-nya, jadi pembuka halamannya diganti fungsi kosong: memuat
+   daftar akun / HS Code / jadwal kapal sungguhan di sini meninggalkan
+   pekerjaan asinkron yang menimpa keadaan uji-uji berikutnya. */
+const PEMBUKA_HALAMAN = ["showOverviewView", "showAccountView", "showHsCodeView", "showVesselScheduleView",
+  "showDocNumView", "renderFormPage", "showListView", "render", "isiPilihanJadwal", "isiPilihanAju"];
+const bukaSebagai = (peran, hash) => denganPeran(peran, () => {
+  const asli = PEMBUKA_HALAMAN.map((n) => w[n]);
+  if (asli.some((f) => typeof f !== "function")) throw new Error("pembuka halaman tidak ditemukan: " + PEMBUKA_HALAMAN.filter((n, i) => typeof asli[i] !== "function"));
+  PEMBUKA_HALAMAN.forEach((n) => (w[n] = () => {}));
+  try {
+    w.applyPermissions();
+    w.location.hash = hash;
+    w.router();
+    return w.location.hash;
+  } finally {
+    PEMBUKA_HALAMAN.forEach((n, i) => (w[n] = asli[i]));
+  }
+});
+const ALAMAT_HALAMAN = {
+  overview: "#/ringkasan", schedule: "#/", docnum: "#/docnum", hscode: "#/hscode",
+  vessel: "#/shipment-schedule", accounts: "#/akun", form: "#/new",
+};
+t("matriks hak FINANCE: tidak mengubah apa pun, hanya Jadwal & Nomor Dokumen", () => {
+  eq(denganPeran("finance", () => [w.canEdit(), w.canViewDocNum(), w.currentRoleLabel()].join(",")), "false,true,Finance");
+  const terbuka = denganPeran("finance", () => Object.keys(ALAMAT_HALAMAN).filter((h) => w.bolehBuka(h)));
+  eq(terbuka.join(","), "schedule,docnum");
+  // Alamat yang diketik langsung dilempar balik ke Jadwal
+  Object.keys(ALAMAT_HALAMAN).forEach((h) => {
+    const jadi = bukaSebagai("finance", ALAMAT_HALAMAN[h]);
+    eq(jadi, h === "schedule" || h === "docnum" ? ALAMAT_HALAMAN[h] : "#/", "finance -> " + h + ":");
+  });
+  eq(bukaSebagai("finance", "#/edit/apa-saja"), "#/", "finance -> ubah jadwal:");
+  w.location.hash = "#/";
+});
+t("finance: hanya-baca (is-viewer) + penanda is-finance; tautan halaman tertutup disembunyikan", () => {
+  denganPeran("finance", () => {
+    w.applyPermissions();
+    const b = w.document.body.classList;
+    if (!b.contains("is-viewer") || b.contains("is-editor")) throw new Error("finance tidak hanya-baca");
+    if (!b.contains("is-finance")) throw new Error("penanda is-finance tidak terpasang");
+    if (b.contains("is-marketing")) throw new Error("is-marketing ikut terpasang");
+    eq(["overview", "schedule", "docnum", "hscode", "vessel", "accounts"].filter((h) => b.contains("tutup-" + h)).join(","),
+       "overview,hscode,vessel,accounts", "halaman tertutup:");
+    eq($("#userChipRole").textContent, "Finance", "lencana:");
+    if (!$("#userChipRole").classList.contains("is-finance")) throw new Error("lencana tidak berwarna finance");
+    // Di Nomor Dokumen ia sama dengan marketing: membaca saja
+    if (w.bolehUbahDocNum()) throw new Error("finance bisa mengubah di Nomor Dokumen");
+    if (/^<button/.test(w.dnTombolBayar({ id: "x", payload: {} }))) throw new Error("finance bisa menandai status bayar");
+    if (w.requireEdit()) throw new Error("requireEdit meloloskan finance");
+  });
+  // Penandanya dilepas lagi begitu perannya berganti
+  denganPeran("exim", () => {
+    w.applyPermissions();
+    const b = w.document.body.classList;
+    if (b.contains("is-finance") || b.contains("is-viewer")) throw new Error("penanda finance tertinggal di EXIM");
+    if ([...b].some((k) => k.startsWith("tutup-"))) throw new Error("EXIM punya halaman tertutup: " + [...b].filter((k) => k.startsWith("tutup-")));
+    if ($("#userChipRole").classList.contains("is-finance")) throw new Error("warna lencana finance tertinggal");
+  });
+});
+t("tautan navbar disembunyikan lewat body.tutup-<halaman>, satu aturan per halaman", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css", "auth.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const tautan = [...w.document.querySelectorAll(".site-nav-link[data-page]")].map((a) => a.dataset.page);
+  if (tautan.length < 6) throw new Error("tautan navbar tidak ditemukan");
+  tautan.filter((h) => h !== "schedule").forEach((h) => {
+    if (!css.includes(`body.tutup-${h} .site-nav-link[data-page="${h}"]`)) throw new Error("tautan " + h + " tidak punya aturan sembunyi");
+  });
+  // Jadwal terbuka untuk semua peran: ke sanalah alamat tertutup dilempar
+  Object.keys(baca("PERAN")).forEach((p) => {
+    if (!denganPeran(p, () => w.bolehBuka("schedule"))) throw new Error(p + " tidak boleh membuka Jadwal");
+  });
+  // Tautan Nomor Dokumen di luar navbar (aksi cepat Ringkasan) ikut aturan yang sama
+  if (!css.includes("body.tutup-docnum .nav-docnum")) throw new Error("aksi cepat Nomor Dokumen tidak ikut disembunyikan");
+  // Cara lama (kelas per peran di tautan) tidak tersisa
+  if (/nav-exim-only|is-viewer:not\(\.is-marketing\)/.test(css + htmlAsli.replace(/<!--[\s\S]*?-->/g, "")))
+    throw new Error("penyembunyian tautan cara lama masih ada");
+  // Setiap halaman yang disebut sebuah peran memang ada
+  const dikenal = Object.keys(baca("PAGE_VIEWS")).concat(["masterlist"]);
+  Object.entries(baca("PERAN")).forEach(([p, a]) => (a.halaman || []).forEach((h) => {
+    if (dikenal.indexOf(h) < 0) throw new Error(p + ": halaman tidak dikenal: " + h);
+  }));
+});
+t("viewer & marketing tidak berubah: Ringkasan/HS Code/Jadwal Kapal terbuka, Akun & form tertutup", () => {
+  ["viewer", "marketing"].forEach((p) => {
+    ["overview", "hscode", "vessel", "schedule"].forEach((h) =>
+      eq(bukaSebagai(p, ALAMAT_HALAMAN[h]), ALAMAT_HALAMAN[h], p + " -> " + h + ":"));
+    ["accounts", "form"].forEach((h) => eq(bukaSebagai(p, ALAMAT_HALAMAN[h]), "#/", p + " -> " + h + ":"));
+  });
+  eq(bukaSebagai("viewer", "#/docnum"), "#/", "viewer -> Nomor Dokumen:");
+  Object.values(ALAMAT_HALAMAN).forEach((a) => eq(bukaSebagai("exim", a), a, "exim -> " + a + ":"));
+  w.location.hash = "#/";
+});
+t("peran yang tidak dikenal diperlakukan sebagai viewer, bukan exim", () => {
+  ["", "admin", "toString", "constructor", "__proto__"].forEach((p) => {
+    eq(denganPeran(p || "kosong", () => { w.eval(`authState.profile.role = ${JSON.stringify(p)}`); return [w.canEdit(), w.canViewDocNum(), w.currentRoleLabel()].join(","); }),
+       "false,false,Viewer", JSON.stringify(p) + ":");
+  });
+});
+t("halaman Akun menawarkan peran Finance; hitungan & pilihan dibaca dari tabel PERAN", () => {
+  const simpan = baca("accountRows");
+  try {
+    tulis("accountRows", [
+      { id: "a1", email: "a@x", username: "a", full_name: "A", role: "exim" },
+      { id: "a2", email: "b@x", username: "b", full_name: "B", role: "finance" },
+      { id: "a3", email: "c@x", username: "c", full_name: "C", role: "finance" },
+      { id: "a4", email: "d@x", username: "d", full_name: "D", role: "marketing" },
+      { id: "a5", email: "e@x", username: "e", full_name: "E", role: "peran-lama" },
+      { id: "a6", email: "f@x", username: "f", full_name: "F", role: null },
+    ]);
+    w.renderAccounts();
+    eq(["Exim", "Marketing", "Finance", "Viewer"].map((k) => $("#accountCount" + k).textContent).join(","), "1,1,2,2", "hitungan:");
+    const pilih = w.document.querySelector('[data-role-for="a2"]');
+    eq([...pilih.options].map((o) => o.value).join(","), "viewer,finance,marketing,exim", "urutan pilihan:");
+    eq(pilih.value, "finance", "peran terpilih:");
+    eq(pilih.selectedOptions[0].textContent, "Finance — lihat saja: Jadwal & No. Dokumen");
+    eq(w.document.querySelector('[data-role-for="a5"]').value, "viewer", "peran tak dikenal tampil sebagai viewer:");
+    if (!w.document.querySelector('[data-acct="a2"] .acct-avatar').classList.contains("is-finance")) throw new Error("avatar finance tidak berwarna");
+    if (w.document.querySelector('[data-acct="a5"] .acct-avatar').className.trim() !== "acct-avatar") throw new Error("avatar viewer membawa kelas peran");
+  } finally {
+    tulis("accountRows", simpan);
+  }
+});
+t("palet perintah hanya menawarkan halaman yang boleh dibuka peran itu", () => {
+  const judul = (peran) => denganPeran(peran, () => w.cmdkPerintah().map((c) => c.halaman));
+  eq([...new Set(judul("finance"))].join(","), "schedule,docnum");
+  eq([...new Set(judul("viewer"))].join(","), "overview,schedule");
+  eq([...new Set(judul("marketing"))].join(","), "overview,schedule,docnum");
+  eq(judul("exim").length, baca("CMDK_COMMANDS").length, "EXIM mendapat semuanya:");
+  if (baca("CMDK_COMMANDS").some((c) => !c.halaman)) throw new Error("ada perintah tanpa halaman (lolos dari saringan peran)");
+  // Yang tidak mengubah data "membuka", bukan "meminta" nomor
+  const perintahDok = (peran) => denganPeran(peran, () => baca("CMDK_COMMANDS").find((c) => c.halaman === "docnum").title);
+  eq(perintahDok("finance"), "Buka Nomor Dokumen");
+  eq(perintahDok("exim"), "Permintaan Nomor Dokumen");
+});
+t("migrasi database peran finance ikut di paket", () => {
+  const sql = fs.readFileSync(path.join(ROOT, "migration-role-finance.sql"), "utf8");
+  ["'finance'", "document_numbers", "for select to authenticated", "drop policy if exists"].forEach((k) => {
+    if (!sql.includes(k)) throw new Error("migrasi tidak memuat " + k);
+  });
+  // Finance HANYA membaca: tidak ada kebijakan tulis untuknya.
+  const tanpaKomentar = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
+  if (/for (insert|update|delete|all) to authenticated/i.test(tanpaKomentar)) throw new Error("migrasi memberi finance hak menulis");
+  // Aman dijalankan ulang, dan tidak menyentuh fungsi khusus EXIM.
+  if (/create policy (?!"finance )/i.test(tanpaKomentar)) throw new Error("migrasi membuat kebijakan di luar milik finance");
+  if (/next_document_number|set_document_counter|delete_document_number|admin_/.test(tanpaKomentar))
+    throw new Error("migrasi menyentuh fungsi yang harus tetap khusus EXIM");
 });
 t("migrasi database peran marketing ikut di paket", () => {
   const sql = require("fs").readFileSync(require("path").join(__dirname, "..", "migration-role-marketing.sql"), "utf8");
@@ -3323,20 +3709,42 @@ t("surat jalan juga bisa diperbaiki", () => {
 });
 
 console.log("— DETAIL: MATA UANG PADA NILAI —");
-t("Nilai diberi lambang mata uangnya", () => {
-  tulis("docNumHistoryRows", [
-    { id: "n1", doc_number: "INV-1", doc_date: "2026-08-05",
-      payload: { amount: 30062, currency: "USD" } },
-    { id: "n2", doc_number: "INV-2", doc_date: "2026-08-05",
-      payload: { amount: 5000000, currency: "IDR" } },
-  ]);
-  w.tampilkanDetailNomor("n1");
-  let h = $("#promptFields").innerHTML;
-  if (!h.includes("$30.062") && !h.includes("$30,062"))
-    throw new Error("lambang $ tidak muncul: " + h.slice(0, 200));
-  w.tampilkanDetailNomor("n2");
-  h = $("#promptFields").innerHTML;
-  if (!/Rp\s?5/.test(h)) throw new Error("lambang Rp tidak muncul");
+t("Nilai invoice ditulis bersama kode mata uangnya", () => {
+  /* Angka telanjang "30,062" tidak memberi tahu rupiah atau dolar.
+     Kodenya ("USD 30,062") sama dengan kolom Amount di riwayat dan
+     dengan Commercial Invoice cetaknya. */
+  const usd = dndBuka({ id: "n1", doc_type: "invoice", doc_number: "INV-1", doc_date: "2026-08-05",
+    payload: { amount: 30062, currency: "USD", customer: "KUMHO" } });
+  eq(usd.kepala.querySelector(".dnd-sisi-label").textContent, "Nilai invoice");
+  eq(usd.kepala.querySelector(".dnd-sisi-nilai").textContent, "USD 30,062");
+  /* Belum ditautkan ke jadwal: angka di kepala ADALAH isian Nilai-nya,
+     jadi tidak diulang di badan -- dan tidak jatuh ke "Lainnya". */
+  if (usd.badan.querySelector('[data-dnd="amount"]')) throw new Error("nilai yang sama tampil dua kali");
+  eq(dndJudul(usd.badan).join(" | "), "Invoice");
+  const idr = dndBuka({ id: "n2", doc_type: "invoice", doc_number: "INV-2", doc_date: "2026-08-05",
+    payload: { amount: 5000000, currency: "IDR" } });
+  eq(idr.kepala.querySelector(".dnd-sisi-nilai").textContent, "IDR 5,000,000");
+  // Tanpa mata uang -> bawaan USD, sama dengan cetakannya
+  eq(dndBuka({ id: "n3", doc_type: "invoice", doc_number: "INV-3", doc_date: "2026-08-05", payload: { amount: "120" } })
+    .kepala.querySelector(".dnd-sisi-nilai").textContent, "USD 120");
+});
+t("invoice yang ditautkan: kepala memuat Total jadwalnya, isian Nilai tetap tampil", () => {
+  /* Keduanya bisa berbeda (nilai diketik saat meminta nomor, barang
+     jadwal diperbarui kemudian) -- dan bedanya yang perlu terlihat. */
+  const simpan = baca("data");
+  try {
+    tulis("data", { import: [], export: [{ id: "sx9", mode: "export", invoice: "DDI - CRBM - X - 061", party: "KUMHO",
+      items: [{ namaBarang: "MOLD", qty: 2, satuan: "SET", harga: 3150 }] }] });
+    const baris = { id: "n4", doc_type: "invoice", doc_number: "DDI - CRBM - X - 061", doc_date: "2026-10-02",
+      payload: { amount: "6000", currency: "USD", shipmentId: "sx9" } };
+    const { kepala, badan } = dndBuka(baris);
+    eq(kepala.querySelector(".dnd-sisi-nilai").textContent, baca("dnTeksNilaiInvoice")(baris), "kepala = kolom Amount di riwayat:");
+    eq(kepala.querySelector(".dnd-sisi-nilai").textContent, "USD 6,300", "jumlah x harga barang jadwalnya:");
+    eq(dndNilaiIsian(badan, "amount"), "USD 6,000", "isian Nilai:");
+    eq(dndNilaiIsian(badan, "shipmentId"), "DDI - CRBM - X - 061 · KUMHO", "jadwal terkait disebut dengan invoice & pihaknya:");
+  } finally {
+    tulis("data", simpan);
+  }
 });
 
 console.log("— CIPL: TIDAK ADA GARIS GANDA —");
@@ -4792,15 +5200,15 @@ t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris", () => {
     // Nilainya tetap terbaca lewat id yang sama
     w.document.getElementById("prompt_a").value = "x";
     eq(w.document.getElementById("prompt_a").value, "x", "isian terbaca:");
-    // Ditutup: lebarnya dilepas supaya tidak diwarisi pemakai berikutnya
-    modal.dispatchEvent(new w.Event("hidden.bs.modal"));
-    if (dialog.classList.contains("prompt-dialog--lebar")) throw new Error("lebar dua kolom tertinggal setelah ditutup");
+    // Kotak berikutnya yang satu kolom tidak mewarisi lebar itu
+    w.showPrompt({ fields: [{ key: "a", label: "A" }] });
+    if (dialog.classList.contains("prompt-dialog--lebar")) throw new Error("lebar dua kolom terbawa ke kotak berikutnya");
   } finally {
     w.eval("bootstrap.Modal.getOrCreateInstance(document.getElementById('promptModal')).hide()");
   }
   const css = require("fs").readFileSync(__dirname + "/../css/auth.css", "utf8");
   if (!/#promptFields \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css)) throw new Error("kisi dua lajur tidak ada");
-  if (!/#promptFields > \* \{\s*grid-column: 1 \/ -1;/.test(css)) throw new Error("isi bawaan tidak selebar kotak (Detail Pengajuan Nomor bisa terbelah)");
+  if (!/#promptFields > \* \{\s*grid-column: 1 \/ -1;/.test(css)) throw new Error("isian bawaan tidak selebar kotak");
 });
 t("Jadwal Kapal: delapan isian tersusun dua per baris", () => {
   const isian = w.eval("vsFields({})");
@@ -9268,6 +9676,293 @@ t("No. Surat diambil dari nomor dokumennya sendiri, Subject dari Rincian", () =>
   if (!h.includes("Pembayaran Billing Import IKR Guide"))
     throw new Error("Subject tidak diambil dari Rincian");
 });
+t("Doc No: hanya untuk vendor selain PRIME & WIDE, dicocokkan per kata", () => {
+  ["FEDEX", "DHL", "KAS NEGARA", "DHL WORLDWIDE EXPRESS", "PT PRIMERA LOGISTIK", "", null].forEach((v) => {
+    if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya memakai Doc No: " + v);
+  });
+  ["PRIME", "WIDE", "PT WIDE INDONESIA", "pt. prime cargo", "Wide-Logistics", "PRIME/WIDE"].forEach((v) => {
+    if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TANPA Doc No: " + v);
+  });
+});
+t("Doc No tercetak di bawah No Surat -- tidak untuk PRIME & WIDE", () => {
+  const meta = (payload) => {
+    const h = w.buildFundRequestHtml(barisFundUji(payload));
+    const i = h.indexOf('<table class="meta">');
+    return h.slice(i, h.indexOf("</table>", i)).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  };
+  // Urutannya: No Surat, Doc No, Subject, Lampiran
+  eq(meta({ payee: "FEDEX", docNo: "DOC-7781", notes: "Sub" }),
+    "No Surat : 283/EXIM/DDI/IX/2026 Doc No : DOC-7781 Subject : Sub Lampiran : 1 Set", "FedEx:");
+  // Belum diisi: barisnya tetap ada supaya bisa ditulis tangan
+  eq(meta({ payee: "DHL", notes: "Sub" }),
+    "No Surat : 283/EXIM/DDI/IX/2026 Doc No : Subject : Sub Lampiran : 1 Set", "DHL tanpa isi:");
+  ["PT WIDE INDONESIA", "PRIME"].forEach((v) => {
+    // Doc No yang terlanjur tersimpan pun tidak tercetak untuk dua vendor ini
+    eq(meta({ payee: v, docNo: "DOC-1", notes: "Sub" }),
+      "No Surat : 283/EXIM/DDI/IX/2026 Subject : Sub Lampiran : 1 Set", v + ":");
+  });
+});
+t("form: kotak Doc No mengikuti Dibayarkan Kepada, dan tidak tersimpan untuk PRIME/WIDE", () => {
+  const panel = w.docNumPanelEl("fund");
+  const payee = panel.querySelector('[data-dn="payee"]');
+  const docNo = panel.querySelector('[data-dn="docNo"]');
+  const wadah = panel.querySelector(".fund-docno");
+  const simpan = { payee: payee.value, docNo: docNo.value, kunciPayee: payee.disabled, kunciDoc: docNo.disabled };
+  const ketik = (v) => { payee.value = v; payee.dispatchEvent(new w.Event("input", { bubbles: true })); };
+  try {
+    payee.disabled = false;
+    ketik("FEDEX");
+    if (wadah.classList.contains("d-none") || docNo.disabled) throw new Error("Doc No tersembunyi untuk FedEx");
+    docNo.value = "DOC-7781";
+    eq(w.readDocNumForm("fund").docNo, "DOC-7781", "tersimpan:");
+    ketik("PT WIDE INDONESIA");
+    if (!wadah.classList.contains("d-none") || !docNo.disabled) throw new Error("Doc No masih tampil untuk WIDE");
+    if ("docNo" in w.readDocNumForm("fund")) throw new Error("Doc No ikut tersimpan untuk WIDE");
+    ketik("DHL");
+    if (wadah.classList.contains("d-none")) throw new Error("Doc No tidak kembali tampil");
+    // Dibuka lagi lewat syncDocNumConditional (isi ulang / reset form)
+    payee.value = "PRIME";
+    w.syncDocNumConditional(panel);
+    if (!wadah.classList.contains("d-none")) throw new Error("penyelarasan form tidak memeriksa Doc No");
+  } finally {
+    payee.value = simpan.payee; docNo.value = simpan.docNo;
+    w.syncDocNumConditional(panel);
+    payee.disabled = simpan.kunciPayee; docNo.disabled = simpan.kunciDoc || docNo.disabled;
+  }
+  // Baris form tetap penuh: tanpa Doc No, Rincian melebar
+  const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
+  if (!/\.fgrid:has\(> \.fund-docno\.d-none\) > \.fund-rincian \{\s*grid-column: span 9;/.test(css)) throw new Error("Rincian tidak melebar saat Doc No disembunyikan");
+});
+console.log("\u2014 ATURAN DOC NO BISA DIATUR \u2014");
+/* Tiruan tabel report_settings untuk satu uji: mencatat yang disimpan,
+   dan bisa disuruh gagal. Dikembalikan lewat .lepas(). */
+const tiruanPengaturan = (awal, opsi) => {
+  const o = opsi || {};
+  const keadaan = { tersimpan: awal === undefined ? null : awal, upsert: [] };
+  const asli = w.eval("supabaseClient.from");
+  w.__pengaturanUji = {
+    baca: () => (o.gagalBaca ? { data: null, error: { message: "relation does not exist" } }
+      : { data: keadaan.tersimpan ? { key: "fund-doc-no-tanpa-vendor", value: keadaan.tersimpan } : null, error: null }),
+    tulis: (baris) => {
+      keadaan.upsert.push(JSON.parse(JSON.stringify(baris)));
+      if (o.gagalTulis) return { error: { message: "permission denied" } };
+      keadaan.tersimpan = baris.value;
+      return { error: null };
+    },
+  };
+  /* Hanya report_settings yang ditiru; tabel lain diteruskan ke tiruan
+     bawaan -- pekerjaan asinkron milik uji lain (riwayat nomor yang
+     sedang dimuat, misalnya) tidak boleh ikut gagal karena uji ini. */
+  w.__asliFrom = asli;
+  w.eval(`supabaseClient.from = (tabel) => {
+    if (tabel !== "report_settings") return window.__asliFrom(tabel);
+    const c = { select: () => c, eq: () => c, maybeSingle: async () => window.__pengaturanUji.baca(),
+                upsert: async (b) => window.__pengaturanUji.tulis(b) };
+    return c;
+  }`);
+  keadaan.lepas = () => { w.eval("supabaseClient.from = window.__asliFrom"); delete w.__asliFrom; delete w.__pengaturanUji; };
+  return keadaan;
+};
+/* Menjalankan fn dengan daftar "tanpa Doc No" tertentu, lalu memulihkannya. */
+const denganDaftarDocNo = async (daftar, fn) => {
+  const simpan = JSON.stringify(baca("fundDocNoTanpa"));
+  try {
+    tulis("fundDocNoTanpa", daftar);
+    return await fn();
+  } finally {
+    w.eval("fundDocNoTanpa = " + simpan + "; fundDocNoSibuk = false; fundDocNoTerapkan();");
+  }
+};
+t("daftar bawaan PRIME & WIDE; aturannya tinggal di satu berkas", () => {
+  eq(baca("FUND_DOCNO_BAWAAN").join(","), "PRIME,WIDE");
+  eq(baca("fundDocNoTanpa").join(","), "PRIME,WIDE", "daftar yang berlaku sebelum dimuat:");
+  // Daftar vendor tidak ditulis mati di tempat lain
+  ["js/features/fund-request-print.js", "js/views/docnum-view.js", "js/features/docnum-detail.js"].forEach((f) => {
+    const js = fs.readFileSync(path.join(ROOT, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    if (/["']PRIME["']|["']WIDE["']|FUND_VENDOR_TANPA_DOCNO/.test(js)) throw new Error(f + " masih memuat daftar vendor sendiri");
+  });
+  // Dimuat sebelum pemakainya
+  const urutan = [...htmlAsli.matchAll(/<script src="(js\/[^"]+)"/g)].map((m) => m[1]);
+  if (!(urutan.indexOf("js/features/fund-docno.js") >= 0)) throw new Error("fund-docno.js tidak dimuat");
+});
+t("vendor baru di daftar langsung berlaku di form & cetakan; entri beberapa kata harus berurutan", async () => {
+  await denganDaftarDocNo(["PRIME", "WIDE", "FEDEX", "KAS NEGARA"], async () => {
+    ["FEDEX", "FedEx Express Indonesia", "pt. kas negara", "KAS NEGARA (BEA CUKAI)", "PRIME"].forEach((v) => {
+      if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TANPA Doc No: " + v);
+    });
+    ["DHL", "FEDEXX", "NEGARA KAS", "KAS", "KAS BESAR NEGARA", "BANK NEGARA INDONESIA", ""].forEach((v) => {
+      if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya memakai Doc No: " + v);
+    });
+    const h = w.buildFundRequestHtml(barisFundUji({ payee: "FEDEX", docNo: "DOC-1" }));
+    if (h.includes(">Doc No<")) throw new Error("Doc No masih tercetak untuk vendor yang baru ditambahkan");
+    // Form: kotaknya ikut tersembunyi
+    const panel = w.docNumPanelEl("fund");
+    const payee = panel.querySelector('[data-dn="payee"]');
+    const simpan = payee.value;
+    try {
+      payee.value = "FEDEX";
+      w.fundSelaraskanDocNo(panel);
+      if (!panel.querySelector(".fund-docno").classList.contains("d-none")) throw new Error("kotak Doc No masih tampil untuk FEDEX");
+    } finally {
+      payee.value = simpan;
+    }
+  });
+  // Daftar kosong = semua vendor memakai Doc No
+  await denganDaftarDocNo([], async () => {
+    if (!w.fundPakaiDocNo("PRIME") || !w.fundPakaiDocNo("PT WIDE INDONESIA")) throw new Error("daftar kosong masih mengecualikan vendor");
+  });
+});
+t("entri baru diperiksa & dirapikan sebelum masuk daftar", async () => {
+  eq(w.fundDocNoRapikan("  pt.  Prime-Cargo "), "PT PRIME CARGO");
+  eq(w.fundDocNoBersihkan([" fedex ", "FEDEX", "", null, "kas  negara", "Fedex."]).join("|"), "FEDEX|KAS NEGARA");
+  await denganDaftarDocNo(["PRIME", "WIDE"], async () => {
+    eq(w.fundDocNoPeriksa("FEDEX"), "", "nama sah:");
+    eq(w.fundDocNoPeriksa("   "), "Nama vendor harus diisi.");
+    eq(w.fundDocNoPeriksa("..."), "Nama vendor harus diisi.", "hanya tanda baca:");
+    eq(w.fundDocNoPeriksa("x"), "Nama vendor terlalu pendek.");
+    eq(w.fundDocNoPeriksa("prime"), "PRIME sudah ada di daftar.", "kembar walau beda huruf besar-kecil:");
+    if (!/hampir semua nama vendor/.test(w.fundDocNoPeriksa("PT."))) throw new Error("'PT' diterima -- akan mengenai semua vendor");
+    if (!/hampir semua nama vendor/.test(w.fundDocNoPeriksa("pt tbk"))) throw new Error("'PT TBK' diterima");
+    eq(w.fundDocNoPeriksa("PT PRIMA"), "", "kata umum + nama sendiri boleh:");
+    if (!/paling panjang/.test(w.fundDocNoPeriksa("A".repeat(61)))) throw new Error("nama terlalu panjang diterima");
+  });
+  await denganDaftarDocNo(Array.from({ length: baca("FUND_DOCNO_MAKS") }, (_, i) => "V" + i), async () => {
+    if (!/penuh/.test(w.fundDocNoPeriksa("FEDEX"))) throw new Error("daftar penuh masih menerima");
+  });
+});
+t("aturan dimuat dari report_settings: belum pernah disimpan -> bawaan; daftar kosong tersimpan tetap kosong", async () => {
+  await denganDaftarDocNo(["BASI"], async () => {
+    let tiruan = tiruanPengaturan(undefined);
+    try {
+      await w.fundDocNoMuat();
+      eq(baca("fundDocNoTanpa").join(","), "PRIME,WIDE", "belum pernah disimpan:");
+    } finally { tiruan.lepas(); }
+    tiruan = tiruanPengaturan({ vendor: [" fedex ", "KAS NEGARA", "FEDEX"] });
+    try {
+      await w.fundDocNoMuat();
+      eq(baca("fundDocNoTanpa").join(","), "FEDEX,KAS NEGARA", "tersimpan (dirapikan):");
+      eq($("#fundDocNoInfo").textContent, "2 vendor", "jumlah di kepala kotak:");
+      eq([...w.document.querySelectorAll("#fundDocNoDaftar .dn-aturan-cip")].map((c) => c.textContent.trim()).join(","), "FEDEX,KAS NEGARA", "cip:");
+    } finally { tiruan.lepas(); }
+    tiruan = tiruanPengaturan({ vendor: [] });
+    try {
+      await w.fundDocNoMuat();
+      eq(baca("fundDocNoTanpa").length, 0, "daftar kosong adalah pilihan, bukan data hilang:");
+      if (!w.document.querySelector("#fundDocNoDaftar .dn-aturan-kosong")) throw new Error("daftar kosong tidak diberi keterangan");
+    } finally { tiruan.lepas(); }
+    // Tabel belum dibuat / jaringan putus: daftar yang sedang berlaku dipertahankan
+    tulis("fundDocNoTanpa", ["FEDEX"]);
+    tiruan = tiruanPengaturan(undefined, { gagalBaca: true });
+    const simpanGalat = console.error;
+    console.error = () => {};
+    try {
+      await w.fundDocNoMuat();
+      eq(baca("fundDocNoTanpa").join(","), "FEDEX", "gagal memuat:");
+    } finally { console.error = simpanGalat; tiruan.lepas(); }
+  });
+});
+t("tambah & hapus vendor tersimpan untuk semua pengguna; gagal simpan dikembalikan; khusus EXIM", async () => {
+  const profil = w.eval("JSON.stringify(authState.profile || null)");
+  const kotak = $("#fundDocNoBaru");
+  await denganDaftarDocNo(["PRIME", "WIDE"], async () => {
+    try {
+      w.eval('authState.profile = { id: "u1", role: "exim" }');
+      let tiruan = tiruanPengaturan(undefined);
+      try {
+        kotak.disabled = false;
+        kotak.value = " fedex ";
+        await w.fundDocNoTambah();
+        eq(baca("fundDocNoTanpa").join(","), "PRIME,WIDE,FEDEX");
+        eq(JSON.stringify(tiruan.upsert[0].value), '{"vendor":["PRIME","WIDE","FEDEX"]}', "yang dikirim ke database:");
+        eq(tiruan.upsert[0].key, "fund-doc-no-tanpa-vendor");
+        eq(kotak.value, "", "kotak ketik dikosongkan:");
+        await w.fundDocNoHapus("WIDE");
+        eq(baca("fundDocNoTanpa").join(","), "PRIME,FEDEX");
+        eq(JSON.stringify(tiruan.upsert[1].value), '{"vendor":["PRIME","FEDEX"]}');
+        // Entri yang ditolak tidak sampai ke database
+        kotak.value = "prime";
+        await w.fundDocNoTambah();
+        eq(tiruan.upsert.length, 2, "entri kembar ikut disimpan:");
+      } finally { tiruan.lepas(); }
+
+      tiruan = tiruanPengaturan(undefined, { gagalTulis: true });
+      const simpanGalat = console.error;
+      console.error = () => {};
+      try {
+        kotak.value = "DHL";
+        await w.fundDocNoTambah();
+        eq(baca("fundDocNoTanpa").join(","), "PRIME,FEDEX", "gagal simpan -> daftar kembali:");
+        eq(kotak.value, "DHL", "ketikan tidak dibuang saat gagal:");
+        if (baca("fundDocNoSibuk")) throw new Error("kotak tertinggal dalam keadaan sibuk");
+      } finally { console.error = simpanGalat; tiruan.lepas(); }
+
+      // Peran hanya-baca tidak bisa mengubah aturan, walau memanggil fungsinya langsung
+      for (const peran of ["finance", "marketing", "viewer"]) {
+        w.eval(`authState.profile = { id: "u2", role: ${JSON.stringify(peran)} }`);
+        tiruan = tiruanPengaturan(undefined);
+        try {
+          eq(await w.fundDocNoSimpan(["X"]), false, peran + ":");
+          eq(tiruan.upsert.length, 0, peran + " sampai ke database:");
+        } finally { tiruan.lepas(); }
+      }
+      eq(baca("fundDocNoTanpa").join(","), "PRIME,FEDEX", "daftar tidak berubah:");
+    } finally {
+      kotak.value = "";
+      w.eval("authState.profile = " + profil);
+      w.applyPermissions();
+    }
+  });
+});
+t("kotak Aturan Doc No: hanya di tab Pengajuan Dana, tersembunyi untuk peran hanya-baca, ikut bahasa", () => {
+  const kotak = $("#fundDocNoBox");
+  w.fundDocNoTampilkanKotak("invoice");
+  if (!kotak.classList.contains("d-none")) throw new Error("tampil di tab Invoice");
+  w.fundDocNoTampilkanKotak("fund");
+  if (kotak.classList.contains("d-none")) throw new Error("tidak tampil di tab Pengajuan Dana");
+  // Dipasang oleh perpindahan tab sungguhan
+  const tab = baca("docNumActiveTab");
+  try {
+    w.showDocNumTab("do");
+    if (!kotak.classList.contains("d-none")) throw new Error("showDocNumTab tidak menyembunyikannya");
+    w.showDocNumTab("fund");
+    if (kotak.classList.contains("d-none")) throw new Error("showDocNumTab tidak menampilkannya");
+  } finally {
+    w.showDocNumTab(tab);
+  }
+  /* Disembunyikan dari viewer / marketing / finance oleh aturan yang
+     sama dengan Atur Nomor Urut, dan isiannya ikut dikunci lockInputs(). */
+  if (!kotak.classList.contains("counter-box")) throw new Error("tidak ikut aturan sembunyi .counter-box");
+  if (!kotak.closest(".dn-pengaturan")) throw new Error("tidak di dalam wadah pengaturan");
+  const bahasa = baca("activeLang");
+  try {
+    w.setLang("en");
+    eq($("#fundDocNoInfo").textContent, "2 vendors");
+    eq(kotak.querySelector("[data-docno-hapus]").getAttribute("aria-label"), "Remove PRIME from the list");
+    eq(kotak.querySelector(".dn-aturan-label").textContent, "No Doc No for:");
+  } finally {
+    w.setLang(bahasa);
+  }
+  const css = fs.readFileSync(path.join(ROOT, "css", "docnum.css"), "utf8");
+  if (!/\.dn-pengaturan:has\(> \.dn-aturan:not\(\.d-none\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/.test(css))
+    throw new Error("dua kotak pengaturan tidak berdampingan di layar lebar");
+});
+t("cetak menunggu aturan yang sedang dimuat, tapi tidak selamanya", async () => {
+  const src = fs.readFileSync(path.join(ROOT, "js", "features", "fund-request-print.js"), "utf8");
+  // Jendela dibuka SEBELUM menunggu (kalau tidak, peramban memblokirnya)
+  const badan = src.slice(src.indexOf("async function cetakFundRequest"), src.indexOf("function fundRequestCss"));
+  if (!(badan.indexOf("window.open") > 0 && badan.indexOf("window.open") < badan.indexOf("await fundDocNoSiap()")))
+    throw new Error("jendela cetak dibuka sesudah menunggu");
+  const simpan = baca("fundDocNoJanjiMuat");
+  try {
+    w.eval("fundDocNoJanjiMuat = new Promise(() => {})"); // tidak pernah selesai
+    const mulai = Date.now();
+    await w.fundDocNoSiap();
+    const lama = Date.now() - mulai;
+    if (lama < 1000 || lama > 4000) throw new Error("batas tunggu tidak ~1,5 detik: " + lama + " ms");
+  } finally {
+    w.__janji = simpan; w.eval("fundDocNoJanjiMuat = window.__janji"); delete w.__janji;
+  }
+});
 t("rincian pungutan terisi -> tiga baris, TOTAL dijumlahkan dari situ", () => {
   const h = w.buildFundRequestHtml(barisFundUji({
     feeBm: "0", feePpn: "6975012", feePph: "0", currency: "IDR",
@@ -12694,11 +13389,11 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     ["#btnVsAdd", "\\.vs-kol-aksi"].forEach((sel) => {
       if (!new RegExp("body\\.is-viewer " + sel).test(css)) throw new Error("tidak disembunyikan untuk viewer/marketing: " + sel);
     });
-    if (w.document.querySelector('[data-page="vessel"]').classList.contains("nav-exim-only"))
-      throw new Error("tautan menu tersembunyi untuk viewer/marketing");
     ["viewer", "marketing"].forEach((peran) => {
       denganPeran(peran, () => {
         w.applyPermissions();
+        if (w.document.body.classList.contains("tutup-vessel"))
+          throw new Error("tautan menu tersembunyi untuk " + peran);
         bukaVs();
         eq(w.location.hash, "#/shipment-schedule", peran + " dilempar keluar:");
         if (w.document.getElementById("viewVesselSchedule").classList.contains("d-none")) throw new Error(peran + ": halaman tidak tampil");

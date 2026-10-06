@@ -246,7 +246,12 @@ function buildFundRequestHtml(row) {
     <div class="judul">FORM PENGAJUAN DANA</div>
 
     <table class="meta">
-      <tr><td class="meta-k">No Surat</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>
+      <tr><td class="meta-k">No Surat</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>${
+        fundPakaiDocNo(p.payee)
+          ? `
+      <tr><td class="meta-k">Doc No</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.docNo || "")}</td></tr>`
+          : ""
+      }
       <tr><td class="meta-k">Subject</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.notes || "")}</td></tr>
       <tr><td class="meta-k">Lampiran</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.attachment || "1 Set")}</td></tr>
     </table>
@@ -425,17 +430,24 @@ function frTabelRinci(p, mataUang) {
     </table>`;
 }
 
-function cetakFundRequest(rowId) {
+async function cetakFundRequest(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
     showToast(t("m.data.pengajuan.dana.tidak.ditemukan"), "danger");
     return;
   }
+  /* Jendelanya dibuka DULU, selagi masih di dalam klik pengguna --
+     dibuka sesudah menunggu apa pun, peramban menganggapnya pop-up liar
+     dan memblokirnya. */
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
     showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
     return;
   }
+  /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
+     dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang dicetak
+     sesaat setelah halaman tampil tidak memakai aturan lama. */
+  await fundDocNoSiap();
   w.document.write(`<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Form Pengajuan Dana ${escapeHtml(row.doc_number || "")}</title>

@@ -162,10 +162,13 @@ body.is-locked {
 .user-chip-role.is-exim {
   color: var(--sec-300);
 }
-/* Marketing: warna sendiri, supaya di bilah atas langsung terbaca
-   bahwa akun ini bukan EXIM walau bisa mengubah Nomor Dokumen. */
+/* Marketing & Finance: warna sendiri, supaya di bilah atas langsung
+   terbaca bahwa akun ini bukan EXIM walau bisa membuka Nomor Dokumen. */
 .user-chip-role.is-marketing {
   color: #9ec5fe;
+}
+.user-chip-role.is-finance {
+  color: #8fd8c0;
 }
 /* Bisa diklik (membuka menu akun), jadi diberi penanda visual yang
    jelas bahwa ini bukan sekadar label pasif.
@@ -325,7 +328,6 @@ body.is-locked {
    Ini KERAPIAN TAMPILAN, bukan pengamanan — penegaknya di
    auth-roles-migration.sql.
 ================================================================== */
-body.is-viewer .nav-exim-only,
 body.is-viewer .cmd-trigger,
 body.is-viewer #btnAdd,
 body.is-viewer #btnAddEmpty,
@@ -351,16 +353,34 @@ body.is-viewer .card-note-input {
   display: none !important;
 }
 
-/* NOMOR DOKUMEN: tertutup untuk viewer, TERBUKA untuk marketing -- tapi
-   hanya untuk MEMBACA (riwayat & Summary). Marketing membawa .is-viewer
-   juga, jadi panel isian, tombol Ajukan, dan Atur Nomor Urut tersembunyi
-   baginya lewat aturan yang sama dengan viewer.
+/* TAUTAN KE HALAMAN YANG TERTUTUP untuk peran yang sedang masuk.
+
+   applyPermissions() memasang body.tutup-<halaman> dari tabel PERAN di
+   session.js -- siapa boleh membuka apa diputuskan di SATU tempat itu.
+   Peran baru tidak butuh aturan CSS baru; HALAMAN baru butuh satu baris
+   di sini. .nav-docnum = tautan ke Nomor Dokumen di luar navbar (aksi
+   cepat di Ringkasan).
+
+   Penegaknya tetap router() -- alamatnya bisa diketik langsung. */
+body.tutup-overview .site-nav-link[data-page="overview"],
+body.tutup-docnum .site-nav-link[data-page="docnum"],
+body.tutup-docnum .nav-docnum,
+body.tutup-hscode .site-nav-link[data-page="hscode"],
+body.tutup-vessel .site-nav-link[data-page="vessel"],
+body.tutup-masterlist .site-nav-link[data-page="masterlist"],
+body.tutup-accounts .site-nav-link[data-page="accounts"] {
+  display: none !important;
+}
+
+/* NOMOR DOKUMEN: tertutup untuk viewer, TERBUKA untuk marketing &
+   finance -- tapi hanya untuk MEMBACA (riwayat & Summary). Keduanya
+   membawa .is-viewer juga, jadi panel isian, tombol Ajukan, dan Atur
+   Nomor Urut tersembunyi baginya lewat aturan yang sama dengan viewer.
 
    Form ini tidak punya satu pembungkus: panel isian per jenis
    ([data-docnum-panel]), baris tombol (.docnum-actions), dan riwayat
    bersaudara di dalam section.docnum-panels -- jadi yang disembunyikan
    panel & tombolnya, bukan section-nya. */
-body.is-viewer:not(.is-marketing) .nav-docnum,
 body.is-viewer [data-docnum-panel],
 body.is-viewer .docnum-actions,
 body.is-viewer .counter-box {
@@ -429,6 +449,10 @@ body.is-viewer .delay-strip-fields input {
 .acct-avatar.is-marketing {
   background: #e7f0ff;
   color: #1d4ed8;
+}
+.acct-avatar.is-finance {
+  background: #e3f4ee;
+  color: #0f6b52;
 }
 .acct-main {
   flex: 1;

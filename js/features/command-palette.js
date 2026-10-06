@@ -9,16 +9,30 @@ const cmdkListEl = $("#cmdkList");
 let cmdkCursor = 0;
 let cmdkResults = [];
 
-// Perintah halaman ikut masuk daftar yang sama supaya tidak perlu diingat sebagai fitur terpisah.
+/* Perintah halaman ikut masuk daftar yang sama supaya tidak perlu
+   diingat sebagai fitur terpisah.
+
+   `halaman` = halaman yang dibuka perintah itu (kunci PAGE_VIEWS).
+   Perintah ke halaman yang tertutup untuk peran yang sedang masuk tidak
+   ditawarkan sama sekali -- lihat cmdkPerintah() dan tabel PERAN di
+   session.js. Menawarkannya lalu menolak di router hanya membuang satu
+   langkah pengguna. */
 const CMDK_COMMANDS = [
-  { type: "cmd", icon: "bi-plus-lg", get title() { return tt("Tambah jadwal baru", "Add new schedule"); }, get hint() { return tt("Buka form kosong", "Open a blank form"); }, run: () => (location.hash = "#/new") },
-  { type: "cmd", icon: "bi-columns-gap", get title() { return tt("Buka Ringkasan", "Open Overview"); }, get hint() { return t("s.apa.yang.perlu.ditindak.hari.ini"); }, run: () => (location.hash = "#/ringkasan") },
-  { type: "cmd", icon: "bi-list-columns-reverse", get title() { return tt("Buka Jadwal", "Open Schedule"); }, get hint() { return tt("Daftar pengiriman", "Shipment list"); }, run: () => (location.hash = "#/") },
-  { type: "cmd", icon: "bi-hash", get title() { return tt("Permintaan Nomor Dokumen", "Request Document Number"); }, get hint() { return tt("Invoice, DO, dana, surat", "Invoice, DO, fund, letter"); }, run: () => (location.hash = "#/docnum") },
-  { type: "cmd", icon: "bi-arrow-left-right", get title() { return tt("Ganti buku Import / Export", "Switch Import / Export book"); }, get hint() { return tt("Pindah antar mode", "Switch between modes"); }, run: () => switchMode(activeMode === "import" ? "export" : "import") },
-  { type: "cmd", icon: "bi-exclamation-triangle", get title() { return tt("Saring: perlu tindakan", "Filter: needs action"); }, get hint() { return t("s.lewat.eta.atau.delay"); }, run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
-  { type: "cmd", icon: "bi-file-earmark-excel", get title() { return tt("Bulk Export ke Excel", "Bulk Export to Excel"); }, get hint() { return t("s.buku.yang.sedang.aktif"); }, run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
+  { type: "cmd", halaman: "form", icon: "bi-plus-lg", get title() { return tt("Tambah jadwal baru", "Add new schedule"); }, get hint() { return tt("Buka form kosong", "Open a blank form"); }, run: () => (location.hash = "#/new") },
+  { type: "cmd", halaman: "overview", icon: "bi-columns-gap", get title() { return tt("Buka Ringkasan", "Open Overview"); }, get hint() { return t("s.apa.yang.perlu.ditindak.hari.ini"); }, run: () => (location.hash = "#/ringkasan") },
+  { type: "cmd", halaman: "schedule", icon: "bi-list-columns-reverse", get title() { return tt("Buka Jadwal", "Open Schedule"); }, get hint() { return tt("Daftar pengiriman", "Shipment list"); }, run: () => (location.hash = "#/") },
+  /* Yang tidak mengubah data (marketing, finance) membuka halamannya
+     untuk membaca riwayat -- bukan "meminta" nomor. */
+  { type: "cmd", halaman: "docnum", icon: "bi-hash", get title() { return canEdit() ? tt("Permintaan Nomor Dokumen", "Request Document Number") : tt("Buka Nomor Dokumen", "Open Document Numbers"); }, get hint() { return tt("Invoice, DO, dana, surat", "Invoice, DO, fund, letter"); }, run: () => (location.hash = "#/docnum") },
+  { type: "cmd", halaman: "schedule", icon: "bi-arrow-left-right", get title() { return tt("Ganti buku Import / Export", "Switch Import / Export book"); }, get hint() { return tt("Pindah antar mode", "Switch between modes"); }, run: () => switchMode(activeMode === "import" ? "export" : "import") },
+  { type: "cmd", halaman: "schedule", icon: "bi-exclamation-triangle", get title() { return tt("Saring: perlu tindakan", "Filter: needs action"); }, get hint() { return t("s.lewat.eta.atau.delay"); }, run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
+  { type: "cmd", halaman: "schedule", icon: "bi-file-earmark-excel", get title() { return tt("Bulk Export ke Excel", "Bulk Export to Excel"); }, get hint() { return t("s.buku.yang.sedang.aktif"); }, run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
 ];
+
+/* Perintah yang boleh dijalankan peran yang sedang masuk. */
+function cmdkPerintah() {
+  return CMDK_COMMANDS.filter((c) => bolehBuka(c.halaman));
+}
 
 function cmdkSearchShipments(q) {
   if (!q) return [];
@@ -61,11 +75,10 @@ function cmdkSearchShipments(q) {
 function cmdkRender() {
   const q = cmdkInputEl.value.trim();
   const kapal = cmdkSearchShipments(q);
+  const tersedia = cmdkPerintah();
   const perintah = q
-    ? CMDK_COMMANDS.filter((c) =>
-        (c.title + " " + c.hint).toLowerCase().includes(q.toLowerCase()),
-      )
-    : CMDK_COMMANDS;
+    ? tersedia.filter((c) => (c.title + " " + c.hint).toLowerCase().includes(q.toLowerCase()))
+    : tersedia;
 
   cmdkResults = [...kapal, ...perintah];
   if (cmdkCursor >= cmdkResults.length) cmdkCursor = 0;

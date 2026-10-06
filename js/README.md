@@ -53,4 +53,7 @@ dependency-nya dulu.
 | `views/vessel-schedule-view.js` | Halaman Shipment Schedule (#/shipment-schedule): daftar jadwal kapal per rute, saring From/To + tombol Cari, tambah/ubah/hapus. Tabel `vessel_schedules` (migration-vessel-schedule.sql) |
 | `views/detail-view.js` | Modal detail pengiriman (read-only) |
 | `features/bulk-excel.js` | Bulk export/import seluruh data lewat file Excel |
+| `auth/session.js` | Sesi login & hak akses. Tabel `PERAN` (exim, marketing, finance, viewer): nama tampil, boleh mengubah atau tidak, dan halaman yang boleh dibuka — router, navbar, palet perintah, dan halaman Akun membaca dari sini. Peran baru = satu baris di tabel itu + nilainya di database (contoh: migration-role-finance.sql) |
+| `features/fund-docno.js` | Aturan "Doc No" di Form Pengajuan Dana: daftar vendor TANPA Doc No (bawaan PRIME & WIDE) yang bisa diatur dari kotak Aturan Doc No di halaman Nomor Dokumen. Tersimpan di `report_settings`; `fundPakaiDocNo()` dipakai form dan cetakannya |
+| `features/docnum-detail.js` | Kotak Detail pengajuan nomor ("Lihat seluruh isian") untuk keempat jenis dokumen: susunan bagian per jenis (`DN_DETAIL_SUSUNAN`), tabel rincian biaya / daftar barang, dan bagian "Lainnya" untuk isian yang belum terdaftar |
 | `app-init.js` | Titik masuk aplikasi — memanggil `loadShipments()` |

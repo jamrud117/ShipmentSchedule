@@ -348,6 +348,45 @@ table.fund-lines select {
   .docnum-panel .docnum-panel-head .dn-dari-invoice {
     margin-left: 0;
   }
+  /* Kotak Detail di ponsel: jarak tepi dirapatkan, angka di sisi kanan
+     kepala turun ke bawah nomornya (rata kiri), dan tiga penanda tangan
+     ditumpuk. Berawalan .dnd-dialog supaya menang atas aturan dasarnya
+     yang ditulis lebih bawah di berkas ini. */
+  .dnd-dialog .dnd-kepala {
+    padding: var(--sp-4);
+  }
+  .dnd-dialog .dnd-badan {
+    padding: 0 var(--sp-4);
+  }
+  .dnd-dialog .dnd-nomor {
+    font-size: 1.15rem;
+  }
+  .dnd-dialog .dnd-sisi {
+    flex: 1 1 100%;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .dnd-dialog .dnd-ttd {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dnd-dialog .dnd-isian--dua {
+    grid-column: 1 / -1;
+  }
+  /* Tabel di ponsel: nomor urut disembunyikan dan jarak sel dirapatkan;
+     pada rincian biaya kolom tarif ikut disembunyikan (tarifnya pindah
+     ke bawah angka PPN) -- uraian dan kedua angkanya terbaca tanpa
+     menggeser tabel ke samping. */
+  .dnd-dialog .dnd-tabel th,
+  .dnd-dialog .dnd-tabel td {
+    padding: 8px;
+  }
+  .dnd-dialog .dnd-tabel .dnd-no,
+  .dnd-dialog .dnd-tabel--biaya .dnd-tarif {
+    display: none;
+  }
+  .dnd-dialog .dnd-tarif-kecil {
+    display: block;
+  }
 }
 
 /* Bilah "sedang memperbaiki nomor ..." — diberi jarak dari isian di
@@ -446,19 +485,139 @@ table.fund-lines select {
 
 /* PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat */
 
+/* ------------------------------------------------------------------
+   PENGATURAN DI BAWAH FORM: Atur Nomor Urut + Aturan Doc No
+
+   Dua kotak bergaris putus (.counter-box, system.css). Di tab Pengajuan
+   Dana keduanya berdampingan di layar lebar -- ditumpuk, riwayat nomor
+   terdorong 150px lebih ke bawah untuk pengaturan yang jarang disentuh.
+   Di tab lain kotak aturan tersembunyi dan Atur Nomor Urut selebar
+   panel seperti biasa.
+
+   Pembungkusnya TANPA jarak sendiri: untuk peran hanya-baca kedua
+   kotaknya disembunyikan auth.css, dan pembungkus yang berjarak akan
+   meninggalkan celah kosong di atas riwayat.
+------------------------------------------------------------------ */
+.dn-pengaturan {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--sp-4);
+}
+.dn-pengaturan > .counter-box + .counter-box {
+  margin-top: var(--sp-4);
+}
+/* Vendor di daftar: label, lalu cip yang bisa dihapus. */
+.dn-aturan-isi {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px var(--sp-2);
+  min-height: 30px;
+}
+.dn-aturan-label {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-700);
+}
+.dn-aturan-daftar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.dn-aturan-cip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 3px 2px 10px;
+  border: 1px solid var(--p-200);
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--p-600);
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.dn-aturan-hapus {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--n-500);
+  font-size: 0.62rem;
+}
+.dn-aturan-hapus:hover {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.dn-aturan-kosong {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+/* Kotak ketik + tombol Tambah, sama tinggi dengan isian Atur Nomor Urut. */
+.dn-aturan-tambah {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.dn-aturan-tambah .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  height: 38px;
+  font-size: var(--t-base);
+  text-transform: uppercase;
+}
+.dn-aturan-tambah .form-control::placeholder {
+  text-transform: none;
+}
+.dn-aturan-tambah .btn {
+  flex: 0 0 auto;
+  height: 38px;
+  white-space: nowrap;
+}
+/* Sedang menyimpan: perubahan berikutnya ditahan sampai yang ini selesai. */
+.dn-aturan.is-sibuk {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 /* BARIS YANG ISINYA BERGANTUNG JENIS DOKUMEN -- tetap penuh 12 lajur.
    Hanya di layar lebar; di bawahnya kisi sudah dua kolom/satu kolom.
    - Surat Jalan Lokal: Alamat Tujuan berbagi baris dengan Keterangan
      Total (Export: alamat selebar baris).
    - Surat Fungsi Barang: tidak punya Nilai Barang & Tanggal Bayar, jadi
-     Negara Asal & Flight/Sail mengisi baris ketiga berdua. */
+     Negara Asal & Flight/Sail mengisi baris ketiga berdua.
+   - Pengajuan Dana: Doc No | Rincian | Lampiran; tanpa Doc No (vendor
+     di daftar Aturan Doc No) Rincian melebar. */
 @media (min-width: 1080px) {
   .fgrid:has(> .dn-total:not(.d-none)) > .dn-alamat {
+    grid-column: span 9;
+  }
+  /* Pengajuan Dana untuk vendor tanpa Doc No: kotaknya disembunyikan
+     dan Rincian melebar mengisi tempatnya. */
+  .fgrid:has(> .fund-docno.d-none) > .fund-rincian {
     grid-column: span 9;
   }
   .fgrid:has(> .sb-tanpabayar.d-none) > .sb-negara,
   .fgrid:has(> .sb-tanpabayar.d-none) > .sb-tiba {
     grid-column: span 6;
+  }
+  /* Pengaturan di bawah form: Atur Nomor Urut & Aturan Doc No
+     berdampingan (tab Pengajuan Dana). Sejajar atas, jadi jarak atas
+     kotak kedua disamakan dengan yang pertama. */
+  .dn-pengaturan:has(> .dn-aturan:not(.d-none)) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .dn-pengaturan > .counter-box + .counter-box {
+    margin-top: var(--sp-6);
   }
 }
 
@@ -672,25 +831,6 @@ table.fund-lines select {
      satu-satunya keterangan yang membedakan baris. */
 }
 
-/* Daftar isian pada kotak Detail Pengajuan Nomor */
-.dn-detail {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(120px, auto) 1fr;
-  gap: 6px var(--sp-4);
-  font-size: var(--t-sm);
-}
-.dn-detail dt {
-  color: var(--n-500);
-  font-weight: 500;
-}
-.dn-detail dd {
-  margin: 0;
-  color: var(--ink);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
 /* ==================================================================
    RIWAYAT NOMOR PADA LAYAR SEMPIT
 
@@ -846,46 +986,350 @@ table.fund-lines select {
   color: var(--n-400);
 }
 
-/* Detail Pengajuan Nomor — dua kolom, bukan daftar mengalir.
+/* ------------------------------------------------------------------
+   DETAIL PENGAJUAN NOMOR (js/features/docnum-detail.js)
 
-   Isian CIPL membuat daftarnya panjang (16 baris), dan label yang
-   berselang-seling dengan nilainya sulit dipindai. Grid membuat mata
-   bisa menyusuri kolom label saja. */
-.dn-detail {
-  display: grid;
-  grid-template-columns: minmax(120px, 34%) 1fr;
-  gap: 0;
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  overflow: hidden;
+   Kotaknya dibaca seperti lembar dokumen: kepala bernomor, lalu bagian-
+   bagian isian, lalu tabel. Bukan tabel dua kolom bergaris -- di sana
+   label dan nilai sama tegasnya, 20 baris terbaca sebagai satu tembok,
+   dan rincian biaya terpaksa jadi kalimat bersambung di satu sel.
+------------------------------------------------------------------ */
+/* Lebar 800px, tetapi tidak pernah menempel tepi layar: di atas 576px
+   Bootstrap memberi margin kiri-kanan "auto", jadi kotak selebar ini
+   akan memenuhi jendela 600-850px dari tepi ke tepi. */
+.dnd-dialog {
+  max-width: min(800px, calc(100% - 2 * var(--bs-modal-margin)));
 }
-.dn-detail dt,
-.dn-detail dd {
-  margin: 0;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: var(--t-sm);
-  line-height: 1.45;
-}
-.dn-detail dt {
+/* KEPALA: nomor dokumen yang paling menonjol; angka yang paling dicari
+   (total pengajuan / nilai invoice) di sisi kanan. */
+.dnd-kepala {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-6);
+  padding: var(--sp-5) var(--sp-6) var(--sp-4);
   background: var(--n-50);
-  color: var(--n-600);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--bs-modal-inner-border-radius) var(--bs-modal-inner-border-radius) 0 0;
+}
+.dnd-utama {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.dnd-jenis {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-family: var(--font-board);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sec-600);
+}
+.dnd-jenis > i {
+  font-size: 0.95rem;
+}
+/* Penjelas jenis (Freight, Air Import, jenis surat) -- huruf biasa,
+   supaya terbaca sebagai keterangan, bukan judul kedua. */
+.dnd-cip {
+  padding: 1px 9px;
+  border: 1px solid var(--p-100);
+  border-radius: var(--r-pill);
+  background: var(--p-50);
+  color: var(--p-600);
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
   font-weight: 600;
-  border-right: 1px solid var(--border);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.dn-detail dd {
-  color: var(--n-900);
-  word-break: break-word;
+.dnd-nomor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--navy);
+  overflow-wrap: anywhere;
 }
-/* Dua sel terakhir: garis bawahnya jadi garis luar kotak. */
-.dn-detail dt:nth-last-of-type(1),
-.dn-detail dd:nth-last-of-type(1) {
+.dnd-salin {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: #fff;
+  color: var(--n-500);
+  font-size: 0.8rem;
+}
+.dnd-salin:hover {
+  border-color: var(--p-400);
+  color: var(--p-600);
+}
+/* Tanggal, pemohon, departemen -- dipisah titik tengah lewat CSS supaya
+   pemisahnya tidak ikut tersalin dan tidak menggantung di awal baris. */
+.dnd-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.dnd-meta > span + span::before {
+  content: "\00b7";
+  margin: 0 7px;
+  color: var(--n-400);
+}
+.dnd-sisi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+.dnd-sisi .dn-bayar {
+  margin-bottom: 6px;
+}
+.dnd-sisi-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.dnd-sisi-nilai {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+/* BADAN: bagian-bagian berjudul, dipisah garis tipis. */
+.dnd-badan {
+  padding: 0 var(--sp-6);
+}
+.dnd-bagian {
+  padding: var(--sp-4) 0 var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+}
+.dnd-bagian:last-child {
   border-bottom: 0;
 }
-@media (max-width: 560px) {
-  .dn-detail { grid-template-columns: 1fr; }
-  .dn-detail dt { border-right: 0; border-bottom: 0; padding-bottom: 2px; }
+.dnd-bagian > h3 {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-board);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--n-600);
+}
+/* Isian: label kecil di atas nilainya, beberapa kolom per baris. Kisi
+   auto-fill -- tiga kolom di kotak selebar ini, dua di tablet, satu di
+   ponsel, tanpa titik henti yang harus dirawat. */
+.dnd-kisi {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px var(--sp-5);
+  margin: 0;
+}
+.dnd-isian {
+  min-width: 0;
+}
+.dnd-isian--lebar {
+  grid-column: 1 / -1;
+}
+/* Dua kolom: isian sebelahnya tetap sebaris. Di ponsel kisinya tinggal
+   satu kolom -- di sana aturan ini diganti selebar kotak (lihat blok
+   575px), sebab "span 2" pada kisi satu kolom memunculkan kolom kedua
+   yang meluber keluar. */
+.dnd-isian--dua {
+  grid-column: span 2;
+}
+.dnd-isian dt {
+  margin-bottom: 2px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--n-500);
+}
+.dnd-isian dd {
+  margin: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.dnd-redup {
+  font-weight: 500;
+  color: var(--n-500);
+}
+.dnd-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+}
+/* Butir berderet dalam satu isian: nomor PO + tanggalnya, invoice /
+   debit note tambahan. */
+.dnd-butir {
+  display: inline-block;
+  margin: 0 6px 4px 0;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--n-50);
+  font-size: var(--t-sm);
+}
+.dnd-butir .dnd-redup {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+}
+
+/* TABEL: rincian biaya, daftar barang, barang & fungsi. */
+.dnd-tabel-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.dnd-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+/* Barang, fungsi & foto: empat kolom dengan teks panjang dan gambar.
+   Tidak ikut menyempit sampai tiap kolomnya tinggal beberapa huruf per
+   baris -- di ponsel tabel ini bergeser ke samping di dalam bingkainya.
+   Tabel lain muat tanpa digeser (rincian biaya dirapatkan, lihat blok
+   575px). */
+.dnd-tabel--fungsi {
+  min-width: 480px;
+}
+/* Tarif PPN di bawah angka PPN-nya: pengganti kolom tarif di ponsel. */
+.dnd-tarif-kecil {
+  display: none;
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.dnd-tabel th {
+  padding: 8px 12px;
+  background: var(--n-50);
+  color: var(--n-600);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+.dnd-tabel td {
+  padding: 8px 12px;
+  border-top: 1px solid var(--n-100);
+  vertical-align: top;
+  color: var(--ink);
+  /* break-word, bukan anywhere: yang terakhir membuat lebar minimum
+     kolom nyaris nol, dan uraian terpotong di tengah kata. */
+  overflow-wrap: break-word;
+}
+.dnd-tabel .dnd-no {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+/* Kolom angka: rata kanan, digit selebar tetap supaya ribuannya lurus
+   dari baris ke baris. Huruf mono hanya untuk SEL-nya -- kepala kolom
+   memakai huruf yang sama dengan kepala kolom lain. */
+.dnd-tabel .dnd-angka {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+.dnd-tabel td.dnd-no {
+  color: var(--n-500);
+  font-family: var(--font-mono);
+}
+.dnd-tabel td.dnd-angka {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Satuan di kepala kolom, "Nilai (Rp)": tidak ikut dikapitalkan --
+   "(RP)" bukan cara orang menulis rupiah. */
+.dnd-satuan {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--n-500);
+}
+.dnd-tabel .dnd-tarif {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+/* Judul kelompok per invoice / debit note. */
+.dnd-tabel tr.dnd-grup td {
+  background: var(--p-50);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--p-600);
+}
+.dnd-tabel tr.dnd-diskon td {
+  background: #fff8f7;
+}
+.dnd-foto img {
+  display: block;
+  max-width: 96px;
+  max-height: 72px;
+  border-radius: 4px;
+}
+.dnd-jumlah {
+  margin-top: var(--sp-3);
+}
+/* Tiga penanda tangan berdampingan -- seperti di lembar cetaknya. */
+.dnd-ttd {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.dnd-ttd-kotak {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+  overflow-wrap: anywhere;
+}
+.dnd-ttd-peran {
+  margin-bottom: 3px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.dnd-ttd-kotak b {
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+.dnd-kosong {
+  padding: var(--sp-8) 0;
+  text-align: center;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.dnd-kaki {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
 }
 
 /* Spanduk mode perbaikan. Sengaja mencolok: form yang sudah terisi

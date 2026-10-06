@@ -165,7 +165,6 @@ const I18N = {
     "m.gagal.menyimpan.jadwal.ke.database": "Gagal menyimpan jadwal ke database.",
     "m.gagal.menyimpan.perubahan": "Gagal menyimpan perubahan.",
     "m.gagal.menyimpan.perubahan.ke.database.memuat.u": "Gagal menyimpan perubahan ke database — memuat ulang data.",
-    "m.halaman.ini.hanya.untuk.peran.exim": "Halaman ini hanya untuk peran EXIM.",
     "m.halaman.kelola.akun.hanya.untuk.peran.exim": "Halaman kelola akun hanya untuk peran EXIM.",
     "m.hanya.peran.exim.yang.boleh.mengubah.jadwal": "Hanya peran EXIM yang boleh mengubah jadwal.",
     "m.invoice.ini.belum.ditautkan.ke.jadwal.export.d": "Invoice ini belum ditautkan ke jadwal Export — daftar barang tercetak kosong.",
@@ -726,7 +725,6 @@ const I18N = {
     "m.gagal.menyimpan.jadwal.ke.database": "Failed to save the schedule to the database.",
     "m.gagal.menyimpan.perubahan": "Failed to save the changes.",
     "m.gagal.menyimpan.perubahan.ke.database.memuat.u": "Failed to save the changes to the database — reloading the data.",
-    "m.halaman.ini.hanya.untuk.peran.exim": "This page is for the EXIM role only.",
     "m.halaman.kelola.akun.hanya.untuk.peran.exim": "The account management page is for the EXIM role only.",
     "m.hanya.peran.exim.yang.boleh.mengubah.jadwal": "Only the EXIM role may change schedules.",
     "m.invoice.ini.belum.ditautkan.ke.jadwal.export.d": "This invoice is not yet linked to an Export schedule — the item list will print empty.",
@@ -1303,6 +1301,8 @@ function setLang(kode) {
     // Label ber-moda di form Surat (Flight/Sail & Tanggal Tiba) ikut bahasa
     if (typeof suratPerbaruiLabelAngkut === "function" && typeof docNumPanelEl === "function")
       suratPerbaruiLabelAngkut(docNumPanelEl("letter"));
+    // Kotak "Aturan Doc No": jumlah vendor & keterangan tombolnya dirakit JS
+    if (typeof fundDocNoGambar === "function") fundDocNoGambar();
   }
 
   document.querySelectorAll("[data-lang-pick]").forEach((el) => {
