@@ -96,14 +96,27 @@ function itemTotals(shipmentLike) {
 const TARIF_PPN_IMPOR = 11;
 const TARIF_PPH_IMPOR = 2.5;
 
+/* BEA MASUK DIBULATKAN KE ATAS KE RIBUAN RUPIAH PENUH (1.543.235 ->
+   1.544.000) -- SATU aturan untuk semua jalan masuk angka BM: dihitung
+   dari tarif, dibaca dari draft Excel CEISA (jumlah NILAI BAYAR per
+   seri yang belum dibulatkan), dibaca dari PIB, atau diketik sendiri
+   di Customs & Charges. Dibersihkan ke 4 desimal dulu: 4.231.999,99999998
+   hasil pecahan biner semestinya 4.232.000, bukan naik ke 4.233.000.
+   Kosong tetap kosong, nol tetap nol. */
+function bulatkanBm(n) {
+  if (n == null || n === "") return n;
+  const x = Number(n);
+  if (!isFinite(x)) return n;
+  return Math.ceil(Math.round(x * 1e4) / 1e4 / 1000) * 1000;
+}
+
 // Nilai USD tiap seri -- hitungan yang sama dengan Total Nilai Barang.
 function nilaiSeriUsd(items) {
   return (items || []).map((it) => parseLooseNumber(it.qty) * parseLooseNumber(it.harga));
 }
 
 function hitungPungutanImpor(o) {
-  /* Dibersihkan ke 4 desimal sebelum dibulatkan: 4.231.999,99999998
-     hasil pecahan biner semestinya 4.232.000, bukan naik ke 4.233.000. */
+  // Dibersihkan ke 4 desimal sebelum dibulatkan (lihat bulatkanBm)
   const bersih = (x) => Math.round(x * 1e4) / 1e4;
   const nilai = (o.nilaiSeriUsd || []).filter((v) => v > 0);
   const totalBarang = nilai.reduce((a, b) => a + b, 0);
@@ -124,7 +137,7 @@ function hitungPungutanImpor(o) {
   });
   return {
     nilaiPabean,
-    bm: o.bmManual != null ? o.bmManual : Math.ceil(bersih(bm) / 1000) * 1000,
+    bm: bulatkanBm(o.bmManual != null ? o.bmManual : bm),
     ppn: Math.floor(bersih(ppn)),
     pph: Math.floor(bersih(pph)),
   };

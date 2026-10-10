@@ -75,13 +75,13 @@ function normalizeHsCode(v) {
 }
 
 function isPlaceholderValue(v) {
-  const t = (v == null ? "" : String(v)).trim();
+  const teks = (v == null ? "" : String(v)).trim();
   return (
-    !t ||
-    t === "-" ||
-    t === "." ||
-    /^n\/?a$/i.test(t) ||
-    /^tanpa\s+(merek|tipe)$/i.test(t)
+    !teks ||
+    teks === "-" ||
+    teks === "." ||
+    /^n\/?a$/i.test(teks) ||
+    /^tanpa\s+(merek|tipe)$/i.test(teks)
   );
 }
 
@@ -89,16 +89,16 @@ function isPlaceholderValue(v) {
 function joinNameParts(parts) {
   const out = [];
   parts.forEach((p) => {
-    const t = (p || "").toString().trim();
-    if (isPlaceholderValue(t)) return;
-    if (out.some((o) => o.toLowerCase() === t.toLowerCase())) return;
-    out.push(t);
+    const teks = (p || "").toString().trim();
+    if (isPlaceholderValue(teks)) return;
+    if (out.some((o) => o.toLowerCase() === teks.toLowerCase())) return;
+    out.push(teks);
   });
   return out.join(" - ");
 }
 
 function guessTransportFromText(...texts) {
-  return texts.some((t) => /air\s*port|bandara/i.test(t || ""))
+  return texts.some((teks) => /air\s*port|bandara/i.test(teks || ""))
     ? "udara"
     : "laut";
 }

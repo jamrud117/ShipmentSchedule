@@ -22,14 +22,14 @@ body::-webkit-scrollbar {
 /* Wadah gulir di dalam halaman ikut disamakan */
 .sheet-body,
 .cmdk-list,
-.site-nav,
+.sb-isi,
 .docnum-tabs {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .sheet-body::-webkit-scrollbar,
 .cmdk-list::-webkit-scrollbar,
-.site-nav::-webkit-scrollbar,
+.sb-isi::-webkit-scrollbar,
 .docnum-tabs::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -76,6 +76,7 @@ body {
   border-radius: var(--r-xs);
 }
 .app-topbar :focus-visible,
+.app-sidebar :focus-visible,
 .board :focus-visible {
   outline-color: var(--p-300);
 }

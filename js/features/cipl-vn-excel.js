@@ -182,17 +182,17 @@ function vnxlBlokAtas(ws, row, shipment, isPacking) {
   const g = isPacking ? 1 : 0; // geseran baris untuk lembar PL
 
   vnxlSet(ws, "A2", "Seller", VNXL_FONT_B);
-  seller.forEach((t, i) => vnxlSet(ws, "A" + (3 + i), t));
+  seller.forEach((teks, i) => vnxlSet(ws, "A" + (3 + i), teks));
 
   vnxlSet(ws, "A" + (10 - g), "Shipper", VNXL_FONT_B);
-  CIPL_VN_SHIPPER.forEach((t, i) => vnxlSet(ws, "A" + (11 - g + i), t));
+  CIPL_VN_SHIPPER.forEach((teks, i) => vnxlSet(ws, "A" + (11 - g + i), teks));
 
   vnxlSet(ws, "A" + (17 - g), "Consignee", VNXL_FONT_B);
   /* Huruf biasa. Di berkas rujukan hanya JUDUL kotak (Seller,
      Shipper, Consignee) yang tebal; isinya -- termasuk nama consignee
      dan nomor invoice -- tidak. */
   vnxlSet(ws, "A" + (18 - g), consignee, VNXL_FONT);
-  alamat.slice(0, 6).forEach((t, i) => vnxlSet(ws, "A" + (19 - g + i), t));
+  alamat.slice(0, 6).forEach((teks, i) => vnxlSet(ws, "A" + (19 - g + i), teks));
 
   vnxlSet(ws, "E2", "Invoice No. and Date");
   vnxlSet(ws, "E3", row.doc_number || "", VNXL_FONT, VNXL_KIRI);
@@ -221,7 +221,7 @@ function vnxlBlokAtas(ws, row, shipment, isPacking) {
     "*ACCOUNT NO. : 1-089331-143-01",
     "                    DYNAMIC DESIGN CO.,LTD",
   ];
-  refs.forEach((t, i) => vnxlSet(ws, "E" + (9 + i), t));
+  refs.forEach((teks, i) => vnxlSet(ws, "E" + (9 + i), teks));
 
   /* Garis pemisah blok: kiri, tengah, kanan -- sisi-per-sisi supaya
      tidak ada garis ganda di pertemuannya. */
@@ -281,7 +281,7 @@ function vnxlBlokAngkutan(ws, row, shipment, barisMulai) {
   ws.mergeCells(`C${r + 4}:D${r + 4}`);
   vnxlSet(
     ws, "A" + (r + 4),
-    p.carrier || (shipment && carrierNameFromShipment(shipment)) || "",
+    carrierCipl(p, shipment), // udara: No Flight saja
     VNXL_FONT_KECIL, VNXL_TENGAH,
   );
   vnxlSet(

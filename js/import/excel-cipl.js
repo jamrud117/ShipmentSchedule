@@ -285,13 +285,13 @@ function parseCiplWorkbook(wb) {
     if (!incoterm || !packageText) {
       const totalPos = findGridCell(grid, CIPL_FIELD_LABELS.totalBoxLine);
       if (totalPos) {
-        const t = gridStrAt(grid, totalPos.r, totalPos.c);
-        if (!incoterm) incoterm = guessIncotermFromText(t);
+        const teks = gridStrAt(grid, totalPos.r, totalPos.c);
+        if (!incoterm) incoterm = guessIncotermFromText(teks);
         if (!packageText) {
           const pkgM = new RegExp(
             `^TOTAL\\s+(.+?)\\s+(?:${INCOTERM_RE.source})\\b`,
             "i",
-          ).exec(t);
+          ).exec(teks);
           packageText = pkgM ? pkgM[1].trim() : "";
         }
       }

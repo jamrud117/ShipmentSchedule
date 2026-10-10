@@ -61,16 +61,16 @@ function sjCariShipment(id) {
 function sjTotalPerSatuan(nilaiList) {
   const peta = new Map();
   nilaiList.forEach((v) => {
-    const t = String(v || "").trim();
-    if (!t) return;
+    const teks = String(v || "").trim();
+    if (!teks) return;
     /* Nilai berbentuk DIMENSI ("82*82*75", "40x30x25") dilewati —
        menjumlahkannya menghasilkan angka tak bermakna.
 
        Polanya harus ANGKA-pemisah-ANGKA, bukan sekadar mengandung
        huruf x: "1 BOX" juga mengandung x, dan penyaring yang terlalu
        longgar membuat seluruh koli ikut terbuang. */
-    if (/\d\s*[*x×]\s*\d/i.test(t)) return;
-    const m = t.match(/^([\d.,]+)\s*(.*)$/);
+    if (/\d\s*[*x×]\s*\d/i.test(teks)) return;
+    const m = teks.match(/^([\d.,]+)\s*(.*)$/);
     if (!m) return;
     const angka = Number(m[1].replace(/\./g, "").replace(/,/g, ".")) || 0;
     const satuan = (m[2] || "").trim().toUpperCase();
@@ -123,8 +123,8 @@ function sjKelompokBox(baris) {
    Total Package pengiriman ("4 BOX" -> "BOX"). Tanpa ini kolom Package
    tercetak berupa angka telanjang, dan "1" tidak menjelaskan apa pun. */
 function sjJenisCadangan(shipment) {
-  const t = String((shipment && shipment.package) || "").trim();
-  const m = t.match(/^[\d.,]+\s*(.+)$/);
+  const teks = String((shipment && shipment.package) || "").trim();
+  const m = teks.match(/^[\d.,]+\s*(.+)$/);
   return m ? m[1].trim() : "";
 }
 

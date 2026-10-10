@@ -44,24 +44,13 @@ function ciplVnMarks(it, idx, total) {
   return `C# : ${total}-${idx + 1}`;
 }
 
-/* NAMA BARANG = Description + Pattern + Size + Mold No, berurutan,
-   dipisah dua spasi seperti berkas aslinya. Dipakai lembar cetak CI &
-   PL dan lembar Excel-nya.
-
-   Bagian yang SUDAH tertulis di Description tidak diulang: nama barang
-   yang terlanjur diketik lengkap ("TIRE MOLD 225/50R17") tidak menjadi
-   "TIRE MOLD 225/50R17  PS72  225/50R17". */
-function ciplVnBagianNama(it) {
-  const desc = String(it.namaBarang || "").trim();
-  const sudah = desc.toUpperCase().replace(/\s+/g, " ");
-  const lain = [it.pattern, it.size, it.moldNo]
-    .map((x) => String(x || "").trim())
-    .filter((x) => x && sudah.indexOf(x.toUpperCase().replace(/\s+/g, " ")) < 0);
-  return { desc, lain };
-}
+/* NAMA BARANG = Description + Pattern + Size + Mold No -- aturan yang
+   SAMA dengan CIPL Dynamic Design Korea dan seluruh aplikasi
+   (itemDisplayName di core/helpers.js): satu spasi, kolom kosong
+   dilewati, yang sudah tertulis di Description tidak diulang. Dulu
+   dipisah dua spasi; di lembar jadi terlihat seperti spasi nyasar. */
 function ciplVnUraian(it) {
-  const b = ciplVnBagianNama(it);
-  return [b.desc].concat(b.lain).filter(Boolean).join("  ");
+  return itemDisplayName(it);
 }
 
 function ciplVnBaris(shipment) {
@@ -75,14 +64,10 @@ function ciplVnBaris(shipment) {
     /* Dipisah JUGA per bagian: lembar Excel menaruh nama tanpa Mold No
        dan Mold No di dua kolom berbeda, karena pembeli menyaring kolom
        mold-nya untuk mencocokkan cetakan. */
-    namaTanpaMold: (() => {
-      const bag = ciplVnBagianNama(it);
-      const mold = String(it.moldNo || "").trim();
-      return [bag.desc].concat(bag.lain.filter((x) => x !== mold)).filter(Boolean).join("  ");
-    })(),
-    size: String(it.size || "").trim(),
-    pattern: String(it.pattern || "").trim(),
-    moldNo: String(it.moldNo || "").trim(),
+    namaTanpaMold: itemDisplayName(Object.assign({}, it, { moldNo: "" })),
+    size: rapiBagianNama(it.size),
+    pattern: rapiBagianNama(it.pattern),
+    moldNo: rapiBagianNama(it.moldNo),
     qty: parseLooseNumber(it.qty),
     satuan: String(it.satuan || "").trim(),
     harga: parseLooseNumber(it.harga),
@@ -258,7 +243,7 @@ function ciplVnAngkutan(row, shipment) {
     p.finalDestination ||
     prof.finalDestination ||
     (shipment ? portCodeLabel(shipment.destination) : "");
-  const kapal = p.carrier || (shipment && carrierNameFromShipment(shipment)) || "";
+  const kapal = carrierCipl(p, shipment); // udara: No Flight saja
   const berangkat = p.sailingDate || (shipment ? shipment.etd : "") || "";
 
   /* Label dan nilainya SATU SEL, bertumpuk -- bukan dua baris tabel.

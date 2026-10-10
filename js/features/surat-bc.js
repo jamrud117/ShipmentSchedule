@@ -78,7 +78,7 @@ function suratDataDariJadwal(s) {
   const nilai = Number(calc.totalUSD) || 0;
   const barang = suratBarangUnik(s);
   const negara = typeof resolvePortCountry === "function" ? resolvePortCountry(s.origin) : "";
-  const angkut = [s.vessel, s.voyage].map((x) => String(x || "").trim()).filter(Boolean).join(" ");
+  const angkut = carrierNameFromShipment(s);
   return {
     noAju: String(s.noAju || "").trim(),
     invoiceRef: String(s.invoice || "").trim(),
@@ -87,7 +87,8 @@ function suratDataDariJadwal(s) {
     koliBerat: [String(s.package || "").trim(), bruto ? `${bruto.toLocaleString("en-US", { maximumFractionDigits: 2 })} KG` : ""].filter(Boolean).join(" / "),
     namaBarang: suratGabung(barang.map((b) => b.nama)),
     negaraAsal: suratNamaNegara(negara),
-    flightTiba: [angkut, s.eta ? suratTanggalPanjang(s.eta) : ""].filter(Boolean).join(" / "),
+    // ETA yang BERLAKU (revisi delay kalau ada), sama dengan kartunya
+    flightTiba: [angkut, effectiveEta(s) ? suratTanggalPanjang(effectiveEta(s)) : ""].filter(Boolean).join(" / "),
     nilaiBarang: nilai ? `USD ${nilai.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "",
     barang,
   };
@@ -106,7 +107,7 @@ function isiPilihanAju() {
   dl.innerHTML = (data.import || [])
     .filter((s) => String(s.noAju || "").trim())
     .map((s) => {
-      const ket = [s.party, [s.masterBL, s.houseBL].filter(Boolean).join(" / "), s.eta ? fmtDate(s.eta) : ""].filter(Boolean).join(" · ");
+      const ket = [s.party, [s.masterBL, s.houseBL].filter(Boolean).join(" / "), effectiveEta(s) ? fmtDate(effectiveEta(s)) : ""].filter(Boolean).join(" · ");
       return `<option value="${escapeAttr(String(s.noAju).trim())}">${escapeHtml(ket)}</option>`;
     })
     .join("");
@@ -197,7 +198,7 @@ function renderSuratBarang() {
       <td><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
       <td class="sb-foto">
         ${b.foto ? `<img src="${escapeAttr(b.foto)}" alt="">` : ""}
-        <label class="btn btn-sm btn-light sb-pilih-foto">
+        <label class="btn-quiet sb-pilih-foto">
           <i class="bi bi-image"></i> ${escapeHtml(b.foto ? tt("Ganti", "Change") : tt("Foto", "Photo"))}
           <input type="file" accept="image/*" data-sb-foto="${i}" hidden>
         </label>

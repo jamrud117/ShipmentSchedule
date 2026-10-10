@@ -101,8 +101,8 @@ function learningConfig() {
 function medianOf(angka) {
   if (!angka.length) return null;
   const urut = angka.slice().sort((a, b) => a - b);
-  const t = Math.floor(urut.length / 2);
-  return urut.length % 2 ? urut[t] : (urut[t - 1] + urut[t]) / 2;
+  const tengah = Math.floor(urut.length / 2);
+  return urut.length % 2 ? urut[tengah] : (urut[tengah - 1] + urut[tengah]) / 2;
 }
 
 /* ------------------------------------------------------------------
@@ -259,9 +259,9 @@ function ringkasSampel(sampel, prior, tipe) {
 function masihRelevan(s) {
   const cfg = learningConfig();
   const batas = cfg.maxAgeDays || 540;
-  const t = sampelKiriman(s).tAcuan;
-  if (t == null) return false;
-  const umur = (acuanBelajarMs() - t) / 86400000;
+  const acuan = sampelKiriman(s).tAcuan;
+  if (acuan == null) return false;
+  const umur = (acuanBelajarMs() - acuan) / 86400000;
   return umur >= 0 && umur <= batas;
 }
 

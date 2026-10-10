@@ -70,17 +70,15 @@ let lapData = null;
 
 /* ---------------------------- pemetaan ---------------------------- */
 
-/* Moda angkut sebuah pengajuan: isiannya sendiri; kalau kosong, dari
-   Jenis Transaksi (Sea -> Laut, Air -> Udara, Local Sale -> Darat). */
-/* Moda dari JENIS TRANSAKSI: Sea -> laut, Air -> udara, Local Sale ->
-   darat (truk). Isian Moda Angkut lama hanya dibaca untuk pengajuan
-   terdahulu yang tidak punya Jenis Transaksi. */
+/* Moda dari JENIS TRANSAKSI: Sea -> laut, Air -> udara, Inland Trucking
+   (dulu Local Sale) -> darat (truk). Isian Moda Angkut lama hanya dibaca
+   untuk pengajuan terdahulu yang tidak punya Jenis Transaksi. */
 function lapModa(p) {
   const m = String((p && p.transportMode) || "").toLowerCase();
-  const t = String((p && p.transactionType) || "");
-  if (/^air/i.test(t)) return "udara";
-  if (/^sea/i.test(t)) return "laut";
-  if (/local/i.test(t)) return "darat";
+  const jenis = fundJenisTransaksiBaku(p && p.transactionType);
+  if (/^air/i.test(jenis)) return "udara";
+  if (/^sea/i.test(jenis)) return "laut";
+  if (/inland|truck/i.test(jenis)) return "darat";
   return LAP_MODA.indexOf(m) >= 0 ? m : "";
 }
 
@@ -117,10 +115,10 @@ function lapBarisDana(row, kurs) {
   let kenaPpn = 0;
   let ppn = 0;
   if (Array.isArray(p.lines) && p.lines.length) {
-    const t = fundLineTotals(p.lines);
-    dpp = t.totalNet;
-    kenaPpn = t.dppPph;
-    ppn = t.totalPpn;
+    const total = fundLineTotals(p.lines);
+    dpp = total.totalNet;
+    kenaPpn = total.dppPph;
+    ppn = total.totalPpn;
   } else {
     dpp = frTotalPengajuan(p);
   }
@@ -136,12 +134,16 @@ function lapBarisDana(row, kurs) {
     customer: String(p.customer || "").trim(),
     moda: lapModa(p),
     jenis: String(p.expenseType || "").trim(),
-    transaksi: String(p.transactionType || "").trim(),
+    transaksi: fundJenisTransaksiBaku(p.transactionType),
     mata,
     // Pembayaran: tanggal lunas & nilai yang dibayar (termasuk PPN, setelah PPh)
     tglBayar: String(p.paidAt || "").slice(0, 10),
     tagihan: frTotalPengajuan(p) * faktor,
     blAwb: String(p.blAwb || "").trim().toUpperCase(),
+    /* Bagian DPP tiap BL/AWB (IDR): pengajuan untuk beberapa kiriman
+       dipisah per kiriman (fundBagiPerAwb, fund-lines.js) -- biaya per
+       kiriman tidak dobel dan tidak tercampur. */
+    perAwb: fundBagiPerAwb(p).map((b) => ({ kunci: b.kunci, dpp: b.dpp * faktor })),
     tanpaPpn: (dpp - kenaPpn) * faktor,
     kenaPpn: kenaPpn * faktor,
     ppn: ppn * faktor,
@@ -193,19 +195,19 @@ function lapKursBawaan() {
 
 const lapModaKosong = () => ({ udara: 0, laut: 0, darat: 0, lain: 0 });
 
-/* MODA + ARAH: "Air Import", "Sea Export", "Local Sale" -- semuanya dari
-   Jenis Transaksi. Laut/udara selalu jelas impor atau ekspornya. */
+/* MODA + ARAH: "Air Import", "Sea Export", "Inland Trucking" -- semuanya
+   dari Jenis Transaksi. Laut/udara selalu jelas impor atau ekspornya. */
 function lapArah(transaksi) {
-  const t = String(transaksi || "");
-  if (/import/i.test(t)) return "Import";
-  if (/export/i.test(t)) return "Export";
-  if (/local/i.test(t)) return "Local Sale";
+  const jenis = fundJenisTransaksiBaku(transaksi);
+  if (/import/i.test(jenis)) return "Import";
+  if (/export/i.test(jenis)) return "Export";
+  if (/inland|truck/i.test(jenis)) return "Inland Trucking";
   return "";
 }
 function lapModaArah(d) {
   const arah = lapArah(d.transaksi);
-  // Local Sale: penjualan dalam negeri -- cukup namanya, tanpa moda
-  if (arah === "Local Sale") return "Local Sale";
+  // Inland Trucking: angkutan darat dalam negeri -- cukup namanya, tanpa moda
+  if (arah === "Inland Trucking") return "Inland Trucking";
   if (d.moda === "udara") return arah ? `Air ${arah}` : "Air (direction not set)";
   if (d.moda === "laut") return arah ? `Sea ${arah}` : "Sea (direction not set)";
   if (d.moda === "darat") return "Truck";
@@ -471,15 +473,30 @@ function lapRamal(ini, lalu, M, Y, mulai) {
                     sebagai berat tagih akhir.
    Termurah: per kg kalau minimal dua vendor di jalur itu punya angka per
    kg; kalau tidak, rata-rata per kiriman. */
-function lapBandingVendor(baris, Y, M, kiriman) {
-  const norm = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const pecah = (x) => String(x || "").split(/[\/,;|\r\n]+/).map(norm).filter((k) => k.length >= 5);
-  const gwKunci = new Map();
+/* Bagian tiap BL/AWB satu baris laporan; baris lama tanpa `perAwb`
+   (dibuat di luar lapBarisDana) dibagi rata dari blAwb-nya. */
+function lapBagianAwb(d) {
+  if (Array.isArray(d.perAwb)) return d.perAwb;
+  const awb = fundDaftarAwb(d.blAwb);
+  return awb.map((a) => ({ kunci: a.kunci, dpp: awb.length ? d.total / awb.length : 0 }));
+}
+
+/* BL/AWB -> jadwal kirimannya (Master & House), supaya MAWB dan HAWB
+   satu kiriman dihitung SATU kiriman. */
+function lapPetaKiriman(kiriman) {
+  const peta = new Map();
   (kiriman || []).forEach((s) => {
     const gw = typeof computeCustoms === "function" ? Number(computeCustoms(s).totalBruto) || 0
       : (s.items || []).reduce((x, it) => x + (Number(it.bruto) || 0), 0);
-    pecah([s.masterBL, s.houseBL].filter(Boolean).join("/")).forEach((k) => gwKunci.set(k, { id: s.id, gw }));
+    fundDaftarAwb([s.masterBL, s.houseBL].filter(Boolean).join("/"))
+      .filter((a) => a.kunci.length >= 5)
+      .forEach((a) => peta.set(a.kunci, { id: s.id, gw }));
   });
+  return peta;
+}
+
+function lapBandingVendor(baris, Y, M, kiriman) {
+  const gwKunci = lapPetaKiriman(kiriman);
   const grup = new Map();
   (baris || [])
     .filter((d) => d.tahun === Y && d.bulan <= M && d.vendor && ["Billing", "Tax Advance"].indexOf(d.jenis) < 0)
@@ -488,14 +505,19 @@ function lapBandingVendor(baris, Y, M, kiriman) {
       const kunci = jalur + "|" + fsumKunci(d.vendor);
       const g = grup.get(kunci) || { jalur, vendor: d.vendor, total: 0, bl: new Set(), tanpaBl: 0, totalCocok: 0, gwKiriman: new Map() };
       g.total += d.total;
-      const bl = pecah(d.blAwb);
-      if (!bl.length) g.tanpaBl += 1;
-      bl.forEach((k) => g.bl.add(k));
-      const cocok = bl.map((k) => gwKunci.get(k)).filter((x) => x && x.gw > 0);
-      if (cocok.length) {
-        g.totalCocok += d.total;
-        cocok.forEach((x) => g.gwKiriman.set(x.id, x.gw));
-      }
+      const bagian = lapBagianAwb(d);
+      if (!bagian.length) g.tanpaBl += 1;
+      bagian.forEach((b) => {
+        const jadwal = gwKunci.get(b.kunci);
+        // Kiriman yang dikenal dihitung per jadwal (MAWB & HAWB = satu)
+        g.bl.add(jadwal ? "id:" + jadwal.id : b.kunci);
+        /* Per kg memakai BAGIAN kiriman yang beratnya diketahui -- bukan
+           seluruh nilai invoice dua AWB dibagi berat satu AWB. */
+        if (jadwal && jadwal.gw > 0) {
+          g.totalCocok += b.dpp;
+          g.gwKiriman.set(jadwal.id, jadwal.gw);
+        }
+      });
       grup.set(kunci, g);
     });
   const perJalur = new Map();
@@ -716,14 +738,20 @@ function hitungAnalisis(dana, opsi) {
     })(),
   };
 
-  /* BIAYA PER KIRIMAN -- pengajuan dikelompokkan per BL/AWB: berapa biaya
-     EXIM satu kiriman, rata-rata per moda & arah. */
+  /* BIAYA PER KIRIMAN -- pengajuan dikelompokkan per kiriman: berapa
+     biaya EXIM satu kiriman, rata-rata per moda & arah. Pengajuan untuk
+     beberapa BL/AWB dipisah ke kirimannya masing-masing (bagiannya
+     saja); MAWB & HAWB satu jadwal dihitung satu kiriman. */
+  const jadwalAwb = lapPetaKiriman(o.kiriman);
   const petaKirim = new Map();
   dalamPeriodeIni.forEach((d) => {
-    if (!d.blAwb) return;
-    const r = petaKirim.get(d.blAwb) || { total: 0, kategori: lapModaArah(d) };
-    r.total += d.total;
-    petaKirim.set(d.blAwb, r);
+    lapBagianAwb(d).forEach((b) => {
+      const jadwal = jadwalAwb.get(b.kunci);
+      const kunci = jadwal ? "id:" + jadwal.id : b.kunci;
+      const r = petaKirim.get(kunci) || { total: 0, kategori: lapModaArah(d) };
+      r.total += b.dpp;
+      petaKirim.set(kunci, r);
+    });
   });
   const perKiriman = (() => {
     const peta = new Map();
@@ -736,7 +764,7 @@ function hitungAnalisis(dana, opsi) {
     });
     return [...peta.values()].map((x) => Object.assign(x, { rata: x.total / x.kiriman })).sort((x, y) => y.total - x.total);
   })();
-  const tanpaBl = dalamPeriodeIni.filter((d) => !d.blAwb);
+  const tanpaBl = dalamPeriodeIni.filter((d) => !lapBagianAwb(d).length);
 
   // Anggaran tahun berjalan
   const ang = o.anggaran && !o.anggaran.gagal ? o.anggaran : null;
@@ -1415,7 +1443,7 @@ function lapGambar(box) {
   const tahunData = [...new Set((lapData.dana || []).concat(lapData.invoice || []).map((r) => String(fsumTanggal(r) || r.doc_date || "").slice(0, 4)).filter(Boolean))];
   if (tahunData.indexOf(lapSaringan.tahun) < 0) tahunData.push(lapSaringan.tahun);
   tahunData.sort().reverse();
-  const opsi = (arr, nilai) => arr.map(([v, t]) => `<option value="${escapeAttr(v)}"${String(v) === String(nilai) ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+  const opsi = (arr, nilai) => arr.map(([v, label]) => `<option value="${escapeAttr(v)}"${String(v) === String(nilai) ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
   const chip = LAP_JENIS.map((j) => `<label class="lap-chip"><input type="checkbox" data-lap-jenis="${escapeAttr(j)}"${lapSaringan.jenis.indexOf(j) >= 0 ? " checked" : ""}> ${escapeHtml(j === "Lainnya" ? "Other" : j)}</label>`).join("");
   const bisaUbah = typeof bolehUbahDocNum === "function" && bolehUbahDocNum();
   const tombolAnggaran = lapData.anggaran && lapData.anggaran.gagal
@@ -1626,8 +1654,8 @@ function lapXlsLebar(ws, min, maks) {
   ws.columns.forEach((col) => {
     let l = min || 10;
     col.eachCell({ includeEmpty: false }, (c) => {
-      const t = c.value == null ? "" : typeof c.value === "number" ? c.value.toLocaleString("en-US") : String(c.value);
-      if (t.length < 60) l = Math.max(l, t.length + 3);
+      const teks = c.value == null ? "" : typeof c.value === "number" ? c.value.toLocaleString("en-US") : String(c.value);
+      if (teks.length < 60) l = Math.max(l, teks.length + 3);
     });
     col.width = Math.min(maks || 40, l);
   });

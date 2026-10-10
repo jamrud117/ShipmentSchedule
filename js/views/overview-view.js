@@ -101,27 +101,27 @@ function renderTaskQueue() {
 
   box.innerHTML =
     potong
-      .map((t) => {
+      .map((tugas) => {
         /* Nomor B/L penelusuran: label mengikuti MODA, bukan tetap
            "HBL". Kiriman udara memakai House Air Waybill (HAWB) --
            menyebutnya HBL membuat nomornya dicari di sistem yang
            salah saat menghubungi forwarder. */
-        const labelHouse = t.s.transport === "udara" ? "HAWB" : "HBL";
-        const punyaHouse = hasMeaningfulValue(t.s.houseBL);
+        const labelHouse = tugas.s.transport === "udara" ? "HAWB" : "HBL";
+        const punyaHouse = hasMeaningfulValue(tugas.s.houseBL);
         /* Nama barang di baris ketiga: satu nama saja. Baris ini untuk
            mengenali "kiriman yang mana", bukan menampilkan isi
            lengkapnya -- daftar penuhnya ada di kartunya sendiri. */
-        const barang = itemNamesSummary(t.s, 1)[0];
+        const barang = itemNamesSummary(tugas.s, 1)[0];
         return `
-      <button type="button" class="task task--${t.kind}" data-ov-open="${t.s.id}"${
-          punyaHouse ? ` data-ov-house="${escapeAttr(t.s.houseBL)}"` : ""
+      <button type="button" class="task task--${tugas.kind}" data-ov-open="${tugas.s.id}"${
+          punyaHouse ? ` data-ov-house="${escapeAttr(tugas.s.houseBL)}"` : ""
         }>
-        <span class="task-reason">${escapeHtml(t.reason)}</span>
+        <span class="task-reason">${escapeHtml(tugas.reason)}</span>
         <span class="task-main">
-          <span class="task-party">${escapeHtml(dispVal(t.s.party))}</span>
-          <span class="task-detail">${escapeHtml(t.detail)}${
+          <span class="task-party">${escapeHtml(dispVal(tugas.s.party))}</span>
+          <span class="task-detail">${escapeHtml(tugas.detail)}${
             punyaHouse
-              ? ` · ${labelHouse} <span class="mono">${escapeHtml(t.s.houseBL)}</span>`
+              ? ` · ${labelHouse} <span class="mono">${escapeHtml(tugas.s.houseBL)}</span>`
               : ""
           }</span>
           <span class="task-goods">${escapeHtml(barang)}</span>

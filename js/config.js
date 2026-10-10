@@ -10,11 +10,13 @@ const supabaseClient = window.supabase.createClient(
 
 /* CONSTANTS */
 // Label di sini cuma default
+/* Kelas warna per status. Namanya (yang berbeda per buku: Arrived di
+   Import, Delivered di Export) dari statusLabel() di core/status.js. */
 const STATUS_META = {
-  process: { label: "PROCESS", class: "status-process" },
-  transit: { label: "IN TRANSIT", class: "status-transit" },
-  arrived: { label: "ARRIVED", class: "status-arrived" },
-  delayed: { label: "DELAY", class: "status-delayed" },
+  process: { class: "status-process" },
+  transit: { class: "status-transit" },
+  arrived: { class: "status-arrived" },
+  delayed: { class: "status-delayed" },
 };
 
 /* Supabase Auth selalu butuh alamat email sebagai identitas — tidak bisa

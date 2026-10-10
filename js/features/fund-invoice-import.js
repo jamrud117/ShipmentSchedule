@@ -39,17 +39,17 @@ const DANA_BULAN = {
    Bergaris miring: "09/15/2026" bulan/hari/tahun (FedEx) kecuali
    urutan = "dmy" ("02/10/2026" DHL = 2 Oktober). */
 function danaTanggalIso(teks, urutan) {
-  const t = String(teks || "").trim();
-  let m = t.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const isi = String(teks || "").trim();
+  let m = isi.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = t.match(/(\d{1,2})\s*-?\s*([A-Za-z]{3,})\.?\s*-?\s*(\d{4})/);
+  m = isi.match(/(\d{1,2})\s*-?\s*([A-Za-z]{3,})\.?\s*-?\s*(\d{4})/);
   if (m) {
     const b = DANA_BULAN[m[2].slice(0, 3).toLowerCase()];
     if (b) return `${m[3]}-${String(b).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
-  m = t.match(/\b(\d{1,2})-(\d{1,2})-(\d{4})\b/);
+  m = isi.match(/\b(\d{1,2})-(\d{1,2})-(\d{4})\b/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-  m = t.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  m = isi.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) {
     const [hari, bulan] = urutan === "dmy" ? [m[1], m[2]] : [m[2], m[1]];
     return `${m[3]}-${bulan.padStart(2, "0")}-${hari.padStart(2, "0")}`;
@@ -60,12 +60,12 @@ function danaTanggalIso(teks, urutan) {
 /* "8,153,951" / "22,210,551.00" / "(4,503,400)" / "-6,633,550" /
    "5.688.963,00" -> angka */
 function danaAngka(teks) {
-  let t = String(teks || "").trim();
-  const negatif = /^\(.*\)$/.test(t) || /^-/.test(t);
-  t = t.replace(/[()\s-]/g, "");
-  if (/,\d{1,2}$/.test(t) && t.indexOf(".") >= 0) t = t.replace(/\./g, "").replace(",", ".");
-  else t = t.replace(/,/g, "");
-  const n = parseFloat(t);
+  let isi = String(teks || "").trim();
+  const negatif = /^\(.*\)$/.test(isi) || /^-/.test(isi);
+  isi = isi.replace(/[()\s-]/g, "");
+  if (/,\d{1,2}$/.test(isi) && isi.indexOf(".") >= 0) isi = isi.replace(/\./g, "").replace(",", ".");
+  else isi = isi.replace(/,/g, "");
+  const n = parseFloat(isi);
   return isFinite(n) ? (negatif ? -n : n) : 0;
 }
 
@@ -173,12 +173,13 @@ function bacaInvoiceFedex(teks) {
     const jumlahKomponen = a.komponen.reduce((x, k) => x + k.nilai, 0);
     if (a.komponen.length && Math.abs(jumlahKomponen - bersih) < 1) {
       a.komponen.forEach((k) => {
-        const baris = { desc: `${k.nama} – ${label}`, amount: String(Math.round(Math.abs(k.nilai))), ppnRate: tarif, grupPpn: a.awb };
+        // awb: baris langsung tertaut ke kirimannya (tagihan per BL/AWB, fund-lines.js)
+        const baris = { desc: `${k.nama} – ${label}`, amount: String(Math.round(Math.abs(k.nilai))), ppnRate: tarif, grupPpn: a.awb, awb: a.awb };
         if (k.nilai < 0) Object.assign(baris, { jenis: "diskon", discType: "rp" });
         lines.push(baris);
       });
     } else {
-      lines.push({ desc: `FedEx express ${label}`, amount: String(Math.round(bersih)), ppnRate: tarif });
+      lines.push({ desc: `FedEx express ${label}`, amount: String(Math.round(bersih)), ppnRate: tarif, awb: a.awb });
     }
   });
   if (!lines.length && subTotal) lines.push({ desc: "FedEx express charges", amount: String(Math.round(subTotal)), ppnRate: ppnTarif });
@@ -211,10 +212,10 @@ const danaTambahHari = (iso, n) => {
    PPN DHL dihitung PER BARIS DHL (biaya dikurangi diskonnya), jadi biaya &
    diskon satu baris DHL satu grupPpn. */
 function bacaInvoiceDhlExpress(teks) {
-  const t = String(teks);
-  const ambil = (re) => (t.match(re) || [])[1] || "";
+  const isi = String(teks);
+  const ambil = (re) => (isi.match(re) || [])[1] || "";
   // Nama lengkap biaya tambahan dari "Analysis of Extra Charges" (di rincian bisa terpotong baris)
-  const namaPanjang = [...t.matchAll(/^([A-Z][A-Z -]+[A-Z])\s+[\d,]+(?:\s|$)/gm)].map((m) => m[1].trim());
+  const namaPanjang = [...isi.matchAll(/^([A-Z][A-Z -]+[A-Z])\s+[\d,]+(?:\s|$)/gm)].map((m) => m[1].trim());
   const lengkapi = (nama) => {
     const dasar = nama.replace(/\s*-\s*$/, "").trim();
     return namaPanjang.find((n) => n.startsWith(dasar) && n.length > dasar.length) || dasar;
@@ -224,7 +225,7 @@ function bacaInvoiceDhlExpress(teks) {
   const awbList = [];
   let awb = null;
   let n = 0;
-  t.split(/\r?\n/).forEach((l) => {
+  isi.split(/\r?\n/).forEach((l) => {
     let m = l.match(/^(\d{10})\s+\d{2}-\d{2}-\d{4}\b/);
     if (m) {
       awb = { no: m[1], berat: "" };
@@ -251,9 +252,10 @@ function bacaInvoiceDhlExpress(teks) {
     n += 1;
     const grup = `${awb.no}#${n}`;
     const label = `AWB ${awb.no}${awb.berat ? ` (${awb.berat} kg)` : ""}`;
-    lines.push({ desc: `${nama} – ${label}`, amount: String(Math.round(nilai)), ppnRate: 1.1, grupPpn: grup });
+    // awb: baris langsung tertaut ke kirimannya (tagihan per BL/AWB, fund-lines.js)
+    lines.push({ desc: `${nama} – ${label}`, amount: String(Math.round(nilai)), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
     if (diskon) {
-      lines.push({ jenis: "diskon", discType: "rp", desc: `Discount – ${label}`, amount: String(Math.abs(danaAngka(diskon[1]))), ppnRate: 1.1, grupPpn: grup });
+      lines.push({ jenis: "diskon", discType: "rp", desc: `Discount – ${label}`, amount: String(Math.abs(danaAngka(diskon[1]))), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
     }
   });
   const tarif = parseFloat(ambil(/Taxable\s+([\d.]+)%/)) || 1.1;
@@ -267,7 +269,7 @@ function bacaInvoiceDhlExpress(teks) {
     invoiceDueDate: danaTambahHari(tanggal, ambil(/Payment due in (\d+) days/i)),
     blAwb: awbList.map((a) => a.no).join("/"),
     expenseType: "Freight",
-    transactionType: /OUTBOUND/i.test(t) ? "Air Export" : "Air Import",
+    transactionType: /OUTBOUND/i.test(isi) ? "Air Export" : "Air Import",
     currency: "IDR",
     lines,
     totalInvoice: danaAngka(ambil(/Total Amount \(IDR\)\s+[\d,]+\s+[\d,]+\s+([\d,]+)/)),
@@ -277,9 +279,9 @@ function bacaInvoiceDhlExpress(teks) {
 /* DHL INBOUND CHARGES INVOICE (biaya kepabeanan / pengurusan saat tiba):
    baris Billing Details "Uraian | Amount Excl VAT | VAT | Amount Incl VAT". */
 function bacaInvoiceDhlCharges(teks) {
-  const t = String(teks);
-  const ambil = (re) => (t.match(re) || [])[1] || "";
-  const baris = t.split(/\r?\n/);
+  const isi = String(teks);
+  const ambil = (re) => (isi.match(re) || [])[1] || "";
+  const baris = isi.split(/\r?\n/);
   const awal = baris.findIndex((l) => /Amount Excl VAT/i.test(l));
   const rincian = [];
   for (let i = awal + 1; awal >= 0 && i < baris.length; i++) {
@@ -299,7 +301,7 @@ function bacaInvoiceDhlCharges(teks) {
     invoiceDueDate: danaTanggalIso(ambil(/Payment Due Date\s*:\s*(\d{2}\/\d{2}\/\d{4})/), "dmy"),
     blAwb: ambil(/HWB Number\s*:\s*(\d+)/),
     expenseType: danaJenisInvoice(rincian),
-    transactionType: /OUTBOUND/i.test(t) ? "Air Export" : "Air Import",
+    transactionType: /OUTBOUND/i.test(isi) ? "Air Export" : "Air Import",
     currency: "IDR",
     lines: rincian.map((r) => ({ desc: r.desc, amount: String(Math.round(r.amount)), ppnRate: danaTarifPpn(r.ppn, r.amount) })),
     totalInvoice: danaAngka(ambil(/Please Pay This Amount:\s*IDR\s*([\d,]+)/)),
@@ -311,11 +313,11 @@ function bacaInvoiceDhlCharges(teks) {
    -> feePpn, PPh Impor -> feePph. Akun lain (PPnBM, denda, cukai, ...)
    tidak punya isian -- dicatat di `akunLain` supaya pengguna diingatkan. */
 function bacaBillingDjbc(teks) {
-  const t = String(teks);
-  const ambil = (re) => (t.match(re) || [])[1] || "";
+  const isi = String(teks);
+  const ambil = (re) => (isi.match(re) || [])[1] || "";
   const fee = { feeBm: 0, feePpn: 0, feePph: 0 };
   const akunLain = [];
-  t.split(/\r?\n/).forEach((l) => {
+  isi.split(/\r?\n/).forEach((l) => {
     const m = l.match(/^(\d{6})\s*-\s*(.+?)\s+[\d/]{10,}\s+([\d,.]+)\s*$/);
     if (!m) return;
     const nama = m[2].trim();
@@ -426,15 +428,15 @@ function bacaInvoiceUmum(teks) {
 /* Pilih pembaca, lengkapi vendor, dan periksa: rincian (DPP + PPN)
    harus sama dengan total di invoice. */
 function bacaInvoiceVendor(teks, vendorDikenal) {
-  const t = String(teks || "");
+  const isi = String(teks || "");
   let h;
-  if (/BILLING DJBC|BEA DAN CUKAI[\s\S]*Nomor Billing/i.test(t)) h = bacaBillingDjbc(t);
-  else if (/DHL/i.test(t) && /REGULAR INVOICE/i.test(t)) h = bacaInvoiceDhlExpress(t);
-  else if (/DHL/i.test(t) && /CHARGES INVOICE/i.test(t)) h = bacaInvoiceDhlCharges(t);
-  else if (/FedEx Express|fedex\.com/i.test(t) && /Invoice Number/i.test(t)) h = bacaInvoiceFedex(t);
+  if (/BILLING DJBC|BEA DAN CUKAI[\s\S]*Nomor Billing/i.test(isi)) h = bacaBillingDjbc(isi);
+  else if (/DHL/i.test(isi) && /REGULAR INVOICE/i.test(isi)) h = bacaInvoiceDhlExpress(isi);
+  else if (/DHL/i.test(isi) && /CHARGES INVOICE/i.test(isi)) h = bacaInvoiceDhlCharges(isi);
+  else if (/FedEx Express|fedex\.com/i.test(isi) && /Invoice Number/i.test(isi)) h = bacaInvoiceFedex(isi);
   else {
-    h = bacaInvoiceTabel(t);
-    if (!h.lines.length) h = bacaInvoiceUmum(t);
+    h = bacaInvoiceTabel(isi);
+    if (!h.lines.length) h = bacaInvoiceUmum(isi);
   }
   if (h.jenisDokumen === "billing") {
     // Billing: bukan tagihan vendor -- dibayar ke kas negara, tanpa rincian baris
@@ -445,8 +447,8 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
     h.cocok = h.totalInvoice ? Math.abs(jumlah - h.totalInvoice) < 1 && !h.akunLain.length : null;
     return h;
   }
-  h.payee = h.payee && !vendorDikenal ? h.payee : danaNamaVendor(t, vendorDikenal) || h.payee || "";
-  h.debitNote = /DEBIT\s*NOTE/i.test(t);
+  h.payee = h.payee && !vendorDikenal ? h.payee : danaNamaVendor(isi, vendorDikenal) || h.payee || "";
+  h.debitNote = /DEBIT\s*NOTE/i.test(isi);
   /* DPP & PPN dihitung dengan rumus FORM itu sendiri (fundLineTotals):
      diskon mengurangi, PPN berkelompok dibulatkan sekali -- jadi yang
      diperiksa adalah angka yang nanti benar-benar tersimpan. */
@@ -501,6 +503,8 @@ function danaIsiForm(h) {
   const setel = (kunci, nilai) => {
     const el = panel.querySelector(`[data-dn="${kunci}"]`);
     if (!el || nilai == null || nilai === "") return;
+    // Vendor dari invoice: masuk ke dropdown vendor (nama yang sama memakai tulisan yang sudah ada)
+    if (kunci === "payee" && typeof fundVendorPastikan === "function") nilai = fundVendorPastikan(nilai, el);
     if (el.tagName === "SELECT" && ![...el.options].some((o) => o.value === nilai)) return;
     el.value = nilai;
     el.dispatchEvent(new Event("input", { bubbles: true }));

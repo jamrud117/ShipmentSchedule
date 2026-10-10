@@ -23,14 +23,6 @@ function rowsToClipboardText(rows) {
   return rows.map((cols) => cols.map(tsvField).join("\t")).join("\n");
 }
 
-/* Requirement B — "Nama Vessel untuk template copy: moda udara -> isi */
-function vesselNameForTemplate(s) {
-  const vessel = (s.vessel || "").trim();
-  const voyage = (s.voyage || "").trim();
-  if (s.transport === "udara") return voyage;
-  return [vessel, voyage].filter(Boolean).join(" ");
-}
-
 /* Master di baris 1, House di baris 2. KALAU MASTER KOSONG, House naik */
 function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatter) {
   const master = (masterBL || "").trim();
@@ -105,7 +97,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.num(s.insurance, 2), // 12 INSURANCE
       formatter.blank, // 13 BL/AWB — diisi terpisah
       formatter.text(s.invoice), // 14 NO. INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 15 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 15 VESSEL NAME (nama + nomor)
       formatter.text(it.package), // 16 PACKAGE — dimensi per barang
       formatter.text(s.notes), // 17 REMARK
     ];
@@ -180,7 +172,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru, lihat di atas)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
@@ -189,7 +181,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(s.factoryTime), // 19 IN FACTORY TIME
       formatter.text(s.muatan), // 20 LCL/FCL
       formatter.text(s.container), // 21 CONTAINER
-      formatter.blank, // 22 NO. POL — tidak ada field-nya
+      formatter.text(s.vehicleNo), // 22 NO. POL — nomor kendaraan
       formatter.text(s.incoterm), // 23 INCOTERM
       formatter.text(s.notes), // 24 NOTES
     ];
@@ -223,7 +215,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
@@ -241,7 +233,7 @@ function buildDailyExportCopyRows(s, formatter) {
 /* INFO BARANG BARU — pesan siap kirim ke tim saat ada kiriman IMPORT
    baru, dibuat dari satu Card (bukan agregat seperti Report). Daftar
    barang ikut urutan Daftar Barang di Card itu, TANPA di-dedupe
-   (reportItemNames() yang meringkas jadi satu baris). Tiga
+   (reportItemNames() menyatukan nama kembar). Tiga
    tanggalnya dari Card yang sama: ETD & ETA terbaru (effectiveEtd/Eta,
    lihat catatan di atas DAILY IMPORT), dan "Estimasi sampai
    pabrik" = kolom Estimasi Delivery (field `actual` -- sama seperti
@@ -283,14 +275,6 @@ function reportItemNames(s) {
   return out;
 }
 
-// Satu baris ringkas: nama barang PERTAMA + jumlah sisanya
-function reportItemSummary(s) {
-  const names = reportItemNames(s);
-  if (!names.length) return "";
-  const sisa = names.length - 1;
-  // Bahasa Inggris: "1 Item", "2 Items" -- bukan "1 Items".
-  return sisa > 0 ? `${names[0]} + ${sisa} ${sisa === 1 ? "Item" : "Items"}` : names[0];
-}
 
 // Baris ke-2 & ke-3 tiap pengiriman
 function reportDetailPairs(s, mode) {
@@ -414,8 +398,8 @@ function buildReportCopyText() {
         .map(([k, v]) => `${k}: ${v}`)
         .join(" | ");
       lines.push(`${no} ${reportHeadline(s, mode)} | ${detail}`);
-      const barang = reportItemSummary(s);
-      if (barang) lines.push(`${pad}o ${barang}`);
+      // SEMUA barang, satu per baris (bukan "barang pertama + N Items")
+      reportItemNames(s).forEach((nama) => lines.push(`${pad}o ${nama}`));
       if (i < list.length - 1) lines.push("");
     });
     blocks.push(lines.join("\n"));
@@ -438,10 +422,11 @@ function buildReportCopyHtml() {
         const detail = reportDetailPairs(s, mode)
           .map(([k, v]) => `<b>${escapeHtml(k)}:</b> ${escapeHtml(v)}`)
           .join(' <span style="color:#94a3b8">|</span> ');
-        const barang = reportItemSummary(s);
-        const daftar = barang
+        // SEMUA barang, satu butir per barang
+        const barang = reportItemNames(s);
+        const daftar = barang.length
           ? `<ul style="margin:4px 0 0;padding-left:18px;list-style:circle">
-               <li style="margin:1px 0">${escapeHtml(barang)}</li>
+               ${barang.map((nama) => `<li style="margin:1px 0">${escapeHtml(nama)}</li>`).join("")}
              </ul>`
           : "";
         return `<li style="margin-bottom:10px">
@@ -540,7 +525,7 @@ const COPY_TEMPLATES = [
 
 // Template yang berlaku di section yang sedang aktif.
 function templatesForMode(mode) {
-  return COPY_TEMPLATES.filter((t) => t.modes.includes(mode || activeMode));
+  return COPY_TEMPLATES.filter((templat) => templat.modes.includes(mode || activeMode));
 }
 
 function copyTemplateMenuHtml(shipmentId) {
@@ -555,7 +540,7 @@ function copyTemplateMenuHtml(shipmentId) {
 }
 
 async function copyShipment(templateId, id) {
-  const tpl = COPY_TEMPLATES.find((t) => t.id === templateId);
+  const tpl = COPY_TEMPLATES.find((templat) => templat.id === templateId);
   if (!tpl) return;
 
   let s = null;

@@ -36,8 +36,7 @@ function buildDetailStopsHtml(s) {
         <div class="detail-stop-body">
           <div class="detail-stop-name">${escapeHtml(dispVal(st.terminal))}</div>
           <div class="detail-stop-meta">
-            <i class="bi ${air ? "bi-airplane" : "bi-water"}"></i> ${escapeHtml(dispVal(st.vessel))}
-            ${hasMeaningfulValue(st.voyage) ? " · " + (voyageNoun(air ? "udara" : "laut") + " ") + escapeHtml(st.voyage) : ""}
+            <i class="bi ${air ? "bi-airplane" : "bi-water"}"></i> ${escapeHtml(dispVal(carrierNameFromShipment(st)))}
             &nbsp;•&nbsp; ${tt("Tiba", "Arrives")}: <b>${fmtDate(st.arrivalDate)}</b>
             &nbsp;·&nbsp; ${tt("Berangkat", "Departs")}: <b>${fmtDate(st.departureDate)}</b>
           </div>
@@ -53,7 +52,19 @@ function buildDetailStopsHtml(s) {
 function buildDetailHtml(s) {
   const lbl = ML();
   const calc = computeCustoms(s);
-  const meta = STATUS_META[s.status] || STATUS_META.process;
+  /* Status yang BERLAKU, dengan nama per buku (Export: Delivered), sama
+     dengan dropdown di kartunya. Dulu yang tampil kolom status mentah
+     dengan label tetap "ARRIVED", sehingga kartu & panel ini bisa
+     menyebut dua status berbeda untuk jadwal yang sama. */
+  const statusBerlaku = effectiveStatus(s);
+  /* Tanggal yang BERLAKU (revisi kalau ada), rencana semula di bawahnya
+     -- sama dengan yang dibaca kartu & aturan status. */
+  const tanggalBerlaku = (rencana, revisi, jam) => {
+    const utama = fmtDate(revisi || rencana) + (jam ? " · " + escapeHtml(jam) : "");
+    return revisi && rencana && revisi !== rencana
+      ? `${utama}<br><span class="muted-value">${tt("Rencana", "Planned")} ${fmtDate(rencana)}</span>`
+      : utama;
+  };
 
   let itemRows = (s.items || [])
     .map(
@@ -119,7 +130,7 @@ function buildDetailHtml(s) {
       </div>
       <div class="d-flex align-items-center gap-2">
         <span class="detail-badge-mode">${activeMode === "import" ? "Import" : "Export"}</span>
-        <span class="status-select ${meta.class}" style="pointer-events:none; padding-right:14px; background-image:none;">${meta.label}</span>
+        <span class="status-select ${statusClass(statusBerlaku)}" style="pointer-events:none; padding-right:14px; background-image:none;">${escapeHtml(statusLabel(statusBerlaku, s.mode).toUpperCase())}</span>
       </div>
     </div>
 
@@ -151,15 +162,15 @@ function buildDetailHtml(s) {
     <div class="subsection-title"><i class="bi bi-compass"></i> ${tt("Transportasi &amp; Rute", "Transport &amp; Route")}</div>
     <div class="info-grid">
       ${fieldPair(tt("Moda Transportasi", "Transport Mode"), s.transport === "udara" ? tt("Udara", "Air") : tt("Laut", "Sea"))}
-      ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(s.vessel)))}
-      ${fieldPair(voyageNoun(s.transport), escapeHtml(dispVal(s.voyage)))}
+      ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(carrierNameFromShipment(s))))}
       ${fieldPair(tt("Kontainer", "Container"), escapeHtml(dispVal(s.container)))}
+      ${fieldPair(tt("No. Kendaraan", "Vehicle No."), escapeHtml(dispVal(s.vehicleNo)))}
       ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
       ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
       ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}
       ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(portCodeLabel(s.destination))))}
-      ${fieldPair("ETD", fmtDate(s.etd) + (s.etdTime ? " · " + escapeHtml(s.etdTime) : ""))}
-      ${fieldPair("ETA", fmtDate(s.eta) + (s.etaTime ? " · " + escapeHtml(s.etaTime) : ""))}
+      ${fieldPair("ETD", tanggalBerlaku(s.etd, s.etdUpdate, s.etdTime))}
+      ${fieldPair("ETA", tanggalBerlaku(s.eta, s.etaUpdate, s.etaTime))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
     </div>
     ${buildDetailStopsHtml(s)}

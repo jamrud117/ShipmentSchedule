@@ -1,0 +1,869 @@
+/* ------------------------------------------------------------------
+   HALAMAN MASTERLIST (js/views/masterlist-view.js)
+
+   Kerangkanya memakai kelas yang sudah ada: .board, .panel, .hs-bar,
+   .hs-halaman (paginasi), .task (antrean), .search-box, .control-select.
+   Yang ditulis di sini hanya milik halaman ini.
+
+   DUA WARNA DATA, dipakai konsisten di seluruh halaman:
+     tersedia  -- navy (aksen aplikasi)
+     terpakai  -- abu muda (latar, bukan pesan)
+   Yang ditonjolkan adalah yang MASIH TERSEDIA: itulah yang dicari
+   orang di halaman ini. Warnanya hanya dipakai TANDA; teks dan angka
+   tetap warna teks biasa, dan angkanya selalu tertulis di sebelah
+   tandanya -- tidak ada yang hanya bisa dibaca lewat warna.
+------------------------------------------------------------------ */
+#viewMasterlist,
+#mstRealisasiModal {
+  --mst-ada: var(--p-500);
+  --mst-pakai: var(--n-300);
+}
+
+/* Memuat ulang: tampilan yang ada ditahan, sedikit diredupkan -- tidak
+   dikosongkan lalu diisi lagi. */
+#viewMasterlist.is-memuat .page-main {
+  opacity: 0.6;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+/* ATAS: kuota yang tersedia (kiri) + dokumen & antrean (kanan). */
+.mst-atas {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+.mst-panel-daftar {
+  margin-top: var(--sp-4);
+}
+/* Kepala ketiga panel atas sama tinggi walau hanya satu yang membawa
+   tombol (sama dengan halaman Akun). */
+.mst-atas .panel-head {
+  min-height: 61px;
+}
+
+/* Dua daftar ini menempel ke tepi panelnya di SEMUA lebar layar:
+   overview.css memberi .panel-body jarak dalam di ponsel, dan aturannya
+   ikut mengenai .panel-body--flush (kekhususan setara, ditulis lebih
+   bawah) -- baris daftar jadi menjorok dan kakinya mengambang. */
+#mstTersedia,
+#mstPerlu {
+  padding: 0;
+}
+
+/* ---------- tanda kuota ---------- */
+/* Satu tanda per unit kuota. Dipisah celah 2px warna permukaan, bukan
+   garis tepi: garis menambah tinta yang bukan data. */
+.mst-tally {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  vertical-align: middle;
+}
+.mst-t {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--mst-pakai);
+}
+.mst-t--ada {
+  background: var(--mst-ada);
+}
+/* Kuota besar / berpecahan: batang berbanding, dua warna yang sama. */
+.mst-meter {
+  display: inline-block;
+  width: 100%;
+  max-width: 240px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--mst-pakai);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.mst-meter-isi {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--mst-ada);
+}
+.mst-legenda {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.mst-legenda > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.mst-legenda .mst-t {
+  height: 12px;
+}
+
+/* ---------- panel: kuota yang masih tersedia ---------- */
+/* Tiga lajur dengan lebar tetap untuk namanya, supaya deretan tanda
+   SEMUA baris berangkat dari garis yang sama dan bisa dibandingkan. */
+.mst-jenis {
+  display: grid;
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  padding: 9px var(--sp-5) 9px calc(var(--sp-5) - 3px);
+  border: 0;
+  border-bottom: 1px solid var(--n-100);
+  border-left: 3px solid transparent;
+  background: transparent;
+  text-align: left;
+  transition: background var(--dur-1) var(--ease);
+}
+.mst-jenis:last-child {
+  border-bottom: 0;
+}
+.mst-jenis:hover {
+  background: var(--p-50);
+}
+.mst-jenis.is-aktif {
+  background: var(--p-50);
+  border-left-color: var(--p-500);
+}
+.mst-jenis-nama {
+  min-width: 0;
+}
+.mst-jenis-nama b {
+  display: block;
+  font-size: var(--t-base);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.mst-jenis-nama small {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.mst-jenis-angka {
+  font-size: var(--t-sm);
+  color: var(--n-600);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.mst-jenis-angka b {
+  font-size: var(--t-md);
+  font-weight: 700;
+  color: var(--ink);
+}
+.mst-jenis-kaki {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px var(--sp-4);
+  padding: 10px var(--sp-5);
+  border-top: 1px solid var(--border);
+  background: var(--n-50);
+  font-size: var(--t-xs);
+  color: var(--n-600);
+}
+/* Tautan dalam kalimat: tombol yang berwujud teks. */
+.mst-taut {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--p-500);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--p-200);
+  text-underline-offset: 2px;
+}
+.mst-taut:hover {
+  color: var(--p-600);
+  text-decoration-color: currentColor;
+}
+
+/* ---------- panel: dokumen ---------- */
+.mst-dok {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px var(--sp-4);
+  margin: 0;
+}
+.mst-dok dt {
+  margin-bottom: 2px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.mst-dok dd {
+  margin: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.mst-redup {
+  font-weight: 400;
+  color: var(--n-400);
+}
+/* Masa berlaku: warna status + ikon + kalimat. */
+.mst-masa {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  padding: 2px 9px;
+  border: 1px solid var(--s-ok-line);
+  border-radius: var(--r-pill);
+  background: var(--s-ok-bg);
+  color: var(--s-ok);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mst-masa--dekat {
+  border-color: var(--s-warn-line);
+  background: var(--s-warn-bg);
+  color: var(--s-warn);
+}
+.mst-masa--lewat {
+  border-color: var(--s-danger-line);
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.mst-dok-ket,
+.mst-dok-catatan {
+  margin: var(--sp-3) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px dashed var(--n-200);
+  font-size: var(--t-xs);
+  line-height: 1.55;
+  color: var(--n-600);
+}
+.mst-dok-ket + .mst-dok-catatan {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* ---------- panel: belum dicatat ---------- */
+.mst-perlu-kosong {
+  padding: var(--sp-4) var(--sp-5);
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.mst-perlu-kosong p {
+  margin: 0;
+}
+.mst-perlu-kosong p + p {
+  margin-top: 6px;
+  font-size: var(--t-xs);
+  line-height: 1.55;
+}
+.mst-perlu-kosong i {
+  color: var(--p-500);
+}
+/* Baris antrean di sini tidak punya label alasan di kirinya, jadi di
+   ponsel ia TETAP sebaris: overview.css melipat .task jadi dua baris
+   (label + panah di atas, isi di bawah), dan tanpa labelnya yang
+   tersisa di baris atas hanyalah ikon yang menggantung sendirian. */
+#mstPerlu .task {
+  flex-wrap: nowrap;
+}
+#mstPerlu .task-main {
+  flex: 1 1 auto;
+  order: 0;
+}
+#mstPerlu .task-go {
+  order: 1;
+  margin-left: 0;
+}
+
+/* ---------- tombol kecil halaman ini ---------- */
+/* Tombol netral (.btn .btn-form-cancel) dengan ukuran halaman ini.
+   Ditulis .btn.mst-tombol (0,2,0): .btn-form-cancel di form.css dimuat
+   SETELAH berkas ini dengan kekhususan setara, dan tanpa kelas kedua
+   padding & ukuran hurufnya yang menang. */
+.btn.mst-tombol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 13px;
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+.panel-head .btn.mst-tombol {
+  height: 32px;
+  padding: 0 11px;
+}
+.btn.mst-tombol--hapus:hover {
+  border-color: var(--s-danger-line);
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.mst-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- bilah saringan ---------- */
+.mst-saring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+}
+.mst-saring .mst-cari {
+  flex: 1 1 260px;
+  max-width: 380px;
+  min-width: 0;
+  margin: 0;
+}
+/* Saringan dari panel "Kuota yang masih tersedia": cip yang bisa dilepas. */
+.mst-cip-saring {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 0 4px 0 11px;
+  border: 1px solid var(--p-200);
+  border-radius: var(--r-sm);
+  background: var(--p-50);
+  color: var(--p-600);
+  font-size: var(--t-sm);
+}
+.mst-cip-saring > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mst-cip-saring button {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--p-600);
+  font-size: 0.68rem;
+}
+.mst-cip-saring button:hover {
+  background: var(--p-100);
+}
+/* Susunan daftar: per baris | per PIB. */
+.mst-seg {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--n-100);
+}
+.mst-seg button {
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--n-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mst-seg button:hover:not(.active) {
+  background: #fff;
+  color: var(--p-600);
+}
+.mst-seg button.active {
+  background: var(--p-600);
+  color: #fff;
+}
+
+/* ---------- tabel ---------- */
+.mst-tabel-wrap {
+  overflow-x: auto;
+}
+.mst-tabel {
+  width: 100%;
+  border-collapse: collapse;
+}
+.mst-tabel th {
+  padding: 10px var(--sp-4);
+  border-bottom: 1px solid var(--n-100);
+  color: var(--n-500);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+.mst-tabel td {
+  padding: 10px var(--sp-4);
+  border-bottom: 1px solid var(--n-100);
+  vertical-align: top;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.mst-tabel th:first-child,
+.mst-tabel td:first-child {
+  padding-left: var(--sp-5);
+}
+.mst-tabel th:last-child,
+.mst-tabel td:last-child {
+  padding-right: var(--sp-5);
+}
+.mst-tabel > tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+.mst-tabel > tbody > tr.mst-baris:hover > td {
+  background: var(--n-50);
+}
+.mst-tabel .mst-kol-no {
+  width: 1%;
+  white-space: nowrap;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+}
+.mst-nama {
+  display: block;
+  font-size: var(--t-base);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.mst-spek {
+  display: block;
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow-wrap: anywhere;
+}
+.mst-tabel .mst-kol-lini {
+  width: 1%;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--n-600);
+}
+/* Kolom angka: rata kanan, digit selebar tetap supaya lurus antarbaris. */
+.mst-tabel .mst-kol-angka,
+.mst-rinci-tabel .mst-kol-angka {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mst-satuan {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.mst-tabel .mst-kol-sisa {
+  white-space: nowrap;
+}
+.mst-tabel td.mst-kol-sisa {
+  font-variant-numeric: tabular-nums;
+}
+.mst-tabel td.mst-kol-sisa b {
+  margin-left: 8px;
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+/* Baris yang kuotanya habis: angkanya diredam -- yang perlu terlihat
+   lebih dulu adalah baris yang masih bersisa. */
+.mst-tabel tr.is-habis td.mst-kol-sisa b {
+  font-weight: 500;
+  color: var(--n-400);
+}
+.mst-tabel .mst-kol-aksi {
+  width: 1%;
+  white-space: nowrap;
+}
+.mst-tabel .mst-kol-aju {
+  min-width: 96px;
+}
+/* Cip nomor aju; yang bertaut ke jadwalnya berwujud tombol. */
+.mst-aju {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 4px 4px 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--n-50);
+  color: var(--n-700);
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mst-aju--taut {
+  border-color: var(--p-200);
+  background: var(--p-50);
+  color: var(--p-600);
+}
+.mst-aju--taut:hover {
+  border-color: var(--p-400);
+}
+.mst-aju--taut i {
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
+.mst-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+}
+.mst-nama.mst-mono {
+  font-size: var(--t-sm);
+}
+
+/* Rincian baris yang dibuka: spesifikasi lengkap + realisasinya. */
+.mst-tabel tr.is-terbuka > td {
+  border-bottom-color: transparent;
+  background: var(--n-50);
+}
+.mst-tabel tr.mst-baris-rinci > td {
+  padding: 0 var(--sp-5) var(--sp-4);
+  background: var(--n-50);
+}
+.mst-rinci {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+.mst-rinci-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.mst-rinci-spek p {
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.mst-rinci-kosong {
+  margin: 0;
+  font-size: var(--t-sm);
+}
+.mst-rinci-tabel {
+  width: 100%;
+  border-collapse: collapse;
+}
+.mst-rinci-tabel th {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--n-200);
+  color: var(--n-500);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.mst-rinci-tabel td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--n-100);
+  vertical-align: middle;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.mst-rinci-tabel tr:last-child td {
+  border-bottom: 0;
+}
+.mst-rinci-tabel th:first-child,
+.mst-rinci-tabel td:first-child {
+  padding-left: 0;
+}
+.mst-rinci-tabel th:last-child,
+.mst-rinci-tabel td:last-child {
+  padding-right: 0;
+}
+.mst-rinci-tabel td.mst-ubah,
+.mst-rinci-tabel th.mst-ubah {
+  width: 1%;
+}
+.mst-rinci-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--n-100);
+}
+
+/* ---------- kotak Catat / Ubah realisasi ---------- */
+.mst-dialog {
+  max-width: min(640px, calc(100% - 2 * var(--bs-modal-margin)));
+}
+.mst-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin-top: var(--sp-1);
+}
+.mst-form > * {
+  min-width: 0;
+}
+/* Ada keterangan di atas form (dibuka dari panel Belum dicatat): diberi jarak. */
+#mstRealisasiKet:not(:empty) + .mst-form {
+  margin-top: var(--sp-3);
+}
+.mst-form-lebar {
+  grid-column: 1 / -1;
+}
+/* Satu baris pilihan: baris masterlist | jumlah | hapus, keterangan sisa
+   kuotanya di bawah. */
+.mst-pilih {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.mst-pilih .login-input {
+  height: 40px;
+  margin-bottom: 0;
+  font-size: var(--t-base);
+}
+.mst-pilih select.login-input {
+  text-overflow: ellipsis;
+}
+.mst-pilih .mst-pilih-qty {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mst-pilih .mst-pilih-ket {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+.mst-pilih .mst-pilih-ket:empty {
+  display: none;
+}
+/* Sedang menyimpan (lihat mstSimpanRealisasi: ditandai, bukan dinonaktifkan). */
+#btnMstSimpanRealisasi.is-sibuk {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ---------- layar menengah & sempit ---------- */
+@media (max-width: 991px) {
+  .mst-atas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Bilah judul terlipat: tombol-tombolnya turun selebar panel, rata kiri. */
+  .mst-aksi {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* KARTU (di bawah 768 px): tiap baris tabel jadi kartu. Nomor & nama
+   barang jadi judulnya, tombol di pojok kanan; angka-angkanya berlabel
+   di atas nilainya. Tabel delapan kolom tidak muat lagi di sini, dan
+   menggesernya ke samping menyembunyikan justru kolom Sisa. */
+@media (max-width: 767px) {
+  .mst-jenis {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "nama angka"
+      "tanda tanda";
+    gap: 8px var(--sp-3);
+    padding: 12px var(--sp-4);
+  }
+  .mst-jenis-nama {
+    grid-area: nama;
+  }
+  .mst-jenis-angka {
+    grid-area: angka;
+    align-self: start;
+  }
+  .mst-jenis > .mst-tally,
+  .mst-jenis > .mst-meter {
+    grid-area: tanda;
+  }
+  .mst-jenis-kaki,
+  .mst-saring,
+  .mst-perlu-kosong {
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+  .mst-saring .mst-cari {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  .mst-saring .control-select {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  .mst-seg {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .mst-seg button {
+    flex: 1 1 0;
+  }
+  .mst-aksi .mst-tombol,
+  .mst-aksi .btn-teal {
+    flex: 1 1 auto;
+  }
+  .mst-aksi #btnMstMuat {
+    flex: 0 0 auto;
+  }
+
+  .mst-tabel > thead {
+    display: none;
+  }
+  .mst-tabel,
+  .mst-tabel > tbody,
+  .mst-tabel > tbody > tr > td {
+    display: block;
+  }
+  .mst-tabel > tbody > tr.mst-baris {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 14px var(--sp-4);
+    border-bottom: 1px solid var(--n-100);
+  }
+  .mst-tabel > tbody > tr.mst-baris.is-terbuka {
+    border-bottom: 0;
+    background: var(--n-50);
+  }
+  .mst-tabel > tbody > tr > td {
+    width: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  .mst-tabel > tbody > tr.mst-baris:hover > td,
+  .mst-tabel tr.is-terbuka > td {
+    background: none;
+  }
+  .mst-tabel th:first-child,
+  .mst-tabel td:first-child,
+  .mst-tabel th:last-child,
+  .mst-tabel td:last-child {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* Judul kartu: nomor baris di atas nama barangnya (atau nomor aju),
+     tombol menumpang di pojok kanan area yang sama. Nomornya ditulis
+     dari data-no di sel nama -- sel nomornya sendiri disembunyikan,
+     supaya nomor dan nama tidak dipisah jarak antarbaris kisi. */
+  .mst-tabel--baris td.mst-kol-no {
+    display: none;
+  }
+  .mst-tabel td.mst-kol-barang[data-no]::before {
+    content: "No. " attr(data-no);
+    display: block;
+    margin-bottom: 2px;
+    font-size: var(--t-xs);
+    color: var(--n-500);
+  }
+  .mst-tabel td.mst-kol-barang,
+  .mst-tabel td.mst-kol-pib {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 88px;
+  }
+  .mst-tabel td.mst-kol-aksi {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+  }
+  .mst-tabel td.mst-kol-lini,
+  .mst-tabel td.mst-kol-aju,
+  .mst-tabel td.mst-kol-jadwal {
+    grid-column: 1 / -1;
+  }
+  /* Kartu PIB: tanggal, jumlah baris & unit sebaris; jadwalnya di bawah. */
+  .mst-tabel--pib td.mst-kol-jadwal {
+    order: 5;
+  }
+  .mst-tabel td.mst-kol-lini {
+    font-size: var(--t-sm);
+  }
+  .mst-tabel td.mst-kol-sisa b {
+    margin-left: 6px;
+  }
+  .mst-tabel td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-family: var(--font-body);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  /* 36px, bukan 44px bawaan ponsel: dua tombol 44px memakan hampir
+     sepertiga lebar kartu (sama dengan kartu Jadwal Kapal). */
+  .mst-tabel .icon-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.86rem;
+  }
+  .mst-tabel > tbody > tr.mst-baris-rinci > td {
+    padding: 0 var(--sp-4) 14px;
+    background: var(--n-50);
+    border-bottom: 1px solid var(--n-100);
+  }
+  .mst-rinci {
+    padding: var(--sp-3);
+  }
+  .mst-rinci-tabel {
+    display: block;
+    overflow-x: auto;
+  }
+  .mst-rinci-aksi > * {
+    flex: 1 1 auto;
+  }
+
+  .mst-dok {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mst-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mst-pilih {
+    grid-template-columns: minmax(0, 1fr) 80px auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #viewMasterlist.is-memuat .page-main,
+  .mst-jenis {
+    transition: none;
+  }
+}

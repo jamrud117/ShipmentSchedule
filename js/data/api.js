@@ -182,14 +182,40 @@ function showDbErrorState() {
     </div>`;
 }
 
+/* KOLOM BARU YANG MUNGKIN BELUM DIMIGRASI. Kalau database menolaknya,
+   jadwal disimpan ulang TANPA kolom itu -- data lain tetap tersimpan --
+   dan pengguna diberi tahu sekali berkas migrasi mana yang perlu
+   dijalankan. Tanpa ini, satu kolom yang belum ada menggagalkan seluruh
+   penyimpanan jadwal. */
+const KOLOM_OPSIONAL = { vehicle_no: { berkas: "migration-vehicle-no.sql", nama: "No. Kendaraan" } };
+const kolomBelumAda = new Set();
+async function simpanDenganCadangan(kirim, row) {
+  kolomBelumAda.forEach((k) => delete row[k]);
+  let hasil = await kirim(row);
+  const pesan = String((hasil.error && (hasil.error.message || hasil.error.details)) || "");
+  const kolom = hasil.error && Object.keys(KOLOM_OPSIONAL).find((k) => pesan.includes(k));
+  if (kolom) {
+    kolomBelumAda.add(kolom);
+    /* Diberi tahu HANYA kalau ada isian yang benar-benar tidak ikut
+       tersimpan. Kolom yang memang kosong (No. Kendaraan tidak diisi)
+       tidak kehilangan apa pun -- peringatan di situ cuma gangguan. */
+    const adaIsi = row[kolom] != null && String(row[kolom]).trim() !== "";
+    delete row[kolom];
+    const k = KOLOM_OPSIONAL[kolom];
+    if (adaIsi && typeof showToast === "function") {
+      showToast(tt(`Jadwal tersimpan, tetapi ${k.nama} belum: jalankan ${k.berkas} di Supabase.`,
+        `Schedule saved, but ${k.nama} was not: run ${k.berkas} in Supabase.`), "warning");
+    }
+    hasil = await kirim(row);
+  }
+  return hasil;
+}
+
 async function createShipment(payload, items, stops) {
   const row = shipmentToRow(payload, activeMode);
   row.mode = activeMode;
-  const { data: inserted, error } = await supabaseClient
-    .from("shipments")
-    .insert(row)
-    .select()
-    .single();
+  const { data: inserted, error } = await simpanDenganCadangan(
+    (r) => supabaseClient.from("shipments").insert(r).select().single(), row);
   if (error) throw error;
   if (items.length) {
     const itemRows = items.map((it) => itemToRow(it, inserted.id));
@@ -210,10 +236,8 @@ async function createShipment(payload, items, stops) {
 
 async function updateShipmentRecord(id, payload, items, stops) {
   const row = shipmentToRow(payload, activeMode);
-  const { error } = await supabaseClient
-    .from("shipments")
-    .update(row)
-    .eq("id", id);
+  const { error } = await simpanDenganCadangan(
+    (r) => supabaseClient.from("shipments").update(r).eq("id", id), row);
   if (error) throw error;
 
   // Cara paling sederhana & aman untuk menyamakan daftar barang: hapus semua item lama

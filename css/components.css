@@ -79,6 +79,14 @@
 .notes-composer .btn {
   white-space: nowrap;
 }
+/* Ponsel: kotak tulis selebar panel, tombol Tambah di bawahnya. Bersisian
+   kotaknya tinggal 150px dan petunjuk di dalamnya terpotong tiga baris. */
+@media (max-width: 575.98px) {
+  .notes-composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
 .notes-timeline {
   margin-top: 12px;
   max-height: 320px;
@@ -375,4 +383,186 @@
   .app-toast {
     transition: none;
   }
+}
+
+/* ==================================================================
+   KISI ISIAN FORM (.fgrid)
+
+   Satu ritme kolom untuk SEMUA form: Tambah/Edit Jadwal, Permintaan
+   Nomor Dokumen, kartu Terminal Transit. Dua belas lajur; tiap isian
+   memakai kelas lebar:
+
+     (tanpa kelas)  3 lajur  seperempat baris -- isian standar
+     .s4            4 lajur  sepertiga
+     .s6            6 lajur  setengah
+     .s9            9 lajur  tiga perempat
+     .s12           selebar baris (tabel, catatan, judul kelompok)
+     .r2            setinggi dua baris (alamat di samping dua baris isian)
+     .m4            sepertiga HANYA di layar sedang (tiga isian pendek
+                    yang memang satu kelompok: Moda / Vessel / Voyage)
+
+   Tiap baris disusun berjumlah 12 lajur, jadi tepi isian SEJAJAR dari
+   baris ke baris dan tidak ada isian yang melebar tanpa alasan.
+
+   TIGA LEBAR LAYAR
+     >= 1080px      empat isian per baris. Ambangnya 1080, bukan 1200:
+                    laptop 1366px yang diskalakan 125% (bawaan Windows)
+                    lebarnya 1093px -- dengan ambang 1200 laptop itu
+                    jatuh ke dua kolom dan tiap isian melebar 500px.
+     768 - 1079px   dua per baris; .s6/.s9 jadi selebar baris.
+     < 768px        satu per baris.
+   Aturan pelebar khusus (mis. Forwarder saat Kontainer disembunyikan)
+   hanya berlaku di layar lebar -- lihat blok min-width: 1080px.
+================================================================== */
+.fgrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px 18px;
+  align-items: start;
+}
+.fgrid > * {
+  grid-column: span 3;
+  min-width: 0;
+}
+.fgrid > .s4 {
+  grid-column: span 4;
+}
+.fgrid > .s6 {
+  grid-column: span 6;
+}
+.fgrid > .s9 {
+  grid-column: span 9;
+}
+.fgrid > .s12 {
+  grid-column: 1 / -1;
+}
+/* Sel setinggi dua baris: isinya (textarea) memanjang mengisi sel. */
+.fgrid > .r2 {
+  grid-row: span 2;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+.fgrid > .r2 > textarea {
+  flex: 1 1 auto;
+  resize: none;
+}
+@media (max-width: 1079.98px) {
+  .fgrid > *,
+  .fgrid > .s4 {
+    grid-column: span 6;
+  }
+  .fgrid > .s6,
+  .fgrid > .s9 {
+    grid-column: 1 / -1;
+  }
+  /* Setelah .s6 dengan sengaja: Nama Vessel (.s6.m4) ikut jadi sepertiga. */
+  .fgrid > .m4 {
+    grid-column: span 4;
+  }
+  .fgrid > .r2 {
+    grid-row: auto;
+  }
+}
+@media (max-width: 767.98px) {
+  .fgrid > *,
+  .fgrid > .s4,
+  .fgrid > .m4 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* LABEL SETINGGI SERAGAM. Kotak isian satu baris hanya sejajar kalau
+   label di atasnya sama tinggi -- termasuk label yang membawa chip
+   "Auto ETA" atau sakelar Auto/Manual (.fl-head). */
+.fgrid .form-label,
+.fgrid .fl-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  margin-bottom: 6px;
+}
+/* Kepala isian: label di kiri, sakelar di kanan. Bukan sakelar di dalam
+   <label> -- tombol adalah kontrol berlabel, jadi klik pada teks label
+   akan ikut menekan tombol Auto. */
+.fl-head {
+  justify-content: space-between;
+}
+.fl-head > .form-label {
+  margin: 0;
+  min-width: 0;
+}
+.fl-head .eta-mode-switch {
+  height: 22px;
+}
+.fl-head .eta-mode-btn {
+  padding: 0 9px;
+  font-size: 0.62rem;
+}
+/* Di sel yang sempit chip "Auto ETA" disembunyikan -- sakelar di
+   sebelahnya sudah menunjukkan mode yang sama. */
+@media (max-width: 1399.98px) and (min-width: 1080px) {
+  .fl-head .eta-mode-chip {
+    display: none;
+  }
+}
+
+/* Tanggal + jam dalam satu sel: [ tanggal ][ jam ]. */
+.fl-pair {
+  display: flex;
+  gap: 8px;
+}
+.fl-pair > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fl-pair > .fl-jam {
+  flex: 0 0 84px;
+  text-align: center;
+}
+
+.fgrid .form-text-note {
+  margin-top: 5px;
+  line-height: 1.4;
+}
+/* Catatan selebar baris tepat di bawah sebaris isian: jarak antarbaris
+   kisi (16px) dipangkas supaya catatannya terbaca milik baris di atasnya. */
+.fgrid > .fg-note {
+  margin-top: -9px;
+}
+/* Nomor polisi diketik kapital; contohnya tidak perlu ikut berteriak. */
+.text-uppercase::placeholder {
+  text-transform: none;
+}
+
+/* ==================================================================
+   TOMBOL HAPUS BARIS (x)
+
+   Satu bentuk di semua daftar isian: Daftar Barang, Rincian Biaya,
+   barang Surat Jalan Lokal, barang Surat Fungsi, nomor PO tambahan,
+   dan dokumen (invoice/debit note) Pengajuan Dana. Dulu aturannya hanya
+   menempel ke table.item-table, jadi di tempat lain tombol ini tampil
+   sebagai tombol bawaan peramban -- kotak abu-abu bergaris hitam.
+================================================================== */
+.rm-row {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--coral);
+  font-size: 0.8rem;
+  line-height: 1;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+.rm-row:hover {
+  background: #fdeaea;
+  border-color: var(--s-danger-line);
 }

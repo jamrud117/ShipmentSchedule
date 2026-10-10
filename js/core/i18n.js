@@ -27,6 +27,7 @@ const I18N = {
     "nav.docnum": "No. Dokumen",
     "nav.hscode": "HS Code",
     "nav.vessel": "Jadwal Kapal",
+    "nav.masterlist": "Masterlist",
     "nav.accounts": "Akun",
     "menu.language": "Bahasa",
     "menu.logout": "Keluar",
@@ -165,7 +166,6 @@ const I18N = {
     "m.gagal.menyimpan.jadwal.ke.database": "Gagal menyimpan jadwal ke database.",
     "m.gagal.menyimpan.perubahan": "Gagal menyimpan perubahan.",
     "m.gagal.menyimpan.perubahan.ke.database.memuat.u": "Gagal menyimpan perubahan ke database — memuat ulang data.",
-    "m.halaman.ini.hanya.untuk.peran.exim": "Halaman ini hanya untuk peran EXIM.",
     "m.halaman.kelola.akun.hanya.untuk.peran.exim": "Halaman kelola akun hanya untuk peran EXIM.",
     "m.hanya.peran.exim.yang.boleh.mengubah.jadwal": "Hanya peran EXIM yang boleh mengubah jadwal.",
     "m.invoice.ini.belum.ditautkan.ke.jadwal.export.d": "Invoice ini belum ditautkan ke jadwal Export — daftar barang tercetak kosong.",
@@ -207,7 +207,6 @@ const I18N = {
     "ph.nama.perusahaan": "Nama Perusahaan",
     "ph.nama.perusahaan.penerima": "Nama perusahaan penerima",
     "ph.nama.pic": "Nama PIC",
-    "ph.nama.vendor.ppjk": "Nama Vendor / PPJK",
     "ph.nomor.aju": "Nomor aju",
     "ph.nomor.house.b.l.atau.awb": "Nomor House B/L atau AWB",
     "ph.nomor.invoice": "Nomor invoice",
@@ -444,7 +443,6 @@ const I18N = {
     "w.sheet.barang.kosong.tidak.ditemukan.daftar.bar": "Sheet BARANG kosong/tidak ditemukan — daftar barang tidak terisi otomatis, tambahkan manual.",
     "w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh": "Terms FOB tapi kolom FOB tidak ditemukan di sheet BARANG — harga satuan tiap barang jadi 0, cek manual.",
     "w.tidak.ada.baris.barang.yang.terbaca.dari.tabel": "Tidak ada baris barang yang terbaca dari tabel Goods Descriptions.",
-    "w.tidak.ditemukan": "tidak ditemukan",
     "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "Tidak ditemukan entri SKB atau E-COO di lembar Pemenuhan Persyaratan/Fasilitas — cek manual kalau seharusnya ada.",
     "w.barang.sudah.masuk.pabrik": "Barang sudah masuk pabrik — perkiraan digantikan tanggal sebenarnya.",
     "w.belum.ada.daftar": " · belum ada {x}",
@@ -515,7 +513,6 @@ const I18N = {
     "x.hari.lebih.mundur": "{n} hari lebih mundur dari hitungan mesin",
     "x.harus.berupa.angka": "{label} harus berupa angka (tidak boleh negatif).",
     "x.isian.belum.benar": "{n} isian belum benar — yang bertanda merah perlu diperbaiki.",
-    "x.isian.nomor.dibuka": "Isian nomor {nomor} dibuka untuk diperbaiki — form ada di atas.",
     "x.jadwal.berhasil.diimpor": "{n} jadwal {mode} berhasil diimpor.",
     "x.jadwal.ditandai.tiba": "{n} jadwal ditandai tiba — tanggal In Factory / Stuffing-nya sudah terlewati.",
     "x.lama.transit.rentang": "Lama transit masih rentang {n} hari",
@@ -590,6 +587,7 @@ const I18N = {
     "nav.docnum": "Doc. Number",
     "nav.hscode": "HS Code",
     "nav.vessel": "Shipment Schedule",
+    "nav.masterlist": "Masterlist",
     "nav.accounts": "Accounts",
     "menu.language": "Language",
     "menu.logout": "Sign out",
@@ -726,7 +724,6 @@ const I18N = {
     "m.gagal.menyimpan.jadwal.ke.database": "Failed to save the schedule to the database.",
     "m.gagal.menyimpan.perubahan": "Failed to save the changes.",
     "m.gagal.menyimpan.perubahan.ke.database.memuat.u": "Failed to save the changes to the database — reloading the data.",
-    "m.halaman.ini.hanya.untuk.peran.exim": "This page is for the EXIM role only.",
     "m.halaman.kelola.akun.hanya.untuk.peran.exim": "The account management page is for the EXIM role only.",
     "m.hanya.peran.exim.yang.boleh.mengubah.jadwal": "Only the EXIM role may change schedules.",
     "m.invoice.ini.belum.ditautkan.ke.jadwal.export.d": "This invoice is not yet linked to an Export schedule — the item list will print empty.",
@@ -768,7 +765,6 @@ const I18N = {
     "ph.nama.perusahaan": "Company name",
     "ph.nama.perusahaan.penerima": "Receiving company name",
     "ph.nama.pic": "PIC name",
-    "ph.nama.vendor.ppjk": "Vendor / PPJK name",
     "ph.nomor.aju": "AJU number",
     "ph.nomor.house.b.l.atau.awb": "House B/L or AWB number",
     "ph.nomor.invoice": "Invoice number",
@@ -1006,7 +1002,6 @@ const I18N = {
     "w.sheet.barang.kosong.tidak.ditemukan.daftar.bar": "The BARANG sheet is empty or missing — the item list was not filled in automatically; please add the items manually.",
     "w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh": "Terms are FOB but no FOB column was found in the BARANG sheet — each item's unit price is 0; please check manually.",
     "w.tidak.ada.baris.barang.yang.terbaca.dari.tabel": "No item rows could be read from the Goods Descriptions table.",
-    "w.tidak.ditemukan": "not found",
     "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "No SKB or E-COO entry was found on the requirements/facilities sheet — please check manually if one is expected.",
     "w.barang.sudah.masuk.pabrik": "The goods have reached the factory — the estimate is replaced by the actual date.",
     "w.belum.ada.daftar": " · missing {x}",
@@ -1077,7 +1072,6 @@ const I18N = {
     "x.hari.lebih.mundur": "{n} day(s) later than the engine's calculation",
     "x.harus.berupa.angka": "{label} must be a number (it cannot be negative).",
     "x.isian.belum.benar": "{n} field(s) are not valid yet — those marked red need fixing.",
-    "x.isian.nomor.dibuka": "The details for number {nomor} are open for editing — the form is above.",
     "x.jadwal.berhasil.diimpor": "{n} {mode} schedule(s) imported.",
     "x.jadwal.ditandai.tiba": "{n} schedule(s) marked as arrived — their In Factory / Stuffing date has passed.",
     "x.lama.transit.rentang": "Transit time still spans {n} days",
@@ -1259,6 +1253,8 @@ function setLang(kode) {
      halaman. Kartu jadwal, label per-buku (MODE_LABELS), dan daftar HS
      Code semuanya dirakit dari string, jadi harus digambar ulang. */
   if (typeof applyModeLabels === "function") applyModeLabels();
+  // Tombol Ciutkan / Lebarkan menu di kaki sidebar ditulis dari JS
+  if (typeof sbTerapkanLebar === "function") sbTerapkanLebar();
   /* Label form per buku (No. SPPB/No. PEB, Tanggal In Factory/Tanggal
      Stuffing, ...) ditulis ulang SEBELUM label moda di bawah: yang di
      bawah menyesuaikan sebagian darinya lagi untuk kiriman udara. */
@@ -1290,6 +1286,7 @@ function setLang(kode) {
     if (typeof isiDropdownVs === "function") isiDropdownVs();
     renderVesselSchedules();
   }
+  if (tampil("viewMasterlist") && typeof renderMasterlist === "function") renderMasterlist();
   /* Tanggal "Hari ini" di kepala tiap halaman ikut nama hari & bulan
      bahasa aktif ("Rabu" / "Wednesday"). Tanpa ini, di halaman yang
      tidak menggambar ulang penandanya sendiri (Jadwal, HS Code, Jadwal
@@ -1300,7 +1297,16 @@ function setLang(kode) {
     if (typeof renderDocNumHistory === "function") renderDocNumHistory();
     if (typeof refreshDocNumPreview === "function" && typeof docNumActiveTab !== "undefined")
       refreshDocNumPreview(docNumActiveTab);
+    // Label ber-moda di form Surat (Flight/Sail & Tanggal Tiba) ikut bahasa
+    if (typeof suratPerbaruiLabelAngkut === "function" && typeof docNumPanelEl === "function")
+      suratPerbaruiLabelAngkut(docNumPanelEl("letter"));
+    // Kotak "Aturan Doc No": jumlah vendor & keterangan tombolnya dirakit JS
+    if (typeof fundDocNoGambar === "function") fundDocNoGambar();
   }
+  /* Tombol rentang tanggal riwayat Pengajuan Dana ("Pilih Rentang
+     Tanggal", nama bulan) -- instansnya hidup terus, jadi ditulis ulang
+     walau halamannya sedang tidak tampil. */
+  if (typeof dnPemilihRentang !== "undefined" && dnPemilihRentang) dnPemilihRentang.setel(docNumRentang[0], docNumRentang[1]);
 
   document.querySelectorAll("[data-lang-pick]").forEach((el) => {
     el.classList.toggle("active", el.dataset.langPick === kode);

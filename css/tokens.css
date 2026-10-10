@@ -124,7 +124,7 @@ body {
   --track-label: 0.1em;
 
   /* ---- Ukuran kerangka aplikasi ---- */
-  --topbar-h: 64px;
+  --topbar-h: 56px; /* bilah atas ponsel & tablet; 0 di desktop (shell.css) */
 
   /* ALIAS — nama lama tetap hidup supaya seluruh aturan CSS yang sudah */
   --navy: var(--d-900);

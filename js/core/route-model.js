@@ -203,8 +203,8 @@ function computeNodeFractionsRaw(nodes) {
   if (!isFinite(maxT - minT) || maxT <= minT) {
     fractions = nodes.map((_, i) => i / (n - 1));
   } else {
-    fractions = times.map((t) =>
-      Math.min(1, Math.max(0, (t - minT) / (maxT - minT))),
+    fractions = times.map((waktu) =>
+      Math.min(1, Math.max(0, (waktu - minT) / (maxT - minT))),
     );
   }
   // Jaga urutan selalu maju supaya titik di rute tidak pernah terlihat mundur ke kiri walau ada
@@ -381,14 +381,9 @@ function laneNodeTitle(nd) {
   if (nd.kind === "stop") {
     if (nd.arrivalDate) parts.push(tt("Tiba ", "Arrives ") + fmtDate(nd.arrivalDate));
     if (nd.departureDate) parts.push(tt("Berangkat ", "Departs ") + fmtDate(nd.departureDate));
-    if (hasMeaningfulValue(nd.vessel))
-      parts.push(
-        (nd.transport === "udara" ? tt("Pesawat ", "Aircraft ") : "Vessel ") + nd.vessel,
-      );
-    if (hasMeaningfulValue(nd.voyage))
-      parts.push(
-        (nd.transport === "udara" ? tt("No. Flight ", "Flight No. ") : tt("No. Voyage ", "Voyage No. ")) + nd.voyage,
-      );
+    // Nama + nomor sarana angkut leg ini, satu teks (carrierNameFromShipment)
+    const sarana = carrierNameFromShipment(nd);
+    if (sarana) parts.push((nd.transport === "udara" ? tt("Pesawat ", "Aircraft ") : "Vessel ") + sarana);
   } else {
     parts.push(fmtDate(nd.date));
   }

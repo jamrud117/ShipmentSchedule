@@ -104,7 +104,7 @@ function frBarisRincian(p) {
 }
 
 function frTotal(baris) {
-  return baris.reduce((t, b) => t + (Number(b.nilai) || 0), 0);
+  return baris.reduce((jumlah, b) => jumlah + (Number(b.nilai) || 0), 0);
 }
 
 /* JUMLAH AKHIR SATU PENGAJUAN -- angka yang sama dengan "Terbilang"
@@ -246,7 +246,12 @@ function buildFundRequestHtml(row) {
     <div class="judul">FORM PENGAJUAN DANA</div>
 
     <table class="meta">
-      <tr><td class="meta-k">No Surat</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>
+      <tr><td class="meta-k">No Surat</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>${
+        fundPakaiDocNo(p.payee)
+          ? `
+      <tr><td class="meta-k">Doc No</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.docNo || "")}</td></tr>`
+          : ""
+      }
       <tr><td class="meta-k">Subject</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.notes || "")}</td></tr>
       <tr><td class="meta-k">Lampiran</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.attachment || "1 Set")}</td></tr>
     </table>
@@ -318,6 +323,25 @@ function buildFundRequestHtml(row) {
       dana, menyampaikan rencana.
     </div>
   </div>`;
+}
+
+/* BAGIAN PER BL/AWB -- satu invoice untuk beberapa kiriman. Dicetak
+   hanya kalau ada baris yang SENGAJA ditautkan ke BL/AWB-nya (kolom
+   BL/AWB di form); pembagian rata semata hitungan aplikasi untuk biaya
+   per kiriman, bukan hal yang perlu disetujui di surat. */
+function frBarisPerAwb(p, mataUang, kolom) {
+  const bagian = typeof fundBagiPerAwb === "function" ? fundBagiPerAwb(p) : [];
+  if (bagian.length < 2 || !bagian.some((b) => b.tautan)) return "";
+  return `
+      <tr class="baris-rujukan"><td class="c-desc" colspan="${kolom}"><b>BAGIAN PER BL/AWB</b></td></tr>${bagian
+        .map(
+          (b) => `
+      <tr class="baris-awb">
+        <td class="c-desc" colspan="${kolom - 1}">${escapeHtml(b.teks)}${b.rata ? " (termasuk bagian rata)" : ""}</td>
+        <td class="c-amt">${escapeHtml(frNilai(b.dibayar, mataUang))}</td>
+      </tr>`,
+        )
+        .join("")}`;
 }
 
 /* Tabel format rinci. Kolomnya mengikuti tagihan forwarder: uraian,
@@ -396,7 +420,7 @@ function frTabelRinci(p, mataUang) {
              menghasilkan "- -" yang terbaca seperti salah cetak. */
           r.pph ? "- " + escapeHtml(frNilai(r.pph, mataUang)) : "-"
         }</td>
-      </tr>`;
+      </tr>${frBarisPerAwb(p, mataUang, KOLOM)}`;
 
   return `
     <table class="rincian rincian--detail">
@@ -425,17 +449,24 @@ function frTabelRinci(p, mataUang) {
     </table>`;
 }
 
-function cetakFundRequest(rowId) {
+async function cetakFundRequest(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
     showToast(t("m.data.pengajuan.dana.tidak.ditemukan"), "danger");
     return;
   }
+  /* Jendelanya dibuka DULU, selagi masih di dalam klik pengguna --
+     dibuka sesudah menunggu apa pun, peramban menganggapnya pop-up liar
+     dan memblokirnya. */
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
     showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
     return;
   }
+  /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
+     dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang dicetak
+     sesaat setelah halaman tampil tidak memakai aturan lama. */
+  await fundDocNoSiap();
   w.document.write(`<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Form Pengajuan Dana ${escapeHtml(row.doc_number || "")}</title>
@@ -591,6 +622,8 @@ function fundRequestCss() {
   .rincian .baris-potongan td,
   .rincian .baris-subtotal td,
   .rincian tfoot td { border-top: 1.2px solid #000; }
+  /* Bagian per BL/AWB: baris rincian kecil di bawah potongan */
+  .rincian .baris-awb td { font-size: 0.95em; }
 
   .c-desc { text-align: left; }
   .c-total { text-align: right; font-weight: 700; }

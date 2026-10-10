@@ -133,6 +133,30 @@
   display: block;
   line-height: 1;
 }
+/* TOMBOL HAPUS (×) DI SETIAP KOTAK CARI (js/ui/search-clear.js).
+   Tampil hanya selama kotaknya berisi -- dibaca dari :placeholder-shown,
+   jadi ikut benar juga saat isinya dikosongkan dari kode (pindah tab,
+   reset saringan) tanpa perlu disegarkan. Ikonnya duduk di tengah
+   tombol: aturan ikon kaca pembesar (.search-box i, absolut di kiri)
+   tidak boleh ikut mengenainya. */
+.search-clear[data-cari-hapus] {
+  display: none;
+  right: 6px;
+  transition:
+    color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
+  display: grid;
+}
+.search-clear[data-cari-hapus]:hover {
+  color: var(--ink);
+  background: var(--n-100);
+}
+.search-box .search-clear[data-cari-hapus] i {
+  position: static;
+  transform: none;
+}
 
 /* Pemilih status: tinggi & gaya disamakan dengan kotak cari */
 .control-select {

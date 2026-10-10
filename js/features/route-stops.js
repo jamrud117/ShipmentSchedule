@@ -14,8 +14,13 @@ function stopCardHtml(st, idx, total) {
           <button type="button" class="rm-stop" data-idx="${idx}" title="${tt("Hapus terminal ini", "Remove this terminal")}"><i class="bi bi-trash3"></i></button>
         </div>
       </div>
-      <div class="row g-2">
-        <div class="col-md-5">
+      <!-- Kisi isian yang sama dengan form (.fgrid): terminal & tanggalnya
+           di baris pertama, alat angkut yang MEMBAWA barang tiba di
+           terminal ini di baris kedua. Kedua baris penuh 12 lajur.
+           Di layar sedang tiga isian alat angkut tetap sebaris (.m4),
+           tidak terpecah jadi Moda sendirian lalu Vessel selebar kartu. -->
+      <div class="fgrid">
+        <div class="s6">
           <label class="form-label">${tt("Nama Terminal", "Terminal Name")}</label>
           <!-- Saran pelabuhan mengikuti moda BARIS INI, bukan moda
                pengiriman di atas: satu perjalanan bisa laut sampai
@@ -25,28 +30,28 @@ function stopCardHtml(st, idx, total) {
                modanya diganti, jadi daftarnya ikut berganti. -->
           <input type="text" class="form-control form-control-sm" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? tt("Nama bandara transit", "Transit airport name") : tt("Nama pelabuhan transit", "Transit port name")}">
         </div>
-        <div class="col-md-2">
+        <div>
+          <label class="form-label">${tt("Tiba di Terminal Ini", "Arrival at This Terminal")}</label>
+          <input type="date" class="form-control form-control-sm" data-f="arrivalDate" value="${st.arrivalDate || ""}">
+        </div>
+        <div>
+          <label class="form-label">${tt("Berangkat dari Terminal Ini", "Departure from This Terminal")}</label>
+          <input type="date" class="form-control form-control-sm" data-f="departureDate" value="${st.departureDate || ""}">
+        </div>
+        <div class="m4">
           <label class="form-label">${tt("Moda", "Mode")}</label>
           <select class="form-select form-select-sm" data-f="transport">
             <option value="laut" ${!air ? "selected" : ""}>${tt("Laut", "Sea")}</option>
             <option value="udara" ${air ? "selected" : ""}>${tt("Udara", "Air")}</option>
           </select>
         </div>
-        <div class="col-md-3">
+        <div class="s6 m4">
           <label class="form-label">${air ? tt("Nama Pesawat/Maskapai", "Aircraft/Airline Name") : tt("Nama Vessel", "Vessel Name")}</label>
           <input type="text" class="form-control form-control-sm" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? tt("Nama maskapai", "Airline name") : tt("Nama pelayaran", "Shipping line name")}">
         </div>
-        <div class="col-md-2">
+        <div class="m4">
           <label class="form-label">${air ? "No. Flight" : "No. Voyage"}</label>
           <input type="text" class="form-control form-control-sm" data-f="voyage" value="${escapeAttr(st.voyage)}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">${tt("Tiba di Terminal Ini", "Arrival at This Terminal")}</label>
-          <input type="date" class="form-control form-control-sm" data-f="arrivalDate" value="${st.arrivalDate || ""}">
-        </div>
-        <div class="col-md-4">
-          <label class="form-label">${tt("Berangkat dari Terminal Ini", "Departure from This Terminal")}</label>
-          <input type="date" class="form-control form-control-sm" data-f="departureDate" value="${st.departureDate || ""}">
         </div>
       </div>
       ${

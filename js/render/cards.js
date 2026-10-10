@@ -8,8 +8,8 @@ function renderCard(s) {
 }
 
 function hasMeaningfulValue(v) {
-  const t = (v || "").toString().trim();
-  return t !== "" && t !== "-";
+  const teks = (v || "").toString().trim();
+  return teks !== "" && teks !== "-";
 }
 
 // Display fallback for free-text fields: treats "-" the same as empty
@@ -79,12 +79,20 @@ function delayDeltaText(baseline, update, basis) {
   return `<span class="delay-delta${kelas}">${teks}</span>`;
 }
 
+/* Tampil saat status DELAY, dan juga selama tanggal revisinya masih
+   terisi walau statusnya sudah bukan Delay: tanggal itulah yang
+   berlaku, jadi tidak boleh tersembunyi (aturan 1 di core/status.js). */
 function delayStripHtml(s) {
-  if (s.status !== "delayed") return "";
+  const delay = s.status === "delayed";
+  if (!delay && !adaRevisiJadwal(s)) return "";
   return `
-    <div class="delay-strip">
+    <div class="delay-strip${delay ? "" : " delay-strip--sisa"}">
       <div class="delay-strip-head">
-        <i class="bi bi-clock-history"></i> ${tt("Tanggal Update Delay", "Delay Update Dates")}
+        <i class="bi bi-clock-history"></i> ${
+          delay
+            ? tt("Tanggal Update Delay", "Delay Update Dates")
+            : tt("Tanggal revisi yang masih berlaku — mengubah ETD/ETA di atas menggantikannya", "Revised dates still in force — changing ETD/ETA above replaces them")
+        }
       </div>
       <div class="delay-strip-fields">
         <div class="date-field">
@@ -183,7 +191,11 @@ function cardBodySplitHtml(s, totals) {
     <div class="info-grid">
       <div class="info-item"><div class="info-label"><i class="bi bi-geo-alt"></i> ${t("f.rute")}</div><div class="info-value">${escapeHtml(routeChainText(s))}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-person-badge"></i> Forwarder</div><div class="info-value">${escapeHtml(dispVal(s.forwarder))}<br><span class="muted-value">PIC: ${escapeHtml(dispVal(s.forwarderPic))}</span></div></div>
-      <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${vesselNoun(s.transport)}</div><div class="info-value">${escapeHtml(dispVal(s.vessel))}<br><span class="muted-value">${voyageNoun(s.transport)} ${escapeHtml(dispVal(s.voyage))}</span></div></div>
+      <div class="info-item"><div class="info-label"><i class="bi ${s.transport === "udara" ? "bi-airplane" : "bi-water"}"></i> ${vesselNoun(s.transport)}</div><div class="info-value">${
+        /* Nama + nomor sarana angkut dalam satu teks, sama dengan templat
+           salin & CIPL (carrierNameFromShipment). */
+        escapeHtml(dispVal(carrierNameFromShipment(s)))
+      }</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> ${t("f.kontainer")}</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
@@ -192,7 +204,8 @@ function cardBodySplitHtml(s, totals) {
           ? ""
           : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>`
       }
-      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.netto")}</div><div class="info-value">${fmtNum(totals.totalNetto)} Kg</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.bruto")}</div><div class="info-value">${fmtNum(totals.totalBruto)} Kg</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-truck-front"></i> ${escapeHtml(tt("No. Kendaraan", "Vehicle No."))}</div><div class="info-value">${escapeHtml(dispVal(s.vehicleNo))}</div></div>
     </div>
     <div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${itemNamesSummary(
       s,
@@ -303,7 +316,12 @@ function renderCollapsedCard(s) {
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
             <div class="collapsed-main">
         <div class="collapsed-party">${escapeHtml(dispVal(s.party))} · ${(s.items || []).length} ${(s.items || []).length === 1 ? tt("Barang", "Item") : t("f.barang")}</div>
-        <div class="collapsed-meta">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;·&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))} &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${fmtDate(activeMode === "export" ? s.actual : s.factoryDate)}</b></div>
+        <div class="collapsed-meta">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;·&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))} &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${
+          /* Tanggal yang MEMBUATNYA selesai (kolomPenyebabTiba): Export =
+             ETD yang berlaku (kapal berangkat), bukan tanggal Stuffing;
+             Import = In Factory. */
+          fmtDate(s.mode === "export" ? effectiveEtd(s) : s.factoryDate)
+        }</b></div>
       </div>
       <div class="ship-actions-block">
         ${statusSelectHtml(s)}

@@ -82,6 +82,50 @@ function effectiveEtd(s) {
   return (s && (s.etdUpdate || s.etd)) || "";
 }
 
+/* ------------------------------------------------------------------
+   TANGGAL REVISI (kotak "Tanggal Update Delay": etdUpdate / etaUpdate)
+
+   ETD/ETA = rencana, etdUpdate/etaUpdate = revisi sesudah delay. Yang
+   BERLAKU revisinya (effectiveEtd/Eta di atas), jadi revisi yang
+   tertinggal & tidak terlihat menimpa tanggal yang baru diketik.
+
+   Itulah bug "ETD sudah diubah ke tanggal 10, kartu masih tanggal 9":
+   jadwalnya pernah delay (ETD revisi 9), statusnya sudah bukan Delay
+   sehingga kotak revisinya tersembunyi, lalu ETD rencana diubah ke 10
+   -- revisi 9 tetap menang, dan karena tanggal 9 sudah lewat, jadwal
+   export itu otomatis Delivered.
+
+   Dua aturan menutupnya:
+     1. Revisi yang masih terisi SELALU tampil (form & kartu), apa pun
+        statusnya. Tidak ada tanggal tersembunyi yang menentukan.
+     2. Di luar status Delay, tanggal RENCANA yang diubah adalah jadwal
+        terbarunya: revisi yang digantikannya dikosongkan. Mengubah ETD
+        menggugurkan kedua revisi (ETA revisi berpijak pada ETD revisi
+        yang sama); mengubah ETA hanya revisi ETA. Saat status Delay
+        keduanya tampil berdampingan dan diubah sendiri-sendiri.
+------------------------------------------------------------------ */
+const LABEL_TANGGAL_REVISI = {
+  get etdUpdate() {
+    return tt("ETD revisi", "Revised ETD");
+  },
+  get etaUpdate() {
+    return tt("ETA revisi", "Revised ETA");
+  },
+};
+
+function adaRevisiJadwal(s) {
+  return !!(s && (s.etdUpdate || s.etaUpdate));
+}
+
+/* Kolom revisi yang gugur saat tanggal rencana `field` ("etd"/"eta")
+   diubah pada jadwal berstatus `status`. Yang sudah kosong tidak
+   disebut. */
+function revisiDigugurkan(status, field, s) {
+  if (status === "delayed" || !s) return [];
+  const kolom = field === "etd" ? ["etdUpdate", "etaUpdate"] : field === "eta" ? ["etaUpdate"] : [];
+  return kolom.filter((k) => s[k]);
+}
+
 // Teks badge di sebelah label field update, mis
 function delayDeltaLabel(baselineDate, updateDate, basis) {
   const d = delayDaysBetween(baselineDate, updateDate);

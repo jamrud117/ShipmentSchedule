@@ -170,16 +170,58 @@ function dnTerapkanSaringBayar(kueri) {
   if (docNumSaringBayar === "belum") return kueri.is("payload->>paidAt", null);
   return kueri;
 }
-/* Pilihannya hanya tampil di Pengajuan Dana, dan TIDAK di tab Summary --
-   Summary punya saringan Status Bayar sendiri; dua pilihan untuk hal
-   yang sama di satu layar hanya menunggu saatnya saling bertentangan. */
+
+/* RENTANG TANGGAL PENGAJUAN (kolom Tanggal = doc_date) di riwayat
+   Pengajuan Dana. Dikirim ke database seperti kotak cari & status
+   bayar, jadi berlaku untuk SELURUH riwayat, bukan cuma halaman yang
+   sedang tampil -- dan jumlah halamannya ikut menyusut. */
+let docNumRentang = ["", ""];
+let dnPemilihRentang = null;
+function dnTerapkanSaringTanggal(kueri) {
+  if (docNumActiveTab !== "fund") return kueri;
+  const [dari, sampai] = docNumRentang;
+  if (dari) kueri = kueri.gte("doc_date", dari);
+  if (sampai) kueri = kueri.lte("doc_date", sampai);
+  return kueri;
+}
+function dnPasangPemilihRentang() {
+  const wadah = $("#docNumRentang");
+  if (!wadah || dnPemilihRentang || typeof buatRentangTanggal !== "function") return;
+  dnPemilihRentang = buatRentangTanggal(wadah, {
+    pintas: [
+      { label: () => t("u.minggu.ini"), rentang: RENTANG_PINTAS.mingguIni },
+      { label: () => t("u.bulan.ini"), rentang: RENTANG_PINTAS.bulanIni },
+      { label: () => t("u.bulan.lalu"), rentang: RENTANG_PINTAS.bulanLalu },
+      { label: () => t("u.tahun.ini"), rentang: RENTANG_PINTAS.tahunIni },
+    ],
+    onApply: (dari, sampai) => {
+      docNumRentang = [dari, sampai];
+      docNumPage = 1;
+      renderDocNumHistory();
+    },
+  });
+}
+function dnLepasRentang() {
+  docNumRentang = ["", ""];
+  if (dnPemilihRentang) dnPemilihRentang.setel("", "");
+}
+
+/* Saringan status bayar & rentang tanggal hanya tampil di Pengajuan
+   Dana, dan TIDAK di tab Summary / Report -- keduanya punya saringan
+   sendiri; dua pilihan untuk hal yang sama di satu layar hanya menunggu
+   saatnya saling bertentangan. */
 function dnTampilkanSaringBayar() {
-  const wadah = document.querySelector(".dn-saring-bayar");
-  if (!wadah) return;
   const summary =
     (typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) ||
     (typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB);
-  wadah.classList.toggle("d-none", docNumActiveTab !== "fund" || summary);
+  const sembunyi = docNumActiveTab !== "fund" || summary;
+  const wadah = document.querySelector(".dn-saring-bayar");
+  if (wadah) wadah.classList.toggle("d-none", sembunyi);
+  const rentang = $("#docNumRentang");
+  if (rentang) {
+    if (!sembunyi) dnPasangPemilihRentang();
+    rentang.classList.toggle("d-none", sembunyi);
+  }
 }
 const DN_KOLOM_CARI = [
   "doc_number", "requester", "department",
@@ -199,19 +241,18 @@ const DN_KOLOM_CARI = [
 /* Jenis Transaksi di tabel riwayat: ikon moda + istilahnya. Pengajuan
    lama yang belum punya isian ini tampil "—". */
 function dnTeksTransaksi(v) {
-  const teks = String(v || "").trim();
+  const teks = fundJenisTransaksiBaku(v);
   if (!teks) return "\u2014";
-  const ikon = /^Sea/.test(teks) ? "bi-water" : /^Air/.test(teks) ? "bi-airplane" : "bi-shop";
+  const ikon = /^Sea/.test(teks) ? "bi-water" : /^Air/.test(teks) ? "bi-airplane" : /Truck/i.test(teks) ? "bi-truck" : "bi-shop";
   return `<span class="dn-transaksi"><i class="bi ${ikon}"></i> ${escapeHtml(teks)}</span>`;
 }
 
-/* Carrier untuk tabel riwayat invoice: isian Carrier di data cetak
-   CIPL; kalau kosong, kapal/pesawat + voyage dari Jadwal Terkait --
-   sumber yang sama yang dipakai cetakannya. */
+/* Carrier untuk tabel riwayat invoice: PERSIS yang tercetak di CIPL
+   (carrierCipl -- isian Carrier, kalau kosong dari Jadwal Terkait;
+   kiriman udara cukup No Flight). */
 function dnCarrierInvoice(p) {
-  if (p.carrier) return p.carrier;
   const jadwal = p.shipmentId && typeof ciplCariShipment === "function" ? ciplCariShipment(p.shipmentId) : null;
-  return jadwal ? [jadwal.vessel, jadwal.voyage].filter(Boolean).join(" ") : "";
+  return carrierCipl(p, jadwal);
 }
 
 function dnFilterCari(q) {
@@ -333,10 +374,10 @@ async function muatSeri(docType) {
    menuliskannya, jadi polanya diambil dari profil, bukan dari
    sub-jenis baru yang akan memecah penomorannya. */
 function docNumTemplate(typeKey, isoDate) {
-  const t = resolveDocNumType(typeKey);
+  const jenis = resolveDocNumType(typeKey);
   const d = parseLocalDate(isoDate) || new Date();
 
-  let pola = t.pattern || "{SEQ}";
+  let pola = jenis.pattern || "{SEQ}";
   if (typeKey === "invoice" && typeof ciplProfil === "function") {
     const isi = readDocNumForm(typeKey);
     const prof = ciplProfil(isi.customer);
@@ -376,8 +417,9 @@ function readDocNumForm(typeKey) {
     /* Isian yang sedang disembunyikan (lihat data-dn-when) dilewati.
        Tanpa ini, nomor billing & nomor invoice akan tersimpan
        dua-duanya padahal cuma satu yang dimaksud, dan surat cetaknya
-       memuat keduanya. */
-    if (el.disabled) return;
+       memuat keduanya. Sub-jenis TIDAK: ia dikunci (bukan disembunyikan)
+       di pop-up Ubah Isian, dan nilainya tetap bagian dari isian. */
+    if (el.disabled && !el.hasAttribute("data-dn-subtype")) return;
     out[el.dataset.dn] = String(el.value || "").trim();
   });
   /* Rincian biaya bukan isian ber-data-dn (ia tabel tersendiri), jadi
@@ -414,7 +456,7 @@ function readDocNumForm(typeKey) {
   }
   if (typeof fundLines !== "undefined" && typeKey === "fund") {
     const pakaiRinci = out.expenseType && out.expenseType !== "Billing";
-    const bersih = pakaiRinci ? fundLinesBersih(fundLines) : [];
+    const bersih = pakaiRinci ? fundRapikanTautanAwb(fundLinesBersih(fundLines), out.blAwb) : [];
     if (bersih.length) out.lines = bersih;
     // Invoice / debit note tambahan dalam pengajuan yang sama
     if (pakaiRinci && typeof fundDokumenBersih === "function" && fundDokumen.length) out.dokumen = fundDokumenBersih();
@@ -444,13 +486,28 @@ function validateDocNumForm(typeKey) {
       "A formula in the Cost Breakdown is not valid yet (red box).",
     ));
   }
+  /* Baris yang ditautkan ke BL/AWB yang sudah dihapus dari isian BL/AWB:
+     biayanya tidak akan sampai ke kiriman mana pun. Ditolak supaya
+     dipilih ulang -- bukan diam-diam dibagi rata. */
+  if (typeKey === "fund" && typeof fundTautanAwbHilang === "function") {
+    const isianAwb = panel.querySelector('[data-dn="blAwb"]');
+    const nilaiAwb = isianAwb && !isianAwb.disabled ? isianAwb.value : "";
+    const pakaiRinci = (panel.querySelector('[data-dn="expenseType"]') || {}).value !== "Billing";
+    const hilang = pakaiRinci && fundDaftarAwb(nilaiAwb).length > 1 ? fundTautanAwbHilang(fundLines, nilaiAwb) : [];
+    if (hilang.length) {
+      errors.push(tt(
+        `Baris ${hilang.join(", ")} di Rincian Biaya ditautkan ke BL/AWB yang sudah tidak ada di isian BL/AWB — pilih ulang BL/AWB-nya.`,
+        `Cost line(s) ${hilang.join(", ")} are linked to a BL/AWB that is no longer in the BL/AWB field — choose it again.`,
+      ));
+    }
+  }
 
   panel.querySelectorAll("[data-dn]").forEach((el) => {
     // Isian tersembunyi tidak boleh dituntut wajib diisi.
     if (el.disabled) return;
     const nilai = String(el.value || "").trim();
     const label = (
-      el.closest(".col-md-2, .col-md-3, .col-md-4, .col-md-6, .col-12")
+      el.closest(".fgrid > *")
         ?.querySelector(".form-label")
         ?.textContent || el.dataset.dn
     )
@@ -843,6 +900,115 @@ function docNumSubtypeLabelFor(docType) {
   return hasil;
 }
 
+/* ------------------------------------------------------------------
+   UBAH ISIAN DI POP-UP
+
+   Pensil di riwayat membuka pop-up -- bukan mengisi form di atas lalu
+   menggulir ke sana, sehingga pengguna kehilangan baris riwayat yang
+   sedang ia lihat. Form-nya tetap SATU: panel jenis dokumennya
+   dipinjam ke dalam pop-up selama diubah, lalu dikembalikan ke
+   tempatnya. Validasi, isian bersyarat, rincian biaya, pemilih jadwal,
+   dropdown vendor -- semuanya jalur yang sama dengan pengajuan baru,
+   tanpa salinan form kedua yang bisa berbeda.
+
+   Pengajuan baru yang sedang setengah diisi di form itu difoto lebih
+   dulu dan dipulihkan sesudah pop-up ditutup: membuka pop-up tidak
+   boleh menghapus pekerjaan yang ada di belakangnya.
+------------------------------------------------------------------ */
+let dnUbahSesi = null; // { tab, panel, ganjal, draf, kunciSub, asal } selama panel dipinjam
+
+/* Menyetel satu isian. Nilai lama yang tidak ada di daftar pilihan
+   TETAP DIPERTAHANKAN.
+
+   Isian Pemohon dulu kotak ketik bebas, jadi pengajuan lama bisa
+   menyimpan nama mana pun -- termasuk ejaan yang tidak persis sama
+   dengan pilihan sekarang. Menyetel .value ke nilai yang tidak ada
+   pilihannya membuat <select> diam-diam jatuh ke kosong: membuka nomor
+   lama untuk memperbaiki SATU isian lalu menyimpannya akan menghapus
+   nama pemohonnya tanpa ada yang terlihat berubah. */
+function dnSetelIsian(el, nilai) {
+  if (!el || nilai == null) return;
+  if (el.tagName === "SELECT" && nilai !== "" && !dnPunyaPilihan(el, nilai)) {
+    const opsi = document.createElement("option");
+    opsi.value = nilai;
+    opsi.textContent = nilai;
+    /* Ditandai supaya dibuang lagi saat form dikosongkan -- tanpa itu
+       daftar pilihannya memanjang terus setiap satu nomor lama dibuka,
+       dan nama yang sudah tidak dipakai ikut ditawarkan untuk
+       pengajuan baru. Disisipkan sebelum "+ Tambah vendor baru…"
+       (dropdown vendor), supaya pilihan itu tetap paling bawah. */
+    opsi.dataset.dnLawas = "1";
+    const akhir = typeof FUND_VENDOR_BARU !== "undefined" ? [...el.options].find((o) => o.value === FUND_VENDOR_BARU) : null;
+    el.insertBefore(opsi, akhir || null);
+  }
+  el.value = nilai;
+}
+
+/* Foto seluruh isi form yang sedang diisi: isian ber-data-dn, kotak
+   ketik pemilih jadwal, nomor PO tambahan, tabel-tabel rinciannya, dan
+   catatan isian otomatis. Elemennya sendiri tidak pernah dibuat ulang
+   (hanya pilihan <option>-nya), jadi yang dicatat elemen + nilainya. */
+function dnFotoDraf(panel, tab) {
+  const salin = (x) => JSON.parse(JSON.stringify(x == null ? null : x));
+  const dalam = (sel) => {
+    const el = $(sel);
+    return el && panel.contains(el) ? el : null;
+  };
+  return {
+    isian: [...panel.querySelectorAll("[data-dn]")].map((el) => ({ el, nilai: el.value, otomatis: el.dataset.autoFill })),
+    cari: DN_PEMILIH_JADWAL.map((pas) => dalam(pas.cari))
+      .filter(Boolean)
+      .map((el) => ({ el, nilai: el.value })),
+    po: dalam("#poNoList") && typeof poNoKotakTambahan === "function"
+      ? { no: poNoKotakTambahan().map((el) => el.value), tgl: poTglKotakTambahan().map((el) => el.value) }
+      : null,
+    fundLines: tab === "fund" && typeof fundLines !== "undefined" ? salin(fundLines) : null,
+    fundDokumen: tab === "fund" && typeof fundDokumen !== "undefined" ? salin(fundDokumen) : null,
+    doLines: tab === "do" && typeof doLines !== "undefined" ? salin(doLines) : null,
+    suratBarang: tab === "letter" && typeof suratBarang !== "undefined" ? salin(suratBarang) : null,
+    suratOtomatis: tab === "letter" && typeof suratIsianOtomatis !== "undefined" ? salin(suratIsianOtomatis) : null,
+    isianOtomatis: salin(dnIsianOtomatis),
+  };
+}
+
+function dnPulihkanDraf(panel, tab, draf) {
+  resetDocNumForm(tab);
+  draf.isian.forEach((x) => {
+    dnSetelIsian(x.el, x.nilai);
+    if (x.otomatis) x.el.dataset.autoFill = x.otomatis;
+    else delete x.el.dataset.autoFill;
+  });
+  // Sesudah id tersembunyinya: teks yang setengah diketik ikut kembali
+  draf.cari.forEach((x) => {
+    x.el.value = x.nilai;
+    const teks = String(x.nilai || "").trim();
+    x.el.classList.toggle("is-invalid", !!teks && !dnPetaJadwal.get(teks));
+  });
+  if (draf.po) setPoNoExtra(draf.po.no, draf.po.tgl);
+  if (draf.fundLines) {
+    // Dokumen dulu: pengelompokan baris rincian bergantung padanya
+    setFundDokumen(draf.fundDokumen || []);
+    setFundLines(draf.fundLines);
+  }
+  if (draf.doLines) setDoLines(draf.doLines);
+  if (draf.suratBarang) setSuratBarang(draf.suratBarang);
+  if (draf.suratOtomatis) suratIsianOtomatis = draf.suratOtomatis;
+  dnIsianOtomatis = draf.isianOtomatis || {};
+  syncDocNumConditional(panel);
+  if (tab === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
+}
+
+/* Pesan isian yang belum benar: di kaki pop-up saat mengubah, di baris
+   tombol halaman saat mengajukan nomor baru. */
+const dnKotakHint = () => (dnUbahSesi ? $("#dnEditHint") : $("#docNumHint"));
+
+function dnTulisHint(pesan, galat) {
+  const hint = dnKotakHint();
+  if (!hint) return;
+  hint.textContent = pesan || "";
+  hint.classList.toggle("docnum-hint--error", !!(pesan && galat));
+}
+
 function mulaiUbahDocNum(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
   if (!r) return;
@@ -850,6 +1016,8 @@ function mulaiUbahDocNum(id) {
     showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger");
     return;
   }
+  // Pop-up sebelumnya yang belum sempat selesai menutup dirapikan dulu.
+  if (dnUbahSesi) dnSelesaiUbah();
 
   /* Pindah ke panel jenis dokumennya dulu, baru isian diisi.
 
@@ -861,10 +1029,23 @@ function mulaiUbahDocNum(id) {
   if (tabKey !== docNumActiveTab) showDocNumTab(tabKey);
 
   const panel = docNumPanelEl(tabKey);
-  if (!panel) {
+  const badan = $("#dnEditBadan");
+  if (!panel || !badan) {
     showToast(t("m.panel.jenis.dokumen.ini.tidak.ditemukan"), "danger");
     return;
   }
+
+  /* Draf difoto & tingginya dicatat SEBELUM form dikosongkan. Pengganti
+     setinggi panel itu menjaga halaman di belakang tidak melompat --
+     tanpa itu riwayat yang sedang dilihat bergeser naik selama pop-up
+     terbuka, dan turun lagi saat panelnya kembali. */
+  const draf = dnFotoDraf(panel, tabKey);
+  const ganjal = document.createElement("div");
+  ganjal.className = "dn-edit-ganjal";
+  ganjal.style.height = panel.offsetHeight + "px";
+  panel.parentNode.insertBefore(ganjal, panel);
+  badan.appendChild(panel);
+
   resetDocNumForm(tabKey);
   dnIsianOtomatis = {};
 
@@ -876,34 +1057,14 @@ function mulaiUbahDocNum(id) {
   const elSub = panel.querySelector("[data-dn-subtype]");
   if (elSub && subLabel) elSub.value = subLabel;
 
-  const isi = (nama, nilai) => {
-    const el = panel.querySelector(`[data-dn="${nama}"]`);
-    if (!el || nilai == null) return;
-    /* NILAI LAMA YANG TIDAK ADA DI DAFTAR PILIHAN TETAP DIPERTAHANKAN.
-
-       Isian Pemohon dulu kotak ketik bebas, jadi pengajuan lama bisa
-       menyimpan nama mana pun -- termasuk ejaan yang tidak persis sama
-       dengan pilihan sekarang. Menyetel .value ke nilai yang tidak ada
-       pilihannya membuat <select> diam-diam jatuh ke kosong: membuka
-       nomor lama untuk memperbaiki SATU isian lalu menyimpannya akan
-       menghapus nama pemohonnya tanpa ada yang terlihat berubah. */
-    if (el.tagName === "SELECT" && !dnPunyaPilihan(el, nilai)) {
-      const opsi = document.createElement("option");
-      opsi.value = nilai;
-      opsi.textContent = nilai;
-      /* Ditandai supaya bisa dibuang lagi saat form dikosongkan --
-         tanpa itu daftar pilihannya memanjang terus setiap satu nomor
-         lama dibuka, dan nama yang sudah tidak dipakai ikut ditawarkan
-         untuk pengajuan baru. */
-      opsi.dataset.dnLawas = "1";
-      el.appendChild(opsi);
-    }
-    el.value = nilai;
-  };
+  const isi = (nama, nilai) => dnSetelIsian(panel.querySelector(`[data-dn="${nama}"]`), nilai);
   isi("docDate", r.doc_date);
   isi("requester", r.requester);
   isi("department", r.department);
-  Object.keys(r.payload || {}).forEach((k) => isi(k, r.payload[k]));
+  Object.keys(r.payload || {}).forEach((k) =>
+    // Nama lama "Local Sale" dibuka dengan nama barunya (Inland Trucking)
+    isi(k, k === "transactionType" ? fundJenisTransaksiBaku(r.payload[k]) : r.payload[k]),
+  );
   /* Kotak tersembunyi sudah terisi id-nya oleh isi() di atas, tapi
      kotak yang DITERLIHAT pengguna masih kosong — tanpa baris ini,
      membuka nomor lama untuk diubah menampilkan tautan jadwal sebagai
@@ -938,66 +1099,76 @@ function mulaiUbahDocNum(id) {
      isian yang justru berisi data. */
   syncDocNumConditional(panel);
 
+  /* SUB-JENIS = DERET NOMOR, jadi dikunci selama diubah. Nomornya tidak
+     ikut berubah (lihat simpanUbahDocNum), sehingga mengganti Commercial
+     jadi Non-Commercial -- atau Export jadi Lokal -- di sini hanya
+     menghasilkan nomor deret yang satu dengan isian deret yang lain.
+     Isian yang dikunci tetap ikut terbaca (readDocNumForm). */
+  const kunciSub = !!(elSub && !elSub.disabled);
+  if (kunciSub) {
+    elSub.disabled = true;
+    elSub.title = tt("Jenis ini menentukan deret nomornya, jadi tidak bisa diganti di sini.",
+      "This type sets the number series, so it cannot be changed here.");
+  }
+
   dnEditingId = r.id;
-  syncModeUbahDocNum(r.doc_number);
+  // asal: tombol pensil yang ditekan -- fokus kembali ke sana saat pop-up ditutup
+  dnUbahSesi = { tab: tabKey, panel, ganjal, draf, kunciSub, asal: document.activeElement };
 
-  /* DERET NOMOR IKUT BERPINDAH KE SUB-JENIS YANG BARU DIBUKA.
-
-     Sub-jenis di atas disetel lewat kode (elSub.value = ...), dan
-     menyetel .value TIDAK memicu event `change` -- jadi pendengar yang
-     biasanya menyegarkan pratinjau tidak pernah berjalan. Akibatnya
-     membuka satu nomor Surat Jalan LOKAL meninggalkan pratinjau dan
-     panel "Atur Nomor Urut" menunjuk deret EXPORT: nomor berikutnya
-     yang tampil milik deret sebelah, dan menekan Simpan di panel itu
-     menyetel deret sebelah pula.
-
-     Riwayatnya ikut dilepas dari sub-tab yang dipilih sebelumnya
-     supaya tab, form, dan panel nomor urut menunjuk deret yang sama. */
-  docNumHistorySub = null;
-  refreshDocNumPreview(tabKey);
-
-  /* Menggulir ke form itu kenyamanan, bukan bagian dari operasinya.
-     Dibiarkan tanpa penjaga, satu peramban yang tidak mendukungnya
-     akan melempar SESUDAH isian terisi — form tampak siap diedit,
-     padahal mode ubahnya tidak pernah selesai dipasang. */
-  if (typeof panel.scrollIntoView === "function") {
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  /* Form berada jauh di atas tabel riwayat. Kalau gulirannya tidak
-     bergerak — halaman pendek, gulir dihentikan pengguna, atau
-     kontainer yang bergulir bukan jendela — tidak ada satu pun tanda
-     bahwa tombolnya bekerja. Toast terlihat di mana pun posisinya. */
-  showToast(
-    t("x.isian.nomor.dibuka", { nomor: r.doc_number }),
-    "dark",
-  );
+  $("#dnEditJenis").textContent = `${tt("Ubah isian", "Edit details")} · ${
+    typeof dndNamaJenis === "function" ? dndNamaJenis(r, tabKey) : (DOCNUM_TYPES[tabKey] || {}).label || ""}`;
+  $("#dnEditNomor").textContent = r.doc_number || "—";
+  dnTulisHint("");
+  bootstrap.Modal.getOrCreateInstance($("#dnEditModal")).show();
 }
 
-function batalUbahDocNum() {
-  const jenis = dnEditingId ? docNumActiveTab : null;
+/* Panel kembali ke halaman dan draf pengajuan baru dipulihkan. Dipanggil
+   SESUDAH pop-up selesai menghilang (hidden.bs.modal) -- dipanggil saat
+   ia masih memudar, isinya tampak kosong sekejap. */
+function dnSelesaiUbah() {
   dnEditingId = null;
-  syncModeUbahDocNum(null);
-  if (jenis) resetDocNumForm(jenis, { keepIdentity: true });
+  const sesi = dnUbahSesi;
+  if (!sesi) return;
+  dnUbahSesi = null;
+  const elSub = sesi.panel.querySelector("[data-dn-subtype]");
+  if (elSub && sesi.kunciSub) {
+    elSub.disabled = false;
+    elSub.removeAttribute("title");
+  }
+  if (sesi.ganjal.parentNode) sesi.ganjal.replaceWith(sesi.panel);
+  dnPulihkanDraf(sesi.panel, sesi.tab, sesi.draf);
+  /* Sub-jenis & tanggal draf bisa berbeda dari nomor yang tadi diubah:
+     pratinjau dan panel Atur Nomor Urut menunjuk deret draf lagi. Hanya
+     kalau tab-nya masih tab itu -- pop-up yang ditutup karena berpindah
+     jenis dokumen tidak boleh menarik panel nomor urut ke jenis lama. */
+  if (sesi.tab === docNumActiveTab) refreshDocNumPreview(sesi.tab);
+  /* Pengguna papan ketik kembali ke baris riwayat yang tadi ia buka,
+     bukan ke awal halaman. Sesudah menyimpan, riwayatnya digambar ulang
+     dan tombol lamanya sudah lepas -- dilewati. */
+  const asal = sesi.asal;
+  if (asal && asal !== document.body && asal.isConnected && typeof asal.focus === "function") {
+    try {
+      asal.focus({ preventScroll: true });
+    } catch (e) {
+      /* Mengembalikan fokus hanya kenyamanan */
+    }
+  }
 }
 
-/* Tombol Ajukan berubah jadi Simpan Perubahan, dan sebuah spanduk
-   menyebutkan nomor mana yang sedang diperbaiki — tanpa itu, form yang
-   sudah terisi mudah disangka pengajuan baru dan ditekan Ajukan. */
-function syncModeUbahDocNum(nomor) {
-  const btn = $("#btnDocNumSubmit");
-  const banner = $("#dnEditBanner");
-  if (btn) {
-    btn.innerHTML = nomor
-      ? '<i class="bi bi-check2"></i> ' + tt("Simpan Perubahan", "Save Changes")
-      : '<i class="bi bi-hash"></i> ' + tt("Ajukan Nomor", "Request Number");
-  }
-  if (banner) {
-    banner.classList.toggle("d-none", !nomor);
-    const el = $("#dnEditBannerNum");
-    if (el) el.textContent = nomor || "";
-  }
+/* Menutup pop-up tanpa menyimpan. Form dikembalikan begitu pop-up
+   hilang; kalau ia tidak sedang tampil, langsung saat itu juga. */
+function batalUbahDocNum() {
+  dnEditingId = null;
+  const el = $("#dnEditModal");
+  if (el && el.classList.contains("show")) bootstrap.Modal.getOrCreateInstance(el).hide();
+  else dnSelesaiUbah();
 }
+
+$("#dnEditModal")?.addEventListener("hide.bs.modal", (e) => {
+  // Sedang menyimpan: menutupnya sekarang meninggalkan simpanan setengah jalan
+  if (docNumBusy) e.preventDefault();
+});
+$("#dnEditModal")?.addEventListener("hidden.bs.modal", dnSelesaiUbah);
 
 /* ---------- tagihan ganda (Pengajuan Dana) ---------- */
 
@@ -1076,12 +1247,8 @@ function dnTolakTagihanGanda(temuan) {
   const panel = docNumPanelEl("fund");
   const kotak = panel && panel.querySelector(`[data-dn="${temuan.jenis.field}"]`);
   if (kotak) kotak.classList.add("is-invalid");
-  const hint = $("#docNumHint");
-  if (hint) {
-    hint.textContent = tt(`${label} ${temuan.nomor} sudah diajukan di ${r.doc_number}.`,
-      `${label} ${temuan.nomor} was already submitted in ${r.doc_number}.`);
-    hint.classList.add("docnum-hint--error");
-  }
+  dnTulisHint(tt(`${label} ${temuan.nomor} sudah diajukan di ${r.doc_number}.`,
+    `${label} ${temuan.nomor} was already submitted in ${r.doc_number}.`), true);
   showConfirm(
     tt(
       `${label} ${temuan.nomor} sudah diajukan di Permintaan Dana ${di}. Satu tagihan hanya bisa diajukan sekali supaya tidak dibayar dua kali — kalau pengajuan itu batal, perbaiki atau hapus dulu di riwayat.`,
@@ -1101,12 +1268,19 @@ function dnTolakTagihanGanda(temuan) {
 }
 
 async function simpanUbahDocNum() {
-  const typeKey = docNumActiveTab;
+  /* Id & jenisnya dipegang sendiri sejak awal: selama kueri berjalan
+     dnEditingId bisa saja sudah dilepas, dan menulis ke "id null"
+     berarti perubahannya hilang tanpa pesan. */
+  const id = dnEditingId;
+  if (docNumBusy || !id) return;
+  const typeKey = dnUbahSesi ? dnUbahSesi.tab : docNumActiveTab;
   const errors = validateDocNumForm(typeKey);
   if (errors.length) {
-    showToast(errors[0], "danger");
+    dnTulisHint(errors[0], true);
+    showToast(errors.length === 1 ? errors[0] : t("x.isian.belum.benar", { n: errors.length }), "danger");
     return;
   }
+  dnTulisHint("");
 
   const form = readDocNumForm(typeKey);
   const payload = {};
@@ -1119,15 +1293,22 @@ async function simpanUbahDocNum() {
      bukan isian form -- ia ditandai dari daftar riwayat. Tanpa baris
      ini, memperbaiki satu salah ketik di pengajuan yang sudah lunas
      diam-diam mengembalikannya jadi "belum lunas". */
-  const lama = (docNumHistoryRows.find((r) => r.id === dnEditingId) || {}).payload || {};
+  const lama = (docNumHistoryRows.find((r) => r.id === id) || {}).payload || {};
   DN_FIELD_BAYAR.forEach((k) => {
     if (lama[k] != null && lama[k] !== "") payload[k] = lama[k];
   });
 
+  const btn = $("#btnDnEditSimpan");
+  const htmlAsli = btn ? btn.innerHTML : "";
+  let tersimpan = false;
   docNumBusy = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menyimpan...", "Saving...")}`;
+  }
   try {
     if (typeKey === "fund") {
-      const ganda = await dnCariTagihanGanda(form, dnEditingId);
+      const ganda = await dnCariTagihanGanda(form, id);
       if (ganda) {
         dnTolakTagihanGanda(ganda);
         return;
@@ -1142,12 +1323,9 @@ async function simpanUbahDocNum() {
         department: form.department || null,
         payload,
       })
-      .eq("id", dnEditingId);
+      .eq("id", id);
     if (error) throw error;
-
-    batalUbahDocNum();
-    await renderDocNumHistory();
-    showToast(t("m.isian.nomor.berhasil.diperbarui"), "success");
+    tersimpan = true;
   } catch (err) {
     console.error(err);
     showToast(
@@ -1156,7 +1334,17 @@ async function simpanUbahDocNum() {
     );
   } finally {
     docNumBusy = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = htmlAsli;
+    }
   }
+  if (!tersimpan) return; // pop-up tetap terbuka: isiannya bisa dibetulkan lalu disimpan lagi
+
+  // Sesudah docNumBusy dilepas -- selama menyimpan, pop-up menolak ditutup
+  batalUbahDocNum();
+  await renderDocNumHistory();
+  showToast(t("m.isian.nomor.berhasil.diperbarui"), "success");
 }
 
 /* ---------- penerbitan nomor ---------- */
@@ -1467,7 +1655,7 @@ function isiOtomatisDariJadwal() {
   }
   set("portLoading", portCodeLabel(s.origin));
   set("finalDestination", portCodeLabel(s.destination));
-  set("carrier", carrierNameFromShipment(s));
+  set("carrier", carrierCiplDariJadwal(s)); // udara: No Flight saja
   set("termsDelivery", s.incoterm);
   /* Sailing on or About SENGAJA tidak diisi dari ETD. Tanggal berlayar
      di invoice adalah keterangan pengangkut, bukan rencana kita — dan
@@ -1502,7 +1690,8 @@ function syncDocNumConditional(panel) {
   if (kotakPayee) {
     if (nilai === "Billing") {
       if (!kotakPayee.value.trim() || kotakPayee.dataset.autoFill === "1") {
-        kotakPayee.value = "KAS NEGARA";
+        // Dropdown vendor: pilihannya dipastikan ada dulu (fund-vendor.js)
+        kotakPayee.value = typeof fundVendorPastikan === "function" ? fundVendorPastikan("KAS NEGARA", kotakPayee) : "KAS NEGARA";
         kotakPayee.dataset.autoFill = "1";
       }
     } else if (kotakPayee.dataset.autoFill === "1") {
@@ -1522,6 +1711,9 @@ function syncDocNumConditional(panel) {
       f.disabled = !cocok;
     });
   });
+  /* Sesudah "Dibayarkan Kepada" diisikan di atas (KAS NEGARA untuk
+     Billing): Doc No bergantung pada nama vendornya (fund-docno.js). */
+  fundSelaraskanDocNo(panel);
 }
 
 function dnPunyaPilihan(sel, nilai) {
@@ -1615,12 +1807,21 @@ document.addEventListener("click", (e) => {
   renderDocNumHistory();
 });
 document.addEventListener("input", (e) => {
-  // Begitu diketik sendiri, isinya milik pengguna -- jangan ditimpa lagi.
+  // Begitu dipilih sendiri, isinya milik pengguna -- jangan ditimpa lagi.
   const el = e.target.closest('[data-dn="payee"]');
-  if (el) delete el.dataset.autoFill;
+  if (!el || (typeof FUND_VENDOR_BARU !== "undefined" && el.value === FUND_VENDOR_BARU)) return;
+  delete el.dataset.autoFill;
+  // Nama vendor berubah -> Doc No ikut tampil / sembunyi
+  fundSelaraskanDocNo(el.closest("[data-docnum-panel]"));
 });
 
 /* ---------- riwayat nomor terbit ---------- */
+
+/* Kolom No (nomor baris, berlanjut antarhalaman) di riwayat Invoice &
+   Pengajuan Dana -- daftar yang paling sering dicocokkan baris demi
+   baris dengan rekap di luar aplikasi. */
+const DN_TAB_KOLOM_NO = ["invoice", "fund"];
+const dnPakaiKolomNo = (tab) => DN_TAB_KOLOM_NO.indexOf(tab) >= 0;
 
 /* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
 let docNumPage = 1;
@@ -1674,6 +1875,7 @@ async function renderDocNumHistory() {
     const saringCari = dnFilterCari(docNumCari);
     if (saringCari) kueri = kueri.or(saringCari);
     kueri = dnTerapkanSaringBayar(kueri);
+    kueri = dnTerapkanSaringTanggal(kueri);
     const { data, error, count } = await kueri
       .order("created_at", { ascending: false })
       .range(dari, dari + docNumPageSize - 1);
@@ -1693,10 +1895,20 @@ async function renderDocNumHistory() {
 
     if (!total) {
       const teksBayar = docNumSaringBayar === "lunas" ? tt("Lunas", "Paid") : tt("Belum Lunas", "Unpaid");
+      const [rDari, rSampai] = docNumRentang;
+      const teksRentang = docNumActiveTab === "fund" && (rDari || rSampai)
+        ? `${drpFmtDisplay(rDari) || "…"} – ${drpFmtDisplay(rSampai) || "…"}`
+        : "";
       box.innerHTML = docNumCari
         ? `<div class="docnum-empty">${tt(`Tidak ada nomor yang cocok dengan “${escapeHtml(docNumCari)}”.`, `No numbers match “${escapeHtml(docNumCari)}”.`)}</div>`
-        : docNumActiveTab === "fund" && docNumSaringBayar
-        ? `<div class="docnum-empty">${tt(`Tidak ada pengajuan berstatus ${teksBayar}.`, `No ${teksBayar.toLowerCase()} requests.`)}</div>`
+        : docNumActiveTab === "fund" && (docNumSaringBayar || teksRentang)
+        ? `<div class="docnum-empty">${
+            docNumSaringBayar && teksRentang
+              ? tt(`Tidak ada pengajuan berstatus ${teksBayar} pada ${escapeHtml(teksRentang)}.`, `No ${teksBayar.toLowerCase()} requests in ${escapeHtml(teksRentang)}.`)
+              : docNumSaringBayar
+              ? tt(`Tidak ada pengajuan berstatus ${teksBayar}.`, `No ${teksBayar.toLowerCase()} requests.`)
+              : tt(`Tidak ada pengajuan pada ${escapeHtml(teksRentang)}.`, `No requests in ${escapeHtml(teksRentang)}.`)
+          }</div>`
         : `<div class="docnum-empty">${tt(`Belum ada nomor ${escapeHtml(jenis.label)} yang diterbitkan.`, `No ${escapeHtml(jenis.label)} numbers issued yet.`)}</div>`;
       return;
     }
@@ -1705,7 +1917,7 @@ async function renderDocNumHistory() {
       <div class="docnum-history-wrap">
       <table class="docnum-table">
         <thead>
-          <tr>${jenis.key === "invoice" ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
+          <tr>${dnPakaiKolomNo(jenis.key) ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
             /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
                dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
                penerima yang sama persis dan cuma beda nomor billing. */
@@ -1759,7 +1971,7 @@ async function renderDocNumHistory() {
                  dilihat lewat tombol Detail — daftarnya cukup menyebut
                  satu hal yang membedakan tiap baris. */
               return `<tr>
-                ${jenis.key === "invoice" ? `<td class="dn-col-no">${(docNumPage - 1) * docNumPageSize + idx + 1}</td>` : ""}
+                ${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no">${(docNumPage - 1) * docNumPageSize + idx + 1}</td>` : ""}
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
@@ -1846,7 +2058,9 @@ async function renderDocNumHistory() {
                        Barang): surat resmi berkop. */
                     typeof suratBcBolehCetak === "function" && suratBcBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-surat="${r.id}"
-                                 title="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
+                         <button type="button" class="icon-btn" data-word-surat="${r.id}"
+                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
                       : ""
                   }
                   ${
@@ -1962,6 +2176,11 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
     cetakSuratBc(cetakSurat.dataset.printSurat);
     return;
   }
+  const wordSurat = e.target.closest("[data-word-surat]");
+  if (wordSurat) {
+    unduhSuratWord(wordSurat.dataset.wordSurat);
+    return;
+  }
 
   const cetakCi = e.target.closest("[data-print-cipl]");
   if (cetakCi) {
@@ -2010,15 +2229,12 @@ function showDocNumTab(key) {
   if (!tabs.length) return;
 
   // Kalau kunci tidak dikenal (mis
-  const known = Array.from(tabs).some((t) => t.dataset.docnumTab === key);
+  const known = Array.from(tabs).some((tab) => tab.dataset.docnumTab === key);
   const active = known ? key : DOCNUM_DEFAULT_TAB;
-  /* Berpindah jenis dokumen membatalkan perbaikan yang sedang berjalan.
-     Form panel lain sudah kosong; membiarkan dnEditingId hidup membuat
-     pengajuan berikutnya diam-diam menimpa nomor yang tadi dibuka. */
-  if (typeof dnEditingId !== "undefined" && dnEditingId && active !== docNumActiveTab) {
-    dnEditingId = null;
-    syncModeUbahDocNum(null);
-  }
+  /* Berpindah jenis dokumen menutup pop-up Ubah Isian yang masih
+     terbuka (tanpa menyimpan) -- membiarkan dnEditingId hidup membuat
+     simpanan berikutnya diam-diam menimpa nomor yang tadi dibuka. */
+  if (typeof dnUbahSesi !== "undefined" && dnUbahSesi && active !== docNumActiveTab) batalUbahDocNum();
   /* Pindah jenis dokumen MELEPAS pilihan sub-tab riwayat: label seperti
      "Lokal" tidak ada di jenis lain, dan membiarkannya membuat riwayat
      tampil kosong tanpa alasan yang terlihat. */
@@ -2032,6 +2248,7 @@ function showDocNumTab(key) {
     docNumSaringBayar = "";
     const pilihBayar = $("#docNumBayar");
     if (pilihBayar) pilihBayar.value = "";
+    dnLepasRentang();
   }
   docNumActiveTab = active;
   try {
@@ -2041,8 +2258,8 @@ function showDocNumTab(key) {
        tidak sebanding dengan menggagalkan perpindahan tab. */
   }
 
-  tabs.forEach((t) =>
-    t.classList.toggle("active", t.dataset.docnumTab === active),
+  tabs.forEach((tab) =>
+    tab.classList.toggle("active", tab.dataset.docnumTab === active),
   );
   panels.forEach((p) =>
     p.classList.toggle("active", p.dataset.docnumPanel === active),
@@ -2050,6 +2267,8 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
+  // Kotak "Aturan Doc No" hanya milik Pengajuan Dana
+  fundDocNoTampilkanKotak(active);
 
   // Tanggal dokumen default = hari ini, biar tidak perlu diketik tiap kali.
   const panel = docNumPanelEl(active);
@@ -2060,6 +2279,10 @@ function showDocNumTab(key) {
      Category Work, Total Notes, Item List) ikut muncul pada Surat Jalan
      Export sampai jenisnya diganti. */
   if (panel) syncDocNumConditional(panel);
+  /* Label "Flight/Sail & Tanggal Tiba" ditulis dari JS (ikut moda dan
+     bahasa). Tanpa disegarkan saat panel dibuka, form surat yang baru
+     tampil dengan teks HTML-nya -- berbahasa Indonesia di mode Inggris. */
+  if (active === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
 
   docNumPage = 1;
   refreshDocNumPreview(active);
@@ -2075,10 +2298,14 @@ if (docNumTabsEl) {
   });
 }
 
-// Mengubah tanggal berarti mengubah periode penomoran (bulan/tahun di dalam nomor)
+/* Mengubah tanggal berarti mengubah periode penomoran (bulan/tahun di
+   dalam nomor). Tidak berlaku di pop-up Ubah Isian: nomornya tetap, dan
+   pratinjau & panel nomor urut di belakangnya milik draf pengajuan. */
 document.querySelectorAll('[data-docnum-panel] [data-dn="docDate"]').forEach(
   (el) => {
-    el.addEventListener("change", () => refreshDocNumPreview(docNumActiveTab));
+    el.addEventListener("change", () => {
+      if (!dnUbahSesi) refreshDocNumPreview(docNumActiveTab);
+    });
   },
 );
 /* Mengganti sub-jenis berarti pindah DERET nomor: pratinjau, panel
@@ -2090,6 +2317,7 @@ document.querySelectorAll('[data-docnum-panel] [data-dn="docDate"]').forEach(
    saling membantah di satu layar. */
 document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
   el.addEventListener("change", () => {
+    if (dnUbahSesi) return; // dikunci selama diubah; berjaga-jaga
     docNumPage = 1;
     docNumHistorySub = null;
     refreshDocNumPreview(docNumActiveTab);
@@ -2097,11 +2325,13 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
   });
 });
 
-$("#btnDnEditCancel")?.addEventListener("click", batalUbahDocNum);
-
 $("#btnDocNumSubmit")?.addEventListener("click", () => {
   if (!requireEdit()) return;
   submitDocNumRequest();
+});
+$("#btnDnEditSimpan")?.addEventListener("click", () => {
+  if (!requireEdit()) return;
+  simpanUbahDocNum();
 });
 $("#btnDocNumReset")?.addEventListener("click", () => {
   resetDocNumForm(docNumActiveTab);
@@ -2127,14 +2357,9 @@ function setActivePageNav(page) {
 }
 
 
-/* ------------------------------------------------------------------
-   DETAIL PENGAJUAN NOMOR
+/* Kotak Detail Pengajuan Nomor ("Lihat seluruh isian") ada di
+   js/features/docnum-detail.js. */
 
-   Isian tiap jenis dokumen berbeda-beda, dan menampilkan semuanya di
-   tabel membuat kolom Keterangan melebar melewati lebarnya. Di sini
-   seluruh isian ditampilkan apa adanya — termasuk field yang hanya
-   dipunyai satu jenis dokumen.
------------------------------------------------------------------- */
 /* Judul kolom keempat mengikuti jenis dokumennya. "Keterangan" terlalu
    samar padahal isinya selalu satu hal tertentu. */
 const DN_KOLOM_UTAMA = {
@@ -2143,253 +2368,6 @@ const DN_KOLOM_UTAMA = {
   get fund() { return "Vendor"; },
   get letter() { return tt("Perihal", "Subject"); },
 };
-
-const DN_LABEL_FIELD = {
-  get transactionType() { return tt("Jenis Transaksi", "Transaction Type"); },
-  get packages() { return tt("Jumlah Koli", "Number of Packages"); },
-  get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
-  get address() { return tt("Alamat Tujuan", "Destination Address"); },
-  get vehicle() { return tt("No. Kendaraan", "Vehicle No."); },
-  get shipmentId() { return tt("Jadwal Terkait", "Linked Schedule"); },
-  get customer() { return tt("Customer", "Customer"); },
-  get payee() { return tt("Dibayarkan Kepada", "Paid To"); },
-  get recipient() { return tt("Penerima Surat", "Letter Recipient"); },
-  get signerTitle() { return tt("Jabatan Penanda Tangan", "Signatory Title"); },
-  get noAju() { return tt("Nomor Aju", "Aju No."); },
-  get invoiceRef() { return tt("No. & Tanggal Invoice", "Invoice No. & Date"); },
-  get shipper() { return "Shipper"; },
-  get awb() { return "AWB / BL"; },
-  get koliBerat() { return tt("Koli / Berat", "Packages / Weight"); },
-  get namaBarang() { return tt("Nama Barang", "Goods"); },
-  get negaraAsal() { return tt("Negara Asal", "Country of Origin"); },
-  get flightTiba() { return tt("Flight & Tanggal Tiba", "Flight & Arrival Date"); },
-  get nilaiBarang() { return tt("Nilai Barang", "Goods Value"); },
-  get tglBayar() { return tt("Tanggal Pembayaran", "Payment Date"); },
-  get itemsFungsi() { return tt("Barang & Fungsi", "Goods & Function"); },
-  get subject() { return tt("Perihal", "Subject"); },
-  get amount() { return tt("Nilai", "Amount"); },
-  get currency() { return tt("Mata Uang", "Currency"); },
-  get purpose() { return tt("Keperluan", "Purpose"); },
-  get notes() { return tt("Keterangan", "Notes"); },
-  get reference() { return tt("Referensi", "Reference"); },
-  // Isian Form Pengajuan Dana
-  get billingNo() { return tt("Nomor Billing", "Billing Number"); },
-  get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
-  get dokumen() { return tt("Invoice / Debit Note Tambahan", "Additional Invoice / Debit Note"); },
-  get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
-  get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
-  get blAwb() { return "BL/AWB"; },
-  get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
-  get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
-  get attachment() { return tt("Lampiran", "Attachment"); },
-  get feeBm() { return tt("Bea Masuk", "Import Duty"); },
-  get feePpn() { return tt("PPN Import", "Import VAT (PPN)"); },
-  get feePph() { return tt("PPH Import", "Import Income Tax (PPH)"); },
-  get checkedByName() { return tt("Checked By", "Checked By"); },
-  get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
-  get approver1Name() { return tt("Approved By", "Approved By"); },
-  get approver1Role() { return tt("Jabatan Approved By", "Approved By Position"); },
-  get quantity() { return tt("Jumlah", "Quantity"); },
-  get unit() { return tt("Satuan", "Unit"); },
-  // Isian CIPL
-  get invoiceKind() { return tt("Jenis Invoice", "Invoice Type"); },
-  get consigneeAddress() { return tt("Alamat Consignee", "Consignee Address"); },
-  get notifyParty() { return tt("Notify Party", "Notify Party"); },
-  get poNo() { return tt("PO No.", "PO No."); },
-  get poDate() { return tt("Tanggal PO", "PO Date"); },
-  get poNoExtra() { return tt("PO No. lainnya", "Other PO No."); },
-  get termsDelivery() { return tt("Terms of Delivery", "Terms of Delivery"); },
-  get termPayment() { return tt("Term of Payment", "Term of Payment"); },
-  get portLoading() { return tt("Port of Loading", "Port of Loading"); },
-  get finalDestination() { return tt("Final Destination", "Final Destination"); },
-  get carrier() { return tt("Carrier", "Carrier"); },
-  get sailingDate() { return tt("Sailing on or About", "Sailing on or About"); },
-  get remarks() { return tt("Remarks", "Remarks"); },
-};
-
-/* Urutan tampil di kotak Detail. Yang tidak tersebut di sini ikut di
-   belakang, urut sesuai kemunculannya.
-
-   Tanpa urutan tetap, isian tampil mengikuti urutan kunci JSON — dan
-   itu berubah-ubah mengikuti urutan pengisian, sehingga dua invoice
-   yang isinya sama bisa tampil dengan susunan berbeda. */
-const DN_URUTAN_FIELD = [
-  "invoiceKind",
-  "customer",
-  "consigneeAddress",
-  "notifyParty",
-  "shipmentId",
-  "poNo",
-  "poDate",
-  "termsDelivery",
-  "termPayment",
-  "currency",
-  "amount",
-  "portLoading",
-  "finalDestination",
-  "carrier",
-  "sailingDate",
-  "remarks",
-  "receiver",
-  "address",
-  "vehicle",
-  "packages",
-  "payee",
-  "invoiceDate",
-  "invoiceDueDate",
-  "blAwb",
-  "expenseType",
-  "transactionType",
-  "letterType",
-  "signer",
-  "signerTitle",
-  "recipient",
-  "noAju",
-  "invoiceRef",
-  "shipper",
-  "awb",
-  "koliBerat",
-  "namaBarang",
-  "negaraAsal",
-  "flightTiba",
-  "nilaiBarang",
-  "tglBayar",
-  "itemsFungsi",
-  "dokumen",
-  "subject",
-  "notes",
-];
-
-/* Isian bertipe tanggal: disimpan ISO ("2026-09-20"), ditampilkan
-   sebagai tanggal biasa di kotak Detail. */
-const DN_FIELD_TANGGAL = new Set([
-  "poDate", "sailingDate", "invoiceDate", "invoiceDueDate", "tglBayar",
-]);
-
-/* Satu baris larik payload -> teks terbaca.
-
-   Bentuknya berbeda antar jenis dokumen (rincian biaya punya
-   desc/amount, daftar barang punya nama/qty/satuan), jadi yang
-   dikumpulkan adalah nilai yang ADA, bukan susunan tetap. */
-function dnRingkasBarisPayload(b) {
-  if (b == null) return "";
-  if (typeof b !== "object") return String(b);
-  const bagian = [
-    b.desc || b.nama || "",
-    [b.qty, b.satuan].filter((v) => String(v ?? "").trim()).join(" "),
-    b.amount != null && String(b.amount).trim()
-      ? (typeof formatRupiah === "function"
-          ? "Rp " + formatRupiah(parseRupiah(b.amount))
-          : String(b.amount))
-      : "",
-    b.ppnRate ? "PPN " + b.ppnRate + "%" : "",
-    b.ket || "",
-  ].filter((v) => String(v).trim());
-  return bagian.join(" · ");
-}
-
-function tampilkanDetailNomor(id) {
-  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
-  if (!r) return;
-  const p = r.payload || {};
-
-  const baris = [
-    [tt("Nomor", "Number"), r.doc_number],
-    [tt("Tanggal", "Date"), fmtDate(r.doc_date)],
-    [tt("Pemohon", "Requester"), r.requester],
-    [tt("Departemen", "Department"), r.department],
-  ].filter(([, v]) => String(v == null ? "" : v).trim() !== "");
-  const urut = [
-    ...DN_URUTAN_FIELD.filter((k) => k in p),
-    ...Object.keys(p).filter((k) => !DN_URUTAN_FIELD.includes(k)),
-  ];
-  urut.forEach((k) => {
-    let nilai = p[k];
-    if (k === "shipmentId") {
-      const kapal = typeof sjCariShipment === "function" ? sjCariShipment(nilai) : null;
-      nilai = kapal
-        ? [dispVal(kapal.invoice), dispVal(kapal.party)].filter(Boolean).join(" · ")
-        : t("s.jadwal.tidak.ditemukan");
-    }
-    /* LARIK ISIAN DIRINGKAS JADI BARIS TEKS.
-
-       Rincian biaya & daftar barang tersimpan sebagai larik objek.
-       String(objek) menghasilkan "[object Object]" -- terlihat seperti
-       kerusakan data padahal isinya utuh. */
-    /* Tanggal PO tambahan sudah ikut tercetak bersama nomornya di
-       baris "PO No. lainnya" -- barisnya sendiri cuma akan menampilkan
-       deretan tanggal tanpa keterangan milik PO yang mana. */
-    if (k === "poDateExtra") return;
-    if (k === "poNoExtra") {
-      const tglLain = p.poDateExtra || [];
-      nilai = (nilai || [])
-        .map((no, i) =>
-          tglLain[i] ? `${no} · ${fmtDate(tglLain[i])}` : String(no),
-        )
-        .join("\n");
-    }
-    if (Array.isArray(nilai)) {
-      nilai = nilai.map(dnRingkasBarisPayload).filter(Boolean).join("\n");
-    }
-    if (DN_FIELD_TANGGAL.has(k) && nilai) nilai = fmtDate(nilai);
-    /* Popup Detail ikut bahasa aplikasi (laporannya sendiri selalu
-       berbahasa Inggris -- lihat fund-report.js). */
-    /* Moda angkut kini tersirat di Jenis Transaksi (Sea/Air = laut/udara,
-       Local Sale = darat); isian lama di pengajuan terdahulu tidak
-       ditampilkan lagi. */
-    if (k === "transportMode") return;
-    if (k === "dokumen" && Array.isArray(nilai)) {
-      nilai = nilai.map((d) => [d.jenis === "debit" ? "Debit Note" : "Invoice", d.nomor, d.tanggal ? `(${fmtDate(d.tanggal)})` : ""].filter(Boolean).join(" "));
-    }
-    if (String(nilai ?? "").trim() === "") return;
-    /* Nilai selalu dalam mata uang yang tercatat di baris ini. Angka
-       telanjang "30,062" tidak memberi tahu rupiah atau dolar, dan pada
-       dokumen ekspor bedanya bukan hal kecil. */
-    if (k === "amount") {
-      const mata = String(p.currency || "USD").toUpperCase();
-      const lambang = mata === "USD" ? "$" : mata === "IDR" ? "Rp " : mata + " ";
-      nilai = lambang + formatNumberValue(parseInputNumber(nilai));
-    }
-    /* Kunci yang belum punya label dirapikan sendiri: "packages" ->
-       "Packages". Isian tiap jenis dokumen bisa bertambah, dan yang
-       belum terdaftar tidak boleh tampil sebagai potongan kode. */
-    const label =
-      DN_LABEL_FIELD[k] ||
-      k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    baris.push([label, nilai]);
-  });
-
-  $("#promptTitle").textContent = tt("Detail Pengajuan Nomor", "Number Request Details");
-  $("#promptDesc").textContent = "";
-  $("#promptDesc").classList.add("d-none");
-  $("#promptIcon").className = "bi bi-list-ul";
-  $("#promptError").classList.add("d-none");
-  $("#promptFields").innerHTML = `
-    <dl class="dn-detail">
-      ${baris
-        .map(
-          ([k, v]) =>
-            `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v)).replace(/\n/g, "<br>")}</dd>`,
-        )
-        .join("")}
-    </dl>`;
-  /* Kotak ini hanya membaca: tombol Simpan disembunyikan dan "Batal"
-     diganti "Tutup" — tidak ada yang dibatalkan. */
-  $("#promptOk").classList.add("d-none");
-  const batal = $("#promptModal .modal-footer .btn-quiet");
-  const teksBatal = batal.textContent;
-  batal.textContent = t("a.tutup");
-  const modal = bootstrap.Modal.getOrCreateInstance($("#promptModal"));
-  $("#promptModal").addEventListener(
-    "hidden.bs.modal",
-    () => {
-      $("#promptOk").classList.remove("d-none");
-      batal.textContent = teksBatal;
-    },
-    { once: true },
-  );
-  modal.show();
-}
 
 /* Ketikan di kotak cari: ditunda 300ms supaya tiap huruf tidak
    memanggil database. Di tab Summary datanya sudah termuat semua, jadi

@@ -157,6 +157,43 @@ input::placeholder {
   color: var(--n-600);
 }
 
+/* PANAH DROPDOWN SERAGAM.
+
+   `background: #fff` di atas adalah shorthand: ia ikut menghapus gambar
+   panah bawaan Bootstrap di .form-select, sehingga dropdown tampil
+   persis seperti kotak teks -- Pemohon, Departemen, Jenis Pengeluaran
+   tidak terlihat bisa dibuka. Panahnya digambar ulang di sini, sama
+   dengan .control-select (dashboard.css) dan dropdown Daftar Barang
+   (form.css), dan dipakai juga oleh dropdown yang selama ini memakai
+   panah bawaan peramban, yang bentuknya berbeda di tiap peramban.
+
+   Selektor berawalan .page-form/.docnum-panel (0,2,1) ada supaya
+   padding kanannya menang atas `.page-form .form-select { padding }`
+   di form.css (0,2,0). */
+select.form-select,
+select.form-select.is-invalid,
+.page-form select.form-select,
+.docnum-panel select.form-select,
+select.login-input,
+.dn-saring-bayar select,
+table.fund-lines select,
+.pagination-size select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2364748b'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 15px;
+  padding-right: 30px;
+}
+/* Dropdown sempit di dalam tabel/bilah halaman: panahnya lebih rapat. */
+table.fund-lines select,
+.pagination-size select {
+  background-position: right 5px center;
+  background-size: 14px;
+  padding-right: 22px;
+}
+
 /* Validasi: garis merah + latar sangat tipis, tanpa menggeser tata letak. */
 .is-invalid,
 .form-control.is-invalid,
@@ -337,18 +374,22 @@ input[type="date"][readonly] {
   letter-spacing: 0;
   color: var(--n-500);
 }
+/* Label, kotak, dan dua tombolnya sebaris dan sama tinggi (38px) --
+   label duduk di tengah, bukan menggantung di dasar baris. */
 .counter-body {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--sp-2);
   flex-wrap: wrap;
 }
 .counter-body .form-label {
-  margin-bottom: var(--sp-1);
+  margin: 0 var(--sp-1) 0 0;
 }
 .counter-body .form-control {
   width: 130px;
+  height: 38px;
   font-family: var(--font-mono);
+  font-size: var(--t-base);
 }
 .counter-body .btn {
   white-space: nowrap;
@@ -486,6 +527,10 @@ select,
 .page-form .form-control,
 .page-form .form-select,
 .page-form textarea,
+/* Form No. Dokumen memakai kotak isian yang sama dengan form jadwal
+   (css/form.css) -- garis tepinya juga harus sama tegasnya. */
+.docnum-panel .form-control,
+.docnum-panel .form-select,
 .login-input,
 .control-select,
 .search-box input[type="text"],
@@ -566,6 +611,14 @@ select:disabled,
 .bk-tabel tfoot td {
   border-bottom: 0;
   font-weight: 700;
+}
+/* Pengajuan yang juga menagih kiriman lain: dari berapa bagian ini diambil */
+.bk-bagian {
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--n-500);
+  white-space: normal;
 }
 /* Tiga angka ringkas di atas tabel: total, bea & pajak, logistik */
 .bk-ringkas {

@@ -73,7 +73,7 @@ function fsumKolom(row) {
     company: String(p.payee || "").trim(),
     customer: String(p.customer || "").trim(),
     jenis: String(p.expenseType || "").trim(),
-    transaksi: String(p.transactionType || "").trim(),
+    transaksi: fundJenisTransaksiBaku(p.transactionType),
     detail: String(p.notes || "").trim(),
     jatuhTempo: p.invoiceDueDate || "",
     lunas: !!p.paidAt,
@@ -110,7 +110,17 @@ function fsumTeksBulan(kunci) {
 }
 
 /* Pilihan Jenis Transaksi -- sama dengan dropdown di form Pengajuan Dana. */
-const FUND_JENIS_TRANSAKSI = ["Sea Import", "Sea Export", "Air Import", "Air Export", "Local Sale"];
+const FUND_JENIS_TRANSAKSI = ["Sea Import", "Sea Export", "Air Import", "Air Export", "Inland Trucking"];
+
+/* Nama lama -> nama baru. "Local Sale" kini "Inland Trucking" (angkutan
+   darat dalam negeri). migration-fund-inland-trucking.sql mengganti data
+   yang tersimpan; selama belum dijalankan, pengajuan lama tetap terbaca
+   dengan nama baru di semua tampilan, ringkasan, dan laporan. */
+const FUND_TRANSAKSI_LAMA = { "Local Sale": "Inland Trucking" };
+function fundJenisTransaksiBaku(v) {
+  const teks = String(v == null ? "" : v).trim();
+  return FUND_TRANSAKSI_LAMA[teks] || teks;
+}
 
 /* Cara mengelompokkan. `kunci` menentukan baris mana yang digabung,
    `tampil` teks yang ditulis, `saring` penyaring yang dipasang saat
@@ -134,7 +144,7 @@ const FSUM_KELOMPOK = {
     tampil: (k) => fsumTeksJenis(k.jenis),
     saring: (kunci) => ({ jenis: kunci }),
   },
-  /* Sea Import / Air Export / Local Sale ... -- pengajuan lama tanpa
+  /* Sea Import / Air Export / Inland Trucking ... -- pengajuan lama tanpa
      isian ini terkumpul di satu baris "—". */
   transaksi: {
     label: () => tt("Jenis Transaksi", "Transaction Type"),

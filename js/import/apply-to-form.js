@@ -5,7 +5,11 @@
 const IMPORT_SOURCE_PRIORITY = {
   "pdf": 30, // PIB BC 2.0
   "pdf-peb": 30, // PEB BC 3.0
-  "excel-bc": 20, // draft CEISA (HEADER/BARANG/ENTITAS/DOKUMEN)
+  /* Draft CEISA (HEADER/BARANG/ENTITAS/DOKUMEN). Kuncinya "excel" --
+     nama sumber yang memang dikembalikan parseBcExcelWorkbook(). Dulu
+     tertulis "excel-bc", tidak pernah cocok, dan draft CEISA jatuh ke
+     prioritas bawaan 15. */
+  "excel": 20,
   "cipl": 10, // CIPL Excel
   "cipl-pdf": 10, // CIPL PDF (CI+PL 1 file)
   "cipl-pdf-ci": 10,
@@ -22,6 +26,24 @@ function sourcePriority(source) {
   return IMPORT_SOURCE_PRIORITY[source] != null
     ? IMPORT_SOURCE_PRIORITY[source]
     : 15;
+}
+
+/* SUMBER YANG DIPEGANG UNTUK SATU ISIAN, di atas urutan prioritas umum.
+
+   Nama & nomor sarana angkut diambil dari draft CEISA, sheet
+   PENGANGKUT (NAMA PENGANGKUT & NOMOR PENGANGKUT), untuk buku Import
+   maupun Export. Isiannya MENIMPA yang sudah ada -- ketikan, CIPL
+   ("Vessel/Flight" yang kerap menggabungkan keduanya), maupun PDF --
+   dan tidak tertimpa sumber lain yang diimpor sesudahnya. Kalau
+   sheet-nya kosong, isian lama tetap. */
+const SUMBER_UTAMA_ISIAN = {
+  fVessel: "excel",
+  fVoyage: "excel",
+};
+const PRIORITAS_SUMBER_UTAMA = 100;
+
+function prioritasIsian(id, source) {
+  return SUMBER_UTAMA_ISIAN[id] === source ? PRIORITAS_SUMBER_UTAMA : sourcePriority(source);
 }
 
 // Field mana yang BOLEH diisi oleh sumber ini
@@ -261,12 +283,13 @@ function setImportField(id, value, source, opts) {
   if (!el) return false;
 
   const current = String(el.value || "").trim();
-  const prio = sourcePriority(source);
+  const prio = prioritasIsian(id, source);
   const prevPrio = importFieldOrigin[id];
+  const utama = prio === PRIORITAS_SUMBER_UTAMA;
 
   if (current !== "" && prevPrio != null && prio < prevPrio) return false;
-  // Field terisi yang BELUM pernah disentuh import
-  if (current !== "" && prevPrio == null && !(opts && opts.force)) return false;
+  // Field terisi yang BELUM pernah disentuh import (kecuali sumber utamanya)
+  if (current !== "" && prevPrio == null && !utama && !(opts && opts.force)) return false;
 
   // Kotak angka ditulis dalam bentuk BERFORMAT (mis
   el.value = el.hasAttribute("data-num") ? formatNumberValue(value) : value;

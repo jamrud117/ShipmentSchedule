@@ -369,6 +369,24 @@
   font-weight: 400;
 }
 
+/* Moda udara: kotak Kontainer disembunyikan (modal-fields.js) dan Nama
+   Forwarder melebar mengisi tempatnya, supaya barisnya tetap penuh.
+   Hanya di layar lebar -- di bawahnya kisi sudah dua kolom/satu kolom. */
+@media (min-width: 1080px) {
+  #fContainerWrap.d-none ~ #fForwarderWrap {
+    grid-column: span 6;
+  }
+}
+/* Ringkasan delay duduk sejajar dasar kotak tanggal di sebelahnya. */
+.delay-summary-cell {
+  align-self: end;
+}
+/* Petunjuk "Pilih DELAY..." di bawah Status hilang begitu kotak Tanggal
+   Update Delay-nya sudah terbuka -- yang ditunjuknya sudah di layar. */
+.fgrid:has(> #delayBlock:not(.d-none)) .status-hint {
+  display: none;
+}
+
 /* Varian polos: dipakai saat judulnya duduk di dalam kotak yang sudah
    punya garis & jaraknya sendiri (Terminal Transit, Tanggal Update
    Delay) -- garis kedua di situ cuma menggandakan sekat yang sama. */
@@ -402,9 +420,12 @@
   color: var(--navy);
 }
 
-/* Input/select di halaman form */
+/* Input/select di halaman form -- dan di form Permintaan Nomor Dokumen,
+   supaya kedua halaman memakai kotak isian yang sama persis. */
 .page-form .form-control,
-.page-form .form-select {
+.page-form .form-select,
+.docnum-panel .form-control,
+.docnum-panel .form-select {
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 9px 12px;
@@ -423,11 +444,14 @@
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
-.page-form .form-control::placeholder {
+.page-form .form-control::placeholder,
+.docnum-panel .form-control::placeholder {
   color: #a7b2c2;
 }
 .page-form .form-control:focus,
-.page-form .form-select:focus {
+.page-form .form-select:focus,
+.docnum-panel .form-control:focus,
+.docnum-panel .form-select:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
@@ -445,7 +469,9 @@
    punya kelas .form-control-sm, dan aturan bawaan Bootstrap untuk itu
    tidak selalu kalah spesifisitas hanya dari urutan kelas). */
 .page-form .form-control-sm,
-.page-form .form-select-sm {
+.page-form .form-select-sm,
+.docnum-panel .form-control-sm,
+.docnum-panel .form-select-sm {
   padding: 9px 12px;
   font-size: 0.86rem;
   min-height: 40px;
@@ -766,8 +792,18 @@ table.item-table select[data-f="jenisBarang"] {
   width: 100%;
   height: 42px;
   border: 0;
-  padding: 0 12px 0 34px;
+  /* kanan: tempat tombol hapus (×) */
+  padding: 0 38px 0 34px;
   font-size: 0.86rem;
+}
+.hscode-lookup-search .search-clear[data-cari-hapus] {
+  right: 8px;
+}
+.hscode-lookup-search .search-clear i {
+  position: static;
+  transform: none;
+  font-size: inherit;
+  color: inherit;
 }
 .hscode-lookup-search input:focus {
   outline: none;
@@ -859,17 +895,6 @@ table.item-table input.subtotal {
   color: var(--navy);
   border: none;
   text-align: right;
-}
-table.item-table .rm-row {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--coral);
-}
-table.item-table .rm-row:hover {
-  background: #fdeaea;
 }
 .item-table-foot {
   display: flex;
@@ -1080,12 +1105,56 @@ tr.item-fac-row td {
 
 /* TAMBAHAN: DELAY, SATUAN KEMASAN, PENANDA FORMAT */
 
-/* Blok "Jadwal Awal (sebelum delay)" — hanya tampil saat status DELAY. */
+/* Blok "Tanggal Update Delay" — tampil saat status DELAY, dan selama
+   tanggal revisinya masih terisi (is-sisa, judul & keterangan lain). */
 .delay-box {
   border: 1px dashed var(--amber);
   border-radius: 10px;
   padding: 14px 16px;
   background: #fffaf0;
+}
+#delayBlock .delay-judul-sisa,
+#delayBlock .delay-ket-sisa,
+#delayBlock.is-sisa .delay-judul-delay,
+#delayBlock.is-sisa .delay-ket-delay {
+  display: none;
+}
+#delayBlock.is-sisa .delay-judul-sisa {
+  display: inline;
+}
+#delayBlock.is-sisa .delay-ket-sisa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.delay-hapus-revisi {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--s-danger);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.delay-hapus-revisi:hover {
+  color: var(--ink);
+}
+/* Status yang dipilih tidak akan berlaku karena tanggalnya sudah lewat */
+.status-tiba-hint {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--s-warn-line);
+  border-left: 3px solid var(--s-warn);
+  border-radius: 8px;
+  background: var(--s-warn-bg);
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.status-tiba-hint i {
+  color: var(--s-warn);
 }
 .delay-summary {
   font-size: 0.82rem;
@@ -1331,16 +1400,36 @@ table.item-table input.pkg-invalid {
   padding-right: 8px;
 }
 
-/* BARIS KOTAK HITUNG */
+/* BARIS KOTAK HITUNG -- kisi auto-fit: kotaknya SAMA LEBAR di baris mana
+   pun. Dengan flex-wrap, kotak yang turun ke baris kedua (FOB Rupiah di
+   layar sedang) melebar sendirian selebar kartu. Jarak 18px = jarak
+   kolom kisi isian di atasnya. */
 .calc-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 18px;
 }
 .calc-row > .calc-box {
-  flex: 1 1 220px;
   min-width: 0;
   margin: 0;
+}
+/* Layar sedang: tiga per baris -- baris pertama tiga nilai umum (barang,
+   CIF, Nilai Pabean), baris kedua dua kotak FOB. Lebih sempit lagi dua
+   per baris, lalu satu: angka rupiah belasan digit tidak boleh terpotong. */
+@media (max-width: 1079.98px) {
+  .calc-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767.98px) {
+  .calc-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 575.98px) {
+  .calc-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Tanggal & Jam Stuffing tidak dipakai di buku Export — tanggal muatnya

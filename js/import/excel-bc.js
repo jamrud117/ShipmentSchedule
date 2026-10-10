@@ -222,7 +222,11 @@ function parseBcExcelWorkbook(wb) {
      dipakai apa adanya (bmTarif/ppnTarif/pphTarif di atas); rumus ini
      murni pengisi celah yang kosong saja, per jenis pungutan sendiri
      -sendiri — bukan "kalau satu kosong, buang semua". */
-  let bmFinal = bmTarif,
+  /* bmDasar = BM SEBELUM dibulatkan: itu yang menjadi dasar PPN (Nilai
+     Impor = Nilai Pabean + BM seri sebelum dibulatkan). Yang dibawa ke
+     form dibulatkan ke atas ke ribuan -- jumlah NILAI BAYAR per seri di
+     draft CEISA belum dibulatkan (1.543.235), PIB-nya 1.544.000. */
+  let bmDasar = bmTarif,
     ppnFinal = ppnTarif,
     pphFinal = pphTarif,
     dutyDihitungRumus = false;
@@ -233,10 +237,10 @@ function parseBcExcelWorkbook(wb) {
     const ndpbmUntukPabean = header["NDPBM"] != null ? excelNum(header["NDPBM"]) : 0;
     if (ndpbmUntukPabean && (cifUsd || freightUsd || asuransiUsd)) {
       const nilaiPabean = (cifUsd + freightUsd + asuransiUsd) * ndpbmUntukPabean;
-      if (bmFinal == null) bmFinal = roundNum(nilaiPabean * 0.05, 2);
+      if (bmDasar == null) bmDasar = roundNum(nilaiPabean * 0.05, 2);
       if (pphFinal == null) pphFinal = roundNum(nilaiPabean * 0.025, 2);
       if (ppnFinal == null)
-        ppnFinal = roundNum((nilaiPabean + (bmFinal || 0)) * 0.11, 2);
+        ppnFinal = roundNum((nilaiPabean + (bmDasar || 0)) * 0.11, 2);
       dutyDihitungRumus = true;
     }
   }
@@ -272,7 +276,7 @@ function parseBcExcelWorkbook(wb) {
     transport,
     package: packageStr,
     container: containerStr,
-    bm: bmFinal,
+    bm: bulatkanBm(bmDasar),
     ppn: ppnFinal,
     pph: pphFinal,
   };

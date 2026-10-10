@@ -100,38 +100,48 @@ function fmtQtyBySatuan(list) {
 
 /* NAMA BARANG YANG DITAMPILKAN — dirakit dari beberapa kolom.
 
-   Urutannya: jenis barang (Uraian) → Size → Pattern → Mold No.
+   URUTANNYA: Uraian → Pattern → Size → Mold No. Satu aturan untuk
+   kartu, panel detail, copy template, DAN kedua bentuk CIPL (Kumho &
+   Dynamic Design Korea) -- supaya nama yang terlihat di layar selalu
+   sama dengan yang tersalin dan tercetak.
+
    PO No SENGAJA tidak ikut: itu nomor pesanan pembeli, bukan bagian
    dari identitas barangnya, dan menempelkannya membuat dua kiriman
    barang yang sama terbaca sebagai dua barang berbeda.
 
-   Kolom yang kosong DILEWATI, bukan diisi spasi. Menyambung dengan
-   spasi apa adanya menghasilkan "TYRE MOLD FULL SET   R17" saat Pattern
-   & Mold No kosong -- terlihat seperti salah ketik, dan menyulitkan
-   pencocokan teks saat ditempel ke Excel.
-
-   Dipakai kartu, panel detail, DAN copy template -- satu tempat, supaya
-   nama yang terlihat di layar selalu sama dengan yang tersalin.
-
-   URUTANNYA: Uraian, Pattern, Size, Mold No.
-
-   Sempat ada dua urutan: yang ini untuk layar, satu lagi khusus
-   template salinan Export. Disatukan lagi begitu kartu pun diminta
-   memakai bentuk yang sama -- kalau tidak, nama di kartu berbeda
-   susunannya dari nama yang tersalin ke Excel untuk pengiriman yang
-   sama persis.
+   Kolom yang kosong (atau "-") DILEWATI, spasi di dalam tiap kolom
+   dirapikan jadi satu, dan bagian yang SUDAH tertulis di Uraian tidak
+   diulang ("TIRE MOLD 225/50R17" + Size 225/50R17). Menyambung apa
+   adanya menghasilkan "TYRE MOLD FULL SET   R17" -- terlihat seperti
+   salah ketik dan menyulitkan pencocokan teks saat ditempel ke Excel.
 
    Import TIDAK terpengaruh: Pattern, Size & Mold No hanya diisi di
-   buku Export (lihat body.mode-import .size-col di form.css). Di
-   Import ketiganya kosong, jadi urutan apa pun menghasilkan teks yang
-   sama -- hanya Uraian. */
-const ITEM_NAMA_BAGIAN = ["namaBarang", "pattern", "size", "moldNo"];
+   buku Export (lihat body.mode-import .size-col di form.css). */
+function rapiBagianNama(v) {
+  const x = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+  return x === "-" ? "" : x;
+}
+
+/* Bagian SESUDAH Uraian: Pattern, Size, Mold No -- berurutan, yang
+   kosong dilewati, yang sudah tertulis (sebagai kata utuh) di Uraian
+   atau di bagian sebelumnya tidak diulang. */
+function rincianNamaBarang(it) {
+  if (!it) return [];
+  const sudah = [" " + rapiBagianNama(it.namaBarang).toUpperCase() + " "];
+  return ["pattern", "size", "moldNo"]
+    .map((k) => rapiBagianNama(it[k]))
+    .filter((x) => {
+      if (!x) return false;
+      const kata = " " + x.toUpperCase() + " ";
+      if (sudah.some((s) => s.includes(kata))) return false;
+      sudah.push(kata);
+      return true;
+    });
+}
 
 function itemDisplayName(it) {
   if (!it) return "";
-  return ITEM_NAMA_BAGIAN.map((k) => String(it[k] || "").trim())
-    .filter(Boolean)
-    .join(" ");
+  return [rapiBagianNama(it.namaBarang)].concat(rincianNamaBarang(it)).filter(Boolean).join(" ");
 }
 
 function newItem() {
@@ -188,7 +198,7 @@ function newItem() {
 function parsePackageDims(raw) {
   const parts = String(raw || "")
     .split(/[x*]/i)
-    .map((t) => parseFloat(String(t).trim().replace(",", ".")))
+    .map((bagian) => parseFloat(String(bagian).trim().replace(",", ".")))
     .filter((n) => !isNaN(n));
   if (parts.length < 3) return null;
   return { p: parts[0], l: parts[1], t: parts[2] };
@@ -224,15 +234,15 @@ function newSkbEntry() {
 function skbTextToEntries(raw) {
   return String(raw || "")
     .split(",")
-    .map((t) => t.trim())
+    .map((bagian) => bagian.trim())
     .filter(Boolean)
-    .map((t) => {
+    .map((nama) => {
       const match = SKB_TYPE_OPTIONS.find(
-        (o) => o !== "Lainnya" && o.toLowerCase() === t.toLowerCase(),
+        (o) => o !== "Lainnya" && o.toLowerCase() === nama.toLowerCase(),
       );
       return match
         ? { jenis: match, jenisLainnya: "", nomor: "", tanggal: "" }
-        : { jenis: "Lainnya", jenisLainnya: t, nomor: "", tanggal: "" };
+        : { jenis: "Lainnya", jenisLainnya: nama, nomor: "", tanggal: "" };
     });
 }
 

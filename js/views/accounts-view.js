@@ -39,12 +39,17 @@ function renderAccounts() {
       (r.full_name || "").toLowerCase().includes(q),
   );
 
-  $("#accountCountExim").textContent = accountRows.filter((r) => r.role === "exim").length;
-  $("#accountCountMarketing").textContent = accountRows.filter((r) => r.role === "marketing").length;
-  // Viewer = selain EXIM & marketing (termasuk peran lama/kosong).
-  $("#accountCountViewer").textContent = accountRows.filter(
-    (r) => r.role !== "exim" && r.role !== "marketing",
-  ).length;
+  /* Hitungan per peran. Peran yang tidak dikenal (lama/kosong) dihitung
+     sebagai Viewer -- sama dengan cara aplikasi memperlakukannya. */
+  const jumlah = {};
+  accountRows.forEach((r) => {
+    const peran = peranAkun(r);
+    jumlah[peran] = (jumlah[peran] || 0) + 1;
+  });
+  Object.keys(PERAN).forEach((peran) => {
+    const el = $("#accountCount" + peran.charAt(0).toUpperCase() + peran.slice(1));
+    if (el) el.textContent = jumlah[peran] || 0;
+  });
 
   if (!rows.length) {
     box.innerHTML = `<div class="panel-empty"><i class="bi bi-person-x"></i> ${t("c.tidak.ada.akun.yang.cocok")}</div>`;
@@ -55,11 +60,10 @@ function renderAccounts() {
   box.innerHTML = rows
     .map((r) => {
       const isSelf = r.id === sendiri;
-      const exim = r.role === "exim";
-      const marketing = r.role === "marketing";
+      const peran = peranAkun(r);
       return `
       <div class="acct-row" data-acct="${r.id}">
-        <div class="acct-avatar ${exim ? "is-exim" : marketing ? "is-marketing" : ""}">${escapeHtml(
+        <div class="acct-avatar ${peran === "viewer" ? "" : "is-" + peran}">${escapeHtml(
           (r.full_name || r.email || "?").trim().charAt(0).toUpperCase(),
         )}</div>
         <div class="acct-main">
@@ -83,9 +87,12 @@ function renderAccounts() {
             ? t("s.peran.sendiri.tidak.bisa.diubah.dari.sini")
             : t("a.ubah.peran.akun.ini")
         }">
-          <option value="viewer" ${!exim && !marketing ? "selected" : ""}>${tt("Viewer — hanya lihat", "Viewer — read only")}</option>
-          <option value="marketing" ${marketing ? "selected" : ""}>${tt("Marketing — lihat saja, termasuk No. Dokumen", "Marketing — view only, incl. Doc. Number")}</option>
-          <option value="exim" ${exim ? "selected" : ""}>${tt("EXIM — bisa ubah", "EXIM — can edit")}</option>
+          ${urutanPilihanPeran()
+            .map(
+              (p) =>
+                `<option value="${p}" ${p === peran ? "selected" : ""}>${escapeHtml(PERAN[p].label + " — " + PERAN[p].ket)}</option>`,
+            )
+            .join("")}
         </select>
         <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="${escapeAttr(t("a.ubah.nama.username"))}">
           <i class="bi bi-pencil"></i>
@@ -103,10 +110,27 @@ function renderAccounts() {
     .join("");
 }
 
+/* Peran sebuah akun menurut tabel PERAN (session.js); yang tidak
+   dikenal -- peran lama atau kolom kosong -- adalah viewer. */
+function peranAkun(r) {
+  return Object.prototype.hasOwnProperty.call(PERAN, r.role) ? r.role : "viewer";
+}
+/* Urutan di pemilih peran: dari hak paling sempit ke paling luas. Peran
+   yang ditambahkan ke PERAN tapi belum disebut di sini tetap tampil,
+   sebelum EXIM.
+
+   Fungsi, bukan nilai tetap: session.js (pemilik PERAN) dimuat SETELAH
+   berkas ini. */
+function urutanPilihanPeran() {
+  const dikenal = ["viewer", "finance", "marketing", "exim"];
+  return ["viewer", "finance", "marketing"]
+    .concat(Object.keys(PERAN).filter((p) => dikenal.indexOf(p) < 0))
+    .concat(["exim"]);
+}
+
 /* Peran sendiri sengaja tidak bisa diubah dari halaman ini. Kalau satu-
    satunya exim menurunkan dirinya jadi viewer, tidak ada lagi yang bisa
    menaikkan siapa pun dan pemulihannya harus lewat SQL Editor. */
-const LABEL_PERAN = { exim: "EXIM", marketing: "Marketing", viewer: "Viewer" };
 
 async function changeAccountRole(id, peranBaru) {
   if (!requireEdit()) return;
@@ -133,8 +157,8 @@ async function changeAccountRole(id, peranBaru) {
   renderAccounts();
   showToast(
     tt(
-      `Peran ${baris ? baris.email : "akun"} diubah menjadi ${LABEL_PERAN[peranBaru] || "Viewer"}.`,
-      `Role of ${baris ? baris.email : "the account"} changed to ${LABEL_PERAN[peranBaru] || "Viewer"}.`,
+      `Peran ${baris ? baris.email : "akun"} diubah menjadi ${aturanPeran(peranBaru).label}.`,
+      `Role of ${baris ? baris.email : "the account"} changed to ${aturanPeran(peranBaru).label}.`,
     ),
     "dark",
   );
@@ -272,12 +296,16 @@ async function deleteAccount(id) {
 }
 
 function pesanHapusAkun(error) {
-  const t = (error.message || "").toLowerCase();
-  if (t.includes("satu-satunya"))
+  // Bukan `t` -- nama itu milik penerjemah t() (lihat pesanLogin di session.js)
+  const asli = (error.message || "").toLowerCase();
+  if (asli.includes("satu-satunya"))
     return t("s.ini.satu.satunya.akun.exim.naikkan.akun.lain.d");
-  if (t.includes("sendiri")) return t("s.akun.sendiri.tidak.bisa.dihapus");
-  if (t.includes(t("w.tidak.ditemukan"))) return t("s.akun.sudah.tidak.ada");
-  if (t.includes("could not find") || t.includes("does not exist"))
+  if (asli.includes("sendiri")) return t("s.akun.sendiri.tidak.bisa.dihapus");
+  /* Pesan ini datang dari fungsi database (berbahasa Indonesia), jadi
+     dicocokkan dengan teks Indonesianya -- bukan terjemahan bahasa yang
+     sedang aktif. */
+  if (asli.includes("tidak ditemukan") || asli.includes("not found")) return t("s.akun.sudah.tidak.ada");
+  if (asli.includes("could not find") || asli.includes("does not exist"))
     return t("a.fungsi.hapus.akun.belum.ada.jalankan.ulang.aut");
   return error.message || t("a.gagal.menghapus.akun");
 }
@@ -303,9 +331,9 @@ async function registerAccount() {
   const sandi = $("#regPassword").value;
   const info = $("#regInfo");
 
-  const gagal = (t) => {
+  const gagal = (pesan) => {
     info.className = "reg-info is-error";
-    info.textContent = t;
+    info.textContent = pesan;
   };
   if (!nama || !username || !sandi)
     return gagal(t("s.nama.username.dan.kata.sandi.harus.diisi"));
@@ -356,14 +384,14 @@ async function registerAccount() {
   }
 
   if (error) {
-    const t = (error.message || "").toLowerCase();
-    if (t.includes("already registered") || t.includes("already been"))
+    const asli = (error.message || "").toLowerCase();
+    if (asli.includes("already registered") || asli.includes("already been"))
       return gagal(t("s.email.itu.sudah.terdaftar"));
-    if (t.includes("signups not allowed") || t.includes("disabled"))
+    if (asli.includes("signups not allowed") || asli.includes("disabled"))
       return gagal(
         t("v.pendaftaran.dimatikan.di.supabase.nyalakan.di."),
       );
-    if (t.includes("password"))
+    if (asli.includes("password"))
       return gagal(t("a.kata.sandi.terlalu.lemah.gunakan.minimal.8.kar"));
     return gagal(error.message || tt("Pendaftaran gagal.", "Registration failed."));
   }
