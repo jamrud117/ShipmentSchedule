@@ -3992,26 +3992,28 @@
             </div>
             <p class="dialog-text" id="mstRealisasiKet"></p>
             <div class="mst-form">
-              <div class="prompt-field mst-form-lebar">
-                <label class="prompt-label" for="mstAju" data-en="PIB aju number">Nomor aju PIB</label>
-                <input
-                  type="text"
-                  class="login-input"
-                  id="mstAju"
-                  list="mstAjuList"
-                  autocomplete="off"
-                  maxlength="80"
-                  placeholder="Nomor aju, atau 4 angka terakhirnya"
-                  data-en-ph="Aju number, or its last 4 digits"
-                />
+              <!-- PIB realisasi ini: satu baris per PIB (nomor aju + tanggalnya).
+                   Mesin yang dikirim bertahap punya lebih dari satu. -->
+              <div class="mst-form-lebar">
+                <div class="mst-pib-daftar" id="mstPibDaftar">
+                  <div class="mst-pib mst-pib-kepala" aria-hidden="true">
+                    <span class="prompt-label" data-en="PIB aju number">Nomor aju PIB</span>
+                    <span class="prompt-label" data-en="PIB date">Tanggal PIB</span>
+                  </div>
+                  <div id="mstPib" role="group" aria-label="PIB"></div>
+                </div>
                 <datalist id="mstAjuList"></datalist>
-                <div class="prompt-hint" id="mstAjuKet"></div>
+                <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstPibTambah">
+                  <i class="bi bi-plus-lg"></i> <span data-en="Add PIB">Tambah PIB</span>
+                </button>
+                <div
+                  class="prompt-hint mst-pib-saran"
+                  data-en="Each PIB brings its own units (e.g. 2 units, then 3)? Record each PIB separately with its quantity. One machine arriving in parts under several PIBs? Add all its PIBs here — the quota is counted once."
+                >
+                  Tiap PIB membawa unitnya sendiri (mis. 2 unit, lalu 3 unit)? Catat terpisah per PIB dengan jumlahnya. Satu mesin datang terurai di beberapa PIB? Tambahkan semua PIB-nya di sini — kuotanya dihitung sekali.
+                </div>
               </div>
-              <div class="prompt-field">
-                <label class="prompt-label" for="mstTanggal" data-en="PIB date">Tanggal PIB</label>
-                <input type="date" class="login-input" id="mstTanggal" />
-              </div>
-              <div class="prompt-field">
+              <div class="prompt-field mst-form-lebar">
                 <label class="prompt-label" for="mstCatatan" data-en="Notes (optional)">Catatan (opsional)</label>
                 <input type="text" class="login-input" id="mstCatatan" maxlength="200" autocomplete="off" />
               </div>

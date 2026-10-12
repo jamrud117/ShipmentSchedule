@@ -31,6 +31,9 @@ let mstDok = null; // baris tabel masterlists yang sedang dibuka
 let mstBarisDb = []; // masterlist_items
 let mstRealisasiDb = []; // masterlist_usages
 let mstTermuat = false;
+/* Kolom masterlist_usages.pibs sudah ada (migration-masterlist-pib-parsial.sql).
+   Belum: realisasi tetap bisa dicatat, asal satu PIB saja. */
+let mstPibsSiap = true;
 
 /* Keadaan tampilan. Saringan (cari, status, lini) TIDAK disalin ke sini:
    dibaca langsung dari kotaknya tiap menggambar, jadi tidak ada salinan
@@ -119,7 +122,7 @@ function mstSpekRingkas(spek) {
 
 function mstUrutRealisasi(a, b) {
   return (
-    String(a.pib_date || "9999").localeCompare(String(b.pib_date || "9999")) ||
+    String(mstTanggalAwal(a) || "9999").localeCompare(String(mstTanggalAwal(b) || "9999")) ||
     String(a.created_at || "").localeCompare(String(b.created_at || ""))
   );
 }
@@ -245,6 +248,99 @@ function mstAjuRingkas(ref) {
   return angka.length > 10 ? "…" + angka.slice(-6) : teks;
 }
 
+/* ---------- PIB sebuah realisasi ---------- */
+
+/* SATU REALISASI, BEBERAPA PIB. Mesin yang dikirim bertahap -- sebagian
+   di PIB bulan Mei, sisanya di PIB bulan Agustus -- memakai kuotanya
+   SEKALI, tapi punya dua PIB, masing-masing dengan nomor aju dan
+   tanggalnya sendiri. Daftarnya di kolom `pibs`
+   (migration-masterlist-pib-parsial.sql), urut tanggal.
+
+   Catatan dari sebelum kolom itu ada diurai dari aju_ref ("7130 / 9204")
+   dan tanggalnya milik PIB pertama -- sama persis dengan isian awal di
+   migrasinya, jadi tampilannya tidak berubah begitu migrasi dijalankan. */
+function mstPibs(u) {
+  if (!u) return [];
+  const daftar = Array.isArray(u.pibs) ? u.pibs : [];
+  const pibs = daftar.length
+    ? daftar.map((p) => ({ aju: String((p && p.aju_ref) || "").trim(), tanggal: (p && p.pib_date) || null }))
+    : mstPecahAju(u.aju_ref).map((aju, i) => ({ aju, tanggal: (i === 0 && u.pib_date) || null }));
+  return pibs.filter((p) => p.aju);
+}
+
+const mstTanggalTerawal = (pibs) => pibs.reduce((min, p) => (p.tanggal && (!min || p.tanggal < min) ? p.tanggal : min), null);
+
+/* Tanggal PIB paling awal sebuah realisasi = kapan kirimannya dimulai. */
+function mstTanggalAwal(u) {
+  return mstTanggalTerawal(mstPibs(u));
+}
+
+/* Kiriman pertama dulu -- kalau SEMUA PIB-nya sudah bertanggal. Selama
+   ada yang belum, urutan yang ada dipertahankan: PIB lama dari Excel
+   (tanpa tanggal) tidak boleh terlempar ke belakang kiriman lanjutannya. */
+function mstUrutPib(pibs) {
+  if (!pibs.every((p) => p.tanggal)) return pibs.slice();
+  return pibs
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => (a.p.tanggal === b.p.tanggal ? a.i - b.i : a.p.tanggal < b.p.tanggal ? -1 : 1))
+    .map((o) => o.p);
+}
+
+/* Daftar PIB -> kolom simpanannya. aju_ref & pib_date tetap diisi
+   (pemicu di database juga menurunkannya) supaya yang membaca kolom lama
+   tetap benar, dan supaya realisasi satu PIB tetap bisa disimpan sebelum
+   migrasinya dijalankan. */
+function mstKolomPib(pibs) {
+  const kolom = { aju_ref: pibs.map((p) => p.aju).join(" / "), pib_date: mstTanggalTerawal(pibs) };
+  if (mstPibsSiap) kolom.pibs = pibs.map((p) => ({ aju_ref: p.aju, pib_date: p.tanggal || null }));
+  return kolom;
+}
+
+/* Tanggal yang sudah tercatat untuk sebuah PIB di realisasi LAIN. Satu
+   PIB hanya punya satu tanggal, jadi isian berikutnya mengikutinya. */
+function mstTanggalTercatat(kunci, kecualiId) {
+  const tanggal = new Set();
+  let catatan = 0;
+  mstRealisasiDb.forEach((u) => {
+    if (u.id === kecualiId) return;
+    const cocok = mstPibs(u).filter((p) => mstKunciAju(p.aju) === kunci);
+    if (!cocok.length) return;
+    catatan++;
+    cocok.forEach((p) => p.tanggal && tanggal.add(p.tanggal));
+  });
+  return { catatan, tanggal: [...tanggal].sort() };
+}
+
+const mstPesanMigrasiPib = () =>
+  tt(
+    "Realisasi dengan lebih dari satu PIB butuh pembaruan database: jalankan migration-masterlist-pib-parsial.sql di Supabase (SQL Editor), lalu muat ulang halaman ini.",
+    "A realization with more than one PIB needs a database update: run migration-masterlist-pib-parsial.sql in Supabase (SQL Editor), then reload this page.",
+  );
+
+/* Database belum mengenal kolom pibs: "column masterlist_usages.pibs does
+   not exist" saat membaca, "Could not find the 'pibs' column" saat menulis. */
+const mstGalatKolomPibs = (e) => /\bpibs\b/.test(String((e && (e.message || e.details)) || ""));
+
+/* Menulis realisasi (insert / update) yang memuat kolom pibs. Kalau
+   database belum mengenalnya, diulang tanpa kolom itu -- asal tidak ada
+   yang punya lebih dari satu PIB, karena itu HANYA bisa disimpan di
+   kolom tersebut. Hasilnya { data, error, muatan }; muatan = yang
+   benar-benar terkirim, untuk disalin ke layar. */
+async function mstKirimPib(kirim, muatan) {
+  let hasil = await kirim(muatan);
+  if (hasil && hasil.error && mstGalatKolomPibs(hasil.error)) {
+    mstPibsSiap = false;
+    if (muatan.some((r) => Array.isArray(r.pibs) && r.pibs.length > 1)) return { data: null, error: { message: mstPesanMigrasiPib() }, muatan };
+    muatan = muatan.map((r) => {
+      const x = Object.assign({}, r);
+      delete x.pibs;
+      return x;
+    });
+    hasil = await kirim(muatan);
+  }
+  return { data: hasil ? hasil.data : null, error: hasil ? hasil.error : null, muatan };
+}
+
 /* Barang sebuah jadwal yang ditandai berfasilitas Masterlist. */
 function mstBarangMasterlist(s) {
   return ((s && s.items) || []).filter((it) => (it.skb || []).some((sk) => sk.jenis === "Masterlist"));
@@ -257,8 +353,8 @@ function mstBarangMasterlist(s) {
 function mstBelumDicatat() {
   const rujukan = [];
   mstRealisasiDb.forEach((u) =>
-    mstPecahAju(u.aju_ref).forEach((x) => {
-      const d = mstDigit(x);
+    mstPibs(u).forEach((p) => {
+      const d = mstDigit(p.aju);
       if (d.length >= 4) rujukan.push(d);
     }),
   );
@@ -295,36 +391,53 @@ function mstCocok(b, f) {
   if (f.jenis && (b.nama !== f.jenis.nama || b.lini !== f.jenis.lini)) return false;
   if (!f.q) return true;
   const isi = [b.no, b.nama, b.spesifikasi, b.satuan]
-    .concat(b.realisasi.map((u) => u.aju_ref))
+    .concat(b.realisasi.flatMap((u) => mstPibs(u).map((p) => p.aju)))
     .join(" ")
     .toLowerCase();
   return f.q.split(/\s+/).every((kata) => isi.includes(kata));
 }
 
 /* Realisasi dikelompokkan per PIB. Dihitung dari baris yang LOLOS
-   saringan, jadi kotak cari dan saringan lini berlaku di kedua susunan. */
+   saringan, jadi kotak cari dan saringan lini berlaku di kedua susunan.
+
+   Realisasi PARSIAL (beberapa PIB) masuk ke kelompok tiap PIB-nya.
+   Jumlahnya milik gabungan PIB itu, bukan salah satunya -- jadi dihitung
+   terpisah (unitParsial), tidak ditambahkan ke unit PIB yang utuh. */
 function mstPerPib(baris) {
   const peta = new Map();
   baris.forEach((b) =>
     b.realisasi.forEach((u) => {
-      const kunci = mstKunciAju(u.aju_ref);
-      let g = peta.get(kunci);
-      if (!g) {
-        g = { kunci, aju: String(u.aju_ref || "").trim(), tanggal: "", unit: 0, isi: [] };
-        peta.set(kunci, g);
-      }
-      // Nama kelompoknya rujukan yang paling lengkap di antara anggotanya
-      if (String(u.aju_ref || "").trim().length > g.aju.length) g.aju = String(u.aju_ref || "").trim();
-      if (u.pib_date && u.pib_date > g.tanggal) g.tanggal = u.pib_date;
-      g.unit += Number(u.qty) || 0;
-      g.isi.push({ baris: b, realisasi: u });
+      const pibs = mstPibs(u);
+      const parsial = pibs.length > 1;
+      pibs.forEach((p) => {
+        const kunci = mstKunciAju(p.aju);
+        let g = peta.get(kunci);
+        if (!g) {
+          g = { kunci, aju: p.aju, tanggal: "", semuaTanggal: new Set(), tanpaTanggal: 0, unit: 0, unitParsial: 0, isi: [] };
+          peta.set(kunci, g);
+        }
+        // Nama kelompoknya rujukan yang paling lengkap di antara anggotanya
+        if (p.aju.length > g.aju.length) g.aju = p.aju;
+        if (p.tanggal) {
+          g.semuaTanggal.add(p.tanggal);
+          if (p.tanggal > g.tanggal) g.tanggal = p.tanggal;
+        } else g.tanpaTanggal++;
+        if (parsial) g.unitParsial += Number(u.qty) || 0;
+        else g.unit += Number(u.qty) || 0;
+        g.isi.push({ baris: b, realisasi: u, pib: p, lain: parsial ? pibs.filter((x) => x !== p) : [] });
+      });
     }),
   );
   return [...peta.values()]
     .map((g) => {
-      const bagian = mstPecahAju(g.aju);
-      const jadwal = bagian.length === 1 ? mstJadwalUntukAju(bagian[0]) : [];
-      return Object.assign(g, { unit: mstBulat(g.unit), jadwal: jadwal.length === 1 ? jadwal[0] : null });
+      const jadwal = mstJadwalUntukAju(g.aju);
+      return Object.assign(g, {
+        unit: mstBulat(g.unit),
+        unitParsial: mstBulat(g.unitParsial),
+        jadwal: jadwal.length === 1 ? jadwal[0] : null,
+        // Satu PIB, satu tanggal: catatan yang tanggalnya berbeda-beda (atau sebagian kosong) ditandai
+        tanggalBeda: g.semuaTanggal.size > 1 || (g.semuaTanggal.size === 1 && g.tanpaTanggal > 0),
+      });
     })
     .sort(
       (a, b) =>
@@ -352,17 +465,33 @@ function mstTallyHtml(sisa, terpakai) {
 }
 
 /* Cip nomor aju. Kalau tepat satu jadwal import yang cocok, cipnya jadi
-   tombol yang membuka jadwal itu. */
-function mstAjuCipHtml(ref) {
+   tombol yang membuka jadwal itu. Tanggal PIB-nya (kalau ada) ikut di
+   keterangan cip. */
+function mstAjuCipHtml(ref, tanggal) {
+  const tgl = tanggal ? " · " + fmtDate(tanggal) : "";
   return mstPecahAju(ref)
     .map((bagian) => {
       const jadwal = mstJadwalUntukAju(bagian);
-      if (jadwal.length !== 1) return `<span class="mst-aju" title="${escapeAttr(bagian)}">${escapeHtml(mstAjuRingkas(bagian))}</span>`;
+      if (jadwal.length !== 1) return `<span class="mst-aju" title="${escapeAttr(bagian + tgl)}">${escapeHtml(mstAjuRingkas(bagian))}</span>`;
       const s = jadwal[0];
-      const ket = tt("Buka jadwal", "Open schedule") + ": " + s.noAju + " · " + dispVal(s.party);
+      const ket = tt("Buka jadwal", "Open schedule") + ": " + s.noAju + tgl + " · " + dispVal(s.party);
       return `<button type="button" class="mst-aju mst-aju--taut" data-mst-jadwal="${escapeAttr(s.id)}" title="${escapeAttr(ket)}">${escapeHtml(mstAjuRingkas(bagian))}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></button>`;
     })
     .join("");
+}
+
+/* PIB yang memakai sebuah baris, tanpa kembar (satu PIB bisa tercatat
+   di beberapa realisasi baris yang sama), urut tanggal. */
+function mstPibBaris(b) {
+  const peta = new Map();
+  b.realisasi.forEach((u) =>
+    mstPibs(u).forEach((p) => {
+      const ada = peta.get(p.aju);
+      if (!ada) peta.set(p.aju, { aju: p.aju, tanggal: p.tanggal });
+      else if (!ada.tanggal && p.tanggal) ada.tanggal = p.tanggal;
+    }),
+  );
+  return mstUrutPib([...peta.values()]);
 }
 
 /* Masa berlaku dokumen: null kalau tanggalnya belum diisi. Status
@@ -573,6 +702,44 @@ function mstGambarBelumDicatat() {
 
 /* ---------- daftar: per baris ---------- */
 
+/* Satu realisasi di rincian baris = satu <tbody>, satu baris tabel per
+   PIB: tanggal & nomor aju berpasangan di baris yang sama. Jumlah,
+   catatan & tombolnya milik realisasi (bukan per PIB), jadi selnya
+   setinggi seluruh PIB-nya. */
+function mstRincianRealisasiHtml(u) {
+  const pibs = mstPibs(u);
+  const isi = pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null }];
+  const tinggi = isi.length > 1 ? ` rowspan="${isi.length}"` : "";
+  const parsial =
+    isi.length > 1
+      ? `<span class="mst-parsial" title="${escapeAttr(
+          tt(
+            `Dikirim bertahap lewat ${isi.length} PIB; kuotanya dihitung sekali.`,
+            `Shipped in stages under ${isi.length} PIBs; the quota is counted once.`,
+          ),
+        )}">${escapeHtml(tt(`${isi.length} PIB · parsial`, `${isi.length} PIBs · partial`))}</span>`
+      : "";
+  const id = escapeAttr(u.id);
+  const milikRealisasi = `
+    <td class="mst-kol-angka"${tinggi}>${escapeHtml(mstFmt(u.qty))} ${parsial}</td>
+    <td class="mst-rinci-catatan"${tinggi}>${u.notes ? escapeHtml(u.notes) : `<span class="mst-redup">—</span>`}</td>
+    <td class="mst-ubah"${tinggi}><div class="hscode-actions">
+      <button type="button" class="mst-pib-tambah" data-mst-tambah-pib="${id}" title="${escapeAttr(
+        tt("Tambah PIB kiriman berikutnya ke realisasi ini", "Add the next shipment's PIB to this realization"),
+      )}"><i class="bi bi-plus-lg" aria-hidden="true"></i> PIB</button>
+      <button type="button" class="icon-btn" data-mst-ubah-realisasi="${id}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
+      <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${id}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
+    </div></td>`;
+  return `<tbody class="${isi.length > 1 ? "mst-rinci-parsial" : ""}">${isi
+    .map(
+      (p, i) => `<tr>
+        <td class="mst-mono">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
+        <td class="mst-rinci-aju"><span class="mst-mono">${escapeHtml(p.aju)}</span></td>${i === 0 ? milikRealisasi : ""}
+      </tr>`,
+    )
+    .join("")}</tbody>`;
+}
+
 function mstRincianBarisHtml(b) {
   const boleh = canEdit();
   const realisasi = b.realisasi.length
@@ -584,20 +751,7 @@ function mstRincianBarisHtml(b) {
           <th>${escapeHtml(tt("Catatan", "Notes"))}</th>
           <th class="mst-ubah"></th>
         </tr></thead>
-        <tbody>${b.realisasi
-          .map(
-            (u) => `<tr>
-            <td class="mst-mono">${u.pib_date ? escapeHtml(fmtDate(u.pib_date)) : `<span class="mst-redup">—</span>`}</td>
-            <td><span class="mst-mono">${escapeHtml(u.aju_ref)}</span></td>
-            <td class="mst-kol-angka">${escapeHtml(mstFmt(u.qty))}</td>
-            <td>${u.notes ? escapeHtml(u.notes) : `<span class="mst-redup">—</span>`}</td>
-            <td class="mst-ubah"><div class="hscode-actions">
-              <button type="button" class="icon-btn" data-mst-ubah-realisasi="${escapeAttr(u.id)}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
-              <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${escapeAttr(u.id)}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
-            </div></td>
-          </tr>`,
-          )
-          .join("")}</tbody>
+        ${b.realisasi.map(mstRincianRealisasiHtml).join("")}
       </table>`
     : `<p class="mst-redup mst-rinci-kosong">${escapeHtml(tt("Belum ada realisasi untuk baris ini.", "No realization recorded for this line yet."))}</p>`;
 
@@ -650,7 +804,7 @@ function mstTabelBarisHtml(baris) {
         <tbody>${baris
           .map((b) => {
             const buka = mstKeadaan.terbuka.has("b:" + b.id);
-            const rujukan = [...new Set(b.realisasi.map((u) => String(u.aju_ref || "").trim()).filter(Boolean))];
+            const rujukan = mstPibBaris(b);
             return `<tr class="mst-baris${buka ? " is-terbuka" : ""}${b.sisa > 0 ? "" : " is-habis"}" data-mst-id="${escapeAttr(b.id)}">
             <td class="mst-kol-no">${escapeHtml(b.no)}</td>
             <td class="mst-kol-barang" data-no="${escapeAttr(b.no)}">
@@ -661,7 +815,7 @@ function mstTabelBarisHtml(baris) {
             <td class="mst-kol-angka" data-label="${escapeAttr(L.kuota)}">${escapeHtml(mstFmt(b.kuota))} <span class="mst-satuan">${escapeHtml(b.satuan)}</span></td>
             <td class="mst-kol-angka" data-label="${escapeAttr(L.terpakai)}">${escapeHtml(mstFmt(b.terpakai))}</td>
             <td class="mst-kol-sisa" data-label="${escapeAttr(L.sisa)}">${mstTallyHtml(b.sisa, b.terpakai)}<b>${escapeHtml(mstFmt(b.sisa))}</b></td>
-            <td class="mst-kol-aju" data-label="${escapeAttr(L.aju)}">${rujukan.length ? rujukan.map(mstAjuCipHtml).join("") : `<span class="mst-redup">—</span>`}</td>
+            <td class="mst-kol-aju" data-label="${escapeAttr(L.aju)}">${rujukan.length ? rujukan.map((p) => mstAjuCipHtml(p.aju, p.tanggal)).join("") : `<span class="mst-redup">—</span>`}</td>
             <td class="mst-kol-aksi"><div class="hscode-actions">
               ${
                 b.sisa > 0
@@ -710,7 +864,15 @@ function mstTabelPibHtml(kelompok) {
                       .map(
                         (x) => `<tr>
                         <td class="mst-mono">${escapeHtml(x.baris.no)}</td>
-                        <td><span class="mst-nama">${escapeHtml(x.baris.nama)}</span><span class="mst-spek">${escapeHtml(mstSpekRingkas(x.baris.spek))}</span></td>
+                        <td><span class="mst-nama">${escapeHtml(x.baris.nama)}</span><span class="mst-spek">${escapeHtml(mstSpekRingkas(x.baris.spek))}</span>${
+                          x.lain.length
+                            ? `<span class="mst-parsial">${escapeHtml(
+                                tt("Parsial, juga di PIB", "Partial, also under PIB") +
+                                  " " +
+                                  x.lain.map((p) => mstAjuRingkas(p.aju) + (p.tanggal ? " (" + fmtDate(p.tanggal) + ")" : "")).join(", "),
+                              )}</span>`
+                            : ""
+                        }</td>
                         <td class="mst-kol-angka">${escapeHtml(mstFmt(x.realisasi.qty))} <span class="mst-satuan">${escapeHtml(x.baris.satuan)}</span></td>
                         <td>${x.realisasi.notes ? escapeHtml(x.realisasi.notes) : `<span class="mst-redup">—</span>`}</td>
                       </tr>`,
@@ -719,13 +881,34 @@ function mstTabelPibHtml(kelompok) {
                   </table>
                 </div></td></tr>`
               : "";
+            const beda = g.tanggalBeda
+              ? `<i class="bi bi-exclamation-triangle-fill mst-tgl-beda" role="img" aria-label="${escapeAttr(tt("Tanggal belum seragam", "Dates not uniform"))}" title="${escapeAttr(
+                  tt(
+                    `Tanggal PIB ini belum sama di semua catatannya (${[...g.semuaTanggal].sort().map(fmtDate).join(", ")}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} belum bertanggal` : ""}). Samakan lewat Atur tanggal.`,
+                    `This PIB's date differs between its records (${[...g.semuaTanggal].sort().map(fmtDate).join(", ")}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} undated` : ""}). Align them with Set date.`,
+                  ),
+                )}"></i>`
+              : "";
+            const unit =
+              (g.unit || !g.unitParsial ? escapeHtml(mstFmt(g.unit)) + " " : "") +
+              (g.unitParsial
+                ? `<span class="mst-parsial" title="${escapeAttr(
+                    tt(
+                      `${mstFmt(g.unitParsial)} unit dikirim bertahap bersama PIB lain; di kuota dihitung sekali.`,
+                      `${mstFmt(g.unitParsial)} ${g.unitParsial === 1 ? "unit" : "units"} shipped in stages with another PIB; counted once against the quota.`,
+                    ),
+                  )}">${escapeHtml((g.unit ? "+" : "") + tt(`${mstFmt(g.unitParsial)} parsial`, `${mstFmt(g.unitParsial)} partial`))}</span>`
+                : "");
             return `<tr class="mst-baris${buka ? " is-terbuka" : ""}">
             <td class="mst-kol-pib"><span class="mst-nama mst-mono" title="${escapeAttr(g.aju)}">${escapeHtml(g.jadwal ? g.jadwal.noAju : g.aju)}</span></td>
-            <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${g.tanggal ? escapeHtml(fmtDate(g.tanggal)) : `<span class="mst-redup">—</span>`}</td>
+            <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${g.tanggal ? escapeHtml(fmtDate(g.tanggal)) : `<span class="mst-redup">—</span>`}${beda}</td>
             <td class="mst-kol-jadwal" data-label="${escapeAttr(L.jadwal)}">${jadwal}</td>
             <td class="mst-kol-angka" data-label="${escapeAttr(L.baris)}">${escapeHtml(mstFmt(g.isi.length))}</td>
-            <td class="mst-kol-angka" data-label="${escapeAttr(L.unit)}">${escapeHtml(mstFmt(g.unit))}</td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.unit)}">${unit}</td>
             <td class="mst-kol-aksi"><div class="hscode-actions">
+              <button type="button" class="icon-btn mst-ubah" data-mst-tanggal-pib="${escapeAttr(g.kunci)}" title="${escapeAttr(
+                tt("Atur tanggal PIB ini di semua catatannya", "Set this PIB's date on all its records"),
+              )}"><i class="bi bi-calendar-event"></i></button>
               <button type="button" class="icon-btn mst-buka" data-mst-buka="p:${escapeAttr(g.kunci)}" aria-expanded="${buka}"
                 title="${escapeAttr(buka ? tt("Tutup rincian", "Hide details") : tt("Baris yang direalisasikan", "Lines realized"))}"><i class="bi ${buka ? "bi-chevron-up" : "bi-chevron-down"}"></i></button>
             </div></td>
@@ -873,10 +1056,14 @@ async function mstAmbil() {
     .order("no", { ascending: true });
   if (e2) throw e2;
   mstBarisDb = baris || [];
-  const { data: realisasi, error: e3 } = await supabaseClient
-    .from("masterlist_usages")
-    .select("id, item_id, qty, aju_ref, pib_date, notes, created_at")
-    .order("created_at", { ascending: true });
+  /* Kolom pibs (daftar PIB realisasi parsial) belum ada sebelum
+     migration-masterlist-pib-parsial.sql dijalankan: dibaca ulang tanpa
+     kolom itu, halamannya tetap jalan. */
+  const KOLOM = "id, item_id, qty, aju_ref, pib_date, notes, created_at";
+  const ambil = (kolom) => supabaseClient.from("masterlist_usages").select(kolom).order("created_at", { ascending: true });
+  let { data: realisasi, error: e3 } = await ambil(KOLOM + ", pibs");
+  mstPibsSiap = !(e3 && mstGalatKolomPibs(e3));
+  if (!mstPibsSiap) ({ data: realisasi, error: e3 } = await ambil(KOLOM));
   if (e3) throw e3;
   const milik = new Set(mstBarisDb.map((b) => b.id));
   mstRealisasiDb = (realisasi || []).filter((u) => milik.has(u.item_id));
@@ -937,7 +1124,7 @@ function showMasterlistView() {
    orang mencatat bersamaan (kuota terlampaui), nomor baris kembar. */
 function mstPesanGalat(error, cadangan) {
   const pesan = String((error && error.message) || "");
-  if (/melebihi kuota|lebih kecil dari yang sudah terpakai/i.test(pesan)) return pesan;
+  if (/melebihi kuota|lebih kecil dari yang sudah terpakai|harus punya nomor aju PIB|Tanggal PIB harus berbentuk|migration-masterlist-pib-parsial/i.test(pesan)) return pesan;
   if (/masterlist_items_no_unik|duplicate key/i.test(pesan)) return tt("Nomor baris itu sudah dipakai.", "That line number is already in use.");
   return cadangan;
 }
@@ -946,7 +1133,13 @@ function mstPesanGalat(error, cadangan) {
 
 const mstModalEl = $("#mstRealisasiModal");
 const mstModal = mstModalEl ? new bootstrap.Modal(mstModalEl) : null;
-let mstForm = null; // { mode: "baru" | "ubah", id, asal, baris: [{ itemId, qty }] }
+/* Isian kotak yang sedang terbuka:
+     mode   "baru" | "ubah" (mengubah SATU realisasi: id, asal = jumlah lamanya)
+     pib    [{ aju, tanggal, otomatis }] -- PIB realisasi ini. otomatis =
+            tanggalnya diisikan dari catatan lain PIB yang sama, bukan diketik
+     baris  [{ itemId, qty, lanjutId }] -- lanjutId: realisasi yang sudah ada
+            yang mendapat PIB kotak ini (kiriman lanjutan); tanpa jumlah */
+let mstForm = null;
 let mstMenyimpan = false;
 
 /* Paling banyak yang boleh dicatat untuk sebuah baris: sisanya -- dan
@@ -961,91 +1154,239 @@ function mstLabelBaris(b) {
   return `${b.no} · ${b.nama}${spek ? " · " + spek : ""} · ${tt("sisa", "left")} ${mstFmt(mstBatas(b))}`;
 }
 
+/* "7130 (12-05-2025) + 9204" */
+function mstRingkasPib(pibs) {
+  return pibs.map((p) => mstAjuRingkas(p.aju) + (p.tanggal ? ` (${fmtDate(p.tanggal)})` : "")).join(" + ");
+}
+
+function mstLabelLanjutan(b, u) {
+  return `${b.no} · ${b.nama} · ${mstFmt(u.qty)} ${b.satuan} · PIB ${mstRingkasPib(mstPibs(u))}`;
+}
+
+/* ---- PIB di kotak: nomor aju | tanggal | hapus, keterangannya di bawah ---- */
+
+/* Digambar ulang hanya saat PIB ditambah / dihapus. Saat mengetik cukup
+   keterangan & tanggalnya yang diperbarui, supaya fokus kotak tidak hilang. */
+function mstGambarPib() {
+  const wadah = $("#mstPib");
+  if (!wadah || !mstForm) return;
+  const banyak = mstForm.pib.length > 1;
+  const daftar = $("#mstPibDaftar");
+  if (daftar) daftar.classList.toggle("is-banyak", banyak);
+  wadah.innerHTML = mstForm.pib
+    .map(
+      (p, i) => `<div class="mst-pib" data-mst-pib="${i}">
+        <input type="text" class="login-input" data-mst-pib-aju list="mstAjuList" autocomplete="off" maxlength="80"
+               value="${escapeAttr(p.aju)}" placeholder="${escapeAttr(tt("Nomor aju, atau 4 angka terakhirnya", "Aju number, or its last 4 digits"))}"
+               aria-label="${escapeAttr(banyak ? tt(`Nomor aju PIB ${i + 1}`, `PIB ${i + 1} aju number`) : tt("Nomor aju PIB", "PIB aju number"))}" />
+        <input type="date" class="login-input" data-mst-pib-tgl value="${escapeAttr(p.tanggal || "")}"
+               aria-label="${escapeAttr(banyak ? tt(`Tanggal PIB ${i + 1}`, `PIB ${i + 1} date`) : tt("Tanggal PIB", "PIB date"))}" />
+        ${
+          banyak
+            ? `<button type="button" class="rm-row" data-mst-pib-hapus title="${escapeAttr(tt("Hapus PIB ini", "Remove this PIB"))}" aria-label="${escapeAttr(
+                tt(`Hapus PIB ${i + 1}`, `Remove PIB ${i + 1}`),
+              )}"><i class="bi bi-x-lg"></i></button>`
+            : ""
+        }
+        <div class="prompt-hint mst-pib-ket" data-mst-pib-ket></div>
+      </div>`,
+    )
+    .join("");
+  mstForm.pib.forEach((_, i) => mstGambarKetPib(i));
+  mstAturTombolPib();
+}
+
+/* PIB berikutnya baru bisa ditambah kalau yang ada sudah bernomor aju. */
+function mstAturTombolPib() {
+  const tambah = $("#btnMstPibTambah");
+  if (tambah && mstForm) tambah.disabled = mstForm.pib.some((p) => !String(p.aju || "").trim());
+}
+
+/* Isi kotak-kotak PIB -> mstForm.pib. Tanggal yang diubah tangan bukan
+   lagi isian otomatis. */
+function mstBacaPib() {
+  if (!mstForm) return;
+  document.querySelectorAll("#mstPib [data-mst-pib]").forEach((el) => {
+    const p = mstForm.pib[Number(el.dataset.mstPib)];
+    if (!p) return;
+    p.aju = el.querySelector("[data-mst-pib-aju]").value;
+    const tgl = el.querySelector("[data-mst-pib-tgl]").value;
+    if (tgl !== (p.tanggal || "")) p.otomatis = false;
+    p.tanggal = tgl;
+  });
+}
+
+/* SATU PIB, SATU TANGGAL. Nomor aju yang sudah tercatat di realisasi lain
+   dengan satu tanggal: tanggal itu diisikan, kalau kotaknya kosong atau
+   isinya hasil isian otomatis sebelumnya. Nomor ajunya berganti ke PIB
+   yang belum bertanggal: tanggal ikutan yang lama dilepas lagi. */
+function mstSelaraskanTanggal(i) {
+  const p = mstForm && mstForm.pib[i];
+  const kotak = document.querySelector(`#mstPib [data-mst-pib="${i}"] [data-mst-pib-tgl]`);
+  if (!p) return;
+  const bagian = mstPecahAju(p.aju);
+  const info = bagian.length === 1 ? mstTanggalTercatat(mstKunciAju(bagian[0]), mstForm.id) : { tanggal: [] };
+  if (info.tanggal.length === 1 && (!p.tanggal || p.otomatis)) {
+    p.tanggal = info.tanggal[0];
+    p.otomatis = true;
+  } else if (p.otomatis && info.tanggal.length !== 1) {
+    p.tanggal = "";
+    p.otomatis = false;
+  }
+  if (kotak) kotak.value = p.tanggal || "";
+}
+
+/* Keterangan di bawah satu PIB: jadwal yang cocok, apakah PIB itu sudah
+   punya catatan (mencegah dicatat dua kali), dan tanggal yang tercatat. */
+function mstGambarKetPib(i) {
+  const p = mstForm && mstForm.pib[i];
+  const ket = document.querySelector(`#mstPib [data-mst-pib="${i}"] [data-mst-pib-ket]`);
+  if (!p || !ket) return;
+  const bagian = mstPecahAju(p.aju);
+  const pesan = [];
+  let awas = false;
+  if (bagian.length > 1) {
+    pesan.push(tt("Satu kotak untuk satu nomor aju — PIB berikutnya ditambahkan lewat Tambah PIB.", "One box per aju number — add the next PIB with Add PIB."));
+    awas = true;
+  } else if (bagian.length === 1) {
+    const jadwal = mstJadwalUntukAju(bagian[0]);
+    if (jadwal.length === 1) pesan.push(tt("Jadwal", "Schedule") + ": " + dispVal(jadwal[0].party) + " · " + dispVal(jadwal[0].invoice));
+    const info = mstTanggalTercatat(mstKunciAju(bagian[0]), mstForm.id);
+    if (info.catatan)
+      pesan.push(
+        tt(
+          `PIB ini sudah punya ${mstFmt(info.catatan)} baris realisasi tercatat.`,
+          `This PIB already has ${mstFmt(info.catatan)} realization ${info.catatan === 1 ? "line" : "lines"} recorded.`,
+        ),
+      );
+    if (info.tanggal.length === 1 && p.otomatis) {
+      pesan.push(tt(`Tanggalnya mengikuti catatan itu (${fmtDate(info.tanggal[0])}).`, `Its date follows those records (${fmtDate(info.tanggal[0])}).`));
+    } else if (info.tanggal.length === 1 && p.tanggal && p.tanggal !== info.tanggal[0]) {
+      pesan.push(tt(`Catatan lain PIB ini bertanggal ${fmtDate(info.tanggal[0])}.`, `Other records of this PIB are dated ${fmtDate(info.tanggal[0])}.`));
+      awas = true;
+    } else if (info.tanggal.length > 1) {
+      const daftar = info.tanggal.map(fmtDate).join(", ");
+      pesan.push(tt(`Catatan lain PIB ini memakai beberapa tanggal: ${daftar}.`, `Other records of this PIB use several dates: ${daftar}.`));
+      awas = true;
+    }
+  }
+  // Peringatan: ikon + kalimat (warna peringatan hanya di ikonnya; teksnya tetap terbaca)
+  ket.innerHTML = (awas ? '<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>' : "") + escapeHtml(pesan.join(" "));
+  ket.classList.toggle("is-awas", awas);
+}
+
+/* ---- baris masterlist yang direalisasikan ---- */
+
 function mstGambarPilih() {
   const wadah = $("#mstPilih");
   if (!wadah || !mstForm) return;
   const semua = mstSusun();
-  const dipilih = new Set(mstForm.baris.map((x) => x.itemId).filter(Boolean));
   const ubah = mstForm.mode === "ubah";
+  const dipilih = new Set(mstForm.baris.map((x) => x.itemId).filter(Boolean));
+  const disambung = new Set(mstForm.baris.map((x) => x.lanjutId).filter(Boolean));
+  /* KIRIMAN LANJUTAN: PIB kotak ini DITAMBAHKAN ke realisasi yang sudah
+     ada -- mesin yang sebagian sudah tiba lewat PIB sebelumnya. Kuotanya
+     tidak berkurang lagi, jadi baris yang kuotanya habis pun bisa. */
+  const sambungan = ubah ? [] : semua.flatMap((b) => b.realisasi.map((u) => ({ b, u })));
   wadah.innerHTML = mstForm.baris
     .map((x, i) => {
       const b = semua.find((r) => r.id === x.itemId);
-      const pilihan = semua.filter((r) => r.id === x.itemId || (mstBatas(r) > 0 && !dipilih.has(r.id)));
-      return `<div class="mst-pilih" data-mst-pilih="${i}">
+      const lanjut = x.lanjutId ? sambungan.find((s) => s.u.id === x.lanjutId) : null;
+      const opsiBaru = semua
+        .filter((r) => r.id === x.itemId || (mstBatas(r) > 0 && !dipilih.has(r.id)))
+        .map((r) => `<option value="${escapeAttr(r.id)}" ${!lanjut && r.id === x.itemId ? "selected" : ""}>${escapeHtml(mstLabelBaris(r))}</option>`)
+        .join("");
+      const opsiLanjut = sambungan
+        .filter((s) => s.u.id === x.lanjutId || !disambung.has(s.u.id))
+        .map((s) => `<option value="r:${escapeAttr(s.u.id)}" ${s.u.id === x.lanjutId ? "selected" : ""}>${escapeHtml(mstLabelLanjutan(s.b, s.u))}</option>`)
+        .join("");
+      const opsi = opsiLanjut
+        ? (opsiBaru ? `<optgroup label="${escapeAttr(tt("Realisasi baru — memakai kuota", "New realization — uses quota"))}">${opsiBaru}</optgroup>` : "") +
+          `<optgroup label="${escapeAttr(tt("Kiriman lanjutan — tambahkan PIB ke realisasi yang ada (jumlah tetap)", "Follow-up shipment — add the PIB to an existing realization (quantity unchanged)"))}">${opsiLanjut}</optgroup>`
+        : opsiBaru;
+      /* Kiriman lanjutan TIDAK menambah jumlah. Baris yang masih bersisa:
+         kiriman ini mungkin justru membawa unit baru (2 unit lalu 3 unit)
+         -- itu realisasi baru dengan jumlahnya sendiri, bukan lanjutan. */
+      const unitBaru =
+        lanjut && lanjut.b.sisa > 0
+          ? " " +
+            tt(
+              `Kiriman ini membawa unit tambahan? Pilih baris ${lanjut.b.no} di Realisasi baru dan isi jumlahnya (sisa ${mstFmt(lanjut.b.sisa)} ${lanjut.b.satuan}).`,
+              `Does this shipment bring more units? Choose line ${lanjut.b.no} under New realization and enter its quantity (${mstFmt(lanjut.b.sisa)} ${lanjut.b.satuan} left).`,
+            )
+          : "";
+      const ket = lanjut
+        ? tt(
+            `Kiriman lanjutan: PIB di atas ditambahkan ke realisasi ini (sekarang PIB ${mstRingkasPib(mstPibs(lanjut.u))}). Kuotanya tidak berkurang lagi.`,
+            `Follow-up shipment: the PIB above is added to this realization (now PIB ${mstRingkasPib(mstPibs(lanjut.u))}). No more quota is used.`,
+          ) + unitBaru
+        : b
+          ? tt(`Sisa kuota ${mstFmt(mstBatas(b))} ${b.satuan}`, `Quota left: ${mstFmt(mstBatas(b))} ${b.satuan}`)
+          : "";
+      return `<div class="mst-pilih${lanjut ? " is-lanjutan" : ""}" data-mst-pilih="${i}">
           <select class="login-input mst-pilih-baris" data-mst-pilih-baris ${ubah ? "disabled" : ""}
                   aria-label="${escapeAttr(tt("Baris masterlist", "Masterlist line"))}">
             <option value="">${escapeHtml(tt("— pilih baris —", "— choose a line —"))}</option>
-            ${pilihan.map((r) => `<option value="${escapeAttr(r.id)}" ${r.id === x.itemId ? "selected" : ""}>${escapeHtml(mstLabelBaris(r))}</option>`).join("")}
+            ${opsi}
           </select>
           <input type="number" class="login-input mst-pilih-qty" data-mst-pilih-qty min="0" step="any" inputmode="decimal"
-                 value="${escapeAttr(x.qty)}" aria-label="${escapeAttr(tt("Jumlah", "Quantity"))}" placeholder="${escapeAttr(tt("Jumlah", "Qty"))}" />
+                 value="${escapeAttr(lanjut ? mstBulat(lanjut.u.qty) : x.qty)}" ${lanjut ? "disabled" : ""}
+                 aria-label="${escapeAttr(tt("Jumlah", "Quantity"))}" placeholder="${escapeAttr(tt("Jumlah", "Qty"))}" />
           ${
             !ubah && mstForm.baris.length > 1
               ? `<button type="button" class="rm-row" data-mst-pilih-hapus title="${escapeAttr(tt("Hapus baris ini", "Remove this line"))}" aria-label="${escapeAttr(tt("Hapus baris ini", "Remove this line"))}"><i class="bi bi-x-lg"></i></button>`
               : ""
           }
-          <div class="prompt-hint mst-pilih-ket">${
-            b ? escapeHtml(tt(`Sisa kuota ${mstFmt(mstBatas(b))} ${b.satuan}`, `Quota left: ${mstFmt(mstBatas(b))} ${b.satuan}`)) : ""
-          }</div>
+          <div class="prompt-hint mst-pilih-ket">${escapeHtml(ket)}</div>
         </div>`;
     })
     .join("");
-  // Tidak ada lagi baris bersisa yang belum dipilih -> tidak ada yang bisa ditambahkan
+  // Tidak ada lagi yang bisa dipilih -> tidak ada yang bisa ditambahkan
   const tambah = $("#btnMstPilihTambah");
   if (tambah) {
-    const tersisa = semua.some((r) => mstBatas(r) > 0 && !dipilih.has(r.id));
+    const tersisa = semua.some((r) => mstBatas(r) > 0 && !dipilih.has(r.id)) || sambungan.some((s) => !disambung.has(s.u.id));
     tambah.classList.toggle("d-none", ubah);
-    tambah.disabled = !tersisa || mstForm.baris.some((x) => !x.itemId);
+    tambah.disabled = !tersisa || mstForm.baris.some((x) => !x.itemId && !x.lanjutId);
   }
-}
-
-/* Keterangan di bawah kotak nomor aju: jadwal yang cocok, dan apakah PIB
-   itu sudah punya catatan (mencegah dicatat dua kali). */
-function mstGambarKetAju() {
-  const ket = $("#mstAjuKet");
-  const kotak = $("#mstAju");
-  if (!ket || !kotak) return;
-  const bagian = mstPecahAju(kotak.value);
-  const pesan = [];
-  if (bagian.length === 1) {
-    const jadwal = mstJadwalUntukAju(bagian[0]);
-    if (jadwal.length === 1) pesan.push(tt("Jadwal", "Schedule") + ": " + dispVal(jadwal[0].party) + " · " + dispVal(jadwal[0].invoice));
-    const kunci = mstKunciAju(bagian[0]);
-    const tercatat = mstRealisasiDb.filter((u) => (!mstForm || u.id !== mstForm.id) && mstKunciAju(u.aju_ref) === kunci).length;
-    if (tercatat)
-      pesan.push(
-        tt(`PIB ini sudah punya ${mstFmt(tercatat)} baris realisasi tercatat.`, `This PIB already has ${mstFmt(tercatat)} realization ${tercatat === 1 ? "line" : "lines"} recorded.`),
-      );
-  }
-  ket.textContent = pesan.join(" ");
 }
 
 /* opsi: { itemId } baris yang langsung dipilih; { aju, ket } isian awal
-   (dari panel Belum dicatat); { realisasi } untuk MENGUBAH satu catatan. */
+   (dari panel Belum dicatat); { realisasi } untuk MENGUBAH satu catatan,
+   dengan { tambahPib: true } langsung bersama satu PIB kosong untuk
+   kiriman berikutnya. */
 function mstBukaRealisasi(opsi) {
   if (!requireEdit() || !mstModal) return;
   const o = opsi || {};
   const u = o.realisasi || null;
-  /* Mencatat realisasi BARU butuh baris yang masih bersisa. Tanpa itu
-     kotaknya terbuka dengan pilihan kosong dan tidak ada yang bisa
-     disimpan -- lebih jelas dikatakan langsung. */
-  if (!u && !mstSusun().some((b) => b.sisa > 0)) {
-    showToast(
-      mstBarisDb.length
-        ? tt("Seluruh kuota sudah terealisasi — tidak ada baris yang bisa dicatat.", "All quota has been realized — there is no line left to record.")
-        : tt("Belum ada baris masterlist untuk dicatat.", "There are no masterlist lines to record yet."),
-      "danger",
-    );
+  /* Tanpa baris sama sekali tidak ada yang bisa dicatat -- lebih jelas
+     dikatakan langsung daripada membuka kotak dengan pilihan kosong.
+     Kuota yang sudah habis semua TIDAK menghalangi: kiriman lanjutan
+     (PIB berikutnya untuk realisasi yang ada) tidak memakai kuota. */
+  if (!u && !mstBarisDb.length) {
+    showToast(tt("Belum ada baris masterlist untuk dicatat.", "There are no masterlist lines to record yet."), "danger");
     return;
   }
+  const pibKosong = () => ({ aju: "", tanggal: "", otomatis: false });
+  const pib = u ? mstPibs(u).map((p) => ({ aju: p.aju, tanggal: p.tanggal || "", otomatis: false })) : [Object.assign(pibKosong(), { aju: o.aju || "" })];
+  if (!pib.length || (u && o.tambahPib)) pib.push(pibKosong());
   mstForm = u
-    ? { mode: "ubah", id: u.id, asal: Number(u.qty) || 0, baris: [{ itemId: u.item_id, qty: String(mstBulat(u.qty)) }] }
-    : { mode: "baru", id: null, asal: 0, baris: [{ itemId: o.itemId || "", qty: o.itemId ? "1" : "" }] };
+    ? { mode: "ubah", id: u.id, asal: Number(u.qty) || 0, pib, baris: [{ itemId: u.item_id, qty: String(mstBulat(u.qty)), lanjutId: "" }] }
+    : { mode: "baru", id: null, asal: 0, pib, baris: [{ itemId: o.itemId || "", qty: o.itemId ? "1" : "", lanjutId: "" }] };
 
-  $("#mstRealisasiJudul").textContent = u ? tt("Ubah realisasi", "Edit realization") : tt("Catat realisasi", "Record realization");
-  $("#mstRealisasiKet").textContent = o.ket || "";
-  $("#mstAju").value = u ? u.aju_ref || "" : o.aju || "";
-  $("#mstTanggal").value = u ? u.pib_date || "" : "";
+  const habis = !u && !mstSusun().some((b) => b.sisa > 0);
+  $("#mstRealisasiJudul").textContent = u
+    ? o.tambahPib
+      ? tt("Tambah PIB kiriman berikutnya", "Add the next shipment's PIB")
+      : tt("Ubah realisasi", "Edit realization")
+    : tt("Catat realisasi", "Record realization");
+  $("#mstRealisasiKet").textContent =
+    o.ket ||
+    (habis
+      ? tt(
+          "Seluruh kuota sudah terealisasi — yang masih bisa dicatat hanya kiriman lanjutan: PIB berikutnya untuk realisasi yang sudah ada.",
+          "All quota has been realized — only follow-up shipments can still be recorded: the next PIB of an existing realization.",
+        )
+      : "");
   $("#mstCatatan").value = u ? u.notes || "" : "";
   $("#mstRealisasiGalat").classList.add("d-none");
   $("#mstAjuList").innerHTML = ((typeof data !== "undefined" && data && data.import) || [])
@@ -1057,35 +1398,81 @@ function mstBukaRealisasi(opsi) {
     const b = mstSusun().find((r) => r.id === o.itemId);
     if (b) mstForm.baris[0].qty = String(Math.min(1, mstBatas(b)));
   }
+  mstGambarPib();
+  mstForm.pib.forEach((_, i) => {
+    mstSelaraskanTanggal(i);
+    mstGambarKetPib(i);
+  });
   mstGambarPilih();
-  mstGambarKetAju();
+  if (mstModalEl.classList.contains("show")) mstFokusAwal();
   mstModal.show();
-  setTimeout(() => {
-    const fokus = $("#mstAju").value ? $("#mstPilih select:not(:disabled), #mstPilih input") : $("#mstAju");
-    if (fokus) fokus.focus();
-  }, 300);
 }
 
-/* Isi kotak pilihan -> mstForm.baris, sebelum digambar ulang atau disimpan. */
+/* Fokus pertama: kotak PIB yang masih kosong, atau pilihan baris. Dipasang
+   sesudah kotaknya SELESAI tampil (shown.bs.modal, lihat penangan di bawah):
+   Bootstrap memindahkan fokus ke kotak itu sendiri di akhir animasinya,
+   jadi fokus yang dipasang lebih awal tertimpa. */
+function mstFokusAwal() {
+  if (!mstForm) return;
+  const kosong = [...document.querySelectorAll("#mstPib [data-mst-pib-aju]")].find((el) => !el.value);
+  const fokus = kosong || $("#mstPilih select:not(:disabled), #mstPilih input:not(:disabled)");
+  if (fokus) fokus.focus();
+}
+
+/* Isi kotak pilihan -> mstForm.baris, sebelum digambar ulang atau
+   disimpan. Pilihan "r:<id>" = kiriman lanjutan ke realisasi itu. */
 function mstBacaPilih() {
   if (!mstForm) return;
   document.querySelectorAll("#mstPilih [data-mst-pilih]").forEach((el) => {
     const x = mstForm.baris[Number(el.dataset.mstPilih)];
     if (!x) return;
-    x.itemId = el.querySelector("[data-mst-pilih-baris]").value;
-    x.qty = el.querySelector("[data-mst-pilih-qty]").value;
+    const nilai = el.querySelector("[data-mst-pilih-baris]").value;
+    const lanjut = nilai.indexOf("r:") === 0;
+    x.itemId = lanjut ? "" : nilai;
+    x.lanjutId = lanjut ? nilai.slice(2) : "";
+    // Kotak jumlah kiriman lanjutan hanya menampilkan jumlah realisasinya
+    if (!lanjut) x.qty = el.querySelector("[data-mst-pilih-qty]").value;
   });
 }
 
-/* Memeriksa isian. Mengembalikan { galat } atau { aju, tanggal, catatan,
-   baris: [{ itemId, qty }] } yang siap disimpan. */
+/* Memeriksa isian. Mengembalikan { galat } atau
+   { pib: [{ aju, tanggal }] (urut tanggal), catatan, baris } yang siap
+   disimpan; baris = [{ itemId, qty, no }] atau [{ lanjutId, itemId, no }]. */
 function mstPeriksaForm() {
   mstBacaPilih();
-  const aju = $("#mstAju").value.replace(/\s+/g, " ").trim();
-  if (!aju) return { galat: tt("Nomor aju PIB harus diisi.", "The PIB aju number is required.") };
+  mstBacaPib();
+  const pib = [];
+  for (let i = 0; i < mstForm.pib.length; i++) {
+    const p = mstForm.pib[i];
+    const aju = String(p.aju || "").replace(/\s+/g, " ").trim();
+    const tanggal = p.tanggal || null;
+    if (!aju && !tanggal) continue; // kotak PIB tambahan yang dibiarkan kosong
+    const ke = mstForm.pib.length > 1 ? " " + (i + 1) : "";
+    if (!aju) return { galat: tt(`Nomor aju PIB${ke} harus diisi.`, `The aju number of PIB${ke} is required.`) };
+    if (mstPecahAju(aju).length > 1)
+      return { galat: tt("Satu kotak untuk satu nomor aju. PIB berikutnya ditambahkan lewat tombol Tambah PIB.", "One box per aju number. Add the next PIB with the Add PIB button.") };
+    const kunci = mstKunciAju(aju);
+    if (pib.some((x) => x.kunci === kunci)) return { galat: tt(`PIB ${aju} diisi dua kali.`, `PIB ${aju} is entered twice.`) };
+    pib.push({ aju, tanggal, kunci });
+  }
+  if (!pib.length) return { galat: tt("Nomor aju PIB harus diisi.", "The PIB aju number is required.") };
+  if (pib.length > 1 && !mstPibsSiap) return { galat: mstPesanMigrasiPib() };
+
   const semua = mstSusun();
   const baris = [];
   for (const x of mstForm.baris) {
+    if (x.lanjutId) {
+      const u = mstRealisasiDb.find((r) => r.id === x.lanjutId);
+      const b = u && semua.find((r) => r.id === u.item_id);
+      if (!b) return { galat: tt("Pilih baris masterlist yang direalisasikan.", "Choose the masterlist line being realized.") };
+      if (baris.some((y) => y.lanjutId === u.id)) return { galat: tt(`Realisasi baris ${b.no} dipilih dua kali.`, `The line ${b.no} realization is chosen twice.`) };
+      const ada = new Set(mstPibs(u).map((p) => mstKunciAju(p.aju)));
+      const sudah = pib.find((p) => ada.has(p.kunci));
+      if (sudah) return { galat: tt(`PIB ${sudah.aju} sudah ada di realisasi baris ${b.no}.`, `PIB ${sudah.aju} is already in the line ${b.no} realization.`) };
+      if (!mstPibsSiap) return { galat: mstPesanMigrasiPib() };
+      baris.push({ lanjutId: u.id, itemId: b.id, no: b.no });
+      continue;
+    }
     const b = semua.find((r) => r.id === x.itemId);
     if (!b) return { galat: tt("Pilih baris masterlist yang direalisasikan.", "Choose the masterlist line being realized.") };
     const qty = Number(String(x.qty).replace(",", "."));
@@ -1100,10 +1487,14 @@ function mstPeriksaForm() {
           `The quantity for line ${b.no} exceeds its remaining quota (${mstFmt(batas)} ${b.satuan}).`,
         ),
       };
-    if (baris.some((y) => y.itemId === b.id)) return { galat: tt(`Baris ${b.no} dipilih dua kali.`, `Line ${b.no} is chosen twice.`) };
+    if (baris.some((y) => !y.lanjutId && y.itemId === b.id)) return { galat: tt(`Baris ${b.no} dipilih dua kali.`, `Line ${b.no} is chosen twice.`) };
     baris.push({ itemId: b.id, qty, no: b.no });
   }
-  return { aju, tanggal: $("#mstTanggal").value || null, catatan: $("#mstCatatan").value.trim(), baris };
+  return {
+    pib: mstUrutPib(pib.map((p) => ({ aju: p.aju, tanggal: p.tanggal }))),
+    catatan: $("#mstCatatan").value.trim(),
+    baris,
+  };
 }
 
 async function mstSimpanRealisasi() {
@@ -1124,32 +1515,51 @@ async function mstSimpanRealisasi() {
   const tombol = $("#btnMstSimpanRealisasi");
   mstMenyimpan = true;
   tombol.classList.add("is-sibuk");
-  let galat = null;
+  const ubah = mstForm.mode === "ubah";
+  // Mengubah satu realisasi bukan mencatat yang baru / menyambung yang lain
+  const baru = ubah ? [] : isi.baris.filter((x) => !x.lanjutId);
+  const lanjut = ubah ? [] : isi.baris.filter((x) => x.lanjutId);
+  const ubahRealisasi = (id, ubahan) => mstKirimPib((m) => supabaseClient.from("masterlist_usages").update(m[0]).eq("id", id), [ubahan]);
+  let galat = null; // belum ada yang tersimpan: kotak tetap terbuka dengan pesannya
+  const gagalLanjut = []; // sebagian tersimpan, kiriman lanjutan baris-baris ini tidak
+  let galatLanjut = null;
   try {
-    if (mstForm.mode === "ubah") {
-      const ubahan = { qty: isi.baris[0].qty, aju_ref: isi.aju, pib_date: isi.tanggal, notes: isi.catatan };
-      const { error } = await supabaseClient.from("masterlist_usages").update(ubahan).eq("id", mstForm.id);
-      galat = error;
-      if (!error) {
+    if (ubah) {
+      const h = await ubahRealisasi(mstForm.id, Object.assign({ qty: isi.baris[0].qty, notes: isi.catatan }, mstKolomPib(isi.pib)));
+      galat = h.error;
+      if (!galat) {
         const u = mstRealisasiDb.find((x) => x.id === mstForm.id);
-        if (u) Object.assign(u, ubahan);
+        if (u) Object.assign(u, h.muatan[0]);
       }
     } else {
-      const { data: hasil, error } = await supabaseClient
-        .from("masterlist_usages")
-        .insert(
-          isi.baris.map((x) => ({
-            item_id: x.itemId,
-            qty: x.qty,
-            aju_ref: isi.aju,
-            pib_date: isi.tanggal,
-            notes: isi.catatan,
-            created_by: authState.user ? authState.user.id : null,
-          })),
-        )
-        .select();
-      galat = error;
-      if (!error) (hasil || []).forEach((u) => mstRealisasiDb.push(u));
+      if (baru.length) {
+        const h = await mstKirimPib(
+          (m) => supabaseClient.from("masterlist_usages").insert(m).select(),
+          baru.map((x) =>
+            Object.assign(
+              { item_id: x.itemId, qty: x.qty, notes: isi.catatan, created_by: authState.user ? authState.user.id : null },
+              mstKolomPib(isi.pib),
+            ),
+          ),
+        );
+        galat = h.error;
+        if (!galat) (h.data || []).forEach((u) => mstRealisasiDb.push(u));
+      }
+      // Kiriman lanjutan: PIB-nya ditambahkan ke realisasi yang sudah ada, jumlahnya tetap
+      if (!galat) {
+        for (const x of lanjut) {
+          const u = mstRealisasiDb.find((r) => r.id === x.lanjutId);
+          const h = await ubahRealisasi(
+            u.id,
+            Object.assign({ notes: [u.notes, isi.catatan].filter(Boolean).join(" · ") }, mstKolomPib(mstUrutPib(mstPibs(u).concat(isi.pib)))),
+          );
+          if (h.error) {
+            gagalLanjut.push(x.no);
+            galatLanjut = h.error;
+          } else Object.assign(u, h.muatan[0]);
+        }
+        if (!baru.length && lanjut.length && gagalLanjut.length === lanjut.length) galat = galatLanjut;
+      }
     }
   } catch (e) {
     galat = e;
@@ -1160,20 +1570,36 @@ async function mstSimpanRealisasi() {
     console.error(galat);
     return tampilGalat(mstPesanGalat(galat, tt("Realisasi gagal disimpan. Coba lagi.", "The realization could not be saved. Try again.")));
   }
-  const unit = mstBulat(isi.baris.reduce((s, x) => s + x.qty, 0));
-  const ubah = mstForm.mode === "ubah";
+  const unit = mstBulat(baru.reduce((s, x) => s + x.qty, 0));
+  const labelPib = isi.pib.map((p) => mstAjuRingkas(p.aju)).join(" + ");
   mstForm = null;
   mstModal.hide();
   renderMasterlist();
-  showToast(
-    ubah
-      ? tt("Realisasi diperbarui.", "Realization updated.")
-      : tt(
-          `Realisasi PIB ${mstAjuRingkas(isi.aju)} tercatat: ${mstFmt(isi.baris.length)} baris, ${mstFmt(unit)} unit.`,
-          `PIB ${mstAjuRingkas(isi.aju)} recorded: ${mstFmt(isi.baris.length)} ${isi.baris.length === 1 ? "line" : "lines"}, ${mstFmt(unit)} ${unit === 1 ? "unit" : "units"}.`,
-        ),
-    "success",
-  );
+  if (gagalLanjut.length) {
+    console.error(galatLanjut);
+    showToast(
+      tt(
+        `Sebagian tersimpan, tetapi PIB ${labelPib} belum masuk ke realisasi baris ${gagalLanjut.join(", ")}. Tambahkan lewat tombol + PIB di rincian barisnya.`,
+        `Partly saved, but PIB ${labelPib} was not added to the line ${gagalLanjut.join(", ")} realization. Add it with the + PIB button in the line details.`,
+      ),
+      "danger",
+    );
+    return;
+  }
+  const pesan = [];
+  if (ubah) pesan.push(tt("Realisasi diperbarui.", "Realization updated."));
+  if (baru.length)
+    pesan.push(
+      tt(
+        `Realisasi PIB ${labelPib} tercatat: ${mstFmt(baru.length)} baris, ${mstFmt(unit)} unit.`,
+        `PIB ${labelPib} recorded: ${mstFmt(baru.length)} ${baru.length === 1 ? "line" : "lines"}, ${mstFmt(unit)} ${unit === 1 ? "unit" : "units"}.`,
+      ),
+    );
+  if (lanjut.length) {
+    const no = lanjut.map((x) => x.no).join(", ");
+    pesan.push(tt(`PIB ${labelPib} ditambahkan ke realisasi baris ${no}.`, `PIB ${labelPib} added to the line ${no} realization${lanjut.length === 1 ? "" : "s"}.`));
+  }
+  showToast(pesan.join(" "), "success");
 }
 
 function mstHapusRealisasi(id) {
@@ -1181,10 +1607,13 @@ function mstHapusRealisasi(id) {
   const u = mstRealisasiDb.find((x) => x.id === id);
   if (!u) return;
   const b = mstBarisDb.find((x) => x.id === u.item_id);
+  const pib = mstPibs(u)
+    .map((p) => p.aju)
+    .join(" / ");
   showConfirm(
     tt(
-      `Hapus realisasi ${mstFmt(u.qty)} unit (PIB ${u.aju_ref}) dari baris ${b ? b.no : "?"}? Kuotanya kembali tersedia.`,
-      `Delete the realization of ${mstFmt(u.qty)} ${Number(u.qty) === 1 ? "unit" : "units"} (PIB ${u.aju_ref}) from line ${b ? b.no : "?"}? The quota becomes available again.`,
+      `Hapus realisasi ${mstFmt(u.qty)} unit (PIB ${pib}) dari baris ${b ? b.no : "?"}? Kuotanya kembali tersedia.`,
+      `Delete the realization of ${mstFmt(u.qty)} ${Number(u.qty) === 1 ? "unit" : "units"} (PIB ${pib}) from line ${b ? b.no : "?"}? The quota becomes available again.`,
     ),
     async () => {
       const { error } = await supabaseClient.from("masterlist_usages").delete().eq("id", id);
@@ -1199,6 +1628,86 @@ function mstHapusRealisasi(id) {
     },
     { confirmText: t("u.ya.hapus") },
   );
+}
+
+/* ---------- tanggal satu PIB di semua catatannya ---------- */
+
+/* Satu PIB, satu tanggal. Catatan lama (dari Excel) belum bertanggal, dan
+   satu PIB bisa tercatat di belasan baris: tanggalnya diatur SEKALI dari
+   susunan Per PIB lalu dipasang ke semua catatan PIB itu -- termasuk PIB
+   yang menjadi bagian sebuah realisasi parsial. */
+function mstAturTanggalPib(kunci) {
+  if (!requireEdit()) return;
+  const g = mstPerPib(mstSusun()).find((x) => x.kunci === kunci);
+  if (!g) return;
+  const realisasi = [...new Set(g.isi.map((x) => x.realisasi))];
+  const tanggal = [...g.semuaTanggal].sort();
+  const n = realisasi.length;
+  const sekarang = tanggal.map(fmtDate).join(", ") + (g.tanpaTanggal ? tt(`; ${mstFmt(g.tanpaTanggal)} belum bertanggal`, `; ${mstFmt(g.tanpaTanggal)} undated`) : "");
+  // Nama PIB-nya sama dengan yang tertulis di susunan Per PIB (nomor jadwalnya kalau ada)
+  const label = mstAjuRingkas(g.jadwal ? g.jadwal.noAju : g.aju);
+  showPrompt({
+    title: tt(`Tanggal PIB ${label}`, `PIB ${label} date`),
+    desc: tt(
+      `Dipasang ke ${mstFmt(n)} catatan realisasi PIB ini — satu PIB, satu tanggal.`,
+      `Applied to this PIB's ${mstFmt(n)} realization ${n === 1 ? "record" : "records"} — one PIB, one date.`,
+    ),
+    icon: "bi-calendar-event",
+    okText: tt("Simpan", "Save"),
+    fields: [
+      {
+        key: "tanggal",
+        label: tt("Tanggal PIB", "PIB date"),
+        type: "date",
+        value: tanggal.length ? tanggal[tanggal.length - 1] : "",
+        hint: g.tanggalBeda ? tt(`Sekarang tercatat: ${sekarang}. Semuanya disamakan.`, `Currently recorded: ${sekarang}. All of them are aligned.`) : "",
+      },
+    ],
+    onSubmit: (v) => {
+      mstSimpanTanggalPib(g.kunci, label, realisasi, v.tanggal || null);
+      return true;
+    },
+  });
+}
+
+async function mstSimpanTanggalPib(kunci, label, realisasi, tanggal) {
+  const hasil = await Promise.all(
+    realisasi.map(async (u) => {
+      const pibs = mstPibs(u).map((p) => (mstKunciAju(p.aju) === kunci ? { aju: p.aju, tanggal } : p));
+      // Tanggal per PIB sebuah realisasi parsial hanya bisa disimpan di kolom pibs
+      if (pibs.length > 1 && !mstPibsSiap) return { lewat: true };
+      try {
+        const h = await mstKirimPib((m) => supabaseClient.from("masterlist_usages").update(m[0]).eq("id", u.id), [mstKolomPib(mstUrutPib(pibs))]);
+        if (!h.error) Object.assign(u, h.muatan[0]);
+        return { error: h.error };
+      } catch (e) {
+        return { error: e };
+      }
+    }),
+  );
+  renderMasterlist();
+  const gagal = hasil.filter((h) => h.error);
+  const lewat = hasil.filter((h) => h.lewat).length;
+  if (gagal.length) {
+    console.error(gagal[0].error);
+    showToast(
+      tt(
+        `${mstFmt(gagal.length)} dari ${mstFmt(hasil.length)} catatan PIB ${label} gagal diperbarui. Coba lagi.`,
+        `${mstFmt(gagal.length)} of ${mstFmt(hasil.length)} PIB ${label} records could not be updated. Try again.`,
+      ),
+      "danger",
+    );
+  } else if (lewat) {
+    showToast(mstPesanMigrasiPib(), "danger");
+  } else {
+    const n = hasil.length;
+    showToast(
+      tanggal
+        ? tt(`Tanggal PIB ${label} (${fmtDate(tanggal)}) dipasang ke ${mstFmt(n)} catatan.`, `PIB ${label} date (${fmtDate(tanggal)}) applied to ${mstFmt(n)} ${n === 1 ? "record" : "records"}.`)
+        : tt(`Tanggal PIB ${label} dikosongkan di ${mstFmt(n)} catatan.`, `PIB ${label} date cleared on ${mstFmt(n)} ${n === 1 ? "record" : "records"}.`),
+      "success",
+    );
+  }
 }
 
 /* ---------- baris masterlist: tambah / ubah / hapus ---------- */
@@ -1410,10 +1919,42 @@ async function mstSimpanDokumen(ubahan) {
    REMAIN, PIB AJU), jadi hasil unduhan bisa langsung menggantikannya. */
 function mstBarisExcel(baris) {
   return baris.map((b) => {
-    const rujukan = [...new Set(b.realisasi.map((u) => String(u.aju_ref || "").trim()).filter(Boolean))];
-    const aju = rujukan.join(" / ");
+    const aju = mstPibBaris(b)
+      .map((p) => p.aju)
+      .join(" / ");
     return [b.no, b.nama, b.spesifikasi, b.satuan, b.kuota, b.terpakai, b.sisa, /^\d{1,15}$/.test(aju) ? Number(aju) : aju];
   });
+}
+
+/* Lembar kedua, "REALISASI PER PIB": tiap realisasi satu blok, SATU BARIS
+   PER PIB -- nomor aju dan tanggalnya berpasangan di baris yang sama
+   (di Sheet1 kolom PIB AJU hanya bisa memuat nomornya). Isian milik
+   realisasi (No, uraian, satuan, jumlah, catatan) ditulis sekali dan
+   selnya digabung setinggi blok, jadi SUM kolom QTTY tetap = terpakai. */
+function mstBlokRealisasiExcel(baris) {
+  const blok = [];
+  baris.forEach((b) =>
+    b.realisasi.forEach((u) => {
+      const pibs = mstPibs(u);
+      blok.push({
+        no: b.no,
+        nama: b.nama,
+        satuan: b.satuan,
+        qty: mstBulat(u.qty),
+        catatan: u.notes || "",
+        pib: (pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null }]).map((p) => ({ aju: p.aju, tanggal: p.tanggal || null })),
+      });
+    }),
+  );
+  return blok;
+}
+
+/* "2025-05-12" -> tanggal Excel. Tengah malam UTC: ExcelJS menghitung
+   nomor serinya dari waktu UTC, jadi tanggalnya tidak bergeser oleh zona
+   waktu komputer yang mengunduh. */
+function mstTanggalExcel(iso) {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 const MST_BULAN_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -1440,17 +1981,18 @@ async function mstUnduhExcel() {
     ws.columns = [{ width: 2 }, { width: 5 }, { width: 44 }, { width: 58 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 16 }];
     const tepi = { style: "thin", color: { argb: "FF000000" } };
     const bingkai = { top: tepi, left: tepi, bottom: tepi, right: tepi };
-    const tulis = (nomorBaris, nilai, opsi) => {
+    // kiri = kolom teks panjang (rata kiri & boleh membungkus); sisanya di tengah
+    const penulis = (lembar, kiri) => (nomorBaris, nilai, opsi) => {
       const o = opsi || {};
       nilai.forEach((v, i) => {
-        const sel = ws.getCell(nomorBaris, i + 2);
+        const sel = lembar.getCell(nomorBaris, i + 2);
         sel.value = v;
         sel.border = bingkai;
         sel.font = { name: "Calibri", size: 11, bold: !!o.tebal };
-        // Uraian & spesifikasi rata kiri dan boleh membungkus; sisanya di tengah
-        sel.alignment = { vertical: "middle", horizontal: o.tebal || (i !== 1 && i !== 2) ? "center" : "left", wrapText: i === 1 || i === 2 };
+        sel.alignment = { vertical: "middle", horizontal: o.tebal || kiri.indexOf(i) < 0 ? "center" : "left", wrapText: kiri.indexOf(i) >= 0 };
       });
     };
+    const tulis = penulis(ws, [1, 2]);
     tulis(1, ["NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU"], { tebal: true });
     ws.getRow(1).height = 36;
     mstBarisExcel(baris).forEach((r, i) => {
@@ -1468,6 +2010,27 @@ async function mstUnduhExcel() {
       { tebal: true },
     );
     ws.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Lembar kedua: pasangan nomor aju - tanggal PIB, satu baris per PIB
+    const ws2 = wb.addWorksheet("REALISASI PER PIB");
+    ws2.columns = [{ width: 2 }, { width: 5 }, { width: 40 }, { width: 8 }, { width: 8 }, { width: 32 }, { width: 13 }, { width: 40 }];
+    const tulis2 = penulis(ws2, [1, 6]);
+    tulis2(1, ["NO", "DESCRIPTION", "UoM", "QTTY", "PIB AJU", "PIB DATE", "NOTES"], { tebal: true });
+    ws2.getRow(1).height = 30;
+    let n2 = 2;
+    mstBlokRealisasiExcel(baris).forEach((k) => {
+      k.pib.forEach((p, j) => {
+        const aju = /^\d{1,15}$/.test(p.aju) ? Number(p.aju) : p.aju;
+        const tgl = p.tanggal ? mstTanggalExcel(p.tanggal) : "";
+        tulis2(n2 + j, j === 0 ? [k.no, k.nama, k.satuan, k.qty, aju, tgl, k.catatan] : ["", "", "", "", aju, tgl, ""]);
+        if (p.tanggal) ws2.getCell(n2 + j, 7).numFmt = "dd-mm-yyyy";
+      });
+      // Realisasi parsial: No, uraian, satuan, jumlah & catatan setinggi seluruh PIB-nya
+      if (k.pib.length > 1) [2, 3, 4, 5, 8].forEach((kol) => ws2.mergeCells(n2, kol, n2 + k.pib.length - 1, kol));
+      n2 += k.pib.length;
+    });
+    tulis2(n2, ["", "TOTAL", "", n2 > 2 ? { formula: `SUM(E2:E${n2 - 1})`, result: ring.terpakai } : 0, "", "", ""], { tebal: true });
+    ws2.views = [{ state: "frozen", ySplit: 1 }];
 
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -1574,6 +2137,11 @@ if (mstHalamanEl) {
       });
     }
     if ((el = cari("[data-mst-catat]"))) return mstBukaRealisasi({ itemId: el.dataset.mstCatat });
+    if ((el = cari("[data-mst-tambah-pib]"))) {
+      const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstTambahPib);
+      return u ? mstBukaRealisasi({ realisasi: u, tambahPib: true }) : undefined;
+    }
+    if ((el = cari("[data-mst-tanggal-pib]"))) return mstAturTanggalPib(el.dataset.mstTanggalPib);
     if ((el = cari("[data-mst-ubah-realisasi]"))) {
       const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstUbahRealisasi);
       return u ? mstBukaRealisasi({ realisasi: u }) : undefined;
@@ -1602,11 +2170,27 @@ if (mstHalamanEl) {
 }
 
 if (mstModalEl) {
+  mstModalEl.addEventListener("shown.bs.modal", mstFokusAwal);
   mstModalEl.addEventListener("click", (e) => {
     if (e.target.closest("#btnMstSimpanRealisasi")) return void mstSimpanRealisasi();
+    if (e.target.closest("#btnMstPibTambah")) {
+      mstBacaPib();
+      mstForm.pib.push({ aju: "", tanggal: "", otomatis: false });
+      mstGambarPib();
+      const kotak = document.querySelector(`#mstPib [data-mst-pib="${mstForm.pib.length - 1}"] [data-mst-pib-aju]`);
+      if (kotak) kotak.focus();
+      return;
+    }
+    const hapusPib = e.target.closest("[data-mst-pib-hapus]");
+    if (hapusPib) {
+      mstBacaPib();
+      mstForm.pib.splice(Number(hapusPib.closest("[data-mst-pib]").dataset.mstPib), 1);
+      $("#mstRealisasiGalat").classList.add("d-none");
+      return mstGambarPib();
+    }
     if (e.target.closest("#btnMstPilihTambah")) {
       mstBacaPilih();
-      mstForm.baris.push({ itemId: "", qty: "" });
+      mstForm.baris.push({ itemId: "", qty: "", lanjutId: "" });
       return mstGambarPilih();
     }
     const hapus = e.target.closest("[data-mst-pilih-hapus]");
@@ -1629,7 +2213,20 @@ if (mstModalEl) {
   mstModalEl.addEventListener("input", (e) => {
     // Pesan galat milik isian yang lama: begitu ada yang diubah, ia tidak berlaku lagi
     $("#mstRealisasiGalat").classList.add("d-none");
-    if (e.target.id === "mstAju") mstGambarKetAju();
+    const pib = mstForm && e.target.closest("[data-mst-pib]");
+    if (!pib) return;
+    const i = Number(pib.dataset.mstPib);
+    const p = mstForm.pib[i];
+    if (!p) return;
+    if (e.target.matches("[data-mst-pib-aju]")) {
+      p.aju = e.target.value;
+      mstSelaraskanTanggal(i);
+      mstAturTombolPib();
+    } else if (e.target.matches("[data-mst-pib-tgl]")) {
+      p.tanggal = e.target.value;
+      p.otomatis = false;
+    }
+    mstGambarKetPib(i);
   });
   mstModalEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.matches("input")) {
