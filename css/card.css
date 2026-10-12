@@ -648,6 +648,16 @@
   color: #a35a00;
   margin-bottom: 6px;
 }
+/* Revisi yang tertinggal di jadwal yang sudah bukan Delay: tetap
+   tampil (tanggal itulah yang berlaku), garisnya tidak putus-putus. */
+.delay-strip--sisa {
+  border-style: solid;
+  border-color: var(--s-warn-line);
+}
+.delay-strip--sisa .delay-strip-head {
+  font-weight: 600;
+  letter-spacing: 0;
+}
 .delay-strip-fields {
   display: flex;
   gap: 14px;

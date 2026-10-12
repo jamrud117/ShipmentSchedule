@@ -251,6 +251,51 @@ table.fund-lines select {
   width: 46px;
   text-align: center;
 }
+/* KOLOM BL/AWB -- hanya saat isian BL/AWB memuat dua nomor atau lebih
+   (fund-lines.js menambahkan .fund-lines--awb dan selnya). Tabelnya
+   ikut melebar; pembungkusnya sudah bergulir mendatar. */
+.fund-lines th.fl-awb {
+  display: none;
+}
+.fund-lines.fund-lines--awb th.fl-awb {
+  display: table-cell;
+}
+.fund-lines .fl-awb {
+  width: 190px;
+}
+#fundLinesTable.fund-lines--awb {
+  min-width: 1050px;
+}
+.fund-lines select.fl-awb-hilang {
+  border-color: var(--s-danger);
+  color: var(--s-danger);
+}
+/* Bagian per BL/AWB di bawah TOTAL */
+.fl-awb-bagian {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px dashed var(--border);
+}
+.fl-awb-judul {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.fl-sum--awb span {
+  font-family: var(--font-mono);
+}
+.fl-awb-rata {
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
 .fund-lines-foot {
   display: flex;
   flex-direction: column;
@@ -342,6 +387,29 @@ table.fund-lines select {
   .docnum-history-head .docnum-history-aksi > button {
     flex-shrink: 0;
   }
+  /* Pengajuan Dana membawa dua saringan lagi (rentang tanggal & status
+     bayar): keduanya sebaris di atas, kotak cari + muat ulang di baris
+     berikutnya -- tidak lagi berdesakan meluber keluar layar. */
+  .docnum-history-aksi {
+    flex-wrap: wrap;
+  }
+  /* Sebaris kalau muat; kalau tidak, masing-masing selebar baris. */
+  .docnum-history-aksi .dn-saring-tanggal,
+  .docnum-history-aksi .dn-saring-bayar {
+    flex: 1 1 auto;
+  }
+  .dn-saring-bayar select {
+    width: 100%;
+  }
+  .dn-saring-tanggal .date-range-trigger {
+    width: 100%;
+    /* setinggi kotak status bayar & kotak cari di sebelahnya (32px),
+       bukan target sentuh 44px bilah utama (dashboard.css) */
+    min-height: 0;
+  }
+  .docnum-history-head .docnum-history-aksi .dn-cari {
+    flex: 1 1 calc(100% - 44px);
+  }
   /* Kepala panel terlipat jadi beberapa baris: tombol unggah ikut rata
      kiri, tidak terdorong sendirian ke kanan. Berawalan .docnum-panel
      supaya menang atas aturan dasarnya yang ditulis lebih bawah. */
@@ -387,12 +455,6 @@ table.fund-lines select {
   .dnd-dialog .dnd-tarif-kecil {
     display: block;
   }
-}
-
-/* Bilah "sedang memperbaiki nomor ..." — diberi jarak dari isian di
-   atasnya supaya tidak terbaca menempel pada baris Penanda Tangan. */
-.dn-edit-banner {
-  margin-top: var(--sp-5);
 }
 
 /* Baris nomor PO tambahan: kotak + tombol hapus sebaris. */
@@ -1274,6 +1336,12 @@ table.fund-lines select {
   text-align: center;
   white-space: nowrap;
 }
+/* BL/AWB tiap baris (pengajuan untuk beberapa kiriman) */
+.dnd-tabel .dnd-awb {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
 /* Judul kelompok per invoice / debit note. */
 .dnd-tabel tr.dnd-grup td {
   background: var(--p-50);
@@ -1294,11 +1362,15 @@ table.fund-lines select {
 .dnd-jumlah {
   margin-top: var(--sp-3);
 }
-/* Tiga penanda tangan berdampingan -- seperti di lembar cetaknya. */
+/* Tiga (atau empat, dengan CFO) penanda tangan berdampingan -- seperti
+   di lembar cetaknya. */
 .dnd-ttd {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-3);
+}
+.dnd-ttd--empat {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .dnd-ttd-kotak {
   display: flex;
@@ -1332,26 +1404,71 @@ table.fund-lines select {
   border-top: 1px solid var(--border);
 }
 
-/* Spanduk mode perbaikan. Sengaja mencolok: form yang sudah terisi
-   mudah disangka pengajuan baru, dan menekan Ajukan di sana akan
-   menghabiskan satu nomor urut tanpa perlu. */
-.dn-edit-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
-  padding: 8px 12px;
-  border: 1px solid var(--s-warn-line);
-  border-left: 3px solid var(--s-warn);
-  border-radius: var(--r-md);
-  background: var(--s-warn-bg);
-  font-size: var(--t-sm);
-  color: var(--n-800);
+/* ------------------------------------------------------------------
+   POP-UP UBAH ISIAN -- panel form jenis dokumennya dipinjam ke sini
+   (lihat mulaiUbahDocNum). Kepalanya memakai gaya kotak Detail
+   (.dnd-kepala) supaya nomor yang sedang diubah sama menonjolnya.
+------------------------------------------------------------------ */
+/* Selebar form di halaman, supaya kisi isiannya tersusun sama persis
+   dengan saat mengajukan; tidak pernah menempel tepi layar. */
+.dn-edit-dialog {
+  max-width: min(1080px, calc(100% - 2 * var(--bs-modal-margin)));
 }
-.dn-edit-banner i { color: var(--s-warn); margin-right: 4px; }
-.dn-edit-banner b { font-family: var(--font-mono); }
+/* Isinya hanya judul + tombol tutup: tombolnya tetap di kanan, tidak
+   turun ke baris sendiri di ponsel (.dnd-kepala dasarnya melipat). */
+.dn-edit-kepala {
+  flex-wrap: nowrap;
+}
+.dn-edit-kepala .dnd-utama {
+  flex: 1 1 auto;
+}
+.dn-edit-kepala .btn-close {
+  flex: 0 0 auto;
+  margin: 2px -4px 0 0;
+}
+.dn-edit-ket {
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.dn-edit-badan {
+  padding: var(--sp-5) var(--sp-6);
+}
+/* Judul panel ("Permintaan Nomor ...") dan "Nomor berikutnya" tidak
+   berlaku di sini -- nomornya tetap. Kepala panel Pengajuan Dana tetap
+   tampil karena membawa tombol "Isi dari Invoice / Billing (PDF)". */
+.dn-edit-badan .docnum-panel-head h6,
+.dn-edit-badan .docnum-preview,
+.dn-edit-badan [data-docnum-panel]:not([data-docnum-panel="fund"]) .docnum-panel-head {
+  display: none;
+}
+.dn-edit-badan .docnum-panel-head {
+  min-height: 0;
+}
+.dn-edit-kaki {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+/* Pengganti tinggi panel di halaman selama panelnya dipinjam: halaman
+   di belakang pop-up tidak melompat, dan riwayat yang sedang dilihat
+   tetap di tempatnya saat pop-up ditutup. */
+.dn-edit-ganjal {
+  pointer-events: none;
+}
+@media (max-width: 575.98px) {
+  .dn-edit-dialog .dnd-kepala,
+  .dn-edit-badan {
+    padding: var(--sp-4);
+  }
+  .dn-edit-dialog .dnd-nomor {
+    font-size: 1.15rem;
+  }
+  .dn-edit-kaki {
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  }
+  .dn-edit-kaki .docnum-hint {
+    flex-basis: 100%;
+  }
+}
 
 /* ------------------------------------------------------------------
    TAB SUMMARY — Pengajuan Dana (penyaring + pivot + rincian)
@@ -1615,6 +1732,24 @@ button.dn-bayar--lunas:hover {
 .dn-saring-bayar {
   margin: 0;
 }
+/* Pemicu kalender rentang tanggal setinggi kotak status bayar & kotak
+   cari di sebelahnya (32px), dengan sudut yang sama. */
+.dn-saring-tanggal {
+  min-width: 0;
+}
+.dn-saring-tanggal .date-range-trigger {
+  height: 32px;
+  max-width: 100%;
+  padding: 0 12px 0 5px;
+  gap: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.dn-saring-tanggal .date-range-trigger-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
 .dn-saring-bayar select {
   height: 32px;
   padding: 0 28px 0 10px;
@@ -1645,12 +1780,27 @@ button.dn-bayar--lunas:hover {
 .dn-cari input {
   width: 300px;
   height: 32px;
-  padding: 0 10px 0 30px;
+  /* kanan: tempat tombol hapus (×) */
+  padding: 0 32px 0 30px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
   font-size: 13px;
   color: var(--n-800);
+}
+/* Tombol hapus (×) di kotak cari riwayat. type="search" punya tombol
+   hapus bawaan peramban -- disembunyikan supaya tidak ada dua. */
+.dn-cari .search-clear[data-cari-hapus] {
+  right: 4px;
+}
+.dn-cari .search-clear i {
+  position: static;
+  font-size: inherit;
+}
+.dn-cari input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
 }
 .dn-cari input:focus {
   outline: none;

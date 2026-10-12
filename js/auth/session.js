@@ -18,8 +18,9 @@ const authState = { user: null, profile: null, siap: false };
                   Tidak ada satu pun yang bisa ia ubah di sana:
                   mengajukan, memperbaiki isian, menandai status bayar,
                   menghapus, dan mengatur nomor urut -- khusus EXIM.
-     finance   -- hanya MELIHAT, dan hanya DUA halaman: Jadwal dan Nomor
-                  Dokumen. Di Nomor Dokumen ia sama dengan marketing.
+     finance   -- hanya MELIHAT, dan hanya TIGA halaman: Jadwal, Nomor
+                  Dokumen, dan Masterlist. Di Nomor Dokumen ia sama
+                  dengan marketing.
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
    `halaman: null` = semua halaman. Kuncinya sama dengan PAGE_VIEWS di
@@ -48,8 +49,8 @@ const PERAN = {
   finance: {
     label: "Finance",
     ubah: false,
-    halaman: ["schedule", "docnum"],
-    get ket() { return tt("lihat saja: Jadwal & No. Dokumen", "view only: Schedule & Doc. Number"); },
+    halaman: ["schedule", "docnum", "masterlist"],
+    get ket() { return tt("lihat saja: Jadwal, No. Dokumen & Masterlist", "view only: Schedule, Doc. Number & Masterlist"); },
   },
   viewer: {
     label: "Viewer",
@@ -110,12 +111,12 @@ async function loadProfile(userId) {
    Kalau yang diketik sudah berbentuk email, dipakai apa adanya — jadi
    akun lama tetap bisa masuk seperti biasa. */
 async function resolveLoginEmail(masukan) {
-  const t = (masukan || "").trim();
-  if (!t) return null;
-  if (t.includes("@")) return t;
+  const isian = (masukan || "").trim();
+  if (!isian) return null;
+  if (isian.includes("@")) return isian;
 
   const { data, error } = await supabaseClient.rpc("email_for_login", {
-    p_username: t,
+    p_username: isian,
   });
   if (!error && data) return data;
   if (error) console.error("Gagal menukar username:", error);
@@ -124,7 +125,7 @@ async function resolveLoginEmail(masukan) {
      "<username>@<domain internal>". Kalau RPC tidak menemukan apa pun —
      misalnya baris profilnya belum sempat dibuat — alamat itu masih bisa
      disusun sendiri dan login tetap jalan. */
-  return emailFromUsername(t);
+  return emailFromUsername(isian);
 }
 
 async function signIn(masukan, password) {
@@ -153,13 +154,16 @@ async function signOut() {
 
 /* Pesan bawaan Supabase berbahasa Inggris & teknis */
 function pesanLogin(error) {
-  const t = (error && error.message ? error.message : "").toLowerCase();
-  if (t.includes("invalid login")) return t("s.username.email.atau.kata.sandi.salah");
-  if (t.includes("email not confirmed"))
+  /* Bukan `t`: nama itu milik penerjemah t(). Variabel lokal bernama t
+     membuat setiap t("...") di bawahnya memanggil teks, dan pesan galat
+     login justru melempar galat baru. */
+  const asli = (error && error.message ? error.message : "").toLowerCase();
+  if (asli.includes("invalid login")) return t("s.username.email.atau.kata.sandi.salah");
+  if (asli.includes("email not confirmed"))
     return t("s.akun.belum.aktif.minta.admin.menjalankan.ulang");
-  if (t.includes("rate limit") || t.includes("too many"))
+  if (asli.includes("rate limit") || asli.includes("too many"))
     return tt("Terlalu banyak percobaan. Coba lagi beberapa menit.", "Too many attempts. Try again in a few minutes.");
-  if (t.includes("failed to fetch") || t.includes("network"))
+  if (asli.includes("failed to fetch") || asli.includes("network"))
     return t("s.tidak.bisa.menghubungi.server.periksa.koneksi");
   return error && error.message ? error.message : tt("Login gagal.", "Sign-in failed.");
 }
@@ -253,7 +257,7 @@ function showLoginView() {
     const el = $(sel);
     if (el) el.classList.add("d-none");
   });
-  $(".app-topbar").classList.add("d-none");
+  aturKerangka(false);
   const footer = $("#appFooter");
   if (footer) footer.classList.add("d-none");
   setTimeout(() => $("#loginUsername").focus(), 60);
@@ -263,7 +267,7 @@ function hideLoginView() {
   hideBootScreen();
   $("#viewLogin").classList.add("d-none");
   document.body.classList.remove("is-locked");
-  $(".app-topbar").classList.remove("d-none");
+  aturKerangka(true);
   const footer = $("#appFooter");
   if (footer) footer.classList.remove("d-none");
 }

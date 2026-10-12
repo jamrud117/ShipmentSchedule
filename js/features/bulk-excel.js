@@ -339,7 +339,7 @@ function reconstructShipmentFromGroup(group, mode) {
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),
     invoice: excelStr(first[idx.INVOICE]),
-    // Kolom VESSEL kini berisi hasil gabungan vesselNameForTemplate(): moda laut "<Nama Vessel> <No
+    // Kolom VESSEL berisi gabungan carrierNameFromShipment(): "<Nama> <Nomor>", kedua moda
     ...splitVesselCell(excelStr(first[idx.VESSEL])),
     package: excelStr(first[idx.PACKAGE]),
     notes: excelStr(first[idx.REMARK]),
@@ -348,7 +348,7 @@ function reconstructShipmentFromGroup(group, mode) {
     s.ndpbm = excelNum(first[idx.NDPBM]);
     s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
     s.pi = excelStr(first[idx.PI]);
-    s.bm = excelNum(first[idx.BM]);
+    s.bm = bulatkanBm(excelNum(first[idx.BM])); // ke atas ke ribuan, seperti semua jalan masuk BM
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);
   }

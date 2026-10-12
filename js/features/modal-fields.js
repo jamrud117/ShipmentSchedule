@@ -77,6 +77,25 @@ function isAutoDuty(el) {
   return el.dataset.auto !== "0";
 }
 
+/* BM yang DIKETIK sendiri ikut aturan pembulatan yang sama (bulatkanBm,
+   core/customs.js): begitu kotaknya ditinggalkan, angka yang belum bulat
+   ribuan dibulatkan ke atas -- dan dikatakan, supaya tidak terasa
+   angkanya berubah sendiri. PPN & PPh otomatis ikut dihitung ulang. */
+$("#fBM").addEventListener("change", (e) => {
+  const el = e.target;
+  if (!String(el.value || "").trim()) return;
+  const n = nilaiKotakAngka("#fBM");
+  const bulat = bulatkanBm(n);
+  if (bulat === n) return;
+  el.value = formatNumberValue(bulat);
+  recalcCustoms();
+  showToast(
+    tt(`BM dibulatkan ke ribuan ke atas: ${formatNumberValue(n)} → ${formatNumberValue(bulat)}.`,
+      `Import duty rounded up to the nearest thousand: ${formatNumberValue(n)} → ${formatNumberValue(bulat)}.`),
+    "dark",
+  );
+});
+
 // Dipanggil saat form dibuka: nilai yang sudah tersimpan dianggap dimasukkan dengan sengaja
 function initAutoDutyFlags() {
   AUTO_DUTY_FIELDS.forEach((id) => {

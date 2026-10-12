@@ -154,18 +154,18 @@ function extractItemDetailColumn(pagesItems, nItems) {
   };
   // "SET (SET)" -> "SET" · "NUMBER OF PACKAGE (PK)" -> "PK"
   const satuanCode = (s) => {
-    const t = (s || "").trim();
-    const inKurung = /\(([A-Z0-9]{1,12})\)\s*$/i.exec(t);
+    const teks = (s || "").trim();
+    const inKurung = /\(([A-Z0-9]{1,12})\)\s*$/i.exec(teks);
     if (inKurung) return inKurung[1].toUpperCase();
-    return t.split("(")[0].trim().toUpperCase();
+    return teks.split("(")[0].trim().toUpperCase();
   };
   // Teks satuan yang terpecah disambung
   const joinSatuanParts = (texts) => {
     const out = [];
     let buf = "";
-    texts.forEach((t) => {
-      const cur = (buf ? buf + " " : "") + t;
-      if (/\([A-Z0-9]{1,12}\)\s*$/i.test(t)) {
+    texts.forEach((teks) => {
+      const cur = (buf ? buf + " " : "") + teks;
+      if (/\([A-Z0-9]{1,12}\)\s*$/i.test(teks)) {
         out.push(cur);
         buf = "";
       } else {
@@ -179,10 +179,10 @@ function extractItemDetailColumn(pagesItems, nItems) {
   return results.map((tokens) => {
     const nums = [];
     const texts = [];
-    tokens.forEach((t) => {
-      const n = numTok(t);
+    tokens.forEach((tok) => {
+      const n = numTok(tok);
       if (n != null) nums.push(n);
-      else if ((t || "").trim()) texts.push(t.trim().replace(/^-\s*/, ""));
+      else if ((tok || "").trim()) texts.push(tok.trim().replace(/^-\s*/, ""));
     });
     const satuanParts = joinSatuanParts(texts);
     // Urutan baku field 35: jumlah satuan barang, berat bersih, lalu jumlah kemasan
@@ -345,18 +345,18 @@ function parsePibPdfText(text, pagesItems) {
     const baris = text.split(/\r?\n/);
     const antre = [];
 
-    const cocokLabel = (t) => {
-      const bersih = t.replace(/^\d+\.\s*/, "").trim().toUpperCase();
+    const cocokLabel = (teks) => {
+      const bersih = teks.replace(/^\d+\.\s*/, "").trim().toUpperCase();
       // "BM KITE" & "PPnBM" harus diuji SEBELUM "BM"/"PPN"
       return LABEL.find((l) => bersih === l) || null;
     };
 
     baris.forEach((rawLine) => {
-      const t = rawLine.trim();
-      if (!t) return;
+      const teks = rawLine.trim();
+      if (!teks) return;
 
       // (a) label + angka pada satu baris
-      const sebaris = t.match(
+      const sebaris = teks.match(
         /^(?:\d+\.\s*)?(BM KITE|BMT|BM|Cukai|PPnBM|PPN|PPh|TOTAL)\s+((?:[\d.,]+\s*)+)$/i,
       );
       if (sebaris) {
@@ -367,17 +367,17 @@ function parsePibPdfText(text, pagesItems) {
       }
 
       // (b) baris berisi LABEL saja -> masuk antrean
-      const label = cocokLabel(t);
+      const label = cocokLabel(teks);
       if (label) {
         antre.push(label);
         return;
       }
 
       // (b) baris berisi ANGKA saja -> dipasangkan dengan label terdepan
-      if (/^[\d.,]+(?:\s+[\d.,]+)+$/.test(t)) {
+      if (/^[\d.,]+(?:\s+[\d.,]+)+$/.test(teks)) {
         const nama = antre.shift();
         if (!nama) return;
-        const angka = t.split(/\s+/);
+        const angka = teks.split(/\s+/);
         if (hasil[nama] == null) hasil[nama] = pibNum(angka[0]);
       }
     });
@@ -504,7 +504,8 @@ function parsePibPdfText(text, pagesItems) {
     ndpbm: ndpbmMatch ? pibNum(ndpbmMatch[1]) : null,
     freight: freightMatch ? pibNum(freightMatch[1]) : null,
     insurance: asuransiMatch ? pibNum(asuransiMatch[1]) : null,
-    bm: bmM,
+    // PIB final sudah bulat ke ribuan; dibulatkan lagi = sama (aturan satu, bulatkanBm)
+    bm: bulatkanBm(bmM),
     ppn: ppnM,
     pph: pphM,
     // "2 PACKAGE, Tanpa Merk" -> "2 PACKAGE"
@@ -535,9 +536,9 @@ function parsePibPdfText(text, pagesItems) {
   const TAX_COLUMN_BLEED =
     /\s+-?\s*(?:KETERANGAN PAJAK\b|SURAT PERSETUJUAN\b|LAPORAN SURVEYOR\b|PREFERENSI TARIF\b|IMPOR(?:TASI)?\s+(?:DEP\.?DAG\b|[A-Z-]+(?:\s*\([A-Z]+\))?)|METODE\s*\d|(?:BM|PPH|PPN|PPnBM|Cukai)\s+\d+(?:[.,]\d+)?\s*%)/i;
   const isEmptySpecValue = (v) => {
-    const t = (v || "").trim();
+    const teks = (v || "").trim();
     return (
-      !t || t === "-" || /^tanpa\s+merek$/i.test(t) || /^tanpa\s+tipe$/i.test(t)
+      !teks || teks === "-" || /^tanpa\s+merek$/i.test(teks) || /^tanpa\s+tipe$/i.test(teks)
     );
   };
   const posTarifMatches = [];

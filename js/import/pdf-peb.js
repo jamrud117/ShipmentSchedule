@@ -46,12 +46,12 @@ const PEB_ITEM_HEADERS = [
 ];
 
 function isEmptyPebSpec(v) {
-  const t = (v || "").trim();
+  const teks = (v || "").trim();
   return (
-    !t ||
-    t === "-" ||
-    /^tanpa\s+(merek|merk|tipe)$/i.test(t) ||
-    /^kode\s+barang$/i.test(t)
+    !teks ||
+    teks === "-" ||
+    /^tanpa\s+(merek|merk|tipe)$/i.test(teks) ||
+    /^kode\s+barang$/i.test(teks)
   );
 }
 
@@ -141,19 +141,19 @@ function extractPebItems(pagesItems) {
       let satuan = "";
       let netto = null;
       let packageText = "";
-      satuanLines.forEach((t) => {
-        let m = /^-?\s*([\d,]+\.?\d*)\s+([A-Z]{1,12})\s*(?:\(([A-Z]{1,12})\))?\s*$/i.exec(t);
+      satuanLines.forEach((teks) => {
+        let m = /^-?\s*([\d,]+\.?\d*)\s+([A-Z]{1,12})\s*(?:\(([A-Z]{1,12})\))?\s*$/i.exec(teks);
         if (m && qty == null) {
           qty = pebNum(m[1]);
           satuan = (m[3] || m[2]).toUpperCase();
           return;
         }
-        m = /^-?\s*([\d,]+\.?\d*)\s*Kgs?\b/i.exec(t);
+        m = /^-?\s*([\d,]+\.?\d*)\s*Kgs?\b/i.exec(teks);
         if (m && netto == null) {
           netto = pebNum(m[1]);
           return;
         }
-        m = /Kemasan\s*:\s*(.+)$/i.exec(t);
+        m = /Kemasan\s*:\s*(.+)$/i.exec(teks);
         if (m && !packageText) packageText = m[1].trim();
       });
 
@@ -165,7 +165,7 @@ function extractPebItems(pagesItems) {
           bounds.nilai.xMax,
           yRange,
         ).map((l) => l.text.trim());
-        const hit = nilaiLines.find((t) => /^[\d,]+\.?\d*$/.test(t));
+        const hit = nilaiLines.find((teks) => /^[\d,]+\.?\d*$/.test(teks));
         if (hit) nilai = pebNum(hit);
       }
 

@@ -77,6 +77,8 @@ const DN_LABEL_FIELD = {
   get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
   get approver1Name() { return tt("Approved By", "Approved By"); },
   get approver1Role() { return tt("Jabatan Approved By", "Approved By Position"); },
+  get cfoName() { return tt("Approved By 2", "Approved By 2"); },
+  get cfoRole() { return tt("Jabatan Approved By 2", "Approved By 2 Position"); },
   get quantity() { return tt("Jumlah", "Quantity"); },
   get unit() { return tt("Satuan", "Unit"); },
   // Isian Surat Jalan
@@ -167,7 +169,7 @@ const DN_DETAIL_SUSUNAN = {
     /* `amount` = Nominal pengajuan format lama: tampil sebagai satu baris
        di tabel pungutan, bukan sebagai isian tersendiri. */
     { khusus: "biaya", memakai: ["lines", "feeBm", "feePpn", "feePph", "amount"] },
-    { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role"] },
+    { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role", "cfoName", "cfoRole"] },
     { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy"] },
   ],
   letter: [
@@ -285,6 +287,11 @@ function dndNilai(k, r) {
       : `<span class="dnd-redup">${escapeHtml(t("s.jadwal.tidak.ditemukan"))}</span>`;
   }
   if (k === "poNo") return dndDaftarPo(p);
+  // Nama lama "Local Sale" tampil dengan nama barunya (fund-summary.js)
+  if (k === "transactionType") {
+    const jenis = fundJenisTransaksiBaku(v);
+    return dndKosong(jenis) ? "" : escapeHtml(jenis);
+  }
   if (k === "carrier") {
     const kapal = typeof dnCarrierInvoice === "function" ? dnCarrierInvoice(p) : v;
     return dndKosong(kapal) ? "" : escapeHtml(kapal);
@@ -374,6 +381,16 @@ function dndBiayaHtml(r) {
     const nilai = fundLineValues(daftar);
     const ppn = fundLinePpnDaftar(daftar, nilai);
     const tot = fundLineTotals(daftar);
+    /* Pengajuan untuk beberapa BL/AWB: kolom BL/AWB per baris dan bagian
+       tiap BL/AWB di bawah TOTAL -- sama dengan form & surat cetaknya. */
+    const awb = fundDaftarAwb(p.blAwb);
+    const pakaiAwb = awb.length > 1;
+    const teksAwb = (b) => {
+      const k = fundKunciAwb(b.awb);
+      const a = awb.find((x) => x.kunci === k);
+      if (a) return escapeHtml(a.teks);
+      return `<span class="dnd-redup">${escapeHtml(barisDiskon(b) ? tt("ikut pos di atas", "same as above") : tt("dibagi rata", "split evenly"))}</span>`;
+    };
     /* Tarif PPN ditulis dua kali: di kolomnya sendiri, dan kecil di bawah
        angka PPN-nya. Yang kedua hanya tampil di ponsel, tempat kolom
        tarif (dan nomor urut) disembunyikan supaya uraian dan kedua angka
@@ -382,7 +399,7 @@ function dndBiayaHtml(r) {
       const tarif = fundLineRate(b) ? escapeHtml(String(fundLineRate(b))) + "%" : "";
       return `<tr${barisDiskon(b) ? ' class="dnd-diskon"' : ""}>
         <td class="dnd-no">${i + 1}</td>
-        <td>${escapeHtml(b.desc || "")}</td>
+        <td>${escapeHtml(b.desc || "")}</td>${pakaiAwb ? `<td class="dnd-awb">${teksAwb(b)}</td>` : ""}
         <td class="dnd-angka">${escapeHtml(polos(nilai[i]))}</td>
         <td class="dnd-tarif">${tarif || "—"}</td>
         <td class="dnd-angka">${escapeHtml(polos(ppn[i]))}${tarif ? `<span class="dnd-tarif-kecil">${tarif}</span>` : ""}</td>
@@ -398,7 +415,7 @@ function dndBiayaHtml(r) {
       ? kelompok
           .map(
             (d) =>
-              `<tr class="dnd-grup"><td colspan="5">${escapeHtml(d.jenis === "debit" ? "Debit Note" : "Invoice")} ${escapeHtml(d.nomor || "—")}</td></tr>` +
+              `<tr class="dnd-grup"><td colspan="${pakaiAwb ? 6 : 5}">${escapeHtml(d.jenis === "debit" ? "Debit Note" : "Invoice")} ${escapeHtml(d.nomor || "—")}</td></tr>` +
               daftar.map((b, i) => (milik(b, d) ? barisPos(b, i) : "")).join(""),
           )
           .join("")
@@ -410,7 +427,7 @@ function dndBiayaHtml(r) {
         <table class="dnd-tabel dnd-tabel--biaya">
           <thead><tr>
             <th class="dnd-no">No.</th>
-            <th>${escapeHtml(tt("Uraian", "Description"))}</th>
+            <th>${escapeHtml(tt("Uraian", "Description"))}</th>${pakaiAwb ? `<th class="dnd-awb">BL/AWB</th>` : ""}
             <th class="dnd-angka">${escapeHtml(tt("Nilai", "Amount"))} ${satuan}</th>
             <th class="dnd-tarif">PPN</th>
             <th class="dnd-angka">PPN ${satuan}</th>
@@ -423,6 +440,13 @@ function dndBiayaHtml(r) {
         ${jumlah(tt("Total PPN", "Total PPN"), frNilai(tot.totalPpn, mata))}
         ${jumlah(tt(`Potongan PPH 23 (${FUND_PPH23_RATE}%)`, `PPH 23 deduction (${FUND_PPH23_RATE}%)`), tot.pph ? "- " + frNilai(tot.pph, mata) : "-", "fl-sum--minus")}
         ${jumlah("TOTAL", frNilai(tot.grandTotal, mata), "fl-sum--total")}
+        ${
+          pakaiAwb
+            ? `<div class="fl-awb-bagian"><div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>${fundBagiPerAwb(p)
+                .map((b) => jumlah(b.teks + (b.rata && !b.tautan ? " · " + tt("dibagi rata", "split evenly") : ""), frNilai(b.dibayar, mata), "fl-sum--awb"))
+                .join("")}</div>`
+            : ""
+        }
       </div>`,
     );
   }
@@ -455,10 +479,12 @@ function dndBiayaHtml(r) {
   );
 }
 
-/* Tiga penanda tangan Form Pengajuan Dana -- nama & jabatan bawaannya
-   sama dengan yang tercetak (lihat buildFundRequestHtml). */
+/* Penanda tangan Form Pengajuan Dana -- tiga, atau empat (CFO) untuk
+   vendor yang memakai Doc No; nama & jabatan bawaannya sama dengan yang
+   tercetak (lihat buildFundRequestHtml). */
 function dndPenandaTanganHtml(r) {
   const p = r.payload || {};
+  const cfo = typeof frPakaiTtdCfo === "function" && frPakaiTtdCfo(p);
   const kotak = (peran, nama, jabatan) => `<div class="dnd-ttd-kotak">
       <span class="dnd-ttd-peran">${escapeHtml(peran)}</span>
       <b>${escapeHtml(nama || "—")}</b>
@@ -466,10 +492,11 @@ function dndPenandaTanganHtml(r) {
     </div>`;
   return dndBagianHtml(
     tt("Penanda Tangan", "Signatories"),
-    `<div class="dnd-ttd">
+    `<div class="dnd-ttd${cfo ? " dnd-ttd--empat" : ""}">
       ${kotak("Made by", p.requester || r.requester, "Drafter")}
       ${kotak("Checked by", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
       ${kotak("Approved by", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
+      ${cfo ? kotak("Approved by", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
     </div>`,
   );
 }
@@ -560,7 +587,7 @@ function dndKepalaHtml(r, tab) {
   /* Penjelas jenis. Invoice & Surat Jalan sudah menyebut sub-jenisnya di
      namanya ("Non-Commercial Invoice", "Surat Jalan Lokal"); Pengajuan
      Dana dan Surat membawanya sebagai isian tersendiri. */
-  const cip = (tab === "fund" ? [p.expenseType, p.transactionType] : tab === "letter" ? [p.letterType] : [])
+  const cip = (tab === "fund" ? [p.expenseType, fundJenisTransaksiBaku(p.transactionType)] : tab === "letter" ? [p.letterType] : [])
     .filter((x) => !dndKosong(x))
     .map((x) => `<span class="dnd-cip">${escapeHtml(x)}</span>`)
     .join("");

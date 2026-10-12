@@ -14,21 +14,66 @@
   flex: 1;
 }
 
+/* ==================================================================
+   KERANGKA NAVIGASI -- SIDEBAR (js/ui/sidebar.js)
+
+   Desktop (>= 992 px): sidebar menempel di kiri; halaman bergeser
+   selebar --sb-w. body.sb-rel menciutkannya jadi rel ikon.
+   Ponsel & tablet: sidebar jadi laci (body.sb-terbuka), dibuka dari
+   tombol menu di bilah atas yang ramping.
+
+   Dulu tujuh tautan berderet di bilah atas dan meringkas dalam enam
+   tahap (label hilang di bawah 1.160 px, jarak antarikon dirapatkan
+   sampai 2 px di ponsel). Sidebar tidak perlu itu: tautannya tersusun
+   ke bawah, jadi tautan baru tidak menggeser apa pun.
+================================================================== */
+:root {
+  --sb-lebar: 244px; /* sidebar terbuka penuh */
+  --sb-rel: 72px; /* rel ikon */
+}
+
+/* Bilah atas: hanya di ponsel & tablet. */
 .app-topbar {
   position: sticky;
   top: 0;
   z-index: 1040;
   height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3) 0 var(--sp-2);
   background: var(--d-900);
   /* Garis kuningan setipis rambut: satu-satunya hiasan di bilah ini */
   border-bottom: 1px solid rgba(199, 154, 62, 0.35);
   color: #fff;
 }
-.app-topbar-inner {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-5);
+.topbar-spacer {
+  flex: 1;
+}
+.sb-pemicu,
+.sb-tutup {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1.4rem;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.sb-tutup {
+  font-size: 1rem;
+}
+.sb-pemicu:hover,
+.sb-tutup:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 /* ---- Merek ---- */
@@ -36,6 +81,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   text-decoration: none;
   color: #fff;
   flex-shrink: 0;
@@ -52,6 +98,7 @@
   font-size: 1.06rem;
   letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
 }
 .brand-name span {
   color: var(--sec-300);
@@ -60,68 +107,55 @@
   color: var(--p-200);
 }
 
-/* ---- Navigasi halaman ---- */
-.site-nav {
+/* ---- Sidebar ---- */
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1045;
+  width: var(--sb-lebar);
+  display: flex;
+  flex-direction: column;
+  background: var(--d-900);
+  /* Garis kuningan yang sama dengan bilah atas: memisahkan sidebar
+     dari kepala halaman (.board) yang sewarna */
+  border-right: 1px solid rgba(199, 154, 62, 0.35);
+  color: #fff;
+}
+.sb-kepala {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 2px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  height: 64px;
+  padding: 0 var(--sp-3) 0 var(--sp-5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.site-nav::-webkit-scrollbar {
-  display: none;
-}
-.site-nav-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--topbar-h);
-  padding: 0 15px;
-  font-size: var(--t-md);
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.68);
-  text-decoration: none;
-  white-space: nowrap;
-  transition: color var(--dur-1) var(--ease);
-}
-.site-nav-link i {
-  font-size: 1.1rem;
-  opacity: 0.9;
-}
-.site-nav-link:hover {
-  color: #fff;
-}
-/* Halaman aktif ditandai garis kuningan di dasar bilah — bacaannya */
-.site-nav-link.active {
-  color: #fff;
-}
-.site-nav-link.active::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: -1px;
-  height: 2px;
-  background: var(--sec-400);
-}
-
-.topbar-spacer {
+/* Bagian tengah bergulir sendiri di layar yang pendek; kepala & kaki
+   tetap di tempat. */
+.sb-isi {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-3);
 }
 
 /* ---- Pemicu pencarian cepat (Ctrl/⌘ + K) ---- */
 .cmd-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  /* Tidak pernah membungkus: dijepit di layar menengah, "Quick search"
-     patah jadi dua baris dan "Ctrl K" jadi "Ctrl" di atas "K". */
+  gap: 10px;
+  /* Tidak pernah membungkus: "Quick search" tidak patah jadi dua baris
+     dan "Ctrl K" tidak jadi "Ctrl" di atas "K". */
   white-space: nowrap;
   flex-shrink: 0;
   height: 38px;
-  padding: 0 12px 0 13px;
+  padding: 0 10px 0 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
   border-radius: var(--r-sm);
@@ -136,6 +170,7 @@
   color: #fff;
 }
 .cmd-trigger kbd {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   padding: 2px 5px;
@@ -143,6 +178,229 @@
   background: rgba(255, 255, 255, 0.14);
   color: rgba(255, 255, 255, 0.8);
   border: 0;
+}
+.app-sidebar .cmd-trigger {
+  width: 100%;
+}
+/* Versi ikon di bilah atas ponsel */
+.cmd-trigger--ikon {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+}
+
+/* ---- Tautan halaman ---- */
+.site-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.site-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-md);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.68);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+.site-nav-link i {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  font-size: 1.12rem;
+  opacity: 0.9;
+}
+.site-nav-link span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.site-nav-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+/* Halaman aktif: latar terang tipis + garis kuningan di tepi kiri
+   sidebar (dulu garis di dasar bilah atas) */
+.site-nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.site-nav-link.active::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--sp-3));
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--sec-400);
+}
+.site-nav-link.active i {
+  color: var(--sec-300);
+  opacity: 1;
+}
+
+/* ---- Kaki: ciutkan + akun ---- */
+.sb-kaki {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sb-ciut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.sb-ciut i {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  font-size: 0.95rem;
+}
+.sb-ciut:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* ---- Desktop: sidebar menempel, halaman bergeser ---- */
+@media (min-width: 992px) {
+  /* Tidak ada bilah atas di desktop: yang menempel di puncak layar
+     (bilah kendali Jadwal, toast) mulai dari 0. */
+  :root {
+    --topbar-h: 0px;
+  }
+  .app-topbar,
+  .sb-tutup,
+  .sb-latar {
+    display: none !important;
+  }
+  body {
+    --sb-w: var(--sb-lebar);
+  }
+  body.sb-rel {
+    --sb-w: var(--sb-rel);
+  }
+  body.punya-kerangka {
+    padding-left: var(--sb-w);
+  }
+  .app-sidebar {
+    width: var(--sb-w);
+  }
+
+  /* REL IKON. Label tautan disembunyikan SECARA VISUAL saja (bukan
+     display:none): pembaca layar tetap menyebut nama halamannya, dan
+     sidebar.js memasang judul (tooltip) dari teks yang sama. */
+  body.sb-rel .sb-kepala {
+    justify-content: center;
+    padding: 0;
+  }
+  body.sb-rel .brand-name,
+  body.sb-rel .app-sidebar .cmd-trigger kbd,
+  body.sb-rel .user-chip-main {
+    display: none;
+  }
+  body.sb-rel .site-nav-link span,
+  body.sb-rel .app-sidebar .cmd-trigger-text,
+  body.sb-rel .sb-ciut span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  body.sb-rel .site-nav-link,
+  body.sb-rel .sb-ciut,
+  body.sb-rel .app-sidebar .cmd-trigger {
+    justify-content: center;
+    padding: 0;
+  }
+  body.sb-rel .user-chip {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* ---- Ponsel & tablet: sidebar jadi laci ---- */
+@media (max-width: 991.98px) {
+  .app-sidebar {
+    width: min(300px, 86vw);
+    transform: translateX(-100%);
+    /* Laci tertutup juga TAK TERLIHAT bagi Tab & pembaca layar --
+       visibility menunggu gerak geser selesai dulu. */
+    visibility: hidden;
+    transition:
+      transform var(--dur-3) var(--ease),
+      visibility 0s linear var(--dur-3);
+  }
+  body.sb-terbuka .app-sidebar {
+    transform: none;
+    visibility: visible;
+    box-shadow: var(--sh-lg);
+    transition: transform var(--dur-3) var(--ease);
+  }
+  /* Rel ikon hanya di desktop; pintasan Ctrl K tidak berarti di layar sentuh */
+  .sb-ciut,
+  .app-sidebar .cmd-trigger kbd {
+    display: none;
+  }
+  .sb-latar {
+    position: fixed;
+    inset: 0;
+    z-index: 1044;
+    background: rgba(10, 27, 51, 0.5);
+    opacity: 0;
+    transition: opacity var(--dur-3) var(--ease);
+  }
+  body.sb-terbuka .sb-latar {
+    opacity: 1;
+  }
+  body.sb-terbuka {
+    overflow: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  body.sb-terbuka .app-sidebar,
+  .sb-latar {
+    transition: none;
+  }
+}
+@media print {
+  .app-topbar,
+  .app-sidebar,
+  .sb-latar {
+    display: none !important;
+  }
+  body.punya-kerangka {
+    padding-left: 0 !important;
+  }
 }
 
 /* Sakelar buku Import / Export */
@@ -195,80 +453,9 @@
   font-size: 0.8rem;
 }
 
-/* NAVBAR MERINGKAS BERTAHAP -- diukur, bukan dikira. Semua ambang di
-   bawah diukur untuk kasus TERLEBAR: akun EXIM (enam tautan, termasuk
-   Akun), label bahasa Inggris, dan scrollbar Windows 17 px. Viewer &
-   marketing punya lebih sedikit tautan, jadi ikut aman.
-
-   Sejak tautan Jadwal Kapal / Shipment Schedule ditambahkan, ambang lama
-   (1.320 / 1.100 / 900 px) tidak cukup lagi: di 1.366 px -- lebar laptop
-   paling umum -- tautan Akun terpotong. Tahap 1 (< 1.440 px): Quick
-   search jadi tombol ikon, chip akun jadi avatar (auth.css). */
-@media (max-width: 1439px) {
-  .cmd-trigger .cmd-trigger-text,
-  .cmd-trigger kbd {
-    display: none;
-  }
-  .cmd-trigger {
-    padding: 0 9px;
-  }
-}
-/* Tahap 2 (< 1.220 px): nama brand disembunyikan (logonya tetap),
-   jarak antar tautan dirapatkan. */
-@media (max-width: 1219px) {
-  .brand-name {
-    display: none;
-  }
-  .site-nav-link {
-    padding: 0 10px;
-  }
-  .site-nav-link.active::after {
-    left: 8px;
-    right: 8px;
-  }
-}
-/* Tahap 3 (< 1.060 px): tautan tinggal ikon. */
-@media (max-width: 1059px) {
-  .site-nav-link span {
-    display: none;
-  }
-}
 @media (max-width: 767px) {
-  .app-topbar-inner {
-    gap: var(--sp-3);
-  }
-  /* Di bilah atas dulu labelnya disembunyikan karena ruangnya habis */
   .mode-tabs--board button {
     padding: 6px 13px;
-  }
-}
-/* Tahap 4 (< 440 px, ponsel): enam ikon + logo + tombol cari + avatar
-   tidak muat di layar 360-390 px, dan ikon terakhir terpotong; di
-   420-440 px sisanya tinggal 1-2 px. Jarak antar ikon & antar bagian
-   bilah dirapatkan. */
-@media (max-width: 439px) {
-  .app-topbar-inner {
-    gap: var(--sp-2);
-  }
-  .site-nav-link {
-    padding: 0 5px;
-  }
-  .site-nav-link.active::after {
-    left: 5px;
-    right: 5px;
-  }
-}
-/* Tahap 5 (< 360 px, ponsel sangat kecil): dirapatkan sekali lagi. */
-@media (max-width: 359px) {
-  .app-topbar-inner {
-    gap: var(--sp-1);
-  }
-  .site-nav-link {
-    padding: 0 3px;
-  }
-  .site-nav-link.active::after {
-    left: 3px;
-    right: 3px;
   }
 }
 

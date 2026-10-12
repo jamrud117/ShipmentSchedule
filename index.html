@@ -63,6 +63,7 @@
     <link rel="stylesheet" href="css/palette.css" />
     <link rel="stylesheet" href="css/auth.css" />
     <link rel="stylesheet" href="css/vessel.css" />
+    <link rel="stylesheet" href="css/masterlist.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
     <link rel="stylesheet" href="css/docnum.css" />
@@ -249,61 +250,97 @@
       </div>
     </div>
 
-    <!-- BILAH ATAS — satu-satunya navigasi global -->
-    <nav class="app-topbar d-none">
-      <div class="container app-topbar-inner">
+    <!-- KERANGKA NAVIGASI (css/shell.css, js/ui/sidebar.js)
+
+         SIDEBAR, bukan lagi deretan tautan di bilah atas: tujuh halaman
+         (dengan Masterlist) tidak muat lagi berlabel di satu bilah, dan
+         di layar menengah tautannya tinggal ikon tanpa nama.
+
+         - Desktop (>= 992 px): sidebar menempel di kiri. Bisa diciutkan
+           jadi rel ikon (tombol di kakinya; pilihan diingat). Tanpa
+           pilihan, ia rel di bawah 1.280 px supaya tabel lebar tetap
+           punya ruang.
+         - Ponsel & tablet: sidebar jadi laci yang dibuka dari tombol
+           menu di bilah atas yang ramping.
+
+         Bilah atas & sidebar disembunyikan bersama di layar masuk dan
+         di halaman form (aturKerangka). -->
+    <header class="app-topbar d-none">
+      <button
+        type="button"
+        class="sb-pemicu"
+        id="btnSidebarBuka"
+        aria-controls="appSidebar"
+        aria-expanded="false"
+        aria-label="Buka menu"
+        data-en-aria="Open menu"
+      >
+        <i class="bi bi-list"></i>
+      </button>
+      <a class="brand" href="#/" aria-label="EXIM DDI — beranda" data-en-aria="EXIM DDI — home">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="11.1" y="2" width="1.8" height="5.4" rx="0.6" fill="#c79a3e" />
+          <rect x="7.8" y="3.5" width="8.4" height="1.8" rx="0.6" fill="#c79a3e" />
+          <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+          <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
+          <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+          <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="#f2f5f9" />
+        </svg>
+        <span class="brand-name">EXIM<span>·</span>DDI</span>
+      </a>
+      <div class="topbar-spacer"></div>
+      <button
+        type="button"
+        class="cmd-trigger cmd-trigger--ikon"
+        data-cmdk-buka
+        title="Cari Cepat Lintas Import & Export"
+        data-i18n-title="ti.cari.cepat.lintas.import.export"
+        aria-label="Cari cepat"
+        data-en-aria="Quick search"
+      >
+        <i class="bi bi-search"></i>
+      </button>
+    </header>
+
+    <aside class="app-sidebar d-none" id="appSidebar" aria-label="Navigasi utama" data-en-aria="Main navigation">
+      <div class="sb-kepala">
+        <!-- Digambar ulang mengikuti ikon situs: haluan kapal peti -->
         <a class="brand" href="#/" aria-label="EXIM DDI — beranda" data-en-aria="EXIM DDI — home">
-          <!-- Digambar ulang mengikuti ikon situs: haluan kapal peti -->
           <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-            <rect
-              x="11.1"
-              y="2"
-              width="1.8"
-              height="5.4"
-              rx="0.6"
-              fill="#c79a3e"
-            />
-            <rect
-              x="7.8"
-              y="3.5"
-              width="8.4"
-              height="1.8"
-              rx="0.6"
-              fill="#c79a3e"
-            />
-            <rect
-              x="5.4"
-              y="8.1"
-              width="4"
-              height="4.2"
-              rx="0.6"
-              fill="#c79a3e"
-            />
-            <rect
-              x="10"
-              y="8.1"
-              width="4"
-              height="4.2"
-              rx="0.6"
-              fill="#dcb45f"
-            />
-            <rect
-              x="14.6"
-              y="8.1"
-              width="4"
-              height="4.2"
-              rx="0.6"
-              fill="#c79a3e"
-            />
-            <path
-              d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z"
-              fill="#f2f5f9"
-            />
+            <rect x="11.1" y="2" width="1.8" height="5.4" rx="0.6" fill="#c79a3e" />
+            <rect x="7.8" y="3.5" width="8.4" height="1.8" rx="0.6" fill="#c79a3e" />
+            <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+            <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
+            <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+            <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="#f2f5f9" />
           </svg>
           <span class="brand-name">EXIM<span>·</span>DDI</span>
         </a>
+        <!-- Hanya di laci (ponsel & tablet) -->
+        <button type="button" class="sb-tutup" id="btnSidebarTutup" aria-label="Tutup menu" data-en-aria="Close menu">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
 
-        <div class="site-nav">
+      <!-- Bagian yang bisa digulir kalau layarnya pendek. Kaki sidebar
+           (tombol ciutkan & chip akun) di luarnya: menu akun di rel ikon
+           membuka ke kanan, melewati tepi sidebar, dan wadah yang
+           bergulir akan memotongnya. -->
+      <div class="sb-isi">
+        <button
+          type="button"
+          class="cmd-trigger"
+          id="btnCmdk"
+          data-cmdk-buka
+          title="Cari Cepat Lintas Import & Export"
+          data-i18n-title="ti.cari.cepat.lintas.import.export"
+        >
+          <i class="bi bi-search"></i>
+          <span class="cmd-trigger-text" data-i18n="u.cari.cepat">Cari cepat</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <nav class="site-nav" aria-label="Halaman" data-en-aria="Pages">
           <!-- SIAPA MELIHAT TAUTAN MANA diputuskan tabel PERAN di
                js/auth/session.js: applyPermissions() memasang
                body.tutup-<data-page> untuk halaman yang tertutup bagi
@@ -334,26 +371,22 @@
             <i class="bi bi-water"></i
             ><span data-i18n="nav.vessel">Jadwal Kapal</span>
           </a>
+          <a class="site-nav-link" href="#/masterlist" data-page="masterlist">
+            <i class="bi bi-card-checklist"></i
+            ><span data-i18n="nav.masterlist">Masterlist</span>
+          </a>
           <a class="site-nav-link" href="#/akun" data-page="accounts">
             <i class="bi bi-people"></i
             ><span data-i18n="nav.accounts">Akun</span>
           </a>
-        </div>
+        </nav>
+      </div>
 
-        <div class="topbar-spacer"></div>
-
-        <button
-          type="button"
-          class="cmd-trigger"
-          id="btnCmdk"
-          title="Cari Cepat Lintas Import & Export"
-          data-i18n-title="ti.cari.cepat.lintas.import.export"
-        >
-          <i class="bi bi-search"></i>
-          <span class="cmd-trigger-text" data-i18n="u.cari.cepat"
-            >Cari cepat</span
-          >
-          <kbd>Ctrl K</kbd>
+      <div class="sb-kaki">
+        <!-- Hanya di desktop. Teks & ikonnya ditulis sidebar.js
+             (Ciutkan / Lebarkan, ikut bahasa). -->
+        <button type="button" class="sb-ciut" id="btnSidebarCiut" aria-controls="appSidebar">
+          <i class="bi bi-chevron-double-left"></i><span>Ciutkan menu</span>
         </button>
 
         <div class="user-chip" id="userChip">
@@ -365,10 +398,8 @@
             <span class="user-chip-role" id="userChipRole">—</span>
           </div>
 
-          <!-- Menu akun — menggantikan tombol keluar mengambang di
-               sudut kanan-bawah (dulu .fab-logout). Ditempel di bawah
-               chip ini lewat position:absolute, jadi ikut berpindah
-               kalau chip-nya bergeser. -->
+          <!-- Menu akun: bahasa & keluar. Membuka KE ATAS dari chip di
+               kaki sidebar, atau ke kanan saat sidebar jadi rel ikon. -->
           <div class="user-menu d-none" id="userMenu">
             <div class="user-menu-head">
               <span class="user-menu-name" id="userMenuName">—</span>
@@ -394,7 +425,9 @@
           </div>
         </div>
       </div>
-    </nav>
+    </aside>
+    <!-- Latar redup di belakang laci (ponsel & tablet); diklik = tutup -->
+    <div class="sb-latar" id="sbLatar" hidden></div>
 
     <!-- HALAMAN: RINGKASAN HARIAN (baru) -->
     <div id="viewOverview" class="d-none">
@@ -590,6 +623,7 @@
                   aria-label="Cari nama atau email akun"
                   data-en-aria="Search account name or email"
                 />
+                <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
               </div>
               <div id="accountList"></div>
             </div>
@@ -722,6 +756,7 @@
                   aria-label="Cari nama barang atau HS Code"
                   data-en-aria="Search item name or HS Code"
                 />
+                <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
               </div>
               <button
                 type="button"
@@ -790,6 +825,7 @@
                   aria-label="Cari jadwal kapal"
                   data-en-aria="Search shipment schedules"
                 />
+                <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
               </div>
               <label class="vs-port">
                 <span data-en="From">Dari</span>
@@ -807,6 +843,134 @@
           </div>
           <div id="vsList"></div>
           <div id="vsPagination" class="hs-halaman"></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- HALAMAN: MASTERLIST -- kuota fasilitas & realisasinya
+         (js/views/masterlist-view.js, css/masterlist.css).
+
+         Dibaca dari atas ke bawah: berapa kuota yang masih tersedia dan
+         di mesin apa; apakah dokumennya masih berlaku dan adakah jadwal
+         yang belum dicatat; lalu baris per baris. Semua peran yang
+         boleh membuka halaman ini membaca; yang mengubah (.mst-ubah)
+         khusus EXIM. -->
+    <div id="viewMasterlist" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" id="mstJudul">Masterlist</h1>
+              <div class="board-sub" id="mstSub" data-en="Loading…">Memuat…</div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label" data-i18n="u.hari.ini">
+                  Hari ini
+                </div>
+                <div class="board-today-date" id="mstToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container page-main">
+        <div class="mst-atas">
+          <section class="panel">
+            <div class="panel-head">
+              <h2 data-en="<i class=&quot;bi bi-bar-chart-steps&quot;></i> Quota still available">
+                <i class="bi bi-bar-chart-steps"></i> Kuota yang masih tersedia
+              </h2>
+              <!-- Legenda: dua seri, selalu ada. Warnanya milik TANDA-nya,
+                   teksnya tetap warna teks biasa. -->
+              <span class="panel-head-note mst-legenda">
+                <span><i class="mst-t mst-t--ada"></i><span data-en="available">tersedia</span></span>
+                <span><i class="mst-t"></i><span data-en="used">terpakai</span></span>
+              </span>
+            </div>
+            <div class="panel-body panel-body--flush" id="mstTersedia"></div>
+          </section>
+
+          <div class="mst-samping">
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-en="<i class=&quot;bi bi-file-earmark-text&quot;></i> Masterlist document">
+                  <i class="bi bi-file-earmark-text"></i> Dokumen masterlist
+                </h2>
+                <button type="button" class="btn btn-form-cancel mst-tombol mst-ubah" id="btnMstDokumen">
+                  <i class="bi bi-pencil"></i> <span data-en="Edit">Ubah</span>
+                </button>
+              </div>
+              <div class="panel-body" id="mstDokumen"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-en="<i class=&quot;bi bi-exclamation-diamond&quot;></i> Not yet recorded">
+                  <i class="bi bi-exclamation-diamond"></i> Belum dicatat
+                </h2>
+                <span class="panel-head-note" id="mstPerluNote"></span>
+              </div>
+              <div class="panel-body panel-body--flush" id="mstPerlu"></div>
+            </section>
+          </div>
+        </div>
+
+        <section class="panel hs-panel mst-panel-daftar" id="mstPanelDaftar">
+          <div class="panel-head hs-bar mst-bar">
+            <div class="hs-bar-judul">
+              <h2>
+                <i class="bi bi-card-checklist"></i>
+                <span data-en="Masterlist lines">Daftar baris masterlist</span>
+              </h2>
+            </div>
+            <div class="mst-aksi">
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstMuat"
+                      title="Muat ulang" data-en-title="Reload" aria-label="Muat ulang" data-en-aria="Reload">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstExcel">
+                <i class="bi bi-file-earmark-excel"></i> <span data-en="Download Excel">Unduh Excel</span>
+              </button>
+              <button type="button" class="btn btn-form-cancel mst-tombol mst-ubah" id="btnMstBaris">
+                <i class="bi bi-plus-lg"></i> <span data-en="Add line">Tambah baris</span>
+              </button>
+              <button type="button" class="btn-teal mst-ubah" id="btnMstCatat">
+                <i class="bi bi-journal-check"></i> <span data-en="Record realization">Catat realisasi</span>
+              </button>
+            </div>
+          </div>
+          <!-- SATU baris saringan di atas daftar yang disaringnya. -->
+          <div class="mst-saring">
+            <div class="search-box mst-cari">
+              <i class="bi bi-search"></i>
+              <input
+                type="text"
+                id="mstSearch"
+                autocomplete="off"
+                placeholder="Cari barang, merek, seri, nomor aju…"
+                data-en-ph="Search item, brand, serial, aju number…"
+                aria-label="Cari di daftar masterlist"
+                data-en-aria="Search the masterlist"
+              />
+              <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <select id="mstStatus" class="control-select" aria-label="Saring menurut sisa kuota" data-en-aria="Filter by remaining quota">
+              <option value="" data-en="All lines">Semua baris</option>
+              <option value="sisa" data-en="Quota remaining">Masih ada sisa</option>
+              <option value="habis" data-en="Fully used">Habis</option>
+              <option value="utuh" data-en="Not used yet">Belum dipakai</option>
+            </select>
+            <select id="mstLini" class="control-select" aria-label="Saring menurut lini proses" data-en-aria="Filter by process line"></select>
+            <span class="mst-cip-saring d-none" id="mstJenisAktif"></span>
+            <div class="mst-seg" role="group" aria-label="Susunan daftar" data-en-aria="List layout">
+              <button type="button" class="active" data-mst-tampilan="baris" data-en="By line">Per baris</button>
+              <button type="button" data-mst-tampilan="pib" data-en="By PIB">Per PIB</button>
+            </div>
+          </div>
+          <div id="mstDaftar"></div>
+          <div id="mstPagination" class="hs-halaman"></div>
         </section>
       </main>
     </div>
@@ -1845,10 +2009,11 @@
                   </select>
                 </div>
                 <!-- JENIS TRANSAKSI: kegiatan yang dibiayai pengajuan ini.
-                     Bukan "Jenis Pengiriman" -- Local Sale bukan kiriman
-                     laut/udara. Nilainya istilah baku perdagangan, sama di
-                     kedua bahasa (seperti Billing/Freight). Tidak wajib:
-                     pengajuan lama tidak punya isian ini. -->
+                     Bukan "Jenis Pengiriman" -- Inland Trucking (angkutan
+                     darat dalam negeri, dulu bernama Local Sale) bukan
+                     kiriman laut/udara. Nilainya istilah baku perdagangan,
+                     sama di kedua bahasa (seperti Billing/Freight). Tidak
+                     wajib: pengajuan lama tidak punya isian ini. -->
                 <div>
                   <label class="form-label" data-en="Transaction Type">Jenis Transaksi</label>
                   <select class="form-select" data-dn="transactionType">
@@ -1857,7 +2022,7 @@
                     <option value="Sea Export">Sea Export</option>
                     <option value="Air Import">Air Import</option>
                     <option value="Air Export">Air Export</option>
-                    <option value="Local Sale">Local Sale</option>
+                    <option value="Inland Trucking">Inland Trucking</option>
                   </select>
                 </div>
                 <div>
@@ -1873,14 +2038,12 @@
                   <label class="form-label"
                      data-en="Paid To <span class=&quot;req&quot;>*</span>">Dibayarkan Kepada <span class="req">*</span></label
                   >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="payee"
-                    data-dn-required
-                    placeholder="Nama Vendor / PPJK"
-                    data-i18n-ph="ph.nama.vendor.ppjk"
-                  />
+                  <!-- Dropdown vendor; pilihannya diisi fund-vendor.js
+                       (daftar tersimpan + vendor pengajuan lama). Vendor
+                       baru lewat pilihan "+ Tambah vendor baru…". -->
+                  <select class="form-select" data-dn="payee" data-dn-required>
+                    <option value="">— pilih vendor —</option>
+                  </select>
                 </div>
                 <div>
                   <label class="form-label" data-i18n="f.customer"
@@ -2065,6 +2228,9 @@
                         <tr>
                           <th class="fl-no">No.</th>
                           <th data-i18n="f.uraian">Uraian</th>
+                          <!-- Hanya saat isian BL/AWB memuat dua nomor atau lebih
+                               (.fund-lines--awb): tiap baris ditautkan ke kirimannya. -->
+                          <th class="fl-awb">BL/AWB</th>
                           <th class="fl-amt" data-i18n="f.nilai.rp">
                             Nilai (Rp)
                           </th>
@@ -2140,6 +2306,33 @@
                     class="form-control"
                     data-dn="approver1Role"
                     value="Chief Marketing Officer"
+                  />
+                </div>
+                <!-- PENANDA TANGAN KEEMPAT -- hanya untuk vendor yang memakai
+                     Doc No (aturan yang sama dengan kotak Doc No di atas:
+                     fundSelaraskanDocNo, js/features/fund-docno.js). Bawaannya
+                     Mr. Kim Taewan, Chief Financial Officer; tetap bisa diubah.
+
+                     Kuncinya cfoName/cfoRole, BUKAN approver2*: nama itu milik
+                     kotak persetujuan lama yang sudah dihapus, dan pengajuan
+                     lama masih menyimpannya -- memakainya lagi akan mencetak
+                     orang lama itu di kotak ini. -->
+                <div class="fund-ttd-cfo">
+                  <label class="form-label" data-en="Approved By 2 &amp;mdash; Name">Approved By 2 &mdash; Nama</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="cfoName"
+                    value="Mr. Kim Taewan"
+                  />
+                </div>
+                <div class="fund-ttd-cfo">
+                  <label class="form-label" data-en="Approved By 2 &amp;mdash; Position">Approved By 2 &mdash; Jabatan</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    data-dn="cfoRole"
+                    value="Chief Financial Officer"
                   />
                 </div>
               </div>
@@ -2332,21 +2525,6 @@
               </button>
             </div>
 
-            <div id="dnEditBanner" class="dn-edit-banner d-none">
-              <span>
-                <i class="bi bi-pencil-square"></i>
-                <span data-en="Editing the details of number">Memperbaiki isian nomor</span> <b id="dnEditBannerNum"></b> <span data-en="&amp;mdash; the number itself stays the same.">&mdash;
-                nomornya sendiri tidak berubah.</span>
-              </span>
-              <button
-                type="button"
-                class="btn-quiet"
-                id="btnDnEditCancel"
-                data-i18n="u.batal"
-              >
-                Batal
-              </button>
-            </div>
             <div class="docnum-actions">
               <span class="docnum-hint" id="docNumHint"></span>
               <button type="button" class="btn btn-form-cancel" id="btnDocNumReset">
@@ -2443,6 +2621,11 @@
                   Terbit</span
                 >
                 <div class="docnum-history-aksi">
+                  <!-- Saringan rentang TANGGAL pengajuan (kolom Tanggal) --
+                       hanya Pengajuan Dana, tidak di tab Summary & Report
+                       (punya saringannya sendiri). Digambar
+                       js/views/docnum-view.js lewat buatRentangTanggal(). -->
+                  <div class="dn-saring-tanggal d-none" id="docNumRentang"></div>
                   <!-- Saringan status bayar -- hanya Pengajuan Dana, dan
                        tidak di tab Summary (punya saringannya sendiri).
                        Dikirim ke database seperti kotak cari. -->
@@ -2467,6 +2650,7 @@
                       aria-label="Cari di riwayat nomor"
                       data-en-aria="Search the number history"
                     />
+                    <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
                   </label>
                   <button
                     type="button"
@@ -2849,6 +3033,9 @@
                 <div class="form-text-note status-hint" data-en="Choose <b>DELAY</b> to fill in the delay update dates.">
                   Pilih <b>DELAY</b> untuk mengisi tanggal update delay.
                 </div>
+                <!-- Diisi syncStatusTibaHint(): status yang dipilih tidak akan
+                     berlaku karena tanggalnya sudah membuat jadwal ini tiba. -->
+                <div class="status-tiba-hint d-none" id="statusTibaHint" role="status"></div>
               </div>
               <div class="s12 form-text-note fg-note route-auto-hint d-none" id="routeAutoHint"></div>
               <div class="s12 d-none" id="routeStopsWrap">
@@ -3070,12 +3257,15 @@
                 </div>
                 <div class="pred-panel" id="predictionPanel"></div>
               </div>
+              <!-- Tampil saat status DELAY, dan selama tanggal revisinya masih
+                   terisi walau statusnya bukan Delay (is-sisa): tanggal itulah
+                   yang berlaku, jadi tidak boleh tersembunyi. -->
               <div class="s12 d-none" id="delayBlock">
                 <div class="delay-box">
-                  <div
-                    class="subsection-title subsection-title--plain mb-3"
-                   data-en="<i class=&quot;bi bi-clock-history&quot;></i> Delay Update Dates">
-                    <i class="bi bi-clock-history"></i> Tanggal Update Delay
+                  <div class="subsection-title subsection-title--plain mb-3">
+                    <i class="bi bi-clock-history"></i>
+                    <span class="delay-judul-delay" data-en="Delay Update Dates">Tanggal Update Delay</span>
+                    <span class="delay-judul-sisa" data-en="Revised dates still in force">Tanggal revisi yang masih berlaku</span>
                   </div>
                   <div class="fgrid">
                     <div>
@@ -3094,10 +3284,21 @@
                       <div class="delay-summary" id="delaySummary"></div>
                     </div>
                   </div>
-                  <div class="form-text-note mt-2" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the <b>new</b> dates after the postponement. ETD &amp;amp; ETA above keep the original plan for comparison.">
+                  <div class="form-text-note mt-2 delay-ket-delay" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the <b>new</b> dates after the postponement. ETD &amp;amp; ETA above keep the original plan for comparison.">
                     <i class="bi bi-info-circle"></i> Isi tanggal <b>baru</b>
                     hasil pemunduran. ETD &amp; ETA di atas tetap berisi rencana
                     semula sebagai pembanding.
+                  </div>
+                  <div class="form-text-note mt-2 delay-ket-sisa">
+                    <span data-en="<i class=&quot;bi bi-info-circle&quot;></i> This schedule was postponed before. These revised dates are the ones in force (cards, status, reports) — not ETD &amp;amp; ETA above. Changing ETD/ETA above replaces them.">
+                      <i class="bi bi-info-circle"></i> Jadwal ini pernah dimundurkan. Tanggal revisi
+                      inilah yang berlaku (kartu, status, laporan) — bukan ETD &amp; ETA di atas.
+                      Mengubah ETD/ETA di atas akan menggantikannya.
+                    </span>
+                    <button type="button" class="delay-hapus-revisi" id="btnHapusRevisi"
+                            data-en="<i class=&quot;bi bi-x-circle&quot;></i> Clear revised dates">
+                      <i class="bi bi-x-circle"></i> Kosongkan tanggal revisi
+                    </button>
                   </div>
                 </div>
               </div>
@@ -3232,6 +3433,7 @@
                   data-i18n-ph="ph.ketik.nama.barang"
                   autocomplete="off"
                 />
+                <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
               </div>
               <div class="hscode-lookup-results" id="hscodeLookupResults"></div>
             </div>
@@ -3586,6 +3788,7 @@
             autocomplete="off"
             spellcheck="false"
           />
+          <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
           <span class="cmdk-esc">Esc</span>
         </div>
         <div class="cmdk-list" id="cmdkList"></div>
@@ -3739,8 +3942,101 @@
       </div>
     </div>
 
+    <!-- UBAH ISIAN NOMOR YANG SUDAH TERBIT (tombol pensil di riwayat No.
+         Dokumen). Badannya kosong: panel form jenis dokumennya DIPINJAM
+         ke sini selama diubah, lalu dikembalikan ke halaman
+         (js/views/docnum-view.js, mulaiUbahDocNum) -- satu form, satu
+         jalur validasi & simpan. Latar statis: klik di luar kotak tidak
+         membuang isian yang sedang diperbaiki. -->
+    <div class="modal fade" id="dnEditModal" tabindex="-1" aria-labelledby="dnEditNomor" data-bs-backdrop="static">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down dn-edit-dialog">
+        <div class="modal-content">
+          <div class="dnd-kepala dn-edit-kepala">
+            <div class="dnd-utama">
+              <div class="dnd-jenis"><i class="bi bi-pencil-square"></i><span id="dnEditJenis"></span></div>
+              <div class="dnd-nomor"><span id="dnEditNomor">&mdash;</span></div>
+              <div class="dn-edit-ket" data-en="Only the details change &amp;mdash; the number itself stays the same.">
+                Hanya isiannya yang berubah &mdash; nomornya sendiri tetap.
+              </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
+          </div>
+          <div class="modal-body dn-edit-badan" id="dnEditBadan"></div>
+          <div class="modal-footer dialog-foot dn-edit-kaki">
+            <span class="docnum-hint" id="dnEditHint" role="alert"></span>
+            <button type="button" class="btn btn-form-cancel" data-bs-dismiss="modal" data-i18n="u.batal">
+              Batal
+            </button>
+            <button type="button" class="btn btn-teal" id="btnDnEditSimpan" data-en="<i class=&quot;bi bi-check2&quot;></i> Save Changes">
+              <i class="bi bi-check2"></i> Simpan Perubahan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Kotak isian aplikasi — menggantikan prompt() bawaan peramban,
          yang tampilannya berbeda di tiap peramban dan tidak bisa ditata. -->
+    <!-- CATAT / UBAH REALISASI MASTERLIST (js/views/masterlist-view.js).
+         Satu PIB biasanya memakai beberapa baris sekaligus, jadi nomor
+         aju & tanggalnya diisi sekali dan barisnya ditambah di bawahnya. -->
+    <div class="modal fade" id="mstRealisasiModal" tabindex="-1" aria-labelledby="mstRealisasiJudul">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mst-dialog">
+        <div class="modal-content">
+          <div class="modal-body dialog-body">
+            <div class="dialog-head">
+              <div class="dialog-icon">
+                <i class="bi bi-journal-check"></i>
+              </div>
+              <h6 class="dialog-title" id="mstRealisasiJudul">Catat realisasi</h6>
+            </div>
+            <p class="dialog-text" id="mstRealisasiKet"></p>
+            <div class="mst-form">
+              <div class="prompt-field mst-form-lebar">
+                <label class="prompt-label" for="mstAju" data-en="PIB aju number">Nomor aju PIB</label>
+                <input
+                  type="text"
+                  class="login-input"
+                  id="mstAju"
+                  list="mstAjuList"
+                  autocomplete="off"
+                  maxlength="80"
+                  placeholder="Nomor aju, atau 4 angka terakhirnya"
+                  data-en-ph="Aju number, or its last 4 digits"
+                />
+                <datalist id="mstAjuList"></datalist>
+                <div class="prompt-hint" id="mstAjuKet"></div>
+              </div>
+              <div class="prompt-field">
+                <label class="prompt-label" for="mstTanggal" data-en="PIB date">Tanggal PIB</label>
+                <input type="date" class="login-input" id="mstTanggal" />
+              </div>
+              <div class="prompt-field">
+                <label class="prompt-label" for="mstCatatan" data-en="Notes (optional)">Catatan (opsional)</label>
+                <input type="text" class="login-input" id="mstCatatan" maxlength="200" autocomplete="off" />
+              </div>
+              <div class="mst-form-lebar">
+                <span class="prompt-label" id="mstPilihLabel" data-en="Lines realized">Baris yang direalisasikan</span>
+                <div id="mstPilih" role="group" aria-labelledby="mstPilihLabel"></div>
+                <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstPilihTambah">
+                  <i class="bi bi-plus-lg"></i> <span data-en="Add another line">Tambah baris lain</span>
+                </button>
+              </div>
+            </div>
+            <div class="prompt-error d-none" id="mstRealisasiGalat" role="alert"></div>
+          </div>
+          <div class="modal-footer dialog-foot">
+            <button type="button" class="btn-quiet" data-bs-dismiss="modal" data-i18n="u.batal">
+              Batal
+            </button>
+            <button type="button" class="btn-primary-navy" id="btnMstSimpanRealisasi" data-i18n="u.simpan">
+              Simpan
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="promptModal" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -3967,6 +4263,8 @@
     <script src="js/ui/number-input.js"></script>
     <script src="js/ui/time-input.js"></script>
     <script src="js/ui/feedback.js"></script>
+    <script src="js/ui/sidebar.js"></script>
+    <script src="js/ui/search-clear.js"></script>
     <script src="js/ui/board.js"></script>
 
     <!-- ========================================= -->
@@ -4039,6 +4337,7 @@
     <script src="js/features/fund-report.js"></script>
     <script src="js/features/shipment-cost.js"></script>
     <script src="js/features/fund-invoice-import.js"></script>
+    <script src="js/features/fund-vendor.js"></script>
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>
@@ -4051,6 +4350,7 @@
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
     <script src="js/views/vessel-schedule-view.js"></script>
+    <script src="js/views/masterlist-view.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 

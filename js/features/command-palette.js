@@ -24,6 +24,10 @@ const CMDK_COMMANDS = [
   /* Yang tidak mengubah data (marketing, finance) membuka halamannya
      untuk membaca riwayat -- bukan "meminta" nomor. */
   { type: "cmd", halaman: "docnum", icon: "bi-hash", get title() { return canEdit() ? tt("Permintaan Nomor Dokumen", "Request Document Number") : tt("Buka Nomor Dokumen", "Open Document Numbers"); }, get hint() { return tt("Invoice, DO, dana, surat", "Invoice, DO, fund, letter"); }, run: () => (location.hash = "#/docnum") },
+  { type: "cmd", halaman: "hscode", icon: "bi-upc-scan", get title() { return tt("Buka HS Code", "Open HS Code"); }, get hint() { return tt("Database HS Code", "HS Code database"); }, run: () => (location.hash = "#/hscode") },
+  { type: "cmd", halaman: "vessel", icon: "bi-water", get title() { return tt("Buka Jadwal Kapal", "Open Shipment Schedule"); }, get hint() { return tt("Jadwal kapal per rute", "Vessel schedule per route"); }, run: () => (location.hash = "#/shipment-schedule") },
+  { type: "cmd", halaman: "masterlist", icon: "bi-card-checklist", get title() { return tt("Buka Masterlist", "Open Masterlist"); }, get hint() { return tt("Kuota fasilitas & realisasinya", "Facility quota & its realization"); }, run: () => (location.hash = "#/masterlist") },
+  { type: "cmd", halaman: "accounts", icon: "bi-people", get title() { return tt("Kelola Akun", "Manage Accounts"); }, get hint() { return tt("Pengguna & peran", "Users & roles"); }, run: () => (location.hash = "#/akun") },
   { type: "cmd", halaman: "schedule", icon: "bi-arrow-left-right", get title() { return tt("Ganti buku Import / Export", "Switch Import / Export book"); }, get hint() { return tt("Pindah antar mode", "Switch between modes"); }, run: () => switchMode(activeMode === "import" ? "export" : "import") },
   { type: "cmd", halaman: "schedule", icon: "bi-exclamation-triangle", get title() { return tt("Saring: perlu tindakan", "Filter: needs action"); }, get hint() { return t("s.lewat.eta.atau.delay"); }, run: () => { location.hash = "#/"; setTimeout(() => setOnlyNeedsAction(true), 60); } },
   { type: "cmd", halaman: "schedule", icon: "bi-file-earmark-excel", get title() { return tt("Bulk Export ke Excel", "Bulk Export to Excel"); }, get hint() { return t("s.buku.yang.sedang.aktif"); }, run: () => { location.hash = "#/"; setTimeout(() => $("#btnBulkExport").click(), 60); } },
@@ -158,7 +162,10 @@ function isCmdkOpen() {
   return cmdkScrimEl && cmdkScrimEl.classList.contains("is-open");
 }
 
-$("#btnCmdk").addEventListener("click", openCmdk);
+// Dua pemicu: di sidebar (desktop) dan di bilah atas ponsel
+document.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest("[data-cmdk-buka]")) openCmdk();
+});
 cmdkScrimEl.addEventListener("click", (e) => {
   if (e.target === cmdkScrimEl) closeCmdk();
 });

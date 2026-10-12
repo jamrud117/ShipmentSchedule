@@ -65,6 +65,13 @@
 .cmdk-input::placeholder {
   color: var(--n-400);
 }
+/* Tombol hapus (×): di baris palet ia ikut susunan flex (di depan
+   tanda Esc), bukan melayang absolut seperti di kotak cari lain. */
+.cmdk-input-row .search-clear[data-cari-hapus] {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+}
 .cmdk-esc {
   font-family: var(--font-mono);
   font-size: 0.64rem;

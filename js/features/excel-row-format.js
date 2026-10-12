@@ -203,8 +203,8 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
-      // VESSEL mengikuti aturan requirement B lewat vesselNameForTemplate()
-      formatter.text(vesselNameForTemplate(s)), // 27 VESSEL
+      // VESSEL = nama + nomor sarana angkut (carrierNameFromShipment, core/carrier-master.js)
+      formatter.text(carrierNameFromShipment(s)), // 27 VESSEL
       formatter.packageNum(s.package), // 28 PACKAGE
     ];
     if (idx > 0)

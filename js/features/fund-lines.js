@@ -87,22 +87,39 @@ function formatRupiahKetik(mentah) {
   return (negatif ? "-" : "") + hasil;
 }
 
-/* Kursor tetap di antara angka yang sama setelah titik ribuan disisipkan
-   atau dipindah -- dihitung dari jumlah angka (dan koma) di kirinya,
-   bukan dari posisi karakter yang bergeser tiap kali titik bertambah. */
+/* RUMUS YANG SEDANG DIKETIK ikut diberi titik ribuan, per angkanya:
+     "=1000000+250000*2"  ->  "=1.000.000+250.000*2"
+   Operator, kurung, dan persen tidak diubah. Bagian desimal (sesudah
+   koma) ditulis apa adanya -- di dalam rumus boleh lebih dari dua angka.
+   Titik yang diketik sendiri dibuang lalu disusun ulang, sama seperti
+   kotak nominal biasa: di konvensi ini titik hanya pemisah ribuan, dan
+   hitungRumus() membacanya dengan cara yang sama. */
+function formatRumusKetik(teks) {
+  return String(teks == null ? "" : teks).replace(/\d[\d.]*(?:,\d*)?/g, (angka) => {
+    const koma = angka.indexOf(",");
+    const bulat = (koma >= 0 ? angka.slice(0, koma) : angka).replace(/\./g, "").replace(/^0+(?=\d)/, "");
+    const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return koma >= 0 ? berkelompok + angka.slice(koma) : berkelompok;
+  });
+}
+
+/* Kursor tetap di antara karakter yang sama setelah titik ribuan
+   disisipkan atau dipindah -- dihitung dari jumlah karakter BUKAN titik
+   di kirinya (angka & koma; untuk rumus juga operatornya), bukan dari
+   posisi karakter yang bergeser tiap kali titik bertambah. */
 function formatKotakRupiah(el) {
   const sebelum = el.value;
-  // Rumus sedang diketik: dibiarkan apa adanya sampai Enter / pindah kotak.
-  if (/^\s*=/.test(sebelum)) return;
-  const kiri = (sebelum.slice(0, el.selectionStart || 0).match(/[\d,]/g) || []).length;
-  const sesudah = formatRupiahKetik(sebelum);
+  const rumus = /^\s*=/.test(sebelum);
+  const berarti = rumus ? /[^.]/ : /[\d,]/;
+  const kiri = [...sebelum.slice(0, el.selectionStart || 0)].filter((c) => berarti.test(c)).length;
+  const sesudah = rumus ? formatRumusKetik(sebelum) : formatRupiahKetik(sebelum);
   if (sesudah === sebelum) return;
   el.value = sesudah;
   let pos = sesudah.length;
-  if (kiri === 0) pos = /^-/.test(sesudah) ? 1 : 0;
+  if (kiri === 0) pos = !rumus && /^-/.test(sesudah) ? 1 : 0;
   else {
     for (let i = 0, n = 0; i < sesudah.length; i++) {
-      if (/[\d,]/.test(sesudah[i]) && ++n === kiri) { pos = i + 1; break; }
+      if (berarti.test(sesudah[i]) && ++n === kiri) { pos = i + 1; break; }
     }
   }
   try { el.setSelectionRange(pos, pos); } catch (err) { /* kotak tanpa kursor */ }
@@ -372,6 +389,168 @@ function fundLineTotals(lines) {
   };
 }
 
+/* ==================================================================
+   TAGIHAN PER BL/AWB
+
+   Satu invoice forwarder kerap menagih BEBERAPA kiriman sekaligus (dua
+   AWB dalam satu invoice). Kalau seluruh nilainya ditautkan ke setiap
+   AWB, biaya per kiriman jadi dobel: kiriman A ikut menanggung ongkos
+   kiriman B.
+
+   Tiap baris rincian bisa ditautkan ke SATU BL/AWB (`awb`, kolom BL/AWB
+   di tabel rincian -- muncul begitu isian BL/AWB memuat dua nomor atau
+   lebih). Baris tanpa tautan -- juga pengajuan lama dan jenis Billing --
+   DIBAGI RATA ke semua BL/AWB pengajuan itu. Baris diskon tanpa tautan
+   mengikuti pos di atasnya, sama seperti diskon persennya.
+
+   Bagian tiap BL/AWB menjumlah TEPAT ke total pengajuan (sisa
+   pembulatan ke bagian terbesar), jadi biaya per kiriman tidak pernah
+   dobel dan tidak ada rupiah yang hilang.
+================================================================== */
+const fundKunciAwb = (x) => String(x == null ? "" : x).toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/* "8771 4421 8723 / 877334611529" -> [{ kunci: "877144218723",
+   teks: "8771 4421 8723" }, { ... }]. Pemisahnya "/", koma, titik koma,
+   "|" atau baris baru; spasi DI DALAM satu nomor bukan pemisah. Nomor
+   yang sama (beda tulisan) dihitung sekali. */
+function fundDaftarAwb(teks) {
+  const hasil = [];
+  const ada = new Set();
+  String(teks == null ? "" : teks)
+    .split(/[\/,;|\r\n]+/)
+    .forEach((x) => {
+      const tampil = x.replace(/\s+/g, " ").trim();
+      const kunci = fundKunciAwb(tampil);
+      if (!kunci || ada.has(kunci)) return;
+      ada.add(kunci);
+      hasil.push({ kunci, teks: tampil });
+    });
+  return hasil;
+}
+
+/* Komponen total satu pengajuan, dalam mata uangnya sendiri. Format
+   tanpa rincian per baris (Billing, format lama) tidak punya PPN/PPh
+   terpisah: seluruhnya dpp = dibayar. */
+function fundTotalKomponen(p) {
+  const d = p || {};
+  if (Array.isArray(d.lines) && d.lines.length) {
+    const jumlah = fundLineTotals(d.lines);
+    return { dpp: jumlah.totalNet, ppn: jumlah.totalPpn, pph: jumlah.pph, dibayar: jumlah.grandTotal };
+  }
+  const total = typeof frTotalPengajuan === "function" ? frTotalPengajuan(d) : 0;
+  return { dpp: total, ppn: 0, pph: 0, dibayar: total };
+}
+
+/* Membulatkan bagian-bagian supaya jumlahnya TEPAT `target` (metode
+   sisa terbesar): tiap bagian dibulatkan ke bawah, lalu rupiah yang
+   tersisa diberikan satu-satu ke bagian dengan pecahan terbesar --
+   kalau sama, ke bagian yang lebih besar, lalu ke yang terakhir.
+   Pembagian rata 301 / 3 = 100 + 100 + 101. */
+function fundBulatkanBagian(mentah, target) {
+  const bulat = mentah.map((v) => Math.floor(v));
+  let sisa = Math.round(target) - bulat.reduce((x, v) => x + v, 0);
+  if (!bulat.length) return bulat;
+  const urut = mentah
+    .map((v, i) => ({ i, pecahan: v - Math.floor(v), v }))
+    .sort((a, b) => b.pecahan - a.pecahan || b.v - a.v || b.i - a.i);
+  for (let n = 0; sisa > 0; n++, sisa--) bulat[urut[n % urut.length].i] += 1;
+  // Total yang lebih kecil dari jumlah pembulatan ke bawah (sen): dikurangi dari pecahan terkecil
+  for (let n = 0; sisa < 0; n++, sisa++) bulat[urut[urut.length - 1 - (n % urut.length)].i] -= 1;
+  return bulat;
+}
+
+/* Bagian tiap BL/AWB satu pengajuan:
+     [{ kunci, teks, dpp, ppn, pph, dibayar, rata, tautan }]
+   rata   = (sebagian) dari baris yang dibagi rata
+   tautan = ada baris yang ditautkan langsung ke BL/AWB ini
+   Kosong kalau pengajuannya tidak menyebut BL/AWB. */
+function fundBagiPerAwb(p) {
+  const d = p || {};
+  const awb = fundDaftarAwb(d.blAwb);
+  if (!awb.length) return [];
+  const total = fundTotalKomponen(d);
+  if (awb.length === 1) return [Object.assign({}, awb[0], total, { rata: false, tautan: true })];
+
+  const n = awb.length;
+  const ada = new Set(awb.map((a) => a.kunci));
+  const isi = new Map(awb.map((a) => [a.kunci, { dpp: 0, ppn: 0, dasarPph: 0, tautan: false }]));
+  const bersama = { dpp: 0, ppn: 0, dasarPph: 0 };
+  const lines = Array.isArray(d.lines) && d.lines.length ? normalisasiBarisDana(d.lines) : [];
+  if (lines.length) {
+    const nilai = fundLineValues(lines);
+    const ppn = fundLinePpnDaftar(lines, nilai);
+    let kunciPos = "";
+    lines.forEach((b, i) => {
+      let k = fundKunciAwb(b.awb);
+      if (!ada.has(k)) k = "";
+      if (barisDiskon(b)) {
+        if (!k) k = kunciPos; // diskon tanpa tautan mengikuti pos di atasnya
+      } else {
+        kunciPos = k;
+      }
+      const wadah = k ? isi.get(k) : bersama;
+      wadah.dpp += nilai[i];
+      wadah.ppn += ppn[i];
+      if (fundLineRate(b) > 0) wadah.dasarPph += nilai[i];
+      if (k) wadah.tautan = true;
+    });
+  } else {
+    bersama.dpp = total.dpp;
+  }
+  const adaBersama = bersama.dpp !== 0 || bersama.ppn !== 0;
+  const mentah = awb.map((a) => {
+    const x = isi.get(a.kunci);
+    return {
+      dpp: x.dpp + bersama.dpp / n,
+      ppn: x.ppn + bersama.ppn / n,
+      pph: Math.max(0, ((x.dasarPph + bersama.dasarPph / n) * FUND_PPH23_RATE) / 100),
+    };
+  });
+  const dpp = fundBulatkanBagian(mentah.map((m) => m.dpp), total.dpp);
+  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn);
+  const pph = fundBulatkanBagian(mentah.map((m) => m.pph), total.pph);
+  return awb.map((a, i) => ({
+    kunci: a.kunci,
+    teks: a.teks,
+    dpp: dpp[i],
+    ppn: ppnBagian[i],
+    pph: pph[i],
+    dibayar: dpp[i] + ppnBagian[i] - pph[i],
+    rata: adaBersama,
+    tautan: isi.get(a.kunci).tautan,
+  }));
+}
+
+/* Nomor baris (mulai 1, sama dengan kolom No. di tabel) yang ditautkan
+   ke BL/AWB yang TIDAK ada di isian BL/AWB -- nomornya dihapus dari
+   isian sesudah ditautkan. Baris kosong tidak ikut tersimpan, jadi
+   tidak diperiksa. */
+function fundTautanAwbHilang(lines, blAwb) {
+  const ada = new Set(fundDaftarAwb(blAwb).map((a) => a.kunci));
+  const hasil = [];
+  (Array.isArray(lines) ? lines : []).forEach((b, i) => {
+    const k = fundKunciAwb(b && b.awb);
+    const berisi = b && (String(b.desc || "").trim() || String(b.amount || "").trim());
+    if (k && berisi && !ada.has(k)) hasil.push(i + 1);
+  });
+  return hasil;
+}
+
+/* Tautan BL/AWB baris yang akan disimpan: kunci baku; dibuang kalau
+   pengajuannya menagih kurang dari dua BL/AWB (tidak ada yang perlu
+   dipisahkan). Tautan ke nomor yang hilang dibiarkan -- ditolak saat
+   disimpan, supaya pengguna yang memutuskan. */
+function fundRapikanTautanAwb(lines, blAwb) {
+  const banyak = fundDaftarAwb(blAwb).length > 1;
+  return (Array.isArray(lines) ? lines : []).map((b) => {
+    const k = fundKunciAwb(b && b.awb);
+    const salinan = Object.assign({}, b);
+    if (k && banyak) salinan.awb = k;
+    else delete salinan.awb;
+    return salinan;
+  });
+}
+
 /* Baris kosong bawaan: satu baris siap isi, bukan tabel kosong yang
    memaksa pengguna menekan "tambah" dulu. */
 function fundLineBaru() {
@@ -414,6 +593,11 @@ if (typeof module !== "undefined" && module.exports) {
     fundLineBaru,
     fundLinesBersih,
     normalisasiBarisDana,
+    fundKunciAwb,
+    fundDaftarAwb,
+    fundBagiPerAwb,
+    fundTautanAwbHilang,
+    fundRapikanTautanAwb,
   };
 }
 
@@ -450,7 +634,29 @@ function pilihanTarifHtml(b) {
    kotaknya sendiri; di mode Rp ia menegaskan tanda minusnya. */
 const teksNominalDiskon = (v) => (v ? "- " + formatRupiah(-v) : "0");
 
-function barisRincianHtml(b, i, v, ppn) {
+/* BL/AWB yang sedang diketik di isian BL/AWB form Pengajuan Dana. */
+function fundAwbForm() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
+  return fundDaftarAwb(el ? el.value : "");
+}
+
+/* Sel BL/AWB satu baris: pos biaya "Dibagi rata" atau satu BL/AWB;
+   diskon "Ikut pos di atas" atau satu BL/AWB. Tautan ke nomor yang
+   sudah dihapus dari isian BL/AWB tetap terlihat (bertanda) supaya bisa
+   dibetulkan -- menyimpannya ditolak (validateDocNumForm). */
+function selAwbHtml(b, daftar) {
+  const kini = fundKunciAwb(b.awb);
+  const ada = daftar.some((a) => a.kunci === kini);
+  const pertama = barisDiskon(b) ? tt("Ikut pos di atas", "Same as line above") : tt("Dibagi rata", "Split evenly");
+  return `<td class="fl-awb"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
+      <option value="">${escapeHtml(pertama)}</option>
+      ${daftar.map((a) => `<option value="${escapeAttr(a.kunci)}"${a.kunci === kini ? " selected" : ""}>${escapeHtml(a.teks)}</option>`).join("")}
+      ${kini && !ada ? `<option value="${escapeAttr(kini)}" selected>⚠ ${escapeHtml(kini)} — ${escapeHtml(tt("tidak ada di isian BL/AWB", "not in the BL/AWB field"))}</option>` : ""}
+    </select></td>`;
+}
+
+function barisRincianHtml(b, i, v, ppn, daftarAwb) {
+  const kolomAwb = daftarAwb && daftarAwb.length > 1 ? selAwbHtml(b, daftarAwb) : "";
   const tombolHapus = `
         <td class="fl-act">
           <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}">
@@ -462,7 +668,7 @@ function barisRincianHtml(b, i, v, ppn) {
     return `
       <tr data-fl="${i}">
         <td class="fl-no">${i + 1}</td>
-        <td><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>
+        <td><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
         <td class="fl-amt">${kotakNilai}</td>
         <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
         <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
@@ -476,7 +682,7 @@ function barisRincianHtml(b, i, v, ppn) {
             <span class="fl-tag-diskon">${escapeHtml(tt("Diskon", "Discount"))}</span>
             <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
           </div>
-        </td>
+        </td>${kolomAwb}
         <td class="fl-amt">
           <div class="fl-disc-in">
             ${kotakNilai}
@@ -586,14 +792,19 @@ function renderFundLines() {
   if (fundDokumen.length) fundLinesUrutkan();
   const nilai = fundLineValues(fundLines);
   const ppn = fundLinePpnDaftar(fundLines, nilai);
-  const baris = (b, i) => barisRincianHtml(b, i, nilai[i], ppn[i]);
+  // Kolom BL/AWB hanya saat pengajuan ini menagih dua BL/AWB atau lebih
+  const daftarAwb = fundAwbForm();
+  const pakaiAwb = daftarAwb.length > 1;
+  const tabel = body.closest("table");
+  if (tabel) tabel.classList.toggle("fund-lines--awb", pakaiAwb);
+  const baris = (b, i) => barisRincianHtml(b, i, nilai[i], ppn[i], daftarAwb);
   if (!fundDokumen.length) {
     body.innerHTML = fundLines.map(baris).join("");
   } else {
     const ada = new Set(fundDokKelompok().map((d) => d.id));
     body.innerHTML = fundDokKelompok().map((d) => `
       <tr class="fl-grup" data-fl-grup="${escapeAttr(d.id)}">
-        <td colspan="6">
+        <td colspan="${pakaiAwb ? 7 : 6}">
           <span class="fl-grup-judul">${escapeHtml(fundDokJudul(d.jenis))} :</span>
           <b class="fl-grup-nomor">${escapeHtml(d.nomor || tt("(nomor belum diisi)", "(number not filled)"))}</b>
           <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-tambah="${escapeAttr(d.id)}"><i class="bi bi-plus-lg"></i> ${escapeHtml(tt("Baris", "Row"))}</button>
@@ -634,7 +845,22 @@ function gambarKakiRincian() {
       ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatRupiah(r.totalDiskon)}</b></div>` : ""}
       <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatRupiah(r.totalPpn)}</b></div>
       <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatRupiah(r.pph)}</b></div>
-      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatRupiah(r.grandTotal)}</b></div>`;
+      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatRupiah(r.grandTotal)}</b></div>
+      ${kakiPerAwbHtml()}`;
+}
+
+/* BAGIAN PER BL/AWB di bawah TOTAL -- angka yang sama dengan yang
+   dibebankan ke tiap kiriman (Biaya Kiriman Ini di panel detail jadwal). */
+function kakiPerAwbHtml() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
+  const bagian = fundBagiPerAwb({ lines: fundLinesBersih(fundLines), blAwb: el ? el.value : "" });
+  if (bagian.length < 2) return "";
+  return `
+      <div class="fl-awb-bagian">
+        <div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>
+        ${bagian.map((b) => `
+        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatRupiah(b.dibayar)}</b></div>`).join("")}
+      </div>`;
 }
 
 function setFundLines(lines) {
@@ -652,8 +878,8 @@ if (fundLinesBodyEl) {
     if (!tr || !f) return;
     const baris = fundLines[Number(tr.dataset.fl)];
     if (f === "amount") {
-      // Rupiah ikut titik ribuan; persen dibiarkan ("2,5"); rumus dibiarkan
-      // sampai Enter / pindah kotak (formatKotakRupiah sendiri melewatinya).
+      // Rupiah & rumus ikut titik ribuan saat diketik; persen dibiarkan ("2,5").
+      // Rumusnya sendiri baru DIHITUNG saat Enter / pindah kotak.
       if (!kotakPersen(baris, f)) formatKotakRupiah(e.target);
       if (!adalahRumus(e.target.value)) {
         e.target.classList.remove("fl-rumus-salah");
@@ -661,9 +887,9 @@ if (fundLinesBodyEl) {
       }
     }
     baris[f] = e.target.value;
-    // Tarif / jenis diskon: digambar ulang. Selain itu hanya sel hitungan,
-    // supaya fokus tidak direbut dari kotak yang sedang diketik.
-    if (f === "ppnRate" || f === "discType") return renderFundLines();
+    // Tarif / jenis diskon / BL/AWB: digambar ulang. Selain itu hanya sel
+    // hitungan, supaya fokus tidak direbut dari kotak yang sedang diketik.
+    if (f === "ppnRate" || f === "discType" || f === "awb") return renderFundLines();
     perbaruiHitunganRincian();
   });
   /* Pilihan (tarif PPN, jenis diskon) DISIMPAN di sini juga sebelum
@@ -671,7 +897,7 @@ if (fundLinesBodyEl) {
      kebetulan ikut terpicu pada <select> di peramban modern. */
   fundLinesBodyEl.addEventListener("change", (e) => {
     const f = e.target.dataset.flF;
-    if (f !== "ppnRate" && f !== "discType") return;
+    if (f !== "ppnRate" && f !== "discType" && f !== "awb") return;
     const tr = e.target.closest("[data-fl]");
     if (tr) fundLines[Number(tr.dataset.fl)][f] = e.target.value;
     renderFundLines();
@@ -824,6 +1050,8 @@ if (fundDokListEl) {
 // Nomor invoice utama diketik -> judul kelompok utama ikut
 document.addEventListener("input", (e) => {
   if (e.target.closest('[data-docnum-panel="fund"] [data-dn="invoiceNo"]') && fundDokumen.length) perbaruiJudulKelompok();
+  // BL/AWB diketik -> kolom & pilihan BL/AWB di rincian, dan bagian per BL/AWB
+  if (e.target.closest('[data-docnum-panel="fund"] [data-dn="blAwb"]')) renderFundLines();
 });
 
 renderFundLines();

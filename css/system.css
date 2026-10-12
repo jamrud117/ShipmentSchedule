@@ -612,6 +612,14 @@ select:disabled,
   border-bottom: 0;
   font-weight: 700;
 }
+/* Pengajuan yang juga menagih kiriman lain: dari berapa bagian ini diambil */
+.bk-bagian {
+  margin-top: 1px;
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--n-500);
+  white-space: normal;
+}
 /* Tiga angka ringkas di atas tabel: total, bea & pajak, logistik */
 .bk-ringkas {
   display: grid;

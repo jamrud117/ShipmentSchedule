@@ -397,6 +397,14 @@ t("salah satu kolom kosong -> yang ada saja, tanpa spasi nyasar", () => {
   eq(carrierNameFromShipment({ vessel: "", voyage: "" }), "");
   eq(carrierNameFromShipment({}), "");
 });
+t("nomor yang sudah tertulis di ujung nama tidak diulang; '-' & spasi dirapikan", () => {
+  eq(carrierNameFromShipment({ vessel: "HMM MIRACLE 0009S", voyage: "0009S" }), "HMM MIRACLE 0009S");
+  eq(carrierNameFromShipment({ vessel: "HMM MIRACLE V.0009S", voyage: "0009S" }), "HMM MIRACLE V.0009S");
+  eq(carrierNameFromShipment({ vessel: "GA", voyage: "GA880" }), "GA880");
+  eq(carrierNameFromShipment({ vessel: "  HMM   HARVEST ", voyage: " 0015N " }), "HMM HARVEST 0015N");
+  eq(carrierNameFromShipment({ vessel: "-", voyage: "0015N" }), "0015N");
+  eq(carrierNameFromShipment({ vessel: "HMM HARVEST", voyage: "-" }), "HMM HARVEST");
+});
 
 console.log("— NAMA KAPAL NYATA DARI RIWAYAT DDI —");
 /* Diambil dari DAILY REPORT 04-08-2026, sheet ALL IMPORT SHIPMENT.

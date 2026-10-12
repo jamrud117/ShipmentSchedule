@@ -817,23 +817,60 @@ function carrierCodeOf(s) {
 }
 
 /* ------------------------------------------------------------------
-   CARRIER TERTULIS untuk CIPL
+   NAMA SARANA ANGKUT = NAMA + NOMOR
 
-   Field "Carrier" pada invoice/packing list BUKAN kode hasil deteksi
-   di atas (MSC, ONE, KE, ...) — itu untuk mesin prediksi. Yang dibaca
-   bea cukai & buyer adalah apa yang diketik pengguna: Nama
-   Voyager/Vessel digabung No. Voyage/Flight, apa pun modanya —
-   "MSC LORENA 056S" atau "GARUDA CARGO GA880/04JUL".
+   SATU aturan untuk semua tempat yang menampilkan kapal/pesawat:
+   kartu, panel detail, templat salin, Bulk Excel, CIPL, surat BC,
+   riwayat invoice. Nama Voyager/Vessel digabung No. Voyage/Flight, apa
+   pun modanya -- "MSC LORENA 056S", "KOREAN AIR KE628" -- persis
+   pasangan NAMA PENGANGKUT + NOMOR PENGANGKUT di sheet PENGANGKUT draft
+   CEISA. (Dulu templat salin membuang nama untuk moda udara; kini
+   semuanya sama.)
 
-   BEDA dengan vesselNameForTemplate() di copy-templates.js: itu untuk
-   templat copy-paste forwarder (requirement B), dan sengaja membuang
-   Nama Vessel saat udara. Di sini keduanya SELALU digabung — tidak ada
-   berkas eksternal berformat tetap yang harus diikuti. */
+   Bukan kode hasil deteksi di atas (MSC, ONE, KE, ...) -- itu untuk
+   mesin prediksi. Kolom yang kosong atau "-" dilewati, spasi dirapikan,
+   dan nomor yang sudah tertulis di ujung nama (data lama: "HMM MIRACLE
+   0009S" + "0009S") tidak diulang. */
 function carrierNameFromShipment(s) {
   const src = s || {};
-  const vessel = String(src.vessel || "").trim();
-  const voyage = String(src.voyage || "").trim();
-  return [vessel, voyage].filter(Boolean).join(" ");
+  const rapi = (v) => {
+    const x = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+    return x === "-" ? "" : x;
+  };
+  const nama = rapi(src.vessel);
+  const nomor = rapi(src.voyage);
+  if (!nama || !nomor) return nama || nomor;
+  const kunci = (x) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (kunci(nama).endsWith(kunci(nomor))) return nama;
+  if (kunci(nomor).startsWith(kunci(nama))) return nomor;
+  return nama + " " + nomor;
+}
+
+/* CARRIER DI CIPL (Commercial Invoice & Packing List).
+
+   Kiriman UDARA cukup No Flight-nya ("KE628") -- tanpa nama maskapai.
+   Kiriman LAUT tetap nama kapal + voyage, aturan di atas. No Flight
+   kosong -> nama yang ada tetap dipakai, daripada kotaknya kosong. */
+function carrierCiplDariJadwal(s) {
+  const src = s || {};
+  if (src.transport === "udara") {
+    const no = String(src.voyage == null ? "" : src.voyage).replace(/\s+/g, " ").trim();
+    if (no && no !== "-") return no;
+  }
+  return carrierNameFromShipment(src);
+}
+
+/* Carrier yang DICETAK di CIPL: isian Carrier di data cetak invoice,
+   kalau kosong dari Jadwal Terkait. Untuk kiriman udara, isian yang
+   cuma salinan otomatis "nama + nomor" (aturan lama, saat jadwalnya
+   ditautkan) ikut jadi No Flight saja; yang diketik lain dibiarkan. */
+function carrierCipl(p, shipment) {
+  const isian = String((p && p.carrier) || "").replace(/\s+/g, " ").trim();
+  if (!shipment) return isian;
+  if (!isian || (shipment.transport === "udara" && isian === carrierNameFromShipment(shipment))) {
+    return carrierCiplDariJadwal(shipment);
+  }
+  return isian;
 }
 
 if (typeof module !== "undefined" && module.exports) {
@@ -846,5 +883,7 @@ if (typeof module !== "undefined" && module.exports) {
     detectCarrier,
     carrierCodeOf,
     carrierNameFromShipment,
+    carrierCiplDariJadwal,
+    carrierCipl,
   };
 }

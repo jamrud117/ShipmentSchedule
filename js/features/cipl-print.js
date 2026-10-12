@@ -241,17 +241,19 @@ function ciplBarisBarang(shipment) {
   return items
     .filter((it) => String(it.namaBarang || "").trim())
     .map((it) => {
-      /* Kolom Size (data baru — lihat body.mode-import .size-col,
-         form.css) didahulukan kalau terisi: sumbernya sekarang field
-         SENDIRI, bukan tebakan dari gabungan teks lagi. ciplPecahNama()
-         (menebak dari " - " atau daftar CIPL_JENIS_BARANG) tinggal
-         jadi cadangan untuk barang lama yang dibuat sebelum kolom Size
-         ada, atau saat Size sengaja dikosongkan (masih digabung manual
-         di Nama Barang/Uraian). */
-      const sizeTerisi = String(it.size || "").trim();
-      const n = sizeTerisi
-        ? { item: String(it.namaBarang || "").trim(), type: sizeTerisi }
-        : ciplPecahNama(it.namaBarang);
+      /* NAMA BARANG = Uraian + Pattern + Size + Mold No, aturan yang sama
+         dengan CIPL Kumho (itemDisplayName, core/helpers.js). Lembar ini
+         punya dua kolom: Item = Uraian, Type = sisanya (Pattern, Size,
+         Mold No) -- dibaca dari kiri ke kanan hasilnya urutan yang sama.
+         Dulu Type cuma Size, sehingga Pattern & Mold No tidak tercetak.
+
+         ciplPecahNama() (menebak dari " - " atau CIPL_JENIS_BARANG)
+         tinggal cadangan untuk barang lama yang ketiga kolomnya kosong
+         -- semuanya masih digabung di Uraian. */
+      const rincian = rincianNamaBarang(it);
+      const n = rincian.length
+        ? { item: rapiBagianNama(it.namaBarang), type: rincian.join(" ") }
+        : ciplPecahNama(rapiBagianNama(it.namaBarang));
       const qty = parseLooseNumber(it.qty);
       const harga = parseLooseNumber(it.harga);
       return {
@@ -508,7 +510,7 @@ function ciplRincianKemasan(p, shipment, baris) {
   const koli = ciplTotalKoli(shipment);
   const dimensi = typeof ciplVnDimensi === "function" ? ciplVnDimensi((shipment && shipment.items) || []) : [];
   return (p.packing ? [[p.packing, false]] : [])
-    .concat(dimensi.map((t) => [t, false]))
+    .concat(dimensi.map((teks) => [teks, false]))
     .concat(cbm ? [[`MEASUREMENT : ${ciplAngka(cbm, 3)} M³`, true]] : [])
     .concat(koli ? [[`${ciplAngka(koli)} PACKAGE${koli > 1 ? "S" : ""}`, true]] : []);
 }
@@ -544,7 +546,7 @@ function ciplHalamanPacking(row, shipment, baris) {
     <section class="dd-akhir">
       <div class="dd-catatan dd-kemasan">
         <div class="dd-catatan-k">Packing details</div>
-        <div class="dd-catatan-b">${kemasan.map(([t, tebal]) => `<div${tebal ? ' class="dd-tebal"' : ""}>${escapeHtml(t)}</div>`).join("") || "<div>—</div>"}</div>
+        <div class="dd-catatan-b">${kemasan.map(([teks, tebal]) => `<div${tebal ? ' class="dd-tebal"' : ""}>${escapeHtml(teks)}</div>`).join("") || "<div>—</div>"}</div>
       </div>
       ${ciplDdTandaTangan()}
     </section>
@@ -562,7 +564,8 @@ function ciplDdRincianData(row, shipment) {
   return [
     ["Port of Loading", p.portLoading || prof.portLoading || (shipment ? portCodeLabel(shipment.origin) : "")],
     ["Final Destination", p.finalDestination || prof.finalDestination || (shipment ? portCodeLabel(shipment.destination) : "")],
-    ["Vessel / Flight", p.carrier || (shipment && carrierNameFromShipment(shipment)) || ""],
+    // Udara: No Flight saja; laut: kapal + voyage (carrierCipl, core/carrier-master.js)
+    ["Vessel / Flight", carrierCipl(p, shipment)],
     ["Sailing on or About", ciplTanggal(p.sailingDate || "")],
     ["Terms of Delivery", p.termsDelivery || ""],
     ["Terms of Payment", p.termPayment || ""],

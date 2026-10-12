@@ -95,8 +95,8 @@ function predictionShipmentType(src) {
   return PREDICTION_CONFIG.defaultSeaType;
 }
 function predictionShipmentTypeLabel(key) {
-  const t = PREDICTION_CONFIG.shipmentTypes[key];
-  return (t && t.label) || key || "—";
+  const tipe = PREDICTION_CONFIG.shipmentTypes[key];
+  return (tipe && tipe.label) || key || "—";
 }
 
 // Muatan belum diisi -> tipenya masih tebakan, dan itu dikatakan apa adanya.

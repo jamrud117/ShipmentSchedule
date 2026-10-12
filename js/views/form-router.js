@@ -6,6 +6,7 @@ const PAGE_VIEWS = {
   accounts: "#viewAccounts",
   hscode: "#viewHsCode",
   vessel: "#viewVesselSchedule",
+  masterlist: "#viewMasterlist",
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
@@ -17,8 +18,10 @@ function showPage(page) {
     const el = $(sel);
     if (el) el.classList.toggle("d-none", key !== page);
   });
-  // Bilah atas & footer disembunyikan HANYA di halaman form: saat mengisi data
-  $(".app-topbar").classList.toggle("d-none", page === "form");
+  // Sidebar, bilah atas & footer disembunyikan HANYA di halaman form: saat mengisi data
+  if (typeof aturKerangka === "function") aturKerangka(page !== "form");
+  // Laci navigasi (ponsel) tertutup begitu halamannya berganti
+  if (typeof sbTutup === "function") sbTutup(false);
   const footer = $("#appFooter");
   if (footer) footer.classList.toggle("d-none", page === "form");
   // Menu akun ikut ditutup saat berpindah halaman -- kalau tidak, ia
@@ -47,8 +50,9 @@ function showDocNumView() {
   if (typeof showDocNumTab === "function") {
     showDocNumTab(docNumActiveTab || DOCNUM_DEFAULT_TAB);
   }
-  // Aturan Doc No (vendor tanpa Doc No) dimuat ulang tiap halaman dibuka
+  // Aturan Doc No (vendor tanpa Doc No) & daftar vendor dimuat ulang tiap halaman dibuka
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
+  if (typeof fundVendorMuat === "function") fundVendorMuat();
 }
 
 function showFormView() {
@@ -68,6 +72,7 @@ const HALAMAN_HASH = {
   "#/akun": "accounts",
   "#/hscode": "hscode",
   "#/shipment-schedule": "vessel",
+  "#/masterlist": "masterlist",
   "#/docnum": "docnum",
   "#/new": "form",
 };
@@ -87,7 +92,8 @@ function router() {
      marketing boleh membuka HS Code, Jadwal Kapal, dan Ringkasan untuk
      MEMBACA (yang mengubah data di sana disembunyikan lewat
      body.is-viewer dan ditolak requireEdit() serta RLS); finance hanya
-     Jadwal & Nomor Dokumen; form jadwal dan Akun khusus EXIM.
+     Jadwal, Nomor Dokumen & Masterlist; form jadwal dan Akun khusus
+     EXIM.
 
      Dilempar balik ke Jadwal -- satu-satunya halaman yang terbuka untuk
      semua peran, jadi lemparannya tidak mungkin berputar. */
@@ -129,6 +135,12 @@ function router() {
   // Shipment Schedule
   if (hash === "#/shipment-schedule") {
     showVesselScheduleView();
+    return;
+  }
+
+  // Masterlist: kuota fasilitas & realisasinya
+  if (hash === "#/masterlist") {
+    showMasterlistView();
     return;
   }
 
@@ -323,7 +335,8 @@ function renderFormPage(id) {
 
        Nol yang disengaja dan kotak yang belum pernah disentuh harus
        bisa dibedakan; hanya yang kedua yang boleh diisi mesin. */
-    $("#fBM").value = nilaiPungutan(s.bm);
+    // BM tersimpan sebelum aturan pembulatan (mis. dari draft CEISA) ikut dibulatkan
+    $("#fBM").value = nilaiPungutan(bulatkanBm(s.bm));
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     $("#fPI").value = s.pi || "";
@@ -444,11 +457,20 @@ function syncFormValidity() {
   if (el) el.addEventListener("change", syncFormValidity);
 });
 
-/* Requirement D: saat status DELAY, tampilkan TANGGAL UPDATE DELAY — */
+/* KOTAK TANGGAL UPDATE DELAY
+
+   Tampil saat status DELAY, dan juga selama tanggal revisinya masih
+   terisi walau statusnya bukan Delay -- tanggal itulah yang berlaku
+   (aturan 1 di core/status.js). Bentuk kedua (is-sisa) berjudul lain
+   dan punya tombol untuk mengosongkannya. */
 function applyDelayFieldVisibility() {
   const isDelay = $("#fStatus").value === "delayed";
-  $("#delayBlock").classList.toggle("d-none", !isDelay);
-  if (!isDelay) return;
+  const sisa = !isDelay && !!($("#fEtaUpdate").value || $("#fEtdUpdate").value);
+  const blok = $("#delayBlock");
+  blok.classList.toggle("d-none", !isDelay && !sisa);
+  blok.classList.toggle("is-sisa", sisa);
+  syncStatusTibaHint();
+  if (!isDelay && !sisa) return;
   const info = shipmentDelayInfo({
     etaUpdate: $("#fEtaUpdate").value,
     etdUpdate: $("#fEtdUpdate").value,
@@ -474,6 +496,116 @@ $("#fStatus").addEventListener("change", applyDelayFieldVisibility);
 ["fEta", "fEtd", "fEtaUpdate", "fEtdUpdate"].forEach((idf) => {
   $("#" + idf).addEventListener("change", applyDelayFieldVisibility);
 });
+$("#fFactoryDate").addEventListener("change", syncStatusTibaHint);
+
+const KOTAK_REVISI = { etdUpdate: "#fEtdUpdate", etaUpdate: "#fEtaUpdate" };
+
+/* Mengosongkan kotak revisi di form. Lewat event "change" supaya panel
+   prediksi & ringkasan delay ikut menghitung ulang. Selama itu,
+   pendengar kotak revisi tahu perubahan ini bukan ketikan pengguna. */
+let revisiSedangDikosongkan = false;
+function kosongkanRevisiForm(kolom) {
+  revisiSedangDikosongkan = true;
+  try {
+    kolom.forEach((k) => {
+      const el = $(KOTAK_REVISI[k]);
+      el.value = "";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  } finally {
+    revisiSedangDikosongkan = false;
+  }
+}
+
+/* Aturan 2 di core/status.js, di dalam form: ETD/ETA rencana diubah di
+   luar status Delay -> revisi yang digantikannya dikosongkan saat itu
+   juga (terlihat, dan bisa diketik ulang sebelum Simpan). Mengembalikan
+   kalimat untuk pengguna, atau "" kalau tidak ada yang dikosongkan. */
+function gugurkanRevisiForm(field) {
+  const nilai = $(field === "etd" ? "#fEtd" : "#fEta").value;
+  if (!nilai) return "";
+  const sumber = { etdUpdate: $("#fEtdUpdate").value, etaUpdate: $("#fEtaUpdate").value };
+  const gugur = revisiDigugurkan($("#fStatus").value, field, sumber);
+  if (!gugur.length) return "";
+  const teks = gugur.map((k) => `${LABEL_TANGGAL_REVISI[k]} ${fmtDate(sumber[k])}`).join(" & ");
+  kosongkanRevisiForm(gugur);
+  return tt(`${teks} dihapus — ${field.toUpperCase()} yang baru yang berlaku.`, `${teks} removed — the new ${field.toUpperCase()} is now in force.`);
+}
+
+/* EXPORT YANG BELUM BERANGKAT TIDAK BOLEH TETAP "DELIVERED".
+
+   Status Delivered biasanya dipasang sendiri oleh aplikasi begitu ETD
+   terlewati (shipmentsNeedingArrivalSync), lalu tersimpan di kolom
+   status. Kalau ETD-nya kemudian dimundurkan ke tanggal yang belum
+   lewat, status tersimpan itu yang tertinggal: kartu tetap Delivered
+   walau kapalnya belum berangkat, dan pengguna harus mengubah status
+   sendiri lagi. Begitu ETD yang berlaku digeser ke masa depan, status
+   di form ikut kembali ke Process -- terlihat sebelum Simpan, dan masih
+   bisa dipilih lain. Mengembalikan kalimat untuk pengguna, atau "". */
+function kembalikanStatusBelumBerangkat() {
+  if (activeMode !== "export" || $("#fStatus").value !== "arrived") return "";
+  const sumber = { mode: "export", etd: $("#fEtd").value, etdUpdate: $("#fEtdUpdate").value };
+  const berlaku = effectiveEtd(sumber);
+  if (!berlaku || kolomPenyebabTiba(sumber).length) return "";
+  const el = $("#fStatus");
+  el.value = "process";
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return tt(`ETD ${fmtDate(berlaku)} belum lewat — status dikembalikan ke ${statusLabel("process", "export")}.`,
+    `ETD ${fmtDate(berlaku)} has not passed — status set back to ${statusLabel("process", "export")}.`);
+}
+
+// Satu toast untuk satu perubahan: dua kalimat digabung, bukan saling menimpa
+function kabarkanForm(...pesan) {
+  const isi = pesan.filter(Boolean).join(" ");
+  if (isi) showToast(isi, "dark");
+}
+$("#fEtd").addEventListener("change", () => kabarkanForm(gugurkanRevisiForm("etd"), kembalikanStatusBelumBerangkat()));
+$("#fEta").addEventListener("change", () => kabarkanForm(gugurkanRevisiForm("eta")));
+$("#fEtdUpdate").addEventListener("change", () => {
+  if (!revisiSedangDikosongkan) kabarkanForm(kembalikanStatusBelumBerangkat());
+});
+$("#btnHapusRevisi").addEventListener("click", () => {
+  kosongkanRevisiForm(["etdUpdate", "etaUpdate"].filter((k) => $(KOTAK_REVISI[k]).value));
+  kabarkanForm(
+    tt("Tanggal revisi dikosongkan — ETD & ETA di atas yang berlaku.", "Revised dates cleared — ETD & ETA above are now in force."),
+    kembalikanStatusBelumBerangkat(),
+  );
+});
+
+/* STATUS YANG TIDAK AKAN BERLAKU
+
+   Begitu tanggal kejadiannya lewat (Export: ETD yang berlaku; Import:
+   In Factory), jadwal terbaca tiba apa pun pilihan di dropdown Status
+   (lihat kolomPenyebabTiba). Dikatakan di bawah dropdown-nya, sebelum
+   Simpan -- bukan baru ketahuan di kartu. */
+function syncStatusTibaHint() {
+  const el = $("#statusTibaHint");
+  if (!el) return;
+  const sumber = {
+    mode: activeMode,
+    etd: $("#fEtd").value,
+    etdUpdate: $("#fEtdUpdate").value,
+    factoryDate: $("#fFactoryDate").value,
+  };
+  const kolom = $("#fStatus").value === "arrived" ? [] : kolomPenyebabTiba(sumber);
+  el.classList.toggle("d-none", !kolom.length);
+  if (!kolom.length) {
+    el.innerHTML = "";
+    return;
+  }
+  const ikon = `<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> `;
+  el.innerHTML =
+    ikon +
+    (activeMode === "export"
+      ? tt(
+          `${sumber.etdUpdate ? "ETD revisi" : "ETD"} ${fmtDate(effectiveEtd(sumber))} sudah lewat, jadi jadwal ini tetap terbaca <b>Delivered</b>. Kalau kapalnya belum berangkat, ubah tanggal itu.`,
+          `${sumber.etdUpdate ? "Revised ETD" : "ETD"} ${fmtDate(effectiveEtd(sumber))} has passed, so this schedule still reads as <b>Delivered</b>. If it has not departed, change that date.`,
+        )
+      : tt(
+          `In Factory ${fmtDate(sumber.factoryDate)} sudah terisi, jadi jadwal ini tetap terbaca <b>Arrived</b>. Kosongkan In Factory kalau barangnya belum sampai.`,
+          `In Factory ${fmtDate(sumber.factoryDate)} is filled in, so this schedule still reads as <b>Arrived</b>. Clear In Factory if the goods have not arrived.`,
+        ));
+}
 
 $("#btnSaveShipment").addEventListener("click", async () => {
   if (!requireEdit()) return;

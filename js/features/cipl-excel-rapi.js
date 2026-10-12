@@ -121,8 +121,8 @@ function rxLembarDd(wb, nama, jenis, row, shipment, baris) {
     rxKotak(ws, rK, B, r0 + n - 1, E, RX_WARNA.navy);
     rxKotak(ws, rK, F, r0 + n - 1, I, RX_WARNA.navy);
   };
-  const barisTeks = (arr) => arr.map((t, i) => (r, c1, c2) =>
-    rxTulis(ws, r, c1, r, c2, t, { size: i === 0 ? 9 : 8.5, bold: i === 0, indent: 1, v: i === arr.length - 1 ? "top" : "middle" }));
+  const barisTeks = (arr) => arr.map((teks, i) => (r, c1, c2) =>
+    rxTulis(ws, r, c1, r, c2, teks, { size: i === 0 ? 9 : 8.5, bold: i === 0, indent: 1, v: i === arr.length - 1 ? "top" : "middle" }));
 
   // Referensi dokumen: label abu-abu, lalu nomor (kiri) & tanggal (rata kanan) per baris
   const ref = [];
@@ -170,7 +170,7 @@ function rxLembarDd(wb, nama, jenis, row, shipment, baris) {
     rxTulis(ws, r, c, r, c, f.v, Object.assign({ h: "center", numFmt: f.f }, gaya));
   };
   // Perkiraan jumlah baris teks dalam sel (Arial 8,5pt ~1,75 mm per huruf)
-  const barisDalam = (teks, mm) => String(teks || "").split("\n").reduce((x, t) => x + Math.max(1, Math.ceil((t.length * 1.75) / Math.max(10, mm - 3))), 0);
+  const barisDalam = (teks, mm) => String(teks || "").split("\n").reduce((x, isi) => x + Math.max(1, Math.ceil((isi.length * 1.75) / Math.max(10, mm - 3))), 0);
   const lebarMm = RX_TABEL_PERSEN.map((x) => (RX_ISI_MM * x) / 100);
   baris.forEach((b, i) => {
     const nama = ciplNamaDuaBaris(b.item).join("\n");
@@ -229,8 +229,8 @@ function rxLembarDd(wb, nama, jenis, row, shipment, baris) {
   rxGaris(ws, rTtd, F, rTtd, I, ["atas"], RX_WARNA.teks);
   if (!ci) {
     rxTulis(ws, rA, B, rA, 4, "PACKING DETAILS", { size: 7, bold: true, warna: RX_WARNA.putih, fill: RX_WARNA.navy, h: "center" });
-    (kemasan.length ? kemasan : [["—", false]]).forEach(([t, tebal], i) =>
-      rxTulis(ws, rA + 1 + i, B, rA + 1 + i, 4, t, { size: 8.5, bold: tebal, indent: 1 }));
+    (kemasan.length ? kemasan : [["—", false]]).forEach(([teks, tebal], i) =>
+      rxTulis(ws, rA + 1 + i, B, rA + 1 + i, 4, teks, { size: 8.5, bold: tebal, indent: 1 }));
     rxKotak(ws, rA, B, rA + nTeks, 4, RX_WARNA.navy);
   }
   R.tambah(rxPt(5)); // jarak dalam bingkai (bawah)
@@ -267,8 +267,8 @@ function rxLembarSi(wb, row, shipment, baris) {
   }
   rxTulis(ws, rKop, 3, rKop, 5, CIPL_PERUSAHAAN.nama, Object.assign({}, T, { size: 19, bold: true, h: "center" }));
   // Alamat panjang: dikecilkan otomatis bila tidak muat (bukan terpotong)
-  [CIPL_PERUSAHAAN.pusat, CIPL_PERUSAHAAN.cabang].forEach((t, i) => {
-    const sel = rxTulis(ws, rKop + 1 + i, 3, rKop + 1 + i, 5, t, Object.assign({}, T, { size: 9, h: "center" }));
+  [CIPL_PERUSAHAAN.pusat, CIPL_PERUSAHAAN.cabang].forEach((teks, i) => {
+    const sel = rxTulis(ws, rKop + 1 + i, 3, rKop + 1 + i, 5, teks, Object.assign({}, T, { size: 9, h: "center" }));
     sel.alignment = Object.assign({}, sel.alignment, { shrinkToFit: true });
   });
   R.tambah(27);
@@ -295,7 +295,7 @@ function rxLembarSi(wb, row, shipment, baris) {
     if (def.alamat) {
       const isi = d[def.alamat];
       barisDaftar(def.k, isi[0] || "", {});
-      isi.slice(1).forEach((t, i) => barisDaftar(i === 0 ? "Address" : null, t, { sub: true }));
+      isi.slice(1).forEach((teks, i) => barisDaftar(i === 0 ? "Address" : null, teks, { sub: true }));
       if (isi.length < 2) barisDaftar("Address", "", { sub: true });
       return;
     }

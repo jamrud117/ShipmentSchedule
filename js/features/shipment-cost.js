@@ -12,6 +12,12 @@
    barang -- tanpa istilah akuntansi.
    Nomor BL/AWB dicocokkan tanpa spasi, titik, dan tanda hubung; satu
    pengajuan boleh memuat beberapa nomor ("877144218723/877334611529").
+
+   PENGAJUAN UNTUK BEBERAPA BL/AWB: yang dihitung BAGIAN kiriman ini
+   saja (fundBagiPerAwb, fund-lines.js) -- baris yang ditautkan ke
+   BL/AWB-nya, ditambah bagian rata dari baris tanpa tautan. Dulu seluruh
+   nilai pengajuan masuk ke SETIAP kiriman yang disebutnya, jadi invoice
+   dua AWB terhitung dua kali.
 ================================================================== */
 
 const BK_TTL_MS = 60 * 1000;
@@ -45,9 +51,8 @@ function bkKunciKiriman(s) {
    "/", koma, titik koma, atau baris baru. Spasi DI DALAM satu nomor
    ("SRE 453834", "MAEU 1234567") bukan pemisah -- dirapatkan saja. */
 function bkKunciDana(p) {
-  return String((p && p.blAwb) || "")
-    .split(/[\/,;|\r\n]+/)
-    .map(bkNormal)
+  return fundDaftarAwb(p && p.blAwb)
+    .map((a) => a.kunci)
     .filter((k) => k.length >= 5);
 }
 
@@ -62,19 +67,28 @@ function bkCocokkan(s, rows) {
 const BK_JENIS_PAJAK = ["Billing", "Tax Advance"];
 function hitungBiayaKiriman(s, rows, kursFn) {
   const kurs = (mata, tgl) => (String(mata || "IDR").toUpperCase() === "IDR" ? 1 : Number(kursFn && kursFn(mata, tgl)) || bkAngka(s.ndpbm) || 0);
+  const milikKiriman = new Set(bkKunciKiriman(s));
   const baris = (rows || []).map((r) => {
     const p = r.payload || {};
     const tanggal = String(p.invoiceDate || r.doc_date || "");
+    const faktor = kurs(p.currency, tanggal);
+    /* Nilai AKHIR yang dibayar -- sama dengan "Total Dibayar" di
+       Pengajuan Dana: DPP + PPN - potongan PPh 23 (jasa), atau bea &
+       pajak impor (Billing). Bukan DPP, bukan DPP + PPN saja.
+       Untuk pengajuan beberapa BL/AWB: hanya bagian kiriman ini. */
+    const bagian = fundBagiPerAwb(p);
+    const milik = bagian.filter((b) => milikKiriman.has(b.kunci));
+    const total = frTotalPengajuan(p) * faktor;
+    const dibagi = milik.length > 0 && milik.length < bagian.length;
     return {
       id: r.id,
       nomor: r.doc_number || "",
       tanggal,
       vendor: String(p.payee || "").trim() || "—",
       jenis: String(p.expenseType || "").trim() || "Lainnya",
-      /* Nilai AKHIR yang dibayar -- sama dengan "Total Dibayar" di
-         Pengajuan Dana: DPP + PPN - potongan PPh 23 (jasa), atau bea &
-         pajak impor (Billing). Bukan DPP, bukan DPP + PPN saja. */
-      dibayar: frTotalPengajuan(p) * kurs(p.currency, tanggal),
+      dibayar: dibagi ? milik.reduce((x, b) => x + b.dibayar, 0) * faktor : total,
+      // Pengajuan ini juga menagih kiriman lain: total & jumlah BL/AWB-nya
+      dibagi: dibagi ? { total, jumlahAwb: bagian.length, rata: milik.some((b) => b.rata), tautan: milik.some((b) => b.tautan) } : null,
       lunas: String(p.paidAt || "").slice(0, 10),
     };
   }).sort((a, b) => a.tanggal.localeCompare(b.tanggal));
@@ -123,7 +137,10 @@ function bkHtml(s, h) {
         <td>${fmtDate(b.tanggal)}</td>
         <td>${escapeHtml(b.vendor)}</td>
         <td>${escapeHtml(bkNamaJenis(b.jenis))}</td>
-        <td>${bkRp(b.dibayar)}</td>
+        <td>${bkRp(b.dibayar)}${b.dibagi ? `<div class="bk-bagian">${escapeHtml(tt(
+          `bagian kiriman ini dari ${bkRp(b.dibagi.total)} (${b.dibagi.jumlahAwb} BL/AWB${b.dibagi.tautan ? "" : ", dibagi rata"})`,
+          `this shipment's share of ${bkRp(b.dibagi.total)} (${b.dibagi.jumlahAwb} BL/AWBs${b.dibagi.tautan ? "" : ", split evenly"})`,
+        ))}</div>` : ""}</td>
         <td>${b.lunas ? `<span class="bk-lunas">${escapeHtml(tt("Lunas", "Paid"))}</span>` : `<span class="bk-belum">${escapeHtml(tt("Belum lunas", "Unpaid"))}</span>`}</td>
       </tr>`).join("");
   const kotak = (judul, nilai, ket, utama) => `

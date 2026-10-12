@@ -33,11 +33,11 @@ function kursPajakPada(mata, tanggal, data) {
   if (!kode || kode === "IDR") return { nilai: 1, periode: null, perkiraan: false };
   const daftar = ((data || KURS_PAJAK_DATA || {}).periode || []).filter((p) => p && p.kurs && p.kurs[kode] > 0);
   if (!daftar.length) return { nilai: 0, periode: null, perkiraan: true };
-  const t = String(tanggal || "").slice(0, 10);
-  const tepat = daftar.find((p) => p.mulai <= t && t <= p.sampai);
+  const hari = String(tanggal || "").slice(0, 10);
+  const tepat = daftar.find((p) => p.mulai <= hari && hari <= p.sampai);
   if (tepat) return { nilai: tepat.kurs[kode], periode: tepat, perkiraan: false };
   // Di luar riwayat: periode terakhir sebelum tanggal itu, kalau tidak ada yang paling awal
-  const sebelum = daftar.filter((p) => p.mulai <= t).sort((a, b) => (a.mulai < b.mulai ? 1 : -1))[0];
+  const sebelum = daftar.filter((p) => p.mulai <= hari).sort((a, b) => (a.mulai < b.mulai ? 1 : -1))[0];
   const p = sebelum || daftar.slice().sort((a, b) => (a.mulai < b.mulai ? -1 : 1))[0];
   return { nilai: p.kurs[kode], periode: p, perkiraan: true };
 }

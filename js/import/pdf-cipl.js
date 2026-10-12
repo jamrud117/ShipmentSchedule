@@ -37,8 +37,8 @@ function ciplPdfColumnSplits(pageItems) {
     const y = it.transform[5];
     if (Math.abs(x - qty.x) > 34) return;
     if (y >= qty.y || qty.y - y > 18) return;
-    const t = (it.str || "").trim();
-    if (!defaultUnit && UNIT_QTY_RE.test(t)) defaultUnit = t.toUpperCase();
+    const teks = (it.str || "").trim();
+    if (!defaultUnit && UNIT_QTY_RE.test(teks)) defaultUnit = teks.toUpperCase();
   });
 
   return { nameStart, valueStart: qty.x - 3, headerY: desc.y, defaultUnit };
@@ -166,15 +166,15 @@ function parseCiplValueTokens(valueText) {
   const toks = normalizeCiplValueText(valueText).split(/\s+/).filter(Boolean);
   const nums = [];
   let satuan = "";
-  toks.forEach((t) => {
-    if (/^[\d,]+\.?\d*$/.test(t)) {
-      const n = Number(t.replace(/,/g, ""));
+  toks.forEach((tok) => {
+    if (/^[\d,]+\.?\d*$/.test(tok)) {
+      const n = Number(tok.replace(/,/g, ""));
       if (isFinite(n)) nums.push(n);
       return;
     }
-    if (CURRENCY_TOKEN_RE.test(t)) return;
-    if (/^KGS?$/i.test(t)) return;
-    if (!satuan && UNIT_QTY_RE.test(t)) satuan = t.toUpperCase();
+    if (CURRENCY_TOKEN_RE.test(tok)) return;
+    if (/^KGS?$/i.test(tok)) return;
+    if (!satuan && UNIT_QTY_RE.test(tok)) satuan = tok.toUpperCase();
   });
   return { qty: nums.length ? nums[0] : null, satuan, nums: nums.slice(1) };
 }
@@ -272,8 +272,8 @@ const KNOWN_LABEL_RES = [
   /^OBL\s+TYPE/i,
 ];
 function looksLikeAnotherLabel(s) {
-  const t = (s || "").trim();
-  return KNOWN_LABEL_RES.some((re) => re.test(t));
+  const teks = (s || "").trim();
+  return KNOWN_LABEL_RES.some((re) => re.test(teks));
 }
 /* Baris pertama SETELAH sebuah label yang berisi tanggal. Baris kosong
    dan baris label lain dilewati; pencarian berhenti setelah beberapa
@@ -388,7 +388,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
     if (m) {
       m[1]
         .split(",")
-        .map((t) => t.trim())
+        .map((teks) => teks.trim())
         .filter(Boolean)
         .forEach((prefix) =>
           hsNotes.push({
@@ -407,7 +407,7 @@ function parseCiplPdfPageFields(pageItems, pageText) {
       /([\d,]+\.?\d*)\s*KGS?\b/gi,
     );
     if (kgs && kgs.length) {
-      const nums = kgs.map((t) => Number(t.replace(/[^\d.]/g, "")));
+      const nums = kgs.map((kg) => Number(kg.replace(/[^\d.]/g, "")));
       totalNetto = nums[0] != null ? nums[0] : null;
       totalBruto = nums.length > 1 ? nums[1] : null;
     }

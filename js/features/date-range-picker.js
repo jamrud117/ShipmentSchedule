@@ -274,19 +274,19 @@ const drpIso = (d) => drpIsoOf(d.getFullYear(), d.getMonth(), d.getDate());
    halaman yang dibiarkan terbuka melewati tengah malam tetap
    menghasilkan \"hari ini\" yang benar. */
 const RENTANG_PINTAS = {
-  hariIni: () => { const t = new Date(); return [drpIso(t), drpIso(t)]; },
+  hariIni: () => { const kini = new Date(); return [drpIso(kini), drpIso(kini)]; },
   mingguIni: () => {
     const a = drpAwalMinggu(new Date());
     const b = new Date(a); b.setDate(a.getDate() + 6);
     return [drpIso(a), drpIso(b)];
   },
   bulanIni: () => {
-    const t = new Date();
-    return [drpIsoOf(t.getFullYear(), t.getMonth(), 1), drpIsoOf(t.getFullYear(), t.getMonth() + 1, 0)];
+    const kini = new Date();
+    return [drpIsoOf(kini.getFullYear(), kini.getMonth(), 1), drpIsoOf(kini.getFullYear(), kini.getMonth() + 1, 0)];
   },
   bulanLalu: () => {
-    const t = new Date();
-    return [drpIsoOf(t.getFullYear(), t.getMonth() - 1, 1), drpIsoOf(t.getFullYear(), t.getMonth(), 0)];
+    const kini = new Date();
+    return [drpIsoOf(kini.getFullYear(), kini.getMonth() - 1, 1), drpIsoOf(kini.getFullYear(), kini.getMonth(), 0)];
   },
   tahunIni: () => {
     const y = new Date().getFullYear();

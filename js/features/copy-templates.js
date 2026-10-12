@@ -23,14 +23,6 @@ function rowsToClipboardText(rows) {
   return rows.map((cols) => cols.map(tsvField).join("\t")).join("\n");
 }
 
-/* Requirement B — "Nama Vessel untuk template copy: moda udara -> isi */
-function vesselNameForTemplate(s) {
-  const vessel = (s.vessel || "").trim();
-  const voyage = (s.voyage || "").trim();
-  if (s.transport === "udara") return voyage;
-  return [vessel, voyage].filter(Boolean).join(" ");
-}
-
 /* Master di baris 1, House di baris 2. KALAU MASTER KOSONG, House naik */
 function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatter) {
   const master = (masterBL || "").trim();
@@ -105,7 +97,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.num(s.insurance, 2), // 12 INSURANCE
       formatter.blank, // 13 BL/AWB — diisi terpisah
       formatter.text(s.invoice), // 14 NO. INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 15 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 15 VESSEL NAME (nama + nomor)
       formatter.text(it.package), // 16 PACKAGE — dimensi per barang
       formatter.text(s.notes), // 17 REMARK
     ];
@@ -180,7 +172,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru, lihat di atas)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
@@ -223,7 +215,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(vesselNameForTemplate(s)), // 13 VESSEL NAME
+      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
@@ -533,7 +525,7 @@ const COPY_TEMPLATES = [
 
 // Template yang berlaku di section yang sedang aktif.
 function templatesForMode(mode) {
-  return COPY_TEMPLATES.filter((t) => t.modes.includes(mode || activeMode));
+  return COPY_TEMPLATES.filter((templat) => templat.modes.includes(mode || activeMode));
 }
 
 function copyTemplateMenuHtml(shipmentId) {
@@ -548,7 +540,7 @@ function copyTemplateMenuHtml(shipmentId) {
 }
 
 async function copyShipment(templateId, id) {
-  const tpl = COPY_TEMPLATES.find((t) => t.id === templateId);
+  const tpl = COPY_TEMPLATES.find((templat) => templat.id === templateId);
   if (!tpl) return;
 
   let s = null;

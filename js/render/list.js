@@ -34,8 +34,8 @@ function sortDirection() {
    ketemu. Hanya dipakai sebagai pencocokan CADANGAN — pencarian apa
    adanya tetap dicoba lebih dulu, supaya spasi yang sengaja diketik
    pengguna masih berarti. */
-function tanpaPemisah(t) {
-  return String(t || "").replace(/[\s./_-]+/g, "");
+function tanpaPemisah(teks) {
+  return String(teks || "").replace(/[\s./_-]+/g, "");
 }
 
 /* SARINGAN RENTANG TANGGAL (#filterDateBasis + #filterDateFrom/To)
@@ -551,20 +551,20 @@ function fixSelectWidths() {
   // 2. UKUR hanya yang belum pernah diukur di panggilan ini.
   const m = getMeasurer();
   const lebar = new Map();
-  tugas.forEach((t) => {
-    if (lebar.has(t.kunci)) return;
-    m.style.fontFamily = t.cs.fontFamily;
-    m.style.fontSize = t.cs.fontSize;
-    m.style.fontWeight = t.cs.fontWeight;
-    m.style.letterSpacing = t.cs.letterSpacing;
-    m.style.textTransform = t.cs.textTransform;
-    m.textContent = t.teks;
-    lebar.set(t.kunci, m.getBoundingClientRect().width);
+  tugas.forEach((kerja) => {
+    if (lebar.has(kerja.kunci)) return;
+    m.style.fontFamily = kerja.cs.fontFamily;
+    m.style.fontSize = kerja.cs.fontSize;
+    m.style.fontWeight = kerja.cs.fontWeight;
+    m.style.letterSpacing = kerja.cs.letterSpacing;
+    m.style.textTransform = kerja.cs.textTransform;
+    m.textContent = kerja.teks;
+    lebar.set(kerja.kunci, m.getBoundingClientRect().width);
   });
 
   // 3. TULIS semua.
-  tugas.forEach((t) => {
-    t.el.style.width = Math.ceil(lebar.get(t.kunci)) + 46 + "px";
+  tugas.forEach((kerja) => {
+    kerja.el.style.width = Math.ceil(lebar.get(kerja.kunci)) + 46 + "px";
   });
 }
 

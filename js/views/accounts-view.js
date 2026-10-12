@@ -296,12 +296,16 @@ async function deleteAccount(id) {
 }
 
 function pesanHapusAkun(error) {
-  const t = (error.message || "").toLowerCase();
-  if (t.includes("satu-satunya"))
+  // Bukan `t` -- nama itu milik penerjemah t() (lihat pesanLogin di session.js)
+  const asli = (error.message || "").toLowerCase();
+  if (asli.includes("satu-satunya"))
     return t("s.ini.satu.satunya.akun.exim.naikkan.akun.lain.d");
-  if (t.includes("sendiri")) return t("s.akun.sendiri.tidak.bisa.dihapus");
-  if (t.includes(t("w.tidak.ditemukan"))) return t("s.akun.sudah.tidak.ada");
-  if (t.includes("could not find") || t.includes("does not exist"))
+  if (asli.includes("sendiri")) return t("s.akun.sendiri.tidak.bisa.dihapus");
+  /* Pesan ini datang dari fungsi database (berbahasa Indonesia), jadi
+     dicocokkan dengan teks Indonesianya -- bukan terjemahan bahasa yang
+     sedang aktif. */
+  if (asli.includes("tidak ditemukan") || asli.includes("not found")) return t("s.akun.sudah.tidak.ada");
+  if (asli.includes("could not find") || asli.includes("does not exist"))
     return t("a.fungsi.hapus.akun.belum.ada.jalankan.ulang.aut");
   return error.message || t("a.gagal.menghapus.akun");
 }
@@ -327,9 +331,9 @@ async function registerAccount() {
   const sandi = $("#regPassword").value;
   const info = $("#regInfo");
 
-  const gagal = (t) => {
+  const gagal = (pesan) => {
     info.className = "reg-info is-error";
-    info.textContent = t;
+    info.textContent = pesan;
   };
   if (!nama || !username || !sandi)
     return gagal(t("s.nama.username.dan.kata.sandi.harus.diisi"));
@@ -380,14 +384,14 @@ async function registerAccount() {
   }
 
   if (error) {
-    const t = (error.message || "").toLowerCase();
-    if (t.includes("already registered") || t.includes("already been"))
+    const asli = (error.message || "").toLowerCase();
+    if (asli.includes("already registered") || asli.includes("already been"))
       return gagal(t("s.email.itu.sudah.terdaftar"));
-    if (t.includes("signups not allowed") || t.includes("disabled"))
+    if (asli.includes("signups not allowed") || asli.includes("disabled"))
       return gagal(
         t("v.pendaftaran.dimatikan.di.supabase.nyalakan.di."),
       );
-    if (t.includes("password"))
+    if (asli.includes("password"))
       return gagal(t("a.kata.sandi.terlalu.lemah.gunakan.minimal.8.kar"));
     return gagal(error.message || tt("Pendaftaran gagal.", "Registration failed."));
   }

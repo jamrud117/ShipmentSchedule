@@ -196,9 +196,13 @@ async function simpanDenganCadangan(kirim, row) {
   const kolom = hasil.error && Object.keys(KOLOM_OPSIONAL).find((k) => pesan.includes(k));
   if (kolom) {
     kolomBelumAda.add(kolom);
+    /* Diberi tahu HANYA kalau ada isian yang benar-benar tidak ikut
+       tersimpan. Kolom yang memang kosong (No. Kendaraan tidak diisi)
+       tidak kehilangan apa pun -- peringatan di situ cuma gangguan. */
+    const adaIsi = row[kolom] != null && String(row[kolom]).trim() !== "";
     delete row[kolom];
     const k = KOLOM_OPSIONAL[kolom];
-    if (typeof showToast === "function") {
+    if (adaIsi && typeof showToast === "function") {
       showToast(tt(`Jadwal tersimpan, tetapi ${k.nama} belum: jalankan ${k.berkas} di Supabase.`,
         `Schedule saved, but ${k.nama} was not: run ${k.berkas} in Supabase.`), "warning");
     }

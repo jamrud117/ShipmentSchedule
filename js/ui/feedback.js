@@ -145,9 +145,13 @@ if ($("#confirmCancelBtn")) {
    bisa ditata, tidak bisa memuat lebih dari satu isian, dan di
    sebagian peramban bisa diblokir pengguna tanpa pemberitahuan.
 
-   fields: [{ key, label, type, value, placeholder, hint, lebar }]
+   fields: [{ key, label, type, value, placeholder, hint, lebar, min, max }]
    onSubmit(nilai) -> kembalikan string pesan galat untuk menahan, atau
    apa pun yang bukan string untuk menutup.
+
+   type: "select" (dengan options), "password", "textarea" (teks panjang
+   -- Enter di dalamnya membuat baris baru, bukan menyimpan), atau jenis
+   <input> apa pun ("date", "number", ...). Bawaannya "text".
 
    lebar: "setengah" -> dua isian per baris. Dipakai kotak yang isiannya
    banyak (Jadwal Kapal: 8 isian): ditumpuk satu-satu kotaknya lebih
@@ -187,6 +191,9 @@ function showPrompt(opsi) {
                   `<option value="${escapeAttr(o.value)}"${o.value === f.value ? " selected" : ""}>${escapeHtml(o.label)}</option>`,
               )
               .join("")}</select>`
+          : f.type === "textarea"
+          ? `<textarea class="login-input prompt-textarea" id="prompt_${f.key}" rows="${f.rows || 3}"
+               placeholder="${escapeAttr(f.placeholder || "")}">${escapeHtml(f.value || "")}</textarea>`
           : f.type === "password"
           ? `<div class="pwd-wrap">
                <input class="login-input" id="prompt_${f.key}" type="password"
@@ -195,7 +202,8 @@ function showPrompt(opsi) {
              </div>`
           : `<input class="login-input" id="prompt_${f.key}" type="${f.type || "text"}"
                placeholder="${escapeAttr(f.placeholder || "")}" value="${escapeAttr(f.value || "")}"
-               ${f.inputmode ? `inputmode="${escapeAttr(f.inputmode)}"` : ""} />`
+               ${f.inputmode ? `inputmode="${escapeAttr(f.inputmode)}"` : ""}
+               ${f.min != null ? `min="${escapeAttr(f.min)}"` : ""} ${f.max != null ? `max="${escapeAttr(f.max)}"` : ""} />`
       }
       ${f.hint ? `<div class="prompt-hint">${escapeHtml(f.hint)}</div>` : ""}
       </div>`,
@@ -248,9 +256,37 @@ function showPrompt(opsi) {
 if (promptModalEl) {
   $("#promptOk").addEventListener("click", () => promptSubmit && promptSubmit());
   promptModalEl.addEventListener("keydown", (e) => {
+    // Di kotak teks panjang, Enter adalah baris baru
+    if (e.key === "Enter" && e.target && e.target.tagName === "TEXTAREA") return;
     if (e.key === "Enter" && promptSubmit) {
       e.preventDefault();
       promptSubmit();
     }
   });
 }
+
+/* POP-UP BERTUMPUK. Bootstrap tidak mengatur kotak yang dibuka di atas
+   kotak lain -- mis. "Tambah vendor baru" atau penolakan tagihan ganda
+   dari dalam pop-up Ubah Isian. Keduanya ber-z-index 1055 dan latar
+   keduanya 1050: kotak di bawah tidak ikut diredupkan dan terbaca
+   setara dengan kotak yang sedang menunggu jawaban. Kotak berikutnya
+   dinaikkan 20 tingkat per kotak yang masih terbuka, latarnya tepat di
+   bawahnya (latar ditambahkan Bootstrap sesudah event ini, jadi
+   ditunggu satu microtask). */
+document.addEventListener("show.bs.modal", (e) => {
+  const kotak = e.target;
+  const terbuka = [...document.querySelectorAll(".modal.show")].filter((m) => m !== kotak).length;
+  if (!terbuka) {
+    kotak.style.zIndex = "";
+    return;
+  }
+  const z = 1055 + 20 * terbuka;
+  kotak.style.zIndex = String(z);
+  Promise.resolve().then(() => {
+    const latar = document.querySelectorAll(".modal-backdrop");
+    if (latar.length) latar[latar.length - 1].style.zIndex = String(z - 5);
+  });
+});
+document.addEventListener("hidden.bs.modal", (e) => {
+  e.target.style.zIndex = "";
+});
