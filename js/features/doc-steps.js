@@ -2,9 +2,12 @@
 
 /* PROGRES DOKUMEN PER PENGIRIMAN
 
-   Tujuh berkas yang harus terkumpul sebelum barang bisa dikeluarkan.
-   Tiap tahap hanya berpindah setelah pengguna mengonfirmasi — tidak
-   ada yang ditebak dari data lain.
+   Berkas yang harus terkumpul sebelum barang bisa dikeluarkan. Tiap
+   tahap hanya berpindah setelah pengguna mengonfirmasi — tidak ada yang
+   ditebak dari data lain — dan saat dikonfirmasi ditanyakan TANGGAL
+   DITERIMA berkasnya. Tanggal itu yang tampil di tooltip, bukan waktu
+   tombolnya ditekan: berkas yang datang Jumat dan dicentang Senin tetap
+   tercatat diterima Jumat.
 
    URUTAN TAMPILAN TETAP, URUTAN PENGISIAN BEBAS.
 
@@ -32,10 +35,24 @@
    Label AWB/BL ditulis sebagai fungsi, bukan teks mati: yang benar
    tergantung moda pengangkutnya — AWB untuk udara, B/L untuk laut.
 ------------------------------------------------------------------ */
+/* E-COO -- COO elektronik. Datangnya terpisah dari lembar COO, jadi
+   tahap sendiri tepat sesudahnya, di kedua buku. `induk: "coo"`: kalau
+   COO ditandai tidak dipakai, E-COO ikut tidak dipakai (strip) dengan
+   sendirinya; kalau COO DITERIMA, E-COO tidak ikut terisi -- ia
+   dikonfirmasi sendiri saat memang sudah ada. Lihat docStepEntri(). */
+const DOC_STEP_ECOO = {
+  key: "ecoo",
+  label: "E-COO",
+  full: () => tt("Certificate of Origin elektronik (E-COO)", "Electronic Certificate of Origin (E-COO)"),
+  optional: true,
+  induk: "coo",
+};
+
 const DOC_STEPS_IMPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List" },
   { key: "bl", label: blLabel, full: blFull },
   { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
+  DOC_STEP_ECOO,
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
   /* KEDATANGAN — satu-satunya tahap yang bukan berkas.
 
@@ -46,8 +63,11 @@ const DOC_STEPS_IMPORT = [
      ke arah yang sama — sehari terlalu awal, tiap kali.
 
      Bagi LCL ini penentu: stripping tidak bisa mulai sebelum kapalnya
-     sandar, secepat apa pun dokumennya diurus. */
-  { key: "berth", label: berthLabel, full: berthFull },
+     sandar, secepat apa pun dokumennya diurus.
+
+     `peristiwa`: bukan berkas yang "diterima" -- tooltip & kotak
+     isiannya cukup menyebut tanggalnya. */
+  { key: "berth", label: berthLabel, full: berthFull, peristiwa: true },
   /* `full` berupa FUNGSI, bukan teks: daftar ini dibuat sekali saat
      halaman dimuat. Teks biasa -- termasuk hasil t() -- akan terkunci
      di bahasa saat itu, dan ganti bahasa tidak lagi mengubahnya.
@@ -64,6 +84,7 @@ const DOC_STEPS_EXPORT = [
   { key: "bl", label: blLabel, full: blFull },
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
   { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
+  DOC_STEP_ECOO,
   {
     key: "fumigasi",
     label: () => tt("Fumigasi", "Fumigation"),
@@ -79,7 +100,7 @@ const DOC_STEPS_EXPORT = [
      diurus tim EXIM; sesudahnya barang dalam perjalanan. Tally
      (hitung fisik saat muat) mendahuluinya: barang dihitung dulu,
      baru alat angkutnya berangkat. */
-  { key: "sailing", label: sailingLabel, full: sailingFull },
+  { key: "sailing", label: sailingLabel, full: sailingFull, peristiwa: true },
 ];
 
 /* Keberangkatan alat angkut. Istilahnya berbeda per moda, sama
@@ -173,27 +194,87 @@ function docProgressOf(s) {
   return p && typeof p === "object" && !Array.isArray(p) ? p : {};
 }
 
+/* Entri sebuah tahap SEPERTI YANG BERLAKU -- satu-satunya tempat yang
+   menimbang aturan induk, dipakai stepper, hitungan, saran berikutnya,
+   dan daftar "berkas belum ada" (missingDocs, board.js).
+
+   Tahap ber-`induk` (E-COO -> COO) ikut DILEWATI selama induknya
+   ditandai tidak dipakai: tanpa COO tidak ada E-COO. Diturunkan, bukan
+   disimpan -- membatalkan "tidak dipakai" di COO langsung mengembalikan
+   E-COO ke keadaannya semula. Selain itu tahapnya berdiri sendiri: COO
+   yang diterima TIDAK membuat E-COO ikut terisi. */
+function docStepEntri(s, st) {
+  const p = docProgressOf(s);
+  const induk = st.induk && p[st.induk];
+  if (induk && induk.skipped) return { skipped: true, ikutInduk: true };
+  return p[st.key] || null;
+}
+
 /* Tahap paling awal yang BELUM terisi — dipakai sebagai saran, bukan
    syarat. Kalau semuanya sudah terisi, hasilnya -1. */
 function docNextIndex(s) {
-  const p = docProgressOf(s);
-  return docStepsFor(s).findIndex((st) => !p[st.key]);
+  return docStepsFor(s).findIndex((st) => !docStepEntri(s, st));
 }
 
 /* Tahap yang dilewati tidak dihitung sebagai "terkumpul", dan tidak
    ikut menambah penyebut — berkasnya memang tidak ada dalam pengiriman
    ini. Jadi 3/6, bukan 3/7 atau 4/7. */
 function docStepCount(s) {
-  const p = docProgressOf(s);
   let selesai = 0;
   let berlaku = 0;
   docStepsFor(s).forEach((st) => {
-    const e = p[st.key];
+    const e = docStepEntri(s, st);
     if (e && e.skipped) return;
     berlaku++;
     if (e) selesai++;
   });
   return { selesai, berlaku };
+}
+
+/* TOOLTIP TAHAP: TANGGAL DITERIMA, bukan waktu konfirmasi.
+
+   `date` = tanggal yang diisi saat mengonfirmasi (berkas: tanggal
+   diterima; Manifest/PIB/Billing/SPPB: tanggal dokumen yang juga
+   dipakai prediksi; Berths/ATA & Sailing/ATD: tanggal kejadiannya).
+   Entri lama yang dicatat sebelum tanggal itu ditanyakan hanya punya
+   waktu konfirmasi -- ditulis apa adanya sebagai "dikonfirmasi", tidak
+   disamarkan jadi tanggal diterima. */
+function docStepJudul(s, st, entri, kini) {
+  const nama = stepText(st.full, s);
+  if (entri && entri.skipped) {
+    if (entri.ikutInduk) {
+      const induk = docStepsFor(s).find((x) => x.key === st.induk);
+      const namaInduk = induk ? stepText(induk.label, s) : st.induk;
+      return tt(`${nama} — tidak dipakai, mengikuti ${namaInduk}`, `${nama} — not used, follows ${namaInduk}`);
+    }
+    return tt(`${nama} — tidak dipakai untuk pengiriman ini`, `${nama} — not used for this shipment`);
+  }
+  if (entri) {
+    const by = entri.by || "";
+    if (entri.date) {
+      const tgl = fmtDate(entri.date);
+      const oleh = by ? tt(` · dicatat oleh ${by}`, ` · recorded by ${by}`) : "";
+      return st.peristiwa
+        ? `${nama} — ${tgl}${oleh}`
+        : tt(`${nama} — diterima ${tgl}${oleh}`, `${nama} — received ${tgl}${oleh}`);
+    }
+    const belum = st.peristiwa
+      ? tt("tanggalnya belum dicatat", "date not recorded")
+      : tt("tanggal diterima belum dicatat", "date received not recorded");
+    if (!entri.at) return `${nama} — ${belum}`;
+    const stempel = fmtNoteStamp(entri.at);
+    return by
+      ? tt(`${nama} — ${belum} (dikonfirmasi ${stempel} oleh ${by})`, `${nama} — ${belum} (confirmed ${stempel} by ${by})`)
+      : tt(`${nama} — ${belum} (dikonfirmasi ${stempel})`, `${nama} — ${belum} (confirmed ${stempel})`);
+  }
+  /* stepText(), BUKAN st.full langsung.
+
+     Nama panjang sebagian tahap berupa FUNGSI — ia menyesuaikan moda
+     ("Bill of Lading" vs "Air Waybill"). Ditempel apa adanya ke
+     template, fungsinya diubah jadi string dan tooltip menampilkan
+     kode sumber JavaScript. */
+  if (kini) return t("x.klik.kalau.berkasnya.ada", { x: nama, opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" });
+  return tt(`${nama} — menunggu tahap sebelumnya`, `${nama} — waiting for the previous step`);
 }
 
 /* ------------------------------------------------------------------
@@ -267,30 +348,14 @@ function docStepHtml(s) {
      saja. */
   if (isKurirNilaiRendah(s)) return "";
 
-  const p = docProgressOf(s);
   const berikut = docNextIndex(s);
 
   const langkah = docStepsFor(s).map((st, i) => {
-    const entri = p[st.key];
+    const entri = docStepEntri(s, st);
     const dilewati = !!(entri && entri.skipped);
     const sudah = !!entri && !dilewati;
     const kini = i === berikut;
-    const cap = entri && entri.at ? fmtNoteStamp(entri.at) : "";
-    const judul = dilewati
-      ? t("x.ditandai.tidak.dipakai", { x: stepText(st.full, s), cap })
-      : sudah
-        ? tt(`${stepText(st.full, s)} — dikonfirmasi ${cap}${entri.by ? " oleh " + entri.by : ""}`, `${stepText(st.full, s)} — confirmed ${cap}${entri.by ? " by " + entri.by : ""}`)
-        : kini
-          ? t("x.klik.kalau.berkasnya.ada", { x: stepText(st.full, s), opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" })
-          /* stepText(), BUKAN st.full langsung.
-
-             Nama panjang sebagian tahap berupa FUNGSI — ia menyesuaikan
-             moda ("Bill of Lading" vs "Air Waybill"). Ditempel apa
-             adanya ke template, fungsinya diubah jadi string dan
-             tooltip tahap yang belum tercapai menampilkan kode sumber
-             JavaScript. Tiga cabang lain sudah memanggilnya; yang ini
-             terlewat. */
-          : tt(`${stepText(st.full, s)} — menunggu tahap sebelumnya`, `${stepText(st.full, s)} — waiting for the previous step`);
+    const judul = docStepJudul(s, st, entri, kini);
 
     const isi = dilewati
       ? "–"
@@ -333,21 +398,56 @@ function docStepHtml(s) {
 /* ------------------------------------------------------------------
    KONFIRMASI
 
-   Menekan tahap BERIKUTNYA menandainya selesai. Menekan tahap yang
-   sudah selesai membatalkannya — beserta seluruh tahap sesudahnya,
-   karena urutan ini berantai: kalau PIB dibatalkan, Billing dan SPPB
-   yang bergantung padanya tidak mungkin masih sah.
+   Menekan tahap yang belum terisi menanyakan TANGGAL DITERIMA-nya
+   (bawaan hari ini) lalu menandainya selesai. Menekan tahap yang sudah
+   terisi membatalkannya -- HANYA tahap itu (lihat di bawah).
 ------------------------------------------------------------------ */
+
+/* Isian tanggal diterima: bawaan hari ini, tidak boleh kosong, tidak
+   boleh sesudah hari ini (berkas yang belum datang belum diterima). */
+function docIsianTanggal(st, s) {
+  return {
+    key: "tanggal",
+    label: st.peristiwa
+      ? tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`)
+      : tt("Tanggal diterima", "Date received"),
+    type: "date",
+    value: todayISO(),
+    max: todayISO(),
+  };
+}
+function docPeriksaTanggal(tanggal) {
+  if (!tanggal) return tt("Tanggal wajib diisi.", "The date is required.");
+  if (tanggal > todayISO()) return tt("Tanggal tidak boleh sesudah hari ini.", "The date cannot be later than today.");
+  return "";
+}
+
 async function toggleDocStep(id, stepKey) {
   if (!requireEdit()) return;
   const s = currentList().find((x) => x.id === id);
   if (!s) return;
 
-  const DAFTAR = docStepsFor(s);
-  const idx = DAFTAR.findIndex((x) => x.key === stepKey);
-  if (idx < 0) return;
+  const st = docStepsFor(s).find((x) => x.key === stepKey);
+  if (!st) return;
   const progres = { ...docProgressOf(s) };
-  const st = DAFTAR[idx];
+  const label = stepText(st.label, s);
+
+  /* Tahap yang ikut induknya tidak dipakai (E-COO saat COO ditandai
+     tidak dipakai) tidak punya keadaan sendiri untuk diubah -- yang
+     diubah tahap induknya. */
+  const entri = docStepEntri(s, st);
+  if (entri && entri.ikutInduk) {
+    const induk = docStepsFor(s).find((x) => x.key === st.induk);
+    const namaInduk = induk ? stepText(induk.label, s) : st.induk;
+    showToast(
+      tt(
+        `${label} mengikuti ${namaInduk} yang ditandai tidak dipakai. Ubah tahap ${namaInduk} dulu kalau ternyata dipakai.`,
+        `${label} follows ${namaInduk}, which is marked as not used. Change the ${namaInduk} step first if it is used after all.`,
+      ),
+      "info",
+    );
+    return;
+  }
 
   if (progres[stepKey]) {
     /* HANYA tahap ini yang dibatalkan, bukan tahap-tahap sesudahnya.
@@ -356,7 +456,7 @@ async function toggleDocStep(id, stepKey) {
        dipaksa berurutan — dan di sini tidak: PIB bisa saja dibetulkan
        sementara SPPB memang sudah benar-benar di tangan. Membuangnya
        berarti membuang catatan yang sah. */
-    showConfirm(tt(`Batalkan konfirmasi ${stepText(st.label, s)}?`, `Cancel the ${stepText(st.label, s)} confirmation?`), () => {
+    showConfirm(tt(`Batalkan konfirmasi ${label}?`, `Cancel the ${label} confirmation?`), () => {
       const tanpa = { ...progres };
       delete tanpa[stepKey];
       simpanDocStep(s, tanpa);
@@ -368,6 +468,12 @@ async function toggleDocStep(id, stepKey) {
     });
     return;
   }
+
+  const catat = (tambahan) =>
+    simpanDocStep(s, {
+      ...progres,
+      [stepKey]: { at: new Date().toISOString(), by: penggunaSekarang(), ...tambahan },
+    });
 
   /* ------------------------------------------------------------------
      TAHAP YANG MENGGERAKKAN PREDIKSI
@@ -385,28 +491,21 @@ async function toggleDocStep(id, stepKey) {
   const milestone = predictionMilestoneForStep(stepKey, s);
   if (milestone) {
     showPrompt({
-      title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
+      title: t("x.konfirmasi.tahap", { x: label }),
       desc: t("x.isi.tanggal.dokumen", { x: stepText(st.full, s) }),
       icon: "bi-calendar-check",
       okText: tt("Simpan", "Save"),
       fields: [
         {
           key: "tanggal",
-          label: tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`),
+          label: tt(`Tanggal ${label}`, `${label} date`),
           type: "date",
           value: todayISO(),
           hint: t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
         },
       ],
       onSubmit: (v) => {
-        simpanDocStep(s, {
-          ...progres,
-          [stepKey]: {
-            at: new Date().toISOString(),
-            by: penggunaSekarang(),
-            date: v.tanggal || todayISO(),
-          },
-        });
+        catat({ date: v.tanggal || todayISO() });
         return true;
       },
     });
@@ -415,10 +514,11 @@ async function toggleDocStep(id, stepKey) {
 
   /* Tahap yang boleh dilewati diberi PILIHAN, bukan konfirmasi
      ya/tidak — pengguna harus bisa menyatakan "dokumen ini memang
-     tidak ada untuk pengiriman ini". */
+     tidak ada untuk pengiriman ini". Tanggal diterima disembunyikan
+     selama yang dipilih "tidak dipakai". */
   if (st.optional) {
     showPrompt({
-      title: tt(`Tahap ${stepText(st.label, s)}`, `Step: ${stepText(st.label, s)}`),
+      title: tt(`Tahap ${label}`, `Step: ${label}`),
       desc: t("x.tandai.sudah.diterima", { x: stepText(st.full, s) }),
       icon: "bi-patch-question",
       okText: tt("Simpan", "Save"),
@@ -433,36 +533,44 @@ async function toggleDocStep(id, stepKey) {
             { value: "lewati", label: tt("Tidak dipakai — lewati tahap ini", "Not used — skip this step") },
           ],
         },
+        docIsianTanggal(st, s),
       ],
       onSubmit: (v) => {
-        simpanDocStep(s, {
-          ...progres,
-          [stepKey]: {
-            at: new Date().toISOString(),
-            by: penggunaSekarang(),
-            ...(v.pilih === "lewati" ? { skipped: true } : {}),
-          },
-        });
+        if (v.pilih === "lewati") {
+          catat({ skipped: true });
+          return true;
+        }
+        const galat = docPeriksaTanggal(v.tanggal);
+        if (galat) return galat;
+        catat({ date: v.tanggal });
         return true;
       },
     });
+    const pilih = document.getElementById("prompt_pilih");
+    const kotakTanggal = document.getElementById("prompt_tanggal");
+    if (pilih && kotakTanggal) {
+      pilih.addEventListener("change", () => {
+        kotakTanggal.closest(".prompt-field").classList.toggle("d-none", pilih.value === "lewati");
+      });
+    }
     return;
   }
 
-  showConfirm(
-    t("x.konfirmasi.berkas.diterima", { x: stepText(st.full, s) }),
-    () =>
-      simpanDocStep(s, {
-        ...progres,
-        [stepKey]: { at: new Date().toISOString(), by: penggunaSekarang() },
-      }),
-    {
-      title: t("x.konfirmasi.tahap", { x: stepText(st.label, s) }),
-      confirmText: tt("Ya, Sudah Ada", "Yes, it's here"),
-      tone: "primary",
-      icon: "bi-check2-circle",
+  showPrompt({
+    title: t("x.konfirmasi.tahap", { x: label }),
+    desc: st.peristiwa
+      ? tt(`${stepText(st.full, s)}? Isi tanggalnya.`, `${stepText(st.full, s)}? Enter the date.`)
+      : t("x.konfirmasi.berkas.diterima", { x: stepText(st.full, s) }),
+    icon: "bi-check2-circle",
+    okText: st.peristiwa ? tt("Simpan", "Save") : tt("Ya, Sudah Ada", "Yes, it's here"),
+    fields: [docIsianTanggal(st, s)],
+    onSubmit: (v) => {
+      const galat = docPeriksaTanggal(v.tanggal);
+      if (galat) return galat;
+      catat({ date: v.tanggal });
+      return true;
     },
-  );
+  });
 }
 
 /* Tahap ini termasuk milestone prediksi atau bukan.

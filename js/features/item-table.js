@@ -1,21 +1,37 @@
 "use strict";
 
 /* ITEM TABLE (draft, inside modal) */
+
+/* Nama TAMPIL jenis fasilitas. Nilai tersimpannya tetap "E-COO" (data
+   lama & hasil impor PDF/CEISA memakainya), tapi di layar & salinan
+   fasilitas itu disebut COO -- "E-COO" kini nama tahap tersendiri di
+   Progres Dokumen (COO elektronik), dan dua hal berbeda tidak boleh
+   bernama sama. */
+function skbJenisLabel(jenis) {
+  if (jenis === "E-COO") return "COO";
+  if (jenis === "Lainnya") return tt("Lainnya", "Other");
+  return jenis;
+}
 function skbEntryLabel(sk) {
   if (sk.jenis === "Lainnya")
     return (sk.jenisLainnya || "").trim() || tt("Lainnya", "Other");
-  return sk.jenis;
+  return skbJenisLabel(sk.jenis);
 }
 
+/* Hitungan fasilitas: COO tersendiri, semua jenis lain dihitung SKB. */
+function hitungFasilitas(daftar) {
+  const semua = daftar || [];
+  const coo = semua.filter((sk) => sk.jenis === "E-COO").length;
+  return { skb: semua.length - coo, coo };
+}
+
+/* Tombol kolom Fasilitas: "SKB 1 · COO 1" -- keduanya berhitungan. */
 function facilitiesButtonLabel(it) {
-  const list = it.skb || [];
-  if (!list.length) return tt("Fasilitas", "Facility");
-  const ecooCount = list.filter((sk) => sk.jenis === "E-COO").length;
-  const skbCount = list.length - ecooCount;
+  const h = hitungFasilitas(it.skb);
   const parts = [];
-  if (skbCount) parts.push(`SKB ${skbCount}`);
-  if (ecooCount) parts.push("E-COO");
-  return parts.join(" · ");
+  if (h.skb) parts.push(`SKB ${h.skb}`);
+  if (h.coo) parts.push(`COO ${h.coo}`);
+  return parts.join(" · ") || tt("Fasilitas", "Facility");
 }
 
 /* SERI BARANG — nomor urut barang, dari POSISI baris (idx+1), BUKAN
@@ -35,14 +51,14 @@ function facilitiesPanelHtml(it, idx) {
           (sk, skIdx) => `
         <div class="item-fac-skb-row">
           <select data-fac="jenis" data-idx="${idx}" data-skidx="${skIdx}">
-            ${SKB_TYPE_OPTIONS.map((o) => `<option value="${o}" ${o === sk.jenis ? "selected" : ""}>${o === "Lainnya" ? tt("Lainnya", "Other") : o}</option>`).join("")}
+            ${SKB_TYPE_OPTIONS.map((o) => `<option value="${o}" ${o === sk.jenis ? "selected" : ""}>${escapeHtml(skbJenisLabel(o))}</option>`).join("")}
           </select>
           ${
             sk.jenis === "Lainnya"
               ? `<input type="text" class="skb-lainnya" data-fac="jenisLainnya" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.jenisLainnya)}" placeholder="${tt("Sebutkan jenisnya", "Specify the type")}">`
               : ""
           }
-          <input type="text" data-fac="nomor" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.nomor)}" placeholder="${sk.jenis === "E-COO" ? tt("Nomor E-COO", "E-COO number") : tt("Nomor SKB", "SKB number")}">
+          <input type="text" data-fac="nomor" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.nomor)}" placeholder="${sk.jenis === "E-COO" ? tt("Nomor COO", "COO number") : tt("Nomor SKB", "SKB number")}">
           <input type="date" data-fac="tanggal" data-idx="${idx}" data-skidx="${skIdx}" value="${escapeAttr(sk.tanggal)}">
           <button type="button" class="rm-skb" data-idx="${idx}" data-skidx="${skIdx}" title="${tt("Hapus fasilitas ini", "Remove this facility")}"><i class="bi bi-x-lg"></i></button>
         </div>`,
@@ -55,7 +71,7 @@ function facilitiesPanelHtml(it, idx) {
       <td colspan="15">
         <div class="item-fac-panel">
           <div class="item-fac-skb-head">
-            <b>${tt("Fasilitas (SKB &amp; E-COO)", "Facilities (SKB &amp; E-COO)")}</b>
+            <b>${tt("Fasilitas (SKB &amp; COO)", "Facilities (SKB &amp; COO)")}</b>
             <button type="button" class="btn-add-skb" data-idx="${idx}"><i class="bi bi-plus-lg"></i> ${tt("Tambah Fasilitas", "Add Facility")}</button>
           </div>
           ${skbRowsHtml}
@@ -374,7 +390,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
     recalcCustoms();
     return;
   }
-  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/E-COO)
+  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/COO)
   const fac = e.target.dataset.fac;
   if (!fac) return;
   const skIdxAttr = e.target.dataset.skidx;

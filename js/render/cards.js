@@ -42,8 +42,8 @@ function skbTagsHtml(s) {
     const isEcoo = jenis === "E-COO";
     const cls = isEcoo ? "tag-ecoo" : "tag-skb";
     const icon = isEcoo ? "bi-patch-check" : "bi-shield-check";
-    // "Lainnya" adalah nilai tersimpan; yang diterjemahkan hanya tampilannya.
-    const nama = jenis === "Lainnya" ? tt("Lainnya", "Other") : jenis;
+    // Nama tampil, bukan nilai tersimpan: "E-COO" -> COO, "Lainnya" diterjemahkan.
+    const nama = skbJenisLabel(jenis);
     const label = SKB_JENIS_WITH_COUNT.has(jenis) ? `${nama} × ${n}` : nama;
     return `<span class="tag ${cls}"><i class="bi ${icon}"></i> ${escapeHtml(label)}</span>`;
   }).join("");

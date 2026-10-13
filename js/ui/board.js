@@ -45,19 +45,15 @@ function boardState(s) {
 
    Tahap yang DILEWATI (skipped) tidak dihitung -- berkasnya memang
    tidak ada dalam pengiriman ini, jadi bukan sesuatu yang tertinggal.
-   Tahap opsional ikut dilaporkan: COO sering wajib bagi pembeli walau
-   bukan syarat kepabeanan. */
+   Termasuk E-COO yang ikut tidak dipakai karena COO-nya tidak dipakai
+   (docStepEntri, doc-steps.js). Tahap opsional ikut dilaporkan: COO
+   sering wajib bagi pembeli walau bukan syarat kepabeanan. */
 function missingDocs(s) {
   if (typeof docStepsFor !== "function") return [];
-  const p = typeof docProgressOf === "function" ? docProgressOf(s) : {};
   return docStepsFor(s)
-    .filter((st) => {
-      const e = p[st.key];
-      if (e) return false;
-      // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
-      return st.key !== "berth";
-    })
-    .map((st) => (typeof stepText === "function" ? stepText(st.label, s) : st.label));
+    // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
+    .filter((st) => st.key !== "berth" && !docStepEntri(s, st))
+    .map((st) => stepText(st.label, s));
 }
 // "Perlu tindakan" = satu definisi, dipakai metrik, saringan cepat, dan halaman Ringkasan
 function needsAction(s) {

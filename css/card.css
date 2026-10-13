@@ -1004,7 +1004,7 @@
 /* ==================================================================
    PROGRES DOKUMEN
 
-   Tujuh tahap dalam satu baris. Yang sudah dikonfirmasi navy pekat,
+   Semua tahap dalam satu baris. Yang sudah dikonfirmasi navy pekat,
    tahap BERIKUTNYA diberi cincin kuningan supaya jelas mana yang
    menunggu tindakan, sisanya tenang.
 ================================================================== */
@@ -1122,8 +1122,9 @@ body.is-viewer .docstep {
 }
 
 /* Tahap yang ditandai TIDAK DIPAKAI — mis. COO untuk barang tanpa
-   fasilitas tarif preferensi. Digambar bergaris putus-putus dan
-   diredupkan: jelas sudah dilewati, jelas pula bukan "selesai". */
+   fasilitas tarif preferensi (E-COO ikut dengan sendirinya). Digambar
+   bergaris putus-putus dan diredupkan: jelas sudah dilewati, jelas
+   pula bukan "selesai". */
 .docstep.is-skipped .docstep-dot {
   border-style: dashed;
   border-color: var(--n-300);

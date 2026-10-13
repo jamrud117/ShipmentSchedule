@@ -665,6 +665,74 @@
 .mst-pib-tambah i {
   font-size: 0.7rem;
 }
+/* NILAI (USD): baris kedua sel Kuota / Terpakai / Sisa -- lebih kecil dan
+   redup dari angka unitnya. Status yang perlu dicek: ikon + kalimat
+   (pembaca layar), warna hanya pendukung. */
+.mst-nilai {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mst-tabel td.mst-kol-sisa .mst-nilai {
+  margin-left: 0;
+}
+.mst-nilai i {
+  margin-right: 4px;
+}
+.mst-nilai--lebih {
+  color: var(--s-danger);
+  font-weight: 700;
+}
+.mst-nilai--selisih i,
+.mst-nilai-ket--selisih i {
+  color: var(--s-warn);
+}
+.mst-nilai--belum i,
+.mst-nilai-ket--belum i {
+  color: var(--n-400);
+}
+.mst-nilai-ket--lebih i {
+  color: var(--s-danger);
+}
+.mst-rinci-nilai .mst-nilai-ring {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, max-content));
+  gap: 4px var(--sp-5);
+  margin: 0;
+}
+.mst-nilai-ring dt {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.mst-nilai-ring dd {
+  margin: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mst-nilai-ring dd.mst-nilai--lebih {
+  color: var(--s-danger);
+}
+.mst-nilai-ket,
+.mst-nilai-kosong {
+  margin: 6px 0 0;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.mst-nilai-ket i {
+  margin-right: 6px;
+}
+.mst-nilai-kosong {
+  margin-top: 0;
+  color: var(--n-500);
+}
+
 /* Susunan Per PIB: tanggal PIB belum sama di semua catatannya. */
 .mst-tgl-beda {
   margin-left: 6px;
@@ -703,14 +771,39 @@
 .mst-form-lebar {
   grid-column: 1 / -1;
 }
-/* Satu baris pilihan: baris masterlist | jumlah | hapus, keterangan sisa
-   kuotanya di bawah. */
+/* Satu baris pilihan: baris masterlist | jumlah | nilai invoice (| hapus),
+   keterangan sisa kuota & nilainya di bawah. Kepala kolomnya memakai kisi
+   yang sama; kolom hapus hanya ada kalau barisnya lebih dari satu. */
 .mst-pilih {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px auto;
+  grid-template-columns: minmax(0, 1fr) 76px 128px;
   gap: 4px 8px;
   align-items: center;
   margin-bottom: 10px;
+}
+.mst-pilih-daftar.is-banyak .mst-pilih {
+  grid-template-columns: minmax(0, 1fr) 76px 128px 30px;
+}
+.mst-pilih-daftar .mst-pilih-kepala {
+  align-items: end;
+  margin-bottom: 4px;
+}
+.mst-pilih-kepala .prompt-label {
+  margin-bottom: 0;
+}
+.mst-pilih .mst-pilih-nilai {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Peringatan nilai: baris sendiri, ikon peringatan + kalimat berwarna teks. */
+.mst-pilih-awas {
+  display: block;
+  margin-top: 2px;
+  color: var(--n-700);
+}
+.mst-pilih-awas i {
+  margin-right: 5px;
+  color: var(--s-warn);
 }
 .mst-pilih .login-input {
   height: 40px;
@@ -897,6 +990,10 @@
   .mst-tabel > tbody > tr > td.mst-kol-angka .mst-parsial {
     margin-left: 0;
   }
+  /* Kartu sepertiga lebar: nilai panjang ("lebih USD 2,500.00") boleh turun baris. */
+  .mst-tabel .mst-nilai {
+    white-space: normal;
+  }
   /* Catatan realisasi tidak diperas jadi kolom sempit bertingkat-tingkat:
      tabel rinciannya boleh lebih lebar dari kartu dan digeser ke samping. */
   .mst-rinci-tabel td.mst-rinci-catatan {
@@ -985,8 +1082,22 @@
   .mst-form {
     grid-template-columns: minmax(0, 1fr);
   }
-  .mst-pilih {
-    grid-template-columns: minmax(0, 1fr) 80px auto;
+  /* Ponsel: baris masterlist selebar kotak, jumlah & nilai di bawahnya. */
+  .mst-pilih,
+  .mst-pilih-daftar.is-banyak .mst-pilih {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .mst-pilih-daftar.is-banyak .mst-pilih {
+    grid-template-columns: 76px minmax(0, 1fr) 30px;
+  }
+  .mst-pilih .mst-pilih-baris {
+    grid-column: 1 / -1;
+  }
+  .mst-pilih-kepala .prompt-label[aria-hidden] {
+    display: none;
+  }
+  .mst-pilih-kepala .prompt-label:first-child {
+    grid-column: 1 / -1;
   }
   .mst-pib-daftar .mst-pib {
     grid-template-columns: minmax(0, 1fr) 138px;

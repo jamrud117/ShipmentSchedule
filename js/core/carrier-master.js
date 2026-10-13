@@ -819,13 +819,12 @@ function carrierCodeOf(s) {
 /* ------------------------------------------------------------------
    NAMA SARANA ANGKUT = NAMA + NOMOR
 
-   SATU aturan untuk semua tempat yang menampilkan kapal/pesawat:
-   kartu, panel detail, templat salin, Bulk Excel, CIPL, surat BC,
-   riwayat invoice. Nama Voyager/Vessel digabung No. Voyage/Flight, apa
-   pun modanya -- "MSC LORENA 056S", "KOREAN AIR KE628" -- persis
-   pasangan NAMA PENGANGKUT + NOMOR PENGANGKUT di sheet PENGANGKUT draft
-   CEISA. (Dulu templat salin membuang nama untuk moda udara; kini
-   semuanya sama.)
+   Aturan untuk tempat yang MENAMPILKAN kapal/pesawat: kartu, panel
+   detail, Bulk Excel, surat BC. Nama Voyager/Vessel digabung No.
+   Voyage/Flight, apa pun modanya -- "MSC LORENA 056S", "KOREAN AIR
+   KE628" -- persis pasangan NAMA PENGANGKUT + NOMOR PENGANGKUT di sheet
+   PENGANGKUT draft CEISA. Satu kolom "Vessel / Flight" di dokumen &
+   templat salin memakai carrierVesselFlight() di bawah.
 
    Bukan kode hasil deteksi di atas (MSC, ONE, KE, ...) -- itu untuk
    mesin prediksi. Kolom yang kosong atau "-" dilewati, spasi dirapikan,
@@ -846,12 +845,13 @@ function carrierNameFromShipment(s) {
   return nama + " " + nomor;
 }
 
-/* CARRIER DI CIPL (Commercial Invoice & Packing List).
+/* SATU KOLOM "VESSEL / FLIGHT": CIPL (Commercial Invoice & Packing
+   List) dan kolom VESSEL / VESSEL NAME di templat salin.
 
    Kiriman UDARA cukup No Flight-nya ("KE628") -- tanpa nama maskapai.
    Kiriman LAUT tetap nama kapal + voyage, aturan di atas. No Flight
    kosong -> nama yang ada tetap dipakai, daripada kotaknya kosong. */
-function carrierCiplDariJadwal(s) {
+function carrierVesselFlight(s) {
   const src = s || {};
   if (src.transport === "udara") {
     const no = String(src.voyage == null ? "" : src.voyage).replace(/\s+/g, " ").trim();
@@ -868,7 +868,7 @@ function carrierCipl(p, shipment) {
   const isian = String((p && p.carrier) || "").replace(/\s+/g, " ").trim();
   if (!shipment) return isian;
   if (!isian || (shipment.transport === "udara" && isian === carrierNameFromShipment(shipment))) {
-    return carrierCiplDariJadwal(shipment);
+    return carrierVesselFlight(shipment);
   }
   return isian;
 }
@@ -883,7 +883,7 @@ if (typeof module !== "undefined" && module.exports) {
     detectCarrier,
     carrierCodeOf,
     carrierNameFromShipment,
-    carrierCiplDariJadwal,
+    carrierVesselFlight,
     carrierCipl,
   };
 }

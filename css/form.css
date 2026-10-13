@@ -957,7 +957,7 @@ table.item-table td.text-center {
   text-align: center;
 }
 
-/* ---- Kolom "Fasilitas" (SKB + E-COO per barang) ---- */
+/* ---- Kolom "Fasilitas" (SKB + COO per barang) ---- */
 .btn-facilities {
   display: inline-flex;
   align-items: center;

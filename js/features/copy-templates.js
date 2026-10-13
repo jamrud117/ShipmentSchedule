@@ -97,7 +97,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.num(s.insurance, 2), // 12 INSURANCE
       formatter.blank, // 13 BL/AWB — diisi terpisah
       formatter.text(s.invoice), // 14 NO. INVOICE
-      formatter.text(carrierNameFromShipment(s)), // 15 VESSEL NAME (nama + nomor)
+      formatter.vessel(s), // 15 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(it.package), // 16 PACKAGE — dimensi per barang
       formatter.text(s.notes), // 17 REMARK
     ];
@@ -172,7 +172,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
+      formatter.vessel(s), // 13 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru, lihat di atas)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)
@@ -215,7 +215,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC
       formatter.text(s.invoice), // 12 INVOICE
-      formatter.text(carrierNameFromShipment(s)), // 13 VESSEL NAME (nama + nomor)
+      formatter.vessel(s), // 13 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru)
       formatter.date(effectiveEta(s)), // 16 ETA (terbaru)

@@ -779,9 +779,15 @@ function dnSudahBayar(r) {
   return !!(r && r.payload && r.payload.paidAt);
 }
 
-/* Lencana status. Yang boleh mengubah (EXIM) mendapat tombol; viewer
-   hanya melihat lencananya -- status bayar bukan sesuatu yang boleh
-   diubah sembarang pembaca. */
+/* Yang boleh menandai status bayar: EXIM & Finance (bolehTandaiBayar
+   di session.js). Finance HANYA ini -- isian lain tetap bolehUbahDocNum. */
+function dnBolehTandaiBayar() {
+  return typeof bolehTandaiBayar !== "function" || bolehTandaiBayar();
+}
+
+/* Lencana status. Yang boleh menandai (EXIM, Finance) mendapat tombol;
+   pembaca lain hanya melihat lencananya -- status bayar bukan sesuatu
+   yang boleh diubah sembarang pembaca. */
 function dnTombolBayar(r) {
   const lunas = dnSudahBayar(r);
   const p = r.payload || {};
@@ -789,7 +795,7 @@ function dnTombolBayar(r) {
     ? `<i class="bi bi-check-circle-fill"></i> ${escapeHtml(tt("Lunas", "Paid"))}<span class="dn-bayar-tgl">${escapeHtml(fmtDate(p.paidAt))}</span>`
     : `<i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("Belum Lunas", "Unpaid"))}`;
   const kelas = `dn-bayar ${lunas ? "dn-bayar--lunas" : "dn-bayar--belum"}`;
-  if (!bolehUbahDocNum()) return `<span class="${kelas}">${teks}</span>`;
+  if (!dnBolehTandaiBayar()) return `<span class="${kelas}">${teks}</span>`;
   const judul = lunas
     ? tt(`Ditandai lunas${p.paidBy ? " oleh " + p.paidBy : ""}. Klik untuk membatalkan.`,
          `Marked paid${p.paidBy ? " by " + p.paidBy : ""}. Click to undo.`)
@@ -797,17 +803,52 @@ function dnTombolBayar(r) {
   return `<button type="button" class="${kelas}" data-bayar-num="${r.id}" title="${escapeAttr(judul)}">${teks}</button>`;
 }
 
-/* Menulis status bayar: payload TERBARU dibaca dulu dari database, baru
-   digabung. Menulis dari salinan di layar akan menimpa perubahan yang
-   dibuat orang lain sejak daftar ini dimuat. */
+/* Menulis status bayar lewat fungsi database set_fund_paid
+   (migration-finance-tanda-bayar.sql): HANYA paidAt & paidBy yang
+   diubah, langsung di database -- tidak ada salinan payload di layar
+   yang bisa menimpa perubahan orang lain, paidBy diisi nama akun yang
+   menandai, dan Finance tidak butuh izin mengubah tabelnya.
+
+   Fungsinya belum ada (migrasinya belum dijalankan): EXIM memakai jalur
+   lama di bawah; Finance diberi tahu berkas migrasinya. */
+const dnFungsiBayarBelumAda = (e) =>
+  !!e && (e.code === "PGRST202" || (/set_fund_paid/.test(e.message || "") && /could not find the function|does not exist/i.test(e.message || "")));
+
 async function dnSetelBayar(id, tanggal) {
+  if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
+  const { data, error } = await supabaseClient.rpc("set_fund_paid", { p_id: String(id), p_paid_at: tanggal || null });
+  let payload;
+  if (!error) payload = data || {};
+  else if (dnFungsiBayarBelumAda(error) && bolehUbahDocNum()) payload = await dnSetelBayarLangsung(id, tanggal);
+  else if (dnFungsiBayarBelumAda(error))
+    throw new Error(
+      tt(
+        "Menandai status bayar sebagai Finance butuh pembaruan database: minta admin menjalankan migration-finance-tanda-bayar.sql di Supabase.",
+        "Marking the payment status as Finance needs a database update: ask an admin to run migration-finance-tanda-bayar.sql in Supabase.",
+      ),
+    );
+  else throw error;
+  const baris = docNumHistoryRows.find((r) => r.id === id);
+  if (baris) baris.payload = payload;
+}
+
+/* Payload sebuah pengajuan seperti yang ada di database SAAT INI -- bukan
+   salinan di layar, yang bisa sudah basi sejak daftarnya dimuat. */
+async function dnPayloadTerbaru(id) {
   const { data, error } = await supabaseClient
     .from("document_numbers")
     .select("payload")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
-  const payload = Object.assign({}, (data && data.payload) || {});
+  return (data && data.payload) || {};
+}
+
+/* Jalur lama (EXIM, sebelum fungsi database ada): payload TERBARU dibaca
+   dulu dari database, baru digabung. Menulis dari salinan di layar akan
+   menimpa perubahan yang dibuat orang lain sejak daftar ini dimuat. */
+async function dnSetelBayarLangsung(id, tanggal) {
+  const payload = Object.assign({}, await dnPayloadTerbaru(id));
   if (tanggal) {
     payload.paidAt = tanggal;
     const pr = (typeof authState !== "undefined" && authState.profile) || {};
@@ -815,19 +856,17 @@ async function dnSetelBayar(id, tanggal) {
   } else {
     DN_FIELD_BAYAR.forEach((k) => delete payload[k]);
   }
-  if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
   const { error: galat } = await supabaseClient
     .from("document_numbers")
     .update({ payload })
     .eq("id", id);
   if (galat) throw galat;
-  const baris = docNumHistoryRows.find((r) => r.id === id);
-  if (baris) baris.payload = payload;
+  return payload;
 }
 
 function dnKlikBayar(id) {
   const r = docNumHistoryRows.find((x) => x.id === id);
-  if (!r || !bolehUbahDocNum()) return;
+  if (!r || !dnBolehTandaiBayar()) return;
   const simpan = async (tanggal, pesan) => {
     try {
       await dnSetelBayar(id, tanggal);
@@ -1287,17 +1326,6 @@ async function simpanUbahDocNum() {
   Object.keys(form).forEach((k) => {
     if (!DOCNUM_COLUMN_FIELDS.has(k) && form[k] !== "") payload[k] = form[k];
   });
-  /* STATUS PEMBAYARAN DIBAWA, bukan dibangun ulang dari form.
-
-     Payload di atas dirakit HANYA dari isian form, dan status lunas
-     bukan isian form -- ia ditandai dari daftar riwayat. Tanpa baris
-     ini, memperbaiki satu salah ketik di pengajuan yang sudah lunas
-     diam-diam mengembalikannya jadi "belum lunas". */
-  const lama = (docNumHistoryRows.find((r) => r.id === id) || {}).payload || {};
-  DN_FIELD_BAYAR.forEach((k) => {
-    if (lama[k] != null && lama[k] !== "") payload[k] = lama[k];
-  });
-
   const btn = $("#btnDnEditSimpan");
   const htmlAsli = btn ? btn.innerHTML : "";
   let tersimpan = false;
@@ -1315,6 +1343,22 @@ async function simpanUbahDocNum() {
       }
     }
     if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
+    /* STATUS PEMBAYARAN DIBAWA, bukan dibangun ulang dari form.
+
+       Payload di atas dirakit HANYA dari isian form, dan status lunas
+       bukan isian form -- ia ditandai dari daftar riwayat. Tanpa ini,
+       memperbaiki satu salah ketik di pengajuan yang sudah lunas
+       diam-diam mengembalikannya jadi "belum lunas".
+
+       Dibaca dari DATABASE tepat sebelum menyimpan, bukan dari salinan
+       di layar: Finance ikut menandai Paid / Unpaid, jadi statusnya bisa
+       berubah selama pop-up ini terbuka -- salinan lama akan menghapus
+       tanda lunas yang baru dibuat, atau menghidupkan lagi yang baru
+       dibatalkan. */
+    const terbaru = await dnPayloadTerbaru(id);
+    DN_FIELD_BAYAR.forEach((k) => {
+      if (terbaru[k] != null && terbaru[k] !== "") payload[k] = terbaru[k];
+    });
     const { error } = await supabaseClient
       .from("document_numbers")
       .update({
@@ -1655,7 +1699,7 @@ function isiOtomatisDariJadwal() {
   }
   set("portLoading", portCodeLabel(s.origin));
   set("finalDestination", portCodeLabel(s.destination));
-  set("carrier", carrierCiplDariJadwal(s)); // udara: No Flight saja
+  set("carrier", carrierVesselFlight(s)); // udara: No Flight saja
   set("termsDelivery", s.incoterm);
   /* Sailing on or About SENGAJA tidak diisi dari ETD. Tanggal berlayar
      di invoice adalah keterangan pengangkut, bukan rencana kita — dan

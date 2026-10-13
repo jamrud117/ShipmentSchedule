@@ -961,6 +961,7 @@
               <option value="sisa" data-en="Quota remaining">Masih ada sisa</option>
               <option value="habis" data-en="Fully used">Habis</option>
               <option value="utuh" data-en="Not used yet">Belum dipakai</option>
+              <option value="nilai" data-en="Value needs checking">Nilai perlu dicek</option>
             </select>
             <select id="mstLini" class="control-select" aria-label="Saring menurut lini proses" data-en-aria="Filter by process line"></select>
             <span class="mst-cip-saring d-none" id="mstJenisAktif"></span>
@@ -4017,9 +4018,17 @@
                 <label class="prompt-label" for="mstCatatan" data-en="Notes (optional)">Catatan (opsional)</label>
                 <input type="text" class="login-input" id="mstCatatan" maxlength="200" autocomplete="off" />
               </div>
+              <!-- Baris yang direalisasikan: baris masterlist | jumlah | nilai invoice.
+                   Kepala kolomnya memakai kisi yang sama dengan barisnya. -->
               <div class="mst-form-lebar">
-                <span class="prompt-label" id="mstPilihLabel" data-en="Lines realized">Baris yang direalisasikan</span>
-                <div id="mstPilih" role="group" aria-labelledby="mstPilihLabel"></div>
+                <div class="mst-pilih-daftar" id="mstPilihDaftar">
+                  <div class="mst-pilih mst-pilih-kepala">
+                    <span class="prompt-label" id="mstPilihLabel" data-en="Lines realized">Baris yang direalisasikan</span>
+                    <span class="prompt-label" aria-hidden="true" data-en="Qty">Jumlah</span>
+                    <span class="prompt-label" aria-hidden="true" data-en="Invoice value (USD)">Nilai invoice (USD)</span>
+                  </div>
+                  <div id="mstPilih" role="group" aria-labelledby="mstPilihLabel"></div>
+                </div>
                 <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstPilihTambah">
                   <i class="bi bi-plus-lg"></i> <span data-en="Add another line">Tambah baris lain</span>
                 </button>

@@ -2622,8 +2622,15 @@ const ALAMAT_HALAMAN = {
   vessel: "#/shipment-schedule", masterlist: "#/masterlist", accounts: "#/akun", form: "#/new",
 };
 const HALAMAN_FINANCE = ["schedule", "docnum", "masterlist"];
-t("matriks hak FINANCE: tidak mengubah apa pun, hanya Jadwal, Nomor Dokumen & Masterlist", () => {
+t("matriks hak FINANCE: tidak mengubah apa pun selain status bayar, hanya Jadwal, Nomor Dokumen & Masterlist", () => {
   eq(denganPeran("finance", () => [w.canEdit(), w.canViewDocNum(), w.currentRoleLabel()].join(",")), "false,true,Finance");
+  /* Hak ubah per peran: [ubah data, ubah isian No. Dokumen, tandai
+     Paid/Unpaid]. Status bayar SATU-SATUNYA yang terbuka untuk finance,
+     dan tidak ikut terbuka untuk peran hanya-baca lainnya. */
+  const hak = (peran) => denganPeran(peran, () => [w.canEdit(), w.bolehUbahDocNum(), w.bolehTandaiBayar()].map(Number).join(""));
+  eq(["exim", "finance", "marketing", "viewer", "peran-lama", ""].map((p) => (p || "-") + ":" + hak(p)).join(" "),
+     "exim:111 finance:001 marketing:000 viewer:000 peran-lama:000 -:000", "hak ubah:");
+  eq(Object.keys(w.eval("PERAN")).filter((p) => w.eval("PERAN")[p].tandaiBayar).join(","), "exim,finance", "peran bertanda bayar:");
   const terbuka = denganPeran("finance", () => Object.keys(ALAMAT_HALAMAN).filter((h) => w.bolehBuka(h)));
   eq(terbuka.join(","), HALAMAN_FINANCE.join(","));
   // Alamat yang diketik langsung dilempar balik ke Jadwal
@@ -2645,10 +2652,14 @@ t("finance: hanya-baca (is-viewer) + penanda is-finance; tautan halaman tertutup
        "overview,hscode,vessel,accounts", "halaman tertutup:");
     eq($("#userChipRole").textContent, "Finance", "lencana:");
     if (!$("#userChipRole").classList.contains("is-finance")) throw new Error("lencana tidak berwarna finance");
-    // Di Nomor Dokumen ia sama dengan marketing: membaca saja
+    /* Di Nomor Dokumen ia sama dengan marketing: membaca saja -- dengan
+       SATU pengecualian, tombol status bayar Pengajuan Dana. */
     if (w.bolehUbahDocNum()) throw new Error("finance bisa mengubah di Nomor Dokumen");
-    if (/^<button/.test(w.dnTombolBayar({ id: "x", payload: {} }))) throw new Error("finance bisa menandai status bayar");
+    if (w.canEdit()) throw new Error("canEdit meloloskan finance");
     if (w.requireEdit()) throw new Error("requireEdit meloloskan finance");
+    if (!w.bolehTandaiBayar()) throw new Error("finance tidak boleh menandai status bayar");
+    if (!/^<button[^>]*data-bayar-num="x"/.test(w.dnTombolBayar({ id: "x", payload: {} })))
+      throw new Error("finance tidak mendapat tombol status bayar");
   });
   // Penandanya dilepas lagi begitu perannya berganti
   denganPeran("exim", () => {
@@ -2713,7 +2724,7 @@ t("halaman Akun menawarkan peran Finance; hitungan & pilihan dibaca dari tabel P
     const pilih = w.document.querySelector('[data-role-for="a2"]');
     eq([...pilih.options].map((o) => o.value).join(","), "viewer,finance,marketing,exim", "urutan pilihan:");
     eq(pilih.value, "finance", "peran terpilih:");
-    eq(pilih.selectedOptions[0].textContent, "Finance — lihat saja: Jadwal, No. Dokumen & Masterlist");
+    eq(pilih.selectedOptions[0].textContent, "Finance — lihat saja: Jadwal, No. Dokumen & Masterlist + tandai Paid/Unpaid");
     eq(w.document.querySelector('[data-role-for="a5"]').value, "viewer", "peran tak dikenal tampil sebagai viewer:");
     if (!w.document.querySelector('[data-acct="a2"] .acct-avatar').classList.contains("is-finance")) throw new Error("avatar finance tidak berwarna");
     if (w.document.querySelector('[data-acct="a5"] .acct-avatar').className.trim() !== "acct-avatar") throw new Error("avatar viewer membawa kelas peran");
@@ -2752,6 +2763,30 @@ t("migrasi database peran finance ikut di paket", () => {
   if (/next_document_number|set_document_counter|delete_document_number|admin_/.test(tanpaKomentar))
     throw new Error("migrasi menyentuh fungsi yang harus tetap khusus EXIM");
 });
+t("migrasi tanda bayar finance ikut di paket: SATU fungsi, tanpa kebijakan / hak tabel baru, hanya paidAt & paidBy", () => {
+  const sql = fs.readFileSync(path.join(ROOT, "migration-finance-tanda-bayar.sql"), "utf8");
+  const isi = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
+  [
+    "create or replace function public.set_fund_paid(p_id text, p_paid_at date)",
+    "security definer",
+    "set search_path = public",
+    "v_peran not in ('exim', 'finance')",
+    "revoke all on function public.set_fund_paid(text, date) from public",
+    "grant execute on function public.set_fund_paid(text, date) to authenticated",
+  ].forEach((k) => {
+    if (!isi.includes(k)) throw new Error("migrasi tidak memuat " + k);
+  });
+  // Tidak ada kebijakan atau hak tabel yang ikut dibuka.
+  if (/\b(create|alter|drop) policy\b|grant\s+(select|insert|update|delete|all)\b/i.test(isi))
+    throw new Error("migrasi mengubah kebijakan / hak tabel");
+  // Yang ditulis hanya payload Pengajuan Dana, dan hanya dua kunci status bayar.
+  eq([...isi.matchAll(/\bupdate\s+public\.(\w+)/gi)].map((m) => m[1]).join(","), "document_numbers,document_numbers", "tabel yang ditulis:");
+  eq([...isi.matchAll(/\bset\s+(\w+)\s*=/gi)].map((m) => m[1]).join(","), "search_path,payload,payload", "kolom yang ditulis:");
+  eq((isi.match(/doc_type = 'fund'/g) || []).length, 2, "hanya Pengajuan Dana:");
+  if (!/- 'paidAt' - 'paidBy'/.test(isi)) throw new Error("membatalkan bukan menghapus paidAt & paidBy");
+  if (!/jsonb_build_object\('paidAt', to_char\(p_paid_at, 'YYYY-MM-DD'\), 'paidBy', v_nama\)/.test(isi))
+    throw new Error("menandai lunas menulis kunci lain");
+});
 t("migrasi database peran marketing ikut di paket", () => {
   const sql = require("fs").readFileSync(require("path").join(__dirname, "..", "migration-role-marketing.sql"), "utf8");
   ["'marketing'", "peran_saya", "next_document_number"].forEach((k) => {
@@ -2775,7 +2810,7 @@ t("migrasi database peran marketing ikut di paket", () => {
 });
 
 console.log("\u2014 PENGAJUAN DANA: NILAI & STATUS BAYAR \u2014");
-t("lencana bayar: EXIM dapat tombol, viewer hanya lencana; lunas menyebut tanggalnya", () => {
+t("lencana bayar: EXIM & Finance dapat tombol, marketing & viewer hanya lencana; lunas menyebut tanggalnya", () => {
   const simpanProfil = w.eval("JSON.stringify(authState.profile || null)");
   try {
     w.eval('authState.profile = { id: "u1", role: "exim", full_name: "Yogi" }');
@@ -2784,63 +2819,208 @@ t("lencana bayar: EXIM dapat tombol, viewer hanya lencana; lunas menyebut tangga
     if (!lunas.includes("21-09-2026")) throw new Error("tanggal bayar tidak ditampilkan");
     const belum = w.dnTombolBayar({ id: "y", payload: {} });
     if (!/dn-bayar--belum/.test(belum)) throw new Error("status belum lunas salah");
-    w.eval('authState.profile = { id: "u2", role: "viewer" }');
-    const viewer = w.dnTombolBayar({ id: "x", payload: { paidAt: "2026-09-21" } });
-    if (/<button/.test(viewer)) throw new Error("viewer bisa mengubah status bayar");
+    w.eval('authState.profile = { id: "u3", role: "finance", full_name: "Rina" }');
+    const fin = w.dnTombolBayar({ id: "x", payload: { paidAt: "2026-09-21", paidBy: "Rina" } });
+    if (!/^<button/.test(fin) || !/data-bayar-num="x"/.test(fin)) throw new Error("finance tidak mendapat tombol");
+    if (!fin.includes(w.tt("Ditandai lunas oleh Rina", "Marked paid by Rina"))) throw new Error("keterangan penanda: " + fin);
+    ["marketing", "viewer", "peran-lama"].forEach((peran) => {
+      w.eval(`authState.profile = { id: "u2", role: ${JSON.stringify(peran)} }`);
+      const lencana = w.dnTombolBayar({ id: "x", payload: { paidAt: "2026-09-21" } });
+      if (/<button/.test(lencana)) throw new Error(peran + " bisa mengubah status bayar");
+      if (!/dn-bayar--lunas/.test(lencana)) throw new Error(peran + " tidak melihat lencananya");
+    });
   } finally {
     w.eval("authState.profile = " + simpanProfil);
   }
 });
+
+/* Tiruan Supabase untuk uji status bayar.
+     opsi.peran / opsi.nama -- akun yang masuk
+     opsi.rpc   -- jawaban fungsi set_fund_paid (objek, atau fungsi (nama, args))
+     opsi.db    -- payload pengajuan di database SAAT INI (dibaca .maybeSingle)
+     opsi.galatBaca -- pembacaan payload gagal
+   Jejaknya: panggilan rpc, update tabel langsung, dan berapa kali payload
+   dibaca. Profil, tab, dan baris riwayat dikembalikan sesudahnya. */
+const denganBayar = async (opsi, fn) => {
+  const simpan = {
+    prof: w.eval("JSON.stringify(authState.profile || null)"),
+    tab: baca("docNumActiveTab"),
+    rows: w.eval("JSON.stringify(docNumHistoryRows || [])"),
+  };
+  w.__asliBayar = { from: w.eval("supabaseClient.from"), rpc: w.eval("supabaseClient.rpc") };
+  const jejak = { rpc: [], update: [], baca: 0 };
+  w.__ujiBayar = { opsi, jejak };
+  try {
+    w.eval(`authState.profile = ${JSON.stringify({ id: "u", role: opsi.peran || "exim", full_name: opsi.nama || "Uji" })}`);
+    w.eval(`supabaseClient.rpc = async (nama, args) => {
+      const u = window.__ujiBayar;
+      u.jejak.rpc.push({ nama, args });
+      return typeof u.opsi.rpc === "function" ? u.opsi.rpc(nama, args) : u.opsi.rpc;
+    }`);
+    w.eval(`supabaseClient.from = () => ({
+      select: () => {
+        const c = { eq: () => c, order: () => c, filter: () => c, or: () => c, gte: () => c, lte: () => c,
+          not: () => c, is: () => c, limit: () => c,
+          range: async () => ({ data: [], error: null, count: 0 }),
+          maybeSingle: async () => {
+            const u = window.__ujiBayar;
+            u.jejak.baca++;
+            if (u.opsi.galatBaca) return { data: null, error: u.opsi.galatBaca };
+            return { data: u.opsi.db ? { payload: u.opsi.db } : null, error: null };
+          },
+          then: (r) => r({ data: [], error: null, count: 0 }) };
+        return c;
+      },
+      update: (u) => { window.__ujiBayar.jejak.update.push(u); return { eq: async () => ({ error: null }) }; } })`);
+    await fn(jejak);
+  } finally {
+    w.eval("supabaseClient.from = window.__asliBayar.from; supabaseClient.rpc = window.__asliBayar.rpc");
+    w.eval("authState.profile = " + simpan.prof);
+    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
+    w.eval("docNumHistoryRows = " + simpan.rows);
+  }
+};
+const FUNGSI_BAYAR_BELUM_ADA = { data: null, error: { code: "PGRST202",
+  message: "Could not find the function public.set_fund_paid(p_id, p_paid_at) in the schema cache" } };
+const galatDari = async (janji) => {
+  try { await janji; } catch (e) { return e; }
+  return null;
+};
+
+t("status bayar lewat fungsi database set_fund_paid: hanya id & tanggal yang dikirim, payload jawabannya dipakai", async () => {
+  const jawab = (nama, args) => ({ error: null, data: args.p_paid_at
+    ? { payee: "BARU DARI ORANG LAIN", paidAt: args.p_paid_at, paidBy: "Rina Finance" }
+    : { payee: "BARU DARI ORANG LAIN" } });
+  await denganBayar({ peran: "finance", rpc: jawab }, async (jejak) => {
+    tulis("docNumHistoryRows", [{ id: "f7", doc_type: "fund", doc_number: "302", payload: { payee: "LAMA" } }]);
+    await w.dnSetelBayar("f7", "2026-10-13");
+    eq(JSON.stringify(jejak.rpc), JSON.stringify([{ nama: "set_fund_paid", args: { p_id: "f7", p_paid_at: "2026-10-13" } }]), "panggilan:");
+    eq(JSON.stringify(baca("docNumHistoryRows")[0].payload),
+       JSON.stringify({ payee: "BARU DARI ORANG LAIN", paidAt: "2026-10-13", paidBy: "Rina Finance" }), "baris di layar = isi database:");
+    await w.dnSetelBayar("f7", null);
+    eq(JSON.stringify(jejak.rpc[1].args), JSON.stringify({ p_id: "f7", p_paid_at: null }), "membatalkan:");
+    eq("paidAt" in baca("docNumHistoryRows")[0].payload, false, "tanda lunas hilang di layar:");
+    eq(jejak.update.length + jejak.baca, 0, "tabel tidak dibaca / ditulis langsung:");
+  });
+});
+t("fungsi database belum dipasang: dikenali dari kode PGRST202 / pesannya -- galat lain bukan", () => {
+  const belumAda = w.eval("dnFungsiBayarBelumAda");
+  eq([
+    { code: "PGRST202", message: "x" },
+    { message: "Could not find the function public.set_fund_paid(p_id, p_paid_at) in the schema cache" },
+    { code: "42883", message: "function public.set_fund_paid(text, date) does not exist" },
+    { code: "42501", message: "Hanya EXIM dan Finance yang boleh menandai status bayar." },
+    { message: "Could not find the function public.email_for_login(p_username)" },
+    null,
+  ].map((e) => belumAda(e)).join(","), "true,true,true,false,false,false");
+});
+t("finance + fungsi database belum dipasang: pesan migrasinya, TIDAK jatuh ke menulis tabel langsung", async () => {
+  await denganBayar({ peran: "finance", rpc: FUNGSI_BAYAR_BELUM_ADA, db: { payee: "A" } }, async (jejak) => {
+    tulis("docNumHistoryRows", [{ id: "f7", doc_type: "fund", doc_number: "302", payload: { payee: "A" } }]);
+    const galat = await galatDari(w.dnSetelBayar("f7", "2026-10-13"));
+    if (!galat || !/migration-finance-tanda-bayar\.sql/.test(galat.message)) throw new Error("pesan: " + (galat && galat.message));
+    eq(jejak.update.length + jejak.baca, 0, "tidak ada jalur cadangan untuk finance:");
+    eq("paidAt" in baca("docNumHistoryRows")[0].payload, false, "layar tidak berubah:");
+  });
+});
+t("EXIM sebelum migrasinya: jalur lama, payload TERBARU dibaca dulu -- tidak menimpa perubahan orang lain", async () => {
+  await denganBayar({ peran: "exim", nama: "Yogi", rpc: FUNGSI_BAYAR_BELUM_ADA,
+    db: { payee: "BARU DARI ORANG LAIN", notes: "x" } }, async (jejak) => {
+    tulis("docNumHistoryRows", [{ id: "f8", doc_type: "fund", doc_number: "300", payload: { payee: "LAMA" } }]);
+    await w.dnSetelBayar("f8", "2026-09-23");
+    eq(jejak.update.length, 1, "tersimpan langsung:");
+    const terkirim = jejak.update[0].payload;
+    eq(terkirim.payee, "BARU DARI ORANG LAIN", "perubahan orang lain dipertahankan:");
+    eq([terkirim.paidAt, terkirim.paidBy].join("|"), "2026-09-23|Yogi", "tanda lunas:");
+    eq(baca("docNumHistoryRows")[0].payload.paidAt, "2026-09-23", "layar diperbarui:");
+    await w.dnSetelBayar("f8", null);
+    const batal = jejak.update[1].payload;
+    if ("paidAt" in batal || "paidBy" in batal) throw new Error("status lunas tidak terhapus saat dibatalkan");
+    eq(batal.payee, "BARU DARI ORANG LAIN", "isian lain utuh saat dibatalkan:");
+  });
+});
+t("galat lain dari fungsinya (mis. ditolak database) diteruskan apa adanya -- tanpa jalur cadangan", async () => {
+  const ditolak = { data: null, error: { code: "42501", message: "Hanya EXIM dan Finance yang boleh menandai status bayar." } };
+  await denganBayar({ peran: "exim", rpc: ditolak, db: { payee: "A" } }, async (jejak) => {
+    tulis("docNumHistoryRows", [{ id: "f7", doc_type: "fund", doc_number: "302", payload: { payee: "A" } }]);
+    const galat = await galatDari(w.dnSetelBayar("f7", "2026-10-13"));
+    eq(galat && galat.message, "Hanya EXIM dan Finance yang boleh menandai status bayar.", "pesan:");
+    eq(jejak.update.length + jejak.baca, 0, "tidak menulis langsung:");
+  });
+});
+t("finance mengklik Belum Lunas: tanggal bayar ditanyakan, Tandai Lunas memanggil set_fund_paid, pesan berhasil", async () => {
+  const jawab = (nama, args) => ({ error: null, data: { payee: "KAS NEGARA", paidAt: args.p_paid_at, paidBy: "Uji" } });
+  await denganBayar({ peran: "finance", rpc: jawab }, async (jejak) => {
+    w.eval('docNumActiveTab = "fund"');
+    tulis("docNumHistoryRows", [{ id: "f6", doc_type: "fund", doc_number: "303/EXIM/DDI/X/2026", payload: { payee: "KAS NEGARA" } }]);
+    w.dnKlikBayar("f6");
+    eq($("#promptTitle").textContent, w.tt("Tandai Sudah Dibayar", "Mark as Paid"), "kotak tanggal:");
+    eq($("#prompt_tgl").value, HARI_INI_UJI, "bawaan hari ini:");
+    $("#prompt_tgl").value = "2026-08-07";
+    $("#promptOk").click();
+    await new Promise((r) => setTimeout(r, 30));
+    eq(JSON.stringify(jejak.rpc.map((r) => r.args)), JSON.stringify([{ p_id: "f6", p_paid_at: "2026-08-07" }]), "panggilan:");
+    eq($("#toastMsg").textContent, w.tt("303/EXIM/DDI/X/2026 ditandai lunas.", "303/EXIM/DDI/X/2026 marked as paid."), "pesan:");
+    eq(jejak.update.length, 0, "tidak ada update tabel:");
+  });
+});
+t("marketing & viewer: klik paksa ke status bayar diabaikan -- tidak ada kotak, tidak ada panggilan", async () => {
+  for (const peran of ["marketing", "viewer"]) {
+    await denganBayar({ peran, rpc: { data: {}, error: null } }, async (jejak) => {
+      tulis("docNumHistoryRows", [{ id: "f6", doc_type: "fund", doc_number: "303", payload: {} }]);
+      $("#promptTitle").textContent = "";
+      w.dnKlikBayar("f6");
+      eq($("#promptTitle").textContent, "", peran + " tidak mendapat kotak tanggal:");
+      eq(jejak.rpc.length, 0, peran + " tidak memanggil fungsi:");
+    });
+  }
+});
+
+/* UBAH ISIAN membawa status bayar dari DATABASE, bukan dari salinan di
+   layar: sejak Finance ikut menandai Paid / Unpaid, status itu bisa
+   berubah selama pop-up Ubah Isian terbuka. */
+const BARIS_F9 = (bayar) => [{ id: "f9", doc_type: "fund", doc_number: "301/EXIM/DDI/IX/2026",
+  doc_date: "2026-09-21", requester: "Yogi Firgiawan", department: "EXIM",
+  payload: Object.assign({ payee: "KAS NEGARA", expenseType: "Billing", billingNo: "640260906211153", notes: "Billing Import" }, bayar) }];
+const ubahF9 = async (layar, opsi) => {
+  let hasil = null;
+  await denganBayar(Object.assign({ peran: "exim" }, opsi), async (jejak) => {
+    w.eval('docNumActiveTab = "fund"');
+    tulis("docNumHistoryRows", BARIS_F9(layar));
+    w.mulaiUbahDocNum("f9");
+    try {
+      await w.simpanUbahDocNum();
+      hasil = { jejak, terkirim: jejak.update.length ? jejak.update[jejak.update.length - 1].payload : null, masihUbah: baca("dnEditingId") };
+    } finally {
+      if (baca("dnEditingId")) w.batalUbahDocNum();
+    }
+  });
+  return hasil;
+};
+const LUNAS_YOGI = { paidAt: "2026-09-22", paidBy: "Yogi" };
 t("ubah isian TIDAK menghapus status lunas", async () => {
   /* Payload ubah-isian dirakit dari form; status lunas bukan isian form
      dan dulu ikut hilang setiap kali pengajuannya diperbaiki. */
-  const simpan = { tab: baca("docNumActiveTab"), prof: w.eval("JSON.stringify(authState.profile || null)") };
-  let terkirim = null;
-  const asli = w.eval("supabaseClient.from");
-  try {
-    w.eval('authState.profile = { id: "u1", role: "exim" }');
-    w.eval('docNumActiveTab = "fund"');
-    tulis("docNumHistoryRows", [{ id: "f9", doc_type: "fund", doc_number: "301/EXIM/DDI/IX/2026",
-      doc_date: "2026-09-21", requester: "Yogi Firgiawan", department: "EXIM",
-      payload: { payee: "KAS NEGARA", expenseType: "Billing", billingNo: "640260906211153",
-        notes: "Billing Import", paidAt: "2026-09-22", paidBy: "Yogi" } }]);
-    w.mulaiUbahDocNum("f9");
-    w.__tangkap = (u) => { terkirim = u; };
-    w.eval(`supabaseClient.from = () => ({ update: (u) => { window.__tangkap(u); return { eq: async () => ({ error: null }) }; },
-      select: () => { const c = { eq: () => c, order: () => c, range: async () => ({ data: [], error: null, count: 0 }),
-        maybeSingle: async () => ({ data: null, error: null }), filter: () => c, or: () => c,
-        then: (r) => r({ data: [], error: null, count: 0 }) }; return c; } })`);
-    await w.simpanUbahDocNum();
-    if (!terkirim) throw new Error("perubahan tidak terkirim");
-    eq(terkirim.payload.paidAt, "2026-09-22", "tanggal bayar terbawa:");
-    eq(terkirim.payload.paidBy, "Yogi", "penanda terbawa:");
-  } finally {
-    w.supabaseClient_from_asli = asli;
-    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
-    w.batalUbahDocNum();
-    w.eval("docNumActiveTab = " + JSON.stringify(simpan.tab));
-    w.eval("authState.profile = " + simpan.prof);
-  }
+  const r = await ubahF9(LUNAS_YOGI, { db: BARIS_F9(LUNAS_YOGI)[0].payload });
+  if (!r.terkirim) throw new Error("perubahan tidak terkirim");
+  eq(r.terkirim.paidAt, "2026-09-22", "tanggal bayar terbawa:");
+  eq(r.terkirim.paidBy, "Yogi", "penanda terbawa:");
+  eq(r.terkirim.billingNo, "640260906211153", "isian form:");
 });
-t("menandai lunas membaca payload TERBARU dulu -- tidak menimpa perubahan orang lain", async () => {
-  let terkirim = null;
-  const asli = w.eval("supabaseClient.from");
-  try {
-    tulis("docNumHistoryRows", [{ id: "f8", doc_type: "fund", doc_number: "300", payload: { payee: "LAMA" } }]);
-    w.__tangkap = (u) => { terkirim = u; };
-    // Di database, isiannya sudah diubah orang lain sejak daftar dimuat.
-    w.eval(`supabaseClient.from = () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { payload: { payee: "BARU DARI ORANG LAIN", notes: "x" } }, error: null }) }) }),
-      update: (u) => { window.__tangkap(u); return { eq: async () => ({ error: null }) }; } })`);
-    await w.dnSetelBayar("f8", "2026-09-23");
-    eq(terkirim.payload.payee, "BARU DARI ORANG LAIN", "perubahan orang lain dipertahankan:");
-    eq(terkirim.payload.paidAt, "2026-09-23");
-    await w.dnSetelBayar("f8", null);
-    if ("paidAt" in terkirim.payload || "paidBy" in terkirim.payload) throw new Error("status lunas tidak terhapus saat dibatalkan");
-  } finally {
-    w.supabaseClient_from_asli = asli;
-    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
-  }
+t("ubah isian: status yang ditandai Finance SESUDAH daftar dimuat tidak terhapus, yang dibatalkannya tidak hidup lagi", async () => {
+  // Di layar belum lunas; sementara itu Finance menandainya lunas.
+  const a = await ubahF9({}, { db: Object.assign({}, BARIS_F9({})[0].payload, { paidAt: "2026-10-13", paidBy: "Rina Finance" }) });
+  eq([a.terkirim.paidAt, a.terkirim.paidBy].join("|"), "2026-10-13|Rina Finance", "tanda Finance dipertahankan:");
+  eq(a.jejak.baca, 1, "status dibaca dari database:");
+  // Di layar lunas; sementara itu Finance membatalkannya.
+  const b = await ubahF9(LUNAS_YOGI, { db: BARIS_F9({})[0].payload });
+  if ("paidAt" in b.terkirim || "paidBy" in b.terkirim) throw new Error("status lunas dari layar yang basi hidup lagi: " + JSON.stringify(b.terkirim));
+});
+t("ubah isian: status bayar gagal dibaca -> tidak menyimpan apa pun, pop-up tetap terbuka", async () => {
+  const r = await ubahF9(LUNAS_YOGI, { galatBaca: { message: "koneksi putus" } });
+  eq(r.terkirim, null, "tidak boleh tersimpan:");
+  eq(r.masihUbah, "f9", "pop-up masih mengubah f9:");
+  if (!/koneksi putus/.test($("#toastMsg").textContent)) throw new Error("pesan: " + $("#toastMsg").textContent);
 });
 console.log("\u2014 PENGAJUAN DANA: NOMOR INVOICE / BILLING GANDA \u2014");
 t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & spasi", () => {
@@ -6874,8 +7054,8 @@ t("berth minta tanggal saat dikonfirmasi (milestone prediksi)", () => {
 t("kedatangan selalu di belakang SPPB, kedua moda", () => {
   ["laut", "udara"].forEach((moda) => {
     const k = w.docStepsFor({ mode: "import", transport: moda }).map((x) => x.key);
-    eq(k.length, 8, moda + " jumlah:");
-    eq(k.join(">"), "cipl>bl>coo>manifest>pib>billing>sppb>berth", moda + ":");
+    eq(k.length, 9, moda + " jumlah:");
+    eq(k.join(">"), "cipl>bl>coo>ecoo>manifest>pib>billing>sppb>berth", moda + ":");
   });
 });
 t("Gate Out sudah tidak ada", () => {
@@ -6883,18 +7063,236 @@ t("Gate Out sudah tidak ada", () => {
   eq(w.predictionMilestoneForStep("gateOut", contoh), null);
 });
 
+console.log("— PROGRES DOKUMEN: E-COO & TANGGAL DITERIMA —");
+/* Stepper digambar sebagai akun EXIM (viewer tidak melihatnya). */
+const sebagaiEximStepper = (fn) => {
+  const simpan = w.eval("JSON.stringify(authState.profile || null)");
+  try {
+    w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+    return fn();
+  } finally {
+    w.eval("authState.profile = " + simpan);
+  }
+};
+const stepperDom = (s) => {
+  const div = w.document.createElement("div");
+  div.innerHTML = sebagaiEximStepper(() => w.docStepHtml(s));
+  return div;
+};
+const tahapEcoo = () => w.docStepsFor({ mode: "import" }).find((x) => x.key === "ecoo");
+
+t("E-COO tepat sesudah COO, di Import & Export; opsional, mengikuti COO", () => {
+  ["import", "export"].forEach((mode) => {
+    const k = w.docStepsFor({ mode }).map((x) => x.key);
+    eq(k.indexOf("ecoo"), k.indexOf("coo") + 1, mode + ":");
+  });
+  const st = tahapEcoo();
+  eq([w.stepText(st.label, {}), st.optional, st.induk].join("|"), "E-COO|true|coo");
+  if (w.predictionMilestoneForStep("ecoo", { mode: "import" })) throw new Error("E-COO tidak boleh jadi milestone prediksi");
+});
+t("COO tidak dipakai -> E-COO ikut strip: tidak dihitung, bukan saran berikutnya, tidak dilaporkan kurang", () => {
+  const s = { id: "e1", mode: "import", transport: "laut", docProgress: {
+    cipl: { at: "2026-08-01T03:00:00Z", date: "2026-08-01" },
+    bl: { at: "2026-08-01T03:00:00Z", date: "2026-08-01" },
+    coo: { at: "2026-08-02T03:00:00Z", skipped: true },
+  } };
+  const div = stepperDom(s);
+  const ecoo = div.querySelector('[data-step="ecoo"]');
+  eq(ecoo.classList.contains("is-skipped"), true, "bergaris putus-putus:");
+  eq(ecoo.querySelector(".docstep-dot").textContent.trim(), "–", "strip:");
+  eq(ecoo.title, "Certificate of Origin elektronik (E-COO) — tidak dipakai, mengikuti COO", "tooltip:");
+  eq(div.querySelector(".is-next").dataset.step, "manifest", "saran berikutnya melompati E-COO:");
+  eq(JSON.stringify(w.docStepCount(s)), JSON.stringify({ selesai: 2, berlaku: 7 }), "hitungan (9 tahap - COO - E-COO):");
+  eq(div.querySelector(".docsteps-count").textContent, "2 / 7", "di kartu:");
+  eq(w.missingDocs(s).includes("E-COO"), false, "tidak dilaporkan kurang:");
+  eq("ecoo" in s.docProgress, false, "tidak ada yang disimpan untuk E-COO:");
+});
+t("COO DITERIMA -> E-COO TIDAK ikut terisi: tetap menunggu & dilaporkan kurang", () => {
+  const s = { id: "e2", mode: "import", transport: "laut", docProgress: { coo: { at: "2026-08-02T03:00:00Z", date: "2026-08-02" } } };
+  eq(w.docStepEntri(s, tahapEcoo()), null, "entri E-COO:");
+  const ecoo = stepperDom(s).querySelector('[data-step="ecoo"]');
+  eq(ecoo.classList.contains("is-done") || ecoo.classList.contains("is-skipped"), false, "belum terisi:");
+  eq(w.missingDocs(s).includes("E-COO"), true, "dilaporkan kurang:");
+  eq(JSON.stringify(w.docStepCount(s)), JSON.stringify({ selesai: 1, berlaku: 9 }), "hitungan:");
+});
+t("aturan induk DITURUNKAN, bukan disimpan: COO kembali dipakai -> E-COO kembali ke keadaannya sendiri", () => {
+  const p = { coo: { at: "x", skipped: true }, ecoo: { at: "x", date: "2026-08-03" } };
+  eq(w.docStepEntri({ docProgress: p }, tahapEcoo()).ikutInduk, true, "selama COO tidak dipakai:");
+  delete p.coo;
+  eq(w.docStepEntri({ docProgress: p }, tahapEcoo()).date, "2026-08-03", "sesudah COO dibatalkan:");
+  delete p.ecoo;
+  eq(w.docStepEntri({ docProgress: p }, tahapEcoo()), null, "kosong:");
+});
+t("tooltip tahap: TANGGAL DITERIMA, bukan waktu konfirmasi; entri lama disebut apa adanya", () => {
+  const s = { id: "t1", mode: "import", transport: "laut", docProgress: {
+    cipl: { at: "2026-08-09T03:00:00.000Z", by: "yogi", date: "2026-08-05" },
+    bl: { at: "2026-08-09T03:00:00.000Z", by: "yogi" },
+    coo: { at: "2026-08-09T03:00:00.000Z", by: "yogi", skipped: true },
+    pib: { at: "2026-08-09T03:00:00.000Z", by: "yogi", date: "2026-08-06" },
+    berth: { at: "2026-08-09T03:00:00.000Z", by: "yogi", date: "2026-08-07" },
+  } };
+  const judul = (k) => stepperDom(s).querySelector(`[data-step="${k}"]`).title;
+  eq(judul("cipl"), "Commercial Invoice & Packing List — diterima 05-08-2026 · dicatat oleh yogi", "berkas:");
+  eq(judul("pib"), "Pemberitahuan Impor Barang — diterima 06-08-2026 · dicatat oleh yogi", "milestone (tanggal dokumen):");
+  eq(judul("berth"), "Kapal sandar di pelabuhan tujuan / berths (ATA) — 07-08-2026 · dicatat oleh yogi", "kedatangan:");
+  eq(judul("coo"), "Certificate of Origin — tidak dipakai untuk pengiriman ini", "dilewati:");
+  const lama = judul("bl");
+  if (!/^Bill of Lading — tanggal diterima belum dicatat \(dikonfirmasi .+ oleh yogi\)$/.test(lama)) throw new Error("entri lama: " + lama);
+  if (/diterima 09-08-2026/.test(lama)) throw new Error("waktu konfirmasi disamarkan jadi tanggal diterima");
+  const simpan = baca("activeLang");
+  try {
+    w.eval('activeLang = "en"');
+    eq(judul("cipl"), "Commercial Invoice & Packing List — received 05-08-2026 · recorded by yogi", "EN:");
+  } finally {
+    w.eval("activeLang = " + JSON.stringify(simpan));
+  }
+});
+
+/* Alur klik sungguhan: satu jadwal di buku yang aktif, toggleDocStep()
+   seperti tombol di kartu, lalu kotak isiannya diisi. */
+const denganStepper = async (jadwal, fn) => {
+  const simpan = {
+    data: w.eval("JSON.stringify(data)"),
+    mode: baca("activeMode"),
+    prof: w.eval("JSON.stringify(authState.profile || null)"),
+  };
+  try {
+    w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+    tulis("data", { import: jadwal.mode === "import" ? [jadwal] : [], export: jadwal.mode === "export" ? [jadwal] : [] });
+    w.eval(`activeMode = ${JSON.stringify(jadwal.mode)}`);
+    await fn(() => baca("data")[jadwal.mode][0]);
+  } finally {
+    // Biarkan simpanDocStep() (async) selesai sebelum keadaan dikembalikan.
+    await new Promise((r) => setTimeout(r, 30));
+    w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.prof};`);
+    w.render();
+  }
+};
+const jadwalStepper = (progres, lebih) => Object.assign({
+  id: "ds1", mode: "import", status: "process", transport: "laut", party: "PT UJI", etaMode: "manual",
+  eta: "2026-08-20", items: [], notesLog: [], docProgress: progres || {},
+}, lebih || {});
+const isiTanggal = (nilai) => { $("#prompt_tanggal").value = nilai; $("#promptOk").click(); };
+
+t("konfirmasi berkas menanyakan TANGGAL DITERIMA (bawaan hari ini); kosong & sesudah hari ini ditolak", async () => {
+  await denganStepper(jadwalStepper(), async (s) => {
+    w.toggleDocStep("ds1", "bl");
+    eq($("#promptTitle").textContent, "Konfirmasi B/L", "judul:");
+    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal diterima", "label:");
+    eq([$("#prompt_tanggal").value, $("#prompt_tanggal").max].join("|"), HARI_INI_UJI + "|" + HARI_INI_UJI, "bawaan & batas:");
+    isiTanggal("");
+    eq($("#promptError").textContent, "Tanggal wajib diisi.", "kosong:");
+    isiTanggal("2026-08-10");
+    eq($("#promptError").textContent, "Tanggal tidak boleh sesudah hari ini.", "besok:");
+    eq("bl" in s().docProgress, false, "belum tersimpan:");
+    isiTanggal("2026-08-06");
+    const e = s().docProgress.bl;
+    eq([e.date, e.by, typeof e.at].join("|"), "2026-08-06|yogi|string", "tersimpan:");
+    await new Promise((r) => setTimeout(r, 20));
+    const terakhir = [...jejakUpdate].reverse().find((u) => u.row && u.row.doc_progress);
+    eq([terakhir.id, terakhir.row.doc_progress.bl.date].join("|"), "ds1|2026-08-06", "ke database:");
+  });
+});
+t("COO: pilihan Sudah diterima + tanggal; 'Tidak dipakai' menyembunyikan tanggal & ikut men-strip E-COO", async () => {
+  await denganStepper(jadwalStepper(), async (s) => {
+    w.toggleDocStep("ds1", "coo");
+    const pilih = $("#prompt_pilih");
+    const bidangTanggal = $("#prompt_tanggal").closest(".prompt-field");
+    eq(bidangTanggal.classList.contains("d-none"), false, "tanggal tampil saat 'Sudah diterima':");
+    pilih.value = "lewati";
+    pilih.dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq(bidangTanggal.classList.contains("d-none"), true, "tanggal disembunyikan saat 'Tidak dipakai':");
+    $("#promptOk").click();
+    eq(JSON.stringify(Object.keys(s().docProgress.coo).sort()), JSON.stringify(["at", "by", "skipped"]), "COO tidak dipakai, tanpa tanggal:");
+    eq(w.docStepEntri(s(), tahapEcoo()).ikutInduk, true, "E-COO ikut strip:");
+    eq("ecoo" in s().docProgress, false, "E-COO tidak disimpan apa pun:");
+  });
+});
+t("E-COO yang ikut strip tidak bisa diubah sendiri -- diberi tahu ubah COO dulu", async () => {
+  await denganStepper(jadwalStepper({ coo: { at: "2026-08-02T03:00:00Z", skipped: true } }), async (s) => {
+    $("#promptTitle").textContent = "";
+    $("#confirmMessage").textContent = "";
+    w.toggleDocStep("ds1", "ecoo");
+    eq($("#promptTitle").textContent + $("#confirmMessage").textContent, "", "tidak ada kotak isian / konfirmasi:");
+    if (!/E-COO mengikuti COO yang ditandai tidak dipakai/.test($("#toastMsg").textContent)) throw new Error("pesan: " + $("#toastMsg").textContent);
+    eq("ecoo" in s().docProgress, false, "tidak berubah:");
+  });
+});
+t("COO diterima, lalu E-COO dikonfirmasi SENDIRI dengan tanggal diterimanya", async () => {
+  await denganStepper(jadwalStepper(), async (s) => {
+    w.toggleDocStep("ds1", "coo");
+    isiTanggal("2026-08-03");
+    eq(s().docProgress.coo.date, "2026-08-03", "COO:");
+    eq("ecoo" in s().docProgress, false, "E-COO tidak ikut terisi:");
+    await new Promise((r) => setTimeout(r, 20));
+    w.toggleDocStep("ds1", "ecoo");
+    eq($("#promptTitle").textContent, "Tahap E-COO", "kotak E-COO:");
+    isiTanggal("2026-08-08");
+    eq([s().docProgress.ecoo.date, !!s().docProgress.ecoo.skipped].join("|"), "2026-08-08|false", "E-COO:");
+  });
+});
+t("PIB (milestone prediksi) tetap menanyakan tanggal dokumennya, tanggal itu yang tampil di tooltip", async () => {
+  await denganStepper(jadwalStepper(), async (s) => {
+    w.toggleDocStep("ds1", "pib");
+    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal PIB", "label:");
+    isiTanggal("2026-08-04");
+    eq(s().docProgress.pib.date, "2026-08-04", "tersimpan:");
+    const judul = stepperDom(s()).querySelector('[data-step="pib"]').title;
+    eq(judul, "Pemberitahuan Impor Barang — diterima 04-08-2026 · dicatat oleh yogi", "tooltip:");
+  });
+});
+t("Export: Sailing (bukan berkas) menanyakan tanggalnya sendiri, bukan 'tanggal diterima'", async () => {
+  await denganStepper(jadwalStepper({}, { mode: "export", id: "ds1" }), async (s) => {
+    w.toggleDocStep("ds1", "sailing");
+    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal Sailing", "label:");
+    if (/berkas/.test($("#promptDesc").textContent)) throw new Error("keterangan menyebut berkas: " + $("#promptDesc").textContent);
+    isiTanggal("2026-08-05");
+    eq(stepperDom(s()).querySelector('[data-step="sailing"]').title, "Kapal berangkat dari pelabuhan muat (ATD) — 05-08-2026 · dicatat oleh yogi", "tooltip:");
+  });
+});
+
+console.log("— FASILITAS: COO (BUKAN E-COO), BERHITUNGAN —");
+t("tombol kolom Fasilitas: 'SKB 1 · COO 1' -- COO berhitungan seperti SKB", () => {
+  eq(w.facilitiesButtonLabel({ skb: [{ jenis: "PPH" }, { jenis: "E-COO" }] }), "SKB 1 · COO 1");
+  eq(w.facilitiesButtonLabel({ skb: [{ jenis: "E-COO" }, { jenis: "E-COO" }] }), "COO 2");
+  eq(w.facilitiesButtonLabel({ skb: [{ jenis: "PPH" }, { jenis: "Masterlist" }, { jenis: "Lainnya", jenisLainnya: "X" }] }), "SKB 3");
+  eq(w.facilitiesButtonLabel({ skb: [] }), "Fasilitas");
+  eq(JSON.stringify(w.hitungFasilitas([{ jenis: "BM" }, { jenis: "E-COO" }, { jenis: "PPN" }])), JSON.stringify({ skb: 2, coo: 1 }));
+});
+t("panel fasilitas, kartu, detail & salinan menyebut COO; nilai tersimpannya tetap E-COO", () => {
+  const tabel = w.document.createElement("table");
+  tabel.innerHTML = "<tbody>" + w.facilitiesPanelHtml({ skb: [{ jenis: "E-COO", jenisLainnya: "", nomor: "", tanggal: "" }] }, 0) + "</tbody>";
+  const opsi = [...tabel.querySelectorAll('select[data-fac="jenis"] option')];
+  const coo = opsi.find((o) => o.value === "E-COO");
+  eq([coo.textContent, coo.selected].join("|"), "COO|true", "pilihan jenis:");
+  if (opsi.some((o) => o.textContent === "E-COO")) throw new Error("masih ada pilihan bertuliskan E-COO");
+  eq(tabel.querySelector('input[data-fac="nomor"]').placeholder, "Nomor COO", "placeholder:");
+  if (!tabel.querySelector(".item-fac-skb-head b").textContent.includes("Fasilitas (SKB & COO)")) throw new Error("judul panel");
+  eq(w.skbEntryLabel({ jenis: "E-COO" }), "COO", "label entri:");
+  const tag = w.skbTagsHtml({ items: [{ skb: [{ jenis: "E-COO" }] }, { skb: [{ jenis: "E-COO" }] }] });
+  if (!tag.includes("COO × 2") || tag.includes("E-COO")) throw new Error("lencana kartu: " + tag);
+  const detail = w.itemFacilitiesCellHtml({ skb: [{ jenis: "E-COO", nomor: "C-123", tanggal: "" }] });
+  if (!detail.includes("COO · C-123") || detail.includes("E-COO")) throw new Error("detail: " + detail);
+  eq(w.shipmentFacilitiesSummary([{ skb: [{ jenis: "E-COO" }] }, { skb: [{ jenis: "PPH" }] }]), "COO\nPPH", "kolom fasilitas templat salin:");
+});
+t("teks fasilitas 'COO' / 'MASTER LIST' (templat salin, Bulk Excel) kembali ke jenisnya, bukan Lainnya", () => {
+  const hasil = w.skbTextToEntries("COO, MASTER LIST, pph, e-coo, Form E")
+    .map((x) => x.jenis + (x.jenisLainnya ? ":" + x.jenisLainnya : ""));
+  eq(hasil.join(","), "E-COO,Masterlist,PPH,E-COO,Lainnya:Form E");
+});
+
 console.log("\u2014 KURIR EKSPRES TIDAK PAKAI MANIFEST \u2014");
 t("FedEx/DHL: tahap Manifest hilang, tahap lain & urutannya tetap utuh", () => {
   ["FEDEX", "DHL", "UPS", "FEDEX PRIORITY"].forEach((nama) => {
     const k = w.docStepsFor({ mode: "import", forwarder: nama }).map((x) => x.key);
     if (k.includes("manifest")) throw new Error(nama + ": Manifest belum hilang");
-    eq(k.join(">"), "cipl>bl>coo>pib>billing>sppb>berth", nama + ":");
+    eq(k.join(">"), "cipl>bl>coo>ecoo>pib>billing>sppb>berth", nama + ":");
   });
 });
 t("berlaku juga di Export, bukan cuma Import", () => {
   const k = w.docStepsFor({ mode: "export", forwarder: "DHL" }).map((x) => x.key);
   if (k.includes("manifest")) throw new Error("Export+DHL: Manifest belum hilang");
-  eq(k.length, 8, "8 dari 9 tahap Export:");
+  eq(k.length, 9, "9 dari 10 tahap Export:");
 });
 t("impor Excel CEISA di buku Export -> jenis barang BARANG JADI", () => {
   /* newItem() sudah memilih jenis menurut buku yang dibuka; jalur
@@ -6961,9 +7359,9 @@ t("forwarder LAIN (bukan kurir ekspres) tidak kena — termasuk yang sekilas mir
     if (!k.includes("manifest")) throw new Error(nama + ": Manifest ikut hilang, seharusnya tidak");
   });
 });
-t("docStepCount ikut menyesuaikan penyebutnya (7, bukan 8)", () => {
+t("docStepCount ikut menyesuaikan penyebutnya (8, bukan 9)", () => {
   const c = w.docStepCount({ mode: "import", forwarder: "FEDEX", docProgress: {} });
-  eq(c.berlaku, 7);
+  eq(c.berlaku, 8);
 });
 t("aturan lama (nilai di bawah $1.500 -> seluruh balok kosong) tetap jalan berdampingan", () => {
   /* docStepsFor() cuma soal DAFTAR tahap; docStepHtml() yang menimbang
@@ -12867,6 +13265,7 @@ t("SATU urutan nama barang di seluruh aplikasi: Uraian + Pattern + Size + Mold N
     text: (v) => String(v == null ? "" : v),
     num: (v) => String(v == null ? "" : v),
     date: (v) => String(v == null ? "" : v),
+    vessel: (j) => w.carrierNameFromShipment(j),
     blank: "",
   };
   const teks = (baris) => baris.map((k) => k.join(" ")).join("\n");
@@ -13796,7 +14195,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     tulis("mstDok", o.dok === undefined ? MST_DOK : o.dok);
     tulis("mstBarisDb", o.baris || MST_BARIS);
     tulis("mstRealisasiDb", o.realisasi || MST_REALISASI);
-    w.eval(`mstTermuat = true; mstForm = null; mstMenyimpan = false; mstPibsSiap = true;
+    w.eval(`mstTermuat = true; mstForm = null; mstMenyimpan = false; mstKolomBelumAda.clear();
       Object.assign(mstKeadaan, { tampilan: "baris", halaman: 1, perHalaman: 25, jenis: null, semuaJenis: false });
       mstKeadaan.terbuka.clear();`);
     ["mstSearch", "mstStatus", "mstLini"].forEach((id) => (w.document.getElementById(id).value = ""));
@@ -13849,13 +14248,15 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const tabel = o.tabel || {};
     const jejak = [];
     let urut = 0;
-    /* o.tanpaPibs: database sebelum migration-masterlist-pib-parsial.sql --
-       kolom pibs ditolak saat dibaca maupun ditulis, dengan pesan PostgREST. */
+    /* o.tanpaKolom: database sebelum migrasi lanjutannya dijalankan -- kolom
+       itu ditolak saat dibaca maupun ditulis, dengan pesan PostgREST.
+       (o.tanpaPibs = tanpaKolom ["pibs"].) */
+    const tanpaKolom = (o.tanpaKolom || []).concat(o.tanpaPibs ? ["pibs"] : []);
     const galat = (nama, aksi, muatan) => {
-      if (o.tanpaPibs && nama === "masterlist_usages") {
-        if (aksi === "select" && /\bpibs\b/.test(muatan || "")) return { message: "column masterlist_usages.pibs does not exist", code: "42703" };
-        if ((aksi === "insert" || aksi === "update") && [].concat(muatan || []).some((m) => m && "pibs" in m))
-          return { message: "Could not find the 'pibs' column of 'masterlist_usages' in the schema cache", code: "PGRST204" };
+      for (const k of tanpaKolom) {
+        if (aksi === "select" && new RegExp(`\\b${k}\\b`).test(muatan || "")) return { message: `column ${nama}.${k} does not exist`, code: "42703" };
+        if ((aksi === "insert" || aksi === "update") && [].concat(muatan || []).some((m) => m && k in m))
+          return { message: `Could not find the '${k}' column of '${nama}' in the schema cache`, code: "PGRST204" };
       }
       const g = o.galat && o.galat[nama] && o.galat[nama][aksi];
       return g ? { message: g } : null;
@@ -14306,7 +14707,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(mstD.querySelector('[data-mst-tampilan="pib"]').getAttribute("aria-pressed"), "true", "tombol susunan ditandai:");
       eq(mstD.querySelector('[data-mst-tampilan="baris"]').getAttribute("aria-pressed"), "false", "tombol lain dilepas:");
       eq(mstBarisTampil(), 12, "jumlah PIB:");
-      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "PIB aju|Tanggal PIB|Jadwal|Baris|Unit|", "kepala tabel:");
+      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "PIB aju|Tanggal PIB|Jadwal|Baris|Unit|Nilai (USD)|", "kepala tabel:");
       eq(rapat(mstD.querySelector("#mstPagination .pagination-info")), "Menampilkan 1–12 dari 12 PIB", "paginasi:");
       const g = JSON.parse(w.eval("JSON.stringify(mstPerPib(mstSusun()).map((k) => [k.aju, k.isi.length, k.unit, k.unitParsial, k.jadwal ? k.jadwal.id : null]))"));
       /* Baris 58: 3 unit lewat DUA PIB (7130 / 9204) -- masuk ke kedua
@@ -14452,7 +14853,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       mstPibKotak(0, "tgl").value = "2026-09-29";
       mstD.getElementById("mstCatatan").value = "  Unit 1 & 2 ";
       eq(periksa(), JSON.stringify({ pib: [{ aju: "000020-029142-20260928-209871", tanggal: "2026-09-29" }], catatan: "Unit 1 & 2",
-        baris: [{ itemId: "it57", qty: 2, no: 57 }, { itemId: "it20", qty: 1, no: 20 }] }), "isian lengkap:");
+        baris: [{ itemId: "it57", qty: 2, no: 57, nilai: null }, { itemId: "it20", qty: 1, no: 20, nilai: null }] }), "isian lengkap:");
       // Baris dihapus dari kotak
       mstKlik('#mstPilih [data-mst-pilih="1"] [data-mst-pilih-hapus]');
       eq(mstD.querySelectorAll("#mstPilih [data-mst-pilih]").length, 1, "baris kedua dihapus:");
@@ -14537,11 +14938,11 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       // Sebelum migrasinya dijalankan: satu PIB tetap boleh, lebih dari satu ditolak dengan petunjuk
       mstKlik("#btnMstPibTambah");
       mstIsiPib(1, "9204");
-      w.eval("mstPibsSiap = false");
+      w.eval("mstKolomBelumAda.add('pibs')");
       if (!/migration-masterlist-pib-parsial\.sql/.test(periksa())) throw new Error("dua PIB tanpa migrasi tidak menunjuk berkasnya: " + periksa());
       mstKlik('#mstPib [data-mst-pib="1"] [data-mst-pib-hapus]');
       eq(periksa(), JSON.stringify([{ aju: "7130", tanggal: null }]), "satu PIB tanpa migrasi:");
-      w.eval("mstPibsSiap = true");
+      w.eval("mstKolomBelumAda.delete('pibs')");
       // Saran di bawah daftar PIB
       // Saran: unit per PIB = catat terpisah; satu mesin terurai = semua PIB di satu realisasi
       eq(rapat(mstD.querySelector(".mst-pib-saran")),
@@ -14733,10 +15134,10 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(w.mstTanggalAwal({ aju_ref: "7154", pib_date: null }), null, "belum bertanggal:");
     eq(JSON.stringify(w.mstKolomPib([{ aju: "7130", tanggal: "2025-05-12" }, { aju: "9204", tanggal: null }])),
       JSON.stringify({ aju_ref: "7130 / 9204", pib_date: "2025-05-12", pibs: [{ aju_ref: "7130", pib_date: "2025-05-12" }, { aju_ref: "9204", pib_date: null }] }), "kolom simpanan:");
-    w.eval("mstPibsSiap = false");
+    w.eval("mstKolomBelumAda.add('pibs')");
     try {
       eq(JSON.stringify(w.mstKolomPib([{ aju: "7130", tanggal: null }])), JSON.stringify({ aju_ref: "7130", pib_date: null }), "sebelum migrasi: tanpa kolom pibs:");
-    } finally { w.eval("mstPibsSiap = true"); }
+    } finally { w.eval("mstKolomBelumAda.delete('pibs')"); }
     // Realisasi di satu baris diurutkan menurut tanggal PIB paling awalnya
     pasangMst({
       baris: [{ id: "a", list_id: "ml1", no: 1, description: "MESIN", specification: "", uom: "NIU", quota: 3 }],
@@ -14945,11 +15346,253 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     }
   });
 
+  /* NILAI (USD): enam baris contoh, satu per keadaan.
+       1 kuota 6 / USD 116,700 -- 2 unit bernilai 38,900 + 1 unit belum bernilai  -> belum
+       2 kuota 2 / USD 1,000   -- 2 unit bernilai 1,200                          -> lebih
+       3 kuota 1 / USD 500     -- 1 unit bernilai 400 (unit habis, nilai kurang) -> selisih
+       4 kuota 1 / USD 300     -- 1 unit bernilai 300                            -> sesuai
+       5 kuota 3 / tanpa nilai -- 1 unit bernilai 50                             -> kosong
+       6 kuota 2 / USD 2,000   -- 1 unit bernilai 1,000                          -> sesuai (masih bersisa) */
+  const MST_NILAI_BARIS = [
+    { id: "n1", list_id: "ml1", no: 1, description: "DRY OVEN MACHINE", specification: "BRAND CLEAN THERMO; DO-1200; 30 KW FOR FLOW PROSES MANUFAKTUR TREAD (CASTING MOLD)", uom: "NIU", quota: 6, value_quota: 116700 },
+    { id: "n2", list_id: "ml1", no: 2, description: "MELTING FURNACE", specification: "", uom: "NIU", quota: 2, value_quota: "1000.00" },
+    { id: "n3", list_id: "ml1", no: 3, description: "HOLDING FURNACE", specification: "", uom: "NIU", quota: 1, value_quota: 500 },
+    { id: "n4", list_id: "ml1", no: 4, description: "BAND SAW MACHINE", specification: "", uom: "NIU", quota: 1, value_quota: 300 },
+    { id: "n5", list_id: "ml1", no: 5, description: "HYDRAULIC PRESS", specification: "", uom: "NIU", quota: 3, value_quota: null },
+    { id: "n6", list_id: "ml1", no: 6, description: "MILLING MACHINE", specification: "", uom: "NIU", quota: 2, value_quota: 2000 },
+  ];
+  const MST_NILAI_REALISASI = [
+    { id: "v1", item_id: "n1", qty: 2, aju_ref: "1111", pib_date: "2025-05-12", invoice_value: "38900.00", notes: "", created_at: "1" },
+    { id: "v2", item_id: "n1", qty: 1, aju_ref: "2222", pib_date: "2025-08-20", invoice_value: null, notes: "", created_at: "2" },
+    { id: "v3", item_id: "n2", qty: 2, aju_ref: "1111", pib_date: "2025-05-12", invoice_value: 1200, notes: "", created_at: "3" },
+    { id: "v4", item_id: "n3", qty: 1, aju_ref: "3333", pib_date: null, invoice_value: 400, notes: "", created_at: "4" },
+    { id: "v5", item_id: "n4", qty: 1, aju_ref: "3333", pib_date: null, invoice_value: 300, notes: "", created_at: "5" },
+    { id: "v6", item_id: "n5", qty: 1, aju_ref: "4444", pib_date: null, invoice_value: 50, notes: "", created_at: "6" },
+    { id: "v7", item_id: "n6", qty: 1, aju_ref: "4444", pib_date: null, invoice_value: 1000, notes: "", created_at: "7" },
+  ];
+  const pasangNilai = () => pasangMst({ baris: MST_NILAI_BARIS.map((b) => Object.assign({}, b)), realisasi: MST_NILAI_REALISASI.map((u) => Object.assign({}, u)) });
+
+  t("Masterlist: nilai (USD) -- kuota nilai per baris, terpakai & sisa dari nilai invoice realisasi, status yang perlu dicek", () => {
+    pasangNilai();
+    const ring = JSON.parse(w.eval("JSON.stringify(mstSusun().map((b) => [b.no, b.nilaiKuota, b.nilaiTerpakai, b.nilaiSisa, b.tanpaNilai, b.hargaSatuan, b.statusNilai]))"));
+    eq(JSON.stringify(ring), JSON.stringify([
+      [1, 116700, 38900, 77800, 1, 19450, "belum"],
+      [2, 1000, 1200, -200, 0, 500, "lebih"],
+      [3, 500, 400, 100, 0, 500, "selisih"],
+      [4, 300, 300, 0, 0, 300, "sesuai"],
+      [5, null, 50, null, 0, null, "kosong"],
+      [6, 2000, 1000, 1000, 0, 1000, "sesuai"],
+    ]), "per baris [no, kuota, terpakai, sisa, tanpa nilai, harga satuan, status]:");
+    const r = JSON.parse(w.eval("JSON.stringify(mstRingkasan(mstSusun()))"));
+    eq([r.nilaiBaris, r.nilaiKuota, r.nilaiTerpakai, r.nilaiSisa, r.nilaiDicek].join("/"), "5/120500/41800/78700/3", "ringkasan [baris bernilai, kuota, terpakai, sisa, perlu dicek]:");
+    eq(w.eval("mstFmtUang(116700)"), "USD 116,700.00", "format nilai:");
+    eq(w.mstAngkaUang(1234.5), "1,234.50", "dua desimal:");
+    // Kepala halaman: nilai terealisasi dari baris bernilai
+    if (!/nilai USD 41,800\.00 dari USD 120,500\.00 terealisasi/.test(rapat(mstD.getElementById("mstSub")))) throw new Error("anak judul: " + rapat(mstD.getElementById("mstSub")));
+    // Tabel: nilai di baris kedua sel kuota / terpakai / sisa
+    const sel = (no, kelas) => mstD.querySelector(`#mstDaftar tr[data-mst-id="n${no}"] ${kelas}`);
+    eq(rapat(sel(1, "td[data-label='Kuota']")), "6 NIU USD 116,700.00", "kuota + nilai:");
+    eq(rapat(sel(1, "td[data-label='Terpakai']")), "3 USD 38,900.00", "terpakai + nilai:");
+    eq(rapat(sel(1, ".mst-kol-sisa .mst-nilai")), "USD 77,800.00 — 1 realisasi belum dicatat nilainya — sisa nilai belum pasti.", "sisa nilai belum pasti:");
+    if (!sel(1, ".mst-nilai--belum i.bi")) throw new Error("status belum tanpa ikon");
+    eq(rapat(sel(2, ".mst-kol-sisa .mst-nilai")), "lebih USD 200.00 — Nilai invoice melebihi nilai masterlist sebesar USD 200.00.", "lebih:");
+    eq(rapat(sel(3, ".mst-kol-sisa .mst-nilai")), "USD 100.00 — Unit sudah habis, tapi nilai invoicenya masih kurang USD 100.00 dari nilai masterlist.", "selisih:");
+    eq(rapat(sel(4, ".mst-kol-sisa .mst-nilai")), "USD 0.00", "sesuai:");
+    if (sel(4, ".mst-nilai i")) throw new Error("baris sesuai diberi ikon");
+    eq(rapat(sel(5, "td[data-label='Kuota']")), "3 NIU", "tanpa nilai masterlist: kuota tanpa nilai:");
+    eq(rapat(sel(5, "td[data-label='Terpakai']")), "1 USD 50.00", "nilai invoice tetap terlihat:");
+    if (sel(5, ".mst-kol-sisa .mst-nilai")) throw new Error("sisa nilai ditulis padahal nilai masterlist kosong");
+    // Saringan "Nilai perlu dicek": belum, lebih, selisih
+    eq([...mstD.querySelectorAll("#mstStatus option")].map((o) => o.value).join(","), ",sisa,habis,utuh,nilai", "pilihan status:");
+    mstIsi("mstStatus", "nilai", "change");
+    eq(w.eval("mstSusun().filter((b) => mstCocok(b, mstSaringan())).map((b) => b.no).join(',')"), "1,2,3", "nilai perlu dicek:");
+    mstIsi("mstStatus", "", "change");
+    // Panel jenis: sisa nilai hanya kalau seluruh barisnya bernilai lengkap
+    const ket = (nama) => rapat(mstD.querySelector(`#mstTersedia [data-mst-jenis="${nama}"] .mst-jenis-nama small`));
+    eq(ket("MILLING MACHINE"), "1 baris · sisa USD 1,000.00", "jenis bernilai lengkap:");
+    eq(ket("DRY OVEN MACHINE"), "TREAD (CASTING MOLD) · 1 baris", "jenis dengan realisasi belum bernilai:");
+    eq(ket("HYDRAULIC PRESS"), "1 baris", "jenis tanpa nilai masterlist:");
+    // Rincian baris 1: ringkasan nilai + kolom nilai per realisasi
+    mstKlik('#mstDaftar [data-mst-buka="b:n1"]');
+    const rinci = mstD.querySelector('#mstDaftar tr[data-mst-id="n1"] + tr.mst-baris-rinci');
+    eq([...rinci.querySelectorAll(".mst-nilai-ring > div")].map((d) => rapat(d.querySelector("dt")) + " " + rapat(d.querySelector("dd"))).join(" | "), "Masterlist 116,700.00 | Harga satuan 19,450.00 | Terpakai 38,900.00 | Sisa 77,800.00", "ringkasan nilai:");
+    eq(rapat(rinci.querySelector(".mst-nilai-ket")), "1 realisasi belum dicatat nilainya — sisa nilai belum pasti.", "kalimat status:");
+    eq([...rinci.querySelectorAll(".mst-rinci-tabel thead th")].map((th) => th.textContent.trim()).join("|"), "Tanggal PIB|Nomor aju|Jumlah|Nilai (USD)|Catatan|", "kepala realisasi:");
+    eq([...rinci.querySelectorAll(".mst-rinci-tabel > tbody > tr")].map((tr) => rapat(tr.querySelectorAll("td")[3])).join(" | "), "38,900.00 | —", "nilai per realisasi:");
+    mstKlik('#mstDaftar [data-mst-buka="b:n1"]');
+    // Baris tanpa nilai masterlist: diajak mengisinya (yang boleh mengubah saja)
+    mstKlik('#mstDaftar [data-mst-buka="b:n5"]');
+    eq(rapat(mstD.querySelector('#mstDaftar tr[data-mst-id="n5"] + tr .mst-nilai-kosong')),
+      "Nilai masterlist baris ini belum diisi. Nilai invoice tercatat USD 50.00. Isi lewat Ubah baris supaya sisa nilainya terlacak.", "nilai masterlist kosong:");
+    mstKlik('#mstDaftar [data-mst-buka="b:n5"]');
+    // Rincian baris 2: lebih -> angka sisa ditulis "lebih"
+    mstKlik('#mstDaftar [data-mst-buka="b:n2"]');
+    eq(rapat(mstD.querySelector('#mstDaftar tr[data-mst-id="n2"] + tr .mst-nilai-ring dd.mst-nilai--lebih')), "lebih 200.00", "sisa lebih di rincian:");
+    mstKlik('#mstDaftar [data-mst-buka="b:n2"]');
+    // Per PIB: nilai invoice per PIB
+    mstKlik('#viewMasterlist [data-mst-tampilan="pib"]');
+    const nilaiPib = (aju) => rapat([...mstD.querySelectorAll("#mstDaftar tr.mst-baris")].find((tr) => rapat(tr.querySelector(".mst-kol-pib")) === aju).querySelector(".mst-kol-nilai"));
+    eq(nilaiPib("1111"), "40,100.00", "PIB 1111 (38,900 + 1,200):");
+    eq(nilaiPib("2222"), "—", "PIB tanpa nilai:");
+    eq(nilaiPib("3333"), "700.00", "PIB 3333:");
+    mstKlik('#viewMasterlist [data-mst-tampilan="baris"]');
+  });
+
+  t("Masterlist: nilai di kotak realisasi -- patokan harga masterlist, peringatan lebih/beda (tidak menghalangi), tersimpan; kiriman lanjutan menambah nilai", async () => {
+    const tabel = { masterlist_usages: MST_NILAI_REALISASI.map((u) => Object.assign({}, u)), masterlist_items: MST_NILAI_BARIS.map((b) => Object.assign({}, b)) };
+    const tiruan = tiruanMst({ tabel });
+    const baris0 = (sel) => mstD.querySelector(`#mstPilih [data-mst-pilih="0"] ${sel}`);
+    const ketik = (el, v) => { el.value = v; el.dispatchEvent(new w.Event("input", { bubbles: true })); };
+    const ket0 = () => rapat(baris0(".mst-pilih-ket"));
+    try {
+      pasangNilai();
+      w.mstBukaRealisasi({ itemId: "n1" });
+      // Kepala kolom & kotak nilai
+      eq([...mstD.querySelectorAll("#mstPilihDaftar .mst-pilih-kepala .prompt-label")].map((x) => rapat(x)).join(" | "), "Baris yang direalisasikan | Jumlah | Nilai invoice (USD)", "kepala kolom:");
+      const nilai = baris0("[data-mst-pilih-nilai]");
+      eq([nilai.type, nilai.getAttribute("inputmode"), nilai.hasAttribute("data-num")].join(","), "text,decimal,true", "kotak nilai (ribuan saat diketik):");
+      eq(ket0(), "Sisa kuota 3 NIU · sisa nilai USD 77,800.00", "sisa kuota & nilai:");
+      eq(nilai.placeholder, "≈ 19,450.00", "patokan 1 x harga satuan:");
+      ketik(baris0("[data-mst-pilih-qty]"), "2");
+      eq(nilai.placeholder, "≈ 38,900.00", "patokan ikut jumlah:");
+      // Beda dari harga masterlist: diberi tahu, tidak menghalangi
+      ketik(nilai, "40000");
+      eq(ket0(), "Sisa kuota 3 NIU · sisa nilai USD 77,800.00 Beda dari harga masterlist: 2 × USD 19,450.00 = USD 38,900.00.", "beda harga:");
+      if (!baris0(".mst-pilih-awas i.bi")) throw new Error("peringatan tanpa ikon");
+      ketik(nilai, "80000");
+      eq(ket0(), "Sisa kuota 3 NIU · sisa nilai USD 77,800.00 Melebihi sisa nilai masterlist (USD 77,800.00).", "melebihi sisa nilai:");
+      ketik(nilai, "38900");
+      eq(nilai.value, "38,900", "pemisah ribuan saat diketik:");
+      eq(ket0(), "Sisa kuota 3 NIU · sisa nilai USD 77,800.00", "sama dengan harga masterlist:");
+      // Isian yang salah
+      nilai.value = "1.234";
+      eq(w.mstPeriksaForm().galat, "Nomor aju PIB harus diisi.", "aju dulu:");
+      mstIsiPib(0, "5555", "2025-10-01");
+      eq(w.mstPeriksaForm().galat, "Nilai invoice untuk baris 1 paling banyak dua angka di belakang koma.", "tiga desimal:");
+      nilai.value = "abc";
+      eq(w.mstPeriksaForm().galat, "Nilai invoice untuk baris 1 bukan angka.", "bukan angka:");
+      // Simpan: nilai invoice ikut terkirim
+      nilai.value = "38,900";
+      await w.mstSimpanRealisasi();
+      const ins = tiruan.jejak.filter((j) => j.aksi === "insert").pop().muatan[0];
+      eq(ins.invoice_value + "|" + ins.qty, "38900|2", "terkirim:");
+      eq(mstD.getElementById("toastMsg").textContent, "Realisasi PIB 5555 tercatat: 1 baris, 2 unit, USD 38,900.00.", "pemberitahuan:");
+      eq(w.eval("JSON.stringify((({ nilaiTerpakai, nilaiSisa }) => [nilaiTerpakai, nilaiSisa])(mstSusun()[0]))"), "[77800,38900]", "terpakai & sisa nilai baris 1:");
+      // Tanpa nilai: tetap boleh (dicatat "belum bernilai")
+      w.mstBukaRealisasi({ itemId: "n6" });
+      mstIsiPib(0, "6666");
+      await w.mstSimpanRealisasi();
+      eq(tiruan.jejak.filter((j) => j.aksi === "insert").pop().muatan[0].invoice_value, null, "nilai kosong = null:");
+      // Ubah: nilai lama terisi; batasnya = sisa + nilai lamanya
+      w.mstBukaRealisasi({ realisasi: baca("mstRealisasiDb").find((u) => u.id === "v1") });
+      eq(baris0("[data-mst-pilih-nilai]").value, "38,900", "nilai lama:");
+      eq(ket0(), "Sisa kuota 3 NIU · sisa nilai USD 77,800.00", "batas = sisa + nilai lamanya:");
+      ketik(baris0("[data-mst-pilih-nilai]"), "39000");
+      await w.mstSimpanRealisasi();
+      const ubah = tiruan.jejak.filter((j) => j.aksi === "update").pop();
+      eq(ubah.id + "|" + ubah.muatan.invoice_value, "v1|39000", "nilai diubah:");
+      // Kiriman lanjutan: nilai invoice PIB berikutnya DITAMBAHKAN ke realisasinya
+      w.mstBukaRealisasi();
+      mstIsiPib(0, "7777", "2025-11-01");
+      const k = baris0("[data-mst-pilih-baris]");
+      k.value = "r:v7";
+      k.dispatchEvent(new w.Event("change", { bubbles: true }));
+      // (baris 6 sudah habis: realisasi tanpa nilai di atas memakai sisanya)
+      eq(ket0(), "Kiriman lanjutan: PIB di atas ditambahkan ke realisasi ini (sekarang PIB 4444). Kuotanya tidak berkurang lagi. Nilai invoice PIB ini ditambahkan ke nilai realisasinya (sekarang USD 1,000.00).", "keterangan lanjutan:");
+      eq(baris0("[data-mst-pilih-nilai]").placeholder, "Tambahan nilai", "kotak nilai = tambahan:");
+      ketik(baris0("[data-mst-pilih-nilai]"), "250.5");
+      await w.mstSimpanRealisasi();
+      const sambung = tiruan.jejak.filter((j) => j.aksi === "update").pop();
+      eq(sambung.id + "|" + sambung.muatan.invoice_value + "|" + ("qty" in sambung.muatan), "v7|1250.5|false", "nilai ditambahkan, jumlah tetap:");
+      // Sebelum migrasi nilai: nilai yang diisi ditolak dengan petunjuk; tanpa nilai tetap tersimpan
+      w.eval("mstKolomBelumAda.add('invoice_value')");
+      w.mstBukaRealisasi({ itemId: "n1" });
+      mstIsiPib(0, "8888");
+      baris0("[data-mst-pilih-nilai]").value = "100";
+      if (!/migration-masterlist-nilai\.sql/.test(w.mstPeriksaForm().galat || "")) throw new Error("nilai tanpa migrasi tidak menunjuk berkasnya");
+      baris0("[data-mst-pilih-nilai]").value = "";
+      await w.mstSimpanRealisasi();
+      eq("invoice_value" in tiruan.jejak.filter((j) => j.aksi === "insert").pop().muatan[0], false, "tanpa kolom nilai:");
+    } finally {
+      tiruan.lepas();
+      w.eval("mstKolomBelumAda.clear(); mstForm = null;");
+    }
+  });
+
+  t("Masterlist: nilai masterlist di Tambah/Ubah baris; Excel ikut menulis nilai; Belum dicatat menampilkan nilai barang jadwal", async () => {
+    pasangNilai();
+    // Isian kotak baris
+    const f = w.mstIsianBaris(baca("mstBarisDb").find((b) => b.id === "n1")).find((x) => x.key === "nilai");
+    eq([f.label, f.value, f.inputmode, f.lebar, f.filter === w.formatNumberTyping].join("|"), "Nilai masterlist (USD)|116,700|decimal|setengah|true", "isian nilai:");
+    eq(f.hint, "Nilai invoice yang sudah terealisasi: USD 38,900.00.", "keterangan saat mengubah:");
+    const dasar = { no: "9", satuan: "NIU", nama: "X", spek: "", kuota: "2" };
+    const periksa = (nilai) => { const h = w.mstPeriksaBaris(Object.assign({}, dasar, { nilai }), null); return typeof h === "string" ? h : h.value_quota; };
+    eq(periksa("116,700.5"), 116700.5, "koma ribuan, titik desimal:");
+    eq(periksa(""), null, "kosong = belum diisi:");
+    eq(periksa("0"), "Nilai masterlist harus angka lebih dari 0 — atau kosongkan.", "nol:");
+    eq(periksa("1.234"), "Nilai masterlist paling banyak dua angka di belakang koma.", "tiga desimal:");
+    eq(periksa("abc"), "Nilai masterlist harus angka lebih dari 0 — atau kosongkan.", "bukan angka:");
+    // Tersimpan
+    const tabel = { masterlist_items: MST_NILAI_BARIS.map((b) => Object.assign({}, b)) };
+    let tiruan = tiruanMst({ tabel });
+    try {
+      await w.mstSimpanUbahBaris("n5", { no: 5, description: "HYDRAULIC PRESS", specification: "", uom: "NIU", quota: 3, value_quota: 1500 });
+      eq(tiruan.jejak.pop().muatan.value_quota, 1500, "nilai terkirim:");
+      eq(w.eval("mstSusun().find((b) => b.no === 5).statusNilai"), "sesuai", "baris 5 sekarang bernilai:");
+      tiruan.lepas();
+      // Sebelum migrasi nilai: nilai ditolak dengan petunjuk; tanpa nilai tetap tersimpan
+      tiruan = tiruanMst({ tabel, tanpaKolom: ["value_quota"] });
+      await w.mstSimpanBarisBaru({ no: 7, description: "Y", specification: "", uom: "NIU", quota: 1, value_quota: 99 });
+      if (!/migration-masterlist-nilai\.sql/.test(mstD.getElementById("toastMsg").textContent)) throw new Error("nilai tanpa migrasi: " + mstD.getElementById("toastMsg").textContent);
+      await w.mstSimpanBarisBaru({ no: 8, description: "Z", specification: "", uom: "NIU", quota: 1, value_quota: null });
+      eq(mstD.getElementById("toastMsg").textContent, "Baris 8 ditambahkan.", "tanpa nilai tersimpan:");
+      eq("value_quota" in tiruan.jejak.filter((j) => j.aksi === "insert").pop().muatan, false, "dikirim ulang tanpa kolom itu:");
+    } finally {
+      tiruan.lepas();
+      w.eval("mstKolomBelumAda.clear();");
+    }
+    // Excel: VALUE, USED VALUE, REMAIN VALUE di belakang kolom lama; lembar per PIB memuat nilai realisasi
+    pasangNilai();
+    const xl = JSON.parse(w.eval("JSON.stringify(mstBarisExcel(mstSusun()).map((r) => r.slice(8)))"));
+    eq(JSON.stringify(xl), JSON.stringify([[116700, 38900, 77800], [1000, 1200, -200], [500, 400, 100], [300, 300, 0], ["", 50, ""], [2000, 1000, 1000]]), "kolom nilai Sheet1:");
+    eq(w.eval("mstBlokRealisasiExcel(mstSusun()).map((k) => k.nilai).join(',')"), "38900,,1200,400,300,50,1000", "nilai per realisasi (lembar per PIB):");
+    // Belum dicatat: nilai barang jadwal (jumlah x harga) ikut di keterangan kotak
+    const jadwal = [Object.assign({}, MST_JADWAL[1], { items: [Object.assign({}, MST_JADWAL[1].items[0], { harga: 19450 })] })];
+    denganJadwalMst(jadwal, () => {
+      pasangNilai();
+      mstKlik('#mstPerlu [data-mst-catat-jadwal="m2"]');
+      eq(mstD.getElementById("mstRealisasiKet").textContent, "DONGJIN MACHINERY CO., LTD. — barang berfasilitas Masterlist: HYDRAULIC PRESS (2 NIU, USD 38,900.00).", "nilai barang jadwal:");
+    });
+    tulis("mstForm", null);
+  });
+
+  t("Masterlist: sebelum migrasi nilai -- halaman tetap jalan tanpa kolom nilai", async () => {
+    const tabel = { masterlists: [Object.assign({}, MST_DOK)], masterlist_items: MST_BARIS.map((b) => Object.assign({}, b)), masterlist_usages: MST_REALISASI.map((u) => Object.assign({}, u)) };
+    const tiruan = tiruanMst({ tabel, tanpaKolom: ["value_quota", "invoice_value"] });
+    try {
+      w.eval("mstTermuat = false; mstDok = null; mstBarisDb = []; mstRealisasiDb = []; mstKolomBelumAda.clear();");
+      eq(await w.loadMasterlist(), true, "termuat:");
+      eq(w.eval("[...mstKolomBelumAda].sort().join(',')"), "invoice_value,value_quota", "kolom nilai dikenali belum ada:");
+      eq(mstRing(), "88/112/72/40/26/62/23", "data lengkap:");
+      if (/nilai USD/.test(mstD.getElementById("mstSub").textContent)) throw new Error("anak judul menulis nilai padahal belum ada");
+      // Memuat ulang sesudah migrasi dijalankan: kolomnya diperiksa lagi
+      tiruan.lepas();
+      const tiruan2 = tiruanMst({ tabel });
+      try {
+        await w.loadMasterlist();
+        eq(w.eval("mstKolomBelumAda.size"), 0, "sesudah migrasi, muat ulang cukup:");
+      } finally { tiruan2.lepas(); }
+    } finally {
+      tiruan.lepas();
+      pasangMst();
+    }
+  });
+
   t("Masterlist: baris -- isian diperiksa; nomor kembar & kuota di bawah terpakai ditolak", () => {
     pasangMst();
     const dasar = { no: "89", satuan: "niu", nama: "  LASER   MARKING MACHINE ", spek: " BRAND HANS; LM-200;\n LM200-0007; 2.5 KW FOR FLOW PROSES MANUFAKTUR SIDE PLATE ", kuota: "3" };
     const p = (ubah, lama) => { const h = w.mstPeriksaBaris(Object.assign({}, dasar, ubah), lama || null); return typeof h === "string" ? h : JSON.stringify(h); };
-    eq(p({}), JSON.stringify({ no: 89, description: "LASER MARKING MACHINE", specification: "BRAND HANS; LM-200; LM200-0007; 2.5 KW FOR FLOW PROSES MANUFAKTUR SIDE PLATE", uom: "NIU", quota: 3 }), "isian rapi:");
+    eq(p({}), JSON.stringify({ no: 89, description: "LASER MARKING MACHINE", specification: "BRAND HANS; LM-200; LM200-0007; 2.5 KW FOR FLOW PROSES MANUFAKTUR SIDE PLATE", uom: "NIU", quota: 3, value_quota: null }), "isian rapi:");
     eq(p({ no: "0" }), "No. harus bilangan bulat lebih dari 0.", "nomor nol:");
     eq(p({ no: "1.5" }), "No. harus bilangan bulat lebih dari 0.", "nomor pecahan:");
     eq(p({ no: "58" }), "No. 58 sudah dipakai baris lain.", "nomor kembar:");
@@ -14965,7 +15608,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(p({ no: "57" }, b58), "No. 57 sudah dipakai baris lain.", "pindah ke nomor baris lain:");
     // Isian kotaknya: nomor berikutnya, satuan bawaan, keterangan kuota saat mengubah
     const isian = w.mstIsianBaris(null);
-    eq(isian.map((f) => f.key).join(","), "no,satuan,nama,spek,kuota", "urutan isian:");
+    eq(isian.map((f) => f.key).join(","), "no,satuan,nama,spek,kuota,nilai", "urutan isian:");
     eq(isian[0].value + "/" + isian[1].value + "/" + isian[4].value, "89/NIU/1", "nilai awal baris baru:");
     eq(isian.find((f) => f.key === "spek").type, "textarea", "spesifikasi = kotak teks panjang:");
     eq(w.mstIsianBaris(b58).find((f) => f.key === "kuota").hint, "Tidak boleh lebih kecil dari yang sudah terpakai (3).", "keterangan kuota saat mengubah:");
@@ -15062,19 +15705,19 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const blok = JSON.parse(w.eval("JSON.stringify(mstBlokRealisasiExcel(mstSusun()))"));
     eq(blok.length, 65, "satu blok per realisasi:");
     eq(blok.reduce((s, k) => s + k.qty, 0), 72, "jumlah QTTY = terpakai (realisasi parsial dihitung sekali):");
-    eq(JSON.stringify(blok.find((k) => k.no === 58)), JSON.stringify({ no: 58, nama: "5-AXIS MACHINING CENTER", satuan: "NIU", qty: 3,
+    eq(JSON.stringify(blok.find((k) => k.no === 58)), JSON.stringify({ no: 58, nama: "5-AXIS MACHINING CENTER", satuan: "NIU", qty: 3, nilai: null,
       catatan: "Dipakai di lebih dari satu PIB; pembagian per PIB tidak tercatat di Excel sumber.", pib: [{ aju: "7130", tanggal: null }, { aju: "9204", tanggal: null }] }), "baris 58: dua PIB dalam satu blok:");
     eq(JSON.stringify(blok.find((k) => k.no === 10).pib), JSON.stringify([{ aju: "7154", tanggal: null }]), "realisasi satu PIB:");
     eq(w.mstTanggalExcel("2025-05-12").toISOString(), "2025-05-12T00:00:00.000Z", "tanggal Excel tengah malam UTC:");
     const srcX = fs.readFileSync(path.join(ROOT, "js", "views", "masterlist-view.js"), "utf8");
     if (!/addWorksheet\("REALISASI PER PIB"\)/.test(srcX)) throw new Error("lembar REALISASI PER PIB");
-    if (!/"NO", "DESCRIPTION", "UoM", "QTTY", "PIB AJU", "PIB DATE", "NOTES"/.test(srcX)) throw new Error("judul kolom lembar per PIB");
+    if (!/"NO", "DESCRIPTION", "UoM", "QTTY", `VALUE \(\$\{U\}\)`, "PIB AJU", "PIB DATE", "NOTES"/.test(srcX)) throw new Error("judul kolom lembar per PIB");
     if (!/mergeCells/.test(srcX)) throw new Error("sel realisasi parsial tidak digabung");
     const baris = JSON.parse(w.eval("JSON.stringify(mstBarisExcel(mstSusun()))"));
     eq(baris.length, 88, "jumlah baris:");
-    eq(JSON.stringify(baris[9]), JSON.stringify([10, "VACUUM RUBBER MIXER", MST_BARIS[9].specification, "NIU", 1, 1, 0, 7154]), "baris 10 (aju angka tetap angka):");
-    eq(JSON.stringify(baris[57].slice(4)), JSON.stringify([4, 3, 1, "7130 / 9204"]), "baris 58 (dua PIB tetap teks):");
-    eq(JSON.stringify(baris[0].slice(4)), JSON.stringify([1, 0, 1, ""]), "baris belum dipakai:");
+    eq(JSON.stringify(baris[9]), JSON.stringify([10, "VACUUM RUBBER MIXER", MST_BARIS[9].specification, "NIU", 1, 1, 0, 7154, "", "", ""]), "baris 10 (aju angka tetap angka; belum bernilai):");
+    eq(JSON.stringify(baris[57].slice(4)), JSON.stringify([4, 3, 1, "7130 / 9204", "", "", ""]), "baris 58 (dua PIB tetap teks):");
+    eq(JSON.stringify(baris[0].slice(4)), JSON.stringify([1, 0, 1, "", "", "", ""]), "baris belum dipakai:");
     eq(baris.reduce((s, r) => s + r[4], 0) + "/" + baris.reduce((s, r) => s + r[5], 0) + "/" + baris.reduce((s, r) => s + r[6], 0), "112/72/40", "jumlah kolom QTTY/USED/REMAIN:");
     // Beberapa realisasi satu baris: rujukannya digabung tanpa kembar
     pasangMst({ baris: [MST_BARIS[56]], realisasi: [
@@ -15085,7 +15728,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(w.mstNamaBerkas("2026-08-07"), "LAST UPDATE QUOTA MASTER LIST DDI 07 AUG 2026.xlsx", "nama berkas:");
     eq(w.mstNamaBerkas("2026-12-31"), "LAST UPDATE QUOTA MASTER LIST DDI 31 DEC 2026.xlsx", "nama berkas Desember:");
     const src = fs.readFileSync(path.join(ROOT, "js", "views", "masterlist-view.js"), "utf8");
-    if (!/"NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU"/.test(src)) throw new Error("judul kolom berkas sumber berubah");
+    if (!/"NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", `VALUE/.test(src)) throw new Error("judul kolom berkas sumber berubah (nilai menyusul di belakangnya)");
     // Yang hanya membaca tetap boleh mengunduh
     if (/function mstUnduhExcel\(\) \{\s*if \(!requireEdit/.test(src)) throw new Error("unduh Excel ikut dikunci untuk yang hanya membaca");
   });
@@ -15185,9 +15828,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const diam = w.console.error;
     w.console.error = () => {};
     try {
-      w.eval("mstTermuat = false; mstDok = null; mstBarisDb = []; mstRealisasiDb = []; mstPibsSiap = true;");
+      w.eval("mstTermuat = false; mstDok = null; mstBarisDb = []; mstRealisasiDb = []; mstKolomBelumAda.clear();");
       eq(await w.loadMasterlist(), true, "termuat:");
-      eq(baca("mstPibsSiap"), false, "kolom pibs dikenali belum ada:");
+      eq(w.eval("mstKolomBelumAda.has('pibs')"), true, "kolom pibs dikenali belum ada:");
       eq(tiruan.jejak.filter((j) => j.nama === "masterlist_usages").map((j) => (/\bpibs\b/.test(j.kolom) ? "dengan" : "tanpa")).join(","), "dengan,tanpa", "dibaca ulang tanpa kolom itu:");
       eq(mstRing(), "88/112/72/40/26/62/23", "data lengkap:");
       eq(JSON.stringify(w.mstPibs(baca("mstRealisasiDb").find((u) => u.id === "u58"))), JSON.stringify([{ aju: "7130", tanggal: null }, { aju: "9204", tanggal: null }]), "catatan lama tetap terbaca dua PIB:");
@@ -15210,7 +15853,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(tiruan.jejak.length, n, "tidak ada yang dikirim:");
       tulis("mstForm", null);
       // Ternyata belum ada saat MENULIS (dikira sudah): dikirim ulang tanpa kolom itu
-      w.eval("mstPibsSiap = true");
+      w.eval("mstKolomBelumAda.delete('pibs')");
       w.mstBukaRealisasi({ itemId: "it3" });
       mstIsiPib(0, "1237");
       const sebelum = tiruan.jejak.filter((j) => j.aksi === "insert").length;
@@ -15218,7 +15861,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       const kirim = tiruan.jejak.filter((j) => j.aksi === "insert");
       eq(kirim.length - sebelum, 2, "dikirim ulang sekali:");
       eq("pibs" in kirim[kirim.length - 1].muatan[0], false, "kiriman ulang tanpa kolom pibs:");
-      eq(baca("mstPibsSiap"), false, "sesudahnya diingat:");
+      eq(w.eval("mstKolomBelumAda.has('pibs')"), true, "sesudahnya diingat:");
       eq(baca("mstRealisasiDb").filter((u) => u.item_id === "it3").length, 1, "tersimpan sekali:");
     } finally {
       tiruan.lepas();
@@ -15572,20 +16215,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     }
   });
 
-  t("nama sarana angkut = nama + nomor di SEMUA tampilan, kedua moda", () => {
+  t("nama sarana angkut = nama + nomor di semua TAMPILAN, kedua moda", () => {
     const laut = { id: "v1", mode: "export", transport: "laut", status: "process", vessel: "HMM HARVEST", voyage: "0015N", party: "X",
       items: [{ id: "i1", namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", bruto: 10 }],
       etd: "2026-08-20", eta: "2026-08-28", origin: "IDTPP", destination: "KRPUS" };
     const udara = Object.assign({}, laut, { id: "v2", transport: "udara", vessel: "KOREAN AIR", voyage: "KE628" });
-    eq(w.carrierNameFromShipment(laut), "HMM HARVEST 0015N", "laut:");
-    eq(w.carrierNameFromShipment(udara), "KOREAN AIR KE628", "udara (dulu templat hanya menulis nomornya):");
-    // Templat salin: kolom VESSEL NAME
-    const f = w.clipboardFormatter;
-    eq(w.buildDailyExportCopyRows(laut, f)[0].filter((c) => c === "HMM HARVEST 0015N").length, 1, "Daily Export laut:");
-    eq(w.buildDailyExportCopyRows(udara, f)[0].filter((c) => c === "KOREAN AIR KE628").length, 1, "Daily Export udara:");
     const imp = Object.assign({}, udara, { mode: "import" });
-    eq(w.buildDailyImportCopyRows(imp, f)[0].filter((c) => c === "KOREAN AIR KE628").length, 1, "Daily Import udara:");
-    eq(w.buildExcelCopyRows(imp, f)[0].filter((c) => c === "KOREAN AIR KE628").length, 1, "All Import udara:");
+    eq(w.carrierNameFromShipment(laut), "HMM HARVEST 0015N", "laut:");
+    eq(w.carrierNameFromShipment(udara), "KOREAN AIR KE628", "udara:");
     // Kartu & panel detail: satu teks, tidak dua baris terpisah
     const kartu = w.renderExpandedCard(laut);
     if (!/>HMM HARVEST 0015N<\/div>/.test(kartu)) throw new Error("kartu tidak menampilkan gabungan");
@@ -15595,17 +16232,52 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     if (/No\. Voyage|Voyage No\./.test(detail)) throw new Error("panel detail masih punya baris No. Voyage terpisah");
     // Leg transit di jalur progres
     eq(w.laneNodeTitle({ kind: "stop", terminal: "SGSIN", transport: "laut", vessel: "ONE APUS", voyage: "012E" }), "SGSIN · Vessel ONE APUS 012E", "leg transit:");
-    // Surat BC & riwayat invoice
+    // Surat BC
     eq(w.suratDataDariJadwal(Object.assign({}, imp, { eta: "2026-08-28" })).flightTiba.split(" / ")[0], "KOREAN AIR KE628", "surat BC:");
+  });
+
+  t("templat salin: kolom VESSEL / VESSEL NAME kiriman UDARA cukup No Flight; laut nama kapal + voyage", () => {
+    const laut = { id: "v1", mode: "export", transport: "laut", status: "process", vessel: "HMM HARVEST", voyage: "0015N", party: "X",
+      items: [{ id: "i1", namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", bruto: 10 }],
+      etd: "2026-08-20", eta: "2026-08-28", origin: "IDTPP", destination: "KRPUS" };
+    const udara = Object.assign({}, laut, { id: "v2", transport: "udara", vessel: "KOREAN AIR", voyage: "KE628" });
+    const imp = Object.assign({}, udara, { mode: "import" });
+    const f = baca("clipboardFormatter");
+    eq(w.buildDailyExportCopyRows(udara, f)[0][13], "KE628", "Daily Export udara:");
+    eq(w.buildAllExportCopyRows(udara, f)[0][15], "KE628", "All Export udara:");
+    eq(w.buildDailyImportCopyRows(imp, f)[0][13], "KE628", "Daily Import udara:");
+    eq(w.buildExcelCopyRows(imp, f)[0][27], "KE628", "All Import udara:");
+    eq(w.buildDailyExportCopyRows(laut, f)[0][13], "HMM HARVEST 0015N", "Daily Export laut:");
+    eq(w.buildAllExportCopyRows(laut, f)[0][15], "HMM HARVEST 0015N", "All Export laut:");
+    // No Flight kosong -> nama yang ada, daripada kolomnya kosong
+    eq(w.buildDailyExportCopyRows(Object.assign({}, udara, { voyage: "" }), f)[0][13], "KOREAN AIR", "udara tanpa No Flight:");
+    // Jalur tombol Copy sungguhan (tanpa kolom NO)
+    const tpl = (id) => baca("COPY_TEMPLATES").find((x) => x.id === id);
+    [["AllImport", imp], ["DailyImport", imp], ["AllExport", udara], ["DailyExport", udara]].forEach(([id, j]) => {
+      const sel = tpl(id).getText(j).split("\n")[0].split("\t");
+      if (!sel.includes("KE628")) throw new Error(id + ": No Flight tidak tersalin");
+      if (sel.some((x) => /KOREAN AIR/.test(x))) throw new Error(id + ": nama maskapai ikut tersalin");
+    });
+  });
+
+  t("Bulk Excel tetap NAMA + NOMOR untuk udara -- dibaca balik Bulk Import tanpa kehilangan nama maskapai", () => {
+    const udara = { id: "v2", mode: "export", transport: "udara", vessel: "KOREAN AIR", voyage: "KE628", party: "X",
+      items: [{ id: "i1", namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", bruto: 10 }] };
+    const imp = Object.assign({}, udara, { mode: "import", noAju: "AJU1" });
+    const nf = baca("nativeFormatter");
+    eq(w.buildBulkRowsForShipment(udara, 1, "export", nf)[0][15], "KOREAN AIR KE628", "ALL EXPORT:");
+    eq(w.buildBulkRowsForShipment(imp, 1, "import", nf)[0][28], "KOREAN AIR KE628", "ALL IMPORT:");
+    eq(w.buildDailyImportCopyRows(imp, nf)[0][13], "KOREAN AIR KE628", "sheet DAILY IMPORT di berkas Bulk:");
+    eq(JSON.stringify(w.splitVesselCell("KOREAN AIR KE628")), JSON.stringify({ voyage: "KE628", vessel: "KOREAN AIR" }), "dibaca balik:");
   });
 
   t("carrier CIPL: kiriman UDARA cukup No Flight; laut tetap kapal + voyage", () => {
     const laut = { id: "c1", mode: "export", transport: "laut", vessel: "HMM HARVEST", voyage: "0015N", party: "KUMHO TIRE (VIETNAM) CO., LTD.",
       items: [{ id: "i1", namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", harga: 100, bruto: 10 }], origin: "IDTPP", destination: "VNSGN" };
     const udara = Object.assign({}, laut, { id: "c2", transport: "udara", vessel: "KOREAN AIR", voyage: " KE628 ", party: "DYNAMIC DESIGN CO., LTD." });
-    eq(w.carrierCiplDariJadwal(udara), "KE628", "udara:");
-    eq(w.carrierCiplDariJadwal(laut), "HMM HARVEST 0015N", "laut:");
-    eq(w.carrierCiplDariJadwal(Object.assign({}, udara, { voyage: "-" })), "KOREAN AIR", "udara tanpa No Flight -> nama yang ada:");
+    eq(w.carrierVesselFlight(udara), "KE628", "udara:");
+    eq(w.carrierVesselFlight(laut), "HMM HARVEST 0015N", "laut:");
+    eq(w.carrierVesselFlight(Object.assign({}, udara, { voyage: "-" })), "KOREAN AIR", "udara tanpa No Flight -> nama yang ada:");
     // Isian Carrier di data cetak
     eq(w.carrierCipl({}, udara), "KE628", "isian kosong (udara):");
     eq(w.carrierCipl({ carrier: "KOREAN AIR KE628" }, udara), "KE628", "salinan otomatis aturan lama (udara):");

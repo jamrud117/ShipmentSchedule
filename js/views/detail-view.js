@@ -5,7 +5,7 @@ function fieldPair(label, value, icon) {
   return `<div class="info-item"><div class="info-label">${icon ? `<i class="bi ${icon}"></i> ` : ""}${escapeHtml(label)}</div><div class="info-value">${value || "—"}</div></div>`;
 }
 
-// Ringkasan fasilitas 1 barang (SKB & E-COO, bisa banyak
+// Ringkasan fasilitas 1 barang (SKB & COO, bisa banyak
 function itemFacilitiesCellHtml(it) {
   const lines = (it.skb || []).map((sk) => {
     const isEcoo = sk.jenis === "E-COO";

@@ -19,7 +19,9 @@ const authState = { user: null, profile: null, siap: false };
                   mengajukan, memperbaiki isian, menandai status bayar,
                   menghapus, dan mengatur nomor urut -- khusus EXIM.
      finance   -- hanya MELIHAT, dan hanya TIGA halaman: Jadwal, Nomor
-                  Dokumen, dan Masterlist. Di Nomor Dokumen ia sama
+                  Dokumen, dan Masterlist -- kecuali SATU aksi: menandai
+                  Pengajuan Dana sudah / belum dibayar (Paid / Unpaid,
+                  `tandaiBayar`). Selebihnya di Nomor Dokumen ia sama
                   dengan marketing.
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
@@ -37,6 +39,7 @@ const PERAN = {
   exim: {
     label: "EXIM",
     ubah: true,
+    tandaiBayar: true,
     halaman: null,
     get ket() { return tt("bisa ubah", "can edit"); },
   },
@@ -49,8 +52,11 @@ const PERAN = {
   finance: {
     label: "Finance",
     ubah: false,
+    tandaiBayar: true,
     halaman: ["schedule", "docnum", "masterlist"],
-    get ket() { return tt("lihat saja: Jadwal, No. Dokumen & Masterlist", "view only: Schedule, Doc. Number & Masterlist"); },
+    get ket() {
+      return tt("lihat saja: Jadwal, No. Dokumen & Masterlist + tandai Paid/Unpaid", "view only: Schedule, Doc. Number & Masterlist + mark Paid/Unpaid");
+    },
   },
   viewer: {
     label: "Viewer",
@@ -72,6 +78,14 @@ function aturanPeran(peran) {
    halaman mana pun. */
 function canEdit() {
   return aturanPeran().ubah;
+}
+/* Satu-satunya hal yang boleh DIUBAH selain oleh EXIM: status bayar
+   Pengajuan Dana (Paid / Unpaid) -- untuk Finance. Di database dijaga
+   fungsi set_fund_paid (migration-finance-tanda-bayar.sql), bukan izin
+   UPDATE ke tabelnya: isian pengajuan lainnya tetap tertutup. */
+function bolehTandaiBayar() {
+  const a = aturanPeran();
+  return !!(a.ubah || a.tandaiBayar);
 }
 /* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
 function bolehBuka(halaman) {

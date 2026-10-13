@@ -339,7 +339,7 @@ function reconstructShipmentFromGroup(group, mode) {
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),
     invoice: excelStr(first[idx.INVOICE]),
-    // Kolom VESSEL berisi gabungan carrierNameFromShipment(): "<Nama> <Nomor>", kedua moda
+    // Kolom VESSEL berisi gabungan carrierNameFromShipment(): "<Nama> <Nomor>", kedua moda (nativeFormatter.vessel)
     ...splitVesselCell(excelStr(first[idx.VESSEL])),
     package: excelStr(first[idx.PACKAGE]),
     notes: excelStr(first[idx.REMARK]),

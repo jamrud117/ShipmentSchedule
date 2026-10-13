@@ -187,7 +187,7 @@ function newItem() {
     /* Marks pada CIPL. Kosong = dibangkitkan otomatis dari urutan
        koli ("C# : 8-1"); diisi kalau penandaan di lapangan berbeda. */
     marks: "",
-    // Fasilitas per barang — SKB & E-COO sekarang 1 daftar yang sama (skb)
+    // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang sama (skb)
     skb: [],
     // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)
     _facOpen: false,
@@ -231,15 +231,20 @@ function newSkbEntry() {
 }
 
 // Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis
+/* Dicocokkan tanpa beda huruf, spasi & tanda hubung, ditambah nama
+   tampilnya: "COO" (nama fasilitas E-COO di layar & salinan) dan
+   "MASTER LIST" (tulisan kolom fasilitas di templat salin / Bulk
+   Excel) kembali ke jenisnya sendiri, bukan jadi "Lainnya". */
 function skbTextToEntries(raw) {
+  const kunci = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, "");
   return String(raw || "")
     .split(",")
     .map((bagian) => bagian.trim())
     .filter(Boolean)
     .map((nama) => {
-      const match = SKB_TYPE_OPTIONS.find(
-        (o) => o !== "Lainnya" && o.toLowerCase() === nama.toLowerCase(),
-      );
+      const match =
+        SKB_TYPE_OPTIONS.find((o) => o !== "Lainnya" && kunci(o) === kunci(nama)) ||
+        (kunci(nama) === "coo" ? "E-COO" : null);
       return match
         ? { jenis: match, jenisLainnya: "", nomor: "", tanggal: "" }
         : { jenis: "Lainnya", jenisLainnya: nama, nomor: "", tanggal: "" };

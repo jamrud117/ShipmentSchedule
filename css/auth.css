@@ -354,6 +354,9 @@ body.tutup-accounts .site-nav-link[data-page="accounts"] {
    finance -- tapi hanya untuk MEMBACA (riwayat & Summary). Keduanya
    membawa .is-viewer juga, jadi panel isian, tombol Ajukan, dan Atur
    Nomor Urut tersembunyi baginya lewat aturan yang sama dengan viewer.
+   (Satu-satunya tombol ubah untuk finance -- status bayar Pengajuan
+   Dana -- tidak diatur di sini: dnTombolBayar() menggambarnya sebagai
+   tombol hanya untuk peran yang boleh, selain itu lencana biasa.)
 
    Form ini tidak punya satu pembungkus: panel isian per jenis
    ([data-docnum-panel]), baris tombol (.docnum-actions), dan riwayat
