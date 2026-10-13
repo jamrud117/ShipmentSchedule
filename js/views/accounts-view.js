@@ -50,6 +50,7 @@ function renderAccounts() {
     const el = $("#accountCount" + peran.charAt(0).toUpperCase() + peran.slice(1));
     if (el) el.textContent = jumlah[peran] || 0;
   });
+  renderLegendaPeran();
 
   if (!rows.length) {
     box.innerHTML = `<div class="panel-empty"><i class="bi bi-person-x"></i> ${t("c.tidak.ada.akun.yang.cocok")}</div>`;
@@ -90,7 +91,7 @@ function renderAccounts() {
           ${urutanPilihanPeran()
             .map(
               (p) =>
-                `<option value="${p}" ${p === peran ? "selected" : ""}>${escapeHtml(PERAN[p].label + " — " + PERAN[p].ket)}</option>`,
+                `<option value="${p}" ${p === peran ? "selected" : ""} title="${escapeAttr(PERAN[p].ket)}">${escapeHtml(PERAN[p].label)}</option>`,
             )
             .join("")}
         </select>
@@ -108,6 +109,27 @@ function renderAccounts() {
       </div>`;
     })
     .join("");
+}
+
+/* HAK TIAP PERAN di bawah daftar akun. Pemilih peran cukup menyebut
+   namanya (dulu "Finance — lihat saja: Jadwal, …" terpotong di kotak
+   selebar 172px); apa arti tiap peran dibaca di sini, dari tabel PERAN
+   yang sama dengan router & navbar. Urut dari hak paling luas. */
+function renderLegendaPeran() {
+  const box = $("#acctPeranLegend");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="acct-legend-judul">${escapeHtml(tt("Hak tiap peran", "What each role can do"))}</div>
+    ${urutanPilihanPeran()
+      .slice()
+      .reverse()
+      .map(
+        (p) => `<div class="acct-legend-baris">
+          <span class="acct-legend-peran${p === "viewer" ? "" : " is-" + p}">${escapeHtml(PERAN[p].label)}</span>
+          <span>${escapeHtml(PERAN[p].ket)}</span>
+        </div>`,
+      )
+      .join("")}`;
 }
 
 /* Peran sebuah akun menurut tabel PERAN (session.js); yang tidak

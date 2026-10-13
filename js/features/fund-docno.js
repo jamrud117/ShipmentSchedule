@@ -19,6 +19,11 @@
 
    SATU fungsi, fundPakaiDocNo(), dipakai form DAN cetakannya -- jadi
    keduanya tidak mungkin berbeda pendapat.
+
+   Aturan yang sama menentukan PENANDA TANGAN KEEMPAT (bawaan Mr. Kim
+   Taewan, Chief Financial Officer -- isian cfoName/cfoRole): vendor
+   yang memakai Doc No juga ditandatangani CFO; vendor di daftar "tanpa
+   Doc No" tidak.
 ------------------------------------------------------------------ */
 const FUND_DOCNO_BAWAAN = ["PRIME", "WIDE"];
 const FUND_DOCNO_KUNCI = "fund-doc-no-tanpa-vendor";
@@ -108,9 +113,15 @@ function fundSelaraskanDocNo(panel) {
   if (!wadah) return;
   const kotakPayee = panel.querySelector('[data-dn="payee"]');
   const pakai = fundPakaiDocNo(kotakPayee && kotakPayee.value);
-  wadah.classList.toggle("d-none", !pakai);
-  const kotak = wadah.querySelector('[data-dn="docNo"]');
-  if (kotak) kotak.disabled = !pakai;
+  /* Kotak Doc No dan isian penanda tangan keempat (CFO) ikut aturan
+     yang sama -- disembunyikan sekaligus dinonaktifkan, jadi isinya
+     tidak tersimpan untuk vendor tanpa Doc No. */
+  [wadah, ...panel.querySelectorAll(".fund-ttd-cfo")].forEach((el) => {
+    el.classList.toggle("d-none", !pakai);
+    el.querySelectorAll("[data-dn]").forEach((f) => {
+      f.disabled = !pakai;
+    });
+  });
 }
 
 /* ---------- kotak "Aturan Doc No" ---------- */

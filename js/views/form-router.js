@@ -5,7 +5,6 @@
 const PAGE_VIEWS = {
   accounts: "#viewAccounts",
   hscode: "#viewHsCode",
-  vessel: "#viewVesselSchedule",
   masterlist: "#viewMasterlist",
   overview: "#viewOverview",
   schedule: "#viewList",
@@ -71,7 +70,6 @@ const HALAMAN_HASH = {
   "#/ringkasan": "overview",
   "#/akun": "accounts",
   "#/hscode": "hscode",
-  "#/shipment-schedule": "vessel",
   "#/masterlist": "masterlist",
   "#/docnum": "docnum",
   "#/new": "form",
@@ -89,7 +87,7 @@ function router() {
      memang sudah disembunyikan, tapi alamatnya bisa diketik langsung.
 
      Siapa boleh membuka apa ada di tabel PERAN (session.js): viewer &
-     marketing boleh membuka HS Code, Jadwal Kapal, dan Ringkasan untuk
+     marketing boleh membuka HS Code dan Ringkasan untuk
      MEMBACA (yang mengubah data di sana disembunyikan lewat
      body.is-viewer dan ditolak requireEdit() serta RLS); finance hanya
      Jadwal, Nomor Dokumen & Masterlist; form jadwal dan Akun khusus
@@ -129,12 +127,6 @@ function router() {
      lewat RLS. */
   if (hash === "#/hscode") {
     showHsCodeView();
-    return;
-  }
-
-  // Shipment Schedule
-  if (hash === "#/shipment-schedule") {
-    showVesselScheduleView();
     return;
   }
 

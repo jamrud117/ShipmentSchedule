@@ -50,8 +50,10 @@ function ringkasMeleset(selisih) {
   };
 }
 
-function predictionBacktest(list) {
-  const hariIni = todayISO();
+/* Uji mundur dipecah tiga -- siapkan, jalankan (boleh bertahap),
+   ringkas -- supaya layar bisa menjalankannya sedikit demi sedikit
+   (predictionAccuracyBertahap di bawah). */
+function siapkanUjiMundur(list) {
   const fakta = (list || [])
     .filter((s) => s && (s.etdUpdate || s.etd))
     .map((s) => {
@@ -60,14 +62,28 @@ function predictionBacktest(list) {
       const tahu = [tiba, milestoneDateOf(s, "sppb"), pabrik].filter(Boolean).sort().pop() || "";
       return { s, tiba, pabrik, tahu, etd: s.etdUpdate || s.etd };
     });
+  return {
+    hariIni: todayISO(),
+    fakta,
+    i: 0,
+    selisih: { eta: { laut: [], udara: [] }, delivery: { laut: [], udara: [] } },
+  };
+}
 
-  const selisih = { eta: { laut: [], udara: [] }, delivery: { laut: [], udara: [] } };
+/* Menguji paling banyak `maks` kiriman berikutnya. Riwayat, tanggal
+   acuan, dan todayISO ditukar HANYA selama langkah ini dan selalu
+   dipulihkan di ujungnya -- di sela dua langkah, kartu & halaman lain
+   membaca keadaan yang normal. true = semua kiriman sudah diuji. */
+function ujiMundurLangkah(uji, maks) {
+  const { fakta, selisih, hariIni } = uji;
+  const akhir = Math.min(fakta.length, uji.i + maks);
   const simpan = { riwayat: PREDICTION_HISTORY_OVERRIDE, asOf: PREDICTION_LEARN_ASOF, today: todayISO };
   try {
-    fakta.forEach((f) => {
+    for (; uji.i < akhir; uji.i++) {
+      const f = fakta[uji.i];
       // Kenyataannya harus sudah terjadi -- ETA manual yang masih di
       // depan baru janji, belum kenyataan.
-      if ((!f.tiba && !f.pabrik) || !f.tahu || f.tahu > hariIni) return;
+      if ((!f.tiba && !f.pabrik) || !f.tahu || f.tahu > hariIni) continue;
 
       PREDICTION_HISTORY_OVERRIDE = fakta.filter((g) => g !== f && g.tahu && g.tahu < f.etd).map((g) => g.s);
       setPredictionAsOf(f.etd);
@@ -78,33 +94,69 @@ function predictionBacktest(list) {
         factoryDate: "", actual: "", deliveryMode: "auto", status: "process",
       });
       const p = predictEta(rencana);
-      if (!p.ok || !p.eta) return;
+      if (!p.ok || !p.eta) continue;
       const jenis = f.s.transport === "udara" ? "udara" : "laut";
       if (f.tiba) selisih.eta[jenis].push(calendarDaysBetweenISO(f.tiba, p.eta));
       if (f.pabrik) {
         const d = predictDelivery(Object.assign({}, rencana, { eta: p.eta }));
         if (d.ok && d.date) selisih.delivery[jenis].push(calendarDaysBetweenISO(f.pabrik, d.date));
       }
-    });
+    }
   } finally {
     todayISO = simpan.today;
     PREDICTION_HISTORY_OVERRIDE = simpan.riwayat;
     setPredictionAsOf(simpan.asOf);
   }
+  return uji.i >= fakta.length;
+}
 
+function ringkasUjiMundur(uji) {
+  const { selisih } = uji;
   return {
     eta: { laut: ringkasMeleset(selisih.eta.laut), udara: ringkasMeleset(selisih.eta.udara) },
     delivery: { laut: ringkasMeleset(selisih.delivery.laut), udara: ringkasMeleset(selisih.delivery.udara) },
   };
 }
 
-/* Hasil untuk seluruh data yang dimuat, dihitung sekali per generasi
-   data (lihat resetPredictionLearning). */
-function predictionAccuracy() {
-  if (UJI_MUNDUR.generasi === GENERASI_BELAJAR && UJI_MUNDUR.hasil) return UJI_MUNDUR.hasil;
-  const semua = typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
-  const hasil = predictionBacktest(semua);
-  UJI_MUNDUR.generasi = GENERASI_BELAJAR;
-  UJI_MUNDUR.hasil = hasil;
-  return hasil;
+function predictionBacktest(list) {
+  const uji = siapkanUjiMundur(list);
+  ujiMundurLangkah(uji, Infinity);
+  return ringkasUjiMundur(uji);
+}
+
+function semuaKirimanDimuat() {
+  return typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
+}
+
+/* Hasil untuk seluruh data yang dimuat, disimpan sekali per generasi
+   data (lihat resetPredictionLearning). BERTAHAP: tiap giliran paling
+   lama ±12 ms, lalu peramban dibiarkan menanggapi klik & ketikan dulu.
+   Sekali jalan, uji mundur ratusan kiriman memakan ratusan milidetik
+   tanpa jeda di laptop kantor -- klik yang jatuh di tengahnya baru
+   ditanggapi sesudah selesai. Data berubah di tengah jalan -> diulang
+   dari awal dengan data baru. */
+function predictionAccuracyBertahap(selesai) {
+  if (UJI_MUNDUR.generasi === GENERASI_BELAJAR && UJI_MUNDUR.hasil) {
+    selesai(UJI_MUNDUR.hasil);
+    return;
+  }
+  const generasi = GENERASI_BELAJAR;
+  const uji = siapkanUjiMundur(semuaKirimanDimuat());
+  const giliran = () => {
+    if (generasi !== GENERASI_BELAJAR) {
+      predictionAccuracyBertahap(selesai);
+      return;
+    }
+    const mulai = Date.now();
+    let habis = false;
+    while (!habis && Date.now() - mulai < 12) habis = ujiMundurLangkah(uji, 3);
+    if (!habis) {
+      setTimeout(giliran, 0);
+      return;
+    }
+    UJI_MUNDUR.generasi = generasi;
+    UJI_MUNDUR.hasil = ringkasUjiMundur(uji);
+    selesai(UJI_MUNDUR.hasil);
+  };
+  giliran();
 }

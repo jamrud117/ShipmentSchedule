@@ -49,16 +49,6 @@
   gap: var(--sp-2);
 }
 
-.eta-input-row {
-  display: flex;
-  align-items: stretch;
-  gap: var(--sp-2);
-}
-.eta-input-row .form-control {
-  flex: 1;
-  min-width: 0;
-}
-
 /* Pengalih Auto/Manual — dua tombol berdempet, bukan dropdown: hanya
    ada dua pilihan dan keduanya harus terbaca tanpa dibuka dulu. */
 .eta-mode-switch {

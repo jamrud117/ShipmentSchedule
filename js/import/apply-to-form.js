@@ -496,15 +496,13 @@ function applyImportedBcData(parsed) {
   renderItemTable();
 
   const items = parsed.items || [];
+  const fasilitas = hitungFasilitas(items.flatMap((it) => it.skb || []));
   const facParts = [];
-  const skbCount = items.reduce(
-    (n, it) => n + (it.skb || []).filter((sk) => sk.jenis !== "E-COO").length,
-    0,
-  );
-  if (skbCount) facParts.push(`${skbCount} SKB`);
-  if (items.some((it) => (it.skb || []).some((sk) => sk.jenis === "E-COO")))
-    facParts.push("E-COO");
-  const facSuffix = facParts.length ? ` (termasuk ${facParts.join(" & ")})` : "";
+  if (fasilitas.skb) facParts.push(`${fasilitas.skb} SKB`);
+  if (fasilitas.coo) facParts.push(`${fasilitas.coo} COO`);
+  const facSuffix = facParts.length
+    ? tt(` (termasuk ${facParts.join(" & ")})`, ` (incl. ${facParts.join(" & ")})`)
+    : "";
   const sourceLabel = /pdf/i.test(src || "") ? "PDF" : "Excel";
   const docLabel =
     src === "pdf"

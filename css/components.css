@@ -17,11 +17,6 @@
   color: var(--navy);
   margin-bottom: 0.25rem;
 }
-/* Varian tanpa jarak atas: dipakai saat catatannya jadi elemen
-   PERTAMA di dalam kotaknya, bukan penjelasan di bawah sebuah isian. */
-.form-text-note--flush {
-  margin-top: 0;
-}
 .form-text-note {
   font-size: 0.72rem;
   color: var(--muted);
@@ -281,9 +276,11 @@
 /* ==================================================================
    TOAST
 
-   Kanan-atas, DI BAWAH bilah yang sedang menempel — posisinya dihitung
-   dari tinggi bilah itu, bukan angka tetap, karena bilah kendali
-   membungkus jadi dua baris di layar sempit.
+   Kanan-atas, tepat DI BAWAH BILAH ATAS (ponsel & tablet; desktop
+   --topbar-h = 0). Bilah kendali Jadwal sengaja tidak dihitung: ia
+   cuma ada di satu halaman, jadi posisi toast akan beda-beda antar
+   halaman. Di layar tanpa kerangka (masuk, form) bilah atas tidak ada,
+   toast naik ke puncak. Murni CSS -- tidak ada pengukuran di JS.
 
    Seluruh kotaknya TEMBUS KLIK (pointer-events: none); hanya tombol
    tutupnya yang menangkap tekanan. Jadi walau ia melintas di atas
@@ -293,9 +290,6 @@
 .toast-stack {
   position: fixed;
   right: var(--sp-5);
-  /* Diatur ulang oleh JS mengikuti tinggi bilah yang sedang menempel —
-     lihat posisikanToast() di js/ui/feedback.js. Nilai ini cadangan
-     kalau JS-nya belum sempat berjalan. */
   top: calc(var(--topbar-h) + 12px);
   z-index: 2000;
   display: flex;
@@ -303,6 +297,9 @@
   gap: var(--sp-2);
   pointer-events: none;
   max-width: min(420px, calc(100vw - 40px));
+}
+body:not(.punya-kerangka) .toast-stack {
+  top: 12px;
 }
 
 .app-toast {

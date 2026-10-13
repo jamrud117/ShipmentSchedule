@@ -173,5 +173,8 @@ function jenisOptionsUntuk(nilai) {
   return urutkanJenis(JENIS_OPTIONS.concat([kini]));
 }
 
-// Jenis fasilitas SKB yang sudah dikenal aplikasi (checkbox tetap)
+/* Jenis fasilitas yang sudah dikenal aplikasi -- NILAI TERSIMPAN.
+   "E-COO" ditampilkan sebagai "COO" (skbJenisLabel, item-table.js);
+   nilainya sendiri dibiarkan supaya data lama & hasil impor tetap
+   terbaca. */
 const SKB_TYPE_OPTIONS = ["BM", "PPN", "PPH", "Masterlist", "E-COO", "Lainnya"];

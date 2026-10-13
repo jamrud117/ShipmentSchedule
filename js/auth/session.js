@@ -19,7 +19,9 @@ const authState = { user: null, profile: null, siap: false };
                   mengajukan, memperbaiki isian, menandai status bayar,
                   menghapus, dan mengatur nomor urut -- khusus EXIM.
      finance   -- hanya MELIHAT, dan hanya TIGA halaman: Jadwal, Nomor
-                  Dokumen, dan Masterlist. Di Nomor Dokumen ia sama
+                  Dokumen, dan Masterlist -- kecuali SATU aksi: menandai
+                  Pengajuan Dana sudah / belum dibayar (Paid / Unpaid,
+                  `tandaiBayar`). Selebihnya di Nomor Dokumen ia sama
                   dengan marketing.
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
@@ -37,25 +39,29 @@ const PERAN = {
   exim: {
     label: "EXIM",
     ubah: true,
+    tandaiBayar: true,
     halaman: null,
     get ket() { return tt("bisa ubah", "can edit"); },
   },
   marketing: {
     label: "Marketing",
     ubah: false,
-    halaman: ["overview", "schedule", "docnum", "hscode", "vessel", "masterlist"],
+    halaman: ["overview", "schedule", "docnum", "hscode", "masterlist"],
     get ket() { return tt("lihat saja, termasuk No. Dokumen", "view only, incl. Doc. Number"); },
   },
   finance: {
     label: "Finance",
     ubah: false,
+    tandaiBayar: true,
     halaman: ["schedule", "docnum", "masterlist"],
-    get ket() { return tt("lihat saja: Jadwal, No. Dokumen & Masterlist", "view only: Schedule, Doc. Number & Masterlist"); },
+    get ket() {
+      return tt("lihat saja: Jadwal, No. Dokumen & Masterlist + tandai Paid/Unpaid", "view only: Schedule, Doc. Number & Masterlist + mark Paid/Unpaid");
+    },
   },
   viewer: {
     label: "Viewer",
     ubah: false,
-    halaman: ["overview", "schedule", "hscode", "vessel", "masterlist"],
+    halaman: ["overview", "schedule", "hscode", "masterlist"],
     get ket() { return tt("hanya lihat", "read only"); },
   },
 };
@@ -73,13 +79,18 @@ function aturanPeran(peran) {
 function canEdit() {
   return aturanPeran().ubah;
 }
+/* Satu-satunya hal yang boleh DIUBAH selain oleh EXIM: status bayar
+   Pengajuan Dana (Paid / Unpaid) -- untuk Finance. Di database dijaga
+   fungsi set_fund_paid (migration-finance-tanda-bayar.sql), bukan izin
+   UPDATE ke tabelnya: isian pengajuan lainnya tetap tertutup. */
+function bolehTandaiBayar() {
+  const a = aturanPeran();
+  return !!(a.ubah || a.tandaiBayar);
+}
 /* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
 function bolehBuka(halaman) {
   const daftar = aturanPeran().halaman;
   return !daftar || daftar.indexOf(halaman) >= 0;
-}
-function canViewDocNum() {
-  return bolehBuka("docnum");
 }
 
 function currentRoleLabel() {
@@ -196,6 +207,10 @@ function applyPermissions() {
       authState.profile.full_name ||
       authState.profile.username ||
       tt("Pengguna", "User");
+    const avatar = $("#userChipAvatar");
+    if (avatar) {
+      avatar.textContent = (authState.profile.full_name || authState.profile.username || "?").trim().charAt(0).toUpperCase() || "?";
+    }
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
@@ -241,11 +256,16 @@ function requireEdit(pesan) {
    LAYAR LOGIN
 ------------------------------------------------------------------ */
 
+/* Sesudah memudar, layar sambutan DISEMBUNYIKAN, bukan dibuang:
+   membuang anak langsung <body> membuat peramban menghitung ulang gaya
+   seluruh halaman (±1.200 elemen) tepat saat papan baru tergambar. */
 function hideBootScreen() {
   const b = $("#bootScreen");
   if (!b || b.classList.contains("is-done")) return;
   b.classList.add("is-done");
-  setTimeout(() => b.remove(), 350);
+  setTimeout(() => {
+    b.style.display = "none";
+  }, 350);
 }
 
 function showLoginView() {

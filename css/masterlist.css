@@ -594,16 +594,150 @@
   font-size: var(--t-sm);
   color: var(--n-700);
 }
-.mst-rinci-tabel tr:last-child td {
+/* Rincian baris: satu <tbody> per realisasi. Garis bawah terakhir
+   dihapus hanya di tbody terakhir -- termasuk sel jumlah/catatan/tombol
+   yang setinggi beberapa baris (rowspan, realisasi parsial). */
+.mst-rinci-tabel tbody:last-child tr:last-child td,
+.mst-rinci-tabel tbody:last-child td[rowspan] {
   border-bottom: 0;
+}
+/* Antar-PIB dalam satu realisasi parsial: garis putus-putus, supaya
+   terbaca satu kesatuan; garis utuh baru memisahkan realisasi. */
+.mst-rinci-tabel tbody.mst-rinci-parsial tr:not(:last-child) > td:not([rowspan]) {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--n-200);
 }
 .mst-rinci-tabel th:first-child,
 .mst-rinci-tabel td:first-child {
   padding-left: 0;
 }
+/* (Sel nomor aju PIB kedua dst. menjadi anak terakhir barisnya karena
+   sel lain milik baris pertama -- ia tidak berada di tepi tabel.) */
 .mst-rinci-tabel th:last-child,
-.mst-rinci-tabel td:last-child {
+.mst-rinci-tabel td:last-child:not(.mst-rinci-aju) {
   padding-right: 0;
+}
+.mst-rinci-tabel td.mst-rinci-aju:last-child {
+  padding-right: 10px;
+}
+.mst-rinci-tabel td[rowspan] {
+  vertical-align: middle;
+}
+
+/* Penanda realisasi parsial (beberapa PIB) -- teks + bentuk cip, bukan
+   warna saja. */
+.mst-parsial {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border: 1px solid var(--s-warn-line);
+  border-radius: var(--r-xs);
+  background: var(--s-warn-bg);
+  color: var(--n-700);
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: normal;
+}
+.mst-kol-angka .mst-parsial {
+  margin-left: auto;
+}
+/* Tombol "+ PIB": kiriman berikutnya untuk realisasi ini. */
+.mst-pib-tambah {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--p-200);
+  border-radius: var(--r-xs);
+  background: var(--p-50);
+  color: var(--p-600);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mst-pib-tambah:hover {
+  border-color: var(--p-400);
+}
+.mst-pib-tambah i {
+  font-size: 0.7rem;
+}
+/* NILAI (USD): baris kedua sel Kuota / Terpakai / Sisa -- lebih kecil dan
+   redup dari angka unitnya. Status yang perlu dicek: ikon + kalimat
+   (pembaca layar), warna hanya pendukung. */
+.mst-nilai {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mst-tabel td.mst-kol-sisa .mst-nilai {
+  margin-left: 0;
+}
+.mst-nilai i {
+  margin-right: 4px;
+}
+.mst-nilai--lebih {
+  color: var(--s-danger);
+  font-weight: 700;
+}
+.mst-nilai--selisih i,
+.mst-nilai-ket--selisih i {
+  color: var(--s-warn);
+}
+.mst-nilai--belum i,
+.mst-nilai-ket--belum i {
+  color: var(--n-400);
+}
+.mst-nilai-ket--lebih i {
+  color: var(--s-danger);
+}
+.mst-rinci-nilai .mst-nilai-ring {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, max-content));
+  gap: 4px var(--sp-5);
+  margin: 0;
+}
+.mst-nilai-ring dt {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.mst-nilai-ring dd {
+  margin: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mst-nilai-ring dd.mst-nilai--lebih {
+  color: var(--s-danger);
+}
+.mst-nilai-ket,
+.mst-nilai-kosong {
+  margin: 6px 0 0;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.mst-nilai-ket i {
+  margin-right: 6px;
+}
+.mst-nilai-kosong {
+  margin-top: 0;
+  color: var(--n-500);
+}
+
+/* Susunan Per PIB: tanggal PIB belum sama di semua catatannya. */
+.mst-tgl-beda {
+  margin-left: 6px;
+  color: var(--s-warn);
+  font-size: 0.8rem;
 }
 .mst-rinci-tabel td.mst-ubah,
 .mst-rinci-tabel th.mst-ubah {
@@ -637,14 +771,39 @@
 .mst-form-lebar {
   grid-column: 1 / -1;
 }
-/* Satu baris pilihan: baris masterlist | jumlah | hapus, keterangan sisa
-   kuotanya di bawah. */
+/* Satu baris pilihan: baris masterlist | jumlah | nilai invoice (| hapus),
+   keterangan sisa kuota & nilainya di bawah. Kepala kolomnya memakai kisi
+   yang sama; kolom hapus hanya ada kalau barisnya lebih dari satu. */
 .mst-pilih {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px auto;
+  grid-template-columns: minmax(0, 1fr) 76px 128px;
   gap: 4px 8px;
   align-items: center;
   margin-bottom: 10px;
+}
+.mst-pilih-daftar.is-banyak .mst-pilih {
+  grid-template-columns: minmax(0, 1fr) 76px 128px 30px;
+}
+.mst-pilih-daftar .mst-pilih-kepala {
+  align-items: end;
+  margin-bottom: 4px;
+}
+.mst-pilih-kepala .prompt-label {
+  margin-bottom: 0;
+}
+.mst-pilih .mst-pilih-nilai {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* Peringatan nilai: baris sendiri, ikon peringatan + kalimat berwarna teks. */
+.mst-pilih-awas {
+  display: block;
+  margin-top: 2px;
+  color: var(--n-700);
+}
+.mst-pilih-awas i {
+  margin-right: 5px;
+  color: var(--s-warn);
 }
 .mst-pilih .login-input {
   height: 40px;
@@ -665,6 +824,54 @@
 .mst-pilih .mst-pilih-ket:empty {
   display: none;
 }
+/* Kiriman lanjutan: kotak jumlahnya hanya menampilkan jumlah realisasinya. */
+.mst-pilih.is-lanjutan .mst-pilih-qty {
+  background: var(--n-50);
+  color: var(--n-500);
+}
+
+/* PIB realisasi: nomor aju | tanggal (| hapus), keterangan di bawahnya.
+   Kepala kolomnya memakai kisi yang sama supaya lurus dengan kotaknya;
+   kolom hapus hanya ada kalau PIB-nya lebih dari satu. */
+.mst-pib-daftar .mst-pib {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  gap: 4px 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.mst-pib-daftar.is-banyak .mst-pib {
+  grid-template-columns: minmax(0, 1fr) 156px 30px;
+}
+.mst-pib-daftar .mst-pib-kepala {
+  margin-bottom: 4px;
+}
+.mst-pib-kepala .prompt-label {
+  margin-bottom: 0;
+}
+.mst-pib .login-input {
+  height: 40px;
+  margin-bottom: 0;
+  font-size: var(--t-base);
+}
+.mst-pib .mst-pib-ket {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+.mst-pib .mst-pib-ket:empty {
+  display: none;
+}
+.mst-pib .mst-pib-ket.is-awas {
+  color: var(--n-700);
+}
+.mst-pib-ket.is-awas i {
+  margin-right: 5px;
+  color: var(--s-warn);
+}
+.mst-pib-saran {
+  margin-top: 8px;
+}
+
 /* Sedang menyimpan (lihat mstSimpanRealisasi: ditandai, bukan dinonaktifkan). */
 #btnMstSimpanRealisasi.is-sibuk {
   opacity: 0.6;
@@ -766,12 +973,31 @@
   .mst-tabel tr.is-terbuka > td {
     background: none;
   }
-  .mst-tabel th:first-child,
-  .mst-tabel td:first-child,
-  .mst-tabel th:last-child,
-  .mst-tabel td:last-child {
+  /* Hanya sel kartu itu sendiri (anak langsung): tabel rincian di
+     dalam kartu punya jarak selnya sendiri -- tanpa ">" kolom catatannya
+     menempel ke kolom jumlah. */
+  .mst-tabel > tbody > tr > td:first-child,
+  .mst-tabel > tbody > tr > td:last-child {
     padding-left: 0;
     padding-right: 0;
+  }
+  /* Kolom angka di kartu selebar selnya (bukan 1% seperti di tabel), supaya
+     penanda parsial di bawah angkanya tidak terjepit. */
+  .mst-tabel > tbody > tr > td.mst-kol-angka {
+    width: auto;
+    text-align: left;
+  }
+  .mst-tabel > tbody > tr > td.mst-kol-angka .mst-parsial {
+    margin-left: 0;
+  }
+  /* Kartu sepertiga lebar: nilai panjang ("lebih USD 2,500.00") boleh turun baris. */
+  .mst-tabel .mst-nilai {
+    white-space: normal;
+  }
+  /* Catatan realisasi tidak diperas jadi kolom sempit bertingkat-tingkat:
+     tabel rinciannya boleh lebih lebar dari kartu dan digeser ke samping. */
+  .mst-rinci-tabel td.mst-rinci-catatan {
+    min-width: 180px;
   }
   /* Judul kartu: nomor baris di atas nama barangnya (atau nomor aju),
      tombol menumpang di pojok kanan area yang sama. Nomornya ditulis
@@ -826,7 +1052,7 @@
     color: var(--n-500);
   }
   /* 36px, bukan 44px bawaan ponsel: dua tombol 44px memakan hampir
-     sepertiga lebar kartu (sama dengan kartu Jadwal Kapal). */
+     sepertiga lebar kartu. */
   .mst-tabel .icon-btn {
     width: 36px;
     height: 36px;
@@ -856,8 +1082,28 @@
   .mst-form {
     grid-template-columns: minmax(0, 1fr);
   }
-  .mst-pilih {
-    grid-template-columns: minmax(0, 1fr) 80px auto;
+  /* Ponsel: baris masterlist selebar kotak, jumlah & nilai di bawahnya. */
+  .mst-pilih,
+  .mst-pilih-daftar.is-banyak .mst-pilih {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+  .mst-pilih-daftar.is-banyak .mst-pilih {
+    grid-template-columns: 76px minmax(0, 1fr) 30px;
+  }
+  .mst-pilih .mst-pilih-baris {
+    grid-column: 1 / -1;
+  }
+  .mst-pilih-kepala .prompt-label[aria-hidden] {
+    display: none;
+  }
+  .mst-pilih-kepala .prompt-label:first-child {
+    grid-column: 1 / -1;
+  }
+  .mst-pib-daftar .mst-pib {
+    grid-template-columns: minmax(0, 1fr) 138px;
+  }
+  .mst-pib-daftar.is-banyak .mst-pib {
+    grid-template-columns: minmax(0, 1fr) 138px 30px;
   }
 }
 

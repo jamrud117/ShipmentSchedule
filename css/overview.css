@@ -9,6 +9,21 @@
   .ov-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Satu kolom: kedua kolom dilebur supaya urutan panel bisa diatur
+     lintas kolom -- yang mendesak dulu, akurasi prediksi & aksi cepat
+     paling bawah. Jaraknya dari gap grid, bukan margin antarpanel. */
+  .ov-kolom {
+    display: contents;
+  }
+  .ov-grid .panel + .panel {
+    margin-top: 0;
+  }
+  .ov-tindakan { order: 1; }
+  .ov-agenda { order: 2; }
+  .ov-delay { order: 3; }
+  .ov-docs { order: 4; }
+  .ov-akurasi { order: 5; }
+  .ov-aksi { order: 6; }
 }
 
 .panel {
@@ -44,9 +59,25 @@
   color: var(--sec-600);
   font-size: 0.9rem;
 }
+.panel-head h2 .ic {
+  color: var(--sec-600);
+  width: 17px;
+  height: 17px;
+}
 .panel-head-note {
   font-size: var(--t-xs);
   color: var(--n-500);
+}
+/* Ponsel: keterangan panel turun ke baris sendiri di bawah judul --
+   berdampingan, judulnya ("AGENDA 7 HARI") ikut patah jadi dua baris. */
+@media (max-width: 575.98px) {
+  .panel-head:has(> .panel-head-note) {
+    flex-wrap: wrap;
+    row-gap: 3px;
+  }
+  .panel-head > .panel-head-note {
+    flex-basis: 100%;
+  }
 }
 .panel-body {
   padding: var(--sp-5);
@@ -366,16 +397,15 @@
   background: var(--p-50);
   color: var(--ink);
 }
-.quick-action i {
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
+/* Ikon halaman (.ic) di dalam kotak berlatar; padding = jarak garis ke
+   tepi kotak, jadi ukuran gambarnya sendiri 18px. */
+.quick-action .ic {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
   border-radius: var(--r-sm);
   background: var(--p-50);
   color: var(--p-600);
-  font-size: 0.9rem;
 }
 .quick-action b {
   display: block;

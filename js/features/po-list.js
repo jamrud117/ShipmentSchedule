@@ -26,14 +26,6 @@ function poTglKotakTambahan() {
   return [...document.querySelectorAll("#poNoList [data-po-tgl-extra]")];
 }
 
-/* Seluruh nomor PO yang terisi, berurutan, tanpa yang kosong. */
-function poNoSemua(payload) {
-  const p = payload || {};
-  return [p.poNo, ...(p.poNoExtra || [])]
-    .map((x) => String(x || "").trim())
-    .filter(Boolean);
-}
-
 function poNoTambahKotak(nilai, tanggal) {
   const box = document.getElementById("poNoList");
   if (!box) return null;

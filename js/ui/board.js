@@ -45,19 +45,15 @@ function boardState(s) {
 
    Tahap yang DILEWATI (skipped) tidak dihitung -- berkasnya memang
    tidak ada dalam pengiriman ini, jadi bukan sesuatu yang tertinggal.
-   Tahap opsional ikut dilaporkan: COO sering wajib bagi pembeli walau
-   bukan syarat kepabeanan. */
+   Termasuk E-COO yang ikut tidak dipakai karena COO-nya tidak dipakai
+   (docStepEntri, doc-steps.js). Tahap opsional ikut dilaporkan: COO
+   sering wajib bagi pembeli walau bukan syarat kepabeanan. */
 function missingDocs(s) {
   if (typeof docStepsFor !== "function") return [];
-  const p = typeof docProgressOf === "function" ? docProgressOf(s) : {};
   return docStepsFor(s)
-    .filter((st) => {
-      const e = p[st.key];
-      if (e) return false;
-      // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
-      return st.key !== "berth";
-    })
-    .map((st) => (typeof stepText === "function" ? stepText(st.label, s) : st.label));
+    // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
+    .filter((st) => st.key !== "berth" && !docStepEntri(s, st))
+    .map((st) => stepText(st.label, s));
 }
 // "Perlu tindakan" = satu definisi, dipakai metrik, saringan cepat, dan halaman Ringkasan
 function needsAction(s) {
@@ -71,7 +67,7 @@ function needsAction(s) {
 function fmtDateBoard(iso) {
   const dt = parseLocalDate(iso || todayISO());
   if (!dt) return "—";
-  return dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
+  return tanggalLokal(dt, activeLang === "en" ? "en-GB" : "id-ID", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -82,7 +78,7 @@ function fmtDateBoard(iso) {
 // Isi semua penanda "hari ini" di seluruh halaman sekaligus.
 function paintTodayStamps() {
   const teks = fmtDateBoard(todayISO());
-  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#vsToday", "#mstToday"].forEach((sel) => {
+  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday"].forEach((sel) => {
     const el = $(sel);
     if (el) el.textContent = teks;
   });

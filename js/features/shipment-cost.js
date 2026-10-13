@@ -170,8 +170,8 @@ function bkHtml(s, h) {
       </table>
     </div>
     ${h.nilaiBarang ? `<div class="form-text-note">${escapeHtml(tt(
-      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs ${h.impor ? "NDPBM" : "pajak"} ${bkRp(h.kursBarang)}) — biaya kiriman ini ${(h.persen * 100).toLocaleString("id-ID", { maximumFractionDigits: 1 })}% dari nilai barang.`,
-      `Goods value ${bkRp(h.nilaiBarang)} (${h.impor ? "NDPBM" : "tax"} rate ${bkRp(h.kursBarang)}) — this shipment's cost is ${(h.persen * 100).toLocaleString("en-US", { maximumFractionDigits: 1 })}% of the goods value.`))}</div>` : ""}`;
+      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs ${h.impor ? "NDPBM" : "pajak"} ${bkRp(h.kursBarang)}) — biaya kiriman ini ${angkaLokal(h.persen * 100, "id-ID", { maximumFractionDigits: 1 })}% dari nilai barang.`,
+      `Goods value ${bkRp(h.nilaiBarang)} (${h.impor ? "NDPBM" : "tax"} rate ${bkRp(h.kursBarang)}) — this shipment's cost is ${angkaLokal(h.persen * 100, "en-US", { maximumFractionDigits: 1 })}% of the goods value.`))}</div>` : ""}`;
 }
 
 /* Bagian di panel detail: kerangka langsung, isinya menyusul. */

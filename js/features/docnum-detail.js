@@ -77,6 +77,8 @@ const DN_LABEL_FIELD = {
   get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
   get approver1Name() { return tt("Approved By", "Approved By"); },
   get approver1Role() { return tt("Jabatan Approved By", "Approved By Position"); },
+  get cfoName() { return tt("Approved By 2", "Approved By 2"); },
+  get cfoRole() { return tt("Jabatan Approved By 2", "Approved By 2 Position"); },
   get quantity() { return tt("Jumlah", "Quantity"); },
   get unit() { return tt("Satuan", "Unit"); },
   // Isian Surat Jalan
@@ -167,7 +169,7 @@ const DN_DETAIL_SUSUNAN = {
     /* `amount` = Nominal pengajuan format lama: tampil sebagai satu baris
        di tabel pungutan, bukan sebagai isian tersendiri. */
     { khusus: "biaya", memakai: ["lines", "feeBm", "feePpn", "feePph", "amount"] },
-    { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role"] },
+    { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role", "cfoName", "cfoRole"] },
     { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy"] },
   ],
   letter: [
@@ -477,10 +479,12 @@ function dndBiayaHtml(r) {
   );
 }
 
-/* Tiga penanda tangan Form Pengajuan Dana -- nama & jabatan bawaannya
-   sama dengan yang tercetak (lihat buildFundRequestHtml). */
+/* Penanda tangan Form Pengajuan Dana -- tiga, atau empat (CFO) untuk
+   vendor yang memakai Doc No; nama & jabatan bawaannya sama dengan yang
+   tercetak (lihat buildFundRequestHtml). */
 function dndPenandaTanganHtml(r) {
   const p = r.payload || {};
+  const cfo = typeof frPakaiTtdCfo === "function" && frPakaiTtdCfo(p);
   const kotak = (peran, nama, jabatan) => `<div class="dnd-ttd-kotak">
       <span class="dnd-ttd-peran">${escapeHtml(peran)}</span>
       <b>${escapeHtml(nama || "—")}</b>
@@ -488,10 +492,11 @@ function dndPenandaTanganHtml(r) {
     </div>`;
   return dndBagianHtml(
     tt("Penanda Tangan", "Signatories"),
-    `<div class="dnd-ttd">
+    `<div class="dnd-ttd${cfo ? " dnd-ttd--empat" : ""}">
       ${kotak("Made by", p.requester || r.requester, "Drafter")}
       ${kotak("Checked by", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
       ${kotak("Approved by", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
+      ${cfo ? kotak("Approved by", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
     </div>`,
   );
 }

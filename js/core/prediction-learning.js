@@ -88,6 +88,7 @@ function resetPredictionLearning() {
 function kosongkanRingkasanBelajar() {
   PREDICTION_LEARN_CACHE.clear();
   ACUAN_BELAJAR.ms = null;
+  SAMPEL_RELEVAN.daftar = null;
 }
 
 function learningConfig() {
@@ -347,6 +348,26 @@ function sampelKiriman(s) {
   return out;
 }
 
+/* SAMPEL YANG MASIH RELEVAN, dikumpulkan SEKALI per ringkasan belajar.
+
+   Setiap rute yang diprediksi menyapu seluruh riwayat. Tanpa daftar
+   ini tiap sapuan memeriksa ulang umur & mengambil sampel setiap
+   kiriman -- puluhan rute x ratusan kiriman saat aplikasi dibuka.
+   Umurnya sama dengan PREDICTION_LEARN_CACHE: dibuang bersama di
+   kosongkanRingkasanBelajar() (data berubah, riwayat atau tanggal
+   acuan diganti). Urutannya tetap urutan riwayat. */
+const SAMPEL_RELEVAN = { daftar: null };
+function sampelRelevan() {
+  if (!SAMPEL_RELEVAN.daftar) {
+    const daftar = [];
+    predictionHistory().forEach((s) => {
+      if (s && masihRelevan(s)) daftar.push({ s, k: sampelKiriman(s) });
+    });
+    SAMPEL_RELEVAN.daftar = daftar;
+  }
+  return SAMPEL_RELEVAN.daftar;
+}
+
 /* Transit yang DISENGAJA: berlabel Transit DAN terminal transitnya
    diisi. Label Direct tidak membuktikan apa-apa -- ia nilai bawaan. */
 function transitSengaja(s) {
@@ -382,11 +403,8 @@ function hitungTransitDariRiwayat(ctx, prior) {
      belajar karena riwayatnya disaring keluar; kedatangannya tercatat
      lewat ETA manual dari forwarder, bukti yang sama sahnya. */
   const sampelRute = [];
-  predictionHistory().forEach((s) => {
-    if (!s || !(s.etdUpdate || s.etd)) return;
-    if (!masihRelevan(s)) return;
-
-    const k = sampelKiriman(s);
+  sampelRelevan().forEach(({ s, k }) => {
+    if (!(s.etdUpdate || s.etd)) return;
     if (k.transit == null) return;
     const c = k.ctx;
     if (c.shipmentType !== ctx.shipmentType) return;
@@ -486,11 +504,8 @@ function hitungOpsDariRiwayat(ctx, leg, prior) {
   if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
 
   const sampel = [];
-  predictionHistory().forEach((s) => {
-    if (!s || s.mode === "export") return;
-    if (!masihRelevan(s)) return;
-
-    const k = sampelKiriman(s);
+  sampelRelevan().forEach(({ s, k }) => {
+    if (s.mode === "export") return;
     const n = leg === "clearance" ? k.clearance : leg === "delivery" ? k.delivery : null;
     if (n == null) return;
     const c = k.ctx;

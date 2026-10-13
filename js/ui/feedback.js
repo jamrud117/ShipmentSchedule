@@ -13,36 +13,12 @@ const TOAST_IKON = {
 };
 let toastTimer = null;
 
-/* Menaruh toast tepat di bawah bilah yang sedang menempel.
-
-   Diukur, bukan ditebak: bilah kendali membungkus jadi dua baris di
-   layar sempit, dan di halaman form bilah itu tidak ada sama sekali. */
-/* Toast diposisikan tepat di bawah BILAH ATAS saja.
-
-   Bilah kendali (.controlbar) SENGAJA tidak ikut diukur: ia cuma ada
-   di halaman Jadwal, jadi mengukurnya membuat posisi toast berbeda
-   antar halaman. Bilah atas ada di semua halaman dan tingginya tetap,
-   jadi hasilnya sama di mana pun.
-
-   Tidak ada pendengar "scroll": bilah atas itu sticky, posisinya tidak
-   berubah saat digulir — menghitung ulang tiap kali digulir cuma
-   membuat toast bergeser-geser halus tanpa alasan. */
-function posisikanToast() {
-  const stack = document.getElementById("toastStack");
-  if (!stack) return;
-  const topbar = document.querySelector(".app-topbar");
-  let bawah = 0;
-  if (topbar && !topbar.classList.contains("d-none")) {
-    bawah = topbar.getBoundingClientRect().bottom;
-  }
-  stack.style.top = Math.max(12, bawah + 12) + "px";
-}
-
-window.addEventListener("resize", posisikanToast);
-
+/* Posisi toast (tepat di bawah bilah atas) diurus CSS sepenuhnya --
+   lihat .toast-stack di css/components.css. Tidak diukur dengan JS:
+   mengukur bilah atas saat halaman baru selesai dirender memaksa
+   seluruh tata letak dihitung di tengah skrip. */
 function showToast(msg, type) {
   type = TOAST_IKON[type] ? type : "info";
-  posisikanToast();
   const el = $("#appToast");
   if (!el) return;
 
@@ -154,7 +130,7 @@ if ($("#confirmCancelBtn")) {
    <input> apa pun ("date", "number", ...). Bawaannya "text".
 
    lebar: "setengah" -> dua isian per baris. Dipakai kotak yang isiannya
-   banyak (Jadwal Kapal: 8 isian): ditumpuk satu-satu kotaknya lebih
+   banyak (baris Masterlist): ditumpuk satu-satu kotaknya lebih
    tinggi dari layar laptop dan tombol Simpan baru terlihat setelah
    menggulir. Kotaknya ikut melebar sedikit supaya tiap isian tetap lega.
 ------------------------------------------------------------------ */

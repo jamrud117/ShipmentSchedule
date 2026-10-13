@@ -26,7 +26,6 @@ const I18N = {
     "nav.schedule": "Jadwal",
     "nav.docnum": "No. Dokumen",
     "nav.hscode": "HS Code",
-    "nav.vessel": "Jadwal Kapal",
     "nav.masterlist": "Masterlist",
     "nav.accounts": "Akun",
     "menu.language": "Bahasa",
@@ -443,7 +442,7 @@ const I18N = {
     "w.sheet.barang.kosong.tidak.ditemukan.daftar.bar": "Sheet BARANG kosong/tidak ditemukan — daftar barang tidak terisi otomatis, tambahkan manual.",
     "w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh": "Terms FOB tapi kolom FOB tidak ditemukan di sheet BARANG — harga satuan tiap barang jadi 0, cek manual.",
     "w.tidak.ada.baris.barang.yang.terbaca.dari.tabel": "Tidak ada baris barang yang terbaca dari tabel Goods Descriptions.",
-    "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "Tidak ditemukan entri SKB atau E-COO di lembar Pemenuhan Persyaratan/Fasilitas — cek manual kalau seharusnya ada.",
+    "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "Tidak ditemukan entri SKB atau COO di lembar Pemenuhan Persyaratan/Fasilitas — cek manual kalau seharusnya ada.",
     "w.barang.sudah.masuk.pabrik": "Barang sudah masuk pabrik — perkiraan digantikan tanggal sebenarnya.",
     "w.belum.ada.daftar": " · belum ada {x}",
     "w.ditandai.delay.tanpa.tanggal": "Ditandai DELAY tapi tanggal update belum diisi",
@@ -525,7 +524,6 @@ const I18N = {
     "x.tujuan.tidak.dikenali": "Tujuan \"{x}\" tidak dikenali",
     "x.atau.tandai.tidak.dipakai": " (atau tandai tidak dipakai)",
     "x.berkas.akan.mengganti": "Berkas ini berisi {n} jadwal {mode}. Ini akan MENGGANTI seluruh jadwal {mode} yang tersimpan di database dengan isi berkas ini. Lanjutkan?",
-    "x.ditandai.tidak.dipakai": "{x} — ditandai tidak dipakai {cap}",
     "x.hapus.seluruh.data": "Anda akan menghapus SELURUH data Jadwal {mode} secara permanen: {n} jadwal beserta seluruh daftar barang di dalamnya. Jadwal {lain} TIDAK ikut terhapus. Tindakan ini TIDAK BISA dibatalkan. Lanjutkan?",
     "x.isi.tanggal.dokumen": "{x}. Isi tanggal yang tertera pada dokumennya — tanggal inilah yang dipakai mesin prediksi.",
     "x.klik.kalau.berkasnya.ada": "{x} — klik kalau berkasnya sudah ada{opsional}",
@@ -545,7 +543,7 @@ const I18N = {
     "y.bukan.format.dikenali": "\"{nama}\" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil pindaian/gambar).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" tidak terbaca sebagai dokumen BC (sheet HEADER/BARANG) maupun CIPL mana pun yang dikenali.",
     "y.eta.diisi.hitungan.mesin": "ETA diisi {eta} (hitungan mesin prediksi dari ETD + lama transit rute ini). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba {pibEta} di field 11 — isi manual kalau yang dipakai angka dokumen; ETA otomatis berpindah ke Mode Manual begitu diketik.",
-    "y.fasilitas.diterapkan.semua.barang": "Fasilitas SKB/E-COO dari PDF diterapkan ke SEMUA barang secara bawaan (lembar Pemenuhan Persyaratan tidak memisahkan per barang) — periksa tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya mendapatkannya (E-COO biasanya hanya berlaku untuk barang tertentu, bukan semuanya).",
+    "y.fasilitas.diterapkan.semua.barang": "Fasilitas SKB/COO dari PDF diterapkan ke SEMUA barang secara bawaan (lembar Pemenuhan Persyaratan tidak memisahkan per barang) — periksa tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya mendapatkannya (COO biasanya hanya berlaku untuk barang tertentu, bukan semuanya).",
     "y.harga.satuan.tidak.dihitung": "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",
     "y.hasil.baca.pdf.best.effort": "Hasil baca PDF ini sebaik yang bisa dilakukan (posisi teks di PDF tidak selalu berurutan) — mohon periksa ulang semua isian sebelum menyimpan, terutama Vessel, Freight/Insurance/NDPBM, dan berat per barang.",
     "y.berkas.mode.berbeda": "Berkas ini sepertinya dokumen {dokumen}, tapi form yang terbuka sekarang mode {form} — periksa lagi sebelum menyimpan.",
@@ -557,7 +555,7 @@ const I18N = {
     "y.pdf.ini.packing.list": "PDF ini Packing List: berat netto/bruto & qty terbaca, TAPI harga TIDAK ada di dokumen ini — kalau ada berkas Commercial Invoice (CI) pasangannya, pilih keduanya sekaligus supaya harga ikut terisi otomatis.",
     "y.sebagian.tanpa.hs.code.cipl": "Sebagian barang tidak ditemukan HS Code-nya (dokumen CIPL sering tidak mencantumkannya sama sekali) — isi manual di tab Daftar Barang.",
     "y.bruto.per.barang.tidak.ada": "Bruto per barang tidak ada di berkas ini — total Bruto dari HEADER ({n} Kg) ditaruh di baris barang pertama, sesuaikan manual per barang kalau perlu.",
-    "y.fasilitas.diisi.per.barang": "Fasilitas SKB PPH (kode 457) & SKB COO/E-COO (kode 860) diisi per barang sesuai pemetaan di lembar BARANGDOKUMEN — periksa tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
+    "y.fasilitas.diisi.per.barang": "Fasilitas SKB PPH (kode 457) & COO (kode 860) diisi per barang sesuai pemetaan di lembar BARANGDOKUMEN — periksa tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
     "y.pungutan.dihitung.otomatis": "Sebagian atau seluruh Bea Masuk/PPN/PPH tidak ada di lembar BARANGTARIF — dihitung otomatis dari Nilai Pabean (CIF+Freight+Asuransi)×NDPBM dengan tarif 5%/11%/2,5%, periksa manual kalau tarif sebenarnya berbeda.",
     "y.pungutan.tidak.cukup.dihitung": "Bea Masuk/PPN/PPH tidak ditemukan di lembar BARANGTARIF, dan CIF/Freight/Asuransi/NDPBM di HEADER juga tidak cukup untuk dihitung otomatis — isi manual di tab Kepabeanan.",
     "y.respon.2003.tidak.ditemukan": "Baris respons dengan KODE RESPON=2003 (SPPB terbit) tidak ditemukan di lembar RESPON — Tanggal SPPB memakai HEADER.TANGGAL DAFTAR sebagai cadangan, periksa manual.",
@@ -586,7 +584,6 @@ const I18N = {
     "nav.schedule": "Schedule",
     "nav.docnum": "Doc. Number",
     "nav.hscode": "HS Code",
-    "nav.vessel": "Shipment Schedule",
     "nav.masterlist": "Masterlist",
     "nav.accounts": "Accounts",
     "menu.language": "Language",
@@ -1002,7 +999,7 @@ const I18N = {
     "w.sheet.barang.kosong.tidak.ditemukan.daftar.bar": "The BARANG sheet is empty or missing — the item list was not filled in automatically; please add the items manually.",
     "w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh": "Terms are FOB but no FOB column was found in the BARANG sheet — each item's unit price is 0; please check manually.",
     "w.tidak.ada.baris.barang.yang.terbaca.dari.tabel": "No item rows could be read from the Goods Descriptions table.",
-    "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "No SKB or E-COO entry was found on the requirements/facilities sheet — please check manually if one is expected.",
+    "w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar": "No SKB or COO entry was found on the requirements/facilities sheet — please check manually if one is expected.",
     "w.barang.sudah.masuk.pabrik": "The goods have reached the factory — the estimate is replaced by the actual date.",
     "w.belum.ada.daftar": " · missing {x}",
     "w.ditandai.delay.tanpa.tanggal": "Marked DELAYED but the update date has not been filled in",
@@ -1084,7 +1081,6 @@ const I18N = {
     "x.tujuan.tidak.dikenali": "Destination \"{x}\" not recognised",
     "x.atau.tandai.tidak.dipakai": " (or mark it as not used)",
     "x.berkas.akan.mengganti": "This file contains {n} {mode} schedule(s). It will REPLACE every {mode} schedule stored in the database with the contents of this file. Continue?",
-    "x.ditandai.tidak.dipakai": "{x} — marked as not used {cap}",
     "x.hapus.seluruh.data": "You are about to permanently delete ALL {mode} schedule data: {n} schedule(s) together with every item inside them. {lain} schedules are NOT affected. This action CANNOT be undone. Continue?",
     "x.isi.tanggal.dokumen": "{x}. Enter the date shown on the document — this is the date the prediction engine uses.",
     "x.klik.kalau.berkasnya.ada": "{x} — click once the document exists{opsional}",
@@ -1104,7 +1100,7 @@ const I18N = {
     "y.bukan.format.dikenali": "\"{nama}\" does not appear to be a recognised PIB BC 2.0, PEB BC 3.0, Packing List, or Commercial Invoice, or its text could not be read (e.g. a scan/image).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" could not be read as a BC document (HEADER/BARANG sheets) or as any recognised CIPL.",
     "y.eta.diisi.hitungan.mesin": "The ETA was set to {eta} (calculated by the prediction engine from the ETD + this route's transit time). The PIB document itself states an estimated arrival of {pibEta} in field 11 — enter it manually if you want the document's figure; the ETA switches to Manual Mode as soon as you type.",
-    "y.fasilitas.diterapkan.semua.barang": "The SKB/E-COO facilities from the PDF are applied to ALL items by default (the requirements sheet does not separate them per item) — check each item via the Facilities button and remove any that should not have it (E-COO usually applies only to certain items, not all of them).",
+    "y.fasilitas.diterapkan.semua.barang": "The SKB/COO facilities from the PDF are applied to ALL items by default (the requirements sheet does not separate them per item) — check each item via the Facilities button and remove any that should not have it (COO usually applies only to certain items, not all of them).",
     "y.harga.satuan.tidak.dihitung": "The unit price (USD) is not calculated automatically for PDFs with more than one item (the per-item customs value is not extracted) — fill it in per item on the Item List tab.",
     "y.hasil.baca.pdf.best.effort": "This PDF was read on a best-effort basis (text positions in a PDF are not always in order) — please double-check every field before saving, especially the Vessel, Freight/Insurance/NDPBM, and the per-item weights.",
     "y.berkas.mode.berbeda": "This file appears to be a {dokumen} document, but the form currently open is in {form} mode — please check again before saving.",
@@ -1116,7 +1112,7 @@ const I18N = {
     "y.pdf.ini.packing.list": "This PDF is a Packing List: net/gross weight & qty were read, BUT price is NOT in this document — if you have the matching Commercial Invoice (CI) file, select both at once so the prices are filled in automatically.",
     "y.sebagian.tanpa.hs.code.cipl": "Some items had no HS Code found (CIPL documents often omit them entirely) — please fill them in on the Item List tab.",
     "y.bruto.per.barang.tidak.ada": "This file has no per-item gross weight — the HEADER total ({n} Kg) was placed on the first item row; adjust it per item if needed.",
-    "y.fasilitas.diisi.per.barang": "The SKB PPH (code 457) & SKB COO/E-COO (code 860) facilities were filled in per item according to the BARANGDOKUMEN sheet mapping — check each item via the Facilities button if anything needs adjusting.",
+    "y.fasilitas.diisi.per.barang": "The SKB PPH (code 457) & COO (code 860) facilities were filled in per item according to the BARANGDOKUMEN sheet mapping — check each item via the Facilities button if anything needs adjusting.",
     "y.pungutan.dihitung.otomatis": "Some or all of the Import Duty/VAT/Income Tax (BM/PPN/PPH) values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
     "y.pungutan.tidak.cukup.dihitung": "Import Duty/VAT/Income Tax (BM/PPN/PPH) were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
     "y.respon.2003.tidak.ditemukan": "No response row with KODE RESPON=2003 (SPPB issued) was found in the RESPON sheet — the SPPB date falls back to HEADER.TANGGAL DAFTAR; please check it manually.",
@@ -1207,14 +1203,20 @@ const I18N_ATRIBUT_EN = [
 function applyI18nSebaris() {
   I18N_ATRIBUT_EN.forEach(([kunci, atribut]) => {
     const sel = "[data-" + kunci.replace(/[A-Z]/g, (h) => "-" + h.toLowerCase()) + "]";
+    const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
     document.querySelectorAll(sel).forEach((el) => {
-      const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
       if (el.dataset[simpan] == null) {
+        /* Belum pernah diterjemahkan = isinya masih teks Indonesia asli.
+           Dalam bahasa Indonesia tidak ada yang perlu ditulis -- dulu
+           ratusan elemen ditulis ulang dengan isi yang sama setiap kali
+           halaman dibuka. */
+        if (activeLang !== "en") return;
         el.dataset[simpan] = atribut ? el.getAttribute(atribut) || "" : el.innerHTML;
       }
       const teks = activeLang === "en" ? el.dataset[kunci] : el.dataset[simpan];
-      if (atribut) el.setAttribute(atribut, teks);
-      else el.innerHTML = teks;
+      if (atribut) {
+        if (el.getAttribute(atribut) !== teks) el.setAttribute(atribut, teks);
+      } else if (el.innerHTML !== teks) el.innerHTML = teks;
     });
   });
 }
@@ -1226,17 +1228,23 @@ function applyI18nSebaris() {
    data-i18n-ph    -> atribut placeholder
    data-i18n-title -> atribut title */
 function applyI18n() {
+  /* Hanya yang isinya BERBEDA yang ditulis: menulis innerHTML berarti
+     mengurai & membangun ulang elemennya, padahal saat halaman dibuka
+     dalam bahasa Indonesia kebanyakan isinya sudah persis kamusnya. */
   document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.innerHTML = t(el.dataset.i18n);
+    const teks = t(el.dataset.i18n);
+    if (el.innerHTML !== teks) el.innerHTML = teks;
   });
   document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
-    el.setAttribute("placeholder", t(el.dataset.i18nPh));
+    const teks = t(el.dataset.i18nPh);
+    if (el.getAttribute("placeholder") !== teks) el.setAttribute("placeholder", teks);
   });
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
-    el.setAttribute("title", t(el.dataset.i18nTitle));
+    const teks = t(el.dataset.i18nTitle);
+    if (el.getAttribute("title") !== teks) el.setAttribute("title", teks);
   });
   applyI18nSebaris();
-  document.documentElement.lang = activeLang;
+  if (document.documentElement.lang !== activeLang) document.documentElement.lang = activeLang;
 }
 
 function setLang(kode) {
@@ -1282,15 +1290,11 @@ function setLang(kode) {
   };
   if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
   if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
-  if (tampil("viewVesselSchedule") && typeof renderVesselSchedules === "function") {
-    if (typeof isiDropdownVs === "function") isiDropdownVs();
-    renderVesselSchedules();
-  }
   if (tampil("viewMasterlist") && typeof renderMasterlist === "function") renderMasterlist();
   /* Tanggal "Hari ini" di kepala tiap halaman ikut nama hari & bulan
      bahasa aktif ("Rabu" / "Wednesday"). Tanpa ini, di halaman yang
-     tidak menggambar ulang penandanya sendiri (Jadwal, HS Code, Jadwal
-     Kapal), tanggalnya tertinggal di bahasa lama. */
+     tidak menggambar ulang penandanya sendiri (Jadwal, HS Code),
+     tanggalnya tertinggal di bahasa lama. */
   if (typeof paintTodayStamps === "function") paintTodayStamps();
   if (tampil("viewDocNum")) {
     if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();

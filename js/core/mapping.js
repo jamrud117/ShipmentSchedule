@@ -171,7 +171,7 @@ function itemToRow(it, shipmentId) {
     package: it.package || "",
     packing: it.packing || "",
     packing_unit: it.packingUnit || "",
-    // Fasilitas per barang — SKB & E-COO 1 array yang sama
+    // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 array yang sama
     skb: sanitizeSkbList(it.skb),
   };
 }

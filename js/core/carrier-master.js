@@ -758,14 +758,33 @@ const COURIER_SERVICES = [
 
 siapkanAlias(COURIER_SERVICES);
 
+/* Hasil deteksi DIINGAT per teks (di sini dan di detectCarrier):
+   mesin prediksi & papan menanyakan pengangkut yang sama berulang-ulang
+   -- sekali per kiriman di tiap lapis, ±800 kali saat aplikasi dibuka
+   -- padahal hasilnya cuma bergantung pada teksnya. Daftar pelayaran,
+   maskapai & kurir tidak berubah selama halaman terbuka. */
+const DETEKSI_INGAT_MAKS = 5000;
+function ingatDeteksi(peta, kunci, hitung) {
+  let hasil = peta.get(kunci);
+  if (hasil === undefined) {
+    if (peta.size >= DETEKSI_INGAT_MAKS) peta.clear();
+    hasil = hitung();
+    peta.set(kunci, hasil);
+  }
+  return hasil;
+}
+
+const LAYANAN_KURIR_INGAT = new Map();
 function detectCourierService(raw) {
-  const kata = normalisasiTeksKapal(raw).split(" ").filter(Boolean);
-  if (!kata.length) return "";
-  const rapat = " " + kata.join(" ") + " ";
-  const m = COURIER_SERVICES.find((s) =>
-    s._alias.some((a) => rapat.indexOf(" " + a + " ") >= 0),
-  );
-  return m ? m.code : "";
+  return ingatDeteksi(LAYANAN_KURIR_INGAT, String(raw == null ? "" : raw), () => {
+    const kata = normalisasiTeksKapal(raw).split(" ").filter(Boolean);
+    if (!kata.length) return "";
+    const rapat = " " + kata.join(" ") + " ";
+    const m = COURIER_SERVICES.find((s) =>
+      s._alias.some((a) => rapat.indexOf(" " + a + " ") >= 0),
+    );
+    return m ? m.code : "";
+  });
 }
 
 /* ------------------------------------------------------------------
@@ -775,10 +794,23 @@ function detectCourierService(raw) {
    maupun No. Voyage — tergantung kebiasaan yang mengetik. Dua-duanya
    dicoba daripada memaksa satu kebiasaan.
 ------------------------------------------------------------------ */
+/* Kuncinya moda + Nama Kapal (+ No. Flight untuk udara) + bahasa (teks
+   alasan "belum dikenali" ikut bahasa). Yang dikembalikan SALINAN,
+   supaya pemanggil yang mengubah hasilnya tidak mengubah ingatan. */
+const CARRIER_INGAT = new Map();
 function detectCarrier(s) {
   const src = s || {};
   const udara = src.transport === "udara";
+  const kunci = [
+    typeof activeLang !== "undefined" ? activeLang : "",
+    udara ? "u" : "l",
+    src.vessel || "",
+    udara ? src.voyage || "" : "",
+  ].join("\u0001");
+  return { ...ingatDeteksi(CARRIER_INGAT, kunci, () => deteksiCarrier(src, udara)) };
+}
 
+function deteksiCarrier(src, udara) {
   /* KURIR PALING DULU, apa pun moda yang tercatat. Kalau kolom Nama
      Kapal berisi "FEDEX", kirimannya memang lewat kurir — tidak peduli
      moda transportasinya terlanjur diisi apa. */
@@ -819,13 +851,12 @@ function carrierCodeOf(s) {
 /* ------------------------------------------------------------------
    NAMA SARANA ANGKUT = NAMA + NOMOR
 
-   SATU aturan untuk semua tempat yang menampilkan kapal/pesawat:
-   kartu, panel detail, templat salin, Bulk Excel, CIPL, surat BC,
-   riwayat invoice. Nama Voyager/Vessel digabung No. Voyage/Flight, apa
-   pun modanya -- "MSC LORENA 056S", "KOREAN AIR KE628" -- persis
-   pasangan NAMA PENGANGKUT + NOMOR PENGANGKUT di sheet PENGANGKUT draft
-   CEISA. (Dulu templat salin membuang nama untuk moda udara; kini
-   semuanya sama.)
+   Aturan untuk tempat yang MENAMPILKAN kapal/pesawat: kartu, panel
+   detail, Bulk Excel, surat BC. Nama Voyager/Vessel digabung No.
+   Voyage/Flight, apa pun modanya -- "MSC LORENA 056S", "KOREAN AIR
+   KE628" -- persis pasangan NAMA PENGANGKUT + NOMOR PENGANGKUT di sheet
+   PENGANGKUT draft CEISA. Satu kolom "Vessel / Flight" di dokumen &
+   templat salin memakai carrierVesselFlight() di bawah.
 
    Bukan kode hasil deteksi di atas (MSC, ONE, KE, ...) -- itu untuk
    mesin prediksi. Kolom yang kosong atau "-" dilewati, spasi dirapikan,
@@ -846,12 +877,13 @@ function carrierNameFromShipment(s) {
   return nama + " " + nomor;
 }
 
-/* CARRIER DI CIPL (Commercial Invoice & Packing List).
+/* SATU KOLOM "VESSEL / FLIGHT": CIPL (Commercial Invoice & Packing
+   List) dan kolom VESSEL / VESSEL NAME di templat salin.
 
    Kiriman UDARA cukup No Flight-nya ("KE628") -- tanpa nama maskapai.
    Kiriman LAUT tetap nama kapal + voyage, aturan di atas. No Flight
    kosong -> nama yang ada tetap dipakai, daripada kotaknya kosong. */
-function carrierCiplDariJadwal(s) {
+function carrierVesselFlight(s) {
   const src = s || {};
   if (src.transport === "udara") {
     const no = String(src.voyage == null ? "" : src.voyage).replace(/\s+/g, " ").trim();
@@ -868,7 +900,7 @@ function carrierCipl(p, shipment) {
   const isian = String((p && p.carrier) || "").replace(/\s+/g, " ").trim();
   if (!shipment) return isian;
   if (!isian || (shipment.transport === "udara" && isian === carrierNameFromShipment(shipment))) {
-    return carrierCiplDariJadwal(shipment);
+    return carrierVesselFlight(shipment);
   }
   return isian;
 }
@@ -883,7 +915,7 @@ if (typeof module !== "undefined" && module.exports) {
     detectCarrier,
     carrierCodeOf,
     carrierNameFromShipment,
-    carrierCiplDariJadwal,
+    carrierVesselFlight,
     carrierCipl,
   };
 }

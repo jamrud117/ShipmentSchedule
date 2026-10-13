@@ -185,15 +185,26 @@ function frKotakTtd(label, nama, jabatan) {
 
 /* ---------- lembar ---------- */
 
-/* TIGA PENANDA TANGAN, bukan empat.
+/* Penanda tangan keempat: Chief Financial Officer. Nilai bawaan yang
+   SAMA dengan isian di form (cfoName/cfoRole di index.html), dipakai
+   cetakan & kotak Detail kalau isiannya kosong. */
+const FR_TTD_CFO = { nama: "Mr. Kim Taewan", jabatan: "Chief Financial Officer" };
 
-   Kotak persetujuan kedua dihapus karena jalur persetujuannya memang
-   sudah tidak lewat sana lagi. Pengajuan LAMA yang terlanjur menyimpan
-   isian itu TIDAK ikut tercetak: kotak yang tidak akan ditandatangani
-   siapa pun lebih menyesatkan daripada tidak ada sama sekali.
+/* Penanda tangan keempat (CFO) hanya untuk vendor yang memakai Doc No
+   -- aturan yang sama dengan baris Doc No (fundPakaiDocNo). */
+const frPakaiTtdCfo = (p) => typeof fundPakaiDocNo === "function" && fundPakaiDocNo((p || {}).payee);
 
-   Lebarnya dibagi rata bertiga (33,33% lewat table-layout: fixed di
-   CSS), jadi jarak antar tanda tangan sama besar.
+/* TIGA PENANDA TANGAN -- EMPAT untuk vendor yang memakai Doc No.
+
+   Kotak persetujuan kedua yang LAMA (President Director, isian
+   approver2*) dihapus karena jalur persetujuannya sudah tidak lewat
+   sana lagi. Pengajuan lama yang terlanjur menyimpan isian itu TIDAK
+   ikut tercetak: kotak yang tidak akan ditandatangani siapa pun lebih
+   menyesatkan daripada tidak ada sama sekali. Penanda tangan keempat
+   yang sekarang (CFO) memakai kunci sendiri, cfoName/cfoRole.
+
+   Lebarnya dibagi rata (table-layout: fixed di CSS: 33,33% bertiga,
+   25% berempat), jadi jarak antar tanda tangan sama besar.
 
    Keterangan ini sengaja komentar JS, bukan komentar HTML di dalam
    templat: apa pun yang ditulis di dalam templat ikut terbawa ke
@@ -307,11 +318,12 @@ function buildFundRequestHtml(row) {
 
     <div class="tempat-tanggal">Cirebon, ${escapeHtml(frTanggalSurat(row.doc_date))}</div>
 
-    <table class="ttd">
+    <table class="ttd${frPakaiTtdCfo(p) ? " ttd--empat" : ""}">
       <tr>
         ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
         ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
         ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
+        ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
       </tr>
     </table>
 
@@ -675,6 +687,7 @@ function fundRequestCss() {
      tetangganya -- jaraknya jadi tidak rata. */
   .ttd { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .ttd-cell { width: 33.33%; vertical-align: top; }
+  .ttd--empat .ttd-cell { width: 25%; }
   .ttd-label { margin-bottom: 1.5mm; }
   /* Ruang tanda tangan basah. */
   .ttd-ruang { height: 24mm; }

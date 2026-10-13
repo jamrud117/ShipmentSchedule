@@ -68,6 +68,10 @@ const clipboardFormatter = {
     const n = extractLeadingNumber(pkg);
     return n == null ? "" : clipboardFormatter.num(n, 2);
   },
+  /* Kolom VESSEL / VESSEL NAME yang DITEMPEL ke laporan: kiriman udara
+     cukup No Flight-nya ("KE628"), laut nama kapal + voyage --
+     carrierVesselFlight(), aturan yang sama dengan CIPL. */
+  vessel: (s) => carrierVesselFlight(s),
   blank: "",
 };
 const nativeFormatter = {
@@ -83,6 +87,10 @@ const nativeFormatter = {
     const n = extractLeadingNumber(pkg);
     return n == null ? "" : roundNum(n, 2);
   },
+  /* Berkas Bulk Excel tetap NAMA + NOMOR, kedua moda: kolom VESSEL di
+     sheet ALL IMPORT / ALL EXPORT dibaca balik oleh Bulk Import
+     (splitVesselCell) -- No Flight saja akan menghapus nama maskapainya. */
+  vessel: (s) => carrierNameFromShipment(s),
   blank: "",
 };
 
@@ -203,8 +211,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
-      // VESSEL = nama + nomor sarana angkut (carrierNameFromShipment, core/carrier-master.js)
-      formatter.text(carrierNameFromShipment(s)), // 27 VESSEL
+      formatter.vessel(s), // 27 VESSEL (salin: udara No Flight saja; Bulk: nama + nomor)
       formatter.packageNum(s.package), // 28 PACKAGE
     ];
     if (idx > 0)

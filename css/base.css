@@ -102,6 +102,27 @@ body {
 
 /* Kelas bantu yang dipakai lintas komponen. */
 
+/* IKON HALAMAN (js/ui/icons.js): satu gaya garis untuk semua ikon yang
+   mewakili halaman. Ukurannya ikut huruf di sekitarnya, warnanya ikut
+   `color`. */
+.ikon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.ic {
+  width: 1.2em;
+  height: 1.2em;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.22em;
+}
+
 /* TOMBOL */
 /* Tombol yang mengisi lebar induknya (mis. tombol utama di dalam
    panel sempit). */

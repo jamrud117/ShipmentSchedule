@@ -84,12 +84,12 @@ function suratDataDariJadwal(s) {
     invoiceRef: String(s.invoice || "").trim(),
     shipper: String(s.party || "").trim(),
     awb: [s.masterBL, s.houseBL].map((x) => String(x || "").trim()).filter(Boolean).join(" / "),
-    koliBerat: [String(s.package || "").trim(), bruto ? `${bruto.toLocaleString("en-US", { maximumFractionDigits: 2 })} KG` : ""].filter(Boolean).join(" / "),
+    koliBerat: [String(s.package || "").trim(), bruto ? `${angkaLokal(bruto, "en-US", { maximumFractionDigits: 2 })} KG` : ""].filter(Boolean).join(" / "),
     namaBarang: suratGabung(barang.map((b) => b.nama)),
     negaraAsal: suratNamaNegara(negara),
     // ETA yang BERLAKU (revisi delay kalau ada), sama dengan kartunya
     flightTiba: [angkut, effectiveEta(s) ? suratTanggalPanjang(effectiveEta(s)) : ""].filter(Boolean).join(" / "),
-    nilaiBarang: nilai ? `USD ${nilai.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "",
+    nilaiBarang: nilai ? `USD ${angkaLokal(nilai, "en-US", { maximumFractionDigits: 2 })}` : "",
     barang,
   };
 }
