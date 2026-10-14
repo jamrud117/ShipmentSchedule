@@ -312,7 +312,7 @@ function ciplAngka(n, maks) {
   const d = maks == null ? 2 : maks;
   const bulat = Math.abs(n - Math.round(n)) < 1e-9;
   const pakai = bulat ? 0 : d;
-  return n.toLocaleString("en-US", {
+  return angkaLokal(n, "en-US", {
     minimumFractionDigits: pakai,
     maximumFractionDigits: pakai,
   });
@@ -436,7 +436,7 @@ function ciplFormatUang(mata, nilai) {
   const d = (nilai || []).some((n) => Math.round(Number(n) * 100) % 100 !== 0) ? 2 : 0;
   return {
     f: `"${mata} "#,##0${d ? ".00" : ""}`,
-    teks: (n) => `${mata} ${(Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`,
+    teks: (n) => `${mata} ${angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`,
   };
 }
 /* Angka bersatuan (berat KG, jumlah): desimal mengikuti nilainya
@@ -447,7 +447,7 @@ function ciplFormatAngka(n, satuan) {
   return {
     v,
     f: `#,##0${d ? "." + "0".repeat(d) : ""}${satuan ? `" ${satuan}"` : ""}`,
-    teks: v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) + (satuan ? ` ${satuan}` : ""),
+    teks: angkaLokal(v, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) + (satuan ? ` ${satuan}` : ""),
   };
 }
 function ciplDdSelAngka(n, satuan, kelas) {

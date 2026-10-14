@@ -1052,7 +1052,7 @@
     color: var(--n-500);
   }
   /* 36px, bukan 44px bawaan ponsel: dua tombol 44px memakan hampir
-     sepertiga lebar kartu (sama dengan kartu Jadwal Kapal). */
+     sepertiga lebar kartu. */
   .mst-tabel .icon-btn {
     width: 36px;
     height: 36px;

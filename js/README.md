@@ -28,19 +28,20 @@ dependency-nya dulu.
 | File | Isi |
 |---|---|
 | `config.js` | Koneksi Supabase, STATUS_META, MODE_LABELS, JENIS_OPTIONS, SKB_TYPE_OPTIONS |
-| `core/helpers.js` | Formatter tanggal/angka, escapeHtml, factory objek baru (newItem/newSkbEntry/newStop) |
+| `core/helpers.js` | Formatter tanggal/angka, escapeHtml, factory objek baru (newItem/newSkbEntry/newStop). Format BEROPSI selalu lewat `angkaLokal()` / `tanggalLokal()` (formatter Intl disimpan) -- `toLocaleString(locale, opsi)` membangun formatter baru tiap panggilan |
 | `core/state.js` | Satu-satunya tempat state mutable app: `data`, `activeMode`, `draftItems`, `draftStops`, `currentDetailId`, `currentPage`, `pageSize` |
 | `core/mapping.js` | Konversi baris Supabase (snake_case) <-> objek JS (camelCase) |
 | `data/api.js` | Semua panggilan CRUD ke Supabase (load/create/update/persistFields) |
 | `ui/dom.js` | Shortcut `$`/`$$`, referensi elemen DOM yang sering dipakai |
-| `ui/feedback.js` | Toast & modal konfirmasi (pengganti alert/confirm bawaan browser); pop-up yang dibuka di atas pop-up lain dinaikkan lapisannya (latar meredupkan yang di bawah) |
+| `ui/feedback.js` | Toast & modal konfirmasi (pengganti alert/confirm bawaan browser); pop-up yang dibuka di atas pop-up lain dinaikkan lapisannya (latar meredupkan yang di bawah). Posisi toast murni CSS (`.toast-stack`) |
+| `ui/icons.js` | Ikon halaman: satu set garis (Lucide, ISC) untuk sidebar, rel, bilah atas ponsel, palet perintah, aksi cepat & tab jenis dokumen. Bentuknya di `<svg class="ikon-sprite">` awal index.html (`#ik-*`), gayanya `.ic` (base.css); `ikonSvg(nama)` / `ikonDari("ik:nama" atau "bi-…")` untuk markup yang dirakit JS |
 | `ui/sidebar.js` | Sidebar navigasi: desktop menempel di kiri & bisa diciutkan jadi rel ikon (pilihan diingat, `exim.sidebar`); ponsel/tablet jadi laci dari tombol menu di bilah atas. `aturKerangka()` menampilkan/menyembunyikan sidebar + bilah atas bersama (disembunyikan di layar masuk & halaman form) |
 | `ui/search-clear.js` | Tombol hapus (×) di setiap kotak cari (`.search-clear[data-cari-hapus]`): mengosongkan lalu mengirim event `input` supaya saringan halamannya berjalan sendiri. Kapan tampil diurus CSS (`:placeholder-shown`) |
 | `core/customs.js` | Perhitungan CIF/FOB/BM+PDRI (satu-satunya sumber kebenaran). `bulatkanBm()` = aturan tunggal BM ke atas ke ribuan, dipakai semua jalan masuk BM (hitungan tarif, draft CEISA, PIB PDF, Bulk Import, form) |
-| `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi. `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL |
+| `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi. `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL. Hasil deteksi diingat per teks (`ingatDeteksi`) |
 | `core/route-model.js` | Progres lane pengiriman + rute transit multi-terminal + aturan auto-arrive |
 | `render/cards.js` | Render kartu pengiriman (expanded & collapsed) |
-| `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch |
+| `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch. Teks pencarian (`teksCariJadwal`) hanya dirakit saat ada kata kunci; lebar pil status & kartu di luar layar diurus CSS (`field-sizing`, `content-visibility`) |
 | `features/excel-row-format.js` | Format baris Excel (clipboard & native) utk mode Import & Export. `formatter.vessel`: salinan (clipboard) menulis No Flight saja untuk kiriman udara; Bulk Excel (native) tetap nama + nomor supaya Bulk Import tidak kehilangan nama maskapai |
 | `features/copy-templates.js` | Dropdown pilihan template di tombol Copy (All Import/Export, Daily Import/Export, Report) — builder & dispatcher-nya, TANPA mengubah excel-row-format.js |
 | `features/card-events.js` | Delegasi event di kartu (status, tanggal, edit, hapus, dll) |
@@ -54,7 +55,6 @@ dependency-nya dulu.
 | `import/pdf.js` | Parser PDF PIB BC 2.0 (pakai pdf.js, dimuat lazy) |
 | `import/dispatch.js` | Deteksi file PDF vs Excel BC vs Excel CIPL, panggil parser yang sesuai |
 | `views/form-router.js` | Routing hash (#/new, #/edit/:id), render & simpan halaman form |
-| `views/vessel-schedule-view.js` | Halaman Shipment Schedule (#/shipment-schedule): daftar jadwal kapal per rute, saring From/To + tombol Cari, tambah/ubah/hapus. Tabel `vessel_schedules` (migration-vessel-schedule.sql) |
 | `views/detail-view.js` | Modal detail pengiriman (read-only) |
 | `features/bulk-excel.js` | Bulk export/import seluruh data lewat file Excel |
 | `auth/session.js` | Sesi login & hak akses. Tabel `PERAN` (exim, marketing, finance, viewer): nama tampil, boleh mengubah atau tidak, dan halaman yang boleh dibuka — router, navbar, palet perintah, dan halaman Akun membaca dari sini. Peran baru = satu baris di tabel itu + nilainya di database (contoh: migration-role-finance.sql). `tandaiBayar` / `bolehTandaiBayar()` = satu-satunya hak ubah di luar EXIM: Finance menandai Pengajuan Dana Paid / Unpaid (selebihnya `canEdit()` tetap false) |

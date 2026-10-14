@@ -46,7 +46,7 @@ const PERAN = {
   marketing: {
     label: "Marketing",
     ubah: false,
-    halaman: ["overview", "schedule", "docnum", "hscode", "vessel", "masterlist"],
+    halaman: ["overview", "schedule", "docnum", "hscode", "masterlist"],
     get ket() { return tt("lihat saja, termasuk No. Dokumen", "view only, incl. Doc. Number"); },
   },
   finance: {
@@ -61,7 +61,7 @@ const PERAN = {
   viewer: {
     label: "Viewer",
     ubah: false,
-    halaman: ["overview", "schedule", "hscode", "vessel", "masterlist"],
+    halaman: ["overview", "schedule", "hscode", "masterlist"],
     get ket() { return tt("hanya lihat", "read only"); },
   },
 };
@@ -91,9 +91,6 @@ function bolehTandaiBayar() {
 function bolehBuka(halaman) {
   const daftar = aturanPeran().halaman;
   return !daftar || daftar.indexOf(halaman) >= 0;
-}
-function canViewDocNum() {
-  return bolehBuka("docnum");
 }
 
 function currentRoleLabel() {
@@ -210,6 +207,10 @@ function applyPermissions() {
       authState.profile.full_name ||
       authState.profile.username ||
       tt("Pengguna", "User");
+    const avatar = $("#userChipAvatar");
+    if (avatar) {
+      avatar.textContent = (authState.profile.full_name || authState.profile.username || "?").trim().charAt(0).toUpperCase() || "?";
+    }
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
     badge.classList.toggle("is-exim", boleh);
@@ -255,11 +256,16 @@ function requireEdit(pesan) {
    LAYAR LOGIN
 ------------------------------------------------------------------ */
 
+/* Sesudah memudar, layar sambutan DISEMBUNYIKAN, bukan dibuang:
+   membuang anak langsung <body> membuat peramban menghitung ulang gaya
+   seluruh halaman (±1.200 elemen) tepat saat papan baru tergambar. */
 function hideBootScreen() {
   const b = $("#bootScreen");
   if (!b || b.classList.contains("is-done")) return;
   b.classList.add("is-done");
-  setTimeout(() => b.remove(), 350);
+  setTimeout(() => {
+    b.style.display = "none";
+  }, 350);
 }
 
 function showLoginView() {

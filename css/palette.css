@@ -121,6 +121,10 @@
   color: var(--n-600);
   font-size: 0.85rem;
 }
+.cmdk-item-icon .ic {
+  width: 16px;
+  height: 16px;
+}
 .cmdk-item.is-cursor .cmdk-item-icon {
   background: var(--p-500);
   color: #fff;
@@ -187,6 +191,12 @@
   border-radius: 3px;
   padding: 1px 4px;
   margin-right: 3px;
+}
+/* Petunjuk tombol keyboard tidak ada artinya di layar sentuh. */
+@media (max-width: 767px), (hover: none) {
+  .cmdk-foot {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

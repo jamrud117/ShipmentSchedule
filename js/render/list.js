@@ -2,8 +2,7 @@
 
 /* GROUPING BY DATE + FILTER/SORT + MAIN RENDER */
 /* Urutan & pengelompokan SELALU memakai sortBasis() di bawah — tidak
-   ada pemilih ETA/ETD untuk itu (dihapus di masa lalu, lihat git log).
-   Saringan rentang tanggal (#filterDateBasis dkk., di bawah dekat
+   ada pemilih ETA/ETD untuk itu. Saringan rentang tanggal (#filterDateBasis dkk., di bawah dekat
    getFiltered()) sengaja dibuat LEPAS dari urutan/pengelompokan ini —
    filter boleh menyaring ETD sementara daftar tetap terurut menurut
    sortBasis() mode aktif; keduanya operasi yang berbeda. */
@@ -52,50 +51,57 @@ function dateRangeBasisValue(s, basis) {
   return effectiveEta(s);
 }
 
+/* Pencarian menjangkau SEMUA yang terbaca di kartu & panel detail.
+
+   Master/House B/L-AWB WAJIB ikut: nomor itulah yang paling sering
+   dipakai mencari, entah dari e-mail forwarder atau dari dokumen di
+   tangan. Size, Pattern, Mold No & PO No ikut dicari: orang gudang
+   menelusuri kiriman lewat nomor cetakan atau nomor PO, bukan cuma
+   nama barangnya. */
+function teksCariJadwal(s) {
+  return [
+    s.party,
+    s.docNo,
+    s.noAju,
+    s.invoice,
+    s.masterBL,
+    s.houseBL,
+    s.vessel,
+    s.voyage,
+    s.container,
+    s.forwarder,
+    s.forwarderPic,
+    s.origin,
+    s.destination,
+    s.incoterm,
+    s.muatan,
+    s.notes,
+    ...(s.items || []).flatMap((i) => [
+      i.namaBarang, i.hsCode, i.size, i.pattern, i.moldNo, i.poNo,
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
+  const qRapat = tanpaPemisah(q);
   const statusFilter = $("#filterStatus").value;
   const dateBasis = $("#filterDateBasis").value || "actual";
   const dateFrom = $("#filterDateFrom").value;
   const dateTo = $("#filterDateTo").value;
   return currentList().filter((s) => {
-    /* Pencarian menjangkau SEMUA yang terbaca di kartu & panel detail.
-
-       Master/House B/L-AWB WAJIB ikut: nomor itulah yang paling sering
-       dipakai mencari, entah dari e-mail forwarder atau dari dokumen di
-       tangan.
-
-       Nomor B/L, kontainer, dan HS Code kerap ditulis dengan tanda
+    /* Nomor B/L, kontainer, dan HS Code kerap ditulis dengan tanda
        pisah yang berbeda-beda ("PFSX-260480" vs "PFSX260480"), jadi
        pencarian dicocokkan DUA KALI: apa adanya, dan setelah tanda
-       baca dibuang di kedua sisi. */
-    const hay = [
-      s.party,
-      s.docNo,
-      s.noAju,
-      s.invoice,
-      s.masterBL,
-      s.houseBL,
-      s.vessel,
-      s.voyage,
-      s.container,
-      s.forwarder,
-      s.forwarderPic,
-      s.origin,
-      s.destination,
-      s.incoterm,
-      s.muatan,
-      s.notes,
-      /* Size, Pattern, Mold No & PO No ikut dicari: orang gudang
-         menelusuri kiriman lewat nomor cetakan atau nomor PO, bukan
-         cuma nama barangnya. */
-      ...(s.items || []).flatMap((i) => [
-        i.namaBarang, i.hsCode, i.size, i.pattern, i.moldNo, i.poNo,
-      ]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    const matchQ = !q || hay.includes(q) || tanpaPemisah(hay).includes(tanpaPemisah(q));
+       baca dibuang di kedua sisi. Teksnya hanya dirakit kalau memang
+       ada yang dicari. */
+    let matchQ = true;
+    if (q) {
+      const hay = teksCariJadwal(s);
+      matchQ = hay.includes(q) || tanpaPemisah(hay).includes(qRapat);
+    }
     const matchStatus = !statusFilter || s.status === statusFilter;
 
     /* Rentang tanggal. Perbandingan memakai teks ISO (yyyy-mm-dd), yang
@@ -341,7 +347,6 @@ function render() {
   cardContainer.innerHTML = html;
 
   renderPaginationBar(flat.length);
-  fixSelectWidths();
   updateStats(flat.length);
   renderFilterNote(flat.length, totalInBook);
 }
@@ -497,75 +502,6 @@ function nilaiFilterStatusBawaan() {
     FILTER_STATUS_DEFAULT,
   );
   return ada ? FILTER_STATUS_DEFAULT : "";
-}
-
-/* ---- Make each status <select> exactly as wide as its selected text ---- */
-let measurerEl = null;
-function getMeasurer() {
-  if (measurerEl) return measurerEl;
-  measurerEl = document.createElement("span");
-  measurerEl.style.position = "absolute";
-  measurerEl.style.visibility = "hidden";
-  measurerEl.style.whiteSpace = "nowrap";
-  measurerEl.style.top = "-9999px";
-  measurerEl.style.left = "-9999px";
-  document.body.appendChild(measurerEl);
-  return measurerEl;
-}
-/* LEBAR KOTAK STATUS — diukur berkelompok, bukan satu per satu.
-
-   Mengerjakan tiap kotak sampai tuntas (baca gaya, tulis ke pengukur,
-   baca lebarnya, tulis lebar kotaknya) membuat tulis-baca
-   berselang-seling, dan itu memaksa peramban menghitung ulang tata
-   letak SETIAP PUTARAN — papan berisi 200 kartu berarti 200
-   perhitungan paksa. Dua hal yang menghindarinya:
-
-   1. Dipisah jadi tiga tahap — baca semua, ukur, baru tulis semua.
-   2. Hasil ukuran DIPAKAI ULANG. Isi kotak status cuma segelintir
-      ("Process", "In Transit", "Arrived"...), jadi 200 kartu paling
-      butuh beberapa pengukuran, bukan 200.
-
-   Ingatannya sengaja hanya sepanjang satu panggilan: font halaman
-   dimuat dengan `display=swap`, dan ukuran yang disimpan lintas render
-   bisa jadi hasil pengukuran memakai font sementara. */
-function fixSelectWidths() {
-  const kotak = $$(".status-select", cardContainer);
-  if (!kotak.length) return;
-
-  // 1. BACA semua dulu — tanpa satu pun tulis di antaranya.
-  const tugas = [];
-  kotak.forEach((el) => {
-    const opt = el.options[el.selectedIndex];
-    if (!opt) return;
-    const cs = getComputedStyle(el);
-    tugas.push({
-      el,
-      teks: opt.text,
-      cs,
-      kunci: [cs.fontFamily, cs.fontSize, cs.fontWeight,
-        cs.letterSpacing, cs.textTransform, opt.text].join("|"),
-    });
-  });
-  if (!tugas.length) return;
-
-  // 2. UKUR hanya yang belum pernah diukur di panggilan ini.
-  const m = getMeasurer();
-  const lebar = new Map();
-  tugas.forEach((kerja) => {
-    if (lebar.has(kerja.kunci)) return;
-    m.style.fontFamily = kerja.cs.fontFamily;
-    m.style.fontSize = kerja.cs.fontSize;
-    m.style.fontWeight = kerja.cs.fontWeight;
-    m.style.letterSpacing = kerja.cs.letterSpacing;
-    m.style.textTransform = kerja.cs.textTransform;
-    m.textContent = kerja.teks;
-    lebar.set(kerja.kunci, m.getBoundingClientRect().width);
-  });
-
-  // 3. TULIS semua.
-  tugas.forEach((kerja) => {
-    kerja.el.style.width = Math.ceil(lebar.get(kerja.kunci)) + 46 + "px";
-  });
 }
 
 /* Penyegaran ringan: hanya geser penanda, DOM & fokus tidak disentuh */

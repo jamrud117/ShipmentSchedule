@@ -121,6 +121,20 @@
   border-radius: 3px;
   padding: 1px 4px;
 }
+/* Petunjuk tombol keyboard tidak berguna di layar sentuh -- di ponsel
+   ia membungkus jadi tiga baris di sebelah tombol. Tombolnya
+   melebar mengisi kaki panel. */
+@media (max-width: 767px), (hover: none) {
+  .sheet-foot .sheet-foot-hint {
+    display: none;
+  }
+}
+@media (max-width: 767px) {
+  .sheet-foot > button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}
 
 /* Kepala isi panel (nama pihak + status). */
 .detail-header {

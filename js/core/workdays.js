@@ -48,6 +48,16 @@ function isWorkingDayISO(iso) {
   return !isWeekendISO(iso) && !isHolidayISO(iso);
 }
 
+/* Sama dengan isWorkingDayISO, untuk objek tanggal yang sedang
+   dimajukan per hari -- tanpa mengurai & menulis ulang teks tanggal di
+   tiap langkah (perulangan hari kerja dipanggil ratusan kali tiap
+   prediksi dihitung). `cal` = predictionCalendar() sekali per hitungan. */
+function hariKerjaTgl(d, cal) {
+  if (cal.weekendDays.indexOf(d.getDay()) >= 0) return false;
+  return !cal.holidays.length || cal.holidays.indexOf(toISODate(d)) < 0;
+}
+const ISO_RAPI = /^\d{4}-\d{2}-\d{2}$/;
+
 /* Tanggal + n hari KALENDER. n boleh 0 atau negatif. */
 function addCalendarDaysISO(iso, n) {
   const d = parseLocalDate(iso);
@@ -61,15 +71,17 @@ function addCalendarDaysISO(iso, n) {
    Dipakai saat sebuah proses dijadwalkan mulai di akhir pekan: barang
    yang mendarat Sabtu tidak diurus Sabtu itu juga. */
 function nextWorkingDayISO(iso) {
-  let cur = iso;
-  if (!parseLocalDate(cur)) return "";
+  const d = parseLocalDate(iso);
+  if (!d) return "";
+  const cal = predictionCalendar();
+  if (cal.weekendDays.indexOf(d.getDay()) < 0 && cal.holidays.indexOf(iso) < 0) return iso;
   let jaga = 0;
-  while (!isWorkingDayISO(cur)) {
-    cur = addCalendarDaysISO(cur, 1);
+  do {
+    d.setDate(d.getDate() + 1);
     // Jaring pengaman: kalau seluruh tahun ditandai libur, jangan berputar selamanya
-    if (++jaga > 400) return cur;
-  }
-  return cur;
+    if (++jaga > 400) break;
+  } while (!hariKerjaTgl(d, cal));
+  return toISODate(d);
 }
 
 /* Tanggal + n HARI KERJA.
@@ -82,19 +94,20 @@ function nextWorkingDayISO(iso) {
    mendarat di hari kerja. Jadi Jumat + 1 hari kerja = Senin. */
 function addWorkingDaysISO(iso, n) {
   const jml = Math.max(0, Math.round(Number(n) || 0));
-  if (!parseLocalDate(iso)) return "";
+  const d = parseLocalDate(iso);
+  if (!d) return "";
   if (jml === 0) return iso;
 
-  let cur = iso;
+  const cal = predictionCalendar();
   for (let i = 0; i < jml; i++) {
-    cur = addCalendarDaysISO(cur, 1);
+    d.setDate(d.getDate() + 1);
     let jaga = 0;
-    while (!isWorkingDayISO(cur)) {
-      cur = addCalendarDaysISO(cur, 1);
+    while (!hariKerjaTgl(d, cal)) {
+      d.setDate(d.getDate() + 1);
       if (++jaga > 400) break;
     }
   }
-  return cur;
+  return toISODate(d);
 }
 
 /* Selisih HARI KALENDER antara dua tanggal. Positif kalau `toISO`
@@ -107,22 +120,33 @@ function calendarDaysBetweenISO(fromISO, toISO) {
 }
 
 /* Berapa hari KERJA di antara dua tanggal (tidak termasuk tanggal awal,
-   termasuk tanggal akhir). Belum dipakai perhitungan mana pun sekarang,
-   tapi dibutuhkan begitu prediksi mulai belajar dari riwayat: "PIB ke
-   SPPB kemarin makan berapa hari kerja". */
+   termasuk tanggal akhir). Dipakai mesin belajar prediksi: "PIB ke SPPB
+   kemarin makan berapa hari kerja" (prediction-learning.js). */
 function workingDaysBetweenISO(fromISO, toISO) {
   const a = parseLocalDate(fromISO);
   const b = parseLocalDate(toISO);
   if (!a || !b) return null;
   const mundur = b < a;
-  let cur = mundur ? toISO : fromISO;
-  const akhir = mundur ? fromISO : toISO;
   let n = 0;
-  let jaga = 0;
-  while (cur !== akhir) {
-    cur = addCalendarDaysISO(cur, 1);
-    if (isWorkingDayISO(cur)) n++;
-    if (++jaga > 4000) break;
+  if (ISO_RAPI.test(fromISO) && ISO_RAPI.test(toISO)) {
+    // Satu objek tanggal yang dimajukan, bukan urai-tulis teks tiap hari.
+    const cal = predictionCalendar();
+    const d = mundur ? b : a;
+    const hari = Math.min(Math.abs(calendarDaysBetweenISO(fromISO, toISO)), 4001);
+    for (let i = 0; i < hari; i++) {
+      d.setDate(d.getDate() + 1);
+      if (hariKerjaTgl(d, cal)) n++;
+    }
+  } else {
+    // Teks tanggal tak baku: jalur lama apa adanya.
+    let cur = mundur ? toISO : fromISO;
+    const akhir = mundur ? fromISO : toISO;
+    let jaga = 0;
+    while (cur !== akhir) {
+      cur = addCalendarDaysISO(cur, 1);
+      if (isWorkingDayISO(cur)) n++;
+      if (++jaga > 4000) break;
+    }
   }
   return mundur ? -n : n;
 }

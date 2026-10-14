@@ -76,6 +76,17 @@ function columnFor(camelField) {
   return FIELD_MAP[camelField] || camelField;
 }
 
+/* Kolom teks yang di database NOT NULL DEFAULT '' -- isian kosong dikirim
+   sebagai teks kosong, BUKAN NULL. Kolom lain menyimpan kosong sebagai
+   NULL; untuk kolom ini NULL ditolak database ("null value in column
+   ... violates not-null constraint") dan seluruh penyimpanannya gagal. */
+const KOLOM_TEKS_TANPA_NULL = new Set(["vehicle_no"]);
+
+// Nilai kosong untuk sebuah kolom: "" bagi kolom di atas, NULL bagi yang lain
+function nilaiKosongKolom(kolom) {
+  return KOLOM_TEKS_TANPA_NULL.has(kolom) ? "" : null;
+}
+
 // Payload form (camelCase) -> baris siap INSERT/UPDATE (snake_case)
 /* ISIAN TERSEMBUNYI DI BUKU EXPORT: Tanggal & Jam Stuffing
    (factory_date / factory_time).
@@ -110,8 +121,8 @@ function shipmentToRow(payload, mode) {
     let val = payload[camel];
     if (NUMERIC_FIELDS.includes(camel)) {
       val = Number(val) || 0;
-    } else if (val === "") {
-      val = null; // tanggal/teks kosong disimpan sebagai NULL di database
+    } else if (val === "" || (val == null && KOLOM_TEKS_TANPA_NULL.has(col))) {
+      val = nilaiKosongKolom(col); // kosong -> NULL ('' untuk kolom NOT NULL di atas)
     }
     row[col] = val;
   });

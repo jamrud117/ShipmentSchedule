@@ -856,13 +856,13 @@ function lapFmtUang(n) {
   const v = Number(n) || 0;
   if (!v) return "-";
   const abs = Math.abs(v);
-  if (abs >= 1e9) return `IDR ${(v / 1e9).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} bn`;
-  if (abs >= 1e6) return `IDR ${(v / 1e6).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`;
+  if (abs >= 1e9) return `IDR ${angkaLokal(v / 1e9, "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} bn`;
+  if (abs >= 1e6) return `IDR ${angkaLokal(v / 1e6, "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`;
   return `IDR ${Math.round(v).toLocaleString("en-US")}`;
 }
 const lapFmtJt = lapFmtUang;
 const lapFmtJuta = lapFmtUang;
-const lapFmtUsd = (n) => (n ? `USD ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "-");
+const lapFmtUsd = (n) => (n ? `USD ${angkaLokal(Number(n), "en-US", { maximumFractionDigits: 0 })}` : "-");
 const lapFmtRp = (n) => (Math.round(n) ? "IDR " + Math.round(n).toLocaleString("en-US") : "-");
 const LAP_BULAN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const lapNamaBulan = (b) => LAP_BULAN[b - 1] || "";
@@ -883,7 +883,7 @@ function lapTeksSel(c) {
     case "rp": return lapFmtRp(v);
     case "pct": return v ? (v * 100).toFixed(1) + "%" : "-";
     case "pct2": return v ? (v * 100).toFixed(2) + "%" : "-";
-    case "rp2": return v ? Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
+    case "rp2": return v ? angkaLokal(Number(v), "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
     case "chg": return (v > 0 ? "▲ +" : v < 0 ? "▼ −" : "") + Math.abs(v * 100).toFixed(1) + "%";
     case "n": return v ? Math.round(v).toLocaleString("en-US") : "-";
     default: return String(v);
@@ -1238,9 +1238,9 @@ function lapSvgLegenda(seri) {
 }
 function lapSvgSumbu(maks, y, kiri, kanan, desimal) {
   return [0, 0.25, 0.5, 0.75, 1].map((f) => `<line x1="${kiri}" x2="${kanan}" y1="${y(maks * f).toFixed(1)}" y2="${y(maks * f).toFixed(1)}" stroke="#e2e8f0"/>` +
-    `<text x="${kiri - 10}" y="${(y(maks * f) + 5).toFixed(1)}" font-size="13" text-anchor="end" fill="#64748b">${(maks * f).toLocaleString("en-US", { maximumFractionDigits: desimal })}</text>`).join("");
+    `<text x="${kiri - 10}" y="${(y(maks * f) + 5).toFixed(1)}" font-size="13" text-anchor="end" fill="#64748b">${angkaLokal(maks * f, "en-US", { maximumFractionDigits: desimal })}</text>`).join("");
 }
-const lapLabelNilai = (v) => (v >= 100 ? Math.round(v).toLocaleString("en-US") : v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
+const lapLabelNilai = (v) => (v >= 100 ? Math.round(v).toLocaleString("en-US") : angkaLokal(v, "en-US", { maximumFractionDigits: 1 }));
 
 function lapSvgBatang(judul, seri, opsi) {
   const o = opsi || {};

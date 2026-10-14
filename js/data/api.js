@@ -182,20 +182,40 @@ function showDbErrorState() {
     </div>`;
 }
 
-/* KOLOM BARU YANG MUNGKIN BELUM DIMIGRASI. Kalau database menolaknya,
-   jadwal disimpan ulang TANPA kolom itu -- data lain tetap tersimpan --
-   dan pengguna diberi tahu sekali berkas migrasi mana yang perlu
+/* KOLOM BARU YANG MUNGKIN BELUM DIMIGRASI. Kalau database belum
+   mengenalnya, jadwal disimpan ulang TANPA kolom itu -- data lain tetap
+   tersimpan -- dan pengguna diberi tahu berkas migrasi mana yang perlu
    dijalankan. Tanpa ini, satu kolom yang belum ada menggagalkan seluruh
-   penyimpanan jadwal. */
+   penyimpanan jadwal.
+
+   Tiap penyimpanan mencoba kolomnya lagi (tidak diingat sepanjang sesi):
+   begitu migrasinya dijalankan, simpan berikutnya langsung ikut, tanpa
+   perlu memuat ulang halaman. */
 const KOLOM_OPSIONAL = { vehicle_no: { berkas: "migration-vehicle-no.sql", nama: "No. Kendaraan" } };
-const kolomBelumAda = new Set();
+
+/* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
+   PGRST204 = kolom tidak ada di cache skema PostgREST, 42703 = kolom
+   tidak ada di tabel. Galat lain yang kebetulan menyebut nama kolomnya
+   (mis. "null value in column "vehicle_no" violates not-null
+   constraint") BUKAN tanda migrasi belum jalan. Dulu tertangkap sebagai
+   itu: kolomnya dibuang dari SEMUA penyimpanan berikutnya sampai halaman
+   dimuat ulang, dan No. Kendaraan tidak pernah tersimpan walau
+   migrasinya sudah dijalankan. */
+function kolomBelumDikenal(error) {
+  if (!error) return null;
+  const pesan = [error.message, error.details, error.hint].filter(Boolean).join(" ");
+  const kolomHilang =
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    /could not find the '\w+' column|column "?[\w.]+"? (?:of relation "?[\w.]+"? )?does not exist/i.test(pesan);
+  if (!kolomHilang) return null;
+  return Object.keys(KOLOM_OPSIONAL).find((k) => pesan.includes(k)) || null;
+}
+
 async function simpanDenganCadangan(kirim, row) {
-  kolomBelumAda.forEach((k) => delete row[k]);
   let hasil = await kirim(row);
-  const pesan = String((hasil.error && (hasil.error.message || hasil.error.details)) || "");
-  const kolom = hasil.error && Object.keys(KOLOM_OPSIONAL).find((k) => pesan.includes(k));
+  const kolom = kolomBelumDikenal(hasil.error);
   if (kolom) {
-    kolomBelumAda.add(kolom);
     /* Diberi tahu HANYA kalau ada isian yang benar-benar tidak ikut
        tersimpan. Kolom yang memang kosong (No. Kendaraan tidak diisi)
        tidak kehilangan apa pun -- peringatan di situ cuma gangguan. */
@@ -203,8 +223,8 @@ async function simpanDenganCadangan(kirim, row) {
     delete row[kolom];
     const k = KOLOM_OPSIONAL[kolom];
     if (adaIsi && typeof showToast === "function") {
-      showToast(tt(`Jadwal tersimpan, tetapi ${k.nama} belum: jalankan ${k.berkas} di Supabase.`,
-        `Schedule saved, but ${k.nama} was not: run ${k.berkas} in Supabase.`), "warning");
+      showToast(tt(`Jadwal tersimpan, tetapi ${k.nama} belum: database belum mengenal kolomnya. Jalankan ${k.berkas} di Supabase (aman diulang).`,
+        `Schedule saved, but ${k.nama} was not: the database does not know the column yet. Run ${k.berkas} in Supabase (safe to re-run).`), "warning");
     }
     hasil = await kirim(row);
   }
@@ -274,7 +294,8 @@ async function updateShipmentRecord(id, payload, items, stops) {
 async function persistFields(id, patch) {
   const row = {};
   Object.keys(patch).forEach((camel) => {
-    row[columnFor(camel)] = patch[camel] === "" ? null : patch[camel];
+    const kolom = columnFor(camel);
+    row[kolom] = patch[camel] === "" ? nilaiKosongKolom(kolom) : patch[camel];
   });
   const { error } = await supabaseClient
     .from("shipments")

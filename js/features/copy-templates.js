@@ -318,7 +318,7 @@ function reportDetailPairs(s, mode) {
 function fmtTanggalReport(d) {
   const dt = parseLocalDate(d);
   if (!dt) return "TBA";
-  return dt.toLocaleDateString("en-GB", {
+  return tanggalLokal(dt, "en-GB", {
     day: "2-digit",
     month: "long",
     year: "numeric",

@@ -36,7 +36,7 @@ function sbSetelRel(rel) {
   const btn = document.getElementById("btnSidebarCiut");
   if (!btn) return;
   const teks = rel ? tt("Lebarkan menu", "Expand menu") : tt("Ciutkan menu", "Collapse menu");
-  btn.innerHTML = `<i class="bi ${rel ? "bi-chevron-double-right" : "bi-chevron-double-left"}"></i><span>${escapeHtml(teks)}</span>`;
+  btn.innerHTML = `${ikonSvg(rel ? "lebar" : "ciut")}<span>${escapeHtml(teks)}</span>`;
   btn.title = teks;
   btn.setAttribute("aria-expanded", String(!rel));
 }

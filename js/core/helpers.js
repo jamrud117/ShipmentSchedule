@@ -36,22 +36,51 @@ function fmtDate(d) {
   const p2 = (n) => String(n).padStart(2, "0");
   return `${p2(dt.getDate())}-${p2(dt.getMonth() + 1)}-${dt.getFullYear()}`;
 }
+/* FORMATTER INTL YANG DISIMPAN.
+
+   n.toLocaleString(locale, opsi) / d.toLocaleDateString(locale, opsi)
+   membangun formatter baru di SETIAP panggilan: ±25 µs untuk angka,
+   ±65 µs untuk tanggal. Kartu, tabel & laporan memanggilnya ratusan
+   kali tiap digambar. Formatter yang disimpan ±0,5 µs, hasilnya sama
+   persis (spesifikasinya memang "buat formatter, lalu format").
+   Tanpa opsi tidak perlu: peramban sudah menyimpannya sendiri. */
+const FORMATTER_INTL = new Map();
+function formatterIntl(Kelas, locale, opsi) {
+  const kunci = Kelas.name + "|" + locale + "|" + JSON.stringify(opsi);
+  let f = FORMATTER_INTL.get(kunci);
+  if (!f) {
+    f = new Kelas(locale, opsi);
+    FORMATTER_INTL.set(kunci, f);
+  }
+  return f;
+}
+// = n.toLocaleString(locale, opsi), n berupa Number
+function angkaLokal(n, locale, opsi) {
+  return formatterIntl(Intl.NumberFormat, locale, opsi).format(n);
+}
+/* = d.toLocaleDateString / toLocaleTimeString(locale, opsi) -- opsinya
+   menyebut sendiri bagian yang ditulis (day/month/year/weekday atau
+   hour/minute), seperti semua pemanggil di aplikasi ini. */
+function tanggalLokal(d, locale, opsi) {
+  if (isNaN(d)) return "Invalid Date";
+  return formatterIntl(Intl.DateTimeFormat, locale, opsi).format(d);
+}
+
 function fmtDateLong(d) {
   const dt = parseLocalDate(d);
   if (!dt) return tt("Tanggal Tidak Diketahui", "Unknown Date");
   // Nama bulan mengikuti bahasa tampilan ("Agustus" / "August").
-  return dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
+  return tanggalLokal(dt, activeLang === "en" ? "en-GB" : "id-ID", {
     day: "2-digit",
     month: "long",
     year: "numeric",
   });
 }
-// isPastOrToday() (dipakai utk auto-arrive) dihapus -- auto-arrive sudah tidak ada lagi
 function fmtUSD(n) {
   n = Number(n) || 0;
   return (
     "$" +
-    n.toLocaleString("en-US", {
+    angkaLokal(n, "en-US", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     })
@@ -67,7 +96,7 @@ function fmtRp(n) {
 function fmtRpPresisi(n) {
   const v = Math.round((Number(n) || 0) * 100) / 100;
   const bulat = Number.isInteger(v);
-  return "Rp " + v.toLocaleString("id-ID", { minimumFractionDigits: bulat ? 0 : 2, maximumFractionDigits: 2 });
+  return "Rp " + angkaLokal(v, "id-ID", { minimumFractionDigits: bulat ? 0 : 2, maximumFractionDigits: 2 });
 }
 function fmtNum(n) {
   return (Number(n) || 0).toLocaleString("id-ID");

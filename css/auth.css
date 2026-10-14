@@ -178,15 +178,19 @@ body.is-locked {
 .user-chip-role.is-finance {
   color: #8fd8c0;
 }
+/* Inisial nama (session.js), bukan ikon orang generik -- sama dengan
+   avatar di halaman Akun. */
 .user-chip-avatar {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--sec-400);
+  color: var(--navy);
   display: grid;
   place-items: center;
-  font-size: 1.05rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 800;
   flex-shrink: 0;
 }
 
@@ -275,6 +279,10 @@ body.is-locked {
 .user-menu-item:hover {
   background: var(--n-100);
 }
+.user-menu-item .ic {
+  width: 16px;
+  height: 16px;
+}
 .user-menu-item.danger {
   color: var(--s-danger);
 }
@@ -320,9 +328,6 @@ body.is-viewer #btnHsCodeAdd,
 body.is-viewer .hs-kol-aksi,
 body.is-viewer [data-edit-hscode],
 body.is-viewer [data-del-hscode],
-/* Shipment Schedule: sama seperti HS Code. */
-body.is-viewer #btnVsAdd,
-body.is-viewer .vs-kol-aksi,
 /* Masterlist: semua yang mencatat / mengubah membawa kelas .mst-ubah. */
 body.is-viewer .mst-ubah,
 body.is-viewer .btn-note-send,
@@ -344,7 +349,6 @@ body.tutup-overview .site-nav-link[data-page="overview"],
 body.tutup-docnum .site-nav-link[data-page="docnum"],
 body.tutup-docnum .nav-docnum,
 body.tutup-hscode .site-nav-link[data-page="hscode"],
-body.tutup-vessel .site-nav-link[data-page="vessel"],
 body.tutup-masterlist .site-nav-link[data-page="masterlist"],
 body.tutup-accounts .site-nav-link[data-page="accounts"] {
   display: none !important;
@@ -478,9 +482,62 @@ body.is-viewer .delay-strip-fields input {
 }
 .acct-role {
   flex-shrink: 0;
-  width: 172px;
+  width: 140px;
   height: 34px;
   font-size: var(--t-sm);
+}
+
+/* Hak tiap peran -- di bawah daftar akun (accounts-view.js). */
+.acct-legend {
+  margin-top: var(--sp-4);
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--n-50);
+  border: 1px solid var(--n-100);
+  display: grid;
+  gap: 7px;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.acct-legend:empty {
+  display: none;
+}
+.acct-legend-judul {
+  font-family: var(--font-board);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.acct-legend-baris {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+}
+.acct-legend-peran {
+  justify-self: start;
+  font-family: var(--font-board);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--n-100);
+  color: var(--n-600);
+}
+.acct-legend-peran.is-exim {
+  background: var(--p-600);
+  color: #fff;
+}
+.acct-legend-peran.is-marketing {
+  background: #e7f0ff;
+  color: #1d4ed8;
+}
+.acct-legend-peran.is-finance {
+  background: #e3f4ee;
+  color: #0f6b52;
 }
 
 /* Pemilih bahasa — dipakai di layar masuk & menu akun. */

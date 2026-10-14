@@ -331,11 +331,17 @@
   background: rgba(255, 255, 255, 0.25);
   color: #fff;
 }
+/* Ponsel: nomor langkah di atas, namanya boleh dua baris -- dulu satu
+   baris tanpa bungkus, dan "Kepabeanan & Biaya" terpotong di tepi. */
 @media (max-width: 575.98px) {
   .nav-detail .nav-link {
-    font-size: 0.68rem;
-    gap: 5px;
-    padding: 9px 4px;
+    flex-direction: column;
+    gap: 3px;
+    padding: 7px 4px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    white-space: normal;
+    text-align: center;
   }
 }
 

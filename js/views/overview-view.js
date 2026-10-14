@@ -180,7 +180,7 @@ function renderAgenda() {
       .join(" ");
     html.push(`
       <button type="button" class="${cls}" data-ov-date="${iso}" title="${escapeAttr(fmtDateBoard(iso))}">
-        <span class="agenda-dow">${dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", { weekday: "short" })}</span>
+        <span class="agenda-dow">${tanggalLokal(dt, activeLang === "en" ? "en-GB" : "id-ID", { weekday: "short" })}</span>
         <span class="agenda-date">${dt.getDate()}</span>
         <span class="agenda-count ${n ? "has" : ""}">${n}</span>
       </button>`);
@@ -337,7 +337,7 @@ function renderOverview() {
 let akurasiTertunda = false;
 function renderPredictionAccuracy() {
   const box = $("#ovAccuracy");
-  if (!box || typeof predictionAccuracy !== "function") return;
+  if (!box || typeof predictionAccuracyBertahap !== "function") return;
   if (UJI_MUNDUR.hasil && UJI_MUNDUR.generasi === GENERASI_BELAJAR) {
     gambarAkurasi(box, UJI_MUNDUR.hasil);
     return;
@@ -345,12 +345,13 @@ function renderPredictionAccuracy() {
   box.innerHTML = `<div class="ov-muted">${tt("Menghitung dari riwayat…", "Calculating from history…")}</div>`;
   if (akurasiTertunda || typeof shipmentsLoaded === "undefined" || !shipmentsLoaded) return;
   akurasiTertunda = true;
-  const jalan = () => {
-    akurasiTertunda = false;
-    const hasil = predictionAccuracy();
-    const b = $("#ovAccuracy");
-    if (b) gambarAkurasi(b, hasil);
-  };
+  // Bertahap (prediction-backtest.js): klik di tengah hitungan tetap ditanggapi
+  const jalan = () =>
+    predictionAccuracyBertahap((hasil) => {
+      akurasiTertunda = false;
+      const b = $("#ovAccuracy");
+      if (b) gambarAkurasi(b, hasil);
+    });
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(jalan, { timeout: 2000 });
   else setTimeout(jalan, 300);
 }

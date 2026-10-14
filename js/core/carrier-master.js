@@ -758,14 +758,33 @@ const COURIER_SERVICES = [
 
 siapkanAlias(COURIER_SERVICES);
 
+/* Hasil deteksi DIINGAT per teks (di sini dan di detectCarrier):
+   mesin prediksi & papan menanyakan pengangkut yang sama berulang-ulang
+   -- sekali per kiriman di tiap lapis, ±800 kali saat aplikasi dibuka
+   -- padahal hasilnya cuma bergantung pada teksnya. Daftar pelayaran,
+   maskapai & kurir tidak berubah selama halaman terbuka. */
+const DETEKSI_INGAT_MAKS = 5000;
+function ingatDeteksi(peta, kunci, hitung) {
+  let hasil = peta.get(kunci);
+  if (hasil === undefined) {
+    if (peta.size >= DETEKSI_INGAT_MAKS) peta.clear();
+    hasil = hitung();
+    peta.set(kunci, hasil);
+  }
+  return hasil;
+}
+
+const LAYANAN_KURIR_INGAT = new Map();
 function detectCourierService(raw) {
-  const kata = normalisasiTeksKapal(raw).split(" ").filter(Boolean);
-  if (!kata.length) return "";
-  const rapat = " " + kata.join(" ") + " ";
-  const m = COURIER_SERVICES.find((s) =>
-    s._alias.some((a) => rapat.indexOf(" " + a + " ") >= 0),
-  );
-  return m ? m.code : "";
+  return ingatDeteksi(LAYANAN_KURIR_INGAT, String(raw == null ? "" : raw), () => {
+    const kata = normalisasiTeksKapal(raw).split(" ").filter(Boolean);
+    if (!kata.length) return "";
+    const rapat = " " + kata.join(" ") + " ";
+    const m = COURIER_SERVICES.find((s) =>
+      s._alias.some((a) => rapat.indexOf(" " + a + " ") >= 0),
+    );
+    return m ? m.code : "";
+  });
 }
 
 /* ------------------------------------------------------------------
@@ -775,10 +794,23 @@ function detectCourierService(raw) {
    maupun No. Voyage — tergantung kebiasaan yang mengetik. Dua-duanya
    dicoba daripada memaksa satu kebiasaan.
 ------------------------------------------------------------------ */
+/* Kuncinya moda + Nama Kapal (+ No. Flight untuk udara) + bahasa (teks
+   alasan "belum dikenali" ikut bahasa). Yang dikembalikan SALINAN,
+   supaya pemanggil yang mengubah hasilnya tidak mengubah ingatan. */
+const CARRIER_INGAT = new Map();
 function detectCarrier(s) {
   const src = s || {};
   const udara = src.transport === "udara";
+  const kunci = [
+    typeof activeLang !== "undefined" ? activeLang : "",
+    udara ? "u" : "l",
+    src.vessel || "",
+    udara ? src.voyage || "" : "",
+  ].join("\u0001");
+  return { ...ingatDeteksi(CARRIER_INGAT, kunci, () => deteksiCarrier(src, udara)) };
+}
 
+function deteksiCarrier(src, udara) {
   /* KURIR PALING DULU, apa pun moda yang tercatat. Kalau kolom Nama
      Kapal berisi "FEDEX", kirimannya memang lewat kurir — tidak peduli
      moda transportasinya terlanjur diisi apa. */

@@ -62,7 +62,6 @@
     <link rel="stylesheet" href="css/panel.css" />
     <link rel="stylesheet" href="css/palette.css" />
     <link rel="stylesheet" href="css/auth.css" />
-    <link rel="stylesheet" href="css/vessel.css" />
     <link rel="stylesheet" href="css/masterlist.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
@@ -71,6 +70,32 @@
     <link rel="stylesheet" href="css/system.css" />
   </head>
   <body>
+    <!-- IKON HALAMAN -- satu set garis (Lucide, lisensi ISC) untuk semua
+         ikon yang mewakili halaman: sidebar, rel, bilah atas ponsel, palet
+         perintah, aksi cepat. Dipakai lewat <svg class="ic"><use href="#ik-…">
+         (atau ikonSvg() di js/ui/icons.js); gaya garisnya di .ic (base.css). -->
+    <svg class="ikon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="ik-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" /> <rect width="7" height="5" x="14" y="3" rx="1" /> <rect width="7" height="9" x="14" y="12" rx="1" /> <rect width="7" height="5" x="3" y="16" rx="1" /></symbol>
+      <symbol id="ik-jadwal" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" /> <path d="M16 2v4" /> <path d="M8 2v4" /> <path d="M3 10h5" /> <path d="M17.5 17.5 16 16.3V14" /> <circle cx="16" cy="16" r="6" /></symbol>
+      <symbol id="ik-dokumen" viewBox="0 0 24 24"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <rect width="4" height="6" x="2" y="12" rx="2" /> <path d="M10 12h2v6" /> <path d="M10 18h4" /></symbol>
+      <symbol id="ik-hscode" viewBox="0 0 24 24"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14" /> <path d="m7.5 4.27 9 5.15" /> <polyline points="3.29 7 12 12 20.71 7" /> <line x1="12" x2="12" y1="22" y2="12" /> <circle cx="18.5" cy="15.5" r="2.5" /> <path d="M20.27 17.27 22 19" /></symbol>
+      <symbol id="ik-masterlist" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /> <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /> <path d="M12 11h4" /> <path d="M12 16h4" /> <path d="M8 11h.01" /> <path d="M8 16h.01" /></symbol>
+      <symbol id="ik-akun" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0" /> <circle cx="10" cy="8" r="5" /> <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" /></symbol>
+      <symbol id="ik-cari" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /> <path d="m21 21-4.3-4.3" /></symbol>
+      <symbol id="ik-menu" viewBox="0 0 24 24"><line x1="4" x2="20" y1="12" y2="12" /> <line x1="4" x2="20" y1="6" y2="6" /> <line x1="4" x2="20" y1="18" y2="18" /></symbol>
+      <symbol id="ik-tutup" viewBox="0 0 24 24"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></symbol>
+      <symbol id="ik-ciut" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 3v18" /> <path d="m16 15-3-3 3-3" /></symbol>
+      <symbol id="ik-lebar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 3v18" /> <path d="m14 9 3 3-3 3" /></symbol>
+      <symbol id="ik-keluar" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /> <polyline points="16 17 21 12 16 7" /> <line x1="21" x2="9" y1="12" y2="12" /></symbol>
+      <symbol id="ik-tambah" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
+      <symbol id="ik-excel" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="M8 13h2" /> <path d="M14 13h2" /> <path d="M8 17h2" /> <path d="M14 17h2" /></symbol>
+      <symbol id="ik-tukar" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4" /> <path d="M4 7h16" /> <path d="m16 21 4-4-4-4" /> <path d="M20 17H4" /></symbol>
+      <symbol id="ik-perhatian" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></symbol>
+      <symbol id="ik-invoice" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /> <path d="M14 8H8" /> <path d="M16 12H8" /> <path d="M13 16H8" /></symbol>
+      <symbol id="ik-truk" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /> <path d="M15 18H9" /> <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" /> <circle cx="17" cy="18" r="2" /> <circle cx="7" cy="18" r="2" /></symbol>
+      <symbol id="ik-dana" viewBox="0 0 24 24"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" /> <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9" /> <path d="m2 16 6 6" /> <circle cx="16" cy="9" r="2.9" /> <circle cx="6" cy="5" r="3" /></symbol>
+      <symbol id="ik-surat" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
+    </svg>
     <!-- Layar sambutan. Tampil sejak gambar pertama, sebelum satu baris
          JavaScript pun berjalan — sesi ke Supabase butuh sepersekian detik,
          dan selama itu seluruh halaman masih tersembunyi sehingga yang
@@ -275,7 +300,7 @@
         aria-label="Buka menu"
         data-en-aria="Open menu"
       >
-        <i class="bi bi-list"></i>
+        <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-menu"></use></svg>
       </button>
       <a class="brand" href="#/" aria-label="EXIM DDI — beranda" data-en-aria="EXIM DDI — home">
         <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -298,7 +323,7 @@
         aria-label="Cari cepat"
         data-en-aria="Quick search"
       >
-        <i class="bi bi-search"></i>
+        <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cari"></use></svg>
       </button>
     </header>
 
@@ -318,7 +343,7 @@
         </a>
         <!-- Hanya di laci (ponsel & tablet) -->
         <button type="button" class="sb-tutup" id="btnSidebarTutup" aria-label="Tutup menu" data-en-aria="Close menu">
-          <i class="bi bi-x-lg"></i>
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-tutup"></use></svg>
         </button>
       </div>
 
@@ -335,7 +360,7 @@
           title="Cari Cepat Lintas Import & Export"
           data-i18n-title="ti.cari.cepat.lintas.import.export"
         >
-          <i class="bi bi-search"></i>
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cari"></use></svg>
           <span class="cmd-trigger-text" data-i18n="u.cari.cepat">Cari cepat</span>
           <kbd>Ctrl K</kbd>
         </button>
@@ -347,37 +372,26 @@
                peran yang sedang masuk, dan auth.css menyembunyikan
                tautannya. Tidak ada kelas per-peran di tautan ini.
 
-               Ringkasan, HS Code, dan Jadwal Kapal terbuka untuk
-               viewer & marketing: isinya hanya DIBACA, dan yang
-               mengubah data di sana disembunyikan sendiri lewat
-               body.is-viewer. -->
+               Ringkasan & HS Code terbuka untuk viewer & marketing:
+               isinya hanya DIBACA, dan yang mengubah data di sana
+               disembunyikan sendiri lewat body.is-viewer. -->
           <a class="site-nav-link" href="#/ringkasan" data-page="overview">
-            <i class="bi bi-columns-gap"></i
-            ><span data-i18n="nav.overview">Ringkasan</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-dashboard"></use></svg><span data-i18n="nav.overview">Ringkasan</span>
           </a>
           <a class="site-nav-link active" href="#/" data-page="schedule">
-            <i class="bi bi-list-columns-reverse"></i
-            ><span data-i18n="nav.schedule">Jadwal</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-jadwal"></use></svg><span data-i18n="nav.schedule">Jadwal</span>
           </a>
           <a class="site-nav-link" href="#/docnum" data-page="docnum">
-            <i class="bi bi-hash"></i
-            ><span data-i18n="nav.docnum">No. Dokumen</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-dokumen"></use></svg><span data-i18n="nav.docnum">No. Dokumen</span>
           </a>
           <a class="site-nav-link" href="#/hscode" data-page="hscode">
-            <i class="bi bi-upc-scan"></i
-            ><span data-i18n="nav.hscode">HS Code</span>
-          </a>
-          <a class="site-nav-link" href="#/shipment-schedule" data-page="vessel">
-            <i class="bi bi-water"></i
-            ><span data-i18n="nav.vessel">Jadwal Kapal</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-hscode"></use></svg><span data-i18n="nav.hscode">HS Code</span>
           </a>
           <a class="site-nav-link" href="#/masterlist" data-page="masterlist">
-            <i class="bi bi-card-checklist"></i
-            ><span data-i18n="nav.masterlist">Masterlist</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-masterlist"></use></svg><span data-i18n="nav.masterlist">Masterlist</span>
           </a>
           <a class="site-nav-link" href="#/akun" data-page="accounts">
-            <i class="bi bi-people"></i
-            ><span data-i18n="nav.accounts">Akun</span>
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-akun"></use></svg><span data-i18n="nav.accounts">Akun</span>
           </a>
         </nav>
       </div>
@@ -386,13 +400,11 @@
         <!-- Hanya di desktop. Teks & ikonnya ditulis sidebar.js
              (Ciutkan / Lebarkan, ikut bahasa). -->
         <button type="button" class="sb-ciut" id="btnSidebarCiut" aria-controls="appSidebar">
-          <i class="bi bi-chevron-double-left"></i><span>Ciutkan menu</span>
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-ciut"></use></svg><span>Ciutkan menu</span>
         </button>
 
         <div class="user-chip" id="userChip">
-          <div class="user-chip-avatar">
-            <i class="bi bi-person-circle"></i>
-          </div>
+          <div class="user-chip-avatar" id="userChipAvatar" aria-hidden="true">?</div>
           <div class="user-chip-main">
             <span class="user-chip-name" id="userChipName">—</span>
             <span class="user-chip-role" id="userChipRole">—</span>
@@ -419,7 +431,7 @@
               class="user-menu-item danger"
               id="btnLogoutMenu"
             >
-              <i class="bi bi-box-arrow-right"></i>
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-keluar"></use></svg>
               <span data-i18n="menu.logout">Keluar</span>
             </button>
           </div>
@@ -476,9 +488,13 @@
       </header>
 
       <main class="container page-main">
+        <!-- Dua kolom yang tingginya seimbang: kiri = antrean, agenda,
+             akurasi; kanan = delay, kelengkapan, aksi cepat. Di layar
+             sempit kolomnya dilebur (display: contents) dan urutan
+             panelnya diatur ulang di overview.css. -->
         <div class="ov-grid">
-          <div>
-            <section class="panel">
+          <div class="ov-kolom">
+            <section class="panel ov-tindakan">
               <div class="panel-head">
                 <h2 data-en="<i class=&quot;bi bi-exclamation-diamond&quot;></i> Needs action">
                   <i class="bi bi-exclamation-diamond"></i> Perlu tindakan
@@ -488,7 +504,7 @@
               <div class="panel-body panel-body--flush" id="ovTasks"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel ov-agenda">
               <div class="panel-head">
                 <h2 data-en="<i class=&quot;bi bi-calendar3-week&quot;></i> 7-day agenda"><i class="bi bi-calendar3-week"></i> Agenda 7 hari</h2>
                 <span class="panel-head-note" id="ovAgendaNote"
@@ -499,17 +515,24 @@
                 <div class="agenda" id="ovAgenda"></div>
               </div>
             </section>
+
+            <section class="panel ov-akurasi">
+              <div class="panel-head">
+                <h2 data-en="<i class=&quot;bi bi-bullseye&quot;></i> Prediction accuracy"><i class="bi bi-bullseye"></i> Akurasi prediksi</h2>
+              </div>
+              <div class="panel-body" id="ovAccuracy"></div>
+            </section>
           </div>
 
-          <div>
-            <section class="panel">
+          <div class="ov-kolom">
+            <section class="panel ov-delay">
               <div class="panel-head">
                 <h2 data-en="<i class=&quot;bi bi-graph-down-arrow&quot;></i> Delay watch"><i class="bi bi-graph-down-arrow"></i> Pantauan delay</h2>
               </div>
               <div class="panel-body" id="ovDelay"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel ov-docs">
               <div class="panel-head">
                 <h2 data-en="<i class=&quot;bi bi-clipboard-check&quot;></i> Document completeness">
                   <i class="bi bi-clipboard-check"></i> Kelengkapan dokumen
@@ -518,14 +541,8 @@
               <div class="panel-body" id="ovDocs"></div>
             </section>
 
-            <section class="panel">
-              <div class="panel-head">
-                <h2 data-en="<i class=&quot;bi bi-bullseye&quot;></i> Prediction accuracy"><i class="bi bi-bullseye"></i> Akurasi prediksi</h2>
-              </div>
-              <div class="panel-body" id="ovAccuracy"></div>
-            </section>
 
-            <section class="panel">
+            <section class="panel ov-aksi">
               <div class="panel-head">
                 <h2 data-en="<i class=&quot;bi bi-lightning-charge&quot;></i> Quick actions"><i class="bi bi-lightning-charge"></i> Aksi cepat</h2>
               </div>
@@ -536,7 +553,7 @@
                     class="quick-action"
                     data-ov-action="new"
                   >
-                    <i class="bi bi-plus-lg"></i>
+                    <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-tambah"></use></svg>
                     <span
                       ><b id="ovQaNewLabel">Tambah Jadwal Import</b
                       ><small data-i18n="u.atau.isi.otomatis.dari.pdf.pib.peb"
@@ -544,8 +561,8 @@
                       ></span
                     >
                   </button>
-                  <a class="quick-action nav-docnum" href="#/docnum" data-en="<i class=&quot;bi bi-hash&quot;></i> <span><b>Request Document Number</b><small>Invoice, DO, fund request, letter</small></span>">
-                    <i class="bi bi-hash"></i>
+                  <a class="quick-action nav-docnum" href="#/docnum" data-en="<svg class=&quot;ic&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;><use href=&quot;#ik-dokumen&quot;></use></svg> <span><b>Request Document Number</b><small>Invoice, DO, fund request, letter</small></span>">
+                    <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-dokumen"></use></svg>
                     <span
                       ><b>Minta Nomor Dokumen</b
                       ><small>Invoice, DO, permintaan dana, surat</small></span
@@ -556,7 +573,7 @@
                     class="quick-action"
                     data-ov-action="export"
                   >
-                    <i class="bi bi-file-earmark-excel"></i>
+                    <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-excel"></use></svg>
                     <span
                       ><b data-en="Bulk Export to Excel">Bulk Export ke Excel</b
                       ><small data-i18n="u.seluruh.jadwal.pada.buku.yang.aktif"
@@ -605,7 +622,7 @@
         <div class="acct-grid">
           <section class="panel">
             <div class="panel-head">
-              <h2 data-en="<i class=&quot;bi bi-people&quot;></i> Account list"><i class="bi bi-people"></i> Daftar akun</h2>
+              <h2 data-en="<svg class=&quot;ic&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;><use href=&quot;#ik-akun&quot;></use></svg> Account list"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-akun"></use></svg> Daftar akun</h2>
               <button type="button" class="btn-quiet" id="btnAccountRefresh">
                 <i class="bi bi-arrow-clockwise"></i>
                 <span data-i18n="hscode.reload">Muat ulang</span>
@@ -626,6 +643,7 @@
                 <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
               </div>
               <div id="accountList"></div>
+              <div class="acct-legend" id="acctPeranLegend"></div>
             </div>
           </section>
 
@@ -737,7 +755,7 @@
           <div class="panel-head hs-bar">
             <div class="hs-bar-judul">
               <h2>
-                <i class="bi bi-upc-scan"></i>
+                <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-hscode"></use></svg>
                 <span data-i18n="hscode.list.title">Daftar HS Code</span>
               </h2>
               <p class="hs-bar-sub" data-i18n="hscode.sub">
@@ -777,72 +795,6 @@
           </div>
           <div id="hsCodeList"></div>
           <div id="hsCodePagination" class="hs-halaman"></div>
-        </section>
-      </main>
-    </div>
-
-    <div id="viewVesselSchedule" class="d-none">
-      <header class="board">
-        <div class="container board-inner">
-          <div class="board-head">
-            <div>
-              <h1 class="board-title" data-en="Shipment Schedule">Jadwal Kapal</h1>
-              <div class="board-sub">
-                <b id="vsCount">0</b>
-                <span id="vsCountLabel" data-en="schedules saved">jadwal tersimpan</span>
-              </div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="vsToday">—</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main class="container page-main">
-        <section class="panel hs-panel">
-          <div class="panel-head hs-bar vs-bar">
-            <div class="hs-bar-judul">
-              <h2>
-                <i class="bi bi-water"></i>
-                <span data-en="Shipment schedule list">Daftar jadwal kapal</span>
-              </h2>
-            </div>
-            <div class="vs-aksi">
-              <div class="search-box vs-cari">
-                <i class="bi bi-search"></i>
-                <input
-                  type="text"
-                  id="vsSearch"
-                  autocomplete="off"
-                  placeholder="Cari customer, vessel…"
-                  data-en-ph="Search customer, vessel…"
-                  aria-label="Cari jadwal kapal"
-                  data-en-aria="Search shipment schedules"
-                />
-                <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
-              </div>
-              <label class="vs-port">
-                <span data-en="From">Dari</span>
-                <select id="vsFrom" class="control-select"></select>
-              </label>
-              <label class="vs-port">
-                <span data-en="To">Ke</span>
-                <select id="vsTo" class="control-select"></select>
-              </label>
-              <button type="button" class="btn-teal hs-tambah" id="btnVsAdd">
-                <i class="bi bi-plus-lg"></i>
-                <span data-en="Add Data">Tambah Data</span>
-              </button>
-            </div>
-          </div>
-          <div id="vsList"></div>
-          <div id="vsPagination" class="hs-halaman"></div>
         </section>
       </main>
     </div>
@@ -921,7 +873,7 @@
           <div class="panel-head hs-bar mst-bar">
             <div class="hs-bar-judul">
               <h2>
-                <i class="bi bi-card-checklist"></i>
+                <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-masterlist"></use></svg>
                 <span data-en="Masterlist lines">Daftar baris masterlist</span>
               </h2>
             </div>
@@ -1082,7 +1034,7 @@
                       id="btnQuickToday"
                       data-i18n="u.hari.ini"
                     >
-                      Hari Ini
+                      Hari ini
                     </button>
                     <button
                       type="button"
@@ -1352,7 +1304,7 @@
               data-docnum-tab="invoice"
               type="button"
             >
-              <span class="docnum-tab-icon"><i class="bi bi-receipt"></i></span>
+              <span class="docnum-tab-icon"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-invoice"></use></svg></span>
               <span class="docnum-tab-text">
                 <b>Invoice Number</b>
                 <small data-i18n="u.nomor.invoice.penjualan.jasa"
@@ -1361,7 +1313,7 @@
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="do" type="button">
-              <span class="docnum-tab-icon"><i class="bi bi-truck"></i></span>
+              <span class="docnum-tab-icon"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-truk"></use></svg></span>
               <span class="docnum-tab-text">
                 <b>Delivery Order Number</b>
                 <small data-i18n="u.nomor.surat.jalan.pengiriman"
@@ -1370,9 +1322,7 @@
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="fund" type="button">
-              <span class="docnum-tab-icon"
-                ><i class="bi bi-cash-coin"></i
-              ></span>
+              <span class="docnum-tab-icon"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-dana"></use></svg></span>
               <span class="docnum-tab-text">
                 <b>Fund Request Number</b>
                 <small data-i18n="u.nomor.permintaan.dana"
@@ -1381,9 +1331,7 @@
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="letter" type="button">
-              <span class="docnum-tab-icon"
-                ><i class="bi bi-envelope-paper"></i
-              ></span>
+              <span class="docnum-tab-icon"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-surat"></use></svg></span>
               <span class="docnum-tab-text">
                 <b>Letter Number</b>
                 <small data-i18n="u.nomor.surat.keluar"
@@ -1681,7 +1629,7 @@
                     type="text"
                     class="form-control"
                     data-dn="siTo"
-                    placeholder="Nama forwarder"
+                    placeholder="Nama Forwarder"
                     data-i18n-ph="ph.nama.forwarder"
                   />
                 </div>
@@ -3828,9 +3776,9 @@
           </div>
           <div class="col-md-3">
             <div class="footer-heading" data-i18n="u.pintasan">Pintasan</div>
-            <p class="footer-text" data-en="<b>Ctrl K</b> quick search · <b>/</b> focus search · <b>N</b> new schedule ·">
+            <p class="footer-text" data-en="<b>Ctrl K</b> quick search · <b>/</b> focus search · <b>N</b> new schedule">
               <b>Ctrl K</b> cari cepat · <b>/</b> fokus pencarian ·
-              <b>N</b> jadwal baru ·
+              <b>N</b> jadwal baru
             </p>
           </div>
         </div>
@@ -4193,9 +4141,12 @@
     <!-- ============ APP SCRIPTS (urutan berikut WAJIB dipertahankan -->
     <!-- persis seperti ini -- setiap file mengandalkan const/function -->
     <!-- yang didefinisikan oleh file-file sebelumnya di daftar ini). -->
-    <!-- LIBRARY -->
+    <!-- LIBRARY. Versi PERSIS, bukan "@2": berkas berversi tetap
+         disimpan peramban & CDN selama setahun, sedangkan "@2" diperiksa
+         ulang tiap minggu dan bisa berganti isi tanpa pemberitahuan.
+         Naikkan versinya di sini dengan sengaja. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 
     <!-- ========================================= -->
     <!-- CONFIG -->
@@ -4271,6 +4222,7 @@
     <!-- UI -->
     <!-- ========================================= -->
     <script src="js/ui/dom.js"></script>
+    <script src="js/ui/icons.js"></script>
     <script src="js/ui/number-input.js"></script>
     <script src="js/ui/time-input.js"></script>
     <script src="js/ui/feedback.js"></script>
@@ -4360,7 +4312,6 @@
     <script src="js/views/accounts-view.js"></script>
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
-    <script src="js/views/vessel-schedule-view.js"></script>
     <script src="js/views/masterlist-view.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>

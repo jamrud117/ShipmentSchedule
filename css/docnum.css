@@ -1,7 +1,10 @@
 /* HALAMAN PERMINTAAN NO */
-/* Tidak ada lagi hero melengkung yang harus ditumpangi, jadi offset */
+/* Atas & bawah saja: jarak kiri-kanan datang dari .container, sama
+   dengan halaman lain. (Dulu `padding: … 0 …` menghapusnya, dan kartu
+   form menempel ke tepi sidebar & tepi layar.) */
 .page-docnum-body {
-  padding: var(--sp-5) 0 var(--sp-10);
+  padding-top: var(--sp-5);
+  padding-bottom: var(--sp-10);
 }
 /* JENIS DOKUMEN DI ATAS, BUKAN SIDEBAR -- di semua lebar layar.
 
@@ -71,6 +74,10 @@
   font-size: 0.9rem;
   transition: all 0.18s ease;
 }
+.docnum-tab-icon .ic {
+  width: 17px;
+  height: 17px;
+}
 .docnum-tab.active .docnum-tab-icon {
   background: linear-gradient(135deg, var(--ocean), var(--navy));
   color: #fff;
@@ -100,7 +107,7 @@
   min-width: 0;
 }
 
-/* PAGINASI RIWAYAT = KAKI KARTU, seperti di HS Code & Jadwal Kapal.
+/* PAGINASI RIWAYAT = KAKI KARTU, seperti di HS Code.
 
    Dulu ia mengambang di ruang putih antara tabel dan dasar kartu --
    tanpa garis, tanpa latar, dengan ruang kosong 40px di bawahnya --
@@ -839,7 +846,8 @@ table.fund-lines select {
     display: none;
   }
   .page-docnum-body {
-    padding: var(--sp-4) 0 var(--sp-8);
+    padding-top: var(--sp-4);
+    padding-bottom: var(--sp-8);
   }
 
   /* ---- Tabel riwayat: ukurannya diperkecil, kolomnya tetap ----
@@ -1023,6 +1031,59 @@ table.fund-lines select {
   width: 1%;
   min-width: 205px;
   white-space: nowrap;
+}
+
+/* KOLOM AKSI -- DAN STATUS BAYAR DI PENGAJUAN DANA -- MENEMPEL DI KANAN.
+
+   Tabel riwayat lebih lebar dari layar laptop mana pun (Pengajuan Dana
+   ±1.740px, wadahnya ±1.030px di layar 1.366px), jadi kolom paling
+   kanan -- tombol aksi dan Status Bayar yang ditandai Finance -- dulu
+   baru terlihat sesudah tabelnya digeser. Keduanya kini menempel di
+   tepi kanan; kolom rincian di antaranya yang digeser.
+
+   right Status Bayar = lebar kolom aksi (min-width 205px di atas).
+   Hanya di layar lebar: di ponsel dua kolom yang menempel memakan
+   hampir seluruh lebar tabel. */
+@media (min-width: 992px) {
+  .docnum-table th.dn-act,
+  .docnum-table td.dn-act {
+    position: sticky;
+    right: 0;
+  }
+  .docnum-table th.dn-col-bayar,
+  .docnum-table td.dn-col-bayar {
+    position: sticky;
+    right: 205px;
+  }
+  .docnum-table td.dn-act,
+  .docnum-table td.dn-col-bayar {
+    z-index: 1;
+    background: #fff;
+  }
+  .docnum-table tbody tr:nth-child(even) td.dn-act,
+  .docnum-table tbody tr:nth-child(even) td.dn-col-bayar {
+    background: var(--n-50);
+  }
+  .docnum-table tbody tr:hover td.dn-act,
+  .docnum-table tbody tr:hover td.dn-col-bayar {
+    background: var(--p-50);
+  }
+  .docnum-table thead th.dn-act,
+  .docnum-table thead th.dn-col-bayar {
+    z-index: 3;
+  }
+  /* Bayang tipis di tepi kiri kolom menempel paling kiri: tanda ada
+     kolom lain yang tergeser di baliknya. */
+  .docnum-table th.dn-col-bayar,
+  .docnum-table td.dn-col-bayar,
+  .docnum-table th.dn-act,
+  .docnum-table td.dn-act {
+    box-shadow: inset 1px 0 0 var(--n-200), -10px 0 10px -10px rgba(15, 23, 42, 0.22);
+  }
+  .docnum-table th.dn-col-bayar + th.dn-act,
+  .docnum-table td.dn-col-bayar + td.dn-act {
+    box-shadow: none;
+  }
 }
 
 /* Sekat di dalam form pengajuan nomor — memisahkan isian wajib dari
@@ -1723,6 +1784,28 @@ button.dn-bayar--lunas:hover {
   }
   .fsum-wrap--rinci {
     max-height: 65vh;
+  }
+
+  /* JENIS DOKUMEN DI PONSEL: kisi 2 x 2, bukan baris yang digeser.
+     Keempat tombol muat utuh tanpa ada yang terpotong di tepi layar
+     ("Delivery Order Numb…"), dan semuanya terlihat sekaligus. */
+  .docnum-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+  .docnum-tab {
+    align-items: center;
+    gap: 9px;
+    padding: 9px 10px;
+  }
+  .docnum-tab-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .docnum-tab-text b {
+    font-size: 0.8rem;
   }
 }
 

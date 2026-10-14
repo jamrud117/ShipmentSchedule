@@ -200,12 +200,24 @@ function cardBodySplitHtml(s, totals) {
       <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
       ${
+        /* Import: No. Kendaraan menumpang di sel In Factory (truk yang
+           mengantar barang ke pabrik), seperti PIC di bawah Forwarder --
+           delapan rincian pas dua baris empat kolom, tanpa satu sel
+           yatim di baris ketiga. Export tidak punya sel In Factory, jadi
+           No. Kendaraan tetap sel sendiri. */
         activeMode === "export"
           ? ""
-          : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}</div></div>`
+          : `<div class="info-item"><div class="info-label"><i class="bi bi-truck"></i> ${lbl.factoryDate}</div><div class="info-value">${s.factoryDate ? fmtDate(s.factoryDate) : "—"}${s.factoryTime ? " · " + escapeHtml(s.factoryTime) : ""}${
+              // Baris kendaraan hanya kalau terisi: baru relevan saat barang diantar ke pabrik.
+              hasMeaningfulValue(s.vehicleNo) ? `<br><span class="muted-value">${escapeHtml(tt("Kendaraan", "Vehicle"))}: ${escapeHtml(s.vehicleNo)}</span>` : ""
+            }</div></div>`
       }
       <div class="info-item"><div class="info-label"><i class="bi bi-box-seam"></i> ${t("f.total.bruto")}</div><div class="info-value">${fmtNum(totals.totalBruto)} Kg</div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-truck-front"></i> ${escapeHtml(tt("No. Kendaraan", "Vehicle No."))}</div><div class="info-value">${escapeHtml(dispVal(s.vehicleNo))}</div></div>
+      ${
+        activeMode === "export"
+          ? `<div class="info-item"><div class="info-label"><i class="bi bi-truck-front"></i> ${escapeHtml(tt("No. Kendaraan", "Vehicle No."))}</div><div class="info-value">${escapeHtml(dispVal(s.vehicleNo))}</div></div>`
+          : ""
+      }
     </div>
     <div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${itemNamesSummary(
       s,

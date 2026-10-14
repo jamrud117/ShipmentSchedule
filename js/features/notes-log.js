@@ -45,12 +45,12 @@ function fmtNoteStamp(ts) {
   if (!ts) return tt("catatan lama (tanpa waktu)", "old note (no timestamp)");
   const d = new Date(ts);
   if (isNaN(d)) return tt("catatan lama (tanpa waktu)", "old note (no timestamp)");
-  const tgl = d.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
+  const tgl = tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
-  const jam = d.toLocaleTimeString("id-ID", {
+  const jam = tanggalLokal(d, "id-ID", {
     hour: "2-digit",
     minute: "2-digit",
   });

@@ -67,7 +67,7 @@ function needsAction(s) {
 function fmtDateBoard(iso) {
   const dt = parseLocalDate(iso || todayISO());
   if (!dt) return "—";
-  return dt.toLocaleDateString(activeLang === "en" ? "en-GB" : "id-ID", {
+  return tanggalLokal(dt, activeLang === "en" ? "en-GB" : "id-ID", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -78,7 +78,7 @@ function fmtDateBoard(iso) {
 // Isi semua penanda "hari ini" di seluruh halaman sekaligus.
 function paintTodayStamps() {
   const teks = fmtDateBoard(todayISO());
-  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#vsToday", "#mstToday"].forEach((sel) => {
+  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday"].forEach((sel) => {
     const el = $(sel);
     if (el) el.textContent = teks;
   });

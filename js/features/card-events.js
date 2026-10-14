@@ -282,6 +282,8 @@ cardContainer.addEventListener("click", (e) => {
           .eq("id", id);
         if (error) throw error;
         data[activeMode] = currentList().filter((x) => x.id !== id);
+        // Kiriman yang dihapus tidak boleh tetap jadi bahan belajar prediksi
+        if (typeof resetPredictionLearning === "function") resetPredictionLearning();
         render();
         showToast(t("m.jadwal.berhasil.dihapus"), "dark");
       } catch (err) {

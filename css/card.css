@@ -5,6 +5,25 @@
   border-left: 3px solid var(--border);
   padding: 19px 21px;
   /* border-radius & box-shadow datang dari aturan bersama ".ship-card" */
+
+  /* DIGAMBAR SAAT MENDEKATI LAYAR. Satu halaman ±10 kartu x ±180
+     elemen, yang terlihat waktu dibuka cuma satu-dua: sisanya dilewati
+     peramban (gaya, tata letak, gambar) sampai digulir mendekat.
+     contain-intrinsic-size = perkiraan tinggi selama belum digambar;
+     "auto" = sesudahnya memakai tinggi sebenarnya.
+     Akibatnya isi kartu terpotong di tepi kartu -- satu-satunya yang
+     memang keluar dari kartu, menu templat salin, dilepas di bawah. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 760px;
+}
+.ship-card:has(.dropdown-menu.show) {
+  content-visibility: visible;
+}
+/* Dicetak: semua kartu utuh, bukan kotak kosong yang belum digulir. */
+@media print {
+  .ship-card {
+    content-visibility: visible;
+  }
 }
 .ship-card + .ship-card {
   margin-top: 13px;
@@ -200,8 +219,16 @@
   border-color: #c9edd6;
 }
 
-/* ---- Status select (auto width, styled as pill) ---- */
+/* ---- Status select: pil selebar teks yang TERPILIH ----
+
+   Lebarnya diurus peramban (`field-sizing: content`), bukan JavaScript.
+   Dulu tiap render() mengukur kotak-kotak ini dengan getComputedStyle
+   + getBoundingClientRect -- tata letak seluruh halaman dihitung paksa
+   di tengah skrip, lalu dihitung lagi saat digambar. Itu bagian
+   terberat membuka papan Jadwal. Peramban tanpa field-sizing memakai
+   lebar pilihan terpanjang: semua pil sama lebar, tetap rapi. */
 .status-select {
+  field-sizing: content;
   appearance: none;
   -webkit-appearance: none;
   border: none;
@@ -534,10 +561,6 @@
 .port-labels--multi .p--end .p-term {
   max-width: 120px;
 }
-/* .delay-flag dihapus bersama penanda "Melewati ETA" (lihat
-   js/core/route-model.js) — tidak ada lagi yang memakainya. */
-
-
 /* ---- Date strip ---- */
 /* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
 .date-strip {
@@ -601,6 +624,17 @@
 .ship-card--collapsed {
   padding: 14px 20px;
   background: var(--p-50);
+  contain-intrinsic-size: auto 600px;
+}
+/* Perkiraan tinggi di ponsel: kolom-kolom kartu menumpuk, kartu jauh
+   lebih tinggi. Sesudah aturan kartu tiba supaya tidak tertimpa. */
+@media (max-width: 767px) {
+  .ship-card {
+    contain-intrinsic-size: auto 1250px;
+  }
+  .ship-card--collapsed {
+    contain-intrinsic-size: auto 1000px;
+  }
 }
 .collapsed-row {
   display: flex;

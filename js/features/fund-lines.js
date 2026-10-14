@@ -54,7 +54,7 @@ function parseRupiah(v) {
 function formatRupiah(n) {
   const x = Number(n) || 0;
   const desimal = Math.round(x * 100) % 100 !== 0;
-  return x.toLocaleString("id-ID", {
+  return angkaLokal(x, "id-ID", {
     minimumFractionDigits: desimal ? 2 : 0,
     maximumFractionDigits: 2,
   });

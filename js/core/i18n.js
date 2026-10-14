@@ -26,7 +26,6 @@ const I18N = {
     "nav.schedule": "Jadwal",
     "nav.docnum": "No. Dokumen",
     "nav.hscode": "HS Code",
-    "nav.vessel": "Jadwal Kapal",
     "nav.masterlist": "Masterlist",
     "nav.accounts": "Akun",
     "menu.language": "Bahasa",
@@ -585,7 +584,6 @@ const I18N = {
     "nav.schedule": "Schedule",
     "nav.docnum": "Doc. Number",
     "nav.hscode": "HS Code",
-    "nav.vessel": "Shipment Schedule",
     "nav.masterlist": "Masterlist",
     "nav.accounts": "Accounts",
     "menu.language": "Language",
@@ -1205,14 +1203,20 @@ const I18N_ATRIBUT_EN = [
 function applyI18nSebaris() {
   I18N_ATRIBUT_EN.forEach(([kunci, atribut]) => {
     const sel = "[data-" + kunci.replace(/[A-Z]/g, (h) => "-" + h.toLowerCase()) + "]";
+    const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
     document.querySelectorAll(sel).forEach((el) => {
-      const simpan = "id" + kunci.charAt(0).toUpperCase() + kunci.slice(1);
       if (el.dataset[simpan] == null) {
+        /* Belum pernah diterjemahkan = isinya masih teks Indonesia asli.
+           Dalam bahasa Indonesia tidak ada yang perlu ditulis -- dulu
+           ratusan elemen ditulis ulang dengan isi yang sama setiap kali
+           halaman dibuka. */
+        if (activeLang !== "en") return;
         el.dataset[simpan] = atribut ? el.getAttribute(atribut) || "" : el.innerHTML;
       }
       const teks = activeLang === "en" ? el.dataset[kunci] : el.dataset[simpan];
-      if (atribut) el.setAttribute(atribut, teks);
-      else el.innerHTML = teks;
+      if (atribut) {
+        if (el.getAttribute(atribut) !== teks) el.setAttribute(atribut, teks);
+      } else if (el.innerHTML !== teks) el.innerHTML = teks;
     });
   });
 }
@@ -1224,17 +1228,23 @@ function applyI18nSebaris() {
    data-i18n-ph    -> atribut placeholder
    data-i18n-title -> atribut title */
 function applyI18n() {
+  /* Hanya yang isinya BERBEDA yang ditulis: menulis innerHTML berarti
+     mengurai & membangun ulang elemennya, padahal saat halaman dibuka
+     dalam bahasa Indonesia kebanyakan isinya sudah persis kamusnya. */
   document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.innerHTML = t(el.dataset.i18n);
+    const teks = t(el.dataset.i18n);
+    if (el.innerHTML !== teks) el.innerHTML = teks;
   });
   document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
-    el.setAttribute("placeholder", t(el.dataset.i18nPh));
+    const teks = t(el.dataset.i18nPh);
+    if (el.getAttribute("placeholder") !== teks) el.setAttribute("placeholder", teks);
   });
   document.querySelectorAll("[data-i18n-title]").forEach((el) => {
-    el.setAttribute("title", t(el.dataset.i18nTitle));
+    const teks = t(el.dataset.i18nTitle);
+    if (el.getAttribute("title") !== teks) el.setAttribute("title", teks);
   });
   applyI18nSebaris();
-  document.documentElement.lang = activeLang;
+  if (document.documentElement.lang !== activeLang) document.documentElement.lang = activeLang;
 }
 
 function setLang(kode) {
@@ -1280,15 +1290,11 @@ function setLang(kode) {
   };
   if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
   if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
-  if (tampil("viewVesselSchedule") && typeof renderVesselSchedules === "function") {
-    if (typeof isiDropdownVs === "function") isiDropdownVs();
-    renderVesselSchedules();
-  }
   if (tampil("viewMasterlist") && typeof renderMasterlist === "function") renderMasterlist();
   /* Tanggal "Hari ini" di kepala tiap halaman ikut nama hari & bulan
      bahasa aktif ("Rabu" / "Wednesday"). Tanpa ini, di halaman yang
-     tidak menggambar ulang penandanya sendiri (Jadwal, HS Code, Jadwal
-     Kapal), tanggalnya tertinggal di bahasa lama. */
+     tidak menggambar ulang penandanya sendiri (Jadwal, HS Code),
+     tanggalnya tertinggal di bahasa lama. */
   if (typeof paintTodayStamps === "function") paintTodayStamps();
   if (tampil("viewDocNum")) {
     if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();

@@ -71,7 +71,7 @@ function mstBulat(n) {
   return Math.round((Number(n) || 0) * 1000) / 1000;
 }
 function mstFmt(n) {
-  return mstBulat(n).toLocaleString(activeLang === "en" ? "en-US" : "id-ID", { maximumFractionDigits: 3 });
+  return angkaLokal(mstBulat(n), activeLang === "en" ? "en-US" : "id-ID", { maximumFractionDigits: 3 });
 }
 
 /* NILAI (USD) -- dua desimal, ditulis seperti di invoice & kotak harga
@@ -82,7 +82,7 @@ function mstUang(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 function mstAngkaUang(n) {
-  return mstUang(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return angkaLokal(mstUang(n), "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 const mstFmtUang = (n) => MST_MATA_UANG + " " + mstAngkaUang(n);
 /* Nilai dari database: null / "" = belum diisi (bukan nol). */

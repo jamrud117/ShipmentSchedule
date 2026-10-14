@@ -5,7 +5,7 @@
 
    Jarak BAWAH di sini, bukan di tiap halaman: dulu hanya Ringkasan &
    Akun yang memberinya sendiri (lewat .ov-grid / .acct-grid), sehingga
-   panel HS Code dan Jadwal Kapal menempel langsung ke kaki halaman. */
+   panel HS Code menempel langsung ke kaki halaman. */
 .page-main {
   padding-top: 20px;
   padding-bottom: var(--sp-8);
@@ -67,8 +67,13 @@
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-.sb-tutup {
-  font-size: 1rem;
+.sb-pemicu .ic {
+  width: 22px;
+  height: 22px;
+}
+.sb-tutup .ic {
+  width: 20px;
+  height: 20px;
 }
 .sb-pemicu:hover,
 .sb-tutup:hover {
@@ -182,6 +187,10 @@
 .app-sidebar .cmd-trigger {
   width: 100%;
 }
+.cmd-trigger .ic {
+  width: 17px;
+  height: 17px;
+}
 /* Versi ikon di bilah atas ponsel */
 .cmd-trigger--ikon {
   justify-content: center;
@@ -212,12 +221,11 @@
     color var(--dur-1) var(--ease),
     background var(--dur-1) var(--ease);
 }
-.site-nav-link i {
-  flex-shrink: 0;
-  width: 22px;
-  text-align: center;
-  font-size: 1.12rem;
-  opacity: 0.9;
+.site-nav-link .ic {
+  width: 20px;
+  height: 20px;
+  margin: 0 1px;
+  opacity: 0.86;
 }
 .site-nav-link span {
   min-width: 0;
@@ -244,7 +252,7 @@
   border-radius: 0 3px 3px 0;
   background: var(--sec-400);
 }
-.site-nav-link.active i {
+.site-nav-link.active .ic {
   color: var(--sec-300);
   opacity: 1;
 }
@@ -276,11 +284,10 @@
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
-.sb-ciut i {
-  flex-shrink: 0;
-  width: 22px;
-  text-align: center;
-  font-size: 0.95rem;
+.sb-ciut .ic {
+  width: 18px;
+  height: 18px;
+  margin: 0 2px;
 }
 .sb-ciut:hover {
   background: rgba(255, 255, 255, 0.06);
