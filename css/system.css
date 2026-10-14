@@ -205,6 +205,53 @@ table.fund-lines select,
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
+/* NOMOR GANDA (cek-duplikat.js): garis kuning -- peringatan, bukan
+   galat; jadwalnya tetap boleh disimpan. Keterangannya di bawah kotak. */
+.form-control.is-ganda {
+  border-color: var(--s-warn) !important;
+  background: var(--s-warn-bg);
+}
+.form-control.is-ganda:focus {
+  box-shadow: 0 0 0 3px rgba(181, 115, 15, 0.16);
+}
+.dup-peringatan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.dup-baris {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: #7a4f0c;
+}
+.dup-baris i {
+  margin-top: 2px;
+  color: var(--s-warn);
+}
+.dup-baris span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dup-lihat {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--p-600);
+  font-size: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dup-lihat:hover {
+  color: var(--p-700);
+}
+
 /* KARTU */
 .ship-card,
 .form-section-card,

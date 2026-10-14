@@ -403,6 +403,8 @@ function renderFormPage(id) {
   recalcCustoms();
   syncAffixState();
   syncFormValidity();
+  // Nomor yang sudah dipakai jadwal lain langsung ditandai (cek-duplikat.js)
+  if (typeof periksaNomorGandaForm === "function") periksaNomorGandaForm();
   showFormView();
 }
 
@@ -642,8 +644,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     vessel: $("#fVessel").value.trim(),
     voyage: $("#fVoyage").value.trim(),
     container: $("#fContainer").value.trim(),
-    // Nomor polisi ditulis kapital & berspasi tunggal: "b  9123 kxt" -> "B 9123 KXT"
-    vehicleNo: $("#fVehicleNo").value.trim().replace(/\s+/g, " ").toUpperCase(),
+    // No. Kendaraan bebas format: disimpan persis seperti diketik (tepi spasi saja yang dibuang)
+    vehicleNo: $("#fVehicleNo").value.trim(),
     muatan: $("#fMuatan").value,
     routeType: routeType,
     origin: $("#fOrigin").value.trim(),
@@ -698,6 +700,25 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     package: joinPackageFields(),
   };
 
+  /* NOMOR GANDA (cek-duplikat.js): B/L-AWB, Invoice, No. Aju, No.
+     SPPB/PEB yang sudah dipakai jadwal lain ditanyakan dulu -- jadwal
+     yang sama tidak terbuat dua kali. Tetap bisa disimpan: Master B/L
+     konsolidasi & invoice yang dikirim bertahap memang sah. */
+  const ganda = periksaNomorGandaForm();
+  if (ganda.length) {
+    showConfirm(pesanNomorGanda(ganda), () => simpanJadwalForm(id, payload, cleanItems, cleanStops), {
+      title: tt("Nomor Sudah Dipakai Jadwal Lain", "Number Already Used by Another Schedule"),
+      confirmText: tt("Tetap Simpan", "Save Anyway"),
+      cancelText: tt("Periksa Lagi", "Review"),
+      tone: "warning",
+      icon: "bi-exclamation-triangle-fill",
+    });
+    return;
+  }
+  await simpanJadwalForm(id, payload, cleanItems, cleanStops);
+});
+
+async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   const btn = $("#btnSaveShipment");
   const originalLabel = btn.innerHTML;
   btn.disabled = true;
@@ -719,4 +740,4 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     btn.disabled = false;
     btn.innerHTML = originalLabel;
   }
-});
+}

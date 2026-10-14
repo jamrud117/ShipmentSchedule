@@ -294,6 +294,8 @@ function orderedFiltered() {
 }
 
 function render() {
+  // Data jadwal mungkin berubah -> notifikasi lonceng dihitung ulang (notifikasi.js)
+  if (typeof jadwalkanNotif === "function") jadwalkanNotif();
   applyModeLabels();
   syncSearchClear();
   const filtered = getFiltered();

@@ -75,6 +75,7 @@
          perintah, aksi cepat. Dipakai lewat <svg class="ic"><use href="#ik-…">
          (atau ikonSvg() di js/ui/icons.js); gaya garisnya di .ic (base.css). -->
     <svg class="ikon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="ik-lonceng" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
       <symbol id="ik-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" /> <rect width="7" height="5" x="14" y="3" rx="1" /> <rect width="7" height="9" x="14" y="12" rx="1" /> <rect width="7" height="5" x="3" y="16" rx="1" /></symbol>
       <symbol id="ik-jadwal" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" /> <path d="M16 2v4" /> <path d="M8 2v4" /> <path d="M3 10h5" /> <path d="M17.5 17.5 16 16.3V14" /> <circle cx="16" cy="16" r="6" /></symbol>
       <symbol id="ik-dokumen" viewBox="0 0 24 24"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <rect width="4" height="6" x="2" y="12" rx="2" /> <path d="M10 12h2v6" /> <path d="M10 18h4" /></symbol>
@@ -316,6 +317,17 @@
       <div class="topbar-spacer"></div>
       <button
         type="button"
+        class="cmd-trigger cmd-trigger--ikon notif-pemicu"
+        data-notif-buka
+        aria-controls="notifPanel"
+        aria-expanded="false"
+        aria-label="Notifikasi"
+      >
+        <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-lonceng"></use></svg>
+        <span class="notif-lencana" hidden>0</span>
+      </button>
+      <button
+        type="button"
         class="cmd-trigger cmd-trigger--ikon"
         data-cmdk-buka
         title="Cari Cepat Lintas Import & Export"
@@ -363,6 +375,13 @@
           <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cari"></use></svg>
           <span class="cmd-trigger-text" data-i18n="u.cari.cepat">Cari cepat</span>
           <kbd>Ctrl K</kbd>
+        </button>
+
+        <!-- NOTIFIKASI (js/features/notifikasi.js): jadwal yang berangkat /
+             tiba besok (H-1 ETD & ETA). Panelnya #notifPanel. -->
+        <button type="button" class="site-nav-link notif-pemicu" data-notif-buka aria-controls="notifPanel" aria-expanded="false" aria-label="Notifikasi">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-lonceng"></use></svg><span data-en="Notifications">Notifikasi</span>
+          <span class="notif-lencana" hidden>0</span>
         </button>
 
         <nav class="site-nav" aria-label="Halaman" data-en-aria="Pages">
@@ -2903,8 +2922,8 @@
               </div>
               <div>
                 <label class="form-label" for="fVehicleNo" data-en="Vehicle No.">No. Kendaraan</label>
-                <input type="text" class="form-control text-uppercase" id="fVehicleNo" autocomplete="off"
-                  placeholder="Nomor polisi, mis. B 9123 KXT" data-en-ph="Plate number, e.g. B 9123 KXT" />
+                <input type="text" class="form-control" id="fVehicleNo" autocomplete="off"
+                  placeholder="Nomor kendaraan / polisi" data-en-ph="Vehicle / plate number" />
               </div>
               <div id="fForwarderWrap">
                 <label class="form-label" for="fForwarder" data-i18n="f.nama.forwarder"
@@ -3656,6 +3675,21 @@
     <!-- ============ /HALAMAN: TAMBAH / EDIT JADWAL ============ -->
 
     <!-- PANEL GESER — detail pengiriman (read-only) -->
+    <!-- PANEL NOTIFIKASI (js/features/notifikasi.js): dibuka dari lonceng
+         di sidebar / bilah atas ponsel. Klik satu notifikasi = buka detail
+         jadwalnya. -->
+    <section class="notif-panel" id="notifPanel" tabindex="-1" role="dialog" aria-labelledby="notifJudul" hidden>
+      <div class="notif-kepala">
+        <h2 class="notif-judul-panel" id="notifJudul" data-en="Notifications">Notifikasi</h2>
+        <button type="button" class="notif-baca-semua" id="btnNotifBacaSemua" data-en="Mark all as read" hidden>Tandai semua dibaca</button>
+        <button type="button" class="notif-tutup" id="btnNotifTutup" aria-label="Tutup notifikasi" data-en-aria="Close notifications">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-tutup"></use></svg>
+        </button>
+      </div>
+      <div class="notif-isi" id="notifIsi"></div>
+      <div class="notif-kaki" data-en="Appears one day before ETD &amp; ETA, until the day itself.">Muncul H-1 sebelum ETD &amp; ETA, sampai hari H.</div>
+    </section>
+
     <div class="sheet-scrim" id="detailScrim" hidden></div>
     <aside
       class="sheet"
@@ -4304,9 +4338,11 @@
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>
+    <script src="js/features/cek-duplikat.js"></script>
     <script src="js/render/prediction-view.js"></script>
     <script src="js/features/prediction-ui.js"></script>
     <script src="js/views/detail-view.js"></script>
+    <script src="js/features/notifikasi.js"></script>
     <script src="js/views/overview-view.js"></script>
     <script src="js/features/command-palette.js"></script>
     <script src="js/views/accounts-view.js"></script>

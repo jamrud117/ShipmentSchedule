@@ -513,6 +513,8 @@ function applyImportedBcData(parsed) {
           ? "CIPL"
           : "BC";
   const summary = t("x.field.barang.terisi.otomatis", { f: filled, b: items.length, dok: docLabel, sumber: sourceLabel, fac: facSuffix });
+  // Nomor dari berkas bisa saja sudah dipakai jadwal lain (cek-duplikat.js)
+  if (typeof periksaNomorGandaForm === "function") periksaNomorGandaForm();
   return { summary, notes };
 }
 

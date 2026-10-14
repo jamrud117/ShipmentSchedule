@@ -1100,6 +1100,8 @@ body.is-viewer .delay-strip-fields input {
   color: var(--n-600);
   line-height: 1.6;
   margin: 0;
+  /* Baris baru di pesan dipertahankan (daftar nomor ganda, paragraf) */
+  white-space: pre-line;
 }
 .dialog-text:empty {
   display: none;

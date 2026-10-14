@@ -8766,11 +8766,12 @@ t("No. Kendaraan / Nopol: tersimpan di kolomnya, tampil di card & detail, masuk 
   const api = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "data", "api.js"), "utf8");
   if (!/vehicle_no: \{ berkas: "migration-vehicle-no\.sql"/.test(api)) throw new Error("simpan cadangan bila kolom belum dimigrasi");
   if (!require("fs").existsSync(require("path").join(__dirname, "..", "migration-vehicle-no.sql"))) throw new Error("berkas migrasi tidak ada");
-  // Form: isian ada, nilainya dirapikan (kapital, spasi tunggal)
+  // Form: isian ada, BEBAS FORMAT -- disimpan persis seperti diketik (tanpa pola, tanpa dikapitalkan)
   const el = w.document.getElementById("fVehicleNo");
   if (!el) throw new Error("isian No. Kendaraan tidak ada di form");
+  if (el.hasAttribute("pattern") || el.classList.contains("text-uppercase")) throw new Error("isian No. Kendaraan masih berpola / dikapitalkan");
   const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "form-router.js"), "utf8");
-  if (!/vehicleNo: \$\("#fVehicleNo"\)\.value\.trim\(\)\.replace\(\/\\s\+\/g, " "\)\.toUpperCase\(\)/.test(src)) throw new Error("nilai form tidak dirapikan");
+  if (!/vehicleNo: \$\("#fVehicleNo"\)\.value\.trim\(\),/.test(src)) throw new Error("nilai form diubah sebelum disimpan");
   // Card & detail
   const s = { id: "v1", mode: "import", transport: "laut", party: "SHENG GUANG", vehicleNo: "B 9123 KXT", status: "berangkat",
     items: [{ namaBarang: "A", qty: 1, bruto: 10 }, { namaBarang: "B", qty: 2, bruto: 5 }] };
@@ -12065,6 +12066,239 @@ t("pustaka dari CDN berversi persis, bukan rentang (@2)", () => {
   });
 });
 
+console.log("\u2014 NOMOR GANDA DI FORM JADWAL \u2014");
+/* Data tiruan dipasang sementara; `data` dikembalikan apa adanya. */
+function denganDataUji(imp, eks, fn) {
+  const simpan = w.eval("[data.import, data.export]");
+  w.__dataUji = [imp, eks];
+  w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+  try {
+    return fn();
+  } finally {
+    w.__dataUji = simpan;
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+    delete w.__dataUji;
+  }
+}
+const DUP_IMPORT = [
+  { id: "d1", mode: "import", party: "SHENG GUANG", houseBL: "HBL-001", masterBL: "MSCU1234567", invoice: "INV/2026/001",
+    noAju: "000020-029142-20260712-197154", docNo: "123456", etd: "2026-08-01", items: [] },
+  { id: "d2", mode: "import", party: "DONGJIN", houseBL: "-", masterBL: "TBA", invoice: "INV-9", noAju: "", docNo: "", etd: "2026-08-02", items: [] },
+];
+const DUP_EXPORT = [
+  { id: "e1", mode: "export", party: "KUMHO", houseBL: "", masterBL: "EXP777", invoice: "INV/2026/001",
+    noAju: "000030-000001-20260801-000001", docNo: "555", etd: "2026-08-03", items: [] },
+];
+t("nomor ganda: B/L-AWB (Master & House silang, kedua buku), Aju (kedua buku), Invoice & No. dokumen (buku sama)", () =>
+  denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
+    const cari = (isi, id) => w.cariNomorGanda(isi, { id: id || "", mode: "import" })
+      .map((g) => g.isian.kunci + ":" + g.kiriman.map((s) => s.id).join("+")).join(" ");
+    eq(cari({ houseBL: "hbl 001" }), "houseBL:d1", "tanpa beda huruf, spasi & tanda baca:");
+    eq(cari({ masterBL: "HBL001" }), "masterBL:d1", "nomor House jadwal lain diketik di kotak Master:");
+    eq(cari({ masterBL: "EXP777" }), "masterBL:e1", "B/L lintas buku:");
+    eq(cari({ noAju: "000030000001-20260801-000001" }), "noAju:e1", "No. Aju lintas buku:");
+    eq(cari({ invoice: "INV/2026/001" }), "invoice:d1", "invoice hanya di buku yang sama:");
+    eq(cari({ docNo: "555" }), "", "No. SPPB tidak dibandingkan dengan No. PEB:");
+    eq(cari({ houseBL: "-", masterBL: "TBA", invoice: "N/A" }), "", "isian pengisi diabaikan:");
+    eq(cari({ houseBL: "XYZ1, HBL-001" }), "houseBL:d1", "beberapa nomor dalam satu kotak:");
+    eq(cari({ houseBL: "HBL-001", masterBL: "MSCU1234567", invoice: "INV/2026/001", docNo: "123456" }, "d1"), "", "jadwal yang sedang diubah tidak ganda dengan dirinya:");
+    eq(cari({ houseBL: "HBL-001", masterBL: "HBL-001" }), "houseBL:d1", "nomor yang sama di Master & House disebut sekali:");
+  }));
+t("nomor ganda di form: kotaknya ditandai, keterangan menyebut jadwalnya, lalu hilang saat diperbaiki", () =>
+  denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
+    const simpanMode = baca("activeMode");
+    const form = w.document.getElementById("viewForm");
+    const tersembunyi = form.classList.contains("d-none");
+    try {
+      w.eval('activeMode = "import"');
+      form.classList.remove("d-none");
+      w.renderFormPage(null);
+      $("#fHouseBL").value = "HBL001";
+      $("#fInvoice").value = "INV/2026/001";
+      const ganda = w.periksaNomorGandaForm();
+      eq(ganda.length, 2, "temuan:");
+      eq($("#fHouseBL").classList.contains("is-ganda"), true, "kotak House ditandai:");
+      eq($("#dup-fHouseBL").hidden, false, "keterangan tampil:");
+      if (!/SHENG GUANG/.test($("#dup-fHouseBL").textContent)) throw new Error("jadwalnya tidak disebut: " + $("#dup-fHouseBL").textContent);
+      eq($("#dup-fHouseBL [data-dup-buka]").dataset.dupBuka, "d1", "tombol Lihat:");
+      const pesan = w.pesanNomorGanda(ganda);
+      if (!/HBL001 \u2014 SHENG GUANG/.test(pesan) || !/No\. Invoice INV\/2026\/001/.test(pesan)) throw new Error("pesan Simpan: " + pesan);
+      $("#fHouseBL").value = "HBL-BARU-01";
+      $("#fInvoice").value = "";
+      w.periksaNomorGandaForm();
+      eq($("#fHouseBL").classList.contains("is-ganda"), false, "tanda dilepas:");
+      eq($("#dup-fHouseBL").hidden, true, "keterangan hilang:");
+    } finally {
+      w.hapusTandaNomorGanda();
+      w.eval("activeMode = " + JSON.stringify(simpanMode));
+      if (tersembunyi) form.classList.add("d-none");
+    }
+  }));
+t("Simpan dengan nomor ganda: ditanyakan dulu, 'Tetap Simpan' baru menyimpan; tanpa nomor ganda langsung", async () => {
+  const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList,
+    data: w.eval("[data.import, data.export]"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+  const form = w.document.getElementById("viewForm");
+  const tersembunyi = form.classList.contains("d-none");
+  let dibuat = 0;
+  const tunggu = () => new Promise((r) => setTimeout(r, 30));
+  try {
+    w.__dataUji = [DUP_IMPORT, DUP_EXPORT];
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+    w.eval('activeMode = "import"; authState.profile = { id: "u1", role: "exim", full_name: "Uji", username: "uji" };');
+    form.classList.remove("d-none");
+    w.renderFormPage(null);
+    w.createShipment = async () => { dibuat++; return { id: "baru" + dibuat }; };
+    w.loadShipments = async () => {};
+    w.goBackToList = () => {};
+    $("#fEtd").value = "2026-08-20";
+    $("#fEta").value = "2026-08-30";
+    w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "SEGMENT MOLD" })]');
+    $("#fHouseBL").value = "HBL-001";
+    $("#confirmTitle").textContent = "";
+    $("#btnSaveShipment").click();
+    await tunggu();
+    eq(dibuat, 0, "belum disimpan sebelum dijawab:");
+    eq($("#confirmTitle").textContent, "Nomor Sudah Dipakai Jadwal Lain", "pertanyaan:");
+    eq($("#confirmActionBtn").textContent, "Tetap Simpan", "tombol lanjut:");
+    eq($("#confirmCancelBtn").textContent, "Periksa Lagi", "tombol kembali:");
+    if (!/House B\/L HBL-001 — SHENG GUANG/.test($("#confirmMessage").textContent)) throw new Error("pesan: " + $("#confirmMessage").textContent);
+    $("#confirmActionBtn").click();
+    await tunggu();
+    eq(dibuat, 1, "disimpan sesudah 'Tetap Simpan':");
+    $("#fHouseBL").value = "HBL-UNIK-77";
+    $("#confirmTitle").textContent = "";
+    $("#btnSaveShipment").click();
+    await tunggu();
+    eq(dibuat, 2, "tanpa nomor ganda langsung tersimpan:");
+    eq($("#confirmTitle").textContent, "", "tanpa pertanyaan:");
+  } finally {
+    w.createShipment = simpan.buat;
+    w.loadShipments = simpan.muat;
+    w.goBackToList = simpan.kembali;
+    w.__dataUji = simpan.data;
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
+    w.eval("authState.profile = " + simpan.profil + "; activeMode = " + JSON.stringify(simpan.mode) + ";");
+    w.hapusTandaNomorGanda();
+    if (tersembunyi) form.classList.add("d-none");
+  }
+});
+t("pesan dialog mempertahankan baris baru (daftar nomor ganda)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css", "auth.css"), "utf8");
+  if (!/\.dialog-text\s*\{[^}]*white-space:\s*pre-line/.test(css)) throw new Error(".dialog-text tanpa white-space: pre-line");
+});
+
+console.log("\u2014 NOTIFIKASI LONCENG: H-1 ETD & ETA \u2014");
+const NOTIF_KIRIMAN = () => [
+  { id: "n1", mode: "import", party: "ALFA", etd: "2026-08-10", eta: "2026-08-20", status: "process", items: [] }, // ETD besok
+  { id: "n2", mode: "import", party: "BRAVO", etd: "2026-08-01", eta: "2026-08-09", status: "transit", items: [] }, // ETA hari ini
+  { id: "n3", mode: "import", party: "CHARLIE", etd: "2026-08-11", eta: "2026-08-25", status: "process", items: [] }, // H-2: belum
+  { id: "n4", mode: "import", party: "DELTA", etd: "2026-08-08", eta: "2026-08-10", factoryDate: "2026-08-09", status: "arrived", items: [] }, // sudah di pabrik
+  { id: "n6", mode: "import", party: "FOXTROT", etd: "2026-08-05", etdUpdate: "2026-08-10", eta: "2026-08-30", status: "delayed", items: [] }, // revisi ETD besok
+];
+const NOTIF_EKSPOR = () => [
+  { id: "n5", mode: "export", party: "ECHO", etd: "2026-08-09", eta: "2026-08-10", status: "process", items: [] }, // ETD hari ini, ETA besok
+];
+function denganNotifUji(fn) {
+  const simpanUser = w.eval("JSON.stringify(authState.user)");
+  const simpanMuat = baca("shipmentsLoaded");
+  w.eval('authState.user = { id: "uji-notif" }; shipmentsLoaded = true;');
+  w.localStorage.removeItem("exim.notif.uji-notif");
+  try {
+    return fn();
+  } finally {
+    w.localStorage.removeItem("exim.notif.uji-notif");
+    w.eval("authState.user = " + simpanUser + "; shipmentsLoaded = " + JSON.stringify(simpanMuat) + ";");
+  }
+}
+const daftarNotif = (hari) => w.hitungNotifikasi(hari).map((n) => n.s.id + ":" + n.jenis + (n.hariIni ? "!" : "") + (n.dibaca ? "(dibaca)" : "")).join(" ");
+t("notifikasi: aktif sejak H-1 sampai hari H, memakai ETD/ETA yang berlaku; Import yang sudah tiba tidak", () =>
+  denganNotifUji(() => denganDataUji(NOTIF_KIRIMAN(), NOTIF_EKSPOR(), () => {
+    eq(daftarNotif("2026-08-09"), "n5:etd! n2:eta! n1:etd n6:etd n5:eta", "hari ini 09-08:");
+    eq(daftarNotif("2026-08-10"), "n1:etd! n6:etd! n5:eta! n3:etd", "esoknya:");
+    eq(daftarNotif("2026-08-12"), "", "sesudah lewat hilang sendiri:");
+  })));
+t("notifikasi ULANG: ETD diubah sesudah dibaca -> muncul lagi di H-1 tanggal barunya (juga bila dikembalikan)", () =>
+  denganNotifUji(() => {
+    const kiriman = NOTIF_KIRIMAN();
+    return denganDataUji(kiriman, [], () => {
+      const n1 = () => w.hitungNotifikasi(w.__hari).find((n) => n.s.id === "n1" && n.jenis === "etd");
+      w.__hari = "2026-08-09";
+      const awal = n1();
+      eq(!!awal && awal.dibaca, false, "pertama: belum dibaca:");
+      w.tandaiNotifDibaca(awal.kunci);
+      eq(n1().dibaca, true, "sesudah dibaca:");
+      // ETD mundur ke 15 Agustus: notifikasi lama hilang, belum ada yang baru
+      w.eval('data.import.find((s) => s.id === "n1").etd = "2026-08-15"');
+      eq(n1(), undefined, "09-08 sesudah diubah:");
+      w.__hari = "2026-08-14";
+      const ulang = n1();
+      eq(!!ulang && ulang.dibaca, false, "H-1 tanggal baru: muncul lagi, belum dibaca:");
+      eq(ulang.dulu, "2026-08-10", "menyebut tanggal semula:");
+      if (ulang.kunci === awal.kunci) throw new Error("kunci tidak berganti");
+      // Dikembalikan ke tanggal semula -> tetap notifikasi baru
+      w.tandaiNotifDibaca(ulang.kunci);
+      w.eval('data.import.find((s) => s.id === "n1").etd = "2026-08-10"');
+      w.__hari = "2026-08-09";
+      const balik = n1();
+      eq(!!balik && balik.dibaca, false, "dikembalikan: muncul lagi:");
+      delete w.__hari;
+    });
+  }));
+t("lonceng: lencana jumlah belum dibaca, panel per Hari ini / Besok, klik membuka detail (buku lain pun), Tandai semua", () =>
+  denganNotifUji(() => denganDataUji(NOTIF_KIRIMAN(), NOTIF_EKSPOR(), () => {
+    const simpanMode = baca("activeMode");
+    try {
+      w.eval('activeMode = "import"');
+      w.notifSegarkan();
+      const lencana = [...w.document.querySelectorAll("[data-notif-buka] .notif-lencana")];
+      eq(lencana.length, 2, "dua lonceng:");
+      eq(lencana.map((l) => (l.hidden ? "-" : l.textContent)).join(","), "5,5", "jumlah:");
+      if (!/5 belum dibaca/.test($("[data-notif-buka]").getAttribute("aria-label"))) throw new Error("aria-label: " + $("[data-notif-buka]").getAttribute("aria-label"));
+      $("#appSidebar [data-notif-buka]").click();
+      eq($("#notifPanel").hidden, false, "panel terbuka:");
+      eq([...w.document.querySelectorAll("#notifIsi .notif-kelompok")].map((x) => x.textContent).join(","), "Hari ini,Besok", "kelompok:");
+      eq(w.document.querySelectorAll("#notifIsi .notif-item.is-baru").length, 5, "belum dibaca:");
+      const ekspor = w.document.querySelector('#notifIsi [data-notif-jadwal="n5"]');
+      if (!/Berangkat hari ini \u00b7 ETD 09-08-2026/.test(ekspor.textContent)) throw new Error("judul: " + ekspor.textContent.replace(/\s+/g, " "));
+      ekspor.click();
+      eq($("#notifPanel").hidden, true, "panel tertutup:");
+      eq(baca("currentDetailId"), "n5", "detail jadwal Export terbuka dari buku Import:");
+      eq($("#detailSheetTitle").textContent, "ECHO", "judul detail:");
+      eq($("#detailViewBody .detail-badge-mode").textContent, "Export", "label buku:");
+      eq(baca("activeMode"), "import", "buku yang dibuka tidak berubah:");
+      eq(lencana[0].textContent, "4", "satu sudah dibaca:");
+      w.stepDetailView(1);
+      eq(baca("currentDetailId"), "n5", "di luar daftar: tidak melompat ke jadwal lain:");
+      w.closeDetailView();
+      $("#detailViewBody").innerHTML = ""; // isi berbahasa Indonesia jangan tertinggal untuk uji bahasa
+      $("#appSidebar [data-notif-buka]").click();
+      $("#btnNotifBacaSemua").click();
+      eq(lencana[0].hidden, true, "semua dibaca: lencana hilang:");
+      eq($("#btnNotifBacaSemua").hidden, true, "tombol Tandai semua disembunyikan:");
+      w.tutupPanelNotif(false);
+    } finally {
+      w.tutupPanelNotif(false);
+      w.eval("activeMode = " + JSON.stringify(simpanMode));
+    }
+  })));
+t("notifikasi: tanpa jadwal yang mendekat, panel memberi tahu kapan notifikasi muncul", () =>
+  denganNotifUji(() => denganDataUji([], [], () => {
+    w.notifSegarkan();
+    w.bukaPanelNotif(null);
+    try {
+      if (!/berangkat atau tiba besok/.test($("#notifIsi").textContent)) throw new Error("kosong: " + $("#notifIsi").textContent);
+      eq($("[data-notif-buka] .notif-lencana").hidden, true, "lencana:");
+    } finally {
+      w.tutupPanelNotif(false);
+    }
+  })));
+t("notifikasi tidak dihitung di tengah render(), dan tidak memaksa tata letak", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js", "render", "list.js"), "utf8");
+  if (!/jadwalkanNotif\(\)/.test(src)) throw new Error("render() tidak menjadwalkan notifikasi");
+  const nf = fs.readFileSync(path.join(ROOT, "js", "features", "notifikasi.js"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  if (/offsetWidth|getBoundingClientRect|getComputedStyle/.test(nf)) throw new Error("notifikasi.js membaca tata letak");
+});
+
 console.log("\u2014 LEBAR KOLOM NAMA BARANG \u2014");
 t("dua min-width kolom nama barang tetap sepasang", () => {
   /* Lebar kolom ditentukan DUA aturan: sel-nya dan textarea di
@@ -14226,9 +14460,11 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
   t("ikon halaman: satu set garis (sprite ik-*) di sidebar, bilah atas, palet & aksi cepat; tiap simbol yang dipakai ada", () => {
     const d = w.document;
     const ada = new Set([...d.querySelectorAll(".ikon-sprite symbol")].map((x) => x.id));
-    const tautan = [...d.querySelectorAll("#appSidebar .site-nav-link")];
+    const tautan = [...d.querySelectorAll("#appSidebar .site-nav a.site-nav-link")];
     eq(tautan.map((a) => a.querySelector("svg.ic use").getAttribute("href")).join(","),
       "#ik-dashboard,#ik-jadwal,#ik-dokumen,#ik-hscode,#ik-masterlist,#ik-akun", "ikon sidebar:");
+    eq([...d.querySelectorAll("[data-notif-buka] svg.ic use")].map((u) => u.getAttribute("href")).join(","),
+      "#ik-lonceng,#ik-lonceng", "lonceng bilah atas & sidebar:");
     if (tautan.some((a) => a.querySelector("i.bi"))) throw new Error("ikon Bootstrap lama tersisa di sidebar");
     const dipakai = [...d.querySelectorAll("use")].map((u) => u.getAttribute("href").slice(1));
     const hilang = dipakai.filter((id) => !ada.has(id));
