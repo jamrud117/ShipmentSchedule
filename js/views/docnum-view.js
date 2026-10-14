@@ -656,7 +656,8 @@ async function maxIssuedSeq(docType, periodKey) {
 async function simpanCounter(nilaiBerikutnya) {
   const { typeKey, periodKey, pad } = counterCtx;
   if (!typeKey) return;
-  const berikut = parseInt(nilaiBerikutnya, 10);
+  const isi = String(nilaiBerikutnya == null ? "" : nilaiBerikutnya).trim();
+  const berikut = /^\d+$/.test(isi) ? parseInt(isi, 10) : NaN;
   if (!isFinite(berikut) || berikut < 1) {
     showToast(t("m.nomor.berikutnya.harus.angka.minimal.1"), "danger");
     return;
@@ -1418,6 +1419,9 @@ async function submitDocNumRequest() {
         : t("x.isian.belum.benar", { n: errors.length }),
       "danger",
     );
+    // Kursor dibawa ke kotak bertanda merah yang pertama, siap dibetulkan
+    const salah = docNumPanelEl(typeKey) && docNumPanelEl(typeKey).querySelector(".is-invalid");
+    if (salah) tandaiIsianKurang(salah);
     return;
   }
   hint.textContent = "";
@@ -1484,6 +1488,9 @@ async function submitDocNumRequest() {
     if (errInsert) throw errInsert;
 
     tampilkanHasilDocNum(baris.out_number);
+    /* Langkah berikutnya hampir selalu menyalin nomornya: tombol Salin
+       langsung difokus -- Enter menyalin. */
+    fokuskan($("#btnCopyDocNum"));
     resetDocNumForm(typeKey, { keepIdentity: true });
     docNumPage = 1;
     await Promise.all([refreshDocNumPreview(typeKey), renderDocNumHistory()]);
@@ -2339,6 +2346,8 @@ if (docNumTabsEl) {
     const btn = e.target.closest("[data-docnum-tab]");
     if (!btn) return;
     showDocNumTab(btn.dataset.docnumTab);
+    // Jenis dokumen dipilih = mau mengisi: kursor langsung di isian kosong pertama
+    fokusIsianPertama(docNumPanelEl(docNumActiveTab));
   });
 }
 

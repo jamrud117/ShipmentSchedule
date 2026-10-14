@@ -353,17 +353,19 @@ async function registerAccount() {
   const sandi = $("#regPassword").value;
   const info = $("#regInfo");
 
-  const gagal = (pesan) => {
+  /* Pesan galatnya disertai kursor di kotak yang perlu dibetulkan. */
+  const gagal = (pesan, kotak) => {
     info.className = "reg-info is-error";
     info.textContent = pesan;
+    if (kotak) fokuskan($(kotak), { pilihIsi: true });
   };
   if (!nama || !username || !sandi)
-    return gagal(t("s.nama.username.dan.kata.sandi.harus.diisi"));
+    return gagal(t("s.nama.username.dan.kata.sandi.harus.diisi"), !nama ? "#regName" : !username ? "#regUsername" : "#regPassword");
   if (!/^[a-z0-9._-]{3,}$/.test(username))
-    return gagal(t("v.username.minimal.3.karakter.hanya.huruf.angka."));
+    return gagal(t("v.username.minimal.3.karakter.hanya.huruf.angka."), "#regUsername");
   if (accountRows.some((r) => (r.username || "").toLowerCase() === username))
-    return gagal(t("s.username.itu.sudah.dipakai"));
-  if (sandi.length < 8) return gagal(t("a.kata.sandi.minimal.8.karakter"));
+    return gagal(t("s.username.itu.sudah.dipakai"), "#regUsername");
+  if (sandi.length < 8) return gagal(t("a.kata.sandi.minimal.8.karakter"), "#regPassword");
 
   const btn = $("#btnRegister");
   btn.disabled = true;
@@ -428,6 +430,8 @@ async function registerAccount() {
   ["#regName", "#regUsername", "#regPassword"].forEach(
     (sel) => ($(sel).value = ""),
   );
+  // Siap mendaftarkan akun berikutnya
+  fokuskan($("#regName"), { tanpaGulir: true });
   await loadAccounts();
 }
 
@@ -458,9 +462,6 @@ if (accountRoot) {
   $("#accountSearch").addEventListener("input", renderAccounts);
   $("#btnRegister").addEventListener("click", registerAccount);
   $("#btnAccountRefresh").addEventListener("click", loadAccounts);
-  ["#regName", "#regUsername", "#regPassword"].forEach((sel) => {
-    $(sel).addEventListener("keydown", (e) => {
-      if (e.key === "Enter") registerAccount();
-    });
-  });
+  /* Enter: Nama -> Username -> Kata sandi -> Daftarkan (lihat
+     data-enter-lanjut di index.html & js/ui/fokus.js). */
 }

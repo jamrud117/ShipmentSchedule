@@ -257,6 +257,233 @@
   opacity: 1;
 }
 
+/* ---- Lonceng notifikasi (js/features/notifikasi.js) ----
+   Di sidebar tampil seperti tautan halaman (ikon + label + jumlah);
+   di bilah atas ponsel berupa tombol ikon di sebelah pencarian. */
+button.site-nav-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.notif-pemicu {
+  position: relative;
+}
+.notif-pemicu .ic {
+  transform-origin: 50% 12%;
+}
+.notif-lencana {
+  display: inline-block;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--s-danger);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.site-nav-link.notif-pemicu .notif-lencana {
+  margin-left: auto;
+  overflow: visible;
+}
+/* Ikon di bilah atas & rel ikon: lencana kecil di pojok kanan atas ikon */
+.cmd-trigger--ikon.notif-pemicu .notif-lencana {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  font-size: 0.6rem;
+  line-height: 17px;
+  box-shadow: 0 0 0 2px var(--d-900);
+}
+
+/* ---- Panel notifikasi ---- */
+.notif-panel {
+  position: fixed;
+  z-index: 1050; /* di atas sidebar (1045), di bawah panel detail (1055+) */
+  top: 12px;
+  left: calc(var(--sb-w, 0px) + 12px);
+  width: min(400px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+  color: var(--ink);
+}
+.notif-panel:focus {
+  outline: none;
+}
+.notif-kepala {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.notif-judul-panel {
+  flex: 1;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-md);
+  font-weight: 700;
+}
+.notif-baca-semua {
+  border: 0;
+  background: transparent;
+  padding: 4px 8px;
+  border-radius: var(--r-xs);
+  color: var(--p-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.notif-baca-semua:hover {
+  background: var(--p-50);
+}
+.notif-tutup {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-500);
+}
+.notif-tutup:hover {
+  background: var(--n-100);
+  color: var(--ink);
+}
+.notif-tutup .ic {
+  width: 18px;
+  height: 18px;
+}
+.notif-isi {
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+.notif-kelompok {
+  padding: 12px 16px 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+.notif-item:hover {
+  background: var(--n-50);
+}
+.notif-item.is-baru {
+  background: var(--p-50);
+}
+.notif-item.is-baru:hover {
+  background: var(--p-100);
+}
+.notif-item:focus-visible {
+  outline: 2px solid var(--p-500);
+  outline-offset: -2px;
+}
+.notif-ikon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 1rem;
+}
+.notif-ikon--etd {
+  background: #fff3de;
+  color: #95610c;
+}
+.notif-ikon--eta {
+  background: var(--sec-50);
+  color: var(--teal-dark);
+}
+.notif-teks {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.notif-judul {
+  font-size: var(--t-sm);
+  font-weight: 700;
+}
+.notif-pihak,
+.notif-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notif-pihak {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-700);
+}
+.notif-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.notif-ubah {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #95610c;
+}
+.notif-titik {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--p-500);
+}
+.notif-kosong {
+  padding: 30px 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--t-sm);
+}
+.notif-kosong i {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1.6rem;
+  color: var(--n-300);
+}
+.notif-kosong p {
+  margin: 0;
+}
+.notif-kaki {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
 /* ---- Kaki: ciutkan + akun ---- */
 .sb-kaki {
   flex-shrink: 0;
@@ -351,6 +578,33 @@
     justify-content: center;
     padding-left: 0;
     padding-right: 0;
+  }
+  /* Lencana notifikasi di rel ikon: tetap terlihat (aturan di atas
+     menyembunyikan semua <span> tautan), menempel di pojok ikonnya. */
+  body.sb-rel .notif-pemicu .notif-lencana {
+    position: absolute;
+    top: 4px;
+    right: 10px;
+    width: auto;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    clip: auto;
+    overflow: visible;
+    font-size: 0.6rem;
+    line-height: 17px;
+    box-shadow: 0 0 0 2px var(--d-900);
+  }
+}
+
+/* Ponsel & tablet: panel turun dari bilah atas, selebar layar */
+@media (max-width: 991.98px) {
+  .notif-panel {
+    top: calc(var(--topbar-h) + 8px);
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100vh - var(--topbar-h) - 16px);
   }
 }
 
@@ -611,6 +865,47 @@
 .footer-text b {
   color: rgba(255, 255, 255, 0.88);
   font-weight: 600;
+}
+/* Pintasan keyboard: tombolnya digambar sebagai tuts, keterangannya
+   rata kiri dalam satu kolom supaya bisa dipindai sekilas. */
+.footer-pintasan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.footer-pintasan li {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.35;
+}
+.footer-tuts {
+  display: inline-flex;
+  gap: 4px;
+}
+.footer-pintasan kbd {
+  min-width: 24px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: none;
+}
+/* Tidak ada keyboard di layar sentuh: kolomnya tidak berguna di sana. */
+@media (max-width: 767px), (hover: none) {
+  .footer-pintasan-kolom {
+    display: none;
+  }
 }
 .footer-divider {
   border-color: rgba(255, 255, 255, 0.12);

@@ -75,6 +75,7 @@
          perintah, aksi cepat. Dipakai lewat <svg class="ic"><use href="#ik-…">
          (atau ikonSvg() di js/ui/icons.js); gaya garisnya di .ic (base.css). -->
     <svg class="ikon-sprite" aria-hidden="true" focusable="false">
+      <symbol id="ik-lonceng" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
       <symbol id="ik-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1" /> <rect width="7" height="5" x="14" y="3" rx="1" /> <rect width="7" height="9" x="14" y="12" rx="1" /> <rect width="7" height="5" x="3" y="16" rx="1" /></symbol>
       <symbol id="ik-jadwal" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" /> <path d="M16 2v4" /> <path d="M8 2v4" /> <path d="M3 10h5" /> <path d="M17.5 17.5 16 16.3V14" /> <circle cx="16" cy="16" r="6" /></symbol>
       <symbol id="ik-dokumen" viewBox="0 0 24 24"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <rect width="4" height="6" x="2" y="12" rx="2" /> <path d="M10 12h2v6" /> <path d="M10 18h4" /></symbol>
@@ -217,7 +218,7 @@
             id="loginUsername"
             class="login-input"
             autocomplete="username"
-            placeholder="Username atau Email"
+            placeholder="Username atau email"
             data-i18n-ph="ph.username.atau.email"
           />
 
@@ -316,6 +317,17 @@
       <div class="topbar-spacer"></div>
       <button
         type="button"
+        class="cmd-trigger cmd-trigger--ikon notif-pemicu"
+        data-notif-buka
+        aria-controls="notifPanel"
+        aria-expanded="false"
+        aria-label="Notifikasi"
+      >
+        <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-lonceng"></use></svg>
+        <span class="notif-lencana" hidden>0</span>
+      </button>
+      <button
+        type="button"
         class="cmd-trigger cmd-trigger--ikon"
         data-cmdk-buka
         title="Cari Cepat Lintas Import & Export"
@@ -363,6 +375,13 @@
           <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cari"></use></svg>
           <span class="cmd-trigger-text" data-i18n="u.cari.cepat">Cari cepat</span>
           <kbd>Ctrl K</kbd>
+        </button>
+
+        <!-- NOTIFIKASI (js/features/notifikasi.js): jadwal yang berangkat /
+             tiba besok (H-1 ETD & ETA). Panelnya #notifPanel. -->
+        <button type="button" class="site-nav-link notif-pemicu" data-notif-buka aria-controls="notifPanel" aria-expanded="false" aria-label="Notifikasi">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-lonceng"></use></svg><span data-en="Notifications">Notifikasi</span>
+          <span class="notif-lencana" hidden>0</span>
         </button>
 
         <nav class="site-nav" aria-label="Halaman" data-en-aria="Pages">
@@ -651,7 +670,7 @@
             <div class="panel-head">
               <h2 data-en="<i class=&quot;bi bi-person-plus&quot;></i> Register a new account"><i class="bi bi-person-plus"></i> Daftarkan akun baru</h2>
             </div>
-            <div class="panel-body">
+            <div class="panel-body" data-enter-lanjut data-enter-kirim="#btnRegister">
               <label
                 class="login-label"
                 for="regName"
@@ -662,7 +681,7 @@
                 type="text"
                 id="regName"
                 class="login-input"
-                placeholder="Nama Lengkap Pengguna"
+                placeholder="Nama lengkap pengguna"
                 data-i18n-ph="ph.nama.lengkap.pengguna"
               />
 
@@ -671,7 +690,7 @@
                 type="text"
                 id="regUsername"
                 class="login-input"
-                placeholder="Huruf Kecil, Tanpa Spasi"
+                placeholder="Huruf kecil, tanpa spasi"
                 data-i18n-ph="ph.huruf.kecil.tanpa.spasi"
               />
 
@@ -683,7 +702,7 @@
                   type="password"
                   id="regPassword"
                   class="login-input"
-                  placeholder="Minimal 8 Karakter"
+                  placeholder="Minimal 8 karakter"
                   data-i18n-ph="ph.minimal.8.karakter"
                 /><button
                   type="button"
@@ -1346,6 +1365,8 @@
             <form
               class="docnum-panel active"
               data-docnum-panel="invoice"
+              data-enter-lanjut
+              data-enter-akhir="#btnDnEditSimpan, #btnDocNumSubmit"
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
@@ -1453,7 +1474,7 @@
                     class="form-control"
                     rows="2"
                     data-dn="notes"
-                    placeholder="Keperluan Penomoran..."
+                    placeholder="Keperluan penomoran…"
                     data-i18n-ph="ph.keperluan.penomoran"
                   ></textarea>
                 </div>
@@ -1513,7 +1534,7 @@
                   <label class="form-label" data-i18n="f.po.no.tanggal"
                     >PO No. &amp; Tanggal</label
                   >
-                  <div id="poNoList">
+                  <div id="poNoList" data-enter-sendiri>
                     <div class="po-row">
                       <input
                         type="text"
@@ -1629,7 +1650,7 @@
                     type="text"
                     class="form-control"
                     data-dn="siTo"
-                    placeholder="Nama Forwarder"
+                    placeholder="Nama forwarder"
                     data-i18n-ph="ph.nama.forwarder"
                   />
                 </div>
@@ -1689,6 +1710,8 @@
             <form
               class="docnum-panel"
               data-docnum-panel="do"
+              data-enter-lanjut
+              data-enter-akhir="#btnDnEditSimpan, #btnDocNumSubmit"
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
@@ -1760,7 +1783,7 @@
                     class="form-control"
                     data-dn="receiver"
                     data-dn-required
-                    placeholder="Nama Penerima"
+                    placeholder="Nama penerima"
                     data-i18n-ph="ph.nama.penerima"
                   />
                 </div>
@@ -1825,7 +1848,7 @@
                     rows="2"
                     data-dn="address"
                     data-dn-required
-                    placeholder="Alamat Lengkap Penerima"
+                    placeholder="Alamat lengkap penerima"
                     data-i18n-ph="ph.alamat.lengkap.penerima"
                   ></textarea>
                 </div>
@@ -1860,7 +1883,7 @@
                           <th class="fl-act"></th>
                         </tr>
                       </thead>
-                      <tbody id="doLinesBody"></tbody>
+                      <tbody id="doLinesBody" data-enter-sendiri></tbody>
                     </table>
                   </div>
                   <button
@@ -1879,6 +1902,8 @@
             <form
               class="docnum-panel"
               data-docnum-panel="fund"
+              data-enter-lanjut
+              data-enter-akhir="#btnDnEditSimpan, #btnDocNumSubmit"
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
@@ -2188,7 +2213,7 @@
                           <th class="fl-act"></th>
                         </tr>
                       </thead>
-                      <tbody id="fundLinesBody"></tbody>
+                      <tbody id="fundLinesBody" data-enter-sendiri></tbody>
                     </table>
                   </div>
                   <!-- Dua tombol tambah, sebaris berdampingan. Diskon = baris
@@ -2291,6 +2316,8 @@
             <form
               class="docnum-panel"
               data-docnum-panel="letter"
+              data-enter-lanjut
+              data-enter-akhir="#btnDnEditSimpan, #btnDocNumSubmit"
               onsubmit="return false;"
             >
               <div class="docnum-panel-head">
@@ -2357,7 +2384,7 @@
                     class="form-control"
                     data-dn="recipient"
                     data-dn-required
-                    placeholder="Instansi / Perusahaan Tujuan"
+                    placeholder="Instansi / perusahaan tujuan"
                     data-i18n-ph="ph.instansi.perusahaan.tujuan"
                   />
                 </div>
@@ -2498,11 +2525,13 @@
                    data-en="Next number">Nomor berikutnya</label
                 >
                 <input
-                  type="number"
-                  min="1"
-                  step="1"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
+                  maxlength="6"
                   class="form-control"
                   id="counterNext"
+                  data-hanya-angka
                 />
                 <button type="button" class="btn btn-teal" id="btnCounterSave" data-en="<i class=&quot;bi bi-check2&quot;></i> Save">
                   <i class="bi bi-check2"></i> Simpan
@@ -2721,7 +2750,7 @@
         </ul>
 
         <!-- TAB 1: DOKUMEN & UMUM -->
-        <div class="tab-pane" data-tabpane="umum">
+        <div class="tab-pane" data-tabpane="umum" data-enter-lanjut data-enter-kirim='#detailTabs [data-tab="barang"]'>
           <!-- TATA LETAK: kisi .fgrid (css/components.css). Tiap baris
                berjumlah 12 lajur -- isian standar seperempat baris -- jadi
                tepi isian sejajar dari baris ke baris. Urutan kartu:
@@ -2791,7 +2820,7 @@
                   type="text"
                   class="form-control"
                   id="fParty"
-                  placeholder="Nama Perusahaan"
+                  placeholder="Nama perusahaan"
                   data-i18n-ph="ph.nama.perusahaan"
                 />
               </div>
@@ -2903,8 +2932,8 @@
               </div>
               <div>
                 <label class="form-label" for="fVehicleNo" data-en="Vehicle No.">No. Kendaraan</label>
-                <input type="text" class="form-control text-uppercase" id="fVehicleNo" autocomplete="off"
-                  placeholder="Nomor polisi, mis. B 9123 KXT" data-en-ph="Plate number, e.g. B 9123 KXT" />
+                <input type="text" class="form-control" id="fVehicleNo" autocomplete="off"
+                  placeholder="Nomor kendaraan / polisi" data-en-ph="Vehicle / plate number" />
               </div>
               <div id="fForwarderWrap">
                 <label class="form-label" for="fForwarder" data-i18n="f.nama.forwarder"
@@ -2914,7 +2943,7 @@
                   type="text"
                   class="form-control"
                   id="fForwarder"
-                  placeholder="Nama Forwarder"
+                  placeholder="Nama forwarder"
                   data-i18n-ph="ph.nama.forwarder"
                 />
               </div>
@@ -3263,6 +3292,7 @@
               <div class="notes-composer">
                 <textarea
                   id="fNoteDraft"
+                  data-enter-lewati
                   rows="2"
                   placeholder="Tulis kronologi atau kejadian… Ctrl+Enter untuk kirim."
                   data-i18n-ph="ph.tulis.kronologi.atau.kejadian.ctrl.enter.untuk"
@@ -3284,7 +3314,7 @@
         </div>
 
         <!-- TAB 2: DAFTAR BARANG -->
-        <div class="tab-pane d-none" data-tabpane="barang">
+        <div class="tab-pane d-none" data-tabpane="barang" data-enter-lanjut data-enter-kirim='#detailTabs [data-tab="pabean"]'>
           <div class="form-section-card form-section-card--violet">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <div class="subsection-title mb-3" data-en="<span class=&quot;subsection-icon&quot;><i class=&quot;bi bi-boxes&quot;></i></span> Items in This Shipment">
@@ -3363,7 +3393,7 @@
                     <th></th>
                   </tr>
                 </thead>
-                <tbody id="itemTableBody"></tbody>
+                <tbody id="itemTableBody" data-enter-sendiri></tbody>
               </table>
             </div>
 
@@ -3426,7 +3456,7 @@
         </div>
 
         <!-- TAB 3: KEPABEANAN & BIAYA -->
-        <div class="tab-pane d-none" data-tabpane="pabean">
+        <div class="tab-pane d-none" data-tabpane="pabean" data-enter-lanjut data-enter-akhir="#btnSaveShipment">
           <div class="form-section-card form-section-card--amber">
             <div class="subsection-title mb-3" data-en="<span class=&quot;subsection-icon&quot;><i class=&quot;bi bi-cash-coin&quot;></i></span> Incoterm &amp;amp; Goods Value">
               <span class="subsection-icon"
@@ -3613,7 +3643,7 @@
                   type="text"
                   class="form-control"
                   id="fPI"
-                  placeholder="Keterangan Pemberitahuan Impor"
+                  placeholder="Keterangan pemberitahuan impor"
                   data-i18n-ph="ph.keterangan.pemberitahuan.impor"
                 />
               </div>
@@ -3646,6 +3676,9 @@
               type="button"
               class="btn-primary-navy btn-save-primary"
               id="btnSaveShipment"
+              title="Simpan (Ctrl+S)"
+              data-en-title="Save (Ctrl+S)"
+              aria-keyshortcuts="Control+S"
              data-en="<i class=&quot;bi bi-check-lg&quot;></i> Save Schedule">
               <i class="bi bi-check-lg"></i> Simpan Jadwal
             </button>
@@ -3656,6 +3689,21 @@
     <!-- ============ /HALAMAN: TAMBAH / EDIT JADWAL ============ -->
 
     <!-- PANEL GESER — detail pengiriman (read-only) -->
+    <!-- PANEL NOTIFIKASI (js/features/notifikasi.js): dibuka dari lonceng
+         di sidebar / bilah atas ponsel. Klik satu notifikasi = buka detail
+         jadwalnya. -->
+    <section class="notif-panel" id="notifPanel" tabindex="-1" role="dialog" aria-labelledby="notifJudul" hidden>
+      <div class="notif-kepala">
+        <h2 class="notif-judul-panel" id="notifJudul" data-en="Notifications">Notifikasi</h2>
+        <button type="button" class="notif-baca-semua" id="btnNotifBacaSemua" data-en="Mark all as read" hidden>Tandai semua dibaca</button>
+        <button type="button" class="notif-tutup" id="btnNotifTutup" aria-label="Tutup notifikasi" data-en-aria="Close notifications">
+          <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-tutup"></use></svg>
+        </button>
+      </div>
+      <div class="notif-isi" id="notifIsi"></div>
+      <div class="notif-kaki" data-en="Appears one day before ETD &amp; ETA, until the day itself.">Muncul H-1 sebelum ETD &amp; ETA, sampai hari H.</div>
+    </section>
+
     <div class="sheet-scrim" id="detailScrim" hidden></div>
     <aside
       class="sheet"
@@ -3774,12 +3822,14 @@
               dengan format yang sama.
             </p>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-3 footer-pintasan-kolom">
             <div class="footer-heading" data-i18n="u.pintasan">Pintasan</div>
-            <p class="footer-text" data-en="<b>Ctrl K</b> quick search · <b>/</b> focus search · <b>N</b> new schedule">
-              <b>Ctrl K</b> cari cepat · <b>/</b> fokus pencarian ·
-              <b>N</b> jadwal baru
-            </p>
+            <ul class="footer-pintasan">
+              <li><span class="footer-tuts"><kbd>Ctrl</kbd><kbd>K</kbd></span><span data-en="Quick search">Cari cepat</span></li>
+              <li><span class="footer-tuts"><kbd>/</kbd></span><span data-en="Go to the search box">Ke kotak pencarian</span></li>
+              <li><span class="footer-tuts"><kbd>N</kbd></span><span data-en="New schedule">Jadwal baru</span></li>
+              <li><span class="footer-tuts"><kbd>T</kbd></span><span data-en="Back to top">Kembali ke atas</span></li>
+            </ul>
           </div>
         </div>
         <hr class="footer-divider" />
@@ -4225,6 +4275,7 @@
     <script src="js/ui/icons.js"></script>
     <script src="js/ui/number-input.js"></script>
     <script src="js/ui/time-input.js"></script>
+    <script src="js/ui/fokus.js"></script>
     <script src="js/ui/feedback.js"></script>
     <script src="js/ui/sidebar.js"></script>
     <script src="js/ui/search-clear.js"></script>
@@ -4304,9 +4355,11 @@
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>
+    <script src="js/features/cek-duplikat.js"></script>
     <script src="js/render/prediction-view.js"></script>
     <script src="js/features/prediction-ui.js"></script>
     <script src="js/views/detail-view.js"></script>
+    <script src="js/features/notifikasi.js"></script>
     <script src="js/views/overview-view.js"></script>
     <script src="js/features/command-palette.js"></script>
     <script src="js/views/accounts-view.js"></script>

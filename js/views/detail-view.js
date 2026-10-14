@@ -50,20 +50,27 @@ function buildDetailStopsHtml(s) {
 }
 
 function buildDetailHtml(s) {
-  const lbl = ML();
+  /* Buku JADWALNYA SENDIRI, bukan buku yang sedang dibuka: panel ini
+     juga dibuka dari notifikasi & penanda nomor ganda, yang bisa
+     menunjuk jadwal di buku lain. */
+  const mode = s.mode === "export" ? "export" : s.mode === "import" ? "import" : activeMode;
+  const lbl = MODE_LABELS[mode];
   const calc = computeCustoms(s);
   /* Status yang BERLAKU, dengan nama per buku (Export: Delivered), sama
      dengan dropdown di kartunya. Dulu yang tampil kolom status mentah
      dengan label tetap "ARRIVED", sehingga kartu & panel ini bisa
      menyebut dua status berbeda untuk jadwal yang sama. */
   const statusBerlaku = effectiveStatus(s);
-  /* Tanggal yang BERLAKU (revisi kalau ada), rencana semula di bawahnya
-     -- sama dengan yang dibaca kartu & aturan status. */
+  /* Jadwal yang pernah diubah (kotak Tanggal Update Delay): rencana
+     awal di atas, jadwal BARU di bawahnya ditandai panah ke bawah --
+     dibaca "berubah menjadi". Tanpa revisi: satu tanggal saja. Jam
+     (kalau ada) milik tanggal yang berlaku. */
   const tanggalBerlaku = (rencana, revisi, jam) => {
-    const utama = fmtDate(revisi || rencana) + (jam ? " · " + escapeHtml(jam) : "");
-    return revisi && rencana && revisi !== rencana
-      ? `${utama}<br><span class="muted-value">${tt("Rencana", "Planned")} ${fmtDate(rencana)}</span>`
-      : utama;
+    const tglJam = (tgl) => fmtDate(tgl) + (jam ? " · " + escapeHtml(jam) : "");
+    if (!(revisi && rencana && revisi !== rencana)) return tglJam(revisi || rencana);
+    return `<span class="tgl-rencana">${fmtDate(rencana)}</span><span class="tgl-revisi"><i class="bi bi-arrow-down" aria-hidden="true"></i><span class="visually-hidden">${escapeHtml(
+      tt("diubah menjadi", "changed to"),
+    )} </span>${tglJam(revisi)}</span>`;
   };
 
   let itemRows = (s.items || [])
@@ -80,7 +87,7 @@ function buildDetailHtml(s) {
       <td class="text-center">${fmtNum(it.netto)} Kg</td>
       <td class="text-center">${fmtNum(it.bruto)} Kg</td>
       <td class="text-center">${detailPackageCellHtml(it)}</td>
-      ${activeMode === "export" ? `<td class="text-center">${computeItemCbm(it)}</td>` : ""}
+      ${mode === "export" ? `<td class="text-center">${computeItemCbm(it)}</td>` : ""}
       <td class="text-center">${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}</td>
     </tr>`,
     )
@@ -129,7 +136,7 @@ function buildDetailHtml(s) {
         <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} · ${lbl.docDate}: ${fmtDate(s.docDate)}</div>
       </div>
       <div class="d-flex align-items-center gap-2">
-        <span class="detail-badge-mode">${activeMode === "import" ? "Import" : "Export"}</span>
+        <span class="detail-badge-mode">${mode === "import" ? "Import" : "Export"}</span>
         <span class="status-select ${statusClass(statusBerlaku)}" style="pointer-events:none; padding-right:14px; background-image:none;">${escapeHtml(statusLabel(statusBerlaku, s.mode).toUpperCase())}</span>
       </div>
     </div>
@@ -167,8 +174,8 @@ function buildDetailHtml(s) {
       ${fieldPair(tt("No. Kendaraan", "Vehicle No."), escapeHtml(dispVal(s.vehicleNo)))}
       ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
       ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
-      ${fieldPair(portNoun("origin", s.transport), escapeHtml(dispVal(portCodeLabel(s.origin))))}
-      ${fieldPair(portNoun("destination", s.transport), escapeHtml(dispVal(portCodeLabel(s.destination))))}
+      ${fieldPair(portNoun("origin", s.transport, mode), escapeHtml(dispVal(portCodeLabel(s.origin))))}
+      ${fieldPair(portNoun("destination", s.transport, mode), escapeHtml(dispVal(portCodeLabel(s.destination))))}
       ${fieldPair("ETD", tanggalBerlaku(s.etd, s.etdUpdate, s.etdTime))}
       ${fieldPair("ETA", tanggalBerlaku(s.eta, s.etaUpdate, s.etaTime))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
@@ -196,7 +203,7 @@ function buildDetailHtml(s) {
         <thead><tr>
           <th>${tt("Nama Barang", "Item Name")}</th><th>HS Code</th><th>${tt("Jenis Barang", "Goods Type")}</th><th>${tt("Fasilitas", "Facility")}</th>
           <th class="text-center">Qty</th><th class="text-center">${tt("Satuan", "Unit")}</th><th class="text-center">${tt("Harga/Unit", "Unit Price")}</th>
-          <th class="text-center">${tt("Netto", "Net Wt.")}</th><th class="text-center">${tt("Bruto", "Gross Wt.")}</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${activeMode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
+          <th class="text-center">${tt("Netto", "Net Wt.")}</th><th class="text-center">${tt("Bruto", "Gross Wt.")}</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${mode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
@@ -208,7 +215,7 @@ function buildDetailHtml(s) {
         <div>${t("f.total.netto")}: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
         <div>${t("f.total.bruto")}: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
         <div>${tt("Total Nilai", "Total Value")}: <b>${fmtUSD(calc.totalUSD)}</b></div>
-        ${activeMode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
+        ${mode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
       </div>
     </div>
 
@@ -226,9 +233,23 @@ function detailNavList() {
   return orderedFiltered();
 }
 
+/* Jadwal dengan id ini dari buku MANA PUN -- notifikasi & penanda nomor
+   ganda bisa menunjuk jadwal di buku yang sedang tidak dibuka. */
+function kirimanDenganId(id) {
+  const cari = (arr) => (arr || []).find((x) => String(x.id) === String(id));
+  return cari(currentList()) || (typeof data !== "undefined" && data ? cari(data.import) || cari(data.export) : null) || null;
+}
+
+/* Tombol yang membuka panel (mata di kartu, notifikasi, palet): fokus
+   kembali ke sana saat panel ditutup -- bukan ke awal halaman. Dicatat
+   hanya saat panel BARU dibuka, bukan saat berpindah kiriman di dalamnya. */
+let detailPemicu = null;
 function openDetailView(id) {
-  const s = currentList().find((x) => x.id === id);
+  const s = kirimanDenganId(id);
   if (!s) return;
+  const aktif = document.activeElement;
+  if (!isDetailOpen() && aktif && aktif !== document.body && !detailSheetEl.contains(aktif))
+    detailPemicu = { el: aktif, kunci: kunciFokus(aktif) };
   currentDetailId = id;
 
   $("#detailViewBody").innerHTML = buildDetailHtml(s);
@@ -256,6 +277,12 @@ function openDetailView(id) {
 function closeDetailView() {
   detailScrimEl.classList.remove("is-open");
   detailSheetEl.classList.remove("is-open");
+  const asal = detailPemicu;
+  detailPemicu = null;
+  if (asal) {
+    const el = asal.el.isConnected ? asal.el : asal.kunci ? document.querySelector(asal.kunci) : null;
+    if (el && tampilDiLayar(el)) fokuskan(el, { tanpaGulir: true });
+  }
   const sembunyikan = () => {
     detailScrimEl.hidden = true;
     detailSheetEl.hidden = true;
@@ -268,6 +295,8 @@ function closeDetailView() {
 function stepDetailView(delta) {
   const list = detailNavList();
   const idx = list.findIndex((x) => x.id === currentDetailId);
+  // Dibuka dari luar daftar (notifikasi, buku lain): tidak ada urutan telusur
+  if (idx < 0) return;
   const next = list[idx + delta];
   if (next) openDetailView(next.id);
 }

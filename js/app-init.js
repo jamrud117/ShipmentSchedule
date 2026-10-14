@@ -76,8 +76,34 @@ function segarkanTombolAtas() {
 window.addEventListener("scroll", segarkanTombolAtas, { passive: true });
 const btnScrollTop = $("#btnScrollTop");
 if (btnScrollTop) {
-  btnScrollTop.addEventListener("click", () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  btnScrollTop.addEventListener("click", gulirKeAtas);
+}
+
+/* TINGGI BILAH YANG MENEMPEL -> scroll-padding (lihat css/base.css).
+   Diukur, bukan ditebak: bilah kendali daftar jadwal dua atau tiga
+   baris tergantung lebar layar & bahasa. Bilah simpan form diukur
+   sampai dasar layar (kotak putihnya + jarak di bawahnya). */
+if (typeof ResizeObserver === "function") {
+  const ukurLengket = {
+    "--lengket-kendali": () => $(".controlbar"),
+    "--lengket-form-atas": () => $(".page-form-header"),
+    "--lengket-form-bawah": () => $(".page-form-actions-inner"),
+  };
+  const amatiLengket = new ResizeObserver((daftar) => {
+    daftar.forEach(({ target }) => {
+      if (!target.offsetHeight) return; // halamannya sedang tersembunyi
+      const nama = Object.keys(ukurLengket).find((k) => ukurLengket[k]() === target);
+      let tinggi = target.offsetHeight;
+      if (nama === "--lengket-form-bawah") {
+        const baris = target.parentElement;
+        tinggi += baris ? parseFloat(getComputedStyle(baris).paddingBottom) || 0 : 0;
+      }
+      document.documentElement.style.setProperty(nama, Math.round(tinggi) + "px");
+    });
+  });
+  Object.values(ukurLengket).forEach((cari) => {
+    const el = cari();
+    if (el) amatiLengket.observe(el);
   });
 }
 segarkanTombolAtas();

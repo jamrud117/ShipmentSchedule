@@ -145,7 +145,12 @@ function cmdkRun(idx, langsungEdit) {
   }
 }
 
+/* Yang difokus sebelum palet dibuka: ke sanalah fokus kembali kalau
+   palet ditutup tanpa memilih apa pun (Esc / klik di luar). */
+let cmdkPemicu = null;
 function openCmdk() {
+  const aktif = document.activeElement;
+  cmdkPemicu = aktif && aktif !== document.body ? { el: aktif, kunci: kunciFokus(aktif) } : null;
   cmdkScrimEl.hidden = false;
   requestAnimationFrame(() => cmdkScrimEl.classList.add("is-open"));
   cmdkInputEl.value = "";
@@ -153,9 +158,14 @@ function openCmdk() {
   cmdkRender();
   cmdkInputEl.focus();
 }
-function closeCmdk() {
+function closeCmdk(kembalikanFokus) {
   cmdkScrimEl.classList.remove("is-open");
   setTimeout(() => (cmdkScrimEl.hidden = true), 200);
+  const asal = cmdkPemicu;
+  cmdkPemicu = null;
+  if (!kembalikanFokus || !asal) return;
+  const el = asal.el.isConnected ? asal.el : asal.kunci ? document.querySelector(asal.kunci) : null;
+  if (el && tampilDiLayar(el)) fokuskan(el, { tanpaGulir: true });
 }
 function isCmdkOpen() {
   return cmdkScrimEl && cmdkScrimEl.classList.contains("is-open");
@@ -166,7 +176,7 @@ document.addEventListener("click", (e) => {
   if (e.target.closest && e.target.closest("[data-cmdk-buka]")) openCmdk();
 });
 cmdkScrimEl.addEventListener("click", (e) => {
-  if (e.target === cmdkScrimEl) closeCmdk();
+  if (e.target === cmdkScrimEl) closeCmdk(true);
 });
 cmdkInputEl.addEventListener("input", () => {
   cmdkCursor = 0;
@@ -190,7 +200,7 @@ cmdkInputEl.addEventListener("keydown", (e) => {
     cmdkRun(cmdkCursor, e.ctrlKey || e.metaKey);
   } else if (e.key === "Escape") {
     e.preventDefault();
-    closeCmdk();
+    closeCmdk(true);
   }
 });
 
@@ -206,27 +216,51 @@ function isTypingTarget(el) {
   );
 }
 
+/* KEMBALI KE ATAS -- tombol panah di pojok kanan bawah dan pintasan T.
+   Yang digulir adalah yang sedang dilihat: isi panel detail kalau panel
+   itu terbuka (halaman di belakangnya tertutup tirai), selain itu
+   halamannya. */
+function gulirKeAtas() {
+  const panel = typeof isDetailOpen === "function" && isDetailOpen() ? $("#detailViewBody") : null;
+  (panel || window).scrollTo({ top: 0, behavior: "smooth" });
+}
+
 document.addEventListener("keydown", (e) => {
   // Ctrl/⌘ + K berlaku di mana pun, termasuk saat sedang mengetik.
   if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
     e.preventDefault();
-    isCmdkOpen() ? closeCmdk() : openCmdk();
+    isCmdkOpen() ? closeCmdk(true) : openCmdk();
     return;
   }
   if (isCmdkOpen() || isTypingTarget(e.target)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  /* Pintasan satu huruf tidak berlaku selama ada kotak dialog atau
+     panel lonceng yang menunggu: fokusnya di tombol dialog, jadi N
+     yang tertekan tidak boleh membuang dialog itu ke halaman lain. */
+  if (document.querySelector(".modal.show")) return;
+  if (typeof panelNotifTerbuka === "function" && panelNotifTerbuka()) return;
+
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k === "t") {
+    if (e.repeat) return;
+    e.preventDefault();
+    gulirKeAtas();
+    return;
+  }
+  // Selebihnya hanya untuk halaman, bukan saat panel detail menutupinya
+  if (typeof isDetailOpen === "function" && isDetailOpen()) return;
 
   const diJadwal = !$("#viewList").classList.contains("d-none");
 
-  if (e.key === "/") {
+  if (k === "/") {
     if (!diJadwal) return;
     e.preventDefault();
     $("#searchInput").focus();
     $("#searchInput").select();
-  } else if (e.key === "n" || e.key === "N") {
+  } else if (k === "n") {
     e.preventDefault();
     location.hash = "#/new";
-  } else if (e.key === "?") {
+  } else if (k === "?") {
     e.preventDefault();
     showToast(t("m.pintasan.ctrl.k.cari.cepat.pencarian.n.jadwal."),
       "dark",

@@ -499,4 +499,6 @@ $("#itemTableBody").addEventListener("click", (e) => {
 $("#btnAddItem").addEventListener("click", () => {
   draftItems.push(newItem());
   renderItemTable();
+  // Baris baru langsung siap diisi nama barangnya
+  fokuskan($(`#itemTableBody tr[data-idx="${draftItems.length - 1}"]:not(.item-fac-row) [data-f="namaBarang"]`));
 });

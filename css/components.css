@@ -25,11 +25,6 @@
 .modal .form-select {
   font-size: 0.87rem;
 }
-.modal .form-control:focus,
-.modal .form-select:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
-}
 .modal .form-control[readonly] {
   background: #f7fafd;
   font-family: var(--font-mono);
@@ -65,11 +60,6 @@
   line-height: 1.4;
   resize: vertical;
   min-height: 52px;
-}
-.notes-composer textarea:focus {
-  outline: none;
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(18, 58, 99, 0.12);
 }
 .notes-composer .btn {
   white-space: nowrap;
@@ -201,10 +191,6 @@
   padding: 6px 10px;
   font-size: 0.82rem;
   background: #fff;
-}
-.card-note-input:focus {
-  outline: none;
-  border-color: var(--teal);
 }
 .btn-note-send {
   border: none;

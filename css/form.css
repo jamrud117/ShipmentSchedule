@@ -454,13 +454,6 @@
 .docnum-panel .form-control::placeholder {
   color: #a7b2c2;
 }
-.page-form .form-control:focus,
-.page-form .form-select:focus,
-.docnum-panel .form-control:focus,
-.docnum-panel .form-select:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
-}
 .page-form .form-control[readonly] {
   background: #f7fafd;
   font-family: var(--font-mono);
@@ -1097,7 +1090,7 @@ tr.item-fac-row td {
 }
 .calc-box .calc-label {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   letter-spacing: 0.02em;
   color: var(--muted);
 }
@@ -1326,6 +1319,30 @@ table.item-table input.pkg-invalid {
 }
 .form-validity--warn {
   color: var(--s-warn);
+}
+/* Petunjuk pintasan simpan di sebelah "Siap disimpan". */
+.form-validity-tuts {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+}
+.form-validity-tuts kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--n-300);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--n-600);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.3;
+  box-shadow: none;
+}
+@media (hover: none) {
+  .form-validity-tuts {
+    display: none;
+  }
 }
 
 @media (max-width: 767.98px) {

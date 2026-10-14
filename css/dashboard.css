@@ -104,11 +104,6 @@
 .search-box input[type="text"]::placeholder {
   color: var(--n-400);
 }
-.search-box input[type="text"]:focus {
-  outline: none;
-  border-color: var(--p-400);
-  box-shadow: var(--sh-focus);
-}
 .search-clear {
   position: absolute;
   top: 50%;
@@ -174,11 +169,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   background-size: 15px;
   flex: 0 0 auto;
 }
-.control-select:focus {
-  outline: none;
-  border-color: var(--p-400);
-  box-shadow: var(--sh-focus);
-}
 
 /* Dropdown basis tanggal (ETA/ETD/Estimasi Delivery) dengan ikon di
    kirinya, dibungkus supaya jadi SATU kotak (ikon + select) — sama
@@ -211,11 +201,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 15px;
-}
-.basis-select-wrap select:focus {
-  outline: none;
-  border-color: var(--p-400);
-  box-shadow: var(--sh-focus);
 }
 
 /* Rentang tanggal — ikon + dua tanggal + tombol hapus dalam satu

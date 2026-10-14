@@ -130,7 +130,7 @@
 }
 .info-label {
   font-family: var(--font-board);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--n-500);
@@ -153,6 +153,22 @@
 .info-value.muted-value {
   color: var(--muted);
   font-weight: 500;
+}
+/* Tanggal yang pernah diubah (panel detail): rencana awal di atas,
+   jadwal baru di bawahnya dengan panah ke bawah. */
+.tgl-rencana {
+  display: block;
+  color: var(--muted);
+  font-weight: 500;
+}
+.tgl-revisi {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tgl-revisi .bi {
+  color: var(--s-warn);
+  font-size: 0.85em;
 }
 
 .detail-fac-line {
@@ -244,10 +260,6 @@
   width: auto;
   max-width: 100%;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E");
-}
-.status-select:focus {
-  outline: 2px solid rgba(0, 0, 0, 0.15);
-  outline-offset: 1px;
 }
 .status-process {
   background-color: #fff3de;
@@ -341,7 +353,7 @@
 /* ---- Shipping lane ---- */
 .lane-title {
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   letter-spacing: 0.02em;
   color: var(--muted);
   /* 18px, bukan 10px.
@@ -555,7 +567,7 @@
   text-overflow: ellipsis;
   color: var(--navy);
   font-weight: 600;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
 }
 .port-labels--multi .p--start .p-term,
 .port-labels--multi .p--end .p-term {
@@ -595,7 +607,7 @@
 }
 .date-field label {
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   letter-spacing: 0.02em;
   color: var(--muted);
   margin-bottom: 4px;
@@ -613,11 +625,6 @@
   font-family: var(--font-mono);
   width: 100%;
   background: #fff;
-}
-.date-field input:focus {
-  border-color: var(--teal);
-  outline: none;
-  box-shadow: 0 0 0 0.15rem rgba(138, 106, 40, 0.15);
 }
 
 /* ================= COLLAPSED CARD (arrived) ================= */
@@ -969,7 +976,7 @@
 .lane-remaining {
   float: right;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -1114,12 +1121,40 @@
 }
 .docstep-label {
   font-family: var(--font-board);
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--n-500);
   white-space: nowrap;
+}
+/* Fokus keyboard: cincin di bulatannya, bukan kotak tinggi yang
+   membungkus bulatan beserta labelnya. */
+.docstep:focus-visible {
+  outline: none;
+}
+.docstep:focus-visible .docstep-dot {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* LAYAR SEMPIT: sembilan tahap tidak muat dalam satu baris. Dulu
+   barisnya menggulir mendatar tanpa tanda apa pun -- SPPB dan Berths
+   terpotong di tepi kartu dan tidak ada yang tahu masih ada tahap di
+   sebelah kanan. Di sini tahapnya ditata jadi petak lima kolom (dua
+   baris), garis penghubungnya dilepas. */
+@media (max-width: 575.98px) {
+  .docsteps-track {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px 4px;
+    overflow: visible;
+  }
+  .docstep-line {
+    display: none;
+  }
+  .docstep {
+    min-width: 0;
+  }
 }
 
 .docstep.is-done .docstep-dot {

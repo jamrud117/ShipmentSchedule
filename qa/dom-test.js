@@ -8766,11 +8766,12 @@ t("No. Kendaraan / Nopol: tersimpan di kolomnya, tampil di card & detail, masuk 
   const api = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "data", "api.js"), "utf8");
   if (!/vehicle_no: \{ berkas: "migration-vehicle-no\.sql"/.test(api)) throw new Error("simpan cadangan bila kolom belum dimigrasi");
   if (!require("fs").existsSync(require("path").join(__dirname, "..", "migration-vehicle-no.sql"))) throw new Error("berkas migrasi tidak ada");
-  // Form: isian ada, nilainya dirapikan (kapital, spasi tunggal)
+  // Form: isian ada, BEBAS FORMAT -- disimpan persis seperti diketik (tanpa pola, tanpa dikapitalkan)
   const el = w.document.getElementById("fVehicleNo");
   if (!el) throw new Error("isian No. Kendaraan tidak ada di form");
+  if (el.hasAttribute("pattern") || el.classList.contains("text-uppercase")) throw new Error("isian No. Kendaraan masih berpola / dikapitalkan");
   const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "views", "form-router.js"), "utf8");
-  if (!/vehicleNo: \$\("#fVehicleNo"\)\.value\.trim\(\)\.replace\(\/\\s\+\/g, " "\)\.toUpperCase\(\)/.test(src)) throw new Error("nilai form tidak dirapikan");
+  if (!/vehicleNo: \$\("#fVehicleNo"\)\.value\.trim\(\),/.test(src)) throw new Error("nilai form diubah sebelum disimpan");
   // Card & detail
   const s = { id: "v1", mode: "import", transport: "laut", party: "SHENG GUANG", vehicleNo: "B 9123 KXT", status: "berangkat",
     items: [{ namaBarang: "A", qty: 1, bruto: 10 }, { namaBarang: "B", qty: 2, bruto: 5 }] };
@@ -12065,6 +12066,559 @@ t("pustaka dari CDN berversi persis, bukan rentang (@2)", () => {
   });
 });
 
+console.log("\u2014 NOMOR GANDA DI FORM JADWAL \u2014");
+/* Data tiruan dipasang sementara; `data` dikembalikan apa adanya. */
+function denganDataUji(imp, eks, fn) {
+  const simpan = w.eval("[data.import, data.export]");
+  w.__dataUji = [imp, eks];
+  w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+  try {
+    return fn();
+  } finally {
+    w.__dataUji = simpan;
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+    delete w.__dataUji;
+  }
+}
+const DUP_IMPORT = [
+  { id: "d1", mode: "import", party: "SHENG GUANG", houseBL: "HBL-001", masterBL: "MSCU1234567", invoice: "INV/2026/001",
+    noAju: "000020-029142-20260712-197154", docNo: "123456", etd: "2026-08-01", items: [] },
+  { id: "d2", mode: "import", party: "DONGJIN", houseBL: "-", masterBL: "TBA", invoice: "INV-9", noAju: "", docNo: "", etd: "2026-08-02", items: [] },
+];
+const DUP_EXPORT = [
+  { id: "e1", mode: "export", party: "KUMHO", houseBL: "", masterBL: "EXP777", invoice: "INV/2026/001",
+    noAju: "000030-000001-20260801-000001", docNo: "555", etd: "2026-08-03", items: [] },
+];
+t("nomor ganda: B/L-AWB (Master & House silang, kedua buku), Aju (kedua buku), Invoice & No. dokumen (buku sama)", () =>
+  denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
+    const cari = (isi, id) => w.cariNomorGanda(isi, { id: id || "", mode: "import" })
+      .map((g) => g.isian.kunci + ":" + g.kiriman.map((s) => s.id).join("+")).join(" ");
+    eq(cari({ houseBL: "hbl 001" }), "houseBL:d1", "tanpa beda huruf, spasi & tanda baca:");
+    eq(cari({ masterBL: "HBL001" }), "masterBL:d1", "nomor House jadwal lain diketik di kotak Master:");
+    eq(cari({ masterBL: "EXP777" }), "masterBL:e1", "B/L lintas buku:");
+    eq(cari({ noAju: "000030000001-20260801-000001" }), "noAju:e1", "No. Aju lintas buku:");
+    eq(cari({ invoice: "INV/2026/001" }), "invoice:d1", "invoice hanya di buku yang sama:");
+    eq(cari({ docNo: "555" }), "", "No. SPPB tidak dibandingkan dengan No. PEB:");
+    eq(cari({ houseBL: "-", masterBL: "TBA", invoice: "N/A" }), "", "isian pengisi diabaikan:");
+    eq(cari({ houseBL: "XYZ1, HBL-001" }), "houseBL:d1", "beberapa nomor dalam satu kotak:");
+    eq(cari({ houseBL: "HBL-001", masterBL: "MSCU1234567", invoice: "INV/2026/001", docNo: "123456" }, "d1"), "", "jadwal yang sedang diubah tidak ganda dengan dirinya:");
+    eq(cari({ houseBL: "HBL-001", masterBL: "HBL-001" }), "houseBL:d1", "nomor yang sama di Master & House disebut sekali:");
+  }));
+t("nomor ganda di form: kotaknya ditandai, keterangan menyebut jadwalnya, lalu hilang saat diperbaiki", () =>
+  denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
+    const simpanMode = baca("activeMode");
+    const form = w.document.getElementById("viewForm");
+    const tersembunyi = form.classList.contains("d-none");
+    try {
+      w.eval('activeMode = "import"');
+      form.classList.remove("d-none");
+      w.renderFormPage(null);
+      $("#fHouseBL").value = "HBL001";
+      $("#fInvoice").value = "INV/2026/001";
+      const ganda = w.periksaNomorGandaForm();
+      eq(ganda.length, 2, "temuan:");
+      eq($("#fHouseBL").classList.contains("is-ganda"), true, "kotak House ditandai:");
+      eq($("#dup-fHouseBL").hidden, false, "keterangan tampil:");
+      if (!/SHENG GUANG/.test($("#dup-fHouseBL").textContent)) throw new Error("jadwalnya tidak disebut: " + $("#dup-fHouseBL").textContent);
+      eq($("#dup-fHouseBL [data-dup-buka]").dataset.dupBuka, "d1", "tombol Lihat:");
+      const pesan = w.pesanNomorGanda(ganda);
+      if (!/HBL001 \u2014 SHENG GUANG/.test(pesan) || !/No\. Invoice INV\/2026\/001/.test(pesan)) throw new Error("pesan Simpan: " + pesan);
+      $("#fHouseBL").value = "HBL-BARU-01";
+      $("#fInvoice").value = "";
+      w.periksaNomorGandaForm();
+      eq($("#fHouseBL").classList.contains("is-ganda"), false, "tanda dilepas:");
+      eq($("#dup-fHouseBL").hidden, true, "keterangan hilang:");
+    } finally {
+      w.hapusTandaNomorGanda();
+      w.eval("activeMode = " + JSON.stringify(simpanMode));
+      if (tersembunyi) form.classList.add("d-none");
+    }
+  }));
+t("Simpan dengan nomor ganda: ditanyakan dulu, 'Tetap Simpan' baru menyimpan; tanpa nomor ganda langsung", async () => {
+  const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList,
+    data: w.eval("[data.import, data.export]"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+  const form = w.document.getElementById("viewForm");
+  const tersembunyi = form.classList.contains("d-none");
+  let dibuat = 0;
+  const tunggu = () => new Promise((r) => setTimeout(r, 30));
+  try {
+    w.__dataUji = [DUP_IMPORT, DUP_EXPORT];
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+    w.eval('activeMode = "import"; authState.profile = { id: "u1", role: "exim", full_name: "Uji", username: "uji" };');
+    form.classList.remove("d-none");
+    w.renderFormPage(null);
+    w.createShipment = async () => { dibuat++; return { id: "baru" + dibuat }; };
+    w.loadShipments = async () => {};
+    w.goBackToList = () => {};
+    $("#fEtd").value = "2026-08-20";
+    $("#fEta").value = "2026-08-30";
+    w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "SEGMENT MOLD" })]');
+    $("#fHouseBL").value = "HBL-001";
+    $("#confirmTitle").textContent = "";
+    $("#btnSaveShipment").click();
+    await tunggu();
+    eq(dibuat, 0, "belum disimpan sebelum dijawab:");
+    eq($("#confirmTitle").textContent, "Nomor Sudah Dipakai Jadwal Lain", "pertanyaan:");
+    eq($("#confirmActionBtn").textContent, "Tetap Simpan", "tombol lanjut:");
+    eq($("#confirmCancelBtn").textContent, "Periksa Lagi", "tombol kembali:");
+    if (!/House B\/L HBL-001 — SHENG GUANG/.test($("#confirmMessage").textContent)) throw new Error("pesan: " + $("#confirmMessage").textContent);
+    $("#confirmActionBtn").click();
+    await tunggu();
+    eq(dibuat, 1, "disimpan sesudah 'Tetap Simpan':");
+    $("#fHouseBL").value = "HBL-UNIK-77";
+    $("#confirmTitle").textContent = "";
+    $("#btnSaveShipment").click();
+    await tunggu();
+    eq(dibuat, 2, "tanpa nomor ganda langsung tersimpan:");
+    eq($("#confirmTitle").textContent, "", "tanpa pertanyaan:");
+  } finally {
+    w.createShipment = simpan.buat;
+    w.loadShipments = simpan.muat;
+    w.goBackToList = simpan.kembali;
+    w.__dataUji = simpan.data;
+    w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
+    w.eval("authState.profile = " + simpan.profil + "; activeMode = " + JSON.stringify(simpan.mode) + ";");
+    w.hapusTandaNomorGanda();
+    if (tersembunyi) form.classList.add("d-none");
+  }
+});
+t("pesan dialog mempertahankan baris baru (daftar nomor ganda)", () => {
+  const css = fs.readFileSync(path.join(ROOT, "css", "auth.css"), "utf8");
+  if (!/\.dialog-text\s*\{[^}]*white-space:\s*pre-line/.test(css)) throw new Error(".dialog-text tanpa white-space: pre-line");
+});
+
+console.log("\u2014 NOTIFIKASI LONCENG: H-1 ETD & ETA \u2014");
+const NOTIF_KIRIMAN = () => [
+  { id: "n1", mode: "import", party: "ALFA", etd: "2026-08-10", eta: "2026-08-20", status: "process", items: [] }, // ETD besok
+  { id: "n2", mode: "import", party: "BRAVO", etd: "2026-08-01", eta: "2026-08-09", status: "transit", items: [] }, // ETA hari ini
+  { id: "n3", mode: "import", party: "CHARLIE", etd: "2026-08-11", eta: "2026-08-25", status: "process", items: [] }, // H-2: belum
+  { id: "n4", mode: "import", party: "DELTA", etd: "2026-08-08", eta: "2026-08-10", factoryDate: "2026-08-09", status: "arrived", items: [] }, // sudah di pabrik
+  { id: "n6", mode: "import", party: "FOXTROT", etd: "2026-08-05", etdUpdate: "2026-08-10", eta: "2026-08-30", status: "delayed", items: [] }, // revisi ETD besok
+];
+const NOTIF_EKSPOR = () => [
+  { id: "n5", mode: "export", party: "ECHO", etd: "2026-08-09", eta: "2026-08-10", status: "process", items: [] }, // ETD hari ini, ETA besok
+];
+function denganNotifUji(fn) {
+  const simpanUser = w.eval("JSON.stringify(authState.user)");
+  const simpanMuat = baca("shipmentsLoaded");
+  w.eval('authState.user = { id: "uji-notif" }; shipmentsLoaded = true;');
+  w.localStorage.removeItem("exim.notif.uji-notif");
+  try {
+    return fn();
+  } finally {
+    w.localStorage.removeItem("exim.notif.uji-notif");
+    w.eval("authState.user = " + simpanUser + "; shipmentsLoaded = " + JSON.stringify(simpanMuat) + ";");
+  }
+}
+const daftarNotif = (hari) => w.hitungNotifikasi(hari).map((n) => n.s.id + ":" + n.jenis + (n.hariIni ? "!" : "") + (n.dibaca ? "(dibaca)" : "")).join(" ");
+t("notifikasi: aktif sejak H-1 sampai hari H, memakai ETD/ETA yang berlaku; Import yang sudah tiba tidak", () =>
+  denganNotifUji(() => denganDataUji(NOTIF_KIRIMAN(), NOTIF_EKSPOR(), () => {
+    eq(daftarNotif("2026-08-09"), "n5:etd! n2:eta! n1:etd n6:etd n5:eta", "hari ini 09-08:");
+    eq(daftarNotif("2026-08-10"), "n1:etd! n6:etd! n5:eta! n3:etd", "esoknya:");
+    eq(daftarNotif("2026-08-12"), "", "sesudah lewat hilang sendiri:");
+  })));
+t("notifikasi ULANG: ETD diubah sesudah dibaca -> muncul lagi di H-1 tanggal barunya (juga bila dikembalikan)", () =>
+  denganNotifUji(() => {
+    const kiriman = NOTIF_KIRIMAN();
+    return denganDataUji(kiriman, [], () => {
+      const n1 = () => w.hitungNotifikasi(w.__hari).find((n) => n.s.id === "n1" && n.jenis === "etd");
+      w.__hari = "2026-08-09";
+      const awal = n1();
+      eq(!!awal && awal.dibaca, false, "pertama: belum dibaca:");
+      w.tandaiNotifDibaca(awal.kunci);
+      eq(n1().dibaca, true, "sesudah dibaca:");
+      // ETD mundur ke 15 Agustus: notifikasi lama hilang, belum ada yang baru
+      w.eval('data.import.find((s) => s.id === "n1").etd = "2026-08-15"');
+      eq(n1(), undefined, "09-08 sesudah diubah:");
+      w.__hari = "2026-08-14";
+      const ulang = n1();
+      eq(!!ulang && ulang.dibaca, false, "H-1 tanggal baru: muncul lagi, belum dibaca:");
+      eq(ulang.dulu, "2026-08-10", "menyebut tanggal semula:");
+      if (ulang.kunci === awal.kunci) throw new Error("kunci tidak berganti");
+      // Dikembalikan ke tanggal semula -> tetap notifikasi baru
+      w.tandaiNotifDibaca(ulang.kunci);
+      w.eval('data.import.find((s) => s.id === "n1").etd = "2026-08-10"');
+      w.__hari = "2026-08-09";
+      const balik = n1();
+      eq(!!balik && balik.dibaca, false, "dikembalikan: muncul lagi:");
+      delete w.__hari;
+    });
+  }));
+t("lonceng: lencana jumlah belum dibaca, panel per Hari ini / Besok, klik membuka detail (buku lain pun), Tandai semua", () =>
+  denganNotifUji(() => denganDataUji(NOTIF_KIRIMAN(), NOTIF_EKSPOR(), () => {
+    const simpanMode = baca("activeMode");
+    try {
+      w.eval('activeMode = "import"');
+      w.notifSegarkan();
+      const lencana = [...w.document.querySelectorAll("[data-notif-buka] .notif-lencana")];
+      eq(lencana.length, 2, "dua lonceng:");
+      eq(lencana.map((l) => (l.hidden ? "-" : l.textContent)).join(","), "5,5", "jumlah:");
+      if (!/5 belum dibaca/.test($("[data-notif-buka]").getAttribute("aria-label"))) throw new Error("aria-label: " + $("[data-notif-buka]").getAttribute("aria-label"));
+      $("#appSidebar [data-notif-buka]").click();
+      eq($("#notifPanel").hidden, false, "panel terbuka:");
+      eq([...w.document.querySelectorAll("#notifIsi .notif-kelompok")].map((x) => x.textContent).join(","), "Hari ini,Besok", "kelompok:");
+      eq(w.document.querySelectorAll("#notifIsi .notif-item.is-baru").length, 5, "belum dibaca:");
+      const ekspor = w.document.querySelector('#notifIsi [data-notif-jadwal="n5"]');
+      if (!/Berangkat hari ini \u00b7 ETD 09-08-2026/.test(ekspor.textContent)) throw new Error("judul: " + ekspor.textContent.replace(/\s+/g, " "));
+      ekspor.click();
+      eq($("#notifPanel").hidden, true, "panel tertutup:");
+      eq(baca("currentDetailId"), "n5", "detail jadwal Export terbuka dari buku Import:");
+      eq($("#detailSheetTitle").textContent, "ECHO", "judul detail:");
+      eq($("#detailViewBody .detail-badge-mode").textContent, "Export", "label buku:");
+      eq(baca("activeMode"), "import", "buku yang dibuka tidak berubah:");
+      eq(lencana[0].textContent, "4", "satu sudah dibaca:");
+      w.stepDetailView(1);
+      eq(baca("currentDetailId"), "n5", "di luar daftar: tidak melompat ke jadwal lain:");
+      w.closeDetailView();
+      $("#detailViewBody").innerHTML = ""; // isi berbahasa Indonesia jangan tertinggal untuk uji bahasa
+      $("#appSidebar [data-notif-buka]").click();
+      $("#btnNotifBacaSemua").click();
+      eq(lencana[0].hidden, true, "semua dibaca: lencana hilang:");
+      eq($("#btnNotifBacaSemua").hidden, true, "tombol Tandai semua disembunyikan:");
+      w.tutupPanelNotif(false);
+    } finally {
+      w.tutupPanelNotif(false);
+      w.eval("activeMode = " + JSON.stringify(simpanMode));
+    }
+  })));
+t("notifikasi: tanpa jadwal yang mendekat, panel memberi tahu kapan notifikasi muncul", () =>
+  denganNotifUji(() => denganDataUji([], [], () => {
+    w.notifSegarkan();
+    w.bukaPanelNotif(null);
+    try {
+      if (!/berangkat atau tiba besok/.test($("#notifIsi").textContent)) throw new Error("kosong: " + $("#notifIsi").textContent);
+      eq($("[data-notif-buka] .notif-lencana").hidden, true, "lencana:");
+    } finally {
+      w.tutupPanelNotif(false);
+    }
+  })));
+t("notifikasi tidak dihitung di tengah render(), dan tidak memaksa tata letak", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js", "render", "list.js"), "utf8");
+  if (!/jadwalkanNotif\(\)/.test(src)) throw new Error("render() tidak menjadwalkan notifikasi");
+  const nf = fs.readFileSync(path.join(ROOT, "js", "features", "notifikasi.js"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  if (/offsetWidth|getBoundingClientRect|getComputedStyle/.test(nf)) throw new Error("notifikasi.js membaca tata letak");
+});
+
+console.log("\u2014 TIDAK ADA KOTAK ISIAN type=number \u2014");
+t("tidak ada <input type=number> di markup maupun di JS", () => {
+  /* Roda gulir tetikus diam-diam mengubah nilainya saat halaman
+     digulir, panah naik-turunnya sempit, dan pemisah ribuan tidak bisa
+     ditampilkan. Angka memakai kotak teks + inputmode. */
+  const temuan = [];
+  const periksa = (berkas, isi) => isi.split("\n").forEach((b, i) => {
+    if (/type\s*=\s*["']?number\b|type:\s*["']number["']|\.type\s*=\s*["']number["']/.test(b)) temuan.push(berkas + ":" + (i + 1));
+  });
+  periksa("index.html", htmlAsli);
+  (function jalan(d) {
+    fs.readdirSync(d).forEach((f) => {
+      const p = path.join(d, f);
+      if (fs.statSync(p).isDirectory()) jalan(p);
+      else if (p.endsWith(".js")) periksa(path.relative(ROOT, p), fs.readFileSync(p, "utf8"));
+    });
+  })(path.join(ROOT, "js"));
+  eq(temuan.join(", "), "", "type=number:");
+  eq(w.document.querySelectorAll('input[type="number"]').length, 0, "di DOM:");
+});
+t("nomor urut berikutnya: kotak teks berpapan angka, selain angka dibuang saat diketik", () => {
+  const el = $("#counterNext");
+  eq(el.type, "text", "jenis:");
+  eq(el.getAttribute("inputmode"), "numeric", "papan ketik:");
+  el.value = "0a3-6";
+  el.dispatchEvent(new w.Event("input", { bubbles: true }));
+  eq(el.value, "036", "hanya angka:");
+  el.value = "";
+});
+t("kotak jumlah realisasi masterlist & isian kuota/No./anggaran: teks berformat, bukan type=number", () => {
+  const isian = w.mstIsianBaris(null);
+  const no = isian.find((f) => f.key === "no");
+  const kuota = isian.find((f) => f.key === "kuota");
+  eq(no.type || "text", "text", "No.:");
+  eq(no.filter("1a2"), "12", "No. hanya angka:");
+  eq(kuota.type || "text", "text", "kuota:");
+  eq(kuota.filter("12500.5"), "12,500.5", "kuota berpemisah ribuan:");
+  eq(w.mstBacaJumlah("1,250.5"), 1250.5, "baca jumlah:");
+  eq(Number.isNaN(w.mstBacaJumlah("2,5x")), true, "bukan angka:");
+  eq(w.mstBacaJumlah(""), 0, "kosong:");
+});
+
+console.log("\u2014 GULIR TETAP DI TEMPAT SAAT DAFTAR DIGAMBAR ULANG \u2014");
+/* Tata letak tiruan -- jsdom tidak punya mesin tata letak. Daftar sudah
+   tergulir 2600px; kartu di `diAtasLayar` belum digambar, jadi kartu
+   BARU di sana memakai perkiraan 760px kecuali diberi
+   contain-intrinsic-height (persis content-visibility: auto). Judul
+   tanggal 40px. scrollBy tiruan menggeser seluruh isi. */
+function denganTataLetakTiruan(tinggiAsli, diAtasLayar, jalankan, atasDaftar) {
+  const wadah = w.document.getElementById("cardContainer");
+  const diingat = new WeakMap();
+  const gulir = [];
+  let geser = 0;
+  const tinggiKartu = (el) => {
+    const id = el.dataset.id;
+    if (!diAtasLayar.has(id)) return tinggiAsli[id];
+    if (diingat.has(el)) return diingat.get(el);
+    const m = /auto\s+([\d.]+)px/.exec(el.style.containIntrinsicHeight || "");
+    return m ? parseFloat(m[1]) : 760;
+  };
+  const posisi = () => {
+    const atas = (atasDaftar == null ? -2600 : atasDaftar) - geser;
+    const peta = new Map();
+    let y = atas;
+    [...wadah.children].forEach((el) => {
+      const h = el.classList.contains("ship-card") ? tinggiKartu(el) : 40;
+      peta.set(el, { top: y, bottom: y + h, height: h });
+      y += h;
+    });
+    return { atas, bawah: y, peta };
+  };
+  const proto = w.Element.prototype;
+  const asliRect = proto.getBoundingClientRect;
+  const asliGulir = w.scrollBy;
+  proto.getBoundingClientRect = function () {
+    const p = posisi();
+    if (this === wadah) return { top: p.atas, bottom: p.bawah, height: p.bawah - p.atas };
+    return p.peta.get(this) || asliRect.call(this);
+  };
+  w.scrollBy = (o) => { gulir.push(o); geser += o.top; };
+  try {
+    return jalankan({
+      gulir,
+      ingatSemua: () => wadah.querySelectorAll(".ship-card").forEach((el) => diingat.set(el, tinggiAsli[el.dataset.id])),
+      atasKartu: (id) => posisi().peta.get(wadah.querySelector(`.ship-card[data-id="${id}"]`)).top,
+    });
+  } finally {
+    proto.getBoundingClientRect = asliRect;
+    w.scrollBy = asliGulir;
+  }
+}
+const GULIR_DATA = () => ["g1", "g2", "g3", "g4", "g5"].map((id, i) => ({
+  id, mode: "import", status: "process", party: "PIHAK " + id, etd: `2026-11-0${i + 1}`, eta: `2026-11-1${i + 1}`,
+  items: [], docProgress: {},
+}));
+const GULIR_TINGGI = { g1: 700, g2: 905, g3: 812, g4: 760, g5: 690 };
+function siapkanDaftarGulir(el) {
+  el.status.value = ""; el.dari.value = ""; el.sampai.value = ""; el.q.value = "";
+  w.render();
+  eq([...$("#cardContainer").querySelectorAll(".ship-card")].map((k) => k.dataset.id).join(","), "g1,g2,g3,g4,g5", "urutan kartu uji:");
+}
+t("konfirmasi tahap / ubah data saat tergulir: kartu yang terlihat TIDAK bergeser", () =>
+  pakaiJadwalUji(GULIR_DATA(), (el) => {
+    siapkanDaftarGulir(el);
+    denganTataLetakTiruan(GULIR_TINGGI, new Set(["g1", "g2", "g3"]), (tl) => {
+      tl.ingatSemua();
+      const sebelum = tl.atasKartu("g4");
+      if (!(sebelum < 0 && sebelum + 760 > 0)) throw new Error("kartu g4 seharusnya terpotong di atas layar: " + sebelum);
+      // Perubahan data dari kartu g4 (mis. konfirmasi tahap) -> render()
+      w.eval("data.import.find((s) => s.id === 'g4').docProgress = { cipl: { at: '2026-10-14T00:00:00Z', by: 'yogi' } }");
+      w.render();
+      eq(tl.atasKartu("g4"), sebelum, "posisi kartu g4 sesudah render:");
+      // Kartu di atas layar mewarisi tinggi pendahulunya, bukan perkiraan 760px
+      const kartu = (id) => $("#cardContainer").querySelector(`.ship-card[data-id="${id}"]`);
+      eq(kartu("g2").style.containIntrinsicHeight, "auto 905px", "tinggi warisan g2:");
+      eq(tl.gulir.length, 0, "tidak perlu menggulir sama sekali:");
+    });
+  }));
+t("kartu di atas layar hilang dari daftar: yang terlihat tetap di tempat, digeser SEKETIKA", () =>
+  pakaiJadwalUji(GULIR_DATA(), (el) => {
+    siapkanDaftarGulir(el);
+    denganTataLetakTiruan(GULIR_TINGGI, new Set(["g1", "g2", "g3"]), (tl) => {
+      tl.ingatSemua();
+      const sebelum = tl.atasKartu("g4");
+      w.eval("data.import = data.import.filter((s) => s.id !== 'g2')");
+      w.render();
+      eq(tl.atasKartu("g4"), sebelum, "posisi kartu g4:");
+      eq(tl.gulir.length, 1, "satu kali geser:");
+      eq(tl.gulir[0].top, -945, "selisih = tinggi kartu g2 + judul tanggalnya:");
+      eq(tl.gulir[0].behavior, "instant", "bukan gulir halus (html: scroll-behavior smooth):");
+    });
+  }));
+t("daftar belum tergulir: render() tidak mengukur kartu dan tidak menggulir", () =>
+  pakaiJadwalUji(GULIR_DATA(), (el) => {
+    siapkanDaftarGulir(el);
+    denganTataLetakTiruan(GULIR_TINGGI, new Set(), (tl) => {
+      w.render();
+      eq(tl.gulir.length, 0, "gulir:");
+      const diwarisi = [...$("#cardContainer").querySelectorAll(".ship-card")].filter((k) => k.style.containIntrinsicHeight);
+      eq(diwarisi.length, 0, "kartu bertinggi warisan:");
+    }, 180);
+  }));
+
+console.log("\u2014 FOKUS: LANGSUNG SIAP MENGETIK \u2014");
+/* jsdom tidak punya tata letak: semua elemen "tidak tampil" bagi
+   tampilDiLayar(). Selama uji ini dianggap tampil kecuali di dalam
+   kotak dialog yang tertutup (Bootstrap: .modal tanpa .show =
+   display:none); .d-none / [hidden] diperiksa bisaDiisi sendiri. */
+function denganTampil(fn) {
+  const asli = w.tampilDiLayar;
+  w.tampilDiLayar = (el) => !el.closest(".modal:not(.show)");
+  try { return fn(); } finally { w.tampilDiLayar = asli; }
+}
+const tekanEnter = (el, opsi) => el.dispatchEvent(new w.KeyboardEvent("keydown", Object.assign({ key: "Enter", bubbles: true, cancelable: true }, opsi)));
+t("isian pertama = yang KOSONG pertama; yang hanya-baca, nonaktif, tersembunyi, tabindex -1 dilewati", () => denganTampil(() => {
+  const d = w.document.createElement("div");
+  d.innerHTML = `<input id="a1" value="otomatis"><input id="a2" readonly><input id="a3" disabled><div class="d-none"><input id="a4"></div>
+    <input id="a5" tabindex="-1"><input type="checkbox" id="a6"><button id="a7">x</button><select id="a8"><option value="">\u2014 pilih \u2014</option></select><input id="a9">`;
+  w.document.body.appendChild(d);
+  try {
+    eq(w.isianPertama(d).id, "a8", "pilihan bernilai kosong ikut dihitung kosong:");
+    eq(w.isianPertama(d, { pertama: true }).id, "a1", "opsi pertama:");
+    d.querySelector("#a8").remove(); d.querySelector("#a9").value = "x";
+    eq(w.isianPertama(d).id, "a1", "semuanya terisi -> isian pertama:");
+  } finally { d.remove(); }
+}));
+t("pop-up isian: kursor di isian kosong pertama, Enter ke isian berikutnya, Enter terakhir = Simpan", () => denganTampil(() => {
+  let simpan = 0;
+  $("#promptModal").classList.add("show");
+  w.showPrompt({ title: "Baris baru", fields: [
+    { key: "no", label: "No.", value: "12" }, { key: "satuan", label: "Satuan", value: "NIU" },
+    { key: "nama", label: "Uraian" }, { key: "kuota", label: "Kuota", value: "1" } ], onSubmit: () => { simpan++; return "tahan"; } });
+  $("#promptModal").dispatchEvent(new w.Event("shown.bs.modal"));
+  eq(w.document.activeElement.id, "prompt_nama", "No. & Satuan bawaan dilewati:");
+  tekanEnter($("#prompt_nama"));
+  eq(w.document.activeElement.id, "prompt_kuota", "Enter -> isian berikutnya:");
+  eq(simpan, 0, "belum tersimpan:");
+  tekanEnter($("#prompt_kuota"));
+  eq(simpan, 1, "Enter di isian terakhir menyimpan:");
+  tekanEnter($("#prompt_no"), { ctrlKey: true });
+  eq(simpan, 2, "Ctrl+Enter menyimpan dari isian mana pun:");
+  eq($("#prompt_no").getAttribute("enterkeyhint") + "/" + $("#prompt_kuota").getAttribute("enterkeyhint"), "next/done", "label tombol Enter papan ketik:");
+  $("#promptModal").classList.remove("show");
+}));
+t("kotak konfirmasi: hapus -> fokus di Batal; konfirmasi biasa & pemberitahuan -> tombol utama", () => {
+  const kotak = $("#confirmModal");
+  w.showConfirm("Hapus?", () => {});
+  kotak.dispatchEvent(new w.Event("shown.bs.modal"));
+  eq(w.document.activeElement.id, "confirmCancelBtn", "hapus:");
+  w.showConfirm("Tetap simpan?", () => {}, { tone: "warning", confirmText: "Tetap Simpan" });
+  kotak.dispatchEvent(new w.Event("shown.bs.modal"));
+  eq(w.document.activeElement.id, "confirmCancelBtn", "peringatan:");
+  w.showConfirm("Lanjut?", () => {}, { tone: "primary", confirmText: "Ya" });
+  kotak.dispatchEvent(new w.Event("shown.bs.modal"));
+  eq(w.document.activeElement.id, "confirmActionBtn", "biasa:");
+  w.showConfirm("Tersimpan.", () => {}, { tanpaBatal: true, confirmText: "OK" });
+  kotak.dispatchEvent(new w.Event("shown.bs.modal"));
+  eq(w.document.activeElement.id, "confirmActionBtn", "pemberitahuan:");
+  w.document.activeElement.blur();
+});
+t("form nomor dokumen: Enter ke isian berikutnya, tabel rincian mengurus Enter-nya sendiri, akhirnya tombol Ajukan (tidak menerbitkan)", () => denganTampil(() => {
+  const panel = w.docNumPanelEl("invoice");
+  const tersembunyi = $("#viewDocNum").classList.contains("d-none");
+  $("#viewDocNum").classList.remove("d-none");
+  const sebelum = [...panel.classList];
+  panel.classList.add("active");
+  try {
+    eq(panel.hasAttribute("data-enter-lanjut"), true, "panel bertanda:");
+    const isian = [...panel.querySelectorAll(baca("ISIAN_KETIK"))].filter((x) => w.bisaDiisi(x) && !x.closest("[data-enter-lewati]") && !x.closest("[data-enter-sendiri]"));
+    const [satu, dua] = isian;
+    satu.focus();
+    tekanEnter(satu);
+    eq(w.document.activeElement, dua, "Enter -> isian berikutnya:");
+    const terakhir = isian[isian.length - 1];
+    terakhir.focus();
+    tekanEnter(terakhir);
+    eq(w.document.activeElement.id, "btnDocNumSubmit", "isian terakhir -> tombol Ajukan difokus, bukan ditekan:");
+    // Panel yang sedang dibuka di pop-up Ubah Isian -> tombol Simpan pop-up itu
+    $("#dnEditModal").classList.add("show");
+    try {
+      terakhir.focus();
+      tekanEnter(terakhir);
+      eq(w.document.activeElement.id, "btnDnEditSimpan", "di pop-up Ubah Isian:");
+    } finally { $("#dnEditModal").classList.remove("show"); }
+    eq($("#docNumResult").classList.contains("d-none"), true, "tidak ada nomor terbit:");
+    eq(["itemTableBody", "fundLinesBody", "doLinesBody", "poNoList"].filter((id) => !w.document.getElementById(id).hasAttribute("data-enter-sendiri")).join(","), "", "tabel yang mengurus Enter sendiri:");
+  } finally {
+    panel.className = sebelum.join(" ");
+    if (tersembunyi) $("#viewDocNum").classList.add("d-none");
+    w.document.activeElement.blur && w.document.activeElement.blur();
+  }
+}));
+t("form jadwal baru: kursor di isian pertama; Simpan tanpa ETD membuka langkah 1 & membawa kursor ke ETD", () => denganTampil(() => {
+  const form = $("#viewForm");
+  const tersembunyi = form.classList.contains("d-none");
+  try {
+    w.renderFormPage(null);
+    eq(w.document.activeElement.id, "fDocNo", "dibuka:");
+    w.pilihTabForm("pabean");
+    // Ctrl+S = Simpan Jadwal
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }));
+    eq(w.document.querySelector("#detailTabs .nav-link.active").dataset.tab, "umum", "langkah yang dibuka:");
+    eq(w.document.activeElement.id, "fEtd", "kursor:");
+    eq($("#fEtd").classList.contains("is-invalid"), true, "bertanda merah:");
+    $("#fEtd").value = "2026-11-01";
+    $("#fEtd").dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq($("#fEtd").classList.contains("is-invalid"), false, "merahnya hilang begitu diisi:");
+    $("#fEta").value = "2026-11-12";
+    w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true }));
+    eq(w.document.querySelector("#detailTabs .nav-link.active").dataset.tab, "barang", "nama barang kosong -> langkah Daftar Barang:");
+    eq(w.document.activeElement.getAttribute("data-f"), "namaBarang", "kursor di nama barang:");
+    // Klik langkah 3 -> isian kosong pertama di langkah itu
+    $('#detailTabs [data-tab="pabean"]').click();
+    const a = w.document.activeElement;
+    eq(!!a.closest('.tab-pane[data-tabpane="pabean"]') && !a.value, true, "langkah 3:");
+  } finally {
+    $("#fEtd").value = ""; $("#fEta").value = "";
+    if (tersembunyi) form.classList.add("d-none");
+    w.location.hash = "#/";
+  }
+}));
+t("render() tidak membuang fokus & isi kotak kronologi yang sedang diketik", () =>
+  pakaiJadwalUji(GULIR_DATA(), (el) => denganTampil(() => {
+    siapkanDaftarGulir(el);
+    const kotak = $('#cardContainer [data-note-input="g2"]');
+    kotak.focus();
+    kotak.value = "Dokumen sedang";
+    kotak.setSelectionRange(8, 8);
+    w.render(); // mis. pembaruan dari pengguna lain
+    const baru = w.document.activeElement;
+    eq(baru.getAttribute("data-note-input"), "g2", "fokus:");
+    eq(baru === kotak, false, "elemen baru:");
+    eq(baru.value + "|" + baru.selectionStart, "Dokumen sedang|8", "isi & posisi kursor:");
+    // Pil status ikut bertahan
+    $('#cardContainer select[data-action="status"][data-id="g3"]').focus();
+    w.render();
+    eq(w.document.activeElement.getAttribute("data-id") + "/" + w.document.activeElement.getAttribute("data-action"), "g3/status", "pil status:");
+    w.document.activeElement.blur();
+  })));
+t("dialog ditutup: fokus kembali ke tombol pemicunya -- juga kalau kartunya digambar ulang", () =>
+  pakaiJadwalUji(GULIR_DATA(), (el) => denganTampil(() => {
+    siapkanDaftarGulir(el);
+    const kotak = $("#promptModal");
+    const pemicu = () => $('#cardContainer [data-action="docStep"][data-id="g1"][data-step="cipl"]');
+    pemicu().focus();
+    kotak.dispatchEvent(new w.Event("show.bs.modal", { bubbles: true }));
+    $("#prompt_tanggal") ? $("#prompt_tanggal").focus() : kotak.focus();
+    w.render(); // tahapnya tersimpan -> kartu digambar ulang selagi dialog terbuka
+    kotak.dispatchEvent(new w.Event("hidden.bs.modal", { bubbles: true }));
+    eq(w.document.activeElement, pemicu(), "tombol tahap yang sama (elemen baru):");
+    w.document.activeElement.blur();
+  })));
+t("layar masuk: Enter di Username pindah ke Password yang masih kosong", () => {
+  const u = $("#loginUsername"), p = $("#loginPassword");
+  const simpan = [u.value, p.value];
+  try {
+    u.value = "yogi"; p.value = "";
+    u.focus();
+    tekanEnter(u);
+    eq(w.document.activeElement.id, "loginPassword", "kursor:");
+  } finally { u.value = simpan[0]; p.value = simpan[1]; p.blur(); }
+});
+t("CSS fokus: satu cincin untuk semua kotak isian, bentuk elemen tidak berubah saat difokus, tombol tersembunyi tak bisa difokus", () => {
+  const css = ["base", "system", "form", "card", "components", "auth", "dashboard", "docnum"]
+    .map((f) => fs.readFileSync(path.join(ROOT, "css", f + ".css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")).join("\n");
+  if (/138,\s*106,\s*40,\s*0\.15/.test(css)) throw new Error("cincin fokus kuningan pucat masih ada");
+  [...css.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^}]*)\}/g)].forEach((m) => {
+    if (/border-radius/.test(m[2])) throw new Error("bentuk berubah saat fokus: " + m[1].trim().slice(0, 60));
+  });
+  const sys = fs.readFileSync(path.join(ROOT, "css", "system.css"), "utf8");
+  if (!/\.date-field input\[type="date"\]:focus,[\s\S]*?\{\s*outline: none;\s*border-color: var\(--focus-ring\);\s*box-shadow: var\(--sh-focus\);/.test(sys))
+    throw new Error("blok FOKUS kotak isian tidak lengkap");
+  const auth = fs.readFileSync(path.join(ROOT, "css", "auth.css"), "utf8");
+  if (!/\.fab-top \{[^}]*visibility: hidden;/.test(auth) || !/\.fab-top\.is-visible \{[^}]*visibility: visible;/.test(auth))
+    throw new Error("tombol kembali-ke-atas tersembunyi masih bisa difokus");
+  const base = fs.readFileSync(path.join(ROOT, "css", "base.css"), "utf8");
+  if (!/html:has\(#viewForm:not\(\.d-none\)\) \{\s*scroll-padding-top:[^;]+;\s*scroll-padding-bottom:/.test(base))
+    throw new Error("kotak yang difokus bisa tertutup bilah simpan form");
+});
+
 console.log("\u2014 LEBAR KOLOM NAMA BARANG \u2014");
 t("dua min-width kolom nama barang tetap sepasang", () => {
   /* Lebar kolom ditentukan DUA aturan: sel-nya dan textarea di
@@ -14226,9 +14780,11 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
   t("ikon halaman: satu set garis (sprite ik-*) di sidebar, bilah atas, palet & aksi cepat; tiap simbol yang dipakai ada", () => {
     const d = w.document;
     const ada = new Set([...d.querySelectorAll(".ikon-sprite symbol")].map((x) => x.id));
-    const tautan = [...d.querySelectorAll("#appSidebar .site-nav-link")];
+    const tautan = [...d.querySelectorAll("#appSidebar .site-nav a.site-nav-link")];
     eq(tautan.map((a) => a.querySelector("svg.ic use").getAttribute("href")).join(","),
       "#ik-dashboard,#ik-jadwal,#ik-dokumen,#ik-hscode,#ik-masterlist,#ik-akun", "ikon sidebar:");
+    eq([...d.querySelectorAll("[data-notif-buka] svg.ic use")].map((u) => u.getAttribute("href")).join(","),
+      "#ik-lonceng,#ik-lonceng", "lonceng bilah atas & sidebar:");
     if (tautan.some((a) => a.querySelector("i.bi"))) throw new Error("ikon Bootstrap lama tersisa di sidebar");
     const dipakai = [...d.querySelectorAll("use")].map((u) => u.getAttribute("href").slice(1));
     const hilang = dipakai.filter((id) => !ada.has(id));
@@ -14296,11 +14852,71 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       w.eval("activeMode = " + JSON.stringify(simpan));
     }
   });
-  t("kaki halaman: daftar pintasan tidak berakhir dengan pemisah menggantung", () => {
-    const p = [...w.document.querySelectorAll(".footer-text")].find((x) => /Ctrl K/.test(x.textContent));
-    if (/·\s*$/.test(p.textContent)) throw new Error("ID: " + p.textContent.trim());
-    if (/·\s*$/.test(p.getAttribute("data-en"))) throw new Error("EN: " + p.getAttribute("data-en"));
+  t("kaki halaman: pintasan digambar sebagai tuts, termasuk T kembali ke atas, dan disembunyikan di layar sentuh", () => {
+    const baris = [...w.document.querySelectorAll(".footer-pintasan li")];
+    eq(baris.map((li) => [...li.querySelectorAll("kbd")].map((k) => k.textContent).join("+")).join(" "), "Ctrl+K / N T", "tuts:");
+    baris.forEach((li) => {
+      const ket = li.querySelector("span[data-en]");
+      if (!ket || !ket.textContent.trim() || !ket.dataset.en.trim()) throw new Error("keterangan ID/EN kosong: " + li.textContent);
+    });
+    const shell = fs.readFileSync(path.join(ROOT, "css", "shell.css"), "utf8");
+    if (!/@media \(max-width: 767px\), \(hover: none\) \{\s*\.footer-pintasan-kolom \{\s*display: none;/.test(shell))
+      throw new Error("kolom pintasan tidak disembunyikan di layar sentuh");
+    if (!/T kembali ke atas/.test(w.t("m.pintasan.ctrl.k.cari.cepat.pencarian.n.jadwal.")))
+      throw new Error("toast ? belum menyebut T");
   });
+  /* Palet & panel detail bisa tertinggal terbuka oleh uji sebelumnya --
+     uji pintasan dijalankan dengan keduanya tertutup, lalu dipulihkan. */
+  function tanpaLapisanTerbuka(fn) {
+    const lapisan = [$("#cmdkScrim"), $("#detailSheet")].filter((el) => el && el.classList.contains("is-open"));
+    lapisan.forEach((el) => el.classList.remove("is-open"));
+    try { return fn(); } finally { lapisan.forEach((el) => el.classList.add("is-open")); }
+  }
+  t("pintasan T: kembali ke atas -- kecuali sedang mengetik atau ada dialog terbuka", () => tanpaLapisanTerbuka(() => {
+    const panggilan = [];
+    const asli = w.scrollTo;
+    w.scrollTo = (o) => panggilan.push(o);
+    const tekan = (target, opsi) => target.dispatchEvent(new w.KeyboardEvent("keydown", Object.assign({ key: "t", bubbles: true }, opsi)));
+    const cari = $("#searchInput");
+    try {
+      tekan(w.document.body);
+      eq(JSON.stringify(panggilan), JSON.stringify([{ top: 0, behavior: "smooth" }]), "di halaman:");
+      tekan(w.document.body, { key: "T", shiftKey: true });
+      eq(panggilan.length, 2, "huruf besar juga:");
+      tekan(cari);
+      eq(panggilan.length, 2, "sedang mengetik di kotak pencarian:");
+      tekan(w.document.body, { ctrlKey: true });
+      eq(panggilan.length, 2, "Ctrl+T milik peramban:");
+      const modal = $("#confirmModal");
+      modal.classList.add("show");
+      try { tekan(w.document.body); } finally { modal.classList.remove("show"); }
+      eq(panggilan.length, 2, "dialog konfirmasi terbuka:");
+    } finally {
+      w.scrollTo = asli;
+    }
+  }));
+  t("pintasan T saat panel detail terbuka: isi panel yang digulir ke atas, bukan halaman di belakangnya", () => tanpaLapisanTerbuka(() => {
+    const halaman = [], panel = [];
+    const asli = w.scrollTo;
+    const isi = $("#detailViewBody");
+    const sheet = $("#detailSheet");
+    w.scrollTo = (o) => halaman.push(o);
+    isi.scrollTo = (o) => panel.push(o);
+    sheet.classList.add("is-open");
+    try {
+      w.document.body.dispatchEvent(new w.KeyboardEvent("keydown", { key: "t", bubbles: true }));
+      eq(halaman.length, 0, "halaman:");
+      eq(JSON.stringify(panel), JSON.stringify([{ top: 0, behavior: "smooth" }]), "panel:");
+      // N tidak membuang panel detail ke form jadwal baru
+      const hash = w.location.hash;
+      w.document.body.dispatchEvent(new w.KeyboardEvent("keydown", { key: "n", bubbles: true }));
+      eq(w.location.hash, hash, "N saat panel terbuka:");
+    } finally {
+      sheet.classList.remove("is-open");
+      delete isi.scrollTo;
+      w.scrollTo = asli;
+    }
+  }));
   t("petunjuk tombol keyboard disembunyikan di layar sentuh / ponsel (kaki panel detail & palet)", () => {
     const panel = fs.readFileSync(path.join(ROOT, "css", "panel.css"), "utf8");
     if (!/@media \(max-width: 767px\), \(hover: none\) \{\s*\.sheet-foot \.sheet-foot-hint \{\s*display: none;/.test(panel)) throw new Error("kaki panel detail");
@@ -15014,9 +15630,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       mstKlik('#mstPilih [data-mst-pilih="1"] [data-mst-pilih-hapus]');
       eq(mstD.querySelectorAll("#mstPilih [data-mst-pilih]").length, 1, "baris kedua dihapus:");
       if (mstD.querySelector("#mstPilih [data-mst-pilih-hapus]")) throw new Error("satu-satunya baris masih bisa dihapus");
-      // Jumlah boleh berpecahan (kg, meter): kotak angka dengan papan ketik desimal
+      // Jumlah boleh berpecahan (kg, meter): kotak teks berformat dengan papan ketik desimal
       const qty = mstD.querySelector('#mstPilih [data-mst-pilih="0"] [data-mst-pilih-qty]');
-      eq([qty.type, qty.getAttribute("step"), qty.getAttribute("inputmode")].join(","), "number,any,decimal", "kotak jumlah:");
+      eq([qty.type, qty.hasAttribute("data-num"), qty.getAttribute("inputmode")].join(","), "text,true,decimal", "kotak jumlah:");
       qty.value = "1.5";
       eq(JSON.parse(periksa()).baris[0].qty, 1.5, "jumlah berpecahan:");
       // PIB yang sudah punya catatan diberi tahu (mencegah dicatat dua kali)
@@ -15756,7 +16372,10 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(p({ kuota: "0" }), "Kuota harus lebih dari 0.", "kuota nol:");
     eq(p({ kuota: "abc" }), "Kuota harus lebih dari 0.", "kuota bukan angka:");
     eq(p({ kuota: "1.2345" }), "Kuota paling banyak tiga angka di belakang koma.", "kuota terlalu banyak desimal:");
-    eq(JSON.parse(p({ kuota: "2,5", satuan: "" })).quota + "/" + JSON.parse(p({ kuota: "2,5", satuan: "" })).uom, "2.5/NIU", "koma desimal & satuan bawaan:");
+    eq(JSON.parse(p({ kuota: "2.5", satuan: "" })).quota + "/" + JSON.parse(p({ kuota: "2.5", satuan: "" })).uom, "2.5/NIU", "titik desimal & satuan bawaan:");
+    /* Kotaknya teks berformat seperti kotak angka lain (bukan
+       type="number"): koma = pemisah ribuan, titik = desimal. */
+    eq(JSON.parse(p({ kuota: "1,250" })).quota, 1250, "koma = pemisah ribuan:");
     // Mengubah baris: nomornya sendiri boleh dipakai lagi; kuota tidak boleh di bawah yang terpakai
     const b58 = baca("mstBarisDb").find((b) => b.no === 58);
     eq(JSON.parse(p({ no: "58", kuota: "3" }, b58)).quota, 3, "kuota = terpakai boleh:");
@@ -16283,10 +16902,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const h = w.buildDetailHtml(exportDelay());
     if (!/>DELIVERED<\/span>/.test(h)) throw new Error("status export bukan DELIVERED");
     if (/>ARRIVED</.test(h)) throw new Error("label ARRIVED di buku Export");
-    if (!/08-08-2026<br><span class="muted-value">Rencana 10-08-2026<\/span>/.test(h)) throw new Error("ETD berlaku + rencana tidak tampil");
-    if (!/19-08-2026<br><span class="muted-value">Rencana 18-08-2026<\/span>/.test(h)) throw new Error("ETA berlaku + rencana tidak tampil");
+    /* Rencana awal di atas, jadwal baru di bawahnya dengan panah ke
+       bawah -- tanpa kata "Rencana"/"Planned". */
+    const tanggal = (rencana, baru) => new RegExp(`<span class="tgl-rencana">${rencana}</span><span class="tgl-revisi"><i class="bi bi-arrow-down"[^>]*></i><span class="visually-hidden">[^<]*</span>${baru}</span>`);
+    if (!tanggal("10-08-2026", "08-08-2026").test(h)) throw new Error("ETD: rencana di atas, jadwal baru di bawah tidak tampil");
+    if (!tanggal("18-08-2026", "19-08-2026").test(h)) throw new Error("ETA: rencana di atas, jadwal baru di bawah tidak tampil");
+    if (/Rencana|Planned/.test(h)) throw new Error("masih ada label Rencana / Planned");
     const tanpaRevisi = w.buildDetailHtml(exportDelay({ status: "process", etd: "2026-08-20", etdUpdate: "", eta: "2026-08-28", etaUpdate: "" }));
-    if (/Rencana/.test(tanpaRevisi)) throw new Error("baris rencana muncul tanpa revisi");
+    if (/tgl-revisi|tgl-rencana/.test(tanpaRevisi)) throw new Error("panah jadwal baru muncul tanpa revisi");
     if (!/>PROCESS<\/span>/.test(tanpaRevisi)) throw new Error("status Process");
   });
 
@@ -16606,16 +17229,64 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
 
   t("No. Kendaraan kosong tidak memunculkan peringatan kolom yang belum dimigrasi", async () => {
     const kirim = (row) => Promise.resolve(row.vehicle_no !== undefined
-      ? { error: { message: 'column "vehicle_no" of relation "shipments" does not exist' } }
+      ? { error: { code: "42703", message: 'column "vehicle_no" of relation "shipments" does not exist' } }
       : { error: null, data: row });
-    w.eval("kolomBelumAda.clear()");
     $("#toastMsg").textContent = "";
-    await w.simpanDenganCadangan(kirim, { party: "X", vehicle_no: null });
+    await w.simpanDenganCadangan(kirim, { party: "X", vehicle_no: "" });
     eq($("#toastMsg").textContent, "", "kosong: tanpa peringatan:");
-    w.eval("kolomBelumAda.clear()");
     await w.simpanDenganCadangan(kirim, { party: "X", vehicle_no: "B 9123 KXT" });
-    if (!/No\. Kendaraan belum: jalankan migration-vehicle-no\.sql/.test($("#toastMsg").textContent)) throw new Error("terisi tapi tidak diberi tahu: " + $("#toastMsg").textContent);
-    w.eval("kolomBelumAda.clear()");
+    if (!/No\. Kendaraan belum[\s\S]*migration-vehicle-no\.sql/.test($("#toastMsg").textContent)) throw new Error("terisi tapi tidak diberi tahu: " + $("#toastMsg").textContent);
+  });
+
+  t("No. Kendaraan tersimpan sesudah migrasi: kosong dikirim '' (kolom NOT NULL), bukan NULL", async () => {
+    /* Database tiruan yang menegakkan kolom vehicle_no NOT NULL DEFAULT ''
+       persis seperti migration-vehicle-no.sql. Dulu jadwal yang disimpan
+       TANPA No. Kendaraan mengirim NULL -> ditolak -> galatnya disangka
+       "kolom belum dimigrasi" -> kolomnya dibuang dari SEMUA simpan
+       berikutnya sampai halaman dimuat ulang. */
+    const db = { vehicle_no: "" };
+    const kirim = (row) => {
+      if ("vehicle_no" in row && row.vehicle_no === null) {
+        return Promise.resolve({ error: { code: "23502", message: 'null value in column "vehicle_no" of relation "shipments" violates not-null constraint' } });
+      }
+      Object.assign(db, row);
+      return Promise.resolve({ error: null, data: row });
+    };
+    const r1 = await w.simpanDenganCadangan(kirim, w.shipmentToRow({ party: "A", invoice: "", vehicleNo: "" }, "import"));
+    eq(r1.error, null, "simpan tanpa No. Kendaraan:");
+    eq(db.vehicle_no, "", "kosong tersimpan sebagai teks kosong:");
+    eq(db.invoice, null, "isian teks lain tetap NULL saat kosong:");
+    const r2 = await w.simpanDenganCadangan(kirim, w.shipmentToRow({ party: "A", vehicleNo: "b  9123 kxt" }, "import"));
+    eq(r2.error, null, "simpan berikutnya:");
+    eq(db.vehicle_no, "b  9123 kxt", "No. Kendaraan ikut tersimpan:");
+    // Galat lain yang menyebut kolomnya TIDAK disangka kolom belum ada
+    const r3 = await w.simpanDenganCadangan(kirim, { party: "A", vehicle_no: null });
+    eq(!!(r3.error && r3.error.code === "23502"), true, "galat not-null diteruskan apa adanya:");
+    eq(w.nilaiKosongKolom("vehicle_no"), "", "kosong kolom vehicle_no:");
+    eq(w.nilaiKosongKolom("invoice"), null, "kosong kolom lain:");
+  });
+
+  t("kolom belum dikenal API: disimpan tanpa kolomnya, simpan berikutnya mencoba lagi (tanpa muat ulang)", async () => {
+    let kenal = false;
+    const kiriman = [];
+    const kirim = (row) => {
+      kiriman.push(Object.assign({}, row));
+      if (!kenal && "vehicle_no" in row) {
+        return Promise.resolve({ error: { code: "PGRST204", message: "Could not find the 'vehicle_no' column of 'shipments' in the schema cache" } });
+      }
+      return Promise.resolve({ error: null, data: row });
+    };
+    $("#toastMsg").textContent = "";
+    const a = await w.simpanDenganCadangan(kirim, { party: "X", vehicle_no: "B 1 CD" });
+    eq(a.error, null, "tetap tersimpan:");
+    eq(kiriman.length, 2, "dicoba ulang sekali:");
+    eq("vehicle_no" in kiriman[1], false, "percobaan ulang tanpa kolomnya:");
+    if (!/migration-vehicle-no\.sql/.test($("#toastMsg").textContent)) throw new Error("tidak diberi tahu: " + $("#toastMsg").textContent);
+    kenal = true; // migrasinya dijalankan
+    kiriman.length = 0;
+    await w.simpanDenganCadangan(kirim, { party: "X", vehicle_no: "B 1 CD" });
+    eq(kiriman.length, 1, "sekali kirim:");
+    eq(kiriman[0].vehicle_no, "B 1 CD", "kolomnya langsung ikut lagi:");
   });
 
   t("Jenis Transaksi 'Local Sale' kini 'Inland Trucking' -- data lama terbaca dengan nama baru", () => {

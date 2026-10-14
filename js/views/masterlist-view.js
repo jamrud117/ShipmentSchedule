@@ -1543,8 +1543,8 @@ function mstGambarPilih() {
             <option value="">${escapeHtml(tt("— pilih baris —", "— choose a line —"))}</option>
             ${opsi}
           </select>
-          <input type="number" class="login-input mst-pilih-qty" data-mst-pilih-qty min="0" step="any" inputmode="decimal"
-                 value="${escapeAttr(lanjut ? mstBulat(lanjut.u.qty) : x.qty)}" ${lanjut ? "disabled" : ""}
+          <input type="text" class="login-input mst-pilih-qty" data-mst-pilih-qty data-num inputmode="decimal" autocomplete="off"
+                 value="${escapeAttr(formatNumberTyping(String(lanjut ? mstBulat(lanjut.u.qty) : x.qty)))}" ${lanjut ? "disabled" : ""}
                  aria-label="${escapeAttr(tt("Jumlah", "Quantity"))}" placeholder="${escapeAttr(tt("Jumlah", "Qty"))}" />
           <input type="text" class="login-input mst-pilih-nilai" data-mst-pilih-nilai data-num inputmode="decimal" autocomplete="off"
                  value="${escapeAttr(x.nilai || "")}"
@@ -1628,7 +1628,7 @@ function mstGambarKetPilih(i) {
           .join(" · "),
       );
       // Patokan: jumlah x harga satuan masterlist
-      const qty = Number(String(x.qty).replace(",", "."));
+      const qty = mstBacaJumlah(x.qty);
       const taksiran = b.hargaSatuan != null && qty > 0 ? mstUang(qty * b.hargaSatuan) : null;
       if (taksiran != null) taruh = "≈ " + mstAngkaUang(taksiran);
       if (nilai != null && !Number.isNaN(nilai)) {
@@ -1796,7 +1796,7 @@ function mstPeriksaForm() {
     }
     const b = semua.find((r) => r.id === x.itemId);
     if (!b) return { galat: tt("Pilih baris masterlist yang direalisasikan.", "Choose the masterlist line being realized.") };
-    const qty = Number(String(x.qty).replace(",", "."));
+    const qty = mstBacaJumlah(x.qty);
     if (!(qty > 0)) return { galat: tt(`Jumlah untuk baris ${b.no} harus lebih dari 0.`, `The quantity for line ${b.no} must be greater than 0.`) };
     if (mstBulat(qty) !== qty)
       return { galat: tt(`Jumlah untuk baris ${b.no} paling banyak tiga angka di belakang koma.`, `The quantity for line ${b.no} can have at most three decimals.`) };
@@ -2040,7 +2040,7 @@ async function mstSimpanTanggalPib(kunci, label, realisasi, tanggal) {
 function mstIsianBaris(b) {
   const berikut = mstBarisDb.reduce((m, x) => Math.max(m, Number(x.no) || 0), 0) + 1;
   return [
-    { key: "no", label: "No.", type: "number", inputmode: "numeric", value: String(b ? b.no : berikut), lebar: "setengah" },
+    { key: "no", label: "No.", inputmode: "numeric", value: String(b ? b.no : berikut), filter: (v) => v.replace(/\D/g, ""), lebar: "setengah" },
     { key: "satuan", label: tt("Satuan", "Unit"), value: b ? b.uom || "" : "NIU", placeholder: "NIU", lebar: "setengah" },
     { key: "nama", label: tt("Uraian barang", "Item description"), value: b ? b.description || "" : "", placeholder: tt("Cth: HYDRAULIC PRESS", "e.g. HYDRAULIC PRESS") },
     {
@@ -2056,9 +2056,9 @@ function mstIsianBaris(b) {
     {
       key: "kuota",
       label: tt("Kuota", "Quota"),
-      type: "number",
       inputmode: "decimal",
-      value: b ? String(mstBulat(b.quota)) : "1",
+      value: b ? formatNumberTyping(String(mstBulat(b.quota))) : "1",
+      filter: formatNumberTyping,
       hint: b ? mstKetKuota(b) : "",
       lebar: "setengah",
     },
@@ -2080,6 +2080,16 @@ function mstIsianBaris(b) {
 function mstTeksNilai(v) {
   const n = mstNilaiDb(v);
   return n == null ? "" : formatNumberTyping(String(n));
+}
+
+/* Isi kotak jumlah / kuota -> angka; 0 kalau kosong, NaN kalau bukan
+   angka. Ditulis seperti kotak angka lain di aplikasi: koma ribuan,
+   titik desimal ("1,250.5"). */
+function mstBacaJumlah(teks) {
+  const isi = String(teks == null ? "" : teks).trim();
+  if (!isi) return 0;
+  if (!/^[\d,]*\.?\d*$/.test(isi) || !/\d/.test(isi)) return NaN;
+  return parseInputNumber(isi);
 }
 
 /* Isi kotak nilai -> angka, null kalau kosong, NaN kalau bukan angka. */
@@ -2116,7 +2126,7 @@ function mstPeriksaBaris(v, lama) {
     return tt(`No. ${no} sudah dipakai baris lain.`, `No. ${no} is already used by another line.`);
   const nama = String(v.nama || "").replace(/\s+/g, " ").trim();
   if (!nama) return tt("Uraian barang harus diisi.", "The item description is required.");
-  const kuota = Number(String(v.kuota).replace(",", "."));
+  const kuota = mstBacaJumlah(v.kuota);
   if (!(kuota > 0)) return tt("Kuota harus lebih dari 0.", "The quota must be greater than 0.");
   if (mstBulat(kuota) !== kuota) return tt("Kuota paling banyak tiga angka di belakang koma.", "The quota can have at most three decimals.");
   if (lama && kuota < mstTerpakai(lama.id))
@@ -2604,7 +2614,10 @@ if (mstModalEl) {
     if (e.target.closest("#btnMstPilihTambah")) {
       mstBacaPilih();
       mstForm.baris.push({ itemId: "", qty: "", lanjutId: "", nilai: "" });
-      return mstGambarPilih();
+      mstGambarPilih();
+      // Baris pilihan baru langsung siap dipilih barisnya
+      fokuskan(document.querySelector(`#mstPilih [data-mst-pilih="${mstForm.baris.length - 1}"] [data-mst-pilih-baris]`));
+      return;
     }
     const hapus = e.target.closest("[data-mst-pilih-hapus]");
     if (hapus) {
@@ -2620,7 +2633,8 @@ if (mstModalEl) {
     $("#mstRealisasiGalat").classList.add("d-none");
     const x = mstForm.baris[Number(e.target.closest("[data-mst-pilih]").dataset.mstPilih)];
     const b = mstSusun().find((r) => r.id === x.itemId);
-    if (b && !(Number(x.qty) > 0 && Number(x.qty) <= mstBatas(b))) x.qty = String(Math.min(1, mstBatas(b)));
+    const qty = mstBacaJumlah(x.qty);
+    if (b && !(qty > 0 && qty <= mstBatas(b))) x.qty = String(Math.min(1, mstBatas(b)));
     mstGambarPilih();
   });
   mstModalEl.addEventListener("input", (e) => {
@@ -2647,10 +2661,15 @@ if (mstModalEl) {
     }
     mstGambarKetPib(i);
   });
+  /* Enter: ke isian berikutnya (PIB -> tanggal -> baris -> jumlah ->
+     nilai -> catatan); di isian terakhir -> Simpan. Dulu Enter di kotak
+     mana pun langsung menyimpan, termasuk saat baru nomor aju yang
+     terisi. Ctrl+Enter tetap langsung menyimpan. */
   mstModalEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.matches("input")) {
-      e.preventDefault();
-      mstSimpanRealisasi();
-    }
+    if (e.key !== "Enter" || e.isComposing || !e.target.matches("input, select")) return;
+    e.preventDefault();
+    const berikut = e.ctrlKey || e.metaKey ? null : isianBerikutnya(e.target, mstModalEl);
+    if (berikut) fokuskan(berikut, { pilihIsi: true });
+    else mstSimpanRealisasi();
   });
 }

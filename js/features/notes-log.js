@@ -93,11 +93,14 @@ function addDraftNote() {
   const text = el.value.trim();
   if (!text) {
     showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
+    fokuskan(el);
     return;
   }
   draftNotesLog.push(newNoteEntry(text));
   el.value = "";
   renderNotesTimeline();
+  // Siap menulis catatan berikutnya tanpa mengklik kotaknya lagi
+  fokuskan(el, { tanpaGulir: true });
 }
 
 $("#btnAddNote").addEventListener("click", addDraftNote);
@@ -196,9 +199,11 @@ function cardNotesHtml(s) {
     </div>
     <div class="card-notes-list">${list}</div>
     <div class="card-note-add">
-      <input type="text" class="card-note-input" data-note-input="${s.id}"
-             placeholder="${tt("Tambah kronologi (tanggal &amp; jam otomatis)...", "Add a timeline entry (date &amp; time automatic)...")}" />
-      <button type="button" class="btn-note-send" data-action="addNote" data-id="${s.id}">
+      <input type="text" class="card-note-input" data-note-input="${s.id}" enterkeyhint="send"
+             aria-label="${tt("Tambah kronologi — tanggal &amp; jam dicatat otomatis", "Add a timeline note — date &amp; time are recorded automatically")}"
+             placeholder="${tt("Tulis kronologi, Enter untuk kirim", "Write a timeline note, Enter to send")}" />
+      <button type="button" class="btn-note-send" data-action="addNote" data-id="${s.id}"
+              title="${tt("Kirim kronologi", "Send timeline note")}" aria-label="${tt("Kirim kronologi", "Send timeline note")}">
         <i class="bi bi-send"></i>
       </button>
     </div>
@@ -214,6 +219,7 @@ async function addNoteFromCard(id) {
   const text = input.value.trim();
   if (!text) {
     showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
+    fokuskan(input);
     return;
   }
   const log = normalizeNotesLog(s.notesLog, s.notes);
@@ -222,6 +228,9 @@ async function addNoteFromCard(id) {
   s.notes = notesLogToPlainNotes(log);
   input.value = "";
   render();
+  /* Kartunya digambar ulang: kotak kronologi yang baru langsung siap
+     untuk catatan berikutnya (juga saat yang ditekan tombol kirim). */
+  fokuskan(document.querySelector(`[data-note-input="${kutipNilaiSelektor(id)}"]`), { tanpaGulir: true });
   await persistFields(id, { notesLog: s.notesLog, notes: s.notes });
   showToast(t("m.catatan.ditambahkan"), "success");
 }

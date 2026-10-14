@@ -1,17 +1,41 @@
 "use strict";
 
 /* MODAL TABS */
+function pilihTabForm(nama) {
+  $$("#detailTabs .nav-link").forEach((b) => b.classList.toggle("active", b.dataset.tab === nama));
+  $$(".tab-pane").forEach((p) => p.classList.toggle("d-none", p.dataset.tabpane !== nama));
+  // Penanda langkah di kepala halaman ikut berpindah.
+  if (typeof syncFormStep === "function") syncFormStep();
+  return $(`.tab-pane[data-tabpane="${nama}"]`);
+}
+
+/* Isian yang ditunggu di tiap langkah. Daftar Barang bukan "isian kosong
+   pertama" -- di tabel barang itu bisa sel Size baris ketiga -- melainkan
+   nama barang pertama yang masih kosong (atau nama barang pertama). */
+function fokusLangkahForm(pane) {
+  if (!pane) return;
+  if (pane.dataset.tabpane === "barang") {
+    const nama = [...pane.querySelectorAll('#itemTableBody [data-f="namaBarang"]')].filter(bisaDiisi);
+    fokuskan(nama.find(isianKosong) || nama[0]);
+    return;
+  }
+  // Mengubah jadwal: isian pertama; jadwal baru: isian kosong pertama
+  fokusIsianPertama(pane, { pertama: !!$("#fId").value });
+}
+
 $$("#detailTabs .nav-link").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    $$("#detailTabs .nav-link").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    $$(".tab-pane").forEach((p) => p.classList.add("d-none"));
-    $(`.tab-pane[data-tabpane="${btn.dataset.tab}"]`).classList.remove(
-      "d-none",
-    );
-    // Penanda langkah di kepala halaman ikut berpindah.
-    if (typeof syncFormStep === "function") syncFormStep();
-  });
+  btn.addEventListener("click", () => fokusLangkahForm(pilihTabForm(btn.dataset.tab)));
+});
+
+/* Ctrl/⌘ + S di form jadwal = Simpan Jadwal -- tanpa ini peramban
+   menawarkan menyimpan halaman web sebagai berkas. */
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key !== "s" && e.key !== "S")) return;
+  const form = $("#viewForm");
+  if (!form || form.classList.contains("d-none")) return;
+  e.preventDefault();
+  if (document.querySelector(".modal.show")) return;
+  $("#btnSaveShipment").click();
 });
 
 /* TRANSPORT LABEL TOGGLE (modal) */

@@ -395,6 +395,10 @@ function showHsCodeView() {
   showPage("hscode");
   window.scrollTo(0, 0);
   loadHsCodes();
+  /* Halaman ini dibuka untuk MENCARI HS Code: kotak carinya langsung
+     siap diketik (tidak di layar sentuh -- papan ketiknya menutupi
+     daftar yang mau dibaca). */
+  if (!layarSentuh() && hsCodeSearchEl) fokuskan(hsCodeSearchEl, { tanpaGulir: true });
 }
 
 const btnHsCodeAdd = $("#btnHsCodeAdd");

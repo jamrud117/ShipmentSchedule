@@ -52,6 +52,11 @@ function showDocNumView() {
   // Aturan Doc No (vendor tanpa Doc No) & daftar vendor dimuat ulang tiap halaman dibuka
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
+  /* Halaman ini untuk mengisi permintaan nomor: kursor langsung di isian
+     kosong pertama. Tidak di layar sentuh -- membuka halaman bukan
+     berarti mau mengetik, dan papan ketiknya menutupi riwayat nomor. */
+  if (!layarSentuh() && typeof docNumPanelEl === "function")
+    fokusIsianPertama(docNumPanelEl(docNumActiveTab), { tanpaGulir: true });
 }
 
 function showFormView() {
@@ -403,7 +408,14 @@ function renderFormPage(id) {
   recalcCustoms();
   syncAffixState();
   syncFormValidity();
+  // Nomor yang sudah dipakai jadwal lain langsung ditandai (cek-duplikat.js)
+  if (typeof periksaNomorGandaForm === "function") periksaNomorGandaForm();
   showFormView();
+  /* SIAP MENGETIK. Jadwal baru: kursor langsung di isian kosong pertama.
+     Mengubah jadwal: isian pertama -- tapi tidak di layar sentuh, di
+     sana papan ketiknya akan menutupi form padahal yang ingin diubah
+     belum tentu isian pertama. */
+  if (!id || !layarSentuh()) fokusIsianPertama($('.tab-pane[data-tabpane="umum"]'), { pertama: !!id, tanpaGulir: true });
 }
 
 /* PENANDA LANGKAH & KELENGKAPAN */
@@ -436,7 +448,7 @@ function syncFormValidity() {
 
   if (!kurang.length) {
     el.className = "form-validity form-validity--ok";
-    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${tt("Siap disimpan", "Ready to save")}`;
+    el.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${tt("Siap disimpan", "Ready to save")}<span class="form-validity-tuts"><kbd>Ctrl</kbd><kbd>S</kbd></span>`;
   } else {
     el.className = "form-validity form-validity--warn";
     el.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${tt("Belum lengkap", "Incomplete")}: ${escapeHtml(kurang.join(", "))}`;
@@ -601,8 +613,12 @@ function syncStatusTibaHint() {
 
 $("#btnSaveShipment").addEventListener("click", async () => {
   if (!requireEdit()) return;
+  /* Isian yang kurang tidak hanya disebut di pesan: langkahnya dibuka
+     dan kursornya dibawa ke kotak itu, siap diisi. */
   if (!$("#fEtd").value || !$("#fEta").value) {
     showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger");
+    pilihTabForm("umum");
+    tandaiIsianKurang($(!$("#fEtd").value ? "#fEtd" : "#fEta"));
     return;
   }
   const cleanItems = draftItems.filter((it) => it.namaBarang.trim() !== "");
@@ -610,6 +626,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"),
       "danger",
     );
+    pilihTabForm("barang");
+    tandaiIsianKurang($('#itemTableBody [data-f="namaBarang"]'));
     return;
   }
   const routeType = $("#fRouteType").value;
@@ -623,6 +641,10 @@ $("#btnSaveShipment").addEventListener("click", async () => {
       tt('Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".', 'Please add at least 1 Transit Terminal, or change the Route Type to "Direct".'),
       "danger",
     );
+    pilihTabForm("umum");
+    const terminal = $('#routeStopsBody [data-f="terminal"]');
+    if (terminal) tandaiIsianKurang(terminal);
+    else fokuskan($("#btnAddStop"));
     return;
   }
   const id = $("#fId").value;
@@ -642,8 +664,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     vessel: $("#fVessel").value.trim(),
     voyage: $("#fVoyage").value.trim(),
     container: $("#fContainer").value.trim(),
-    // Nomor polisi ditulis kapital & berspasi tunggal: "b  9123 kxt" -> "B 9123 KXT"
-    vehicleNo: $("#fVehicleNo").value.trim().replace(/\s+/g, " ").toUpperCase(),
+    // No. Kendaraan bebas format: disimpan persis seperti diketik (tepi spasi saja yang dibuang)
+    vehicleNo: $("#fVehicleNo").value.trim(),
     muatan: $("#fMuatan").value,
     routeType: routeType,
     origin: $("#fOrigin").value.trim(),
@@ -698,6 +720,25 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     package: joinPackageFields(),
   };
 
+  /* NOMOR GANDA (cek-duplikat.js): B/L-AWB, Invoice, No. Aju, No.
+     SPPB/PEB yang sudah dipakai jadwal lain ditanyakan dulu -- jadwal
+     yang sama tidak terbuat dua kali. Tetap bisa disimpan: Master B/L
+     konsolidasi & invoice yang dikirim bertahap memang sah. */
+  const ganda = periksaNomorGandaForm();
+  if (ganda.length) {
+    showConfirm(pesanNomorGanda(ganda), () => simpanJadwalForm(id, payload, cleanItems, cleanStops), {
+      title: tt("Nomor Sudah Dipakai Jadwal Lain", "Number Already Used by Another Schedule"),
+      confirmText: tt("Tetap Simpan", "Save Anyway"),
+      cancelText: tt("Periksa Lagi", "Review"),
+      tone: "warning",
+      icon: "bi-exclamation-triangle-fill",
+    });
+    return;
+  }
+  await simpanJadwalForm(id, payload, cleanItems, cleanStops);
+});
+
+async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   const btn = $("#btnSaveShipment");
   const originalLabel = btn.innerHTML;
   btn.disabled = true;
@@ -719,4 +760,4 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     btn.disabled = false;
     btn.innerHTML = originalLabel;
   }
-});
+}

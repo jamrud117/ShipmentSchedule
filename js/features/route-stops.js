@@ -125,4 +125,7 @@ $("#btnAddStop").addEventListener("click", () => {
   draftStops.push(newStop());
   renderRouteStopsUI();
   applyTransportLabels();
+  // Kartu terminal baru langsung siap diketik
+  const baru = $$('#routeStopsBody [data-f="terminal"]');
+  if (baru.length) fokuskan(baru[baru.length - 1]);
 });
