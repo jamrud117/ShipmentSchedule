@@ -422,6 +422,11 @@ button.site-nav-link {
   background: var(--sec-50);
   color: var(--teal-dark);
 }
+/* Ubin biru-tengah: tetap terlihat di atas latar notifikasi belum dibaca (--p-50) & saat disorot (--p-100). */
+.notif-ikon--delivery {
+  background: var(--p-200);
+  color: var(--p-600);
+}
 .notif-teks {
   flex: 1;
   min-width: 0;

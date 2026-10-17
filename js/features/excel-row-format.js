@@ -95,7 +95,11 @@ const nativeFormatter = {
 };
 
 /* SALIN KE EXCEL / BULK EXPORT — MODE IMPORT */
-// Gabungan fasilitas 1 PENGIRIMAN
+/* Gabungan fasilitas 1 PENGIRIMAN, satu baris per dokumen: label lalu
+   NOMOR dokumennya -- "MASTER LIST 72/PABEAN-PB/OSS/PMA/2025",
+   "PPH KET-00001/PPUT-CT/KPP.2211/2026". Masterlist yang sama di
+   beberapa barang cukup ditulis sekali; COO bernomor beda tetap
+   terpisah. Bulk Import membacanya balik lewat skbTextToEntries(). */
 function shipmentFacilitiesSummary(items) {
   const seen = new Set();
   const result = [];
@@ -109,10 +113,12 @@ function shipmentFacilitiesSummary(items) {
 
       if (/^MASTERLIST$/i.test(label)) label = "MASTER LIST";
 
+      const nomor = String(sk.nomor || "").replace(/\s+/g, " ").trim();
+      const baris = [label, nomor].filter(Boolean).join(" ");
       // hanya ambil yang belum pernah ada
-      if (!seen.has(label)) {
-        seen.add(label);
-        result.push(label);
+      if (baris && !seen.has(baris)) {
+        seen.add(baris);
+        result.push(baris);
       }
     });
   });

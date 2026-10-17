@@ -339,6 +339,8 @@ function applyImportedBcData(parsed) {
   put("fDocDate", f.docDate);
   put("fParty", resolvePartyForActiveMode(f));
   put("fInvoice", f.invoice);
+  // No. Surat Persetujuan Impor (dokumen kode 959) -- kolom PI templat salin
+  put("fPI", f.pi);
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
   put("fForwarder", f.forwarder);

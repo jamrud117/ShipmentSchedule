@@ -409,6 +409,17 @@ function fundLineTotals(lines) {
 ================================================================== */
 const fundKunciAwb = (x) => String(x == null ? "" : x).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+/* INLAND TRUCKING TIDAK DIPECAH PER BL/AWB. Angkutan darat tidak punya
+   BL/AWB -- isiannya diisi nomor DO / Surat Jalan, dan beberapa nomor DO
+   bukan beberapa kiriman yang harus berbagi tagihan. Seluruh pengajuan
+   dihitung SATU bagian (fundBagiPerAwb), tanpa kolom BL/AWB di rincian.
+   Nama lamanya ("Local Sale") ikut, lewat fundJenisTransaksiBaku. */
+function fundTanpaPecahAwb(p) {
+  const v = p && p.transactionType;
+  const jenis = typeof fundJenisTransaksiBaku === "function" ? fundJenisTransaksiBaku(v) : String(v || "");
+  return /inland|truck/i.test(jenis);
+}
+
 /* "8771 4421 8723 / 877334611529" -> [{ kunci: "877144218723",
    teks: "8771 4421 8723" }, { ... }]. Pemisahnya "/", koma, titik koma,
    "|" atau baris baru; spasi DI DALAM satu nomor bukan pemisah. Nomor
@@ -470,6 +481,11 @@ function fundBagiPerAwb(p) {
   if (!awb.length) return [];
   const total = fundTotalKomponen(d);
   if (awb.length === 1) return [Object.assign({}, awb[0], total, { rata: false, tautan: true })];
+  // Inland Trucking: semua nomor DO / Surat Jalan = satu bagian utuh
+  if (fundTanpaPecahAwb(d)) {
+    const teks = awb.map((a) => a.teks).join(" / ");
+    return [Object.assign({ kunci: fundKunciAwb(teks), teks }, total, { rata: false, tautan: true })];
+  }
 
   const n = awb.length;
   const ada = new Set(awb.map((a) => a.kunci));
@@ -540,8 +556,8 @@ function fundTautanAwbHilang(lines, blAwb) {
    pengajuannya menagih kurang dari dua BL/AWB (tidak ada yang perlu
    dipisahkan). Tautan ke nomor yang hilang dibiarkan -- ditolak saat
    disimpan, supaya pengguna yang memutuskan. */
-function fundRapikanTautanAwb(lines, blAwb) {
-  const banyak = fundDaftarAwb(blAwb).length > 1;
+function fundRapikanTautanAwb(lines, blAwb, transaksi) {
+  const banyak = fundDaftarAwb(blAwb).length > 1 && !fundTanpaPecahAwb({ transactionType: transaksi });
   return (Array.isArray(lines) ? lines : []).map((b) => {
     const k = fundKunciAwb(b && b.awb);
     const salinan = Object.assign({}, b);
@@ -594,6 +610,7 @@ if (typeof module !== "undefined" && module.exports) {
     fundLinesBersih,
     normalisasiBarisDana,
     fundKunciAwb,
+    fundTanpaPecahAwb,
     fundDaftarAwb,
     fundBagiPerAwb,
     fundTautanAwbHilang,
@@ -634,8 +651,16 @@ function pilihanTarifHtml(b) {
    kotaknya sendiri; di mode Rp ia menegaskan tanda minusnya. */
 const teksNominalDiskon = (v) => (v ? "- " + formatRupiah(-v) : "0");
 
-/* BL/AWB yang sedang diketik di isian BL/AWB form Pengajuan Dana. */
+/* Jenis transaksi yang sedang dipilih di form Pengajuan Dana. */
+function fundTransaksiForm() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="transactionType"]');
+  return el ? el.value : "";
+}
+
+/* BL/AWB yang sedang diketik di isian BL/AWB form Pengajuan Dana --
+   kosong untuk Inland Trucking (tidak dipecah, lihat fundTanpaPecahAwb). */
 function fundAwbForm() {
+  if (fundTanpaPecahAwb({ transactionType: fundTransaksiForm() })) return [];
   const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
   return fundDaftarAwb(el ? el.value : "");
 }
@@ -787,6 +812,7 @@ function perbaruiJudulKelompok() {
 function renderFundLines() {
   const body = document.getElementById("fundLinesBody");
   if (!body) return;
+  fundSelaraskanIsianAwb();
   fundLines = normalisasiBarisDana(fundLines);
   if (!fundLines.length) fundLines = [fundLineBaru()];
   if (fundDokumen.length) fundLinesUrutkan();
@@ -853,7 +879,7 @@ function gambarKakiRincian() {
    dibebankan ke tiap kiriman (Biaya Kiriman Ini di panel detail jadwal). */
 function kakiPerAwbHtml() {
   const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
-  const bagian = fundBagiPerAwb({ lines: fundLinesBersih(fundLines), blAwb: el ? el.value : "" });
+  const bagian = fundBagiPerAwb({ lines: fundLinesBersih(fundLines), blAwb: el ? el.value : "", transactionType: fundTransaksiForm() });
   if (bagian.length < 2) return "";
   return `
       <div class="fl-awb-bagian">
@@ -1052,6 +1078,26 @@ document.addEventListener("input", (e) => {
   if (e.target.closest('[data-docnum-panel="fund"] [data-dn="invoiceNo"]') && fundDokumen.length) perbaruiJudulKelompok();
   // BL/AWB diketik -> kolom & pilihan BL/AWB di rincian, dan bagian per BL/AWB
   if (e.target.closest('[data-docnum-panel="fund"] [data-dn="blAwb"]')) renderFundLines();
+});
+
+/* Jenis transaksi berganti -> Inland Trucking menyembunyikan pemisahan per
+   BL/AWB (dan sebaliknya), dan isian BL/AWB-nya menyebut DO / Surat Jalan. */
+function fundSelaraskanIsianAwb() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
+  if (!el) return;
+  const darat = fundTanpaPecahAwb({ transactionType: fundTransaksiForm() });
+  /* Kedua bahasa ditulis ke atribut milik applyI18nSebaris (data-en-ph &
+     simpanan teks Indonesianya, data-id-en-ph): ganti bahasa memakai teks
+     yang sama, bukan placeholder BL/AWB bawaan. */
+  el.dataset.idEnPh = darat ? "No. DO / Surat Jalan" : "No. BL / AWB";
+  el.dataset.enPh = darat ? "DO / delivery note number" : "BL / AWB number";
+  const teks = activeLang === "en" ? el.dataset.enPh : el.dataset.idEnPh;
+  if (el.placeholder !== teks) el.placeholder = teks;
+}
+document.addEventListener("change", (e) => {
+  if (!e.target.closest('[data-docnum-panel="fund"] [data-dn="transactionType"]')) return;
+  fundSelaraskanIsianAwb();
+  renderFundLines();
 });
 
 renderFundLines();

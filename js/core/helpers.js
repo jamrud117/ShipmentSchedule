@@ -259,24 +259,89 @@ function newSkbEntry() {
   return { jenis: "PPH", jenisLainnya: "", nomor: "", tanggal: "" };
 }
 
-// Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis
-/* Dicocokkan tanpa beda huruf, spasi & tanda hubung, ditambah nama
-   tampilnya: "COO" (nama fasilitas E-COO di layar & salinan) dan
-   "MASTER LIST" (tulisan kolom fasilitas di templat salin / Bulk
-   Excel) kembali ke jenisnya sendiri, bukan jadi "Lainnya". */
+/* DOKUMEN PELENGKAP PABEAN (kode CEISA) yang berarti FASILITAS barang.
+
+   Kodenya dari sheet DOKUMEN berkas Excel CEISA dan kolom kode di
+   lembar Pemenuhan Persyaratan PIB. Daftar kode dokumen pelengkap BC
+   2.0: 912 SK Fasilitas BKPM (masterlist), 861 Certificate of Origin,
+   959 Surat Persetujuan Impor Kemendag, 958 Laporan Surveyor. 456 (SKB
+   PPN, "KET-.../SKBPPN-CT/..."), 457 (SKB PPh, ".../PPUT-CT/..."), 912
+   dan 959 terlihat langsung di berkas CEISA pengguna. Kode yang tidak
+   dikenal masih bisa ditebak dari nomornya (jenisFasilitasDariNomor). */
+const KODE_DOKUMEN_FASILITAS = {
+  456: "PPN",
+  457: "PPH",
+  912: "Masterlist",
+  860: "E-COO",
+  861: "E-COO",
+};
+// Surat Persetujuan Impor (PI) -- satu nomor per pengiriman, bukan fasilitas
+const KODE_DOKUMEN_PI = "959";
+
+/* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
+   dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh
+   impor ".../PPUT-CT/...". */
+function jenisFasilitasDariNomor(nomor) {
+  const n = String(nomor || "").toUpperCase();
+  if (/MASTER\s*LIST|PABEAN-PB/.test(n)) return "Masterlist";
+  if (/\bPPN\b|SKB[\s._/-]*PPN/.test(n)) return "PPN";
+  if (/PPUT|\bPPH\b|SKB[\s._/-]*PPH/.test(n)) return "PPH";
+  return "";
+}
+const POLA_NOMOR_PI = /(^|[^A-Z0-9])PI-\d/i;
+
+/* Kenali satu dokumen pelengkap: { jenis, jenisLainnya } kalau ia
+   fasilitas, { pi: true } kalau Persetujuan Impor, null untuk yang
+   lain (invoice, B/L, Laporan Surveyor, ...). `label` hanya ada pada
+   PIB PDF ("SURAT KETERANGAN BEBAS (SKB) PPN"); Excel CEISA cuma
+   memberi kode & nomor. */
+function kenaliDokumenPelengkap(dok) {
+  const kode = String(dok.kode == null ? "" : dok.kode).trim();
+  const label = String(dok.label || "").toUpperCase();
+  if (kode === KODE_DOKUMEN_PI || /PERSETUJUAN IMPOR/.test(label)) return { pi: true };
+  if (/SURAT KETERANGAN BEBAS/.test(label)) {
+    const tipe = (/\(SKB\)\s*([A-Z%0-9]*)/.exec(label) || [])[1] || "";
+    const jenis =
+      SKB_TYPE_OPTIONS.find((o) => o !== "Lainnya" && o.toUpperCase() === tipe) ||
+      KODE_DOKUMEN_FASILITAS[kode];
+    return jenis ? { jenis, jenisLainnya: "" } : { jenis: "Lainnya", jenisLainnya: tipe || "SKB" };
+  }
+  const jenis =
+    KODE_DOKUMEN_FASILITAS[kode] ||
+    (/MASTER\s*LIST|FASILITAS BKPM/.test(label) ? "Masterlist" : "") ||
+    (/CERTIFICATE OF ORIGIN|\bE-?CO\b|KETERANGAN ASAL/.test(label) ? "E-COO" : "");
+  return jenis ? { jenis, jenisLainnya: "" } : null;
+}
+
+/* Satu baris kolom FASILITAS / SKB (templat salin & Bulk Excel) kembali
+   jadi entri: "MASTER LIST 72/PABEAN-PB/OSS/PMA/2025" -> Masterlist +
+   nomornya, "COO" -> E-COO. Label dicocokkan tanpa beda huruf; data
+   lama berisi label saja ("COO, MASTER LIST") tetap terbaca. Teks yang
+   labelnya tidak dikenal utuh menjadi "Lainnya". */
+const LABEL_FASILITAS_TEKS = [
+  [/^MASTER\s*LIST\b/i, "Masterlist"],
+  [/^E-?COO\b/i, "E-COO"],
+  [/^COO\b/i, "E-COO"],
+  [/^(SKB\s*)?PPN\b/i, "PPN"],
+  [/^(SKB\s*)?PPH\b/i, "PPH"],
+  [/^(SKB\s*)?BM\b/i, "BM"],
+];
 function skbTextToEntries(raw) {
-  const kunci = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, "");
   return String(raw || "")
-    .split(",")
+    .split(/[,\n]/)
     .map((bagian) => bagian.trim())
     .filter(Boolean)
-    .map((nama) => {
-      const match =
-        SKB_TYPE_OPTIONS.find((o) => o !== "Lainnya" && kunci(o) === kunci(nama)) ||
-        (kunci(nama) === "coo" ? "E-COO" : null);
-      return match
-        ? { jenis: match, jenisLainnya: "", nomor: "", tanggal: "" }
-        : { jenis: "Lainnya", jenisLainnya: nama, nomor: "", tanggal: "" };
+    .map((teks) => {
+      for (const [pola, jenis] of LABEL_FASILITAS_TEKS) {
+        const m = pola.exec(teks);
+        if (!m) continue;
+        const nomor = teks
+          .slice(m[0].length)
+          .replace(/^[\s:.-]*(NO\.|NO(?=\s)|NOMOR\b)?[\s:.]*/i, "")
+          .trim();
+        return { jenis, jenisLainnya: "", nomor, tanggal: "" };
+      }
+      return { jenis: "Lainnya", jenisLainnya: teks, nomor: "", tanggal: "" };
     });
 }
 

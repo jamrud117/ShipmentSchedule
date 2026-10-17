@@ -281,31 +281,77 @@ function parseBcExcelWorkbook(wb) {
     pph: pphFinal,
   };
 
-  // Fasilitas per barang (SKB PPH & SKB COO/E-COO) — dipetakan lewat BARANGDOKUMEN
+  /* Dokumen pelengkap -> FASILITAS per barang (Masterlist, SKB PPN/PPH,
+     COO) lewat BARANGDOKUMEN, dan No. PI (Persetujuan Impor) untuk
+     pengirimannya -- kenaliDokumenPelengkap() di helpers.js, aturan yang
+     sama dengan PIB PDF. Nomor & tanggal dokumennya ikut dibawa: itulah
+     yang tersalin ke kolom FASILITAS / SKB dan PI di templat salin. */
   const dokumenBySeri = new Map(
     dokumen
       .filter((r) => r["SERI"] != null)
       .map((r) => [String(r["SERI"]).trim(), r]),
   );
-  const FACILITY_DOC_JENIS = { 457: "PPH", 860: "E-COO" };
+  const kenaliBaris = (r, perBarang) => {
+    const nomor = excelStr(r["NOMOR DOKUMEN"]);
+    const kenal = kenaliDokumenPelengkap({ kode: excelStr(r["KODE DOKUMEN"]), nomor });
+    if (kenal || !perBarang) return kenal;
+    /* Kode tak dikenal tapi ditautkan ke barang: tebak dari nomornya.
+       Hanya untuk dokumen per barang -- invoice & B/L tidak pernah
+       ditautkan ke barang, jadi nomornya tidak ikut ditebak. */
+    const jenis = jenisFasilitasDariNomor(nomor);
+    if (jenis) return { jenis, jenisLainnya: "" };
+    return POLA_NOMOR_PI.test(nomor) ? { pi: true } : null;
+  };
+  const entriDokumen = (r, kenal) => ({
+    jenis: kenal.jenis,
+    jenisLainnya: kenal.jenisLainnya || "",
+    nomor: excelStr(r["NOMOR DOKUMEN"]),
+    tanggal: excelValueToISODate(r["TANGGAL DOKUMEN"]),
+  });
   const skbBySeriBarang = new Map();
+  const seriTertaut = new Set();
+  const nomorPi = [];
+  const catatPi = (r) => {
+    const nomor = excelStr(r["NOMOR DOKUMEN"]);
+    if (nomor && !nomorPi.includes(nomor)) nomorPi.push(nomor);
+  };
+  const dokumenLain = [];
   barangDokumen.forEach((row) => {
     const seriBarang = row["SERI BARANG"];
     const seriDokumen = row["SERI DOKUMEN"];
     if (seriBarang == null || seriDokumen == null) return;
-    const docRow = dokumenBySeri.get(String(seriDokumen).trim());
+    const seriDok = String(seriDokumen).trim();
+    const docRow = dokumenBySeri.get(seriDok);
     if (!docRow) return;
-    const jenis = FACILITY_DOC_JENIS[excelStr(docRow["KODE DOKUMEN"])];
-    if (!jenis) return;
+    seriTertaut.add(seriDok);
+    const kenal = kenaliBaris(docRow, true);
+    if (!kenal) {
+      const teks = [excelStr(docRow["KODE DOKUMEN"]), excelStr(docRow["NOMOR DOKUMEN"])]
+        .filter(Boolean)
+        .join(" ");
+      if (teks && !dokumenLain.includes(teks)) dokumenLain.push(teks);
+      return;
+    }
+    if (kenal.pi) return catatPi(docRow);
     const key = String(seriBarang).trim();
     if (!skbBySeriBarang.has(key)) skbBySeriBarang.set(key, []);
-    skbBySeriBarang.get(key).push({
-      jenis,
-      jenisLainnya: "",
-      nomor: excelStr(docRow["NOMOR DOKUMEN"]),
-      tanggal: excelValueToISODate(docRow["TANGGAL DOKUMEN"]),
-    });
+    const daftar = skbBySeriBarang.get(key);
+    const entri = entriDokumen(docRow, kenal);
+    if (!daftar.some((sk) => sk.jenis === entri.jenis && sk.nomor === entri.nomor))
+      daftar.push(entri);
   });
+  /* Dokumen fasilitas yang TIDAK ditautkan ke barang mana pun berlaku
+     untuk pengirimannya -- diterapkan ke semua barang, sama seperti PIB
+     PDF (lembarnya juga tidak memisahkan per barang). */
+  const fasilitasUmum = [];
+  dokumen.forEach((r) => {
+    if (r["SERI"] != null && seriTertaut.has(String(r["SERI"]).trim())) return;
+    const kenal = kenaliBaris(r, false);
+    if (!kenal) return;
+    if (kenal.pi) return catatPi(r);
+    fasilitasUmum.push(entriDokumen(r, kenal));
+  });
+  fields.pi = nomorPi.join(", ");
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);
@@ -372,7 +418,12 @@ function parseBcExcelWorkbook(wb) {
          baris ini dulu menimpa pilihan itu, jadi berkas CEISA yang
          diimpor ke buku Export selalu mendarat sebagai bahan baku dan
          harus dibetulkan satu per satu. */
-      skb: (skbBySeriBarang.get(seriBarang) || []).map((sk) => ({ ...sk })),
+      skb: [...(skbBySeriBarang.get(seriBarang) || []), ...fasilitasUmum]
+        .filter(
+          (sk, i, semua) =>
+            semua.findIndex((x) => x.jenis === sk.jenis && x.nomor === sk.nomor) === i,
+        )
+        .map((sk) => ({ ...sk })),
     };
   });
 
@@ -380,10 +431,20 @@ function parseBcExcelWorkbook(wb) {
     notes.push(
       t("y.fasilitas.diisi.per.barang"),
     );
-  } else {
+  } else if (!fasilitasUmum.length) {
     notes.push(
       t("y.skb.tidak.ditemukan.pemetaan"),
     );
+  }
+  if (fasilitasUmum.length && items.length) {
+    notes.push(
+      t("y.fasilitas.umum.semua.barang", {
+        daftar: fasilitasUmum.map((sk) => `${skbEntryLabel(sk)} ${sk.nomor}`.trim()).join(", "),
+      }),
+    );
+  }
+  if (dokumenLain.length) {
+    notes.push(t("y.dokumen.lain.per.barang", { daftar: dokumenLain.join(", ") }));
   }
 
   if (!items.length) {

@@ -125,7 +125,7 @@ function buildDetailHtml(s) {
         ${fieldPair("PPN", fmtRp(s.ppn))}
         ${fieldPair("PPH", fmtRp(s.pph))}
         ${fieldPair("PDRI", fmtRp(calc.bmPdri))}
-        ${fieldPair(tt("Keterangan PI", "PI Notes"), escapeHtml(dispVal(s.pi)))}
+        ${fieldPair(tt("PI (Persetujuan Impor)", "PI (Import Approval)"), escapeHtml(dispVal(s.pi)))}
       </div>`;
   }
 

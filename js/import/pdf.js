@@ -224,36 +224,33 @@ function parsePibPdfText(text, pagesItems) {
       .trim()
       .replace(/\s+YA\s*\/\s*TIDAK\s*$/i, "")
       .trim();
-    docRows.push({ label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
+    docRows.push({ kode: m[2], label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
   }
   const findDoc = (re) => docRows.find((r) => re.test(r.label));
   const invoiceRow = findDoc(/^INVOICE$/i);
   // "AWB" (udara) atau "B/L" polos (laut) sama-sama berarti dokumen level house
   const houseRow = findDoc(/^(AWB|B\/?L)$/i) || findDoc(/HOUSE/i);
   const masterRow = findDoc(/MASTER\s*(AWB|B\/?L)/i);
-  const skbRows = docRows.filter((r) =>
-    /SURAT KETERANGAN BEBAS/i.test(r.label),
-  );
-  const ecoRow = findDoc(/ELECTRONIC CERTIFICATE OF ORIGIN|\bE-?CO\b/i);
 
-  const skbList = skbRows.map((r) => {
-    const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
-    const raw = (tm && tm[1] ? tm[1] : "").toUpperCase();
-    const known =
-      SKB_TYPE_OPTIONS.includes(raw) && raw !== "LAINNYA" ? raw : null;
-    return known
-      ? {
-          jenis: known,
-          jenisLainnya: "",
-          nomor: r.nomor,
-          tanggal: pibDateToISO(r.tanggalDMY),
-        }
-      : {
-          jenis: "Lainnya",
-          jenisLainnya: raw || "SKB",
-          nomor: r.nomor,
-          tanggal: pibDateToISO(r.tanggalDMY),
-        };
+  /* Fasilitas (SKB, Masterlist, COO) & No. PI dari lembar yang sama --
+     kode dokumennya ikut dibaca, aturannya sama dengan Excel CEISA
+     (kenaliDokumenPelengkap di helpers.js). */
+  const skbList = [];
+  const nomorPi = [];
+  docRows.forEach((r) => {
+    const kenal = kenaliDokumenPelengkap(r);
+    if (!kenal) return;
+    if (kenal.pi) {
+      if (r.nomor && !nomorPi.includes(r.nomor)) nomorPi.push(r.nomor);
+      return;
+    }
+    if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
+    skbList.push({
+      jenis: kenal.jenis,
+      jenisLainnya: kenal.jenisLainnya,
+      nomor: r.nomor,
+      tanggal: pibDateToISO(r.tanggalDMY),
+    });
   });
 
   // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari baris "Nomor Pengajuan : ..
@@ -487,6 +484,7 @@ function parsePibPdfText(text, pagesItems) {
     container: petiKemas.container,
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
+    pi: nomorPi.join(", "),
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
     masterBlDate,
@@ -696,15 +694,6 @@ function parsePibPdfText(text, pagesItems) {
     );
   }
 
-  // E-COO sekarang cuma salah satu entri di array skb yang sama (jenis "E-COO")
-  if (ecoRow) {
-    skbList.push({
-      jenis: "E-COO",
-      jenisLainnya: "",
-      nomor: ecoRow.nomor,
-      tanggal: pibDateToISO(ecoRow.tanggalDMY),
-    });
-  }
   // Lembar Pemenuhan Persyaratan/Fasilitas cuma nyantumin SATU daftar SKB/E-COO utk 1 dokumen PIB
   if (skbList.length) {
     items.forEach((it) => {
@@ -729,7 +718,7 @@ function parsePibPdfText(text, pagesItems) {
     notes.push(
       t("w.tidak.ada.baris.pos.tarif"),
     );
-  if (!skbList.length && !ecoRow)
+  if (!skbList.length)
     notes.push(
       t("w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar"),
     );

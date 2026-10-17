@@ -508,6 +508,8 @@ function mstSaringan() {
 function mstCocok(b, f) {
   if (f.status === "sisa" && !(b.sisa > 0)) return false;
   if (f.status === "habis" && b.sisa > 0) return false;
+  // Sudah ada yang masuk (sebagian atau seluruhnya) -- yang dihitung saat stock opname
+  if (f.status === "pakai" && !(b.terpakai > 0)) return false;
   if (f.status === "utuh" && b.terpakai !== 0) return false;
   if (f.status === "nilai" && MST_NILAI_DICEK.indexOf(b.statusNilai) < 0) return false;
   if (f.lini && b.lini !== f.lini) return false;
@@ -1508,6 +1510,37 @@ function mstBatasNilai(b) {
   return mstUang(b.nilaiSisa + tambahan);
 }
 
+/* NILAI INVOICE OTOMATIS: jumlah x harga satuan masterlist, begitu
+   jumlahnya diisi. null kalau tidak bisa dihitung (nilai masterlist
+   belum diisi, jumlah kosong). Realisasi yang menghabiskan seluruh sisa
+   unit mengambil sisa nilainya kalau bedanya cuma pembulatan sen --
+   1000 / 3 unit = 333.33 x 3 tidak boleh menyisakan 0.01 yang lalu
+   ditandai "selisih". */
+function mstNilaiOtomatis(x, b) {
+  // Sebelum migrasi nilai: nilai yang terisi justru membuat simpannya tertolak (mstPeriksaNilai)
+  if (!b || b.hargaSatuan == null || x.lanjutId || !mstAdaKolom("invoice_value")) return null;
+  const qty = mstBacaJumlah(x.qty);
+  if (!(qty > 0)) return null;
+  const taksiran = mstUang(qty * b.hargaSatuan);
+  const sisaNilai = mstBatasNilai(b);
+  if (qty === mstBatas(b) && sisaNilai != null && sisaNilai >= 0 && Math.abs(sisaNilai - taksiran) < 0.01 * Math.max(1, qty)) return sisaNilai;
+  return taksiran;
+}
+
+/* Kotak nilai yang masih OTOMATIS (belum diketik sendiri, atau
+   dikosongkan lagi) mengikuti jumlahnya -- aturan yang sama dengan BM /
+   PPN / PPH di form jadwal: kosong = otomatis, diisi = manual. */
+function mstIsiNilaiOtomatis(i) {
+  const x = mstForm && mstForm.baris[i];
+  if (!x || !x.nilaiOtomatis) return;
+  // Kiriman lanjutan / baris tanpa nilai masterlist: nilai otomatis sebelumnya tidak berlaku lagi
+  const b = x.lanjutId ? null : mstSusun().find((r) => r.id === x.itemId);
+  const nilai = b ? mstNilaiOtomatis(x, b) : null;
+  x.nilai = nilai == null ? "" : formatNumberTyping(String(nilai));
+  const kotak = document.querySelector(`#mstPilih [data-mst-pilih="${i}"] [data-mst-pilih-nilai]`);
+  if (kotak) kotak.value = x.nilai;
+}
+
 function mstGambarPilih() {
   const wadah = $("#mstPilih");
   if (!wadah || !mstForm) return;
@@ -1627,10 +1660,17 @@ function mstGambarKetPilih(i) {
           .concat(batasNilai != null ? [tt(`sisa nilai ${mstFmtUang(batasNilai)}`, `value left: ${mstFmtUang(batasNilai)}`)] : [])
           .join(" · "),
       );
-      // Patokan: jumlah x harga satuan masterlist
+      // Patokan: jumlah x harga satuan masterlist (mstNilaiOtomatis -- yang juga mengisi kotaknya)
       const qty = mstBacaJumlah(x.qty);
-      const taksiran = b.hargaSatuan != null && qty > 0 ? mstUang(qty * b.hargaSatuan) : null;
+      const taksiran = mstNilaiOtomatis(x, b);
       if (taksiran != null) taruh = "≈ " + mstAngkaUang(taksiran);
+      if (x.nilaiOtomatis && taksiran != null && nilai === taksiran)
+        pesan.push(
+          tt(
+            `Nilai invoice dihitung otomatis: ${mstFmt(qty)} × ${mstFmtUang(b.hargaSatuan)} — ketik sendiri kalau invoicenya berbeda.`,
+            `Invoice value calculated automatically: ${mstFmt(qty)} × ${mstFmtUang(b.hargaSatuan)} — type your own if the invoice differs.`,
+          ),
+        );
       if (nilai != null && !Number.isNaN(nilai)) {
         if (batasNilai != null && nilai > batasNilai + MST_TOLERANSI_NILAI)
           awas.push(tt(`Melebihi sisa nilai masterlist (${mstFmtUang(batasNilai)}).`, `More than the remaining masterlist value (${mstFmtUang(batasNilai)}).`));
@@ -1676,9 +1716,11 @@ function mstBukaRealisasi(opsi) {
         asal: Number(u.qty) || 0,
         asalNilai: mstNilaiDb(u.invoice_value) || 0,
         pib,
-        baris: [{ itemId: u.item_id, qty: String(mstBulat(u.qty)), lanjutId: "", nilai: mstTeksNilai(u.invoice_value) }],
+        /* Nilai yang sudah tercatat tetap milik pengguna; catatan yang
+           belum bernilai baru dihitung begitu jumlahnya diubah. */
+        baris: [{ itemId: u.item_id, qty: String(mstBulat(u.qty)), lanjutId: "", nilai: mstTeksNilai(u.invoice_value), nilaiOtomatis: mstNilaiDb(u.invoice_value) == null }],
       }
-    : { mode: "baru", id: null, asal: 0, asalNilai: 0, pib, baris: [{ itemId: o.itemId || "", qty: o.itemId ? "1" : "", lanjutId: "", nilai: "" }] };
+    : { mode: "baru", id: null, asal: 0, asalNilai: 0, pib, baris: [{ itemId: o.itemId || "", qty: o.itemId ? "1" : "", lanjutId: "", nilai: "", nilaiOtomatis: true }] };
 
   const habis = !u && !mstSusun().some((b) => b.sisa > 0);
   $("#mstRealisasiJudul").textContent = u
@@ -1700,10 +1742,11 @@ function mstBukaRealisasi(opsi) {
     .filter((s) => String(s.noAju || "").trim())
     .map((s) => `<option value="${escapeAttr(s.noAju)}">${escapeHtml(dispVal(s.party))}</option>`)
     .join("");
-  // Baris yang langsung dipilih: jumlah awalnya 1, atau sisanya kalau kurang dari itu
+  // Baris yang langsung dipilih: jumlah awalnya 1, atau sisanya kalau kurang dari itu -- nilainya langsung terhitung
   if (!u && o.itemId) {
     const b = mstSusun().find((r) => r.id === o.itemId);
     if (b) mstForm.baris[0].qty = String(Math.min(1, mstBatas(b)));
+    mstIsiNilaiOtomatis(0);
   }
   mstGambarPib();
   mstForm.pib.forEach((_, i) => {
@@ -2289,17 +2332,26 @@ async function mstSimpanDokumen(ubahan) {
 
 /* ---------- unduh Excel ---------- */
 
+/* Tanggal PIB sebuah baris, berpasangan dengan kolom PIB AJU: satu PIB
+   bertanggal -> tanggal ISO (ditulis sebagai sel tanggal Excel); beberapa
+   PIB -> teks berurutan sama dengan nomornya ("12-05-2025 / -"); tanpa
+   tanggal sama sekali -> kosong. */
+function mstTanggalPibBaris(pibs) {
+  if (!pibs.some((p) => p.tanggal)) return "";
+  if (pibs.length === 1) return pibs[0].tanggal;
+  return pibs.map((p) => (p.tanggal ? fmtDate(p.tanggal) : "-")).join(" / ");
+}
+
 /* Baris lembar Excel -- susunan kolomnya SAMA dengan berkas yang selama
    ini dipakai (NO, DESCRIPTION, SPECIFICATION OF GOODS, UoM, QTTY, USED,
    REMAIN, PIB AJU), jadi hasil unduhan bisa langsung menggantikannya.
-   Nilai (USD) menyusul di BELAKANGNYA -- VALUE, USED VALUE, REMAIN VALUE --
-   supaya kolom-kolom lama tetap di tempatnya. Baris yang nilai
-   masterlist-nya belum diisi: kolom nilainya kosong. */
+   Sesudahnya PIB DATE dan ACTUAL QTY (sengaja kosong: diisi saat stock
+   opname), lalu nilai (USD) -- VALUE, USED VALUE, REMAIN VALUE. Baris yang
+   nilai masterlist-nya belum diisi: kolom nilainya kosong. */
 function mstBarisExcel(baris) {
   return baris.map((b) => {
-    const aju = mstPibBaris(b)
-      .map((p) => p.aju)
-      .join(" / ");
+    const pibs = mstPibBaris(b);
+    const aju = pibs.map((p) => p.aju).join(" / ");
     const kosong = (n) => (n == null ? "" : n);
     return [
       b.no,
@@ -2310,6 +2362,8 @@ function mstBarisExcel(baris) {
       b.terpakai,
       b.sisa,
       /^\d{1,15}$/.test(aju) ? Number(aju) : aju,
+      mstTanggalPibBaris(pibs),
+      "", // ACTUAL QTY
       kosong(b.nilaiKuota),
       b.nilaiKuota != null || b.nilaiTerpakai > 0 ? b.nilaiTerpakai : "",
       kosong(b.nilaiSisa),
@@ -2370,7 +2424,7 @@ async function mstUnduhExcel() {
     wb.created = new Date();
     const ws = wb.addWorksheet("Sheet1");
     // Kolom A kosong, tabel mulai di B -- seperti berkas aslinya
-    ws.columns = [{ width: 2 }, { width: 5 }, { width: 44 }, { width: 58 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }];
+    ws.columns = [2, 5, 44, 58, 8, 8, 8, 11, 22, 13, 13, 16, 16, 16].map((width) => ({ width }));
     const FORMAT_UANG = "#,##0.00";
     const tepi = { style: "thin", color: { argb: "FF000000" } };
     const bingkai = { top: tepi, left: tepi, bottom: tepi, right: tepi };
@@ -2387,14 +2441,17 @@ async function mstUnduhExcel() {
     };
     const tulis = penulis(ws, [1, 2]);
     const U = MST_MATA_UANG;
-    tulis(1, ["NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`], { tebal: true });
+    tulis(1, ["NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", "PIB DATE", "ACTUAL QTY", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`], { tebal: true });
     ws.getRow(1).height = 36;
     mstBarisExcel(baris).forEach((r, i) => {
       const n = i + 2;
+      // Satu PIB bertanggal = sel tanggal sungguhan; beberapa PIB = teks "dd-mm-yyyy / dd-mm-yyyy"
+      const tglPib = /^\d{4}-\d{2}-\d{2}$/.test(r[8]) ? mstTanggalExcel(r[8]) : r[8];
       // REMAIN = QTTY - USED (dan REMAIN VALUE = VALUE - USED VALUE), sebagai rumus
       // dengan hasilnya, supaya tetap benar kalau berkasnya disunting
-      tulis(n, r.slice(0, 6).concat([{ formula: `F${n}-G${n}`, result: r[6] }, r[7], r[8], r[9], r[8] === "" ? "" : { formula: `J${n}-K${n}`, result: r[10] }]));
-      [10, 11, 12].forEach((kol) => (ws.getCell(n, kol).numFmt = FORMAT_UANG));
+      tulis(n, r.slice(0, 6).concat([{ formula: `F${n}-G${n}`, result: r[6] }, r[7], tglPib, r[9], r[10], r[11], r[10] === "" ? "" : { formula: `L${n}-M${n}`, result: r[12] }]));
+      if (tglPib instanceof Date) ws.getCell(n, 10).numFmt = "dd-mm-yyyy";
+      [12, 13, 14].forEach((kol) => (ws.getCell(n, kol).numFmt = FORMAT_UANG));
       ws.getRow(n).height = 30.75;
     });
     const akhir = baris.length + 1;
@@ -2413,13 +2470,16 @@ async function mstUnduhExcel() {
         jumlah("G", ring.terpakai),
         jumlah("H", ring.sisa),
         "",
-        jumlah("J", ring.nilaiKuota),
-        jumlah("K", mstUang(bernilai.reduce((s, b) => s + b.nilaiTerpakai, 0))),
-        jumlah("L", ring.nilaiSisa),
+        "",
+        // ACTUAL QTY masih kosong; jumlahnya ikut terisi begitu hasil opname ditulis
+        jumlah("K", 0),
+        jumlah("L", ring.nilaiKuota),
+        jumlah("M", mstUang(bernilai.reduce((s, b) => s + b.nilaiTerpakai, 0))),
+        jumlah("N", ring.nilaiSisa),
       ],
       { tebal: true },
     );
-    [10, 11, 12].forEach((kol) => (ws.getCell(total, kol).numFmt = FORMAT_UANG));
+    [12, 13, 14].forEach((kol) => (ws.getCell(total, kol).numFmt = FORMAT_UANG));
     ws.views = [{ state: "frozen", ySplit: 1 }];
 
     // Lembar kedua: pasangan nomor aju - tanggal PIB, satu baris per PIB
@@ -2502,6 +2562,7 @@ if (mstHalamanEl) {
     if (cari("#btnMstBaris")) return mstTambahBaris();
     if (cari("#btnMstDokumen")) return mstUbahDokumen();
     if (cari("#btnMstExcel")) return void mstUnduhExcel();
+    if (cari("#btnMstCetak")) return cetakMasterlist();
     if (cari("#btnMstMuat")) return void loadMasterlist();
 
     if ((el = cari("[data-mst-tampilan]"))) {
@@ -2613,7 +2674,7 @@ if (mstModalEl) {
     }
     if (e.target.closest("#btnMstPilihTambah")) {
       mstBacaPilih();
-      mstForm.baris.push({ itemId: "", qty: "", lanjutId: "", nilai: "" });
+      mstForm.baris.push({ itemId: "", qty: "", lanjutId: "", nilai: "", nilaiOtomatis: true });
       mstGambarPilih();
       // Baris pilihan baru langsung siap dipilih barisnya
       fokuskan(document.querySelector(`#mstPilih [data-mst-pilih="${mstForm.baris.length - 1}"] [data-mst-pilih-baris]`));
@@ -2631,20 +2692,28 @@ if (mstModalEl) {
     mstBacaPilih();
     // Baris baru dipilih: jumlah awalnya 1 (atau sisanya), kecuali sudah diisi dan masih muat
     $("#mstRealisasiGalat").classList.add("d-none");
-    const x = mstForm.baris[Number(e.target.closest("[data-mst-pilih]").dataset.mstPilih)];
+    const i = Number(e.target.closest("[data-mst-pilih]").dataset.mstPilih);
+    const x = mstForm.baris[i];
     const b = mstSusun().find((r) => r.id === x.itemId);
     const qty = mstBacaJumlah(x.qty);
     if (b && !(qty > 0 && qty <= mstBatas(b))) x.qty = String(Math.min(1, mstBatas(b)));
+    mstIsiNilaiOtomatis(i);
     mstGambarPilih();
   });
   mstModalEl.addEventListener("input", (e) => {
     // Pesan galat milik isian yang lama: begitu ada yang diubah, ia tidak berlaku lagi
     $("#mstRealisasiGalat").classList.add("d-none");
-    // Jumlah / nilai diketik: keterangan & peringatan nilai baris itu diperbarui
+    /* Jumlah diketik: nilai invoice yang masih otomatis ikut dihitung.
+       Nilai diketik sendiri: tidak lagi otomatis -- kecuali dikosongkan.
+       Keterangan & peringatan nilai baris itu diperbarui. */
     const pilih = mstForm && e.target.matches("[data-mst-pilih-qty], [data-mst-pilih-nilai]") && e.target.closest("[data-mst-pilih]");
     if (pilih) {
+      const i = Number(pilih.dataset.mstPilih);
       mstBacaPilih();
-      return mstGambarKetPilih(Number(pilih.dataset.mstPilih));
+      const x = mstForm.baris[i];
+      if (e.target.matches("[data-mst-pilih-nilai]")) x.nilaiOtomatis = !String(x.nilai || "").trim();
+      else mstIsiNilaiOtomatis(i);
+      return mstGambarKetPilih(i);
     }
     const pib = mstForm && e.target.closest("[data-mst-pib]");
     if (!pib) return;

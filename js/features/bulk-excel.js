@@ -352,8 +352,15 @@ function reconstructShipmentFromGroup(group, mode) {
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);
   }
-  // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per barang)
-  const legacySkbText = mode === "import" ? excelStr(first[idx.SKB]) : "";
+  /* Kolom FASILITAS / SKB: satu dokumen per baris ("MASTER LIST
+     72/PABEAN-PB/...", lihat shipmentFacilitiesSummary), berkas lama
+     berisi label berkoma di baris pertama saja. Semua baris dibaca;
+     kolom ini level pengiriman, jadi hasilnya berlaku untuk semua
+     barang. */
+  const legacySkbText =
+    mode === "import"
+      ? rows.map((row) => excelStr(row[idx.SKB])).filter(Boolean).join("\n")
+      : "";
 
   // BL/AWB: baris pertama = Master
   s.masterBL = excelStr(first[idx.BLAWB]);
@@ -391,7 +398,12 @@ function reconstructShipmentFromGroup(group, mode) {
   });
 
   if (legacySkbText && items.length) {
-    const legacyEntries = skbTextToEntries(legacySkbText);
+    const legacyEntries = skbTextToEntries(legacySkbText).filter(
+      (sk, i, semua) =>
+        semua.findIndex(
+          (x) => x.jenis === sk.jenis && x.jenisLainnya === sk.jenisLainnya && x.nomor === sk.nomor,
+        ) === i,
+    );
     items.forEach((it) => {
       it.skb = legacyEntries.map((sk) => ({ ...sk }));
     });

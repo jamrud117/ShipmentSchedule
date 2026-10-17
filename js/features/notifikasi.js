@@ -1,11 +1,13 @@
 "use strict";
 
 /* ==================================================================
-   NOTIFIKASI KEBERANGKATAN & KEDATANGAN (ikon lonceng)
+   NOTIFIKASI KEBERANGKATAN, KEDATANGAN & DELIVERY TO FACTORY (lonceng)
 
    Pemicu: H-1 dari ETD dan H-1 dari ETA yang BERLAKU -- revisi delay
-   ikut (effectiveEtd / effectiveEta). Notifikasinya tampil sejak H-1
-   ("besok") sampai akhir hari H ("hari ini"), lalu hilang sendiri.
+   ikut (effectiveEtd / effectiveEta) -- dan H-1 dari Estimated Delivery
+   jadwal Import (kolom `actual`: barang diantar ke pabrik). Notifikasinya
+   tampil sejak H-1 ("besok") sampai akhir hari H ("hari ini"), lalu
+   hilang sendiri.
 
    Notifikasi DIHITUNG dari jadwal, bukan baris database: semua yang
    bisa membuka Jadwal melihat yang sama. Yang disimpan -- localStorage,
@@ -14,7 +16,7 @@
      lacak   tanggal yang terakhir DINOTIFIKASI per jadwal & jenis.
 
    NOTIFIKASI ULANG. Kunci tiap notifikasi memuat tanggal & generasinya.
-   Begitu ETD/ETA jadwal yang sudah pernah dinotifikasi berubah,
+   Begitu ETD/ETA/Estimated Delivery yang sudah pernah dinotifikasi berubah,
    generasinya naik: notifikasi lama hilang, dan yang baru muncul (belum
    dibaca) begitu tanggal barunya mencapai H-1 -- juga kalau tanggalnya
    dikembalikan ke yang semula.
@@ -22,6 +24,8 @@
    Buku Import: jadwal yang sudah tiba (In Factory) tidak dinotifikasi.
    Buku Export dinyatakan Delivered sejak ETD-nya lewat (status.js),
    jadi tidak disaring: ETA ke pelabuhan pembeli tetap diberitahukan.
+   Delivery to Factory hanya Import -- kolom `actual` di buku Export
+   adalah tanggal Stuffing, bukan pengantaran ke pabrik.
 ================================================================== */
 
 const NOTIF_AWALAN_SIMPAN = "exim.notif.";
@@ -52,8 +56,12 @@ function notifSimpanKeadaan(k) {
   }
 }
 
+const NOTIF_JENIS = ["etd", "eta", "delivery"];
+
 function notifTanggal(s, jenis) {
-  return (jenis === "etd" ? effectiveEtd(s) : effectiveEta(s)) || "";
+  if (jenis === "etd") return effectiveEtd(s) || "";
+  if (jenis === "eta") return effectiveEta(s) || "";
+  return (s && s.mode !== "export" && s.actual) || "";
 }
 
 /* Notifikasi yang aktif hari ini, sekaligus memperbarui pelacak tanggal.
@@ -69,7 +77,7 @@ function hitungNotifikasi(hariIni) {
   semua.forEach((s) => {
     if (!s || !s.id) return;
     ada.add(String(s.id));
-    ["etd", "eta"].forEach((jenis) => {
+    NOTIF_JENIS.forEach((jenis) => {
       const tgl = notifTanggal(s, jenis);
       const kLacak = s.id + "|" + jenis;
       let lacak = keadaan.lacak[kLacak];
@@ -124,12 +132,12 @@ function hitungNotifikasi(hariIni) {
   }
   if (berubah) notifSimpanKeadaan(keadaan);
 
-  // Hari ini dulu, lalu besok; yang belum dibaca di atas; berangkat sebelum tiba
+  // Hari ini dulu, lalu besok; yang belum dibaca di atas; berangkat, tiba, lalu diantar ke pabrik
   hasil.sort(
     (a, b) =>
       (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : 0) ||
       Number(a.dibaca) - Number(b.dibaca) ||
-      (a.jenis === b.jenis ? 0 : a.jenis === "etd" ? -1 : 1) ||
+      NOTIF_JENIS.indexOf(a.jenis) - NOTIF_JENIS.indexOf(b.jenis) ||
       String(a.s.party || "").localeCompare(String(b.s.party || "")),
   );
   return hasil;
@@ -153,13 +161,23 @@ function tandaiNotifDibaca(kunciDaftar) {
 
 function notifJudul(n) {
   const kapan = n.hariIni ? tt("hari ini", "today") : tt("besok", "tomorrow");
+  if (n.jenis === "delivery")
+    return tt(`Dikirim ke pabrik ${kapan}`, `Delivery to factory ${kapan}`) + ` · Estimated Delivery ${fmtDate(n.tgl)}`;
   return n.jenis === "etd"
     ? tt(`Berangkat ${kapan}`, `Departs ${kapan}`) + ` · ETD ${fmtDate(n.tgl)}`
     : tt(`Tiba ${kapan}`, `Arrives ${kapan}`) + ` · ETA ${fmtDate(n.tgl)}`;
 }
 
+/* Ikon per jenis: berangkat, tiba, diantar ke pabrik. */
+const NOTIF_IKON = { etd: "bi-arrow-up-right", eta: "bi-arrow-down-left", delivery: "bi-truck" };
+
 function notifMeta(n) {
   const s = n.s;
+  if (n.jenis === "delivery") {
+    // Dari pelabuhan tujuan ke pabrik: siapa yang mengantar & kendaraannya
+    const dari = hasMeaningfulValue(s.destination) ? `${s.destination} → ${tt("Pabrik", "Factory")}` : "";
+    return ["Import", dari, s.forwarder, s.vehicleNo, s.container].filter(hasMeaningfulValue).join(" · ");
+  }
   const rute = [s.origin, s.destination].filter(hasMeaningfulValue).join(" → ");
   const angkut = carrierNameFromShipment(s);
   const bl = [s.houseBL, s.masterBL].find(hasMeaningfulValue) || "";
@@ -168,7 +186,7 @@ function notifMeta(n) {
 
 function notifItemHtml(n) {
   return `<button type="button" class="notif-item${n.dibaca ? "" : " is-baru"}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-jadwal="${escapeAttr(n.s.id)}">
-    <span class="notif-ikon notif-ikon--${n.jenis}" aria-hidden="true"><i class="bi ${n.jenis === "etd" ? "bi-arrow-up-right" : "bi-arrow-down-left"}"></i></span>
+    <span class="notif-ikon notif-ikon--${n.jenis}" aria-hidden="true"><i class="bi ${NOTIF_IKON[n.jenis]}"></i></span>
     <span class="notif-teks">
       <span class="notif-judul">${escapeHtml(notifJudul(n))}</span>
       <span class="notif-pihak">${escapeHtml(dispVal(n.s.party))}</span>
@@ -187,7 +205,10 @@ function gambarPanelNotif() {
   if (tombolSemua) tombolSemua.hidden = belum === 0;
   if (!notifDaftar.length) {
     isi.innerHTML = `<div class="notif-kosong"><i class="bi bi-bell-slash" aria-hidden="true"></i><p>${escapeHtml(
-      tt("Belum ada notifikasi. Jadwal yang berangkat atau tiba besok akan muncul di sini.", "No notifications yet. Schedules departing or arriving tomorrow will appear here."),
+      tt(
+        "Belum ada notifikasi. Jadwal yang berangkat, tiba, atau dikirim ke pabrik besok akan muncul di sini.",
+        "No notifications yet. Schedules departing, arriving or being delivered to the factory tomorrow will appear here.",
+      ),
     )}</p></div>`;
     return;
   }

@@ -378,7 +378,8 @@
         </button>
 
         <!-- NOTIFIKASI (js/features/notifikasi.js): jadwal yang berangkat /
-             tiba besok (H-1 ETD & ETA). Panelnya #notifPanel. -->
+             tiba / dikirim ke pabrik besok (H-1 ETD, ETA & Estimated
+             Delivery). Panelnya #notifPanel. -->
         <button type="button" class="site-nav-link notif-pemicu" data-notif-buka aria-controls="notifPanel" aria-expanded="false" aria-label="Notifikasi">
           <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-lonceng"></use></svg><span data-en="Notifications">Notifikasi</span>
           <span class="notif-lencana" hidden>0</span>
@@ -904,6 +905,10 @@
               <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstExcel">
                 <i class="bi bi-file-earmark-excel"></i> <span data-en="Download Excel">Unduh Excel</span>
               </button>
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnMstCetak"
+                      title="Cetak lembar stock opname dari baris yang sedang tampil" data-en-title="Print a stock count sheet of the lines shown">
+                <i class="bi bi-printer"></i> <span data-en="Print">Cetak</span>
+              </button>
               <button type="button" class="btn btn-form-cancel mst-tombol mst-ubah" id="btnMstBaris">
                 <i class="bi bi-plus-lg"></i> <span data-en="Add line">Tambah baris</span>
               </button>
@@ -931,6 +936,7 @@
               <option value="" data-en="All lines">Semua baris</option>
               <option value="sisa" data-en="Quota remaining">Masih ada sisa</option>
               <option value="habis" data-en="Fully used">Habis</option>
+              <option value="pakai" data-en="With realizations">Ada realisasi</option>
               <option value="utuh" data-en="Not used yet">Belum dipakai</option>
               <option value="nilai" data-en="Value needs checking">Nilai perlu dicek</option>
             </select>
@@ -2599,11 +2605,22 @@
                   Terbit</span
                 >
                 <div class="docnum-history-aksi">
-                  <!-- Saringan rentang TANGGAL pengajuan (kolom Tanggal) --
-                       hanya Pengajuan Dana, tidak di tab Summary & Report
-                       (punya saringannya sendiri). Digambar
-                       js/views/docnum-view.js lewat buatRentangTanggal(). -->
-                  <div class="dn-saring-tanggal d-none" id="docNumRentang"></div>
+                  <!-- Saringan rentang TANGGAL -- hanya Pengajuan Dana, tidak
+                       di tab Summary & Report (punya saringannya sendiri).
+                       Tanggal dasarnya dipilih: Terbit, Invoice, Jatuh Tempo,
+                       atau Bayar (DN_DASAR_TANGGAL). Pemilih rentangnya
+                       digambar js/views/docnum-view.js lewat buatRentangTanggal(). -->
+                  <div class="dn-saring-grup d-none">
+                    <label class="dn-saring-dasar">
+                      <select id="docNumDasarTanggal" aria-label="Rentang tanggal menurut" data-en-aria="Date range by">
+                        <option value="terbit" data-en="Date of Issue">Tanggal Terbit</option>
+                        <option value="invoice" data-en="Invoice Date">Tanggal Invoice</option>
+                        <option value="jatuhTempo" data-en="Due Date">Jatuh Tempo</option>
+                        <option value="bayar" data-en="Paid Date">Tanggal Bayar</option>
+                      </select>
+                    </label>
+                    <div class="dn-saring-tanggal d-none" id="docNumRentang"></div>
+                  </div>
                   <!-- Saringan status bayar -- hanya Pengajuan Dana, dan
                        tidak di tab Summary (punya saringannya sendiri).
                        Dikirim ke database seperti kotak cari. -->
@@ -3637,14 +3654,14 @@
               </div>
               <div class="s9">
                 <label class="form-label" for="fPI"
-                   data-en="PI Notes (Import Notification)">Keterangan PI (Pemberitahuan Impor)</label
+                   data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
                 >
                 <input
                   type="text"
                   class="form-control"
                   id="fPI"
-                  placeholder="Keterangan pemberitahuan impor"
-                  data-i18n-ph="ph.keterangan.pemberitahuan.impor"
+                  placeholder="Nomor PI, mis. 04.PI-02.26.0131"
+                  data-i18n-ph="ph.nomor.persetujuan.impor"
                 />
               </div>
             </div>
@@ -3701,7 +3718,7 @@
         </button>
       </div>
       <div class="notif-isi" id="notifIsi"></div>
-      <div class="notif-kaki" data-en="Appears one day before ETD &amp; ETA, until the day itself.">Muncul H-1 sebelum ETD &amp; ETA, sampai hari H.</div>
+      <div class="notif-kaki" data-en="Appears one day before ETD, ETA &amp; Estimated Delivery, until the day itself.">Muncul H-1 sebelum ETD, ETA &amp; Estimated Delivery, sampai hari H.</div>
     </section>
 
     <div class="sheet-scrim" id="detailScrim" hidden></div>
@@ -4366,6 +4383,7 @@
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
     <script src="js/views/masterlist-view.js"></script>
+    <script src="js/features/masterlist-print.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 
