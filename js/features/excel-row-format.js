@@ -213,7 +213,8 @@ function buildExcelCopyRows(s, formatter) {
       formatter.num(ppnVal, 2), // 20 PPN 11%
       formatter.num(pphVal, 2), // 21 PPH
       formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
-      formatter.text(s.pi), // 23 PI
+      // 23 PI -- LS (Laporan Surveyor) ikut di baris sendiri: "LS <nomor>" (gabungPiLs)
+      formatter.text(gabungPiLs(s.pi, s.ls)),
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE

@@ -191,7 +191,13 @@ function showDbErrorState() {
    Tiap penyimpanan mencoba kolomnya lagi (tidak diingat sepanjang sesi):
    begitu migrasinya dijalankan, simpan berikutnya langsung ikut, tanpa
    perlu memuat ulang halaman. */
-const KOLOM_OPSIONAL = { vehicle_no: { berkas: "migration-vehicle-no.sql", nama: "No. Kendaraan" } };
+const KOLOM_OPSIONAL = {
+  vehicle_no: { berkas: "migration-vehicle-no.sql", nama: "No. Kendaraan" },
+  ls: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "LS" },
+  invoice_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Invoice" },
+  master_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Master B/L-AWB" },
+  house_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal House B/L-AWB" },
+};
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
    PGRST204 = kolom tidak ada di cache skema PostgREST, 42703 = kolom
@@ -209,24 +215,31 @@ function kolomBelumDikenal(error) {
     error.code === "42703" ||
     /could not find the '\w+' column|column "?[\w.]+"? (?:of relation "?[\w.]+"? )?does not exist/i.test(pesan);
   if (!kolomHilang) return null;
-  return Object.keys(KOLOM_OPSIONAL).find((k) => pesan.includes(k)) || null;
+  // Nama kolom utuh: "ls" tidak boleh tertangkap dari kata lain ("details")
+  return Object.keys(KOLOM_OPSIONAL).find((k) => new RegExp(`(^|[^\\w])${k}([^\\w]|$)`).test(pesan)) || null;
 }
 
+/* Satu kolom yang belum dikenal dibuang per percobaan -- beberapa kolom
+   dari migrasi yang sama (LS & tanggal dokumen) bisa sama-sama belum
+   ada, jadi dicoba sampai tidak ada lagi yang ditolak. */
 async function simpanDenganCadangan(kirim, row) {
   let hasil = await kirim(row);
-  const kolom = kolomBelumDikenal(hasil.error);
-  if (kolom) {
+  const tertinggal = [];
+  for (let i = 0; i < Object.keys(KOLOM_OPSIONAL).length; i++) {
+    const kolom = kolomBelumDikenal(hasil.error);
+    if (!kolom || !(kolom in row)) break;
     /* Diberi tahu HANYA kalau ada isian yang benar-benar tidak ikut
        tersimpan. Kolom yang memang kosong (No. Kendaraan tidak diisi)
        tidak kehilangan apa pun -- peringatan di situ cuma gangguan. */
-    const adaIsi = row[kolom] != null && String(row[kolom]).trim() !== "";
+    if (row[kolom] != null && String(row[kolom]).trim() !== "") tertinggal.push(KOLOM_OPSIONAL[kolom]);
     delete row[kolom];
-    const k = KOLOM_OPSIONAL[kolom];
-    if (adaIsi && typeof showToast === "function") {
-      showToast(tt(`Jadwal tersimpan, tetapi ${k.nama} belum: database belum mengenal kolomnya. Jalankan ${k.berkas} di Supabase (aman diulang).`,
-        `Schedule saved, but ${k.nama} was not: the database does not know the column yet. Run ${k.berkas} in Supabase (safe to re-run).`), "warning");
-    }
     hasil = await kirim(row);
+  }
+  if (tertinggal.length && typeof showToast === "function") {
+    const nama = tertinggal.map((k) => k.nama).join(", ");
+    const berkas = [...new Set(tertinggal.map((k) => k.berkas))].join(" & ");
+    showToast(tt(`Jadwal tersimpan, tetapi ${nama} belum: database belum mengenal kolomnya. Jalankan ${berkas} di Supabase (aman diulang).`,
+      `Schedule saved, but ${nama} was not: the database does not know the column yet. Run ${berkas} in Supabase (safe to re-run).`), "warning");
   }
   return hasil;
 }

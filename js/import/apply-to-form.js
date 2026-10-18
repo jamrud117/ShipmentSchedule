@@ -54,7 +54,9 @@ const CIPL_BLOCKED_FIELDS = new Set([
   "fDocDate",
   "fDocNo",
   "fMasterBL",
+  "fMasterBLDate",
   "fHouseBL",
+  "fHouseBLDate",
   "fNoAju",
 ]);
 
@@ -339,10 +341,29 @@ function applyImportedBcData(parsed) {
   put("fDocDate", f.docDate);
   put("fParty", resolvePartyForActiveMode(f));
   put("fInvoice", f.invoice);
+  /* Tanggal invoice: dari CIPL (pembaca lama menamainya docDate --
+     tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
+     lembar dokumen PIB/PEB. */
+  put("fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : ""));
   // No. Surat Persetujuan Impor (dokumen kode 959) -- kolom PI templat salin
   put("fPI", f.pi);
+  // No. Laporan Surveyor (dokumen kode 958) -- ikut kolom PI templat salin
+  put("fLS", f.ls);
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
+  /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
+     kosong pasangannya diisi sesudahnya (lengkapiTanggalBl). PIB PDF
+     menamainya masterBlDate / houseBlDate. */
+  [
+    ["fMasterBLDate", f.masterBLDate || f.masterBlDate],
+    ["fHouseBLDate", f.houseBLDate || f.houseBlDate],
+  ].forEach(([id, nilai]) => {
+    if (setImportField(id, nilai, src)) {
+      filled++;
+      delete $("#" + id).dataset.ikut;
+    }
+  });
+  if (typeof lengkapiTanggalBl === "function") lengkapiTanggalBl();
   put("fForwarder", f.forwarder);
   put("fVessel", f.vessel);
   put("fVoyage", f.voyage);

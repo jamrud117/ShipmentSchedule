@@ -46,7 +46,9 @@ async function extractPdfText(file) {
     pageTexts.push(groupPdfItemsIntoLines(content.items).join("\n"));
     pagesItems.push(content.items);
   }
-  return { text: pageTexts.join("\n\n"), pagesItems };
+  /* pdf & lib ikut dikembalikan: mesin EXIM (impor CIPL di dispatch.js)
+     membaca halamannya sendiri lewat EximEngine.pdfPagesFromDocument. */
+  return { text: pageTexts.join("\n\n"), pagesItems, pdf, lib: pdfjsLib };
 }
 
 function pibDateToISO(dmy) {
@@ -237,11 +239,13 @@ function parsePibPdfText(text, pagesItems) {
      (kenaliDokumenPelengkap di helpers.js). */
   const skbList = [];
   const nomorPi = [];
+  const nomorLs = [];
   docRows.forEach((r) => {
     const kenal = kenaliDokumenPelengkap(r);
     if (!kenal) return;
-    if (kenal.pi) {
-      if (r.nomor && !nomorPi.includes(r.nomor)) nomorPi.push(r.nomor);
+    if (kenal.pi || kenal.ls) {
+      const daftar = kenal.pi ? nomorPi : nomorLs;
+      if (r.nomor && !daftar.includes(r.nomor)) daftar.push(r.nomor);
       return;
     }
     if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
@@ -484,7 +488,9 @@ function parsePibPdfText(text, pagesItems) {
     container: petiKemas.container,
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
+    invoiceDate: invoiceRow ? pibDateToISO(invoiceRow.tanggalDMY) : "",
     pi: nomorPi.join(", "),
+    ls: nomorLs.join(", "),
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
     masterBlDate,

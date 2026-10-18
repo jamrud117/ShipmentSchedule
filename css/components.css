@@ -491,6 +491,22 @@ body:not(.punya-kerangka) .toast-stack {
   }
 }
 
+/* Dua isian berdampingan dalam satu sel kisi (PI & LS di sel .s9):
+   label & kotaknya tetap sejajar dengan isian lain di baris itu. */
+.fgrid > .fl-dua {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+}
+.fl-dua > * {
+  min-width: 0;
+}
+@media (max-width: 767.98px) {
+  .fgrid > .fl-dua {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Tanggal + jam dalam satu sel: [ tanggal ][ jam ]. */
 .fl-pair {
   display: flex;

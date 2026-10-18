@@ -26,8 +26,9 @@ const authState = { user: null, profile: null, siap: false };
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
    `halaman: null` = semua halaman. Kuncinya sama dengan PAGE_VIEWS di
-   form-router.js. "form" (tambah/ubah jadwal) dan "accounts" tidak
-   pernah masuk daftar peran hanya-baca. "schedule" ada di SEMUA peran:
+   form-router.js. "form" (tambah/ubah jadwal), "accounts" dan "checker"
+   (Cek PIB/PEB -- memeriksa draft CEISA sebelum diajukan, pekerjaan
+   EXIM) tidak pernah masuk daftar peran hanya-baca. "schedule" ada di SEMUA peran:
    ke sanalah router melempar balik alamat yang tertutup.
 
    `ket` = keterangan di pemilih peran halaman Akun.

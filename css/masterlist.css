@@ -791,8 +791,13 @@
 .mst-pilih-kepala .prompt-label {
   margin-bottom: 0;
 }
+/* Jumlah & Nilai invoice (USD): kotak dan kepala kolomnya rata tengah. */
+.mst-pilih-kepala .prompt-label[aria-hidden] {
+  text-align: center;
+}
+.mst-pilih .mst-pilih-qty,
 .mst-pilih .mst-pilih-nilai {
-  text-align: right;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 /* Peringatan nilai: baris sendiri, ikon peringatan + kalimat berwarna teks. */
@@ -812,10 +817,6 @@
 }
 .mst-pilih select.login-input {
   text-overflow: ellipsis;
-}
-.mst-pilih .mst-pilih-qty {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .mst-pilih .mst-pilih-ket {
   grid-column: 1 / -1;

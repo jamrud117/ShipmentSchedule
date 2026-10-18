@@ -6,6 +6,7 @@ const PAGE_VIEWS = {
   accounts: "#viewAccounts",
   hscode: "#viewHsCode",
   masterlist: "#viewMasterlist",
+  checker: "#viewChecker",
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
@@ -76,6 +77,7 @@ const HALAMAN_HASH = {
   "#/akun": "accounts",
   "#/hscode": "hscode",
   "#/masterlist": "masterlist",
+  "#/cek": "checker",
   "#/docnum": "docnum",
   "#/new": "form",
 };
@@ -138,6 +140,12 @@ function router() {
   // Masterlist: kuota fasilitas & realisasinya
   if (hash === "#/masterlist") {
     showMasterlistView();
+    return;
+  }
+
+  // Cek PIB/PEB: CIPL vs draft CEISA, dibantu data jadwal (khusus EXIM)
+  if (hash === "#/cek") {
+    showCheckerView();
     return;
   }
 
@@ -294,8 +302,11 @@ function renderFormPage(id) {
     $("#fNoAju").value = s.noAju || "";
     $("#fParty").value = s.party || "";
     $("#fInvoice").value = s.invoice || "";
+    $("#fInvoiceDate").value = s.invoiceDate || "";
     $("#fMasterBL").value = s.masterBL || "";
+    $("#fMasterBLDate").value = s.masterBLDate || "";
     $("#fHouseBL").value = s.houseBL || "";
+    $("#fHouseBLDate").value = s.houseBLDate || "";
     $("#fFactoryDate").value = s.factoryDate || "";
     $("#fFactoryTime").value = s.factoryTime || "";
     $("#fForwarder").value = s.forwarder || "";
@@ -337,6 +348,7 @@ function renderFormPage(id) {
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     $("#fPI").value = s.pi || "";
+    $("#fLS").value = s.ls || "";
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
@@ -352,8 +364,11 @@ function renderFormPage(id) {
       "fNoAju",
       "fParty",
       "fInvoice",
+      "fInvoiceDate",
       "fMasterBL",
+      "fMasterBLDate",
       "fHouseBL",
+      "fHouseBLDate",
       "fFactoryDate",
       "fFactoryTime",
       "fForwarder",
@@ -377,6 +392,7 @@ function renderFormPage(id) {
       "fPPN",
       "fPPH",
       "fPI",
+      "fLS",
       "fPackage",
     ].forEach((fid) => ($("#" + fid).value = ""));
     $("#fMuatan").value = "";
@@ -392,6 +408,11 @@ function renderFormPage(id) {
   }
   applyTransportLabels();
   applyDelayFieldVisibility();
+  tandaiTanggalBlTersimpan();
+  /* "CONSIGNEE NOTE" yang tersimpan tetap dikelola otomatis selama
+     syaratnya masih berlaku (modal-fields.js) -- dibaca SEBELUM
+     recalcCustoms() di bawah, yang memeriksa syarat itu lagi. */
+  if (typeof tandaiAjuConsigneeNoteTersimpan === "function") tandaiAjuConsigneeNoteTersimpan();
   /* Mesin prediksi disiapkan SETELAH seluruh isian terpasang: ia membaca
      ETD, moda, muatan, rute, dan progres dokumen sekaligus. Dipanggil
      lebih awal, ia akan menghitung dari form yang masih kosong. */
@@ -417,6 +438,63 @@ function renderFormPage(id) {
      belum tentu isian pertama. */
   if (!id || !layarSentuh()) fokusIsianPertama($('.tab-pane[data-tabpane="umum"]'), { pertama: !!id, tanpaGulir: true });
 }
+
+/* TANGGAL MASTER & HOUSE B/L-AWB SALING MENGIKUTI.
+
+   Begitu salah satu diisi, yang lain ikut bertanggal sama -- kiriman
+   langsung memang memakai satu tanggal untuk keduanya. Tetap bisa
+   diketik sendiri: kotak yang diubah langsung menjadi isian MANUAL dan
+   tidak pernah ditimpa lagi. Yang ikut ditandai data-ikut, jadi:
+     - kotak kosong, atau berisi tanggal ikutan -> mengikuti yang lain;
+     - kotak yang diketik sendiri -> dibiarkan.
+   Mengosongkan satu kotak ikut mengosongkan pasangannya yang masih
+   ikutan. Tanggal tersimpan yang sama dianggap ikutan keduanya. */
+const PASANGAN_TANGGAL_BL = { fMasterBLDate: "fHouseBLDate", fHouseBLDate: "fMasterBLDate" };
+
+function samakanTanggalBl(dariId) {
+  const dari = $("#" + dariId);
+  const ke = $("#" + PASANGAN_TANGGAL_BL[dariId]);
+  if (!dari || !ke) return;
+  if (ke.value && ke.dataset.ikut !== "1") return; // diisi sendiri: dibiarkan
+  ke.value = dari.value;
+  if (ke.value) ke.dataset.ikut = "1";
+  else delete ke.dataset.ikut;
+}
+
+/* Saat form dibuka: dua tanggal yang sama = ikutan (yang mana pun yang
+   diubah, yang lain mengikuti); yang berbeda = dua-duanya manual. */
+function tandaiTanggalBlTersimpan() {
+  const m = $("#fMasterBLDate");
+  const h = $("#fHouseBLDate");
+  if (!m || !h) return;
+  const sama = !!m.value && m.value === h.value;
+  [m, h].forEach((el) => {
+    if (sama) el.dataset.ikut = "1";
+    else delete el.dataset.ikut;
+  });
+}
+
+/* Sesudah impor berkas: tanggal yang terbaca mengisi pasangannya yang
+   masih kosong -- aturan yang sama dengan mengetik. */
+function lengkapiTanggalBl() {
+  const m = $("#fMasterBLDate");
+  const h = $("#fHouseBLDate");
+  if (!m || !h) return;
+  if (m.value && !h.value) samakanTanggalBl("fMasterBLDate");
+  else if (h.value && !m.value) samakanTanggalBl("fHouseBLDate");
+}
+
+// Diubah sendiri = isian manual; pasangannya mengikuti kalau masih kosong / ikutan
+Object.keys(PASANGAN_TANGGAL_BL).forEach((id) => {
+  const el = $("#" + id);
+  if (!el) return;
+  const ubah = () => {
+    delete el.dataset.ikut;
+    samakanTanggalBl(id);
+  };
+  el.addEventListener("input", ubah);
+  el.addEventListener("change", ubah);
+});
 
 /* PENANDA LANGKAH & KELENGKAPAN */
 function syncFormStep() {
@@ -655,8 +733,11 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     noAju: $("#fNoAju").value.trim(),
     party: $("#fParty").value.trim(),
     invoice: $("#fInvoice").value.trim(),
+    invoiceDate: $("#fInvoiceDate").value,
     masterBL: $("#fMasterBL").value.trim(),
+    masterBLDate: $("#fMasterBLDate").value,
     houseBL: $("#fHouseBL").value.trim(),
+    houseBLDate: $("#fHouseBLDate").value,
     factoryDate: $("#fFactoryDate").value,
     factoryTime: normalkanJam($("#fFactoryTime").value),
     forwarder: $("#fForwarder").value.trim(),
@@ -717,13 +798,14 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     ppn: parseInputNumber($("#fPPN").value),
     pph: parseInputNumber($("#fPPH").value),
     pi: $("#fPI").value.trim(),
+    ls: $("#fLS").value.trim(),
     package: joinPackageFields(),
   };
 
-  /* NOMOR GANDA (cek-duplikat.js): B/L-AWB, Invoice, No. Aju, No.
-     SPPB/PEB yang sudah dipakai jadwal lain ditanyakan dulu -- jadwal
-     yang sama tidak terbuat dua kali. Tetap bisa disimpan: Master B/L
-     konsolidasi & invoice yang dikirim bertahap memang sah. */
+  /* NOMOR GANDA (cek-duplikat.js): hanya House B/L-AWB yang sudah
+     dipakai jadwal lain yang ditanyakan dulu -- jadwal yang sama tidak
+     terbuat dua kali. Tetap bisa disimpan. No. Aju, No. SPPB/PEB,
+     invoice & Master B/L-AWB boleh sama ("CONSIGNEE NOTE", konsolidasi). */
   const ganda = periksaNomorGandaForm();
   if (ganda.length) {
     showConfirm(pesanNomorGanda(ganda), () => simpanJadwalForm(id, payload, cleanItems, cleanStops), {

@@ -24,6 +24,7 @@ const CMDK_COMMANDS = [
   /* Yang tidak mengubah data (marketing, finance) membuka halamannya
      untuk membaca riwayat -- bukan "meminta" nomor. */
   { type: "cmd", halaman: "docnum", icon: "ik:dokumen", get title() { return canEdit() ? tt("Permintaan Nomor Dokumen", "Request Document Number") : tt("Buka Nomor Dokumen", "Open Document Numbers"); }, get hint() { return tt("Invoice, DO, dana, surat", "Invoice, DO, fund, letter"); }, run: () => (location.hash = "#/docnum") },
+  { type: "cmd", halaman: "checker", icon: "ik:cek", get title() { return tt("Cek PIB/PEB", "PIB/PEB Check"); }, get hint() { return tt("CIPL vs draft CEISA, dibantu jadwal & HS Code", "CIPL vs CEISA draft, backed by the schedule & HS Codes"); }, run: () => (location.hash = "#/cek") },
   { type: "cmd", halaman: "hscode", icon: "ik:hscode", get title() { return tt("Buka HS Code", "Open HS Code"); }, get hint() { return tt("Database HS Code", "HS Code database"); }, run: () => (location.hash = "#/hscode") },
   { type: "cmd", halaman: "masterlist", icon: "ik:masterlist", get title() { return tt("Buka Masterlist", "Open Masterlist"); }, get hint() { return tt("Kuota fasilitas & realisasinya", "Facility quota & its realization"); }, run: () => (location.hash = "#/masterlist") },
   { type: "cmd", halaman: "accounts", icon: "ik:akun", get title() { return tt("Kelola Akun", "Manage Accounts"); }, get hint() { return tt("Pengguna & peran", "Users & roles"); }, run: () => (location.hash = "#/akun") },

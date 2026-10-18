@@ -411,8 +411,8 @@ function mstCetakCss() {
   }
   .so-grup span { font-weight: 400; }
   .so-no, .so-tengah { text-align: center; }
-  .so-angka { text-align: right; font-variant-numeric: tabular-nums; }
-  .so-tabel thead th.so-angka { text-align: center; }
+  /* QTTY, USED & REMAIN: rata tengah, sama dengan berkas Excel-nya. */
+  .so-angka { text-align: center; font-variant-numeric: tabular-nums; }
   /* Nomor aju lengkap (26 karakter) muat satu baris; tiap PIB sebaris dengan tanggalnya. */
   .so-tabel tbody td.so-pib { white-space: nowrap; font-size: 7.5pt; font-variant-numeric: tabular-nums; }
   .so-tabel tfoot td { font-weight: 700; padding-top: 1.4mm; padding-bottom: 1.4mm; }

@@ -311,10 +311,15 @@ function parsePebPdfText(text, pagesItems) {
   // Di PEB, B/L biasanya cuma SATU baris (dokumen ekspor jarang punya Master & House sekaligus)
   let masterBL = masterRow ? masterRow.nomor : "";
   let houseBL = houseRow ? houseRow.nomor : "";
+  let masterBLDate = masterRow ? pebDateToISO(masterRow.tanggalDMY) : "";
+  let houseBLDate = houseRow ? pebDateToISO(houseRow.tanggalDMY) : "";
   if (!masterBL && houseBL) {
     masterBL = houseBL;
     houseBL = "";
+    masterBLDate = houseBLDate;
+    houseBLDate = "";
   }
+  const invoiceDate = invoiceRow ? pebDateToISO(invoiceRow.tanggalDMY) : "";
 
   const skbList = skbRows.map((r) => {
     const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
@@ -402,8 +407,11 @@ function parsePebPdfText(text, pagesItems) {
       party,
       forwarder,
       invoice,
+      invoiceDate,
       masterBL,
+      masterBLDate,
       houseBL,
+      houseBLDate,
       transport,
       vessel,
       voyage,

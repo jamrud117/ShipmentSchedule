@@ -63,6 +63,7 @@
     <link rel="stylesheet" href="css/palette.css" />
     <link rel="stylesheet" href="css/auth.css" />
     <link rel="stylesheet" href="css/masterlist.css" />
+    <link rel="stylesheet" href="css/checker.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/form.css" />
     <link rel="stylesheet" href="css/docnum.css" />
@@ -80,6 +81,7 @@
       <symbol id="ik-jadwal" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" /> <path d="M16 2v4" /> <path d="M8 2v4" /> <path d="M3 10h5" /> <path d="M17.5 17.5 16 16.3V14" /> <circle cx="16" cy="16" r="6" /></symbol>
       <symbol id="ik-dokumen" viewBox="0 0 24 24"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <rect width="4" height="6" x="2" y="12" rx="2" /> <path d="M10 12h2v6" /> <path d="M10 18h4" /></symbol>
       <symbol id="ik-hscode" viewBox="0 0 24 24"><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14" /> <path d="m7.5 4.27 9 5.15" /> <polyline points="3.29 7 12 12 20.71 7" /> <line x1="12" x2="12" y1="22" y2="12" /> <circle cx="18.5" cy="15.5" r="2.5" /> <path d="M20.27 17.27 22 19" /></symbol>
+      <symbol id="ik-cek" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="m9 15 2 2 4-4" /></symbol>
       <symbol id="ik-masterlist" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /> <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /> <path d="M12 11h4" /> <path d="M12 16h4" /> <path d="M8 11h.01" /> <path d="M8 16h.01" /></symbol>
       <symbol id="ik-akun" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0" /> <circle cx="10" cy="8" r="5" /> <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3" /></symbol>
       <symbol id="ik-cari" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /> <path d="m21 21-4.3-4.3" /></symbol>
@@ -403,6 +405,9 @@
           </a>
           <a class="site-nav-link" href="#/docnum" data-page="docnum">
             <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-dokumen"></use></svg><span data-i18n="nav.docnum">No. Dokumen</span>
+          </a>
+          <a class="site-nav-link" href="#/cek" data-page="checker">
+            <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cek"></use></svg><span data-i18n="nav.checker">Cek PIB/PEB</span>
           </a>
           <a class="site-nav-link" href="#/hscode" data-page="hscode">
             <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-hscode"></use></svg><span data-i18n="nav.hscode">HS Code</span>
@@ -950,6 +955,157 @@
           <div id="mstDaftar"></div>
           <div id="mstPagination" class="hs-halaman"></div>
         </section>
+      </main>
+    </div>
+
+    <!-- HALAMAN: CEK PIB/PEB -- CIPL dibandingkan dengan draft CEISA,
+         dibantu jadwal terkait, Database HS Code, masterlist & kurs pajak
+         (js/views/checker-view.js, css/checker.css). Mesinnya
+         js/import/exim-engine.js, sama dengan EXIM Checker. Khusus EXIM. -->
+    <div id="viewChecker" class="d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <h1 class="board-title" data-en="PIB/PEB Check">Cek PIB/PEB</h1>
+              <div class="board-sub" data-en="The CIPL against the CEISA draft, backed by the schedule, the HS Code database &amp;amp; the masterlist">CIPL dibandingkan dengan draft CEISA, dibantu data jadwal, Database HS Code &amp; masterlist</div>
+            </div>
+            <div class="board-aside">
+              <div class="board-today">
+                <div class="board-today-label" data-i18n="u.hari.ini">
+                  Hari ini
+                </div>
+                <div class="board-today-date" id="cekToday">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container page-main">
+        <section class="panel cek-berkas">
+          <div class="panel-head">
+            <h2>
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-cek"></use></svg>
+              <span data-en="Files to check">Berkas yang diperiksa</span>
+            </h2>
+            <button type="button" class="btn btn-form-cancel mst-tombol" id="btnCekReset">
+              <i class="bi bi-arrow-counterclockwise"></i> <span data-en="Start over">Mulai ulang</span>
+            </button>
+          </div>
+          <div class="panel-body">
+            <!-- Berkas dikenali dari ISINYA (draft = sheet HEADER & BARANG),
+                 jadi semuanya boleh diseret sekaligus ke kotak mana pun. -->
+            <div class="cek-drops">
+              <label class="cek-drop" id="cekDropCipl" for="cekFileCipl" data-cek-kotak="cipl">
+                <input type="file" id="cekFileCipl" class="visually-hidden" accept=".xlsx,.xls,.xlsm,.pdf" multiple />
+                <i class="bi bi-receipt cek-drop-ikon" aria-hidden="true"></i>
+                <span class="cek-drop-teks">
+                  <span class="cek-drop-judul">CIPL</span>
+                  <span class="cek-drop-nama">Commercial Invoice &amp; Packing List</span>
+                  <span class="cek-drop-ket">Excel atau PDF — satu berkas, atau dua (CI dan PL).</span>
+                </span>
+              </label>
+              <label class="cek-drop" id="cekDropDraft" for="cekFileDraft" data-cek-kotak="draft">
+                <input type="file" id="cekFileDraft" class="visually-hidden" accept=".xlsx,.xls" />
+                <i class="bi bi-file-earmark-spreadsheet cek-drop-ikon" aria-hidden="true"></i>
+                <span class="cek-drop-teks">
+                  <span class="cek-drop-judul" data-en="PIB / PEB draft">Draft PIB / PEB</span>
+                  <span class="cek-drop-nama">Ekspor Excel dari CEISA</span>
+                  <span class="cek-drop-ket">PIB atau PEB — jenisnya dikenali sendiri.</span>
+                </span>
+              </label>
+            </div>
+
+            <div class="cek-jadwal" id="cekJadwal"></div>
+
+            <fieldset class="cek-bl">
+              <legend data-en="B/L-AWB to compare">B/L-AWB pembanding</legend>
+              <p class="cek-bl-ket" data-en="Filled in from the linked schedule (numbers &amp;amp; dates), then from the numbers printed on the CIPL. Type over them if they differ from the B/L-AWB in hand.">Diisi dari jadwal terkait (nomor &amp; tanggal), lalu dari nomor yang tercetak di CIPL. Ketik ulang bila berbeda dengan B/L-AWB di tangan.</p>
+              <div class="cek-bl-kisi">
+                <div class="cek-bl-isian">
+                  <label class="form-label" for="cekMasterNo" data-en="Master B/L-AWB number">No. Master B/L-AWB</label>
+                  <input type="text" class="form-control text-uppercase" id="cekMasterNo" autocomplete="off" spellcheck="false" />
+                  <small class="cek-bl-sumber" id="cekMasterSumber"></small>
+                </div>
+                <div class="cek-bl-isian">
+                  <label class="form-label" for="cekMasterTgl" data-en="Master B/L-AWB date">Tanggal Master B/L-AWB</label>
+                  <input type="date" class="form-control" id="cekMasterTgl" />
+                  <small class="cek-bl-sumber" id="cekMasterTglSumber"></small>
+                </div>
+                <div class="cek-bl-isian">
+                  <label class="form-label" for="cekHouseNo" data-en="House B/L-AWB number">No. House B/L-AWB</label>
+                  <input type="text" class="form-control text-uppercase" id="cekHouseNo" autocomplete="off" spellcheck="false" />
+                  <small class="cek-bl-sumber" id="cekHouseSumber"></small>
+                </div>
+                <div class="cek-bl-isian">
+                  <label class="form-label" for="cekHouseTgl" data-en="House B/L-AWB date">Tanggal House B/L-AWB</label>
+                  <input type="date" class="form-control" id="cekHouseTgl" />
+                  <small class="cek-bl-sumber" id="cekHouseTglSumber"></small>
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="cek-aksi">
+              <div class="cek-status" id="cekStatus" role="status" aria-live="polite"></div>
+              <button type="button" class="btn-teal" id="btnCekPeriksa" disabled>
+                <i class="bi bi-clipboard-check"></i> <span data-en="Check">Periksa</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel cek-hasil d-none" id="cekHasil" aria-live="polite">
+          <div class="cek-vonis" id="cekVonis"></div>
+          <div class="cek-bagian" id="cekBagian"></div>
+          <div class="cek-alat">
+            <div class="mst-seg cek-seg" role="group" aria-label="Saring hasil" data-en-aria="Filter results">
+              <button type="button" class="active" data-cek-saring="ALL" aria-pressed="true"><span data-en="All">Semua</span> <b>0</b></button>
+              <button type="button" data-cek-saring="MISMATCH" aria-pressed="false">Mismatch <b>0</b></button>
+              <button type="button" data-cek-saring="MATCH" aria-pressed="false">Match <b>0</b></button>
+              <button type="button" data-cek-saring="INFO" aria-pressed="false">Info <b>0</b></button>
+            </div>
+            <div class="cek-alat-kanan">
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnCekLihatJadwal" hidden>
+                <i class="bi bi-eye"></i> <span data-en="View schedule">Lihat jadwal</span>
+              </button>
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnCekSalin"
+                      title="Salin daftar mismatch untuk dikirim ke PPJK / forwarder" data-en-title="Copy the mismatch list to send to the customs broker / forwarder">
+                <i class="bi bi-clipboard"></i> <span data-en="Copy findings">Salin temuan</span>
+              </button>
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnCekBuka" title="Buka semua bagian" data-en-title="Expand all sections"
+                      aria-label="Buka semua bagian" data-en-aria="Expand all sections"><i class="bi bi-arrows-expand"></i></button>
+              <button type="button" class="btn btn-form-cancel mst-tombol" id="btnCekTutup" title="Tutup semua bagian" data-en-title="Collapse all sections"
+                      aria-label="Tutup semua bagian" data-en-aria="Collapse all sections"><i class="bi bi-arrows-collapse"></i></button>
+            </div>
+          </div>
+          <div class="cek-daftar" id="cekDaftar"></div>
+        </section>
+
+        <section class="panel cek-saran-panel d-none" id="cekSaranHs">
+          <div class="panel-head">
+            <h2>
+              <svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-hscode"></use></svg>
+              <span data-en="HS Codes not in the database yet">HS Code yang belum ada di database</span>
+            </h2>
+            <span class="panel-head-note" data-en="From the draft — save them so the next check knows the 8 digits">Dari draft — simpan supaya pemeriksaan berikutnya tahu 8 digitnya</span>
+          </div>
+          <div class="panel-body panel-body--flush" id="cekSaranHsDaftar"></div>
+        </section>
+
+        <details class="panel cek-aturan">
+          <summary data-en="What is checked">Apa saja yang diperiksa</summary>
+          <div class="panel-body">
+            <ul data-en="&lt;li&gt;&lt;b&gt;CIPL ↔ draft&lt;/b&gt; — the same engine as EXIM Checker: invoice &amp;amp; packing list (codes 380 / 217), B/L-AWB (704 / 714 / 705, 741 / 703 / 740), parties &amp;amp; TAX ID, ports, vessel, incoterm, currency, value (FOB / CIF), weights, packages, and per item description, HS, quantity, unit, value &amp;amp; net weight.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — looked up in the HS Code database by item name, then in the linked schedule's items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Schedule&lt;/b&gt; — aju no., invoice, mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer, item count, weights &amp;amp; dates of the linked schedule against the draft.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959), LS (958), Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule; document 912 against the Masterlist page (decree no. &amp;amp; date, validity, realization recorded).&lt;/li&gt;&lt;li&gt;&lt;b&gt;NDPBM&lt;/b&gt; — against the weekly KMK tax exchange rate on the aju date.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
+              <li><b>CIPL ↔ draft</b> — mesin yang sama dengan EXIM Checker: invoice &amp; packing list (kode 380 / 217), B/L-AWB (704 / 714 / 705, 741 / 703 / 740), pihak &amp; TAX ID, pelabuhan, kapal, incoterm, mata uang, nilai (FOB / CIF), berat, kemasan, dan per barang uraian, HS, jumlah, satuan, nilai &amp; netto.</li>
+              <li><b>HS Code 8 digit</b> — dicari di Database HS Code menurut nama barang, lalu di barang jadwal terkait, lalu di jadwal sebelumnya. CIPL yang hanya menulis 6 digit dilengkapi dari situ.</li>
+              <li><b>Jadwal</b> — No. Aju, invoice, moda, kapal / penerbangan, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan, kontainer, shipper / buyer, jumlah barang, berat &amp; tanggal jadwal terkait dibandingkan dengan draft.</li>
+              <li><b>Fasilitas &amp; izin</b> — PI (959), LS (958), Masterlist (912), SKB PPN (456), SKB PPh (457) &amp; COO (860 / 861) dibandingkan dengan jadwal; dokumen 912 dengan halaman Masterlist (No. &amp; tanggal SK, masa berlaku, realisasi sudah dicatat).</li>
+              <li><b>NDPBM</b> — dibandingkan dengan kurs pajak KMK mingguan pada tanggal aju.</li>
+              <li>Tanpa CIPL, draft dibandingkan dengan jadwal terkait saja. Berkas dibaca di peramban ini dan tidak diunggah.</li>
+            </ul>
+          </div>
+        </details>
       </main>
     </div>
 
@@ -2803,7 +2959,11 @@
                 >
                 <input type="date" class="form-control" id="fDocDate" />
               </div>
-              <div>
+              <!-- Selebar setengah baris: nomor aju 26 angka. Kiriman kurir
+                   FedEx/DHL/UPS bernilai di bawah USD 1.500 terisi
+                   "CONSIGNEE NOTE" sendiri (aturAjuConsigneeNote,
+                   modal-fields.js). -->
+              <div class="s6">
                 <label class="form-label" for="fNoAju" data-i18n="f.no.aju">No. Aju</label>
                 <input
                   type="text"
@@ -2824,6 +2984,10 @@
                   placeholder="Nomor invoice"
                   data-i18n-ph="ph.nomor.invoice"
                 />
+              </div>
+              <div>
+                <label class="form-label" for="fInvoiceDate" data-en="Invoice Date">Tanggal Invoice</label>
+                <input type="date" class="form-control" id="fInvoiceDate" />
               </div>
               <div class="s6">
                 <label
@@ -2853,6 +3017,13 @@
                   data-i18n-ph="ph.nomor.master.b.l.atau.awb"
                 />
               </div>
+              <!-- Tanggal Master & House saling mengikuti selama salah satunya
+                   belum diubah sendiri (samakanTanggalBl, form-router.js).
+                   Labelnya ikut moda: B/L atau AWB (applyTransportLabels). -->
+              <div>
+                <label class="form-label" id="lblMasterBLDate" for="fMasterBLDate">Tanggal Master B/L</label>
+                <input type="date" class="form-control" id="fMasterBLDate" />
+              </div>
               <div>
                 <label class="form-label" id="lblHouseBL" for="fHouseBL"
                   >House B/L / AWB</label
@@ -2864,6 +3035,10 @@
                   placeholder="Nomor House B/L atau AWB"
                   data-i18n-ph="ph.nomor.house.b.l.atau.awb"
                 />
+              </div>
+              <div>
+                <label class="form-label" id="lblHouseBLDate" for="fHouseBLDate">Tanggal House B/L</label>
+                <input type="date" class="form-control" id="fHouseBLDate" />
               </div>
             </div>
           </div>
@@ -2937,13 +3112,13 @@
                    (#fContainerWrap.d-none ~ #fForwarderWrap, form.css). -->
               <div id="fContainerWrap">
                 <label class="form-label" for="fContainer" data-i18n="f.kontainer"
-                  >Kontainer</label
+                  >No. Kontainer/Seal</label
                 >
                 <input
                   type="text"
                   class="form-control"
                   id="fContainer"
-                  placeholder="Nomor kontainer"
+                  placeholder="Nomor kontainer / segel"
                   data-i18n-ph="ph.nomor.kontainer"
                 />
               </div>
@@ -3652,17 +3827,34 @@
                   />
                 </div>
               </div>
-              <div class="s9">
-                <label class="form-label" for="fPI"
-                   data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
-                >
-                <input
-                  type="text"
-                  class="form-control"
-                  id="fPI"
-                  placeholder="Nomor PI, mis. 04.PI-02.26.0131"
-                  data-i18n-ph="ph.nomor.persetujuan.impor"
-                />
+              <!-- PI & LS berdampingan: dua dokumen yang biasanya sepaket.
+                   Keduanya ikut kolom PI di templat salin (LS di baris
+                   sendiri, "LS <nomor>") dan Bulk Excel. -->
+              <div class="s9 fl-dua">
+                <div>
+                  <label class="form-label" for="fPI"
+                     data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fPI"
+                    placeholder="Nomor PI, mis. 04.PI-02.26.0131"
+                    data-i18n-ph="ph.nomor.persetujuan.impor"
+                  />
+                </div>
+                <div>
+                  <label class="form-label" for="fLS"
+                     data-en="LS (Surveyor Report)">LS (Laporan Surveyor)</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fLS"
+                    placeholder="Nomor LS, mis. ITB21G2672826137141"
+                    data-en-ph="LS number, e.g. ITB21G2672826137141"
+                  />
+                </div>
               </div>
             </div>
             <div class="form-text-note mt-1">
@@ -4325,6 +4517,11 @@
     <!-- IMPORT -->
     <!-- ========================================= -->
 
+    <!-- Mesin EXIM (CIPL + draft PIB/PEB): berkas yang SAMA dengan
+         exim-engine.js di EXIM Checker. Satu IIFE, keluarnya hanya
+         window.EximEngine -- tidak menambah nama global lain. -->
+    <script src="js/import/exim-engine.js"></script>
+
     <!-- Shared Helper -->
     <script src="js/import/pdf-coords.js"></script>
     <script src="js/import/cipl-common.js"></script>
@@ -4384,6 +4581,7 @@
     <script src="js/features/hscode-lookup.js"></script>
     <script src="js/views/masterlist-view.js"></script>
     <script src="js/features/masterlist-print.js"></script>
+    <script src="js/views/checker-view.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 

@@ -3,44 +3,27 @@
 /* ==================================================================
    NOMOR GANDA DI FORM JADWAL
 
-   B/L-AWB (Master & House), No. Aju PIB/PEB, No. Invoice, dan No. SPPB /
-   No. PEB yang SUDAH dipakai jadwal lain ditandai di bawah kotaknya saat
-   diketik, lalu ditanyakan sekali lagi saat Simpan -- supaya jadwal yang
-   sama tidak terbuat dua kali.
+   Hanya HOUSE B/L-AWB yang harus unik: House B/L-AWB yang SUDAH dipakai
+   jadwal lain (kedua buku) ditandai di bawah kotaknya saat diketik,
+   lalu ditanyakan sekali lagi saat Simpan -- supaya jadwal yang sama
+   tidak terbuat dua kali. Tetap peringatan, bukan larangan: yang
+   memutuskan pengguna ("Tetap Simpan").
 
-   PERINGATAN, bukan larangan: satu Master B/L-AWB memang bisa dipakai
-   beberapa jadwal (konsolidasi LCL / udara), dan satu invoice kadang
-   dikirim bertahap. Yang memutuskan pengguna ("Tetap Simpan").
-
-   Cakupan perbandingan (DUP_GRUP):
-     - B/L-AWB: Master & House saling dibandingkan -- nomor yang sama
-       bisa tertulis di kotak yang berbeda -- di KEDUA buku;
-     - No. Aju: di kedua buku (nomornya unik secara nasional);
-     - Invoice & No. SPPB / PEB: di buku yang sama saja. Invoice pemasok
-       (Import) dan invoice penjualan (Export) bisa kebetulan bernomor
-       sama, dan No. SPPB tidak sebanding dengan No. PEB.
+   Yang lain BOLEH SAMA dan tidak diperiksa:
+     - No. Aju & No. SPPB / PEB -- kiriman kurir bernilai rendah semuanya
+       berisi "CONSIGNEE NOTE" (aturAjuConsigneeNote, modal-fields.js);
+     - Master B/L-AWB -- satu master dipakai beberapa jadwal (konsolidasi
+       LCL / udara);
+     - Invoice -- satu invoice kadang dikirim bertahap.
 
    Dicocokkan tanpa beda huruf besar/kecil, spasi & tanda baca
    ("PFSX-260480" = "pfsx 260480"), per nomor kalau satu kotak memuat
-   beberapa: dipisah koma / titik koma / baris baru. Garis miring bagian
-   dari nomornya (INV/2026/001). Isian pengisi ("-", "TBA", "N/A")
-   diabaikan.
+   beberapa: dipisah koma / titik koma / baris baru. Isian pengisi
+   ("-", "TBA", "N/A") diabaikan.
 ================================================================== */
 
-const DUP_ISIAN = [
-  { id: "fHouseBL", kunci: "houseBL", grup: "bl" },
-  { id: "fMasterBL", kunci: "masterBL", grup: "bl" },
-  { id: "fNoAju", kunci: "noAju", grup: "aju" },
-  { id: "fInvoice", kunci: "invoice", grup: "invoice" },
-  { id: "fDocNo", kunci: "docNo", grup: "dokumen" },
-];
-// Kolom jadwal lain yang dibandingkan per grup, dan apakah lintas buku
-const DUP_GRUP = {
-  bl: { kolom: ["masterBL", "houseBL"], lintasBuku: true },
-  aju: { kolom: ["noAju"], lintasBuku: true },
-  invoice: { kolom: ["invoice"], lintasBuku: false },
-  dokumen: { kolom: ["docNo"], lintasBuku: false },
-};
+// Kotak form -> kolom jadwal lain (kedua buku) yang dibandingkan
+const DUP_ISIAN = [{ id: "fHouseBL", kunci: "houseBL", kolom: ["houseBL"] }];
 const DUP_PENGISI = new Set(["NA", "NIL", "TBA", "TBC", "NONE", "BELUM", "KOSONG"]);
 
 function dupPecah(nilai) {
@@ -57,29 +40,25 @@ function dupKunci(no) {
   return k;
 }
 
-/* Jadwal LAIN yang memakai nomor di `isi` (nama kolom jadwal: houseBL,
-   masterBL, noAju, invoice, docNo). opsi: { id: jadwal yang sedang
-   diubah -- tidak dihitung ganda dengan dirinya sendiri, mode: buku }.
+/* Jadwal LAIN (kedua buku) yang memakai nomor di `isi` (nama kolom
+   jadwal: houseBL). opsi.id: jadwal yang sedang diubah -- tidak dihitung
+   ganda dengan dirinya sendiri.
    Hasil: [{ isian, nomor, kiriman: [...] }], satu per nomor yang ganda. */
 function cariNomorGanda(isi, opsi) {
-  const o = opsi || {};
-  const idSendiri = String(o.id || "");
-  const mode = o.mode || activeMode;
+  const idSendiri = String((opsi && opsi.id) || "");
   const semua = typeof data !== "undefined" && data ? [].concat(data.import || [], data.export || []) : [];
   const hasil = [];
   DUP_ISIAN.forEach((isian) => {
-    const grup = DUP_GRUP[isian.grup];
     dupPecah(isi && isi[isian.kunci]).forEach((nomor) => {
       const k = dupKunci(nomor);
       if (!k) return;
-      // Nomor yang sama di Master & House form ini cukup disebut sekali
-      if (hasil.some((h) => h.isian.grup === isian.grup && h.kunciNomor === k)) return;
+      // Nomor yang sama dua kali di satu kotak cukup disebut sekali
+      if (hasil.some((h) => h.isian === isian && h.kunciNomor === k)) return;
       const kiriman = semua.filter(
         (s) =>
           s &&
           String(s.id) !== idSendiri &&
-          (grup.lintasBuku || s.mode === mode) &&
-          grup.kolom.some((kol) => dupPecah(s[kol]).some((x) => dupKunci(x) === k)),
+          isian.kolom.some((kol) => dupPecah(s[kol]).some((x) => dupKunci(x) === k)),
       );
       if (kiriman.length) hasil.push({ isian, nomor, kunciNomor: k, kiriman });
     });
@@ -135,7 +114,7 @@ function dupIsiForm() {
    mengetik, saat form dibuka, dan sesudah form diisi dari berkas. */
 function periksaNomorGandaForm() {
   const idEl = document.getElementById("fId");
-  const ganda = cariNomorGanda(dupIsiForm(), { id: idEl ? idEl.value : "", mode: activeMode });
+  const ganda = cariNomorGanda(dupIsiForm(), { id: idEl ? idEl.value : "" });
   DUP_ISIAN.forEach((isian) => {
     const wadah = dupWadah(isian);
     const kotak = document.getElementById(isian.id);

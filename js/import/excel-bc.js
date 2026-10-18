@@ -132,12 +132,14 @@ function parseBcExcelWorkbook(wb) {
       return (isFinite(sa) ? sa : Infinity) - (isFinite(sb) ? sb : Infinity);
     });
 
-  const findDokumen = (...codes) => {
-    const row = dokumen.find((r) =>
-      codes.includes(excelStr(r["KODE DOKUMEN"])),
-    );
-    return row ? excelStr(row["NOMOR DOKUMEN"]) : "";
-  };
+  const barisDokumen = (...codes) =>
+    dokumen.find((r) => codes.includes(excelStr(r["KODE DOKUMEN"]))) || null;
+  const nomorDokumen = (row) => (row ? excelStr(row["NOMOR DOKUMEN"]) : "");
+  const tanggalDokumen = (row) => (row ? excelValueToISODate(row["TANGGAL DOKUMEN"]) : "");
+  // Invoice & B/L-AWB beserta tanggalnya (kode dokumen: lihat masterBL di bawah)
+  const dokMaster = barisDokumen("704", "741");
+  const dokHouse = barisDokumen("714", "703") || barisDokumen("705", "740");
+  const dokInvoice = barisDokumen("380");
   // BM/PPN/PPH: dijumlahkan dari sheet BARANGTARIF (rincian per barang)
   const sumBarangTarif = (kode) => {
     const rows = barangTarif.filter(
@@ -251,18 +253,25 @@ function parseBcExcelWorkbook(wb) {
     docDate: respTanggal || excelValueToISODate(header["TANGGAL DAFTAR"]),
     incoterm: excelStr(header["KODE INCOTERM"]).toUpperCase(),
     party: shipper ? excelStr(shipper["NAMA ENTITAS"]) : "",
-    invoice: findDokumen("380"),
+    invoice: nomorDokumen(dokInvoice),
+    invoiceDate: tanggalDokumen(dokInvoice),
     /* KODE DOKUMEN mengikuti daftar UN/EDIFACT 1001 yang dipakai BC 2.0:
 
          704  Master bill of lading      (laut, tingkat master)
          741  Master air waybill         (udara, tingkat master)
-         705  Bill of lading             (laut, tingkat house)
-         740  Air waybill                (udara, tingkat house)
+         714  House bill of lading       (laut, tingkat house)
+         703  House waybill              (udara, tingkat house)
+         705  Bill of lading             (laut, umum -- dipakai di tingkat house)
+         740  Air waybill                (udara, umum -- dipakai di tingkat house)
 
-       HATI-HATI untuk moda udara: 741 itu Master AWB dan 740 yang
-       house — gampang tertukar kalau ditebak dari urutan angkanya. */
-    masterBL: findDokumen("704", "741"),
-    houseBL: findDokumen("705", "740"),
+       House: 714 / 703 didahulukan, lalu 705 / 740. HATI-HATI untuk moda
+       udara: 741 itu Master AWB dan 740 yang house — gampang tertukar
+       kalau ditebak dari urutan angkanya. Tanggal dokumennya mengisi
+       Tanggal Master / House. */
+    masterBL: nomorDokumen(dokMaster),
+    masterBLDate: tanggalDokumen(dokMaster),
+    houseBL: nomorDokumen(dokHouse),
+    houseBLDate: tanggalDokumen(dokHouse),
     freight: header["FREIGHT"] != null ? excelNum(header["FREIGHT"]) : null,
     insurance:
       header["ASURANSI"] != null ? excelNum(header["ASURANSI"]) : null,
@@ -311,10 +320,13 @@ function parseBcExcelWorkbook(wb) {
   const skbBySeriBarang = new Map();
   const seriTertaut = new Set();
   const nomorPi = [];
-  const catatPi = (r) => {
+  const nomorLs = [];
+  const catat = (daftar) => (r) => {
     const nomor = excelStr(r["NOMOR DOKUMEN"]);
-    if (nomor && !nomorPi.includes(nomor)) nomorPi.push(nomor);
+    if (nomor && !daftar.includes(nomor)) daftar.push(nomor);
   };
+  const catatPi = catat(nomorPi);
+  const catatLs = catat(nomorLs);
   const dokumenLain = [];
   barangDokumen.forEach((row) => {
     const seriBarang = row["SERI BARANG"];
@@ -333,6 +345,7 @@ function parseBcExcelWorkbook(wb) {
       return;
     }
     if (kenal.pi) return catatPi(docRow);
+    if (kenal.ls) return catatLs(docRow);
     const key = String(seriBarang).trim();
     if (!skbBySeriBarang.has(key)) skbBySeriBarang.set(key, []);
     const daftar = skbBySeriBarang.get(key);
@@ -349,9 +362,11 @@ function parseBcExcelWorkbook(wb) {
     const kenal = kenaliBaris(r, false);
     if (!kenal) return;
     if (kenal.pi) return catatPi(r);
+    if (kenal.ls) return catatLs(r);
     fasilitasUmum.push(entriDokumen(r, kenal));
   });
   fields.pi = nomorPi.join(", ");
+  fields.ls = nomorLs.join(", ");
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);

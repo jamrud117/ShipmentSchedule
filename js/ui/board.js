@@ -78,7 +78,7 @@ function fmtDateBoard(iso) {
 // Isi semua penanda "hari ini" di seluruh halaman sekaligus.
 function paintTodayStamps() {
   const teks = fmtDateBoard(todayISO());
-  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday"].forEach((sel) => {
+  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
     const el = $(sel);
     if (el) el.textContent = teks;
   });

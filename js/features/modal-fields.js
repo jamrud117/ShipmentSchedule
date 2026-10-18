@@ -65,8 +65,12 @@ function applyTransportLabels() {
      sarannya justru menghalangi. */
   $("#fVessel").setAttribute("list", air ? "carrierListUdara" : "carrierListLaut");
   $("#fVoyage").placeholder = air ? "GA880/04JUL" : "V.023E";
-  $("#lblMasterBL").textContent = air ? "Master AWB" : "Master B/L";
-  $("#lblHouseBL").textContent = air ? "House AWB" : "House B/L";
+  const dokMaster = air ? "Master AWB" : "Master B/L";
+  const dokHouse = air ? "House AWB" : "House B/L";
+  $("#lblMasterBL").textContent = dokMaster;
+  $("#lblHouseBL").textContent = dokHouse;
+  $("#lblMasterBLDate").textContent = tt(`Tanggal ${dokMaster}`, `${dokMaster} Date`);
+  $("#lblHouseBLDate").textContent = tt(`Tanggal ${dokHouse}`, `${dokHouse} Date`);
   /* FCL/LCL & kontainer itu konsep laut — muatan udara tidak dikapalkan
      dalam kontainer. Udara -> Jenis Muatan dikunci ke LCL, kolom
      Kontainer disembunyikan & dikosongkan supaya tidak ada data
@@ -260,7 +264,67 @@ function recalcCustoms(opsi) {
      dikunci total. */
   $("#fPackage").value = totalKemasanBarang();
   autoSizeInput($("#fPackage"), 92, 210);
+
+  // Nilai barang bisa saja baru melewati / turun di bawah USD 1.500
+  aturAjuConsigneeNote();
 }
+
+/* NO. AJU KIRIMAN KURIR BERNILAI RENDAH = "CONSIGNEE NOTE".
+
+   Kiriman FedEx / DHL / UPS di buku Import yang nilai barangnya di
+   bawah USD 1.500 diselesaikan dengan Consignment Note, bukan PIB --
+   tidak ada nomor aju. Aturan kurir & ambangnya SATU dengan progres
+   dokumen di kartu: isKurirNilaiRendah() di doc-steps.js (nilai 0 =
+   harga belum diisi, belum dihitung). Kurirnya dikenali dari Forwarder,
+   Nama Kapal/Pesawat, atau No. Flight (CIPL kurir menulis "DHL" di
+   kolom Vessel/Flight).
+
+   Kotak No. Aju yang KOSONG diisi sendiri dan ditandai otomatis
+   (data-auto="cn"); begitu syaratnya tidak terpenuhi lagi (nilai naik,
+   kurir diganti) dikosongkan kembali. Yang diketik sendiri -- termasuk
+   "CONSIGNEE NOTE" yang diketik di kiriman lain -- tidak disentuh. */
+const AJU_CONSIGNEE_NOTE = "CONSIGNEE NOTE";
+
+function syaratAjuConsigneeNote() {
+  if (typeof isKurirNilaiRendah !== "function") return false;
+  return isKurirNilaiRendah({
+    mode: activeMode,
+    forwarder: $("#fForwarder").value,
+    vessel: [$("#fVessel").value, $("#fVoyage").value].join(" "),
+    items: draftItems,
+  });
+}
+
+function aturAjuConsigneeNote() {
+  const el = $("#fNoAju");
+  if (!el) return;
+  const isi = el.value.trim();
+  if (syaratAjuConsigneeNote()) {
+    if (isi) return;
+    el.value = AJU_CONSIGNEE_NOTE;
+    el.dataset.auto = "cn";
+  } else if (el.dataset.auto === "cn" && isi.toUpperCase() === AJU_CONSIGNEE_NOTE) {
+    el.value = "";
+    delete el.dataset.auto;
+  }
+}
+
+/* Form dibuka: "CONSIGNEE NOTE" tersimpan ikut dikelola otomatis hanya
+   kalau syaratnya memang masih berlaku -- kalau tidak (kurir di luar
+   daftar, harga belum diisi), itu ketikan pengguna dan dibiarkan. */
+function tandaiAjuConsigneeNoteTersimpan() {
+  const el = $("#fNoAju");
+  if (!el) return;
+  delete el.dataset.auto;
+  if (el.value.trim().toUpperCase() === AJU_CONSIGNEE_NOTE && syaratAjuConsigneeNote()) el.dataset.auto = "cn";
+}
+
+$("#fNoAju").addEventListener("input", (e) => {
+  delete e.target.dataset.auto;
+});
+["fForwarder", "fVessel", "fVoyage"].forEach((id) => {
+  $("#" + id).addEventListener("input", aturAjuConsigneeNote);
+});
 
 /* KEADAAN LAMBANG MATA UANG */
 function syncAffixState(scope) {

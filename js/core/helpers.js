@@ -277,6 +277,8 @@ const KODE_DOKUMEN_FASILITAS = {
 };
 // Surat Persetujuan Impor (PI) -- satu nomor per pengiriman, bukan fasilitas
 const KODE_DOKUMEN_PI = "959";
+// Laporan Surveyor (LS) -- sepaket dengan PI, juga satu nomor per pengiriman
+const KODE_DOKUMEN_LS = "958";
 
 /* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
    dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh
@@ -291,14 +293,15 @@ function jenisFasilitasDariNomor(nomor) {
 const POLA_NOMOR_PI = /(^|[^A-Z0-9])PI-\d/i;
 
 /* Kenali satu dokumen pelengkap: { jenis, jenisLainnya } kalau ia
-   fasilitas, { pi: true } kalau Persetujuan Impor, null untuk yang
-   lain (invoice, B/L, Laporan Surveyor, ...). `label` hanya ada pada
-   PIB PDF ("SURAT KETERANGAN BEBAS (SKB) PPN"); Excel CEISA cuma
-   memberi kode & nomor. */
+   fasilitas, { pi: true } kalau Persetujuan Impor, { ls: true } kalau
+   Laporan Surveyor, null untuk yang lain (invoice, B/L, ...). `label`
+   hanya ada pada PIB PDF ("SURAT KETERANGAN BEBAS (SKB) PPN"); Excel
+   CEISA cuma memberi kode & nomor. */
 function kenaliDokumenPelengkap(dok) {
   const kode = String(dok.kode == null ? "" : dok.kode).trim();
   const label = String(dok.label || "").toUpperCase();
   if (kode === KODE_DOKUMEN_PI || /PERSETUJUAN IMPOR/.test(label)) return { pi: true };
+  if (kode === KODE_DOKUMEN_LS || /LAPORAN SURVEYOR/.test(label)) return { ls: true };
   if (/SURAT KETERANGAN BEBAS/.test(label)) {
     const tipe = (/\(SKB\)\s*([A-Z%0-9]*)/.exec(label) || [])[1] || "";
     const jenis =
@@ -311,6 +314,30 @@ function kenaliDokumenPelengkap(dok) {
     (/MASTER\s*LIST|FASILITAS BKPM/.test(label) ? "Masterlist" : "") ||
     (/CERTIFICATE OF ORIGIN|\bE-?CO\b|KETERANGAN ASAL/.test(label) ? "E-COO" : "");
   return jenis ? { jenis, jenisLainnya: "" } : null;
+}
+
+/* KOLOM PI templat salin & Bulk Excel memuat PI DAN LS -- dua dokumen
+   yang biasanya sepaket. PI ditulis apa adanya (sama seperti sebelum LS
+   ada), LS di baris sendiri berawalan "LS ", supaya Bulk Import bisa
+   memisahkannya lagi (pecahPiLs). */
+function gabungPiLs(pi, ls) {
+  const p = String(pi == null ? "" : pi).trim();
+  const l = String(ls == null ? "" : ls).trim();
+  return [p, l ? "LS " + l : ""].filter(Boolean).join("\n");
+}
+function pecahPiLs(teks) {
+  const pi = [];
+  const ls = [];
+  String(teks == null ? "" : teks)
+    .split(/\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .forEach((baris) => {
+      const m = /^LS(?:\s*:\s*|\s+)(.+)$/i.exec(baris);
+      if (m) ls.push(m[1].trim());
+      else pi.push(baris);
+    });
+  return { pi: pi.join(", "), ls: ls.join(", ") };
 }
 
 /* Satu baris kolom FASILITAS / SKB (templat salin & Bulk Excel) kembali

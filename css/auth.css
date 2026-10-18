@@ -346,6 +346,7 @@ body.tutup-docnum .site-nav-link[data-page="docnum"],
 body.tutup-docnum .nav-docnum,
 body.tutup-hscode .site-nav-link[data-page="hscode"],
 body.tutup-masterlist .site-nav-link[data-page="masterlist"],
+body.tutup-checker .site-nav-link[data-page="checker"],
 body.tutup-accounts .site-nav-link[data-page="accounts"] {
   display: none !important;
 }

@@ -2428,7 +2428,9 @@ async function mstUnduhExcel() {
     const FORMAT_UANG = "#,##0.00";
     const tepi = { style: "thin", color: { argb: "FF000000" } };
     const bingkai = { top: tepi, left: tepi, bottom: tepi, right: tepi };
-    // kiri = kolom teks panjang (rata kiri & boleh membungkus); sisanya di tengah
+    /* kiri = kolom teks panjang (rata kiri & boleh membungkus); sisanya --
+       termasuk QTTY, USED, REMAIN & nilai -- rata tengah, sama dengan
+       lembar cetaknya (masterlist-print.js). */
     const penulis = (lembar, kiri) => (nomorBaris, nilai, opsi) => {
       const o = opsi || {};
       nilai.forEach((v, i) => {

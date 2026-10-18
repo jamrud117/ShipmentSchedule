@@ -2621,7 +2621,7 @@ console.log("\u2014 PERAN FINANCE & TABEL PERAN \u2014");
    daftar akun / HS Code sungguhan di sini meninggalkan
    pekerjaan asinkron yang menimpa keadaan uji-uji berikutnya. */
 const PEMBUKA_HALAMAN = ["showOverviewView", "showAccountView", "showHsCodeView",
-  "showMasterlistView", "showDocNumView", "renderFormPage", "showListView", "render", "isiPilihanJadwal", "isiPilihanAju"];
+  "showMasterlistView", "showDocNumView", "showCheckerView", "renderFormPage", "showListView", "render", "isiPilihanJadwal", "isiPilihanAju"];
 const bukaSebagai = (peran, hash) => denganPeran(peran, () => {
   const asli = PEMBUKA_HALAMAN.map((n) => w[n]);
   if (asli.some((f) => typeof f !== "function")) throw new Error("pembuka halaman tidak ditemukan: " + PEMBUKA_HALAMAN.filter((n, i) => typeof asli[i] !== "function"));
@@ -2636,7 +2636,7 @@ const bukaSebagai = (peran, hash) => denganPeran(peran, () => {
   }
 });
 const ALAMAT_HALAMAN = {
-  overview: "#/ringkasan", schedule: "#/", docnum: "#/docnum", hscode: "#/hscode",
+  overview: "#/ringkasan", schedule: "#/", docnum: "#/docnum", checker: "#/cek", hscode: "#/hscode",
   masterlist: "#/masterlist", accounts: "#/akun", form: "#/new",
 };
 const HALAMAN_FINANCE = ["schedule", "docnum", "masterlist"];
@@ -2691,7 +2691,7 @@ t("finance: hanya-baca (is-viewer) + penanda is-finance; tautan halaman tertutup
 t("tautan navbar disembunyikan lewat body.tutup-<halaman>, satu aturan per halaman", () => {
   const css = fs.readFileSync(path.join(ROOT, "css", "auth.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const tautan = [...w.document.querySelectorAll(".site-nav-link[data-page]")].map((a) => a.dataset.page);
-  eq(tautan.join(","), "overview,schedule,docnum,hscode,masterlist,accounts", "tautan navbar:");
+  eq(tautan.join(","), "overview,schedule,docnum,checker,hscode,masterlist,accounts", "tautan navbar:");
   tautan.filter((h) => h !== "schedule").forEach((h) => {
     if (!css.includes(`body.tutup-${h} .site-nav-link[data-page="${h}"]`)) throw new Error("tautan " + h + " tidak punya aturan sembunyi");
   });
@@ -2710,11 +2710,11 @@ t("tautan navbar disembunyikan lewat body.tutup-<halaman>, satu aturan per halam
     if (dikenal.indexOf(h) < 0) throw new Error(p + ": halaman tidak dikenal: " + h);
   }));
 });
-t("viewer & marketing: Ringkasan/HS Code/Masterlist terbuka, Akun & form tertutup", () => {
+t("viewer & marketing: Ringkasan/HS Code/Masterlist terbuka, Akun, form & Cek PIB/PEB tertutup", () => {
   ["viewer", "marketing"].forEach((p) => {
     ["overview", "hscode", "masterlist", "schedule"].forEach((h) =>
       eq(bukaSebagai(p, ALAMAT_HALAMAN[h]), ALAMAT_HALAMAN[h], p + " -> " + h + ":"));
-    ["accounts", "form"].forEach((h) => eq(bukaSebagai(p, ALAMAT_HALAMAN[h]), "#/", p + " -> " + h + ":"));
+    ["accounts", "form", "checker"].forEach((h) => eq(bukaSebagai(p, ALAMAT_HALAMAN[h]), "#/", p + " -> " + h + ":"));
   });
   eq(bukaSebagai("viewer", "#/docnum"), "#/", "viewer -> Nomor Dokumen:");
   Object.values(ALAMAT_HALAMAN).forEach((a) => eq(bukaSebagai("exim", a), a, "exim -> " + a + ":"));
@@ -9505,10 +9505,10 @@ t("rel ikon: nama & peran akun disembunyikan, sisakan avatar", () => {
   const blok = css.slice(i, css.indexOf("\n}\n", i));
   if (!/body\.sb-rel \.user-chip-main[^{]*\{\s*display: none;/.test(blok)) throw new Error("nama & peran tetap tampil di rel ikon");
 });
-t("SIDEBAR: enam tautan tersusun ke bawah; ambang navbar bertahap yang lama sudah tidak ada", () => {
+t("SIDEBAR: tujuh tautan tersusun ke bawah; ambang navbar bertahap yang lama sudah tidak ada", () => {
   const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "shell.css"), "utf8");
   const auth = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "auth.css"), "utf8");
-  eq(w.document.querySelectorAll("#appSidebar .site-nav .site-nav-link").length, 6, "tautan di sidebar:");
+  eq(w.document.querySelectorAll("#appSidebar .site-nav .site-nav-link").length, 7, "tautan di sidebar:");
   eq(w.document.querySelectorAll(".app-topbar .site-nav-link").length, 0, "tautan tersisa di bilah atas:");
   if (!/\.site-nav \{[^}]*flex-direction: column;/.test(css)) throw new Error("tautan tidak tersusun ke bawah");
   if (!/\.cmd-trigger \{[\s\S]*?white-space: nowrap;[\s\S]*?flex-shrink: 0;/.test(css)) throw new Error("tulisan Quick search bisa patah");
@@ -12105,23 +12105,24 @@ const DUP_IMPORT = [
   { id: "d2", mode: "import", party: "DONGJIN", houseBL: "-", masterBL: "TBA", invoice: "INV-9", noAju: "", docNo: "", etd: "2026-08-02", items: [] },
 ];
 const DUP_EXPORT = [
-  { id: "e1", mode: "export", party: "KUMHO", houseBL: "", masterBL: "EXP777", invoice: "INV/2026/001",
+  { id: "e1", mode: "export", party: "KUMHO", houseBL: "HAWB-E1-2026", masterBL: "EXP777", invoice: "INV/2026/001",
     noAju: "000030-000001-20260801-000001", docNo: "555", etd: "2026-08-03", items: [] },
 ];
-t("nomor ganda: B/L-AWB (Master & House silang, kedua buku), Aju (kedua buku), Invoice & No. dokumen (buku sama)", () =>
+t("nomor ganda: hanya House B/L-AWB yang unik (kedua buku); Master, Aju, SPPB/PEB & Invoice boleh sama", () =>
   denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
-    const cari = (isi, id) => w.cariNomorGanda(isi, { id: id || "", mode: "import" })
+    const cari = (isi, id) => w.cariNomorGanda(isi, { id: id || "" })
       .map((g) => g.isian.kunci + ":" + g.kiriman.map((s) => s.id).join("+")).join(" ");
+    eq(baca("DUP_ISIAN").map((x) => x.id).join(","), "fHouseBL", "kotak yang diperiksa:");
     eq(cari({ houseBL: "hbl 001" }), "houseBL:d1", "tanpa beda huruf, spasi & tanda baca:");
-    eq(cari({ masterBL: "HBL001" }), "masterBL:d1", "nomor House jadwal lain diketik di kotak Master:");
-    eq(cari({ masterBL: "EXP777" }), "masterBL:e1", "B/L lintas buku:");
-    eq(cari({ noAju: "000030000001-20260801-000001" }), "noAju:e1", "No. Aju lintas buku:");
-    eq(cari({ invoice: "INV/2026/001" }), "invoice:d1", "invoice hanya di buku yang sama:");
-    eq(cari({ docNo: "555" }), "", "No. SPPB tidak dibandingkan dengan No. PEB:");
-    eq(cari({ houseBL: "-", masterBL: "TBA", invoice: "N/A" }), "", "isian pengisi diabaikan:");
+    eq(cari({ houseBL: "hawb e1 2026" }), "houseBL:e1", "House lintas buku:");
+    eq(cari({ houseBL: "MSCU1234567" }), "", "House tidak dicocokkan dengan Master jadwal lain:");
+    // Yang boleh sama: Master (konsolidasi), Aju & SPPB/PEB (CONSIGNEE NOTE kurir), Invoice (kirim bertahap)
+    eq(cari({ masterBL: "MSCU1234567", noAju: "000020-029142-20260712-197154", docNo: "123456", invoice: "INV/2026/001" }), "", "Master, Aju, SPPB & Invoice:");
+    eq(cari({ noAju: "CONSIGNEE NOTE", docNo: "CONSIGNEE NOTE" }), "", "CONSIGNEE NOTE berulang:");
+    eq(cari({ houseBL: "-" }) + cari({ houseBL: "TBA" }) + cari({ houseBL: "N/A" }), "", "isian pengisi diabaikan:");
     eq(cari({ houseBL: "XYZ1, HBL-001" }), "houseBL:d1", "beberapa nomor dalam satu kotak:");
-    eq(cari({ houseBL: "HBL-001", masterBL: "MSCU1234567", invoice: "INV/2026/001", docNo: "123456" }, "d1"), "", "jadwal yang sedang diubah tidak ganda dengan dirinya:");
-    eq(cari({ houseBL: "HBL-001", masterBL: "HBL-001" }), "houseBL:d1", "nomor yang sama di Master & House disebut sekali:");
+    eq(cari({ houseBL: "HBL-001; hbl001" }), "houseBL:d1", "nomor yang sama dua kali di satu kotak disebut sekali:");
+    eq(cari({ houseBL: "HBL-001" }, "d1"), "", "jadwal yang sedang diubah tidak ganda dengan dirinya:");
   }));
 t("nomor ganda di form: kotaknya ditandai, keterangan menyebut jadwalnya, lalu hilang saat diperbaiki", () =>
   denganDataUji(DUP_IMPORT, DUP_EXPORT, () => {
@@ -12133,17 +12134,23 @@ t("nomor ganda di form: kotaknya ditandai, keterangan menyebut jadwalnya, lalu h
       form.classList.remove("d-none");
       w.renderFormPage(null);
       $("#fHouseBL").value = "HBL001";
+      // Nomor yang boleh sama tidak ditandai
+      $("#fMasterBL").value = "MSCU1234567";
       $("#fInvoice").value = "INV/2026/001";
+      $("#fNoAju").value = "000020-029142-20260712-197154";
       const ganda = w.periksaNomorGandaForm();
-      eq(ganda.length, 2, "temuan:");
+      eq(ganda.length, 1, "temuan:");
       eq($("#fHouseBL").classList.contains("is-ganda"), true, "kotak House ditandai:");
       eq($("#dup-fHouseBL").hidden, false, "keterangan tampil:");
+      ["fMasterBL", "fInvoice", "fNoAju", "fDocNo"].forEach((id) => {
+        if ($("#" + id).classList.contains("is-ganda") || w.document.getElementById("dup-" + id)) throw new Error(id + " ikut ditandai");
+      });
       if (!/SHENG GUANG/.test($("#dup-fHouseBL").textContent)) throw new Error("jadwalnya tidak disebut: " + $("#dup-fHouseBL").textContent);
       eq($("#dup-fHouseBL [data-dup-buka]").dataset.dupBuka, "d1", "tombol Lihat:");
       const pesan = w.pesanNomorGanda(ganda);
-      if (!/HBL001 \u2014 SHENG GUANG/.test(pesan) || !/No\. Invoice INV\/2026\/001/.test(pesan)) throw new Error("pesan Simpan: " + pesan);
+      if (!/HBL001 \u2014 SHENG GUANG/.test(pesan) || /Invoice|Aju/.test(pesan)) throw new Error("pesan Simpan: " + pesan);
       $("#fHouseBL").value = "HBL-BARU-01";
-      $("#fInvoice").value = "";
+      ["fMasterBL", "fInvoice", "fNoAju"].forEach((id) => ($("#" + id).value = ""));
       w.periksaNomorGandaForm();
       eq($("#fHouseBL").classList.contains("is-ganda"), false, "tanda dilepas:");
       eq($("#dup-fHouseBL").hidden, true, "keterangan hilang:");
@@ -12901,12 +12908,15 @@ t("catatan pembaca berkas impor ikut dua bahasa", () => {
 });
 t("berkas pembaca impor tidak lagi menyimpan kalimat Indonesia panjang", () => {
   /* Dipindai per berkas: kalimat panjang yang tersisa berarti ada
-     catatan yang belum masuk kamus. */
+     catatan yang belum masuk kamus.
+     exim-engine.js tidak ikut: mesin itu dipakai bersama EXIM Checker
+     (berkasnya sama persis di kedua aplikasi), jadi pesannya tetap
+     milik mesin dan tidak bergantung pada kamus Shipment Schedule. */
   const fs = require("fs"), path = require("path");
   const dir = path.join(__dirname, "..", "js", "import");
   const sisa = [];
   fs.readdirSync(dir).forEach((nm) => {
-    if (!nm.endsWith(".js")) return;
+    if (!nm.endsWith(".js") || nm === "exim-engine.js") return;
     const src = fs
       .readFileSync(path.join(dir, nm), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -14248,29 +14258,34 @@ t("panel Fasilitas per barang tetap merentang penuh (colspan ikut bertambah 1)",
 
 console.log("\u2014 KODE DOKUMEN MASTER vs HOUSE \u2014");
 /* Daftar UN/EDIFACT 1001 yang dipakai BC 2.0:
-     704 Master B/L · 741 Master AWB · 705 B/L · 740 AWB
+     704 Master B/L · 741 Master AWB · 714 House B/L · 703 House waybill
+     · 705 B/L · 740 AWB (umum, di CEISA dipakai untuk tingkat house)
    Sebelumnya master memakai 740/742 dan house 741/743 — terbalik untuk
-   udara, karena 741 justru MASTER AWB. */
-function wbDokumenPalsu(baris) {
-  return { SheetNames: ["HEADER", "DOKUMEN"], Sheets: { HEADER: {}, DOKUMEN: {} },
-    __rows: baris };
+   udara, karena 741 justru MASTER AWB. Tanggal dokumennya ikut ke isian
+   Tanggal Master / House. */
+function bacaDokumenBl(dokumen) {
+  const wb = wbBcPalsu({ "KODE JENIS IMPOR": "1" }, [barangRowPalsu()]);
+  wb.Sheets.DOKUMEN = { __rows: dokumen.map(([kode, nomor, tanggal]) => ({ "KODE DOKUMEN": kode, "NOMOR DOKUMEN": nomor, "TANGGAL DOKUMEN": tanggal || "" })) };
+  const asli = w.XLSX;
+  w.XLSX = { utils: { sheet_to_json: (sh) => sh.__rows || [] } };
+  try {
+    const f = w.parseBcExcelWorkbook(wb).fields;
+    return [f.masterBL, f.masterBLDate, f.houseBL, f.houseBLDate].join(" | ");
+  } finally { w.XLSX = asli; }
 }
-t("704 & 741 masuk ke masterBL, 705 & 740 ke houseBL", () => {
-  const src = require("fs").readFileSync(
-    require("path").join(__dirname, "..", "js", "import", "excel-bc.js"), "utf8");
-  const m = /masterBL:\s*findDokumen\(([^)]*)\)/.exec(src);
-  const h = /houseBL:\s*findDokumen\(([^)]*)\)/.exec(src);
-  if (!m || !h) throw new Error("masterBL/houseBL tidak ditemukan");
-  eq(m[1].replace(/[\s"]/g, ""), "704,741", "masterBL:");
-  eq(h[1].replace(/[\s"]/g, ""), "705,740", "houseBL:");
+t("704 & 741 masuk ke masterBL; 714 & 703 ke houseBL, lalu 705 & 740 -- nomor & tanggalnya", () => {
+  eq(bacaDokumenBl([["704", "SNKO010260809553", "2026-10-03"], ["705", "PFSX260693", "2026-10-04"]]),
+    "SNKO010260809553 | 2026-10-03 | PFSX260693 | 2026-10-04", "laut 704 + 705:");
+  eq(bacaDokumenBl([["741", "180-12345675", "2026-09-30"], ["740", "WLAX2609001", "2026-09-30"]]),
+    "180-12345675 | 2026-09-30 | WLAX2609001 | 2026-09-30", "udara 741 + 740:");
+  eq(bacaDokumenBl([["704", "M1"], ["705", "BL-UMUM"], ["714", "HBL-714", "2026-10-05"]]),
+    "M1 |  | HBL-714 | 2026-10-05", "714 House B/L didahulukan dari 705:");
+  eq(bacaDokumenBl([["740", "AWB-UMUM"], ["703", "HAWB-703"], ["741", "MAWB-741"]]),
+    "MAWB-741 |  | HAWB-703 | ", "703 House waybill didahulukan dari 740:");
 });
-t("741 TIDAK lagi dipakai sebagai house — itu Master AWB", () => {
-  const src = require("fs").readFileSync(
-    require("path").join(__dirname, "..", "js", "import", "excel-bc.js"), "utf8");
-  if (/houseBL:\s*findDokumen\([^)]*"741"/.test(src))
-    throw new Error("741 (Master AWB) masih dipetakan ke houseBL");
-  if (/masterBL:\s*findDokumen\([^)]*"740"/.test(src))
-    throw new Error("740 (AWB house) masih dipetakan ke masterBL");
+t("741 TIDAK lagi dipakai sebagai house — itu Master AWB; 740 tidak jadi master", () => {
+  eq(bacaDokumenBl([["741", "180-12345675"]]), "180-12345675 |  |  | ", "741 saja:");
+  eq(bacaDokumenBl([["740", "WLAX2609001"]]), " |  | WLAX2609001 | ", "740 saja:");
 });
 t("pesan peringatan menyebut kode yang benar-benar dicari", () => {
   /* Pesan yang menyebut kode lain menyesatkan orang yang mengeceknya
@@ -14836,7 +14851,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const ada = new Set([...d.querySelectorAll(".ikon-sprite symbol")].map((x) => x.id));
     const tautan = [...d.querySelectorAll("#appSidebar .site-nav a.site-nav-link")];
     eq(tautan.map((a) => a.querySelector("svg.ic use").getAttribute("href")).join(","),
-      "#ik-dashboard,#ik-jadwal,#ik-dokumen,#ik-hscode,#ik-masterlist,#ik-akun", "ikon sidebar:");
+      "#ik-dashboard,#ik-jadwal,#ik-dokumen,#ik-cek,#ik-hscode,#ik-masterlist,#ik-akun", "ikon sidebar:");
     eq([...d.querySelectorAll("[data-notif-buka] svg.ic use")].map((u) => u.getAttribute("href")).join(","),
       "#ik-lonceng,#ik-lonceng", "lonceng bilah atas & sidebar:");
     if (tautan.some((a) => a.querySelector("i.bi"))) throw new Error("ikon Bootstrap lama tersisa di sidebar");
@@ -18126,13 +18141,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     };
     const ringkas = (daftar) => daftar.map((sk) => [sk.jenis, sk.nomor, sk.tanggal].join(" ")).join(" | ");
 
-    t("kode dokumen dikenali: 912 Masterlist, 457 SKB PPh, 456 SKB PPN, 860/861 COO, 959 PI; lainnya bukan fasilitas", () => {
+    t("kode dokumen dikenali: 912 Masterlist, 457 SKB PPh, 456 SKB PPN, 860/861 COO, 959 PI, 958 LS; lainnya bukan fasilitas", () => {
       const jenis = (kode, nomor, label) => {
         const r = w.kenaliDokumenPelengkap({ kode, nomor, label });
-        return r ? (r.pi ? "PI" : r.jenis + (r.jenisLainnya ? ":" + r.jenisLainnya : "")) : "-";
+        return r ? (r.pi ? "PI" : r.ls ? "LS" : r.jenis + (r.jenisLainnya ? ":" + r.jenisLainnya : "")) : "-";
       };
       eq(["912", "457", "456", "860", "861", "959", "958", "380", "705", "530"].map((k) => jenis(k, "X")).join(","),
-        "Masterlist,PPH,PPN,E-COO,E-COO,PI,-,-,-,-");
+        "Masterlist,PPH,PPN,E-COO,E-COO,PI,LS,-,-,-");
+      eq(jenis("", "1", "LAPORAN SURVEYOR"), "LS", "label LS:");
       // PIB PDF: dari label lembar Pemenuhan Persyaratan
       eq(jenis("", "1", "SURAT KETERANGAN BEBAS (SKB) PPN"), "PPN", "label SKB PPN:");
       eq(jenis("", "1", "SURAT KETERANGAN BEBAS (SKB) PPNBM"), "Lainnya:PPNBM", "tipe SKB tak dikenal:");
@@ -18145,7 +18161,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         .map((n) => w.jenisFasilitasDariNomor(n) || "-").join(","), "Masterlist,PPN,PPH,-,-", "dari nomor:");
     });
 
-    t("Excel CEISA pengguna: fasilitas barang membawa nomor & tanggal, No. PI terisi, LS dicatat", () => {
+    t("Excel CEISA pengguna: fasilitas barang membawa nomor & tanggal, No. PI & No. LS terisi, tanggal dokumen ikut", () => {
       const hasil = parseCeisa(DOKUMEN_CEISA, [5, 6, 7, 8, 10].map((d) => ({ "SERI BARANG": 1, "SERI DOKUMEN": d })));
       eq(ringkas(hasil.items[0].skb),
         "PPH KET-00001/PPUT-CT/KPP.2211/2026 2026-01-05 | Masterlist 72/PABEAN-PB/OSS/PMA/2025 2025-12-10 | PPN KET-00002/SKBPPN-CT/KPP.2211/2025 2025-03-03", "fasilitas:");
@@ -18153,10 +18169,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(w.shipmentFacilitiesSummary(hasil.items),
         "PPH KET-00001/PPUT-CT/KPP.2211/2026\nMASTER LIST 72/PABEAN-PB/OSS/PMA/2025\nPPN KET-00002/SKBPPN-CT/KPP.2211/2025", "kolom FASILITAS / SKB:");
       eq(hasil.fields.pi, "04.PI-02.26.0131", "No. PI:");
+      eq(hasil.fields.ls, "ITB21G2672826137141", "No. LS (958 Laporan Surveyor):");
       eq([hasil.fields.invoice, hasil.fields.masterBL, hasil.fields.houseBL].join(" | "),
         "DD-DDI2026090403 | SNKO010260809553 | PFSX260693", "invoice & B/L tetap:");
-      if (!hasil.notes.some((n) => n.includes("958 ITB21G2672826137141")))
-        throw new Error("Laporan Surveyor tidak disebut di catatan: " + hasil.notes.join(" / "));
+      eq([hasil.fields.invoiceDate, hasil.fields.masterBLDate, hasil.fields.houseBLDate].join(" | "),
+        "2026-09-04 | 2026-10-03 | 2026-10-03", "tanggal invoice, Master & House:");
+      // LS sudah punya isiannya sendiri: tidak lagi disebut sebagai "dokumen lain"
+      if (hasil.notes.some((n) => n.includes("958") || n.includes("ITB21G2672826137141")))
+        throw new Error("LS masih disebut di catatan: " + hasil.notes.join(" / "));
       if (hasil.notes.some((n) => n.includes("380") || n.includes("530")))
         throw new Error("dokumen tanpa tautan barang ikut disebut");
     });
@@ -18243,6 +18263,541 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       } finally {
         $("#fPI").value = simpan;
         w.eval("importFieldOrigin = {}");
+      }
+    });
+  }
+
+  console.log("— CEK PIB/PEB, MESIN EXIM BERSAMA & ISIAN DOKUMEN BARU —");
+  {
+    const XLSXuji = require("xlsx");
+    const jeda = (ms) => new Promise((r) => setTimeout(r, ms || 0));
+    /* CIPL (CI & PL di dua sheet) dan draft PIB CEISA buatan -- tanpa berkas luar. */
+    const kepalaCipl = (judul) => [
+      [judul], [],
+      ["Seller", "", "", "", "Invoice No. & Date"],
+      ["DYNAMIC DESIGN CO., LTD.", "", "", "", "DD-UJI-2610", "", "2026-10-01"],
+      [],
+      ["Consignee", "", "", "", "Port of Loading"],
+      ["PT DYNAMIC DESIGN INDONESIA", "", "", "", "BUSAN, KOREA"],
+      ["", "", "", "", "Final Destination"],
+      ["", "", "", "", "JAKARTA, INDONESIA"],
+      ["", "", "", "", "Terms of Delivery"],
+      ["", "", "", "", "CIF JAKARTA"],
+    ];
+    const bukuCiplUji = () => {
+      const wb = XLSXuji.utils.book_new();
+      XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.aoa_to_sheet(kepalaCipl("COMMERCIAL INVOICE").concat([[],
+        ["No", "Description", "HS Code", "Qty", "Unit", "Unit Price (USD)", "Amount (USD)"],
+        [1, "TYRE MOLD", "848071", 1, "SET", 6300, 6300],
+        [2, "VENT SPRING", "8481.40", 60000, "PCS", 0.44, 26400],
+        [3, "BLADE", "8480.71", 120, "PCS", 2.5, 300],
+        ["TOTAL", "", "", 60121, "", "", 33000]])), "CI");
+      XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.aoa_to_sheet(kepalaCipl("PACKING LIST").concat([[],
+        ["No", "Description", "Qty", "Unit", "N.W.(KG)", "G.W.(KG)"],
+        [1, "TYRE MOLD", 1, "SET", 850, 1020],
+        [2, "VENT SPRING", 60000, "PCS", 19.2, 20],
+        [3, "BLADE", 120, "PCS", 12, 13],
+        ["TOTAL", "3 PKGS", 60121, "", 881.2, 1053]])), "PL");
+      return wb;
+    };
+    const bukuDraftUji = () => {
+      const wb = XLSXuji.utils.book_new();
+      const lembar = (n, b) => XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(b), n);
+      lembar("HEADER", [{ "NOMOR AJU": "000020DDI00020261002000777", "KODE JENIS IMPOR": "1", "KODE KANTOR": "040300", "KODE KANTOR BONGKAR": "040300",
+        "KODE PELABUHAN MUAT": "KRPUS", "KODE PELABUHAN TUJUAN": "IDTPP", "KODE VALUTA": "USD", "KODE INCOTERM": "CIF", "NDPBM": 16500,
+        "CIF": 33000, "FREIGHT": 450, "ASURANSI": 25.5, "NETTO": 881.2, "BRUTO": 1053 }]);
+      lembar("ENTITAS", [
+        { "KODE ENTITAS": "1", "NAMA ENTITAS": "PT DYNAMIC DESIGN INDONESIA", "NOMOR IDENTITAS": "0656319779061000000000", "KODE JENIS IDENTITAS": "6" },
+        { "KODE ENTITAS": "9", "NAMA ENTITAS": "DYNAMIC DESIGN CO., LTD.", "KODE NEGARA": "KR" },
+      ]);
+      lembar("DOKUMEN", [
+        { SERI: 1, "KODE DOKUMEN": "380", "NOMOR DOKUMEN": "DD-UJI-2610", "TANGGAL DOKUMEN": "2026-10-01" },
+        { SERI: 2, "KODE DOKUMEN": "217", "NOMOR DOKUMEN": "DD-UJI-2610", "TANGGAL DOKUMEN": "2026-10-01" },
+        { SERI: 3, "KODE DOKUMEN": "704", "NOMOR DOKUMEN": "HDMUBSAJ2610001", "TANGGAL DOKUMEN": "2026-10-05" },
+        { SERI: 4, "KODE DOKUMEN": "714", "NOMOR DOKUMEN": "WLSO26100077", "TANGGAL DOKUMEN": "2026-10-05" },
+        { SERI: 5, "KODE DOKUMEN": "959", "NOMOR DOKUMEN": "04.PI-02.26.0131", "TANGGAL DOKUMEN": "2026-01-22" },
+        { SERI: 6, "KODE DOKUMEN": "958", "NOMOR DOKUMEN": "ITB21G2672826137141", "TANGGAL DOKUMEN": "2026-09-23" },
+      ]);
+      lembar("PENGANGKUT", [{ "KODE CARA ANGKUT": "1", "NAMA PENGANGKUT": "HMM HARVEST", "NOMOR PENGANGKUT": "0015N" }]);
+      lembar("KEMASAN", [{ "JUMLAH KEMASAN": 3, "KODE KEMASAN": "PK" }]);
+      lembar("BARANG", [
+        { "SERI BARANG": 1, HS: "84807190", URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 850, CIF: 6300 },
+        { "SERI BARANG": 2, HS: "84814000", URAIAN: "VENT SPRING", "JUMLAH SATUAN": 60000, "KODE SATUAN": "PCE", NETTO: 19.2, CIF: 26400 },
+        { "SERI BARANG": 3, HS: "84807110", URAIAN: "BLADE", "JUMLAH SATUAN": 120, "KODE SATUAN": "PCE", NETTO: 12, CIF: 300 },
+      ]);
+      return wb;
+    };
+    // Berkas seperti File di peramban
+    const berkasUji = (nama, wb) => {
+      const buf = XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" });
+      return { name: nama, size: buf.length, lastModified: 1, type: "", arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length) };
+    };
+    const DB_HS_UJI = [{ id: "h1", item_name: "TYRE MOLD", hs_code: "8480.71.90" }, { id: "h2", item_name: "VENT SPRING", hs_code: "8481.40.00" }];
+    const jadwalCek = (hsBlade) => ({
+      id: "cek-1", mode: "import", party: "DYNAMIC DESIGN CO., LTD.", noAju: "000020DDI00020261002000777", docNo: "",
+      invoice: "DD-UJI-2610", invoiceDate: "2026-10-01",
+      masterBL: "HDMUBSAJ2610001", masterBLDate: "2026-10-05", houseBL: "WLSO26100077", houseBLDate: "2026-10-05",
+      pi: "04.PI-02.26.0131", ls: "ITB21G2672826137141", transport: "laut", vessel: "HMM HARVEST", voyage: "0015N",
+      origin: "KRPUS", destination: "IDTPP", incoterm: "CIF", freight: 450, insurance: 25.5, ndpbm: 16500, package: "3 PK",
+      etd: "2026-10-05", eta: "2026-10-12", status: "process",
+      items: [["TYRE MOLD", "84807190", 1, "SET", 850], ["VENT SPRING", "84814000", 60000, "PCS", 19.2], ["BLADE", hsBlade, 120, "PCS", 12]]
+        .map(([namaBarang, hsCode, qty, satuan, netto]) => Object.assign(w.newItem(), { namaBarang, hsCode, qty, satuan, netto })),
+    });
+    const JADWAL_LAIN = { id: "cek-0", mode: "import", party: "LAIN", invoice: "X-1", noAju: "000020DDI00020260101000001", items: [] };
+
+    /* Halaman Cek dengan data tiruan: jadwal, Database HS Code, kurs pajak
+       satu periode; masterlist kosong. Semuanya dikembalikan sesudahnya. */
+    async function denganCek(fn, opsi) {
+      const o = opsi || {};
+      const simpan = {
+        XLSX: w.XLSX, ambil: w.ambilHsCodes, mst: w.mstAmbil, simpanHs: w.simpanHsCodeBaru,
+        data: w.eval("[data.import, data.export]"),
+        hs: w.eval("JSON.stringify(hsCodeRows || [])"),
+        kurs: w.eval("JSON.stringify(KURS_PAJAK_DATA)"),
+      };
+      w.XLSX = XLSXuji;
+      w.ambilHsCodes = async () => { w.eval("hsCodeRows = " + JSON.stringify(DB_HS_UJI)); return w.eval("hsCodeRows"); };
+      w.mstAmbil = async () => {};
+      w.eval('KURS_PAJAK_DATA = { periode: [{ mulai: "2026-01-01", sampai: "2099-12-31", kmk: "UJI/MK/2026", kurs: { USD: 16500 } }] }');
+      w.__dataUji = [[JADWAL_LAIN, jadwalCek(o.hsBlade == null ? "84807110" : o.hsBlade)], []];
+      w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+      try {
+        w.cekMulaiUlang();
+        w.eval("cekKeadaan.pendukung = null");
+        return await fn(baca("cekKeadaan"));
+      } finally {
+        w.cekMulaiUlang();
+        w.eval("cekKeadaan.pendukung = null; cekKeadaan.dbHs = ''; cekKeadaan.dbMasterlist = '';");
+        Object.assign(w, { XLSX: simpan.XLSX, ambilHsCodes: simpan.ambil, mstAmbil: simpan.mst, simpanHsCodeBaru: simpan.simpanHs });
+        w.__dataUji = simpan.data;
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
+        w.eval("hsCodeRows = " + simpan.hs + "; KURS_PAJAK_DATA = " + simpan.kurs + ";");
+      }
+    }
+    const barisCek = (k, field) => k.hasil.checks.find((x) => x.field === field) || {};
+
+    t("Cek PIB/PEB: alamat #/cek, tautan sidebar & palet; khusus EXIM, peran lain dilempar ke Jadwal", () => {
+      eq(w.halamanDariHash("#/cek"), "checker", "alamat:");
+      eq(baca("PAGE_VIEWS").checker, "#viewChecker", "tampilan:");
+      const a = $('#appSidebar .site-nav-link[data-page="checker"]');
+      eq([a.getAttribute("href"), a.querySelector("span").textContent.trim()].join(" | "), "#/cek | Cek PIB/PEB", "tautan:");
+      if (!baca("CMDK_COMMANDS").some((c) => c.halaman === "checker")) throw new Error("palet perintah tanpa Cek PIB/PEB");
+      eq(["exim", "marketing", "finance", "viewer"].map((p) => p + ":" + denganPeran(p, () => w.bolehBuka("checker"))).join(" "),
+        "exim:true marketing:false finance:false viewer:false", "hak buka:");
+      eq(bukaSebagai("viewer", "#/cek"), "#/", "viewer -> #/cek:");
+      eq(bukaSebagai("exim", "#/cek"), "#/cek", "exim -> #/cek:");
+      denganPeran("viewer", () => {
+        w.applyPermissions();
+        if (!w.document.body.classList.contains("tutup-checker")) throw new Error("tautan tidak disembunyikan untuk viewer");
+      });
+      w.location.hash = "#/";
+    });
+
+    t("mesin EXIM bersama: dimuat sebelum pemakainya, API lengkap, berdiri sendiri (tanpa penerjemah / DOM / data aplikasi)", () => {
+      const urutan = [...htmlAsli.matchAll(/<script src="(js\/[^"]+)"><\/script>/g)].map((m) => m[1]);
+      const ke = (f) => urutan.indexOf(f);
+      const mesin = ke("js/import/exim-engine.js");
+      if (!(mesin >= 0 && mesin < ke("js/import/dispatch.js") && mesin < ke("js/views/checker-view.js")))
+        throw new Error("urutan muat: mesin " + mesin + ", dispatch " + ke("js/import/dispatch.js") + ", cek " + ke("js/views/checker-view.js"));
+      const E = w.EximEngine;
+      const api = ["extractCipl", "readCiplSources", "resolveCiplSheets", "pdfCiplGrids", "pdfPagesFromDocument", "extractCiplFromPdfPages",
+        "extractDeclaration", "runCheck", "summarize", "blChecks", "hsCheckRow", "compareNum", "compareUnit", "addPlaces", "placeGroupOf",
+        "portEquivalent", "normalizeDate", "hsDigits", "fmtHs"];
+      eq(api.filter((n) => typeof E[n] !== "function").join(","), "", "fungsi yang tidak ada:");
+      ["TRANSPORT_DOCS", "XLSX_READ_OPTS", "XLSX_DECL_READ_OPTS"].forEach((n) => { if (!E[n] || typeof E[n] !== "object") throw new Error("tidak ada " + n); });
+      eq(["704", "714", "741", "703", "705", "740"].map((k) => E.TRANSPORT_DOCS[k].role).join(","), "master,house,master,house,generic,generic", "peran dokumen B/L-AWB:");
+      eq(E.fmtHs("84807190"), "8480.71.90", "fmtHs:");
+      const src = fs.readFileSync(path.join(ROOT, "js", "import", "exim-engine.js"), "utf8");
+      const m = src.match(/(^|[^\w.$])(t|tt|\$|showToast|escapeHtml)\s*\(|\b(activeMode|supabaseClient|authState|activeLang|I18N)\b/m);
+      if (m) throw new Error("mesin bergantung pada aplikasi: " + m[0].trim());
+    });
+
+    t("Cek PIB/PEB: CIPL + draft -> jadwal tertaut sendiri, B/L-AWB dari jadwal, HS 8 digit dari Database HS Code, PI & LS dari jadwal", async () => {
+      await denganCek(async (k) => {
+        // Jenis berkas dikenali dari isinya: keduanya dilepas di kotak CIPL
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
+        eq([k.galatCipl, k.galatDraft, k.galatCek].join(""), "", "galat:");
+        eq([k.berkasCipl.map((f) => f.name).join("+"), k.berkasDraft && k.berkasDraft.name, k.decl.type, k.cipl.sourceFormat].join(" | "), "CIPL.xlsx | DRAFT.xlsx | PIB | CI + PL", "berkas:");
+        eq(k.jadwalId, "cek-1", "jadwal terkait (aju & invoice, bukan jadwal lain):");
+        eq(k.dbHs, "ok", "Database HS Code termuat:");
+        // Kotak B/L-AWB diisi dari jadwal, lengkap dengan sumbernya
+        eq([$("#cekMasterNo").value, $("#cekMasterNo").dataset.otomatis, $("#cekMasterTgl").value, $("#cekHouseNo").value, $("#cekHouseTgl").value].join(" | "),
+          "HDMUBSAJ2610001 | jadwal | 2026-10-05 | WLSO26100077 | 2026-10-05", "kotak B/L-AWB:");
+        eq([$("#cekMasterSumber").textContent, $("#cekHouseTglSumber").textContent].join(" | "), "Dari Jadwal | Dari Jadwal", "sumber:");
+        ["Master BL / AWB Number", "Master BL / AWB Date", "House BL / AWB Number", "House BL / AWB Date"].forEach((f) => eq(barisCek(k, f).status, "MATCH", f + ":"));
+        // HS: CIPL 6 digit -> 8 digit dari Database HS Code; yang tidak ada di database dari barang jadwal terkait
+        eq(["Item 1 HS Code", "Item 2 HS Code", "Item 3 HS Code"].map((f) => barisCek(k, f).status).join(","), "MATCH,MATCH,MATCH", "HS Code:");
+        if (!/menurut Database HS Code: 8480\.71\.90/.test(barisCek(k, "Item 1 HS Code").expected_note)) throw new Error("HS barang 1: " + barisCek(k, "Item 1 HS Code").expected_note);
+        if (!/menurut jadwal terkait: 8480\.71\.10/.test(barisCek(k, "Item 3 HS Code").expected_note)) throw new Error("HS barang 3: " + barisCek(k, "Item 3 HS Code").expected_note);
+        // Bagian Jadwal, Fasilitas & izin, kurs pajak
+        ["No. Aju", "No. Invoice", "Tanggal Invoice", "Moda", "Kapal / Voyage", "Pelabuhan muat", "Pelabuhan tujuan", "Kemasan", "PI (Persetujuan Impor)", "LS (Laporan Surveyor)", "NDPBM ↔ kurs pajak"]
+          .forEach((f) => eq(barisCek(k, f).status, "MATCH", f + ":"));
+        eq([k.hasil.overall, k.hasil.summary.mismatches].join(" "), "PASS 0", "hasil:");
+        // Tergambar: vonis, angka saringan, grup per bagian & per barang
+        if (!/PASS/.test($("#cekVonis").textContent) || $("#cekHasil").classList.contains("d-none")) throw new Error("vonis tidak tampil");
+        eq($('[data-cek-saring="MISMATCH"] b').textContent, "0", "angka MISMATCH:");
+        eq($('[data-cek-saring="ALL"] b').textContent, String(k.hasil.checks.length), "angka semua:");
+        const grup = [...w.document.querySelectorAll("#cekDaftar details[data-cek-grup]")].map((d) => d.dataset.cekGrup);
+        ["SCHEDULE", "FACILITY", "ITEM-1", "ITEM-3"].forEach((g) => { if (grup.indexOf(g) < 0) throw new Error("grup tidak ada: " + g + " (" + grup + ")"); });
+        eq($("#btnCekLihatJadwal").hidden, false, "tombol Lihat jadwal:");
+        eq(w.cekTeksTemuan().split("\n").slice(0, 3).join(" / "), "Cek PIB 000020DDI00020261002000777: PASS / CIPL: DD-UJI-2610 / Jadwal: DYNAMIC DESIGN CO., LTD.", "teks temuan:");
+        // Nomor B/L yang diketik sendiri: keterangan "Dari Jadwal" hilang, dibandingkan sebagai Input manual
+        $("#cekMasterNo").value = "HDMUBSAJ2610009";
+        $("#cekMasterNo").dispatchEvent(new w.Event("input", { bubbles: true }));
+        eq([$("#cekMasterNo").dataset.otomatis || "", $("#cekMasterSumber").textContent].join("|"), "|", "sumber ketikan:");
+        await w.cekJalankan();
+        eq(barisCek(k, "Master BL / AWB Number").status, "MISMATCH", "nomor Master diketik berbeda:");
+        if (!/Master BL \/ AWB Number: Input manual HDMUBSAJ2610009 \| Draft HDMUBSAJ2610001/.test(w.cekTeksTemuan())) throw new Error("teks temuan: " + w.cekTeksTemuan());
+      });
+    });
+
+    t("Cek PIB/PEB: kode draft yang belum dikenal diusulkan ke Database HS Code; setelah disimpan, pemeriksaan memakainya", async () => {
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
+        eq(barisCek(k, "Item 3 HS Code").status, "INFO", "BLADE belum di database & jadwal:");
+        eq(JSON.stringify(k.hasil.saranHs.map((x) => [x.nama, x.kode, x.barang.join()])), JSON.stringify([["BLADE", "84807110", "3"]]), "usulan:");
+        eq($("#cekSaranHs").classList.contains("d-none"), false, "panel usulan tampil:");
+        const disimpan = [];
+        w.simpanHsCodeBaru = async (nama, kode, catatan) => {
+          disimpan.push([nama, kode, catatan].join(" | "));
+          w.eval("hsCodeRows").push({ id: "h3", item_name: nama, hs_code: kode, notes: catatan });
+        };
+        $("[data-cek-simpan-hs]").click();
+        eq($("#prompt_nama").value, "BLADE", "nama usulan:");
+        $("#promptOk").click();
+        for (let i = 0; i < 20 && k.hasil.saranHs.length; i++) await jeda(10);
+        eq(disimpan.join(" / "), "BLADE | 8480.71.10 | Dari draft PIB 000020DDI00020261002000777", "tersimpan:");
+        eq(barisCek(k, "Item 3 HS Code").status, "MATCH", "diperiksa ulang dengan database:");
+        eq(k.hasil.saranHs.length, 0, "usulan habis:");
+        eq($("#cekSaranHs").classList.contains("d-none"), true, "panel usulan tertutup:");
+      }, { hsBlade: "" });
+    });
+
+    t("Cek PIB/PEB tanpa CIPL: draft dibandingkan dengan barang jadwal terkait; jadwal dilepas -> tidak ada hasil", async () => {
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
+        eq([k.berkasCipl.length, !!k.berkasDraft, k.jadwalId, k.hasil.cipl].join(" | "), "0 | true | cek-1 | ", "draft saja, jadwal dari No. Aju:");
+        const barang = k.hasil.checks.filter((x) => x.section === "ITEM");
+        eq([...new Set(barang.map((x) => x.left_source))].join(","), "Jadwal", "pembanding barang:");
+        eq(["Item 1 HS Code", "Item 2 Quantity", "Item 2 Unit", "Item 3 Net Weight"].map((f) => barisCek(k, f).status).join(","), "MATCH,MATCH,MATCH,MATCH", "barang jadwal vs draft:");
+        eq($("#cekStatus").textContent.trim(), "Tanpa CIPL: draft dibandingkan dengan jadwal terkait.", "status:");
+        $("[data-cek-jadwal-lepas]").click();
+        await jeda(20);
+        eq([k.jadwalId, k.jadwalManual, k.hasil].join(" | "), " | true | ", "dilepas:");
+        eq($("#cekMasterNo").value, "", "kotak B/L dari jadwal ikut kosong:");
+        eq($("#cekHasil").classList.contains("d-none"), true, "hasil disembunyikan:");
+        w.cekMulaiUlang();
+        eq([k.berkasCipl.length, k.berkasDraft, k.decl, k.hasil].join(" | "), "0 |  |  | ", "mulai ulang:");
+      });
+    });
+
+    t("Cek PIB/PEB ikut bahasa aktif: label baris & status berbahasa Inggris saat EN", async () => {
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
+        try {
+          w.setLang("en");
+          await w.cekJalankan();
+          ["Aju No.", "Invoice No.", "Port of loading", "PI (Import Approval)", "LS (Surveyor Report)"].forEach((f) => {
+            if (!k.hasil.checks.some((x) => x.field === f)) throw new Error("label EN tidak ada: " + f);
+          });
+          eq($("#cekStatus").textContent.trim(), "Check complete. The result updates itself when the fields above change.", "status EN:");
+          eq($("#cekMasterSumber").textContent, "From schedule", "sumber EN:");
+        } finally {
+          w.setLang("id");
+        }
+        await w.cekJalankan();
+        if (!k.hasil.checks.some((x) => x.field === "No. Aju")) throw new Error("kembali ke bahasa Indonesia");
+      });
+    });
+
+    t("Tanggal Master & House B/L-AWB saling mengikuti; yang diketik sendiri tidak ditimpa; label ikut moda", () => {
+      const simpanMode = baca("activeMode");
+      const ketik = (sel, nilai, ev) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event(ev || "input", { bubbles: true })); };
+      try {
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        ketik("#fMasterBLDate", "2026-10-01", "change");
+        eq($("#fHouseBLDate").value, "2026-10-01", "House ikut Master:");
+        ketik("#fMasterBLDate", "2026-10-03", "change");
+        eq($("#fHouseBLDate").value, "2026-10-03", "House tetap ikut:");
+        ketik("#fHouseBLDate", "2026-10-05", "change");
+        eq([$("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-10-03 | 2026-10-05", "House diketik sendiri, Master tidak ditimpa:");
+        ketik("#fMasterBLDate", "2026-10-07", "change");
+        eq($("#fHouseBLDate").value, "2026-10-05", "House yang diketik sendiri tidak ikut lagi:");
+        w.renderFormPage(null);
+        eq([$("#fMasterBLDate").value, $("#fHouseBLDate").value].join("|"), "|", "form baru kosong:");
+        ketik("#fHouseBLDate", "2026-09-20", "change");
+        eq($("#fMasterBLDate").value, "2026-09-20", "Master ikut House:");
+        ketik("#fHouseBLDate", "", "change");
+        eq($("#fMasterBLDate").value, "", "dikosongkan ikut kosong:");
+        eq($("#lblMasterBLDate").textContent, "Tanggal Master B/L", "label laut:");
+        ketik("#fTransport", "udara", "change");
+        eq([$("#lblMasterBLDate").textContent, $("#lblHouseBLDate").textContent].join(" | "), "Tanggal Master AWB | Tanggal House AWB", "label udara:");
+      } finally {
+        tulis("activeMode", simpanMode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("Tanggal invoice, tanggal B/L-AWB & LS: tersimpan, termuat ulang, kolomnya di database (migrasi) -- jadwal lama tetap terbaca", async () => {
+      const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList, data: w.eval("[data.import, data.export]") };
+      const form = w.document.getElementById("viewForm");
+      const tersembunyi = form.classList.contains("d-none");
+      const ketik = (sel, nilai, ev) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event(ev || "input", { bubbles: true })); };
+      let payload = null;
+      try {
+        tulis("activeMode", "import");
+        form.classList.remove("d-none");
+        w.renderFormPage(null);
+        w.createShipment = async (p) => { payload = p; return { id: "baru-1" }; };
+        w.loadShipments = async () => {};
+        w.goBackToList = () => {};
+        ketik("#fEtd", "2026-10-01", "change");
+        ketik("#fEta", "2026-10-09", "change");
+        ketik("#fInvoice", "INV-77");
+        ketik("#fInvoiceDate", "2026-09-28", "change");
+        ketik("#fMasterBL", "MBL-UJI-1");
+        ketik("#fMasterBLDate", "2026-10-01", "change");
+        ketik("#fHouseBL", "HBL-UJI-UNIK-1");
+        ketik("#fPI", "04.PI-02.26.0131");
+        ketik("#fLS", "ITB21G2672826137141");
+        w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "X", qty: 1, harga: 1 })]');
+        $("#btnSaveShipment").click();
+        for (let i = 0; i < 20 && !payload; i++) await jeda(10);
+        if (!payload) throw new Error("tidak tersimpan");
+        await jeda(30); // alur simpan selesai (muat ulang, kembali ke daftar) sebelum tiruannya dilepas
+        eq([payload.invoiceDate, payload.masterBLDate, payload.houseBLDate, payload.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "isian tersimpan:");
+        const row = w.shipmentToRow(payload, "import");
+        eq([row.invoice_date, row.master_bl_date, row.house_bl_date, row.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "kolom database:");
+        const s = w.rowToShipment(Object.assign({ id: "baru-1", mode: "import", items: [] }, row));
+        w.__dataUji = [[s], []];
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+        w.renderFormPage("baru-1");
+        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value, $("#fLS").value].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "termuat ulang:");
+        ketik("#fHouseBLDate", "2026-10-02", "change");
+        eq($("#fMasterBLDate").value, "2026-10-02", "tersimpan sama -> tetap saling mengikuti:");
+        const lama = w.rowToShipment({ id: "lama", mode: "import", party: "A", items: [] });
+        eq([lama.invoiceDate, lama.masterBLDate, lama.houseBLDate, lama.ls].join("|"), "|||", "jadwal lama tanpa kolom baru:");
+        // Kolomnya opsional sampai migrasinya dijalankan
+        const opsional = baca("KOLOM_OPSIONAL");
+        eq(["ls", "invoice_date", "master_bl_date", "house_bl_date"].map((k) => opsional[k] && opsional[k].berkas).join(","),
+          "migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql", "kolom opsional:");
+        const sql = fs.readFileSync(path.join(ROOT, "migration-ls-tanggal-dokumen.sql"), "utf8");
+        ["ls text", "invoice_date date", "master_bl_date date", "house_bl_date date"].forEach((k) => {
+          if (sql.indexOf("add column if not exists " + k) < 0) throw new Error("migrasi tanpa " + k);
+        });
+        if (!/notify pgrst, 'reload schema'/.test(sql)) throw new Error("migrasi tidak memuat ulang skema PostgREST");
+      } finally {
+        Object.assign(w, { createShipment: simpan.buat, loadShipments: simpan.muat, goBackToList: simpan.kembali });
+        w.__dataUji = simpan.data;
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
+        tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+        w.hapusTandaNomorGanda();
+        if (tersembunyi) form.classList.add("d-none");
+      }
+    });
+
+    t("sebelum migrasi: kolom LS & tanggal dokumen dilewati satu per satu, jadwal tetap tersimpan, SATU pemberitahuan untuk isian yang tertinggal", async () => {
+      const asli = w.showToast;
+      const toast = [];
+      w.showToast = (m, j) => toast.push(j + ": " + m);
+      try {
+        const baru = ["ls", "invoice_date", "master_bl_date", "house_bl_date"];
+        const dikirim = [];
+        const kirim = async (r) => {
+          dikirim.push(Object.keys(r).filter((k) => baru.includes(k)).join(","));
+          const k = baru.find((x) => x in r);
+          return k ? { data: null, error: { code: "PGRST204", message: `Could not find the '${k}' column of 'shipments' in the schema cache` } } : { data: { id: "s1" }, error: null };
+        };
+        const hasil = await w.simpanDenganCadangan(kirim, { party: "A", ls: "ITB2", invoice_date: "2026-09-28", master_bl_date: null, house_bl_date: "" });
+        eq(hasil.error, null, "tersimpan:");
+        eq(dikirim.join(" / "), "ls,invoice_date,master_bl_date,house_bl_date / invoice_date,master_bl_date,house_bl_date / master_bl_date,house_bl_date / house_bl_date / ", "percobaan:");
+        const migrasi = toast.filter((m) => /migration-ls-tanggal-dokumen\.sql/.test(m));
+        eq(migrasi.length, 1, "pemberitahuan (" + toast.join(" || ") + "):");
+        if (!/LS, Tanggal Invoice belum/.test(migrasi[0]) || /Master|House/.test(migrasi[0]) || !/^warning/.test(migrasi[0])) throw new Error(migrasi[0]);
+        // Galat kolom LAIN yang kebetulan memuat huruf "ls" (details) bukan tanda kolom LS belum ada
+        eq(w.kolomBelumDikenal({ code: "PGRST204", message: "Could not find the 'details' column of 'shipments' in the schema cache" }), null, "'details' bukan 'ls':");
+        eq(w.kolomBelumDikenal({ code: "42703", message: 'column "house_bl_date" of relation "shipments" does not exist' }), "house_bl_date", "42703:");
+      } finally {
+        w.showToast = asli;
+      }
+    });
+
+    t("templat salin: kolom PI memuat LS (sepaket); Bulk Import memisahkannya lagi", () => {
+      const sx = { mode: "import", pi: "04.PI-02.26.0131", ls: "ITB21G2672826137141", items: [Object.assign(w.newItem(), { namaBarang: "X", qty: 1, harga: 1 })] };
+      const kolomPi = (s) => w.buildExcelCopyRows(s, baca("clipboardFormatter"))[0][23];
+      eq(kolomPi(sx), "04.PI-02.26.0131\nLS ITB21G2672826137141", "PI + LS:");
+      eq(kolomPi(Object.assign({}, sx, { ls: "" })), "04.PI-02.26.0131", "tanpa LS:");
+      eq(kolomPi(Object.assign({}, sx, { pi: "" })), "LS ITB21G2672826137141", "LS saja:");
+      eq(JSON.stringify(w.pecahPiLs("04.PI-02.26.0131\nLS ITB21G2672826137141")), JSON.stringify({ pi: "04.PI-02.26.0131", ls: "ITB21G2672826137141" }), "dipecah:");
+      eq(JSON.stringify(w.pecahPiLs("LS: ITB2\n04.PI-1")), JSON.stringify({ pi: "04.PI-1", ls: "ITB2" }), "urutan & titik dua:");
+      eq(JSON.stringify(w.pecahPiLs("04.PI-02.26.0131")), JSON.stringify({ pi: "04.PI-02.26.0131", ls: "" }), "teks lama tanpa LS:");
+      const rows = w.buildBulkRowsForShipment(Object.assign({ noAju: "AJU-1", docNo: "1", party: "PT A" }, sx), 1, "import", baca("nativeFormatter"));
+      const balik = w.reconstructShipmentFromGroup({ rows }, "import");
+      eq([balik.shipment.pi, balik.shipment.ls].join(" | "), "04.PI-02.26.0131 | ITB21G2672826137141", "Bulk Import:");
+    });
+
+    t("No. Aju CONSIGNEE NOTE: kurir (FedEx/DHL/UPS) Import bernilai < USD 1.500; ikut berubah, ketikan sendiri tidak disentuh", () => {
+      const simpan = { mode: baca("activeMode"), data: w.eval("[data.import, data.export]") };
+      const ketik = (sel, nilai) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event("input", { bubbles: true })); };
+      const nilai = (harga) => w.eval(`draftItems = [Object.assign(newItem(), { namaBarang: "BAR GAUGE", qty: 1, harga: ${harga} })]; recalcCustoms();`);
+      try {
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        ketik("#fForwarder", "DHL EXPRESS");
+        nilai(40);
+        eq($("#fNoAju").value, "CONSIGNEE NOTE", "DHL, USD 40:");
+        nilai(1500);
+        eq($("#fNoAju").value, "", "USD 1.500 (bukan di bawah):");
+        nilai(40);
+        eq($("#fNoAju").value, "CONSIGNEE NOTE", "turun lagi:");
+        ketik("#fForwarder", "PT WIDE LOGISTICS");
+        eq($("#fNoAju").value, "", "bukan kurir:");
+        ketik("#fForwarder", "");
+        ketik("#fVoyage", "FEDEX");
+        eq($("#fNoAju").value, "CONSIGNEE NOTE", "kurir dari kolom Flight / Voyage:");
+        ketik("#fNoAju", "000020-029142-20261012-197154");
+        nilai(2000);
+        eq($("#fNoAju").value, "000020-029142-20261012-197154", "ketikan sendiri tidak disentuh:");
+        tulis("activeMode", "export");
+        w.renderFormPage(null);
+        ketik("#fForwarder", "UPS");
+        nilai(40);
+        eq($("#fNoAju").value, "", "Export tidak pernah CONSIGNEE NOTE:");
+        // Tersimpan CONSIGNEE NOTE & syaratnya masih berlaku -> tetap diatur otomatis
+        tulis("activeMode", "import");
+        w.__dataUji = [[
+          { id: "cn1", mode: "import", forwarder: "FEDEX", noAju: "CONSIGNEE NOTE", items: [{ namaBarang: "X", qty: 1, harga: 100 }] },
+          { id: "cn2", mode: "import", forwarder: "PRIME", noAju: "CONSIGNEE NOTE", items: [{ namaBarang: "X", qty: 1, harga: 100 }] },
+        ], []];
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
+        w.renderFormPage("cn1");
+        eq([$("#fNoAju").value, $("#fNoAju").dataset.auto].join(" | "), "CONSIGNEE NOTE | cn", "dimuat, tetap otomatis:");
+        w.renderFormPage("cn2");
+        nilai(5000);
+        eq($("#fNoAju").value, "CONSIGNEE NOTE", "kurir di luar daftar: isian pengguna, tidak dikosongkan:");
+      } finally {
+        w.__dataUji = simpan.data;
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
+        tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("impor dokumen: draft CEISA & PIB PDF mengisi tanggal invoice, tanggal Master/House & LS; CIPL tidak mengisi tanggal B/L-AWB", () => {
+      const simpan = { mode: baca("activeMode"), XLSX: w.XLSX };
+      try {
+        tulis("activeMode", "import");
+        w.XLSX = XLSXuji;
+        w.renderFormPage(null);
+        const hasil = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(bukuDraftUji(), { type: "buffer", bookType: "xlsx" }), { type: "buffer", cellDates: true }));
+        eq([hasil.fields.invoiceDate, hasil.fields.masterBL, hasil.fields.masterBLDate, hasil.fields.houseBL, hasil.fields.houseBLDate, hasil.fields.pi, hasil.fields.ls].join(" | "),
+          "2026-10-01 | HDMUBSAJ2610001 | 2026-10-05 | WLSO26100077 | 2026-10-05 | 04.PI-02.26.0131 | ITB21G2672826137141", "draft CEISA:");
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(hasil);
+        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value, $("#fLS").value, $("#fPI").value].join(" | "),
+          "2026-10-01 | 2026-10-05 | 2026-10-05 | ITB21G2672826137141 | 04.PI-02.26.0131", "form dari draft:");
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData({ source: "cipl", fields: { invoice: "INV-9", invoiceDate: "2026-09-16", masterBLDate: "2026-09-25", houseBLDate: "2026-09-25" }, items: [], notes: [] });
+        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-09-16 |  | ", "CIPL: tanggal invoice saja:");
+        const pib = w.parsePibPdfText(["Nomor Pengajuan : 000020PRM61620261012009918", "1 380 INVOICE No. DD-DDI2026090403", "Tgl. 04-09-2026",
+          "5 958 LAPORAN SURVEYOR No. ITB21G2672826137141", "Tgl. 23-09-2026"].join("\n"), []);
+        eq([pib.fields.invoiceDate, pib.fields.ls].join(" | "), "2026-09-04 | ITB21G2672826137141", "PIB PDF:");
+      } finally {
+        w.XLSX = simpan.XLSX;
+        w.eval("importFieldOrigin = {}");
+        tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("impor CIPL di form lewat mesin EXIM: HS 8 digit dari Database HS Code; catatan HS CIPL gugur bila draft CEISA ikut dipilih", async () => {
+      const simpan = { mode: baca("activeMode"), XLSX: w.XLSX, hs: w.eval("JSON.stringify(hsCodeRows || [])") };
+      const catatan = () => [...w.document.querySelectorAll("#importNotesList li")].map((li) => li.textContent).join(" // ");
+      const barang = () => w.eval("draftItems").filter((it) => it.namaBarang).map((it) => it.namaBarang + ":" + String(it.hsCode).replace(/\D/g, "")).join(" | ");
+      try {
+        tulis("activeMode", "import");
+        w.XLSX = XLSXuji;
+        w.eval("hsCodeRows = " + JSON.stringify(DB_HS_UJI));
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        await w.prosesBerkasImport([berkasUji("CIPL.xlsx", bukuCiplUji())]);
+        eq(barang(), "TYRE MOLD:84807190 | VENT SPRING:84814000 | BLADE:848071", "HS per barang (BLADE belum di database):");
+        eq([$("#fInvoice").value, $("#fInvoiceDate").value, $("#fIncoterm").value].join(" | "), "DD-UJI-2610 | 2026-10-01 | CIF", "isian kepala:");
+        const c1 = catatan();
+        if (!/HS Code 8 digit barang 1, 2 diambil dari Database HS Code \(CIPL hanya menulis 6 digit\)/.test(c1)) throw new Error("catatan Database HS Code: " + c1);
+        if (!/HS Code barang 3 belum 8 digit/.test(c1)) throw new Error("catatan HS belum 8 digit: " + c1);
+        if (!/CIPL dibaca dengan mesin EXIM \(CI \+ PL\)/.test(c1)) throw new Error("catatan mesin: " + c1);
+        // CIPL + draft sekaligus (draft dipilih lebih dulu): HS dari draft, catatan HS CIPL tidak tersisa
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        await w.prosesBerkasImport([berkasUji("DRAFT.xlsx", bukuDraftUji()), berkasUji("CIPL.xlsx", bukuCiplUji())]);
+        eq(barang(), "TYRE MOLD:84807190 | VENT SPRING:84814000 | BLADE:84807110", "HS dari draft:");
+        const c2 = catatan();
+        if (/HS Code (8 digit )?barang/.test(c2)) throw new Error("catatan HS CIPL tersisa: " + c2);
+        eq(w.eval("draftItems").filter((it) => it.namaBarang).map((it) => it.harga).join(","), "6300,0.44,2.5", "harga tetap dari CIPL:");
+      } finally {
+        w.XLSX = simpan.XLSX;
+        w.eval("hsCodeRows = " + simpan.hs + "; importFieldOrigin = {};");
+        tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("label: No. Kontainer/Seal (Container/Seal Number) & LS (Laporan Surveyor) di sebelah PI, kedua bahasa", () => {
+      const label = (id) => $(`label[for="${id}"]`).textContent.trim();
+      eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "No. Kontainer/Seal | LS (Laporan Surveyor) | Tanggal Invoice", "ID:");
+      // LS bersebelahan dengan PI di Customs & Charges
+      const pi = $("#fPI").closest(".fl-dua");
+      if (!pi || !pi.contains($("#fLS"))) throw new Error("LS tidak di sebelah PI");
+      try {
+        w.setLang("en");
+        eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "Container/Seal Number | LS (Surveyor Report) | Invoice Date", "EN:");
+      } finally {
+        w.setLang("id");
+      }
+    });
+
+    t("Masterlist: QTY & Nilai Invoice di kotak realisasi rata tengah; cetakan & unduhan Excel QTTY/USED/REMAIN rata tengah", async () => {
+      const css = fs.readFileSync(path.join(ROOT, "css", "masterlist.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      if (!/\.mst-pilih \.mst-pilih-qty,\s*\.mst-pilih \.mst-pilih-nilai\s*\{[^}]*text-align:\s*center/.test(css)) throw new Error("kotak QTY & Nilai Invoice tidak rata tengah");
+      if (!/\.mst-pilih-kepala \.prompt-label\[aria-hidden\]\s*\{[^}]*text-align:\s*center/.test(css)) throw new Error("judul kolom QTY & Nilai Invoice tidak rata tengah");
+      eq(baca("SO_KOLOM").filter((k) => ["QTTY", "USED", "REMAIN"].includes(k.judul)).map((k) => k.kelas).join(","), "so-angka,so-angka,so-angka", "kelas kolom cetak:");
+      if (!/\.so-angka \{ text-align: center;/.test(fs.readFileSync(path.join(ROOT, "js", "features", "masterlist-print.js"), "utf8"))) throw new Error("kolom angka cetakan tidak rata tengah");
+      // Unduhan Excel: ExcelJS tiruan mencatat perataan tiap sel
+      const lembar = [];
+      class LembarUji {
+        constructor(nama) { this.nama = nama; this.sel = {}; this.columns = []; }
+        getCell(r, c) { const k = r + ":" + c; return this.sel[k] || (this.sel[k] = {}); }
+        getRow() { return {}; }
+        mergeCells() {}
+      }
+      const asli = { ExcelJS: w.ExcelJS, susun: w.mstSusun, baris: w.mstBarisExcel, ringkas: w.mstRingkasan, blok: w.mstBlokRealisasiExcel, url: w.URL.createObjectURL, cabut: w.URL.revokeObjectURL, klik: w.HTMLAnchorElement.prototype.click, toast: w.showToast };
+      w.ExcelJS = { Workbook: class { addWorksheet(n) { const l = new LembarUji(n); lembar.push(l); return l; } get xlsx() { return { writeBuffer: async () => new ArrayBuffer(8) }; } } };
+      w.mstSusun = () => [{ nilaiKuota: null, nilaiTerpakai: 0 }];
+      w.mstBarisExcel = () => [[1, "VACUUM RUBBER MIXER", "SPEC", "NIU", 4, 3, 1, 7154, "", "", "", "", ""]];
+      w.mstRingkasan = () => ({ kuota: 4, terpakai: 3, sisa: 1, nilaiKuota: 0, nilaiSisa: 0 });
+      w.mstBlokRealisasiExcel = () => [];
+      w.URL.createObjectURL = () => "blob:uji";
+      w.URL.revokeObjectURL = () => {};
+      w.HTMLAnchorElement.prototype.click = function () {};
+      w.showToast = () => {};
+      try {
+        await w.mstUnduhExcel();
+        const ws = lembar[0];
+        if (!ws) throw new Error("berkas Excel tidak dibuat");
+        const rata = (r, c) => (ws.sel[r + ":" + c] && ws.sel[r + ":" + c].alignment || {}).horizontal;
+        // Kolom tabel mulai di B: QTTY = F, USED = G, REMAIN = H
+        eq([6, 7, 8].map((c) => rata(1, c) + "/" + rata(2, c) + "/" + rata(3, c)).join(" "), "center/center/center center/center/center center/center/center", "QTTY, USED, REMAIN (judul/data/total):");
+        eq([rata(2, 3), rata(2, 4)].join(","), "left,left", "DESCRIPTION & SPECIFICATION tetap rata kiri:");
+      } finally {
+        Object.assign(w, { ExcelJS: asli.ExcelJS, mstSusun: asli.susun, mstBarisExcel: asli.baris, mstRingkasan: asli.ringkas, mstBlokRealisasiExcel: asli.blok, showToast: asli.toast });
+        // Pencabut URL dipanggil sedetik kemudian: tiruannya dibiarkan kalau jsdom tidak punya aslinya
+        w.URL.createObjectURL = asli.url || (() => "");
+        w.URL.revokeObjectURL = asli.cabut || (() => {});
+        w.HTMLAnchorElement.prototype.click = asli.klik;
       }
     });
   }

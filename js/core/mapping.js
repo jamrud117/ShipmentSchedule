@@ -8,8 +8,14 @@ const FIELD_MAP = {
   noAju: "no_aju",
   party: "party",
   invoice: "invoice",
+  /* Tanggal invoice & tanggal Master / House B/L-AWB -- kolom baru,
+     migration-ls-tanggal-dokumen.sql. Sebelum migrasinya dijalankan
+     jadwal tetap tersimpan tanpa kolom ini (KOLOM_OPSIONAL, api.js). */
+  invoiceDate: "invoice_date",
   masterBL: "master_bl",
+  masterBLDate: "master_bl_date",
   houseBL: "house_bl",
+  houseBLDate: "house_bl_date",
   factoryDate: "factory_date",
   factoryTime: "factory_time",
   forwarder: "forwarder",
@@ -58,6 +64,8 @@ const FIELD_MAP = {
   ppn: "ppn",
   pph: "pph",
   pi: "pi",
+  // LS (Laporan Surveyor, dokumen 958) -- sepaket dengan PI; kolom baru, migrasi yang sama
+  ls: "ls",
   // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini
   package: "package",
   routeType: "route_type",
