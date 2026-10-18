@@ -3433,6 +3433,76 @@ t("pencarian dikirim ke DATABASE (bukan menyaring halaman di layar)", async () =
     w.eval("docNumActiveTab = " + JSON.stringify(tab));
   }
 });
+t("kotak cari: kata kunci berupa nominal -- dengan / tanpa pemisah ribuan, 'Rp.', sen; selain itu bukan nominal", () => {
+  const A = (q) => JSON.stringify(w.dnAngkaCari(q));
+  eq([A("139.731"), A("139731"), A("Rp. 139.731"), A("Rp139.731,-"), A("139.731,00"), A("USD 1,234.56"), A("15 242 517")].join(" "),
+    '["139731"] ["139731"] ["139731"] ["139731"] ["13973100","139731"] ["123456"] ["15242517"]', "nominal:");
+  eq([A("IN-WL2610-00060"), A("fedex"), A("12"), A(""), A("SRE453969"), A("1.234.567x")].join(" "), "[] [] [] [] [] []", "bukan nominal:");
+});
+t("cari nominal di riwayat: seluruh riwayat dicocokkan di aplikasi (Nilai ATAU isian teks), dibagi per halaman; jawaban usang dibuang", async () => {
+  const asli = w.eval("supabaseClient.from");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub"), cari: baca("docNumCari"), hal: baca("docNumPage"), ukuran: baca("docNumPageSize"), eks: baca("data.export") };
+  const ambil = [];
+  let orDipanggil = null;
+  try {
+    w.__barisUji = [
+      barisDana("f1", { payee: "FEDEX", amount: "139731", notes: "Storage" }),
+      barisDana("f2", { payee: "WIDE", amount: "15242517", notes: "Tax" }),
+      barisDana("f3", { payee: "KAS NEGARA", billingNo: "640261006422268", amount: "5890632" }),
+      barisDana("f4", { payee: "DHL", amount: "2139731", notes: "Duty" }),
+    ];
+    w.__catat = { range: (a, b) => ambil.push(a + "-" + b), or: (s) => (orDipanggil = s) };
+    /* Seluruh riwayat (0-999) dijawab LEBIH LAMBAT daripada satu halaman:
+       pencarian nominal yang sudah diganti kata kunci lain datang belakangan. */
+    w.eval(`supabaseClient.from = () => { let kata = ""; const c = { select: () => c, eq: () => c, filter: () => c, not: () => c, is: () => c,
+      or: (s) => { kata = s; window.__catat.or(s); return c; }, order: () => c,
+      range: (a, b) => { window.__catat.range(a, b);
+        const data = kata ? window.__barisUji.filter((r) => kata.includes("fedex") && r.payload.payee === "FEDEX") : window.__barisUji.slice(a, b + 1);
+        const hasil = { data, error: null, count: kata ? data.length : window.__barisUji.length };
+        return new Promise((ok) => setTimeout(() => ok(hasil), b === 999 ? 30 : 0)); } }; return c; }`);
+    const id = () => w.eval("docNumHistoryRows").map((r) => r.id).join(",");
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumPage = 1; docNumPageSize = 10; docNumCari = "139.731"');
+    await w.renderDocNumHistory();
+    eq(id(), "f1,f4", "Rp. 139.731 & Rp. 2.139.731:");
+    eq([orDipanggil, ambil.join(" ")].join(" | "), " | 0-999", "nominal: tanpa filter teks, seluruh riwayat diambil:");
+    w.eval('docNumCari = "640261006422268"');
+    await w.renderDocNumHistory();
+    eq(id(), "f3", "angka yang cocok dengan nomor billing (isian teks):");
+    w.eval('docNumCari = "139731"; docNumPageSize = 1');
+    await w.renderDocNumHistory();
+    eq(id(), "f1", "halaman 1:");
+    if (!/1–1[\s\S]*2/.test(w.document.getElementById("docNumPagination").textContent)) throw new Error("paginasi: " + w.document.getElementById("docNumPagination").textContent);
+    w.eval("docNumPage = 2");
+    await w.renderDocNumHistory();
+    eq(id(), "f4", "halaman 2:");
+    w.eval('docNumPage = 1; docNumPageSize = 10; docNumCari = "999999"');
+    await w.renderDocNumHistory();
+    if (!/999999/.test(w.document.getElementById("docNumHistory").textContent)) throw new Error("pesan kosong tidak menyebut nominalnya");
+    // Kata kunci diganti sebelum seluruh riwayat terjawab: hasil nominal yang datang belakangan tidak menimpa
+    w.eval('docNumCari = "139731"');
+    const lama = w.renderDocNumHistory();
+    w.eval('docNumCari = "fedex"');
+    await w.renderDocNumHistory();
+    await lama;
+    eq(id(), "f1", "hasil kata kunci terakhir tetap tampil:");
+    // Amount invoice ikut: angka yang sama dengan kolom Amount
+    tulis("data.export", [{ id: "e9", mode: "export", party: "KUMHO", items: [
+      { namaBarang: "TYRE MOLD", qty: 1, satuan: "SET", harga: 9918.97, hsCode: "84807190" },
+      { namaBarang: "TYRE MOLD", qty: 2, satuan: "SET", harga: 6200, hsCode: "84807190" } ] }]);
+    const inv = { id: "i1", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 059", payload: { shipmentId: "e9", customer: "KUMHO" } };
+    eq(["22,318.97", "22318.97", "22.318", "999"].map((q) => w.dnCocokCari(inv, "invoice", q)).join(","), "true,true,true,false", "Amount invoice:");
+    // Tab Summary memakai kotak cari yang sama
+    const k = kolomDana([barisDana("s1", { payee: "FEDEX", amount: "139731" }), barisDana("s2", { payee: "DHL", amount: "410636" })]);
+    const f = (q) => w.fsumSaring(k, { dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", q }).map((x) => x.id).join(",");
+    eq([f("139.731"), f("Rp. 410.636"), f("dhl")].join(" | "), "s1 | s2 | s2", "Summary:");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    w.eval(`docNumActiveTab = ${JSON.stringify(simpan.tab)}; docNumHistorySub = ${JSON.stringify(simpan.sub)}; docNumCari = ${JSON.stringify(simpan.cari)};
+      docNumPage = ${simpan.hal}; docNumPageSize = ${simpan.ukuran};`);
+    tulis("data.export", simpan.eks || []);
+  }
+});
 t("ganti jenis dokumen mengosongkan pencarian", () => {
   const tab = baca("docNumActiveTab");
   const kotak = w.document.getElementById("docNumSearch");

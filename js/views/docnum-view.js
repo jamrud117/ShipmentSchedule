@@ -153,8 +153,9 @@ const DOCNUM_HISTORY_FILTERS = {
    Kolom yang dicari mencakup isian semua jenis dokumen sekaligus
    (penerima invoice, surat jalan, pengajuan dana, surat keluar); isian
    yang tidak dimiliki suatu jenis bernilai kosong dan tidak pernah
-   cocok. Nilai pengajuan tidak ikut -- ia dihitung di aplikasi, tidak
-   tersimpan sebagai teks yang bisa dicari.
+   cocok. NOMINAL (Nilai pengajuan dana, Amount invoice) dihitung di
+   aplikasi, tidak tersimpan di database -- kata kunci berupa angka
+   dicocokkan di aplikasi atas seluruh riwayat (dnAngkaCari).
 ------------------------------------------------------------------ */
 let docNumCari = "";
 
@@ -272,10 +273,74 @@ function dnCarrierInvoice(p) {
   return carrierCipl(p, jadwal);
 }
 
+// Kata kunci bersih -- sama untuk filter database & pencocokan di aplikasi
+function dnKataCari(q) {
+  return String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function dnFilterCari(q) {
-  const bersih = String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
+  const bersih = dnKataCari(q);
   if (!bersih) return null;
   return DN_KOLOM_CARI.map((k) => `${k}.ilike."%${bersih}%"`).join(",");
+}
+
+/* PENCARIAN NOMINAL. Kata kunci berupa angka -- "139.731", "139731",
+   "Rp. 139.731", "15.242.517", "USD 1,234.56" -- juga dicari di kolom
+   Nilai (Pengajuan Dana) / Amount (Invoice). Yang dicocokkan angka-
+   angkanya saja, jadi ditulis dengan atau tanpa pemisah ribuan sama
+   saja. Minimal 3 angka; kata kunci yang memuat huruf lain
+   ("IN-WL2610-00060") bukan nominal. "139.731,00" ikut dicari sebagai
+   "139.731" (rupiah tampil tanpa sen). Hasil: [] = bukan nominal. */
+function dnAngkaCari(q) {
+  const teks = String(q || "")
+    .trim()
+    .replace(/^(?:rp\.?|idr|usd|us\$|\$)\s*/i, "")
+    .replace(/\s*(?:idr|usd)$/i, "")
+    .replace(/[.,]-$/, "");
+  if (!/^\d[\d.,\s]*$/.test(teks)) return [];
+  const calon = [teks];
+  if (/[.,]0{1,2}$/.test(teks)) calon.push(teks.replace(/[.,]0{1,2}$/, ""));
+  return [...new Set(calon.map((x) => x.replace(/\D/g, "")))].filter((x) => x.length >= 3);
+}
+
+// Nilai satu baris persis seperti tampil di tabelnya; "" = jenis tanpa kolom nilai
+function dnTeksNilaiBaris(r, jenisKey) {
+  const p = r.payload || {};
+  if (jenisKey === "fund") return frNilai(frTotalPengajuan(p), p.currency || "IDR");
+  if (jenisKey === "invoice") return dnTeksNilaiInvoice(r);
+  return "";
+}
+
+/* Cocok = isian teks yang sama dengan filter database (DN_KOLOM_CARI,
+   tanpa beda huruf) ATAU nilainya memuat nominal yang dicari. */
+function dnCocokCari(r, jenisKey, q) {
+  const kata = dnKataCari(q).toLowerCase();
+  const p = r.payload || {};
+  const cocokTeks =
+    !!kata &&
+    DN_KOLOM_CARI.some((k) => {
+      const v = k.startsWith("payload->>") ? p[k.slice(10)] : r[k];
+      return v != null && String(v).toLowerCase().includes(kata);
+    });
+  if (cocokTeks) return true;
+  const angka = dnAngkaCari(q);
+  const nilai = angka.length ? dnTeksNilaiBaris(r, jenisKey).replace(/\D/g, "") : "";
+  return !!nilai && angka.some((a) => nilai.includes(a));
+}
+
+// Seluruh baris yang lolos saringan lain, per 1.000 (batas satu permintaan Supabase)
+async function dnAmbilSemuaRiwayat(kueriDasar) {
+  const semua = [];
+  for (let mulai = 0; mulai < 50000; mulai += 1000) {
+    const { data, error } = await kueriDasar()
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(mulai, mulai + 999);
+    if (error) throw error;
+    semua.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return semua;
 }
 
 function docNumPayloadFilter() {
@@ -1963,39 +2028,56 @@ async function renderDocNumHistory() {
 
   const jenis = resolveDocNumType(docNumActiveTab);
   try {
-    // Ambil HANYA sebanyak satu halaman
+    // Saringan saat kueri dikirim: jawaban yang datang sesudah saringannya berubah dibuang
+    const keadaan = () =>
+      [docNumActiveTab, docNumHistorySub, docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang.join("~"), docNumDasarTanggal].join("|");
+    const keadaanKirim = keadaan();
     const dari = (docNumPage - 1) * docNumPageSize;
-    let kueri = supabaseClient
-      .from("document_numbers")
-      .select(
-        /* doc_type WAJIB ikut diambil.
+    // Kueri dengan semua saringan kecuali kata kunci & halaman -- dibuat baru tiap dipakai
+    const kueriDasar = () => {
+      const kueri = supabaseClient
+        .from("document_numbers")
+        .select(
+          /* doc_type WAJIB ikut diambil.
 
-           Tanpanya, tiap baris di layar punya doc_type undefined —
-           dan siapa pun yang menanyakannya akan mendapat jawaban yang
-           kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
-           undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
-           melompat ke panel Invoice dan mengisi form yang keliru.
+             Tanpanya, tiap baris di layar punya doc_type undefined —
+             dan siapa pun yang menanyakannya akan mendapat jawaban yang
+             kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
+             undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
+             melompat ke panel Invoice dan mengisi form yang keliru.
 
-           Baris ini memang sudah disaring per jenis di kueri, tapi
-           datanya tetap harus membawa jenisnya sendiri — yang menyaring
-           dan yang membaca bukan bagian kode yang sama. */
-        /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
-           lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
-           tebakan dari ekor nomor invoice, yang untuk pola Kumho
-           menghasilkan tanggalnya. */
-        "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
-        { count: "exact" },
-      )
-      .eq("doc_type", docNumHistoryKey())
-      .filter(...docNumPayloadFilter());
-    const saringCari = dnFilterCari(docNumCari);
-    if (saringCari) kueri = kueri.or(saringCari);
-    kueri = dnTerapkanSaringBayar(kueri);
-    kueri = dnTerapkanSaringTanggal(kueri);
-    const { data, error, count } = await kueri
-      .order("created_at", { ascending: false })
-      .range(dari, dari + docNumPageSize - 1);
-    if (error) throw error;
+             Baris ini memang sudah disaring per jenis di kueri, tapi
+             datanya tetap harus membawa jenisnya sendiri — yang menyaring
+             dan yang membaca bukan bagian kode yang sama. */
+          /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
+             lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
+             tebakan dari ekor nomor invoice, yang untuk pola Kumho
+             menghasilkan tanggalnya. */
+          "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
+          { count: "exact" },
+        )
+        .eq("doc_type", docNumHistoryKey())
+        .filter(...docNumPayloadFilter());
+      return dnTerapkanSaringTanggal(dnTerapkanSaringBayar(kueri));
+    };
+    let data;
+    let count;
+    if ((jenis.key === "fund" || jenis.key === "invoice") && dnAngkaCari(docNumCari).length) {
+      /* Nominal: nilainya dihitung di aplikasi -- seluruh riwayat (saringan
+         lain tetap berlaku) dicocokkan di sini, lalu dibagi per halaman. */
+      const cocok = (await dnAmbilSemuaRiwayat(kueriDasar)).filter((r) => dnCocokCari(r, jenis.key, docNumCari));
+      count = cocok.length;
+      data = cocok.slice(dari, dari + docNumPageSize);
+    } else {
+      // Ambil HANYA sebanyak satu halaman
+      let kueri = kueriDasar();
+      const saringCari = dnFilterCari(docNumCari);
+      if (saringCari) kueri = kueri.or(saringCari);
+      const hasil = await kueri.order("created_at", { ascending: false }).range(dari, dari + docNumPageSize - 1);
+      if (hasil.error) throw hasil.error;
+      ({ data, count } = hasil);
+    }
+    if (keadaan() !== keadaanKirim) return;
 
     /* Disimpan supaya tombol cetak tidak perlu memanggil database lagi —
        barisnya sudah ada di layar. Sengaja dipastikan berupa LARIK:

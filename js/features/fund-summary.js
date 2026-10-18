@@ -93,10 +93,12 @@ function fsumSaring(kolom, f) {
     if (f.transaksi && k.transaksi !== f.transaksi) return false;
     if (f.bayar === "lunas" && !k.lunas) return false;
     if (f.bayar === "belum" && k.lunas) return false;
-    // Kotak cari riwayat ikut berlaku di sini, di seluruh kolom teks.
+    // Kotak cari riwayat ikut berlaku di sini: seluruh kolom teks + nominal Cost (dnAngkaCari, docnum-view.js)
     if (f.q) {
       const isi = [k.nomorSurat, k.nomor, k.blAwb, k.company, k.customer, k.detail, k.jenis, k.transaksi].join(" ").toLowerCase();
-      if (!isi.includes(String(f.q).toLowerCase())) return false;
+      const nilai = frNilai(k.nilai, k.mataUang).replace(/\D/g, "");
+      const nominal = typeof dnAngkaCari === "function" ? dnAngkaCari(f.q) : [];
+      if (!isi.includes(String(f.q).toLowerCase()) && !nominal.some((a) => nilai.includes(a))) return false;
     }
     return true;
   });
