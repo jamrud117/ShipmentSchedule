@@ -19071,6 +19071,51 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       });
     });
 
+    t("Cek PIB/PEB: rincian barang urut Seri Barang draft -- jadwal & CIPL yang urutannya lain dipasangkan menurut isinya (dengan CIPL, CIPL saja, tanpa CIPL)", async () => {
+      // Draft: Seri 1 BLADE, 2 TYRE MOLD, 3 VENT SPRING (lembarnya juga tidak berurutan); jadwal & CIPL: TYRE MOLD, VENT SPRING, BLADE
+      const draft = bukuDraftUji();
+      draft.Sheets.BARANG = XLSXuji.utils.json_to_sheet([
+        { "SERI BARANG": 3, HS: "84814000", URAIAN: "VENT SPRING", "JUMLAH SATUAN": 60000, "KODE SATUAN": "PCE", NETTO: 19.2, CIF: 26400 },
+        { "SERI BARANG": 1, HS: "84807110", URAIAN: "BLADE", "JUMLAH SATUAN": 120, "KODE SATUAN": "PCE", NETTO: 12, CIF: 300 },
+        { "SERI BARANG": 2, HS: "84807190", URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 850, CIF: 6300 },
+      ]);
+      const pasangan = (k, kolom) => [1, 2, 3].map((n) => { const x = barisCek(k, `Item ${n} ${kolom}`); return `${n}:${x.cipl_display}/${x.pib_display}:${x.status}`; }).join(" ");
+      const grup = () => [...w.document.querySelectorAll('#cekDaftar details[data-cek-grup^="ITEM-"]')]
+        .map((d) => [d.dataset.cekGrup, d.querySelector("summary b").textContent, (d.querySelector("summary small") || { textContent: "" }).textContent].join(" ")).join(" | ");
+      // 1. CIPL + jadwal
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", draft)], "cipl");
+        eq(k.jadwalId, "cek-1", "jadwal terkait:");
+        eq(pasangan(k, "Uraian"), "1:BLADE/BLADE:MATCH 2:TYRE MOLD/TYRE MOLD:MATCH 3:VENT SPRING/VENT SPRING:MATCH", "CIPL + jadwal -> Uraian per seri:");
+        eq(["Quantity", "Amount / CIF", "Net Weight"].map((f) => pasangan(k, f)).join(" || "),
+          "1:120/120:MATCH 2:1/1:MATCH 3:60000/60000:MATCH || 1:300/300:MATCH 2:6300/6300:MATCH 3:26400/26400:MATCH || 1:12/12:MATCH 2:850/850:MATCH 3:19.2/19.2:MATCH", "jumlah, nilai & netto per seri:");
+        eq([k.hasil.overall, k.hasil.summary.mismatches].join(" "), "PASS 0", "hasil:");
+        eq(grup(), "ITEM-1 Barang 1 BLADE | ITEM-2 Barang 2 TYRE MOLD | ITEM-3 Barang 3 VENT SPRING", "grup barang urut seri:");
+      });
+      // 2. CIPL saja (jadwal terkait tanpa barang)
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", draft)], "cipl");
+        eq(k.hasil.barangDariJadwal || false, false, "barang dari CIPL:");
+        eq(pasangan(k, "Description"), "1:BLADE/BLADE:MATCH 2:TYRE MOLD/TYRE MOLD:MATCH 3:VENT SPRING/VENT SPRING:MATCH", "CIPL saja -> Description per seri:");
+        eq(pasangan(k, "Quantity"), "1:120/120:MATCH 2:1/1:MATCH 3:60000/60000:MATCH", "jumlah per seri:");
+      }, { jadwal: Object.assign(jadwalCek("84807110"), { items: [] }) });
+      // 3. Tanpa CIPL: draft vs barang jadwal
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", draft)], "cipl");
+        eq(pasangan(k, "Uraian"), "1:BLADE/BLADE:MATCH 2:TYRE MOLD/TYRE MOLD:MATCH 3:VENT SPRING/VENT SPRING:MATCH", "tanpa CIPL -> Uraian per seri:");
+        eq(k.hasil.summary.mismatches, 0, "tanpa mismatch:");
+      });
+      // Aturan pasangan: barang kembar tetap berurutan; HS Code bila nama berbeda; sisanya menurut urutan; yang tidak ada di draft = null
+      const decl = { items: [{ no: 1, description: "BLADE", hs: "84807110" }, { no: 2, description: "TYRE MOLD", hs: "84807190" }, { no: 3, description: "TYRE MOLD", hs: "84807190" }] };
+      const ciri = (nama, hs) => ({ nama, uraian: nama, hs });
+      eq(JSON.stringify(w.cekSeriPasangan([ciri("TYRE MOLD", "848071"), ciri("TYRE MOLD", "848071"), ciri("BLADE", "")], decl, null)), "[2,3,1]", "kembar tetap berurutan:");
+      eq(JSON.stringify(w.cekSeriPasangan([ciri("CUTTER KNIFE", "8480.71.10"), ciri("TIRE MOULD", "84807190"), ciri("TIRE MOULD", "84807190")], decl, null)), "[1,2,3]", "nama lain, HS Code sama:");
+      eq(JSON.stringify(w.cekSeriPasangan([ciri("A", ""), ciri("TYRE MOLD", ""), ciri("B", ""), ciri("C", "")], decl, null)), "[1,2,3,null]", "sisanya menurut urutan; lebih = tidak ada di draft:");
+      eq(JSON.stringify(w.cekSeriPasangan([ciri("TYRE MOLD", "")], { items: [] }, null)), "[null]", "draft tanpa barang:");
+      // Barang yang tidak ada di draft bernomor sesudah seri terakhir
+      eq(w.cekNomoriMenurutSeri([{ no: 1, description: "X" }, { no: 2, description: "BLADE" }], { items: [{ no: 1, description: "BLADE" }] }, null).map((x) => x.no + ":" + x.description).join(","), "1:BLADE,2:X", "nomor & urutan:");
+    });
+
     t("Cek PIB/PEB: Kode Kondisi Barang, Kode Negara Asal & Fasilitas / No. Urut per barang vs draft", async () => {
       const draft = bukuDraftUji();
       draft.Sheets.BARANG = XLSXuji.utils.json_to_sheet([

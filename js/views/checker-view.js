@@ -484,7 +484,7 @@ function cekPenyelesaiHs(s, decl, opsi) {
     if (barangJadwal.length) {
       let hit = cariHsMenurutNama(barangJadwal.filter((x) => x.kunci), teks);
       if (!hit && barangJadwal.length === itemsCipl.length) {
-        const x = barangJadwal[itemsCipl.indexOf(c)];
+        const x = barangJadwal[c._indeksAsal != null ? c._indeksAsal : itemsCipl.indexOf(c)];
         if (x) hit = { kode: x.kode, label: x.label };
       }
       if (hit && hit.kode && hit.kode.length === 8) return { code: hit.kode, source: SUMBER_JADWAL, label: hit.label };
@@ -515,7 +515,7 @@ function cekPenyelesaiHs(s, decl, opsi) {
    ...) tetap dari CIPL. Total netto & nilai dihitung ulang dari barang
    gabungan; total bruto dari jadwal (bruto kerap ditulis sekaligus di
    barang pertama). Jadwal tanpa barang -> null: barang CIPL apa adanya. */
-function cekBarangGabungan(cipl, s) {
+function cekBarangGabungan(cipl, s, decl, bc) {
   const barang = ((s && s.items) || []).filter((it) => cekAda(rapiBagianNama(it.namaBarang)));
   if (!cipl || !barang.length) return null;
   const ciplItems = cipl.items || [];
@@ -564,8 +564,13 @@ function cekBarangGabungan(cipl, s) {
     };
   };
   const SEMUA_CIPL = { nama: "cipl", hs: "cipl", qty: "cipl", unit: "cipl", amount: "cipl", net: "cipl", gross: "cipl" };
-  const items = urutan.map((x, i) =>
-    Object.assign(x.it ? dariJadwal(x.it, x.c || {}) : Object.assign({}, x.c, { _sumber: SEMUA_CIPL, _dariCipl: true }), { no: i + 1 }),
+  // Nomor = Seri Barang pasangannya di draft, urut seri (cekNomoriMenurutSeri)
+  const items = cekNomoriMenurutSeri(
+    urutan.map((x, i) =>
+      Object.assign(x.it ? dariJadwal(x.it, x.c || {}) : Object.assign({}, x.c, { _sumber: SEMUA_CIPL, _dariCipl: true }), { no: i + 1 }),
+    ),
+    decl,
+    bc,
   );
   const out = Object.assign({}, cipl, { items });
   const totalJadwal = { net: false, gross: false, amount: false };
@@ -682,6 +687,79 @@ function cekKolomDraftPerNo(bc, decl) {
     if (cekAda(x.seri)) peta.set(kunciSeri(x.seri), x.kolom);
   });
   return peta;
+}
+
+/* RINCIAN BARANG URUT SERI BARANG DRAFT.
+
+   Draft CEISA (barangnya sudah urut SERI BARANG, cekBacaDraft) yang
+   menentukan urutan rincian barang: "Barang n" = Seri Barang n, dan ia
+   dibandingkan dengan barang jadwal / CIPL YANG SAMA -- bukan barang
+   ke-n dari jadwal / CIPL, yang urutannya bisa lain. Pasangan dicari
+   berlapis, seperti impor draft ke form jadwal: nama lengkap sama,
+   Uraian sama, kata Uraian termuat di nama pasangannya, HS Code 8 digit
+   sama, 6 digit awal sama, lalu sisanya menurut urutan. Tiap lapis
+   menjalani Seri Barang berurutan, masing-masing mengambil barang
+   pembanding PALING AWAL yang lolos dan belum terpakai -- barang kembar
+   (nama & HS sama) tetap berpasangan menurut urutannya, yang pertama
+   dengan yang pertama. `ciri`: [{ nama, uraian, hs }] barang
+   pembanding. Hasil: Seri Barang pasangan tiap barang pembanding
+   (null = tidak ada di draft). */
+function cekSeriPasangan(ciri, decl, bc) {
+  const draftItems = (decl && decl.items) || [];
+  const seri = ciri.map(() => null);
+  if (!draftItems.length || !ciri.length) return seri;
+  const kata = (v) => new Set(cekKunci(v).split(" ").filter(Boolean));
+  const sama = (a, b) => a.size > 0 && a.size === b.size && [...a].every((k) => b.has(k));
+  const termuat = (a, b) => a.size > 0 && [...a].every((k) => b.has(k));
+  const siapkan = (nama, uraian, hs) => ({ nama: kata(nama), uraian: kata(uraian), hs: cekDigit(hs) });
+  const kolomDraft = cekKolomDraftPerNo(bc, decl);
+  const draft = draftItems.map((d) => {
+    const k = kolomDraft.get(kunciSeri(d.no)) || {};
+    const uraian = cekAda(k.namaBarang) ? k.namaBarang : d.description;
+    return Object.assign(siapkan(itemDisplayName(Object.assign({}, k, { namaBarang: uraian })), uraian, d.hs), { seri: d.no });
+  });
+  const pembanding = ciri.map((x) => siapkan(x.nama, x.uraian, x.hs));
+  const LAPISAN = [
+    (d, c) => d.nama.size > 0 && sama(c.nama, d.nama),
+    (d, c) => d.uraian.size > 0 && sama(c.uraian, d.uraian),
+    (d, c) => d.uraian.size > 0 && (termuat(c.uraian, d.nama) || termuat(d.uraian, c.nama)),
+    (d, c) => d.hs.length >= 8 && c.hs.slice(0, 8) === d.hs.slice(0, 8),
+    (d, c) => d.hs.length >= 6 && c.hs.length >= 6 && c.hs.slice(0, 6) === d.hs.slice(0, 6),
+    () => true,
+  ];
+  const terpasang = new Set(); // draft yang sudah berpasangan
+  const dipakai = new Set(); // indeks barang pembanding yang sudah berpasangan
+  LAPISAN.forEach((cocok) =>
+    draft.forEach((d) => {
+      if (terpasang.has(d)) return;
+      const i = pembanding.findIndex((c, j) => !dipakai.has(j) && cocok(d, c));
+      if (i < 0) return;
+      seri[i] = d.seri;
+      dipakai.add(i);
+      terpasang.add(d);
+    }),
+  );
+  return seri;
+}
+
+/* Barang pembanding (bentuk barang CIPL mesin) bernomor Seri Barang
+   pasangannya, urut seri; yang tidak ada di draft menyusul sesudah seri
+   terakhir. `_indeksAsal` = posisinya sebelum diurutkan (penyelesai HS
+   memakainya untuk barang CIPL). */
+function cekNomoriMenurutSeri(items, decl, bc) {
+  const seri = cekSeriPasangan(
+    items.map((x) => ({
+      nama: x._nama || [x.description, x.brand, x.type].filter(cekAda).join(" "),
+      uraian: x._barang ? rapiBagianNama(x._barang.namaBarang) : x.description,
+      hs: x.hs,
+    })),
+    decl,
+    bc,
+  );
+  let berikut = ((decl && decl.items) || []).reduce((m, d) => Math.max(m, Number(d.no) || 0), 0);
+  return items
+    .map((x, i) => Object.assign({}, x, { no: seri[i] != null ? seri[i] : ++berikut, _indeksAsal: i }))
+    .sort((a, b) => Number(a.no) - Number(b.no));
 }
 
 /* Baris kolom barang satu barang jadwal vs draft.
@@ -1526,8 +1604,14 @@ function cekBarisBarangJadwal(s, decl, resolve, bc) {
   const items = (s && s.items) || [];
   const sumber = tt("Jadwal", "Schedule");
   const kolomDraft = cekKolomDraftPerNo(bc, decl);
-  (decl.items || []).forEach((d, i) => {
-    const it = items[i];
+  // Barang jadwal dipasangkan ke Seri Barang draft menurut isinya, bukan urutannya (cekSeriPasangan)
+  const seri = cekSeriPasangan(items.map((it) => ({ nama: itemDisplayName(it), uraian: rapiBagianNama(it.namaBarang), hs: it.hsCode })), decl, bc);
+  const perSeri = new Map();
+  seri.forEach((n, i) => {
+    if (n != null) perSeri.set(kunciSeri(n), items[i]);
+  });
+  (decl.items || []).forEach((d) => {
+    const it = perSeri.get(kunciSeri(d.no));
     const no = d.no;
     if (!it) {
       rows.push({ section: "ITEM", field: `Item ${no}`, status: "MISMATCH", severity: "ERROR", cipl: "", pib: d.description, cipl_display: tt("Tidak ada di jadwal", "Not on the schedule"), pib_display: d.description, expected_note: "", left_source: sumber });
@@ -1542,8 +1626,11 @@ function cekBarisBarangJadwal(s, decl, resolve, bc) {
     if (cekAda(it.satuan) && cekAda(d.unit)) rows.push(tandai(E.compareUnit(`Item ${no} Unit`, it.satuan, d.unit, "ITEM")));
     if (Number(it.netto) > 0 || d.net != null) rows.push(tandai(E.compareNum(`Item ${no} Net Weight`, it.netto, d.net, "ITEM")));
   });
-  items.slice((decl.items || []).length).forEach((it, j) => {
-    rows.push({ section: "ITEM", field: `Item ${(decl.items || []).length + j + 1}`, status: "MISMATCH", severity: "ERROR", cipl: it.namaBarang, pib: "", cipl_display: itemDisplayName(it), pib_display: tt("Tidak ada di draft", "Not in the draft"), expected_note: "", left_source: sumber });
+  // Barang jadwal yang tidak ada di draft: sesudah seri terakhir
+  let berikut = (decl.items || []).reduce((m, d) => Math.max(m, Number(d.no) || 0), 0);
+  items.forEach((it, i) => {
+    if (seri[i] != null) return;
+    rows.push({ section: "ITEM", field: `Item ${++berikut}`, status: "MISMATCH", severity: "ERROR", cipl: it.namaBarang, pib: "", cipl_display: itemDisplayName(it), pib_display: tt("Tidak ada di draft", "Not in the draft"), expected_note: "", left_source: sumber });
   });
   return rows;
 }
@@ -1566,14 +1653,15 @@ async function cekJalankan() {
   const E = EximEngine;
   try {
     // Barang jadwal terkait jadi rujukan utama, CIPL melengkapi (cekBarangGabungan)
-    const gabung = cipl && s ? cekBarangGabungan(cipl, s) : null;
+    const gabung = cipl && s ? cekBarangGabungan(cipl, s, decl, bc) : null;
     const resolve = cekPenyelesaiHs(s, decl, { tanpaJadwal: !cipl || !!gabung });
     const extra = Object.assign(cekExtraBl(), { hsResolve: resolve });
     // Isian jadwal = rujukan utama; CIPL hanya untuk yang belum diisi di jadwal (cekRujukJadwal)
     const barisJadwal = cekBarisJadwal(s, decl, bc, { barangDariJadwal: !!gabung });
     let res;
     if (cipl) {
-      const pembanding = gabung ? gabung.cipl : cipl;
+      // Barang CIPL bernomor Seri Barang pasangannya di draft (cekNomoriMenurutSeri)
+      const pembanding = gabung ? gabung.cipl : Object.assign({}, cipl, { items: cekNomoriMenurutSeri(cipl.items || [], decl, bc) });
       res = E.runCheck(pembanding, decl, extra);
       if (gabung) cekTandaiBarangJadwal(res, gabung, decl, bc);
       res.checks = cekRujukJadwal(res.checks, barisJadwal, pembanding, !!s);
