@@ -68,7 +68,7 @@ function facilitiesPanelHtml(it, idx) {
 
   return `
     <tr class="item-fac-row" data-idx="${idx}">
-      <td colspan="22">
+      <td colspan="24">
         <div class="item-fac-panel">
           <div class="item-fac-skb-head">
             <b>${tt("Fasilitas (SKB &amp; COO)", "Facilities (SKB &amp; COO)")}</b>
@@ -247,6 +247,58 @@ function isianBarangHtml(it, field, label, placeholder, kelas) {
   return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
 }
 
+/* KODE KONDISI BARANG (buku Import; kolomnya disembunyikan di Export,
+   .import-col): pilihan 1 / 2 (KONDISI_BARANG, helpers.js). Nilai lain
+   yang terlanjur tersimpan tetap tampil sebagai pilihan sendiri, tidak
+   diam-diam diganti. */
+function isianKondisiHtml(it) {
+  const kini = kodeKondisiBarang(it.kondisiBarang);
+  const opsi = [["", "—"]].concat(KONDISI_BARANG.map((k) => [k[0], labelKondisiBarang(k[0])]));
+  if (kini && !opsi.some((o) => o[0] === kini)) opsi.push([kini, kini]);
+  return `<td class="kolom-kode import-col"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kode Kondisi Barang", "Goods Condition Code"))}">${opsi
+    .map(([v, label]) => `<option value="${escapeAttr(v)}"${v === kini ? " selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("")}</select></td>`;
+}
+
+/* KODE NEGARA ASAL BARANG: kotak ketik + saran #negaraList (negara.js)
+   -- mengetik kode, nama Indonesia, atau nama Inggris menemukannya.
+   Yang tersimpan KODENYA: dibakukan begitu kotaknya ditinggalkan atau
+   Enter (bakukanIsianNegara). Nama negaranya redup di dalam kotak,
+   sesudah kodenya (form.css); kode yang tidak dikenal dibiarkan (huruf
+   besar), ditandai merah, keterangannya di tooltip. */
+function keteranganNegara(kode) {
+  const nama = namaNegara(kode);
+  const salah = !!kode && !nama;
+  return {
+    salah,
+    teks: salah ? "" : nama,
+    judul: salah ? tt("Kode negara tidak dikenal — pilih dari daftar.", "Unknown country code — pick one from the list.") : nama ? `${kode} — ${nama}` : "",
+  };
+}
+
+function isianNegaraHtml(it) {
+  const kode = String(it.negaraAsal || "").trim().toUpperCase();
+  const ket = keteranganNegara(kode);
+  return `<td class="kolom-kode"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Kode Negara Asal Barang", "Country of Origin Code"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
+}
+
+// Keterangan di bawah kotak negara mengikuti isinya: `kode` = yang sudah dibakukan, atau tebakan dari ketikan
+function tulisKeteranganNegara(el, kode) {
+  const ket = keteranganNegara(kode);
+  el.classList.toggle("negara-salah", ket.salah);
+  el.title = ket.judul;
+  const kecil = el.parentElement && el.parentElement.querySelector(".negara-nama");
+  if (kecil) kecil.textContent = ket.teks;
+}
+
+function bakukanIsianNegara(el, idx) {
+  const teks = el.value.trim();
+  const nilai = kodeNegara(teks) || teks.toUpperCase();
+  if (el.value !== nilai) el.value = nilai;
+  if (draftItems[idx]) draftItems[idx].negaraAsal = nilai;
+  tulisKeteranganNegara(el, nilai);
+}
+
 function renderItemTable() {
   // Penanda kelengkapan & tinggi isian barang ikut diperbarui tiap tabel
   // digambar ulang — termasuk setelah data hasil impor masuk.
@@ -271,6 +323,8 @@ function renderItemTable() {
         </div>
       </td>
       ${kolom.map(([field, label]) => isianBarangHtml(it, field, label)).join("")}
+      ${isianKondisiHtml(it)}
+      ${isianNegaraHtml(it)}
       ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
       <td>
         <select data-f="jenisBarang">
@@ -387,6 +441,8 @@ $("#itemTableBody").addEventListener("input", (e) => {
         : e.target.value;
     }
     if (e.target.tagName === "TEXTAREA") autoGrowTextarea(e.target);
+    // Saran yang dipilih / kode yang diketik langsung bernama; ketikan lain dibakukan saat ditinggalkan
+    if (field === "negaraAsal") tulisKeteranganNegara(e.target, kodeNegara(e.target.value));
     if (field === "package") {
       autoSizeInput(e.target, 96, 210);
       // Peringatan format ditaruh di tooltip + kelas penanda
@@ -424,9 +480,21 @@ $("#itemTableBody").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || e.shiftKey) return;
   const field = e.target.closest("[data-f]");
   if (!field) return;
+  const idx = Number(field.closest("tr").dataset.idx);
+  /* Kotak bersaran (datalist: Kode Negara Asal, Satuan, Jenis
+     Kemasan): Enter yang sama memasang saran yang dipilih -- bawaannya
+     tidak dicegah dan pindahnya ditunda sesaat, sesudah sarannya
+     terpasang (sama dengan fokus.js). */
+  if (field.list) {
+    setTimeout(() => keBarisBerikutnya(field, idx), 0);
+    return;
+  }
   e.preventDefault();
-  const row = field.closest("tr");
-  const idx = Number(row.dataset.idx);
+  keBarisBerikutnya(field, idx);
+});
+
+function keBarisBerikutnya(field, idx) {
+  if (field.dataset.f === "negaraAsal") bakukanIsianNegara(field, idx);
 
   /* DI BARIS TERAKHIR, Enter MENAMBAH barang baru.
 
@@ -448,12 +516,16 @@ $("#itemTableBody").addEventListener("keydown", (e) => {
   if (!nextField) return;
   nextField.focus();
   if (typeof nextField.select === "function") nextField.select();
-});
+}
 
 $("#itemTableBody").addEventListener("change", (e) => {
   const tr = e.target.closest("tr");
   if (!tr) return;
   const idx = Number(tr.dataset.idx);
+  if (e.target.dataset.f === "negaraAsal") {
+    bakukanIsianNegara(e.target, idx);
+    return;
+  }
   const fac = e.target.dataset.fac;
   if (fac === "jenis") {
     const skIdx = Number(e.target.dataset.skidx);

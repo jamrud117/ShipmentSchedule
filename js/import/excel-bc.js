@@ -135,6 +135,23 @@ function kolomBarangDraft(row) {
   return out;
 }
 
+/* KODE CEISA PER BARANG -> kolom yang sama di jadwal: KODE KONDISI
+   BARANG (1 = BARU, 2 = BUKAN BARU) & KODE NEGARA ASAL (kode negara
+   ISO). Kolom yang ada di berkas: isinya, boleh kosong. Yang tidak ada:
+   undefined -- bukan kosong: isian barang lama / bawaan form yang
+   berlaku (lengkapiKodeBarang, apply-to-form.js). */
+const KOLOM_KODE_DRAFT = {
+  kondisiBarang: "KODE KONDISI BARANG",
+  negaraAsal: "KODE NEGARA ASAL",
+};
+function kodeBarangDraft(row) {
+  const out = {};
+  Object.entries(KOLOM_KODE_DRAFT).forEach(([field, kolom]) => {
+    out[field] = kolom in row ? excelStr(row[kolom]).toUpperCase() : undefined;
+  });
+  return out;
+}
+
 function parseBcExcelWorkbook(wb) {
   const notes = [];
   const header = sheetRows(wb, "HEADER")[0] || {};
@@ -200,15 +217,21 @@ function parseBcExcelWorkbook(wb) {
     .filter((v) => v)
     .join(", ");
 
-  const containerStr = kontainer
-    .map((r) => {
-      const no = excelStr(r["NOMOR KONTINER"]);
-      const size = excelStr(r["KODE UKURAN KONTAINER"]);
-      if (!no) return "";
-      return size ? `${no} (${size})` : no;
-    })
-    .filter((v) => v)
-    .join(", ");
+  /* PETI KEMAS (sheet KONTAINER): Nomor, Ukuran, Jenis Muatan & Tipe --
+     isian peti kemas CEISA. Ke Container/Seal Number jadwal satu
+     kontainer per bagian (teksKontainer, helpers.js) -- bentuk yang
+     dibaca balik Cek PIB/PEB. Jenis Muatan F/L mengisi Jenis Muatan
+     (FCL/LCL) jadwal. */
+  const daftarKontainer = kontainer
+    .map((r) => ({
+      nomor: excelStr(r["NOMOR KONTINER"] != null ? r["NOMOR KONTINER"] : r["NOMOR KONTAINER"]),
+      ukuran: excelStr(r["KODE UKURAN KONTAINER"]),
+      jenis: excelStr(r["KODE JENIS KONTAINER"]),
+      tipe: excelStr(r["KODE TIPE KONTAINER"]),
+    }))
+    .filter((k) => k.nomor);
+  const containerStr = daftarKontainer.map(teksKontainer).join(", ");
+  const muatanKontainer = [...new Set(daftarKontainer.map((k) => muatanDariKode(k.jenis)).filter(Boolean))];
 
   // Tanggal SPPB = TANGGAL RESPON di sheet RESPON, pada baris yang KODE RESPON-nya = 2003
   const sppbRespon = respon.find(
@@ -309,16 +332,19 @@ function parseBcExcelWorkbook(wb) {
     transport,
     package: packageStr,
     container: containerStr,
+    // Semua kontainer satu jenis muatan -> Jenis Muatan jadwal; campuran dibiarkan
+    muatan: muatanKontainer.length === 1 ? muatanKontainer[0] : "",
     bm: bulatkanBm(bmDasar),
     ppn: ppnFinal,
     pph: pphFinal,
   };
 
   /* Dokumen pelengkap -> FASILITAS per barang (Masterlist, SKB PPN/PPH,
-     COO) lewat BARANGDOKUMEN, dan No. PI (Persetujuan Impor) untuk
-     pengirimannya -- kenaliDokumenPelengkap() di helpers.js, aturan yang
-     sama dengan PIB PDF. Nomor & tanggal dokumennya ikut dibawa: itulah
-     yang tersalin ke kolom FASILITAS / SKB dan PI di templat salin. */
+     COO) lewat BARANGDOKUMEN, dan PI (Persetujuan Impor) & LS (Laporan
+     Surveyor) untuk pengirimannya -- kenaliDokumenPelengkap() di
+     helpers.js, aturan yang sama dengan PIB PDF. Nomor & tanggal
+     dokumennya ikut dibawa: nomornya yang tersalin ke kolom FASILITAS /
+     SKB dan PI di templat salin, tanggal PI & LS ke isiannya sendiri. */
   // Seri dokumen di lembar DOKUMEN: kolom SERI (atau SERI DOKUMEN)
   const seriDokumenDari = (r) => kunciSeri(r["SERI"] != null ? r["SERI"] : r["SERI DOKUMEN"]);
   const dokumenBySeri = new Map(
@@ -327,12 +353,14 @@ function parseBcExcelWorkbook(wb) {
       .map((r) => [seriDokumenDari(r), r]),
   );
   const kenaliBaris = (r, perBarang) => {
+    const kode = excelStr(r["KODE DOKUMEN"]);
     const nomor = excelStr(r["NOMOR DOKUMEN"]);
-    const kenal = kenaliDokumenPelengkap({ kode: excelStr(r["KODE DOKUMEN"]), nomor });
-    if (kenal || !perBarang) return kenal;
+    const kenal = kenaliDokumenPelengkap({ kode, nomor });
+    // Dokumen yang dikenal bukan fasilitas (invoice, B/L, polis asuransi 530, ...) tidak ditebak dari nomornya
+    if (kenal || !perBarang || namaDokumenBukanFasilitas(kode)) return kenal;
     /* Kode tak dikenal tapi ditautkan ke barang: tebak dari nomornya.
-       Hanya untuk dokumen per barang -- invoice & B/L tidak pernah
-       ditautkan ke barang, jadi nomornya tidak ikut ditebak. */
+       Hanya untuk dokumen per barang -- yang tidak ditautkan tidak
+       ikut ditebak. */
     const jenis = jenisFasilitasDariNomor(nomor);
     if (jenis) return { jenis, jenisLainnya: "" };
     return POLA_NOMOR_PI.test(nomor) ? { pi: true } : null;
@@ -343,16 +371,18 @@ function parseBcExcelWorkbook(wb) {
     nomor: excelStr(r["NOMOR DOKUMEN"]),
     tanggal: excelValueToISODate(r["TANGGAL DOKUMEN"]),
   });
+  // Untuk Cek PIB/PEB (fasilitasBarang): No. Urut = seri dokumennya di sheet DOKUMEN, dan kodenya
+  const entriDokumenCek = (r, kenal) =>
+    Object.assign(entriDokumen(r, kenal), { noUrut: seriDokumenDari(r), kode: excelStr(r["KODE DOKUMEN"]) });
   const skbBySeriBarang = new Map();
   const seriTertaut = new Set();
-  const nomorPi = [];
-  const nomorLs = [];
-  const catat = (daftar) => (r) => {
-    const nomor = excelStr(r["NOMOR DOKUMEN"]);
-    if (nomor && !daftar.includes(nomor)) daftar.push(nomor);
-  };
-  const catatPi = catat(nomorPi);
-  const catatLs = catat(nomorLs);
+  // PI (959), LS (958) & Polis Asuransi (530): nomor + tanggal per pengiriman
+  const dokPi = [];
+  const dokLs = [];
+  const dokPolis = [];
+  const catat = (daftar) => (r) => tambahDokumenPengiriman(daftar, excelStr(r["NOMOR DOKUMEN"]), tanggalDokumen(r));
+  const catatPi = catat(dokPi);
+  const catatLs = catat(dokLs);
   const dokumenLain = [];
   barangDokumen.forEach((row) => {
     const seriBarang = row["SERI BARANG"];
@@ -364,6 +394,8 @@ function parseBcExcelWorkbook(wb) {
     seriTertaut.add(seriDok);
     const kenal = kenaliBaris(docRow, true);
     if (!kenal) {
+      // Dokumen yang dikenal (mis. 530 Polis Asuransi) memang bukan fasilitas: tidak perlu diberi tahu
+      if (namaDokumenBukanFasilitas(docRow["KODE DOKUMEN"])) return;
       const teks = [excelStr(docRow["KODE DOKUMEN"]), excelStr(docRow["NOMOR DOKUMEN"])]
         .filter(Boolean)
         .join(" ");
@@ -375,7 +407,7 @@ function parseBcExcelWorkbook(wb) {
     const key = kunciSeri(seriBarang);
     if (!skbBySeriBarang.has(key)) skbBySeriBarang.set(key, []);
     const daftar = skbBySeriBarang.get(key);
-    const entri = entriDokumen(docRow, kenal);
+    const entri = entriDokumenCek(docRow, kenal);
     if (!daftar.some((sk) => sk.jenis === entri.jenis && sk.nomor === entri.nomor))
       daftar.push(entri);
   });
@@ -389,10 +421,21 @@ function parseBcExcelWorkbook(wb) {
     if (!kenal) return;
     if (kenal.pi) return catatPi(r);
     if (kenal.ls) return catatLs(r);
-    fasilitasUmum.push(entriDokumen(r, kenal));
+    fasilitasUmum.push(entriDokumenCek(r, kenal));
   });
-  fields.pi = nomorPi.join(", ");
-  fields.ls = nomorLs.join(", ");
+  // Polis asuransi bukan fasilitas: dibaca dari sheet DOKUMEN, tertaut ke barang atau tidak
+  dokumen.filter((r) => adalahPolisAsuransi({ kode: excelStr(r["KODE DOKUMEN"]) })).forEach(catat(dokPolis));
+  const pi = isianDokumenPengiriman(dokPi);
+  const ls = isianDokumenPengiriman(dokLs);
+  const polis = isianDokumenPengiriman(dokPolis);
+  Object.assign(fields, {
+    pi: pi.nomor,
+    piDate: pi.tanggal,
+    ls: ls.nomor,
+    lsDate: ls.tanggal,
+    polisAsuransi: polis.nomor,
+    polisAsuransiDate: polis.tanggal,
+  });
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);
@@ -415,6 +458,7 @@ function parseBcExcelWorkbook(wb) {
     return {
       seriBarang: kunciSeri(row["SERI BARANG"]),
       ...kolomBarangDraft(row),
+      ...kodeBarangDraft(row),
       hsCode: excelStr(row["HS"]),
       satuan: excelStr(row["KODE SATUAN"]),
       qty,
@@ -459,7 +503,8 @@ function parseBcExcelWorkbook(wb) {
           (sk, i, semua) =>
             semua.findIndex((x) => x.jenis === sk.jenis && x.nomor === sk.nomor) === i,
         )
-        .map((sk) => ({ ...sk })),
+        // Isian fasilitas form saja (No. Urut & kode dokumen hanya untuk Cek PIB/PEB)
+        .map((sk) => ({ jenis: sk.jenis, jenisLainnya: sk.jenisLainnya, nomor: sk.nomor, tanggal: sk.tanggal })),
     };
   });
 
@@ -529,8 +574,33 @@ function parseBcExcelWorkbook(wb) {
   }
 
   /* Kolom barang CEISA per Seri Barang APA ADANYA -- hanya kolom yang
-     ada di berkas, tanpa nilai bawaan form. Dibandingkan kolom demi
-     kolom dengan jadwal di Cek PIB/PEB (checker-view.js). */
-  const kolomBarang = barang.map((row) => ({ seri: kunciSeri(row["SERI BARANG"]), kolom: kolomBarangDraft(row) }));
-  return { fields, items, notes, modeHint, source: "excel", kolomBarang };
+     ada di berkas, tanpa nilai bawaan form (kode kondisi & negara asal
+     ikut). Dibandingkan kolom demi kolom dengan jadwal di Cek PIB/PEB
+     (checker-view.js). */
+  const kolomBarang = barang.map((row) => {
+    const kode = kodeBarangDraft(row);
+    Object.keys(kode).forEach((k) => kode[k] === undefined && delete kode[k]);
+    return { seri: kunciSeri(row["SERI BARANG"]), kolom: Object.assign(kolomBarangDraft(row), kode) };
+  });
+  /* Dokumen fasilitas yang DITAUTKAN ke tiap Seri Barang (BARANGDOKUMEN)
+     beserta No. Urut-nya (seri dokumen di sheet DOKUMEN) -- Keterangan
+     Fasilitas & No. Urut per barang di Cek PIB/PEB. Dokumen yang tidak
+     ditautkan ke barang mana pun (fasilitasUmum) tidak ikut: di draft ia
+     tidak tercantum pada barang mana pun, walau form jadwal
+     menerapkannya ke semua barang. */
+  const fasilitasBarang = barang.map((row) => {
+    const seri = kunciSeri(row["SERI BARANG"]);
+    return { seri, dokumen: (skbBySeriBarang.get(seri) || []).map((sk) => ({ ...sk })) };
+  });
+  return {
+    fields,
+    items,
+    notes,
+    modeHint,
+    source: "excel",
+    kolomBarang,
+    fasilitasBarang,
+    fasilitasUmum: fasilitasUmum.map((sk) => ({ ...sk })),
+    kontainer: daftarKontainer,
+  };
 }

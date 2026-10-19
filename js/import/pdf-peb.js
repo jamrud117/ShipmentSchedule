@@ -165,8 +165,18 @@ function extractPebItems(pagesItems) {
         if (hit) nilai = pebNum(hit);
       }
 
+      // Negara asal barang (kolom 52) -> kode negara; tidak terbaca = tidak dibawa (lengkapiKodeBarang)
+      let negaraAsal;
+      if (bounds.negara) {
+        const teks = pdfLinesInBox(pageItems, bounds.negara.xMin, bounds.negara.xMax, yRange)
+          .map((l) => l.text.trim())
+          .join(" ");
+        negaraAsal = (typeof kodeNegaraPib === "function" && kodeNegaraPib(teks)) || undefined;
+      }
+
       items.push({
         kolom: parsePebItemKolom(nameBlock),
+        negaraAsal,
         hsCode: st.hsCode,
         qty,
         satuan,
@@ -353,6 +363,7 @@ function parsePebPdfText(text, pagesItems) {
       const base = {
         ...newItem(),
         ...it.kolom,
+        negaraAsal: it.negaraAsal,
         hsCode: normalizeHsCodeInput(it.hsCode),
         jenisBarang: "BARANG JADI",
         qty: it.qty != null ? it.qty : 0,

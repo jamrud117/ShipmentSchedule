@@ -10,6 +10,11 @@ function ciplRawItemsToFinalItems(rawItems) {
   return (rawItems || []).map((it) => ({
     ...newItem(),
     ...(it.kolom || { namaBarang: it.name || "" }),
+    /* CIPL tidak memuat kondisi barang; negara asalnya dari COUNTRY OF
+       ORIGIN (ciplDariMesin). undefined = tidak dibawa berkasnya:
+       isian barang lama / bawaan form yang berlaku (lengkapiKodeBarang). */
+    kondisiBarang: undefined,
+    negaraAsal: it.negaraAsal || undefined,
     hsCode: normalizeHsCodeInput(it.hsCode),
     jenisBarang: activeMode === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: it.qty != null ? it.qty : 0,
@@ -143,8 +148,11 @@ function hsBarangCipl(it, catat) {
 function ciplDariMesin(c, sumber, lama) {
   const pdf = sumber.every((s) => !s.wb);
   const catat = { dariDb: [], bentrok: [], negara: [], pendek: [] };
+  // COUNTRY OF ORIGIN CIPL ("KOREA", "MADE IN CHINA") -> kode negara semua barangnya
+  const negaraAsal = typeof kodeNegara === "function" ? kodeNegara(String(c.country_origin || "").replace(/^\s*MADE\s+IN\s+/i, "")) : "";
   const raw = c.items.map((it) => ({
     kolom: kolomBarangCipl(it),
+    negaraAsal,
     hsCode: hsBarangCipl(it, catat),
     qty: it.qty != null ? it.qty : null,
     satuan: it.unit || "",

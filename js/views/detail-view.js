@@ -73,9 +73,10 @@ function buildDetailHtml(s) {
     )} </span>${tglJam(revisi)}</span>`;
   };
 
-  /* Nomor dokumen + tanggalnya dalam satu isian: "DD-INV-01 · 16-09-2026". */
+  /* Nomor dokumen + tanggalnya dalam satu isian: "DD-INV-01 · 16-09-2026".
+     Tanggalnya tidak terpotong di tanda pisah: pindah baris utuh. */
   const nomorTanggal = (nomor, tanggal) =>
-    escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted">· ${fmtDate(tanggal)}</span>` : "");
+    escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(tanggal)}</span>` : "");
 
   let itemRows = (s.items || [])
     .map(
@@ -129,8 +130,9 @@ function buildDetailHtml(s) {
         ${fieldPair("PPN", fmtRp(s.ppn))}
         ${fieldPair("PPH", fmtRp(s.pph))}
         ${fieldPair("PDRI", fmtRp(calc.bmPdri))}
-        ${fieldPair(tt("PI (Persetujuan Impor)", "PI (Import Approval)"), escapeHtml(dispVal(s.pi)))}
-        ${fieldPair(tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), escapeHtml(dispVal(s.ls)))}
+        ${fieldPair(tt("PI (Persetujuan Impor)", "PI (Import Approval)"), nomorTanggal(s.pi, s.piDate))}
+        ${fieldPair(tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), nomorTanggal(s.ls, s.lsDate))}
+        ${fieldPair(tt("Polis Asuransi", "Insurance Policy"), nomorTanggal(s.polisAsuransi, s.polisAsuransiDate))}
       </div>`;
   }
 

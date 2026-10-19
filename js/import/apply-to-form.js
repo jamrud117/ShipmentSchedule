@@ -254,6 +254,34 @@ function preserveNamesForCeisa(newItems, oldItems, src) {
   return { items: salin(pasangan), kept };
 }
 
+/* KODE KONDISI BARANG & KODE NEGARA ASAL YANG TIDAK DIBAWA BERKASNYA.
+
+   Draft CEISA memuat keduanya; PIB PDF tidak selalu tercetak terbaca,
+   dan CIPL tidak pernah memuat kondisi barang. Barang baru yang
+   kodenya kosong / tidak dibawa (undefined) mengambil isian barang lama
+   pasangannya -- nama, lalu HS Code (pasangkanBarangLama) -- supaya
+   pilihan yang sudah dibuat tidak hilang hanya karena berkas yang
+   diimpor belakangan tidak memuatnya. Yang dibawa berkas tetap dipakai.
+   Yang tetap tidak dibawa memakai bawaan buku (newItem); yang dibawa
+   kosong tetap kosong (draft memang tidak mengisinya). */
+const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal"];
+function lengkapiKodeBarang(newItems, oldItems) {
+  const isi = (it, k) => String((it && it[k]) || "").trim();
+  const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => KOLOM_KODE_BARANG.some((k) => isi(o.it, k)));
+  const perlu = (cari) => (it) => (KOLOM_KODE_BARANG.some((k) => !isi(it, k)) ? cari(it) : null);
+  const pasangan = lama.length ? pasangkanBarangLama(newItems, lama, [perlu(COCOK_NAMA), perlu(COCOK_HS)]) : [];
+  const bawaan = newItem(activeMode);
+  return newItems.map((it, i) => {
+    const out = Object.assign({}, it);
+    const o = pasangan[i];
+    KOLOM_KODE_BARANG.forEach((k) => {
+      if (!isi(out, k) && o && isi(o, k)) out[k] = o[k];
+      else if (out[k] == null) out[k] = bawaan[k];
+    });
+    return out;
+  });
+}
+
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
    Dicocokkan berlapis — nama dulu untuk semua barang, baru HS Code
@@ -351,10 +379,18 @@ function applyImportedBcData(parsed) {
      tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
      lembar dokumen PIB/PEB. */
   put("fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : ""));
-  // No. Surat Persetujuan Impor (dokumen kode 959) -- kolom PI templat salin
-  put("fPI", f.pi);
-  // No. Laporan Surveyor (dokumen kode 958) -- ikut kolom PI templat salin
-  put("fLS", f.ls);
+  /* PI (dokumen 959), LS (958) & Polis Asuransi (530) beserta tanggalnya
+     -- isian Bea & Pajak Impor, yang hanya ada di buku Import: buku
+     Export tidak diisi diam-diam lewat kotak yang tersembunyi. Nomor PI
+     & LS ikut kolom PI templat salin. */
+  if (ML().showDuty) {
+    put("fPI", f.pi);
+    put("fPIDate", f.piDate);
+    put("fLS", f.ls);
+    put("fLSDate", f.lsDate);
+    put("fPolisAsuransi", f.polisAsuransi);
+    put("fPolisAsuransiDate", f.polisAsuransiDate);
+  }
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
   /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
@@ -476,6 +512,9 @@ function applyImportedBcData(parsed) {
     const cleaned = parsed.items.map((it) => {
       const out = { ...it, hsCode: normalizeHsCodeInput(it.hsCode) };
       KOLOM_NAMA_BARANG.forEach((k) => (out[k] = String(it[k] == null ? "" : it[k]).toUpperCase()));
+      // Kode CEISA dibakukan (1 / 2, kode negara ISO); undefined = tidak dibawa berkasnya (lengkapiKodeBarang)
+      if (it.kondisiBarang != null) out.kondisiBarang = kodeKondisiBarang(it.kondisiBarang);
+      if (it.negaraAsal != null) out.negaraAsal = kodeNegara(it.negaraAsal) || String(it.negaraAsal).trim().toUpperCase();
       return out;
     });
     // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar barang yang sudah terisi
@@ -486,7 +525,7 @@ function applyImportedBcData(parsed) {
     );
     if (!hasRealItems || prevPrio == null || prio >= prevPrio) {
       if (isPriceAuthority(src)) {
-        draftItems = cleaned;
+        draftItems = lengkapiKodeBarang(cleaned, draftItems);
       } else {
         /* Nama dipertahankan LEBIH DULU: pencocokan harga & dimensi di
            bawah memakai nama sebagai kunci, jadi urutannya penting --
@@ -502,7 +541,7 @@ function applyImportedBcData(parsed) {
           );
         }
         const jaga = preserveUnitPrices(jagaNama.items, draftItems);
-        draftItems = preserveDimensionsForCeisa(jaga.items, draftItems, src);
+        draftItems = lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems);
         if (jaga.kept) {
           notes.push(
             t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),

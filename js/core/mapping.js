@@ -66,6 +66,12 @@ const FIELD_MAP = {
   pi: "pi",
   // LS (Laporan Surveyor, dokumen 958) -- sepaket dengan PI; kolom baru, migrasi yang sama
   ls: "ls",
+  /* Tanggal PI & LS, nomor + tanggal Polis Asuransi (dokumen 530) --
+     kolom baru, migration-tanggal-pi-ls-polis.sql (KOLOM_OPSIONAL). */
+  piDate: "pi_date",
+  lsDate: "ls_date",
+  polisAsuransi: "polis_asuransi",
+  polisAsuransiDate: "polis_asuransi_date",
   // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini
   package: "package",
   routeType: "route_type",
@@ -169,14 +175,17 @@ function itemToRow(it, shipmentId) {
     /* Kolom barang CEISA (KOLOM_NAMA_BARANG, helpers.js); Uraian tetap
        di nama_barang. Kolom lainnya dari migration-barang-ceisa.sql --
        sebelum dijalankan, sisipkanBarang() (api.js) meleburnya ke
-       Uraian. Kolom lama (size, pattern, mold_no, po_no) tidak lagi
-       ditulis. */
+       Uraian (kode kondisi & negara asal ditinggalkan). Kolom lama
+       (size, pattern, mold_no, po_no) tidak lagi ditulis. */
     kode_barang: it.kodeBarang || "",
     nama_barang: it.namaBarang || "",
     merek: it.merek || "",
     tipe: it.tipe || "",
     ukuran: it.ukuran || "",
     spesifikasi_lain: it.spesifikasiLain || "",
+    // Kode CEISA per barang (migration-barang-ceisa.sql): 1/2 & kode negara ISO
+    kode_kondisi_barang: it.kondisiBarang || "",
+    kode_negara_asal: it.negaraAsal || "",
     marks: it.marks || "",
     hs_code: it.hsCode || "",
     jenis_barang: it.jenisBarang || "",
@@ -221,6 +230,9 @@ function rowToItem(row) {
     tipe: row.tipe || "",
     ukuran: row.ukuran || "",
     spesifikasiLain: row.spesifikasi_lain || "",
+    // Barang lama / sebelum migrasi: kosong ("Belum diisi"), bukan bawaan 1 = BARU
+    kondisiBarang: row.kode_kondisi_barang || "",
+    negaraAsal: row.kode_negara_asal || "",
     marks: row.marks || "",
     hsCode: row.hs_code || "",
     /* Dibakukan di sini, satu pintu. Jadwal lama menyimpan

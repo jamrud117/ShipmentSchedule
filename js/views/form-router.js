@@ -348,7 +348,11 @@ function renderFormPage(id) {
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     $("#fPI").value = s.pi || "";
+    $("#fPIDate").value = s.piDate || "";
     $("#fLS").value = s.ls || "";
+    $("#fLSDate").value = s.lsDate || "";
+    $("#fPolisAsuransi").value = s.polisAsuransi || "";
+    $("#fPolisAsuransiDate").value = s.polisAsuransiDate || "";
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
@@ -392,7 +396,11 @@ function renderFormPage(id) {
       "fPPN",
       "fPPH",
       "fPI",
+      "fPIDate",
       "fLS",
+      "fLSDate",
+      "fPolisAsuransi",
+      "fPolisAsuransiDate",
       "fPackage",
     ].forEach((fid) => ($("#" + fid).value = ""));
     $("#fMuatan").value = "";
@@ -800,7 +808,11 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     ppn: parseInputNumber($("#fPPN").value),
     pph: parseInputNumber($("#fPPH").value),
     pi: $("#fPI").value.trim(),
+    piDate: $("#fPIDate").value,
     ls: $("#fLS").value.trim(),
+    lsDate: $("#fLSDate").value,
+    polisAsuransi: $("#fPolisAsuransi").value.trim(),
+    polisAsuransiDate: $("#fPolisAsuransiDate").value,
     package: joinPackageFields(),
   };
 

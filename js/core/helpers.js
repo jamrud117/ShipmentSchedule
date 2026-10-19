@@ -216,6 +216,52 @@ function teksCariBarang(it) {
   return it ? KOLOM_NAMA_BARANG.map((k) => rapiBagianNama(it[k])) : [];
 }
 
+/* KODE KONDISI BARANG (kolom KODE KONDISI BARANG draft PIB / BC 2.0):
+   1 = BARU, 2 = BUKAN BARU. Hanya buku Import -- PEB (BC 3.0) tidak
+   memuat kolom ini. Label mengikuti bahasa aktif; yang tersimpan &
+   dibandingkan selalu kodenya. */
+const KONDISI_BARANG = [
+  ["1", "BARU", "NEW"],
+  ["2", "BUKAN BARU", "NOT NEW"],
+];
+
+// "1", "01", "1 - BARU", "BARU" -> "1"; "BUKAN BARU", "BEKAS" -> "2"; lainnya apa adanya
+function kodeKondisiBarang(v) {
+  const s = String(v == null ? "" : v).trim().toUpperCase().replace(/\s+/g, " ");
+  if (!s) return "";
+  if (/^0*1(?:\D.*)?$/.test(s) || s === "BARU" || s === "NEW") return "1";
+  if (/^0*2(?:\D.*)?$/.test(s) || /^(?:BUKAN|TIDAK) BARU$|^BEKAS$|^USED$|^NOT NEW$/.test(s)) return "2";
+  return s;
+}
+
+// "1 - BARU" (bahasa aktif); kode tak dikenal ditampilkan apa adanya
+function labelKondisiBarang(v) {
+  const kode = kodeKondisiBarang(v);
+  const k = KONDISI_BARANG.find((x) => x[0] === kode);
+  return k ? `${k[0]} - ${tt(k[1], k[2])}` : kode;
+}
+
+/* PETI KEMAS DI ISIAN CONTAINER/SEAL NUMBER: satu kontainer per bagian
+   (dipisah koma), "NOMOR / UKURAN / TIPE" -- urutan isian "Nomor,
+   Ukuran, dan Tipe Peti Kemas" PIB. Ditulis begitu oleh impor draft
+   CEISA (teksKontainer) dan dibaca balik oleh Cek PIB/PEB; yang diketik
+   sendiri boleh lebih bebas ("TGHU1234567 40' FCL", "1x40HC ...").
+     UKURAN : KODE UKURAN KONTAINER (20 / 40 / 45).
+     TIPE   : jenis muatan FCL / LCL (KODE JENIS KONTAINER F / L). */
+function muatanDariKode(v) {
+  const s = String(v == null ? "" : v).trim().toUpperCase();
+  if (s === "F" || s === "FCL") return "FCL";
+  if (s === "L" || s === "LCL") return "LCL";
+  return "";
+}
+
+function teksKontainer(k) {
+  return [k.nomor, k.ukuran, muatanDariKode(k.jenis)]
+    .map((x) => String(x == null ? "" : x).trim().toUpperCase())
+    .filter(Boolean)
+    .join(" / ");
+}
+
 function newItem(mode) {
   /* Nilai bawaan BEDA per buku, dibaca dari `mode` (tanpa itu:
      activeMode):
@@ -224,7 +270,8 @@ function newItem(mode) {
        Export : jenis BARANG JADI (hasil olahan yang dikirim keluar),
                 Tipe kosong
      Kode Barang "-" & Merek TANPA MEREK di kedua buku, mengikuti
-     pengisian CEISA. Satuan (SET) & jenis kemasan (BOX) juga sama.
+     pengisian CEISA; Kode Kondisi Barang 1 (BARU) hanya di Import.
+     Satuan (SET) & jenis kemasan (BOX) sama di kedua buku.
      Semuanya cuma NILAI AWAL — tetap bisa diganti per barang. */
   const modeKini = mode || (typeof activeMode === "string" ? activeMode : "import");
   return {
@@ -236,6 +283,11 @@ function newItem(mode) {
     tipe: modeKini === "export" ? "" : "TANPA TIPE",
     ukuran: "",
     spesifikasiLain: "",
+    /* Kode Kondisi Barang (KONDISI_BARANG): Import bawaan 1 = BARU,
+       Export kosong (PEB tidak memuatnya). Kode Negara Asal: kode ISO
+       (negara.js), tanpa bawaan. */
+    kondisiBarang: modeKini === "export" ? "" : "1",
+    negaraAsal: "",
     hsCode: "",
     jenisBarang: modeKini === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: 0,
@@ -321,6 +373,46 @@ const KODE_DOKUMEN_FASILITAS = {
 const KODE_DOKUMEN_PI = "959";
 // Laporan Surveyor (LS) -- sepaket dengan PI, juga satu nomor per pengiriman
 const KODE_DOKUMEN_LS = "958";
+// Polis Asuransi -- bukan fasilitas; nomor & tanggalnya punya isian sendiri
+const KODE_DOKUMEN_POLIS = "530";
+/* Dokumen pelengkap yang dikenal BUKAN fasilitas (dan bukan PI / LS):
+   tidak pernah ditebak sebagai fasilitas atau PI dari nomornya, dan
+   tidak dilaporkan sebagai dokumen tak dikenal saat ditautkan ke
+   barang. */
+const KODE_DOKUMEN_BUKAN_FASILITAS = {
+  380: "Invoice",
+  217: "Packing List",
+  [KODE_DOKUMEN_POLIS]: "Polis Asuransi",
+  703: "House AWB",
+  704: "Master B/L",
+  705: "B/L",
+  714: "House B/L",
+  740: "AWB",
+  741: "Master AWB",
+};
+function namaDokumenBukanFasilitas(kode) {
+  return KODE_DOKUMEN_BUKAN_FASILITAS[String(kode == null ? "" : kode).trim()] || "";
+}
+// Polis asuransi: kode 530 (Excel CEISA & PIB PDF) atau labelnya di lembar PIB PDF
+function adalahPolisAsuransi(dok) {
+  return (
+    String(dok.kode == null ? "" : dok.kode).trim() === KODE_DOKUMEN_POLIS ||
+    /POLIS\s*ASURANSI|INSURANCE\s*POLICY/i.test(dok.label || "")
+  );
+}
+
+/* PI, LS & Polis Asuransi: SATU isian nomor + SATU tanggal per
+   pengiriman. Dokumennya bisa lebih dari satu -- nomornya digabung
+   ("A, B", nomor yang sama tidak diulang), tanggalnya dari dokumen
+   pertama yang bertanggal. */
+function tambahDokumenPengiriman(daftar, nomor, tanggal) {
+  const n = String(nomor == null ? "" : nomor).trim();
+  if (n && !daftar.some((d) => d.nomor === n)) daftar.push({ nomor: n, tanggal: tanggal || "" });
+}
+function isianDokumenPengiriman(daftar) {
+  const bertanggal = daftar.find((d) => d.tanggal);
+  return { nomor: daftar.map((d) => d.nomor).join(", "), tanggal: bertanggal ? bertanggal.tanggal : "" };
+}
 
 /* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
    dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh

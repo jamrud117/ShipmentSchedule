@@ -14075,14 +14075,15 @@ t("tombol tidak menyebabkan form tersubmit (preventDefault)", () => {
 });
 
 console.log("\u2014 KOLOM BARANG = KOLOM CEISA, KIRI KE KANAN \u2014");
-t("kepala tabel barang: HS Code paling kiri, lalu Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain (+ Marks di Export)", () => {
+t("kepala tabel barang: HS Code paling kiri, lalu Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain, Kode Kondisi Barang (Import), Kode Negara Asal Barang (+ Marks di Export)", () => {
   const modeAwal = baca("activeMode");
-  const kepala = () => [...w.document.querySelectorAll(".item-table--form thead th")].slice(1, 10).map((th) => th.textContent.trim()).join(" | ");
+  const kepala = () => [...w.document.querySelectorAll(".item-table--form thead th")].slice(1, 12).map((th) => th.textContent.trim()).join(" | ");
   try {
     tulis("activeMode", "export");
     w.renderItemTable();
-    eq(kepala(), "HS Code | Kode Barang | Uraian | Merek | Tipe | Ukuran | Spesifikasi Lain | Marks | Jenis Barang", "kepala:");
-    eq(w.document.querySelector(".item-table--form thead th:nth-child(9)").classList.contains("export-col"), true, "Marks khusus Export:");
+    eq(kepala(), "HS Code | Kode Barang | Uraian | Merek | Tipe | Ukuran | Spesifikasi Lain | Kode Kondisi Barang | Kode Negara Asal Barang | Marks | Jenis Barang", "kepala:");
+    eq(w.document.querySelector(".item-table--form thead th:nth-child(9)").classList.contains("import-col"), true, "Kode Kondisi Barang khusus Import:");
+    eq(w.document.querySelector(".item-table--form thead th:nth-child(11)").classList.contains("export-col"), true, "Marks khusus Export:");
   } finally {
     tulis("activeMode", modeAwal);
     w.renderItemTable();
@@ -14093,9 +14094,10 @@ t("tiap kolom CEISA punya kotaknya sendiri (textarea adaptif), urut kiri ke kana
   try {
     w.eval('draftItems = [{ hsCode: "84807190", kodeBarang: "-", namaBarang: "TYRE MOLD TREAD ONLY", merek: "TANPA MEREK", tipe: "AUTOGRAPH ULTRA 5", ukuran: "245/55R19", spesifikasiLain: "S03", marks: "" }]');
     w.renderItemTable();
-    const isian = [...w.document.querySelectorAll("#itemTableBody tr:first-child [data-f]")].slice(0, 9);
-    eq(isian.map((el) => el.dataset.f).join(","), "hsCode,kodeBarang,namaBarang,merek,tipe,ukuran,spesifikasiLain,marks,jenisBarang", "urutan:");
-    eq(isian.slice(1, 8).every((el) => el.tagName === "TEXTAREA" && el.classList.contains("isian-barang")), true, "kotak adaptif:");
+    const isian = [...w.document.querySelectorAll("#itemTableBody tr:first-child [data-f]")].slice(0, 11);
+    eq(isian.map((el) => el.dataset.f).join(","), "hsCode,kodeBarang,namaBarang,merek,tipe,ukuran,spesifikasiLain,kondisiBarang,negaraAsal,marks,jenisBarang", "urutan:");
+    eq(isian.slice(1, 7).concat(isian[9]).every((el) => el.tagName === "TEXTAREA" && el.classList.contains("isian-barang")), true, "kotak adaptif:");
+    eq([isian[7].tagName, isian[8].tagName, isian[8].getAttribute("list")].join(","), "SELECT,INPUT,negaraList", "kode kondisi & negara asal:");
     eq(isian.slice(1, 7).map((el) => el.value).join(" | "), "- | TYRE MOLD TREAD ONLY | TANPA MEREK | AUTOGRAPH ULTRA 5 | 245/55R19 | S03", "isi:");
   } finally {
     w.eval("draftItems = " + JSON.stringify(draftAwal || []));
@@ -14186,10 +14188,158 @@ t("sebelum migration-barang-ceisa.sql: barang tetap tersimpan, kolom CEISA dileb
   }
   eq(!!(galat && galat.code === "42501"), true, "galat lain dilempar:");
 });
+t("Kode Kondisi Barang: 1 = BARU, 2 = BUKAN BARU; bawaan Import 1, Export kosong", () => {
+  eq(["1", "01", "1 - BARU", "baru", "2", "2 - BUKAN BARU", "Bukan Baru", "BEKAS", "", "9"].map((v) => w.kodeKondisiBarang(v)).join(","), "1,1,1,1,2,2,2,2,,9", "kode:");
+  eq([w.labelKondisiBarang("1"), w.labelKondisiBarang("BUKAN BARU")].join(" | "), "1 - BARU | 2 - BUKAN BARU", "label:");
+  eq([w.newItem("import").kondisiBarang, w.newItem("export").kondisiBarang, w.newItem("import").negaraAsal].map((v) => JSON.stringify(v)).join(","), '"1","",""', "bawaan:");
+});
+t("kode negara: 249 kode ISO 3166-1; kode, nama Indonesia / Inggris & cetakan PIB dikenali; saran #negaraList", () => {
+  eq(w.eval("DAFTAR_NEGARA.length"), 249, "jumlah:");
+  eq(w.eval("new Set(DAFTAR_NEGARA.map((n) => n[0])).size"), 249, "kode unik:");
+  const kasus = [["kr", "KR"], ["KR — Korea Selatan · Korea, Republic of", "KR"], ["KOREA, REPUBLIC OF (KR)", "KR"], ["Korea Selatan", "KR"], ["south korea", "KR"], ["KOREA", "KR"],
+    ["Viet Nam", "VN"], ["Tiongkok", "CN"], ["P.R. CHINA", "CN"], ["U.S.A.", "US"], ["Côte d’Ivoire", "CI"], ["Jepang", "JP"], ["xx", ""], ["", ""]];
+  eq(kasus.map(([v]) => w.kodeNegara(v)).join(","), kasus.map(([, k]) => k).join(","), "dikenali:");
+  eq([w.labelNegara("KR"), w.labelNegara("zz")].join(" | "), "KR — Korea Selatan | ZZ", "label:");
+  const dl = w.document.getElementById("negaraList");
+  eq(dl.options.length, 249, "saran:");
+  const kr = [...dl.options].find((o) => o.value === "KR");
+  if (!/Korea Selatan/.test(kr.textContent) || !/Korea, Republic of/.test(kr.textContent)) throw new Error("label saran: " + kr.textContent);
+});
+t("Kode Kondisi Barang & Kode Negara Asal dipetakan dua arah; barang lama kosong (bukan bawaan 1 = BARU)", () => {
+  const baris = w.itemToRow({ namaBarang: "X", kondisiBarang: "2", negaraAsal: "KR" }, "id-1");
+  eq([baris.kode_kondisi_barang, baris.kode_negara_asal].join(" | "), "2 | KR", "ke kolom:");
+  const balik = w.rowToItem(baris);
+  eq([balik.kondisiBarang, balik.negaraAsal].join(" | "), "2 | KR", "dari kolom:");
+  const lama = w.rowToItem({ nama_barang: "X" });
+  eq(JSON.stringify([lama.kondisiBarang, lama.negaraAsal]), '["",""]', "barang lama:");
+});
+t("sebelum kolom Kode Kondisi & Negara Asal dimigrasi: hanya kolom yang ditolak yang ditinggal, nama barang tidak dilebur", async () => {
+  const kiriman = [];
+  const tolak = ["kode_kondisi_barang", "kode_negara_asal"];
+  const kirim = (rows) => {
+    kiriman.push(rows.map((r) => Object.assign({}, r)));
+    const k = tolak.find((x) => rows.some((r) => x in r));
+    return Promise.resolve({ error: k ? { code: "PGRST204", message: "Could not find the '" + k + "' column of 'shipment_items' in the schema cache" } : null });
+  };
+  const barang = [{ kodeBarang: "-", namaBarang: "TYRE MOLD", merek: "KUMHO", tipe: "PS72", kondisiBarang: "1", negaraAsal: "KR", qty: 1 }];
+  $("#toastMsg").textContent = "";
+  await w.sisipkanBarang(barang, "s1", kirim);
+  eq(kiriman.length, 3, "dua kolom ditolak satu per satu:");
+  const akhir = kiriman[2][0];
+  eq([akhir.nama_barang, akhir.merek, akhir.tipe].join(" | "), "TYRE MOLD | KUMHO | PS72", "nama barang tetap per kolom:");
+  eq(tolak.filter((k) => k in akhir).join(","), "", "kolom kode ditinggal:");
+  const pesan = $("#toastMsg").textContent;
+  if (!/Kode Kondisi Barang & Kode Negara Asal/.test(pesan) || !/migration-barang-ceisa\.sql/.test(pesan) || /digabung ke Uraian/.test(pesan)) throw new Error("pemberitahuan: " + pesan);
+  // Kodenya kosong: tidak ada isian yang tertinggal, tidak diberi tahu
+  $("#toastMsg").textContent = "";
+  await w.sisipkanBarang([Object.assign({}, barang[0], { kondisiBarang: "", negaraAsal: "" })], "s1", kirim);
+  eq($("#toastMsg").textContent, "", "kode kosong tidak diberi tahu:");
+});
+t("tabel barang: Kode Kondisi Barang (pilihan 1 / 2, Import saja) & Kode Negara Asal (ketik kode / nama -> kode)", () => {
+  const draftAwal = baca("draftItems");
+  try {
+    w.eval('draftItems = [Object.assign(newItem("import"), { namaBarang: "TYRE MOLD" })]');
+    w.renderItemTable();
+    const baris = w.document.querySelector("#itemTableBody tr:first-child");
+    const pilih = baris.querySelector('select[data-f="kondisiBarang"]');
+    eq([...pilih.options].map((o) => o.value + "=" + o.textContent).join(", "), "=—, 1=1 - BARU, 2=2 - BUKAN BARU", "pilihan:");
+    eq(pilih.value, "1", "bawaan BARU:");
+    eq(pilih.closest("td").classList.contains("import-col"), true, "kolom Import saja:");
+    pilih.value = "2";
+    pilih.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(baca("draftItems")[0].kondisiBarang, "2", "tersimpan:");
+    const negara = baris.querySelector('input[data-f="negaraAsal"]');
+    eq(negara.getAttribute("list"), "negaraList", "bersaran:");
+    negara.value = "korea selatan";
+    negara.dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(baris.querySelector(".negara-nama").textContent, "Korea Selatan", "nama tampil selagi diketik:");
+    negara.dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq([negara.value, baca("draftItems")[0].negaraAsal, baris.querySelector(".negara-nama").textContent].join(" | "), "KR | KR | Korea Selatan", "dibakukan ke kode:");
+    eq([negara.parentElement.classList.contains("negara-isian"), negara.title].join(" | "), "true | KR — Korea Selatan", "nama di dalam kotak yang sama, lengkapnya di tooltip:");
+    negara.value = "zz";
+    negara.dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq([negara.value, negara.classList.contains("negara-salah"), baris.querySelector(".negara-nama").textContent, /tidak dikenal/.test(negara.title)].join(" | "), "ZZ | true |  | true", "kode tak dikenal:");
+    w.renderItemTable();
+    const lagi = w.document.querySelector('#itemTableBody tr:first-child input[data-f="negaraAsal"]');
+    eq([lagi.value, lagi.classList.contains("negara-salah")].join(" | "), "ZZ | true", "digambar ulang:");
+    const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "form.css"), "utf8");
+    if (!/body\.mode-export \.import-col\s*\{\s*display:\s*none/.test(css)) throw new Error("kolom Import saja tidak disembunyikan di Export");
+    // Nama negara tidak mendorong kotaknya naik dari garis baris; kolomnya selebar isinya
+    if (!/table\.item-table \.negara-nama\s*\{[^}]*position:\s*absolute/.test(css)) throw new Error("nama negara masih di bawah kotak");
+    if (!/table\.item-table th\.kolom-kode\s*\{[^}]*white-space:\s*normal[^}]*width:\s*1%/.test(css)) throw new Error("kolom kode tidak selebar isinya");
+  } finally {
+    w.eval("draftItems = " + JSON.stringify(draftAwal || []));
+    w.renderItemTable();
+  }
+});
+t("impor berkas: Kode Kondisi & Negara Asal yang tidak dibawa berkasnya diambil dari barang lama pasangannya, selain itu bawaan buku", () => {
+  const simpan = { draft: baca("draftItems"), mode: baca("activeMode") };
+  try {
+    tulis("activeMode", "import");
+    w.eval('draftItems = [Object.assign(newItem("import"), { namaBarang: "TYRE MOLD", hsCode: "84807190", kondisiBarang: "2", negaraAsal: "JP" })]');
+    w.applyImportedBcData({ source: "pdf", fields: {}, notes: [], items: [
+      Object.assign(w.newItem("import"), { namaBarang: "TYRE MOLD", hsCode: "84807190", kondisiBarang: undefined, negaraAsal: undefined }),
+      Object.assign(w.newItem("import"), { namaBarang: "BLADE", hsCode: "84807110", kondisiBarang: undefined, negaraAsal: "KOREA, REPUBLIC OF (KR)" }),
+    ] });
+    eq(baca("draftItems").map((it) => it.namaBarang + ":" + it.kondisiBarang + "/" + it.negaraAsal).join(" | "), "TYRE MOLD:2/JP | BLADE:1/KR", "barang lama / bawaan / berkas:");
+  } finally {
+    w.eval("draftItems = " + JSON.stringify(simpan.draft || []));
+    tulis("activeMode", simpan.mode);
+    w.renderItemTable();
+  }
+});
+t("Fasilitas & No. Urut: nilai draft ditulis seperti jadwal (urutan pasangannya, tanpa No. Urut) -- yang sama terbaca sama", () => {
+  const bc = { fasilitasBarang: [{ seri: "1", dokumen: [
+    { jenis: "Masterlist", jenisLainnya: "", nomor: "72/PABEAN-PB/OSS/PMA/2025", noUrut: "6" },
+    { jenis: "PPH", jenisLainnya: "", nomor: "KET-00001/PPUT-CT/KPP.2211/2026", noUrut: "5" },
+    { jenis: "PPN", jenisLainnya: "", nomor: "KET-00002/SKBPPN-CT/KPP.2211/2025", noUrut: "10" },
+  ] }], fasilitasUmum: [] };
+  const it = { skb: [
+    { jenis: "PPH", nomor: "KET-00001/PPUT-CT/KPP.2211/2026" },
+    { jenis: "PPN", nomor: "KET-00002/SKBPPN-CT/KPP.2211/2025" },
+    { jenis: "Masterlist", nomor: "72/PABEAN-PB/OSS/PMA/2025" },
+  ] };
+  const [r] = w.cekBarisFasilitasBarang(1, it, bc, "Jadwal");
+  eq(r.status, "MATCH", "status:");
+  eq(r.pib_display, r.cipl_display, "nilai kedua sisi sama:");
+  eq(r.pib_display, "PPH KET-00001/PPUT-CT/KPP.2211/2026; PPN KET-00002/SKBPPN-CT/KPP.2211/2025; Masterlist 72/PABEAN-PB/OSS/PMA/2025", "urutan jadwal:");
+  eq(r.expected_note, "No. Urut di draft: PPH 5, PPN 10, Masterlist 6.", "No. Urut di catatan:");
+  // Yang tidak ada di jadwal menyusul di belakang, disebut di catatan
+  const [r2] = w.cekBarisFasilitasBarang(1, { skb: it.skb.slice(0, 1) }, bc, "Jadwal");
+  eq([r2.status, r2.pib_display].join(" | "), "MISMATCH | PPH KET-00001/PPUT-CT/KPP.2211/2026; Masterlist 72/PABEAN-PB/OSS/PMA/2025; PPN KET-00002/SKBPPN-CT/KPP.2211/2025", "sisa di belakang:");
+  if (!/^Tidak ada di barang jadwal: Masterlist 72\/PABEAN-PB\/OSS\/PMA\/2025; PPN /.test(r2.expected_note)) throw new Error("catatan: " + r2.expected_note);
+});
+t("kode dokumen 530 = Polis Asuransi: bukan fasilitas, tidak ditebak dari nomornya, tidak dilaporkan sebagai dokumen tak dikenal", () => {
+  eq([w.namaDokumenBukanFasilitas("530"), w.namaDokumenBukanFasilitas(" 380 "), w.namaDokumenBukanFasilitas("912")].join(" | "), "Polis Asuransi | Invoice | ", "nama:");
+  const XLSXuji = require("xlsx");
+  const wb = XLSXuji.utils.book_new();
+  const lembar = (n, b) => XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(b), n);
+  lembar("HEADER", [{ "NOMOR AJU": "000020DDI00020261002000777", "KODE JENIS IMPOR": "1", "KODE INCOTERM": "CIF" }]);
+  // Nomor polis yang kebetulan berpola nomor PI / SKB PPN
+  lembar("DOKUMEN", [{ SERI: 1, "KODE DOKUMEN": "530", "NOMOR DOKUMEN": "POL/PI-26/PPN-0007", "TANGGAL DOKUMEN": "2026-10-01" }]);
+  lembar("BARANG", [{ "SERI BARANG": 1, URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, CIF: 1 }]);
+  lembar("BARANGDOKUMEN", [{ "SERI BARANG": 1, "SERI DOKUMEN": 1 }]);
+  const asli = w.XLSX;
+  try {
+    w.XLSX = XLSXuji;
+    const r = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
+    eq([r.fields.pi, r.items[0].skb.length, r.fasilitasBarang[0].dokumen.length].join(" | "), " | 0 | 0", "bukan PI / fasilitas:");
+    if (r.notes.some((n) => /530|POL\/PI/.test(n))) throw new Error("dilaporkan sebagai dokumen lain: " + r.notes.join(" / "));
+  } finally {
+    w.XLSX = asli;
+  }
+});
+t("PIB PDF: Negara barang -> kode negara (kode dalam kurung, kodenya, atau namanya)", () => {
+  eq(["KOREA, REPUBLIC OF (KR)", "KR", "JAPAN Pos Tarif: 84807190", "Tiongkok, Kondisi Brg: Baru"].map((v) => w.kodeNegaraPib(v)).join(","), "KR,KR,JP,CN");
+});
+t("CIPL: COUNTRY OF ORIGIN -> Kode Negara Asal semua barang; kondisi barang tidak dibawa CIPL", () => {
+  const items = w.ciplRawItemsToFinalItems([{ kolom: { namaBarang: "TYRE MOLD" }, negaraAsal: "KR", qty: 1 }, { kolom: { namaBarang: "BLADE" }, negaraAsal: "", qty: 1 }]);
+  eq(JSON.stringify(items.map((it) => [it.negaraAsal, it.kondisiBarang])), '[["KR",null],[null,null]]');
+});
 t("migrasi SQL kolom barang CEISA disertakan & aman diulang", () => {
   const fs = require("fs"), path = require("path");
   const sql = fs.readFileSync(path.join(__dirname, "..", "migration-barang-ceisa.sql"), "utf8");
-  ["kode_barang", "merek", "tipe", "ukuran", "spesifikasi_lain"].forEach((k) => {
+  ["kode_barang", "merek", "tipe", "ukuran", "spesifikasi_lain", "kode_kondisi_barang", "kode_negara_asal"].forEach((k) => {
     if (!new RegExp("add column if not exists " + k + " text not null default ''", "i").test(sql)) throw new Error("migrasi tidak menambah kolom " + k);
   });
   if (/drop\s+column/i.test(sql)) throw new Error("migrasi menghapus kolom lama");
@@ -14661,6 +14811,60 @@ t("seluruh rincian barang (kolom barang, HS, jumlah, nilai, berat, kemasan, fasi
     eq(r.items.map((it) => (it.skb || []).map((sk) => sk.jenis).join("+") || "-").join(","), "-,Masterlist,-", "fasilitas hanya di barang seri 2:");
     eq(r.kolomBarang.map((x) => x.seri).join(","), "1,2,3", "kolom mentah urut seri:");
     eq(w.kunciSeri(" 003 ") + "|" + w.kunciSeri(2) + "|" + w.kunciSeri("x1"), "3|2|X1", "kunci seri:");
+  } finally {
+    w.XLSX = asli;
+  }
+});
+
+t("impor Excel CEISA: KODE KONDISI BARANG & KODE NEGARA ASAL ke barangnya; kolom yang tidak ada tidak dibawa (barang lama / bawaan)", () => {
+  const XLSXuji = require("xlsx");
+  const buku = (barang) => {
+    const wb = XLSXuji.utils.book_new();
+    XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet([{ "NOMOR AJU": "000020DDI00020261002000777", "KODE JENIS IMPOR": "1", "KODE INCOTERM": "CIF" }]), "HEADER");
+    XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(barang), "BARANG");
+    return XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer" });
+  };
+  const asli = w.XLSX;
+  try {
+    w.XLSX = XLSXuji;
+    const r = w.parseBcExcelWorkbook(buku([
+      { "SERI BARANG": 2, URAIAN: "VENT SPRING", "KODE KONDISI BARANG": 2, "KODE NEGARA ASAL": "cn", "JUMLAH SATUAN": 1, CIF: 1 },
+      { "SERI BARANG": 1, URAIAN: "TYRE MOLD", "KODE KONDISI BARANG": "1", "KODE NEGARA ASAL": "KR", "JUMLAH SATUAN": 1, CIF: 1 },
+    ]));
+    eq(r.items.map((it) => it.namaBarang + ":" + it.kondisiBarang + "/" + it.negaraAsal).join(" | "), "TYRE MOLD:1/KR | VENT SPRING:2/CN", "per seri:");
+    eq(r.kolomBarang.map((x) => x.kolom.kondisiBarang + "/" + x.kolom.negaraAsal).join(","), "1/KR,2/CN", "kolom mentah:");
+    const tanpa = w.parseBcExcelWorkbook(buku([{ "SERI BARANG": 1, URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, CIF: 1 }]));
+    eq(JSON.stringify([tanpa.items[0].kondisiBarang, tanpa.items[0].negaraAsal]), "[null,null]", "kolom tidak ada -> tidak dibawa:");
+    eq("kondisiBarang" in tanpa.kolomBarang[0].kolom, false, "kolom mentah tanpa kode:");
+  } finally {
+    w.XLSX = asli;
+  }
+});
+t("impor Excel CEISA: sheet KONTAINER -> Container/Seal Number NOMOR / UKURAN / TIPE & Jenis Muatan; fasilitas per Seri Barang beserta No. Urut", () => {
+  const XLSXuji = require("xlsx");
+  const wb = XLSXuji.utils.book_new();
+  const lembar = (n, b) => XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(b), n);
+  lembar("HEADER", [{ "NOMOR AJU": "000020DDI00020261002000777", "KODE JENIS IMPOR": "1", "KODE INCOTERM": "CIF" }]);
+  lembar("DOKUMEN", [
+    { SERI: 3, "KODE DOKUMEN": "912", "NOMOR DOKUMEN": "72/PABEAN-PB/OSS/PMA/2025", "TANGGAL DOKUMEN": "2025-12-10" },
+    { SERI: 4, "KODE DOKUMEN": "456", "NOMOR DOKUMEN": "KET-123/WPJ.09/2026", "TANGGAL DOKUMEN": "2026-09-01" },
+  ]);
+  lembar("KONTAINER", [
+    { "NOMOR KONTINER": "TGHU1234567", "KODE UKURAN KONTAINER": "40", "KODE JENIS KONTAINER": "F", "KODE TIPE KONTAINER": "1" },
+    { "NOMOR KONTINER": "TCLU7654321", "KODE UKURAN KONTAINER": 20, "KODE JENIS KONTAINER": "F", "KODE TIPE KONTAINER": "" },
+  ]);
+  lembar("BARANG", [{ "SERI BARANG": 1, URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, CIF: 1 }, { "SERI BARANG": 2, URAIAN: "BLADE", "JUMLAH SATUAN": 1, CIF: 1 }]);
+  lembar("BARANGDOKUMEN", [{ "SERI BARANG": 2, "SERI DOKUMEN": 3 }]);
+  const asli = w.XLSX;
+  try {
+    w.XLSX = XLSXuji;
+    const r = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
+    eq([r.fields.container, r.fields.muatan].join(" | "), "TGHU1234567 / 40 / FCL, TCLU7654321 / 20 / FCL | FCL", "kontainer & jenis muatan:");
+    eq(r.kontainer.map((k) => [k.nomor, k.ukuran, k.jenis, k.tipe].join("/")).join(" | "), "TGHU1234567/40/F/1 | TCLU7654321/20/F/", "kontainer mentah:");
+    eq(r.fasilitasBarang.map((x) => x.seri + ":" + x.dokumen.map((d) => d.jenis + "#" + d.noUrut + "#" + d.kode).join("+")).join(" | "), "1: | 2:Masterlist#3#912", "fasilitas per seri:");
+    eq(r.fasilitasUmum.map((d) => d.jenis + "#" + d.noUrut).join(","), "PPN#4", "tidak ditautkan:");
+    eq(Object.keys(r.items[1].skb[0]).sort().join(","), "jenis,jenisLainnya,nomor,tanggal", "isian fasilitas form tanpa No. Urut:");
+    eq(w.teksKontainer({ nomor: "MSKU1111110", ukuran: "45", jenis: "L" }) + " | " + w.teksKontainer({ nomor: "MSKU1111110", ukuran: "", jenis: "7" }), "MSKU1111110 / 45 / LCL | MSKU1111110", "bentuk teks:");
   } finally {
     w.XLSX = asli;
   }
@@ -18344,6 +18548,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       // Cadangan dari nomor (hanya dipakai untuk dokumen per barang ber-kode asing)
       eq(["72/PABEAN-PB/OSS/PMA/2025", "KET-00002/PPN-CT/KPP.2211/2026", "KET-00001/PPUT-CT/KPP.2211/2026", "INV-PPNBM-1", "DD-DDI2026090403"]
         .map((n) => w.jenisFasilitasDariNomor(n) || "-").join(","), "Masterlist,PPN,PPH,-,-", "dari nomor:");
+      // Polis asuransi (530): punya isian sendiri, dari kode atau label PIB PDF
+      eq(["530", " 530 ", "380", ""].map((k) => w.adalahPolisAsuransi({ kode: k })).join(","), "true,true,false,false", "polis dari kode:");
+      eq(w.adalahPolisAsuransi({ kode: "", label: "POLIS ASURANSI" }), true, "polis dari label:");
+      // PI / LS / polis lebih dari satu: nomor digabung tanpa ulang, tanggal dari yang pertama bertanggal
+      const daftar = [];
+      [["A", ""], ["B", "2026-01-02"], ["A", "2026-01-01"], ["", "2026-01-03"], [" C ", "2026-01-04"]].forEach(([n, d]) => w.tambahDokumenPengiriman(daftar, n, d));
+      eq(JSON.stringify(w.isianDokumenPengiriman(daftar)), '{"nomor":"A, B, C","tanggal":"2026-01-02"}', "dokumen sejenis:");
+      eq(JSON.stringify(w.isianDokumenPengiriman([])), '{"nomor":"","tanggal":""}', "tanpa dokumen:");
     });
 
     t("Excel CEISA pengguna: fasilitas barang membawa nomor & tanggal, No. PI & No. LS terisi, tanggal dokumen ikut", () => {
@@ -18355,6 +18567,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "PPH KET-00001/PPUT-CT/KPP.2211/2026\nMASTER LIST 72/PABEAN-PB/OSS/PMA/2025\nPPN KET-00002/SKBPPN-CT/KPP.2211/2025", "kolom FASILITAS / SKB:");
       eq(hasil.fields.pi, "04.PI-02.26.0131", "No. PI:");
       eq(hasil.fields.ls, "ITB21G2672826137141", "No. LS (958 Laporan Surveyor):");
+      eq([hasil.fields.piDate, hasil.fields.lsDate, hasil.fields.polisAsuransi, hasil.fields.polisAsuransiDate].join(" | "),
+        "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "tanggal PI & LS, Polis Asuransi (530, tidak ditautkan ke barang):");
       eq([hasil.fields.invoice, hasil.fields.masterBL, hasil.fields.houseBL].join(" | "),
         "DD-DDI2026090403 | SNKO010260809553 | PFSX260693", "invoice & B/L tetap:");
       eq([hasil.fields.invoiceDate, hasil.fields.masterBLDate, hasil.fields.houseBLDate].join(" | "),
@@ -18394,9 +18608,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "Tgl. 22-01-2026",
         "5 958 LAPORAN SURVEYOR No. ITB21G2672826137141",
         "Tgl. 23-09-2026",
+        "6 530 POLIS ASURANSI No. EKD2273805 - KMC260031",
+        "Tgl. 03-10-2026",
       ].join("\n");
       const hasil = w.parsePibPdfText(teks, []);
       eq(hasil.fields.pi, "04.PI-02.26.0131", "No. PI:");
+      eq(["piDate", "ls", "lsDate", "polisAsuransi", "polisAsuransiDate"].map((k) => hasil.fields[k]).join(" | "),
+        "2026-01-22 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "tanggal PI & LS, Polis Asuransi:");
+      if (hasil.items.some((it) => (it.skb || []).some((sk) => /EKD2273805/.test(sk.nomor)))) throw new Error("polis terbaca sebagai fasilitas");
       eq(hasil.fields.invoice, "DD-DDI2026090403", "invoice:");
       // Lembarnya memuat SKB PPh & masterlist -> peringatan "tidak ada SKB" tidak muncul
       if (hasil.notes.includes(w.t("w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar")))
@@ -18438,7 +18657,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
 
     t("impor dokumen mengisi kotak PI; labelnya Persetujuan Impor (kedua bahasa)", () => {
       const simpan = $("#fPI").value;
+      const mode = baca("activeMode");
       try {
+        tulis("activeMode", "import");
         w.eval("importFieldOrigin = {}");
         $("#fPI").value = "";
         w.applyImportedBcData({ source: "excel", fields: { pi: "04.PI-02.26.0131" }, items: [], notes: [] });
@@ -18446,6 +18667,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         const label = w.document.querySelector('label[for="fPI"]');
         eq([label.textContent.trim(), label.dataset.en].join(" | "), "PI (Persetujuan Impor) | PI (Import Approval)", "label:");
       } finally {
+        tulis("activeMode", mode);
         $("#fPI").value = simpan;
         w.eval("importFieldOrigin = {}");
       }
@@ -18522,7 +18744,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       id: "cek-1", mode: "import", party: "DYNAMIC DESIGN CO., LTD.", noAju: "000020DDI00020261002000777", docNo: "",
       invoice: "DD-UJI-2610", invoiceDate: "2026-10-01",
       masterBL: "HDMUBSAJ2610001", masterBLDate: "2026-10-05", houseBL: "WLSO26100077", houseBLDate: "2026-10-05",
-      pi: "04.PI-02.26.0131", ls: "ITB21G2672826137141", transport: "laut", vessel: "HMM HARVEST", voyage: "0015N",
+      pi: "04.PI-02.26.0131", piDate: "2026-01-22", ls: "ITB21G2672826137141", lsDate: "2026-09-23", transport: "laut", vessel: "HMM HARVEST", voyage: "0015N",
       origin: "KRPUS", destination: "IDTPP", incoterm: "CIF", freight: 450, insurance: 25.5, ndpbm: 16500, package: "3 PK",
       etd: "2026-10-05", eta: "2026-10-12", status: "process",
       items: [["TYRE MOLD", "84807190", 1, "SET", 850, 6300], ["VENT SPRING", "848140", 60000, "PCS", 19.2, 0.44], ["BLADE", hsBlade, 120, "PCS", 12, 2.5]]
@@ -18624,12 +18846,23 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         eq(w.cekSubjudulBarang(k.hasil, 1), "TYRE MOLD", "subjudul barang:");
         eq(["Net Weight Total", "Gross Weight Total", "Total Amount / CIF"].map((f) => barisCek(k, f).status + ":" + barisCek(k, f).left_source).join(","),
           "MATCH:Jadwal,MATCH:Jadwal,MATCH:Jadwal", "total dari jadwal:");
-        // Jumlah barang & total berat tidak dobel di bagian Jadwal
-        if (k.hasil.checks.some((x) => x.section === "SCHEDULE" && /Jumlah barang|Total netto|Total bruto/.test(x.field))) throw new Error("baris barang ganda di bagian Jadwal");
+        // Jumlah barang & total berat tidak dobel (sudah dibandingkan di bagian Barang & Berat)
+        if (k.hasil.checks.some((x) => /^(?:Jumlah barang|Total netto|Total bruto)/.test(x.field))) throw new Error("baris barang ganda dari jadwal");
+        // Jadwal rujukan utama: baris CIPL untuk isian yang diisi jadwal tidak tampil; kode kantor tidak diperiksa
+        ["Invoice Number", "Invoice Date", "Port of Loading", "Port of Destination", "Vessel / Voyage", "Package Count", "Supplier / Seller (Entity 9/10)", "Transport Mode"].forEach((f) => {
+          if (k.hasil.checks.some((x) => x.field === f)) throw new Error("baris CIPL masih tampil padahal jadwal mengisinya: " + f);
+        });
+        eq(k.hasil.checks.filter((x) => x.field === "Incoterm").map((x) => x.left_source).join(","), "Jadwal", "Incoterm sekali, dari jadwal:");
+        if (k.hasil.checks.some((x) => /^Kode Kantor/.test(x.field))) throw new Error("kode kantor masih diperiksa");
+        eq(["No. Invoice", "Pelabuhan muat", "Kapal / Voyage", "Incoterm", "Kemasan", "Shipper / Supplier"].map((f) => barisCek(k, f).section + ":" + barisCek(k, f).left_source).join(","),
+          "DOCUMENT:Jadwal,HEADER:Jadwal,TRANSPORT:Jadwal,VALUE:Jadwal,PACKING:Jadwal,ENTITY:Jadwal", "isian jadwal di bagiannya:");
+        eq(["Packing List Number", "Currency", "Importer / Buyer (Entity 1)"].map((f) => barisCek(k, f).left_source).join(","), "CIPL,CIPL,CIPL", "yang tidak dicatat jadwal dari CIPL:");
         eq([...w.document.querySelectorAll('#cekDaftar details[data-cek-grup="ITEM-1"] thead th')].map((th) => th.textContent).slice(1, 3).join(" / "), "Jadwal / Draft PIB", "kepala kolom barang:");
         // Bagian Jadwal, Fasilitas & izin, kurs pajak
-        ["No. Aju", "No. Invoice", "Tanggal Invoice", "Moda", "Kapal / Voyage", "Pelabuhan muat", "Pelabuhan tujuan", "Kemasan", "PI (Persetujuan Impor)", "LS (Laporan Surveyor)", "NDPBM ↔ kurs pajak"]
+        ["No. Aju", "No. Invoice", "Tanggal Invoice", "Moda", "Kapal / Voyage", "Pelabuhan muat", "Pelabuhan tujuan", "Kemasan", "PI (Persetujuan Impor)", "Tanggal PI", "LS (Laporan Surveyor)", "Tanggal LS", "NDPBM ↔ kurs pajak"]
           .forEach((f) => eq(barisCek(k, f).status, "MATCH", f + ":"));
+        eq(["Tanggal PI", "Tanggal LS"].map((f) => barisCek(k, f).section + ":" + barisCek(k, f).pib_display).join(","), "FACILITY:2026-01-22,FACILITY:2026-09-23", "tanggal PI & LS di Fasilitas & izin:");
+        if (k.hasil.checks.some((x) => /Polis Asuransi/.test(x.field))) throw new Error("baris polis tanpa polis di kedua sisi");
         if (!/tanggal aju 02-10-2026/.test(barisCek(k, "NDPBM ↔ kurs pajak").expected_note)) throw new Error("tanggal aju dari nomor aju: " + barisCek(k, "NDPBM ↔ kurs pajak").expected_note);
         eq([k.hasil.overall, k.hasil.summary.mismatches].join(" "), "PASS 0", "hasil:");
         // Tergambar: vonis, angka saringan, grup per bagian & per barang
@@ -18637,7 +18870,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         eq($('[data-cek-saring="MISMATCH"] b').textContent, "0", "angka MISMATCH:");
         eq($('[data-cek-saring="ALL"] b').textContent, String(k.hasil.checks.length), "angka semua:");
         const grup = [...w.document.querySelectorAll("#cekDaftar details[data-cek-grup]")].map((d) => d.dataset.cekGrup);
-        ["SCHEDULE", "FACILITY", "ITEM-1", "ITEM-3"].forEach((g) => { if (grup.indexOf(g) < 0) throw new Error("grup tidak ada: " + g + " (" + grup + ")"); });
+        ["DOCUMENT", "HEADER", "FACILITY", "ITEM-1", "ITEM-3"].forEach((g) => { if (grup.indexOf(g) < 0) throw new Error("grup tidak ada: " + g + " (" + grup + ")"); });
+        if (grup.indexOf("SCHEDULE") >= 0) throw new Error("bagian Jadwal terpisah masih ada");
+        eq([...w.document.querySelectorAll('#cekDaftar details[data-cek-grup="DOCUMENT"] thead th')].map((th) => th.textContent).slice(1, 3).join(" / "), "Jadwal / Draft PIB", "kepala kolom bagian Dokumen:");
         eq($("#btnCekLihatJadwal").hidden, false, "tombol Lihat jadwal:");
         eq(w.cekTeksTemuan().split("\n").slice(0, 3).join(" / "), "Cek PIB 000020DDI00020261002000777: PASS / CIPL: DD-UJI-2610 / Jadwal: DYNAMIC DESIGN CO., LTD.", "teks temuan:");
         // Nomor B/L yang diketik sendiri: keterangan "Dari Jadwal" hilang, dibandingkan sebagai Input manual
@@ -18763,13 +18998,117 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       });
     });
 
+    t("Cek PIB/PEB: Kode Kondisi Barang, Kode Negara Asal & Fasilitas / No. Urut per barang vs draft", async () => {
+      const draft = bukuDraftUji();
+      draft.Sheets.BARANG = XLSXuji.utils.json_to_sheet([
+        { "SERI BARANG": 1, HS: "84807190", URAIAN: "TYRE MOLD", "KODE KONDISI BARANG": 1, "KODE NEGARA ASAL": "KR", "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 850, CIF: 6300 },
+        { "SERI BARANG": 2, HS: "84814000", URAIAN: "VENT SPRING", "KODE KONDISI BARANG": 2, "KODE NEGARA ASAL": "CN", "JUMLAH SATUAN": 60000, "KODE SATUAN": "PCE", NETTO: 19.2, CIF: 26400 },
+        { "SERI BARANG": 3, HS: "84807110", URAIAN: "BLADE", "KODE KONDISI BARANG": "", "KODE NEGARA ASAL": "KR", "JUMLAH SATUAN": 120, "KODE SATUAN": "PCE", NETTO: 12, CIF: 300 },
+      ]);
+      // 912 (seri 7) ditautkan ke barang 1; 456 (seri 8) ada di DOKUMEN tetapi tidak ditautkan ke barang mana pun
+      const dokumen = XLSXuji.utils.sheet_to_json(draft.Sheets.DOKUMEN);
+      dokumen.push({ SERI: 7, "KODE DOKUMEN": "912", "NOMOR DOKUMEN": "72/PABEAN-PB/OSS/PMA/2025", "TANGGAL DOKUMEN": "2025-12-10" },
+        { SERI: 8, "KODE DOKUMEN": "456", "NOMOR DOKUMEN": "KET-123/WPJ.09/2026", "TANGGAL DOKUMEN": "2026-09-01" });
+      draft.Sheets.DOKUMEN = XLSXuji.utils.json_to_sheet(dokumen);
+      XLSXuji.utils.book_append_sheet(draft, XLSXuji.utils.json_to_sheet([{ "SERI BARANG": 1, "SERI DOKUMEN": 7 }]), "BARANGDOKUMEN");
+      const jadwal = jadwalCek("84807110");
+      Object.assign(jadwal.items[0], { kondisiBarang: "1", negaraAsal: "KR", skb: [{ jenis: "Masterlist", jenisLainnya: "", nomor: "72/PABEAN-PB/OSS/PMA/2025", tanggal: "2025-12-10" }] });
+      Object.assign(jadwal.items[1], { kondisiBarang: "1", negaraAsal: "CN", skb: [{ jenis: "PPN", jenisLainnya: "", nomor: "KET-123/WPJ.09/2026", tanggal: "" }] });
+      Object.assign(jadwal.items[2], { kondisiBarang: "1", negaraAsal: "" });
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", draft)], "cipl");
+        const sel = (f) => [barisCek(k, f).status, barisCek(k, f).cipl_display, barisCek(k, f).pib_display].join("|");
+        eq(sel("Item 1 Kode Kondisi Barang"), "MATCH|1 - BARU|1 - BARU", "kondisi barang 1:");
+        eq(sel("Item 2 Kode Kondisi Barang"), "MISMATCH|1 - BARU|2 - BUKAN BARU", "kondisi barang 2:");
+        eq([barisCek(k, "Item 3 Kode Kondisi Barang").status, barisCek(k, "Item 3 Kode Kondisi Barang").expected_note].join(" "), "MISMATCH Kosong di draft.", "kondisi kosong di draft:");
+        eq(sel("Item 1 Kode Negara Asal"), "MATCH|KR — Korea Selatan|KR — Korea Selatan", "negara asal barang 1:");
+        eq([barisCek(k, "Item 3 Kode Negara Asal").status, barisCek(k, "Item 3 Kode Negara Asal").expected_note].join(" "), "INFO Belum diisi di jadwal.", "negara asal belum diisi:");
+        eq(sel("Item 1 Fasilitas & No. Urut"), "MATCH|Masterlist 72/PABEAN-PB/OSS/PMA/2025|Masterlist 72/PABEAN-PB/OSS/PMA/2025", "fasilitas barang 1:");
+        eq(barisCek(k, "Item 1 Fasilitas & No. Urut").expected_note, "No. Urut di draft: Masterlist 7.", "No. Urut di catatan:");
+        eq(barisCek(k, "Item 2 Fasilitas & No. Urut").status, "MISMATCH", "fasilitas barang 2:");
+        if (!/ada di sheet DOKUMEN, No\. Urut 8, tetapi tidak ditautkan ke barang ini/.test(barisCek(k, "Item 2 Fasilitas & No. Urut").expected_note)) throw new Error("catatan: " + barisCek(k, "Item 2 Fasilitas & No. Urut").expected_note);
+        if (k.hasil.checks.some((x) => x.field === "Item 3 Fasilitas & No. Urut")) throw new Error("barang tanpa fasilitas di kedua sisi tetap dibaris");
+        eq(barisCek(k, "Item 1 Kode Kondisi Barang").left_source, "Jadwal", "sumber:");
+      }, { jadwal });
+    });
+
+    t("Cek PIB/PEB: Nomor, Ukuran & Tipe Peti Kemas tiap kontainer vs Container/Seal Number jadwal", async () => {
+      const draft = bukuDraftUji();
+      XLSXuji.utils.book_append_sheet(draft, XLSXuji.utils.json_to_sheet([
+        { "NOMOR KONTINER": "TGHU1234567", "KODE UKURAN KONTAINER": "40", "KODE JENIS KONTAINER": "F", "KODE TIPE KONTAINER": "1" },
+        { "NOMOR KONTINER": "TCLU7654321", "KODE UKURAN KONTAINER": "40", "KODE JENIS KONTAINER": "F", "KODE TIPE KONTAINER": "1" },
+        { "NOMOR KONTINER": "MSKU1111110", "KODE UKURAN KONTAINER": "20", "KODE JENIS KONTAINER": "F", "KODE TIPE KONTAINER": "1" },
+      ]), "KONTAINER");
+      const jadwal = Object.assign(jadwalCek("84807110"), { container: "TGHU1234567 / 40 / FCL, TCLU 765432-1 20' / SEAL 0012345, OOLU2222220", muatan: "FCL" });
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", draft)], "cipl");
+        const baris = k.hasil.checks.filter((x) => x.field === "Nomor, Ukuran & Tipe Peti Kemas");
+        eq(baris.map((x) => x.status).join(","), "MATCH,MISMATCH,MISMATCH,MISMATCH", "status:");
+        eq([baris[0].cipl_display, baris[0].pib_display, baris[0].section].join(" | "), "TGHU1234567 / 40 / FCL | TGHU1234567 / 40 / FCL | PACKING", "kontainer sama:");
+        if (!/ukuran 20 di jadwal, 40 di draft/.test(baris[1].expected_note) || !/Tipe dari isian Jenis Muatan jadwal/.test(baris[1].expected_note)) throw new Error("ukuran beda: " + baris[1].expected_note);
+        eq([baris[2].expected_note, baris[3].expected_note].join(" | "), "OOLU2222220 tidak ada di draft. | MSKU1111110 tidak ada di jadwal.", "hanya di satu sisi:");
+      }, { jadwal });
+      // Bentuk bebas: ukuran & tipe di depan nomornya; nomor saja -> ukuran & tipe belum tertulis
+      eq(JSON.stringify(w.cekUraiKontainer("1x40'HC FCL TGHU1234567").map((x) => [x.nomor, x.ukuran, x.tipe])), '[["TGHU1234567","40","FCL"]]', "di depan nomornya:");
+      eq(JSON.stringify(w.cekUraiKontainer("TGHU1234567 SEAL 204512").map((x) => [x.ukuran, x.tipe])), '[["",""]]', "nomor segel bukan ukuran:");
+      const info = w.cekBarisPetiKemas({ container: "TGHU1234567", muatan: "" }, { containers: [] }, { kontainer: [{ nomor: "TGHU1234567", ukuran: "40", jenis: "F" }] });
+      eq([info[0].status, info[0].expected_note].join(" "), "INFO Nomor sama; ukuran & tipe (FCL/LCL) belum tertulis di Container/Seal Number jadwal (tulis NOMOR / UKURAN / TIPE).", "belum tertulis:");
+    });
+
+    t("Cek PIB/PEB: Tanggal PI & LS, nomor & tanggal Polis Asuransi (530) dibandingkan dengan jadwal", async () => {
+      const draft = bukuDraftUji();
+      const dokumen = XLSXuji.utils.sheet_to_json(draft.Sheets.DOKUMEN);
+      dokumen.push({ SERI: 7, "KODE DOKUMEN": "530", "NOMOR DOKUMEN": "EKD2273805 - KMC260031", "TANGGAL DOKUMEN": "2026-10-03" });
+      draft.Sheets.DOKUMEN = XLSXuji.utils.json_to_sheet(dokumen);
+      const jadwal = Object.assign(jadwalCek("84807110"), { lsDate: "2026-09-20", polisAsuransi: "EKD2273805-KMC260031", polisAsuransiDate: "2026-10-03" });
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", draft)], "cipl");
+        const sel = (f) => [barisCek(k, f).section, barisCek(k, f).status, barisCek(k, f).cipl_display, barisCek(k, f).pib_display].join("|");
+        eq(sel("Tanggal PI"), "FACILITY|MATCH|2026-01-22|2026-01-22", "tanggal PI:");
+        eq(sel("Tanggal LS"), "FACILITY|MISMATCH|2026-09-20|2026-09-23", "tanggal LS berbeda:");
+        eq(sel("Polis Asuransi"), "DOCUMENT|MATCH|EKD2273805-KMC260031|EKD2273805 - KMC260031", "polis (spasi & tanda hubung diabaikan):");
+        eq([sel("Tanggal Polis Asuransi"), barisCek(k, "Tanggal Polis Asuransi").left_source].join(" "), "DOCUMENT|MATCH|2026-10-03|2026-10-03 Jadwal", "tanggal polis:");
+        eq(barisCek(k, "Polis Asuransi").expected_note, "Kode dokumen 530.", "catatan:");
+        const dok = [...w.document.querySelectorAll('#cekDaftar details[data-cek-grup="DOCUMENT"] tbody tr')].map((tr) => tr.textContent);
+        if (!dok.some((x) => /Polis Asuransi/.test(x)) || !dok.some((x) => /Tanggal Polis Asuransi/.test(x))) throw new Error("polis tidak tergambar di bagian Dokumen");
+      }, { jadwal });
+      // Belum diisi di jadwal / tidak ada di draft / nomor lain
+      const decl = { type: "PIB", documents: [{ code: "530", number: "EKD2273805 - KMC260031", date: "2026-10-03" }] };
+      const polis = (s, d) => w.cekBarisJadwal(Object.assign(jadwalCek("84807110"), s), d || decl, null)
+        .filter((x) => /Polis/.test(x.field)).map((x) => [x.field, x.status, x.expected_note].join(": ")).join(" / ");
+      eq(polis({}), "Polis Asuransi: INFO: Belum diisi di jadwal. / Tanggal Polis Asuransi: INFO: Belum diisi di jadwal.", "belum diisi:");
+      eq(polis({ polisAsuransi: "EKD2273805 - KMC260031", polisAsuransiDate: "2026-10-03" }, { type: "PIB", documents: [] }),
+        "Polis Asuransi: INFO: Draft tidak mencantumkan polis asuransi (kode dokumen 530). / Tanggal Polis Asuransi: INFO: Draft tidak mencantumkan tanggal dokumen kode 530.", "tidak ada di draft:");
+      eq(polis({ polisAsuransi: "EKD9999999", polisAsuransiDate: "2026-10-01" }),
+        "Polis Asuransi: MISMATCH: Tidak ada di draft: EKD9999999. Tidak ada di jadwal: EKD2273805 - KMC260031. / Tanggal Polis Asuransi: MISMATCH: Kode dokumen 530.", "berbeda:");
+      // Tanggal dari dokumen yang nomornya sama dengan jadwal, bukan sekadar dokumen pertama
+      const dua = [{ code: "959", number: "PI-LAMA-1", date: "2025-01-02" }, { code: "959", number: "04.PI-02.26.0131", date: "2026-01-22" }];
+      eq(w.cekBarisTanggalDokumen("2026-01-22", w.cekPecahNomor("04.PI-02.26.0131"), dua, "959").slice(0, 3).join("|"), "MATCH|2026-01-22|2026-01-22", "dokumen yang nomornya sama:");
+      eq(w.cekBarisTanggalDokumen("", [], [], "959"), null, "tanpa tanggal di kedua sisi:");
+    });
+
+    t("Cek PIB/PEB dengan CIPL: isian yang kosong di jadwal memakai CIPL (bertanda CIPL); yang diisi jadwal tidak menampilkan nilai CIPL; kode kantor tidak diperiksa", async () => {
+      const jadwal = Object.assign(jadwalCek("84807110"), { invoice: "", invoiceDate: "", incoterm: "" });
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
+        eq(k.jadwalId, "cek-1", "jadwal terkait lewat aju:");
+        eq(["Invoice Number", "Invoice Date", "Incoterm"].map((f) => barisCek(k, f).status + ":" + barisCek(k, f).left_source).join(","), "MATCH:CIPL,MATCH:CIPL,MATCH:CIPL", "isian kosong di jadwal dari CIPL:");
+        if (k.hasil.checks.some((x) => x.field === "No. Invoice" || x.field === "Tanggal Invoice")) throw new Error("baris jadwal yang kosong masih tampil di samping baris CIPL");
+        ["Pelabuhan muat", "Pelabuhan tujuan", "Kapal / Voyage", "Kemasan", "Shipper / Supplier"].forEach((f) => eq(barisCek(k, f).left_source, "Jadwal", f + ":"));
+        ["Port of Loading", "Port of Destination", "Vessel / Voyage", "Package Count", "Supplier / Seller (Entity 9/10)", "Kode Kantor", "Kode Kantor Bongkar", "Transport Mode"].forEach((f) => {
+          if (k.hasil.checks.some((x) => x.field === f)) throw new Error("baris CIPL / mesin masih tampil: " + f);
+        });
+        eq([...w.document.querySelectorAll('#cekDaftar details[data-cek-grup="DOCUMENT"] .cek-sumber')].map((x) => x.textContent).filter((x) => x === "CIPL").length >= 2, true, "tanda CIPL di bagian Dokumen:");
+      }, { jadwal });
+    });
+
     t("Cek PIB/PEB ikut bahasa aktif: label baris & status berbahasa Inggris saat EN", async () => {
       await denganCek(async (k) => {
         await w.cekTerimaBerkas([berkasUji("CIPL.xlsx", bukuCiplUji()), berkasUji("DRAFT.xlsx", bukuDraftUji())], "cipl");
         try {
           w.setLang("en");
           await w.cekJalankan();
-          ["Aju No.", "Invoice No.", "Port of loading", "PI (Import Approval)", "LS (Surveyor Report)"].forEach((f) => {
+          ["Aju No.", "Invoice No.", "Port of loading", "PI (Import Approval)", "PI Date", "LS (Surveyor Report)", "LS Date"].forEach((f) => {
             if (!k.hasil.checks.some((x) => x.field === f)) throw new Error("label EN tidak ada: " + f);
           });
           eq($("#cekStatus").textContent.trim(), "Check complete. The result updates itself when the fields above change.", "status EN:");
@@ -18811,7 +19150,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       }
     });
 
-    t("Tanggal invoice, tanggal B/L-AWB & LS: tersimpan, termuat ulang, kolomnya di database (migrasi) -- jadwal lama tetap terbaca", async () => {
+    t("Tanggal invoice, tanggal B/L-AWB, LS, tanggal PI & LS, Polis Asuransi: tersimpan, termuat ulang, kolomnya di database (migrasi) -- jadwal lama tetap terbaca", async () => {
       const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList, data: w.eval("[data.import, data.export]") };
       const form = w.document.getElementById("viewForm");
       const tersembunyi = form.classList.contains("d-none");
@@ -18832,24 +19171,43 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         ketik("#fMasterBLDate", "2026-10-01", "change");
         ketik("#fHouseBL", "HBL-UJI-UNIK-1");
         ketik("#fPI", "04.PI-02.26.0131");
+        ketik("#fPIDate", "2026-01-22", "change");
         ketik("#fLS", "ITB21G2672826137141");
+        ketik("#fLSDate", "2026-09-23", "change");
+        ketik("#fPolisAsuransi", "  EKD2273805 - KMC260031 ");
+        ketik("#fPolisAsuransiDate", "2026-10-03", "change");
         w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "X", qty: 1, harga: 1 })]');
         $("#btnSaveShipment").click();
         for (let i = 0; i < 20 && !payload; i++) await jeda(10);
         if (!payload) throw new Error("tidak tersimpan");
         await jeda(30); // alur simpan selesai (muat ulang, kembali ke daftar) sebelum tiruannya dilepas
         eq([payload.invoiceDate, payload.masterBLDate, payload.houseBLDate, payload.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "isian tersimpan:");
+        eq([payload.piDate, payload.lsDate, payload.polisAsuransi, payload.polisAsuransiDate].join(" | "), "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PI, LS & polis tersimpan:");
         const row = w.shipmentToRow(payload, "import");
         eq([row.invoice_date, row.master_bl_date, row.house_bl_date, row.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "kolom database:");
+        eq([row.pi_date, row.ls_date, row.polis_asuransi, row.polis_asuransi_date].join(" | "), "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "kolom database PI, LS & polis:");
+        eq(["pi_date", "ls_date", "polis_asuransi", "polis_asuransi_date"].map((k) => w.shipmentToRow({ piDate: "", lsDate: "", polisAsuransi: "", polisAsuransiDate: "" }, "import")[k]).join(","), ",,,", "kosong -> NULL:");
+        if (w.shipmentToRow({ piDate: "" }, "import").pi_date !== null) throw new Error("tanggal PI kosong bukan NULL");
         const s = w.rowToShipment(Object.assign({ id: "baru-1", mode: "import", items: [] }, row));
         w.__dataUji = [[s], []];
         w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
         w.renderFormPage("baru-1");
         eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value, $("#fLS").value].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "termuat ulang:");
+        eq(["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join(" | "),
+          "04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PI, LS & polis termuat ulang:");
+        // Panel detail: nomor + tanggal dalam satu isian, seperti invoice
+        const detail = w.buildDetailHtml(s);
+        ["PI (Persetujuan Impor)", "LS (Laporan Surveyor)", "Polis Asuransi"].forEach((label) => {
+          if (detail.indexOf(`<div class="info-label">${label}</div>`) < 0) throw new Error("detail tanpa " + label);
+        });
+        if (!/EKD2273805 - KMC260031 <span class="text-muted text-nowrap">· [^<]*2026/.test(detail)) throw new Error("detail polis tanpa tanggal (utuh, tidak terpotong)");
         ketik("#fHouseBLDate", "2026-10-02", "change");
         eq($("#fMasterBLDate").value, "2026-10-02", "tersimpan sama -> tetap saling mengikuti:");
         const lama = w.rowToShipment({ id: "lama", mode: "import", party: "A", items: [] });
-        eq([lama.invoiceDate, lama.masterBLDate, lama.houseBLDate, lama.ls].join("|"), "|||", "jadwal lama tanpa kolom baru:");
+        eq([lama.invoiceDate, lama.masterBLDate, lama.houseBLDate, lama.ls, lama.piDate, lama.lsDate, lama.polisAsuransi, lama.polisAsuransiDate].join("|"), "|||||||", "jadwal lama tanpa kolom baru:");
+        // Form baru: keenam isian kosong lagi
+        w.renderFormPage(null);
+        eq(["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join("|"), "|||||", "form baru kosong:");
         // Kolomnya opsional sampai migrasinya dijalankan
         const opsional = baca("KOLOM_OPSIONAL");
         eq(["ls", "invoice_date", "master_bl_date", "house_bl_date"].map((k) => opsional[k] && opsional[k].berkas).join(","),
@@ -18859,6 +19217,17 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
           if (sql.indexOf("add column if not exists " + k) < 0) throw new Error("migrasi tanpa " + k);
         });
         if (!/notify pgrst, 'reload schema'/.test(sql)) throw new Error("migrasi tidak memuat ulang skema PostgREST");
+        eq(["pi_date", "ls_date", "polis_asuransi", "polis_asuransi_date"].map((k) => opsional[k] && opsional[k].berkas + ":" + opsional[k].nama).join(","),
+          "migration-tanggal-pi-ls-polis.sql:Tanggal PI,migration-tanggal-pi-ls-polis.sql:Tanggal LS,migration-tanggal-pi-ls-polis.sql:Polis Asuransi,migration-tanggal-pi-ls-polis.sql:Tanggal Polis Asuransi", "kolom opsional PI, LS & polis:");
+        const sql2 = fs.readFileSync(path.join(ROOT, "migration-tanggal-pi-ls-polis.sql"), "utf8");
+        ["pi_date date", "ls_date date", "polis_asuransi text", "polis_asuransi_date date"].forEach((k) => {
+          if (sql2.indexOf("add column if not exists " + k) < 0) throw new Error("migrasi PI/LS/polis tanpa " + k);
+        });
+        if (!/notify pgrst, 'reload schema'/.test(sql2)) throw new Error("migrasi PI/LS/polis tidak memuat ulang skema PostgREST");
+        // Nama kolom utuh: tanggal LS / polis bukan kolom LS / polis
+        eq(w.kolomBelumDikenal({ code: "PGRST204", message: "Could not find the 'ls_date' column of 'shipments' in the schema cache" }), "ls_date", "ls_date:");
+        eq(w.kolomBelumDikenal({ code: "PGRST204", message: "Could not find the 'polis_asuransi_date' column of 'shipments' in the schema cache" }), "polis_asuransi_date", "polis_asuransi_date:");
+        eq(w.kolomBelumDikenal({ code: "42703", message: 'column "polis_asuransi" of relation "shipments" does not exist' }), "polis_asuransi", "polis_asuransi:");
       } finally {
         Object.assign(w, { createShipment: simpan.buat, loadShipments: simpan.muat, goBackToList: simpan.kembali });
         w.__dataUji = simpan.data;
@@ -19093,26 +19462,39 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       }
     });
 
-    t("impor dokumen: draft CEISA & PIB PDF mengisi tanggal invoice, tanggal Master/House & LS; CIPL tidak mengisi tanggal B/L-AWB", () => {
+    t("impor dokumen: draft CEISA & PIB PDF mengisi tanggal invoice, tanggal Master/House, PI & LS beserta tanggalnya, Polis Asuransi; CIPL tidak mengisi tanggal B/L-AWB; buku Export tidak diisi lewat kotak tersembunyi", () => {
       const simpan = { mode: baca("activeMode"), XLSX: w.XLSX };
+      const isianDok = () => ["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join(" | ");
       try {
         tulis("activeMode", "import");
         w.XLSX = XLSXuji;
         w.renderFormPage(null);
         const hasil = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(bukuDraftUji(), { type: "buffer", bookType: "xlsx" }), { type: "buffer", cellDates: true }));
-        eq([hasil.fields.invoiceDate, hasil.fields.masterBL, hasil.fields.masterBLDate, hasil.fields.houseBL, hasil.fields.houseBLDate, hasil.fields.pi, hasil.fields.ls].join(" | "),
-          "2026-10-01 | HDMUBSAJ2610001 | 2026-10-05 | WLSO26100077 | 2026-10-05 | 04.PI-02.26.0131 | ITB21G2672826137141", "draft CEISA:");
+        eq([hasil.fields.invoiceDate, hasil.fields.masterBL, hasil.fields.masterBLDate, hasil.fields.houseBL, hasil.fields.houseBLDate, hasil.fields.pi, hasil.fields.piDate, hasil.fields.ls, hasil.fields.lsDate].join(" | "),
+          "2026-10-01 | HDMUBSAJ2610001 | 2026-10-05 | WLSO26100077 | 2026-10-05 | 04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23", "draft CEISA:");
+        eq([hasil.fields.polisAsuransi, hasil.fields.polisAsuransiDate].join("|"), "|", "draft tanpa dokumen 530:");
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData(hasil);
-        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value, $("#fLS").value, $("#fPI").value].join(" | "),
-          "2026-10-01 | 2026-10-05 | 2026-10-05 | ITB21G2672826137141 | 04.PI-02.26.0131", "form dari draft:");
+        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-10-01 | 2026-10-05 | 2026-10-05", "form dari draft:");
+        eq(isianDok(), "04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23 |  | ", "PI, LS & tanggalnya dari draft:");
         w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData({ source: "cipl", fields: { invoice: "INV-9", invoiceDate: "2026-09-16", masterBLDate: "2026-09-25", houseBLDate: "2026-09-25" }, items: [], notes: [] });
         eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-09-16 |  | ", "CIPL: tanggal invoice saja:");
         const pib = w.parsePibPdfText(["Nomor Pengajuan : 000020PRM61620261012009918", "1 380 INVOICE No. DD-DDI2026090403", "Tgl. 04-09-2026",
-          "5 958 LAPORAN SURVEYOR No. ITB21G2672826137141", "Tgl. 23-09-2026"].join("\n"), []);
-        eq([pib.fields.invoiceDate, pib.fields.ls].join(" | "), "2026-09-04 | ITB21G2672826137141", "PIB PDF:");
+          "5 958 LAPORAN SURVEYOR No. ITB21G2672826137141", "Tgl. 23-09-2026", "6 530 POLIS ASURANSI No. EKD2273805 - KMC260031", "Tgl. 03-10-2026"].join("\n"), []);
+        eq([pib.fields.invoiceDate, pib.fields.ls, pib.fields.lsDate, pib.fields.polisAsuransi, pib.fields.polisAsuransiDate].join(" | "),
+          "2026-09-04 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PIB PDF:");
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(Object.assign({ source: "pdf" }, pib));
+        eq(isianDok(), " |  | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "form dari PIB PDF:");
+        // Buku Export: Bea & Pajak Impor tersembunyi -> PI, LS & polis tidak ikut terisi
+        tulis("activeMode", "export");
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(Object.assign({ source: "pdf" }, pib));
+        eq(isianDok(), " |  |  |  |  | ", "buku Export:");
       } finally {
         w.XLSX = simpan.XLSX;
         w.eval("importFieldOrigin = {}");
@@ -19154,15 +19536,30 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       }
     });
 
-    t("label: No. Kontainer/Seal (Container/Seal Number) & LS (Laporan Surveyor) di sebelah PI, kedua bahasa", () => {
+    t("label: No. Kontainer/Seal (Container/Seal Number); Bea & Pajak Impor: PI, Tanggal PI, LS, Tanggal LS, Polis Asuransi, Tanggal Polis Asuransi sebaris, kedua bahasa", () => {
       const label = (id) => $(`label[for="${id}"]`).textContent.trim();
       eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "No. Kontainer/Seal | LS (Laporan Surveyor) | Tanggal Invoice", "ID:");
-      // LS bersebelahan dengan PI di Customs & Charges
-      const pi = $("#fPI").closest(".fl-dua");
-      if (!pi || !pi.contains($("#fLS"))) throw new Error("LS tidak di sebelah PI");
+      // Satu baris dokumen di Bea & Pajak Impor: tiap dokumen sepasang nomor + tanggal, urut
+      const baris = $("#fPI").closest(".fl-dok");
+      if (!baris || !baris.classList.contains("s12") || baris.closest("#dutySection") === null) throw new Error("baris dokumen tidak di Bea & Pajak Impor");
+      const urut = [...baris.querySelectorAll("input")].map((el) => el.id + ":" + el.type);
+      eq(urut.join(","), "fPI:text,fPIDate:date,fLS:text,fLSDate:date,fPolisAsuransi:text,fPolisAsuransiDate:date", "urutan isian:");
+      eq([...baris.children].map((p) => p.className + ":" + p.querySelectorAll("input").length).join(","), "fl-dok-pasang:2,fl-dok-pasang:2,fl-dok-pasang:2", "berpasangan:");
+      const ids = ["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"];
+      eq(ids.map(label).join(" | "), "PI (Persetujuan Impor) | Tanggal PI | LS (Laporan Surveyor) | Tanggal LS | Polis Asuransi | Tanggal Polis Asuransi", "label ID:");
+      eq(["fPI", "fLS", "fPolisAsuransi"].map((id) => $("#" + id).placeholder).join(" | "), "mis. 04.PI-02.26.0131 | mis. ITB21G2672826137141 | mis. EKD2273805 - KMC260031", "contoh ID:");
+      // PDRI tepat di bawah PPH: catatan bea .s9 di sebelahnya
+      const note = $('#dutySection [data-i18n="form.note.duty"]');
+      eq([note.classList.contains("s9"), note.nextElementSibling.contains($("#calcPDRI")), note.nextElementSibling.nextElementSibling === baris].join(","), "true,true,true", "catatan | PDRI, lalu baris dokumen:");
+      const css = fs.readFileSync(path.join(ROOT, "css", "components.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      if (!/\.fgrid > \.fl-dok\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,/.test(css)) throw new Error("baris dokumen tidak mengalir per pasangan");
+      if (!/\.fl-dok \.form-label\s*\{[^}]*white-space:\s*nowrap/.test(css)) throw new Error("label dokumen bisa terlipat -> kotak tidak sejajar");
+      if (/fl-dua/.test(css) || /fl-dua/.test(htmlAsli)) throw new Error("aturan .fl-dua lama tersisa");
       try {
         w.setLang("en");
         eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "Container/Seal Number | LS (Surveyor Report) | Invoice Date", "EN:");
+        eq(ids.map(label).join(" | "), "PI (Import Approval) | PI Date | LS (Surveyor Report) | LS Date | Insurance Policy | Insurance Policy Date", "label EN:");
+        eq(["fPI", "fLS", "fPolisAsuransi"].map((id) => $("#" + id).placeholder).join(" | "), "e.g. 04.PI-02.26.0131 | e.g. ITB21G2672826137141 | e.g. EKD2273805 - KMC260031", "contoh EN:");
       } finally {
         w.setLang("id");
       }
