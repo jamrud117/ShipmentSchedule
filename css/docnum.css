@@ -405,6 +405,9 @@ table.fund-lines select {
   .docnum-history-aksi .dn-saring-bayar {
     flex: 1 1 auto;
   }
+  .docnum-history-aksi .dn-saring-grup {
+    flex: 1 1 auto;
+  }
   .dn-saring-bayar select {
     width: 100%;
   }
@@ -921,7 +924,14 @@ table.fund-lines select {
   .docnum-table .dn-col-ket {
     display: none;
   }
+  /* Pengajuan Dana: Tanggal Terbit tetap tampil -- ia satu dari empat
+     tanggal yang bisa dipakai menyaring rentang, berdampingan dengan
+     Tanggal Invoice & Jatuh Tempo. */
+  .docnum-table--dana .dn-col-tgl {
+    display: table-cell;
+  }
 }
+
 
 /* Kolom khusus daftar Pengajuan Dana. */
 .docnum-table .dn-col-billing {
@@ -1090,8 +1100,9 @@ table.fund-lines select {
    isian yang hanya dipakai saat mencetak. */
 .dn-sub {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-2);
+  gap: 2px var(--sp-2);
   margin-top: var(--sp-2);
   padding-top: var(--sp-3);
   border-top: 1px dashed var(--border);
@@ -1102,7 +1113,7 @@ table.fund-lines select {
   color: var(--n-500);
 }
 .dn-sub-note {
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
@@ -1516,6 +1527,34 @@ table.fund-lines select {
   pointer-events: none;
 }
 @media (max-width: 575.98px) {
+  /* Tanggal dasar & pemicu rentang masing-masing selebar baris --
+     berdampingan, teks rentangnya terpotong. Berawalan .docnum-history-aksi
+     supaya menang atas aturan dasarnya yang ditulis lebih bawah. */
+  .docnum-history-aksi .dn-saring-grup {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .docnum-history-aksi .dn-saring-grup .dn-saring-dasar,
+  .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal {
+    flex: 1 1 100%;
+  }
+  .docnum-history-aksi .dn-saring-dasar select {
+    width: 100%;
+    border-radius: 8px;
+  }
+  .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal .date-range-trigger {
+    margin-left: 0;
+    border-radius: 8px;
+  }
+  /* Kotak tanggal PO cukup selebar "dd/mm/yyyy" + ikonnya, sisanya
+     untuk nomor PO -- dulu 170px dan nomor PO tinggal separuh kata. */
+  .po-row {
+    grid-template-columns: minmax(0, 1fr) 136px;
+  }
+  .po-extra-row,
+  #poNoList:has(.po-extra-row) > .po-row {
+    grid-template-columns: minmax(0, 1fr) 136px 30px;
+  }
   .dn-edit-dialog .dnd-kepala,
   .dn-edit-badan {
     padding: var(--sp-4);
@@ -1812,7 +1851,8 @@ button.dn-bayar--lunas:hover {
 /* ------------------------------------------------------------------
    KOTAK CARI & SARINGAN STATUS BAYAR RIWAYAT NOMOR
 ------------------------------------------------------------------ */
-.dn-saring-bayar {
+.dn-saring-bayar,
+.dn-saring-dasar {
   margin: 0;
 }
 /* Pemicu kalender rentang tanggal setinggi kotak status bayar & kotak
@@ -1833,7 +1873,8 @@ button.dn-bayar--lunas:hover {
   height: 22px;
   border-radius: 6px;
 }
-.dn-saring-bayar select {
+.dn-saring-bayar select,
+.dn-saring-dasar select {
   height: 32px;
   padding: 0 28px 0 10px;
   border: 1px solid var(--border);
@@ -1842,10 +1883,35 @@ button.dn-bayar--lunas:hover {
   font-size: 13px;
   color: var(--n-800);
 }
-.dn-saring-bayar select:focus {
-  outline: none;
-  border-color: var(--p-600);
-  box-shadow: 0 0 0 3px rgba(20, 45, 90, 0.12);
+/* Tanggal dasar rentang menempel ke pemicu rentangnya: dua kotak, satu
+   saringan ("Jatuh Tempo" + "01-10-2026 – 31-10-2026"). */
+.dn-saring-grup {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.dn-saring-grup .dn-saring-tanggal {
+  flex: 1 1 auto;
+}
+.dn-saring-dasar select {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  background-color: var(--n-50);
+  font-weight: 600;
+}
+.dn-saring-grup .dn-saring-tanggal .date-range-trigger {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Jatuh tempo yang terlewat (tagihan belum lunas): ikon + keterangan. */
+.dn-jatuh-lewat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--s-danger);
+  font-weight: 600;
 }
 .dn-cari {
   position: relative;
@@ -1884,11 +1950,6 @@ button.dn-bayar--lunas:hover {
   -webkit-appearance: none;
   appearance: none;
   display: none;
-}
-.dn-cari input:focus {
-  outline: none;
-  border-color: var(--p-600);
-  box-shadow: 0 0 0 3px rgba(20, 45, 90, 0.12);
 }
 
 /* ------------------------------------------------------------------

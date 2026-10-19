@@ -223,7 +223,7 @@
 }
 .agenda-dow {
   font-family: var(--font-board);
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--n-400);
@@ -246,7 +246,7 @@
   padding: 0 6px;
   border-radius: var(--r-pill);
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   background: var(--n-100);
   color: var(--n-400);

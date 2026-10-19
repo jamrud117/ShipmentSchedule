@@ -63,13 +63,14 @@
   margin: 6px 0 var(--sp-5);
 }
 
+/* Label isian: sama dengan .form-label di form jadwal & nomor dokumen
+   (huruf biasa, tebal 600, navy) -- satu bentuk label untuk semua
+   kotak isian aplikasi. */
 .login-label {
   display: block;
-  font-family: var(--font-display);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--n-500);
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--navy);
   margin-bottom: 5px;
 }
 .login-input {
@@ -82,11 +83,6 @@
   color: var(--ink);
   background: #fff;
   margin-bottom: var(--sp-4);
-}
-.login-input:focus {
-  outline: none;
-  border-color: var(--p-400);
-  box-shadow: var(--sh-focus);
 }
 
 .login-submit {
@@ -350,6 +346,7 @@ body.tutup-docnum .site-nav-link[data-page="docnum"],
 body.tutup-docnum .nav-docnum,
 body.tutup-hscode .site-nav-link[data-page="hscode"],
 body.tutup-masterlist .site-nav-link[data-page="masterlist"],
+body.tutup-checker .site-nav-link[data-page="checker"],
 body.tutup-accounts .site-nav-link[data-page="accounts"] {
   display: none !important;
 }
@@ -454,7 +451,7 @@ body.is-viewer .delay-strip-fields input {
 }
 .acct-self {
   font-family: var(--font-board);
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--sec-50);
@@ -504,7 +501,7 @@ body.is-viewer .delay-strip-fields input {
 }
 .acct-legend-judul {
   font-family: var(--font-board);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -519,7 +516,7 @@ body.is-viewer .delay-strip-fields input {
 .acct-legend-peran {
   justify-self: start;
   font-family: var(--font-board);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 2px 7px;
@@ -892,9 +889,14 @@ body.is-viewer .delay-strip-fields input {
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
+  /* Tak terlihat = tak bisa difokus. Dulu hanya transparan: Tab
+     berhenti di tombol yang tidak kelihatan. visibility ditunda sampai
+     pudarnya selesai supaya tombol tetap memudar, bukan lenyap. */
+  visibility: hidden;
   transition:
     opacity var(--dur-2) var(--ease),
     transform var(--dur-2) var(--ease),
+    visibility 0s linear var(--dur-2),
     border-color var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
@@ -902,6 +904,8 @@ body.is-viewer .delay-strip-fields input {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  visibility: visible;
+  transition-delay: 0s;
 }
 .fab-top:hover {
   border-color: var(--p-300);
@@ -944,12 +948,9 @@ body.is-viewer .delay-strip-fields input {
 }
 .prompt-label {
   display: block;
-  font-family: var(--font-display);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--n-500);
+  font-size: 0.79rem;
+  font-weight: 600;
+  color: var(--navy);
   margin: 0 0 5px;
 }
 /* Kotak isian di sini setinggi & sebesar huruf isian form lain (40px,

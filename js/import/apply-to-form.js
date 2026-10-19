@@ -54,7 +54,9 @@ const CIPL_BLOCKED_FIELDS = new Set([
   "fDocDate",
   "fDocNo",
   "fMasterBL",
+  "fMasterBLDate",
   "fHouseBL",
+  "fHouseBLDate",
   "fNoAju",
 ]);
 
@@ -76,13 +78,63 @@ function isPriceAuthority(source) {
   return isCiplSource(source);
 }
 
-// Nama barang untuk pencocokan: beda spasi & huruf besar bukan beda barang.
+/* Nama barang untuk pencocokan -- nama lengkapnya (Uraian beserta
+   merek, tipe, ukuran, dst.): dua barang ber-Uraian sama dengan tipe
+   berbeda bukan barang yang sama. Beda spasi & huruf besar bukan beda
+   barang. */
 function itemMatchKey(it) {
-  return String((it && it.namaBarang) || (it && it.name) || "")
+  return String(itemDisplayName(it) || (it && it.name) || "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/* PASANGAN BARANG LAMA UNTUK BARANG BARU.
+
+   Barang baru dari draft CEISA sudah urut menurut Seri Barang
+   (excel-bc.js); barang lama urut menurut tabel di form. Pasangan
+   dicari berlapis -- mis. nama sama dulu untuk SEMUA barang, baru HS
+   Code untuk sisanya -- supaya barang yang namanya cocok tidak
+   didahului barang lain yang kebetulan ber-HS sama. Dari kandidat yang
+   lolos & belum terpakai, dipilih yang URUTANNYA PALING DEKAT dengan
+   barang baru itu, bukan yang kebetulan ditemukan pertama: banyak
+   cetakan ber-HS sama (8480.71.90), dan harga, nama, atau dimensinya
+   tidak boleh saling tertukar hanya karena urutan baris.
+
+   `lama`: barang lama yang boleh dipakai, [{ it, i }] (i = posisinya di
+   tabel). `lapisan`: (barangBaru) => uji(barangLama), atau null kalau
+   barang baru itu tidak punya kuncinya. Hasil: barang lama per barang
+   baru (null = tanpa pasangan). */
+function pasangkanBarangLama(newItems, lama, lapisan) {
+  const terpakai = new Set();
+  const hasil = newItems.map(() => null);
+  lapisan.forEach((ujiUntuk) => {
+    newItems.forEach((it, posisi) => {
+      if (hasil[posisi]) return;
+      const uji = ujiUntuk(it);
+      if (!uji) return;
+      let pilih = null;
+      lama.forEach((o) => {
+        if (terpakai.has(o.i) || !uji(o.it)) return;
+        if (!pilih || Math.abs(o.i - posisi) < Math.abs(pilih.i - posisi)) pilih = o;
+      });
+      if (!pilih) return;
+      terpakai.add(pilih.i);
+      hasil[posisi] = pilih.it;
+    });
+  });
+  return hasil;
+}
+
+// Lapisan pencocokan yang dipakai bersama: nama lengkap sama, lalu HS Code sama
+const COCOK_NAMA = (it) => {
+  const nama = itemMatchKey(it);
+  return nama ? (o) => itemMatchKey(o) === nama : null;
+};
+const COCOK_HS = (it) => {
+  const hs = normalizeHsCodeInput(it.hsCode);
+  return hs ? (o) => normalizeHsCodeInput(o.hsCode) === hs : null;
+};
 
 /* CEISA (excel-bc.js) TIDAK PERNAH mengisi `package` (dimensi P*L*T) --
    sheet BARANG di file itu memang tidak punya kolomnya sama sekali
@@ -92,9 +144,9 @@ function itemMatchKey(it) {
    membawa `package` apa pun, jadi field itu ikut ke nilai kosong
    begitu item lama ditimpa oleh preserveUnitPrices() di atas.
 
-   Dicocokkan lewat nama/HS yang SAMA persis dengan preserveUnitPrices,
-   supaya dimensi menempel ke barang yang benar walau urutan barisnya
-   berubah — bukan sekadar berdasar posisi baris.
+   Dicocokkan lewat nama/HS dengan cara yang SAMA dengan
+   preserveUnitPrices (pasangkanBarangLama), supaya dimensi menempel ke
+   barang yang benar walau urutan barisnya berubah.
 
    Khusus Export saja: di Import, `package` berarti JUMLAH KOLI ("5
    BOX"), bukan dimensi -- konsep yang beda sama sekali (lihat
@@ -102,63 +154,46 @@ function itemMatchKey(it) {
    diminta di sini. */
 function preserveDimensionsForCeisa(newItems, oldItems, src) {
   if (src !== "excel" || activeMode !== "export") return newItems;
-  const lama = (oldItems || []).filter((it) => String(it.package || "").trim());
+  const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => String(o.it.package || "").trim());
   if (!lama.length || !newItems.length) return newItems;
-
-  const terpakai = new Set();
-  const ambil = (uji) => {
-    for (let i = 0; i < lama.length; i++) {
-      if (terpakai.has(i)) continue;
-      if (uji(lama[i])) {
-        terpakai.add(i);
-        return lama[i];
-      }
-    }
-    return null;
-  };
-
-  return newItems.map((it) => {
-    if (String(it.package || "").trim()) return it; // sudah terisi, jangan timpa
-    const nama = itemMatchKey(it);
-    const hs = normalizeHsCodeInput(it.hsCode);
-    const cocok =
-      (nama && ambil((o) => itemMatchKey(o) === nama)) ||
-      (hs && ambil((o) => normalizeHsCodeInput(o.hsCode) === hs));
-    return cocok ? Object.assign({}, it, { package: cocok.package }) : it;
-  });
+  // Barang yang dimensinya sudah terisi tidak mencari pasangan (dan tidak memakai jatah barang lama)
+  const perlu = (cari) => (it) => (String(it.package || "").trim() ? null : cari(it));
+  const pasangan = pasangkanBarangLama(newItems, lama, [perlu(COCOK_NAMA), perlu(COCOK_HS)]);
+  return newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { package: pasangan[i].package }) : it));
 }
 
 /* NAMA BARANG YANG SUDAH DIKETIK SENDIRI TIDAK DITIMPA IMPOR CEISA.
 
-   Berkas CEISA menulis nama barang sebagai SATU teks gabungan; di
-   aplikasi ini nama itu terbagi empat kolom (Uraian, Pattern, Size,
-   Mold No) yang dipakai membentuk nama di kartu, CIPL, dan template
-   salinan. Tidak ada aturan yang bisa memecah teks CEISA jadi empat
-   kolom itu -- sudah dicoba dan selalu meleset, karena susunannya
-   bergantung kebiasaan penulis berkas.
+   Di buku Export, nama barang di jadwal adalah sumber CIPL yang
+   dicetak aplikasi ini -- yang diketik EXIM itulah rujukannya, dan Cek
+   PIB/PEB membandingkan draft dengannya. Draft yang menimpanya membuat
+   pemeriksaan itu selalu sama dengan dirinya sendiri.
 
-   Jadi arahnya dibalik: yang sudah diketik orang DIPERTAHANKAN, dan
-   teks dari CEISA hanya dipakai untuk baris yang keempat kolomnya
-   masih kosong. Impor CEISA memang dilakukan untuk mengambil angka
-   kepabeanannya (HS, nilai, berat, kemasan) -- bukan namanya.
+   Jadi yang sudah diketik orang DIPERTAHANKAN (seluruh kolom barang
+   CEISA baris itu, KOLOM_NAMA_BARANG), dan kolom dari CEISA hanya
+   dipakai untuk baris yang belum berisi apa pun selain tanda kosong
+   bawaan ("-", TANPA MEREK). Impor CEISA memang dilakukan untuk
+   mengambil angka kepabeanannya (HS, nilai, berat, kemasan) -- bukan
+   namanya.
 
-   PENCOCOKANNYA MENURUT URUTAN, bukan nama. Nama justru yang berbeda
-   antara kedua sisi -- itu seluruh alasan fungsi ini ada -- jadi
-   mencocokkan lewat nama pasti gagal. Urutan baris dipakai hanya
-   kalau jumlah barangnya sama persis; kalau berbeda, dicocokkan lewat
-   HS Code sekali pakai, dan baris yang tak berpasangan memakai nama
-   dari berkas apa adanya.
+   PENCOCOKANNYA: nama yang sama persis lebih dulu (pasangan pasti,
+   walau urutan Seri Barang di draft berbeda dari tabel), lalu MENURUT
+   URUTAN -- Seri Barang draft yang tersisa dengan baris tabel yang
+   tersisa, berurutan. Nama biasanya justru berbeda antara kedua sisi
+   (itu seluruh alasan fungsi ini ada), jadi urutanlah sandaran
+   utamanya; urutan dipakai hanya kalau jumlah barangnya sama persis.
+   Kalau berbeda, dicocokkan lewat HS Code (urutan terdekat), dan baris
+   yang tak berpasangan memakai kolom dari berkas apa adanya.
 
-   Khusus Export: di Import keempat kolom itu tidak ada. */
-const ITEM_NAMA_FIELD = ["namaBarang", "pattern", "size", "moldNo"];
-
+   Khusus Export: barang Import diambil dari dokumen pemasok, dan draft
+   CEISA-nya mengisi kolom barangnya apa adanya. */
 function punyaNamaManual(it) {
-  return ITEM_NAMA_FIELD.some((k) => String((it && it[k]) || "").trim());
+  return !!it && KOLOM_NAMA_BARANG.some((k) => rapiBagianNama(it[k]));
 }
 
 function salinNama(baru, lama) {
   const out = Object.assign({}, baru);
-  ITEM_NAMA_FIELD.forEach((k) => {
+  KOLOM_NAMA_BARANG.forEach((k) => {
     out[k] = lama[k] || "";
   });
   return out;
@@ -197,81 +232,54 @@ function preserveNamesForCeisa(newItems, oldItems, src) {
      tidak pernah kena pada kasus yang paling sering terjadi, dan nama
      yang sudah diketik ikut tertimpa. Urutan barislah yang bisa
      diandalkan: berkas CEISA disusun dari invoice yang sama. */
-  if (lamaIsi.length === newItems.length) {
-    return {
-      items: newItems.map((it, i) => {
-        if (!punyaNamaManual(lamaIsi[i])) return it;
-        kept++;
-        return salinNama(it, lamaIsi[i]);
-      }),
-      kept,
-      byOrder: true,
-    };
-  }
-
-  const terpakai = new Set();
-  const items = newItems.map((it) => {
-    const hs = normalizeHsCodeInput(it.hsCode);
-    if (!hs) return it;
-    for (let i = 0; i < lama.length; i++) {
-      if (terpakai.has(i)) continue;
-      if (normalizeHsCodeInput(lama[i].hsCode) !== hs) continue;
-      terpakai.add(i);
+  const salin = (pasangan) =>
+    newItems.map((it, i) => {
+      const o = pasangan[i];
+      if (!o || !punyaNamaManual(o)) return it;
       kept++;
-      return salinNama(it, lama[i]);
-    }
-    return it;
-  });
-  return { items, kept };
+      return salinNama(it, o);
+    });
+  if (lamaIsi.length === newItems.length) {
+    const lamaPos = lamaIsi.map((it, i) => ({ it, i }));
+    const pasangan = pasangkanBarangLama(newItems, lamaPos, [COCOK_NAMA]);
+    const dipakai = new Set(pasangan.filter(Boolean));
+    const sisa = lamaIsi.filter((it) => !dipakai.has(it));
+    let k = 0;
+    pasangan.forEach((o, i) => {
+      if (!o) pasangan[i] = sisa[k++] || null;
+    });
+    return { items: salin(pasangan), kept, byOrder: true };
+  }
+  const pasangan = pasangkanBarangLama(newItems, lama.map((it) => ({ it, i: oldItems.indexOf(it) })), [COCOK_HS]);
+  return { items: salin(pasangan), kept };
 }
 
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
-   Dicocokkan berlapis — nama dulu, baru HS Code — karena satu HS Code
-   kerap dipakai beberapa barang sekaligus, sementara namanya jarang
-   sama persis. Tiap barang lama hanya boleh dipakai sekali, supaya dua
-   pos yang ber-HS sama tidak sama-sama mewarisi harga dari satu baris.
+   Dicocokkan berlapis — nama dulu untuk semua barang, baru HS Code
+   untuk sisanya, urutan terdekat (pasangkanBarangLama) — karena satu HS
+   Code kerap dipakai beberapa barang sekaligus, sementara namanya
+   jarang sama persis. Tiap barang lama hanya boleh dipakai sekali,
+   supaya dua pos yang ber-HS sama tidak sama-sama mewarisi harga dari
+   satu baris.
 
    Kalau tidak ada yang cocok sama sekali TAPI jumlah barangnya persis
    sama, dicocokkan menurut urutan: dokumen kepabeanan hampir selalu
    menyusun barang dalam urutan yang sama dengan invoice-nya. */
 function preserveUnitPrices(newItems, oldItems) {
-  const lama = (oldItems || []).filter((it) => parseLooseNumber(it.harga) > 0);
+  const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => parseLooseNumber(o.it.harga) > 0);
   if (!lama.length || !newItems.length) return { items: newItems, kept: 0 };
 
-  const terpakai = new Set();
-  let kept = 0;
-
-  const ambil = (uji) => {
-    for (let i = 0; i < lama.length; i++) {
-      if (terpakai.has(i)) continue;
-      if (uji(lama[i])) {
-        terpakai.add(i);
-        return lama[i];
-      }
-    }
-    return null;
-  };
-
-  const items = newItems.map((it) => {
-    const nama = itemMatchKey(it);
-    const hs = normalizeHsCodeInput(it.hsCode);
-    const cocok =
-      (nama && ambil((o) => itemMatchKey(o) === nama)) ||
-      (hs && ambil((o) => normalizeHsCodeInput(o.hsCode) === hs));
-    if (!cocok) return it;
-    kept++;
-    return Object.assign({}, it, { harga: cocok.harga });
-  });
-
+  const pasangan = pasangkanBarangLama(newItems, lama, [COCOK_NAMA, COCOK_HS]);
+  const kept = pasangan.filter(Boolean).length;
   if (!kept && newItems.length === lama.length) {
     return {
-      items: newItems.map((it, i) => Object.assign({}, it, { harga: lama[i].harga })),
+      items: newItems.map((it, i) => Object.assign({}, it, { harga: lama[i].it.harga })),
       kept: newItems.length,
       byOrder: true,
     };
   }
-  return { items, kept };
+  return { items: newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { harga: pasangan[i].harga }) : it)), kept };
 }
 
 // Satu-satunya pintu penulisan field form dari hasil import.
@@ -339,8 +347,31 @@ function applyImportedBcData(parsed) {
   put("fDocDate", f.docDate);
   put("fParty", resolvePartyForActiveMode(f));
   put("fInvoice", f.invoice);
+  /* Tanggal invoice: dari CIPL (pembaca lama menamainya docDate --
+     tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
+     lembar dokumen PIB/PEB. */
+  put("fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : ""));
+  // No. Surat Persetujuan Impor (dokumen kode 959) -- kolom PI templat salin
+  put("fPI", f.pi);
+  // No. Laporan Surveyor (dokumen kode 958) -- ikut kolom PI templat salin
+  put("fLS", f.ls);
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
+  /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
+     kosong pasangannya diisi sesudahnya (lengkapiTanggalBl). PIB PDF
+     menamainya masterBlDate / houseBlDate. */
+  [
+    ["fMasterBLDate", f.masterBLDate || f.masterBlDate],
+    ["fHouseBLDate", f.houseBLDate || f.houseBlDate],
+  ].forEach(([id, nilai]) => {
+    if (setImportField(id, nilai, src)) {
+      filled++;
+      delete $("#" + id).dataset.ikut;
+    }
+  });
+  if (typeof lengkapiTanggalBl === "function") lengkapiTanggalBl();
+  // Export: Tanggal PEB kosong (draft belum didaftarkan) diisi dari tanggal di nomor aju
+  if (typeof tandaiTanggalPebDariAju === "function") tandaiTanggalPebDariAju();
   put("fForwarder", f.forwarder);
   put("fVessel", f.vessel);
   put("fVoyage", f.voyage);
@@ -431,7 +462,7 @@ function applyImportedBcData(parsed) {
   /* ---- daftar barang ---- */
   if (parsed.items && parsed.items.length) {
     // HS Code disimpan sebagai DIGIT saja (requirement A)
-    /* NAMA BARANG DISERAGAMKAN KE HURUF BESAR.
+    /* KOLOM BARANG (KOLOM_NAMA_BARANG) DISERAGAMKAN KE HURUF BESAR.
 
        Dipasang di sini karena SEMUA impor berkas lewat titik ini —
        CIPL Excel, CIPL PDF, PIB, PEB. Menaruhnya di tiap parser berarti
@@ -442,11 +473,11 @@ function applyImportedBcData(parsed) {
        "Tyre Mold Full Set" dan "TYRE MOLD FULL SET" terhitung sebagai
        dua barang berbeda saat dikelompokkan di laporan — dan itu baru
        ketahuan berbulan-bulan kemudian, saat jumlahnya tidak cocok. */
-    const cleaned = parsed.items.map((it) => ({
-      ...it,
-      namaBarang: String(it.namaBarang || "").toUpperCase(),
-      hsCode: normalizeHsCodeInput(it.hsCode),
-    }));
+    const cleaned = parsed.items.map((it) => {
+      const out = { ...it, hsCode: normalizeHsCodeInput(it.hsCode) };
+      KOLOM_NAMA_BARANG.forEach((k) => (out[k] = String(it[k] == null ? "" : it[k]).toUpperCase()));
+      return out;
+    });
     // Barang dari sumber berprioritas LEBIH RENDAH tidak menimpa daftar barang yang sudah terisi
     const prevPrio = importFieldOrigin.__items;
     const prio = sourcePriority(src);

@@ -8,8 +8,14 @@ const FIELD_MAP = {
   noAju: "no_aju",
   party: "party",
   invoice: "invoice",
+  /* Tanggal invoice & tanggal Master / House B/L-AWB -- kolom baru,
+     migration-ls-tanggal-dokumen.sql. Sebelum migrasinya dijalankan
+     jadwal tetap tersimpan tanpa kolom ini (KOLOM_OPSIONAL, api.js). */
+  invoiceDate: "invoice_date",
   masterBL: "master_bl",
+  masterBLDate: "master_bl_date",
   houseBL: "house_bl",
+  houseBLDate: "house_bl_date",
   factoryDate: "factory_date",
   factoryTime: "factory_time",
   forwarder: "forwarder",
@@ -58,6 +64,8 @@ const FIELD_MAP = {
   ppn: "ppn",
   pph: "pph",
   pi: "pi",
+  // LS (Laporan Surveyor, dokumen 958) -- sepaket dengan PI; kolom baru, migrasi yang sama
+  ls: "ls",
   // Catatan: shipment-level "skb" SENGAJA tidak ada lagi di sini
   package: "package",
   routeType: "route_type",
@@ -158,18 +166,17 @@ function rowToShipment(row) {
 function itemToRow(it, shipmentId) {
   return {
     shipment_id: shipmentId,
+    /* Kolom barang CEISA (KOLOM_NAMA_BARANG, helpers.js); Uraian tetap
+       di nama_barang. Kolom lainnya dari migration-barang-ceisa.sql --
+       sebelum dijalankan, sisipkanBarang() (api.js) meleburnya ke
+       Uraian. Kolom lama (size, pattern, mold_no, po_no) tidak lagi
+       ditulis. */
+    kode_barang: it.kodeBarang || "",
     nama_barang: it.namaBarang || "",
-    // Size (ukuran/spesifikasi, mis. "235/55R20") -- field BARU, HANYA
-    // dipakai/ditampilkan di buku Export (lihat body.mode-import
-    // .size-col, form.css). Butuh kolom `size` di tabel shipment_items
-    // -- lihat migrasi SQL yang disertakan.
-    size: it.size || "",
-    /* Kolom cetakan (Export). Pattern & Mold No ikut membentuk nama
-       yang ditampilkan; PO No tidak -- lihat itemDisplayName().
-       Butuh kolom baru di shipment_items, lihat migrasi SQL. */
-    pattern: it.pattern || "",
-    mold_no: it.moldNo || "",
-    po_no: it.poNo || "",
+    merek: it.merek || "",
+    tipe: it.tipe || "",
+    ukuran: it.ukuran || "",
+    spesifikasi_lain: it.spesifikasiLain || "",
     marks: it.marks || "",
     hs_code: it.hsCode || "",
     jenis_barang: it.jenisBarang || "",
@@ -187,14 +194,33 @@ function itemToRow(it, shipmentId) {
   };
 }
 
+/* BARANG LAMA. Sebelum kolom CEISA ada, buku Export menyimpan Pattern,
+   Size & Mold No di kolomnya sendiri (pattern, size, mold_no). Isinya
+   dilebur ke Uraian dengan urutan nama lamanya -- Uraian, Pattern,
+   Size, Mold No -- jadi nama yang tampil, tersalin & tercetak tetap
+   sama persis, dan tidak ada isian yang dipindah ke kolom CEISA yang
+   belum tentu benar. Kolom CEISA lainnya tetap kosong: barang lama
+   dibandingkan per kata di Cek PIB/PEB (barangBerkolomCeisa). PO No
+   bukan kolom CEISA dan memang tidak pernah ikut ke nama barang.
+   Begitu jadwalnya disimpan ulang, barangnya tertulis dalam susunan
+   baru (itemToRow tidak menulis kolom lama). */
+function uraianBarangTersimpan(row) {
+  const lama = [row.pattern, row.size, row.mold_no];
+  if (!lama.some((v) => rapiBagianNama(v))) return row.nama_barang || "";
+  return rakitBagianNama([row.nama_barang].concat(lama).map((v) => ({ teks: rapiBagianNama(v) })))
+    .map((b) => b.teks)
+    .join(" ");
+}
+
 function rowToItem(row) {
   return {
     id: row.id,
-    namaBarang: row.nama_barang || "",
-    size: row.size || "",
-    pattern: row.pattern || "",
-    moldNo: row.mold_no || "",
-    poNo: row.po_no || "",
+    kodeBarang: row.kode_barang || "",
+    namaBarang: uraianBarangTersimpan(row),
+    merek: row.merek || "",
+    tipe: row.tipe || "",
+    ukuran: row.ukuran || "",
+    spesifikasiLain: row.spesifikasi_lain || "",
     marks: row.marks || "",
     hsCode: row.hs_code || "",
     /* Dibakukan di sini, satu pintu. Jadwal lama menyimpan

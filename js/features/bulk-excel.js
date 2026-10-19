@@ -347,13 +347,21 @@ function reconstructShipmentFromGroup(group, mode) {
   if (mode === "import") {
     s.ndpbm = excelNum(first[idx.NDPBM]);
     s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
-    s.pi = excelStr(first[idx.PI]);
+    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri)
+    Object.assign(s, pecahPiLs(excelStr(first[idx.PI])));
     s.bm = bulatkanBm(excelNum(first[idx.BM])); // ke atas ke ribuan, seperti semua jalan masuk BM
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);
   }
-  // Kolom FASILITAS/SKB di file legacy ini shipment-level (bukan per barang)
-  const legacySkbText = mode === "import" ? excelStr(first[idx.SKB]) : "";
+  /* Kolom FASILITAS / SKB: satu dokumen per baris ("MASTER LIST
+     72/PABEAN-PB/...", lihat shipmentFacilitiesSummary), berkas lama
+     berisi label berkoma di baris pertama saja. Semua baris dibaca;
+     kolom ini level pengiriman, jadi hasilnya berlaku untuk semua
+     barang. */
+  const legacySkbText =
+    mode === "import"
+      ? rows.map((row) => excelStr(row[idx.SKB])).filter(Boolean).join("\n")
+      : "";
 
   // BL/AWB: baris pertama = Master
   s.masterBL = excelStr(first[idx.BLAWB]);
@@ -368,12 +376,18 @@ function reconstructShipmentFromGroup(group, mode) {
     if (!desc && !hs && !qty) return;
     const amount = excelNum(row[idx.AMOUNT]);
     items.push({
-      ...newItem(),
-      /* Huruf besar, sama seperti impor berkas tunggal. Impor massal
+      ...newItem(mode),
+      /* DESCRIPTION berkas massal = nama barang UTUH (templat salin,
+         itemDisplayName), bukan kolom CEISA yang terpisah: seluruhnya
+         masuk Uraian dan kolom CEISA lainnya dikosongkan -- sama seperti
+         barang lama (barangBerkolomCeisa).
+
+         Huruf besar, sama seperti impor berkas tunggal. Impor massal
          punya jalurnya sendiri dan TIDAK lewat apply-to-form.js, jadi
          aturannya harus disebut lagi di sini — kalau tidak, satu-satunya
          jalur yang memasukkan ratusan baris sekaligus justru yang
          terlewat. */
+      ...Object.fromEntries(KOLOM_CEISA_LAIN.map((k) => [k, ""])),
       namaBarang: String(desc || "").toUpperCase(),
       hsCode: normalizeHsCodeInput(hs),
       /* Isian dari Excel dibakukan juga: pengguna bisa menulis
@@ -391,7 +405,12 @@ function reconstructShipmentFromGroup(group, mode) {
   });
 
   if (legacySkbText && items.length) {
-    const legacyEntries = skbTextToEntries(legacySkbText);
+    const legacyEntries = skbTextToEntries(legacySkbText).filter(
+      (sk, i, semua) =>
+        semua.findIndex(
+          (x) => x.jenis === sk.jenis && x.jenisLainnya === sk.jenisLainnya && x.nomor === sk.nomor,
+        ) === i,
+    );
     items.forEach((it) => {
       it.skb = legacyEntries.map((sk) => ({ ...sk }));
     });

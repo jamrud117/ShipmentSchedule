@@ -1,0 +1,845 @@
+/* HALAMAN CEK PIB/PEB (#/cek) -- js/views/checker-view.js
+
+   Komponen yang sudah ada dipakai apa adanya: .panel (overview.css),
+   .btn.mst-tombol & .mst-seg (masterlist.css), .search-box
+   (dashboard.css), .form-control (form.css). Yang di sini hanya milik
+   halaman ini. Warna status selalu ditemani teks (MATCH / MISMATCH /
+   INFO) -- tidak pernah warna saja. */
+
+#viewChecker {
+  --cek-sama: #1e7a4d;
+  --cek-sama-bg: #edf7f1;
+  --cek-sama-line: #bfe0cc;
+  --cek-info: var(--s-info);
+  --cek-info-bg: #eff2fb;
+  --cek-info-line: #c9d3f0;
+}
+#viewChecker .panel + .panel,
+#viewChecker .panel + details.panel {
+  margin-top: var(--sp-4);
+}
+
+/* ---------- kotak berkas ---------- */
+.cek-drops {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.cek-drop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: 14px var(--sp-4);
+  border: 1px dashed var(--p-200);
+  border-radius: var(--r-lg);
+  background: var(--p-50);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+.cek-drop:hover,
+.cek-drop.is-dragover {
+  border-color: var(--p-500);
+  background: var(--p-100);
+}
+.cek-drop:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.cek-drop.has-file {
+  border-style: solid;
+  border-color: var(--cek-sama-line);
+  background: var(--cek-sama-bg);
+}
+.cek-drop.has-galat {
+  border-style: solid;
+  border-color: var(--s-danger-line);
+  background: var(--s-danger-bg);
+}
+.cek-drop-ikon {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--p-500);
+}
+.cek-drop.has-file .cek-drop-ikon {
+  color: var(--cek-sama);
+}
+.cek-drop.has-galat .cek-drop-ikon {
+  color: var(--s-danger);
+}
+.cek-drop-teks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cek-drop-judul {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.cek-drop-nama {
+  font-size: var(--t-base);
+  font-weight: 600;
+  color: var(--d-900);
+  overflow-wrap: anywhere;
+}
+.cek-drop-ket {
+  font-size: var(--t-xs);
+  color: var(--n-600);
+  overflow-wrap: anywhere;
+}
+.cek-drop.has-galat .cek-drop-ket {
+  color: var(--s-danger);
+}
+
+/* ---------- jadwal terkait ---------- */
+.cek-jadwal {
+  margin-top: var(--sp-3);
+}
+.cek-jadwal-kartu {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 12px var(--sp-4);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-lg);
+  background: #fff;
+}
+.cek-jadwal-kartu.is-kosong {
+  background: var(--n-50);
+}
+.cek-jadwal-ikon {
+  flex: 0 0 auto;
+  font-size: 1.3rem;
+  color: var(--sec-600);
+}
+.cek-jadwal-kartu.is-kosong .cek-jadwal-ikon {
+  color: var(--n-400);
+}
+.cek-jadwal-nama {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cek-jadwal-nama b {
+  font-size: var(--t-base);
+  color: var(--d-900);
+  overflow-wrap: anywhere;
+}
+.cek-jadwal-nama small {
+  font-size: var(--t-xs);
+  color: var(--n-600);
+  overflow-wrap: anywhere;
+}
+.cek-alasan {
+  font-size: var(--t-xs);
+  color: var(--cek-sama);
+}
+.cek-alasan b {
+  font-size: inherit;
+  color: inherit;
+}
+.cek-jadwal-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.cek-jadwal-aksi .btn-quiet {
+  height: 32px;
+}
+.cek-pilih {
+  margin-top: 8px;
+  padding: var(--sp-3);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-lg);
+  background: var(--n-50);
+}
+.cek-pilih-cari {
+  width: 100%;
+  max-width: none;
+}
+.cek-pilih-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.cek-pilih-baris {
+  display: flex;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-md);
+  background: #fff;
+  text-align: left;
+}
+.cek-pilih-baris:hover {
+  border-color: var(--p-300);
+  background: var(--p-50);
+}
+.cek-pilih-baris.is-aktif {
+  border-color: var(--p-500);
+  box-shadow: inset 3px 0 0 var(--p-500);
+}
+.cek-pilih-kosong {
+  padding: 10px 4px 2px;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+
+/* ---------- B/L-AWB pembanding ---------- */
+.cek-bl {
+  margin: var(--sp-4) 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.cek-bl legend {
+  float: none;
+  width: auto;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--d-900);
+}
+.cek-bl-ket {
+  margin: 2px 0 var(--sp-3);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.cek-bl-kisi {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+.cek-bl-isian {
+  min-width: 0;
+}
+.cek-bl-sumber {
+  display: block;
+  min-height: 1.1em;
+  margin-top: 3px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--sec-600);
+}
+
+/* ---------- status & tombol periksa ---------- */
+.cek-aksi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--n-100);
+}
+.cek-status {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.cek-status small {
+  color: var(--s-warn);
+}
+.cek-status-titik {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--n-300);
+  transform: translateY(-1px);
+}
+.cek-status.is-siap .cek-status-titik {
+  background: var(--cek-sama);
+}
+.cek-status.is-galat {
+  color: var(--s-danger);
+}
+.cek-status.is-galat .cek-status-titik {
+  background: var(--s-danger);
+}
+#btnCekPeriksa:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- vonis ---------- */
+.cek-vonis {
+  --vonis: var(--s-warn);
+  --vonis-bg: var(--s-warn-bg);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+  box-shadow: inset 4px 0 0 var(--vonis);
+}
+.cek-vonis--lulus {
+  --vonis: var(--cek-sama);
+  --vonis-bg: var(--cek-sama-bg);
+}
+.cek-vonis--gagal {
+  --vonis: var(--s-danger);
+  --vonis-bg: var(--s-danger-bg);
+}
+.cek-vonis-ikon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--vonis-bg);
+  color: var(--vonis);
+  font-size: 1.4rem;
+}
+.cek-vonis-isi {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cek-vonis-judul {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cek-vonis-judul b {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  letter-spacing: 0.02em;
+  color: var(--vonis);
+}
+.cek-jenis {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--d-900);
+  color: #fff;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.cek-vonis-isi p {
+  margin: 4px 0 0;
+  font-size: var(--t-base);
+  color: var(--n-700);
+}
+.cek-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+}
+.cek-meta-item {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--t-xs);
+  color: var(--n-600);
+}
+.cek-meta-item i {
+  color: var(--n-400);
+}
+.cek-meta-item span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cek-meta-item b {
+  color: var(--n-800);
+  overflow-wrap: anywhere;
+}
+.cek-angka {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(64px, auto));
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.cek-angka > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-md);
+  background: #fff;
+}
+.cek-angka b {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  line-height: 1.1;
+  color: var(--d-900);
+}
+.cek-angka span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--n-500);
+}
+.cek-angka--sama b {
+  color: var(--cek-sama);
+}
+.cek-angka--beda b {
+  color: var(--s-danger);
+}
+.cek-angka--info b {
+  color: var(--cek-info);
+}
+.cek-angka .is-nol b {
+  color: var(--n-400);
+}
+
+/* ---------- ringkasan per bagian ---------- */
+.cek-bagian {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-bagian-baris {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--t-xs);
+}
+.cek-bagian-nama {
+  font-weight: 600;
+  color: var(--n-700);
+}
+.cek-bagian-baris.has-beda .cek-bagian-nama {
+  color: var(--s-danger);
+}
+.cek-batang {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+}
+.cek-batang .is-sama {
+  background: var(--cek-sama);
+}
+.cek-batang .is-beda {
+  background: var(--s-danger);
+}
+.cek-batang .is-info {
+  background: var(--cek-info);
+}
+.cek-bagian-angka {
+  color: var(--n-500);
+  white-space: nowrap;
+}
+
+/* ---------- alat & saringan ---------- */
+.cek-alat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-seg {
+  margin-left: 0;
+}
+.cek-seg button b {
+  margin-left: 4px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.cek-alat-kanan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- daftar hasil ---------- */
+.cek-daftar {
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+}
+.cek-grup {
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-lg);
+  background: #fff;
+}
+.cek-grup + .cek-grup {
+  margin-top: 8px;
+}
+.cek-grup.has-beda {
+  border-color: var(--s-danger-line);
+}
+.cek-grup > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 11px var(--sp-4);
+  cursor: pointer;
+  list-style: none;
+}
+.cek-grup > summary::-webkit-details-marker {
+  display: none;
+}
+.cek-grup > summary::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin-right: -4px;
+  border-right: 2px solid var(--n-400);
+  border-bottom: 2px solid var(--n-400);
+  transform: rotate(-45deg);
+  transition: transform var(--dur-1) var(--ease);
+}
+.cek-grup[open] > summary::before {
+  transform: rotate(45deg);
+}
+.cek-grup[open] > summary {
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-grup-judul {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cek-grup-judul b {
+  font-size: var(--t-base);
+  color: var(--d-900);
+}
+.cek-grup-judul small {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cek-grup-pil {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 0 1 auto;
+}
+.cek-pil {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--n-600);
+  font-size: 0.66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cek-st {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.cek-st--sama {
+  border-color: var(--cek-sama-line);
+  background: var(--cek-sama-bg);
+  color: var(--cek-sama);
+}
+.cek-st--beda {
+  border-color: var(--s-danger-line);
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+.cek-st--info {
+  border-color: var(--cek-info-line);
+  background: var(--cek-info-bg);
+  color: var(--cek-info);
+}
+.cek-tabel-wrap {
+  overflow-x: auto;
+}
+.cek-tabel {
+  width: 100%;
+  border-collapse: collapse;
+}
+.cek-tabel th {
+  padding: 9px var(--sp-4);
+  border-bottom: 1px solid var(--n-100);
+  color: var(--n-500);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+.cek-tabel td {
+  padding: 9px var(--sp-4);
+  border-bottom: 1px solid var(--n-100);
+  vertical-align: top;
+  font-size: var(--t-sm);
+  color: var(--n-800);
+}
+.cek-tabel tr:last-child td {
+  border-bottom: 0;
+}
+.cek-tabel tr.is-beda td {
+  background: #fffafa;
+}
+.cek-kol-isian {
+  width: 34%;
+}
+.cek-kol-nilai {
+  width: 27%;
+  overflow-wrap: anywhere;
+}
+.cek-kol-hasil {
+  width: 12%;
+  text-align: right;
+}
+.cek-tabel th.cek-kol-hasil {
+  text-align: right;
+}
+.cek-isian {
+  display: block;
+  font-weight: 600;
+  color: var(--d-900);
+}
+.cek-catatan {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--t-xs);
+  line-height: 1.45;
+  color: var(--n-500);
+}
+.cek-sumber {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--sec-50);
+  color: var(--sec-700);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.cek-kol-nilai .cek-sumber {
+  display: table;
+}
+.cek-selisih {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--s-danger);
+  white-space: nowrap;
+}
+.cek-tanda {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: #fde2de;
+  color: var(--s-danger);
+}
+.cek-redup {
+  color: var(--n-400);
+}
+
+/* ---------- HS Code untuk database ---------- */
+.cek-saran {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cek-saran li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 11px var(--sp-5);
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-saran li:last-child {
+  border-bottom: 0;
+}
+.cek-saran-nama {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cek-saran-nama b {
+  font-size: var(--t-sm);
+  color: var(--d-900);
+  overflow-wrap: anywhere;
+}
+.cek-saran-nama small {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.cek-saran-kode {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--p-600);
+  white-space: nowrap;
+}
+.cek-saran-simpan {
+  height: 32px;
+}
+
+/* ---------- apa yang diperiksa ---------- */
+.cek-aturan > summary {
+  padding: 13px var(--sp-5);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--d-900);
+}
+.cek-aturan[open] > summary {
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-aturan ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--t-sm);
+  line-height: 1.6;
+  color: var(--n-700);
+}
+.cek-aturan li + li {
+  margin-top: 4px;
+}
+
+/* ---------- layar sempit ---------- */
+@media (max-width: 991.98px) {
+  .cek-bl-kisi {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+  .cek-vonis {
+    flex-wrap: wrap;
+  }
+  .cek-angka {
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .cek-bagian {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 575.98px) {
+  .cek-drops {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cek-bl-kisi {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cek-jadwal-kartu {
+    flex-wrap: wrap;
+  }
+  .cek-jadwal-aksi {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .cek-vonis,
+  .cek-alat {
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+  /* Ringkasan per bagian disembunyikan di ponsel: angka yang sama sudah
+     tertulis di kepala tiap bagian di bawahnya, dan sebelas baris
+     batang mendorong hasilnya jauh ke bawah. */
+  .cek-bagian {
+    display: none;
+  }
+  .cek-seg {
+    flex: 1 1 100%;
+  }
+  .cek-alat-kanan {
+    gap: 6px;
+  }
+  .cek-alat-kanan .btn.mst-tombol {
+    padding: 0 10px;
+  }
+  .cek-seg button {
+    flex: 1 1 0;
+    padding: 0 6px;
+  }
+  .cek-daftar {
+    padding: var(--sp-3);
+  }
+  .cek-grup > summary {
+    flex-wrap: wrap;
+  }
+  .cek-grup-pil {
+    justify-content: flex-start;
+  }
+  /* Baris tabel jadi kartu bertumpuk: label kolom dari data-label. */
+  .cek-tabel thead {
+    display: none;
+  }
+  .cek-tabel,
+  .cek-tabel tbody,
+  .cek-tabel tr,
+  .cek-tabel td {
+    display: block;
+    width: 100%;
+  }
+  .cek-tabel tr {
+    padding: 10px var(--sp-3);
+    border-bottom: 1px solid var(--n-100);
+  }
+  .cek-tabel tr:last-child {
+    border-bottom: 0;
+  }
+  .cek-tabel td {
+    padding: 2px 0;
+    border-bottom: 0;
+    text-align: left;
+  }
+  .cek-tabel td.cek-kol-nilai::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--n-400);
+  }
+  .cek-kol-hasil {
+    margin-top: 4px;
+  }
+  .cek-saran li {
+    flex-wrap: wrap;
+    padding: 11px var(--sp-4);
+  }
+}
+
+@media print {
+  #viewChecker .cek-berkas,
+  #viewChecker .cek-alat,
+  #viewChecker .cek-saran-panel,
+  #viewChecker .cek-aturan {
+    display: none !important;
+  }
+}

@@ -56,11 +56,11 @@ function suratNamaNegara(kode) {
 
 const suratRapatAju = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-/* Daftar barang unik (per nama) sebuah jadwal */
+/* Daftar barang unik (per nama yang ditampilkan, itemDisplayName) sebuah jadwal */
 function suratBarangUnik(s) {
   const peta = new Map();
   (s.items || []).forEach((it) => {
-    const nama = String(it.namaBarang || "").trim();
+    const nama = itemDisplayName(it);
     if (!nama) return;
     const k = nama.toUpperCase();
     if (!peta.has(k)) peta.set(k, { nama, hs: String(it.hsCode || "").trim(), fungsi: "", foto: "" });

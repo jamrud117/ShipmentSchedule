@@ -241,19 +241,19 @@ function ciplBarisBarang(shipment) {
   return items
     .filter((it) => String(it.namaBarang || "").trim())
     .map((it) => {
-      /* NAMA BARANG = Uraian + Pattern + Size + Mold No, aturan yang sama
+      /* NAMA BARANG = kolom barang CEISA kiri ke kanan, aturan yang sama
          dengan CIPL Kumho (itemDisplayName, core/helpers.js). Lembar ini
-         punya dua kolom: Item = Uraian, Type = sisanya (Pattern, Size,
-         Mold No) -- dibaca dari kiri ke kanan hasilnya urutan yang sama.
-         Dulu Type cuma Size, sehingga Pattern & Mold No tidak tercetak.
+         punya dua kolom: Item = Kode Barang + Uraian, Type = sisanya
+         (Merek, Tipe, Ukuran, Spesifikasi Lain) -- dibaca dari kiri ke
+         kanan hasilnya urutan yang sama.
 
          ciplPecahNama() (menebak dari " - " atau CIPL_JENIS_BARANG)
-         tinggal cadangan untuk barang lama yang ketiga kolomnya kosong
-         -- semuanya masih digabung di Uraian. */
+         tinggal cadangan untuk barang yang kolom sesudah Uraian-nya
+         kosong -- barang lama, seluruh namanya di Uraian. */
+      const bagian = bagianNamaBarang(it);
       const rincian = rincianNamaBarang(it);
-      const n = rincian.length
-        ? { item: rapiBagianNama(it.namaBarang), type: rincian.join(" ") }
-        : ciplPecahNama(rapiBagianNama(it.namaBarang));
+      const depan = bagian.filter((b) => !KOLOM_SESUDAH_URAIAN.includes(b.kolom)).map((b) => b.teks).join(" ");
+      const n = rincian.length ? { item: depan, type: rincian.join(" ") } : ciplPecahNama(depan);
       const qty = parseLooseNumber(it.qty);
       const harga = parseLooseNumber(it.harga);
       return {

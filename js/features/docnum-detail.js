@@ -384,7 +384,8 @@ function dndBiayaHtml(r) {
     /* Pengajuan untuk beberapa BL/AWB: kolom BL/AWB per baris dan bagian
        tiap BL/AWB di bawah TOTAL -- sama dengan form & surat cetaknya. */
     const awb = fundDaftarAwb(p.blAwb);
-    const pakaiAwb = awb.length > 1;
+    // Inland Trucking: nomor DO / Surat Jalan, tidak dipecah per BL/AWB
+    const pakaiAwb = awb.length > 1 && !fundTanpaPecahAwb(p);
     const teksAwb = (b) => {
       const k = fundKunciAwb(b.awb);
       const a = awb.find((x) => x.kunci === k);

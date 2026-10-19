@@ -55,9 +55,9 @@ function dateRangeBasisValue(s, basis) {
 
    Master/House B/L-AWB WAJIB ikut: nomor itulah yang paling sering
    dipakai mencari, entah dari e-mail forwarder atau dari dokumen di
-   tangan. Size, Pattern, Mold No & PO No ikut dicari: orang gudang
-   menelusuri kiriman lewat nomor cetakan atau nomor PO, bukan cuma
-   nama barangnya. */
+   tangan. Seluruh kolom barang CEISA ikut dicari (teksCariBarang):
+   orang gudang menelusuri kiriman lewat kode barang, tipe, ukuran, atau
+   nomor cetakan (Spesifikasi Lain), bukan cuma uraiannya. */
 function teksCariJadwal(s) {
   return [
     s.party,
@@ -76,9 +76,7 @@ function teksCariJadwal(s) {
     s.incoterm,
     s.muatan,
     s.notes,
-    ...(s.items || []).flatMap((i) => [
-      i.namaBarang, i.hsCode, i.size, i.pattern, i.moldNo, i.poNo,
-    ]),
+    ...(s.items || []).flatMap((i) => teksCariBarang(i).concat(i.hsCode)),
   ]
     .join(" ")
     .toLowerCase();
@@ -293,7 +291,101 @@ function orderedFiltered() {
   return flattenGroups(groupAndSort(getFiltered())).map((e) => e.shipment);
 }
 
+/* ------------------------------------------------------------------
+   POSISI GULIR SAAT DAFTAR DIGAMBAR ULANG
+
+   render() mengganti SELURUH isi daftar. Kartu yang baru dibuat belum
+   punya "tinggi yang diingat" (content-visibility: auto, lihat
+   css/card.css), jadi kartu yang sedang di atas layar kembali ke
+   perkiraan tinggi 760px. Selisihnya menggeser seluruh isi layar:
+   sesudah konfirmasi tahap dokumen, ubah status, atau ubah tanggal di
+   kartu, kartu yang sedang dikerjakan melompat turun dan halaman
+   terasa menggulir ke atas sendiri.
+
+   Dua langkah, keduanya hanya saat daftar sudah tergulir:
+     1. Tinggi tiap kartu lama diwariskan ke kartu baru ber-id sama
+        (contain-intrinsic-height). Kartu di atas layar tetap setinggi
+        semula selama belum digambar, jadi tidak ada yang bergeser.
+     2. Penanda gulir bawaan peramban (scroll anchoring) tidak menolong
+        karena elemen penandanya ikut dibuang. Jadi penandanya dipegang
+        sendiri: kartu pertama yang masih terlihat dicatat jarak
+        atasnya, lalu dikembalikan ke jarak itu -- untuk kartu di
+        atasnya yang memang berubah urutan atau isi. Seketika, bukan
+        digulir halus (html memakai scroll-behavior: smooth).
+   Kartu yang hilang dari daftar (pindah halaman, tersaring) tidak
+   dikejar: posisi gulir dibiarkan apa adanya. */
+function catatPenandaGulir() {
+  const wadah = cardContainer.getBoundingClientRect();
+  // Daftar belum tergulir (atau tidak tampil): tidak ada yang bisa bergeser
+  if (wadah.top >= 0 || wadah.bottom <= 0) return null;
+  const tinggi = new Map();
+  let penanda = null;
+  for (const kartu of cardContainer.querySelectorAll(":scope > .ship-card")) {
+    const r = kartu.getBoundingClientRect();
+    tinggi.set(kartu.dataset.id, r.height);
+    if (!penanda && r.bottom > 0) penanda = { id: kartu.dataset.id, top: r.top };
+  }
+  return penanda ? { ...penanda, tinggi } : null;
+}
+function wariskanTinggiKartu(penanda) {
+  if (!penanda) return;
+  for (const kartu of cardContainer.querySelectorAll(":scope > .ship-card")) {
+    const lama = penanda.tinggi.get(kartu.dataset.id);
+    if (!lama) continue;
+    // contain-intrinsic-* mengukur kotak ISI: padding & garis tepi dikurangkan
+    const cs = getComputedStyle(kartu);
+    const tepi = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"]
+      .reduce((n, k) => n + (parseFloat(cs[k]) || 0), 0);
+    kartu.style.containIntrinsicHeight = `auto ${Math.max(0, lama - tepi)}px`;
+  }
+}
+function pulihkanPenandaGulir(penanda) {
+  if (!penanda || !penanda.id) return;
+  const kartu = [...cardContainer.querySelectorAll(":scope > .ship-card")]
+    .find((k) => k.dataset.id === penanda.id);
+  if (!kartu) return;
+  const geser = Math.round(kartu.getBoundingClientRect().top - penanda.top);
+  if (geser) window.scrollBy({ top: geser, behavior: "instant" });
+}
+
+/* FOKUS IKUT BERTAHAN.
+
+   Kalau yang sedang difokus ada di dalam daftar -- kotak kronologi
+   yang sedang diketik, pil status, kotak tanggal, tombol tahap dokumen
+   -- kembarannya di kartu yang baru difokus lagi, lengkap dengan isi &
+   posisi kursornya (kunciFokus, js/ui/fokus.js). Tanpa ini pembaruan
+   dari pengguna lain (realtime) membuang kalimat kronologi yang sedang
+   setengah diketik, dan pengguna papan ketik terlempar ke awal halaman
+   setiap kali mengubah status. */
+function catatFokusDaftar() {
+  const el = document.activeElement;
+  if (!el || el === document.body || !cardContainer.contains(el)) return null;
+  const kunci = kunciFokus(el);
+  if (!kunci) return null;
+  const teks = el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text");
+  return { kunci, teks, nilai: el.value, awal: teks ? el.selectionStart : null, akhir: teks ? el.selectionEnd : null };
+}
+function pulihkanFokusDaftar(lama) {
+  if (!lama) return;
+  const aktif = document.activeElement;
+  if (aktif && aktif !== document.body && aktif.isConnected) return; // sudah ada yang mengambil fokus
+  const el = cardContainer.querySelector(lama.kunci);
+  if (!el) return;
+  // Isi yang sedang diketik tidak ikut terbuang (kotak tanggal & pilihan mengikuti data)
+  if (lama.teks && el.value !== lama.nilai) el.value = lama.nilai;
+  fokuskan(el, { tanpaGulir: true });
+  if (lama.teks && lama.awal != null) {
+    try {
+      el.setSelectionRange(lama.awal, lama.akhir);
+    } catch (err) {
+      /* abaikan */
+    }
+  }
+}
+
 function render() {
+  const penanda = catatPenandaGulir();
+  const fokusLama = catatFokusDaftar();
   // Data jadwal mungkin berubah -> notifikasi lonceng dihitung ulang (notifikasi.js)
   if (typeof jadwalkanNotif === "function") jadwalkanNotif();
   applyModeLabels();
@@ -347,10 +439,13 @@ function render() {
     lastKey = entry.key;
   });
   cardContainer.innerHTML = html;
+  wariskanTinggiKartu(penanda);
 
   renderPaginationBar(flat.length);
   updateStats(flat.length);
   renderFilterNote(flat.length, totalInBook);
+  pulihkanPenandaGulir(penanda);
+  pulihkanFokusDaftar(fokusLama);
 }
 
 /* PAGINATION */

@@ -255,6 +255,87 @@ document.addEventListener("click", (e) => {
   if (tombol) salinHsCode(tombol.dataset.salinHs, tombol);
 });
 
+/* ------------------------------------------------------------------
+   HS CODE MENURUT NAMA BARANG
+
+   CIPL biasanya hanya benar sampai 6 digit (kode internasional), atau
+   menulis kode 10 digit negara asalnya; BTKI butuh 8 digit. Pasangan
+   nama & kode yang disimpan EXIM di database ini yang melengkapinya --
+   dipakai impor CIPL di form jadwal (import/dispatch.js) dan halaman
+   Cek PIB/PEB (views/checker-view.js), aturan yang sama di keduanya.
+------------------------------------------------------------------ */
+const kunciNamaHs = (v) =>
+  String(v == null ? "" : v)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+
+/* Teks barang -> entri terbaik di sebuah daftar {kunci, kunciNama, kode, label}.
+   `teks` = [uraian + tipe, uraian] dalam bentuk kunciNamaHs.
+     3  sama persis (uraian + tipe, atau uraian saja)
+     2  nama di daftar terkandung utuh di teks barang ("TYRE MOLD" di
+        "TYRE MOLD TREAD ONLY ...") -- yang terpanjang menang
+     1  uraian barang terkandung utuh di nama daftar (minimal dua kata)
+   Beberapa entri setara dengan kode berbeda = belum pasti: dikembalikan
+   sebagai kandidat, kecuali satu kode jelas paling sering. */
+function cariHsMenurutNama(daftar, teks) {
+  const lengkap = " " + teks[0] + " ";
+  const uraian = teks[teks.length - 1];
+  const uraianCukup = uraian.split(" ").length >= 2 && uraian.length >= 6;
+  let terbaik = [];
+  let nilai = 0;
+  let panjang = 0;
+  daftar.forEach((x) => {
+    let n = 0;
+    if (teks.includes(x.kunci) || (x.kunciNama && teks.includes(x.kunciNama))) n = 3;
+    else if (x.kunci.length >= 3 && lengkap.includes(" " + x.kunci + " ")) n = 2;
+    else if (uraianCukup && (" " + x.kunci + " ").includes(" " + uraian + " ")) n = 1;
+    if (!n) return;
+    const p = n === 2 ? x.kunci.length : 0;
+    if (n > nilai || (n === nilai && p > panjang)) {
+      terbaik = [x];
+      nilai = n;
+      panjang = p;
+    } else if (n === nilai && p === panjang) terbaik.push(x);
+  });
+  if (!terbaik.length) return null;
+  const hitung = new Map();
+  terbaik.forEach((x) => hitung.set(x.kode, (hitung.get(x.kode) || 0) + 1));
+  const urut = [...hitung.entries()].sort((a, b) => b[1] - a[1]);
+  if (urut.length === 1 || urut[0][1] > urut[1][1] * 2) {
+    const x = terbaik.find((y) => y.kode === urut[0][0]);
+    return { kode: x.kode, label: x.label };
+  }
+  return { kandidat: urut.map((u) => u[0]).sort() };
+}
+
+/* Isi database sebagai daftar pencarian -- hanya kode 8 digit (BTKI). */
+function daftarHsDatabase() {
+  return hsCodeRows
+    .map((r) => ({ kunci: kunciNamaHs(r.item_name), kunciNama: "", kode: String(r.hs_code || "").replace(/\D/g, "").slice(0, 8), label: r.item_name }))
+    .filter((x) => x.kunci && x.kode.length === 8);
+}
+
+/* Kode 8 digit sebuah barang menurut database: {kode, label},
+   {kandidat: [...]} bila beberapa nama setara berbeda kode, atau null. */
+function hsDatabaseUntukBarang(uraian, tipe) {
+  const teks = [kunciNamaHs(`${uraian || ""} ${tipe || ""}`), kunciNamaHs(uraian)].filter(Boolean);
+  if (!teks.length || !hsCodeRows.length) return null;
+  return cariHsMenurutNama(daftarHsDatabase(), teks);
+}
+
+/* Database dimuat sekali kalau belum -- tanpa menggambar halaman HS Code. */
+async function hsCodeSiap() {
+  if (hsCodeRows.length) return true;
+  try {
+    await ambilHsCodes();
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+}
+
 /* Dipakai juga dari luar halaman ini -- tombol cari HS Code di Daftar
    Barang (item-table.js) mencari lewat array yang sama, tanpa perlu
    muat ulang dari Supabase tiap kali dibuka. Memuat sendiri kalau
@@ -395,6 +476,10 @@ function showHsCodeView() {
   showPage("hscode");
   window.scrollTo(0, 0);
   loadHsCodes();
+  /* Halaman ini dibuka untuk MENCARI HS Code: kotak carinya langsung
+     siap diketik (tidak di layar sentuh -- papan ketiknya menutupi
+     daftar yang mau dibaca). */
+  if (!layarSentuh() && hsCodeSearchEl) fokuskan(hsCodeSearchEl, { tanpaGulir: true });
 }
 
 const btnHsCodeAdd = $("#btnHsCodeAdd");

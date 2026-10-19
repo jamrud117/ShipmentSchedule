@@ -153,8 +153,9 @@ const DOCNUM_HISTORY_FILTERS = {
    Kolom yang dicari mencakup isian semua jenis dokumen sekaligus
    (penerima invoice, surat jalan, pengajuan dana, surat keluar); isian
    yang tidak dimiliki suatu jenis bernilai kosong dan tidak pernah
-   cocok. Nilai pengajuan tidak ikut -- ia dihitung di aplikasi, tidak
-   tersimpan sebagai teks yang bisa dicari.
+   cocok. NOMINAL (Nilai pengajuan dana, Amount invoice) dihitung di
+   aplikasi, tidak tersimpan di database -- kata kunci berupa angka
+   dicocokkan di aplikasi atas seluruh riwayat (dnAngkaCari).
 ------------------------------------------------------------------ */
 let docNumCari = "";
 
@@ -171,17 +172,28 @@ function dnTerapkanSaringBayar(kueri) {
   return kueri;
 }
 
-/* RENTANG TANGGAL PENGAJUAN (kolom Tanggal = doc_date) di riwayat
-   Pengajuan Dana. Dikirim ke database seperti kotak cari & status
-   bayar, jadi berlaku untuk SELURUH riwayat, bukan cuma halaman yang
-   sedang tampil -- dan jumlah halamannya ikut menyusut. */
+/* RENTANG TANGGAL di riwayat Pengajuan Dana, menurut tanggal yang
+   dipilih: Tanggal Terbit (doc_date), Tanggal Invoice, Jatuh Tempo, atau
+   Tanggal Bayar. Dikirim ke database seperti kotak cari & status bayar,
+   jadi berlaku untuk SELURUH riwayat, bukan cuma halaman yang sedang
+   tampil -- dan jumlah halamannya ikut menyusut. Ketiga tanggal payload
+   tersimpan "YYYY-MM-DD" (paidAt lewat set_fund_paid juga), jadi
+   dibandingkan sebagai teks pun urutannya benar. */
+const DN_DASAR_TANGGAL = {
+  terbit: { kolom: "doc_date", label: () => tt("Tanggal Terbit", "Date of Issue") },
+  invoice: { kolom: "payload->>invoiceDate", label: () => tt("Tanggal Invoice", "Invoice Date") },
+  jatuhTempo: { kolom: "payload->>invoiceDueDate", label: () => tt("Jatuh Tempo", "Due Date") },
+  bayar: { kolom: "payload->>paidAt", label: () => tt("Tanggal Bayar", "Paid Date") },
+};
 let docNumRentang = ["", ""];
+let docNumDasarTanggal = "terbit";
 let dnPemilihRentang = null;
 function dnTerapkanSaringTanggal(kueri) {
   if (docNumActiveTab !== "fund") return kueri;
   const [dari, sampai] = docNumRentang;
-  if (dari) kueri = kueri.gte("doc_date", dari);
-  if (sampai) kueri = kueri.lte("doc_date", sampai);
+  const kolom = (DN_DASAR_TANGGAL[docNumDasarTanggal] || DN_DASAR_TANGGAL.terbit).kolom;
+  if (dari) kueri = kueri.gte(kolom, dari);
+  if (sampai) kueri = kueri.lte(kolom, sampai);
   return kueri;
 }
 function dnPasangPemilihRentang() {
@@ -204,6 +216,9 @@ function dnPasangPemilihRentang() {
 function dnLepasRentang() {
   docNumRentang = ["", ""];
   if (dnPemilihRentang) dnPemilihRentang.setel("", "");
+  docNumDasarTanggal = "terbit";
+  const dasar = $("#docNumDasarTanggal");
+  if (dasar) dasar.value = "terbit";
 }
 
 /* Saringan status bayar & rentang tanggal hanya tampil di Pengajuan
@@ -222,6 +237,9 @@ function dnTampilkanSaringBayar() {
     if (!sembunyi) dnPasangPemilihRentang();
     rentang.classList.toggle("d-none", sembunyi);
   }
+  // Tanggal dasar + pemilih rentangnya satu kelompok
+  const grup = document.querySelector(".dn-saring-grup");
+  if (grup) grup.classList.toggle("d-none", sembunyi);
 }
 const DN_KOLOM_CARI = [
   "doc_number", "requester", "department",
@@ -255,10 +273,74 @@ function dnCarrierInvoice(p) {
   return carrierCipl(p, jadwal);
 }
 
+// Kata kunci bersih -- sama untuk filter database & pencocokan di aplikasi
+function dnKataCari(q) {
+  return String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function dnFilterCari(q) {
-  const bersih = String(q || "").replace(/[,()"\\%*]/g, " ").replace(/\s+/g, " ").trim();
+  const bersih = dnKataCari(q);
   if (!bersih) return null;
   return DN_KOLOM_CARI.map((k) => `${k}.ilike."%${bersih}%"`).join(",");
+}
+
+/* PENCARIAN NOMINAL. Kata kunci berupa angka -- "139.731", "139731",
+   "Rp. 139.731", "15.242.517", "USD 1,234.56" -- juga dicari di kolom
+   Nilai (Pengajuan Dana) / Amount (Invoice). Yang dicocokkan angka-
+   angkanya saja, jadi ditulis dengan atau tanpa pemisah ribuan sama
+   saja. Minimal 3 angka; kata kunci yang memuat huruf lain
+   ("IN-WL2610-00060") bukan nominal. "139.731,00" ikut dicari sebagai
+   "139.731" (rupiah tampil tanpa sen). Hasil: [] = bukan nominal. */
+function dnAngkaCari(q) {
+  const teks = String(q || "")
+    .trim()
+    .replace(/^(?:rp\.?|idr|usd|us\$|\$)\s*/i, "")
+    .replace(/\s*(?:idr|usd)$/i, "")
+    .replace(/[.,]-$/, "");
+  if (!/^\d[\d.,\s]*$/.test(teks)) return [];
+  const calon = [teks];
+  if (/[.,]0{1,2}$/.test(teks)) calon.push(teks.replace(/[.,]0{1,2}$/, ""));
+  return [...new Set(calon.map((x) => x.replace(/\D/g, "")))].filter((x) => x.length >= 3);
+}
+
+// Nilai satu baris persis seperti tampil di tabelnya; "" = jenis tanpa kolom nilai
+function dnTeksNilaiBaris(r, jenisKey) {
+  const p = r.payload || {};
+  if (jenisKey === "fund") return frNilai(frTotalPengajuan(p), p.currency || "IDR");
+  if (jenisKey === "invoice") return dnTeksNilaiInvoice(r);
+  return "";
+}
+
+/* Cocok = isian teks yang sama dengan filter database (DN_KOLOM_CARI,
+   tanpa beda huruf) ATAU nilainya memuat nominal yang dicari. */
+function dnCocokCari(r, jenisKey, q) {
+  const kata = dnKataCari(q).toLowerCase();
+  const p = r.payload || {};
+  const cocokTeks =
+    !!kata &&
+    DN_KOLOM_CARI.some((k) => {
+      const v = k.startsWith("payload->>") ? p[k.slice(10)] : r[k];
+      return v != null && String(v).toLowerCase().includes(kata);
+    });
+  if (cocokTeks) return true;
+  const angka = dnAngkaCari(q);
+  const nilai = angka.length ? dnTeksNilaiBaris(r, jenisKey).replace(/\D/g, "") : "";
+  return !!nilai && angka.some((a) => nilai.includes(a));
+}
+
+// Seluruh baris yang lolos saringan lain, per 1.000 (batas satu permintaan Supabase)
+async function dnAmbilSemuaRiwayat(kueriDasar) {
+  const semua = [];
+  for (let mulai = 0; mulai < 50000; mulai += 1000) {
+    const { data, error } = await kueriDasar()
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(mulai, mulai + 999);
+    if (error) throw error;
+    semua.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return semua;
 }
 
 function docNumPayloadFilter() {
@@ -456,7 +538,7 @@ function readDocNumForm(typeKey) {
   }
   if (typeof fundLines !== "undefined" && typeKey === "fund") {
     const pakaiRinci = out.expenseType && out.expenseType !== "Billing";
-    const bersih = pakaiRinci ? fundRapikanTautanAwb(fundLinesBersih(fundLines), out.blAwb) : [];
+    const bersih = pakaiRinci ? fundRapikanTautanAwb(fundLinesBersih(fundLines), out.blAwb, out.transactionType) : [];
     if (bersih.length) out.lines = bersih;
     // Invoice / debit note tambahan dalam pengajuan yang sama
     if (pakaiRinci && typeof fundDokumenBersih === "function" && fundDokumen.length) out.dokumen = fundDokumenBersih();
@@ -493,7 +575,9 @@ function validateDocNumForm(typeKey) {
     const isianAwb = panel.querySelector('[data-dn="blAwb"]');
     const nilaiAwb = isianAwb && !isianAwb.disabled ? isianAwb.value : "";
     const pakaiRinci = (panel.querySelector('[data-dn="expenseType"]') || {}).value !== "Billing";
-    const hilang = pakaiRinci && fundDaftarAwb(nilaiAwb).length > 1 ? fundTautanAwbHilang(fundLines, nilaiAwb) : [];
+    // Inland Trucking tidak dipecah per BL/AWB: tautan barisnya tidak dipakai
+    const darat = fundTanpaPecahAwb({ transactionType: (panel.querySelector('[data-dn="transactionType"]') || {}).value });
+    const hilang = pakaiRinci && !darat && fundDaftarAwb(nilaiAwb).length > 1 ? fundTautanAwbHilang(fundLines, nilaiAwb) : [];
     if (hilang.length) {
       errors.push(tt(
         `Baris ${hilang.join(", ")} di Rincian Biaya ditautkan ke BL/AWB yang sudah tidak ada di isian BL/AWB — pilih ulang BL/AWB-nya.`,
@@ -656,7 +740,8 @@ async function maxIssuedSeq(docType, periodKey) {
 async function simpanCounter(nilaiBerikutnya) {
   const { typeKey, periodKey, pad } = counterCtx;
   if (!typeKey) return;
-  const berikut = parseInt(nilaiBerikutnya, 10);
+  const isi = String(nilaiBerikutnya == null ? "" : nilaiBerikutnya).trim();
+  const berikut = /^\d+$/.test(isi) ? parseInt(isi, 10) : NaN;
   if (!isFinite(berikut) || berikut < 1) {
     showToast(t("m.nomor.berikutnya.harus.angka.minimal.1"), "danger");
     return;
@@ -1418,6 +1503,9 @@ async function submitDocNumRequest() {
         : t("x.isian.belum.benar", { n: errors.length }),
       "danger",
     );
+    // Kursor dibawa ke kotak bertanda merah yang pertama, siap dibetulkan
+    const salah = docNumPanelEl(typeKey) && docNumPanelEl(typeKey).querySelector(".is-invalid");
+    if (salah) tandaiIsianKurang(salah);
     return;
   }
   hint.textContent = "";
@@ -1484,6 +1572,9 @@ async function submitDocNumRequest() {
     if (errInsert) throw errInsert;
 
     tampilkanHasilDocNum(baris.out_number);
+    /* Langkah berikutnya hampir selalu menyalin nomornya: tombol Salin
+       langsung difokus -- Enter menyalin. */
+    fokuskan($("#btnCopyDocNum"));
     resetDocNumForm(typeKey, { keepIdentity: true });
     docNumPage = 1;
     await Promise.all([refreshDocNumPreview(typeKey), renderDocNumHistory()]);
@@ -1867,6 +1958,52 @@ document.addEventListener("input", (e) => {
 const DN_TAB_KOLOM_NO = ["invoice", "fund"];
 const dnPakaiKolomNo = (tab) => DN_TAB_KOLOM_NO.indexOf(tab) >= 0;
 
+/* Jatuh tempo: tagihan yang BELUM lunas dan sudah lewat jatuh temponya
+   ditandai -- ikon + keterangan, bukan warna saja. */
+function dnSelJatuhTempo(r, p) {
+  if (!p.invoiceDueDate) return "\u2014";
+  const tgl = escapeHtml(fmtDate(p.invoiceDueDate));
+  const hari = dnSudahBayar(r) || typeof daysFromToday !== "function" ? null : daysFromToday(p.invoiceDueDate);
+  if (hari == null || hari >= 0) return tgl;
+  const ket = tt(`Lewat jatuh tempo ${-hari} hari`, `${-hari} ${hari === -1 ? "day" : "days"} overdue`);
+  return `<span class="dn-jatuh-lewat" title="${escapeAttr(ket)}"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i>${tgl}<span class="visually-hidden"> — ${escapeHtml(ket)}</span></span>`;
+}
+
+/* KOLOM RIWAYAT PENGAJUAN DANA, urut seperti daftar ini dibaca:
+   pengajuannya (No, Nomor), lalu EMPAT TANGGALNYA berdampingan --
+   Terbit, Tanggal Invoice, Jatuh Tempo di sini, Tanggal Bayar di Status
+   Bayar -- sama dengan pilihan saringan rentang tanggal; sesudahnya
+   tagihan yang dibayar (Vendor, Nomor Billing/Invoice, Nilai), lalu
+   konteksnya (Transaksi, BL/AWB, Keterangan, Drafter). Tanggal-tanggal
+   di depan: di layar laptop kolom sebelah kanan baru terlihat sesudah
+   digeser, dan Status Bayar + tombol aksi menempel di kanan (docnum.css)
+   -- karena itu Status Bayar HARUS kolom terakhir sebelum aksi.
+   kelas = kepala & sel; kelasSel = kelas sel kalau berbeda. */
+const DN_KOLOM_DANA = [
+  { kelas: "dn-col-no", judul: () => "No", isi: (r, p, x) => String(x.urut) },
+  { kelas: "", kelasSel: "dn-num", judul: () => tt("Nomor", "Number"), isi: (r) => escapeHtml(r.doc_number) },
+  { kelas: "dn-col-tgl", judul: () => tt("Tanggal Terbit", "Date of Issue"), isi: (r) => escapeHtml(fmtDate(r.doc_date)) },
+  { kelas: "dn-col-tglinv", judul: () => tt("Tanggal Invoice", "Invoice Date"), isi: (r, p) => (p.invoiceDate ? escapeHtml(fmtDate(p.invoiceDate)) : "\u2014") },
+  { kelas: "dn-col-jatuh", judul: () => tt("Jatuh Tempo", "Due Date"), isi: (r, p) => dnSelJatuhTempo(r, p) },
+  // Dibayarkan Kepada = VENDOR (payee), bukan Customer -- lihat `ringkas` di renderDocNumHistory
+  { kelas: "dn-col-vendor", judul: () => DN_KOLOM_UTAMA.fund, isi: (r, p, x) => escapeHtml(String(x.ringkas).slice(0, 60)) },
+  /* Nomor rujukannya BERGANTIAN mengikuti jenis pengeluaran: billing
+     untuk Billing, invoice (+ dokumen tambahannya) untuk sisanya. */
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => t("f.nomor.billing.invoice"),
+    isi: (r, p) => escapeHtml(p.billingNo || (typeof fundSemuaNomor === "function" ? fundSemuaNomor(p).join(" / ") : p.invoiceNo) || "\u2014") },
+  // Nilai = jumlah akhir pengajuan, angka yang sama dengan "Terbilang" di surat cetaknya
+  { kelas: "dn-col-nilai", judul: () => tt("Nilai", "Value"), isi: (r, p) => escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR")) },
+  { kelas: "dn-col-transaksi", judul: () => tt("Transaksi", "Transaction"), isi: (r, p) => dnTeksTransaksi(p.transactionType) },
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => "BL/AWB", isi: (r, p) => escapeHtml(p.blAwb || "\u2014") },
+  /* Keterangan = Subject pada surat yang dicetak, jadi di sinilah terbaca
+     "pembayaran billing import apa". Dipotong 80; kalimat penuhnya di tooltip. */
+  { kelas: "dn-col-ket", judul: () => tt("Keterangan", "Notes"), atribut: (r, p) => ` title="${escapeAttr(p.notes || "")}"`,
+    isi: (r, p) => `<div class="dn-ket-isi">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</div>` },
+  { kelas: "dn-col-pemohon", judul: () => "Drafter",
+    isi: (r) => `${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}` },
+  { kelas: "dn-col-bayar", judul: () => tt("Status Bayar", "Payment Status"), isi: (r) => dnTombolBayar(r) },
+];
+
 /* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
 let docNumPage = 1;
 let docNumPageSize = 10;
@@ -1891,39 +2028,56 @@ async function renderDocNumHistory() {
 
   const jenis = resolveDocNumType(docNumActiveTab);
   try {
-    // Ambil HANYA sebanyak satu halaman
+    // Saringan saat kueri dikirim: jawaban yang datang sesudah saringannya berubah dibuang
+    const keadaan = () =>
+      [docNumActiveTab, docNumHistorySub, docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang.join("~"), docNumDasarTanggal].join("|");
+    const keadaanKirim = keadaan();
     const dari = (docNumPage - 1) * docNumPageSize;
-    let kueri = supabaseClient
-      .from("document_numbers")
-      .select(
-        /* doc_type WAJIB ikut diambil.
+    // Kueri dengan semua saringan kecuali kata kunci & halaman -- dibuat baru tiap dipakai
+    const kueriDasar = () => {
+      const kueri = supabaseClient
+        .from("document_numbers")
+        .select(
+          /* doc_type WAJIB ikut diambil.
 
-           Tanpanya, tiap baris di layar punya doc_type undefined —
-           dan siapa pun yang menanyakannya akan mendapat jawaban yang
-           kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
-           undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
-           melompat ke panel Invoice dan mengisi form yang keliru.
+             Tanpanya, tiap baris di layar punya doc_type undefined —
+             dan siapa pun yang menanyakannya akan mendapat jawaban yang
+             kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
+             undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
+             melompat ke panel Invoice dan mengisi form yang keliru.
 
-           Baris ini memang sudah disaring per jenis di kueri, tapi
-           datanya tetap harus membawa jenisnya sendiri — yang menyaring
-           dan yang membaca bukan bagian kode yang sama. */
-        /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
-           lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
-           tebakan dari ekor nomor invoice, yang untuk pola Kumho
-           menghasilkan tanggalnya. */
-        "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
-        { count: "exact" },
-      )
-      .eq("doc_type", docNumHistoryKey())
-      .filter(...docNumPayloadFilter());
-    const saringCari = dnFilterCari(docNumCari);
-    if (saringCari) kueri = kueri.or(saringCari);
-    kueri = dnTerapkanSaringBayar(kueri);
-    kueri = dnTerapkanSaringTanggal(kueri);
-    const { data, error, count } = await kueri
-      .order("created_at", { ascending: false })
-      .range(dari, dari + docNumPageSize - 1);
-    if (error) throw error;
+             Baris ini memang sudah disaring per jenis di kueri, tapi
+             datanya tetap harus membawa jenisnya sendiri — yang menyaring
+             dan yang membaca bukan bagian kode yang sama. */
+          /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
+             lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
+             tebakan dari ekor nomor invoice, yang untuk pola Kumho
+             menghasilkan tanggalnya. */
+          "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
+          { count: "exact" },
+        )
+        .eq("doc_type", docNumHistoryKey())
+        .filter(...docNumPayloadFilter());
+      return dnTerapkanSaringTanggal(dnTerapkanSaringBayar(kueri));
+    };
+    let data;
+    let count;
+    if ((jenis.key === "fund" || jenis.key === "invoice") && dnAngkaCari(docNumCari).length) {
+      /* Nominal: nilainya dihitung di aplikasi -- seluruh riwayat (saringan
+         lain tetap berlaku) dicocokkan di sini, lalu dibagi per halaman. */
+      const cocok = (await dnAmbilSemuaRiwayat(kueriDasar)).filter((r) => dnCocokCari(r, jenis.key, docNumCari));
+      count = cocok.length;
+      data = cocok.slice(dari, dari + docNumPageSize);
+    } else {
+      // Ambil HANYA sebanyak satu halaman
+      let kueri = kueriDasar();
+      const saringCari = dnFilterCari(docNumCari);
+      if (saringCari) kueri = kueri.or(saringCari);
+      const hasil = await kueri.order("created_at", { ascending: false }).range(dari, dari + docNumPageSize - 1);
+      if (hasil.error) throw hasil.error;
+      ({ data, count } = hasil);
+    }
+    if (keadaan() !== keadaanKirim) return;
 
     /* Disimpan supaya tombol cetak tidak perlu memanggil database lagi —
        barisnya sudah ada di layar. Sengaja dipastikan berupa LARIK:
@@ -1943,48 +2097,38 @@ async function renderDocNumHistory() {
       const teksRentang = docNumActiveTab === "fund" && (rDari || rSampai)
         ? `${drpFmtDisplay(rDari) || "…"} – ${drpFmtDisplay(rSampai) || "…"}`
         : "";
+      // Rentangnya disebut bersama tanggal dasarnya: "dengan Jatuh Tempo 01 Okt 2026 – 31 Okt 2026"
+      const dasar = escapeHtml((DN_DASAR_TANGGAL[docNumDasarTanggal] || DN_DASAR_TANGGAL.terbit).label());
       box.innerHTML = docNumCari
         ? `<div class="docnum-empty">${tt(`Tidak ada nomor yang cocok dengan “${escapeHtml(docNumCari)}”.`, `No numbers match “${escapeHtml(docNumCari)}”.`)}</div>`
         : docNumActiveTab === "fund" && (docNumSaringBayar || teksRentang)
         ? `<div class="docnum-empty">${
             docNumSaringBayar && teksRentang
-              ? tt(`Tidak ada pengajuan berstatus ${teksBayar} pada ${escapeHtml(teksRentang)}.`, `No ${teksBayar.toLowerCase()} requests in ${escapeHtml(teksRentang)}.`)
+              ? tt(`Tidak ada pengajuan berstatus ${teksBayar} dengan ${dasar} ${escapeHtml(teksRentang)}.`, `No ${teksBayar.toLowerCase()} requests with ${dasar} in ${escapeHtml(teksRentang)}.`)
               : docNumSaringBayar
               ? tt(`Tidak ada pengajuan berstatus ${teksBayar}.`, `No ${teksBayar.toLowerCase()} requests.`)
-              : tt(`Tidak ada pengajuan pada ${escapeHtml(teksRentang)}.`, `No requests in ${escapeHtml(teksRentang)}.`)
+              : tt(`Tidak ada pengajuan dengan ${dasar} ${escapeHtml(teksRentang)}.`, `No requests with ${dasar} in ${escapeHtml(teksRentang)}.`)
           }</div>`
         : `<div class="docnum-empty">${tt(`Belum ada nomor ${escapeHtml(jenis.label)} yang diterbitkan.`, `No ${escapeHtml(jenis.label)} numbers issued yet.`)}</div>`;
       return;
     }
 
+    const dana = jenis.key === "fund";
     box.innerHTML = `
       <div class="docnum-history-wrap">
-      <table class="docnum-table">
+      <table class="docnum-table${dana ? " docnum-table--dana" : ""}">
         <thead>
-          <tr>${dnPakaiKolomNo(jenis.key) ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${jenis.key === "fund" ? "Drafter" : tt("Pemohon", "Requester")}</th>${
-            /* Pengajuan dana perlu dikenali dari BILLING-nya, bukan cuma
-               dari "Dibayarkan Kepada" -- beberapa pengajuan bisa punya
-               penerima yang sama persis dan cuma beda nomor billing. */
-            jenis.key === "fund"
-              ? `<th class="dn-col-billing">${escapeHtml(t("f.nomor.billing.invoice"))}</th><th class="dn-col-billing">BL/AWB</th>`
-              : ""
-          }<th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
-            /* Invoice: syarat & tujuan pengiriman yang dicetak di CIPL,
-               supaya tiap invoice bisa dikenali tanpa membuka Detail. */
-            jenis.key === "invoice"
-              ? `<th class="dn-col-inv">Terms of Delivery</th><th class="dn-col-inv">Final Destination</th>` +
-                `<th class="dn-col-inv">Terms of Payment</th><th class="dn-col-inv">Carrier</th>`
-              : ""
-          }${
-            jenis.key === "fund" ? `<th class="dn-col-transaksi">${tt("Transaksi", "Transaction")}</th>` : ""
-          }${
-            jenis.key === "fund" ? `<th class="dn-col-nilai">${tt("Nilai", "Value")}</th>` : ""
-          }${
-            jenis.key === "invoice" ? `<th class="dn-col-nilai">Amount</th>` : ""
-          }${
-            jenis.key === "fund" ? `<th class="dn-col-ket">${tt("Keterangan", "Notes")}</th>` : ""
-          }${
-            jenis.key === "fund" ? `<th class="dn-col-bayar">${tt("Status Bayar", "Payment Status")}</th>` : ""
+          <tr>${
+            dana
+              ? DN_KOLOM_DANA.map((k) => `<th class="${k.kelas}">${escapeHtml(k.judul())}</th>`).join("")
+              : `${dnPakaiKolomNo(jenis.key) ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th><th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
+                  /* Invoice: syarat & tujuan pengiriman yang dicetak di CIPL,
+                     supaya tiap invoice bisa dikenali tanpa membuka Detail. */
+                  jenis.key === "invoice"
+                    ? `<th class="dn-col-inv">Terms of Delivery</th><th class="dn-col-inv">Final Destination</th>` +
+                      `<th class="dn-col-inv">Terms of Payment</th><th class="dn-col-inv">Carrier</th><th class="dn-col-nilai">Amount</th>`
+                    : ""
+                }`
           }<th class="dn-act"></th></tr>
         </thead>
         <tbody>
@@ -2014,55 +2158,28 @@ async function renderDocNumHistory() {
                  dan melebar melewati tabelnya. Semua isian sekarang bisa
                  dilihat lewat tombol Detail — daftarnya cukup menyebut
                  satu hal yang membedakan tiap baris. */
+              const urut = (docNumPage - 1) * docNumPageSize + idx + 1;
               return `<tr>
-                ${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no">${(docNumPage - 1) * docNumPageSize + idx + 1}</td>` : ""}
+                ${
+                  dana
+                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
+                    : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no">${urut}</td>` : ""}
                 <td class="dn-num">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
                 <td class="dn-col-tgl">${escapeHtml(fmtDate(r.doc_date))}</td>
                 <td class="dn-col-pemohon">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
-                ${
-                  jenis.key === "fund"
-                    ? /* Nomor rujukannya BERGANTIAN mengikuti jenis pengeluaran:
-                         billing untuk Billing, invoice untuk sisanya. Membaca
-                         billingNo saja membuat kolomnya kosong untuk jenis
-                         lain padahal nomornya tersimpan. */
-                      `<td class="dn-col-billing dn-num">${escapeHtml(p.billingNo || (typeof fundSemuaNomor === "function" ? fundSemuaNomor(p).join(" / ") : p.invoiceNo) || "\u2014")}</td>` +
-                      `<td class="dn-col-billing dn-num">${escapeHtml(p.blAwb || "\u2014")}</td>`
-                    : ""
-                }
                 <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 ${
                   jenis.key === "invoice"
                     ? [p.termsDelivery, p.finalDestination, p.termPayment, dnCarrierInvoice(p)]
                         .map((v) => `<td class="dn-col-inv">${escapeHtml(v || "\u2014")}</td>`)
-                        .join("")
+                        .join("") +
+                      // Amount = baris Total di Commercial Invoice cetaknya.
+                      `<td class="dn-col-nilai">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
                     : ""
+                }`
                 }
-                ${jenis.key === "fund" ? `<td class="dn-col-transaksi">${dnTeksTransaksi(p.transactionType)}</td>` : ""}
-                ${
-                  /* Nilai = jumlah akhir pengajuan, angka yang sama dengan
-                     "Terbilang" di surat cetaknya (frTotalPengajuan). */
-                  jenis.key === "fund"
-                    ? `<td class="dn-col-nilai">${escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR"))}</td>`
-                    : ""
-                }
-                ${
-                  // Amount = baris Total di Commercial Invoice cetaknya.
-                  jenis.key === "invoice"
-                    ? `<td class="dn-col-nilai">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
-                    : ""
-                }
-                ${
-                  /* Rincian = Subject pada surat yang dicetak, jadi di
-                     sinilah terbaca "pembayaran billing import apa".
-                     Dipotong 80: lebih panjang dari kolom lain karena
-                     memang kalimat, bukan satu nama. */
-                  jenis.key === "fund"
-                    ? `<td class="dn-col-ket" title="${escapeAttr(p.notes || "")}"><div class="dn-ket-isi">${escapeHtml(String(p.notes || "\u2014").slice(0, 80))}</div></td>`
-                    : ""
-                }
-                ${jenis.key === "fund" ? `<td class="dn-col-bayar">${dnTombolBayar(r)}</td>` : ""}
                 <td class="dn-act"><div class="dn-act-tombol">
                   ${
                     /* Edit hanya untuk isian permintaannya — NOMOR dan
@@ -2339,6 +2456,8 @@ if (docNumTabsEl) {
     const btn = e.target.closest("[data-docnum-tab]");
     if (!btn) return;
     showDocNumTab(btn.dataset.docnumTab);
+    // Jenis dokumen dipilih = mau mengisi: kursor langsung di isian kosong pertama
+    fokusIsianPertama(docNumPanelEl(docNumActiveTab));
   });
 }
 
@@ -2436,6 +2555,16 @@ document.addEventListener("input", (e) => {
 document.addEventListener("change", (e) => {
   if (!e.target || e.target.id !== "docNumBayar") return;
   docNumSaringBayar = e.target.value;
+  docNumPage = 1;
+  renderDocNumHistory();
+});
+
+/* Tanggal dasar rentang berganti: dimuat ulang hanya kalau rentangnya
+   memang sedang dipakai -- tanpa rentang, hasilnya sama saja. */
+document.addEventListener("change", (e) => {
+  if (!e.target || e.target.id !== "docNumDasarTanggal") return;
+  docNumDasarTanggal = DN_DASAR_TANGGAL[e.target.value] ? e.target.value : "terbit";
+  if (!docNumRentang[0] && !docNumRentang[1]) return;
   docNumPage = 1;
   renderDocNumHistory();
 });

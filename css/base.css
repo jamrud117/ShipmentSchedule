@@ -4,6 +4,25 @@
 }
 html {
   scroll-behavior: smooth;
+  /* RUANG DI BAWAH BILAH YANG MENEMPEL.
+
+     Kotak yang mendapat fokus (Tab, tombol "berikutnya" di papan ketik
+     ponsel) digulir peramban ke dalam layar -- tapi peramban tidak tahu
+     ada bilah yang menempel di atas/bawah. Tanpa ini kotaknya berhenti
+     tepat DI BALIK bilah simpan form jadwal di ponsel (12 dari 69 kotak
+     tertutup), atau di balik bilah kendali daftar jadwal saat menggulir
+     mundur. Tinggi bilahnya diukur app-init.js (--lengket-*), bukan
+     ditebak: bilah kendali bisa dua atau tiga baris. */
+  scroll-padding-top: calc(var(--topbar-h) + 12px);
+}
+@media (min-width: 768px) {
+  html:has(#viewList:not(.d-none)) {
+    scroll-padding-top: calc(var(--topbar-h) + var(--lengket-kendali, 152px) + 12px);
+  }
+}
+html:has(#viewForm:not(.d-none)) {
+  scroll-padding-top: calc(var(--lengket-form-atas, 62px) + 12px);
+  scroll-padding-bottom: calc(var(--lengket-form-bawah, 80px) + 12px);
 }
 
 /* Scrollbar disembunyikan, gulir tetap jalan. overflow-y: scroll ditahan agar lebar isi tidak bergeser antar halaman */
@@ -69,16 +88,25 @@ body {
 
 /* Angka besar: Archivo, lebar digit rata */
 
-/* ---- Fokus keyboard: satu perlakuan untuk seluruh aplikasi ---- */
+/* ---- Fokus keyboard: satu perlakuan untuk seluruh aplikasi ----
+
+   Garis luar mengikuti sudut bulat elemennya sendiri. Radiusnya TIDAK
+   diubah di sini: dulu diubah, dan tombol bulat (kembali ke atas, pil
+   status) berganti bentuk jadi kotak bersudut begitu difokus. Kotak
+   isian memakai cincin bayangan, bukan garis luar -- lihat FOKUS di
+   css/system.css. */
 :focus-visible {
-  outline: 2px solid var(--p-500);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: var(--r-xs);
 }
+/* Di atas permukaan navy, garis navy tidak terlihat: kuningan muda. */
 .app-topbar :focus-visible,
 .app-sidebar :focus-visible,
-.board :focus-visible {
-  outline-color: var(--p-300);
+.board :focus-visible,
+.page-form-header :focus-visible,
+.sheet-head :focus-visible,
+.app-footer :focus-visible {
+  outline-color: var(--focus-ring-dark);
 }
 
 /* Lebar isi — MENGISI PENUH lebar layar, bukan kotak di tengah dengan
@@ -156,7 +184,6 @@ body {
 }
 
 .btn-quiet,
-.btn-quiet:hover,
 .btn-outline-danger {
   display: inline-flex;
   align-items: center;
@@ -164,13 +191,33 @@ body {
   gap: 6px;
   height: 38px;
   padding: 0 12px;
-  border: 1px solid var(--s-danger-line);
+  border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
   background: #fff;
-  color: var(--s-danger);
   font-size: var(--t-sm);
   font-weight: 600;
   white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+/* Tombol sekunder untuk tindakan BIASA -- Batal, Tutup, Muat ulang,
+   Tambah baris/PO/invoice. Navy, bukan merah: dulu ia berbagi aturan
+   dengan .btn-outline-danger dan ikut merah, sehingga "Tambah Baris"
+   dan "Batal" terbaca seperti tombol hapus. Merah hanya untuk yang
+   merusak (.btn-outline-danger: Reset ke 001). */
+.btn-quiet {
+  color: var(--p-600);
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--p-700);
+}
+.btn-outline-danger {
+  border-color: var(--s-danger-line);
+  color: var(--s-danger);
 }
 .btn-outline-danger:hover,
 .btn-outline-danger:active,

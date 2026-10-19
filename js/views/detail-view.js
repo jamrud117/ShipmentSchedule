@@ -61,14 +61,21 @@ function buildDetailHtml(s) {
      dengan label tetap "ARRIVED", sehingga kartu & panel ini bisa
      menyebut dua status berbeda untuk jadwal yang sama. */
   const statusBerlaku = effectiveStatus(s);
-  /* Tanggal yang BERLAKU (revisi kalau ada), rencana semula di bawahnya
-     -- sama dengan yang dibaca kartu & aturan status. */
+  /* Jadwal yang pernah diubah (kotak Tanggal Update Delay): rencana
+     awal di atas, jadwal BARU di bawahnya ditandai panah ke bawah --
+     dibaca "berubah menjadi". Tanpa revisi: satu tanggal saja. Jam
+     (kalau ada) milik tanggal yang berlaku. */
   const tanggalBerlaku = (rencana, revisi, jam) => {
-    const utama = fmtDate(revisi || rencana) + (jam ? " · " + escapeHtml(jam) : "");
-    return revisi && rencana && revisi !== rencana
-      ? `${utama}<br><span class="muted-value">${tt("Rencana", "Planned")} ${fmtDate(rencana)}</span>`
-      : utama;
+    const tglJam = (tgl) => fmtDate(tgl) + (jam ? " · " + escapeHtml(jam) : "");
+    if (!(revisi && rencana && revisi !== rencana)) return tglJam(revisi || rencana);
+    return `<span class="tgl-rencana">${fmtDate(rencana)}</span><span class="tgl-revisi"><i class="bi bi-arrow-down" aria-hidden="true"></i><span class="visually-hidden">${escapeHtml(
+      tt("diubah menjadi", "changed to"),
+    )} </span>${tglJam(revisi)}</span>`;
   };
+
+  /* Nomor dokumen + tanggalnya dalam satu isian: "DD-INV-01 · 16-09-2026". */
+  const nomorTanggal = (nomor, tanggal) =>
+    escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted">· ${fmtDate(tanggal)}</span>` : "");
 
   let itemRows = (s.items || [])
     .map(
@@ -122,7 +129,8 @@ function buildDetailHtml(s) {
         ${fieldPair("PPN", fmtRp(s.ppn))}
         ${fieldPair("PPH", fmtRp(s.pph))}
         ${fieldPair("PDRI", fmtRp(calc.bmPdri))}
-        ${fieldPair(tt("Keterangan PI", "PI Notes"), escapeHtml(dispVal(s.pi)))}
+        ${fieldPair(tt("PI (Persetujuan Impor)", "PI (Import Approval)"), escapeHtml(dispVal(s.pi)))}
+        ${fieldPair(tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), escapeHtml(dispVal(s.ls)))}
       </div>`;
   }
 
@@ -142,9 +150,9 @@ function buildDetailHtml(s) {
     <div class="info-grid">
       ${fieldPair("No. Aju", escapeHtml(dispVal(s.noAju)))}
       ${fieldPair(lbl.party, escapeHtml(dispVal(s.party)))}
-      ${fieldPair("No. Invoice", escapeHtml(dispVal(s.invoice)))}
-      ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", escapeHtml(dispVal(s.masterBL)))}
-      ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", escapeHtml(dispVal(s.houseBL)))}
+      ${fieldPair("No. Invoice", nomorTanggal(s.invoice, s.invoiceDate))}
+      ${fieldPair(s.transport === "udara" ? "Master AWB" : "Master B/L", nomorTanggal(s.masterBL, s.masterBLDate))}
+      ${fieldPair(s.transport === "udara" ? "House AWB" : "House B/L", nomorTanggal(s.houseBL, s.houseBLDate))}
       ${
         /* Hanya Import. Di Export kolom ini tidak dipakai lagi — muatan
            dicatat lewat kolom Stuffing (s.actual), dan menampilkan
@@ -167,7 +175,7 @@ function buildDetailHtml(s) {
     <div class="info-grid">
       ${fieldPair(tt("Moda Transportasi", "Transport Mode"), s.transport === "udara" ? tt("Udara", "Air") : tt("Laut", "Sea"))}
       ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(carrierNameFromShipment(s))))}
-      ${fieldPair(tt("Kontainer", "Container"), escapeHtml(dispVal(s.container)))}
+      ${fieldPair(tt("No. Kontainer/Seal", "Container/Seal Number"), escapeHtml(dispVal(s.container)))}
       ${fieldPair(tt("No. Kendaraan", "Vehicle No."), escapeHtml(dispVal(s.vehicleNo)))}
       ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
       ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
@@ -237,9 +245,16 @@ function kirimanDenganId(id) {
   return cari(currentList()) || (typeof data !== "undefined" && data ? cari(data.import) || cari(data.export) : null) || null;
 }
 
+/* Tombol yang membuka panel (mata di kartu, notifikasi, palet): fokus
+   kembali ke sana saat panel ditutup -- bukan ke awal halaman. Dicatat
+   hanya saat panel BARU dibuka, bukan saat berpindah kiriman di dalamnya. */
+let detailPemicu = null;
 function openDetailView(id) {
   const s = kirimanDenganId(id);
   if (!s) return;
+  const aktif = document.activeElement;
+  if (!isDetailOpen() && aktif && aktif !== document.body && !detailSheetEl.contains(aktif))
+    detailPemicu = { el: aktif, kunci: kunciFokus(aktif) };
   currentDetailId = id;
 
   $("#detailViewBody").innerHTML = buildDetailHtml(s);
@@ -267,6 +282,12 @@ function openDetailView(id) {
 function closeDetailView() {
   detailScrimEl.classList.remove("is-open");
   detailSheetEl.classList.remove("is-open");
+  const asal = detailPemicu;
+  detailPemicu = null;
+  if (asal) {
+    const el = asal.el.isConnected ? asal.el : asal.kunci ? document.querySelector(asal.kunci) : null;
+    if (el && tampilDiLayar(el)) fokuskan(el, { tanpaGulir: true });
+  }
   const sembunyikan = () => {
     detailScrimEl.hidden = true;
     detailSheetEl.hidden = true;

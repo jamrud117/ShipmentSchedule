@@ -96,8 +96,20 @@ function showConfirm(message, onConfirm, opsi) {
   /* onCancel: tombol kiri sebagai PILIHAN kedua (mis. "Ganti Isi Form"),
      bukan sekadar batal. Menutup lewat X / klik di luar tidak memanggilnya. */
   confirmBatalCallback = typeof o.onCancel === "function" ? o.onCancel : null;
+  /* TOMBOL YANG MENUNGGU ENTER. Konfirmasi biasa (navy) dan pemberitahuan
+     satu tombol: tombol utamanya -- Enter langsung melanjutkan. Hapus
+     (merah) dan peringatan (kuning): tombol Batal -- Enter yang
+     tertekan tanpa sengaja tidak boleh menghapus atau menyimpan nomor
+     ganda. */
+  const aman = !o.tanpaBatal && (o.tone === "warning" || !navy) && btnBatal;
+  confirmFokusAwal = aman ? btnBatal : btn;
   confirmModal.show();
 }
+let confirmFokusAwal = null;
+confirmModalEl.addEventListener("shown.bs.modal", () => {
+  if (confirmFokusAwal) confirmFokusAwal.focus();
+  confirmFokusAwal = null;
+});
 $("#confirmActionBtn").addEventListener("click", () => {
   confirmModal.hide();
   confirmBatalCallback = null;
@@ -127,7 +139,11 @@ if ($("#confirmCancelBtn")) {
 
    type: "select" (dengan options), "password", "textarea" (teks panjang
    -- Enter di dalamnya membuat baris baru, bukan menyimpan), atau jenis
-   <input> apa pun ("date", "number", ...). Bawaannya "text".
+   <input> lain ("date", ...). Bawaannya "text". Angka TIDAK memakai
+   jenis isian angka bawaan peramban (roda gulir mengubah nilainya
+   diam-diam, tombol panahnya sempit, dan pemisah ribuan tidak bisa
+   ditampilkan): pakai inputmode "numeric"/"decimal" dengan filter
+   formatNumberTyping.
 
    lebar: "setengah" -> dua isian per baris. Dipakai kotak yang isiannya
    banyak (baris Masterlist): ditumpuk satu-satu kotaknya lebih
@@ -186,6 +202,11 @@ function showPrompt(opsi) {
     )
     .join("");
 
+  /* Tombol Enter papan ketik ponsel: "Berikutnya" sampai isian
+     terakhir, "Selesai" di isian terakhir (lihat Enter di bawah). */
+  const isianTeks = [...$("#promptFields").querySelectorAll("input, select")];
+  isianTeks.forEach((el, i) => el.setAttribute("enterkeyhint", i < isianTeks.length - 1 ? "next" : "done"));
+
   /* PENYARING KETIKAN.
 
      Isian yang memberi `filter` merapikan nilainya saat diketik --
@@ -222,22 +243,38 @@ function showPrompt(opsi) {
     promptModal.hide();
   };
 
+  /* Kursor langsung di isian pertama yang perlu diisi (yang KOSONG --
+     No. urut atau satuan bawaan dilewati). Dipasang saat "shown":
+     Bootstrap memindahkan fokus ke kotaknya sendiri di akhir animasi,
+     jadi fokus yang dipasang lebih awal tertimpa. Kalau kotaknya sudah
+     terbuka (isian diganti di tempat), tidak ada "shown" -- langsung. */
+  promptFokusAwal = () => {
+    promptFokusAwal = null;
+    const aktif = document.activeElement;
+    if (!aktif || !promptModalEl.contains(aktif) || !aktif.matches(ISIAN_KETIK))
+      fokusIsianPertama($("#promptFields"));
+  };
+  const sudahTerbuka = promptModalEl.classList.contains("show");
   promptModal.show();
-  setTimeout(() => {
-    const p = fields[0] && $("#prompt_" + fields[0].key);
-    if (p) p.focus();
-  }, 300);
+  if (sudahTerbuka) promptFokusAwal();
 }
+let promptFokusAwal = null;
 
 if (promptModalEl) {
+  promptModalEl.addEventListener("shown.bs.modal", () => promptFokusAwal && promptFokusAwal());
   $("#promptOk").addEventListener("click", () => promptSubmit && promptSubmit());
+  /* ENTER: ke isian berikutnya; di isian terakhir -> Simpan. Kotak
+     satu isian tetap tersimpan dengan sekali Enter, kotak banyak isian
+     tidak lagi tersimpan setengah jadi karena Enter di isian pertama. */
   promptModalEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !promptSubmit || e.isComposing) return;
     // Di kotak teks panjang, Enter adalah baris baru
-    if (e.key === "Enter" && e.target && e.target.tagName === "TEXTAREA") return;
-    if (e.key === "Enter" && promptSubmit) {
-      e.preventDefault();
-      promptSubmit();
-    }
+    if (e.target && e.target.tagName === "TEXTAREA") return;
+    e.preventDefault();
+    const isian = e.target && e.target.matches && e.target.matches(ISIAN_KETIK) ? e.target : null;
+    const berikut = isian && !e.ctrlKey && !e.metaKey ? isianBerikutnya(isian, $("#promptFields")) : null;
+    if (berikut) fokuskan(berikut, { pilihIsi: true });
+    else promptSubmit();
   });
 }
 

@@ -36,6 +36,23 @@ function fmtDate(d) {
   const p2 = (n) => String(n).padStart(2, "0");
   return `${p2(dt.getDate())}-${p2(dt.getMonth() + 1)}-${dt.getFullYear()}`;
 }
+
+/* TANGGAL DARI NOMOR AJU CEISA (26 karakter):
+     000020  POL858  20261016  024172
+     kantor  pengaju TAHUN-BULAN-TANGGAL  nomor urut
+   -> "2026-10-16". Tanda pisah diabaikan ("000020-029142-20260712-
+   197154"). Bukan nomor aju lengkap ("CONSIGNEE NOTE", ekornya saja)
+   atau tanggalnya tidak sah -> "". Dipakai sebagai tanggal PIB/PEB
+   BAWAAN -- isiannya tetap bisa diubah pengguna. */
+function tanggalDariAju(aju) {
+  const k = String(aju == null ? "" : aju).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const m = /^\d{6}[A-Z0-9]{6}(20\d{2})(\d{2})(\d{2})\d{6}$/.exec(k);
+  if (!m) return "";
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  const dt = parseLocalDate(iso);
+  return dt && dt.getMonth() + 1 === Number(m[2]) && dt.getDate() === Number(m[3]) ? iso : "";
+}
+
 /* FORMATTER INTL YANG DISIMPAN.
 
    n.toLocaleString(locale, opsi) / d.toLocaleDateString(locale, opsi)
@@ -127,62 +144,98 @@ function fmtQtyBySatuan(list) {
     .join(" + ");
 }
 
-/* NAMA BARANG YANG DITAMPILKAN — dirakit dari beberapa kolom.
+/* KOLOM BARANG = KOLOM BARANG CEISA, kiri ke kanan: Kode Barang,
+   Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain (buku Export menambah
+   Marks). `namaBarang` adalah Uraian -- kolom database-nya tetap
+   nama_barang. Isian form, impor draft/PIB/PEB, dan Cek PIB/PEB
+   memakai susunan yang sama, jadi tiap kolom dibandingkan dengan
+   kolom yang sama di CEISA. */
+const KOLOM_NAMA_BARANG = ["kodeBarang", "namaBarang", "merek", "tipe", "ukuran", "spesifikasiLain"];
+// Kolom CEISA selain Uraian. Semuanya kosong = barang lama: seluruh namanya ditulis di Uraian.
+const KOLOM_CEISA_LAIN = ["kodeBarang", "merek", "tipe", "ukuran", "spesifikasiLain"];
+// Kolom sesudah Uraian -- kolom TYPE di CIPL Dynamic Design Korea
+const KOLOM_SESUDAH_URAIAN = ["merek", "tipe", "ukuran", "spesifikasiLain"];
 
-   URUTANNYA: Uraian → Pattern → Size → Mold No. Satu aturan untuk
-   kartu, panel detail, copy template, DAN kedua bentuk CIPL (Kumho &
-   Dynamic Design Korea) -- supaya nama yang terlihat di layar selalu
-   sama dengan yang tersalin dan tercetak.
-
-   PO No SENGAJA tidak ikut: itu nomor pesanan pembeli, bukan bagian
-   dari identitas barangnya, dan menempelkannya membuat dua kiriman
-   barang yang sama terbaca sebagai dua barang berbeda.
-
-   Kolom yang kosong (atau "-") DILEWATI, spasi di dalam tiap kolom
-   dirapikan jadi satu, dan bagian yang SUDAH tertulis di Uraian tidak
-   diulang ("TIRE MOLD 225/50R17" + Size 225/50R17). Menyambung apa
-   adanya menghasilkan "TYRE MOLD FULL SET   R17" -- terlihat seperti
-   salah ketik dan menyulitkan pencocokan teks saat ditempel ke Excel.
-
-   Import TIDAK terpengaruh: Pattern, Size & Mold No hanya diisi di
-   buku Export (lihat body.mode-import .size-col di form.css). */
+/* TANDA KOSONG ALA CEISA: "-" dan "TANPA MEREK" / "TANPA TIPE" (juga
+   TANPA UKURAN, dst.) berarti kolomnya memang tidak berisi. Disimpan
+   apa adanya (itulah isian CEISA-nya), tapi TIDAK PERNAH ikut ke nama
+   barang -- di layar, salinan, maupun cetakan. */
+const TANDA_KOSONG_BARANG = /^(?:-+|TANPA\s+(?:MEREK|MERK|TIPE|TYPE|UKURAN|SPESIFIKASI(?:\s+LAIN)?|KODE(?:\s+BARANG)?))$/i;
 function rapiBagianNama(v) {
   const x = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
-  return x === "-" ? "" : x;
+  return TANDA_KOSONG_BARANG.test(x) ? "" : x;
 }
 
-/* Bagian SESUDAH Uraian: Pattern, Size, Mold No -- berurutan, yang
-   kosong dilewati, yang sudah tertulis (sebagai kata utuh) di Uraian
-   atau di bagian sebelumnya tidak diulang. */
-function rincianNamaBarang(it) {
+/* Bagian nama barang, KIRI KE KANAN mengikuti kolom CEISA. Tanda
+   kosong dilewati, spasi di dalam kolom dirapikan jadi satu, dan
+   bagian yang SUDAH tertulis (sebagai kata utuh) di bagian sebelumnya
+   tidak diulang ("TIRE MOLD 225/50R17" + Ukuran 225/50R17) --
+   menyambung apa adanya menghasilkan nama yang terlihat salah ketik
+   dan menyulitkan pencocokan teks saat ditempel ke Excel.
+   Hasil: [{ kolom, teks }]. */
+function bagianNamaBarang(it) {
   if (!it) return [];
-  const sudah = [" " + rapiBagianNama(it.namaBarang).toUpperCase() + " "];
-  return ["pattern", "size", "moldNo"]
-    .map((k) => rapiBagianNama(it[k]))
-    .filter((x) => {
-      if (!x) return false;
-      const kata = " " + x.toUpperCase() + " ";
-      if (sudah.some((s) => s.includes(kata))) return false;
-      sudah.push(kata);
-      return true;
-    });
+  return rakitBagianNama(KOLOM_NAMA_BARANG.map((kolom) => ({ kolom, teks: rapiBagianNama(it[kolom]) })));
 }
 
+// [{ teks }] berurutan -> yang ikut ke nama: berisi, dan belum tertulis di bagian sebelumnya
+function rakitBagianNama(bagian) {
+  const sudah = [];
+  return bagian.filter((b) => {
+    if (!b.teks) return false;
+    const kata = " " + b.teks.toUpperCase() + " ";
+    if (sudah.some((s) => s.includes(kata))) return false;
+    sudah.push(kata);
+    return true;
+  });
+}
+
+/* NAMA BARANG YANG DITAMPILKAN. Satu aturan untuk kartu, panel detail,
+   templat salin, laporan, surat, DAN kedua bentuk CIPL -- supaya nama
+   yang terlihat di layar selalu sama dengan yang tersalin & tercetak. */
 function itemDisplayName(it) {
-  if (!it) return "";
-  return [rapiBagianNama(it.namaBarang)].concat(rincianNamaBarang(it)).filter(Boolean).join(" ");
+  return bagianNamaBarang(it)
+    .map((b) => b.teks)
+    .join(" ");
 }
 
-function newItem() {
-  /* Nilai bawaan BEDA per buku, jadi dibaca dari activeMode:
-       Import : jenis BAHAN BAKU  (bahan yang didatangkan untuk diolah)
-       Export : jenis BARANG JADI (hasil olahan yang dikirim keluar)
-     Satuan (SET) & jenis kemasan (BOX) sama untuk kedua buku.
+// Bagian sesudah Uraian: Merek, Tipe, Ukuran, Spesifikasi Lain (yang berisi)
+function rincianNamaBarang(it) {
+  return bagianNamaBarang(it)
+    .filter((b) => KOLOM_SESUDAH_URAIAN.includes(b.kolom))
+    .map((b) => b.teks);
+}
+
+// Barang yang memakai kolom CEISA selain Uraian (bukan barang lama)
+function barangBerkolomCeisa(it) {
+  return !!it && KOLOM_CEISA_LAIN.some((k) => String(it[k] == null ? "" : it[k]).trim() !== "");
+}
+
+// Teks kolom barang untuk pencarian (daftar jadwal & palet perintah) -- tanpa tanda kosong: "TANPA" tidak mengena semua barang
+function teksCariBarang(it) {
+  return it ? KOLOM_NAMA_BARANG.map((k) => rapiBagianNama(it[k])) : [];
+}
+
+function newItem(mode) {
+  /* Nilai bawaan BEDA per buku, dibaca dari `mode` (tanpa itu:
+     activeMode):
+       Import : jenis BAHAN BAKU  (bahan yang didatangkan untuk diolah),
+                Tipe TANPA TIPE
+       Export : jenis BARANG JADI (hasil olahan yang dikirim keluar),
+                Tipe kosong
+     Kode Barang "-" & Merek TANPA MEREK di kedua buku, mengikuti
+     pengisian CEISA. Satuan (SET) & jenis kemasan (BOX) juga sama.
      Semuanya cuma NILAI AWAL — tetap bisa diganti per barang. */
-  const modeKini = typeof activeMode === "string" ? activeMode : "import";
+  const modeKini = mode || (typeof activeMode === "string" ? activeMode : "import");
   return {
     id: uid("it"),
+    // Kolom barang CEISA (KOLOM_NAMA_BARANG); namaBarang = Uraian
+    kodeBarang: "-",
     namaBarang: "",
+    merek: "TANPA MEREK",
+    tipe: modeKini === "export" ? "" : "TANPA TIPE",
+    ukuran: "",
+    spesifikasiLain: "",
     hsCode: "",
     jenisBarang: modeKini === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: 0,
@@ -201,20 +254,9 @@ function newItem() {
     /* Jenis kemasannya — BOX, PALLET, CRATE. Dipisah dari angkanya
        supaya bisa dijumlahkan per jenis tanpa mengurai teks. */
     packingUnit: "BOX",
-    /* Kolom tambahan untuk barang Export (cetakan/mold).
-
-       Pattern & Mold No ikut membentuk nama yang ditampilkan; PO No
-       tidak -- lihat itemDisplayName(). Kosong itu wajar: tidak semua
-       pembeli memakai penomoran ini. */
-    /* size belum pernah punya nilai awal -- tanpa ini, barang baru
-       memulai dengan size undefined dan escapeAttr() menuliskannya
-       sebagai teks "undefined" di kotaknya. */
-    size: "",
-    pattern: "",
-    moldNo: "",
-    poNo: "",
-    /* Marks pada CIPL. Kosong = dibangkitkan otomatis dari urutan
-       koli ("C# : 8-1"); diisi kalau penandaan di lapangan berbeda. */
+    /* Marks pada CIPL (buku Export). Kosong = dibangkitkan otomatis
+       dari urutan koli ("C# : 8-1"); diisi kalau penandaan di lapangan
+       berbeda. */
     marks: "",
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang sama (skb)
     skb: [],
@@ -259,24 +301,116 @@ function newSkbEntry() {
   return { jenis: "PPH", jenisLainnya: "", nomor: "", tanggal: "" };
 }
 
-// Kompatibilitas dengan data lama: ubah teks bebas gaya lama, mis
-/* Dicocokkan tanpa beda huruf, spasi & tanda hubung, ditambah nama
-   tampilnya: "COO" (nama fasilitas E-COO di layar & salinan) dan
-   "MASTER LIST" (tulisan kolom fasilitas di templat salin / Bulk
-   Excel) kembali ke jenisnya sendiri, bukan jadi "Lainnya". */
+/* DOKUMEN PELENGKAP PABEAN (kode CEISA) yang berarti FASILITAS barang.
+
+   Kodenya dari sheet DOKUMEN berkas Excel CEISA dan kolom kode di
+   lembar Pemenuhan Persyaratan PIB. Daftar kode dokumen pelengkap BC
+   2.0: 912 SK Fasilitas BKPM (masterlist), 861 Certificate of Origin,
+   959 Surat Persetujuan Impor Kemendag, 958 Laporan Surveyor. 456 (SKB
+   PPN, "KET-.../SKBPPN-CT/..."), 457 (SKB PPh, ".../PPUT-CT/..."), 912
+   dan 959 terlihat langsung di berkas CEISA pengguna. Kode yang tidak
+   dikenal masih bisa ditebak dari nomornya (jenisFasilitasDariNomor). */
+const KODE_DOKUMEN_FASILITAS = {
+  456: "PPN",
+  457: "PPH",
+  912: "Masterlist",
+  860: "E-COO",
+  861: "E-COO",
+};
+// Surat Persetujuan Impor (PI) -- satu nomor per pengiriman, bukan fasilitas
+const KODE_DOKUMEN_PI = "959";
+// Laporan Surveyor (LS) -- sepaket dengan PI, juga satu nomor per pengiriman
+const KODE_DOKUMEN_LS = "958";
+
+/* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
+   dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh
+   impor ".../PPUT-CT/...". */
+function jenisFasilitasDariNomor(nomor) {
+  const n = String(nomor || "").toUpperCase();
+  if (/MASTER\s*LIST|PABEAN-PB/.test(n)) return "Masterlist";
+  if (/\bPPN\b|SKB[\s._/-]*PPN/.test(n)) return "PPN";
+  if (/PPUT|\bPPH\b|SKB[\s._/-]*PPH/.test(n)) return "PPH";
+  return "";
+}
+const POLA_NOMOR_PI = /(^|[^A-Z0-9])PI-\d/i;
+
+/* Kenali satu dokumen pelengkap: { jenis, jenisLainnya } kalau ia
+   fasilitas, { pi: true } kalau Persetujuan Impor, { ls: true } kalau
+   Laporan Surveyor, null untuk yang lain (invoice, B/L, ...). `label`
+   hanya ada pada PIB PDF ("SURAT KETERANGAN BEBAS (SKB) PPN"); Excel
+   CEISA cuma memberi kode & nomor. */
+function kenaliDokumenPelengkap(dok) {
+  const kode = String(dok.kode == null ? "" : dok.kode).trim();
+  const label = String(dok.label || "").toUpperCase();
+  if (kode === KODE_DOKUMEN_PI || /PERSETUJUAN IMPOR/.test(label)) return { pi: true };
+  if (kode === KODE_DOKUMEN_LS || /LAPORAN SURVEYOR/.test(label)) return { ls: true };
+  if (/SURAT KETERANGAN BEBAS/.test(label)) {
+    const tipe = (/\(SKB\)\s*([A-Z%0-9]*)/.exec(label) || [])[1] || "";
+    const jenis =
+      SKB_TYPE_OPTIONS.find((o) => o !== "Lainnya" && o.toUpperCase() === tipe) ||
+      KODE_DOKUMEN_FASILITAS[kode];
+    return jenis ? { jenis, jenisLainnya: "" } : { jenis: "Lainnya", jenisLainnya: tipe || "SKB" };
+  }
+  const jenis =
+    KODE_DOKUMEN_FASILITAS[kode] ||
+    (/MASTER\s*LIST|FASILITAS BKPM/.test(label) ? "Masterlist" : "") ||
+    (/CERTIFICATE OF ORIGIN|\bE-?CO\b|KETERANGAN ASAL/.test(label) ? "E-COO" : "");
+  return jenis ? { jenis, jenisLainnya: "" } : null;
+}
+
+/* KOLOM PI templat salin & Bulk Excel memuat PI DAN LS -- dua dokumen
+   yang biasanya sepaket. PI ditulis apa adanya (sama seperti sebelum LS
+   ada), LS di baris sendiri berawalan "LS ", supaya Bulk Import bisa
+   memisahkannya lagi (pecahPiLs). */
+function gabungPiLs(pi, ls) {
+  const p = String(pi == null ? "" : pi).trim();
+  const l = String(ls == null ? "" : ls).trim();
+  return [p, l ? "LS " + l : ""].filter(Boolean).join("\n");
+}
+function pecahPiLs(teks) {
+  const pi = [];
+  const ls = [];
+  String(teks == null ? "" : teks)
+    .split(/\n+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .forEach((baris) => {
+      const m = /^LS(?:\s*:\s*|\s+)(.+)$/i.exec(baris);
+      if (m) ls.push(m[1].trim());
+      else pi.push(baris);
+    });
+  return { pi: pi.join(", "), ls: ls.join(", ") };
+}
+
+/* Satu baris kolom FASILITAS / SKB (templat salin & Bulk Excel) kembali
+   jadi entri: "MASTER LIST 72/PABEAN-PB/OSS/PMA/2025" -> Masterlist +
+   nomornya, "COO" -> E-COO. Label dicocokkan tanpa beda huruf; data
+   lama berisi label saja ("COO, MASTER LIST") tetap terbaca. Teks yang
+   labelnya tidak dikenal utuh menjadi "Lainnya". */
+const LABEL_FASILITAS_TEKS = [
+  [/^MASTER\s*LIST\b/i, "Masterlist"],
+  [/^E-?COO\b/i, "E-COO"],
+  [/^COO\b/i, "E-COO"],
+  [/^(SKB\s*)?PPN\b/i, "PPN"],
+  [/^(SKB\s*)?PPH\b/i, "PPH"],
+  [/^(SKB\s*)?BM\b/i, "BM"],
+];
 function skbTextToEntries(raw) {
-  const kunci = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, "");
   return String(raw || "")
-    .split(",")
+    .split(/[,\n]/)
     .map((bagian) => bagian.trim())
     .filter(Boolean)
-    .map((nama) => {
-      const match =
-        SKB_TYPE_OPTIONS.find((o) => o !== "Lainnya" && kunci(o) === kunci(nama)) ||
-        (kunci(nama) === "coo" ? "E-COO" : null);
-      return match
-        ? { jenis: match, jenisLainnya: "", nomor: "", tanggal: "" }
-        : { jenis: "Lainnya", jenisLainnya: nama, nomor: "", tanggal: "" };
+    .map((teks) => {
+      for (const [pola, jenis] of LABEL_FASILITAS_TEKS) {
+        const m = pola.exec(teks);
+        if (!m) continue;
+        const nomor = teks
+          .slice(m[0].length)
+          .replace(/^[\s:.-]*(NO\.|NO(?=\s)|NOMOR\b)?[\s:.]*/i, "")
+          .trim();
+        return { jenis, jenisLainnya: "", nomor, tanggal: "" };
+      }
+      return { jenis: "Lainnya", jenisLainnya: teks, nomor: "", tanggal: "" };
     });
 }
 

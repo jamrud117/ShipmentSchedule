@@ -26,8 +26,9 @@ const authState = { user: null, profile: null, siap: false };
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
 
    `halaman: null` = semua halaman. Kuncinya sama dengan PAGE_VIEWS di
-   form-router.js. "form" (tambah/ubah jadwal) dan "accounts" tidak
-   pernah masuk daftar peran hanya-baca. "schedule" ada di SEMUA peran:
+   form-router.js. "form" (tambah/ubah jadwal), "accounts" dan "checker"
+   (Cek PIB/PEB -- memeriksa draft CEISA sebelum diajukan, pekerjaan
+   EXIM) tidak pernah masuk daftar peran hanya-baca. "schedule" ada di SEMUA peran:
    ke sanalah router melempar balik alamat yang tertutup.
 
    `ket` = keterangan di pemilih peran halaman Akun.
@@ -280,7 +281,8 @@ function showLoginView() {
   aturKerangka(false);
   const footer = $("#appFooter");
   if (footer) footer.classList.add("d-none");
-  setTimeout(() => $("#loginUsername").focus(), 60);
+  // Kotak yang masih kosong: Username, atau Password kalau username diingat
+  setTimeout(() => fokusIsianPertama($("#viewLogin")), 60);
 }
 
 function hideLoginView() {
@@ -348,9 +350,16 @@ async function handleLoginSubmit() {
 }
 
 $("#btnLogin").addEventListener("click", handleLoginSubmit);
+/* Enter di Username: ke kotak sandi kalau masih kosong -- bukan pesan
+   "harus diisi" untuk kotak yang memang belum sempat diisi. Kalau
+   sandinya sudah terisi (pengelola sandi peramban), langsung masuk. */
 ["#loginUsername", "#loginPassword"].forEach((sel) => {
   $(sel).addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleLoginSubmit();
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    const sandi = $("#loginPassword");
+    if (e.target.id === "loginUsername" && !sandi.value) fokuskan(sandi);
+    else handleLoginSubmit();
   });
 });
 /* Memakai kotak konfirmasi aplikasi, bukan confirm() bawaan peramban —

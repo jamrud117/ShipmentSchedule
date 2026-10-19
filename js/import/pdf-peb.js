@@ -45,42 +45,38 @@ const PEB_ITEM_HEADERS = [
   { key: "nilai", re: /^54\.\s*Nilai\s*Ekspor/i },
 ];
 
-function isEmptyPebSpec(v) {
-  const teks = (v || "").trim();
-  return (
-    !teks ||
-    teks === "-" ||
-    /^tanpa\s+(merek|merk|tipe)$/i.test(teks) ||
-    /^kode\s+barang$/i.test(teks)
-  );
-}
-
-// Nama barang dari blok teks kolom 48 satu barang
-function parsePebItemName(blockText) {
+/* Kolom barang dari blok teks kolom 48 satu barang -- Uraian, Merk,
+   Tipe, Ukuran (juga Spesifikasi lain & Kode Barang bila tercetak) --
+   masing-masing ke kolomnya sendiri di jadwal (KOLOM_NAMA_BARANG,
+   helpers.js), apa adanya: "TANPA MEREK" juga. Kolom yang tidak
+   tercetak tidak diisi (nilai bawaan newItem()). Label "Kode Barang"
+   yang tertinggal sebagai isi dianggap kosong. */
+function parsePebItemKolom(blockText) {
   const joined = blockText.replace(/\s+/g, " ").trim();
   // Buang "- <pos tarif>" di depan & "- EKSPOR BIASA/..." di belakang.
-  let s = joined
+  const s = joined
     .replace(/^-\s*\d{6,10}\s*/, "")
     .replace(/-\s*EKSPOR\s+[A-Z\s]+$/i, "")
     .trim();
-
-  const parts = [];
+  const bersih = (v) => {
+    const x = String(v || "").replace(/^-\s+/, "").replace(/,\s*$/, "").trim();
+    return /^kode\s+barang$/i.test(x) ? "" : x;
+  };
+  const kolom = {};
   // Uraian = teks sebelum "Merk:" (atau seluruhnya kalau tidak ada).
   const uraianM = /^-?\s*(.+?)(?=,?\s*Merk\s*:|$)/i.exec(s);
-  if (uraianM && uraianM[1]) {
-    const u = uraianM[1].replace(/^-\s*/, "").replace(/,\s*$/, "").trim();
-    if (!isEmptyPebSpec(u)) parts.push(u);
-  }
-  const merkM = /Merk\s*:\s*([^,]*)/i.exec(s);
-  const tipeM = /Tipe\s*:\s*([^,]*)/i.exec(s);
-  const ukuranM = /Ukuran\s*:\s*([^,]*)/i.exec(s);
-  [merkM, tipeM, ukuranM].forEach((mm) => {
-    if (mm && !isEmptyPebSpec(mm[1])) parts.push(mm[1].trim());
+  if (uraianM && uraianM[1]) kolom.namaBarang = bersih(uraianM[1]);
+  [
+    ["merek", /Merk\s*:\s*([^,]*)/i],
+    ["tipe", /Tipe\s*:\s*([^,]*)/i],
+    ["ukuran", /Ukuran\s*:\s*([^,]*)/i],
+    ["spesifikasiLain", /Spesifikasi\s+lain\s*:\s*([^,]*)/i],
+    ["kodeBarang", /Kode\s*Barang\s*:\s*([^,]*)/i],
+  ].forEach(([field, re]) => {
+    const m = re.exec(s);
+    if (m) kolom[field] = bersih(m[1]);
   });
-  return parts
-    .filter(Boolean)
-    .filter((p, i, arr) => arr.findIndex((q) => q.toLowerCase() === p.toLowerCase()) === i)
-    .join(" ");
+  return kolom;
 }
 
 function extractPebItems(pagesItems) {
@@ -170,7 +166,7 @@ function extractPebItems(pagesItems) {
       }
 
       items.push({
-        name: parsePebItemName(nameBlock),
+        kolom: parsePebItemKolom(nameBlock),
         hsCode: st.hsCode,
         qty,
         satuan,
@@ -311,10 +307,15 @@ function parsePebPdfText(text, pagesItems) {
   // Di PEB, B/L biasanya cuma SATU baris (dokumen ekspor jarang punya Master & House sekaligus)
   let masterBL = masterRow ? masterRow.nomor : "";
   let houseBL = houseRow ? houseRow.nomor : "";
+  let masterBLDate = masterRow ? pebDateToISO(masterRow.tanggalDMY) : "";
+  let houseBLDate = houseRow ? pebDateToISO(houseRow.tanggalDMY) : "";
   if (!masterBL && houseBL) {
     masterBL = houseBL;
     houseBL = "";
+    masterBLDate = houseBLDate;
+    houseBLDate = "";
   }
+  const invoiceDate = invoiceRow ? pebDateToISO(invoiceRow.tanggalDMY) : "";
 
   const skbList = skbRows.map((r) => {
     const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
@@ -347,11 +348,11 @@ function parsePebPdfText(text, pagesItems) {
   const totalNettoKnown = rawItems.reduce((s, it) => s + (it.netto || 0), 0);
 
   const items = rawItems
-    .filter((it) => it.name || it.hsCode)
+    .filter((it) => it.kolom.namaBarang || it.hsCode)
     .map((it) => {
       const base = {
         ...newItem(),
-        namaBarang: it.name || "",
+        ...it.kolom,
         hsCode: normalizeHsCodeInput(it.hsCode),
         jenisBarang: "BARANG JADI",
         qty: it.qty != null ? it.qty : 0,
@@ -402,8 +403,11 @@ function parsePebPdfText(text, pagesItems) {
       party,
       forwarder,
       invoice,
+      invoiceDate,
       masterBL,
+      masterBLDate,
       houseBL,
+      houseBLDate,
       transport,
       vessel,
       voyage,

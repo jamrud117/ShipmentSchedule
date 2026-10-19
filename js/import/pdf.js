@@ -46,7 +46,9 @@ async function extractPdfText(file) {
     pageTexts.push(groupPdfItemsIntoLines(content.items).join("\n"));
     pagesItems.push(content.items);
   }
-  return { text: pageTexts.join("\n\n"), pagesItems };
+  /* pdf & lib ikut dikembalikan: mesin EXIM (impor CIPL di dispatch.js)
+     membaca halamannya sendiri lewat EximEngine.pdfPagesFromDocument. */
+  return { text: pageTexts.join("\n\n"), pagesItems, pdf, lib: pdfjsLib };
 }
 
 function pibDateToISO(dmy) {
@@ -224,36 +226,35 @@ function parsePibPdfText(text, pagesItems) {
       .trim()
       .replace(/\s+YA\s*\/\s*TIDAK\s*$/i, "")
       .trim();
-    docRows.push({ label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
+    docRows.push({ kode: m[2], label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
   }
   const findDoc = (re) => docRows.find((r) => re.test(r.label));
   const invoiceRow = findDoc(/^INVOICE$/i);
   // "AWB" (udara) atau "B/L" polos (laut) sama-sama berarti dokumen level house
   const houseRow = findDoc(/^(AWB|B\/?L)$/i) || findDoc(/HOUSE/i);
   const masterRow = findDoc(/MASTER\s*(AWB|B\/?L)/i);
-  const skbRows = docRows.filter((r) =>
-    /SURAT KETERANGAN BEBAS/i.test(r.label),
-  );
-  const ecoRow = findDoc(/ELECTRONIC CERTIFICATE OF ORIGIN|\bE-?CO\b/i);
 
-  const skbList = skbRows.map((r) => {
-    const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
-    const raw = (tm && tm[1] ? tm[1] : "").toUpperCase();
-    const known =
-      SKB_TYPE_OPTIONS.includes(raw) && raw !== "LAINNYA" ? raw : null;
-    return known
-      ? {
-          jenis: known,
-          jenisLainnya: "",
-          nomor: r.nomor,
-          tanggal: pibDateToISO(r.tanggalDMY),
-        }
-      : {
-          jenis: "Lainnya",
-          jenisLainnya: raw || "SKB",
-          nomor: r.nomor,
-          tanggal: pibDateToISO(r.tanggalDMY),
-        };
+  /* Fasilitas (SKB, Masterlist, COO) & No. PI dari lembar yang sama --
+     kode dokumennya ikut dibaca, aturannya sama dengan Excel CEISA
+     (kenaliDokumenPelengkap di helpers.js). */
+  const skbList = [];
+  const nomorPi = [];
+  const nomorLs = [];
+  docRows.forEach((r) => {
+    const kenal = kenaliDokumenPelengkap(r);
+    if (!kenal) return;
+    if (kenal.pi || kenal.ls) {
+      const daftar = kenal.pi ? nomorPi : nomorLs;
+      if (r.nomor && !daftar.includes(r.nomor)) daftar.push(r.nomor);
+      return;
+    }
+    if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
+    skbList.push({
+      jenis: kenal.jenis,
+      jenisLainnya: kenal.jenisLainnya,
+      nomor: r.nomor,
+      tanggal: pibDateToISO(r.tanggalDMY),
+    });
   });
 
   // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari baris "Nomor Pengajuan : ..
@@ -487,6 +488,9 @@ function parsePibPdfText(text, pagesItems) {
     container: petiKemas.container,
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
+    invoiceDate: invoiceRow ? pibDateToISO(invoiceRow.tanggalDMY) : "",
+    pi: nomorPi.join(", "),
+    ls: nomorLs.join(", "),
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
     masterBlDate,
@@ -535,12 +539,6 @@ function parsePibPdfText(text, pagesItems) {
   // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif HS" dulu
   const TAX_COLUMN_BLEED =
     /\s+-?\s*(?:KETERANGAN PAJAK\b|SURAT PERSETUJUAN\b|LAPORAN SURVEYOR\b|PREFERENSI TARIF\b|IMPOR(?:TASI)?\s+(?:DEP\.?DAG\b|[A-Z-]+(?:\s*\([A-Z]+\))?)|METODE\s*\d|(?:BM|PPH|PPN|PPnBM|Cukai)\s+\d+(?:[.,]\d+)?\s*%)/i;
-  const isEmptySpecValue = (v) => {
-    const teks = (v || "").trim();
-    return (
-      !teks || teks === "-" || /^tanpa\s+merek$/i.test(teks) || /^tanpa\s+tipe$/i.test(teks)
-    );
-  };
   const posTarifMatches = [];
   const posTarifRe = /Pos Tarif\s*:\s*(\d+)/g;
   let ptm;
@@ -573,19 +571,20 @@ function parsePibPdfText(text, pagesItems) {
           block,
         );
       const spekM = /Spesifikasi lain:\s*([^,\n]*),/i.exec(block);
+      const kodeM = /Kode\s*Barang\s*:\s*([^,\n]*)/i.exec(block);
 
-      const nameParts = [];
-      if (uraianM) {
-        const uraianClean = uraianM[1].trim().split(TAX_COLUMN_BLEED)[0].trim();
-        if (uraianClean) nameParts.push(uraianClean);
-      }
+      /* Kolom barang CEISA masing-masing ke kolomnya sendiri di jadwal
+         (KOLOM_NAMA_BARANG, helpers.js), apa adanya -- "TANPA MEREK"
+         juga. Yang tidak tercetak tidak diisi: nilai bawaan newItem(). */
+      const kolom = {};
+      if (uraianM) kolom.namaBarang = stripFieldLabels(uraianM[1].trim().split(TAX_COLUMN_BLEED)[0].trim());
       if (mtuM) {
-        if (!isEmptySpecValue(mtuM[1])) nameParts.push(mtuM[1].trim());
-        if (!isEmptySpecValue(mtuM[2])) nameParts.push(mtuM[2].trim());
-        if (!isEmptySpecValue(mtuM[3])) nameParts.push(mtuM[3].trim());
+        kolom.merek = mtuM[1].trim();
+        kolom.tipe = mtuM[2].trim();
+        kolom.ukuran = mtuM[3].trim();
       }
-      if (spekM && !isEmptySpecValue(spekM[1])) nameParts.push(spekM[1].trim());
-      const namaBarang = stripFieldLabels(nameParts.join(" "));
+      if (spekM) kolom.spesifikasiLain = spekM[1].trim();
+      if (kodeM) kolom.kodeBarang = kodeM[1].trim();
 
       // Fallback berbasis teks (jarang cocok krn kolom sering ke-gabung)
       const col = columnResults[i];
@@ -608,7 +607,8 @@ function parsePibPdfText(text, pagesItems) {
         }
       }
       return {
-        namaBarang,
+        kolom,
+        namaBarang: kolom.namaBarang || "",
         hsCode: pt.hsCode,
         qty,
         netto,
@@ -629,7 +629,7 @@ function parsePibPdfText(text, pagesItems) {
   const items = rawItems.map((it, idx) => {
     const base = {
       ...newItem(),
-      namaBarang: it.namaBarang,
+      ...it.kolom,
       hsCode: it.hsCode,
       /* Jenis barang dibiarkan mengikuti buku (newItem()). PIB memang
          dokumen impor, jadi hasilnya sama saja -- tapi nilai mati di
@@ -696,15 +696,6 @@ function parsePibPdfText(text, pagesItems) {
     );
   }
 
-  // E-COO sekarang cuma salah satu entri di array skb yang sama (jenis "E-COO")
-  if (ecoRow) {
-    skbList.push({
-      jenis: "E-COO",
-      jenisLainnya: "",
-      nomor: ecoRow.nomor,
-      tanggal: pibDateToISO(ecoRow.tanggalDMY),
-    });
-  }
   // Lembar Pemenuhan Persyaratan/Fasilitas cuma nyantumin SATU daftar SKB/E-COO utk 1 dokumen PIB
   if (skbList.length) {
     items.forEach((it) => {
@@ -729,7 +720,7 @@ function parsePibPdfText(text, pagesItems) {
     notes.push(
       t("w.tidak.ada.baris.pos.tarif"),
     );
-  if (!skbList.length && !ecoRow)
+  if (!skbList.length)
     notes.push(
       t("w.tidak.ditemukan.entri.skb.atau.e.coo.di.lembar"),
     );

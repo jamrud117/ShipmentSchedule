@@ -1528,8 +1528,8 @@ document.addEventListener("click", (e) => {
       icon: "bi-piggy-bank",
       okText: "Save",
       fields: [
-        { key: "tahunan", label: "Annual budget (IDR)", type: "number", value: x.tahunan || "" },
-        { key: "berubah", label: "Current budget after revisions (IDR) — empty = same", type: "number", value: x.berubah || "" },
+        { key: "tahunan", label: "Annual budget (IDR)", inputmode: "numeric", value: formatNumberValue(x.tahunan), filter: formatNumberTyping },
+        { key: "berubah", label: "Current budget after revisions (IDR) — empty = same", inputmode: "numeric", value: formatNumberValue(x.berubah), filter: formatNumberTyping },
       ],
       onSubmit: (v) => {
         lapSimpanAnggaran({ tahunan: lapAngka(v.tahunan), berubah: lapAngka(v.berubah) });

@@ -24,18 +24,6 @@ h1, h2, h3, h4, h5, h6,
   font-variant-numeric: tabular-nums;
 }
 
-/* AKSESIBILITAS: cincin fokus yang jelas & konsisten */
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid var(--p-600);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
-}
-
 /* Hormati preferensi sistem: matikan animasi bila diminta. */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -112,7 +100,6 @@ button:disabled {
 input[type="text"],
 input[type="date"],
 input[type="time"],
-input[type="number"],
 textarea,
 select {
   border-radius: var(--r-md);
@@ -127,16 +114,6 @@ select {
 .form-control:hover:not(:disabled):not([readonly]),
 .form-select:hover:not(:disabled) {
   border-color: var(--n-300);
-}
-.form-control:focus,
-.form-select:focus,
-table.item-table input:focus,
-table.item-table textarea:focus,
-.notes-composer textarea:focus,
-.card-note-input:focus {
-  outline: none;
-  border-color: var(--p-600);
-  box-shadow: var(--sh-focus);
 }
 .form-control::placeholder,
 textarea::placeholder,
@@ -176,6 +153,7 @@ select.form-select.is-invalid,
 .docnum-panel select.form-select,
 select.login-input,
 .dn-saring-bayar select,
+.dn-saring-dasar select,
 table.fund-lines select,
 .pagination-size select {
   appearance: none;
@@ -202,7 +180,7 @@ table.fund-lines select,
   background: var(--s-danger-bg);
 }
 .is-invalid:focus {
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.18) !important;
 }
 
 /* NOMOR GANDA (cek-duplikat.js): garis kuning -- peringatan, bukan
@@ -212,7 +190,7 @@ table.fund-lines select,
   background: var(--s-warn-bg);
 }
 .form-control.is-ganda:focus {
-  box-shadow: 0 0 0 3px rgba(181, 115, 15, 0.16);
+  box-shadow: 0 0 0 3px rgba(181, 115, 15, 0.18) !important;
 }
 .dup-peringatan {
   display: flex;
@@ -374,15 +352,6 @@ table.item-table tbody tr:hover,
   color: inherit;
 }
 
-.form-control:focus,
-.form-select:focus,
-table.item-table input:focus,
-table.item-table textarea:focus,
-.notes-composer textarea:focus,
-.card-note-input:focus {
-  border-color: var(--p-500);
-}
-
 /* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js) */
 input[type="date"],
 input[type="time"],
@@ -504,7 +473,9 @@ input[type="date"][readonly] {
    Label kecil (eyebrow, kepala kolom, penanda) lebih terbaca dalam
    huruf besar berspasi renggang: bentuknya berbeda tegas dari isi
    datanya. Yang TIDAK ikut adalah kalimat keterangan — itu teks yang
-   dibaca, bukan penanda.
+   dibaca, bukan penanda — dan label ISIAN (login, pop-up): ditulis
+   seperti label form jadwal & nomor dokumen, huruf biasa yang lebih
+   besar, supaya semua kotak isian di aplikasi berlabel sama.
 ================================================================== */
 .eyebrow,
 .board-label,
@@ -521,8 +492,6 @@ input[type="date"][readonly] {
 .cmdk-group,
 .cmdk-item-tag,
 .detail-badge-mode,
-.login-label,
-.prompt-label,
 .user-chip-role,
 .acct-self,
 .form-progress,
@@ -560,7 +529,6 @@ input[type="date"][readonly] {
 input[type="text"],
 input[type="password"],
 input[type="email"],
-input[type="number"],
 input[type="search"],
 input[type="date"],
 input[type="time"],
@@ -611,6 +579,113 @@ select:disabled,
 .form-control:disabled,
 .form-select:disabled {
   border-color: var(--border);
+}
+
+/* ==================================================================
+   FOKUS — KOTAK ISIAN
+
+   Satu tanda untuk SEMUA kotak isian (teks, angka, tanggal, pilihan,
+   kotak teks panjang): garis tepi navy + cincin lembut 3px. Dulu ada
+   lima versi sekaligus -- navy di daftar jadwal, kuningan pucat di
+   form & pop-up, dan kotak tanggal di kartu yang garis tepinya tidak
+   berubah sama sekali (hanya cincin kuningan 15% yang nyaris tidak
+   terlihat): pengguna tidak bisa melihat kotak mana yang sedang diisi.
+
+   Tanpa garis luar (outline): cincin bayangan mengikuti sudut kotak
+   dan tidak bertumpuk dua dengan garis luar :focus-visible.
+
+   Selektornya meniru daftar BATAS KONTROL di atas, masing-masing
+   ditambah :focus -- selalu satu tingkat lebih khusus daripada aturan
+   bentuk kotaknya sendiri, di berkas mana pun aturan itu ditulis.
+   Kotak bertanda galat / nomor ganda tetap bercincin warnanya sendiri
+   (lihat .is-invalid & .is-ganda).
+================================================================== */
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="search"]:focus,
+input[type="tel"]:focus,
+input[type="url"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="month"]:focus,
+input:not([type]):focus,
+textarea:focus,
+select:focus,
+.form-control:focus,
+.form-select:focus,
+.page-form .form-control:focus,
+.page-form .form-select:focus,
+.page-form textarea:focus,
+.docnum-panel .form-control:focus,
+.docnum-panel .form-select:focus,
+.modal .form-control:focus,
+.modal .form-select:focus,
+.login-input:focus,
+.control-select:focus,
+.search-box input[type="text"]:focus,
+.pagination-size select:focus,
+.date-field input[type="date"]:focus,
+.delay-strip-fields input[type="date"]:focus,
+.basis-select-wrap select:focus,
+.dn-saring-bayar select:focus,
+.dn-saring-dasar select:focus,
+.dn-cari input:focus,
+select.acct-role:focus,
+.acct-row .acct-role:focus,
+table.item-table input:focus,
+table.item-table textarea:focus,
+.notes-composer textarea:focus,
+.card-note-input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--sh-focus);
+}
+/* Kotak cari tanpa bingkai di kepala daftar pilihan HS Code (seperti
+   palet perintah): cincin di kotaknya sendiri terlihat ganjil -- yang
+   ditandai garis bawah kepalanya. */
+.hscode-lookup-search input:focus {
+  box-shadow: none;
+}
+.hscode-lookup-search:focus-within {
+  border-bottom-color: var(--focus-ring);
+}
+/* Pil status: cap berwarna, bukan kotak isian. Garis luarnya sewarna
+   statusnya sendiri, mengikuti bentuk pilnya. */
+.status-select:focus {
+  border-color: currentColor;
+  box-shadow: none;
+}
+.status-select:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* ==================================================================
+   FOKUS — KOMPONEN BOOTSTRAP
+
+   Bootstrap memberi cincin birunya sendiri (rgba(13,110,253,.25)) pada
+   tab, tombol .btn, tombol tutup, dan kotak centang -- biru yang tidak
+   ada di palet aplikasi ini. Diseragamkan dengan garis luar navy.
+================================================================== */
+.nav-link:focus-visible,
+.btn:focus-visible,
+.btn-close:focus-visible,
+.page-link:focus-visible,
+.dropdown-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.dropdown-item:focus-visible {
+  outline-offset: -2px;
+}
+.btn-close:focus {
+  box-shadow: none;
+}
+.form-check-input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: var(--sh-focus);
 }
 
 

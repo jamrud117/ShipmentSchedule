@@ -144,10 +144,29 @@ function applyLiveNumberFormat(el) {
   }
 }
 
+/* NOMOR URUT -- [data-hanya-angka]: bilangan bulat tanpa pemisah ribuan
+   (nomor dokumen berikutnya "036", bukan "36" atau "3,600"). Selain
+   angka dibuang saat diketik; kursor tetap di tempatnya. */
+function applyDigitOnly(el) {
+  const sebelum = el.value;
+  const sesudah = sebelum.replace(/\D/g, "");
+  if (sesudah === sebelum) return;
+  const kursor = el.selectionStart == null ? sesudah.length : el.selectionStart;
+  const digitKiri = (sebelum.slice(0, kursor).match(/\d/g) || []).length;
+  el.value = sesudah;
+  try {
+    el.setSelectionRange(digitKiri, digitKiri);
+  } catch (err) {
+    /* abaikan */
+  }
+}
+
 // Satu pendengar untuk seluruh halaman: isian yang dibuat belakangan (baris barang baru
 document.addEventListener("input", (e) => {
+  if (!e.target.closest) return;
   const el = e.target.closest(NUMBER_INPUT_SELECTOR);
   if (el) applyLiveNumberFormat(el);
+  else if (e.target.matches("[data-hanya-angka]")) applyDigitOnly(e.target);
 });
 
 // Rapikan sekali lagi saat kotak ditinggalkan

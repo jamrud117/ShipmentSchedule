@@ -2,11 +2,14 @@
 
 /* Deteksi tipe file lalu panggil parser yang sesuai */
 
-// Item mentah CIPL (name/qty/satuan/harga/netto/bruto) -> bentuk item form yang sama dipakai
+/* Item mentah CIPL -> bentuk item form yang sama dipakai. Kolom barang
+   CEISA dari `kolom` (pembaca mesin EXIM, kolomBarangCipl); pembaca
+   lama hanya memberi satu teks nama -> Uraian. Kolom lain: nilai
+   bawaan newItem(). */
 function ciplRawItemsToFinalItems(rawItems) {
   return (rawItems || []).map((it) => ({
     ...newItem(),
-    namaBarang: it.name || "",
+    ...(it.kolom || { namaBarang: it.name || "" }),
     hsCode: normalizeHsCodeInput(it.hsCode),
     jenisBarang: activeMode === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: it.qty != null ? it.qty : 0,
@@ -60,17 +63,239 @@ function mergeCiplPdfFields(a, b) {
   return out;
 }
 
-async function parseOneImportFile(file) {
+/* ------------------------------------------------------------------
+   CIPL LEWAT MESIN EXIM
+
+   CIPL dibaca js/import/exim-engine.js -- mesin yang sama dengan
+   halaman Cek PIB/PEB dan EXIM Checker: label & kolom dikenali dari
+   artinya (bukan alamat sel), satu sheet CI,PL maupun CI & PL terpisah
+   (dua berkas Excel/PDF dibaca sebagai SATU CIPL), baris tersembunyi
+   dilewati, angka 1.234,56 / 1,234.56, satuan EA = PCS, SIZE & koli per
+   barang, judul berbahasa Korea, dan seterusnya. Perbaikan ekstraksi
+   cukup ditulis sekali di mesinnya.
+
+   Pembaca lama (excel-cipl.js / pdf-cipl.js) tetap ada sebagai
+   CADANGAN: dipakai kalau mesinnya tidak menemukan satu barang pun,
+   dan untuk isian kepala yang dibiarkan kosong oleh mesin.
+
+   HS Code 8 digit dilengkapi dari Database HS Code menurut nama barang
+   (hsDatabaseUntukBarang, hscode-view.js) -- CIPL biasanya hanya benar
+   sampai 6 digit, atau menulis kode 10 digit negara asalnya.
+------------------------------------------------------------------ */
+
+/* Sisi CIPL yang ada di satu berkas: "CI", "PL", atau "CIPL" (keduanya). */
+function ciplSisiMesin(src) {
+  try {
+    const r = src.wb ? EximEngine.resolveCiplSheets(src.wb) : src.pages ? EximEngine.pdfCiplGrids(src.pages) : null;
+    if (!r) return "";
+    return r.missingSide === "PL" ? "CI" : r.missingSide === "CI" ? "PL" : "CIPL";
+  } catch (e) {
+    return "";
+  }
+}
+
+/* Pembaca lama untuk satu berkas CIPL (cadangan). */
+function bacaCiplLama(src) {
+  if (src.wbLama) return parseCiplWorkbook(src.wbLama);
+  if (src.text != null) return parseCiplPdfText(src.text, src.pagesItems);
+  return null;
+}
+
+/* Kolom CIPL -> kolom barang CEISA jadwal: uraian -> Uraian, tipe /
+   spesifikasi -> Tipe, merek -> Merek -- susunan yang sama dengan draft
+   CEISA yang disusun dari CIPL ini. Yang tidak tercetak tidak diisi
+   (nilai bawaan newItem()); tanpa uraian, tipe & mereknya jadi Uraian. */
+function kolomBarangCipl(it) {
+  const bersih = (v) => {
+    const teks = bersihkanLabelNama(String(v == null ? "" : v).replace(/\s+/g, " ").trim());
+    return isPlaceholderValue(teks) ? "" : teks;
+  };
+  const uraian = bersih(it.description);
+  const tipe = bersih(it.type);
+  const merek = bersih(it.brand);
+  if (!uraian) return { namaBarang: [tipe, merek].filter(Boolean).join(" ") };
+  const kolom = { namaBarang: uraian };
+  if (tipe && tipe.toUpperCase() !== uraian.toUpperCase()) kolom.tipe = tipe;
+  if (merek && merek.toUpperCase() !== uraian.toUpperCase()) kolom.merek = merek;
+  return kolom;
+}
+
+/* HS Code satu barang CIPL untuk form: 8 digit dari Database HS Code
+   kalau namanya dikenal dan 6 digit awalnya tidak bertentangan dengan
+   CIPL; selain itu kode CIPL apa adanya (dipotong 8 digit). */
+function hsBarangCipl(it, catat) {
+  const cipl = String(it.hs || "").replace(/\D/g, "");
+  const hit = typeof hsDatabaseUntukBarang === "function" ? hsDatabaseUntukBarang(it.description, it.type) : null;
+  if (hit && hit.kode) {
+    if (cipl.length < 6 || hit.kode.startsWith(cipl.slice(0, 6))) {
+      if (hit.kode !== cipl.slice(0, 8)) catat.dariDb.push(it.no);
+      return hit.kode;
+    }
+    catat.bentrok.push(`${it.no} (CIPL ${it.hs}, database ${EximEngine.fmtHs(hit.kode)})`);
+  }
+  if (cipl.length > 8) catat.negara.push(it.no);
+  else if (cipl && cipl.length < 8) catat.pendek.push(it.no);
+  return normalizeHsCodeInput(cipl);
+}
+
+/* Hasil mesin -> bentuk hasil impor form (fields + items), sama dengan
+   yang dulu dikembalikan parseCiplWorkbook / parseCiplPdfText. */
+function ciplDariMesin(c, sumber, lama) {
+  const pdf = sumber.every((s) => !s.wb);
+  const catat = { dariDb: [], bentrok: [], negara: [], pendek: [] };
+  const raw = c.items.map((it) => ({
+    kolom: kolomBarangCipl(it),
+    hsCode: hsBarangCipl(it, catat),
+    qty: it.qty != null ? it.qty : null,
+    satuan: it.unit || "",
+    harga: it.unit_price != null ? it.unit_price : it.qty && it.amount != null ? roundNum(it.amount / it.qty, 4) : null,
+    netto: it.net != null ? it.net : null,
+    bruto: it.gross != null ? it.gross : null,
+    package: it.package || "",
+    dimensions: it.dimensions || "",
+  }));
+  const notes = [];
+  // Berat yang hanya tercetak sebagai TOTAL ditumpuk ke barang pertama (aturan yang sama dengan pembaca lama)
+  if (raw.length && !raw.some((it) => Number(it.netto) > 0) && Number(c.total_net) > 0) {
+    raw.forEach((it, i) => (it.netto = i === 0 ? c.total_net : 0));
+    notes.push(t("y.netto.total.ke.barang.pertama", { kg: c.total_net }));
+  }
+  applyTotalBrutoToFirstItem(raw, c.total_gross);
+
+  const f = (lama.find((x) => x && x.fields) || {}).fields || {};
+  const seller = c.exporter || c.seller || f.seller || "";
+  const consignee = c.buyer || f.consignee || "";
+  const origin = c.port_loading || "";
+  const destination = c.final_destination || c.port_destination || "";
+  const modeHint = guessCiplModeFromPorts(origin, destination) || guessCiplModeFromPorts(f.origin, f.destination);
+  const kemasan = c.packages ? `${c.packages} ${c.package_unit || ""}`.trim() : "";
+  const fields = {
+    invoice: c.invoice_no || f.invoice || "",
+    invoiceDate: c.invoice_date || f.docDate || "",
+    docDate: c.invoice_date || f.docDate || "",
+    party: pickCiplParty(seller, consignee, modeHint || activeMode),
+    seller,
+    consignee,
+    masterBL: c.master_bl || f.masterBL || "",
+    houseBL: c.house_bl || (!c.master_bl && c.bl_no) || f.houseBL || "",
+    origin: origin ? portDisplay(origin) : f.origin || "",
+    destination: destination ? portDisplay(destination) : f.destination || "",
+    incoterm: c.incoterm || f.incoterm || "",
+    transport: origin || destination ? guessTransportFromText(origin, destination) : f.transport || "",
+    voyage: c.vessel || f.voyage || "",
+    etd: c.etd || f.etd || "",
+    package: kemasan || f.package || "",
+    muatan: c.muatan || f.muatan || "",
+  };
+
+  // Catatan HS Code -- gugur kalau draft CEISA ikut dipilih (ciplTanpaCatatanHs)
+  const daftar = (nos) => nos.join(", ");
+  const catatanHs = [];
+  if (catat.dariDb.length) catatanHs.push(t("y.hs.dari.database.hs", { no: daftar(catat.dariDb), cipl: catat.negara.length ? tt("kode negara asal", "the origin country's code") : tt("6 digit", "6 digits") }));
+  if (catat.bentrok.length) catatanHs.push(t("y.hs.beda.dengan.database", { no: daftar(catat.bentrok) }));
+  if (catat.negara.length) catatanHs.push(t("y.hs.cipl.kode.negara", { no: daftar(catat.negara) }));
+  if (catat.pendek.length) catatanHs.push(t("y.hs.cipl.belum.8.digit", { no: daftar(catat.pendek) }));
+  if (raw.some((it) => !it.hsCode)) catatanHs.push(t("y.sebagian.tanpa.hs.code.cipl"));
+  notes.push(...catatanHs);
+  (c.warnings || []).slice(0, 6).forEach((w) => notes.push(w));
+  notes.push(t("y.cipl.dibaca.mesin.exim", { format: c.sourceFormat || (pdf ? "PDF" : "Excel") }));
+
+  return {
+    fields,
+    items: ciplRawItemsToFinalItems(raw),
+    notes,
+    notesHs: catatanHs,
+    modeHint,
+    source: pdf ? "cipl-pdf" : "cipl",
+  };
+}
+
+/* CIPL + draft CEISA dipilih bersama: HS Code tiap barang datang dari
+   draft (prioritasnya lebih tinggi dari CIPL), jadi catatan HS Code CIPL
+   ("belum 8 digit, lengkapi", "diambil dari Database HS Code", ...)
+   sudah tidak berlaku -- dibuang supaya tidak menyuruh mengisi yang
+   sudah terisi. Pembaca lama hanya punya catatan umumnya. */
+function ciplTanpaCatatanHs(hasilCipl, hasilDokumen) {
+  const hsLengkap = hasilDokumen.some(
+    (r) => (r.items || []).length && r.items.every((it) => String(it.hsCode || "").replace(/\D/g, "").length >= 8),
+  );
+  if (!hsLengkap) return hasilCipl;
+  const umum = t("y.sebagian.tanpa.hs.code.cipl");
+  return hasilCipl.map((r) => ({
+    ...r,
+    notes: (r.notes || []).filter((n) => n !== umum && !(r.notesHs || []).includes(n)),
+  }));
+}
+
+/* Satu atau dua berkas CIPL -> hasil impor. Dua berkas yang satu CI dan
+   satunya PL dibaca sebagai SATU CIPL; berkas yang masing-masing sudah
+   memuat CI & PL (dua invoice) tetap diterapkan sendiri-sendiri. */
+function hasilCipl(sumber) {
+  const mesinAda = typeof EximEngine !== "undefined";
+  const sisi = sumber.map((s) => (mesinAda ? ciplSisiMesin(s) : ""));
+  const pasangan = sumber.length === 2 && sisi.includes("CI") && sisi.includes("PL");
+  const kelompok = pasangan ? [sumber] : sumber.map((s) => [s]);
+  const hasil = [];
+  kelompok.forEach((grup) => {
+    const lama = grup.map((s) => {
+      try {
+        return bacaCiplLama(s);
+      } catch (e) {
+        console.warn("Pembaca CIPL lama:", e);
+        return null;
+      }
+    });
+    let c = null;
+    if (mesinAda && grup.every((s) => s.wb || s.pages)) {
+      try {
+        c = EximEngine.readCiplSources(grup.map((s) => (s.wb ? { wb: s.wb, name: s.name } : { pages: s.pages, name: s.name })));
+      } catch (e) {
+        console.warn("Mesin EXIM gagal, pakai pembaca lama:", e);
+      }
+    }
+    if (c && c.items && c.items.length) {
+      hasil.push(ciplDariMesin(c, grup, lama));
+      return;
+    }
+    // Cadangan: perilaku pembaca lama apa adanya
+    const ada = lama.filter(Boolean);
+    if (ada.length === 2 && ada.every((r) => /^cipl/.test(r.source || "")) && ada[0].source !== ada[1].source) {
+      hasil.push(combineCiplPair(ada));
+      return;
+    }
+    ada.forEach((r, i) => {
+      if (!r.items.length && !(r.rawItems || []).length && !r.fields.invoice && !r.fields.party) {
+        throw new Error(t("y.tidak.terbaca.bc.maupun.cipl", { nama: grup[i] ? grup[i].name : "" }));
+      }
+      hasil.push(r.rawItems ? { ...r, items: ciplRawItemsToFinalItems(r.rawItems) } : r);
+    });
+  });
+  return hasil;
+}
+
+/* Satu berkas -> { hasil } (PIB / PEB / draft CEISA, sudah dibaca) atau
+   { cipl } (bahan CIPL, dibaca bersama berkas CIPL lainnya). */
+async function bacaBerkasImport(file) {
   const isPdf =
     file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
   if (isPdf) {
-    const { text, pagesItems } = await extractPdfText(file);
+    const { text, pagesItems, pdf, lib } = await extractPdfText(file);
 
     // Judul dokumen dicek DULUAN (murah
-    if (detectCiplPdfKind(text)) return parseCiplPdfText(text, pagesItems);
+    if (detectCiplPdfKind(text)) {
+      let pages = null;
+      if (typeof EximEngine !== "undefined" && pdf) {
+        try {
+          pages = await EximEngine.pdfPagesFromDocument(pdf, lib);
+        } catch (e) {
+          console.warn("Halaman PDF untuk mesin EXIM:", e);
+        }
+      }
+      return { cipl: { name: file.name, pages, text, pagesItems } };
+    }
 
     // PEB dicek sebelum PIB: keduanya dokumen bea cukai berformat mirip
-    if (isPebPdfText(text)) return parsePebPdfText(text, pagesItems);
+    if (isPebPdfText(text)) return { hasil: parsePebPdfText(text, pagesItems) };
 
     const pib = parsePibPdfText(text, pagesItems);
     if (!pib.isPib && !pib.fields.docNo && !pib.items.length) {
@@ -78,22 +303,24 @@ async function parseOneImportFile(file) {
         t("y.bukan.format.dikenali", { nama: file.name }),
       );
     }
-    return pib;
+    return { hasil: pib };
   }
 
   await ensureXLSX();
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array", cellDates: true });
   const hasBcFormat = wb.Sheets["HEADER"] && wb.Sheets["BARANG"];
-  if (hasBcFormat) return parseBcExcelWorkbook(wb);
+  if (hasBcFormat) return { hasil: parseBcExcelWorkbook(wb) };
 
-  const cipl = parseCiplWorkbook(wb);
-  if (!cipl.items.length && !cipl.fields.invoice && !cipl.fields.party) {
-    throw new Error(
-      t("y.tidak.terbaca.bc.maupun.cipl", { nama: file.name }),
-    );
+  let wbMesin = null;
+  if (typeof EximEngine !== "undefined") {
+    try {
+      wbMesin = XLSX.read(buf, EximEngine.XLSX_READ_OPTS);
+    } catch (e) {
+      console.warn("Workbook untuk mesin EXIM:", e);
+    }
   }
-  return cipl;
+  return { cipl: { name: file.name, wb: wbMesin, wbLama: wb } };
 }
 
 // Dua hasil CIPL (CI & PL, file terpisah) -> satu hasil gabungan.
@@ -181,23 +408,18 @@ async function prosesBerkasImport(files) {
   btn.disabled = true;
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Membaca ${files.length > 1 ? "file-file" : "file"}...`;
   try {
-    const results = [];
-    for (const f of files) results.push(await parseOneImportFile(f));
+    const dibaca = [];
+    for (const f of files) dibaca.push(await bacaBerkasImport(f));
 
-    const isCiplPair =
-      results.length === 2 &&
-      results.every((r) => /^cipl/.test(r.source || "")) &&
-      results[0].source !== results[1].source;
-
-    let toApply;
-    if (isCiplPair) {
-      toApply = [combineCiplPair(results)];
-    } else {
-      // Beberapa file berbeda jenis (mis
-      toApply = results.map((r) =>
-        r.rawItems ? { ...r, items: ciplRawItemsToFinalItems(r.rawItems) } : r,
-      );
-    }
+    /* CIPL dikumpulkan dulu: CI & PL di dua berkas dibaca sebagai satu
+       CIPL. Hasilnya diterapkan PALING AWAL, apa pun urutan berkasnya:
+       dokumen kepabeanan sesudahnya menimpa isian kepala (prioritasnya
+       lebih tinggi) tapi mempertahankan harga satuan dari CIPL -- urutan
+       yang dulu hanya benar kalau CIPL kebetulan dipilih lebih dulu. */
+    const sumberCipl = dibaca.filter((x) => x.cipl).map((x) => x.cipl);
+    if (sumberCipl.length && typeof hsCodeSiap === "function") await hsCodeSiap();
+    const hasilDokumen = dibaca.filter((x) => x.hasil).map((x) => x.hasil);
+    const toApply = ciplTanpaCatatanHs(sumberCipl.length ? hasilCipl(sumberCipl) : [], hasilDokumen).concat(hasilDokumen);
 
     const summaries = [];
     let allNotes = [];

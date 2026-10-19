@@ -99,6 +99,11 @@ body {
   --sh-panel: -22px 0 60px -30px rgba(10, 27, 51, 0.45);
   --sh-focus: 0 0 0 3px rgba(29, 81, 136, 0.26);
 
+  /* ---- Fokus: satu warna untuk seluruh aplikasi (lihat FOKUS di
+     css/system.css). Versi terang untuk di atas permukaan navy. ---- */
+  --focus-ring: var(--p-500);
+  --focus-ring-dark: var(--sec-300);
+
   /* ---- Gerak: satu kurva, tiga durasi ---- */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --dur-1: 130ms;

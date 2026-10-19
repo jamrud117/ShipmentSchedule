@@ -95,7 +95,11 @@ const nativeFormatter = {
 };
 
 /* SALIN KE EXCEL / BULK EXPORT — MODE IMPORT */
-// Gabungan fasilitas 1 PENGIRIMAN
+/* Gabungan fasilitas 1 PENGIRIMAN, satu baris per dokumen: label lalu
+   NOMOR dokumennya -- "MASTER LIST 72/PABEAN-PB/OSS/PMA/2025",
+   "PPH KET-00001/PPUT-CT/KPP.2211/2026". Masterlist yang sama di
+   beberapa barang cukup ditulis sekali; COO bernomor beda tetap
+   terpisah. Bulk Import membacanya balik lewat skbTextToEntries(). */
 function shipmentFacilitiesSummary(items) {
   const seen = new Set();
   const result = [];
@@ -109,10 +113,12 @@ function shipmentFacilitiesSummary(items) {
 
       if (/^MASTERLIST$/i.test(label)) label = "MASTER LIST";
 
+      const nomor = String(sk.nomor || "").replace(/\s+/g, " ").trim();
+      const baris = [label, nomor].filter(Boolean).join(" ");
       // hanya ambil yang belum pernah ada
-      if (!seen.has(label)) {
-        seen.add(label);
-        result.push(label);
+      if (baris && !seen.has(baris)) {
+        seen.add(baris);
+        result.push(baris);
       }
     });
   });
@@ -191,7 +197,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(s.party), // 4  SUPPLIER NAME
       formatter.text(it.jenisBarang), // 5  ITEM
       formatter.text(it.hsCode), // 6  HS CODE
-      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (+ Size/Pattern/Mold No)
+      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (kolom barang CEISA, kiri ke kanan)
       formatter.num(it.qty, 2), // 8  QTY
       formatter.text(it.satuan), // 9  SAT
       formatter.num(amount, 2), // 10 AMOUNT
@@ -207,7 +213,8 @@ function buildExcelCopyRows(s, formatter) {
       formatter.num(ppnVal, 2), // 20 PPN 11%
       formatter.num(pphVal, 2), // 21 PPH
       formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
-      formatter.text(s.pi), // 23 PI
+      // 23 PI -- LS (Laporan Surveyor) ikut di baris sendiri: "LS <nomor>" (gabungPiLs)
+      formatter.text(gabungPiLs(s.pi, s.ls)),
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE

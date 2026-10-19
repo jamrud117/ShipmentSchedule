@@ -68,7 +68,7 @@ function facilitiesPanelHtml(it, idx) {
 
   return `
     <tr class="item-fac-row" data-idx="${idx}">
-      <td colspan="15">
+      <td colspan="22">
         <div class="item-fac-panel">
           <div class="item-fac-skb-head">
             <b>${tt("Fasilitas (SKB &amp; COO)", "Facilities (SKB &amp; COO)")}</b>
@@ -94,7 +94,9 @@ function packageWarnTitle(it) {
     : tt("Format dimensi: P*L*T, mis. 82*82*75.", "Dimension format: L*W*H, e.g. 82*82*75.");
 }
 
-/* Textarea "Nama Barang" tumbuh otomatis mengikuti isinya.
+/* Isian kolom barang CEISA (Kode Barang s.d. Spesifikasi Lain, juga
+   Marks) adalah textarea yang tumbuh otomatis mengikuti isinya --
+   lebarnya seragam, teks panjang membungkus ke baris berikutnya.
 
    TIDAK BISA DIUKUR SAAT TERSEMBUNYI. Tabel ini tinggal di dalam
    tab-pane "barang", dan tab yang tidak aktif memakai `d-none` —
@@ -144,7 +146,7 @@ function autoGrowTextarea(el) {
 function autoGrowAllItemNames() {
   const kotak = [];
   document
-    .querySelectorAll("textarea.nama-barang-input")
+    .querySelectorAll("textarea.isian-barang")
     .forEach((el) => { if (terlihat(el)) kotak.push(el); });
   if (!kotak.length) return;
 
@@ -167,7 +169,7 @@ window.addEventListener("resize", () => {
    terukur masih isi yang lama. */
 document.addEventListener("paste", (e) => {
   const el = e.target;
-  if (el && el.matches && el.matches("textarea.nama-barang-input")) {
+  if (el && el.matches && el.matches("textarea.isian-barang")) {
     setTimeout(() => autoGrowTextarea(el), 0);
   }
 });
@@ -219,37 +221,47 @@ amatiPaneBarang();
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
   document.fonts.ready.then(() => {
     document
-      .querySelectorAll("textarea.nama-barang-input")
+      .querySelectorAll("textarea.isian-barang")
       .forEach(autoGrowTextarea);
   });
 }
 
+/* Kolom barang CEISA di tabel isian, kiri ke kanan -- sesudah HS Code
+   (KOLOM_NAMA_BARANG, helpers.js). Label dibaca saat digambar, supaya
+   ikut bahasa aktif. */
+function kolomIsianBarang() {
+  return [
+    ["kodeBarang", tt("Kode Barang", "Item Code")],
+    ["namaBarang", tt("Uraian", "Description")],
+    ["merek", tt("Merek", "Brand")],
+    ["tipe", tt("Tipe", "Type")],
+    ["ukuran", tt("Ukuran", "Size")],
+    ["spesifikasiLain", tt("Spesifikasi Lain", "Other Specification")],
+  ];
+}
+
+// Isian yang selalu HURUF BESAR (kolom CEISA ditulis kapital; "Tyre Mold" & "TYRE MOLD" bukan dua barang)
+const ISIAN_BARANG_KAPITAL = new Set(KOLOM_NAMA_BARANG.concat(["marks", "satuan", "packingUnit"]));
+
+function isianBarangHtml(it, field, label, placeholder, kelas) {
+  return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
+}
+
 function renderItemTable() {
-  // Penanda kelengkapan & tinggi nama barang ikut diperbarui tiap tabel
+  // Penanda kelengkapan & tinggi isian barang ikut diperbarui tiap tabel
   // digambar ulang — termasuk setelah data hasil impor masuk.
   setTimeout(() => {
     if (typeof syncFormValidity === "function") syncFormValidity();
     amatiTabelBarang();
     requestAnimationFrame(autoGrowAllItemNames);
   }, 0);
-  /* Header kolom pertama: "Uraian" di Export (dipasangkan dengan
-     kolom Size di sebelahnya), "Nama Barang" di Import (field yang
-     SAMA, cuma labelnya beda -- tidak ada kolom Size di Import, jadi
-     tidak perlu dipisah). */
-  const thNama = $("#thNamaBarang");
-  if (thNama) thNama.textContent = activeMode === "export" ? tt("Uraian", "Description") : t("c.nama.barang");
+  const kolom = kolomIsianBarang();
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
     .map((it, idx) => {
       const mainRow = `
     <tr data-idx="${idx}">
       <td class="seri-col text-center" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
-      <td class="namabarang-col"><textarea rows="1" class="nama-barang-input" data-f="namaBarang" placeholder="${activeMode === "export" ? tt("Uraian barang", "Item description") : tt("Nama barang", "Item name")}">${escapeHtml(it.namaBarang)}</textarea></td>
-      <td class="size-col"><input type="text" data-f="size" placeholder="Size" value="${escapeAttr(it.size)}"></td>
-      <td class="export-col"><input type="text" data-f="pattern" placeholder="Pattern" value="${escapeAttr(it.pattern)}"></td>
-      <td class="export-col"><input type="text" data-f="moldNo" placeholder="Mold No." value="${escapeAttr(it.moldNo)}"></td>
-      <td class="export-col"><input type="text" data-f="poNo" placeholder="PO No." value="${escapeAttr(it.poNo)}"></td>
-      <td class="export-col"><input type="text" data-f="marks" placeholder="${tt("otomatis", "auto")}" value="${escapeAttr(it.marks)}"></td>
       <td>
         <div class="hscode-cell">
           <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">
@@ -258,6 +270,8 @@ function renderItemTable() {
           </button>
         </div>
       </td>
+      ${kolom.map(([field, label]) => isianBarangHtml(it, field, label)).join("")}
+      ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
       <td>
         <select data-f="jenisBarang">
           ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
@@ -301,7 +315,7 @@ function renderItemTable() {
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
     })
     .join("");
-  tbody.querySelectorAll(".nama-barang-input").forEach(autoGrowTextarea);
+  tbody.querySelectorAll("textarea.isian-barang").forEach(autoGrowTextarea);
   tbody
     .querySelectorAll('.pkg-cell input[data-f="package"]')
     .forEach((el) => autoSizeInput(el, 96, 210));
@@ -341,7 +355,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
       typeof applyLiveNumberFormat === "function") {
     applyLiveNumberFormat(e.target);
   }
-  /* NAMA BARANG SELALU HURUF BESAR.
+  /* ISIAN BARANG SELALU HURUF BESAR (ISIAN_BARANG_KAPITAL).
 
      Dirapikan SEBELUM dibaca, dengan alasan yang sama seperti angka di
      atas: kalau diubah sesudahnya, yang tersimpan huruf kecil sementara
@@ -352,7 +366,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
      Justru tempelan yang paling butuh: nama yang disalin dari invoice
      pemasok datang dengan huruf campur, dan "Tyre Mold" dengan "TYRE
      MOLD" terhitung dua barang berbeda saat dikelompokkan di laporan. */
-  if (field === "namaBarang" && typeof jadikanHurufBesar === "function") {
+  if (ISIAN_BARANG_KAPITAL.has(field) && typeof jadikanHurufBesar === "function") {
     jadikanHurufBesar(e.target);
   }
   if (field) {
@@ -372,7 +386,7 @@ $("#itemTableBody").addEventListener("input", (e) => {
         ? parseInputNumber(e.target.value)
         : e.target.value;
     }
-    if (field === "namaBarang") autoGrowTextarea(e.target);
+    if (e.target.tagName === "TEXTAREA") autoGrowTextarea(e.target);
     if (field === "package") {
       autoSizeInput(e.target, 96, 210);
       // Peringatan format ditaruh di tooltip + kelas penanda
@@ -499,4 +513,6 @@ $("#itemTableBody").addEventListener("click", (e) => {
 $("#btnAddItem").addEventListener("click", () => {
   draftItems.push(newItem());
   renderItemTable();
+  // Baris baru langsung siap diisi nama barangnya
+  fokuskan($(`#itemTableBody tr[data-idx="${draftItems.length - 1}"]:not(.item-fac-row) [data-f="namaBarang"]`));
 });
