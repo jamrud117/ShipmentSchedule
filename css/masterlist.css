@@ -563,6 +563,13 @@
   text-transform: uppercase;
   color: var(--n-500);
 }
+/* HS Code di kiri spesifikasi (urutan unduhan Excel): selebar isinya */
+.mst-rinci-kepala {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-5);
+}
+.mst-rinci-hs p,
 .mst-rinci-spek p {
   margin: 0;
   font-size: var(--t-sm);

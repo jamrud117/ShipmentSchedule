@@ -14,10 +14,11 @@
      1. JADWAL TERKAIT. Dicari sendiri dari nomor aju, invoice,
         B/L-AWB & kontainer di kedua berkas (bisa diganti atau dilepas).
         Nomor Master & House B/L-AWB jadwalnya mengisi kotak pembanding,
-        dan isian jadwal -- aju, invoice, moda, sarana angkut,
-        pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan,
-        kontainer, pihak, tanggal -- dibandingkan dengan draft (bagian
-        "Jadwal"). BARANG jadwalnya jadi rujukan utama pembanding draft:
+        dan isian jadwal -- aju, invoice, polis asuransi, moda, sarana
+        angkut, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan,
+        kontainer, pihak, tanggal dokumen -- dibandingkan dengan draft
+        di bagiannya masing-masing. ETD/ETA jadwal tidak dibandingkan
+        (kecuali ETD vs TANGGAL EKSPOR PEB). BARANG jadwalnya jadi rujukan utama pembanding draft:
         nama, HS Code, jumlah, satuan, harga & berat dari jadwal (sudah
         diperiksa EXIM), yang kosong dilengkapi CIPL (cekBarangGabungan).
      2. HS CODE 8 DIGIT. CIPL biasanya hanya benar sampai 6 digit,
@@ -25,10 +26,9 @@
         Database HS Code (nama barang), lalu di barang jadwal terkait,
         lalu di riwayat jadwal lain; kode draft yang belum dikenal
         database bisa langsung disimpan dari sini.
-     3. FASILITAS & IZIN. PI (959), LS (958), Masterlist (912), SKB PPN
-        (456), SKB PPh (457) & COO (860/861) di draft dibandingkan
-        dengan isian jadwal; dokumen 912 dengan halaman Masterlist
-        (nomor & tanggal SK, masa berlaku, sudah dicatat atau belum).
+     3. FASILITAS & IZIN. PI (959) & LS (958) beserta tanggalnya,
+        Masterlist (912), SKB PPN (456), SKB PPh (457) & COO (860/861)
+        di draft dibandingkan dengan isian jadwal.
      4. NDPBM dibandingkan dengan kurs pajak KMK (data/kurs-pajak.json).
 
    Tanpa CIPL pun bisa dipakai: draft dibandingkan dengan jadwal
@@ -60,9 +60,8 @@ const cekKeadaan = {
   hasil: null,
   galatCek: "",
   saring: "ALL",
-  pendukung: null, // Promise: Database HS Code, masterlist, kurs pajak
+  pendukung: null, // Promise: Database HS Code, kurs pajak
   dbHs: "", // "" | "ok" | "gagal"
-  dbMasterlist: "",
 };
 
 const CEK_URUTAN = ["DOCUMENT", "ENTITY", "HEADER", "TRANSPORT", "VALUE", "WEIGHT", "PACKING", "FACILITY", "CIPL"];
@@ -118,7 +117,7 @@ function cekSiapkanTempat() {
   EximEngine.addPlaces(UNLOCODES.filter((u) => u.metro).map((u) => baris(u, EximEngine.placeGroupOf(u.metro, kind(u)) || undefined)));
 }
 
-/* ---------- data pendukung: Database HS Code, masterlist, kurs pajak ---------- */
+/* ---------- data pendukung: Database HS Code, kurs pajak ---------- */
 
 function cekMuatPendukung(paksa) {
   if (cekKeadaan.pendukung && !paksa) return cekKeadaan.pendukung;
@@ -132,18 +131,8 @@ function cekMuatPendukung(paksa) {
           },
         )
       : Promise.resolve();
-  const ml =
-    typeof mstAmbil === "function"
-      ? mstAmbil().then(
-          () => (cekKeadaan.dbMasterlist = "ok"),
-          (e) => {
-            console.error(e);
-            cekKeadaan.dbMasterlist = "gagal";
-          },
-        )
-      : Promise.resolve();
   const kurs = typeof muatKursPajak === "function" ? muatKursPajak().catch(() => null) : Promise.resolve(null);
-  cekKeadaan.pendukung = Promise.all([hs, ml, kurs]);
+  cekKeadaan.pendukung = Promise.all([hs, kurs]);
   return cekKeadaan.pendukung;
 }
 
@@ -214,7 +203,8 @@ async function cekBacaCipl(files) {
    pemeriksaan) dan oleh parseBcExcelWorkbook (excel-bc.js) -- pembaca
    yang sama dengan isi-otomatis form jadwal, jadi isian draft
    dibandingkan dengan jadwal dalam bentuk yang sama persis dengan yang
-   dulu mengisinya (No. Daftar, tanggal tiba, fasilitas per barang). */
+   dulu mengisinya (No. Daftar, moda, peti kemas, kolom & fasilitas per
+   barang). */
 async function cekBacaDraft(file) {
   await ensureXLSX();
   const wb = XLSX.read(await file.arrayBuffer(), EximEngine.XLSX_DECL_READ_OPTS);
@@ -1026,7 +1016,7 @@ function cekTanggalJadwal(s, kolom) {
    hanya dipakai untuk isian yang belum diisi di jadwal (cekRujukJadwal).
 
    Yang hanya bisa salah karena jadwalnya belum diperbarui (jumlah
-   barang, total berat, tanggal) cukup INFO; yang menentukan dokumen
+   barang, total berat, ETD Export) cukup INFO; yang menentukan dokumen
    (aju, invoice, sarana angkut, pelabuhan, incoterm, freight, asuransi,
    NDPBM, kemasan, peti kemas, pihak) MISMATCH bila berbeda. Isian jadwal
    yang kosong selalu INFO. */
@@ -1271,22 +1261,13 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     });
   }
 
-  // Tanggal: hanya perkiraan di jadwal, jadi INFO bila berbeda
-  {
+  /* PEB: ETD jadwal vs TANGGAL EKSPOR -- perkiraan, jadi INFO bila
+     berbeda. ETD vs tanggal B/L-AWB dan ETA vs TANGGAL TIBA tidak
+     diperiksa. */
+  if (isPeb) {
     const etd = cekTanggalJadwal(s, "etd");
-    const docBl = (decl.documents || []).find((d) => E.TRANSPORT_DOCS[String(d.code).trim()] && E.normalizeDate(d.date));
-    if (etd && docBl) {
-      const tglDok = E.normalizeDate(docBl.date);
-      tambah("TRANSPORT", "etdBl", tt("ETD ↔ tanggal B/L-AWB", "ETD ↔ B/L-AWB date"), tglDok === etd ? "MATCH" : "INFO", etd, tglDok, tglDok === etd ? "" : tt(`Tanggal dokumen ${String(docBl.code).trim()} di draft berbeda dengan ETD jadwal.`, `The date of document ${String(docBl.code).trim()} in the draft differs from the schedule's ETD.`));
-    }
-    if (isPeb) {
-      const ex = E.normalizeDate(decl.export_date || "");
-      if (etd && ex) tambah("TRANSPORT", "etd", tt("ETD ↔ tanggal ekspor", "ETD ↔ export date"), ex === etd ? "MATCH" : "INFO", etd, ex, ex === etd ? "" : tt("TANGGAL EKSPOR di draft berbeda dengan ETD jadwal.", "TANGGAL EKSPOR in the draft differs from the schedule's ETD."));
-    } else {
-      const tiba = E.normalizeDate(f.actual || "");
-      const eta = String(s.actual || "").slice(0, 10) || cekTanggalJadwal(s, "eta");
-      if (eta && tiba) tambah("TRANSPORT", "eta", tt("ETA ↔ tanggal tiba", "ETA ↔ arrival date"), tiba === eta ? "MATCH" : "INFO", eta, tiba, tiba === eta ? "" : tt("TANGGAL TIBA di draft berbeda dengan tanggal tiba jadwal.", "TANGGAL TIBA in the draft differs from the schedule's arrival date."));
-    }
+    const ex = E.normalizeDate(decl.export_date || "");
+    if (etd && ex) tambah("TRANSPORT", "etd", tt("ETD ↔ tanggal ekspor", "ETD ↔ export date"), ex === etd ? "MATCH" : "INFO", etd, ex, ex === etd ? "" : tt("TANGGAL EKSPOR di draft berbeda dengan ETD jadwal.", "TANGGAL EKSPOR in the draft differs from the schedule's ETD."));
   }
   return rows;
 }
@@ -1458,96 +1439,51 @@ function cekBarisTanggalDokumen(tanggalJadwal, nomorJadwal, docs, kode) {
   return [jadwal === draft ? "MATCH" : "MISMATCH", jadwal, draft, tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)];
 }
 
+/* FASILITAS & IZIN: dokumen di draft vs isian jadwal terkait. Dokumen
+   912 TIDAK dibandingkan dengan halaman Masterlist (No. & tanggal SK,
+   masa berlaku, realisasi) -- hanya dengan fasilitas barang jadwal. */
 function cekBarisFasilitas(s, decl) {
-  const E = EximEngine;
+  if (!s) return [];
   const rows = [];
   const baris = cekBarisBaru("FACILITY", tt("Jadwal", "Schedule"));
   const daftarNomor = (docs) => docs.map((d) => d.number).join(", ");
 
-  if (s) {
-    /* PI (959) & LS (958): satu nomor per kiriman, isian jadwal "PI" &
-       "LS", lalu tanggalnya ("Tanggal PI" & "Tanggal LS") */
-    [
-      ["pi", "piDate", "959", tt("PI (Persetujuan Impor)", "PI (Import Approval)"), tt("Tanggal PI", "PI Date")],
-      ["ls", "lsDate", "958", tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), tt("Tanggal LS", "LS Date")],
-    ].forEach(([kolom, kolomTanggal, kode, field, fieldTanggal]) => {
-      const jadwal = cekPecahNomor(s[kolom]);
-      const docs = cekDokumenKode(decl, kode);
-      if (!jadwal.length && !docs.length) return;
-      if (!jadwal.length) rows.push(baris(field, "INFO", "", daftarNomor(docs), tt(`Belum diisi di jadwal; draft memuat dokumen kode ${kode}.`, `Not filled in on the schedule; the draft holds document code ${kode}.`)));
-      else if (!docs.length) rows.push(baris(field, "MISMATCH", s[kolom], "", tt(`Jadwal mencatat ${field}, tetapi dokumen kode ${kode} tidak ada di sheet DOKUMEN draft.`, `The schedule records the ${field}, but document code ${kode} is not in the draft's DOKUMEN sheet.`)));
-      else {
-        const kurang = jadwal.filter((x) => !docs.some((d) => cekAlnum(d.number) === x.kunci));
-        rows.push(baris(field, kurang.length ? "MISMATCH" : "MATCH", s[kolom], daftarNomor(docs), kurang.length ? tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`) : tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)));
-      }
-      const tanggal = cekBarisTanggalDokumen(s[kolomTanggal], jadwal, docs, kode);
-      if (tanggal) rows.push(baris(fieldTanggal, ...tanggal));
-    });
-
-    // Fasilitas barang (SKB / Masterlist / COO) di jadwal vs dokumen fasilitas di draft
-    const entri = [].concat(...(s.items || []).map((it) => it.skb || []));
-    CEK_FASILITAS.forEach((fas) => {
-      const milikJadwal = entri.filter((sk) => sk.jenis === fas.jenis);
-      const docs = cekDokumenKode(decl, fas.kode);
-      if (!milikJadwal.length && !docs.length) return;
-      const nomorJadwal = [...new Set(milikJadwal.map((sk) => String(sk.nomor || "").trim()).filter(Boolean))];
-      const kiri = nomorJadwal.join(", ") || (milikJadwal.length ? tt("Ditandai (tanpa nomor)", "Marked (no number)") : "");
-      const field = tt(`Fasilitas ${fas.label}`, `Facility ${fas.label}`);
-      if (!milikJadwal.length) return rows.push(baris(field, "INFO", "", daftarNomor(docs), tt(`Draft memuat dokumen ${fas.label} (kode ${fas.kode.join("/")}), tetapi belum ada barang jadwal yang ditandai berfasilitas ini.`, `The draft holds a ${fas.label} document (code ${fas.kode.join("/")}), but no item on the schedule is marked with this facility.`)));
-      if (!docs.length) return rows.push(baris(field, "MISMATCH", kiri, "", tt(`Barang jadwal berfasilitas ${fas.label}, tetapi dokumennya (kode ${fas.kode.join("/")}) tidak ada di draft. Fasilitasnya tidak akan berlaku.`, `Items on the schedule carry the ${fas.label} facility, but its document (code ${fas.kode.join("/")}) is not in the draft. The facility will not apply.`)));
-      const kurang = nomorJadwal.filter((n) => !docs.some((d) => cekAlnum(d.number) === cekAlnum(n)));
-      rows.push(
-        baris(field, kurang.length ? "MISMATCH" : "MATCH", kiri, daftarNomor(docs),
-          kurang.length ? tt(`Nomor yang tidak ada di draft: ${kurang.join(", ")}.`, `Numbers not in the draft: ${kurang.join(", ")}.`) : nomorJadwal.length ? tt(`Kode dokumen ${fas.kode.join("/")}.`, `Document code ${fas.kode.join("/")}.`) : tt("Nomornya belum diisi di jadwal; hanya keberadaan dokumennya yang dibandingkan.", "The number is not filled in on the schedule; only the presence of the document is compared.")),
-      );
-    });
-  }
-
-  // Dokumen masterlist (912) vs halaman Masterlist
-  const doc912 = cekDokumenKode(decl, "912")[0];
-  if (doc912) {
-    const bm = cekBarisBaru("FACILITY", "Masterlist");
-    const dok = typeof mstDok !== "undefined" ? mstDok : null;
-    if (cekKeadaan.dbMasterlist === "gagal") {
-      rows.push(bm(tt("Masterlist: dokumen", "Masterlist: document"), "INFO", "", doc912.number, tt("Halaman Masterlist tidak bisa dimuat; nomor & masa berlakunya tidak dibandingkan.", "The Masterlist page could not be loaded; its number & validity are not compared.")));
-    } else if (!dok) {
-      rows.push(bm(tt("Masterlist: dokumen", "Masterlist: document"), "INFO", "", doc912.number, tt("Belum ada dokumen masterlist di halaman Masterlist.", "There is no masterlist document on the Masterlist page yet.")));
-    } else {
-      if (cekAda(dok.sk_no)) {
-        const sama = cekAlnum(dok.sk_no) === cekAlnum(doc912.number);
-        rows.push(bm(tt("Masterlist: No. SK", "Masterlist: decree No."), sama ? "MATCH" : "MISMATCH", dok.sk_no, doc912.number, sama ? tt("Kode dokumen 912.", "Document code 912.") : tt("Nomor dokumen 912 di draft berbeda dengan No. SK di halaman Masterlist.", "Document 912 in the draft differs from the decree No. on the Masterlist page.")));
-      }
-      const tglDraft = E.normalizeDate(doc912.date || "");
-      if (dok.sk_date && tglDraft) {
-        const sama = String(dok.sk_date).slice(0, 10) === tglDraft;
-        rows.push(bm(tt("Masterlist: tanggal SK", "Masterlist: decree date"), sama ? "MATCH" : "MISMATCH", String(dok.sk_date).slice(0, 10), tglDraft));
-      }
-      if (dok.valid_until) {
-        const batas = String(dok.valid_until).slice(0, 10);
-        const tglAju = cekTanggalAju(decl);
-        const pada = tglAju || todayISO();
-        const berlaku = pada <= batas;
-        const kanan = tglAju ? tt(`aju ${fmtDate(pada)}`, `aju ${fmtDate(pada)}`) : tt(`hari ini ${fmtDate(pada)}`, `today ${fmtDate(pada)}`);
-        rows.push(
-          bm(tt("Masterlist: masa berlaku", "Masterlist: validity"), berlaku ? "MATCH" : "MISMATCH", tt(`sampai ${fmtDate(batas)}`, `until ${fmtDate(batas)}`), kanan,
-            berlaku ? tt(`Masih berlaku pada tanggal ${tglAju ? "aju" : "hari ini"}.`, `Still valid on the ${tglAju ? "aju date" : "current date"}.`) : tt("Masa berlaku masterlist sudah berakhir sebelum tanggal ini.", "The masterlist expired before this date.")),
-        );
-      }
-      // Sudah dicatat sebagai realisasi di halaman Masterlist?
-      const aju = cekDigit(decl.aju);
-      if (aju && typeof mstRealisasiDb !== "undefined" && typeof mstPibs === "function") {
-        const tercatat = mstRealisasiDb.filter((u) => mstPibs(u).some((p) => {
-          const d = cekDigit(p.aju);
-          return d.length >= 4 && aju.endsWith(d);
-        }));
-        const kiri = tercatat.length ? tt(`${tercatat.length} catatan`, `${tercatat.length} ${tercatat.length === 1 ? "record" : "records"}`) : tt("Belum dicatat", "Not recorded");
-        rows.push(
-          bm(tt("Masterlist: realisasi", "Masterlist: realization"), "INFO", kiri, decl.aju,
-            tercatat.length ? tt("Nomor aju ini sudah dicatat di halaman Masterlist.", "This aju number is already recorded on the Masterlist page.") : tt("Nomor aju ini belum dicatat di halaman Masterlist. Catat realisasinya setelah PIB terbit.", "This aju number is not recorded on the Masterlist page yet. Record the realization once the PIB is issued.")),
-        );
-      }
+  /* PI (959) & LS (958): satu nomor per kiriman, isian jadwal "PI" &
+     "LS", lalu tanggalnya ("Tanggal PI" & "Tanggal LS") */
+  [
+    ["pi", "piDate", "959", tt("PI (Persetujuan Impor)", "PI (Import Approval)"), tt("Tanggal PI", "PI Date")],
+    ["ls", "lsDate", "958", tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), tt("Tanggal LS", "LS Date")],
+  ].forEach(([kolom, kolomTanggal, kode, field, fieldTanggal]) => {
+    const jadwal = cekPecahNomor(s[kolom]);
+    const docs = cekDokumenKode(decl, kode);
+    if (!jadwal.length && !docs.length) return;
+    if (!jadwal.length) rows.push(baris(field, "INFO", "", daftarNomor(docs), tt(`Belum diisi di jadwal; draft memuat dokumen kode ${kode}.`, `Not filled in on the schedule; the draft holds document code ${kode}.`)));
+    else if (!docs.length) rows.push(baris(field, "MISMATCH", s[kolom], "", tt(`Jadwal mencatat ${field}, tetapi dokumen kode ${kode} tidak ada di sheet DOKUMEN draft.`, `The schedule records the ${field}, but document code ${kode} is not in the draft's DOKUMEN sheet.`)));
+    else {
+      const kurang = jadwal.filter((x) => !docs.some((d) => cekAlnum(d.number) === x.kunci));
+      rows.push(baris(field, kurang.length ? "MISMATCH" : "MATCH", s[kolom], daftarNomor(docs), kurang.length ? tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`) : tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)));
     }
-  }
+    const tanggal = cekBarisTanggalDokumen(s[kolomTanggal], jadwal, docs, kode);
+    if (tanggal) rows.push(baris(fieldTanggal, ...tanggal));
+  });
+
+  // Fasilitas barang (SKB / Masterlist / COO) di jadwal vs dokumen fasilitas di draft
+  const entri = [].concat(...(s.items || []).map((it) => it.skb || []));
+  CEK_FASILITAS.forEach((fas) => {
+    const milikJadwal = entri.filter((sk) => sk.jenis === fas.jenis);
+    const docs = cekDokumenKode(decl, fas.kode);
+    if (!milikJadwal.length && !docs.length) return;
+    const nomorJadwal = [...new Set(milikJadwal.map((sk) => String(sk.nomor || "").trim()).filter(Boolean))];
+    const kiri = nomorJadwal.join(", ") || (milikJadwal.length ? tt("Ditandai (tanpa nomor)", "Marked (no number)") : "");
+    const field = tt(`Fasilitas ${fas.label}`, `Facility ${fas.label}`);
+    if (!milikJadwal.length) return rows.push(baris(field, "INFO", "", daftarNomor(docs), tt(`Draft memuat dokumen ${fas.label} (kode ${fas.kode.join("/")}), tetapi belum ada barang jadwal yang ditandai berfasilitas ini.`, `The draft holds a ${fas.label} document (code ${fas.kode.join("/")}), but no item on the schedule is marked with this facility.`)));
+    if (!docs.length) return rows.push(baris(field, "MISMATCH", kiri, "", tt(`Barang jadwal berfasilitas ${fas.label}, tetapi dokumennya (kode ${fas.kode.join("/")}) tidak ada di draft. Fasilitasnya tidak akan berlaku.`, `Items on the schedule carry the ${fas.label} facility, but its document (code ${fas.kode.join("/")}) is not in the draft. The facility will not apply.`)));
+    const kurang = nomorJadwal.filter((n) => !docs.some((d) => cekAlnum(d.number) === cekAlnum(n)));
+    rows.push(
+      baris(field, kurang.length ? "MISMATCH" : "MATCH", kiri, daftarNomor(docs),
+        kurang.length ? tt(`Nomor yang tidak ada di draft: ${kurang.join(", ")}.`, `Numbers not in the draft: ${kurang.join(", ")}.`) : nomorJadwal.length ? tt(`Kode dokumen ${fas.kode.join("/")}.`, `Document code ${fas.kode.join("/")}.`) : tt("Nomornya belum diisi di jadwal; hanya keberadaan dokumennya yang dibandingkan.", "The number is not filled in on the schedule; only the presence of the document is compared.")),
+    );
+  });
   return rows;
 }
 
@@ -2085,7 +2021,6 @@ function cekGambarStatus() {
   } else teks = tt("Siap diperiksa.", "Ready to check.");
   const db = [];
   if (k.dbHs === "gagal") db.push(tt("Database HS Code tidak termuat", "the HS Code database did not load"));
-  if (k.dbMasterlist === "gagal" && k.decl && cekDokumenKode(k.decl, "912").length) db.push(tt("masterlist tidak termuat", "the masterlist did not load"));
   el.className = "cek-status " + kelas;
   el.innerHTML = `<span class="cek-status-titik" aria-hidden="true"></span><span>${escapeHtml(teks)}${db.length ? ` <small>(${escapeHtml(db.join(", "))})</small>` : ""}</span>`;
 }
@@ -2156,7 +2091,7 @@ function showCheckerView() {
   showPage("checker");
   window.scrollTo(0, 0);
   /* Data pendukung dimuat ulang tiap halaman dibuka: HS Code yang baru
-     disimpan di tab lain, masterlist yang baru dicatat. */
+     disimpan di tab lain. */
   cekKeadaan.pendukung = null;
   const pendukung = cekMuatPendukung();
   // Jadwal bisa saja selesai dimuat sesudah berkasnya dipilih

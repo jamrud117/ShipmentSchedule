@@ -5,9 +5,10 @@
    Lembar hitung fisik dari halaman Masterlist: baris yang sedang tampil
    (saringan cari / status / lini / jenis ikut berlaku), dikelompokkan per
    lini proses supaya tim opname bisa berjalan satu lini sekali jalan.
-   Kolomnya mengikuti berkas Excel unduhan -- NO s.d. PIB AJU, PIB DATE --
-   ditambah ACTUAL QTY dan REMARKS yang SENGAJA kosong untuk diisi tangan.
-   Kertas A4 mendatar (landscape).
+   Kolomnya mengikuti berkas Excel unduhan -- NO s.d. PIB AJU, PIB DATE,
+   TANPA HS CODE (yang hanya ada di Excel) -- ditambah ACTUAL QTY dan
+   REMARKS yang SENGAJA kosong untuk diisi tangan. Kertas A4 mendatar
+   (landscape).
 
    HALAMAN DIPECAH SENDIRI, tidak diserahkan ke peramban. Margin @page
    harus nol supaya kop & kaki bawaan peramban ("about:blank", tanggal)
@@ -21,7 +22,8 @@
 
    Teks lembarnya berbahasa Indonesia apa pun bahasa tampilan -- hasil
    cetak adalah dokumen, bukan antarmuka. Judul kolom tabelnya sama
-   dengan berkas Excel supaya keduanya bisa dicocokkan baris per baris.
+   dengan berkas Excel (kecuali HS CODE) supaya keduanya bisa dicocokkan
+   baris per baris.
 */
 
 /* Lebar kolom (mm) -- jumlahnya = lebar isi lembar (297 - 2 x 10). */
