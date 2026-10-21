@@ -56,6 +56,29 @@ function sjCariShipment(id) {
   );
 }
 
+/* Semua nomor mobil sebuah pengajuan: yang pertama (`vehicle`) lalu yang
+   tambahan (`vehicleExtra`, lihat js/features/vehicle-list.js).
+
+   Kiriman export kerap diangkut lebih dari satu mobil. Yang kosong
+   dibuang, dan nomor yang sama diketik dua kali dihitung sekali (spasi &
+   huruf besar-kecil diabaikan saat membandingkan) -- dua baris
+   "B 1234 XY" di surat jalan terbaca seperti dua mobil. Dipakai form
+   (saat menyimpan), cetakan, dan detail, supaya ketiganya satu aturan. */
+function sjDaftarKendaraan(p) {
+  const sumber = p || {};
+  const lihat = new Set();
+  return []
+    .concat(sumber.vehicle || [], sumber.vehicleExtra || [])
+    .map((v) => String(v == null ? "" : v).trim())
+    .filter((v) => {
+      if (!v) return false;
+      const kunci = v.replace(/\s+/g, "").toUpperCase();
+      if (lihat.has(kunci)) return false;
+      lihat.add(kunci);
+      return true;
+    });
+}
+
 /* Qty & kemasan dijumlahkan per SATUAN, bukan ditotal buta.
    "3 SET" dan "2 BOX" tidak bisa dijumlahkan jadi 5 apa pun. */
 function sjTotalPerSatuan(nilaiList) {
@@ -202,9 +225,15 @@ function buildSuratJalanHtml(row, shipment) {
 
   /* Keterangan: satu sel tinggi membentang seluruh tabel, berisi NOMOR
      KENDARAAN — itu yang tercantum pada contoh berkas ("E 1578 MS").
-     Kendaraannya satu untuk seluruh kiriman, jadi memang satu sel. */
-  const ket = [p.vehicle, p.notes].map((v) => String(v || "").trim()).filter(Boolean).join(" · ");
-  const selKet = `<td class="sj-ket" rowspan="${totalBaris}">${escapeHtml(ket)}</td>`;
+     Kiriman yang diangkut beberapa mobil menuliskan semuanya, SATU NOMOR
+     PER BARIS (kolomnya sempit; nomor yang disambung titik tengah
+     terpotong di tengah plat). Catatan, kalau ada, di baris sesudahnya.
+     Tetap satu sel untuk seluruh kiriman. */
+  const ket = sjDaftarKendaraan(p)
+    .concat([String(p.notes || "").trim()].filter(Boolean))
+    .map((v) => escapeHtml(v))
+    .join("<br>");
+  const selKet = `<td class="sj-ket" rowspan="${totalBaris}">${ket}</td>`;
 
   /* Sel Package digambar sekali per BOX, membentang seluruh barang di
      dalamnya. */
@@ -454,7 +483,11 @@ function suratJalanCss() {
   .sj-meta-kiri { width: 55%; vertical-align: top; border-left: 0 !important; }
   .sj-kepada { font-size: 8.5pt; }
   .sj-to { font-weight: 700; font-size: 10pt; margin-top: 2px; }
-  .sj-to-addr { font-size: 8.5pt; line-height: 1.35; white-space: pre-line; }
+  /* Alamat penerima diperkecil lagi (8.5pt -> 7.5pt, sama dengan alamat
+     kop di atasnya): alamat tiga baris yang panjang membuat kotak
+     Kepada terlalu penuh dan ikut menarik tinggi baris Nomor/Tanggal/Ref
+     di sebelahnya. Nama penerima di atasnya tetap 10pt tebal. */
+  .sj-to-addr { font-size: 7.5pt; line-height: 1.3; white-space: pre-line; }
   .sj-lbl { font-size: 8.5pt; text-align: center; }
   .sj-val { text-align: center; font-size: 9pt; }
   .sj-ref { font-size: 9pt; }
@@ -509,6 +542,9 @@ function suratJalanCss() {
     text-align: center;
     vertical-align: middle;
   }
+  /* Beberapa mobil = beberapa baris; jarak antarbarisnya dilonggarkan
+     sedikit supaya nomor platnya tidak terbaca menyambung. */
+  .sj-items td.sj-ket { line-height: 1.6; }
   /* Baris Total adalah baris TERAKHIR tabel. Di bawah konvensi
      atas+kiri, sisi bawahnya tidak dimiliki siapa pun — tidak ada
      baris berikutnya yang menggambar border-top. Jadi ia menutup

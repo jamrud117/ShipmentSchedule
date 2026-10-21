@@ -241,12 +241,15 @@ function dnTampilkanSaringBayar() {
   const grup = document.querySelector(".dn-saring-grup");
   if (grup) grup.classList.toggle("d-none", sembunyi);
 }
+/* `payload->>docNo` = isian "Doc No" di Form Pengajuan Dana (diketik
+   manual, fund-docno.js): mencari Doc No sama saja dengan mencari nomor
+   suratnya. Kolom ini juga dicocokkan di tab Summary (fsumSaring). */
 const DN_KOLOM_CARI = [
   "doc_number", "requester", "department",
   "payload->>payee", "payload->>customer", "payload->>receiver",
   "payload->>recipient", "payload->>subject", "payload->>notes",
   "payload->>invoiceNo", "payload->>billingNo", "payload->>poNo",
-  "payload->>blAwb",
+  "payload->>blAwb", "payload->>docNo",
   "payload->>termsDelivery", "payload->>termPayment",
   "payload->>finalDestination", "payload->>carrier",
   "payload->>transactionType",
@@ -531,6 +534,25 @@ function readDocNumForm(typeKey) {
       out.poNoExtra = pasangan.map((x) => x.no);
       out.poDateExtra = pasangan.map((x) => x.tanggal);
     }
+  }
+  /* Nomor mobil kedua dan seterusnya (Delivery Order). Yang pertama sudah
+     ikut lewat data-dn="vehicle" di atas, sama seperti nomor PO.
+
+     Disatukan lewat sjDaftarKendaraan: kotak kosong dibuang -- kotak
+     pertama kosong tapi yang kedua terisi menjadikan yang kedua mobil
+     pertama, bukan meninggalkan lubang -- dan nomor yang sama diketik dua
+     kali tersimpan sekali. */
+  if (
+    typeKey === "do" &&
+    typeof kendaraanKotakTambahan === "function" &&
+    typeof sjDaftarKendaraan === "function"
+  ) {
+    const semua = sjDaftarKendaraan({
+      vehicle: out.vehicle,
+      vehicleExtra: kendaraanKotakTambahan().map((el) => el.value),
+    });
+    out.vehicle = semua[0] || "";
+    if (semua.length > 1) out.vehicleExtra = semua.slice(1);
   }
   if (typeof doLines !== "undefined" && typeKey === "do" && out.doKind === "Lokal") {
     const bersih = doLinesBersih(doLines);
@@ -1086,6 +1108,9 @@ function dnFotoDraf(panel, tab) {
     po: dalam("#poNoList") && typeof poNoKotakTambahan === "function"
       ? { no: poNoKotakTambahan().map((el) => el.value), tgl: poTglKotakTambahan().map((el) => el.value) }
       : null,
+    kendaraan: dalam("#vehicleList") && typeof kendaraanKotakTambahan === "function"
+      ? kendaraanKotakTambahan().map((el) => el.value)
+      : null,
     fundLines: tab === "fund" && typeof fundLines !== "undefined" ? salin(fundLines) : null,
     fundDokumen: tab === "fund" && typeof fundDokumen !== "undefined" ? salin(fundDokumen) : null,
     doLines: tab === "do" && typeof doLines !== "undefined" ? salin(doLines) : null,
@@ -1109,6 +1134,7 @@ function dnPulihkanDraf(panel, tab, draf) {
     x.el.classList.toggle("is-invalid", !!teks && !dnPetaJadwal.get(teks));
   });
   if (draf.po) setPoNoExtra(draf.po.no, draf.po.tgl);
+  if (draf.kendaraan) setKendaraanExtra(draf.kendaraan);
   if (draf.fundLines) {
     // Dokumen dulu: pengelompokan baris rincian bergantung padanya
     setFundDokumen(draf.fundDokumen || []);
@@ -1203,6 +1229,10 @@ function mulaiUbahDocNum(id) {
       (r.payload && r.payload.poNoExtra) || [],
       (r.payload && r.payload.poDateExtra) || [],
     );
+  }
+  if (typeof setKendaraanExtra === "function" && String(r.doc_type || "").startsWith("do")) {
+    // Mobil kedua dst.; yang pertama sudah terisi lewat isi("vehicle") di atas
+    setKendaraanExtra((r.payload && r.payload.vehicleExtra) || []);
   }
   if (typeof setDoLines === "function" && String(r.doc_type || "").startsWith("do")) {
     setDoLines((r.payload && r.payload.items) || []);
@@ -1893,6 +1923,7 @@ function resetDocNumForm(typeKey, opts) {
     elCari.classList.remove("is-invalid");
   });
   if (typeof setPoNoExtra === "function") setPoNoExtra([], []);
+  if (typeof setKendaraanExtra === "function" && typeKey === "do") setKendaraanExtra([]);
   if (typeof setDoLines === "function" && typeKey === "do") setDoLines([]);
   if (typeof setFundLines === "function" && typeKey === "fund") {
     if (typeof setFundDokumen === "function") setFundDokumen([]);

@@ -49,6 +49,7 @@ const cekKeadaan = {
   galatCipl: "",
   decl: null, // hasil EximEngine.extractDeclaration
   bc: null, // hasil parseBcExcelWorkbook (bentuk isian jadwal) -- excel-bc.js
+  draftDiurutkan: false, // baris sheet BARANG di berkasnya TIDAK berurutan Seri Barang, lalu diurutkan (cekBacaDraft)
   galatDraft: "",
   membaca: false,
   bacaKe: 0, // nomor urut pembacaan: jawaban yang usang dibuang
@@ -212,14 +213,21 @@ async function cekBacaDraft(file) {
   const decl = EximEngine.extractDeclaration(wb);
   if (decl.type !== "PIB" && decl.type !== "PEB") throw new Error(tt("Jenis dokumen tidak dikenali sebagai PIB atau PEB.", "The document type was not recognised as PIB or PEB."));
   // Barang draft urut menurut SERI BARANG (baris sheet BARANG tidak selalu berurutan) -- sama dengan impor ke form
+  const urutDiBerkas = (decl.items || []).map((d) => String(d.no));
   decl.items = urutMenurutSeri(decl.items || [], (d) => d.no);
+  /* Ekspor Excel CEISA kerap mengacak baris BARANG. Dicatat apakah urutan
+     di berkasnya memang berbeda dari Seri Barang, supaya halaman bisa
+     memberi tahu bahwa barang SUDAH diurutkan (cekRingkasDraft) -- tanpa
+     itu pengguna tidak punya cara melihat bahwa pengurutan terjadi, dan
+     berkas yang sudah rapi tidak perlu diberi keterangan apa pun. */
+  const diurutkan = decl.items.some((d, i) => String(d.no) !== urutDiBerkas[i]);
   let bc = null;
   try {
     bc = parseBcExcelWorkbook(wb);
   } catch (e) {
     console.warn("parseBcExcelWorkbook:", e);
   }
-  return { decl, bc };
+  return { decl, bc, diurutkan };
 }
 
 async function cekProses() {
@@ -236,6 +244,7 @@ async function cekProses() {
     galatCipl = k.galatCipl,
     decl = k.decl,
     bc = k.bc,
+    diurutkan = k.draftDiurutkan,
     galatDraft = k.galatDraft;
   if (bacaCipl) {
     cipl = null;
@@ -252,10 +261,11 @@ async function cekProses() {
   if (bacaDraft) {
     decl = null;
     bc = null;
+    diurutkan = false;
     galatDraft = "";
     if (k.berkasDraft) {
       try {
-        ({ decl, bc } = await cekBacaDraft(k.berkasDraft));
+        ({ decl, bc, diurutkan } = await cekBacaDraft(k.berkasDraft));
       } catch (e) {
         console.error(e);
         galatDraft = (e && e.message) || tt("Draft tidak terbaca.", "The draft could not be read.");
@@ -263,7 +273,7 @@ async function cekProses() {
     }
   }
   if (nomor !== k.bacaKe) return; // sudah ada berkas yang lebih baru
-  Object.assign(k, { cipl, galatCipl, decl, bc, galatDraft, kunciCipl, kunciDraft, membaca: false });
+  Object.assign(k, { cipl, galatCipl, decl, bc, draftDiurutkan: !!diurutkan, galatDraft, kunciCipl, kunciDraft, membaca: false });
   cekPerbaruiKandidat();
   cekIsiBl();
   await cekJalankan();
@@ -1996,7 +2006,18 @@ function cekRingkasDraft() {
   const d = cekKeadaan.decl;
   if (!d) return "";
   const nilai = d.type === "PEB" ? d.fob : d.cif;
-  return [d.type, d.aju ? `Aju ${d.aju}` : "", tt(`${d.items.length} barang`, `${d.items.length} ${d.items.length === 1 ? "item" : "items"}`), nilai != null ? `${d.currency || ""} ${cekAngka(nilai)}`.trim() : ""].filter(Boolean).join(" · ");
+  return [
+    d.type,
+    d.aju ? `Aju ${d.aju}` : "",
+    tt(`${d.items.length} barang`, `${d.items.length} ${d.items.length === 1 ? "item" : "items"}`),
+    nilai != null ? `${d.currency || ""} ${cekAngka(nilai)}`.trim() : "",
+    /* Hanya bila urutan di berkasnya memang acak: pengguna jadi tahu
+       barang SUDAH disusun menurut Seri Barang (1, 2, 3, …) sebelum
+       dibandingkan, tanpa perlu memeriksa sendiri. */
+    cekKeadaan.draftDiurutkan ? tt("barang diurutkan menurut Seri Barang", "items sorted by Seri Barang") : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function cekGambarKotak(id, berkas, ringkas, galat, kosong) {
@@ -2154,7 +2175,7 @@ function cekTeksTemuan() {
 
 function cekMulaiUlang() {
   Object.assign(cekKeadaan, {
-    berkasCipl: [], berkasDraft: null, kunciCipl: "", kunciDraft: "", cipl: null, galatCipl: "", decl: null, bc: null, galatDraft: "",
+    berkasCipl: [], berkasDraft: null, kunciCipl: "", kunciDraft: "", cipl: null, galatCipl: "", decl: null, bc: null, draftDiurutkan: false, galatDraft: "",
     jadwalId: "", jadwalManual: false, kandidat: [], pilihTerbuka: false, hasil: null, galatCek: "", saring: "ALL",
   });
   cekKeadaan.bacaKe++;

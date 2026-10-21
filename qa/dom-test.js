@@ -2261,6 +2261,234 @@ t("daftar barang manual hanya tersimpan untuk Lokal", () => {
 t("baris tanpa nama barang tidak ikut tersimpan", () => {
   eq(w.doLinesBersih([{ nama: "A" }, { nama: "" }, { nama: "  " }]).length, 1);
 });
+
+console.log("— SURAT JALAN: LEBIH DARI SATU NOMOR MOBIL —");
+/* Kiriman export kerap diangkut beberapa mobil. Kotak No. Kendaraan
+   pertama tetap data-dn="vehicle" (pengajuan lama terbaca tanpa
+   migrasi); mobil berikutnya = `vehicleExtra`, ditambah lewat tombol
+   "+ Nomor Mobil". */
+const panelDo = () => w.document.querySelector('[data-docnum-panel="do"]');
+const kotakMobil = () => panelDo().querySelector('#vehicleList [data-dn="vehicle"]');
+const bersihkanMobil = () => {
+  w.setKendaraanExtra([]);
+  kotakMobil().value = "";
+};
+t("No. Kendaraan: kotak pertama tetap data-dn=vehicle, tombol + Nomor Mobil ada di panel DO", () => {
+  if (!kotakMobil()) throw new Error("kotak pertama bukan data-dn=vehicle di #vehicleList");
+  const tombol = panelDo().querySelector("#btnVehicleAdd");
+  if (!tombol) throw new Error("tombol + Nomor Mobil tidak ada di panel Delivery Order");
+  eq(tombol.textContent.replace(/\s+/g, " ").trim(), "Nomor Mobil", "teks tombol:");
+  if (!tombol.querySelector(".bi-plus-lg")) throw new Error("tombol tanpa tanda +");
+  if (tombol.closest("#vehicleList")) throw new Error("tombol di dalam daftar -- ikut terhapus saat daftar digambar ulang");
+  eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 0, "bawaannya satu kotak saja:");
+});
+t("tombol + Nomor Mobil di baris label: tinggi baris pertama form tidak bertambah", () => {
+  /* Kalau tombolnya di bawah kotak, sel No. Kendaraan lebih tinggi dari
+     tiga isian di sebelahnya dan seluruh form turun ke bawah. */
+  const sel = panelDo().querySelector(".dn-kendaraan");
+  const kepala = sel.querySelector(".fl-head");
+  if (!kepala || !kepala.contains(sel.querySelector("#btnVehicleAdd"))) throw new Error("tombol tidak di baris label (.fl-head)");
+  if (!kepala.contains(sel.querySelector(".form-label"))) throw new Error("label bukan di baris yang sama dengan tombol");
+});
+t("tombol + Nomor Mobil menambah kotak, dan kotaknya bisa dihapus", () => {
+  try {
+    w.document.getElementById("btnVehicleAdd").click();
+    w.document.getElementById("btnVehicleAdd").click();
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 2, "dua kali klik:");
+    eq(w.document.activeElement === w.document.querySelectorAll("#vehicleList [data-veh-extra]")[1], true, "kursor di kotak yang baru:");
+    w.document.querySelector("#vehicleList [data-veh-del]").click();
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 1, "sesudah hapus:");
+  } finally {
+    bersihkanMobil();
+  }
+});
+t("mobil kedua dst. ikut tersimpan (vehicleExtra) & dipulihkan; satu mobil tidak membawa vehicleExtra", () => {
+  try {
+    kotakMobil().value = "B 1111 AA";
+    eq(w.readDocNumForm("do").vehicle, "B 1111 AA", "satu mobil:");
+    eq("vehicleExtra" in w.readDocNumForm("do"), false, "satu mobil tanpa vehicleExtra:");
+
+    w.setKendaraanExtra(["B 2222 BB", "B 3333 CC"]);
+    const kotak = [...w.document.querySelectorAll("#vehicleList [data-veh-extra]")];
+    eq(kotak.map((el) => el.value).join(","), "B 2222 BB,B 3333 CC", "dipulihkan:");
+    const isi = w.readDocNumForm("do");
+    eq(isi.vehicle, "B 1111 AA", "mobil pertama:");
+    eq((isi.vehicleExtra || []).join(","), "B 2222 BB,B 3333 CC", "mobil berikutnya:");
+  } finally {
+    bersihkanMobil();
+  }
+});
+t("kotak mobil kosong dibuang, nomor kembar sekali, kotak pertama kosong digantikan yang kedua", () => {
+  try {
+    kotakMobil().value = "B 1111 AA";
+    w.setKendaraanExtra(["", "  b1111aa ", "B 3333 CC", "   "]);
+    const a = w.readDocNumForm("do");
+    eq(a.vehicle, "B 1111 AA", "pertama:");
+    eq((a.vehicleExtra || []).join(","), "B 3333 CC", "kosong & kembar dibuang:");
+
+    kotakMobil().value = "";
+    w.setKendaraanExtra(["B 2222 BB"]);
+    const b = w.readDocNumForm("do");
+    eq(b.vehicle, "B 2222 BB", "kotak pertama kosong -> yang kedua jadi pertama:");
+    eq("vehicleExtra" in b, false, "tidak ada sisa:");
+
+    bersihkanMobil();
+    const c = w.readDocNumForm("do");
+    eq(c.vehicle, "", "semua kosong:");
+    eq("vehicleExtra" in c, false, "semua kosong tanpa vehicleExtra:");
+  } finally {
+    bersihkanMobil();
+  }
+});
+t("mobil tambahan hanya milik form Delivery Order: form lain tidak membawa vehicleExtra", () => {
+  try {
+    w.setKendaraanExtra(["B 2222 BB"]);
+    eq("vehicleExtra" in w.readDocNumForm("invoice"), false, "invoice:");
+    eq("vehicleExtra" in w.readDocNumForm("fund"), false, "fund:");
+  } finally {
+    bersihkanMobil();
+  }
+});
+t("resetDocNumForm('do') mengosongkan mobil tambahan; mengosongkan form lain tidak menyentuhnya", () => {
+  try {
+    w.setKendaraanExtra(["B 2222 BB"]);
+    w.resetDocNumForm("fund");
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 1, "form Dana direset:");
+    w.resetDocNumForm("do");
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 0, "form DO direset:");
+  } finally {
+    bersihkanMobil();
+  }
+});
+t("sjDaftarKendaraan: pertama + tambahan, kosong dibuang, kembar (spasi & huruf besar-kecil) sekali", () => {
+  const daftar = (p) => w.sjDaftarKendaraan(p).join("|");
+  eq(daftar({ vehicle: "E 1578 MS" }), "E 1578 MS", "satu:");
+  eq(daftar({ vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC"] }), "B 1 AA|B 2 BB|B 3 CC", "beberapa:");
+  eq(daftar({ vehicle: " B 1 AA ", vehicleExtra: ["", "b1aa", "B  2  BB", "b 2 bb"] }), "B 1 AA|B  2  BB", "kosong & kembar:");
+  eq(daftar({ vehicleExtra: ["B 2 BB"] }), "B 2 BB", "tanpa mobil pertama:");
+  eq(daftar({}), "", "tidak ada:");
+  eq(daftar(null), "", "null:");
+  eq(daftar({ vehicle: "B 1 AA", vehicleExtra: "B 9 ZZ" }), "B 1 AA|B 9 ZZ", "vehicleExtra bukan larik tidak membuat galat:");
+});
+t("surat jalan Export: semua nomor mobil tercetak di kolom Keterangan, satu per baris", () => {
+  const h = w.buildSuratJalanHtml({
+    id: "m1", doc_number: "030/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Yogi",
+    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1111 AA", vehicleExtra: ["B 2222 BB", "B 3333 CC"] },
+  }, null);
+  const sel = /<td class="sj-ket" rowspan="\d+">([^<]*(?:<br>[^<]*)*)<\/td>/.exec(h);
+  if (!sel) throw new Error("sel Keterangan berisi nomor mobil tidak ditemukan");
+  eq(sel[1], "B 1111 AA<br>B 2222 BB<br>B 3333 CC", "isi Keterangan:");
+});
+t("surat jalan Export: satu mobil tercetak seperti semula; nomor kembar tidak dicetak dua kali", () => {
+  const cetak = (payload) => {
+    const h = w.buildSuratJalanHtml({ id: "m2", doc_number: "031/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+      payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) }, null);
+    return (/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1];
+  };
+  eq(cetak({ vehicle: "E 1578 MS" }), "E 1578 MS", "satu mobil:");
+  eq(cetak({ vehicle: "E 1578 MS", vehicleExtra: ["e1578ms"] }), "E 1578 MS", "kembar:");
+  eq(cetak({}), "", "tanpa mobil:");
+  eq(cetak({ vehicle: "B 1 AA<script>", vehicleExtra: ["B 2 \"BB\""] }), "B 1 AA&lt;script&gt;<br>B 2 &quot;BB&quot;", "disaring:");
+});
+t("surat jalan Export: catatan di baris sesudah nomor mobil", () => {
+  const h = w.buildSuratJalanHtml({ id: "m3", doc_number: "032/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"], notes: "Kirim pagi" } }, null);
+  eq((/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1], "B 1 AA<br>B 2 BB<br>Kirim pagi", "isi Keterangan:");
+});
+t("surat jalan Export: sel Keterangan tetap SATU sel setinggi tabel walau mobilnya banyak", () => {
+  const h = w.buildSuratJalanHtml({ id: "m4", doc_number: "033/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC", "B 4 DD"],
+      items: [{ nama: "RUBBER", qty: "1", satuan: "PCS" }] } }, null);
+  eq((h.match(/class="sj-ket" rowspan=/g) || []).length, 1, "jumlah sel Keterangan berisi nomor:");
+  /* Satu barang + satu ruang kosong sisa tabel = dua baris badan; sel
+     Keterangan membentang keduanya, berapa pun nomor mobilnya. */
+  eq((/class="sj-ket" rowspan="(\d+)"/.exec(h) || [])[1], "2", "rentang sel Keterangan:");
+});
+t("alamat penerima di surat jalan Export lebih kecil dari label Kepada & dari 8.5pt sebelumnya", () => {
+  const css = w.suratJalanCss();
+  const ukuran = (sel) => {
+    const i = css.indexOf(sel + " {");
+    if (i < 0) throw new Error("aturan hilang: " + sel);
+    const m = /font-size:\s*([\d.]+)pt/.exec(css.slice(i, css.indexOf("}", i)));
+    if (!m) throw new Error(sel + ": ukuran huruf tidak ditulis dalam pt");
+    return Number(m[1]);
+  };
+  const alamat = ukuran(".sj-to-addr");
+  if (!(alamat < 8.5)) throw new Error("alamat penerima masih " + alamat + "pt (harus lebih kecil dari 8.5pt)");
+  if (!(alamat < ukuran(".sj-kepada"))) throw new Error("alamat tidak lebih kecil dari label Kepada");
+  if (alamat < 7) throw new Error("alamat " + alamat + "pt terlalu kecil untuk dicetak");
+  eq(ukuran(".sj-to"), 10, "nama penerima tidak ikut diperkecil:");
+});
+t("detail pengajuan Surat Jalan: semua nomor mobil tampil, vehicleExtra tidak jatuh ke Lainnya", () => {
+  const { badan } = dndBuka({ id: "m5", doc_type: "do", doc_number: "034/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05",
+    requester: "Yogi", department: "EXIM", payload: { receiver: "PT A", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC"] } });
+  const butir = [...badan.querySelectorAll('[data-dnd="vehicle"] .dnd-butir')].map((el) => el.textContent.trim());
+  eq(butir.join("|"), "B 1 AA|B 2 BB|B 3 CC", "butir mobil:");
+  if (badan.querySelector('[data-dnd="vehicleExtra"]')) throw new Error("vehicleExtra tampil terpisah di Lainnya");
+  // Pengajuan lama: satu nomor saja, tampil seperti biasa
+  const lama = dndBuka({ id: "m6", doc_type: "do", doc_number: "035/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05",
+    payload: { receiver: "PT A", vehicle: "B 9 ZZ" } }).badan;
+  eq(dndNilaiIsian(lama, "vehicle"), "B 9 ZZ", "satu nomor:");
+});
+t("pengajuan lama (satu nomor) terbuka tanpa kotak tambahan; yang punya vehicleExtra membuka kotaknya", () => {
+  const simpan = baca("docNumActiveTab");
+  try {
+    w.showDocNumTab("do");
+    tulis("docNumHistoryRows", [
+      { id: "mo1", doc_type: "do", doc_number: "036/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Yogi Firgiawan",
+        payload: { receiver: "PT A", vehicle: "B 9760 URU" } },
+      { id: "mo2", doc_type: "do", doc_number: "037/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Yogi Firgiawan",
+        payload: { receiver: "PT A", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC"] } },
+    ]);
+    w.mulaiUbahDocNum("mo1");
+    eq(kotakMobil().value, "B 9760 URU", "mobil pertama nomor lama:");
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 0, "nomor lama tanpa kotak tambahan:");
+    w.batalUbahDocNum();
+
+    w.mulaiUbahDocNum("mo2");
+    eq(kotakMobil().value, "B 1 AA", "mobil pertama:");
+    eq([...w.document.querySelectorAll("#vehicleList [data-veh-extra]")].map((el) => el.value).join(","), "B 2 BB,B 3 CC", "mobil berikutnya:");
+    w.batalUbahDocNum();
+  } finally {
+    if (baca("dnUbahSesi")) w.batalUbahDocNum();
+    bersihkanMobil();
+    w.showDocNumTab(simpan);
+  }
+});
+t("PENJAGA: Enter di kotak mobil tidak diambil alih -- tetap pindah ke isian berikutnya", () => denganTampil(() => {
+  /* Satu mobil adalah kasus terbanyak. Menandai #vehicleList sebagai
+     [data-enter-sendiri] membuat Enter di kotak itu tidak berbuat apa-apa
+     -- tidak pindah, tidak menambah. */
+  if (w.document.querySelector("#vehicleList[data-enter-sendiri], #vehicleList [data-enter-sendiri]"))
+    throw new Error("#vehicleList mengurus Enter-nya sendiri");
+  const simpanTab = baca("docNumActiveTab");
+  const enter = (el) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  /* Halaman No. Dokumen tidak sedang dibuka di harness, jadi induknya
+     ber-.d-none -- bisaDiisi() menganggap SEMUA isian di dalamnya tidak
+     bisa diisi dan Enter loncat ke tombol Ajukan. Dibuka sementara. */
+  const pulih = [];
+  for (let x = panelDo(); x && x !== w.document.documentElement; x = x.parentElement) {
+    if (x.classList.contains("d-none")) { x.classList.remove("d-none"); pulih.push(() => x.classList.add("d-none")); }
+    if (x.hidden) { x.hidden = false; pulih.push(() => { x.hidden = true; }); }
+  }
+  try {
+    w.showDocNumTab("do");
+    w.setKendaraanExtra(["B 2 BB"]);
+    const pertama = kotakMobil();
+    const kedua = panelDo().querySelector("#vehicleList [data-veh-extra]");
+    pertama.focus();
+    enter(pertama);
+    eq(w.document.activeElement === kedua, true, "Enter dari mobil pertama menuju mobil kedua:");
+    // Dari mobil terakhir: ke isian berikutnya di form, BUKAN menambah kotak
+    enter(kedua);
+    eq(w.document.activeElement === panelDo().querySelector('[data-dn="receiver"]'), true, "Enter dari mobil terakhir menuju Tujuan / Penerima:");
+    eq(w.document.querySelectorAll("#vehicleList [data-veh-extra]").length, 1, "Enter tidak menambah kotak:");
+  } finally {
+    bersihkanMobil();
+    pulih.forEach((f) => f());
+    w.showDocNumTab(simpanTab);
+  }
+}));
 t("Pengajuan Dana bertab per Jenis Pengeluaran, dengan tab Semua", () => {
   const simpanTab = baca("docNumActiveTab");
   const box = w.document.getElementById("docNumSubTabs");
@@ -3436,6 +3664,59 @@ t("pencarian dikirim ke DATABASE (bukan menyaring halaman di layar)", async () =
     w.eval("supabaseClient.from = window.supabaseClient_from_asli; docNumCari = ''");
     w.eval("docNumActiveTab = " + JSON.stringify(tab));
   }
+});
+t("Doc No (Pengajuan Dana) ikut dicari di riwayat: filter database, kata kunci angka (dicocokkan di aplikasi), dan tab Summary", async () => {
+  // 1. Filter database memuat kolom Doc No beserta kata kuncinya (tanda yang merusak filter tetap dibuang)
+  const filter = w.dnFilterCari("DOC-2610/045");
+  if (!filter.includes('payload->>docNo.ilike."%DOC-2610/045%"')) throw new Error("Doc No tidak ikut filter database: " + filter);
+  if (!w.dnFilterCari('Doc, (No)').includes('payload->>docNo.ilike."%Doc No%"')) throw new Error("kata kunci Doc No tidak dibersihkan");
+  // 2. Pencocokan di aplikasi (jalur kata kunci angka): isian teks yang sama, tanpa beda huruf; tanpa Doc No tidak cocok
+  const baris = barisDana("fd1", { payee: "FEDEX", docNo: "Ab-20261045", amount: "1" });
+  eq(["ab-2026", "20261045", "ZZZ"].map((q) => w.dnCocokCari(baris, "fund", q)).join(","), "true,true,false", "dnCocokCari:");
+  eq(w.dnCocokCari(barisDana("fd2", { payee: "PRIME", amount: "1" }), "fund", "20261045"), false, "pengajuan tanpa Doc No:");
+  // 3. Riwayat dengan database tiruan yang hanya mengenal kolom Doc No: kata kunci teks lewat filter `or`, kata kunci angka lewat seluruh riwayat
+  const asli = w.eval("supabaseClient.from");
+  const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub"), cari: baca("docNumCari"), hal: baca("docNumPage"), ukuran: baca("docNumPageSize") };
+  let orDipanggil = null;
+  try {
+    w.__barisUji = [
+      barisDana("f1", { payee: "FEDEX", docNo: "20261045", amount: "100" }),
+      barisDana("f2", { payee: "DHL", docNo: "DOC-2610/046", amount: "200" }),
+      barisDana("f3", { payee: "PRIME", amount: "300" }),
+    ];
+    w.__catat = { or: (s) => (orDipanggil = s) };
+    // Kolom Doc No di filter `or` -> baris yang Doc No-nya memuat kata kunci itu
+    w.__saringDb = (or) => {
+      const m = /payload->>docNo\.ilike\."%(.*?)%"/.exec(or || "");
+      return m ? w.__barisUji.filter((r) => String((r.payload || {}).docNo || "").toLowerCase().includes(m[1].toLowerCase())) : w.__barisUji;
+    };
+    w.eval(`supabaseClient.from = () => { let kata = ""; const c = { select: () => c, eq: () => c, filter: () => c, not: () => c, is: () => c,
+      or: (s) => { kata = s; window.__catat.or(s); return c; }, order: () => c,
+      range: async () => { const data = window.__saringDb(kata); return { data, error: null, count: data.length }; } }; return c; }`);
+    const id = () => w.eval("docNumHistoryRows").map((r) => r.id).join(",");
+    w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumPage = 1; docNumPageSize = 10; docNumCari = "doc-2610"');
+    await w.renderDocNumHistory();
+    eq(id(), "f2", "kata kunci teks mengenai Doc No:");
+    if (!orDipanggil || !orDipanggil.includes('payload->>docNo.ilike."%doc-2610%"')) throw new Error("filter `or` tanpa Doc No: " + orDipanggil);
+    orDipanggil = null;
+    w.eval('docNumCari = "20261045"');
+    await w.renderDocNumHistory();
+    eq(id(), "f1", "Doc No berupa angka:");
+    eq(orDipanggil, null, "kata kunci angka: dicocokkan di aplikasi, bukan lewat filter:");
+    w.eval('docNumCari = "tidak-ada-doc"');
+    await w.renderDocNumHistory();
+    if (!/tidak-ada-doc/.test(w.document.getElementById("docNumHistory").textContent)) throw new Error("pesan kosong tidak menyebut kata kuncinya");
+  } finally {
+    w.supabaseClient_from_asli = asli;
+    w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+    w.eval(`docNumActiveTab = ${JSON.stringify(simpan.tab)}; docNumHistorySub = ${JSON.stringify(simpan.sub)}; docNumCari = ${JSON.stringify(simpan.cari)};
+      docNumPage = ${simpan.hal}; docNumPageSize = ${simpan.ukuran};`);
+  }
+  // 4. Tab Summary memakai kotak cari yang sama
+  const k = kolomDana([barisDana("s1", { payee: "FEDEX", docNo: "DOC-777", amount: "1" }), barisDana("s2", { payee: "DHL", amount: "1" })]);
+  const cari = (q) => w.fsumSaring(k, { dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", q }).map((x) => x.id).join(",");
+  eq([cari("doc-777"), cari("777"), cari("tidak-ada")].join(" | "), "s1 | s1 | ", "Summary:");
+  eq(k.map((x) => x.docNo).join("|"), "DOC-777|", "kolom Summary menyimpan Doc No:");
 });
 t("kotak cari: kata kunci berupa nominal -- dengan / tanpa pemisah ribuan, 'Rp.', sen; selain itu bukan nominal", () => {
   const A = (q) => JSON.stringify(w.dnAngkaCari(q));
@@ -5612,7 +5893,7 @@ t("tombol hapus baris (x) berbentuk sama di semua daftar isian", () => {
   const form = require("fs").readFileSync(__dirname + "/../css/form.css", "utf8");
   if (/table\.item-table \.rm-row/.test(form)) throw new Error("aturan khusus item-table masih ada (kembar)");
   // Semua daftar memakai kelas yang sama
-  ["fund-lines.js", "do-lines.js", "surat-bc.js", "po-list.js", "item-table.js"].forEach((f) => {
+  ["fund-lines.js", "do-lines.js", "surat-bc.js", "po-list.js", "vehicle-list.js", "item-table.js"].forEach((f) => {
     const js = require("fs").readFileSync(__dirname + "/../js/features/" + f, "utf8");
     if (!/class="rm-row"/.test(js)) throw new Error(f + ": tombol hapus tidak memakai .rm-row");
   });
@@ -18568,6 +18849,37 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(sub.value, "Lokal", "sub-jenis draf:");
       sub.value = "Export";
     }));
+
+    t("pop-up Surat Jalan Export: nomor mobil draf (pertama & tambahan) ikut kembali, mobil nomor itu yang tampil di pop-up", async () => dengan("do", async () => {
+      tulis("docNumHistoryRows", [{ id: "pm1", doc_type: "do", doc_number: "038/EXIM-LOG/X/2026", doc_date: "2026-10-05",
+        requester: "Yogi Firgiawan", payload: { doKind: "Export", receiver: "PT LAMA", vehicle: "B 1 LAMA", vehicleExtra: ["B 2 LAMA"] } }]);
+      const panel = w.docNumPanelEl("do");
+      kotak("vehicle", panel).value = "B 1 DRAF";
+      w.setKendaraanExtra(["B 2 DRAF", "B 3 DRAF"]);
+      w.mulaiUbahDocNum("pm1");
+      eq(kotak("vehicle", panel).value, "B 1 LAMA", "mobil pertama di pop-up:");
+      eq(w.kendaraanKotakTambahan().map((el) => el.value).join(","), "B 2 LAMA", "mobil tambahan di pop-up:");
+      w.batalUbahDocNum();
+      eq(kotak("vehicle", panel).value, "B 1 DRAF", "mobil pertama draf:");
+      eq(w.kendaraanKotakTambahan().map((el) => el.value).join(","), "B 2 DRAF,B 3 DRAF", "mobil tambahan draf:");
+    }));
+
+    t("pop-up Surat Jalan: Simpan menulis vehicleExtra ke nomor yang dibuka", async () => dengan("do", async () => {
+      tulis("docNumHistoryRows", [{ id: "pm2", doc_type: "do", doc_number: "039/EXIM-LOG/X/2026", doc_date: "2026-10-05",
+        requester: "Yogi Firgiawan", payload: { doKind: "Export", receiver: "PT LAMA", address: "Jakarta", vehicle: "B 1 LAMA" } }]);
+      const panel = w.docNumPanelEl("do");
+      w.mulaiUbahDocNum("pm2");
+      eq(w.kendaraanKotakTambahan().length, 0, "nomor lama tanpa mobil tambahan:");
+      w.document.getElementById("btnVehicleAdd").click();
+      w.kendaraanKotakTambahan()[0].value = "B 2 BARU";
+      const n = jejakUpdate.length;
+      await w.simpanUbahDocNum();
+      eq(jejakUpdate.length, n + 1, "tersimpan sekali:");
+      const u = jejakUpdate[jejakUpdate.length - 1];
+      eq(u.id, "pm2", "ke nomor yang dibuka:");
+      eq(u.row.payload.vehicle, "B 1 LAMA", "mobil pertama:");
+      eq((u.row.payload.vehicleExtra || []).join(","), "B 2 BARU", "mobil tambahan:");
+    }));
   }
 
   console.log("— DOKUMEN PELENGKAP CEISA: MASTERLIST, SKB, PI —");
@@ -18839,7 +19151,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       w.XLSX = XLSXuji;
       w.ambilHsCodes = async () => { w.eval("hsCodeRows = " + JSON.stringify(DB_HS_UJI)); return w.eval("hsCodeRows"); };
       w.eval('KURS_PAJAK_DATA = { periode: [{ mulai: "2026-01-01", sampai: "2099-12-31", kmk: "UJI/MK/2026", kurs: { USD: 16500 } }] }');
-      w.__dataUji = [[JADWAL_LAIN, o.jadwal || jadwalCek(o.hsBlade == null ? "84807110" : o.hsBlade)], []];
+      // `ekspor`: jadwal buku Export (PEB dicari di sana, bukan di buku Import)
+      w.__dataUji = [[JADWAL_LAIN, o.jadwal || jadwalCek(o.hsBlade == null ? "84807110" : o.hsBlade)], o.ekspor || []];
       w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
       try {
         w.cekMulaiUlang();
@@ -19065,9 +19378,112 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       await denganCek(async (k) => {
         await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", draft)], "cipl");
         eq(k.decl.items.map((d) => d.no).join(","), "1,2,3", "urut seri:");
+        eq(k.draftDiurutkan, true, "urutan di berkas memang acak -> ditandai:");
         eq(["Item 1 Uraian", "Item 2 Uraian", "Item 3 Uraian"].map((f) => barisCek(k, f).pib_display).join(","), "TYRE MOLD,VENT SPRING,BLADE", "pasangan:");
         eq(["Item 1 Quantity", "Item 2 Quantity", "Item 3 Quantity"].map((f) => barisCek(k, f).status).join(","), "MATCH,MATCH,MATCH", "jumlah:");
         eq(k.hasil.summary.mismatches, 0, "tanpa mismatch:");
+      });
+    });
+
+    /* PEB tiruan seperti ekspor CEISA yang acak: 8 barang BERNAMA SAMA (hanya Tipenya yang beda), baris sheet BARANG
+       tidak berurutan -- Seri Barang menurut urutan barisnya: 2,6,4,5,3,7,1,8. Isinya buatan sendiri. */
+    const TIPE_PEB = ["255/55R18", "255/60R18", "215/55R17", "225/45ZR17", "225/50ZR17", "225/55R17", "235/55R17", "235/45ZR17"].map((u) => "AUTOGRAPH ULTRA 5 SUV " + u);
+    const AJU_PEB = "000030DDI00020261015000123";
+    const SERI_ACAK = [2, 6, 4, 5, 3, 7, 1, 8];
+    const SERI_URUT = [1, 2, 3, 4, 5, 6, 7, 8];
+    const bukuPebUji = (urut) => {
+      const wb = XLSXuji.utils.book_new();
+      const lembar = (n, b) => XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(b), n);
+      lembar("HEADER", [{ "NOMOR AJU": AJU_PEB, "KODE JENIS EKSPOR": "1", "KODE KANTOR EKSPOR": "040300", "KODE VALUTA": "USD", "KODE INCOTERM": "FOB", NDPBM: 16500, FOB: 8000, NETTO: 800, BRUTO: 900 }]);
+      lembar("DOKUMEN", [{ SERI: 1, "KODE DOKUMEN": "380", "NOMOR DOKUMEN": "DD-EKS-2610", "TANGGAL DOKUMEN": "2026-10-10" }]);
+      lembar("BARANG", urut.map((n) => ({ "SERI BARANG": n, HS: "84807190", "KODE BARANG": "-", URAIAN: "TYRE MOLD TREAD ONLY", MEREK: "-", TIPE: TIPE_PEB[n - 1], "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 100, FOB: 1000 })));
+      return wb;
+    };
+    // Jadwal buku Export; `urut` = Seri Barang tiap barangnya menurut urutan di jadwal
+    const jadwalPeb = (urut) => ({
+      id: "cek-eks-1", mode: "export", party: "PT UJI EKSPOR", noAju: AJU_PEB, docNo: "", invoice: "DD-EKS-2610", invoiceDate: "2026-10-10",
+      transport: "laut", incoterm: "FOB", ndpbm: 16500, etd: "2026-10-20", status: "process",
+      items: urut.map((n) => Object.assign(w.newItem("export"), { namaBarang: "TYRE MOLD TREAD ONLY", merek: "-", tipe: TIPE_PEB[n - 1], hsCode: "84807190", qty: 1, satuan: "SET", netto: 100, harga: 1000 })),
+    });
+    const ketDraft = () => $("#cekDropDraft .cek-drop-ket").textContent;
+    const grupBarang = () => [...w.document.querySelectorAll('#cekDaftar details[data-cek-grup^="ITEM-"]')].map((d) => d.dataset.cekGrup + " " + d.querySelector("summary b").textContent).join(" | ");
+    const GRUP_URUT = SERI_URUT.map((n) => `ITEM-${n} Barang ${n}`).join(" | ");
+    const pasanganTipe = (k) => SERI_URUT.map((n) => { const x = barisCek(k, `Item ${n} Tipe`); return `${n}:${x.cipl_display}/${x.pib_display}:${x.status}`; }).join(" ");
+    const TIPE_SEMUA = SERI_URUT.map((n) => `${n}:${TIPE_PEB[n - 1]}/${TIPE_PEB[n - 1]}:MATCH`).join(" ");
+    const barisBarangSalah = (k) => k.hasil.checks.filter((x) => x.section === "ITEM" && x.status === "MISMATCH").map((x) => x.field).join(", ");
+
+    t("Cek PIB/PEB: PEB 8 barang bernama sama & sheet BARANG diacak (Seri 2,6,4,5,3,7,1,8) -> Barang 1..8 menurut Seri Barang, tiap barang jadwal dengan serinya; kotak draft memberi tahu barang sudah diurutkan", async () => {
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("PEB-ACAK.xlsx", bukuPebUji(SERI_ACAK))], "draft");
+        eq([k.decl.type, k.jadwalId].join(" "), "PEB cek-eks-1", "jenis & jadwal ekspor dari No. Aju:");
+        eq(k.decl.items.map((d) => d.no).join(","), "1,2,3,4,5,6,7,8", "barang draft urut seri:");
+        eq(k.draftDiurutkan, true, "ditandai diurutkan:");
+        eq(grupBarang(), GRUP_URUT, "rincian Barang 1..8 berurutan:");
+        eq(pasanganTipe(k), TIPE_SEMUA, "tiap seri dengan barang jadwal bertipe sama:");
+        eq(barisBarangSalah(k), "", "baris barang tanpa mismatch:");
+        eq(["Item 1 Quantity", "Item 1 Unit", "Item 8 Net Weight"].map((f) => barisCek(k, f).status).join(","), "MATCH,MATCH,MATCH", "jumlah, satuan & netto:");
+        // Kotak draft: jenis, aju, jumlah barang, nilai -- lalu keterangan pengurutan
+        if (!/^PEB · Aju 000030DDI00020261015000123 · 8 barang · .+ · barang diurutkan menurut Seri Barang$/.test(ketDraft())) throw new Error("keterangan kotak draft: " + ketDraft());
+        const bahasa = baca("activeLang");
+        try {
+          w.setLang("en");
+          w.renderChecker();
+          if (!/ · 8 items · .+ · items sorted by Seri Barang$/.test(ketDraft())) throw new Error("keterangan kotak draft (EN): " + ketDraft());
+        } finally {
+          w.setLang(bahasa);
+          w.renderChecker();
+        }
+        // Berkas pengganti yang sudah rapi: tanda hilang, hasil sama
+        await w.cekTerimaBerkas([berkasUji("PEB-URUT.xlsx", bukuPebUji(SERI_URUT))], "draft");
+        eq(k.draftDiurutkan, false, "berkas yang sudah urut:");
+        if (/Seri Barang/.test(ketDraft())) throw new Error("keterangan masih menyebut pengurutan: " + ketDraft());
+        eq(pasanganTipe(k) + " | " + grupBarang(), TIPE_SEMUA + " | " + GRUP_URUT, "hasil sama dengan berkas urut:");
+        // Acak lagi -> tanda muncul lagi; Mulai ulang -> hilang
+        await w.cekTerimaBerkas([berkasUji("PEB-ACAK-2.xlsx", bukuPebUji(SERI_ACAK))], "draft");
+        eq(k.draftDiurutkan, true, "berkas acak lagi:");
+        w.cekMulaiUlang();
+        eq(k.draftDiurutkan, false, "mulai ulang:");
+        if (/Seri Barang/.test(ketDraft())) throw new Error("keterangan sesudah mulai ulang: " + ketDraft());
+      }, { ekspor: [jadwalPeb(SERI_URUT)] });
+    });
+
+    t("Cek PIB/PEB: PEB acak, barang jadwal dalam urutan apa pun (urut, terbalik, acak seperti berkas) -> pasangan menurut isinya, rincian tetap Barang 1..8", async () => {
+      for (const [nama, urutJadwal] of [["urut", SERI_URUT], ["terbalik", SERI_URUT.slice().reverse()], ["acak", SERI_ACAK]]) {
+        await denganCek(async (k) => {
+          await w.cekTerimaBerkas([berkasUji("PEB-ACAK.xlsx", bukuPebUji(SERI_ACAK))], "draft");
+          eq(k.jadwalId, "cek-eks-1", `jadwal terkait (${nama}):`);
+          eq(grupBarang(), GRUP_URUT, `grup (${nama}):`);
+          eq(pasanganTipe(k), TIPE_SEMUA, `pasangan menurut Tipe (${nama}):`);
+          eq(barisBarangSalah(k), "", `tanpa mismatch (${nama}):`);
+        }, { ekspor: [jadwalPeb(urutJadwal)] });
+      }
+    });
+
+    t("Cek PIB/PEB: draft yang sudah berurutan tanpa keterangan pengurutan; draft acak ditandai; draft yang tak terbaca menghapus tanda lama", async () => {
+      await denganCek(async (k) => {
+        await w.cekTerimaBerkas([berkasUji("DRAFT.xlsx", bukuDraftUji())], "draft");
+        eq([k.decl.type, k.draftDiurutkan].join(" "), "PIB false", "PIB yang berurutan:");
+        if (/Seri Barang/.test(ketDraft())) throw new Error("keterangan untuk berkas yang sudah rapi: " + ketDraft());
+        const acak = bukuDraftUji();
+        acak.Sheets.BARANG = XLSXuji.utils.json_to_sheet([
+          { "SERI BARANG": 3, HS: "84807110", URAIAN: "BLADE", "JUMLAH SATUAN": 120, "KODE SATUAN": "PCE", NETTO: 12, CIF: 300 },
+          { "SERI BARANG": 1, HS: "84807190", URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 850, CIF: 6300 },
+          { "SERI BARANG": 2, HS: "84814000", URAIAN: "VENT SPRING", "JUMLAH SATUAN": 60000, "KODE SATUAN": "PCE", NETTO: 19.2, CIF: 26400 },
+        ]);
+        await w.cekTerimaBerkas([berkasUji("ACAK.xlsx", acak)], "draft");
+        eq(k.draftDiurutkan, true, "PIB acak:");
+        if (!/ · barang diurutkan menurut Seri Barang$/.test(ketDraft())) throw new Error("keterangan PIB acak: " + ketDraft());
+        // Satu baris yang menyimpang saja (1,2,4,3) sudah termasuk acak; seri sama-sama berurutan (1,2,3) tidak
+        const hampir = bukuDraftUji();
+        hampir.Sheets.BARANG = XLSXuji.utils.json_to_sheet([1, 2, 4, 3].map((n) => ({ "SERI BARANG": n, HS: "84807190", URAIAN: "TYRE MOLD " + n, "JUMLAH SATUAN": 1, "KODE SATUAN": "SET", NETTO: 1, CIF: 1 })));
+        await w.cekTerimaBerkas([berkasUji("HAMPIR.xlsx", hampir)], "draft");
+        eq([k.draftDiurutkan, k.decl.items.map((d) => d.no).join(",")].join(" "), "true 1,2,3,4", "satu pasang tertukar:");
+        // Jenis dokumen tidak dikenali -> galat; tanda pengurutan yang lama tidak tertinggal
+        const rusak = bukuDraftUji();
+        rusak.Sheets.HEADER = XLSXuji.utils.json_to_sheet([{ "NOMOR AJU": "X" }]);
+        await w.cekTerimaBerkas([berkasUji("RUSAK.xlsx", rusak)], "draft");
+        eq([k.draftDiurutkan, k.decl === null].join(" "), "false true", "draft tak terbaca:");
+        eq(ketDraft(), "Jenis dokumen tidak dikenali sebagai PIB atau PEB.", "galat tampil, tanpa keterangan pengurutan:");
       });
     });
 

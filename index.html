@@ -1925,17 +1925,40 @@
                     <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
-                <div>
-                  <label class="form-label" data-i18n="f.no.kendaraan"
-                    >No. Kendaraan</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="vehicle"
-                    placeholder="Nomor polisi kendaraan"
-                    data-i18n-ph="ph.nomor.polisi.kendaraan"
-                  />
+                <!-- NO. KENDARAAN BISA LEBIH DARI SATU. Kiriman export kerap
+                     diangkut beberapa mobil, dan surat jalannya menyebut
+                     semuanya. Tombol di baris label (bukan di bawah kotak)
+                     supaya tinggi baris pertama form tidak bertambah.
+                     Kotak pertama tetap data-dn="vehicle" supaya pengajuan
+                     lama yang menyimpan satu nomor tetap terbaca; mobil
+                     berikutnya dikumpulkan sebagai vehicleExtra
+                     (js/features/vehicle-list.js). -->
+                <div class="dn-kendaraan">
+                  <div class="fl-head">
+                    <label class="form-label" data-i18n="f.no.kendaraan"
+                      >No. Kendaraan</label
+                    >
+                    <button
+                      type="button"
+                      class="dn-tambah-mini"
+                      id="btnVehicleAdd"
+                    >
+                      <i class="bi bi-plus-lg"></i>
+                      <span data-i18n="f.tambah.no.mobil">Nomor Mobil</span>
+                    </button>
+                  </div>
+                  <div id="vehicleList">
+                    <div class="veh-baris">
+                      <input
+                        type="text"
+                        class="form-control"
+                        data-dn="vehicle"
+                        autocomplete="off"
+                        placeholder="Nomor polisi kendaraan"
+                        data-i18n-ph="ph.nomor.polisi.kendaraan"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div class="s6">
                   <label class="form-label"
@@ -4588,6 +4611,7 @@
     <script src="js/features/surat-jalan-lokal-print.js"></script>
     <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/po-list.js"></script>
+    <script src="js/features/vehicle-list.js"></script>
     <script src="js/features/fund-lines.js"></script>
     <script src="js/features/fund-docno.js"></script>
     <script src="js/features/do-lines.js"></script>

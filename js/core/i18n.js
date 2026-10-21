@@ -584,6 +584,7 @@ const I18N = {
     "f.semua": "Semua",
     "f.po.no.tanggal": "PO No. & Tanggal",
     "f.tambah.po": "Tambah No. PO & Tanggal",
+    "f.tambah.no.mobil": "Nomor Mobil",
   },
 
   en: {
@@ -1149,6 +1150,7 @@ const I18N = {
     "f.semua": "All",
     "f.po.no.tanggal": "PO No. & date",
     "f.tambah.po": "Add PO no. & date",
+    "f.tambah.no.mobil": "Vehicle No.",
   },
 };
 
