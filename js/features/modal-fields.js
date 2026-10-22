@@ -10,8 +10,8 @@ function pilihTabForm(nama) {
 }
 
 /* Isian yang ditunggu di tiap langkah. Daftar Barang bukan "isian kosong
-   pertama" -- di tabel barang itu bisa sel Size baris ketiga -- melainkan
-   nama barang pertama yang masih kosong (atau nama barang pertama). */
+   pertama" -- di tabel barang itu bisa kolom Ukuran baris ketiga --
+   melainkan Uraian pertama yang masih kosong (atau Uraian pertama). */
 function fokusLangkahForm(pane) {
   if (!pane) return;
   if (pane.dataset.tabpane === "barang") {
@@ -279,20 +279,31 @@ function recalcCustoms(opsi) {
    Nama Kapal/Pesawat, atau No. Flight (CIPL kurir menulis "DHL" di
    kolom Vessel/Flight).
 
-   Kotak No. Aju yang KOSONG diisi sendiri dan ditandai otomatis
-   (data-auto="cn"); begitu syaratnya tidak terpenuhi lagi (nilai naik,
-   kurir diganti) dikosongkan kembali. Yang diketik sendiri -- termasuk
-   "CONSIGNEE NOTE" yang diketik di kiriman lain -- tidak disentuh. */
+   Kotak No. Aju yang KOSONG -- atau berisi tanda kosong ("-", "N/A",
+   "TBA") -- diisi sendiri dan ditandai otomatis (data-auto="cn");
+   begitu syaratnya tidak terpenuhi lagi (nilai naik, kurir diganti)
+   dikosongkan kembali. Yang diketik sendiri -- termasuk "CONSIGNEE
+   NOTE" yang diketik di kiriman lain -- tidak disentuh; kotak yang
+   dikosongkan sendiri terisi lagi begitu ditinggalkan. Keterangan di
+   bawah kotaknya (#ajuKurirKet) menjelaskan kenapa terisi, atau kenapa
+   belum: harga barang belum diisi, nilainya USD 1.500 ke atas, atau
+   kotaknya sudah berisi nomor lain. */
 const AJU_CONSIGNEE_NOTE = "CONSIGNEE NOTE";
+const AJU_TANDA_KOSONG = /^(?:-+|\.|N\/?A|TBA|TBC|NIL)$/i;
 
-function syaratAjuConsigneeNote() {
-  if (typeof isKurirNilaiRendah !== "function") return false;
-  return isKurirNilaiRendah({
+// Isian form yang menentukan kiriman kurir (bentuk jadwal untuk isKurirNilaiRendah)
+function kirimanKurirForm() {
+  return {
     mode: activeMode,
     forwarder: $("#fForwarder").value,
     vessel: [$("#fVessel").value, $("#fVoyage").value].join(" "),
     items: draftItems,
-  });
+  };
+}
+
+function syaratAjuConsigneeNote() {
+  if (typeof isKurirNilaiRendah !== "function") return false;
+  return isKurirNilaiRendah(kirimanKurirForm());
 }
 
 function aturAjuConsigneeNote() {
@@ -300,13 +311,68 @@ function aturAjuConsigneeNote() {
   if (!el) return;
   const isi = el.value.trim();
   if (syaratAjuConsigneeNote()) {
-    if (isi) return;
-    el.value = AJU_CONSIGNEE_NOTE;
-    el.dataset.auto = "cn";
+    if (!isi || AJU_TANDA_KOSONG.test(isi)) {
+      el.value = AJU_CONSIGNEE_NOTE;
+      el.dataset.auto = "cn";
+    }
   } else if (el.dataset.auto === "cn" && isi.toUpperCase() === AJU_CONSIGNEE_NOTE) {
     el.value = "";
     delete el.dataset.auto;
   }
+  gambarKetAjuKurir();
+}
+
+/* Keterangan di bawah No. Aju untuk kiriman kurir di buku Import. */
+function gambarKetAjuKurir() {
+  const ket = $("#ajuKurirKet");
+  if (!ket) return;
+  const s = kirimanKurirForm();
+  let teks = "";
+  if (s.mode === "import" && typeof pakaiKurirEkspres === "function" && pakaiKurirEkspres(s)) {
+    const nilai = itemTotals(s).totalUSD;
+    const isi = $("#fNoAju").value.trim();
+    const kosong = !isi || AJU_TANDA_KOSONG.test(isi);
+    if ($("#fNoAju").dataset.auto === "cn") {
+      teks = tt(`Otomatis: kiriman kurir bernilai ${fmtUSD(nilai)} (di bawah USD 1.500) memakai Consignment Note.`, `Automatic: a courier shipment worth ${fmtUSD(nilai)} (under USD 1,500) uses a Consignment Note.`);
+    } else if (nilai >= AMBANG_KURIR_TANPA_PIB) {
+      teks = tt(`Kiriman kurir bernilai ${fmtUSD(nilai)} (USD 1.500 ke atas): wajib PIB, bukan CONSIGNEE NOTE.`, `Courier shipment worth ${fmtUSD(nilai)} (USD 1,500 or more): a PIB is required, not a CONSIGNEE NOTE.`);
+    } else if (!nilai) {
+      if (kosong) teks = tt("Kiriman kurir: isi harga barang — di bawah USD 1.500, No. Aju terisi CONSIGNEE NOTE sendiri.", "Courier shipment: fill in the item prices — under USD 1,500 the Aju No. becomes CONSIGNEE NOTE by itself.");
+    } else if (!kosong && isi.toUpperCase() !== AJU_CONSIGNEE_NOTE) {
+      teks = tt(
+        `Kiriman kurir bernilai ${fmtUSD(nilai)} (di bawah USD 1.500) biasanya CONSIGNEE NOTE — kosongkan No. Aju untuk mengisinya otomatis.`,
+        `A courier shipment worth ${fmtUSD(nilai)} (under USD 1,500) is usually a CONSIGNEE NOTE — clear the Aju No. to fill it automatically.`,
+      );
+    }
+  }
+  ket.textContent = teks;
+  ket.hidden = !teks;
+}
+
+/* TANGGAL PEB DARI NOMOR AJU (buku Export). Nomor aju CEISA memuat
+   tanggalnya (tanggalDariAju, helpers.js): kotak Tanggal PEB yang
+   KOSONG diisi dari situ dan ditandai otomatis (data-auto="aju"),
+   jadi ikut berubah saat nomor ajunya diubah. Yang diketik sendiri --
+   atau terisi dari PEB / draft CEISA yang diimpor -- tidak ditimpa.
+   Buku Import tidak: kotak itu Tanggal SPPB, tanggal yang lain (tanggal
+   PIB-nya di tahap PIB progres dokumen, doc-steps.js). */
+function aturTanggalPebDariAju() {
+  const el = $("#fDocDate");
+  if (!el || activeMode !== "export") return;
+  if (el.value && el.dataset.auto !== "aju") return;
+  const tgl = tanggalDariAju($("#fNoAju").value);
+  el.value = tgl;
+  if (tgl) el.dataset.auto = "aju";
+  else delete el.dataset.auto;
+}
+
+// Form dibuka / berkas diimpor: Tanggal PEB yang sama dengan tanggal nomor ajunya ikut dikelola otomatis
+function tandaiTanggalPebDariAju() {
+  const el = $("#fDocDate");
+  if (!el) return;
+  if (activeMode === "export" && el.value && el.value === tanggalDariAju($("#fNoAju").value)) el.dataset.auto = "aju";
+  else delete el.dataset.auto;
+  aturTanggalPebDariAju();
 }
 
 /* Form dibuka: "CONSIGNEE NOTE" tersimpan ikut dikelola otomatis hanya
@@ -321,10 +387,16 @@ function tandaiAjuConsigneeNoteTersimpan() {
 
 $("#fNoAju").addEventListener("input", (e) => {
   delete e.target.dataset.auto;
+  gambarKetAjuKurir();
+  aturTanggalPebDariAju();
 });
+// Dikosongkan sendiri lalu ditinggalkan: CONSIGNEE NOTE kembali (tidak selagi mengetik)
+$("#fNoAju").addEventListener("change", aturAjuConsigneeNote);
 ["fForwarder", "fVessel", "fVoyage"].forEach((id) => {
   $("#" + id).addEventListener("input", aturAjuConsigneeNote);
 });
+// Tanggal PEB yang diubah sendiri tidak lagi mengikuti nomor aju
+["input", "change"].forEach((ev) => $("#fDocDate").addEventListener(ev, (e) => delete e.target.dataset.auto));
 
 /* KEADAAN LAMBANG MATA UANG */
 function syncAffixState(scope) {

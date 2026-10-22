@@ -493,6 +493,61 @@ table.fund-lines select {
   margin-top: 6px;
 }
 
+/* NOMOR MOBIL (Delivery Order): satu kotak per kendaraan. Sama dengan
+   baris PO di atas: baris tambahan membawa tombol hapus di lajur kedua,
+   dan begitu ada baris tambahan lajurnya ikut disisihkan di baris
+   pertama, supaya semua kotak sama lebar. */
+.veh-baris {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.veh-baris input {
+  min-width: 0;
+}
+.veh-baris-extra,
+#vehicleList:has(.veh-baris-extra) > .veh-baris {
+  grid-template-columns: minmax(0, 1fr) 30px;
+}
+.veh-baris-extra {
+  margin-top: 6px;
+}
+/* Tombol "+ Nomor Mobil" duduk di baris label (.fl-head, setinggi 22px),
+   bukan di bawah kotaknya: baris pertama form tidak jadi lebih tinggi
+   dari isian di sebelahnya. Bentuknya mengikuti .btn-quiet, versi ringkas. */
+.dn-tambah-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: #fff;
+  color: var(--p-600);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.dn-tambah-mini:hover {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--p-700);
+}
+.dn-tambah-mini .bi {
+  font-size: 0.7rem;
+}
+
 .docnum-panel-head {
   display: flex;
   align-items: center;
@@ -667,15 +722,10 @@ table.fund-lines select {
      Total (Export: alamat selebar baris).
    - Surat Fungsi Barang: tidak punya Nilai Barang & Tanggal Bayar, jadi
      Negara Asal & Flight/Sail mengisi baris ketiga berdua.
-   - Pengajuan Dana: Doc No | Rincian | Lampiran; tanpa Doc No (vendor
-     di daftar Aturan Doc No) Rincian melebar. */
+   (Pengajuan Dana tidak termasuk: kotak Doc No ada untuk semua vendor,
+   jadi susunan barisnya sama untuk vendor mana pun.) */
 @media (min-width: 1080px) {
   .fgrid:has(> .dn-total:not(.d-none)) > .dn-alamat {
-    grid-column: span 9;
-  }
-  /* Pengajuan Dana untuk vendor tanpa Doc No: kotaknya disembunyikan
-     dan Rincian melebar mengisi tempatnya. */
-  .fgrid:has(> .fund-docno.d-none) > .fund-rincian {
     grid-column: span 9;
   }
   .fgrid:has(> .sb-tanpabayar.d-none) > .sb-negara,

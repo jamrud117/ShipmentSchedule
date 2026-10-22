@@ -1096,11 +1096,12 @@
         <details class="panel cek-aturan">
           <summary data-en="What is checked">Apa saja yang diperiksa</summary>
           <div class="panel-body">
-            <ul data-en="&lt;li&gt;&lt;b&gt;CIPL ↔ draft&lt;/b&gt; — the same engine as EXIM Checker: invoice &amp;amp; packing list (codes 380 / 217), B/L-AWB (704 / 714 / 705, 741 / 703 / 740), parties &amp;amp; TAX ID, ports, vessel, incoterm, currency, value (FOB / CIF), weights, packages, and per item description, HS, quantity, unit, value &amp;amp; net weight.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — looked up in the HS Code database by item name, then in the linked schedule's items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Schedule&lt;/b&gt; — aju no., invoice, mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer, item count, weights &amp;amp; dates of the linked schedule against the draft.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959), LS (958), Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule; document 912 against the Masterlist page (decree no. &amp;amp; date, validity, realization recorded).&lt;/li&gt;&lt;li&gt;&lt;b&gt;NDPBM&lt;/b&gt; — against the weekly KMK tax exchange rate on the aju date.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
-              <li><b>CIPL ↔ draft</b> — mesin yang sama dengan EXIM Checker: invoice &amp; packing list (kode 380 / 217), B/L-AWB (704 / 714 / 705, 741 / 703 / 740), pihak &amp; TAX ID, pelabuhan, kapal, incoterm, mata uang, nilai (FOB / CIF), berat, kemasan, dan per barang uraian, HS, jumlah, satuan, nilai &amp; netto.</li>
-              <li><b>HS Code 8 digit</b> — dicari di Database HS Code menurut nama barang, lalu di barang jadwal terkait, lalu di jadwal sebelumnya. CIPL yang hanya menulis 6 digit dilengkapi dari situ.</li>
-              <li><b>Jadwal</b> — No. Aju, invoice, moda, kapal / penerbangan, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan, kontainer, shipper / buyer, jumlah barang, berat &amp; tanggal jadwal terkait dibandingkan dengan draft.</li>
-              <li><b>Fasilitas &amp; izin</b> — PI (959), LS (958), Masterlist (912), SKB PPN (456), SKB PPh (457) &amp; COO (860 / 861) dibandingkan dengan jadwal; dokumen 912 dengan halaman Masterlist (No. &amp; tanggal SK, masa berlaku, realisasi sudah dicatat).</li>
+            <ul data-en="&lt;li&gt;&lt;b&gt;Schedule first, CIPL fills gaps&lt;/b&gt; — the linked schedule is the main reference: aju no., invoice, insurance policy (530), mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer &amp;amp; dates are compared from the schedule, each in its own section. CIPL values are used only for fields the schedule leaves empty (marked &quot;CIPL&quot;) and for what the schedule does not record (packing list, TAX ID, currency). Customs office codes and the schedule&#x27;s ETD / ETA are not checked (a PEB still compares ETD with TANGGAL EKSPOR).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Items from the schedule&lt;/b&gt; — when the linked schedule has an item list, each item comes from the schedule: its columns are compared one by one, as in CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), then the goods condition code (PIB), country of origin code, HS Code, quantity, unit, value, net weight, and Facilities &amp;amp; Seq. No. (the documents linked to its Seri Barang). What the schedule leaves empty — and items missing from the schedule — come from the CIPL. Items follow the draft&#x27;s Seri Barang: Item 1 = Seri Barang 1, paired with the same schedule / CIPL item by name, then HS Code — not by position.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Containers&lt;/b&gt; — the number, size &amp;amp; type (FCL / LCL) of each container in the KONTAINER sheet against the schedule&#x27;s Container/Seal Number, written NUMBER / SIZE / TYPE.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — a code that is not 8 digits yet is looked up in the HS Code database by item name, then in the linked schedule&#x27;s items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959) &amp;amp; LS (958) with their dates, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule.&lt;/li&gt;&lt;li&gt;&lt;b&gt;NDPBM&lt;/b&gt; — against the weekly KMK tax exchange rate on the aju date.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
+              <li><b>Jadwal dulu, CIPL melengkapi</b> — jadwal terkait adalah rujukan utama: No. Aju, invoice, polis asuransi (530), moda, kapal / penerbangan, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan, peti kemas, shipper / buyer &amp; tanggal dibandingkan dari jadwal, di bagiannya masing-masing. Nilai CIPL hanya dipakai untuk isian yang belum diisi di jadwal (ditandai "CIPL") dan yang memang tidak dicatat jadwal (packing list, TAX ID, mata uang). Kode kantor dan ETD / ETA jadwal tidak diperiksa (PEB tetap membandingkan ETD dengan TANGGAL EKSPOR).</li>
+              <li><b>Barang dari jadwal</b> — bila jadwal terkait punya daftar barang, tiap barang diambil dari jadwal: kolom barangnya dibandingkan satu per satu seperti di CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), lalu Kode Kondisi Barang (PIB), Kode Negara Asal, HS Code, jumlah, satuan, nilai, netto, serta Fasilitas &amp; No. Urut (dokumen yang ditautkan ke Seri Barang-nya). Yang kosong di jadwal — dan barang yang tidak ada di jadwal — diambil dari CIPL. Rincian barang mengikuti Seri Barang draft: Barang 1 = Seri Barang 1, dipasangkan dengan barang jadwal / CIPL yang sama menurut nama, lalu HS Code — bukan menurut urutannya.</li>
+              <li><b>Peti kemas</b> — nomor, ukuran &amp; tipe (FCL / LCL) tiap kontainer di sheet KONTAINER dibandingkan dengan Container/Seal Number jadwal, ditulis NOMOR / UKURAN / TIPE.</li>
+              <li><b>HS Code 8 digit</b> — yang belum 8 digit dicari di Database HS Code menurut nama barang, lalu di barang jadwal terkait, lalu di jadwal sebelumnya. CIPL yang hanya menulis 6 digit dilengkapi dari situ.</li>
+              <li><b>Fasilitas &amp; izin</b> — PI (959) &amp; LS (958) beserta tanggalnya, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp; COO (860 / 861) dibandingkan dengan jadwal.</li>
               <li><b>NDPBM</b> — dibandingkan dengan kurs pajak KMK mingguan pada tanggal aju.</li>
               <li>Tanpa CIPL, draft dibandingkan dengan jadwal terkait saja. Berkas dibaca di peramban ini dan tidak diunggah.</li>
             </ul>
@@ -1924,17 +1925,40 @@
                     <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
-                <div>
-                  <label class="form-label" data-i18n="f.no.kendaraan"
-                    >No. Kendaraan</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    data-dn="vehicle"
-                    placeholder="Nomor polisi kendaraan"
-                    data-i18n-ph="ph.nomor.polisi.kendaraan"
-                  />
+                <!-- NO. KENDARAAN BISA LEBIH DARI SATU. Kiriman export kerap
+                     diangkut beberapa mobil, dan surat jalannya menyebut
+                     semuanya. Tombol di baris label (bukan di bawah kotak)
+                     supaya tinggi baris pertama form tidak bertambah.
+                     Kotak pertama tetap data-dn="vehicle" supaya pengajuan
+                     lama yang menyimpan satu nomor tetap terbaca; mobil
+                     berikutnya dikumpulkan sebagai vehicleExtra
+                     (js/features/vehicle-list.js). -->
+                <div class="dn-kendaraan">
+                  <div class="fl-head">
+                    <label class="form-label" data-i18n="f.no.kendaraan"
+                      >No. Kendaraan</label
+                    >
+                    <button
+                      type="button"
+                      class="dn-tambah-mini"
+                      id="btnVehicleAdd"
+                    >
+                      <i class="bi bi-plus-lg"></i>
+                      <span data-i18n="f.tambah.no.mobil">Nomor Mobil</span>
+                    </button>
+                  </div>
+                  <div id="vehicleList">
+                    <div class="veh-baris">
+                      <input
+                        type="text"
+                        class="form-control"
+                        data-dn="vehicle"
+                        autocomplete="off"
+                        placeholder="Nomor polisi kendaraan"
+                        data-i18n-ph="ph.nomor.polisi.kendaraan"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div class="s6">
                   <label class="form-label"
@@ -2246,13 +2270,16 @@
                      urutannya sama dengan kepala Form Pengajuan Dana yang
                      dicetak: No Surat, Doc No, Subject, Lampiran.
 
-                     DOC NO diketik manual, untuk semua vendor KECUALI yang
-                     ada di daftar "tanpa Doc No" (bawaannya PRIME & WIDE;
-                     diatur dari kotak Aturan Doc No di bawah form -- lihat
-                     js/features/fund-docno.js). Untuk vendor di daftar itu
-                     kotaknya disembunyikan dan Rincian melebar mengisi
-                     tempatnya (.fund-rincian di docnum.css), jadi barisnya
-                     tetap penuh. -->
+                     DOC NO diketik manual dan ADA UNTUK SEMUA VENDOR --
+                     termasuk PRIME & WIDE. Isinya selalu tersimpan (bisa
+                     dicari di riwayat & tampil di Detail). Yang berbeda
+                     hanya CETAKANNYA: baris Doc No tidak dicetak untuk
+                     vendor di daftar "Doc No tidak dicetak" (bawaannya
+                     PRIME & WIDE; diatur dari kotak Aturan Doc No di
+                     bawah form -- lihat js/features/fund-docno.js).
+                     Keterangan di bawah kotak mengikuti vendor yang
+                     dipilih: .fund-docno-cetak atau .fund-docno-tak-cetak
+                     (fundSelaraskanDocNo). -->
                 <div class="fund-docno" id="fundDocNoWrap">
                   <label class="form-label" for="fundDocNo">Doc No</label>
                   <input
@@ -2262,11 +2289,14 @@
                     data-dn="docNo"
                     autocomplete="off"
                   />
-                  <div class="form-text-note" data-en="Printed under No Surat on the form.">
+                  <div class="form-text-note fund-docno-cetak" data-en="Printed under No Surat on the form.">
                     Tercetak di bawah No Surat pada form.
                   </div>
+                  <div class="form-text-note fund-docno-tak-cetak d-none" data-en="Saved with the request, but not printed on the form for this vendor.">
+                    Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.
+                  </div>
                 </div>
-                <div class="s6 fund-rincian">
+                <div class="s6">
                   <label class="form-label" data-i18n="f.rincian"
                     >Rincian</label
                   >
@@ -2444,10 +2474,11 @@
                     value="Chief Marketing Officer"
                   />
                 </div>
-                <!-- PENANDA TANGAN KEEMPAT -- hanya untuk vendor yang memakai
-                     Doc No (aturan yang sama dengan kotak Doc No di atas:
-                     fundSelaraskanDocNo, js/features/fund-docno.js). Bawaannya
-                     Mr. Kim Taewan, Chief Financial Officer; tetap bisa diubah.
+                <!-- PENANDA TANGAN KEEMPAT -- hanya untuk vendor yang Doc No-nya
+                     dicetak (daftar yang sama dengan Aturan Doc No: PRIME &
+                     WIDE tidak memakainya; fundSelaraskanDocNo,
+                     js/features/fund-docno.js). Bawaannya Mr. Kim Taewan,
+                     Chief Financial Officer; tetap bisa diubah.
 
                      Kuncinya cfoName/cfoRole, BUKAN approver2*: nama itu milik
                      kotak persetujuan lama yang sudah dihapus, dan pengajuan
@@ -2713,8 +2744,9 @@
               </div>
             </div>
 
-            <!-- ATURAN DOC NO: vendor yang TIDAK memakai Doc No di Form
-                 Pengajuan Dana. Bisa ditambah & dihapus di sini, jadi
+            <!-- ATURAN DOC NO: vendor yang Doc No-nya TIDAK DICETAK di Form
+                 Pengajuan Dana (kotak Doc No di form tetap ada & tersimpan
+                 untuk semua vendor). Bisa ditambah & dihapus di sini, jadi
                  pengecualian berikutnya tidak butuh perubahan kode
                  (js/features/fund-docno.js). Tampil hanya di tab
                  Pengajuan Dana; untuk peran hanya-baca ikut tersembunyi
@@ -2725,7 +2757,7 @@
                 <span class="counter-info" id="fundDocNoInfo">&mdash;</span>
               </div>
               <div class="dn-aturan-isi">
-                <span class="dn-aturan-label" data-en="No Doc No for:">Tanpa Doc No untuk:</span>
+                <span class="dn-aturan-label" data-en="Doc No not printed for:">Doc No tidak dicetak untuk:</span>
                 <div class="dn-aturan-daftar" id="fundDocNoDaftar"></div>
               </div>
               <div class="dn-aturan-tambah">
@@ -2737,19 +2769,21 @@
                   autocomplete="off"
                   placeholder="Nama vendor, mis. FEDEX"
                   data-en-ph="Vendor name, e.g. FEDEX"
-                  aria-label="Vendor tanpa Doc No"
-                  data-en-aria="Vendor without Doc No"
+                  aria-label="Vendor yang Doc No-nya tidak dicetak"
+                  data-en-aria="Vendor whose Doc No is not printed"
                 />
                 <button type="button" class="btn btn-teal" id="btnFundDocNoTambah" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add">
                   <i class="bi bi-plus-lg"></i> Tambah
                 </button>
               </div>
-              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No appears on the form and is printed under No Surat for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
-                <i class="bi bi-info-circle"></i> Doc No tampil di form dan
-                tercetak di bawah No Surat untuk semua vendor
-                <b>kecuali</b> yang ada di daftar ini. Dicocokkan per kata
-                dengan &ldquo;Dibayarkan Kepada&rdquo;: <b>PRIME</b> mengenai
-                &ldquo;PT PRIME CARGO&rdquo;, tidak mengenai &ldquo;PRIMERA&rdquo;.
+              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+                <i class="bi bi-info-circle"></i> Doc No bisa diisi dan
+                tersimpan untuk semua vendor. Pada form yang dicetak, Doc No
+                tampil di bawah No Surat (beserta tanda tangan CFO) untuk
+                semua vendor <b>kecuali</b> yang ada di daftar ini.
+                Dicocokkan per kata dengan &ldquo;Dibayarkan Kepada&rdquo;:
+                <b>PRIME</b> mengenai &ldquo;PT PRIME CARGO&rdquo;, tidak
+                mengenai &ldquo;PRIMERA&rdquo;.
               </div>
             </div>
             </div>
@@ -2960,9 +2994,10 @@
                 <input type="date" class="form-control" id="fDocDate" />
               </div>
               <!-- Selebar setengah baris: nomor aju 26 angka. Kiriman kurir
-                   FedEx/DHL/UPS bernilai di bawah USD 1.500 terisi
-                   "CONSIGNEE NOTE" sendiri (aturAjuConsigneeNote,
-                   modal-fields.js). -->
+                   bernilai di bawah USD 1.500 terisi "CONSIGNEE NOTE"
+                   sendiri, keterangannya di #ajuKurirKet
+                   (aturAjuConsigneeNote, modal-fields.js). Buku Export:
+                   Tanggal PEB terisi dari tanggal di nomor aju. -->
               <div class="s6">
                 <label class="form-label" for="fNoAju" data-i18n="f.no.aju">No. Aju</label>
                 <input
@@ -2971,7 +3006,9 @@
                   id="fNoAju"
                   placeholder="Nomor aju"
                   data-i18n-ph="ph.nomor.aju"
+                  aria-describedby="ajuKurirKet"
                 />
+                <div class="form-text-note" id="ajuKurirKet" role="status" hidden></div>
               </div>
               <div>
                 <label class="form-label" for="fInvoice" data-i18n="f.no.invoice"
@@ -3529,33 +3566,28 @@
                     >
                       Seri
                     </th>
-                    <th
-                      class="namabarang-col"
-                      id="thNamaBarang"
-                      data-i18n="f.nama.barang"
-                    >
-                      Nama Barang
-                    </th>
-                    <!-- Size (ukuran/spesifikasi barang, mis. "235/55R20")
-                         — kolom TERPISAH dari Nama Barang/Uraian, HANYA
-                         berlaku di buku Export (lihat body.mode-import
-                         .size-col di form.css). Lebih lebar dari kolom
-                         lain di sekitarnya: isinya bisa sepanjang
-                         "CREDO SUNMODE SUV 205/70R15" (dari kolom TIPE
-                         CEISA yang gabung merek+ukuran), bukan cuma
-                         kode ukuran murni yang pendek. -->
-                    <th class="size-col">Size</th>
-                    <!-- Kolom cetakan (mold). Ikut disembunyikan di buku
-                         Import lewat kelas .export-col — penomoran ini
-                         milik barang jadi yang dikirim keluar. -->
-                    <th class="export-col">Pattern</th>
-                    <th class="export-col">Mold No.</th>
-                    <th class="export-col">PO No.</th>
-                    <!-- Marks: dikosongkan -> dibangkitkan otomatis
-                         ("C# : 8-1"). Diisi kalau penandaannya tidak
-                         mengikuti urutan koli. -->
-                    <th class="export-col">Marks</th>
                     <th>HS Code</th>
+                    <!-- Kolom barang = kolom barang CEISA, kiri ke kanan
+                         (KOLOM_NAMA_BARANG, helpers.js) -- kedua buku.
+                         Lebarnya seragam & isinya membungkus seperti
+                         Uraian (.kolom-ceisa di form.css). -->
+                    <th class="kolom-ceisa" data-en="Item Code">Kode Barang</th>
+                    <th class="kolom-ceisa" data-en="Description">Uraian</th>
+                    <th class="kolom-ceisa" data-en="Brand">Merek</th>
+                    <th class="kolom-ceisa" data-en="Type">Tipe</th>
+                    <th class="kolom-ceisa" data-en="Size">Ukuran</th>
+                    <th class="kolom-ceisa" data-en="Other Specification">Spesifikasi Lain</th>
+                    <!-- Kode CEISA per barang. Kode Kondisi Barang (buku
+                         Import saja -- PEB tidak memuatnya): 1 = BARU,
+                         2 = BUKAN BARU. Kode Negara Asal Barang (kedua
+                         buku): kode negara ISO, kotaknya bisa diketik
+                         untuk mencari (#negaraList, js/core/negara.js). -->
+                    <th class="kolom-kode import-col" data-en="Goods Condition Code">Kode Kondisi Barang</th>
+                    <th class="kolom-kode" data-en="Country of Origin Code">Kode Negara Asal Barang</th>
+                    <!-- Marks (buku Export saja): dikosongkan ->
+                         dibangkitkan otomatis ("C# : 8-1"). Diisi kalau
+                         penandaannya tidak mengikuti urutan koli. -->
+                    <th class="kolom-ceisa export-col">Marks</th>
                     <th data-i18n="f.jenis.barang">
                       Jenis Barang
                     </th>
@@ -3814,7 +3846,8 @@
                   />
                 </div>
               </div>
-              <div class="s12 form-text-note fg-note" data-i18n="form.note.duty">Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.</div>
+              <!-- Catatan di bawah Tarif/BM/PPN, PDRI (jumlah ketiganya) tepat di bawah PPH -->
+              <div class="s9 form-text-note fg-note" data-i18n="form.note.duty">Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.</div>
               <div>
                 <label class="form-label" for="calcPDRI">PDRI (Rp)</label>
                 <div class="input-affix" data-affix="Rp">
@@ -3827,33 +3860,65 @@
                   />
                 </div>
               </div>
-              <!-- PI & LS berdampingan: dua dokumen yang biasanya sepaket.
-                   Keduanya ikut kolom PI di templat salin (LS di baris
+              <!-- PI, LS & Polis Asuransi: tiap dokumen sepasang nomor +
+                   tanggal (.fl-dok-pasang), berurutan PI, Tanggal PI, LS,
+                   Tanggal LS, Polis Asuransi, Tanggal Polis Asuransi. Nomor
+                   PI & LS ikut kolom PI di templat salin (LS di baris
                    sendiri, "LS <nomor>") dan Bulk Excel. -->
-              <div class="s9 fl-dua">
-                <div>
-                  <label class="form-label" for="fPI"
-                     data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="fPI"
-                    placeholder="Nomor PI, mis. 04.PI-02.26.0131"
-                    data-i18n-ph="ph.nomor.persetujuan.impor"
-                  />
+              <div class="s12 fl-dok">
+                <div class="fl-dok-pasang">
+                  <div>
+                    <label class="form-label" for="fPI"
+                       data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="fPI"
+                      placeholder="mis. 04.PI-02.26.0131"
+                      data-i18n-ph="ph.nomor.persetujuan.impor"
+                    />
+                  </div>
+                  <div>
+                    <label class="form-label" for="fPIDate" data-en="PI Date">Tanggal PI</label>
+                    <input type="date" class="form-control" id="fPIDate" />
+                  </div>
                 </div>
-                <div>
-                  <label class="form-label" for="fLS"
-                     data-en="LS (Surveyor Report)">LS (Laporan Surveyor)</label
-                  >
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="fLS"
-                    placeholder="Nomor LS, mis. ITB21G2672826137141"
-                    data-en-ph="LS number, e.g. ITB21G2672826137141"
-                  />
+                <div class="fl-dok-pasang">
+                  <div>
+                    <label class="form-label" for="fLS"
+                       data-en="LS (Surveyor Report)">LS (Laporan Surveyor)</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="fLS"
+                      placeholder="mis. ITB21G2672826137141"
+                      data-en-ph="e.g. ITB21G2672826137141"
+                    />
+                  </div>
+                  <div>
+                    <label class="form-label" for="fLSDate" data-en="LS Date">Tanggal LS</label>
+                    <input type="date" class="form-control" id="fLSDate" />
+                  </div>
+                </div>
+                <div class="fl-dok-pasang">
+                  <div>
+                    <label class="form-label" for="fPolisAsuransi"
+                       data-en="Insurance Policy">Polis Asuransi</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="fPolisAsuransi"
+                      placeholder="mis. EKD2273805 - KMC260031"
+                      data-en-ph="e.g. EKD2273805 - KMC260031"
+                    />
+                  </div>
+                  <div>
+                    <label class="form-label" for="fPolisAsuransiDate" data-en="Insurance Policy Date">Tanggal Polis Asuransi</label>
+                    <input type="date" class="form-control" id="fPolisAsuransiDate" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -4380,6 +4445,9 @@
       </div>
     </div>
 
+    <!-- Saran Kode Negara Asal (tabel barang): diisi js/core/negara.js -->
+    <datalist id="negaraList"></datalist>
+
     <datalist id="satuanList">
       <option value="PCS"></option>
       <option value="SET"></option>
@@ -4450,6 +4518,10 @@
     <!-- ========================================= -->
     <script src="js/core/helpers.js"></script>
     <script src="js/core/num-format.js"></script>
+    <!-- Kode negara ISO 3166-1 (Referensi Negara CEISA): kotak Kode Negara
+         Asal di tabel barang, impor CEISA/PIB/CIPL, Cek PIB/PEB. Sesudah
+         helpers.js (escapeHtml) -- saran #negaraList diisi saat dimuat. -->
+    <script src="js/core/negara.js"></script>
     <script src="js/core/unlocode.js"></script>
     <script src="js/core/status.js"></script>
     <script src="js/core/state.js"></script>
@@ -4549,6 +4621,7 @@
     <script src="js/features/surat-jalan-lokal-print.js"></script>
     <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/po-list.js"></script>
+    <script src="js/features/vehicle-list.js"></script>
     <script src="js/features/fund-lines.js"></script>
     <script src="js/features/fund-docno.js"></script>
     <script src="js/features/do-lines.js"></script>

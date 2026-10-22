@@ -206,6 +206,16 @@ function extractItemDetailColumn(pagesItems, nItems) {
   });
 }
 
+/* Negara asal satu barang PIB -> kode negara: kode dalam kurung lebih
+   dulu ("KOREA, REPUBLIC OF (KR)"), lalu kode / namanya sendiri
+   (kodeNegara, negara.js) -- sebelum sub-isian berikutnya. */
+function kodeNegaraPib(teks) {
+  const s = String(teks || "");
+  const kurung = /\(\s*([A-Z]{2})\s*\)/.exec(s);
+  if (kurung && NEGARA_PER_KODE.has(kurung[1])) return kurung[1];
+  return kodeNegara(s.split(/\s*(?:Pos Tarif|Kondisi|Merk)\b/i)[0].replace(/[,;.\s]+$/, ""));
+}
+
 function parsePibPdfText(text, pagesItems) {
   const notes = [];
   const grab = (re) => {
@@ -234,20 +244,19 @@ function parsePibPdfText(text, pagesItems) {
   const houseRow = findDoc(/^(AWB|B\/?L)$/i) || findDoc(/HOUSE/i);
   const masterRow = findDoc(/MASTER\s*(AWB|B\/?L)/i);
 
-  /* Fasilitas (SKB, Masterlist, COO) & No. PI dari lembar yang sama --
-     kode dokumennya ikut dibaca, aturannya sama dengan Excel CEISA
-     (kenaliDokumenPelengkap di helpers.js). */
+  /* Fasilitas (SKB, Masterlist, COO), PI, LS & Polis Asuransi dari
+     lembar yang sama -- kode dokumennya ikut dibaca, aturannya sama
+     dengan Excel CEISA (kenaliDokumenPelengkap & adalahPolisAsuransi di
+     helpers.js). PI, LS & polis: nomor + tanggal per pengiriman. */
   const skbList = [];
-  const nomorPi = [];
-  const nomorLs = [];
+  const dokPi = [];
+  const dokLs = [];
+  const dokPolis = [];
   docRows.forEach((r) => {
+    if (adalahPolisAsuransi(r)) return tambahDokumenPengiriman(dokPolis, r.nomor, pibDateToISO(r.tanggalDMY));
     const kenal = kenaliDokumenPelengkap(r);
     if (!kenal) return;
-    if (kenal.pi || kenal.ls) {
-      const daftar = kenal.pi ? nomorPi : nomorLs;
-      if (r.nomor && !daftar.includes(r.nomor)) daftar.push(r.nomor);
-      return;
-    }
+    if (kenal.pi || kenal.ls) return tambahDokumenPengiriman(kenal.pi ? dokPi : dokLs, r.nomor, pibDateToISO(r.tanggalDMY));
     if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
     skbList.push({
       jenis: kenal.jenis,
@@ -256,6 +265,9 @@ function parsePibPdfText(text, pagesItems) {
       tanggal: pibDateToISO(r.tanggalDMY),
     });
   });
+  const isianPi = isianDokumenPengiriman(dokPi);
+  const isianLs = isianDokumenPengiriman(dokLs);
+  const isianPolis = isianDokumenPengiriman(dokPolis);
 
   // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari baris "Nomor Pengajuan : ..
   const noAju = grab(/Nomor Pengajuan\s*:\s*(\S+)/);
@@ -489,8 +501,12 @@ function parsePibPdfText(text, pagesItems) {
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
     invoiceDate: invoiceRow ? pibDateToISO(invoiceRow.tanggalDMY) : "",
-    pi: nomorPi.join(", "),
-    ls: nomorLs.join(", "),
+    pi: isianPi.nomor,
+    piDate: isianPi.tanggal,
+    ls: isianLs.nomor,
+    lsDate: isianLs.tanggal,
+    polisAsuransi: isianPolis.nomor,
+    polisAsuransiDate: isianPolis.tanggal,
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
     masterBlDate,
@@ -539,12 +555,6 @@ function parsePibPdfText(text, pagesItems) {
   // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif HS" dulu
   const TAX_COLUMN_BLEED =
     /\s+-?\s*(?:KETERANGAN PAJAK\b|SURAT PERSETUJUAN\b|LAPORAN SURVEYOR\b|PREFERENSI TARIF\b|IMPOR(?:TASI)?\s+(?:DEP\.?DAG\b|[A-Z-]+(?:\s*\([A-Z]+\))?)|METODE\s*\d|(?:BM|PPH|PPN|PPnBM|Cukai)\s+\d+(?:[.,]\d+)?\s*%)/i;
-  const isEmptySpecValue = (v) => {
-    const teks = (v || "").trim();
-    return (
-      !teks || teks === "-" || /^tanpa\s+merek$/i.test(teks) || /^tanpa\s+tipe$/i.test(teks)
-    );
-  };
   const posTarifMatches = [];
   const posTarifRe = /Pos Tarif\s*:\s*(\d+)/g;
   let ptm;
@@ -577,19 +587,25 @@ function parsePibPdfText(text, pagesItems) {
           block,
         );
       const spekM = /Spesifikasi lain:\s*([^,\n]*),/i.exec(block);
+      const kodeM = /Kode\s*Barang\s*:\s*([^,\n]*)/i.exec(block);
 
-      const nameParts = [];
-      if (uraianM) {
-        const uraianClean = uraianM[1].trim().split(TAX_COLUMN_BLEED)[0].trim();
-        if (uraianClean) nameParts.push(uraianClean);
-      }
+      /* Kolom barang CEISA masing-masing ke kolomnya sendiri di jadwal
+         (KOLOM_NAMA_BARANG, helpers.js), apa adanya -- "TANPA MEREK"
+         juga. Yang tidak tercetak tidak diisi: nilai bawaan newItem(). */
+      const kolom = {};
+      if (uraianM) kolom.namaBarang = stripFieldLabels(uraianM[1].trim().split(TAX_COLUMN_BLEED)[0].trim());
       if (mtuM) {
-        if (!isEmptySpecValue(mtuM[1])) nameParts.push(mtuM[1].trim());
-        if (!isEmptySpecValue(mtuM[2])) nameParts.push(mtuM[2].trim());
-        if (!isEmptySpecValue(mtuM[3])) nameParts.push(mtuM[3].trim());
+        kolom.merek = mtuM[1].trim();
+        kolom.tipe = mtuM[2].trim();
+        kolom.ukuran = mtuM[3].trim();
       }
-      if (spekM && !isEmptySpecValue(spekM[1])) nameParts.push(spekM[1].trim());
-      const namaBarang = stripFieldLabels(nameParts.join(" "));
+      if (spekM) kolom.spesifikasiLain = spekM[1].trim();
+      if (kodeM) kolom.kodeBarang = kodeM[1].trim();
+      /* Kondisi barang & negara asal (D.32) -- tidak selalu tercetak
+         terbaca. Yang tidak terbaca undefined, bukan kosong: isian barang
+         lama / bawaan form yang berlaku (lengkapiKodeBarang). */
+      const kondisiM = /Kondisi\s*(?:Brg|Barang)\.?\s*:?\s*(BUKAN\s+BARU|TIDAK\s+BARU|BARU|BEKAS|[12]\b)/i.exec(block);
+      const negaraM = /Negara(?:\s*Asal)?\s*:?\s*([^\n]+)/i.exec(block);
 
       // Fallback berbasis teks (jarang cocok krn kolom sering ke-gabung)
       const col = columnResults[i];
@@ -612,7 +628,10 @@ function parsePibPdfText(text, pagesItems) {
         }
       }
       return {
-        namaBarang,
+        kolom,
+        kondisiBarang: kondisiM ? kodeKondisiBarang(kondisiM[1]) : undefined,
+        negaraAsal: (negaraM && kodeNegaraPib(negaraM[1])) || undefined,
+        namaBarang: kolom.namaBarang || "",
         hsCode: pt.hsCode,
         qty,
         netto,
@@ -633,7 +652,9 @@ function parsePibPdfText(text, pagesItems) {
   const items = rawItems.map((it, idx) => {
     const base = {
       ...newItem(),
-      namaBarang: it.namaBarang,
+      ...it.kolom,
+      kondisiBarang: it.kondisiBarang,
+      negaraAsal: it.negaraAsal,
       hsCode: it.hsCode,
       /* Jenis barang dibiarkan mengikuti buku (newItem()). PIB memang
          dokumen impor, jadi hasilnya sama saja -- tapi nilai mati di

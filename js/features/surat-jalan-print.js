@@ -33,9 +33,22 @@ const SJ_PERUSAHAAN = {
 
 /* Sisa tabel diisi satu ruang kosong setinggi baris yang tersisa,
    supaya blok Total dan tanda tangan selalu jatuh di tempat yang sama
-   berapa pun jumlah barangnya. */
+   berapa pun jumlah barangnya.
+
+   Ini tinggi MINIMUM ruang kosong itu. Di jendela cetak, sjIsiKertas()
+   melebarkannya lagi sampai kotak surat jalan memenuhi kertas A4. */
 const SJ_MIN_BARIS = 10;
 const SJ_TINGGI_BARIS = 19;
+
+/* Selisih aman (px) yang SENGAJA disisakan sjIsiKertas() di dasar kotak.
+   Tata letak saat diukur (layar jendela cetak) dan saat dicetak bisa
+   berselisih beberapa piksel; tanpa sisa, selisih sekecil itu cukup
+   untuk mendorong satu halaman kosong di belakang surat jalan. */
+const SJ_SISA_AMAN_PX = 4;
+
+/* Nama & alamat penerima dicetak KAPITAL, seragam dengan kotak pihak
+   di Commercial Invoice. Yang sudah kapital tidak berubah. */
+const sjKapital = (s) => String(s == null ? "" : s).toUpperCase();
 
 /* Surat jalan hanya berlaku untuk kiriman EXPORT — bentuk cetaknya
    memang dirancang untuk itu. Yang belum ditautkan jadwal tetap boleh
@@ -54,6 +67,29 @@ function sjCariShipment(id) {
     (data.export || []).find((x) => x.id === id) ||
     null
   );
+}
+
+/* Semua nomor mobil sebuah pengajuan: yang pertama (`vehicle`) lalu yang
+   tambahan (`vehicleExtra`, lihat js/features/vehicle-list.js).
+
+   Kiriman export kerap diangkut lebih dari satu mobil. Yang kosong
+   dibuang, dan nomor yang sama diketik dua kali dihitung sekali (spasi &
+   huruf besar-kecil diabaikan saat membandingkan) -- dua baris
+   "B 1234 XY" di surat jalan terbaca seperti dua mobil. Dipakai form
+   (saat menyimpan), cetakan, dan detail, supaya ketiganya satu aturan. */
+function sjDaftarKendaraan(p) {
+  const sumber = p || {};
+  const lihat = new Set();
+  return []
+    .concat(sumber.vehicle || [], sumber.vehicleExtra || [])
+    .map((v) => String(v == null ? "" : v).trim())
+    .filter((v) => {
+      if (!v) return false;
+      const kunci = v.replace(/\s+/g, "").toUpperCase();
+      if (lihat.has(kunci)) return false;
+      lihat.add(kunci);
+      return true;
+    });
 }
 
 /* Qty & kemasan dijumlahkan per SATUAN, bukan ditotal buta.
@@ -197,14 +233,23 @@ function buildSuratJalanHtml(row, shipment) {
     ? sjBarisBarang(shipment)
     : sjBarisManual(row.payload);
   const kosong = Math.max(0, SJ_MIN_BARIS - baris.length);
-  // Ruang kosong kini SATU baris, jadi rentang sel Keterangan ikut.
-  const totalBaris = baris.length + (kosong ? 1 : 0);
+  /* Ruang kosong SATU baris dan SELALU ada -- juga untuk 10 barang ke
+     atas. Dialah yang dilebarkan sjIsiKertas() supaya tabel memenuhi
+     kertas; tanpanya tidak ada yang bisa dilebarkan. Rentang sel
+     Keterangan ikut menghitungnya. */
+  const totalBaris = baris.length + 1;
 
   /* Keterangan: satu sel tinggi membentang seluruh tabel, berisi NOMOR
      KENDARAAN — itu yang tercantum pada contoh berkas ("E 1578 MS").
-     Kendaraannya satu untuk seluruh kiriman, jadi memang satu sel. */
-  const ket = [p.vehicle, p.notes].map((v) => String(v || "").trim()).filter(Boolean).join(" · ");
-  const selKet = `<td class="sj-ket" rowspan="${totalBaris}">${escapeHtml(ket)}</td>`;
+     Kiriman yang diangkut beberapa mobil menuliskan semuanya, SATU NOMOR
+     PER BARIS (kolomnya sempit; nomor yang disambung titik tengah
+     terpotong di tengah plat). Catatan, kalau ada, di baris sesudahnya.
+     Tetap satu sel untuk seluruh kiriman. */
+  const ket = sjDaftarKendaraan(p)
+    .concat([String(p.notes || "").trim()].filter(Boolean))
+    .map((v) => escapeHtml(v))
+    .join("<br>");
+  const selKet = `<td class="sj-ket" rowspan="${totalBaris}">${ket}</td>`;
 
   /* Sel Package digambar sekali per BOX, membentang seluruh barang di
      dalamnya. */
@@ -233,14 +278,12 @@ function buildSuratJalanHtml(row, shipment) {
      Kolom yang tidak berisi barang tidak digariskan, sama seperti
      Commercial Invoice. Yang dipertahankan cuma garis ATAS-nya:
      itulah penutup baris barang terakhir. */
-  const barisKosong = kosong
-    ? [
-        `<tr class="sj-fill" style="height:${kosong * SJ_TINGGI_BARIS}px">
+  const barisKosong = [
+    `<tr class="sj-fill" style="height:${kosong * SJ_TINGGI_BARIS}px">
         <td></td><td></td><td></td><td></td>
         ${baris.length === 0 ? selKet : ""}
       </tr>`,
-      ]
-    : [];
+  ];
 
   const totalQty = sjTotalPerSatuan(baris.map((b) => b.qty));
   /* Dihitung per BOX, bukan per barang — kalau tidak, satu box berisi
@@ -267,9 +310,14 @@ function buildSuratJalanHtml(row, shipment) {
     <table class="sj-meta">
       <tr>
         <td class="sj-meta-kiri" rowspan="3">
-          <div class="sj-kepada">Kepada :</div>
-          <div class="sj-to">${escapeHtml(p.receiver || "")}</div>
-          <div class="sj-to-addr">${escapeHtml(p.address || "")}</div>
+          <!-- KEPADA / nama / garis / ALAMAT PENERIMA / alamat: label
+               kecil di atas isinya, supaya jelas siapa yang dituju dan
+               ke mana barangnya dikirim. -->
+          <div class="sj-kepada">KEPADA</div>
+          <div class="sj-to">${escapeHtml(sjKapital(p.receiver))}</div>
+          <div class="sj-garis"></div>
+          <div class="sj-alamat-k">ALAMAT PENERIMA</div>
+          <div class="sj-to-addr">${escapeHtml(sjKapital(p.address))}</div>
         </td>
         <td class="sj-lbl">Nomor :</td>
         <td class="sj-lbl">Tanggal :</td>
@@ -372,9 +420,64 @@ function cetakSuratJalan(rowId) {
   // Menunggu tata letaknya selesai digambar sebelum kotak cetak muncul;
   // tanpa ini sebagian peramban mencetak halaman yang masih kosong.
   w.onload = () => {
+    /* Surat jalan memenuhi kertas A4: ruang kosong tabel dilebarkan
+       (Export) / baris kosong ditambah (Lokal) sampai tanda tangan jatuh
+       di dasar halaman. Harus SESUDAH tata letak jadi -- ia mengukur. */
+    if (lokal) sjlIsiKertas(w.document);
+    else sjIsiKertas(w.document);
     w.focus();
     w.print();
   };
+}
+
+/* SURAT JALAN EXPORT MEMENUHI KERTAS A4.
+
+   Kotak surat jalan sudah dipatok setinggi kertas (min-height di CSS),
+   tapi tanpa ini isinya berhenti di tanda tangan dan sisa kotaknya
+   kosong. Yang dilakukan di sini: mengukur jarak antara tanda tangan dan
+   dasar kotak, lalu menambahkannya ke ruang kosong tabel barang. Hasilnya
+   daftar barang di atas, ruang lega di tengah, Total dan tanda tangan di
+   dasar halaman -- seperti lembar Excel aslinya.
+
+   Diukur, bukan dihitung dari jumlah baris: nama barang yang membungkus
+   atau nomor mobil yang banyak membuat tinggi tabel berbeda-beda, dan
+   tinggi yang salah berarti satu halaman kosong di belakangnya atau
+   tanda tangan yang tidak menempel ke dasar.
+
+   SJ_SISA_AMAN_PX sengaja disisakan, dan pelebaran yang kelewat ditarik
+   kembali. Kalau tidak ada ruang kosongnya atau sudah penuh, tidak ada
+   yang diubah. Mengembalikan jumlah piksel yang ditambahkan. */
+function sjIsiKertas(dok) {
+  const d = dok || document;
+  const kotak = d.querySelector(".sj-box");
+  const isi = d.querySelector(".sj-fill");
+  const ttd = d.querySelector(".sj-sign");
+  if (!kotak || !isi || !ttd) return 0;
+  const jendela = d.defaultView || window;
+  const angka = (v) => parseFloat(v) || 0;
+  // Jarak (px) dari bawah tanda tangan (termasuk jaraknya sendiri) ke dasar kotak.
+  const sisa = () => {
+    const gk = jendela.getComputedStyle(kotak);
+    const dasar =
+      kotak.getBoundingClientRect().bottom -
+      angka(gk.borderBottomWidth) -
+      angka(gk.paddingBottom);
+    return (
+      dasar -
+      (ttd.getBoundingClientRect().bottom +
+        angka(jendela.getComputedStyle(ttd).marginBottom))
+    );
+  };
+  const tambah = Math.floor(sisa() - SJ_SISA_AMAN_PX);
+  if (!(tambah > 0)) return 0;
+  const semula = isi.getBoundingClientRect().height;
+  isi.style.height = semula + tambah + "px";
+  // Tabel kadang membulatkan tinggi barisnya; yang melewati batas aman ditarik kembali.
+  const lebih = SJ_SISA_AMAN_PX - sisa();
+  if (lebih > 0) {
+    isi.style.height = Math.max(semula, semula + tambah - Math.ceil(lebih)) + "px";
+  }
+  return tambah;
 }
 
 function suratJalanCss() {
@@ -404,14 +507,29 @@ function suratJalanCss() {
     font-family: Arial, Helvetica, sans-serif;
     color: #000;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    /* Ukuran huruf persis seperti yang ditulis di sini. Tanpa ini peramban
+       ponsel (iOS) membesarkan sebagian teks sendiri, tiap blok berbeda
+       banyaknya -- tampilan jadi tidak sama dengan yang tercetak, dan
+       pengukur tinggi di sjIsiKertas() mengukur tata letak yang salah. */
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   }
   /* Margin "Narrow" — 12,7 mm, sama dengan preset Word/Excel yang
      dipakai orang kantor. Dipasang sebagai padding, bukan @page margin,
      karena @page margin harus tetap 0 supaya kop & kaki bawaan peramban
-     tidak ikut tercetak. */
-  .sj-sheet { padding: 12.7mm; }
-  /* Seluruh isi dikurung satu bingkai, seperti berkas aslinya. */
-  .sj-box { border: var(--sj-line); }
+     tidak ikut tercetak.
+
+     LEBARNYA DIPATOK selebar kertas A4 (210 mm), bukan selebar jendela:
+     di layar dan di kertas tata letaknya jadi SAMA, dan pengukur tinggi
+     di sjIsiKertas() mengukur apa yang benar-benar tercetak. */
+  .sj-sheet { width: 210mm; padding: 12.7mm; }
+  /* Seluruh isi dikurung satu bingkai, seperti berkas aslinya.
+
+     DASAR BINGKAI = DASAR KERTAS: tinggi minimumnya kertas A4 (297 mm)
+     dikurangi padding atas + bawah .sj-sheet (2 x 12,7 mm) dan 2px
+     selisih aman. Angka 25.4mm HARUS ikut kalau padding di atas diubah
+     -- bingkai yang lebih tinggi dari sisa kertas mendorong satu halaman
+     kosong di belakangnya; yang lebih rendah menyisakan kertas kosong. */
+  .sj-box { border: var(--sj-line); min-height: calc(297mm - 25.4mm - 2px); }
 
   table { border-collapse: separate; border-spacing: 0; width: 100%; }
 
@@ -452,9 +570,18 @@ function suratJalanCss() {
   .sj-meta td { border-top: var(--sj-line); border-left: var(--sj-line);
     padding: 3px 6px; font-size: 9pt; }
   .sj-meta-kiri { width: 55%; vertical-align: top; border-left: 0 !important; }
-  .sj-kepada { font-size: 8.5pt; }
+  /* Blok penerima: label kecil abu-abu (KEPADA, ALAMAT PENERIMA) di atas
+     isinya -- nama tebal, garis tipis, lalu alamat -- supaya jelas siapa
+     yang dituju dan ke mana. Garis tipisnya latar setinggi 1px, bukan
+     border: semua border surat jalan lewat satu variabel (--sj-line). */
+  .sj-kepada, .sj-alamat-k { font-size: 7pt; letter-spacing: .5px; color: #555; }
   .sj-to { font-weight: 700; font-size: 10pt; margin-top: 2px; }
-  .sj-to-addr { font-size: 8.5pt; line-height: 1.35; white-space: pre-line; }
+  .sj-garis { height: 1px; background: #999; margin: 4px 0 3px; }
+  /* Alamat penerima diperkecil lagi (8.5pt -> 7.5pt, sama dengan alamat
+     kop di atasnya): alamat tiga baris yang panjang membuat kotak
+     Kepada terlalu penuh dan ikut menarik tinggi baris Nomor/Tanggal/Ref
+     di sebelahnya. Nama penerima di atasnya tetap 10pt tebal. */
+  .sj-to-addr { font-size: 7.5pt; line-height: 1.3; white-space: pre-line; margin-top: 1px; }
   .sj-lbl { font-size: 8.5pt; text-align: center; }
   .sj-val { text-align: center; font-size: 9pt; }
   .sj-ref { font-size: 9pt; }
@@ -487,6 +614,9 @@ function suratJalanCss() {
   /* Ruang kosong: garis tegaknya tidak digambar, garis atasnya iya. */
   .sj-fill td { border-left: 0; }
   .sj-fill td.sj-ket { border-left: var(--sj-line); }
+  /* Ruang kosong dilebarkan sjIsiKertas() lewat tinggi barisnya; tanpa
+     padding, yang tersisa kalau kertas sudah penuh hanya garisnya. */
+  .sj-fill td { padding-top: 0; padding-bottom: 0; }
   .sj-no  { width: 26px; text-align: center; }
   .sj-items td.sj-nama, .sj-items th.sj-nama { text-align: center; }
   .sj-qty { width: 62px; text-align: center; }
@@ -509,6 +639,9 @@ function suratJalanCss() {
     text-align: center;
     vertical-align: middle;
   }
+  /* Beberapa mobil = beberapa baris; jarak antarbarisnya dilonggarkan
+     sedikit supaya nomor platnya tidak terbaca menyambung. */
+  .sj-items td.sj-ket { line-height: 1.6; }
   /* Baris Total adalah baris TERAKHIR tabel. Di bawah konvensi
      atas+kiri, sisi bawahnya tidak dimiliki siapa pun — tidak ada
      baris berikutnya yang menggambar border-top. Jadi ia menutup

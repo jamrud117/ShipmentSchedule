@@ -197,7 +197,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(s.party), // 4  SUPPLIER NAME
       formatter.text(it.jenisBarang), // 5  ITEM
       formatter.text(it.hsCode), // 6  HS CODE
-      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (+ Size/Pattern/Mold No)
+      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (kolom barang CEISA, kiri ke kanan)
       formatter.num(it.qty, 2), // 8  QTY
       formatter.text(it.satuan), // 9  SAT
       formatter.num(amount, 2), // 10 AMOUNT

@@ -2,11 +2,19 @@
 
 /* Deteksi tipe file lalu panggil parser yang sesuai */
 
-// Item mentah CIPL (name/qty/satuan/harga/netto/bruto) -> bentuk item form yang sama dipakai
+/* Item mentah CIPL -> bentuk item form yang sama dipakai. Kolom barang
+   CEISA dari `kolom` (pembaca mesin EXIM, kolomBarangCipl); pembaca
+   lama hanya memberi satu teks nama -> Uraian. Kolom lain: nilai
+   bawaan newItem(). */
 function ciplRawItemsToFinalItems(rawItems) {
   return (rawItems || []).map((it) => ({
     ...newItem(),
-    namaBarang: it.name || "",
+    ...(it.kolom || { namaBarang: it.name || "" }),
+    /* CIPL tidak memuat kondisi barang; negara asalnya dari COUNTRY OF
+       ORIGIN (ciplDariMesin). undefined = tidak dibawa berkasnya:
+       isian barang lama / bawaan form yang berlaku (lengkapiKodeBarang). */
+    kondisiBarang: undefined,
+    negaraAsal: it.negaraAsal || undefined,
     hsCode: normalizeHsCodeInput(it.hsCode),
     jenisBarang: activeMode === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: it.qty != null ? it.qty : 0,
@@ -98,15 +106,23 @@ function bacaCiplLama(src) {
   return null;
 }
 
-function gabungNamaCipl(bagian, pemisah) {
-  const out = [];
-  bagian.forEach((p) => {
-    const teks = String(p == null ? "" : p).replace(/\s+/g, " ").trim();
-    if (isPlaceholderValue(teks)) return;
-    if (out.some((o) => o.toLowerCase() === teks.toLowerCase())) return;
-    out.push(teks);
-  });
-  return out.join(pemisah);
+/* Kolom CIPL -> kolom barang CEISA jadwal: uraian -> Uraian, tipe /
+   spesifikasi -> Tipe, merek -> Merek -- susunan yang sama dengan draft
+   CEISA yang disusun dari CIPL ini. Yang tidak tercetak tidak diisi
+   (nilai bawaan newItem()); tanpa uraian, tipe & mereknya jadi Uraian. */
+function kolomBarangCipl(it) {
+  const bersih = (v) => {
+    const teks = bersihkanLabelNama(String(v == null ? "" : v).replace(/\s+/g, " ").trim());
+    return isPlaceholderValue(teks) ? "" : teks;
+  };
+  const uraian = bersih(it.description);
+  const tipe = bersih(it.type);
+  const merek = bersih(it.brand);
+  if (!uraian) return { namaBarang: [tipe, merek].filter(Boolean).join(" ") };
+  const kolom = { namaBarang: uraian };
+  if (tipe && tipe.toUpperCase() !== uraian.toUpperCase()) kolom.tipe = tipe;
+  if (merek && merek.toUpperCase() !== uraian.toUpperCase()) kolom.merek = merek;
+  return kolom;
 }
 
 /* HS Code satu barang CIPL untuk form: 8 digit dari Database HS Code
@@ -132,10 +148,11 @@ function hsBarangCipl(it, catat) {
 function ciplDariMesin(c, sumber, lama) {
   const pdf = sumber.every((s) => !s.wb);
   const catat = { dariDb: [], bentrok: [], negara: [], pendek: [] };
+  // COUNTRY OF ORIGIN CIPL ("KOREA", "MADE IN CHINA") -> kode negara semua barangnya
+  const negaraAsal = typeof kodeNegara === "function" ? kodeNegara(String(c.country_origin || "").replace(/^\s*MADE\s+IN\s+/i, "")) : "";
   const raw = c.items.map((it) => ({
-    /* Excel: bagian nama digabung " - " (Item - Description - Brand),
-       sama dengan pembaca lama; PDF: satu teks seperti tercetak. */
-    name: bersihkanLabelNama(gabungNamaCipl([it.description, it.type, it.brand], pdf ? " " : " - ")),
+    kolom: kolomBarangCipl(it),
+    negaraAsal,
     hsCode: hsBarangCipl(it, catat),
     qty: it.qty != null ? it.qty : null,
     satuan: it.unit || "",

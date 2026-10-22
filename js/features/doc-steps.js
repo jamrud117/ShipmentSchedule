@@ -403,18 +403,36 @@ function docStepHtml(s) {
    terisi membatalkannya -- HANYA tahap itu (lihat di bawah).
 ------------------------------------------------------------------ */
 
-/* Isian tanggal diterima: bawaan hari ini, tidak boleh kosong, tidak
-   boleh sesudah hari ini (berkas yang belum datang belum diterima). */
+/* Tanggal PIB / PEB bawaan = tanggal di nomor ajunya
+   ("000020POL85820261016024172" -> 16-10-2026, tanggalDariAju di
+   helpers.js); tetap bisa diubah di kotaknya. Tahap lain, nomor aju
+   tidak lengkap, atau tanggal aju yang belum tiba -> "" (hari ini). */
+function docTanggalDariAju(st, s) {
+  if (st.key !== "pib" && st.key !== "peb") return "";
+  const tgl = tanggalDariAju(s && s.noAju);
+  return tgl && tgl <= todayISO() ? tgl : "";
+}
+const docTanggalBawaan = (st, s) => docTanggalDariAju(st, s) || todayISO();
+const docHintDariAju = (st, s) =>
+  docTanggalDariAju(st, s) ? tt("Terisi dari tanggal di nomor aju — ubah kalau berbeda.", "Filled from the date in the aju number — change it if it differs.") : "";
+
+/* Isian tanggal diterima: bawaan hari ini (PIB / PEB: tanggal nomor
+   ajunya), tidak boleh kosong, tidak boleh sesudah hari ini (berkas
+   yang belum datang belum diterima). */
 function docIsianTanggal(st, s) {
-  return {
-    key: "tanggal",
-    label: st.peristiwa
-      ? tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`)
-      : tt("Tanggal diterima", "Date received"),
-    type: "date",
-    value: todayISO(),
-    max: todayISO(),
-  };
+  const hint = docHintDariAju(st, s);
+  return Object.assign(
+    {
+      key: "tanggal",
+      label: st.peristiwa
+        ? tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`)
+        : tt("Tanggal diterima", "Date received"),
+      type: "date",
+      value: docTanggalBawaan(st, s),
+      max: todayISO(),
+    },
+    hint ? { hint } : {},
+  );
 }
 function docPeriksaTanggal(tanggal) {
   if (!tanggal) return tt("Tanggal wajib diisi.", "The date is required.");
@@ -500,8 +518,8 @@ async function toggleDocStep(id, stepKey) {
           key: "tanggal",
           label: tt(`Tanggal ${label}`, `${label} date`),
           type: "date",
-          value: todayISO(),
-          hint: t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
+          value: docTanggalBawaan(st, s),
+          hint: docHintDariAju(st, s) || t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
         },
       ],
       onSubmit: (v) => {

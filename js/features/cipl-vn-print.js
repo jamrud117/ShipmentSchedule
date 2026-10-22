@@ -44,11 +44,11 @@ function ciplVnMarks(it, idx, total) {
   return `C# : ${total}-${idx + 1}`;
 }
 
-/* NAMA BARANG = Description + Pattern + Size + Mold No -- aturan yang
-   SAMA dengan CIPL Dynamic Design Korea dan seluruh aplikasi
-   (itemDisplayName di core/helpers.js): satu spasi, kolom kosong
-   dilewati, yang sudah tertulis di Description tidak diulang. Dulu
-   dipisah dua spasi; di lembar jadi terlihat seperti spasi nyasar. */
+/* NAMA BARANG = kolom barang CEISA kiri ke kanan -- aturan yang SAMA
+   dengan CIPL Dynamic Design Korea dan seluruh aplikasi
+   (itemDisplayName di core/helpers.js): satu spasi, tanda kosong
+   dilewati, yang sudah tertulis di bagian sebelumnya tidak diulang.
+   Dulu dipisah dua spasi; di lembar jadi terlihat seperti spasi nyasar. */
 function ciplVnUraian(it) {
   return itemDisplayName(it);
 }
@@ -61,13 +61,12 @@ function ciplVnBaris(shipment) {
   return items.map((it, i) => ({
     marks: ciplVnMarks(it, i, total),
     uraian: ciplVnUraian(it),
-    /* Dipisah JUGA per bagian: lembar Excel menaruh nama tanpa Mold No
-       dan Mold No di dua kolom berbeda, karena pembeli menyaring kolom
-       mold-nya untuk mencocokkan cetakan. */
-    namaTanpaMold: itemDisplayName(Object.assign({}, it, { moldNo: "" })),
-    size: rapiBagianNama(it.size),
-    pattern: rapiBagianNama(it.pattern),
-    moldNo: rapiBagianNama(it.moldNo),
+    /* Dipisah JUGA per bagian: lembar Excel menaruh nama tanpa nomor
+       cetakan dan nomor cetakannya (MOLD NO = Spesifikasi Lain) di dua
+       kolom berbeda, karena pembeli menyaring kolom mold-nya untuk
+       mencocokkan cetakan. */
+    namaTanpaMold: itemDisplayName(Object.assign({}, it, { spesifikasiLain: "" })),
+    moldNo: rapiBagianNama(it.spesifikasiLain),
     qty: parseLooseNumber(it.qty),
     satuan: String(it.satuan || "").trim(),
     harga: parseLooseNumber(it.harga),

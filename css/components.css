@@ -491,18 +491,36 @@ body:not(.punya-kerangka) .toast-stack {
   }
 }
 
-/* Dua isian berdampingan dalam satu sel kisi (PI & LS di sel .s9):
-   label & kotaknya tetap sejajar dengan isian lain di baris itu. */
-.fgrid > .fl-dua {
+/* DOKUMEN BERNOMOR + BERTANGGAL (PI, LS & Polis Asuransi di Bea & Pajak
+   Impor): satu sel .s12 berisi pasangan [ nomor ][ tanggal ]
+   (.fl-dok-pasang). Pasangannya mengalir sebanyak yang muat -- tiga
+   sebaris di layar lebar, lalu dua, lalu satu -- dan tidak pernah
+   terbelah di antara dua baris. Lebar minimum pasangan menjaga label
+   terpanjang ("Tanggal Polis Asuransi") tetap satu baris, jadi seluruh
+   kotaknya sejajar. Di ponsel nomor & tanggal bertumpuk. */
+.fgrid > .fl-dok {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
   gap: 16px 18px;
 }
-.fl-dua > * {
+.fl-dok-pasang {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 16px 18px;
   min-width: 0;
 }
+.fl-dok-pasang > * {
+  min-width: 0;
+}
+.fl-dok .form-label {
+  display: block;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 @media (max-width: 767.98px) {
-  .fgrid > .fl-dua {
+  .fl-dok-pasang {
     grid-template-columns: minmax(0, 1fr);
   }
 }

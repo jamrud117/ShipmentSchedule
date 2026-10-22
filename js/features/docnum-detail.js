@@ -196,6 +196,8 @@ const DN_DETAIL_TERPAKAI = new Set([
   "expenseType", "transactionType",
   // tampil bersama PO No. (nomor & tanggalnya berpasangan)
   "poDate", "poNoExtra", "poDateExtra",
+  // mobil kedua dst. tampil bersama No. Kendaraan (vehicle-list.js)
+  "vehicleExtra",
   // penanda internal: moda kiriman surat, isian moda yang sudah dihapus
   "moda", "transportMode",
 ]);
@@ -273,6 +275,15 @@ function dndDaftarPo(p) {
     .join("");
 }
 
+/* Nomor mobil -- yang pertama dan yang tambahan, satu butir per mobil.
+   Disaring sjDaftarKendaraan (surat-jalan-print.js), aturan yang sama
+   dengan cetakan surat jalannya. */
+function dndDaftarKendaraan(p) {
+  return sjDaftarKendaraan(p)
+    .map((v) => `<span class="dnd-butir">${escapeHtml(v)}</span>`)
+    .join("");
+}
+
 /* Nilai satu isian -> HTML siap tampil. String kosong = tidak ada yang
    perlu ditampilkan, dan isiannya dilewati. */
 function dndNilai(k, r) {
@@ -287,6 +298,7 @@ function dndNilai(k, r) {
       : `<span class="dnd-redup">${escapeHtml(t("s.jadwal.tidak.ditemukan"))}</span>`;
   }
   if (k === "poNo") return dndDaftarPo(p);
+  if (k === "vehicle") return dndDaftarKendaraan(p);
   // Nama lama "Local Sale" tampil dengan nama barunya (fund-summary.js)
   if (k === "transactionType") {
     const jenis = fundJenisTransaksiBaku(v);
@@ -481,8 +493,8 @@ function dndBiayaHtml(r) {
 }
 
 /* Penanda tangan Form Pengajuan Dana -- tiga, atau empat (CFO) untuk
-   vendor yang memakai Doc No; nama & jabatan bawaannya sama dengan yang
-   tercetak (lihat buildFundRequestHtml). */
+   vendor yang Doc No-nya dicetak; nama & jabatan bawaannya sama dengan
+   yang tercetak (lihat buildFundRequestHtml). */
 function dndPenandaTanganHtml(r) {
   const p = r.payload || {};
   const cfo = typeof frPakaiTtdCfo === "function" && frPakaiTtdCfo(p);

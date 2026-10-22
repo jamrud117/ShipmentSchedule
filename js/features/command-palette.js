@@ -55,10 +55,8 @@ function cmdkSearchShipments(q) {
         s.voyage,
         s.container,
         s.forwarder,
-        // Ikut nomor cetakan & nomor PO -- lihat catatan di list.js.
-        ...(s.items || []).flatMap((i) => [
-          i.namaBarang, i.size, i.pattern, i.moldNo, i.poNo,
-        ]),
+        // Seluruh kolom barang CEISA -- lihat catatan di list.js.
+        ...(s.items || []).flatMap(teksCariBarang),
       ]
         .join(" ")
         .toLowerCase();

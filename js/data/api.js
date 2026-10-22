@@ -197,6 +197,10 @@ const KOLOM_OPSIONAL = {
   invoice_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Invoice" },
   master_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Master B/L-AWB" },
   house_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal House B/L-AWB" },
+  pi_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal PI" },
+  ls_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal LS" },
+  polis_asuransi: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Polis Asuransi" },
+  polis_asuransi_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal Polis Asuransi" },
 };
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
@@ -207,7 +211,7 @@ const KOLOM_OPSIONAL = {
    itu: kolomnya dibuang dari SEMUA penyimpanan berikutnya sampai halaman
    dimuat ulang, dan No. Kendaraan tidak pernah tersimpan walau
    migrasinya sudah dijalankan. */
-function kolomBelumDikenal(error) {
+function kolomBelumDikenal(error, daftar) {
   if (!error) return null;
   const pesan = [error.message, error.details, error.hint].filter(Boolean).join(" ");
   const kolomHilang =
@@ -216,7 +220,78 @@ function kolomBelumDikenal(error) {
     /could not find the '\w+' column|column "?[\w.]+"? (?:of relation "?[\w.]+"? )?does not exist/i.test(pesan);
   if (!kolomHilang) return null;
   // Nama kolom utuh: "ls" tidak boleh tertangkap dari kata lain ("details")
-  return Object.keys(KOLOM_OPSIONAL).find((k) => new RegExp(`(^|[^\\w])${k}([^\\w]|$)`).test(pesan)) || null;
+  return (daftar || Object.keys(KOLOM_OPSIONAL)).find((k) => new RegExp(`(^|[^\\w])${k}([^\\w]|$)`).test(pesan)) || null;
+}
+
+/* KOLOM BARANG CEISA YANG MUNGKIN BELUM DIMIGRASI
+   (migration-barang-ceisa.sql). Daftar barang disimpan dengan cara
+   hapus semua lalu sisipkan, jadi sisipan yang ditolak karena kolomnya
+   belum ada berarti barangnya HILANG. Ditolak karena itu -> disisipkan
+   ulang tanpa kolom yang ditolak, dan pengguna diberi tahu berkas
+   migrasinya:
+     - Kode Barang s.d. Spesifikasi Lain: seluruh nama barang dilebur ke
+       Uraian -- nama yang tampil tetap sama;
+     - Kode Kondisi Barang & Kode Negara Asal: ditinggalkan, HANYA kolom
+       yang ditolak (database yang sudah mengenal kolom nama barang
+       tidak ikut dilebur).
+   PostgREST menyebut satu kolom per penolakan, jadi dicoba sampai
+   tidak ada lagi yang ditolak. */
+const KOLOM_BARANG_CEISA = ["kode_barang", "merek", "tipe", "ukuran", "spesifikasi_lain"];
+const KOLOM_BARANG_KODE = {
+  kode_kondisi_barang: () => tt("Kode Kondisi Barang", "Goods Condition Code"),
+  kode_negara_asal: () => tt("Kode Negara Asal", "Country of Origin Code"),
+};
+
+async function sisipkanBarang(items, shipmentId, kirimBaris) {
+  if (!items.length) return;
+  let rows = items.map((it) => itemToRow(it, shipmentId));
+  const kirim = kirimBaris || ((r) => supabaseClient.from("shipment_items").insert(r));
+  let { error } = await kirim(rows);
+  let lebur = false;
+  const ditinggal = [];
+  const kolomKode = Object.keys(KOLOM_BARANG_KODE);
+  for (let i = 0; error && i <= kolomKode.length; i++) {
+    if (!lebur && kolomBelumDikenal(error, KOLOM_BARANG_CEISA)) {
+      lebur = true;
+      rows = rows.map((r, j) => {
+        const x = Object.assign({}, r, { nama_barang: itemDisplayName(items[j]) });
+        KOLOM_BARANG_CEISA.forEach((k) => delete x[k]);
+        return x;
+      });
+    } else {
+      const kolom = kolomBelumDikenal(error, kolomKode);
+      if (!kolom || !rows.some((r) => kolom in r)) break;
+      // Diberi tahu hanya kalau ada isian yang benar-benar tidak ikut tersimpan
+      if (rows.some((r) => String(r[kolom] == null ? "" : r[kolom]).trim())) ditinggal.push(KOLOM_BARANG_KODE[kolom]());
+      rows = rows.map((r) => {
+        const x = Object.assign({}, r);
+        delete x[kolom];
+        return x;
+      });
+    }
+    ({ error } = await kirim(rows));
+  }
+  if (!error && (lebur || ditinggal.length) && typeof showToast === "function") {
+    const kode = ditinggal.join(" & ");
+    showToast(
+      lebur && kode
+        ? tt(
+            `Jadwal tersimpan, tetapi database belum mengenal kolom barang CEISA: Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain digabung ke Uraian, ${kode} belum tersimpan. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).`,
+            `Schedule saved, but the database does not know the CEISA item columns yet: Item Code, Brand, Type, Size & Other Specification were merged into the Description, ${kode} was not saved. Run migration-barang-ceisa.sql in Supabase (safe to re-run).`,
+          )
+        : lebur
+          ? tt(
+              "Jadwal tersimpan, tetapi kolom Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain belum: database belum mengenal kolomnya, jadi isinya digabung ke Uraian. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).",
+              "Schedule saved, but Item Code, Brand, Type, Size & Other Specification were not: the database does not know the columns yet, so they were merged into the Description. Run migration-barang-ceisa.sql in Supabase (safe to re-run).",
+            )
+          : tt(
+              `Jadwal tersimpan, tetapi ${kode} belum: database belum mengenal kolomnya. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).`,
+              `Schedule saved, but ${kode} was not: the database does not know the column yet. Run migration-barang-ceisa.sql in Supabase (safe to re-run).`,
+            ),
+      "warning",
+    );
+  }
+  if (error) throw error;
 }
 
 /* Satu kolom yang belum dikenal dibuang per percobaan -- beberapa kolom
@@ -250,13 +325,7 @@ async function createShipment(payload, items, stops) {
   const { data: inserted, error } = await simpanDenganCadangan(
     (r) => supabaseClient.from("shipments").insert(r).select().single(), row);
   if (error) throw error;
-  if (items.length) {
-    const itemRows = items.map((it) => itemToRow(it, inserted.id));
-    const { error: itemErr } = await supabaseClient
-      .from("shipment_items")
-      .insert(itemRows);
-    if (itemErr) throw itemErr;
-  }
+  await sisipkanBarang(items, inserted.id);
   if (stops && stops.length) {
     const stopRows = stops.map((st, i) => stopToRow(st, inserted.id, i + 1));
     const { error: stopErr } = await supabaseClient
@@ -280,13 +349,7 @@ async function updateShipmentRecord(id, payload, items, stops) {
     .eq("shipment_id", id);
   if (delErr) throw delErr;
 
-  if (items.length) {
-    const itemRows = items.map((it) => itemToRow(it, id));
-    const { error: insErr } = await supabaseClient
-      .from("shipment_items")
-      .insert(itemRows);
-    if (insErr) throw insErr;
-  }
+  await sisipkanBarang(items, id);
 
   // Sama persis dengan pola daftar barang di atas: hapus semua terminal transit lama
   const { error: delStopErr } = await supabaseClient

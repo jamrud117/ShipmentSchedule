@@ -610,7 +610,7 @@ table.item-table th {
 
    Dibatasi ke .item-table--form dengan sengaja. Kelas .item-table
    dipakai DUA tabel dengan susunan kolom yang sama sekali berbeda:
-   tabel isian (21 kolom, mulai dari "Seri") dan tabel Daftar Barang
+   tabel isian (24 kolom, mulai dari "Seri") dan tabel Daftar Barang
    di panel detail (12 kolom, mulai dari "Nama Barang"). Aturan
    :nth-child yang tidak dibatasi akan mengenai keduanya -- dan itu
    sempat terjadi: kolom Nama Barang di panel detail kebagian jatah
@@ -619,29 +619,28 @@ table.item-table th {
 
    Dulu tiap <th> membawa style="width: N%" sendiri. :nth-child()
    dipakai di sini dengan sengaja: sebagian kolom DISEMBUNYIKAN per
-   buku (Size & Dimensi hanya di Export, CBM menyusul pilihan), dan
+   buku (Marks & Dimensi hanya di Export, CBM menyusul pilihan), dan
    kolom yang disembunyikan lewat display:none TETAP menempati
    urutannya di DOM -- jadi nomor posisinya tidak pernah bergeser.
 
-   Kolom 4-7 (Pattern, Mold No., PO No., Marks) sengaja tanpa jatah:
-   isinya pendek & seragam, jadi lebarnya boleh mengikuti isi. */
-table.item-table--form th:nth-child(1) { width: 4%; }   /* Seri */
-table.item-table--form th:nth-child(2) { width: 16%; }  /* Nama Barang */
-table.item-table--form th:nth-child(3) { width: 14%; }  /* Size */
-table.item-table--form th:nth-child(8) { width: 6%; }   /* HS Code */
-table.item-table--form th:nth-child(9) { width: 8%; }   /* Jenis Barang */
-table.item-table--form th:nth-child(10) { width: 6%; }  /* Fasilitas */
-table.item-table--form th:nth-child(11) { width: 5%; }  /* Qty */
-table.item-table--form th:nth-child(12) { width: 5%; }  /* Satuan */
-table.item-table--form th:nth-child(13) { width: 7%; }  /* Harga/Unit */
-table.item-table--form th:nth-child(14) { width: 5%; }  /* Netto */
-table.item-table--form th:nth-child(15) { width: 5%; }  /* Bruto */
-table.item-table--form th:nth-child(16) { width: 9%; }  /* Dimensi */
-table.item-table--form th:nth-child(17) { width: 7%; }  /* Kemasan */
-table.item-table--form th:nth-child(18) { width: 9%; }  /* Jenis Kemasan */
-table.item-table--form th:nth-child(19) { width: 8%; }  /* CBM */
-table.item-table--form th:nth-child(20) { width: 6%; }  /* Subtotal */
-table.item-table--form th:nth-child(21) { width: 3%; }  /* tombol hapus */
+   Kolom 3-8 (Kode Barang s.d. Spesifikasi Lain) & 11 (Marks) tanpa
+   jatah persen: lebarnya seragam lewat .kolom-ceisa di bawah; kolom
+   9-10 (Kode Kondisi Barang, Kode Negara Asal) lewat .kolom-kode. */
+table.item-table--form th:nth-child(1) { width: 3%; }   /* Seri */
+table.item-table--form th:nth-child(2) { width: 7%; }   /* HS Code */
+table.item-table--form th:nth-child(12) { width: 8%; }  /* Jenis Barang */
+table.item-table--form th:nth-child(13) { width: 6%; }  /* Fasilitas */
+table.item-table--form th:nth-child(14) { width: 5%; }  /* Qty */
+table.item-table--form th:nth-child(15) { width: 5%; }  /* Satuan */
+table.item-table--form th:nth-child(16) { width: 7%; }  /* Harga/Unit */
+table.item-table--form th:nth-child(17) { width: 5%; }  /* Netto */
+table.item-table--form th:nth-child(18) { width: 5%; }  /* Bruto */
+table.item-table--form th:nth-child(19) { width: 9%; }  /* Dimensi */
+table.item-table--form th:nth-child(20) { width: 7%; }  /* Kemasan */
+table.item-table--form th:nth-child(21) { width: 9%; }  /* Jenis Kemasan */
+table.item-table--form th:nth-child(22) { width: 8%; }  /* CBM */
+table.item-table--form th:nth-child(23) { width: 6%; }  /* Subtotal */
+table.item-table--form th:nth-child(24) { width: 3%; }  /* tombol hapus */
 
 /* TABEL DAFTAR BARANG DI PANEL DETAIL.
 
@@ -659,13 +658,15 @@ table.item-table--detail td:first-child {
   text-align: left;
 }
 
-/* Kolom Nama Barang butuh lebar minimum sendiri (dipasangkan dengan
-   textarea.nama-barang-input di bawah — kalau salah satu diubah
-   sendirian, lebar kolomnya jadi yang terbesar di antara keduanya,
-   bukan yang dimaksud). Ditandai lewat kelasnya sendiri, BUKAN
-   :first-child — sejak kolom Seri Barang ditambahkan di depannya,
-   :first-child sudah berarti kolom lain. */
-table.item-table th.namabarang-col {
+/* KOLOM BARANG CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran,
+   Spesifikasi Lain, Marks): LEBAR SAMA semuanya, isinya membungkus &
+   kotaknya tumbuh ke bawah (textarea.isian-barang). Lebar sel dan
+   lebar kotaknya dipasangkan lewat --lebar-kolom-ceisa -- kalau salah
+   satu diubah sendirian, kolomnya jadi selebar yang terbesar. */
+table.item-table--form {
+  --lebar-kolom-ceisa: 200px;
+}
+table.item-table th.kolom-ceisa {
   text-align: left;
 }
 table.item-table td {
@@ -674,9 +675,68 @@ table.item-table td {
   vertical-align: middle;
   text-align: center;
 }
-table.item-table td.namabarang-col {
+table.item-table td.kolom-ceisa {
   text-align: left;
-  min-width: 400px;
+  width: var(--lebar-kolom-ceisa);
+  min-width: var(--lebar-kolom-ceisa);
+}
+/* KODE KONDISI BARANG & KODE NEGARA ASAL: isinya kode pendek (1 / 2,
+   KR), jadi kolomnya SELEBAR ISINYA -- judulnya boleh dua baris, tidak
+   memaksa kolom selebar judul. */
+table.item-table th.kolom-kode {
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+  width: 1%;
+}
+table.item-table td.kolom-kode {
+  text-align: left;
+  width: 1%;
+}
+/* Kode Negara Asal: kode di kiri, nama negaranya redup di DALAM kotak
+   yang sama -- pola "kode + keterangan" isian kode di aplikasi
+   kepabeanan / ERP. Satu baris setinggi isian lain: tidak ada teks di
+   bawah kotak yang mendorongnya naik dari garis baris. Nama panjang
+   terpotong "…" (lengkapnya di tooltip); disembunyikan selagi kotaknya
+   diketik, karena saat itu daftar sarannya yang bicara. */
+table.item-table .negara-isian {
+  position: relative;
+  width: 8.5rem;
+}
+table.item-table input[data-f="negaraAsal"] {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+table.item-table input[data-f="negaraAsal"]::placeholder {
+  text-transform: none;
+  font-family: var(--font-body);
+  letter-spacing: 0;
+}
+table.item-table .negara-nama {
+  position: absolute;
+  top: 50%;
+  left: 2.15rem;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  font-size: 0.74rem;
+  line-height: 1;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+table.item-table .negara-nama:empty,
+table.item-table input[data-f="negaraAsal"]:focus + .negara-nama {
+  display: none;
+}
+table.item-table input.negara-salah {
+  border-color: var(--coral);
+  background: #fff6f6;
 }
 /* Kolom Seri Barang — angka referensi saja (dari posisi baris, lihat
    item-table.js), bukan isian. Sengaja sempit & senada warna muted,
@@ -863,21 +923,24 @@ table.item-table input.cbm-readonly {
   text-align: center;
   width: 100%;
 }
-/* NAMA BARANG — harus terbaca UTUH tanpa scroll apa pun */
-table.item-table textarea.nama-barang-input {
+/* ISIAN BARANG CEISA — harus terbaca UTUH tanpa scroll apa pun */
+table.item-table textarea.isian-barang {
+  /* Blok, bukan inline: textarea inline duduk di garis dasar teks dan
+     menyisakan celah di bawahnya, jadi kotaknya beberapa piksel lebih
+     tinggi dari isian satu baris di baris yang sama. */
+  display: block;
   border: 1px solid var(--border-control);
   border-radius: 7px;
   padding: 6px 8px;
   font-size: 0.82rem;
   width: 100%;
-  min-width: 400px;
+  min-width: var(--lebar-kolom-ceisa);
   min-height: 34px;
   height: auto;
-  /* Nama barang ditulis UTUH: dibungkus ke baris berikutnya, tidak
-     dipotong. Kolomnya melebar (min-width 400px, sepasang dengan
-     td:first-child di atas) dan tabelnya bisa digeser mendatar —
-     lebih baik menggeser daripada kehilangan bagian nama yang justru
-     membedakan satu barang dari lainnya. */
+  /* Isinya ditulis UTUH: dibungkus ke baris berikutnya, tidak
+     dipotong, dan kotaknya tumbuh ke bawah (autoGrowTextarea,
+     item-table.js). Lebih baik bertambah baris daripada kehilangan
+     bagian nama yang justru membedakan satu barang dari lainnya. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow: hidden;
@@ -1470,47 +1533,15 @@ body.mode-import .dim-col {
   display: none;
 }
 
-/* Kolom Size (ukuran/spesifikasi, mis. "235/55R20") — TERPISAH dari
-   Nama Barang/Uraian (requirement: "jangan digabung jadi satu kolom"),
-   dan HANYA berlaku di buku Export. Field-nya (`it.size`) SENGAJA baru
-   ("Nama Barang" tetap field yang sama di kedua mode, cuma labelnya
-   berubah jadi "Uraian" di Export lewat renderItemTable() —
-   item-table.js) supaya semua yang SUDAH membaca `it.namaBarang`
-   (cetak CIPL, Copy Template, pencarian, dst.) tidak perlu diubah
-   sama sekali; yang perlu tahu soal Size cukup ditambahkan di tempat
-   yang benar-benar menampilkannya). */
-body.mode-import .size-col,
-/* Kolom cetakan: Pattern, Mold No, PO No. Penomoran ini milik barang
-   jadi yang dikirim keluar -- tidak ada padanannya di buku Import. */
+/* Kolom Marks: penandaan peti barang yang dikirim keluar -- tidak ada
+   padanannya di buku Import. */
 body.mode-import .export-col {
   display: none;
 }
-.export-col {
-  min-width: 120px;
-}
-.export-col input {
-  height: 100%;
-  min-height: 34px;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 5px 8px;
-  font-size: var(--t-sm);
-}
-.size-col {
-  /* Isinya bisa sepanjang "CREDO SUNMODE SUV 205/70R15" (kolom TIPE
-     CEISA, gabung merek+ukuran) — bukan cuma kode ukuran pendek. */
-  min-width: 180px;
-}
-.size-col input {
-  height: 100%;
-  min-height: 34px;
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 4px 6px;
-  font-size: var(--t-sm);
-  text-align: center;
+
+/* Kode Kondisi Barang: kolom PIB (BC 2.0) -- PEB tidak memuatnya. */
+body.mode-export .import-col {
+  display: none;
 }
 
 /* Baris yang ikut box di atasnya: isian Koli-nya dibiarkan kosong dan

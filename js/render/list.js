@@ -55,9 +55,9 @@ function dateRangeBasisValue(s, basis) {
 
    Master/House B/L-AWB WAJIB ikut: nomor itulah yang paling sering
    dipakai mencari, entah dari e-mail forwarder atau dari dokumen di
-   tangan. Size, Pattern, Mold No & PO No ikut dicari: orang gudang
-   menelusuri kiriman lewat nomor cetakan atau nomor PO, bukan cuma
-   nama barangnya. */
+   tangan. Seluruh kolom barang CEISA ikut dicari (teksCariBarang):
+   orang gudang menelusuri kiriman lewat kode barang, tipe, ukuran, atau
+   nomor cetakan (Spesifikasi Lain), bukan cuma uraiannya. */
 function teksCariJadwal(s) {
   return [
     s.party,
@@ -76,9 +76,7 @@ function teksCariJadwal(s) {
     s.incoterm,
     s.muatan,
     s.notes,
-    ...(s.items || []).flatMap((i) => [
-      i.namaBarang, i.hsCode, i.size, i.pattern, i.moldNo, i.poNo,
-    ]),
+    ...(s.items || []).flatMap((i) => teksCariBarang(i).concat(i.hsCode)),
   ]
     .join(" ")
     .toLowerCase();

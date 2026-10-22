@@ -51,7 +51,7 @@ function skbTagsHtml(s) {
 
 // Daftar nama barang buat kartu depan (info-grid) — 1 barang 1 baris
 function itemNamesSummary(s, maxShown = 4) {
-  /* itemDisplayName: Uraian + Size + Pattern + Mold No, kolom kosong
+  /* itemDisplayName: kolom barang CEISA kiri ke kanan, tanda kosong
      dilewati. Dipakai bersama copy template -- lihat helpers.js. */
   const names = (s.items || [])
     .map((it) => itemDisplayName(it))

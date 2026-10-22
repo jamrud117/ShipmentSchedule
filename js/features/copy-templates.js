@@ -1,22 +1,5 @@
 "use strict";
 
-/* Nama Barang + Size (Export) untuk template yang cuma punya SATU
-   kolom deskripsi barang (bukan kolom Uraian & Size terpisah seperti
-   di form) -- CIPL (cipl-print.js) sudah punya penanganannya sendiri
-   lewat ciplPecahNama()/kolom item+type; ini untuk tempat lain yang
-   cuma butuh satu baris teks. `it.size` baru relevan di Export (lihat
-   body.mode-import .size-col, form.css) -- kosong/tidak ada di Import,
-   jadi aman dipanggil apa pun mode-nya. */
-/* Diteruskan ke itemDisplayName() di helpers.js.
-
-   Dulu fungsi ini merakit namanya sendiri (nama + size saja), sehingga
-   Pattern & Mold No yang tampil di kartu TIDAK ikut tersalin -- dua
-   tempat merakit nama yang sama dengan aturan berbeda. Namanya
-   dipertahankan supaya pemanggil yang sudah ada tidak perlu diubah. */
-function namaBarangDenganSize(it) {
-  return itemDisplayName(it);
-}
-
 /* COPY TEMPLATE PICKER — dropdown pilihan template di tombol Copy */
 
 function rowsToClipboardText(rows) {
@@ -89,7 +72,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.text(s.noAju), // 4  AJU
       formatter.text(s.party), // 5  CONSIGNEE (BUYER NAME)
       formatter.text(it.hsCode), // 6  HS CODE
-      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (Uraian+Pattern+Size+Mold No)
+      formatter.text(itemDisplayName(it)), // 7  DESCRIPTION (kolom barang CEISA, kiri ke kanan)
       formatter.num(it.qty, 2), // 8  QTY
       formatter.num((Number(it.qty) || 0) * (Number(it.harga) || 0), 2), // 9 AMOUNT
       formatter.text(s.incoterm), // 10 INCOTERMS
@@ -166,7 +149,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.text(statusTemplateValue(s.status)), // 4  STATUS
       formatter.text(s.destination), // 5  PELABUHAN / TERMINAL
       formatter.text(s.party), // 6  SHIPPER
-      formatter.text(itemDisplayName(it)), // 7  GOODS DESCRIPTION (+ Size/Pattern/Mold No)
+      formatter.text(itemDisplayName(it)), // 7  GOODS DESCRIPTION (kolom barang CEISA, kiri ke kanan)
       qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
       formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Total Bruto se-pengiriman)
       formatter.blank, // 10 BL/AWB — diisi terpisah
@@ -209,7 +192,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.text(statusTemplateValue(s.status)), // 4  STATUS
       formatter.text(s.origin), // 5  PELABUHAN MUAT
       formatter.text(s.party), // 6  CUSTOMER
-      formatter.text(itemDisplayName(it)), // 7  ITEM NAME (Uraian+Pattern+Size+Mold No)
+      formatter.text(itemDisplayName(it)), // 7  ITEM NAME (kolom barang CEISA, kiri ke kanan)
       qtyDenganSatuan(it, formatter), // 8  QTY (+ satuan)
       formatter.num(it.bruto, 2), // 9  GROSS WEIGHT
       formatter.blank, // 10 BL/AWB — diisi terpisah
@@ -262,10 +245,10 @@ function reportItemNames(s) {
   const seen = new Set();
   const out = [];
   (s.items || []).forEach((it) => {
-    // + Size (Export) supaya dua ukuran beda dari nama dasar yang sama
-    // (mis. "TYRE MOLD TREAD ONLY" 235/55R20 vs 195/65R15) tidak
-    // ke-dedupe jadi satu baris seolah barang yang persis sama.
-    const nama = namaBarangDenganSize(it);
+    // Nama lengkap (Uraian + Tipe/Ukuran, dst.) supaya dua ukuran beda dari
+    // Uraian yang sama (mis. "TYRE MOLD TREAD ONLY" 235/55R20 vs 195/65R15)
+    // tidak ke-dedupe jadi satu baris seolah barang yang persis sama.
+    const nama = itemDisplayName(it);
     if (!nama) return;
     const key = nama.toLowerCase();
     if (seen.has(key)) return;

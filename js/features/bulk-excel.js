@@ -376,12 +376,18 @@ function reconstructShipmentFromGroup(group, mode) {
     if (!desc && !hs && !qty) return;
     const amount = excelNum(row[idx.AMOUNT]);
     items.push({
-      ...newItem(),
-      /* Huruf besar, sama seperti impor berkas tunggal. Impor massal
+      ...newItem(mode),
+      /* DESCRIPTION berkas massal = nama barang UTUH (templat salin,
+         itemDisplayName), bukan kolom CEISA yang terpisah: seluruhnya
+         masuk Uraian dan kolom CEISA lainnya dikosongkan -- sama seperti
+         barang lama (barangBerkolomCeisa).
+
+         Huruf besar, sama seperti impor berkas tunggal. Impor massal
          punya jalurnya sendiri dan TIDAK lewat apply-to-form.js, jadi
          aturannya harus disebut lagi di sini — kalau tidak, satu-satunya
          jalur yang memasukkan ratusan baris sekaligus justru yang
          terlewat. */
+      ...Object.fromEntries(KOLOM_CEISA_LAIN.map((k) => [k, ""])),
       namaBarang: String(desc || "").toUpperCase(),
       hsCode: normalizeHsCodeInput(hs),
       /* Isian dari Excel dibakukan juga: pengguna bisa menulis

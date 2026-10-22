@@ -35,12 +35,13 @@ let mstTermuat = false;
 /* KOLOM DARI MIGRASI LANJUTAN. Halaman ini tetap jalan sebelum migrasinya
    dijalankan: kolom yang belum ada dibuang dari bacaan & kiriman
    (mstBacaKolom, mstKirim). Isian yang HANYA bisa disimpan di kolom itu
-   -- lebih dari satu PIB, nilai USD -- ditolak dengan pesan yang
-   menunjuk berkas migrasinya. */
+   -- lebih dari satu PIB, nilai USD, HS Code -- ditolak dengan pesan
+   yang menunjuk berkas migrasinya. */
 const MST_MIGRASI = {
   pibs: "migration-masterlist-pib-parsial.sql",
   value_quota: "migration-masterlist-nilai.sql",
   invoice_value: "migration-masterlist-nilai.sql",
+  hs_code: "migration-masterlist-hs-code.sql",
 };
 const mstKolomBelumAda = new Set();
 const mstAdaKolom = (k) => !mstKolomBelumAda.has(k);
@@ -178,6 +179,8 @@ function mstSusun() {
         id: b.id,
         no: Number(b.no),
         nama: b.description || "",
+        // HS Code barang -- di rincian baris & unduhan Excel, tidak di cetakan stock opname
+        hsCode: String(b.hs_code || "").trim(),
         spesifikasi: b.specification || "",
         satuan: b.uom || "",
         kuota,
@@ -393,15 +396,16 @@ function mstTanggalTercatat(kunci, kecualiId) {
 
 function mstPesanMigrasi(kolom) {
   const berkas = MST_MIGRASI[kolom];
-  return kolom === "pibs"
-    ? tt(
-        `Realisasi dengan lebih dari satu PIB butuh pembaruan database: jalankan ${berkas} di Supabase (SQL Editor), lalu muat ulang halaman ini.`,
-        `A realization with more than one PIB needs a database update: run ${berkas} in Supabase (SQL Editor), then reload this page.`,
-      )
-    : tt(
-        `Nilai (USD) butuh pembaruan database: jalankan ${berkas} di Supabase (SQL Editor), lalu muat ulang halaman ini.`,
-        `Values (USD) need a database update: run ${berkas} in Supabase (SQL Editor), then reload this page.`,
-      );
+  const [apa, what] =
+    kolom === "pibs"
+      ? ["Realisasi dengan lebih dari satu PIB", "A realization with more than one PIB needs"]
+      : kolom === "hs_code"
+        ? ["HS Code", "The HS Code needs"]
+        : ["Nilai (USD)", "Values (USD) need"];
+  return tt(
+    `${apa} butuh pembaruan database: jalankan ${berkas} di Supabase (SQL Editor), lalu muat ulang halaman ini.`,
+    `${what} a database update: run ${berkas} in Supabase (SQL Editor), then reload this page.`,
+  );
 }
 const mstPesanMigrasiPib = () => mstPesanMigrasi("pibs");
 
@@ -410,6 +414,7 @@ const MST_BERISI = {
   pibs: (v) => Array.isArray(v) && v.length > 1,
   value_quota: (v) => v != null,
   invoice_value: (v) => v != null,
+  hs_code: (v) => v != null && String(v).trim() !== "",
 };
 
 /* Kolom opsional yang disebut galat database: "column masterlist_usages.pibs
@@ -515,7 +520,8 @@ function mstCocok(b, f) {
   if (f.lini && b.lini !== f.lini) return false;
   if (f.jenis && (b.nama !== f.jenis.nama || b.lini !== f.jenis.lini)) return false;
   if (!f.q) return true;
-  const isi = [b.no, b.nama, b.spesifikasi, b.satuan]
+  // HS Code juga tanpa titik: "84807190" menemukan "8480.71.90"
+  const isi = [b.no, b.nama, b.hsCode, b.hsCode.replace(/\D/g, ""), b.spesifikasi, b.satuan]
     .concat(b.realisasi.flatMap((u) => mstPibs(u).map((p) => p.aju)))
     .join(" ")
     .toLowerCase();
@@ -964,10 +970,17 @@ function mstRincianBarisHtml(b) {
       </table>`
     : `<p class="mst-redup mst-rinci-kosong">${escapeHtml(tt("Belum ada realisasi untuk baris ini.", "No realization recorded for this line yet."))}</p>`;
 
+  // HS Code lalu spesifikasi -- urutan kolom unduhan Excel
   return `<div class="mst-rinci">
-      <div class="mst-rinci-spek">
-        <span class="mst-rinci-label">${escapeHtml(tt("Spesifikasi", "Specification"))}</span>
-        <p>${escapeHtml(b.spesifikasi || "—")}</p>
+      <div class="mst-rinci-kepala">
+        <div class="mst-rinci-hs">
+          <span class="mst-rinci-label">HS Code</span>
+          <p class="mst-mono">${b.hsCode ? escapeHtml(b.hsCode) : `<span class="mst-redup">—</span>`}</p>
+        </div>
+        <div class="mst-rinci-spek">
+          <span class="mst-rinci-label">${escapeHtml(tt("Spesifikasi", "Specification"))}</span>
+          <p>${escapeHtml(b.spesifikasi || "—")}</p>
+        </div>
       </div>
       ${mstRincianNilaiHtml(b)}
       <div class="mst-rinci-realisasi">
@@ -1280,10 +1293,11 @@ async function mstAmbil() {
     mstRealisasiDb = [];
     return;
   }
-  /* Kolom dari migrasi lanjutan (daftar PIB, nilai USD) diperiksa ulang
-     tiap memuat: begitu migrasinya dijalankan, muat ulang sudah cukup. */
+  /* Kolom dari migrasi lanjutan (daftar PIB, nilai USD, HS Code)
+     diperiksa ulang tiap memuat: begitu migrasinya dijalankan, muat ulang
+     sudah cukup. */
   mstKolomBelumAda.clear();
-  mstBarisDb = await mstBacaKolom("masterlist_items", "id, list_id, no, description, specification, uom, quota, created_at", ["value_quota"], (q) =>
+  mstBarisDb = await mstBacaKolom("masterlist_items", "id, list_id, no, description, specification, uom, quota, created_at", ["value_quota", "hs_code"], (q) =>
     q.eq("list_id", mstDok.id).order("no", { ascending: true }),
   );
   const realisasi = await mstBacaKolom("masterlist_usages", "id, item_id, qty, aju_ref, pib_date, notes, created_at", ["pibs", "invoice_value"], (q) =>
@@ -1348,7 +1362,7 @@ function showMasterlistView() {
    orang mencatat bersamaan (kuota terlampaui), nomor baris kembar. */
 function mstPesanGalat(error, cadangan) {
   const pesan = String((error && error.message) || "");
-  if (/melebihi kuota|lebih kecil dari yang sudah terpakai|harus punya nomor aju PIB|Tanggal PIB harus berbentuk|migration-masterlist-(pib-parsial|nilai)/i.test(pesan)) return pesan;
+  if (/melebihi kuota|lebih kecil dari yang sudah terpakai|harus punya nomor aju PIB|Tanggal PIB harus berbentuk|migration-masterlist-(pib-parsial|nilai|hs-code)/i.test(pesan)) return pesan;
   if (/masterlist_items_no_unik|duplicate key/i.test(pesan)) return tt("Nomor baris itu sudah dipakai.", "That line number is already in use.");
   return cadangan;
 }
@@ -1440,20 +1454,34 @@ function mstBacaPib() {
   });
 }
 
+/* Tanggal PIB dari nomor ajunya (tanggalDariAju, helpers.js). Yang
+   diketik hanya ekornya ("4172"): nomor lengkapnya dari jadwal yang
+   cocok. */
+function mstTanggalDariAju(ref) {
+  const langsung = tanggalDariAju(ref);
+  if (langsung) return langsung;
+  const jadwal = mstJadwalUntukAju(ref);
+  return jadwal.length === 1 ? tanggalDariAju(jadwal[0].noAju) : "";
+}
+
 /* SATU PIB, SATU TANGGAL. Nomor aju yang sudah tercatat di realisasi lain
    dengan satu tanggal: tanggal itu diisikan, kalau kotaknya kosong atau
-   isinya hasil isian otomatis sebelumnya. Nomor ajunya berganti ke PIB
-   yang belum bertanggal: tanggal ikutan yang lama dilepas lagi. */
+   isinya hasil isian otomatis sebelumnya. PIB yang belum pernah
+   tercatat: tanggal di nomor ajunya. Nomor ajunya berganti ke PIB tanpa
+   keduanya: tanggal ikutan yang lama dilepas lagi. Tetap bisa diubah
+   sendiri di kotaknya. */
 function mstSelaraskanTanggal(i) {
   const p = mstForm && mstForm.pib[i];
   const kotak = document.querySelector(`#mstPib [data-mst-pib="${i}"] [data-mst-pib-tgl]`);
   if (!p) return;
   const bagian = mstPecahAju(p.aju);
   const info = bagian.length === 1 ? mstTanggalTercatat(mstKunciAju(bagian[0]), mstForm.id) : { tanggal: [] };
-  if (info.tanggal.length === 1 && (!p.tanggal || p.otomatis)) {
-    p.tanggal = info.tanggal[0];
+  const dariAju = bagian.length === 1 && !info.tanggal.length ? mstTanggalDariAju(bagian[0]) : "";
+  const ikut = info.tanggal.length === 1 ? info.tanggal[0] : dariAju;
+  if (ikut && (!p.tanggal || p.otomatis)) {
+    p.tanggal = ikut;
     p.otomatis = true;
-  } else if (p.otomatis && info.tanggal.length !== 1) {
+  } else if (p.otomatis && !ikut) {
     p.tanggal = "";
     p.otomatis = false;
   }
@@ -1485,6 +1513,8 @@ function mstGambarKetPib(i) {
       );
     if (info.tanggal.length === 1 && p.otomatis) {
       pesan.push(tt(`Tanggalnya mengikuti catatan itu (${fmtDate(info.tanggal[0])}).`, `Its date follows those records (${fmtDate(info.tanggal[0])}).`));
+    } else if (!info.tanggal.length && p.otomatis && p.tanggal) {
+      pesan.push(tt(`Tanggal dari nomor aju (${fmtDate(p.tanggal)}) — ubah kalau berbeda.`, `Date from the aju number (${fmtDate(p.tanggal)}) — change it if it differs.`));
     } else if (info.tanggal.length === 1 && p.tanggal && p.tanggal !== info.tanggal[0]) {
       pesan.push(tt(`Catatan lain PIB ini bertanggal ${fmtDate(info.tanggal[0])}.`, `Other records of this PIB are dated ${fmtDate(info.tanggal[0])}.`));
       awas = true;
@@ -2085,7 +2115,18 @@ function mstIsianBaris(b) {
   return [
     { key: "no", label: "No.", inputmode: "numeric", value: String(b ? b.no : berikut), filter: (v) => v.replace(/\D/g, ""), lebar: "setengah" },
     { key: "satuan", label: tt("Satuan", "Unit"), value: b ? b.uom || "" : "NIU", placeholder: "NIU", lebar: "setengah" },
-    { key: "nama", label: tt("Uraian barang", "Item description"), value: b ? b.description || "" : "", placeholder: tt("Cth: HYDRAULIC PRESS", "e.g. HYDRAULIC PRESS") },
+    // HS Code di samping uraian barang -- seperti di unduhan Excel
+    { key: "nama", label: tt("Uraian barang", "Item description"), value: b ? b.description || "" : "", placeholder: tt("Cth: HYDRAULIC PRESS", "e.g. HYDRAULIC PRESS"), lebar: "setengah" },
+    {
+      key: "hs",
+      label: "HS Code",
+      value: b ? b.hs_code || "" : "",
+      placeholder: tt("Cth: 8477.80.10", "e.g. 8477.80.10"),
+      inputmode: "numeric",
+      filter: batasiHsCode,
+      hint: tt("Opsional. Ikut di unduhan Excel, tidak di cetakan.", "Optional. Included in the Excel download, not in the printout."),
+      lebar: "setengah",
+    },
     {
       key: "spek",
       label: tt("Spesifikasi", "Specification"),
@@ -2178,9 +2219,12 @@ function mstPeriksaBaris(v, lama) {
   const nilai = mstBacaNilai(v.nilai);
   if (nilai != null && !(nilai > 0)) return tt("Nilai masterlist harus angka lebih dari 0 — atau kosongkan.", "The masterlist value must be a number greater than 0 — or leave it empty.");
   if (nilai != null && mstUang(nilai) !== nilai) return tt("Nilai masterlist paling banyak dua angka di belakang koma.", "The masterlist value can have at most two decimals.");
+  // HS Code: boleh kosong; paling banyak 8 angka, titik hanya pemisah (batasiHsCode, hscode-view.js)
+  const hs = batasiHsCode(v.hs).replace(/\.+$/, "");
   return {
     no,
     description: nama,
+    hs_code: /\d/.test(hs) ? hs : null,
     specification: String(v.spek || "").replace(/\s+/g, " ").trim(),
     uom: String(v.satuan || "").trim().toUpperCase() || "NIU",
     quota: kuota,
@@ -2342,12 +2386,13 @@ function mstTanggalPibBaris(pibs) {
   return pibs.map((p) => (p.tanggal ? fmtDate(p.tanggal) : "-")).join(" / ");
 }
 
-/* Baris lembar Excel -- susunan kolomnya SAMA dengan berkas yang selama
-   ini dipakai (NO, DESCRIPTION, SPECIFICATION OF GOODS, UoM, QTTY, USED,
-   REMAIN, PIB AJU), jadi hasil unduhan bisa langsung menggantikannya.
-   Sesudahnya PIB DATE dan ACTUAL QTY (sengaja kosong: diisi saat stock
-   opname), lalu nilai (USD) -- VALUE, USED VALUE, REMAIN VALUE. Baris yang
-   nilai masterlist-nya belum diisi: kolom nilainya kosong. */
+/* Baris lembar Excel -- susunan kolom berkas yang selama ini dipakai
+   (NO, DESCRIPTION, SPECIFICATION OF GOODS, UoM, QTTY, USED, REMAIN, PIB
+   AJU) dengan HS CODE di samping DESCRIPTION; HS Code hanya ada di sini,
+   tidak di cetakan stock opname. Sesudahnya PIB DATE dan ACTUAL QTY
+   (sengaja kosong: diisi saat stock opname), lalu nilai (USD) -- VALUE,
+   USED VALUE, REMAIN VALUE. Baris yang nilai masterlist-nya belum diisi:
+   kolom nilainya kosong. */
 function mstBarisExcel(baris) {
   return baris.map((b) => {
     const pibs = mstPibBaris(b);
@@ -2356,6 +2401,7 @@ function mstBarisExcel(baris) {
     return [
       b.no,
       b.nama,
+      b.hsCode,
       b.spesifikasi,
       b.satuan,
       b.kuota,
@@ -2374,8 +2420,9 @@ function mstBarisExcel(baris) {
 /* Lembar kedua, "REALISASI PER PIB": tiap realisasi satu blok, SATU BARIS
    PER PIB -- nomor aju dan tanggalnya berpasangan di baris yang sama
    (di Sheet1 kolom PIB AJU hanya bisa memuat nomornya). Isian milik
-   realisasi (No, uraian, satuan, jumlah, catatan) ditulis sekali dan
-   selnya digabung setinggi blok, jadi SUM kolom QTTY tetap = terpakai. */
+   realisasi (No, uraian, HS Code, satuan, jumlah, catatan) ditulis sekali
+   dan selnya digabung setinggi blok, jadi SUM kolom QTTY tetap =
+   terpakai. */
 function mstBlokRealisasiExcel(baris) {
   const blok = [];
   baris.forEach((b) =>
@@ -2384,6 +2431,7 @@ function mstBlokRealisasiExcel(baris) {
       blok.push({
         no: b.no,
         nama: b.nama,
+        hsCode: b.hsCode,
         satuan: b.satuan,
         qty: mstBulat(u.qty),
         nilai: mstNilaiDb(u.invoice_value),
@@ -2423,8 +2471,10 @@ async function mstUnduhExcel() {
     wb.creator = "EXIM DDI";
     wb.created = new Date();
     const ws = wb.addWorksheet("Sheet1");
-    // Kolom A kosong, tabel mulai di B -- seperti berkas aslinya
-    ws.columns = [2, 5, 44, 58, 8, 8, 8, 11, 22, 13, 13, 16, 16, 16].map((width) => ({ width }));
+    /* Tabel mulai di kolom A: NO, DESCRIPTION, HS CODE, SPECIFICATION ...
+       -- dari SPECIFICATION ke kanan hurufnya tetap (D s.d. N), jadi
+       rumus di bawah sama dengan berkas aslinya. */
+    ws.columns = [5, 44, 13, 58, 8, 8, 8, 11, 22, 13, 13, 16, 16, 16].map((width) => ({ width }));
     const FORMAT_UANG = "#,##0.00";
     const tepi = { style: "thin", color: { argb: "FF000000" } };
     const bingkai = { top: tepi, left: tepi, bottom: tepi, right: tepi };
@@ -2434,24 +2484,24 @@ async function mstUnduhExcel() {
     const penulis = (lembar, kiri) => (nomorBaris, nilai, opsi) => {
       const o = opsi || {};
       nilai.forEach((v, i) => {
-        const sel = lembar.getCell(nomorBaris, i + 2);
+        const sel = lembar.getCell(nomorBaris, i + 1);
         sel.value = v;
         sel.border = bingkai;
         sel.font = { name: "Calibri", size: 11, bold: !!o.tebal };
         sel.alignment = { vertical: "middle", horizontal: o.tebal || kiri.indexOf(i) < 0 ? "center" : "left", wrapText: kiri.indexOf(i) >= 0 };
       });
     };
-    const tulis = penulis(ws, [1, 2]);
+    const tulis = penulis(ws, [1, 3]);
     const U = MST_MATA_UANG;
-    tulis(1, ["NO", "DESCRIPTION", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", "PIB DATE", "ACTUAL QTY", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`], { tebal: true });
+    tulis(1, ["NO", "DESCRIPTION", "HS CODE", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", "PIB DATE", "ACTUAL QTY", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`], { tebal: true });
     ws.getRow(1).height = 36;
     mstBarisExcel(baris).forEach((r, i) => {
       const n = i + 2;
       // Satu PIB bertanggal = sel tanggal sungguhan; beberapa PIB = teks "dd-mm-yyyy / dd-mm-yyyy"
-      const tglPib = /^\d{4}-\d{2}-\d{2}$/.test(r[8]) ? mstTanggalExcel(r[8]) : r[8];
+      const tglPib = /^\d{4}-\d{2}-\d{2}$/.test(r[9]) ? mstTanggalExcel(r[9]) : r[9];
       // REMAIN = QTTY - USED (dan REMAIN VALUE = VALUE - USED VALUE), sebagai rumus
       // dengan hasilnya, supaya tetap benar kalau berkasnya disunting
-      tulis(n, r.slice(0, 6).concat([{ formula: `F${n}-G${n}`, result: r[6] }, r[7], tglPib, r[9], r[10], r[11], r[10] === "" ? "" : { formula: `L${n}-M${n}`, result: r[12] }]));
+      tulis(n, r.slice(0, 7).concat([{ formula: `F${n}-G${n}`, result: r[7] }, r[8], tglPib, r[10], r[11], r[12], r[11] === "" ? "" : { formula: `L${n}-M${n}`, result: r[13] }]));
       if (tglPib instanceof Date) ws.getCell(n, 10).numFmt = "dd-mm-yyyy";
       [12, 13, 14].forEach((kol) => (ws.getCell(n, kol).numFmt = FORMAT_UANG));
       ws.getRow(n).height = 30.75;
@@ -2464,6 +2514,7 @@ async function mstUnduhExcel() {
     tulis(
       total,
       [
+        "",
         "",
         "",
         "TOTAL",
@@ -2486,9 +2537,10 @@ async function mstUnduhExcel() {
 
     // Lembar kedua: pasangan nomor aju - tanggal PIB, satu baris per PIB
     const ws2 = wb.addWorksheet("REALISASI PER PIB");
-    ws2.columns = [{ width: 2 }, { width: 5 }, { width: 40 }, { width: 8 }, { width: 8 }, { width: 16 }, { width: 32 }, { width: 13 }, { width: 40 }];
-    const tulis2 = penulis(ws2, [1, 7]);
-    tulis2(1, ["NO", "DESCRIPTION", "UoM", "QTTY", `VALUE (${U})`, "PIB AJU", "PIB DATE", "NOTES"], { tebal: true });
+    // Juga mulai di kolom A, HS CODE di samping DESCRIPTION; dari UoM ke kanan hurufnya tetap (D s.d. I)
+    ws2.columns = [5, 40, 13, 8, 8, 16, 32, 13, 40].map((width) => ({ width }));
+    const tulis2 = penulis(ws2, [1, 8]);
+    tulis2(1, ["NO", "DESCRIPTION", "HS CODE", "UoM", "QTTY", `VALUE (${U})`, "PIB AJU", "PIB DATE", "NOTES"], { tebal: true });
     ws2.getRow(1).height = 30;
     let n2 = 2;
     const blok = mstBlokRealisasiExcel(baris);
@@ -2496,18 +2548,18 @@ async function mstUnduhExcel() {
       k.pib.forEach((p, j) => {
         const aju = /^\d{1,15}$/.test(p.aju) ? Number(p.aju) : p.aju;
         const tgl = p.tanggal ? mstTanggalExcel(p.tanggal) : "";
-        tulis2(n2 + j, j === 0 ? [k.no, k.nama, k.satuan, k.qty, k.nilai == null ? "" : k.nilai, aju, tgl, k.catatan] : ["", "", "", "", "", aju, tgl, ""]);
+        tulis2(n2 + j, j === 0 ? [k.no, k.nama, k.hsCode, k.satuan, k.qty, k.nilai == null ? "" : k.nilai, aju, tgl, k.catatan] : ["", "", "", "", "", "", aju, tgl, ""]);
         if (p.tanggal) ws2.getCell(n2 + j, 8).numFmt = "dd-mm-yyyy";
       });
       ws2.getCell(n2, 6).numFmt = FORMAT_UANG;
-      // Realisasi parsial: No, uraian, satuan, jumlah, nilai & catatan setinggi seluruh PIB-nya
-      if (k.pib.length > 1) [2, 3, 4, 5, 6, 9].forEach((kol) => ws2.mergeCells(n2, kol, n2 + k.pib.length - 1, kol));
+      // Realisasi parsial: No, uraian, HS Code, satuan, jumlah, nilai & catatan setinggi seluruh PIB-nya
+      if (k.pib.length > 1) [1, 2, 3, 4, 5, 6, 9].forEach((kol) => ws2.mergeCells(n2, kol, n2 + k.pib.length - 1, kol));
       n2 += k.pib.length;
     });
     const nilaiBlok = mstUang(blok.reduce((s, k) => s + (k.nilai || 0), 0));
     tulis2(
       n2,
-      ["", "TOTAL", "", n2 > 2 ? { formula: `SUM(E2:E${n2 - 1})`, result: ring.terpakai } : 0, n2 > 2 ? { formula: `SUM(F2:F${n2 - 1})`, result: nilaiBlok } : 0, "", "", ""],
+      ["", "TOTAL", "", "", n2 > 2 ? { formula: `SUM(E2:E${n2 - 1})`, result: ring.terpakai } : 0, n2 > 2 ? { formula: `SUM(F2:F${n2 - 1})`, result: nilaiBlok } : 0, "", "", ""],
       { tebal: true },
     );
     ws2.getCell(n2, 6).numFmt = FORMAT_UANG;

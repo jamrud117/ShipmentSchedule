@@ -36,6 +36,23 @@ function fmtDate(d) {
   const p2 = (n) => String(n).padStart(2, "0");
   return `${p2(dt.getDate())}-${p2(dt.getMonth() + 1)}-${dt.getFullYear()}`;
 }
+
+/* TANGGAL DARI NOMOR AJU CEISA (26 karakter):
+     000020  POL858  20261016  024172
+     kantor  pengaju TAHUN-BULAN-TANGGAL  nomor urut
+   -> "2026-10-16". Tanda pisah diabaikan ("000020-029142-20260712-
+   197154"). Bukan nomor aju lengkap ("CONSIGNEE NOTE", ekornya saja)
+   atau tanggalnya tidak sah -> "". Dipakai sebagai tanggal PIB/PEB
+   BAWAAN -- isiannya tetap bisa diubah pengguna. */
+function tanggalDariAju(aju) {
+  const k = String(aju == null ? "" : aju).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const m = /^\d{6}[A-Z0-9]{6}(20\d{2})(\d{2})(\d{2})\d{6}$/.exec(k);
+  if (!m) return "";
+  const iso = `${m[1]}-${m[2]}-${m[3]}`;
+  const dt = parseLocalDate(iso);
+  return dt && dt.getMonth() + 1 === Number(m[2]) && dt.getDate() === Number(m[3]) ? iso : "";
+}
+
 /* FORMATTER INTL YANG DISIMPAN.
 
    n.toLocaleString(locale, opsi) / d.toLocaleDateString(locale, opsi)
@@ -127,62 +144,150 @@ function fmtQtyBySatuan(list) {
     .join(" + ");
 }
 
-/* NAMA BARANG YANG DITAMPILKAN — dirakit dari beberapa kolom.
+/* KOLOM BARANG = KOLOM BARANG CEISA, kiri ke kanan: Kode Barang,
+   Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain (buku Export menambah
+   Marks). `namaBarang` adalah Uraian -- kolom database-nya tetap
+   nama_barang. Isian form, impor draft/PIB/PEB, dan Cek PIB/PEB
+   memakai susunan yang sama, jadi tiap kolom dibandingkan dengan
+   kolom yang sama di CEISA. */
+const KOLOM_NAMA_BARANG = ["kodeBarang", "namaBarang", "merek", "tipe", "ukuran", "spesifikasiLain"];
+// Kolom CEISA selain Uraian. Semuanya kosong = barang lama: seluruh namanya ditulis di Uraian.
+const KOLOM_CEISA_LAIN = ["kodeBarang", "merek", "tipe", "ukuran", "spesifikasiLain"];
+// Kolom sesudah Uraian -- kolom TYPE di CIPL Dynamic Design Korea
+const KOLOM_SESUDAH_URAIAN = ["merek", "tipe", "ukuran", "spesifikasiLain"];
 
-   URUTANNYA: Uraian → Pattern → Size → Mold No. Satu aturan untuk
-   kartu, panel detail, copy template, DAN kedua bentuk CIPL (Kumho &
-   Dynamic Design Korea) -- supaya nama yang terlihat di layar selalu
-   sama dengan yang tersalin dan tercetak.
-
-   PO No SENGAJA tidak ikut: itu nomor pesanan pembeli, bukan bagian
-   dari identitas barangnya, dan menempelkannya membuat dua kiriman
-   barang yang sama terbaca sebagai dua barang berbeda.
-
-   Kolom yang kosong (atau "-") DILEWATI, spasi di dalam tiap kolom
-   dirapikan jadi satu, dan bagian yang SUDAH tertulis di Uraian tidak
-   diulang ("TIRE MOLD 225/50R17" + Size 225/50R17). Menyambung apa
-   adanya menghasilkan "TYRE MOLD FULL SET   R17" -- terlihat seperti
-   salah ketik dan menyulitkan pencocokan teks saat ditempel ke Excel.
-
-   Import TIDAK terpengaruh: Pattern, Size & Mold No hanya diisi di
-   buku Export (lihat body.mode-import .size-col di form.css). */
+/* TANDA KOSONG ALA CEISA: "-" dan "TANPA MEREK" / "TANPA TIPE" (juga
+   TANPA UKURAN, dst.) berarti kolomnya memang tidak berisi. Disimpan
+   apa adanya (itulah isian CEISA-nya), tapi TIDAK PERNAH ikut ke nama
+   barang -- di layar, salinan, maupun cetakan. */
+const TANDA_KOSONG_BARANG = /^(?:-+|TANPA\s+(?:MEREK|MERK|TIPE|TYPE|UKURAN|SPESIFIKASI(?:\s+LAIN)?|KODE(?:\s+BARANG)?))$/i;
 function rapiBagianNama(v) {
   const x = String(v == null ? "" : v).replace(/\s+/g, " ").trim();
-  return x === "-" ? "" : x;
+  return TANDA_KOSONG_BARANG.test(x) ? "" : x;
 }
 
-/* Bagian SESUDAH Uraian: Pattern, Size, Mold No -- berurutan, yang
-   kosong dilewati, yang sudah tertulis (sebagai kata utuh) di Uraian
-   atau di bagian sebelumnya tidak diulang. */
-function rincianNamaBarang(it) {
+/* Bagian nama barang, KIRI KE KANAN mengikuti kolom CEISA. Tanda
+   kosong dilewati, spasi di dalam kolom dirapikan jadi satu, dan
+   bagian yang SUDAH tertulis (sebagai kata utuh) di bagian sebelumnya
+   tidak diulang ("TIRE MOLD 225/50R17" + Ukuran 225/50R17) --
+   menyambung apa adanya menghasilkan nama yang terlihat salah ketik
+   dan menyulitkan pencocokan teks saat ditempel ke Excel.
+   Hasil: [{ kolom, teks }]. */
+function bagianNamaBarang(it) {
   if (!it) return [];
-  const sudah = [" " + rapiBagianNama(it.namaBarang).toUpperCase() + " "];
-  return ["pattern", "size", "moldNo"]
-    .map((k) => rapiBagianNama(it[k]))
-    .filter((x) => {
-      if (!x) return false;
-      const kata = " " + x.toUpperCase() + " ";
-      if (sudah.some((s) => s.includes(kata))) return false;
-      sudah.push(kata);
-      return true;
-    });
+  return rakitBagianNama(KOLOM_NAMA_BARANG.map((kolom) => ({ kolom, teks: rapiBagianNama(it[kolom]) })));
 }
 
+// [{ teks }] berurutan -> yang ikut ke nama: berisi, dan belum tertulis di bagian sebelumnya
+function rakitBagianNama(bagian) {
+  const sudah = [];
+  return bagian.filter((b) => {
+    if (!b.teks) return false;
+    const kata = " " + b.teks.toUpperCase() + " ";
+    if (sudah.some((s) => s.includes(kata))) return false;
+    sudah.push(kata);
+    return true;
+  });
+}
+
+/* NAMA BARANG YANG DITAMPILKAN. Satu aturan untuk kartu, panel detail,
+   templat salin, laporan, surat, DAN kedua bentuk CIPL -- supaya nama
+   yang terlihat di layar selalu sama dengan yang tersalin & tercetak. */
 function itemDisplayName(it) {
-  if (!it) return "";
-  return [rapiBagianNama(it.namaBarang)].concat(rincianNamaBarang(it)).filter(Boolean).join(" ");
+  return bagianNamaBarang(it)
+    .map((b) => b.teks)
+    .join(" ");
 }
 
-function newItem() {
-  /* Nilai bawaan BEDA per buku, jadi dibaca dari activeMode:
-       Import : jenis BAHAN BAKU  (bahan yang didatangkan untuk diolah)
-       Export : jenis BARANG JADI (hasil olahan yang dikirim keluar)
-     Satuan (SET) & jenis kemasan (BOX) sama untuk kedua buku.
+// Bagian sesudah Uraian: Merek, Tipe, Ukuran, Spesifikasi Lain (yang berisi)
+function rincianNamaBarang(it) {
+  return bagianNamaBarang(it)
+    .filter((b) => KOLOM_SESUDAH_URAIAN.includes(b.kolom))
+    .map((b) => b.teks);
+}
+
+// Barang yang memakai kolom CEISA selain Uraian (bukan barang lama)
+function barangBerkolomCeisa(it) {
+  return !!it && KOLOM_CEISA_LAIN.some((k) => String(it[k] == null ? "" : it[k]).trim() !== "");
+}
+
+// Teks kolom barang untuk pencarian (daftar jadwal & palet perintah) -- tanpa tanda kosong: "TANPA" tidak mengena semua barang
+function teksCariBarang(it) {
+  return it ? KOLOM_NAMA_BARANG.map((k) => rapiBagianNama(it[k])) : [];
+}
+
+/* KODE KONDISI BARANG (kolom KODE KONDISI BARANG draft PIB / BC 2.0):
+   1 = BARU, 2 = BUKAN BARU. Hanya buku Import -- PEB (BC 3.0) tidak
+   memuat kolom ini. Label mengikuti bahasa aktif; yang tersimpan &
+   dibandingkan selalu kodenya. */
+const KONDISI_BARANG = [
+  ["1", "BARU", "NEW"],
+  ["2", "BUKAN BARU", "NOT NEW"],
+];
+
+// "1", "01", "1 - BARU", "BARU" -> "1"; "BUKAN BARU", "BEKAS" -> "2"; lainnya apa adanya
+function kodeKondisiBarang(v) {
+  const s = String(v == null ? "" : v).trim().toUpperCase().replace(/\s+/g, " ");
+  if (!s) return "";
+  if (/^0*1(?:\D.*)?$/.test(s) || s === "BARU" || s === "NEW") return "1";
+  if (/^0*2(?:\D.*)?$/.test(s) || /^(?:BUKAN|TIDAK) BARU$|^BEKAS$|^USED$|^NOT NEW$/.test(s)) return "2";
+  return s;
+}
+
+// "1 - BARU" (bahasa aktif); kode tak dikenal ditampilkan apa adanya
+function labelKondisiBarang(v) {
+  const kode = kodeKondisiBarang(v);
+  const k = KONDISI_BARANG.find((x) => x[0] === kode);
+  return k ? `${k[0]} - ${tt(k[1], k[2])}` : kode;
+}
+
+/* PETI KEMAS DI ISIAN CONTAINER/SEAL NUMBER: satu kontainer per bagian
+   (dipisah koma), "NOMOR / UKURAN / TIPE" -- urutan isian "Nomor,
+   Ukuran, dan Tipe Peti Kemas" PIB. Ditulis begitu oleh impor draft
+   CEISA (teksKontainer) dan dibaca balik oleh Cek PIB/PEB; yang diketik
+   sendiri boleh lebih bebas ("TGHU1234567 40' FCL", "1x40HC ...").
+     UKURAN : KODE UKURAN KONTAINER (20 / 40 / 45).
+     TIPE   : jenis muatan FCL / LCL (KODE JENIS KONTAINER F / L). */
+function muatanDariKode(v) {
+  const s = String(v == null ? "" : v).trim().toUpperCase();
+  if (s === "F" || s === "FCL") return "FCL";
+  if (s === "L" || s === "LCL") return "LCL";
+  return "";
+}
+
+function teksKontainer(k) {
+  return [k.nomor, k.ukuran, muatanDariKode(k.jenis)]
+    .map((x) => String(x == null ? "" : x).trim().toUpperCase())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function newItem(mode) {
+  /* Nilai bawaan BEDA per buku, dibaca dari `mode` (tanpa itu:
+     activeMode):
+       Import : jenis BAHAN BAKU  (bahan yang didatangkan untuk diolah),
+                Tipe TANPA TIPE
+       Export : jenis BARANG JADI (hasil olahan yang dikirim keluar),
+                Tipe kosong
+     Kode Barang "-" & Merek TANPA MEREK di kedua buku, mengikuti
+     pengisian CEISA; Kode Kondisi Barang 1 (BARU) hanya di Import.
+     Satuan (SET) & jenis kemasan (BOX) sama di kedua buku.
      Semuanya cuma NILAI AWAL — tetap bisa diganti per barang. */
-  const modeKini = typeof activeMode === "string" ? activeMode : "import";
+  const modeKini = mode || (typeof activeMode === "string" ? activeMode : "import");
   return {
     id: uid("it"),
+    // Kolom barang CEISA (KOLOM_NAMA_BARANG); namaBarang = Uraian
+    kodeBarang: "-",
     namaBarang: "",
+    merek: "TANPA MEREK",
+    tipe: modeKini === "export" ? "" : "TANPA TIPE",
+    ukuran: "",
+    spesifikasiLain: "",
+    /* Kode Kondisi Barang (KONDISI_BARANG): Import bawaan 1 = BARU,
+       Export kosong (PEB tidak memuatnya). Kode Negara Asal: kode ISO
+       (negara.js), tanpa bawaan. */
+    kondisiBarang: modeKini === "export" ? "" : "1",
+    negaraAsal: "",
     hsCode: "",
     jenisBarang: modeKini === "export" ? "BARANG JADI" : "BAHAN BAKU",
     qty: 0,
@@ -201,20 +306,9 @@ function newItem() {
     /* Jenis kemasannya — BOX, PALLET, CRATE. Dipisah dari angkanya
        supaya bisa dijumlahkan per jenis tanpa mengurai teks. */
     packingUnit: "BOX",
-    /* Kolom tambahan untuk barang Export (cetakan/mold).
-
-       Pattern & Mold No ikut membentuk nama yang ditampilkan; PO No
-       tidak -- lihat itemDisplayName(). Kosong itu wajar: tidak semua
-       pembeli memakai penomoran ini. */
-    /* size belum pernah punya nilai awal -- tanpa ini, barang baru
-       memulai dengan size undefined dan escapeAttr() menuliskannya
-       sebagai teks "undefined" di kotaknya. */
-    size: "",
-    pattern: "",
-    moldNo: "",
-    poNo: "",
-    /* Marks pada CIPL. Kosong = dibangkitkan otomatis dari urutan
-       koli ("C# : 8-1"); diisi kalau penandaan di lapangan berbeda. */
+    /* Marks pada CIPL (buku Export). Kosong = dibangkitkan otomatis
+       dari urutan koli ("C# : 8-1"); diisi kalau penandaan di lapangan
+       berbeda. */
     marks: "",
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang sama (skb)
     skb: [],
@@ -279,6 +373,46 @@ const KODE_DOKUMEN_FASILITAS = {
 const KODE_DOKUMEN_PI = "959";
 // Laporan Surveyor (LS) -- sepaket dengan PI, juga satu nomor per pengiriman
 const KODE_DOKUMEN_LS = "958";
+// Polis Asuransi -- bukan fasilitas; nomor & tanggalnya punya isian sendiri
+const KODE_DOKUMEN_POLIS = "530";
+/* Dokumen pelengkap yang dikenal BUKAN fasilitas (dan bukan PI / LS):
+   tidak pernah ditebak sebagai fasilitas atau PI dari nomornya, dan
+   tidak dilaporkan sebagai dokumen tak dikenal saat ditautkan ke
+   barang. */
+const KODE_DOKUMEN_BUKAN_FASILITAS = {
+  380: "Invoice",
+  217: "Packing List",
+  [KODE_DOKUMEN_POLIS]: "Polis Asuransi",
+  703: "House AWB",
+  704: "Master B/L",
+  705: "B/L",
+  714: "House B/L",
+  740: "AWB",
+  741: "Master AWB",
+};
+function namaDokumenBukanFasilitas(kode) {
+  return KODE_DOKUMEN_BUKAN_FASILITAS[String(kode == null ? "" : kode).trim()] || "";
+}
+// Polis asuransi: kode 530 (Excel CEISA & PIB PDF) atau labelnya di lembar PIB PDF
+function adalahPolisAsuransi(dok) {
+  return (
+    String(dok.kode == null ? "" : dok.kode).trim() === KODE_DOKUMEN_POLIS ||
+    /POLIS\s*ASURANSI|INSURANCE\s*POLICY/i.test(dok.label || "")
+  );
+}
+
+/* PI, LS & Polis Asuransi: SATU isian nomor + SATU tanggal per
+   pengiriman. Dokumennya bisa lebih dari satu -- nomornya digabung
+   ("A, B", nomor yang sama tidak diulang), tanggalnya dari dokumen
+   pertama yang bertanggal. */
+function tambahDokumenPengiriman(daftar, nomor, tanggal) {
+  const n = String(nomor == null ? "" : nomor).trim();
+  if (n && !daftar.some((d) => d.nomor === n)) daftar.push({ nomor: n, tanggal: tanggal || "" });
+}
+function isianDokumenPengiriman(daftar) {
+  const bertanggal = daftar.find((d) => d.tanggal);
+  return { nomor: daftar.map((d) => d.nomor).join(", "), tanggal: bertanggal ? bertanggal.tanggal : "" };
+}
 
 /* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
    dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh

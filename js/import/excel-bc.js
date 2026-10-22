@@ -59,9 +59,48 @@ function excelStr(v) {
 function excelNum(v) {
   return parseLooseNumber(v);
 }
+/* Nama kolom dibakukan: huruf besar, spasi tunggal, garis bawah =
+   spasi ("Seri Barang", "SERI_BARANG " -> "SERI BARANG"). Satu kepala
+   kolom yang ditulis lain membuat seluruh kolomnya tidak terbaca --
+   untuk SERI BARANG artinya urutan barang & pasangan fasilitasnya ikut
+   kacau tanpa ada yang tampak salah. */
+function kunciKolomExcel(k) {
+  return String(k).replace(/_/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+}
 function sheetRows(wb, name) {
   if (!wb.Sheets[name]) return [];
-  return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
+  return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null }).map((row) => {
+    const out = {};
+    Object.keys(row).forEach((k) => {
+      const kunci = kunciKolomExcel(k);
+      if (!(kunci in out)) out[kunci] = row[k];
+    });
+    return out;
+  });
+}
+
+/* Kunci Seri Barang / Seri Dokumen: angka dibaca sebagai angka ("1", 1,
+   "001" sama), selain itu teksnya. Lembar BARANG, BARANGDOKUMEN &
+   DOKUMEN ditautkan lewat kunci ini. */
+function kunciSeri(v) {
+  const s = String(v == null ? "" : v).trim();
+  const n = Number(s);
+  return s !== "" && Number.isFinite(n) ? String(n) : s.toUpperCase();
+}
+
+/* Diurutkan NUMERIK menaik menurut Seri Barang -- bukan urutan baris
+   apa adanya. Baris mentah CEISA TIDAK selalu berurutan (nemu di data
+   sungguhan: 1, 4, 3, 2, 6, ...). Seri yang bukan angka didorong ke
+   BELAKANG; yang setara tetap di urutan aslinya. */
+function urutMenurutSeri(daftar, seriDari) {
+  return daftar
+    .map((x, i) => {
+      const k = kunciSeri(seriDari(x));
+      const n = k === "" ? NaN : Number(k);
+      return { x, i, n: Number.isFinite(n) ? n : Infinity };
+    })
+    .sort((a, b) => (a.n === b.n ? a.i - b.i : a.n - b.n))
+    .map((y) => y.x);
 }
 
 // Buang label field ("Tipe :", "Merek :", dst) yang kadang ke-ikut dalam teks deskripsi
@@ -75,32 +114,42 @@ function stripFieldLabels(s) {
     .trim();
 }
 
-/* Deskripsi barang: URAIAN + MEREK + TIPE, digabung jadi SATU teks --
-   sama untuk kedua buku.
+/* KOLOM BARANG CEISA -> kolom yang SAMA di jadwal (KOLOM_NAMA_BARANG,
+   helpers.js), satu lawan satu dan apa adanya -- "TANPA MEREK" & "-"
+   juga, karena itulah isian CEISA-nya (nama barang yang ditampilkan
+   melewatinya sendiri, rapiBagianNama). Kolom yang tidak ada di berkas
+   tidak diisi: nilai bawaan newItem() yang berlaku. */
+const KOLOM_BARANG_DRAFT = {
+  kodeBarang: "KODE BARANG",
+  namaBarang: "URAIAN",
+  merek: "MEREK",
+  tipe: "TIPE",
+  ukuran: "UKURAN",
+  spesifikasiLain: "SPESIFIKASI LAIN",
+};
+function kolomBarangDraft(row) {
+  const out = {};
+  Object.entries(KOLOM_BARANG_DRAFT).forEach(([field, kolom]) => {
+    if (kolom in row) out[field] = stripFieldLabels(excelStr(row[kolom]));
+  });
+  return out;
+}
 
-   TIDAK DIPECAH KE Size/Pattern/Mold No, walau di buku Export ketiga
-   kolom itu ada. Sempat dicoba: TIPE dipakai sebagai Size, karena
-   isinya yang paling dekat. Tapi TIPE di berkas CEISA memuat model
-   DAN ukuran sekaligus ("MAGNETAR A/T 235/55R20") dan tidak ada aturan
-   yang bisa dipakai untuk memisahnya -- mana model, mana ukuran,
-   mana nomor cetakan, semuanya bergantung kebiasaan penulis berkas.
-   Menebaknya berarti Size terisi setengah benar, dan yang setengah
-   salah itu ikut ke nama barang di kartu, CIPL, dan seluruh template
-   salinan.
-
-   Jadi seluruh teksnya masuk ke Uraian apa adanya, dan Size, Pattern
-   & Mold No DIBIARKAN KOSONG untuk diisi sendiri. Kosong itu jujur:
-   terlihat jelas belum diisi. Terisi tapi salah tidak. */
-function buildImportedNamaBarang(row) {
-  let desc = excelStr(row["URAIAN"]);
-  const merek = excelStr(row["MEREK"]);
-  const tipe = excelStr(row["TIPE"]);
-  const isPlaceholder = (v) => !v || v === "-" || /^TANPA\s/i.test(v);
-  const parts = [];
-  if (!isPlaceholder(merek)) parts.push(merek);
-  if (!isPlaceholder(tipe)) parts.push(tipe);
-  if (parts.length) desc += (desc ? " " : "") + parts.join(" ");
-  return stripFieldLabels(desc);
+/* KODE CEISA PER BARANG -> kolom yang sama di jadwal: KODE KONDISI
+   BARANG (1 = BARU, 2 = BUKAN BARU) & KODE NEGARA ASAL (kode negara
+   ISO). Kolom yang ada di berkas: isinya, boleh kosong. Yang tidak ada:
+   undefined -- bukan kosong: isian barang lama / bawaan form yang
+   berlaku (lengkapiKodeBarang, apply-to-form.js). */
+const KOLOM_KODE_DRAFT = {
+  kondisiBarang: "KODE KONDISI BARANG",
+  negaraAsal: "KODE NEGARA ASAL",
+};
+function kodeBarangDraft(row) {
+  const out = {};
+  Object.entries(KOLOM_KODE_DRAFT).forEach(([field, kolom]) => {
+    out[field] = kolom in row ? excelStr(row[kolom]).toUpperCase() : undefined;
+  });
+  return out;
 }
 
 function parseBcExcelWorkbook(wb) {
@@ -114,23 +163,15 @@ function parseBcExcelWorkbook(wb) {
   const kontainer = sheetRows(wb, "KONTAINER");
   const barangTarif = sheetRows(wb, "BARANGTARIF");
   const barangDokumen = sheetRows(wb, "BARANGDOKUMEN");
-  /* Ascending NUMERIK berdasar SERI BARANG, bukan urutan baris apa
-     adanya di sheet BARANG. Baris mentah CEISA TIDAK selalu berurutan
-     (nemu di data sungguhan: 1, 4, 3, 2, 6, ... — bukan salah baca,
-     memang begitu urutan exportnya), dan Seri Barang non-numerik
-     (jarang, tapi mungkin) didorong ke BELAKANG lewat Infinity supaya
-     tidak ikut menyerobot ke depan cuma karena NaN < angka bernilai
-     false di sort(). Ini urutan yang lalu dipakai APA ADANYA untuk
-     nomor Seri Barang yang ditampilkan (lihat item-table.js — dihitung
-     dari POSISI baris, bukan disimpan ulang di sini), jadi sortir di
-     sinilah yang menentukan baris mana jadi "Seri Barang 1" dst. */
-  const barang = sheetRows(wb, "BARANG")
-    .slice()
-    .sort((a, b) => {
-      const sa = Number(a["SERI BARANG"]);
-      const sb = Number(b["SERI BARANG"]);
-      return (isFinite(sa) ? sa : Infinity) - (isFinite(sb) ? sb : Infinity);
-    });
+  /* Barang diurutkan menurut SERI BARANG lebih dulu (urutMenurutSeri),
+     baru dipetakan. Urutan inilah yang dipakai APA ADANYA untuk nomor
+     Seri di tabel barang (dihitung dari POSISI baris, item-table.js) dan
+     untuk memasangkan barang yang sudah ada di form (apply-to-form.js),
+     jadi di sinilah ditentukan baris mana jadi "Seri Barang 1" dst.
+     Seluruh rincian satu baris -- kolom barang, HS, jumlah, nilai,
+     berat, kemasan, fasilitas -- dibaca dari baris BARANG-nya sendiri
+     atau lewat Seri Barang-nya, tidak pernah lewat posisi. */
+  const barang = urutMenurutSeri(sheetRows(wb, "BARANG"), (row) => row["SERI BARANG"]);
 
   const barisDokumen = (...codes) =>
     dokumen.find((r) => codes.includes(excelStr(r["KODE DOKUMEN"]))) || null;
@@ -176,15 +217,21 @@ function parseBcExcelWorkbook(wb) {
     .filter((v) => v)
     .join(", ");
 
-  const containerStr = kontainer
-    .map((r) => {
-      const no = excelStr(r["NOMOR KONTINER"]);
-      const size = excelStr(r["KODE UKURAN KONTAINER"]);
-      if (!no) return "";
-      return size ? `${no} (${size})` : no;
-    })
-    .filter((v) => v)
-    .join(", ");
+  /* PETI KEMAS (sheet KONTAINER): Nomor, Ukuran, Jenis Muatan & Tipe --
+     isian peti kemas CEISA. Ke Container/Seal Number jadwal satu
+     kontainer per bagian (teksKontainer, helpers.js) -- bentuk yang
+     dibaca balik Cek PIB/PEB. Jenis Muatan F/L mengisi Jenis Muatan
+     (FCL/LCL) jadwal. */
+  const daftarKontainer = kontainer
+    .map((r) => ({
+      nomor: excelStr(r["NOMOR KONTINER"] != null ? r["NOMOR KONTINER"] : r["NOMOR KONTAINER"]),
+      ukuran: excelStr(r["KODE UKURAN KONTAINER"]),
+      jenis: excelStr(r["KODE JENIS KONTAINER"]),
+      tipe: excelStr(r["KODE TIPE KONTAINER"]),
+    }))
+    .filter((k) => k.nomor);
+  const containerStr = daftarKontainer.map(teksKontainer).join(", ");
+  const muatanKontainer = [...new Set(daftarKontainer.map((k) => muatanDariKode(k.jenis)).filter(Boolean))];
 
   // Tanggal SPPB = TANGGAL RESPON di sheet RESPON, pada baris yang KODE RESPON-nya = 2003
   const sppbRespon = respon.find(
@@ -285,28 +332,35 @@ function parseBcExcelWorkbook(wb) {
     transport,
     package: packageStr,
     container: containerStr,
+    // Semua kontainer satu jenis muatan -> Jenis Muatan jadwal; campuran dibiarkan
+    muatan: muatanKontainer.length === 1 ? muatanKontainer[0] : "",
     bm: bulatkanBm(bmDasar),
     ppn: ppnFinal,
     pph: pphFinal,
   };
 
   /* Dokumen pelengkap -> FASILITAS per barang (Masterlist, SKB PPN/PPH,
-     COO) lewat BARANGDOKUMEN, dan No. PI (Persetujuan Impor) untuk
-     pengirimannya -- kenaliDokumenPelengkap() di helpers.js, aturan yang
-     sama dengan PIB PDF. Nomor & tanggal dokumennya ikut dibawa: itulah
-     yang tersalin ke kolom FASILITAS / SKB dan PI di templat salin. */
+     COO) lewat BARANGDOKUMEN, dan PI (Persetujuan Impor) & LS (Laporan
+     Surveyor) untuk pengirimannya -- kenaliDokumenPelengkap() di
+     helpers.js, aturan yang sama dengan PIB PDF. Nomor & tanggal
+     dokumennya ikut dibawa: nomornya yang tersalin ke kolom FASILITAS /
+     SKB dan PI di templat salin, tanggal PI & LS ke isiannya sendiri. */
+  // Seri dokumen di lembar DOKUMEN: kolom SERI (atau SERI DOKUMEN)
+  const seriDokumenDari = (r) => kunciSeri(r["SERI"] != null ? r["SERI"] : r["SERI DOKUMEN"]);
   const dokumenBySeri = new Map(
     dokumen
-      .filter((r) => r["SERI"] != null)
-      .map((r) => [String(r["SERI"]).trim(), r]),
+      .filter((r) => seriDokumenDari(r) !== "")
+      .map((r) => [seriDokumenDari(r), r]),
   );
   const kenaliBaris = (r, perBarang) => {
+    const kode = excelStr(r["KODE DOKUMEN"]);
     const nomor = excelStr(r["NOMOR DOKUMEN"]);
-    const kenal = kenaliDokumenPelengkap({ kode: excelStr(r["KODE DOKUMEN"]), nomor });
-    if (kenal || !perBarang) return kenal;
+    const kenal = kenaliDokumenPelengkap({ kode, nomor });
+    // Dokumen yang dikenal bukan fasilitas (invoice, B/L, polis asuransi 530, ...) tidak ditebak dari nomornya
+    if (kenal || !perBarang || namaDokumenBukanFasilitas(kode)) return kenal;
     /* Kode tak dikenal tapi ditautkan ke barang: tebak dari nomornya.
-       Hanya untuk dokumen per barang -- invoice & B/L tidak pernah
-       ditautkan ke barang, jadi nomornya tidak ikut ditebak. */
+       Hanya untuk dokumen per barang -- yang tidak ditautkan tidak
+       ikut ditebak. */
     const jenis = jenisFasilitasDariNomor(nomor);
     if (jenis) return { jenis, jenisLainnya: "" };
     return POLA_NOMOR_PI.test(nomor) ? { pi: true } : null;
@@ -317,27 +371,31 @@ function parseBcExcelWorkbook(wb) {
     nomor: excelStr(r["NOMOR DOKUMEN"]),
     tanggal: excelValueToISODate(r["TANGGAL DOKUMEN"]),
   });
+  // Untuk Cek PIB/PEB (fasilitasBarang): No. Urut = seri dokumennya di sheet DOKUMEN, dan kodenya
+  const entriDokumenCek = (r, kenal) =>
+    Object.assign(entriDokumen(r, kenal), { noUrut: seriDokumenDari(r), kode: excelStr(r["KODE DOKUMEN"]) });
   const skbBySeriBarang = new Map();
   const seriTertaut = new Set();
-  const nomorPi = [];
-  const nomorLs = [];
-  const catat = (daftar) => (r) => {
-    const nomor = excelStr(r["NOMOR DOKUMEN"]);
-    if (nomor && !daftar.includes(nomor)) daftar.push(nomor);
-  };
-  const catatPi = catat(nomorPi);
-  const catatLs = catat(nomorLs);
+  // PI (959), LS (958) & Polis Asuransi (530): nomor + tanggal per pengiriman
+  const dokPi = [];
+  const dokLs = [];
+  const dokPolis = [];
+  const catat = (daftar) => (r) => tambahDokumenPengiriman(daftar, excelStr(r["NOMOR DOKUMEN"]), tanggalDokumen(r));
+  const catatPi = catat(dokPi);
+  const catatLs = catat(dokLs);
   const dokumenLain = [];
   barangDokumen.forEach((row) => {
     const seriBarang = row["SERI BARANG"];
     const seriDokumen = row["SERI DOKUMEN"];
     if (seriBarang == null || seriDokumen == null) return;
-    const seriDok = String(seriDokumen).trim();
+    const seriDok = kunciSeri(seriDokumen);
     const docRow = dokumenBySeri.get(seriDok);
     if (!docRow) return;
     seriTertaut.add(seriDok);
     const kenal = kenaliBaris(docRow, true);
     if (!kenal) {
+      // Dokumen yang dikenal (mis. 530 Polis Asuransi) memang bukan fasilitas: tidak perlu diberi tahu
+      if (namaDokumenBukanFasilitas(docRow["KODE DOKUMEN"])) return;
       const teks = [excelStr(docRow["KODE DOKUMEN"]), excelStr(docRow["NOMOR DOKUMEN"])]
         .filter(Boolean)
         .join(" ");
@@ -346,10 +404,10 @@ function parseBcExcelWorkbook(wb) {
     }
     if (kenal.pi) return catatPi(docRow);
     if (kenal.ls) return catatLs(docRow);
-    const key = String(seriBarang).trim();
+    const key = kunciSeri(seriBarang);
     if (!skbBySeriBarang.has(key)) skbBySeriBarang.set(key, []);
     const daftar = skbBySeriBarang.get(key);
-    const entri = entriDokumen(docRow, kenal);
+    const entri = entriDokumenCek(docRow, kenal);
     if (!daftar.some((sk) => sk.jenis === entri.jenis && sk.nomor === entri.nomor))
       daftar.push(entri);
   });
@@ -358,15 +416,26 @@ function parseBcExcelWorkbook(wb) {
      PDF (lembarnya juga tidak memisahkan per barang). */
   const fasilitasUmum = [];
   dokumen.forEach((r) => {
-    if (r["SERI"] != null && seriTertaut.has(String(r["SERI"]).trim())) return;
+    if (seriTertaut.has(seriDokumenDari(r))) return;
     const kenal = kenaliBaris(r, false);
     if (!kenal) return;
     if (kenal.pi) return catatPi(r);
     if (kenal.ls) return catatLs(r);
-    fasilitasUmum.push(entriDokumen(r, kenal));
+    fasilitasUmum.push(entriDokumenCek(r, kenal));
   });
-  fields.pi = nomorPi.join(", ");
-  fields.ls = nomorLs.join(", ");
+  // Polis asuransi bukan fasilitas: dibaca dari sheet DOKUMEN, tertaut ke barang atau tidak
+  dokumen.filter((r) => adalahPolisAsuransi({ kode: excelStr(r["KODE DOKUMEN"]) })).forEach(catat(dokPolis));
+  const pi = isianDokumenPengiriman(dokPi);
+  const ls = isianDokumenPengiriman(dokLs);
+  const polis = isianDokumenPengiriman(dokPolis);
+  Object.assign(fields, {
+    pi: pi.nomor,
+    piDate: pi.tanggal,
+    ls: ls.nomor,
+    lsDate: ls.tanggal,
+    polisAsuransi: polis.nomor,
+    polisAsuransiDate: polis.tanggal,
+  });
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);
@@ -387,13 +456,9 @@ function parseBcExcelWorkbook(wb) {
         : row["CIF"],
     );
     return {
-      seriBarang:
-        row["SERI BARANG"] != null ? String(row["SERI BARANG"]).trim() : "",
-      namaBarang: buildImportedNamaBarang(row),
-      /* Size / Pattern / Mold No sengaja TIDAK diisi dari sini --
-         lihat buildImportedNamaBarang(). Nilainya ikut newItem()
-         (kosong), jadi tetap bisa diisi sendiri tanpa harus
-         membatalkan tebakan lebih dulu. */
+      seriBarang: kunciSeri(row["SERI BARANG"]),
+      ...kolomBarangDraft(row),
+      ...kodeBarangDraft(row),
       hsCode: excelStr(row["HS"]),
       satuan: excelStr(row["KODE SATUAN"]),
       qty,
@@ -438,7 +503,8 @@ function parseBcExcelWorkbook(wb) {
           (sk, i, semua) =>
             semua.findIndex((x) => x.jenis === sk.jenis && x.nomor === sk.nomor) === i,
         )
-        .map((sk) => ({ ...sk })),
+        // Isian fasilitas form saja (No. Urut & kode dokumen hanya untuk Cek PIB/PEB)
+        .map((sk) => ({ jenis: sk.jenis, jenisLainnya: sk.jenisLainnya, nomor: sk.nomor, tanggal: sk.tanggal })),
     };
   });
 
@@ -507,5 +573,34 @@ function parseBcExcelWorkbook(wb) {
     }
   }
 
-  return { fields, items, notes, modeHint, source: "excel" };
+  /* Kolom barang CEISA per Seri Barang APA ADANYA -- hanya kolom yang
+     ada di berkas, tanpa nilai bawaan form (kode kondisi & negara asal
+     ikut). Dibandingkan kolom demi kolom dengan jadwal di Cek PIB/PEB
+     (checker-view.js). */
+  const kolomBarang = barang.map((row) => {
+    const kode = kodeBarangDraft(row);
+    Object.keys(kode).forEach((k) => kode[k] === undefined && delete kode[k]);
+    return { seri: kunciSeri(row["SERI BARANG"]), kolom: Object.assign(kolomBarangDraft(row), kode) };
+  });
+  /* Dokumen fasilitas yang DITAUTKAN ke tiap Seri Barang (BARANGDOKUMEN)
+     beserta No. Urut-nya (seri dokumen di sheet DOKUMEN) -- Keterangan
+     Fasilitas & No. Urut per barang di Cek PIB/PEB. Dokumen yang tidak
+     ditautkan ke barang mana pun (fasilitasUmum) tidak ikut: di draft ia
+     tidak tercantum pada barang mana pun, walau form jadwal
+     menerapkannya ke semua barang. */
+  const fasilitasBarang = barang.map((row) => {
+    const seri = kunciSeri(row["SERI BARANG"]);
+    return { seri, dokumen: (skbBySeriBarang.get(seri) || []).map((sk) => ({ ...sk })) };
+  });
+  return {
+    fields,
+    items,
+    notes,
+    modeHint,
+    source: "excel",
+    kolomBarang,
+    fasilitasBarang,
+    fasilitasUmum: fasilitasUmum.map((sk) => ({ ...sk })),
+    kontainer: daftarKontainer,
+  };
 }

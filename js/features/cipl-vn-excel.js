@@ -375,9 +375,9 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
     ws.getRow(r).height = 11;
     ws.mergeCells(`A${r}:B${r}`);
     vnxlSet(ws, "A" + r, b.marks, VNXL_FONT, VNXL_TENGAH);
-    /* Uraian dipecah dua sel: nama (Description + Pattern + Size) di C,
-       MOLD NO di D -- pembeli menyaring kolom D untuk mencocokkan
-       cetakannya. */
+    /* Uraian dipecah dua sel: nama (tanpa Spesifikasi Lain) di C, MOLD
+       NO (= Spesifikasi Lain) di D -- pembeli menyaring kolom D untuk
+       mencocokkan cetakannya. */
     /* PERATAAN & UKURAN HURUF DIBACA DARI BERKAS ASLI, sel demi sel.
 
        Semuanya sempat rata tengah. Di berkas asli uraian & nomor
@@ -385,8 +385,9 @@ function vnxlTabel(ws, row, shipment, barisKepala, isPacking) {
        9pt sementara di PL 10pt. Rata tengah membuat kolom uraian
        bergerigi: "225/50R17  PS72" dan "205/55R16  HS52" tidak lagi
        berawal di garis yang sama. */
-    /* Nama barang = Description + Pattern + Size (+ Mold No di D) --
-       urutan yang sama dengan lembar cetaknya (ciplVnUraian). */
+    /* Nama barang = kolom barang CEISA kiri ke kanan (+ Spesifikasi
+       Lain di D) -- urutan yang sama dengan lembar cetaknya
+       (ciplVnUraian). */
     vnxlSet(ws, "C" + r, b.namaTanpaMold,
       isPacking ? VNXL_FONT : VNXL_FONT_KECIL, VNXL_KIRI);
     vnxlSet(ws, "D" + r, b.moldNo || "", VNXL_FONT, VNXL_KIRI);

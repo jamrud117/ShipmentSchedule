@@ -50,7 +50,7 @@ function showDocNumView() {
   if (typeof showDocNumTab === "function") {
     showDocNumTab(docNumActiveTab || DOCNUM_DEFAULT_TAB);
   }
-  // Aturan Doc No (vendor tanpa Doc No) & daftar vendor dimuat ulang tiap halaman dibuka
+  // Aturan Doc No (vendor yang Doc No-nya tidak dicetak) & daftar vendor dimuat ulang tiap halaman dibuka
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
   /* Halaman ini untuk mengisi permintaan nomor: kursor langsung di isian
@@ -348,7 +348,11 @@ function renderFormPage(id) {
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     $("#fPI").value = s.pi || "";
+    $("#fPIDate").value = s.piDate || "";
     $("#fLS").value = s.ls || "";
+    $("#fLSDate").value = s.lsDate || "";
+    $("#fPolisAsuransi").value = s.polisAsuransi || "";
+    $("#fPolisAsuransiDate").value = s.polisAsuransiDate || "";
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
@@ -392,7 +396,11 @@ function renderFormPage(id) {
       "fPPN",
       "fPPH",
       "fPI",
+      "fPIDate",
       "fLS",
+      "fLSDate",
+      "fPolisAsuransi",
+      "fPolisAsuransiDate",
       "fPackage",
     ].forEach((fid) => ($("#" + fid).value = ""));
     $("#fMuatan").value = "";
@@ -413,6 +421,8 @@ function renderFormPage(id) {
      syaratnya masih berlaku (modal-fields.js) -- dibaca SEBELUM
      recalcCustoms() di bawah, yang memeriksa syarat itu lagi. */
   if (typeof tandaiAjuConsigneeNoteTersimpan === "function") tandaiAjuConsigneeNoteTersimpan();
+  // Export: Tanggal PEB yang kosong / sama dengan tanggal nomor ajunya ikut nomor aju (modal-fields.js)
+  if (typeof tandaiTanggalPebDariAju === "function") tandaiTanggalPebDariAju();
   /* Mesin prediksi disiapkan SETELAH seluruh isian terpasang: ia membaca
      ETD, moda, muatan, rute, dan progres dokumen sekaligus. Dipanggil
      lebih awal, ia akan menghitung dari form yang masih kosong. */
@@ -798,7 +808,11 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     ppn: parseInputNumber($("#fPPN").value),
     pph: parseInputNumber($("#fPPH").value),
     pi: $("#fPI").value.trim(),
+    piDate: $("#fPIDate").value,
     ls: $("#fLS").value.trim(),
+    lsDate: $("#fLSDate").value,
+    polisAsuransi: $("#fPolisAsuransi").value.trim(),
+    polisAsuransiDate: $("#fPolisAsuransiDate").value,
     package: joinPackageFields(),
   };
 

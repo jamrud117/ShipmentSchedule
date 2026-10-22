@@ -190,11 +190,11 @@ function frKotakTtd(label, nama, jabatan) {
    cetakan & kotak Detail kalau isiannya kosong. */
 const FR_TTD_CFO = { nama: "Mr. Kim Taewan", jabatan: "Chief Financial Officer" };
 
-/* Penanda tangan keempat (CFO) hanya untuk vendor yang memakai Doc No
-   -- aturan yang sama dengan baris Doc No (fundPakaiDocNo). */
+/* Penanda tangan keempat (CFO) hanya untuk vendor yang Doc No-nya
+   dicetak -- aturan yang sama dengan baris Doc No (fundPakaiDocNo). */
 const frPakaiTtdCfo = (p) => typeof fundPakaiDocNo === "function" && fundPakaiDocNo((p || {}).payee);
 
-/* TIGA PENANDA TANGAN -- EMPAT untuk vendor yang memakai Doc No.
+/* TIGA PENANDA TANGAN -- EMPAT untuk vendor yang Doc No-nya dicetak.
 
    Kotak persetujuan kedua yang LAMA (President Director, isian
    approver2*) dihapus karena jalur persetujuannya sudah tidak lewat
@@ -243,6 +243,11 @@ function buildFundRequestHtml(row) {
     () => `<tr class="baris-pos"><td class="c-no">&nbsp;</td><td class="c-desc"></td><td class="c-amt"></td></tr>`,
   ).join("");
 
+  /* DOC NO: kotaknya ada di form untuk SEMUA vendor dan isinya tersimpan
+     (p.docNo), tetapi baris "Doc No" di bawah No Surat hanya DICETAK untuk
+     vendor di luar daftar Aturan Doc No (bawaan: PRIME & WIDE tidak
+     dicetak). Jadi pengajuan PRIME/WIDE yang menyimpan Doc No tetap
+     tercetak seperti biasa, tanpa baris itu. */
   return `
   <div class="sheet">
     <div class="kop">
