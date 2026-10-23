@@ -374,6 +374,8 @@ function renderItemTable() {
     .querySelectorAll('.pkg-cell input[data-f="package"]')
     .forEach((el) => autoSizeInput(el, 96, 210));
   recalcCustoms();
+  // Toast "Samakan … ke baris 2–N?" yang sedang terbuka (item-samakan.js) ikut menyesuaikan jumlah baris
+  if (typeof perbaruiTawaranSamakan === "function") perbaruiTawaranSamakan();
 }
 $("#itemTableBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr");
@@ -458,6 +460,8 @@ $("#itemTableBody").addEventListener("input", (e) => {
     const cbmInput = tr.querySelector(".cbm-readonly");
     if (cbmInput) cbmInput.value = computeItemCbm(draftItems[idx]);
     recalcCustoms();
+    // Toast "Samakan …" yang terbuka untuk kolom ini mengikuti ketikan (item-samakan.js)
+    if (typeof samakanSaatMengetik === "function") samakanSaatMengetik(field, idx);
     return;
   }
   // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/COO)
@@ -505,7 +509,11 @@ function keBarisBerikutnya(field, idx) {
      di tengah daftar bukan yang dimaksud. */
   if (idx === draftItems.length - 1) {
     draftItems.push(newItem());
-    renderItemTable();
+    /* Chrome menembakkan `change` dari kotak yang dilepas selagi tabel
+       digambar ulang; itu tidak boleh menawarkan "samakan" ke baris
+       yang justru lahir dari Enter ini (item-samakan.js). */
+    if (typeof tanpaTawaranSamakan === "function") tanpaTawaranSamakan(renderItemTable);
+    else renderItemTable();
   }
 
   const nextRow = $(
@@ -522,8 +530,17 @@ $("#itemTableBody").addEventListener("change", (e) => {
   const tr = e.target.closest("tr");
   if (!tr) return;
   const idx = Number(tr.dataset.idx);
-  if (e.target.dataset.f === "negaraAsal") {
+  /* Isian BARIS PERTAMA selesai diisi -> tawarkan menyamakannya ke baris
+     di bawahnya (item-samakan.js; baris lain & kolom lain diabaikan di
+     sana). Untuk negara, SESUDAH dibakukan ke kodenya. */
+  const f = e.target.dataset.f;
+  if (f === "negaraAsal") {
     bakukanIsianNegara(e.target, idx);
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan(f, idx);
+    return;
+  }
+  if (f) {
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan(f, idx);
     return;
   }
   const fac = e.target.dataset.fac;

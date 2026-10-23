@@ -224,6 +224,25 @@ function sjKotakTtd(label, nama) {
         </td>`;
 }
 
+/* Sel NOPOL: satu sel yang membentang `rentang` baris, di sebelah barang.
+
+   Isinya satu kotak per mobil, tingginya DIBAGI RATA sehingga seluruh
+   kotak persis setinggi baris barang di sampingnya. Pembagian rata
+   dikerjakan CSS (kolom flex di atas sel, tiap kotak flex: 1), bukan
+   dihitung di sini -- tinggi baris barang baru diketahui peramban
+   sesudah nama barangnya membungkus, dan tidak sama untuk tiap surat.
+
+   Tanpa mobil tetap ada SATU kotak kosong: tempat menulis nomor mobil
+   dengan tangan. Tanpa baris sama sekali tidak ada sel (mengembalikan
+   string kosong). */
+function sjSelNopol(mobil, rentang) {
+  if (!(rentang > 0)) return "";
+  const isi = (mobil.length ? mobil : [""])
+    .map((v) => `<div class="sj-nopol-sel">${escapeHtml(v)}</div>`)
+    .join("");
+  return `<td class="sj-nopol" rowspan="${rentang}"><div class="sj-nopol-bagi">${isi}</div></td>`;
+}
+
 function buildSuratJalanHtml(row, shipment) {
   const p = (row && row.payload) || {};
   /* Sumber daftar barang: jadwal kalau ada yang ditautkan (Export),
@@ -233,23 +252,36 @@ function buildSuratJalanHtml(row, shipment) {
     ? sjBarisBarang(shipment)
     : sjBarisManual(row.payload);
   const kosong = Math.max(0, SJ_MIN_BARIS - baris.length);
-  /* Ruang kosong SATU baris dan SELALU ada -- juga untuk 10 barang ke
-     atas. Dialah yang dilebarkan sjIsiKertas() supaya tabel memenuhi
-     kertas; tanpanya tidak ada yang bisa dilebarkan. Rentang sel
-     Keterangan ikut menghitungnya. */
-  const totalBaris = baris.length + 1;
 
-  /* Keterangan: satu sel tinggi membentang seluruh tabel, berisi NOMOR
-     KENDARAAN — itu yang tercantum pada contoh berkas ("E 1578 MS").
-     Kiriman yang diangkut beberapa mobil menuliskan semuanya, SATU NOMOR
-     PER BARIS (kolomnya sempit; nomor yang disambung titik tengah
-     terpotong di tengah plat). Catatan, kalau ada, di baris sesudahnya.
-     Tetap satu sel untuk seluruh kiriman. */
-  const ket = sjDaftarKendaraan(p)
-    .concat([String(p.notes || "").trim()].filter(Boolean))
-    .map((v) => escapeHtml(v))
-    .join("<br>");
-  const selKet = `<td class="sj-ket" rowspan="${totalBaris}">${ket}</td>`;
+  /* NOPOL: kolom di SAMPING baris barang, tidak ditarik sampai Total.
+
+     Rentangnya sebanyak baris barang (bukan baris barang + ruang kosong),
+     jadi di bawah barang terakhir kolom ini terbuka seperti kolom lain.
+     Mobil yang lebih banyak daripada barang menambah baris pelengkap
+     kosong -- tiap mobil butuh tinggi minimum supaya nomornya terbaca. */
+  const mobil = sjDaftarKendaraan(p);
+  const jumlahBarisNopol = Math.max(baris.length, mobil.length);
+  const selNopol = sjSelNopol(mobil, jumlahBarisNopol);
+  const barisPelengkap = Array.from(
+    { length: Math.max(0, mobil.length - baris.length) },
+    (_, k) => `
+      <tr class="sj-pelengkap">
+        <td class="sj-no">&nbsp;</td>
+        <td class="sj-nama"></td>
+        <td class="sj-qty"></td>
+        <td class="sj-pkg"></td>
+        ${baris.length === 0 && k === 0 ? selNopol : ""}
+      </tr>`,
+  );
+
+  /* Catatan bebas (payload.notes) dulu menumpang di sel Keterangan. Kolom
+     itu kini milik Nopol, jadi catatannya dipindah ke ruang kosong di
+     bawah barang. Formulir DO sendiri tidak punya isian catatan; ini
+     hanya agar data lama yang memilikinya tidak ikut hilang. */
+  const catatan = String(p.notes || "").trim();
+  const selCatatan = catatan
+    ? `<td class="sj-catatan">Catatan : ${escapeHtml(catatan)}</td>`
+    : "<td></td>";
 
   /* Sel Package digambar sekali per BOX, membentang seluruh barang di
      dalamnya. */
@@ -269,19 +301,21 @@ function buildSuratJalanHtml(row, shipment) {
         <td class="sj-nama">${escapeHtml(b.nama)}</td>
         <td class="sj-qty">${escapeHtml(b.qty)}</td>
         ${selPkgUntuk.get(i) || ""}
-        ${i === 0 ? selKet : ""}
+        ${i === 0 ? selNopol : ""}
       </tr>`,
   );
   /* SATU ruang kosong setinggi baris yang tersisa — bukan deretan
-     baris bergaris.
+     baris bergaris. SELALU ada, juga untuk 10 barang ke atas: dialah
+     yang dilebarkan sjIsiKertas() supaya tabel memenuhi kertas.
 
      Kolom yang tidak berisi barang tidak digariskan, sama seperti
      Commercial Invoice. Yang dipertahankan cuma garis ATAS-nya:
-     itulah penutup baris barang terakhir. */
+     itulah penutup baris barang terakhir. Sel kelimanya (kolom Nopol)
+     wajib ada walau kosong: garis atasnya menutup sisi bawah sel Nopol
+     di atasnya, dan di bawah itu kolomnya terbuka. */
   const barisKosong = [
     `<tr class="sj-fill" style="height:${kosong * SJ_TINGGI_BARIS}px">
-        <td></td><td></td><td></td><td></td>
-        ${baris.length === 0 ? selKet : ""}
+        <td></td>${selCatatan}<td></td><td></td><td></td>
       </tr>`,
   ];
 
@@ -340,10 +374,10 @@ function buildSuratJalanHtml(row, shipment) {
           <th>Nama Barang / Deskripsi</th>
           <th class="sj-qty">Quantity</th>
           <th class="sj-pkg">Package</th>
-          <th class="sj-ket">Keterangan</th>
+          <th class="sj-nopol">Nopol</th>
         </tr>
       </thead>
-      <tbody>${barisIsi.concat(barisKosong).join("")}</tbody>
+      <tbody>${barisIsi.concat(barisPelengkap, barisKosong).join("")}</tbody>
       <tfoot>
         <tr>
           <td class="sj-total-label" colspan="2">Total</td>
@@ -352,7 +386,7 @@ function buildSuratJalanHtml(row, shipment) {
           <!-- Sel kelima wajib ada walau kosong: tanpa ini baris Total
                cuma punya empat kolom dari lima, dan sisi kanannya
                kehilangan garis tabel. -->
-          <td class="sj-ket"></td>
+          <td></td>
         </tr>
       </tfoot>
     </table>
@@ -574,14 +608,15 @@ function suratJalanCss() {
      isinya -- nama tebal, garis tipis, lalu alamat -- supaya jelas siapa
      yang dituju dan ke mana. Garis tipisnya latar setinggi 1px, bukan
      border: semua border surat jalan lewat satu variabel (--sj-line). */
-  .sj-kepada, .sj-alamat-k { font-size: 7pt; letter-spacing: .5px; color: #555; }
-  .sj-to { font-weight: 700; font-size: 10pt; margin-top: 2px; }
-  .sj-garis { height: 1px; background: #999; margin: 4px 0 3px; }
-  /* Alamat penerima diperkecil lagi (8.5pt -> 7.5pt, sama dengan alamat
-     kop di atasnya): alamat tiga baris yang panjang membuat kotak
-     Kepada terlalu penuh dan ikut menarik tinggi baris Nomor/Tanggal/Ref
-     di sebelahnya. Nama penerima di atasnya tetap 10pt tebal. */
-  .sj-to-addr { font-size: 7.5pt; line-height: 1.3; white-space: pre-line; margin-top: 1px; }
+  /* Seluruh blok Kepada diperkecil supaya tidak padat: label 7pt -> 6pt,
+     nama 10pt -> 9pt (tetap tebal), alamat 7.5pt -> 6.5pt. Jarak di
+     sekitar garis pemisah dan antarbaris alamat dilonggarkan sedikit --
+     alamat tiga baris yang panjang sebelumnya membuat kotak ini penuh
+     dan ikut menarik tinggi baris Nomor/Tanggal/Ref di sebelahnya. */
+  .sj-kepada, .sj-alamat-k { font-size: 6pt; letter-spacing: .5px; color: #555; }
+  .sj-to { font-weight: 700; font-size: 9pt; margin-top: 2px; }
+  .sj-garis { height: 1px; background: #999; margin: 5px 0 4px; }
+  .sj-to-addr { font-size: 6.5pt; line-height: 1.35; white-space: pre-line; margin-top: 1px; }
   .sj-lbl { font-size: 8.5pt; text-align: center; }
   .sj-val { text-align: center; font-size: 9pt; }
   .sj-ref { font-size: 9pt; }
@@ -611,37 +646,75 @@ function suratJalanCss() {
   .sj-items tbody td { height: 15px; }
   /* Tepi kiri & kanan diambil alih bingkai kotak. */
   .sj-items tr th:first-child, .sj-items tr td:first-child { border-left: 0; }
-  /* Ruang kosong: garis tegaknya tidak digambar, garis atasnya iya. */
+  /* Ruang kosong: garis tegaknya tidak digambar, garis atasnya iya --
+     juga di kolom Nopol, jadi kolom itu berhenti di barang terakhir dan
+     terbuka di bawahnya. */
   .sj-fill td { border-left: 0; }
-  .sj-fill td.sj-ket { border-left: var(--sj-line); }
   /* Ruang kosong dilebarkan sjIsiKertas() lewat tinggi barisnya; tanpa
      padding, yang tersisa kalau kertas sudah penuh hanya garisnya. */
   .sj-fill td { padding-top: 0; padding-bottom: 0; }
+  /* Catatan bebas (kalau ada) di sudut kiri atas ruang kosong. Ditulis
+     td.sj-catatan supaya mengalahkan aturan ".sj-fill td" di atas. */
+  .sj-items td.sj-catatan {
+    text-align: left; vertical-align: top;
+    white-space: normal; word-break: break-word; overflow: visible;
+    padding: 6px 8px 0; font-size: 7.5pt; color: #333;
+  }
   .sj-no  { width: 26px; text-align: center; }
-  .sj-items td.sj-nama, .sj-items th.sj-nama { text-align: center; }
   .sj-qty { width: 62px; text-align: center; }
   .sj-pkg { width: 62px; text-align: center; }
-  /* Kolom Keterangan dilebarkan (96 -> 132px): isinya bisa berupa nomor
-     kontainer yang panjang, dan ruangnya diambil dari Nama Barang yang
-     memang paling lapang.
+  /* ISI BARIS DATA rata tengah HORIZONTAL dan VERTIKAL di semua kolom:
+     No, Nama Barang, Quantity, Package (Nopol punya aturan sendiri di
+     bawah). Nama barang yang membungkus membuat barisnya lebih tinggi --
+     tanpa ini nomor dan jumlahnya menempel di atas baris setinggi itu --
+     dan sel kemasan yang membentang beberapa baris (satu box berisi tiga
+     barang) jadi tepat di tengah rentangnya.
 
-     Ditulis td.sj-ket, bukan .sj-ket saja: aturan ".sj-items td" di
+     Ditulis td.sj-xxx, bukan .sj-xxx saja: aturan ".sj-items td" di atas
+     ber-kekhususan (0,1,1) dan mengalahkan kelas tunggal (0,1,0), jadi
+     vertical-align: middle tidak akan pernah berlaku. */
+  .sj-items td.sj-no,
+  .sj-items td.sj-nama,
+  .sj-items td.sj-qty,
+  .sj-items td.sj-pkg { text-align: center; vertical-align: middle; }
+  /* KOLOM NOPOL. Lebarnya tetap 132px (dulu kolom Keterangan).
+
+     Ditulis td.sj-nopol, bukan .sj-nopol saja: aturan ".sj-items td" di
      atas ber-kekhususan (0,1,1) dan mengalahkan kelas tunggal (0,1,0),
-     sehingga vertical-align: middle tidak pernah berlaku dan isinya
-     menempel di atas.
+     sehingga padding: 0 di bawah tidak pernah berlaku.
+
+     Selnya membentang sebanyak baris barang. Isinya satu kotak per
+     mobil di dalam kolom flex yang menutupi seluruh sel (position:
+     absolute, keempat sisi 0), tiap kotak flex: 1 -- jadi tingginya
+     DIBAGI RATA, berapa pun tinggi baris barang di sampingnya dan berapa
+     pun jumlah mobilnya. Dipilih daripada height: 100% di dalam sel
+     tabel, yang hasilnya berbeda antarmesin peramban. Sel ini yang
+     menjadi acuan penempatannya, makanya position: relative.
+
+     Garis antarkotak hanya sisi ATAS kotak kedua dan seterusnya; garis
+     atas kotak pertama milik selnya sendiri, dan garis bawah kotak
+     terakhir milik sel kelima baris ruang kosong di bawahnya.
 
      Tanda petik-balik sengaja TIDAK dipakai di komentar ini — seluruh
      CSS ini berada di dalam template literal, dan satu petik-balik saja
      memotongnya di tengah. */
-  .sj-items td.sj-ket,
-  .sj-items th.sj-ket {
+  .sj-items td.sj-nopol,
+  .sj-items th.sj-nopol {
     width: 132px;
     text-align: center;
     vertical-align: middle;
   }
-  /* Beberapa mobil = beberapa baris; jarak antarbarisnya dilonggarkan
-     sedikit supaya nomor platnya tidak terbaca menyambung. */
-  .sj-items td.sj-ket { line-height: 1.6; }
+  .sj-items td.sj-nopol { position: relative; padding: 0; }
+  .sj-nopol-bagi {
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    display: flex; flex-direction: column;
+  }
+  .sj-nopol-sel {
+    flex: 1 1 0; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    white-space: nowrap; overflow: hidden;
+  }
+  .sj-nopol-sel + .sj-nopol-sel { border-top: var(--sj-line); }
   /* Baris Total adalah baris TERAKHIR tabel. Di bawah konvensi
      atas+kiri, sisi bawahnya tidak dimiliki siapa pun — tidak ada
      baris berikutnya yang menggambar border-top. Jadi ia menutup

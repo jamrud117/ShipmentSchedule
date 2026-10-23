@@ -4,8 +4,8 @@
    DAFTAR NOMOR MOBIL PADA PENGAJUAN DELIVERY ORDER
 
    Satu kiriman export kerap diangkut lebih dari satu mobil, dan surat
-   jalannya harus menyebut semuanya (kolom Keterangan, satu nomor per
-   baris).
+   jalannya harus menyebut semuanya (kolom Nopol, satu kotak per mobil
+   dengan tinggi dibagi rata).
 
    Pola yang sama dengan nomor PO (po-list.js): kotak PERTAMA tetap
    memakai data-dn="vehicle" -- jalur penyimpanan yang sudah ada.

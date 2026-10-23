@@ -2497,41 +2497,148 @@ t("sjDaftarKendaraan: pertama + tambahan, kosong dibuang, kembar (spasi & huruf 
   eq(daftar(null), "", "null:");
   eq(daftar({ vehicle: "B 1 AA", vehicleExtra: "B 9 ZZ" }), "B 1 AA|B 9 ZZ", "vehicleExtra bukan larik tidak membuat galat:");
 });
-t("surat jalan Export: semua nomor mobil tercetak di kolom Keterangan, satu per baris", () => {
+/* Kotak-kotak mobil di kolom Nopol, urut seperti tercetak. */
+const nopolKotak = (h) => Array.from(h.matchAll(/<div class="sj-nopol-sel">([^<]*)<\/div>/g), (m) => m[1]);
+t("surat jalan Export: kolom Nopol -- tiap mobil SATU kotak sendiri, berurutan, di dalam SATU sel Nopol", () => {
   const h = w.buildSuratJalanHtml({
     id: "m1", doc_number: "030/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Yogi",
     payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1111 AA", vehicleExtra: ["B 2222 BB", "B 3333 CC"] },
   }, null);
-  const sel = /<td class="sj-ket" rowspan="\d+">([^<]*(?:<br>[^<]*)*)<\/td>/.exec(h);
-  if (!sel) throw new Error("sel Keterangan berisi nomor mobil tidak ditemukan");
-  eq(sel[1], "B 1111 AA<br>B 2222 BB<br>B 3333 CC", "isi Keterangan:");
+  eq(nopolKotak(h).join("|"), "B 1111 AA|B 2222 BB|B 3333 CC", "kotak per mobil:");
+  eq((h.match(/<td class="sj-nopol"/g) || []).length, 1, "jumlah sel Nopol:");
+  eq((h.match(/<div class="sj-nopol-bagi">/g) || []).length, 1, "jumlah kolom pembagi tinggi:");
+  // nomor mobil TIDAK lagi digabung dengan <br> di satu sel
+  if (h.includes("<br>")) throw new Error("nomor mobil masih disambung dengan <br>, bukan kotak sendiri-sendiri");
 });
-t("surat jalan Export: satu mobil tercetak seperti semula; nomor kembar tidak dicetak dua kali", () => {
-  const cetak = (payload) => {
-    const h = w.buildSuratJalanHtml({ id: "m2", doc_number: "031/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-      payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) }, null);
-    return (/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1];
+t("surat jalan Export: satu mobil tercetak seperti semula; nomor kembar sekali; tanpa mobil = SATU kotak kosong", () => {
+  const cetak = (payload) => nopolKotak(w.buildSuratJalanHtml({ id: "m2", doc_number: "031/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) },
+  { id: "s", mode: "export", items: [{ namaBarang: "RUBBER", qty: 1, satuan: "PCS" }] }));
+  eq(cetak({ vehicle: "E 1578 MS" }).join("|"), "E 1578 MS", "satu mobil:");
+  eq(cetak({ vehicle: "E 1578 MS", vehicleExtra: ["e1578ms"] }).join("|"), "E 1578 MS", "kembar:");
+  // tempat menulis nomor mobil dengan tangan: kotaknya tetap ada
+  eq(JSON.stringify(cetak({})), '[""]', "tanpa mobil:");
+  eq(cetak({ vehicle: "B 1 AA<script>", vehicleExtra: ["B 2 \"BB\""] }).join("|"), "B 1 AA&lt;script&gt;|B 2 &quot;BB&quot;", "disaring:");
+});
+t("surat jalan Export: catatan pindah ke ruang kosong di bawah barang -- bukan di kolom Nopol -- dan hanya kalau ada", () => {
+  const cetak = (payload) => w.buildSuratJalanHtml({ id: "m3", doc_number: "032/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"] }, payload) }, null);
+  const h = cetak({ notes: "Kirim <pagi>" });
+  const isiFill = (/<tr class="sj-fill"[\s\S]*?<\/tr>/.exec(h) || [])[0] || "";
+  if (!isiFill.includes('<td class="sj-catatan">Catatan : Kirim &lt;pagi&gt;</td>')) throw new Error("catatan tidak ada di ruang kosong (atau tidak disaring): " + isiFill);
+  const sel = (/<td class="sj-nopol"[\s\S]*?<\/td>/.exec(h) || [])[0] || "";
+  if (/Kirim|Catatan/.test(sel)) throw new Error("catatan masih menumpang di sel Nopol");
+  eq(nopolKotak(h).join("|"), "B 1 AA|B 2 BB", "kotak mobil tidak ikut berubah:");
+  if (cetak({}).includes("sj-catatan")) throw new Error("sel catatan tercetak padahal catatannya kosong");
+  if (cetak({ notes: "   " }).includes("sj-catatan")) throw new Error("catatan berisi spasi saja ikut tercetak");
+});
+t("surat jalan Export: sel Nopol membentang HANYA baris barang di sampingnya -- tidak ke ruang kosong, tidak ke Total", () => {
+  const cetak = (n, payload) => w.buildSuratJalanHtml({ id: "m4", doc_number: "033/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) },
+  n === null ? null : { id: "s", mode: "export", items: Array.from({ length: n }, (_, i) => ({ namaBarang: "BARANG " + i, qty: 1, satuan: "PCS" })) });
+  const rentang = (h) => (/<td class="sj-nopol" rowspan="(\d+)"/.exec(h) || [])[1];
+  const mobil3 = { vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC"] };
+  // barang >= mobil: rentang = jumlah barang, apa pun jumlah mobilnya
+  [1, 3, 7, 9, 10, 25].forEach((n) => {
+    eq(rentang(cetak(n, { vehicle: "B 1 AA" })), String(n), n + " barang, 1 mobil: rentang Nopol:");
+    eq(rentang(cetak(n, mobil3)), String(Math.max(n, 3)), n + " barang, 3 mobil: rentang Nopol:");
+    eq((cetak(n, mobil3).match(/class="sj-pelengkap"/g) || []).length, Math.max(0, 3 - n), n + " barang, 3 mobil: baris pelengkap:");
+  });
+  // mobil lebih banyak daripada barang: baris pelengkap kosong menyusul, satu baris per mobil
+  const h = cetak(1, { vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC", "B 4 DD"] });
+  eq(rentang(h), "4", "1 barang, 4 mobil: rentang:");
+  eq((h.match(/class="sj-pelengkap"/g) || []).length, 3, "1 barang, 4 mobil: baris pelengkap:");
+  // tanpa barang tapi ada mobil: barisnya tetap ada supaya nomor mobil tercetak
+  eq(rentang(cetak(null, { vehicle: "B 1 AA" })), "1", "tanpa barang, 1 mobil:");
+  eq(rentang(cetak(null, mobil3)), "3", "tanpa barang, 3 mobil:");
+  // tanpa barang & tanpa mobil: tidak ada kolom Nopol sama sekali
+  eq(rentang(cetak(null, {})), undefined, "tanpa barang & tanpa mobil:");
+  // barang tanpa mobil: SATU sel kosong di samping barangnya
+  eq(rentang(cetak(4, {})), "4", "4 barang, tanpa mobil:");
+  eq(nopolKotak(cetak(4, {})).length, 1, "4 barang, tanpa mobil: jumlah kotak:");
+});
+t("surat jalan Export: header kolom Nopol; ruang kosong punya LIMA sel (sel kelima menutup dasar Nopol); baris Total lima kolom", () => {
+  const h = w.buildSuratJalanHtml({ id: "m5", doc_number: "034/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA" } },
+  { id: "s", mode: "export", items: [{ namaBarang: "RUBBER", qty: 1, satuan: "PCS" }] });
+  if (!h.includes('<th class="sj-nopol">Nopol</th>')) throw new Error("header kolom bukan 'Nopol'");
+  if (/Keterangan|sj-ket/.test(h)) throw new Error("sisa kolom Keterangan lama masih ada di cetakan");
+  if (/sj-ket/.test(w.suratJalanCss())) throw new Error("CSS masih mengacu .sj-ket");
+  const fill = (/<tr class="sj-fill"[\s\S]*?<\/tr>/.exec(h) || [])[0];
+  eq((fill.match(/<td/g) || []).length, 5, "sel di ruang kosong:");
+  // sel Nopol tidak boleh ikut masuk ruang kosong (kolomnya terbuka di bawah barang)
+  if (fill.includes("sj-nopol")) throw new Error("sel Nopol menjalar ke ruang kosong");
+  const tfoot = (/<tfoot>[\s\S]*?<\/tfoot>/.exec(h) || [])[0];
+  const kolom = Array.from(tfoot.matchAll(/<td([^>]*)>/g)).reduce((jml, m) => jml + Number((/colspan="(\d+)"/.exec(m[1]) || [])[1] || 1), 0);
+  eq(kolom, 5, "kolom baris Total:");
+  if (tfoot.includes("sj-nopol")) throw new Error("sel Nopol menjalar ke baris Total");
+});
+t("surat jalan Export: CSS Nopol -- kotak mobil dibagi rata lewat kolom flex, garis antarkotak lewat --sj-line, tanpa tinggi tetap", () => {
+  const css = w.suratJalanCss();
+  const aturan = (sel) => {
+    const i = css.indexOf(sel + " {");
+    if (i < 0) throw new Error("aturan hilang: " + sel);
+    return css.slice(i, css.indexOf("}", i));
   };
-  eq(cetak({ vehicle: "E 1578 MS" }), "E 1578 MS", "satu mobil:");
-  eq(cetak({ vehicle: "E 1578 MS", vehicleExtra: ["e1578ms"] }), "E 1578 MS", "kembar:");
-  eq(cetak({}), "", "tanpa mobil:");
-  eq(cetak({ vehicle: "B 1 AA<script>", vehicleExtra: ["B 2 \"BB\""] }), "B 1 AA&lt;script&gt;<br>B 2 &quot;BB&quot;", "disaring:");
+  // sel Nopol: acuan penempatan kolom pembagi, tanpa padding (kotak mepet ke garis selnya)
+  const sel = aturan(".sj-items td.sj-nopol");
+  if (!/position:\s*relative/.test(sel)) throw new Error("sel Nopol bukan acuan penempatan (position: relative)");
+  if (!/padding:\s*0/.test(sel)) throw new Error("sel Nopol masih berpadding -- kotak tidak mepet garis");
+  // kolom pembagi menutupi seluruh sel dan menyusun kotak ke bawah
+  const bagi = aturan(".sj-nopol-bagi");
+  if (!/position:\s*absolute/.test(bagi) || !/top:\s*0/.test(bagi) || !/right:\s*0/.test(bagi) || !/bottom:\s*0/.test(bagi) || !/left:\s*0/.test(bagi))
+    throw new Error("kolom pembagi tidak menutupi seluruh sel Nopol");
+  if (!/display:\s*flex/.test(bagi) || !/flex-direction:\s*column/.test(bagi)) throw new Error("kotak mobil tidak disusun ke bawah (flex column)");
+  // tiap kotak mengambil bagian yang SAMA: flex 1 1 0, dan tanpa tinggi tetap
+  const kotak = aturan(".sj-nopol-sel");
+  if (!/flex:\s*1 1 0/.test(kotak)) throw new Error("kotak mobil tidak berbagi tinggi sama rata (flex: 1 1 0)");
+  if (/(^|[^-])height:/.test(kotak.replace(/min-height:[^;]*;/, ""))) throw new Error("kotak mobil bertinggi tetap -- tidak ikut dibagi rata");
+  // garis pemisah hanya sisi ATAS kotak kedua dst., lewat variabel garis satu-satunya
+  if (!/\.sj-nopol-sel \+ \.sj-nopol-sel \{[^}]*border-top:\s*var\(--sj-line\)/.test(css)) throw new Error("garis antarkotak tidak lewat --sj-line pada kotak kedua dst.");
+  if (/border/.test(kotak)) throw new Error("kotak pertama menggambar garisnya sendiri -- dobel dengan garis atas sel Nopol");
+  // ruang kosong tidak menggambar garis kiri di kolom mana pun (juga Nopol): kolomnya terbuka di bawah barang
+  if (/\.sj-fill td\.[a-z-]+ \{[^}]*border-left:\s*var/.test(css)) throw new Error("ada sel ruang kosong yang menggambar garis kiri");
+  if (!/\.sj-fill td \{ border-left: 0; \}/.test(css)) throw new Error("ruang kosong tidak mematikan garis kiri selnya");
 });
-t("surat jalan Export: catatan di baris sesudah nomor mobil", () => {
-  const h = w.buildSuratJalanHtml({ id: "m3", doc_number: "032/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"], notes: "Kirim pagi" } }, null);
-  eq((/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1], "B 1 AA<br>B 2 BB<br>Kirim pagi", "isi Keterangan:");
+t("surat jalan Export: isi baris data -- No, Nama Barang, Quantity, Package -- rata tengah HORIZONTAL dan VERTIKAL (diperiksa pada hasil cascade, bukan sekadar adanya aturan)", () => {
+  /* Satu box berisi tiga barang: sel Package membentang tiga baris. Nama
+     barang yang membungkus membuat baris lebih tinggi; di baris setinggi
+     itu No & Quantity yang menempel di atas paling kelihatan. */
+  const h = w.buildSuratJalanHtml({ id: "pk1", doc_number: "070/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-23", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"] } },
+  { id: "s", mode: "export", package: "2 PK", items: [
+    { namaBarang: "A", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" },
+    { namaBarang: "B", qty: 1, satuan: "SET" },
+    { namaBarang: "C", qty: 1, satuan: "SET" },
+    { namaBarang: "D", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" }] });
+  if (!/<td class="sj-pkg" rowspan="3">1 PK<\/td>/.test(h)) throw new Error("sel Package yang membentang tiga baris tidak ditemukan");
+  const d = new JSDOM("<style>" + w.suratJalanCss() + "</style><body>" + h + "</body>").window;
+  const gayaDari = (td) => d.getComputedStyle(td);
+  // sel yang diharapkan: 4 No, 4 Nama, 4 Quantity, 2 kemasan -- tiap kolom diperiksa SATU PER SATU
+  const harapan = { "No": ["td.sj-no", 4], "Nama Barang": ["td.sj-nama", 4], "Quantity": ["td.sj-qty", 4], "Package": ["td.sj-pkg", 2] };
+  Object.keys(harapan).forEach((kolom) => {
+    const sel = Array.from(d.document.querySelectorAll(".sj-items tbody " + harapan[kolom][0]));
+    eq(sel.length, harapan[kolom][1], "jumlah sel " + kolom + ":");
+    sel.forEach((td, i) => {
+      eq(gayaDari(td).verticalAlign, "middle", kolom + " #" + i + " rata tengah vertikal:");
+      eq(gayaDari(td).textAlign, "center", kolom + " #" + i + " rata tengah horizontal:");
+    });
+  });
+  // baris Total juga: jumlah Quantity & Package di tengah barisnya
+  ["td.sj-qty", "td.sj-pkg"].forEach((sel) => {
+    const td = d.document.querySelector(".sj-items tfoot " + sel);
+    eq(gayaDari(td).verticalAlign, "middle", "Total " + sel + " rata tengah vertikal:");
+    eq(gayaDari(td).textAlign, "center", "Total " + sel + " rata tengah horizontal:");
+  });
+  // Nopol: sel & kotak per mobil (kotaknya flex yang menengahkan teks di kedua arah)
+  const nopol = d.document.querySelector(".sj-items td.sj-nopol");
+  eq(gayaDari(nopol).verticalAlign, "middle", "Nopol rata tengah vertikal:");
+  eq(gayaDari(nopol).textAlign, "center", "Nopol rata tengah horizontal:");
+  const css = w.suratJalanCss();
+  const kotak = css.slice(css.indexOf(".sj-nopol-sel {"), css.indexOf("}", css.indexOf(".sj-nopol-sel {")));
+  if (!/align-items:\s*center/.test(kotak) || !/justify-content:\s*center/.test(kotak)) throw new Error("nomor mobil tidak ditengahkan di kotaknya");
 });
-t("surat jalan Export: sel Keterangan tetap SATU sel setinggi tabel walau mobilnya banyak", () => {
-  const h = w.buildSuratJalanHtml({ id: "m4", doc_number: "033/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC", "B 4 DD"],
-      items: [{ nama: "RUBBER", qty: "1", satuan: "PCS" }] } }, null);
-  eq((h.match(/class="sj-ket" rowspan=/g) || []).length, 1, "jumlah sel Keterangan berisi nomor:");
-  /* Satu barang + satu ruang kosong sisa tabel = dua baris badan; sel
-     Keterangan membentang keduanya, berapa pun nomor mobilnya. */
-  eq((/class="sj-ket" rowspan="(\d+)"/.exec(h) || [])[1], "2", "rentang sel Keterangan:");
-});
-t("alamat penerima di surat jalan Export tetap kecil (7,5pt, bukan 8,5pt lagi); nama 10pt; label KEPADA/ALAMAT PENERIMA lebih kecil dari nama", () => {
+t("blok Kepada di surat jalan Export diperkecil (label 6pt, nama 9pt, alamat 6,5pt) -- urutan ukuran label <= alamat < nama, masih terbaca", () => {
   const css = w.suratJalanCss();
   const ukuran = (sel) => {
     const i = css.indexOf(sel + " {");
@@ -2541,13 +2648,19 @@ t("alamat penerima di surat jalan Export tetap kecil (7,5pt, bukan 8,5pt lagi); 
     return Number(m[1]);
   };
   const alamat = ukuran(".sj-to-addr");
-  if (!(alamat < 8.5)) throw new Error("alamat penerima masih " + alamat + "pt (harus lebih kecil dari 8.5pt)");
-  if (alamat < 7) throw new Error("alamat " + alamat + "pt terlalu kecil untuk dicetak");
-  eq(ukuran(".sj-to"), 10, "nama penerima tidak ikut diperkecil:");
+  const nama = ukuran(".sj-to");
   const label = ukuran(".sj-kepada, .sj-alamat-k");
-  if (!(label < ukuran(".sj-to"))) throw new Error("label tidak lebih kecil dari nama penerima");
-  if (label < 6.5) throw new Error("label " + label + "pt terlalu kecil untuk dibaca");
+  // lebih kecil dari ukuran sebelum diperkecil (label 7pt, nama 10pt, alamat 7.5pt)
+  if (!(alamat < 7.5)) throw new Error("alamat penerima masih " + alamat + "pt (harus lebih kecil dari 7.5pt)");
+  if (!(nama < 10)) throw new Error("nama penerima masih " + nama + "pt (harus lebih kecil dari 10pt)");
+  if (!(label < 7)) throw new Error("label KEPADA/ALAMAT PENERIMA masih " + label + "pt (harus lebih kecil dari 7pt)");
+  // tetap terbaca di atas kertas, dan hierarkinya tidak terbalik
+  if (alamat < 6) throw new Error("alamat " + alamat + "pt terlalu kecil untuk dicetak");
+  if (label < 5.5) throw new Error("label " + label + "pt terlalu kecil untuk dibaca");
+  if (nama < 8) throw new Error("nama penerima " + nama + "pt terlalu kecil");
+  if (!(label <= alamat && alamat < nama)) throw new Error("urutan ukuran harus label <= alamat < nama (" + label + " / " + alamat + " / " + nama + ")");
   if (!/\.sj-kepada, \.sj-alamat-k \{[^}]*color:\s*#[0-9a-f]{3,6}/i.test(css)) throw new Error("label belum berwarna redup");
+  if (!/\.sj-to \{[^}]*font-weight:\s*700/.test(css)) throw new Error("nama penerima tidak lagi tebal");
 });
 t("surat jalan Export: blok penerima berlabel -- KEPADA, nama, garis, ALAMAT PENERIMA, alamat -- semuanya kapital", () => {
   const h = w.buildSuratJalanHtml({ id: "k1", doc_number: "050/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y",
@@ -2571,23 +2684,25 @@ t("surat jalan Export: blok penerima berlabel -- KEPADA, nama, garis, ALAMAT PEN
   if (!/\.sj-garis \{[^}]*background:/.test(w.suratJalanCss())) throw new Error("garis pemisah tidak berlatar");
   if (/\.sj-garis \{[^}]*border/.test(w.suratJalanCss())) throw new Error("garis pemisah memakai border sendiri");
 });
-t("surat jalan Export: ruang kosong tabel SELALU ada -- juga untuk 10 barang ke atas -- dan sel Keterangan membentanginya", () => {
+t("surat jalan Export: ruang kosong tabel SELALU ada -- juga untuk 10 barang ke atas -- dan TIDAK ikut dibentangi sel Nopol", () => {
   const cetak = (n) => w.buildSuratJalanHtml({ id: "f" + n, doc_number: "060/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y",
     payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA" } },
     { id: "s", mode: "export", items: Array.from({ length: n }, (_, i) => ({ namaBarang: "BARANG " + i, qty: 1, satuan: "PCS" })) });
   [1, 9, 10, 25].forEach((n) => {
     const h = cetak(n);
     eq((h.match(/class="sj-fill"/g) || []).length, 1, n + " barang: jumlah ruang kosong:");
-    eq((h.match(/class="sj-ket" rowspan=/g) || []).length, 1, n + " barang: jumlah sel Keterangan:");
-    eq((/class="sj-ket" rowspan="(\d+)"/.exec(h) || [])[1], String(n + 1), n + " barang: rentang Keterangan:");
+    eq((h.match(/<td class="sj-nopol" rowspan=/g) || []).length, 1, n + " barang: jumlah sel Nopol:");
+    // rentangnya jumlah barang SAJA -- bukan jumlah barang + 1 seperti sel Keterangan yang dulu ditarik sampai Total
+    eq((/<td class="sj-nopol" rowspan="(\d+)"/.exec(h) || [])[1], String(n), n + " barang: rentang Nopol:");
   });
   // tinggi awal: sisa baris minimum; nol begitu sudah 10 barang (selebihnya dari sjIsiKertas)
   const awal = (n) => /class="sj-fill" style="height:(\d+)px"/.exec(cetak(n))[1];
   eq(awal(9), String(w.eval("SJ_TINGGI_BARIS")), "tinggi awal 9 barang:");
   eq(awal(12), "0", "tinggi awal 12 barang:");
-  // tanpa barang sama sekali: Keterangan ikut di baris kosong itu
+  // tanpa barang sama sekali: tinggi awal sisa minimum penuh, dan nomor mobil tetap tercetak
   const nol = w.buildSuratJalanHtml({ id: "f0", doc_number: "061/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y", payload: { doKind: "Export", vehicle: "B 1 AA" } }, null);
-  eq((/class="sj-ket" rowspan="(\d+)"/.exec(nol) || [])[1], "1", "tanpa barang: rentang Keterangan:");
+  eq(/class="sj-fill" style="height:(\d+)px"/.exec(nol)[1], String(10 * w.eval("SJ_TINGGI_BARIS")), "tinggi awal tanpa barang:");
+  eq(nopolKotak(nol).join("|"), "B 1 AA", "tanpa barang: nomor mobil:");
 });
 t("surat jalan: lembar selebar A4 dan kotaknya setinggi sisa kertas -- angka padding & tinggi kotak harus sepasang", () => {
   const css = w.suratJalanCss();
@@ -14888,6 +15003,486 @@ t("tabel barang: Kode Kondisi Barang (pilihan 1 / 2, Import saja) & Kode Negara 
     w.renderItemTable();
   }
 });
+console.log("— SAMAKAN ISIAN BARIS 1 KE BARIS DI BAWAHNYA —");
+{
+  /* Toast "Samakan Satuan PCS ke baris 2–12?  [Ya] [Tidak]" (item-samakan.js):
+     isian BARIS PERTAMA di tujuh kolom -- HS Code, Kode Kondisi Barang,
+     Kode Negara Asal, Jenis Barang, Qty, Satuan, Jenis Kemasan -- selesai
+     diisi -> tawarkan menyamakannya ke baris 2..terakhir. Baris 2+ tidak
+     pernah memicunya. */
+  const toastEl = () => $("#samakanToast");
+  const terbuka = () => !!toastEl() && toastEl().classList.contains("is-open");
+  const pesan = () => $("#samakanPesan").textContent;
+  const catatan = () => ($("#samakanCatatan").classList.contains("d-none") ? "" : $("#samakanCatatan").textContent);
+  const tutup = () => { if (terbuka()) $("#samakanTidak").click(); };
+  const kotak = (idx, f) => $(`#itemTableBody tr[data-idx="${idx}"]:not(.item-fac-row) [data-f="${f}"]`);
+  const kejadian = (el, jenis) => el.dispatchEvent(new w.Event(jenis, { bubbles: true }));
+  // Mengisi satu kotak seperti orang: diketik (input), lalu ditinggalkan (change)
+  const isi = (idx, f, nilai) => {
+    const el = kotak(idx, f);
+    el.value = nilai;
+    kejadian(el, "input");
+    kejadian(el, "change");
+    return el;
+  };
+  // Tabel contoh `n` baris (nilai awal buku Import); `ubah(it, i)` menyesuaikan tiap barang
+  const siapkan = (n, ubah, mode) => {
+    const daftar = Array.from({ length: n }, (_, i) => {
+      const it = w.newItem(mode || "import");
+      it.namaBarang = "BARANG " + (i + 1);
+      if (ubah) ubah(it, i);
+      return it;
+    });
+    w.eval("draftItems = " + JSON.stringify(daftar));
+    w.renderItemTable();
+  };
+  const denganTabel = (fn, mode) => {
+    const simpan = { draft: baca("draftItems"), mode: baca("activeMode") };
+    try {
+      tulis("activeMode", mode || "import");
+      fn();
+    } finally {
+      w.sembunyikanTawaranSamakan();
+      w.eval("draftItems = " + JSON.stringify(simpan.draft || []));
+      tulis("activeMode", simpan.mode);
+      w.renderItemTable();
+    }
+  };
+  const salinan = (daftar) => JSON.parse(JSON.stringify(daftar));
+
+  t("samakan: isian baris 1 di tujuh kolom memunculkan toast yang menyebut kolom, nilai & rentang baris", () => {
+    denganTabel(() => {
+      siapkan(4);
+      eq(terbuka(), false, "awal tertutup:");
+      [
+        ["hsCode", "84807190", "Samakan HS Code 84807190 ke baris 2–4?"],
+        ["kondisiBarang", "2", "Samakan Kode Kondisi Barang 2 - BUKAN BARU ke baris 2–4?"],
+        ["negaraAsal", "korea selatan", "Samakan Kode Negara Asal KR — Korea Selatan ke baris 2–4?"],
+        ["jenisBarang", "SPAREPART", "Samakan Jenis Barang SPAREPART ke baris 2–4?"],
+        ["qty", "12", "Samakan Qty 12 ke baris 2–4?"],
+        ["satuan", "pcs", "Samakan Satuan PCS ke baris 2–4?"],
+        ["packingUnit", "pallet", "Samakan Jenis Kemasan PALLET ke baris 2–4?"],
+      ].forEach(([f, nilai, harap]) => {
+        isi(0, f, nilai);
+        eq(terbuka(), true, f + " terbuka:");
+        eq(pesan(), harap, f + " pesan:");
+        eq([$("#samakanYa").textContent, $("#samakanTidak").textContent].join("|"), "Ya, samakan|Tidak", f + " tombol:");
+        tutup();
+        eq(terbuka(), false, f + " ditutup:");
+      });
+    });
+  });
+
+  t("samakan: isian di baris 2 dan seterusnya TIDAK memunculkan toast (ketujuh kolom)", () => {
+    denganTabel(() => {
+      siapkan(4);
+      [1, 2, 3].forEach((idx) => {
+        [["hsCode", "84807190"], ["kondisiBarang", "2"], ["negaraAsal", "jepang"], ["jenisBarang", "SPAREPART"], ["qty", "12"], ["satuan", "pcs"], ["packingUnit", "pallet"]].forEach(([f, nilai]) => {
+          isi(idx, f, nilai);
+          eq(terbuka(), false, `baris ${idx + 1} / ${f}:`);
+        });
+      });
+      eq(baca("draftItems")[3].satuan, "PCS", "isiannya sendiri tetap tersimpan:");
+    });
+  });
+
+  t("samakan: kolom di luar ketujuh itu tidak memunculkan toast, di baris 1 sekalipun", () => {
+    denganTabel(() => {
+      siapkan(3);
+      ["namaBarang", "kodeBarang", "merek", "tipe", "ukuran", "spesifikasiLain", "harga", "netto", "bruto", "package", "packing", "marks"].forEach((f) => {
+        isi(0, f, f === "package" ? "10*10*10" : f === "packing" || /^(harga|netto|bruto)$/.test(f) ? "5" : "ABC");
+        eq(terbuka(), false, f + ":");
+      });
+    });
+  });
+
+  t("samakan: tidak muncul bila tak ada yang perlu disamakan (baris tunggal, kosong, qty 0, kode negara tak dikenal, semua sudah sama)", () => {
+    denganTabel(() => {
+      siapkan(1);
+      isi(0, "hsCode", "84807190");
+      eq(terbuka(), false, "baris tunggal:");
+
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      tutup();
+      isi(0, "hsCode", "");
+      eq(terbuka(), false, "isian dikosongkan:");
+      isi(0, "qty", "0");
+      eq(terbuka(), false, "qty 0 dianggap kosong:");
+      isi(0, "negaraAsal", "zz");
+      eq(terbuka(), false, "kode negara tak dikenal:");
+      isi(0, "negaraAsal", "id");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan Kode Negara Asal ID — Indonesia ke baris 2–3?", "kode negara dikenal:");
+      tutup();
+
+      siapkan(3, (it) => { it.satuan = "PCS"; });
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), false, "semua baris sudah sama:");
+
+      // Baris 1 dikosongkan sementara baris lain terisi: tidak pernah ditawarkan menghapus isian orang
+      siapkan(3, (it, i) => { if (i) { it.hsCode = "1111"; it.qty = 5; } });
+      isi(0, "hsCode", "");
+      eq(terbuka(), false, "HS Code baris 1 kosong, baris lain terisi:");
+      isi(0, "qty", "0");
+      eq(terbuka(), false, "qty baris 1 nol, baris lain terisi:");
+    });
+  });
+
+  t("samakan: \"Ya, samakan\" menyalin HANYA kolom itu dari baris 1 ke baris 2 sampai terakhir -- data, tampilan & kolom lain utuh", () => {
+    const tanpa = (daftar, f) => daftar.map((it) => { const c = Object.assign({}, it); delete c[f]; return JSON.stringify(c); }).join("|");
+    const beda = (it, i) => {
+      it.harga = 10 + i;
+      it.qty = 5 + i;
+      it.satuan = ["SET", "KG", "PCS", "SET"][i];
+      it.negaraAsal = ["", "JP", "", "CN"][i];
+      it.hsCode = ["", "", "1111", "2222"][i];
+      it.packingUnit = ["BOX", "PALLET", "BOX", "CRATE"][i];
+      it.kondisiBarang = ["1", "2", "1", "2"][i];
+      it.jenisBarang = ["BAHAN BAKU", "SPAREPART", "BAHAN BAKU", "BARANG MODAL"][i];
+      it.packing = i === 1 ? "3" : "";
+    };
+    denganTabel(() => {
+      [
+        // kolom, diketik, tersimpan, tampil di kotak, kabar sukses
+        ["hsCode", "84807190", "84807190", "84807190", "HS Code disamakan ke baris 2–4."],
+        ["kondisiBarang", "2", "2", "2", "Kode Kondisi Barang disamakan ke baris 2–4."],
+        ["negaraAsal", "korea selatan", "KR", "KR", "Kode Negara Asal disamakan ke baris 2–4."],
+        ["jenisBarang", "SPAREPART", "SPAREPART", "SPAREPART", "Jenis Barang disamakan ke baris 2–4."],
+        ["qty", "12", "12", "12", "Qty disamakan ke baris 2–4."],
+        ["satuan", "pcs", "PCS", "PCS", "Satuan disamakan ke baris 2–4."],
+        ["packingUnit", "pallet", "PALLET", "PALLET", "Jenis Kemasan disamakan ke baris 2–4."],
+      ].forEach(([f, ketik, tersimpan, tampil, kabar]) => {
+        siapkan(4, beda);
+        const sebelum = salinan(baca("draftItems"));
+        isi(0, f, ketik);
+        eq(terbuka(), true, f + " terbuka:");
+        $("#samakanYa").click();
+        eq(terbuka(), false, f + " tertutup sesudah Ya:");
+        const sesudah = baca("draftItems");
+        eq(sesudah.map((it) => String(it[f])).join("|"), [tersimpan, tersimpan, tersimpan, tersimpan].join("|"), f + " tersimpan:");
+        eq([0, 1, 2, 3].map((i) => kotak(i, f).value).join("|"), [tampil, tampil, tampil, tampil].join("|"), f + " tampil di kotak:");
+        eq(tanpa(sesudah, f), tanpa(sebelum, f), f + " kolom lain utuh:");
+        eq($("#toastMsg").textContent, kabar, f + " kabar:");
+      });
+    });
+  });
+
+  t("samakan: Qty yang disamakan ikut menghitung ulang Subtotal tiap baris", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { it.harga = 10 + i; });
+      isi(0, "qty", "12");
+      $("#samakanYa").click();
+      eq([0, 1, 2].map((i) => $(`#itemTableBody tr[data-idx="${i}"] .subtotal`).value).join("|"), [120, 132, 144].map((n) => w.fmtUSD(n)).join("|"), "subtotal:");
+    });
+  });
+
+  t("samakan: \"Tidak\" menutup toast tanpa mengubah satu pun data di baris lain; diubah lagi -> ditawarkan lagi", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { it.hsCode = ["", "1111", ""][i]; });
+      isi(0, "hsCode", "84807190");
+      const sebelum = JSON.stringify(baca("draftItems").slice(1));
+      $("#samakanTidak").click();
+      eq(terbuka(), false, "tertutup:");
+      eq(JSON.stringify(baca("draftItems").slice(1)), sebelum, "baris 2+ utuh:");
+      eq(baca("draftItems")[0].hsCode, "84807190", "baris 1 tetap:");
+      isi(0, "hsCode", "84807191");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code 84807191 ke baris 2–3?", "diubah lagi:");
+    });
+  });
+
+  t("samakan: catatan \"baris yang sudah terisi akan ditimpa\" hanya menghitung isian yang berbeda -- nilai bawaan & yang sudah sama tidak", () => {
+    denganTabel(() => {
+      siapkan(4);
+      isi(0, "satuan", "pcs");
+      eq(catatan(), "", "semua masih bawaan (SET):");
+      tutup();
+
+      siapkan(4, (it, i) => { if (i === 2) it.satuan = "KG"; });
+      isi(0, "satuan", "pcs");
+      eq(catatan(), "1 baris yang sudah terisi akan ditimpa.", "satu isian orang:");
+      tutup();
+
+      siapkan(5, (it, i) => { it.hsCode = ["", "1111", "84807190", "2222", ""][i]; });
+      isi(0, "hsCode", "84807190");
+      eq(catatan(), "2 baris yang sudah terisi akan ditimpa.", "yang sudah sama & kosong tidak dihitung:");
+      eq(pesan(), "Samakan HS Code 84807190 ke baris 2–5?", "rentang tetap semua baris:");
+      $("#samakanYa").click();
+      eq(baca("draftItems").map((it) => it.hsCode).join("|"), "84807190|84807190|84807190|84807190|84807190", "hasil:");
+    });
+  });
+
+  t("samakan: nilai bawaan dibaca per buku -- jenis BARANG JADI bawaan Export bukan isian, di Import itu isian", () => {
+    denganTabel(() => {
+      siapkan(3, null, "export");
+      isi(0, "jenisBarang", "SPAREPART");
+      eq([terbuka(), catatan()].join(" | "), "true | ", "Export, rows bawaan BARANG JADI:");
+      tutup();
+    }, "export");
+    denganTabel(() => {
+      siapkan(3, (it) => { it.jenisBarang = "BARANG JADI"; });
+      isi(0, "jenisBarang", "SPAREPART");
+      eq(catatan(), "2 baris yang sudah terisi akan ditimpa.", "Import, rows BARANG JADI:");
+      tutup();
+    });
+  });
+
+  t("samakan: Enter di baris 1 tetap memindahkan kursor ke baris 2 dan toast TIDAK mencuri fokus", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const el = kotak(0, "hsCode");
+      el.focus();
+      el.value = "84807190";
+      kejadian(el, "input");
+      el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      // Peramban menembakkan `change` saat kotak ditinggalkan (jsdom tidak)
+      kejadian(el, "change");
+      eq(w.document.activeElement, kotak(1, "hsCode"), "kursor di baris 2:");
+      eq(terbuka(), true, "toast terbuka:");
+      eq(toastEl().contains(w.document.activeElement), false, "fokus tidak di toast:");
+    });
+  });
+
+  t("samakan: Enter di baris terakhir (baris tunggal) tidak menawarkan ke baris yang baru lahir -- walau peramban menembakkan change saat tabel digambar ulang (Chrome)", () => {
+    denganTabel(() => {
+      siapkan(1);
+      const asli = w.renderItemTable;
+      const el = kotak(0, "hsCode");
+      el.focus();
+      el.value = "84807190";
+      kejadian(el, "input");
+      // Chrome: kotak yang berfokus & berubah ikut dilepas -> `change` menyala SELAGI tabel digambar ulang
+      w.renderItemTable = () => { kejadian(el, "change"); asli(); };
+      try {
+        el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      } finally {
+        w.renderItemTable = asli;
+      }
+      eq(baca("draftItems").length, 2, "baris baru lahir:");
+      eq(terbuka(), false, "tidak ada tawaran:");
+      // Sesudah itu isian baris 1 diubah lagi: baris di bawahnya sudah ada -> ditawarkan seperti biasa
+      isi(0, "hsCode", "84807191");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code 84807191 ke baris 2?", "diubah lagi:");
+    });
+  });
+
+  t("samakan: mengetik di kolom yang sama di baris 2+ menutup toast, mengetik di kolom lain tidak", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      eq(terbuka(), true, "terbuka:");
+      const lain = kotak(1, "namaBarang");
+      lain.value = "ABC";
+      kejadian(lain, "input");
+      eq(terbuka(), true, "kolom lain, baris 2:");
+      const harga = kotak(0, "harga");
+      harga.value = "5";
+      kejadian(harga, "input");
+      eq(terbuka(), true, "kolom lain, baris 1:");
+      const qty = kotak(2, "qty");
+      qty.value = "3";
+      kejadian(qty, "input");
+      eq(terbuka(), true, "kolom lain (Qty), baris 3:");
+      const sama = kotak(2, "hsCode");
+      sama.value = "1";
+      kejadian(sama, "input");
+      eq(terbuka(), false, "kolom yang sama, baris 3:");
+    });
+  });
+
+  t("samakan: mengetik ulang isian baris 1 -- pesan mengikuti, dikosongkan -> menutup", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "8480");
+      eq(pesan(), "Samakan HS Code 8480 ke baris 2–3?", "awal:");
+      const el = kotak(0, "hsCode");
+      el.value = "84807";
+      kejadian(el, "input");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code 84807 ke baris 2–3?", "mengikuti ketikan:");
+      $("#samakanYa").click();
+      eq(baca("draftItems").map((it) => it.hsCode).join("|"), "84807|84807|84807", "yang disalin nilai TERBARU:");
+
+      siapkan(3);
+      isi(0, "hsCode", "8480");
+      const lagi = kotak(0, "hsCode");
+      lagi.value = "";
+      kejadian(lagi, "input");
+      eq(terbuka(), false, "dikosongkan:");
+    });
+  });
+
+  t("samakan: bila baris 1 sudah berganti isi lewat jalur lain sebelum \"Ya\", tidak ada yang disalin", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      w.eval('draftItems[0].hsCode = "99999999"');
+      $("#samakanYa").click();
+      eq(terbuka(), false, "tertutup:");
+      eq(baca("draftItems").map((it) => it.hsCode).join("|"), "99999999||", "tidak ada yang disalin:");
+    });
+  });
+
+  t("samakan: jumlah baris di pesan mengikuti saat barang ditambah / dihapus; tinggal satu baris atau sudah sama -> menutup", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      eq(pesan(), "Samakan Satuan PCS ke baris 2–3?", "awal:");
+      $("#btnAddItem").click();
+      eq([baca("draftItems").length, pesan()].join(" | "), "4 | Samakan Satuan PCS ke baris 2–4?", "bertambah:");
+      $('#itemTableBody tr[data-idx="3"] .rm-row').click();
+      $('#itemTableBody tr[data-idx="2"] .rm-row').click();
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan Satuan PCS ke baris 2?", "dua baris -> tunggal:");
+      $('#itemTableBody tr[data-idx="1"] .rm-row').click();
+      eq(terbuka(), false, "tinggal satu baris:");
+
+      siapkan(3, (it, i) => { if (i === 1) it.satuan = "PCS"; });
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), true, "masih ada yang beda:");
+      $('#itemTableBody tr[data-idx="2"] .rm-row').click();
+      eq(terbuka(), false, "sisanya sudah sama:");
+
+      siapkan(3, (it, i) => { it.satuan = ["SET", "KG", "SET"][i]; });
+      isi(0, "satuan", "pcs");
+      $('#itemTableBody tr[data-idx="0"] .rm-row').click();
+      eq(terbuka(), false, "baris 1 berganti isi:");
+    });
+  });
+
+  t("samakan: HS Code yang dipilih lewat pencarian di baris 1 memunculkan toast (diganti kalau dipilih lagi); di baris 2 tidak", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const hasil = $("#hscodeLookupResults");
+      const pilih = (idx, kode) => {
+        w.eval(`hscodeLookupUntukIdx = ${idx}`);
+        hasil.innerHTML = `<button type="button" class="hscode-lookup-item" data-hscode-pick="${kode}"></button>`;
+        hasil.querySelector("button").click();
+      };
+      pilih(1, "11111111");
+      eq(terbuka(), false, "baris 2:");
+      eq(baca("draftItems")[1].hsCode, "11111111", "tetap terisi:");
+      pilih(0, "84807190");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code 84807190 ke baris 2–3?", "baris 1:");
+      pilih(0, "85011019");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code 85011019 ke baris 2–3?", "dipilih lagi:");
+      hasil.innerHTML = "";
+    });
+  });
+
+  t("samakan: hasil impor / data yang diisi program tidak memunculkan toast", () => {
+    denganTabel(() => {
+      siapkan(1);
+      w.applyImportedBcData({ source: "pdf", fields: {}, notes: [], items: [
+        Object.assign(w.newItem("import"), { namaBarang: "A", hsCode: "84807190", satuan: "PCS", qty: 3 }),
+        Object.assign(w.newItem("import"), { namaBarang: "B", hsCode: "84807110", satuan: "SET", qty: 4 }),
+      ] });
+      eq(baca("draftItems").length >= 2, true, "barisnya masuk:");
+      eq(terbuka(), false, "impor:");
+      siapkan(3, (it, i) => { it.hsCode = i ? "" : "84807190"; });
+      eq(terbuka(), false, "digambar dari data:");
+    });
+  });
+
+  t("samakan: tombol toast tidak mengambil fokus; sesudah \"Ya\" kursor kembali ke kotak yang tadi dipakai", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      kotak(1, "hsCode").focus();
+      const tekan = new w.MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      $("#samakanYa").dispatchEvent(tekan);
+      eq(tekan.defaultPrevented, true, "menekan tombol tidak memindahkan fokus:");
+      $("#samakanYa").click();
+      const aktif = w.document.activeElement;
+      eq([aktif.dataset.f, aktif.closest("tr").dataset.idx, aktif.value].join("|"), "hsCode|1|84807190", "fokus pulih:");
+    });
+  });
+
+  t("samakan: tertutup sendiri setelah 15 detik", () => {
+    denganTabel(() => {
+      const asli = w.setTimeout;
+      const jadwal = [];
+      // Id negatif: clearTimeout() pada id tiruan tidak boleh membatalkan pewaktu sungguhan
+      w.setTimeout = (fn, ms) => { jadwal.push([fn, ms]); return -jadwal.length; };
+      try {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        const otomatis = jadwal.filter(([, ms]) => ms === 15000);
+        eq(otomatis.length, 1, "satu pewaktu 15 detik:");
+        eq(terbuka(), true, "terbuka:");
+        otomatis[0][0]();
+        eq(terbuka(), false, "tertutup:");
+      } finally {
+        w.setTimeout = asli;
+      }
+    });
+  });
+
+  t("samakan: pindah halaman (hashchange) dan tab Barang yang disembunyikan menutup toast", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), true, "terbuka:");
+      w.dispatchEvent(new w.Event("hashchange"));
+      eq(terbuka(), false, "hashchange:");
+
+      isi(0, "satuan", "kg");
+      eq(terbuka(), true, "dibuka lagi:");
+      const pane = w.document.createElement("div");
+      w.tutupBilaPaneBarangTersembunyi(pane);
+      eq(terbuka(), true, "tab Barang masih terlihat:");
+      pane.classList.add("d-none");
+      w.tutupBilaPaneBarangTersembunyi(pane);
+      eq(terbuka(), false, "tab Barang disembunyikan:");
+    });
+    // Pengamatnya terpasang di pane sungguhan (jsdom menyalakannya lewat microtask, jadi hanya penandanya yang dicek)
+    eq($('.tab-pane[data-tabpane="barang"]').dataset.samakanDiamati, "1", "pane barang diamati:");
+  });
+
+  t("samakan: teks ikut bahasa Inggris", () => {
+    const bahasa = baca("activeLang");
+    denganTabel(() => {
+      try {
+        w.setLang("en");
+        siapkan(4, (it, i) => { if (i > 1) it.satuan = "KG"; });
+        isi(0, "satuan", "pcs");
+        eq(pesan(), "Set Unit to PCS in rows 2–4?", "pesan:");
+        eq(catatan(), "2 filled rows will be overwritten.", "catatan:");
+        eq([$("#samakanYa").textContent, $("#samakanTidak").textContent].join("|"), "Yes, apply|No", "tombol:");
+        $("#samakanYa").click();
+        eq($("#toastMsg").textContent, "Unit applied to rows 2–4.", "kabar:");
+        siapkan(2);
+        isi(0, "satuan", "set");
+        eq(terbuka(), false, "sama dengan bawaan (SET), tak ada yang disamakan:");
+        isi(0, "hsCode", "84807190");
+        eq(pesan(), "Set HS Code to 84807190 in row 2?", "satu baris:");
+      } finally {
+        w.setLang(bahasa);
+      }
+    });
+  });
+
+  t("samakan: toast ada di tumpukan toast PALING ATAS, terpisah dari #appToast (showToast biasa tidak menutupnya)", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      eq($("#toastStack").firstElementChild.id, "samakanToast", "paling atas:");
+      w.showToast("halo", "info");
+      eq([terbuka(), $("#toastMsg").textContent].join(" | "), "true | halo", "toast lain berjalan terpisah:");
+    });
+  });
+
+  t("samakan: berkas terpasang di index.html sesudah item-table.js; CSS toast aksi & README tercatat", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const baca2 = (...b) => fs.readFileSync(path.join(__dirname, "..", ...b), "utf8");
+    const html2 = baca2("index.html");
+    eq((html2.match(/js\/features\/item-samakan\.js/g) || []).length, 1, "satu kali di index.html:");
+    if (!(html2.indexOf("js/features/item-table.js") > 0 && html2.indexOf("js/features/item-samakan.js") > html2.indexOf("js/features/item-table.js"))) throw new Error("item-samakan.js harus sesudah item-table.js");
+    const css = baca2("css", "components.css");
+    if (!/\.app-toast--aksi\s*\{[^}]*display:\s*none/.test(css)) throw new Error("toast aksi tertutup harus display: none");
+    if (!/\.app-toast--aksi\.is-open\s*\{[^}]*display:\s*flex/.test(css)) throw new Error("toast aksi terbuka harus display: flex");
+    if (!/\.samakan-btn\s*\{[^}]*pointer-events:\s*auto/.test(css)) throw new Error("tombol toast aksi harus menangkap tekanan (kotak toast tembus klik)");
+    if (!/features\/item-samakan\.js/.test(baca2("js", "README.md"))) throw new Error("js/README.md belum mencatat item-samakan.js");
+  });
+}
 t("impor berkas: Kode Kondisi & Negara Asal yang tidak dibawa berkasnya diambil dari barang lama pasangannya, selain itu bawaan buku", () => {
   const simpan = { draft: baca("draftItems"), mode: baca("activeMode") };
   try {

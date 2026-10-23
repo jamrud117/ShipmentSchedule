@@ -369,6 +369,84 @@ body:not(.punya-kerangka) .toast-stack {
 }
 
 /* ==================================================================
+   TOAST AKSI -- "Samakan Satuan PCS ke baris 2–12?  [Ya] [Tidak]"
+   (js/features/item-samakan.js)
+
+   Elemen sendiri di tumpukan toast yang sama (paling atas), bukan
+   #appToast: tertutup = display: none (tidak makan tempat di
+   tumpukan), terbuka (.is-open) = tampil dengan animasi masuk. Kotaknya
+   tetap tembus klik seperti toast lain; hanya kedua tombolnya yang
+   menangkap tekanan, jadi ia tidak menghalangi kotak isian di bawahnya.
+================================================================== */
+.app-toast--aksi {
+  display: none;
+  --toast-hue: var(--p-500);
+}
+.app-toast--aksi.is-open {
+  display: flex;
+  animation: samakan-masuk var(--dur-2) var(--ease);
+}
+@keyframes samakan-masuk {
+  from {
+    opacity: 0;
+    transform: translateX(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.samakan-pesan {
+  font-weight: 500;
+}
+.samakan-nilai {
+  font-weight: 700;
+}
+.samakan-catatan {
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.samakan-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.samakan-btn {
+  pointer-events: auto;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: #fff;
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+.samakan-btn:hover {
+  background: var(--n-100);
+}
+.samakan-btn--ya {
+  border-color: var(--p-600);
+  background: var(--p-600);
+  color: #fff;
+}
+.samakan-btn--ya:hover {
+  border-color: var(--p-700);
+  background: var(--p-700);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast--aksi.is-open {
+    animation: none;
+  }
+}
+
+/* ==================================================================
    KISI ISIAN FORM (.fgrid)
 
    Satu ritme kolom untuk SEMUA form: Tambah/Edit Jadwal, Permintaan

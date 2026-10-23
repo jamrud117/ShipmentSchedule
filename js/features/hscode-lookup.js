@@ -104,6 +104,8 @@ if (hscodeLookupResultsEl) {
     draftItems[idx].hsCode = item.dataset.hscodePick;
     tutupHscodeLookup();
     renderItemTable();
+    // Dipilih lewat pencarian, bukan diketik: tidak ada kejadian `change`, jadi ditawarkan di sini
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan("hsCode", idx);
   });
 }
 
