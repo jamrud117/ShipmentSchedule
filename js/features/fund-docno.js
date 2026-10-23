@@ -3,14 +3,20 @@
 /* ------------------------------------------------------------------
    DOC NO PADA FORM PENGAJUAN DANA
 
-   Baris "Doc No" di bawah No Surat, diketik manual. Berlaku untuk
-   SEMUA vendor KECUALI yang ada di daftar "tanpa Doc No" -- bawaannya
-   PRIME dan WIDE: untuk vendor di daftar itu kotaknya tidak tampil di
-   form dan barisnya tidak tercetak.
+   Kotak "Doc No" di form, diketik manual, ADA UNTUK SEMUA VENDOR dan
+   isinya selalu tersimpan (jadi bisa dicari di riwayat, dan tampil di
+   kotak Detail). Yang dibedakan per vendor hanya CETAKANNYA: baris
+   "Doc No" di bawah No Surat tercetak untuk SEMUA vendor KECUALI yang
+   ada di daftar "Doc No tidak dicetak" -- bawaannya PRIME dan WIDE.
+
+   Daftar yang sama juga menentukan penanda tangan keempat (CFO):
+   hanya vendor di luar daftar yang ditandatangani CFO, dan isian CFO
+   di form ikut tersembunyi untuk vendor di daftar.
 
    DAFTARNYA BISA DIATUR dari halaman Nomor Dokumen (kotak "Aturan Doc
-   No" di tab Pengajuan Dana, khusus EXIM). Vendor berikutnya yang tidak
-   memakai Doc No cukup ditambahkan di sana -- tanpa mengubah kode.
+   No" di tab Pengajuan Dana, khusus EXIM). Vendor berikutnya yang Doc
+   No-nya tidak dicetak cukup ditambahkan di sana -- tanpa mengubah
+   kode.
 
    Tersimpan di tabel report_settings (kunci-nilai, RLS: semua peran
    membaca, hanya EXIM menulis) supaya SAMA untuk semua pengguna. Kalau
@@ -18,12 +24,10 @@
    No di satu komputer dan tanpa di komputer lain.
 
    SATU fungsi, fundPakaiDocNo(), dipakai form DAN cetakannya -- jadi
-   keduanya tidak mungkin berbeda pendapat.
-
-   Aturan yang sama menentukan PENANDA TANGAN KEEMPAT (bawaan Mr. Kim
-   Taewan, Chief Financial Officer -- isian cfoName/cfoRole): vendor
-   yang memakai Doc No juga ditandatangani CFO; vendor di daftar "tanpa
-   Doc No" tidak.
+   keduanya tidak mungkin berbeda pendapat. Artinya: "pengajuan vendor
+   ini mencetak Doc No (dan penanda tangan keempat, CFO -- bawaan Mr. Kim
+   Taewan, Chief Financial Officer, isian cfoName/cfoRole)". Namanya
+   tetap `Pakai` walau kotak Doc No di form kini selalu ada.
 ------------------------------------------------------------------ */
 const FUND_DOCNO_BAWAAN = ["PRIME", "WIDE"];
 const FUND_DOCNO_KUNCI = "fund-doc-no-tanpa-vendor";
@@ -32,7 +36,7 @@ const FUND_DOCNO_MAKS_HURUF = 60;
 
 /* Kata yang ada di hampir semua nama badan usaha. Entri yang HANYA
    berisi kata-kata ini akan mengenai hampir semua vendor -- Doc No
-   lenyap dari semua pengajuan -- jadi ditolak saat ditambahkan. */
+   tidak tercetak di semua pengajuan -- jadi ditolak saat ditambahkan. */
 const FUND_DOCNO_KATA_UMUM = ["PT", "CV", "UD", "TBK", "PERSERO", "CO", "LTD", "INC", "CORP", "LLC", "PTE", "SDN", "BHD"];
 
 /* Daftar yang sedang berlaku: bawaan sampai pengaturannya selesai
@@ -93,8 +97,8 @@ function fundDocNoPeriksa(teks) {
     return tt(`Nama vendor paling panjang ${FUND_DOCNO_MAKS_HURUF} huruf.`, `The vendor name can have at most ${FUND_DOCNO_MAKS_HURUF} characters.`);
   if (fundDocNoKata(rapi).every((k) => FUND_DOCNO_KATA_UMUM.indexOf(k) >= 0))
     return tt(
-      `"${rapi}" ada di hampir semua nama vendor — Doc No akan hilang dari semua pengajuan. Tulis nama vendornya, mis. PRIME.`,
-      `"${rapi}" appears in almost every vendor name — Doc No would disappear from every request. Enter the vendor's own name, e.g. PRIME.`,
+      `"${rapi}" ada di hampir semua nama vendor — Doc No tidak akan tercetak di semua pengajuan. Tulis nama vendornya, mis. PRIME.`,
+      `"${rapi}" appears in almost every vendor name — Doc No would not be printed on any request. Enter the vendor's own name, e.g. PRIME.`,
     );
   if (fundDocNoTanpa.indexOf(rapi) >= 0) return tt(`${rapi} sudah ada di daftar.`, `${rapi} is already on the list.`);
   if (fundDocNoTanpa.length >= FUND_DOCNO_MAKS)
@@ -104,19 +108,30 @@ function fundDocNoPeriksa(teks) {
 
 /* ---------- form ---------- */
 
-/* DOC NO mengikuti "Dibayarkan Kepada". Saat disembunyikan kotaknya
-   ikut dinonaktifkan -- readDocNumForm() melewati isian nonaktif, jadi
-   Doc No yang terlanjur diketik tidak ikut tersimpan untuk vendor yang
-   tidak memakainya. */
+/* Kotak DOC NO selalu tampil dan bisa diisi, apa pun vendornya -- isinya
+   tersimpan untuk semua pengajuan (bisa dicari, tampil di Detail). Yang
+   mengikuti "Dibayarkan Kepada" hanya dua hal:
+
+   - Keterangan di bawah kotak Doc No: "tercetak di bawah No Surat" atau,
+     untuk vendor di daftar Aturan Doc No (PRIME & WIDE), "tersimpan
+     saja, tidak dicetak" -- supaya yang mengetik tahu kenapa baris Doc
+     No tidak ada di suratnya.
+   - Isian penanda tangan keempat (CFO): disembunyikan sekaligus
+     dinonaktifkan untuk vendor di daftar. readDocNumForm() melewati
+     isian nonaktif, jadi isiannya tidak tersimpan untuk mereka. */
 function fundSelaraskanDocNo(panel) {
   const wadah = panel && panel.querySelector(".fund-docno");
   if (!wadah) return;
   const kotakPayee = panel.querySelector('[data-dn="payee"]');
   const pakai = fundPakaiDocNo(kotakPayee && kotakPayee.value);
-  /* Kotak Doc No dan isian penanda tangan keempat (CFO) ikut aturan
-     yang sama -- disembunyikan sekaligus dinonaktifkan, jadi isinya
-     tidak tersimpan untuk vendor tanpa Doc No. */
-  [wadah, ...panel.querySelectorAll(".fund-ttd-cfo")].forEach((el) => {
+  [
+    [".fund-docno-cetak", pakai],
+    [".fund-docno-tak-cetak", !pakai],
+  ].forEach(([kelas, tampil]) => {
+    const ket = wadah.querySelector(kelas);
+    if (ket) ket.classList.toggle("d-none", !tampil);
+  });
+  panel.querySelectorAll(".fund-ttd-cfo").forEach((el) => {
     el.classList.toggle("d-none", !pakai);
     el.querySelectorAll("[data-dn]").forEach((f) => {
       f.disabled = !pakai;
@@ -140,13 +155,13 @@ function fundDocNoGambar() {
               aria-label="${escapeAttr(tt(`Hapus ${v} dari daftar`, `Remove ${v} from the list`))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></span>`,
         )
         .join("")
-    : `<span class="dn-aturan-kosong">${escapeHtml(tt("Daftar kosong — Doc No dipakai untuk semua vendor.", "The list is empty — Doc No applies to every vendor."))}</span>`;
+    : `<span class="dn-aturan-kosong">${escapeHtml(tt("Daftar kosong — Doc No dicetak untuk semua vendor.", "The list is empty — Doc No is printed for every vendor."))}</span>`;
   const kotak = $("#fundDocNoBox");
   if (kotak) kotak.classList.toggle("is-sibuk", fundDocNoSibuk);
 }
 
 /* Daftar berubah -> kotak aturan digambar ulang dan form yang sedang
-   terbuka ikut menyesuaikan (kotak Doc No tampil / sembunyi). */
+   terbuka ikut menyesuaikan (keterangan Doc No, isian CFO). */
 function fundDocNoTerapkan() {
   fundDocNoGambar();
   if (typeof docNumPanelEl === "function") fundSelaraskanDocNo(docNumPanelEl("fund"));
@@ -175,7 +190,7 @@ function fundDocNoMuat() {
         .maybeSingle();
       if (error) throw error;
       /* Belum pernah disimpan -> bawaan. Daftar KOSONG yang tersimpan
-         tetap kosong: itu pilihan ("semua vendor memakai Doc No"),
+         tetap kosong: itu pilihan ("Doc No dicetak untuk semua vendor"),
          bukan data yang hilang. */
       const tersimpan = data && data.value && Array.isArray(data.value.vendor) ? data.value.vendor : null;
       if (!fundDocNoSibuk) fundDocNoTanpa = tersimpan ? fundDocNoBersihkan(tersimpan) : FUND_DOCNO_BAWAAN.slice();
@@ -244,7 +259,7 @@ async function fundDocNoTambah() {
   const vendor = fundDocNoRapikan(kotak.value);
   if (await fundDocNoSimpan(fundDocNoTanpa.concat([vendor]))) {
     kotak.value = "";
-    showToast(tt(`${vendor} ditambahkan: Doc No tidak dipakai untuk vendor ini.`, `${vendor} added: Doc No is not used for this vendor.`), "dark");
+    showToast(tt(`${vendor} ditambahkan: Doc No tidak dicetak untuk vendor ini.`, `${vendor} added: Doc No is not printed for this vendor.`), "dark");
   }
   kotak.focus();
 }
@@ -252,7 +267,7 @@ async function fundDocNoTambah() {
 async function fundDocNoHapus(vendor) {
   if (!requireEdit()) return;
   if (await fundDocNoSimpan(fundDocNoTanpa.filter((v) => v !== vendor))) {
-    showToast(tt(`${vendor} dihapus dari daftar: Doc No kembali dipakai untuk vendor ini.`, `${vendor} removed: Doc No is used for this vendor again.`), "dark");
+    showToast(tt(`${vendor} dihapus dari daftar: Doc No kembali dicetak untuk vendor ini.`, `${vendor} removed: Doc No is printed for this vendor again.`), "dark");
   }
 }
 

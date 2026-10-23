@@ -50,7 +50,7 @@ function showDocNumView() {
   if (typeof showDocNumTab === "function") {
     showDocNumTab(docNumActiveTab || DOCNUM_DEFAULT_TAB);
   }
-  // Aturan Doc No (vendor tanpa Doc No) & daftar vendor dimuat ulang tiap halaman dibuka
+  // Aturan Doc No (vendor yang Doc No-nya tidak dicetak) & daftar vendor dimuat ulang tiap halaman dibuka
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
   /* Halaman ini untuk mengisi permintaan nomor: kursor langsung di isian

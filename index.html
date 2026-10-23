@@ -2270,13 +2270,16 @@
                      urutannya sama dengan kepala Form Pengajuan Dana yang
                      dicetak: No Surat, Doc No, Subject, Lampiran.
 
-                     DOC NO diketik manual, untuk semua vendor KECUALI yang
-                     ada di daftar "tanpa Doc No" (bawaannya PRIME & WIDE;
-                     diatur dari kotak Aturan Doc No di bawah form -- lihat
-                     js/features/fund-docno.js). Untuk vendor di daftar itu
-                     kotaknya disembunyikan dan Rincian melebar mengisi
-                     tempatnya (.fund-rincian di docnum.css), jadi barisnya
-                     tetap penuh. -->
+                     DOC NO diketik manual dan ADA UNTUK SEMUA VENDOR --
+                     termasuk PRIME & WIDE. Isinya selalu tersimpan (bisa
+                     dicari di riwayat & tampil di Detail). Yang berbeda
+                     hanya CETAKANNYA: baris Doc No tidak dicetak untuk
+                     vendor di daftar "Doc No tidak dicetak" (bawaannya
+                     PRIME & WIDE; diatur dari kotak Aturan Doc No di
+                     bawah form -- lihat js/features/fund-docno.js).
+                     Keterangan di bawah kotak mengikuti vendor yang
+                     dipilih: .fund-docno-cetak atau .fund-docno-tak-cetak
+                     (fundSelaraskanDocNo). -->
                 <div class="fund-docno" id="fundDocNoWrap">
                   <label class="form-label" for="fundDocNo">Doc No</label>
                   <input
@@ -2286,11 +2289,14 @@
                     data-dn="docNo"
                     autocomplete="off"
                   />
-                  <div class="form-text-note" data-en="Printed under No Surat on the form.">
+                  <div class="form-text-note fund-docno-cetak" data-en="Printed under No Surat on the form.">
                     Tercetak di bawah No Surat pada form.
                   </div>
+                  <div class="form-text-note fund-docno-tak-cetak d-none" data-en="Saved with the request, but not printed on the form for this vendor.">
+                    Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.
+                  </div>
                 </div>
-                <div class="s6 fund-rincian">
+                <div class="s6">
                   <label class="form-label" data-i18n="f.rincian"
                     >Rincian</label
                   >
@@ -2468,10 +2474,11 @@
                     value="Chief Marketing Officer"
                   />
                 </div>
-                <!-- PENANDA TANGAN KEEMPAT -- hanya untuk vendor yang memakai
-                     Doc No (aturan yang sama dengan kotak Doc No di atas:
-                     fundSelaraskanDocNo, js/features/fund-docno.js). Bawaannya
-                     Mr. Kim Taewan, Chief Financial Officer; tetap bisa diubah.
+                <!-- PENANDA TANGAN KEEMPAT -- hanya untuk vendor yang Doc No-nya
+                     dicetak (daftar yang sama dengan Aturan Doc No: PRIME &
+                     WIDE tidak memakainya; fundSelaraskanDocNo,
+                     js/features/fund-docno.js). Bawaannya Mr. Kim Taewan,
+                     Chief Financial Officer; tetap bisa diubah.
 
                      Kuncinya cfoName/cfoRole, BUKAN approver2*: nama itu milik
                      kotak persetujuan lama yang sudah dihapus, dan pengajuan
@@ -2737,8 +2744,9 @@
               </div>
             </div>
 
-            <!-- ATURAN DOC NO: vendor yang TIDAK memakai Doc No di Form
-                 Pengajuan Dana. Bisa ditambah & dihapus di sini, jadi
+            <!-- ATURAN DOC NO: vendor yang Doc No-nya TIDAK DICETAK di Form
+                 Pengajuan Dana (kotak Doc No di form tetap ada & tersimpan
+                 untuk semua vendor). Bisa ditambah & dihapus di sini, jadi
                  pengecualian berikutnya tidak butuh perubahan kode
                  (js/features/fund-docno.js). Tampil hanya di tab
                  Pengajuan Dana; untuk peran hanya-baca ikut tersembunyi
@@ -2749,7 +2757,7 @@
                 <span class="counter-info" id="fundDocNoInfo">&mdash;</span>
               </div>
               <div class="dn-aturan-isi">
-                <span class="dn-aturan-label" data-en="No Doc No for:">Tanpa Doc No untuk:</span>
+                <span class="dn-aturan-label" data-en="Doc No not printed for:">Doc No tidak dicetak untuk:</span>
                 <div class="dn-aturan-daftar" id="fundDocNoDaftar"></div>
               </div>
               <div class="dn-aturan-tambah">
@@ -2761,19 +2769,21 @@
                   autocomplete="off"
                   placeholder="Nama vendor, mis. FEDEX"
                   data-en-ph="Vendor name, e.g. FEDEX"
-                  aria-label="Vendor tanpa Doc No"
-                  data-en-aria="Vendor without Doc No"
+                  aria-label="Vendor yang Doc No-nya tidak dicetak"
+                  data-en-aria="Vendor whose Doc No is not printed"
                 />
                 <button type="button" class="btn btn-teal" id="btnFundDocNoTambah" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add">
                   <i class="bi bi-plus-lg"></i> Tambah
                 </button>
               </div>
-              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No appears on the form and is printed under No Surat for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
-                <i class="bi bi-info-circle"></i> Doc No tampil di form dan
-                tercetak di bawah No Surat untuk semua vendor
-                <b>kecuali</b> yang ada di daftar ini. Dicocokkan per kata
-                dengan &ldquo;Dibayarkan Kepada&rdquo;: <b>PRIME</b> mengenai
-                &ldquo;PT PRIME CARGO&rdquo;, tidak mengenai &ldquo;PRIMERA&rdquo;.
+              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+                <i class="bi bi-info-circle"></i> Doc No bisa diisi dan
+                tersimpan untuk semua vendor. Pada form yang dicetak, Doc No
+                tampil di bawah No Surat (beserta tanda tangan CFO) untuk
+                semua vendor <b>kecuali</b> yang ada di daftar ini.
+                Dicocokkan per kata dengan &ldquo;Dibayarkan Kepada&rdquo;:
+                <b>PRIME</b> mengenai &ldquo;PT PRIME CARGO&rdquo;, tidak
+                mengenai &ldquo;PRIMERA&rdquo;.
               </div>
             </div>
             </div>

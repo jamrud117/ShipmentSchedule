@@ -30,17 +30,28 @@ const CIPL_PERUSAHAAN = {
    dipakai untuk kiriman KELUAR. Ditulis di sini, bukan diisi pengguna:
    satu kolom yang isinya selalu sama hanya menambah peluang salah
    ketik pada dokumen yang dibaca bea cukai negara lain. */
-/* Nama badan usaha KAPITAL -- sama dengan nama consignee & baris tanda
-   tangan; alamat dengan Huruf Awal Kapital, yang lebih mudah dibaca dan
-   lazim pada alamat di dokumen formal. */
+/* SELURUH kotak pihak (nama, alamat, ATTN) KAPITAL -- sama dengan nama
+   consignee & baris tanda tangan, dan seragam di satu dokumen. Dulu
+   alamatnya Huruf Awal Kapital; atas permintaan pengguna kini kapital
+   semua, termasuk alamat surel pada baris ATTN. */
 const CIPL_SHIPPER = [
   "PT DYNAMIC DESIGN INDONESIA",
-  "Jalan Mayjend Sutoyo No. 1, Desa Pabedilan Kulon,",
-  "Kec. Pabedilan, Kab. Cirebon, Jawa Barat 45193",
-  "ATTN : jjh2296@dynamicdesign.co.kr",
+  "JALAN MAYJEND SUTOYO NO. 1, DESA PABEDILAN KULON,",
+  "KEC. PABEDILAN, KAB. CIREBON, JAWA BARAT 45193",
+  "ATTN : JJH2296@DYNAMICDESIGN.CO.KR",
   "TEL : +622318886161",
   "TAX ID : 0656 3197 7906 1000",
 ];
+
+/* Teks kotak pihak dicetak KAPITAL, dari SATU tempat ini.
+
+   Alamat consignee diketik pengguna di form (atau terisi otomatis dari
+   profil pembeli, yang sengaja dibiarkan bertulis aslinya supaya form
+   tetap mudah dibaca). Dikapitalkan baru saat dicetak: cetak CI, cetak
+   Packing List, Shipping Instruction, dan Excel memakai fungsi pembangun
+   baris yang sama, sehingga tidak mungkin ada yang tertinggal berhuruf
+   kecil. */
+const ciplKapital = (s) => String(s == null ? "" : s).toUpperCase();
 
 /* ------------------------------------------------------------------
    ALAMAT BUYER YANG SUDAH DIKENAL
@@ -381,19 +392,26 @@ function ciplRefBaris(row) {
 
 /* PIHAK: Shipper & Consignee bertumpuk di kiri; di kanan Referensi
    dokumen (atas) dan Notify Party (bawah, setinggi consignee). */
-/* Baris kotak Consignee: nama pembeli lalu alamatnya (cetak & Excel) */
+/* Baris kotak Consignee: nama pembeli lalu alamatnya (cetak & Excel),
+   KAPITAL semua -- lihat ciplKapital(). */
 function ciplKonsigneeBaris(row, shipment) {
   const p = row.payload || {};
-  return [p.customer || (shipment && shipment.party) || "", ...ciplBarisTeks(p.consigneeAddress)].filter(Boolean);
+  return [p.customer || (shipment && shipment.party) || "", ...ciplBarisTeks(p.consigneeAddress)]
+    .filter(Boolean)
+    .map(ciplKapital);
 }
 
 function ciplDdPihak(row, shipment) {
   const p = row.payload || {};
   const consignee = ciplKonsigneeBaris(row, shipment);
-  const kartu = (kelas, judul, isi) => `
+  /* `satuBaris`: tiap baris alamat di kartu ini dijaga tetap SATU baris
+     (ciplPasSatuBaris). Kapital lebih lebar daripada Huruf Awal Kapital,
+     jadi baris yang dulu pas bisa kini menyisakan satu kata (kode pos)
+     di baris sendiri. */
+  const kartu = (kelas, judul, isi, satuBaris) => `
     <div class="dd-kartu ${kelas}">
       <div class="dd-kartu-h">${escapeHtml(judul)}</div>
-      <div class="dd-kartu-b">${isi}</div>
+      <div class="dd-kartu-b"${satuBaris ? " data-satu-baris" : ""}>${isi}</div>
     </div>`;
   const baris = (arr) => arr.map((x, i) => `<div${i === 0 ? ' class="dd-nama"' : ""}>${escapeHtml(x)}</div>`).join("");
   const ref = ciplRefBaris(row)
@@ -403,10 +421,10 @@ function ciplDdPihak(row, shipment) {
     .join("");
   return `
     <section class="dd-pihak">
-      ${kartu("dd-shipper", "Shipper / Exporter", baris(CIPL_SHIPPER))}
+      ${kartu("dd-shipper", "Shipper / Exporter", baris(CIPL_SHIPPER), true)}
       ${kartu("dd-ref", "Document reference", ref)}
-      ${kartu("dd-consignee", "Consignee / Buyer", baris(consignee))}
-      ${kartu("dd-notify", "Notify Party", baris([p.notifyParty || "SAME AS CONSIGNEE"]))}
+      ${kartu("dd-consignee", "Consignee / Buyer", baris(consignee), true)}
+      ${kartu("dd-notify", "Notify Party", baris([ciplKapital(p.notifyParty || "SAME AS CONSIGNEE")]))}
     </section>`;
 }
 
@@ -574,12 +592,78 @@ function ciplDdRincianData(row, shipment) {
   ];
 }
 
+/* Isian yang WAJIB satu baris: nama pelabuhan. Ia ditulis "KOTA, NEGARA"
+   ("JAKARTA, INDONESIA") dan kolom pertama kotak ini sempit -- tanpa
+   perlakuan khusus ", INDONESIA" turun ke baris kedua. Isian lain
+   (Terms of Payment, Remarks, ...) boleh turun baris: teksnya memang
+   bisa panjang dan dikecilkan sampai tak terbaca bukan jalan keluar. */
+const CIPL_RINCI_SATU_BARIS = ["Port of Loading", "Final Destination"];
+
 function ciplDdRincian(row, shipment) {
   const isi = ciplDdRincianData(row, shipment);
   return `
     <section class="dd-rinci">
-      ${isi.map(([k, v]) => `<div><div class="dd-rinci-k">${escapeHtml(k)}</div><div class="dd-rinci-v">${escapeHtml(v || "—")}</div></div>`).join("")}
+      ${isi.map(([k, v]) => `<div><div class="dd-rinci-k">${escapeHtml(k)}</div><div class="dd-rinci-v"${CIPL_RINCI_SATU_BARIS.includes(k) ? " data-satu-baris" : ""}>${escapeHtml(v || "—")}</div></div>`).join("")}
     </section>`;
+}
+
+/* SATU BARIS -- dijalankan di jendela cetak, SEBELUM kotak cetak muncul.
+
+   Berlaku untuk dua hal:
+     - nilai Port of Loading / Final Destination ("JAKARTA, INDONESIA")
+     - baris alamat Shipper & Consignee
+
+   Lebar kolomnya TIDAK diubah: kolom kotak rincian sengaja sejajar
+   dengan kolom tabel barang di bawahnya dan dengan kisi Excel, dan
+   menggesernya merusak keduanya. Yang disesuaikan hurufnya -- dikecilkan
+   seperempat piksel demi seperempat piksel sampai SEMUA baris dalam
+   kelompoknya muat (biasanya cuma 2-5%, nyaris tak terlihat), tidak
+   lebih kecil dari CIPL_UKURAN_MIN_PT.
+
+   Satu KELOMPOK memakai satu ukuran huruf: satu nilai pelabuhan, atau
+   seluruh baris alamat sebuah kotak. Kalau hanya baris yang kepanjangan
+   yang mengecil, alamat di kotak itu tampil dengan dua ukuran huruf.
+
+   Kalau di ukuran terkecil pun tetap tidak muat (mis. nama pelabuhan
+   yang diketik sangat panjang), kelompok dikembalikan ke ukuran semula
+   dan dibiarkan turun baris: teks yang turun masih terbaca, teks yang
+   menembus kolom tetangga atau terpotong tidak.
+
+   Aman dipanggil di dokumen tanpa elemen itu (lembar Kumho): tidak ada
+   yang dicari, tidak ada yang berubah. */
+const CIPL_UKURAN_MIN_PT = 7;
+
+function ciplPasKelompok(els, jendela) {
+  const minPx = (CIPL_UKURAN_MIN_PT * 96) / 72;
+  const lebih = () => els.some((el) => el.scrollWidth > el.clientWidth);
+  els.forEach((el) => { el.style.whiteSpace = "nowrap"; });
+  let px = parseFloat(jendela.getComputedStyle(els[0]).fontSize);
+  while (lebih() && px - 0.25 >= minPx) {
+    px -= 0.25;
+    els.forEach((el) => { el.style.fontSize = px + "px"; });
+  }
+  if (lebih()) {
+    /* "normal" ditulis EKSPLISIT: nowrap sudah dipasang di atas, dan
+       teks yang tak muat harus boleh turun baris lagi. */
+    els.forEach((el) => {
+      el.style.fontSize = "";
+      el.style.whiteSpace = "normal";
+    });
+  }
+}
+
+function ciplPasSatuBaris(dok) {
+  const d = dok || document;
+  const jendela = d.defaultView || window;
+  const kelompok = [];
+  d.querySelectorAll(".dd-rinci-v[data-satu-baris]").forEach((el) => kelompok.push([el]));
+  /* Nama (baris pertama, tebal) tidak ikut: ia bukan alamat, dan nama
+     yang panjang lebih baik turun baris daripada mengecilkan alamatnya. */
+  d.querySelectorAll(".dd-kartu-b[data-satu-baris]").forEach((kartu) => {
+    const alamat = [...kartu.children].filter((el) => !el.classList.contains("dd-nama"));
+    if (alamat.length) kelompok.push(alamat);
+  });
+  kelompok.forEach((els) => ciplPasKelompok(els, jendela));
 }
 
 
@@ -613,7 +697,7 @@ const CIPL_SI_BARIS = [
   { k: "Bill of Lading", f: "blType", bawaan: "Original/Telex" },
   { k: "Shipper", alamat: "shipper" },
   { k: "Consignee", alamat: "consignee" },
-  { k: "Notify Party", f: "notifyParty", bawaan: "SAME AS CONSIGNEE" },
+  { k: "Notify Party", f: "notifyParty", bawaan: "SAME AS CONSIGNEE", kapital: true },
   { k: "Place of Receipt", f: "portLoading", dari: "origin" },
   { k: "Port of Discharge", f: "finalDestination", dari: "destination" },
   { k: "Description of Goods", hitung: "barang", tebal: true },
@@ -667,10 +751,10 @@ function ciplNoSiBawaan(row) {
    yang satu terkirim ke forwarder. */
 function ciplSiData(row, shipment, baris) {
   const p = row.payload || {};
-  const consignee = [
-    p.customer || (shipment && shipment.party) || "",
-    ...ciplBarisTeks(p.consigneeAddress),
-  ].filter(Boolean);
+  /* Kotak Consignee SI = kotak Consignee CI (satu pembangun baris,
+     ikut kapital semua). Dulu disalin di sini dan bisa berbeda
+     diam-diam dari yang tercetak di halaman 1. */
+  const consignee = ciplKonsigneeBaris(row, shipment);
   const koli = ciplTotalKoli(shipment);
 
   return {
@@ -691,7 +775,15 @@ function ciplSiData(row, shipment, baris) {
   };
 }
 
+/* `kapital: true` pada definisi baris = nilainya dicetak KAPITAL (kotak
+   pihak, seperti di CI). Baris lain tidak disentuh -- "Original/Telex"
+   memang bertulis campur. */
 function ciplSiNilai(def, d) {
+  const nilai = ciplSiNilaiMentah(def, d);
+  return def.kapital ? ciplKapital(nilai) : nilai;
+}
+
+function ciplSiNilaiMentah(def, d) {
   if (def.kosong) return "";
   if (def.hitung) return d[def.hitung] || "";
   if (def.f) {
@@ -844,6 +936,7 @@ function cetakCipl(rowId) {
 <body>${isi}</body></html>`);
   w.document.close();
   w.onload = () => {
+    ciplPasSatuBaris(w.document);
     w.focus();
     w.print();
   };
@@ -884,6 +977,10 @@ function ciplCss() {
     font-family: "Times New Roman", Times, serif;
     color: #000;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    /* Ukuran huruf persis seperti yang ditulis di sini. Tanpa ini peramban
+       ponsel (iOS) membesarkan sebagian teks sendiri, dan pengepas
+       ciplPasSatuBaris() mengukur tata letak yang salah. */
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   }
   /* JARAK KE TEPI KERTAS — preset "Narrow" Excel, dalam milimeter.
 

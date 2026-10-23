@@ -49,6 +49,12 @@ function sjlTanggalPanjang(iso) {
    di tempat yang sama, berapa pun jumlah barangnya. */
 const SJL_MIN_BARIS = 12;
 
+/* Satu baris kosong tabel. Dipakai saat menyusun lembar DAN oleh
+   sjlIsiKertas() yang menambahnya sampai kertas penuh -- satu sumber,
+   supaya baris tambahan persis sama dengan baris penambal bawaan. */
+const SJL_BARIS_KOSONG =
+  `<tr><td class="l-no">&nbsp;</td><td class="l-desc"></td><td class="l-qty"></td><td class="l-unit"></td><td class="l-note"></td></tr>`;
+
 function sjlBarisBarang(items) {
   return (items || [])
     .filter((it) => String(it.nama || "").trim())
@@ -85,11 +91,7 @@ function buildSuratJalanLokalHtml(row) {
   const items = p.items || [];
   const total = sjlTotal(items);
   const kosong = Math.max(0, SJL_MIN_BARIS - items.length);
-  const kosongHtml = Array.from(
-    { length: kosong },
-    () =>
-      `<tr><td class="l-no">&nbsp;</td><td class="l-desc"></td><td class="l-qty"></td><td class="l-unit"></td><td class="l-note"></td></tr>`,
-  ).join("");
+  const kosongHtml = Array.from({ length: kosong }, () => SJL_BARIS_KOSONG).join("");
 
   const ket = (label, nilai) => `
     <div class="l-ket-baris">
@@ -173,6 +175,67 @@ function buildSuratJalanLokalHtml(row) {
   </div>`;
 }
 
+/* DELIVERY ORDER LOKAL MEMENUHI KERTAS A4.
+
+   Lembar dipatok setinggi kertas (min-height di CSS). Di sini sisa
+   ruang antara kotak tanda tangan dan dasar lembar diisi BARIS KOSONG
+   tambahan -- tabel bergaris yang memanjang sampai bawah, seperti
+   formulir cetak pada umumnya -- supaya tanggal & tanda tangan jatuh di
+   dasar halaman, bukan di tengah kertas.
+
+   Banyaknya baris DIUKUR dari tinggi baris sungguhan, bukan dihitung:
+   uraian barang yang membungkus membuat tinggi tabel berbeda-beda. Sisa
+   yang kurang dari satu baris dibagi rata ke baris tambahan. Selisih aman
+   SJ_SISA_AMAN_PX (surat-jalan-print.js) sengaja disisakan supaya selisih
+   ukuran layar vs kertas tidak mendorong halaman kosong di belakangnya.
+
+   Tidak ada ruang tersisa, atau tata letaknya tidak bisa diukur: tidak
+   ada yang diubah. Mengembalikan jumlah baris yang ditambahkan. */
+function sjlIsiKertas(dok) {
+  const d = dok || document;
+  const lembar = d.querySelector(".sheet");
+  const badan = d.querySelector(".l-items tbody");
+  const ttd = d.querySelector(".l-ttd");
+  if (!lembar || !badan || !ttd) return 0;
+  const jendela = d.defaultView || window;
+  const angka = (v) => parseFloat(v) || 0;
+  // Jarak (px) dari dasar kotak tanda tangan ke dasar isi lembar.
+  const sisa = () => {
+    const gl = jendela.getComputedStyle(lembar);
+    const dasar =
+      lembar.getBoundingClientRect().bottom -
+      angka(gl.paddingBottom) -
+      angka(gl.borderBottomWidth);
+    return dasar - ttd.getBoundingClientRect().bottom;
+  };
+  const lapang = sisa() - SJ_SISA_AMAN_PX;
+  if (!(lapang >= 1)) return 0;
+
+  badan.insertAdjacentHTML("beforeend", SJL_BARIS_KOSONG);
+  const baru = [badan.lastElementChild];
+  const tinggi = baru[0].getBoundingClientRect().height;
+  if (!(tinggi > 0)) {
+    baru[0].remove();
+    return 0;
+  }
+  const jumlah = Math.floor(lapang / tinggi);
+  if (jumlah < 1) {
+    baru[0].remove();
+    return 0;
+  }
+  for (let i = 1; i < jumlah; i++) {
+    badan.insertAdjacentHTML("beforeend", SJL_BARIS_KOSONG);
+    baru.push(badan.lastElementChild);
+  }
+  // Pembulatan tinggi baris bisa membuat satu baris terakhir kelewat; tarik kembali.
+  while (baru.length && sisa() < SJ_SISA_AMAN_PX) baru.pop().remove();
+  if (!baru.length) return 0;
+  // Sisa kurang dari satu baris dibagi rata ke baris tambahan.
+  const rata = (sisa() - SJ_SISA_AMAN_PX) / baru.length;
+  if (rata > 0) baru.forEach((tr) => { tr.style.height = tinggi + rata + "px"; });
+  return baru.length;
+}
+
 /* Warna diambil dari cetakan aslinya: jingga untuk garis & judul, biru
    tua untuk teks isi, dan peach muda untuk bidang kepala tabel. */
 function suratJalanLokalCss() {
@@ -186,8 +249,20 @@ function suratJalanLokalCss() {
     /* SELURUH TEKS HITAM. Jingga hanya dipakai pada judul dokumen &
        garis tabel -- itu penanda, bukan isi yang harus dibaca. */
     color: #000;
+    /* Ukuran huruf persis seperti yang ditulis di sini: peramban ponsel
+       (iOS) kalau dibiarkan membesarkan sebagian teks sendiri, dan
+       pengukur di sjlIsiKertas() mengukur tata letak yang salah. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
-  .sheet { width: 100%; padding: 14mm 15mm; }
+  /* LEMBAR SETINGGI KERTAS A4.
+
+     Lebar 210 mm dan tinggi minimum 297 mm (dikurangi 2px selisih aman
+     supaya tidak menjalar jadi halaman kedua): di layar dan di kertas
+     tata letaknya sama, dan sjlIsiKertas() memanjangkan tabel sampai
+     tanda tangan jatuh di dasar halaman. padding sudah termasuk dalam
+     angka ini (box-sizing: border-box). */
+  .sheet { width: 210mm; min-height: calc(297mm - 2px); padding: 14mm 15mm; }
 
   /* LATAR IKUT TERCETAK.
 

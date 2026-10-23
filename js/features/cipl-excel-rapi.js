@@ -137,7 +137,7 @@ function rxLembarDd(wb, nama, jenis, row, shipment, baris) {
   pasangKartu("Shipper / Exporter", "Document reference", barisTeks(CIPL_SHIPPER), ref);
   R.tambah(7.5);
   pasangKartu("Consignee / Buyer", "Notify Party", barisTeks(ciplKonsigneeBaris(row, shipment)),
-    barisTeks([p.notifyParty || "SAME AS CONSIGNEE"]), 4);
+    barisTeks([ciplKapital(p.notifyParty || "SAME AS CONSIGNEE")]), 4);
   R.tambah(7.5);
 
   // RINCIAN PENGIRIMAN: 2 pita x 4 kelompok kolom

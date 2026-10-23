@@ -722,15 +722,10 @@ table.fund-lines select {
      Total (Export: alamat selebar baris).
    - Surat Fungsi Barang: tidak punya Nilai Barang & Tanggal Bayar, jadi
      Negara Asal & Flight/Sail mengisi baris ketiga berdua.
-   - Pengajuan Dana: Doc No | Rincian | Lampiran; tanpa Doc No (vendor
-     di daftar Aturan Doc No) Rincian melebar. */
+   (Pengajuan Dana tidak termasuk: kotak Doc No ada untuk semua vendor,
+   jadi susunan barisnya sama untuk vendor mana pun.) */
 @media (min-width: 1080px) {
   .fgrid:has(> .dn-total:not(.d-none)) > .dn-alamat {
-    grid-column: span 9;
-  }
-  /* Pengajuan Dana untuk vendor tanpa Doc No: kotaknya disembunyikan
-     dan Rincian melebar mengisi tempatnya. */
-  .fgrid:has(> .fund-docno.d-none) > .fund-rincian {
     grid-column: span 9;
   }
   .fgrid:has(> .sb-tanpabayar.d-none) > .sb-negara,

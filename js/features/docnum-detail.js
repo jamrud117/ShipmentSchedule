@@ -493,8 +493,8 @@ function dndBiayaHtml(r) {
 }
 
 /* Penanda tangan Form Pengajuan Dana -- tiga, atau empat (CFO) untuk
-   vendor yang memakai Doc No; nama & jabatan bawaannya sama dengan yang
-   tercetak (lihat buildFundRequestHtml). */
+   vendor yang Doc No-nya dicetak; nama & jabatan bawaannya sama dengan
+   yang tercetak (lihat buildFundRequestHtml). */
 function dndPenandaTanganHtml(r) {
   const p = r.payload || {};
   const cfo = typeof frPakaiTtdCfo === "function" && frPakaiTtdCfo(p);

@@ -1877,7 +1877,8 @@ function syncDocNumConditional(panel) {
     });
   });
   /* Sesudah "Dibayarkan Kepada" diisikan di atas (KAS NEGARA untuk
-     Billing): Doc No bergantung pada nama vendornya (fund-docno.js). */
+     Billing): keterangan Doc No & isian CFO bergantung pada nama
+     vendornya (fund-docno.js). */
   fundSelaraskanDocNo(panel);
 }
 
@@ -1977,7 +1978,7 @@ document.addEventListener("input", (e) => {
   const el = e.target.closest('[data-dn="payee"]');
   if (!el || (typeof FUND_VENDOR_BARU !== "undefined" && el.value === FUND_VENDOR_BARU)) return;
   delete el.dataset.autoFill;
-  // Nama vendor berubah -> Doc No ikut tampil / sembunyi
+  // Nama vendor berubah -> keterangan Doc No (dicetak / hanya tersimpan) & isian CFO ikut menyesuaikan
   fundSelaraskanDocNo(el.closest("[data-docnum-panel]"));
 });
 

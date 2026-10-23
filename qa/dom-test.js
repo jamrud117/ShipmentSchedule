@@ -877,14 +877,139 @@ t("judul mengikuti jenis invoice", () => {
   // Tanpa pilihan tersimpan, Commercial yang dipakai
   eq(w.ciplJudulInvoice({ payload: {} }), "COMMERCIAL INVOICE");
 });
-t("shipper: nama PT kapital, alamat ringkas Huruf Awal Kapital; bingkai luar di cetak", () => {
+t("shipper: nama, alamat, dan ATTN semuanya KAPITAL; bingkai luar di cetak", () => {
   const sh = w.eval("CIPL_SHIPPER");
   eq(sh[0], "PT DYNAMIC DESIGN INDONESIA");
-  eq(sh.slice(1, 3).join(" "), "Jalan Mayjend Sutoyo No. 1, Desa Pabedilan Kulon, Kec. Pabedilan, Kab. Cirebon, Jawa Barat 45193");
+  eq(sh.slice(1, 3).join(" "), "JALAN MAYJEND SUTOYO NO. 1, DESA PABEDILAN KULON, KEC. PABEDILAN, KAB. CIREBON, JAWA BARAT 45193");
+  eq(sh[3], "ATTN : JJH2296@DYNAMICDESIGN.CO.KR", "baris ATTN:");
+  sh.forEach((baris) => eq(baris, baris.toUpperCase(), "baris shipper harus kapital:"));
   const row = { id: "b1", doc_number: "X", doc_date: "2026-08-03", payload: {} };
   [w.ciplHalamanInvoice(row, null, []), w.ciplHalamanPacking(row, null, [])].forEach((h) => {
     if (!h.includes('class="dd-bingkai"')) throw new Error("cetak tanpa bingkai luar");
   });
+});
+t("CI, PL & SI: alamat consignee dan notify party dicetak KAPITAL semua; datanya sendiri tidak diubah", () => {
+  const row = { id: "u1", doc_number: "DDI - CRBM - X - 061", doc_date: "2026-09-29", seq: 61,
+    payload: { customer: "Dynamic Design Co., Ltd.",
+      consigneeAddress: "12, Cheomdanyeonsin-ro 29 beon-gil Buk-gu Gwangju, 61089\nRepublic of Korea\nTel : 82-62-720-7894",
+      notifyParty: "Same as consignee <b>" } };
+  const ci = w.ciplHalamanInvoice(row, null, []);
+  const pl = w.ciplHalamanPacking(row, null, []);
+  const si = w.ciplHalamanShippingInstruction(row, null, []);
+  [["CI", ci], ["PL", pl], ["SI", si]].forEach(([n, h]) => {
+    ["DYNAMIC DESIGN CO., LTD.", "12, CHEOMDANYEONSIN-RO 29 BEON-GIL BUK-GU GWANGJU, 61089", "REPUBLIC OF KOREA", "TEL : 82-62-720-7894",
+      "SAME AS CONSIGNEE &lt;B&gt;", "JALAN MAYJEND SUTOYO NO. 1", "JJH2296@DYNAMICDESIGN.CO.KR"].forEach((x) => {
+      if (!h.includes(x)) throw new Error(n + ": tidak tercetak kapital: " + x);
+    });
+    /* Alamat KOP perusahaan di Shipping Instruction ("Jl. Mayjend Sutoyo No. 1
+       Pabedilan Kulon, ...") memang bertulis campur -- itu kop surat, bukan
+       kotak pihak -- jadi yang dicari baris alamat SHIPPER ("Jalan ... , Desa"). */
+    if (/Cheomdanyeonsin|Republic of Korea|Tel : 82|Same as|Jalan Mayjend Sutoyo No\. 1, Desa|jjh2296/.test(h))
+      throw new Error(n + ": masih ada teks pihak yang berhuruf kecil");
+  });
+  // Excel memakai pembangun baris yang SAMA dengan cetak -- ikut kapital
+  eq(w.ciplKonsigneeBaris(row, null).join("|"),
+    "DYNAMIC DESIGN CO., LTD.|12, CHEOMDANYEONSIN-RO 29 BEON-GIL BUK-GU GWANGJU, 61089|REPUBLIC OF KOREA|TEL : 82-62-720-7894",
+    "baris consignee (dipakai Excel):");
+  // Yang diketik pengguna tidak diubah -- hanya tampilan cetaknya
+  eq(row.payload.consigneeAddress.startsWith("12, Cheomdanyeonsin-ro"), true, "data asli:");
+  eq(row.payload.notifyParty, "Same as consignee <b>", "notify asli:");
+  // Tanpa notify: bawaannya sudah kapital
+  if (!w.ciplHalamanInvoice({ id: "u2", doc_number: "X", doc_date: "2026-09-29", payload: {} }, null, []).includes("SAME AS CONSIGNEE"))
+    throw new Error("bawaan SAME AS CONSIGNEE hilang");
+});
+t("SI: hanya baris pihak yang dikapitalkan -- Bill of Lading tetap bertulis aslinya", () => {
+  const row = { id: "u3", doc_number: "X", doc_date: "2026-09-29", seq: 3, payload: { blType: "Original/Telex", notifyParty: "Notify Co" } };
+  const si = w.ciplHalamanShippingInstruction(row, null, []);
+  if (!si.includes("Original/Telex")) throw new Error("nilai non-pihak ikut dikapitalkan");
+  if (!si.includes("NOTIFY CO")) throw new Error("notify party SI belum kapital");
+  eq(w.eval("CIPL_SI_BARIS").filter((d) => d.kapital).map((d) => d.k).join("|"), "Notify Party", "baris SI yang dikapitalkan:");
+});
+t("CI & PL: Port of Loading & Final Destination ditandai SATU BARIS, kotak alamat Shipper & Consignee juga; sisanya boleh turun baris", () => {
+  const row = { id: "u4", doc_number: "X", doc_date: "2026-09-29", payload: { portLoading: "JAKARTA, INDONESIA", remarks: "SEBUAH CATATAN PANJANG" } };
+  const rinci = w.ciplDdRincian(row, null);
+  const tanda = [...rinci.matchAll(/<div class="dd-rinci-k">([^<]+)<\/div><div class="dd-rinci-v"( data-satu-baris)?>/g)]
+    .map((m) => m[1] + (m[2] ? "*" : ""));
+  eq(tanda.join("|"), "Port of Loading*|Final Destination*|Vessel / Flight|Sailing on or About|Terms of Delivery|Terms of Payment|Country of Origin|Remarks",
+    "isian rincian yang dijaga satu baris:");
+  [w.ciplHalamanInvoice(row, null, []), w.ciplHalamanPacking(row, null, [])].forEach((h, i) => {
+    eq((h.match(/<div class="dd-kartu-b" data-satu-baris>/g) || []).length, 2, (i ? "PL" : "CI") + ": kotak alamat yang dijaga:");
+    if (/dd-kartu dd-notify">\s*<div class="dd-kartu-h">[^<]*<\/div>\s*<div class="dd-kartu-b" data-satu-baris>/.test(h))
+      throw new Error("kotak Notify Party ikut dijaga -- nama yang panjang harus boleh turun baris");
+  });
+});
+/* Peniru elemen untuk menguji pengepas TANPA mesin tata letak (jsdom tidak
+   punya lebar): lebar teks dianggap sebanding dengan ukuran hurufnya,
+   seperti di peramban sungguhan. `lebar12` = lebar teks pada 12px. */
+function tiruanElemenPas(lebar12, lebarKolom, kelas) {
+  const e = { style: {}, clientWidth: lebarKolom, children: [], classList: { contains: (c) => c === kelas } };
+  // tanpa nowrap teks membungkus, jadi tidak pernah melebihi kolom
+  Object.defineProperty(e, "scrollWidth", {
+    get: () => (e.style.whiteSpace === "nowrap" ? Math.round(lebar12 * (parseFloat(e.style.fontSize) || 12) / 12) : e.clientWidth),
+  });
+  return e;
+}
+function tiruanDokumenPas(rinci, kartu) {
+  const gaya = (el) => ({ fontSize: (el.style.fontSize || "12px") });
+  return {
+    defaultView: { getComputedStyle: gaya },
+    querySelectorAll: (sel) => (sel.indexOf(".dd-rinci-v") === 0 ? rinci : kartu),
+  };
+}
+t("pengepas satu baris: nilai pelabuhan yang kelebihan sedikit dikecilkan, tak lebih dari perlu", () => {
+  const pel = tiruanElemenPas(130, 128);
+  w.ciplPasSatuBaris(tiruanDokumenPas([pel], []));
+  eq(pel.style.whiteSpace, "nowrap", "tidak boleh membungkus:");
+  eq(pel.style.fontSize, "11.75px", "ukuran huruf (selangkah 0,25px dari 12px):");
+});
+t("pengepas satu baris: yang sudah muat tidak disentuh ukurannya", () => {
+  const pel = tiruanElemenPas(100, 128);
+  w.ciplPasSatuBaris(tiruanDokumenPas([pel], []));
+  eq(pel.style.whiteSpace, "nowrap");
+  eq(pel.style.fontSize || "", "", "ukuran huruf:");
+});
+t("pengepas satu baris: terlalu panjang bahkan di ukuran terkecil -> kembali ke ukuran semula & boleh membungkus", () => {
+  const pel = tiruanElemenPas(300, 128);
+  w.ciplPasSatuBaris(tiruanDokumenPas([pel], []));
+  eq(pel.style.whiteSpace, "normal", "harus boleh turun baris:");
+  eq(pel.style.fontSize, "", "ukuran kembali ke bawaan:");
+});
+t("pengepas satu baris: tidak pernah mengecil di bawah batas baca", () => {
+  const min = w.eval("CIPL_UKURAN_MIN_PT");
+  eq(min >= 6.5 && min <= 8, true, "batas minimum " + min + "pt masuk akal:");
+  // butuh 8,5px agar muat -> di bawah batas 9,33px (7pt) -> harus menyerah, bukan terus mengecil
+  const pel = tiruanElemenPas(180, 128);
+  w.ciplPasSatuBaris(tiruanDokumenPas([pel], []));
+  eq(pel.style.whiteSpace, "normal");
+  eq(pel.style.fontSize, "");
+});
+t("pengepas satu baris: baris alamat satu kotak SATU ukuran huruf; nama (tebal) tidak ikut", () => {
+  const nama = tiruanElemenPas(500, 362, "dd-nama");
+  const a1 = tiruanElemenPas(340, 362);
+  const a2 = tiruanElemenPas(380, 362);
+  const kartu = { children: [nama, a1, a2] };
+  w.ciplPasSatuBaris(tiruanDokumenPas([], [kartu]));
+  eq(a2.style.fontSize, "11.25px", "baris terpanjang menentukan ukuran:");
+  eq(a1.style.fontSize, a2.style.fontSize, "semua baris alamat satu ukuran:");
+  eq(a1.style.whiteSpace + "|" + a2.style.whiteSpace, "nowrap|nowrap");
+  eq(JSON.stringify(nama.style), "{}", "nama tidak disentuh:");
+});
+t("pengepas satu baris: kartu yang sudah muat tidak diubah ukurannya; dokumen tanpa elemen itu aman", () => {
+  const a1 = tiruanElemenPas(300, 362);
+  w.ciplPasSatuBaris(tiruanDokumenPas([], [{ children: [a1] }]));
+  eq(a1.style.fontSize || "", "");
+  w.ciplPasSatuBaris(tiruanDokumenPas([], []));   // lembar Kumho: tidak ada yang dicari
+});
+t("CSS cetak CI: ukuran huruf dikunci (peramban ponsel tidak membesarkan sendiri), tanpa backtick liar", () => {
+  const css = w.ciplCss();
+  if (!/body \{[^}]*text-size-adjust: 100%/.test(css)) throw new Error("ukuran huruf CI bisa dibesarkan sendiri oleh peramban ponsel");
+  eq((w.eval("ciplCss.toString()").match(/`/g) || []).length, 2, "backtick di ciplCss:");
+});
+t("cetak CIPL menjalankan pengepas satu baris SEBELUM kotak cetak muncul", () => {
+  const src = w.eval("cetakCipl.toString()");
+  const i = src.indexOf("ciplPasSatuBaris(w.document)");
+  if (i < 0) throw new Error("pengepas tidak dipanggil di jendela cetak");
+  if (!(i < src.indexOf("w.print()"))) throw new Error("pengepas dipanggil sesudah kotak cetak");
 });
 t("CIPL: tema navy, referensi dokumen kanan atas + Notify ringkas, TOTAL satu baris, rincian kemasan di kiri bawah", () => {
   const row = { id: "o1", doc_number: "DDI - CRBM - X - 061", doc_date: "2026-09-29",
@@ -1127,13 +1252,15 @@ t("Detail Pengajuan Dana: kepala memuat status & total, rincian biaya jadi tabel
   ].join(" | "));
   // Kunci yang sudah jadi tabel tidak muncul lagi sebagai isian
   if (badan.querySelector('[data-dnd="lines"]')) throw new Error("rincian biaya tampil dua kali");
-  // Penanda tangan: bawaannya sama dengan surat cetak; FEDEX memakai Doc No -> ditambah CFO
+  // Penanda tangan: bawaannya sama dengan surat cetak; FEDEX (Doc No dicetak) -> ditambah CFO
   eq([...badan.querySelectorAll(".dnd-ttd-kotak b")].map((b) => b.textContent).join("|"), "Yogi|M. Rangga|Mr. Shin Na Ra|Mr. Kim Taewan");
   eq(badan.querySelectorAll(".dnd-ttd-kotak")[3].querySelector(".dnd-redup").textContent, "Chief Financial Officer", "jabatan CFO:");
-  // Vendor tanpa Doc No (WIDE): tiga kotak saja, walau payload-nya membawa isian CFO
+  // Vendor yang Doc No-nya tidak dicetak (WIDE): tiga kotak saja, walau payload-nya membawa isian CFO
   const wide = dndBuka(Object.assign(dndDana("319/EXIM/DDI/X/2026", Object.assign({}, p, { payee: "PT WIDE INDONESIA", cfoName: "X" })), { requester: "Yogi" }));
   eq([...wide.badan.querySelectorAll(".dnd-ttd-kotak b")].map((b) => b.textContent).join("|"), "Yogi|M. Rangga|Mr. Shin Na Ra", "WIDE:");
   if (wide.badan.querySelector('[data-dnd="cfoName"]')) throw new Error("isian CFO muncul lagi di Lainnya");
+  // Doc No WIDE ikut tersimpan (kotaknya ada untuk semua vendor), jadi tampil di Detail walau tidak dicetak
+  eq(dndNilaiIsian(wide.badan, "docNo"), "DOC-2610-0042", "Doc No pengajuan WIDE tampil di Detail:");
 });
 t("Detail Pengajuan Dana: pos dikelompokkan per invoice / debit note", () => {
   const p = {
@@ -1148,8 +1275,8 @@ t("Detail Pengajuan Dana: pos dikelompokkan per invoice / debit note", () => {
   eq(baris.map((tr) => (tr.classList.contains("dnd-grup") ? "[" + tr.textContent.trim() + "]" : dndSel(tr)[1])).join(" > "),
      "[Invoice IN-1] > Ocean Freight > [Debit Note DN-2] > Storage");
   eq(dndNilaiIsian(badan, "dokumen"), "Debit Note DN-2 03-10-2026", "dokumen tambahan di Tagihan:");
-  // PRIME & WIDE tidak punya Doc No
-  if (badan.querySelector('[data-dnd="docNo"]')) throw new Error("Doc No tampil untuk WIDE");
+  // Pengajuan WIDE ini tidak mengisi Doc No (pengajuan lama) -> tidak ada barisnya, bukan baris kosong
+  if (badan.querySelector('[data-dnd="docNo"]')) throw new Error("baris Doc No tampil padahal tidak diisi");
   // Lunas: lencana di kepala + bagian Pembayaran
   if (!kepala.querySelector(".dn-bayar--lunas")) throw new Error("status Lunas tidak tampil");
   eq(dndJudul(badan).slice(-1)[0], "Pembayaran");
@@ -2370,41 +2497,133 @@ t("sjDaftarKendaraan: pertama + tambahan, kosong dibuang, kembar (spasi & huruf 
   eq(daftar(null), "", "null:");
   eq(daftar({ vehicle: "B 1 AA", vehicleExtra: "B 9 ZZ" }), "B 1 AA|B 9 ZZ", "vehicleExtra bukan larik tidak membuat galat:");
 });
-t("surat jalan Export: semua nomor mobil tercetak di kolom Keterangan, satu per baris", () => {
+/* Kotak-kotak mobil di kolom Nopol, urut seperti tercetak. */
+const nopolKotak = (h) => Array.from(h.matchAll(/<div class="sj-nopol-sel">([^<]*)<\/div>/g), (m) => m[1]);
+t("surat jalan Export: kolom Nopol -- tiap mobil SATU kotak sendiri, berurutan, di dalam SATU sel Nopol", () => {
   const h = w.buildSuratJalanHtml({
     id: "m1", doc_number: "030/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Yogi",
     payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1111 AA", vehicleExtra: ["B 2222 BB", "B 3333 CC"] },
   }, null);
-  const sel = /<td class="sj-ket" rowspan="\d+">([^<]*(?:<br>[^<]*)*)<\/td>/.exec(h);
-  if (!sel) throw new Error("sel Keterangan berisi nomor mobil tidak ditemukan");
-  eq(sel[1], "B 1111 AA<br>B 2222 BB<br>B 3333 CC", "isi Keterangan:");
+  eq(nopolKotak(h).join("|"), "B 1111 AA|B 2222 BB|B 3333 CC", "kotak per mobil:");
+  eq((h.match(/<td class="sj-nopol"/g) || []).length, 1, "jumlah sel Nopol:");
+  eq((h.match(/<div class="sj-nopol-bagi">/g) || []).length, 1, "jumlah kolom pembagi tinggi:");
+  // nomor mobil TIDAK lagi digabung dengan <br> di satu sel
+  if (h.includes("<br>")) throw new Error("nomor mobil masih disambung dengan <br>, bukan kotak sendiri-sendiri");
 });
-t("surat jalan Export: satu mobil tercetak seperti semula; nomor kembar tidak dicetak dua kali", () => {
-  const cetak = (payload) => {
-    const h = w.buildSuratJalanHtml({ id: "m2", doc_number: "031/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-      payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) }, null);
-    return (/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1];
+t("surat jalan Export: satu mobil tercetak seperti semula; nomor kembar sekali; tanpa mobil = SATU kotak kosong", () => {
+  const cetak = (payload) => nopolKotak(w.buildSuratJalanHtml({ id: "m2", doc_number: "031/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) },
+  { id: "s", mode: "export", items: [{ namaBarang: "RUBBER", qty: 1, satuan: "PCS" }] }));
+  eq(cetak({ vehicle: "E 1578 MS" }).join("|"), "E 1578 MS", "satu mobil:");
+  eq(cetak({ vehicle: "E 1578 MS", vehicleExtra: ["e1578ms"] }).join("|"), "E 1578 MS", "kembar:");
+  // tempat menulis nomor mobil dengan tangan: kotaknya tetap ada
+  eq(JSON.stringify(cetak({})), '[""]', "tanpa mobil:");
+  eq(cetak({ vehicle: "B 1 AA<script>", vehicleExtra: ["B 2 \"BB\""] }).join("|"), "B 1 AA&lt;script&gt;|B 2 &quot;BB&quot;", "disaring:");
+});
+t("surat jalan Export: catatan pindah ke ruang kosong di bawah barang -- bukan di kolom Nopol -- dan hanya kalau ada", () => {
+  const cetak = (payload) => w.buildSuratJalanHtml({ id: "m3", doc_number: "032/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"] }, payload) }, null);
+  const h = cetak({ notes: "Kirim <pagi>" });
+  const isiFill = (/<tr class="sj-fill"[\s\S]*?<\/tr>/.exec(h) || [])[0] || "";
+  if (!isiFill.includes('<td class="sj-catatan">Catatan : Kirim &lt;pagi&gt;</td>')) throw new Error("catatan tidak ada di ruang kosong (atau tidak disaring): " + isiFill);
+  const sel = (/<td class="sj-nopol"[\s\S]*?<\/td>/.exec(h) || [])[0] || "";
+  if (/Kirim|Catatan/.test(sel)) throw new Error("catatan masih menumpang di sel Nopol");
+  eq(nopolKotak(h).join("|"), "B 1 AA|B 2 BB", "kotak mobil tidak ikut berubah:");
+  if (cetak({}).includes("sj-catatan")) throw new Error("sel catatan tercetak padahal catatannya kosong");
+  if (cetak({ notes: "   " }).includes("sj-catatan")) throw new Error("catatan berisi spasi saja ikut tercetak");
+});
+t("surat jalan Export: sel Nopol membentang HANYA baris barang di sampingnya -- tidak ke ruang kosong, tidak ke Total", () => {
+  const cetak = (n, payload) => w.buildSuratJalanHtml({ id: "m4", doc_number: "033/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: Object.assign({ doKind: "Export", receiver: "PT A", address: "Jakarta" }, payload) },
+  n === null ? null : { id: "s", mode: "export", items: Array.from({ length: n }, (_, i) => ({ namaBarang: "BARANG " + i, qty: 1, satuan: "PCS" })) });
+  const rentang = (h) => (/<td class="sj-nopol" rowspan="(\d+)"/.exec(h) || [])[1];
+  const mobil3 = { vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC"] };
+  // barang >= mobil: rentang = jumlah barang, apa pun jumlah mobilnya
+  [1, 3, 7, 9, 10, 25].forEach((n) => {
+    eq(rentang(cetak(n, { vehicle: "B 1 AA" })), String(n), n + " barang, 1 mobil: rentang Nopol:");
+    eq(rentang(cetak(n, mobil3)), String(Math.max(n, 3)), n + " barang, 3 mobil: rentang Nopol:");
+    eq((cetak(n, mobil3).match(/class="sj-pelengkap"/g) || []).length, Math.max(0, 3 - n), n + " barang, 3 mobil: baris pelengkap:");
+  });
+  // mobil lebih banyak daripada barang: baris pelengkap kosong menyusul, satu baris per mobil
+  const h = cetak(1, { vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC", "B 4 DD"] });
+  eq(rentang(h), "4", "1 barang, 4 mobil: rentang:");
+  eq((h.match(/class="sj-pelengkap"/g) || []).length, 3, "1 barang, 4 mobil: baris pelengkap:");
+  // tanpa barang tapi ada mobil: barisnya tetap ada supaya nomor mobil tercetak
+  eq(rentang(cetak(null, { vehicle: "B 1 AA" })), "1", "tanpa barang, 1 mobil:");
+  eq(rentang(cetak(null, mobil3)), "3", "tanpa barang, 3 mobil:");
+  // tanpa barang & tanpa mobil: tidak ada kolom Nopol sama sekali
+  eq(rentang(cetak(null, {})), undefined, "tanpa barang & tanpa mobil:");
+  // barang tanpa mobil: SATU sel kosong di samping barangnya
+  eq(rentang(cetak(4, {})), "4", "4 barang, tanpa mobil:");
+  eq(nopolKotak(cetak(4, {})).length, 1, "4 barang, tanpa mobil: jumlah kotak:");
+});
+t("surat jalan Export: header kolom Nopol; ruang kosong punya LIMA sel (sel kelima menutup dasar Nopol); baris Total lima kolom", () => {
+  const h = w.buildSuratJalanHtml({ id: "m5", doc_number: "034/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA" } },
+  { id: "s", mode: "export", items: [{ namaBarang: "RUBBER", qty: 1, satuan: "PCS" }] });
+  if (!h.includes('<th class="sj-nopol">Nopol</th>')) throw new Error("header kolom bukan 'Nopol'");
+  if (/Keterangan|sj-ket/.test(h)) throw new Error("sisa kolom Keterangan lama masih ada di cetakan");
+  if (/sj-ket/.test(w.suratJalanCss())) throw new Error("CSS masih mengacu .sj-ket");
+  const fill = (/<tr class="sj-fill"[\s\S]*?<\/tr>/.exec(h) || [])[0];
+  eq((fill.match(/<td/g) || []).length, 5, "sel di ruang kosong:");
+  // sel Nopol tidak boleh ikut masuk ruang kosong (kolomnya terbuka di bawah barang)
+  if (fill.includes("sj-nopol")) throw new Error("sel Nopol menjalar ke ruang kosong");
+  const tfoot = (/<tfoot>[\s\S]*?<\/tfoot>/.exec(h) || [])[0];
+  const kolom = Array.from(tfoot.matchAll(/<td([^>]*)>/g)).reduce((jml, m) => jml + Number((/colspan="(\d+)"/.exec(m[1]) || [])[1] || 1), 0);
+  eq(kolom, 5, "kolom baris Total:");
+  if (tfoot.includes("sj-nopol")) throw new Error("sel Nopol menjalar ke baris Total");
+});
+t("surat jalan Export: CSS Nopol -- kotak mobil dibagi rata lewat kolom flex, garis antarkotak lewat --sj-line, tanpa tinggi tetap", () => {
+  const css = w.suratJalanCss();
+  const aturan = (sel) => {
+    const i = css.indexOf(sel + " {");
+    if (i < 0) throw new Error("aturan hilang: " + sel);
+    return css.slice(i, css.indexOf("}", i));
   };
-  eq(cetak({ vehicle: "E 1578 MS" }), "E 1578 MS", "satu mobil:");
-  eq(cetak({ vehicle: "E 1578 MS", vehicleExtra: ["e1578ms"] }), "E 1578 MS", "kembar:");
-  eq(cetak({}), "", "tanpa mobil:");
-  eq(cetak({ vehicle: "B 1 AA<script>", vehicleExtra: ["B 2 \"BB\""] }), "B 1 AA&lt;script&gt;<br>B 2 &quot;BB&quot;", "disaring:");
+  // sel Nopol: acuan penempatan kolom pembagi, tanpa padding (kotak mepet ke garis selnya)
+  const sel = aturan(".sj-items td.sj-nopol");
+  if (!/position:\s*relative/.test(sel)) throw new Error("sel Nopol bukan acuan penempatan (position: relative)");
+  if (!/padding:\s*0/.test(sel)) throw new Error("sel Nopol masih berpadding -- kotak tidak mepet garis");
+  // kolom pembagi menutupi seluruh sel dan menyusun kotak ke bawah
+  const bagi = aturan(".sj-nopol-bagi");
+  if (!/position:\s*absolute/.test(bagi) || !/top:\s*0/.test(bagi) || !/right:\s*0/.test(bagi) || !/bottom:\s*0/.test(bagi) || !/left:\s*0/.test(bagi))
+    throw new Error("kolom pembagi tidak menutupi seluruh sel Nopol");
+  if (!/display:\s*flex/.test(bagi) || !/flex-direction:\s*column/.test(bagi)) throw new Error("kotak mobil tidak disusun ke bawah (flex column)");
+  // tiap kotak mengambil bagian yang SAMA: flex 1 1 0, dan tanpa tinggi tetap
+  const kotak = aturan(".sj-nopol-sel");
+  if (!/flex:\s*1 1 0/.test(kotak)) throw new Error("kotak mobil tidak berbagi tinggi sama rata (flex: 1 1 0)");
+  if (/(^|[^-])height:/.test(kotak.replace(/min-height:[^;]*;/, ""))) throw new Error("kotak mobil bertinggi tetap -- tidak ikut dibagi rata");
+  // garis pemisah hanya sisi ATAS kotak kedua dst., lewat variabel garis satu-satunya
+  if (!/\.sj-nopol-sel \+ \.sj-nopol-sel \{[^}]*border-top:\s*var\(--sj-line\)/.test(css)) throw new Error("garis antarkotak tidak lewat --sj-line pada kotak kedua dst.");
+  if (/border/.test(kotak)) throw new Error("kotak pertama menggambar garisnya sendiri -- dobel dengan garis atas sel Nopol");
+  // ruang kosong tidak menggambar garis kiri di kolom mana pun (juga Nopol): kolomnya terbuka di bawah barang
+  if (/\.sj-fill td\.[a-z-]+ \{[^}]*border-left:\s*var/.test(css)) throw new Error("ada sel ruang kosong yang menggambar garis kiri");
+  if (!/\.sj-fill td \{ border-left: 0; \}/.test(css)) throw new Error("ruang kosong tidak mematikan garis kiri selnya");
 });
-t("surat jalan Export: catatan di baris sesudah nomor mobil", () => {
-  const h = w.buildSuratJalanHtml({ id: "m3", doc_number: "032/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"], notes: "Kirim pagi" } }, null);
-  eq((/<td class="sj-ket" rowspan="\d+">([\s\S]*?)<\/td>/.exec(h) || [])[1], "B 1 AA<br>B 2 BB<br>Kirim pagi", "isi Keterangan:");
+t("surat jalan Export: isi kolom Package rata tengah HORIZONTAL dan VERTIKAL -- diperiksa pada hasil cascade, bukan sekadar adanya aturan", () => {
+  /* Tiga barang dalam SATU box: sel Package membentang tiga baris -- sel
+     yang paling kelihatan kalau rata tengahnya salah (menempel di atas). */
+  const h = w.buildSuratJalanHtml({ id: "pk1", doc_number: "070/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-23", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA" } },
+  { id: "s", mode: "export", package: "2 PK", items: [
+    { namaBarang: "A", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" },
+    { namaBarang: "B", qty: 1, satuan: "SET" },
+    { namaBarang: "C", qty: 1, satuan: "SET" },
+    { namaBarang: "D", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" }] });
+  if (!/<td class="sj-pkg" rowspan="3">1 PK<\/td>/.test(h)) throw new Error("sel Package yang membentang tiga baris tidak ditemukan");
+  const d = new JSDOM("<style>" + w.suratJalanCss() + "</style><body>" + h + "</body>").window;
+  const sel = Array.from(d.document.querySelectorAll(".sj-items td.sj-pkg"));
+  // dua sel kemasan (box 1 membentang tiga baris, box 2 satu baris) + sel Package baris Total
+  eq(sel.length, 3, "jumlah sel Package:");
+  sel.forEach((td, i) => {
+    const gaya = d.getComputedStyle(td);
+    eq(gaya.verticalAlign, "middle", "sel Package #" + i + " rata tengah vertikal:");
+    eq(gaya.textAlign, "center", "sel Package #" + i + " rata tengah horizontal:");
+  });
+  // kolom lain TIDAK ikut berubah: Quantity tetap menempel di atas barisnya
+  eq(d.getComputedStyle(d.document.querySelector(".sj-items td.sj-qty")).verticalAlign, "top", "Quantity tetap di atas:");
 });
-t("surat jalan Export: sel Keterangan tetap SATU sel setinggi tabel walau mobilnya banyak", () => {
-  const h = w.buildSuratJalanHtml({ id: "m4", doc_number: "033/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05", requester: "Y",
-    payload: { doKind: "Export", receiver: "PT A", address: "Jakarta", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB", "B 3 CC", "B 4 DD"],
-      items: [{ nama: "RUBBER", qty: "1", satuan: "PCS" }] } }, null);
-  eq((h.match(/class="sj-ket" rowspan=/g) || []).length, 1, "jumlah sel Keterangan berisi nomor:");
-  /* Satu barang + satu ruang kosong sisa tabel = dua baris badan; sel
-     Keterangan membentang keduanya, berapa pun nomor mobilnya. */
-  eq((/class="sj-ket" rowspan="(\d+)"/.exec(h) || [])[1], "2", "rentang sel Keterangan:");
-});
-t("alamat penerima di surat jalan Export lebih kecil dari label Kepada & dari 8.5pt sebelumnya", () => {
+t("blok Kepada di surat jalan Export diperkecil (label 6pt, nama 9pt, alamat 6,5pt) -- urutan ukuran label <= alamat < nama, masih terbaca", () => {
   const css = w.suratJalanCss();
   const ukuran = (sel) => {
     const i = css.indexOf(sel + " {");
@@ -2414,10 +2633,188 @@ t("alamat penerima di surat jalan Export lebih kecil dari label Kepada & dari 8.
     return Number(m[1]);
   };
   const alamat = ukuran(".sj-to-addr");
-  if (!(alamat < 8.5)) throw new Error("alamat penerima masih " + alamat + "pt (harus lebih kecil dari 8.5pt)");
-  if (!(alamat < ukuran(".sj-kepada"))) throw new Error("alamat tidak lebih kecil dari label Kepada");
-  if (alamat < 7) throw new Error("alamat " + alamat + "pt terlalu kecil untuk dicetak");
-  eq(ukuran(".sj-to"), 10, "nama penerima tidak ikut diperkecil:");
+  const nama = ukuran(".sj-to");
+  const label = ukuran(".sj-kepada, .sj-alamat-k");
+  // lebih kecil dari ukuran sebelum diperkecil (label 7pt, nama 10pt, alamat 7.5pt)
+  if (!(alamat < 7.5)) throw new Error("alamat penerima masih " + alamat + "pt (harus lebih kecil dari 7.5pt)");
+  if (!(nama < 10)) throw new Error("nama penerima masih " + nama + "pt (harus lebih kecil dari 10pt)");
+  if (!(label < 7)) throw new Error("label KEPADA/ALAMAT PENERIMA masih " + label + "pt (harus lebih kecil dari 7pt)");
+  // tetap terbaca di atas kertas, dan hierarkinya tidak terbalik
+  if (alamat < 6) throw new Error("alamat " + alamat + "pt terlalu kecil untuk dicetak");
+  if (label < 5.5) throw new Error("label " + label + "pt terlalu kecil untuk dibaca");
+  if (nama < 8) throw new Error("nama penerima " + nama + "pt terlalu kecil");
+  if (!(label <= alamat && alamat < nama)) throw new Error("urutan ukuran harus label <= alamat < nama (" + label + " / " + alamat + " / " + nama + ")");
+  if (!/\.sj-kepada, \.sj-alamat-k \{[^}]*color:\s*#[0-9a-f]{3,6}/i.test(css)) throw new Error("label belum berwarna redup");
+  if (!/\.sj-to \{[^}]*font-weight:\s*700/.test(css)) throw new Error("nama penerima tidak lagi tebal");
+});
+t("surat jalan Export: blok penerima berlabel -- KEPADA, nama, garis, ALAMAT PENERIMA, alamat -- semuanya kapital", () => {
+  const h = w.buildSuratJalanHtml({ id: "k1", doc_number: "050/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y",
+    payload: { doKind: "Export", receiver: "Segara Pacific <Maju>", address: "Jl Cakung Cilincing CK-59,\nSemper Barat" } }, null);
+  const urut = ['<div class="sj-kepada">KEPADA</div>', '<div class="sj-to">SEGARA PACIFIC &lt;MAJU&gt;</div>', '<div class="sj-garis"></div>',
+    '<div class="sj-alamat-k">ALAMAT PENERIMA</div>', '<div class="sj-to-addr">JL CAKUNG CILINCING CK-59,\nSEMPER BARAT</div>'];
+  let dari = 0;
+  urut.forEach((x) => {
+    const i = h.indexOf(x, dari);
+    if (i < 0) throw new Error("tidak ada, atau urutannya salah: " + x);
+    dari = i + x.length;
+  });
+  if (h.includes("Kepada :")) throw new Error("label lama 'Kepada :' masih tercetak");
+  // seluruh blok di SATU sel yang membentang tiga baris, di sebelah Nomor/Tanggal/Ref
+  if (!/<td class="sj-meta-kiri" rowspan="3">[\s\S]*?KEPADA[\s\S]*?ALAMAT PENERIMA[\s\S]*?<\/td>\s*<td class="sj-lbl">Nomor :/.test(h))
+    throw new Error("blok penerima keluar dari selnya");
+  // penerima & alamat kosong tidak membuat galat dan label tetap tercetak
+  const kosong = w.buildSuratJalanHtml({ id: "k2", doc_number: "051/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y", payload: { doKind: "Export" } }, null);
+  if (!kosong.includes("KEPADA") || !kosong.includes("ALAMAT PENERIMA")) throw new Error("label hilang saat penerima belum diisi");
+  // garis tipisnya latar, BUKAN border -- semua border surat jalan lewat satu variabel
+  if (!/\.sj-garis \{[^}]*background:/.test(w.suratJalanCss())) throw new Error("garis pemisah tidak berlatar");
+  if (/\.sj-garis \{[^}]*border/.test(w.suratJalanCss())) throw new Error("garis pemisah memakai border sendiri");
+});
+t("surat jalan Export: ruang kosong tabel SELALU ada -- juga untuk 10 barang ke atas -- dan TIDAK ikut dibentangi sel Nopol", () => {
+  const cetak = (n) => w.buildSuratJalanHtml({ id: "f" + n, doc_number: "060/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y",
+    payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA" } },
+    { id: "s", mode: "export", items: Array.from({ length: n }, (_, i) => ({ namaBarang: "BARANG " + i, qty: 1, satuan: "PCS" })) });
+  [1, 9, 10, 25].forEach((n) => {
+    const h = cetak(n);
+    eq((h.match(/class="sj-fill"/g) || []).length, 1, n + " barang: jumlah ruang kosong:");
+    eq((h.match(/<td class="sj-nopol" rowspan=/g) || []).length, 1, n + " barang: jumlah sel Nopol:");
+    // rentangnya jumlah barang SAJA -- bukan jumlah barang + 1 seperti sel Keterangan yang dulu ditarik sampai Total
+    eq((/<td class="sj-nopol" rowspan="(\d+)"/.exec(h) || [])[1], String(n), n + " barang: rentang Nopol:");
+  });
+  // tinggi awal: sisa baris minimum; nol begitu sudah 10 barang (selebihnya dari sjIsiKertas)
+  const awal = (n) => /class="sj-fill" style="height:(\d+)px"/.exec(cetak(n))[1];
+  eq(awal(9), String(w.eval("SJ_TINGGI_BARIS")), "tinggi awal 9 barang:");
+  eq(awal(12), "0", "tinggi awal 12 barang:");
+  // tanpa barang sama sekali: tinggi awal sisa minimum penuh, dan nomor mobil tetap tercetak
+  const nol = w.buildSuratJalanHtml({ id: "f0", doc_number: "061/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y", payload: { doKind: "Export", vehicle: "B 1 AA" } }, null);
+  eq(/class="sj-fill" style="height:(\d+)px"/.exec(nol)[1], String(10 * w.eval("SJ_TINGGI_BARIS")), "tinggi awal tanpa barang:");
+  eq(nopolKotak(nol).join("|"), "B 1 AA", "tanpa barang: nomor mobil:");
+});
+t("surat jalan: lembar selebar A4 dan kotaknya setinggi sisa kertas -- angka padding & tinggi kotak harus sepasang", () => {
+  const css = w.suratJalanCss();
+  const sheet = /\.sj-sheet \{[^}]*\}/.exec(css);
+  if (!sheet) throw new Error("aturan .sj-sheet hilang");
+  if (!/width:\s*210mm/.test(sheet[0])) throw new Error("lembar tidak dipatok selebar A4 -- tata letak layar beda dari kertas");
+  const pad = Number((/padding:\s*([\d.]+)mm/.exec(sheet[0]) || [])[1]);
+  const m = /\.sj-box \{[^}]*min-height:\s*calc\(297mm - ([\d.]+)mm - 2px\)/.exec(css);
+  if (!m) throw new Error("kotak tidak setinggi kertas A4 (min-height: calc(297mm - ... - 2px))");
+  if (Math.abs(Number(m[1]) - pad * 2) > 1e-9)
+    throw new Error("pengurang tinggi kotak (" + m[1] + "mm) tidak sama dengan padding atas+bawah lembar (" + pad * 2 + "mm) -- kertas kosong atau halaman tambahan");
+  if (!/@page \{[^}]*size: A4/.test(css)) throw new Error("ukuran kertas bukan A4");
+  if (!/text-size-adjust: 100%/.test(css)) throw new Error("ukuran huruf bisa dibesarkan sendiri oleh peramban ponsel");
+});
+/* Peniru dokumen jendela cetak untuk sjIsiKertas() TANPA mesin tata letak.
+   `tambahan` = selisih piksel yang diam-diam ikut menggeser tanda tangan
+   (pembulatan tinggi baris oleh peramban). */
+function tiruanDokumenSj(opsi) {
+  const o = Object.assign({ dasarKotak: 1000, bawahTtd: 500, tinggiIsi: 190, tambahan: 0, adaIsi: true }, opsi);
+  const isi = { style: {}, getBoundingClientRect: () => ({ height: o.tinggiIsi }) };
+  Object.defineProperty(isi.style, "height", { get: () => o.tinggiIsi + "px", set: (v) => { o.tinggiIsi = parseFloat(v); } });
+  const kotak = { getBoundingClientRect: () => ({ bottom: o.dasarKotak }) };
+  const awal = o.tinggiIsi;
+  const ttd = { getBoundingClientRect: () => ({ bottom: o.bawahTtd + (o.tinggiIsi - awal) + (o.tinggiIsi > awal ? o.tambahan : 0) }) };
+  return {
+    o, isi,
+    dok: {
+      defaultView: { getComputedStyle: (el) => (el === kotak ? { borderBottomWidth: "1px", paddingBottom: "0px" } : { marginBottom: "10px" }) },
+      querySelector: (sel) => ({ ".sj-box": kotak, ".sj-fill": o.adaIsi ? isi : null, ".sj-sign": ttd }[sel] || null),
+    },
+  };
+}
+t("sjIsiKertas: ruang antara tanda tangan dan dasar kotak ditambahkan ke ruang kosong tabel, menyisakan selisih aman", () => {
+  const aman = w.eval("SJ_SISA_AMAN_PX");
+  const f = tiruanDokumenSj({});
+  // dasar dalam kotak 999 (border 1px); tanda tangan 500 + jarak 10 -> sisa 489
+  const tambah = w.sjIsiKertas(f.dok);
+  eq(tambah, 489 - aman, "px yang ditambahkan:");
+  eq(f.o.tinggiIsi, 190 + 489 - aman, "tinggi ruang kosong:");
+  eq(999 - (f.o.bawahTtd + (f.o.tinggiIsi - 190) + 10), aman, "sisa di dasar kotak setelah diisi:");
+});
+t("sjIsiKertas: pembulatan tabel yang menggeser tanda tangan kelewat batas aman ditarik kembali", () => {
+  const aman = w.eval("SJ_SISA_AMAN_PX");
+  const f = tiruanDokumenSj({ tambahan: 3 });   // tabel diam-diam 3px lebih tinggi dari yang diminta
+  w.sjIsiKertas(f.dok);
+  const sisa = 999 - (f.o.bawahTtd + (f.o.tinggiIsi - 190) + 3 + 10);
+  if (sisa < aman) throw new Error("sisa " + sisa + "px kurang dari selisih aman " + aman + "px -- bisa menjalar ke halaman kedua");
+});
+t("sjIsiKertas: kertas sudah penuh / tak ada ruang kosong / unsur hilang -> tidak ada yang diubah", () => {
+  const aman = w.eval("SJ_SISA_AMAN_PX");
+  const penuh = tiruanDokumenSj({ dasarKotak: 510 + 1 + aman });   // sisa tepat sama dengan selisih aman
+  eq(w.sjIsiKertas(penuh.dok), 0, "penuh:");
+  eq(penuh.o.tinggiIsi, 190, "tinggi tak berubah:");
+  const lebihPenuh = tiruanDokumenSj({ dasarKotak: 400 });          // isi melewati dasar kotak
+  eq(w.sjIsiKertas(lebihPenuh.dok), 0, "melewati dasar:");
+  eq(lebihPenuh.o.tinggiIsi, 190, "tinggi tak berubah (melewati dasar):");
+  eq(w.sjIsiKertas(tiruanDokumenSj({ adaIsi: false }).dok), 0, "tanpa ruang kosong:");
+  eq(w.sjIsiKertas({ querySelector: () => null, defaultView: w }), 0, "dokumen lain:");
+});
+t("cetak surat jalan menjalankan pengisi kertas -- Export & Lokal -- SEBELUM kotak cetak muncul", () => {
+  const src = w.eval("cetakSuratJalan.toString()");
+  const iEx = src.indexOf("sjIsiKertas(w.document)");
+  const iLk = src.indexOf("sjlIsiKertas(w.document)");
+  if (iEx < 0) throw new Error("surat jalan Export tidak dipenuhkan ke kertas");
+  if (iLk < 0) throw new Error("surat jalan Lokal tidak dipenuhkan ke kertas");
+  if (!(Math.max(iEx, iLk) < src.indexOf("w.print()"))) throw new Error("pengisi kertas dipanggil sesudah kotak cetak");
+  if (!/if \(lokal\) sjlIsiKertas\(w\.document\);\s*else sjIsiKertas\(w\.document\);/.test(src)) throw new Error("pemilihan Lokal/Export salah");
+});
+t("lembar Lokal: selebar A4, setinggi kertas; baris kosong satu sumber dengan baris tambahan", () => {
+  const css = w.suratJalanLokalCss();
+  const m = /\.sheet \{([^}]*)\}/.exec(css);
+  if (!m) throw new Error("aturan .sheet hilang");
+  if (!/width:\s*210mm/.test(m[1])) throw new Error("lembar Lokal tidak dipatok selebar A4");
+  if (!/min-height:\s*calc\(297mm - 2px\)/.test(m[1])) throw new Error("lembar Lokal tidak setinggi kertas A4");
+  if (!/text-size-adjust: 100%/.test(css)) throw new Error("ukuran huruf bisa dibesarkan sendiri oleh peramban ponsel");
+  const row = { id: "l9", doc_number: "030/EXIM-LOG/X/2026", doc_date: "2026-10-22", requester: "Y",
+    payload: { doKind: "Lokal", receiver: "PT A", items: [{ nama: "A", qty: "1", satuan: "PCS" }, { nama: "B", qty: "2", satuan: "PCS" }] } };
+  const h = w.buildSuratJalanLokalHtml(row);
+  const kosong = w.eval("SJL_BARIS_KOSONG");
+  eq(h.split(kosong).length - 1, w.eval("SJL_MIN_BARIS") - 2, "baris penambal bawaan memakai templat bersama:");
+});
+/* Peniru dokumen Lokal untuk sjlIsiKertas(): tiap baris kosong setinggi
+   `tinggiBaris`; tanda tangan turun sejauh baris yang ditambahkan. */
+function tiruanDokumenLokal(opsi) {
+  const o = Object.assign({ dasarLembar: 1000, paddingBawah: 52, bawahTtd: 600, tinggiBaris: 20 }, opsi);
+  const baris = [];
+  const buatBaris = () => {
+    const tr = { style: {}, remove() { baris.splice(baris.indexOf(tr), 1); } };
+    tr.getBoundingClientRect = () => ({ height: o.tinggiBaris > 0 ? (parseFloat(tr.style.height) || o.tinggiBaris) : 0 });
+    return tr;
+  };
+  const badan = {
+    insertAdjacentHTML(pos, html) { if (pos !== "beforeend" || html !== w.eval("SJL_BARIS_KOSONG")) throw new Error("baris tambahan bukan dari templat bersama"); baris.push(buatBaris()); },
+    get lastElementChild() { return baris[baris.length - 1]; },
+  };
+  const lembar = { getBoundingClientRect: () => ({ bottom: o.dasarLembar }) };
+  const ttd = { getBoundingClientRect: () => ({ bottom: o.bawahTtd + baris.reduce((a, tr) => a + tr.getBoundingClientRect().height, 0) }) };
+  return {
+    o, baris,
+    dok: {
+      defaultView: { getComputedStyle: () => ({ paddingBottom: o.paddingBawah + "px", borderBottomWidth: "0px" }) },
+      querySelector: (sel) => ({ ".sheet": lembar, ".l-items tbody": badan, ".l-ttd": ttd }[sel] || null),
+    },
+  };
+}
+t("sjlIsiKertas: baris kosong ditambah sebanyak yang muat, sisanya kurang dari satu baris dibagi rata", () => {
+  const aman = w.eval("SJ_SISA_AMAN_PX");
+  const f = tiruanDokumenLokal({});
+  // dasar isi 1000 - 52 = 948; tanda tangan 600 -> sisa 348; lapang 344 / 20 = 17 baris
+  const n = w.sjlIsiKertas(f.dok);
+  eq(n, Math.floor((348 - aman) / 20), "jumlah baris ditambahkan:");
+  eq(f.baris.length, n, "jumlah baris di tabel:");
+  const bawah = 600 + f.baris.reduce((a, tr) => a + tr.getBoundingClientRect().height, 0);
+  const sisa = 948 - bawah;
+  if (Math.abs(sisa - aman) > 0.01) throw new Error("setelah dibagi rata sisa " + sisa + "px, diharap tepat " + aman + "px (selisih aman)");
+});
+t("sjlIsiKertas: ruang kurang dari satu baris / tak bisa diukur -> tidak ada yang ditambahkan", () => {
+  const sempit = tiruanDokumenLokal({ bawahTtd: 948 - 10 });       // sisa 10px, lapang 6px < satu baris
+  eq(w.sjlIsiKertas(sempit.dok), 0, "sempit:");
+  eq(sempit.baris.length, 0, "tidak ada baris tertinggal:");
+  const penuh = tiruanDokumenLokal({ bawahTtd: 1200 });           // isi sudah melewati dasar
+  eq(w.sjlIsiKertas(penuh.dok), 0, "penuh:");
+  eq(penuh.baris.length, 0);
+  const tanpaTataLetak = tiruanDokumenLokal({ tinggiBaris: 0 });   // mesin tata letak tak ada (tinggi 0)
+  eq(w.sjlIsiKertas(tanpaTataLetak.dok), 0, "tanpa tata letak:");
+  eq(tanpaTataLetak.baris.length, 0, "baris percobaan dibersihkan:");
+  eq(w.sjlIsiKertas({ querySelector: () => null, defaultView: w }), 0, "dokumen lain:");
 });
 t("detail pengajuan Surat Jalan: semua nomor mobil tampil, vehicleExtra tidak jatuh ke Lainnya", () => {
   const { badan } = dndBuka({ id: "m5", doc_type: "do", doc_number: "034/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-05",
@@ -3673,7 +4070,10 @@ t("Doc No (Pengajuan Dana) ikut dicari di riwayat: filter database, kata kunci a
   // 2. Pencocokan di aplikasi (jalur kata kunci angka): isian teks yang sama, tanpa beda huruf; tanpa Doc No tidak cocok
   const baris = barisDana("fd1", { payee: "FEDEX", docNo: "Ab-20261045", amount: "1" });
   eq(["ab-2026", "20261045", "ZZZ"].map((q) => w.dnCocokCari(baris, "fund", q)).join(","), "true,true,false", "dnCocokCari:");
-  eq(w.dnCocokCari(barisDana("fd2", { payee: "PRIME", amount: "1" }), "fund", "20261045"), false, "pengajuan tanpa Doc No:");
+  eq(w.dnCocokCari(barisDana("fd2", { payee: "PRIME", amount: "1" }), "fund", "20261045"), false, "pengajuan yang Doc No-nya tidak diisi:");
+  // PRIME & WIDE juga punya kotak Doc No (tersimpan walau tidak dicetak), jadi ikut dicari
+  eq(w.dnCocokCari(barisDana("fd3", { payee: "WIDE", docNo: "WL-20261045", amount: "1" }), "fund", "20261045"), true, "Doc No pengajuan WIDE:");
+  eq(w.dnCocokCari(barisDana("fd4", { payee: "PT PRIME CARGO", docNo: "PR-77", amount: "1" }), "fund", "pr-77"), true, "Doc No pengajuan PRIME (teks):");
   // 3. Riwayat dengan database tiruan yang hanya mengenal kolom Doc No: kata kunci teks lewat filter `or`, kata kunci angka lewat seluruh riwayat
   const asli = w.eval("supabaseClient.from");
   const simpan = { tab: baca("docNumActiveTab"), sub: baca("docNumHistorySub"), cari: baca("docNumCari"), hal: baca("docNumPage"), ukuran: baca("docNumPageSize") };
@@ -3682,7 +4082,7 @@ t("Doc No (Pengajuan Dana) ikut dicari di riwayat: filter database, kata kunci a
     w.__barisUji = [
       barisDana("f1", { payee: "FEDEX", docNo: "20261045", amount: "100" }),
       barisDana("f2", { payee: "DHL", docNo: "DOC-2610/046", amount: "200" }),
-      barisDana("f3", { payee: "PRIME", amount: "300" }),
+      barisDana("f3", { payee: "PRIME", docNo: "DOC-2610/047", amount: "300" }),
     ];
     w.__catat = { or: (s) => (orDipanggil = s) };
     // Kolom Doc No di filter `or` -> baris yang Doc No-nya memuat kata kunci itu
@@ -3696,7 +4096,7 @@ t("Doc No (Pengajuan Dana) ikut dicari di riwayat: filter database, kata kunci a
     const id = () => w.eval("docNumHistoryRows").map((r) => r.id).join(",");
     w.eval('docNumActiveTab = "fund"; docNumHistorySub = null; docNumPage = 1; docNumPageSize = 10; docNumCari = "doc-2610"');
     await w.renderDocNumHistory();
-    eq(id(), "f2", "kata kunci teks mengenai Doc No:");
+    eq(id(), "f2,f3", "kata kunci teks mengenai Doc No (termasuk pengajuan PRIME):");
     if (!orDipanggil || !orDipanggil.includes('payload->>docNo.ilike."%doc-2610%"')) throw new Error("filter `or` tanpa Doc No: " + orDipanggil);
     orDipanggil = null;
     w.eval('docNumCari = "20261045"');
@@ -3713,10 +4113,14 @@ t("Doc No (Pengajuan Dana) ikut dicari di riwayat: filter database, kata kunci a
       docNumPage = ${simpan.hal}; docNumPageSize = ${simpan.ukuran};`);
   }
   // 4. Tab Summary memakai kotak cari yang sama
-  const k = kolomDana([barisDana("s1", { payee: "FEDEX", docNo: "DOC-777", amount: "1" }), barisDana("s2", { payee: "DHL", amount: "1" })]);
+  const k = kolomDana([
+    barisDana("s1", { payee: "FEDEX", docNo: "DOC-777", amount: "1" }),
+    barisDana("s2", { payee: "DHL", amount: "1" }),
+    barisDana("s3", { payee: "PRIME", docNo: "DOC-888", amount: "1" }),
+  ]);
   const cari = (q) => w.fsumSaring(k, { dari: "", sampai: "", company: "", customer: "", jenis: "", bayar: "", q }).map((x) => x.id).join(",");
-  eq([cari("doc-777"), cari("777"), cari("tidak-ada")].join(" | "), "s1 | s1 | ", "Summary:");
-  eq(k.map((x) => x.docNo).join("|"), "DOC-777|", "kolom Summary menyimpan Doc No:");
+  eq([cari("doc-777"), cari("777"), cari("tidak-ada"), cari("doc-888")].join(" | "), "s1 | s1 |  | s3", "Summary (termasuk PRIME):");
+  eq(k.map((x) => x.docNo).join("|"), "DOC-777||DOC-888", "kolom Summary menyimpan Doc No:");
 });
 t("kotak cari: kata kunci berupa nominal -- dengan / tanpa pemisah ribuan, 'Rp.', sen; selain itu bukan nominal", () => {
   const A = (q) => JSON.stringify(w.dnAngkaCari(q));
@@ -10816,15 +11220,15 @@ t("No. Surat diambil dari nomor dokumennya sendiri, Subject dari Rincian", () =>
   if (!h.includes("Pembayaran Billing Import IKR Guide"))
     throw new Error("Subject tidak diambil dari Rincian");
 });
-t("Doc No: hanya untuk vendor selain PRIME & WIDE, dicocokkan per kata", () => {
+t("Doc No dicetak hanya untuk vendor selain PRIME & WIDE, dicocokkan per kata", () => {
   ["FEDEX", "DHL", "KAS NEGARA", "DHL WORLDWIDE EXPRESS", "PT PRIMERA LOGISTIK", "", null].forEach((v) => {
-    if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya memakai Doc No: " + v);
+    if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya mencetak Doc No: " + v);
   });
   ["PRIME", "WIDE", "PT WIDE INDONESIA", "pt. prime cargo", "Wide-Logistics", "PRIME/WIDE"].forEach((v) => {
-    if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TANPA Doc No: " + v);
+    if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TIDAK mencetak Doc No: " + v);
   });
 });
-t("Doc No tercetak di bawah No Surat -- tidak untuk PRIME & WIDE", () => {
+t("Doc No tercetak di bawah No Surat -- tidak untuk PRIME & WIDE, walau Doc No-nya tersimpan", () => {
   const meta = (payload) => {
     const h = w.buildFundRequestHtml(barisFundUji(payload));
     const i = h.indexOf('<table class="meta">');
@@ -10837,41 +11241,56 @@ t("Doc No tercetak di bawah No Surat -- tidak untuk PRIME & WIDE", () => {
   eq(meta({ payee: "DHL", notes: "Sub" }),
     "No Surat : 283/EXIM/DDI/IX/2026 Doc No : Subject : Sub Lampiran : 1 Set", "DHL tanpa isi:");
   ["PT WIDE INDONESIA", "PRIME"].forEach((v) => {
-    // Doc No yang terlanjur tersimpan pun tidak tercetak untuk dua vendor ini
+    // Doc No yang tersimpan pun tidak tercetak untuk dua vendor ini -- hanya cetakannya yang tanpa baris itu
     eq(meta({ payee: v, docNo: "DOC-1", notes: "Sub" }),
       "No Surat : 283/EXIM/DDI/IX/2026 Subject : Sub Lampiran : 1 Set", v + ":");
+    const h = w.buildFundRequestHtml(barisFundUji({ payee: v, docNo: "DOC-1" }));
+    if (h.includes("DOC-1")) throw new Error("isi Doc No bocor ke cetakan " + v);
   });
 });
-t("form: kotak Doc No mengikuti Dibayarkan Kepada, dan tidak tersimpan untuk PRIME/WIDE", () => {
+t("form: kotak Doc No ADA & tersimpan untuk semua vendor, termasuk PRIME/WIDE; hanya keterangannya mengikuti Dibayarkan Kepada", () => {
   const panel = w.docNumPanelEl("fund");
   const payee = panel.querySelector('[data-dn="payee"]');
   const docNo = panel.querySelector('[data-dn="docNo"]');
   const wadah = panel.querySelector(".fund-docno");
+  const cetak = wadah.querySelector(".fund-docno-cetak");
+  const takCetak = wadah.querySelector(".fund-docno-tak-cetak");
+  if (!cetak || !takCetak) throw new Error("keterangan Doc No (dicetak / tidak dicetak) tidak ada di form");
+  eq(cetak.textContent.trim(), "Tercetak di bawah No Surat pada form.", "teks keterangan 'dicetak':");
+  eq(takCetak.textContent.trim(), "Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.", "teks keterangan 'tidak dicetak':");
   const simpan = { payee: payee.value, docNo: docNo.value, kunciPayee: payee.disabled, kunciDoc: docNo.disabled };
   const ketik = (v) => { pilihVendor(payee, v); payee.dispatchEvent(new w.Event("input", { bubbles: true })); };
+  /* Kotak tersembunyi?, kotak nonaktif?, keterangan 'dicetak' tersembunyi?,
+     keterangan 'tidak dicetak' tersembunyi? */
+  const keadaan = () => [wadah, docNo, cetak, takCetak].map((el, i) => (i === 1 ? el.disabled : el.classList.contains("d-none"))).join(",");
   try {
     payee.disabled = false;
+    docNo.disabled = false;
     ketik("FEDEX");
-    if (wadah.classList.contains("d-none") || docNo.disabled) throw new Error("Doc No tersembunyi untuk FedEx");
+    eq(keadaan(), "false,false,false,true", "FedEx -- Doc No dicetak:");
     docNo.value = "DOC-7781";
-    eq(w.readDocNumForm("fund").docNo, "DOC-7781", "tersimpan:");
+    eq(w.readDocNumForm("fund").docNo, "DOC-7781", "tersimpan untuk FedEx:");
     ketik("PT WIDE INDONESIA");
-    if (!wadah.classList.contains("d-none") || !docNo.disabled) throw new Error("Doc No masih tampil untuk WIDE");
-    if ("docNo" in w.readDocNumForm("fund")) throw new Error("Doc No ikut tersimpan untuk WIDE");
+    // Kotak tetap tampil, bisa diisi, dan isinya TERSIMPAN; yang berganti hanya keterangannya
+    eq(keadaan(), "false,false,true,false", "WIDE -- Doc No hanya tersimpan:");
+    eq(w.readDocNumForm("fund").docNo, "DOC-7781", "Doc No ikut tersimpan untuk WIDE:");
+    docNo.value = "DOC-WIDE-1";
+    eq(w.readDocNumForm("fund").docNo, "DOC-WIDE-1", "diketik langsung di pengajuan WIDE:");
     ketik("DHL");
-    if (wadah.classList.contains("d-none")) throw new Error("Doc No tidak kembali tampil");
+    eq(keadaan(), "false,false,false,true", "kembali ke keterangan 'dicetak':");
     // Dibuka lagi lewat syncDocNumConditional (isi ulang / reset form)
     pilihVendor(payee, "PRIME");
     w.syncDocNumConditional(panel);
-    if (!wadah.classList.contains("d-none")) throw new Error("penyelarasan form tidak memeriksa Doc No");
+    eq(keadaan(), "false,false,true,false", "PRIME sesudah penyelarasan form:");
+    eq(w.readDocNumForm("fund").docNo, "DOC-WIDE-1", "tersimpan untuk PRIME:");
   } finally {
     payee.value = simpan.payee; docNo.value = simpan.docNo;
     w.syncDocNumConditional(panel);
-    payee.disabled = simpan.kunciPayee; docNo.disabled = simpan.kunciDoc || docNo.disabled;
+    payee.disabled = simpan.kunciPayee; docNo.disabled = simpan.kunciDoc;
   }
-  // Baris form tetap penuh: tanpa Doc No, Rincian melebar
+  // Susunan baris sama untuk semua vendor: tak ada lagi aturan CSS untuk kotak Doc No yang tersembunyi (Rincian melebar)
   const css = require("fs").readFileSync(__dirname + "/../css/docnum.css", "utf8");
-  if (!/\.fgrid:has\(> \.fund-docno\.d-none\) > \.fund-rincian \{\s*grid-column: span 9;/.test(css)) throw new Error("Rincian tidak melebar saat Doc No disembunyikan");
+  if (/fund-docno\.d-none/.test(css)) throw new Error("masih ada aturan CSS untuk kotak Doc No yang tersembunyi");
 });
 console.log("\u2014 ATURAN DOC NO BISA DIATUR \u2014");
 /* Tiruan tabel report_settings untuk satu uji: mencatat yang disimpan,
@@ -10903,7 +11322,7 @@ const tiruanPengaturan = (awal, opsi) => {
   keadaan.lepas = () => { w.eval("supabaseClient.from = window.__asliFrom"); delete w.__asliFrom; delete w.__pengaturanUji; };
   return keadaan;
 };
-/* Menjalankan fn dengan daftar "tanpa Doc No" tertentu, lalu memulihkannya. */
+/* Menjalankan fn dengan daftar "Doc No tidak dicetak" tertentu, lalu memulihkannya. */
 const denganDaftarDocNo = async (daftar, fn) => {
   const simpan = JSON.stringify(baca("fundDocNoTanpa"));
   try {
@@ -10928,26 +11347,31 @@ t("daftar bawaan PRIME & WIDE; aturannya tinggal di satu berkas", () => {
 t("vendor baru di daftar langsung berlaku di form & cetakan; entri beberapa kata harus berurutan", async () => {
   await denganDaftarDocNo(["PRIME", "WIDE", "FEDEX", "KAS NEGARA"], async () => {
     ["FEDEX", "FedEx Express Indonesia", "pt. kas negara", "KAS NEGARA (BEA CUKAI)", "PRIME"].forEach((v) => {
-      if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TANPA Doc No: " + v);
+      if (w.fundPakaiDocNo(v)) throw new Error("seharusnya TIDAK mencetak Doc No: " + v);
     });
     ["DHL", "FEDEXX", "NEGARA KAS", "KAS", "KAS BESAR NEGARA", "BANK NEGARA INDONESIA", ""].forEach((v) => {
-      if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya memakai Doc No: " + v);
+      if (!w.fundPakaiDocNo(v)) throw new Error("seharusnya mencetak Doc No: " + v);
     });
     const h = w.buildFundRequestHtml(barisFundUji({ payee: "FEDEX", docNo: "DOC-1" }));
     if (h.includes(">Doc No<")) throw new Error("Doc No masih tercetak untuk vendor yang baru ditambahkan");
-    // Form: kotaknya ikut tersembunyi
+    /* Form: kotak Doc No TETAP tampil & aktif (isinya tetap tersimpan);
+       keterangannya berganti ke "tidak dicetak" */
     const panel = w.docNumPanelEl("fund");
     const payee = panel.querySelector('[data-dn="payee"]');
+    const wadah = panel.querySelector(".fund-docno");
     const simpan = payee.value;
     try {
       pilihVendor(payee, "FEDEX");
       w.fundSelaraskanDocNo(panel);
-      if (!panel.querySelector(".fund-docno").classList.contains("d-none")) throw new Error("kotak Doc No masih tampil untuk FEDEX");
+      if (wadah.classList.contains("d-none") || panel.querySelector('[data-dn="docNo"]').disabled) throw new Error("kotak Doc No tersembunyi untuk FEDEX");
+      if (!wadah.querySelector(".fund-docno-cetak").classList.contains("d-none")) throw new Error("keterangan 'tercetak' masih tampil untuk FEDEX");
+      if (wadah.querySelector(".fund-docno-tak-cetak").classList.contains("d-none")) throw new Error("keterangan 'tidak dicetak' tidak tampil untuk FEDEX");
     } finally {
       payee.value = simpan;
+      w.fundSelaraskanDocNo(panel);
     }
   });
-  // Daftar kosong = semua vendor memakai Doc No
+  // Daftar kosong = semua vendor mencetak Doc No
   await denganDaftarDocNo([], async () => {
     if (!w.fundPakaiDocNo("PRIME") || !w.fundPakaiDocNo("PT WIDE INDONESIA")) throw new Error("daftar kosong masih mengecualikan vendor");
   });
@@ -11078,10 +11502,18 @@ t("kotak Aturan Doc No: hanya di tab Pengajuan Dana, tersembunyi untuk peran han
     w.setLang("en");
     eq($("#fundDocNoInfo").textContent, "2 vendors");
     eq(kotak.querySelector("[data-docno-hapus]").getAttribute("aria-label"), "Remove PRIME from the list");
-    eq(kotak.querySelector(".dn-aturan-label").textContent, "No Doc No for:");
+    eq(kotak.querySelector(".dn-aturan-label").textContent, "Doc No not printed for:");
+    eq($("#fundDocNoBaru").getAttribute("aria-label"), "Vendor whose Doc No is not printed", "aria-label kotak isian:");
+    if (!/Doc No can be filled in and is saved for every vendor/.test(kotak.querySelector(".form-text-note").textContent))
+      throw new Error("catatan kotak aturan belum berbahasa Inggris: " + kotak.querySelector(".form-text-note").textContent);
+    // Keterangan di bawah kotak Doc No di form
+    eq($("#fundDocNoWrap .fund-docno-cetak").textContent.trim(), "Printed under No Surat on the form.", "keterangan 'dicetak' (EN):");
+    eq($("#fundDocNoWrap .fund-docno-tak-cetak").textContent.trim(), "Saved with the request, but not printed on the form for this vendor.", "keterangan 'tidak dicetak' (EN):");
   } finally {
     w.setLang(bahasa);
   }
+  eq(kotak.querySelector(".dn-aturan-label").textContent, "Doc No tidak dicetak untuk:", "kembali ke bahasa Indonesia:");
+  eq($("#fundDocNoWrap .fund-docno-tak-cetak").textContent.trim(), "Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.", "keterangan 'tidak dicetak' (ID):");
   const css = fs.readFileSync(path.join(ROOT, "css", "docnum.css"), "utf8");
   if (!/\.dn-pengaturan:has\(> \.dn-aturan:not\(\.d-none\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/.test(css))
     throw new Error("dua kotak pengaturan tidak berdampingan di layar lebar");
@@ -11178,7 +11610,7 @@ t("nama & jabatan penanda tangan bisa diubah, dengan bawaan kalau dikosongkan", 
     .forEach((j) => {
       if (!bawaan.includes(j)) throw new Error("bawaan " + j + " tidak tercetak");
     });
-  /* Vendor yang memakai Doc No (di sini tanpa vendor -> tidak
+  /* Vendor yang Doc No-nya dicetak (di sini tanpa vendor -> tidak
      dikecualikan): EMPAT kotak, yang keempat CFO. President Director
      (kotak persetujuan lama, approver2*) tetap tidak tercetak -- lihat
      di bawah. */
@@ -11186,8 +11618,8 @@ t("nama & jabatan penanda tangan bisa diubah, dengan bawaan kalau dikosongkan", 
   if (!bawaan.includes("Mr. Kim Taewan") || !bawaan.includes("Chief Financial Officer")) throw new Error("bawaan CFO tidak tercetak");
   if (!/class="ttd ttd--empat"/.test(bawaan)) throw new Error("tabel tanda tangan tidak dibagi berempat");
   const tanpaDocNo = w.buildFundRequestHtml(barisFundUji({ payee: "PT PRIME CARGO", cfoName: "Mr. Kim Taewan" }));
-  eq((tanpaDocNo.match(/ttd-cell/g) || []).length, 3, "vendor tanpa Doc No:");
-  if (tanpaDocNo.includes("Chief Financial Officer")) throw new Error("CFO tercetak untuk vendor tanpa Doc No");
+  eq((tanpaDocNo.match(/ttd-cell/g) || []).length, 3, "vendor yang Doc No-nya tidak dicetak:");
+  if (tanpaDocNo.includes("Chief Financial Officer")) throw new Error("CFO tercetak untuk vendor yang Doc No-nya tidak dicetak");
   const cfoDiubah = w.buildFundRequestHtml(barisFundUji({ payee: "DHL EXPRESS", cfoName: "Mr. Lee", cfoRole: "Finance Director" }));
   if (!cfoDiubah.includes("Mr. Lee") || !cfoDiubah.includes("Finance Director") || cfoDiubah.includes("Mr. Kim Taewan"))
     throw new Error("isian CFO yang diubah tidak dipakai");
@@ -11207,7 +11639,7 @@ t("nama & jabatan penanda tangan bisa diubah, dengan bawaan kalau dikosongkan", 
   if (!diubah.includes("Mr Kim Taewan"))
     throw new Error("nama yang diisi manual tidak tercetak");
 });
-t("form: isian penanda tangan keempat (CFO) bawaan Mr. Kim Taewan, tampil & tersimpan HANYA untuk vendor ber-Doc No", () => {
+t("form: isian penanda tangan keempat (CFO) bawaan Mr. Kim Taewan, tampil & tersimpan HANYA untuk vendor yang Doc No-nya dicetak", () => {
   const panel = w.docNumPanelEl("fund");
   const nama = panel.querySelector('[data-dn="cfoName"]');
   const jabatan = panel.querySelector('[data-dn="cfoRole"]');
@@ -11221,6 +11653,9 @@ t("form: isian penanda tangan keempat (CFO) bawaan Mr. Kim Taewan, tampil & ters
     eq(tampil(), "false,false", "PRIME (dikecualikan) -> disembunyikan:");
     eq(nama.disabled, true, "dinonaktifkan:");
     eq("cfoName" in w.readDocNumForm("fund"), false, "tidak tersimpan untuk PRIME:");
+    // Kotak Doc No-nya sendiri TIDAK ikut tersembunyi: PRIME tetap bisa mengisi & menyimpannya
+    eq($("#fundDocNoWrap").classList.contains("d-none"), false, "kotak Doc No tetap tampil untuk PRIME:");
+    eq(panel.querySelector('[data-dn="docNo"]').disabled, false, "kotak Doc No tetap aktif untuk PRIME:");
     pilihVendor(payee, "DHL EXPRESS");
     payee.dispatchEvent(new w.Event("input", { bubbles: true }));
     eq(tampil(), "true,true", "DHL -> tampil:");
@@ -18747,12 +19182,37 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(u.id, "pu1", "ke nomor yang dibuka:");
       eq(u.row.payload.invoiceNo, "LAMA-78", "isian baru:");
       eq(u.row.payload.payee, "PT LAMA EKSPRES", "vendor lama tidak tertukar draf:");
-      // Pengajuan lama tanpa isian CFO (vendor ber-Doc No): tersimpan dengan bawaannya
+      // Pengajuan lama tanpa isian CFO (vendor yang Doc No-nya dicetak): tersimpan dengan bawaannya
       eq([u.row.payload.cfoName, u.row.payload.cfoRole].join(" | "), "Mr. Kim Taewan | Chief Financial Officer", "penanda tangan CFO:");
       eq(baca("dnEditingId"), null, "mode ubah selesai:");
       eq(!!panelDana().closest("#dnEditModal"), false, "panel kembali ke halaman:");
       eq(kotak("invoiceNo").value, "DRAF-001", "draf kembali:");
       eq(w.document.getElementById("toastMsg").textContent, w.t("m.isian.nomor.berhasil.diperbarui"), "pesan berhasil:");
+    }));
+
+    t("pop-up: pengajuan PRIME ber-Doc No -- Doc No terisi di pop-up & tersimpan ulang (cetakannya tetap tanpa baris Doc No)", async () => dengan("fund", async () => {
+      const baris = Object.assign({}, BARIS_LAMA, {
+        id: "pu2", doc_number: "411/EXIM/DDI/X/2026",
+        payload: Object.assign({}, BARIS_LAMA.payload, { payee: "PRIME", docNo: "DOC-PR-1" }),
+      });
+      tulis("docNumHistoryRows", [baris]);
+      const n = jejakUpdate.length;
+      w.mulaiUbahDocNum("pu2");
+      const docNo = kotak("docNo");
+      eq(docNo.value, "DOC-PR-1", "Doc No PRIME terisi di pop-up:");
+      eq(docNo.disabled, false, "bisa diubah:");
+      eq(panelDana().querySelector(".fund-docno").classList.contains("d-none"), false, "kotak Doc No tampil untuk PRIME:");
+      eq(panelDana().querySelector(".fund-docno-tak-cetak").classList.contains("d-none"), false, "keterangan 'tidak dicetak':");
+      docNo.value = "DOC-PR-2";
+      await w.simpanUbahDocNum();
+      eq(jejakUpdate.length, n + 1, "tersimpan sekali:");
+      const u = jejakUpdate[jejakUpdate.length - 1];
+      eq(u.id, "pu2", "ke nomor yang dibuka:");
+      eq(u.row.payload.docNo, "DOC-PR-2", "Doc No PRIME tersimpan:");
+      eq(u.row.payload.payee, "PRIME", "vendor tetap:");
+      eq("cfoName" in u.row.payload, false, "isian CFO tidak ikut untuk PRIME:");
+      const cetak = w.buildFundRequestHtml(Object.assign({}, baris, { payload: u.row.payload }));
+      if (cetak.includes("DOC-PR-2") || cetak.includes(">Doc No<")) throw new Error("Doc No PRIME tercetak");
     }));
 
     t("pop-up: isian yang belum benar ditolak di KAKI POP-UP, dan pop-up tetap terbuka", async () => dengan("fund", async () => {
