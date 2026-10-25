@@ -26,9 +26,37 @@ function itemFacilitiesCellHtml(it, mode) {
 function daftarDokumenHtml(daftar, denganKode) {
   const baris = (daftar || []).map((d) => {
     const nama = denganKode ? `<span class="text-muted">${escapeHtml(namaDokumenCeisa(d.kode))}</span> ` : "";
-    return `<div>${nama}${escapeHtml(dispVal(d.nomor))}${d.tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(d.tanggal)}</span>` : ""}</div>`;
+    // Lampiran dokumennya (PI & LS) bisa langsung dibuka
+    return `<div>${nama}${escapeHtml(dispVal(d.nomor))}${d.tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(d.tanggal)}</span>` : ""}${tautanLampiranHtml(d.berkas)}</div>`;
   });
   return baris.join("") || "—";
+}
+
+/* PROGRES DOKUMEN, HANYA BACA. Stepper di kartu disembunyikan dari akun
+   yang tidak boleh mengubah (doc-steps.js) -- di panel ini semua akun
+   bisa membaca tahap yang sudah dicatat, statusnya (draft menunggu asli
+   / asli / tidak dipakai) dan membuka lampirannya. */
+function detailProgresDokumenHtml(s) {
+  if (typeof docStepsFor !== "function" || isKurirNilaiRendah(s)) return "";
+  const baris = docStepsFor(s)
+    .map((st) => ({ st, e: docStepEntri(s, st) }))
+    .filter((x) => x.e && !x.e.ikutInduk)
+    .map(({ st, e }) => {
+      const status = e.skipped
+        ? `<span class="text-muted">${escapeHtml(tt("tidak dipakai", "not used"))}</span>`
+        : e.draft
+          ? `<span class="detail-draft"><i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("draft, menunggu asli", "draft, awaiting original"))}</span>`
+          : "";
+      const tgl = e.date && !e.skipped ? `<span class="text-nowrap">${fmtDate(e.date)}</span>` : "";
+      const draftLama = e.tglDraft ? ` <span class="text-muted text-nowrap">(draft ${fmtDate(e.tglDraft)})</span>` : "";
+      const jalur = e.jalur && jalurInfo(e.jalur) ? ` <span class="text-muted">· ${escapeHtml(tt("jalur", "lane"))} ${escapeHtml(jalurInfo(e.jalur).label)}</span>` : "";
+      return `<div class="detail-progres-baris"><b>${escapeHtml(stepText(st.label, s))}</b> ${[tgl + draftLama + jalur, status].filter(Boolean).join(" · ")}${tautanLampiranHtml(e.berkas)}</div>`;
+    });
+  if (!baris.length) return "";
+  const c = docStepCount(s);
+  return `
+    <div class="subsection-title"><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")} <span class="text-muted fw-normal">${c.selesai}/${c.berlaku}</span></div>
+    <div class="detail-progres mb-3">${baris.join("")}</div>`;
 }
 
 // Daftar terminal transit (read-only) untuk detail view
@@ -185,6 +213,7 @@ function buildDetailHtml(s) {
       ${fieldPair(tt("Nama Forwarder", "Forwarder Name"), escapeHtml(dispVal(s.forwarder)))}
       ${fieldPair("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic)))}
     </div>
+    ${detailProgresDokumenHtml(s)}
 
     <div class="subsection-title"><i class="bi bi-compass"></i> ${tt("Transportasi &amp; Rute", "Transport &amp; Route")}</div>
     <div class="info-grid">
@@ -204,6 +233,7 @@ function buildDetailHtml(s) {
       ${fieldPair("ETD", tanggalBerlaku(s.etd, s.etdUpdate, s.etdTime))}
       ${fieldPair("ETA", tanggalBerlaku(s.eta, s.etaUpdate, s.etaTime))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
+      ${s.mode !== "export" && s.neededDate ? fieldPair(tt("Dibutuhkan di Pabrik", "Needed at Factory"), fmtDate(s.neededDate) + tagKebutuhanHtml(s)) : ""}
     </div>
     ${buildDetailStopsHtml(s)}
     ${predictionDetailHtml(s)}

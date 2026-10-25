@@ -135,11 +135,108 @@ function delayDeltaLabel(baselineDate, updateDate, basis) {
   return t("x.sama.dengan.basis", { basis });
 }
 
+/* ------------------------------------------------------------------
+   RATA-RATA DELAY KAPAL (Ringkasan, panel Pantauan delay)
+
+   Berapa hari kapal/pesawat datang -- atau, di buku Export, berangkat
+   -- lebih lambat dari jadwal RENCANA (kolom ETA / ETD). Kenyataannya
+   dari yang paling pasti:
+
+     tiba       ATA / Berths, Berths kiriman lain di kapal yang sama,
+                Manifest + jeda biasanya (kedatanganTercatat), lalu ETA
+                revisi yang tanggalnya sudah lewat;
+     berangkat  Sailing/ATD, lalu ETD revisi.
+
+   Kiriman yang jadwalnya sudah lewat & sudah selesai tanpa catatan
+   apa pun dihitung TEPAT WAKTU (0 hari) -- delay di aplikasi ini
+   dicatat lewat status Delay + tanggal revisi. Yang belum selesai &
+   belum ada kenyataannya belum dihitung.
+
+   Ukuran yang lazim dipakai laporan keandalan jadwal pelayaran:
+   rata-rata delay KAPAL YANG TELAT (telat = >= 1 hari) dan persentase
+   kiriman yang tepat jadwal. Datang lebih awal dihitung 0.
+------------------------------------------------------------------ */
+function delayKapalKiriman(s, hariIni) {
+  const hasil = { tiba: null, berangkat: null };
+  if (!s) return hasil;
+  const sudah = (iso) => !!iso && iso <= hariIni;
+  const selesai = isArrived(s) || !!s.factoryDate;
+
+  if (s.eta && sudah(s.eta)) {
+    const bukti = typeof kedatanganTercatat === "function" ? kedatanganTercatat(s) : null;
+    const nyata = (bukti && bukti.date) || (sudah(s.etaUpdate) ? s.etaUpdate : "");
+    if (nyata) hasil.tiba = delayDaysBetween(s.eta, nyata);
+    else if (selesai) hasil.tiba = 0;
+  }
+  if (s.etd && sudah(s.etd)) {
+    const atd = typeof milestoneDateOf === "function" ? milestoneDateOf(s, "sailing") : "";
+    const nyata = atd || s.etdUpdate || "";
+    // ETD rencana sudah lewat tanpa revisi: dianggap berangkat sesuai jadwal
+    hasil.berangkat = nyata ? delayDaysBetween(s.etd, nyata) : 0;
+  }
+  return hasil;
+}
+
+function ringkasAngkaDelay(daftar) {
+  const angka = daftar.filter((n) => n != null && isFinite(n));
+  if (!angka.length) return { n: 0 };
+  const telat = angka.filter((n) => n >= 1);
+  const satuDesimal = (x) => Math.round(x * 10) / 10;
+  return {
+    n: angka.length,
+    telat: telat.length,
+    // Rata-rata kapal yang telat (hari)
+    rataTelat: telat.length ? satuDesimal(telat.reduce((a, b) => a + b, 0) / telat.length) : 0,
+    // Rata-rata per kiriman, datang lebih awal = 0
+    rataSemua: satuDesimal(angka.reduce((a, b) => a + Math.max(0, b), 0) / angka.length),
+    tepat: Math.round(((angka.length - telat.length) / angka.length) * 100),
+    maks: Math.max.apply(null, angka),
+  };
+}
+
+/* Ringkasan per moda + pelayaran/maskapai yang paling telat.
+   opsi.basis: "tiba" (bawaan Import) atau "berangkat" (bawaan Export);
+   opsi.hari: jendela ke belakang dari hari ini (bawaan 365). */
+function ringkasDelayKapal(list, opsi) {
+  const o = opsi || {};
+  const hariIni = o.hariIni || todayISO();
+  const awal = addCalendarDaysISO(hariIni, -(o.hari || 365));
+  const basis = o.basis === "berangkat" ? "berangkat" : "tiba";
+  const per = { laut: [], udara: [] };
+  const perCarrier = new Map();
+
+  (list || []).forEach((s) => {
+    const rencana = basis === "tiba" ? s && s.eta : s && s.etd;
+    if (!rencana || rencana < awal) return;
+    const d = delayKapalKiriman(s, hariIni)[basis];
+    if (d == null) return;
+    const moda = s.transport === "udara" ? "udara" : "laut";
+    per[moda].push(d);
+
+    // Pelayaran dengan kodenya yang ringkas (HMM, MSC); maskapai dengan namanya
+    const c = typeof detectCarrier === "function" ? detectCarrier(s) : null;
+    const nama = (c && c.detected && (c.kind === "airline" ? c.name || c.code : c.code || c.name)) || "";
+    if (!nama || (c && c.kind === "courier")) return;
+    if (!perCarrier.has(nama)) perCarrier.set(nama, { nama, moda, angka: [] });
+    perCarrier.get(nama).angka.push(d);
+  });
+
+  const carrier = [...perCarrier.values()]
+    .map((x) => ({ nama: x.nama, moda: x.moda, ...ringkasAngkaDelay(x.angka) }))
+    .filter((x) => x.n >= 2 && x.telat > 0)
+    .sort((a, b) => b.rataSemua - a.rataSemua || b.telat - a.telat)
+    .slice(0, 3);
+
+  return { basis, laut: ringkasAngkaDelay(per.laut), udara: ringkasAngkaDelay(per.udara), carrier };
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     STATUS_OPTIONS_BY_MODE,
     statusTemplateValue,
     delayDaysBetween,
+    delayKapalKiriman,
+    ringkasDelayKapal,
   };
 }
 

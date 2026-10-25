@@ -135,11 +135,17 @@ if ($("#confirmCancelBtn")) {
 
    fields: [{ key, label, type, value, placeholder, hint, lebar, min, max }]
    onSubmit(nilai) -> kembalikan string pesan galat untuk menahan, atau
-   apa pun yang bukan string untuk menutup.
+   apa pun yang bukan string untuk menutup. Boleh juga JANJI (mis.
+   mengunggah lampiran dulu): selama ditunggu tombolnya terkunci &
+   berputar, kotaknya tidak bisa ditutup; hasilnya dibaca dengan aturan
+   yang sama.
 
    type: "select" (dengan options), "password", "textarea" (teks panjang
-   -- Enter di dalamnya membuat baris baru, bukan menyimpan), atau jenis
-   <input> lain ("date", ...). Bawaannya "text". Angka TIDAK memakai
+   -- Enter di dalamnya membuat baris baru, bukan menyimpan), "checks"
+   (beberapa kotak centang dari options; nilainya daftar value yang
+   dicentang), "berkas" (lampiran, js/data/lampiran.js -- nilainya dari
+   `pengelola`), atau jenis <input> lain ("date", ...). Bawaannya
+   "text". Angka TIDAK memakai
    jenis isian angka bawaan peramban (roda gulir mengubah nilainya
    diam-diam, tombol panahnya sempit, dan pemisah ribuan tidak bisa
    ditampilkan): pakai inputmode "numeric"/"decimal" dengan filter
@@ -149,6 +155,10 @@ if ($("#confirmCancelBtn")) {
    banyak (baris Masterlist): ditumpuk satu-satu kotaknya lebih
    tinggi dari layar laptop dan tombol Simpan baru terlihat setelah
    menggulir. Kotaknya ikut melebar sedikit supaya tiap isian tetap lega.
+
+   aksiKiri: { label, icon, onClick } -> tombol ketiga di kiri bawah
+   (mis. "Batalkan tahap" di kotak tahap dokumen). Menekannya menutup
+   kotak ini lalu memanggil onClick.
 ------------------------------------------------------------------ */
 const promptModalEl = $("#promptModal");
 const promptModal = promptModalEl ? new bootstrap.Modal(promptModalEl) : null;
@@ -171,13 +181,28 @@ function showPrompt(opsi) {
   const LEBAR_ISIAN = { setengah: " prompt-field--half", sepertiga: " prompt-field--third" };
   const duaKolom = fields.some((f) => LEBAR_ISIAN[f.lebar]);
   promptModalEl.querySelector(".modal-dialog").classList.toggle("prompt-dialog--lebar", duaKolom);
+  // Isian berkelompok (centang, lampiran) dilabeli lewat aria-labelledby, bukan <label for>
+  const berkelompok = (f) => f.type === "checks" || f.type === "berkas";
   $("#promptFields").innerHTML = fields
     .map(
       (f) => `
       <div class="prompt-field${LEBAR_ISIAN[f.lebar] || ""}">
-      <label class="prompt-label" for="prompt_${f.key}">${escapeHtml(f.label)}</label>
       ${
-        f.type === "select"
+        berkelompok(f)
+          ? `<span class="prompt-label" id="prompt_${f.key}_label">${escapeHtml(f.label)}</span>`
+          : `<label class="prompt-label" for="prompt_${f.key}">${escapeHtml(f.label)}</label>`
+      }
+      ${
+        f.type === "checks"
+          ? `<div class="prompt-checks" id="prompt_${f.key}" role="group" aria-labelledby="prompt_${f.key}_label">${(f.options || [])
+              .map(
+                (o) => `<label class="prompt-check"><input type="checkbox" value="${escapeAttr(o.value)}"${(f.value || []).indexOf(o.value) >= 0 ? " checked" : ""}>
+                  <span><b>${escapeHtml(o.label)}</b>${o.hint ? `<small>${escapeHtml(o.hint)}</small>` : ""}</span></label>`,
+              )
+              .join("")}</div>`
+          : f.type === "berkas"
+          ? isianBerkasHtml("prompt_" + f.key).replace('class="prompt-berkas"', `class="prompt-berkas" role="group" aria-labelledby="prompt_${f.key}_label"`)
+          : f.type === "select"
           ? `<select class="login-input" id="prompt_${f.key}">${(f.options || [])
               .map(
                 (o) =>
@@ -203,9 +228,21 @@ function showPrompt(opsi) {
     )
     .join("");
 
+  // Lampiran: pengelolanya memasang daftar & pemilih berkasnya sendiri
+  fields.forEach((f) => {
+    if (f.type === "berkas" && f.pengelola) f.pengelola.pasang($("#prompt_" + f.key));
+  });
+
+  const kiri = $("#promptAksiKiri");
+  if (kiri) {
+    kiri.classList.toggle("d-none", !o.aksiKiri);
+    kiri.innerHTML = o.aksiKiri ? `<i class="bi ${o.aksiKiri.icon || "bi-arrow-counterclockwise"}"></i> ${escapeHtml(o.aksiKiri.label)}` : "";
+    promptAksiKiri = o.aksiKiri && typeof o.aksiKiri.onClick === "function" ? o.aksiKiri.onClick : null;
+  }
+
   /* Tombol Enter papan ketik ponsel: "Berikutnya" sampai isian
      terakhir, "Selesai" di isian terakhir (lihat Enter di bawah). */
-  const isianTeks = [...$("#promptFields").querySelectorAll("input, select")];
+  const isianTeks = [...$("#promptFields").querySelectorAll('input:not([type="checkbox"]):not([type="file"]), select')];
   isianTeks.forEach((el, i) => el.setAttribute("enterkeyhint", i < isianTeks.length - 1 ? "next" : "done"));
 
   /* PENYARING KETIKAN.
@@ -231,10 +268,13 @@ function showPrompt(opsi) {
     });
   });
 
-  promptSubmit = () => {
-    const nilai = {};
-    fields.forEach((f) => (nilai[f.key] = $("#prompt_" + f.key).value));
-    const galat = o.onSubmit ? o.onSubmit(nilai) : null;
+  const bacaIsian = (f) => {
+    const el = $("#prompt_" + f.key);
+    if (f.type === "checks") return el ? [...el.querySelectorAll("input:checked")].map((c) => c.value) : [];
+    if (f.type === "berkas") return f.pengelola ? f.pengelola.nilai() : { lama: [], baru: [], dilepas: [] };
+    return el ? el.value : "";
+  };
+  const selesai = (galat) => {
     if (typeof galat === "string" && galat) {
       const box = $("#promptError");
       box.textContent = galat;
@@ -242,6 +282,29 @@ function showPrompt(opsi) {
       return;
     }
     promptModal.hide();
+  };
+  promptSubmit = () => {
+    if (promptSibuk) return;
+    const nilai = {};
+    fields.forEach((f) => (nilai[f.key] = bacaIsian(f)));
+    const hasil = o.onSubmit ? o.onSubmit(nilai) : null;
+    if (hasil && typeof hasil.then === "function") {
+      $("#promptError").classList.add("d-none");
+      aturPromptSibuk(true, o.busyText || tt("Menyimpan…", "Saving…"));
+      hasil.then(
+        (galat) => {
+          aturPromptSibuk(false);
+          selesai(galat);
+        },
+        (err) => {
+          console.error(err);
+          aturPromptSibuk(false);
+          selesai(tt("Gagal menyimpan. Coba lagi.", "Failed to save. Please try again."));
+        },
+      );
+      return;
+    }
+    selesai(hasil);
   };
 
   /* Kursor langsung di isian pertama yang perlu diisi (yang KOSONG --
@@ -260,10 +323,40 @@ function showPrompt(opsi) {
   if (sudahTerbuka) promptFokusAwal();
 }
 let promptFokusAwal = null;
+let promptAksiKiri = null;
+
+/* SELAMA JANJI onSubmit DITUNGGU: tombol Simpan berputar, seluruh
+   tombol lain terkunci, dan kotaknya tidak bisa ditutup -- menutupnya
+   di tengah unggahan membuat hasilnya tidak terlihat siapa pun. */
+let promptSibuk = false;
+function aturPromptSibuk(sibuk, teks) {
+  promptSibuk = sibuk;
+  const ok = $("#promptOk");
+  if (sibuk) {
+    ok.dataset.teks = ok.textContent;
+    ok.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${escapeHtml(teks || "")}`;
+  } else if (ok.dataset.teks != null) {
+    ok.textContent = ok.dataset.teks;
+    delete ok.dataset.teks;
+  }
+  promptModalEl.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = sibuk));
+}
 
 if (promptModalEl) {
   promptModalEl.addEventListener("shown.bs.modal", () => promptFokusAwal && promptFokusAwal());
+  promptModalEl.addEventListener("hide.bs.modal", (e) => {
+    if (promptSibuk) e.preventDefault();
+  });
   $("#promptOk").addEventListener("click", () => promptSubmit && promptSubmit());
+  const tombolKiri = $("#promptAksiKiri");
+  if (tombolKiri) {
+    tombolKiri.addEventListener("click", () => {
+      const fn = promptAksiKiri;
+      if (!fn || promptSibuk) return;
+      promptModal.hide();
+      fn();
+    });
+  }
   /* ENTER: ke isian berikutnya; di isian terakhir -> Simpan. Kotak
      satu isian tetap tersimpan dengan sekali Enter, kotak banyak isian
      tidak lagi tersimpan setengah jadi karena Enter di isian pertama. */
@@ -271,6 +364,10 @@ if (promptModalEl) {
     if (e.key !== "Enter" || !promptSubmit || e.isComposing) return;
     // Di kotak teks panjang, Enter adalah baris baru
     if (e.target && e.target.tagName === "TEXTAREA") return;
+    /* Tombol & kotak centang menjalankan dirinya sendiri: Enter di
+       tombol lepas lampiran melepas lampiran itu, bukan menyimpan --
+       dan Enter di tombol Batal membatalkan. */
+    if (e.target && e.target.closest && e.target.closest('button, a, input[type="checkbox"], .prompt-berkas')) return;
     e.preventDefault();
     const isian = e.target && e.target.matches && e.target.matches(ISIAN_KETIK) ? e.target : null;
     const berikut = isian && !e.ctrlKey && !e.metaKey ? isianBerikutnya(isian, $("#promptFields")) : null;

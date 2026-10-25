@@ -601,6 +601,13 @@ function applyImportedBcData(parsed) {
       t("y.berkas.mode.berbeda", { dokumen: parsed.modeHint === "import" ? "IMPORT" : "EXPORT", form: activeMode === "import" ? "IMPORT" : "EXPORT" }),
     );
   }
+  /* Dokumen pabean resmi (draft CEISA, PIB/PEB) ikut mencentang Progres
+     Dokumen: PIB/PEB draft atau terdaftar, SPPB, Manifest, jalur
+     (doc-steps.js) -- ditampung sampai Simpan. */
+  if (typeof catatProgresImporForm === "function") {
+    const progres = catatProgresImporForm(parsed);
+    if (progres) notes.push(progres);
+  }
 
   applyTransportLabels();
   renderItemTable();

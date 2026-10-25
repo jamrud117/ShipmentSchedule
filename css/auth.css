@@ -330,6 +330,8 @@ body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
 body.is-viewer .dp-tambah,
 body.is-viewer .dp-hapus,
+body.is-viewer .dp-lampir,
+body.is-viewer .berkas-hapus,
 body.is-viewer .card-note-input {
   display: none !important;
 }
@@ -691,8 +693,41 @@ body.is-viewer .delay-strip-fields input {
   font-size: var(--t-sm);
   color: var(--n-600);
 }
-.hs-tanpa-catatan {
+.hs-tanpa-catatan,
+.hs-tanpa-lartas {
   color: var(--n-300);
+}
+.hs-tabel th.hs-kol-lartas,
+.hs-tabel td.hs-kol-lartas {
+  width: 1%;
+  white-space: nowrap;
+}
+/* Tanda lartas per HS Code (PI / LS / SNI) -- juga dipakai kartu
+   Dokumen Pelengkap di form. */
+.lartas-chip {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  border: 1px solid;
+}
+.lartas-chip--pi {
+  color: #6a3fc2;
+  background: #f3eefe;
+  border-color: #e3d9fb;
+}
+.lartas-chip--ls {
+  color: var(--s-info);
+  background: #eef2fc;
+  border-color: #d5def6;
+}
+.lartas-chip--sni {
+  color: var(--sec-700);
+  background: var(--sec-50);
+  border-color: var(--sec-200);
 }
 .hs-tabel .hs-kol-aksi {
   width: 1%;
@@ -769,11 +804,11 @@ body.is-viewer .delay-strip-fields input {
   }
   .hs-tabel tr {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "nama aksi"
-      "kode aksi"
-      "catatan catatan";
+      "nama nama aksi"
+      "kode lartas aksi"
+      "catatan catatan catatan";
     gap: 4px var(--sp-3);
     padding: 11px var(--sp-4);
     border-bottom: 1px solid var(--n-100);
@@ -792,7 +827,9 @@ body.is-viewer .delay-strip-fields input {
   .hs-tabel td.hs-kol-kode { grid-area: kode; width: auto; text-align: left; }
   .hs-tabel td.hs-kol-catatan { grid-area: catatan; font-size: var(--t-xs); }
   .hs-tabel td.hs-kol-aksi { grid-area: aksi; align-self: center; width: auto; }
-  .hs-tabel td.hs-tanpa-catatan { display: none; }
+  .hs-tabel td.hs-kol-lartas { grid-area: lartas; align-self: center; width: auto; }
+  .hs-tabel td.hs-tanpa-catatan,
+  .hs-tabel td.hs-tanpa-lartas { display: none; }
   .pagination-bar.hs-halaman {
     padding: 10px var(--sp-4);
   }
@@ -990,6 +1027,103 @@ body.is-viewer .delay-strip-fields input {
   color: var(--n-500);
   margin-top: 5px;
 }
+/* Kotak centang berjajar (showPrompt type: "checks") -- mis. lartas di
+   HS Code: judul tebal, keterangan kecil di bawahnya. */
+.prompt-checks {
+  display: grid;
+  gap: 6px;
+}
+.prompt-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.prompt-check:hover {
+  border-color: var(--p-300);
+}
+.prompt-check:has(input:checked) {
+  border-color: var(--p-400);
+  background: var(--p-50);
+}
+.prompt-check input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--p-600);
+  flex-shrink: 0;
+}
+.prompt-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--t-sm);
+  color: var(--ink);
+}
+.prompt-check small {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+/* Lampiran (showPrompt type: "berkas", js/data/lampiran.js) */
+.prompt-berkas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pb-daftar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+.pb-daftar:empty {
+  display: none;
+}
+.pb-kosong {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  font-style: italic;
+}
+.pb-tambah {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--p-600);
+  cursor: pointer;
+}
+.pb-tambah:hover {
+  border-color: var(--p-500);
+  background: var(--p-50);
+}
+.pb-tambah:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Aksi ketiga di kiri bawah kotak isian (aksiKiri) -- mis. "Batalkan
+   tahap": terpisah dari Batal / Simpan di kanan supaya tidak tertekan
+   sebagai salah satunya. */
+.dialog-foot .prompt-aksi-kiri {
+  margin-right: auto !important;
+  color: var(--s-danger);
+  border-color: var(--s-danger-line);
+}
+.dialog-foot .prompt-aksi-kiri:hover:not(:disabled) {
+  background: var(--s-danger-bg);
+  border-color: var(--s-danger);
+  color: var(--s-danger);
+}
+
 .prompt-error {
   font-size: var(--t-sm);
   color: var(--s-danger);

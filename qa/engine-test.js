@@ -27,6 +27,8 @@ vm.createContext(ctx);
  "js/core/prediction-confidence.js",
  "js/core/prediction-schedule.js",
  "js/core/prediction.js",
+ // Rencana mundur: Dibutuhkan di Pabrik -> ETA & ETD paling lambat
+ "js/core/prediction-mundur.js",
  /* Model jalur rute: posisi simpul & penanda kapal. Uji posisinya
     aritmetika murni, jadi tempatnya di sini, bukan di dom-test. */
  "js/core/route-model.js"].forEach((f) => {
@@ -81,6 +83,21 @@ const {
 /* `const` di dalam vm tidak menempel ke objek konteks (beda dengan
    deklarasi function), jadi diambil lewat evaluasi. */
 const PREDICTION_CONFIG = vm.runInContext("PREDICTION_CONFIG", ctx);
+
+/* KALENDER NETRAL untuk uji logika.
+
+   Sebagian besar uji di bawah menguji ATURAN (akhir pekan, gerbang,
+   urutan langkah) dengan tanggal Agustus 2026 -- dan 17 & 25 Agustus
+   2026 libur nasional. Daftar libur asli diuji tersendiri di bagian
+   "KALENDER LIBUR NASIONAL & PEMBATASAN TRUK" (pakaiKalenderAsli). */
+const KALENDER_ASLI = { ...PREDICTION_CONFIG.calendar };
+const kalenderNetral = () =>
+  Object.assign(PREDICTION_CONFIG.calendar, { holidays: [], collectiveLeave: [], freightRestrictions: [] });
+const pakaiKalenderAsli = (fn) => {
+  Object.assign(PREDICTION_CONFIG.calendar, KALENDER_ASLI);
+  try { fn(); } finally { kalenderNetral(); }
+};
+kalenderNetral();
 
 console.log("\n— HARI KERJA —");
 // 2026-08-07 = Jumat
@@ -189,7 +206,8 @@ const withEta = { ...base, eta: "2026-08-14" };
 t("Manifest menggeser dasar hitungan", () => {
   const d = predictDelivery({ ...withEta, docProgress: { manifest: { date: "2026-08-17" } } });
   eq(d.source, "manifest");
-  eq(d.date, "2026-08-19"); // Sen17 tiba · Sel18 clearance · Rab19 antar
+  // BC 1.1 Sen17 + jeda 1 hari = tiba Sel18 · Rab19 clearance · Kam20 antar
+  eq(d.date, "2026-08-20");
   eq(d.confidence.percent, 80);   // Manifest = High
 });
 t("PIB mengalahkan Manifest", () => {
@@ -713,8 +731,8 @@ t("Manifest lebih AWAL dari ETA delay tidak menariknya mundur", () => {
 });
 t("Manifest lebih BARU dari ETA justru dipakai", () => {
   const d = predictDelivery({ ...DELAY, docProgress: { manifest: { date: "2026-08-14" } } });
-  eq(d.base, "2026-08-14");
-  eq(d.baseLabel, "Kedatangan (perkiraan dari Manifest)");
+  eq(d.base, "2026-08-15");   // BC 1.1 + jeda 1 hari
+  eq(d.baseLabel, "Kedatangan (perkiraan dari Manifest) + 1 hari");
 });
 t("Sandar tetap mengalahkan keduanya", () => {
   const d = predictDelivery({ ...DELAY, docProgress: {
@@ -825,8 +843,8 @@ t("Sandar mengalahkan Manifest sebagai bukti kedatangan", () => {
 });
 t("tanpa Sandar, Manifest tetap dipakai sebagai cadangan", () => {
   const d = predictDelivery({ ...LCL, docProgress: { manifest: { date: "2026-08-11" } } });
-  eq(d.base, "2026-08-11");
-  eq(d.baseLabel, "Kedatangan (perkiraan dari Manifest)");
+  eq(d.base, "2026-08-12");   // BC 1.1 diajukan sebelum sandar: + jeda 1 hari
+  eq(d.baseLabel, "Kedatangan (perkiraan dari Manifest) + 1 hari");
 });
 t("label mengikuti moda: pesawat mendarat", () => {
   const d = predictDelivery({ ...AIR, docProgress: { berth: { date: "2026-08-12" } } });
@@ -865,8 +883,8 @@ t("kedatangan pasti -> rentang hilang", () => {
 console.log("— MANIFEST = BUKTI KEDATANGAN —");
 t("Manifest menggantikan ETA sebagai titik kedatangan", () => {
   const d = predictDelivery({ ...LCL, docProgress: { manifest: { date: "2026-08-12" } } });
-  eq(d.base, "2026-08-12");
-  eq(d.date, "2026-08-18");   // Kam13,Jum14 strip · Sen17 clr · Sel18 antar
+  eq(d.base, "2026-08-13");   // BC 1.1 Rab12 + jeda 1 hari
+  eq(d.date, "2026-08-18");   // Jum14,Sab15 strip · Sen17 clr · Sel18 antar
 });
 t("SPPB melewati seluruh urusan pelabuhan", () => {
   const d = predictDelivery({ ...LCL, docProgress: {
@@ -1248,6 +1266,211 @@ t("aturan tidak cocok gugur seluruhnya", () => {
 t("angka operasional dibaca dari konfigurasi", () => {
   const ops = predictionOpsDays(predictionContext({ transport: "laut", muatan: "FCL" }));
   eq(ops.clearance, 1); eq(ops.delivery, 1); eq(ops.stripping, 0);
+});
+
+/* "Hari ini" dipindah sementara -- uji di bawah memakai tanggal Maret
+   2026, dan lapis kenyataan akan menggesernya ke 09-08-2026. */
+const padaHari = (iso, fn) => {
+  vm.runInContext(`todayISO = () => ${JSON.stringify(iso)};`, ctx);
+  try { fn(); } finally { vm.runInContext(`todayISO = () => ${JSON.stringify(HARI_INI_UJI)};`, ctx); }
+};
+const { hariTutupLangkah, hariTutupDiAntara, jalurOf, kunciKapalTeks, kunciVoyageTeks, jedaManifestHari } = ctx;
+const FCL_TPP = { mode: "import", etd: "2026-03-01", origin: "KRPUS", destination: "IDTPP",
+  routeType: "direct", transport: "laut", muatan: "FCL", etaMode: "manual", eta: "2026-03-11", docProgress: {} };
+
+console.log("— KALENDER LIBUR NASIONAL & PEMBATASAN TRUK —");
+t("data SKB: tanggal sah, tidak ganda, 2025-2027 lengkap", () => {
+  const c = KALENDER_ASLI;
+  const semua = [...c.holidays, ...c.collectiveLeave].map((h) => h.date);
+  semua.forEach((d) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !ctx.parseLocalDate(d)) throw new Error("tanggal rusak: " + d); });
+  const libur = c.holidays.map((h) => h.date);
+  eq(new Set(libur).size, libur.length, "libur ganda:");
+  ["2025", "2026", "2027"].forEach((th) => {
+    if (libur.filter((d) => d.startsWith(th)).length < 17) throw new Error("libur " + th + " kurang");
+  });
+  eq(c.holidays.find((h) => h.date === "2026-03-21").name, "Idulfitri 1447 H");
+  eq(c.collectiveLeave.some((h) => h.date === "2025-08-18"), true, "revisi 18-08-2025:");
+  c.freightRestrictions.forEach((r) => { if (!(r.from <= r.to)) throw new Error("rentang terbalik " + r.from); });
+});
+t("selisih hari kalender tanpa mengurai Date (pergantian tahun, kabisat)", () => {
+  eq(calendarDaysBetweenISO("2026-12-31", "2027-01-01"), 1);
+  eq(calendarDaysBetweenISO("2028-02-28", "2028-03-01"), 2);
+  eq(calendarDaysBetweenISO("2026-03-30", "2026-03-01"), -29);
+  eq(calendarDaysBetweenISO("", "2026-03-01"), null);
+  eq(calendarDaysBetweenISO("bukan tanggal", "2026-03-01"), null);
+});
+t("17 Agustus dilompati hari kerja", () => pakaiKalenderAsli(() => {
+  eq(addWorkingDaysISO("2026-08-14", 1), "2026-08-18");
+  eq(isWorkingDayISO("2026-08-17"), false);
+}));
+t("Lebaran 2026: libur + cuti bersama dilompati (Sel17 + 1 = Rab25)", () => pakaiKalenderAsli(() => {
+  // Rab18 cuti · Kam19 Nyepi · Jum20 cuti · Sab-Min (Idulfitri) · Sen23 & Sel24 cuti
+  eq(addWorkingDaysISO("2026-03-17", 1), "2026-03-25");
+}));
+t("cuti bersama bisa tidak dihitung tutup", () => pakaiKalenderAsli(() => {
+  PREDICTION_CONFIG.calendar.countCollectiveLeave = false;
+  try { eq(addWorkingDaysISO("2026-03-17", 1), "2026-03-18"); }
+  finally { PREDICTION_CONFIG.calendar.countCollectiveLeave = true; }
+}));
+t("pembatasan truk Lebaran hanya menahan ANTAR kontainer FCL", () => pakaiKalenderAsli(() => {
+  const fcl = hariTutupLangkah("delivery", { shipmentType: "SEA_FCL" });
+  eq(isWorkingDayISO("2026-03-25", fcl), false, "FCL antar:");
+  eq(isWorkingDayISO("2026-03-25"), true, "hari kerja biasa:");
+  eq(hariTutupLangkah("delivery", { shipmentType: "SEA_LCL" }), null, "LCL antar:");
+  eq(hariTutupLangkah("delivery", { shipmentType: "AIR" }), null, "udara antar:");
+  eq(hariTutupLangkah("clearance", { shipmentType: "SEA_FCL" }), null, "FCL clearance:");
+  // 13-03 pukul 12.00 baru mulai: pagi itu truk masih jalan
+  eq(isWorkingDayISO("2026-03-13", fcl), true, "13-03:");
+  eq([isWorkingDayISO("2026-03-27", fcl), isWorkingDayISO("2026-03-30", fcl)].join(","), "false,true", "ujung:");
+}));
+t("FCL sandar menjelang Lebaran: antar menunggu pembatasan truk usai", () => pakaiKalenderAsli(() => padaHari("2026-03-10", () => {
+  const d = predictDelivery({ ...FCL_TPP, docProgress: { berth: { date: "2026-03-16" } } });
+  eq(d.steps.find((x) => x.key === "clearance").to, "2026-03-17");
+  eq(d.date, "2026-03-30");   // 18-29 Maret truk sumbu 3 dilarang
+  const lcl = predictDelivery({ ...FCL_TPP, muatan: "LCL", docProgress: { berth: { date: "2026-03-16" } } });
+  eq(lcl.date, "2026-03-26");  // LCL: strip Sel17-Rab18 · clr Rab25 · antar Kam26
+})));
+t("rincian menyebut hari tutup yang dilewati", () => pakaiKalenderAsli(() => padaHari("2026-03-10", () => {
+  const d = predictDelivery({ ...FCL_TPP, docProgress: { berth: { date: "2026-03-16" } } });
+  const antar = d.steps.find((x) => x.key === "delivery");
+  const hari = hariTutupDiAntara(antar.from, antar.to, hariTutupLangkah("delivery", d.ctx));
+  eq(hari.length, 8, "jumlah:");   // 18,19,20,23,24 libur/cuti + 25,26,27 pembatasan truk
+  eq(hari.map((h) => h.kind).join(","), "cuti,libur,cuti,cuti,cuti,truk,truk,truk");
+  eq(hari[1].name, "Hari Suci Nyepi (Tahun Baru Saka 1948)");
+  eq(hari[5].name, "Pembatasan truk Lebaran 2026");
+})));
+t("stripping LCL tetap jalan di hari libur", () => pakaiKalenderAsli(() => padaHari("2026-03-10", () => {
+  const d = predictDelivery({ ...FCL_TPP, muatan: "LCL", docProgress: { berth: { date: "2026-03-18" } } });
+  eq(d.steps.find((x) => x.key === "stripping").to, "2026-03-20");
+})));
+
+console.log("— JALUR PIB —");
+const dgnJalur = (jalur, tambahan) => ({ ...FCL, docProgress: { berth: { date: "2026-08-03" },
+  pib: { date: "2026-08-03", jalur }, ...(tambahan || {}) } });
+t("jalur dibaca dari PIB, Billing, atau SPPB", () => {
+  eq(jalurOf({ docProgress: { pib: { date: "2026-08-03", jalur: "merah" } } }), "merah");
+  eq(jalurOf({ docProgress: { pib: { date: "2026-08-03" }, billing: { date: "2026-08-04", jalur: "hijau" } } }), "hijau");
+  eq(jalurOf({ docProgress: { sppb: { date: "2026-08-05", jalur: "mita" } } }), "mita");
+  // Jalur kuning sudah dihapus (PER-02/BC/2022): data lama diabaikan
+  eq(jalurOf({ docProgress: { pib: { date: "2026-08-03", jalur: "kuning" } } }), "");
+  eq(predictionContext({ docProgress: { pib: { jalur: "merah" } } }).jalur, "merah");
+});
+t("Merah: clearance menunggu pemeriksaan fisik (FCL 4 hari kerja)", () => {
+  const d = predictDelivery(dgnJalur("merah"));
+  const clr = d.steps.find((x) => x.key === "clearance");
+  eq(clr.days, 4); eq(clr.to, "2026-08-07");
+  eq(clr.label, "Customs clearance · jalur Merah");
+  eq(d.date, "2026-08-10");
+});
+t("Hijau sehari, MITA langsung SPPB", () => padaHari("2026-08-01", () => {
+  eq(predictDelivery(dgnJalur("hijau")).date, "2026-08-05");
+  const mita = predictDelivery(dgnJalur("mita"));
+  eq(kunci(mita).join(">"), "delivery");
+  eq(mita.date, "2026-08-04");
+}));
+t("jalur per tipe: udara Merah 2 hari", () => {
+  const d = predictDelivery({ ...dgnJalur("merah"), transport: "udara", muatan: "" });
+  eq(d.steps.find((x) => x.key === "clearance").days, 2);
+});
+t("jalur diketahui menaikkan keyakinan sampai SPPB terbit", () => padaHari("2026-08-01", () => {
+  const tanpa = predictDelivery(dgnJalur(""));
+  const dengan = predictDelivery(dgnJalur("hijau"));
+  eq(dengan.confidence.percent - tanpa.confidence.percent, PREDICTION_CONFIG.confidencePercent.bonuses.laneKnown);
+  const selesai = predictDelivery(dgnJalur("hijau", { sppb: { date: "2026-08-04" } }));
+  if (selesai.confidence.reasons.some((r) => /Jalur PIB/.test(r.text))) throw new Error("bonus jalur sesudah SPPB");
+}));
+
+console.log("— KEDATANGAN: JEDA MANIFEST, LCL, KAPAL YANG SAMA —");
+t("jeda Manifest bawaan: laut 1 hari, udara 0", () => {
+  eq(jedaManifestHari("SEA_FCL"), 1);
+  eq(jedaManifestHari("SEA_LCL"), 1);
+  eq(jedaManifestHari("AIR"), 0);
+  const d = predictDelivery({ ...AIR, docProgress: { manifest: { date: "2026-08-12" } } });
+  eq(d.base, "2026-08-12");
+  eq(d.baseLabel, "Kedatangan (perkiraan dari Manifest)");
+});
+t("LCL: SPPB lebih dulu tetap menunggu stripping selesai", () => {
+  const d = predictDelivery({ ...LCL, docProgress: { berth: { date: "2026-08-12" }, sppb: { date: "2026-08-12" } } });
+  eq(kunci(d).join(">"), "waitStripping>delivery");
+  eq(d.steps[0].to, "2026-08-14");   // sandar Rab12 + 2 hari kalender
+  eq(d.date, "2026-08-17");          // antar: hari kerja sesudah Jum14
+  // FCL dengan data yang sama langsung antar
+  eq(predictDelivery({ ...FCL, docProgress: { berth: { date: "2026-08-12" }, sppb: { date: "2026-08-12" } } }).date, "2026-08-13");
+});
+t("nama kapal & voyage diseragamkan", () => {
+  eq(kunciKapalTeks("M/V EVER GIVEN"), "EVER GIVEN");
+  eq(kunciKapalTeks("MV. Sawasdee Altair"), "SAWASDEE ALTAIR");
+  eq(kunciKapalTeks("KM Tanto Sejahtera"), "TANTO SEJAHTERA");
+  eq(kunciKapalTeks("TBA"), "");
+  eq(kunciKapalTeks("-"), "");
+  eq(kunciVoyageTeks("V.123S"), "123S");
+  eq(kunciVoyageTeks("Voy 123S"), "123S");
+  eq(kunciVoyageTeks("123S"), "123S");
+});
+
+console.log("— DRAFT BUKAN MILESTONE —");
+t("PIB berstatus draft (belum diajukan) tidak menggerakkan prediksi & tidak berjalur", () => padaHari("2026-08-01", () => {
+  const tanpa = predictDelivery({ ...FCL, docProgress: { berth: { date: "2026-08-03" } } });
+  const draft = predictDelivery({ ...FCL, docProgress: { berth: { date: "2026-08-03" }, pib: { date: "2026-08-05", draft: true, jalur: "merah" } } });
+  eq(draft.date, tanpa.date, "tanggal:");
+  eq(draft.source, tanpa.source, "sumber:");
+  eq(ctx.milestoneDateOf({ docProgress: { pib: { date: "2026-08-05", draft: true } } }, "pib"), "", "milestone:");
+  eq(jalurOf({ docProgress: { pib: { date: "2026-08-05", draft: true, jalur: "merah" } } }), "", "jalur draft:");
+  const asli = predictDelivery({ ...FCL, docProgress: { berth: { date: "2026-08-03" }, pib: { date: "2026-08-05", tglDraft: "2026-08-01" } } });
+  eq(asli.source, "pib", "terdaftar = milestone:");
+}));
+
+console.log("— RENCANA MUNDUR: DIBUTUHKAN DI PABRIK —");
+const { rencanaMundur, statusKebutuhan } = ctx;
+t("ETA paling lambat = kedatangan terakhir yang masih sampai pada hari H (FCL: clearance + antar)", () => {
+  const r = rencanaMundur(FCL, "2026-08-24");
+  eq(r.ok, true);
+  eq(r.eta, "2026-08-20", "ETA Kam:");          // clearance Jum21, antar Sen24
+  eq(r.langkah.map((l) => l.key + ":" + l.to).join(","), "clearance:2026-08-21,delivery:2026-08-24");
+  // Sehari lebih lambat sudah tidak cukup -- jadwal darat yang sama dengan Estimated Delivery
+  const sehariLagi = predictDelivery({ ...FCL, eta: "2026-08-21", etaMode: "manual" });
+  if (!(sehariLagi.date > "2026-08-24")) throw new Error("ETA Jum21 masih cukup: " + sehariLagi.date);
+  eq(predictDelivery({ ...FCL, eta: r.eta, etaMode: "manual" }).date, "2026-08-24", "ETA itu tepat sampai hari H:");
+});
+t("ETD paling lambat = ETA paling lambat - transit TERPANJANG rute", () => {
+  const r = rencanaMundur(FCL, "2026-08-24");
+  eq(r.transit.max, 10);
+  eq(r.etd, addCalendarDaysISO(r.eta, -r.transit.max));
+  eq(r.etd, "2026-08-10");
+});
+t("LCL menunggu stripping: ETA paling lambat lebih awal dari FCL", () => {
+  const r = rencanaMundur(LCL, "2026-08-24");
+  eq(r.langkah.map((l) => l.key).join(">"), "stripping>clearance>delivery");
+  eq(r.eta, "2026-08-18");
+  if (!(r.eta < rencanaMundur(FCL, "2026-08-24").eta)) throw new Error("LCL tidak lebih awal");
+});
+t("milestone kiriman ini tidak dipakai -- rencana, bukan perkiraan kiriman berjalan", () => {
+  const kosong = rencanaMundur(FCL, "2026-08-24");
+  const berjalan = rencanaMundur({ ...FCL, docProgress: { berth: { date: "2026-08-03" }, sppb: { date: "2026-08-04" } } }, "2026-08-24");
+  eq(berjalan.eta, kosong.eta);
+});
+t("pembatasan truk Lebaran ikut: antar baru bisa sesudah pembatasan selesai", () => pakaiKalenderAsli(() => {
+  const r = rencanaMundur({ ...FCL_TPP }, "2026-03-30");
+  eq(r.eta, "2026-03-26");
+  eq(r.langkah.find((l) => l.key === "delivery").to, "2026-03-30");
+}));
+t("tanpa tanggal dibutuhkan / buku Export -> tidak ada rencana", () => {
+  eq(rencanaMundur(FCL, ""), null);
+  eq(rencanaMundur({ ...FCL, mode: "export" }, "2026-08-24"), null);
+  eq(rencanaMundur({ ...FCL, neededDate: "2026-08-24" }).eta, "2026-08-20", "dibaca dari s.neededDate:");
+});
+t("status kebutuhan: telat / mepet / aman (Estimated Delivery) & tepat (In Factory)", () => {
+  const k = (lebih) => statusKebutuhan({ mode: "import", neededDate: "2026-08-20", ...lebih });
+  eq(JSON.stringify(k({ actual: "2026-08-22" })), JSON.stringify({ kind: "telat", butuh: "2026-08-20", sampai: "2026-08-22", selisih: -2, fakta: false }));
+  eq(k({ actual: "2026-08-19" }).kind, "mepet");
+  eq(k({ actual: "2026-08-18" }).kind, "mepet", "cadangan 2 hari masih mepet:");
+  eq(k({ actual: "2026-08-17" }).kind, "aman");
+  eq(k({ actual: "2026-08-17" }).selisih, 3);
+  eq(JSON.stringify([k({ factoryDate: "2026-08-18", actual: "2026-08-25" }).kind, k({ factoryDate: "2026-08-18" }).fakta]), JSON.stringify(["tepat", true]), "fakta menang:");
+  eq(k({ factoryDate: "2026-08-21" }).kind, "telat");
+  eq(k({}).kind, "belum");
+  eq(statusKebutuhan({ mode: "export", neededDate: "2026-08-20", actual: "2026-08-25" }), null);
+  eq(statusKebutuhan({ mode: "import", actual: "2026-08-25" }), null);
 });
 
 console.log(`\n${pass} lulus, ${fail} gagal\n`);

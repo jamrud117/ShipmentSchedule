@@ -130,6 +130,43 @@ function departingTodayHtml(s) {
 }
 
 // Tag PI kartu: "PI", atau "PI × 2" untuk lebih dari satu dokumen PI
+/* DIBUTUHKAN DI PABRIK (prediction-mundur.js): Estimated Delivery
+   dibandingkan tanggal yang dibutuhkan produksi -- telat (merah), mepet
+   (cadangan <= 2 hari, kuning), aman (netral). */
+function tagKebutuhanHtml(s) {
+  const k = typeof statusKebutuhan === "function" ? statusKebutuhan(s) : null;
+  if (!k || k.fakta) return "";
+  const tgl = fmtDate(k.butuh);
+  const judul = escapeAttr(
+    k.sampai
+      ? tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`, `Needed at the factory ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`)
+      : tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery belum bisa dihitung`, `Needed at the factory ${tgl} · Estimated Delivery not available yet`),
+  );
+  if (k.kind === "telat")
+    return `<span class="tag tag-butuh tag-butuh--telat" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Telat ${-k.selisih} hari dari kebutuhan ${tgl}`, `${-k.selisih} day${k.selisih === -1 ? "" : "s"} past the need date ${tgl}`)}</span>`;
+  if (k.kind === "mepet")
+    return `<span class="tag tag-butuh tag-butuh--mepet" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Mepet: butuh ${tgl}, cadangan ${k.selisih} hari`, `Tight: needed ${tgl}, ${k.selisih}-day margin`)}</span>`;
+  return `<span class="tag tag-butuh" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Butuh ${tgl}`, `Needed ${tgl}`)}${k.kind === "aman" ? tt(` · cadangan ${k.selisih} hari`, ` · ${k.selisih}-day margin`) : ""}</span>`;
+}
+
+/* LARTAS (core/lartas.js): PI / LS yang wajib menurut barangnya tapi
+   belum ada nomornya di jadwal. */
+function tagLartasHtml(s) {
+  const kurang = typeof lartasKurang === "function" ? lartasKurang(s) : [];
+  if (!kurang.length) return "";
+  const perlu = kebutuhanLartas(s);
+  const sebab = kurang
+    .map((k) => {
+      const hs = [...new Set(perlu[k].filter((a) => a.sebab === "hs").map((a) => a.hs))];
+      const bekas = perlu[k].some((a) => a.sebab === "bukanBaru");
+      return `${k}: ${[hs.length ? "HS " + hs.join(", ") : "", bekas ? tt("barang bukan baru", "used goods") : ""].filter(Boolean).join(" · ")}`;
+    })
+    .join("; ");
+  return `<span class="tag tag-lartas" title="${escapeAttr(tt(`Lartas — wajib ${sebab}`, `Restricted — required ${sebab}`))}"><i class="bi bi-shield-exclamation"></i> ${escapeHtml(
+    tt(`${kurang.join(" & ")} belum ada`, `${kurang.join(" & ")} missing`),
+  )}</span>`;
+}
+
 function tagPiHtml(s) {
   const n = (dokPelengkapJadwal(s).pi || []).filter((d) => hasMeaningfulValue(d.nomor)).length;
   return n ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI${n > 1 ? ` × ${n}` : ""}</span>` : "";
@@ -265,7 +302,7 @@ function renderExpandedCard(s) {
 
 ${cardBodySplitHtml(s, totals)}
 
-    <div class="tag-row">${delayBadgeHtml(s)}${buildTags(s, totals)}</div>
+    <div class="tag-row">${delayBadgeHtml(s)}${tagKebutuhanHtml(s)}${tagLartasHtml(s)}${buildTags(s, totals)}</div>
 
     <div class="lane">
       ${buildLaneHtml(s)}

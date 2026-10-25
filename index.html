@@ -3450,6 +3450,20 @@
                   />
                 </div>
               </div>
+              <!-- DIBUTUHKAN DI PABRIK (Import): hari produksi membutuhkan
+                   barangnya. Rencana mundur di sampingnya
+                   (core/prediction-mundur.js, renderRencanaMundurForm):
+                   ETA & ETD paling lambat, dan cadangan Estimated Delivery
+                   terhadap tanggal ini. -->
+              <div class="s12 factory-field">
+                <div class="rencana-mundur" id="rencanaMundur">
+                  <div class="rencana-isian">
+                    <label class="form-label" for="fNeededDate" data-en="Needed at Factory">Dibutuhkan di Pabrik</label>
+                    <input type="date" class="form-control" id="fNeededDate" />
+                  </div>
+                  <div class="rencana-hasil" id="rencanaMundurHasil" role="status" aria-live="polite"></div>
+                </div>
+              </div>
               <div class="s12" id="predictionBlock">
                 <div
                   class="pred-notice d-none"
@@ -3578,9 +3592,20 @@
                 <span class="subsection-icon"><i class="bi bi-boxes"></i></span>
                 Daftar Barang dalam Pengiriman Ini
               </div>
-              <button type="button" class="btn btn-teal btn-sm" id="btnAddItem" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add Item">
-                <i class="bi bi-plus-lg"></i> Tambah Barang
-              </button>
+              <div class="barang-aksi">
+                <!-- Samakan isian baris 1 ke semua baris, kolom mana pun
+                     (item-samakan.js: isinya dirakit saat dibuka) -->
+                <div class="dropdown" id="samakanMenu" hidden>
+                  <button type="button" class="btn-quiet" id="btnSamakanMenu" data-bs-toggle="dropdown" aria-expanded="false"
+                    data-en="<i class=&quot;bi bi-arrow-down-square&quot;></i> Copy row 1">
+                    <i class="bi bi-arrow-down-square"></i> Samakan baris 1
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end samakan-menu" id="samakanMenuIsi"></ul>
+                </div>
+                <button type="button" class="btn btn-teal btn-sm" id="btnAddItem" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add Item">
+                  <i class="bi bi-plus-lg"></i> Tambah Barang
+                </button>
+              </div>
             </div>
 
             <!-- Wadah ukuran (@container barang-isi, form.css): di layar
@@ -3614,8 +3639,8 @@
                          2 = BUKAN BARU. Kode Negara Asal Barang (kedua
                          buku): kode negara ISO, kotaknya bisa diketik
                          untuk mencari (#negaraList, js/core/negara.js). -->
-                    <th class="kolom-kode import-col" data-en="Goods Condition Code">Kode Kondisi Barang</th>
-                    <th class="kolom-kode" data-en="Country of Origin Code">Kode Negara Asal Barang</th>
+                    <th class="kolom-kode import-col" data-en="Goods Condition">Kondisi Barang</th>
+                    <th class="kolom-kode" data-en="Country of Origin">Negara Asal</th>
                     <!-- Marks (buku Export saja): dikosongkan ->
                          dibangkitkan otomatis ("C# : 8-1"). Diisi kalau
                          penandaannya tidak mengikuti urutan koli. -->
@@ -3910,6 +3935,9 @@
               <span class="subsection-icon"><i class="bi bi-files"></i></span>
               Dokumen Pelengkap Pabean
             </div>
+            <!-- Lartas (PI / LS / SNI wajib menurut HS Code & kondisi barang)
+                 & petunjuk COO menurut negara asal: segarkanLartasForm() -->
+            <div class="lartas-box d-none" id="lartasForm" role="status"></div>
             <div class="dp" id="dokPelengkapIsi"></div>
           </div>
         </div>
@@ -4340,6 +4368,8 @@
             <div class="prompt-error d-none" id="promptError"></div>
           </div>
           <div class="modal-footer dialog-foot">
+            <!-- Aksi ketiga di kiri (showPrompt: aksiKiri), mis. "Batalkan tahap" -->
+            <button type="button" class="btn-quiet prompt-aksi-kiri d-none" id="promptAksiKiri"></button>
             <button
               type="button"
               class="btn-quiet"
@@ -4573,6 +4603,9 @@
          Asal di tabel barang, impor CEISA/PIB/CIPL, Cek PIB/PEB. Sesudah
          helpers.js (escapeHtml) -- saran #negaraList diisi saat dimuat. -->
     <script src="js/core/negara.js"></script>
+    <!-- Lartas per HS Code (PI / LS / SNI), barang bukan baru, & skema FTA
+         per negara asal untuk petunjuk COO -->
+    <script src="js/core/lartas.js"></script>
     <script src="js/core/unlocode.js"></script>
     <script src="js/core/status.js"></script>
     <script src="js/core/state.js"></script>
@@ -4593,12 +4626,15 @@
     <script src="js/core/prediction-learning.js"></script>
     <script src="js/core/prediction.js"></script>
     <script src="js/core/prediction-backtest.js"></script>
+    <!-- Dibutuhkan di pabrik -> ETA & ETD paling lambat (rencana mundur) -->
+    <script src="js/core/prediction-mundur.js"></script>
     <script src="js/core/route-inference.js"></script>
 
     <!-- ========================================= -->
     <!-- DATA -->
     <!-- ========================================= -->
     <script src="js/data/api.js"></script>
+    <script src="js/data/lampiran.js"></script>
 
     <!-- ========================================= -->
     <!-- UI -->

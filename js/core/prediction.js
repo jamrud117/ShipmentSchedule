@@ -142,10 +142,42 @@ async function refreshShipmentPrediction(s, opsi) {
   return berubah;
 }
 
+/* KIRIMAN LAIN DI KAPAL YANG SAMA.
+
+   Sandar atau Manifest yang baru dicatat di satu kiriman juga
+   kedatangan kiriman lain di kapal + voyage yang sama
+   (kedatanganSekapal, prediction-milestones.js). Perkiraannya ikut
+   dihitung ulang & disimpan sekarang, bukan menunggu halaman dimuat
+   ulang. Panggil SESUDAH refreshShipmentPrediction(s) -- riwayatnya
+   sudah disegarkan di sana. Hasil: kiriman yang berubah. */
+async function segarkanKirimanSekapal(s) {
+  const k = kunciSekapal(s);
+  if (!k) return [];
+  const lain = semuaKiriman().filter((x) => {
+    if (!x || x === s || (s.id && x.id === s.id)) return false;
+    const kx = kunciSekapal(x);
+    return !!kx && kx.grup === k.grup && sekapalCocok(k, kx);
+  });
+  const berubah = [];
+  for (const x of lain) {
+    const kolom = applyPredictionToShipment(x);
+    if (!kolom.length) continue;
+    berubah.push(x);
+    if (typeof persistFields === "function") {
+      const patch = {};
+      kolom.forEach((f) => (patch[f] = x[f]));
+      await persistFields(x.id, patch);
+    }
+  }
+  if (berubah.length && typeof render === "function") render();
+  return berubah;
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     recomputeShipmentDates,
     applyPredictionToAll,
     refreshShipmentPrediction,
+    segarkanKirimanSekapal,
   };
 }

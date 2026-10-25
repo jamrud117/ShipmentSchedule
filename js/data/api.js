@@ -97,8 +97,24 @@ async function loadShipments() {
   // PENTING: render() harus dipanggil di sini
   shipmentsLoaded = true;
   render();
+  siapkanLartasLatar();
 
   await syncArrivedStatuses();
+}
+
+/* Database HS Code disiapkan di LATAR sesudah papan tergambar: tanda
+   lartas per HS (core/lartas.js) baru terbaca sesudahnya. Kalau ada HS
+   bertanda lartas, kartu & Ringkasan digambar ulang -- peringatan "PI /
+   LS belum ada" ikut muncul tanpa harus membuka halaman HS Code dulu. */
+function siapkanLartasLatar() {
+  if (typeof hsCodeSiap !== "function" || (typeof hsCodeRows !== "undefined" && hsCodeRows.length)) return;
+  hsCodeSiap().then((ok) => {
+    if (!ok || !petaLartasHs().size) return;
+    render();
+    const ringkasan = $("#viewOverview");
+    if (ringkasan && !ringkasan.classList.contains("d-none") && typeof renderOverview === "function") renderOverview();
+    if (typeof segarkanLartasForm === "function") segarkanLartasForm();
+  });
 }
 
 /* ------------------------------------------------------------------
@@ -210,9 +226,16 @@ const KOLOM_OPSIONAL = {
   /* Satu dokumen per jenis tanpa dokumen lain tetap utuh di kolom lama
      (pi / pi_date, ...): yang tertinggal hanya dokumen kedua dst. & dokumen lain. */
   dokumen_pelengkap: Object.assign(
-    kolomOpsional("migration-dokumen-pelengkap.sql", "PI, LS & Polis kedua dst. serta Dokumen Lain", "the second and further PI, LS & policies, and Other Documents"),
-    { hilang: (d) => !!d && (JENIS_DOK_PENGIRIMAN.some((j) => (d[j] || []).length > 1) || (d.lain || []).length > 0) },
+    kolomOpsional("migration-dokumen-pelengkap.sql", "PI, LS & Polis kedua dst., Dokumen Lain, serta lampiran PI & LS", "the second and further PI, LS & policies, Other Documents, and PI & LS attachments"),
+    {
+      hilang: (d) =>
+        !!d &&
+        (JENIS_DOK_PENGIRIMAN.some((j) => (d[j] || []).length > 1 || (d[j] || []).some((x) => (x.berkas || []).length)) ||
+          (d.lain || []).length > 0),
+    },
   ),
+  // Dibutuhkan di pabrik -> rencana mundur ETD/ETA (core/prediction-mundur.js)
+  needed_date: kolomOpsional("migration-lampiran-lartas-kebutuhan.sql", "Dibutuhkan di Pabrik", "Needed at Factory"),
 };
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
@@ -253,8 +276,8 @@ function kolomBelumDikenal(error, daftar) {
 const KOLOM_BARANG_CEISA = ["kode_barang", "merek", "tipe", "ukuran", "spesifikasi_lain"];
 const BERKAS_BARANG_CEISA = "migration-barang-ceisa.sql";
 const KOLOM_BARANG_OPSIONAL = {
-  kode_kondisi_barang: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Kode Kondisi Barang", "Goods Condition Code"); } },
-  kode_negara_asal: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Kode Negara Asal", "Country of Origin Code"); } },
+  kode_kondisi_barang: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Kondisi Barang", "Goods Condition"); } },
+  kode_negara_asal: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Negara Asal", "Country of Origin"); } },
   pi_nomor: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("PI barang", "Item PI"); } },
   pi_no_item: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("No. item di PI", "Item no. in PI"); } },
 };

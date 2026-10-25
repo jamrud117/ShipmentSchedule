@@ -328,6 +328,14 @@
   font-size: var(--t-xs);
   color: var(--n-500);
 }
+/* Libur/cuti bersama/pembatasan truk yang dilewati langkah itu */
+.pred-step-libur {
+  color: var(--s-warn);
+}
+.pred-step-libur i {
+  font-size: 0.7rem;
+  margin-right: 2px;
+}
 .pred-steps li:last-child {
   border-bottom: 0;
   font-weight: 700;

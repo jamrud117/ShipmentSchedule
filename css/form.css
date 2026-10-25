@@ -384,8 +384,30 @@
 }
 @media (max-width: 575.98px) {
   .form-section-card > .d-flex > .btn,
-  .route-stops-box > .d-flex > .btn {
+  .route-stops-box > .d-flex > .btn,
+  .form-section-card > .d-flex > .barang-aksi {
     flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+/* Kepala Daftar Barang: "Samakan baris 1" + "Tambah Barang" sebaris,
+   setinggi sama; di ponsel berbagi rata selebar kartu. */
+.barang-aksi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+.barang-aksi .btn-quiet {
+  height: 100%;
+}
+@media (max-width: 575.98px) {
+  .barang-aksi > :not([hidden]) {
+    flex: 1 1 0;
+  }
+  .barang-aksi .btn-quiet,
+  .barang-aksi .btn {
+    width: 100%;
     justify-content: center;
   }
 }
@@ -848,6 +870,19 @@ table.item-table select[data-f="jenisBarang"] {
 .hscode-lookup-btn:hover {
   border-color: var(--p-300);
   color: var(--p-600);
+}
+/* HS Code yang terisi otomatis dari Database HS Code menurut nama
+   barangnya (hscode-lookup.js) -- berbeda dari yang diketik sendiri. */
+table.item-table input.hs-otomatis {
+  border-color: var(--s-ok-line);
+  background: var(--s-ok-bg);
+  color: var(--s-ok);
+}
+/* Nama barang cocok dengan beberapa kode: tombol cari = pilih salah satu */
+.hscode-lookup-btn.is-saran {
+  border-color: var(--s-warn-line);
+  background: var(--s-warn-bg);
+  color: var(--s-warn);
 }
 /* Popover cari HS Code — satu elemen dipakai bergantian untuk baris
    mana pun (lihat komentar di index.html & hscode-lookup.js).
@@ -1371,6 +1406,126 @@ tr.item-fac-row td {
 .dp-baris--lain {
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(0, 1fr) 34px;
 }
+/* PI & LS: [ nomor ][ tanggal ][ klip ][ x ], lampirannya sebaris penuh di bawah */
+.dp-baris--berkas {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 34px 34px;
+}
+.dp-lampir {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--p-600);
+  cursor: pointer;
+}
+.dp-lampir:hover {
+  border-color: var(--p-400);
+  background: var(--p-50);
+}
+.dp-lampir:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.dp-lampir.has-value {
+  border-color: var(--p-300);
+  background: var(--p-50);
+}
+.dp-lampir-n {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--p-600);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.dp-berkas {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* LARTAS & COO di atas daftar dokumen pelengkap (dok-pelengkap.js) */
+.lartas-box {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border: 1px solid var(--p-200);
+  border-left-width: 3px;
+  border-radius: var(--r-sm);
+  background: var(--p-50);
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.lartas-box.is-kurang {
+  border-color: var(--s-danger-line);
+  border-left-color: var(--s-danger);
+  background: var(--s-danger-bg);
+}
+.lartas-judul {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.lartas-daftar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.lartas-baris {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  line-height: 1.45;
+}
+.lartas-baris > i {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.lartas-baris--kurang > i,
+.lartas-baris--kurang .lartas-status {
+  color: var(--s-danger);
+  font-weight: 600;
+}
+.lartas-baris--ada > i,
+.lartas-baris--ada .lartas-status {
+  color: var(--p-600);
+}
+.lartas-baris--info > i {
+  color: var(--s-warn);
+}
+.lartas-fta {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  line-height: 1.45;
+}
+.lartas-daftar + .lartas-fta {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.lartas-fta > i {
+  margin-top: 2px;
+  color: var(--p-500);
+}
 .dp-baris .form-select {
   text-overflow: ellipsis;
 }
@@ -1423,9 +1578,99 @@ tr.item-fac-row td {
   .dp-baris--lain {
     grid-template-columns: minmax(0, 1fr) 34px;
   }
+  .dp-baris--berkas {
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
+  }
   .dp-baris [data-dp-k="nomor"] {
     grid-column: 1 / -1;
   }
+}
+
+/* RENCANA MUNDUR -- Dibutuhkan di Pabrik (prediction-ui.js): kotak
+   tanggalnya di kiri, ETA & ETD paling lambat beserta pembandingnya di
+   kanan; di layar sempit ditumpuk. */
+.rencana-mundur {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 14px 22px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-50);
+}
+@media (max-width: 767.98px) {
+  .rencana-mundur {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.rencana-hasil {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.rm-kosong {
+  align-self: center;
+  color: var(--n-500);
+  line-height: 1.5;
+  padding-top: 28px;
+}
+@media (max-width: 767.98px) {
+  .rm-kosong {
+    padding-top: 0;
+  }
+}
+.rm-kosong i {
+  color: var(--p-500);
+  margin-right: 4px;
+}
+.rm-baris {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+.rm-angka {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rm-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--n-500);
+}
+.rm-angka b {
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  color: var(--ink);
+}
+.rm-ket {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  line-height: 1.5;
+}
+.rm-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.45;
+}
+.rm-status i {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.rm-status--aman i {
+  color: var(--p-600);
+}
+.rm-status--mepet {
+  color: var(--s-warn);
+}
+.rm-status--telat {
+  color: var(--s-danger);
+  font-weight: 600;
 }
 
 .calc-box {

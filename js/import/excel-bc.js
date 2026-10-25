@@ -152,6 +152,39 @@ function kodeBarangDraft(row) {
   return out;
 }
 
+/* JALUR & NPE DARI RESPON CEISA (progres dokumen, doc-steps.js).
+
+   Kode respon jalur tidak dibakukan di berkas unduhan, jadi yang dibaca
+   TULISANNYA: SPJM / "JALUR MERAH", SPJH / "JALUR HIJAU", MITA / "JALUR
+   PRIORITAS" -- di kolom mana pun pada baris RESPON, atau isi kolom
+   JALUR HEADER bila ada. Tanpa tulisan itu jalur dibiarkan kosong:
+   menebak jalur lebih buruk daripada tidak tahu. Merah mengalahkan
+   yang lain (SPJM bisa terbit menyusul). */
+function jalurDariTeks(teks, kolomJalur) {
+  const isi = String(teks == null ? "" : teks).toUpperCase().replace(/\s+/g, " ").trim();
+  if (!isi) return "";
+  if (/\bSPJM\b|JALUR MERAH/.test(isi) || (kolomJalur && /^MERAH\b/.test(isi))) return "merah";
+  if (/\bSPJH\b|JALUR HIJAU/.test(isi) || (kolomJalur && /^HIJAU\b/.test(isi))) return "hijau";
+  if (/\bMITA\b|JALUR PRIORITAS/.test(isi)) return "mita";
+  return "";
+}
+function jalurDokumenCeisa(respon, header) {
+  const temu = new Set();
+  ["JALUR", "KODE JALUR", "NAMA JALUR"].forEach((k) => {
+    const j = jalurDariTeks(header[k], true);
+    if (j) temu.add(j);
+  });
+  respon.forEach((r) => Object.values(r).forEach((v) => {
+    const j = jalurDariTeks(v, false);
+    if (j) temu.add(j);
+  }));
+  return ["merah", "hijau", "mita"].find((j) => temu.has(j)) || "";
+}
+function tanggalResponNpe(respon) {
+  const r = respon.find((x) => Object.values(x).some((v) => /\bNPE\b|NOTA PELAYANAN EKSPOR/i.test(String(v == null ? "" : v))));
+  return r ? excelValueToISODate(r["TANGGAL RESPON"]) : "";
+}
+
 function parseBcExcelWorkbook(wb) {
   const notes = [];
   const header = sheetRows(wb, "HEADER")[0] || {};
@@ -565,11 +598,28 @@ function parseBcExcelWorkbook(wb) {
     const seri = kunciSeri(row["SERI BARANG"]);
     return { seri, dokumen: (skbBySeriBarang.get(seri) || []).map((sk) => ({ ...sk })) };
   });
+  /* BAHAN PROGRES DOKUMEN (progresDariDokumenPabean, doc-steps.js):
+     pendaftaran PIB/PEB APA ADANYA (docDate di atas bisa tanggal SPPB),
+     SPPB, BC 1.1 HEADER (Manifest), jalur & NPE dari RESPON. */
+  const headerTeks = (...kolom) => kolom.map((k) => excelStr(header[k])).find(Boolean) || "";
+  const progres = {
+    nomorDaftar: excelStr(header["NOMOR DAFTAR"]),
+    tanggalDaftar: excelValueToISODate(header["TANGGAL DAFTAR"]),
+    sppb: respTanggal,
+    bc11: {
+      nomor: headerTeks("NOMOR BC11", "NOMOR BC 11", "NO BC11"),
+      tanggal: tanggalHeader("TANGGAL BC11", "TANGGAL BC 11", "TGL BC11"),
+    },
+    jalur: jalurDokumenCeisa(respon, header),
+    npe: modeHint === "export" ? tanggalResponNpe(respon) : "",
+  };
+
   return {
     fields,
     items,
     notes,
     modeHint,
+    progres,
     source: "excel",
     kolomBarang,
     fasilitasBarang,

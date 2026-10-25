@@ -541,28 +541,36 @@ function kenaliDokumenPelengkap(dok, opsi) {
 }
 
 /* DAFTAR DOKUMEN PELENGKAP SATU JADWAL -- s.dokPelengkap:
-     { pi: [{ nomor, tanggal }], ls: [...], polis: [...],
+     { pi: [{ nomor, tanggal, berkas? }], ls: [...], polis: [...],
        lain: [{ kode, nomor, tanggal }] }   (dokumen lain ber-kode CEISA)
-   Entri tanpa nomor & tanggal dibuang; nomor yang sama (jenis yang sama)
-   tidak diulang -- yang bertanggal melengkapi yang belum. */
+   `berkas` = lampiran dokumennya (PI & LS, js/data/lampiran.js).
+   Entri tanpa nomor, tanggal & lampiran dibuang; nomor yang sama (jenis
+   yang sama) tidak diulang -- yang bertanggal melengkapi yang belum,
+   lampirannya digabung. */
 function dokPelengkapKosong() {
   return { pi: [], ls: [], polis: [], lain: [] };
 }
 
-function tambahDokumenPengiriman(daftar, nomor, tanggal, kode) {
+function tambahDokumenPengiriman(daftar, nomor, tanggal, kode, berkas) {
   const entri = { nomor: String(nomor == null ? "" : nomor).trim(), tanggal: String(tanggal || "").slice(0, 10) };
   if (kode !== undefined) entri.kode = kodeDokumen(kode);
-  if (!entri.nomor && !entri.tanggal) return;
+  const lampiran = typeof rapikanBerkas === "function" ? rapikanBerkas(berkas) : [];
+  if (!entri.nomor && !entri.tanggal && !lampiran.length) return;
   const sama = entri.nomor && daftar.find((d) => d.nomor === entri.nomor && (kode === undefined || d.kode === entri.kode));
-  if (!sama) daftar.push(entri);
-  else if (!sama.tanggal) sama.tanggal = entri.tanggal;
+  if (!sama) {
+    if (lampiran.length) entri.berkas = lampiran;
+    daftar.push(entri);
+    return;
+  }
+  if (!sama.tanggal) sama.tanggal = entri.tanggal;
+  if (lampiran.length) sama.berkas = rapikanBerkas((sama.berkas || []).concat(lampiran));
 }
 
 function rapikanDokPelengkap(x) {
   const out = dokPelengkapKosong();
   if (!x || typeof x !== "object") return out;
-  JENIS_DOK_PENGIRIMAN.forEach((j) => (Array.isArray(x[j]) ? x[j] : []).forEach((d) => d && tambahDokumenPengiriman(out[j], d.nomor, d.tanggal)));
-  (Array.isArray(x.lain) ? x.lain : []).forEach((d) => d && tambahDokumenPengiriman(out.lain, d.nomor, d.tanggal, d.kode));
+  JENIS_DOK_PENGIRIMAN.forEach((j) => (Array.isArray(x[j]) ? x[j] : []).forEach((d) => d && tambahDokumenPengiriman(out[j], d.nomor, d.tanggal, undefined, d.berkas)));
+  (Array.isArray(x.lain) ? x.lain : []).forEach((d) => d && tambahDokumenPengiriman(out.lain, d.nomor, d.tanggal, d.kode, d.berkas));
   return out;
 }
 

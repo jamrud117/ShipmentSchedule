@@ -119,6 +119,10 @@
 .task--doc {
   border-left-color: var(--sec-500);
 }
+/* Draft sudah disetujui, aslinya belum datang */
+.task--asli {
+  border-left-color: var(--p-300);
+}
 .task-reason {
   flex-shrink: 0;
   width: 92px;
@@ -135,6 +139,12 @@
 }
 .task--doc .task-reason {
   color: var(--sec-600);
+}
+.task--asli .task-reason {
+  color: var(--p-500);
+}
+.ov-asli .stat-line-label i {
+  color: var(--p-500);
 }
 /* TIGA TINGKAT: perusahaan / keterangan / nama barang.
 
@@ -330,8 +340,38 @@
 }
 /* Label baris berupa flex: rinciannya turun ke baris kedua, sejajar
    dengan teks label (melewati lebar ikon). */
-#ovAccuracy .stat-line-label {
+#ovAccuracy .stat-line-label,
+.ov-delay-rata .stat-line-label {
   flex-wrap: wrap;
+}
+/* Rata-rata delay kapal, di bawah pantauan delay */
+.ov-delay-rata {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--n-200);
+}
+.ov-delay-judul {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--n-700);
+}
+.ov-delay-judul small {
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--n-500);
+}
+.ov-delay-judul .acc-head {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+/* "+3,3 hari" tetap satu baris; rinciannya yang turun */
+.ov-delay-rata .stat-line-value {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .acc-detail {
   flex-basis: 100%;

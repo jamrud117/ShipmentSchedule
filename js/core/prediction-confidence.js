@@ -69,6 +69,12 @@ function predictionConfidencePercent(info) {
     });
   }
 
+  // Jalur PIB tercatat: lama clearance tidak lagi ditebak dari rata-rata semua jalur
+  if (info.laneKnown && cfg.bonuses.laneKnown) {
+    nilai += cfg.bonuses.laneKnown;
+    alasan.push({ delta: cfg.bonuses.laneKnown, text: tt("Jalur PIB sudah diketahui", "PIB lane is known") });
+  }
+
   /* "Final" hanya untuk barang yang BENAR-BENAR sudah masuk pabrik.
      Tanpa atap ini, SPPB (99) ditambah bonus kedatangan (5) menembus
      100 dan papan menyatakan Final untuk kiriman yang bahkan belum

@@ -266,6 +266,8 @@ function recalcCustoms(opsi) {
 
   // Nilai barang bisa saja baru melewati / turun di bawah USD 1.500
   aturAjuConsigneeNote();
+  // HS Code, kondisi & negara asal barang menentukan lartas & petunjuk COO (dok-pelengkap.js)
+  if (typeof segarkanLartasForm === "function") segarkanLartasForm();
 }
 
 /* NO. AJU KIRIMAN KURIR BERNILAI RENDAH = "CONSIGNEE NOTE".

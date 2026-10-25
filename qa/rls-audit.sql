@@ -132,3 +132,36 @@ WHERE g.table_schema = 'public'
   AND g.grantee = 'anon'
 GROUP BY g.table_name, c.relrowsecurity
 ORDER BY c.relrowsecurity, g.table_name;
+
+
+/* ------------------------------------------------------------------
+   6. TEMPAT LAMPIRAN (Storage) PRIVAT?
+
+   Lampiran jadwal (PI, LS, draft B/L, PIB, ...) disimpan di bucket
+   "lampiran-jadwal" (migration-lampiran-lartas-kebutuhan.sql). Bucket
+   publik berarti siapa pun yang menebak path-nya bisa mengunduh berkas
+   tanpa login. Harus: public = false, dan kebijakannya hanya untuk
+   peran authenticated (bukan anon / public).
+------------------------------------------------------------------ */
+SELECT
+  '6. BUCKET LAMPIRAN'                      AS bagian,
+  b.id                                      AS bucket,
+  CASE WHEN b.public THEN 'BAHAYA — publik, bisa diunduh tanpa login'
+       ELSE 'aman — privat' END             AS vonis
+FROM storage.buckets b
+WHERE b.id = 'lampiran-jadwal';
+/* Kosong = migrasinya belum dijalankan (lampiran belum bisa dipakai). */
+
+SELECT
+  '6. KEBIJAKAN LAMPIRAN'                   AS bagian,
+  policyname                                AS kebijakan,
+  cmd                                       AS perintah,
+  roles::text                               AS peran,
+  CASE WHEN roles::text LIKE '%anon%' OR roles::text = '{public}'
+       THEN 'PERIKSA — anon/public kebagian'
+       ELSE 'aman' END                      AS vonis
+FROM pg_policies
+WHERE schemaname = 'storage'
+  AND tablename = 'objects'
+  AND policyname LIKE 'lampiran-jadwal%'
+ORDER BY policyname;

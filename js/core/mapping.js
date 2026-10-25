@@ -18,6 +18,10 @@ const FIELD_MAP = {
   houseBLDate: "house_bl_date",
   factoryDate: "factory_date",
   factoryTime: "factory_time",
+  /* Dibutuhkan di pabrik (Import) -- rencana mundur ETD/ETA
+     (core/prediction-mundur.js). Kolom baru,
+     migration-lampiran-lartas-kebutuhan.sql (KOLOM_OPSIONAL). */
+  neededDate: "needed_date",
   forwarder: "forwarder",
   forwarderPic: "forwarder_pic",
   vessel: "vessel",

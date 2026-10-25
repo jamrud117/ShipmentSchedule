@@ -330,6 +330,7 @@ function renderFormPage(id) {
     $("#fEtaUpdate").value = s.etaUpdate || "";
     $("#fEtdUpdate").value = s.etdUpdate || "";
     $("#fActual").value = s.actual || "";
+    $("#fNeededDate").value = s.neededDate || "";
     $("#fStatus").value = s.status || "process";
     draftNotesLog = normalizeNotesLog(s.notesLog, s.notes);
     $("#fIncoterm").value = s.incoterm || "FOB";
@@ -387,6 +388,7 @@ function renderFormPage(id) {
       "fEtaUpdate",
       "fEtdUpdate",
       "fActual",
+      "fNeededDate",
       "fFreight",
       "fInsurance",
       "fNdpbm",
@@ -408,6 +410,9 @@ function renderFormPage(id) {
     draftStops = [];
     draftDokPelengkap = dokPelengkapKosong();
   }
+  // Lampiran yang dilepas & progres hasil impor milik form sebelumnya dibuang
+  berkasDilepasForm = [];
+  resetProgresImporForm();
   applyTransportLabels();
   applyDelayFieldVisibility();
   resetSelarasTiba();
@@ -898,6 +903,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     etaMode: typeof formEtaMode === "string" ? formEtaMode : "auto",
     deliveryMode: typeof formDeliveryMode === "string" ? formDeliveryMode : "auto",
     actual: $("#fActual").value,
+    // Dibutuhkan di pabrik -- buku Import saja (kotaknya tersembunyi di Export)
+    ...(activeMode === "import" ? { neededDate: $("#fNeededDate").value } : {}),
     status: $("#fStatus").value,
     notesLog: draftNotesLog,
     // `notes` = teks entri terbaru
@@ -951,6 +958,13 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   await simpanJadwalForm(id, payload, cleanItems, cleanStops);
 });
 
+/* LAMPIRAN & PROGRES IKUT TERSIMPAN BERSAMA JADWAL.
+     1. Berkas PI / LS yang menunggu diunggah lebih dulu (dok-pelengkap.js)
+        -- payload.dokPelengkap disusun ulang sesudahnya, memuat path-nya.
+     2. Progres hasil impor dokumen pabean digabung ke progres TERBARU
+        jadwal ini (doc-steps.js), bukan salinan saat form dibuka.
+     3. Simpanan berhasil -> lampiran yang dilepas di form ini baru
+        dihapus dari bucket (gagal: tidak ada yang dihapus). */
 async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   const btn = $("#btnSaveShipment");
   const originalLabel = btn.innerHTML;
@@ -958,11 +972,25 @@ async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   btn.innerHTML =
     '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menyimpan...", "Saving...");
   try {
+    if (adaLampiranTertundaForm()) {
+      try {
+        await unggahLampiranForm(id);
+      } catch (e) {
+        console.error(e);
+        showToast(pesanGalatLampiran(e), "danger");
+        return;
+      }
+      payload.dokPelengkap = dokPelengkapForm();
+    }
+    const progres = progresSimpanForm(id);
+    if (progres) payload.docProgress = progres;
     if (id) {
       await updateShipmentRecord(id, payload, cleanItems, cleanStops);
     } else {
       await createShipment(payload, cleanItems, cleanStops);
     }
+    hapusLampiran(berkasDilepasForm);
+    berkasDilepasForm = [];
     await loadShipments();
     goBackToList();
     showToast(t("m.jadwal.berhasil.disimpan"), "success");

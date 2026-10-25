@@ -41,6 +41,18 @@ function facilitiesButtonLabel(it) {
   return parts.join(" · ") || tt("Fasilitas", "Facility");
 }
 
+/* HS Code dari Database HS Code menurut nama barangnya (hscode-lookup.js):
+   kotak yang diisi otomatis & tombol cari untuk nama yang cocok dengan
+   beberapa kode. */
+function judulHsOtomatis(nama) {
+  return tt(`Diisi otomatis dari Database HS Code ("${nama}"). Ketik untuk mengganti.`, `Filled automatically from the HS Code Database ("${nama}"). Type to replace it.`);
+}
+function judulTombolCariHs(it) {
+  return it._hsSaran
+    ? tt(`Beberapa HS Code cocok untuk "${it._hsSaran}" — pilih salah satu.`, `Several HS Codes match "${it._hsSaran}" — pick one.`)
+    : t("s.cari.hs.code.dari.database.berdasarkan.nama.ba");
+}
+
 // Pilihan PI kosong: barang BARU memang tidak memakai PI
 function labelTanpaPi(it) {
   return kodeKondisiBarang(it.kondisiBarang) === "1" ? tt("Tidak Menggunakan PI", "No PI Used") : tt("— Pilih PI —", "— Select PI —");
@@ -297,7 +309,7 @@ function isianKondisiHtml(it) {
   const kini = kodeKondisiBarang(it.kondisiBarang);
   const opsi = [["", "—"]].concat(KONDISI_BARANG.map((k) => [k[0], labelKondisiBarang(k[0])]));
   if (kini && !opsi.some((o) => o[0] === kini)) opsi.push([kini, kini]);
-  return `<td class="kolom-kode import-col" data-label="${escapeAttr(tt("Kode Kondisi Barang", "Goods Condition Code"))}"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kode Kondisi Barang", "Goods Condition Code"))}">${opsi
+  return `<td class="kolom-kode import-col" data-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}">${opsi
     .map(([v, label]) => `<option value="${escapeAttr(v)}"${v === kini ? " selected" : ""}>${escapeHtml(label)}</option>`)
     .join("")}</select></td>`;
 }
@@ -321,7 +333,7 @@ function keteranganNegara(kode) {
 function isianNegaraHtml(it) {
   const kode = String(it.negaraAsal || "").trim().toUpperCase();
   const ket = keteranganNegara(kode);
-  return `<td class="kolom-kode" data-label="${escapeAttr(tt("Kode Negara Asal Barang", "Country of Origin Code"))}"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Kode Negara Asal Barang", "Country of Origin Code"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
+  return `<td class="kolom-kode" data-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
 }
 
 // Keterangan di bawah kotak negara mengikuti isinya: `kode` = yang sudah dibakukan, atau tebakan dari ketikan
@@ -358,8 +370,10 @@ function renderItemTable() {
       <td class="seri-col" data-label="${escapeAttr(t("f.seri"))}" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
       <td data-label="HS Code">
         <div class="hscode-cell">
-          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">
-          <button type="button" class="hscode-lookup-btn" data-hscode-lookup="${idx}" title="${escapeAttr(t("s.cari.hs.code.dari.database.berdasarkan.nama.ba"))}">
+          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric"${
+            it._hsOtomatis ? ` class="hs-otomatis" title="${escapeAttr(judulHsOtomatis(it._hsOtomatis))}"` : ""
+          }>
+          <button type="button" class="hscode-lookup-btn${it._hsSaran ? " is-saran" : ""}" data-hscode-lookup="${idx}" title="${escapeAttr(judulTombolCariHs(it))}">
             <i class="bi bi-search"></i>
           </button>
         </div>
@@ -600,6 +614,8 @@ $("#itemTableBody").addEventListener("change", (e) => {
     it.piNomor = e.target.value;
     renderItemTable();
     if (it.piNomor) fokuskan($(`input[data-fac="piNoItem"][data-idx="${idx}"]`));
+    // PI baris 1 -> tawarkan ke barang lain yang belum ber-PI (item-samakan.js)
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan("piNomor", idx);
     return;
   }
   if (fac === "jenis") {

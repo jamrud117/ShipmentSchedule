@@ -465,11 +465,14 @@ async function handleBulkImport(mode, file) {
       t("x.berkas.akan.mengganti", { n: reconstructed.length, mode: modeLabel }),
       async () => {
         try {
+          // Jadwal lama terganti seluruhnya: lampiran berkasnya ikut dihapus dari bucket
+          const lampiranLama = (data[mode] || []).flatMap(semuaLampiranJadwal);
           const { error: delErr } = await supabaseClient
             .from("shipments")
             .delete()
             .eq("mode", mode);
           if (delErr) throw delErr;
+          hapusLampiran(lampiranLama);
           for (const r of reconstructed) {
             await createShipment(r.shipment, r.items);
           }
@@ -548,11 +551,13 @@ async function handleDeleteAll() {
         '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menghapus...", "Deleting...");
       try {
         // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka yang terhapus
+        const lampiranLama = (data[mode] || []).flatMap(semuaLampiranJadwal);
         const { error } = await supabaseClient
           .from("shipments")
           .delete()
           .eq("mode", mode);
         if (error) throw error;
+        hapusLampiran(lampiranLama);
         // shipment_items & shipment_route_stops ikut terhapus otomatis lewat "on delete cascade".
         data[mode] = [];
         render();

@@ -284,13 +284,20 @@ cardContainer.addEventListener("click", (e) => {
   } else if (btn.dataset.action === "copyTemplate") {
     copyShipment(btn.dataset.template, id);
   } else if (btn.dataset.action === "delete") {
-    showConfirm(tt("Hapus jadwal pengiriman ini secara permanen?", "Permanently delete this shipment schedule?"), async () => {
+    // Lampiran berkasnya (tahap dokumen & PI/LS) ikut dihapus dari bucket -- sesudah jadwalnya terhapus
+    const jadwal = currentList().find((x) => x.id === id);
+    const lampiran = semuaLampiranJadwal(jadwal);
+    const ekor = lampiran.length
+      ? tt(` ${lampiran.length} lampiran berkasnya ikut terhapus.`, ` Its ${lampiran.length} attachment${lampiran.length === 1 ? "" : "s"} will be deleted too.`)
+      : "";
+    showConfirm(tt("Hapus jadwal pengiriman ini secara permanen?", "Permanently delete this shipment schedule?") + ekor, async () => {
       try {
         const { error } = await supabaseClient
           .from("shipments")
           .delete()
           .eq("id", id);
         if (error) throw error;
+        hapusLampiran(lampiran);
         data[activeMode] = currentList().filter((x) => x.id !== id);
         // Kiriman yang dihapus tidak boleh tetap jadi bahan belajar prediksi
         if (typeof resetPredictionLearning === "function") resetPredictionLearning();
