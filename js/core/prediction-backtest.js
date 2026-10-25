@@ -118,15 +118,6 @@ function ringkasUjiMundur(uji) {
   };
 }
 
-function predictionBacktest(list) {
-  const uji = siapkanUjiMundur(list);
-  ujiMundurLangkah(uji, Infinity);
-  return ringkasUjiMundur(uji);
-}
-
-function semuaKirimanDimuat() {
-  return typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
-}
 
 /* Hasil untuk seluruh data yang dimuat, disimpan sekali per generasi
    data (lihat resetPredictionLearning). BERTAHAP: tiap giliran paling
@@ -141,7 +132,7 @@ function predictionAccuracyBertahap(selesai) {
     return;
   }
   const generasi = GENERASI_BELAJAR;
-  const uji = siapkanUjiMundur(semuaKirimanDimuat());
+  const uji = siapkanUjiMundur(semuaKiriman());
   const giliran = () => {
     if (generasi !== GENERASI_BELAJAR) {
       predictionAccuracyBertahap(selesai);

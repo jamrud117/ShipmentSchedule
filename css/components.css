@@ -168,7 +168,7 @@
   padding: 6px 9px;
 }
 .card-note-stamp {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--muted);
   margin-bottom: 2px;
@@ -369,79 +369,268 @@ body:not(.punya-kerangka) .toast-stack {
 }
 
 /* ==================================================================
-   TOAST AKSI -- "Samakan Satuan PCS ke baris 2–12?  [Ya] [Tidak]"
-   (js/features/item-samakan.js)
+   SAMAKAN ISIAN BARIS 1 -- kotak dialog tawaran & bilah Urungkan
+   (js/features/item-samakan.js, markup di index.html)
 
-   Elemen sendiri di tumpukan toast yang sama (paling atas), bukan
-   #appToast: tertutup = display: none (tidak makan tempat di
-   tumpukan), terbuka (.is-open) = tampil dengan animasi masuk. Kotaknya
-   tetap tembus klik seperti toast lain; hanya kedua tombolnya yang
-   menangkap tekanan, jadi ia tidak menghalangi kotak isian di bawahnya.
+   Tawaran: kotak dialog di tengah layar di atas latar redup. Rupanya
+   sama dengan kotak konfirmasi (.dialog-* di auth.css) tetapi bukan
+   modal Bootstrap: dibuka & ditutup seketika dan tidak mengunci gulir
+   halaman. z-index di bawah modal Bootstrap (1050 / 1055) -- dialog lain
+   yang menyusul tetap di atasnya -- dan di atas bilah Urungkan, yang ikut
+   diredupkan selama tawaran menunggu jawaban.
+
+   Urungkan: bilah navy di kiri bawah, tepat di atas bilah Simpan form
+   atau papan ketik layar (--samakan-dasar, dihitung JS). Cincin di
+   ikonnya menghitung mundur (--samakan-lama); dua nama animasi yang
+   bergantian (data-putaran) memulainya lagi dari penuh.
 ================================================================== */
-.app-toast--aksi {
-  display: none;
-  --toast-hue: var(--p-500);
+.samakan-lapis {
+  position: fixed;
+  inset: 0;
+  z-index: 1048;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgba(10, 27, 51, 0.38);
+  animation: samakan-redup var(--dur-2) var(--ease);
 }
-.app-toast--aksi.is-open {
-  display: flex;
+.samakan-lapis[hidden],
+.samakan-urung[hidden] {
+  display: none;
+}
+.samakan-dialog {
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-xl);
+  box-shadow: 0 28px 64px -24px rgba(10, 27, 51, 0.6);
+  outline: none;
   animation: samakan-masuk var(--dur-2) var(--ease);
+}
+.samakan-nilai {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--p-100);
+  border-radius: var(--r-md);
+  background: var(--p-50);
+}
+.samakan-nilai-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.samakan-nilai-isi {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.samakan-catatan {
+  margin: var(--sp-3) 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--s-warn-line);
+  border-left: 3px solid var(--s-warn);
+  border-radius: var(--r-md);
+  background: var(--s-warn-bg);
+  color: var(--sec-700);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+.samakan-foot {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* Petunjuk tombol papan ketik di dalam tombol -- warnanya ikut tombolnya */
+.samakan-tuts {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.45;
+  opacity: 0.65;
+  box-shadow: none;
+}
+@media (hover: none) {
+  .samakan-tuts {
+    display: none;
+  }
+}
+@media (max-width: 479.98px) {
+  .samakan-foot > button {
+    flex: 1 1 0;
+  }
+}
+
+/* Sel yang baru disamakan / dikembalikan berkedip sebentar */
+table.item-table .is-disamakan {
+  animation: samakan-sorot 1.4s var(--ease);
+}
+
+.samakan-urung {
+  position: fixed;
+  left: var(--sp-6);
+  bottom: calc(var(--samakan-dasar, 0px) + var(--sp-3));
+  z-index: 1046;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 2 * var(--sp-6));
+  padding: 5px 5px 5px 6px;
+  border-radius: var(--r-pill);
+  background: var(--d-900);
+  color: #fff;
+  font-size: var(--t-sm);
+  box-shadow:
+    0 18px 40px -16px rgba(10, 27, 51, 0.7),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: samakan-naik var(--dur-2) var(--ease);
+}
+.samakan-urung-ikon {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  color: var(--sec-300);
+}
+.samakan-urung[data-jenis="kabar"] .samakan-urung-ikon {
+  color: var(--p-200);
+}
+.samakan-cincin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.samakan-cincin circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 2.5;
+}
+/* Keliling lingkaran r=13: 2 x pi x 13 = 81.68 */
+.samakan-cincin .samakan-cincin-sisa {
+  stroke: var(--sec-300);
+  stroke-linecap: round;
+  stroke-dasharray: 81.68;
+  animation: samakan-cincin-a var(--samakan-lama, 15s) linear forwards;
+}
+.samakan-urung[data-putaran="b"] .samakan-cincin-sisa {
+  animation-name: samakan-cincin-b;
+}
+.samakan-urung.is-jeda .samakan-cincin-sisa {
+  animation-play-state: paused;
+}
+.samakan-urung:not([data-jenis="urung"]) .samakan-cincin,
+.samakan-urung:not([data-jenis="urung"]) .samakan-urung-btn {
+  display: none;
+}
+.samakan-urung-pesan {
+  min-width: 0;
+  line-height: 1.35;
+}
+.samakan-urung-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sec-300);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease);
+}
+.samakan-urung-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.samakan-urung-tutup {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.72rem;
+}
+.samakan-urung-tutup:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.samakan-urung button:focus-visible {
+  outline: 2px solid var(--focus-ring-dark);
+  outline-offset: 2px;
+}
+@media (max-width: 575.98px) {
+  .samakan-urung {
+    left: 14px;
+    right: 14px;
+    max-width: none;
+    border-radius: var(--r-lg);
+  }
+  .samakan-urung-pesan {
+    flex: 1;
+  }
+}
+@keyframes samakan-redup {
+  from {
+    opacity: 0;
+  }
 }
 @keyframes samakan-masuk {
   from {
     opacity: 0;
-    transform: translateX(14px) scale(0.98);
+    transform: translateY(10px) scale(0.97);
   }
+}
+@keyframes samakan-naik {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes samakan-sorot {
+  0%,
+  30% {
+    background-color: var(--sec-100);
+    box-shadow: 0 0 0 2px var(--sec-300);
+  }
+}
+@keyframes samakan-cincin-a {
   to {
-    opacity: 1;
-    transform: none;
+    stroke-dashoffset: 81.68;
   }
 }
-.samakan-pesan {
-  font-weight: 500;
-}
-.samakan-nilai {
-  font-weight: 700;
-}
-.samakan-catatan {
-  margin-top: 2px;
-  font-size: var(--t-sm);
-  color: var(--n-600);
-}
-.samakan-aksi {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin-top: var(--sp-2);
-}
-.samakan-btn {
-  pointer-events: auto;
-  height: 30px;
-  padding: 0 14px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
-  background: #fff;
-  color: var(--ink);
-  font-size: var(--t-sm);
-  font-weight: 600;
-  white-space: nowrap;
-  transition:
-    background var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease);
-}
-.samakan-btn:hover {
-  background: var(--n-100);
-}
-.samakan-btn--ya {
-  border-color: var(--p-600);
-  background: var(--p-600);
-  color: #fff;
-}
-.samakan-btn--ya:hover {
-  border-color: var(--p-700);
-  background: var(--p-700);
+@keyframes samakan-cincin-b {
+  to {
+    stroke-dashoffset: 81.68;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .app-toast--aksi.is-open {
+  .samakan-lapis,
+  .samakan-dialog,
+  .samakan-urung {
     animation: none;
   }
 }
@@ -555,51 +744,25 @@ body:not(.punya-kerangka) .toast-stack {
   min-width: 0;
 }
 .fl-head .eta-mode-switch {
-  height: 22px;
+  height: 26px;
 }
 .fl-head .eta-mode-btn {
-  padding: 0 9px;
-  font-size: 0.62rem;
+  padding: 0 10px;
+  font-size: 0.7rem;
+}
+@media (pointer: coarse) {
+  .fl-head .eta-mode-switch {
+    height: 32px;
+  }
+  .fl-head .eta-mode-btn {
+    padding: 0 13px;
+  }
 }
 /* Di sel yang sempit chip "Auto ETA" disembunyikan -- sakelar di
    sebelahnya sudah menunjukkan mode yang sama. */
 @media (max-width: 1399.98px) and (min-width: 1080px) {
   .fl-head .eta-mode-chip {
     display: none;
-  }
-}
-
-/* DOKUMEN BERNOMOR + BERTANGGAL (PI, LS & Polis Asuransi di Bea & Pajak
-   Impor): satu sel .s12 berisi pasangan [ nomor ][ tanggal ]
-   (.fl-dok-pasang). Pasangannya mengalir sebanyak yang muat -- tiga
-   sebaris di layar lebar, lalu dua, lalu satu -- dan tidak pernah
-   terbelah di antara dua baris. Lebar minimum pasangan menjaga label
-   terpanjang ("Tanggal Polis Asuransi") tetap satu baris, jadi seluruh
-   kotaknya sejajar. Di ponsel nomor & tanggal bertumpuk. */
-.fgrid > .fl-dok {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
-  gap: 16px 18px;
-}
-.fl-dok-pasang {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 16px 18px;
-  min-width: 0;
-}
-.fl-dok-pasang > * {
-  min-width: 0;
-}
-.fl-dok .form-label {
-  display: block;
-  line-height: 22px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@media (max-width: 767.98px) {
-  .fl-dok-pasang {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

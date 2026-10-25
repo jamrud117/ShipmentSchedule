@@ -348,6 +348,30 @@ function pulihkanPenandaGulir(penanda) {
   if (geser) window.scrollBy({ top: geser, behavior: "instant" });
 }
 
+/* POSISI DAFTAR SEBELUM FORM JADWAL DIBUKA.
+
+   Form jadwal adalah halaman tersendiri (#/new, #/edit/<id>) yang dibuka
+   dari atas. Kembali ke daftar -- sesudah Simpan maupun Batal -- tampilan
+   dikembalikan ke posisi gulir SEBELUM form dibuka, bukan mengejar kartu
+   yang diubah: urutannya bisa berubah (ETD / ETA / Estimated Delivery
+   baru), tapi yang sedang dilihat pengguna tetap di tempatnya. Tinggi
+   tiap kartu diwariskan seperti render biasa (wariskanTinggiKartu),
+   supaya kartu di atas layar yang belum tergambar tidak menggesernya. */
+let posisiDaftarSebelumForm = null;
+function catatPosisiDaftar() {
+  if ($("#viewList").classList.contains("d-none")) return;
+  const tinggi = new Map();
+  cardContainer.querySelectorAll(":scope > .ship-card").forEach((k) => tinggi.set(k.dataset.id, k.getBoundingClientRect().height));
+  posisiDaftarSebelumForm = { y: window.scrollY, tinggi };
+}
+function pulihkanPosisiDaftar() {
+  const p = posisiDaftarSebelumForm;
+  posisiDaftarSebelumForm = null;
+  if (!p) return;
+  wariskanTinggiKartu(p);
+  window.scrollTo({ top: p.y, left: 0, behavior: "instant" });
+}
+
 /* FOKUS IKUT BERTAHAN.
 
    Kalau yang sedang difokus ada di dalam daftar -- kotak kronologi

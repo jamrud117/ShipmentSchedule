@@ -450,8 +450,7 @@ function airlineNetwork(code) {
    lebih dulu, yang terbaru di atas, lengkap dengan rute yang pernah
    dilaluinya. */
 function saranSaranaRiwayat(mode) {
-  if (typeof data === "undefined" || !data) return [];
-  const semua = (data.import || []).concat(data.export || []);
+  const semua = semuaKiriman();
   const peta = new Map();
   semua.forEach((s) => {
     const nama = String(s.vessel || "").trim();

@@ -224,6 +224,30 @@ function sjKotakTtd(label, nama) {
         </td>`;
 }
 
+/* SARAN NAMA PENANDA TANGAN (Mengetahui / Dikirim oleh / Diterima oleh):
+   nama yang pernah dipakai di surat jalan yang sudah termuat, ditambah
+   daftar Pemohon. Disusun saat kotaknya difokus -- bukan tiap riwayat
+   digambar. */
+const SJ_KOLOM_TTD = ["knownBy", "sentBy", "receivedBy"];
+function sjIsiSaranTtd() {
+  const daftar = document.getElementById("dnTtdList");
+  if (!daftar) return;
+  const nama = new Set();
+  (typeof docNumHistoryRows !== "undefined" ? docNumHistoryRows : []).forEach((r) => {
+    const p = (r && r.payload) || {};
+    SJ_KOLOM_TTD.forEach((k) => p[k] && nama.add(String(p[k]).trim()));
+  });
+  document.querySelectorAll('[data-docnum-panel="do"] [data-dn="requester"] option').forEach((o) => o.value && nama.add(o.value));
+  daftar.innerHTML = [...nama]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .map((n) => `<option value="${escapeAttr(n)}"></option>`)
+    .join("");
+}
+document.addEventListener("focusin", (e) => {
+  if (e.target.matches && e.target.matches('input[list="dnTtdList"]')) sjIsiSaranTtd();
+});
+
 /* Sel NOPOL: satu sel yang membentang `rentang` baris, di sebelah barang.
 
    Isinya satu kotak per mobil, tingginya DIBAGI RATA sehingga seluruh
@@ -394,9 +418,9 @@ function buildSuratJalanHtml(row, shipment) {
     <table class="sj-sign">
       <tr>
         ${sjKotakTtd("Dibuat oleh :", row.requester)}
-        ${sjKotakTtd("Mengetahui :")}
-        ${sjKotakTtd("Dikirim oleh :")}
-        ${sjKotakTtd("Diterima oleh :")}
+        ${sjKotakTtd("Mengetahui :", p.knownBy)}
+        ${sjKotakTtd("Dikirim oleh :", p.sentBy)}
+        ${sjKotakTtd("Diterima oleh :", p.receivedBy)}
       </tr>
     </table>
 

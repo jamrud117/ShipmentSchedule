@@ -168,12 +168,13 @@ function showPrompt(opsi) {
   /* Lebar dua kolom ditentukan ulang tiap kali kotak dibuka. Hanya
      showPrompt() yang mengisi kotak ini, jadi tidak ada lebar yang
      perlu dilepas saat ditutup. */
-  const duaKolom = fields.some((f) => f.lebar === "setengah");
+  const LEBAR_ISIAN = { setengah: " prompt-field--half", sepertiga: " prompt-field--third" };
+  const duaKolom = fields.some((f) => LEBAR_ISIAN[f.lebar]);
   promptModalEl.querySelector(".modal-dialog").classList.toggle("prompt-dialog--lebar", duaKolom);
   $("#promptFields").innerHTML = fields
     .map(
       (f) => `
-      <div class="prompt-field${f.lebar === "setengah" ? " prompt-field--half" : ""}">
+      <div class="prompt-field${LEBAR_ISIAN[f.lebar] || ""}">
       <label class="prompt-label" for="prompt_${f.key}">${escapeHtml(f.label)}</label>
       ${
         f.type === "select"

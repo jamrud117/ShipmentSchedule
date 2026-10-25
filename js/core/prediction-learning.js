@@ -60,10 +60,7 @@ function denganPenjagaRekursi(fn) {
    hanya dari Import); bisa diganti untuk pengujian & uji mundur. */
 function predictionHistory() {
   if (PREDICTION_HISTORY_OVERRIDE) return PREDICTION_HISTORY_OVERRIDE;
-  if (typeof data !== "undefined" && data && Array.isArray(data.import)) {
-    return Array.isArray(data.export) ? data.import.concat(data.export) : data.import;
-  }
-  return [];
+  return semuaKiriman();
 }
 
 function setPredictionHistory(list) {

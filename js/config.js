@@ -140,7 +140,9 @@ function urutkanJenis(daftar) {
 
    Semua perbandingan lewat sini, jadi ejaan lama tetap dikenali. */
 function normalisasiJenisBarang(v) {
-  return String(v == null ? "" : v).trim().toUpperCase();
+  const s = String(v == null ? "" : v).trim().toUpperCase().replace(/\s+/g, " ");
+  // "SPARE PART", "SPARE-PARTS", "SPAREPARTS" -> SPAREPART (ejaan di daftar)
+  return /^SPARE[ -]?PARTS?$/.test(s) ? "SPAREPART" : s;
 }
 
 /* Daftar pilihan untuk SATU baris barang.
@@ -156,7 +158,7 @@ function normalisasiJenisBarang(v) {
 const JENIS_BARANG_EN = {
   "BARANG MODAL": "CAPITAL GOODS",
   "BARANG JADI": "FINISHED GOODS",
-  "SPAREPART": "SPARE PART",
+  "SPAREPART": "SPAREPART",
   "BAHAN BAKU": "RAW MATERIAL",
   "BARANG PENOLONG": "AUXILIARY GOODS",
 };

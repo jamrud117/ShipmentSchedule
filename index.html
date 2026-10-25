@@ -959,7 +959,7 @@
     </div>
 
     <!-- HALAMAN: CEK PIB/PEB -- CIPL dibandingkan dengan draft CEISA,
-         dibantu jadwal terkait, Database HS Code, masterlist & kurs pajak
+         dibantu jadwal terkait & Database HS Code
          (js/views/checker-view.js, css/checker.css). Mesinnya
          js/import/exim-engine.js, sama dengan EXIM Checker. Khusus EXIM. -->
     <div id="viewChecker" class="d-none">
@@ -1096,13 +1096,12 @@
         <details class="panel cek-aturan">
           <summary data-en="What is checked">Apa saja yang diperiksa</summary>
           <div class="panel-body">
-            <ul data-en="&lt;li&gt;&lt;b&gt;Schedule first, CIPL fills gaps&lt;/b&gt; — the linked schedule is the main reference: aju no., invoice, insurance policy (530), mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer &amp;amp; dates are compared from the schedule, each in its own section. CIPL values are used only for fields the schedule leaves empty (marked &quot;CIPL&quot;) and for what the schedule does not record (packing list, TAX ID, currency). Customs office codes and the schedule&#x27;s ETD / ETA are not checked (a PEB still compares ETD with TANGGAL EKSPOR).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Items from the schedule&lt;/b&gt; — when the linked schedule has an item list, each item comes from the schedule: its columns are compared one by one, as in CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), then the goods condition code (PIB), country of origin code, HS Code, quantity, unit, value, net weight, and Facilities &amp;amp; Seq. No. (the documents linked to its Seri Barang). What the schedule leaves empty — and items missing from the schedule — come from the CIPL. Items follow the draft&#x27;s Seri Barang: Item 1 = Seri Barang 1, paired with the same schedule / CIPL item by name, then HS Code — not by position.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Containers&lt;/b&gt; — the number, size &amp;amp; type (FCL / LCL) of each container in the KONTAINER sheet against the schedule&#x27;s Container/Seal Number, written NUMBER / SIZE / TYPE.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — a code that is not 8 digits yet is looked up in the HS Code database by item name, then in the linked schedule&#x27;s items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959) &amp;amp; LS (958) with their dates, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule.&lt;/li&gt;&lt;li&gt;&lt;b&gt;NDPBM&lt;/b&gt; — against the weekly KMK tax exchange rate on the aju date.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
+            <ul data-en="&lt;li&gt;&lt;b&gt;Schedule first, CIPL fills gaps&lt;/b&gt; — the linked schedule is the main reference: aju no., invoice, insurance policy (530), mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer &amp;amp; dates are compared from the schedule, each in its own section. CIPL values are used only for fields the schedule leaves empty (marked &quot;CIPL&quot;) and for what the schedule does not record (packing list, TAX ID, currency). Customs office codes and the schedule&#x27;s ETD / ETA are not checked (a PEB still compares ETD with TANGGAL EKSPOR).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Items from the schedule&lt;/b&gt; — when the linked schedule has an item list, each item comes from the schedule: its columns are compared one by one, as in CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), then the goods condition code (PIB), country of origin code, HS Code, quantity, unit, value, net weight, and Facilities &amp;amp; Seq. No. (the documents linked to its Seri Barang). What the schedule leaves empty — and items missing from the schedule — come from the CIPL. Items follow the draft&#x27;s Seri Barang: Item 1 = Seri Barang 1, paired with the same schedule / CIPL item by name, then HS Code — not by position.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Containers&lt;/b&gt; — the number, size &amp;amp; type (FCL / LCL) of each container in the KONTAINER sheet against the schedule&#x27;s Container/Seal Number, written NUMBER / SIZE / TYPE.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — a code that is not 8 digits yet is looked up in the HS Code database by item name, then in the linked schedule&#x27;s items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959) &amp;amp; LS (958) with their dates, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
               <li><b>Jadwal dulu, CIPL melengkapi</b> — jadwal terkait adalah rujukan utama: No. Aju, invoice, polis asuransi (530), moda, kapal / penerbangan, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan, peti kemas, shipper / buyer &amp; tanggal dibandingkan dari jadwal, di bagiannya masing-masing. Nilai CIPL hanya dipakai untuk isian yang belum diisi di jadwal (ditandai "CIPL") dan yang memang tidak dicatat jadwal (packing list, TAX ID, mata uang). Kode kantor dan ETD / ETA jadwal tidak diperiksa (PEB tetap membandingkan ETD dengan TANGGAL EKSPOR).</li>
               <li><b>Barang dari jadwal</b> — bila jadwal terkait punya daftar barang, tiap barang diambil dari jadwal: kolom barangnya dibandingkan satu per satu seperti di CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), lalu Kode Kondisi Barang (PIB), Kode Negara Asal, HS Code, jumlah, satuan, nilai, netto, serta Fasilitas &amp; No. Urut (dokumen yang ditautkan ke Seri Barang-nya). Yang kosong di jadwal — dan barang yang tidak ada di jadwal — diambil dari CIPL. Rincian barang mengikuti Seri Barang draft: Barang 1 = Seri Barang 1, dipasangkan dengan barang jadwal / CIPL yang sama menurut nama, lalu HS Code — bukan menurut urutannya.</li>
               <li><b>Peti kemas</b> — nomor, ukuran &amp; tipe (FCL / LCL) tiap kontainer di sheet KONTAINER dibandingkan dengan Container/Seal Number jadwal, ditulis NOMOR / UKURAN / TIPE.</li>
               <li><b>HS Code 8 digit</b> — yang belum 8 digit dicari di Database HS Code menurut nama barang, lalu di barang jadwal terkait, lalu di jadwal sebelumnya. CIPL yang hanya menulis 6 digit dilengkapi dari situ.</li>
               <li><b>Fasilitas &amp; izin</b> — PI (959) &amp; LS (958) beserta tanggalnya, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp; COO (860 / 861) dibandingkan dengan jadwal.</li>
-              <li><b>NDPBM</b> — dibandingkan dengan kurs pajak KMK mingguan pada tanggal aju.</li>
               <li>Tanpa CIPL, draft dibandingkan dengan jadwal terkait saja. Berkas dibaca di peramban ini dan tidak diunggah.</li>
             </ul>
           </div>
@@ -2038,6 +2037,34 @@
                     data-i18n-ph="ph.alamat.lengkap.penerima"
                   ></textarea>
                 </div>
+                <!-- PENANDA TANGAN SURAT JALAN EXPORT: nama yang dicetak di
+                     kotak tanda tangan Mengetahui, Dikirim oleh & Diterima
+                     oleh (Dibuat oleh = Pemohon). Kosong = tempat menulis
+                     tangan "(.......)". Saran dari surat jalan sebelumnya
+                     (#dnTtdList, sjIsiSaranTtd di surat-jalan-print.js). -->
+                <div class="s12 dn-ttd" data-dn-when="Export">
+                  <div class="form-subhead">
+                    <span data-en="Delivery note signatures">Tanda tangan surat jalan</span>
+                  </div>
+                  <div class="dn-ttd-isian">
+                    <div>
+                      <label class="form-label" data-en="Acknowledged by">Mengetahui</label>
+                      <input type="text" class="form-control" data-dn="knownBy" list="dnTtdList" autocomplete="off"
+                        placeholder="Nama yang mengetahui" data-en-ph="Name of the acknowledger" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Sent by">Dikirim Oleh</label>
+                      <input type="text" class="form-control" data-dn="sentBy" list="dnTtdList" autocomplete="off"
+                        placeholder="Nama pengirim / sopir" data-en-ph="Sender / driver name" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Received by">Diterima Oleh</label>
+                      <input type="text" class="form-control" data-dn="receivedBy" list="dnTtdList" autocomplete="off"
+                        placeholder="Nama penerima barang" data-en-ph="Name of the receiver" />
+                    </div>
+                  </div>
+                  <datalist id="dnTtdList"></datalist>
+                </div>
                 <div class="dn-total" data-dn-when="Lokal">
                   <label class="form-label" data-i18n="f.keterangan.total"
                     >Keterangan Total</label
@@ -2053,7 +2080,7 @@
                      Kiriman lokal tidak punya CIPL, jadi tidak ada sumber
                      daftar barang yang bisa ditarik -- diketik langsung di
                      sini supaya surat jalannya tetap bisa dicetak lengkap. -->
-                <div class="s12" data-dn-when="Lokal">
+                <div class="s12 tabel-isian" data-dn-when="Lokal">
                   <div class="form-subhead">
                     <span data-i18n="f.daftar.barang">Daftar Barang</span>
                   </div>
@@ -2369,7 +2396,7 @@
                 <!-- FORMAT RINCI (selain Billing): satu tagihan forwarder
                      berisi banyak pos, sebagian dipungut PPN dan sebagian
                      tidak, jadi tarifnya diisi per baris. -->
-                <div class="s12" data-dn-when="!Billing">
+                <div class="s12 tabel-isian" data-dn-when="!Billing">
                   <div class="form-subhead">
                     <span data-i18n="f.rincian.biaya">Rincian Biaya</span>
                   </div>
@@ -2655,7 +2682,7 @@
                     <label class="form-label" data-en="Payment Will Be Made On">Tanggal Pembayaran Akan Dilakukan</label>
                     <input type="date" class="form-control" data-dn="tglBayar" />
                   </div>
-                  <div class="s12" data-dn-when="Certificate of Function and Use of Goods">
+                  <div class="s12 tabel-isian" data-dn-when="Certificate of Function and Use of Goods">
                     <label class="form-label" data-en="Goods, Function &amp; Photo">Barang, Fungsi &amp; Foto</label>
                     <div class="sb-wrap">
                       <table class="sb-tabel">
@@ -3080,7 +3107,7 @@
             </div>
           </div>
 
-          <div class="form-section-card form-section-card--ocean">
+          <div class="form-section-card form-section-card--ocean" id="fAngkutCard">
             <div class="subsection-title mb-3">
               <span class="subsection-icon"><i class="bi bi-truck"></i></span>
               <span data-en="Transport &amp; Forwarder">Transportasi &amp; Forwarder</span>
@@ -3134,7 +3161,11 @@
                   data-i18n-ph="ph.nomor.voyage.atau.penerbangan"
                 />
               </div>
-              <div>
+              <!-- Jenis Muatan & Kontainer hanya untuk moda laut: disembunyikan
+                   dan dikosongkan saat moda udara (applyTransportLabels,
+                   modal-fields.js); Forwarder & PIC lalu melebar mengisi
+                   barisnya (#fAngkutCard.is-udara, form.css). -->
+              <div id="fMuatanWrap">
                 <label class="form-label" for="fMuatan" data-i18n="f.jenis.muatan"
                   >Jenis Muatan</label
                 >
@@ -3144,9 +3175,6 @@
                   <option value="LCL">LCL</option>
                 </select>
               </div>
-              <!-- Kontainer disembunyikan untuk moda udara (modal-fields.js);
-                   saat itu Nama Forwarder melebar mengisi tempatnya
-                   (#fContainerWrap.d-none ~ #fForwarderWrap, form.css). -->
               <div id="fContainerWrap">
                 <label class="form-label" for="fContainer" data-i18n="f.kontainer"
                   >No. Kontainer/Seal</label
@@ -3176,7 +3204,7 @@
                   data-i18n-ph="ph.nama.forwarder"
                 />
               </div>
-              <div>
+              <div id="fForwarderPicWrap">
                 <label class="form-label" for="fForwarderPic" data-i18n="f.pic.forwarder"
                   >PIC Forwarder</label
                 >
@@ -3555,7 +3583,11 @@
               </button>
             </div>
 
-            <div class="item-table-wrap">
+            <!-- Wadah ukuran (@container barang-isi, form.css): di layar
+                 sempit tiap barang jadi kartu isian. Hanya tabelnya --
+                 popover HS Code di bawah (position: fixed) sengaja di
+                 luar wadah ini. -->
+            <div class="barang-isi"><div class="item-table-wrap">
               <table class="item-table item-table--form">
                 <thead>
                   <tr>
@@ -3619,7 +3651,7 @@
                 </thead>
                 <tbody id="itemTableBody" data-enter-sendiri></tbody>
               </table>
-            </div>
+            </div></div>
 
             <!-- Popover cari HS Code — SATU elemen, dipakai bergantian
                  untuk baris mana pun yang tombol kacanya diklik (lihat
@@ -3860,67 +3892,6 @@
                   />
                 </div>
               </div>
-              <!-- PI, LS & Polis Asuransi: tiap dokumen sepasang nomor +
-                   tanggal (.fl-dok-pasang), berurutan PI, Tanggal PI, LS,
-                   Tanggal LS, Polis Asuransi, Tanggal Polis Asuransi. Nomor
-                   PI & LS ikut kolom PI di templat salin (LS di baris
-                   sendiri, "LS <nomor>") dan Bulk Excel. -->
-              <div class="s12 fl-dok">
-                <div class="fl-dok-pasang">
-                  <div>
-                    <label class="form-label" for="fPI"
-                       data-en="PI (Import Approval)">PI (Persetujuan Impor)</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="fPI"
-                      placeholder="mis. 04.PI-02.26.0131"
-                      data-i18n-ph="ph.nomor.persetujuan.impor"
-                    />
-                  </div>
-                  <div>
-                    <label class="form-label" for="fPIDate" data-en="PI Date">Tanggal PI</label>
-                    <input type="date" class="form-control" id="fPIDate" />
-                  </div>
-                </div>
-                <div class="fl-dok-pasang">
-                  <div>
-                    <label class="form-label" for="fLS"
-                       data-en="LS (Surveyor Report)">LS (Laporan Surveyor)</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="fLS"
-                      placeholder="mis. ITB21G2672826137141"
-                      data-en-ph="e.g. ITB21G2672826137141"
-                    />
-                  </div>
-                  <div>
-                    <label class="form-label" for="fLSDate" data-en="LS Date">Tanggal LS</label>
-                    <input type="date" class="form-control" id="fLSDate" />
-                  </div>
-                </div>
-                <div class="fl-dok-pasang">
-                  <div>
-                    <label class="form-label" for="fPolisAsuransi"
-                       data-en="Insurance Policy">Polis Asuransi</label
-                    >
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="fPolisAsuransi"
-                      placeholder="mis. EKD2273805 - KMC260031"
-                      data-en-ph="e.g. EKD2273805 - KMC260031"
-                    />
-                  </div>
-                  <div>
-                    <label class="form-label" for="fPolisAsuransiDate" data-en="Insurance Policy Date">Tanggal Polis Asuransi</label>
-                    <input type="date" class="form-control" id="fPolisAsuransiDate" />
-                  </div>
-                </div>
-              </div>
             </div>
             <div class="form-text-note mt-1">
               <i class="bi bi-info-circle"></i> <span data-en="SKB / Masterlist facilities are now recorded per item — see the">Fasilitas SKB / Masterlist
@@ -3928,6 +3899,18 @@
               tiap baris di tab</span>
               <b data-i18n="u.2.daftar.barang">2. Daftar Barang</b>.
             </div>
+          </div>
+
+          <!-- Dokumen Pelengkap Pabean: PI, LS & Polis Asuransi (buku
+               Import), masing-masing bisa lebih dari satu & bertanggal,
+               dan dokumen lain ber-kode CEISA (kedua buku). Isinya
+               digambar features/dok-pelengkap.js. -->
+          <div id="dokPelengkapSection" class="form-section-card form-section-card--amber">
+            <div class="subsection-title mb-3" data-en="<span class=&quot;subsection-icon&quot;><i class=&quot;bi bi-files&quot;></i></span> Supporting Customs Documents">
+              <span class="subsection-icon"><i class="bi bi-files"></i></span>
+              Dokumen Pelengkap Pabean
+            </div>
+            <div class="dp" id="dokPelengkapIsi"></div>
           </div>
         </div>
       </div>
@@ -4253,6 +4236,26 @@
     <!-- CATAT / UBAH REALISASI MASTERLIST (js/views/masterlist-view.js).
          Satu PIB biasanya memakai beberapa baris sekaligus, jadi nomor
          aju & tanggalnya diisi sekali dan barisnya ditambah di bawahnya. -->
+    <!-- Rincian Masterlist (tombol mata di daftar): satu baris -- angka,
+         HS Code, lini, spesifikasi, nilai, realisasi & dokumen PIB-nya --
+         atau satu PIB. Isinya dirakit mstGambarDetail (masterlist-view.js). -->
+    <div class="modal fade" id="mstDetailModal" tabindex="-1" aria-labelledby="mstDetailJudul">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down mst-detail-dialog">
+        <div class="modal-content">
+          <div class="modal-header mst-detail-kepala">
+            <div class="dialog-icon"><i class="bi bi-box-seam" id="mstDetailIkon"></i></div>
+            <div class="mst-detail-judul">
+              <h6 class="dialog-title" id="mstDetailJudul"></h6>
+              <p class="mst-detail-sub" id="mstDetailSub"></p>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
+          </div>
+          <div class="modal-body" id="mstDetailIsi"></div>
+          <div class="modal-footer mst-detail-kaki" id="mstDetailAksi"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal fade" id="mstRealisasiModal" tabindex="-1" aria-labelledby="mstRealisasiJudul">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mst-dialog">
         <div class="modal-content">
@@ -4415,11 +4418,8 @@
       <i class="bi bi-arrow-up"></i>
     </button>
 
-    <!-- Toast — pengganti alert() bawaan.
-
-         Ditaruh di KIRI-BAWAH, bukan kanan-atas: sudut kanan-atas
-         ditempati chip pengguna & pencarian cepat, dan sudut
-         kanan-bawah sudah dipakai tombol keluar mengambang. -->
+    <!-- Toast — pengganti alert() bawaan. Kanan-atas, tepat di bawah
+         bilah atas (.toast-stack di css/components.css). -->
     <div class="toast-stack" id="toastStack">
       <div
         id="appToast"
@@ -4443,6 +4443,57 @@
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
+    </div>
+
+    <!-- Samakan isian baris 1 ke baris di bawahnya (item-samakan.js):
+         kotak dialog tawaran di tengah layar & bilah Urungkan di kiri bawah.
+         Kalimatnya ditulis JS setiap kali dibuka. -->
+    <div class="samakan-lapis" id="samakanLapis" hidden>
+      <div
+        class="samakan-dialog"
+        id="samakanDialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="samakanJudul"
+        aria-describedby="samakanNilai samakanCatatan"
+        tabindex="-1"
+      >
+        <div class="dialog-body">
+          <div class="dialog-head">
+            <div class="dialog-icon"><i class="bi bi-arrow-down-circle-fill"></i></div>
+            <h2 class="dialog-title" id="samakanJudul"></h2>
+          </div>
+          <div class="samakan-nilai">
+            <span class="samakan-nilai-label" data-en="Row 1 value">Isian baris 1</span>
+            <span class="samakan-nilai-isi" id="samakanNilai"></span>
+          </div>
+          <p class="samakan-catatan" id="samakanCatatan" hidden></p>
+        </div>
+        <div class="dialog-foot samakan-foot">
+          <button type="button" class="btn-quiet" id="samakanTidak">
+            <span data-en="No">Tidak</span><kbd class="samakan-tuts">Esc</kbd>
+          </button>
+          <button type="button" class="btn-primary-navy" id="samakanYa">
+            <span data-en="Yes, apply">Ya, samakan</span><kbd class="samakan-tuts">Enter</kbd>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="samakan-urung" id="samakanUrung" role="status" aria-live="polite" hidden>
+      <span class="samakan-urung-ikon" aria-hidden="true">
+        <svg class="samakan-cincin" viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r="13"></circle>
+          <circle class="samakan-cincin-sisa" cx="16" cy="16" r="13"></circle>
+        </svg>
+        <i class="bi" id="samakanUrungIkon"></i>
+      </span>
+      <span class="samakan-urung-pesan" id="samakanUrungPesan"></span>
+      <button type="button" class="samakan-urung-btn" id="samakanUrungBtn">
+        <span data-en="Undo">Urungkan</span><kbd class="samakan-tuts">Ctrl+Z</kbd>
+      </button>
+      <button type="button" class="samakan-urung-tutup" id="samakanUrungTutup" aria-label="Tutup" data-en-aria="Close">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
 
     <!-- Saran Kode Negara Asal (tabel barang): diisi js/core/negara.js -->
@@ -4579,6 +4630,7 @@
     <script src="js/features/modal-fields.js"></script>
     <script src="js/features/item-table.js"></script>
     <script src="js/features/item-samakan.js"></script>
+    <script src="js/features/dok-pelengkap.js"></script>
     <script src="js/features/notes-log.js"></script>
     <script src="js/features/doc-steps.js"></script>
     <script src="js/features/route-stops.js"></script>
@@ -4635,7 +4687,6 @@
     <script src="js/views/docnum-view.js"></script>
     <script src="js/features/docnum-detail.js"></script>
     <script src="js/features/fund-summary.js"></script>
-    <script src="js/core/kurs-pajak.js"></script>
     <script src="js/features/fund-report.js"></script>
     <script src="js/features/shipment-cost.js"></script>
     <script src="js/features/fund-invoice-import.js"></script>

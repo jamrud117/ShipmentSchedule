@@ -46,7 +46,7 @@ function dupKunci(no) {
    Hasil: [{ isian, nomor, kiriman: [...] }], satu per nomor yang ganda. */
 function cariNomorGanda(isi, opsi) {
   const idSendiri = String((opsi && opsi.id) || "");
-  const semua = typeof data !== "undefined" && data ? [].concat(data.import || [], data.export || []) : [];
+  const semua = semuaKiriman();
   const hasil = [];
   DUP_ISIAN.forEach((isian) => {
     dupPecah(isi && isi[isian.kunci]).forEach((nomor) => {
@@ -140,18 +140,6 @@ function periksaNomorGandaForm() {
       .join("");
   });
   return ganda;
-}
-
-function hapusTandaNomorGanda() {
-  DUP_ISIAN.forEach((isian) => {
-    const kotak = document.getElementById(isian.id);
-    if (kotak) kotak.classList.remove("is-ganda");
-    const wadah = document.getElementById("dup-" + isian.id);
-    if (wadah) {
-      wadah.hidden = true;
-      wadah.innerHTML = "";
-    }
-  });
 }
 
 // Pesan konfirmasi saat Simpan (teks polos; baris baru dipertahankan .dialog-text)

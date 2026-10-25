@@ -13,6 +13,8 @@ let draftItems = [];
 // Kronologi catatan yang sedang diedit di form (lihat features/notes-log.js)
 let draftNotesLog = [];
 let draftStops = [];
+// PI, LS, Polis Asuransi & dokumen lain yang sedang diedit di form (features/dok-pelengkap.js)
+let draftDokPelengkap = dokPelengkapKosong();
 let currentDetailId = null;
 let currentPage = 1;
 let pageSize = 10;

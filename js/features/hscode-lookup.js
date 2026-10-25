@@ -50,9 +50,10 @@ async function bukaHscodeLookup(idx, tombol) {
   if (!pop || !input) return;
 
   // Diposisikan DI BAWAH tombolnya, rata kiri -- geser ke kiri sendiri
-  // kalau lebarnya (320px) akan meluber dari tepi kanan jendela.
+  // kalau lebarnya (320px, menyempit di layar < 336px; form.css) akan
+  // meluber dari tepi kanan jendela.
   const r = tombol.getBoundingClientRect();
-  const lebarPop = 320;
+  const lebarPop = Math.min(320, window.innerWidth - 16);
   let kiri = r.left;
   if (kiri + lebarPop > window.innerWidth - 8) kiri = window.innerWidth - lebarPop - 8;
   pop.style.top = r.bottom + 6 + "px";

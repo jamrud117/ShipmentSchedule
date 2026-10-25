@@ -204,9 +204,19 @@ cardContainer.addEventListener("change", (e) => {
       );
       return;
     }
+    const patch = { status: el.value };
     s.status = el.value;
+    /* Import ditandai Arrived tanpa tanggal In Factory: barangnya
+       dianggap masuk pabrik HARI INI (sama dengan form jadwal). */
+    const isiTiba = s.mode !== "export" && el.value === "arrived" && !s.factoryDate;
+    if (isiTiba) {
+      s.factoryDate = patch.factoryDate = todayISO();
+      catatKronologi(s, patch, tt(`Status Arrived — In Factory diisi ${fmtDate(s.factoryDate)}.`, `Status Arrived — In Factory set to ${fmtDate(s.factoryDate)}.`));
+    }
     render();
-    persistFields(id, { status: s.status });
+    persistFields(id, patch);
+    if (isiTiba)
+      showToast(tt(`Arrived — In Factory diisi ${fmtDate(s.factoryDate)}. Ubah lewat tombol pensil kalau tanggalnya lain.`, `Arrived — In Factory set to ${fmtDate(s.factoryDate)}. Use the pencil button if the date differs.`), "success");
   } else if (el.dataset.action === "date") {
     const field = el.dataset.field;
     const patch = { [field]: el.value };

@@ -191,12 +191,12 @@ function renderSuratBarang() {
   body.innerHTML = suratBarang.map((b, i) => `
     <tr data-sb="${i}">
       <td class="sb-no">${i + 1}</td>
-      <td>
+      <td class="sb-barang">
         <input type="text" class="form-control form-control-sm" data-sb-f="nama" value="${escapeAttr(b.nama)}" placeholder="${escapeAttr(tt("Nama barang", "Item name"))}">
         <input type="text" class="form-control form-control-sm mt-1" data-sb-f="hs" value="${escapeAttr(b.hs)}" placeholder="HS Code">
       </td>
-      <td><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
-      <td class="sb-foto">
+      <td class="sb-fungsi" data-label="${escapeAttr(tt("Fungsi & Kegunaan", "Function & Use"))}"><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
+      <td class="sb-foto" data-label="${escapeAttr(tt("Foto", "Photo"))}">
         ${b.foto ? `<img src="${escapeAttr(b.foto)}" alt="">` : ""}
         <label class="btn-quiet sb-pilih-foto">
           <i class="bi bi-image"></i> ${escapeHtml(b.foto ? tt("Ganti", "Change") : tt("Foto", "Photo"))}

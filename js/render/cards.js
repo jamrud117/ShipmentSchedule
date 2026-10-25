@@ -129,23 +129,26 @@ function departingTodayHtml(s) {
     </div>`;
 }
 
+// Tag PI kartu: "PI", atau "PI × 2" untuk lebih dari satu dokumen PI
+function tagPiHtml(s) {
+  const n = (dokPelengkapJadwal(s).pi || []).filter((d) => hasMeaningfulValue(d.nomor)).length;
+  return n ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI${n > 1 ? ` × ${n}` : ""}</span>` : "";
+}
+
 function buildTags(s, totals) {
   const lbl = ML();
   const stopCount = routeStopList(s).length;
+  const muatan = muatanKiriman(s);
   return [
     s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
     totals.totalUSD
       ? `<span class="tag tag-usd">${fmtUSD(totals.totalUSD)}</span>`
       : "",
-    s.muatan
-      ? `<span class="tag tag-muatan">${escapeHtml(s.muatan)}</span>`
-      : "",
+    muatan ? `<span class="tag tag-muatan">${escapeHtml(muatan)}</span>` : "",
     isTransitRoute(s)
       ? `<span class="tag tag-transit"><i class="bi bi-signpost-split"></i> Transit · ${stopCount} Stop</span>`
       : "",
-    lbl.showDuty && hasMeaningfulValue(s.pi)
-      ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI</span>`
-      : "",
+    lbl.showDuty ? tagPiHtml(s) : "",
     skbTagsHtml(s),
   ]
     .filter(Boolean)
@@ -177,6 +180,19 @@ function statusSelectHtml(s) {
     </select>`;
 }
 
+// Satu rincian kartu: ikon + label di atas nilainya (nilaiHtml sudah di-escape)
+function infoItemHtml(ikon, label, nilaiHtml) {
+  return `<div class="info-item"><div class="info-label"><i class="bi ${ikon}"></i> ${label}</div><div class="info-value">${nilaiHtml}</div></div>`;
+}
+
+/* Sel peti kemas: laut = No. Kontainer/Seal + jenis muatannya; udara
+   tidak berkontainer, selnya diisi Master AWB (House AWB di sel lain). */
+function infoKontainerHtml(s) {
+  if (s.transport === "udara") return infoItemHtml("bi-file-earmark-text", "Master AWB", escapeHtml(dispVal(s.masterBL)));
+  const muatan = muatanKiriman(s);
+  return infoItemHtml("bi-upc-scan", t("f.kontainer"), escapeHtml(dispVal(kontainerKiriman(s))) + (muatan ? " · " + escapeHtml(muatan) : ""));
+}
+
 /* BADAN KARTU — rincian di kiri, nama barang di kanan.
 
    SATU fungsi untuk kartu berjalan MAUPUN kartu yang sudah tiba.
@@ -196,7 +212,7 @@ function cardBodySplitHtml(s, totals) {
            salin & CIPL (carrierNameFromShipment). */
         escapeHtml(dispVal(carrierNameFromShipment(s)))
       }</div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> ${t("f.kontainer")}</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
+      ${infoKontainerHtml(s)}
       <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
       ${

@@ -101,8 +101,9 @@ const lapAngka = (v) => {
 
 /* Satu pengajuan dana -> angka laporan (IDR, sebelum PPN). */
 /* Kurs untuk satu transaksi: `kurs` boleh angka (satu kurs untuk semua)
-   atau fungsi (mata, tanggal) -> kurs -- yang dipakai laporan: kurs pajak
-   KMK yang berlaku pada tanggal transaksinya. */
+   atau fungsi (mata, tanggal) -> kurs -- yang dipakai laporan: NDPBM
+   kiriman yang tanggalnya paling dekat dengan transaksinya (kursNdpbm,
+   core/customs.js). */
 const lapKursUntuk = (kurs, mata, tanggal) =>
   mata === "IDR" ? 1 : typeof kurs === "function" ? Number(kurs(mata, tanggal)) || 0 : Number(kurs) || 0;
 
@@ -183,12 +184,10 @@ function lapBarisInvoice(row, kurs) {
   };
 }
 
-/* Kurs bawaan: NDPBM jadwal terbaru -- kurs pajak yang memang dipakai
-   DDI; bisa diganti di laporan. */
+/* Kurs bawaan (data mentah Excel): NDPBM jadwal terbaru. */
 function lapKursBawaan() {
-  const semua = typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
-  const dengan = semua.filter((s) => lapAngka(s.ndpbm) > 1000).sort((a, b) => String(b.etd || "").localeCompare(String(a.etd || "")));
-  return dengan.length ? Math.round(lapAngka(dengan[0].ndpbm)) : 16000;
+  const terbaru = kursNdpbm(semuaKiriman())("USD", todayISO());
+  return terbaru.nilai ? Math.round(terbaru.nilai) : 16000;
 }
 
 /* ---------------------------- hitungan ---------------------------- */
@@ -346,12 +345,8 @@ async function renderLaporanBiaya(box, bar) {
   if (bar) bar.innerHTML = "";
   box.innerHTML = `<div class="docnum-empty">Loading report…</div>`;
   try {
-    const [dana, invoice, kursPajak] = await Promise.all([
-      fsumAmbilSemua(),
-      lapAmbilInvoice(),
-      typeof muatKursPajak === "function" ? muatKursPajak() : Promise.resolve({ periode: [] }),
-    ]);
-    lapData = { dana, invoice, kursPajak, anggaran: null };
+    const [dana, invoice] = await Promise.all([fsumAmbilSemua(), lapAmbilInvoice()]);
+    lapData = { dana, invoice, anggaran: null };
   } catch (e) {
     console.error(e);
     box.innerHTML = `<div class="docnum-empty">The report failed to load. Please try again.</div>`;
@@ -581,7 +576,7 @@ function hitungAnalisis(dana, opsi) {
 
   /* PENDAPATAN -- nilai invoice dari tab Invoice Number: patokan berapa
      yang dijual vs berapa yang dikeluarkan. Ekspor (valas) dikonversi
-     dengan kurs pajak tanggal invoicenya; Local Sale sudah IDR. */
+     dengan NDPBM terdekat tanggal invoicenya; Local Sale sudah IDR. */
   const jual = (o.invoice || []).filter((v) => v.bulan >= 1);
   const jualPerTahun = (y) => {
     const arr = Array(12).fill(0);
@@ -825,7 +820,7 @@ function lapWawasan(a) {
   const naikTurun = (x) => (x == null ? "" : ` (${x >= 0 ? "up" : "down"} ${Math.abs(x * 100).toFixed(0)}% from ${a.Y - 1})`);
   if (a.pendYtd) {
     out.push(a.pendUsdYtd
-      ? `Revenue ${per}: ${lapFmtUsd(a.pendUsdYtd)} from ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"}, which is ${lapFmtUang(a.pendYtd)} at the weekly Kurs Pajak${naikTurun(a.pendYoy)}.`
+      ? `Revenue ${per}: ${lapFmtUsd(a.pendUsdYtd)} from ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"}, which is ${lapFmtUang(a.pendYtd)} at the customs rate (NDPBM)${naikTurun(a.pendYoy)}.`
       : `Revenue ${per}: ${lapFmtUang(a.pendYtd)} from ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"}${naikTurun(a.pendYoy)}.`);
   } else {
     out.push(`No invoice values recorded for ${per} — revenue comparisons are not available.`);
@@ -910,7 +905,7 @@ function lapSusunBlok(a, lap, ang) {
   B.ringkasBulan = {
     judul: `Month by month — ${Y}`,
     sub: "",
-    kepala: ["Month (invoice date)", "Export revenue (USD)", "Kurs Pajak used", `Revenue (IDR)`, `EXIM spending (IDR)`, "Spending as % of revenue"]
+    kepala: ["Month (invoice date)", "Export revenue (USD)", "Rate used (NDPBM)", `Revenue (IDR)`, `EXIM spending (IDR)`, "Spending as % of revenue"]
       .concat(adaLaluApaPun ? [`EXIM spending ${Y - 1}`, `Spending change vs ${Y - 1}`] : []),
     baris: bulanAda.map((i) => [sel(lapNamaBulan(i + 1)), sel(a.pendUsd[i], "usd"),
       sel(a.pendUsd[i] ? a.pendUsdIdr[i] / a.pendUsd[i] : null, "rp2"), sel(a.pend[i], "jt"), sel(a.ini[i], "jt"),
@@ -924,7 +919,7 @@ function lapSusunBlok(a, lap, ang) {
     catatan: [
       `Spending is dated by the vendor's invoice date${a.tanpaTglInvoice ? ` (${a.tanpaTglInvoice} request${a.tanpaTglInvoice === 1 ? "" : "s"} without an invoice date use the request date)` : ""}, not by payment date — a bill paid late stays in the month it was invoiced.`,
       `Check: ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"} (${lapFmtUsd(a.pendUsdYtd)} export${a.pendYtd - lapJumlah(a.pendUsdIdr.slice(0, M)) > 0 ? ` + ${lapFmtUang(a.pendYtd - lapJumlah(a.pendUsdIdr.slice(0, M)))} local sale` : ""}) — same as the Invoice Number tab; ${a.jumlahPengajuan} fund request${a.jumlahPengajuan === 1 ? "" : "s"} (${lapFmtUang(a.ytd)}).`,
-      "Revenue (IDR) = USD × the Kurs Pajak valid on each invoice date, plus local sales in IDR.",
+      "Revenue (IDR) = USD × the NDPBM (customs rate) of the shipment closest to each invoice date, plus local sales in IDR.",
       adaLaluApaPun ? "" : `No ${Y - 1} data recorded yet — year-on-year columns appear once there is.`,
     ].filter(Boolean).join(" "),
   };
@@ -1018,7 +1013,7 @@ function lapSusunBlok(a, lap, ang) {
   // 0. Pendapatan vs pengeluaran
   B.pendapatan = {
     judul: "Revenue vs EXIM spending",
-    sub: `revenue = Invoice Number values, foreign currency at Kurs Pajak of the invoice date`,
+    sub: `revenue = Invoice Number values, foreign currency at the NDPBM nearest the invoice date`,
     kepala: ["Month", `Export ${Y - 1} (USD)`, `Export ${Y} (USD)`, `Revenue ${Y - 1} (IDR)`, `Revenue ${Y} (IDR)`, "Revenue YoY %", `Spending ${Y}`, `Spending / revenue ${Y}`, `Spending / revenue ${Y - 1}`],
     baris: Array.from({ length: 12 }, (_, i) => {
       const lewat = i < M;
@@ -1199,10 +1194,10 @@ function lapSusunBlok(a, lap, ang) {
     kaki: [sel("Total"), sel(""), sel(totV[0], "rp"), sel(totV[1], "rp"), sel(totV[2], "rp")],
   };
   B.kurs = {
-    judul: "Exchange rates used (Kurs Pajak, Ministry of Finance)",
-    sub: "per KMK period · IDR per unit",
-    kepala: ["Valid from", "Valid to", "KMK number", "USD", "Invoices converted"],
-    baris: (lap.kursPakai || []).map((k) => [sel(k.mulai), sel(k.sampai), sel(k.kmk || "-"), sel(k.usd, "rp2"), sel(k.jumlah, "n")]),
+    judul: "Exchange rates used (NDPBM of the nearest shipment)",
+    sub: "customs rate declared on the PIB / PEB · IDR per USD",
+    kepala: ["Rate date", "Shipment", "Aju No.", "USD", "Transactions converted"],
+    baris: (lap.kursPakai || []).map((k) => [sel(k.tanggal), sel(k.pihak || "-"), sel(k.aju || "-"), sel(k.usd, "rp2"), sel(k.jumlah, "n")]),
     catatan: lap.kursCatatan || "",
   };
   B.anggaranPakai = ang
@@ -1322,77 +1317,43 @@ function lapGrafik(a, lap) {
 
 /* ---------------------------- tampilan ---------------------------- */
 
-/* NDPBM jadwal di sekitar sebuah tanggal (+-7 hari). NDPBM di PIB ADALAH
-   kurs pajak KMK pekan itu -- jadi untuk tanggal yang belum ada di
-   riwayat kurs tersimpan, NDPBM kiriman pada pekan yang sama lebih tepat
-   daripada periode KMK terdekat. */
-function lapNdpbmSekitar() {
-  const semua = typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
-  const titik = semua
-    .filter((s) => lapAngka(s.ndpbm) > 1000)
-    .map((s) => ({ t: (s.docProgress && s.docProgress.pib && s.docProgress.pib.date) || s.eta || s.etd || "", n: lapAngka(s.ndpbm) }))
-    .filter((x) => x.t);
-  return (tanggal) => {
-    const t0 = new Date(String(tanggal).slice(0, 10) + "T00:00:00Z").getTime();
-    let terbaik = null;
-    titik.forEach((x) => {
-      const d = Math.abs(new Date(x.t.slice(0, 10) + "T00:00:00Z").getTime() - t0) / 86400000;
-      if (d <= 7 && (!terbaik || d < terbaik.d)) terbaik = { d, n: x.n };
-    });
-    return terbaik ? terbaik.n : 0;
-  };
-}
-
 function lapHitungSekarang() {
-  /* Kurs pajak KMK yang berlaku pada tanggal tiap transaksi. Di luar
-     riwayat kurs yang tersimpan: NDPBM kiriman sepekan yang sama, lalu
-     periode KMK terdekat. Kalau berkas kursnya belum ada sama sekali,
-     USD jatuh ke NDPBM terbaru. */
+  /* Valas dikonversi dengan NDPBM kiriman terdekat tanggal transaksinya
+     (kursNdpbm, core/customs.js) -- NDPBM itulah kurs pajak KMK yang
+     berlaku pekan itu. Yang terpakai dicatat per kiriman sumbernya. */
   const ndpbm = lapKursBawaan();
-  const ndpbmSekitar = lapNdpbmSekitar();
-  let dariNdpbm = 0;
-  const dataKurs = lapData.kursPajak || { periode: [] };
+  const cari = kursNdpbm(semuaKiriman());
   const pakai = new Map();
-  let cadangan = 0;
-  let perkiraan = 0;
+  let jauh = 0;
+  let tanpaKurs = 0;
   const kursFn = (mata, tanggal) => {
-    const k = typeof kursPajakPada === "function" ? kursPajakPada(mata, tanggal, dataKurs) : { nilai: 0 };
-    if (k.perkiraan && mata === "USD") {
-      const n = ndpbmSekitar(tanggal);
-      if (n) {
-        dariNdpbm += 1;
-        return n;
-      }
+    const k = cari(mata, tanggal);
+    if (!k.nilai) {
+      if (String(mata || "").toUpperCase() !== "IDR") tanpaKurs += 1;
+      return 0;
     }
-    if (k.nilai && k.periode) {
-      const kunci = k.periode.mulai;
-      const x = pakai.get(kunci) || { mulai: k.periode.mulai, sampai: k.periode.sampai, kmk: k.periode.kmk, usd: k.periode.kurs.USD, jumlah: 0 };
-      x.jumlah += 1;
-      pakai.set(kunci, x);
-      if (k.perkiraan) perkiraan += 1;
-      return k.nilai;
-    }
-    if (mata === "USD") {
-      cadangan += 1;
-      return ndpbm;
-    }
-    return 0;
+    if (!k.s) return k.nilai;
+    const kunci = k.s.id;
+    const x = pakai.get(kunci) || { tanggal: k.tanggal, pihak: k.s.party || "", aju: k.s.noAju || "", usd: k.nilai, jumlah: 0 };
+    x.jumlah += 1;
+    pakai.set(kunci, x);
+    if (k.jarak > 7) jauh += 1;
+    return k.nilai;
   };
   const dana = (lapData.dana || []).map((r) => lapBarisDana(r, kursFn));
   const invoice = (lapData.invoice || []).map((r) => lapBarisInvoice(r, kursFn));
   const opsi = { tahun: lapSaringan.tahun, bulan: lapSaringan.bulan, jenis: lapSaringan.jenis };
   const lap = hitungLaporanBiaya(dana, invoice, opsi);
   lap.kurs = ndpbm;
-  lap.kursPakai = [...pakai.values()].sort((x, y) => (x.mulai < y.mulai ? 1 : -1));
+  lap.kursPakai = [...pakai.values()].sort((x, y) => (x.tanggal < y.tanggal ? 1 : -1));
   lap.kursCatatan = [
-    dariNdpbm ? `${dariNdpbm} USD transaction(s) dated before the stored Kurs Pajak history used the customs NDPBM of a shipment in the same week (NDPBM is the KMK tax rate).` : "",
-    perkiraan ? `${perkiraan} transaction(s) dated outside the stored Kurs Pajak history used the nearest available KMK period — run the "Kurs pajak mingguan" GitHub Action with a start date to fill the history.` : "",
-    cadangan ? `${cadangan} USD transaction(s) used the latest customs rate (NDPBM ${ndpbm.toLocaleString("en-US")}) because no Kurs Pajak was available.` : "",
-    dataKurs.diperbarui ? `Kurs Pajak last updated ${String(dataKurs.diperbarui).slice(0, 10)} from fiskal.kemenkeu.go.id.` : "",
+    "NDPBM is the KMK tax rate declared on each PIB / PEB, so a transaction uses the NDPBM of the shipment dated closest to it.",
+    jauh ? `${jauh} transaction(s) had no shipment within 7 days and used the nearest NDPBM available.` : "",
+    tanpaKurs ? `${tanpaKurs} foreign-currency transaction(s) could not be converted: no shipment has an NDPBM for that currency.` : "",
   ].filter(Boolean).join(" ");
   const anggaran = lapData.anggaran && !lapData.anggaran.gagal ? lapData.anggaran : null;
   // Jadwal kiriman (gross weight per BL/AWB) untuk perbandingan per kg antar vendor
-  const kiriman = typeof data !== "undefined" && data ? [].concat(data.import || [], data.export || []) : [];
+  const kiriman = semuaKiriman();
   const a = hitungAnalisis(dana, Object.assign({ anggaran, invoice, kiriman }, opsi));
   const ang = anggaran ? hitungAnggaran(lap, anggaran) : null;
   return { a, lap, ang, blok: lapSusunBlok(a, lap, ang) };
@@ -1423,7 +1384,7 @@ function lapKpi(a) {
   const naikRasio = a.rasio != null && a.rasioLalu != null ? a.rasio - a.rasioLalu : null;
   const kartu = [
     { k: `Revenue · ${per}`, v: a.pendUsdYtd ? lapFmtUsd(a.pendUsdYtd) : a.pendYtd ? lapFmtUang(a.pendYtd) : "—",
-      s: (a.pendUsdYtd ? `<span class="lap-kpi-banding">≈ ${escapeHtml(lapFmtUang(a.pendYtd))} at Kurs Pajak · ${a.jumlahInvoice} invoices</span>` : "") + banding(a.pendYoy, `vs ${a.Y - 1}`) },
+      s: (a.pendUsdYtd ? `<span class="lap-kpi-banding">≈ ${escapeHtml(lapFmtUang(a.pendYtd))} at NDPBM · ${a.jumlahInvoice} invoices</span>` : "") + banding(a.pendYoy, `vs ${a.Y - 1}`) },
     { k: `EXIM spending · ${per}`, v: lapFmtUang(a.ytd), s: banding(a.yoy, `vs ${a.Y - 1}`) },
     { k: "Spending per IDR 100 revenue", v: a.rasio != null ? `IDR ${(a.rasio * 100).toFixed(2)}` : "—",
       s: naikRasio == null ? `<span class="lap-kpi-banding">${a.Y - 1}: no data</span>`
@@ -1466,7 +1427,7 @@ function lapGambar(box) {
 
     <div class="lap-kepala">
       <div class="lap-kepala-judul">EXIM Spending Report ${escapeHtml(String(a.Y))}</div>
-      <div class="lap-kepala-sub">January – ${escapeHtml(lapNamaBulan(a.M))} ${escapeHtml(String(a.Y))}, compared with ${escapeHtml(String(a.Y - 1))}. All amounts in rupiah (IDR m = million, bn = billion). Every amount is placed in the month of its INVOICE DATE (not payment date). Revenue = Invoice Number values (USD at the weekly Kurs Pajak); spending = Fund Requests before VAT.</div>
+      <div class="lap-kepala-sub">January – ${escapeHtml(lapNamaBulan(a.M))} ${escapeHtml(String(a.Y))}, compared with ${escapeHtml(String(a.Y - 1))}. All amounts in rupiah (IDR m = million, bn = billion). Every amount is placed in the month of its INVOICE DATE (not payment date). Revenue = Invoice Number values (USD at the customs rate, NDPBM); spending = Fund Requests before VAT.</div>
     </div>
 
     ${bagian(1, "Summary", `${lapKpi(a)}
@@ -1488,7 +1449,7 @@ function lapGambar(box) {
       ${bagian("G", "Transport cost detail (DD Korea format)", `${lapTabelHtml(B.modaBulan)}${lapTabelHtml(B.jumlahModa)}${lapTabelHtml(B.vendorPpn)}${lapTabelHtml(B.anggaranPakai)}`)}
       ${bagian("H", "Exchange rates", lapTabelHtml(B.kurs))}
     </details>
-    <p class="lap-catatan">Spending comes from Fund Requests (IDR, before VAT), dated by invoice date. Revenue comes from Invoice Number requests; foreign-currency invoices are converted at the weekly Kurs Pajak (KMK) valid on the invoice date, local sales are in IDR. Forecasts are statistical estimates from recorded history — review them against planned shipments and sales plans before setting the budget.</p>`;
+    <p class="lap-catatan">Spending comes from Fund Requests (IDR, before VAT), dated by invoice date. Revenue comes from Invoice Number requests; foreign-currency invoices are converted at the NDPBM (the KMK tax rate on the PIB / PEB) of the shipment closest to the invoice date, local sales are in IDR. Forecasts are statistical estimates from recorded history — review them against planned shipments and sales plans before setting the budget.</p>`;
 }
 
 /* Satu pendengar untuk seluruh panel (isinya digambar ulang terus). */
@@ -1687,14 +1648,14 @@ function lapSusunWorkbook(hasil, gambar) {
   const s = wb.addWorksheet("Summary");
   s.getCell(1, 1).value = `EXIM SPENDING REPORT ${a.Y}`;
   s.getCell(1, 1).font = { bold: true, size: 16, color: { argb: "FF0F172A" } };
-  s.getCell(2, 1).value = `January – ${lapNamaBulan(a.M)} ${a.Y}, compared with ${a.Y - 1}. Amounts in rupiah (IDR). Revenue = Invoice Number values (USD at Kurs Pajak); spending = Fund Requests before VAT.`;
+  s.getCell(2, 1).value = `January – ${lapNamaBulan(a.M)} ${a.Y}, compared with ${a.Y - 1}. Amounts in rupiah (IDR). Revenue = Invoice Number values (USD at the customs rate, NDPBM); spending = Fund Requests before VAT.`;
   s.getCell(2, 1).font = { italic: true, color: { argb: "FF64748B" } };
   let r = lapXlsBlok(s, {
     judul: "Key figures",
     kepala: ["", "Amount", "Compared"],
     baris: [
       [sel(`Revenue Jan–${lapBulanPendek(a.M)} ${a.Y} (USD, export invoices)`), sel(a.pendUsdYtd, "usd"), sel(`${a.jumlahInvoice} invoices`)],
-      [sel(`Revenue Jan–${lapBulanPendek(a.M)} ${a.Y} (IDR, at Kurs Pajak)`), sel(a.pendYtd, "jt"), sel(a.pendYoy, "chg")],
+      [sel(`Revenue Jan–${lapBulanPendek(a.M)} ${a.Y} (IDR, at NDPBM)`), sel(a.pendYtd, "jt"), sel(a.pendYoy, "chg")],
       [sel(`EXIM spending Jan–${lapBulanPendek(a.M)} ${a.Y}`), sel(a.ytd, "jt"), sel(a.yoy, "chg")],
       [sel("Spending as % of revenue"), sel(a.rasio, "pct2"), sel(a.rasioLalu != null ? `${a.Y - 1}: ${(a.rasioLalu * 100).toFixed(2)}%` : "")],
       [sel(`${lapNamaBulan(a.M)} ${a.Y} spending`), sel(a.bulanIni, "jt"), sel(a.mom, "chg")],
@@ -1769,7 +1730,7 @@ function lapSusunWorkbook(hasil, gambar) {
   p.columns = [
     { header: "Invoice No.", width: 30 }, { header: "Date", width: 12 }, { header: "Customer", width: 28 }, { header: "Terms of Delivery", width: 22 },
     { header: "Terms group", width: 14 }, { header: "Channel", width: 12 }, { header: "Currency", width: 10 }, { header: "Amount", width: 14 },
-    { header: "Kurs Pajak", width: 12 }, { header: "Amount (IDR)", width: 18 }, { header: "QTY", width: 8 },
+    { header: "Rate (NDPBM)", width: 13 }, { header: "Amount (IDR)", width: 18 }, { header: "QTY", width: 8 },
   ];
   kepala(p.getRow(1));
   lap.jual.slice().sort((x, y) => x.tanggal.localeCompare(y.tanggal)).forEach((x) => {

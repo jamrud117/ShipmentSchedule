@@ -174,3 +174,43 @@ function computeCustoms(shipmentLike) {
 
   return { ...totals, cifUsd, cifRupiah, fobUsd, fobRupiah, bmPdri };
 }
+
+/* ------------------------------------------------------------------
+   KURS DARI NDPBM JADWAL
+
+   NDPBM di PIB/PEB adalah kurs pajak (KMK) yang berlaku pekan itu,
+   jadi transaksi bervaluta asing dikonversi dengan NDPBM kiriman yang
+   tanggalnya PALING DEKAT dengan tanggal transaksinya. Satu sumber untuk
+   Laporan Biaya & biaya per kiriman -- tanpa unduhan kurs dari luar.
+
+   NDPBM jadwal DDI berdenominasi USD, jadi hanya USD yang punya kurs;
+   IDR = 1, mata uang lain = 0 (tidak dikonversi diam-diam).
+   Hasil: (mata, tanggal) -> { nilai, tanggal, jarak, s } -- `jarak` dalam
+   hari ke NDPBM yang dipakai (di atas 7 hari = di luar pekan KMK-nya).
+------------------------------------------------------------------ */
+const NDPBM_MINIMAL = 1000; // di bawah ini bukan kurs rupiah per USD (isian salah / kosong)
+
+function tanggalNdpbm(s) {
+  const pib = s && s.docProgress && s.docProgress.pib;
+  return String((pib && pib.date) || tanggalDariAju(s.noAju) || s.docDate || s.eta || s.etd || "").slice(0, 10);
+}
+
+function kursNdpbm(kiriman) {
+  const hari = (iso) => Date.parse(String(iso).slice(0, 10) + "T00:00:00Z") / 86400000;
+  const titik = (kiriman || [])
+    .map((s) => ({ s, n: Number(s.ndpbm) || 0, t: tanggalNdpbm(s) }))
+    .filter((x) => x.n > NDPBM_MINIMAL && x.t && Number.isFinite(hari(x.t)));
+  return (mata, tanggal) => {
+    const kode = String(mata || "IDR").trim().toUpperCase();
+    if (kode === "IDR") return { nilai: 1, jarak: 0 };
+    if (kode !== "USD" || !titik.length) return { nilai: 0, jarak: null };
+    const t0 = hari(tanggal);
+    let pilih = null;
+    titik.forEach((x) => {
+      const jarak = Number.isFinite(t0) ? Math.abs(hari(x.t) - t0) : 0;
+      if (!pilih || jarak < pilih.jarak || (jarak === pilih.jarak && x.t > pilih.tanggal))
+        pilih = { nilai: x.n, tanggal: x.t, jarak, s: x.s };
+    });
+    return pilih;
+  };
+}

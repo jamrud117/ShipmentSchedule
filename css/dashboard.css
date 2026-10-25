@@ -375,6 +375,13 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   place-items: center;
   position: relative;
 }
+/* Layar sentuh selebar tablet: tanggal 36px, bukan 26px (di ponsel 40px, di bawah) */
+@media (pointer: coarse) {
+  .drp-day {
+    width: 36px;
+    height: 36px;
+  }
+}
 .drp-day:hover {
   background: var(--p-50);
 }
@@ -952,6 +959,21 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* Ponsel: "1 pengiriman · ESTIMASI KIRIM" turun ke bawah tanggalnya --
+   sebaris dengan garis, ia melewati tepi kanan layar. */
+@media (max-width: 575.98px) {
+  .date-section {
+    flex-wrap: wrap;
+    gap: 2px var(--sp-3);
+  }
+  .date-section-line {
+    display: none;
+  }
+  .date-section-count {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+}
 
 /* PAGINASI */
 .pagination-bar {
@@ -1191,6 +1213,11 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
 }
 .filter-note button:hover {
   color: var(--s-danger);
+}
+@media (max-width: 820px), (pointer: coarse) {
+  .filter-note button {
+    min-height: 32px;
+  }
 }
 
 /* Judul daftar + jumlah jadwal — menggantikan papan navy berisi ubin

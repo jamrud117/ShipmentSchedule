@@ -477,7 +477,6 @@ input[type="date"][readonly] {
    seperti label form jadwal & nomor dokumen, huruf biasa yang lebih
    besar, supaya semua kotak isian di aplikasi berlabel sama.
 ================================================================== */
-.eyebrow,
 .board-label,
 .panel-eyebrow,
 .board-today-label,
@@ -665,13 +664,12 @@ table.item-table textarea:focus,
    FOKUS — KOMPONEN BOOTSTRAP
 
    Bootstrap memberi cincin birunya sendiri (rgba(13,110,253,.25)) pada
-   tab, tombol .btn, tombol tutup, dan kotak centang -- biru yang tidak
-   ada di palet aplikasi ini. Diseragamkan dengan garis luar navy.
+   tab, tombol .btn, dan tombol tutup -- biru yang tidak ada di palet
+   aplikasi ini. Diseragamkan dengan garis luar navy.
 ================================================================== */
 .nav-link:focus-visible,
 .btn:focus-visible,
 .btn-close:focus-visible,
-.page-link:focus-visible,
 .dropdown-item:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -682,10 +680,6 @@ table.item-table textarea:focus,
 }
 .btn-close:focus {
   box-shadow: none;
-}
-.form-check-input:focus {
-  border-color: var(--focus-ring);
-  box-shadow: var(--sh-focus);
 }
 
 
@@ -780,6 +774,84 @@ table.item-table textarea:focus,
 @media (max-width: 640px) {
   .bk-ringkas {
     grid-template-columns: 1fr;
+  }
+}
+/* Panel sempit (ponsel): tiap pengajuan jadi kartu -- nomor sebagai
+   judul, tanggal/vendor/jenis/status berlabel (data-label,
+   shipment-cost.js), nilai dibayar selebar kartu di bawahnya. Tabel
+   enam kolom tadinya menyembunyikan Dibayar & Status di balik gulir. */
+.bk-isi {
+  container: bk-isi / inline-size;
+}
+@container bk-isi (max-width: 599.98px) {
+  .bk-isi .bk-wrap {
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .bk-isi .bk-tabel,
+  .bk-isi .bk-tabel :is(tbody, tfoot, td) {
+    display: block;
+  }
+  .bk-isi .bk-tabel thead {
+    display: none;
+  }
+  .bk-isi .bk-tabel tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: #fff;
+  }
+  .bk-isi .bk-tabel td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .bk-isi .bk-tabel tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  .bk-isi .bk-tabel tbody td.bk-nomor {
+    grid-column: 1 / -1;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .bk-isi .bk-tabel tbody td.bk-nomor::before {
+    content: none;
+  }
+  .bk-isi .bk-tabel tbody td.bk-dibayar {
+    grid-column: 1 / -1;
+    order: 1;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  /* Baris Total: label & jumlah sebaris, status pembayaran di bawahnya */
+  .bk-isi .bk-tabel tfoot tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 12px;
+    padding: 2px 14px;
+  }
+  .bk-isi .bk-tabel tfoot td.bk-dibayar {
+    text-align: right;
+  }
+  .bk-isi .bk-tabel tfoot td.bk-status {
+    grid-column: 1 / -1;
+    font-weight: 400;
+    color: var(--n-600);
   }
 }
 /* Status bayar tiap pengajuan */

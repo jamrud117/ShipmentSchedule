@@ -393,9 +393,6 @@
 .lane-track.is-process .lane-fill {
   background: var(--amber);
 }
-.lane-track.is-arrived .lane-fill {
-  background: var(--green);
-}
 .port-node {
   position: absolute;
   top: 50%;
@@ -1112,7 +1109,7 @@
   background: #fff;
   color: var(--n-500);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   transition:
     background var(--dur-1) var(--ease),

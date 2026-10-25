@@ -347,8 +347,10 @@ function reconstructShipmentFromGroup(group, mode) {
   if (mode === "import") {
     s.ndpbm = excelNum(first[idx.NDPBM]);
     s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
-    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri)
-    Object.assign(s, pecahPiLs(excelStr(first[idx.PI])));
+    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri); nomor "A, B" jadi daftarnya
+    const piLs = pecahPiLs(excelStr(first[idx.PI]));
+    s.dokPelengkap = Object.assign(dokPelengkapKosong(), { pi: pecahNomorDokumen(piLs.pi), ls: pecahNomorDokumen(piLs.ls) });
+    Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
     s.bm = bulatkanBm(excelNum(first[idx.BM])); // ke atas ke ribuan, seperti semua jalan masuk BM
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);

@@ -42,45 +42,6 @@ function addDaysISO(iso, days) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/* ETA & Estimated Delivery turunan dari PDF PIB.
-
-   Keduanya menumpang mesin prediksi supaya berkas yang diimpor memakai
-   asumsi yang PERSIS SAMA dengan yang dipakai di layar — satu sumber
-   angka, bukan dua yang perlahan berbeda.
-
-   JANGAN menuliskan aturan cadangan sendiri di sini. Aturan yang
-   ditulis mati (mis. "laut = ETD + 7 hari") tidak membedakan FCL dari
-   LCL, tidak tahu rutenya dari mana, dan menghitung akhir pekan sebagai
-   hari kerja.
-
-   `ctx` boleh berisi field apa pun dari sebuah pengiriman (muatan,
-   origin, destination, routeType, forwarder); makin lengkap, makin
-   tepat aturan yang terpilih. */
-function deriveEtaFromEtd(etd, transport, ctx) {
-  if (!etd) return "";
-  if (typeof predictEta === "function") {
-    const p = predictEta(Object.assign({}, ctx || {}, { etd, transport }));
-    if (p.ok && p.eta) return p.eta;
-  }
-  return etd;
-}
-
-function deriveActualFromEta(eta, ctx) {
-  if (!eta) return "";
-  if (typeof predictDelivery === "function") {
-    /* factoryDate & docProgress sengaja dibuang: berkas yang baru
-       diimpor belum punya milestone apa pun, dan membawa serta sisa
-       data dari pemanggil hanya akan membuat hasilnya tidak terduga. */
-    const src = Object.assign({}, ctx || {}, { eta, etaMode: "auto" });
-    delete src.factoryDate;
-    delete src.docProgress;
-    delete src.etaUpdate;
-    const d = predictDelivery(src);
-    if (d.ok && d.date) return d.date;
-  }
-  return eta;
-}
-
 /* BRUTO: TOTAL SAJA, DITARUH DI SATU BARANG */
 function applyTotalBrutoToFirstItem(items, totalBruto) {
   if (!items || !items.length) return items;
@@ -109,7 +70,5 @@ if (typeof module !== "undefined" && module.exports) {
     applyTotalBrutoToFirstItem,
     normalizeHsCodeInput,
     addDaysISO,
-    deriveEtaFromEtd,
-    deriveActualFromEta,
   };
 }

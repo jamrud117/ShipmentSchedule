@@ -83,6 +83,9 @@ const DN_LABEL_FIELD = {
   get unit() { return tt("Satuan", "Unit"); },
   // Isian Surat Jalan
   get doKind() { return tt("Jenis Surat Jalan", "Delivery Note Type"); },
+  get knownBy() { return tt("Mengetahui", "Acknowledged By"); },
+  get sentBy() { return tt("Dikirim Oleh", "Sent By"); },
+  get receivedBy() { return tt("Diterima Oleh", "Received By"); },
   get categoryWork() { return "Category Work"; },
   get totalNote() { return tt("Keterangan Total", "Total Notes"); },
   get items() { return tt("Daftar Barang", "Item List"); },
@@ -148,6 +151,10 @@ const DN_DETAIL_SUSUNAN = {
         "receiver", { k: "shipmentId", lebar: 2 }, "vehicle", "poNo", "categoryWork", "totalNote",
         "packages", { k: "address", lebar: true },
       ],
+    },
+    {
+      judul: () => tt("Tanda Tangan", "Signatures"),
+      isian: ["knownBy", "sentBy", "receivedBy"],
     },
     { khusus: "barangSuratJalan", memakai: ["items"] },
   ],

@@ -673,7 +673,7 @@ function selAwbHtml(b, daftar) {
   const kini = fundKunciAwb(b.awb);
   const ada = daftar.some((a) => a.kunci === kini);
   const pertama = barisDiskon(b) ? tt("Ikut pos di atas", "Same as line above") : tt("Dibagi rata", "Split evenly");
-  return `<td class="fl-awb"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
+  return `<td class="fl-awb" data-label="BL/AWB"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
       <option value="">${escapeHtml(pertama)}</option>
       ${daftar.map((a) => `<option value="${escapeAttr(a.kunci)}"${a.kunci === kini ? " selected" : ""}>${escapeHtml(a.teks)}</option>`).join("")}
       ${kini && !ada ? `<option value="${escapeAttr(kini)}" selected>⚠ ${escapeHtml(kini)} — ${escapeHtml(tt("tidak ada di isian BL/AWB", "not in the BL/AWB field"))}</option>` : ""}
@@ -689,26 +689,30 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
           </button>
         </td>`;
   const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0">`;
+  /* data-label: judul kolomnya, tampil di atas isian saat tabel ini jadi
+     kartu di layar sempit (docnum.css, @container tabel-isian). */
+  const selTarif = `
+        <td class="fl-rate" data-label="PPN"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
+        <td class="fl-amt fl-ppn" data-label="PPN (Rp)">${teksPpnSel(ppn)}</td>${tombolHapus}`;
+  const labelNilai = escapeAttr(t("f.nilai.rp"));
   if (!barisDiskon(b)) {
     return `
       <tr data-fl="${i}">
         <td class="fl-no">${i + 1}</td>
-        <td><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
-        <td class="fl-amt">${kotakNilai}</td>
-        <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
+        <td class="fl-desc"><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
+        <td class="fl-amt" data-label="${labelNilai}">${kotakNilai}</td>${selTarif}
       </tr>`;
   }
   return `
       <tr data-fl="${i}" class="fl-row-diskon">
         <td class="fl-no">${i + 1}</td>
-        <td>
+        <td class="fl-desc">
           <div class="fl-desc-diskon">
             <span class="fl-tag-diskon">${escapeHtml(tt("Diskon", "Discount"))}</span>
             <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
           </div>
         </td>${kolomAwb}
-        <td class="fl-amt">
+        <td class="fl-amt" data-label="${labelNilai}">
           <div class="fl-disc-in">
             ${kotakNilai}
             <select data-fl-f="discType" aria-label="${escapeAttr(tt("Jenis diskon", "Discount type"))}">
@@ -721,9 +725,7 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
               value="${escapeAttr(teksNominalDiskon(v))}"
               aria-label="${escapeAttr(tt("Nominal diskon", "Discount amount"))}">
           </div>
-        </td>
-        <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
+        </td>${selTarif}
       </tr>`;
 }
 

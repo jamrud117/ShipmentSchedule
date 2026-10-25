@@ -373,6 +373,7 @@ function renderDocNumSubTabs() {
           `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label === "Lokal" ? tt("Lokal", "Local") : label)}</button>`,
       )
       .join("");
+    dnTabAktifTerlihat(box);
     return;
   }
 
@@ -413,9 +414,23 @@ function renderDocNumSubTabs() {
    sedang di luar layar. */
 function dnTabAktifTerlihat(baris) {
   const aktif = baris.querySelector(".docnum-subtab.active");
-  if (!aktif || baris.scrollWidth <= baris.clientWidth) return;
-  baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
+  if (aktif && baris.scrollWidth > baris.clientWidth)
+    baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
+  dnTandaiTepiTab(baris);
 }
+
+/* Tepi baris tab yang masih bisa digeser memudar (docnum.css) -- tanda
+   bahwa di baliknya masih ada tab (Summary, Report). */
+function dnTandaiTepiTab(baris) {
+  baris.classList.toggle("luber-kiri", baris.scrollLeft > 1);
+  baris.classList.toggle("luber-kanan", baris.scrollWidth - baris.clientWidth - baris.scrollLeft > 1);
+}
+(function pasangTepiTab() {
+  const baris = document.getElementById("docNumSubTabs");
+  if (!baris) return;
+  baris.addEventListener("scroll", () => dnTandaiTepiTab(baris), { passive: true });
+  window.addEventListener("resize", () => dnTandaiTepiTab(baris), { passive: true });
+})();
 
 function resolveDocNumType(tabKey) {
   const base = DOCNUM_TYPES[tabKey] || {};
@@ -2026,7 +2041,7 @@ const DN_KOLOM_DANA = [
   // Nilai = jumlah akhir pengajuan, angka yang sama dengan "Terbilang" di surat cetaknya
   { kelas: "dn-col-nilai", judul: () => tt("Nilai", "Value"), isi: (r, p) => escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR")) },
   { kelas: "dn-col-transaksi", judul: () => tt("Transaksi", "Transaction"), isi: (r, p) => dnTeksTransaksi(p.transactionType) },
-  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => "BL/AWB", isi: (r, p) => escapeHtml(p.blAwb || "\u2014") },
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-col-blawb dn-num", judul: () => "BL/AWB", isi: (r, p) => escapeHtml(p.blAwb || "\u2014") },
   /* Keterangan = Subject pada surat yang dicetak, jadi di sinilah terbaca
      "pembayaran billing import apa". Dipotong 80; kalimat penuhnya di tooltip. */
   { kelas: "dn-col-ket", judul: () => tt("Keterangan", "Notes"), atribut: (r, p) => ` title="${escapeAttr(p.notes || "")}"`,
@@ -2148,7 +2163,7 @@ async function renderDocNumHistory() {
     const dana = jenis.key === "fund";
     box.innerHTML = `
       <div class="docnum-history-wrap">
-      <table class="docnum-table${dana ? " docnum-table--dana" : ""}">
+      <table class="docnum-table docnum-table--${escapeAttr(jenis.key)}${dana ? " docnum-table--dana" : ""}">
         <thead>
           <tr>${
             dana
@@ -2194,21 +2209,26 @@ async function renderDocNumHistory() {
               return `<tr>
                 ${
                   dana
-                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
-                    : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no">${urut}</td>` : ""}
-                <td class="dn-num">${escapeHtml(r.doc_number)}</td>
+                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}" data-label="${escapeAttr(k.judul())}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
+                    : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no" data-label="No">${urut}</td>` : ""}
+                <td class="dn-num" data-label="${escapeAttr(jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number"))}">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
-                <td class="dn-col-tgl">${escapeHtml(fmtDate(r.doc_date))}</td>
-                <td class="dn-col-pemohon">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
-                <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
+                <td class="dn-col-tgl" data-label="${escapeAttr(tt("Tanggal", "Date"))}">${escapeHtml(fmtDate(r.doc_date))}</td>
+                <td class="dn-col-pemohon" data-label="${escapeAttr(tt("Pemohon", "Requester"))}">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
+                <td class="dn-col-utama" data-label="${escapeAttr(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}">${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 ${
                   jenis.key === "invoice"
-                    ? [p.termsDelivery, p.finalDestination, p.termPayment, dnCarrierInvoice(p)]
-                        .map((v) => `<td class="dn-col-inv">${escapeHtml(v || "\u2014")}</td>`)
+                    ? [
+                        ["terms", "Terms of Delivery", p.termsDelivery],
+                        ["tujuan", "Final Destination", p.finalDestination],
+                        ["bayar", "Terms of Payment", p.termPayment],
+                        ["carrier", "Carrier", dnCarrierInvoice(p)],
+                      ]
+                        .map(([k, label, v]) => `<td class="dn-col-inv dn-inv-${k}" data-label="${label}">${escapeHtml(v || "\u2014")}</td>`)
                         .join("") +
                       // Amount = baris Total di Commercial Invoice cetaknya.
-                      `<td class="dn-col-nilai">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
+                      `<td class="dn-col-nilai" data-label="Amount">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
                     : ""
                 }`
                 }

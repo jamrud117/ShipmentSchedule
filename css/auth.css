@@ -158,7 +158,7 @@ body.is-locked {
 }
 .user-chip-role {
   font-family: var(--font-board);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.55);
@@ -328,6 +328,8 @@ body.is-viewer [data-del-hscode],
 body.is-viewer .mst-ubah,
 body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
+body.is-viewer .dp-tambah,
+body.is-viewer .dp-hapus,
 body.is-viewer .card-note-input {
   display: none !important;
 }
@@ -451,7 +453,7 @@ body.is-viewer .delay-strip-fields input {
 }
 .acct-self {
   font-family: var(--font-board);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--sec-50);
@@ -466,9 +468,7 @@ body.is-viewer .delay-strip-fields input {
   font-family: var(--font-mono);
   font-size: var(--t-xs);
   color: var(--n-500);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .acct-since {
   font-family: var(--font-mono);
@@ -558,6 +558,12 @@ body.is-viewer .delay-strip-fields input {
 .lang-switch button.active {
   background: var(--p-600);
   color: #fff;
+}
+@media (pointer: coarse) {
+  .lang-switch button {
+    min-height: 34px;
+    padding: 4px 14px;
+  }
 }
 .login-lang {
   display: flex;
@@ -920,14 +926,15 @@ body.is-viewer .delay-strip-fields input {
 
 /* Kotak isian aplikasi */
 
-/* Isian kotak ini tersusun di kisi dua lajur. Bawaannya tiap isian
+/* Isian kotak ini tersusun di kisi enam lajur. Bawaannya tiap isian
    selebar kotak; .prompt-field--half (lebar: "setengah" di showPrompt)
-   memakai satu lajur. Jarak antarisian datang dari `gap` kisi -- bukan
-   dari margin label/kotak, yang dulu membuat jaraknya berbeda antara
-   isian yang punya petunjuk dan yang tidak. */
+   memakai separuhnya, .prompt-field--third ("sepertiga") sepertiganya.
+   Jarak antarisian datang dari `gap` kisi -- bukan dari margin
+   label/kotak, yang dulu membuat jaraknya berbeda antara isian yang
+   punya petunjuk dan yang tidak. */
 #promptFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px 12px;
   margin-top: var(--sp-1);
 }
@@ -936,13 +943,17 @@ body.is-viewer .delay-strip-fields input {
   min-width: 0;
 }
 #promptFields > .prompt-field--half {
-  grid-column: span 1;
+  grid-column: span 3;
+}
+#promptFields > .prompt-field--third {
+  grid-column: span 2;
 }
 .prompt-dialog--lebar {
   max-width: 600px;
 }
 @media (max-width: 479.98px) {
-  #promptFields > .prompt-field--half {
+  #promptFields > .prompt-field--half,
+  #promptFields > .prompt-field--third {
     grid-column: 1 / -1;
   }
 }
