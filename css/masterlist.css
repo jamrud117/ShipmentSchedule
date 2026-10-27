@@ -33,8 +33,13 @@
   gap: var(--sp-4);
   align-items: start;
 }
+/* Daftar baris menyesuaikan LEBAR PANELNYA, bukan lebar layar
+   (@container mst-daftar di bawah): jendela terbagi dua, tablet, dan
+   sidebar yang dilebarkan memberi panel yang sempit walau layarnya
+   lebar. */
 .mst-panel-daftar {
   margin-top: var(--sp-4);
+  container: mst-daftar / inline-size;
 }
 /* Kepala ketiga panel atas sama tinggi walau hanya satu yang membawa
    tombol (sama dengan halaman Akun). */
@@ -171,8 +176,10 @@
   color: var(--n-600);
 }
 /* Tautan dalam kalimat: tombol yang berwujud teks. */
+/* Area tekan diperbesar ke 25px tanpa menggeser baris teksnya. */
 .mst-taut {
-  padding: 0;
+  padding: 4px 0;
+  margin: -4px 0;
   border: 0;
   background: none;
   color: var(--p-500);
@@ -186,6 +193,13 @@
 .mst-taut:hover {
   color: var(--p-600);
   text-decoration-color: currentColor;
+}
+@media (pointer: coarse) {
+  .mst-jenis-kaki .mst-taut,
+  .mst-rinci-aju .mst-taut,
+  .mst-dok-atur {
+    min-height: 32px;
+  }
 }
 
 /* ---------- panel: dokumen ---------- */
@@ -211,7 +225,7 @@
 }
 .mst-redup {
   font-weight: 400;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 /* Masa berlaku: warna status + ikon + kalimat. */
 .mst-masa {
@@ -232,7 +246,7 @@
 .mst-masa--dekat {
   border-color: var(--s-warn-line);
   background: var(--s-warn-bg);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .mst-masa--lewat {
   border-color: var(--s-danger-line);
@@ -445,25 +459,25 @@
   color: var(--n-500);
   font-variant-numeric: tabular-nums;
 }
+/* break-word, bukan anywhere: "anywhere" ikut mengecilkan lebar minimum
+   kolomnya, jadi kolom Barang bisa diperas sampai namanya terpotong di
+   tengah kata ("MACHININ G"). */
 .mst-nama {
   display: block;
   font-size: var(--t-base);
   font-weight: 600;
   color: var(--ink);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .mst-spek {
   display: block;
   margin-top: 1px;
   font-size: var(--t-xs);
   color: var(--n-500);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
-.mst-tabel .mst-kol-lini {
-  width: 1%;
-  white-space: nowrap;
-  font-size: var(--t-xs);
-  color: var(--n-600);
+.mst-tabel .mst-kol-barang {
+  min-width: 180px;
 }
 /* Kolom angka: rata kanan, digit selebar tetap supaya lurus antarbaris. */
 .mst-tabel .mst-kol-angka,
@@ -492,42 +506,20 @@
    lebih dulu adalah baris yang masih bersisa. */
 .mst-tabel tr.is-habis td.mst-kol-sisa b {
   font-weight: 500;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .mst-tabel .mst-kol-aksi {
   width: 1%;
   white-space: nowrap;
 }
-.mst-tabel .mst-kol-aju {
-  min-width: 96px;
+/* Baris daftar membuka kotak rinciannya (tombol mata, atau barisnya sendiri). */
+.mst-tabel > tbody > tr.mst-baris[data-mst-detail] {
+  cursor: pointer;
 }
-/* Cip nomor aju; yang bertaut ke jadwalnya berwujud tombol. */
-.mst-aju {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0 4px 4px 0;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--n-50);
-  color: var(--n-700);
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.mst-aju--taut {
-  border-color: var(--p-200);
-  background: var(--p-50);
-  color: var(--p-600);
-}
-.mst-aju--taut:hover {
-  border-color: var(--p-400);
-}
-.mst-aju--taut i {
-  font-size: 0.62rem;
-  opacity: 0.75;
+/* Status nilai yang perlu dicek, di sel Sisa: ikon saja (kalimatnya di title). */
+.mst-tanda-nilai {
+  margin-left: 6px;
+  font-size: 0.8rem;
 }
 .mst-mono {
   font-family: var(--font-mono);
@@ -537,22 +529,95 @@
   font-size: var(--t-sm);
 }
 
-/* Rincian baris yang dibuka: spesifikasi lengkap + realisasinya. */
-.mst-tabel tr.is-terbuka > td {
-  border-bottom-color: transparent;
-  background: var(--n-50);
+/* ---------- kotak rincian (tombol mata) ----------
+   Satu baris -- atau satu PIB -- lengkap: angka ringkas, HS Code, lini,
+   spesifikasi, nilai (USD), realisasi & dokumen PIB-nya. Lebarnya cukup
+   untuk tabel realisasi; di ponsel selayar penuh (modal-fullscreen-sm-down). */
+/* Di ponsel selayar penuh (modal-fullscreen-sm-down): lebar ini hanya mulai 576px */
+@media (min-width: 576px) {
+  .mst-detail-dialog {
+    max-width: min(980px, calc(100% - 2 * var(--bs-modal-margin)));
+  }
 }
-.mst-tabel tr.mst-baris-rinci > td {
-  padding: 0 var(--sp-5) var(--sp-4);
-  background: var(--n-50);
+.mst-detail-kepala {
+  align-items: flex-start;
+  gap: 13px;
+}
+.mst-detail-judul {
+  flex: 1;
+  min-width: 0;
+}
+.mst-detail-judul .dialog-title {
+  overflow-wrap: break-word;
+}
+.mst-detail-no {
+  margin-right: 2px;
+  color: var(--n-500);
+  font-weight: 600;
+}
+/* Nomor aju di judul: huruf mono sedikit lebih kecil dari judulnya, bukan sekecil sel tabel */
+.mst-detail-judul .dialog-title .mst-mono {
+  font-size: 0.9em;
+}
+.mst-detail-sub {
+  margin: 3px 0 0;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+  overflow-wrap: anywhere;
+}
+.mst-detail-kaki {
+  gap: var(--sp-2);
+}
+.mst-detail-kaki:empty {
+  display: none;
+}
+.mst-detail-kaki > * {
+  margin: 0;
+}
+.mst-detail-kaki [data-mst-hapus-baris] {
+  margin-right: auto;
 }
 .mst-rinci {
   display: grid;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  border: 1px solid var(--border);
+  gap: var(--sp-4);
+}
+/* Angka ringkas: tiga petak sejajar */
+.mst-ringkas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.mst-ringkas-sel {
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--n-200);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--n-50);
+}
+.mst-ringkas-sel .mst-rinci-label {
+  margin-bottom: 2px;
+}
+.mst-ringkas-angka {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mst-ringkas-angka .mst-satuan,
+.mst-ringkas-angka .mst-spek {
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+.mst-ringkas-angka .mst-parsial {
+  margin-top: 0;
+}
+.mst-ringkas-sel.is-habis b {
+  color: var(--text-subtle);
 }
 .mst-rinci-label {
   display: block;
@@ -563,14 +628,13 @@
   text-transform: uppercase;
   color: var(--n-500);
 }
-/* HS Code di kiri spesifikasi (urutan unduhan Excel): selebar isinya */
+/* HS Code & lini selebar isinya, lalu spesifikasi (urutan unduhan Excel) */
 .mst-rinci-kepala {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--sp-3) var(--sp-5);
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-6);
 }
-.mst-rinci-hs p,
-.mst-rinci-spek p {
+.mst-rinci-kepala p {
   margin: 0;
   font-size: var(--t-sm);
   line-height: 1.5;
@@ -597,7 +661,7 @@
 .mst-rinci-tabel td {
   padding: 7px 10px;
   border-bottom: 1px solid var(--n-100);
-  vertical-align: middle;
+  vertical-align: top;
   font-size: var(--t-sm);
   color: var(--n-700);
 }
@@ -629,6 +693,56 @@
 }
 .mst-rinci-tabel td[rowspan] {
   vertical-align: middle;
+}
+
+/* DOKUMEN SATU PIB (mstDokPibHtml): label | nomor · tanggal, di bawah
+   nomor ajunya; "manual" = diisi sendiri, selebihnya dari jadwal. */
+.mst-dokpib {
+  margin-top: 6px;
+}
+.mst-dokpib dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 0;
+  font-size: var(--t-xs);
+}
+.mst-dokpib dl > div {
+  display: contents;
+}
+.mst-dokpib dt {
+  font-weight: 700;
+  color: var(--n-500);
+}
+.mst-dokpib dd {
+  margin: 0;
+  color: var(--n-700);
+  overflow-wrap: break-word;
+}
+.mst-dok-sendiri {
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.mst-dok-atur {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--p-600);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+.mst-dok-atur:hover {
+  text-decoration: underline;
 }
 
 /* Penanda realisasi parsial (beberapa PIB) -- teks + bentuk cip, bukan
@@ -672,38 +786,19 @@
 .mst-pib-tambah i {
   font-size: 0.7rem;
 }
-/* NILAI (USD): baris kedua sel Kuota / Terpakai / Sisa -- lebih kecil dan
-   redup dari angka unitnya. Status yang perlu dicek: ikon + kalimat
+/* NILAI (USD) di kotak rincian. Status yang perlu dicek: ikon + kalimat
    (pembaca layar), warna hanya pendukung. */
-.mst-nilai {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--t-xs);
-  font-weight: 500;
-  color: var(--n-500);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.mst-tabel td.mst-kol-sisa .mst-nilai {
-  margin-left: 0;
-}
-.mst-nilai i {
-  margin-right: 4px;
-}
-.mst-nilai--lebih {
+.mst-nilai--lebih,
+.mst-nilai-ket--lebih i {
   color: var(--s-danger);
-  font-weight: 700;
 }
-.mst-nilai--selisih i,
+.mst-nilai--selisih,
 .mst-nilai-ket--selisih i {
   color: var(--s-warn);
 }
-.mst-nilai--belum i,
+.mst-nilai--belum,
 .mst-nilai-ket--belum i {
   color: var(--n-400);
-}
-.mst-nilai-ket--lebih i {
-  color: var(--s-danger);
 }
 .mst-rinci-nilai .mst-nilai-ring {
   display: grid;
@@ -724,7 +819,7 @@
   font-variant-numeric: tabular-nums;
 }
 .mst-nilai-ring dd.mst-nilai--lebih {
-  color: var(--s-danger);
+  font-weight: 700;
 }
 .mst-nilai-ket,
 .mst-nilai-kosong {
@@ -743,19 +838,12 @@
 /* Susunan Per PIB: tanggal PIB belum sama di semua catatannya. */
 .mst-tgl-beda {
   margin-left: 6px;
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
   font-size: 0.8rem;
 }
 .mst-rinci-tabel td.mst-ubah,
 .mst-rinci-tabel th.mst-ubah {
   width: 1%;
-}
-.mst-rinci-aksi {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--n-100);
 }
 
 /* ---------- kotak Catat / Ubah realisasi ---------- */
@@ -898,10 +986,7 @@
   }
 }
 
-/* KARTU (di bawah 768 px): tiap baris tabel jadi kartu. Nomor & nama
-   barang jadi judulnya, tombol di pojok kanan; angka-angkanya berlabel
-   di atas nilainya. Tabel delapan kolom tidak muat lagi di sini, dan
-   menggesernya ke samping menyembunyikan justru kolom Sisa. */
+/* Ponsel: panel atas, tombol bilah judul, dan kotak Catat realisasi. */
 @media (max-width: 767px) {
   .mst-jenis {
     grid-template-columns: minmax(0, 1fr) max-content;
@@ -923,25 +1008,9 @@
     grid-area: tanda;
   }
   .mst-jenis-kaki,
-  .mst-saring,
   .mst-perlu-kosong {
     padding-left: var(--sp-4);
     padding-right: var(--sp-4);
-  }
-  .mst-saring .mst-cari {
-    flex: 1 1 100%;
-    max-width: none;
-  }
-  .mst-saring .control-select {
-    flex: 1 1 140px;
-    min-width: 0;
-  }
-  .mst-seg {
-    flex: 1 1 100%;
-    margin-left: 0;
-  }
-  .mst-seg button {
-    flex: 1 1 0;
   }
   .mst-aksi .mst-tombol,
   .mst-aksi .btn-teal {
@@ -949,139 +1018,6 @@
   }
   .mst-aksi #btnMstMuat {
     flex: 0 0 auto;
-  }
-
-  .mst-tabel > thead {
-    display: none;
-  }
-  .mst-tabel,
-  .mst-tabel > tbody,
-  .mst-tabel > tbody > tr > td {
-    display: block;
-  }
-  .mst-tabel > tbody > tr.mst-baris {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px 12px;
-    padding: 14px var(--sp-4);
-    border-bottom: 1px solid var(--n-100);
-  }
-  .mst-tabel > tbody > tr.mst-baris.is-terbuka {
-    border-bottom: 0;
-    background: var(--n-50);
-  }
-  .mst-tabel > tbody > tr > td {
-    width: auto;
-    padding: 0;
-    border: 0;
-    text-align: left;
-    white-space: normal;
-  }
-  .mst-tabel > tbody > tr.mst-baris:hover > td,
-  .mst-tabel tr.is-terbuka > td {
-    background: none;
-  }
-  /* Hanya sel kartu itu sendiri (anak langsung): tabel rincian di
-     dalam kartu punya jarak selnya sendiri -- tanpa ">" kolom catatannya
-     menempel ke kolom jumlah. */
-  .mst-tabel > tbody > tr > td:first-child,
-  .mst-tabel > tbody > tr > td:last-child {
-    padding-left: 0;
-    padding-right: 0;
-  }
-  /* Kolom angka di kartu selebar selnya (bukan 1% seperti di tabel), supaya
-     penanda parsial di bawah angkanya tidak terjepit. */
-  .mst-tabel > tbody > tr > td.mst-kol-angka {
-    width: auto;
-    text-align: left;
-  }
-  .mst-tabel > tbody > tr > td.mst-kol-angka .mst-parsial {
-    margin-left: 0;
-  }
-  /* Kartu sepertiga lebar: nilai panjang ("lebih USD 2,500.00") boleh turun baris. */
-  .mst-tabel .mst-nilai {
-    white-space: normal;
-  }
-  /* Catatan realisasi tidak diperas jadi kolom sempit bertingkat-tingkat:
-     tabel rinciannya boleh lebih lebar dari kartu dan digeser ke samping. */
-  .mst-rinci-tabel td.mst-rinci-catatan {
-    min-width: 180px;
-  }
-  /* Judul kartu: nomor baris di atas nama barangnya (atau nomor aju),
-     tombol menumpang di pojok kanan area yang sama. Nomornya ditulis
-     dari data-no di sel nama -- sel nomornya sendiri disembunyikan,
-     supaya nomor dan nama tidak dipisah jarak antarbaris kisi. */
-  .mst-tabel--baris td.mst-kol-no {
-    display: none;
-  }
-  .mst-tabel td.mst-kol-barang[data-no]::before {
-    content: "No. " attr(data-no);
-    display: block;
-    margin-bottom: 2px;
-    font-size: var(--t-xs);
-    color: var(--n-500);
-  }
-  .mst-tabel td.mst-kol-barang,
-  .mst-tabel td.mst-kol-pib {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    padding-right: 88px;
-  }
-  .mst-tabel td.mst-kol-aksi {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    justify-self: end;
-    align-self: start;
-  }
-  .mst-tabel td.mst-kol-lini,
-  .mst-tabel td.mst-kol-aju,
-  .mst-tabel td.mst-kol-jadwal {
-    grid-column: 1 / -1;
-  }
-  /* Kartu PIB: tanggal, jumlah baris & unit sebaris; jadwalnya di bawah. */
-  .mst-tabel--pib td.mst-kol-jadwal {
-    order: 5;
-  }
-  .mst-tabel td.mst-kol-lini {
-    font-size: var(--t-sm);
-  }
-  .mst-tabel td.mst-kol-sisa b {
-    margin-left: 6px;
-  }
-  .mst-tabel td[data-label]::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 3px;
-    font-family: var(--font-body);
-    font-size: var(--t-xs);
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: var(--n-500);
-  }
-  /* 36px, bukan 44px bawaan ponsel: dua tombol 44px memakan hampir
-     sepertiga lebar kartu. */
-  .mst-tabel .icon-btn {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
-    font-size: 0.86rem;
-  }
-  .mst-tabel > tbody > tr.mst-baris-rinci > td {
-    padding: 0 var(--sp-4) 14px;
-    background: var(--n-50);
-    border-bottom: 1px solid var(--n-100);
-  }
-  .mst-rinci {
-    padding: var(--sp-3);
-  }
-  .mst-rinci-tabel {
-    display: block;
-    overflow-x: auto;
-  }
-  .mst-rinci-aksi > * {
-    flex: 1 1 auto;
   }
 
   .mst-dok {
@@ -1112,6 +1048,206 @@
   }
   .mst-pib-daftar.is-banyak .mst-pib {
     grid-template-columns: minmax(0, 1fr) 138px 30px;
+  }
+}
+
+/* KARTU (panel di bawah 820 px -- ponsel, tablet tegak, jendela sempit):
+   tiap baris tabel jadi kartu. Nomor & nama barang jadi judulnya, tombol
+   di pojok kanan; angka-angkanya berlabel di atas nilainya. Menggeser
+   tabel delapan kolom ke samping menyembunyikan justru kolom Sisa. */
+@container mst-daftar (max-width: 820px) {
+  .mst-saring {
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+  .mst-saring .mst-cari {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+  /* 180px: "Semua lini proses" / "Nilai perlu dicek" muat utuh; di ponsel
+     kedua pilihan bertumpuk selebar kartu, bukan terpotong berdampingan. */
+  .mst-saring .control-select {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+  .mst-seg {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .mst-seg button {
+    flex: 1 1 0;
+  }
+
+  .mst-tabel > thead {
+    display: none;
+  }
+  .mst-tabel,
+  .mst-tabel > tbody,
+  .mst-tabel > tbody > tr > td {
+    display: block;
+  }
+  .mst-tabel > tbody > tr.mst-baris {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 14px var(--sp-4);
+    border-bottom: 1px solid var(--n-100);
+  }
+  .mst-tabel > tbody > tr > td {
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  .mst-tabel > tbody > tr.mst-baris:hover > td {
+    background: none;
+  }
+  .mst-tabel > tbody > tr > td:first-child,
+  .mst-tabel > tbody > tr > td:last-child {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* Kolom angka di kartu selebar selnya (bukan 1% seperti di tabel), supaya
+     penanda parsial di bawah angkanya tidak terjepit. */
+  .mst-tabel > tbody > tr > td.mst-kol-angka {
+    width: auto;
+    text-align: left;
+  }
+  .mst-tabel > tbody > tr > td.mst-kol-angka .mst-parsial {
+    margin-left: 0;
+  }
+  /* Judul kartu: nomor baris di atas nama barangnya (atau nomor aju),
+     tombol menumpang di pojok kanan area yang sama. Nomornya ditulis
+     dari data-no di sel nama -- sel nomornya sendiri disembunyikan,
+     supaya nomor dan nama tidak dipisah jarak antarbaris kisi. */
+  .mst-tabel--baris td.mst-kol-no {
+    display: none;
+  }
+  .mst-tabel td.mst-kol-barang[data-no]::before {
+    content: "No. " attr(data-no);
+    display: block;
+    margin-bottom: 2px;
+    font-size: var(--t-xs);
+    color: var(--n-500);
+  }
+  .mst-tabel td.mst-kol-barang,
+  .mst-tabel td.mst-kol-pib {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-right: 96px;
+  }
+  .mst-tabel td.mst-kol-aksi {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+  }
+  .mst-tabel td.mst-kol-jadwal {
+    grid-column: 1 / -1;
+  }
+  /* Kartu PIB: tanggal, jumlah baris & unit sebaris; jadwalnya di bawah. */
+  .mst-tabel--pib td.mst-kol-jadwal {
+    order: 5;
+  }
+  .mst-tabel td.mst-kol-sisa b {
+    margin-left: 6px;
+  }
+  .mst-tabel > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-family: var(--font-body);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  /* 36px, bukan 44px bawaan ponsel: dua tombol 44px memakan hampir
+     sepertiga lebar kartu. */
+  .mst-tabel .icon-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.86rem;
+  }
+}
+
+/* RINCIAN SEMPIT (kotak rincian di tablet tegak / ponsel): tabel
+   realisasi (dan baris per PIB) jadi tumpukan -- tiap sel berlabel, nomor
+   aju & dokumennya selebar rincian. Diukur dari lebar rinciannya sendiri. */
+.mst-rinci {
+  container: mst-rinci / inline-size;
+}
+@container mst-rinci (max-width: 760px) {
+  .mst-rinci-kepala {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+  .mst-rinci-kepala .mst-rinci-spek {
+    grid-column: 1 / -1;
+  }
+  .mst-rinci-nilai .mst-nilai-ring {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+  .mst-rinci-tabel > thead {
+    display: none;
+  }
+  .mst-rinci-tabel,
+  .mst-rinci-tabel > tbody {
+    display: block;
+  }
+  .mst-rinci-tabel > tbody {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--n-100);
+  }
+  .mst-rinci-tabel > tbody:last-child {
+    border-bottom: 0;
+  }
+  .mst-rinci-tabel > tbody > tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 4px 0;
+  }
+  /* Antarbaris dalam satu kelompok: garis tipis (putus-putus = PIB lain realisasi parsial yang sama) */
+  .mst-rinci-tabel > tbody > tr + tr {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--n-100);
+  }
+  .mst-rinci-tabel > tbody.mst-rinci-parsial > tr + tr {
+    border-top-style: dashed;
+  }
+  /* width: auto -- kolom angka & tombol berlebar 1% di tabel, dan sebagai
+     butir flex lebar itu ikut membatasi ukuran terkecilnya (labelnya
+     bertumpuk). */
+  .mst-rinci .mst-rinci-tabel > tbody > tr > td {
+    display: block;
+    width: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .mst-rinci-tabel > tbody > tr > td.mst-rinci-aju {
+    flex: 1 1 100%;
+    order: -1;
+  }
+  .mst-rinci-tabel td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--font-body);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  .mst-rinci-tabel td.mst-ubah {
+    flex: 1 1 100%;
   }
 }
 

@@ -18,6 +18,10 @@ const FIELD_MAP = {
   houseBLDate: "house_bl_date",
   factoryDate: "factory_date",
   factoryTime: "factory_time",
+  /* Dibutuhkan di pabrik (Import) -- rencana mundur ETD/ETA
+     (core/prediction-mundur.js). Kolom baru,
+     migration-lampiran-lartas-kebutuhan.sql (KOLOM_OPSIONAL). */
+  neededDate: "needed_date",
   forwarder: "forwarder",
   forwarderPic: "forwarder_pic",
   vessel: "vessel",
@@ -144,6 +148,17 @@ function shipmentToRow(payload, mode) {
     row.factory_date = null;
     row.factory_time = null;
   }
+  /* DOKUMEN PELENGKAP (PI, LS, Polis Asuransi -- masing-masing bisa lebih
+     dari satu -- & dokumen lain) di kolom jsonb dokumen_pelengkap
+     (migration-dokumen-pelengkap.sql; KOLOM_OPSIONAL). Kolom lama pi /
+     pi_date, ls / ls_date, polis_asuransi / polis_asuransi_date tetap
+     ditulis sebagai ringkasannya. Tanpa dokumen apa pun: NULL. */
+  if ("dokPelengkap" in payload) {
+    const dok = rapikanDokPelengkap(payload.dokPelengkap);
+    row.dokumen_pelengkap = adaDokPelengkap(dok) ? dok : null;
+    const ringkas = ringkasDokPelengkap(dok);
+    Object.keys(ringkas).forEach((camel) => (row[FIELD_MAP[camel]] = ringkas[camel] || null));
+  }
   return row;
 }
 
@@ -161,6 +176,11 @@ function rowToShipment(row) {
     s[camel] = val;
   });
   lepasIsianPabrikExport(s);
+  /* Daftar dokumen pelengkap: kolom dokumen_pelengkap, atau -- jadwal
+     sebelum kolom itu ada -- kolom lama (nomor "A, B" dipecah). Isian
+     lama (s.pi, s.piDate, ...) jadi ringkasannya. */
+  s.dokPelengkap = row.dokumen_pelengkap ? rapikanDokPelengkap(row.dokumen_pelengkap) : dokPelengkapJadwal(s);
+  Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
   s.items = (row.items || []).map(rowToItem);
   // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])
@@ -198,6 +218,9 @@ function itemToRow(it, shipmentId) {
     package: it.package || "",
     packing: it.packing || "",
     packing_unit: it.packingUnit || "",
+    // PI barang ini & nomor urutnya di dokumen PI (migration-dokumen-pelengkap.sql)
+    pi_nomor: String(it.piNomor || "").trim(),
+    pi_no_item: String(it.piNoItem || "").trim(),
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 array yang sama
     skb: sanitizeSkbList(it.skb),
   };
@@ -247,6 +270,8 @@ function rowToItem(row) {
     package: row.package || "",
     packing: row.packing || "",
     packingUnit: row.packing_unit || "",
+    piNomor: row.pi_nomor || "",
+    piNoItem: row.pi_no_item || "",
     skb: sanitizeSkbList(row.skb),
     _facOpen: false,
   };

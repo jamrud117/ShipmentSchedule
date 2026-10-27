@@ -115,7 +115,7 @@
 }
 .sheet-foot kbd {
   font-family: var(--font-mono);
-  font-size: 0.64rem;
+  font-size: 0.69rem;
   background: var(--n-200);
   color: var(--n-700);
   border-radius: 3px;
@@ -182,7 +182,7 @@
   background: var(--p-500);
   color: #fff;
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 .detail-stop-name {
@@ -224,4 +224,27 @@
   .sheet-scrim {
     transition: none;
   }
+}
+
+/* Progres dokumen hanya-baca (detailProgresDokumenHtml): satu baris per
+   tahap yang sudah dicatat, lampirannya bisa langsung dibuka. */
+.detail-progres {
+  display: grid;
+  gap: 6px;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.detail-progres-baris {
+  padding: 6px 10px;
+  border-left: 2px solid var(--p-200);
+  background: var(--n-50);
+  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+}
+.detail-progres-baris b {
+  color: var(--ink);
+  margin-right: 4px;
+}
+.detail-draft {
+  color: var(--p-500);
+  font-weight: 600;
 }

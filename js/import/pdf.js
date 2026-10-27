@@ -244,30 +244,24 @@ function parsePibPdfText(text, pagesItems) {
   const houseRow = findDoc(/^(AWB|B\/?L)$/i) || findDoc(/HOUSE/i);
   const masterRow = findDoc(/MASTER\s*(AWB|B\/?L)/i);
 
-  /* Fasilitas (SKB, Masterlist, COO), PI, LS & Polis Asuransi dari
-     lembar yang sama -- kode dokumennya ikut dibaca, aturannya sama
-     dengan Excel CEISA (kenaliDokumenPelengkap & adalahPolisAsuransi di
-     helpers.js). PI, LS & polis: nomor + tanggal per pengiriman. */
+  /* Fasilitas (SKB, Masterlist, COO), PI, LS, Polis Asuransi & dokumen
+     lain dari lembar yang sama -- kode dokumennya ikut dibaca, aturannya
+     sama dengan Excel CEISA (kenaliDokumenPelengkap, helpers.js). PI, LS
+     & polis: daftar nomor + tanggal; dokumen lain (selain invoice & B/L-
+     AWB, yang punya isian sendiri) dicatat beserta kodenya. */
   const skbList = [];
-  const dokPi = [];
-  const dokLs = [];
-  const dokPolis = [];
+  const dokPelengkap = dokPelengkapKosong();
   docRows.forEach((r) => {
-    if (adalahPolisAsuransi(r)) return tambahDokumenPengiriman(dokPolis, r.nomor, pibDateToISO(r.tanggalDMY));
+    const tanggal = pibDateToISO(r.tanggalDMY);
     const kenal = kenaliDokumenPelengkap(r);
-    if (!kenal) return;
-    if (kenal.pi || kenal.ls) return tambahDokumenPengiriman(kenal.pi ? dokPi : dokLs, r.nomor, pibDateToISO(r.tanggalDMY));
+    if (kenal && kenal.pengiriman) return tambahDokumenPengiriman(dokPelengkap[kenal.pengiriman], r.nomor, tanggal);
+    if (!kenal) {
+      if (!KODE_DOKUMEN_BERISIAN.has(kodeDokumen(r.kode))) tambahDokumenPengiriman(dokPelengkap.lain, r.nomor, tanggal, r.kode);
+      return;
+    }
     if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
-    skbList.push({
-      jenis: kenal.jenis,
-      jenisLainnya: kenal.jenisLainnya,
-      nomor: r.nomor,
-      tanggal: pibDateToISO(r.tanggalDMY),
-    });
+    skbList.push({ jenis: kenal.jenis, jenisLainnya: kenal.jenisLainnya, nomor: r.nomor, tanggal });
   });
-  const isianPi = isianDokumenPengiriman(dokPi);
-  const isianLs = isianDokumenPengiriman(dokLs);
-  const isianPolis = isianDokumenPengiriman(dokPolis);
 
   // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari baris "Nomor Pengajuan : ..
   const noAju = grab(/Nomor Pengajuan\s*:\s*(\S+)/);
@@ -501,12 +495,7 @@ function parsePibPdfText(text, pagesItems) {
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
     invoiceDate: invoiceRow ? pibDateToISO(invoiceRow.tanggalDMY) : "",
-    pi: isianPi.nomor,
-    piDate: isianPi.tanggal,
-    ls: isianLs.nomor,
-    lsDate: isianLs.tanggal,
-    polisAsuransi: isianPolis.nomor,
-    polisAsuransiDate: isianPolis.tanggal,
+    dokPelengkap,
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),
     masterBlDate,
@@ -534,23 +523,11 @@ function parsePibPdfText(text, pagesItems) {
       .trim(),
   };
 
-  // --- ETD / ETA / Actual Delivery (requirement A) ETD = tanggal Master BL/AWB (cadangan
-  fields.etd = masterBlDate || houseBlDate || "";
-  fields.eta = deriveEtaFromEtd(fields.etd, fields.transport, fields);
-  fields.actual = deriveActualFromEta(fields.eta, fields);
-  if (!fields.etd) {
-    notes.push(
-      t("w.tanggal.bl.awb.tidak.terbaca"),
-    );
-  } else {
-    // Field 11 PIB ("Perkiraan Tanggal Tiba") adalah perkiraan versi dokumen itu sendiri
-    const pibEta = etaMatch ? pibDateToISO(etaMatch[1]) : "";
-    if (pibEta && pibEta !== fields.eta) {
-      notes.push(
-        t("y.eta.diisi.hitungan.mesin", { eta: fields.eta, pibEta }),
-      );
-    }
-  }
+  /* ETD & ETA (terapkanTanggalDokumen, apply-to-form.js): ETD mengikuti
+     tanggal Master / House B/L-AWB di atas; ETA = Perkiraan Tanggal Tiba
+     (field 11). */
+  fields.eta = etaMatch ? pibDateToISO(etaMatch[1]) : "";
+  if (!masterBlDate && !houseBlDate) notes.push(t("w.tanggal.bl.awb.tidak.terbaca"));
 
   // --- Barang: field 32 form resmi BC 2.0 urutannya SELALU "Pos Tarif HS" dulu
   const TAX_COLUMN_BLEED =

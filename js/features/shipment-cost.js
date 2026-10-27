@@ -131,17 +131,27 @@ function bkHtml(s, h) {
       `Belum ada Pengajuan Dana dengan BL/AWB ${[s.masterBL, s.houseBL].filter(Boolean).join(" / ")}.`,
       `No Fund Request mentions B/L/AWB ${[s.masterBL, s.houseBL].filter(Boolean).join(" / ")} yet.`))}</div>`;
   }
+  /* Judul kolom = label sel saat tabelnya jadi kartu di panel sempit */
+  const judul = {
+    nomor: tt("No. Pengajuan", "Request No."),
+    tanggal: tt("Tgl Invoice", "Invoice Date"),
+    vendor: "Vendor",
+    jenis: tt("Jenis", "Type"),
+    dibayar: tt("Dibayar", "Paid amount"),
+    status: "Status",
+  };
+  const sel = (kunci, html) => `<td class="bk-${kunci}" data-label="${escapeAttr(judul[kunci])}">${html}</td>`;
   const isi = h.baris.map((b) => `
       <tr>
-        <td>${escapeHtml(b.nomor)}</td>
-        <td>${fmtDate(b.tanggal)}</td>
-        <td>${escapeHtml(b.vendor)}</td>
-        <td>${escapeHtml(bkNamaJenis(b.jenis))}</td>
-        <td>${bkRp(b.dibayar)}${b.dibagi ? `<div class="bk-bagian">${escapeHtml(tt(
+        ${sel("nomor", escapeHtml(b.nomor))}
+        ${sel("tanggal", fmtDate(b.tanggal))}
+        ${sel("vendor", escapeHtml(b.vendor))}
+        ${sel("jenis", escapeHtml(bkNamaJenis(b.jenis)))}
+        ${sel("dibayar", bkRp(b.dibayar) + (b.dibagi ? `<div class="bk-bagian">${escapeHtml(tt(
           `bagian kiriman ini dari ${bkRp(b.dibagi.total)} (${b.dibagi.jumlahAwb} BL/AWB${b.dibagi.tautan ? "" : ", dibagi rata"})`,
           `this shipment's share of ${bkRp(b.dibagi.total)} (${b.dibagi.jumlahAwb} BL/AWBs${b.dibagi.tautan ? "" : ", split evenly"})`,
-        ))}</div>` : ""}</td>
-        <td>${b.lunas ? `<span class="bk-lunas">${escapeHtml(tt("Lunas", "Paid"))}</span>` : `<span class="bk-belum">${escapeHtml(tt("Belum lunas", "Unpaid"))}</span>`}</td>
+        ))}</div>` : ""))}
+        ${sel("status", b.lunas ? `<span class="bk-lunas">${escapeHtml(tt("Lunas", "Paid"))}</span>` : `<span class="bk-belum">${escapeHtml(tt("Belum lunas", "Unpaid"))}</span>`)}
       </tr>`).join("");
   const kotak = (judul, nilai, ket, utama) => `
       <div class="bk-kotak${utama ? " bk-kotak--utama" : ""}">
@@ -160,25 +170,21 @@ function bkHtml(s, h) {
     </div>
     <div class="bk-wrap mb-2">
       <table class="bk-tabel">
-        <thead><tr>
-          <th>${escapeHtml(tt("No. Pengajuan", "Request No."))}</th><th>${escapeHtml(tt("Tgl Invoice", "Invoice Date"))}</th>
-          <th>Vendor</th><th>${escapeHtml(tt("Jenis", "Type"))}</th>
-          <th>${escapeHtml(tt("Dibayar", "Paid amount"))}</th><th>Status</th>
-        </tr></thead>
+        <thead><tr>${Object.values(judul).map((j) => `<th>${escapeHtml(j)}</th>`).join("")}</tr></thead>
         <tbody>${isi}</tbody>
-        <tfoot><tr><td colspan="4">Total</td><td>${bkRp(h.total)}</td><td>${escapeHtml(statusTotal)}</td></tr></tfoot>
+        <tfoot><tr><td colspan="4">Total</td><td class="bk-dibayar">${bkRp(h.total)}</td><td class="bk-status">${escapeHtml(statusTotal)}</td></tr></tfoot>
       </table>
     </div>
     ${h.nilaiBarang ? `<div class="form-text-note">${escapeHtml(tt(
-      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs ${h.impor ? "NDPBM" : "pajak"} ${bkRp(h.kursBarang)}) — biaya kiriman ini ${angkaLokal(h.persen * 100, "id-ID", { maximumFractionDigits: 1 })}% dari nilai barang.`,
-      `Goods value ${bkRp(h.nilaiBarang)} (${h.impor ? "NDPBM" : "tax"} rate ${bkRp(h.kursBarang)}) — this shipment's cost is ${angkaLokal(h.persen * 100, "en-US", { maximumFractionDigits: 1 })}% of the goods value.`))}</div>` : ""}`;
+      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs NDPBM ${bkRp(h.kursBarang)}) — biaya kiriman ini ${angkaLokal(h.persen * 100, "id-ID", { maximumFractionDigits: 1 })}% dari nilai barang.`,
+      `Goods value ${bkRp(h.nilaiBarang)} (NDPBM rate ${bkRp(h.kursBarang)}) — this shipment's cost is ${angkaLokal(h.persen * 100, "en-US", { maximumFractionDigits: 1 })}% of the goods value.`))}</div>` : ""}`;
 }
 
 /* Bagian di panel detail: kerangka langsung, isinya menyusul. */
 function biayaKirimanKerangka(s) {
   return `
     <div class="subsection-title"><i class="bi bi-calculator"></i> ${tt("Biaya Kiriman Ini", "This Shipment's Cost")}</div>
-    <div id="detailBiaya" data-id="${escapeAttr(s.id)}"><div class="form-text-note">${escapeHtml(tt("Memuat biaya…", "Loading costs…"))}</div></div>`;
+    <div id="detailBiaya" class="bk-isi" data-id="${escapeAttr(s.id)}"><div class="form-text-note">${escapeHtml(tt("Memuat biaya…", "Loading costs…"))}</div></div>`;
 }
 
 async function isiBiayaKiriman(s) {
@@ -187,8 +193,9 @@ async function isiBiayaKiriman(s) {
     return el && el.dataset.id === String(s.id) ? el : null; // panel sudah pindah kiriman lain -> abaikan
   };
   try {
-    const [rows] = await Promise.all([bkAmbilDana(), typeof muatKursPajak === "function" ? muatKursPajak() : null]);
-    const kursFn = (mata, tgl) => (typeof kursPajakPada === "function" ? kursPajakPada(mata, tgl).nilai : 0);
+    const rows = await bkAmbilDana();
+    const cari = kursNdpbm(semuaKiriman());
+    const kursFn = (mata, tgl) => cari(mata, tgl).nilai;
     const el = wadah();
     if (el) el.innerHTML = bkHtml(s, hitungBiayaKiriman(s, bkCocokkan(s, rows), kursFn));
   } catch (e) {

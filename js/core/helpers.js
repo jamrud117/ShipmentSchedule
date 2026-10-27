@@ -255,6 +255,16 @@ function muatanDariKode(v) {
   return "";
 }
 
+/* Jenis muatan (FCL / LCL) & peti kemas hanya untuk kiriman LAUT --
+   muatan udara tidak dikapalkan dalam kontainer. Isian lama yang
+   terlanjur tersimpan di jadwal udara tidak ditampilkan / disalin. */
+function muatanKiriman(s) {
+  return s && s.transport !== "udara" ? String(s.muatan || "") : "";
+}
+function kontainerKiriman(s) {
+  return s && s.transport !== "udara" ? String(s.container || "") : "";
+}
+
 function teksKontainer(k) {
   return [k.nomor, k.ukuran, muatanDariKode(k.jenis)]
     .map((x) => String(x == null ? "" : x).trim().toUpperCase())
@@ -310,6 +320,10 @@ function newItem(mode) {
        dari urutan koli ("C# : 8-1"); diisi kalau penandaan di lapangan
        berbeda. */
     marks: "",
+    /* PI yang dipakai barang ini (nomor dari daftar PI jadwal) & nomor
+       urut barang ini di dokumen PI itu -- buku Import. */
+    piNomor: "",
+    piNoItem: "",
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang sama (skb)
     skb: [],
     // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)
@@ -353,15 +367,103 @@ function newSkbEntry() {
   return { jenis: "PPH", jenisLainnya: "", nomor: "", tanggal: "" };
 }
 
-/* DOKUMEN PELENGKAP PABEAN (kode CEISA) yang berarti FASILITAS barang.
+/* DOKUMEN PELENGKAP PABEAN -- KODE DOKUMEN CEISA.
 
-   Kodenya dari sheet DOKUMEN berkas Excel CEISA dan kolom kode di
-   lembar Pemenuhan Persyaratan PIB. Daftar kode dokumen pelengkap BC
-   2.0: 912 SK Fasilitas BKPM (masterlist), 861 Certificate of Origin,
-   959 Surat Persetujuan Impor Kemendag, 958 Laporan Surveyor. 456 (SKB
-   PPN, "KET-.../SKBPPN-CT/..."), 457 (SKB PPh, ".../PPUT-CT/..."), 912
-   dan 959 terlihat langsung di berkas CEISA pengguna. Kode yang tidak
-   dikenal masih bisa ditebak dari nomornya (jenisFasilitasDariNomor). */
+   Nama tiap kode [Indonesia, English]: daftar kode dokumen pelengkap
+   pabean PMK (69 kode), ditambah kode yang terlihat langsung di berkas
+   CEISA pengguna -- 456 SKB PPN ("KET-.../SKBPPN-CT/..."), 457 SKB PPh
+   (".../PPUT-CT/..."), 530 Polis Asuransi, 703 House AWB, 714 House B/L
+   & 860 e-COO. Kode di luar daftar tetap terbaca ("Dokumen kode 123"):
+   nomor & tanggalnya tidak hilang. */
+const KODE_DOKUMEN_CEISA = {
+  217: ["Packing List", "Packing List"],
+  343: ["Shipping Order", "Shipping Order"],
+  380: ["Invoice", "Invoice"],
+  383: ["SSTB", "SSTB"],
+  410: ["Surat Sanggup Bayar (SSB)", "Payment Undertaking (SSB)"],
+  430: ["Bank Garansi", "Bank Guarantee"],
+  440: ["Surat Tanda Bukti Setor (STBS)", "Proof of Deposit (STBS)"],
+  454: ["SSPCP", "SSPCP"],
+  456: ["SKB PPN", "VAT Exemption Letter (SKB PPN)"],
+  457: ["SKB PPh", "Income Tax Exemption Letter (SKB PPh)"],
+  465: ["Letter of Credit (L/C)", "Letter of Credit (L/C)"],
+  530: ["Polis Asuransi", "Insurance Policy"],
+  666: ["Pengecualian dengan Surat Keputusan", "Exemption by Decree"],
+  703: ["House AWB", "House AWB"],
+  704: ["Master B/L", "Master B/L"],
+  705: ["B/L", "B/L"],
+  714: ["House B/L", "House B/L"],
+  740: ["AWB", "AWB"],
+  741: ["Master AWB", "Master AWB"],
+  800: ["Sertifikat Alat/Perangkat Telekomunikasi", "Telecommunication Equipment Certificate"],
+  803: ["SATS-LN Kementerian Kehutanan", "SATS-LN (Ministry of Forestry)"],
+  805: ["Registrasi B3 Kementerian Lingkungan Hidup", "Hazardous Substance (B3) Registration"],
+  808: ["Izin Impor Kepolisian", "Police Import Permit"],
+  810: ["SM / SPM", "SM / SPM"],
+  811: ["SIE", "SIE"],
+  813: ["Dokumen Cukai (CK)", "Excise Document (CK)"],
+  814: ["SK Izin Ekspor Berkala", "Periodic Export Permit"],
+  815: ["SK Izin Tata Niaga Ekspor", "Export Trade Permit"],
+  816: ["Dokumen Ekspor (PEB)", "Export Declaration (PEB)"],
+  834: ["SNI Gula Kristal Mentah Kementan", "Raw Sugar SNI (Ministry of Agriculture)"],
+  835: ["Izin / Pendaftaran Pestisida Kementan", "Pesticide Permit / Registration"],
+  836: ["Izin Impor Kementan", "Import Permit (Ministry of Agriculture)"],
+  842: ["SNI Kementerian ESDM", "SNI (Ministry of Energy)"],
+  843: ["Nomor Pelumas Terdaftar (NPT)", "Registered Lubricant Number (NPT)"],
+  844: ["Izin Usaha Niaga ESDM", "Trading License (Ministry of Energy)"],
+  845: ["Rekomendasi Impor Pelumas", "Lubricant Import Recommendation"],
+  851: ["Izin Karantina Tumbuhan", "Plant Quarantine Permit"],
+  853: ["Izin Karantina Hewan / Ikan", "Animal / Fish Quarantine Permit"],
+  854: ["Persetujuan Muat BPOM", "Loading Approval (BPOM)"],
+  856: ["Laporan Pemeriksaan Surveyor (LPS-E)", "Surveyor Inspection Report (LPS-E)"],
+  857: ["Fumigation Certificate", "Fumigation Certificate"],
+  858: ["CITES Certificate", "CITES Certificate"],
+  860: ["e-COO", "e-COO"],
+  861: ["Certificate of Origin (COO / SKA)", "Certificate of Origin (COO / SKA)"],
+  871: ["Nomor Pendaftaran Alat Kesehatan", "Medical Device Registration Number"],
+  872: ["Laporan Surveyor Kemenkes", "Surveyor Report (Ministry of Health)"],
+  873: ["Importir Produsen Narkotika/Prekursor/Psikotropika", "Producer Importer (Narcotics/Precursors/Psychotropics)"],
+  874: ["Importir Terdaftar Narkotika/Prekursor/Psikotropika", "Registered Importer (Narcotics/Precursors/Psychotropics)"],
+  875: ["SPI Narkotika/Prekursor/Psikotropika", "Import Approval (Narcotics/Precursors/Psychotropics)"],
+  888: ["Pengecualian Perizinan", "Licensing Exemption"],
+  902: ["Izin BAPETEN", "BAPETEN Permit"],
+  911: ["Surat Keputusan", "Decree"],
+  912: ["SK Fasilitas BKPM (Masterlist)", "BKPM Facility Decree (Masterlist)"],
+  913: ["SK Fasilitas Pertambangan", "Mining Facility Decree"],
+  917: ["BPBC", "BPBC"],
+  918: ["Surat Keterangan Label Bahasa Indonesia", "Indonesian Label Certificate"],
+  942: ["Izin Impor Karantina Tumbuhan", "Plant Quarantine Import Permit"],
+  943: ["KH-5 Izin Impor Karantina Hewan", "KH-5 Animal Quarantine Import Permit"],
+  944: ["KH-7 Izin Impor Karantina Hewan", "KH-7 Animal Quarantine Import Permit"],
+  945: ["KH-12 Izin Impor Karantina Hewan", "KH-12 Animal Quarantine Import Permit"],
+  946: ["KID-3 Izin Impor Karantina Ikan", "KID-3 Fish Quarantine Import Permit"],
+  947: ["KID-15 Izin Impor Karantina Ikan", "KID-15 Fish Quarantine Import Permit"],
+  948: ["NPIK", "NPIK"],
+  949: ["Pengakuan Importir Produsen", "Producer Importer Recognition"],
+  956: ["Pengakuan Importir Terdaftar", "Registered Importer Recognition"],
+  957: ["SNI / SPB Kemendag", "SNI / SPB (Ministry of Trade)"],
+  958: ["Laporan Surveyor (LS)", "Surveyor Report (LS)"],
+  959: ["Persetujuan Impor (PI)", "Import Approval (PI)"],
+  993: ["Surat Izin Menteri Pertanian", "Minister of Agriculture Permit"],
+  994: ["Bukti Penerimaan Jaminan (BPJ)", "Guarantee Receipt (BPJ)"],
+  995: ["STBS / SSP Ekspor", "Proof of Deposit / Export Tax Payment"],
+  996: ["Surat Sanggup Bayar (SSB)", "Payment Undertaking (SSB)"],
+  997: ["Customs Bond / STTJ", "Customs Bond / Guarantee Receipt (STTJ)"],
+  998: ["SK Fasilitas KITE", "KITE Facility Decree"],
+  999: ["Lainnya", "Other"],
+};
+
+const kodeDokumen = (v) => String(v == null ? "" : v).trim();
+
+// Nama dokumen dari kodenya, bahasa aktif; kode di luar daftar: "Dokumen kode 123"
+function namaDokumenCeisa(kode) {
+  const k = kodeDokumen(kode);
+  const nama = KODE_DOKUMEN_CEISA[k];
+  if (nama) return tt(nama[0], nama[1]);
+  return k ? tt(`Dokumen kode ${k}`, `Document code ${k}`) : "";
+}
+
+// Fasilitas per barang (item.skb) menurut kodenya -- SKB, Masterlist, COO
 const KODE_DOKUMEN_FASILITAS = {
   456: "PPN",
   457: "PPH",
@@ -369,52 +471,31 @@ const KODE_DOKUMEN_FASILITAS = {
   860: "E-COO",
   861: "E-COO",
 };
-// Surat Persetujuan Impor (PI) -- satu nomor per pengiriman, bukan fasilitas
-const KODE_DOKUMEN_PI = "959";
-// Laporan Surveyor (LS) -- sepaket dengan PI, juga satu nomor per pengiriman
-const KODE_DOKUMEN_LS = "958";
-// Polis Asuransi -- bukan fasilitas; nomor & tanggalnya punya isian sendiri
-const KODE_DOKUMEN_POLIS = "530";
-/* Dokumen pelengkap yang dikenal BUKAN fasilitas (dan bukan PI / LS):
-   tidak pernah ditebak sebagai fasilitas atau PI dari nomornya, dan
-   tidak dilaporkan sebagai dokumen tak dikenal saat ditautkan ke
-   barang. */
-const KODE_DOKUMEN_BUKAN_FASILITAS = {
-  380: "Invoice",
-  217: "Packing List",
-  [KODE_DOKUMEN_POLIS]: "Polis Asuransi",
-  703: "House AWB",
-  704: "Master B/L",
-  705: "B/L",
-  714: "House B/L",
-  740: "AWB",
-  741: "Master AWB",
+
+/* DOKUMEN PENGIRIMAN -- PI, LS & Polis Asuransi: bisa lebih dari satu
+   per jadwal, masing-masing bernomor & bertanggal (dokPelengkap.pi / .ls
+   / .polis). Nomor PI juga dipilih per barang (item.piNomor). */
+const DOK_PENGIRIMAN = {
+  pi: { kode: "959", get label() { return tt("PI (Persetujuan Impor)", "PI (Import Approval)"); }, get singkat() { return "PI"; } },
+  ls: { kode: "958", get label() { return tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"); }, get singkat() { return "LS"; } },
+  polis: { kode: "530", get label() { return tt("Polis Asuransi", "Insurance Policy"); }, get singkat() { return tt("Polis", "Policy"); } },
 };
-function namaDokumenBukanFasilitas(kode) {
-  return KODE_DOKUMEN_BUKAN_FASILITAS[String(kode == null ? "" : kode).trim()] || "";
-}
-// Polis asuransi: kode 530 (Excel CEISA & PIB PDF) atau labelnya di lembar PIB PDF
-function adalahPolisAsuransi(dok) {
-  return (
-    String(dok.kode == null ? "" : dok.kode).trim() === KODE_DOKUMEN_POLIS ||
-    /POLIS\s*ASURANSI|INSURANCE\s*POLICY/i.test(dok.label || "")
-  );
-}
+const JENIS_DOK_PENGIRIMAN = Object.keys(DOK_PENGIRIMAN);
+/* Kolom lama per jenis (satu nomor gabungan + satu tanggal) -- tetap
+   ditulis sebagai ringkasan untuk templat salin, Bulk Excel & versi
+   aplikasi yang belum mengenal daftarnya. */
+const KOLOM_DOK_PENGIRIMAN = {
+  pi: ["pi", "piDate"],
+  ls: ["ls", "lsDate"],
+  polis: ["polisAsuransi", "polisAsuransiDate"],
+};
+/* Invoice & B/L-AWB punya isiannya sendiri: tidak ikut "dokumen lain".
+   Kode umum (911 Surat Keputusan, 999 Lainnya): jenis fasilitas / PI
+   dokumennya masih ditebak dari nomornya. */
+const KODE_DOKUMEN_BERISIAN = new Set(["380", "703", "704", "705", "714", "740", "741"]);
+const KODE_DOKUMEN_UMUM = new Set(["911", "999"]);
 
-/* PI, LS & Polis Asuransi: SATU isian nomor + SATU tanggal per
-   pengiriman. Dokumennya bisa lebih dari satu -- nomornya digabung
-   ("A, B", nomor yang sama tidak diulang), tanggalnya dari dokumen
-   pertama yang bertanggal. */
-function tambahDokumenPengiriman(daftar, nomor, tanggal) {
-  const n = String(nomor == null ? "" : nomor).trim();
-  if (n && !daftar.some((d) => d.nomor === n)) daftar.push({ nomor: n, tanggal: tanggal || "" });
-}
-function isianDokumenPengiriman(daftar) {
-  const bertanggal = daftar.find((d) => d.tanggal);
-  return { nomor: daftar.map((d) => d.nomor).join(", "), tanggal: bertanggal ? bertanggal.tanggal : "" };
-}
-
-/* Cadangan untuk kode yang tidak dikenal: jenis fasilitas dari NOMOR
+/* Cadangan untuk kode umum / tak dikenal: jenis fasilitas dari NOMOR
    dokumennya. Masterlist OSS bernomor ".../PABEAN-PB/OSS/...", SKB PPh
    impor ".../PPUT-CT/...". */
 function jenisFasilitasDariNomor(nomor) {
@@ -426,16 +507,19 @@ function jenisFasilitasDariNomor(nomor) {
 }
 const POLA_NOMOR_PI = /(^|[^A-Z0-9])PI-\d/i;
 
-/* Kenali satu dokumen pelengkap: { jenis, jenisLainnya } kalau ia
-   fasilitas, { pi: true } kalau Persetujuan Impor, { ls: true } kalau
-   Laporan Surveyor, null untuk yang lain (invoice, B/L, ...). `label`
-   hanya ada pada PIB PDF ("SURAT KETERANGAN BEBAS (SKB) PPN"); Excel
-   CEISA cuma memberi kode & nomor. */
-function kenaliDokumenPelengkap(dok) {
-  const kode = String(dok.kode == null ? "" : dok.kode).trim();
+/* PERAN SATU DOKUMEN PELENGKAP di jadwal:
+     { pengiriman: "pi" | "ls" | "polis" } -> daftar dokumen pengiriman
+     { jenis, jenisLainnya }               -> fasilitas per barang
+     null                                  -> lainnya (invoice, B/L, packing list, ...)
+   Kode yang dikenal menentukan; `label` (hanya PIB/PEB PDF, mis. "SURAT
+   KETERANGAN BEBAS (SKB) PPN") dipakai untuk kode umum / tak dikenal,
+   juga nomornya kalau `opsi.tebakNomor` (dokumen yang ditautkan ke
+   barang di draft CEISA). */
+function kenaliDokumenPelengkap(dok, opsi) {
+  const kode = kodeDokumen(dok.kode);
   const label = String(dok.label || "").toUpperCase();
-  if (kode === KODE_DOKUMEN_PI || /PERSETUJUAN IMPOR/.test(label)) return { pi: true };
-  if (kode === KODE_DOKUMEN_LS || /LAPORAN SURVEYOR/.test(label)) return { ls: true };
+  const pengiriman = JENIS_DOK_PENGIRIMAN.find((j) => DOK_PENGIRIMAN[j].kode === kode);
+  if (pengiriman) return { pengiriman };
   if (/SURAT KETERANGAN BEBAS/.test(label)) {
     const tipe = (/\(SKB\)\s*([A-Z%0-9]*)/.exec(label) || [])[1] || "";
     const jenis =
@@ -443,11 +527,100 @@ function kenaliDokumenPelengkap(dok) {
       KODE_DOKUMEN_FASILITAS[kode];
     return jenis ? { jenis, jenisLainnya: "" } : { jenis: "Lainnya", jenisLainnya: tipe || "SKB" };
   }
+  if (KODE_DOKUMEN_FASILITAS[kode]) return { jenis: KODE_DOKUMEN_FASILITAS[kode], jenisLainnya: "" };
+  if (KODE_DOKUMEN_CEISA[kode] && !KODE_DOKUMEN_UMUM.has(kode)) return null;
+  if (/POLIS\s*ASURANSI|INSURANCE\s*POLICY/.test(label)) return { pengiriman: "polis" };
+  if (/PERSETUJUAN IMPOR/.test(label)) return { pengiriman: "pi" };
+  if (/LAPORAN SURVEYOR/.test(label)) return { pengiriman: "ls" };
   const jenis =
-    KODE_DOKUMEN_FASILITAS[kode] ||
     (/MASTER\s*LIST|FASILITAS BKPM/.test(label) ? "Masterlist" : "") ||
-    (/CERTIFICATE OF ORIGIN|\bE-?CO\b|KETERANGAN ASAL/.test(label) ? "E-COO" : "");
-  return jenis ? { jenis, jenisLainnya: "" } : null;
+    (/CERTIFICATE OF ORIGIN|\bE-?CO\b|KETERANGAN ASAL/.test(label) ? "E-COO" : "") ||
+    (opsi && opsi.tebakNomor ? jenisFasilitasDariNomor(dok.nomor) : "");
+  if (jenis) return { jenis, jenisLainnya: "" };
+  return opsi && opsi.tebakNomor && POLA_NOMOR_PI.test(dok.nomor || "") ? { pengiriman: "pi" } : null;
+}
+
+/* DAFTAR DOKUMEN PELENGKAP SATU JADWAL -- s.dokPelengkap:
+     { pi: [{ nomor, tanggal, berkas? }], ls: [...], polis: [...],
+       lain: [{ kode, nomor, tanggal }] }   (dokumen lain ber-kode CEISA)
+   `berkas` = lampiran dokumennya (PI & LS, js/data/lampiran.js).
+   Entri tanpa nomor, tanggal & lampiran dibuang; nomor yang sama (jenis
+   yang sama) tidak diulang -- yang bertanggal melengkapi yang belum,
+   lampirannya digabung. */
+function dokPelengkapKosong() {
+  return { pi: [], ls: [], polis: [], lain: [] };
+}
+
+function tambahDokumenPengiriman(daftar, nomor, tanggal, kode, berkas) {
+  const entri = { nomor: String(nomor == null ? "" : nomor).trim(), tanggal: String(tanggal || "").slice(0, 10) };
+  if (kode !== undefined) entri.kode = kodeDokumen(kode);
+  const lampiran = typeof rapikanBerkas === "function" ? rapikanBerkas(berkas) : [];
+  if (!entri.nomor && !entri.tanggal && !lampiran.length) return;
+  const sama = entri.nomor && daftar.find((d) => d.nomor === entri.nomor && (kode === undefined || d.kode === entri.kode));
+  if (!sama) {
+    if (lampiran.length) entri.berkas = lampiran;
+    daftar.push(entri);
+    return;
+  }
+  if (!sama.tanggal) sama.tanggal = entri.tanggal;
+  if (lampiran.length) sama.berkas = rapikanBerkas((sama.berkas || []).concat(lampiran));
+}
+
+function rapikanDokPelengkap(x) {
+  const out = dokPelengkapKosong();
+  if (!x || typeof x !== "object") return out;
+  JENIS_DOK_PENGIRIMAN.forEach((j) => (Array.isArray(x[j]) ? x[j] : []).forEach((d) => d && tambahDokumenPengiriman(out[j], d.nomor, d.tanggal, undefined, d.berkas)));
+  (Array.isArray(x.lain) ? x.lain : []).forEach((d) => d && tambahDokumenPengiriman(out.lain, d.nomor, d.tanggal, d.kode, d.berkas));
+  return out;
+}
+
+function adaDokPelengkap(d) {
+  return !!d && JENIS_DOK_PENGIRIMAN.concat("lain").some((j) => (d[j] || []).length);
+}
+
+/* Nomor gabungan "A, B" (juga "A / B", "A & B") kembali jadi daftar --
+   isian lama & kolom PI templat salin. Tanggal yang hanya satu milik
+   nomor pertama. */
+function pecahNomorDokumen(nomor, tanggal) {
+  const daftar = [];
+  String(nomor == null ? "" : nomor)
+    .split(/[,;\n]+|\s+\/\s+|\s+&\s+|\s+DAN\s+/i)
+    .forEach((n, i) => tambahDokumenPengiriman(daftar, n, i === 0 ? tanggal : ""));
+  return daftar;
+}
+
+/* Ringkasan satu daftar untuk kolom lama: nomor digabung "A, B", tanggal
+   dokumen pertama yang bertanggal. */
+function ringkasDokumen(daftar) {
+  const ada = (daftar || []).filter((d) => d.nomor || d.tanggal);
+  const bertanggal = ada.find((d) => d.tanggal);
+  return { nomor: ada.map((d) => d.nomor).filter(Boolean).join(", "), tanggal: bertanggal ? bertanggal.tanggal : "" };
+}
+
+// Isian lama (s.pi / s.piDate, ...) dari daftarnya
+function ringkasDokPelengkap(d) {
+  const out = {};
+  JENIS_DOK_PENGIRIMAN.forEach((j) => {
+    const r = ringkasDokumen(d && d[j]);
+    const [kolomNomor, kolomTanggal] = KOLOM_DOK_PENGIRIMAN[j];
+    out[kolomNomor] = r.nomor;
+    out[kolomTanggal] = r.tanggal;
+  });
+  return out;
+}
+
+/* Daftar dokumen pelengkap sebuah jadwal: s.dokPelengkap kalau ada
+   (sudah rapi sejak dimuat, rowToShipment -- HANYA DIBACA, salin dengan
+   rapikanDokPelengkap sebelum diubah), kalau tidak dari isian lama
+   (s.pi / s.piDate, ...): jadwal dari Bulk Excel atau data uji. */
+function dokPelengkapJadwal(s) {
+  if (s && s.dokPelengkap && typeof s.dokPelengkap === "object") return s.dokPelengkap;
+  const out = dokPelengkapKosong();
+  JENIS_DOK_PENGIRIMAN.forEach((j) => {
+    const [kolomNomor, kolomTanggal] = KOLOM_DOK_PENGIRIMAN[j];
+    out[j] = pecahNomorDokumen(s && s[kolomNomor], s && s[kolomTanggal]);
+  });
+  return out;
 }
 
 /* KOLOM PI templat salin & Bulk Excel memuat PI DAN LS -- dua dokumen
@@ -522,6 +695,11 @@ function sanitizeSkbEntry(sk) {
 function sanitizeSkbList(list) {
   if (!Array.isArray(list)) return [];
   return list.map(sanitizeSkbEntry);
+}
+
+// Semua jadwal yang sudah dimuat, kedua buku (Import lalu Export)
+function semuaKiriman() {
+  return typeof data !== "undefined" && data ? [].concat(data.import || [], data.export || []) : [];
 }
 
 function newStop() {

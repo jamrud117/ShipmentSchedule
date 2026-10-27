@@ -202,7 +202,7 @@ document.addEventListener("keydown", (e) => {
    dibentuk dari atribut penanda (id, data-action + data-id, ...) dan
    dipakai menemukan kembarannya sesudah digambar ulang.
 ------------------------------------------------------------------ */
-const ATRIBUT_KUNCI_FOKUS = ["data-action", "data-id", "data-field", "data-step", "data-note-input", "data-tab", "data-docnum-tab"];
+const ATRIBUT_KUNCI_FOKUS = ["data-action", "data-id", "data-field", "data-step", "data-note-input", "data-tab", "data-docnum-tab", "data-mst-detail"];
 
 function kutipNilaiSelektor(v) {
   return String(v).replace(/["\\]/g, "\\$&");
@@ -239,8 +239,16 @@ document.addEventListener("show.bs.modal", (e) => {
 document.addEventListener("hidden.bs.modal", (e) => {
   const simpan = pemicuDialog.get(e.target);
   pemicuDialog.delete(e.target);
+  /* Kotak yang dibuka dari kotak lain (mis. Catat realisasi dari rincian
+     Masterlist): fokus kembali ke kotak yang masih menunggu -- yang paling
+     atas -- bukan jatuh ke <body> di belakangnya. */
+  const tingkat = (m) => Number(m.style.zIndex) || 0;
+  const sisa = [...document.querySelectorAll(".modal.show")].sort((a, b) => tingkat(a) - tingkat(b)).pop();
+  if (sisa) {
+    if (!sisa.contains(document.activeElement)) fokuskan(sisa, { tanpaGulir: true });
+    return;
+  }
   if (!simpan) return;
-  if (document.querySelector(".modal.show")) return; // dialog lain masih menunggu
   const aktif = document.activeElement;
   // Kode lain sudah memindahkan fokus (mis. ke kotak yang kurang diisi)
   if (aktif && aktif !== document.body && !e.target.contains(aktif)) return;

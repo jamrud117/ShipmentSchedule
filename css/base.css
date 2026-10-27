@@ -157,24 +157,24 @@ body {
 .btn-block {
   width: 100%;
 }
+/* Tombol utama & kedua: tinggi, sudut, dan huruf yang SAMA -- yang
+   membedakan perannya warna & isiannya, bukan ukuran. Keadaan (hover,
+   ditekan, nonaktif, sibuk) diseragamkan di css/system.css (TOMBOL). */
 .btn-primary-navy,
 .btn-teal {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  height: 38px;
+  height: var(--ctl-h);
   padding: 0 18px;
   border: 1px solid var(--p-600);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: var(--p-600);
   color: #fff;
   font-size: var(--t-base);
   font-weight: 600;
   white-space: nowrap;
-  transition:
-    background var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease);
 }
 .btn-primary-navy:hover,
 .btn-teal:hover {
@@ -189,18 +189,14 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 12px;
+  height: var(--ctl-h);
+  padding: 0 14px;
   border: 1px solid var(--border-control);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: #fff;
-  font-size: var(--t-sm);
+  font-size: var(--t-base);
   font-weight: 600;
   white-space: nowrap;
-  transition:
-    background var(--dur-1) var(--ease),
-    border-color var(--dur-1) var(--ease),
-    color var(--dur-1) var(--ease);
 }
 /* Tombol sekunder untuk tindakan BIASA -- Batal, Tutup, Muat ulang,
    Tambah baris/PO/invoice. Navy, bukan merah: dulu ia berbagi aturan
@@ -219,9 +215,11 @@ body {
   border-color: var(--s-danger-line);
   color: var(--s-danger);
 }
-.btn-outline-danger:hover,
-.btn-outline-danger:active,
-.btn-outline-danger:focus {
+/* :focus-visible, bukan :focus -- dengan :focus tombolnya tetap merah
+   pekat sesudah diklik tetikus, seolah masih ditekan. */
+.btn-outline-danger:hover:not(:disabled),
+.btn-outline-danger:active:not(:disabled),
+.btn-outline-danger:focus-visible {
   background: var(--s-danger);
   border-color: var(--s-danger);
   color: #fff;
@@ -234,11 +232,12 @@ body {
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: #fff;
-  color: var(--n-500);
+  color: var(--n-600);
 }
 .btn-more:hover {
   border-color: var(--p-400);
+  background: var(--p-50);
   color: var(--p-600);
 }

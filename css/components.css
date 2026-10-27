@@ -1,20 +1,35 @@
-/* ================= MODAL ================= */
-.modal-content {
-  border-radius: 16px;
-  border: none;
+/* ================= MODAL =================
+   Bentuk kotaknya (sudut, garis, bayangan) di css/system.css; kepala,
+   badan & kaki modal biasa di bawah (KEPALA MODAL); kotak dialog
+   berikon (isian, konfirmasi) di css/auth.css (KOTAK DIALOG). */
+
+/* Latar redup bernada navy -- sama dengan latar panel detail & kotak
+   Samakan -- bukan hitam pekat: konteks halaman tetap terbaca samar. */
+.modal-backdrop {
+  --bs-backdrop-bg: #0a1b33;
+  --bs-backdrop-opacity: 0.45;
 }
-.modal-header {
-  border-bottom: 1px solid var(--border);
+/* Muncul: naik sedikit & membesar halus, bukan meluncur 50px dari atas */
+.modal.fade .modal-dialog {
+  transform: translateY(10px) scale(0.98);
+  transition: transform var(--dur-3) var(--ease);
 }
-.modal-title {
-  font-family: var(--font-display);
-  font-weight: 700;
-  color: var(--navy);
+.modal.show .modal-dialog {
+  transform: none;
 }
+/* Latar statis yang diklik: kotak "menolak" dengan membesar sekejap
+   (bawaan Bootstrap) -- tetap berlaku setelah aturan di atas. */
+.modal.modal-static .modal-dialog {
+  transform: scale(1.02);
+}
+/* Ponsel: kotak hampir selebar layar, tapi tetap bertepi 12px */
+@media (max-width: 575.98px) {
+  .modal {
+    --bs-modal-margin: 0.75rem;
+  }
+}
+
 .form-label {
-  font-size: 0.79rem;
-  font-weight: 600;
-  color: var(--navy);
   margin-bottom: 0.25rem;
 }
 .form-text-note {
@@ -30,11 +45,6 @@
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--navy);
-}
-
-/* ================= TOAST ================= */
-.toast {
-  min-width: 260px;
 }
 
 /* KRONOLOGI & CATATAN (notes log) — lihat js/features/notes-log.js */
@@ -105,19 +115,32 @@
   color: var(--muted);
   font-family: var(--font-mono);
 }
+/* Hapus catatan: sebesar tombol ubah di sebelahnya (26px), bukan ikon
+   18px yang sulit dikenai. */
 .note-del {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--n-500);
   font-size: 0.72rem;
   line-height: 1;
-  padding: 3px 5px;
-  border-radius: 6px;
+  padding: 0;
+  border-radius: var(--r-xs);
   cursor: pointer;
 }
 .note-del:hover {
-  background: #fdeeee;
-  color: var(--coral);
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+@media (pointer: coarse) {
+  .note-del,
+  .note-edit {
+    width: 32px;
+    height: 32px;
+  }
 }
 .note-text {
   font-size: 0.85rem;
@@ -168,7 +191,7 @@
   padding: 6px 9px;
 }
 .card-note-stamp {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--muted);
   margin-bottom: 2px;
@@ -215,8 +238,6 @@
   margin-top: 6px;
 }
 
-/* Tombol tutup toast: bawaan Bootstrap hanya 16x21px — di bawah ambang
-   sasaran sentuh yang nyaman. */
 /* Kepala modal disamakan dengan kotak dialog: judul lebih tegas dan
    jaraknya lebih lega daripada bawaan Bootstrap. */
 .modal-header {
@@ -282,89 +303,503 @@
   flex-direction: column;
   gap: var(--sp-2);
   pointer-events: none;
-  max-width: min(420px, calc(100vw - 40px));
+  /* Lebar tetap: pesan pendek & panjang tampil sebagai kartu yang sama,
+     bukan kotak yang mengkerut-memanjang mengikuti kalimatnya. */
+  width: min(400px, calc(100vw - 40px));
 }
 body:not(.punya-kerangka) .toast-stack {
   top: 12px;
 }
 
+/* Kartu putih dengan rel warna jenis di kiri, lencana ikon bertinta,
+   judul singkat + kalimatnya, tombol tutup, dan garis sisa waktu di
+   dasarnya. Warna BUKAN satu-satunya pembeda: ikon & judulnya juga
+   berbeda per jenis. */
 .app-toast {
   --toast-hue: var(--p-500);
+  --toast-tint: var(--p-50);
+  position: relative;
+  overflow: hidden;
   pointer-events: none;
   display: flex;
   align-items: flex-start;
-  gap: 11px;
-  padding: 13px 14px 13px 15px;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 10px 13px 14px;
   border-radius: var(--r-lg);
   border: 1px solid var(--n-200);
-  border-left: 3px solid var(--toast-hue);
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
-  font-size: var(--t-base);
-  line-height: 1.5;
-  box-shadow: 0 16px 36px -16px rgba(10, 27, 51, 0.45);
-  /* Mulai dari luar layar & tembus; kelas .is-open yang memunculkannya. */
+  line-height: 1.45;
+  box-shadow:
+    inset 3px 0 0 var(--toast-hue),
+    0 18px 40px -18px rgba(10, 27, 51, 0.5),
+    0 2px 6px rgba(10, 27, 51, 0.06);
+  /* Mulai dari luar layar & tembus; kelas .is-open yang memunculkannya.
+     Tak terlihat = tak bisa difokus: visibility ditunda sampai pudarnya
+     selesai, supaya tombol tutupnya tidak tertinggal di urutan Tab. */
   opacity: 0;
-  transform: translateX(14px) scale(0.98);
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.98);
   transition:
     opacity var(--dur-2) var(--ease),
-    transform var(--dur-2) var(--ease);
+    transform var(--dur-2) var(--ease),
+    visibility 0s linear var(--dur-2);
 }
 .app-toast.is-open {
   opacity: 1;
+  visibility: visible;
   transform: none;
+  transition-delay: 0s;
 }
 
 .app-toast-icon {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
+  border-radius: 50%;
+  background: var(--toast-tint);
   color: var(--toast-hue);
   font-size: 1rem;
-  margin-top: 1px;
 }
-.app-toast-body {
+.app-toast-teks {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 1px;
+}
+.app-toast-judul {
+  font-size: var(--t-base);
+  font-weight: 700;
+  color: var(--n-900);
+  line-height: 1.35;
+}
+.app-toast-judul:empty {
+  display: none;
+}
+.app-toast-body {
+  font-size: 0.82rem;
+  color: var(--n-600);
   overflow-wrap: anywhere;
+  /* Baris baru di pesan dipertahankan (daftar nomor, dua kalimat) */
+  white-space: pre-line;
 }
 .app-toast-close {
   pointer-events: auto;
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
+  margin: -3px 0 0;
   display: grid;
   place-items: center;
   border: 0;
   background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--n-400);
-  font-size: 0.72rem;
+  border-radius: var(--r-sm);
+  color: var(--n-500);
+  font-size: 0.78rem;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
 }
 .app-toast-close:hover {
   background: var(--n-100);
   color: var(--ink);
 }
 
+/* Garis sisa waktu: penuh -> kosong selama --toast-lama, berhenti
+   selama dijeda (tombol tutup difokus / tab tidak terlihat). Dua nama
+   animasi bergantian (data-putaran) memulainya lagi dari penuh. Toast
+   yang tetap tidak punya garis waktu -- ia menunggu ditutup. */
+.app-toast-waktu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--toast-hue);
+  opacity: 0.32;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+.app-toast.is-open .app-toast-waktu {
+  animation: toast-waktu-a var(--toast-lama, 4000ms) linear forwards;
+}
+.app-toast.is-open[data-putaran="b"] .app-toast-waktu {
+  animation-name: toast-waktu-b;
+}
+.app-toast.is-jeda .app-toast-waktu {
+  animation-play-state: paused;
+}
+.app-toast.is-tetap .app-toast-waktu {
+  display: none;
+}
+@keyframes toast-waktu-a {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes toast-waktu-b {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 /* Warna mengikuti jenis pesan. */
-.app-toast--success { --toast-hue: #1e7a4d; }
-.app-toast--danger  { --toast-hue: var(--s-danger); }
-.app-toast--warning { --toast-hue: var(--s-warn); }
-.app-toast--info,
-.app-toast--dark    { --toast-hue: var(--p-500); }
+.app-toast--success {
+  --toast-hue: var(--s-success);
+  --toast-tint: var(--s-success-bg);
+}
+.app-toast--danger {
+  --toast-hue: var(--s-danger);
+  --toast-tint: var(--s-danger-bg);
+}
+.app-toast--warning {
+  --toast-hue: var(--s-warn);
+  --toast-tint: var(--s-warn-bg);
+}
+.app-toast--info {
+  --toast-hue: var(--p-500);
+  --toast-tint: var(--p-50);
+}
 
 @media (max-width: 575px) {
   .toast-stack {
     left: var(--sp-3);
     right: var(--sp-3);
+    width: auto;
+  }
+}
+/* Tanpa gerak: toast cukup memudar, garis waktunya disembunyikan
+   (hitungan mundurnya tetap berjalan di JS). */
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    transform: none;
+    transition:
+      opacity var(--dur-1) linear,
+      visibility 0s linear var(--dur-1);
+  }
+  .app-toast-waktu {
+    display: none;
+  }
+}
+
+/* ==================================================================
+   SAMAKAN ISIAN BARIS 1 -- kotak dialog tawaran & bilah Urungkan
+   (js/features/item-samakan.js, markup di index.html)
+
+   Tawaran: kotak dialog di tengah layar di atas latar redup. Rupanya
+   sama dengan kotak konfirmasi (.dialog-* di auth.css) tetapi bukan
+   modal Bootstrap: dibuka & ditutup seketika dan tidak mengunci gulir
+   halaman. z-index di bawah modal Bootstrap (1050 / 1055) -- dialog lain
+   yang menyusul tetap di atasnya -- dan di atas bilah Urungkan, yang ikut
+   diredupkan selama tawaran menunggu jawaban.
+
+   Urungkan: bilah navy di kiri bawah, tepat di atas bilah Simpan form
+   atau papan ketik layar (--samakan-dasar, dihitung JS). Cincin di
+   ikonnya menghitung mundur (--samakan-lama); dua nama animasi yang
+   bergantian (data-putaran) memulainya lagi dari penuh.
+================================================================== */
+.samakan-lapis {
+  position: fixed;
+  inset: 0;
+  z-index: 1048;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: rgba(10, 27, 51, 0.38);
+  animation: samakan-redup var(--dur-2) var(--ease);
+}
+.samakan-lapis[hidden],
+.samakan-urung[hidden] {
+  display: none;
+}
+.samakan-dialog {
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-xl);
+  box-shadow: 0 28px 64px -24px rgba(10, 27, 51, 0.6);
+  outline: none;
+  animation: samakan-masuk var(--dur-2) var(--ease);
+}
+.samakan-nilai {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--p-100);
+  border-radius: var(--r-md);
+  background: var(--p-50);
+}
+.samakan-nilai-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.samakan-nilai-isi {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.samakan-catatan {
+  margin: var(--sp-3) 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--s-warn-line);
+  border-left: 3px solid var(--s-warn);
+  border-radius: var(--r-md);
+  background: var(--s-warn-bg);
+  color: var(--sec-700);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+.samakan-foot {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* Petunjuk tombol papan ketik di dalam tombol -- warnanya ikut tombolnya */
+.samakan-tuts {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+  font-weight: 600;
+  line-height: 1.45;
+  opacity: 0.75;
+  box-shadow: none;
+}
+@media (hover: none) {
+  .samakan-tuts {
+    display: none;
+  }
+}
+@media (max-width: 479.98px) {
+  .samakan-foot > button {
+    flex: 1 1 0;
+  }
+}
+
+/* Menu "Samakan baris 1" (kepala Daftar Barang): tiap kolom yang
+   berbeda dari baris 1 -- namanya, nilai baris 1, jumlah baris yang
+   berubah. */
+.samakan-menu {
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+}
+.samakan-menu .samakan-menu-butir {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: center;
+  white-space: normal;
+}
+.samakan-menu-kolom {
+  font-weight: 600;
+  color: var(--ink);
+}
+.samakan-menu-nilai {
+  grid-column: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.samakan-menu-jumlah {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.samakan-menu-kosong,
+.samakan-menu-tip {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+/* Sel yang baru disamakan / dikembalikan berkedip sebentar */
+table.item-table .is-disamakan {
+  animation: samakan-sorot 1.4s var(--ease);
+}
+
+.samakan-urung {
+  position: fixed;
+  left: var(--sp-6);
+  bottom: calc(var(--samakan-dasar, 0px) + var(--sp-3));
+  z-index: 1046;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 2 * var(--sp-6));
+  padding: 5px 5px 5px 6px;
+  border-radius: var(--r-pill);
+  background: var(--d-900);
+  color: #fff;
+  font-size: var(--t-sm);
+  box-shadow:
+    0 18px 40px -16px rgba(10, 27, 51, 0.7),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: samakan-naik var(--dur-2) var(--ease);
+}
+.samakan-urung-ikon {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  color: var(--sec-300);
+}
+.samakan-urung[data-jenis="kabar"] .samakan-urung-ikon {
+  color: var(--p-200);
+}
+.samakan-cincin {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.samakan-cincin circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 2.5;
+}
+/* Keliling lingkaran r=13: 2 x pi x 13 = 81.68 */
+.samakan-cincin .samakan-cincin-sisa {
+  stroke: var(--sec-300);
+  stroke-linecap: round;
+  stroke-dasharray: 81.68;
+  animation: samakan-cincin-a var(--samakan-lama, 15s) linear forwards;
+}
+.samakan-urung[data-putaran="b"] .samakan-cincin-sisa {
+  animation-name: samakan-cincin-b;
+}
+.samakan-urung.is-jeda .samakan-cincin-sisa {
+  animation-play-state: paused;
+}
+.samakan-urung:not([data-jenis="urung"]) .samakan-cincin,
+.samakan-urung:not([data-jenis="urung"]) .samakan-urung-btn {
+  display: none;
+}
+.samakan-urung-pesan {
+  min-width: 0;
+  line-height: 1.35;
+}
+.samakan-urung-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sec-300);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background var(--dur-1) var(--ease);
+}
+.samakan-urung-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.samakan-urung-tutup {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.72rem;
+}
+.samakan-urung-tutup:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.samakan-urung button:focus-visible {
+  outline: 2px solid var(--focus-ring-dark);
+  outline-offset: 2px;
+}
+@media (max-width: 575.98px) {
+  .samakan-urung {
+    left: 14px;
+    right: 14px;
     max-width: none;
+    border-radius: var(--r-lg);
+  }
+  .samakan-urung-pesan {
+    flex: 1;
+  }
+}
+@keyframes samakan-redup {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes samakan-masuk {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes samakan-naik {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes samakan-sorot {
+  0%,
+  30% {
+    background-color: var(--sec-100);
+    box-shadow: 0 0 0 2px var(--sec-300);
+  }
+}
+@keyframes samakan-cincin-a {
+  to {
+    stroke-dashoffset: 81.68;
+  }
+}
+@keyframes samakan-cincin-b {
+  to {
+    stroke-dashoffset: 81.68;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .app-toast {
-    transition: none;
+  .samakan-lapis,
+  .samakan-dialog,
+  .samakan-urung {
+    animation: none;
   }
 }
 
@@ -477,51 +912,25 @@ body:not(.punya-kerangka) .toast-stack {
   min-width: 0;
 }
 .fl-head .eta-mode-switch {
-  height: 22px;
+  height: 26px;
 }
 .fl-head .eta-mode-btn {
-  padding: 0 9px;
-  font-size: 0.62rem;
+  padding: 0 10px;
+  font-size: 0.7rem;
+}
+@media (pointer: coarse) {
+  .fl-head .eta-mode-switch {
+    height: 32px;
+  }
+  .fl-head .eta-mode-btn {
+    padding: 0 13px;
+  }
 }
 /* Di sel yang sempit chip "Auto ETA" disembunyikan -- sakelar di
    sebelahnya sudah menunjukkan mode yang sama. */
 @media (max-width: 1399.98px) and (min-width: 1080px) {
   .fl-head .eta-mode-chip {
     display: none;
-  }
-}
-
-/* DOKUMEN BERNOMOR + BERTANGGAL (PI, LS & Polis Asuransi di Bea & Pajak
-   Impor): satu sel .s12 berisi pasangan [ nomor ][ tanggal ]
-   (.fl-dok-pasang). Pasangannya mengalir sebanyak yang muat -- tiga
-   sebaris di layar lebar, lalu dua, lalu satu -- dan tidak pernah
-   terbelah di antara dua baris. Lebar minimum pasangan menjaga label
-   terpanjang ("Tanggal Polis Asuransi") tetap satu baris, jadi seluruh
-   kotaknya sejajar. Di ponsel nomor & tanggal bertumpuk. */
-.fgrid > .fl-dok {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
-  gap: 16px 18px;
-}
-.fl-dok-pasang {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 16px 18px;
-  min-width: 0;
-}
-.fl-dok-pasang > * {
-  min-width: 0;
-}
-.fl-dok .form-label {
-  display: block;
-  line-height: 22px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@media (max-width: 767.98px) {
-  .fl-dok-pasang {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -582,4 +991,183 @@ body:not(.punya-kerangka) .toast-stack {
 .rm-row:hover {
   background: #fdeaea;
   border-color: var(--s-danger-line);
+}
+
+/* ==================================================================
+   LAMPIRAN BERKAS (js/data/lampiran.js)
+
+   Satu chip per lampiran: ikon jenis berkas, nama (tombol buka), versi
+   Draft / Asli, tombol lepas. Dipakai kotak tahap dokumen, baris PI &
+   LS di form, dan -- hanya baca, .berkas-link -- panel detail.
+================================================================== */
+.berkas-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 4px 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: #fff;
+  font-size: var(--t-xs);
+  color: var(--n-700);
+}
+.berkas-chip > i {
+  color: var(--p-500);
+  flex-shrink: 0;
+}
+.berkas-chip.is-baru {
+  border-style: dashed;
+  border-color: var(--p-300);
+  background: var(--p-50);
+}
+.berkas-buka {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--p-600);
+  text-decoration: underline;
+  text-decoration-color: var(--p-200);
+  text-underline-offset: 2px;
+}
+.berkas-buka:hover {
+  color: var(--p-700);
+  text-decoration-color: currentColor;
+}
+.berkas-versi,
+.berkas-baru {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.berkas-versi--draft {
+  background: var(--s-warn-bg);
+  color: var(--s-warn-ink);
+  border: 1px solid var(--s-warn-line);
+}
+.berkas-versi--asli {
+  background: var(--p-50);
+  color: var(--p-600);
+  border: 1px solid var(--p-200);
+}
+.berkas-baru {
+  background: var(--p-100);
+  color: var(--p-600);
+}
+.berkas-hapus {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--n-500);
+  font-size: 0.7rem;
+}
+.berkas-hapus:hover {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+}
+/* Hanya baca: tautan berikon di bawah nomor dokumen / tahap */
+.berkas-tautan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 3px;
+}
+.berkas-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--p-600);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.berkas-link:hover {
+  color: var(--p-700);
+  text-decoration: underline;
+}
+
+/* ==================================================================
+   TOOLTIP (js/ui/tooltip.js)
+
+   Keterangan tombol ikon dari atribut title: navy pekat, huruf putih,
+   muncul di atas tombolnya (rel menu: di kanannya), tidak menangkap
+   klik. Panahnya menunjuk tengah tombol walau kotaknya dijepit di tepi
+   layar (--tip-panah).
+================================================================== */
+.app-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2050;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 6px 9px;
+  border-radius: var(--r-sm);
+  background: var(--d-900);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 20px -8px rgba(10, 27, 51, 0.55);
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--dur-1) var(--ease),
+    transform var(--dur-1) var(--ease);
+}
+/* Diukur dulu (is-siap: ada di tata letak, belum terlihat), baru
+   dimunculkan (is-open) -- supaya letaknya dihitung dari ukuran asli. */
+.app-tip.is-siap {
+  visibility: visible;
+}
+.app-tip.is-open {
+  opacity: 1;
+  transform: none;
+}
+.app-tip::after {
+  content: "";
+  position: absolute;
+  left: var(--tip-panah, 50%);
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  background: inherit;
+  transform: rotate(45deg);
+}
+.app-tip[data-arah="atas"]::after {
+  bottom: -4px;
+}
+.app-tip[data-arah="bawah"]::after {
+  top: -4px;
+}
+.app-tip[data-arah="kanan"]::after {
+  left: -4px;
+  top: 50%;
+  margin: -4px 0 0;
 }

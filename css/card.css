@@ -234,6 +234,28 @@
   color: #1f8a4c;
   border-color: #c9edd6;
 }
+/* Lartas: PI / LS wajib tapi belum ada (core/lartas.js) */
+.tag.tag-lartas {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+  border-color: var(--s-danger-line);
+}
+/* Dibutuhkan di pabrik (prediction-mundur.js): netral / mepet / telat */
+.tag.tag-butuh {
+  background: var(--p-50);
+  color: var(--p-600);
+  border-color: var(--p-200);
+}
+.tag.tag-butuh--mepet {
+  background: var(--s-warn-bg);
+  color: var(--s-warn-ink);
+  border-color: var(--s-warn-line);
+}
+.tag.tag-butuh--telat {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+  border-color: var(--s-danger-line);
+}
 
 /* ---- Status select: pil selebar teks yang TERPILIH ----
 
@@ -287,35 +309,43 @@
   display: flex;
   gap: 7px;
 }
+/* Tombol ikon: satu bentuk di kartu, tabel riwayat, akun, HS Code.
+   Labelnya di title (tooltip) & aria-label. Hover bertinta navy --
+   bukan abu-abu kertas yang nyaris tak terlihat di atas putih. */
 .icon-btn {
-  width: 33px;
-  height: 33px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
   background: #fff;
-  color: var(--muted);
+  color: var(--n-600);
   font-size: 0.95rem;
-  transition: all 0.15s ease;
 }
-.icon-btn:hover {
-  background: var(--bg);
-  color: var(--navy);
+.icon-btn:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--p-600);
+}
+.icon-btn:active:not(:disabled) {
+  background: var(--p-100);
 }
 .icon-btn.primary {
   background: var(--navy);
   color: #fff;
   border-color: var(--navy);
 }
-.icon-btn.primary:hover {
+.icon-btn.primary:hover:not(:disabled) {
   background: var(--ocean);
+  border-color: var(--ocean);
+  color: #fff;
 }
-.icon-btn.danger:hover {
-  background: #fdeaea;
-  color: var(--coral);
-  border-color: #f6c6c6;
+.icon-btn.danger:hover:not(:disabled) {
+  background: var(--s-danger-bg);
+  color: var(--s-danger);
+  border-color: var(--s-danger-line);
 }
 
 /* ---- Dropdown pemilih Copy Template ---- */
@@ -392,9 +422,6 @@
 }
 .lane-track.is-process .lane-fill {
   background: var(--amber);
-}
-.lane-track.is-arrived .lane-fill {
-  background: var(--green);
 }
 .port-node {
   position: absolute;
@@ -1074,6 +1101,27 @@
   letter-spacing: 0;
   color: var(--p-600);
 }
+.docsteps-hitung {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* "· 2 draft": berkas yang aslinya masih ditunggu */
+.docsteps-draft {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--p-50);
+  border: 1px dashed var(--p-300);
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  color: var(--p-500);
+}
+.docsteps-draft i {
+  color: var(--p-500);
+}
 .docsteps-track {
   display: flex;
   align-items: center;
@@ -1103,6 +1151,7 @@
   padding: 0 2px;
 }
 .docstep-dot {
+  position: relative;
   width: 26px;
   height: 26px;
   display: grid;
@@ -1112,7 +1161,7 @@
   background: #fff;
   color: var(--n-500);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   transition:
     background var(--dur-1) var(--ease),
@@ -1185,6 +1234,44 @@
   color: #fff;
 }
 
+/* DRAFT DISETUJUI, ASLINYA DITUNGGU: terkumpul, tapi bukan selesai --
+   garis putus-putus navy & jam pasir, bukan centang penuh. */
+.docstep.is-draft .docstep-dot {
+  background: var(--p-50);
+  border-style: dashed;
+  border-color: var(--p-500);
+  color: var(--p-600);
+  font-size: 0.72rem;
+}
+.docstep.is-draft .docstep-label {
+  color: var(--p-500);
+}
+.docstep.is-draft:hover .docstep-dot {
+  border-color: var(--p-700);
+  color: var(--p-700);
+}
+/* Jumlah lampiran di pojok bulatannya */
+.docstep-lampir {
+  position: absolute;
+  top: -7px;
+  right: -11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px 0 2px;
+  border-radius: var(--r-pill);
+  background: #fff;
+  border: 1px solid var(--p-200);
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+  font-weight: 600;
+  line-height: 15px;
+  color: var(--p-600);
+}
+.docstep-lampir i {
+  font-size: 0.66rem;
+}
+
 /* Viewer tidak boleh mengubah, tapi tetap harus bisa membacanya. */
 body.is-viewer .docstep {
   pointer-events: none;
@@ -1201,7 +1288,7 @@ body.is-viewer .docstep {
   color: var(--n-400);
 }
 .docstep.is-skipped .docstep-label {
-  color: var(--n-400);
+  color: var(--text-subtle);
   text-decoration: line-through;
   text-decoration-color: var(--n-300);
 }
@@ -1252,5 +1339,5 @@ body.is-viewer .docstep {
   gap: 5px;
   padding-bottom: 6px;
   font-size: var(--t-xs);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }

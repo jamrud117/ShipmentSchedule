@@ -347,8 +347,10 @@ function reconstructShipmentFromGroup(group, mode) {
   if (mode === "import") {
     s.ndpbm = excelNum(first[idx.NDPBM]);
     s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
-    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri)
-    Object.assign(s, pecahPiLs(excelStr(first[idx.PI])));
+    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri); nomor "A, B" jadi daftarnya
+    const piLs = pecahPiLs(excelStr(first[idx.PI]));
+    s.dokPelengkap = Object.assign(dokPelengkapKosong(), { pi: pecahNomorDokumen(piLs.pi), ls: pecahNomorDokumen(piLs.ls) });
+    Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
     s.bm = bulatkanBm(excelNum(first[idx.BM])); // ke atas ke ribuan, seperti semua jalan masuk BM
     s.ppn = excelNum(first[idx.PPN]);
     s.pph = excelNum(first[idx.PPH]);
@@ -463,11 +465,14 @@ async function handleBulkImport(mode, file) {
       t("x.berkas.akan.mengganti", { n: reconstructed.length, mode: modeLabel }),
       async () => {
         try {
+          // Jadwal lama terganti seluruhnya: lampiran berkasnya ikut dihapus dari bucket
+          const lampiranLama = (data[mode] || []).flatMap(semuaLampiranJadwal);
           const { error: delErr } = await supabaseClient
             .from("shipments")
             .delete()
             .eq("mode", mode);
           if (delErr) throw delErr;
+          hapusLampiran(lampiranLama);
           for (const r of reconstructed) {
             await createShipment(r.shipment, r.items);
           }
@@ -482,6 +487,7 @@ async function handleBulkImport(mode, file) {
           loadShipments();
         }
       },
+      { title: tt("Ganti Seluruh Jadwal?", "Replace All Schedules?"), confirmText: tt(`Ganti Jadwal ${modeLabel}`, `Replace ${modeLabel} Schedules`), icon: "bi-arrow-repeat" },
     );
   } catch (err) {
     console.error(err);
@@ -532,7 +538,7 @@ async function handleDeleteAll() {
   const total = (data[mode] || []).length;
 
   if (!total) {
-    showToast(t("x.tidak.ada.data.untuk.dihapus", { mode: modeLabel }), "dark");
+    showToast(t("x.tidak.ada.data.untuk.dihapus", { mode: modeLabel }), "info");
     return;
   }
 
@@ -546,11 +552,13 @@ async function handleDeleteAll() {
         '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menghapus...", "Deleting...");
       try {
         // Dibatasi kolom `mode`, jadi hanya section yang sedang dibuka yang terhapus
+        const lampiranLama = (data[mode] || []).flatMap(semuaLampiranJadwal);
         const { error } = await supabaseClient
           .from("shipments")
           .delete()
           .eq("mode", mode);
         if (error) throw error;
+        hapusLampiran(lampiranLama);
         // shipment_items & shipment_route_stops ikut terhapus otomatis lewat "on delete cascade".
         data[mode] = [];
         render();
@@ -564,6 +572,7 @@ async function handleDeleteAll() {
         btn.innerHTML = originalLabel;
       }
     },
+    { title: tt("Hapus Seluruh Data?", "Delete All Data?"), confirmText: tt(`Hapus Semua Jadwal ${modeLabel}`, `Delete All ${modeLabel} Schedules`), icon: "bi-trash3" },
   );
 }
 $("#btnDeleteAll").addEventListener("click", () => {

@@ -348,6 +348,30 @@ function pulihkanPenandaGulir(penanda) {
   if (geser) window.scrollBy({ top: geser, behavior: "instant" });
 }
 
+/* POSISI DAFTAR SEBELUM FORM JADWAL DIBUKA.
+
+   Form jadwal adalah halaman tersendiri (#/new, #/edit/<id>) yang dibuka
+   dari atas. Kembali ke daftar -- sesudah Simpan maupun Batal -- tampilan
+   dikembalikan ke posisi gulir SEBELUM form dibuka, bukan mengejar kartu
+   yang diubah: urutannya bisa berubah (ETD / ETA / Estimated Delivery
+   baru), tapi yang sedang dilihat pengguna tetap di tempatnya. Tinggi
+   tiap kartu diwariskan seperti render biasa (wariskanTinggiKartu),
+   supaya kartu di atas layar yang belum tergambar tidak menggesernya. */
+let posisiDaftarSebelumForm = null;
+function catatPosisiDaftar() {
+  if ($("#viewList").classList.contains("d-none")) return;
+  const tinggi = new Map();
+  cardContainer.querySelectorAll(":scope > .ship-card").forEach((k) => tinggi.set(k.dataset.id, k.getBoundingClientRect().height));
+  posisiDaftarSebelumForm = { y: window.scrollY, tinggi };
+}
+function pulihkanPosisiDaftar() {
+  const p = posisiDaftarSebelumForm;
+  posisiDaftarSebelumForm = null;
+  if (!p) return;
+  wariskanTinggiKartu(p);
+  window.scrollTo({ top: p.y, left: 0, behavior: "instant" });
+}
+
 /* FOKUS IKUT BERTAHAN.
 
    Kalau yang sedang difokus ada di dalam daftar -- kotak kronologi
@@ -509,9 +533,9 @@ function renderPaginationBar(totalItems) {
   bar.innerHTML = `
     <div class="pagination-info">${tt(`Menampilkan <b>${startIdx}–${endIdx}</b> dari <b>${totalItems}</b> pengiriman`, `Showing <b>${startIdx}–${endIdx}</b> of <b>${totalItems}</b> shipments`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${pageBtns}</div>
-      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="pageSizeSelect">${tt("Per halaman", "Per page")}</label>

@@ -64,13 +64,37 @@ body {
   --s-warn: #b5730f;
   --s-warn-bg: #fdf6e9;
   --s-warn-line: #e9d3a6;
+  /* --s-warn hanya 3,87:1 di atas putih: cukup untuk ikon & garis
+     (3:1), tidak untuk TEKS kecil. Teks peringatan memakai ini (5,78:1
+     di putih, 5,37:1 di --s-warn-bg). */
+  --s-warn-ink: #8f5a0b;
   --s-danger: #c0392b;
   --s-danger-bg: #fdf1ef;
   --s-danger-line: #f0c4bd;
+  --s-danger-hover: #a5301f;
   --s-ok: var(--p-600);
   --s-ok-bg: var(--p-50);
   --s-ok-line: var(--p-200);
+  /* Hijau HANYA untuk "berhasil" (toast, lunas) -- bukan aksen. 5,32:1. */
+  --s-success: #1e7a4d;
+  --s-success-bg: #edf7f1;
+  --s-success-line: #bfe0cd;
   --s-info: #3f5fb8;
+  --s-info-bg: #eef1fb;
+  --s-info-line: #c9d3f0;
+
+  /* ---- Teks di atas putih / kertas. Ketiganya lolos AA (4,5:1).
+     --n-400 BUKAN warna teks (2,62:1) -- hanya ikon & garis hias. ---- */
+  --text-muted: var(--n-600);
+  --text-subtle: var(--n-500);
+  /* Teks contoh di dalam isian: 4,54:1 -- terbaca, tetap jelas lebih
+     pucat dari isian sungguhan (--n-800, 13,6:1). */
+  --text-placeholder: #6b7789;
+
+  /* ---- Ukuran kontrol: tombol & isian satu baris ---- */
+  --ctl-h-sm: 32px;
+  --ctl-h: 38px;
+  --ctl-h-lg: 42px;
 
   /* ---- Radius ---- */
   --r-xs: 5px;

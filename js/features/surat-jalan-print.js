@@ -224,6 +224,30 @@ function sjKotakTtd(label, nama) {
         </td>`;
 }
 
+/* SARAN NAMA PENANDA TANGAN (Mengetahui / Dikirim oleh / Diterima oleh):
+   nama yang pernah dipakai di surat jalan yang sudah termuat, ditambah
+   daftar Pemohon. Disusun saat kotaknya difokus -- bukan tiap riwayat
+   digambar. */
+const SJ_KOLOM_TTD = ["knownBy", "sentBy", "receivedBy"];
+function sjIsiSaranTtd() {
+  const daftar = document.getElementById("dnTtdList");
+  if (!daftar) return;
+  const nama = new Set();
+  (typeof docNumHistoryRows !== "undefined" ? docNumHistoryRows : []).forEach((r) => {
+    const p = (r && r.payload) || {};
+    SJ_KOLOM_TTD.forEach((k) => p[k] && nama.add(String(p[k]).trim()));
+  });
+  document.querySelectorAll('[data-docnum-panel="do"] [data-dn="requester"] option').forEach((o) => o.value && nama.add(o.value));
+  daftar.innerHTML = [...nama]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .map((n) => `<option value="${escapeAttr(n)}"></option>`)
+    .join("");
+}
+document.addEventListener("focusin", (e) => {
+  if (e.target.matches && e.target.matches('input[list="dnTtdList"]')) sjIsiSaranTtd();
+});
+
 /* Sel NOPOL: satu sel yang membentang `rentang` baris, di sebelah barang.
 
    Isinya satu kotak per mobil, tingginya DIBAGI RATA sehingga seluruh
@@ -394,9 +418,9 @@ function buildSuratJalanHtml(row, shipment) {
     <table class="sj-sign">
       <tr>
         ${sjKotakTtd("Dibuat oleh :", row.requester)}
-        ${sjKotakTtd("Mengetahui :")}
-        ${sjKotakTtd("Dikirim oleh :")}
-        ${sjKotakTtd("Diterima oleh :")}
+        ${sjKotakTtd("Mengetahui :", p.knownBy)}
+        ${sjKotakTtd("Dikirim oleh :", p.sentBy)}
+        ${sjKotakTtd("Diterima oleh :", p.receivedBy)}
       </tr>
     </table>
 
@@ -438,7 +462,7 @@ function cetakSuratJalan(rowId) {
 
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
     return;
   }
   const gaya = lokal ? suratJalanLokalCss() : suratJalanCss();
@@ -661,16 +685,21 @@ function suratJalanCss() {
     padding: 6px 8px 0; font-size: 7.5pt; color: #333;
   }
   .sj-no  { width: 26px; text-align: center; }
-  .sj-items td.sj-nama, .sj-items th.sj-nama { text-align: center; }
   .sj-qty { width: 62px; text-align: center; }
   .sj-pkg { width: 62px; text-align: center; }
-  /* Isi kolom Package rata tengah HORIZONTAL dan VERTIKAL. Sel kemasan
-     yang membentang beberapa baris (satu box berisi tiga barang) jadi
-     tepat di tengah rentangnya, tidak menempel di atas.
+  /* ISI BARIS DATA rata tengah HORIZONTAL dan VERTIKAL di semua kolom:
+     No, Nama Barang, Quantity, Package (Nopol punya aturan sendiri di
+     bawah). Nama barang yang membungkus membuat barisnya lebih tinggi --
+     tanpa ini nomor dan jumlahnya menempel di atas baris setinggi itu --
+     dan sel kemasan yang membentang beberapa baris (satu box berisi tiga
+     barang) jadi tepat di tengah rentangnya.
 
-     Ditulis td.sj-pkg, bukan .sj-pkg saja: aturan ".sj-items td" di atas
+     Ditulis td.sj-xxx, bukan .sj-xxx saja: aturan ".sj-items td" di atas
      ber-kekhususan (0,1,1) dan mengalahkan kelas tunggal (0,1,0), jadi
      vertical-align: middle tidak akan pernah berlaku. */
+  .sj-items td.sj-no,
+  .sj-items td.sj-nama,
+  .sj-items td.sj-qty,
   .sj-items td.sj-pkg { text-align: center; vertical-align: middle; }
   /* KOLOM NOPOL. Lebarnya tetap 132px (dulu kolom Keterangan).
 

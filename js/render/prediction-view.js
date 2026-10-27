@@ -150,6 +150,25 @@ function satuanHariTunggal(n, satuan) {
 }
 
 
+/* Libur nasional, cuti bersama, & pembatasan truk yang DILEWATI sebuah
+   langkah hari kerja. Tanpa keterangan ini, "1 hari kerja" yang
+   ternyata jatuh sepekan kemudian (Lebaran) terbaca seperti mesin
+   yang salah hitung. */
+function predLiburHtml(st, ctx) {
+  if (st.days == null || !st.from || !st.to || legUsesCalendarDays(st.key)) return "";
+  const hari = hariTutupDiAntara(st.from, st.to, hariTutupLangkah(st.key, ctx));
+  if (!hari.length) return "";
+  const nama = [];
+  hari.forEach((h) => {
+    const label = h.kind === "cuti" ? tt(`cuti bersama ${h.name}`, `collective leave ${h.name}`) : h.name;
+    if (label && nama.indexOf(label) < 0) nama.push(label);
+  });
+  const teks =
+    tt(`melewati ${hari.length} hari tutup`, `skips ${hari.length} closed ${hari.length === 1 ? "day" : "days"}`) +
+    (nama.length ? `: ${nama.slice(0, 5).join(", ")}${nama.length > 5 ? "…" : ""}` : "");
+  return ` <span class="pred-step-src pred-step-libur"><i class="bi bi-calendar-x"></i> ${escapeHtml(teks)}</span>`;
+}
+
 // Rincian "ETA + 2 hari kerja + 2 hari kerja" yang bisa ditelusuri pengguna.
 function predStepsHtml(d) {
   const baris = [];
@@ -178,7 +197,7 @@ function predStepsHtml(d) {
         )}</span>`
       : "";
     baris.push(
-      `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}${sumber}</span>
+      `<li><span class="pred-step-label">+ ${escapeHtml(st.label)}${durasi}${sumber}${predLiburHtml(st, d.ctx)}</span>
        <span class="pred-step-date">${fmtDate(st.to)}</span></li>`,
     );
   });

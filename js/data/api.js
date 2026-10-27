@@ -97,8 +97,24 @@ async function loadShipments() {
   // PENTING: render() harus dipanggil di sini
   shipmentsLoaded = true;
   render();
+  siapkanLartasLatar();
 
   await syncArrivedStatuses();
+}
+
+/* Database HS Code disiapkan di LATAR sesudah papan tergambar: tanda
+   lartas per HS (core/lartas.js) baru terbaca sesudahnya. Kalau ada HS
+   bertanda lartas, kartu & Ringkasan digambar ulang -- peringatan "PI /
+   LS belum ada" ikut muncul tanpa harus membuka halaman HS Code dulu. */
+function siapkanLartasLatar() {
+  if (typeof hsCodeSiap !== "function" || (typeof hsCodeRows !== "undefined" && hsCodeRows.length)) return;
+  hsCodeSiap().then((ok) => {
+    if (!ok || !petaLartasHs().size) return;
+    render();
+    const ringkasan = $("#viewOverview");
+    if (ringkasan && !ringkasan.classList.contains("d-none") && typeof renderOverview === "function") renderOverview();
+    if (typeof segarkanLartasForm === "function") segarkanLartasForm();
+  });
 }
 
 /* ------------------------------------------------------------------
@@ -191,16 +207,35 @@ function showDbErrorState() {
    Tiap penyimpanan mencoba kolomnya lagi (tidak diingat sepanjang sesi):
    begitu migrasinya dijalankan, simpan berikutnya langsung ikut, tanpa
    perlu memuat ulang halaman. */
+const kolomOpsional = (berkas, id, en) => ({
+  berkas,
+  get nama() {
+    return tt(id, en);
+  },
+});
 const KOLOM_OPSIONAL = {
-  vehicle_no: { berkas: "migration-vehicle-no.sql", nama: "No. Kendaraan" },
-  ls: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "LS" },
-  invoice_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Invoice" },
-  master_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal Master B/L-AWB" },
-  house_bl_date: { berkas: "migration-ls-tanggal-dokumen.sql", nama: "Tanggal House B/L-AWB" },
-  pi_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal PI" },
-  ls_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal LS" },
-  polis_asuransi: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Polis Asuransi" },
-  polis_asuransi_date: { berkas: "migration-tanggal-pi-ls-polis.sql", nama: "Tanggal Polis Asuransi" },
+  vehicle_no: kolomOpsional("migration-vehicle-no.sql", "No. Kendaraan", "Vehicle No."),
+  ls: kolomOpsional("migration-ls-tanggal-dokumen.sql", "LS", "LS"),
+  invoice_date: kolomOpsional("migration-ls-tanggal-dokumen.sql", "Tanggal Invoice", "Invoice Date"),
+  master_bl_date: kolomOpsional("migration-ls-tanggal-dokumen.sql", "Tanggal Master B/L-AWB", "Master B/L-AWB Date"),
+  house_bl_date: kolomOpsional("migration-ls-tanggal-dokumen.sql", "Tanggal House B/L-AWB", "House B/L-AWB Date"),
+  pi_date: kolomOpsional("migration-tanggal-pi-ls-polis.sql", "Tanggal PI", "PI Date"),
+  ls_date: kolomOpsional("migration-tanggal-pi-ls-polis.sql", "Tanggal LS", "LS Date"),
+  polis_asuransi: kolomOpsional("migration-tanggal-pi-ls-polis.sql", "Polis Asuransi", "Insurance Policy"),
+  polis_asuransi_date: kolomOpsional("migration-tanggal-pi-ls-polis.sql", "Tanggal Polis Asuransi", "Insurance Policy Date"),
+  /* Satu dokumen per jenis tanpa dokumen lain tetap utuh di kolom lama
+     (pi / pi_date, ...): yang tertinggal hanya dokumen kedua dst. & dokumen lain. */
+  dokumen_pelengkap: Object.assign(
+    kolomOpsional("migration-dokumen-pelengkap.sql", "PI, LS & Polis kedua dst., Dokumen Lain, serta lampiran PI & LS", "the second and further PI, LS & policies, Other Documents, and PI & LS attachments"),
+    {
+      hilang: (d) =>
+        !!d &&
+        (JENIS_DOK_PENGIRIMAN.some((j) => (d[j] || []).length > 1 || (d[j] || []).some((x) => (x.berkas || []).length)) ||
+          (d.lain || []).length > 0),
+    },
+  ),
+  // Dibutuhkan di pabrik -> rencana mundur ETD/ETA (core/prediction-mundur.js)
+  needed_date: kolomOpsional("migration-lampiran-lartas-kebutuhan.sql", "Dibutuhkan di Pabrik", "Needed at Factory"),
 };
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
@@ -223,70 +258,76 @@ function kolomBelumDikenal(error, daftar) {
   return (daftar || Object.keys(KOLOM_OPSIONAL)).find((k) => new RegExp(`(^|[^\\w])${k}([^\\w]|$)`).test(pesan)) || null;
 }
 
-/* KOLOM BARANG CEISA YANG MUNGKIN BELUM DIMIGRASI
-   (migration-barang-ceisa.sql). Daftar barang disimpan dengan cara
-   hapus semua lalu sisipkan, jadi sisipan yang ditolak karena kolomnya
-   belum ada berarti barangnya HILANG. Ditolak karena itu -> disisipkan
-   ulang tanpa kolom yang ditolak, dan pengguna diberi tahu berkas
-   migrasinya:
-     - Kode Barang s.d. Spesifikasi Lain: seluruh nama barang dilebur ke
-       Uraian -- nama yang tampil tetap sama;
-     - Kode Kondisi Barang & Kode Negara Asal: ditinggalkan, HANYA kolom
-       yang ditolak (database yang sudah mengenal kolom nama barang
-       tidak ikut dilebur).
-   PostgREST menyebut satu kolom per penolakan, jadi dicoba sampai
-   tidak ada lagi yang ditolak. */
+/* KOLOM BARANG YANG MUNGKIN BELUM DIMIGRASI. Daftar barang disimpan
+   dengan cara hapus semua lalu sisipkan, jadi sisipan yang ditolak karena
+   kolomnya belum ada berarti barangnya HILANG. Ditolak karena itu ->
+   disisipkan ulang tanpa kolom yang ditolak, dan pengguna diberi tahu
+   berkas migrasinya:
+     - Kode Barang s.d. Spesifikasi Lain (migration-barang-ceisa.sql):
+       seluruh nama barang dilebur ke Uraian -- nama yang tampil tetap sama;
+     - KOLOM_BARANG_OPSIONAL (Kode Kondisi Barang, Kode Negara Asal, PI
+       barang & No. item di PI): HANYA kolom yang ditolak yang ditinggal
+       (database yang sudah mengenal kolom nama barang tidak ikut dilebur).
+       Kolom opsional yang kosong di semua barang tidak dikirim sama
+       sekali -- nilainya sama dengan bawaan database, dan database yang
+       belum dimigrasi tidak perlu menolaknya dulu.
+   PostgREST menyebut satu kolom per penolakan, jadi dicoba sampai tidak
+   ada lagi yang ditolak. */
 const KOLOM_BARANG_CEISA = ["kode_barang", "merek", "tipe", "ukuran", "spesifikasi_lain"];
-const KOLOM_BARANG_KODE = {
-  kode_kondisi_barang: () => tt("Kode Kondisi Barang", "Goods Condition Code"),
-  kode_negara_asal: () => tt("Kode Negara Asal", "Country of Origin Code"),
+const BERKAS_BARANG_CEISA = "migration-barang-ceisa.sql";
+const KOLOM_BARANG_OPSIONAL = {
+  kode_kondisi_barang: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Kondisi Barang", "Goods Condition"); } },
+  kode_negara_asal: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Negara Asal", "Country of Origin"); } },
+  pi_nomor: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("PI barang", "Item PI"); } },
+  pi_no_item: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("No. item di PI", "Item no. in PI"); } },
 };
+
+const isianKolom = (v) => String(v == null ? "" : v).trim() !== "";
+const tanpaKolom = (rows, kolom) =>
+  rows.map((r) => {
+    const x = Object.assign({}, r);
+    kolom.forEach((k) => delete x[k]);
+    return x;
+  });
 
 async function sisipkanBarang(items, shipmentId, kirimBaris) {
   if (!items.length) return;
+  const opsional = Object.keys(KOLOM_BARANG_OPSIONAL);
   let rows = items.map((it) => itemToRow(it, shipmentId));
+  rows = tanpaKolom(rows, opsional.filter((k) => !rows.some((r) => isianKolom(r[k]))));
   const kirim = kirimBaris || ((r) => supabaseClient.from("shipment_items").insert(r));
   let { error } = await kirim(rows);
   let lebur = false;
   const ditinggal = [];
-  const kolomKode = Object.keys(KOLOM_BARANG_KODE);
-  for (let i = 0; error && i <= kolomKode.length; i++) {
+  for (let i = 0; error && i <= opsional.length; i++) {
     if (!lebur && kolomBelumDikenal(error, KOLOM_BARANG_CEISA)) {
       lebur = true;
-      rows = rows.map((r, j) => {
-        const x = Object.assign({}, r, { nama_barang: itemDisplayName(items[j]) });
-        KOLOM_BARANG_CEISA.forEach((k) => delete x[k]);
-        return x;
-      });
+      rows = tanpaKolom(rows, KOLOM_BARANG_CEISA).map((r, j) => Object.assign(r, { nama_barang: itemDisplayName(items[j]) }));
     } else {
-      const kolom = kolomBelumDikenal(error, kolomKode);
+      const kolom = kolomBelumDikenal(error, opsional);
       if (!kolom || !rows.some((r) => kolom in r)) break;
-      // Diberi tahu hanya kalau ada isian yang benar-benar tidak ikut tersimpan
-      if (rows.some((r) => String(r[kolom] == null ? "" : r[kolom]).trim())) ditinggal.push(KOLOM_BARANG_KODE[kolom]());
-      rows = rows.map((r) => {
-        const x = Object.assign({}, r);
-        delete x[kolom];
-        return x;
-      });
+      ditinggal.push(KOLOM_BARANG_OPSIONAL[kolom]);
+      rows = tanpaKolom(rows, [kolom]);
     }
     ({ error } = await kirim(rows));
   }
   if (!error && (lebur || ditinggal.length) && typeof showToast === "function") {
-    const kode = ditinggal.join(" & ");
+    const kode = ditinggal.map((k) => k.nama).join(" & ");
+    const berkas = [...new Set((lebur ? [BERKAS_BARANG_CEISA] : []).concat(ditinggal.map((k) => k.berkas)))].join(" & ");
     showToast(
       lebur && kode
         ? tt(
-            `Jadwal tersimpan, tetapi database belum mengenal kolom barang CEISA: Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain digabung ke Uraian, ${kode} belum tersimpan. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).`,
-            `Schedule saved, but the database does not know the CEISA item columns yet: Item Code, Brand, Type, Size & Other Specification were merged into the Description, ${kode} was not saved. Run migration-barang-ceisa.sql in Supabase (safe to re-run).`,
+            `Jadwal tersimpan, tetapi database belum mengenal kolom barang CEISA: Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain digabung ke Uraian, ${kode} belum tersimpan. Jalankan ${berkas} di Supabase (aman diulang).`,
+            `Schedule saved, but the database does not know the CEISA item columns yet: Item Code, Brand, Type, Size & Other Specification were merged into the Description, ${kode} was not saved. Run ${berkas} in Supabase (safe to re-run).`,
           )
         : lebur
           ? tt(
-              "Jadwal tersimpan, tetapi kolom Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain belum: database belum mengenal kolomnya, jadi isinya digabung ke Uraian. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).",
-              "Schedule saved, but Item Code, Brand, Type, Size & Other Specification were not: the database does not know the columns yet, so they were merged into the Description. Run migration-barang-ceisa.sql in Supabase (safe to re-run).",
+              `Jadwal tersimpan, tetapi kolom Kode Barang, Merek, Tipe, Ukuran & Spesifikasi Lain belum: database belum mengenal kolomnya, jadi isinya digabung ke Uraian. Jalankan ${berkas} di Supabase (aman diulang).`,
+              `Schedule saved, but Item Code, Brand, Type, Size & Other Specification were not: the database does not know the columns yet, so they were merged into the Description. Run ${berkas} in Supabase (safe to re-run).`,
             )
           : tt(
-              `Jadwal tersimpan, tetapi ${kode} belum: database belum mengenal kolomnya. Jalankan migration-barang-ceisa.sql di Supabase (aman diulang).`,
-              `Schedule saved, but ${kode} was not: the database does not know the column yet. Run migration-barang-ceisa.sql in Supabase (safe to re-run).`,
+              `Jadwal tersimpan, tetapi ${kode} belum: database belum mengenal kolomnya. Jalankan ${berkas} di Supabase (aman diulang).`,
+              `Schedule saved, but ${kode} was not: the database does not know the column yet. Run ${berkas} in Supabase (safe to re-run).`,
             ),
       "warning",
     );
@@ -306,7 +347,8 @@ async function simpanDenganCadangan(kirim, row) {
     /* Diberi tahu HANYA kalau ada isian yang benar-benar tidak ikut
        tersimpan. Kolom yang memang kosong (No. Kendaraan tidak diisi)
        tidak kehilangan apa pun -- peringatan di situ cuma gangguan. */
-    if (row[kolom] != null && String(row[kolom]).trim() !== "") tertinggal.push(KOLOM_OPSIONAL[kolom]);
+    const k = KOLOM_OPSIONAL[kolom];
+    if (k.hilang ? k.hilang(row[kolom]) : isianKolom(row[kolom])) tertinggal.push(k);
     delete row[kolom];
     hasil = await kirim(row);
   }

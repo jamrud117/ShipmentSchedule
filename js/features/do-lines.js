@@ -34,10 +34,10 @@ function renderDoLines() {
       (b, i) => `
       <tr data-dl="${i}">
         <td class="fl-no">${i + 1}</td>
-        <td><input type="text" data-dl-f="nama" value="${escapeAttr(b.nama || "")}" placeholder="${escapeAttr(t("f.nama.barang"))}"></td>
-        <td class="fl-rate"><input type="text" data-dl-f="qty" inputmode="decimal" value="${escapeAttr(b.qty || "")}" placeholder="0"></td>
-        <td class="fl-rate"><input type="text" data-dl-f="satuan" value="${escapeAttr(b.satuan || "")}" placeholder="PCS"></td>
-        <td><input type="text" data-dl-f="ket" value="${escapeAttr(b.ket || "")}"></td>
+        <td class="fl-desc"><input type="text" data-dl-f="nama" value="${escapeAttr(b.nama || "")}" placeholder="${escapeAttr(t("f.nama.barang"))}" aria-label="${escapeAttr(t("f.nama.barang"))}"></td>
+        <td class="fl-rate fl-qty" data-label="${escapeAttr(t("f.qty"))}"><input type="text" data-dl-f="qty" inputmode="decimal" value="${escapeAttr(b.qty || "")}" placeholder="0" aria-label="${escapeAttr(t("f.qty"))}"></td>
+        <td class="fl-rate fl-sat" data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-dl-f="satuan" value="${escapeAttr(b.satuan || "")}" placeholder="PCS" aria-label="${escapeAttr(t("f.satuan"))}"></td>
+        <td class="fl-ket" data-label="${escapeAttr(t("f.keterangan"))}"><input type="text" data-dl-f="ket" value="${escapeAttr(b.ket || "")}" aria-label="${escapeAttr(t("f.keterangan"))}"></td>
         <td class="fl-act">
           <button type="button" class="rm-row" data-dl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}">
             <i class="bi bi-x-lg"></i>

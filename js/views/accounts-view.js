@@ -81,7 +81,7 @@ function renderAccounts() {
           }</span>
         </div>
         <span class="acct-since">${r.created_at ? fmtDate(r.created_at.slice(0, 10)) : ""}</span>
-        <select class="acct-role control-select" data-role-for="${r.id}" ${
+        <select class="acct-role control-select" data-role-for="${r.id}" aria-label="${escapeAttr(tt(`Peran ${r.username || r.email || ""}`, `Role of ${r.username || r.email || ""}`))}" ${
           isSelf ? "disabled" : ""
         } title="${
           isSelf
@@ -95,15 +95,15 @@ function renderAccounts() {
             )
             .join("")}
         </select>
-        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="${escapeAttr(t("a.ubah.nama.username"))}">
+        <button type="button" class="icon-btn" data-edit-acct="${r.id}" title="${escapeAttr(t("a.ubah.nama.username"))}" aria-label="${escapeAttr(t("a.ubah.nama.username"))}">
           <i class="bi bi-pencil"></i>
         </button>
-        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title="${escapeAttr(t("a.setel.ulang.kata.sandi"))}">
+        <button type="button" class="icon-btn" data-pwd-acct="${r.id}" title="${escapeAttr(t("a.setel.ulang.kata.sandi"))}" aria-label="${escapeAttr(t("a.setel.ulang.kata.sandi"))}">
           <i class="bi bi-key"></i>
         </button>
         <button type="button" class="icon-btn danger acct-del" data-del-acct="${r.id}"
           ${isSelf ? "disabled" : ""}
-          title="${isSelf ? t("s.akun.sendiri.tidak.bisa.dihapus") : t("a.hapus.akun.ini")}">
+          title="${isSelf ? t("s.akun.sendiri.tidak.bisa.dihapus") : t("a.hapus.akun.ini")}" aria-label="${isSelf ? t("s.akun.sendiri.tidak.bisa.dihapus") : t("a.hapus.akun.ini")}">
           <i class="bi bi-trash3"></i>
         </button>
       </div>`;
@@ -157,7 +157,7 @@ function urutanPilihanPeran() {
 async function changeAccountRole(id, peranBaru) {
   if (!requireEdit()) return;
   if (authState.user && id === authState.user.id) {
-    showToast(t("m.peran.sendiri.tidak.bisa.diubah.dari.halaman.i"), "danger");
+    showToast(t("m.peran.sendiri.tidak.bisa.diubah.dari.halaman.i"), "danger", { judul: tt("Tidak diizinkan", "Not allowed") });
     renderAccounts();
     return;
   }
@@ -313,7 +313,7 @@ async function deleteAccount(id) {
       renderAccounts();
       showToast(t("x.akun.dihapus", { nama: baris.username || baris.email }), "dark");
     },
-    { confirmText: t("a.ya.hapus.akun") },
+    { title: tt("Hapus Akun?", "Delete Account?"), confirmText: tt("Hapus Akun", "Delete Account"), icon: "bi-person-x" },
   );
 }
 

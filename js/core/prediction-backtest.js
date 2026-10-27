@@ -26,13 +26,12 @@
 
 const UJI_MUNDUR = { generasi: -1, hasil: null };
 
-function tanggalTibaNyata(s) {
-  return (
-    s.ata ||
-    milestoneDateOf(s, "berth") ||
-    milestoneDateOf(s, "manifest") ||
-    (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "")
-  );
+/* Kedatangan nyata: ATA/Sandar, Sandar di kapal yang sama (dibaca dari
+   `daftar`), Manifest + jeda biasanya (kedatanganTercatat) -- atau ETA
+   manual dari forwarder. */
+function tanggalTibaNyata(s, daftar) {
+  const bukti = kedatanganTercatat(s, daftar);
+  return (bukti && bukti.date) || (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "");
 }
 
 function ringkasMeleset(selisih) {
@@ -54,10 +53,12 @@ function ringkasMeleset(selisih) {
    ringkas -- supaya layar bisa menjalankannya sedikit demi sedikit
    (predictionAccuracyBertahap di bawah). */
 function siapkanUjiMundur(list) {
-  const fakta = (list || [])
-    .filter((s) => s && (s.etdUpdate || s.etd))
+  // Riwayat penuh: bukti kapal-yang-sama & sampel per kiriman (riwayatPenuh, prediction-learning.js)
+  const penuh = (list || []).filter(Boolean);
+  const fakta = penuh
+    .filter((s) => s.etdUpdate || s.etd)
     .map((s) => {
-      const tiba = tanggalTibaNyata(s);
+      const tiba = tanggalTibaNyata(s, penuh);
       const pabrik = s.mode !== "export" ? s.factoryDate || "" : "";
       const tahu = [tiba, milestoneDateOf(s, "sppb"), pabrik].filter(Boolean).sort().pop() || "";
       return { s, tiba, pabrik, tahu, etd: s.etdUpdate || s.etd };
@@ -65,6 +66,7 @@ function siapkanUjiMundur(list) {
   return {
     hariIni: todayISO(),
     fakta,
+    penuh,
     i: 0,
     selisih: { eta: { laut: [], udara: [] }, delivery: { laut: [], udara: [] } },
   };
@@ -77,7 +79,9 @@ function siapkanUjiMundur(list) {
 function ujiMundurLangkah(uji, maks) {
   const { fakta, selisih, hariIni } = uji;
   const akhir = Math.min(fakta.length, uji.i + maks);
-  const simpan = { riwayat: PREDICTION_HISTORY_OVERRIDE, asOf: PREDICTION_LEARN_ASOF, today: todayISO };
+  const simpan = { riwayat: PREDICTION_HISTORY_OVERRIDE, asOf: PREDICTION_LEARN_ASOF, today: todayISO, penuh: RIWAYAT_PENUH_UJI };
+  // Sampel per kiriman tetap membaca riwayat penuh (riwayatPenuh, prediction-learning.js)
+  RIWAYAT_PENUH_UJI = uji.penuh;
   try {
     for (; uji.i < akhir; uji.i++) {
       const f = fakta[uji.i];
@@ -105,6 +109,7 @@ function ujiMundurLangkah(uji, maks) {
   } finally {
     todayISO = simpan.today;
     PREDICTION_HISTORY_OVERRIDE = simpan.riwayat;
+    RIWAYAT_PENUH_UJI = simpan.penuh;
     setPredictionAsOf(simpan.asOf);
   }
   return uji.i >= fakta.length;
@@ -118,15 +123,6 @@ function ringkasUjiMundur(uji) {
   };
 }
 
-function predictionBacktest(list) {
-  const uji = siapkanUjiMundur(list);
-  ujiMundurLangkah(uji, Infinity);
-  return ringkasUjiMundur(uji);
-}
-
-function semuaKirimanDimuat() {
-  return typeof data !== "undefined" && data ? (data.import || []).concat(data.export || []) : [];
-}
 
 /* Hasil untuk seluruh data yang dimuat, disimpan sekali per generasi
    data (lihat resetPredictionLearning). BERTAHAP: tiap giliran paling
@@ -141,7 +137,7 @@ function predictionAccuracyBertahap(selesai) {
     return;
   }
   const generasi = GENERASI_BELAJAR;
-  const uji = siapkanUjiMundur(semuaKirimanDimuat());
+  const uji = siapkanUjiMundur(semuaKiriman());
   const giliran = () => {
     if (generasi !== GENERASI_BELAJAR) {
       predictionAccuracyBertahap(selesai);

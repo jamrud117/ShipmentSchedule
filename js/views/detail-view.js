@@ -5,8 +5,11 @@ function fieldPair(label, value, icon) {
   return `<div class="info-item"><div class="info-label">${icon ? `<i class="bi ${icon}"></i> ` : ""}${escapeHtml(label)}</div><div class="info-value">${value || "—"}</div></div>`;
 }
 
-// Ringkasan fasilitas 1 barang (SKB & COO, bisa banyak
-function itemFacilitiesCellHtml(it) {
+// Ringkasan fasilitas 1 barang: PI barang ini (buku Import), lalu SKB & COO (bisa banyak)
+function itemFacilitiesCellHtml(it, mode) {
+  const pi = mode !== "export" && String(it.piNomor || "").trim()
+    ? `<div class="detail-fac-line"><i class="bi bi-file-earmark-check"></i> ${escapeHtml(["PI", it.piNomor.trim(), it.piNoItem ? tt(`No. item ${it.piNoItem}`, `Item no. ${it.piNoItem}`) : ""].filter(Boolean).join(" · "))}</div>`
+    : "";
   const lines = (it.skb || []).map((sk) => {
     const isEcoo = sk.jenis === "E-COO";
     const bits = [skbEntryLabel(sk)];
@@ -15,12 +18,45 @@ function itemFacilitiesCellHtml(it) {
     const icon = isEcoo ? "bi-patch-check-fill" : "bi-shield-check";
     return `<div class="detail-fac-line"><i class="bi ${icon}"></i> ${escapeHtml(bits.join(" · "))}</div>`;
   });
-  return lines.join("") || `<span class="text-muted">—</span>`;
+  return pi + lines.join("") || `<span class="text-muted">—</span>`;
 }
 
-// Cell kolom "Kemasan" di tabel Daftar Barang (detail view, read-only)
-function detailPackageCellHtml(it) {
-  return escapeHtml(dispVal(it.package));
+/* Daftar dokumen (PI, LS, Polis, dokumen lain): satu baris per dokumen,
+   "nomor · tanggal" -- tanggalnya pindah baris utuh, tidak terpotong. */
+function daftarDokumenHtml(daftar, denganKode) {
+  const baris = (daftar || []).map((d) => {
+    const nama = denganKode ? `<span class="text-muted">${escapeHtml(namaDokumenCeisa(d.kode))}</span> ` : "";
+    // Lampiran dokumennya (PI & LS) bisa langsung dibuka
+    return `<div>${nama}${escapeHtml(dispVal(d.nomor))}${d.tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(d.tanggal)}</span>` : ""}${tautanLampiranHtml(d.berkas)}</div>`;
+  });
+  return baris.join("") || "—";
+}
+
+/* PROGRES DOKUMEN, HANYA BACA. Stepper di kartu disembunyikan dari akun
+   yang tidak boleh mengubah (doc-steps.js) -- di panel ini semua akun
+   bisa membaca tahap yang sudah dicatat, statusnya (draft menunggu asli
+   / asli / tidak dipakai) dan membuka lampirannya. */
+function detailProgresDokumenHtml(s) {
+  if (typeof docStepsFor !== "function" || isKurirNilaiRendah(s)) return "";
+  const baris = docStepsFor(s)
+    .map((st) => ({ st, e: docStepEntri(s, st) }))
+    .filter((x) => x.e && !x.e.ikutInduk)
+    .map(({ st, e }) => {
+      const status = e.skipped
+        ? `<span class="text-muted">${escapeHtml(tt("tidak dipakai", "not used"))}</span>`
+        : e.draft
+          ? `<span class="detail-draft"><i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("draft, menunggu asli", "draft, awaiting original"))}</span>`
+          : "";
+      const tgl = e.date && !e.skipped ? `<span class="text-nowrap">${fmtDate(e.date)}</span>` : "";
+      const draftLama = e.tglDraft ? ` <span class="text-muted text-nowrap">(draft ${fmtDate(e.tglDraft)})</span>` : "";
+      const jalur = e.jalur && jalurInfo(e.jalur) ? ` <span class="text-muted">· ${escapeHtml(tt("jalur", "lane"))} ${escapeHtml(jalurInfo(e.jalur).label)}</span>` : "";
+      return `<div class="detail-progres-baris"><b>${escapeHtml(stepText(st.label, s))}</b> ${[tgl + draftLama + jalur, status].filter(Boolean).join(" · ")}${tautanLampiranHtml(e.berkas)}</div>`;
+    });
+  if (!baris.length) return "";
+  const c = docStepCount(s);
+  return `
+    <div class="subsection-title"><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")} <span class="text-muted fw-normal">${c.selesai}/${c.berlaku}</span></div>
+    <div class="detail-progres mb-3">${baris.join("")}</div>`;
 }
 
 // Daftar terminal transit (read-only) untuk detail view
@@ -56,6 +92,7 @@ function buildDetailHtml(s) {
   const mode = s.mode === "export" ? "export" : s.mode === "import" ? "import" : activeMode;
   const lbl = MODE_LABELS[mode];
   const calc = computeCustoms(s);
+  const dok = dokPelengkapJadwal(s);
   /* Status yang BERLAKU, dengan nama per buku (Export: Delivered), sama
      dengan dropdown di kartunya. Dulu yang tampil kolom status mentah
      dengan label tetap "ARRIVED", sehingga kartu & panel ini bisa
@@ -78,24 +115,25 @@ function buildDetailHtml(s) {
   const nomorTanggal = (nomor, tanggal) =>
     escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(tanggal)}</span>` : "");
 
-  let itemRows = (s.items || [])
-    .map(
-      (it) => `
-    <tr>
-      <td>${escapeHtml(itemDisplayName(it))}</td>
-      <td>${escapeHtml(it.hsCode || "—")}</td>
-      <td>${escapeHtml(it.jenisBarang || "—")}</td>
-      <td>${itemFacilitiesCellHtml(it)}</td>
-      <td class="text-center">${fmtNum(it.qty)}</td>
-      <td class="text-center">${escapeHtml(it.satuan || "—")}</td>
-      <td class="text-center">${fmtUSD(it.harga)}</td>
-      <td class="text-center">${fmtNum(it.netto)} Kg</td>
-      <td class="text-center">${fmtNum(it.bruto)} Kg</td>
-      <td class="text-center">${detailPackageCellHtml(it)}</td>
-      ${mode === "export" ? `<td class="text-center">${computeItemCbm(it)}</td>` : ""}
-      <td class="text-center">${fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0))}</td>
-    </tr>`,
-    )
+  /* Kolom Daftar Barang: judulnya dipakai <th> sekaligus label tiap sel
+     (data-label) saat panelnya sempit dan tiap barang jadi kartu. */
+  const kolomBarang = [
+    { judul: tt("Nama Barang", "Item Name"), kelas: "db-nama", isi: (it) => escapeHtml(itemDisplayName(it)) },
+    { judul: "HS Code", isi: (it) => escapeHtml(it.hsCode || "—") },
+    { judul: tt("Jenis Barang", "Goods Type"), isi: (it) => escapeHtml(it.jenisBarang || "—") },
+    { judul: tt("Fasilitas", "Facility"), kelas: "db-fasilitas", isi: (it) => itemFacilitiesCellHtml(it, mode) },
+    { judul: "Qty", isi: (it) => fmtNum(it.qty) },
+    { judul: tt("Satuan", "Unit"), isi: (it) => escapeHtml(it.satuan || "—") },
+    { judul: tt("Harga/Unit", "Unit Price"), isi: (it) => fmtUSD(it.harga) },
+    { judul: tt("Netto", "Net Wt."), isi: (it) => `${fmtNum(it.netto)} Kg` },
+    { judul: tt("Bruto", "Gross Wt."), isi: (it) => `${fmtNum(it.bruto)} Kg` },
+    { judul: tt("Kemasan", "Packaging"), isi: (it) => escapeHtml(dispVal(it.package)) },
+    mode === "export" && { judul: "CBM (m³)", isi: (it) => computeItemCbm(it) },
+    { judul: "Subtotal", kelas: "db-subtotal", isi: (it) => fmtUSD((Number(it.qty) || 0) * (Number(it.harga) || 0)) },
+  ].filter(Boolean);
+  const kelasKolom = (k) => (k.kelas ? ` class="${k.kelas}"` : "");
+  const itemRows = (s.items || [])
+    .map((it) => `<tr>${kolomBarang.map((k) => `<td${kelasKolom(k)} data-label="${escapeAttr(k.judul)}">${k.isi(it)}</td>`).join("")}</tr>`)
     .join("");
 
   let customsHtml = `
@@ -130,10 +168,13 @@ function buildDetailHtml(s) {
         ${fieldPair("PPN", fmtRp(s.ppn))}
         ${fieldPair("PPH", fmtRp(s.pph))}
         ${fieldPair("PDRI", fmtRp(calc.bmPdri))}
-        ${fieldPair(tt("PI (Persetujuan Impor)", "PI (Import Approval)"), nomorTanggal(s.pi, s.piDate))}
-        ${fieldPair(tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), nomorTanggal(s.ls, s.lsDate))}
-        ${fieldPair(tt("Polis Asuransi", "Insurance Policy"), nomorTanggal(s.polisAsuransi, s.polisAsuransiDate))}
+        ${JENIS_DOK_PENGIRIMAN.map((j) => fieldPair(DOK_PENGIRIMAN[j].label, daftarDokumenHtml(dok[j]))).join("")}
       </div>`;
+  }
+  if ((dok.lain || []).length) {
+    customsHtml += `
+      <div class="subsection-title"><i class="bi bi-files"></i> ${tt("Dokumen Lain", "Other Documents")}</div>
+      <div class="info-grid">${fieldPair(tt("Dokumen pelengkap pabean", "Supporting customs documents"), daftarDokumenHtml(dok.lain, true))}</div>`;
   }
 
   return `
@@ -172,20 +213,27 @@ function buildDetailHtml(s) {
       ${fieldPair(tt("Nama Forwarder", "Forwarder Name"), escapeHtml(dispVal(s.forwarder)))}
       ${fieldPair("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic)))}
     </div>
+    ${detailProgresDokumenHtml(s)}
 
     <div class="subsection-title"><i class="bi bi-compass"></i> ${tt("Transportasi &amp; Rute", "Transport &amp; Route")}</div>
     <div class="info-grid">
       ${fieldPair(tt("Moda Transportasi", "Transport Mode"), s.transport === "udara" ? tt("Udara", "Air") : tt("Laut", "Sea"))}
       ${fieldPair(vesselNoun(s.transport) + (isTransitRoute(s) ? tt(" (Leg Terakhir)", " (Last Leg)") : ""), escapeHtml(dispVal(carrierNameFromShipment(s))))}
-      ${fieldPair(tt("No. Kontainer/Seal", "Container/Seal Number"), escapeHtml(dispVal(s.container)))}
+      ${
+        // Peti kemas & jenis muatan hanya kiriman laut
+        s.transport === "udara"
+          ? ""
+          : fieldPair(tt("No. Kontainer/Seal", "Container/Seal Number"), escapeHtml(dispVal(s.container))) +
+            fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))
+      }
       ${fieldPair(tt("No. Kendaraan", "Vehicle No."), escapeHtml(dispVal(s.vehicleNo)))}
-      ${fieldPair(tt("Jenis Muatan", "Load Type"), escapeHtml(s.muatan || "—"))}
       ${fieldPair(tt("Tipe Rute", "Route Type"), isTransitRoute(s) ? tt(`Transit (${routeStopList(s).length} Terminal Singgah)`, `Transit (${routeStopList(s).length} stopover terminal${routeStopList(s).length === 1 ? "" : "s"})`) : "Direct")}
       ${fieldPair(portNoun("origin", s.transport, mode), escapeHtml(dispVal(portCodeLabel(s.origin))))}
       ${fieldPair(portNoun("destination", s.transport, mode), escapeHtml(dispVal(portCodeLabel(s.destination))))}
       ${fieldPair("ETD", tanggalBerlaku(s.etd, s.etdUpdate, s.etdTime))}
       ${fieldPair("ETA", tanggalBerlaku(s.eta, s.etaUpdate, s.etaTime))}
       ${fieldPair(lbl.actual, fmtDate(s.actual))}
+      ${s.mode !== "export" && s.neededDate ? fieldPair(tt("Dibutuhkan di Pabrik", "Needed at Factory"), fmtDate(s.neededDate) + tagKebutuhanHtml(s)) : ""}
     </div>
     ${buildDetailStopsHtml(s)}
     ${predictionDetailHtml(s)}
@@ -205,16 +253,12 @@ function buildDetailHtml(s) {
     })()}
 
     <div class="subsection-title"><i class="bi bi-boxes"></i> ${tt("Daftar Barang", "Item List")}</div>
-    <div class="item-table-wrap mb-2">
+    <div class="detail-barang"><div class="item-table-wrap mb-2">
       <table class="item-table item-table--detail">
-        <thead><tr>
-          <th>${tt("Nama Barang", "Item Name")}</th><th>HS Code</th><th>${tt("Jenis Barang", "Goods Type")}</th><th>${tt("Fasilitas", "Facility")}</th>
-          <th class="text-center">Qty</th><th class="text-center">${tt("Satuan", "Unit")}</th><th class="text-center">${tt("Harga/Unit", "Unit Price")}</th>
-          <th class="text-center">${tt("Netto", "Net Wt.")}</th><th class="text-center">${tt("Bruto", "Gross Wt.")}</th><th class="text-center">${tt("Kemasan", "Packaging")}</th>${mode === "export" ? `<th class="text-center">CBM (m³)</th>` : ""}<th class="text-center">Subtotal</th>
-        </tr></thead>
+        <thead><tr>${kolomBarang.map((k) => `<th${kelasKolom(k)}>${escapeHtml(k.judul)}</th>`).join("")}</tr></thead>
         <tbody>${itemRows}</tbody>
       </table>
-    </div>
+    </div></div>
     <div class="item-table-foot item-table-foot--split mb-3">
       <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
       <div class="foot-totals">

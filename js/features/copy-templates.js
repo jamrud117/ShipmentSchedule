@@ -162,8 +162,8 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.date(s.actual), // 17 ESTIMATE DELIVERY
       formatter.date(s.factoryDate), // 18 IN FACTORY DATE
       formatter.text(s.factoryTime), // 19 IN FACTORY TIME
-      formatter.text(s.muatan), // 20 LCL/FCL
-      formatter.text(s.container), // 21 CONTAINER
+      formatter.text(muatanKiriman(s)), // 20 LCL/FCL (udara: kosong)
+      formatter.text(kontainerKiriman(s)), // 21 CONTAINER (udara: kosong)
       formatter.text(s.vehicleNo), // 22 NO. POL — nomor kendaraan
       formatter.text(s.incoterm), // 23 INCOTERM
       formatter.text(s.notes), // 24 NOTES
@@ -284,7 +284,8 @@ function reportDetailPairs(s, mode) {
      Memakainya berarti kolom tanggalnya selalu kosong. */
   return [
     ["Incoterm", dispVal(s.incoterm)],
-    ["Mode", dispVal(s.muatan)],
+    // Laut: FCL / LCL; udara tidak bermuatan kontainer -> AIR
+    ["Mode", s.transport === "udara" ? "AIR" : dispVal(muatanKiriman(s))],
     ["ETD", fmtTanggalReport(effectiveEtd(s))],
     ["ETA", fmtTanggalReport(effectiveEta(s))],
     ["Estimated Arrival at Factory", fmtTanggalReport(s.actual)],
@@ -538,7 +539,7 @@ async function copyShipment(templateId, id) {
 
   const text = tpl.getText(s);
   if (!text) {
-    showToast(tpl.emptyMsg || t("s.tidak.ada.data.untuk.disalin"), "dark");
+    showToast(tpl.emptyMsg || t("s.tidak.ada.data.untuk.disalin"), "info");
     return;
   }
 

@@ -191,12 +191,12 @@ function renderSuratBarang() {
   body.innerHTML = suratBarang.map((b, i) => `
     <tr data-sb="${i}">
       <td class="sb-no">${i + 1}</td>
-      <td>
-        <input type="text" class="form-control form-control-sm" data-sb-f="nama" value="${escapeAttr(b.nama)}" placeholder="${escapeAttr(tt("Nama barang", "Item name"))}">
-        <input type="text" class="form-control form-control-sm mt-1" data-sb-f="hs" value="${escapeAttr(b.hs)}" placeholder="HS Code">
+      <td class="sb-barang">
+        <input type="text" class="form-control form-control-sm" data-sb-f="nama" value="${escapeAttr(b.nama)}" placeholder="${escapeAttr(tt("Nama barang", "Item name"))}" aria-label="${escapeAttr(tt(`Nama barang ${i + 1}`, `Item name ${i + 1}`))}">
+        <input type="text" class="form-control form-control-sm mt-1" data-sb-f="hs" value="${escapeAttr(b.hs)}" placeholder="HS Code" aria-label="${escapeAttr(`HS Code ${i + 1}`)}">
       </td>
-      <td><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
-      <td class="sb-foto">
+      <td class="sb-fungsi" data-label="${escapeAttr(tt("Fungsi & Kegunaan", "Function & Use"))}"><textarea class="form-control form-control-sm" rows="3" data-sb-f="fungsi" aria-label="${escapeAttr(tt(`Fungsi & kegunaan barang ${i + 1}`, `Function & use of item ${i + 1}`))}" placeholder="${escapeAttr(tt("Jelaskan fungsi & kegunaan barang…", "Describe the function & use of the goods…"))}">${escapeHtml(b.fungsi)}</textarea></td>
+      <td class="sb-foto" data-label="${escapeAttr(tt("Foto", "Photo"))}">
         ${b.foto ? `<img src="${escapeAttr(b.foto)}" alt="">` : ""}
         <label class="btn-quiet sb-pilih-foto">
           <i class="bi bi-image"></i> ${escapeHtml(b.foto ? tt("Ganti", "Change") : tt("Foto", "Photo"))}
@@ -204,7 +204,7 @@ function renderSuratBarang() {
         </label>
         ${b.foto ? `<button type="button" class="btn btn-sm btn-link text-danger" data-sb-hapus-foto="${i}">${escapeHtml(tt("Hapus", "Remove"))}</button>` : ""}
       </td>
-      <td class="sb-aksi"><button type="button" class="rm-row" data-sb-del="${i}" title="${escapeAttr(tt("Hapus baris", "Delete row"))}"><i class="bi bi-x-lg"></i></button></td>
+      <td class="sb-aksi"><button type="button" class="rm-row" data-sb-del="${i}" title="${escapeAttr(tt("Hapus baris", "Delete row"))}" aria-label="${escapeAttr(tt("Hapus baris", "Delete row"))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
     </tr>`).join("");
 }
 
@@ -456,7 +456,7 @@ function cetakSuratBc(rowId) {
   }
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
     return;
   }
   w.document.write(`<!doctype html>

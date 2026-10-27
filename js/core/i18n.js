@@ -330,7 +330,6 @@ const I18N = {
     "ph.instansi.perusahaan.tujuan": "Instansi / perusahaan tujuan",
     "ph.jumlah.jenis.kemasan": "Jumlah & jenis kemasan",
     "ph.keperluan.penomoran": "Keperluan penomoran…",
-    "ph.nomor.persetujuan.impor": "mis. 04.PI-02.26.0131",
     "ph.kosongkan.bila.diisi.forwarder": "Kosongkan bila diisi forwarder",
     "ph.kota.negara.pelabuhan.muat": "Kota, negara pelabuhan muat",
     "ph.kota.negara.tujuan.akhir": "Kota, negara tujuan akhir",
@@ -360,7 +359,6 @@ const I18N = {
     "a.ubah.data.akun": "Ubah data akun",
     "a.ubah.nama.username": "Ubah nama & username",
     "a.ubah.peran.akun.ini": "Ubah peran akun ini",
-    "a.ya.hapus.akun": "Ya, hapus akun",
     "f.barang": "Barang",
 
     // -- Teks pada kartu & layar masuk
@@ -475,7 +473,7 @@ const I18N = {
     "w.nilai.tidak.ada.di.dropdown": "{label} \"{nilai}\" dari berkas tidak ada di pilihan dropdown — pilih manual.",
     "w.peti.kemas.kosong": "Peti kemas (field 43) kosong di dokumen ini — Kontainer & Jenis Muatan (FCL/LCL) tidak terisi, isi manual kalau memang ada.",
     "w.sebagian.barang.tanpa.hs.code": "Sebagian barang tidak ketemu HS Code-nya (dicoba dari kolom HS Code, teks \"Origin HS Code: ...\" yang menyatu di deskripsi, dan catatan terpisah) — isi manual kalau kosong.",
-    "w.tanggal.bl.awb.tidak.terbaca": "Tanggal Master/House B/L-AWB tidak terbaca, jadi ETD (dan ETA & Actual Delivery yang diturunkan darinya) tidak terisi — isi manual.",
+    "w.tanggal.bl.awb.tidak.terbaca": "Tanggal Master/House B/L-AWB tidak terbaca, jadi ETD tidak diubah — isi tanggal B/L-AWB di form, ETD mengikutinya.",
     "w.tidak.ada.baris.lembar.lanjutan": "Tidak ada baris barang yang terbaca dari lembar lanjutan \"DATA BARANG EKSPOR\" — isi manual di tab Daftar Barang.",
     "w.tidak.ada.baris.pos.tarif": "Tidak ada baris \"Pos Tarif :\" / \"Uraian :\" yang ditemukan di PDF — daftar barang tidak terisi otomatis.",
     "w.tidak.ada.baris.sheet.cipl": "Tidak ada baris barang yang terbaca dari sheet CI/PL (dicari lewat header kolom \"Description\"/\"Item\"/\"Goods Descriptions\").",
@@ -542,7 +540,6 @@ const I18N = {
     "y.ada.catatan.perlu.dicek": " Ada catatan yang perlu dicek di atas form.",
     "y.bukan.format.dikenali": "\"{nama}\" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil pindaian/gambar).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" tidak terbaca sebagai dokumen BC (sheet HEADER/BARANG) maupun CIPL mana pun yang dikenali.",
-    "y.eta.diisi.hitungan.mesin": "ETA diisi {eta} (hitungan mesin prediksi dari ETD + lama transit rute ini). Dokumen PIB sendiri mencantumkan Perkiraan Tanggal Tiba {pibEta} di field 11 — isi manual kalau yang dipakai angka dokumen; ETA otomatis berpindah ke Mode Manual begitu diketik.",
     "y.fasilitas.diterapkan.semua.barang": "Fasilitas SKB/COO dari PDF diterapkan ke SEMUA barang secara bawaan (lembar Pemenuhan Persyaratan tidak memisahkan per barang) — periksa tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya mendapatkannya (COO biasanya hanya berlaku untuk barang tertentu, bukan semuanya).",
     "y.harga.satuan.tidak.dihitung": "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",
     "y.hasil.baca.pdf.best.effort": "Hasil baca PDF ini sebaik yang bisa dilakukan (posisi teks di PDF tidak selalu berurutan) — mohon periksa ulang semua isian sebelum menyimpan, terutama Vessel, Freight/Insurance/NDPBM, dan berat per barang.",
@@ -557,7 +554,9 @@ const I18N = {
     "y.bruto.per.barang.tidak.ada": "Bruto per barang tidak ada di berkas ini — total Bruto dari HEADER ({n} Kg) ditaruh di baris barang pertama, sesuaikan manual per barang kalau perlu.",
     "y.fasilitas.diisi.per.barang": "Fasilitas (Masterlist, SKB PPN/PPH, COO) diisi per barang sesuai lembar BARANGDOKUMEN, lengkap dengan nomor dokumennya — periksa tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
     "y.fasilitas.umum.semua.barang": "Dokumen fasilitas yang tidak ditautkan ke barang tertentu diterapkan ke semua barang: {daftar}. Hapus dari barang yang tidak mendapatkannya.",
-    "y.dokumen.lain.per.barang": "Dokumen lain per barang tidak dimasukkan ke Fasilitas: {daftar}.",
+    "y.dokumen.lain.dicatat": "Dokumen lain dicatat di Dokumen Pelengkap Pabean: {daftar}.",
+    "y.eta.dari.perkiraan.tiba": "ETA dari perkiraan tanggal tiba dokumen: {tgl} (mode ETA Manual).",
+    "y.eta.revisi.dari.perkiraan.tiba": "ETA revisi dari perkiraan tanggal tiba dokumen: {tgl}.",
     "y.pungutan.dihitung.otomatis": "Sebagian atau seluruh Bea Masuk/PPN/PPH tidak ada di lembar BARANGTARIF — dihitung otomatis dari Nilai Pabean (CIF+Freight+Asuransi)×NDPBM dengan tarif 5%/11%/2,5%, periksa manual kalau tarif sebenarnya berbeda.",
     "y.pungutan.tidak.cukup.dihitung": "Bea Masuk/PPN/PPH tidak ditemukan di lembar BARANGTARIF, dan CIF/Freight/Asuransi/NDPBM di HEADER juga tidak cukup untuk dihitung otomatis — isi manual di tab Kepabeanan.",
     "y.respon.2003.tidak.ditemukan": "Baris respons dengan KODE RESPON=2003 (SPPB terbit) tidak ditemukan di lembar RESPON — Tanggal SPPB memakai HEADER.TANGGAL DAFTAR sebagai cadangan, periksa manual.",
@@ -895,7 +894,6 @@ const I18N = {
     "ph.instansi.perusahaan.tujuan": "Destination institution / company",
     "ph.jumlah.jenis.kemasan": "Package count & type",
     "ph.keperluan.penomoran": "Purpose of the numbering…",
-    "ph.nomor.persetujuan.impor": "e.g. 04.PI-02.26.0131",
     "ph.kosongkan.bila.diisi.forwarder": "Leave empty if the forwarder fills it in",
     "ph.kota.negara.pelabuhan.muat": "City, country of the loading port",
     "ph.kota.negara.tujuan.akhir": "City, country of the final destination",
@@ -925,7 +923,6 @@ const I18N = {
     "a.ubah.data.akun": "Edit account details",
     "a.ubah.nama.username": "Edit name & username",
     "a.ubah.peran.akun.ini": "Change this account's role",
-    "a.ya.hapus.akun": "Yes, delete the account",
     "f.barang": "Items",
 
     // -- Teks pada kartu & layar masuk
@@ -1041,7 +1038,7 @@ const I18N = {
     "w.nilai.tidak.ada.di.dropdown": "{label} \"{nilai}\" from the file is not in the dropdown options — please choose it manually.",
     "w.peti.kemas.kosong": "The container field (43) is empty in this document — Container & Load Type (FCL/LCL) were left blank; fill them in manually if they do apply.",
     "w.sebagian.barang.tanpa.hs.code": "Some items had no HS Code found (tried the HS Code column, the \"Origin HS Code: ...\" text embedded in the description, and separate notes) — please fill in any blanks manually.",
-    "w.tanggal.bl.awb.tidak.terbaca": "The Master/House B/L-AWB date could not be read, so the ETD (and the ETA & Actual Delivery derived from it) were left blank — please fill them in manually.",
+    "w.tanggal.bl.awb.tidak.terbaca": "The Master/House B/L-AWB date could not be read, so the ETD was not changed — enter the B/L-AWB date in the form and the ETD follows it.",
     "w.tidak.ada.baris.lembar.lanjutan": "No item rows could be read from the \"DATA BARANG EKSPOR\" continuation sheet — please fill them in on the Item List tab.",
     "w.tidak.ada.baris.pos.tarif": "No \"Pos Tarif :\" / \"Uraian :\" rows were found in the PDF — the item list was not filled in automatically.",
     "w.tidak.ada.baris.sheet.cipl": "No item rows could be read from the CI/PL sheet (searched via the \"Description\"/\"Item\"/\"Goods Descriptions\" column headers).",
@@ -1108,7 +1105,6 @@ const I18N = {
     "y.ada.catatan.perlu.dicek": " There are notes to review above the form.",
     "y.bukan.format.dikenali": "\"{nama}\" does not appear to be a recognised PIB BC 2.0, PEB BC 3.0, Packing List, or Commercial Invoice, or its text could not be read (e.g. a scan/image).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" could not be read as a BC document (HEADER/BARANG sheets) or as any recognised CIPL.",
-    "y.eta.diisi.hitungan.mesin": "The ETA was set to {eta} (calculated by the prediction engine from the ETD + this route's transit time). The PIB document itself states an estimated arrival of {pibEta} in field 11 — enter it manually if you want the document's figure; the ETA switches to Manual Mode as soon as you type.",
     "y.fasilitas.diterapkan.semua.barang": "The SKB/COO facilities from the PDF are applied to ALL items by default (the requirements sheet does not separate them per item) — check each item via the Facilities button and remove any that should not have it (COO usually applies only to certain items, not all of them).",
     "y.harga.satuan.tidak.dihitung": "The unit price (USD) is not calculated automatically for PDFs with more than one item (the per-item customs value is not extracted) — fill it in per item on the Item List tab.",
     "y.hasil.baca.pdf.best.effort": "This PDF was read on a best-effort basis (text positions in a PDF are not always in order) — please double-check every field before saving, especially the Vessel, Freight/Insurance/NDPBM, and the per-item weights.",
@@ -1123,7 +1119,9 @@ const I18N = {
     "y.bruto.per.barang.tidak.ada": "This file has no per-item gross weight — the HEADER total ({n} Kg) was placed on the first item row; adjust it per item if needed.",
     "y.fasilitas.diisi.per.barang": "Facilities (Masterlist, SKB PPN/PPH, COO) were filled in per item from the BARANGDOKUMEN sheet, with their document numbers — check each item via the Facility button if anything needs adjusting.",
     "y.fasilitas.umum.semua.barang": "Facility documents not linked to a specific item were applied to all items: {daftar}. Remove them from items that do not get them.",
-    "y.dokumen.lain.per.barang": "Other per-item documents were not added as facilities: {daftar}.",
+    "y.dokumen.lain.dicatat": "Other documents were recorded under Supporting Customs Documents: {daftar}.",
+    "y.eta.dari.perkiraan.tiba": "ETA taken from the document's estimated arrival date: {tgl} (ETA mode Manual).",
+    "y.eta.revisi.dari.perkiraan.tiba": "Revised ETA taken from the document's estimated arrival date: {tgl}.",
     "y.pungutan.dihitung.otomatis": "Some or all of the Import Duty/VAT/Income Tax (BM/PPN/PPH) values are missing from the BARANGTARIF sheet — they were calculated automatically from the Customs Value (CIF+Freight+Insurance)×NDPBM at 5%/11%/2.5%; check manually if the actual rates differ.",
     "y.pungutan.tidak.cukup.dihitung": "Import Duty/VAT/Income Tax (BM/PPN/PPH) were not found in the BARANGTARIF sheet, and the CIF/Freight/Insurance/NDPBM in HEADER are not sufficient to calculate them automatically — please fill them in on the Customs tab.",
     "y.respon.2003.tidak.ditemukan": "No response row with KODE RESPON=2003 (SPPB issued) was found in the RESPON sheet — the SPPB date falls back to HEADER.TANGGAL DAFTAR; please check it manually.",
@@ -1287,6 +1285,9 @@ function setLang(kode) {
   const layarForm = document.getElementById("viewForm");
   if (layarForm && !layarForm.classList.contains("d-none") && typeof terapkanLabelForm === "function") {
     terapkanLabelForm();
+    // Isian form yang dirakit JS -- tabel barang & kartu Dokumen Pelengkap Pabean
+    renderItemTable();
+    renderDokPelengkapForm();
   }
   /* Label yang bergantung MODA (Nama Vessel/Voyager, No. Flight/Voyage,
      Pelabuhan/Terminal) ditulis dari JS, bukan lewat data-i18n --
@@ -1327,6 +1328,13 @@ function setLang(kode) {
     // Kotak "Aturan Doc No": jumlah vendor & keterangan tombolnya dirakit JS
     if (typeof fundDocNoGambar === "function") fundDocNoGambar();
   }
+  /* Tabel isian No. Dokumen yang dirakit JS (placeholder, label kartu di
+     layar sempit, judul kelompok & kaki totalnya) -- juga saat halamannya
+     tersembunyi: membukanya nanti tidak menggambarnya ulang. */
+  if (typeof renderFundDokumen === "function") renderFundDokumen();
+  if (typeof renderFundLines === "function") renderFundLines();
+  if (typeof renderDoLines === "function") renderDoLines();
+  if (typeof renderSuratBarang === "function") renderSuratBarang();
   /* Tombol rentang tanggal riwayat Pengajuan Dana ("Pilih Rentang
      Tanggal", nama bulan) -- instansnya hidup terus, jadi ditulis ulang
      walau halamannya sedang tidak tampil. */

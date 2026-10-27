@@ -96,12 +96,12 @@ function delayStripHtml(s) {
       </div>
       <div class="delay-strip-fields">
         <div class="date-field">
-          <label>${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
-          <input type="date" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
+          <label for="${idTglKartu(s, "etdUpdate")}">${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
+          <input type="date" id="${idTglKartu(s, "etdUpdate")}" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
         </div>
         <div class="date-field">
-          <label>${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
-          <input type="date" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
+          <label for="${idTglKartu(s, "etaUpdate")}">${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
+          <input type="date" id="${idTglKartu(s, "etaUpdate")}" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
         </div>
       </div>
     </div>`;
@@ -129,41 +129,92 @@ function departingTodayHtml(s) {
     </div>`;
 }
 
+// Tag PI kartu: "PI", atau "PI × 2" untuk lebih dari satu dokumen PI
+/* DIBUTUHKAN DI PABRIK (prediction-mundur.js): Estimated Delivery
+   dibandingkan tanggal yang dibutuhkan produksi -- telat (merah), mepet
+   (cadangan <= 2 hari, kuning), aman (netral). */
+function tagKebutuhanHtml(s) {
+  const k = typeof statusKebutuhan === "function" ? statusKebutuhan(s) : null;
+  if (!k || k.fakta) return "";
+  const tgl = fmtDate(k.butuh);
+  const judul = escapeAttr(
+    k.sampai
+      ? tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`, `Needed at the factory ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`)
+      : tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery belum bisa dihitung`, `Needed at the factory ${tgl} · Estimated Delivery not available yet`),
+  );
+  if (k.kind === "telat")
+    return `<span class="tag tag-butuh tag-butuh--telat" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Telat ${-k.selisih} hari dari kebutuhan ${tgl}`, `${-k.selisih} day${k.selisih === -1 ? "" : "s"} past the need date ${tgl}`)}</span>`;
+  if (k.kind === "mepet")
+    return `<span class="tag tag-butuh tag-butuh--mepet" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Mepet: butuh ${tgl}, cadangan ${k.selisih} hari`, `Tight: needed ${tgl}, ${k.selisih}-day margin`)}</span>`;
+  return `<span class="tag tag-butuh" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Butuh ${tgl}`, `Needed ${tgl}`)}${k.kind === "aman" ? tt(` · cadangan ${k.selisih} hari`, ` · ${k.selisih}-day margin`) : ""}</span>`;
+}
+
+/* LARTAS (core/lartas.js): PI / LS yang wajib menurut barangnya tapi
+   belum ada nomornya di jadwal. */
+function tagLartasHtml(s) {
+  const kurang = typeof lartasKurang === "function" ? lartasKurang(s) : [];
+  if (!kurang.length) return "";
+  const perlu = kebutuhanLartas(s);
+  const sebab = kurang
+    .map((k) => {
+      const hs = [...new Set(perlu[k].filter((a) => a.sebab === "hs").map((a) => a.hs))];
+      const bekas = perlu[k].some((a) => a.sebab === "bukanBaru");
+      return `${k}: ${[hs.length ? "HS " + hs.join(", ") : "", bekas ? tt("barang bukan baru", "used goods") : ""].filter(Boolean).join(" · ")}`;
+    })
+    .join("; ");
+  return `<span class="tag tag-lartas" title="${escapeAttr(tt(`Lartas — wajib ${sebab}`, `Restricted — required ${sebab}`))}"><i class="bi bi-shield-exclamation"></i> ${escapeHtml(
+    tt(`${kurang.join(" & ")} belum ada`, `${kurang.join(" & ")} missing`),
+  )}</span>`;
+}
+
+function tagPiHtml(s) {
+  const n = (dokPelengkapJadwal(s).pi || []).filter((d) => hasMeaningfulValue(d.nomor)).length;
+  return n ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI${n > 1 ? ` × ${n}` : ""}</span>` : "";
+}
+
 function buildTags(s, totals) {
   const lbl = ML();
   const stopCount = routeStopList(s).length;
+  const muatan = muatanKiriman(s);
   return [
     s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
     totals.totalUSD
       ? `<span class="tag tag-usd">${fmtUSD(totals.totalUSD)}</span>`
       : "",
-    s.muatan
-      ? `<span class="tag tag-muatan">${escapeHtml(s.muatan)}</span>`
-      : "",
+    muatan ? `<span class="tag tag-muatan">${escapeHtml(muatan)}</span>` : "",
     isTransitRoute(s)
       ? `<span class="tag tag-transit"><i class="bi bi-signpost-split"></i> Transit · ${stopCount} Stop</span>`
       : "",
-    lbl.showDuty && hasMeaningfulValue(s.pi)
-      ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI</span>`
-      : "",
+    lbl.showDuty ? tagPiHtml(s) : "",
     skbTagsHtml(s),
   ]
     .filter(Boolean)
     .join("");
 }
 
+/* Tombol ikon kartu: keterangannya di title (tooltip, js/ui/tooltip.js)
+   DAN aria-label (nama yang dibacakan) -- ikon saja tidak cukup. */
 function actionButtons(s) {
+  const lihat = tt("Lihat Detail", "View Details");
+  const ubah = tt("Ubah Jadwal", "Edit Schedule");
+  const salin = t("v.salin.ke.excel");
+  const hapus = tt("Hapus Jadwal", "Delete Schedule");
   return `
     <div class="actions-col">
-      <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${tt("Lihat Detail", "View Details")}"><i class="bi bi-eye"></i></button>
-      <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+      <button type="button" class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${lihat}" aria-label="${lihat}"><i class="bi bi-eye" aria-hidden="true"></i></button>
+      <button type="button" class="icon-btn primary" data-action="edit" data-id="${s.id}" title="${ubah}" aria-label="${ubah}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
       <div class="dropdown copy-template-dropdown">
-        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(t("v.salin.ke.excel"))}"><i class="bi bi-clipboard"></i></button>
+        <button type="button" class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(salin)}" aria-label="${escapeAttr(salin)}"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
         <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
       </div>
-      <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${tt("Hapus", "Delete")}"><i class="bi bi-trash3"></i></button>
+      <button type="button" class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${hapus}" aria-label="${hapus}"><i class="bi bi-trash3" aria-hidden="true"></i></button>
     </div>`;
 }
+
+/* Id kotak tanggal di kartu -- supaya <label>-nya benar-benar terhubung
+   (diklik membuka isiannya, dibacakan pembaca layar). Id jadwal unik,
+   dan tiap jadwal hanya punya satu kartu di halaman. */
+const idTglKartu = (s, kolom) => "tgl-" + String(s.id).replace(/[^\w-]/g, "") + "-" + String(kolom).replace(/[^\w-]/g, "");
 
 // Dropdown status di kartu: pilihannya mengikuti section aktif (requirement D)
 function statusSelectHtml(s) {
@@ -172,9 +223,22 @@ function statusSelectHtml(s) {
      database belum sempat diperbarui */
   const st = effectiveStatus(s);
 
-  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}">
+  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}" aria-label="${escapeAttr(tt("Status pengiriman", "Shipment status"))}">
       ${statusOptionsHtml(activeMode, st)}
     </select>`;
+}
+
+// Satu rincian kartu: ikon + label di atas nilainya (nilaiHtml sudah di-escape)
+function infoItemHtml(ikon, label, nilaiHtml) {
+  return `<div class="info-item"><div class="info-label"><i class="bi ${ikon}"></i> ${label}</div><div class="info-value">${nilaiHtml}</div></div>`;
+}
+
+/* Sel peti kemas: laut = No. Kontainer/Seal + jenis muatannya; udara
+   tidak berkontainer, selnya diisi Master AWB (House AWB di sel lain). */
+function infoKontainerHtml(s) {
+  if (s.transport === "udara") return infoItemHtml("bi-file-earmark-text", "Master AWB", escapeHtml(dispVal(s.masterBL)));
+  const muatan = muatanKiriman(s);
+  return infoItemHtml("bi-upc-scan", t("f.kontainer"), escapeHtml(dispVal(kontainerKiriman(s))) + (muatan ? " · " + escapeHtml(muatan) : ""));
 }
 
 /* BADAN KARTU — rincian di kiri, nama barang di kanan.
@@ -196,7 +260,7 @@ function cardBodySplitHtml(s, totals) {
            salin & CIPL (carrierNameFromShipment). */
         escapeHtml(dispVal(carrierNameFromShipment(s)))
       }</div></div>
-      <div class="info-item"><div class="info-label"><i class="bi bi-upc-scan"></i> ${t("f.kontainer")}</div><div class="info-value">${escapeHtml(dispVal(s.container))}${s.muatan ? " · " + escapeHtml(s.muatan) : ""}</div></div>
+      ${infoKontainerHtml(s)}
       <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
       ${
@@ -249,22 +313,22 @@ function renderExpandedCard(s) {
 
 ${cardBodySplitHtml(s, totals)}
 
-    <div class="tag-row">${delayBadgeHtml(s)}${buildTags(s, totals)}</div>
+    <div class="tag-row">${delayBadgeHtml(s)}${tagKebutuhanHtml(s)}${tagLartasHtml(s)}${buildTags(s, totals)}</div>
 
     <div class="lane">
       ${buildLaneHtml(s)}
     </div>
 
     <div class="date-strip">
-      <div class="date-field"><label>ETD</label><input type="date" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
-      <div class="date-field"><label>ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
+      <div class="date-field"><label for="${idTglKartu(s, "etd")}">ETD</label><input type="date" id="${idTglKartu(s, "etd")}" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
+      <div class="date-field"><label for="${idTglKartu(s, "eta")}">ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "eta")}" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
       ${
         /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
            sini mengunci tanggalnya ke mode Manual. Kalau terpikir
            menguncinya supaya tidak ada dua sumber kebenaran: laporan
            butuh tanggal yang bisa dipatok, dan mode Manual itulah
            jawabannya. */
-        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label>${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
+        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label for="${idTglKartu(s, "actual")}">${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "actual")}" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
       }
     </div>
 
@@ -301,8 +365,8 @@ function collapsedDatesHtml(s) {
     : "";
   const kotak = (label, nilai) => `
       <div class="date-field date-field--locked">
-        <label>${label}</label>
-        <input type="date" value="${nilai || ""}" readonly
+        <label for="${idTglKartu(s, "kunci-" + label)}">${label}</label>
+        <input type="date" id="${idTglKartu(s, "kunci-" + label)}" value="${nilai || ""}" readonly
                title="${tt("Hanya baca. Tekan tombol pensil untuk mengubahnya.", "Read-only. Press the pencil button to change it.")}${catatan}">
       </div>`;
 

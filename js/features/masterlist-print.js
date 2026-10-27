@@ -457,7 +457,7 @@ function cetakMasterlist() {
   }
   const w = window.open("", "_blank", "width=1200,height=900");
   if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
     return;
   }
   const judul = `Stock Opname ${data.dok.name || "Masterlist"} ${fmtDate(data.tanggal)}`;

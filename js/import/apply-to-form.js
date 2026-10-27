@@ -254,17 +254,19 @@ function preserveNamesForCeisa(newItems, oldItems, src) {
   return { items: salin(pasangan), kept };
 }
 
-/* KODE KONDISI BARANG & KODE NEGARA ASAL YANG TIDAK DIBAWA BERKASNYA.
+/* KODE KONDISI BARANG, KODE NEGARA ASAL & PI BARANG YANG TIDAK DIBAWA
+   BERKASNYA.
 
-   Draft CEISA memuat keduanya; PIB PDF tidak selalu tercetak terbaca,
-   dan CIPL tidak pernah memuat kondisi barang. Barang baru yang
+   Draft CEISA memuat kedua kode (dan PI barang lewat BARANGDOKUMEN); PIB
+   PDF tidak selalu tercetak terbaca, dan CIPL tidak pernah memuat
+   kondisi barang maupun PI. Barang baru yang
    kodenya kosong / tidak dibawa (undefined) mengambil isian barang lama
    pasangannya -- nama, lalu HS Code (pasangkanBarangLama) -- supaya
    pilihan yang sudah dibuat tidak hilang hanya karena berkas yang
    diimpor belakangan tidak memuatnya. Yang dibawa berkas tetap dipakai.
    Yang tetap tidak dibawa memakai bawaan buku (newItem); yang dibawa
    kosong tetap kosong (draft memang tidak mengisinya). */
-const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal"];
+const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal", "piNomor"];
 function lengkapiKodeBarang(newItems, oldItems) {
   const isi = (it, k) => String((it && it[k]) || "").trim();
   const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => KOLOM_KODE_BARANG.some((k) => isi(o.it, k)));
@@ -278,6 +280,8 @@ function lengkapiKodeBarang(newItems, oldItems) {
       if (!isi(out, k) && o && isi(o, k)) out[k] = o[k];
       else if (out[k] == null) out[k] = bawaan[k];
     });
+    // No. item di PI tidak pernah dibawa berkas: ikut barang lamanya selama PI-nya sama
+    out.piNoItem = o && isi(o, "piNoItem") && isi(o, "piNomor") === isi(out, "piNomor") ? o.piNoItem : out.piNoItem || "";
     return out;
   });
 }
@@ -361,6 +365,50 @@ function resolvePartyForActiveMode(f) {
   return f.party || "";
 }
 
+/* ETD & ETA DARI DOKUMEN PABEAN (draft CEISA, PIB, PEB) -- bukan CIPL.
+     - ETD: tanggal Master / House B/L-AWB -- dari berkas maupun yang sudah
+       ada di form (etdIkutTanggalBl, form-router.js). Tanpa tanggal
+       B/L-AWB: tanggal berangkat / perkiraan tanggal ekspor dokumennya,
+       hanya mengisi ETD yang masih kosong.
+     - ETA: perkiraan tanggal tiba dokumen (draft CEISA: TANGGAL TIBA di
+       HEADER; PIB: field 11) -- menimpa ETA, dan mode ETA jadi Manual:
+       tanggal dokumen, bukan hitungan mesin. Tanpa itu ETA dihitung dari
+       ETD (mode Otomatis), atau -- ETA manual yang masih kosong -- diisi
+       hitungan mesin.
+     - Status Delay: yang diubah tanggal revisinya (Update ETD / Update
+       ETA); ETD & ETA rencana tetap, karena selisih keduanya itulah
+       lamanya delay.
+   Kotaknya diubah lewat event "change", jadi aturan form yang menempel
+   (revisi gugur, status Export, panel prediksi) ikut berjalan; kalimat
+   penyesuaiannya jadi catatan impor (tampungKabarForm). Hasil: jumlah
+   isian yang diubah. */
+function terapkanTanggalDokumen(f, src, notes) {
+  if (isCiplSource(src)) return 0;
+  let terisi = 0;
+  const ubah = (el) => {
+    terisi++;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  notes.push(
+    ...tampungKabarForm(() => {
+      if ($("#fMasterBLDate").value || $("#fHouseBLDate").value) {
+        if (etdIkutTanggalBl()) terisi++;
+      } else if (setImportField("fEtd", f.etd, src)) ubah($("#fEtd"));
+      if (f.eta) {
+        const delay = $("#fStatus").value === "delayed" && !!$("#fEta").value;
+        const id = delay ? "fEtaUpdate" : "fEta";
+        if ($("#" + id).value !== f.eta && setImportField(id, f.eta, src, { force: true })) {
+          kabarkanForm(t(delay ? "y.eta.revisi.dari.perkiraan.tiba" : "y.eta.dari.perkiraan.tiba", { tgl: fmtDate(f.eta) }));
+          if (!delay && typeof setFormEtaMode === "function") setFormEtaMode("manual", { recalc: false });
+          ubah($("#" + id));
+        }
+      }
+      if (!$("#fEta").value && typeof hitungUlangEtaForm === "function") hitungUlangEtaForm({ paksa: true });
+    }),
+  );
+  return terisi;
+}
+
 function applyImportedBcData(parsed) {
   const f = parsed.fields || {};
   const notes = (parsed.notes || []).slice();
@@ -379,18 +427,11 @@ function applyImportedBcData(parsed) {
      tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
      lembar dokumen PIB/PEB. */
   put("fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : ""));
-  /* PI (dokumen 959), LS (958) & Polis Asuransi (530) beserta tanggalnya
-     -- isian Bea & Pajak Impor, yang hanya ada di buku Import: buku
-     Export tidak diisi diam-diam lewat kotak yang tersembunyi. Nomor PI
-     & LS ikut kolom PI templat salin. */
-  if (ML().showDuty) {
-    put("fPI", f.pi);
-    put("fPIDate", f.piDate);
-    put("fLS", f.ls);
-    put("fLSDate", f.lsDate);
-    put("fPolisAsuransi", f.polisAsuransi);
-    put("fPolisAsuransiDate", f.polisAsuransiDate);
-  }
+  /* Dokumen pelengkap: PI (959), LS (958) & Polis Asuransi (530) --
+     buku Import saja, buku Export tidak diisi diam-diam -- dan dokumen
+     lain ber-kode CEISA, digabung ke kartu Dokumen Pelengkap Pabean per
+     nomornya (gabungDokPelengkapImpor, dok-pelengkap.js). */
+  if (f.dokPelengkap) filled += gabungDokPelengkapImpor(f.dokPelengkap);
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
   /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
@@ -414,9 +455,6 @@ function applyImportedBcData(parsed) {
   put("fContainer", f.container);
   put("fOrigin", f.origin);
   put("fDestination", f.destination);
-  put("fEtd", f.etd);
-  put("fEta", f.eta);
-  put("fActual", f.actual);
   if (f.package) {
     // Dari file, Total Package datang sbg satu teks ("2 PACKAGE")
     const before = $("#fPackage").value.trim();
@@ -494,6 +532,8 @@ function applyImportedBcData(parsed) {
     if (setImportSelect("fIncoterm", f.incoterm, src, notes, "Kode incoterm"))
       filled++;
   }
+  // Sesudah moda, kapal & pelabuhan terisi: ETA otomatis dihitung dari isian yang sudah lengkap
+  filled += terapkanTanggalDokumen(f, src, notes);
 
   /* ---- daftar barang ---- */
   if (parsed.items && parsed.items.length) {
@@ -561,9 +601,21 @@ function applyImportedBcData(parsed) {
       t("y.berkas.mode.berbeda", { dokumen: parsed.modeHint === "import" ? "IMPORT" : "EXPORT", form: activeMode === "import" ? "IMPORT" : "EXPORT" }),
     );
   }
+  /* Dokumen pabean resmi (draft CEISA, PIB/PEB) ikut mencentang Progres
+     Dokumen: PIB/PEB draft atau terdaftar, SPPB, Manifest, jalur
+     (doc-steps.js) -- ditampung sampai Simpan. */
+  if (typeof catatProgresImporForm === "function") {
+    const progres = catatProgresImporForm(parsed);
+    if (progres) notes.push(progres);
+  }
 
   applyTransportLabels();
   renderItemTable();
+  // Isian yang diisi tanpa event (kapal, pelabuhan, moda) ikut dihitung panel prediksi & penanda form
+  if (typeof hitungUlangEtaForm === "function") hitungUlangEtaForm();
+  if (typeof syncPredictionForm === "function") syncPredictionForm();
+  applyDelayFieldVisibility();
+  syncFormValidity();
 
   const items = parsed.items || [];
   const fasilitas = hitungFasilitas(items.flatMap((it) => it.skb || []));

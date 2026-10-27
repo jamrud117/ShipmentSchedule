@@ -673,7 +673,7 @@ function selAwbHtml(b, daftar) {
   const kini = fundKunciAwb(b.awb);
   const ada = daftar.some((a) => a.kunci === kini);
   const pertama = barisDiskon(b) ? tt("Ikut pos di atas", "Same as line above") : tt("Dibagi rata", "Split evenly");
-  return `<td class="fl-awb"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
+  return `<td class="fl-awb" data-label="BL/AWB"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
       <option value="">${escapeHtml(pertama)}</option>
       ${daftar.map((a) => `<option value="${escapeAttr(a.kunci)}"${a.kunci === kini ? " selected" : ""}>${escapeHtml(a.teks)}</option>`).join("")}
       ${kini && !ada ? `<option value="${escapeAttr(kini)}" selected>⚠ ${escapeHtml(kini)} — ${escapeHtml(tt("tidak ada di isian BL/AWB", "not in the BL/AWB field"))}</option>` : ""}
@@ -684,31 +684,35 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
   const kolomAwb = daftarAwb && daftarAwb.length > 1 ? selAwbHtml(b, daftarAwb) : "";
   const tombolHapus = `
         <td class="fl-act">
-          <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}">
-            <i class="bi bi-x-lg"></i>
+          <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}" aria-label="${escapeAttr(t("f.hapus.baris"))}">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
           </button>
         </td>`;
-  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0">`;
+  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0" aria-label="${escapeAttr(t("f.nilai.rp"))}">`;
+  /* data-label: judul kolomnya, tampil di atas isian saat tabel ini jadi
+     kartu di layar sempit (docnum.css, @container tabel-isian). */
+  const selTarif = `
+        <td class="fl-rate" data-label="PPN"><select data-fl-f="ppnRate" aria-label="${escapeAttr(tt("Tarif PPN", "VAT rate"))}">${pilihanTarifHtml(b)}</select></td>
+        <td class="fl-amt fl-ppn" data-label="PPN (Rp)">${teksPpnSel(ppn)}</td>${tombolHapus}`;
+  const labelNilai = escapeAttr(t("f.nilai.rp"));
   if (!barisDiskon(b)) {
     return `
       <tr data-fl="${i}">
         <td class="fl-no">${i + 1}</td>
-        <td><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
-        <td class="fl-amt">${kotakNilai}</td>
-        <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
+        <td class="fl-desc"><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}" aria-label="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
+        <td class="fl-amt" data-label="${labelNilai}">${kotakNilai}</td>${selTarif}
       </tr>`;
   }
   return `
       <tr data-fl="${i}" class="fl-row-diskon">
         <td class="fl-no">${i + 1}</td>
-        <td>
+        <td class="fl-desc">
           <div class="fl-desc-diskon">
             <span class="fl-tag-diskon">${escapeHtml(tt("Diskon", "Discount"))}</span>
-            <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
+            <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}" aria-label="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
           </div>
         </td>${kolomAwb}
-        <td class="fl-amt">
+        <td class="fl-amt" data-label="${labelNilai}">
           <div class="fl-disc-in">
             ${kotakNilai}
             <select data-fl-f="discType" aria-label="${escapeAttr(tt("Jenis diskon", "Discount type"))}">
@@ -721,9 +725,7 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
               value="${escapeAttr(teksNominalDiskon(v))}"
               aria-label="${escapeAttr(tt("Nominal diskon", "Discount amount"))}">
           </div>
-        </td>
-        <td class="fl-rate"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn">${teksPpnSel(ppn)}</td>${tombolHapus}
+        </td>${selTarif}
       </tr>`;
 }
 
@@ -794,10 +796,11 @@ function renderFundDokumen() {
     <div class="fd-baris" data-fd="${escapeAttr(d.id)}">
       <span class="fd-jenis fd-jenis--${d.jenis}">${escapeHtml(fundDokNama(d.jenis))}</span>
       <input type="text" class="form-control form-control-sm" data-fd-f="nomor" value="${escapeAttr(d.nomor)}"
-        placeholder="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}">
+        placeholder="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}"
+        aria-label="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}">
       <input type="date" class="form-control form-control-sm" data-fd-f="tanggal" value="${escapeAttr(d.tanggal)}"
-        title="${escapeAttr(tt("Tanggal dokumen", "Document date"))}">
-      <button type="button" class="rm-row" data-fd-del="${escapeAttr(d.id)}" title="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}"><i class="bi bi-x-lg"></i></button>
+        title="${escapeAttr(tt("Tanggal dokumen", "Document date"))}" aria-label="${escapeAttr(tt(`Tanggal ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} date`))}">
+      <button type="button" class="rm-row" data-fd-del="${escapeAttr(d.id)}" title="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}" aria-label="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
     </div>`).join("");
 }
 
@@ -1070,7 +1073,7 @@ if (fundDokListEl) {
       tt(`${nama} beserta ${isi.length} baris rinciannya akan dihapus dari pengajuan ini. Dokumen lain tidak berubah.`,
         `${nama} and its ${isi.length} cost line(s) will be removed from this request. Other documents stay as they are.`),
       hapus,
-      { title: tt(`Hapus ${fundDokNama(dok.jenis)}?`, `Remove ${fundDokNama(dok.jenis)}?`), confirmText: tt("Ya, Hapus", "Yes, Remove"), icon: "bi-trash3" });
+      { title: tt(`Hapus ${fundDokNama(dok.jenis)}?`, `Remove ${fundDokNama(dok.jenis)}?`), confirmText: tt(`Hapus ${fundDokNama(dok.jenis)}`, `Remove ${fundDokNama(dok.jenis)}`), icon: "bi-trash3" });
   });
 }
 // Nomor invoice utama diketik -> judul kelompok utama ikut

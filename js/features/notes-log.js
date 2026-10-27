@@ -92,7 +92,7 @@ function addDraftNote() {
   const el = $("#fNoteDraft");
   const text = el.value.trim();
   if (!text) {
-    showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
+    showToast(t("m.tulis.dulu.isi.catatannya"), "warning");
     fokuskan(el);
     return;
   }
@@ -218,7 +218,7 @@ async function addNoteFromCard(id) {
   if (!input) return;
   const text = input.value.trim();
   if (!text) {
-    showToast(t("m.tulis.dulu.isi.catatannya"), "dark");
+    showToast(t("m.tulis.dulu.isi.catatannya"), "warning");
     fokuskan(input);
     return;
   }

@@ -72,15 +72,14 @@ function applyTransportLabels() {
   $("#lblMasterBLDate").textContent = tt(`Tanggal ${dokMaster}`, `${dokMaster} Date`);
   $("#lblHouseBLDate").textContent = tt(`Tanggal ${dokHouse}`, `${dokHouse} Date`);
   /* FCL/LCL & kontainer itu konsep laut — muatan udara tidak dikapalkan
-     dalam kontainer. Udara -> Jenis Muatan dikunci ke LCL, kolom
-     Kontainer disembunyikan & dikosongkan supaya tidak ada data
-     kontainer nyasar ikut tersimpan pada jadwal pesawat. */
-  const elMuatan = $("#fMuatan");
-  $("#fContainerWrap").classList.toggle("d-none", air);
-  elMuatan.disabled = air;
+     dalam kontainer. Udara -> Jenis Muatan & Kontainer disembunyikan dan
+     dikosongkan, supaya tidak ada isian laut nyasar ikut tersimpan pada
+     jadwal pesawat (kartu & detail juga tidak menampilkannya). */
+  $("#fAngkutCard").classList.toggle("is-udara", air);
+  ["#fMuatanWrap", "#fContainerWrap"].forEach((sel) => $(sel).classList.toggle("d-none", air));
   if (air) {
     $("#fContainer").value = "";
-    elMuatan.value = "LCL";
+    $("#fMuatan").value = "";
   }
   // Vessel/Voyage di atas hanya "leg terakhir" kalau rutenya transit DAN sudah ada minimal 1 kartu
   const showFinalLegHint =
@@ -267,6 +266,8 @@ function recalcCustoms(opsi) {
 
   // Nilai barang bisa saja baru melewati / turun di bawah USD 1.500
   aturAjuConsigneeNote();
+  // HS Code, kondisi & negara asal barang menentukan lartas & petunjuk COO (dok-pelengkap.js)
+  if (typeof segarkanLartasForm === "function") segarkanLartasForm();
 }
 
 /* NO. AJU KIRIMAN KURIR BERNILAI RENDAH = "CONSIGNEE NOTE".

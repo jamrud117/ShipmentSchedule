@@ -165,6 +165,9 @@ function predictionContext(src) {
         ? resolvePortCountry(s.destination)
         : "",
     shipmentType: predictionShipmentType(s),
+    /* Jalur PIB (MITA/Hijau/Merah) dari progres dokumen -- menentukan
+       lama clearance (configuredOpsDays, prediction-schedule.js). */
+    jalur: typeof jalurOf === "function" ? jalurOf(s) : "",
   };
 }
 /* ==================================================================

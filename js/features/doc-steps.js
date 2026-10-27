@@ -23,7 +23,22 @@
    Alasan tidak diotomatiskan: keberadaan sebuah kolom di aplikasi
    tidak sama dengan berkasnya sudah di tangan. No. Aju bisa sudah
    diketik sementara PIB-nya belum terbit. Menandainya otomatis akan
-   membuat papan ini berbohong pada hari yang paling genting. */
+   membuat papan ini berbohong pada hari yang paling genting.
+   Satu-satunya pengecualian: berkas pabean resmi yang DIIMPOR ke form
+   (draft CEISA / PIB / PEB) -- lihat PROGRES DARI DOKUMEN PABEAN di
+   bawah.
+
+   DRAFT DULU, ASLI MENYUSUL. CI/PL, B/L-AWB, COO, PIB / PEB (dan
+   Fumigasi di Export) biasanya datang sebagai DRAFT untuk disetujui,
+   aslinya menyusul. Tahap itu dicentang begitu draftnya disetujui --
+   `bisaDraft` -- dengan status "Draft" (entri `draft: true`): dihitung
+   terkumpul, tapi digambar lain dan diingatkan "menunggu asli" di
+   Ringkasan sampai statusnya diubah ke Asli. Tanggal draft disimpan di
+   `tglDraft` begitu aslinya dicatat. PIB berstatus draft BELUM diajukan,
+   jadi bukan milestone prediksi (milestoneDateOf).
+
+   LAMPIRAN. Tiap tahap berkas bisa membawa berkasnya (`berkas`, lihat
+   js/data/lampiran.js) -- draft maupun asli, ditandai versinya. */
 
 /* ------------------------------------------------------------------
    DAFTAR TAHAP — berbeda antara Import & Export
@@ -49,9 +64,9 @@ const DOC_STEP_ECOO = {
 };
 
 const DOC_STEPS_IMPORT = [
-  { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List" },
-  { key: "bl", label: blLabel, full: blFull },
-  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
+  { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
+  { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
+  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true, bisaDraft: true },
   DOC_STEP_ECOO,
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
   /* KEDATANGAN — satu-satunya tahap yang bukan berkas.
@@ -72,24 +87,25 @@ const DOC_STEPS_IMPORT = [
      halaman dimuat. Teks biasa -- termasuk hasil t() -- akan terkunci
      di bahasa saat itu, dan ganti bahasa tidak lagi mengubahnya.
      stepText() memanggil fungsinya saat ditampilkan. */
-  { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang") },
+  { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean },
   { key: "billing", label: "Billing", full: () => tt("Billing / bukti bayar", "Billing / proof of payment") },
   { key: "sppb", label: "SPPB", full: () => tt("Surat Persetujuan Pengeluaran Barang", "Goods Release Approval (SPPB)") },
 ];
 
 const DOC_STEPS_EXPORT = [
-  { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List" },
-  { key: "peb", label: "PEB", full: () => t("c.pemberitahuan.ekspor.barang") },
+  { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
+  { key: "peb", label: "PEB", full: () => t("c.pemberitahuan.ekspor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean },
   { key: "npe", label: "NPE", full: () => tt("Nota Pelayanan Ekspor", "Export Service Note (NPE)") },
-  { key: "bl", label: blLabel, full: blFull },
+  { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
   { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
-  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true },
+  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true, bisaDraft: true },
   DOC_STEP_ECOO,
   {
     key: "fumigasi",
     label: () => tt("Fumigasi", "Fumigation"),
     full: () => tt("Sertifikat Fumigasi & ISPM-15", "Fumigation & ISPM-15 Certificate"),
     optional: true,
+    bisaDraft: true,
   },
   { key: "tally", label: "Tally", full: () => tt("Tally sheet (hitung fisik saat muat)", "Tally sheet (physical count at loading)") },
   /* BERANGKAT — seperti Berths/ATA di buku Import, ini tahap yang
@@ -142,6 +158,15 @@ function blFull(s) {
   return s && s.transport === "udara"
     ? "Air Waybill"
     : "Bill of Lading";
+}
+
+/* Status PIB / PEB: "asli"-nya dokumen yang sudah DIDAFTARKAN (bernomor
+   pendaftaran), draft-nya yang masih diperiksa sebelum diajukan. */
+function labelDraftPabean() {
+  return tt("Draft — sudah dicek, belum didaftarkan", "Draft — checked, not yet lodged");
+}
+function labelAsliPabean() {
+  return tt("Terdaftar — sudah bernomor pendaftaran", "Lodged — registration number issued");
 }
 
 /* Daftar tahap milik SEBUAH pengiriman — dibaca dari mode pengiriman
@@ -216,6 +241,18 @@ function docNextIndex(s) {
   return docStepsFor(s).findIndex((st) => !docStepEntri(s, st));
 }
 
+/* Tahap berstatus DRAFT -- dihitung terkumpul, tapi aslinya masih
+   ditunggu. [{ st, entri }] menurut urutan tampilan. */
+function docStepsDraft(s) {
+  return docStepsFor(s)
+    .map((st) => ({ st, entri: docStepEntri(s, st) }))
+    .filter((x) => x.entri && !x.entri.skipped && x.entri.draft);
+}
+// Label tahap yang masih draft ("B/L", "COO") -- Ringkasan & antrean tindakan
+function draftDocs(s) {
+  return docStepsDraft(s).map((x) => stepText(x.st.label, s));
+}
+
 /* Tahap yang dilewati tidak dihitung sebagai "terkumpul", dan tidak
    ikut menambah penyebut — berkasnya memang tidak ada dalam pengiriman
    ini. Jadi 3/6, bukan 3/7 atau 4/7. */
@@ -253,10 +290,20 @@ function docStepJudul(s, st, entri, kini) {
     const by = entri.by || "";
     if (entri.date) {
       const tgl = fmtDate(entri.date);
-      const oleh = by ? tt(` · dicatat oleh ${by}`, ` · recorded by ${by}`) : "";
+      const jalur = entri.jalur ? jalurInfo(entri.jalur) : null;
+      const nLampiran = rapikanBerkas(entri.berkas).length;
+      const oleh =
+        (jalur ? tt(` · jalur ${jalur.label}`, ` · ${jalur.label} lane`) : "") +
+        (entri.sumber === "ceisa" ? tt(" · dari impor dokumen pabean", " · from the customs document import") : "") +
+        (nLampiran ? tt(` · ${nLampiran} lampiran`, ` · ${nLampiran} attachment${nLampiran === 1 ? "" : "s"}`) : "") +
+        (by ? tt(` · dicatat oleh ${by}`, ` · recorded by ${by}`) : "");
+      if (entri.draft) {
+        return tt(`${nama} — draft diterima ${tgl} · menunggu asli${oleh}`, `${nama} — draft received ${tgl} · awaiting the original${oleh}`);
+      }
+      const draft = entri.tglDraft ? tt(` (draft ${fmtDate(entri.tglDraft)})`, ` (draft ${fmtDate(entri.tglDraft)})`) : "";
       return st.peristiwa
         ? `${nama} — ${tgl}${oleh}`
-        : tt(`${nama} — diterima ${tgl}${oleh}`, `${nama} — received ${tgl}${oleh}`);
+        : tt(`${nama} — diterima ${tgl}${draft}${oleh}`, `${nama} — received ${tgl}${draft}${oleh}`);
     }
     const belum = st.peristiwa
       ? tt("tanggalnya belum dicatat", "date not recorded")
@@ -273,8 +320,10 @@ function docStepJudul(s, st, entri, kini) {
      ("Bill of Lading" vs "Air Waybill"). Ditempel apa adanya ke
      template, fungsinya diubah jadi string dan tooltip menampilkan
      kode sumber JavaScript. */
-  if (kini) return t("x.klik.kalau.berkasnya.ada", { x: nama, opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" });
-  return tt(`${nama} — menunggu tahap sebelumnya`, `${nama} — waiting for the previous step`);
+  // COO buku Import: skema FTA negara asal barangnya ikut disebut (lartas.js)
+  const fta = st.key === "coo" ? petunjukFtaCoo(s) : "";
+  if (kini) return t("x.klik.kalau.berkasnya.ada", { x: nama, opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" }) + (fta ? `. ${fta}` : "");
+  return tt(`${nama} — menunggu tahap sebelumnya`, `${nama} — waiting for the previous step`) + (fta ? ` · ${fta}` : "");
 }
 
 /* ------------------------------------------------------------------
@@ -350,25 +399,32 @@ function docStepHtml(s) {
 
   const berikut = docNextIndex(s);
 
+  let jumlahDraft = 0;
   const langkah = docStepsFor(s).map((st, i) => {
     const entri = docStepEntri(s, st);
     const dilewati = !!(entri && entri.skipped);
     const sudah = !!entri && !dilewati;
+    // Draft disetujui, aslinya ditunggu: terkumpul, tapi jam pasir -- bukan centang
+    const draft = sudah && !!entri.draft;
+    if (draft) jumlahDraft++;
     const kini = i === berikut;
     const judul = docStepJudul(s, st, entri, kini);
+    const nLampiran = sudah ? rapikanBerkas(entri.berkas).length : 0;
 
     const isi = dilewati
       ? "–"
-      : sudah
-        ? '<i class="bi bi-check-lg"></i>'
-        : i + 1;
+      : draft
+        ? '<i class="bi bi-hourglass-split"></i>'
+        : sudah
+          ? '<i class="bi bi-check-lg"></i>'
+          : i + 1;
 
     return `
       <button type="button"
-        class="docstep${sudah ? " is-done" : ""}${dilewati ? " is-skipped" : ""}${kini ? " is-next" : ""}"
+        class="docstep${sudah ? " is-done" : ""}${draft ? " is-draft" : ""}${dilewati ? " is-skipped" : ""}${kini ? " is-next" : ""}"
         data-action="docStep" data-id="${s.id}" data-step="${st.key}"
         title="${escapeAttr(judul)}">
-        <span class="docstep-dot">${isi}</span>
+        <span class="docstep-dot">${isi}${nLampiran ? `<span class="docstep-lampir" aria-hidden="true"><i class="bi bi-paperclip"></i>${nLampiran}</span>` : ""}</span>
         <span class="docstep-label">${escapeHtml(stepText(st.label, s))}</span>
       </button>`;
   }).join('<span class="docstep-line"></span>');
@@ -389,24 +445,34 @@ function docStepHtml(s) {
   <div class="docsteps">
     <div class="docsteps-head">
       <span><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
-      <span class="docsteps-count">${docStepCount(s).selesai} / ${docStepCount(s).berlaku}</span>
+      <span class="docsteps-hitung"><span class="docsteps-count">${docStepCount(s).selesai} / ${docStepCount(s).berlaku}</span>${
+        jumlahDraft ? `<span class="docsteps-draft" title="${escapeAttr(tt("Draft sudah disetujui, aslinya masih ditunggu", "Draft approved, the original is still awaited"))}"><i class="bi bi-hourglass-split"></i> ${jumlahDraft} draft</span>` : ""
+      }</span>
     </div>
     <div class="docsteps-track">${langkah}</div>
   </div>`;
 }
 
 /* ------------------------------------------------------------------
-   KONFIRMASI
+   KOTAK TAHAP DOKUMEN
 
-   Menekan tahap yang belum terisi menanyakan TANGGAL DITERIMA-nya
-   (bawaan hari ini) lalu menandainya selesai. Menekan tahap yang sudah
-   terisi membatalkannya -- HANYA tahap itu (lihat di bawah).
+   Menekan tahap mana pun membuka SATU kotak yang sama:
+     - status (tahap yang mengenal draft / boleh dilewati):
+         Draft (disetujui, menunggu asli) / Asli / Tidak dipakai;
+     - tanggal: tanggal DITERIMA berkasnya (draft: tanggal draftnya;
+       Manifest/PIB/Billing/SPPB: tanggal dokumen yang dipakai prediksi;
+       Berths/ATA & Sailing/ATD: tanggal kejadiannya);
+     - jalur PIB (PIB terdaftar, Billing, SPPB);
+     - lampiran berkas (tahap berkas, bukan kejadian).
+   Tahap yang sudah terisi dibuka dengan isiannya, plus tombol "Batalkan
+   tahap" -- HANYA tahap itu yang dibatalkan (lihat di bawah).
 ------------------------------------------------------------------ */
 
 /* Tanggal PIB / PEB bawaan = tanggal di nomor ajunya
    ("000020POL85820261016024172" -> 16-10-2026, tanggalDariAju di
-   helpers.js); tetap bisa diubah di kotaknya. Tahap lain, nomor aju
-   tidak lengkap, atau tanggal aju yang belum tiba -> "" (hari ini). */
+   helpers.js); tetap bisa diubah di kotaknya. Draftnya pun disusun pada
+   hari ajunya dibuat. Tahap lain, nomor aju tidak lengkap, atau tanggal
+   aju yang belum tiba -> "" (hari ini). */
 function docTanggalDariAju(st, s) {
   if (st.key !== "pib" && st.key !== "peb") return "";
   const tgl = tanggalDariAju(s && s.noAju);
@@ -416,28 +482,89 @@ const docTanggalBawaan = (st, s) => docTanggalDariAju(st, s) || todayISO();
 const docHintDariAju = (st, s) =>
   docTanggalDariAju(st, s) ? tt("Terisi dari tanggal di nomor aju — ubah kalau berbeda.", "Filled from the date in the aju number — change it if it differs.") : "";
 
-/* Isian tanggal diterima: bawaan hari ini (PIB / PEB: tanggal nomor
-   ajunya), tidak boleh kosong, tidak boleh sesudah hari ini (berkas
-   yang belum datang belum diterima). */
-function docIsianTanggal(st, s) {
-  const hint = docHintDariAju(st, s);
-  return Object.assign(
-    {
-      key: "tanggal",
-      label: st.peristiwa
-        ? tt(`Tanggal ${stepText(st.label, s)}`, `${stepText(st.label, s)} date`)
-        : tt("Tanggal diterima", "Date received"),
-      type: "date",
-      value: docTanggalBawaan(st, s),
-      max: todayISO(),
-    },
-    hint ? { hint } : {},
-  );
+/* JALUR PIB — ditanyakan di konfirmasi PIB (terdaftar), Billing, dan SPPB.
+
+   Jalur (SPPJ) keluar sesaat setelah PIB diajukan; kalau PIB sudah
+   dicentang sebelum jalurnya diketahui, Billing atau SPPB jadi
+   kesempatan berikutnya. Mesin prediksi memakainya untuk lama
+   clearance (PREDICTION_CONFIG.customsLanes) dan belajar per jalur. */
+function docIsianJalur(s) {
+  return {
+    key: "jalur",
+    label: tt("Jalur PIB", "PIB lane"),
+    type: "select",
+    value: jalurOf(s),
+    options: [
+      { value: "", label: tt("Belum diketahui", "Not known yet") },
+      ...(PREDICTION_CONFIG.customsLanes || []).map((l) => ({ value: l.key, label: l.label })),
+    ],
+    hint: tt("Dipakai memperkirakan lama clearance sampai SPPB.", "Used to estimate how long clearance takes until SPPB."),
+  };
 }
+
+/* Progres baru: tahap `stepKey` dicatat (`entri`), dengan jalur yang
+   dipilih. Jalur yang diisi ikut disamakan di tahap PIB/Billing/SPPB
+   lain yang sudah dicatat -- koreksi di SPPB tidak boleh kalah oleh
+   jalur lama di PIB. "Belum diketahui" tidak menghapus apa pun. PIB yang
+   masih draft belum berjalur, jadi tidak ikut disamakan. */
+function docProgresDenganJalur(progres, stepKey, jalur, entri) {
+  const baru = { ...progres, [stepKey]: jalur ? { ...entri, jalur } : entri };
+  if (jalur) {
+    TAHAP_PENCATAT_JALUR.forEach((k) => {
+      if (k !== stepKey && baru[k] && !baru[k].skipped && !baru[k].draft) baru[k] = { ...baru[k], jalur };
+    });
+  }
+  return baru;
+}
+
 function docPeriksaTanggal(tanggal) {
   if (!tanggal) return tt("Tanggal wajib diisi.", "The date is required.");
   if (tanggal > todayISO()) return tt("Tanggal tidak boleh sesudah hari ini.", "The date cannot be later than today.");
   return "";
+}
+
+// Keadaan entri tersimpan: "" (belum), "draft", "ada" (asli / diterima), "lewati"
+function statusEntriTahap(entri) {
+  if (!entri) return "";
+  if (entri.skipped) return "lewati";
+  return entri.draft ? "draft" : "ada";
+}
+
+/* Pilihan status sebuah tahap. Kosong = tahap tanpa pilihan (hanya
+   tanggal): Manifest, Billing, SPPB, NPE, Tally, kejadian. */
+function opsiStatusTahap(st) {
+  const opsi = [];
+  if (st.bisaDraft) {
+    opsi.push({ value: "draft", label: st.labelDraft ? st.labelDraft() : tt("Draft — disetujui, menunggu asli", "Draft — approved, awaiting the original") });
+    opsi.push({ value: "ada", label: st.labelAsli ? st.labelAsli() : tt("Asli / final", "Original / final") });
+  } else if (st.optional) {
+    opsi.push({ value: "ada", label: tt("Sudah diterima", "Received") });
+  }
+  if (st.optional) opsi.push({ value: "lewati", label: tt("Tidak dipakai — lewati tahap ini", "Not used — skip this step") });
+  return opsi;
+}
+
+// Folder lampiran satu tahap di bucket: <id jadwal>/<tahap>
+const folderLampiranTahap = (s, st) => `${s.id}/${st.key}`;
+
+// Kalimat keadaan tahap yang sudah dicatat -- keterangan kotak tahapnya
+function ringkasanEntriTahap(s, st, entri) {
+  if (!entri) return "";
+  if (entri.skipped) return tt("Ditandai tidak dipakai untuk pengiriman ini.", "Marked as not used for this shipment.");
+  const tgl = entri.date ? fmtDate(entri.date) : "";
+  const oleh = entri.by ? tt(` · dicatat oleh ${entri.by}`, ` · recorded by ${entri.by}`) : "";
+  if (entri.draft) {
+    const asli = (opsiStatusTahap(st).find((o) => o.value === "ada") || {}).label || tt("Asli / final", "Original / final");
+    return tt(
+      `Draft diterima ${tgl}${oleh}. Begitu yang asli datang, ubah statusnya ke "${asli}".`,
+      `Draft received ${tgl}${oleh}. Once the original arrives, change its status to "${asli}".`,
+    );
+  }
+  if (st.peristiwa) return `${stepText(st.full, s)} — ${tgl}${oleh}.`;
+  const draft = entri.tglDraft ? ` (draft ${fmtDate(entri.tglDraft)})` : "";
+  return tgl
+    ? tt(`Diterima ${tgl}${draft}${oleh}.`, `Received ${tgl}${draft}${oleh}.`)
+    : tt(`Sudah dikonfirmasi${oleh}.`, `Already confirmed${oleh}.`);
 }
 
 async function toggleDocStep(id, stepKey) {
@@ -447,7 +574,6 @@ async function toggleDocStep(id, stepKey) {
 
   const st = docStepsFor(s).find((x) => x.key === stepKey);
   if (!st) return;
-  const progres = { ...docProgressOf(s) };
   const label = stepText(st.label, s);
 
   /* Tahap yang ikut induknya tidak dipakai (E-COO saat COO ditandai
@@ -466,39 +592,23 @@ async function toggleDocStep(id, stepKey) {
     );
     return;
   }
+  bukaTahapDokumen(s, st);
+}
 
-  if (progres[stepKey]) {
-    /* HANYA tahap ini yang dibatalkan, bukan tahap-tahap sesudahnya.
-
-       Menghapus yang sesudahnya baru masuk akal kalau pengisiannya
-       dipaksa berurutan — dan di sini tidak: PIB bisa saja dibetulkan
-       sementara SPPB memang sudah benar-benar di tangan. Membuangnya
-       berarti membuang catatan yang sah. */
-    showConfirm(tt(`Batalkan konfirmasi ${label}?`, `Cancel the ${label} confirmation?`), () => {
-      const tanpa = { ...progres };
-      delete tanpa[stepKey];
-      simpanDocStep(s, tanpa);
-    }, {
-      title: t("c.batalkan.tahap.dokumen"),
-      confirmText: tt("Ya, Batalkan", "Yes, cancel"),
-      tone: "primary",
-      icon: "bi-arrow-counterclockwise",
-    });
-    return;
-  }
-
-  const catat = (tambahan) =>
-    simpanDocStep(s, {
-      ...progres,
-      [stepKey]: { at: new Date().toISOString(), by: penggunaSekarang(), ...tambahan },
-    });
+function bukaTahapDokumen(s, st) {
+  const progres = { ...docProgressOf(s) };
+  const lama = progres[st.key] || null;
+  const statusLama = statusEntriTahap(lama);
+  const label = stepText(st.label, s);
+  const nama = stepText(st.full, s);
 
   /* ------------------------------------------------------------------
      TAHAP YANG MENGGERAKKAN PREDIKSI
 
-     Manifest, PIB, dan SPPB bukan sekadar centang: tanggalnya dipakai
-     mesin prediksi sebagai titik mulai hitungan berikutnya. Karena itu
-     yang ditanyakan tanggal DOKUMEN, bukan sekadar "ya, sudah ada".
+     Manifest, PIB, Billing, dan SPPB bukan sekadar centang: tanggalnya
+     dipakai mesin prediksi sebagai titik mulai hitungan berikutnya.
+     Karena itu yang ditanyakan tanggal DOKUMEN, bukan sekadar "ya,
+     sudah ada" -- dan boleh dikosongkan (= hari ini).
 
      Tanggal konfirmasi tidak bisa menggantikannya. SPPB terbit Jumat
      sore lalu dicentang Senin pagi akan menggeser seluruh perkiraan
@@ -506,89 +616,307 @@ async function toggleDocStep(id, stepKey) {
 
      Daftar tahapnya dibaca dari konfigurasi, bukan ditulis di sini.
   ------------------------------------------------------------------ */
-  const milestone = predictionMilestoneForStep(stepKey, s);
-  if (milestone) {
-    showPrompt({
-      title: t("x.konfirmasi.tahap", { x: label }),
-      desc: t("x.isi.tanggal.dokumen", { x: stepText(st.full, s) }),
-      icon: "bi-calendar-check",
-      okText: tt("Simpan", "Save"),
-      fields: [
-        {
-          key: "tanggal",
-          label: tt(`Tanggal ${label}`, `${label} date`),
-          type: "date",
-          value: docTanggalBawaan(st, s),
-          hint: docHintDariAju(st, s) || t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket"),
-        },
-      ],
-      onSubmit: (v) => {
-        catat({ date: v.tanggal || todayISO() });
-        return true;
-      },
+  const milestone = predictionMilestoneForStep(st.key, s);
+  const tanyaJalur = !!milestone && TAHAP_PENCATAT_JALUR.indexOf(st.key) >= 0;
+  const opsiStatus = opsiStatusTahap(st);
+  /* Tahap yang mengenal draft dibuka sebagai Draft: begitulah berkasnya
+     biasa datang lebih dulu. Keadaan tersimpan yang tidak dikenal tahap
+     ini (mis. draft di tahap tanpa draft) dibaca sebagai Asli. */
+  const statusSah = (v) => v === "ada" || (v === "draft" && !!st.bisaDraft) || (v === "lewati" && !!st.optional);
+  const statusAwal = statusSah(statusLama) ? statusLama : !lama && st.bisaDraft ? "draft" : "ada";
+  let status = statusAwal;
+  // Milestone yang sudah terdaftar: tanggal dokumennya boleh kosong (= hari ini) & tanpa batas
+  const tanggalMilestone = (stt) => !!milestone && stt === "ada";
+  const tanggalUntuk = (stt) => (lama && statusLama === stt && lama.date ? lama.date : docTanggalBawaan(st, s));
+  const labelTanggal = (stt) =>
+    stt === "draft"
+      ? tt("Tanggal draft diterima", "Draft received date")
+      : milestone || st.peristiwa
+        ? tt(`Tanggal ${label}`, `${label} date`)
+        : st.bisaDraft
+          ? tt("Tanggal asli diterima", "Original received date")
+          : tt("Tanggal diterima", "Date received");
+  const hintTanggal = (stt) =>
+    docHintDariAju(st, s) || (tanggalMilestone(stt) ? t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket") : "");
+
+  // Lampiran: tahap berkas saja (kejadian -- Berths/ATA, Sailing/ATD -- tidak berberkas)
+  const pengelola = st.peristiwa
+    ? null
+    : buatPengelolaBerkas({ berkas: lama && lama.berkas, versi: () => (st.bisaDraft ? (status === "draft" ? "draft" : "asli") : "") });
+
+  const fields = [];
+  if (opsiStatus.length) {
+    fields.push({ key: "pilih", label: tt("Status dokumen", "Document status"), type: "select", value: statusAwal, options: opsiStatus });
+  }
+  fields.push(
+    Object.assign(
+      { key: "tanggal", label: labelTanggal(statusAwal), type: "date", value: tanggalUntuk(statusAwal) },
+      tanggalMilestone(statusAwal) ? {} : { max: todayISO() },
+      hintTanggal(statusAwal) ? { hint: hintTanggal(statusAwal) } : {},
+    ),
+  );
+  if (tanyaJalur) fields.push(docIsianJalur(s));
+  if (pengelola) {
+    fields.push({
+      key: "berkas",
+      label: tt("Lampiran berkas", "Attachments"),
+      type: "berkas",
+      pengelola,
+      hint: tt(`PDF, gambar, Excel, Word · maks. ${LAMPIRAN_MAKS_MB} MB per berkas`, `PDF, image, Excel, Word · max. ${LAMPIRAN_MAKS_MB} MB per file`),
     });
-    return;
   }
 
-  /* Tahap yang boleh dilewati diberi PILIHAN, bukan konfirmasi
-     ya/tidak — pengguna harus bisa menyatakan "dokumen ini memang
-     tidak ada untuk pengiriman ini". Tanggal diterima disembunyikan
-     selama yang dipilih "tidak dipakai". */
-  if (st.optional) {
-    showPrompt({
-      title: tt(`Tahap ${label}`, `Step: ${label}`),
-      desc: t("x.tandai.sudah.diterima", { x: stepText(st.full, s) }),
-      icon: "bi-patch-question",
-      okText: tt("Simpan", "Save"),
-      fields: [
-        {
-          key: "pilih",
-          label: tt("Status dokumen", "Document status"),
-          type: "select",
-          value: "ada",
-          options: [
-            { value: "ada", label: tt("Sudah diterima", "Received") },
-            { value: "lewati", label: tt("Tidak dipakai — lewati tahap ini", "Not used — skip this step") },
-          ],
-        },
-        docIsianTanggal(st, s),
-      ],
-      onSubmit: (v) => {
-        if (v.pilih === "lewati") {
-          catat({ skipped: true });
-          return true;
-        }
-        const galat = docPeriksaTanggal(v.tanggal);
-        if (galat) return galat;
-        catat({ date: v.tanggal });
-        return true;
-      },
-    });
-    const pilih = document.getElementById("prompt_pilih");
-    const kotakTanggal = document.getElementById("prompt_tanggal");
-    if (pilih && kotakTanggal) {
-      pilih.addEventListener("change", () => {
-        kotakTanggal.closest(".prompt-field").classList.toggle("d-none", pilih.value === "lewati");
-      });
+  const fta = st.key === "coo" ? petunjukFtaCoo(s) : "";
+  // Keterangan kotak: keadaan tersimpan, atau apa yang ditanyakan untuk tahap ini
+  const keteranganBaru = () => {
+    if (milestone && st.bisaDraft) {
+      return tt(
+        `${nama}. Draft yang sudah dicek dicatat sebagai Draft; begitu terdaftar, isi tanggal pendaftarannya — tanggal itulah yang dipakai mesin prediksi.`,
+        `${nama}. A checked draft is recorded as Draft; once lodged, enter its registration date — that date is what the prediction engine uses.`,
+      );
     }
-    return;
-  }
+    if (milestone) return t("x.isi.tanggal.dokumen", { x: nama });
+    if (st.optional) return t("x.tandai.sudah.diterima", { x: nama });
+    if (st.peristiwa) return tt(`${nama}? Isi tanggalnya.`, `${nama}? Enter the date.`);
+    return t("x.konfirmasi.berkas.diterima", { x: nama });
+  };
+  const keterangan = lama ? ringkasanEntriTahap(s, st, lama) : keteranganBaru();
 
   showPrompt({
-    title: t("x.konfirmasi.tahap", { x: label }),
-    desc: st.peristiwa
-      ? tt(`${stepText(st.full, s)}? Isi tanggalnya.`, `${stepText(st.full, s)}? Enter the date.`)
-      : t("x.konfirmasi.berkas.diterima", { x: stepText(st.full, s) }),
-    icon: "bi-check2-circle",
-    okText: st.peristiwa ? tt("Simpan", "Save") : tt("Ya, Sudah Ada", "Yes, it's here"),
-    fields: [docIsianTanggal(st, s)],
+    title: lama || st.optional ? tt(`Tahap ${label}`, `Step: ${label}`) : t("x.konfirmasi.tahap", { x: label }),
+    desc: keterangan + (fta ? "\n" + fta : ""),
+    icon: lama ? "bi-pencil-square" : milestone ? "bi-calendar-check" : st.optional ? "bi-patch-question" : "bi-check2-circle",
+    okText: lama || opsiStatus.length || st.peristiwa || milestone ? tt("Simpan", "Save") : tt("Ya, Sudah Ada", "Yes, it's here"),
+    busyText: tt("Mengunggah…", "Uploading…"),
+    fields,
+    aksiKiri: lama
+      ? { label: tt("Batalkan tahap", "Undo step"), icon: "bi-arrow-counterclockwise", onClick: () => batalkanTahapDokumen(s, st) }
+      : null,
     onSubmit: (v) => {
-      const galat = docPeriksaTanggal(v.tanggal);
-      if (galat) return galat;
-      catat({ date: v.tanggal });
-      return true;
+      const pilihan = opsiStatus.length ? v.pilih : statusAwal;
+      const lampiran = v.berkas || { lama: [], baru: [], dilepas: [] };
+      const sekarang = { at: new Date().toISOString(), by: penggunaSekarang() };
+      // Dilewati: tanpa tanggal & tanpa lampiran -- berkas lamanya ikut dihapus
+      if (pilihan === "lewati") {
+        simpanDocStep(s, { ...progres, [st.key]: { ...sekarang, skipped: true } }, {
+          dihapus: rapikanBerkas(lama && lama.berkas).map((b) => b.path),
+        });
+        return true;
+      }
+      let tanggal = v.tanggal;
+      if (tanggalMilestone(pilihan)) tanggal = tanggal || todayISO();
+      else {
+        const galat = docPeriksaTanggal(tanggal);
+        if (galat) return galat;
+      }
+      const susun = (unggahan) => {
+        const berkas = lampiran.lama.concat(unggahan);
+        const entri = { ...sekarang, date: tanggal };
+        if (pilihan === "draft") entri.draft = true;
+        else if (lama && (lama.draft || lama.tglDraft)) entri.tglDraft = lama.draft ? lama.date : lama.tglDraft;
+        // "Dari impor dokumen pabean" hanya selama isinya tidak diubah tangan
+        if (lama && lama.sumber && pilihan === statusLama && tanggal === lama.date) entri.sumber = lama.sumber;
+        if (berkas.length) entri.berkas = berkas;
+        return tanyaJalur && pilihan === "ada"
+          ? docProgresDenganJalur(progres, st.key, v.jalur, entri)
+          : { ...progres, [st.key]: entri };
+      };
+      const dihapus = lampiran.dilepas.map((b) => b.path);
+      if (!lampiran.baru.length) {
+        simpanDocStep(s, susun([]), { dihapus });
+        return true;
+      }
+      // Berkas baru diunggah dulu -- kotaknya menunggu; gagal = tetap terbuka dengan pesannya
+      return (async () => {
+        let unggahan;
+        try {
+          unggahan = await unggahLampiran(lampiran.baru, folderLampiranTahap(s, st));
+        } catch (e) {
+          console.error(e);
+          return pesanGalatLampiran(e);
+        }
+        simpanDocStep(s, susun(unggahan), { unggahan: unggahan.map((b) => b.path), dihapus });
+        return true;
+      })();
     },
   });
+
+  /* Isian mengikuti status yang dipilih: "Tidak dipakai" menyembunyikan
+     tanggal & lampiran, jalur hanya untuk PIB terdaftar, label & isi
+     tanggal bawaan berganti -- selama tanggalnya belum diubah sendiri. */
+  const pilih = document.getElementById("prompt_pilih");
+  const kotakTanggal = document.getElementById("prompt_tanggal");
+  if (!pilih || !kotakTanggal) return;
+  const bidang = (key) => {
+    const el = document.getElementById("prompt_" + key);
+    return el ? el.closest(".prompt-field") : null;
+  };
+  let tanggalDiubah = false;
+  kotakTanggal.addEventListener("input", () => (tanggalDiubah = true));
+  const sinkron = () => {
+    status = pilih.value;
+    const lewati = status === "lewati";
+    bidang("tanggal").classList.toggle("d-none", lewati);
+    if (bidang("berkas")) bidang("berkas").classList.toggle("d-none", lewati);
+    if (bidang("jalur")) bidang("jalur").classList.toggle("d-none", status !== "ada");
+    if (lewati) return;
+    const lbl = bidang("tanggal").querySelector(".prompt-label");
+    if (lbl) lbl.textContent = labelTanggal(status);
+    if (tanggalMilestone(status)) kotakTanggal.removeAttribute("max");
+    else kotakTanggal.max = todayISO();
+    if (!tanggalDiubah) kotakTanggal.value = tanggalUntuk(status);
+    const hint = hintTanggal(status);
+    let elHint = bidang("tanggal").querySelector(".prompt-hint");
+    if (hint && !elHint) {
+      elHint = document.createElement("div");
+      elHint.className = "prompt-hint";
+      bidang("tanggal").appendChild(elHint);
+    }
+    if (elHint) {
+      elHint.textContent = hint;
+      elHint.classList.toggle("d-none", !hint);
+    }
+    if (pengelola) pengelola.gambarUlang();
+  };
+  pilih.addEventListener("change", sinkron);
+  sinkron();
+}
+
+/* Membatalkan tahap: HANYA tahap ini, bukan tahap-tahap sesudahnya.
+
+   Menghapus yang sesudahnya baru masuk akal kalau pengisiannya dipaksa
+   berurutan — dan di sini tidak: PIB bisa saja dibetulkan sementara
+   SPPB memang sudah benar-benar di tangan. Membuangnya berarti membuang
+   catatan yang sah. Lampiran tahap ini ikut dihapus. */
+function batalkanTahapDokumen(s, st) {
+  const label = stepText(st.label, s);
+  const lampiran = rapikanBerkas((docProgressOf(s)[st.key] || {}).berkas).map((b) => b.path);
+  const ekor = lampiran.length
+    ? tt(` ${lampiran.length} lampiran berkasnya ikut dihapus.`, ` Its ${lampiran.length} attachment${lampiran.length === 1 ? "" : "s"} will be deleted too.`)
+    : "";
+  showConfirm(tt(`Batalkan konfirmasi ${label}?`, `Cancel the ${label} confirmation?`) + ekor, () => {
+    const tanpa = { ...docProgressOf(s) };
+    delete tanpa[st.key];
+    simpanDocStep(s, tanpa, { dihapus: lampiran });
+  }, {
+    title: t("c.batalkan.tahap.dokumen"),
+    confirmText: tt("Ya, Batalkan", "Yes, cancel"),
+    tone: lampiran.length ? "warning" : "primary",
+    icon: "bi-arrow-counterclockwise",
+  });
+}
+
+/* ------------------------------------------------------------------
+   PROGRES DARI DOKUMEN PABEAN (impor berkas ke form jadwal)
+
+   Draft CEISA (Excel) / PIB / PEB (PDF) yang diimpor ke form adalah
+   bukti resmi tahap-tahap pabean -- satu-satunya yang boleh mencentang
+   stepper tanpa diklik:
+     - nomor aju tanpa nomor pendaftaran -> PIB / PEB DRAFT (tanggal di
+       nomor ajunya; berkas yang belum didaftarkan memang draft);
+     - nomor & tanggal pendaftaran      -> PIB / PEB terdaftar;
+     - respon SPPB (KODE RESPON 2003)   -> SPPB, tanggal responnya;
+     - nomor & tanggal BC 1.1 di HEADER -> Manifest (Import);
+     - respon NPE                       -> NPE (Export);
+     - jalur yang tertulis di respon    -> Jalur PIB.
+   Hanya MENAMBAH atau MENAIKKAN (draft -> terdaftar): tahap yang sudah
+   dicatat tangan, atau ditandai tidak dipakai, tidak disentuh. Ditandai
+   `sumber: "ceisa"` dan baru tersimpan bersama jadwalnya saat Simpan --
+   Batal membuangnya.
+------------------------------------------------------------------ */
+let progresImporForm = {};
+function resetProgresImporForm() {
+  progresImporForm = {};
+}
+
+// Berkas hasil impor -> { tahap: { date, draft?, jalur? } } (murni, tanpa menyentuh form)
+function progresDariDokumenPabean(parsed, mode) {
+  const out = {};
+  if (!parsed || !/^(excel|pdf|pdf-peb)$/.test(parsed.source || "")) return out;
+  if (parsed.modeHint && parsed.modeHint !== mode) return out;
+  const f = parsed.fields || {};
+  const p = parsed.progres || {};
+  const hariIni = todayISO();
+  const sah = (tgl) => (tgl && tgl <= hariIni ? tgl : "");
+  const tahapDok = mode === "export" ? "peb" : "pib";
+  const nomorDaftar = String((p.nomorDaftar != null ? p.nomorDaftar : f.docNo) || "").trim();
+  const tanggalDaftar = sah(p.tanggalDaftar != null ? p.tanggalDaftar : f.docDate);
+  if (nomorDaftar && tanggalDaftar) out[tahapDok] = { date: tanggalDaftar };
+  else if (String(f.noAju || "").trim() && !nomorDaftar) out[tahapDok] = { date: sah(tanggalDariAju(f.noAju)) || hariIni, draft: true };
+  if (mode === "import") {
+    if (sah(p.sppb)) out.sppb = { date: p.sppb };
+    if (p.bc11 && sah(p.bc11.tanggal)) out.manifest = { date: p.bc11.tanggal };
+    if (p.jalur && (PREDICTION_CONFIG.customsLanes || []).some((l) => l.key === p.jalur)) {
+      ["pib", "sppb"].forEach((k) => out[k] && !out[k].draft && (out[k].jalur = p.jalur));
+    }
+  } else if (sah(p.npe)) out.npe = { date: p.npe };
+  return out;
+}
+
+/* Progres tersimpan + hasil impor -> { progres, berubah: [tahap] }.
+   Tahap baru ditambahkan, draft dinaikkan ke terdaftar (tanggal
+   draftnya & lampirannya dibawa), selebihnya milik pengguna. Jalur dari
+   dokumen hanya mengisi tahap yang belum berjalur. */
+function gabungProgresImpor(progres, patch, cap) {
+  const out = { ...(progres || {}) };
+  const berubah = [];
+  const tanda = cap || { at: new Date().toISOString(), by: penggunaSekarang() };
+  Object.keys(patch || {}).forEach((k) => {
+    const p = patch[k];
+    const lama = out[k];
+    const entri = { ...tanda, date: p.date, sumber: "ceisa" };
+    if (p.draft) entri.draft = true;
+    if (p.jalur) entri.jalur = p.jalur;
+    if (!lama) {
+      out[k] = entri;
+      berubah.push(k);
+    } else if (!lama.skipped && lama.draft && !p.draft) {
+      out[k] = { ...entri, tglDraft: lama.date || "", ...(lama.berkas ? { berkas: lama.berkas } : {}) };
+      if (!out[k].tglDraft) delete out[k].tglDraft;
+      berubah.push(k);
+    } else if (p.jalur && !lama.skipped && !lama.draft && !lama.jalur) {
+      out[k] = { ...lama, jalur: p.jalur };
+      berubah.push(k);
+    }
+  });
+  return { progres: out, berubah };
+}
+
+/* Dipanggil impor berkas di form (apply-to-form.js): hasilnya ditampung
+   sampai Simpan & langsung dipakai panel prediksi form. Hasil: kalimat
+   catatan impor, atau "" kalau tidak ada yang berubah. */
+function catatProgresImporForm(parsed) {
+  const patch = progresDariDokumenPabean(parsed, activeMode);
+  if (!Object.keys(patch).length) return "";
+  const { progres, berubah } = gabungProgresImpor(formDocProgress, patch);
+  if (!berubah.length) return "";
+  // Impor berikutnya hanya menaikkan: terdaftar tidak turun lagi jadi draft
+  Object.keys(patch).forEach((k) => {
+    const lama = progresImporForm[k];
+    const baru = patch[k];
+    if (!lama || (lama.draft && !baru.draft)) progresImporForm[k] = { ...baru };
+    else if (baru.jalur && !lama.jalur && !lama.draft) progresImporForm[k] = { ...lama, jalur: baru.jalur };
+  });
+  formDocProgress = progres;
+  const langkah = docStepsFor({ mode: activeMode, transport: $("#fTransport").value });
+  const teks = berubah.map((k) => {
+    const st = langkah.find((x) => x.key === k);
+    const e = progres[k];
+    const nama = st ? stepText(st.label, { transport: $("#fTransport").value }) : k.toUpperCase();
+    const jalur = e.jalur ? jalurInfo(e.jalur) : null;
+    return `${nama}${e.draft ? " (draft)" : ""} ${fmtDate(e.date)}${jalur ? tt(` · jalur ${jalur.label}`, ` · ${jalur.label} lane`) : ""}`;
+  });
+  return tt(
+    `Progres Dokumen ikut dicentang dari berkas: ${teks.join(", ")} — tersimpan bersama jadwal saat Simpan.`,
+    `Document Progress ticked from the file: ${teks.join(", ")} — saved with the schedule on Save.`,
+  );
+}
+
+// Saat Simpan: progres tersimpan TERBARU + hasil impor (null bila tidak ada impor)
+function progresSimpanForm(idJadwal) {
+  if (!Object.keys(progresImporForm).length) return null;
+  const s = idJadwal ? currentList().find((x) => x.id === idJadwal) : null;
+  return gabungProgresImpor(docProgressOf(s), progresImporForm).progres;
 }
 
 /* Tahap ini termasuk milestone prediksi atau bukan.
@@ -619,7 +947,12 @@ function penggunaSekarang() {
 }
 
 
-async function simpanDocStep(s, progresBaru) {
+/* `lampiran`: { unggahan, dihapus } -- path berkas yang baru diunggah
+   untuk simpanan ini (dihapus lagi kalau simpanannya gagal) dan yang
+   dilepas pengguna (baru dihapus dari bucket sesudah simpanannya
+   berhasil, jadi gagal simpan tidak menghilangkan berkas). */
+async function simpanDocStep(s, progresBaru, lampiran) {
+  const l = lampiran || {};
   const sebelum = s.docProgress;
   s.docProgress = progresBaru; // layar berubah lebih dulu
   render();
@@ -633,6 +966,7 @@ async function simpanDocStep(s, progresBaru) {
     console.error(error);
     s.docProgress = sebelum; // dikembalikan kalau gagal
     render();
+    hapusLampiran(l.unggahan);
     showToast(
       (error.message || "").includes("doc_progress")
         ? t("v.kolom.doc.progress.belum.ada.jalankan.ulang.sc")
@@ -641,6 +975,7 @@ async function simpanDocStep(s, progresBaru) {
     );
     return;
   }
+  hapusLampiran(l.dihapus);
   /* Milestone baru = ketidakpastian berkurang. Estimated Delivery
      dihitung ulang di sini, bukan menunggu form dibuka: tahap dokumen
      dikonfirmasi dari kartu, dan angka di kartu yang sama harus ikut
@@ -651,6 +986,14 @@ async function simpanDocStep(s, progresBaru) {
     if (berubah.includes("actual")) {
       const d = predictDelivery(s);
       pesanPrediksi = ` Estimated Delivery → ${fmtDate(s.actual)} (${d.sourceLabel}).`;
+    }
+    // Sandar/Manifest di kiriman ini juga kedatangan kiriman lain di kapal yang sama
+    const ikut = await segarkanKirimanSekapal(s);
+    if (ikut.length) {
+      pesanPrediksi += tt(
+        ` ${ikut.length} kiriman lain di kapal yang sama ikut diperbarui.`,
+        ` ${ikut.length} other shipment(s) on the same vessel updated too.`,
+      );
     }
   }
 

@@ -373,6 +373,7 @@ function renderDocNumSubTabs() {
           `<button type="button" class="docnum-subtab${subs[label].key === aktif ? " active" : ""}" data-dn-subtab="${escapeAttr(label)}">${escapeHtml(label === "Lokal" ? tt("Lokal", "Local") : label)}</button>`,
       )
       .join("");
+    dnTabAktifTerlihat(box);
     return;
   }
 
@@ -413,9 +414,23 @@ function renderDocNumSubTabs() {
    sedang di luar layar. */
 function dnTabAktifTerlihat(baris) {
   const aktif = baris.querySelector(".docnum-subtab.active");
-  if (!aktif || baris.scrollWidth <= baris.clientWidth) return;
-  baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
+  if (aktif && baris.scrollWidth > baris.clientWidth)
+    baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
+  dnTandaiTepiTab(baris);
 }
+
+/* Tepi baris tab yang masih bisa digeser memudar (docnum.css) -- tanda
+   bahwa di baliknya masih ada tab (Summary, Report). */
+function dnTandaiTepiTab(baris) {
+  baris.classList.toggle("luber-kiri", baris.scrollLeft > 1);
+  baris.classList.toggle("luber-kanan", baris.scrollWidth - baris.clientWidth - baris.scrollLeft > 1);
+}
+(function pasangTepiTab() {
+  const baris = document.getElementById("docNumSubTabs");
+  if (!baris) return;
+  baris.addEventListener("scroll", () => dnTandaiTepiTab(baris), { passive: true });
+  window.addEventListener("resize", () => dnTandaiTepiTab(baris), { passive: true });
+})();
 
 function resolveDocNumType(tabKey) {
   const base = DOCNUM_TYPES[tabKey] || {};
@@ -1163,7 +1178,7 @@ function mulaiUbahDocNum(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
   if (!r) return;
   if (!bolehUbahDocNum()) {
-    showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger");
+    showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger", { judul: tt("Tidak diizinkan", "Not allowed") });
     return;
   }
   // Pop-up sebelumnya yang belum sempat selesai menutup dirapikan dulu.
@@ -1431,7 +1446,7 @@ async function simpanUbahDocNum() {
   const errors = validateDocNumForm(typeKey);
   if (errors.length) {
     dnTulisHint(errors[0], true);
-    showToast(errors.length === 1 ? errors[0] : t("x.isian.belum.benar", { n: errors.length }), "danger");
+    showToast(errors.length === 1 ? errors[0] : t("x.isian.belum.benar", { n: errors.length }), "danger", { judul: tt("Periksa isian", "Check the form") });
     return;
   }
   dnTulisHint("");
@@ -2026,7 +2041,7 @@ const DN_KOLOM_DANA = [
   // Nilai = jumlah akhir pengajuan, angka yang sama dengan "Terbilang" di surat cetaknya
   { kelas: "dn-col-nilai", judul: () => tt("Nilai", "Value"), isi: (r, p) => escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR")) },
   { kelas: "dn-col-transaksi", judul: () => tt("Transaksi", "Transaction"), isi: (r, p) => dnTeksTransaksi(p.transactionType) },
-  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => "BL/AWB", isi: (r, p) => escapeHtml(p.blAwb || "\u2014") },
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-col-blawb dn-num", judul: () => "BL/AWB", isi: (r, p) => escapeHtml(p.blAwb || "\u2014") },
   /* Keterangan = Subject pada surat yang dicetak, jadi di sinilah terbaca
      "pembayaran billing import apa". Dipotong 80; kalimat penuhnya di tooltip. */
   { kelas: "dn-col-ket", judul: () => tt("Keterangan", "Notes"), atribut: (r, p) => ` title="${escapeAttr(p.notes || "")}"`,
@@ -2148,7 +2163,7 @@ async function renderDocNumHistory() {
     const dana = jenis.key === "fund";
     box.innerHTML = `
       <div class="docnum-history-wrap">
-      <table class="docnum-table${dana ? " docnum-table--dana" : ""}">
+      <table class="docnum-table docnum-table--${escapeAttr(jenis.key)}${dana ? " docnum-table--dana" : ""}">
         <thead>
           <tr>${
             dana
@@ -2194,21 +2209,26 @@ async function renderDocNumHistory() {
               return `<tr>
                 ${
                   dana
-                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
-                    : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no">${urut}</td>` : ""}
-                <td class="dn-num">${escapeHtml(r.doc_number)}</td>
+                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}" data-label="${escapeAttr(k.judul())}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
+                    : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no" data-label="No">${urut}</td>` : ""}
+                <td class="dn-num" data-label="${escapeAttr(jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number"))}">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
                      hanya <th> membuat kolomnya bergeser, bukan hilang. -->
-                <td class="dn-col-tgl">${escapeHtml(fmtDate(r.doc_date))}</td>
-                <td class="dn-col-pemohon">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
-                <td>${escapeHtml(String(ringkas).slice(0, 60))}</td>
+                <td class="dn-col-tgl" data-label="${escapeAttr(tt("Tanggal", "Date"))}">${escapeHtml(fmtDate(r.doc_date))}</td>
+                <td class="dn-col-pemohon" data-label="${escapeAttr(tt("Pemohon", "Requester"))}">${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}</td>
+                <td class="dn-col-utama" data-label="${escapeAttr(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}">${escapeHtml(String(ringkas).slice(0, 60))}</td>
                 ${
                   jenis.key === "invoice"
-                    ? [p.termsDelivery, p.finalDestination, p.termPayment, dnCarrierInvoice(p)]
-                        .map((v) => `<td class="dn-col-inv">${escapeHtml(v || "\u2014")}</td>`)
+                    ? [
+                        ["terms", "Terms of Delivery", p.termsDelivery],
+                        ["tujuan", "Final Destination", p.finalDestination],
+                        ["bayar", "Terms of Payment", p.termPayment],
+                        ["carrier", "Carrier", dnCarrierInvoice(p)],
+                      ]
+                        .map(([k, label, v]) => `<td class="dn-col-inv dn-inv-${k}" data-label="${label}">${escapeHtml(v || "\u2014")}</td>`)
                         .join("") +
                       // Amount = baris Total di Commercial Invoice cetaknya.
-                      `<td class="dn-col-nilai">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
+                      `<td class="dn-col-nilai" data-label="Amount">${escapeHtml(dnTeksNilaiInvoice(r))}</td>`
                     : ""
                 }`
                 }
@@ -2220,11 +2240,11 @@ async function renderDocNumHistory() {
                        kembali menciptakan dua kebenaran. */
                     bolehUbahDocNum()
                       ? `<button type="button" class="icon-btn" data-edit-num="${r.id}"
-                                 title="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
+                                 title="${tt("Perbaiki isian", "Edit fields")}" aria-label="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn" data-detail-num="${r.id}"
-                          title="${tt("Lihat seluruh isian", "View all fields")}"><i class="bi bi-list-ul"></i></button>
+                          title="${tt("Lihat seluruh isian", "View all fields")}" aria-label="${tt("Lihat seluruh isian", "View all fields")}"><i class="bi bi-list-ul"></i></button>
                   ${
                     /* Surat jalan hanya dipakai untuk kiriman EXPORT.
                        Yang belum ditautkan pun ditawarkan — jadwalnya
@@ -2234,7 +2254,7 @@ async function renderDocNumHistory() {
                        untuk seluruh surat jalan Lokal. */
                     String(jenis.key || "").startsWith("do") && sjBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-sj="${r.id}"
-                                 title="${tt("Cetak surat jalan", "Print delivery note")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak surat jalan", "Print delivery note")}" aria-label="${tt("Cetak surat jalan", "Print delivery note")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -2243,7 +2263,7 @@ async function renderDocNumHistory() {
                        sendiri, jadi setiap nomor "fund" bisa dicetak. */
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
-                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -2251,9 +2271,9 @@ async function renderDocNumHistory() {
                        Barang): surat resmi berkop. */
                     typeof suratBcBolehCetak === "function" && suratBcBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-surat="${r.id}"
-                                 title="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
+                                 title="${tt("Cetak surat", "Print letter")}" aria-label="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-word-surat="${r.id}"
-                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
+                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}" aria-label="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
                       : ""
                   }
                   ${
@@ -2262,13 +2282,13 @@ async function renderDocNumHistory() {
                        jenis invoice yang dipilih saat nomor terbit. */
                     /^invoice/.test(jenis.key) && ciplBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-cipl="${r.id}"
-                                 title="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}"><i class="bi bi-printer"></i></button>
+                                 title="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}" aria-label="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-xls-cipl="${r.id}"
-                                 title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
+                                 title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}" aria-label="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
-                          data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}">
+                          data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}" aria-label="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
                   </button>
                 </div></td>
@@ -2306,9 +2326,9 @@ function renderDocNumPagination(total) {
   bar.innerHTML = `
     <div class="pagination-info">${tt(`Menampilkan <b>${awal}–${akhir}</b> dari <b>${total}</b> nomor`, `Showing <b>${awal}–${akhir}</b> of <b>${total}</b> numbers`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${tombolHal}</div>
-      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="dnPageSize">${tt("Per halaman", "Per page")}</label>
@@ -2411,6 +2431,7 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
         );
       }
     },
+    { title: tt("Hapus Nomor?", "Delete Number?"), confirmText: tt("Hapus Nomor", "Delete Number"), icon: "bi-trash3" },
   );
 });
 

@@ -60,15 +60,24 @@ function denganPenjagaRekursi(fn) {
    hanya dari Import); bisa diganti untuk pengujian & uji mundur. */
 function predictionHistory() {
   if (PREDICTION_HISTORY_OVERRIDE) return PREDICTION_HISTORY_OVERRIDE;
-  if (typeof data !== "undefined" && data && Array.isArray(data.import)) {
-    return Array.isArray(data.export) ? data.import.concat(data.export) : data.import;
-  }
-  return [];
+  return semuaKiriman();
 }
 
 function setPredictionHistory(list) {
   PREDICTION_HISTORY_OVERRIDE = Array.isArray(list) ? list : null;
   resetPredictionLearning();
+}
+
+/* RIWAYAT PENUH untuk sampel per kiriman (sampelKiriman). Uji mundur
+   menyaring predictionHistory() per kiriman yang diuji, tapi sampel per
+   kiriman disimpan sepanjang generasi -- jadi bukti kapal-yang-sama di
+   dalamnya selalu dibaca dari daftar yang sama, apa pun saringan yang
+   sedang berlaku. Sampelnya baru dipakai kalau kenyataannya sudah
+   diketahui sebelum ETD kiriman yang diuji (prediction-backtest.js). */
+let RIWAYAT_PENUH_UJI = null;
+// null = riwayat yang sedang berlaku (kedatanganSekapal membacanya sendiri)
+function riwayatPenuh() {
+  return RIWAYAT_PENUH_UJI;
 }
 
 /* GENERASI DATA. Sampel per kiriman (sampelKiriman) berlaku selama
@@ -313,31 +322,49 @@ function sampelKiriman(s) {
   const etdNyata = s.etdUpdate || s.etd || "";
   const out = {
     gen: GENERASI_BELAJAR, ctx, etdNyata, transit: null, clearance: null, delivery: null,
-    fwd: kunciForwarder(s.forwarder),
+    fwd: kunciForwarder(s.forwarder), jalur: ctx.jalur || "",
     tAcuan: msTanggal(s.etd || s.eta), tEtd: msTanggal(etdNyata), tSppb: null, tPabrik: null,
   };
 
+  /* Kedatangan nyata (kedatanganTercatat): ATA/Sandar sendiri, Sandar
+     kiriman lain di kapal yang sama, atau Manifest + jeda biasanya. */
+  const bukti = kedatanganTercatat(s, riwayatPenuh());
+  const tibaNyata = bukti ? bukti.date : "";
+
   // Transit: ETD berlaku -> kedatangan nyata (lihat hitungTransitDariRiwayat)
-  const tiba =
-    s.ata || tgl("berth") || tgl("manifest") || (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "");
+  const tiba = tibaNyata || (etaModeOf(s) === "manual" ? s.etaUpdate || s.eta : "");
   if (etdNyata && tiba) {
     const n = selisihKalender(etdNyata, tiba);
     if (n != null && n >= 0 && n <= 200) out.transit = n;
   }
 
   if (s.mode !== "export") {
-    const tibaNyata = s.ata || tgl("berth") || tgl("manifest");
     const sppb = tgl("sppb");
-    if (tibaNyata && sppb) {
-      const ops = configuredOpsDays(ctx);
-      const siap = predictionStrippingApplies(ctx) ? advanceLeg(tibaNyata, ops.stripping, "stripping") : tibaNyata;
+    const ops = configuredOpsDays(ctx);
+    // Barang siap diurus: kedatangan, + stripping di CFS untuk LCL
+    const siap = tibaNyata
+      ? predictionStrippingApplies(ctx)
+        ? advanceLeg(tibaNyata, ops.stripping, "stripping", ctx)
+        : tibaNyata
+      : "";
+    if (siap && sppb) {
       const pib = tgl("pib");
       const dari = pib && pib > siap ? pib : siap;
       const n = workingDaysBetweenISO(dari, sppb);
-      if (n != null && n >= 0 && n <= 60) out.clearance = n;
+      /* SPPB yang terbit SEBELUM barang siap (udara, PIB yang diajukan
+         jauh hari) berarti clearance tidak menahan apa pun: 0, bukan
+         dibuang. Dulu dibuang -- yang tersisa justru kiriman yang
+         lambat, dan angka belajarnya condong ke atas. */
+      if (n != null && n >= -20 && n <= 60) out.clearance = Math.max(0, n);
     }
     if (sppb && s.factoryDate) {
-      const n = workingDaysBetweenISO(sppb, s.factoryDate);
+      /* Antar ke pabrik diukur dari yang PALING BELAKANG di antara SPPB
+         dan barang siap -- sama dengan cara mesin memperkirakannya
+         (buildDeliverySchedule). SPPB kiriman udara kerap terbit
+         sebelum pesawat mendarat; diukur dari SPPB, waktu menunggu
+         pesawat ikut terbaca sebagai lama pengantaran. */
+      const mulai = siap && siap > sppb ? siap : sppb;
+      const n = workingDaysBetweenISO(mulai, s.factoryDate, hariTutupLangkah("delivery", ctx));
       if (n != null && n >= 0 && n <= 60) out.delivery = n;
     }
     out.tSppb = msTanggal(sppb);
@@ -500,7 +527,13 @@ function hitungOpsDariRiwayat(ctx, leg, prior) {
 
   const tujuan = ctx.toMetro || ctx.toPort || ctx.toCountry;
   const fwd = kunciForwarder(ctx.forwarder);
-  const kunci = `ops|${leg}|${ctx.shipmentType}|${tujuan}|${fwd}|${prior}`;
+  /* Clearance kiriman yang jalurnya DICATAT belajar dari kiriman
+     sejalur saja: Merah lima hari dan Hijau sehari bukan dua sampel
+     dari satu sebaran. Yang jalurnya belum dicatat belajar dari semua
+     -- itulah perkiraan terbaik selama jalurnya belum diketahui. */
+  const jalur = leg === "clearance" ? ctx.jalur || "" : "";
+  const tipe = jalur === "merah" ? "ops_merah" : "ops";
+  const kunci = `ops|${leg}|${ctx.shipmentType}|${tujuan}|${fwd}|${jalur}|${prior}`;
   if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
 
   const sampel = [];
@@ -508,6 +541,7 @@ function hitungOpsDariRiwayat(ctx, leg, prior) {
     if (s.mode === "export") return;
     const n = leg === "clearance" ? k.clearance : leg === "delivery" ? k.delivery : null;
     if (n == null) return;
+    if (jalur && k.jalur !== jalur) return;
     const c = k.ctx;
     if (c.shipmentType !== ctx.shipmentType) return;
     if (tujuan && (c.toMetro || c.toPort || c.toCountry) !== tujuan) return;
@@ -522,16 +556,63 @@ function hitungOpsDariRiwayat(ctx, leg, prior) {
      keluar sehari setelah sandar, ada yang tiga hari; ada yang truknya
      siap begitu SPPB terbit, ada yang menunggu jadwal armada. Rata-rata
      semua forwarder meleset untuk masing-masing. */
-  const rute = ringkasSampel(sampel, prior, "ops");
+  const rute = ringkasSampel(sampel, prior, tipe);
   let hasil = { ...rute, scope: "rute" };
   if (rute.cukup && fwd) {
     const milikFwd = sampel.filter((x) => x.fwd === fwd);
-    const perFwd = ringkasSampel(milikFwd, rute.exact, "ops");
+    const perFwd = ringkasSampel(milikFwd, rute.exact, tipe);
     if (perFwd.cukup) {
       hasil = { ...perFwd, prior: prior == null ? null : Math.round(prior * 10) / 10, routeDays: rute.exact, scope: "forwarder" };
     }
   }
   PREDICTION_LEARN_CACHE.set(kunci, hasil);
+  return hasil;
+}
+
+/* ------------------------------------------------------------------
+   JEDA BC 1.1 -> KEDATANGAN
+
+   Dari kiriman yang punya Manifest DAN Sandar/ATA. Dipakai untuk
+   kiriman yang baru punya Manifest (jedaManifestHari, prediction-
+   milestones.js) -- termasuk di dalam sampelKiriman, jadi di sini
+   HANYA tanggal mentah yang dibaca: yang belajar tidak boleh bertanya
+   pada yang sudah belajar.
+
+   Satu angka per tipe pengiriman per generasi data -- kalibrasi umum
+   (berapa lama kapal biasanya tiba sesudah BC 1.1), bukan sifat rute,
+   jadi tidak ikut disaring per uji mundur. Manifest yang tercatat
+   SESUDAH sandar (mis. pecah pos LCL) dihitung 0: kedatangan tidak
+   pernah dimundurkan dari tanggal Manifest.
+------------------------------------------------------------------ */
+const JEDA_MANIFEST = { gen: -1, hasil: new Map() };
+
+function learnedManifestLagDays(tipe) {
+  const cfg = learningConfig();
+  if (!cfg.enabled) return null;
+  if (JEDA_MANIFEST.gen !== GENERASI_BELAJAR) {
+    JEDA_MANIFEST.gen = GENERASI_BELAJAR;
+    JEDA_MANIFEST.hasil = new Map();
+  }
+  if (JEDA_MANIFEST.hasil.has(tipe)) return JEDA_MANIFEST.hasil.get(tipe);
+
+  const peta = (PREDICTION_CONFIG.arrival && PREDICTION_CONFIG.arrival.manifestLeadDays) || {};
+  const prior = Number(peta[tipe] != null ? peta[tipe] : peta.default) || 0;
+  const batasUmur = cfg.maxAgeDays || 540;
+  const sampel = [];
+  predictionHistory().forEach((s) => {
+    if (!s || predictionShipmentType(s) !== tipe) return;
+    const manifest = manifestKedatangan(s);
+    const tiba = s.ata || milestoneDateOf(s, "berth");
+    if (!manifest || !tiba) return;
+    const n = selisihKalender(manifest, tiba);
+    if (n == null || n < -10 || n > 10) return;
+    const tMs = msTanggal(tiba);
+    const umur = (acuanBelajarMs() - tMs) / 86400000;
+    if (!(umur >= 0 && umur <= batasUmur)) return;
+    sampel.push({ n: Math.max(0, n), w: bobotKebaruan(tMs) });
+  });
+  const hasil = ringkasSampel(sampel, prior, "lag");
+  JEDA_MANIFEST.hasil.set(tipe, hasil);
   return hasil;
 }
 
@@ -542,5 +623,6 @@ if (typeof module !== "undefined" && module.exports) {
     resetPredictionLearning,
     learnedTransitDays,
     learnedOpsDays,
+    learnedManifestLagDays,
   };
 }

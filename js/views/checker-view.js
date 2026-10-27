@@ -29,7 +29,6 @@
      3. FASILITAS & IZIN. PI (959) & LS (958) beserta tanggalnya,
         Masterlist (912), SKB PPN (456), SKB PPh (457) & COO (860/861)
         di draft dibandingkan dengan isian jadwal.
-     4. NDPBM dibandingkan dengan kurs pajak KMK (data/kurs-pajak.json).
 
    Tanpa CIPL pun bisa dipakai: draft dibandingkan dengan jadwal
    terkaitnya saja.
@@ -61,7 +60,7 @@ const cekKeadaan = {
   hasil: null,
   galatCek: "",
   saring: "ALL",
-  pendukung: null, // Promise: Database HS Code, kurs pajak
+  pendukung: null, // Promise: Database HS Code
   dbHs: "", // "" | "ok" | "gagal"
 };
 
@@ -118,7 +117,7 @@ function cekSiapkanTempat() {
   EximEngine.addPlaces(UNLOCODES.filter((u) => u.metro).map((u) => baris(u, EximEngine.placeGroupOf(u.metro, kind(u)) || undefined)));
 }
 
-/* ---------- data pendukung: Database HS Code, kurs pajak ---------- */
+/* ---------- data pendukung: Database HS Code ---------- */
 
 function cekMuatPendukung(paksa) {
   if (cekKeadaan.pendukung && !paksa) return cekKeadaan.pendukung;
@@ -132,8 +131,7 @@ function cekMuatPendukung(paksa) {
           },
         )
       : Promise.resolve();
-  const kurs = typeof muatKursPajak === "function" ? muatKursPajak().catch(() => null) : Promise.resolve(null);
-  cekKeadaan.pendukung = Promise.all([hs, kurs]);
+  cekKeadaan.pendukung = hs;
   return cekKeadaan.pendukung;
 }
 
@@ -170,10 +168,10 @@ async function cekTerimaBerkas(daftar, kotak) {
     showToast(tt(`Satu draft saja yang dibandingkan: ${draft[draft.length - 1].name}.`, `Only one draft is compared: ${draft[draft.length - 1].name}.`), "warning");
   }
   if (kotak === "cipl" && !cipl.length && draft.length) {
-    showToast(tt("Berkas itu draft CEISA, jadi dipasang sebagai draft PIB/PEB.", "That file is a CEISA draft, so it was set as the PIB/PEB draft."), "dark");
+    showToast(tt("Berkas itu draft CEISA, jadi dipasang sebagai draft PIB/PEB.", "That file is a CEISA draft, so it was set as the PIB/PEB draft."), "info");
   }
   if (kotak === "draft" && !draft.length && cipl.length) {
-    showToast(tt("Berkas itu bukan draft CEISA (tanpa sheet HEADER & BARANG), jadi dipasang sebagai CIPL.", "That file is not a CEISA draft (no HEADER & BARANG sheets), so it was set as the CIPL."), "dark");
+    showToast(tt("Berkas itu bukan draft CEISA (tanpa sheet HEADER & BARANG), jadi dipasang sebagai CIPL.", "That file is not a CEISA draft (no HEADER & BARANG sheets), so it was set as the CIPL."), "info");
   }
   if (cipl.length) cekKeadaan.berkasCipl = cipl.slice(0, 2);
   if (draft.length) {
@@ -288,9 +286,20 @@ function cekBuku() {
 function cekBukuData(mode) {
   return (typeof data !== "undefined" && data && data[mode]) || [];
 }
+/* Jadwal yang PIB/PEB-nya masih mungkin diperiksa -- yang lain tidak
+   ditawarkan sebagai jadwal terkait (tebakan otomatis & pencarian):
+     Import : yang belum tiba, berstatus Process / Delay (bukan Arrived);
+     Export : yang ETD-nya belum lewat (ETD hari ini masih ikut).
+   Jadwal yang sudah tertaut tetap terbaca lewat cekJadwal(). */
+function cekJadwalTerbuka(s, mode) {
+  if (mode !== "export") return effectiveStatus(s) !== "arrived";
+  const etd = effectiveEtd(s);
+  return !etd || etd >= todayISO();
+}
 function cekDaftarJadwal() {
-  const b = cekBuku();
-  return b ? cekBukuData(b) : cekBukuData("import").concat(cekBukuData("export"));
+  const buku = cekBuku();
+  const dari = (mode) => cekBukuData(mode).filter((s) => cekJadwalTerbuka(s, mode));
+  return buku ? dari(buku) : dari("import").concat(dari("export"));
 }
 function cekJadwal() {
   const id = cekKeadaan.jadwalId;
@@ -1032,12 +1041,6 @@ function cekTandaiBarangJadwal(res, gabung, decl, bc) {
 
 /* ---------- baris tambahan dari data Shipment Schedule ---------- */
 
-/* Tanggal aju draft: TANGGAL AJU di HEADER, kalau kosong dari nomor
-   ajunya sendiri ("000020POL85820261016024172" -> 2026-10-16). */
-function cekTanggalAju(decl) {
-  return EximEngine.normalizeDate(decl.aju_date || "") || tanggalDariAju(decl.aju);
-}
-
 function cekBarisBaru(seksi, sumber) {
   return (field, status, kiri, kanan, catatan, ext) =>
     Object.assign(
@@ -1178,24 +1181,26 @@ function cekBarisJadwal(s, decl, bc, opsi) {
   /* Polis Asuransi (dokumen 530): nomor seperti invoice -- semua nomor
      di jadwal harus ada di draft dan sebaliknya -- lalu tanggalnya */
   {
-    const field = tt("Polis Asuransi", "Insurance Policy");
-    const jadwal = cekPecahNomor(s.polisAsuransi);
-    const docs = cekDokumenKode(decl, KODE_DOKUMEN_POLIS);
+    const field = DOK_PENGIRIMAN.polis.label;
+    const daftar = dokPelengkapJadwal(s).polis || [];
+    const jadwal = cekNomorDokumen(daftar);
+    const kiri = ringkasDokumen(daftar).nomor;
+    const kode = DOK_PENGIRIMAN.polis.kode;
+    const docs = cekDokumenKode(decl, kode);
     const teksDraft = docs.map((d) => d.number).join(", ");
-    const kodeCatatan = tt(`Kode dokumen ${KODE_DOKUMEN_POLIS}.`, `Document code ${KODE_DOKUMEN_POLIS}.`);
     if (jadwal.length || docs.length) {
       if (!jadwal.length) kosong("DOCUMENT", "polis", field, teksDraft);
-      else if (!docs.length) tanpaDraft("DOCUMENT", "polis", field, s.polisAsuransi, tt(`polis asuransi (kode dokumen ${KODE_DOKUMEN_POLIS})`, `insurance policy (document code ${KODE_DOKUMEN_POLIS})`));
+      else if (!docs.length) tanpaDraft("DOCUMENT", "polis", field, kiri, tt(`polis asuransi (kode dokumen ${kode})`, `insurance policy (document code ${kode})`));
       else {
         const kurang = jadwal.filter((x) => !docs.some((d) => cekAlnum(d.number) === x.kunci));
         const lebih = docs.filter((d) => !jadwal.some((x) => x.kunci === cekAlnum(d.number)));
         const catatan = [];
         if (kurang.length) catatan.push(tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`));
         if (lebih.length) catatan.push(tt(`Tidak ada di jadwal: ${lebih.map((d) => d.number).join(", ")}.`, `Not on the schedule: ${lebih.map((d) => d.number).join(", ")}.`));
-        tambah("DOCUMENT", "polis", field, catatan.length ? "MISMATCH" : "MATCH", s.polisAsuransi, teksDraft, catatan.join(" ") || kodeCatatan);
+        tambah("DOCUMENT", "polis", field, catatan.length ? "MISMATCH" : "MATCH", kiri, teksDraft, catatan.join(" ") || tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`));
       }
     }
-    const tanggal = cekBarisTanggalDokumen(s.polisAsuransiDate, jadwal, docs, KODE_DOKUMEN_POLIS);
+    const tanggal = cekBarisTanggalDokumen(daftar, docs, kode);
     if (tanggal) tambah("DOCUMENT", "polisDate", tt("Tanggal Polis Asuransi", "Insurance Policy Date"), ...tanggal);
   }
 
@@ -1509,22 +1514,32 @@ function cekDokumenKode(decl, kode) {
   return (decl.documents || []).filter((d) => k.includes(String(d.code == null ? "" : d.code).trim()));
 }
 
-/* Tanggal dokumen pengiriman (PI, LS, Polis Asuransi) di jadwal vs
-   tanggal dokumennya di draft: dokumen yang nomornya sama dengan nomor
-   di jadwal, atau -- kalau tidak ada yang sama -- dokumen pertama yang
-   bertanggal. Hasil [status, jadwal, draft, catatan]; null kalau
-   keduanya tidak bertanggal. */
-function cekBarisTanggalDokumen(tanggalJadwal, nomorJadwal, docs, kode) {
+// Nomor dokumen pengiriman jadwal (daftar { nomor, tanggal }) untuk dibandingkan dengan draft
+function cekNomorDokumen(daftar) {
+  return (daftar || []).map((d) => String(d.nomor || "").trim()).filter((n) => cekAlnum(n).length >= 3).map((teks) => ({ teks, kunci: cekAlnum(teks) }));
+}
+
+/* Tanggal dokumen pengiriman (PI, LS, Polis Asuransi): tiap dokumen
+   jadwal yang bertanggal vs dokumen draft yang nomornya sama -- atau,
+   kalau jadwal hanya punya satu tanggal dan nomornya tidak ada di draft,
+   dokumen draft pertama yang bertanggal. Hasil [status, jadwal, draft,
+   catatan]; null kalau keduanya tidak bertanggal. */
+function cekBarisTanggalDokumen(daftar, docs, kode) {
   const tanggalDok = (d) => (d ? EximEngine.normalizeDate(d.date || "") : "");
-  const dok =
-    docs.find((d) => tanggalDok(d) && nomorJadwal.some((x) => x.kunci === cekAlnum(d.number))) ||
-    docs.find((d) => tanggalDok(d));
-  const draft = tanggalDok(dok);
-  const jadwal = String(tanggalJadwal || "").slice(0, 10);
-  if (!jadwal && !draft) return null;
-  if (!jadwal) return ["INFO", "", draft, tt("Belum diisi di jadwal.", "Not filled in on the schedule.")];
-  if (!draft) return ["INFO", jadwal, "", tt(`Draft tidak mencantumkan tanggal dokumen kode ${kode}.`, `The draft does not state the date of document code ${kode}.`)];
-  return [jadwal === draft ? "MATCH" : "MISMATCH", jadwal, draft, tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)];
+  const bertanggal = docs.filter((d) => tanggalDok(d));
+  const milikJadwal = (daftar || []).filter((x) => x.tanggal);
+  const pasangan = milikJadwal.map((x) => bertanggal.find((d) => cekAlnum(d.number) === cekAlnum(x.nomor)) || null);
+  if (milikJadwal.length === 1 && !pasangan[0]) pasangan[0] = bertanggal[0] || null;
+  const jadwal = milikJadwal.map((x) => String(x.tanggal).slice(0, 10)).join(", ");
+  // Draft: tanggal dokumen yang nomornya ada di jadwal, kalau tidak semua dokumen draft yang bertanggal
+  const sepadan = bertanggal.filter((d) => (daftar || []).some((x) => cekAlnum(x.nomor) === cekAlnum(d.number)));
+  const draftSemua = (sepadan.length ? sepadan : bertanggal.slice(0, 1)).map(tanggalDok).join(", ");
+  if (!jadwal && !bertanggal.length) return null;
+  if (!jadwal) return ["INFO", "", draftSemua, tt("Belum diisi di jadwal.", "Not filled in on the schedule.")];
+  if (!bertanggal.length) return ["INFO", jadwal, "", tt(`Draft tidak mencantumkan tanggal dokumen kode ${kode}.`, `The draft does not state the date of document code ${kode}.`)];
+  const sama = pasangan.every((d, i) => d && tanggalDok(d) === String(milikJadwal[i].tanggal).slice(0, 10));
+  const draft = pasangan.map((d) => tanggalDok(d) || "—").join(", ");
+  return [sama ? "MATCH" : "MISMATCH", jadwal, draft, tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)];
 }
 
 /* FASILITAS & IZIN: dokumen di draft vs isian jadwal terkait. Dokumen
@@ -1536,22 +1551,26 @@ function cekBarisFasilitas(s, decl) {
   const baris = cekBarisBaru("FACILITY", tt("Jadwal", "Schedule"));
   const daftarNomor = (docs) => docs.map((d) => d.number).join(", ");
 
-  /* PI (959) & LS (958): satu nomor per kiriman, isian jadwal "PI" &
-     "LS", lalu tanggalnya ("Tanggal PI" & "Tanggal LS") */
+  /* PI (959) & LS (958): daftar dokumen jadwal -- tiap nomornya harus
+     ada di draft -- lalu tanggalnya ("Tanggal PI" & "Tanggal LS") */
+  const dok = dokPelengkapJadwal(s);
   [
-    ["pi", "piDate", "959", tt("PI (Persetujuan Impor)", "PI (Import Approval)"), tt("Tanggal PI", "PI Date")],
-    ["ls", "lsDate", "958", tt("LS (Laporan Surveyor)", "LS (Surveyor Report)"), tt("Tanggal LS", "LS Date")],
-  ].forEach(([kolom, kolomTanggal, kode, field, fieldTanggal]) => {
-    const jadwal = cekPecahNomor(s[kolom]);
+    ["pi", tt("Tanggal PI", "PI Date")],
+    ["ls", tt("Tanggal LS", "LS Date")],
+  ].forEach(([jenis, fieldTanggal]) => {
+    const { kode, label: field } = DOK_PENGIRIMAN[jenis];
+    const daftar = dok[jenis] || [];
+    const jadwal = cekNomorDokumen(daftar);
+    const kiri = ringkasDokumen(daftar).nomor;
     const docs = cekDokumenKode(decl, kode);
     if (!jadwal.length && !docs.length) return;
     if (!jadwal.length) rows.push(baris(field, "INFO", "", daftarNomor(docs), tt(`Belum diisi di jadwal; draft memuat dokumen kode ${kode}.`, `Not filled in on the schedule; the draft holds document code ${kode}.`)));
-    else if (!docs.length) rows.push(baris(field, "MISMATCH", s[kolom], "", tt(`Jadwal mencatat ${field}, tetapi dokumen kode ${kode} tidak ada di sheet DOKUMEN draft.`, `The schedule records the ${field}, but document code ${kode} is not in the draft's DOKUMEN sheet.`)));
+    else if (!docs.length) rows.push(baris(field, "MISMATCH", kiri, "", tt(`Jadwal mencatat ${field}, tetapi dokumen kode ${kode} tidak ada di sheet DOKUMEN draft.`, `The schedule records the ${field}, but document code ${kode} is not in the draft's DOKUMEN sheet.`)));
     else {
       const kurang = jadwal.filter((x) => !docs.some((d) => cekAlnum(d.number) === x.kunci));
-      rows.push(baris(field, kurang.length ? "MISMATCH" : "MATCH", s[kolom], daftarNomor(docs), kurang.length ? tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`) : tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)));
+      rows.push(baris(field, kurang.length ? "MISMATCH" : "MATCH", kiri, daftarNomor(docs), kurang.length ? tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`) : tt(`Kode dokumen ${kode}.`, `Document code ${kode}.`)));
     }
-    const tanggal = cekBarisTanggalDokumen(s[kolomTanggal], jadwal, docs, kode);
+    const tanggal = cekBarisTanggalDokumen(daftar, docs, kode);
     if (tanggal) rows.push(baris(fieldTanggal, ...tanggal));
   });
 
@@ -1573,34 +1592,6 @@ function cekBarisFasilitas(s, decl) {
     );
   });
   return rows;
-}
-
-/* NDPBM draft vs kurs pajak KMK pada tanggal aju (hari ini bila draft
-   tidak mencantumkannya). */
-function cekBarisKurs(decl) {
-  if (decl.ndpbm == null || !cekAda(decl.currency) || typeof kursPajakPada !== "function") return [];
-  const E = EximEngine;
-  const mata = String(decl.currency).trim().toUpperCase();
-  if (mata === "IDR") return [];
-  const baris = cekBarisBaru("VALUE", tt("Kurs pajak", "Tax rate"));
-  const tglAju = cekTanggalAju(decl);
-  const pada = tglAju || todayISO();
-  const k = kursPajakPada(mata, pada);
-  const field = tt("NDPBM ↔ kurs pajak", "NDPBM ↔ tax exchange rate");
-  if (!k.nilai) return [baris(field, "INFO", "", decl.ndpbm, tt(`Kurs pajak ${mata} tidak ada di data/kurs-pajak.json.`, `There is no ${mata} tax rate in data/kurs-pajak.json.`))];
-  const p = k.periode || {};
-  const sama = Math.abs(k.nilai - decl.ndpbm) < 0.005;
-  const catatan = [
-    tt(`Kurs pajak ${mata} KMK ${p.kmk || "—"} (${fmtDate(p.mulai)} – ${fmtDate(p.sampai)}) untuk tanggal ${tglAju ? "aju" : "hari ini"} ${fmtDate(pada)}.`, `${mata} tax rate KMK ${p.kmk || "—"} (${fmtDate(p.mulai)} – ${fmtDate(p.sampai)}) for the ${tglAju ? "aju date" : "current date"} ${fmtDate(pada)}.`),
-  ];
-  if (k.perkiraan) catatan.push(tt("Tanggal itu di luar riwayat kurs yang tersimpan; dipakai periode terdekat.", "That date is outside the stored rate history; the nearest period is used."));
-  if (tglAju && tglAju !== todayISO()) {
-    const kini = kursPajakPada(mata, todayISO());
-    if (kini.nilai && Math.abs(kini.nilai - k.nilai) >= 0.005 && !kini.perkiraan) {
-      catatan.push(tt(`Bila diajukan hari ini berlaku ${cekAngka(kini.nilai)} (KMK ${(kini.periode || {}).kmk || "—"}).`, `If submitted today, ${cekAngka(kini.nilai)} applies (KMK ${(kini.periode || {}).kmk || "—"}).`));
-    }
-  }
-  return [baris(field, sama ? "MATCH" : k.perkiraan ? "INFO" : "MISMATCH", k.nilai, decl.ndpbm, catatan.join(" "), { numeric: true, diff: Math.round((k.nilai - decl.ndpbm) * 10000) / 10000 })];
 }
 
 /* Tanpa CIPL: barang jadwal terkait vs barang draft, menurut urutan --
@@ -1676,7 +1667,7 @@ async function cekJalankan() {
       if (gabung) cekTandaiBarangJadwal(res, gabung, decl, bc);
       res.checks = cekRujukJadwal(res.checks, barisJadwal, pembanding, !!s);
     } else res = { type: decl.type, checks: E.blChecks(decl, extra, decl.type === "PEB").concat(cekBarisBarangJadwal(s, decl, resolve, bc), barisJadwal), cipl: null, decl };
-    res.checks.push(...cekBarisFasilitas(s, decl), ...cekBarisKurs(decl));
+    res.checks.push(...cekBarisFasilitas(s, decl));
     E.summarize(res);
     res.jadwal = s;
     res.saranHs = cekSaranHs(res);
@@ -2094,7 +2085,9 @@ function cekDaftarPilihHtml(q) {
       .map((s) => ({ s, alasan: [] }));
   }
   if (!daftar.length) {
-    return `<div class="cek-pilih-kosong">${escapeHtml(kunci ? tt("Tidak ada jadwal yang cocok.", "No matching schedule.") : tt("Ketik untuk mencari jadwal di buku ini.", "Type to search the schedules in this book."))}</div>`;
+    return `<div class="cek-pilih-kosong">${escapeHtml(kunci ? tt("Tidak ada jadwal yang cocok.", "No matching schedule.") : tt("Ketik untuk mencari jadwal di buku ini.", "Type to search the schedules in this book."))}<small>${escapeHtml(
+      tt("Yang dicari hanya Import berstatus Process / Delay dan Export yang ETD-nya belum lewat.", "Only Import schedules in Process / Delay and Export schedules whose ETD has not passed are searched."),
+    )}</small></div>`;
   }
   return daftar
     .map(

@@ -103,6 +103,9 @@ function router() {
      Dilempar balik ke Jadwal -- satu-satunya halaman yang terbuka untuk
      semua peran, jadi lemparannya tidak mungkin berputar. */
   const halaman = halamanDariHash(hash);
+  // Membuka form dari daftar: posisi gulirnya diingat; halaman lain melupakannya
+  if (halaman === "form") catatPosisiDaftar();
+  else if (halaman !== "schedule") posisiDaftarSebelumForm = null;
   if (!bolehBuka(halaman)) {
     showToast(
       halaman === "form"
@@ -201,9 +204,10 @@ function router() {
     return;
   }
 
-  // Dashboard
+  // Dashboard -- kembali dari form: ke posisi gulir sebelum form dibuka
   showListView();
   render();
+  pulihkanPosisiDaftar();
 }
 
 // Jalankan router ketika URL berubah
@@ -326,6 +330,7 @@ function renderFormPage(id) {
     $("#fEtaUpdate").value = s.etaUpdate || "";
     $("#fEtdUpdate").value = s.etdUpdate || "";
     $("#fActual").value = s.actual || "";
+    $("#fNeededDate").value = s.neededDate || "";
     $("#fStatus").value = s.status || "process";
     draftNotesLog = normalizeNotesLog(s.notesLog, s.notes);
     $("#fIncoterm").value = s.incoterm || "FOB";
@@ -347,12 +352,7 @@ function renderFormPage(id) {
     $("#fBM").value = nilaiPungutan(bulatkanBm(s.bm));
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
-    $("#fPI").value = s.pi || "";
-    $("#fPIDate").value = s.piDate || "";
-    $("#fLS").value = s.ls || "";
-    $("#fLSDate").value = s.lsDate || "";
-    $("#fPolisAsuransi").value = s.polisAsuransi || "";
-    $("#fPolisAsuransiDate").value = s.polisAsuransiDate || "";
+    draftDokPelengkap = rapikanDokPelengkap(dokPelengkapJadwal(s));
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
@@ -388,6 +388,7 @@ function renderFormPage(id) {
       "fEtaUpdate",
       "fEtdUpdate",
       "fActual",
+      "fNeededDate",
       "fFreight",
       "fInsurance",
       "fNdpbm",
@@ -395,12 +396,6 @@ function renderFormPage(id) {
       "fBM",
       "fPPN",
       "fPPH",
-      "fPI",
-      "fPIDate",
-      "fLS",
-      "fLSDate",
-      "fPolisAsuransi",
-      "fPolisAsuransiDate",
       "fPackage",
     ].forEach((fid) => ($("#" + fid).value = ""));
     $("#fMuatan").value = "";
@@ -413,9 +408,14 @@ function renderFormPage(id) {
     draftItems = [newItem()];
     draftNotesLog = [];
     draftStops = [];
+    draftDokPelengkap = dokPelengkapKosong();
   }
+  // Lampiran yang dilepas & progres hasil impor milik form sebelumnya dibuang
+  berkasDilepasForm = [];
+  resetProgresImporForm();
   applyTransportLabels();
   applyDelayFieldVisibility();
+  resetSelarasTiba();
   tandaiTanggalBlTersimpan();
   /* "CONSIGNEE NOTE" yang tersimpan tetap dikelola otomatis selama
      syaratnya masih berlaku (modal-fields.js) -- dibaca SEBELUM
@@ -433,6 +433,7 @@ function renderFormPage(id) {
   autoSizePackageFooter();
   $("#fNoteDraft").value = "";
   renderItemTable();
+  renderDokPelengkapForm();
   renderRouteStopsUI();
   /* Urutannya penting */
   initAutoDutyFlags();
@@ -503,8 +504,37 @@ Object.keys(PASANGAN_TANGGAL_BL).forEach((id) => {
     samakanTanggalBl(id);
   };
   el.addEventListener("input", ubah);
-  el.addEventListener("change", ubah);
+  el.addEventListener("change", () => {
+    ubah();
+    etdIkutTanggalBl();
+  });
 });
+
+/* ETD MENGIKUTI TANGGAL B/L-AWB.
+
+   Tanggal Master B/L-AWB (House kalau Master kosong) = tanggal kapal /
+   pesawat benar-benar berangkat. Begitu tanggal itu ada -- diketik, atau
+   dari impor dokumen pabean (terapkanTanggalDokumen, apply-to-form.js) --
+   ETD berubah ke tanggal itu. Status Delay: yang diubah ETD revisi
+   (Update ETD); ETD rencana tetap, karena selisih keduanya itulah lamanya
+   delay.
+
+   Lewat event "change" kotaknya, jadi aturan yang menempel di ETD
+   (revisi gugur, status Export, hitung ulang ETA) ikut berjalan; kalimat
+   penyesuaiannya dititipkan ke event itu supaya semuanya jadi SATU
+   toast. Hasil { el, pesan }, atau null kalau tidak ada yang berubah. */
+function etdIkutTanggalBl() {
+  const tgl = $("#fMasterBLDate").value || $("#fHouseBLDate").value;
+  if (!tgl) return null;
+  const delay = $("#fStatus").value === "delayed" && !!$("#fEtd").value;
+  const el = $(delay ? "#fEtdUpdate" : "#fEtd");
+  if (el.value === tgl) return null;
+  el.value = tgl;
+  const pesan = tt(`${delay ? "ETD revisi" : "ETD"} mengikuti tanggal B/L-AWB: ${fmtDate(tgl)}.`,
+    `${delay ? "Revised ETD" : "ETD"} follows the B/L-AWB date: ${fmtDate(tgl)}.`);
+  el.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: { pesan } }));
+  return { el, pesan };
+}
 
 /* PENANDA LANGKAH & KELENGKAPAN */
 function syncFormStep() {
@@ -585,6 +615,12 @@ function applyDelayFieldVisibility() {
         : t("x.tidak.ada.perubahan.dari", { basis: info.basis, rentang });
 }
 $("#fStatus").addEventListener("change", applyDelayFieldVisibility);
+$("#fStatus").addEventListener("change", () => {
+  if (!selarasTibaJalan) kabarkanForm(selaraskanTibaDariStatus());
+});
+$("#fFactoryDate").addEventListener("change", () => {
+  if (!selarasTibaJalan) kabarkanForm(selaraskanStatusDariTiba());
+});
 ["fEta", "fEtd", "fEtaUpdate", "fEtdUpdate"].forEach((idf) => {
   $("#" + idf).addEventListener("change", applyDelayFieldVisibility);
 });
@@ -646,15 +682,32 @@ function kembalikanStatusBelumBerangkat() {
     `ETD ${fmtDate(berlaku)} has not passed — status set back to ${statusLabel("process", "export")}.`);
 }
 
-// Satu toast untuk satu perubahan: dua kalimat digabung, bukan saling menimpa
+/* Satu toast untuk satu perubahan: kalimat-kalimatnya digabung, bukan
+   saling menimpa. Selama impor berkas (tampungKabarForm) kalimatnya
+   ditampung jadi catatan impor, bukan toast tersendiri. */
+let tampunganKabarForm = null;
 function kabarkanForm(...pesan) {
   const isi = pesan.filter(Boolean).join(" ");
-  if (isi) showToast(isi, "dark");
+  if (!isi) return;
+  if (tampunganKabarForm) tampunganKabarForm.push(isi);
+  else showToast(isi, "info");
 }
-$("#fEtd").addEventListener("change", () => kabarkanForm(gugurkanRevisiForm("etd"), kembalikanStatusBelumBerangkat()));
+function tampungKabarForm(fn) {
+  const sebelum = tampunganKabarForm;
+  const tampung = (tampunganKabarForm = []);
+  try {
+    fn();
+  } finally {
+    tampunganKabarForm = sebelum;
+  }
+  return tampung;
+}
+// Kalimat yang dititipkan ke event "change" buatan (etdIkutTanggalBl)
+const pesanEvent = (e) => (e && e.detail && e.detail.pesan) || "";
+$("#fEtd").addEventListener("change", (e) => kabarkanForm(pesanEvent(e), gugurkanRevisiForm("etd"), kembalikanStatusBelumBerangkat()));
 $("#fEta").addEventListener("change", () => kabarkanForm(gugurkanRevisiForm("eta")));
-$("#fEtdUpdate").addEventListener("change", () => {
-  if (!revisiSedangDikosongkan) kabarkanForm(kembalikanStatusBelumBerangkat());
+$("#fEtdUpdate").addEventListener("change", (e) => {
+  if (!revisiSedangDikosongkan) kabarkanForm(pesanEvent(e), kembalikanStatusBelumBerangkat());
 });
 $("#btnHapusRevisi").addEventListener("click", () => {
   kosongkanRevisiForm(["etdUpdate", "etaUpdate"].filter((k) => $(KOTAK_REVISI[k]).value));
@@ -663,6 +716,77 @@ $("#btnHapusRevisi").addEventListener("click", () => {
     kembalikanStatusBelumBerangkat(),
   );
 });
+
+/* IMPORT: STATUS ARRIVED <-> TANGGAL IN FACTORY, DUA ARAH.
+
+   In Factory = tanggal barang benar-benar masuk pabrik, bukti kiriman
+   Import sudah tiba (kolomPenyebabTiba, core/status.js). Di form keduanya
+   selalu sejalan, dan tiap penyesuaian dikatakan lewat satu toast:
+     - Status -> Arrived, In Factory kosong: diisi HARI INI (atau tanggal
+       yang tadi dikosongkan di form ini);
+     - Status -> selain Arrived: In Factory (& jamnya) dikosongkan --
+       diingat, kembali lagi kalau statusnya dikembalikan ke Arrived;
+     - In Factory diisi: status Arrived; dikosongkan: status sebelum
+       Arrived (atau Process).
+   Buku Export tidak: kotak In Factory tersembunyi di sana. */
+let selarasTibaJalan = false;
+function ubahStatusForm(nilai) {
+  const el = $("#fStatus");
+  el.value = nilai;
+  selarasTibaJalan = true;
+  try {
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  } finally {
+    selarasTibaJalan = false;
+  }
+}
+
+function selaraskanTibaDariStatus() {
+  if (activeMode !== "import") return "";
+  const tgl = $("#fFactoryDate");
+  const jam = $("#fFactoryTime");
+  if ($("#fStatus").value === "arrived") {
+    if (tgl.value) return "";
+    tgl.value = tgl.dataset.sebelum || todayISO();
+    jam.value = tgl.dataset.sebelumJam || jam.value;
+    delete tgl.dataset.sebelum;
+    delete tgl.dataset.sebelumJam;
+    syncStatusTibaHint();
+    return tt(`In Factory diisi ${fmtDate(tgl.value)} — ubah kalau barangnya masuk pabrik di tanggal lain.`,
+      `In Factory set to ${fmtDate(tgl.value)} — change it if the goods entered the factory on another date.`);
+  }
+  if (!tgl.value) return "";
+  const lama = tgl.value;
+  tgl.dataset.sebelum = lama;
+  tgl.dataset.sebelumJam = jam.value;
+  tgl.value = "";
+  jam.value = "";
+  syncStatusTibaHint();
+  return tt(`In Factory ${fmtDate(lama)} dikosongkan — barangnya belum masuk pabrik.`, `In Factory ${fmtDate(lama)} cleared — the goods have not entered the factory.`);
+}
+
+function selaraskanStatusDariTiba() {
+  if (activeMode !== "import") return "";
+  const status = $("#fStatus");
+  if ($("#fFactoryDate").value) {
+    delete $("#fFactoryDate").dataset.sebelum;
+    if (status.value === "arrived") return "";
+    status.dataset.sebelumTiba = status.value;
+    ubahStatusForm("arrived");
+    return tt(`Status jadi ${statusLabel("arrived", "import")}: In Factory sudah diisi.`, `Status set to ${statusLabel("arrived", "import")}: In Factory is filled in.`);
+  }
+  if (status.value !== "arrived") return "";
+  ubahStatusForm(status.dataset.sebelumTiba || "process");
+  delete status.dataset.sebelumTiba;
+  return tt(`Status kembali ${statusLabel(status.value, "import")}: In Factory dikosongkan.`, `Status set back to ${statusLabel(status.value, "import")}: In Factory was cleared.`);
+}
+
+// Form dibuka: ingatan penyelarasan dari form sebelumnya dibuang
+function resetSelarasTiba() {
+  delete $("#fStatus").dataset.sebelumTiba;
+  delete $("#fFactoryDate").dataset.sebelum;
+  delete $("#fFactoryDate").dataset.sebelumJam;
+}
 
 /* STATUS YANG TIDAK AKAN BERLAKU
 
@@ -704,16 +828,14 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   /* Isian yang kurang tidak hanya disebut di pesan: langkahnya dibuka
      dan kursornya dibawa ke kotak itu, siap diisi. */
   if (!$("#fEtd").value || !$("#fEta").value) {
-    showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger");
+    showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger", { judul: tt("Belum lengkap", "Incomplete") });
     pilihTabForm("umum");
     tandaiIsianKurang($(!$("#fEtd").value ? "#fEtd" : "#fEta"));
     return;
   }
   const cleanItems = draftItems.filter((it) => it.namaBarang.trim() !== "");
   if (cleanItems.length === 0) {
-    showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"),
-      "danger",
-    );
+    showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"), "danger", { judul: tt("Belum lengkap", "Incomplete") });
     pilihTabForm("barang");
     tandaiIsianKurang($('#itemTableBody [data-f="namaBarang"]'));
     return;
@@ -728,6 +850,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     showToast(
       tt('Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".', 'Please add at least 1 Transit Terminal, or change the Route Type to "Direct".'),
       "danger",
+      { judul: tt("Belum lengkap", "Incomplete") },
     );
     pilihTabForm("umum");
     const terminal = $('#routeStopsBody [data-f="terminal"]');
@@ -754,10 +877,11 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     forwarderPic: $("#fForwarderPic").value.trim(),
     vessel: $("#fVessel").value.trim(),
     voyage: $("#fVoyage").value.trim(),
-    container: $("#fContainer").value.trim(),
+    // Peti kemas & jenis muatan hanya kiriman laut (muatanKiriman / kontainerKiriman)
+    container: kontainerKiriman({ transport: $("#fTransport").value, container: $("#fContainer").value.trim() }),
     // No. Kendaraan bebas format: disimpan persis seperti diketik (tepi spasi saja yang dibuang)
     vehicleNo: $("#fVehicleNo").value.trim(),
-    muatan: $("#fMuatan").value,
+    muatan: muatanKiriman({ transport: $("#fTransport").value, muatan: $("#fMuatan").value }),
     routeType: routeType,
     origin: $("#fOrigin").value.trim(),
     destination: $("#fDestination").value.trim(),
@@ -778,6 +902,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     etaMode: typeof formEtaMode === "string" ? formEtaMode : "auto",
     deliveryMode: typeof formDeliveryMode === "string" ? formDeliveryMode : "auto",
     actual: $("#fActual").value,
+    // Dibutuhkan di pabrik -- buku Import saja (kotaknya tersembunyi di Export)
+    ...(activeMode === "import" ? { neededDate: $("#fNeededDate").value } : {}),
     status: $("#fStatus").value,
     notesLog: draftNotesLog,
     // `notes` = teks entri terbaru
@@ -807,12 +933,9 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     bm: parseInputNumber($("#fBM").value),
     ppn: parseInputNumber($("#fPPN").value),
     pph: parseInputNumber($("#fPPH").value),
-    pi: $("#fPI").value.trim(),
-    piDate: $("#fPIDate").value,
-    ls: $("#fLS").value.trim(),
-    lsDate: $("#fLSDate").value,
-    polisAsuransi: $("#fPolisAsuransi").value.trim(),
-    polisAsuransiDate: $("#fPolisAsuransiDate").value,
+    /* PI, LS & Polis Asuransi (buku Import) + dokumen lain; kolom lama
+       pi / pi_date, ... ditulis dari ringkasannya (shipmentToRow) */
+    dokPelengkap: dokPelengkapForm(),
     package: joinPackageFields(),
   };
 
@@ -834,6 +957,13 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   await simpanJadwalForm(id, payload, cleanItems, cleanStops);
 });
 
+/* LAMPIRAN & PROGRES IKUT TERSIMPAN BERSAMA JADWAL.
+     1. Berkas PI / LS yang menunggu diunggah lebih dulu (dok-pelengkap.js)
+        -- payload.dokPelengkap disusun ulang sesudahnya, memuat path-nya.
+     2. Progres hasil impor dokumen pabean digabung ke progres TERBARU
+        jadwal ini (doc-steps.js), bukan salinan saat form dibuka.
+     3. Simpanan berhasil -> lampiran yang dilepas di form ini baru
+        dihapus dari bucket (gagal: tidak ada yang dihapus). */
 async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   const btn = $("#btnSaveShipment");
   const originalLabel = btn.innerHTML;
@@ -841,11 +971,25 @@ async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
   btn.innerHTML =
     '<span class="spinner-border spinner-border-sm" role="status"></span> ' + tt("Menyimpan...", "Saving...");
   try {
+    if (adaLampiranTertundaForm()) {
+      try {
+        await unggahLampiranForm(id);
+      } catch (e) {
+        console.error(e);
+        showToast(pesanGalatLampiran(e), "danger");
+        return;
+      }
+      payload.dokPelengkap = dokPelengkapForm();
+    }
+    const progres = progresSimpanForm(id);
+    if (progres) payload.docProgress = progres;
     if (id) {
       await updateShipmentRecord(id, payload, cleanItems, cleanStops);
     } else {
       await createShipment(payload, cleanItems, cleanStops);
     }
+    hapusLampiran(berkasDilepasForm);
+    berkasDilepasForm = [];
     await loadShipments();
     goBackToList();
     showToast(t("m.jadwal.berhasil.disimpan"), "success");

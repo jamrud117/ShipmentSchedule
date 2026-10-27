@@ -40,10 +40,15 @@ function configuredOpsDays(ctx) {
     }
   }
   const d = (rule && rule.days && rule.days[ctx.shipmentType]) || {};
+  /* Jalur PIB yang sudah dicatat menggantikan angka clearance umum:
+     Hijau/MITA langsung SPPB, Merah menunggu pemeriksaan fisik. */
+  const jalur = ctx.jalur ? jalurInfo(ctx.jalur) : null;
+  const clrJalur = jalur && jalur.clearance ? jalur.clearance[ctx.shipmentType] : null;
   return {
     stripping: Math.max(0, Number(d.stripping) || 0),
-    clearance: Math.max(0, Number(d.clearance) || 0),
+    clearance: Math.max(0, Number(clrJalur != null ? clrJalur : d.clearance) || 0),
     delivery: Math.max(0, Number(d.delivery) || 0),
+    jalur: clrJalur != null ? ctx.jalur : "",
     ruleId: (rule && rule.id) || "",
     ruleLabel: (rule && rule.label) || "",
   };
@@ -74,6 +79,7 @@ function predictionOpsDays(ctx) {
     stripping: dasar.stripping,
     clearance: clearance,
     delivery: delivery,
+    jalur: dasar.jalur,
     learned: dipelajari,
     ruleId: dasar.ruleId,
     ruleLabel: dasar.ruleLabel,
@@ -147,42 +153,51 @@ function courierCommitmentFor(s, ctx) {
 /* Kapan alat angkut benar-benar tiba. Inilah jangkar seluruh proses
    darat — stripping tidak bisa mulai sebelum kapalnya sandar.
 
-   Urutannya dari yang paling pasti:
+   Urutannya dari yang paling pasti (kedatanganTercatat,
+   prediction-milestones.js):
 
      1. tahap SANDAR         tanggal ATA yang dikonfirmasi pengguna.
                              Satu-satunya yang benar-benar menyatakan
                              "alat angkutnya sudah di sini".
 
-     2. tanggal Manifest     CADANGAN, dan sengaja diakui lemah.
-                             BC 1.1 diajukan pengangkut SEBELUM kapal
-                             sandar, jadi memakainya selalu meleset ke
-                             arah yang sama — sehari terlalu awal, tiap
-                             kali. Tetap dipakai karena ribuan jadwal
-                             lama hanya punya ini, dan sehari terlalu
-                             awal masih jauh lebih baik daripada ETA
-                             yang sudah basi berminggu-minggu.
+     2. KAPAL YANG SAMA      Sandar/ATA yang dikonfirmasi di kiriman
+                             lain dengan kapal + voyage yang sama.
 
-     3. ETA yang berlaku     tebakan.
+     3. tanggal Manifest     CADANGAN. BC 1.1 diajukan pengangkut
+                             SEBELUM kapal sandar, jadi tanggalnya
+                             ditambah jeda yang biasa terjadi (sehari
+                             untuk laut, dipelajari dari riwayat) --
+                             dan tetap hanya batas bawah bagi ETA.
+
+     4. ETA yang berlaku     tebakan.
 
    `s.ata` dibaca lebih dulu kalau suatu saat kolomnya ditambahkan. */
 
 function arrivalInfoOf(s) {
-  if (s && s.ata) {
-    return { date: s.ata, label: tt("ATA (Aktual)", "ATA (Actual)"), confirmed: true };
-  }
-
-  const berth = milestoneDateOf(s, "berth");
-  if (berth) {
-    return {
-      date: berth,
-      label: s && s.transport === "udara" ? tt("Mendarat (ATA)", "Landed (ATA)") : tt("Sandar (ATA)", "Berthed (ATA)"),
-      confirmed: true,
-    };
+  const udara = !!(s && s.transport === "udara");
+  const bukti = kedatanganTercatat(s);
+  if (bukti && bukti.confirmed) {
+    const label =
+      bukti.kind === "ata"
+        ? tt("ATA (Aktual)", "ATA (Actual)")
+        : bukti.kind === "sekapal"
+          ? udara
+            ? tt("Mendarat (penerbangan yang sama)", "Landed (same flight)")
+            : tt("Sandar (kapal & voyage yang sama)", "Berthed (same vessel & voyage)")
+          : udara
+            ? tt("Mendarat (ATA)", "Landed (ATA)")
+            : tt("Sandar (ATA)", "Berthed (ATA)");
+    return { date: bukti.date, label, confirmed: true, kind: bukti.kind };
   }
 
   // ETA yang BERLAKU — kotak delay menang atas ETA rencana.
   const eta = predictionEtaBasis(s);
-  const manifest = milestoneDateOf(s, "manifest");
+  const manifest = bukti ? bukti.date : "";
+  const labelManifest = bukti
+    ? t("s.kedatangan.perkiraan.dari.manifest") +
+      (bukti.jeda ? tt(` + ${bukti.jeda} hari`, ` + ${bukti.jeda} ${bukti.jeda === 1 ? "day" : "days"}`) : "") +
+      (bukti.sekapal ? tt(" · kapal yang sama", " · same vessel") : "")
+    : "";
   const dariEtdMundur =
     !!(s && s.etdUpdate && !s.etaUpdate && etaModeOf(s) === "auto");
   const labelEta = s && s.etaUpdate
@@ -207,13 +222,13 @@ function arrivalInfoOf(s) {
      memang meleset dan Manifest yang lebih layak dipercaya. */
   if (manifest && eta) {
     return manifest > eta
-      ? { date: manifest, label: t("s.kedatangan.perkiraan.dari.manifest"), confirmed: false }
-      : { date: eta, label: labelEta, confirmed: false };
+      ? { date: manifest, label: labelManifest, confirmed: false, kind: "manifest" }
+      : { date: eta, label: labelEta, confirmed: false, kind: "eta" };
   }
   if (manifest) {
-    return { date: manifest, label: t("s.kedatangan.perkiraan.dari.manifest"), confirmed: false };
+    return { date: manifest, label: labelManifest, confirmed: false, kind: "manifest" };
   }
-  return { date: eta, label: labelEta, confirmed: false };
+  return { date: eta, label: labelEta, confirmed: false, kind: "eta" };
 }
 
 // Kedatangan sudah PASTI, bukan lagi diturunkan dari dokumen.
@@ -233,12 +248,14 @@ function legUsesCalendarDays(key) {
 function legUnitLabel(key) {
   return legUsesCalendarDays(key) ? tt("hari kalender", "calendar days") : tt("hari kerja", "working days");
 }
-/* Maju sekian hari menurut satuan langkah itu sendiri. */
+/* Maju sekian hari menurut satuan langkah itu sendiri. Langkah hari
+   kerja ikut melompati hari tutup khusus langkah itu -- pembatasan
+   truk Lebaran/Nataru untuk antar ke pabrik (hariTutupLangkah). */
 
-function advanceLeg(dari, hari, key) {
+function advanceLeg(dari, hari, key, ctx) {
   return legUsesCalendarDays(key)
     ? addCalendarDaysISO(dari, hari)
-    : addWorkingDaysISO(dari, hari);
+    : addWorkingDaysISO(dari, hari, hariTutupLangkah(key, ctx));
 }
 /* Menyusun sisa jadwal dari titik yang sudah pasti sampai ke pabrik.
    Mengembalikan tanggal akhir + rincian langkahnya. */
@@ -298,7 +315,11 @@ function buildDeliverySchedule(s, ops, ctx) {
 
      Jadi pengantaran mulai dari yang PALING BELAKANG di antara SPPB
      dan kedatangan. Kalau tidak, papan akan menjanjikan barang sampai
-     pabrik sebelum pesawatnya menyentuh landasan. */
+     pabrik sebelum pesawatnya menyentuh landasan.
+
+     LCL juga menunggu STRIPPING: SPPB boleh terbit lebih dulu, tapi
+     barangnya baru bisa diambil setelah dibongkar dari kontainer
+     gabungan di CFS. */
   if (sppb) {
     let mulai = sppb;
     if (kedatangan.date && kedatangan.date > mulai) {
@@ -311,7 +332,20 @@ function buildDeliverySchedule(s, ops, ctx) {
       });
       mulai = kedatangan.date;
     }
-    const akhir = advanceLeg(mulai, ops.delivery, "delivery");
+    if (pakaiStripping && kedatangan.date) {
+      const selesaiStripping = advanceLeg(kedatangan.date, ops.stripping, "stripping", ctx);
+      if (selesaiStripping > mulai) {
+        langkah.push({
+          key: "waitStripping",
+          label: tt("Menunggu stripping di CFS selesai", "Waiting for CFS stripping to finish"),
+          days: null,
+          from: mulai,
+          to: selesaiStripping,
+        });
+        mulai = selesaiStripping;
+      }
+    }
+    const akhir = advanceLeg(mulai, ops.delivery, "delivery", ctx);
     if (ops.delivery > 0) {
       langkah.push({
         key: "delivery",
@@ -342,7 +376,7 @@ function buildDeliverySchedule(s, ops, ctx) {
   /* Stripping memakai HARI KALENDER: CFS membongkar terus, termasuk
      akhir pekan dan hari libur. */
   if (pakaiStripping) {
-    const sesudah = advanceLeg(cur, ops.stripping, "stripping");
+    const sesudah = advanceLeg(cur, ops.stripping, "stripping", ctx);
     langkah.push({
       key: "stripping",
       label: tt("Stripping di CFS", "Stripping at CFS"),
@@ -379,10 +413,11 @@ function buildDeliverySchedule(s, ops, ctx) {
      di akhir pekan, langkah berikutnya otomatis maju ke hari kerja
      terdekat — itu perilaku addWorkingDaysISO, bukan tambalan. */
   if (ops.clearance > 0) {
-    const sesudah = advanceLeg(cur, ops.clearance, "clearance");
+    const sesudah = advanceLeg(cur, ops.clearance, "clearance", ctx);
+    const jalur = ops.jalur ? jalurInfo(ops.jalur) : null;
     langkah.push({
       key: "clearance",
-      label: "Customs clearance",
+      label: jalur ? `Customs clearance · ${tt("jalur", "lane")} ${jalur.label}` : "Customs clearance",
       days: ops.clearance,
       unit: legUnitLabel("clearance"),
       from: cur,
@@ -392,7 +427,7 @@ function buildDeliverySchedule(s, ops, ctx) {
   }
 
   if (ops.delivery > 0) {
-    const sesudah = advanceLeg(cur, ops.delivery, "delivery");
+    const sesudah = advanceLeg(cur, ops.delivery, "delivery", ctx);
     langkah.push({
       key: "delivery",
       label: t("v.antar.ke.pabrik"),
@@ -585,23 +620,20 @@ function predictDelivery(src) {
           days: penyangga,
         });
       }
-      hasil = jalankanLangkahKerja(hariIni, sisa);
+      hasil = jalankanLangkahKerja(hariIni, sisa, ctx);
       baseLabel = tt("Hari ini (perkiraan sebelumnya terlewat)", "Today (previous estimate passed)");
     }
   }
 
   /* ---- Rentang, hanya selama kedatangan masih tebakan mesin ---- */
-  const kedatanganMasihTebakan =
-    !arrivalConfirmedOf(s) &&
-    !milestoneDateOf(s, "manifest") &&
-    !milestoneDateOf(s, "sppb");
+  const kedatanganMasihTebakan = !kedatanganTercatat(s) && !milestoneDateOf(s, "sppb");
   if (kedatanganMasihTebakan && !digeser && etaModeOf(s) === "auto" && !s.etaUpdate && ctx.etd) {
     const e = predictEta(s);
     if (e.ok && e.hasRange) {
       const langkahBersih = jadwal.steps.filter((l) => l.days > 0);
       rentang = {
-        earliest: jalankanLangkahKerja(e.etaEarliest, langkahBersih).date,
-        latest: jalankanLangkahKerja(e.etaLatest, langkahBersih).date,
+        earliest: jalankanLangkahKerja(e.etaEarliest, langkahBersih, ctx).date,
+        latest: jalankanLangkahKerja(e.etaLatest, langkahBersih, ctx).date,
         etaEarliest: e.etaEarliest,
         etaLatest: e.etaLatest,
         daysMin: e.daysMin,
@@ -628,6 +660,7 @@ function predictDelivery(src) {
       realityShifted: digeser,
       learned: belajar || !!transit.learned,
       arrivalConfirmed: arrivalConfirmedOf(s),
+      laneKnown: !!ops.jalur && !milestoneDateOf(s, "sppb"),
     }),
     base: digeser ? hariIni : jadwal.base,
     baseLabel: baseLabel,
@@ -640,12 +673,12 @@ function predictDelivery(src) {
 /* Menjalankan rangkaian proses darat satu per satu, mencatat tanggal
    selesai tiap langkah supaya bisa ditampilkan sebagai rincian. */
 
-function jalankanLangkahKerja(mulai, langkah) {
+function jalankanLangkahKerja(mulai, langkah, ctx) {
   let cur = mulai;
   const rinci = [];
   (langkah || []).forEach((l) => {
     const dari = cur;
-    cur = advanceLeg(cur, l.days, l.key);
+    cur = advanceLeg(cur, l.days, l.key, ctx);
     // `key` & `unit` ikut dibawa: tampilan dan uji perlu tahu langkah
     // APA ini dan satuannya, bukan cuma tulisannya.
     rinci.push({

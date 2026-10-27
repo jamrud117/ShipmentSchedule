@@ -56,24 +56,147 @@
 ================================================================== */
 
 const PREDICTION_CONFIG = {
-  version: "1.0.0",
+  version: "1.1.0",
 
   /* ----------------------------------------------------------------
      KALENDER
 
-     Dipakai oleh hitungan HARI KERJA saja. Transit tetap memakai hari
-     kalender.
+     Dipakai oleh hitungan HARI KERJA saja (clearance, antar ke pabrik,
+     komitmen kurir). Transit & stripping tetap hari kalender.
 
      weekendDays: 0 = Minggu … 6 = Sabtu.
 
-     holidays: hari libur nasional, format "YYYY-MM-DD". Sengaja
-     dibiarkan kosong — begitu diisi, seluruh perhitungan stripping,
-     clearance, dan pengantaran otomatis melompatinya tanpa satu baris
-     kode pun berubah.
+     holidays / collectiveLeave: libur nasional & cuti bersama menurut
+     SKB 3 Menteri (setneg.go.id), termasuk revisi 18-08-2025. Tahun
+     berikutnya cukup ditambahkan di sini begitu SKB-nya terbit --
+     biasanya sekitar September tahun sebelumnya.
+
+     countCollectiveLeave: cuti bersama ikut dihitung tutup. Pabrik,
+     PPJK, dan sebagian besar layanan Bea Cukai bekerja minimal di hari
+     itu; Lebaran tanpa cuti bersama membuat perkiraan meleset sepekan.
+
+     freightRestrictions: masa pembatasan angkutan barang (truk sumbu
+     tiga ke atas, trailer, gandengan) di tol & arteri, termasuk ruas
+     Cawang–Tanjung Priok dan Jakarta–Cikampek. Hanya menahan langkah
+     antar ke pabrik (`legs`), hanya untuk tipe di `appliesTo` --
+     kontainer FCL diangkut trailer; udara & LCL biasanya truk kecil.
+     Sumber: SKB Lebaran & Nataru Kemenhub-Korlantas-PUPR.
   ---------------------------------------------------------------- */
   calendar: {
     weekendDays: [0, 6],
-    holidays: [],
+    holidays: [
+      { date: "2025-01-01", name: "Tahun Baru 2025 Masehi" },
+      { date: "2025-01-27", name: "Isra Mikraj Nabi Muhammad SAW" },
+      { date: "2025-01-29", name: "Tahun Baru Imlek 2576 Kongzili" },
+      { date: "2025-03-29", name: "Hari Suci Nyepi (Tahun Baru Saka 1947)" },
+      { date: "2025-03-31", name: "Idulfitri 1446 H" },
+      { date: "2025-04-01", name: "Idulfitri 1446 H" },
+      { date: "2025-04-18", name: "Wafat Yesus Kristus" },
+      { date: "2025-04-20", name: "Kebangkitan Yesus Kristus (Paskah)" },
+      { date: "2025-05-01", name: "Hari Buruh Internasional" },
+      { date: "2025-05-12", name: "Hari Raya Waisak 2569 BE" },
+      { date: "2025-05-29", name: "Kenaikan Yesus Kristus" },
+      { date: "2025-06-01", name: "Hari Lahir Pancasila" },
+      { date: "2025-06-06", name: "Iduladha 1446 H" },
+      { date: "2025-06-27", name: "1 Muharam Tahun Baru Islam 1447 H" },
+      { date: "2025-08-17", name: "Proklamasi Kemerdekaan" },
+      { date: "2025-09-05", name: "Maulid Nabi Muhammad SAW" },
+      { date: "2025-12-25", name: "Kelahiran Yesus Kristus" },
+
+      { date: "2026-01-01", name: "Tahun Baru 2026 Masehi" },
+      { date: "2026-01-16", name: "Isra Mikraj Nabi Muhammad SAW" },
+      { date: "2026-02-17", name: "Tahun Baru Imlek 2577 Kongzili" },
+      { date: "2026-03-19", name: "Hari Suci Nyepi (Tahun Baru Saka 1948)" },
+      { date: "2026-03-21", name: "Idulfitri 1447 H" },
+      { date: "2026-03-22", name: "Idulfitri 1447 H" },
+      { date: "2026-04-03", name: "Wafat Yesus Kristus" },
+      { date: "2026-04-05", name: "Kebangkitan Yesus Kristus (Paskah)" },
+      { date: "2026-05-01", name: "Hari Buruh Internasional" },
+      { date: "2026-05-14", name: "Kenaikan Yesus Kristus" },
+      { date: "2026-05-27", name: "Iduladha 1447 H" },
+      { date: "2026-05-31", name: "Hari Raya Waisak 2570 BE" },
+      { date: "2026-06-01", name: "Hari Lahir Pancasila" },
+      { date: "2026-06-16", name: "1 Muharam Tahun Baru Islam 1448 H" },
+      { date: "2026-08-17", name: "Proklamasi Kemerdekaan" },
+      { date: "2026-08-25", name: "Maulid Nabi Muhammad SAW" },
+      { date: "2026-12-25", name: "Kelahiran Yesus Kristus" },
+
+      { date: "2027-01-01", name: "Tahun Baru 2027 Masehi" },
+      { date: "2027-01-05", name: "Isra Mikraj Nabi Muhammad SAW" },
+      { date: "2027-02-06", name: "Tahun Baru Imlek 2578 Kongzili" },
+      { date: "2027-03-08", name: "Hari Suci Nyepi (Tahun Baru Saka 1949)" },
+      { date: "2027-03-10", name: "Idulfitri 1448 H" },
+      { date: "2027-03-11", name: "Idulfitri 1448 H" },
+      { date: "2027-03-26", name: "Wafat Yesus Kristus" },
+      { date: "2027-03-28", name: "Kebangkitan Yesus Kristus (Paskah)" },
+      { date: "2027-05-01", name: "Hari Buruh Internasional" },
+      { date: "2027-05-06", name: "Kenaikan Yesus Kristus" },
+      { date: "2027-05-17", name: "Iduladha 1448 H" },
+      { date: "2027-05-20", name: "Hari Raya Waisak 2571 BE" },
+      { date: "2027-06-01", name: "Hari Lahir Pancasila" },
+      { date: "2027-06-06", name: "1 Muharam Tahun Baru Islam 1449 H" },
+      { date: "2027-08-15", name: "Maulid Nabi Muhammad SAW" },
+      { date: "2027-08-17", name: "Proklamasi Kemerdekaan" },
+      { date: "2027-12-25", name: "Kelahiran Yesus Kristus" },
+      { date: "2027-12-26", name: "Isra Mikraj Nabi Muhammad SAW" },
+    ],
+    collectiveLeave: [
+      { date: "2025-01-28", name: "Tahun Baru Imlek 2576 Kongzili" },
+      { date: "2025-03-28", name: "Hari Suci Nyepi" },
+      { date: "2025-04-02", name: "Idulfitri 1446 H" },
+      { date: "2025-04-03", name: "Idulfitri 1446 H" },
+      { date: "2025-04-04", name: "Idulfitri 1446 H" },
+      { date: "2025-04-07", name: "Idulfitri 1446 H" },
+      { date: "2025-05-13", name: "Hari Raya Waisak" },
+      { date: "2025-05-30", name: "Kenaikan Yesus Kristus" },
+      { date: "2025-06-09", name: "Iduladha 1446 H" },
+      { date: "2025-08-18", name: "Proklamasi Kemerdekaan" },
+      { date: "2025-12-26", name: "Kelahiran Yesus Kristus" },
+
+      { date: "2026-02-16", name: "Tahun Baru Imlek 2577 Kongzili" },
+      { date: "2026-03-18", name: "Hari Suci Nyepi" },
+      { date: "2026-03-20", name: "Idulfitri 1447 H" },
+      { date: "2026-03-23", name: "Idulfitri 1447 H" },
+      { date: "2026-03-24", name: "Idulfitri 1447 H" },
+      { date: "2026-05-15", name: "Kenaikan Yesus Kristus" },
+      { date: "2026-05-28", name: "Iduladha 1447 H" },
+      { date: "2026-12-24", name: "Kelahiran Yesus Kristus" },
+
+      { date: "2027-02-05", name: "Tahun Baru Imlek 2578 Kongzili" },
+      { date: "2027-03-09", name: "Idulfitri 1448 H" },
+      { date: "2027-03-12", name: "Idulfitri 1448 H" },
+      { date: "2027-03-15", name: "Idulfitri 1448 H" },
+      { date: "2027-03-25", name: "Wafat Yesus Kristus" },
+      { date: "2027-05-18", name: "Iduladha 1448 H" },
+      { date: "2027-05-19", name: "Hari Raya Waisak" },
+      { date: "2027-12-24", name: "Kelahiran Yesus Kristus" },
+    ],
+    countCollectiveLeave: true,
+    /* Lebaran 2026 mulai 13-03 pukul 12.00 -- pagi itu truk masih
+       jalan, jadi hari tutupnya dihitung dari 14-03. Pembatasan
+       Lebaran 2027 belum diterbitkan; tambahkan begitu SKB-nya keluar. */
+    freightRestrictions: [
+      {
+        from: "2025-03-24", to: "2025-04-08", appliesTo: ["SEA_FCL"],
+        get name() { return tt("Pembatasan truk Lebaran 2025", "Lebaran 2025 truck restriction"); },
+      },
+      {
+        from: "2025-12-19", to: "2025-12-20", appliesTo: ["SEA_FCL"],
+        get name() { return tt("Pembatasan truk Nataru 2025/2026", "Christmas–New Year 2025/2026 truck restriction"); },
+      },
+      {
+        from: "2025-12-23", to: "2025-12-28", appliesTo: ["SEA_FCL"],
+        get name() { return tt("Pembatasan truk Nataru 2025/2026", "Christmas–New Year 2025/2026 truck restriction"); },
+      },
+      {
+        from: "2026-01-02", to: "2026-01-04", appliesTo: ["SEA_FCL"],
+        get name() { return tt("Pembatasan truk Nataru 2025/2026", "Christmas–New Year 2025/2026 truck restriction"); },
+      },
+      {
+        from: "2026-03-14", to: "2026-03-29", appliesTo: ["SEA_FCL"],
+        get name() { return tt("Pembatasan truk Lebaran 2026", "Lebaran 2026 truck restriction"); },
+      },
+    ],
   },
 
   /* ----------------------------------------------------------------
@@ -454,6 +577,43 @@ const PREDICTION_CONFIG = {
   strippingAppliesTo: ["SEA_LCL"],
 
   /* ----------------------------------------------------------------
+     JALUR PENGELUARAN BARANG (SPPJ) — lama clearance per jalur
+
+     Jalur keluar sesaat setelah PIB diajukan dan menentukan lama
+     clearance lebih dari apa pun: Hijau/MITA langsung SPPB, Merah
+     menunggu pemeriksaan fisik. Jalur Kuning sudah dihapus sejak
+     25-04-2022 (PER-02/BC/2022), jadi tidak ada di sini.
+
+     `clearance` = HARI KERJA dari barang siap diurus sampai SPPB,
+     menggantikan angka clearance di operations[] untuk kiriman yang
+     jalurnya dicatat. Merah: antrean pemeriksaan fisik di Priok
+     normalnya beberapa hari, saat padat 7–10 hari (GINSI, Juni 2026);
+     layanan Sabtu setengah hari, Minggu tutup. Riwayat kiriman per
+     jalur menarik angka ini ke kenyataan (prediction-learning.js).
+     Kiriman yang jalurnya belum dicatat tetap memakai operations[].
+  ---------------------------------------------------------------- */
+  customsLanes: [
+    { key: "mita", label: "MITA", clearance: { AIR: 0, SEA_FCL: 0, SEA_LCL: 0 } },
+    { key: "hijau", get label() { return tt("Hijau", "Green"); }, clearance: { AIR: 1, SEA_FCL: 1, SEA_LCL: 1 } },
+    { key: "merah", get label() { return tt("Merah", "Red"); }, clearance: { AIR: 2, SEA_FCL: 4, SEA_LCL: 3 } },
+  ],
+
+  /* ----------------------------------------------------------------
+     KEDATANGAN
+
+     manifestLeadDays: berapa hari kalender kapal/pesawat biasanya tiba
+     SESUDAH tanggal BC 1.1. Inward manifest wajib diserahkan paling
+     lambat 24 jam sebelum kapal tiba (laut) dan sebelum pesawat
+     mendarat (udara) -- memakai tanggal Manifest apa adanya sebagai
+     kedatangan selalu meleset sehari terlalu awal. Ini angka awal;
+     begitu ada kiriman yang punya Manifest DAN Sandar/ATA, jedanya
+     dipelajari dari situ (learnedManifestLagDays).
+  ---------------------------------------------------------------- */
+  arrival: {
+    manifestLeadDays: { AIR: 0, SEA_FCL: 1, SEA_LCL: 1, default: 1 },
+  },
+
+  /* ----------------------------------------------------------------
      PROSES YANG JALAN TERUS DI AKHIR PEKAN
 
      Yang tidak disebut di sini memakai HARI KERJA.
@@ -665,12 +825,13 @@ const PREDICTION_CONFIG = {
        Makin besar, makin cepat riwayat mengambil alih. Laut 2 hari:
        tabel rute memang tebakan per wilayah, meleset 1-3 hari biasa.
        Udara 1 hari. "ops" untuk clearance & antar ke pabrik (hari kerja). */
-    priorSpreadDays: { AIR: 1, SEA_FCL: 2, SEA_LCL: 2, ops: 1, default: 2 },
+    priorSpreadDays: { AIR: 1, SEA_FCL: 2, SEA_LCL: 2, ops: 1, ops_merah: 2, lag: 1, default: 2 },
 
     /* SEBARAN WAJAR riwayat (hari) -- dipakai menimbang saat sampel rute
        masih di bawah tiga dan sebarannya belum bisa diukur sendiri.
-       Laut ~1,5 hari sesuai yang terukur di riwayat DDI. */
-    typicalSpreadDays: { AIR: 0.8, SEA_FCL: 1.5, SEA_LCL: 1.5, ops: 1, default: 1.5 },
+       Laut ~1,5 hari sesuai yang terukur di riwayat DDI. Jalur merah
+       jauh lebih berayun (antrean pemeriksaan fisik). */
+    typicalSpreadDays: { AIR: 0.8, SEA_FCL: 1.5, SEA_LCL: 1.5, ops: 1, ops_merah: 2, lag: 0.8, default: 1.5 },
 
     /* PARUH UMUR (hari). Kiriman setua ini berbobot setengah, dua kali
        ini seperempat. Jadwal pelayaran, alur Bea Cukai, dan rekanan
@@ -735,7 +896,8 @@ const PREDICTION_CONFIG = {
       maxOverdue: 20,
       realityShifted: 10,
     },
-    bonuses: { learned: 8, arrivalConfirmed: 5 },
+    // laneKnown: jalur PIB sudah dicatat, SPPB belum terbit
+    bonuses: { learned: 8, arrivalConfirmed: 5, laneKnown: 3 },
     floor: 5,
 
     /* "Final" hanya untuk barang yang BENAR-BENAR sudah masuk pabrik.

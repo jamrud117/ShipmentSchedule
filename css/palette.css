@@ -63,7 +63,7 @@
   box-shadow: none;
 }
 .cmdk-input::placeholder {
-  color: var(--n-400);
+  color: var(--text-placeholder);
 }
 /* Tombol hapus (×): di baris palet ia ikut susunan flex (di depan
    tanda Esc), bukan melayang absolut seperti di kotak cari lain. */
@@ -74,7 +74,7 @@
 }
 .cmdk-esc {
   font-family: var(--font-mono);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   color: var(--n-500);
   background: var(--n-100);
   border: 1px solid var(--n-200);
@@ -92,7 +92,7 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--n-400);
+  color: var(--text-subtle);
   padding: 10px 10px 5px;
 }
 .cmdk-item {
@@ -133,6 +133,10 @@
   flex: 1;
   min-width: 0;
 }
+.cmdk-item-title,
+.cmdk-item-sub {
+  display: block;
+}
 .cmdk-item-title {
   font-size: var(--t-base);
   font-weight: 600;
@@ -148,10 +152,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Ponsel: keterangan perintah boleh dua baris, tidak dipotong */
+@media (max-width: 575.98px) {
+  .cmdk-item-sub {
+    white-space: normal;
+  }
+}
 .cmdk-item-tag {
   flex-shrink: 0;
   font-family: var(--font-board);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 2px 6px;
@@ -185,7 +195,7 @@
 }
 .cmdk-foot kbd {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.69rem;
   background: var(--n-200);
   color: var(--n-700);
   border-radius: 3px;

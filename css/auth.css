@@ -158,7 +158,7 @@ body.is-locked {
 }
 .user-chip-role {
   font-family: var(--font-board);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.55);
@@ -328,6 +328,10 @@ body.is-viewer [data-del-hscode],
 body.is-viewer .mst-ubah,
 body.is-viewer .btn-note-send,
 body.is-viewer .btn-add-skb,
+body.is-viewer .dp-tambah,
+body.is-viewer .dp-hapus,
+body.is-viewer .dp-lampir,
+body.is-viewer .berkas-hapus,
 body.is-viewer .card-note-input {
   display: none !important;
 }
@@ -440,18 +444,25 @@ body.is-viewer .delay-strip-fields input {
   flex: 1;
   min-width: 0;
 }
+/* Nama dibiarkan membungkus ke baris kedua, bukan dipotong "…": di
+   lebar tablet (1024px) kolom nama tinggal sempit di samping pilihan
+   peran & tiga tombol, dan nama orang (atau lencana "ANDA") yang
+   terpotong tidak bisa dibaca sama sekali. */
 .acct-name {
   display: block;
   font-weight: 600;
   font-size: var(--t-base);
+  line-height: 1.35;
   color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+.acct-name .acct-self {
+  display: inline-block;
   white-space: nowrap;
 }
 .acct-self {
   font-family: var(--font-board);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--sec-50);
@@ -466,14 +477,12 @@ body.is-viewer .delay-strip-fields input {
   font-family: var(--font-mono);
   font-size: var(--t-xs);
   color: var(--n-500);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .acct-since {
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: var(--n-400);
+  color: var(--text-subtle);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -558,6 +567,12 @@ body.is-viewer .delay-strip-fields input {
 .lang-switch button.active {
   background: var(--p-600);
   color: #fff;
+}
+@media (pointer: coarse) {
+  .lang-switch button {
+    min-height: 34px;
+    padding: 4px 14px;
+  }
 }
 .login-lang {
   display: flex;
@@ -685,8 +700,41 @@ body.is-viewer .delay-strip-fields input {
   font-size: var(--t-sm);
   color: var(--n-600);
 }
-.hs-tanpa-catatan {
-  color: var(--n-300);
+.hs-tanpa-catatan,
+.hs-tanpa-lartas {
+  color: var(--text-subtle);
+}
+.hs-tabel th.hs-kol-lartas,
+.hs-tabel td.hs-kol-lartas {
+  width: 1%;
+  white-space: nowrap;
+}
+/* Tanda lartas per HS Code (PI / LS / SNI) -- juga dipakai kartu
+   Dokumen Pelengkap di form. */
+.lartas-chip {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  border: 1px solid;
+}
+.lartas-chip--pi {
+  color: #6a3fc2;
+  background: #f3eefe;
+  border-color: #e3d9fb;
+}
+.lartas-chip--ls {
+  color: var(--s-info);
+  background: #eef2fc;
+  border-color: #d5def6;
+}
+.lartas-chip--sni {
+  color: var(--sec-700);
+  background: var(--sec-50);
+  border-color: var(--sec-200);
 }
 .hs-tabel .hs-kol-aksi {
   width: 1%;
@@ -763,11 +811,11 @@ body.is-viewer .delay-strip-fields input {
   }
   .hs-tabel tr {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "nama aksi"
-      "kode aksi"
-      "catatan catatan";
+      "nama nama aksi"
+      "kode lartas aksi"
+      "catatan catatan catatan";
     gap: 4px var(--sp-3);
     padding: 11px var(--sp-4);
     border-bottom: 1px solid var(--n-100);
@@ -786,7 +834,9 @@ body.is-viewer .delay-strip-fields input {
   .hs-tabel td.hs-kol-kode { grid-area: kode; width: auto; text-align: left; }
   .hs-tabel td.hs-kol-catatan { grid-area: catatan; font-size: var(--t-xs); }
   .hs-tabel td.hs-kol-aksi { grid-area: aksi; align-self: center; width: auto; }
-  .hs-tabel td.hs-tanpa-catatan { display: none; }
+  .hs-tabel td.hs-kol-lartas { grid-area: lartas; align-self: center; width: auto; }
+  .hs-tabel td.hs-tanpa-catatan,
+  .hs-tabel td.hs-tanpa-lartas { display: none; }
   .pagination-bar.hs-halaman {
     padding: 10px var(--sp-4);
   }
@@ -856,7 +906,7 @@ body.is-viewer .delay-strip-fields input {
   border: 0;
   background: transparent;
   border-radius: var(--r-sm);
-  color: var(--n-400);
+  color: var(--n-500);
 }
 .pwd-eye:hover {
   color: var(--p-600);
@@ -920,14 +970,15 @@ body.is-viewer .delay-strip-fields input {
 
 /* Kotak isian aplikasi */
 
-/* Isian kotak ini tersusun di kisi dua lajur. Bawaannya tiap isian
+/* Isian kotak ini tersusun di kisi enam lajur. Bawaannya tiap isian
    selebar kotak; .prompt-field--half (lebar: "setengah" di showPrompt)
-   memakai satu lajur. Jarak antarisian datang dari `gap` kisi -- bukan
-   dari margin label/kotak, yang dulu membuat jaraknya berbeda antara
-   isian yang punya petunjuk dan yang tidak. */
+   memakai separuhnya, .prompt-field--third ("sepertiga") sepertiganya.
+   Jarak antarisian datang dari `gap` kisi -- bukan dari margin
+   label/kotak, yang dulu membuat jaraknya berbeda antara isian yang
+   punya petunjuk dan yang tidak. */
 #promptFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px 12px;
   margin-top: var(--sp-1);
 }
@@ -936,13 +987,17 @@ body.is-viewer .delay-strip-fields input {
   min-width: 0;
 }
 #promptFields > .prompt-field--half {
-  grid-column: span 1;
+  grid-column: span 3;
+}
+#promptFields > .prompt-field--third {
+  grid-column: span 2;
 }
 .prompt-dialog--lebar {
   max-width: 600px;
 }
 @media (max-width: 479.98px) {
-  #promptFields > .prompt-field--half {
+  #promptFields > .prompt-field--half,
+  #promptFields > .prompt-field--third {
     grid-column: 1 / -1;
   }
 }
@@ -979,6 +1034,103 @@ body.is-viewer .delay-strip-fields input {
   color: var(--n-500);
   margin-top: 5px;
 }
+/* Kotak centang berjajar (showPrompt type: "checks") -- mis. lartas di
+   HS Code: judul tebal, keterangan kecil di bawahnya. */
+.prompt-checks {
+  display: grid;
+  gap: 6px;
+}
+.prompt-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.prompt-check:hover {
+  border-color: var(--p-300);
+}
+.prompt-check:has(input:checked) {
+  border-color: var(--p-400);
+  background: var(--p-50);
+}
+.prompt-check input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--p-600);
+  flex-shrink: 0;
+}
+.prompt-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--t-sm);
+  color: var(--ink);
+}
+.prompt-check small {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+/* Lampiran (showPrompt type: "berkas", js/data/lampiran.js) */
+.prompt-berkas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pb-daftar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 100%;
+}
+.pb-daftar:empty {
+  display: none;
+}
+.pb-kosong {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  font-style: italic;
+}
+.pb-tambah {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--p-600);
+  cursor: pointer;
+}
+.pb-tambah:hover {
+  border-color: var(--p-500);
+  background: var(--p-50);
+}
+.pb-tambah:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Aksi ketiga di kiri bawah kotak isian (aksiKiri) -- mis. "Batalkan
+   tahap": terpisah dari Batal / Simpan di kanan supaya tidak tertekan
+   sebagai salah satunya. */
+.dialog-foot .prompt-aksi-kiri {
+  margin-right: auto !important;
+  color: var(--s-danger);
+  border-color: var(--s-danger-line);
+}
+.dialog-foot .prompt-aksi-kiri:hover:not(:disabled) {
+  background: var(--s-danger-bg);
+  border-color: var(--s-danger);
+  color: var(--s-danger);
+}
+
 .prompt-error {
   font-size: var(--t-sm);
   color: var(--s-danger);
@@ -1077,6 +1229,45 @@ body.is-viewer .delay-strip-fields input {
   gap: 13px;
   margin-bottom: var(--sp-3);
 }
+.dialog-head .dialog-title {
+  flex: 1;
+  min-width: 0;
+}
+/* KEPALA DI LUAR BADAN (modal Bootstrap: isian, konfirmasi, realisasi
+   masterlist). Badannya saja yang digulir (modal-dialog-scrollable),
+   jadi judul & tombol tutup di atas, tombol aksi di bawah, selalu
+   terlihat -- seberapa pun panjang isiannya. */
+.modal-content > .dialog-head {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4) var(--sp-3) var(--sp-6);
+}
+.modal-content > .dialog-head + .dialog-body {
+  padding-top: var(--sp-1);
+}
+/* Tombol tutup (X) di kepala: sama di semua kotak dialog. Menutup =
+   batal tanpa memilih apa pun; Esc & klik di luar kotak berbuat sama. */
+.dialog-tutup {
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  margin: 4px 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-500);
+  font-size: 0.85rem;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.dialog-tutup:hover:not(:disabled) {
+  background: var(--n-100);
+  color: var(--ink);
+}
 .dialog-icon {
   width: 42px;
   height: 42px;
@@ -1112,12 +1303,52 @@ body.is-viewer .delay-strip-fields input {
   padding: 0 var(--sp-6) var(--sp-6);
   gap: var(--sp-2);
 }
+/* Kotak yang badannya bisa digulir: garis tipis memisahkan tombol aksi
+   dari isian yang lewat di bawahnya. Kotak konfirmasi (.dialog-ringkas)
+   cukup satu-dua kalimat -- tanpa garis, supaya tidak terasa berat. */
+.modal-dialog-scrollable .dialog-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--n-100);
+  padding-top: var(--sp-4);
+  padding-bottom: var(--sp-5);
+}
+.modal-dialog-scrollable.dialog-ringkas .dialog-foot {
+  border-top: 0;
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-6);
+}
+.dialog-ringkas {
+  --bs-modal-width: 460px;
+}
+/* Tombol di kaki dialog sama tinggi & sama huruf -- termasuk .btn-danger
+   bawaan Bootstrap (1rem, tipis) yang dulu terlihat lain sendiri di
+   sebelah "Batal". */
 .dialog-foot .btn,
 .dialog-foot .btn-quiet,
 .dialog-foot .btn-primary-navy {
   height: 40px;
   padding: 0 20px;
   margin: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+/* Ponsel sempit: tombol-tombolnya berbagi lebar sama rata; aksi ketiga
+   (mis. "Batalkan tahap") turun ke baris sendiri di bawahnya. */
+@media (max-width: 419.98px) {
+  .dialog-foot {
+    flex-wrap: wrap;
+  }
+  .dialog-foot > .btn,
+  .dialog-foot > .btn-quiet,
+  .dialog-foot > .btn-primary-navy {
+    flex: 1 1 0;
+    padding: 0 12px;
+  }
+  .dialog-foot > .prompt-aksi-kiri {
+    flex-basis: 100%;
+    order: 2;
+    margin-right: 0 !important;
+  }
 }
 
 

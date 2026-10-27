@@ -260,6 +260,7 @@ function syncPredictionForm() {
     hitungUlangEtaForm();
     const panel = $("#predictionPanel");
     if (panel) panel.innerHTML = "";
+    renderRencanaMundurForm();
     return;
   }
 
@@ -339,6 +340,92 @@ function syncPredictionForm() {
         ${d && d.arrived ? `<div class="pred-note-final"><i class="bi bi-check-circle-fill"></i> ${t("c.tanggal.in.factory.sudah.terisi")}</div>` : ""}
       </div>
     </div>`;
+  renderRencanaMundurForm();
+}
+
+/* ------------------------------------------------------------------
+   RENCANA MUNDUR DI FORM (core/prediction-mundur.js)
+
+   Di samping kotak Dibutuhkan di Pabrik: ETA & ETD paling lambat untuk
+   tanggal itu, dari rute, jenis muatan & jalur yang sedang diisi -- lalu
+   dua pembanding: Estimated Delivery form ini (cadangan / telat) dan ETD
+   yang berlaku (masih dalam batas atau sudah lewat). Ikut dihitung
+   ulang tiap panel prediksi disegarkan.
+------------------------------------------------------------------ */
+function renderRencanaMundurForm() {
+  const box = $("#rencanaMundurHasil");
+  if (!box) return;
+  if (activeMode === "export") {
+    box.innerHTML = "";
+    return;
+  }
+  const butuh = $("#fNeededDate").value;
+  if (!butuh) {
+    box.innerHTML = `<div class="rm-kosong"><i class="bi bi-calendar2-range" aria-hidden="true"></i> ${tt(
+      "Isi tanggal barang ini dibutuhkan produksi — ETA & ETD paling lambat dihitung mundur dari tanggal itu.",
+      "Enter the date production needs these goods — the latest ETA & ETD are calculated backwards from it.",
+    )}</div>`;
+    return;
+  }
+  const src = Object.assign(predictionFormSource(), { neededDate: butuh });
+  const r = rencanaMundur(src, butuh);
+  if (!r || !r.ok) {
+    box.innerHTML = `<div class="rm-kosong"><i class="bi bi-info-circle" aria-hidden="true"></i> ${escapeHtml((r && r.reason) || "")}</div>`;
+    return;
+  }
+  const hari = (n) => tt(`${n} hari`, `${n} day${n === 1 ? "" : "s"}`);
+  const angka = (label, tgl, judul) =>
+    `<div class="rm-angka"${judul ? ` title="${escapeAttr(judul)}"` : ""}><span class="rm-label">${escapeHtml(label)}</span><b>${tgl ? fmtDate(tgl) : "—"}</b></div>`;
+  const transit = r.transit
+    ? tt(`transit maks. ${hari(r.transit.max)}`, `transit up to ${hari(r.transit.max)}`) +
+      (r.transit.min < r.transit.max ? ` (${r.transit.min}–${r.transit.max})` : "") +
+      (r.transit.belajar ? tt(" · dari riwayat", " · from history") : "")
+    : tt("lama transit rute ini belum diketahui — ETD belum bisa dihitung", "this route's transit time is unknown — the ETD cannot be calculated yet");
+  const darat = r.langkah
+    .filter((l) => l.days > 0)
+    .map((l) => `${l.label} ${l.days} ${l.unit || ""}`.trim())
+    .join(" · ");
+
+  const baris = [];
+  const k = statusKebutuhan(Object.assign({}, src, { factoryDate: $("#fFactoryDate").value, actual: $("#fActual").value }));
+  if (k && k.fakta) {
+    baris.push(
+      k.kind === "tepat"
+        ? { kelas: "aman", ikon: "bi-check-circle-fill", teks: tt(`Sudah masuk pabrik ${fmtDate(k.sampai)} — ${hari(k.selisih)} sebelum dibutuhkan.`, `Entered the factory ${fmtDate(k.sampai)} — ${hari(k.selisih)} before needed.`) }
+        : { kelas: "telat", ikon: "bi-x-circle-fill", teks: tt(`Masuk pabrik ${fmtDate(k.sampai)} — ${hari(-k.selisih)} sesudah dibutuhkan.`, `Entered the factory ${fmtDate(k.sampai)} — ${hari(-k.selisih)} after needed.`) },
+    );
+  } else if (k && k.sampai) {
+    baris.push(
+      k.kind === "telat"
+        ? { kelas: "telat", ikon: "bi-exclamation-triangle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} lewat dari kebutuhan.`, `Estimated Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} past the need date.`) }
+        : k.kind === "mepet"
+          ? { kelas: "mepet", ikon: "bi-exclamation-circle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — cadangan hanya ${hari(k.selisih)}.`, `Estimated Delivery ${fmtDate(k.sampai)} — only a ${hari(k.selisih)} margin.`) }
+          : { kelas: "aman", ikon: "bi-check-circle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — cadangan ${hari(k.selisih)}.`, `Estimated Delivery ${fmtDate(k.sampai)} — ${hari(k.selisih)} margin.`) },
+    );
+  }
+  // ETD yang berlaku vs batasnya -- selama barangnya belum sampai
+  const etdKini = $("#fEtdUpdate").value || $("#fEtd").value;
+  if (r.etd && etdKini && !(k && k.fakta)) {
+    const lewat = calendarDaysBetweenISO(r.etd, etdKini);
+    baris.push(
+      lewat > 0
+        ? { kelas: "telat", ikon: "bi-exclamation-triangle-fill", teks: tt(`ETD ${fmtDate(etdKini)} — ${hari(lewat)} lewat dari ETD paling lambat.`, `ETD ${fmtDate(etdKini)} — ${hari(lewat)} after the latest ETD.`) }
+        : { kelas: "aman", ikon: "bi-check-circle-fill", teks: tt(`ETD ${fmtDate(etdKini)} masih dalam batas${lewat < 0 ? ` (${hari(-lewat)} lebih awal)` : ""}.`, `ETD ${fmtDate(etdKini)} is within the limit${lewat < 0 ? ` (${hari(-lewat)} earlier)` : ""}.`) },
+    );
+  }
+
+  box.innerHTML = `
+    <div class="rm-baris">
+      ${angka(tt("ETA paling lambat", "Latest ETA"), r.eta, tt(`Proses darat ${hari(r.hariDarat)} sampai pabrik`, `${hari(r.hariDarat)} of land process to the factory`))}
+      ${angka(tt("ETD paling lambat", "Latest ETD"), r.etd)}
+    </div>
+    <div class="rm-ket">${escapeHtml(transit)}${darat ? ` · ${escapeHtml(darat)}` : ""}</div>
+    ${baris.map((b) => `<div class="rm-status rm-status--${b.kelas}"><i class="bi ${b.ikon}" aria-hidden="true"></i> ${escapeHtml(b.teks)}</div>`).join("")}`;
+}
+const elNeededForm = $("#fNeededDate");
+if (elNeededForm) {
+  elNeededForm.addEventListener("change", renderRencanaMundurForm);
+  elNeededForm.addEventListener("input", renderRencanaMundurForm);
 }
 /* ------------------------------------------------------------------
    PEMASANGAN PENDENGAR
@@ -374,7 +461,7 @@ if (elEtaForm) {
     if (predSedangMengisi || !etaAktifDiForm()) return;
     if (formEtaMode === "auto" && $("#fEta").value) {
       setFormEtaMode("manual", { recalc: false });
-      showToast(t("m.eta.diketik.manual.mode.eta.berpindah.ke.manua"), "dark");
+      showToast(t("m.eta.diketik.manual.mode.eta.berpindah.ke.manua"), "info");
       return;
     }
     syncPredictionForm();
@@ -428,7 +515,7 @@ if (elActualForm) {
       // Hanya berpindah kalau nilainya BEDA dari hitungan mesin.
       if (!d.ok || d.date !== $("#fActual").value) {
         setFormDeliveryMode("manual");
-        showToast(t("m.estimated.delivery.dikunci.mode.berpindah.ke.m"), "dark");
+        showToast(t("m.estimated.delivery.dikunci.mode.berpindah.ke.m"), "info");
       }
     }
   });
@@ -511,7 +598,7 @@ async function handleCardDateChange(s, field) {
     if (deliveryModeOf(s) === "auto" && s.actual) {
       s.deliveryMode = "manual";
       await persistFields(s.id, { deliveryMode: "manual" });
-      showToast(t("m.estimated.delivery.dikunci.mode.manual"), "dark");
+      showToast(t("m.estimated.delivery.dikunci.mode.manual"), "info");
       render();
     }
     return;
@@ -521,7 +608,7 @@ async function handleCardDateChange(s, field) {
   if (field === "eta" && etaModeOf(s) === "auto" && s.eta) {
     s.etaMode = "manual";
     await persistFields(s.id, { etaMode: "manual" });
-    showToast(t("m.eta.diketik.manual.mode.eta.jadwal.ini.berpind"), "dark");
+    showToast(t("m.eta.diketik.manual.mode.eta.jadwal.ini.berpind"), "info");
   }
 
   await refreshShipmentPrediction(s);

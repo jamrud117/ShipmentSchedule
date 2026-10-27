@@ -53,7 +53,11 @@ function missingDocs(s) {
   return docStepsFor(s)
     // Tahap kedatangan (ATA) bukan berkas -- tidak ada yang bisa "diurus".
     .filter((st) => st.key !== "berth" && !docStepEntri(s, st))
-    .map((st) => stepText(st.label, s));
+    .map((st) => stepText(st.label, s))
+    /* PI / LS yang wajib menurut barangnya (lartas per HS Code, barang
+       bukan baru -- core/lartas.js) tapi belum bernomor di jadwal juga
+       berkas yang harus dikejar, walau bukan tahap stepper. */
+    .concat(typeof lartasKurang === "function" ? lartasKurang(s).map((k) => tt(`${k} (lartas)`, `${k} (restricted)`)) : []);
 }
 // "Perlu tindakan" = satu definisi, dipakai metrik, saringan cepat, dan halaman Ringkasan
 function needsAction(s) {

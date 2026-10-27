@@ -119,6 +119,10 @@
 .task--doc {
   border-left-color: var(--sec-500);
 }
+/* Draft sudah disetujui, aslinya belum datang */
+.task--asli {
+  border-left-color: var(--p-300);
+}
 .task-reason {
   flex-shrink: 0;
   width: 92px;
@@ -131,10 +135,16 @@
   color: var(--s-danger);
 }
 .task--soon .task-reason {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .task--doc .task-reason {
   color: var(--sec-600);
+}
+.task--asli .task-reason {
+  color: var(--p-500);
+}
+.ov-asli .stat-line-label i {
+  color: var(--p-500);
 }
 /* TIGA TINGKAT: perusahaan / keterangan / nama barang.
 
@@ -152,9 +162,6 @@
 .task-goods {
   font-size: var(--t-xs);
   color: var(--n-600);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 /* Pengatur halaman daftar tugas. */
 .task-pager {
@@ -173,21 +180,25 @@
   opacity: 0.4;
   pointer-events: none;
 }
+/* Dibungkus, bukan dipotong satu baris: "belum ada CI/PL, AWB, COO…"
+   terpotong tepat di daftar yang perlu dibaca. Paling banyak dua baris. */
 .task-party {
   font-weight: 600;
   font-size: var(--t-base);
   color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.task-detail,
+.task-goods {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .task-detail {
   font-size: var(--t-xs);
   color: var(--n-500);
   margin-top: 1px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .task-detail .mono {
   font-family: var(--font-mono);
@@ -221,12 +232,18 @@
   border-color: var(--p-400);
   background: var(--p-50);
 }
+/* Hari di atas tanggalnya di semua lebar -- sebaris, sebagian sel
+   terbungkus ("KAM / 29") dan sebagian tidak. */
+.agenda-dow,
+.agenda-date {
+  display: block;
+}
 .agenda-dow {
   font-family: var(--font-board);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .agenda-date {
   font-family: var(--font-display);
@@ -249,7 +266,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   background: var(--n-100);
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .agenda-count.has {
   background: var(--p-500);
@@ -266,7 +283,7 @@
   color: var(--d-900);
 }
 .agenda-day--weekend .agenda-date {
-  color: var(--n-400);
+  color: var(--text-placeholder);
 }
 
 /* ---- Ringkasan kecil di kolom kanan ---- */
@@ -302,7 +319,7 @@
   color: var(--s-danger);
 }
 .stat-line-value.is-quiet {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 /* Kiriman yang dimaksud baris "Paling lama": kotak tersendiri yang
    menempel ke barisnya. Dulu baris tugas tanpa wadah -- garis merahnya
@@ -323,8 +340,38 @@
 }
 /* Label baris berupa flex: rinciannya turun ke baris kedua, sejajar
    dengan teks label (melewati lebar ikon). */
-#ovAccuracy .stat-line-label {
+#ovAccuracy .stat-line-label,
+.ov-delay-rata .stat-line-label {
   flex-wrap: wrap;
+}
+/* Rata-rata delay kapal, di bawah pantauan delay */
+.ov-delay-rata {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--n-200);
+}
+.ov-delay-judul {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--n-700);
+}
+.ov-delay-judul small {
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--n-500);
+}
+.ov-delay-judul .acc-head {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+/* "+3,3 hari" tetap satu baris; rinciannya yang turun */
+.ov-delay-rata .stat-line-value {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .acc-detail {
   flex-basis: 100%;
@@ -451,16 +498,6 @@
   .task-go {
     order: 0;
     margin-left: auto;
-  }
-  .task-party,
-  .task-detail {
-    white-space: normal;
-  }
-  .task-detail {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
   .agenda {
     gap: 4px;

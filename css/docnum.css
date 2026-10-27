@@ -20,6 +20,9 @@
   gap: 0;
   background: #fff;
   overflow: hidden;
+  /* Tombol jenis dokumen menyesuaikan lebar kartu ini, bukan lebar layar
+     (@container dn-shell di ujung berkas). */
+  container: dn-shell / inline-size;
   /* border, border-radius & box-shadow datang dari aturan bersama */
 }
 .docnum-tabs {
@@ -169,6 +172,13 @@
    yang berdiri di selnya sendiri sudah berjarak lewat `gap` kisi. */
 .form-subhead + * {
   margin-top: 12px;
+}
+
+/* Penanda tangan surat jalan Export: tiga nama sebaris, satu kolom di ponsel. */
+.dn-ttd-isian {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 18px;
 }
 
 /* TABEL RINCIAN BIAYA (pengajuan dana, jenis selain Billing) */
@@ -364,61 +374,23 @@ table.fund-lines select {
   .docnum-subtabs::-webkit-scrollbar {
     display: none;
   }
+  /* Tepi yang masih bisa digeser memudar (dnTandaiTepiTab) */
+  .docnum-subtabs.luber-kanan {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+  }
+  .docnum-subtabs.luber-kiri {
+    -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(270deg, #000 calc(100% - 32px), transparent);
+  }
+  .docnum-subtabs.luber-kiri.luber-kanan {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  }
   .docnum-subtab {
     padding: 7px 10px;
     white-space: nowrap;
     flex-shrink: 0;
-  }
-  /* Kotak cari riwayat selebar baris di bawah judulnya, tombol muat
-     ulang tetap di sampingnya -- 300px tidak muat bersama judul. */
-  .docnum-history-head {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .docnum-history-aksi {
-    flex: 1 1 100%;
-  }
-  /* Berawalan .docnum-history-head: aturan dasarnya (.dn-cari input
-     { width: 300px }) ditulis LEBIH BAWAH di berkas ini, dan dengan
-     kekhususan setara yang terakhir yang menang -- kotak cari tetap
-     300px di ponsel dan meluber keluar layar bersama tombol muat ulang.
-     min-width 0: tanpa itu kotak cari tidak mau menyusut di bawah lebar
-     bawaannya. */
-  .docnum-history-head .dn-cari {
-    flex: 1;
-    min-width: 0;
-  }
-  .docnum-history-head .dn-cari input {
-    width: 100%;
-  }
-  .docnum-history-head .docnum-history-aksi > button {
-    flex-shrink: 0;
-  }
-  /* Pengajuan Dana membawa dua saringan lagi (rentang tanggal & status
-     bayar): keduanya sebaris di atas, kotak cari + muat ulang di baris
-     berikutnya -- tidak lagi berdesakan meluber keluar layar. */
-  .docnum-history-aksi {
-    flex-wrap: wrap;
-  }
-  /* Sebaris kalau muat; kalau tidak, masing-masing selebar baris. */
-  .docnum-history-aksi .dn-saring-tanggal,
-  .docnum-history-aksi .dn-saring-bayar {
-    flex: 1 1 auto;
-  }
-  .docnum-history-aksi .dn-saring-grup {
-    flex: 1 1 auto;
-  }
-  .dn-saring-bayar select {
-    width: 100%;
-  }
-  .dn-saring-tanggal .date-range-trigger {
-    width: 100%;
-    /* setinggi kotak status bayar & kotak cari di sebelahnya (32px),
-       bukan target sentuh 44px bilah utama (dashboard.css) */
-    min-height: 0;
-  }
-  .docnum-history-head .docnum-history-aksi .dn-cari {
-    flex: 1 1 calc(100% - 44px);
   }
   /* Kepala panel terlipat jadi beberapa baris: tombol unggah ikut rata
      kiri, tidak terdorong sendirian ke kanan. Berawalan .docnum-panel
@@ -521,7 +493,10 @@ table.fund-lines select {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  height: 22px;
+  /* 24px (batas sasaran sentuh WCAG 2.5.8) di ruang label 22px: margin
+     negatif menjaga tinggi baris label tetap sama dengan kolom lain. */
+  height: 24px;
+  margin: -1px 0;
   padding: 0 8px;
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
@@ -546,6 +521,11 @@ table.fund-lines select {
 }
 .dn-tambah-mini .bi {
   font-size: 0.7rem;
+}
+@media (pointer: coarse) {
+  .dn-tambah-mini {
+    min-height: 32px;
+  }
 }
 
 .docnum-panel-head {
@@ -671,8 +651,8 @@ table.fund-lines select {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -800,6 +780,10 @@ table.fund-lines select {
   margin-top: 26px;
   border-top: 1px solid var(--border);
   padding-top: 16px;
+  /* Kepala, saringan & tabel riwayat menyesuaikan lebar riwayat ini --
+     jendela terbagi dua dan tablet memberi riwayat yang sempit walau
+     layarnya lebar (@container dn-riwayat di ujung berkas). */
+  container: dn-riwayat / inline-size;
 }
 .docnum-history-head {
   display: flex;
@@ -862,7 +846,7 @@ table.fund-lines select {
 }
 .docnum-table .dn-dept {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--bg);
@@ -887,28 +871,18 @@ table.fund-lines select {
    tombol jenis dokumen menyusut ke lebar isinya (keterangannya
    disembunyikan) dan barisnya digeser mendatar. */
 @media (max-width: 1199px) {
-  .docnum-tabs {
-    padding: 10px 12px;
-  }
-  .docnum-tab {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-  .docnum-tab-text small,
-  .docnum-tab-text span:not(:first-child) {
-    display: none;
-  }
   .page-docnum-body {
     padding-top: var(--sp-4);
     padding-bottom: var(--sp-8);
   }
+}
 
-  /* ---- Tabel riwayat: ukurannya diperkecil, kolomnya tetap ----
-     Lebar minimum 720px membuatnya selalu bergulir di sini. Yang
-     diperkecil huruf, jarak sel, dan tombol — bukan jumlah kolom,
-     karena tabel yang dipaksa masuk akan memecah nomor dokumen jadi
-     beberapa baris dan justru lebih sulit dibaca. */
-
+/* ---- Tabel riwayat yang sempit: ukurannya diperkecil, kolomnya tetap ----
+   Lebar minimum 720px membuatnya selalu bergulir di sini. Yang
+   diperkecil huruf, jarak sel, dan tombol — bukan jumlah kolom,
+   karena tabel yang dipaksa masuk akan memecah nomor dokumen jadi
+   beberapa baris dan justru lebih sulit dibaca. */
+@container dn-riwayat (max-width: 1100px) {
   .docnum-table {
     min-width: 600px;
     font-size: var(--t-sm);
@@ -940,7 +914,8 @@ table.fund-lines select {
     text-align: center;
     padding-right: 10px;
   }
-  /* Tombolnya 30px di sini, jadi kolomnya boleh lebih sempit. */
+  /* Tombolnya 30px di sini, jadi kolomnya boleh lebih sempit (Status
+     Bayar yang menempel di kirinya ikut bergeser, lihat di bawah). */
   .docnum-table td.dn-act,
   .docnum-table th.dn-act {
     min-width: 186px;
@@ -957,14 +932,14 @@ table.fund-lines select {
 /* ==================================================================
    RIWAYAT NOMOR PADA LAYAR SEMPIT
 
-   Tabelnya punya lima kolom dan tiga tombol aksi. Di bawah ~900px
-   kolom Tanggal & Pemohon menghimpit isi utamanya sampai tombolnya
-   menindih tulisan.
+   Tabelnya punya lima kolom dan tiga tombol aksi. Di riwayat yang
+   lebih sempit dari ~860px kolom Tanggal & Pemohon menghimpit isi
+   utamanya sampai tombolnya menindih tulisan.
 
    Keduanya disembunyikan, bukan dikecilkan — isinya sudah ada di
    kotak Detail, jadi tidak ada yang benar-benar hilang.
 ================================================================== */
-@media (max-width: 900px) {
+@container dn-riwayat (max-width: 860px) {
   .docnum-table .dn-col-tgl,
   .docnum-table .dn-col-pemohon,
   /* Keterangan pengajuan dana ikut disembunyikan lebih dulu: ia kalimat
@@ -1008,7 +983,7 @@ table.fund-lines select {
   line-height: 1.35;
 }
 
-@media (max-width: 640px) {
+@container dn-riwayat (max-width: 600px) {
   .docnum-table td,
   .docnum-table th {
     padding-left: 8px;
@@ -1101,48 +1076,68 @@ table.fund-lines select {
    baru terlihat sesudah tabelnya digeser. Keduanya kini menempel di
    tepi kanan; kolom rincian di antaranya yang digeser.
 
-   right Status Bayar = lebar kolom aksi (min-width 205px di atas).
-   Hanya di layar lebar: di ponsel dua kolom yang menempel memakan
-   hampir seluruh lebar tabel. */
-@media (min-width: 992px) {
+   right Status Bayar = lebar kolom aksi (min-width 205px di atas; 186px
+   di riwayat sempit). Diukur dari lebar RIWAYAT-nya: di jendela terbagi
+   dua & tablet kolom aksi tetap terlihat. Di ponsel tidak -- kolom yang
+   menempel memakan hampir seluruh lebar tabel. */
+@container dn-riwayat (min-width: 560px) {
   .docnum-table th.dn-act,
   .docnum-table td.dn-act {
     position: sticky;
     right: 0;
   }
-  .docnum-table th.dn-col-bayar,
-  .docnum-table td.dn-col-bayar {
-    position: sticky;
-    right: 205px;
-  }
-  .docnum-table td.dn-act,
-  .docnum-table td.dn-col-bayar {
+  .docnum-table td.dn-act {
     z-index: 1;
     background: #fff;
   }
-  .docnum-table tbody tr:nth-child(even) td.dn-act,
-  .docnum-table tbody tr:nth-child(even) td.dn-col-bayar {
+  .docnum-table tbody tr:nth-child(even) td.dn-act {
     background: var(--n-50);
   }
-  .docnum-table tbody tr:hover td.dn-act,
-  .docnum-table tbody tr:hover td.dn-col-bayar {
+  .docnum-table tbody tr:hover td.dn-act {
     background: var(--p-50);
   }
-  .docnum-table thead th.dn-act,
-  .docnum-table thead th.dn-col-bayar {
+  .docnum-table thead th.dn-act {
     z-index: 3;
   }
   /* Bayang tipis di tepi kiri kolom menempel paling kiri: tanda ada
      kolom lain yang tergeser di baliknya. */
-  .docnum-table th.dn-col-bayar,
-  .docnum-table td.dn-col-bayar,
   .docnum-table th.dn-act,
   .docnum-table td.dn-act {
     box-shadow: inset 1px 0 0 var(--n-200), -10px 0 10px -10px rgba(15, 23, 42, 0.22);
   }
+}
+/* Status Bayar ikut menempel di kiri kolom aksi hanya kalau riwayatnya
+   cukup lebar -- di bawah itu keduanya menghabiskan separuh tabel. */
+@container dn-riwayat (min-width: 861px) {
+  .docnum-table th.dn-col-bayar,
+  .docnum-table td.dn-col-bayar {
+    position: sticky;
+    right: 205px;
+    box-shadow: inset 1px 0 0 var(--n-200), -10px 0 10px -10px rgba(15, 23, 42, 0.22);
+  }
+  .docnum-table td.dn-col-bayar {
+    z-index: 1;
+    background: #fff;
+  }
+  .docnum-table tbody tr:nth-child(even) td.dn-col-bayar {
+    background: var(--n-50);
+  }
+  .docnum-table tbody tr:hover td.dn-col-bayar {
+    background: var(--p-50);
+  }
+  .docnum-table thead th.dn-col-bayar {
+    z-index: 3;
+  }
   .docnum-table th.dn-col-bayar + th.dn-act,
   .docnum-table td.dn-col-bayar + td.dn-act {
     box-shadow: none;
+  }
+}
+/* Kolom aksi 186px di riwayat menengah: Status Bayar menempel tepat di kirinya. */
+@container dn-riwayat (min-width: 861px) and (max-width: 1100px) {
+  .docnum-table th.dn-col-bayar,
+  .docnum-table td.dn-col-bayar {
+    right: 186px;
   }
 }
 
@@ -1167,7 +1162,7 @@ table.fund-lines select {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ------------------------------------------------------------------
@@ -1811,6 +1806,15 @@ table.fund-lines select {
 button.dn-bayar {
   cursor: pointer;
 }
+@media (pointer: coarse) {
+  button.dn-bayar {
+    min-height: 34px;
+  }
+  .dn-aturan-hapus {
+    width: 32px;
+    height: 32px;
+  }
+}
 .dn-bayar--lunas {
   color: #146c43;
   background: #e8f5ee;
@@ -1875,27 +1879,6 @@ button.dn-bayar--lunas:hover {
     max-height: 65vh;
   }
 
-  /* JENIS DOKUMEN DI PONSEL: kisi 2 x 2, bukan baris yang digeser.
-     Keempat tombol muat utuh tanpa ada yang terpotong di tepi layar
-     ("Delivery Order Numb…"), dan semuanya terlihat sekaligus. */
-  .docnum-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    overflow: visible;
-  }
-  .docnum-tab {
-    align-items: center;
-    gap: 9px;
-    padding: 9px 10px;
-  }
-  .docnum-tab-icon {
-    width: 30px;
-    height: 30px;
-  }
-  .docnum-tab-text b {
-    font-size: 0.8rem;
-  }
 }
 
 /* ------------------------------------------------------------------
@@ -2452,7 +2435,7 @@ button.dn-bayar--lunas:hover {
   width: 40px;
   text-align: center;
 }
-.sb-tabel td:nth-child(2) {
+.sb-tabel td.sb-barang {
   width: 26%;
 }
 .sb-tabel .sb-foto {
@@ -2522,4 +2505,407 @@ button.dn-bayar--lunas:hover {
 .fl-grup-tambah {
   font-size: var(--t-xs);
   padding: 2px 8px;
+}
+
+/* ==================================================================
+   MENURUT LEBAR KARTU / RIWAYAT, BUKAN LEBAR LAYAR
+
+   Jendela terbagi dua dan tablet memberi kartu yang sempit walau
+   layarnya lebar; aturan @media dulu baru bereaksi di bawah 576px, jadi
+   di lebar menengah judul riwayat tertekuk tiga baris dan saringannya
+   meluber keluar kartu. Ditulis paling bawah: menang atas aturan
+   dasarnya yang setara.
+================================================================== */
+
+/* JENIS DOKUMEN: selalu selebar kartu (berbagi rata). Kartu menengah
+   menyembunyikan keterangannya; kartu sempit menyusunnya 2 x 2 --
+   keempatnya muat utuh tanpa ada yang terpotong di tepi. */
+@container dn-shell (max-width: 1100px) {
+  .docnum-tabs {
+    padding: 10px 12px;
+  }
+  .docnum-tab {
+    align-items: center;
+  }
+  .docnum-tab-text small,
+  .docnum-tab-text span:not(:first-child) {
+    display: none;
+  }
+}
+@container dn-shell (max-width: 820px) {
+  .docnum-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+  }
+  .docnum-tab {
+    gap: 9px;
+    padding: 9px 10px;
+  }
+  .docnum-tab-icon {
+    width: 30px;
+    height: 30px;
+  }
+  .docnum-tab-text b {
+    font-size: 0.8rem;
+  }
+}
+
+/* KEPALA RIWAYAT yang sempit: judulnya sebaris sendiri, saringannya di
+   bawahnya selebar riwayat -- rentang tanggal & status bayar sebaris
+   kalau muat, kotak cari + muat ulang menyusul. */
+@container dn-riwayat (max-width: 1080px) {
+  .docnum-history-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .docnum-history-head > span {
+    flex: 1 1 100%;
+    white-space: nowrap;
+  }
+  .docnum-history-aksi {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  /* Berawalan .docnum-history-head: aturan dasarnya (.dn-cari input
+     { width: 300px }) ditulis di atas dengan kekhususan lebih rendah.
+     min-width 0: tanpa itu kotak cari tidak mau menyusut di bawah lebar
+     bawaannya. */
+  .docnum-history-head .dn-cari {
+    flex: 1;
+    min-width: 0;
+  }
+  .docnum-history-head .dn-cari input {
+    width: 100%;
+  }
+  .docnum-history-head .docnum-history-aksi > button {
+    flex-shrink: 0;
+  }
+  .docnum-history-aksi .dn-saring-grup {
+    flex: 1 1 340px;
+  }
+  .docnum-history-aksi .dn-saring-bayar {
+    flex: 0 1 auto;
+  }
+  .docnum-history-head .docnum-history-aksi .dn-cari {
+    flex: 1 1 220px;
+  }
+  .dn-saring-tanggal .date-range-trigger {
+    width: 100%;
+    /* setinggi kotak status bayar & kotak cari di sebelahnya (32px),
+       bukan target sentuh 44px bilah utama (dashboard.css) */
+    min-height: 0;
+  }
+}
+/* Riwayat sesempit ponsel: tiap saringan selebar baris, kotak cari +
+   muat ulang berdua di baris terakhir. */
+@container dn-riwayat (max-width: 560px) {
+  .docnum-history-aksi .dn-saring-grup,
+  .docnum-history-aksi .dn-saring-bayar {
+    flex: 1 1 100%;
+  }
+  .dn-saring-bayar select {
+    width: 100%;
+  }
+  .docnum-history-head .docnum-history-aksi .dn-cari {
+    flex: 1 1 calc(100% - 44px);
+  }
+}
+
+/* RIWAYAT DI PONSEL (riwayat di bawah 560px): tiap nomor jadi KARTU --
+   nomornya judul, isian lain berlabel dua kolom (label dari data-label
+   tiap sel), tombol aksi sebaris di bawahnya. Tabel lebar yang digeser
+   menyembunyikan justru yang dicari -- tanggal, penerima, status bayar --
+   dan tombol aksinya baru terlihat sesudah digeser jauh ke kanan.
+   Pemilihnya diawali .docnum-history-wrap: system.css (dimuat sesudah
+   berkas ini) ikut mengatur sel aksi. */
+@container dn-riwayat (max-width: 559.98px) {
+  .docnum-history-wrap {
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .docnum-history-wrap .docnum-table,
+  .docnum-history-wrap .docnum-table tbody,
+  .docnum-history-wrap .docnum-table td {
+    display: block;
+  }
+  .docnum-history-wrap .docnum-table {
+    min-width: 0;
+  }
+  .docnum-history-wrap .docnum-table thead {
+    display: none;
+  }
+  .docnum-history-wrap .docnum-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: #fff;
+  }
+  .docnum-history-wrap .docnum-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .docnum-history-wrap .docnum-table td {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .docnum-history-wrap .docnum-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--font-body);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--n-500);
+  }
+  .docnum-history-wrap .docnum-table td {
+    width: auto;
+  }
+  /* Kartu ringkas: yang dipindai sekilas saja -- selebihnya lewat tombol
+     Detail. Pengajuan dana: nomor, terbit, jatuh tempo, vendor, nomor
+     tagihan, nilai, status bayar. Invoice: nomor, tanggal, customer,
+     tujuan akhir, nilai. */
+  .docnum-history-wrap .docnum-table--dana td:is(.dn-col-tglinv, .dn-col-transaksi, .dn-col-blawb, .dn-col-ket, .dn-col-pemohon),
+  .docnum-history-wrap .docnum-table--invoice td:is(.dn-col-pemohon, .dn-inv-terms, .dn-inv-bayar, .dn-inv-carrier) {
+    display: none;
+  }
+  /* Invoice: tanggal & nilai sebaris tepat di bawah nomornya */
+  .docnum-history-wrap .docnum-table--invoice td.dn-num {
+    order: -2;
+  }
+  .docnum-history-wrap .docnum-table--invoice td:is(.dn-col-tgl, .dn-col-nilai) {
+    order: -1;
+  }
+  /* Kartu bergantian putih & abu-abu tidak berarti apa-apa: semua putih */
+  .docnum-history-wrap .docnum-table tbody tr:nth-child(n) {
+    background: #fff;
+  }
+  /* Nomor urut cukup di label nomornya; nomor dokumen jadi judul kartu */
+  .docnum-history-wrap .docnum-table td.dn-col-no {
+    display: none;
+  }
+  .docnum-history-wrap .docnum-table td.dn-num:first-of-type,
+  .docnum-history-wrap .docnum-table td.dn-col-no + td.dn-num {
+    grid-column: 1 / -1;
+    font-size: var(--t-base);
+  }
+  .docnum-history-wrap .docnum-table td.dn-col-utama,
+  .docnum-history-wrap .docnum-table td.dn-col-vendor,
+  .docnum-history-wrap .docnum-table td.dn-col-ket,
+  .docnum-history-wrap .docnum-table td.dn-col-bayar {
+    grid-column: 1 / -1;
+  }
+  .docnum-history-wrap .docnum-table td.dn-act {
+    grid-column: 1 / -1;
+    width: auto;
+    min-width: 0;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .docnum-history-wrap .docnum-table td.dn-act .dn-act-tombol {
+    justify-content: flex-start;
+  }
+  .docnum-history-wrap .docnum-table td.dn-act .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ==================================================================
+   TABEL ISIAN DI WADAH SEMPIT: RINCIAN BIAYA, BARANG SURAT JALAN
+   LOKAL, BARANG SURAT KETERANGAN FUNGSI
+
+   Di bawah 860px (lebar terkecil Rincian Biaya) tabel isian tidak lagi
+   digeser mendatar: tiap baris jadi kartu. Nomor, uraian/nama barang &
+   tombol hapus di baris pertama; isian lainnya berlabel (data-label,
+   dirakit fund-lines.js / do-lines.js / surat-bc.js) di bawahnya. Di
+   ponsel tabelnya dulu hanya menampakkan nomor dan separuh kotak
+   Uraian -- Nilai, PPN & tombol hapus harus dicari dengan menggeser.
+================================================================== */
+.tabel-isian {
+  container: tabel-isian / inline-size;
+}
+@container tabel-isian (max-width: 859.98px) {
+  .tabel-isian :is(.fund-lines-wrap, .sb-wrap) {
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .tabel-isian :is(table.fund-lines, .sb-tabel),
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody,
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr > td {
+    display: block;
+  }
+  /* Lebar terkecil tabelnya dipasang lewat id -- dikalahkan di sini */
+  .tabel-isian :is(#fundLinesTable, #doLinesTable, .sb-tabel) {
+    min-width: 0;
+  }
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > thead {
+    display: none;
+  }
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr:is([data-fl], [data-dl], [data-sb]) {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 30px;
+    gap: 8px;
+    align-items: start;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: #fff;
+  }
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr > td {
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .tabel-isian :is(table.fund-lines, .sb-tabel) td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    font-family: var(--font-body);
+    color: var(--n-500);
+  }
+  /* Baris pertama kartu: nomor, uraian / nama barang, tombol hapus */
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr > td:is(.fl-no, .sb-no) {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    text-align: center;
+  }
+  .tabel-isian td:is(.fl-desc, .sb-barang) {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+  .tabel-isian td:is(.fl-act, .sb-aksi) {
+    grid-column: 4;
+    grid-row: 1;
+    align-self: center;
+  }
+  /* Isian berikutnya selebar kartu, atau berpasangan (PPN & PPN Rp,
+     Qty & Satuan) */
+  .tabel-isian td:is(.fl-awb, .fl-amt, .fl-ket, .sb-fungsi, .sb-foto) {
+    grid-column: 2 / -1;
+  }
+  .tabel-isian td.fl-rate {
+    grid-column: 2;
+  }
+  .tabel-isian td:is(.fl-ppn, .fl-sat) {
+    grid-column: 3 / -1;
+  }
+  /* Angka PPN (Rp) setinggi kotak pilihan PPN di sebelahnya */
+  .tabel-isian td.fl-ppn {
+    line-height: 34px;
+  }
+  /* Baris diskon: kartu bersemu merah (bukan tiap selnya); kotak nominal
+     turun selebar kartu di bawah kotak nilai & pilihan Rp/%. */
+  .tabel-isian table.fund-lines > tbody > tr.fl-row-diskon {
+    background: #fff8f7;
+    border-color: #f6d4cf;
+  }
+  .tabel-isian tr.fl-row-diskon > td {
+    background: none;
+  }
+  .tabel-isian .fl-disc-in {
+    flex-wrap: wrap;
+  }
+  .tabel-isian .fl-disc-in input[data-fl-f="amount"] {
+    min-width: 0;
+  }
+  .tabel-isian .fl-disc-in .fl-disc-nominal {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  /* Judul kelompok per dokumen tagihan: selebar daftar */
+  .tabel-isian table.fund-lines > tbody > tr.fl-grup {
+    display: block;
+    margin-bottom: 8px;
+  }
+  .tabel-isian table.fund-lines > tbody > tr.fl-grup > td {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--n-50);
+  }
+}
+/* Kartu selebar tablet: isian di bawah uraian / nama barang sebaris,
+   bukan bertumpuk satu per baris -- kartunya tidak setinggi di ponsel. */
+@container tabel-isian (min-width: 560px) and (max-width: 859.98px) {
+  .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr:is([data-fl], [data-dl], [data-sb]) {
+    grid-template-columns: 22px repeat(4, minmax(0, 1fr)) 30px;
+  }
+  .tabel-isian tr:is([data-fl], [data-dl], [data-sb]) > td:is(.fl-desc, .sb-barang) {
+    grid-column: 2 / 6;
+  }
+  .tabel-isian tr:is([data-fl], [data-dl], [data-sb]) > td:is(.fl-act, .sb-aksi) {
+    grid-column: 6;
+  }
+  /* Rincian biaya: [BL/AWB] Nilai | PPN | PPN (Rp) */
+  .tabel-isian tr[data-fl] > td.fl-awb {
+    grid-column: 2;
+  }
+  .tabel-isian tr[data-fl] > td.fl-amt:not(.fl-ppn) {
+    grid-column: 2 / 4;
+  }
+  .tabel-isian tr[data-fl] > td.fl-awb ~ td.fl-amt:not(.fl-ppn) {
+    grid-column: 3;
+  }
+  .tabel-isian tr[data-fl] > td.fl-rate {
+    grid-column: 4;
+  }
+  .tabel-isian tr[data-fl] > td.fl-ppn {
+    grid-column: 5 / -1;
+  }
+  /* Surat Jalan Lokal: Qty | Satuan | Keterangan */
+  .tabel-isian tr[data-dl] > td.fl-qty {
+    grid-column: 2;
+  }
+  .tabel-isian tr[data-dl] > td.fl-sat {
+    grid-column: 3;
+  }
+  .tabel-isian tr[data-dl] > td.fl-ket {
+    grid-column: 4 / 6;
+  }
+  /* Surat Fungsi: Fungsi & Kegunaan | Foto */
+  .tabel-isian tr[data-sb] > td.sb-fungsi {
+    grid-column: 2 / 5;
+  }
+  .tabel-isian tr[data-sb] > td.sb-foto {
+    grid-column: 5 / -1;
+  }
+}
+/* Invoice / debit note tambahan di ponsel: jenis, nomor & tombol hapus
+   sebaris, tanggalnya di bawah nomor -- empat kotak sebaris tidak muat
+   (kotak nomornya tinggal selebar jari, tombol hapusnya terpotong). */
+@container tabel-isian (max-width: 479.98px) {
+  .tabel-isian .fd-baris {
+    grid-template-columns: auto minmax(0, 1fr) 30px;
+  }
+  .tabel-isian .fd-baris > input[data-fd-f="tanggal"] {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .tabel-isian .fd-baris > .rm-row {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }

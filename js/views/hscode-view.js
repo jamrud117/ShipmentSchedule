@@ -37,6 +37,9 @@ function periksaHsCode(kode) {
 }
 
 let hsCodeRows = [];
+/* Naik tiap isi database berubah (dimuat, ditambah, diubah, dihapus) --
+   peta lartas per HS (core/lartas.js) disusun ulang hanya saat itu. */
+let versiHsCode = 0;
 
 /* ------------------------------------------------------------------
    PEMBERITAHUAN ANTAR-TAB
@@ -64,14 +67,56 @@ function siarkanHsCodeBerubah() {
   }
 }
 
+/* Seluruh kolom ("*"), bukan daftar tetap: kolom lartas baru ada
+   sesudah migration-lampiran-lartas-kebutuhan.sql, dan meminta kolom
+   yang belum ada menggagalkan seluruh muatnya. */
 async function ambilHsCodes() {
   const { data, error } = await supabaseClient
     .from("hs_code_master")
-    .select("id, item_name, hs_code, notes, created_at")
+    .select("*")
     .order("item_name", { ascending: true });
   if (error) throw error;
   hsCodeRows = data || [];
+  versiHsCode++;
   return hsCodeRows;
+}
+
+/* LARTAS PER HS CODE (core/lartas.js): PI / LS / SNI yang wajib untuk
+   HS ini. Kolom `lartas` (text[]) dari migration-lampiran-lartas-kebutuhan.sql;
+   database yang belum dimigrasi menolak kolomnya -> disimpan tanpa
+   lartas, pengguna diberi tahu berkas migrasinya. */
+function isianLartasHs(nilai) {
+  return {
+    key: "lartas",
+    label: tt("Lartas — dokumen wajib untuk HS ini", "Restrictions — documents required for this HS"),
+    type: "checks",
+    value: rapikanLartas(nilai),
+    options: LARTAS_KODE.map((k) => ({ value: k, label: LARTAS_INFO[k].nama, hint: LARTAS_INFO[k].singkat })),
+    hint: tt("Jadwal Import yang barangnya ber-HS ini diingatkan bila dokumennya belum ada.", "Import schedules with items under this HS are reminded when the document is missing."),
+  };
+}
+async function simpanHsDenganLartas(kirim, row) {
+  let hasil = await kirim(row);
+  if (hasil.error && "lartas" in row && kolomBelumDikenal(hasil.error, ["lartas"])) {
+    const lartas = row.lartas;
+    delete row.lartas;
+    hasil = await kirim(row);
+    if (!hasil.error && lartas.length) {
+      showToast(
+        tt(`HS Code tersimpan, tetapi tanda lartas belum: database belum mengenal kolomnya. Jalankan ${BERKAS_MIGRASI_LAMPIRAN} di Supabase.`,
+          `HS Code saved, but the restriction flags were not: the database does not know the column yet. Run ${BERKAS_MIGRASI_LAMPIRAN} in Supabase.`),
+        "warning",
+      );
+      hasil.lartasDitinggal = true;
+    }
+  }
+  return hasil;
+}
+function chipLartasHtml(lartas) {
+  const daftar = rapikanLartas(lartas);
+  return daftar.length
+    ? daftar.map((k) => `<span class="lartas-chip lartas-chip--${k.toLowerCase()}" title="${escapeAttr(LARTAS_INFO[k].nama)}">${k}</span>`).join("")
+    : "\u2014";
 }
 
 async function loadHsCodes() {
@@ -181,6 +226,7 @@ function renderHsCodes() {
         <thead><tr>
           <th class="hs-kol-nama">${tt("Nama Barang", "Item Name")}</th>
           <th class="hs-kol-kode">HS Code</th>
+          <th class="hs-kol-lartas">${tt("Lartas", "Restrictions")}</th>
           <th class="hs-kol-catatan">${tt("Catatan", "Notes")}</th>
           <th class="hs-kol-aksi"></th>
         </tr></thead>
@@ -196,13 +242,14 @@ function renderHsCodes() {
                 <i class="bi bi-clipboard" aria-hidden="true"></i>
               </button>
             </td>
+            <td class="hs-kol-lartas${rapikanLartas(r.lartas).length ? "" : " hs-tanpa-lartas"}" data-label="${escapeAttr(tt("Lartas", "Restrictions"))}">${chipLartasHtml(r.lartas)}</td>
             <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
             <td class="hs-kol-aksi">
               <div class="hscode-actions">
-                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
+                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}" aria-label="${tt("Ubah", "Edit")}">
                   <i class="bi bi-pencil"></i>
                 </button>
-                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
+                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}" aria-label="${tt("Hapus", "Delete")}">
                   <i class="bi bi-trash3"></i>
                 </button>
               </div>
@@ -306,22 +353,40 @@ function cariHsMenurutNama(daftar, teks) {
     const x = terbaik.find((y) => y.kode === urut[0][0]);
     return { kode: x.kode, label: x.label };
   }
-  return { kandidat: urut.map((u) => u[0]).sort() };
+  // cari: nama yang cocok -- untuk membuka pencarian HS Code dengan kata itu
+  return { kandidat: urut.map((u) => u[0]).sort(), cari: terbaik[0].label };
 }
 
-/* Isi database sebagai daftar pencarian -- hanya kode 8 digit (BTKI). */
-function daftarHsDatabase() {
+/* Kata jamak sama dengan tunggalnya: SIPES = SIPE, MOLDS = MOLD -- tanpa
+   menyentuh kata yang memang berakhiran SS (PRESS, GLASS). */
+const lipatJamakHs = (kunci) =>
+  kunci
+    .split(" ")
+    .map((k) => (k.length >= 4 && /[^S]S$/.test(k) ? k.slice(0, -1) : k))
+    .join(" ");
+
+/* Isi database sebagai daftar pencarian -- hanya kode 8 digit (BTKI).
+   `lipat`: kunci namanya dengan kata jamak dilipat (lipatJamakHs) --
+   pasangan teks barangnya harus dilipat juga. */
+function daftarHsDatabase(lipat) {
   return hsCodeRows
-    .map((r) => ({ kunci: kunciNamaHs(r.item_name), kunciNama: "", kode: String(r.hs_code || "").replace(/\D/g, "").slice(0, 8), label: r.item_name }))
+    .map((r) => {
+      const kunci = kunciNamaHs(r.item_name);
+      return { kunci: lipat ? lipatJamakHs(kunci) : kunci, kunciNama: "", kode: String(r.hs_code || "").replace(/\D/g, "").slice(0, 8), label: r.item_name };
+    })
     .filter((x) => x.kunci && x.kode.length === 8);
 }
 
 /* Kode 8 digit sebuah barang menurut database: {kode, label},
-   {kandidat: [...]} bila beberapa nama setara berbeda kode, atau null. */
+   {kandidat: [...], cari} bila beberapa nama setara berbeda kode, atau
+   null. Dipakai impor CIPL dan HS Code otomatis saat nama barang
+   diketik (hscode-lookup.js): nama di database yang termuat utuh di
+   Uraian + Tipe -- "SIPE" di "SIPES BLADE 0.4T", "MASTER MODEL" di
+   "MASTER MODEL 225/45R17" -- yang terpanjang menang. */
 function hsDatabaseUntukBarang(uraian, tipe) {
-  const teks = [kunciNamaHs(`${uraian || ""} ${tipe || ""}`), kunciNamaHs(uraian)].filter(Boolean);
+  const teks = [kunciNamaHs(`${uraian || ""} ${tipe || ""}`), kunciNamaHs(uraian)].filter(Boolean).map(lipatJamakHs);
   if (!teks.length || !hsCodeRows.length) return null;
-  return cariHsMenurutNama(daftarHsDatabase(), teks);
+  return cariHsMenurutNama(daftarHsDatabase(true), teks);
 }
 
 /* Database dimuat sekali kalau belum -- tanpa menggambar halaman HS Code. */
@@ -363,37 +428,39 @@ function tambahHsCodeBaru() {
         filter: batasiHsCode,
       },
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), placeholder: tt("Cth: EVA Sole", "e.g. EVA Sole") },
+      isianLartasHs([]),
     ],
     onSubmit: (v) => {
       if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
-      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());
+      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas));
       return true;
     },
   });
 }
 
-async function simpanHsCodeBaru(nama, kode, catatan) {
-  const { data, error } = await supabaseClient
-    .from("hs_code_master")
-    .insert({
+async function simpanHsCodeBaru(nama, kode, catatan, lartas) {
+  const { data, error, lartasDitinggal } = await simpanHsDenganLartas(
+    (row) => supabaseClient.from("hs_code_master").insert(row).select().single(),
+    {
       item_name: nama,
       hs_code: kode,
       notes: catatan || null,
       created_by: authState.user ? authState.user.id : null,
-    })
-    .select()
-    .single();
+      lartas: lartas || [],
+    },
+  );
   if (error) {
     console.error(error);
     showToast(t("m.gagal.menyimpan.hs.code.baru"), "danger");
     return;
   }
   hsCodeRows.push(data);
+  versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
+  if (!lartasDitinggal) showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
 }
 
 function editHsCode(id) {
@@ -415,22 +482,23 @@ function editHsCode(id) {
         filter: batasiHsCode,
       },
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), value: r.notes || "" },
+      isianLartasHs(r.lartas),
     ],
     onSubmit: (v) => {
       if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
-      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim());
+      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas));
       return true;
     },
   });
 }
 
-async function simpanUbahHsCode(id, nama, kode, catatan) {
-  const { error } = await supabaseClient
-    .from("hs_code_master")
-    .update({ item_name: nama, hs_code: kode, notes: catatan || null })
-    .eq("id", id);
+async function simpanUbahHsCode(id, nama, kode, catatan, lartas) {
+  const { error, lartasDitinggal } = await simpanHsDenganLartas(
+    (row) => supabaseClient.from("hs_code_master").update(row).eq("id", id),
+    { item_name: nama, hs_code: kode, notes: catatan || null, lartas: lartas || [] },
+  );
   if (error) {
     console.error(error);
     showToast(t("m.gagal.menyimpan.perubahan"), "danger");
@@ -441,10 +509,12 @@ async function simpanUbahHsCode(id, nama, kode, catatan) {
     r.item_name = nama;
     r.hs_code = kode;
     r.notes = catatan || null;
+    if (!lartasDitinggal) r.lartas = lartas || [];
   }
+  versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  showToast(t("m.perubahan.tersimpan"), "dark");
+  if (!lartasDitinggal) showToast(t("m.perubahan.tersimpan"), "dark");
 }
 
 function deleteHsCode(id) {
@@ -464,11 +534,12 @@ function deleteHsCode(id) {
         return;
       }
       hsCodeRows = hsCodeRows.filter((x) => x.id !== id);
+      versiHsCode++;
       renderHsCodes();
       siarkanHsCodeBerubah();
       showToast(t("w.hs.code.untuk.dihapus", { x: r.item_name }), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus HS Code?", "Delete HS Code?"), confirmText: tt("Hapus HS Code", "Delete HS Code"), icon: "bi-trash3" },
   );
 }
 
@@ -528,9 +599,9 @@ function renderHsCodePagination(totalItems) {
       total: `<b>${totalItems}</b>`,
     })}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" data-hsnav="prev" ${hsCodePage <= 1 ? "disabled" : ""}><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" data-hsnav="prev" ${hsCodePage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${tombol}</div>
-      <button type="button" class="page-nav" data-hsnav="next" ${hsCodePage >= totalPages ? "disabled" : ""}><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" data-hsnav="next" ${hsCodePage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="hsCodePageSize">${t("hscode.pager.perPage")}</label>

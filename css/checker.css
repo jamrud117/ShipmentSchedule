@@ -199,6 +199,12 @@
   font-size: var(--t-sm);
   color: var(--n-500);
 }
+.cek-pilih-kosong small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--t-xs);
+  color: var(--text-subtle);
+}
 
 /* ---------- B/L-AWB pembanding ---------- */
 .cek-bl {
@@ -259,7 +265,7 @@
   color: var(--n-600);
 }
 .cek-status small {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .cek-status-titik {
   flex: 0 0 auto;
@@ -390,7 +396,7 @@
   color: var(--d-900);
 }
 .cek-angka span {
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--n-500);
@@ -405,7 +411,7 @@
   color: var(--cek-info);
 }
 .cek-angka .is-nol b {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---------- ringkasan per bagian ---------- */
@@ -548,7 +554,7 @@
   border-radius: var(--r-pill);
   background: var(--n-100);
   color: var(--n-600);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -557,7 +563,7 @@
   padding: 2px 8px;
   border: 1px solid transparent;
   border-radius: var(--r-pill);
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -641,7 +647,7 @@
   border-radius: var(--r-pill);
   background: var(--sec-50);
   color: var(--sec-700);
-  font-size: 0.64rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.03em;
 }
@@ -663,7 +669,7 @@
   color: var(--s-danger);
 }
 .cek-redup {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---------- HS Code untuk database ---------- */
@@ -820,11 +826,11 @@
   .cek-tabel td.cek-kol-nilai::before {
     content: attr(data-label);
     display: block;
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--n-400);
+    color: var(--text-subtle);
   }
   .cek-kol-hasil {
     margin-top: 4px;

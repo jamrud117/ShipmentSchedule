@@ -282,7 +282,7 @@ button.site-nav-link {
   border-radius: var(--r-pill);
   background: var(--s-danger);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -297,11 +297,11 @@ button.site-nav-link {
   position: absolute;
   top: 2px;
   right: 1px;
-  min-width: 17px;
-  height: 17px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
-  font-size: 0.6rem;
-  line-height: 17px;
+  font-size: 0.69rem;
+  line-height: 18px;
   box-shadow: 0 0 0 2px var(--d-900);
 }
 
@@ -351,6 +351,11 @@ button.site-nav-link {
 .notif-baca-semua:hover {
   background: var(--p-50);
 }
+@media (pointer: coarse) {
+  .notif-baca-semua {
+    min-height: 36px;
+  }
+}
 .notif-tutup {
   display: grid;
   place-items: center;
@@ -371,26 +376,89 @@ button.site-nav-link {
 }
 .notif-isi {
   overflow-y: auto;
-  padding-bottom: 6px;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+/* HARI (Hari ini / Besok): kepalanya menempel di atas saat digulir. */
+.notif-hari + .notif-hari {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
 }
 .notif-kelompok {
-  padding: 12px 16px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px 8px;
+  background: var(--surface);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--n-500);
+  color: var(--n-600);
+}
+.notif-kelompok-tgl {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-subtle);
+}
+/* JENIS (Berangkat / Tiba / Dikirim ke pabrik): satu kotak berkepala. */
+.notif-jenis {
+  margin: 0 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+.notif-jenis-kepala {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--n-100);
+  background: var(--n-50);
+}
+.notif-jenis-nama {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.notif-jenis-acuan {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.notif-jenis-jumlah {
+  min-width: 22px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--n-200);
+  color: var(--n-700);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .notif-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 10px 16px;
+  padding: 9px 12px;
   border: 0;
   background: transparent;
   text-align: left;
   color: inherit;
+}
+.notif-item + .notif-item {
+  border-top: 1px solid var(--n-100);
 }
 .notif-item:hover {
   background: var(--n-50);
@@ -409,22 +477,21 @@ button.site-nav-link {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  font-size: 1rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 0.85rem;
 }
 .notif-ikon--etd {
   background: #fff3de;
   color: #95610c;
 }
 .notif-ikon--eta {
-  background: var(--sec-50);
-  color: var(--teal-dark);
+  background: var(--sec-100);
+  color: var(--sec-700);
 }
-/* Ubin biru-tengah: tetap terlihat di atas latar notifikasi belum dibaca (--p-50) & saat disorot (--p-100). */
 .notif-ikon--delivery {
-  background: var(--p-200);
+  background: var(--p-100);
   color: var(--p-600);
 }
 .notif-teks {
@@ -434,20 +501,16 @@ button.site-nav-link {
   flex-direction: column;
   gap: 1px;
 }
-.notif-judul {
-  font-size: var(--t-sm);
-  font-weight: 700;
-}
+/* Dibungkus, tidak dipotong: kapal / nomor penerbangan di ujung
+   keterangan justru yang membedakan dua kiriman pihak yang sama. */
 .notif-pihak,
 .notif-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .notif-pihak {
   font-size: var(--t-sm);
-  font-weight: 600;
-  color: var(--n-700);
+  font-weight: 700;
+  color: var(--ink);
 }
 .notif-meta {
   font-size: 0.72rem;
@@ -591,13 +654,13 @@ button.site-nav-link {
     top: 4px;
     right: 10px;
     width: auto;
-    min-width: 17px;
-    height: 17px;
+    min-width: 18px;
+    height: 18px;
     padding: 0 4px;
     clip: auto;
     overflow: visible;
-    font-size: 0.6rem;
-    line-height: 17px;
+    font-size: 0.69rem;
+    line-height: 18px;
     box-shadow: 0 0 0 2px var(--d-900);
   }
 }
@@ -757,6 +820,13 @@ button.site-nav-link {
   justify-content: space-between;
   gap: var(--sp-5);
   flex-wrap: wrap;
+}
+/* Judul & kalimat ringkasnya yang MENYUSUT dulu (kalimatnya membungkus
+   ke baris kedua) -- bukan blok tanggal di kanan yang terlempar ke
+   bawah, seperti di Masterlist yang kalimat ringkasnya panjang. */
+.board-head > :first-child {
+  flex: 1 1 24rem;
+  min-width: 0;
 }
 .board-title {
   font-family: var(--font-display);
@@ -924,7 +994,8 @@ button.site-nav-link {
   flex-wrap: wrap;
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: rgba(255, 255, 255, 0.45);
+  /* 0,62: 6,4:1 di atas navy -- 0,45 dulu hanya 4,41:1 */
+  color: rgba(255, 255, 255, 0.62);
 }
 
 

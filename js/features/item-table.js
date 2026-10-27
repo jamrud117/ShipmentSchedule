@@ -25,13 +25,62 @@ function hitungFasilitas(daftar) {
   return { skb: semua.length - coo, coo };
 }
 
-/* Tombol kolom Fasilitas: "SKB 1 · COO 1" -- keduanya berhitungan. */
+// PI barang ini hanya di buku Import (Persetujuan Impor)
+function piBarangBerlaku(it) {
+  return ML().showDuty && !!String((it && it.piNomor) || "").trim();
+}
+
+/* Tombol kolom Fasilitas: "PI #5 · SKB 1 · COO 1" -- PI barang ini (buku
+   Import) beserta No. item-nya, lalu SKB & COO berhitungan. */
 function facilitiesButtonLabel(it) {
   const h = hitungFasilitas(it.skb);
   const parts = [];
+  if (piBarangBerlaku(it)) parts.push(it.piNoItem ? `PI #${String(it.piNoItem).trim()}` : "PI");
   if (h.skb) parts.push(`SKB ${h.skb}`);
   if (h.coo) parts.push(`COO ${h.coo}`);
   return parts.join(" · ") || tt("Fasilitas", "Facility");
+}
+
+/* HS Code dari Database HS Code menurut nama barangnya (hscode-lookup.js):
+   kotak yang diisi otomatis & tombol cari untuk nama yang cocok dengan
+   beberapa kode. */
+function judulHsOtomatis(nama) {
+  return tt(`Diisi otomatis dari Database HS Code ("${nama}"). Ketik untuk mengganti.`, `Filled automatically from the HS Code Database ("${nama}"). Type to replace it.`);
+}
+function judulTombolCariHs(it) {
+  return it._hsSaran
+    ? tt(`Beberapa HS Code cocok untuk "${it._hsSaran}" — pilih salah satu.`, `Several HS Codes match "${it._hsSaran}" — pick one.`)
+    : t("s.cari.hs.code.dari.database.berdasarkan.nama.ba");
+}
+
+// Pilihan PI kosong: barang BARU memang tidak memakai PI
+function labelTanpaPi(it) {
+  return kodeKondisiBarang(it.kondisiBarang) === "1" ? tt("Tidak Menggunakan PI", "No PI Used") : tt("— Pilih PI —", "— Select PI —");
+}
+
+/* PI BARANG INI (buku Import): dipilih dari daftar PI jadwal (kartu
+   Dokumen Pelengkap Pabean, dok-pelengkap.js); No. item = nomor urut
+   barang ini di dokumen PI-nya. Barang BARU (kode kondisi 1) tidak
+   memakai PI -- pilihan kosongnya berbunyi begitu. Nomor yang tidak ada
+   lagi di daftar tetap tampil, tidak diam-diam dilepas. */
+function piBarangHtml(it, idx) {
+  if (!ML().showDuty) return "";
+  const daftar = draftDokPelengkap.pi.filter((d) => String(d.nomor || "").trim());
+  const kini = String(it.piNomor || "").trim();
+  const opsi = [["", labelTanpaPi(it)]].concat(daftar.map((d) => [d.nomor.trim(), d.tanggal ? `${d.nomor.trim()} · ${fmtDate(d.tanggal)}` : d.nomor.trim()]));
+  if (kini && !opsi.some((o) => o[0] === kini)) opsi.push([kini, tt(`${kini} (tidak ada di daftar PI)`, `${kini} (not in the PI list)`)]);
+  return `
+          <div class="item-fac-pi">
+            <label>${tt("PI (Persetujuan Impor)", "PI (Import Approval)")}
+              <select data-fac="piNomor" data-idx="${idx}">${opsi
+                .map(([v, label]) => `<option value="${escapeAttr(v)}"${v === kini ? " selected" : ""}>${escapeHtml(label)}</option>`)
+                .join("")}</select>
+            </label>
+            <label>${tt("No. item di PI", "Item no. in PI")}
+              <input type="text" data-fac="piNoItem" data-idx="${idx}" value="${escapeAttr(it.piNoItem || "")}" inputmode="numeric" placeholder="${escapeAttr(tt("mis. 5", "e.g. 5"))}"${kini ? "" : " disabled"}>
+            </label>
+            ${daftar.length ? "" : `<span class="item-fac-pi-catatan">${tt("Nomor PI diisi di kartu Dokumen Pelengkap Pabean, tab 3.", "PI numbers are entered in the Supporting Customs Documents card, tab 3.")}</span>`}
+          </div>`;
 }
 
 /* SERI BARANG — nomor urut barang, dari POSISI baris (idx+1), BUKAN
@@ -70,6 +119,7 @@ function facilitiesPanelHtml(it, idx) {
     <tr class="item-fac-row" data-idx="${idx}">
       <td colspan="24">
         <div class="item-fac-panel">
+          ${piBarangHtml(it, idx)}
           <div class="item-fac-skb-head">
             <b>${tt("Fasilitas (SKB &amp; COO)", "Facilities (SKB &amp; COO)")}</b>
             <button type="button" class="btn-add-skb" data-idx="${idx}"><i class="bi bi-plus-lg"></i> ${tt("Tambah Fasilitas", "Add Facility")}</button>
@@ -240,11 +290,15 @@ function kolomIsianBarang() {
   ];
 }
 
+/* Kelas sel untuk tata letak kartu (form.css, @container barang-isi):
+   Uraian dua kolom. */
+const KELAS_KARTU_BARANG = { namaBarang: "uraian-col" };
+
 // Isian yang selalu HURUF BESAR (kolom CEISA ditulis kapital; "Tyre Mold" & "TYRE MOLD" bukan dua barang)
 const ISIAN_BARANG_KAPITAL = new Set(KOLOM_NAMA_BARANG.concat(["marks", "satuan", "packingUnit"]));
 
 function isianBarangHtml(it, field, label, placeholder, kelas) {
-  return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
+  return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}" data-label="${escapeAttr(label)}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
 }
 
 /* KODE KONDISI BARANG (buku Import; kolomnya disembunyikan di Export,
@@ -255,7 +309,7 @@ function isianKondisiHtml(it) {
   const kini = kodeKondisiBarang(it.kondisiBarang);
   const opsi = [["", "—"]].concat(KONDISI_BARANG.map((k) => [k[0], labelKondisiBarang(k[0])]));
   if (kini && !opsi.some((o) => o[0] === kini)) opsi.push([kini, kini]);
-  return `<td class="kolom-kode import-col"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kode Kondisi Barang", "Goods Condition Code"))}">${opsi
+  return `<td class="kolom-kode import-col" data-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}">${opsi
     .map(([v, label]) => `<option value="${escapeAttr(v)}"${v === kini ? " selected" : ""}>${escapeHtml(label)}</option>`)
     .join("")}</select></td>`;
 }
@@ -279,7 +333,7 @@ function keteranganNegara(kode) {
 function isianNegaraHtml(it) {
   const kode = String(it.negaraAsal || "").trim().toUpperCase();
   const ket = keteranganNegara(kode);
-  return `<td class="kolom-kode"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Kode Negara Asal Barang", "Country of Origin Code"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
+  return `<td class="kolom-kode" data-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
 }
 
 // Keterangan di bawah kotak negara mengikuti isinya: `kode` = yang sudah dibakukan, atau tebakan dari ketikan
@@ -313,40 +367,42 @@ function renderItemTable() {
     .map((it, idx) => {
       const mainRow = `
     <tr data-idx="${idx}">
-      <td class="seri-col text-center" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
-      <td>
+      <td class="seri-col" data-label="${escapeAttr(t("f.seri"))}" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
+      <td data-label="HS Code">
         <div class="hscode-cell">
-          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric">
-          <button type="button" class="hscode-lookup-btn" data-hscode-lookup="${idx}" title="${escapeAttr(t("s.cari.hs.code.dari.database.berdasarkan.nama.ba"))}">
-            <i class="bi bi-search"></i>
+          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric" aria-label="HS Code"${
+            it._hsOtomatis ? ` class="hs-otomatis" title="${escapeAttr(judulHsOtomatis(it._hsOtomatis))}"` : ""
+          }>
+          <button type="button" class="hscode-lookup-btn${it._hsSaran ? " is-saran" : ""}" data-hscode-lookup="${idx}" title="${escapeAttr(judulTombolCariHs(it))}" aria-label="${escapeAttr(judulTombolCariHs(it))}">
+            <i class="bi bi-search" aria-hidden="true"></i>
           </button>
         </div>
       </td>
-      ${kolom.map(([field, label]) => isianBarangHtml(it, field, label)).join("")}
+      ${kolom.map(([field, label]) => isianBarangHtml(it, field, label, "", KELAS_KARTU_BARANG[field])).join("")}
       ${isianKondisiHtml(it)}
       ${isianNegaraHtml(it)}
       ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
-      <td>
-        <select data-f="jenisBarang">
+      <td class="jenis-col" data-label="${escapeAttr(t("f.jenis.barang"))}">
+        <select data-f="jenisBarang" aria-label="${escapeAttr(t("f.jenis.barang"))}">
           ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
         </select>
       </td>
-      <td class="text-center">
-        <button type="button" class="btn-facilities ${(it.skb || []).length ? "has-value" : ""}" data-act="toggle-fac" data-idx="${idx}">
+      <td data-label="${escapeAttr(t("f.fasilitas"))}">
+        <button type="button" class="btn-facilities ${(it.skb || []).length || piBarangBerlaku(it) ? "has-value" : ""}" data-act="toggle-fac" data-idx="${idx}">
           <span>${facilitiesButtonLabel(it)}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
         </button>
       </td>
-      <td><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal"></td>
-      <td><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList"></td>
-      <td><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
-      <td><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
-      <td><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
-      <td class="pkg-cell dim-col">
-        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)">
+      <td data-label="Qty"><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal" aria-label="Qty"></td>
+      <td data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList" aria-label="${escapeAttr(t("f.satuan"))}"></td>
+      <td data-label="${escapeAttr(t("f.harga.unit.usd"))}"><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal" aria-label="${escapeAttr(t("f.harga.unit.usd"))}"></div></td>
+      <td data-label="${escapeAttr(t("f.netto.kg"))}"><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.netto.kg"))}"></td>
+      <td data-label="${escapeAttr(t("f.bruto.kg"))}"><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.bruto.kg"))}"></td>
+      <td class="pkg-cell dim-col" data-label="${escapeAttr(t("f.dimensi"))}">
+        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)" aria-label="${escapeAttr(t("f.dimensi"))}">
 
       </td>
-      <td>
-        <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}"
+      <td data-label="${escapeAttr(t("f.kemasan"))}">
+        <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}" aria-label="${escapeAttr(t("f.kemasan"))}"
                placeholder="${idx === 0 ? "1" : tt("↳ ikut", "↳ same")}"
                title="${
                  idx === 0
@@ -355,16 +411,16 @@ function renderItemTable() {
                }"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
-      <td>
-        <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}"
+      <td data-label="${escapeAttr(t("f.jenis.kemasan"))}">
+        <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}" aria-label="${escapeAttr(t("f.jenis.kemasan"))}"
                list="packageUnitList" placeholder="${idx === 0 ? "BOX" : tt("↳ ikut", "↳ same")}"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
-      <td class="cbm-col text-center ${activeMode === "import" ? "d-none" : ""}">
-        <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}">
+      <td class="cbm-col${activeMode === "import" ? " d-none" : ""}" data-label="CBM (m³)">
+        <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}" aria-label="CBM (m³)">
       </td>
-      <td><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}"></td>
-      <td><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg"></i></button></td>
+      <td class="subtotal-col" data-label="${escapeAttr(t("f.subtotal.usd"))}"><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}" aria-label="${escapeAttr(t("f.subtotal.usd"))}"></td>
+      <td class="hapus-col"><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}" aria-label="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
     </tr>`;
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
     })
@@ -374,6 +430,8 @@ function renderItemTable() {
     .querySelectorAll('.pkg-cell input[data-f="package"]')
     .forEach((el) => autoSizeInput(el, 96, 210));
   recalcCustoms();
+  // Tawaran "Samakan … ke baris 2–N?" & Urungkan (item-samakan.js) mengikuti isi tabel
+  if (typeof perbaruiTawaranSamakan === "function") perbaruiTawaranSamakan();
 }
 $("#itemTableBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr");
@@ -460,9 +518,15 @@ $("#itemTableBody").addEventListener("input", (e) => {
     recalcCustoms();
     return;
   }
-  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/COO)
+  // Field fasilitas (nomor/tanggal/jenisLainnya per entri SKB/COO) & No. item di PI
   const fac = e.target.dataset.fac;
   if (!fac) return;
+  if (fac === "piNoItem") {
+    draftItems[idx].piNoItem = e.target.value.trim();
+    const label = tr.parentElement.querySelector(`tr[data-idx="${idx}"]:not(.item-fac-row) [data-act="toggle-fac"] span`);
+    if (label) label.textContent = facilitiesButtonLabel(draftItems[idx]);
+    return;
+  }
   const skIdxAttr = e.target.dataset.skidx;
   if (skIdxAttr !== undefined) {
     const entry = draftItems[idx].skb[Number(skIdxAttr)];
@@ -505,7 +569,11 @@ function keBarisBerikutnya(field, idx) {
      di tengah daftar bukan yang dimaksud. */
   if (idx === draftItems.length - 1) {
     draftItems.push(newItem());
-    renderItemTable();
+    /* Chrome menembakkan `change` dari kotak yang dilepas selagi tabel
+       digambar ulang; itu tidak boleh menawarkan "samakan" ke baris
+       yang justru lahir dari Enter ini (item-samakan.js). */
+    if (typeof tanpaTawaranSamakan === "function") tanpaTawaranSamakan(renderItemTable);
+    else renderItemTable();
   }
 
   const nextRow = $(
@@ -522,11 +590,34 @@ $("#itemTableBody").addEventListener("change", (e) => {
   const tr = e.target.closest("tr");
   if (!tr) return;
   const idx = Number(tr.dataset.idx);
-  if (e.target.dataset.f === "negaraAsal") {
+  /* Isian BARIS PERTAMA selesai diisi -> tawarkan menyamakannya ke baris
+     di bawahnya (item-samakan.js; baris lain & kolom lain diabaikan di
+     sana). Untuk negara, SESUDAH dibakukan ke kodenya. */
+  const f = e.target.dataset.f;
+  if (f === "negaraAsal") {
     bakukanIsianNegara(e.target, idx);
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan(f, idx);
+    return;
+  }
+  if (f) {
+    if (f === "kondisiBarang") {
+      const tanpaPi = $(`select[data-fac="piNomor"][data-idx="${idx}"] option[value=""]`);
+      if (tanpaPi) tanpaPi.textContent = labelTanpaPi(draftItems[idx]);
+    }
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan(f, idx);
     return;
   }
   const fac = e.target.dataset.fac;
+  if (fac === "piNomor") {
+    const it = draftItems[idx];
+    if (it.piNomor !== e.target.value) it.piNoItem = "";
+    it.piNomor = e.target.value;
+    renderItemTable();
+    if (it.piNomor) fokuskan($(`input[data-fac="piNoItem"][data-idx="${idx}"]`));
+    // PI baris 1 -> tawarkan ke barang lain yang belum ber-PI (item-samakan.js)
+    if (typeof tawarkanSamakan === "function") tawarkanSamakan("piNomor", idx);
+    return;
+  }
   if (fac === "jenis") {
     const skIdx = Number(e.target.dataset.skidx);
     const entry = draftItems[idx].skb[skIdx];

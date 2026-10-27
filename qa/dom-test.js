@@ -25,7 +25,25 @@ const jejakUpdate = [];
 /* Saringan doc_type terakhir yang diminta renderDocNumHistory(). */
 const jejakDocNumFilter = {};
 const jejakRpc = [];
+/* Supabase Storage tiruan (lampiran, js/data/lampiran.js): unggahan
+   tercatat di jejakStorage.unggah, penghapusan di .hapus. `gagalUnggah`
+   = nama berkas yang ditolak (uji galat). */
+const jejakStorage = { unggah: [], hapus: [], gagalUnggah: new Set() };
 w.supabase = { createClient: () => ({
+  storage: {
+    from: (bucket) => ({
+      upload: async (path, file) => {
+        if (jejakStorage.gagalUnggah.has(file && file.name)) return { data: null, error: { message: "new row violates row-level security policy" } };
+        jejakStorage.unggah.push({ bucket, path, nama: file && file.name });
+        return { data: { path }, error: null };
+      },
+      remove: async (paths) => {
+        jejakStorage.hapus.push(...paths);
+        return { data: paths, error: null };
+      },
+      createSignedUrl: async (path) => ({ data: { signedUrl: "https://contoh.supabase.co/sign/" + path }, error: null }),
+    }),
+  },
   from: () => ({
     update: (row) => ({ eq: async (_c, id) => { jejakUpdate.push({ id, row }); return { error: null }; } }),
     /* Rantai .select().eq().order().range() ditiru lengkap.
@@ -122,6 +140,22 @@ const baca = (nama) => w.eval(nama);
 let PC;
 const tulis = (nama, nilai) => w.eval(`${nama} = ${JSON.stringify(nilai)}`);
 
+/* Pembantu khusus tes (bukan kode aplikasi): */
+// Uji mundur prediksi sekali jalan -- pembanding versi bertahap aplikasi (predictionAccuracyBertahap)
+const predictionBacktest = (list) => {
+  const uji = w.siapkanUjiMundur(list);
+  w.ujiMundurLangkah(uji, Infinity);
+  return w.ringkasUjiMundur(uji);
+};
+// Bersihkan tanda nomor ganda di form sesudah tes (aplikasinya menandai ulang tiap form dibuka)
+const hapusTandaNomorGanda = () =>
+  w.eval(`DUP_ISIAN.forEach((isian) => {
+    const kotak = document.getElementById(isian.id);
+    if (kotak) kotak.classList.remove("is-ganda");
+    const wadah = document.getElementById("dup-" + isian.id);
+    if (wadah) { wadah.hidden = true; wadah.innerHTML = ""; }
+  })`);
+
 // --- muat berkas js sesuai urutan di index.html ---
 const urut = [...htmlAsli.matchAll(/<script src="(js\/[^"]+)"><\/script>/g)].map((m) => m[1]);
 const dimuat = [];
@@ -161,7 +195,15 @@ urut.forEach((f) => {
 const HARI_INI_UJI = "2026-08-09";
 w.eval(`todayISO = () => ${JSON.stringify(HARI_INI_UJI)};`);
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, lewat = 0;
+/* Berkas migrasi yang SUDAH dijalankan tidak selalu ikut di paket. Uji yang
+   membaca isinya DILEWATI (bukan gagal) bila berkasnya tidak ada. */
+class BerkasTidakAda extends Error {}
+const bacaMigrasi = (nama) => {
+  const p = path.join(ROOT, nama);
+  if (!fs.existsSync(p)) throw new BerkasTidakAda(nama);
+  return fs.readFileSync(p, "utf8");
+};
 /* Uji ASINKRON didukung: kalau fn() mengembalikan janji, hasilnya
    ditampung dan ditunggu sebelum ringkasan dicetak.
 
@@ -181,6 +223,11 @@ let pass = 0, fail = 0;
 let rantaiAsync = Promise.resolve();
 function t(name, fn) {
   const catatGagal = (e) => {
+    if (e instanceof BerkasTidakAda) {
+      lewat++;
+      console.log("  ~ " + name + " (dilewati: " + e.message + " tidak ada di paket)");
+      return;
+    }
     fail++;
     console.log("  ✗ " + name + "\n      " + e.message);
   };
@@ -207,6 +254,29 @@ const pilihVendor = (el, nama) => {
 };
 
 PC = w.eval("PREDICTION_CONFIG");
+
+/* KALENDER & JEDA MANIFEST NETRAL untuk uji lama.
+
+   Uji di bawah menguji ATURAN mesin (akhir pekan, gerbang, belajar)
+   dengan tanggal Agustus 2026 -- 17 & 25 Agustus 2026 libur nasional --
+   dan memakai tanggal Manifest sebagai tanggal tiba. Libur, cuti
+   bersama, pembatasan truk, dan jeda BC 1.1 -> sandar yang asli diuji
+   tersendiri lewat pakaiKalenderAsli() (bagian "KALENDER, JALUR PIB,
+   KAPAL YANG SAMA"). */
+const KALENDER_ASLI = { ...PC.calendar };
+const JEDA_MANIFEST_ASLI = { ...PC.arrival.manifestLeadDays };
+const kalenderNetral = () => {
+  Object.assign(PC.calendar, { holidays: [], collectiveLeave: [], freightRestrictions: [] });
+  Object.keys(PC.arrival.manifestLeadDays).forEach((k) => (PC.arrival.manifestLeadDays[k] = 0));
+  w.resetPredictionLearning();
+};
+const pakaiKalenderAsli = (fn) => {
+  Object.assign(PC.calendar, KALENDER_ASLI);
+  Object.assign(PC.arrival.manifestLeadDays, JEDA_MANIFEST_ASLI);
+  w.resetPredictionLearning();
+  try { return fn(); } finally { kalenderNetral(); }
+};
+kalenderNetral();
 
 /* Peran bawaan harness: EXIM.
 
@@ -342,6 +412,48 @@ t("In Factory diisi -> Estimated Delivery = tanggal itu", () => {
     throw new Error("catatan final tidak muncul");
   $("#fFactoryDate").value = "";
   $("#fFactoryDate").dispatchEvent(new w.Event("change"));
+});
+
+console.log("— FORM IMPORT: STATUS ARRIVED <-> IN FACTORY —");
+t("form import: Arrived mengisi In Factory hari ini; bukan Arrived mengosongkannya (diingat); In Factory diisi -> Arrived, dikosongkan -> status semula", () => {
+  const simpan = { status: $("#fStatus").innerHTML, nilai: $("#fStatus").value, tgl: $("#fFactoryDate").value, jam: $("#fFactoryTime").value, mode: baca("activeMode") };
+  const ubah = (sel, nilai) => {
+    $(sel).value = nilai;
+    $(sel).dispatchEvent(new w.Event("change", { bubbles: true }));
+  };
+  try {
+    tulis("activeMode", "import");
+    $("#fStatus").innerHTML = w.statusOptionsHtml("import", "process");
+    w.resetSelarasTiba();
+    $("#fFactoryDate").value = "";
+    $("#fFactoryTime").value = "";
+    ubah("#fStatus", "arrived");
+    eq($("#fFactoryDate").value, HARI_INI_UJI, "Arrived -> In Factory hari ini:");
+    if (!/In Factory diisi 09-08-2026/.test($("#toastMsg").textContent)) throw new Error("dikatakan: " + $("#toastMsg").textContent);
+    $("#fFactoryTime").value = "14:30";
+    ubah("#fStatus", "delayed");
+    eq([$("#fFactoryDate").value, $("#fFactoryTime").value].join("|"), "|", "bukan Arrived -> In Factory & jam dikosongkan:");
+    ubah("#fStatus", "arrived");
+    eq([$("#fFactoryDate").value, $("#fFactoryTime").value].join("|"), HARI_INI_UJI + "|14:30", "kembali Arrived -> tanggal & jam tadi kembali:");
+    // Arah sebaliknya: In Factory yang menentukan status
+    ubah("#fStatus", "delayed");
+    ubah("#fFactoryDate", "2026-08-07");
+    eq($("#fStatus").value, "arrived", "In Factory diisi -> Arrived:");
+    if (!/Status jadi Arrived/.test($("#toastMsg").textContent)) throw new Error("dikatakan: " + $("#toastMsg").textContent);
+    ubah("#fFactoryDate", "");
+    eq($("#fStatus").value, "delayed", "In Factory dikosongkan -> status sebelum Arrived:");
+    // Buku Export tidak disentuh (kotak In Factory tersembunyi di sana)
+    tulis("activeMode", "export");
+    ubah("#fStatus", "arrived");
+    eq($("#fFactoryDate").value, "", "export: In Factory tidak diisi:");
+  } finally {
+    tulis("activeMode", simpan.mode);
+    $("#fStatus").innerHTML = simpan.status;
+    $("#fStatus").value = simpan.nilai;
+    $("#fFactoryDate").value = simpan.tgl;
+    $("#fFactoryTime").value = simpan.jam;
+    w.resetSelarasTiba();
+  }
 });
 
 console.log("— MODE EXPORT —");
@@ -2400,6 +2512,46 @@ const bersihkanMobil = () => {
   w.setKendaraanExtra([]);
   kotakMobil().value = "";
 };
+t("Surat jalan Export: isian Mengetahui, Dikirim Oleh & Diterima Oleh -- tersimpan, tercetak di kotak tanda tangan, tampil di Detail", () => {
+  const kotak = (k) => panelDo().querySelector(`[data-dn="${k}"]`);
+  const jenis = panelDo().querySelector('[data-dn="doKind"]');
+  const simpanJenis = jenis.value;
+  try {
+    ["knownBy", "sentBy", "receivedBy"].forEach((k) => {
+      if (!kotak(k)) throw new Error("isian tidak ada: " + k);
+      if (kotak(k).getAttribute("list") !== "dnTtdList") throw new Error("isian tanpa saran nama: " + k);
+    });
+    jenis.value = "Export";
+    w.syncDocNumConditional(panelDo());
+    kotak("knownBy").value = "Budi Santoso";
+    kotak("sentBy").value = "Agus (sopir)";
+    kotak("receivedBy").value = "";
+    const isi = w.readDocNumForm("do");
+    eq([isi.knownBy, isi.sentBy, isi.receivedBy].join("|"), "Budi Santoso|Agus (sopir)|", "tersimpan di payload:");
+    // Surat jalan Lokal tidak memakainya (templatnya sendiri): disembunyikan & tidak ikut tersimpan
+    jenis.value = "Lokal";
+    w.syncDocNumConditional(panelDo());
+    eq(panelDo().querySelector(".dn-ttd").classList.contains("d-none"), true, "Lokal: disembunyikan:");
+    eq("knownBy" in w.readDocNumForm("do"), false, "Lokal: tidak tersimpan:");
+    // Cetak: nama di kotaknya; yang kosong tetap tempat menulis tangan
+    const html = w.buildSuratJalanHtml({ requester: "Yogi Firgiawan", payload: { doKind: "Export", knownBy: "Budi Santoso", sentBy: "Agus (sopir)" } }, null);
+    const ttd = [...new w.DOMParser().parseFromString(html, "text/html").querySelectorAll(".sj-sign td")].map((td) => td.textContent.replace(/\s+/g, " ").trim());
+    eq(ttd.join(" | "), "Dibuat oleh : Yogi Firgiawan | Mengetahui : Budi Santoso | Dikirim oleh : Agus (sopir) | Diterima oleh : (...............................)", "kotak tanda tangan:");
+    // Saran nama: dari surat jalan yang termuat + daftar pemohon
+    w.__riwayat = [{ payload: { knownBy: "Budi Santoso", receivedBy: "Siti" } }];
+    w.eval("const __lama = docNumHistoryRows; docNumHistoryRows = window.__riwayat; sjIsiSaranTtd(); docNumHistoryRows = __lama;");
+    const saran = [...w.document.querySelectorAll("#dnTtdList option")].map((o) => o.value);
+    ["Budi Santoso", "Siti", "Yogi Firgiawan"].forEach((n) => { if (saran.indexOf(n) < 0) throw new Error("saran tanpa " + n + ": " + saran); });
+    delete w.__riwayat;
+    // Detail pengajuan: bagian Tanda Tangan
+    eq(typeof w.eval("DN_LABEL_FIELD").knownBy, "string", "label Detail:");
+    eq(w.eval("DN_DETAIL_SUSUNAN.do").some((b) => b.isian && b.isian.join() === "knownBy,sentBy,receivedBy"), true, "bagian Tanda Tangan di Detail:");
+  } finally {
+    ["knownBy", "sentBy", "receivedBy"].forEach((k) => (kotak(k).value = ""));
+    jenis.value = simpanJenis;
+    w.syncDocNumConditional(panelDo());
+  }
+});
 t("No. Kendaraan: kotak pertama tetap data-dn=vehicle, tombol + Nomor Mobil ada di panel DO", () => {
   if (!kotakMobil()) throw new Error("kotak pertama bukan data-dn=vehicle di #vehicleList");
   const tombol = panelDo().querySelector("#btnVehicleAdd");
@@ -2600,11 +2752,12 @@ t("surat jalan Export: CSS Nopol -- kotak mobil dibagi rata lewat kolom flex, ga
   if (/\.sj-fill td\.[a-z-]+ \{[^}]*border-left:\s*var/.test(css)) throw new Error("ada sel ruang kosong yang menggambar garis kiri");
   if (!/\.sj-fill td \{ border-left: 0; \}/.test(css)) throw new Error("ruang kosong tidak mematikan garis kiri selnya");
 });
-t("surat jalan Export: isi kolom Package rata tengah HORIZONTAL dan VERTIKAL -- diperiksa pada hasil cascade, bukan sekadar adanya aturan", () => {
-  /* Tiga barang dalam SATU box: sel Package membentang tiga baris -- sel
-     yang paling kelihatan kalau rata tengahnya salah (menempel di atas). */
+t("surat jalan Export: isi baris data -- No, Nama Barang, Quantity, Package -- rata tengah HORIZONTAL dan VERTIKAL (diperiksa pada hasil cascade, bukan sekadar adanya aturan)", () => {
+  /* Satu box berisi tiga barang: sel Package membentang tiga baris. Nama
+     barang yang membungkus membuat baris lebih tinggi; di baris setinggi
+     itu No & Quantity yang menempel di atas paling kelihatan. */
   const h = w.buildSuratJalanHtml({ id: "pk1", doc_number: "070/DDI/EXIM-LOG/X/2026", doc_date: "2026-10-23", requester: "Y",
-    payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA" } },
+    payload: { doKind: "Export", receiver: "PT A", address: "X", vehicle: "B 1 AA", vehicleExtra: ["B 2 BB"] } },
   { id: "s", mode: "export", package: "2 PK", items: [
     { namaBarang: "A", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" },
     { namaBarang: "B", qty: 1, satuan: "SET" },
@@ -2612,16 +2765,30 @@ t("surat jalan Export: isi kolom Package rata tengah HORIZONTAL dan VERTIKAL -- 
     { namaBarang: "D", qty: 1, satuan: "SET", packing: "1", packingUnit: "PK" }] });
   if (!/<td class="sj-pkg" rowspan="3">1 PK<\/td>/.test(h)) throw new Error("sel Package yang membentang tiga baris tidak ditemukan");
   const d = new JSDOM("<style>" + w.suratJalanCss() + "</style><body>" + h + "</body>").window;
-  const sel = Array.from(d.document.querySelectorAll(".sj-items td.sj-pkg"));
-  // dua sel kemasan (box 1 membentang tiga baris, box 2 satu baris) + sel Package baris Total
-  eq(sel.length, 3, "jumlah sel Package:");
-  sel.forEach((td, i) => {
-    const gaya = d.getComputedStyle(td);
-    eq(gaya.verticalAlign, "middle", "sel Package #" + i + " rata tengah vertikal:");
-    eq(gaya.textAlign, "center", "sel Package #" + i + " rata tengah horizontal:");
+  const gayaDari = (td) => d.getComputedStyle(td);
+  // sel yang diharapkan: 4 No, 4 Nama, 4 Quantity, 2 kemasan -- tiap kolom diperiksa SATU PER SATU
+  const harapan = { "No": ["td.sj-no", 4], "Nama Barang": ["td.sj-nama", 4], "Quantity": ["td.sj-qty", 4], "Package": ["td.sj-pkg", 2] };
+  Object.keys(harapan).forEach((kolom) => {
+    const sel = Array.from(d.document.querySelectorAll(".sj-items tbody " + harapan[kolom][0]));
+    eq(sel.length, harapan[kolom][1], "jumlah sel " + kolom + ":");
+    sel.forEach((td, i) => {
+      eq(gayaDari(td).verticalAlign, "middle", kolom + " #" + i + " rata tengah vertikal:");
+      eq(gayaDari(td).textAlign, "center", kolom + " #" + i + " rata tengah horizontal:");
+    });
   });
-  // kolom lain TIDAK ikut berubah: Quantity tetap menempel di atas barisnya
-  eq(d.getComputedStyle(d.document.querySelector(".sj-items td.sj-qty")).verticalAlign, "top", "Quantity tetap di atas:");
+  // baris Total juga: jumlah Quantity & Package di tengah barisnya
+  ["td.sj-qty", "td.sj-pkg"].forEach((sel) => {
+    const td = d.document.querySelector(".sj-items tfoot " + sel);
+    eq(gayaDari(td).verticalAlign, "middle", "Total " + sel + " rata tengah vertikal:");
+    eq(gayaDari(td).textAlign, "center", "Total " + sel + " rata tengah horizontal:");
+  });
+  // Nopol: sel & kotak per mobil (kotaknya flex yang menengahkan teks di kedua arah)
+  const nopol = d.document.querySelector(".sj-items td.sj-nopol");
+  eq(gayaDari(nopol).verticalAlign, "middle", "Nopol rata tengah vertikal:");
+  eq(gayaDari(nopol).textAlign, "center", "Nopol rata tengah horizontal:");
+  const css = w.suratJalanCss();
+  const kotak = css.slice(css.indexOf(".sj-nopol-sel {"), css.indexOf("}", css.indexOf(".sj-nopol-sel {")));
+  if (!/align-items:\s*center/.test(kotak) || !/justify-content:\s*center/.test(kotak)) throw new Error("nomor mobil tidak ditengahkan di kotaknya");
 });
 t("blok Kepada di surat jalan Export diperkecil (label 6pt, nama 9pt, alamat 6,5pt) -- urutan ukuran label <= alamat < nama, masih terbaca", () => {
   const css = w.suratJalanCss();
@@ -3403,7 +3570,7 @@ t("palet perintah hanya menawarkan halaman yang boleh dibuka peran itu", () => {
   eq(perintahDok("exim"), "Permintaan Nomor Dokumen");
 });
 t("migrasi database peran finance ikut di paket", () => {
-  const sql = fs.readFileSync(path.join(ROOT, "migration-role-finance.sql"), "utf8");
+  const sql = bacaMigrasi("migration-role-finance.sql");
   ["'finance'", "document_numbers", "for select to authenticated", "drop policy if exists"].forEach((k) => {
     if (!sql.includes(k)) throw new Error("migrasi tidak memuat " + k);
   });
@@ -3416,7 +3583,7 @@ t("migrasi database peran finance ikut di paket", () => {
     throw new Error("migrasi menyentuh fungsi yang harus tetap khusus EXIM");
 });
 t("migrasi tanda bayar finance ikut di paket: SATU fungsi, tanpa kebijakan / hak tabel baru, hanya paidAt & paidBy", () => {
-  const sql = fs.readFileSync(path.join(ROOT, "migration-finance-tanda-bayar.sql"), "utf8");
+  const sql = bacaMigrasi("migration-finance-tanda-bayar.sql");
   const isi = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
   [
     "create or replace function public.set_fund_paid(p_id text, p_paid_at date)",
@@ -3440,7 +3607,7 @@ t("migrasi tanda bayar finance ikut di paket: SATU fungsi, tanpa kebijakan / hak
     throw new Error("menandai lunas menulis kunci lain");
 });
 t("migrasi database peran marketing ikut di paket", () => {
-  const sql = require("fs").readFileSync(require("path").join(__dirname, "..", "migration-role-marketing.sql"), "utf8");
+  const sql = bacaMigrasi("migration-role-marketing.sql");
   ["'marketing'", "peran_saya", "next_document_number"].forEach((k) => {
     if (!sql.includes(k)) throw new Error("migrasi tidak memuat " + k);
   });
@@ -5164,50 +5331,45 @@ console.log("— SARAN MASKAPAI & PELAYARAN DI KOTAK NAMA KAPAL —");
   });
 }
 
-console.log("\u2014 UDARA: JENIS MUATAN LCL TERKUNCI, KONTAINER DISEMBUNYIKAN \u2014");
+console.log("\u2014 UDARA: JENIS MUATAN & KONTAINER DISEMBUNYIKAN \u2014");
 {
   /* FCL/LCL & Kontainer itu konsep laut -- muatan pesawat tidak
-     dikapalkan dalam kontainer. Berlaku untuk export MAUPUN import,
-     lewat applyTransportLabels() yang sama (dipanggil baik saat
-     #fTransport berganti maupun saat form dibuka/diisi). */
+     dikapalkan dalam kontainer. Moda udara: kedua isian disembunyikan &
+     dikosongkan (form), dan tidak ditampilkan di kartu, detail, maupun
+     templat salin. Berlaku untuk export MAUPUN import. */
   const siapkanLaut = () => {
     $("#fTransport").value = "laut";
     $("#fMuatan").value = "FCL";
     $("#fContainer").value = "TCLU1234567";
     w.applyTransportLabels();
   };
+  const tersembunyi = (id) => $(id).classList.contains("d-none");
 
-  t("laut: Kontainer tampil, Jenis Muatan bebas diubah", () => {
+  t("laut: Jenis Muatan & Kontainer tampil dan bebas diubah", () => {
     siapkanLaut();
-    eq($("#fContainerWrap").classList.contains("d-none"), false, "wrap Kontainer:");
-    eq($("#fMuatan").disabled, false, "Jenis Muatan disabled:");
+    eq([tersembunyi("#fMuatanWrap"), tersembunyi("#fContainerWrap")].join(","), "false,false", "wrap Muatan, Kontainer:");
     eq($("#fMuatan").value, "FCL");
+    eq($("#fAngkutCard").classList.contains("is-udara"), false, "kartu angkutan:");
   });
 
-  t("ganti ke udara: Jenis Muatan otomatis LCL dan terkunci", () => {
+  t("ganti ke udara: Jenis Muatan & Kontainer disembunyikan dan dikosongkan; Forwarder & PIC melebar", () => {
     siapkanLaut();
     $("#fTransport").value = "udara";
     w.applyTransportLabels();
-    eq($("#fMuatan").value, "LCL");
-    eq($("#fMuatan").disabled, true, "Jenis Muatan disabled:");
+    eq([tersembunyi("#fMuatanWrap"), tersembunyi("#fContainerWrap")].join(","), "true,true", "wrap Muatan, Kontainer:");
+    eq([$("#fMuatan").value, $("#fContainer").value].join("|"), "|", "isian dikosongkan:");
+    eq($("#fAngkutCard").classList.contains("is-udara"), true, "kartu angkutan ditandai udara:");
+    const css = fs.readFileSync(path.join(ROOT, "css", "form.css"), "utf8");
+    if (!/#fAngkutCard\.is-udara #fForwarderWrap,\s*#fAngkutCard\.is-udara #fForwarderPicWrap \{\s*grid-column: span 6;/.test(css)) throw new Error("Forwarder & PIC tidak melebar");
   });
 
-  t("ganti ke udara: field Kontainer disembunyikan & dikosongkan", () => {
-    siapkanLaut();
-    $("#fTransport").value = "udara";
-    w.applyTransportLabels();
-    eq($("#fContainerWrap").classList.contains("d-none"), true, "wrap Kontainer:");
-    eq($("#fContainer").value, "");
-  });
-
-  t("balik ke laut: Kontainer tampil lagi, Jenis Muatan bisa diubah lagi", () => {
+  t("balik ke laut: Jenis Muatan & Kontainer tampil lagi", () => {
     siapkanLaut();
     $("#fTransport").value = "udara";
     w.applyTransportLabels();
     $("#fTransport").value = "laut";
     w.applyTransportLabels();
-    eq($("#fContainerWrap").classList.contains("d-none"), false, "wrap Kontainer:");
-    eq($("#fMuatan").disabled, false, "Jenis Muatan disabled:");
+    eq([tersembunyi("#fMuatanWrap"), tersembunyi("#fContainerWrap")].join(","), "false,false", "wrap Muatan, Kontainer:");
   });
 
   t("berlaku juga untuk mode import, bukan cuma export", () => {
@@ -5216,9 +5378,22 @@ console.log("\u2014 UDARA: JENIS MUATAN LCL TERKUNCI, KONTAINER DISEMBUNYIKAN \u
     siapkanLaut();
     $("#fTransport").value = "udara";
     w.applyTransportLabels();
-    eq($("#fMuatan").value, "LCL");
-    eq($("#fContainerWrap").classList.contains("d-none"), true, "wrap Kontainer:");
+    eq([$("#fMuatan").value, tersembunyi("#fMuatanWrap"), tersembunyi("#fContainerWrap")].join(","), ",true,true");
     tulis("activeMode", modeSimpan);
+  });
+
+  t("kartu, detail & salinan: jadwal udara tanpa jenis muatan / kontainer (data lama LCL pun)", () => {
+    const udara = { id: "ud1", mode: "import", transport: "udara", party: "AIR CO", muatan: "LCL", container: "TCLU1234567", masterBL: "988-1234", houseBL: "SRE1", etd: "2026-08-05", eta: "2026-08-12", status: "process", items: [] };
+    const laut = Object.assign({}, udara, { id: "ud2", transport: "laut", muatan: "FCL" });
+    eq([w.muatanKiriman(udara), w.kontainerKiriman(udara), w.muatanKiriman(laut), w.kontainerKiriman(laut)].join("|"), "||FCL|TCLU1234567", "pembantu:");
+    const kartu = w.renderExpandedCard(udara);
+    if (/tag-muatan|LCL|TCLU1234567/.test(kartu)) throw new Error("kartu udara masih menampilkan muatan / kontainer");
+    if (!/Master AWB<\/div><div class="info-value">988-1234/.test(kartu)) throw new Error("sel kontainer udara tidak diganti Master AWB");
+    if (!/tag-muatan">FCL/.test(w.renderExpandedCard(laut))) throw new Error("kartu laut kehilangan jenis muatan");
+    const detail = w.buildDetailHtml(udara);
+    if (/Jenis Muatan|No\. Kontainer\/Seal/.test(detail)) throw new Error("detail udara masih menampilkan muatan / kontainer");
+    eq(JSON.stringify(w.reportDetailPairs(udara, "import")[0]), '["Incoterm","—"]', "report baris 1:");
+    eq(w.reportDetailPairs(udara, "import")[1][1], "AIR", "report: mode udara:");
   });
 
   siapkanLaut();
@@ -6302,7 +6477,7 @@ t("tombol hapus baris (x) berbentuk sama di semua daftar isian", () => {
     if (!/class="rm-row"/.test(js)) throw new Error(f + ": tombol hapus tidak memakai .rm-row");
   });
 });
-t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris", () => {
+t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris, `sepertiga` bertiga", () => {
   const modal = w.document.getElementById("promptModal");
   const dialog = modal.querySelector(".modal-dialog");
   try {
@@ -6319,6 +6494,10 @@ t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris", () => {
     // Nilainya tetap terbaca lewat id yang sama
     w.document.getElementById("prompt_a").value = "x";
     eq(w.document.getElementById("prompt_a").value, "x", "isian terbaca:");
+    // Sepertiga: tiga isian sebaris, kotak ikut melebar
+    w.showPrompt({ fields: ["a", "b", "c"].map((key) => ({ key, label: key, lebar: "sepertiga" })) });
+    eq(w.document.querySelectorAll("#promptFields > .prompt-field--third").length, 3, "isian sepertiga:");
+    if (!dialog.classList.contains("prompt-dialog--lebar")) throw new Error("kotak tiga kolom tidak melebar");
     // Kotak berikutnya yang satu kolom tidak mewarisi lebar itu
     w.showPrompt({ fields: [{ key: "a", label: "A" }] });
     if (dialog.classList.contains("prompt-dialog--lebar")) throw new Error("lebar dua kolom terbawa ke kotak berikutnya");
@@ -6326,8 +6505,9 @@ t("kotak isian: jarak dari kisi, isian `setengah` berdua sebaris", () => {
     w.eval("bootstrap.Modal.getOrCreateInstance(document.getElementById('promptModal')).hide()");
   }
   const css = require("fs").readFileSync(__dirname + "/../css/auth.css", "utf8");
-  if (!/#promptFields \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(css)) throw new Error("kisi dua lajur tidak ada");
+  if (!/#promptFields \{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/.test(css)) throw new Error("kisi enam lajur tidak ada");
   if (!/#promptFields > \* \{\s*grid-column: 1 \/ -1;/.test(css)) throw new Error("isian bawaan tidak selebar kotak");
+  if (!/#promptFields > \.prompt-field--half \{\s*grid-column: span 3;/.test(css) || !/#promptFields > \.prompt-field--third \{\s*grid-column: span 2;/.test(css)) throw new Error("lebar setengah / sepertiga");
 });
 t("surat: label Flight/Sail mengikuti bahasa sejak panel dibuka", () => {
   const simpan = { lang: baca("activeLang"), tab: baca("docNumActiveTab") };
@@ -7984,12 +8164,22 @@ const jadwalStepper = (progres, lebih) => Object.assign({
   eta: "2026-08-20", items: [], notesLog: [], docProgress: progres || {},
 }, lebih || {});
 const isiTanggal = (nilai) => { $("#prompt_tanggal").value = nilai; $("#promptOk").click(); };
+// Status di kotak tahap (Draft / Asli / Tidak dipakai) -- isian lain ikut menyesuaikan
+const pilihStatus = (nilai) => {
+  const pilih = $("#prompt_pilih");
+  pilih.value = nilai;
+  pilih.dispatchEvent(new w.Event("change", { bubbles: true }));
+};
 
 t("konfirmasi berkas menanyakan TANGGAL DITERIMA (bawaan hari ini); kosong & sesudah hari ini ditolak", async () => {
   await denganStepper(jadwalStepper(), async (s) => {
     w.toggleDocStep("ds1", "bl");
     eq($("#promptTitle").textContent, "Konfirmasi B/L", "judul:");
-    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal diterima", "label:");
+    // B/L biasa datang sebagai draft dulu: kotaknya dibuka berstatus Draft
+    eq($("#prompt_pilih").value, "draft", "status bawaan:");
+    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal draft diterima", "label draft:");
+    pilihStatus("ada");
+    eq($('label[for="prompt_tanggal"]').textContent, "Tanggal asli diterima", "label asli:");
     eq([$("#prompt_tanggal").value, $("#prompt_tanggal").max].join("|"), HARI_INI_UJI + "|" + HARI_INI_UJI, "bawaan & batas:");
     isiTanggal("");
     eq($("#promptError").textContent, "Tanggal wajib diisi.", "kosong:");
@@ -7998,7 +8188,7 @@ t("konfirmasi berkas menanyakan TANGGAL DITERIMA (bawaan hari ini); kosong & ses
     eq("bl" in s().docProgress, false, "belum tersimpan:");
     isiTanggal("2026-08-06");
     const e = s().docProgress.bl;
-    eq([e.date, e.by, typeof e.at].join("|"), "2026-08-06|yogi|string", "tersimpan:");
+    eq([e.date, e.by, typeof e.at, !!e.draft].join("|"), "2026-08-06|yogi|string|false", "tersimpan:");
     await new Promise((r) => setTimeout(r, 20));
     const terakhir = [...jejakUpdate].reverse().find((u) => u.row && u.row.doc_progress);
     eq([terakhir.id, terakhir.row.doc_progress.bl.date].join("|"), "ds1|2026-08-06", "ke database:");
@@ -8045,6 +8235,7 @@ t("COO diterima, lalu E-COO dikonfirmasi SENDIRI dengan tanggal diterimanya", as
 t("PIB (milestone prediksi) tetap menanyakan tanggal dokumennya, tanggal itu yang tampil di tooltip", async () => {
   await denganStepper(jadwalStepper(), async (s) => {
     w.toggleDocStep("ds1", "pib");
+    pilihStatus("ada");
     eq($('label[for="prompt_tanggal"]').textContent, "Tanggal PIB", "label:");
     isiTanggal("2026-08-04");
     eq(s().docProgress.pib.date, "2026-08-04", "tersimpan:");
@@ -8488,7 +8679,7 @@ t("uji mundur: tanpa mengintip masa depan, dan keadaan dipulihkan", () => {
       factoryDate: w.addWorkingDaysISO(tiba, 3) });
   }
   const todaySebelum = w.todayISO();
-  const h = w.predictionBacktest(riwayat);
+  const h = predictionBacktest(riwayat);
   eq(h.eta.laut.n, 12, "semua kiriman diuji:");
   // Yang pertama belum punya riwayat (konfigurasi 10 vs kenyataan 14);
   // makin ke belakang makin tepat -- rata-rata melesetnya di bawah konfigurasi murni.
@@ -8515,7 +8706,7 @@ t("uji mundur bertahap: hasil sama dengan sekali jalan, keadaan normal di sela g
     tulis("data.import", riwayat);
     tulis("data.export", []);
     w.resetPredictionLearning();
-    const sekaliJalan = JSON.stringify(w.predictionBacktest(w.semuaKirimanDimuat()));
+    const sekaliJalan = JSON.stringify(predictionBacktest(w.semuaKiriman()));
     w.resetPredictionLearning();
     const todayAsli = w.todayISO;
     let celahTidakNormal = 0, giliranLain = 0;
@@ -8942,58 +9133,30 @@ console.log("— LAPORAN BIAYA ANGKUT —");
     const buf = await wb.xlsx.writeBuffer();
     if (!(buf.byteLength > 4000)) throw new Error("berkas terlalu kecil");
   });
-  t("Kurs pajak: halaman fiskal.kemenkeu.go.id terbaca (KMK, periode, 25 kurs, JPY per 1 yen)", () => {
-    const { parseKursPajak, gabungPeriode } = require(require("path").join(__dirname, "..", "scripts", "kurs-pajak-parser.js"));
-    const html = `<h3>KMK Nomor 46/MK/EF.2/2026</h3><em>Tanggal berlaku: 30 September 2026 - 06 Oktober 2026</em>
-      <table><tr><td>1</td><td>Dolar Amerika Serikat (USD) <span>USD</span></td><td><img src="x.gif"> 17.863,00</td><td>156,00<img src="up.gif"></td></tr>
-      <tr><td>13</td><td>Yen Jepang (JPY) JPY</td><td>11.316,89</td><td>-54,36</td></tr>
-      <tr><td>25</td><td>Won Korea (KRW) KRW</td><td>13,09</td><td>0,17</td></tr></table>`;
-    const k = parseKursPajak(html);
-    eq(k.kmk, "46/MK/EF.2/2026");
-    eq(k.mulai, "2026-09-30");
-    eq(k.sampai, "2026-10-06");
-    eq(k.kurs.USD, 17863);
-    eq(k.kurs.JPY, 113.1689, "JPY per 1 yen:");
-    eq(k.kurs.KRW, 13.09);
-    let galat = "";
-    try { parseKursPajak("<p>halaman berubah</p>"); } catch (e) { galat = e.message; }
-    if (!galat) throw new Error("halaman tanpa kurs seharusnya ditolak, bukan disimpan");
-    const daftar = gabungPeriode([{ mulai: "2026-09-23", sampai: "2026-09-29", kurs: { USD: 17700 } }], k);
-    eq(daftar.map((x) => x.mulai).join(","), "2026-09-30,2026-09-23", "terbaru di depan:");
-    // Berkas awal ikut di paket dan isinya sah
-    const awal = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "..", "data", "kurs-pajak.json"), "utf8"));
-    if (!(awal.periode[0].kurs.USD > 5000)) throw new Error("data/kurs-pajak.json tidak berisi kurs USD");
-  });
-  t("Kurs pajak: diambil tiap Rabu 05.00 WIB; jalan terjadwal menunggu kurs pekan itu", () => {
+  t("Kurs otomatis dari GitHub sudah dihapus: kurs = NDPBM jadwal terdekat tanggalnya (kursNdpbm)", () => {
     const fs = require("fs"), path = require("path");
-    const alur = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "kurs-pajak.yml"), "utf8");
-    // Selasa 22.00 UTC = Rabu 05.00 WIB -- satu jadwal saja
-    eq((alur.match(/- cron: "[^"]+"/g) || []).join(" | "), '- cron: "0 22 * * 2"', "jadwal:");
-    if (!/--pekan-ini/.test(alur)) throw new Error("jalan terjadwal tidak memastikan kurs pekan ini");
-    const k = require(path.join(__dirname, "..", "scripts", "kurs-pajak-parser.js"));
-    eq(k.tanggalWib(Date.UTC(2026, 9, 6, 22, 0)), "2026-10-07", "Selasa 22.00 UTC = Rabu WIB:");
-    eq(k.periodeMencakup({ mulai: "2026-10-07", sampai: "2026-10-13" }, "2026-10-07"), true);
-    eq(k.periodeMencakup({ mulai: "2026-09-30", sampai: "2026-10-06" }, "2026-10-07"), false, "pekan lalu:");
+    ["scripts", "data/kurs-pajak.json", ".github/workflows/kurs-pajak.yml", "js/core/kurs-pajak.js"].forEach((f) => {
+      if (fs.existsSync(path.join(__dirname, "..", f))) throw new Error("sisa kurs otomatis masih ada: " + f);
+    });
+    if (/kurs-pajak|muatKursPajak|kursPajakPada/.test(htmlAsli)) throw new Error("index.html masih memuat kurs otomatis");
+    const kiriman = [
+      { id: "a", party: "A", noAju: "000020POL85820260910000001", ndpbm: 16200 },
+      { id: "b", party: "B", eta: "2026-10-01", ndpbm: 16500 },
+      { id: "c", party: "C", eta: "2026-10-05", ndpbm: 0 },
+    ];
+    const k = w.kursNdpbm(kiriman);
+    eq(k("IDR", "2026-10-01").nilai, 1, "IDR:");
+    eq(k("USD", "2026-09-12").nilai, 16200, "tanggal dari nomor aju:");
+    eq(k("USD", "2026-10-03").s.id, "b", "terdekat, NDPBM 0 dilewati:");
+    eq(k("USD", "2026-12-25").jarak, 85, "jarak hari ke NDPBM yang dipakai:");
+    eq(k("EUR", "2026-10-01").nilai, 0, "valuta lain tidak ditebak:");
+    eq(w.kursNdpbm([])("USD", "2026-10-01").nilai, 0, "tanpa NDPBM:");
   });
-  t("Kurs pajak: kurs dipilih menurut tanggal transaksi", () => {
-    const data = { periode: [
-      { mulai: "2026-09-30", sampai: "2026-10-06", kmk: "46", kurs: { USD: 17863, JPY: 113.17 } },
-      { mulai: "2026-09-23", sampai: "2026-09-29", kmk: "45", kurs: { USD: 17707 } },
-    ] };
-    eq(w.kursPajakPada("USD", "2026-09-25", data).nilai, 17707, "periode tepat:");
-    eq(w.kursPajakPada("USD", "2026-10-01", data).nilai, 17863);
-    eq(w.kursPajakPada("IDR", "2026-10-01", data).nilai, 1, "IDR:");
-    const lama = w.kursPajakPada("USD", "2025-01-15", data);
-    eq(lama.nilai, 17707, "sebelum riwayat -> periode paling awal:");
-    eq(lama.perkiraan, true, "ditandai perkiraan:");
-    eq(w.kursPajakPada("USD", "2026-12-01", data).nilai, 17863, "sesudah riwayat -> periode terakhir:");
-    eq(w.kursPajakPada("JPY", "2026-09-25", data).nilai, 113.17, "JPY dari periode terdekat yang punya JPY:");
-  });
-  t("Analisis pendapatan: invoice ekspor (kurs pajak) & local sale (IDR) -> rasio & metode berbasis pendapatan", () => {
+  t("Analisis pendapatan: invoice ekspor (kurs NDPBM) & local sale (IDR) -> rasio & metode berbasis pendapatan", () => {
     const kursFn = (mata, tgl) => (mata === "USD" ? (tgl < "2026-04-01" ? 16000 : 17000) : 0);
     const inv = (no, tgl, mata, n, cust) => w.lapBarisInvoice({ id: no, doc_number: no, doc_date: tgl, payload: { currency: mata, amount: String(n), customer: cust } }, kursFn);
     const invoice = [inv("A", "2026-02-10", "USD", 10000, "DD KOREA"), inv("B", "2026-05-10", "USD", 10000, "DD KOREA"), inv("C", "2026-05-20", "IDR", 30000000, "PT LOKAL")];
-    eq(invoice[0].jumlah, 160000000, "USD x kurs pajak tanggal invoice:");
+    eq(invoice[0].jumlah, 160000000, "USD x kurs tanggal invoice:");
     eq(invoice[1].jumlah, 170000000, "kurs pekan lain:");
     eq(invoice[2].kanal, "Local Sale");
     const dana = [1, 2, 3, 4, 5, 6].map((m) => w.lapBarisDana({ id: "d" + m, doc_number: "d" + m, doc_date: `2026-0${m}-05`,
@@ -9576,8 +9739,7 @@ t("No. Kendaraan / Nopol: tersimpan di kolomnya, tampil di card & detail, masuk 
   eq(w.shipmentToRow({ vehicleNo: "B 9123 KXT" }, "import").vehicle_no, "B 9123 KXT", "simpan:");
   eq(w.rowToShipment({ id: 1, mode: "import", vehicle_no: "E 1234 AB" }).vehicleNo, "E 1234 AB", "baca:");
   const api = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "data", "api.js"), "utf8");
-  if (!/vehicle_no: \{ berkas: "migration-vehicle-no\.sql"/.test(api)) throw new Error("simpan cadangan bila kolom belum dimigrasi");
-  if (!require("fs").existsSync(require("path").join(__dirname, "..", "migration-vehicle-no.sql"))) throw new Error("berkas migrasi tidak ada");
+  if (!/vehicle_no: kolomOpsional\("migration-vehicle-no\.sql"/.test(api)) throw new Error("simpan cadangan bila kolom belum dimigrasi");
   // Form: isian ada, BEBAS FORMAT -- disimpan persis seperti diketik (tanpa pola, tanpa dikapitalkan)
   const el = w.document.getElementById("fVehicleNo");
   if (!el) throw new Error("isian No. Kendaraan tidak ada di form");
@@ -12994,7 +13156,7 @@ t("nomor ganda di form: kotaknya ditandai, keterangan menyebut jadwalnya, lalu h
       eq($("#fHouseBL").classList.contains("is-ganda"), false, "tanda dilepas:");
       eq($("#dup-fHouseBL").hidden, true, "keterangan hilang:");
     } finally {
-      w.hapusTandaNomorGanda();
+      hapusTandaNomorGanda();
       w.eval("activeMode = " + JSON.stringify(simpanMode));
       if (tersembunyi) form.classList.add("d-none");
     }
@@ -13043,7 +13205,7 @@ t("Simpan dengan nomor ganda: ditanyakan dulu, 'Tetap Simpan' baru menyimpan; ta
     w.__dataUji = simpan.data;
     w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
     w.eval("authState.profile = " + simpan.profil + "; activeMode = " + JSON.stringify(simpan.mode) + ";");
-    w.hapusTandaNomorGanda();
+    hapusTandaNomorGanda();
     if (tersembunyi) form.classList.add("d-none");
   }
 });
@@ -13121,7 +13283,12 @@ t("lonceng: lencana jumlah belum dibaca, panel per Hari ini / Besok, klik membuk
       if (!/5 belum dibaca/.test($("[data-notif-buka]").getAttribute("aria-label"))) throw new Error("aria-label: " + $("[data-notif-buka]").getAttribute("aria-label"));
       $("#appSidebar [data-notif-buka]").click();
       eq($("#notifPanel").hidden, false, "panel terbuka:");
-      eq([...w.document.querySelectorAll("#notifIsi .notif-kelompok")].map((x) => x.textContent).join(","), "Hari ini,Besok", "kelompok:");
+      eq([...w.document.querySelectorAll("#notifIsi .notif-kelompok-judul")].map((x) => x.textContent).join(","), "Hari ini,Besok", "kelompok hari:");
+      // Tiap hari dikelompokkan lagi per jenis, berurutan Berangkat, Tiba, Dikirim ke pabrik -- kepala bernama & berjumlah
+      const grupHari = [...w.document.querySelectorAll("#notifIsi .notif-hari")].map((h) =>
+        [...h.querySelectorAll(".notif-jenis")].map((g) => g.querySelector(".notif-jenis-nama").textContent + ":" + g.querySelector(".notif-jenis-jumlah").textContent + ":" + g.querySelectorAll(".notif-item").length).join(" "));
+      eq(grupHari.join(" | "), "Berangkat:1:1 Tiba:1:1 | Berangkat:2:2 Tiba:1:1", "grup per jenis:");
+      eq($("#notifIsi .notif-jenis--etd .notif-jenis-acuan").textContent, "ETD 09-08-2026", "tanggal acuan di kepala jenis:");
       eq(w.document.querySelectorAll("#notifIsi .notif-item.is-baru").length, 5, "belum dibaca:");
       const ekspor = w.document.querySelector('#notifIsi [data-notif-jadwal="n5"]');
       if (!/Berangkat hari ini \u00b7 ETD 09-08-2026/.test(ekspor.textContent)) throw new Error("judul: " + ekspor.textContent.replace(/\s+/g, " "));
@@ -13173,7 +13340,8 @@ t("notifikasi Delivery to Factory: H-1 Estimated Delivery jadwal Import; Export 
       w.__hari = "2026-08-09";
       eq(w.notifJudul(d1()), "Dikirim ke pabrik besok · Estimated Delivery 10-08-2026", "judul:");
       eq(w.notifMeta(d1()), "Import · IDTPP → Pabrik · PRIME · E 1578 MS", "keterangan:");
-      if (!/bi-truck/.test(w.notifItemHtml(d1()))) throw new Error("ikon truk");
+      if (!/bi-truck/.test(w.notifGrupHtml("delivery", [d1()]))) throw new Error("ikon truk di kepala kelompok");
+      if (!/Dikirim ke pabrik besok/.test(w.notifItemHtml(d1()))) throw new Error("judul lengkap untuk pembaca layar");
       const simpan = baca("activeLang");
       try {
         w.setLang("en");
@@ -14628,7 +14796,7 @@ t("tabel HS Code: nama, kode (tombol salin), catatan, aksi", async () => {
       { id: "b", item_name: "CLAY", hs_code: "34070010", notes: "" }]`);
     w.renderHsCodes();
     const kepala = [...w.document.querySelectorAll("#hsCodeList thead th")].map((th) => th.textContent.trim());
-    eq(kepala.slice(0, 3).join(" | "), "Nama Barang | HS Code | Catatan", "kolom:");
+    eq(kepala.slice(0, 4).join(" | "), "Nama Barang | HS Code | Lartas | Catatan", "kolom:");
     const baris = w.document.querySelectorAll("#hsCodeList tbody tr");
     eq(baris[0].querySelector(".hs-kol-catatan").textContent.trim(), "Alat ukur tapak", "catatan tampil:");
     if (!baris[1].querySelector(".hs-kol-catatan").classList.contains("hs-tanpa-catatan")) throw new Error("catatan kosong tidak ditandai");
@@ -14791,13 +14959,13 @@ t("tombol tidak menyebabkan form tersubmit (preventDefault)", () => {
 });
 
 console.log("\u2014 KOLOM BARANG = KOLOM CEISA, KIRI KE KANAN \u2014");
-t("kepala tabel barang: HS Code paling kiri, lalu Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain, Kode Kondisi Barang (Import), Kode Negara Asal Barang (+ Marks di Export)", () => {
+t("kepala tabel barang: HS Code paling kiri, lalu Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain, Kondisi Barang (Import), Negara Asal (+ Marks di Export)", () => {
   const modeAwal = baca("activeMode");
   const kepala = () => [...w.document.querySelectorAll(".item-table--form thead th")].slice(1, 12).map((th) => th.textContent.trim()).join(" | ");
   try {
     tulis("activeMode", "export");
     w.renderItemTable();
-    eq(kepala(), "HS Code | Kode Barang | Uraian | Merek | Tipe | Ukuran | Spesifikasi Lain | Kode Kondisi Barang | Kode Negara Asal Barang | Marks | Jenis Barang", "kepala:");
+    eq(kepala(), "HS Code | Kode Barang | Uraian | Merek | Tipe | Ukuran | Spesifikasi Lain | Kondisi Barang | Negara Asal | Marks | Jenis Barang", "kepala:");
     eq(w.document.querySelector(".item-table--form thead th:nth-child(9)").classList.contains("import-col"), true, "Kode Kondisi Barang khusus Import:");
     eq(w.document.querySelector(".item-table--form thead th:nth-child(11)").classList.contains("export-col"), true, "Marks khusus Export:");
   } finally {
@@ -14945,7 +15113,7 @@ t("sebelum kolom Kode Kondisi & Negara Asal dimigrasi: hanya kolom yang ditolak 
   eq([akhir.nama_barang, akhir.merek, akhir.tipe].join(" | "), "TYRE MOLD | KUMHO | PS72", "nama barang tetap per kolom:");
   eq(tolak.filter((k) => k in akhir).join(","), "", "kolom kode ditinggal:");
   const pesan = $("#toastMsg").textContent;
-  if (!/Kode Kondisi Barang & Kode Negara Asal/.test(pesan) || !/migration-barang-ceisa\.sql/.test(pesan) || /digabung ke Uraian/.test(pesan)) throw new Error("pemberitahuan: " + pesan);
+  if (!/Kondisi Barang & Negara Asal/.test(pesan) || !/migration-barang-ceisa\.sql/.test(pesan) || /digabung ke Uraian/.test(pesan)) throw new Error("pemberitahuan: " + pesan);
   // Kodenya kosong: tidak ada isian yang tertinggal, tidak diberi tahu
   $("#toastMsg").textContent = "";
   await w.sisipkanBarang([Object.assign({}, barang[0], { kondisiBarang: "", negaraAsal: "" })], "s1", kirim);
@@ -14988,6 +15156,1172 @@ t("tabel barang: Kode Kondisi Barang (pilihan 1 / 2, Import saja) & Kode Negara 
     w.renderItemTable();
   }
 });
+console.log("— HS CODE OTOMATIS DARI NAMA BARANG —");
+{
+  /* Nama barang yang diketik dicocokkan dengan Database HS Code
+     (hscode-lookup.js, aturan hsDatabaseUntukBarang): HS Code yang kosong
+     / masih otomatis terisi tanpa menunggu kotaknya ditinggalkan. */
+  const DB_OTOMATIS = [
+    { id: "1", item_name: "SIPE", hs_code: "8480.79.00" },
+    { id: "2", item_name: "MASTER MODEL", hs_code: "8480.71.90" },
+    { id: "3", item_name: "MODEL", hs_code: "4202.92.90" },
+    { id: "4", item_name: "TIRE MOLD", hs_code: "84807190" },
+    { id: "5", item_name: "TIRE MOLD", hs_code: "84807900" },
+  ];
+  const denganHs = (fn) => {
+    const simpan = { draft: baca("draftItems"), rows: baca("hsCodeRows"), mode: baca("activeMode") };
+    try {
+      tulis("activeMode", "import");
+      w.eval("hsCodeRows = " + JSON.stringify(DB_OTOMATIS));
+      w.eval("draftItems = " + JSON.stringify([w.newItem("import"), w.newItem("import")]));
+      w.renderItemTable();
+      fn();
+    } finally {
+      w.tutupHscodeLookup();
+      w.sembunyikanSemuaSamakan();
+      w.eval("draftItems = " + JSON.stringify(simpan.draft || []));
+      w.eval("hsCodeRows = " + JSON.stringify(simpan.rows || []));
+      tulis("activeMode", simpan.mode);
+      w.renderItemTable();
+    }
+  };
+  const kotakHs = (idx, f) => $(`#itemTableBody tr[data-idx="${idx}"]:not(.item-fac-row) [data-f="${f}"]`);
+  // Diketik (kejadian input) lalu jedanya dilewati: pencocokan langsung dijalankan
+  const ketik = (idx, f, nilai) => {
+    const el = kotakHs(idx, f);
+    el.value = nilai;
+    el.dispatchEvent(new w.Event("input", { bubbles: true }));
+    w.jalankanHsOtomatis();
+    return el;
+  };
+  const hsBaris = (idx) => baca("draftItems")[idx].hsCode;
+
+  t("HS Code otomatis: nama di Database HS Code yang termuat di Uraian mengisi HS Code -- yang terpanjang menang, kata jamak = tunggal; kotaknya ditandai & berketerangan", () => {
+    denganHs(() => {
+      ketik(0, "namaBarang", "SIPES BLADE 0.4T");
+      eq([hsBaris(0), kotakHs(0, "hsCode").value].join(" | "), "84807900 | 84807900", "SIPE (dari SIPES):");
+      eq(kotakHs(0, "hsCode").classList.contains("hs-otomatis"), true, "ditandai:");
+      if (!/SIPE/.test(kotakHs(0, "hsCode").title)) throw new Error("keterangan tanpa nama yang cocok: " + kotakHs(0, "hsCode").title);
+      ketik(1, "namaBarang", "MASTER MODEL 225/45R17");
+      eq(hsBaris(1), "84807190", "MASTER MODEL, bukan MODEL:");
+      w.renderItemTable();
+      eq(kotakHs(1, "hsCode").classList.contains("hs-otomatis"), true, "tanda bertahan saat tabel digambar ulang:");
+      // Lewat Tipe juga
+      ketik(1, "namaBarang", "BARANG");
+      ketik(1, "tipe", "SIPE");
+      eq(hsBaris(1), "84807900", "dari Tipe:");
+    });
+  });
+
+  t("HS Code otomatis: isian sendiri tidak ditimpa; nama yang tak lagi cocok mencabut kode otomatisnya; mengetik di HS Code = isian sendiri", () => {
+    denganHs(() => {
+      const hs = kotakHs(0, "hsCode");
+      hs.value = "12345678";
+      hs.dispatchEvent(new w.Event("input", { bubbles: true }));
+      ketik(0, "namaBarang", "SIPE");
+      eq(hsBaris(0), "12345678", "isian sendiri utuh:");
+      ketik(1, "namaBarang", "SIPE");
+      eq(hsBaris(1), "84807900", "terisi:");
+      ketik(1, "namaBarang", "BARANG LAIN");
+      eq([hsBaris(1), kotakHs(1, "hsCode").classList.contains("hs-otomatis")].join(" | "), " | false", "dicabut:");
+      ketik(1, "namaBarang", "SIPE");
+      const hs2 = kotakHs(1, "hsCode");
+      hs2.value = "84807999";
+      hs2.dispatchEvent(new w.Event("input", { bubbles: true }));
+      eq(hs2.classList.contains("hs-otomatis"), false, "diketik sendiri -> bukan otomatis:");
+      ketik(1, "namaBarang", "MASTER MODEL");
+      eq(hsBaris(1), "84807999", "tidak ditimpa lagi:");
+    });
+  });
+
+  t("HS Code otomatis: nama yang cocok dengan beberapa kode tidak ditebak -- tombol cari ditandai & pencariannya dibuka dengan nama itu", () => {
+    denganHs(() => {
+      ketik(0, "namaBarang", "TIRE MOLD 205/55R16");
+      eq(hsBaris(0), "", "tidak ditebak:");
+      const tombol = () => $('#itemTableBody [data-hscode-lookup="0"]');
+      eq(tombol().classList.contains("is-saran"), true, "tombol cari ditandai:");
+      if (!/TIRE MOLD/.test(tombol().title)) throw new Error("keterangan tombol: " + tombol().title);
+      tombol().click();
+      eq($("#hscodeLookupInput").value, "TIRE MOLD", "pencarian dengan nama itu:");
+      eq(w.document.querySelectorAll("#hscodeLookupResults [data-hscode-pick]").length, 2, "dua pilihan:");
+      w.document.querySelector('#hscodeLookupResults [data-hscode-pick="84807900"]').click();
+      eq([hsBaris(0), kotakHs(0, "hsCode").classList.contains("hs-otomatis"), tombol().classList.contains("is-saran")].join(" | "), "84807900 | false | false", "dipilih sendiri:");
+    });
+  });
+
+  t("HS Code otomatis: Uraian yang disamakan ikut mengisi HS Code baris lain (yang kosong / otomatis); Urungkan mengembalikannya", () => {
+    denganHs(() => {
+      w.eval("draftItems.push(newItem('import'))");
+      w.renderItemTable();
+      const hs = kotakHs(2, "hsCode");
+      hs.value = "11112222";
+      hs.dispatchEvent(new w.Event("input", { bubbles: true }));
+      ketik(0, "namaBarang", "MASTER MODEL");
+      eq(w.samakanAtasPermintaan("namaBarang"), true, "disamakan:");
+      eq([0, 1, 2].map(hsBaris).join(","), "84807190,84807190,11112222", "baris kosong ikut, isian sendiri tidak:");
+      eq(kotakHs(1, "hsCode").classList.contains("hs-otomatis"), true, "baris 2 ditandai otomatis:");
+      $("#samakanUrungBtn").click();
+      eq([0, 1, 2].map(hsBaris).join(","), "84807190,,11112222", "diurungkan:");
+    });
+  });
+}
+
+console.log("— SAMAKAN ISIAN BARIS 1 KE BARIS DI BAWAHNYA —");
+{
+  /* Kotak dialog "Samakan Satuan ke baris 2–12?  [PCS]  [Tidak] [Ya, samakan]"
+     (item-samakan.js): isian BARIS PERTAMA di tujuh kolom -- HS Code, Kode
+     Kondisi Barang, Kode Negara Asal, Jenis Barang, Qty, Satuan, Jenis
+     Kemasan -- selesai diisi -> tawarkan menyamakannya ke baris
+     2..terakhir. Baris 2+ tidak pernah memicunya. Sesudah "Ya", bilah
+     Urungkan di kiri bawah. */
+  const lapis = () => $("#samakanLapis");
+  const terbuka = () => !lapis().hidden;
+  // Judul (kolom & rentang baris) | nilai baris 1
+  const pesan = () => `${$("#samakanJudul").textContent} | ${$("#samakanNilai").textContent}`;
+  const catatan = () => ($("#samakanCatatan").hidden ? "" : $("#samakanCatatan").textContent);
+  const label = (id) => $(`#${id} > span`).textContent;
+  const bilah = () => $("#samakanUrung");
+  const bilahTerbuka = () => !bilah().hidden;
+  const urungTerbuka = () => bilahTerbuka() && bilah().dataset.jenis === "urung";
+  const pesanUrung = () => $("#samakanUrungPesan").textContent;
+  const tutup = () => { if (terbuka()) $("#samakanTidak").click(); };
+  const kotak = (idx, f) => $(`#itemTableBody tr[data-idx="${idx}"]:not(.item-fac-row) [data-f="${f}"]`);
+  const kejadian = (el, jenis) => el.dispatchEvent(new w.Event(jenis, { bubbles: true }));
+  const tombol = (el, key, opsi) => {
+    const e = new w.KeyboardEvent("keydown", Object.assign({ key, bubbles: true, cancelable: true }, opsi));
+    el.dispatchEvent(e);
+    return e;
+  };
+  // Mengisi satu kotak seperti orang: diketik (input), lalu ditinggalkan (change)
+  const isi = (idx, f, nilai) => {
+    const el = kotak(idx, f);
+    el.value = nilai;
+    kejadian(el, "input");
+    kejadian(el, "change");
+    return el;
+  };
+  // Tabel contoh `n` baris (nilai awal buku Import); `ubah(it, i)` menyesuaikan tiap barang
+  const siapkan = (n, ubah, mode) => {
+    const daftar = Array.from({ length: n }, (_, i) => {
+      const it = w.newItem(mode || "import");
+      it.namaBarang = "BARANG " + (i + 1);
+      if (ubah) ubah(it, i);
+      return it;
+    });
+    w.eval("draftItems = " + JSON.stringify(daftar));
+    w.renderItemTable();
+  };
+  /* jsdom tanpa tata letak: tampilDiLayar() dianggap benar -- form & tab
+     Barang sedang dibuka -- kecuali di dalam [hidden] dan pop-up pencarian
+     HS Code yang sudah ditutup. */
+  const denganTabel = (fn, mode) => {
+    const simpan = { draft: baca("draftItems"), mode: baca("activeMode"), tampil: w.tampilDiLayar };
+    w.tampilDiLayar = (el) => !el.closest("[hidden], #hscodeLookupPop.d-none");
+    try {
+      tulis("activeMode", mode || "import");
+      fn();
+    } finally {
+      w.tampilDiLayar = simpan.tampil;
+      w.sembunyikanSemuaSamakan();
+      w.eval("draftItems = " + JSON.stringify(simpan.draft || []));
+      tulis("activeMode", simpan.mode);
+      w.renderItemTable();
+    }
+  };
+  /* Pewaktu tiruan: { fn, ms, id } dicatat -- id negatif, jadi clearTimeout()
+     pada id tiruan tidak membatalkan pewaktu sungguhan. Date.now ikut tiruan (jam.kini). */
+  const denganPewaktu = (fn) => {
+    const asli = { s: w.setTimeout, c: w.clearTimeout, now: w.Date.now };
+    const jadwal = [];
+    const batal = [];
+    const jam = { kini: 1000 };
+    w.setTimeout = (f, ms) => { const id = -(jadwal.length + 1); jadwal.push({ fn: f, ms, id }); return id; };
+    w.clearTimeout = (id) => { batal.push(id); };
+    w.Date.now = () => jam.kini;
+    const milik = (f) => jadwal.filter((j) => j.fn === f);
+    try {
+      fn({ jadwal, batal, jam, pewaktuBilah: () => milik(w.sembunyikanBilahUrung), pewaktuFokus: () => milik(w.fokuskanTawaranSamakan) });
+    } finally {
+      w.setTimeout = asli.s;
+      w.clearTimeout = asli.c;
+      w.Date.now = asli.now;
+    }
+  };
+  const salinan = (daftar) => JSON.parse(JSON.stringify(daftar));
+
+  t("samakan: isian baris 1 di tujuh kolom membuka kotak dialog yang menyebut kolom, rentang baris & nilainya", () => {
+    denganTabel(() => {
+      siapkan(4);
+      eq(terbuka(), false, "awal tertutup:");
+      [
+        ["hsCode", "84807190", "Samakan HS Code ke baris 2–4? | 84807190"],
+        ["kondisiBarang", "2", "Samakan Kondisi Barang ke baris 2–4? | 2 - BUKAN BARU"],
+        ["negaraAsal", "korea selatan", "Samakan Negara Asal ke baris 2–4? | KR — Korea Selatan"],
+        ["jenisBarang", "SPAREPART", "Samakan Jenis Barang ke baris 2–4? | SPAREPART"],
+        ["qty", "12", "Samakan Qty ke baris 2–4? | 12"],
+        ["satuan", "pcs", "Samakan Satuan ke baris 2–4? | PCS"],
+        ["packingUnit", "pallet", "Samakan Jenis Kemasan ke baris 2–4? | PALLET"],
+      ].forEach(([f, nilai, harap]) => {
+        isi(0, f, nilai);
+        eq(terbuka(), true, f + " terbuka:");
+        eq(pesan(), harap, f + " pesan:");
+        eq([label("samakanYa"), label("samakanTidak"), $(".samakan-nilai-label").textContent].join("|"), "Ya, samakan|Tidak|Isian baris 1", f + " tombol:");
+        tutup();
+        eq(terbuka(), false, f + " ditutup:");
+      });
+    });
+  });
+
+  t("samakan: isian di baris 2 dan seterusnya TIDAK membuka tawaran (ketujuh kolom)", () => {
+    denganTabel(() => {
+      siapkan(4);
+      [1, 2, 3].forEach((idx) => {
+        [["hsCode", "84807190"], ["kondisiBarang", "2"], ["negaraAsal", "jepang"], ["jenisBarang", "SPAREPART"], ["qty", "12"], ["satuan", "pcs"], ["packingUnit", "pallet"]].forEach(([f, nilai]) => {
+          isi(idx, f, nilai);
+          eq(terbuka(), false, `baris ${idx + 1} / ${f}:`);
+        });
+      });
+      eq(baca("draftItems")[3].satuan, "PCS", "isiannya sendiri tetap tersimpan:");
+    });
+  });
+
+  t("samakan: kolom yang biasanya beda per barang tidak menawarkan sendiri, di baris 1 sekalipun -- walau baris lain kosong", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { if (i) { it.namaBarang = ""; it.harga = 0; } });
+      ["namaBarang", "ukuran", "harga", "netto", "bruto", "packing"].forEach((f) => {
+        isi(0, f, f === "packing" || /^(harga|netto|bruto)$/.test(f) ? "5" : "ABC");
+        eq(terbuka(), false, f + ":");
+      });
+    });
+    denganTabel(() => {
+      siapkan(3, null, "export");
+      ["marks", "package"].forEach((f) => {
+        isi(0, f, f === "package" ? "10*10*10" : "C# 1");
+        eq(terbuka(), false, f + " (Export):");
+      });
+    }, "export");
+  });
+
+  t("samakan: kolom \"pintar\" (Kode Barang, Merek, Tipe, Spesifikasi Lain) menawarkan bila baris lain kosong / bawaan atau masih sama dengan isian LAMA baris 1 -- tidak bila sudah diisi sendiri", () => {
+    // Mulai disunting (focusin), diketik, ditinggalkan
+    const sunting = (idx, f, nilai) => { kejadian(kotak(idx, f), "focusin"); return isi(idx, f, nilai); };
+    denganTabel(() => {
+      siapkan(3);
+      [["kodeBarang", "KB-01"], ["merek", "SAEHWA"], ["tipe", "T-9"], ["spesifikasiLain", "LENGKAP"]].forEach(([f, nilai]) => {
+        sunting(0, f, nilai);
+        eq(terbuka(), true, f + " -- baris lain bawaan / kosong:");
+        $("#samakanYa").click();
+        eq(baca("draftItems").map((it) => it[f]).join(","), [nilai, nilai, nilai].join(","), f + " disamakan:");
+        // Baris lain masih sama dengan isian lama baris 1 -> mengikuti
+        sunting(0, f, nilai + "X");
+        eq(terbuka(), true, f + " -- baris lain mengikuti baris 1:");
+        tutup();
+        // Satu baris sudah diisi sendiri -> diam
+        sunting(2, f, "LAIN");
+        sunting(0, f, nilai + "Y");
+        eq(terbuka(), false, f + " -- ada baris yang diisi sendiri:");
+      });
+    });
+  });
+
+  t("samakan: menu \"Samakan baris 1\" -- hanya kolom yang berbeda (nama, nilai baris 1, jumlah baris), memilih = langsung disamakan & bisa diurungkan; tersembunyi bila barangnya satu", () => {
+    denganTabel(() => {
+      siapkan(1);
+      eq($("#samakanMenu").hidden, true, "satu barang -> tersembunyi:");
+      siapkan(3, (it, i) => { it.ukuran = i ? "" : "225/50R17"; it.harga = i === 2 ? 900 : 1000; });
+      eq($("#samakanMenu").hidden, false, "tiga barang -> tampil:");
+      $("#btnSamakanMenu").click();
+      const butir = () => [...w.document.querySelectorAll("#samakanMenuIsi [data-samakan-kolom]")];
+      const teks = butir().map((b) => [b.dataset.samakanKolom, b.querySelector(".samakan-menu-nilai").textContent, b.querySelector(".samakan-menu-jumlah").textContent].join("="));
+      // Uraian (BARANG 1/2/3), Ukuran (kosong di baris lain), Harga (berbeda di baris 3); yang sama tidak disebut
+      eq(teks.join(" | "), "namaBarang=BARANG 1=2 baris | ukuran=225/50R17=2 baris | harga=1,000=1 baris", "isi menu:");
+      butir().find((b) => b.dataset.samakanKolom === "ukuran").click();
+      eq(baca("draftItems").map((it) => it.ukuran).join(","), "225/50R17,225/50R17,225/50R17", "disamakan:");
+      eq(urungTerbuka(), true, "bilah Urungkan:");
+      eq(pesanUrung(), "Ukuran disamakan ke baris 2–3.", "pesan:");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.ukuran).join(","), "225/50R17,,", "diurungkan:");
+      // Semua sudah sama -> kalimat penjelas, tanpa butir
+      siapkan(2, (it) => { it.namaBarang = "SAMA"; });
+      $("#btnSamakanMenu").click();
+      eq(butir().length, 0, "tanpa butir:");
+      if (!/sudah sama dengan baris 1/.test($("#samakanMenuIsi").textContent)) throw new Error("kalimat penjelas tidak ada: " + $("#samakanMenuIsi").textContent);
+    });
+  });
+
+  t("samakan: Ctrl+D di kotak baris 1 menyamakan kolom itu -- termasuk kolom tanpa tawaran; di baris 2 tidak; tak ada yang berbeda -> alasannya di bilah", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const el = kotak(0, "namaBarang");
+      el.focus();
+      el.value = "TIRE MOLD";
+      kejadian(el, "input");
+      const e = tombol(el, "d", { ctrlKey: true });
+      eq(e.defaultPrevented, true, "pintasan peramban dicegah:");
+      eq(baca("draftItems").map((it) => it.namaBarang).join(","), "TIRE MOLD,TIRE MOLD,TIRE MOLD", "disamakan:");
+      eq(pesanUrung(), "Uraian disamakan ke baris 2–3.", "bilah Urungkan:");
+      eq(w.document.activeElement, kotak(0, "namaBarang"), "kursor tetap di kotaknya:");
+      // Baris 2: bukan sumber
+      const e2 = tombol(kotak(1, "merek"), "d", { ctrlKey: true });
+      eq(e2.defaultPrevented, false, "baris 2 dibiarkan:");
+      // Sudah sama semua
+      tombol(kotak(0, "namaBarang"), "d", { ctrlKey: true });
+      eq(bilah().dataset.jenis, "peringatan", "jenis kabar:");
+      eq(pesanUrung(), "Uraian baris 2–3 sudah sama dengan baris 1.", "alasan:");
+    });
+  });
+
+  t("samakan: Fasilitas (SKB & COO) disalin sebagai salinan sendiri tiap baris; PI barang mengosongkan No. item baris yang PI-nya berganti; Urungkan mengembalikan keduanya", () => {
+    denganTabel(() => {
+      const piLama = baca("draftDokPelengkap");
+      try {
+        w.eval(`draftDokPelengkap = Object.assign(dokPelengkapKosong(), { pi: [{ nomor: "PI-A", tanggal: "" }, { nomor: "PI-B", tanggal: "" }] })`);
+        siapkan(3, (it, i) => {
+          if (i === 0) { it.skb = [{ jenis: "PPH", jenisLainnya: "", nomor: "SKB-1", tanggal: "2026-10-01" }]; it.piNomor = "PI-A"; it.piNoItem = "1"; }
+          if (i === 2) { it.piNomor = "PI-B"; it.piNoItem = "7"; }
+        });
+        eq(w.samakanAtasPermintaan("skb"), true, "fasilitas disamakan:");
+        const d = baca("draftItems");
+        eq(d.map((it) => (it.skb[0] || {}).nomor || "").join(","), "SKB-1,SKB-1,SKB-1", "nomor SKB:");
+        w.eval("draftItems[1].skb[0].nomor = 'UBAH'");
+        eq(baca("draftItems")[2].skb[0].nomor, "SKB-1", "tiap baris salinannya sendiri:");
+        eq(w.document.querySelector('#itemTableBody tr[data-idx="2"]:not(.item-fac-row) [data-act="toggle-fac"]').classList.contains("is-disamakan"), true, "tombol Fasilitas berkedip:");
+        eq(w.samakanAtasPermintaan("piNomor"), true, "PI disamakan:");
+        eq(baca("draftItems").map((it) => it.piNomor + "#" + it.piNoItem).join(","), "PI-A#1,PI-A#,PI-A#", "No. item baris yang PI-nya berganti dikosongkan:");
+        $("#samakanUrungBtn").click();
+        eq(baca("draftItems").map((it) => it.piNomor + "#" + it.piNoItem).join(","), "PI-A#1,#,PI-B#7", "diurungkan -- PI & No. item kembali:");
+      } finally {
+        w.eval("draftDokPelengkap = " + JSON.stringify(piLama));
+      }
+    });
+  });
+
+  t("samakan: tidak muncul bila tak ada yang perlu disamakan (baris tunggal, kosong, qty 0, kode negara tak dikenal, semua sudah sama)", () => {
+    denganTabel(() => {
+      siapkan(1);
+      isi(0, "hsCode", "84807190");
+      eq(terbuka(), false, "baris tunggal:");
+
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      tutup();
+      isi(0, "hsCode", "");
+      eq(terbuka(), false, "isian dikosongkan:");
+      isi(0, "qty", "0");
+      eq(terbuka(), false, "qty 0 dianggap kosong:");
+      isi(0, "negaraAsal", "zz");
+      eq(terbuka(), false, "kode negara tak dikenal:");
+      isi(0, "negaraAsal", "id");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan Negara Asal ke baris 2–3? | ID — Indonesia", "kode negara dikenal:");
+      tutup();
+
+      siapkan(3, (it) => { it.satuan = "PCS"; });
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), false, "semua baris sudah sama:");
+
+      // Baris 1 dikosongkan sementara baris lain terisi: tidak pernah ditawarkan menghapus isian orang
+      siapkan(3, (it, i) => { if (i) { it.hsCode = "1111"; it.qty = 5; } });
+      isi(0, "hsCode", "");
+      eq(terbuka(), false, "HS Code baris 1 kosong, baris lain terisi:");
+      isi(0, "qty", "0");
+      eq(terbuka(), false, "qty baris 1 nol, baris lain terisi:");
+    });
+  });
+
+  t("samakan: \"Ya, samakan\" menyalin HANYA kolom itu dari baris 1 ke baris 2 sampai terakhir -- data, tampilan & kolom lain utuh", () => {
+    const tanpa = (daftar, f) => daftar.map((it) => { const c = Object.assign({}, it); delete c[f]; return JSON.stringify(c); }).join("|");
+    const beda = (it, i) => {
+      it.harga = 10 + i;
+      it.qty = 5 + i;
+      it.satuan = ["SET", "KG", "PCS", "SET"][i];
+      it.negaraAsal = ["", "JP", "", "CN"][i];
+      it.hsCode = ["", "", "1111", "2222"][i];
+      it.packingUnit = ["BOX", "PALLET", "BOX", "CRATE"][i];
+      it.kondisiBarang = ["1", "2", "1", "2"][i];
+      it.jenisBarang = ["BAHAN BAKU", "SPAREPART", "BAHAN BAKU", "BARANG MODAL"][i];
+      it.packing = i === 1 ? "3" : "";
+    };
+    denganTabel(() => {
+      [
+        // kolom, diketik, tersimpan, tampil di kotak, kabar di bilah Urungkan
+        ["hsCode", "84807190", "84807190", "84807190", "HS Code disamakan ke baris 2–4."],
+        ["kondisiBarang", "2", "2", "2", "Kondisi Barang disamakan ke baris 2–4."],
+        ["negaraAsal", "korea selatan", "KR", "KR", "Negara Asal disamakan ke baris 2–4."],
+        ["jenisBarang", "SPAREPART", "SPAREPART", "SPAREPART", "Jenis Barang disamakan ke baris 2–4."],
+        ["qty", "12", "12", "12", "Qty disamakan ke baris 2–4."],
+        ["satuan", "pcs", "PCS", "PCS", "Satuan disamakan ke baris 2–4."],
+        ["packingUnit", "pallet", "PALLET", "PALLET", "Jenis Kemasan disamakan ke baris 2–4."],
+      ].forEach(([f, ketik, tersimpan, tampil, kabar]) => {
+        siapkan(4, beda);
+        const sebelum = salinan(baca("draftItems"));
+        isi(0, f, ketik);
+        eq(terbuka(), true, f + " terbuka:");
+        $("#samakanYa").click();
+        eq(terbuka(), false, f + " tertutup sesudah Ya:");
+        eq([urungTerbuka(), pesanUrung(), label("samakanUrungBtn")].join(" | "), `true | ${kabar} | Urungkan`, f + " bilah Urungkan:");
+        const sesudah = baca("draftItems");
+        eq(sesudah.map((it) => String(it[f])).join("|"), [tersimpan, tersimpan, tersimpan, tersimpan].join("|"), f + " tersimpan:");
+        eq([0, 1, 2, 3].map((i) => kotak(i, f).value).join("|"), [tampil, tampil, tampil, tampil].join("|"), f + " tampil di kotak:");
+        eq(tanpa(sesudah, f), tanpa(sebelum, f), f + " kolom lain utuh:");
+      });
+    });
+  });
+
+  t("samakan: sel yang diubah \"Ya\" / Urungkan berkedip (.is-disamakan) -- baris 1 & yang sudah sama tidak", () => {
+    denganTabel(() => {
+      siapkan(4, (it, i) => { it.satuan = ["SET", "KG", "PCS", "SET"][i]; });
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      const kedip = () => [0, 1, 2, 3].map((i) => (kotak(i, "satuan").classList.contains("is-disamakan") ? "1" : "0")).join("");
+      eq(kedip(), "0101", "sesudah Ya:");
+      $("#samakanUrungBtn").click();
+      eq(kedip(), "0101", "sesudah Urungkan:");
+      const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "components.css"), "utf8");
+      if (!/table\.item-table \.is-disamakan \{\s*animation: samakan-sorot/.test(css)) throw new Error("kedipnya tidak ditata");
+    });
+  });
+
+  t("samakan: Qty yang disamakan ikut menghitung ulang Subtotal tiap baris", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { it.harga = 10 + i; });
+      isi(0, "qty", "12");
+      $("#samakanYa").click();
+      eq([0, 1, 2].map((i) => $(`#itemTableBody tr[data-idx="${i}"] .subtotal`).value).join("|"), [120, 132, 144].map((n) => w.fmtUSD(n)).join("|"), "subtotal:");
+    });
+  });
+
+  t("samakan: \"Tidak\" menutup kotak tanpa mengubah satu pun data di baris lain; diubah lagi -> ditawarkan lagi", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { it.hsCode = ["", "1111", ""][i]; });
+      isi(0, "hsCode", "84807190");
+      const sebelum = JSON.stringify(baca("draftItems").slice(1));
+      $("#samakanTidak").click();
+      eq(terbuka(), false, "tertutup:");
+      eq(bilahTerbuka(), false, "tanpa bilah Urungkan:");
+      eq(JSON.stringify(baca("draftItems").slice(1)), sebelum, "baris 2+ utuh:");
+      eq(baca("draftItems")[0].hsCode, "84807190", "baris 1 tetap:");
+      isi(0, "hsCode", "84807191");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code ke baris 2–3? | 84807191", "diubah lagi:");
+    });
+  });
+
+  t("samakan: catatan \"baris yang sudah terisi akan ditimpa\" hanya menghitung isian yang berbeda -- nilai bawaan & yang sudah sama tidak", () => {
+    denganTabel(() => {
+      siapkan(4);
+      isi(0, "satuan", "pcs");
+      eq(catatan(), "", "semua masih bawaan (SET):");
+      tutup();
+
+      siapkan(4, (it, i) => { if (i === 2) it.satuan = "KG"; });
+      isi(0, "satuan", "pcs");
+      eq(catatan(), "1 baris yang sudah terisi akan ditimpa — bisa diurungkan.", "satu isian orang:");
+      tutup();
+
+      siapkan(5, (it, i) => { it.hsCode = ["", "1111", "84807190", "2222", ""][i]; });
+      isi(0, "hsCode", "84807190");
+      eq(catatan(), "2 baris yang sudah terisi akan ditimpa — bisa diurungkan.", "yang sudah sama & kosong tidak dihitung:");
+      eq(pesan(), "Samakan HS Code ke baris 2–5? | 84807190", "rentang tetap semua baris:");
+      $("#samakanYa").click();
+      eq(baca("draftItems").map((it) => it.hsCode).join("|"), "84807190|84807190|84807190|84807190|84807190", "hasil:");
+    });
+  });
+
+  t("samakan: nilai bawaan dibaca per buku -- jenis BARANG JADI bawaan Export bukan isian, di Import itu isian", () => {
+    denganTabel(() => {
+      siapkan(3, null, "export");
+      isi(0, "jenisBarang", "SPAREPART");
+      eq([terbuka(), catatan()].join(" | "), "true | ", "Export, rows bawaan BARANG JADI:");
+      tutup();
+    }, "export");
+    denganTabel(() => {
+      siapkan(3, (it) => { it.jenisBarang = "BARANG JADI"; });
+      isi(0, "jenisBarang", "SPAREPART");
+      eq(catatan(), "2 baris yang sudah terisi akan ditimpa — bisa diurungkan.", "Import, rows BARANG JADI:");
+      tutup();
+    });
+  });
+
+  t("samakan: Enter di baris 1 tetap memindahkan kursor ke baris 2; fokus baru pindah ke \"Ya\" SESUDAH kejadiannya selesai (setTimeout 0) dan kembali ke baris 2 sesudah dijawab", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const el = kotak(0, "hsCode");
+      el.focus();
+      el.value = "84807190";
+      kejadian(el, "input");
+      denganPewaktu(({ pewaktuFokus }) => {
+        el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        // Peramban menembakkan `change` saat kotak ditinggalkan (jsdom tidak)
+        kejadian(el, "change");
+        eq(pewaktuFokus().map((j) => j.ms).join(","), "0", "fokus ditunda:");
+      });
+      eq(w.document.activeElement, kotak(1, "hsCode"), "kursor di baris 2:");
+      eq(terbuka(), true, "kotak terbuka:");
+      w.fokuskanTawaranSamakan();
+      eq(w.document.activeElement, $("#samakanYa"), "tombol Ya berfokus:");
+      $("#samakanTidak").click();
+      eq(w.document.activeElement, kotak(1, "hsCode"), "kembali ke baris 2:");
+    });
+  });
+
+  t("samakan: Enter di baris terakhir (baris tunggal) tidak menawarkan ke baris yang baru lahir -- walau peramban menembakkan change saat tabel digambar ulang (Chrome)", () => {
+    denganTabel(() => {
+      siapkan(1);
+      const asli = w.renderItemTable;
+      const el = kotak(0, "hsCode");
+      el.focus();
+      el.value = "84807190";
+      kejadian(el, "input");
+      // Chrome: kotak yang berfokus & berubah ikut dilepas -> `change` menyala SELAGI tabel digambar ulang
+      w.renderItemTable = () => { kejadian(el, "change"); asli(); };
+      try {
+        el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      } finally {
+        w.renderItemTable = asli;
+      }
+      eq(baca("draftItems").length, 2, "baris baru lahir:");
+      eq(terbuka(), false, "tidak ada tawaran:");
+      // Sesudah itu isian baris 1 diubah lagi: baris di bawahnya sudah ada -> ditawarkan seperti biasa
+      isi(0, "hsCode", "84807191");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code ke baris 2? | 84807191", "diubah lagi:");
+    });
+  });
+
+  t("samakan: papan ketik di kotak dialog -- Enter = tombol yang berfokus, Esc = Tidak (tidak diteruskan ke halaman), Tab berputar di antara kedua tombol", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      w.fokuskanTawaranSamakan();
+      const ya = $("#samakanYa");
+      const tidak = $("#samakanTidak");
+      tombol(ya, "Tab");
+      eq(w.document.activeElement, tidak, "Tab -> Tidak:");
+      tombol(tidak, "Tab", { shiftKey: true });
+      eq(w.document.activeElement, ya, "Shift+Tab -> Ya:");
+      tombol(ya, "Tab");
+      const enter = tombol(tidak, "Enter");
+      eq([enter.defaultPrevented, terbuka(), baca("draftItems").map((it) => it.satuan).join("|")].join(" | "), "true | false | PCS|SET|SET", "Enter di Tidak:");
+
+      isi(0, "satuan", "kg");
+      w.fokuskanTawaranSamakan();
+      let sampai = false;
+      const dengar = () => { sampai = true; };
+      w.document.addEventListener("keydown", dengar);
+      try {
+        tombol(ya, "Escape");
+      } finally {
+        w.document.removeEventListener("keydown", dengar);
+      }
+      eq([terbuka(), sampai, baca("draftItems")[1].satuan].join(" | "), "false | false | SET", "Esc:");
+
+      isi(0, "satuan", "lot");
+      w.fokuskanTawaranSamakan();
+      // Fokus di kotaknya sendiri (klik di bagian kosong kotak): Enter = Ya
+      $("#samakanDialog").focus();
+      tombol($("#samakanDialog"), "Enter");
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "LOT|LOT|LOT", "Enter di kotak:");
+    });
+  });
+
+  t("samakan: klik di luar kotak (latar redup) = Tidak; klik di dalam kotak tidak menutupnya", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      const tekan = (el) => { const e = new w.MouseEvent("mousedown", { bubbles: true, cancelable: true }); el.dispatchEvent(e); return e; };
+      tekan($("#samakanJudul"));
+      eq(terbuka(), true, "di dalam kotak:");
+      const e = tekan(lapis());
+      eq([e.defaultPrevented, terbuka(), baca("draftItems")[1].satuan].join(" | "), "true | false | SET", "di latar:");
+    });
+  });
+
+  t("samakan: mengetik huruf selagi kotak terbuka = mengisi sendiri -- kotak menutup, data tidak berubah, fokus kembali ke kotak isian SEBELUM hurufnya ditulis (Spasi & pintasan Ctrl tidak)", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const b2 = kotak(1, "satuan");
+      b2.focus();
+      isi(0, "satuan", "pcs");
+      w.fokuskanTawaranSamakan();
+      const ya = $("#samakanYa");
+      tombol(ya, " ");
+      tombol(ya, "c", { ctrlKey: true });
+      eq(terbuka(), true, "Spasi / Ctrl+C:");
+      const e = tombol(ya, "k");
+      eq([terbuka(), e.defaultPrevented].join(","), "false,false", "huruf menutup, tidak dicegah:");
+      eq(w.document.activeElement, b2, "fokus di kotak isian:");
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|SET|SET", "data utuh:");
+    });
+  });
+
+  t("samakan: bila baris 1 sudah berganti isi lewat jalur lain sebelum \"Ya\", tidak ada yang disalin", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      w.eval('draftItems[0].hsCode = "99999999"');
+      $("#samakanYa").click();
+      eq(terbuka(), false, "tertutup:");
+      eq(bilahTerbuka(), false, "tanpa bilah Urungkan:");
+      eq(baca("draftItems").map((it) => it.hsCode).join("|"), "99999999||", "tidak ada yang disalin:");
+    });
+  });
+
+  t("samakan: jumlah baris di judul mengikuti tabel yang digambar ulang (barang ditambah / dihapus); tinggal satu baris atau sudah sama -> menutup", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      eq(pesan(), "Samakan Satuan ke baris 2–3? | PCS", "awal:");
+      $("#btnAddItem").click();
+      eq([baca("draftItems").length, pesan()].join(" | "), "4 | Samakan Satuan ke baris 2–4? | PCS", "bertambah:");
+      $('#itemTableBody tr[data-idx="3"] .rm-row').click();
+      $('#itemTableBody tr[data-idx="2"] .rm-row').click();
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan Satuan ke baris 2? | PCS", "dua baris -> tunggal:");
+      $('#itemTableBody tr[data-idx="1"] .rm-row').click();
+      eq(terbuka(), false, "tinggal satu baris:");
+
+      siapkan(3, (it, i) => { if (i === 1) it.satuan = "PCS"; });
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), true, "masih ada yang beda:");
+      $('#itemTableBody tr[data-idx="2"] .rm-row').click();
+      eq(terbuka(), false, "sisanya sudah sama:");
+
+      siapkan(3, (it, i) => { it.satuan = ["SET", "KG", "SET"][i]; });
+      isi(0, "satuan", "pcs");
+      $('#itemTableBody tr[data-idx="0"] .rm-row').click();
+      eq(terbuka(), false, "baris 1 berganti isi:");
+    });
+  });
+
+  t("samakan: HS Code yang dipilih lewat pencarian di baris 1 membuka tawaran (diganti kalau dipilih lagi); di baris 2 tidak; fokus kembali ke HS Code baris 1", () => {
+    denganTabel(() => {
+      siapkan(3);
+      const hasil = $("#hscodeLookupResults");
+      const pilih = (idx, kode) => {
+        w.eval(`hscodeLookupUntukIdx = ${idx}`);
+        hasil.innerHTML = `<button type="button" class="hscode-lookup-item" data-hscode-pick="${kode}"></button>`;
+        hasil.querySelector("button").click();
+      };
+      pilih(1, "11111111");
+      eq(terbuka(), false, "baris 2:");
+      eq(baca("draftItems")[1].hsCode, "11111111", "tetap terisi:");
+      // Kotak cari di pop-up yang baru ditutup tidak bisa jadi tujuan kembali
+      $("#hscodeLookupInput").focus();
+      pilih(0, "84807190");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code ke baris 2–3? | 84807190", "baris 1:");
+      pilih(0, "85011019");
+      eq([terbuka(), pesan()].join(" | "), "true | Samakan HS Code ke baris 2–3? | 85011019", "dipilih lagi:");
+      w.fokuskanTawaranSamakan();
+      $("#samakanTidak").click();
+      eq(w.document.activeElement, kotak(0, "hsCode"), "kembali ke HS Code baris 1:");
+      hasil.innerHTML = "";
+    });
+  });
+
+  t("samakan: hasil impor / data yang diisi program tidak membuka tawaran", () => {
+    denganTabel(() => {
+      siapkan(1);
+      w.applyImportedBcData({ source: "pdf", fields: {}, notes: [], items: [
+        Object.assign(w.newItem("import"), { namaBarang: "A", hsCode: "84807190", satuan: "PCS", qty: 3 }),
+        Object.assign(w.newItem("import"), { namaBarang: "B", hsCode: "84807110", satuan: "SET", qty: 4 }),
+      ] });
+      eq(baca("draftItems").length >= 2, true, "barisnya masuk:");
+      eq(terbuka(), false, "impor:");
+      siapkan(3, (it, i) => { it.hsCode = i ? "" : "84807190"; });
+      eq(terbuka(), false, "digambar dari data:");
+    });
+  });
+
+  t("samakan: sesudah \"Ya\" kursor kembali ke kotak yang tadi dipakai -- isi yang tadinya tersorot tetap tersorot", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      const b2 = kotak(1, "hsCode");
+      b2.focus();
+      b2.select();
+      w.fokuskanTawaranSamakan();
+      eq(w.document.activeElement, $("#samakanYa"), "Ya berfokus:");
+      $("#samakanYa").click();
+      const aktif = w.document.activeElement;
+      eq([aktif.dataset.f, aktif.closest("tr").dataset.idx, aktif.value, aktif.selectionStart, aktif.selectionEnd].join("|"), "hsCode|1|84807190|0|8", "fokus pulih, isi tersorot:");
+    });
+  });
+
+  t("samakan: kotak dialog menunggu jawaban -- tidak ada pewaktu yang menutupnya", () => {
+    denganTabel(() => {
+      denganPewaktu(({ jadwal }) => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        eq(terbuka(), true, "terbuka:");
+        jadwal.filter((j) => j.fn !== w.fokuskanTawaranSamakan).forEach((j) => j.fn());
+        eq(terbuka(), true, "masih terbuka sesudah semua pewaktu:");
+      });
+    });
+  });
+
+  t("samakan: pindah halaman (hashchange) dan tab Barang yang disembunyikan menutup tawaran", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      eq(terbuka(), true, "terbuka:");
+      w.dispatchEvent(new w.Event("hashchange"));
+      eq(terbuka(), false, "hashchange:");
+
+      isi(0, "satuan", "kg");
+      eq(terbuka(), true, "dibuka lagi:");
+      const pane = w.document.createElement("div");
+      w.tutupBilaPaneBarangTersembunyi(pane);
+      eq(terbuka(), true, "tab Barang masih terlihat:");
+      pane.classList.add("d-none");
+      w.tutupBilaPaneBarangTersembunyi(pane);
+      eq(terbuka(), false, "tab Barang disembunyikan:");
+    });
+    // Pengamatnya terpasang di pane sungguhan (jsdom menyalakannya lewat microtask, jadi hanya penandanya yang dicek)
+    eq($('.tab-pane[data-tabpane="barang"]').dataset.samakanDiamati, "1", "pane barang diamati:");
+  });
+
+  t("samakan: teks ikut bahasa Inggris", () => {
+    const bahasa = baca("activeLang");
+    denganTabel(() => {
+      try {
+        w.setLang("en");
+        siapkan(4, (it, i) => { if (i > 1) it.satuan = "KG"; });
+        isi(0, "satuan", "pcs");
+        eq(pesan(), "Apply Unit to rows 2–4? | PCS", "pesan:");
+        eq(catatan(), "2 filled rows will be overwritten — you can undo this.", "catatan:");
+        eq([label("samakanYa"), label("samakanTidak"), $(".samakan-nilai-label").textContent].join("|"), "Yes, apply|No|Row 1 value", "tombol:");
+        $("#samakanYa").click();
+        eq([pesanUrung(), label("samakanUrungBtn"), $("#samakanUrungTutup").getAttribute("aria-label")].join(" | "), "Unit applied to rows 2–4. | Undo | Close", "bilah Undo:");
+        $("#samakanUrungBtn").click();
+        eq(pesanUrung(), "Unit restored in 3 rows.", "kabar Undo:");
+        siapkan(2);
+        isi(0, "satuan", "set");
+        eq(terbuka(), false, "sama dengan bawaan (SET), tak ada yang disamakan:");
+        isi(0, "hsCode", "84807190");
+        eq(pesan(), "Apply HS Code to row 2? | 84807190", "satu baris:");
+      } finally {
+        w.setLang(bahasa);
+      }
+    });
+  });
+
+  t("samakan: kotak dialog (role=dialog, aria-modal) & bilah Urungkan (role=status) langsung di <body>, terpisah dari #appToast (showToast biasa tidak menutupnya)", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      const dialog = $("#samakanDialog");
+      eq([lapis().parentElement === w.document.body, dialog.getAttribute("role"), dialog.getAttribute("aria-modal"), dialog.getAttribute("aria-labelledby")].join(","), "true,dialog,true,samakanJudul", "kotak dialog:");
+      eq([bilah().parentElement === w.document.body, bilah().getAttribute("role"), bilah().getAttribute("aria-live")].join(","), "true,status,polite", "bilah:");
+      eq($("#toastStack").contains(lapis()) || $("#toastStack").contains(bilah()), false, "bukan tumpukan toast:");
+      w.showToast("halo", "info");
+      eq([terbuka(), $("#toastMsg").textContent].join(" | "), "true | halo", "toast lain berjalan terpisah:");
+    });
+  });
+
+  t("samakan: bilah Urungkan di kiri bawah TEPAT di atas bilah Simpan form -- dan di atas papan ketik layar (visualViewport) bila papan ketik menutupinya", () => {
+    const de = w.document.documentElement;
+    const simpan = $("#viewForm .page-form-actions-inner");
+    const vvAsli = Object.getOwnPropertyDescriptor(w, "visualViewport");
+    Object.defineProperty(de, "clientHeight", { value: 800, configurable: true });
+    simpan.getClientRects = () => [{}];
+    simpan.getBoundingClientRect = () => ({ top: 720 });
+    try {
+      denganTabel(() => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        eq(bilah().style.getPropertyValue("--samakan-dasar"), "80px", "di atas bilah Simpan:");
+        // Papan ketik layar (iPhone) menutupi 300px terbawah
+        Object.defineProperty(w, "visualViewport", { value: { offsetTop: 0, height: 500 }, configurable: true });
+        w.letakkanBilahUrung();
+        eq(bilah().style.getPropertyValue("--samakan-dasar"), "300px", "di atas papan ketik:");
+      });
+    } finally {
+      delete de.clientHeight;
+      delete simpan.getClientRects;
+      delete simpan.getBoundingClientRect;
+      if (vvAsli) Object.defineProperty(w, "visualViewport", vvAsli);
+      else delete w.visualViewport;
+    }
+    const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "components.css"), "utf8");
+    const aturan = (/\.samakan-urung \{([^}]*)\}/.exec(css) || [])[1] || "";
+    ["position: fixed", "left: var\\(--sp-6\\)", "bottom: calc\\(var\\(--samakan-dasar, 0px\\) \\+ var\\(--sp-3\\)\\)"].forEach((a) => {
+      if (!new RegExp(a).test(aturan)) throw new Error("bilah Urungkan kehilangan aturan: " + a);
+    });
+  });
+
+  t("samakan: \"Urungkan\" mengembalikan isian LAMA baris 2 dst. persis seperti sebelumnya (ketujuh kolom) -- baris 1 diketik tetap, kolom lain tak tersentuh", () => {
+    const beda = (it, i) => {
+      it.qty = [3, 0, 7, 9][i];
+      it.satuan = ["SET", "KG", "PCS", "LOT"][i];
+      it.negaraAsal = ["", "JP", "", "CN"][i];
+      it.hsCode = ["", "", "1111", "2222"][i];
+      it.packingUnit = ["BOX", "PALLET", "BOX", "CRATE"][i];
+      it.kondisiBarang = ["1", "2", "1", "2"][i];
+      it.jenisBarang = ["BAHAN BAKU", "SPAREPART", "BAHAN BAKU", "BARANG MODAL"][i];
+      it.harga = 10 + i;
+    };
+    denganTabel(() => {
+      [
+        // kolom, diketik, nama di kabar, baris yang benar-benar berubah (yang sudah sama tidak dihitung)
+        ["hsCode", "84807190", "HS Code", 3],
+        ["kondisiBarang", "2", "Kondisi Barang", 1],
+        ["negaraAsal", "korea selatan", "Negara Asal", 3],
+        ["jenisBarang", "SPAREPART", "Jenis Barang", 2],
+        ["qty", "12", "Qty", 3],
+        ["satuan", "pcs", "Satuan", 2],
+        ["packingUnit", "pallet", "Jenis Kemasan", 2],
+      ].forEach(([f, ketik, nama, jumlah]) => {
+        siapkan(4, beda);
+        const awal = salinan(baca("draftItems"));
+        const tampilAwal = [1, 2, 3].map((i) => kotak(i, f).value).join("|");
+        isi(0, f, ketik);
+        $("#samakanYa").click();
+        const sesudahYa = salinan(baca("draftItems"));
+        const berubah = sesudahYa.slice(1).filter((it, i) => JSON.stringify(it) !== JSON.stringify(awal[i + 1])).length;
+        eq(berubah, jumlah, f + " baris yang berubah oleh Ya:");
+        $("#samakanUrungBtn").click();
+        const akhir = salinan(baca("draftItems"));
+        eq(JSON.stringify(akhir.slice(1)), JSON.stringify(awal.slice(1)), f + " baris 2+ kembali persis:");
+        eq(JSON.stringify(akhir[0]), JSON.stringify(sesudahYa[0]), f + " baris 1 tetap seperti yang diketik:");
+        eq([urungTerbuka(), terbuka()].join(","), "false,false", f + " Urungkan habis, tak ada tawaran baru:");
+        eq([bilah().dataset.jenis, pesanUrung()].join(" | "), `kabar | ${nama} dikembalikan di ${jumlah} baris.`, f + " kabar di bilah yang sama:");
+        eq([1, 2, 3].map((i) => kotak(i, f).value).join("|"), tampilAwal, f + " tampilan baris 2+ kembali:");
+      });
+    });
+  });
+
+  t("samakan: kotak sesudah Urungkan menampilkan nilai lama (kosong tetap kosong, bawaan tetap bawaan)", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { it.hsCode = ["", "", "1111"][i]; });
+      isi(0, "hsCode", "84807190");
+      $("#samakanYa").click();
+      eq([0, 1, 2].map((i) => kotak(i, "hsCode").value).join("|"), "84807190|84807190|84807190", "sesudah Ya:");
+      $("#samakanUrungBtn").click();
+      eq([0, 1, 2].map((i) => kotak(i, "hsCode").value).join("|"), "84807190||1111", "sesudah Urungkan:");
+
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      $("#samakanUrungBtn").click();
+      eq([0, 1, 2].map((i) => kotak(i, "satuan").value).join("|"), "PCS|SET|SET", "bawaan SET kembali:");
+    });
+  });
+
+  t("samakan: Urungkan menghapus lagi properti yang tadinya tidak ada (bukan mengisinya dengan undefined)", () => {
+    denganTabel(() => {
+      siapkan(3, (it, i) => { if (i) delete it.hsCode; });
+      const ada = (i) => Object.prototype.hasOwnProperty.call(baca("draftItems")[i], "hsCode");
+      eq([ada(1), ada(2)].join(","), "false,false", "awal tak ada:");
+      isi(0, "hsCode", "84807190");
+      $("#samakanYa").click();
+      eq([ada(1), ada(2)].join(","), "true,true", "sesudah Ya:");
+      $("#samakanUrungBtn").click();
+      eq([ada(1), ada(2)].join(","), "false,false", "sesudah Urungkan:");
+    });
+  });
+
+  t("samakan: Urungkan MELEWATI sel yang sudah diubah lagi dan baris yang sudah dihapus -- jumlahnya disebut di kabar, pekerjaan yang lebih baru aman", () => {
+    denganTabel(() => {
+      siapkan(5, (it, i) => { it.satuan = ["SET", "KG", "LOT", "BOX", "ROLL"][i]; });
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|PCS|PCS|PCS|PCS", "sesudah Ya:");
+      isi(2, "satuan", "drum");
+      $('#itemTableBody tr[data-idx="3"] .rm-row').click();
+      eq(urungTerbuka(), true, "masih ada yang bisa dikembalikan:");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|KG|DRUM|ROLL", "hanya yang tak tersentuh yang kembali:");
+      eq(pesanUrung(), "Satuan dikembalikan di 2 baris; 2 baris dilewati karena sudah diubah atau dihapus.", "kabar:");
+    });
+  });
+
+  t("samakan: sel yang diubah lagi dengan tulisan lain tapi nilai baku SAMA (pcs -> PCS) tetap dianggap belum disentuh", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      isi(1, "satuan", " pcs ");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|SET|SET", "kembali ke bawaan:");
+    });
+  });
+
+  t("samakan: baris sesudah Ya digeser (baris di atasnya dihapus) -- Urungkan tetap tepat sasaran karena yang dicatat objek barangnya, bukan nomor baris", () => {
+    denganTabel(() => {
+      siapkan(4, (it, i) => { it.satuan = ["SET", "KG", "LOT", "BOX"][i]; });
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      $('#itemTableBody tr[data-idx="1"] .rm-row').click();
+      eq(baca("draftItems").map((it) => it.namaBarang + ":" + it.satuan).join("|"), "BARANG 1:PCS|BARANG 3:PCS|BARANG 4:PCS", "sesudah baris 2 dihapus:");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.namaBarang + ":" + it.satuan).join("|"), "BARANG 1:PCS|BARANG 3:LOT|BARANG 4:BOX", "tiap barang kembali ke nilainya sendiri:");
+      eq(pesanUrung(), "Satuan dikembalikan di 2 baris; 1 baris dilewati karena sudah diubah atau dihapus.", "kabar:");
+    });
+  });
+
+  t("samakan: Urungkan tanpa satu pun yang bisa dikembalikan -> peringatan di bilah yang sama, data tidak disentuh", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      isi(1, "satuan", "kg");
+      isi(2, "satuan", "lot");
+      $("#samakanUrungBtn").click();
+      eq(urungTerbuka(), false, "Urungkan habis:");
+      eq([bilah().dataset.jenis, pesanUrung()].join(" | "), "peringatan | Tidak ada yang bisa dikembalikan: barisnya sudah diubah atau dihapus.", "peringatan:");
+      eq($("#samakanUrungIkon").className, "bi bi-exclamation-lg", "ikon peringatan:");
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|KG|LOT", "data utuh:");
+    });
+  });
+
+  t("samakan: \"Ya\" yang baru menggantikan catatan Urungkan -- hanya \"Ya\" TERAKHIR yang bisa diurungkan", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      isi(0, "hsCode", "84807190");
+      eq([terbuka(), urungTerbuka(), pesanUrung()].join(" | "), "true | true | Satuan disamakan ke baris 2–3.", "tawaran baru di atas Urungkan lama:");
+      $("#samakanYa").click();
+      eq([terbuka(), urungTerbuka(), pesanUrung()].join(" | "), "false | true | HS Code disamakan ke baris 2–3.", "catatan diganti:");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.hsCode + "/" + it.satuan).join("|"), "84807190/PCS|/PCS|/PCS", "hanya HS Code yang kembali, Satuan tetap PCS:");
+      eq(urungTerbuka(), false, "tak ada Urungkan lagi:");
+    });
+  });
+
+  t("samakan: \"Ya\" dua kali di kolom yang sama -- Urungkan kembali ke keadaan sebelum \"Ya\" KEDUA, bukan sebelum yang pertama", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      isi(0, "satuan", "kg");
+      $("#samakanYa").click();
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "KG|KG|KG", "sesudah Ya kedua:");
+      $("#samakanUrungBtn").click();
+      eq(baca("draftItems").map((it) => it.satuan).join("|"), "KG|PCS|PCS", "kembali ke PCS:");
+      eq(urungTerbuka(), false, "tak ada Urungkan lagi:");
+    });
+  });
+
+  t("samakan: tombol bilah Urungkan tidak mengambil fokus; sesudahnya kursor kembali ke kotak yang tadi dipakai", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "hsCode", "84807190");
+      $("#samakanYa").click();
+      kotak(2, "hsCode").focus();
+      ["#samakanUrungBtn", "#samakanUrungTutup"].forEach((id) => {
+        const tekan = new w.MouseEvent("mousedown", { bubbles: true, cancelable: true });
+        $(id).dispatchEvent(tekan);
+        eq(tekan.defaultPrevented, true, id + " tidak memindahkan fokus:");
+      });
+      $("#samakanUrungBtn").click();
+      const aktif = w.document.activeElement;
+      eq([aktif.dataset.f, aktif.closest("tr").dataset.idx, aktif.value].join("|"), "hsCode|2|", "fokus pulih, nilai lama (kosong):");
+    });
+  });
+
+  t("samakan: Ctrl/⌘+Z = Urungkan selagi bilahnya ada -- kecuali di kotak teks yang sudah diketik (riwayat ketikannya sendiri) atau selagi kotak dialog terbuka", () => {
+    denganTabel(() => {
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      const b3 = kotak(2, "satuan");
+      b3.focus();
+      b3.value = "PC";
+      const diketik = tombol(b3, "z", { ctrlKey: true });
+      eq([diketik.defaultPrevented, urungTerbuka()].join(","), "false,true", "kotak yang sudah diketik:");
+      b3.value = b3.defaultValue;
+      isi(0, "hsCode", "84807190");
+      const saatDialog = tombol(w.document.body, "z", { metaKey: true });
+      eq([saatDialog.defaultPrevented, urungTerbuka()].join(","), "false,true", "selagi kotak dialog terbuka:");
+      $("#samakanTidak").click();
+      tombol(b3, "z", { ctrlKey: true, shiftKey: true });
+      eq(urungTerbuka(), true, "Ctrl+Shift+Z bukan Urungkan:");
+      const urung = tombol(kotak(1, "satuan"), "Z", { metaKey: true });
+      eq([urung.defaultPrevented, urungTerbuka(), baca("draftItems").map((it) => it.satuan).join("|")].join(" | "), "true | false | PCS|SET|SET", "⌘+Z di kotak yang belum disentuh:");
+    });
+  });
+
+  t("samakan: bilah Urungkan tertutup sendiri setelah 15 detik, bisa ditutup dengan ×, dan ikut tertutup saat pindah halaman -- datanya tidak berubah", () => {
+    denganTabel(() => {
+      denganPewaktu(({ pewaktuBilah }) => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        const otomatis = pewaktuBilah();
+        eq(otomatis.map((j) => j.ms).join(","), "15000", "satu pewaktu Urungkan, 15 detik:");
+        eq([urungTerbuka(), bilah().style.getPropertyValue("--samakan-lama")].join(","), "true,15000ms", "terbuka, cincin 15 detik:");
+        otomatis[0].fn();
+        eq(bilahTerbuka(), false, "tertutup sendiri:");
+        eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|PCS|PCS", "data tidak berubah:");
+        $("#samakanUrungBtn").click();
+        eq(baca("draftItems").map((it) => it.satuan).join("|"), "PCS|PCS|PCS", "tombol yang sudah tertutup tidak berbuat apa-apa:");
+
+        isi(0, "satuan", "kg");
+        $("#samakanYa").click();
+        eq(urungTerbuka(), true, "terbuka lagi:");
+        $("#samakanUrungTutup").click();
+        eq(bilahTerbuka(), false, "ditutup dengan ×:");
+        eq(baca("draftItems").map((it) => it.satuan).join("|"), "KG|KG|KG", "data tidak berubah:");
+
+        isi(0, "satuan", "lot");
+        $("#samakanYa").click();
+        isi(0, "hsCode", "84807190");
+        eq([terbuka(), urungTerbuka()].join(","), "true,true", "keduanya terbuka:");
+        w.dispatchEvent(new w.Event("hashchange"));
+        eq([terbuka(), bilahTerbuka()].join(","), "false,false", "hashchange menutup keduanya:");
+
+        siapkan(3);
+        isi(0, "satuan", "roll");
+        $("#samakanYa").click();
+        const pane = w.document.createElement("div");
+        pane.classList.add("d-none");
+        w.tutupBilaPaneBarangTersembunyi(pane);
+        eq(bilahTerbuka(), false, "tab Barang disembunyikan menutup Urungkan:");
+      });
+    });
+  });
+
+  t("samakan: kabar hasil Urungkan tertutup sendiri sesuai panjang kalimatnya (paling sebentar 4 detik), tanpa tombol Urungkan", () => {
+    denganTabel(() => {
+      denganPewaktu(({ pewaktuBilah }) => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        $("#samakanUrungBtn").click();
+        const kabar = pewaktuBilah().pop();
+        eq(kabar.ms, Math.max(4000, pesanUrung().length * 60), "lamanya:");
+        eq($("#samakanUrungIkon").className, "bi bi-check-lg", "ikon centang:");
+        kabar.fn();
+        eq(bilahTerbuka(), false, "tertutup:");
+      });
+    });
+    const css = require("fs").readFileSync(require("path").join(__dirname, "..", "css", "components.css"), "utf8");
+    if (!/\.samakan-urung:not\(\[data-jenis="urung"\]\) \.samakan-cincin,\s*\.samakan-urung:not\(\[data-jenis="urung"\]\) \.samakan-urung-btn \{\s*display: none/.test(css)) throw new Error("kabar masih menampilkan tombol Urungkan / cincin");
+  });
+
+  t("samakan: hitung mundur Urungkan BERHENTI selama bilahnya ditunjuk / difokus atau kotak dialog terbuka, lalu berlanjut dengan sisa waktunya", () => {
+    denganTabel(() => {
+      denganPewaktu(({ batal, jam, pewaktuBilah }) => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        const pertama = pewaktuBilah().pop();
+        jam.kini += 4000;
+        bilah().dispatchEvent(new w.Event("pointerenter"));
+        eq([batal.includes(pertama.id), bilah().classList.contains("is-jeda")].join(","), "true,true", "ditunjuk -> berhenti:");
+        jam.kini += 60000;
+        bilah().dispatchEvent(new w.Event("pointerleave"));
+        eq([pewaktuBilah().pop().ms, bilah().classList.contains("is-jeda")].join(","), "11000,false", "berlanjut dengan sisa 11 detik:");
+
+        jam.kini += 1000;
+        isi(0, "hsCode", "84807190");
+        eq(bilah().classList.contains("is-jeda"), true, "kotak dialog terbuka -> berhenti:");
+        bilah().dispatchEvent(new w.FocusEvent("focusin"));
+        jam.kini += 30000;
+        $("#samakanTidak").click();
+        eq(bilah().classList.contains("is-jeda"), true, "masih difokus -> tetap berhenti:");
+        bilah().dispatchEvent(new w.FocusEvent("focusout", { relatedTarget: null }));
+        eq([pewaktuBilah().pop().ms, bilah().classList.contains("is-jeda")].join(","), "10000,false", "berlanjut dengan sisa 10 detik:");
+      });
+    });
+  });
+
+  t("samakan: Urungkan yang diperbarui membatalkan pewaktu LAMAnya, penunda fokus kotak yang ditutup ikut batal -- tidak ada yang menyala belakangan", () => {
+    denganTabel(() => {
+      denganPewaktu(({ batal, pewaktuBilah, pewaktuFokus }) => {
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        const urung1 = pewaktuBilah().pop();
+        isi(0, "satuan", "lot");
+        $("#samakanYa").click();
+        eq(batal.includes(urung1.id), true, "pewaktu Urungkan lama dibatalkan:");
+        eq(urungTerbuka(), true, "Urungkan yang baru tetap terbuka:");
+        isi(0, "hsCode", "84807190");
+        const tunda = pewaktuFokus().pop();
+        $("#samakanTidak").click();
+        eq(batal.includes(tunda.id), true, "penunda fokus dibatalkan saat kotak ditutup:");
+      });
+    });
+  });
+
+  t("samakan: tabel diganti seluruhnya (impor / jadwal lain) atau semua barang yang disamakan dihapus -> bilah Urungkan ikut menutup; sebagian dihapus -> tetap", () => {
+    denganTabel(() => {
+      siapkan(4);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      $('#itemTableBody tr[data-idx="3"] .rm-row').click();
+      eq(urungTerbuka(), true, "sebagian dihapus, masih ada yang bisa dikembalikan:");
+      $('#itemTableBody tr[data-idx="2"] .rm-row').click();
+      $('#itemTableBody tr[data-idx="1"] .rm-row').click();
+      eq(bilahTerbuka(), false, "semua barang yang disamakan sudah hilang:");
+
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      siapkan(3);
+      eq(bilahTerbuka(), false, "tabel diganti seluruhnya:");
+
+      siapkan(3);
+      isi(0, "satuan", "pcs");
+      $("#samakanYa").click();
+      w.applyImportedBcData({ source: "pdf", fields: {}, notes: [], items: [
+        Object.assign(w.newItem("import"), { namaBarang: "A", satuan: "PCS", qty: 3 }),
+        Object.assign(w.newItem("import"), { namaBarang: "B", satuan: "SET", qty: 4 }),
+      ] });
+      eq(bilahTerbuka(), false, "hasil impor menggantikan tabel:");
+    });
+  });
+
+  t("samakan: teks Urungkan ikut bahasa Inggris (tunggal / jamak, baris yang dilewati, tak ada yang bisa dikembalikan)", () => {
+    const bahasa = baca("activeLang");
+    denganTabel(() => {
+      try {
+        w.setLang("en");
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        isi(1, "satuan", "kg");
+        $("#samakanUrungBtn").click();
+        eq(pesanUrung(), "Unit restored in 1 row; 1 skipped because it was changed or removed.", "satu baris + satu dilewati:");
+
+        siapkan(4);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        isi(1, "satuan", "kg");
+        isi(2, "satuan", "lot");
+        $("#samakanUrungBtn").click();
+        eq(pesanUrung(), "Unit restored in 1 row; 2 skipped because they were changed or removed.", "jamak:");
+
+        siapkan(3);
+        isi(0, "satuan", "pcs");
+        $("#samakanYa").click();
+        isi(1, "satuan", "kg");
+        isi(2, "satuan", "lot");
+        $("#samakanUrungBtn").click();
+        eq(pesanUrung(), "Nothing to restore: the rows were changed or removed.", "tak ada yang bisa dikembalikan:");
+      } finally {
+        w.setLang(bahasa);
+      }
+    });
+  });
+
+  t("samakan: berkas terpasang di index.html sesudah item-table.js; markup & CSS kotak dialog / bilah Urungkan & README tercatat", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const baca2 = (...b) => fs.readFileSync(path.join(__dirname, "..", ...b), "utf8");
+    const html2 = baca2("index.html");
+    eq((html2.match(/js\/features\/item-samakan\.js/g) || []).length, 1, "satu kali di index.html:");
+    if (!(html2.indexOf("js/features/item-table.js") > 0 && html2.indexOf("js/features/item-samakan.js") > html2.indexOf("js/features/item-table.js"))) throw new Error("item-samakan.js harus sesudah item-table.js");
+    eq([(html2.match(/id="samakanLapis"/g) || []).length, (html2.match(/id="samakanUrung"/g) || []).length].join(","), "1,1", "markup sekali:");
+    const css = baca2("css", "components.css");
+    if (!/\.samakan-lapis\[hidden\],\s*\.samakan-urung\[hidden\] \{\s*display: none/.test(css)) throw new Error("kotak / bilah yang tertutup harus display: none");
+    const z = (sel) => Number(((new RegExp(sel.replace(/[.[\]]/g, "\\$&") + " \\{[^}]*z-index: (\\d+)").exec(css)) || [])[1]);
+    // Di atas bilah Simpan & sidebar (1045), di bawah modal Bootstrap (latar 1050): dialog lain yang menyusul tetap di atasnya
+    if (!(z(".samakan-urung") > 1045 && z(".samakan-lapis") > z(".samakan-urung") && z(".samakan-lapis") < 1050)) throw new Error("urutan lapisan salah: " + z(".samakan-urung") + " / " + z(".samakan-lapis"));
+    if (/app-toast--aksi|samakan-stack|samakanStack/.test(css + baca2("js", "features", "item-samakan.js"))) throw new Error("sisa model toast lama");
+    if (!/features\/item-samakan\.js/.test(baca2("js", "README.md"))) throw new Error("js/README.md belum mencatat item-samakan.js");
+  });
+}
 t("impor berkas: Kode Kondisi & Negara Asal yang tidak dibawa berkasnya diambil dari barang lama pasangannya, selain itu bawaan buku", () => {
   const simpan = { draft: baca("draftItems"), mode: baca("activeMode") };
   try {
@@ -15025,8 +16359,8 @@ t("Fasilitas & No. Urut: nilai draft ditulis seperti jadwal (urutan pasangannya,
   eq([r2.status, r2.pib_display].join(" | "), "MISMATCH | PPH KET-00001/PPUT-CT/KPP.2211/2026; Masterlist 72/PABEAN-PB/OSS/PMA/2025; PPN KET-00002/SKBPPN-CT/KPP.2211/2025", "sisa di belakang:");
   if (!/^Tidak ada di barang jadwal: Masterlist 72\/PABEAN-PB\/OSS\/PMA\/2025; PPN /.test(r2.expected_note)) throw new Error("catatan: " + r2.expected_note);
 });
-t("kode dokumen 530 = Polis Asuransi: bukan fasilitas, tidak ditebak dari nomornya, tidak dilaporkan sebagai dokumen tak dikenal", () => {
-  eq([w.namaDokumenBukanFasilitas("530"), w.namaDokumenBukanFasilitas(" 380 "), w.namaDokumenBukanFasilitas("912")].join(" | "), "Polis Asuransi | Invoice | ", "nama:");
+t("kode dokumen 530 = Polis Asuransi: bukan fasilitas, tidak ditebak dari nomornya, masuk daftar polis (bukan dokumen lain)", () => {
+  eq([w.namaDokumenCeisa("530"), w.namaDokumenCeisa(" 380 "), w.namaDokumenCeisa("912")].join(" | "), "Polis Asuransi | Invoice | SK Fasilitas BKPM (Masterlist)", "nama:");
   const XLSXuji = require("xlsx");
   const wb = XLSXuji.utils.book_new();
   const lembar = (n, b) => XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(b), n);
@@ -15039,7 +16373,9 @@ t("kode dokumen 530 = Polis Asuransi: bukan fasilitas, tidak ditebak dari nomorn
   try {
     w.XLSX = XLSXuji;
     const r = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer" }));
-    eq([r.fields.pi, r.items[0].skb.length, r.fasilitasBarang[0].dokumen.length].join(" | "), " | 0 | 0", "bukan PI / fasilitas:");
+    const dok = r.fields.dokPelengkap;
+    eq([dok.pi.length, r.items[0].skb.length, r.fasilitasBarang[0].dokumen.length, String(r.items[0].piNomor), dok.polis.map((d) => d.nomor).join(), dok.lain.length].join(" | "),
+      "0 | 0 | 0 | undefined | POL/PI-26/PPN-0007 | 0", "polis, bukan PI / fasilitas / dokumen lain:");
     if (r.notes.some((n) => /530|POL\/PI/.test(n))) throw new Error("dilaporkan sebagai dokumen lain: " + r.notes.join(" / "));
   } finally {
     w.XLSX = asli;
@@ -16105,6 +17441,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
      pratinjau nomor yang sedang dimuat). */
   await rantaiAsync;
 
+  /* Seluruh uji masterlist memakai data awal di migration-masterlist.sql;
+     berkas itu tidak selalu ikut di paket (sudah dijalankan). */
+  const rapat = (el) => (el ? el.textContent.replace(/\s+/g, " ").trim() : null);
+  if (!fs.existsSync(path.join(ROOT, "migration-masterlist.sql"))) {
+    console.log("— MASTERLIST —\n  ~ dilewati: migration-masterlist.sql (data awal masterlist) tidak ada di paket");
+  } else {
   console.log("— MASTERLIST —");
   /* Data ujinya DATA AWAL DI MIGRASI itu sendiri (88 baris dari Excel
      sumber), diurai dari berkas SQL-nya: yang diuji persis yang akan
@@ -16142,8 +17484,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     tulis("mstBarisDb", o.baris || MST_BARIS);
     tulis("mstRealisasiDb", o.realisasi || MST_REALISASI);
     w.eval(`mstTermuat = true; mstForm = null; mstMenyimpan = false; mstKolomBelumAda.clear();
-      Object.assign(mstKeadaan, { tampilan: "baris", halaman: 1, perHalaman: 25, jenis: null, semuaJenis: false });
-      mstKeadaan.terbuka.clear();`);
+      Object.assign(mstKeadaan, { tampilan: "baris", halaman: 1, perHalaman: 25, jenis: null, semuaJenis: false, detail: null });`);
     ["mstSearch", "mstStatus", "mstLini"].forEach((id) => (w.document.getElementById(id).value = ""));
     w.renderMasterlist();
   };
@@ -16165,6 +17506,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     if (!el) throw new Error("tidak ada yang bisa diklik: " + sel);
     el.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
   };
+  // Kotak rincian lewat tombol mata ("b:<id baris>" / "p:<kunci PIB>"): isinya
+  const mstRinci = (kunci) => {
+    mstKlik(`#mstDaftar button[data-mst-detail="${kunci}"]`);
+    if (baca("mstKeadaan.detail") !== kunci) throw new Error("kotak rincian tidak terbuka: " + kunci);
+    return mstD.getElementById("mstDetailIsi");
+  };
   const mstIsi = (id, nilai, jenis) => {
     const el = mstD.getElementById(id);
     el.value = nilai;
@@ -16183,7 +17530,6 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     });
   };
   const mstKetPib = (i) => (mstD.querySelector(`#mstPib [data-mst-pib="${i}"] [data-mst-pib-ket]`) || {}).textContent;
-  const rapat = (el) => (el ? el.textContent.replace(/\s+/g, " ").trim() : null);
   /* Tiruan tiga tabel masterlist: MENYIMPAN sungguhan ke `tabel`, bisa
      disuruh gagal per tabel & aksi, dan mencatat tiap panggilan. Tabel
      lain diteruskan ke tiruan bawaan harness. */
@@ -16480,17 +17826,17 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(w.mstKunciAju("7130 / 9204"), "7130/9204", "catatan dua PIB tidak dilebur ke salah satunya:");
       eq(w.mstAjuRingkas("000020-029142-20260712-197154"), "…197154", "nomor panjang diringkas:");
       eq(w.mstAjuRingkas("7154"), "7154", "rujukan pendek apa adanya:");
-      // Cip: bertaut kalau tepat satu jadwal cocok
-      const cip = w.mstAjuCipHtml("7154");
-      if (!/<button type="button" class="mst-aju mst-aju--taut" data-mst-jadwal="m1"/.test(cip)) throw new Error("cip tidak bertaut ke jadwalnya: " + cip);
-      if (/<button/.test(w.mstAjuCipHtml("8729"))) throw new Error("cip tanpa jadwal jadi tombol");
-      eq((w.mstAjuCipHtml("7130 / 9204").match(/class="mst-aju"/g) || []).length, 2, "dua cip untuk dua PIB:");
+      // Nomor aju di kotak rincian: bertaut kalau tepat satu jadwal cocok
+      const taut = w.mstAjuTautHtml("7154");
+      if (!/<button type="button" class="mst-taut mst-mono" data-mst-jadwal="m1"/.test(taut)) throw new Error("nomor aju tidak bertaut ke jadwalnya: " + taut);
+      if (/<button/.test(w.mstAjuTautHtml("8729"))) throw new Error("nomor aju tanpa jadwal jadi tombol");
+      eq((w.mstAjuTautHtml("7130 / 9204").match(/class="mst-mono"/g) || []).length, 2, "dua nomor untuk dua PIB:");
     });
     // Dua jadwal berekor sama: tidak ditebak salah satunya
     denganJadwalMst([MST_JADWAL[0], Object.assign({}, MST_JADWAL[3], { noAju: "000020-029142-20250101-007154" })], () => {
       eq(w.mstJadwalUntukAju("7154").length, 2, "dua jadwal cocok:");
       eq(w.mstKunciAju("7154"), "7154", "kunci tidak memilih salah satu:");
-      if (/<button/.test(w.mstAjuCipHtml("7154"))) throw new Error("cip bertaut padahal jadwalnya tidak pasti");
+      if (/<button/.test(w.mstAjuTautHtml("7154"))) throw new Error("nomor aju bertaut padahal jadwalnya tidak pasti");
     });
   });
 
@@ -16521,25 +17867,26 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     });
   });
 
-  t("Masterlist: daftar per baris -- 25 per halaman, kolom, tanda sisa, cip aju", () => {
+  t("Masterlist: daftar per baris -- 25 per halaman, kolom ringkas, tanda sisa; aju & lini di kotak rincian", () => {
     denganJadwalMst(MST_JADWAL, () => {
       pasangMst();
       eq(mstBarisTampil(), 25, "baris halaman 1:");
-      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "No.|Barang|Lini proses|Kuota|Terpakai|Sisa|PIB aju|", "kepala tabel:");
+      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "No.|Barang|Kuota|Terpakai|Sisa|Aksi", "kepala tabel:");
       eq(rapat(mstD.querySelector("#mstPagination .pagination-info")), "Menampilkan 1–25 dari 88 baris", "paginasi:");
       eq(mstD.querySelectorAll("#mstPagination .page-btn").length, 4, "tombol halaman (88 / 25):");
       const b10 = mstD.querySelector('#mstDaftar tr[data-mst-id="it10"]');
       eq(rapat(b10.querySelector(".mst-nama")), "VACUUM RUBBER MIXER", "nama:");
       eq(rapat(b10.querySelector(".mst-spek")), "ILBEOM · CHEMVAC-650M · 650M-0120 · 6 kW", "spesifikasi ringkas:");
-      eq(rapat(b10.querySelector(".mst-kol-lini")), "TREAD (CASTING MOLD)", "lini:");
       eq([...b10.querySelectorAll(".mst-kol-angka")].map((x) => rapat(x)).join("|"), "1 NIU|1", "kuota & terpakai:");
       eq(rapat(b10.querySelector(".mst-kol-sisa b")), "0", "sisa tertulis sebagai angka:");
       if (!b10.classList.contains("is-habis")) throw new Error("baris habis tidak ditandai");
       if (b10.querySelector("[data-mst-catat]")) throw new Error("baris habis masih menawarkan Catat realisasi");
-      if (!b10.querySelector('.mst-aju--taut[data-mst-jadwal="m1"]')) throw new Error("cip aju baris 10 tidak bertaut ke jadwalnya");
-      // Baris yang belum dipakai: tanda pisah, dan tombol catat tersedia
+      // Nomor aju (bertaut ke jadwalnya) & lini proses: di kotak rincian
+      const rinci10 = mstRinci("b:it10");
+      if (!rinci10.querySelector('.mst-rinci-aju [data-mst-jadwal="m1"]')) throw new Error("nomor aju baris 10 tidak bertaut ke jadwalnya");
+      eq(rapat(rinci10.querySelectorAll(".mst-rinci-kepala p")[1]), "TREAD (CASTING MOLD)", "lini:");
+      // Baris yang belum dipakai: tombol catat tersedia
       const b1 = mstD.querySelector('#mstDaftar tr[data-mst-id="it1"]');
-      eq(rapat(b1.querySelector(".mst-kol-aju")), "—", "belum ada PIB:");
       if (!b1.querySelector('[data-mst-catat="it1"].mst-ubah')) throw new Error("tombol Catat realisasi baris bersisa");
       // Label kartu ponsel & nomor baris ikut di selnya
       eq(b1.querySelector(".mst-kol-sisa").dataset.label, "Sisa", "label kartu ponsel:");
@@ -16615,33 +17962,29 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     mstIsi("mstStatus", "", "change");
   });
 
-  t("Masterlist: rincian baris -- spesifikasi lengkap & realisasinya; hanya EXIM yang mendapat tombol ubah", () => {
+  t("Masterlist: kotak rincian baris (tombol mata) -- spesifikasi lengkap & realisasinya; hanya EXIM yang mendapat tombol ubah", () => {
     pasangMst();
-    mstKlik('#mstDaftar [data-mst-buka="b:it10"]');
-    const rinci = () => mstD.querySelector('#mstDaftar tr[data-mst-id="it10"] + tr.mst-baris-rinci');
-    if (!rinci()) throw new Error("rincian tidak terbuka");
-    eq(mstD.querySelector('#mstDaftar [data-mst-buka="b:it10"]').getAttribute("aria-expanded"), "true", "aria-expanded:");
-    eq(rapat(rinci().querySelector(".mst-rinci-spek p")), MST_BARIS[9].specification, "spesifikasi asli lengkap:");
-    eq([...rinci().querySelectorAll(".mst-rinci-tabel tbody td")].slice(0, 4).map((x) => rapat(x)).join(" | "), "— | 7154 | 1 | —", "baris realisasi:");
-    if (!rinci().querySelector('[data-mst-ubah-realisasi="u10"]') || !rinci().querySelector('[data-mst-hapus-realisasi="u10"]')) throw new Error("tombol ubah/hapus realisasi (EXIM)");
-    if (rinci().querySelector("[data-mst-catat]")) throw new Error("baris habis menawarkan Catat realisasi di rinciannya");
-    if (!rinci().querySelector('[data-mst-ubah-baris="it10"]') || !rinci().querySelector('[data-mst-hapus-baris="it10"]')) throw new Error("tombol ubah/hapus baris (EXIM)");
-    // Rincian bertahan saat daftar digambar ulang, dan tertutup saat diklik lagi
+    const rinci = mstRinci("b:it10");
+    const aksi = mstD.getElementById("mstDetailAksi");
+    eq(rapat(rinci.querySelector(".mst-rinci-spek p")), MST_BARIS[9].specification, "spesifikasi asli lengkap:");
+    // Sel nomor aju juga memuat dokumen PIB-nya (mstDokPibHtml): yang dibandingkan nomornya
+    const selRinci = (x) => rapat(x.classList.contains("mst-rinci-aju") ? x.querySelector(".mst-mono") : x);
+    eq([...rinci.querySelectorAll(".mst-rinci-tabel tbody td")].slice(0, 4).map(selRinci).join(" | "), "— | 7154 | 1 | —", "baris realisasi:");
+    if (!rinci.querySelector('[data-mst-ubah-realisasi="u10"]') || !rinci.querySelector('[data-mst-hapus-realisasi="u10"]')) throw new Error("tombol ubah/hapus realisasi (EXIM)");
+    if (aksi.querySelector("[data-mst-catat]")) throw new Error("baris habis menawarkan Catat realisasi di rinciannya");
+    if (!aksi.querySelector('[data-mst-ubah-baris="it10"]') || !aksi.querySelector('[data-mst-hapus-baris="it10"]')) throw new Error("tombol ubah/hapus baris (EXIM)");
+    // Kotak rincian ikut digambar ulang bersama daftarnya
     w.renderMasterlist();
-    if (!rinci()) throw new Error("rincian tertutup sendiri saat digambar ulang");
-    mstKlik('#mstDaftar [data-mst-buka="b:it10"]');
-    if (rinci()) throw new Error("rincian tidak tertutup");
+    eq(baca("mstKeadaan.detail"), "b:it10", "tetap terbuka saat digambar ulang:");
     // Baris tanpa realisasi
-    mstKlik('#mstDaftar [data-mst-buka="b:it1"]');
-    if (!/Belum ada realisasi untuk baris ini/.test(mstD.querySelector('#mstDaftar tr[data-mst-id="it1"] + tr').textContent)) throw new Error("rincian baris tanpa realisasi");
-    if (!mstD.querySelector('#mstDaftar tr[data-mst-id="it1"] + tr [data-mst-catat="it1"]')) throw new Error("baris bersisa tidak menawarkan Catat realisasi di rinciannya");
-    // Yang hanya membaca: rinciannya tetap terbuka, tanpa tombol aksi
+    if (!/Belum ada realisasi untuk baris ini/.test(mstRinci("b:it1").textContent)) throw new Error("rincian baris tanpa realisasi");
+    if (!aksi.querySelector('[data-mst-catat="it1"]')) throw new Error("baris bersisa tidak menawarkan Catat realisasi di rinciannya");
+    // Yang hanya membaca: rinciannya tetap ada, tanpa tombol aksi
     ["viewer", "marketing", "finance"].forEach((peran) => denganPeran(peran, () => {
       w.applyPermissions();
       w.renderMasterlist();
-      const r = mstD.querySelector('#mstDaftar tr[data-mst-id="it1"] + tr');
-      if (!r) throw new Error(peran + ": rincian tidak tampil");
-      if (r.querySelector(".mst-rinci-aksi")) throw new Error(peran + ": tombol aksi baris ikut digambar");
+      if (!/Belum ada realisasi untuk baris ini/.test(mstD.getElementById("mstDetailIsi").textContent)) throw new Error(peran + ": rincian tidak tampil");
+      if (aksi.children.length) throw new Error(peran + ": tombol aksi baris ikut digambar");
     }));
   });
 
@@ -16653,7 +17996,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(mstD.querySelector('[data-mst-tampilan="pib"]').getAttribute("aria-pressed"), "true", "tombol susunan ditandai:");
       eq(mstD.querySelector('[data-mst-tampilan="baris"]').getAttribute("aria-pressed"), "false", "tombol lain dilepas:");
       eq(mstBarisTampil(), 12, "jumlah PIB:");
-      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "PIB aju|Tanggal PIB|Jadwal|Baris|Unit|Nilai (USD)|", "kepala tabel:");
+      eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "PIB aju|Tanggal PIB|Jadwal|Baris|Unit|Nilai (USD)|Aksi", "kepala tabel:");
       eq(rapat(mstD.querySelector("#mstPagination .pagination-info")), "Menampilkan 1–12 dari 12 PIB", "paginasi:");
       const g = JSON.parse(w.eval("JSON.stringify(mstPerPib(mstSusun()).map((k) => [k.aju, k.isi.length, k.unit, k.unitParsial, k.jadwal ? k.jadwal.id : null]))"));
       /* Baris 58: 3 unit lewat DUA PIB (7130 / 9204) -- masuk ke kedua
@@ -16667,16 +18010,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(sel("7130", 'td[data-label="Unit"]'), "5 +3 parsial", "kolom unit PIB 7130:");
       eq(sel("9204", 'td[data-label="Unit"]'), "3 parsial", "kolom unit PIB 9204:");
       // Rincian PIB 9204: barisnya ditandai parsial, dengan PIB pasangannya
-      mstKlik('#mstDaftar [data-mst-buka="p:9204"]');
-      eq(rapat(mstD.querySelector("#mstDaftar tr.mst-baris-rinci .mst-parsial")), "Parsial, juga di PIB 7130", "PIB pasangannya:");
-      mstKlik('#mstDaftar [data-mst-buka="p:9204"]');
+      eq(rapat(mstRinci("p:9204").querySelector(".mst-rinci-tabel .mst-parsial")), "Parsial, juga di PIB 7130", "PIB pasangannya:");
       // Baris PIB yang punya jadwal menampilkan nomor aju LENGKAP & nama pihaknya
       const baris7154 = [...mstD.querySelectorAll("#mstDaftar tr.mst-baris")].find((tr) => /197154/.test(tr.textContent));
       eq(rapat(baris7154.querySelector(".mst-kol-pib")), "000020-029142-20260712-197154", "nomor aju lengkap dari jadwal:");
       eq(rapat(baris7154.querySelector(".mst-kol-jadwal .mst-taut")), "ILBEOM CO., LTD.", "pihak jadwal:");
       // Rinciannya: baris-baris yang direalisasikan PIB itu, urut nomor
-      mstKlik(baris7154.querySelector("[data-mst-buka]"));
-      const isi = [...mstD.querySelectorAll("#mstDaftar tr.mst-baris-rinci tbody tr")];
+      mstKlik(baris7154.querySelector("button[data-mst-detail]"));
+      const isi = [...mstD.querySelectorAll("#mstDetailIsi .mst-rinci-tabel tbody tr")];
       eq(isi.length, 20, "baris dalam PIB 7154:");
       eq(rapat(isi[0].querySelector("td")), "10", "urut nomor baris:");
       // Realisasi baru dengan nomor LENGKAP masuk ke kelompok yang sama dengan rujukan lama
@@ -17071,10 +18412,10 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
 
   t("Masterlist: daftar PIB sebuah realisasi -- kolom pibs, catatan lama diurai dari aju_ref, kolom simpanan", () => {
     const pibs = (u) => JSON.stringify(w.mstPibs(u));
-    eq(pibs({ aju_ref: "7130 / 9204", pib_date: "2025-05-12" }), JSON.stringify([{ aju: "7130", tanggal: "2025-05-12" }, { aju: "9204", tanggal: null }]), "catatan lama: tanggalnya milik PIB pertama:");
+    eq(pibs({ aju_ref: "7130 / 9204", pib_date: "2025-05-12" }), JSON.stringify([{ aju: "7130", tanggal: "2025-05-12", dokumen: null }, { aju: "9204", tanggal: null, dokumen: null }]), "catatan lama: tanggalnya milik PIB pertama:");
     eq(pibs({ aju_ref: "x", pib_date: null, pibs: [{ aju_ref: " 7130 ", pib_date: "2025-05-12" }, { aju_ref: "", pib_date: null }, { aju_ref: "9204", pib_date: "2025-08-20" }] }),
-      JSON.stringify([{ aju: "7130", tanggal: "2025-05-12" }, { aju: "9204", tanggal: "2025-08-20" }]), "kolom pibs didahulukan, yang kosong dibuang:");
-    eq(pibs({ aju_ref: "7154", pib_date: null, pibs: [] }), JSON.stringify([{ aju: "7154", tanggal: null }]), "daftar kosong = catatan lama:");
+      JSON.stringify([{ aju: "7130", tanggal: "2025-05-12", dokumen: null }, { aju: "9204", tanggal: "2025-08-20", dokumen: null }]), "kolom pibs didahulukan, yang kosong dibuang:");
+    eq(pibs({ aju_ref: "7154", pib_date: null, pibs: [] }), JSON.stringify([{ aju: "7154", tanggal: null, dokumen: null }]), "daftar kosong = catatan lama:");
     eq(pibs(null), "[]", "tanpa catatan:");
     eq(w.mstTanggalAwal({ pibs: [{ aju_ref: "B", pib_date: "2025-08-20" }, { aju_ref: "A", pib_date: "2025-05-12" }] }), "2025-05-12", "tanggal paling awal:");
     eq(w.mstTanggalAwal({ aju_ref: "7154", pib_date: null }), null, "belum bertanggal:");
@@ -17094,7 +18435,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     });
     eq(w.eval("mstSusun()[0].realisasi.map((u) => u.id).join(',')"), "r2,r1", "urut kiriman pertama:");
     // Migrasinya: kolom baru + penyelaras + isian awal dari catatan lama
-    const sql = fs.readFileSync(path.join(ROOT, "migration-masterlist-pib-parsial.sql"), "utf8");
+    const sql = bacaMigrasi("migration-masterlist-pib-parsial.sql");
     const polos = sql.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "");
     if (!/add column if not exists pibs jsonb not null default '\[\]'::jsonb/.test(polos)) throw new Error("kolom pibs");
     if (!/before insert or update on public\.masterlist_usages/.test(polos)) throw new Error("pemicu penyelaras");
@@ -17133,20 +18474,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(mstRing(), "88/112/73/39/25/63/22", "kuota terpakai sekali (1 unit):");
       eq(mstD.getElementById("toastMsg").textContent, "Realisasi PIB …111111 + …222222 tercatat: 1 baris, 1 unit.", "pemberitahuan:");
       // Rincian baris 1: satu kelompok, tiap PIB sebaris dengan tanggalnya, jumlah ditulis sekali
-      mstKlik('#mstDaftar [data-mst-buka="b:it1"]');
-      const rinci = mstD.querySelector('#mstDaftar tr[data-mst-id="it1"] + tr.mst-baris-rinci');
-      const tb = rinci.querySelectorAll(".mst-rinci-tabel tbody");
+      const tb = mstRinci("b:it1").querySelectorAll(".mst-rinci-tabel tbody");
       eq(tb.length, 1, "satu realisasi = satu kelompok:");
-      eq([...tb[0].querySelectorAll("tr")].map((tr) => [...tr.querySelectorAll("td")].slice(0, 2).map(rapat).join(" ")).join(" | "),
+      eq([...tb[0].querySelectorAll("tr")].map((tr) => [tr.querySelector("td"), tr.querySelector(".mst-rinci-aju .mst-mono")].map(rapat).join(" ")).join(" | "),
         "12-05-2025 000020-029142-20250512-111111 | 20-08-2025 000020-029142-20250820-222222", "tanggal & aju berpasangan per baris:");
       eq(tb[0].querySelector("td.mst-kol-angka").getAttribute("rowspan"), "2", "jumlah setinggi dua PIB:");
       eq(rapat(tb[0].querySelector("td.mst-kol-angka")), "1 2 PIB · parsial", "jumlah + penanda parsial:");
       if (!tb[0].classList.contains("mst-rinci-parsial")) throw new Error("kelompok parsial tidak ditandai");
       if (!tb[0].querySelector("td.mst-ubah[rowspan='2'] [data-mst-tambah-pib]")) throw new Error("tombol + PIB");
-      // Cip PIB di baris daftar: tanggal di keterangannya
-      eq([...mstD.querySelectorAll('#mstDaftar tr[data-mst-id="it1"] .mst-kol-aju .mst-aju')].map((c) => c.getAttribute("title")).join(" | "),
-        "000020-029142-20250512-111111 · 12-05-2025 | 000020-029142-20250820-222222 · 20-08-2025", "cip bertanggal:");
-      mstKlik('#mstDaftar [data-mst-buka="b:it1"]');
 
       // --- 2) kiriman lanjutan dari panel Belum dicatat: PIB jadwal m2 untuk realisasi baris 16 ---
       mstKlik('#mstPerlu [data-mst-catat-jadwal="m2"]');
@@ -17188,9 +18523,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(u58.muatan.qty + " | " + u58.muatan.aju_ref + " | " + u58.muatan.pib_date, "3 | 7130 / 9204 | 2025-05-12", "jumlah & kolom lama:");
       // ... lalu kiriman ketiga lewat tombol + PIB di rincian barisnya
       mstIsi("mstSearch", "9204");
-      mstKlik('#mstDaftar [data-mst-buka="b:it58"]');
-      const rinci58 = () => mstD.querySelector('#mstDaftar tr[data-mst-id="it58"] + tr.mst-baris-rinci');
-      eq([...rinci58().querySelectorAll(".mst-rinci-tabel > tbody > tr")].map((tr) => [...tr.querySelectorAll("td")].slice(0, 2).map(rapat).join(" ")).join(" | "), "12-05-2025 7130 | 20-08-2025 9204", "rincian sesudah dilengkapi:");
+      mstRinci("b:it58");
+      const rinci58 = () => mstD.getElementById("mstDetailIsi");
+      eq([...rinci58().querySelectorAll(".mst-rinci-tabel > tbody > tr")].map((tr) => [tr.querySelector("td"), tr.querySelector(".mst-rinci-aju .mst-mono")].map(rapat).join(" ")).join(" | "), "12-05-2025 7130 | 20-08-2025 9204", "rincian sesudah dilengkapi:");
       mstKlik(rinci58().querySelector('[data-mst-tambah-pib="u58"]'));
       eq(mstD.getElementById("mstRealisasiJudul").textContent, "Tambah PIB kiriman berikutnya", "judul + PIB:");
       eq(mstD.querySelectorAll("#mstPib [data-mst-pib]").length, 3, "satu PIB kosong untuk kiriman berikutnya:");
@@ -17270,7 +18605,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       mstKlik("#promptOk");
       await jedaMst(0);
       eq(ubah().length, 5, "empat catatan lagi:");
-      eq(JSON.stringify(w.mstPibs(baca("mstRealisasiDb").find((u) => u.id === "u58"))), JSON.stringify([{ aju: "7130", tanggal: "2025-05-12" }, { aju: "9204", tanggal: "2025-08-20" }]), "realisasi parsial: tiap PIB bertanggalnya sendiri:");
+      eq(JSON.stringify(w.mstPibs(baca("mstRealisasiDb").find((u) => u.id === "u58"))), JSON.stringify([{ aju: "7130", tanggal: "2025-05-12", dokumen: null }, { aju: "9204", tanggal: "2025-08-20", dokumen: null }]), "realisasi parsial: tiap PIB bertanggalnya sendiri:");
       eq(rapat(barisPib("7130").querySelector(".mst-kol-tgl")), "12-05-2025", "tanggal di susunan Per PIB:");
       // 7154: tanggalnya belum seragam -> ditandai; disamakan sekali jalan
       const tanda = barisPib("7154").querySelector(".mst-tgl-beda");
@@ -17335,19 +18670,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(w.mstAngkaUang(1234.5), "1,234.50", "dua desimal:");
     // Kepala halaman: nilai terealisasi dari baris bernilai
     if (!/nilai USD 41,800\.00 dari USD 120,500\.00 terealisasi/.test(rapat(mstD.getElementById("mstSub")))) throw new Error("anak judul: " + rapat(mstD.getElementById("mstSub")));
-    // Tabel: nilai di baris kedua sel kuota / terpakai / sisa
+    // Daftar: hanya ikon status nilai yang perlu dicek di sel Sisa -- angkanya di kotak rincian
     const sel = (no, kelas) => mstD.querySelector(`#mstDaftar tr[data-mst-id="n${no}"] ${kelas}`);
-    eq(rapat(sel(1, "td[data-label='Kuota']")), "6 NIU USD 116,700.00", "kuota + nilai:");
-    eq(rapat(sel(1, "td[data-label='Terpakai']")), "3 USD 38,900.00", "terpakai + nilai:");
-    eq(rapat(sel(1, ".mst-kol-sisa .mst-nilai")), "USD 77,800.00 — 1 realisasi belum dicatat nilainya — sisa nilai belum pasti.", "sisa nilai belum pasti:");
-    if (!sel(1, ".mst-nilai--belum i.bi")) throw new Error("status belum tanpa ikon");
-    eq(rapat(sel(2, ".mst-kol-sisa .mst-nilai")), "lebih USD 200.00 — Nilai invoice melebihi nilai masterlist sebesar USD 200.00.", "lebih:");
-    eq(rapat(sel(3, ".mst-kol-sisa .mst-nilai")), "USD 100.00 — Unit sudah habis, tapi nilai invoicenya masih kurang USD 100.00 dari nilai masterlist.", "selisih:");
-    eq(rapat(sel(4, ".mst-kol-sisa .mst-nilai")), "USD 0.00", "sesuai:");
-    if (sel(4, ".mst-nilai i")) throw new Error("baris sesuai diberi ikon");
-    eq(rapat(sel(5, "td[data-label='Kuota']")), "3 NIU", "tanpa nilai masterlist: kuota tanpa nilai:");
-    eq(rapat(sel(5, "td[data-label='Terpakai']")), "1 USD 50.00", "nilai invoice tetap terlihat:");
-    if (sel(5, ".mst-kol-sisa .mst-nilai")) throw new Error("sisa nilai ditulis padahal nilai masterlist kosong");
+    eq([rapat(sel(1, "td[data-label='Kuota']")), rapat(sel(1, "td[data-label='Terpakai']"))].join(" | "), "6 NIU | 3", "kuota & terpakai tanpa nilai:");
+    eq(sel(1, ".mst-tanda-nilai.mst-nilai--belum").getAttribute("aria-label"), "1 realisasi belum dicatat nilainya — sisa nilai belum pasti.", "sisa nilai belum pasti:");
+    eq(sel(2, ".mst-tanda-nilai.mst-nilai--lebih").getAttribute("aria-label"), "Nilai invoice melebihi nilai masterlist sebesar USD 200.00.", "lebih:");
+    eq(sel(3, ".mst-tanda-nilai.mst-nilai--selisih").getAttribute("aria-label"), "Unit sudah habis, tapi nilai invoicenya masih kurang USD 100.00 dari nilai masterlist.", "selisih:");
+    if (sel(4, ".mst-tanda-nilai") || sel(5, ".mst-tanda-nilai")) throw new Error("baris sesuai / tanpa nilai masterlist diberi tanda");
+    if (/USD/.test(rapat(mstD.getElementById("mstDaftar")))) throw new Error("nilai USD masih di daftar");
     // Saringan "Nilai perlu dicek": belum, lebih, selisih
     eq([...mstD.querySelectorAll("#mstStatus option")].map((o) => o.value).join(","), ",sisa,habis,pakai,utuh,nilai", "pilihan status:");
     mstIsi("mstStatus", "nilai", "change");
@@ -17359,22 +18689,16 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(ket("DRY OVEN MACHINE"), "TREAD (CASTING MOLD) · 1 baris", "jenis dengan realisasi belum bernilai:");
     eq(ket("HYDRAULIC PRESS"), "1 baris", "jenis tanpa nilai masterlist:");
     // Rincian baris 1: ringkasan nilai + kolom nilai per realisasi
-    mstKlik('#mstDaftar [data-mst-buka="b:n1"]');
-    const rinci = mstD.querySelector('#mstDaftar tr[data-mst-id="n1"] + tr.mst-baris-rinci');
+    const rinci = mstRinci("b:n1");
     eq([...rinci.querySelectorAll(".mst-nilai-ring > div")].map((d) => rapat(d.querySelector("dt")) + " " + rapat(d.querySelector("dd"))).join(" | "), "Masterlist 116,700.00 | Harga satuan 19,450.00 | Terpakai 38,900.00 | Sisa 77,800.00", "ringkasan nilai:");
     eq(rapat(rinci.querySelector(".mst-nilai-ket")), "1 realisasi belum dicatat nilainya — sisa nilai belum pasti.", "kalimat status:");
-    eq([...rinci.querySelectorAll(".mst-rinci-tabel thead th")].map((th) => th.textContent.trim()).join("|"), "Tanggal PIB|Nomor aju|Jumlah|Nilai (USD)|Catatan|", "kepala realisasi:");
+    eq([...rinci.querySelectorAll(".mst-rinci-tabel thead th")].map((th) => th.textContent.trim()).join("|"), "Tanggal PIB|Nomor aju & dokumen|Jumlah|Nilai (USD)|Catatan|", "kepala realisasi:");
     eq([...rinci.querySelectorAll(".mst-rinci-tabel > tbody > tr")].map((tr) => rapat(tr.querySelectorAll("td")[3])).join(" | "), "38,900.00 | —", "nilai per realisasi:");
-    mstKlik('#mstDaftar [data-mst-buka="b:n1"]');
     // Baris tanpa nilai masterlist: diajak mengisinya (yang boleh mengubah saja)
-    mstKlik('#mstDaftar [data-mst-buka="b:n5"]');
-    eq(rapat(mstD.querySelector('#mstDaftar tr[data-mst-id="n5"] + tr .mst-nilai-kosong')),
+    eq(rapat(mstRinci("b:n5").querySelector(".mst-nilai-kosong")),
       "Nilai masterlist baris ini belum diisi. Nilai invoice tercatat USD 50.00. Isi lewat Ubah baris supaya sisa nilainya terlacak.", "nilai masterlist kosong:");
-    mstKlik('#mstDaftar [data-mst-buka="b:n5"]');
     // Rincian baris 2: lebih -> angka sisa ditulis "lebih"
-    mstKlik('#mstDaftar [data-mst-buka="b:n2"]');
-    eq(rapat(mstD.querySelector('#mstDaftar tr[data-mst-id="n2"] + tr .mst-nilai-ring dd.mst-nilai--lebih')), "lebih 200.00", "sisa lebih di rincian:");
-    mstKlik('#mstDaftar [data-mst-buka="b:n2"]');
+    eq(rapat(mstRinci("b:n2").querySelector(".mst-nilai-ring dd.mst-nilai--lebih")), "lebih 200.00", "sisa lebih di rincian:");
     // Per PIB: nilai invoice per PIB
     mstKlik('#viewMasterlist [data-mst-tampilan="pib"]');
     const nilaiPib = (aju) => rapat([...mstD.querySelectorAll("#mstDaftar tr.mst-baris")].find((tr) => rapat(tr.querySelector(".mst-kol-pib")) === aju).querySelector(".mst-kol-nilai"));
@@ -17634,10 +18958,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       const periksa = (v) => w.mstPeriksaBaris({ no: "3", satuan: "NIU", nama: "BARU", spek: "", kuota: "1", hs: v }, null).hs_code;
       eq(["", "8477.51", "8477.", "84775100", "...", "8477.51.00.99"].map((v) => String(periksa(v))).join(","), "null,8477.51,8477,84775100,null,8477.51.00", "HS Code yang disimpan:");
       // Rincian baris: HS Code lalu spesifikasi; cari dengan atau tanpa titik
-      mstKlik('#mstDaftar [data-mst-buka="b:h1"]');
-      eq(mstD.querySelector("#mstDaftar .mst-rinci-kepala").textContent.replace(/\s+/g, " ").trim(), "HS Code 8477.51.00 Spesifikasi BRAND X; P-1; 10 KW FOR FLOW PROSES MANUFAKTUR CURING", "rincian baris:");
-      mstKlik('#mstDaftar [data-mst-buka="b:h2"]');
-      eq(mstD.querySelector('#mstDaftar tr[data-mst-id="h2"] + tr .mst-rinci-hs p').textContent, "—", "belum diisi:");
+      eq(rapat(mstRinci("b:h1").querySelector(".mst-rinci-kepala")), "HS Code 8477.51.00 Lini proses CURING Spesifikasi BRAND X; P-1; 10 KW FOR FLOW PROSES MANUFAKTUR CURING", "rincian baris:");
+      eq(rapat(mstRinci("b:h2").querySelector(".mst-rinci-kepala p")), "—", "belum diisi:");
       ["84775100", "8477.51"].forEach((q) => {
         mstIsi("mstSearch", q);
         eq(mstLolos(), 1, "cari " + q + ":");
@@ -17677,7 +18999,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         tiruan.lepas();
         w.eval("mstKolomBelumAda.clear();");
       }
-      const sql = fs.readFileSync(path.join(ROOT, "migration-masterlist-hs-code.sql"), "utf8");
+      const sql = bacaMigrasi("migration-masterlist-hs-code.sql");
       if (!/alter table public\.masterlist_items add column if not exists hs_code text;/.test(sql) || !/notify pgrst, 'reload schema'/.test(sql)) throw new Error("migrasi HS Code");
     } finally {
       w.showToast = asliToast;
@@ -17926,7 +19248,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         w.setLang("en");
         eq(mstD.getElementById("mstJudul").textContent, "40 masterlist quota units still available", "judul (EN):");
         eq(rapat(mstD.getElementById("mstSub")), "72 of 112 units realized · 26 of 88 lines still have quota · expires in 23 days", "anak judul (EN):");
-        eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "No.|Item|Process line|Quota|Used|Remaining|PIB aju|", "kepala tabel (EN):");
+        eq([...mstD.querySelectorAll("#mstDaftar thead th")].map((th) => th.textContent.trim()).join("|"), "No.|Item|Quota|Used|Remaining|Actions", "kepala tabel (EN):");
         eq(rapat(mstD.querySelector("#mstPagination .pagination-info")), "Showing 1–10 of 10 lines", "paginasi (EN), saringan bertahan:");
         eq(mstD.getElementById("mstSearch").value + "/" + mstD.getElementById("mstLini").value, "doosan/TREAD (CASTING MOLD)", "isi saringan tidak hilang saat ganti bahasa:");
         eq(mstD.querySelector("#mstLini option").textContent, "All process lines", "opsi pertama lini (EN):");
@@ -18072,6 +19394,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(mati.join(","), "", "warna heksa di luar token:");
   });
 
+  }
+
   console.log("— STATUS & TANGGAL REVISI: ETD BARU DI KARTU EXPORT —");
   /* Kasus dari lapangan (hari ini harness = 09-08-2026): jadwal export
      pernah delay (ETD revisi 08-08), lalu ETD rencana diubah ke 10-08.
@@ -18169,6 +19493,50 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       $("#prompt_etd").value = "2026-08-14";
       $("#promptOk").click();
       eq([s().etdUpdate, s().etaUpdate].join("|"), "2026-08-14|", "ETA revisi lama dilepas ke mesin:");
+    });
+  });
+
+  t("kembali dari form jadwal (Simpan / Batal): daftar di posisi gulir SEBELUM form dibuka, walau urutan kartu berubah", () => {
+    const panggil = [];
+    const asliGulir = w.scrollTo;
+    const asliY = Object.getOwnPropertyDescriptor(w, "scrollY");
+    let y = 1480;
+    Object.defineProperty(w, "scrollY", { configurable: true, get: () => y });
+    w.scrollTo = (o) => panggil.push(o);
+    const daftarTersembunyi = $("#viewList").classList.contains("d-none");
+    try {
+      $("#viewList").classList.remove("d-none");
+      w.catatPosisiDaftar();
+      y = 0; // form dibuka dari atas
+      $("#viewList").classList.add("d-none");
+      w.catatPosisiDaftar(); // panggilan kedua saat form sudah tampil tidak menimpa
+      $("#viewList").classList.remove("d-none");
+      w.pulihkanPosisiDaftar();
+      eq(JSON.stringify(panggil.pop()), JSON.stringify({ top: 1480, left: 0, behavior: "instant" }), "posisi dipulihkan seketika:");
+      w.pulihkanPosisiDaftar();
+      eq(panggil.length, 0, "dipulihkan sekali saja:");
+      const src = fs.readFileSync(path.join(ROOT, "js", "views", "form-router.js"), "utf8");
+      if (!/if \(halaman === "form"\) catatPosisiDaftar\(\);\s*else if \(halaman !== "schedule"\) posisiDaftarSebelumForm = null;/.test(src)) throw new Error("router tidak mencatat posisi saat form dibuka");
+      if (!/showListView\(\);\s*render\(\);\s*pulihkanPosisiDaftar\(\);/.test(src)) throw new Error("router tidak memulihkan posisi saat kembali ke daftar");
+    } finally {
+      w.scrollTo = asliGulir;
+      if (asliY) Object.defineProperty(w, "scrollY", asliY);
+      else delete w.scrollY;
+      $("#viewList").classList.toggle("d-none", daftarTersembunyi);
+      w.eval("posisiDaftarSebelumForm = null");
+    }
+  });
+
+  t("kartu import: diubah ke Arrived tanpa In Factory -> In Factory hari ini, tersimpan bersama & tercatat di kronologi", () => {
+    const imp = { id: "im2", mode: "import", status: "process", transport: "laut", party: "PT IMPOR", etd: "2026-07-20", eta: "2026-08-01",
+      actual: "2026-08-12", etaMode: "manual", deliveryMode: "manual", items: [], notesLog: [] };
+    bukuUji("import", [imp], (s) => {
+      jejakUpdate.length = 0;
+      ubahDi(kartuEl("im2").querySelector('select[data-action="status"]'), "arrived");
+      eq([s().status, s().factoryDate].join("|"), "arrived|" + HARI_INI_UJI, "status & In Factory:");
+      eq([jejakUpdate[0].row.status, jejakUpdate[0].row.factory_date].join("|"), "arrived|" + HARI_INI_UJI, "disimpan bersama:");
+      if (!/In Factory diisi 09-08-2026/.test(s().notes)) throw new Error("kronologi: " + s().notes);
+      if (!kartuEl("im2").classList.contains("ship-card--collapsed")) throw new Error("kartu belum terkuncup sebagai Arrived");
     });
   });
 
@@ -18704,7 +20072,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const r = { id: "x", doc_type: "fund", payload: { transactionType: "Local Sale", expenseType: "Freight" } };
     if (!/Inland Trucking/.test(w.dndKepalaHtml(r, "fund"))) throw new Error("kotak Detail masih Local Sale");
     eq(w.dndNilai("transactionType", r), "Inland Trucking", "isian Detail:");
-    const sql = fs.readFileSync(path.join(ROOT, "migration-fund-inland-trucking.sql"), "utf8");
+    const sql = bacaMigrasi("migration-fund-inland-trucking.sql");
     if (!/set payload = jsonb_set\(payload, '\{transactionType\}', to_jsonb\('Inland Trucking'::text\)\)/.test(sql)) throw new Error("migrasi tidak mengganti nama");
     if (!/where doc_type = 'fund'\s+and payload->>'transactionType' = 'Local Sale'/.test(sql)) throw new Error("migrasi menyentuh lebih dari pengajuan Local Sale");
   });
@@ -19376,14 +20744,15 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     };
     const ringkas = (daftar) => daftar.map((sk) => [sk.jenis, sk.nomor, sk.tanggal].join(" ")).join(" | ");
 
-    t("kode dokumen dikenali: 912 Masterlist, 457 SKB PPh, 456 SKB PPN, 860/861 COO, 959 PI, 958 LS; lainnya bukan fasilitas", () => {
-      const jenis = (kode, nomor, label) => {
-        const r = w.kenaliDokumenPelengkap({ kode, nomor, label });
-        return r ? (r.pi ? "PI" : r.ls ? "LS" : r.jenis + (r.jenisLainnya ? ":" + r.jenisLainnya : "")) : "-";
+    t("kode dokumen dikenali: 912 Masterlist, 457 SKB PPh, 456 SKB PPN, 860/861 COO, 959 PI, 958 LS, 530 Polis; lainnya bukan fasilitas", () => {
+      const jenis = (kode, nomor, label, opsi) => {
+        const r = w.kenaliDokumenPelengkap({ kode, nomor, label }, opsi);
+        return r ? (r.pengiriman ? r.pengiriman.toUpperCase() : r.jenis + (r.jenisLainnya ? ":" + r.jenisLainnya : "")) : "-";
       };
-      eq(["912", "457", "456", "860", "861", "959", "958", "380", "705", "530"].map((k) => jenis(k, "X")).join(","),
-        "Masterlist,PPH,PPN,E-COO,E-COO,PI,LS,-,-,-");
+      eq(["912", "457", "456", "860", "861", "959", "958", "380", "705", "530", " 530 "].map((k) => jenis(k, "X")).join(","),
+        "Masterlist,PPH,PPN,E-COO,E-COO,PI,LS,-,-,POLIS,POLIS");
       eq(jenis("", "1", "LAPORAN SURVEYOR"), "LS", "label LS:");
+      eq(jenis("", "1", "POLIS ASURANSI"), "POLIS", "label polis:");
       // PIB PDF: dari label lembar Pemenuhan Persyaratan
       eq(jenis("", "1", "SURAT KETERANGAN BEBAS (SKB) PPN"), "PPN", "label SKB PPN:");
       eq(jenis("", "1", "SURAT KETERANGAN BEBAS (SKB) PPNBM"), "Lainnya:PPNBM", "tipe SKB tak dikenal:");
@@ -19391,17 +20760,39 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       eq(jenis("", "1", "SURAT KEPUTUSAN FASILITAS BKPM"), "Masterlist", "label masterlist:");
       eq(jenis("", "1", "SURAT PERSETUJUAN IMPOR (SPI)"), "PI", "label PI:");
       eq(jenis("", "1", "ELECTRONIC CERTIFICATE OF ORIGIN"), "E-COO", "label COO:");
-      // Cadangan dari nomor (hanya dipakai untuk dokumen per barang ber-kode asing)
+      // Kode yang dikenal menentukan: label tidak menimpanya (872 = LS Kemenkes, bukan LS Kemendag)
+      eq(jenis("872", "1", "LAPORAN SURVEYOR KEMENKES"), "-", "kode dikenal menang:");
+      // Cadangan dari nomor (hanya dokumen per barang ber-kode umum / asing)
       eq(["72/PABEAN-PB/OSS/PMA/2025", "KET-00002/PPN-CT/KPP.2211/2026", "KET-00001/PPUT-CT/KPP.2211/2026", "INV-PPNBM-1", "DD-DDI2026090403"]
         .map((n) => w.jenisFasilitasDariNomor(n) || "-").join(","), "Masterlist,PPN,PPH,-,-", "dari nomor:");
-      // Polis asuransi (530): punya isian sendiri, dari kode atau label PIB PDF
-      eq(["530", " 530 ", "380", ""].map((k) => w.adalahPolisAsuransi({ kode: k })).join(","), "true,true,false,false", "polis dari kode:");
-      eq(w.adalahPolisAsuransi({ kode: "", label: "POLIS ASURANSI" }), true, "polis dari label:");
-      // PI / LS / polis lebih dari satu: nomor digabung tanpa ulang, tanggal dari yang pertama bertanggal
+      eq([jenis("999", "72/PABEAN-PB/OSS/PMA/2025", "", { tebakNomor: true }), jenis("911", "04.PI-02.26.0131", "", { tebakNomor: true }), jenis("777", "KET-1/PPN-CT/2026", "", { tebakNomor: true }),
+        jenis("217", "72/PABEAN-PB/OSS/PMA/2025", "", { tebakNomor: true }), jenis("999", "72/PABEAN-PB/OSS/PMA/2025")].join(","),
+        "Masterlist,PI,PPN,-,-", "tebak dari nomor (kode umum / asing, dokumen per barang saja):");
+      // Semua kode dokumen CEISA bernama, kedua bahasa; kode di luar daftar tetap terbaca
+      const tabel = baca("KODE_DOKUMEN_CEISA");
+      eq(Object.keys(tabel).length, 75, "jumlah kode:");
+      ["217", "380", "456", "457", "530", "703", "704", "705", "714", "740", "741", "860", "861", "911", "912", "913", "958", "959", "998", "999"].forEach((k) => {
+        if (!tabel[k]) throw new Error("kode tanpa nama: " + k);
+      });
+      eq([w.namaDokumenCeisa("912"), w.namaDokumenCeisa(" 217 "), w.namaDokumenCeisa("123"), w.namaDokumenCeisa("")].join(" | "),
+        "SK Fasilitas BKPM (Masterlist) | Packing List | Dokumen kode 123 | ", "nama:");
+      try {
+        w.setLang("en");
+        eq([w.namaDokumenCeisa("912"), w.namaDokumenCeisa("530"), w.namaDokumenCeisa("123")].join(" | "),
+          "BKPM Facility Decree (Masterlist) | Insurance Policy | Document code 123", "nama EN:");
+      } finally {
+        w.setLang("id");
+      }
+      // Dokumen sejenis: nomor yang sama tidak diulang, tanggalnya melengkapi; ringkasan untuk kolom lama
       const daftar = [];
-      [["A", ""], ["B", "2026-01-02"], ["A", "2026-01-01"], ["", "2026-01-03"], [" C ", "2026-01-04"]].forEach(([n, d]) => w.tambahDokumenPengiriman(daftar, n, d));
-      eq(JSON.stringify(w.isianDokumenPengiriman(daftar)), '{"nomor":"A, B, C","tanggal":"2026-01-02"}', "dokumen sejenis:");
-      eq(JSON.stringify(w.isianDokumenPengiriman([])), '{"nomor":"","tanggal":""}', "tanpa dokumen:");
+      [["A", ""], ["B", "2026-01-02"], ["A", "2026-01-01"], ["", ""], [" C ", "2026-01-04"]].forEach(([n, d]) => w.tambahDokumenPengiriman(daftar, n, d));
+      eq(daftar.map((d) => d.nomor + "@" + d.tanggal).join(" "), "A@2026-01-01 B@2026-01-02 C@2026-01-04", "daftar:");
+      eq(JSON.stringify(w.ringkasDokumen(daftar)), '{"nomor":"A, B, C","tanggal":"2026-01-01"}', "ringkasan:");
+      eq(JSON.stringify(w.ringkasDokumen([])), '{"nomor":"","tanggal":""}', "tanpa dokumen:");
+      // Isian lama "A, B" / "A / B" jadi daftar; tanggalnya milik nomor pertama
+      eq(w.pecahNomorDokumen("PI-1, PI-2 / PI-3", "2026-01-05").map((d) => d.nomor + "@" + d.tanggal).join(" "), "PI-1@2026-01-05 PI-2@ PI-3@", "isian lama:");
+      eq(JSON.stringify(w.dokPelengkapJadwal({ pi: "PI-1", piDate: "2026-01-05", ls: "", polisAsuransi: "P-9" })),
+        '{"pi":[{"nomor":"PI-1","tanggal":"2026-01-05"}],"ls":[],"polis":[{"nomor":"P-9","tanggal":""}],"lain":[]}', "jadwal lama:");
     });
 
     t("Excel CEISA pengguna: fasilitas barang membawa nomor & tanggal, No. PI & No. LS terisi, tanggal dokumen ikut", () => {
@@ -19411,10 +20802,16 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       // Templat salin: kolom FASILITAS / SKB berisi nomor-nomornya
       eq(w.shipmentFacilitiesSummary(hasil.items),
         "PPH KET-00001/PPUT-CT/KPP.2211/2026\nMASTER LIST 72/PABEAN-PB/OSS/PMA/2025\nPPN KET-00002/SKBPPN-CT/KPP.2211/2025", "kolom FASILITAS / SKB:");
-      eq(hasil.fields.pi, "04.PI-02.26.0131", "No. PI:");
-      eq(hasil.fields.ls, "ITB21G2672826137141", "No. LS (958 Laporan Surveyor):");
-      eq([hasil.fields.piDate, hasil.fields.lsDate, hasil.fields.polisAsuransi, hasil.fields.polisAsuransiDate].join(" | "),
-        "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "tanggal PI & LS, Polis Asuransi (530, tidak ditautkan ke barang):");
+      const dok = hasil.fields.dokPelengkap;
+      const daftar = (x) => x.map((d) => [d.kode, d.nomor, d.tanggal].filter((v) => v != null).join(" ")).join(" + ");
+      eq([daftar(dok.pi), daftar(dok.ls), daftar(dok.polis)].join(" | "),
+        "04.PI-02.26.0131 2026-01-22 | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03", "PI, LS (958) & Polis Asuransi (530, tidak ditautkan ke barang):");
+      // Dokumen lain: packing list (invoice & B/L-AWB punya isiannya sendiri)
+      eq(daftar(dok.lain), "217 DD-DDI2026090403 2026-09-04", "dokumen lain:");
+      if (!hasil.notes.some((n) => n === "Dokumen lain dicatat di Dokumen Pelengkap Pabean: Packing List DD-DDI2026090403."))
+        throw new Error("catatan dokumen lain: " + hasil.notes.join(" / "));
+      // PI yang ditautkan ke barang lewat BARANGDOKUMEN = PI barang itu
+      eq(hasil.items[0].piNomor, "04.PI-02.26.0131", "PI barang:");
       eq([hasil.fields.invoice, hasil.fields.masterBL, hasil.fields.houseBL].join(" | "),
         "DD-DDI2026090403 | SNKO010260809553 | PFSX260693", "invoice & B/L tetap:");
       eq([hasil.fields.invoiceDate, hasil.fields.masterBLDate, hasil.fields.houseBLDate].join(" | "),
@@ -19438,7 +20835,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "PPN KET-00009/PPN-CT/KPP.2211/2026 + Masterlist 72/PABEAN-PB/OSS/PMA/2025 || E-COO E2600123 + Masterlist 72/PABEAN-PB/OSS/PMA/2025");
       if (!hasil.notes.some((n) => n.includes("MASTER") || n.includes("Masterlist")))
         throw new Error("catatan fasilitas untuk semua barang tidak ada: " + hasil.notes.join(" / "));
-      eq(hasil.fields.pi, "", "tanpa dokumen PI:");
+      eq(hasil.fields.dokPelengkap.pi.length, 0, "tanpa dokumen PI:");
+      eq(hasil.items.map((it) => String(it.piNomor)).join(","), "undefined,undefined", "PI barang tidak dibawa:");
     });
 
     t("PIB PDF: kode & label lembar Pemenuhan Persyaratan -> fasilitas + No. PI", () => {
@@ -19458,9 +20856,9 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "Tgl. 03-10-2026",
       ].join("\n");
       const hasil = w.parsePibPdfText(teks, []);
-      eq(hasil.fields.pi, "04.PI-02.26.0131", "No. PI:");
-      eq(["piDate", "ls", "lsDate", "polisAsuransi", "polisAsuransiDate"].map((k) => hasil.fields[k]).join(" | "),
-        "2026-01-22 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "tanggal PI & LS, Polis Asuransi:");
+      const dok = hasil.fields.dokPelengkap;
+      eq(["pi", "ls", "polis", "lain"].map((j) => dok[j].map((d) => d.nomor + " " + d.tanggal).join(" + ")).join(" | "),
+        "04.PI-02.26.0131 2026-01-22 | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03 | ", "PI, LS & Polis Asuransi:");
       if (hasil.items.some((it) => (it.skb || []).some((sk) => /EKD2273805/.test(sk.nomor)))) throw new Error("polis terbaca sebagai fasilitas");
       eq(hasil.fields.invoice, "DD-DDI2026090403", "invoice:");
       // Lembarnya memuat SKB PPh & masterlist -> peringatan "tidak ada SKB" tidak muncul
@@ -19501,20 +20899,22 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "Masterlist 72/PABEAN-PB/OSS/PMA/2025 + PPH KET-1 + E-COO E1", "fasilitas kembali (level pengiriman):");
     });
 
-    t("impor dokumen mengisi kotak PI; labelnya Persetujuan Impor (kedua bahasa)", () => {
-      const simpan = $("#fPI").value;
+    t("impor dokumen mengisi daftar PI di kartu Dokumen Pelengkap Pabean; judulnya Persetujuan Impor (kedua bahasa)", () => {
       const mode = baca("activeMode");
       try {
         tulis("activeMode", "import");
+        w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
-        $("#fPI").value = "";
-        w.applyImportedBcData({ source: "excel", fields: { pi: "04.PI-02.26.0131" }, items: [], notes: [] });
-        eq($("#fPI").value, "04.PI-02.26.0131", "kotak PI:");
-        const label = w.document.querySelector('label[for="fPI"]');
-        eq([label.textContent.trim(), label.dataset.en].join(" | "), "PI (Persetujuan Impor) | PI (Import Approval)", "label:");
+        w.applyImportedBcData({ source: "excel", fields: { dokPelengkap: { pi: [{ nomor: "04.PI-02.26.0131", tanggal: "2026-01-22" }] } }, items: [], notes: [] });
+        const grup = $('#dokPelengkapIsi [data-dp="pi"]');
+        eq([...grup.querySelectorAll(".dp-baris input:not([type=file])")].map((el) => el.value).join(" | "), "04.PI-02.26.0131 | 2026-01-22", "baris PI:");
+        eq(grup.querySelector(".dp-judul").textContent, "PI (Persetujuan Impor)", "judul:");
+        w.setLang("en");
+        eq($('#dokPelengkapIsi [data-dp="pi"] .dp-judul').textContent, "PI (Import Approval)", "judul EN:");
       } finally {
+        w.setLang("id");
         tulis("activeMode", mode);
-        $("#fPI").value = simpan;
+        w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
       }
     });
@@ -19598,19 +20998,17 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     });
     const JADWAL_LAIN = { id: "cek-0", mode: "import", party: "LAIN", invoice: "X-1", noAju: "000020DDI00020260101000001", items: [] };
 
-    /* Halaman Cek dengan data tiruan: jadwal, Database HS Code, kurs pajak
-       satu periode. Semuanya dikembalikan sesudahnya. */
+    /* Halaman Cek dengan data tiruan: jadwal & Database HS Code. Semuanya
+       dikembalikan sesudahnya. */
     async function denganCek(fn, opsi) {
       const o = opsi || {};
       const simpan = {
         XLSX: w.XLSX, ambil: w.ambilHsCodes, simpanHs: w.simpanHsCodeBaru,
         data: w.eval("[data.import, data.export]"),
         hs: w.eval("JSON.stringify(hsCodeRows || [])"),
-        kurs: w.eval("JSON.stringify(KURS_PAJAK_DATA)"),
       };
       w.XLSX = XLSXuji;
       w.ambilHsCodes = async () => { w.eval("hsCodeRows = " + JSON.stringify(DB_HS_UJI)); return w.eval("hsCodeRows"); };
-      w.eval('KURS_PAJAK_DATA = { periode: [{ mulai: "2026-01-01", sampai: "2099-12-31", kmk: "UJI/MK/2026", kurs: { USD: 16500 } }] }');
       // `ekspor`: jadwal buku Export (PEB dicari di sana, bukan di buku Import)
       w.__dataUji = [[JADWAL_LAIN, o.jadwal || jadwalCek(o.hsBlade == null ? "84807110" : o.hsBlade)], o.ekspor || []];
       w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
@@ -19624,11 +21022,41 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         Object.assign(w, { XLSX: simpan.XLSX, ambilHsCodes: simpan.ambil, simpanHsCodeBaru: simpan.simpanHs });
         w.__dataUji = simpan.data;
         w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
-        w.eval("hsCodeRows = " + simpan.hs + "; KURS_PAJAK_DATA = " + simpan.kurs + ";");
+        w.eval("hsCodeRows = " + simpan.hs + ";");
       }
     }
     const barisCek = (k, field) => k.hasil.checks.find((x) => x.field === field) || {};
 
+    t("Cek PIB/PEB: jadwal terkait yang ditawarkan -- Import Process/Delay saja (bukan Arrived), Export yang ETD-nya belum lewat", () => {
+      const impor = [
+        { id: "j1", mode: "import", party: "A", status: "process", items: [] },
+        { id: "j2", mode: "import", party: "B", status: "delayed", items: [] },
+        { id: "j3", mode: "import", party: "C", status: "arrived", items: [] },
+        { id: "j4", mode: "import", party: "D", status: "process", factoryDate: "2026-08-01", items: [] }, // In Factory lewat = tiba
+      ];
+      const ekspor = [
+        { id: "e1", mode: "export", party: "E", etd: "2026-08-09", status: "process", items: [] }, // ETD hari ini
+        { id: "e2", mode: "export", party: "F", etd: "2026-08-08", status: "process", items: [] }, // ETD kemarin
+        { id: "e3", mode: "export", party: "G", etd: "2026-08-05", etdUpdate: "2026-08-12", status: "delayed", items: [] }, // revisi belum lewat
+        { id: "e4", mode: "export", party: "H", status: "process", items: [] }, // belum ber-ETD
+      ];
+      const simpanDecl = w.eval("JSON.stringify(cekKeadaan.decl)");
+      denganDataUji(impor, ekspor, () => {
+        try {
+          const ids = (decl) => { w.eval("cekKeadaan.decl = " + JSON.stringify(decl)); return w.cekDaftarJadwal().map((s) => s.id).join(","); };
+          eq(ids(null), "j1,j2,e1,e3,e4", "tanpa draft: kedua buku:");
+          eq(ids({ type: "PIB" }), "j1,j2", "PIB: buku Import, tanpa yang sudah tiba:");
+          eq(ids({ type: "PEB" }), "e1,e3,e4", "PEB: buku Export, ETD belum lewat:");
+          const simpanKandidat = w.eval("cekKeadaan.kandidat");
+          w.eval("cekKeadaan.kandidat = []");
+          eq(w.cekDaftarPilihHtml("").indexOf("Process / Delay") > 0, true, "keterangan saringan di kotak pilih:");
+          w.__kandidat = simpanKandidat;
+          w.eval("cekKeadaan.kandidat = window.__kandidat; delete window.__kandidat;");
+        } finally {
+          w.eval("cekKeadaan.decl = " + simpanDecl);
+        }
+      });
+    });
     t("Cek PIB/PEB: alamat #/cek, tautan sidebar & palet; khusus EXIM, peran lain dilempar ke Jadwal", () => {
       eq(w.halamanDariHash("#/cek"), "checker", "alamat:");
       eq(baca("PAGE_VIEWS").checker, "#viewChecker", "tampilan:");
@@ -19704,12 +21132,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
           "DOCUMENT:Jadwal,HEADER:Jadwal,TRANSPORT:Jadwal,VALUE:Jadwal,PACKING:Jadwal,ENTITY:Jadwal", "isian jadwal di bagiannya:");
         eq(["Packing List Number", "Currency", "Importer / Buyer (Entity 1)"].map((f) => barisCek(k, f).left_source).join(","), "CIPL,CIPL,CIPL", "yang tidak dicatat jadwal dari CIPL:");
         eq([...w.document.querySelectorAll('#cekDaftar details[data-cek-grup="ITEM-1"] thead th')].map((th) => th.textContent).slice(1, 3).join(" / "), "Jadwal / Draft PIB", "kepala kolom barang:");
-        // Bagian Jadwal, Fasilitas & izin, kurs pajak
-        ["No. Aju", "No. Invoice", "Tanggal Invoice", "Moda", "Kapal / Voyage", "Pelabuhan muat", "Pelabuhan tujuan", "Kemasan", "PI (Persetujuan Impor)", "Tanggal PI", "LS (Laporan Surveyor)", "Tanggal LS", "NDPBM ↔ kurs pajak"]
+        // Bagian Jadwal, Fasilitas & izin
+        ["No. Aju", "No. Invoice", "Tanggal Invoice", "Moda", "Kapal / Voyage", "Pelabuhan muat", "Pelabuhan tujuan", "Kemasan", "PI (Persetujuan Impor)", "Tanggal PI", "LS (Laporan Surveyor)", "Tanggal LS"]
           .forEach((f) => eq(barisCek(k, f).status, "MATCH", f + ":"));
         eq(["Tanggal PI", "Tanggal LS"].map((f) => barisCek(k, f).section + ":" + barisCek(k, f).pib_display).join(","), "FACILITY:2026-01-22,FACILITY:2026-09-23", "tanggal PI & LS di Fasilitas & izin:");
         if (k.hasil.checks.some((x) => /Polis Asuransi/.test(x.field))) throw new Error("baris polis tanpa polis di kedua sisi");
-        if (!/tanggal aju 02-10-2026/.test(barisCek(k, "NDPBM ↔ kurs pajak").expected_note)) throw new Error("tanggal aju dari nomor aju: " + barisCek(k, "NDPBM ↔ kurs pajak").expected_note);
+        if (k.hasil.checks.some((x) => /kurs pajak/i.test(x.field))) throw new Error("NDPBM masih dibandingkan dengan kurs pajak");
         eq([k.hasil.overall, k.hasil.summary.mismatches].join(" "), "PASS 0", "hasil:");
         // Tergambar: vonis, angka saringan, grup per bagian & per barang
         if (!/PASS/.test($("#cekVonis").textContent) || $("#cekHasil").classList.contains("d-none")) throw new Error("vonis tidak tampil");
@@ -20077,8 +21505,14 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         "Polis Asuransi: MISMATCH: Tidak ada di draft: EKD9999999. Tidak ada di jadwal: EKD2273805 - KMC260031. / Tanggal Polis Asuransi: MISMATCH: Kode dokumen 530.", "berbeda:");
       // Tanggal dari dokumen yang nomornya sama dengan jadwal, bukan sekadar dokumen pertama
       const dua = [{ code: "959", number: "PI-LAMA-1", date: "2025-01-02" }, { code: "959", number: "04.PI-02.26.0131", date: "2026-01-22" }];
-      eq(w.cekBarisTanggalDokumen("2026-01-22", w.cekPecahNomor("04.PI-02.26.0131"), dua, "959").slice(0, 3).join("|"), "MATCH|2026-01-22|2026-01-22", "dokumen yang nomornya sama:");
-      eq(w.cekBarisTanggalDokumen("", [], [], "959"), null, "tanpa tanggal di kedua sisi:");
+      eq(w.cekBarisTanggalDokumen([{ nomor: "04.PI-02.26.0131", tanggal: "2026-01-22" }], dua, "959").slice(0, 3).join("|"), "MATCH|2026-01-22|2026-01-22", "dokumen yang nomornya sama:");
+      eq(w.cekBarisTanggalDokumen([], [], "959"), null, "tanpa tanggal di kedua sisi:");
+      // Beberapa PI di jadwal (daftar): tiap nomor & tanggalnya dibandingkan sendiri-sendiri
+      const duaPi = (tgl2) => w.cekBarisFasilitas(Object.assign(jadwalCek("84807110"), {
+        dokPelengkap: { pi: [{ nomor: "PI-LAMA-1", tanggal: "2025-01-02" }, { nomor: "04.PI-02.26.0131", tanggal: tgl2 }], ls: [], polis: [], lain: [] },
+      }), { type: "PIB", documents: dua }).filter((x) => /^(PI|Tanggal PI)/.test(x.field)).map((x) => [x.field, x.status, x.cipl_display, x.pib_display].join(": ")).join(" / ");
+      eq(duaPi("2026-01-22"), "PI (Persetujuan Impor): MATCH: PI-LAMA-1, 04.PI-02.26.0131: PI-LAMA-1, 04.PI-02.26.0131 / Tanggal PI: MATCH: 2025-01-02, 2026-01-22: 2025-01-02, 2026-01-22", "dua PI cocok:");
+      eq(duaPi("2026-01-23"), "PI (Persetujuan Impor): MATCH: PI-LAMA-1, 04.PI-02.26.0131: PI-LAMA-1, 04.PI-02.26.0131 / Tanggal PI: MISMATCH: 2025-01-02, 2026-01-23: 2025-01-02, 2026-01-22", "tanggal PI kedua berbeda:");
     });
 
     t("Cek PIB/PEB tidak memeriksa Masterlist (912 vs halaman Masterlist), ETD ↔ tanggal B/L-AWB & ETA ↔ tanggal tiba; PEB tetap ETD ↔ tanggal ekspor", async () => {
@@ -20181,7 +21615,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList, data: w.eval("[data.import, data.export]") };
       const form = w.document.getElementById("viewForm");
       const tersembunyi = form.classList.contains("d-none");
-      const ketik = (sel, nilai, ev) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event(ev || "input", { bubbles: true })); };
+      const ketik = (sel, nilai, ev) => { const el = typeof sel === "string" ? $(sel) : sel; el.value = nilai; el.dispatchEvent(new w.Event(ev || "input", { bubbles: true })); };
       let payload = null;
       try {
         tulis("activeMode", "import");
@@ -20197,56 +21631,87 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         ketik("#fMasterBL", "MBL-UJI-1");
         ketik("#fMasterBLDate", "2026-10-01", "change");
         ketik("#fHouseBL", "HBL-UJI-UNIK-1");
-        ketik("#fPI", "04.PI-02.26.0131");
-        ketik("#fPIDate", "2026-01-22", "change");
-        ketik("#fLS", "ITB21G2672826137141");
-        ketik("#fLSDate", "2026-09-23", "change");
-        ketik("#fPolisAsuransi", "  EKD2273805 - KMC260031 ");
-        ketik("#fPolisAsuransiDate", "2026-10-03", "change");
+        // Kartu Dokumen Pelengkap Pabean: dua PI, satu LS, satu polis, satu dokumen lain
+        const dp = (jenis, i, k) => $(`#dokPelengkapIsi [data-dp="${jenis}"] .dp-baris[data-i="${i}"] [data-dp-k="${k}"]`);
+        const tambahDp = (jenis) => $(`#dokPelengkapIsi [data-dp="${jenis}"] [data-dp-tambah]`).click();
+        ketik(dp("pi", 0, "nomor"), "04.PI-02.26.0131");
+        ketik(dp("pi", 0, "tanggal"), "2026-01-22", "change");
+        tambahDp("pi");
+        eq(w.document.activeElement, dp("pi", 1, "nomor"), "PI kedua siap diketik:");
+        ketik(dp("pi", 1, "nomor"), "04.PI-02.26.0200");
+        ketik(dp("pi", 1, "tanggal"), "2026-02-10", "change");
+        ketik(dp("ls", 0, "nomor"), "ITB21G2672826137141");
+        ketik(dp("ls", 0, "tanggal"), "2026-09-23", "change");
+        ketik(dp("polis", 0, "nomor"), "  EKD2273805 - KMC260031 ");
+        ketik(dp("polis", 0, "tanggal"), "2026-10-03", "change");
+        tambahDp("lain");
+        ketik(dp("lain", 0, "kode"), "217", "change");
+        ketik(dp("lain", 0, "nomor"), "PL-77");
         w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "X", qty: 1, harga: 1 })]');
         $("#btnSaveShipment").click();
         for (let i = 0; i < 20 && !payload; i++) await jeda(10);
         if (!payload) throw new Error("tidak tersimpan");
         await jeda(30); // alur simpan selesai (muat ulang, kembali ke daftar) sebelum tiruannya dilepas
-        eq([payload.invoiceDate, payload.masterBLDate, payload.houseBLDate, payload.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "isian tersimpan:");
-        eq([payload.piDate, payload.lsDate, payload.polisAsuransi, payload.polisAsuransiDate].join(" | "), "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PI, LS & polis tersimpan:");
+        eq([payload.invoiceDate, payload.masterBLDate, payload.houseBLDate].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01", "isian tersimpan:");
+        const daftar = (x) => x.map((d) => [d.kode, d.nomor, d.tanggal].filter((v) => v != null && v !== "").join(" ")).join(" + ");
+        const dok = payload.dokPelengkap;
+        eq(["pi", "ls", "polis", "lain"].map((j) => daftar(dok[j])).join(" | "),
+          "04.PI-02.26.0131 2026-01-22 + 04.PI-02.26.0200 2026-02-10 | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03 | 217 PL-77", "PI, LS, polis & dokumen lain tersimpan:");
         const row = w.shipmentToRow(payload, "import");
         eq([row.invoice_date, row.master_bl_date, row.house_bl_date, row.ls].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "kolom database:");
-        eq([row.pi_date, row.ls_date, row.polis_asuransi, row.polis_asuransi_date].join(" | "), "2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "kolom database PI, LS & polis:");
-        eq(["pi_date", "ls_date", "polis_asuransi", "polis_asuransi_date"].map((k) => w.shipmentToRow({ piDate: "", lsDate: "", polisAsuransi: "", polisAsuransiDate: "" }, "import")[k]).join(","), ",,,", "kosong -> NULL:");
-        if (w.shipmentToRow({ piDate: "" }, "import").pi_date !== null) throw new Error("tanggal PI kosong bukan NULL");
+        eq(JSON.stringify(row.dokumen_pelengkap), JSON.stringify(dok), "kolom dokumen_pelengkap:");
+        // Kolom lama = ringkasannya: nomor digabung, tanggal dokumen pertama
+        eq([row.pi, row.pi_date, row.ls_date, row.polis_asuransi, row.polis_asuransi_date].join(" | "), "04.PI-02.26.0131, 04.PI-02.26.0200 | 2026-01-22 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "kolom lama PI, LS & polis:");
+        const kosong = w.shipmentToRow({ dokPelengkap: { pi: [{ nomor: " ", tanggal: "" }] } }, "import");
+        eq(["dokumen_pelengkap", "pi", "pi_date", "ls_date", "polis_asuransi", "polis_asuransi_date"].map((k) => String(kosong[k])).join(","), "null,null,null,null,null,null", "kosong -> NULL:");
         const s = w.rowToShipment(Object.assign({ id: "baru-1", mode: "import", items: [] }, row));
+        eq(daftar(s.dokPelengkap.pi), "04.PI-02.26.0131 2026-01-22 + 04.PI-02.26.0200 2026-02-10", "dibaca dari dokumen_pelengkap:");
         w.__dataUji = [[s], []];
         w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1];");
         w.renderFormPage("baru-1");
-        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value, $("#fLS").value].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01 | ITB21G2672826137141", "termuat ulang:");
-        eq(["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join(" | "),
-          "04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PI, LS & polis termuat ulang:");
-        // Panel detail: nomor + tanggal dalam satu isian, seperti invoice
+        eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-09-28 | 2026-10-01 | 2026-10-01", "termuat ulang:");
+        const nilaiDp = (jenis) => [...$(`#dokPelengkapIsi [data-dp="${jenis}"]`).querySelectorAll(".dp-baris")].map((b) => [...b.querySelectorAll("select, input:not([type=file])")].map((el) => el.value).join(" ")).join(" + ");
+        eq(["pi", "ls", "polis", "lain"].map(nilaiDp).join(" | "),
+          "04.PI-02.26.0131 2026-01-22 + 04.PI-02.26.0200 2026-02-10 | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03 | 217 PL-77 ", "PI, LS, polis & dokumen lain termuat ulang:");
+        // Panel detail: tiap dokumen nomor + tanggal, dokumen lain bernama
         const detail = w.buildDetailHtml(s);
         ["PI (Persetujuan Impor)", "LS (Laporan Surveyor)", "Polis Asuransi"].forEach((label) => {
           if (detail.indexOf(`<div class="info-label">${label}</div>`) < 0) throw new Error("detail tanpa " + label);
         });
         if (!/EKD2273805 - KMC260031 <span class="text-muted text-nowrap">· [^<]*2026/.test(detail)) throw new Error("detail polis tanpa tanggal (utuh, tidak terpotong)");
+        if (!/04\.PI-02\.26\.0200 <span class="text-muted text-nowrap">· 10/.test(detail)) throw new Error("detail tanpa PI kedua");
+        if (!/Packing List<\/span> PL-77/.test(detail)) throw new Error("detail tanpa dokumen lain bernama");
         ketik("#fHouseBLDate", "2026-10-02", "change");
         eq($("#fMasterBLDate").value, "2026-10-02", "tersimpan sama -> tetap saling mengikuti:");
         const lama = w.rowToShipment({ id: "lama", mode: "import", party: "A", items: [] });
         eq([lama.invoiceDate, lama.masterBLDate, lama.houseBLDate, lama.ls, lama.piDate, lama.lsDate, lama.polisAsuransi, lama.polisAsuransiDate].join("|"), "|||||||", "jadwal lama tanpa kolom baru:");
-        // Form baru: keenam isian kosong lagi
+        // Jadwal sebelum dokumen_pelengkap: daftar dari kolom lama
+        const sebelum = w.rowToShipment({ id: "lama2", mode: "import", items: [], pi: "PI-A, PI-B", pi_date: "2026-01-01", polis_asuransi: "P-1" });
+        eq(["pi", "polis"].map((j) => daftar(sebelum.dokPelengkap[j])).join(" | "), "PI-A 2026-01-01 + PI-B | P-1", "dari kolom lama:");
+        // Form baru: satu baris kosong per jenis, tanpa dokumen lain
         w.renderFormPage(null);
-        eq(["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join("|"), "|||||", "form baru kosong:");
+        eq(["pi", "ls", "polis", "lain"].map(nilaiDp).join("|"), " | | |", "form baru kosong:");
+        eq($('#dokPelengkapIsi [data-dp="lain"] .dp-kosong').textContent, "Belum ada dokumen lain.", "dokumen lain kosong:");
         // Kolomnya opsional sampai migrasinya dijalankan
         const opsional = baca("KOLOM_OPSIONAL");
         eq(["ls", "invoice_date", "master_bl_date", "house_bl_date"].map((k) => opsional[k] && opsional[k].berkas).join(","),
           "migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql,migration-ls-tanggal-dokumen.sql", "kolom opsional:");
-        const sql = fs.readFileSync(path.join(ROOT, "migration-ls-tanggal-dokumen.sql"), "utf8");
+        const sql = bacaMigrasi("migration-ls-tanggal-dokumen.sql");
         ["ls text", "invoice_date date", "master_bl_date date", "house_bl_date date"].forEach((k) => {
           if (sql.indexOf("add column if not exists " + k) < 0) throw new Error("migrasi tanpa " + k);
         });
         if (!/notify pgrst, 'reload schema'/.test(sql)) throw new Error("migrasi tidak memuat ulang skema PostgREST");
         eq(["pi_date", "ls_date", "polis_asuransi", "polis_asuransi_date"].map((k) => opsional[k] && opsional[k].berkas + ":" + opsional[k].nama).join(","),
           "migration-tanggal-pi-ls-polis.sql:Tanggal PI,migration-tanggal-pi-ls-polis.sql:Tanggal LS,migration-tanggal-pi-ls-polis.sql:Polis Asuransi,migration-tanggal-pi-ls-polis.sql:Tanggal Polis Asuransi", "kolom opsional PI, LS & polis:");
-        const sql2 = fs.readFileSync(path.join(ROOT, "migration-tanggal-pi-ls-polis.sql"), "utf8");
+        // Daftar dokumen: kolom opsional baru; satu dokumen per jenis tanpa dokumen lain tidak hilang (kolom lama)
+        eq(opsional.dokumen_pelengkap.berkas, "migration-dokumen-pelengkap.sql", "kolom opsional daftar dokumen:");
+        eq([dok, { pi: [{ nomor: "A", tanggal: "" }], ls: [], polis: [], lain: [] }, null].map((d) => opsional.dokumen_pelengkap.hilang(d)).join(","), "true,false,false", "yang tertinggal:");
+        const sql3 = bacaMigrasi("migration-dokumen-pelengkap.sql");
+        ["shipments add column if not exists dokumen_pelengkap jsonb", "shipment_items add column if not exists pi_nomor text not null default ''", "shipment_items add column if not exists pi_no_item text not null default ''"].forEach((k) => {
+          if (sql3.indexOf(k) < 0) throw new Error("migrasi dokumen pelengkap tanpa " + k);
+        });
+        if (!/notify pgrst, 'reload schema'/.test(sql3)) throw new Error("migrasi dokumen pelengkap tidak memuat ulang skema PostgREST");
+        const sql2 = bacaMigrasi("migration-tanggal-pi-ls-polis.sql");
         ["pi_date date", "ls_date date", "polis_asuransi text", "polis_asuransi_date date"].forEach((k) => {
           if (sql2.indexOf("add column if not exists " + k) < 0) throw new Error("migrasi PI/LS/polis tanpa " + k);
         });
@@ -20261,7 +21726,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji;");
         tulis("activeMode", simpan.mode);
         w.renderFormPage(null);
-        w.hapusTandaNomorGanda();
+        hapusTandaNomorGanda();
         if (tersembunyi) form.classList.add("d-none");
       }
     });
@@ -20489,43 +21954,147 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       }
     });
 
-    t("impor dokumen: draft CEISA & PIB PDF mengisi tanggal invoice, tanggal Master/House, PI & LS beserta tanggalnya, Polis Asuransi; CIPL tidak mengisi tanggal B/L-AWB; buku Export tidak diisi lewat kotak tersembunyi", () => {
+    t("impor dokumen: draft CEISA & PIB PDF mengisi tanggal invoice, tanggal Master/House, daftar PI, LS & Polis Asuransi beserta tanggalnya, dokumen lain; CIPL tidak mengisi tanggal B/L-AWB; buku Export hanya dokumen lain", () => {
       const simpan = { mode: baca("activeMode"), XLSX: w.XLSX };
-      const isianDok = () => ["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"].map((id) => $("#" + id).value).join(" | ");
+      const isianDok = () => ["pi", "ls", "polis", "lain"].map((j) => {
+        const grup = $(`#dokPelengkapIsi [data-dp="${j}"]`);
+        return grup ? [...grup.querySelectorAll(".dp-baris")].map((b) => [...b.querySelectorAll("select, input")].map((el) => el.value).filter(Boolean).join(" ")).filter(Boolean).join(" + ") : "-";
+      }).join(" | ");
       try {
         tulis("activeMode", "import");
         w.XLSX = XLSXuji;
         w.renderFormPage(null);
         const hasil = w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(bukuDraftUji(), { type: "buffer", bookType: "xlsx" }), { type: "buffer", cellDates: true }));
-        eq([hasil.fields.invoiceDate, hasil.fields.masterBL, hasil.fields.masterBLDate, hasil.fields.houseBL, hasil.fields.houseBLDate, hasil.fields.pi, hasil.fields.piDate, hasil.fields.ls, hasil.fields.lsDate].join(" | "),
-          "2026-10-01 | HDMUBSAJ2610001 | 2026-10-05 | WLSO26100077 | 2026-10-05 | 04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23", "draft CEISA:");
-        eq([hasil.fields.polisAsuransi, hasil.fields.polisAsuransiDate].join("|"), "|", "draft tanpa dokumen 530:");
+        eq([hasil.fields.invoiceDate, hasil.fields.masterBL, hasil.fields.masterBLDate, hasil.fields.houseBL, hasil.fields.houseBLDate].join(" | "),
+          "2026-10-01 | HDMUBSAJ2610001 | 2026-10-05 | WLSO26100077 | 2026-10-05", "draft CEISA:");
+        eq(hasil.fields.dokPelengkap.polis.length, 0, "draft tanpa dokumen 530:");
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData(hasil);
         eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-10-01 | 2026-10-05 | 2026-10-05", "form dari draft:");
-        eq(isianDok(), "04.PI-02.26.0131 | 2026-01-22 | ITB21G2672826137141 | 2026-09-23 |  | ", "PI, LS & tanggalnya dari draft:");
+        eq(isianDok(), "04.PI-02.26.0131 2026-01-22 | ITB21G2672826137141 2026-09-23 |  | 217 DD-UJI-2610 2026-10-01", "PI, LS & dokumen lain dari draft:");
+        // Diimpor lagi: tidak berlipat, nomor yang sama tetap satu
+        w.applyImportedBcData(hasil);
+        eq(isianDok(), "04.PI-02.26.0131 2026-01-22 | ITB21G2672826137141 2026-09-23 |  | 217 DD-UJI-2610 2026-10-01", "impor ulang:");
         w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData({ source: "cipl", fields: { invoice: "INV-9", invoiceDate: "2026-09-16", masterBLDate: "2026-09-25", houseBLDate: "2026-09-25" }, items: [], notes: [] });
         eq([$("#fInvoiceDate").value, $("#fMasterBLDate").value, $("#fHouseBLDate").value].join(" | "), "2026-09-16 |  | ", "CIPL: tanggal invoice saja:");
         const pib = w.parsePibPdfText(["Nomor Pengajuan : 000020PRM61620261012009918", "1 380 INVOICE No. DD-DDI2026090403", "Tgl. 04-09-2026",
           "5 958 LAPORAN SURVEYOR No. ITB21G2672826137141", "Tgl. 23-09-2026", "6 530 POLIS ASURANSI No. EKD2273805 - KMC260031", "Tgl. 03-10-2026"].join("\n"), []);
-        eq([pib.fields.invoiceDate, pib.fields.ls, pib.fields.lsDate, pib.fields.polisAsuransi, pib.fields.polisAsuransiDate].join(" | "),
-          "2026-09-04 | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "PIB PDF:");
+        eq([pib.fields.invoiceDate, ...["ls", "polis"].map((j) => pib.fields.dokPelengkap[j].map((d) => d.nomor + " " + d.tanggal).join())].join(" | "),
+          "2026-09-04 | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03", "PIB PDF:");
         w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData(Object.assign({ source: "pdf" }, pib));
-        eq(isianDok(), " |  | ITB21G2672826137141 | 2026-09-23 | EKD2273805 - KMC260031 | 2026-10-03", "form dari PIB PDF:");
-        // Buku Export: Bea & Pajak Impor tersembunyi -> PI, LS & polis tidak ikut terisi
+        eq(isianDok(), " | ITB21G2672826137141 2026-09-23 | EKD2273805 - KMC260031 2026-10-03 | ", "form dari PIB PDF:");
+        // Buku Export: PI, LS & polis tidak tampil dan tidak terisi; dokumen lain tetap
         tulis("activeMode", "export");
         w.renderFormPage(null);
         w.eval("importFieldOrigin = {}");
         w.applyImportedBcData(Object.assign({ source: "pdf" }, pib));
-        eq(isianDok(), " |  |  |  |  | ", "buku Export:");
+        eq(isianDok(), "- | - | - | ", "buku Export:");
+        eq(JSON.stringify(w.dokPelengkapForm()), '{"pi":[],"ls":[],"polis":[],"lain":[]}', "tersimpan dari buku Export:");
       } finally {
         w.XLSX = simpan.XLSX;
         w.eval("importFieldOrigin = {}");
         tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("impor dokumen pabean: ETD = tanggal B/L-AWB, ETA = perkiraan tanggal tiba (mode Manual); status Delay -> tanggal revisi; tanpa B/L-AWB tanggal ekspor hanya mengisi ETD kosong", () => {
+      const simpan = { mode: baca("activeMode"), XLSX: w.XLSX, data: w.eval("[data.import, data.export]") };
+      const catatan = (hasil) => hasil.notes.filter((n) => /^(ETD|ETA)/.test(n)).join(" / ");
+      const draft = (ubah) => {
+        const wb = bukuDraftUji();
+        const header = XLSXuji.utils.sheet_to_json(wb.Sheets.HEADER);
+        Object.assign(header[0], ubah || {});
+        wb.Sheets.HEADER = XLSXuji.utils.json_to_sheet(header);
+        return w.parseBcExcelWorkbook(XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer", cellDates: true }));
+      };
+      try {
+        tulis("activeMode", "import");
+        w.XLSX = XLSXuji;
+        const hasil = draft({ "TANGGAL TIBA": "2026-10-12" });
+        eq([hasil.fields.etd, hasil.fields.eta, String(hasil.fields.actual)].join(" | "), " | 2026-10-12 | undefined", "ETA dari TANGGAL TIBA (bukan Estimated Delivery):");
+        // Jadwal baru
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        const baru = w.applyImportedBcData(hasil);
+        eq([$("#fEtd").value, $("#fEta").value, baca("formEtaMode")].join(" | "), "2026-10-05 | 2026-10-12 | manual", "jadwal baru:");
+        eq(catatan(baru), "ETD mengikuti tanggal B/L-AWB: 05-10-2026. / ETA dari perkiraan tanggal tiba dokumen: 12-10-2026 (mode ETA Manual).", "catatan:");
+        // Jadwal ber-ETD lain: ETD tetap ditimpa tanggal B/L-AWB
+        w.renderFormPage(null);
+        $("#fEtd").value = "2026-09-28";
+        $("#fEta").value = "2026-10-06";
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(hasil);
+        eq([$("#fEtd").value, $("#fEta").value].join(" | "), "2026-10-05 | 2026-10-12", "ETD & ETA lama ditimpa:");
+        // Status Delay (ETA rencana diketik: mode Manual): yang berubah tanggal revisinya, rencana tetap
+        w.renderFormPage(null);
+        $("#fStatus").value = "delayed";
+        $("#fEtd").value = "2026-09-28";
+        $("#fEta").value = "2026-10-06";
+        $("#fEta").dispatchEvent(new w.Event("change", { bubbles: true }));
+        w.applyDelayFieldVisibility();
+        w.eval("importFieldOrigin = {}");
+        const delay = w.applyImportedBcData(hasil);
+        eq([$("#fEtd").value, $("#fEtdUpdate").value, $("#fEta").value, $("#fEtaUpdate").value].join(" | "), "2026-09-28 | 2026-10-05 | 2026-10-06 | 2026-10-12", "Delay:");
+        eq(catatan(delay), "ETD revisi mengikuti tanggal B/L-AWB: 05-10-2026. / ETA revisi dari perkiraan tanggal tiba dokumen: 12-10-2026.", "catatan Delay:");
+        // Tanpa tanggal B/L-AWB: tanggal ekspor HEADER hanya mengisi ETD yang kosong
+        const tanpaBl = draft({ "TANGGAL EKSPOR": "2026-10-07" });
+        tanpaBl.fields.masterBLDate = tanpaBl.fields.houseBLDate = "";
+        eq(tanpaBl.fields.etd, "2026-10-07", "tanggal ekspor:");
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(tanpaBl);
+        eq($("#fEtd").value, "2026-10-07", "ETD kosong diisi:");
+        w.renderFormPage(null);
+        $("#fEtd").value = "2026-10-01";
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(tanpaBl);
+        eq($("#fEtd").value, "2026-10-01", "ETD terisi dibiarkan:");
+        // PIB PDF: field 11 Perkiraan Tanggal Tiba -> ETA
+        const pib = w.parsePibPdfText(["Nomor Pengajuan : 000020PRM61620261012009918", "11. Perkiraan Tanggal Tiba : 14-10-2026", "Master-BL/AWB : No. MBL1 Tgl. 06-10-2026"].join("\n"), []);
+        eq([pib.fields.eta, pib.fields.masterBlDate, String(pib.fields.etd)].join(" | "), "2026-10-14 | 2026-10-06 | undefined", "PIB PDF:");
+        w.renderFormPage(null);
+        w.eval("importFieldOrigin = {}");
+        w.applyImportedBcData(Object.assign({ source: "pdf" }, pib));
+        eq([$("#fEtd").value, $("#fEta").value].join(" | "), "2026-10-06 | 2026-10-14", "form dari PIB PDF:");
+      } finally {
+        w.XLSX = simpan.XLSX;
+        w.__dataUji = simpan.data;
+        w.eval("data.import = window.__dataUji[0]; data.export = window.__dataUji[1]; delete window.__dataUji; importFieldOrigin = {};");
+        tulis("activeMode", simpan.mode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("form: tanggal B/L-AWB diisi -> ETD mengikutinya (Delay: ETD revisi), satu toast", () => {
+      const simpanMode = baca("activeMode");
+      const ketik = (sel, nilai) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event("change", { bubbles: true })); };
+      try {
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        ketik("#fEtd", "2026-10-01");
+        ketik("#fMasterBLDate", "2026-10-03");
+        eq([$("#fEtd").value, $("#fHouseBLDate").value].join(" | "), "2026-10-03 | 2026-10-03", "ETD & House ikut:");
+        eq($("#toastMsg").textContent, "ETD mengikuti tanggal B/L-AWB: 03-10-2026.", "toast:");
+        // House diubah sendiri, Master tetap: ETD tetap tanggal Master
+        ketik("#fHouseBLDate", "2026-10-04");
+        eq($("#fEtd").value, "2026-10-03", "Master didahulukan:");
+        // Delay: ETD revisi yang berubah, ETD rencana tetap
+        ketik("#fStatus", "delayed");
+        ketik("#fMasterBLDate", "2026-10-06");
+        eq([$("#fEtd").value, $("#fEtdUpdate").value].join(" | "), "2026-10-03 | 2026-10-06", "Delay:");
+        eq($("#toastMsg").textContent, "ETD revisi mengikuti tanggal B/L-AWB: 06-10-2026.", "toast Delay:");
+        // Master dikosongkan: House yang berlaku; keduanya kosong: ETD tidak ikut dikosongkan
+        ketik("#fMasterBLDate", "");
+        eq($("#fEtdUpdate").value, "2026-10-04", "House:");
+        ketik("#fHouseBLDate", "");
+        eq([$("#fEtd").value, $("#fEtdUpdate").value].join(" | "), "2026-10-03 | 2026-10-04", "dikosongkan:");
+      } finally {
+        tulis("activeMode", simpanMode);
         w.renderFormPage(null);
       }
     });
@@ -20563,32 +22132,391 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       }
     });
 
-    t("label: No. Kontainer/Seal (Container/Seal Number); Bea & Pajak Impor: PI, Tanggal PI, LS, Tanggal LS, Polis Asuransi, Tanggal Polis Asuransi sebaris, kedua bahasa", () => {
+    t("label: No. Kontainer/Seal (Container/Seal Number); kartu Dokumen Pelengkap Pabean: PI, LS, Polis Asuransi & Dokumen Lain, tiap baris nomor + tanggal, kedua bahasa", () => {
+      const simpanMode = baca("activeMode");
       const label = (id) => $(`label[for="${id}"]`).textContent.trim();
-      eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "No. Kontainer/Seal | LS (Laporan Surveyor) | Tanggal Invoice", "ID:");
-      // Satu baris dokumen di Bea & Pajak Impor: tiap dokumen sepasang nomor + tanggal, urut
-      const baris = $("#fPI").closest(".fl-dok");
-      if (!baris || !baris.classList.contains("s12") || baris.closest("#dutySection") === null) throw new Error("baris dokumen tidak di Bea & Pajak Impor");
-      const urut = [...baris.querySelectorAll("input")].map((el) => el.id + ":" + el.type);
-      eq(urut.join(","), "fPI:text,fPIDate:date,fLS:text,fLSDate:date,fPolisAsuransi:text,fPolisAsuransiDate:date", "urutan isian:");
-      eq([...baris.children].map((p) => p.className + ":" + p.querySelectorAll("input").length).join(","), "fl-dok-pasang:2,fl-dok-pasang:2,fl-dok-pasang:2", "berpasangan:");
-      const ids = ["fPI", "fPIDate", "fLS", "fLSDate", "fPolisAsuransi", "fPolisAsuransiDate"];
-      eq(ids.map(label).join(" | "), "PI (Persetujuan Impor) | Tanggal PI | LS (Laporan Surveyor) | Tanggal LS | Polis Asuransi | Tanggal Polis Asuransi", "label ID:");
-      eq(["fPI", "fLS", "fPolisAsuransi"].map((id) => $("#" + id).placeholder).join(" | "), "mis. 04.PI-02.26.0131 | mis. ITB21G2672826137141 | mis. EKD2273805 - KMC260031", "contoh ID:");
-      // PDRI tepat di bawah PPH: catatan bea .s9 di sebelahnya
-      const note = $('#dutySection [data-i18n="form.note.duty"]');
-      eq([note.classList.contains("s9"), note.nextElementSibling.contains($("#calcPDRI")), note.nextElementSibling.nextElementSibling === baris].join(","), "true,true,true", "catatan | PDRI, lalu baris dokumen:");
-      const css = fs.readFileSync(path.join(ROOT, "css", "components.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-      if (!/\.fgrid > \.fl-dok\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,/.test(css)) throw new Error("baris dokumen tidak mengalir per pasangan");
-      if (!/\.fl-dok \.form-label\s*\{[^}]*white-space:\s*nowrap/.test(css)) throw new Error("label dokumen bisa terlipat -> kotak tidak sejajar");
-      if (/fl-dua/.test(css) || /fl-dua/.test(htmlAsli)) throw new Error("aturan .fl-dua lama tersisa");
+      const judul = () => [...w.document.querySelectorAll("#dokPelengkapIsi .dp-judul")].map((el) => el.textContent).join(" | ");
+      const contoh = () => ["pi", "ls", "polis"].map((j) => $(`#dokPelengkapIsi [data-dp="${j}"] [data-dp-k="nomor"]`).placeholder).join(" | ");
       try {
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        eq([label("fContainer"), label("fInvoiceDate")].join(" | "), "No. Kontainer/Seal | Tanggal Invoice", "ID:");
+        // Kartu sendiri di tab Kepabeanan, sesudah Bea & Pajak Impor; kotak lama sudah tidak ada
+        const kartu = $("#dokPelengkapSection");
+        eq([kartu.closest('[data-tabpane="pabean"]') !== null, kartu.previousElementSibling === $("#dutySection"), !$("#fPI"), !$("#fPolisAsuransiDate")].join(","), "true,true,true,true", "letak kartu:");
+        eq(judul(), "PI (Persetujuan Impor) | LS (Laporan Surveyor) | Polis Asuransi | Dokumen Lain", "judul ID:");
+        eq([...w.document.querySelectorAll("#dokPelengkapIsi .dp-kode")].map((el) => el.textContent).join(","), "959,958,530", "kode dokumen:");
+        eq([...$('#dokPelengkapIsi [data-dp="pi"] .dp-baris').querySelectorAll("input, button")].map((el) => el.type).join(","), "text,date,file,button", "baris PI: nomor, tanggal, lampiran, hapus:");
+        eq([...$('#dokPelengkapIsi [data-dp="polis"] .dp-baris').querySelectorAll("input, button")].map((el) => el.type).join(","), "text,date,button", "baris polis: nomor, tanggal, hapus (tanpa lampiran):");
+        eq(contoh(), "mis. 04.PI-02.26.0131 | mis. ITB21G2672826137141 | mis. EKD2273805 - KMC260031", "contoh ID:");
+        const css = fs.readFileSync(path.join(ROOT, "css", "form.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+        if (!/\.dp\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,/.test(css)) throw new Error("kelompok dokumen tidak mengalir");
+        if (!/\.dp-grup--lain\s*\{[^}]*grid-column:\s*1 \/ -1/.test(css)) throw new Error("Dokumen Lain tidak selebar kartu");
+        if (/fl-dok|fl-dua/.test(fs.readFileSync(path.join(ROOT, "css", "components.css"), "utf8")) || /fl-dok|fl-dua/.test(htmlAsli)) throw new Error("aturan .fl-dok / .fl-dua lama tersisa");
         w.setLang("en");
-        eq([label("fContainer"), label("fLS"), label("fInvoiceDate")].join(" | "), "Container/Seal Number | LS (Surveyor Report) | Invoice Date", "EN:");
-        eq(ids.map(label).join(" | "), "PI (Import Approval) | PI Date | LS (Surveyor Report) | LS Date | Insurance Policy | Insurance Policy Date", "label EN:");
-        eq(["fPI", "fLS", "fPolisAsuransi"].map((id) => $("#" + id).placeholder).join(" | "), "e.g. 04.PI-02.26.0131 | e.g. ITB21G2672826137141 | e.g. EKD2273805 - KMC260031", "contoh EN:");
+        eq([label("fContainer"), label("fInvoiceDate")].join(" | "), "Container/Seal Number | Invoice Date", "EN:");
+        eq(judul(), "PI (Import Approval) | LS (Surveyor Report) | Insurance Policy | Other Documents", "judul EN:");
+        eq(contoh(), "e.g. 04.PI-02.26.0131 | e.g. ITB21G2672826137141 | e.g. EKD2273805 - KMC260031", "contoh EN:");
+        eq($('#dokPelengkapIsi [data-dp="lain"] [data-dp-tambah]').textContent.trim(), "Add Document", "tombol EN:");
+        // Buku Export: hanya Dokumen Lain
+        w.setLang("id");
+        tulis("activeMode", "export");
+        w.renderFormPage(null);
+        eq(judul(), "Dokumen Lain", "Export:");
       } finally {
         w.setLang("id");
+        tulis("activeMode", simpanMode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("PI per barang: dipilih dari daftar PI jadwal + No. item di PI; nomor PI diubah ikut, PI dihapus dilepas; barang BARU = Tidak Menggunakan PI; tersimpan di kolom barang", () => {
+      const simpanMode = baca("activeMode");
+      const dp = (jenis, i, k) => $(`#dokPelengkapIsi [data-dp="${jenis}"] .dp-baris[data-i="${i}"] [data-dp-k="${k}"]`);
+      const ketik = (el, nilai, ...ev) => {
+        el.value = nilai;
+        (ev.length ? ev : ["input"]).forEach((e) => el.dispatchEvent(new w.Event(e, { bubbles: true })));
+      };
+      const barang = () => w.eval("draftItems").map((it) => [it.piNomor, it.piNoItem].join(":")).join(" | ");
+      const tombol = (i) => $(`#itemTableBody tr[data-idx="${i}"]:not(.item-fac-row) [data-act="toggle-fac"]`);
+      try {
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        ketik(dp("pi", 0, "nomor"), "PI-A", "input", "change");
+        ketik(dp("pi", 0, "tanggal"), "2026-01-22", "input", "change");
+        $('#dokPelengkapIsi [data-dp="pi"] [data-dp-tambah]').click();
+        ketik(dp("pi", 1, "nomor"), "PI-B", "input", "change");
+        w.eval('draftItems = [Object.assign(newItem("import"), { namaBarang: "MESIN BEKAS", kondisiBarang: "2" }), Object.assign(newItem("import"), { namaBarang: "MESIN BARU" })]');
+        w.renderItemTable();
+        tombol(0).click();
+        const pilih = () => $('select[data-fac="piNomor"][data-idx="0"]');
+        eq([...pilih().options].map((o) => o.value + "=" + o.textContent).join(", "), "=— Pilih PI —, PI-A=PI-A · 22-01-2026, PI-B=PI-B", "pilihan:");
+        eq($('input[data-fac="piNoItem"][data-idx="0"]').disabled, true, "No. item terkunci sebelum PI dipilih:");
+        ketik(pilih(), "PI-B", "change");
+        eq(w.document.activeElement, $('input[data-fac="piNoItem"][data-idx="0"]'), "No. item siap diketik:");
+        ketik($('input[data-fac="piNoItem"][data-idx="0"]'), "5");
+        eq(tombol(0).textContent.trim(), "PI #5", "label tombol Fasilitas:");
+        eq(tombol(0).classList.contains("has-value"), true, "tombol bertanda:");
+        // Nomor PI diubah di kartu: barangnya ikut; dihapus: barangnya dilepas
+        ketik(dp("pi", 1, "nomor"), "PI-B2", "input", "change");
+        eq(barang(), "PI-B2:5 | :", "nomor PI diubah ikut:");
+        eq(pilih().value, "PI-B2", "pilihan ikut:");
+        // Entri baru yang sempat bernomor sama tidak membawa pergi barang PI itu
+        $('#dokPelengkapIsi [data-dp="pi"] [data-dp-tambah]').click();
+        ["P", "PI-B2", "PI-B2X"].forEach((v) => ketik(dp("pi", 2, "nomor"), v));
+        eq(barang(), "PI-B2:5 | :", "entri lain bernomor sama:");
+        $('#dokPelengkapIsi [data-dp="pi"] .dp-baris[data-i="2"] [data-dp-hapus]').click();
+        eq(barang(), "PI-B2:5 | :", "entri lain dihapus:");
+        $('#dokPelengkapIsi [data-dp="pi"] .dp-baris[data-i="1"] [data-dp-hapus]').click();
+        eq(barang(), ": | :", "PI dihapus dilepas:");
+        // Barang BARU (kode kondisi 1) tidak memakai PI; label ikut kode kondisinya
+        tombol(1).click();
+        const kosong = () => $('select[data-fac="piNomor"][data-idx="1"] option[value=""]').textContent;
+        eq(kosong(), "Tidak Menggunakan PI", "barang baru:");
+        ketik($('#itemTableBody tr[data-idx="1"]:not(.item-fac-row) select[data-f="kondisiBarang"]'), "2", "input", "change");
+        eq(kosong(), "— Pilih PI —", "kondisi diubah ke bukan baru:");
+        // Nomor PI yang tidak ada di daftar tetap tampil
+        w.eval('draftItems[1].piNomor = "PI-LAMA"');
+        w.renderItemTable();
+        eq($('select[data-fac="piNomor"][data-idx="1"]').selectedOptions[0].textContent, "PI-LAMA (tidak ada di daftar PI)", "nomor di luar daftar:");
+        // Kolom barang dua arah
+        const row = w.itemToRow({ namaBarang: "X", piNomor: " PI-A ", piNoItem: " 7 " }, "s1");
+        eq([row.pi_nomor, row.pi_no_item].join("|"), "PI-A|7", "ke kolom:");
+        const it = w.rowToItem(row);
+        eq([it.piNomor, it.piNoItem].join("|"), "PI-A|7", "dari kolom:");
+        eq(JSON.stringify([w.rowToItem({ nama_barang: "X" }).piNomor, w.newItem("import").piNoItem]), '["",""]', "barang lama & baru:");
+        // Impor: PI barang dari berkas, atau diwarisi barang lama; No. item hanya selama PI-nya sama
+        const lama = [Object.assign(w.newItem("import"), { namaBarang: "MESIN", piNomor: "PI-A", piNoItem: "5" })];
+        const impor = (piNomor) => { const x = Object.assign(w.newItem("import"), { namaBarang: "MESIN" }); if (piNomor === undefined) delete x.piNomor; else x.piNomor = piNomor; return w.lengkapiKodeBarang([x], lama).map((y) => y.piNomor + ":" + y.piNoItem).join(); };
+        eq([impor(undefined), impor(""), impor("PI-A"), impor("PI-B")].join(" | "), "PI-A:5 | PI-A:5 | PI-A:5 | PI-B:", "impor:");
+        // Buku Export: tanpa PI barang
+        tulis("activeMode", "export");
+        w.renderFormPage(null);
+        w.eval('draftItems[0]._facOpen = true; draftItems[0].piNomor = "PI-A"');
+        w.renderItemTable();
+        eq([!!$(".item-fac-pi"), tombol(0).textContent.trim()].join(" | "), "false | Fasilitas", "buku Export:");
+      } finally {
+        tulis("activeMode", simpanMode);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("sebelum migration-dokumen-pelengkap.sql: PI barang ditinggal & diberi tahu; kolom opsional yang kosong di semua barang tidak dikirim", async () => {
+      const kiriman = [];
+      const kirim = (rows) => {
+        kiriman.push(rows.map((r) => Object.assign({}, r)));
+        const k = ["pi_nomor", "pi_no_item"].find((x) => rows.some((r) => x in r));
+        return Promise.resolve({ error: k ? { code: "PGRST204", message: `Could not find the '${k}' column of 'shipment_items' in the schema cache` } : null });
+      };
+      $("#toastMsg").textContent = "";
+      await w.sisipkanBarang([{ namaBarang: "A", kondisiBarang: "1", piNomor: "PI-A", piNoItem: "5" }], "s1", kirim);
+      eq(kiriman.length, 3, "dua kolom ditolak satu per satu:");
+      eq([kiriman[2][0].nama_barang, kiriman[2][0].kode_kondisi_barang, "pi_nomor" in kiriman[2][0]].join(" | "), "A | 1 | false", "barang tetap tersimpan:");
+      const pesan = $("#toastMsg").textContent;
+      if (!/PI barang & No\. item di PI belum/.test(pesan) || !/migration-dokumen-pelengkap\.sql/.test(pesan) || /migration-barang-ceisa/.test(pesan)) throw new Error("pemberitahuan: " + pesan);
+      // Kosong di semua barang: tidak dikirim, tidak ditolak, tidak diberi tahu
+      kiriman.length = 0;
+      $("#toastMsg").textContent = "";
+      await w.sisipkanBarang([{ namaBarang: "A" }, { namaBarang: "B" }], "s1", kirim);
+      eq(kiriman.length, 1, "sekali kirim:");
+      eq(["pi_nomor", "pi_no_item", "kode_kondisi_barang", "kode_negara_asal"].filter((k) => k in kiriman[0][0]).join(","), "", "kolom kosong tidak dikirim:");
+      eq($("#toastMsg").textContent, "", "tanpa pemberitahuan:");
+    });
+
+    t("jenis barang SPAREPART: ejaan SPARE PART / SPARE-PARTS dibakukan, label Inggris juga SPAREPART", () => {
+      eq(["SPARE PART", "spare-parts", "Spareparts", " sparepart ", "Spare  Part", "BAHAN BAKU"].map((v) => w.normalisasiJenisBarang(v)).join(","), "SPAREPART,SPAREPART,SPAREPART,SPAREPART,SPAREPART,BAHAN BAKU", "dibakukan:");
+      eq(w.rowToItem({ nama_barang: "X", jenis_barang: "Spare Part" }).jenisBarang, "SPAREPART", "data lama:");
+      eq(w.jenisOptionsUntuk("SPARE PART").filter((o) => /SPARE/.test(o)).join(","), "SPAREPART", "tanpa pilihan ganda:");
+      try {
+        w.setLang("en");
+        eq(w.labelJenisBarang("SPAREPART"), "SPAREPART", "EN:");
+      } finally {
+        w.setLang("id");
+      }
+    });
+
+    t("Masterlist: dokumen tiap PIB (PI, LS, SKB PPh, SKB PPN, Masterlist 912) langsung dari jadwal per nomor aju; barang BARU = Tidak Menggunakan PI; isian sendiri didahulukan", () => {
+      const simpan = w.eval("JSON.stringify({ imp: data.import, dok: mstDok, real: mstRealisasiDb, baris: mstBarisDb, kolom: [...mstKolomBelumAda] })");
+      try {
+        const sk = (jenis, nomor, tanggal) => ({ jenis, jenisLainnya: "", nomor, tanggal });
+        w.__jadwalMst = [{
+          id: "jm1", mode: "import", party: "HWACHEON", invoice: "HW-1", noAju: "000020POL85820261015024099",
+          dokPelengkap: { pi: [{ nomor: "PI-1", tanggal: "2026-01-22" }, { nomor: "PI-2", tanggal: "2026-02-01" }], ls: [{ nomor: "LS-1", tanggal: "2026-09-23" }], polis: [], lain: [] },
+          items: [
+            Object.assign(w.newItem("import"), { namaBarang: "5-AXIS MACHINING CENTER", merek: "DOOSAN", kondisiBarang: "2", piNomor: "PI-2", piNoItem: "5", skb: [sk("Masterlist", "M-1", "2025-03-11"), sk("PPH", "PPH-1", "2026-09-02"), sk("PPN", "PPN-1", "2026-09-03")] }),
+            Object.assign(w.newItem("import"), { namaBarang: "HYDRAULIC PRESS", kondisiBarang: "1", skb: [sk("Masterlist", "M-1", "2025-03-11")] }),
+          ],
+        }];
+        w.eval('data.import = window.__jadwalMst; mstDok = { sk_no: "SK-9", sk_date: "2025-01-01" }; mstKolomBelumAda.clear();');
+        const ringkas = (dok) => baca("MST_DOK").map((k) => k + "=" + (k === "pi" && dok.tanpaPi ? "TANPA" : (dok[k] || []).map((d) => [d.nomor, d.tanggal, d.noItem].filter(Boolean).join("@")).join("+"))).join(" ");
+        const pib = (aju, dokumen) => ({ aju, tanggal: null, dokumen: dokumen || null });
+        // Ekor nomor aju cukup; barang dicocokkan menurut uraiannya
+        eq(ringkas(w.mstDokumenPib(pib("4099"), { nama: "5-AXIS MACHINING CENTER" })),
+          "pi=PI-2@2026-02-01@5 ls=LS-1@2026-09-23 pph=PPH-1@2026-09-02 ppn=PPN-1@2026-09-03 masterlist=M-1@2025-03-11", "barang bukan baru, PI barangnya:");
+        // Barang BARU: tidak memakai PI; SKB-nya sendiri kosong -> SKB barang lain di jadwal itu
+        eq(ringkas(w.mstDokumenPib(pib("4099"), { nama: "HYDRAULIC PRESS" })),
+          "pi=TANPA ls=LS-1@2026-09-23 pph=PPH-1@2026-09-02 ppn=PPN-1@2026-09-03 masterlist=M-1@2025-03-11", "barang baru:");
+        // Isian sendiri didahulukan, per dokumen
+        const sendiri = w.mstDokumenPib(pib("4099", { pi: { nomor: "PI-X", tanggal: "", noItem: "7" } }), { nama: "HYDRAULIC PRESS" });
+        eq([ringkas(sendiri), [...sendiri.sendiri].join()].join(" | "), "pi=PI-X@7 ls=LS-1@2026-09-23 pph=PPH-1@2026-09-02 ppn=PPN-1@2026-09-03 masterlist=M-1@2025-03-11 | pi", "isian sendiri:");
+        // Tanpa jadwal: hanya Masterlist dari dokumen masterlist halaman ini
+        eq(ringkas(w.mstDokumenPib(pib("9999"), { nama: "X" })), "pi= ls= pph= ppn= masterlist=SK-9@2025-01-01", "tanpa jadwal:");
+        // Tampilan rincian
+        const html = w.mstDokPibHtml(w.mstDokumenPib(pib("4099"), { nama: "HYDRAULIC PRESS" }), "");
+        if (!/Tidak Menggunakan PI/.test(html) || !/<dt>Masterlist \(912\)<\/dt>/.test(html) || !/text-nowrap">11-03-2025/.test(html)) throw new Error("rincian: " + html);
+        // Penyimpanan: hanya isian yang ada; kolom pibs membawa dokumen; tanpa kolom pibs ditolak (bukan dibuang)
+        eq(JSON.stringify(w.mstRapikanDokumen({ pi: { nomor: " A ", tanggal: "", noItem: "" }, ls: { nomor: "", tanggal: "" } })), '{"pi":{"nomor":"A","tanggal":"","noItem":""}}', "rapikan:");
+        eq(w.mstRapikanDokumen({ pi: {}, ls: { nomor: " " } }), null, "kosong -> null:");
+        const kolom = w.mstKolomPib([{ aju: "4099", tanggal: "2026-10-15", dokumen: { ls: { nomor: "LS-9", tanggal: "" } } }]);
+        eq(JSON.stringify(kolom.pibs), '[{"aju_ref":"4099","pib_date":"2026-10-15","dokumen":{"ls":{"nomor":"LS-9","tanggal":""}}}]', "kolom pibs:");
+        eq(JSON.stringify(w.mstPibs({ pibs: kolom.pibs })[0].dokumen), '{"ls":{"nomor":"LS-9","tanggal":""}}', "dibaca kembali:");
+        eq([w.eval("MST_BERISI.pibs")(kolom.pibs), w.eval("MST_BERISI.pibs")([{ aju_ref: "1" }])].join(","), "true,false", "dokumen tidak boleh hilang tanpa kolom pibs:");
+        // Excel Sheet1: satu kolom per dokumen, teks tanpa kembar
+        w.eval(`mstBarisDb = [{ id: "b1", no: 1, description: "HYDRAULIC PRESS", quota: 2, uom: "NIU" }];
+          mstRealisasiDb = [{ id: "r1", item_id: "b1", qty: 1, pibs: [{ aju_ref: "4099", pib_date: "2026-10-15" }, { aju_ref: "9999", pib_date: null, dokumen: { pi: { nomor: "PI-LAMA", tanggal: "2025-01-02", noItem: "2" } } }] }];`);
+        eq(w.mstBarisExcel(w.mstSusun())[0].slice(14).join(" | "), "TIDAK MENGGUNAKAN PI / PI-LAMA (02-01-2025) ITEM 2 | LS-1 (23-09-2026) | PPH-1 (02-09-2026) | PPN-1 (03-09-2026) | M-1 (11-03-2025) / SK-9 (01-01-2025)", "Excel Sheet1:");
+        eq(w.mstBlokRealisasiExcel(w.mstSusun())[0].pib.map((p) => p.dok.tanpaPi + ":" + p.dok.pi.map((d) => d.nomor).join()).join(" | "), "true: | false:PI-LAMA", "Excel per PIB:");
+      } finally {
+        w.eval(`(() => { const x = ${simpan}; data.import = x.imp; mstDok = x.dok; mstRealisasiDb = x.real; mstBarisDb = x.baris; mstKolomBelumAda.clear(); x.kolom.forEach((k) => mstKolomBelumAda.add(k)); delete window.__jadwalMst; })()`);
+      }
+    });
+
+    t("Masterlist: daftar ringkas (No., Barang, Kuota, Terpakai, Sisa) + kotak rincian lewat tombol mata / klik baris -- isinya ikut data terbaru, menutup kalau barisnya hilang", () => {
+      const simpan = w.eval("JSON.stringify({ imp: data.import, dok: mstDok, real: mstRealisasiDb, baris: mstBarisDb, kolom: [...mstKolomBelumAda], termuat: mstTermuat, keadaan: mstKeadaan })");
+      const modal = w.eval("mstDetailModal");
+      const asli = { show: modal.show, hide: modal.hide, pilih: w.getSelection };
+      const jejak = [];
+      modal.show = () => jejak.push("show");
+      modal.hide = () => jejak.push("hide");
+      const klik = (el) => el.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+      const rapat = (el) => (el ? el.textContent.replace(/\s+/g, " ").trim() : null);
+      try {
+        w.__jadwalMst = [{
+          id: "jm1", mode: "import", party: "HWACHEON", invoice: "HW-1", noAju: "000020POL85820261015024099",
+          dokPelengkap: { pi: [{ nomor: "PI-1", tanggal: "2026-01-22" }], ls: [], polis: [], lain: [] },
+          items: [Object.assign(w.newItem("import"), { namaBarang: "5-AXIS MACHINING CENTER", kondisiBarang: "2", piNomor: "PI-1", piNoItem: "3", skb: [{ jenis: "Masterlist", jenisLainnya: "", nomor: "M-1", tanggal: "2025-03-11" }] })],
+        }];
+        w.eval(`data.import = window.__jadwalMst; mstDok = { sk_no: "SK-9", sk_date: "2025-01-01" }; mstKolomBelumAda.clear(); mstTermuat = true;
+          mstBarisDb = [
+            { id: "b1", no: 1, description: "5-AXIS MACHINING CENTER", specification: "BRAND DOOSAN; VC630; MV0043-000160; 53.3 KW; FOR FLOW PROSES MANUFAKTUR TREAD (CASTING MOLD)", hs_code: "8457.10.10", quota: 1, uom: "NIU", value_quota: 56286 },
+            { id: "b2", no: 2, description: "HYDRAULIC PRESS", specification: "BRAND HWACHEON; VC630", quota: 2, uom: "NIU" },
+          ];
+          mstRealisasiDb = [{ id: "r1", item_id: "b1", qty: 1, invoice_value: 14756, pibs: [{ aju_ref: "000020POL85820261015024099", pib_date: "2026-10-15" }] }];
+          Object.assign(mstKeadaan, { tampilan: "baris", halaman: 1, perHalaman: 25, jenis: null, semuaJenis: false, detail: null });`);
+        ["mstSearch", "mstStatus", "mstLini"].forEach((id) => ($("#" + id).value = ""));
+        denganPeran("exim", () => {
+          w.renderMasterlist();
+          // Depan: hanya yang perlu terlihat sekilas
+          eq([...w.document.querySelectorAll("#mstDaftar .mst-tabel thead th")].map((th) => th.textContent.trim()).join("|"), "No.|Barang|Kuota|Terpakai|Sisa|Aksi", "kolom:");
+          const b1 = $('#mstDaftar tr[data-mst-id="b1"]');
+          eq(rapat(b1.querySelector(".mst-kol-barang")), "5-AXIS MACHINING CENTER DOOSAN · VC630 · MV0043-000160 · 53.3 kW", "barang:");
+          if (/USD|8457|0099|CASTING/.test(rapat(b1))) throw new Error("rincian masih di daftar: " + rapat(b1));
+          eq(b1.querySelector(".mst-tanda-nilai").getAttribute("aria-label"), "Unit sudah habis, tapi nilai invoicenya masih kurang USD 41,530.00 dari nilai masterlist.", "status nilai = ikon berkalimat:");
+          eq([b1.querySelectorAll("[data-mst-catat]").length, $('#mstDaftar tr[data-mst-id="b2"] [data-mst-catat]') != null].join(","), "0,true", "Catat hanya bila masih bersisa:");
+          // Tombol mata
+          klik(b1.querySelector('button[data-mst-detail="b:b1"]'));
+          eq([baca("mstKeadaan.detail"), jejak.join()].join(" | "), "b:b1 | show", "tombol mata:");
+          eq(rapat($("#mstDetailJudul")), "No. 1 5-AXIS MACHINING CENTER", "judul:");
+          eq(rapat($("#mstDetailSub")), "DOOSAN · VC630 · MV0043-000160 · 53.3 kW", "sub:");
+          const isi = $("#mstDetailIsi");
+          eq([...isi.querySelectorAll(".mst-ringkas-sel")].map(rapat).join(" | "), "Kuota 1 NIU | Terpakai 1 | Sisa 0", "angka ringkas:");
+          eq([...isi.querySelectorAll(".mst-rinci-kepala p")].map(rapat).join(" | "), "8457.10.10 | TREAD (CASTING MOLD) | BRAND DOOSAN; VC630; MV0043-000160; 53.3 KW; FOR FLOW PROSES MANUFAKTUR TREAD (CASTING MOLD)", "HS Code, lini, spesifikasi:");
+          if (!/56,286\.00/.test(rapat(isi.querySelector(".mst-rinci-nilai")))) throw new Error("nilai USD tidak di rincian");
+          const aju = isi.querySelector(".mst-rinci-aju [data-mst-jadwal]");
+          eq([aju && aju.dataset.mstJadwal, rapat(aju)].join(" | "), "jm1 | 000020POL85820261015024099", "nomor aju lengkap, bertaut ke jadwalnya:");
+          if (!/PI-1/.test(rapat(isi.querySelector(".mst-dokpib"))) || !isi.querySelector("[data-mst-dok]")) throw new Error("dokumen PIB / Atur dokumen tidak di rincian");
+          eq([...$("#mstDetailAksi").querySelectorAll("button")].map((x) => Object.keys(x.dataset)[0]).join(","), "mstHapusBaris,mstUbahBaris", "tombol kaki (sisa 0: tanpa Catat):");
+          // Data berubah selagi kotak terbuka: isinya ikut
+          w.eval('mstRealisasiDb[0].notes = "CATATAN BARU"; renderMasterlist();');
+          if (!/CATATAN BARU/.test(rapat($("#mstDetailIsi")))) throw new Error("rincian tidak ikut data terbaru");
+          // Klik barisnya sendiri (bukan tombol) juga membuka; teks yang diseleksi tidak
+          w.eval('mstKeadaan.detail = null;');
+          jejak.length = 0;
+          const b2 = $('#mstDaftar tr[data-mst-id="b2"]');
+          w.getSelection = () => ({ toString: () => "HYDRAULIC" });
+          klik(b2.querySelector(".mst-nama"));
+          eq(jejak.join(), "", "menyeleksi teks:");
+          w.getSelection = asli.pilih;
+          klik(b2.querySelector(".mst-nama"));
+          eq([baca("mstKeadaan.detail"), jejak.join()].join(" | "), "b:b2 | show", "klik baris:");
+          eq([...$("#mstDetailAksi").querySelectorAll("button")].map((x) => Object.keys(x.dataset)[0]).join(","), "mstHapusBaris,mstUbahBaris,mstCatat", "masih bersisa: ada Catat realisasi:");
+          // Tombol Catat di baris tidak ikut membuka rincian
+          jejak.length = 0;
+          w.__catat = w.mstBukaRealisasi;
+          w.mstBukaRealisasi = () => jejak.push("catat");
+          try {
+            klik(b2.querySelector("[data-mst-catat]"));
+          } finally {
+            w.mstBukaRealisasi = w.__catat;
+          }
+          eq(jejak.join(), "catat", "tombol Catat di baris:");
+          // Barisnya terhapus selagi kotak terbuka -> kotak menutup
+          w.eval('mstBarisDb = mstBarisDb.filter((b) => b.id !== "b2"); renderMasterlist();');
+          eq(jejak.join(), "catat,hide", "baris hilang -> kotak ditutup:");
+          // Susunan per PIB: tombol mata membuka baris-baris yang direalisasikan PIB itu
+          jejak.length = 0;
+          w.eval('mstKeadaan.tampilan = "pib"; renderMasterlist();');
+          klik($('#mstDaftar button[data-mst-detail^="p:"]'));
+          eq(jejak.join(), "show", "per PIB:");
+          eq(rapat($("#mstDetailJudul")), "PIB 000020POL85820261015024099", "judul PIB:");
+          eq(rapat($("#mstDetailSub")), "15-10-2026 · HWACHEON · HW-1", "sub PIB:");
+          eq([...$("#mstDetailIsi").querySelectorAll("tbody tr")].map((tr) => rapat(tr.querySelector(".mst-nama"))).join(), "5-AXIS MACHINING CENTER", "baris PIB:");
+          eq([...$("#mstDetailAksi").querySelectorAll("button")].map((x) => Object.keys(x.dataset)[0]).join(","), "mstTanggalPib,mstJadwal", "tombol kaki PIB:");
+        });
+        // Yang hanya membaca: tanpa tombol pengubah di kaki kotak
+        denganPeran("finance", () => {
+          w.eval('mstKeadaan.tampilan = "baris"; renderMasterlist();');
+          klik($('#mstDaftar button[data-mst-detail="b:b1"]'));
+          eq($("#mstDetailAksi").innerHTML, "", "peran baca:");
+        });
+        // Pindah halaman menutup kotaknya; tertutup melepas keadaannya
+        jejak.length = 0;
+        w.dispatchEvent(new w.Event("hashchange"));
+        eq(jejak.join(), "hide", "hashchange:");
+        $("#mstDetailModal").dispatchEvent(new w.Event("hidden.bs.modal"));
+        eq(baca("mstKeadaan.detail"), null, "keadaan dilepas:");
+      } finally {
+        modal.show = asli.show;
+        modal.hide = asli.hide;
+        w.getSelection = asli.pilih;
+        w.eval(`(() => { const x = ${simpan}; data.import = x.imp; mstDok = x.dok; mstRealisasiDb = x.real; mstBarisDb = x.baris; mstTermuat = x.termuat; Object.assign(mstKeadaan, x.keadaan, { detail: null }); mstKolomBelumAda.clear(); x.kolom.forEach((k) => mstKolomBelumAda.add(k)); delete window.__jadwalMst; delete window.__catat; })()`);
+      }
+    });
+
+    t("jendela terbagi dua / tablet: Masterlist & No. Dokumen menyesuaikan lebar panelnya (container query), bukan lebar layar", () => {
+      const bersih = (f) => fs.readFileSync(path.join(ROOT, "css", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      const blok = (css, kepala) => {
+        const i = css.indexOf(kepala);
+        if (i < 0) throw new Error("tidak ada: " + kepala);
+        let dalam = 0;
+        for (let k = css.indexOf("{", i); k < css.length; k++) {
+          if (css[k] === "{") dalam++;
+          else if (css[k] === "}" && !--dalam) return css.slice(i, k);
+        }
+        return "";
+      };
+      // Masterlist: panel daftar = wadah; menengah tanpa kolom Lini, sempit jadi kartu; nama tidak dipotong di tengah kata
+      const mst = bersih("masterlist.css");
+      if (!/\.mst-panel-daftar \{[^}]*container: mst-daftar \/ inline-size/.test(mst)) throw new Error("panel daftar masterlist bukan wadah");
+      const kartu = blok(mst, "@container mst-daftar (max-width: 820px)");
+      if (!/\.mst-tabel > thead \{\s*display: none;/.test(kartu)) throw new Error("panel sempit tidak jadi kartu");
+      // Rincian di kotak tersendiri (tombol mata): selayar penuh di ponsel, selebar tabel realisasi di atasnya
+      if (!/modal-fullscreen-sm-down mst-detail-dialog/.test(fs.readFileSync(path.join(ROOT, "index.html"), "utf8"))) throw new Error("kotak rincian tidak selayar penuh di ponsel");
+      if (!/@media \(min-width: 576px\) \{\s*\.mst-detail-dialog \{\s*max-width: min\(980px/.test(mst)) throw new Error("lebar kotak rincian menimpa layar penuh ponsel");
+      if (/mst-baris-rinci|is-terbuka|mst-kol-lini|mst-kol-aju/.test(mst)) throw new Error("sisa aturan rincian di dalam tabel");
+      if (!/\.mst-nama \{[^}]*overflow-wrap: break-word/.test(mst) || /\.mst-nama \{[^}]*overflow-wrap: anywhere/.test(mst)) throw new Error("nama barang masih bisa terpotong di tengah kata");
+      if (!/\.mst-rinci \{\s*container: mst-rinci \/ inline-size/.test(mst) || !blok(mst, "@container mst-rinci (max-width: 760px)")) throw new Error("rincian realisasi tidak bertumpuk saat sempit");
+      // No. Dokumen: tombol jenis dokumen berbagi rata selebar kartu; kepala riwayat terlipat; kolom aksi menempel
+      const dn = bersih("docnum.css");
+      if (!/\.docnum-shell \{[^}]*container: dn-shell \/ inline-size/.test(dn) || !/\.docnum-history \{[^}]*container: dn-riwayat \/ inline-size/.test(dn)) throw new Error("kartu / riwayat No. Dokumen bukan wadah");
+      if (/flex: 0 0 auto/.test(blok(dn, ".docnum-tab {")) || /\.docnum-tab \{\s*flex: 0 0 auto/.test(dn)) throw new Error("tombol jenis dokumen menyusut ke isinya -- sisa lebar kosong di kanan");
+      if (!/display: grid;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/.test(blok(dn, "@container dn-shell (max-width: 820px)"))) throw new Error("kartu sempit: jenis dokumen tidak 2 x 2");
+      const kepala = blok(dn, "@container dn-riwayat (max-width: 1080px)");
+      if (!/\.docnum-history-head > span \{\s*flex: 1 1 100%;\s*white-space: nowrap;/.test(kepala) || !/\.docnum-history-aksi \{\s*flex: 1 1 100%;\s*flex-wrap: wrap;/.test(kepala)) throw new Error("kepala riwayat tidak terlipat rapi");
+      if (!/\.docnum-table td\.dn-act \{\s*position: sticky;|td\.dn-act \{\s*position: sticky;\s*right: 0;/.test(blok(dn, "@container dn-riwayat (min-width: 560px)"))) throw new Error("kolom aksi tidak menempel di riwayat menengah");
+      if (/@media \(min-width: 992px\)/.test(dn)) throw new Error("kolom menempel masih menurut lebar layar");
+    });
+
+    t("tabel di wadah sempit jadi kartu berlabel: Daftar Barang & Biaya Kiriman di panel detail, Rincian Biaya, barang Surat Jalan Lokal & Surat Fungsi; labelnya ikut bahasa", () => {
+      const bersih = (f) => fs.readFileSync(path.join(ROOT, "css", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      const sel = (html, s) => { const d = w.document.createElement("div"); d.innerHTML = html; return d.querySelectorAll(s); };
+      const labelSama = (html, tabel, nama) => {
+        const th = [...sel(html, `${tabel} thead th`)].map((x) => x.textContent.trim());
+        const td = [...sel(html, `${tabel} tbody tr:first-child td`)].map((x) => x.dataset.label);
+        eq(td.join("|"), th.join("|"), nama);
+      };
+      // Panel detail: tiap sel Daftar Barang & Biaya Kiriman membawa judul kolomnya
+      const simpanLang = baca("activeLang");
+      try {
+        w.setLang("id");
+        const kiriman = { id: "k1", mode: "export", party: "A", items: [{ uraian: "TIRE MOLD", hsCode: "84807190", qty: 2, satuan: "SET", harga: 4500, netto: 100, bruto: 120 }] };
+        const detail = w.buildDetailHtml(kiriman);
+        labelSama(detail, ".detail-barang table.item-table--detail", "label sel Daftar Barang (Export, dengan CBM):");
+        if (!sel(detail, "td.db-nama").length || !sel(detail, "td.db-fasilitas").length || !sel(detail, "td.db-subtotal").length) throw new Error("sel judul/fasilitas/subtotal kartu tidak bertanda");
+        if (sel(detail, ".item-table--detail .text-center").length) throw new Error("kelas text-center Bootstrap (!important) menahan kartu tetap rata tengah");
+        const h = { baris: [{ nomor: "346/EXIM", tanggal: "2026-10-20", vendor: "FEDEX", jenis: "Billing", dibayar: 1000, lunas: true }], total: 1000, pajak: 1000, logistik: 0, belumJumlah: 0, belumNilai: 0, nilaiBarang: 0 };
+        labelSama(w.bkHtml({ id: "k1", masterBL: "MBL1" }, h), ".bk-tabel", "label sel Biaya Kiriman:");
+      } finally {
+        w.setLang(simpanLang);
+      }
+      const form = bersih("form.css");
+      // Form Daftar Barang: wadahnya hanya tabel (popover HS Code yang position: fixed di luarnya); tiap isian berlabel
+      const wadahBarang = w.document.querySelector(".barang-isi");
+      if (!wadahBarang || !wadahBarang.querySelector("table.item-table--form") || wadahBarang.contains(w.document.getElementById("hscodeLookupPop"))) throw new Error("wadah kartu Daftar Barang salah tempat");
+      if (!/\.barang-isi \{\s*container: barang-isi \/ inline-size;/.test(form) || !/@container barang-isi \(max-width: 759\.98px\) \{[\s\S]*?> thead \{\s*display: none;/.test(form)) throw new Error("Daftar Barang form tidak jadi kartu saat sempit");
+      if (/\.barang-isi table\.item-table--form > tbody > tr > td \{[^}]*display:/.test(form)) throw new Error("display sel kartu disetel -- kolom yang disembunyikan per buku bisa muncul lagi");
+      const tanpaLabel = [...w.document.querySelectorAll('#itemTableBody tr[data-idx]:not(.item-fac-row) > td:not(.hapus-col)')].filter((td) => !td.dataset.label);
+      if (!w.document.querySelector("#itemTableBody tr[data-idx]")) throw new Error("tabel barang kosong -- tidak ada yang diperiksa");
+      if (tanpaLabel.length) throw new Error("sel barang tanpa label kartu: " + tanpaLabel.map((td) => td.className || td.innerHTML.slice(0, 40)).join(" | "));
+      if (w.document.querySelector("#itemTableBody td.text-center")) throw new Error("text-center Bootstrap (!important) di sel barang menahan kartu rata tengah");
+      if (!/\.detail-barang \{\s*container: detail-barang \/ inline-size;/.test(form) || !/table\.item-table--detail \{\s*min-width: 0;/.test(form)) throw new Error("Daftar Barang panel detail masih selebar 1100px");
+      if (!/@container detail-barang \(max-width: 879\.98px\) \{[\s\S]*?thead \{\s*display: none;/.test(form)) throw new Error("Daftar Barang panel detail tidak jadi kartu saat sempit");
+      if (!/\.bk-isi \{\s*container: bk-isi \/ inline-size;/.test(bersih("system.css")) || !/class="bk-isi"/.test(w.biayaKirimanKerangka({ id: "k1" }))) throw new Error("Biaya Kiriman bukan wadah");
+      // Tabel isian No. Dokumen: wadahnya + label tiap isian
+      const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+      eq((html.match(/class="s12 tabel-isian"/g) || []).length, 3, "wadah tabel isian (Rincian Biaya, Surat Jalan Lokal, Surat Fungsi):");
+      const dn = bersih("docnum.css");
+      if (!/\.tabel-isian \{\s*container: tabel-isian \/ inline-size;/.test(dn)) throw new Error("tabel isian bukan wadah");
+      if (!/@container tabel-isian \(max-width: 859\.98px\) \{[\s\S]*?:is\(#fundLinesTable, #doLinesTable, \.sb-tabel\) \{\s*min-width: 0;/.test(dn)) throw new Error("tabel isian tetap selebar 860px di wadah sempit");
+      const simpanBaris = w.eval("JSON.stringify({ f: fundLines, d: doLines, s: suratBarang })");
+      try {
+        w.eval(`fundLines = [{ desc: "Freight", amount: "1.000", ppnRate: 11 }, { jenis: "diskon", desc: "", amount: "10", discType: "pct", ppnRate: 11 }]; renderFundLines();
+          doLines = [{ nama: "BEAD RING", qty: "10", satuan: "PCS", ket: "" }]; renderDoLines();
+          suratBarang = [{ nama: "MOLD", hs: "", fungsi: "", foto: "" }]; renderSuratBarang();`);
+        const label = (s) => [...w.document.querySelectorAll(s)].map((x) => x.dataset.label || "").join("|");
+        w.setLang("id");
+        eq(label('#fundLinesBody [data-fl="0"] td[data-label]'), "Nilai (Rp)|PPN|PPN (Rp)", "label rincian biaya:");
+        eq(label('#fundLinesBody [data-fl="1"] td[data-label]'), "Nilai (Rp)|PPN|PPN (Rp)", "label baris diskon:");
+        eq(w.document.querySelectorAll("#fundLinesBody td.fl-desc").length, 2, "uraian bertanda (judul kartu):");
+        eq(label("#doLinesBody td[data-label]"), "Qty|Satuan|Keterangan", "label barang Surat Jalan Lokal:");
+        eq(label("#suratBarangBody td[data-label]"), "Fungsi & Kegunaan|Foto", "label Surat Fungsi:");
+        w.setLang("en");
+        eq(label('#fundLinesBody [data-fl="0"] td[data-label]'), "Amount (Rp)|PPN|PPN (Rp)", "label rincian biaya sesudah ganti bahasa:");
+        eq(label("#doLinesBody td[data-label]"), "Qty|Unit|Notes", "label Surat Jalan sesudah ganti bahasa:");
+        eq(label("#suratBarangBody td[data-label]"), "Function & Use|Photo", "label Surat Fungsi sesudah ganti bahasa:");
+      } finally {
+        w.setLang(simpanLang);
+        w.eval(`(() => { const x = ${simpanBaris}; fundLines = x.f; doLines = x.d; suratBarang = x.s; renderFundLines(); renderDoLines(); renderSuratBarang(); })()`);
       }
     });
 
@@ -20611,8 +22539,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       w.mstSusun = () => [{ nilaiKuota: null, nilaiTerpakai: 0 }];
       w.mstBarisExcel = () => [[1, "VACUUM RUBBER MIXER", "8477.80.10", "SPEC", "NIU", 4, 3, 1, 7154, "2026-01-02", "", "", "", ""]];
       w.mstRingkasan = () => ({ kuota: 4, terpakai: 3, sisa: 1, nilaiKuota: 0, nilaiSisa: 0 });
+      const dokUji = (o) => Object.assign({ pi: [], ls: [], pph: [], ppn: [], masterlist: [], tanpaPi: false }, o);
       w.mstBlokRealisasiExcel = () => [{ no: 1, nama: "VACUUM RUBBER MIXER", hsCode: "8477.80.10", satuan: "NIU", qty: 3, nilai: 100, catatan: "PARSIAL",
-        pib: [{ aju: "7154", tanggal: "2026-01-02" }, { aju: "7155", tanggal: null }] }];
+        pib: [
+          { aju: "7154", tanggal: "2026-01-02", dok: dokUji({ pi: [{ nomor: "PI-1", tanggal: "2026-01-22", noItem: "5" }], pph: [{ nomor: "P1", tanggal: "2026-09-02" }, { nomor: "P2", tanggal: "2026-09-05" }], masterlist: [{ nomor: "M1", tanggal: "2025-03-11" }] }) },
+          { aju: "7155", tanggal: null, dok: dokUji({ tanpaPi: true, ls: [{ nomor: "LS-1", tanggal: "" }] }) },
+        ] }];
       w.URL.createObjectURL = () => "blob:uji";
       w.URL.revokeObjectURL = () => {};
       w.HTMLAnchorElement.prototype.click = function () {};
@@ -20625,21 +22557,21 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
         const isi = (l, r, c) => { const v = (l.sel[r + ":" + c] || {}).value; return v && typeof v === "object" && !(v instanceof w.Date) && "formula" in v ? "=" + v.formula : v instanceof w.Date || v instanceof Date ? v.toISOString().slice(0, 10) : v; };
         const baris = (l, r, n) => Array.from({ length: n }, (_, i) => isi(l, r, i + 1)).join("|");
         // Mulai di kolom A, HS CODE di samping DESCRIPTION; dari SPECIFICATION ke kanan hurufnya tetap
-        eq(baris(ws, 1, 14), "NO|DESCRIPTION|HS CODE|SPECIFICATION OF GOODS|UoM|QTTY|USED|REMAIN|PIB AJU|PIB DATE|ACTUAL QTY|VALUE (USD)|USED VALUE (USD)|REMAIN VALUE (USD)", "judul Sheet1:");
+        eq(baris(ws, 1, 19), "NO|DESCRIPTION|HS CODE|SPECIFICATION OF GOODS|UoM|QTTY|USED|REMAIN|PIB AJU|PIB DATE|ACTUAL QTY|VALUE (USD)|USED VALUE (USD)|REMAIN VALUE (USD)|PI|LS|SKB PPH|SKB PPN|MASTERLIST (912)", "judul Sheet1 (dokumen di kanan kolom lama):");
         eq(baris(ws, 2, 10), "1|VACUUM RUBBER MIXER|8477.80.10|SPEC|NIU|4|3|=F2-G2|7154|2026-01-02", "data Sheet1:");
         eq(baris(ws, 3, 11), "|||TOTAL||=SUM(F2:F2)|=SUM(G2:G2)|=SUM(H2:H2)|||=SUM(K2:K2)", "total Sheet1:");
-        eq([ws.sel["2:10"].numFmt, ws.columns.length, ws.columns[0].width, ws.columns[2].width].join(","), "dd-mm-yyyy,14,5,13", "PIB DATE bertanggal, lebar kolom (A = NO):");
-        if (Object.keys(ws.sel).concat(Object.keys(ws2.sel)).some((k) => Number(k.split(":")[1]) > 14)) throw new Error("ada sel di kanan kolom N");
+        eq([ws.sel["2:10"].numFmt, ws.columns.length, ws.columns[0].width, ws.columns[2].width].join(","), "dd-mm-yyyy,19,5,13", "PIB DATE bertanggal, lebar kolom (A = NO):");
+        if (Object.keys(ws.sel).some((k) => Number(k.split(":")[1]) > 19) || Object.keys(ws2.sel).some((k) => Number(k.split(":")[1]) > 20)) throw new Error("ada sel di kanan kolom S (Sheet1) / T (per PIB)");
         // QTTY = F, USED = G, REMAIN = H rata tengah; DESCRIPTION & SPECIFICATION rata kiri, HS CODE di tengah
         eq([6, 7, 8].map((c) => rata(1, c) + "/" + rata(2, c) + "/" + rata(3, c)).join(" "), "center/center/center center/center/center center/center/center", "QTTY, USED, REMAIN (judul/data/total):");
         eq([rata(2, 2), rata(2, 3), rata(2, 4)].join(","), "left,center,left", "DESCRIPTION, HS CODE, SPECIFICATION:");
         // Lembar per PIB: juga mulai di A dengan HS CODE; realisasi parsial digabung setinggi PIB-nya
-        eq(baris(ws2, 1, 9), "NO|DESCRIPTION|HS CODE|UoM|QTTY|VALUE (USD)|PIB AJU|PIB DATE|NOTES", "judul lembar per PIB:");
-        eq(baris(ws2, 2, 9), "1|VACUUM RUBBER MIXER|8477.80.10|NIU|3|100|7154|2026-01-02|PARSIAL", "baris PIB pertama:");
-        eq(baris(ws2, 3, 9), "||||||7155||", "baris PIB kedua:");
+        eq(baris(ws2, 1, 20), "NO|DESCRIPTION|HS CODE|UoM|QTTY|VALUE (USD)|PIB AJU|PIB DATE|PI NO|PI DATE|PI ITEM NO|LS NO|LS DATE|SKB PPH NO|SKB PPH DATE|SKB PPN NO|SKB PPN DATE|MASTERLIST (912) NO|MASTERLIST (912) DATE|NOTES", "judul lembar per PIB:");
+        eq(baris(ws2, 2, 20), "1|VACUUM RUBBER MIXER|8477.80.10|NIU|3|100|7154|2026-01-02|PI-1|2026-01-22|5|||P1 / P2|02-09-2026 / 05-09-2026|||M1|2025-03-11|PARSIAL", "baris PIB pertama + dokumennya:");
+        eq(baris(ws2, 3, 20), "||||||7155||TIDAK MENGGUNAKAN PI|||LS-1||||||||", "baris PIB kedua (barang baru tanpa PI):");
         eq(baris(ws2, 4, 6), "|TOTAL|||=SUM(E2:E3)|=SUM(F2:F3)", "total lembar per PIB:");
-        eq(ws2.gabung.join(" "), "2,1,3,1 2,2,3,2 2,3,3,3 2,4,3,4 2,5,3,5 2,6,3,6 2,9,3,9", "sel realisasi parsial yang digabung:");
-        eq([ws2.sel["2:8"].numFmt, ws2.sel["2:6"].numFmt].join(","), "dd-mm-yyyy,#,##0.00", "format tanggal & nilai per PIB:");
+        eq(ws2.gabung.join(" "), "2,1,3,1 2,2,3,2 2,3,3,3 2,4,3,4 2,5,3,5 2,6,3,6 2,20,3,20", "sel realisasi parsial yang digabung:");
+        eq([ws2.sel["2:8"].numFmt, ws2.sel["2:6"].numFmt, ws2.sel["2:10"].numFmt, ws2.sel["2:19"].numFmt, ws2.sel["2:15"].numFmt].join(","), "dd-mm-yyyy,#,##0.00,dd-mm-yyyy,dd-mm-yyyy,", "format tanggal (satu tanggal = sel tanggal), nilai:");
       } finally {
         Object.assign(w, { ExcelJS: asli.ExcelJS, mstSusun: asli.susun, mstBarisExcel: asli.baris, mstRingkasan: asli.ringkas, mstBlokRealisasiExcel: asli.blok, showToast: asli.toast });
         // Pencabut URL dipanggil sedetik kemudian: tiruannya dibiarkan kalau jsdom tidak punya aslinya
@@ -20650,9 +22582,897 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     });
   }
 
+  console.log("— KALENDER, JALUR PIB, KAPAL YANG SAMA —");
+  {
+    const padaHari = (iso, fn) => {
+      w.eval(`todayISO = () => ${JSON.stringify(iso)};`);
+      try { return fn(); } finally { w.eval(`todayISO = () => ${JSON.stringify(HARI_INI_UJI)};`); }
+    };
+    t("rincian prediksi menyebut libur, cuti bersama & pembatasan truk yang dilewati", () => pakaiKalenderAsli(() => padaHari("2026-03-10", () => {
+      const s = { mode: "import", status: "process", transport: "laut", muatan: "FCL", origin: "KRPUS", destination: "IDTPP",
+        routeType: "direct", etd: "2026-03-01", etaMode: "manual", eta: "2026-03-11", items: [],
+        docProgress: { berth: { date: "2026-03-16" } } };
+      const d = w.predictDelivery(s);
+      eq(d.date, "2026-03-30", "antar sesudah pembatasan truk Lebaran:");
+      const box = w.document.createElement("div");
+      box.innerHTML = w.predictionDetailHtml(s);
+      const catatan = [...box.querySelectorAll(".pred-step-libur")].map((x) => x.textContent.trim());
+      eq(catatan.length, 1, "satu langkah melewati hari tutup:");
+      eq(catatan[0], "melewati 8 hari tutup: cuti bersama Hari Suci Nyepi, Hari Suci Nyepi (Tahun Baru Saka 1948), cuti bersama Idulfitri 1447 H, Pembatasan truk Lebaran 2026", "isi:");
+    })));
+    t("konfirmasi PIB menanyakan Jalur; tersimpan & tampil di tooltip", async () => {
+      await denganStepper(jadwalStepper(), async (s) => {
+        w.toggleDocStep("ds1", "pib");
+        // Jalur baru ada sesudah PIB didaftarkan: tersembunyi selama statusnya Draft
+        eq($("#prompt_jalur").closest(".prompt-field").classList.contains("d-none"), true, "draft tanpa jalur:");
+        pilihStatus("ada");
+        const pilih = $("#prompt_jalur");
+        if (!pilih) throw new Error("tidak ada isian jalur");
+        eq([...pilih.options].map((o) => o.value + ":" + o.textContent).join(","), ":Belum diketahui,mita:MITA,hijau:Hijau,merah:Merah", "pilihan:");
+        eq(pilih.value, "", "bawaan:");
+        $("#prompt_tanggal").value = "2026-08-04";
+        pilih.value = "merah";
+        $("#promptOk").click();
+        eq(s().docProgress.pib.jalur, "merah", "tersimpan:");
+        eq(w.jalurOf(s()), "merah", "terbaca mesin:");
+        eq(stepperDom(s()).querySelector('[data-step="pib"]').title,
+          "Pemberitahuan Impor Barang — diterima 04-08-2026 · jalur Merah · dicatat oleh yogi", "tooltip:");
+      });
+    });
+    t("Jalur bisa diisi/dikoreksi di Billing & SPPB, disamakan ke PIB; 'Belum diketahui' tidak menghapus", async () => {
+      await denganStepper(jadwalStepper({ pib: { date: "2026-08-03", at: "2026-08-03T02:00:00Z", by: "yogi" } }), async (s) => {
+        w.toggleDocStep("ds1", "billing");
+        eq($("#prompt_jalur").value, "", "PIB tanpa jalur:");
+        $("#prompt_tanggal").value = "2026-08-04";
+        $("#prompt_jalur").value = "hijau";
+        $("#promptOk").click();
+        eq([s().docProgress.pib.jalur, s().docProgress.billing.jalur].join(","), "hijau,hijau", "billing:");
+        await new Promise((r) => setTimeout(r, 20));
+        w.toggleDocStep("ds1", "sppb");
+        eq($("#prompt_jalur").value, "hijau", "isian awal SPPB:");
+        $("#prompt_tanggal").value = "2026-08-06";
+        $("#prompt_jalur").value = "merah";
+        $("#promptOk").click();
+        eq(["pib", "billing", "sppb"].map((k) => s().docProgress[k].jalur).join(","), "merah,merah,merah", "dikoreksi di SPPB:");
+      });
+      await denganStepper(jadwalStepper({ pib: { date: "2026-08-03", jalur: "merah" } }), async (s) => {
+        w.toggleDocStep("ds1", "sppb");
+        $("#prompt_tanggal").value = "2026-08-06";
+        $("#prompt_jalur").value = "";
+        $("#promptOk").click();
+        eq([s().docProgress.pib.jalur, "jalur" in s().docProgress.sppb].join(","), "merah,false", "tidak terhapus:");
+      });
+    });
+    t("Jalur hanya ditanyakan di PIB, Billing & SPPB", () => {
+      const s = { id: "jx", mode: "import", transport: "laut", docProgress: {} };
+      const simpanData = w.eval("JSON.stringify(data)");
+      try {
+        tulis("data", { import: [s], export: [] });
+        w.eval('activeMode = "import"');
+        ["manifest", "berth", "bl"].forEach((k) => {
+          $("#promptFields").innerHTML = "";
+          w.toggleDocStep("jx", k);
+          eq(!!$("#prompt_jalur"), false, k + ":");
+        });
+        ["pib", "billing", "sppb"].forEach((k) => {
+          $("#promptFields").innerHTML = "";
+          w.toggleDocStep("jx", k);
+          eq(!!$("#prompt_jalur"), true, k + ":");
+        });
+      } finally {
+        w.eval(`data = ${simpanData};`);
+      }
+    });
+
+    /* Riwayat FCL Shanghai -> Priok dengan jalur & lama clearance tertentu */
+    const riwayatJalur = (n, jalur, clrWd) => Array.from({ length: n }, (_, i) => {
+      const berth = WD("2026-05-04", i);
+      const sppb = WD(berth, clrWd);
+      return { mode: "import", transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP", routeType: "direct",
+        etd: "2026-04-20", etaMode: "manual", eta: berth, factoryDate: WD(sppb, 1),
+        docProgress: { berth: { date: berth }, pib: { date: "2026-04-28", ...(jalur ? { jalur } : {}) }, sppb: { date: sppb } } };
+    });
+    const ctxFcl = (jalur) => w.predictionContext({ transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP",
+      docProgress: jalur ? { pib: { date: "2026-08-03", jalur } } : {} });
+    t("clearance dipelajari PER JALUR; tanpa jalur memakai seluruh riwayat", () => {
+      w.setPredictionHistory([...riwayatJalur(6, "merah", 6), ...riwayatJalur(10, "hijau", 1)]);
+      try {
+        eq(w.configuredOpsDays(ctxFcl("merah")).clearance, 4, "konfigurasi merah:");
+        eq(w.predictionOpsDays(ctxFcl("merah")).clearance, 6, "merah dari riwayat:");
+        eq(w.predictionOpsDays(ctxFcl("hijau")).clearance, 1, "hijau dari riwayat:");
+        // Jalur belum diketahui: kebanyakan hijau, merah yang jarang terbuang sebagai pencilan
+        eq(w.predictionOpsDays(ctxFcl("")).clearance, 1, "tanpa jalur:");
+      } finally {
+        w.setPredictionHistory(null);
+      }
+    });
+    t("SPPB sebelum pesawat mendarat: clearance 0, antar diukur dari kedatangan", () => {
+      const hist = Array.from({ length: 6 }, (_, i) => {
+        const ata = WD("2026-05-04", i);
+        return { mode: "import", transport: "udara", origin: "KRICN", destination: "IDCGK", routeType: "direct",
+          etd: w.addCalendarDaysISO(ata, -1), etaMode: "manual", eta: ata, factoryDate: WD(ata, 1),
+          docProgress: { berth: { date: ata }, pib: { date: w.addCalendarDaysISO(ata, -3) }, sppb: { date: w.addCalendarDaysISO(ata, -2) } } };
+      });
+      w.setPredictionHistory(hist);
+      try {
+        const ops = w.predictionOpsDays(w.predictionContext({ transport: "udara", origin: "KRICN", destination: "IDCGK" }));
+        eq(ops.clearance, 0, "clearance (dulu sampelnya dibuang):");
+        eq(ops.delivery, 1, "antar (dulu diukur dari SPPB: 2-3 hari):");
+      } finally {
+        w.setPredictionHistory(null);
+      }
+    });
+    t("jeda Manifest → Sandar dipelajari dari riwayat", () => pakaiKalenderAsli(() => {
+      const hist = Array.from({ length: 6 }, (_, i) => {
+        const berth = WD("2026-05-04", i);
+        return { mode: "import", transport: "laut", muatan: "FCL", origin: "CNSHA", destination: "IDTPP", routeType: "direct",
+          etd: "2026-04-20", etaMode: "manual", eta: berth,
+          docProgress: { manifest: { date: w.addCalendarDaysISO(berth, -2) }, berth: { date: berth } } };
+      });
+      w.setPredictionHistory(hist);
+      try {
+        eq(w.jedaManifestHari("SEA_FCL"), 2, "dipelajari:");
+        eq(w.jedaManifestHari("AIR"), 0, "udara tanpa riwayat:");
+        const info = w.arrivalInfoOf({ mode: "import", transport: "laut", muatan: "FCL", eta: "2026-08-01",
+          docProgress: { manifest: { date: "2026-08-10" } } });
+        eq([info.date, info.label].join("|"), "2026-08-12|Kedatangan (perkiraan dari Manifest) + 2 hari");
+      } finally {
+        w.setPredictionHistory(null);
+      }
+    }));
+    t("Manifest Export (outward) bukan bukti kedatangan", () => {
+      eq(w.kedatanganTercatat({ mode: "export", transport: "laut", docProgress: { manifest: { date: "2026-08-03" } } }), null);
+      // Lama transit ekspor tidak lagi terbaca nol hari dari outward manifest
+      const ex = Array.from({ length: 4 }, (_, i) => ({ mode: "export", transport: "laut", muatan: "FCL",
+        origin: "IDTPP", destination: "KRPUS", routeType: "direct", etd: WD("2026-05-04", i), etaMode: "auto",
+        docProgress: { manifest: { date: WD("2026-05-04", i) } } }));
+      w.setPredictionHistory(ex);
+      try {
+        const tr = w.predictionTransitDays(w.predictionContext({ transport: "laut", muatan: "FCL", origin: "IDTPP", destination: "KRPUS" }));
+        eq(tr.learned, null, "tidak belajar dari outward manifest:");
+      } finally {
+        w.setPredictionHistory(null);
+      }
+    });
+
+    const kapalSama = (lebih) => Object.assign({ mode: "import", status: "process", transport: "laut", muatan: "LCL",
+      origin: "KRPUS", destination: "IDTPP", routeType: "direct", vessel: "MV. SAWASDEE ALTAIR", voyage: "2541S",
+      etd: "2026-08-01", etaMode: "manual", eta: "2026-08-11", items: [], notesLog: [], docProgress: {} }, lebih);
+    t("Sandar di satu kiriman = kedatangan kiriman lain di kapal & voyage yang sama", () => {
+      const A = kapalSama({ id: "ksA", party: "PT A", docProgress: { berth: { date: "2026-08-12" } } });
+      const B = kapalSama({ id: "ksB", party: "PT B", origin: "CNSHA", etd: "2026-08-03", vessel: "Sawasdee Altair", voyage: "V.2541S" });
+      w.setPredictionHistory([A, B]);
+      try {
+        const info = w.arrivalInfoOf(B);
+        eq([info.date, info.kind, info.confirmed].join("|"), "2026-08-12|sekapal|true", "kedatangan:");
+        eq(info.label, "Sandar (kapal & voyage yang sama)", "label:");
+        const d = w.predictDelivery(B);
+        eq([d.base, d.confidence.reasons.some((r) => /Kedatangan sudah dikonfirmasi/.test(r.text))].join("|"), "2026-08-12|true", "delivery:");
+        eq(w.kedatanganSekapal({ ...B, voyage: "2542S" }), null, "voyage beda:");
+        eq(w.kedatanganSekapal({ ...B, routeType: "transit" }), null, "rute transit:");
+        eq(w.kedatanganSekapal({ ...B, destination: "IDSUB" }), null, "pelabuhan beda:");
+        eq(w.kedatanganSekapal({ ...B, voyage: "", etd: "2026-08-20" }), null, "tanpa voyage, ETD jauh:");
+        eq(w.kedatanganSekapal({ ...B, eta: "2026-09-15" }), null, "jauh dari ETA sendiri:");
+        eq(w.kedatanganSekapal({ ...B, vessel: "FEDEX", voyage: "2541S" }), null, "kurir:");
+        // Manifest kapal yang sama jadi batas bawah, belum kepastian
+        const C = kapalSama({ id: "ksC", docProgress: { manifest: { date: "2026-08-12" } } });
+        w.setPredictionHistory([C, B]);
+        const lemah = w.arrivalInfoOf(B);
+        eq([lemah.date, lemah.confirmed, lemah.label].join("|"),
+          "2026-08-12|false|Kedatangan (perkiraan dari Manifest) · kapal yang sama", "manifest sekapal:");
+      } finally {
+        w.setPredictionHistory(null);
+      }
+    });
+    t("uji mundur tidak mengintip Sandar kapal yang sama dari masa depan", () => {
+      // B diuji dengan riwayat sebelum ETD-nya: Sandar A (sesudahnya) tidak boleh dipakai
+      const A = kapalSama({ id: "ksA", docProgress: { berth: { date: "2026-08-12" } } });
+      const B = kapalSama({ id: "ksB", etd: "2026-08-03", origin: "CNSHA" });
+      const uji = w.siapkanUjiMundur([A, B]);
+      eq(uji.fakta.find((f) => f.s.id === "ksB").tiba, "2026-08-12", "kenyataan B dari kapal yang sama:");
+      w.eval("PREDICTION_HISTORY_OVERRIDE = []");
+      try {
+        eq(w.kedatanganSekapal(B), null, "riwayat saringan kosong:");
+      } finally {
+        w.eval("PREDICTION_HISTORY_OVERRIDE = null");
+      }
+    });
+    t("konfirmasi Sandar ikut memperbarui & menyimpan kiriman lain di kapal yang sama", async () => {
+      const simpan = { data: w.eval("JSON.stringify(data)"), mode: baca("activeMode"), prof: w.eval("JSON.stringify(authState.profile || null)") };
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        tulis("data", { import: [kapalSama({ id: "ksA", party: "PT A" }), kapalSama({ id: "ksB", party: "PT B", origin: "CNSHA", etd: "2026-08-03" })], export: [] });
+        w.eval('activeMode = "import"');
+        w.resetPredictionLearning();
+        w.applyPredictionToAll(baca("data").import);
+        const sebelum = baca("data").import[1].actual;
+        jejakUpdate.length = 0;
+        w.toggleDocStep("ksA", "berth");
+        $("#prompt_tanggal").value = "2026-08-14";
+        $("#promptOk").click();
+        await new Promise((r) => setTimeout(r, 40));
+        const b = baca("data").import[1];
+        eq(w.arrivalInfoOf(b).date, "2026-08-14", "kedatangan B:");
+        if (b.actual === sebelum) throw new Error("Estimated Delivery B tidak bergerak: " + b.actual);
+        eq(jejakUpdate.some((u) => u.id === "ksB" && u.row && u.row.actual === b.actual), true, "B disimpan:");
+        if (!/1 kiriman lain di kapal yang sama ikut diperbarui/.test($("#toastMsg").textContent)) throw new Error("toast: " + $("#toastMsg").textContent);
+      } finally {
+        await new Promise((r) => setTimeout(r, 30));
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.prof};`);
+        w.resetPredictionLearning();
+        w.render();
+      }
+    });
+
+    const dasarDelay = { mode: "import", status: "process", transport: "laut", muatan: "FCL", origin: "KRPUS",
+      destination: "IDTPP", routeType: "direct", items: [], notesLog: [], docProgress: {} };
+    const daftarDelay = [
+      { ...dasarDelay, id: "d1", vessel: "HMM MIR", eta: "2026-07-01", etd: "2026-06-21", docProgress: { berth: { date: "2026-07-04" } } },
+      { ...dasarDelay, id: "d2", vessel: "HMM MIR", eta: "2026-07-10", etd: "2026-06-30", etaUpdate: "2026-07-15", status: "delayed" },
+      { ...dasarDelay, id: "d3", vessel: "ONE APUS", eta: "2026-07-20", etd: "2026-07-10", factoryDate: "2026-07-23" },
+      { ...dasarDelay, id: "d4", vessel: "ONE APUS", eta: "2026-07-25", etd: "2026-07-15", docProgress: { berth: { date: "2026-07-24" } } },
+      { ...dasarDelay, id: "d5", vessel: "MSC ANNA", eta: "2026-08-30", etd: "2026-08-20" },
+      { ...dasarDelay, id: "d6", transport: "udara", muatan: "", vessel: "", voyage: "KE627", origin: "KRICN", destination: "IDCGK",
+        eta: "2026-07-02", etd: "2026-07-01", docProgress: { berth: { date: "2026-07-03" } } },
+      { ...dasarDelay, id: "d7", vessel: "HMM MIR", eta: "2025-06-01", etd: "2025-05-20", docProgress: { berth: { date: "2025-06-20" } } },
+    ];
+    t("rata-rata delay kapal: dari jadwal rencana, per moda & pelayaran", () => {
+      const r = w.ringkasDelayKapal(daftarDelay, { hariIni: HARI_INI_UJI });
+      // Laut: +3 (Berths), +5 (ETA revisi lewat), 0 (selesai tanpa catatan), -1 (lebih awal);
+      // jadwal yang belum jatuh tempo & yang lebih dari 12 bulan tidak ikut
+      eq([r.laut.n, r.laut.telat, r.laut.rataTelat, r.laut.rataSemua, r.laut.tepat, r.laut.maks].join("|"), "4|2|4|2|50|5", "laut:");
+      eq([r.udara.n, r.udara.telat, r.udara.rataTelat].join("|"), "1|1|1", "udara:");
+      const hmm = w.detectCarrier({ transport: "laut", vessel: "HMM MIR" });
+      eq(r.carrier.map((c) => c.nama + ":" + c.rataTelat + ":" + c.telat + "/" + c.n).join(","), hmm.code + ":4:2/2", "pelayaran:");
+      // Export: keberangkatan dari Sailing/ATD atau ETD revisi
+      const ex = [
+        { mode: "export", transport: "laut", etd: "2026-07-01", docProgress: { sailing: { date: "2026-07-03" } } },
+        { mode: "export", transport: "laut", etd: "2026-07-05", etdUpdate: "2026-07-06", docProgress: {} },
+        { mode: "export", transport: "laut", etd: "2026-07-07", docProgress: {} },
+      ];
+      const r2 = w.ringkasDelayKapal(ex, { basis: "berangkat", hariIni: HARI_INI_UJI });
+      eq([r2.basis, r2.laut.n, r2.laut.telat, r2.laut.rataTelat].join("|"), "berangkat|3|2|1.5", "export:");
+    });
+    t("Ringkasan: panel Pantauan delay menampilkan rata-rata delay kapal", () => {
+      const simpan = { data: w.eval("JSON.stringify(data)"), mode: baca("activeMode"), lang: baca("activeLang") };
+      try {
+        tulis("data", { import: daftarDelay, export: [] });
+        w.eval('activeMode = "import"; activeLang = "id"');
+        w.renderDelayWatch();
+        const box = $("#ovDelay");
+        const teks = box.textContent.replace(/\s+/g, " ");
+        if (!/Rata-rata delay kapal · 12 bulan/.test(teks)) throw new Error("judul: " + teks);
+        const laut = [...box.querySelectorAll(".ov-delay-rata .stat-line")][0];
+        eq(laut.querySelector(".stat-line-value").textContent.trim(), "+4 hari", "nilai laut:");
+        eq(laut.querySelector(".acc-detail").textContent.trim(), "2 dari 4 kiriman telat · tepat jadwal 50% · paling lama 5 hari", "rincian laut:");
+        // Tanpa jadwal yang sudah lewat: tidak ada bagian rata-rata
+        tulis("data", { import: [daftarDelay[4]], export: [] });
+        w.renderDelayWatch();
+        eq(!!$("#ovDelay .ov-delay-rata"), false, "tanpa data:");
+        eq(!!$("#ovDelay .panel-empty"), true, "keadaan kosong:");
+      } finally {
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; activeLang = ${JSON.stringify(simpan.lang)};`);
+      }
+    });
+  }
+
+  {
+    console.log("— LAMPIRAN, DRAFT/ASLI, LARTAS & COO, IMPOR CEISA, DIBUTUHKAN DI PABRIK —");
+    const tunggu = (ms) => new Promise((r) => setTimeout(r, ms || 0));
+    const berkasUji = (nama, tipe) => new w.File(["isi berkas uji"], nama, { type: tipe || "application/pdf" });
+    const pilihBerkas = (input, files) => {
+      Object.defineProperty(input, "files", { configurable: true, value: files });
+      input.dispatchEvent(new w.Event("change", { bubbles: true }));
+    };
+    const lampiranLama = (path, nama, versi) => Object.assign({ path, nama, ukuran: 2048, tipe: "application/pdf", at: "2026-08-02T03:00:00.000Z", by: "rina" }, versi ? { versi } : {});
+    const namaChip = (wadah) => [...wadah.querySelectorAll(".berkas-chip")].map((c) => c.dataset.berkasJenis + ":" + c.querySelector(".berkas-buka").textContent.trim()).join(",");
+    const kosongkanJejak = () => {
+      jejakStorage.unggah.length = 0;
+      jejakStorage.hapus.length = 0;
+      jejakStorage.gagalUnggah.clear();
+    };
+
+    t("stepper: draft digambar jam pasir, dihitung terkumpul, tidak dilaporkan kurang; lampiran berhitung di pojok", () => {
+      const s = { id: "d1", mode: "import", transport: "laut", docProgress: {
+        cipl: { at: "2026-08-05T03:00:00Z", by: "yogi", date: "2026-08-05", draft: true },
+        bl: { at: "2026-08-07T03:00:00Z", by: "yogi", date: "2026-08-07", tglDraft: "2026-08-02", berkas: [lampiranLama("d1/bl/a-BL.pdf", "BL.pdf", "asli")] },
+      } };
+      const div = stepperDom(s);
+      const cipl = div.querySelector('[data-step="cipl"]');
+      eq([cipl.classList.contains("is-draft"), cipl.classList.contains("is-done"), !!cipl.querySelector(".bi-hourglass-split")].join(","), "true,true,true", "draft:");
+      eq(cipl.title, "Commercial Invoice & Packing List — draft diterima 05-08-2026 · menunggu asli · dicatat oleh yogi", "tooltip draft:");
+      const bl = div.querySelector('[data-step="bl"]');
+      eq([bl.classList.contains("is-draft"), !!bl.querySelector(".bi-check-lg")].join(","), "false,true", "asli:");
+      eq(bl.title, "Bill of Lading — diterima 07-08-2026 (draft 02-08-2026) · 1 lampiran · dicatat oleh yogi", "tooltip asli:");
+      eq(bl.querySelector(".docstep-lampir").textContent.trim(), "1", "jumlah lampiran:");
+      eq(div.querySelector(".docsteps-count").textContent, "2 / 9", "hitungan:");
+      eq(div.querySelector(".docsteps-draft").textContent.trim(), "1 draft", "penanda draft:");
+      eq(w.draftDocs(s).join(","), "CI/PL", "draftDocs:");
+      eq(w.missingDocs(s).includes("CI/PL"), false, "bukan berkas kurang:");
+    });
+
+    t("kotak tahap: draft dinaikkan ke Asli -- tanggal draft disimpan, lampiran tetap; Batalkan tahap ikut menghapus lampiran", async () => {
+      kosongkanJejak();
+      const lama = lampiranLama("ds1/bl/a-BL-draft.pdf", "BL-draft.pdf", "draft");
+      await denganStepper(jadwalStepper({ bl: { at: "2026-08-02T03:00:00Z", by: "rina", date: "2026-08-02", draft: true, berkas: [lama] } }), async (s) => {
+        w.toggleDocStep("ds1", "bl");
+        eq($("#promptTitle").textContent, "Tahap B/L", "judul:");
+        eq([$("#prompt_pilih").value, $("#prompt_tanggal").value].join("|"), "draft|2026-08-02", "isian tersimpan:");
+        if (!/^Draft diterima 02-08-2026 · dicatat oleh rina\. Begitu yang asli datang/.test($("#promptDesc").textContent)) throw new Error("keterangan: " + $("#promptDesc").textContent);
+        eq($("#promptAksiKiri").classList.contains("d-none"), false, "tombol Batalkan tahap:");
+        eq(namaChip($("#prompt_berkas")), "lama:BL-draft.pdf", "lampiran lama:");
+        pilihStatus("ada");
+        eq([$('label[for="prompt_tanggal"]').textContent, $("#prompt_tanggal").value].join("|"), "Tanggal asli diterima|" + HARI_INI_UJI, "tanggal asli bawaan:");
+        isiTanggal("2026-08-08");
+        const e = s().docProgress.bl;
+        eq([e.date, e.tglDraft, !!e.draft, e.by, e.berkas.map((b) => b.nama + ":" + b.versi).join("")].join("|"), "2026-08-08|2026-08-02|false|yogi|BL-draft.pdf:draft", "dinaikkan:");
+        await tunggu(20);
+        // Batalkan tahap: konfirmasi menyebut lampirannya, lalu entri & berkasnya hilang
+        w.toggleDocStep("ds1", "bl");
+        $("#promptAksiKiri").click();
+        if (!/Batalkan konfirmasi B\/L\? 1 lampiran berkasnya ikut dihapus\./.test($("#confirmMessage").textContent)) throw new Error("konfirmasi: " + $("#confirmMessage").textContent);
+        $("#confirmActionBtn").click();
+        await tunggu(20);
+        eq("bl" in s().docProgress, false, "dibatalkan:");
+        eq(jejakStorage.hapus.join(","), lama.path, "lampiran dihapus:");
+      });
+    });
+
+    t("kotak tahap: lampiran baru diunggah saat Simpan (versinya mengikuti status); gagal unggah = kotak tetap terbuka, tidak ada yang tersimpan", async () => {
+      kosongkanJejak();
+      await denganStepper(jadwalStepper(), async (s) => {
+        w.toggleDocStep("ds1", "coo");
+        eq($("#prompt_pilih").value, "draft", "COO dibuka sebagai draft:");
+        pilihBerkas($('#prompt_berkas input[type="file"]'), [berkasUji("COO draft.pdf")]);
+        eq(namaChip($("#prompt_berkas")), "baru:COO draft.pdf", "menunggu Simpan:");
+        eq($("#prompt_berkas .berkas-versi").textContent, "Draft", "versi mengikuti status:");
+        eq(jejakStorage.unggah.length, 0, "belum diunggah sebelum Simpan:");
+        $("#prompt_tanggal").value = "2026-08-05";
+        $("#promptOk").click();
+        eq($("#promptOk").disabled, true, "terkunci selama mengunggah:");
+        await tunggu(20);
+        const e = s().docProgress.coo;
+        eq([e.draft, e.date, e.berkas.length, e.berkas[0].versi, e.berkas[0].nama, e.berkas[0].by].join("|"), "true|2026-08-05|1|draft|COO draft.pdf|yogi", "tersimpan:");
+        if (!/^ds1\/coo\/.+-COO-draft\.pdf$/.test(e.berkas[0].path)) throw new Error("path: " + e.berkas[0].path);
+        eq(jejakStorage.unggah.map((u) => u.bucket + ":" + u.nama).join(","), "lampiran-jadwal:COO draft.pdf", "bucket:");
+        eq($("#promptOk").disabled, false, "bisa ditekan lagi:");
+      });
+      await denganStepper(jadwalStepper(), async (s) => {
+        jejakStorage.gagalUnggah.add("ditolak.pdf");
+        try {
+          w.toggleDocStep("ds1", "cipl");
+          pilihBerkas($('#prompt_berkas input[type="file"]'), [berkasUji("ditolak.pdf")]);
+          $("#promptOk").click();
+          await tunggu(20);
+          eq("cipl" in s().docProgress, false, "tidak tersimpan:");
+          eq($("#promptError").textContent, "Hanya akun EXIM yang boleh mengunggah atau menghapus lampiran.", "pesan:");
+        } finally {
+          jejakStorage.gagalUnggah.clear();
+        }
+      });
+    });
+
+    t("kotak tahap: lampiran dilepas baru dihapus dari tempat lampiran SESUDAH tersimpan; Tidak dipakai ikut menghapus lampiran", async () => {
+      kosongkanJejak();
+      const a = lampiranLama("ds1/coo/a-A.pdf", "A.pdf", "asli");
+      const b = lampiranLama("ds1/coo/b-B.pdf", "B.pdf", "asli");
+      await denganStepper(jadwalStepper({ coo: { at: "2026-08-03T03:00:00Z", by: "rina", date: "2026-08-03", berkas: [a, b] } }), async (s) => {
+        w.toggleDocStep("ds1", "coo");
+        $('#prompt_berkas [data-berkas-i="0"] [data-berkas-hapus]').click();
+        eq(namaChip($("#prompt_berkas")), "lama:B.pdf", "dilepas di kotak:");
+        eq(jejakStorage.hapus.length, 0, "belum dihapus sebelum Simpan:");
+        $("#promptOk").click();
+        await tunggu(20);
+        eq(s().docProgress.coo.berkas.map((x) => x.nama).join(","), "B.pdf", "tersimpan:");
+        eq(jejakStorage.hapus.join(","), a.path, "dihapus sesudah tersimpan:");
+        w.toggleDocStep("ds1", "coo");
+        pilihStatus("lewati");
+        eq($("#prompt_berkas").closest(".prompt-field").classList.contains("d-none"), true, "lampiran disembunyikan:");
+        $("#promptOk").click();
+        await tunggu(20);
+        eq(JSON.stringify(Object.keys(s().docProgress.coo).sort()), JSON.stringify(["at", "by", "skipped"]), "dilewati tanpa lampiran:");
+        eq(jejakStorage.hapus.join(","), [a.path, b.path].join(","), "lampiran sisanya dihapus:");
+      });
+    });
+
+    t("dokumen pelengkap: lampiran ikut dirapikan & digabung per nomor; kolom lama memperingatkan lampiran yang tertinggal", () => {
+      const p = lampiranLama("j/dok-pi/a.pdf", "a.pdf");
+      const q = lampiranLama("j/dok-pi/b.pdf", "b.pdf");
+      const d = w.rapikanDokPelengkap({ pi: [{ nomor: "PI-1", tanggal: "", berkas: [p] }, { nomor: "PI-1", tanggal: "2026-01-02", berkas: [p, q, { nama: "tanpa path" }] }, { nomor: "", tanggal: "", berkas: [q] }] });
+      eq(d.pi.map((x) => `${x.nomor}|${x.tanggal}|${(x.berkas || []).map((b) => b.nama).join("+")}`).join(" ; "), "PI-1|2026-01-02|a.pdf+b.pdf ; ||b.pdf", "gabung & baris berlampiran saja:");
+      eq(w.eval("KOLOM_OPSIONAL").dokumen_pelengkap.hilang({ pi: [{ nomor: "PI-1", berkas: [p] }], ls: [], polis: [], lain: [] }), true, "lampiran = isian yang bisa hilang:");
+      eq(w.semuaLampiranJadwal({ docProgress: { bl: { berkas: [p] }, coo: { skipped: true } }, dokPelengkap: { pi: [{ berkas: [p, q] }] } }).join(","), "j/dok-pi/a.pdf,j/dok-pi/b.pdf", "semua lampiran jadwal:");
+    });
+
+    t("PI & LS: lampiran ditampung di barisnya, diunggah saat Simpan jadwal; yang dilepas baru dihapus sesudah tersimpan", async () => {
+      kosongkanJejak();
+      const simpan = { mode: baca("activeMode"), ubah: w.updateShipmentRecord, muat: w.loadShipments, kembali: w.goBackToList, data: w.eval("JSON.stringify(data)"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+      const form = w.document.getElementById("viewForm");
+      const tersembunyi = form.classList.contains("d-none");
+      const lama = lampiranLama("j-77/dok-pi/aa-PI-lama.pdf", "PI-lama.pdf");
+      let payload = null;
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        tulis("activeMode", "import");
+        tulis("data", { import: [{ id: "j-77", mode: "import", status: "process", transport: "laut", party: "PT LAMPIRAN", etd: "2026-08-01", eta: "2026-08-10", etaMode: "manual",
+          houseBL: "HBL-LAMPIRAN-77", items: [{ namaBarang: "TYRE MOLD", qty: 1, harga: 1, skb: [] }], notesLog: [], docProgress: {},
+          dokPelengkap: { pi: [{ nomor: "PI-LAMPIRAN-77", tanggal: "2026-01-02", berkas: [lama] }], ls: [], polis: [], lain: [] } }], export: [] });
+        form.classList.remove("d-none");
+        w.renderFormPage("j-77");
+        const baris = (j) => $(`#dokPelengkapIsi [data-dp="${j}"] .dp-baris[data-i="0"]`);
+        eq(namaChip(baris("pi")), "lama:PI-lama.pdf", "lampiran PI tersimpan tampil:");
+        eq(baris("pi").querySelector(".dp-lampir-n").textContent, "1", "jumlah di tombol klip:");
+        pilihBerkas(baris("ls").querySelector("[data-dp-berkas]"), [berkasUji("LS scan.pdf")]);
+        eq(namaChip(baris("ls")), "baru:LS scan.pdf", "LS menunggu Simpan:");
+        baris("pi").querySelector("[data-berkas-hapus]").click();
+        eq(namaChip(baris("pi")), "", "PI dilepas:");
+        eq(jejakStorage.unggah.length + jejakStorage.hapus.length, 0, "bucket belum disentuh:");
+        w.updateShipmentRecord = async (id, p) => { payload = p; };
+        w.loadShipments = async () => {};
+        w.goBackToList = () => {};
+        $("#btnSaveShipment").click();
+        for (let i = 0; i < 30 && !payload; i++) await tunggu(10);
+        if (!payload) throw new Error("tidak tersimpan");
+        await tunggu(20);
+        eq(jejakStorage.unggah.map((u) => u.nama).join(","), "LS scan.pdf", "diunggah:");
+        if (!/^j-77\/dok-ls\//.test(jejakStorage.unggah[0].path)) throw new Error("path: " + jejakStorage.unggah[0].path);
+        eq(payload.dokPelengkap.ls.map((d) => (d.berkas || []).map((b) => b.nama).join("+")).join(","), "LS scan.pdf", "LS berlampiran tersimpan:");
+        eq("berkas" in payload.dokPelengkap.pi[0], false, "PI tanpa lampiran:");
+        eq(jejakStorage.hapus.join(","), lama.path, "lampiran lama dihapus sesudah tersimpan:");
+      } finally {
+        Object.assign(w, { updateShipmentRecord: simpan.ubah, loadShipments: simpan.muat, goBackToList: simpan.kembali });
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.profil};`);
+        if (tersembunyi) form.classList.add("d-none");
+        w.renderFormPage(null);
+      }
+    });
+
+    t("lartas: HS bertanda di Database HS Code & barang bukan baru -> PI/LS wajib; dilaporkan kurang sampai nomornya ada", () => {
+      const simpanRows = w.eval("JSON.stringify(hsCodeRows)");
+      try {
+        w.eval(`hsCodeRows = [{ id: "h1", item_name: "TYRE MOLD", hs_code: "8480.71.90", notes: "", lartas: ["LS", "PI"] },
+          { id: "h2", item_name: "KABEL", hs_code: "85444299", notes: "", lartas: ["SNI"] },
+          { id: "h3", item_name: "BLADE", hs_code: "84807110", notes: "" }]`);
+        eq(w.lartasHsCode("84807190").join(","), "PI,LS", "urutan baku:");
+        eq(w.lartasHsCode("84807110").join(","), "", "tanpa tanda:");
+        const s = { mode: "import", docProgress: {}, items: [
+          { namaBarang: "TYRE MOLD", hsCode: "84807190", kondisiBarang: "1" },
+          { namaBarang: "SEGMENT", hsCode: "84807910", kondisiBarang: "2" },
+          { namaBarang: "KABEL", hsCode: "85444299", kondisiBarang: "1" },
+        ], dokPelengkap: { pi: [], ls: [], polis: [], lain: [] } };
+        const perlu = w.kebutuhanLartas(s);
+        eq(["PI", "LS", "SNI"].map((k) => k + "=" + perlu[k].map((a) => a.sebab + ":" + a.barang).join("+")).join(" "), "PI=hs:TYRE MOLD+bukanBaru:SEGMENT LS=hs:TYRE MOLD SNI=hs:KABEL", "kebutuhan:");
+        eq(w.lartasKurang(s).join(","), "PI,LS", "kurang:");
+        eq(w.missingDocs(s).filter((x) => /lartas/.test(x)).join(","), "PI (lartas),LS (lartas)", "berkas kurang di papan:");
+        if (!/LS belum ada|PI &amp; LS belum ada/.test(w.tagLartasHtml(s))) throw new Error("tag kartu: " + w.tagLartasHtml(s));
+        s.dokPelengkap.pi = [{ nomor: "PI-1", tanggal: "" }];
+        eq(w.lartasKurang(s).join(","), "LS", "PI sudah bernomor:");
+        eq(w.lartasKurang({ ...s, mode: "export" }).join(","), "", "Export tidak:");
+      } finally {
+        w.eval("hsCodeRows = " + simpanRows);
+      }
+    });
+
+    t("lartas & COO di kartu Dokumen Pelengkap Pabean: sebab per dokumen, tanda sudah / belum ada, petunjuk FTA negara asal", () => {
+      const simpan = { rows: w.eval("JSON.stringify(hsCodeRows)"), mode: baca("activeMode"), items: baca("draftItems"), dok: baca("draftDokPelengkap") };
+      try {
+        w.eval(`hsCodeRows = [{ id: "h1", item_name: "TYRE MOLD", hs_code: "84807190", notes: "", lartas: ["PI", "LS"] }]`);
+        tulis("activeMode", "import");
+        tulis("draftItems", [{ namaBarang: "TYRE MOLD", hsCode: "84807190", kondisiBarang: "2", negaraAsal: "KR", skb: [] }]);
+        tulis("draftDokPelengkap", { pi: [{ nomor: "PI-9", tanggal: "" }], ls: [{ nomor: "", tanggal: "" }], polis: [], lain: [] });
+        w.segarkanLartasForm();
+        const box = $("#lartasForm");
+        eq([box.classList.contains("d-none"), box.classList.contains("is-kurang")].join(","), "false,true", "tampil & ada yang kurang:");
+        const baris = [...box.querySelectorAll(".lartas-baris")].map((li) => li.className.replace("lartas-baris ", "") + " " + li.textContent.replace(/\s+/g, " ").trim());
+        eq(baris.join(" || "),
+          "lartas-baris--ada PI — Persetujuan Impor — HS 8480.71.90; barang bukan baru: TYRE MOLD · sudah diisi || lartas-baris--kurang LS — Laporan Surveyor — HS 8480.71.90 · belum ada nomornya", "baris:");
+        eq(box.querySelector(".lartas-fta").textContent.replace(/\s+/g, " ").trim(), "Tarif preferensi dengan COO — KR: AKFTA (Form AK) · IK-CEPA · RCEP (Form RCEP).", "petunjuk COO:");
+        // Nomor LS diketik di kartunya -> tandanya langsung berubah
+        const ls = $('#dokPelengkapIsi [data-dp="ls"] [data-dp-k="nomor"]');
+        if (ls) {
+          ls.value = "LS-1";
+          ls.dispatchEvent(new w.Event("input", { bubbles: true }));
+          eq(box.classList.contains("is-kurang"), false, "LS diisi:");
+        }
+        tulis("activeMode", "export");
+        w.segarkanLartasForm();
+        eq(box.classList.contains("d-none"), true, "Export tanpa lartas:");
+      } finally {
+        w.eval("hsCodeRows = " + simpan.rows);
+        w.eval(`activeMode = ${JSON.stringify(simpan.mode)}`);
+        tulis("draftItems", simpan.items);
+        tulis("draftDokPelengkap", simpan.dok);
+        w.renderDokPelengkapForm();
+      }
+    });
+
+    t("COO & FTA: skema per negara asal; negara tanpa FTA disebut; ikut di tooltip tahap COO", () => {
+      const coo = (negara, mode) => w.petunjukFtaCoo({ mode: mode || "import", items: negara.map((n) => ({ negaraAsal: n })) });
+      eq(coo(["CN", "DE"]), "Tarif preferensi dengan COO — CN: ACFTA (Form E) · RCEP (Form RCEP); DE: tanpa FTA.", "campuran:");
+      eq(coo(["US"]), "Negara asal US tidak punya perjanjian dagang (FTA) dengan Indonesia — COO tidak memberi tarif preferensi.", "tanpa FTA:");
+      eq(coo(["th", "Vietnam"]), "Tarif preferensi dengan COO — TH: ATIGA (Form D) · RCEP (Form RCEP); VN: ATIGA (Form D) · RCEP (Form RCEP).", "ASEAN, nama dibakukan:");
+      eq(coo(["CH"]), "Tarif preferensi dengan COO — CH: IE-CEPA.", "EFTA:");
+      eq([coo([]), coo(["KR"], "export"), coo(["ID"])].join("|"), "||", "kosong / Export / Indonesia:");
+      const s = { id: "f1", mode: "import", transport: "laut", items: [{ negaraAsal: "JP" }], docProgress: { cipl: { date: "2026-08-01" }, bl: { date: "2026-08-01" } } };
+      eq(stepperDom(s).querySelector('[data-step="coo"]').title,
+        "Certificate of Origin — klik kalau berkasnya sudah ada (atau tandai tidak dipakai). Tarif preferensi dengan COO — JP: AJCEP (Form AJ) · IJEPA (Form IJEPA) · RCEP (Form RCEP).", "tooltip COO:");
+    });
+
+    t("HS Code: tanda lartas dipilih di kotaknya & tersimpan; database tanpa kolom lartas -> tersimpan tanpanya + diberi tahu berkas migrasinya", async () => {
+      const asli = w.eval("supabaseClient.from");
+      const simpanRows = w.eval("JSON.stringify(hsCodeRows)");
+      const simpanProfil = w.eval("JSON.stringify(authState.profile || null)");
+      w.__kirimHs = [];
+      w.__tolakLartas = false;
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        w.eval(`supabaseClient.from = () => ({
+          insert: (row) => { window.__kirimHs.push(Object.assign({}, row)); return { select: () => ({ single: async () =>
+            window.__tolakLartas && "lartas" in row
+              ? { data: null, error: { code: "PGRST204", message: "Could not find the 'lartas' column of 'hs_code_master' in the schema cache" } }
+              : { data: Object.assign({ id: "n" + window.__kirimHs.length }, row), error: null } }) }; },
+        })`);
+        w.eval("hsCodeRows = []");
+        w.tambahHsCodeBaru();
+        const centang = [...$("#prompt_lartas").querySelectorAll('input[type="checkbox"]')];
+        eq(centang.map((c) => c.value).join(","), "PI,LS,SNI", "pilihan:");
+        $("#prompt_nama").value = "TYRE MOLD";
+        $("#prompt_kode").value = "84807190";
+        centang[0].checked = true;
+        centang[1].checked = true;
+        $("#promptOk").click();
+        await tunggu(20);
+        eq(JSON.stringify(w.__kirimHs[0].lartas), JSON.stringify(["PI", "LS"]), "terkirim:");
+        eq(w.eval("hsCodeRows.length"), 1, "masuk daftar:");
+        eq([...$("#hsCodeList tbody .hs-kol-lartas").querySelectorAll(".lartas-chip")].map((c) => c.className.replace("lartas-chip ", "") + ":" + c.textContent).join(","), "lartas-chip--pi:PI,lartas-chip--ls:LS", "kolom Lartas tabel:");
+        // Database lama
+        w.__kirimHs = [];
+        w.__tolakLartas = true;
+        $("#toastMsg").textContent = "";
+        w.simpanHsCodeBaru("BLADE", "84807110", "", ["SNI"]);
+        await tunggu(20);
+        eq(w.__kirimHs.map((r) => "lartas" in r).join(","), "true,false", "dicoba ulang tanpa lartas:");
+        if (!/migration-lampiran-lartas-kebutuhan\.sql/.test($("#toastMsg").textContent)) throw new Error("pemberitahuan: " + $("#toastMsg").textContent);
+      } finally {
+        w.supabaseClient_from_asli = asli;
+        w.eval("supabaseClient.from = window.supabaseClient_from_asli");
+        w.eval("hsCodeRows = " + simpanRows + "; renderHsCodes()");
+        w.eval("authState.profile = " + simpanProfil);
+      }
+    });
+
+    t("impor CEISA: draft -> PIB draft (tanggal aju); terdaftar -> PIB terdaftar, SPPB, Manifest BC 1.1 & jalur dari respon", () => {
+      const XLSXuji = require("xlsx");
+      const buku = (header, respon) => {
+        const wb = XLSXuji.utils.book_new();
+        XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet([Object.assign({ "KODE JENIS IMPOR": "1", "KODE INCOTERM": "CIF" }, header)]), "HEADER");
+        XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet([{ "SERI BARANG": 1, URAIAN: "TYRE MOLD", "JUMLAH SATUAN": 1, CIF: 1 }]), "BARANG");
+        if (respon) XLSXuji.utils.book_append_sheet(wb, XLSXuji.utils.json_to_sheet(respon), "RESPON");
+        return XLSXuji.read(XLSXuji.write(wb, { type: "buffer", bookType: "xlsx" }), { type: "buffer" });
+      };
+      const asli = w.XLSX;
+      try {
+        w.XLSX = XLSXuji;
+        const draft = w.parseBcExcelWorkbook(buku({ "NOMOR AJU": "000020DDI00020260802000777" }));
+        eq(JSON.stringify(w.progresDariDokumenPabean(draft, "import")), JSON.stringify({ pib: { date: "2026-08-02", draft: true } }), "draft:");
+        const daftar = w.parseBcExcelWorkbook(buku(
+          { "NOMOR AJU": "000020DDI00020260802000777", "NOMOR DAFTAR": "123456", "TANGGAL DAFTAR": "2026-08-04", "NOMOR BC11": "000777", "TANGGAL BC11": "2026-08-03" },
+          [{ "KODE RESPON": "2101", "TANGGAL RESPON": "2026-08-04", KETERANGAN: "SPJM - Jalur Merah" }, { "KODE RESPON": "2003", "TANGGAL RESPON": "2026-08-06", KETERANGAN: "SPPB" }],
+        ));
+        eq(JSON.stringify(daftar.progres), JSON.stringify({ nomorDaftar: "123456", tanggalDaftar: "2026-08-04", sppb: "2026-08-06", bc11: { nomor: "000777", tanggal: "2026-08-03" }, jalur: "merah", npe: "" }), "bahan dari berkas:");
+        eq(JSON.stringify(w.progresDariDokumenPabean(daftar, "import")),
+          JSON.stringify({ pib: { date: "2026-08-04", jalur: "merah" }, sppb: { date: "2026-08-06", jalur: "merah" }, manifest: { date: "2026-08-03" } }), "terdaftar:");
+        eq(JSON.stringify(w.progresDariDokumenPabean(daftar, "export")), "{}", "berkas Import di buku Export:");
+        eq(JSON.stringify(w.progresDariDokumenPabean({ source: "cipl", fields: { noAju: "000020DDI00020260802000777" } }, "import")), "{}", "bukan dokumen pabean:");
+        // PEB PDF terdaftar
+        eq(JSON.stringify(w.progresDariDokumenPabean({ source: "pdf-peb", modeHint: "export", fields: { noAju: "x", docNo: "778899", docDate: "2026-08-05" } }, "export")), JSON.stringify({ peb: { date: "2026-08-05" } }), "PEB:");
+      } finally {
+        w.XLSX = asli;
+      }
+    });
+
+    t("impor CEISA hanya menambah / menaikkan: draft -> terdaftar (tanggal draft & lampiran dibawa), catatan tangan & tahap dilewati tidak disentuh", () => {
+      const b = lampiranLama("x/pib/a.pdf", "draft-pib.pdf", "draft");
+      const lama = {
+        pib: { at: "x", by: "rina", date: "2026-08-01", draft: true, berkas: [b] },
+        sppb: { at: "x", by: "rina", date: "2026-08-07" },
+        coo: { at: "x", skipped: true },
+      };
+      const patch = { pib: { date: "2026-08-04", jalur: "merah" }, sppb: { date: "2026-08-06", jalur: "merah" }, manifest: { date: "2026-08-03" }, coo: { date: "2026-08-02" } };
+      const g = w.gabungProgresImpor(lama, patch, { at: "T", by: "yogi" });
+      eq(g.berubah.join(","), "pib,sppb,manifest", "berubah:");
+      eq(JSON.stringify(g.progres.pib), JSON.stringify({ at: "T", by: "yogi", date: "2026-08-04", sumber: "ceisa", jalur: "merah", tglDraft: "2026-08-01", berkas: [b] }), "PIB dinaikkan:");
+      eq([g.progres.sppb.date, g.progres.sppb.by, g.progres.sppb.jalur].join("|"), "2026-08-07|rina|merah", "SPPB tangan tetap, jalur dilengkapi:");
+      eq(JSON.stringify(g.progres.coo), JSON.stringify({ at: "x", skipped: true }), "dilewati tetap:");
+      eq(JSON.stringify(g.progres.manifest), JSON.stringify({ at: "T", by: "yogi", date: "2026-08-03", sumber: "ceisa" }), "Manifest baru:");
+      // Draft tidak menurunkan yang sudah terdaftar
+      const lagi = w.gabungProgresImpor(g.progres, { pib: { date: "2026-08-02", draft: true } }, { at: "T2", by: "yogi" });
+      eq([lagi.berubah.length, lagi.progres.pib.date, !!lagi.progres.pib.draft].join("|"), "0|2026-08-04|false", "tidak turun:");
+      const s = { id: "c1", mode: "import", transport: "laut", docProgress: { manifest: { at: "T", by: "yogi", date: "2026-08-03", sumber: "ceisa" } } };
+      eq(stepperDom(s).querySelector('[data-step="manifest"]').title, "Manifest (BC 1.1) — diterima 03-08-2026 · dari impor dokumen pabean · dicatat oleh yogi", "tooltip:");
+    });
+
+    t("impor CEISA di form: progres ditampung sampai Simpan, ikut panel prediksi, disimpan ke progres TERBARU jadwalnya", async () => {
+      const simpan = { mode: baca("activeMode"), ubah: w.updateShipmentRecord, muat: w.loadShipments, kembali: w.goBackToList, data: w.eval("JSON.stringify(data)"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+      const form = w.document.getElementById("viewForm");
+      const tersembunyi = form.classList.contains("d-none");
+      let payload = null;
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        tulis("activeMode", "import");
+        tulis("data", { import: [{ id: "c-9", mode: "import", status: "process", transport: "laut", party: "PT CEISA", etd: "2026-07-25", eta: "2026-08-04", etaMode: "manual",
+          houseBL: "HBL-CEISA-9", items: [{ namaBarang: "TYRE MOLD", qty: 1, harga: 1, skb: [] }], notesLog: [], docProgress: { cipl: { at: "x", by: "rina", date: "2026-07-20" } } }], export: [] });
+        form.classList.remove("d-none");
+        w.renderFormPage("c-9");
+        const catatan = w.catatProgresImporForm({ source: "excel", modeHint: "import", fields: { noAju: "000020DDI00020260802000777", docNo: "123456" },
+          progres: { nomorDaftar: "123456", tanggalDaftar: "2026-08-04", sppb: "2026-08-06", bc11: { tanggal: "" }, jalur: "hijau" } });
+        eq(catatan, "Progres Dokumen ikut dicentang dari berkas: PIB 04-08-2026 · jalur Hijau, SPPB 06-08-2026 · jalur Hijau — tersimpan bersama jadwal saat Simpan.", "catatan impor:");
+        eq(baca("formDocProgress").sppb.date, "2026-08-06", "panel prediksi ikut:");
+        eq("sppb" in baca("data").import[0].docProgress, false, "belum tersimpan:");
+        // Sementara form terbuka, tahap lain dicatat dari kartu (perangkat lain)
+        w.eval('data.import[0].docProgress = Object.assign({}, data.import[0].docProgress, { bl: { at: "y", by: "rina", date: "2026-08-01", draft: true } })');
+        w.updateShipmentRecord = async (id, p) => { payload = p; };
+        w.loadShipments = async () => {};
+        w.goBackToList = () => {};
+        $("#btnSaveShipment").click();
+        for (let i = 0; i < 30 && !payload; i++) await tunggu(10);
+        if (!payload) throw new Error("tidak tersimpan");
+        await tunggu(30); // alur simpan selesai (muat ulang, kembali ke daftar) sebelum tiruannya dilepas
+        eq(Object.keys(payload.docProgress).sort().join(","), "bl,cipl,pib,sppb", "progres terbaru + impor:");
+        eq([payload.docProgress.pib.sumber, payload.docProgress.pib.jalur, payload.docProgress.sppb.date].join("|"), "ceisa|hijau|2026-08-06", "isi:");
+        eq(w.shipmentToRow(payload, "import").doc_progress, payload.docProgress, "kolom doc_progress:");
+        // Form dibuka ulang: tampungan impor dibuang
+        w.renderFormPage("c-9");
+        eq(w.progresSimpanForm("c-9"), null, "tampungan bersih:");
+      } finally {
+        Object.assign(w, { updateShipmentRecord: simpan.ubah, loadShipments: simpan.muat, goBackToList: simpan.kembali });
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.profil};`);
+        if (tersembunyi) form.classList.add("d-none");
+        w.renderFormPage(null);
+      }
+    });
+
+    t("impor CEISA dua kali di form: draft lalu terdaftar -> tampungan naik jadi terdaftar, tidak turun lagi", () => {
+      const simpan = { mode: baca("activeMode"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        tulis("activeMode", "import");
+        w.renderFormPage(null);
+        const impor = (progres) => w.catatProgresImporForm({ source: "excel", modeHint: "import", fields: { noAju: "000020DDI00020260802000777", docNo: progres.nomorDaftar || "" },
+          progres: Object.assign({ nomorDaftar: "", tanggalDaftar: "", sppb: "", bc11: { nomor: "", tanggal: "" }, jalur: "", npe: "" }, progres) });
+        impor({});
+        eq(JSON.stringify(baca("progresImporForm")), JSON.stringify({ pib: { date: "2026-08-02", draft: true } }), "draft:");
+        impor({ nomorDaftar: "123456", tanggalDaftar: "2026-08-04", jalur: "hijau" });
+        eq(JSON.stringify(baca("progresImporForm")), JSON.stringify({ pib: { date: "2026-08-04", jalur: "hijau" } }), "naik:");
+        eq(impor({}), "", "draft lagi: tidak ada yang berubah:");
+        eq(JSON.stringify(baca("progresImporForm")), JSON.stringify({ pib: { date: "2026-08-04", jalur: "hijau" } }), "tidak turun:");
+        const p = w.progresSimpanForm(null);
+        eq([p.pib.date, "draft" in p.pib, p.pib.sumber, p.pib.jalur].join("|"), "2026-08-04|false|ceisa|hijau", "disimpan:");
+      } finally {
+        w.eval(`activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.profil};`);
+        w.renderFormPage(null);
+      }
+    });
+
+    t("Dibutuhkan di Pabrik: rencana mundur di form (ETA & ETD paling lambat, ETD & Estimated Delivery vs batas), tersimpan needed_date; Export tidak", async () => {
+      const simpan = { mode: baca("activeMode"), buat: w.createShipment, muat: w.loadShipments, kembali: w.goBackToList, profil: w.eval("JSON.stringify(authState.profile || null)") };
+      w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+      const form = w.document.getElementById("viewForm");
+      const tersembunyi = form.classList.contains("d-none");
+      const ketik = (sel, nilai, ev) => { const el = $(sel); el.value = nilai; el.dispatchEvent(new w.Event(ev || "change", { bubbles: true })); };
+      let payload = null;
+      try {
+        tulis("activeMode", "import");
+        form.classList.remove("d-none");
+        w.renderFormPage(null);
+        eq($("#rencanaMundurHasil").textContent.trim().slice(0, 27), "Isi tanggal barang ini dibu", "petunjuk saat kosong:");
+        ketik("#fTransport", "laut");
+        ketik("#fMuatan", "FCL");
+        ketik("#fOrigin", "BSN KOREA");
+        ketik("#fDestination", "TPP");
+        ketik("#fEtd", "2026-08-12");
+        ketik("#fNeededDate", "2026-08-24");
+        const teks = () => $("#rencanaMundurHasil").textContent.replace(/\s+/g, " ").trim();
+        const angka = [...$("#rencanaMundurHasil").querySelectorAll(".rm-angka")].map((el) => el.querySelector(".rm-label").textContent + " " + el.querySelector("b").textContent);
+        eq(angka.join(" | "), "ETA paling lambat 20-08-2026 | ETD paling lambat 10-08-2026", "rencana:");
+        eq($("#rencanaMundurHasil .rm-ket").textContent, "transit maks. 10 hari · Customs clearance 1 hari kerja · Antar ke pabrik 1 hari kerja", "keterangan:");
+        if (!/ETD 12-08-2026 — 2 hari lewat dari ETD paling lambat\./.test(teks())) throw new Error("ETD vs batas: " + teks());
+        const status = [...$("#rencanaMundurHasil").querySelectorAll(".rm-status")].map((el) => el.className.replace("rm-status ", ""));
+        eq(status.join(","), "rm-status--telat,rm-status--telat", "Estimated Delivery & ETD sama-sama lewat:");
+        ketik("#fEtd", "2026-08-05");
+        if (!/ETD 05-08-2026 masih dalam batas \(5 hari lebih awal\)\./.test(teks())) throw new Error("ETD dalam batas: " + teks());
+        w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "X", qty: 1, harga: 1 })]');
+        w.createShipment = async (p) => { payload = p; return { id: "baru-butuh" }; };
+        w.loadShipments = async () => {};
+        w.goBackToList = () => {};
+        ketik("#fHouseBL", "HBL-BUTUH-1", "input");
+        $("#btnSaveShipment").click();
+        for (let i = 0; i < 30 && !payload; i++) await tunggu(10);
+        if (!payload) throw new Error("tidak tersimpan");
+        await tunggu(30);
+        eq([payload.neededDate, w.shipmentToRow(payload, "import").needed_date].join("|"), "2026-08-24|2026-08-24", "tersimpan:");
+        eq(w.rowToShipment({ id: "r", mode: "import", needed_date: "2026-08-24", items: [] }).neededDate, "2026-08-24", "terbaca:");
+        // Export: tidak ada kotaknya di payload
+        tulis("activeMode", "export");
+        w.renderFormPage(null);
+        payload = null;
+        ketik("#fEtd", "2026-08-12");
+        ketik("#fEta", "2026-08-20");
+        w.eval('draftItems = [Object.assign(newItem(), { namaBarang: "X", qty: 1, harga: 1 })]');
+        $("#btnSaveShipment").click();
+        for (let i = 0; i < 30 && !payload; i++) await tunggu(10);
+        await tunggu(30);
+        eq("neededDate" in payload, false, "Export:");
+        eq($("#rencanaMundurHasil").textContent, "", "tanpa rencana di Export:");
+      } finally {
+        Object.assign(w, { createShipment: simpan.buat, loadShipments: simpan.muat, goBackToList: simpan.kembali });
+        tulis("activeMode", simpan.mode);
+        w.eval("authState.profile = " + simpan.profil);
+        if (tersembunyi) form.classList.add("d-none");
+        w.renderFormPage(null);
+      }
+    });
+
+    t("kartu & Ringkasan: lewat kebutuhan pabrik (merah) / mepet (kuning); draft menunggu asli jadi tugas sendiri", () => {
+      const simpan = { data: w.eval("JSON.stringify(data)"), mode: baca("activeMode") };
+      try {
+        const dasar = { mode: "import", status: "process", transport: "laut", etaMode: "manual", deliveryMode: "manual", items: [], notesLog: [], party: "PT X" };
+        const telat = { ...dasar, id: "k1", eta: "2026-08-20", actual: "2026-08-24", neededDate: "2026-08-21", docProgress: {} };
+        const mepet = { ...dasar, id: "k2", eta: "2026-08-20", actual: "2026-08-24", neededDate: "2026-08-25", docProgress: {} };
+        if (!/tag-butuh--telat"[^>]*>.*Telat 3 hari dari kebutuhan 21-08-2026/.test(w.tagKebutuhanHtml(telat))) throw new Error("tag telat: " + w.tagKebutuhanHtml(telat));
+        if (!/tag-butuh--mepet"[^>]*>.*Mepet: butuh 25-08-2026, cadangan 1 hari/.test(w.tagKebutuhanHtml(mepet))) throw new Error("tag mepet: " + w.tagKebutuhanHtml(mepet));
+        if (!w.renderExpandedCard(telat).includes("tag-butuh--telat")) throw new Error("kartu tanpa tag kebutuhan");
+        eq(w.tagKebutuhanHtml({ ...telat, factoryDate: "2026-08-22" }), "", "sudah di pabrik: tanpa tag:");
+        const semua = {};
+        w.docStepsFor({ mode: "import" }).forEach((st) => (semua[st.key] = { at: "x", date: "2026-08-01" }));
+        const asli = { ...dasar, id: "k3", eta: "2026-08-30", actual: "2026-09-02", docProgress: { ...semua, bl: { at: "x", date: "2026-08-01", draft: true } } };
+        tulis("data", { import: [telat, asli], export: [] });
+        w.eval('activeMode = "import"');
+        const tugas = w.buildTaskQueue();
+        const t1 = tugas.find((x) => x.s.id === "k1");
+        eq([t1.kind, t1.reason].join("|"), "late|Kebutuhan +3h", "lewat kebutuhan:");
+        if (!/^Dibutuhkan di pabrik 21-08-2026, perkiraan sampai 24-08-2026/.test(t1.detail)) throw new Error("detail: " + t1.detail);
+        const t3 = tugas.find((x) => x.s.id === "k3");
+        eq([t3.kind, t3.reason, t3.detail].join("|"), "asli|Menunggu asli|Draft sudah disetujui, aslinya belum: B/L", "menunggu asli:");
+        w.renderDocCompleteness();
+        eq($("#ovDocs .ov-asli .stat-line-value").textContent.trim(), "1 jadwal", "Ringkasan dokumen:");
+      } finally {
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)};`);
+      }
+    });
+
+    t("panel detail: progres dokumen hanya-baca (status draft, lampiran bisa dibuka) & PI berlampiran; hapus jadwal ikut menghapus lampirannya", async () => {
+      kosongkanJejak();
+      const bl = lampiranLama("dv/bl/a-BL.pdf", "BL.pdf", "draft");
+      const pi = lampiranLama("dv/dok-pi/a-PI.pdf", "PI.pdf");
+      const s = { id: "dv", mode: "import", status: "process", transport: "laut", party: "PT DETAIL", items: [], notesLog: [],
+        docProgress: { bl: { at: "x", by: "rina", date: "2026-08-02", draft: true, berkas: [bl] }, coo: { at: "x", skipped: true } },
+        dokPelengkap: { pi: [{ nomor: "PI-DV", tanggal: "2026-01-02", berkas: [pi] }], ls: [], polis: [], lain: [] } };
+      const box = w.document.createElement("div");
+      box.innerHTML = w.buildDetailHtml(s);
+      w.document.body.appendChild(box);
+      const bukaAsli = w.open;
+      let dibuka = null;
+      try {
+        const progres = [...box.querySelectorAll(".detail-progres-baris")].map((el) => el.textContent.replace(/\s+/g, " ").trim());
+        eq(progres.join(" || "), "B/L 02-08-2026 · draft, menunggu asli BL.pdf Draft || COO tidak dipakai", "progres:");
+        if (!box.querySelector('[data-buka-lampiran="dv/dok-pi/a-PI.pdf"]')) throw new Error("lampiran PI tidak bisa dibuka dari detail");
+        w.open = () => (dibuka = { location: {}, close() {} });
+        box.querySelector('[data-buka-lampiran="dv/bl/a-BL.pdf"]').click();
+        await tunggu(20);
+        eq(dibuka && dibuka.location.href, "https://contoh.supabase.co/sign/dv/bl/a-BL.pdf", "tautan bertanda tangan:");
+      } finally {
+        w.open = bukaAsli;
+        box.remove();
+      }
+      // Hapus jadwal: konfirmasi menyebut lampirannya, berkasnya dihapus sesudah jadwalnya terhapus
+      const simpan = { data: w.eval("JSON.stringify(data)"), mode: baca("activeMode"), profil: w.eval("JSON.stringify(authState.profile || null)") };
+      try {
+        w.eval('authState.profile = { id: "u1", role: "exim", username: "yogi" }');
+        tulis("data", { import: [s], export: [] });
+        w.eval('activeMode = "import"');
+        w.render();
+        const tombol = $('#cardContainer [data-action="delete"][data-id="dv"]');
+        if (!tombol) throw new Error("tombol hapus tidak ada");
+        tombol.click();
+        if (!/2 lampiran berkasnya ikut terhapus\./.test($("#confirmMessage").textContent)) throw new Error("konfirmasi: " + $("#confirmMessage").textContent);
+        $("#confirmActionBtn").click();
+        await tunggu(20);
+        eq(jejakStorage.hapus.sort().join(","), [bl.path, pi.path].sort().join(","), "lampiran dihapus:");
+      } finally {
+        w.eval(`data = ${simpan.data}; activeMode = ${JSON.stringify(simpan.mode)}; authState.profile = ${simpan.profil};`);
+        w.render();
+      }
+    });
+  }
+
+  console.log("— SISTEM TAMPILAN: TOAST, DIALOG, LABEL, TOOLTIP —");
+  t("toast: judul singkat per jenis; dark = berhasil, error = galat; judul sendiri; pesan migrasi tetap", () => {
+    const el = $("#appToast");
+    try {
+      w.showToast("Tersimpan.", "dark");
+      eq([$("#toastJudul").textContent, el.classList.contains("app-toast--success"), $("#toastMsg").textContent].join("|"), "Berhasil|true|Tersimpan.", "dark:");
+      w.showToast("Rusak.", "error");
+      eq([$("#toastJudul").textContent, el.classList.contains("app-toast--danger"), el.classList.contains("app-toast--success")].join("|"), "Terjadi kesalahan|true|false", "error:");
+      w.showToast("Jendela cetak diblokir.", "danger", { judul: "Pop-up diblokir", tetap: true });
+      eq([$("#toastJudul").textContent, el.classList.contains("is-tetap")].join("|"), "Pop-up diblokir|true", "judul sendiri & tetap:");
+      w.showToast("Jalankan migration-xyz.sql di Supabase.", "warning");
+      eq([$("#toastJudul").textContent, el.classList.contains("is-tetap")].join("|"), "Database perlu diperbarui|true", "migrasi:");
+      w.showToast("Biasa.", "info");
+      eq(el.classList.contains("is-tetap"), false, "pesan biasa hilang sendiri:");
+      // Pembaca layar: wilayah suara terpisah, galat disela (assertive)
+      w.showToast("Gagal.", "danger");
+      eq($("#toastSuara").getAttribute("aria-live"), "assertive", "galat:");
+      w.showToast("Beres.", "success");
+      eq($("#toastSuara").getAttribute("aria-live"), "polite", "berhasil:");
+      if (el.hasAttribute("aria-live") || el.getAttribute("role")) throw new Error("toast yang terlihat masih wilayah langsung -- terbaca dua kali");
+    } finally {
+      w.hideToast();
+    }
+  });
+  t("toast: pesan yang sama selagi tampil tidak dimunculkan ulang (tidak berkedip)", async () => {
+    const el = $("#appToast");
+    try {
+      w.showToast("Sama persis.", "success");
+      await new Promise((r) => w.setTimeout(r, 15));
+      if (!el.classList.contains("is-open")) throw new Error("toast tidak terbuka");
+      w.showToast("Sama persis.", "success");
+      eq(el.classList.contains("is-open"), true, "tetap terbuka, tidak dilepas dulu:");
+      w.showToast("Pesan lain.", "success");
+      eq(el.classList.contains("is-open"), false, "pesan berbeda dimunculkan ulang:");
+    } finally {
+      w.hideToast();
+    }
+  });
+  t("dialog isian, konfirmasi & realisasi: kepala ber-X di luar badan, badan bisa digulir, terhubung ke judulnya", () => {
+    ["promptModal", "confirmModal", "mstRealisasiModal"].forEach((id) => {
+      const m = w.document.getElementById(id);
+      const isi = m.querySelector(".modal-content");
+      const kepala = [...isi.children].find((c) => c.classList.contains("dialog-head"));
+      if (!kepala) throw new Error(id + ": kepala tidak di luar badan");
+      const x = kepala.querySelector('.dialog-tutup[data-bs-dismiss="modal"]');
+      if (!x || !x.getAttribute("aria-label")) throw new Error(id + ": tombol X tanpa label");
+      if (!m.querySelector(".modal-dialog").classList.contains("modal-dialog-scrollable")) throw new Error(id + ": badan tidak bisa digulir");
+      const judul = m.getAttribute("aria-labelledby");
+      if (!judul || !w.document.getElementById(judul)) throw new Error(id + ": aria-labelledby");
+    });
+    // Tombol hapus menyebut tindakannya, bukan "Ya, Hapus"
+    const js = fs.readFileSync(path.join(ROOT, "js", "features", "card-events.js"), "utf8");
+    if (!/confirmText: tt\("Hapus Jadwal", "Delete Schedule"\)/.test(js)) throw new Error("hapus jadwal tanpa label tindakan");
+  });
+  t("setiap <label for> menunjuk kotak isian yang ada; isian Permintaan Nomor semuanya berlabel", () => {
+    const d = w.document;
+    d.querySelectorAll("label[for]").forEach((l) => {
+      const el = d.getElementById(l.htmlFor);
+      if (!el || !/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) throw new Error("label for=" + l.htmlFor + " tidak menunjuk isian");
+    });
+    const tanpa = [...d.querySelectorAll("[data-docnum-panel] input, [data-docnum-panel] select, [data-docnum-panel] textarea")].filter(
+      (el) => el.type !== "hidden" && el.type !== "file" && !(el.labels && el.labels.length) && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby"),
+    );
+    eq(tanpa.map((el) => el.dataset.dn || el.id || el.className).join(","), "", "isian tanpa label:");
+  });
+  t("tooltip: title tombol dipinjam selama tampil (tombolnya tetap bernama), lalu dikembalikan", async () => {
+    const b = w.document.createElement("button");
+    b.type = "button";
+    b.title = "Hapus uji";
+    b.innerHTML = '<i class="bi bi-trash"></i>';
+    w.document.body.appendChild(b);
+    try {
+      b.dispatchEvent(new w.MouseEvent("mouseover", { bubbles: true }));
+      await new Promise((r) => w.setTimeout(r, 420));
+      const tip = w.document.querySelector(".app-tip");
+      eq([tip && tip.textContent, b.hasAttribute("title"), b.getAttribute("aria-label")].join("|"), "Hapus uji|false|Hapus uji", "tampil:");
+      b.dispatchEvent(new w.MouseEvent("mouseout", { bubbles: true, relatedTarget: w.document.body }));
+      await new Promise((r) => w.setTimeout(r, 140));
+      eq([b.getAttribute("title"), b.hasAttribute("aria-label"), tip.classList.contains("is-open")].join("|"), "Hapus uji|false|false", "dikembalikan:");
+    } finally {
+      b.remove();
+    }
+  });
+
   // Rantai uji asinkron ditunggu dulu -- lihat catatan di fungsi t().
   await rantaiAsync;
 
-  console.log(`\n${pass} lulus, ${fail} gagal\n`);
+  console.log(`\n${pass} lulus, ${fail} gagal${lewat ? `, ${lewat} dilewati` : ""}\n`);
   process.exit(fail ? 1 : 0);
 })();

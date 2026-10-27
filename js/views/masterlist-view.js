@@ -53,7 +53,7 @@ const mstKeadaan = {
   tampilan: "baris", // "baris" | "pib"
   halaman: 1,
   perHalaman: 25,
-  terbuka: new Set(), // baris / PIB yang rinciannya sedang dibuka
+  detail: null, // kotak rincian yang terbuka: "b:<id baris>" | "p:<kunci PIB>"
   jenis: null, // { nama, lini } -- saringan dari panel "Kuota yang masih tersedia"
   semuaJenis: false, // panel itu menampilkan seluruh jenis, bukan 8 teratas
 };
@@ -344,8 +344,8 @@ function mstPibs(u) {
   if (!u) return [];
   const daftar = Array.isArray(u.pibs) ? u.pibs : [];
   const pibs = daftar.length
-    ? daftar.map((p) => ({ aju: String((p && p.aju_ref) || "").trim(), tanggal: (p && p.pib_date) || null }))
-    : mstPecahAju(u.aju_ref).map((aju, i) => ({ aju, tanggal: (i === 0 && u.pib_date) || null }));
+    ? daftar.map((p) => ({ aju: String((p && p.aju_ref) || "").trim(), tanggal: (p && p.pib_date) || null, dokumen: mstRapikanDokumen(p && p.dokumen) }))
+    : mstPecahAju(u.aju_ref).map((aju, i) => ({ aju, tanggal: (i === 0 && u.pib_date) || null, dokumen: null }));
   return pibs.filter((p) => p.aju);
 }
 
@@ -373,7 +373,8 @@ function mstUrutPib(pibs) {
    migrasinya dijalankan. */
 function mstKolomPib(pibs) {
   const kolom = { aju_ref: pibs.map((p) => p.aju).join(" / "), pib_date: mstTanggalTerawal(pibs) };
-  if (mstAdaKolom("pibs")) kolom.pibs = pibs.map((p) => ({ aju_ref: p.aju, pib_date: p.tanggal || null }));
+  if (mstAdaKolom("pibs"))
+    kolom.pibs = pibs.map((p) => Object.assign({ aju_ref: p.aju, pib_date: p.tanggal || null }, p.dokumen ? { dokumen: p.dokumen } : {}));
   return kolom;
 }
 
@@ -398,7 +399,7 @@ function mstPesanMigrasi(kolom) {
   const berkas = MST_MIGRASI[kolom];
   const [apa, what] =
     kolom === "pibs"
-      ? ["Realisasi dengan lebih dari satu PIB", "A realization with more than one PIB needs"]
+      ? ["Realisasi dengan lebih dari satu PIB atau dokumen PIB yang diisi sendiri", "A realization with more than one PIB or manually entered PIB documents needs"]
       : kolom === "hs_code"
         ? ["HS Code", "The HS Code needs"]
         : ["Nilai (USD)", "Values (USD) need"];
@@ -411,7 +412,7 @@ const mstPesanMigrasiPib = () => mstPesanMigrasi("pibs");
 
 /* Isian yang hilang kalau kolomnya dibuang -- itu yang ditolak, bukan dibuang diam-diam. */
 const MST_BERISI = {
-  pibs: (v) => Array.isArray(v) && v.length > 1,
+  pibs: (v) => Array.isArray(v) && (v.length > 1 || v.some((p) => p && p.dokumen)),
   value_quota: (v) => v != null,
   invoice_value: (v) => v != null,
   hs_code: (v) => v != null && String(v).trim() !== "",
@@ -471,6 +472,128 @@ async function mstKirim(kirim, muatan) {
 /* Barang sebuah jadwal yang ditandai berfasilitas Masterlist. */
 function mstBarangMasterlist(s) {
   return ((s && s.items) || []).filter((it) => (it.skb || []).some((sk) => sk.jenis === "Masterlist"));
+}
+
+/* ---------- dokumen PIB: PI, LS, SKB PPh, SKB PPN, Masterlist (912) ---------- */
+
+/* Dokumen pabean tiap PIB sebuah realisasi, untuk barang baris itu:
+     pi          PI barang itu -- nomor, tanggal & No. item di PI. Barang
+                 BARU (KODE KONDISI BARANG 1) tidak memakai PI.
+     ls          Laporan Surveyor
+     pph / ppn   SKB PPh / SKB PPN
+     masterlist  Nomor BKPM / Masterlist (dokumen 912)
+   Diambil LANGSUNG dari jadwal import yang nomor ajunya cocok
+   (mstDokumenJadwal). Yang diisi sendiri (Atur dokumen) disimpan di daftar
+   PIB realisasinya (pibs[].dokumen) dan selalu didahulukan. Masterlist
+   tanpa keduanya: nomor & tanggal SK dokumen masterlist halaman ini. */
+const MST_DOK = ["pi", "ls", "pph", "ppn", "masterlist"];
+const MST_LABEL_DOK = { pi: "PI", ls: "LS", pph: "SKB PPh", ppn: "SKB PPN", masterlist: "Masterlist (912)" };
+
+// Isian sendiri yang tersimpan: hanya dokumen yang bernomor / bertanggal; tanpa satu pun -> null
+function mstRapikanDokumen(d) {
+  if (!d || typeof d !== "object") return null;
+  const out = {};
+  MST_DOK.forEach((k) => {
+    const x = d[k] || {};
+    const isi = { nomor: String(x.nomor || "").trim(), tanggal: String(x.tanggal || "").slice(0, 10) };
+    if (k === "pi") isi.noItem = String(x.noItem || "").trim();
+    if (isi.nomor || isi.tanggal || isi.noItem) out[k] = isi;
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+const mstKunciNama = (teks) => String(teks || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+
+/* Barang jadwal untuk sebuah baris masterlist: yang uraiannya sama, lalu
+   yang namanya memuat uraian baris itu -- di antara barang berfasilitas
+   Masterlist (kalau ada), selain itu semua barangnya. Jadwal dengan satu
+   barang saja: barang itu. */
+function mstBarangJadwalUntuk(s, b) {
+  const semua = (s && s.items) || [];
+  const fasilitas = mstBarangMasterlist(s);
+  const kandidat = fasilitas.length ? fasilitas : semua;
+  const nama = mstKunciNama(b && b.nama);
+  if (nama) {
+    const sama = kandidat.find((it) => mstKunciNama(it.namaBarang) === nama || mstKunciNama(itemDisplayName(it)) === nama);
+    if (sama) return sama;
+    const memuat = kandidat.filter((it) => mstKunciNama(itemDisplayName(it)).includes(nama));
+    if (memuat.length === 1) return memuat[0];
+  }
+  return kandidat.length === 1 ? kandidat[0] : null;
+}
+
+// Daftar { nomor, tanggal } tanpa kembar
+function mstDokUnik(daftar) {
+  const out = [];
+  daftar.forEach((d) => tambahDokumenPengiriman(out, d.nomor, d.tanggal));
+  return out;
+}
+
+/* Dokumen sebuah PIB menurut jadwal import yang nomor ajunya cocok (tepat
+   satu), untuk barang baris `b`; null kalau tidak ada jadwalnya. SKB &
+   Masterlist dari fasilitas barang itu -- cadangannya fasilitas barang
+   mana pun di jadwal itu. PI: PI barang itu, atau PI jadwal kalau
+   barangnya belum memilih. */
+function mstDokumenJadwal(aju, b) {
+  const jadwal = mstJadwalUntukAju(aju);
+  if (jadwal.length !== 1) return null;
+  const s = jadwal[0];
+  const dok = dokPelengkapJadwal(s);
+  const it = mstBarangJadwalUntuk(s, b);
+  const fasilitas = (jenis) => {
+    const ambil = (x) => ((x && x.skb) || []).filter((sk) => sk.jenis === jenis).map((sk) => ({ nomor: sk.nomor || "", tanggal: sk.tanggal || "" }));
+    const milik = ambil(it);
+    return mstDokUnik(milik.length ? milik : (s.items || []).flatMap(ambil));
+  };
+  const nomorPi = String((it && it.piNomor) || "").trim();
+  const tanpaPi = !!it && !nomorPi && kodeKondisiBarang(it.kondisiBarang) === "1";
+  let pi = [];
+  if (nomorPi) {
+    const d = (dok.pi || []).find((x) => x.nomor === nomorPi);
+    pi = [{ nomor: nomorPi, tanggal: d ? d.tanggal : "", noItem: String(it.piNoItem || "").trim() }];
+  } else if (!tanpaPi) pi = (dok.pi || []).map((d) => Object.assign({ noItem: "" }, d));
+  return { jadwal: s, barang: it, tanpaPi, pi, ls: (dok.ls || []).slice(), pph: fasilitas("PPH"), ppn: fasilitas("PPN"), masterlist: fasilitas("Masterlist") };
+}
+
+/* Dokumen yang BERLAKU untuk satu PIB (p dari mstPibs) & baris `b`: isian
+   sendiri, lalu jadwal, lalu (Masterlist) dokumen halaman ini.
+   { pi: [...], ls, pph, ppn, masterlist, tanpaPi, sendiri: Set, jadwal } */
+function mstDokumenPib(p, b) {
+  const sendiri = (p && p.dokumen) || {};
+  const jadwal = p ? mstDokumenJadwal(p.aju, b) : null;
+  const out = { jadwal: jadwal ? jadwal.jadwal : null, sendiri: new Set(), tanpaPi: false };
+  MST_DOK.forEach((k) => {
+    if (sendiri[k]) {
+      out[k] = [sendiri[k]];
+      out.sendiri.add(k);
+    } else out[k] = jadwal ? jadwal[k] : [];
+  });
+  out.tanpaPi = !out.sendiri.has("pi") && !!(jadwal && jadwal.tanpaPi);
+  if (!out.masterlist.length && mstDok && (mstDok.sk_no || mstDok.sk_date)) out.masterlist = [{ nomor: mstDok.sk_no || "", tanggal: mstDok.sk_date || "" }];
+  return out;
+}
+
+const MST_TANPA_PI = () => tt("Tidak Menggunakan PI", "No PI Used");
+
+/* Daftar dokumen satu PIB di rincian: label | "nomor · tanggal · No.
+   item 5" (beberapa dokumen dipisah " / "; tanggalnya tidak terpotong),
+   penanda "manual" untuk isian sendiri, tombol Atur dokumen untuk EXIM. */
+function mstDokPibHtml(dok, tombol) {
+  const satu = (k, d) =>
+    [
+      d.nomor ? escapeHtml(d.nomor) : "",
+      d.tanggal ? `<span class="text-nowrap">${escapeHtml(fmtDate(d.tanggal))}</span>` : "",
+      k === "pi" && d.noItem ? `<span class="text-nowrap">${escapeHtml(tt(`No. item ${d.noItem}`, `Item no. ${d.noItem}`))}</span>` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const baris = MST_DOK.map((k) => {
+    const isi = k === "pi" && dok.tanpaPi ? `<span class="mst-redup">${escapeHtml(MST_TANPA_PI())}</span>` : (dok[k] || []).map((d) => satu(k, d)).filter(Boolean).join(" / ");
+    if (!isi) return "";
+    const sendiri = dok.sendiri.has(k) ? ` <span class="mst-dok-sendiri" title="${escapeAttr(tt("Diisi sendiri", "Entered manually"))}">manual</span>` : "";
+    return `<div><dt>${escapeHtml(MST_LABEL_DOK[k])}</dt><dd>${isi}${sendiri}</dd></div>`;
+  }).join("");
+  return `<div class="mst-dokpib">${baris ? `<dl>${baris}</dl>` : ""}${tombol || ""}</div>`;
 }
 
 /* JADWAL IMPORT YANG BELUM DICATAT: barangnya ditandai berfasilitas
@@ -627,35 +750,28 @@ function mstKetNilai(b) {
 
 const MST_IKON_NILAI = { lebih: "bi-exclamation-octagon-fill", selisih: "bi-exclamation-triangle-fill", belum: "bi-hourglass-split" };
 
-/* Sisa nilai sebuah baris: angka + penanda statusnya (ikon + kalimat untuk
-   pembaca layar; bukan warna saja). Kosong kalau nilai masterlist belum diisi. */
-function mstNilaiSisaHtml(b) {
-  if (b.nilaiKuota == null) return "";
+/* Status nilai yang perlu dicek, di sel Sisa daftar: ikon saja -- kalimatnya
+   di title & untuk pembaca layar, angkanya di kotak rincian. */
+function mstTandaNilaiHtml(b) {
   const ket = mstKetNilai(b);
-  const ikon = MST_IKON_NILAI[b.statusNilai];
-  const angka = b.statusNilai === "lebih" ? tt(`lebih ${mstFmtUang(-b.nilaiSisa)}`, `${mstFmtUang(-b.nilaiSisa)} over`) : mstFmtUang(b.nilaiSisa);
-  return ` <span class="mst-nilai mst-nilai--${b.statusNilai}"${ket ? ` title="${escapeAttr(ket)}"` : ""}>${
-    ikon ? `<i class="bi ${ikon}" aria-hidden="true"></i>` : ""
-  }${escapeHtml(angka)}${ket ? `<span class="visually-hidden"> — ${escapeHtml(ket)}</span>` : ""}</span>`;
+  return ket
+    ? ` <i class="bi ${MST_IKON_NILAI[b.statusNilai]} mst-tanda-nilai mst-nilai--${b.statusNilai}" role="img" aria-label="${escapeAttr(ket)}" title="${escapeAttr(ket)}"></i>`
+    : "";
 }
 
-/* Baris kedua sel Kuota / Terpakai: nilainya dalam USD. */
-const mstNilaiHtml = (n) => ` <span class="mst-nilai">${escapeHtml(mstFmtUang(n))}</span>`;
-
-/* Cip nomor aju. Kalau tepat satu jadwal import yang cocok, cipnya jadi
-   tombol yang membuka jadwal itu. Tanggal PIB-nya (kalau ada) ikut di
-   keterangan cip. */
-function mstAjuCipHtml(ref, tanggal) {
-  const tgl = tanggal ? " · " + fmtDate(tanggal) : "";
+/* Nomor aju lengkap. Kalau tepat satu jadwal import yang cocok, ia jadi
+   tautan yang membuka jadwal itu. */
+function mstAjuTautHtml(ref) {
   return mstPecahAju(ref)
     .map((bagian) => {
       const jadwal = mstJadwalUntukAju(bagian);
-      if (jadwal.length !== 1) return `<span class="mst-aju" title="${escapeAttr(bagian + tgl)}">${escapeHtml(mstAjuRingkas(bagian))}</span>`;
+      if (jadwal.length !== 1) return `<span class="mst-mono">${escapeHtml(bagian)}</span>`;
       const s = jadwal[0];
-      const ket = tt("Buka jadwal", "Open schedule") + ": " + s.noAju + tgl + " · " + dispVal(s.party);
-      return `<button type="button" class="mst-aju mst-aju--taut" data-mst-jadwal="${escapeAttr(s.id)}" title="${escapeAttr(ket)}">${escapeHtml(mstAjuRingkas(bagian))}<i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></button>`;
+      return `<button type="button" class="mst-taut mst-mono" data-mst-jadwal="${escapeAttr(s.id)}" title="${escapeAttr(tt("Buka jadwal", "Open schedule") + " · " + dispVal(s.party))}">${escapeHtml(
+        bagian,
+      )} <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></button>`;
     })
-    .join("");
+    .join(" ");
 }
 
 /* PIB yang memakai sebuah baris, tanpa kembar (satu PIB bisa tercatat
@@ -889,15 +1005,16 @@ function mstGambarBelumDicatat() {
     .join("");
 }
 
-/* ---------- daftar: per baris ---------- */
+/* ---------- kotak rincian: isi ---------- */
 
 /* Satu realisasi di rincian baris = satu <tbody>, satu baris tabel per
    PIB: tanggal & nomor aju berpasangan di baris yang sama. Jumlah,
    catatan & tombolnya milik realisasi (bukan per PIB), jadi selnya
    setinggi seluruh PIB-nya. */
-function mstRincianRealisasiHtml(u) {
+function mstRincianRealisasiHtml(u, b) {
   const pibs = mstPibs(u);
-  const isi = pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null }];
+  const isi = pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null, dokumen: null }];
+  const L = { tanggal: tt("Tanggal PIB", "PIB date"), aju: tt("Nomor aju", "Aju number"), jumlah: tt("Jumlah", "Quantity"), nilai: tt(`Nilai (${MST_MATA_UANG})`, `Value (${MST_MATA_UANG})`), catatan: tt("Catatan", "Notes") };
   const tinggi = isi.length > 1 ? ` rowspan="${isi.length}"` : "";
   const parsial =
     isi.length > 1
@@ -910,21 +1027,27 @@ function mstRincianRealisasiHtml(u) {
       : "";
   const id = escapeAttr(u.id);
   const milikRealisasi = `
-    <td class="mst-kol-angka"${tinggi}>${escapeHtml(mstFmt(u.qty))} ${parsial}</td>
-    <td class="mst-kol-angka"${tinggi}>${mstNilaiDb(u.invoice_value) != null ? escapeHtml(mstAngkaUang(u.invoice_value)) : `<span class="mst-redup">—</span>`}</td>
-    <td class="mst-rinci-catatan"${tinggi}>${u.notes ? escapeHtml(u.notes) : `<span class="mst-redup">—</span>`}</td>
+    <td class="mst-kol-angka" data-label="${escapeAttr(L.jumlah)}"${tinggi}>${escapeHtml(mstFmt(u.qty))} ${parsial}</td>
+    <td class="mst-kol-angka" data-label="${escapeAttr(L.nilai)}"${tinggi}>${mstNilaiDb(u.invoice_value) != null ? escapeHtml(mstAngkaUang(u.invoice_value)) : `<span class="mst-redup">—</span>`}</td>
+    <td class="mst-rinci-catatan" data-label="${escapeAttr(L.catatan)}"${tinggi}>${u.notes ? escapeHtml(u.notes) : `<span class="mst-redup">—</span>`}</td>
     <td class="mst-ubah"${tinggi}><div class="hscode-actions">
       <button type="button" class="mst-pib-tambah" data-mst-tambah-pib="${id}" title="${escapeAttr(
         tt("Tambah PIB kiriman berikutnya ke realisasi ini", "Add the next shipment's PIB to this realization"),
       )}"><i class="bi bi-plus-lg" aria-hidden="true"></i> PIB</button>
-      <button type="button" class="icon-btn" data-mst-ubah-realisasi="${id}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
-      <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${id}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
+      <button type="button" class="icon-btn" data-mst-ubah-realisasi="${id}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}" aria-label="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
+      <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${id}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}" aria-label="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
     </div></td>`;
+  const aturDok = (i) =>
+    pibs.length
+      ? `<button type="button" class="mst-dok-atur mst-ubah" data-mst-dok="${id}" data-mst-dok-pib="${i}"><i class="bi bi-file-earmark-text" aria-hidden="true"></i> ${escapeHtml(
+          tt("Atur dokumen", "Edit documents"),
+        )}</button>`
+      : "";
   return `<tbody class="${isi.length > 1 ? "mst-rinci-parsial" : ""}">${isi
     .map(
       (p, i) => `<tr>
-        <td class="mst-mono">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
-        <td class="mst-rinci-aju"><span class="mst-mono">${escapeHtml(p.aju)}</span></td>${i === 0 ? milikRealisasi : ""}
+        <td class="mst-mono" data-label="${escapeAttr(L.tanggal)}">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
+        <td class="mst-rinci-aju" data-label="${escapeAttr(L.aju)}">${mstAjuTautHtml(p.aju)}${mstDokPibHtml(mstDokumenPib(p, b), aturDok(i))}</td>${i === 0 ? milikRealisasi : ""}
       </tr>`,
     )
     .join("")}</tbody>`;
@@ -954,105 +1077,163 @@ function mstRincianNilaiHtml(b) {
     </div>`;
 }
 
+/* Angka ringkas di atas rincian: label kecil di atas angkanya. */
+const mstRingkasSelHtml = (label, isi, kelas) =>
+  `<div class="mst-ringkas-sel${kelas ? " " + kelas : ""}"><span class="mst-rinci-label">${escapeHtml(label)}</span> <span class="mst-ringkas-angka">${isi}</span></div>`;
+
+/* Isi kotak rincian SATU BARIS: kuota / terpakai / sisa, HS Code, lini &
+   spesifikasi lengkap (urutan unduhan Excel), nilai (USD), lalu tiap
+   realisasinya beserta dokumen PIB-nya. */
 function mstRincianBarisHtml(b) {
-  const boleh = canEdit();
   const realisasi = b.realisasi.length
     ? `<table class="mst-rinci-tabel">
         <thead><tr>
           <th>${escapeHtml(tt("Tanggal PIB", "PIB date"))}</th>
-          <th>${escapeHtml(tt("Nomor aju", "Aju number"))}</th>
+          <th>${escapeHtml(tt("Nomor aju & dokumen", "Aju number & documents"))}</th>
           <th class="mst-kol-angka">${escapeHtml(tt("Jumlah", "Quantity"))}</th>
           <th class="mst-kol-angka">${escapeHtml(tt(`Nilai (${MST_MATA_UANG})`, `Value (${MST_MATA_UANG})`))}</th>
           <th>${escapeHtml(tt("Catatan", "Notes"))}</th>
           <th class="mst-ubah"></th>
         </tr></thead>
-        ${b.realisasi.map(mstRincianRealisasiHtml).join("")}
+        ${b.realisasi.map((u) => mstRincianRealisasiHtml(u, b)).join("")}
       </table>`
     : `<p class="mst-redup mst-rinci-kosong">${escapeHtml(tt("Belum ada realisasi untuk baris ini.", "No realization recorded for this line yet."))}</p>`;
-
-  // HS Code lalu spesifikasi -- urutan kolom unduhan Excel
+  const kosong = `<span class="mst-redup">—</span>`;
   return `<div class="mst-rinci">
+      <div class="mst-ringkas">
+        ${mstRingkasSelHtml(tt("Kuota", "Quota"), `${escapeHtml(mstFmt(b.kuota))} <span class="mst-satuan">${escapeHtml(b.satuan)}</span>`)}
+        ${mstRingkasSelHtml(tt("Terpakai", "Used"), escapeHtml(mstFmt(b.terpakai)))}
+        ${mstRingkasSelHtml(tt("Sisa", "Remaining"), `<b>${escapeHtml(mstFmt(b.sisa))}</b>${mstTallyHtml(b.sisa, b.terpakai)}`, b.sisa > 0 ? "" : "is-habis")}
+      </div>
       <div class="mst-rinci-kepala">
-        <div class="mst-rinci-hs">
-          <span class="mst-rinci-label">HS Code</span>
-          <p class="mst-mono">${b.hsCode ? escapeHtml(b.hsCode) : `<span class="mst-redup">—</span>`}</p>
-        </div>
-        <div class="mst-rinci-spek">
-          <span class="mst-rinci-label">${escapeHtml(tt("Spesifikasi", "Specification"))}</span>
-          <p>${escapeHtml(b.spesifikasi || "—")}</p>
-        </div>
+        <div><span class="mst-rinci-label">HS Code</span><p class="mst-mono">${b.hsCode ? escapeHtml(b.hsCode) : kosong}</p></div>
+        <div><span class="mst-rinci-label">${escapeHtml(tt("Lini proses", "Process line"))}</span><p>${b.lini ? escapeHtml(b.lini) : kosong}</p></div>
+        <div class="mst-rinci-spek"><span class="mst-rinci-label">${escapeHtml(tt("Spesifikasi", "Specification"))}</span><p>${escapeHtml(b.spesifikasi || "—")}</p></div>
       </div>
       ${mstRincianNilaiHtml(b)}
       <div class="mst-rinci-realisasi">
         <span class="mst-rinci-label">${escapeHtml(tt("Realisasi", "Realizations"))}</span>
         ${realisasi}
       </div>
-      ${
-        boleh
-          ? `<div class="mst-rinci-aksi mst-ubah">
-          ${
-            b.sisa > 0
-              ? `<button type="button" class="btn-teal" data-mst-catat="${escapeAttr(b.id)}"><i class="bi bi-journal-plus"></i> ${escapeHtml(tt("Catat realisasi", "Record realization"))}</button>`
-              : ""
-          }
-          <button type="button" class="btn btn-form-cancel mst-tombol" data-mst-ubah-baris="${escapeAttr(b.id)}"><i class="bi bi-pencil"></i> ${escapeHtml(tt("Ubah baris", "Edit line"))}</button>
-          <button type="button" class="btn btn-form-cancel mst-tombol mst-tombol--hapus" data-mst-hapus-baris="${escapeAttr(b.id)}"><i class="bi bi-trash3"></i> ${escapeHtml(tt("Hapus baris", "Delete line"))}</button>
-        </div>`
-          : ""
-      }
     </div>`;
 }
 
+/* Unit & nilai invoice sebuah PIB. Realisasi PARSIAL milik gabungan
+   PIB-nya, jadi ditulis terpisah ("+1 parsial"), tidak dijumlahkan. */
+function mstUnitPibHtml(g) {
+  return (
+    (g.unit || !g.unitParsial ? escapeHtml(mstFmt(g.unit)) + " " : "") +
+    (g.unitParsial
+      ? `<span class="mst-parsial" title="${escapeAttr(
+          tt(
+            `${mstFmt(g.unitParsial)} unit dikirim bertahap bersama PIB lain; di kuota dihitung sekali.`,
+            `${mstFmt(g.unitParsial)} ${g.unitParsial === 1 ? "unit" : "units"} shipped in stages with another PIB; counted once against the quota.`,
+          ),
+        )}">${escapeHtml((g.unit ? "+" : "") + tt(`${mstFmt(g.unitParsial)} parsial`, `${mstFmt(g.unitParsial)} partial`))}</span>`
+      : "")
+  );
+}
+function mstNilaiPibHtml(g) {
+  if (!(g.nilai > 0 || g.nilaiParsial > 0 || g.tanpaNilai < g.isi.length)) return `<span class="mst-redup">—</span>`;
+  return (
+    (g.nilai || !g.nilaiParsial ? escapeHtml(mstAngkaUang(g.nilai)) + " " : "") +
+    (g.nilaiParsial
+      ? `<span class="mst-parsial">${escapeHtml((g.nilai ? "+" : "") + tt(`${mstAngkaUang(g.nilaiParsial)} parsial`, `${mstAngkaUang(g.nilaiParsial)} partial`))}</span>`
+      : "") +
+    (g.tanpaNilai ? `<span class="mst-spek">${escapeHtml(tt(`${mstFmt(g.tanpaNilai)} baris belum bernilai`, `${mstFmt(g.tanpaNilai)} ${g.tanpaNilai === 1 ? "line" : "lines"} without value`))}</span>` : "")
+  );
+}
+
+// Tanggal sebuah PIB belum sama di semua catatannya: ikon peringatan + kalimatnya
+function mstTanggalBedaHtml(g) {
+  if (!g.tanggalBeda) return "";
+  const daftar = [...g.semuaTanggal].sort().map(fmtDate).join(", ");
+  const ket = tt(
+    `Tanggal PIB ini belum sama di semua catatannya (${daftar}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} belum bertanggal` : ""}). Samakan lewat Atur tanggal.`,
+    `This PIB's date differs between its records (${daftar}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} undated` : ""}). Align them with Set date.`,
+  );
+  return `<i class="bi bi-exclamation-triangle-fill mst-tgl-beda" role="img" aria-label="${escapeAttr(ket)}" title="${escapeAttr(ket)}"></i>`;
+}
+
+/* Isi kotak rincian SATU PIB: baris-baris masterlist yang direalisasikan
+   PIB itu, dengan dokumennya. */
+function mstRincianPibHtml(g) {
+  const L = { barang: tt("Barang", "Item"), dokumen: tt("Dokumen", "Documents"), jumlah: tt("Jumlah", "Quantity"), nilai: tt(`Nilai (${MST_MATA_UANG})`, `Value (${MST_MATA_UANG})`), catatan: tt("Catatan", "Notes") };
+  const kosong = `<span class="mst-redup">—</span>`;
+  return `<div class="mst-rinci">
+      <div class="mst-ringkas">
+        ${mstRingkasSelHtml(tt("Baris", "Lines"), escapeHtml(mstFmt(g.isi.length)))}
+        ${mstRingkasSelHtml("Unit", mstUnitPibHtml(g))}
+        ${mstRingkasSelHtml(L.nilai, mstNilaiPibHtml(g))}
+      </div>
+      <table class="mst-rinci-tabel">
+        <thead><tr>
+          <th>No.</th><th>${escapeHtml(L.barang)}</th><th>${escapeHtml(L.dokumen)}</th><th class="mst-kol-angka">${escapeHtml(L.jumlah)}</th><th class="mst-kol-angka">${escapeHtml(L.nilai)}</th><th>${escapeHtml(L.catatan)}</th>
+        </tr></thead>
+        <tbody>${g.isi
+          .slice()
+          .sort((a, b) => a.baris.no - b.baris.no)
+          .map(
+            (x) => `<tr>
+            <td class="mst-mono" data-label="No.">${escapeHtml(x.baris.no)}</td>
+            <td data-label="${escapeAttr(L.barang)}"><span class="mst-nama">${escapeHtml(x.baris.nama)}</span><span class="mst-spek">${escapeHtml(mstSpekRingkas(x.baris.spek))}</span>${
+              x.lain.length
+                ? `<span class="mst-parsial">${escapeHtml(
+                    tt("Parsial, juga di PIB", "Partial, also under PIB") + " " + x.lain.map((p) => mstAjuRingkas(p.aju) + (p.tanggal ? " (" + fmtDate(p.tanggal) + ")" : "")).join(", "),
+                  )}</span>`
+                : ""
+            }</td>
+            <td data-label="${escapeAttr(L.dokumen)}">${mstDokPibHtml(mstDokumenPib(x.pib, x.baris), "")}</td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.jumlah)}">${escapeHtml(mstFmt(x.realisasi.qty))} <span class="mst-satuan">${escapeHtml(x.baris.satuan)}</span></td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.nilai)}">${mstNilaiDb(x.realisasi.invoice_value) != null ? escapeHtml(mstAngkaUang(x.realisasi.invoice_value)) : kosong}</td>
+            <td data-label="${escapeAttr(L.catatan)}">${x.realisasi.notes ? escapeHtml(x.realisasi.notes) : kosong}</td>
+          </tr>`,
+          )
+          .join("")}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ---------- daftar: per baris ---------- */
+
+/* Hanya yang perlu terlihat sekilas -- nomor, barang, kuota, terpakai,
+   sisa -- dan tombol mata ke kotak rincian (HS Code, spesifikasi lengkap,
+   lini, nilai USD, realisasi & dokumennya). Mengeklik barisnya pun
+   membuka rincian itu. */
 function mstTabelBarisHtml(baris) {
-  const L = {
-    barang: tt("Barang", "Item"),
-    lini: tt("Lini proses", "Process line"),
-    kuota: tt("Kuota", "Quota"),
-    terpakai: tt("Terpakai", "Used"),
-    sisa: tt("Sisa", "Remaining"),
-    aju: "PIB aju",
-  };
+  const L = { barang: tt("Barang", "Item"), kuota: tt("Kuota", "Quota"), terpakai: tt("Terpakai", "Used"), sisa: tt("Sisa", "Remaining") };
   return `<div class="mst-tabel-wrap">
       <table class="mst-tabel mst-tabel--baris">
         <thead><tr>
           <th class="mst-kol-no">No.</th>
           <th class="mst-kol-barang">${escapeHtml(L.barang)}</th>
-          <th class="mst-kol-lini">${escapeHtml(L.lini)}</th>
           <th class="mst-kol-angka">${escapeHtml(L.kuota)}</th>
           <th class="mst-kol-angka">${escapeHtml(L.terpakai)}</th>
           <th class="mst-kol-sisa">${escapeHtml(L.sisa)}</th>
-          <th class="mst-kol-aju">${escapeHtml(L.aju)}</th>
-          <th class="mst-kol-aksi"></th>
+          <th class="mst-kol-aksi"><span class="visually-hidden">${escapeHtml(tt("Aksi", "Actions"))}</span></th>
         </tr></thead>
         <tbody>${baris
           .map((b) => {
-            const buka = mstKeadaan.terbuka.has("b:" + b.id);
-            const rujukan = mstPibBaris(b);
-            return `<tr class="mst-baris${buka ? " is-terbuka" : ""}${b.sisa > 0 ? "" : " is-habis"}" data-mst-id="${escapeAttr(b.id)}">
+            const id = escapeAttr(b.id);
+            return `<tr class="mst-baris${b.sisa > 0 ? "" : " is-habis"}" data-mst-id="${id}" data-mst-detail="b:${id}">
             <td class="mst-kol-no">${escapeHtml(b.no)}</td>
             <td class="mst-kol-barang" data-no="${escapeAttr(b.no)}">
               <span class="mst-nama">${escapeHtml(b.nama)}</span>
               <span class="mst-spek">${escapeHtml(mstSpekRingkas(b.spek))}</span>
             </td>
-            <td class="mst-kol-lini" data-label="${escapeAttr(L.lini)}">${b.lini ? escapeHtml(b.lini) : `<span class="mst-redup">—</span>`}</td>
-            <td class="mst-kol-angka" data-label="${escapeAttr(L.kuota)}">${escapeHtml(mstFmt(b.kuota))} <span class="mst-satuan">${escapeHtml(b.satuan)}</span>${
-              b.nilaiKuota != null ? mstNilaiHtml(b.nilaiKuota) : ""
-            }</td>
-            <td class="mst-kol-angka" data-label="${escapeAttr(L.terpakai)}">${escapeHtml(mstFmt(b.terpakai))}${
-              b.nilaiKuota != null || b.nilaiTerpakai > 0 ? mstNilaiHtml(b.nilaiTerpakai) : ""
-            }</td>
-            <td class="mst-kol-sisa" data-label="${escapeAttr(L.sisa)}">${mstTallyHtml(b.sisa, b.terpakai)}<b>${escapeHtml(mstFmt(b.sisa))}</b>${mstNilaiSisaHtml(b)}</td>
-            <td class="mst-kol-aju" data-label="${escapeAttr(L.aju)}">${rujukan.length ? rujukan.map((p) => mstAjuCipHtml(p.aju, p.tanggal)).join("") : `<span class="mst-redup">—</span>`}</td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.kuota)}">${escapeHtml(mstFmt(b.kuota))} <span class="mst-satuan">${escapeHtml(b.satuan)}</span></td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.terpakai)}">${escapeHtml(mstFmt(b.terpakai))}</td>
+            <td class="mst-kol-sisa" data-label="${escapeAttr(L.sisa)}">${mstTallyHtml(b.sisa, b.terpakai)}<b>${escapeHtml(mstFmt(b.sisa))}</b>${mstTandaNilaiHtml(b)}</td>
             <td class="mst-kol-aksi"><div class="hscode-actions">
               ${
                 b.sisa > 0
-                  ? `<button type="button" class="icon-btn mst-ubah" data-mst-catat="${escapeAttr(b.id)}" title="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}"><i class="bi bi-journal-plus"></i></button>`
+                  ? `<button type="button" class="icon-btn mst-ubah" data-mst-catat="${id}" title="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}" aria-label="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}"><i class="bi bi-journal-plus"></i></button>`
                   : ""
               }
-              <button type="button" class="icon-btn mst-buka" data-mst-buka="b:${escapeAttr(b.id)}" aria-expanded="${buka}"
-                title="${escapeAttr(buka ? tt("Tutup rincian", "Hide details") : tt("Spesifikasi & realisasi", "Specification & realizations"))}"><i class="bi ${buka ? "bi-chevron-up" : "bi-chevron-down"}"></i></button>
+              <button type="button" class="icon-btn" data-mst-detail="b:${id}" title="${escapeAttr(tt("Lihat rincian", "View details"))}"
+                aria-label="${escapeAttr(tt(`Lihat rincian baris ${b.no}`, `View line ${b.no} details`))}"><i class="bi bi-eye"></i></button>
             </div></td>
-          </tr>${buka ? `<tr class="mst-baris-rinci"><td colspan="8">${mstRincianBarisHtml(b)}</td></tr>` : ""}`;
+          </tr>`;
           })
           .join("")}</tbody>
       </table>
@@ -1072,95 +1253,111 @@ function mstTabelPibHtml(kelompok) {
           <th class="mst-kol-angka">${escapeHtml(L.baris)}</th>
           <th class="mst-kol-angka">${escapeHtml(L.unit)}</th>
           <th class="mst-kol-angka">${escapeHtml(L.nilai)}</th>
-          <th class="mst-kol-aksi"></th>
+          <th class="mst-kol-aksi"><span class="visually-hidden">${escapeHtml(tt("Aksi", "Actions"))}</span></th>
         </tr></thead>
         <tbody>${kelompok
           .map((g) => {
-            const buka = mstKeadaan.terbuka.has("p:" + g.kunci);
+            const kunci = escapeAttr(g.kunci);
             const jadwal = g.jadwal
               ? `<button type="button" class="mst-taut" data-mst-jadwal="${escapeAttr(g.jadwal.id)}">${escapeHtml(dispVal(g.jadwal.party))}</button><span class="mst-spek">${escapeHtml(dispVal(g.jadwal.invoice))}</span>`
               : `<span class="mst-redup">—</span>`;
-            const isi = buka
-              ? `<tr class="mst-baris-rinci"><td colspan="7"><div class="mst-rinci">
-                  <table class="mst-rinci-tabel">
-                    <thead><tr>
-                      <th>No.</th><th>${escapeHtml(tt("Barang", "Item"))}</th><th class="mst-kol-angka">${escapeHtml(tt("Jumlah", "Quantity"))}</th><th class="mst-kol-angka">${escapeHtml(L.nilai)}</th><th>${escapeHtml(tt("Catatan", "Notes"))}</th>
-                    </tr></thead>
-                    <tbody>${g.isi
-                      .slice()
-                      .sort((a, b) => a.baris.no - b.baris.no)
-                      .map(
-                        (x) => `<tr>
-                        <td class="mst-mono">${escapeHtml(x.baris.no)}</td>
-                        <td><span class="mst-nama">${escapeHtml(x.baris.nama)}</span><span class="mst-spek">${escapeHtml(mstSpekRingkas(x.baris.spek))}</span>${
-                          x.lain.length
-                            ? `<span class="mst-parsial">${escapeHtml(
-                                tt("Parsial, juga di PIB", "Partial, also under PIB") +
-                                  " " +
-                                  x.lain.map((p) => mstAjuRingkas(p.aju) + (p.tanggal ? " (" + fmtDate(p.tanggal) + ")" : "")).join(", "),
-                              )}</span>`
-                            : ""
-                        }</td>
-                        <td class="mst-kol-angka">${escapeHtml(mstFmt(x.realisasi.qty))} <span class="mst-satuan">${escapeHtml(x.baris.satuan)}</span></td>
-                        <td class="mst-kol-angka">${
-                          mstNilaiDb(x.realisasi.invoice_value) != null ? escapeHtml(mstAngkaUang(x.realisasi.invoice_value)) : `<span class="mst-redup">—</span>`
-                        }</td>
-                        <td>${x.realisasi.notes ? escapeHtml(x.realisasi.notes) : `<span class="mst-redup">—</span>`}</td>
-                      </tr>`,
-                      )
-                      .join("")}</tbody>
-                  </table>
-                </div></td></tr>`
-              : "";
-            const beda = g.tanggalBeda
-              ? `<i class="bi bi-exclamation-triangle-fill mst-tgl-beda" role="img" aria-label="${escapeAttr(tt("Tanggal belum seragam", "Dates not uniform"))}" title="${escapeAttr(
-                  tt(
-                    `Tanggal PIB ini belum sama di semua catatannya (${[...g.semuaTanggal].sort().map(fmtDate).join(", ")}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} belum bertanggal` : ""}). Samakan lewat Atur tanggal.`,
-                    `This PIB's date differs between its records (${[...g.semuaTanggal].sort().map(fmtDate).join(", ")}${g.tanpaTanggal ? `; ${mstFmt(g.tanpaTanggal)} undated` : ""}). Align them with Set date.`,
-                  ),
-                )}"></i>`
-              : "";
-            const unit =
-              (g.unit || !g.unitParsial ? escapeHtml(mstFmt(g.unit)) + " " : "") +
-              (g.unitParsial
-                ? `<span class="mst-parsial" title="${escapeAttr(
-                    tt(
-                      `${mstFmt(g.unitParsial)} unit dikirim bertahap bersama PIB lain; di kuota dihitung sekali.`,
-                      `${mstFmt(g.unitParsial)} ${g.unitParsial === 1 ? "unit" : "units"} shipped in stages with another PIB; counted once against the quota.`,
-                    ),
-                  )}">${escapeHtml((g.unit ? "+" : "") + tt(`${mstFmt(g.unitParsial)} parsial`, `${mstFmt(g.unitParsial)} partial`))}</span>`
-                : "");
-            /* Nilai invoice PIB ini: aturannya sama dengan unit -- nilai realisasi
-               parsial milik gabungan PIB-nya, jadi ditulis terpisah. */
-            const adaNilai = g.nilai > 0 || g.nilaiParsial > 0 || g.tanpaNilai < g.isi.length;
-            const nilai = adaNilai
-              ? (g.nilai || !g.nilaiParsial ? escapeHtml(mstAngkaUang(g.nilai)) + " " : "") +
-                (g.nilaiParsial
-                  ? `<span class="mst-parsial">${escapeHtml((g.nilai ? "+" : "") + tt(`${mstAngkaUang(g.nilaiParsial)} parsial`, `${mstAngkaUang(g.nilaiParsial)} partial`))}</span>`
-                  : "") +
-                (g.tanpaNilai
-                  ? `<span class="mst-spek">${escapeHtml(tt(`${mstFmt(g.tanpaNilai)} baris belum bernilai`, `${mstFmt(g.tanpaNilai)} ${g.tanpaNilai === 1 ? "line" : "lines"} without value`))}</span>`
-                  : "")
-              : `<span class="mst-redup">—</span>`;
-            return `<tr class="mst-baris${buka ? " is-terbuka" : ""}">
+            return `<tr class="mst-baris" data-mst-detail="p:${kunci}">
             <td class="mst-kol-pib"><span class="mst-nama mst-mono" title="${escapeAttr(g.aju)}">${escapeHtml(g.jadwal ? g.jadwal.noAju : g.aju)}</span></td>
-            <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${g.tanggal ? escapeHtml(fmtDate(g.tanggal)) : `<span class="mst-redup">—</span>`}${beda}</td>
+            <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${g.tanggal ? escapeHtml(fmtDate(g.tanggal)) : `<span class="mst-redup">—</span>`}${mstTanggalBedaHtml(g)}</td>
             <td class="mst-kol-jadwal" data-label="${escapeAttr(L.jadwal)}">${jadwal}</td>
             <td class="mst-kol-angka" data-label="${escapeAttr(L.baris)}">${escapeHtml(mstFmt(g.isi.length))}</td>
-            <td class="mst-kol-angka" data-label="${escapeAttr(L.unit)}">${unit}</td>
-            <td class="mst-kol-angka mst-kol-nilai" data-label="${escapeAttr(L.nilai)}">${nilai}</td>
+            <td class="mst-kol-angka" data-label="${escapeAttr(L.unit)}">${mstUnitPibHtml(g)}</td>
+            <td class="mst-kol-angka mst-kol-nilai" data-label="${escapeAttr(L.nilai)}">${mstNilaiPibHtml(g)}</td>
             <td class="mst-kol-aksi"><div class="hscode-actions">
-              <button type="button" class="icon-btn mst-ubah" data-mst-tanggal-pib="${escapeAttr(g.kunci)}" title="${escapeAttr(
+              <button type="button" class="icon-btn mst-ubah" data-mst-tanggal-pib="${kunci}" title="${escapeAttr(
+                tt("Atur tanggal PIB ini di semua catatannya", "Set this PIB's date on all its records"),
+              )}" aria-label="${escapeAttr(
                 tt("Atur tanggal PIB ini di semua catatannya", "Set this PIB's date on all its records"),
               )}"><i class="bi bi-calendar-event"></i></button>
-              <button type="button" class="icon-btn mst-buka" data-mst-buka="p:${escapeAttr(g.kunci)}" aria-expanded="${buka}"
-                title="${escapeAttr(buka ? tt("Tutup rincian", "Hide details") : tt("Baris yang direalisasikan", "Lines realized"))}"><i class="bi ${buka ? "bi-chevron-up" : "bi-chevron-down"}"></i></button>
+              <button type="button" class="icon-btn" data-mst-detail="p:${kunci}" title="${escapeAttr(tt("Lihat rincian", "View details"))}"
+                aria-label="${escapeAttr(tt("Lihat baris yang direalisasikan PIB ini", "View the lines realized by this PIB"))}"><i class="bi bi-eye"></i></button>
             </div></td>
-          </tr>${isi}`;
+          </tr>`;
           })
           .join("")}</tbody>
       </table>
     </div>`;
+}
+
+/* ---------- kotak rincian (tombol mata) ----------
+
+   Satu kotak untuk kedua susunan: "b:<id baris>" atau "p:<kunci PIB>"
+   (mstKeadaan.detail). Isinya selalu dirakit dari data hidup -- setiap
+   kali halaman digambar ulang (realisasi dicatat / diubah / dihapus,
+   dokumen diatur) kotak yang terbuka ikut diperbarui, dan menutup
+   sendiri kalau yang dibukanya sudah tidak ada. Tombol-tombolnya
+   ditangani penangan klik halaman yang sama (mstTanganiKlik). */
+const mstDetailEl = $("#mstDetailModal");
+const mstDetailModal = mstDetailEl ? new bootstrap.Modal(mstDetailEl) : null;
+
+function mstDetailBaris(b) {
+  const boleh = canEdit();
+  const id = escapeAttr(b.id);
+  return {
+    ikon: "bi-box-seam",
+    judul: `<span class="mst-detail-no">No. ${escapeHtml(b.no)}</span> ${escapeHtml(b.nama)}`,
+    sub: escapeHtml(mstSpekRingkas(b.spek)),
+    isi: mstRincianBarisHtml(b),
+    aksi: boleh
+      ? `<button type="button" class="btn btn-form-cancel mst-tombol mst-tombol--hapus" data-mst-hapus-baris="${id}"><i class="bi bi-trash3"></i> ${escapeHtml(tt("Hapus baris", "Delete line"))}</button>
+         <button type="button" class="btn btn-form-cancel mst-tombol" data-mst-ubah-baris="${id}"><i class="bi bi-pencil"></i> ${escapeHtml(tt("Ubah baris", "Edit line"))}</button>
+         ${b.sisa > 0 ? `<button type="button" class="btn-teal" data-mst-catat="${id}"><i class="bi bi-journal-plus"></i> ${escapeHtml(tt("Catat realisasi", "Record realization"))}</button>` : ""}`
+      : "",
+  };
+}
+
+function mstDetailPib(g) {
+  const s = g.jadwal;
+  const tanggal = g.tanggal ? fmtDate(g.tanggal) : tt("Tanggal PIB belum diisi", "PIB date not set");
+  return {
+    ikon: "bi-file-earmark-text",
+    judul: `<span class="mst-detail-no">PIB</span> <span class="mst-mono">${escapeHtml(s ? s.noAju : g.aju)}</span>`,
+    sub: escapeHtml([tanggal, s && dispVal(s.party), s && dispVal(s.invoice)].filter(Boolean).join(" · ")) + mstTanggalBedaHtml(g),
+    isi: mstRincianPibHtml(g),
+    aksi:
+      (canEdit()
+        ? `<button type="button" class="btn btn-form-cancel mst-tombol" data-mst-tanggal-pib="${escapeAttr(g.kunci)}"><i class="bi bi-calendar-event"></i> ${escapeHtml(tt("Atur tanggal", "Set date"))}</button>`
+        : "") +
+      (s ? `<button type="button" class="btn-teal" data-mst-jadwal="${escapeAttr(s.id)}"><i class="bi bi-box-arrow-up-right"></i> ${escapeHtml(tt("Buka jadwal", "Open schedule"))}</button>` : ""),
+  };
+}
+
+/* Isi kotak rincian dari `baris` (mstSusun()). false = yang dibuka sudah
+   tidak ada. PIB dicari dari baris yang lolos saringan -- sama dengan
+   barisnya di daftar. */
+function mstGambarDetail(baris) {
+  const kunci = mstKeadaan.detail;
+  if (!kunci || !mstDetailEl) return false;
+  const id = kunci.slice(2);
+  let bagian = null;
+  if (kunci.startsWith("b:")) {
+    const b = baris.find((x) => x.id === id);
+    if (b) bagian = mstDetailBaris(b);
+  } else {
+    const g = mstPerPib(baris.filter((b) => mstCocok(b, mstSaringan()))).find((x) => x.kunci === id);
+    if (g) bagian = mstDetailPib(g);
+  }
+  if (!bagian) return false;
+  $("#mstDetailIkon").className = "bi " + bagian.ikon;
+  $("#mstDetailJudul").innerHTML = bagian.judul;
+  $("#mstDetailSub").innerHTML = bagian.sub;
+  $("#mstDetailIsi").innerHTML = bagian.isi;
+  $("#mstDetailAksi").innerHTML = bagian.aksi;
+  return true;
+}
+
+function mstBukaDetail(kunci) {
+  mstKeadaan.detail = kunci;
+  if (!mstGambarDetail(mstSusun())) {
+    mstKeadaan.detail = null;
+    return;
+  }
+  mstDetailModal.show();
 }
 
 /* ---------- daftar + paginasi ---------- */
@@ -1277,6 +1474,11 @@ function renderMasterlist() {
   mstGambarBelumDicatat();
   mstGambarSaringan(baris);
   mstGambarDaftar(baris);
+  // Kotak rincian yang terbuka ikut data terbaru -- yang dibukanya sudah tidak ada: ditutup
+  if (mstKeadaan.detail && !mstGambarDetail(baris)) {
+    mstKeadaan.detail = null;
+    mstDetailModal.hide();
+  }
 }
 
 /* ---------- memuat ---------- */
@@ -1502,7 +1704,11 @@ function mstGambarKetPib(i) {
     awas = true;
   } else if (bagian.length === 1) {
     const jadwal = mstJadwalUntukAju(bagian[0]);
-    if (jadwal.length === 1) pesan.push(tt("Jadwal", "Schedule") + ": " + dispVal(jadwal[0].party) + " · " + dispVal(jadwal[0].invoice));
+    if (jadwal.length === 1)
+      pesan.push(
+        tt("Jadwal", "Schedule") + ": " + dispVal(jadwal[0].party) + " · " + dispVal(jadwal[0].invoice) + ".",
+        tt("PI, LS, SKB PPh, SKB PPN & Masterlist (912) diambil langsung dari jadwal ini.", "PI, LS, SKB PPh, SKB PPN & Masterlist (912) are taken straight from this schedule."),
+      );
     const info = mstTanggalTercatat(mstKunciAju(bagian[0]), mstForm.id);
     if (info.catatan)
       pesan.push(
@@ -1737,7 +1943,7 @@ function mstBukaRealisasi(opsi) {
     return;
   }
   const pibKosong = () => ({ aju: "", tanggal: "", otomatis: false });
-  const pib = u ? mstPibs(u).map((p) => ({ aju: p.aju, tanggal: p.tanggal || "", otomatis: false })) : [Object.assign(pibKosong(), { aju: o.aju || "" })];
+  const pib = u ? mstPibs(u).map((p) => ({ aju: p.aju, tanggal: p.tanggal || "", otomatis: false, dokumen: p.dokumen })) : [Object.assign(pibKosong(), { aju: o.aju || "" })];
   if (!pib.length || (u && o.tambahPib)) pib.push(pibKosong());
   mstForm = u
     ? {
@@ -1845,7 +2051,7 @@ function mstPeriksaForm() {
       return { galat: tt("Satu kotak untuk satu nomor aju. PIB berikutnya ditambahkan lewat tombol Tambah PIB.", "One box per aju number. Add the next PIB with the Add PIB button.") };
     const kunci = mstKunciAju(aju);
     if (pib.some((x) => x.kunci === kunci)) return { galat: tt(`PIB ${aju} diisi dua kali.`, `PIB ${aju} is entered twice.`) };
-    pib.push({ aju, tanggal, kunci });
+    pib.push({ aju, tanggal, kunci, dokumen: p.dokumen || null });
   }
   if (!pib.length) return { galat: tt("Nomor aju PIB harus diisi.", "The PIB aju number is required.") };
   if (pib.length > 1 && !mstAdaKolom("pibs")) return { galat: mstPesanMigrasiPib() };
@@ -1887,7 +2093,7 @@ function mstPeriksaForm() {
     baris.push({ itemId: b.id, qty, no: b.no, nilai: n.nilai });
   }
   return {
-    pib: mstUrutPib(pib.map((p) => ({ aju: p.aju, tanggal: p.tanggal }))),
+    pib: mstUrutPib(pib.map((p) => ({ aju: p.aju, tanggal: p.tanggal, dokumen: p.dokumen }))),
     catatan: $("#mstCatatan").value.trim(),
     baris,
   };
@@ -2024,7 +2230,82 @@ function mstHapusRealisasi(id) {
       renderMasterlist();
       showToast(tt("Realisasi dihapus.", "Realization deleted."), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus Realisasi?", "Delete Realization?"), confirmText: tt("Hapus Realisasi", "Delete Realization"), icon: "bi-trash3" },
+  );
+}
+
+/* ---------- dokumen satu PIB (Atur dokumen) ---------- */
+
+/* Isian sendiri PI, LS, SKB PPh, SKB PPN & Masterlist (912) satu PIB
+   sebuah realisasi -- untuk PIB yang dokumennya tidak ada di jadwal, atau
+   berbeda. Kotak yang dibiarkan kosong memakai dokumen dari jadwal
+   (contohnya tertulis redup di kotak itu). Tersimpan di pibs[].dokumen. */
+function mstAturDokumen(id, i) {
+  if (!requireEdit()) return;
+  const u = mstRealisasiDb.find((x) => x.id === id);
+  const pibs = mstPibs(u);
+  const p = pibs[i];
+  if (!p) return;
+  const b = mstSusun().find((r) => r.id === u.item_id);
+  const otomatis = mstDokumenPib(Object.assign({}, p, { dokumen: null }), b);
+  const isi = p.dokumen || {};
+  const contoh = (k, kolom) => (k === "pi" && kolom === "nomor" && otomatis.tanpaPi ? MST_TANPA_PI() : ((otomatis[k] || [])[0] || {})[kolom] || "");
+  const fields = [];
+  MST_DOK.forEach((k) => {
+    const d = isi[k] || {};
+    const lebar = k === "pi" ? "sepertiga" : "setengah";
+    const tgl = contoh(k, "tanggal");
+    fields.push(
+      { key: k + "_nomor", label: tt(`Nomor ${MST_LABEL_DOK[k]}`, `${MST_LABEL_DOK[k]} number`), value: d.nomor || "", placeholder: contoh(k, "nomor"), lebar },
+      { key: k + "_tanggal", label: tt(`Tanggal ${MST_LABEL_DOK[k]}`, `${MST_LABEL_DOK[k]} date`), type: "date", value: d.tanggal || "", lebar, hint: tgl ? tt(`Kosong: ${fmtDate(tgl)}`, `Empty: ${fmtDate(tgl)}`) : "" },
+    );
+    if (k === "pi") fields.push({ key: "pi_noItem", label: tt("No. item di PI", "Item no. in PI"), value: d.noItem || "", placeholder: contoh(k, "noItem"), inputmode: "numeric", lebar });
+  });
+  const baris = b ? `${b.no} · ${b.nama}` : "?";
+  const j = otomatis.jadwal;
+  showPrompt({
+    title: tt(`Dokumen PIB ${mstAjuRingkas(p.aju)}`, `PIB ${mstAjuRingkas(p.aju)} documents`),
+    desc: j
+      ? tt(
+          `Baris ${baris}. Kotak yang dikosongkan memakai dokumen jadwal ${dispVal(j.party)} (${dispVal(j.invoice)}) — isinya tertulis redup di kotaknya.`,
+          `Line ${baris}. Boxes left empty use the documents of schedule ${dispVal(j.party)} (${dispVal(j.invoice)}) — shown faded in each box.`,
+        )
+      : tt(
+          `Baris ${baris}. Tidak ada jadwal dengan nomor aju ini — isi dokumennya di sini. Masterlist (912) yang dikosongkan memakai No. SK dokumen masterlist.`,
+          `Line ${baris}. No schedule has this aju number — enter its documents here. An empty Masterlist (912) uses the masterlist decree number.`,
+        ),
+    icon: "bi-file-earmark-text",
+    okText: tt("Simpan", "Save"),
+    fields,
+    onSubmit: (v) => {
+      const dokumen = mstRapikanDokumen(
+        Object.fromEntries(MST_DOK.map((k) => [k, { nomor: v[k + "_nomor"], tanggal: v[k + "_tanggal"], noItem: v[k + "_noItem"] }])),
+      );
+      if (dokumen && !mstAdaKolom("pibs")) return mstPesanMigrasiPib();
+      mstSimpanDokumenPib(u, i, dokumen);
+      return true;
+    },
+  });
+}
+
+async function mstSimpanDokumenPib(u, i, dokumen) {
+  const pibs = mstPibs(u).map((p, j) => (j === i ? Object.assign({}, p, { dokumen }) : p));
+  let galat = null;
+  try {
+    const h = await mstKirim((m) => supabaseClient.from("masterlist_usages").update(m[0]).eq("id", u.id), [mstKolomPib(pibs)]);
+    galat = h.error;
+    if (!galat) Object.assign(u, h.muatan[0]);
+  } catch (e) {
+    galat = e;
+  }
+  if (galat) {
+    console.error(galat);
+    return showToast(mstPesanGalat(galat, tt("Dokumen PIB gagal disimpan. Coba lagi.", "The PIB documents could not be saved. Try again.")), "danger");
+  }
+  renderMasterlist();
+  showToast(
+    dokumen ? tt("Dokumen PIB disimpan.", "PIB documents saved.") : tt("Dokumen PIB kembali mengikuti jadwal.", "PIB documents follow the schedule again."),
+    "success",
   );
 }
 
@@ -2071,7 +2352,7 @@ function mstAturTanggalPib(kunci) {
 async function mstSimpanTanggalPib(kunci, label, realisasi, tanggal) {
   const hasil = await Promise.all(
     realisasi.map(async (u) => {
-      const pibs = mstPibs(u).map((p) => (mstKunciAju(p.aju) === kunci ? { aju: p.aju, tanggal } : p));
+      const pibs = mstPibs(u).map((p) => (mstKunciAju(p.aju) === kunci ? Object.assign({}, p, { tanggal }) : p));
       // Tanggal per PIB sebuah realisasi parsial hanya bisa disimpan di kolom pibs
       if (pibs.length > 1 && !mstAdaKolom("pibs")) return { lewat: true };
       try {
@@ -2319,11 +2600,10 @@ function mstHapusBaris(id) {
       }
       mstBarisDb = mstBarisDb.filter((x) => x.id !== id);
       mstRealisasiDb = mstRealisasiDb.filter((u) => u.item_id !== id);
-      mstKeadaan.terbuka.delete("b:" + id);
       renderMasterlist();
       showToast(tt(`Baris ${b.no} dihapus.`, `Line ${b.no} deleted.`), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus Baris Masterlist?", "Delete Masterlist Line?"), confirmText: tt("Hapus Baris", "Delete Line"), icon: "bi-trash3" },
   );
 }
 
@@ -2398,6 +2678,8 @@ function mstBarisExcel(baris) {
     const pibs = mstPibBaris(b);
     const aju = pibs.map((p) => p.aju).join(" / ");
     const kosong = (n) => (n == null ? "" : n);
+    // Dokumen tiap PIB realisasinya (mstDokumenPib), teks tanpa kembar: "nomor (dd-mm-yyyy)"
+    const dok = b.realisasi.flatMap((u) => mstPibs(u).map((p) => mstDokumenPib(p, b)));
     return [
       b.no,
       b.nama,
@@ -2413,8 +2695,19 @@ function mstBarisExcel(baris) {
       kosong(b.nilaiKuota),
       b.nilaiKuota != null || b.nilaiTerpakai > 0 ? b.nilaiTerpakai : "",
       kosong(b.nilaiSisa),
-    ];
+    ].concat(MST_DOK.map((k) => [...new Set(dok.map((d) => mstTeksDokExcel(d, k)).filter(Boolean))].join(" / ")));
   });
+}
+
+/* Dokumen di unduhan Excel: "nomor (dd-mm-yyyy)", PI dengan " ITEM 5";
+   barang baru "TIDAK MENGGUNAKAN PI". Berkasnya dokumen kerja, jadi
+   isinya tidak berganti bahasa (seperti judul kolomnya). */
+function mstTeksDokExcel(dok, k) {
+  if (k === "pi" && dok.tanpaPi) return "TIDAK MENGGUNAKAN PI";
+  return (dok[k] || [])
+    .map((d) => [d.nomor, d.tanggal ? `(${fmtDate(d.tanggal)})` : "", k === "pi" && d.noItem ? "ITEM " + d.noItem : ""].filter(Boolean).join(" "))
+    .filter(Boolean)
+    .join(" / ");
 }
 
 /* Lembar kedua, "REALISASI PER PIB": tiap realisasi satu blok, SATU BARIS
@@ -2436,7 +2729,7 @@ function mstBlokRealisasiExcel(baris) {
         qty: mstBulat(u.qty),
         nilai: mstNilaiDb(u.invoice_value),
         catatan: u.notes || "",
-        pib: (pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null }]).map((p) => ({ aju: p.aju, tanggal: p.tanggal || null })),
+        pib: (pibs.length ? pibs : [{ aju: String(u.aju_ref || ""), tanggal: null, dokumen: null }]).map((p) => ({ aju: p.aju, tanggal: p.tanggal || null, dok: mstDokumenPib(p, b) })),
       });
     }),
   );
@@ -2474,7 +2767,7 @@ async function mstUnduhExcel() {
     /* Tabel mulai di kolom A: NO, DESCRIPTION, HS CODE, SPECIFICATION ...
        -- dari SPECIFICATION ke kanan hurufnya tetap (D s.d. N), jadi
        rumus di bawah sama dengan berkas aslinya. */
-    ws.columns = [5, 44, 13, 58, 8, 8, 8, 11, 22, 13, 13, 16, 16, 16].map((width) => ({ width }));
+    ws.columns = [5, 44, 13, 58, 8, 8, 8, 11, 22, 13, 13, 16, 16, 16, 34, 34, 34, 34, 34].map((width) => ({ width }));
     const FORMAT_UANG = "#,##0.00";
     const tepi = { style: "thin", color: { argb: "FF000000" } };
     const bingkai = { top: tepi, left: tepi, bottom: tepi, right: tepi };
@@ -2491,9 +2784,11 @@ async function mstUnduhExcel() {
         sel.alignment = { vertical: "middle", horizontal: o.tebal || kiri.indexOf(i) < 0 ? "center" : "left", wrapText: kiri.indexOf(i) >= 0 };
       });
     };
-    const tulis = penulis(ws, [1, 3]);
+    // Kolom dokumen (O s.d. S) di kanan kolom lama -- huruf & rumus kolom lama tetap
+    const tulis = penulis(ws, [1, 3, 14, 15, 16, 17, 18]);
     const U = MST_MATA_UANG;
-    tulis(1, ["NO", "DESCRIPTION", "HS CODE", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", "PIB DATE", "ACTUAL QTY", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`], { tebal: true });
+    const JUDUL_DOK = { pi: "PI", ls: "LS", pph: "SKB PPH", ppn: "SKB PPN", masterlist: "MASTERLIST (912)" };
+    tulis(1, ["NO", "DESCRIPTION", "HS CODE", "SPECIFICATION OF GOODS", "UoM", "QTTY", "USED", "REMAIN", "PIB AJU", "PIB DATE", "ACTUAL QTY", `VALUE (${U})`, `USED VALUE (${U})`, `REMAIN VALUE (${U})`].concat(MST_DOK.map((k) => JUDUL_DOK[k])), { tebal: true });
     ws.getRow(1).height = 36;
     mstBarisExcel(baris).forEach((r, i) => {
       const n = i + 2;
@@ -2501,7 +2796,7 @@ async function mstUnduhExcel() {
       const tglPib = /^\d{4}-\d{2}-\d{2}$/.test(r[9]) ? mstTanggalExcel(r[9]) : r[9];
       // REMAIN = QTTY - USED (dan REMAIN VALUE = VALUE - USED VALUE), sebagai rumus
       // dengan hasilnya, supaya tetap benar kalau berkasnya disunting
-      tulis(n, r.slice(0, 7).concat([{ formula: `F${n}-G${n}`, result: r[7] }, r[8], tglPib, r[10], r[11], r[12], r[11] === "" ? "" : { formula: `L${n}-M${n}`, result: r[13] }]));
+      tulis(n, r.slice(0, 7).concat([{ formula: `F${n}-G${n}`, result: r[7] }, r[8], tglPib, r[10], r[11], r[12], r[11] === "" ? "" : { formula: `L${n}-M${n}`, result: r[13] }], r.slice(14)));
       if (tglPib instanceof Date) ws.getCell(n, 10).numFmt = "dd-mm-yyyy";
       [12, 13, 14].forEach((kol) => (ws.getCell(n, kol).numFmt = FORMAT_UANG));
       ws.getRow(n).height = 30.75;
@@ -2529,37 +2824,52 @@ async function mstUnduhExcel() {
         jumlah("L", ring.nilaiKuota),
         jumlah("M", mstUang(bernilai.reduce((s, b) => s + b.nilaiTerpakai, 0))),
         jumlah("N", ring.nilaiSisa),
-      ],
+      ].concat(MST_DOK.map(() => "")),
       { tebal: true },
     );
     [12, 13, 14].forEach((kol) => (ws.getCell(total, kol).numFmt = FORMAT_UANG));
     ws.views = [{ state: "frozen", ySplit: 1 }];
 
-    // Lembar kedua: pasangan nomor aju - tanggal PIB, satu baris per PIB
+    /* Lembar kedua: pasangan nomor aju - tanggal PIB, satu baris per PIB,
+       lalu dokumen PIB itu -- nomor & tanggal per dokumen (I s.d. S),
+       NOTES di ujung (T). */
     const ws2 = wb.addWorksheet("REALISASI PER PIB");
-    // Juga mulai di kolom A, HS CODE di samping DESCRIPTION; dari UoM ke kanan hurufnya tetap (D s.d. I)
-    ws2.columns = [5, 40, 13, 8, 8, 16, 32, 13, 40].map((width) => ({ width }));
-    const tulis2 = penulis(ws2, [1, 8]);
-    tulis2(1, ["NO", "DESCRIPTION", "HS CODE", "UoM", "QTTY", `VALUE (${U})`, "PIB AJU", "PIB DATE", "NOTES"], { tebal: true });
+    const KOLOM_DOK = MST_DOK.flatMap((k) => [[k, "nomor"], [k, "tanggal"]].concat(k === "pi" ? [[k, "noItem"]] : []));
+    const JUDUL_DOK2 = { nomor: "NO", tanggal: "DATE", noItem: "ITEM NO" };
+    const KOL_CATATAN = 9 + KOLOM_DOK.length;
+    // Juga mulai di kolom A, HS CODE di samping DESCRIPTION; dari UoM ke kanan hurufnya tetap (D s.d. H)
+    ws2.columns = [5, 40, 13, 8, 8, 16, 32, 13].concat(KOLOM_DOK.map(([, kolom]) => (kolom === "nomor" ? 30 : kolom === "noItem" ? 9 : 13)), [40]).map((width) => ({ width }));
+    const tulis2 = penulis(ws2, [1, KOL_CATATAN - 1].concat(KOLOM_DOK.map((x, i) => (x[1] === "nomor" ? 8 + i : -1)).filter((i) => i >= 0)));
+    tulis2(1, ["NO", "DESCRIPTION", "HS CODE", "UoM", "QTTY", `VALUE (${U})`, "PIB AJU", "PIB DATE"].concat(KOLOM_DOK.map(([k, kolom]) => `${JUDUL_DOK[k]} ${JUDUL_DOK2[kolom]}`), ["NOTES"]), { tebal: true });
     ws2.getRow(1).height = 30;
+    // Satu dokumen bertanggal = sel tanggal sungguhan; beberapa = teks; PI barang baru = TIDAK MENGGUNAKAN PI
+    const selDok = (dok, k, kolom) => {
+      if (!dok) return "";
+      if (k === "pi" && dok.tanpaPi) return kolom === "nomor" ? "TIDAK MENGGUNAKAN PI" : "";
+      const isi = (dok[k] || []).map((d) => d[kolom] || "").filter(Boolean);
+      if (kolom === "tanggal") return isi.length === 1 ? mstTanggalExcel(isi[0]) : isi.map(fmtDate).join(" / ");
+      return isi.join(" / ");
+    };
     let n2 = 2;
     const blok = mstBlokRealisasiExcel(baris);
     blok.forEach((k) => {
       k.pib.forEach((p, j) => {
         const aju = /^\d{1,15}$/.test(p.aju) ? Number(p.aju) : p.aju;
         const tgl = p.tanggal ? mstTanggalExcel(p.tanggal) : "";
-        tulis2(n2 + j, j === 0 ? [k.no, k.nama, k.hsCode, k.satuan, k.qty, k.nilai == null ? "" : k.nilai, aju, tgl, k.catatan] : ["", "", "", "", "", "", aju, tgl, ""]);
+        const dok = KOLOM_DOK.map(([jenis, kolom]) => selDok(p.dok, jenis, kolom));
+        tulis2(n2 + j, (j === 0 ? [k.no, k.nama, k.hsCode, k.satuan, k.qty, k.nilai == null ? "" : k.nilai] : ["", "", "", "", "", ""]).concat([aju, tgl], dok, [j === 0 ? k.catatan : ""]));
         if (p.tanggal) ws2.getCell(n2 + j, 8).numFmt = "dd-mm-yyyy";
+        dok.forEach((v, i) => v instanceof Date && (ws2.getCell(n2 + j, 9 + i).numFmt = "dd-mm-yyyy"));
       });
       ws2.getCell(n2, 6).numFmt = FORMAT_UANG;
       // Realisasi parsial: No, uraian, HS Code, satuan, jumlah, nilai & catatan setinggi seluruh PIB-nya
-      if (k.pib.length > 1) [1, 2, 3, 4, 5, 6, 9].forEach((kol) => ws2.mergeCells(n2, kol, n2 + k.pib.length - 1, kol));
+      if (k.pib.length > 1) [1, 2, 3, 4, 5, 6, KOL_CATATAN].forEach((kol) => ws2.mergeCells(n2, kol, n2 + k.pib.length - 1, kol));
       n2 += k.pib.length;
     });
     const nilaiBlok = mstUang(blok.reduce((s, k) => s + (k.nilai || 0), 0));
     tulis2(
       n2,
-      ["", "TOTAL", "", "", n2 > 2 ? { formula: `SUM(E2:E${n2 - 1})`, result: ring.terpakai } : 0, n2 > 2 ? { formula: `SUM(F2:F${n2 - 1})`, result: nilaiBlok } : 0, "", "", ""],
+      ["", "TOTAL", "", "", n2 > 2 ? { formula: `SUM(E2:E${n2 - 1})`, result: ring.terpakai } : 0, n2 > 2 ? { formula: `SUM(F2:F${n2 - 1})`, result: nilaiBlok } : 0, "", ""].concat(KOLOM_DOK.map(() => ""), [""]),
       { tebal: true },
     );
     ws2.getCell(n2, 6).numFmt = FORMAT_UANG;
@@ -2589,6 +2899,7 @@ async function mstUnduhExcel() {
    sana, dan urutan telusurnya mengikuti daftar buku Import). */
 function mstBukaJadwal(id) {
   if (!id) return;
+  if (mstDetailModal) mstDetailModal.hide();
   if (activeMode !== "import") switchMode("import");
   location.hash = "#/";
   setTimeout(() => openDetailView(id), 60);
@@ -2606,96 +2917,101 @@ function mstKeDaftar() {
   if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/* Satu penangan klik untuk halaman DAN kotak rincian -- tombol-tombol di
+   kotak rincian sama dengan yang dulu ada di baris yang dibuka. */
+function mstTanganiKlik(e) {
+  const cari = (sel) => e.target.closest(sel);
+  let el;
+
+  if (cari("#btnMstCatat")) return mstBukaRealisasi();
+  if (cari("#btnMstBaris")) return mstTambahBaris();
+  if (cari("#btnMstDokumen")) return mstUbahDokumen();
+  if (cari("#btnMstExcel")) return void mstUnduhExcel();
+  if (cari("#btnMstCetak")) return cetakMasterlist();
+  if (cari("#btnMstMuat")) return void loadMasterlist();
+
+  if ((el = cari("[data-mst-tampilan]"))) {
+    if (mstKeadaan.tampilan === el.dataset.mstTampilan) return;
+    mstKeadaan.tampilan = el.dataset.mstTampilan;
+    return mstSaringUlang();
+  }
+  // Panel "Kuota yang masih tersedia": klik jenis -> daftar disaring ke jenis itu (klik lagi melepasnya)
+  if ((el = cari("[data-mst-jenis]"))) {
+    const pilih = { nama: el.dataset.mstJenis, lini: el.dataset.mstJenisLini };
+    const sama = mstKeadaan.jenis && mstKeadaan.jenis.nama === pilih.nama && mstKeadaan.jenis.lini === pilih.lini;
+    mstKeadaan.jenis = sama ? null : pilih;
+    mstKeadaan.tampilan = "baris";
+    mstSaringUlang();
+    if (!sama) mstKeDaftar();
+    return;
+  }
+  if (cari("[data-mst-lepas-jenis]")) {
+    mstKeadaan.jenis = null;
+    return mstSaringUlang();
+  }
+  if (cari("[data-mst-semua-jenis]")) {
+    mstKeadaan.semuaJenis = !mstKeadaan.semuaJenis;
+    return renderMasterlist();
+  }
+  if ((el = cari("[data-mst-lihat-status]"))) {
+    mstKeadaan.jenis = null;
+    mstKeadaan.tampilan = "baris";
+    $("#mstSearch").value = "";
+    $("#mstStatus").value = el.dataset.mstLihatStatus;
+    mstSaringUlang();
+    return mstKeDaftar();
+  }
+  if ((el = cari("[data-mst-jadwal]"))) return mstBukaJadwal(el.dataset.mstJadwal);
+  if ((el = cari("[data-mst-catat-jadwal]"))) {
+    const s = ((data && data.import) || []).find((x) => x.id === el.dataset.mstCatatJadwal);
+    if (!s) return;
+    // Yang tidak mengubah data membuka jadwalnya; EXIM langsung mencatat
+    if (!canEdit()) return mstBukaJadwal(s.id);
+    // Nilai barangnya (jumlah x harga di form jadwal, USD) ikut ditulis: patokan mengisi nilai invoice
+    const barang = mstBarangMasterlist(s)
+      .map((it) => {
+        const nilai = mstUang((Number(it.qty) || 0) * (Number(it.harga) || 0));
+        return `${itemDisplayName(it)} (${`${mstFmt(it.qty)} ${it.satuan || ""}`.trim()}${nilai > 0 ? ", " + mstFmtUang(nilai) : ""})`;
+      })
+      .join(", ");
+    return mstBukaRealisasi({
+      aju: s.noAju || "",
+      ket: tt(`${dispVal(s.party)} — barang berfasilitas Masterlist: ${barang}.`, `${dispVal(s.party)} — items under the Masterlist facility: ${barang}.`),
+    });
+  }
+  if ((el = cari("[data-mst-catat]"))) return mstBukaRealisasi({ itemId: el.dataset.mstCatat });
+  if ((el = cari("[data-mst-tambah-pib]"))) {
+    const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstTambahPib);
+    return u ? mstBukaRealisasi({ realisasi: u, tambahPib: true }) : undefined;
+  }
+  if ((el = cari("[data-mst-tanggal-pib]"))) return mstAturTanggalPib(el.dataset.mstTanggalPib);
+  if ((el = cari("[data-mst-dok]"))) return mstAturDokumen(el.dataset.mstDok, Number(el.dataset.mstDokPib));
+  if ((el = cari("[data-mst-ubah-realisasi]"))) {
+    const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstUbahRealisasi);
+    return u ? mstBukaRealisasi({ realisasi: u }) : undefined;
+  }
+  if ((el = cari("[data-mst-hapus-realisasi]"))) return mstHapusRealisasi(el.dataset.mstHapusRealisasi);
+  if ((el = cari("[data-mst-ubah-baris]"))) return mstUbahBaris(el.dataset.mstUbahBaris);
+  if ((el = cari("[data-mst-hapus-baris]"))) return mstHapusBaris(el.dataset.mstHapusBaris);
+  if ((el = cari("[data-mstpage]"))) {
+    mstKeadaan.halaman = Number(el.dataset.mstpage);
+    return renderMasterlist();
+  }
+  if ((el = cari("[data-mstnav]"))) {
+    mstKeadaan.halaman += el.dataset.mstnav === "next" ? 1 : -1;
+    return renderMasterlist();
+  }
+  /* Tombol mata -- atau barisnya sendiri (sesudah semua tombol di
+     dalamnya; teks yang sedang diseleksi untuk disalin tidak membukanya). */
+  if ((el = cari("[data-mst-detail]"))) {
+    if (!cari("button") && String(window.getSelection ? window.getSelection() : "")) return;
+    return mstBukaDetail(el.dataset.mstDetail);
+  }
+}
+
 const mstHalamanEl = $("#viewMasterlist");
 if (mstHalamanEl) {
-  mstHalamanEl.addEventListener("click", (e) => {
-    const cari = (sel) => e.target.closest(sel);
-    let el;
-
-    if (cari("#btnMstCatat")) return mstBukaRealisasi();
-    if (cari("#btnMstBaris")) return mstTambahBaris();
-    if (cari("#btnMstDokumen")) return mstUbahDokumen();
-    if (cari("#btnMstExcel")) return void mstUnduhExcel();
-    if (cari("#btnMstCetak")) return cetakMasterlist();
-    if (cari("#btnMstMuat")) return void loadMasterlist();
-
-    if ((el = cari("[data-mst-tampilan]"))) {
-      if (mstKeadaan.tampilan === el.dataset.mstTampilan) return;
-      mstKeadaan.tampilan = el.dataset.mstTampilan;
-      return mstSaringUlang();
-    }
-    // Panel "Kuota yang masih tersedia": klik jenis -> daftar disaring ke jenis itu (klik lagi melepasnya)
-    if ((el = cari("[data-mst-jenis]"))) {
-      const pilih = { nama: el.dataset.mstJenis, lini: el.dataset.mstJenisLini };
-      const sama = mstKeadaan.jenis && mstKeadaan.jenis.nama === pilih.nama && mstKeadaan.jenis.lini === pilih.lini;
-      mstKeadaan.jenis = sama ? null : pilih;
-      mstKeadaan.tampilan = "baris";
-      mstSaringUlang();
-      if (!sama) mstKeDaftar();
-      return;
-    }
-    if (cari("[data-mst-lepas-jenis]")) {
-      mstKeadaan.jenis = null;
-      return mstSaringUlang();
-    }
-    if (cari("[data-mst-semua-jenis]")) {
-      mstKeadaan.semuaJenis = !mstKeadaan.semuaJenis;
-      return renderMasterlist();
-    }
-    if ((el = cari("[data-mst-lihat-status]"))) {
-      mstKeadaan.jenis = null;
-      mstKeadaan.tampilan = "baris";
-      $("#mstSearch").value = "";
-      $("#mstStatus").value = el.dataset.mstLihatStatus;
-      mstSaringUlang();
-      return mstKeDaftar();
-    }
-    if ((el = cari("[data-mst-buka]"))) {
-      const kunci = el.dataset.mstBuka;
-      if (mstKeadaan.terbuka.has(kunci)) mstKeadaan.terbuka.delete(kunci);
-      else mstKeadaan.terbuka.add(kunci);
-      return renderMasterlist();
-    }
-    if ((el = cari("[data-mst-jadwal]"))) return mstBukaJadwal(el.dataset.mstJadwal);
-    if ((el = cari("[data-mst-catat-jadwal]"))) {
-      const s = ((data && data.import) || []).find((x) => x.id === el.dataset.mstCatatJadwal);
-      if (!s) return;
-      // Yang tidak mengubah data membuka jadwalnya; EXIM langsung mencatat
-      if (!canEdit()) return mstBukaJadwal(s.id);
-      // Nilai barangnya (jumlah x harga di form jadwal, USD) ikut ditulis: patokan mengisi nilai invoice
-      const barang = mstBarangMasterlist(s)
-        .map((it) => {
-          const nilai = mstUang((Number(it.qty) || 0) * (Number(it.harga) || 0));
-          return `${itemDisplayName(it)} (${`${mstFmt(it.qty)} ${it.satuan || ""}`.trim()}${nilai > 0 ? ", " + mstFmtUang(nilai) : ""})`;
-        })
-        .join(", ");
-      return mstBukaRealisasi({
-        aju: s.noAju || "",
-        ket: tt(`${dispVal(s.party)} — barang berfasilitas Masterlist: ${barang}.`, `${dispVal(s.party)} — items under the Masterlist facility: ${barang}.`),
-      });
-    }
-    if ((el = cari("[data-mst-catat]"))) return mstBukaRealisasi({ itemId: el.dataset.mstCatat });
-    if ((el = cari("[data-mst-tambah-pib]"))) {
-      const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstTambahPib);
-      return u ? mstBukaRealisasi({ realisasi: u, tambahPib: true }) : undefined;
-    }
-    if ((el = cari("[data-mst-tanggal-pib]"))) return mstAturTanggalPib(el.dataset.mstTanggalPib);
-    if ((el = cari("[data-mst-ubah-realisasi]"))) {
-      const u = mstRealisasiDb.find((x) => x.id === el.dataset.mstUbahRealisasi);
-      return u ? mstBukaRealisasi({ realisasi: u }) : undefined;
-    }
-    if ((el = cari("[data-mst-hapus-realisasi]"))) return mstHapusRealisasi(el.dataset.mstHapusRealisasi);
-    if ((el = cari("[data-mst-ubah-baris]"))) return mstUbahBaris(el.dataset.mstUbahBaris);
-    if ((el = cari("[data-mst-hapus-baris]"))) return mstHapusBaris(el.dataset.mstHapusBaris);
-    if ((el = cari("[data-mstpage]"))) {
-      mstKeadaan.halaman = Number(el.dataset.mstpage);
-      return renderMasterlist();
-    }
-    if ((el = cari("[data-mstnav]"))) {
-      mstKeadaan.halaman += el.dataset.mstnav === "next" ? 1 : -1;
-      return renderMasterlist();
-    }
-  });
+  mstHalamanEl.addEventListener("click", mstTanganiKlik);
   mstHalamanEl.addEventListener("change", (e) => {
     if (e.target.id === "mstStatus" || e.target.id === "mstLini") return mstSaringUlang();
     if (e.target.id === "mstPageSize") {
@@ -2705,6 +3021,14 @@ if (mstHalamanEl) {
   });
   const mstSearchEl = $("#mstSearch");
   if (mstSearchEl) mstSearchEl.addEventListener("input", mstSaringUlang);
+}
+
+if (mstDetailEl) {
+  mstDetailEl.addEventListener("click", mstTanganiKlik);
+  mstDetailEl.addEventListener("hidden.bs.modal", () => {
+    mstKeadaan.detail = null;
+  });
+  window.addEventListener("hashchange", () => mstDetailModal.hide());
 }
 
 if (mstModalEl) {

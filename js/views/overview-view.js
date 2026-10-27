@@ -13,6 +13,17 @@ function buildTaskQueue() {
     if (isArrived(s)) return;
     const st = boardState(s);
     const kurang = missingDocs(s);
+    /* Draft yang sudah disetujui tapi aslinya belum datang (doc-steps.js)
+       -- bukan berkas yang kurang, tapi tetap harus dikejar. */
+    const draft = draftDocs(s);
+    const ekorDraft = draft.length ? tt(` · masih draft: ${draft.join(", ")}`, ` · still draft: ${draft.join(", ")}`) : "";
+    /* Dibutuhkan di pabrik (prediction-mundur.js): Estimated Delivery
+       melewati tanggal itu = produksi menunggu. */
+    const butuh = statusKebutuhan(s);
+    const telatButuh = butuh && butuh.kind === "telat" ? -butuh.selisih : 0;
+    const ekorButuh = telatButuh
+      ? tt(` · lewat kebutuhan pabrik ${telatButuh} hari`, ` · ${telatButuh} day${telatButuh === 1 ? "" : "s"} past the factory need date`)
+      : "";
 
     // Status DELAY selalu masuk antrean, walau tanggal barunya masih di depan
     if (s.status === "delayed") {
@@ -24,8 +35,8 @@ function buildTaskQueue() {
         rank: 2000 + (mundur || 0),
         s,
         detail: info
-          ? `${info.basis} ${fmtDate(info.from)} → ${fmtDate(info.to)}${kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""}`
-          : t("w.ditandai.delay.tanpa.tanggal"),
+          ? `${info.basis} ${fmtDate(info.from)} → ${fmtDate(info.to)}${kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""}${ekorButuh}`
+          : t("w.ditandai.delay.tanpa.tanggal") + ekorButuh,
       });
       return;
     }
@@ -42,7 +53,20 @@ function buildTaskQueue() {
            memberi tahu "telat", bukan apa yang harus dikerjakan. */
         detail: t("w.sudah.lewat.statusnya.masih", { basis: st.basis, tgl: fmtDate(st.iso), status: statusLabel(s.status, activeMode) }) + `${
           kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""
-        }`,
+        }${ekorButuh}`,
+      });
+      return;
+    }
+    // Belum telat menurut ETA/ETD, tapi sudah pasti terlambat untuk produksi
+    if (telatButuh) {
+      out.push({
+        kind: "late",
+        reason: tt(`Kebutuhan +${telatButuh}h`, `Need +${telatButuh}d`),
+        rank: 900 + telatButuh,
+        s,
+        detail:
+          tt(`Dibutuhkan di pabrik ${fmtDate(butuh.butuh)}, perkiraan sampai ${fmtDate(butuh.sampai)}`, `Needed at the factory ${fmtDate(butuh.butuh)}, estimated arrival ${fmtDate(butuh.sampai)}`) +
+          (kurang.length ? t("w.belum.ada.daftar", { x: kurang.join(", ") }) : ""),
       });
       return;
     }
@@ -52,7 +76,7 @@ function buildTaskQueue() {
         reason: st.days === 0 ? t("w.reason.hari.ini") : t("w.reason.hmin", { n: st.days }),
         rank: 500 - st.days,
         s,
-        detail: t("w.tiba.sebentar.lagi.tapi.belum.ada", { x: kurang.join(", ") }),
+        detail: t("w.tiba.sebentar.lagi.tapi.belum.ada", { x: kurang.join(", ") }) + ekorDraft,
       });
       return;
     }
@@ -62,7 +86,17 @@ function buildTaskQueue() {
         reason: t("w.reason.dokumen"),
         rank: 100 - (st.days ?? 99),
         s,
-        detail: t("w.belum.ada.x", { x: kurang.join(", ") }),
+        detail: t("w.belum.ada.x", { x: kurang.join(", ") }) + ekorDraft,
+      });
+      return;
+    }
+    if (draft.length) {
+      out.push({
+        kind: "asli",
+        reason: tt("Menunggu asli", "Awaiting original"),
+        rank: 50 - (st.days ?? 49),
+        s,
+        detail: tt(`Draft sudah disetujui, aslinya belum: ${draft.join(", ")}`, `Draft approved, original not yet in: ${draft.join(", ")}`),
       });
     }
   });
@@ -133,13 +167,13 @@ function renderTaskQueue() {
     (totalHalaman > 1
       ? `<div class="task-pager">
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage - 1}"
-                   ${ovTaskPage <= 1 ? "disabled" : ""} title="${tt("Sebelumnya", "Previous")}">
-             <i class="bi bi-chevron-left"></i>
+                   ${ovTaskPage <= 1 ? "disabled" : ""} title="${tt("Sebelumnya", "Previous")}" aria-label="${tt("Halaman tugas sebelumnya", "Previous task page")}">
+             <i class="bi bi-chevron-left" aria-hidden="true"></i>
            </button>
            <span class="task-pageinfo">${mulai + 1}\u2013${mulai + potong.length} ${tt("dari", "of")} ${tasks.length}</span>
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage + 1}"
-                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="${tt("Berikutnya", "Next")}">
-             <i class="bi bi-chevron-right"></i>
+                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="${tt("Berikutnya", "Next")}" aria-label="${tt("Halaman tugas berikutnya", "Next task page")}">
+             <i class="bi bi-chevron-right" aria-hidden="true"></i>
            </button>
          </div>`
       : "");
@@ -188,18 +222,86 @@ function renderAgenda() {
   box.innerHTML = html.join("");
 }
 
+/* "2,5 hari" / "2.5 days" -- koma desimal untuk Bahasa Indonesia. */
+function teksHariDesimal(n) {
+  return activeLang === "en"
+    ? `${n} ${Math.abs(n) === 1 ? "day" : "days"}`
+    : `${String(n).replace(".", ",")} hari`;
+}
+
+/* RATA-RATA DELAY KAPAL — jadwal rencana vs kenyataan, 12 bulan
+   terakhir (ringkasDelayKapal, status.js). Import: kedatangan kapal/
+   pesawat; Export: keberangkatannya. Kosong = belum ada kiriman yang
+   jadwalnya sudah lewat. */
+function rataDelayKapalHtml() {
+  const ekspor = activeMode === "export";
+  const r = ringkasDelayKapal(currentList(), { basis: ekspor ? "berangkat" : "tiba" });
+  if (!r.laut.n && !r.udara.n) return "";
+  const baris = [
+    ["bi-water", tt("Kapal (laut)", "Vessels (sea)"), r.laut],
+    ["bi-airplane", tt("Pesawat (udara)", "Flights (air)"), r.udara],
+  ]
+    .filter(([, , x]) => x.n)
+    .map(([ikon, label, x]) => {
+      const rinci = x.telat
+        ? tt(
+            `${x.telat} dari ${x.n} kiriman telat · tepat jadwal ${x.tepat}% · paling lama ${x.maks} hari`,
+            `${x.telat} of ${x.n} shipments late · on schedule ${x.tepat}% · longest ${x.maks} days`,
+          )
+        : tt(`${x.n} kiriman, semua tepat jadwal`, `${x.n} shipments, all on schedule`);
+      return `<div class="stat-line">
+          <span class="stat-line-label"><i class="bi ${ikon}"></i> ${escapeHtml(label)}
+            <small class="acc-detail">${escapeHtml(rinci)}</small></span>
+          <span class="stat-line-value${x.telat ? "" : " is-quiet"}">${x.telat ? "+" : ""}${escapeHtml(teksHariDesimal(x.rataTelat))}</span>
+        </div>`;
+    });
+  if (r.carrier.length) {
+    const daftar = r.carrier
+      .map((c) => `${c.nama} +${teksHariDesimal(c.rataTelat)} (${c.telat}/${c.n})`)
+      .join(" · ");
+    baris.push(`<div class="stat-line">
+        <span class="stat-line-label"><i class="bi bi-buildings"></i> ${tt("Paling sering telat", "Most often late")}
+          <small class="acc-detail">${escapeHtml(daftar)}</small></span>
+      </div>`);
+  }
+  return `
+    <div class="ov-delay-rata">
+      <div class="ov-delay-judul">
+        <span>${ekspor ? tt("Rata-rata delay keberangkatan", "Average departure delay") : tt("Rata-rata delay kapal", "Average vessel delay")} <small>· ${tt("12 bulan", "12 months")}</small></span>
+        <span class="acc-head">${tt("Saat telat", "When late")}</span>
+      </div>
+      ${baris.join("")}
+      <div class="acc-note">${
+        ekspor
+          ? tt(
+              "Dibanding ETD rencana; kenyataan dari tahap Sailing/ATD atau ETD revisi. Jadwal lewat tanpa revisi dihitung tepat waktu.",
+              "Against the planned ETD; actuals from the Sailing/ATD step or the revised ETD. Past schedules without a revision count as on time.",
+            )
+          : tt(
+              "Dibanding ETA rencana; kenyataan dari Berths/ATA (juga kiriman lain di kapal yang sama), Manifest, atau ETA revisi. Jadwal yang selesai tanpa revisi dihitung tepat waktu.",
+              "Against the planned ETA; actuals from Berths/ATA (including other shipments on the same vessel), the Manifest, or the revised ETA. Completed schedules without a revision count as on time.",
+            )
+      }</div>
+    </div>`;
+}
+
 /* PANTAUAN DELAY */
 function renderDelayWatch() {
   const box = $("#ovDelay");
   if (!box) return;
   const delayed = currentList().filter((s) => s.status === "delayed");
+  const rata = rataDelayKapalHtml();
 
   if (!delayed.length) {
-    box.innerHTML = `
-      <div class="panel-empty">
-        <i class="bi bi-emoji-smile"></i>
-        ${tt("Tidak ada pengiriman berstatus DELAY.", "No shipments with DELAY status.")}
-      </div>`;
+    box.innerHTML = rata
+      ? `<div class="stat-line">
+           <span class="stat-line-label"><i class="bi bi-emoji-smile"></i> ${tt("Tidak ada yang sedang delay", "Nothing currently delayed")}</span>
+           <span class="stat-line-value is-quiet">0</span>
+         </div>${rata}`
+      : `<div class="panel-empty">
+           <i class="bi bi-emoji-smile"></i>
+           ${tt("Tidak ada pengiriman berstatus DELAY.", "No shipments with DELAY status.")}
+         </div>`;
     return;
   }
 
@@ -232,7 +334,7 @@ function renderDelayWatch() {
              <span class="task-detail">${terparah.info.basis} ${fmtDate(terparah.info.from)} → ${fmtDate(terparah.info.to)}</span>
            </div>`
         : ""
-    }`;
+    }${rata}`;
 }
 
 /* KELENGKAPAN DOKUMEN */
@@ -268,12 +370,23 @@ function renderDocCompleteness() {
     .sort((a, b) => b.kurang - a.kurang)
     .slice(0, 6);
 
+  // Jadwal yang berkasnya masih draft -- aslinya ditunggu
+  const menungguAsli = aktif.filter((s) => draftDocs(s).length).length;
+
   box.innerHTML = `
     <div class="stat-line" style="border-bottom:0;padding-bottom:2px">
       <span class="stat-line-label"><i class="bi bi-file-earmark-check"></i> ${tt("Lengkap", "Complete")}</span>
       <span class="stat-line-value">${lengkap}/${aktif.length} · ${persen}%</span>
     </div>
     <div class="meter"><div class="meter-fill ${fillCls}" style="width:${persen}%"></div></div>
+    ${
+      menungguAsli
+        ? `<div class="stat-line ov-asli">
+            <span class="stat-line-label"><i class="bi bi-hourglass-split"></i> ${tt("Draft, menunggu asli", "Draft, awaiting original")}</span>
+            <span class="stat-line-value">${tt(`${menungguAsli} jadwal`, `${menungguAsli} schedule${menungguAsli === 1 ? "" : "s"}`)}</span>
+          </div>`
+        : ""
+    }
     <div style="margin-top:12px">
       ${perField
         .map(
