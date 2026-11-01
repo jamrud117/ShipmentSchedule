@@ -36,10 +36,11 @@ function kendaraanTambahKotak(nilai) {
     <input type="text" class="form-control" data-veh-extra
            autocomplete="off"
            value="${escapeAttr(nilai || "")}"
-           placeholder="${escapeAttr(t("ph.nomor.polisi.kendaraan"))}">
+           placeholder="${escapeAttr(t("ph.nomor.polisi.kendaraan"))}"
+           aria-label="${escapeAttr(tt("Nomor kendaraan tambahan", "Additional vehicle number"))}">
     <button type="button" class="rm-row" data-veh-del
-            title="${escapeAttr(t("f.hapus.baris"))}">
-      <i class="bi bi-x-lg"></i>
+            title="${escapeAttr(t("f.hapus.baris"))}" aria-label="${escapeAttr(t("f.hapus.baris"))}">
+      <i class="bi bi-x-lg" aria-hidden="true"></i>
     </button>`;
   box.appendChild(el);
   return el.querySelector("input");

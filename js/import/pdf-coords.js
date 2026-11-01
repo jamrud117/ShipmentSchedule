@@ -106,13 +106,13 @@ function pdfColumnBounds(items, headerDefs) {
   return bounds;
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    pdfTextFromItems,
-    pdfLines,
-    pdfLinesInBox,
-    pdfFindItem,
-    pdfFindItemOnPage,
-    pdfColumnBounds,
-  };
+/* Peti kemas tercetak di PIB ("HMMU7503080 40 FCL") / PEB ("SKLU2350015 /
+   20 FEET / FCL") -> isian Container/Seal Number jadwal dalam bentuk yang
+   sama dengan impor Excel CEISA: "NOMOR / UKURAN / TIPE" per kontainer
+   (teksKontainer, helpers.js), dibaca balik oleh Cek PIB/PEB. */
+function pdfTeksKontainer(blob) {
+  const re = /\b([A-Z]{4}\s?\d{6,7})\b(?:\s*\/?\s*(20|40|45|53)(?:\s*(?:FEET|FT|')|\b))?(?:\s*\/?\s*(FCL|LCL)\b)?/g;
+  return [...String(blob || "").toUpperCase().matchAll(re)]
+    .map((m) => teksKontainer({ nomor: m[1].replace(/\s+/g, ""), ukuran: m[2] || "", jenis: m[3] || "" }))
+    .join(", ");
 }

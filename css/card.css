@@ -16,7 +16,8 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 760px;
 }
-.ship-card:has(.dropdown-menu.show) {
+/* Menu salin templat terbuka (card-events.js) */
+.ship-card.is-menu-buka {
   content-visibility: visible;
 }
 /* Dicetak: semua kartu utuh, bukan kotak kosong yang belum digulir. */
@@ -80,7 +81,7 @@
   font-weight: 700;
   font-size: 1.02rem;
   letter-spacing: -0.01em;
-  color: var(--navy);
+  color: var(--tp-700);
   line-height: 1.25;
 }
 .po-code {
@@ -140,7 +141,7 @@
   gap: 5px;
 }
 .info-label i {
-  color: var(--ocean);
+  color: var(--tp-500);
   font-size: 0.8rem;
 }
 .info-value {
@@ -167,7 +168,7 @@
   gap: 4px;
 }
 .tgl-revisi .bi {
-  color: var(--s-warn);
+  color: var(--ts-warn);
   font-size: 0.85em;
 }
 
@@ -183,7 +184,7 @@
   margin-top: 3px;
 }
 .detail-fac-line i {
-  color: var(--teal-dark);
+  color: var(--tsec-700);
   font-size: 0.78rem;
   flex-shrink: 0;
 }
@@ -202,58 +203,58 @@
   border-radius: 999px;
   background: var(--bg);
   border: 1px solid var(--border);
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 .tag.tag-usd {
-  background: #eef6ff;
-  color: var(--ocean);
-  border-color: #d5e8fb;
+  background: var(--w-bg-eef6ff);
+  color: var(--tp-500);
+  border-color: var(--w-garis-d5e8fb);
 }
 .tag.tag-pi {
-  background: #f3eefe;
-  color: var(--violet);
-  border-color: #e3d9fb;
+  background: var(--w-bg-f3eefe);
+  color: var(--ts-info);
+  border-color: var(--w-garis-e3d9fb);
 }
 .tag.tag-skb {
-  background: #fff3de;
-  color: #95610c;
-  border-color: #f7e2b8;
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-95610c);
+  border-color: var(--w-garis-f7e2b8);
 }
 .tag.tag-muatan {
-  background: #efeffb;
-  color: #5347c7;
-  border-color: #dcdafb;
+  background: var(--w-bg-efeffb);
+  color: var(--w-teks-5347c7);
+  border-color: var(--w-garis-dcdafb);
 }
 .tag.tag-transit {
   background: var(--sec-50);
-  color: var(--teal-dark);
+  color: var(--tsec-700);
   border-color: var(--sec-200);
 }
 .tag.tag-ecoo {
-  background: #e9f9ee;
-  color: #1f8a4c;
-  border-color: #c9edd6;
+  background: var(--w-bg-e9f9ee);
+  color: var(--ts-success);
+  border-color: var(--w-garis-c9edd6);
 }
 /* Lartas: PI / LS wajib tapi belum ada (core/lartas.js) */
 .tag.tag-lartas {
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
   border-color: var(--s-danger-line);
 }
 /* Dibutuhkan di pabrik (prediction-mundur.js): netral / mepet / telat */
 .tag.tag-butuh {
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   border-color: var(--p-200);
 }
 .tag.tag-butuh--mepet {
   background: var(--s-warn-bg);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
   border-color: var(--s-warn-line);
 }
 .tag.tag-butuh--telat {
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
   border-color: var(--s-danger-line);
 }
 
@@ -284,24 +285,24 @@
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E");
 }
 .status-process {
-  background-color: #fff3de;
-  color: #95610c;
+  background-color: var(--w-bg-fff3de);
+  color: var(--w-teks-95610c);
 }
 .status-transit {
   background-color: var(--sec-50);
-  color: var(--teal-dark);
+  color: var(--tsec-700);
 }
 .status-arrived {
   background-color: var(--p-50);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 .status-delayed {
   background-color: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .status-select option {
-  color: #1b2a41;
-  background: #fff;
+  color: var(--w-teks-1b2a41);
+  background: var(--surface);
 }
 
 /* ---- Action icon buttons ---- */
@@ -309,35 +310,43 @@
   display: flex;
   gap: 7px;
 }
+/* Tombol ikon: satu bentuk di kartu, tabel riwayat, akun, HS Code.
+   Labelnya di title (tooltip) & aria-label. Hover bertinta navy --
+   bukan abu-abu kertas yang nyaris tak terlihat di atas putih. */
 .icon-btn {
-  width: 33px;
-  height: 33px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  background: #fff;
-  color: var(--muted);
+  background: var(--surface);
+  color: var(--n-600);
   font-size: 0.95rem;
-  transition: all 0.15s ease;
 }
-.icon-btn:hover {
-  background: var(--bg);
-  color: var(--navy);
+.icon-btn:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--tp-600);
+}
+.icon-btn:active:not(:disabled) {
+  background: var(--p-100);
 }
 .icon-btn.primary {
   background: var(--navy);
   color: #fff;
   border-color: var(--navy);
 }
-.icon-btn.primary:hover {
+.icon-btn.primary:hover:not(:disabled) {
   background: var(--ocean);
+  border-color: var(--ocean);
+  color: #fff;
 }
-.icon-btn.danger:hover {
-  background: #fdeaea;
-  color: var(--coral);
-  border-color: #f6c6c6;
+.icon-btn.danger:hover:not(:disabled) {
+  background: var(--s-danger-bg);
+  color: var(--ts-danger);
+  border-color: var(--s-danger-line);
 }
 
 /* ---- Dropdown pemilih Copy Template ---- */
@@ -365,11 +374,11 @@
 .copy-template-menu .dropdown-item:hover,
 .copy-template-menu .dropdown-item:focus {
   background: var(--bg);
-  color: var(--navy);
+  color: var(--tp-700);
 }
 .copy-template-menu .dropdown-item:hover i,
 .copy-template-menu .dropdown-item:focus i {
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 
 /* ---- Shipping lane ---- */
@@ -398,7 +407,7 @@
   margin: 0 6px;
 }
 .lane-track.is-delayed {
-  background: #f3c6c6;
+  background: var(--w-bg-f3c6c6);
 }
 .lane-fill {
   position: absolute;
@@ -423,7 +432,7 @@
   height: 10px;
   border-radius: 50%;
   background: var(--ocean);
-  border: 2px solid #fff;
+  border: 2px solid var(--surface);
   box-shadow: 0 0 0 1px var(--border);
 }
 .port-node.origin {
@@ -452,7 +461,7 @@
   font-size: 1.2rem;
   line-height: 1;
   transition: left 0.6s ease;
-  background: #fff;
+  background: var(--surface);
   border-radius: 50%;
   width: 26px;
   height: 26px;
@@ -584,7 +593,7 @@
   max-width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--navy);
+  color: var(--tp-700);
   font-weight: 600;
   font-size: 0.72rem;
 }
@@ -643,7 +652,7 @@
   font-size: 0.85rem;
   font-family: var(--font-mono);
   width: 100%;
-  background: #fff;
+  background: var(--surface);
 }
 
 /* ================= COLLAPSED CARD (arrived) ================= */
@@ -670,7 +679,7 @@
 }
 .collapsed-check {
   font-size: 1.35rem;
-  color: var(--green);
+  color: var(--ts-ok);
   flex-shrink: 0;
 }
 .collapsed-main {
@@ -681,7 +690,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.98rem;
-  color: var(--navy);
+  color: var(--tp-700);
 }
 .collapsed-meta {
   font-size: 0.8rem;
@@ -698,14 +707,14 @@
   margin-top: 8px;
   border: 1px dashed var(--amber);
   border-radius: 10px;
-  background: #fffaf0;
+  background: var(--w-bg-fffaf0);
   padding: 8px 12px 10px;
 }
 .delay-strip-head {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: #a35a00;
+  color: var(--w-teks-a35a00);
   margin-bottom: 6px;
 }
 /* Revisi yang tertinggal di jadwal yang sudah bukan Delay: tetap
@@ -734,17 +743,17 @@
   font-size: 0.7rem;
   padding: 1px 6px;
   border-radius: 6px;
-  background: #eef2f6;
+  background: var(--w-bg-eef2f6);
   color: var(--muted);
   margin-left: 4px;
 }
 .delay-delta--late {
-  background: #ffe7cc;
-  color: #a35a00;
+  background: var(--w-bg-ffe7cc);
+  color: var(--w-teks-a35a00);
 }
 .delay-delta--early {
   background: var(--sec-50);
-  color: var(--teal-dark);
+  color: var(--tsec-700);
 }
 
 /* ISI TAMBAHAN DI KARTU SELESAI (ARRIVED / DELIVERED) */
@@ -791,7 +800,7 @@
   color: var(--teal-dark, #634b1d);
 }
 .depart-strip--air .depart-label {
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 /* Jalur tempat ikon bergerak. Garis putus-putus dibuat dari repeating */
 .depart-track {
@@ -824,7 +833,7 @@
   animation: depart-travel 3.4s ease-in-out infinite;
 }
 .depart-strip--air .depart-mover {
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 @keyframes depart-travel {
   0% {
@@ -950,16 +959,8 @@
     font-size: 0.86rem;
   }
 
-  /* Di HP belahan kiri-kanan itu tidak muat: keduanya ditumpuk, dan
-     rincian dipadatkan jadi dua kolom. minmax(0, 1fr) — bukan 1fr —
-     supaya sel yang isinya panjang tidak melebarkan kolomnya melewati
-     kartu; batas bawah `auto` pada 1fr memakai lebar min-content,
-     dan itu yang membuat seluruh halaman bisa digeser mendatar. */
-  .ship-body-split {
-    flex-direction: column;
-    gap: 15px;
-  }
-  /* auto-fit, bukan dua kolom tetap: di 600px dua kolom menyisakan
+  /* Belahan kiri-kanan sudah ditumpuk sejak 1199.98px (di atas).
+     auto-fit, bukan dua kolom tetap: di 600px dua kolom menyisakan
      ruang kosong selebar hampir satu kolom lagi, sementara di 320px
      tiga kolom akan memotong nomor dokumen. Ambang 150px membuatnya
      memilih sendiri -- tiga kolom di HP besar/tablet kecil, dua di HP
@@ -968,11 +969,6 @@
   .info-grid {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 13px 14px;
-    width: 100%;
-  }
-  .info-names {
-    flex: 1 1 auto;
-    width: 100%;
   }
 
   .date-strip {
@@ -1086,12 +1082,12 @@
   margin-bottom: 10px;
 }
 .docsteps-head i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .docsteps-count {
   font-family: var(--font-mono);
   letter-spacing: 0;
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .docsteps-hitung {
   display: inline-flex;
@@ -1109,10 +1105,10 @@
   border: 1px dashed var(--p-300);
   font-family: var(--font-mono);
   letter-spacing: 0;
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .docsteps-draft i {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .docsteps-track {
   display: flex;
@@ -1150,7 +1146,7 @@
   place-items: center;
   border-radius: 50%;
   border: 1.5px solid var(--border-control);
-  background: #fff;
+  background: var(--surface);
   color: var(--n-500);
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -1204,22 +1200,22 @@
   color: #fff;
 }
 .docstep.is-done .docstep-label {
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .docstep.is-next .docstep-dot {
   border-color: var(--sec-500);
-  color: var(--sec-700);
+  color: var(--tsec-700);
   box-shadow: 0 0 0 3px var(--sec-50);
 }
 .docstep.is-next .docstep-label {
-  color: var(--sec-700);
+  color: var(--tsec-700);
 }
 /* Setiap tahap bisa ditekan — berkas tidak selalu datang berurutan.
    Yang belum terisi diberi isyarat lembut saat disorot. */
 .docstep:hover .docstep-dot {
   transform: scale(1.08);
   border-color: var(--p-500);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .docstep.is-done:hover .docstep-dot {
   border-color: var(--p-700);
@@ -1232,15 +1228,15 @@
   background: var(--p-50);
   border-style: dashed;
   border-color: var(--p-500);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: 0.72rem;
 }
 .docstep.is-draft .docstep-label {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .docstep.is-draft:hover .docstep-dot {
   border-color: var(--p-700);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 /* Jumlah lampiran di pojok bulatannya */
 .docstep-lampir {
@@ -1252,15 +1248,16 @@
   gap: 1px;
   padding: 0 4px 0 2px;
   border-radius: var(--r-pill);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--p-200);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
-  line-height: 13px;
-  color: var(--p-600);
+  font-size: 0.69rem;
+  font-weight: 600;
+  line-height: 15px;
+  color: var(--tp-600);
 }
 .docstep-lampir i {
-  font-size: 0.6rem;
+  font-size: 0.66rem;
 }
 
 /* Viewer tidak boleh mengubah, tapi tetap harus bisa membacanya. */
@@ -1279,7 +1276,7 @@ body.is-viewer .docstep {
   color: var(--n-400);
 }
 .docstep.is-skipped .docstep-label {
-  color: var(--n-400);
+  color: var(--text-subtle);
   text-decoration: line-through;
   text-decoration-color: var(--n-300);
 }
@@ -1330,5 +1327,5 @@ body.is-viewer .docstep {
   gap: 5px;
   padding-bottom: 6px;
   font-size: var(--t-xs);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }

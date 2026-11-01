@@ -99,7 +99,11 @@ function extractPebItems(pagesItems) {
     });
     if (!starts.length) return;
 
-    // Batas bawah tiap barang = awal barang berikutnya
+    /* Batas bawah tiap barang = baris awal barang berikutnya, DIKECUALIKAN
+       (pdfLinesInBox membuang y <= yBottom). Dulu batasnya 0,5 pt di
+       bawah baris itu, sehingga baris pertama barang berikutnya ("-
+       84807990", "HE: 0", ...) ikut terbaca sebagai ekor barang ini --
+       Kode Barang jadi "- EKSPOR BIASA - 84807990". */
     const footerY = Math.max(
       ...pdfLines(pageItems)
         .filter((l) => /Eksportir\/PPJK|^JAKARTA,/i.test(l.text.trim()))
@@ -111,20 +115,17 @@ function extractPebItems(pagesItems) {
       const yTop = st.y + 1;
       const yBottom =
         i + 1 < starts.length
-          ? starts[i + 1].y - 0.5
+          ? starts[i + 1].y + 1
           : isFinite(footerY)
             ? footerY
             : -Infinity;
       const yRange = { yTop, yBottom };
 
-      const nameBlock = pdfLinesInBox(
-        pageItems,
-        bounds.uraian.xMin,
-        bounds.uraian.xMax,
-        yRange,
-      )
-        .map((l) => l.text)
-        .join(" ");
+      // Baris-baris satu kolom barang ini (kolom yang tidak ada: kosong)
+      const kolomBaris = (k) =>
+        bounds[k] ? pdfLinesInBox(pageItems, bounds[k].xMin, bounds[k].xMax, yRange).map((l) => l.text.trim()) : [];
+      const uraianBaris = kolomBaris("uraian");
+      const nameBlock = uraianBaris.join(" ");
 
       const satuanLines = pdfLinesInBox(
         pageItems,
@@ -153,26 +154,14 @@ function extractPebItems(pagesItems) {
         if (m && !packageText) packageText = m[1].trim();
       });
 
-      let nilai = null;
-      if (bounds.nilai) {
-        const nilaiLines = pdfLinesInBox(
-          pageItems,
-          bounds.nilai.xMin,
-          bounds.nilai.xMax,
-          yRange,
-        ).map((l) => l.text.trim());
-        const hit = nilaiLines.find((teks) => /^[\d,]+\.?\d*$/.test(teks));
-        if (hit) nilai = pebNum(hit);
-      }
+      const nilaiBaris = kolomBaris("nilai");
+      const nilaiHit = nilaiBaris.find((teks) => /^[\d,]+\.?\d*$/.test(teks));
+      const nilai = nilaiHit ? pebNum(nilaiHit) : null;
 
-      // Negara asal barang (kolom 52) -> kode negara; tidak terbaca = tidak dibawa (lengkapiKodeBarang)
-      let negaraAsal;
-      if (bounds.negara) {
-        const teks = pdfLinesInBox(pageItems, bounds.negara.xMin, bounds.negara.xMax, yRange)
-          .map((l) => l.text.trim())
-          .join(" ");
-        negaraAsal = (typeof kodeNegaraPib === "function" && kodeNegaraPib(teks)) || undefined;
-      }
+      /* Negara asal barang (kolom 52) -> kode negara; tidak terbaca = tidak
+         dibawa (lengkapiKodeBarang). Daerah asal (53) tercetak di bawahnya. */
+      const negaraBaris = kolomBaris("negara");
+      const negaraAsal = (negaraBaris.length && kodeNegaraPib(negaraBaris.join(" "))) || undefined;
 
       items.push({
         kolom: parsePebItemKolom(nameBlock),
@@ -183,6 +172,8 @@ function extractPebItems(pagesItems) {
         netto,
         nilai,
         package: packageText,
+        // Jenis ekspor, HE & BK, daerah asal (data-pabean-baca.js)
+        dataPabean: pebBarangDataPabean({ uraian: uraianBaris, he: kolomBaris("he"), negara: negaraBaris }),
       });
     });
   });
@@ -289,8 +280,7 @@ function parsePebPdfText(text, pagesItems) {
         .slice(i43, i43 + 4)
         .map((l) => l.text.replace(/^43\.[^:]*/i, "").replace(/^\s*:\s*/, ""))
         .join(" ");
-      const cont = blob.match(/\b([A-Z]{4}\s?\d{6,7})\b/g);
-      if (cont) out.container = cont.join(", ").replace(/\s+/g, "");
+      out.container = pdfTeksKontainer(blob);
       const mu = blob.match(/\b(FCL|LCL)\b/i);
       if (mu) out.muatan = mu[1].toUpperCase();
     }
@@ -355,7 +345,6 @@ function parsePebPdfText(text, pagesItems) {
 
   /* ---- barang ---- */
   const rawItems = extractPebItems(pagesItems);
-  const totalNettoKnown = rawItems.reduce((s, it) => s + (it.netto || 0), 0);
 
   const items = rawItems
     .filter((it) => it.kolom.namaBarang || it.hsCode)
@@ -374,6 +363,14 @@ function parsePebPdfText(text, pagesItems) {
       if (it.nilai != null && base.qty) {
         base.harga = roundNum(it.nilai / base.qty, 4);
       }
+      /* Kemasan per barang ("Kemasan: 1 BX", kolom 51) -> kolom Kemasan
+         (jumlah + jenis), sama dengan PIB & Excel CEISA. */
+      const kemas = /^\s*(\d+(?:[.,]\d+)?)\s*([A-Za-z][A-Za-z\s]*)?$/.exec(it.package || "");
+      if (kemas && pebNum(kemas[1]) > 0) {
+        base.packing = String(pebNum(kemas[1]));
+        base.packingUnit = (kemas[2] || "").trim().toUpperCase();
+      }
+      if (Object.keys(it.dataPabean || {}).length) base.dataPabean = it.dataPabean;
       return base;
     });
 
@@ -435,6 +432,8 @@ function parsePebPdfText(text, pagesItems) {
       bruto,
       netto,
       nilaiEkspor,
+      // Isian PEB lain yang tidak punya kolom sendiri (core/data-pabean.js)
+      dataPabean: pebDataPabean(text, pagesItems),
     },
     items,
     notes,
@@ -442,8 +441,4 @@ function parsePebPdfText(text, pagesItems) {
     source: "pdf-peb",
     isPeb: true,
   };
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parsePebPdfText, isPebPdfText, parsePebDocTable, parsePebItemName };
 }

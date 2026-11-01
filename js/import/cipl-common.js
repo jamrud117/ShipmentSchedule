@@ -342,27 +342,3 @@ function mergeItemSources(sources) {
 
   return merged;
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  // Cabang ini HANYA aktif saat file di-require dari harness pengujian Node
-  module.exports = {
-    INCOTERM_RE,
-    CURRENCY_TOKEN_RE,
-    UNIT_QTY_RE,
-    extractEmbeddedHsCode,
-    normalizeHsCode,
-    isPlaceholderValue,
-    joinNameParts,
-    guessTransportFromText,
-    guessIncotermFromText,
-    guessCiplModeFromPorts,
-    parseFlexibleDateText,
-    excelCellDateToISO,
-    isPrimaryCiplSheetName,
-    isExcludedSheetName,
-    normName,
-    mergeItemSources,
-    CIPL_COLUMN_LABELS,
-    CIPL_FIELD_LABELS,
-  };
-}

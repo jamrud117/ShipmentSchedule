@@ -533,9 +533,9 @@ function renderPaginationBar(totalItems) {
   bar.innerHTML = `
     <div class="pagination-info">${tt(`Menampilkan <b>${startIdx}–${endIdx}</b> dari <b>${totalItems}</b> pengiriman`, `Showing <b>${startIdx}–${endIdx}</b> of <b>${totalItems}</b> shipments`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="pagePrev" ${currentPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${pageBtns}</div>
-      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="pageNext" ${currentPage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="pageSizeSelect">${tt("Per halaman", "Per page")}</label>

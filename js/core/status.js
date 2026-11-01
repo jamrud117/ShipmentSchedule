@@ -230,17 +230,6 @@ function ringkasDelayKapal(list, opsi) {
   return { basis, laut: ringkasAngkaDelay(per.laut), udara: ringkasAngkaDelay(per.udara), carrier };
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    STATUS_OPTIONS_BY_MODE,
-    statusTemplateValue,
-    delayDaysBetween,
-    delayKapalKiriman,
-    ringkasDelayKapal,
-  };
-}
-
-
 /* ------------------------------------------------------------------
    KAPAN SEBUAH PENGIRIMAN DIANGGAP TIBA
 

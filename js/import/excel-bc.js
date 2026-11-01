@@ -29,6 +29,10 @@ function excelValueToISODate(v) {
   if (v == null || v === "") return "";
   if (v instanceof Date) {
     if (isNaN(v.getTime())) return "";
+    /* Dibulatkan ke menit terdekat: SheetJS (cellDates) membuat tanggal
+       lokal dari offset zona waktu tahun 1899 yang berdetik -- di WIB
+       hasilnya 23:59:48 HARI SEBELUMNYA untuk tanggal tanpa jam. */
+    v = new Date(Math.round(v.getTime() / 60000) * 60000);
     const y = v.getFullYear();
     const m = String(v.getMonth() + 1).padStart(2, "0");
     const d = String(v.getDate()).padStart(2, "0");
@@ -453,12 +457,15 @@ function parseBcExcelWorkbook(wb) {
            impor dasarnya CIF (lihat recalcCustoms(), PPN/PPH juga
            dari dasar CIF).
        Berlaku khusus untuk import Excel CEISA ini; sumber lain (CIPL,
-       dst.) punya jalur sendiri. */
-    const nilaiTotal = excelNum(
-      modeHint === "export" && fields.incoterm === "FOB"
-        ? row["FOB"]
-        : row["CIF"],
-    );
+       dst.) punya jalur sendiri.
+       Export ber-terms selain FOB yang kolom CIF-nya kosong / 0 memakai
+       FOB: draft PEB ber-terms CIF sungguhan mengisi FOB per barang (=
+       Nilai Ekspor di PEB) dan membiarkan CIF 0 -- harga satuannya dulu
+       jadi 0. Terms FOB tanpa kolom FOB tetap 0 + catatan (di bawah):
+       CIF bukan pengganti harga FOB. */
+    const kolomNilai =
+      modeHint !== "export" ? ["CIF"] : fields.incoterm === "FOB" ? ["FOB"] : ["CIF", "FOB"];
+    const nilaiTotal = kolomNilai.map((k) => excelNum(row[k])).find((v) => v > 0) || 0;
     return {
       seriBarang: kunciSeri(row["SERI BARANG"]),
       ...kolomBarangDraft(row),
@@ -512,6 +519,27 @@ function parseBcExcelWorkbook(wb) {
         // Isian fasilitas form saja (No. Urut & kode dokumen hanya untuk Cek PIB/PEB)
         .map((sk) => ({ jenis: sk.jenis, jenisLainnya: sk.jenisLainnya, nomor: sk.nomor, tanggal: sk.tanggal })),
     };
+  });
+
+  /* Isian PIB/PEB lain yang tidak punya kolom sendiri (core/data-pabean.js):
+     kantor, jenis dokumen, pihak, BC 1.1, nilai, pungutan lengkap,
+     pernyataan -- dan per barang (sejajar urutan `barang`). */
+  /* Baris mentah per sheet -- juga dikembalikan (`lembar`) untuk cetak
+     draft Cek PIB/PEB (features/cek-cetak.js), yang menulis ulang
+     lembar PIB/PEB dari isi draft apa adanya. */
+  const lembar = {
+    header, entitas, kemasan, kontainer, dokumen, barang, barangTarif, barangDokumen,
+    pengangkut: [pengangkut],
+    pungutan: sheetRows(wb, "PUNGUTAN"),
+    bankDevisa: sheetRows(wb, "BANKDEVISA"),
+    jaminan: sheetRows(wb, "JAMINAN"),
+    komponenBiaya: sheetRows(wb, "KOMPONENBIAYA"),
+    barangVd: sheetRows(wb, "BARANGVD"),
+  };
+  const pabean = ceisaDataPabean(lembar, modeHint);
+  fields.dataPabean = pabean.jadwal;
+  items.forEach((it, i) => {
+    if (Object.keys(pabean.barang[i] || {}).length) it.dataPabean = pabean.barang[i];
   });
 
   if (skbBySeriBarang.size) {
@@ -625,5 +653,6 @@ function parseBcExcelWorkbook(wb) {
     fasilitasBarang,
     fasilitasUmum: fasilitasUmum.map((sk) => ({ ...sk })),
     kontainer: daftarKontainer,
+    lembar,
   };
 }

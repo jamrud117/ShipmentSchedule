@@ -246,10 +246,10 @@ function renderHsCodes() {
             <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
             <td class="hs-kol-aksi">
               <div class="hscode-actions">
-                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}">
+                <button type="button" class="icon-btn" data-edit-hscode="${r.id}" title="${tt("Ubah", "Edit")}" aria-label="${tt("Ubah", "Edit")}">
                   <i class="bi bi-pencil"></i>
                 </button>
-                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}">
+                <button type="button" class="icon-btn danger" data-del-hscode="${r.id}" title="${tt("Hapus", "Delete")}" aria-label="${tt("Hapus", "Delete")}">
                   <i class="bi bi-trash3"></i>
                 </button>
               </div>
@@ -539,7 +539,7 @@ function deleteHsCode(id) {
       siarkanHsCodeBerubah();
       showToast(t("w.hs.code.untuk.dihapus", { x: r.item_name }), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus HS Code?", "Delete HS Code?"), confirmText: tt("Hapus HS Code", "Delete HS Code"), icon: "bi-trash3" },
   );
 }
 
@@ -599,9 +599,9 @@ function renderHsCodePagination(totalItems) {
       total: `<b>${totalItems}</b>`,
     })}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" data-hsnav="prev" ${hsCodePage <= 1 ? "disabled" : ""}><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" data-hsnav="prev" ${hsCodePage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${tombol}</div>
-      <button type="button" class="page-nav" data-hsnav="next" ${hsCodePage >= totalPages ? "disabled" : ""}><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" data-hsnav="next" ${hsCodePage >= totalPages ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="hsCodePageSize">${t("hscode.pager.perPage")}</label>

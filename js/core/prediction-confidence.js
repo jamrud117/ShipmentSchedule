@@ -85,9 +85,3 @@ function predictionConfidencePercent(info) {
   const c = predictionConfidence(band.key);
   return { percent: persen, reasons: alasan, ...c };
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    predictionConfidencePercent,
-  };
-}

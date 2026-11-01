@@ -186,7 +186,7 @@ function fundVendorTambah(el) {
         return tt(`Nama vendor paling panjang ${FUND_VENDOR_MAKS_HURUF} huruf.`, `The vendor name can have at most ${FUND_VENDOR_MAKS_HURUF} characters.`);
       const sudah = [...el.options].find((o) => o.value && o.value !== FUND_VENDOR_BARU && fundVendorKunci(o.value) === fundVendorKunci(nama));
       fundVendorPilih(el, nama);
-      if (sudah) showToast(tt(`${sudah.value} sudah ada di daftar — langsung dipilih.`, `${sudah.value} is already on the list — selected.`), "dark");
+      if (sudah) showToast(tt(`${sudah.value} sudah ada di daftar — langsung dipilih.`, `${sudah.value} is already on the list — selected.`), "info");
       else fundVendorSimpan(nama);
       return true;
     },

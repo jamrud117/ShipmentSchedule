@@ -286,6 +286,20 @@ function lengkapiKodeBarang(newItems, oldItems) {
   });
 }
 
+/* Data PIB/PEB per barang (item.dataPabean, core/data-pabean.js) ikut
+   barang lamanya -- dicocokkan seperti harga satuan di bawah: berkas yang
+   tidak membawanya (CIPL, invoice) tidak menghapusnya, dan isian yang
+   dibawa berkas baru hanya menimpa isian yang sama. */
+function pertahankanDataPabeanBarang(newItems, oldItems) {
+  const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => adaDataPabeanBarang(o.it.dataPabean));
+  if (!lama.length) return newItems;
+  let pasangan = pasangkanBarangLama(newItems, lama, [COCOK_NAMA, COCOK_HS]);
+  if (!pasangan.some(Boolean) && newItems.length === lama.length) pasangan = lama.map((o) => o.it);
+  return newItems.map((it, i) =>
+    pasangan[i] ? Object.assign({}, it, { dataPabean: gabungDataPabeanBarang(pasangan[i].dataPabean, it.dataPabean) }) : it,
+  );
+}
+
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
    Dicocokkan berlapis — nama dulu untuk semua barang, baru HS Code
@@ -422,6 +436,8 @@ function applyImportedBcData(parsed) {
   put("fDocNo", f.docNo);
   put("fDocDate", f.docDate);
   put("fParty", resolvePartyForActiveMode(f));
+  // Ejaan lain dari nama yang sudah ada di daftar Shipper/Buyer disamakan (pilih-pihak.js)
+  if (typeof samakanNamaPihakForm === "function") samakanNamaPihakForm();
   put("fInvoice", f.invoice);
   /* Tanggal invoice: dari CIPL (pembaca lama menamainya docDate --
      tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
@@ -432,6 +448,13 @@ function applyImportedBcData(parsed) {
      lain ber-kode CEISA, digabung ke kartu Dokumen Pelengkap Pabean per
      nomornya (gabungDokPelengkapImpor, dok-pelengkap.js). */
   if (f.dokPelengkap) filled += gabungDokPelengkapImpor(f.dokPelengkap);
+  /* Data PIB/PEB lengkap (kartu "Data PIB/PEB Lengkap", data-pabean-form.js):
+     isian dokumen yang tidak punya kotak sendiri. Data per barang ikut di
+     barangnya (item.dataPabean). */
+  if (f.dataPabean && typeof terapkanDataPabeanImpor === "function" && adaDataPabean(f.dataPabean)) {
+    terapkanDataPabeanImpor(f.dataPabean);
+    filled++;
+  }
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
   /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
@@ -565,7 +588,7 @@ function applyImportedBcData(parsed) {
     );
     if (!hasRealItems || prevPrio == null || prio >= prevPrio) {
       if (isPriceAuthority(src)) {
-        draftItems = lengkapiKodeBarang(cleaned, draftItems);
+        draftItems = pertahankanDataPabeanBarang(lengkapiKodeBarang(cleaned, draftItems), draftItems);
       } else {
         /* Nama dipertahankan LEBIH DULU: pencocokan harga & dimensi di
            bawah memakai nama sebagai kunci, jadi urutannya penting --
@@ -581,7 +604,7 @@ function applyImportedBcData(parsed) {
           );
         }
         const jaga = preserveUnitPrices(jagaNama.items, draftItems);
-        draftItems = lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems);
+        draftItems = pertahankanDataPabeanBarang(lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems), draftItems);
         if (jaga.kept) {
           notes.push(
             t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),
@@ -611,6 +634,7 @@ function applyImportedBcData(parsed) {
 
   applyTransportLabels();
   renderItemTable();
+  if (typeof renderDataPabeanForm === "function") renderDataPabeanForm();
   // Isian yang diisi tanpa event (kapal, pelabuhan, moda) ikut dihitung panel prediksi & penanda form
   if (typeof hitungUlangEtaForm === "function") hitungUlangEtaForm();
   if (typeof syncPredictionForm === "function") syncPredictionForm();

@@ -94,7 +94,3 @@ if (typeof document !== "undefined") {
   pasangSemuaKotakJam();
   document.addEventListener("DOMContentLoaded", () => pasangSemuaKotakJam());
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { normalkanJam };
-}

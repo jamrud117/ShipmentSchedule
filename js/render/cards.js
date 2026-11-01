@@ -96,12 +96,12 @@ function delayStripHtml(s) {
       </div>
       <div class="delay-strip-fields">
         <div class="date-field">
-          <label>${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
-          <input type="date" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
+          <label for="${idTglKartu(s, "etdUpdate")}">${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
+          <input type="date" id="${idTglKartu(s, "etdUpdate")}" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
         </div>
         <div class="date-field">
-          <label>${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
-          <input type="date" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
+          <label for="${idTglKartu(s, "etaUpdate")}">${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
+          <input type="date" id="${idTglKartu(s, "etaUpdate")}" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
         </div>
       </div>
     </div>`;
@@ -192,18 +192,29 @@ function buildTags(s, totals) {
     .join("");
 }
 
+/* Tombol ikon kartu: keterangannya di title (tooltip, js/ui/tooltip.js)
+   DAN aria-label (nama yang dibacakan) -- ikon saja tidak cukup. */
 function actionButtons(s) {
+  const lihat = tt("Lihat Detail", "View Details");
+  const ubah = tt("Ubah Jadwal", "Edit Schedule");
+  const salin = t("v.salin.ke.excel");
+  const hapus = tt("Hapus Jadwal", "Delete Schedule");
   return `
     <div class="actions-col">
-      <button class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${tt("Lihat Detail", "View Details")}"><i class="bi bi-eye"></i></button>
-      <button class="icon-btn primary" data-action="edit" data-id="${s.id}" title="Edit"><i class="bi bi-pencil"></i></button>
+      <button type="button" class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${lihat}" aria-label="${lihat}"><i class="bi bi-eye" aria-hidden="true"></i></button>
+      <button type="button" class="icon-btn primary" data-action="edit" data-id="${s.id}" title="${ubah}" aria-label="${ubah}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
       <div class="dropdown copy-template-dropdown">
-        <button class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(t("v.salin.ke.excel"))}"><i class="bi bi-clipboard"></i></button>
+        <button type="button" class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(salin)}" aria-label="${escapeAttr(salin)}"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
         <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
       </div>
-      <button class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${tt("Hapus", "Delete")}"><i class="bi bi-trash3"></i></button>
+      <button type="button" class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${hapus}" aria-label="${hapus}"><i class="bi bi-trash3" aria-hidden="true"></i></button>
     </div>`;
 }
+
+/* Id kotak tanggal di kartu -- supaya <label>-nya benar-benar terhubung
+   (diklik membuka isiannya, dibacakan pembaca layar). Id jadwal unik,
+   dan tiap jadwal hanya punya satu kartu di halaman. */
+const idTglKartu = (s, kolom) => "tgl-" + String(s.id).replace(/[^\w-]/g, "") + "-" + String(kolom).replace(/[^\w-]/g, "");
 
 // Dropdown status di kartu: pilihannya mengikuti section aktif (requirement D)
 function statusSelectHtml(s) {
@@ -212,7 +223,7 @@ function statusSelectHtml(s) {
      database belum sempat diperbarui */
   const st = effectiveStatus(s);
 
-  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}">
+  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}" aria-label="${escapeAttr(tt("Status pengiriman", "Shipment status"))}">
       ${statusOptionsHtml(activeMode, st)}
     </select>`;
 }
@@ -309,15 +320,15 @@ ${cardBodySplitHtml(s, totals)}
     </div>
 
     <div class="date-strip">
-      <div class="date-field"><label>ETD</label><input type="date" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
-      <div class="date-field"><label>ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
+      <div class="date-field"><label for="${idTglKartu(s, "etd")}">ETD</label><input type="date" id="${idTglKartu(s, "etd")}" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
+      <div class="date-field"><label for="${idTglKartu(s, "eta")}">ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "eta")}" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
       ${
         /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
            sini mengunci tanggalnya ke mode Manual. Kalau terpikir
            menguncinya supaya tidak ada dua sumber kebenaran: laporan
            butuh tanggal yang bisa dipatok, dan mode Manual itulah
            jawabannya. */
-        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label>${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
+        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label for="${idTglKartu(s, "actual")}">${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "actual")}" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
       }
     </div>
 
@@ -354,8 +365,8 @@ function collapsedDatesHtml(s) {
     : "";
   const kotak = (label, nilai) => `
       <div class="date-field date-field--locked">
-        <label>${label}</label>
-        <input type="date" value="${nilai || ""}" readonly
+        <label for="${idTglKartu(s, "kunci-" + label)}">${label}</label>
+        <input type="date" id="${idTglKartu(s, "kunci-" + label)}" value="${nilai || ""}" readonly
                title="${tt("Hanya baca. Tekan tombol pensil untuk mengubahnya.", "Read-only. Press the pencil button to change it.")}${catatan}">
       </div>`;
 

@@ -42,7 +42,7 @@
   font-weight: 800;
   font-size: var(--t-md);
   letter-spacing: 0.04em;
-  color: var(--d-900);
+  color: var(--tp-700);
   margin-bottom: var(--sp-5);
 }
 .login-brand svg {
@@ -70,7 +70,7 @@
   display: block;
   font-size: 0.79rem;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--tp-700);
   margin-bottom: 5px;
 }
 .login-input {
@@ -81,7 +81,7 @@
   border-radius: var(--r-sm);
   font-size: var(--t-md);
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   margin-bottom: var(--sp-4);
 }
 
@@ -97,7 +97,7 @@
   align-items: flex-start;
   gap: 8px;
   font-size: var(--t-sm);
-  color: var(--s-danger);
+  color: var(--ts-danger);
   background: var(--s-danger-bg);
   border: 1px solid var(--s-danger-line);
   border-radius: var(--r-sm);
@@ -199,7 +199,7 @@ body.is-locked {
   bottom: calc(100% + 8px);
   z-index: 1050;
   min-width: 220px;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-lg);
@@ -280,7 +280,7 @@ body.is-locked {
   height: 16px;
 }
 .user-menu-item.danger {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .user-menu-item.danger:hover {
   background: var(--s-danger-bg);
@@ -433,24 +433,31 @@ body.is-viewer .delay-strip-fields input {
   color: #fff;
 }
 .acct-avatar.is-marketing {
-  background: #e7f0ff;
-  color: #1d4ed8;
+  background: var(--w-bg-e7f0ff);
+  color: var(--w-teks-1d4ed8);
 }
 .acct-avatar.is-finance {
-  background: #e3f4ee;
-  color: #0f6b52;
+  background: var(--w-bg-e3f4ee);
+  color: var(--w-teks-0f6b52);
 }
 .acct-main {
   flex: 1;
   min-width: 0;
 }
+/* Nama dibiarkan membungkus ke baris kedua, bukan dipotong "…": di
+   lebar tablet (1024px) kolom nama tinggal sempit di samping pilihan
+   peran & tiga tombol, dan nama orang (atau lencana "ANDA") yang
+   terpotong tidak bisa dibaca sama sekali. */
 .acct-name {
   display: block;
   font-weight: 600;
   font-size: var(--t-base);
+  line-height: 1.35;
   color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+.acct-name .acct-self {
+  display: inline-block;
   white-space: nowrap;
 }
 .acct-self {
@@ -459,7 +466,7 @@ body.is-viewer .delay-strip-fields input {
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--sec-50);
-  color: var(--sec-700);
+  color: var(--tsec-700);
   border: 1px solid var(--sec-200);
   border-radius: 3px;
   padding: 1px 5px;
@@ -475,7 +482,7 @@ body.is-viewer .delay-strip-fields input {
 .acct-since {
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: var(--n-400);
+  color: var(--text-subtle);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -531,12 +538,12 @@ body.is-viewer .delay-strip-fields input {
   color: #fff;
 }
 .acct-legend-peran.is-marketing {
-  background: #e7f0ff;
-  color: #1d4ed8;
+  background: var(--w-bg-e7f0ff);
+  color: var(--w-teks-1d4ed8);
 }
 .acct-legend-peran.is-finance {
-  background: #e3f4ee;
-  color: #0f6b52;
+  background: var(--w-bg-e3f4ee);
+  color: var(--w-teks-0f6b52);
 }
 
 /* Pemilih bahasa — dipakai di layar masuk & menu akun. */
@@ -588,6 +595,15 @@ body.is-viewer .delay-strip-fields input {
 .user-menu-lang-label {
   font-size: var(--t-sm);
   color: var(--n-600);
+}
+/* Pemilih tema: tiga tombol ikon, bentuk sama dengan pemilih bahasa */
+.tema-switch button {
+  padding: 3px 9px;
+  font-size: var(--t-sm);
+  line-height: 1;
+}
+.user-menu-lang + .user-menu-lang {
+  padding-top: 0;
 }
 
 /* ------------------------------------------------------------------
@@ -695,7 +711,7 @@ body.is-viewer .delay-strip-fields input {
 }
 .hs-tanpa-catatan,
 .hs-tanpa-lartas {
-  color: var(--n-300);
+  color: var(--text-subtle);
 }
 .hs-tabel th.hs-kol-lartas,
 .hs-tabel td.hs-kol-lartas {
@@ -710,22 +726,22 @@ body.is-viewer .delay-strip-fields input {
   padding: 2px 7px;
   border-radius: var(--r-xs);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   border: 1px solid;
 }
 .lartas-chip--pi {
-  color: #6a3fc2;
-  background: #f3eefe;
-  border-color: #e3d9fb;
+  color: var(--w-teks-6a3fc2);
+  background: var(--w-bg-f3eefe);
+  border-color: var(--w-garis-e3d9fb);
 }
 .lartas-chip--ls {
-  color: var(--s-info);
-  background: #eef2fc;
-  border-color: #d5def6;
+  color: var(--ts-info);
+  background: var(--w-bg-eef2fc);
+  border-color: var(--w-garis-d5def6);
 }
 .lartas-chip--sni {
-  color: var(--sec-700);
+  color: var(--tsec-700);
   background: var(--sec-50);
   border-color: var(--sec-200);
 }
@@ -747,7 +763,7 @@ body.is-viewer .delay-strip-fields input {
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--t-sm);
-  color: var(--p-600);
+  color: var(--tp-600);
   background: var(--p-50);
   border: 1px solid transparent;
   border-radius: var(--r-xs);
@@ -763,9 +779,9 @@ body.is-viewer .delay-strip-fields input {
   opacity: 0.7;
 }
 .hscode-code.is-tersalin {
-  color: #146c43;
-  background: #e8f5ee;
-  border-color: #b7e0c8;
+  color: var(--w-teks-146c43);
+  background: var(--w-bg-e8f5ee);
+  border-color: var(--w-garis-b7e0c8);
 }
 .hscode-actions {
   display: flex;
@@ -869,12 +885,12 @@ body.is-viewer .delay-strip-fields input {
   display: block;
 }
 .reg-info.is-ok {
-  color: var(--p-600);
+  color: var(--tp-600);
   background: var(--p-50);
   border: 1px solid var(--p-100);
 }
 .reg-info.is-error {
-  color: var(--s-danger);
+  color: var(--ts-danger);
   background: var(--s-danger-bg);
   border: 1px solid var(--s-danger-line);
 }
@@ -899,10 +915,10 @@ body.is-viewer .delay-strip-fields input {
   border: 0;
   background: transparent;
   border-radius: var(--r-sm);
-  color: var(--n-400);
+  color: var(--n-500);
 }
 .pwd-eye:hover {
-  color: var(--p-600);
+  color: var(--tp-600);
   background: var(--n-100);
 }
 
@@ -923,7 +939,7 @@ body.is-viewer .delay-strip-fields input {
   height: 44px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   color: var(--n-600);
   display: grid;
   place-items: center;
@@ -952,7 +968,7 @@ body.is-viewer .delay-strip-fields input {
 }
 .fab-top:hover {
   border-color: var(--p-300);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 @media (prefers-reduced-motion: reduce) {
   .fab-top {
@@ -998,7 +1014,7 @@ body.is-viewer .delay-strip-fields input {
   display: block;
   font-size: 0.79rem;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--tp-700);
   margin: 0 0 5px;
 }
 /* Kotak isian di sini setinggi & sebesar huruf isian form lain (40px,
@@ -1054,7 +1070,7 @@ body.is-viewer .delay-strip-fields input {
   width: 16px;
   height: 16px;
   margin-top: 2px;
-  accent-color: var(--p-600);
+  accent-color: var(--tp-600);
   flex-shrink: 0;
 }
 .prompt-check span {
@@ -1099,7 +1115,7 @@ body.is-viewer .delay-strip-fields input {
   border-radius: var(--r-sm);
   font-size: var(--t-sm);
   font-weight: 600;
-  color: var(--p-600);
+  color: var(--tp-600);
   cursor: pointer;
 }
 .pb-tambah:hover {
@@ -1115,18 +1131,18 @@ body.is-viewer .delay-strip-fields input {
    sebagai salah satunya. */
 .dialog-foot .prompt-aksi-kiri {
   margin-right: auto !important;
-  color: var(--s-danger);
+  color: var(--ts-danger);
   border-color: var(--s-danger-line);
 }
 .dialog-foot .prompt-aksi-kiri:hover:not(:disabled) {
   background: var(--s-danger-bg);
   border-color: var(--s-danger);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 
 .prompt-error {
   font-size: var(--t-sm);
-  color: var(--s-danger);
+  color: var(--ts-danger);
   background: var(--s-danger-bg);
   border: 1px solid var(--s-danger-line);
   border-radius: var(--r-sm);
@@ -1222,6 +1238,45 @@ body.is-viewer .delay-strip-fields input {
   gap: 13px;
   margin-bottom: var(--sp-3);
 }
+.dialog-head .dialog-title {
+  flex: 1;
+  min-width: 0;
+}
+/* KEPALA DI LUAR BADAN (modal Bootstrap: isian, konfirmasi, realisasi
+   masterlist). Badannya saja yang digulir (modal-dialog-scrollable),
+   jadi judul & tombol tutup di atas, tombol aksi di bawah, selalu
+   terlihat -- seberapa pun panjang isiannya. */
+.modal-content > .dialog-head {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4) var(--sp-3) var(--sp-6);
+}
+.modal-content > .dialog-head + .dialog-body {
+  padding-top: var(--sp-1);
+}
+/* Tombol tutup (X) di kepala: sama di semua kotak dialog. Menutup =
+   batal tanpa memilih apa pun; Esc & klik di luar kotak berbuat sama. */
+.dialog-tutup {
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  margin: 4px 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-500);
+  font-size: 0.85rem;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.dialog-tutup:hover:not(:disabled) {
+  background: var(--n-100);
+  color: var(--ink);
+}
 .dialog-icon {
   width: 42px;
   height: 42px;
@@ -1230,7 +1285,7 @@ body.is-viewer .delay-strip-fields input {
   place-items: center;
   border-radius: var(--r-md);
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: 1.15rem;
 }
 .dialog-title {
@@ -1257,12 +1312,52 @@ body.is-viewer .delay-strip-fields input {
   padding: 0 var(--sp-6) var(--sp-6);
   gap: var(--sp-2);
 }
+/* Kotak yang badannya bisa digulir: garis tipis memisahkan tombol aksi
+   dari isian yang lewat di bawahnya. Kotak konfirmasi (.dialog-ringkas)
+   cukup satu-dua kalimat -- tanpa garis, supaya tidak terasa berat. */
+.modal-dialog-scrollable .dialog-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--n-100);
+  padding-top: var(--sp-4);
+  padding-bottom: var(--sp-5);
+}
+.modal-dialog-scrollable.dialog-ringkas .dialog-foot {
+  border-top: 0;
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-6);
+}
+.dialog-ringkas {
+  --bs-modal-width: 460px;
+}
+/* Tombol di kaki dialog sama tinggi & sama huruf -- termasuk .btn-danger
+   bawaan Bootstrap (1rem, tipis) yang dulu terlihat lain sendiri di
+   sebelah "Batal". */
 .dialog-foot .btn,
 .dialog-foot .btn-quiet,
 .dialog-foot .btn-primary-navy {
   height: 40px;
   padding: 0 20px;
   margin: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+/* Ponsel sempit: tombol-tombolnya berbagi lebar sama rata; aksi ketiga
+   (mis. "Batalkan tahap") turun ke baris sendiri di bawahnya. */
+@media (max-width: 419.98px) {
+  .dialog-foot {
+    flex-wrap: wrap;
+  }
+  .dialog-foot > .btn,
+  .dialog-foot > .btn-quiet,
+  .dialog-foot > .btn-primary-navy {
+    flex: 1 1 0;
+    padding: 0 12px;
+  }
+  .dialog-foot > .prompt-aksi-kiri {
+    flex-basis: 100%;
+    order: 2;
+    margin-right: 0 !important;
+  }
 }
 
 
@@ -1293,6 +1388,6 @@ body.is-viewer .delay-strip-fields input {
 .login-remember input {
   width: 15px;
   height: 15px;
-  accent-color: var(--p-700);
+  accent-color: var(--tp-700);
   cursor: pointer;
 }

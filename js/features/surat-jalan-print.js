@@ -462,7 +462,7 @@ function cetakSuratJalan(rowId) {
 
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
     return;
   }
   const gaya = lokal ? suratJalanLokalCss() : suratJalanCss();

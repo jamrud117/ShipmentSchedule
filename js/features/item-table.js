@@ -370,11 +370,11 @@ function renderItemTable() {
       <td class="seri-col" data-label="${escapeAttr(t("f.seri"))}" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
       <td data-label="HS Code">
         <div class="hscode-cell">
-          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric"${
+          <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric" aria-label="HS Code"${
             it._hsOtomatis ? ` class="hs-otomatis" title="${escapeAttr(judulHsOtomatis(it._hsOtomatis))}"` : ""
           }>
-          <button type="button" class="hscode-lookup-btn${it._hsSaran ? " is-saran" : ""}" data-hscode-lookup="${idx}" title="${escapeAttr(judulTombolCariHs(it))}">
-            <i class="bi bi-search"></i>
+          <button type="button" class="hscode-lookup-btn${it._hsSaran ? " is-saran" : ""}" data-hscode-lookup="${idx}" title="${escapeAttr(judulTombolCariHs(it))}" aria-label="${escapeAttr(judulTombolCariHs(it))}">
+            <i class="bi bi-search" aria-hidden="true"></i>
           </button>
         </div>
       </td>
@@ -383,7 +383,7 @@ function renderItemTable() {
       ${isianNegaraHtml(it)}
       ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
       <td class="jenis-col" data-label="${escapeAttr(t("f.jenis.barang"))}">
-        <select data-f="jenisBarang">
+        <select data-f="jenisBarang" aria-label="${escapeAttr(t("f.jenis.barang"))}">
           ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
         </select>
       </td>
@@ -392,17 +392,17 @@ function renderItemTable() {
           <span>${facilitiesButtonLabel(it)}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
         </button>
       </td>
-      <td data-label="Qty"><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal"></td>
-      <td data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList"></td>
-      <td data-label="${escapeAttr(t("f.harga.unit.usd"))}"><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal"></div></td>
-      <td data-label="${escapeAttr(t("f.netto.kg"))}"><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal"></td>
-      <td data-label="${escapeAttr(t("f.bruto.kg"))}"><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal"></td>
+      <td data-label="Qty"><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal" aria-label="Qty"></td>
+      <td data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList" aria-label="${escapeAttr(t("f.satuan"))}"></td>
+      <td data-label="${escapeAttr(t("f.harga.unit.usd"))}"><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal" aria-label="${escapeAttr(t("f.harga.unit.usd"))}"></div></td>
+      <td data-label="${escapeAttr(t("f.netto.kg"))}"><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.netto.kg"))}"></td>
+      <td data-label="${escapeAttr(t("f.bruto.kg"))}"><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.bruto.kg"))}"></td>
       <td class="pkg-cell dim-col" data-label="${escapeAttr(t("f.dimensi"))}">
-        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)">
+        <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)" aria-label="${escapeAttr(t("f.dimensi"))}">
 
       </td>
       <td data-label="${escapeAttr(t("f.kemasan"))}">
-        <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}"
+        <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}" aria-label="${escapeAttr(t("f.kemasan"))}"
                placeholder="${idx === 0 ? "1" : tt("↳ ikut", "↳ same")}"
                title="${
                  idx === 0
@@ -412,15 +412,15 @@ function renderItemTable() {
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
       <td data-label="${escapeAttr(t("f.jenis.kemasan"))}">
-        <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}"
+        <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}" aria-label="${escapeAttr(t("f.jenis.kemasan"))}"
                list="packageUnitList" placeholder="${idx === 0 ? "BOX" : tt("↳ ikut", "↳ same")}"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
       <td class="cbm-col${activeMode === "import" ? " d-none" : ""}" data-label="CBM (m³)">
-        <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}">
+        <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}" aria-label="CBM (m³)">
       </td>
-      <td class="subtotal-col" data-label="${escapeAttr(t("f.subtotal.usd"))}"><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}"></td>
-      <td class="hapus-col"><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg"></i></button></td>
+      <td class="subtotal-col" data-label="${escapeAttr(t("f.subtotal.usd"))}"><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}" aria-label="${escapeAttr(t("f.subtotal.usd"))}"></td>
+      <td class="hapus-col"><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}" aria-label="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
     </tr>`;
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
     })

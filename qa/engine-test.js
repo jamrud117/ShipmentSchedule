@@ -5,7 +5,7 @@ const vm = require("vm");
 const path = require("path");
 const ROOT = path.join(__dirname, "..");
 
-const ctx = { console, module: { exports: {} } };
+const ctx = { console };
 vm.createContext(ctx);
 
 // Hanya potongan helpers yang dibutuhkan mesin (helpers.js penuh butuh DOM-less saja, aman)
@@ -33,7 +33,6 @@ vm.createContext(ctx);
     aritmetika murni, jadi tempatnya di sini, bukan di dom-test. */
  "js/core/route-model.js"].forEach((f) => {
   const src = fs.readFileSync(path.join(ROOT, f), "utf8");
-  ctx.module = { exports: {} };
   vm.runInContext(src, ctx, { filename: f });
 });
 
@@ -71,7 +70,7 @@ function eq(a, b, msg) {
 
 const {
   predictEta, predictDelivery, predictionShipmentType, etaModeOf,
-  addWorkingDaysISO, addCalendarDaysISO, isWorkingDayISO, recomputeShipmentDates,
+  addWorkingDaysISO, addCalendarDaysISO, recomputeShipmentDates,
   predictionOpsDays, predictionContext, pickPredictionRule,
   predictEtaRevised, predictionEtaBasis, calendarDaysBetweenISO,
   arrivalInfoOf, configuredOpsDays, todayISO,
@@ -79,6 +78,12 @@ const {
   isArrived, kolomPenyebabTiba,
   etaPredictionAppliesTo, deliveryPredictionAppliesTo,
 } = ctx;
+
+// Hari kerja? (`tutup` = hari tutup tambahan sebuah langkah) -- lewat pemeriksa yang dipakai mesin
+const isWorkingDayISO = (iso, tutup) => {
+  const d = iso ? ctx.parseLocalDate(iso) : null;
+  return !!d && ctx.hariKerjaTgl(d, ctx.predictionCalendar(), tutup);
+};
 
 /* `const` di dalam vm tidak menempel ke objek konteks (beda dengan
    deklarasi function), jadi diambil lewat evaluasi. */

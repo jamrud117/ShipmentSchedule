@@ -538,16 +538,3 @@ function refreshUnlocodeDatalist() {
   const moda = (document.getElementById("fTransport") || {}).value || "";
   dl.innerHTML = unlocodeDatalistHtml(moda);
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    UNLOCODES,
-    resolvePortEntry,
-    resolvePortCode,
-    resolvePortCountry,
-    resolvePortMetro,
-    resolveUnlocode,
-    portDisplay,
-    portCodeLabel,
-  };
-}

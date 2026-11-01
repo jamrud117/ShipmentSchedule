@@ -1178,7 +1178,7 @@ function mulaiUbahDocNum(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
   if (!r) return;
   if (!bolehUbahDocNum()) {
-    showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger");
+    showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger", { judul: tt("Tidak diizinkan", "Not allowed") });
     return;
   }
   // Pop-up sebelumnya yang belum sempat selesai menutup dirapikan dulu.
@@ -1446,7 +1446,7 @@ async function simpanUbahDocNum() {
   const errors = validateDocNumForm(typeKey);
   if (errors.length) {
     dnTulisHint(errors[0], true);
-    showToast(errors.length === 1 ? errors[0] : t("x.isian.belum.benar", { n: errors.length }), "danger");
+    showToast(errors.length === 1 ? errors[0] : t("x.isian.belum.benar", { n: errors.length }), "danger", { judul: tt("Periksa isian", "Check the form") });
     return;
   }
   dnTulisHint("");
@@ -2240,11 +2240,11 @@ async function renderDocNumHistory() {
                        kembali menciptakan dua kebenaran. */
                     bolehUbahDocNum()
                       ? `<button type="button" class="icon-btn" data-edit-num="${r.id}"
-                                 title="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
+                                 title="${tt("Perbaiki isian", "Edit fields")}" aria-label="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn" data-detail-num="${r.id}"
-                          title="${tt("Lihat seluruh isian", "View all fields")}"><i class="bi bi-list-ul"></i></button>
+                          title="${tt("Lihat seluruh isian", "View all fields")}" aria-label="${tt("Lihat seluruh isian", "View all fields")}"><i class="bi bi-list-ul"></i></button>
                   ${
                     /* Surat jalan hanya dipakai untuk kiriman EXPORT.
                        Yang belum ditautkan pun ditawarkan — jadwalnya
@@ -2254,7 +2254,7 @@ async function renderDocNumHistory() {
                        untuk seluruh surat jalan Lokal. */
                     String(jenis.key || "").startsWith("do") && sjBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-sj="${r.id}"
-                                 title="${tt("Cetak surat jalan", "Print delivery note")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak surat jalan", "Print delivery note")}" aria-label="${tt("Cetak surat jalan", "Print delivery note")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -2263,7 +2263,7 @@ async function renderDocNumHistory() {
                        sendiri, jadi setiap nomor "fund" bisa dicetak. */
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
-                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -2271,9 +2271,9 @@ async function renderDocNumHistory() {
                        Barang): surat resmi berkop. */
                     typeof suratBcBolehCetak === "function" && suratBcBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-surat="${r.id}"
-                                 title="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
+                                 title="${tt("Cetak surat", "Print letter")}" aria-label="${tt("Cetak surat", "Print letter")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-word-surat="${r.id}"
-                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
+                                 title="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}" aria-label="${tt("Unduh surat (Ms Word)", "Download letter (Ms Word)")}"><i class="bi bi-file-earmark-word"></i></button>`
                       : ""
                   }
                   ${
@@ -2282,13 +2282,13 @@ async function renderDocNumHistory() {
                        jenis invoice yang dipilih saat nomor terbit. */
                     /^invoice/.test(jenis.key) && ciplBolehCetak(r)
                       ? `<button type="button" class="icon-btn" data-print-cipl="${r.id}"
-                                 title="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}"><i class="bi bi-printer"></i></button>
+                                 title="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}" aria-label="${tt("Cetak Commercial Invoice, Packing List & Shipping Instruction", "Print Commercial Invoice, Packing List & Shipping Instruction")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-xls-cipl="${r.id}"
-                                 title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
+                                 title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}" aria-label="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
                       : ""
                   }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
-                          data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}">
+                          data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}" aria-label="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
                   </button>
                 </div></td>
@@ -2326,9 +2326,9 @@ function renderDocNumPagination(total) {
   bar.innerHTML = `
     <div class="pagination-info">${tt(`Menampilkan <b>${awal}–${akhir}</b> dari <b>${total}</b> nomor`, `Showing <b>${awal}–${akhir}</b> of <b>${total}</b> numbers`)}</div>
     <div class="pagination-controls">
-      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left"></i></button>
+      <button type="button" class="page-nav" id="dnPagePrev" ${docNumPage <= 1 ? "disabled" : ""} title="${tt("Halaman sebelumnya", "Previous page")}" aria-label="${tt("Halaman sebelumnya", "Previous page")}"><i class="bi bi-chevron-left" aria-hidden="true"></i></button>
       <div class="page-numbers">${tombolHal}</div>
-      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="page-nav" id="dnPageNext" ${docNumPage >= totalHal ? "disabled" : ""} title="${tt("Halaman berikutnya", "Next page")}" aria-label="${tt("Halaman berikutnya", "Next page")}"><i class="bi bi-chevron-right" aria-hidden="true"></i></button>
     </div>
     <div class="pagination-size">
       <label for="dnPageSize">${tt("Per halaman", "Per page")}</label>
@@ -2431,6 +2431,7 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
         );
       }
     },
+    { title: tt("Hapus Nomor?", "Delete Number?"), confirmText: tt("Hapus Nomor", "Delete Number"), icon: "bi-trash3" },
   );
 });
 

@@ -133,9 +133,7 @@ function predictionContext(src) {
     routeType: s.routeType === "transit" ? "transit" : "direct",
     forwarder: s.forwarder || "",
     /* Carrier DITERJEMAHKAN dari nama kapal / no. penerbangan, bukan
-       dipilih pengguna. Lihat js/core/carrier-master.js. */
-    // Satu kali deteksi. carrierCodeOf() dan detectCarrier() dulu
-    // dipanggil terpisah — pekerjaan yang sama dikerjakan dua kali.
+       dipilih pengguna (satu kali detectCarrier, js/core/carrier-master.js). */
     carrier: carrierInfo.code || "",
     carrierKind: carrierInfo.kind || "",
     /* Tingkat layanan kurir — Priority / Economy. Menentukan komitmen
@@ -210,12 +208,4 @@ function portDisplayName(kode) {
   if (!kode || typeof resolvePortEntry !== "function") return "";
   const e = resolvePortEntry(kode);
   return e ? e.name : "";
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    predictionShipmentType,
-    predictionContext,
-    resolveRouteLayer,
-  };
 }

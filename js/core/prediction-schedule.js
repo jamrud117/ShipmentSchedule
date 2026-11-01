@@ -137,7 +137,7 @@ function predictionStrippingApplies(ctx) {
    mengangkut sampai pelabuhan/bandara saja — kepabeanan dan
    pengantarannya tetap urusan kita, jadi rantai proses biasa yang
    berlaku di sana. */
-function courierCommitmentFor(s, ctx) {
+function courierCommitmentFor(ctx) {
   if (!ctx || ctx.carrierKind !== "courier") return null;
   const rule = pickPredictionRule(
     PREDICTION_CONFIG.courierCommitments || [],
@@ -281,7 +281,7 @@ function buildDeliverySchedule(s, ops, ctx) {
      titik itu yang NYATA mengalahkan yang DIJANJIKAN. Manifest dan
      Berths tidak menghentikannya — keduanya justru MEMPERTAJAM
      tanggal kedatangan yang jadi titik hitungnya. */
-  const komitmen = courierCommitmentFor(s, ctx);
+  const komitmen = courierCommitmentFor(ctx);
   const kepabeananMulai = ["pib", "billing", "sppb"].some((k) =>
     milestoneDateOf(s, k),
   );
@@ -691,13 +691,4 @@ function jalankanLangkahKerja(mulai, langkah, ctx) {
     });
   });
   return { date: cur, steps: rinci };
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    predictionOpsDays,
-    buildDeliverySchedule,
-    predictDelivery,
-    deliveryModeOf,
-  };
 }

@@ -157,6 +157,56 @@ function headersForTemplate(tplId) {
 }
 
 /* ------------------------------------------------------------------
+   SHEET "DATA PIB-PEB": Data PIB/PEB lengkap (core/data-pabean.js) --
+   kantor, pihak, BC 1.1, nilai, pungutan, pernyataan, dan data per
+   barang -- satu baris per isian berisi. Sheet utama tetap persis
+   templat salin; sheet ini dibaca balik oleh Bulk Import supaya
+   mengganti seluruh jadwal tidak menghapus data itu. Barang = urutan
+   barang yang terbawa sheet utama (BULK_BARANG_TERBAWA), mulai 1.
+------------------------------------------------------------------ */
+const BULK_SHEET_PABEAN = "DATA PIB-PEB";
+const BULK_PABEAN_HEADERS = ["NO", "AJU", "SERI BARANG", "KELOMPOK", "ISIAN", "NILAI", "KUNCI"];
+// Baris barang yang dibaca balik Bulk Import (reconstructShipmentFromGroup)
+const BULK_BARANG_TERBAWA = (it) => !!(itemDisplayName(it) || it.hsCode || excelNum(it.qty));
+
+function barisSheetPabean(list) {
+  const rows = [];
+  const tambah = (no, s, seri, b) =>
+    rows.push([no, s.noAju || "", seri || "", b.kelompok, b.label,
+      b.jenis === "tanggal" ? new Date(`${b.nilai}T00:00:00Z`) : b.nilai, b.kunci]);
+  list.forEach((s, i) => {
+    dpKeBaris(s.dataPabean, s.mode || activeMode).forEach((b) => tambah(i + 1, s, "", b));
+    (s.items || []).filter(BULK_BARANG_TERBAWA).forEach((it, j) =>
+      dpBarangKeBaris(it.dataPabean).forEach((b) => tambah(i + 1, s, j + 1, b)));
+  });
+  return rows;
+}
+
+/* Baris sheet DATA PIB-PEB -> dataPabean jadwal & barangnya, menurut NO
+   (sama dengan kolom NO sheet utama; tanpa NO: AJU). */
+function terapkanSheetPabean(wb, reconstructed) {
+  const ws = wb.Sheets[BULK_SHEET_PABEAN];
+  if (!ws) return;
+  const baris = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }).slice(1);
+  const kunciKolom = BULK_PABEAN_HEADERS.reduce((o, h, i) => Object.assign(o, { [h]: i }), {});
+  reconstructed.forEach((r) => {
+    const no = excelStr(r.no);
+    const milik = baris.filter((b) => (no && excelStr(b[kunciKolom.NO]) ? excelStr(b[kunciKolom.NO]) === no : excelStr(b[kunciKolom.AJU]) === r.shipment.noAju));
+    const isi = (b) => {
+      const kunci = excelStr(b[kunciKolom.KUNCI]);
+      const v = b[kunciKolom.NILAI];
+      return { kunci, nilai: dpJenisKunci(kunci) === "tanggal" ? excelValueToISODate(v) : v };
+    };
+    const jadwal = dpDariBaris(milik.filter((b) => !excelStr(b[kunciKolom["SERI BARANG"]])).map(isi));
+    if (Object.keys(jadwal).length) r.shipment.dataPabean = jadwal;
+    r.items.forEach((it, j) => {
+      const dp = dpBarangDariBaris(milik.filter((b) => excelStr(b[kunciKolom["SERI BARANG"]]) === String(j + 1)).map(isi));
+      if (Object.keys(dp).length) it.dataPabean = dp;
+    });
+  });
+}
+
+/* ------------------------------------------------------------------
    TATA LETAK BERKAS EKSPOR
 
    Ditulis dengan ExcelJS, bukan SheetJS: versi komunitas SheetJS
@@ -267,6 +317,22 @@ async function handleBulkExport(mode) {
         .filter((i) => i >= 0);
       isiSheet(wb.addWorksheet(tpl.sheet), tplHeaders, tplRows, { kolomTanggal });
     });
+
+  const barisPabean = barisSheetPabean(list);
+  if (barisPabean.length) {
+    const ws = wb.addWorksheet(BULK_SHEET_PABEAN);
+    isiSheet(ws, BULK_PABEAN_HEADERS, barisPabean, {});
+    // Satu kolom NILAI berisi teks, angka & tanggal: format & rata per sel
+    [6, 30, 12, 30, 36, 60, 28].forEach((lebar, i) => (ws.getColumn(i + 1).width = lebar));
+    ws.eachRow((row, nomor) => {
+      if (nomor === 1) return;
+      [4, 5, 6].forEach((c) => (row.getCell(c).alignment = { horizontal: "left", vertical: "middle", wrapText: c === 6 }));
+      const nilai = row.getCell(6);
+      if (nilai.value instanceof Date) nilai.numFmt = "dd-mm-yyyy";
+      else if (typeof nilai.value === "number") nilai.numFmt = "#,##0.####";
+      if (typeof nilai.value === "string" && nilai.value.includes("\n")) row.height = 20 * nilai.value.split("\n").length;
+    });
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
@@ -418,7 +484,8 @@ function reconstructShipmentFromGroup(group, mode) {
     });
   }
 
-  return { shipment: s, items };
+  // NO sheet utama: kunci sheet DATA PIB-PEB (terapkanSheetPabean)
+  return { shipment: s, items, no: excelStr(first[idx.NO]) };
 }
 
 async function handleBulkImport(mode, file) {
@@ -426,7 +493,11 @@ async function handleBulkImport(mode, file) {
   const modeLabel = mode === "import" ? "Import" : "Export";
   try {
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    /* Tanggal dibaca sebagai NOMOR SERI (bukan Date): excelValueToISODate
+       membulatkannya ke hari terdekat, jadi berkas yang tanggalnya
+       tertulis sebagai tengah malam lokal WIB (Bulk Export lama: seri
+       hari sebelumnya pukul 17.00) tetap terbaca pada harinya. */
+    const wb = XLSX.read(buf, { type: "array" });
     const sheetName = wb.SheetNames[0];
     if (!sheetName) {
       showToast(t("m.file.excel.ini.tidak.punya.sheet.sama.sekali"), "danger");
@@ -453,6 +524,7 @@ async function handleBulkImport(mode, file) {
     const reconstructed = groups
       .map((g) => reconstructShipmentFromGroup(g, mode))
       .filter((r) => r.items.length);
+    terapkanSheetPabean(wb, reconstructed);
 
     if (!reconstructed.length) {
       showToast(t("m.tidak.ada.jadwal.dengan.barang.yang.valid.di.f"),
@@ -487,6 +559,7 @@ async function handleBulkImport(mode, file) {
           loadShipments();
         }
       },
+      { title: tt("Ganti Seluruh Jadwal?", "Replace All Schedules?"), confirmText: tt(`Ganti Jadwal ${modeLabel}`, `Replace ${modeLabel} Schedules`), icon: "bi-arrow-repeat" },
     );
   } catch (err) {
     console.error(err);
@@ -537,7 +610,7 @@ async function handleDeleteAll() {
   const total = (data[mode] || []).length;
 
   if (!total) {
-    showToast(t("x.tidak.ada.data.untuk.dihapus", { mode: modeLabel }), "dark");
+    showToast(t("x.tidak.ada.data.untuk.dihapus", { mode: modeLabel }), "info");
     return;
   }
 
@@ -571,6 +644,7 @@ async function handleDeleteAll() {
         btn.innerHTML = originalLabel;
       }
     },
+    { title: tt("Hapus Seluruh Data?", "Delete All Data?"), confirmText: tt(`Hapus Semua Jadwal ${modeLabel}`, `Delete All ${modeLabel} Schedules`), icon: "bi-trash3" },
   );
 }
 $("#btnDeleteAll").addEventListener("click", () => {

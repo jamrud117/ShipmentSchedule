@@ -185,7 +185,3 @@ function routeInferenceNote(src) {
     "No transit recorded for this vessel/line on this route yet — Route Type left as is.",
   );
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { inferRoute, kunciSarana, routeInferenceNote };
-}

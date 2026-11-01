@@ -18,7 +18,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
-  background: #fff;
+  background: var(--surface);
   overflow: hidden;
   /* Tombol jenis dokumen menyesuaikan lebar kartu ini, bukan lebar layar
      (@container dn-shell di ujung berkas). */
@@ -30,7 +30,7 @@
   flex-direction: row;
   gap: 8px;
   padding: 12px 16px;
-  background: #f7fafd;
+  background: var(--w-bg-f7fafd);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
@@ -56,11 +56,11 @@
   transition: all 0.18s ease;
 }
 .docnum-tab:hover {
-  background: #fff;
+  background: var(--surface);
   border-color: var(--border);
 }
 .docnum-tab.active {
-  background: #fff;
+  background: var(--surface);
   border-color: rgba(20, 73, 122, 0.32);
   box-shadow: 0 8px 20px -14px rgba(20, 73, 122, 0.6);
 }
@@ -93,7 +93,7 @@
 }
 .docnum-tab-text b {
   font-size: 0.84rem;
-  color: var(--navy);
+  color: var(--tp-700);
   line-height: 1.25;
 }
 .docnum-tab-text small {
@@ -285,7 +285,7 @@ table.fund-lines select {
 }
 .fund-lines select.fl-awb-hilang {
   border-color: var(--s-danger);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 /* Bagian per BL/AWB di bawah TOTAL */
 .fl-awb-bagian {
@@ -331,7 +331,7 @@ table.fund-lines select {
   color: var(--n-600);
 }
 .fl-sum--minus b {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .fl-sum--total {
   padding-top: 6px;
@@ -357,7 +357,7 @@ table.fund-lines select {
   margin-bottom: -1px;
 }
 .docnum-subtab.active {
-  color: var(--p-600);
+  color: var(--tp-600);
   border-bottom-color: var(--p-600);
 }
 /* PONSEL: baris tab digeser mendatar, tidak dipotong atau dipecah.
@@ -493,12 +493,15 @@ table.fund-lines select {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  height: 22px;
+  /* 24px (batas sasaran sentuh WCAG 2.5.8) di ruang label 22px: margin
+     negatif menjaga tinggi baris label tetap sama dengan kolom lain. */
+  height: 24px;
+  margin: -1px 0;
   padding: 0 8px;
   border: 1px solid var(--border-control);
   border-radius: var(--r-sm);
-  background: #fff;
-  color: var(--p-600);
+  background: var(--surface);
+  color: var(--tp-600);
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1;
@@ -514,7 +517,7 @@ table.fund-lines select {
 .dn-tambah-mini:hover {
   background: var(--p-50);
   border-color: var(--p-300);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 .dn-tambah-mini .bi {
   font-size: 0.7rem;
@@ -552,7 +555,7 @@ table.fund-lines select {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1rem;
-  color: var(--navy);
+  color: var(--tp-700);
 }
 .docnum-preview {
   font-size: 0.76rem;
@@ -560,7 +563,7 @@ table.fund-lines select {
 }
 .docnum-preview b {
   font-family: var(--font-mono);
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 .docnum-actions {
   display: flex;
@@ -637,8 +640,8 @@ table.fund-lines select {
   padding: 2px 3px 2px 10px;
   border: 1px solid var(--p-200);
   border-radius: var(--r-pill);
-  background: #fff;
-  color: var(--p-600);
+  background: var(--surface);
+  color: var(--tp-600);
   font-family: var(--font-mono);
   font-size: var(--t-sm);
   font-weight: 600;
@@ -659,7 +662,7 @@ table.fund-lines select {
 }
 .dn-aturan-hapus:hover {
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .dn-aturan-kosong {
   font-size: var(--t-sm);
@@ -723,14 +726,14 @@ table.fund-lines select {
 /* Tanda isian wajib di label. Labelnya flex berjarak 6px (.fgrid),
    jadi tandanya ditarik sedikit ke kiri supaya menempel ke teksnya. */
 .docnum-panel .form-label .req {
-  color: var(--coral);
+  color: var(--ts-danger);
   font-weight: 700;
   margin-left: -3px;
 }
 /* Kotak isian yang gagal validasi ditandai di tempatnya, supaya user */
 .docnum-panel .is-invalid {
   border-color: var(--coral) !important;
-  background: #fff6f6;
+  background: var(--w-bg-fff6f6);
 }
 
 /* Banner nomor yang baru terbit. */
@@ -749,13 +752,13 @@ table.fund-lines select {
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .docnum-result-number {
   font-family: var(--font-mono);
   font-size: 1.32rem;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--tp-700);
   letter-spacing: 0.02em;
   margin-top: 2px;
   word-break: break-all;
@@ -768,7 +771,7 @@ table.fund-lines select {
   color: var(--muted);
 }
 .docnum-hint--error {
-  color: var(--coral);
+  color: var(--ts-danger);
   font-weight: 600;
 }
 
@@ -838,7 +841,7 @@ table.fund-lines select {
 .docnum-table .dn-num {
   font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--navy);
+  color: var(--tp-700);
   white-space: nowrap;
 }
 .docnum-table .dn-dept {
@@ -1085,7 +1088,7 @@ table.fund-lines select {
   }
   .docnum-table td.dn-act {
     z-index: 1;
-    background: #fff;
+    background: var(--surface);
   }
   .docnum-table tbody tr:nth-child(even) td.dn-act {
     background: var(--n-50);
@@ -1114,7 +1117,7 @@ table.fund-lines select {
   }
   .docnum-table td.dn-col-bayar {
     z-index: 1;
-    background: #fff;
+    background: var(--surface);
   }
   .docnum-table tbody tr:nth-child(even) td.dn-col-bayar {
     background: var(--n-50);
@@ -1159,7 +1162,7 @@ table.fund-lines select {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ------------------------------------------------------------------
@@ -1203,7 +1206,7 @@ table.fund-lines select {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .dnd-jenis > i {
   font-size: 0.95rem;
@@ -1215,7 +1218,7 @@ table.fund-lines select {
   border: 1px solid var(--p-100);
   border-radius: var(--r-pill);
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-family: var(--font-body);
   font-size: var(--t-xs);
   font-weight: 600;
@@ -1231,7 +1234,7 @@ table.fund-lines select {
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.25;
-  color: var(--navy);
+  color: var(--tp-700);
   overflow-wrap: anywhere;
 }
 .dnd-salin {
@@ -1243,13 +1246,13 @@ table.fund-lines select {
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: #fff;
+  background: var(--surface);
   color: var(--n-500);
   font-size: 0.8rem;
 }
 .dnd-salin:hover {
   border-color: var(--p-400);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 /* Tanggal, pemohon, departemen -- dipisah titik tengah lewat CSS supaya
    pemisahnya tidak ikut tersalin dan tidak menggantung di awal baris. */
@@ -1284,7 +1287,7 @@ table.fund-lines select {
   font-family: var(--font-mono);
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--tp-700);
   white-space: nowrap;
 }
 
@@ -1462,10 +1465,10 @@ table.fund-lines select {
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .dnd-tabel tr.dnd-diskon td {
-  background: #fff8f7;
+  background: var(--w-bg-fff8f7);
 }
 .dnd-foto img {
   display: block;
@@ -1729,7 +1732,7 @@ table.fund-lines select {
   font-weight: 700;
   border-top: 2px solid var(--n-300);
   border-bottom: 0;
-  background: #fff;
+  background: var(--surface);
   position: sticky;
   bottom: 0;
 }
@@ -1813,20 +1816,20 @@ button.dn-bayar {
   }
 }
 .dn-bayar--lunas {
-  color: #146c43;
-  background: #e8f5ee;
-  border-color: #b7e0c8;
+  color: var(--w-teks-146c43);
+  background: var(--w-bg-e8f5ee);
+  border-color: var(--w-garis-b7e0c8);
 }
 .dn-bayar--belum {
-  color: #8a5a00;
-  background: #fff7e6;
-  border-color: #f1d9a6;
+  color: var(--w-teks-8a5a00);
+  background: var(--w-bg-fff7e6);
+  border-color: var(--w-garis-f1d9a6);
 }
 button.dn-bayar--belum:hover {
-  background: #ffefcc;
+  background: var(--w-bg-ffefcc);
 }
 button.dn-bayar--lunas:hover {
-  background: #d6efe1;
+  background: var(--w-bg-d6efe1);
 }
 .dn-bayar-tgl {
   font-weight: 500;
@@ -1909,7 +1912,7 @@ button.dn-bayar--lunas:hover {
   padding: 0 28px 0 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background-color: #fff;
+  background-color: var(--surface);
   font-size: 13px;
   color: var(--n-800);
 }
@@ -1940,7 +1943,7 @@ button.dn-bayar--lunas:hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--s-danger);
+  color: var(--ts-danger);
   font-weight: 600;
 }
 .dn-cari {
@@ -1963,7 +1966,7 @@ button.dn-bayar--lunas:hover {
   padding: 0 32px 0 30px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   font-size: 13px;
   color: var(--n-800);
 }
@@ -2034,7 +2037,7 @@ button.dn-bayar--lunas:hover {
    DISKON (baris sendiri) & RUMUS di Rincian Biaya Pengajuan Dana
 ------------------------------------------------------------------ */
 .fl-row-diskon td {
-  background: #fff8f7;
+  background: var(--w-bg-fff8f7);
 }
 .fl-desc-diskon {
   display: flex;
@@ -2049,14 +2052,14 @@ button.dn-bayar--lunas:hover {
   flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #fde7e4;
-  color: #b42318;
+  background: var(--w-bg-fde7e4);
+  color: var(--w-teks-b42318);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 .fl-row-diskon .fl-ppn {
-  color: #b42318;
+  color: var(--w-teks-b42318);
 }
 /* Baris diskon: kotak isian, pilihan Rp/%, dan kotak nominal SEBARIS --
    setinggi baris lain, semua kotak sejajar. */
@@ -2080,7 +2083,7 @@ button.dn-bayar--lunas:hover {
   flex: 1 1 0;
   min-width: 104px;
   text-align: right;
-  color: #b42318;
+  color: var(--w-teks-b42318);
   background: var(--n-50);
   cursor: default;
   font-variant-numeric: tabular-nums;
@@ -2209,7 +2212,7 @@ button.dn-bayar--lunas:hover {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
-  background: #fff;
+  background: var(--surface);
   text-align: center;
 }
 .lap-kpi--sorot {
@@ -2248,10 +2251,10 @@ button.dn-bayar--lunas:hover {
 }
 /* Ini biaya: naik = merah, turun = hijau. */
 .lap-naik {
-  color: #b91c1c !important;
+  color: var(--w-teks-b91c1c) !important;
 }
 .lap-turun {
-  color: #15803d !important;
+  color: var(--w-teks-15803d) !important;
 }
 .lap-wawasan {
   margin-top: 14px;
@@ -2259,7 +2262,7 @@ button.dn-bayar--lunas:hover {
   border: 1px solid var(--border);
   border-left: 4px solid #1e3a5f;
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--w-bg-f8fafc);
 }
 .lap-wawasan ul {
   margin: 6px 0 0;
@@ -2299,7 +2302,7 @@ button.dn-bayar--lunas:hover {
   vertical-align: middle;
 }
 .lap-tabel tbody tr:nth-child(even) td {
-  background: #f8fafc;
+  background: var(--w-bg-f8fafc);
 }
 .lap-tabel tfoot td {
   font-weight: 700;
@@ -2312,7 +2315,7 @@ button.dn-bayar--lunas:hover {
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
 }
 .lap-grafik svg {
   display: block;
@@ -2350,7 +2353,7 @@ button.dn-bayar--lunas:hover {
   margin-top: 28px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
 }
 .lap-detail > summary {
   list-style: none;
@@ -2470,9 +2473,9 @@ button.dn-bayar--lunas:hover {
   border: 1px solid var(--border);
 }
 .fd-jenis--debit {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
+  background: var(--w-bg-fff7ed);
+  border-color: var(--w-garis-fdba74);
+  color: var(--w-teks-9a3412);
 }
 .fd-aksi {
   display: flex;
@@ -2642,7 +2645,7 @@ button.dn-bayar--lunas:hover {
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: #fff;
+    background: var(--surface);
   }
   .docnum-history-wrap .docnum-table tbody tr:last-child {
     margin-bottom: 0;
@@ -2687,7 +2690,7 @@ button.dn-bayar--lunas:hover {
   }
   /* Kartu bergantian putih & abu-abu tidak berarti apa-apa: semua putih */
   .docnum-history-wrap .docnum-table tbody tr:nth-child(n) {
-    background: #fff;
+    background: var(--surface);
   }
   /* Nomor urut cukup di label nomornya; nomor dokumen jadi judul kartu */
   .docnum-history-wrap .docnum-table td.dn-col-no {
@@ -2761,7 +2764,7 @@ button.dn-bayar--lunas:hover {
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: #fff;
+    background: var(--surface);
   }
   .tabel-isian :is(table.fund-lines, .sb-tabel) > tbody > tr > td {
     width: auto;
@@ -2816,8 +2819,8 @@ button.dn-bayar--lunas:hover {
   /* Baris diskon: kartu bersemu merah (bukan tiap selnya); kotak nominal
      turun selebar kartu di bawah kotak nilai & pilihan Rp/%. */
   .tabel-isian table.fund-lines > tbody > tr.fl-row-diskon {
-    background: #fff8f7;
-    border-color: #f6d4cf;
+    background: var(--w-bg-fff8f7);
+    border-color: var(--w-garis-f6d4cf);
   }
   .tabel-isian tr.fl-row-diskon > td {
     background: none;

@@ -81,7 +81,13 @@ const nativeFormatter = {
     const r = roundNum(n, decimals);
     return r === 0 ? "" : r;
   },
-  date: (d) => parseLocalDate(d) || "",
+  /* Tengah malam UTC: ExcelJS menghitung nomor seri tanggal dari waktu
+     UTC-nya, jadi tengah malam LOKAL di WIB (UTC+7) tercatat pukul 17.00
+     hari sebelumnya -- Excel menampilkan tanggal mundur sehari. */
+  date: (d) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || "");
+    return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3])) : "";
+  },
   tarif: (percent) => roundNum((Number(percent) || 0) / 100, 4),
   packageNum: (pkg) => {
     const n = extractLeadingNumber(pkg);

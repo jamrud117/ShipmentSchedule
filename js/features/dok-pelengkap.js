@@ -50,8 +50,8 @@ function nomorPiForm() {
 
 const DP_CONTOH_NOMOR = {
   pi: ["mis. 04.PI-02.26.0131", "e.g. 04.PI-02.26.0131"],
-  ls: ["mis. ITB21G2672826137141", "e.g. ITB21G2672826137141"],
-  polis: ["mis. EKD2273805 - KMC260031", "e.g. EKD2273805 - KMC260031"],
+  ls: ["mis. ITB21G2672826", "e.g. ITB21G2672826"],
+  polis: ["mis. EKD2273805", "e.g. EKD2273805"],
   lain: ["Nomor dokumen", "Document number"],
 };
 

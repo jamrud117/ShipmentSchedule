@@ -4,9 +4,10 @@
 
 /* Nomor urut permintaan muat.
 
-   loadShipments() dipanggil dari delapan tempat — masuk aplikasi,
-   simpan form, impor massal, tombol coba lagi, dan penangan galat
-   persistFields. Tidak ada satu pun yang menunggu yang lain selesai.
+   loadShipments() dipanggil dari banyak tempat — masuk aplikasi,
+   impor massal, tombol coba lagi, penangan galat persistFields, dan
+   simpan form kalau jawabannya tidak bisa langsung dipasang
+   (terapkanJadwalTersimpan). Tidak ada yang menunggu yang lain selesai.
 
    Dua muat yang bertumpang berarti jawaban yang datang TERAKHIR yang
    menang, bukan yang paling baru diminta. Urutan itu tidak dijamin:
@@ -23,6 +24,10 @@ let muatKe = 0;
    Dibaca router(): sebelum ini true, #/edit/<id> yang tidak ketemu
    BUKAN berarti jadwalnya tidak ada -- datanya memang belum sampai. */
 let shipmentsLoaded = false;
+
+/* Nomor muat terakhir yang sudah selesai (berhasil atau gagal). Berbeda
+   dengan muatKe = ada muat penuh yang masih di jalan (terapkanJadwalTersimpan). */
+let muatSelesai = 0;
 
 function kueriShipments() {
   return supabaseClient
@@ -60,6 +65,7 @@ async function loadShipments() {
      galatnya: menampilkan layar gagal untuk permintaan usang akan
      menghapus data yang barusan berhasil dimuat. */
   if (nomor !== muatKe) return;
+  muatSelesai = nomor;
 
   if (error) {
     console.error(error);
@@ -75,15 +81,26 @@ async function loadShipments() {
     if (data[row.mode]) data[row.mode].push(s);
   });
 
-  /* PREDIKSI DISELARASKAN DI MEMORI, SEBELUM DIGAMBAR.
+  selaraskanPrediksi();
 
-     Dengan begitu kartu, panel detail, template salin, dan Bulk Export
-     semuanya membaca s.actual yang sama — tanpa satu pun berkas itu
-     perlu tahu bahwa ada mesin prediksi.
+  // PENTING: render() harus dipanggil di sini
+  shipmentsLoaded = true;
+  render();
+  siapkanLartasLatar();
 
-     Tidak ada penulisan ke database di sini. Membuka halaman bukan
-     mengubah data; kolom di Supabase baru diperbarui saat masukannya
-     benar-benar diubah (tanggal di kartu, tahap dokumen, simpan form). */
+  await syncArrivedStatuses();
+}
+
+/* PREDIKSI DISELARASKAN DI MEMORI, SEBELUM DIGAMBAR.
+
+   Dengan begitu kartu, panel detail, template salin, dan Bulk Export
+   semuanya membaca s.actual yang sama — tanpa satu pun berkas itu
+   perlu tahu bahwa ada mesin prediksi.
+
+   Tidak ada penulisan ke database di sini. Membuka halaman bukan
+   mengubah data; kolom di Supabase baru diperbarui saat masukannya
+   benar-benar diubah (tanggal di kartu, tahap dokumen, simpan form). */
+function selaraskanPrediksi() {
   /* Hasil belajar dibuang lebih dulu: cache yang dibangun dari data
      lama akan tetap dipakai untuk data baru, dan perkiraan basi lebih
      berbahaya daripada tidak belajar sama sekali — ia terlihat pasti. */
@@ -93,12 +110,34 @@ async function loadShipments() {
   if (typeof applyPredictionToAll === "function") {
     applyPredictionToAll(data.import);
   }
+}
 
-  // PENTING: render() harus dipanggil di sini
-  shipmentsLoaded = true;
-  render();
-  siapkanLartasLatar();
+/* SESUDAH SIMPAN FORM: jadwal yang barusan tersimpan dimasukkan ke papan
+   dari JAWABAN SIMPAN ITU SENDIRI (baris + barang + terminal transit,
+   lihat updateShipmentRecord / createShipment) -- bukan memuat ulang
+   SEMUA jadwal beserta seluruh barangnya. Tidak ada permintaan tambahan,
+   dan papan tidak sempat berkedip menjadi kerangka muat.
 
+   Muat penuh tetap dipakai kalau papan belum pernah termuat, ada muat
+   penuh yang masih di jalan (jawabannya bisa memuat jadwal ini SEBELUM
+   disimpan -- muat baru membuangnya, sama seperti dulu), atau jawabannya
+   tidak lengkap. Daftar tidak digambar di sini: kembali ke daftar
+   (router) yang menggambarnya, sekali. */
+async function terapkanJadwalTersimpan(baris) {
+  if (!baris || !baris.id || !data[baris.mode] || !shipmentsLoaded || muatSelesai !== muatKe) return loadShipments();
+  try {
+    const s = rowToShipment(baris);
+    const daftar = data[baris.mode];
+    const i = daftar.findIndex((x) => x.id === s.id);
+    if (i >= 0) daftar[i] = s;
+    else daftar.push(s); // jadwal baru: created_at terbaru, urutan muat tetap sama
+    selaraskanPrediksi();
+  } catch (e) {
+    /* Jadwalnya SUDAH tersimpan -- jangan sampai terbaca "gagal
+       menyimpan" (disimpan ulang = jadwal baru ganda): muat penuh saja. */
+    console.error(e);
+    return loadShipments();
+  }
   await syncArrivedStatuses();
 }
 
@@ -236,6 +275,10 @@ const KOLOM_OPSIONAL = {
   ),
   // Dibutuhkan di pabrik -> rencana mundur ETD/ETA (core/prediction-mundur.js)
   needed_date: kolomOpsional("migration-lampiran-lartas-kebutuhan.sql", "Dibutuhkan di Pabrik", "Needed at Factory"),
+  // Data PIB / PEB lengkap (core/data-pabean.js)
+  data_pabean: Object.assign(kolomOpsional("migration-data-pabean.sql", "Data PIB/PEB lengkap", "Full PIB/PEB data"), {
+    hilang: (d) => !!d && Object.keys(d).length > 0,
+  }),
 };
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
@@ -280,6 +323,7 @@ const KOLOM_BARANG_OPSIONAL = {
   kode_negara_asal: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Negara Asal", "Country of Origin"); } },
   pi_nomor: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("PI barang", "Item PI"); } },
   pi_no_item: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("No. item di PI", "Item no. in PI"); } },
+  data_pabean: { berkas: "migration-data-pabean.sql", get nama() { return tt("Data PIB/PEB per barang", "Per-item PIB/PEB data"); } },
 };
 
 const isianKolom = (v) => String(v == null ? "" : v).trim() !== "";
@@ -290,13 +334,15 @@ const tanpaKolom = (rows, kolom) =>
     return x;
   });
 
+/* Mengembalikan baris barang yang tersisip (bentuk database) -- dipakai
+   terapkanJadwalTersimpan tanpa membaca ulang. */
 async function sisipkanBarang(items, shipmentId, kirimBaris) {
-  if (!items.length) return;
+  if (!items.length) return [];
   const opsional = Object.keys(KOLOM_BARANG_OPSIONAL);
   let rows = items.map((it) => itemToRow(it, shipmentId));
   rows = tanpaKolom(rows, opsional.filter((k) => !rows.some((r) => isianKolom(r[k]))));
-  const kirim = kirimBaris || ((r) => supabaseClient.from("shipment_items").insert(r));
-  let { error } = await kirim(rows);
+  const kirim = kirimBaris || ((r) => supabaseClient.from("shipment_items").insert(r).select());
+  let { data: tersisip, error } = await kirim(rows);
   let lebur = false;
   const ditinggal = [];
   for (let i = 0; error && i <= opsional.length; i++) {
@@ -309,7 +355,7 @@ async function sisipkanBarang(items, shipmentId, kirimBaris) {
       ditinggal.push(KOLOM_BARANG_OPSIONAL[kolom]);
       rows = tanpaKolom(rows, [kolom]);
     }
-    ({ error } = await kirim(rows));
+    ({ data: tersisip, error } = await kirim(rows));
   }
   if (!error && (lebur || ditinggal.length) && typeof showToast === "function") {
     const kode = ditinggal.map((k) => k.nama).join(" & ");
@@ -333,6 +379,7 @@ async function sisipkanBarang(items, shipmentId, kirimBaris) {
     );
   }
   if (error) throw error;
+  return tersisip || [];
 }
 
 /* Satu kolom yang belum dikenal dibuang per percobaan -- beberapa kolom
@@ -361,52 +408,86 @@ async function simpanDenganCadangan(kirim, row) {
   return hasil;
 }
 
+async function sisipkanTransit(stops, shipmentId) {
+  if (!stops || !stops.length) return [];
+  const { data: tersisip, error } = await supabaseClient
+    .from("shipment_route_stops")
+    .insert(stops.map((st, i) => stopToRow(st, shipmentId, i + 1)))
+    .select();
+  if (error) throw error;
+  return tersisip || [];
+}
+
+/* Daftar barang & terminal transit disamakan dengan cara paling
+   sederhana & aman: hapus semua yang lama, sisipkan yang baru. */
+async function gantiBarang(id, items) {
+  const { error } = await supabaseClient.from("shipment_items").delete().eq("shipment_id", id);
+  if (error) throw error;
+  return sisipkanBarang(items, id);
+}
+async function gantiTransit(id, stops) {
+  const { error } = await supabaseClient.from("shipment_route_stops").delete().eq("shipment_id", id);
+  if (error) throw error;
+  return sisipkanTransit(stops, id);
+}
+
+/* Sidik daftar barang & terminal transit dalam bentuk baris database.
+   Form jadwal mencatatnya saat dibuka (sidikAsalForm); sidik yang sama
+   saat disimpan = tidak ada yang berubah, jadi tidak ditulis ulang. */
+function sidikIsiJadwal(items, stops, id) {
+  return {
+    barang: JSON.stringify((items || []).map((it) => itemToRow(it, id))),
+    transit: JSON.stringify((stops || []).map((st, i) => stopToRow(st, id, i + 1))),
+  };
+}
+
+/* Semua jalur ditunggu sampai selesai -- juga kalau salah satunya gagal
+   -- baru galat pertamanya dilempar. Tombol Simpan tidak boleh aktif
+   lagi selagi barang masih dihapus/disisipkan: simpan kedua di
+   tengahnya menggandakan barang. */
+async function tungguSemua(janji) {
+  const hasil = await Promise.allSettled(janji);
+  const gagal = hasil.find((h) => h.status === "rejected");
+  if (gagal) throw gagal.reason;
+  return hasil.map((h) => h.value);
+}
+
+/* Jadwal, barang & terminal transit ada di tabel yang saling lepas:
+   ditulis BERSAMAAN, bukan berurutan -- satu perjalanan ke server, bukan
+   lima. Mengembalikan baris jadwal lengkap (barang + terminal transit)
+   untuk terapkanJadwalTersimpan. */
 async function createShipment(payload, items, stops) {
   const row = shipmentToRow(payload, activeMode);
   row.mode = activeMode;
   const { data: inserted, error } = await simpanDenganCadangan(
     (r) => supabaseClient.from("shipments").insert(r).select().single(), row);
   if (error) throw error;
-  await sisipkanBarang(items, inserted.id);
-  if (stops && stops.length) {
-    const stopRows = stops.map((st, i) => stopToRow(st, inserted.id, i + 1));
-    const { error: stopErr } = await supabaseClient
-      .from("shipment_route_stops")
-      .insert(stopRows);
-    if (stopErr) throw stopErr;
-  }
-  return inserted;
+  const [barang, transit] = await tungguSemua([sisipkanBarang(items, inserted.id), sisipkanTransit(stops, inserted.id)]);
+  return Object.assign({}, inserted, { items: barang, routeStops: transit });
 }
 
-async function updateShipmentRecord(id, payload, items, stops) {
+/* `asal` = sidikIsiJadwal saat form dibuka: barang / terminal transit
+   yang tidak berubah tidak dihapus-sisipkan ulang, cukup ikut terbaca
+   di jawaban simpan jadwalnya. */
+async function updateShipmentRecord(id, payload, items, stops, asal) {
   const row = shipmentToRow(payload, activeMode);
-  const { error } = await simpanDenganCadangan(
-    (r) => supabaseClient.from("shipments").update(r).eq("id", id), row);
-  if (error) throw error;
-
-  // Cara paling sederhana & aman untuk menyamakan daftar barang: hapus semua item lama
-  const { error: delErr } = await supabaseClient
-    .from("shipment_items")
-    .delete()
-    .eq("shipment_id", id);
-  if (delErr) throw delErr;
-
-  await sisipkanBarang(items, id);
-
-  // Sama persis dengan pola daftar barang di atas: hapus semua terminal transit lama
-  const { error: delStopErr } = await supabaseClient
-    .from("shipment_route_stops")
-    .delete()
-    .eq("shipment_id", id);
-  if (delStopErr) throw delStopErr;
-
-  if (stops && stops.length) {
-    const stopRows = stops.map((st, i) => stopToRow(st, id, i + 1));
-    const { error: insStopErr } = await supabaseClient
-      .from("shipment_route_stops")
-      .insert(stopRows);
-    if (insStopErr) throw insStopErr;
-  }
+  const kini = sidikIsiJadwal(items, stops, id);
+  const tulisBarang = !asal || asal.barang !== kini.barang;
+  const tulisTransit = !asal || asal.transit !== kini.transit;
+  const pilih = ["*"]
+    .concat(tulisBarang ? [] : ["items:shipment_items(*)"], tulisTransit ? [] : ["routeStops:shipment_route_stops(*)"])
+    .join(", ");
+  const [jadwal, barang, transit] = await tungguSemua([
+    simpanDenganCadangan((r) => supabaseClient.from("shipments").update(r).eq("id", id).select(pilih).single(), row).then(
+      ({ data: baris, error }) => {
+        if (error) throw error;
+        return baris;
+      },
+    ),
+    tulisBarang ? gantiBarang(id, items) : null,
+    tulisTransit ? gantiTransit(id, stops) : null,
+  ]);
+  return Object.assign({}, jadwal, tulisBarang ? { items: barang } : {}, tulisTransit ? { routeStops: transit } : {});
 }
 
 async function persistFields(id, patch) {

@@ -63,12 +63,3 @@ function applyTotalBrutoToFirstItem(items, totalBruto) {
   });
   return items;
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    fmtPibNumber,
-    applyTotalBrutoToFirstItem,
-    normalizeHsCodeInput,
-    addDaysISO,
-  };
-}

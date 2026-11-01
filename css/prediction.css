@@ -35,12 +35,12 @@
 .eta-mode-chip--auto {
   background: var(--sec-50);
   border-color: var(--sec-200);
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .eta-mode-chip--manual {
   background: var(--p-50);
   border-color: var(--p-200);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 
 .eta-label {
@@ -117,22 +117,22 @@
 .pred-conf--medium {
   background: var(--sec-50);
   border-color: var(--sec-200);
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .pred-conf--medhigh {
   background: var(--sec-100);
   border-color: var(--sec-300);
-  color: var(--sec-700);
+  color: var(--tsec-700);
 }
 .pred-conf--high {
   background: var(--p-50);
   border-color: var(--p-200);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .pred-conf--veryhigh {
   background: var(--p-100);
   border-color: var(--p-300);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 .pred-conf--final {
   background: var(--d-900);
@@ -172,7 +172,7 @@
   color: var(--n-500);
 }
 .pred-strip-head i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .pred-strip-date {
   font-family: var(--font-mono);
@@ -206,7 +206,7 @@
   cursor: default;
 }
 .date-field--locked label i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
   font-size: 0.66rem;
 }
 
@@ -238,7 +238,7 @@
   border-bottom: 1px dashed var(--sec-200);
 }
 .pred-panel-head i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 /* Judulnya tidak dipatahkan dua baris di layar sempit -- jenis
    pengirimannya yang turun ke baris berikutnya. */
@@ -249,7 +249,7 @@
   font-family: var(--font-mono);
   letter-spacing: 0;
   text-transform: none;
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 /* minmax(0, ...): isi kolom (tanggal & penanda tak terbungkus) tidak
    boleh melebarkan kolomnya melewati panel -- di layar 320px meluber 27px. */
@@ -292,7 +292,7 @@
   gap: 4px;
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: var(--sec-600);
+  color: var(--tsec-600);
   white-space: nowrap;
 }
 .pred-range i {
@@ -330,7 +330,7 @@
 }
 /* Libur/cuti bersama/pembatasan truk yang dilewati langkah itu */
 .pred-step-libur {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .pred-step-libur i {
   font-size: 0.7rem;
@@ -347,7 +347,7 @@
   font-style: normal;
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: var(--sec-600);
+  color: var(--tsec-600);
   margin-left: 4px;
 }
 .pred-step-date {
@@ -362,14 +362,14 @@
   gap: 6px;
   margin-top: var(--sp-2);
   font-size: var(--t-sm);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 
 .pred-inline-hint {
   margin-top: 6px;
 }
 .pred-inline-hint i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 
 /* ------------------------------------------------------------------
@@ -400,7 +400,7 @@
   color: var(--n-800);
 }
 .pred-notice-body > i {
-  color: var(--s-warn);
+  color: var(--ts-warn);
   margin-top: 2px;
 }
 .pred-notice-desc {
@@ -520,7 +520,7 @@
   gap: 5px;
   margin-top: 4px;
   font-size: var(--t-sm);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
   font-weight: 600;
 }
 .pred-note-manual {
@@ -529,7 +529,7 @@
   gap: 6px;
   margin-top: var(--sp-2);
   font-size: var(--t-sm);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .date-field--pinned input {
   border-style: solid;
@@ -553,12 +553,12 @@
 .pred-src-tag--learned {
   background: var(--p-50);
   border-color: var(--p-200);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .pred-src-tag--carrier {
   background: var(--sec-50);
   border-color: var(--sec-200);
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .pred-compare {
   display: flex;
@@ -575,7 +575,7 @@
   color: var(--n-800);
 }
 .pred-compare-diff {
-  color: var(--sec-600);
+  color: var(--tsec-600);
   font-weight: 600;
 }
 
@@ -583,7 +583,7 @@
 .pred-delay-line {
   margin-top: 4px;
   font-size: var(--t-sm);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .pred-delay-line b {
   font-family: var(--font-mono);

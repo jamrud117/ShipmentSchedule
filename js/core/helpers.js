@@ -248,9 +248,12 @@ function labelKondisiBarang(v) {
    sendiri boleh lebih bebas ("TGHU1234567 40' FCL", "1x40HC ...").
      UKURAN : KODE UKURAN KONTAINER (20 / 40 / 45).
      TIPE   : jenis muatan FCL / LCL (KODE JENIS KONTAINER F / L). */
+/* KODE JENIS KONTAINER: F / L, dan kode angka CEISA 8 = FCL (draft PIB
+   sungguhan berkode 8 tercetak "40 FCL" di PDF PIB-nya). Kode lain tidak
+   ditebak. */
 function muatanDariKode(v) {
   const s = String(v == null ? "" : v).trim().toUpperCase();
-  if (s === "F" || s === "FCL") return "FCL";
+  if (s === "F" || s === "FCL" || s === "8") return "FCL";
   if (s === "L" || s === "LCL") return "LCL";
   return "";
 }
@@ -489,10 +492,10 @@ const KOLOM_DOK_PENGIRIMAN = {
   ls: ["ls", "lsDate"],
   polis: ["polisAsuransi", "polisAsuransiDate"],
 };
-/* Invoice & B/L-AWB punya isiannya sendiri: tidak ikut "dokumen lain".
-   Kode umum (911 Surat Keputusan, 999 Lainnya): jenis fasilitas / PI
-   dokumennya masih ditebak dari nomornya. */
-const KODE_DOKUMEN_BERISIAN = new Set(["380", "703", "704", "705", "714", "740", "741"]);
+/* Invoice, Packing List & B/L-AWB punya isiannya sendiri (tab Dokumen &
+   Umum): tidak ikut "dokumen lain". Kode umum (911 Surat Keputusan, 999
+   Lainnya): jenis fasilitas / PI dokumennya masih ditebak dari nomornya. */
+const KODE_DOKUMEN_BERISIAN = new Set(["217", "380", "703", "704", "705", "714", "740", "741"]);
 const KODE_DOKUMEN_UMUM = new Set(["911", "999"]);
 
 /* Cadangan untuk kode umum / tak dikenal: jenis fasilitas dari NOMOR

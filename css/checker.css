@@ -7,12 +7,12 @@
    INFO) -- tidak pernah warna saja. */
 
 #viewChecker {
-  --cek-sama: #1e7a4d;
-  --cek-sama-bg: #edf7f1;
-  --cek-sama-line: #bfe0cc;
-  --cek-info: var(--s-info);
-  --cek-info-bg: #eff2fb;
-  --cek-info-line: #c9d3f0;
+  --cek-sama: var(--w-teks-1e7a4d);
+  --cek-sama-bg: var(--w-bg-edf7f1);
+  --cek-sama-line: var(--w-garis-bfe0cc);
+  --cek-info: var(--ts-info);
+  --cek-info-bg: var(--w-bg-eff2fb);
+  --cek-info-line: var(--w-garis-c9d3f0);
 }
 #viewChecker .panel + .panel,
 #viewChecker .panel + details.panel {
@@ -63,13 +63,13 @@
   flex: 0 0 auto;
   font-size: 1.35rem;
   line-height: 1;
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .cek-drop.has-file .cek-drop-ikon {
   color: var(--cek-sama);
 }
 .cek-drop.has-galat .cek-drop-ikon {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .cek-drop-teks {
   display: flex;
@@ -87,7 +87,7 @@
 .cek-drop-nama {
   font-size: var(--t-base);
   font-weight: 600;
-  color: var(--d-900);
+  color: var(--tp-700);
   overflow-wrap: anywhere;
 }
 .cek-drop-ket {
@@ -96,7 +96,7 @@
   overflow-wrap: anywhere;
 }
 .cek-drop.has-galat .cek-drop-ket {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 
 /* ---------- jadwal terkait ---------- */
@@ -110,7 +110,7 @@
   padding: 12px var(--sp-4);
   border: 1px solid var(--n-200);
   border-radius: var(--r-lg);
-  background: #fff;
+  background: var(--surface);
 }
 .cek-jadwal-kartu.is-kosong {
   background: var(--n-50);
@@ -118,7 +118,7 @@
 .cek-jadwal-ikon {
   flex: 0 0 auto;
   font-size: 1.3rem;
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .cek-jadwal-kartu.is-kosong .cek-jadwal-ikon {
   color: var(--n-400);
@@ -132,7 +132,7 @@
 }
 .cek-jadwal-nama b {
   font-size: var(--t-base);
-  color: var(--d-900);
+  color: var(--tp-700);
   overflow-wrap: anywhere;
 }
 .cek-jadwal-nama small {
@@ -183,7 +183,7 @@
   padding: 9px 12px;
   border: 1px solid var(--n-200);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--surface);
   text-align: left;
 }
 .cek-pilih-baris:hover {
@@ -203,7 +203,7 @@
   display: block;
   margin-top: 2px;
   font-size: var(--t-xs);
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---------- B/L-AWB pembanding ---------- */
@@ -220,7 +220,7 @@
   font-family: var(--font-display);
   font-size: var(--t-sm);
   font-weight: 700;
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .cek-bl-ket {
   margin: 2px 0 var(--sp-3);
@@ -241,7 +241,7 @@
   margin-top: 3px;
   font-size: var(--t-xs);
   font-weight: 600;
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 
 /* ---------- status & tombol periksa ---------- */
@@ -265,7 +265,7 @@
   color: var(--n-600);
 }
 .cek-status small {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .cek-status-titik {
   flex: 0 0 auto;
@@ -279,7 +279,7 @@
   background: var(--cek-sama);
 }
 .cek-status.is-galat {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .cek-status.is-galat .cek-status-titik {
   background: var(--s-danger);
@@ -291,7 +291,7 @@
 
 /* ---------- vonis ---------- */
 .cek-vonis {
-  --vonis: var(--s-warn);
+  --vonis: var(--ts-warn);
   --vonis-bg: var(--s-warn-bg);
   display: flex;
   align-items: flex-start;
@@ -305,7 +305,7 @@
   --vonis-bg: var(--cek-sama-bg);
 }
 .cek-vonis--gagal {
-  --vonis: var(--s-danger);
+  --vonis: var(--ts-danger);
   --vonis-bg: var(--s-danger-bg);
 }
 .cek-vonis-ikon {
@@ -387,13 +387,13 @@
   padding: 8px 10px;
   border: 1px solid var(--n-200);
   border-radius: var(--r-md);
-  background: #fff;
+  background: var(--surface);
 }
 .cek-angka b {
   font-family: var(--font-display);
   font-size: var(--t-xl);
   line-height: 1.1;
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .cek-angka span {
   font-size: 0.7rem;
@@ -405,13 +405,13 @@
   color: var(--cek-sama);
 }
 .cek-angka--beda b {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .cek-angka--info b {
   color: var(--cek-info);
 }
 .cek-angka .is-nol b {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---------- ringkasan per bagian ---------- */
@@ -434,7 +434,7 @@
   color: var(--n-700);
 }
 .cek-bagian-baris.has-beda .cek-bagian-nama {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .cek-batang {
   display: flex;
@@ -488,7 +488,7 @@
 .cek-grup {
   border: 1px solid var(--n-200);
   border-radius: var(--r-lg);
-  background: #fff;
+  background: var(--surface);
 }
 .cek-grup + .cek-grup {
   margin-top: 8px;
@@ -533,7 +533,7 @@
 }
 .cek-grup-judul b {
   font-size: var(--t-base);
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .cek-grup-judul small {
   font-size: var(--t-xs);
@@ -576,7 +576,7 @@
 .cek-st--beda {
   border-color: var(--s-danger-line);
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .cek-st--info {
   border-color: var(--cek-info-line);
@@ -612,7 +612,7 @@
   border-bottom: 0;
 }
 .cek-tabel tr.is-beda td {
-  background: #fffafa;
+  background: var(--w-bg-fffafa);
 }
 .cek-kol-isian {
   width: 34%;
@@ -631,7 +631,7 @@
 .cek-isian {
   display: block;
   font-weight: 600;
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .cek-catatan {
   display: block;
@@ -646,7 +646,7 @@
   padding: 1px 7px;
   border-radius: var(--r-pill);
   background: var(--sec-50);
-  color: var(--sec-700);
+  color: var(--tsec-700);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -659,17 +659,17 @@
   margin-top: 4px;
   font-size: var(--t-xs);
   font-weight: 600;
-  color: var(--s-danger);
+  color: var(--ts-danger);
   white-space: nowrap;
 }
 .cek-tanda {
   padding: 0 1px;
   border-radius: 2px;
-  background: #fde2de;
-  color: var(--s-danger);
+  background: var(--w-bg-fde2de);
+  color: var(--ts-danger);
 }
 .cek-redup {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---------- HS Code untuk database ---------- */
@@ -696,7 +696,7 @@
 }
 .cek-saran-nama b {
   font-size: var(--t-sm);
-  color: var(--d-900);
+  color: var(--tp-700);
   overflow-wrap: anywhere;
 }
 .cek-saran-nama small {
@@ -707,7 +707,7 @@
   font-family: var(--font-mono);
   font-size: var(--t-sm);
   font-weight: 600;
-  color: var(--p-600);
+  color: var(--tp-600);
   white-space: nowrap;
 }
 .cek-saran-simpan {
@@ -721,7 +721,7 @@
   font-family: var(--font-display);
   font-size: var(--t-sm);
   font-weight: 700;
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .cek-aturan[open] > summary {
   border-bottom: 1px solid var(--n-100);
@@ -830,7 +830,7 @@
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: var(--n-400);
+    color: var(--text-subtle);
   }
   .cek-kol-hasil {
     margin-top: 4px;

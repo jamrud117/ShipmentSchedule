@@ -34,12 +34,14 @@ function poNoTambahKotak(nilai, tanggal) {
   el.innerHTML = `
     <input type="text" class="form-control" data-po-extra
            value="${escapeAttr(nilai || "")}"
-           placeholder="${escapeAttr(t("ph.nomor.po.pembeli"))}">
+           placeholder="${escapeAttr(t("ph.nomor.po.pembeli"))}"
+           aria-label="${escapeAttr(tt("Nomor PO tambahan", "Additional PO number"))}">
     <input type="date" class="form-control po-tgl" data-po-tgl-extra
-           value="${escapeAttr(tanggal || "")}">
+           value="${escapeAttr(tanggal || "")}"
+           aria-label="${escapeAttr(tt("Tanggal PO tambahan", "Additional PO date"))}">
     <button type="button" class="rm-row" data-po-del
-            title="${escapeAttr(t("f.hapus.baris"))}">
-      <i class="bi bi-x-lg"></i>
+            title="${escapeAttr(t("f.hapus.baris"))}" aria-label="${escapeAttr(t("f.hapus.baris"))}">
+      <i class="bi bi-x-lg" aria-hidden="true"></i>
     </button>`;
   box.appendChild(el);
   return el.querySelector("input");

@@ -186,6 +186,7 @@ function tandaiHsOtomatis(tr, it) {
   if (tombol) {
     tombol.classList.toggle("is-saran", !!it._hsSaran);
     tombol.title = judulTombolCariHs(it);
+    tombol.setAttribute("aria-label", tombol.title);
   }
 }
 

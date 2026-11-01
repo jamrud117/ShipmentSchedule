@@ -142,25 +142,9 @@ function toISODate(d) {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
-function isHolidayISO(iso) {
-  if (!iso) return false;
-  return predictionCalendar().libur.has(kunciHariISO(iso));
-}
-
-function isWeekendISO(iso) {
-  const d = parseLocalDate(iso);
-  if (!d) return false;
-  return predictionCalendar().weekendDays.indexOf(d.getDay()) >= 0;
-}
-
-// `tutup`: hari tutup tambahan langkah itu (hariTutupLangkah), boleh kosong
-function isWorkingDayISO(iso, tutup) {
-  const d = iso ? parseLocalDate(iso) : null;
-  return !!d && hariKerjaTgl(d, predictionCalendar(), tutup);
-}
-
-/* Sama dengan isWorkingDayISO, untuk objek tanggal yang sedang
-   dimajukan per hari. `cal` = predictionCalendar() sekali per hitungan. */
+/* Hari kerja? Untuk objek tanggal yang sedang dimajukan per hari.
+   `cal` = predictionCalendar() sekali per hitungan; `tutup` = hari
+   tutup tambahan langkah itu (hariTutupLangkah), boleh kosong. */
 function hariKerjaTgl(d, cal, tutup) {
   if (cal.weekendDays.indexOf(d.getDay()) >= 0) return false;
   if (!cal.libur.size && !tutup) return true;
@@ -173,24 +157,6 @@ function addCalendarDaysISO(iso, n) {
   const d = parseLocalDate(iso);
   if (!d) return "";
   d.setDate(d.getDate() + (Number(n) || 0));
-  return toISODate(d);
-}
-
-/* Hari kerja PERTAMA pada atau sesudah `iso`.
-
-   Dipakai saat sebuah proses dijadwalkan mulai di akhir pekan: barang
-   yang mendarat Sabtu tidak diurus Sabtu itu juga. */
-function nextWorkingDayISO(iso, tutup) {
-  const d = parseLocalDate(iso);
-  if (!d) return "";
-  const cal = predictionCalendar();
-  if (hariKerjaTgl(d, cal, tutup)) return iso;
-  let jaga = 0;
-  do {
-    d.setDate(d.getDate() + 1);
-    // Jaring pengaman: kalau seluruh tahun ditandai libur, jangan berputar selamanya
-    if (++jaga > 400) break;
-  } while (!hariKerjaTgl(d, cal, tutup));
   return toISODate(d);
 }
 
@@ -295,20 +261,4 @@ function hariTutupDiAntara(fromISO, toISO, tutup) {
     }
   }
   return hasil;
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    toISODate,
-    isHolidayISO,
-    isWeekendISO,
-    isWorkingDayISO,
-    addCalendarDaysISO,
-    calendarDaysBetweenISO,
-    nextWorkingDayISO,
-    addWorkingDaysISO,
-    workingDaysBetweenISO,
-    hariTutupLangkah,
-    hariTutupDiAntara,
-  };
 }

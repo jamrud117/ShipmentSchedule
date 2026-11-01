@@ -36,38 +36,50 @@ h1, h2, h3, h4, h5, h6,
   }
 }
 
-/* ---- TOMBOL: satu bahasa untuk semua ---- */
+/* ==================================================================
+   TOMBOL — satu bahasa untuk semua
+
+   Lima peran, dibedakan WARNA & BOBOT -- bukan ukuran huruf:
+     UTAMA    navy pekat, teks putih    .btn-primary-navy .btn-teal
+                                        .btn-save-primary .btn-add-skb
+                                        .btn-note-send
+     KEDUA    putih, garis kontrol,     .btn-quiet .btn-form-cancel
+              teks navy                 .btn-light
+     TINTA    navy muda bertinta        .btn-import-excel
+     MERUSAK  merah pekat / garis merah .btn-danger .btn-outline-danger
+     IKON     kotak ikon (label di      .icon-btn .btn-more
+              title & aria-label)
+   Satu ukuran huruf untuk tombol setinggi baris isian (--ctl-h, 38px):
+   tombol "Batal" tidak lagi lebih kecil hurufnya dari "Simpan" di
+   sebelahnya. Tombol mini (di dalam tabel / bilah) memakai --t-sm.
+
+   KEADAAN
+     hover    warnanya menggelap -- tanpa melompat naik: di bilah alat
+              yang rapat, tombol yang bergeser 1px terlihat bergetar.
+     ditekan  sedikit lebih gelap lagi.
+     fokus    garis luar navy 2px (:focus-visible, css/base.css).
+     nonaktif pudar 50% + kursor larangan.
+     sibuk    aria-busy="true" / pemutar di dalamnya: kursor menunggu.
+================================================================== */
 .btn,
 .btn-teal,
+.btn-primary-navy,
+.btn-quiet,
 .btn-outline-danger,
 .btn-import-excel,
 .btn-save-primary,
 .btn-form-cancel,
 .btn-note-send,
+.btn-add-skb,
+.btn-more,
 .icon-btn {
   transition:
     background-color var(--dur-1) var(--ease),
     border-color var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease),
-    box-shadow var(--dur-2) var(--ease),
-    transform var(--dur-1) var(--ease);
+    box-shadow var(--dur-2) var(--ease);
 }
-.btn:hover:not(:disabled),
-.btn-teal:hover:not(:disabled),
-.btn-import-excel:hover:not(:disabled),
-.btn-save-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--sh-md);
-}
-/* Ditekan: kembali rata supaya terasa benar-benar "menekan". */
-.btn:active:not(:disabled),
-.btn-teal:active:not(:disabled),
-.btn-import-excel:active:not(:disabled),
-.btn-save-primary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: var(--sh-xs);
-}
-/* Nonaktif: redup + kursor larangan, dan JANGAN ikut animasi hover. */
+/* Nonaktif: redup + kursor larangan, dan JANGAN ikut warna hover. */
 .btn:disabled,
 .btn-teal:disabled,
 .btn-import-excel:disabled,
@@ -79,19 +91,47 @@ button:disabled {
   transform: none;
   box-shadow: none;
 }
+/* Sibuk (menyimpan, mengunggah): bukan "dilarang", tapi "tunggu". */
+button[aria-busy="true"],
+button:disabled:has(.spinner-border) {
+  cursor: progress;
+}
 .btn-teal,
 .btn-save-primary {
   background: var(--p-600);
   border-color: var(--p-600);
   color: #fff;
-  font-weight: 600;
-  border-radius: var(--r-md);
 }
 .btn-teal:hover:not(:disabled),
 .btn-save-primary:hover:not(:disabled) {
   background: var(--p-700);
   border-color: var(--p-700);
   color: #fff;
+}
+/* Ditekan: satu tingkat lebih gelap dari hover */
+.btn-primary-navy:active:not(:disabled),
+.btn-teal:active:not(:disabled),
+.btn-save-primary:active:not(:disabled),
+.btn-add-skb:active:not(:disabled) {
+  background: #06111f;
+  border-color: #06111f;
+}
+.btn-quiet:active:not(:disabled),
+.btn-form-cancel:active:not(:disabled) {
+  background: var(--p-100);
+}
+/* MERUSAK: .btn-danger bawaan Bootstrap disetel ke merah aplikasi. */
+.btn-danger {
+  --bs-btn-bg: var(--s-danger);
+  --bs-btn-border-color: var(--s-danger);
+  --bs-btn-hover-bg: var(--s-danger-hover);
+  --bs-btn-hover-border-color: var(--s-danger-hover);
+  --bs-btn-active-bg: #8c2719;
+  --bs-btn-active-border-color: #8c2719;
+  --bs-btn-disabled-bg: var(--s-danger);
+  --bs-btn-disabled-border-color: var(--s-danger);
+  border-radius: var(--r-md);
+  font-weight: 600;
 }
 
 /* ---- ISIAN FORM ---- */
@@ -104,7 +144,7 @@ textarea,
 select {
   border-radius: var(--r-md);
   border: 1px solid var(--n-200);
-  background: #fff;
+  background: var(--surface);
   color: var(--n-800);
   transition:
     border-color var(--dur-1) var(--ease),
@@ -115,10 +155,24 @@ select {
 .form-select:hover:not(:disabled) {
   border-color: var(--n-300);
 }
+/* Isi / contoh yang lebih panjang dari kotaknya (ponsel) diakhiri "…",
+   bukan terpotong di tengah huruf */
+input.form-control {
+  text-overflow: ellipsis;
+}
+/* Teks contoh: terbaca (4,54:1), tetap jelas lebih pucat dari isian
+   sungguhan. Ia CONTOH, bukan label -- tiap isian tetap berlabel. */
 .form-control::placeholder,
 textarea::placeholder,
 input::placeholder {
-  color: var(--n-400);
+  color: var(--text-placeholder);
+  opacity: 1;
+}
+/* Kotak hanya-baca berlatar abu muda ("Terjumlah otomatis"): satu
+   tingkat lebih gelap supaya tetap 4,5:1 di atas latarnya. */
+input[readonly]::placeholder,
+.form-control[readonly]::placeholder {
+  color: var(--n-500);
 }
 .form-control[readonly],
 .form-control:disabled,
@@ -204,11 +258,11 @@ table.fund-lines select,
   gap: 6px;
   font-size: 0.74rem;
   line-height: 1.45;
-  color: #7a4f0c;
+  color: var(--w-teks-7a4f0c);
 }
 .dup-baris i {
   margin-top: 2px;
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .dup-baris span {
   flex: 1;
@@ -220,14 +274,14 @@ table.fund-lines select,
   border: 0;
   background: transparent;
   padding: 0 2px;
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: inherit;
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 .dup-lihat:hover {
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 
 /* KARTU */
@@ -294,12 +348,7 @@ table.item-table tbody tr:hover,
 .modal-content {
   border-radius: var(--r-xl);
   border: 1px solid var(--n-200);
-  box-shadow: var(--sh-lg);
-}
-.toast {
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-lg);
-  border: 1px solid var(--n-200);
+  box-shadow: 0 28px 64px -24px rgba(10, 27, 51, 0.55), 0 4px 10px rgba(10, 27, 51, 0.06);
 }
 .dropdown-menu {
   border-radius: var(--r-lg);
@@ -316,7 +365,7 @@ table.item-table tbody tr:hover,
 .dropdown-item:hover,
 .dropdown-item:focus {
   background: var(--p-50);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 
 /* PENYESUAIAN KONTRAS SETELAH AKSEN JADI NAVY */
@@ -458,13 +507,23 @@ input[type="date"][readonly] {
   align-items: center;
   gap: 4px;
 }
+/* Tombol aksi baris diredam supaya tabel yang padat tidak dipenuhi
+   ikon, dan menyala penuh saat barisnya disorot / tombolnya difokus.
+   Diredam secukupnya (0,6) -- pada 0,35 tombolnya terbaca nonaktif.
+   Layar sentuh tidak punya "sorot": di sana selalu penuh. */
 .docnum-table td.dn-act .icon-btn {
-  opacity: 0.35;
+  opacity: 0.6;
   transition: opacity var(--dur-1) var(--ease);
 }
 .docnum-table tr:hover td.dn-act .icon-btn,
+.docnum-table tr:focus-within td.dn-act .icon-btn,
 .docnum-table td.dn-act .icon-btn:focus-visible {
   opacity: 1;
+}
+@media (hover: none) {
+  .docnum-table td.dn-act .icon-btn {
+    opacity: 1;
+  }
 }
 
 /* ==================================================================
@@ -681,6 +740,31 @@ table.item-table textarea:focus,
 .btn-close:focus {
   box-shadow: none;
 }
+/* Tombol tutup (X) Bootstrap -- Bulk Excel, Ubah Isian Nomor, Rincian
+   Masterlist -- sebesar & serupa .dialog-tutup di kotak dialog lain:
+   kotak 34px yang bertinta saat disorot, bukan ikon 16px yang cuma
+   berubah pudar. */
+.btn-close,
+.modal-header .btn-close {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background-size: 0.75rem;
+  opacity: 0.7;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    opacity var(--dur-1) var(--ease);
+}
+.btn-close:hover {
+  background-color: var(--n-100);
+  opacity: 1;
+}
+.modal-header .btn-close {
+  margin: -4px -8px -4px auto;
+}
 
 
 /* ------------------------------------------------------------------
@@ -747,7 +831,7 @@ table.item-table textarea:focus,
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--surface);
 }
 .bk-kotak--utama {
   background: var(--n-50);
@@ -804,7 +888,7 @@ table.item-table textarea:focus,
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: #fff;
+    background: var(--surface);
   }
   .bk-isi .bk-tabel td {
     min-width: 0;
@@ -856,12 +940,12 @@ table.item-table textarea:focus,
 }
 /* Status bayar tiap pengajuan */
 .bk-lunas {
-  color: #15803d;
+  color: var(--w-teks-15803d);
   font-weight: 600;
   white-space: nowrap;
 }
 .bk-belum {
-  color: #b45309;
+  color: var(--w-teks-b45309);
   font-weight: 600;
   white-space: nowrap;
 }

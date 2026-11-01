@@ -168,10 +168,10 @@ async function cekTerimaBerkas(daftar, kotak) {
     showToast(tt(`Satu draft saja yang dibandingkan: ${draft[draft.length - 1].name}.`, `Only one draft is compared: ${draft[draft.length - 1].name}.`), "warning");
   }
   if (kotak === "cipl" && !cipl.length && draft.length) {
-    showToast(tt("Berkas itu draft CEISA, jadi dipasang sebagai draft PIB/PEB.", "That file is a CEISA draft, so it was set as the PIB/PEB draft."), "dark");
+    showToast(tt("Berkas itu draft CEISA, jadi dipasang sebagai draft PIB/PEB.", "That file is a CEISA draft, so it was set as the PIB/PEB draft."), "info");
   }
   if (kotak === "draft" && !draft.length && cipl.length) {
-    showToast(tt("Berkas itu bukan draft CEISA (tanpa sheet HEADER & BARANG), jadi dipasang sebagai CIPL.", "That file is not a CEISA draft (no HEADER & BARANG sheets), so it was set as the CIPL."), "dark");
+    showToast(tt("Berkas itu bukan draft CEISA (tanpa sheet HEADER & BARANG), jadi dipasang sebagai CIPL.", "That file is not a CEISA draft (no HEADER & BARANG sheets), so it was set as the CIPL."), "info");
   }
   if (cipl.length) cekKeadaan.berkasCipl = cipl.slice(0, 2);
   if (draft.length) {
@@ -953,7 +953,105 @@ function cekBarisFasilitasBarang(no, it, bc, sumber) {
 /* Seluruh baris CEISA satu barang jadwal: kolom barang, kode kondisi &
    negara asal, fasilitas & no. urut. */
 function cekBlokBarang(no, it, kd, bc, sumber, isPib) {
-  return cekBarisKolomBarang(no, it, kd, sumber).concat(cekBarisKodeBarang(no, it, kd, sumber, isPib), cekBarisFasilitasBarang(no, it, bc, sumber));
+  return cekBarisKolomBarang(no, it, kd, sumber).concat(cekBarisKodeBarang(no, it, kd, sumber, isPib), cekBarisFasilitasBarang(no, it, bc, sumber),
+    cekBarisDataPabeanBarang(no, it, bc, sumber, isPib));
+}
+
+/* ---------- DATA PIB / PEB JADWAL VS DRAFT (core/data-pabean.js) ----------
+
+   Isian Data PIB/PEB jadwal -- yang tersimpan, isian kosongnya diisi
+   nilai bawaan (dpEfektif: kantor & jenis per moda, data perusahaan,
+   valuta USD, ...) -- dibandingkan dengan isian yang sama di draft
+   (ceisaDataPabean, dibaca menurut jenis draftnya). SEMUANYA OPSIONAL:
+   isian yang kosong di jadwal tidak diperiksa; yang tidak tercantum di
+   draft cukup INFO; alamat yang ditulis lain INFO. Kunci barisnya
+   "dp:<isian>" / "barang:<seri>:<isian>" -- letaknya di cetak draft
+   (cek-cetak.js). Keterangan Pembayaran & nomor/tanggal transaksi tidak
+   ada di Excel CEISA, jadi tidak dibandingkan. */
+const CEK_DP_SEKSI = { header: "HEADER", angkut: "TRANSPORT", kemasan: "PACKING", transaksi: "VALUE", jaminan: "VALUE", pernyataan: "HEADER", dokumen: "DOCUMENT" };
+const CEK_DP_TANPA = new Set(["keteranganBayar", "transaksiNomor", "transaksiTanggal"]);
+
+// Data PIB/PEB draft (jadwal + per Seri Barang), sekali per draft & jenis
+function cekDpDraft(bc, mode) {
+  bc._dp = bc._dp || {};
+  if (!bc._dp[mode]) {
+    const hasil = ceisaDataPabean(bc.lembar, mode);
+    const perSeri = new Map((bc.lembar.barang || []).map((r, i) => [kunciSeri(r["SERI BARANG"]), hasil.barang[i] || {}]));
+    bc._dp[mode] = { jadwal: hasil.jadwal, perSeri };
+  }
+  return bc._dp[mode];
+}
+
+// Kode pendek "02" = "2"; nomor panjang (NPWP, NIB) harus persis
+function cekSamaDp(a, b, jenis) {
+  if (jenis === "angka") return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= 0.01;
+  if (jenis === "tanggal") return String(a).slice(0, 10) === String(b).slice(0, 10);
+  const x = cekAlnum(a);
+  const y = cekAlnum(b);
+  if (/^\d{1,3}$/.test(x) && /^\d{1,3}$/.test(y)) return Number(x) === Number(y);
+  return x === y;
+}
+// Alamat sama bila yang satu memuat yang lain (kode pos / baris yang terpotong di salah satunya)
+const cekSamaAlamat = (a, b) => {
+  const x = cekAlnum(a);
+  const y = cekAlnum(b);
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+};
+const cekTampilDp = (v, jenis, pilihan) => (jenis === "pilihan" ? dpNamaPilihan(pilihan, v) : jenis === "angka" ? cekAngka(v) : String(v));
+
+function cekBandingDp(rows, baris, a, b, jenis, pilihan, opsi) {
+  const o = opsi || {};
+  if (!dpAda(a)) return;
+  const kiri = cekTampilDp(a, jenis, pilihan);
+  if (!dpAda(b)) return rows.push(baris("INFO", kiri, "", tt("Draft tidak mencantumkannya.", "The draft does not state it.")));
+  const sama = (o.sama || cekSamaDp)(a, b, jenis);
+  rows.push(baris(sama ? "MATCH" : o.lunak ? "INFO" : "MISMATCH", kiri, cekTampilDp(b, jenis, pilihan),
+    sama ? "" : o.catatan || tt("Data PIB/PEB jadwal berbeda dengan draft.", "The schedule's PIB/PEB data differs from the draft.")));
+}
+
+function cekBarisDataPabean(s, bc, isPeb) {
+  if (!bc || !bc.lembar) return [];
+  const mode = isPeb ? "export" : "import";
+  const jadwal = dpEfektif(Object.assign({}, s, { mode }));
+  const draft = cekDpDraft(bc, mode).jadwal;
+  const rows = [];
+  const pembuat = (seksi, kunci, field) => (status, kiri, kanan, catatan) =>
+    Object.assign(cekBarisBaru(seksi, tt("Jadwal", "Schedule"))(field, status, kiri, kanan, catatan), { kunci, dariJadwal: true });
+  DP_GRUP.forEach((g) => g.isian.forEach((f) => {
+    if (!dpBerlaku(g, mode) || !dpBerlaku(f, mode) || CEK_DP_TANPA.has(f.k)) return;
+    const kunci = /^packingList/.test(f.k) ? "packingList" : `dp:${f.k}`;
+    cekBandingDp(rows, pembuat(CEK_DP_SEKSI[g.k] || "HEADER", kunci, dpLabel(f.label)), jadwal[f.k], draft[f.k], f.jenis, dpPilihanIsian(f, mode));
+  }));
+  // Nama pengirim/penjual (Import) & penerima/pembeli (Export) yang sama dengan Supplier/Customer sudah diperiksa baris pihak
+  const namaParty = EximEngine.normName(s.party || "");
+  const samaNama = (x, y) => EximEngine.normName(x) === EximEngine.normName(y);
+  DP_PIHAK.filter((p) => dpBerlaku(p, mode)).forEach((p) => {
+    const a = (jadwal.pihak || {})[p.k] || {};
+    const b = (draft.pihak || {})[p.k] || {};
+    p.isian.forEach((k) => {
+      if (DP_PIHAK_ISIAN_DOK[k] && DP_PIHAK_ISIAN_DOK[k] !== dpDok(mode)) return;
+      if (k === "nama" && /^(pengirim|penjual|penerima|pembeli)$/.test(p.k) && namaParty && EximEngine.normName(a.nama || "") === namaParty) return;
+      const pil = DP_PIHAK_PILIHAN[k];
+      const opsi = k === "nama" ? { sama: samaNama } : k === "alamat" ? { sama: cekSamaAlamat, lunak: true, catatan: tt("Alamat ditulis berbeda.", "The address is written differently.") } : null;
+      cekBandingDp(rows, pembuat("ENTITY", `dp:pihak.${p.k}.${k}`, `${dpLabel(p.label)} — ${dpLabel(DP_PIHAK_LABEL[k])}`), a[k], b[k], pil ? "pilihan" : "teks", pil, opsi);
+    });
+  });
+  return rows;
+}
+
+// Data PIB/PEB satu barang: isian yang diisi di editor barang jadwal vs Seri Barang yang sama di draft
+function cekBarisDataPabeanBarang(no, it, bc, sumber, isPib) {
+  if (!bc || !bc.lembar) return [];
+  const mode = isPib ? "import" : "export";
+  const a = rapikanDataPabeanBarang(it.dataPabean);
+  const b = cekDpDraft(bc, mode).perSeri.get(kunciSeri(no)) || {};
+  const rows = [];
+  DP_BARANG.filter((f) => dpBerlaku(f, mode)).forEach((f) => {
+    const pembuat = (status, kiri, kanan, catatan) =>
+      Object.assign(cekBarisBaru("ITEM", sumber)(`Item ${no} ${dpLabel(f.label)}`, status, kiri, kanan, catatan), { kunci: `barang:${kunciSeri(no)}:${f.k}` });
+    cekBandingDp(rows, pembuat, a[f.k], b[f.k], f.jenis, f.pilihan);
+  });
+  return rows;
 }
 
 /* Baris hasil mesin sesudah barangnya diambil dari jadwal: sumber tiap
@@ -1362,7 +1460,8 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     const ex = E.normalizeDate(decl.export_date || "");
     if (etd && ex) tambah("TRANSPORT", "etd", tt("ETD ↔ tanggal ekspor", "ETD ↔ export date"), ex === etd ? "MATCH" : "INFO", etd, ex, ex === etd ? "" : tt("TANGGAL EKSPOR di draft berbeda dengan ETD jadwal.", "TANGGAL EKSPOR in the draft differs from the schedule's ETD."));
   }
-  return rows;
+  // Data PIB/PEB (halaman Data PIB/PEB form jadwal, termasuk nilai bawaannya)
+  return rows.concat(cekBarisDataPabean(s, bc, isPeb));
 }
 
 /* PETI KEMAS -- "Nomor, Ukuran, dan Tipe Peti Kemas" draft (sheet
@@ -1461,6 +1560,8 @@ const CEK_KUNCI_MESIN = {
   "Supplier / Seller (Entity 9/10)": "pihak",
   "Consignee (Entity 8)": "pihak",
   "Departure Date (CIPL)": "etd",
+  "Packing List Number": "packingList",
+  "Packing List Date": "packingList",
 };
 
 function cekRujukJadwal(checks, barisJadwal, cipl, adaJadwal) {
@@ -2267,6 +2368,8 @@ function showCheckerView() {
     if (!el) return;
     if (el.id === "btnCekPeriksa") return void cekJalankan();
     if (el.id === "btnCekReset") return void cekMulaiUlang();
+    // Draft dalam tata letak PIB/PEB, isian yang tidak sesuai distabilo (features/cek-cetak.js)
+    if (el.id === "btnCekCetak") return void cekCetakDraft();
     if (el.id === "btnCekSalin") {
       copyToClipboard(cekTeksTemuan()).then((ok) => showToast(ok ? tt("Temuan disalin.", "Findings copied.") : tt("Gagal menyalin.", "Copy failed."), ok ? "success" : "danger"));
       return;

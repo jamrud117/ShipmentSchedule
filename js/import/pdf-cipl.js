@@ -673,12 +673,3 @@ function parseCiplPdfText(text, pagesItems) {
     source: hasCi && hasPl ? "cipl-pdf" : hasCi ? "cipl-pdf-ci" : "cipl-pdf-pl",
   };
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    parseCiplPdfText,
-    detectCiplPdfKind,
-    parseCiplValueTokens,
-    ciplPdfTableRows,
-  };
-}

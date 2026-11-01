@@ -462,8 +462,7 @@ function parsePibPdfText(text, pagesItems) {
       yBottom: stopY,
     });
     const blob = lines.map((l) => l.text).join(" ");
-    const cont = blob.match(/\b([A-Z]{4}\s?\d{6,7})\b/g);
-    if (cont) out.container = cont.join(", ").replace(/\s+/g, "");
+    out.container = pdfTeksKontainer(blob);
     const mu = blob.match(/\b(FCL|LCL)\b/i);
     if (mu) out.muatan = mu[1].toUpperCase();
     return out;
@@ -521,6 +520,12 @@ function parsePibPdfText(text, pagesItems) {
     package: (packageDefault || "")
       .replace(/,\s*(Tanpa\s+Merk|Tanpa\s+Merek|-)\s*$/i, "")
       .trim(),
+    // Isian PIB lain yang tidak punya kolom sendiri (core/data-pabean.js), + Packing List (217)
+    dataPabean: (() => {
+      const dp = pibDataPabean(text, pagesItems);
+      const pl = docRows.find((r) => kodeDokumen(r.kode) === "217");
+      return pl ? rapikanDataPabean(Object.assign({ packingListNomor: pl.nomor, packingListTanggal: pibDateToISO(pl.tanggalDMY) }, dp)) : dp;
+    })(),
   };
 
   /* ETD & ETA (terapkanTanggalDokumen, apply-to-form.js): ETD mengikuti
@@ -547,6 +552,8 @@ function parsePibPdfText(text, pagesItems) {
     pagesItems,
     posTarifMatches.length,
   );
+  // Kolom 33, 34 & 36 per barang -> item.dataPabean (data-pabean-baca.js)
+  const dataBarang = pibBarangDataPabean(pagesItems, posTarifMatches.length);
   const rawItems = posTarifMatches
     .map((pt, i) => {
       const blockEnd =
@@ -615,16 +622,13 @@ function parsePibPdfText(text, pagesItems) {
         satuan,
         packageQty: col ? col.packageQty : null,
         packageJenis: col ? col.packageJenis : "",
+        dataPabean: dataBarang[i],
       };
     })
     .filter((it) => it.namaBarang);
 
   // Berat Kotor (bruto) di form BC 2.0 CUMA ada di level pengiriman (field 29, total)
   const totalBrutoVal = beratMatch ? pibNum(beratMatch[2]) : null;
-  const totalNettoKnown = rawItems.reduce(
-    (sum, it) => sum + (it.netto || 0),
-    0,
-  );
 
   const items = rawItems.map((it, idx) => {
     const base = {
@@ -633,6 +637,7 @@ function parsePibPdfText(text, pagesItems) {
       kondisiBarang: it.kondisiBarang,
       negaraAsal: it.negaraAsal,
       hsCode: it.hsCode,
+      ...(it.dataPabean && Object.keys(it.dataPabean).length ? { dataPabean: it.dataPabean } : {}),
       /* Jenis barang dibiarkan mengikuti buku (newItem()). PIB memang
          dokumen impor, jadi hasilnya sama saja -- tapi nilai mati di
          sini akan salah begitu berkasnya dibuka dari buku Export,
@@ -730,6 +735,12 @@ function parsePibPdfText(text, pagesItems) {
     t("y.hasil.baca.pdf.best.effort"),
   );
 
+  /* BC 1.1 (field 18) -> tahap Manifest di Progres Dokumen
+     (progresDariDokumenPabean, doc-steps.js), sama dengan Excel CEISA. */
+  const progres = fields.dataPabean.bc11Tanggal
+    ? { bc11: { nomor: fields.dataPabean.bc11Nomor || "", tanggal: fields.dataPabean.bc11Tanggal } }
+    : undefined;
+
   return {
     fields,
     items,
@@ -737,5 +748,6 @@ function parsePibPdfText(text, pagesItems) {
     modeHint: "import",
     source: "pdf",
     isPib: PIB_TITLE_RE.test(text),
+    ...(progres ? { progres } : {}),
   };
 }

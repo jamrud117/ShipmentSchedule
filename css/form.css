@@ -138,20 +138,21 @@
 .btn-import-excel {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-height: var(--ctl-h);
   border: 1px solid var(--p-200);
-  color: var(--p-700);
+  color: var(--tp-700);
   background: var(--p-50);
-  border-radius: 9px;
-  padding: 8px 14px;
-  font-size: 0.79rem;
+  border-radius: var(--r-md);
+  padding: 0 14px;
+  font-size: var(--t-base);
   font-weight: 600;
-  transition: all 0.15s ease;
 }
 .btn-import-excel:hover {
   background: var(--p-100);
   border-color: var(--p-300);
-  color: var(--p-700);
+  color: var(--tp-700);
 }
 .btn-import-excel i {
   font-size: 0.9rem;
@@ -173,42 +174,53 @@
     transform: rotate(360deg);
   }
 }
+/* "Batal" form jadwal & tombol tambah di kotak realisasi: rupa tombol
+   KEDUA yang sama dengan .btn-quiet -- teks navy, garis kontrol --
+   bukan abu-abu tersendiri. */
 .btn-form-cancel {
-  border: 1px solid var(--border);
-  background: #fff;
-  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--ctl-h);
+  border: 1px solid var(--border-control);
+  background: var(--surface);
+  color: var(--tp-600);
   font-weight: 600;
-  font-size: 0.85rem;
-  padding: 8px 16px;
-  border-radius: 9px;
-  transition: all 0.15s ease;
+  font-size: var(--t-base);
+  padding: 0 16px;
+  border-radius: var(--r-md);
 }
-.btn-form-cancel:hover {
-  background: #f4f7fb;
-  color: var(--ink);
-  border-color: #cbd5e1;
+.btn-form-cancel:hover:not(:disabled) {
+  background: var(--p-50);
+  color: var(--tp-700);
+  border-color: var(--p-300);
 }
+/* Tombol simpan utama: navy pekat (system.css) dengan bayangan tipis
+   sebagai penanda aksi utama di bilah simpan -- tanpa melompat saat
+   disorot. */
 .btn-save-primary {
-  padding: 8px 18px;
-  border-radius: 9px;
-  box-shadow: 0 8px 18px -8px rgba(18, 58, 99, 0.65);
-  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: var(--ctl-h);
+  padding: 0 18px;
+  border-radius: var(--r-md);
+  font-size: var(--t-base);
+  font-weight: 600;
+  box-shadow: 0 6px 14px -8px rgba(18, 58, 99, 0.6);
 }
-.btn-save-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px -8px rgba(18, 58, 99, 0.75);
-  color: #fff;
-}
-.btn-save-primary:active {
-  transform: translateY(0);
+.btn-save-primary:hover:not(:disabled) {
+  box-shadow: 0 8px 18px -8px rgba(18, 58, 99, 0.7);
 }
 
 .import-notes-box {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: linear-gradient(135deg, #f2fbf8, #fff);
-  border: 1px solid #c9edd6;
+  background: linear-gradient(135deg, var(--w-bg-f2fbf8), var(--surface));
+  border: 1px solid var(--w-garis-c9edd6);
   border-radius: 14px;
   padding: 14px 16px;
   margin-bottom: 20px;
@@ -233,7 +245,7 @@
 .import-notes-summary {
   font-weight: 700;
   font-size: 0.86rem;
-  color: #1f7a56;
+  color: var(--w-teks-1f7a56);
 }
 .import-notes-summary:empty {
   display: none;
@@ -242,7 +254,7 @@
   margin: 6px 0 0;
   padding-left: 18px;
   font-size: 0.8rem;
-  color: #8a5a00;
+  color: var(--w-teks-8a5a00);
 }
 .import-notes-list:empty {
   display: none;
@@ -252,14 +264,14 @@
   margin-bottom: 3px;
 }
 .import-notes-list li::marker {
-  color: #d9932c;
+  color: var(--w-teks-d9932c);
 }
 
 /* Tab stepper (1/2/3) — navy tunggal untuk tab aktif (lihat */
 .nav-detail {
   display: flex;
   gap: 4px;
-  background: #eaf0f8;
+  background: var(--w-bg-eaf0f8);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 5px;
@@ -294,9 +306,9 @@
   text-align: center;
 }
 .nav-detail .nav-link:hover:not(.active) {
-  background: #fff;
+  background: var(--surface);
   border-color: var(--border-control);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .nav-detail .step-num {
   flex-shrink: 0;
@@ -307,15 +319,15 @@
   height: 20px;
   border-radius: 50%;
   background: rgba(100, 116, 139, 0.14);
-  color: var(--muted);
+  color: var(--n-600);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   font-weight: 700;
   transition: all 0.15s ease;
 }
 .nav-detail .nav-link:not(.active):hover {
-  color: var(--navy);
-  background: rgba(255, 255, 255, 0.7);
+  color: var(--tp-700);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 /* Langkah aktif: navy RATA, bukan gradien. Selain lebih tegas bedanya
    dari dua langkah lain, warna rata bisa diukur — gradien membuat
@@ -327,9 +339,11 @@
   color: #fff;
   box-shadow: 0 8px 18px -8px rgba(11, 31, 58, 0.55);
 }
+/* Bulat putih bernomor navy: 17:1 di kedua tema (putih transparan di
+   atas biru langkah aktif hanya 3,7:1 di mode gelap) */
 .nav-detail .nav-link.active .step-num {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: var(--isi-di-navy);
+  color: var(--d-900);
 }
 /* Ponsel: nomor langkah di atas, namanya boleh dua baris -- dulu satu
    baris tanpa bungkus, dan "Kepabeanan & Biaya" terpotong di tepi. */
@@ -347,7 +361,7 @@
 
 /* Kartu tiap subsection (pengelompokan visual + badge ikon */
 .form-section-card {
-  background: #fff;
+  background: var(--surface);
   padding: 22px 22px 20px;
   margin-bottom: 20px;
   /* border, border-radius & box-shadow datang dari aturan bersama */
@@ -359,7 +373,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 0.95rem;
-  color: var(--navy);
+  color: var(--tp-700);
   margin: 20px 0 10px;
   display: flex;
   align-items: center;
@@ -448,26 +462,23 @@
 .subsection-title:first-child {
   margin-top: 0;
 }
+/* Ikon judul bagian form: SATU rupa untuk semua bagian -- kotak navy
+   muda, ikon navy. Dulu tiap bagian bergradasi sendiri (navy, ungu,
+   jingga); ungunya bahkan di luar palet aplikasi, dan warna-warni itu
+   tidak membawa arti apa pun. Kelas --ocean/--violet/--amber tetap ada
+   di markup sebagai penanda bagian. */
 .subsection-icon {
   flex-shrink: 0;
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 0.92rem;
-  color: #fff;
-}
-.form-section-card--ocean .subsection-icon {
-  background: linear-gradient(135deg, var(--ocean), #123b63);
-}
-.form-section-card--violet .subsection-icon {
-  background: linear-gradient(135deg, #6d5ce6, #4a3aa0);
-}
-.form-section-card--amber .subsection-icon {
-  background: linear-gradient(135deg, var(--amber), #c4740f);
-  color: var(--navy);
+  background: var(--p-50);
+  border: 1px solid var(--p-100);
+  color: var(--tp-600);
 }
 
 /* Input/select di halaman form -- dan di form Permintaan Nomor Dokumen,
@@ -481,7 +492,7 @@
   padding: 9px 12px;
   font-size: 0.86rem;
   color: var(--ink);
-  background-color: #fff;
+  background-color: var(--surface);
   /* Tinggi SERAGAM untuk semua jenis field -- text, angka, dropdown,
      date, time. Tanpa ini, <input type="date">/<input type="time">
      kadang tetap sedikit lebih pendek/tinggi dari <input type="text">
@@ -496,13 +507,13 @@
 }
 .page-form .form-control::placeholder,
 .docnum-panel .form-control::placeholder {
-  color: #a7b2c2;
+  color: var(--text-placeholder);
 }
 .page-form .form-control[readonly] {
-  background: #f7fafd;
+  background: var(--w-bg-f7fafd);
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--navy);
+  color: var(--tp-700);
 }
 /* Field baris Terminal Transit (route-stops.js) sengaja memakai
    form-control-sm/form-select-sm bawaan Bootstrap — variasi itu
@@ -529,7 +540,7 @@
   margin: 4px 0 6px;
 }
 .route-stop-card {
-  background: #fff;
+  background: var(--surface);
   padding: 12px 14px;
   margin-bottom: 10px;
 }
@@ -563,7 +574,7 @@
   height: 26px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: #fff;
+  background: var(--surface);
   color: var(--muted);
   display: inline-flex;
   align-items: center;
@@ -573,16 +584,16 @@
 }
 .route-stop-actions button:hover:not(:disabled) {
   background: var(--bg);
-  color: var(--navy);
+  color: var(--tp-700);
 }
 .route-stop-actions button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 .route-stop-actions .rm-stop:hover:not(:disabled) {
-  background: #fdeaea;
-  color: var(--coral);
-  border-color: #f3c6c6;
+  background: var(--w-bg-fdeaea);
+  color: var(--ts-danger);
+  border-color: var(--w-garis-f3c6c6);
 }
 
 /* ---- Terminal Transit (read-only, detail view) ---- */
@@ -616,7 +627,7 @@
 }
 .detail-stop-name {
   font-weight: 700;
-  color: var(--navy);
+  color: var(--tp-700);
   font-size: 0.85rem;
 }
 .detail-stop-meta {
@@ -639,13 +650,17 @@ table.item-table {
   border-collapse: collapse;
   font-size: 0.83rem;
 }
+/* Kepala kolom: huruf besar kecil berspasi, sama dengan kepala tabel
+   lain (HS Code, Masterlist, riwayat nomor) -- bukan huruf mesin tik
+   tersendiri. Warna & latarnya diseragamkan di css/system.css. */
 table.item-table th {
   background: var(--bg);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 700;
   padding: 9px 8px;
   text-align: center;
   white-space: nowrap;
@@ -688,11 +703,13 @@ table.item-table--form th:nth-child(24) { width: 3%; }  /* tombol hapus */
 
 /* TABEL DAFTAR BARANG DI PANEL DETAIL.
 
-   Panel selebar laptop: tabel biasa yang muat di panelnya -- dulu
-   min-width 1100px menyembunyikan Kemasan & Subtotal di balik gulir
-   bahkan di layar 1.366px (panelnya 1000px). Kolom Nama Barang tetap
-   diberi ruang: isinya nama gabungan (Uraian + Pattern + Size + Mold
-   No) yang panjang; disempitkan, namanya pecah satu kata per baris.
+   Panel selebar laptop: tabel biasa selebar panelnya (width 100% dari
+   .item-table, tanpa min-width 1220px milik tabel isian). Judul kolom
+   & isi sel TIDAK membungkus: nama gabungan (Uraian + Pattern + Size +
+   Mold No) dan judul seperti "Goods Type" tetap satu baris. Bila
+   jumlahnya lebih lebar dari panel, tabel memanjang sendiri (lebar
+   minimum tabel = lebar isi terpanjang tiap kolom) dan .item-table-wrap
+   menggulirnya ke samping.
    Panel yang lebih sempit (tablet, ponsel): tiap barang jadi kartu
    berlabel, lihat @container detail-barang di bawah. */
 .detail-barang {
@@ -701,15 +718,12 @@ table.item-table--form th:nth-child(24) { width: 3%; }  /* tombol hapus */
 table.item-table--detail {
   min-width: 0;
 }
-/* Judul kolom boleh dua baris ("Jenis / Barang") supaya kedua belas
-   kolom Export (dengan CBM) muat di panel 880px tanpa digeser. */
-table.item-table--detail th {
-  white-space: normal;
+table.item-table--detail th,
+table.item-table--detail td {
+  white-space: nowrap;
 }
 table.item-table--detail th:first-child,
 table.item-table--detail td:first-child {
-  min-width: 180px;
-  white-space: normal;
   text-align: left;
 }
 
@@ -791,7 +805,7 @@ table.item-table input[data-f="negaraAsal"]:focus + .negara-nama {
 }
 table.item-table input.negara-salah {
   border-color: var(--coral);
-  background: #fff6f6;
+  background: var(--w-bg-fff6f6);
 }
 /* Kolom Seri Barang — angka referensi saja (dari posisi baris, lihat
    item-table.js), bukan isian. Sengaja sempit & senada warna muted,
@@ -861,7 +875,7 @@ table.item-table select[data-f="jenisBarang"] {
   min-height: 34px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: #fff;
+  background: var(--surface);
   color: var(--n-500);
   display: grid;
   place-items: center;
@@ -869,20 +883,20 @@ table.item-table select[data-f="jenisBarang"] {
 }
 .hscode-lookup-btn:hover {
   border-color: var(--p-300);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 /* HS Code yang terisi otomatis dari Database HS Code menurut nama
    barangnya (hscode-lookup.js) -- berbeda dari yang diketik sendiri. */
 table.item-table input.hs-otomatis {
   border-color: var(--s-ok-line);
   background: var(--s-ok-bg);
-  color: var(--s-ok);
+  color: var(--ts-ok);
 }
 /* Nama barang cocok dengan beberapa kode: tombol cari = pilih salah satu */
 .hscode-lookup-btn.is-saran {
   border-color: var(--s-warn-line);
   background: var(--s-warn-bg);
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 /* Popover cari HS Code — satu elemen dipakai bergantian untuk baris
    mana pun (lihat komentar di index.html & hscode-lookup.js).
@@ -896,7 +910,7 @@ table.item-table input.hs-otomatis {
   max-height: 320px;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--sh-lg);
@@ -966,12 +980,100 @@ table.item-table input.hs-otomatis {
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--t-xs);
-  color: var(--p-600);
+  color: var(--tp-600);
   white-space: nowrap;
 }
 .hscode-lookup-empty {
   padding: var(--sp-5) var(--sp-4);
   text-align: center;
+  color: var(--n-500);
+  font-size: var(--t-sm);
+}
+
+/* NAMA SHIPPER / BUYER: dropdown yang bisa ditambah (js/features/pilih-pihak.js).
+   Kotak teks berpanah seperti dropdown lain; daftarnya menggantung di
+   bawah kotak (atau di atasnya, .is-atas, bila ruang bawah sempit). */
+.pilih-pihak {
+  position: relative;
+}
+.pilih-pihak .pilih-pihak-isian {
+  padding-right: 34px;
+}
+.pilih-pihak-panah {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: transparent;
+  color: var(--n-500);
+}
+.pilih-pihak-panah i {
+  font-size: 0.75rem;
+  transition: transform var(--dur-1) var(--ease);
+}
+.pilih-pihak.is-buka .pilih-pihak-panah i {
+  transform: rotate(180deg);
+}
+.pilih-pihak-daftar {
+  position: absolute;
+  z-index: 1035;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(300px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+}
+.pilih-pihak.is-atas .pilih-pihak-daftar {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.pilih-pihak-opsi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.pilih-pihak-opsi > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pilih-pihak-opsi:hover,
+.pilih-pihak-opsi.is-aktif {
+  background: var(--p-50);
+}
+.pilih-pihak-opsi[aria-selected="true"] {
+  font-weight: 600;
+}
+.pilih-pihak-opsi .bi-check2 {
+  color: var(--tp-700);
+}
+.pilih-pihak-opsi.is-baru {
+  color: var(--tp-700);
+  font-weight: 600;
+}
+.pilih-pihak-opsi.is-baru:not(:first-child) {
+  margin-top: 4px;
+  box-shadow: 0 -1px 0 var(--border);
+}
+.pilih-pihak-kosong {
+  padding: 10px;
   color: var(--n-500);
   font-size: var(--t-sm);
 }
@@ -983,10 +1085,10 @@ td.pkg-cell input {
 
 /* Kolom "CBM (m³)" (per barang, mode Export) — readonly, hasil hitung */
 table.item-table input.cbm-readonly {
-  background: #f7fafd;
+  background: var(--w-bg-f7fafd);
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--teal-dark);
+  color: var(--tsec-700);
   border: none;
   text-align: center;
   width: 100%;
@@ -1019,10 +1121,10 @@ table.item-table textarea.isian-barang {
   font-family: inherit;
 }
 table.item-table input.subtotal {
-  background: #f7fafd;
+  background: var(--w-bg-f7fafd);
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--navy);
+  color: var(--tp-700);
   border: none;
   text-align: right;
 }
@@ -1038,7 +1140,7 @@ table.item-table input.subtotal {
 }
 .item-table-foot b {
   font-family: var(--font-mono);
-  color: var(--navy);
+  color: var(--tp-700);
 }
 .item-table-foot--split {
   justify-content: space-between;
@@ -1057,11 +1159,11 @@ table.item-table input.subtotal {
   color: var(--ink);
 }
 .foot-package i {
-  color: var(--ocean);
+  color: var(--tp-500);
 }
 .foot-package b {
   font-family: var(--font-mono);
-  color: var(--navy);
+  color: var(--tp-700);
 }
 /* Input Total Package, menyatu di dalam .foot-package */
 .foot-package input {
@@ -1074,7 +1176,7 @@ table.item-table input.subtotal {
   padding: 4px 8px;
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--navy);
+  color: var(--tp-700);
   text-align: center;
 }
 .foot-package input[readonly] {
@@ -1127,7 +1229,7 @@ table.item-table input.subtotal {
     padding: 12px 14px;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: #fff;
+    background: var(--surface);
   }
   .detail-barang table.item-table--detail tbody tr:last-child {
     margin-bottom: 0;
@@ -1137,6 +1239,7 @@ table.item-table input.subtotal {
     padding: 0;
     border: 0;
     text-align: left;
+    white-space: normal;
     overflow-wrap: anywhere;
   }
   .detail-barang table.item-table--detail tbody td::before {
@@ -1191,7 +1294,7 @@ table.item-table input.subtotal {
   align-items: center;
   gap: 5px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   color: var(--muted);
   border-radius: 7px;
   padding: 5px 8px;
@@ -1210,12 +1313,12 @@ table.item-table input.subtotal {
 }
 .btn-facilities:hover {
   border-color: var(--teal);
-  color: var(--teal-dark);
+  color: var(--tsec-700);
 }
 .btn-facilities.has-value {
-  background: #e9f9ee;
-  border-color: #c9edd6;
-  color: #1f8a4c;
+  background: var(--w-bg-e9f9ee);
+  border-color: var(--w-garis-c9edd6);
+  color: var(--ts-success);
 }
 .btn-facilities i {
   font-size: 0.68rem;
@@ -1224,7 +1327,7 @@ table.item-table input.subtotal {
 tr.item-fac-row td {
   padding: 0;
   border-top: none;
-  background: #fbfcfe;
+  background: var(--w-bg-fbfcfe);
 }
 .item-fac-panel {
   padding: 14px 16px 16px;
@@ -1295,11 +1398,11 @@ tr.item-fac-row td {
   height: 28px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: #fff;
-  color: var(--coral);
+  background: var(--surface);
+  color: var(--ts-danger);
 }
 .item-fac-skb-row .rm-skb:hover {
-  background: #fdeaea;
+  background: var(--w-bg-fdeaea);
 }
 .item-fac-empty {
   font-size: 0.78rem;
@@ -1397,18 +1500,19 @@ tr.item-fac-row td {
   font-weight: 600;
   color: var(--muted);
 }
+/* Kotak tanggal minimal 132px: "dd/mm/yyyy" + ikon kalender tidak terpotong */
 .dp-baris {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(132px, 1fr) 34px;
   gap: 8px;
   align-items: center;
 }
 .dp-baris--lain {
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(132px, 1fr) 34px;
 }
 /* PI & LS: [ nomor ][ tanggal ][ klip ][ x ], lampirannya sebaris penuh di bawah */
 .dp-baris--berkas {
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 34px 34px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(132px, 1fr) 34px 34px;
 }
 .dp-lampir {
   position: relative;
@@ -1420,7 +1524,7 @@ tr.item-fac-row td {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  color: var(--p-600);
+  color: var(--tp-600);
   cursor: pointer;
 }
 .dp-lampir:hover {
@@ -1446,7 +1550,7 @@ tr.item-fac-row td {
   background: var(--p-600);
   color: #fff;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.69rem;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -1501,15 +1605,15 @@ tr.item-fac-row td {
 }
 .lartas-baris--kurang > i,
 .lartas-baris--kurang .lartas-status {
-  color: var(--s-danger);
+  color: var(--ts-danger);
   font-weight: 600;
 }
 .lartas-baris--ada > i,
 .lartas-baris--ada .lartas-status {
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .lartas-baris--info > i {
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .lartas-fta {
   display: flex;
@@ -1524,7 +1628,7 @@ tr.item-fac-row td {
 }
 .lartas-fta > i {
   margin-top: 2px;
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .dp-baris .form-select {
   text-overflow: ellipsis;
@@ -1535,10 +1639,10 @@ tr.item-fac-row td {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
-  color: var(--coral);
+  color: var(--ts-danger);
 }
 .dp-hapus:hover {
-  background: #fdeaea;
+  background: var(--w-bg-fdeaea);
 }
 .dp-tambah {
   align-self: flex-start;
@@ -1551,7 +1655,7 @@ tr.item-fac-row td {
   padding: 5px 10px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .dp-tambah:hover {
   border-color: var(--p-600);
@@ -1623,7 +1727,7 @@ tr.item-fac-row td {
   }
 }
 .rm-kosong i {
-  color: var(--p-500);
+  color: var(--tp-500);
   margin-right: 4px;
 }
 .rm-baris {
@@ -1663,13 +1767,13 @@ tr.item-fac-row td {
   flex-shrink: 0;
 }
 .rm-status--aman i {
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .rm-status--mepet {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .rm-status--telat {
-  color: var(--s-danger);
+  color: var(--ts-danger);
   font-weight: 600;
 }
 
@@ -1679,8 +1783,8 @@ tr.item-fac-row td {
   height: 100%;
 }
 .calc-box.fob {
-  border-color: #fce6c2;
-  background: #fff7e9;
+  border-color: var(--w-garis-fce6c2);
+  background: var(--w-bg-fff7e9);
 }
 .calc-box .calc-label {
   font-family: var(--font-mono);
@@ -1692,7 +1796,7 @@ tr.item-fac-row td {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 1.05rem;
-  color: var(--navy);
+  color: var(--tp-700);
   margin-top: 2px;
 }
 
@@ -1704,7 +1808,7 @@ tr.item-fac-row td {
   border: 1px dashed var(--amber);
   border-radius: 10px;
   padding: 14px 16px;
-  background: #fffaf0;
+  background: var(--w-bg-fffaf0);
 }
 #delayBlock .delay-judul-sisa,
 #delayBlock .delay-ket-sisa,
@@ -1725,7 +1829,7 @@ tr.item-fac-row td {
   border: 0;
   background: none;
   padding: 0;
-  color: var(--s-danger);
+  color: var(--ts-danger);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -1747,13 +1851,13 @@ tr.item-fac-row td {
   line-height: 1.4;
 }
 .status-tiba-hint i {
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .delay-summary {
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--navy);
-  background: #fff;
+  color: var(--tp-700);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
@@ -1763,9 +1867,9 @@ tr.item-fac-row td {
 
 /* Badge lama delay di kartu dashboard. */
 .tag.tag-delay {
-  background: #fff3e0;
-  color: #a35a00;
-  border-color: #ffd8a8;
+  background: var(--w-bg-fff3e0);
+  color: var(--w-teks-a35a00);
+  border-color: var(--w-garis-ffd8a8);
 }
 
 /* Kotak satuan kemasan di sebelah Total Package (mode Import). */
@@ -1773,7 +1877,7 @@ tr.item-fac-row td {
 /* Penanda isi kolom Kemasan yang formatnya belum benar. Sengaja HANYA */
 table.item-table input.pkg-invalid {
   border-color: var(--coral);
-  background: #fff6f6;
+  background: var(--w-bg-fff6f6);
 }
 
 /* TAMBAHAN REDESAIN — HALAMAN FORM */
@@ -1809,8 +1913,10 @@ table.item-table input.pkg-invalid {
 .form-progress-dot.is-done {
   background: var(--sec-400);
 }
+/* Kepala form selalu navy (kedua tema): titik langkah kini putih tetap,
+   bukan --surface -- di mode gelap --surface navy dan titiknya hilang. */
 .form-progress-dot.is-current {
-  background: #fff;
+  background: var(--isi-di-navy);
 }
 
 /* Zona isi otomatis dari dokumen */
@@ -1833,7 +1939,7 @@ table.item-table input.pkg-invalid {
   display: block;
   font-size: var(--t-base);
   font-weight: 600;
-  color: var(--d-900);
+  color: var(--tp-700);
 }
 .import-zone-copy small {
   display: block;
@@ -1877,7 +1983,7 @@ table.item-table input.pkg-invalid {
   justify-content: space-between;
   gap: var(--sp-4);
   padding: 10px 12px 10px 18px;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   backdrop-filter: saturate(1.6) blur(14px);
   border: 1px solid var(--n-200);
   border-radius: var(--r-xl);
@@ -1906,13 +2012,13 @@ table.item-table input.pkg-invalid {
   font-size: 0.9rem;
 }
 .form-validity--ok {
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .form-validity--ok i {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .form-validity--warn {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 /* Petunjuk pintasan simpan di sebelah "Siap disimpan". */
 .form-validity-tuts {
@@ -1925,10 +2031,10 @@ table.item-table input.pkg-invalid {
   border: 1px solid var(--n-300);
   border-bottom-width: 2px;
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface);
   color: var(--n-600);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 600;
   line-height: 1.3;
   box-shadow: none;
@@ -1977,7 +2083,7 @@ table.item-table input.pkg-invalid {
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1;
-  color: var(--n-400);
+  color: var(--text-placeholder);
   pointer-events: none;
   z-index: 2;
   transition: color var(--dur-1) var(--ease);
@@ -1993,7 +2099,7 @@ table.item-table input.pkg-invalid {
 
 /* Lambang meredup saat kolomnya kosong dan menegas begitu terisi — */
 .input-affix.has-value::before {
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 
 /* Lambang di kanan (persen). */
@@ -2084,7 +2190,7 @@ table.item-table input[data-f="packing"].is-ikut {
   background: var(--n-50);
 }
 table.item-table input[data-f="packing"].is-ikut::placeholder {
-  color: var(--n-400);
+  color: var(--text-placeholder);
   font-style: italic;
 }
 
@@ -2169,7 +2275,7 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: #fff;
+    background: var(--surface);
   }
   /* Sel jadi blok kisi dengan sendirinya; kolom yang disembunyikan per
      buku (.dim-col, .export-col, .import-col, .d-none) tetap
@@ -2281,5 +2387,381 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
 @container barang-isi (min-width: 420px) and (max-width: 551.98px) {
   .barang-isi table.item-table--form > tbody > tr > td.uraian-col {
     grid-column: auto;
+  }
+}
+
+/* ==================================================================
+   DATA PIB / PEB (tab 4 form jadwal, features/data-pabean-form.js)
+   Bergaya layar isian CEISA 4.0: deret tab bernomor bergaris bawah,
+   bagian berjudul dalam bingkai tipis, isian hanya-baca kelabu dengan
+   tombol "Ubah" menuju kotak asalnya, hasil hitung bertanda "otomatis".
+================================================================== */
+.dpb-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 var(--sp-4);
+  border-bottom: 1px solid var(--n-200);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.dpb-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+.dpb-tab:hover {
+  background: var(--p-50);
+  color: var(--tp-600);
+}
+.dpb-tab.is-aktif {
+  border-bottom-color: var(--p-500);
+  color: var(--tp-600);
+}
+.dpb-tab-no {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--n-600);
+  font-size: 11px;
+  font-weight: 700;
+}
+.dpb-tab.is-aktif .dpb-tab-no {
+  background: var(--p-500);
+  color: #fff;
+}
+.dpb-bagian {
+  margin-bottom: var(--sp-4);
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.dpb-bagian:last-child {
+  margin-bottom: 0;
+}
+.dpb-bagian-judul {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--n-200);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: var(--n-50);
+  color: var(--n-800);
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.dpb-bagian-judul h3 {
+  margin: 0;
+  font: inherit;
+}
+.dpb-bagian > .fgrid,
+.dpb-bagian > .dpb-tabel-gulir,
+.dpb-bagian > .dpb-kosong,
+.dpb-bagian > .dpbb-fasilitas {
+  padding: 14px;
+}
+.dpb-catatan {
+  margin: 0;
+  padding: 10px 14px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.dpb-kosong {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--t-sm);
+}
+/* Nama CEISA yang panjang di kotak sempit (ponsel) diakhiri "…" (kotak
+   isian: system.css), nama lengkapnya di keterangan kotak (title) */
+.dpb-isi .form-select,
+.dpbb-isi .form-select {
+  text-overflow: ellipsis;
+}
+/* Isian dari tab lain / hasil hitung */
+.dpb-label-baca {
+  justify-content: space-between;
+}
+.dpb-label-baca > label {
+  min-width: 0;
+  margin: 0;
+}
+/* Teks dari tab lain berhuruf biasa seperti isian CEISA yang dikunci;
+   angka hasil hitung tetap berhuruf tetap (gaya kotak hanya-baca form) */
+.page-form .dpb-baca.form-control,
+.modal .dpb-baca.form-control {
+  height: auto;
+  min-height: 40px;
+  border-style: dashed;
+  background: var(--n-50);
+  color: var(--n-800);
+  font-family: var(--font-body);
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  cursor: default;
+}
+.dpb-baca.is-kosong {
+  color: var(--text-subtle);
+}
+.page-form .dpb-baca.dpb-angka,
+.modal .dpb-baca.dpb-angka {
+  color: var(--tp-700);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+.dpb-ke {
+  flex: none;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--tp-500);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.dpb-ke:hover {
+  color: var(--tp-700);
+}
+.dpb-chip {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.dpb-angka,
+.dpb-baca.dpb-angka {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dpb-redup {
+  color: var(--text-subtle);
+}
+/* Tabel dokumen, barang & pungutan */
+.dpb-tabel-gulir {
+  overflow-x: auto;
+}
+.dpb-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.dpb-tabel th,
+.dpb-tabel td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--n-100);
+  text-align: left;
+  vertical-align: middle;
+}
+/* Kolom angka rata kanan, kepalanya juga (aturan di atas lebih spesifik dari .dpb-angka saja) */
+.dpb-tabel .dpb-angka {
+  text-align: right;
+}
+.dpb-tabel thead th {
+  border-bottom-color: var(--n-200);
+  background: var(--n-50);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dpb-tabel tbody th {
+  color: var(--n-800);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dpb-tabel tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.dpb-tabel .dpb-no {
+  width: 1%;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dpb-tabel .dpb-asal {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.dpb-tabel-barang {
+  min-width: 760px;
+}
+/* Tabel Barang rata tengah: judul & isi semua kolom, termasuk angka,
+   uraian & tombol pena (dua kelas supaya mengalahkan rata kiri
+   .dpb-tabel th/td dan rata kanan .dpb-aksi). */
+.dpb-tabel.dpb-tabel-barang th,
+.dpb-tabel.dpb-tabel-barang td {
+  text-align: center;
+}
+.dpb-tabel-barang .dpb-uraian {
+  min-width: 220px;
+}
+.dpb-tabel-pungutan {
+  min-width: 720px;
+}
+.dpb-tabel-pungutan .dpb-total > * {
+  border-top: 2px solid var(--n-200);
+  font-weight: 700;
+}
+.dpb-aksi {
+  width: 1%;
+  text-align: right;
+}
+.dpb-pena {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--tp-600);
+  cursor: pointer;
+}
+.dpb-pena:hover {
+  border-color: var(--p-500);
+  background: var(--p-50);
+}
+
+/* EDITOR BARANG (tombol pena, features/data-pabean-barang.js) */
+.dpbb-dialog {
+  max-width: 980px;
+}
+.dpbb-kepala {
+  gap: var(--sp-3);
+}
+.dpbb-judul {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dpbb-judul .dialog-title {
+  margin: 0;
+}
+.dpbb-sub {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--t-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dpbb-nav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dpbb-nav-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--n-700);
+  cursor: pointer;
+}
+.dpbb-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dpbb-posisi {
+  min-width: 56px;
+  color: var(--n-700);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dpbb-isi {
+  background: var(--n-50);
+}
+.dpbb-judul-baris {
+  justify-content: space-between;
+}
+.dpbb-tarif {
+  min-width: 620px;
+}
+.dpbb-tarif input.form-control {
+  max-width: 130px;
+}
+.dpbb-tetap {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.dpbb-fas {
+  color: var(--n-700);
+  font-size: 12px;
+}
+.dpbb-fasilitas {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  list-style: none;
+}
+.dpbb-fasilitas li {
+  padding: 7px 12px;
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-sm);
+  background: var(--n-50);
+  color: var(--n-800);
+  font-size: var(--t-sm);
+  overflow-wrap: anywhere;
+}
+.dpbb-fasilitas li b {
+  color: var(--tp-600);
+}
+.dpbb-kaki {
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.dpbb-peringatan {
+  flex: 1 1 220px;
+  color: var(--ts-warn);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+#dpbBarangTutup.is-bahaya {
+  border-color: var(--s-danger);
+  color: var(--ts-danger);
+}
+@media (max-width: 575.98px) {
+  .dpbb-kepala .dialog-icon {
+    display: none;
+  }
+  .dpbb-judul .dialog-title {
+    font-size: var(--t-md);
+  }
+  .dpbb-nav-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .dpb-tab {
+    padding: 8px 12px;
   }
 }

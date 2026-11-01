@@ -41,7 +41,7 @@ async function initApp() {
 
   await loadShipments();
 
-  router();
+  routerSesudahMuat();
 
   // Tanggal papan diperbarui kalau aplikasi dibiarkan terbuka melewati tengah malam
   setInterval(() => {

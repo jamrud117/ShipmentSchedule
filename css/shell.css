@@ -109,7 +109,7 @@
   color: var(--sec-300);
 }
 .brand:hover .brand-name {
-  color: var(--p-200);
+  color: var(--teks-di-navy);
 }
 
 /* ---- Sidebar ---- */
@@ -282,7 +282,7 @@ button.site-nav-link {
   border-radius: var(--r-pill);
   background: var(--s-danger);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -297,11 +297,11 @@ button.site-nav-link {
   position: absolute;
   top: 2px;
   right: 1px;
-  min-width: 17px;
-  height: 17px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
-  font-size: 0.64rem;
-  line-height: 17px;
+  font-size: 0.69rem;
+  line-height: 18px;
   box-shadow: 0 0 0 2px var(--d-900);
 }
 
@@ -344,7 +344,7 @@ button.site-nav-link {
   background: transparent;
   padding: 4px 8px;
   border-radius: var(--r-xs);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: var(--t-sm);
   font-weight: 600;
 }
@@ -404,7 +404,7 @@ button.site-nav-link {
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 /* JENIS (Berangkat / Tiba / Dikirim ke pabrik): satu kotak berkepala. */
 .notif-jenis {
@@ -483,16 +483,16 @@ button.site-nav-link {
   font-size: 0.85rem;
 }
 .notif-ikon--etd {
-  background: #fff3de;
-  color: #95610c;
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-95610c);
 }
 .notif-ikon--eta {
   background: var(--sec-100);
-  color: var(--sec-700);
+  color: var(--tsec-700);
 }
 .notif-ikon--delivery {
   background: var(--p-100);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .notif-teks {
   flex: 1;
@@ -520,7 +520,7 @@ button.site-nav-link {
   margin-top: 2px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #95610c;
+  color: var(--w-teks-95610c);
 }
 .notif-titik {
   flex-shrink: 0;
@@ -654,13 +654,13 @@ button.site-nav-link {
     top: 4px;
     right: 10px;
     width: auto;
-    min-width: 17px;
-    height: 17px;
+    min-width: 18px;
+    height: 18px;
     padding: 0 4px;
     clip: auto;
     overflow: visible;
-    font-size: 0.64rem;
-    line-height: 17px;
+    font-size: 0.69rem;
+    line-height: 18px;
     box-shadow: 0 0 0 2px var(--d-900);
   }
 }
@@ -774,8 +774,8 @@ button.site-nav-link {
   background: rgba(255, 255, 255, 0.1);
 }
 .mode-tabs button.active {
-  background: #fff;
-  color: var(--d-900);
+  background: var(--surface);
+  color: var(--tp-700);
 }
 .mode-tabs button i {
   margin-right: 5px;
@@ -820,6 +820,13 @@ button.site-nav-link {
   justify-content: space-between;
   gap: var(--sp-5);
   flex-wrap: wrap;
+}
+/* Judul & kalimat ringkasnya yang MENYUSUT dulu (kalimatnya membungkus
+   ke baris kedua) -- bukan blok tanggal di kanan yang terlempar ke
+   bawah, seperti di Masterlist yang kalimat ringkasnya panjang. */
+.board-head > :first-child {
+  flex: 1 1 24rem;
+  min-width: 0;
 }
 .board-title {
   font-family: var(--font-display);
@@ -987,7 +994,8 @@ button.site-nav-link {
   flex-wrap: wrap;
   font-family: var(--font-mono);
   font-size: var(--t-xs);
-  color: rgba(255, 255, 255, 0.45);
+  /* 0,62: 6,4:1 di atas navy -- 0,45 dulu hanya 4,41:1 */
+  color: rgba(255, 255, 255, 0.62);
 }
 
 
@@ -1007,8 +1015,8 @@ button.site-nav-link {
   color: var(--n-600);
 }
 .controlbar .mode-tabs button:hover:not(.active) {
-  background: #fff;
-  color: var(--p-600);
+  background: var(--surface);
+  color: var(--tp-600);
 }
 .controlbar .mode-tabs button.active {
   background: var(--p-600);

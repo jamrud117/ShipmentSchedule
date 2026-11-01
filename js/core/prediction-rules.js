@@ -197,14 +197,3 @@ function rankPredictionRules(rules, ctx) {
 function pickPredictionRule(rules, ctx) {
   return rankPredictionRules(rules, ctx)[0] || null;
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    predictionMatchScore,
-    pickPredictionRule,
-    rankPredictionRules,
-    pickRouteValue,
-    normalizeDayRange,
-    planningDayValue,
-  };
-}

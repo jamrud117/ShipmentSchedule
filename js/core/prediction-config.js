@@ -916,7 +916,3 @@ const PREDICTION_CONFIG = {
     ],
   },
 };
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { PREDICTION_CONFIG };
-}

@@ -278,6 +278,7 @@ function showLoginView() {
     const el = $(sel);
     if (el) el.classList.add("d-none");
   });
+  delete document.documentElement.dataset.halaman;
   aturKerangka(false);
   const footer = $("#appFooter");
   if (footer) footer.classList.add("d-none");
@@ -346,7 +347,7 @@ async function handleLoginSubmit() {
      kedua membuka #/edit/<id> setelah jadwalnya ada. */
   router();
   await loadShipments();
-  router();
+  routerSesudahMuat();
 }
 
 $("#btnLogin").addEventListener("click", handleLoginSubmit);

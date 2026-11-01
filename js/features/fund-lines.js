@@ -312,11 +312,6 @@ function fundLinePpnNilai(nilai, baris) {
   return p === 0 ? 0 : p;
 }
 
-// PPN sebuah pos BIAYA, dibulatkan ke rupiah penuh seperti di tagihan.
-function fundLinePpn(baris) {
-  return barisDiskon(baris) ? 0 : fundLinePpnNilai(fundLineAmount(baris), baris);
-}
-
 /* PPN PER BARIS -- dengan KELOMPOK PEMBULATAN.
 
    Biasanya tiap baris dibulatkan sendiri (seperti tagihan forwarder,
@@ -592,32 +587,6 @@ function fundLinesRumusGagal(lines) {
   return (Array.isArray(lines) ? lines : []).some((b) => adalahRumus(b && b.amount));
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    parseRupiah,
-    formatRupiah,
-    hitungRumus,
-    FUND_PPN_RATES,
-    FUND_PPH23_RATE,
-    fundLineAmount,
-    fundLineRate,
-    fundLinePpn,
-    fundLinePpnDaftar,
-    fundSemuaNomor,
-    fundLineValues,
-    fundLineTotals,
-    fundLineBaru,
-    fundLinesBersih,
-    normalisasiBarisDana,
-    fundKunciAwb,
-    fundTanpaPecahAwb,
-    fundDaftarAwb,
-    fundBagiPerAwb,
-    fundTautanAwbHilang,
-    fundRapikanTautanAwb,
-  };
-}
-
 /* ------------------------------------------------------------------
    TAMPILAN TABEL RINCIAN
 
@@ -684,22 +653,22 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
   const kolomAwb = daftarAwb && daftarAwb.length > 1 ? selAwbHtml(b, daftarAwb) : "";
   const tombolHapus = `
         <td class="fl-act">
-          <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}">
-            <i class="bi bi-x-lg"></i>
+          <button type="button" class="rm-row" data-fl-del="${i}" title="${escapeAttr(t("f.hapus.baris"))}" aria-label="${escapeAttr(t("f.hapus.baris"))}">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
           </button>
         </td>`;
-  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0">`;
+  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0" aria-label="${escapeAttr(t("f.nilai.rp"))}">`;
   /* data-label: judul kolomnya, tampil di atas isian saat tabel ini jadi
      kartu di layar sempit (docnum.css, @container tabel-isian). */
   const selTarif = `
-        <td class="fl-rate" data-label="PPN"><select data-fl-f="ppnRate">${pilihanTarifHtml(b)}</select></td>
+        <td class="fl-rate" data-label="PPN"><select data-fl-f="ppnRate" aria-label="${escapeAttr(tt("Tarif PPN", "VAT rate"))}">${pilihanTarifHtml(b)}</select></td>
         <td class="fl-amt fl-ppn" data-label="PPN (Rp)">${teksPpnSel(ppn)}</td>${tombolHapus}`;
   const labelNilai = escapeAttr(t("f.nilai.rp"));
   if (!barisDiskon(b)) {
     return `
       <tr data-fl="${i}">
         <td class="fl-no">${i + 1}</td>
-        <td class="fl-desc"><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
+        <td class="fl-desc"><input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(t("f.uraian"))}" aria-label="${escapeAttr(t("f.uraian"))}"></td>${kolomAwb}
         <td class="fl-amt" data-label="${labelNilai}">${kotakNilai}</td>${selTarif}
       </tr>`;
   }
@@ -709,7 +678,7 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
         <td class="fl-desc">
           <div class="fl-desc-diskon">
             <span class="fl-tag-diskon">${escapeHtml(tt("Diskon", "Discount"))}</span>
-            <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
+            <input type="text" data-fl-f="desc" value="${escapeAttr(b.desc || "")}" placeholder="${escapeAttr(tt("Keterangan diskon", "Discount description"))}" aria-label="${escapeAttr(tt("Keterangan diskon", "Discount description"))}">
           </div>
         </td>${kolomAwb}
         <td class="fl-amt" data-label="${labelNilai}">
@@ -796,10 +765,11 @@ function renderFundDokumen() {
     <div class="fd-baris" data-fd="${escapeAttr(d.id)}">
       <span class="fd-jenis fd-jenis--${d.jenis}">${escapeHtml(fundDokNama(d.jenis))}</span>
       <input type="text" class="form-control form-control-sm" data-fd-f="nomor" value="${escapeAttr(d.nomor)}"
-        placeholder="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}">
+        placeholder="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}"
+        aria-label="${escapeAttr(tt(`Nomor ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} number`))}">
       <input type="date" class="form-control form-control-sm" data-fd-f="tanggal" value="${escapeAttr(d.tanggal)}"
-        title="${escapeAttr(tt("Tanggal dokumen", "Document date"))}">
-      <button type="button" class="rm-row" data-fd-del="${escapeAttr(d.id)}" title="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}"><i class="bi bi-x-lg"></i></button>
+        title="${escapeAttr(tt("Tanggal dokumen", "Document date"))}" aria-label="${escapeAttr(tt(`Tanggal ${fundDokNama(d.jenis)}`, `${fundDokNama(d.jenis)} date`))}">
+      <button type="button" class="rm-row" data-fd-del="${escapeAttr(d.id)}" title="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}" aria-label="${escapeAttr(tt("Hapus dokumen ini", "Remove this document"))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
     </div>`).join("");
 }
 
@@ -1072,7 +1042,7 @@ if (fundDokListEl) {
       tt(`${nama} beserta ${isi.length} baris rinciannya akan dihapus dari pengajuan ini. Dokumen lain tidak berubah.`,
         `${nama} and its ${isi.length} cost line(s) will be removed from this request. Other documents stay as they are.`),
       hapus,
-      { title: tt(`Hapus ${fundDokNama(dok.jenis)}?`, `Remove ${fundDokNama(dok.jenis)}?`), confirmText: tt("Ya, Hapus", "Yes, Remove"), icon: "bi-trash3" });
+      { title: tt(`Hapus ${fundDokNama(dok.jenis)}?`, `Remove ${fundDokNama(dok.jenis)}?`), confirmText: tt(`Hapus ${fundDokNama(dok.jenis)}`, `Remove ${fundDokNama(dok.jenis)}`), icon: "bi-trash3" });
   });
 }
 // Nomor invoice utama diketik -> judul kelompok utama ikut

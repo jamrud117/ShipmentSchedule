@@ -64,13 +64,37 @@ body {
   --s-warn: #b5730f;
   --s-warn-bg: #fdf6e9;
   --s-warn-line: #e9d3a6;
+  /* --s-warn hanya 3,87:1 di atas putih: cukup untuk ikon & garis
+     (3:1), tidak untuk TEKS kecil. Teks peringatan memakai ini (5,78:1
+     di putih, 5,37:1 di --s-warn-bg). */
+  --s-warn-ink: #8f5a0b;
   --s-danger: #c0392b;
   --s-danger-bg: #fdf1ef;
   --s-danger-line: #f0c4bd;
+  --s-danger-hover: #a5301f;
   --s-ok: var(--p-600);
   --s-ok-bg: var(--p-50);
   --s-ok-line: var(--p-200);
+  /* Hijau HANYA untuk "berhasil" (toast, lunas) -- bukan aksen. 5,32:1. */
+  --s-success: #1e7a4d;
+  --s-success-bg: #edf7f1;
+  --s-success-line: #bfe0cd;
   --s-info: #3f5fb8;
+  --s-info-bg: #eef1fb;
+  --s-info-line: #c9d3f0;
+
+  /* ---- Teks di atas putih / kertas. Ketiganya lolos AA (4,5:1).
+     --n-400 BUKAN warna teks (2,62:1) -- hanya ikon & garis hias. ---- */
+  --text-muted: var(--n-600);
+  --text-subtle: var(--n-500);
+  /* Teks contoh di dalam isian: 4,54:1 -- terbaca, tetap jelas lebih
+     pucat dari isian sungguhan (--n-800, 13,6:1). */
+  --text-placeholder: #6b7789;
+
+  /* ---- Ukuran kontrol: tombol & isian satu baris ---- */
+  --ctl-h-sm: 32px;
+  --ctl-h: 38px;
+  --ctl-h-lg: 42px;
 
   /* ---- Radius ---- */
   --r-xs: 5px;
@@ -133,7 +157,6 @@ body {
 
   /* ALIAS — nama lama tetap hidup supaya seluruh aturan CSS yang sudah */
   --navy: var(--d-900);
-  --navy-2: var(--d-800);
   --ocean: var(--d-600);
   --teal: var(--sec-600);
   --teal-dark: var(--sec-700);
@@ -158,4 +181,275 @@ body {
      3,46:1 di atas putih dan 3,23:1 di atas kertas — cukup terlihat
      tanpa berubah jadi kotak bergaris tebal. */
   --border-control: #7d8b9f;
+
+  /* ---- TEKS BERAKSEN --------------------------------------------
+     Aksen kuat (--p-500..700, navy, kuningan, warna status) dipakai
+     sebagai ISIAN (tombol, titik, garis) sekaligus sebagai WARNA TEKS.
+     Di mode gelap keduanya tidak bisa satu nilai: isian tetap gelap
+     supaya teks putih di atasnya terbaca, teksnya harus terang. Aturan
+     `color:` memakai --tp-* / --tsec-* / --ts-*; isian tetap --p-*. */
+  --tp-500: var(--p-500);
+  --tp-600: var(--p-600);
+  --tp-700: var(--p-700);
+  --tsec-600: var(--sec-600);
+  --tsec-700: var(--sec-700);
+  --ts-danger: var(--s-danger);
+  --ts-warn: var(--s-warn);
+  --ts-success: var(--s-success);
+  --ts-info: var(--s-info);
+  --ts-ok: var(--s-ok);
+  /* Teks terang di atas permukaan navy (tetap di kedua tema) */
+  --teks-di-navy: #b4cde6;
+  /* Isian putih di atas permukaan navy / biru langkah aktif (tetap di kedua tema) */
+  --isi-di-navy: #ffffff;
+
+  /* ---- WARNA KHUSUS KOMPONEN ------------------------------------
+     Warna lepas komponen (lencana, pita status, latar sorot) sebagai
+     token supaya mode gelap bisa menggantinya. Nama = peran + nilai
+     terangnya: --w-bg-* latar, --w-garis-* tepi, --w-teks-* teks. */
+  --w-bg-d6efe1: #d6efe1;
+  --w-bg-e3f4ee: #e3f4ee;
+  --w-bg-e3f6ea: #e3f6ea;
+  --w-bg-e7f0ff: #e7f0ff;
+  --w-bg-e8f5ee: #e8f5ee;
+  --w-bg-e9f9ee: #e9f9ee;
+  --w-bg-eaf0f8: #eaf0f8;
+  --w-bg-edf7f1: #edf7f1;
+  --w-bg-eef2f6: #eef2f6;
+  --w-bg-eef2fc: #eef2fc;
+  --w-bg-eef6ff: #eef6ff;
+  --w-bg-efeffb: #efeffb;
+  --w-bg-eff2fb: #eff2fb;
+  --w-bg-f2fbf8: #f2fbf8;
+  --w-bg-f3c6c6: #f3c6c6;
+  --w-bg-f3eefe: #f3eefe;
+  --w-bg-f7fafd: #f7fafd;
+  --w-bg-f8fafc: #f8fafc;
+  --w-bg-fbfcfe: #fbfcfe;
+  --w-bg-fbfdff: #fbfdff;
+  --w-bg-fde2de: #fde2de;
+  --w-bg-fde7e4: #fde7e4;
+  --w-bg-fdeaea: #fdeaea;
+  --w-bg-ffe7cc: #ffe7cc;
+  --w-bg-ffefcc: #ffefcc;
+  --w-bg-fff3de: #fff3de;
+  --w-bg-fff3e0: #fff3e0;
+  --w-bg-fff4e0: #fff4e0;
+  --w-bg-fff6f6: #fff6f6;
+  --w-bg-fff7e6: #fff7e6;
+  --w-bg-fff7e9: #fff7e9;
+  --w-bg-fff7ed: #fff7ed;
+  --w-bg-fff8f7: #fff8f7;
+  --w-bg-fffaf0: #fffaf0;
+  --w-bg-fffafa: #fffafa;
+  --w-garis-b7e0c8: #b7e0c8;
+  --w-garis-bfe0cc: #bfe0cc;
+  --w-garis-c9d3f0: #c9d3f0;
+  --w-garis-c9edd6: #c9edd6;
+  --w-garis-d5def6: #d5def6;
+  --w-garis-d5e8fb: #d5e8fb;
+  --w-garis-dcdafb: #dcdafb;
+  --w-garis-e3d9fb: #e3d9fb;
+  --w-garis-f1d9a6: #f1d9a6;
+  --w-garis-f3c6c6: #f3c6c6;
+  --w-garis-f6d4cf: #f6d4cf;
+  --w-garis-f7e2b8: #f7e2b8;
+  --w-garis-fce6c2: #fce6c2;
+  --w-garis-fdba74: #fdba74;
+  --w-garis-ffd8a8: #ffd8a8;
+  --w-teks-0f6b52: #0f6b52;
+  --w-teks-146c43: #146c43;
+  --w-teks-15803d: #15803d;
+  --w-teks-1a8a4d: #1a8a4d;
+  --w-teks-1b2a41: #1b2a41;
+  --w-teks-1d4ed8: #1d4ed8;
+  --w-teks-1e7a4d: #1e7a4d;
+  --w-teks-1f7a56: #1f7a56;
+  --w-teks-5347c7: #5347c7;
+  --w-teks-6a3fc2: #6a3fc2;
+  --w-teks-7a4f0c: #7a4f0c;
+  --w-teks-8a5a00: #8a5a00;
+  --w-teks-95610c: #95610c;
+  --w-teks-9a3412: #9a3412;
+  --w-teks-a35a00: #a35a00;
+  --w-teks-b26a00: #b26a00;
+  --w-teks-b42318: #b42318;
+  --w-teks-b45309: #b45309;
+  --w-teks-b91c1c: #b91c1c;
+  --w-teks-d9932c: #d9932c;
+}
+
+/* ==================================================================
+   MODE GELAP
+
+   <html data-tema="gelap"> (js/core/tema.js; pilihan Terang / Gelap /
+   Ikuti sistem tersimpan per peramban). Hanya layar: cetakan selalu
+   terang. Bootstrap ikut lewat data-bs-theme="dark" + variabelnya
+   diarahkan ke token yang sama.
+
+   Netral DIBALIK: --n-50 (kertas) jadi latar tergelap, --n-900 (tinta)
+   jadi teks paling terang -- seluruh aturan yang memakai tangga netral
+   ikut tanpa disentuh. Aksen kuat tetap isian gelap-sedang (teks putih
+   di atasnya tetap terbaca); teks beraksen memakai --tp-* yang terang.
+   Permukaan navy (sidebar, bilah atas, toast) tetap navy.
+================================================================== */
+@media screen {
+  :root[data-tema="gelap"] {
+    color-scheme: dark;
+
+    --n-50: #0c1422;
+    --n-100: #131d2f;
+    --n-200: #25324a;
+    --n-300: #35455f;
+    --n-400: #6d7c94;
+    --n-500: #9aa9bd;
+    --n-600: #b4c0d1;
+    --n-700: #cbd5e2;
+    --n-800: #e0e7f0;
+    --n-900: #eef2f8;
+
+    --p-50: #13233a;
+    --p-100: #182d4a;
+    --p-200: #27476f;
+    --p-300: #3c6697;
+    --p-400: #5b8dc5;
+    --p-500: #3570b0;
+    --p-600: #2a5f9a;
+    --p-700: #3a78bd;
+    --tp-500: #8fbaea;
+    --tp-600: #a9cbf1;
+    --tp-700: #d6e5f7;
+
+    --sec-50: #251f13;
+    --sec-100: #2f271a;
+    --sec-200: #4e3f23;
+    --tsec-600: #dcb96f;
+    --tsec-700: #e7cd95;
+
+    --s-warn-bg: #2b2313;
+    --s-warn-line: #5b4621;
+    --s-warn-ink: #f0c472;
+    --s-danger-bg: #321a18;
+    --s-danger-line: #6a2f29;
+    --s-ok: #a9cbf1;
+    --s-success-bg: #11291d;
+    --s-success-line: #24523b;
+    --s-info-bg: #171f39;
+    --s-info-line: #2d3b68;
+    --ts-danger: #f2837a;
+    --ts-warn: #f0bd61;
+    --ts-success: #6fd6a3;
+    --ts-info: #a3b5f0;
+    --ts-ok: #a9cbf1;
+
+    --text-placeholder: #7f8ca2;
+    --surface: #121c2e;
+    --border-control: #61728c;
+
+    --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sh-md: 0 4px 12px -4px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.3);
+    --sh-lg: 0 14px 32px -14px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.35);
+    --sh-panel: -22px 0 60px -30px rgba(0, 0, 0, 0.8);
+    --sh-focus: 0 0 0 3px rgba(122, 170, 230, 0.35);
+    --focus-ring: #7aaae6;
+
+    --w-bg-d6efe1: #273f32;
+    --w-bg-e3f4ee: #243a32;
+    --w-bg-e3f6ea: #213c2b;
+    --w-bg-e7f0ff: #1d283a;
+    --w-bg-e8f5ee: #24382d;
+    --w-bg-e9f9ee: #1f3b27;
+    --w-bg-eaf0f8: #202b39;
+    --w-bg-edf7f1: #23352a;
+    --w-bg-eef2f6: #252c34;
+    --w-bg-eef2fc: #1d2539;
+    --w-bg-eef6ff: #1c2938;
+    --w-bg-efeffb: #1d1d39;
+    --w-bg-eff2fb: #1d2439;
+    --w-bg-f2fbf8: #1e362e;
+    --w-bg-f3c6c6: #482424;
+    --w-bg-f3eefe: #251c38;
+    --w-bg-f7fafd: #1b2836;
+    --w-bg-f8fafc: #202831;
+    --w-bg-fbfcfe: #1a2334;
+    --w-bg-fbfdff: #1a2734;
+    --w-bg-fde2de: #3d231f;
+    --w-bg-fde7e4: #3c221e;
+    --w-bg-fdeaea: #3a1d1d;
+    --w-bg-ffe7cc: #423321;
+    --w-bg-ffefcc: #423821;
+    --w-bg-fff3de: #3d321f;
+    --w-bg-fff3e0: #3c311e;
+    --w-bg-fff4e0: #3c321e;
+    --w-bg-fff6f6: #361b1b;
+    --w-bg-fff7e6: #3a311d;
+    --w-bg-fff7e9: #392f1d;
+    --w-bg-fff7ed: #382c1c;
+    --w-bg-fff8f7: #351e1b;
+    --w-bg-fffaf0: #372e1c;
+    --w-bg-fffafa: #341a1a;
+    --w-garis-b7e0c8: #3e654e;
+    --w-garis-bfe0cc: #40624d;
+    --w-garis-c9d3f0: #344167;
+    --w-garis-c9edd6: #366547;
+    --w-garis-d5def6: #324064;
+    --w-garis-d5e8fb: #324b63;
+    --w-garis-dcdafb: #353262;
+    --w-garis-e3d9fb: #403263;
+    --w-garis-f1d9a6: #6d5b37;
+    --w-garis-f3c6c6: #673434;
+    --w-garis-f6d4cf: #653933;
+    --w-garis-f7e2b8: #695735;
+    --w-garis-fce6c2: #665333;
+    --w-garis-fdba74: #73573a;
+    --w-garis-ffd8a8: #6a5235;
+    --w-teks-0f6b52: #a5ebd8;
+    --w-teks-146c43: #a4e7c8;
+    --w-teks-15803d: #93e5b2;
+    --w-teks-1a8a4d: #8ae0b1;
+    --w-teks-1b2a41: #c7d3e4;
+    --w-teks-1d4ed8: #7995e1;
+    --w-teks-1e7a4d: #97debb;
+    --w-teks-1f7a56: #97ddc1;
+    --w-teks-5347c7: #8f88d2;
+    --w-teks-6a3fc2: #a189d1;
+    --w-teks-7a4f0c: #e9cb9c;
+    --w-teks-8a5a00: #e8cd99;
+    --w-teks-95610c: #e5c288;
+    --w-teks-9a3412: #e39980;
+    --w-teks-a35a00: #e4bb87;
+    --w-teks-b26a00: #e2b97c;
+    --w-teks-b42318: #e18179;
+    --w-teks-b45309: #e1a679;
+    --w-teks-b91c1c: #e17a7a;
+    --w-teks-d9932c: #deb77d;
+
+    /* Bootstrap (data-bs-theme="dark") memakai warna kita */
+    --bs-body-bg: var(--n-50);
+    --bs-body-color: var(--n-800);
+    --bs-emphasis-color: var(--n-900);
+    --bs-secondary-color: var(--n-600);
+    --bs-secondary-bg: var(--n-100);
+    --bs-tertiary-bg: var(--n-100);
+    --bs-border-color: var(--n-200);
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.1);
+    --bs-link-color: var(--tp-500);
+    --bs-link-hover-color: var(--tp-600);
+    --bs-link-color-rgb: 143, 186, 234;
+    --bs-link-hover-color-rgb: 169, 203, 241;
+  }
+  :root[data-tema="gelap"],
+  :root[data-tema="gelap"] body {
+    background: var(--n-50);
+    color: var(--n-900);
+  }
+  /* Kotak yang Bootstrap beri latar sendiri */
+  :root[data-tema="gelap"] .modal-content,
+  :root[data-tema="gelap"] .dropdown-menu,
+  :root[data-tema="gelap"] .popover {
+    --bs-modal-bg: var(--surface);
+    --bs-dropdown-bg: var(--surface);
+    --bs-popover-bg: var(--surface);
+  }
 }

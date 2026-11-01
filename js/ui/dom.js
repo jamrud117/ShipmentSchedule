@@ -66,31 +66,25 @@ document.addEventListener("click", (e) => {
   }
 });
 
-/* AUTO-LEBAR INPUT */
-let __textSizer = null;
-/* `gaya` boleh diberikan kalau pemanggilnya SUDAH menghitungnya.
+/* AUTO-LEBAR INPUT
 
-   getComputedStyle memaksa peramban menyelesaikan perhitungan gaya
-   saat itu juga. Dulu autoSizeInput memanggilnya sekali untuk padding,
-   lalu fungsi ini memanggilnya LAGI untuk font — pada elemen yang
-   sama, dua kali kerja yang sama per baris tabel. */
+   Lebar teks diukur di kanvas (measureText), bukan lewat <span> di luar
+   layar: membaca offsetWidth span memaksa peramban menata ulang seluruh
+   halaman SEKALI PER KOTAK -- di form jadwal (satu kotak kemasan per
+   barang) itu setengah waktu membuka form.
+
+   `gaya` boleh diberikan kalau pemanggilnya SUDAH menghitungnya
+   (getComputedStyle memaksa perhitungan gaya saat itu juga). */
+let __kanvasUkur;
 function measureTextWidth(el, text, gaya) {
-  if (!__textSizer) {
-    __textSizer = document.createElement("span");
-    __textSizer.setAttribute("aria-hidden", "true");
-    __textSizer.style.cssText =
-      "position:absolute;left:-9999px;top:-9999px;white-space:pre;visibility:hidden;padding:0;margin:0;border:0";
-    document.body.appendChild(__textSizer);
-  }
+  if (__kanvasUkur === undefined) __kanvasUkur = document.createElement("canvas").getContext("2d");
+  if (!__kanvasUkur) return 0;
   const cs = gaya || getComputedStyle(el);
-  __textSizer.style.fontFamily = cs.fontFamily;
-  __textSizer.style.fontSize = cs.fontSize;
-  __textSizer.style.fontWeight = cs.fontWeight;
-  __textSizer.style.fontStyle = cs.fontStyle;
-  __textSizer.style.letterSpacing = cs.letterSpacing;
-  __textSizer.style.textTransform = cs.textTransform;
-  __textSizer.textContent = text || "";
-  return __textSizer.offsetWidth;
+  const k = __kanvasUkur;
+  k.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  if ("letterSpacing" in k) k.letterSpacing = cs.letterSpacing === "normal" ? "0px" : cs.letterSpacing;
+  const teks = String(text || "");
+  return k.measureText(cs.textTransform === "uppercase" ? teks.toUpperCase() : cs.textTransform === "lowercase" ? teks.toLowerCase() : teks).width;
 }
 
 // Lebar input = lebar teks + padding + border, dibatasi min/max PIKSEL

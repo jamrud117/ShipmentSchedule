@@ -347,25 +347,40 @@ function ciplBarisTeks(teks) {
     .filter(Boolean);
 }
 
+
 /* ==================================================================
    COMMERCIAL INVOICE & PACKING LIST — DYNAMIC DESIGN (desain formal)
 
-   Disusun seperti dokumen ekspor profesional, dibaca dari atas:
-     judul + nomor/tanggal dokumen (kanan atas)
-     tiga kartu pihak: Shipper/Exporter, Consignee/Buyer, Notify Party
-     delapan rincian pengiriman (pelabuhan, kapal, syarat, asal barang)
-     tabel barang -- kepala gelap, baris bergaris tipis, angka rata kanan
+   Disusun sebagai MODEL KISI (cipl-tata.js). Lembar cetak (ttHtml) dan
+   lembar Excel (ttExcel) digambar dari model yang SAMA -- kolom, baris,
+   gabungan sel, garis, huruf, pemotongan baris -- jadi keduanya sama
+   persis, dan Excel-nya cukup 11 kolom dengan satu sel per kotak.
+
+   Dibaca dari atas:
+     judul (garis hitam di bawahnya)
+     kartu pihak: Shipper | Document reference, Consignee | Notify Party
+     delapan rincian pengiriman (2 pita x 4)
+     tabel barang -- kepala navy, baris bergaris tipis, TOTAL satu baris
      ruang kosong yang mendorong bagian akhir ke dasar halaman
-     kiri: terbilang & pernyataan (CI) / rincian kemasan (PL)
-     kanan: kotak total
-     tanda tangan 50 mm (muat stempel)
+     kiri: Packing details (PL); kanan: tanda tangan 50 mm (muat stempel)
    Mata uang SELALU di kiri angkanya: "USD 4,500".
+
+   KISI KOLOM (11 + 1 bila kotak Packing details perlu batas sendiri):
+     A | No | Item | Type | HS Code | celah | Qty | Unit | Harga/NW | Jumlah/GW | K
+   A & K = tepi dalam bingkai. "celah" = jarak 8 px antara kartu kiri &
+   kanan, di tabel menyatu dengan kolom HS Code.
 ================================================================== */
 const CIPL_ASAL_BARANG = "INDONESIA";
-
-function ciplDdKepala(judul) {
-  return `<header class="dd-kepala"><div class="dd-judul">${escapeHtml(judul)}</div></header>`;
-}
+const DD_WARNA = {
+  navy: "#1f2a44", teks: "#222222", abu: "#777777", putih: "#ffffff",
+  garisRinci: "#c8c8c8", garisRinciDalam: "#e4e4e4", garisBarang: "#e2e2e2",
+  zebra: "#fafafa", total: "#eeeeee", bingkai: "#222222",
+};
+const DD_ISI_MM = 176.94; // 190 mm bingkai - 2 x 2 px garis - 2 x 6 mm jarak dalam
+const DD_TABEL_PERSEN = [4, 18, 24, 12, 7, 7, 14, 14];
+const CIPL_TTD_MM = 50; // kotak tanda tangan di kertas, muat stempel perusahaan
+const DD_PAD = ttPx(10); // 9 px jarak + 1 px garis kartu
+const ddH = (s, o) => ttH("arial", s, Object.assign({ c: DD_WARNA.teks }, o || {}));
 
 /* NOMOR + TANGGAL satu baris: nomor di kiri, tanggalnya menempel ke
    kanan kotak ("DD-260928-DDI-01_R1 ........ 28 SEP 2026"), tanpa tanda
@@ -390,8 +405,6 @@ function ciplRefBaris(row) {
   ];
 }
 
-/* PIHAK: Shipper & Consignee bertumpuk di kiri; di kanan Referensi
-   dokumen (atas) dan Notify Party (bawah, setinggi consignee). */
 /* Baris kotak Consignee: nama pembeli lalu alamatnya (cetak & Excel),
    KAPITAL semua -- lihat ciplKapital(). */
 function ciplKonsigneeBaris(row, shipment) {
@@ -401,33 +414,6 @@ function ciplKonsigneeBaris(row, shipment) {
     .map(ciplKapital);
 }
 
-function ciplDdPihak(row, shipment) {
-  const p = row.payload || {};
-  const consignee = ciplKonsigneeBaris(row, shipment);
-  /* `satuBaris`: tiap baris alamat di kartu ini dijaga tetap SATU baris
-     (ciplPasSatuBaris). Kapital lebih lebar daripada Huruf Awal Kapital,
-     jadi baris yang dulu pas bisa kini menyisakan satu kata (kode pos)
-     di baris sendiri. */
-  const kartu = (kelas, judul, isi, satuBaris) => `
-    <div class="dd-kartu ${kelas}">
-      <div class="dd-kartu-h">${escapeHtml(judul)}</div>
-      <div class="dd-kartu-b"${satuBaris ? " data-satu-baris" : ""}>${isi}</div>
-    </div>`;
-  const baris = (arr) => arr.map((x, i) => `<div${i === 0 ? ' class="dd-nama"' : ""}>${escapeHtml(x)}</div>`).join("");
-  const ref = ciplRefBaris(row)
-    .map(([k, v]) => `<div class="dd-ref-k">${escapeHtml(k)}</div>${v
-      .map((x) => `<div class="dd-ref-v"><span>${escapeHtml(x.no)}</span>${x.tgl ? `<span class="dd-ref-tgl">${escapeHtml(x.tgl)}</span>` : ""}</div>`)
-      .join("")}`)
-    .join("");
-  return `
-    <section class="dd-pihak">
-      ${kartu("dd-shipper", "Shipper / Exporter", baris(CIPL_SHIPPER), true)}
-      ${kartu("dd-ref", "Document reference", ref)}
-      ${kartu("dd-consignee", "Consignee / Buyer", baris(consignee), true)}
-      ${kartu("dd-notify", "Notify Party", baris([ciplKapital(p.notifyParty || "SAME AS CONSIGNEE")]))}
-    </section>`;
-}
-
 /* NAMA BARANG DUA BARIS: "TYRE MOLD" di atas, jenisnya di bawah
    ("TREAD ONLY", "FULL SET", "SIDE ONLY", ...) -- kolomnya bisa lebih
    sempit dan daftar barang lebih mudah dipindai. Nama lain apa adanya. */
@@ -435,17 +421,7 @@ function ciplNamaDuaBaris(nama) {
   const m = String(nama || "").match(/^(T[YI]RE\s+MOLDS?)\s+(.+)$/i);
   return m ? [m[1], m[2]] : [String(nama || "")];
 }
-const ciplNamaHtml = (nama) => ciplNamaDuaBaris(nama).map(escapeHtml).join("<br>");
 
-/* Mata uang di KIRI angka; desimal SERAGAM satu kolom -- kalau ada satu
-   saja harga bersen, semuanya ditulis dua desimal (6,300.25 & 5,800.00),
-   bukan campur. */
-function ciplDdPemformatUang(mata, nilai) {
-  const fmt = ciplFormatUang(mata, nilai);
-  const teks = (n) => fmt.teks(n);
-  teks.sel = (n) => `<td class="dd-angka">${escapeHtml(fmt.teks(n))}</td>`;
-  return teks;
-}
 /* FORMAT ANGKA BERSAMA cetak & Excel -- teks cetaknya dan format sel
    Excel-nya menampilkan hal yang sama.
    Uang: mata uang di kiri; desimal seragam satu kolom (dua desimal kalau
@@ -468,61 +444,10 @@ function ciplFormatAngka(n, satuan) {
     teks: angkaLokal(v, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) + (satuan ? ` ${satuan}` : ""),
   };
 }
-function ciplDdSelAngka(n, satuan, kelas) {
-  return `<td${kelas ? ` class="${kelas}"` : ""}>${escapeHtml(ciplFormatAngka(n, satuan).teks)}</td>`;
-}
 
-/* Kotak tanda tangan: 50 mm di kertas, muat stempel perusahaan. */
-function ciplDdTandaTangan() {
-  return `
-      <div class="dd-ttd-kotak">
-        <div>For and on behalf of</div>
-        <div class="dd-ttd-co">${escapeHtml(CIPL_PERUSAHAAN.nama)}</div>
-        <div class="dd-ttd-ruang"></div>
-        <div class="dd-ttd-garis">Authorized Signature</div>
-      </div>`;
-}
-
-
-function ciplHalamanInvoice(row, shipment, baris) {
-  const p = row.payload || {};
-  const mata = p.currency || "USD";
-  const uang = ciplDdPemformatUang(mata, baris.flatMap((b) => [b.harga, b.amount]));
-  const total = baris.reduce((x, b) => x + b.amount, 0);
-  const qty = baris.reduce((x, b) => x + (Number(b.qty) || 0), 0);
-  const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
-  return `
-  <div class="dd-halaman">
-    <div class="dd-bingkai">
-    ${ciplDdKepala(ciplJudulInvoice(row))}
-    ${ciplDdPihak(row, shipment)}
-    ${ciplDdRincian(row, shipment)}
-    <table class="dd-tabel">
-      <colgroup><col style="width:4%"><col style="width:18%"><col style="width:24%"><col style="width:12%"><col style="width:7%"><col style="width:7%"><col style="width:14%"><col style="width:14%"></colgroup>
-      <thead><tr><th>No</th><th>Item</th><th>Type</th><th>HS Code</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Amount</th></tr></thead>
-      <tbody>${baris.map((b, i) => `
-        <tr><td>${i + 1}</td><td>${ciplNamaHtml(b.item)}</td><td>${escapeHtml(b.type)}</td>
-          <td>${escapeHtml(b.hs)}</td>${ciplDdSelAngka(b.qty)}<td>${escapeHtml(b.satuan)}</td>
-          ${uang.sel(b.harga)}${uang.sel(b.amount)}</tr>`).join("")}
-      </tbody>
-      <tfoot><tr class="dd-total-baris">
-        <td colspan="4" class="dd-kiri">TOTAL</td>${ciplDdSelAngka(qty)}<td>${escapeHtml(satuan.length === 1 ? satuan[0] : "")}</td>
-        <td></td>${uang.sel(total)}
-      </tr></tfoot>
-    </table>
-    <div class="dd-ruang"></div>
-    <section class="dd-akhir">
-      <div></div>
-      ${ciplDdTandaTangan()}
-    </section>
-    </div>
-  </div>`;
-}
-
-/* ISI KOTAK PACKING DETAILS -- [teks, tebal], dipakai cetak & Excel:
-   jenis kemasan, ukuran peti (diringkas per ukuran seperti lembar Kumho),
-   MEASUREMENT (total M3), lalu jumlah koli. Jumlah koli pindah ke sini
-   dari baris TOTAL tabel. */
+/* ISI KOTAK PACKING DETAILS -- [teks, tebal]: jenis kemasan, ukuran peti
+   (diringkas per ukuran seperti lembar Kumho), MEASUREMENT (total M3),
+   lalu jumlah koli. */
 function ciplRincianKemasan(p, shipment, baris) {
   const cbm = baris.reduce((x, b) => x + b.cbmRaw, 0);
   const koli = ciplTotalKoli(shipment);
@@ -531,45 +456,6 @@ function ciplRincianKemasan(p, shipment, baris) {
     .concat(dimensi.map((teks) => [teks, false]))
     .concat(cbm ? [[`MEASUREMENT : ${ciplAngka(cbm, 3)} M³`, true]] : [])
     .concat(koli ? [[`${ciplAngka(koli)} PACKAGE${koli > 1 ? "S" : ""}`, true]] : []);
-}
-
-function ciplHalamanPacking(row, shipment, baris) {
-  const p = row.payload || {};
-  const totNw = baris.reduce((x, b) => x + b.netto, 0);
-  const totGw = baris.reduce((x, b) => x + b.bruto, 0);
-  const qty = baris.reduce((x, b) => x + (Number(b.qty) || 0), 0);
-  const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
-  const kemasan = ciplRincianKemasan(p, shipment, baris);
-  return `
-  <div class="dd-halaman ci-page2">
-    <div class="dd-bingkai">
-    ${ciplDdKepala("PACKING LIST")}
-    ${ciplDdPihak(row, shipment)}
-    ${ciplDdRincian(row, shipment)}
-    <table class="dd-tabel">
-      <colgroup><col style="width:4%"><col style="width:18%"><col style="width:24%"><col style="width:12%"><col style="width:7%"><col style="width:7%"><col style="width:14%"><col style="width:14%"></colgroup>
-      <thead><tr><th>No</th><th>Item Description</th><th>Type</th><th>HS Code</th><th>Qty</th><th>Unit</th><th>Net Weight</th><th>Gross Weight</th></tr></thead>
-      <tbody>${baris.map((b, i) => `
-        <tr><td>${i + 1}</td><td>${ciplNamaHtml(b.item)}</td><td>${escapeHtml(b.type)}</td>
-          <td>${escapeHtml(b.hs)}</td>${ciplDdSelAngka(b.qty)}<td>${escapeHtml(b.satuan)}</td>
-          ${ciplDdSelAngka(b.netto, "KG", "dd-angka")}${ciplDdSelAngka(b.bruto, "KG", "dd-angka")}</tr>`).join("")}
-      </tbody>
-      <tfoot><tr class="dd-total-baris">
-        <td colspan="4" class="dd-kiri">TOTAL</td>
-        ${ciplDdSelAngka(qty)}<td>${escapeHtml(satuan.length === 1 ? satuan[0] : "")}</td>
-        ${ciplDdSelAngka(totNw, "KG", "dd-angka")}${ciplDdSelAngka(totGw, "KG", "dd-angka")}
-      </tr></tfoot>
-    </table>
-    <div class="dd-ruang"></div>
-    <section class="dd-akhir">
-      <div class="dd-catatan dd-kemasan">
-        <div class="dd-catatan-k">Packing details</div>
-        <div class="dd-catatan-b">${kemasan.map(([teks, tebal]) => `<div${tebal ? ' class="dd-tebal"' : ""}>${escapeHtml(teks)}</div>`).join("") || "<div>—</div>"}</div>
-      </div>
-      ${ciplDdTandaTangan()}
-    </section>
-    </div>
-  </div>`;
 }
 
 /* Rincian pengiriman [label, isi] -- cetak & Excel.
@@ -592,88 +478,325 @@ function ciplDdRincianData(row, shipment) {
   ];
 }
 
-/* Isian yang WAJIB satu baris: nama pelabuhan. Ia ditulis "KOTA, NEGARA"
-   ("JAKARTA, INDONESIA") dan kolom pertama kotak ini sempit -- tanpa
-   perlakuan khusus ", INDONESIA" turun ke baris kedua. Isian lain
-   (Terms of Payment, Remarks, ...) boleh turun baris: teksnya memang
-   bisa panjang dan dikecilkan sampai tak terbaca bukan jalan keluar. */
+/* Isian yang WAJIB satu baris: nama pelabuhan ("JAKARTA, INDONESIA").
+   Hurufnya dikecilkan seperlunya (paling kecil 7 pt) supaya ", INDONESIA"
+   tidak turun sendiri; kalau tetap tak muat, dibiarkan turun baris pada
+   ukuran semula -- teks yang turun masih terbaca, yang terpotong tidak.
+   Isian lain boleh turun baris. */
 const CIPL_RINCI_SATU_BARIS = ["Port of Loading", "Final Destination"];
-
-function ciplDdRincian(row, shipment) {
-  const isi = ciplDdRincianData(row, shipment);
-  return `
-    <section class="dd-rinci">
-      ${isi.map(([k, v]) => `<div><div class="dd-rinci-k">${escapeHtml(k)}</div><div class="dd-rinci-v"${CIPL_RINCI_SATU_BARIS.includes(k) ? " data-satu-baris" : ""}>${escapeHtml(v || "—")}</div></div>`).join("")}
-    </section>`;
-}
-
-/* SATU BARIS -- dijalankan di jendela cetak, SEBELUM kotak cetak muncul.
-
-   Berlaku untuk dua hal:
-     - nilai Port of Loading / Final Destination ("JAKARTA, INDONESIA")
-     - baris alamat Shipper & Consignee
-
-   Lebar kolomnya TIDAK diubah: kolom kotak rincian sengaja sejajar
-   dengan kolom tabel barang di bawahnya dan dengan kisi Excel, dan
-   menggesernya merusak keduanya. Yang disesuaikan hurufnya -- dikecilkan
-   seperempat piksel demi seperempat piksel sampai SEMUA baris dalam
-   kelompoknya muat (biasanya cuma 2-5%, nyaris tak terlihat), tidak
-   lebih kecil dari CIPL_UKURAN_MIN_PT.
-
-   Satu KELOMPOK memakai satu ukuran huruf: satu nilai pelabuhan, atau
-   seluruh baris alamat sebuah kotak. Kalau hanya baris yang kepanjangan
-   yang mengecil, alamat di kotak itu tampil dengan dua ukuran huruf.
-
-   Kalau di ukuran terkecil pun tetap tidak muat (mis. nama pelabuhan
-   yang diketik sangat panjang), kelompok dikembalikan ke ukuran semula
-   dan dibiarkan turun baris: teks yang turun masih terbaca, teks yang
-   menembus kolom tetangga atau terpotong tidak.
-
-   Aman dipanggil di dokumen tanpa elemen itu (lembar Kumho): tidak ada
-   yang dicari, tidak ada yang berubah. */
 const CIPL_UKURAN_MIN_PT = 7;
 
-function ciplPasKelompok(els, jendela) {
-  const minPx = (CIPL_UKURAN_MIN_PT * 96) / 72;
-  const lebih = () => els.some((el) => el.scrollWidth > el.clientWidth);
-  els.forEach((el) => { el.style.whiteSpace = "nowrap"; });
-  let px = parseFloat(jendela.getComputedStyle(els[0]).fontSize);
-  while (lebih() && px - 0.25 >= minPx) {
-    px -= 0.25;
-    els.forEach((el) => { el.style.fontSize = px + "px"; });
+/* ---------------- POTONGAN MODEL ---------------- */
+
+/* Isi kotak pihak: nama tebal 9 pt (boleh turun baris), lalu alamat 8,5 pt.
+   Baris alamat dijaga SATU baris masing-masing, SATU ukuran huruf untuk
+   seluruh alamat sekotak (dikecilkan seperlunya, min. 7 pt); kalau tetap
+   tak muat, alamat dibungkus pada ukuran semula. */
+function ddIsiPihak(teks, lebar, alamatSatuBaris) {
+  const isi = [ttSpasi(ttPx(6))];
+  const [nama, ...alamat] = teks;
+  const hNama = ddH(9, { b: true });
+  ttBungkus(nama || "", hNama, lebar).forEach((tx) => isi.push(ttBaris(tx, hNama, 9 * 1.42)));
+  if (alamat.length) {
+    const s = alamatSatuBaris ? ttUkuranPas(alamat, ddH(8.5), lebar, CIPL_UKURAN_MIN_PT) : null;
+    if (s) alamat.forEach((tx) => isi.push(ttBaris(tx, ddH(s), s * 1.42)));
+    else alamat.forEach((tx) => ttTeks(tx, ddH(8.5), lebar, 1.42).forEach((b) => isi.push(b)));
   }
-  if (lebih()) {
-    /* "normal" ditulis EKSPLISIT: nowrap sudah dipasang di atas, dan
-       teks yang tak muat harus boleh turun baris lagi. */
-    els.forEach((el) => {
-      el.style.fontSize = "";
-      el.style.whiteSpace = "normal";
+  return isi;
+}
+
+/* Isi kotak Document reference: dua sel berdampingan dengan baris yang
+   sejajar -- nomor (kiri) & tanggalnya (rata kanan). */
+function ddIsiReferensi(kelompok, lebarNo, lebarLabel) {
+  const no = [ttSpasi(ttPx(6))];
+  const tgl = [ttSpasi(ttPx(6))];
+  const hK = ddH(6.8, { b: true, c: DD_WARNA.abu });
+  const hV = ddH(8.8, { b: true });
+  kelompok.forEach(([label, isi], k) => {
+    if (k) { no.push(ttSpasi(ttPx(11))); tgl.push(ttSpasi(ttPx(11))); }
+    ttBungkus(label.toUpperCase(), hK, lebarLabel).forEach((tx) => {
+      no.push(ttBaris(tx, hK, 6.8 * 1.42));
+      tgl.push(ttSpasi(6.8 * 1.42));
     });
-  }
-}
-
-function ciplPasSatuBaris(dok) {
-  const d = dok || document;
-  const jendela = d.defaultView || window;
-  const kelompok = [];
-  d.querySelectorAll(".dd-rinci-v[data-satu-baris]").forEach((el) => kelompok.push([el]));
-  /* Nama (baris pertama, tebal) tidak ikut: ia bukan alamat, dan nama
-     yang panjang lebih baik turun baris daripada mengecilkan alamatnya. */
-  d.querySelectorAll(".dd-kartu-b[data-satu-baris]").forEach((kartu) => {
-    const alamat = [...kartu.children].filter((el) => !el.classList.contains("dd-nama"));
-    if (alamat.length) kelompok.push(alamat);
+    isi.forEach((x) => {
+      ttBungkus(x.no, hV, lebarNo).forEach((tx, i) => {
+        no.push(ttBaris(tx, hV, 8.8 * 1.3));
+        tgl.push(i === 0 && x.tgl ? ttBaris(x.tgl, hV, 8.8 * 1.3) : ttSpasi(8.8 * 1.3));
+      });
+    });
   });
-  kelompok.forEach((els) => ciplPasKelompok(els, jendela));
+  return { no, tgl };
 }
 
+/* Isi satu kotak rincian: label abu-abu kecil, nilainya tebal 9 pt. */
+function ddIsiRinci(label, nilai, lebar, satuBaris) {
+  const hK = ddH(6.8, { b: true, c: DD_WARNA.abu });
+  const hV = ddH(9, { b: true });
+  const isi = [ttSpasi(ttPx(5))].concat(ttTeks(label.toUpperCase(), hK, lebar, 1.15), [ttSpasi(ttPx(2))]);
+  const teks = String(nilai || "").trim() || "—";
+  const s = (satuBaris || CIPL_RINCI_SATU_BARIS).includes(label) ? ttUkuranPas([teks], hV, lebar, CIPL_UKURAN_MIN_PT) : null;
+  return isi.concat(s ? [ttBaris(teks, ddH(s, { b: true }), s * 1.15)] : ttTeks(teks, hV, lebar, 1.15));
+}
+
+/* Sel angka (rata tengah, satu baris): dikecilkan seperlunya kalau tak muat */
+function ddSelAngka(T, r, c1, c2, nilai, fmt, teks, h, gaya) {
+  const lebar = ttLebarIsi(T, c1, c2, ttPx(5), ttPx(5));
+  const s = ttUkuranPas([teks], h, lebar, 5) || h.s;
+  return ttSel(T, r, c1, r, c2, [ttBaris(teks, Object.assign({}, h, { s }), h.s * 1.3)],
+    Object.assign({ ha: "center", va: "middle", angka: { v: nilai, fmt } }, gaya || {}));
+}
+
+/* ---------------- LEMBAR BERGAYA FORMAL (CI / PL) ----------------
+
+   Satu penyusun untuk SEMUA CI & PL bergaya Dynamic Design: lembar
+   Dynamic Design sendiri (ciplDdTata) dan lembar Kumho (ciplVnTata,
+   cipl-vn-print.js) hanya berbeda ISI -- pita kartu, rincian, kolom
+   tabel, kotak kiri bawah -- yang diserahkan lewat `spek`:
+
+     nama, judul
+     persen       8 kolom kisi tabel (%, jumlah 100); celah kartu dipotong
+                  dari ujung kolom ke-4 (kartu kiri 58% - celah, kanan 42%)
+     kartu        [{ kiri: { judul, isi(lebar) }, kanan: { judul, isi(lebar) }
+                    | { judul, referensi(lebarNo, lebarLabel) -> { no, tgl } } }]
+     rinci        8 x [label, nilai] dalam 2 pita x 4 kotak
+     tabel        { kolom: [[k1, k2] ...] (indeks kisi 0..7), kepala: [[judul, sub?]],
+                    baris: [[sel ...]], total: [sel ...] }
+                  sel = { teks: [baris...] } | { angka: { v, fmt, teks } } | null,
+                  sel total boleh { rentang: [k1, k2], teks, kiri }
+     kiriBawah    [{ judul, baris: [[teks, tebal]] }] kotak bertumpuk, selebar isinya
+     ttd          { atas: [teks...] } -- kotak tanda tangan 50 mm di kanan bawah
+*/
+function ciplTataFormal(spek) {
+  const W = DD_WARNA;
+  const isiMm = spek.persen.map((x) => (DD_ISI_MM * x) / 100);
+  const celah = ttMm(ttPx(8));
+  const tepi = 6 + ttMm(ttPx(2));
+  const kolom = [tepi, isiMm[0], isiMm[1], isiMm[2], isiMm[3] - celah, celah, isiMm[4], isiMm[5], isiMm[6], isiMm[7], tepi];
+
+  // Kotak kiri bawah selebar isinya -> satu batas kolom sendiri (dibelah)
+  const kotakKiri = spek.kiriBawah || [];
+  let belah = null;
+  let ujungKiri = null;
+  if (kotakKiri.length) {
+    const lebarPt = Math.max(...kotakKiri.map((k) => Math.max(
+      ttLebar(String(k.judul).toUpperCase(), ddH(7, { b: true })) + ttPx(20),
+      Math.max(...(k.baris.length ? k.baris : [["—", false]]).map(([tx, b]) => ttLebar(tx, ddH(8.5, { b }))) ) / TT_LONGGAR + ttPx(10) + ttPx(15),
+    )));
+    const n0 = kolom.length;
+    ujungKiri = ttBelahKolom(kolom, 1, Math.min(ttMm(lebarPt), isiMm[0] + isiMm[1] + isiMm[2]), 1.5);
+    if (kolom.length > n0) belah = ujungKiri - 1;
+  }
+  // indeks kisi tabel (0..7, plus celah) -> kolom sesungguhnya sesudah dibelah
+  const asli = [1, 2, 3, 4, 6, 7, 8, 9];
+  const geser = (i) => (belah == null || i <= belah ? i : i + 1);
+  const awal = (k) => geser(asli[k]);
+  const akhir = (k) => (belah != null && asli[k] === belah ? belah + 1 : geser(asli[k]));
+  const cA = 0, cK = kolom.length - 1;
+  const cKiri1 = awal(0), cKiri2 = akhir(3), cCelah = geser(5), cKanan1 = awal(4), cKanan2 = akhir(7);
+  const rentang = ([k1, k2]) => [awal(k1), k2 === 3.5 ? cCelah : akhir(k2)];
+
+  const T = ttTataBaru(spek.nama, kolom);
+  const tambah = (pt) => ttTambahBaris(T, pt);
+
+  // JARAK DALAM ATAS + JUDUL (garis hitam 2 px di bawahnya)
+  tambah(ttPt(6) + ttPx(2));
+  const rJudul = tambah(22 + ttPx(6));
+  ttSel(T, rJudul, cKiri1, rJudul, cKanan2, [ttBaris(spek.judul, ddH(20, { b: true }), 22)], { ha: "center" });
+  ttGaris(T, rJudul, cKiri1, rJudul, cKanan2, "bawah", { w: 2, warna: W.bingkai });
+  tambah(ttPx(10) + ttPx(2));
+
+  // PITA KARTU: kepala navy + badan; dua kartu berdampingan berbagi baris
+  const lebarKiri = ttLebarIsi(T, cKiri1, cKiri2, DD_PAD, DD_PAD);
+  const lebarKanan = ttLebarIsi(T, cKanan1, cKanan2, DD_PAD, DD_PAD);
+  const lebarNo = ttLebarIsi(T, cKanan1, cKanan2 - 1, DD_PAD, ttPx(8));
+  const kepalaKartu = (r, c1, c2, teks) => ttSel(T, r, c1, r, c2, [ttBaris(String(teks).toUpperCase(), ddH(7, { b: true, c: W.putih }), 7 * 1.15)],
+    { fill: W.navy, va: "middle", padL: DD_PAD });
+  spek.kartu.forEach((pita, i) => {
+    if (i) tambah(ttPx(8));
+    const isiKiri = pita.kiri.isi(lebarKiri);
+    let tinggiKanan;
+    let pasangKanan;
+    if (pita.kanan.referensi) {
+      const ref = pita.kanan.referensi(lebarNo, lebarKanan);
+      tinggiKanan = ttTinggiIsi(ref.no);
+      pasangKanan = (r) => {
+        ttSel(T, r, cKanan1, r, cKanan2 - 1, ref.no, { padL: DD_PAD });
+        ttSel(T, r, cKanan2, r, cKanan2, ref.tgl, { ha: "right", padR: DD_PAD });
+      };
+    } else {
+      const isi = pita.kanan.isi(lebarKanan);
+      tinggiKanan = ttTinggiIsi(isi);
+      pasangKanan = (r) => ttSel(T, r, cKanan1, r, cKanan2, isi, { padL: DD_PAD, padR: DD_PAD });
+    }
+    const rK = tambah(ttPx(8) + 7 * 1.15 + ttPx(1));
+    kepalaKartu(rK, cKiri1, cKiri2, pita.kiri.judul);
+    kepalaKartu(rK, cKanan1, cKanan2, pita.kanan.judul);
+    const rB = tambah(Math.max(ttTinggiIsi(isiKiri), tinggiKanan) + ttPx(7) + ttPx(1));
+    ttSel(T, rB, cKiri1, rB, cKiri2, isiKiri, { padL: DD_PAD, padR: DD_PAD });
+    pasangKanan(rB);
+    ttKotak(T, rK, cKiri1, rB, cKiri2, { warna: W.navy });
+    ttKotak(T, rK, cKanan1, rB, cKanan2, { warna: W.navy });
+  });
+  tambah(ttPx(8));
+
+  // RINCIAN PENGIRIMAN: 2 pita x 4 kotak (22% | 24% | 26% | 28% dari kisi DD)
+  const kelompok = (spek.rinciKelompok || [[0, 1], [2, 2], [3, 5], [6, 7]]).map(([k1, k2]) => [awal(k1), akhir(k2)]);
+  const rRinci = [];
+  [0, 1].forEach((pitaKe) => {
+    const isi = kelompok.map(([c1, c2], k) => {
+      const [label, nilai] = spek.rinci[pitaKe * 4 + k];
+      return ddIsiRinci(label, nilai, ttLebarIsi(T, c1, c2, DD_PAD, DD_PAD), spek.rinciSatuBaris || CIPL_RINCI_SATU_BARIS);
+    });
+    const r = tambah(Math.max(...isi.map(ttTinggiIsi)) + ttPx(5) + ttPx(1));
+    kelompok.forEach(([c1, c2], k) => {
+      ttSel(T, r, c1, r, c2, isi[k], { padL: DD_PAD, padR: DD_PAD });
+      if (k < 3) ttGaris(T, r, c1, r, c2, "kanan", { warna: W.garisRinciDalam });
+    });
+    rRinci.push(r);
+  });
+  ttGaris(T, rRinci[0], cKiri1, rRinci[0], cKanan2, "bawah", { warna: W.garisRinciDalam });
+  ttKotak(T, rRinci[0], cKiri1, rRinci[1], cKanan2, { warna: W.garisRinci });
+  tambah(ttPx(10));
+
+  // TABEL BARANG
+  const tb = spek.tabel;
+  const kol = tb.kolom.map(rentang);
+  const lebarKol = (i) => ttLebarIsi(T, kol[i][0], kol[i][1], ttPx(5), ttPx(5));
+  const hKepala = ddH(7, { b: true, c: W.putih });
+  const hSub = ddH(6, { c: "#c9d0e0" });
+  const isiKepala = tb.kepala.map(([judul, sub], i) => ttTeks(String(judul).toUpperCase(), hKepala, lebarKol(i), 1.15)
+    .concat(sub ? ttTeks(sub, hSub, lebarKol(i), 1.15) : []));
+  const rKepala = tambah(Math.max(...isiKepala.map(ttTinggiIsi)) + ttPx(12));
+  kol.forEach(([c1, c2], i) => ttSel(T, rKepala, c1, rKepala, c2, isiKepala[i], { ha: "center", va: "middle", fill: W.navy }));
+
+  const hIsi = ddH(8.5);
+  const pitchIsi = 8.5 * 1.3;
+  const padIsi = tb.padBaris == null ? ttPx(8) : tb.padBaris;
+  tb.baris.forEach((sel, i) => {
+    const teks = sel.map((x, k) => (x && x.teks ? x.teks.flatMap((tx) => ttBungkus(tx, hIsi, lebarKol(k))) : null));
+    const n = Math.max(1, ...teks.map((x) => (x ? x.length : 1)));
+    const r = tambah(n * pitchIsi + padIsi + ttPx(1));
+    const g = { ha: "center", va: "middle", fill: i % 2 === 1 ? W.zebra : null };
+    sel.forEach((x, k) => {
+      const [c1, c2] = kol[k];
+      if (x && x.angka) ddSelAngka(T, r, c1, c2, x.angka.v, x.angka.fmt, x.angka.teks, hIsi, g);
+      else {
+        const s = ttSel(T, r, c1, r, c2, (teks[k] || [""]).map((tx) => ttBaris(tx, hIsi, pitchIsi)), g);
+        if (x && x.nilaiExcel) s.angka = x.nilaiExcel;
+      }
+    });
+    ttGaris(T, r, cKiri1, r, cKanan2, "bawah", { warna: W.garisBarang });
+  });
+
+  // TOTAL: satu baris memanjang tepat di bawah barang
+  const rTotal = tambah(9 * 1.15 + ttPx(12) + ttPx(2));
+  const hT = ddH(9, { b: true });
+  const gT = { ha: "center", va: "middle", fill: W.total };
+  tb.total.forEach((x) => {
+    const [c1, c2] = x.rentang ? rentang(x.rentang) : kol[x.kolom];
+    if (x.angka) ddSelAngka(T, rTotal, c1, c2, x.angka.v, x.angka.fmt, x.angka.teks, hT, gT);
+    else ttSel(T, rTotal, c1, rTotal, c2, x.teks ? [ttBaris(x.teks, hT, 9 * 1.15)] : [],
+      Object.assign({}, gT, x.kiri ? { ha: "left", padL: ttPx(9) } : {}));
+  });
+  ttGaris(T, rTotal, cKiri1, rTotal, cKanan2, "atas bawah", { w: 2, warna: W.navy });
+
+  // RUANG PENGISI (mendorong bagian akhir ke dasar halaman, min. 6 mm)
+  const rPengisi = tambah(ttPt(6));
+
+  // BAGIAN AKHIR: kotak kiri bertumpuk & tanda tangan 50 mm di kanan
+  const ttdAtas = [];
+  (spek.ttd.atas || []).forEach((tx, i) => {
+    if (i) ttdAtas.push(ttSpasi(ttPx(1)));
+    ttdAtas.push(ttBaris(tx, i ? ddH(8.5, { b: true }) : ddH(8), (i ? 8.5 : 8) * 1.15));
+  });
+  const ttdBawah = [ttSpasi(ttPx(3)), ttBaris("Authorized Signature", ddH(8), 8 * 1.15)];
+  const rAkhirAtas = T.baris.length;
+  kotakKiri.forEach((k, i) => {
+    if (i) tambah(ttPx(8));
+    const isi = [ttSpasi(ttPx(6))].concat((k.baris.length ? k.baris : [["—", false]]).map(([tx, tebal]) => ttBaris(tx, ddH(8.5, { b: tebal }), 8.5 * 1.55)));
+    const rKK = tambah(ttPx(8) + 7 * 1.15 + ttPx(1));
+    const rKB = tambah(ttTinggiIsi(isi) + ttPx(7) + ttPx(1));
+    const cUjung = ujungKiri - 1;
+    ttSel(T, rKK, cKiri1, rKK, cUjung, [ttBaris(String(k.judul).toUpperCase(), ddH(7, { b: true, c: W.putih }), 7 * 1.15)], { ha: "center", va: "middle", fill: W.navy });
+    ttSel(T, rKB, cKiri1, rKB, cUjung, isi, { padL: DD_PAD, padR: ttPx(15) });
+    ttKotak(T, rKK, cKiri1, rKB, cUjung, { warna: W.navy });
+  });
+  const sudah = T.baris.slice(rAkhirAtas).reduce((a, b) => a + b, 0);
+  const rRuang = tambah(Math.max(ttPx(10), ttPt(CIPL_TTD_MM) - sudah - ttTinggiIsi(ttdBawah), kotakKiri.length ? 0 : ttTinggiIsi(ttdAtas)));
+  const rTtd = tambah(ttTinggiIsi(ttdBawah));
+  ttSel(T, rAkhirAtas, cKanan1, rRuang, cKanan2, ttdAtas, { ha: "center" });
+  ttSel(T, rTtd, cKanan1, rTtd, cKanan2, ttdBawah, { ha: "center" });
+  ttGaris(T, rTtd, cKanan1, rTtd, cKanan2, "atas", { warna: W.teks });
+
+  // JARAK DALAM BAWAH, BINGKAI, SETINGGI HALAMAN
+  const rAkhir = tambah(ttPt(5) + ttPx(2));
+  ttKotak(T, 0, cA, rAkhir, cK, { w: 2, warna: W.bingkai });
+  ttPenuhiHalaman(T, rPengisi);
+  return T;
+}
+
+/* ---------------- LEMBAR CI / PL DYNAMIC DESIGN ---------------- */
+function ciplDdTata(jenis, row, shipment, baris) {
+  const ci = jenis === "CI";
+  const p = row.payload || {};
+  const uang = ciplFormatUang(p.currency || "USD", baris.flatMap((b) => [b.harga, b.amount]));
+  const angka = (n, satuan) => {
+    const f = ciplFormatAngka(n, satuan);
+    return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
+  };
+  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f, teks: uang.teks(n) } });
+  const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
+  const kemasan = ci ? [] : ciplRincianKemasan(p, shipment, baris);
+  return ciplTataFormal({
+    nama: jenis,
+    judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
+    persen: DD_TABEL_PERSEN,
+    kartu: [
+      { kiri: { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(CIPL_SHIPPER, l, true) },
+        kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(ciplRefBaris(row), lNo, lLabel) } },
+      { kiri: { judul: "Consignee / Buyer", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
+        kanan: { judul: "Notify Party", isi: (l) => ddIsiPihak([ciplKapital(p.notifyParty || "SAME AS CONSIGNEE")], l, false) } },
+    ],
+    rinci: ciplDdRincianData(row, shipment),
+    tabel: {
+      kolom: [[0, 0], [1, 1], [2, 2], [3, 3.5], [4, 4], [5, 5], [6, 6], [7, 7]],
+      kepala: (ci ? ["No", "Item", "Type", "HS Code", "Qty", "Unit", "Unit Price", "Amount"]
+        : ["No", "Item Description", "Type", "HS Code", "Qty", "Unit", "Net Weight", "Gross Weight"]).map((k) => [k]),
+      baris: baris.map((b, i) => {
+        const hs = String(b.hs || "");
+        return [
+          { teks: [String(i + 1)], nilaiExcel: { v: i + 1, fmt: "0" } },
+          { teks: ciplNamaDuaBaris(b.item) },
+          { teks: [b.type || ""] },
+          // HS Code berupa angka murni -> angka di Excel (tanpa segitiga hijau "angka sebagai teks")
+          Object.assign({ teks: [hs] }, /^[1-9]\d{3,11}$/.test(hs) ? { nilaiExcel: { v: Number(hs), fmt: "0" } } : {}),
+          angka(b.qty, ""),
+          { teks: [b.satuan || ""] },
+          ci ? duit(b.harga) : angka(b.netto, "KG"),
+          ci ? duit(b.amount) : angka(b.bruto, "KG"),
+        ];
+      }),
+      total: [
+        { rentang: [0, 3.5], teks: "TOTAL", kiri: true },
+        Object.assign({ kolom: 4 }, angka(baris.reduce((x, b) => x + (Number(b.qty) || 0), 0), "")),
+        { kolom: 5, teks: satuan.length === 1 ? satuan[0] : "" },
+        ci ? { kolom: 6 } : Object.assign({ kolom: 6 }, angka(baris.reduce((x, b) => x + b.netto, 0), "KG")),
+        ci ? Object.assign({ kolom: 7 }, duit(baris.reduce((x, b) => x + b.amount, 0)))
+          : Object.assign({ kolom: 7 }, angka(baris.reduce((x, b) => x + b.bruto, 0), "KG")),
+      ],
+    },
+    kiriBawah: ci ? [] : [{ judul: "Packing details", baris: kemasan }],
+    ttd: { atas: ["For and on behalf of", CIPL_PERUSAHAAN.nama] },
+  });
+}
 
 /* ------------------------------------------------------------------
    HALAMAN 3 — SHIPPING INSTRUCTION
 
    Berbeda bentuk dari dua halaman di atas: bukan tabel barang,
-   melainkan daftar instruksi ke forwarder. Karena itu ia tidak
-   memakai potongan bersama — kop pun ditulis ulang tanpa bingkai
-   kotak, mengikuti berkas contohnya.
+   melainkan surat berisi daftar instruksi ke forwarder, berkop
+   perusahaan (Times New Roman). Disusun dengan model kisi yang sama
+   (ciplSiTata), jadi cetakan & Excel-nya pun sama persis.
 
    Beberapa baris SENGAJA dibiarkan kosong (PEB Number, Booking
    Number, Vessel, ETD/ETA, Stuffing Date). Itu yang diisi forwarder
@@ -683,13 +806,8 @@ function ciplPasSatuBaris(dok) {
 
 /* SUSUNAN SHIPPING INSTRUCTION — dipetakan dari berkas aslinya.
 
-   Enam garis pemisah di berkas asli BUKAN border sel, melainkan bentuk
-   gambar 0,75pt yang membentang kolom A-H (baris 32, 35, 45, 51, 53,
-   57). Di sini digambar sebagai border bawah baris; hasilnya sama dan
-   tidak bergantung pada dukungan gambar.
-
    Penanda di depan tiap label adalah huruf "T" berfont Wingdings pada
-   berkas asli; di HTML dipakai lambang setara.
+   berkas asli; di sini dipakai lambang setara (❋).
 
    `kosong: true` menandai baris yang SENGAJA dibiarkan kosong — diisi
    forwarder setelah menerima instruksinya. */
@@ -795,73 +913,105 @@ function ciplSiNilaiMentah(def, d) {
   return "";
 }
 
-function ciplHalamanShippingInstruction(row, shipment, baris) {
+
+/* LEMBAR SHIPPING INSTRUCTION -- model kisi yang sama dengan CI & PL.
+
+   Kolom: A (tepi + jorok label) | penanda | label | titik dua | isi | F.
+   Bingkai 1 px hitam setinggi halaman; isi mengalir dari atas (kop,
+   judul, nomor, tujuan, daftar instruksi, penutup), sisa tinggi di
+   bawah tanda tangan. Huruf Times New Roman. */
+function ciplSiTata(row, shipment, baris) {
   const d = ciplSiData(row, shipment, baris);
-  const teksBaris = (arr) => arr.map((x) => `<div>${escapeHtml(x)}</div>`).join("");
-  const penanda = '<span class="si-b">&#10059;</span>';
+  const H = (s, o) => ttH("times", s, Object.assign({ c: "#000000" }, o || {}));
+  const garis = ttMm(ttPx(1));
+  const dalam = ttMm(ttPx(36));
+  const kolom = [garis + dalam + ttMm(ttPx(26)), ttMm(ttPx(20)), ttMm(ttPx(194)), ttMm(ttPx(16)), 0, garis + dalam];
+  kolom[4] = 190 - kolom.reduce((a, b) => a + b, 0);
+  const T = ttTataBaru("SI", kolom);
+  const tambah = (pt) => ttTambahBaris(T, pt);
+  const [cA, cTanda, cLabel, cTitik, cIsi, cF] = [0, 1, 2, 3, 4, 5];
+  const padTeks = ttPx(37); // garis + jarak dalam: tepi kiri teks bebas
+  const lh = 1.15;
+  const teks = (r, isi, gaya) => ttSel(T, r, cA, r, cF, isi, Object.assign({ padL: padTeks, padR: padTeks }, gaya || {}));
 
-  const isiBaris = CIPL_SI_BARIS.map((def) => {
-    /* Semua baris berjarak SAMA (tanpa jeda antar kelompok), dan titik
-       dua selalu di kolomnya sendiri. */
-    const label = `${penanda}${escapeHtml(def.k)}`;
+  tambah(ttPx(20) + ttPx(1));
+  // KOP: logo di kiri (70 px), nama & alamat di tengah sisa lebarnya
+  const padKopL = ttPx(37 + 70 + 6);
+  const padKopR = ttPx(37 + 6);
+  const lebarKop = ttLebarIsi(T, cA, cF, padKopL, padKopR);
+  const hAlamat = H(9);
+  const sAlamat = ttUkuranPas([CIPL_PERUSAHAAN.pusat, CIPL_PERUSAHAAN.cabang], hAlamat, lebarKop, 6) || 9;
+  const kop = [ttSpasi(ttPx(4)), ttBaris(CIPL_PERUSAHAAN.nama, H(19, { b: true }), 19 * lh),
+    ttBaris(CIPL_PERUSAHAAN.pusat, H(sAlamat), 9 * lh), ttBaris(CIPL_PERUSAHAAN.cabang, H(sAlamat), 9 * lh)];
+  const rKop = tambah(ttTinggiIsi(kop) + ttPx(4));
+  ttSel(T, rKop, cA, rKop, cF, kop, { ha: "center", padL: padKopL, padR: padKopR });
+  if (typeof SJ_LOGO !== "undefined") {
+    T.gambar.push({ src: SJ_LOGO, xMm: ttMm(ttPx(46)), yMm: ttMm(ttPx(25)), wMm: ttMm(ttPx(52)), hMm: ttMm(ttPx((52 * 94) / 127)) });
+  }
 
-    if (def.alamat) {
-      /* "Address" sub-label di baris berikutnya, bukan bagian dari
-         nilainya — mengikuti berkas aslinya. */
-      const isi = d[def.alamat];
-      return `
-      <tr>
-        <td class="si-k">${label}</td>
-        <td class="si-c">:</td>
-        <td class="si-v">${escapeHtml(isi[0] || "")}</td>
-      </tr>
-      <tr>
-        <td class="si-k si-sub">Address</td>
-        <td class="si-c"></td>
-        <td class="si-v">${teksBaris(isi.slice(1))}</td>
-      </tr>`;
+  tambah(ttPx(36));
+  const rJudul = tambah(16 * lh);
+  ttSel(T, rJudul, cA, rJudul, cF, [ttBaris("SHIPPING INSTRUCTION", H(16, { b: true, u: true }), 16 * lh)], { ha: "center", va: "middle" });
+  const rNo = tambah(ttPx(2) + 11.5 * lh);
+  ttSel(T, rNo, cA, rNo, cF, [ttBaris(`NO. ${d.no}`, H(11.5, { b: true }), 11.5 * lh)], { ha: "center", va: "bottom" });
+  tambah(ttPx(30));
+  const hBiasa = H(10.5);
+  const lebarBebas = ttLebarIsi(T, cA, cF, padTeks, padTeks);
+  const isiTo = ttTeks(`To : ${d.tujuan}`, hBiasa, lebarBebas, lh);
+  teks(tambah(ttTinggiIsi(isiTo) + ttPx(4)), isiTo);
+  const rLead = tambah(10.5 * lh + ttPx(10));
+  teks(rLead, [ttBaris("Please arrange our shipment per description below :", hBiasa, 10.5 * lh)]);
+
+  // DAFTAR INSTRUKSI: penanda | label | : | isi -- satu baris kisi per butir
+  const lebarIsi = ttLebarIsi(T, cIsi, cIsi, 0, 0);
+  const butir = (label, nilai, o) => {
+    const isi = ttTeks(nilai, H(10.5, { b: !!o.tebal }), lebarIsi, lh);
+    const r = tambah(ttTinggiIsi(isi) + ttPx(2));
+    if (label != null) {
+      if (!o.sub) ttSel(T, r, cTanda, r, cTanda, [ttBaris("❋", H(8.5), 10.5 * lh)], { va: "top" });
+      ttSel(T, r, cLabel, r, cLabel, [ttBaris(label, o.sub ? H(9.5) : hBiasa, 10.5 * lh)]);
+      if (!o.sub) ttSel(T, r, cTitik, r, cTitik, [ttBaris(":", hBiasa, 10.5 * lh)]);
     }
-
+    const s = ttSel(T, r, cIsi, r, cIsi, isi);
+    if (o.angka) s.angka = o.angka;
+  };
+  CIPL_SI_BARIS.forEach((def) => {
+    if (def.alamat) {
+      const isi = d[def.alamat];
+      butir(def.k, isi[0] || "", {});
+      butir("Address", isi.slice(1).join("\n"), { sub: true });
+      return;
+    }
     const nilai = ciplSiNilai(def, d);
-    return `
-      <tr>
-        <td class="si-k">${label}</td>
-        <td class="si-c">:</td>
-        <td class="si-v${def.tebal ? " si-v-bold" : ""}">${escapeHtml(nilai)}${
-          def.satuan && nilai ? ` &nbsp; ${def.satuan}` : ""
-        }</td>
-      </tr>`;
-  }).join("");
+    // HS Code angka murni -> angka di Excel (tanpa segitiga hijau "angka sebagai teks")
+    const angka = def.hitung === "hs" && /^[1-9]\d{3,11}$/.test(nilai) ? { v: Number(nilai), fmt: "0" } : null;
+    butir(def.k, `${nilai}${def.satuan && nilai ? `   ${def.satuan}` : ""}`, { tebal: def.tebal, angka });
+  });
 
-  return `
-  <div class="ci-sheet ci-page2 si-sheet">
-    <div class="ci-box si-box">
-    <table class="ci-kop">
-      <tr>
-        <td class="ci-kop-logo"><img src="${SJ_LOGO}" alt="" /></td>
-        <td class="ci-kop-teks">
-          <div class="ci-company">${escapeHtml(CIPL_PERUSAHAAN.nama)}</div>
-          <div class="ci-addr">${escapeHtml(CIPL_PERUSAHAAN.pusat)}</div>
-          <div class="ci-addr">${escapeHtml(CIPL_PERUSAHAAN.cabang)}</div>
-        </td>
-      </tr>
-    </table>
+  // PENUTUP
+  tambah(ttPx(16));
+  teks(tambah(10.5 * lh), [ttBaris("Thank you for your good cooperation.", hBiasa, 10.5 * lh)]);
+  tambah(ttPx(12));
+  teks(tambah(10.5 * lh), [ttBaris(`Cirebon, ${d.tanggal}`, hBiasa, 10.5 * lh)]);
+  teks(tambah(10.5 * lh), [ttBaris("Regards,", hBiasa, 10.5 * lh)]);
+  tambah(ttPx(84));
+  teks(tambah(10.5 * lh), [ttBaris("SIGN & STAMP", H(10.5, { b: true, u: true }), 10.5 * lh)]);
+  const rPengisi = tambah(0);
+  const rAkhir = tambah(ttPx(22) + ttPx(1));
+  ttKotak(T, 0, cA, rAkhir, cF, { warna: "#000000" });
+  ttPenuhiHalaman(T, rPengisi);
+  return T;
+}
 
-    <div class="si-title">SHIPPING INSTRUCTION</div>
-    <div class="si-no">NO. ${escapeHtml(d.no)}</div>
-    <div class="si-lead si-to">To : ${escapeHtml(d.tujuan)}</div>
-    <div class="si-lead">Please arrange our shipment per description below :</div>
-
-    <table class="si-list">${isiBaris}</table>
-
-    <div class="si-tutup">
-      <div>Thank you for your good cooperation.</div>
-      <div class="si-kota">Cirebon, ${escapeHtml(d.tanggal)}</div>
-      <div>Regards,</div>
-      <div class="si-ttd">SIGN &amp; STAMP</div>
-    </div>
-    </div>
-  </div>`;
+/* Lembar-lembar CIPL menurut profil pembeli: Kumho (layout "vn") CI & PL,
+   selain itu Dynamic Design CI, PL & SI. Dipakai cetak DAN Excel. */
+function ciplDaftarTata(row, shipment) {
+  const prof = ciplProfil((row.payload || {}).customer || (shipment && shipment.party));
+  if (prof.layout === "vn" && typeof ciplVnTata === "function") {
+    return [ciplVnTata("CI", row, shipment), ciplVnTata("PL", row, shipment)];
+  }
+  const baris = ciplBarisBarang(shipment);
+  return [ciplDdTata("CI", row, shipment, baris), ciplDdTata("PL", row, shipment, baris), ciplSiTata(row, shipment, baris)];
 }
 
 /* "03 Agustus 2026" — bentuk tanggal Indonesia untuk penutup surat. */
@@ -889,6 +1039,7 @@ function ciplCariBarisRiwayat(rowId) {
   return row || null;
 }
 
+
 /* ------------------------------------------------------------------
    PEMICU CETAK
 ------------------------------------------------------------------ */
@@ -908,248 +1059,17 @@ function cetakCipl(rowId) {
     );
   }
 
-  const baris = ciplBarisBarang(shipment);
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger");
+    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
     return;
   }
-  /* BENTUK LEMBAR DIPILIH DARI PROFIL PEMBELI.
-
-     Percabangannya ada di SATU titik masuk ini, bukan di dalam tiap
-     bagian lembar -- kedua templat tidak perlu tahu keberadaan satu
-     sama lain, dan mengubah salah satunya tidak bisa merembet. */
-  const prof = ciplProfil((row.payload || {}).customer || (shipment && shipment.party));
-  const pakaiVn = prof.layout === "vn" && typeof ciplVnHalamanInvoice === "function";
-
-  const gaya = pakaiVn ? ciplVnCss() : ciplCss();
-  const isi = pakaiVn
-    ? ciplVnHalamanInvoice(row, shipment) + ciplVnHalamanPacking(row, shipment)
-    : ciplHalamanInvoice(row, shipment, baris) +
-      ciplHalamanPacking(row, shipment, baris) +
-      ciplHalamanShippingInstruction(row, shipment, baris);
-
-  w.document.write(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<title>${escapeHtml(ciplJudulInvoice(row))} ${escapeHtml(row.doc_number || "")}</title>
-<style>${gaya}</style></head>
-<body>${isi}</body></html>`);
+  /* Lembar dipilih dari PROFIL PEMBELI (ciplDaftarTata) -- model yang
+     sama dipakai unduhan Excel, jadi cetakan & Excel tidak bisa berbeda. */
+  w.document.write(ttDokumenHtml(`${ciplJudulInvoice(row)} ${row.doc_number || ""}`, ciplDaftarTata(row, shipment)));
   w.document.close();
   w.onload = () => {
-    ciplPasSatuBaris(w.document);
     w.focus();
     w.print();
   };
-}
-
-function ciplCss() {
-  return `
-  /* MARGIN @page NOL — DISENGAJA, dan bukan berarti tanpa margin.
-
-     Peramban menggambar kop & kaki cetakannya sendiri (tanggal, judul
-     tab, "about:blank", nomor halaman) DI DALAM area margin @page.
-     Tidak ada CSS yang bisa mematikannya. Satu-satunya cara: tidak
-     menyisakan ruang untuk digambari — yaitu margin nol.
-
-     Jarak ke tepi kertas tetap ada, hanya dipindah ke padding
-     .ci-sheet di bawah. Hasil cetaknya sama, tanpa tulisan peramban.
-
-     PERNAH DICOBA SEBALIKNYA dan gagal: memindahkan margin narrow ke
-     @page memang membuat pratinjau menampilkan angka yang benar, tapi
-     kop & kaki peramban langsung muncul di keempat sisinya. */
-  @page { size: A4; margin: 0; }
-
-  /* SATU ANGKA UNTUK SELURUH GARIS.
-
-     Ketebalan yang ditulis terpisah di sepuluh tempat akan berbeda
-     cepat atau lambat — satu diubah, sembilan tertinggal, dan
-     hasilnya garis yang compang-camping.
-
-     1px dipilih, bukan pecahan poin: pecahan harus dibulatkan ke
-     piksel perangkat, dan pembulatan itu jatuh berbeda-beda menurut
-     posisi tiap garis di halaman. Satu garis jadi 1px, tetangganya
-     2px, tanpa ada yang salah di CSS-nya. */
-  :root { --ci-line: 1px solid #000; }
-
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: "Times New Roman", Times, serif;
-    color: #000;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
-    /* Ukuran huruf persis seperti yang ditulis di sini. Tanpa ini peramban
-       ponsel (iOS) membesarkan sebagian teks sendiri, dan pengepas
-       ciplPasSatuBaris() mengukur tata letak yang salah. */
-    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
-  }
-  /* JARAK KE TEPI KERTAS — preset "Narrow" Excel, dalam milimeter.
-
-     Excel menyimpannya dalam inci: kiri & kanan 0,25" = 6,35 mm; atas
-     & bawah 0,75" = 19,05 mm. Kalau salah satu diubah, ubah
-     pasangannya di cipl-excel.js (XLS_MARGIN_NARROW) — ada uji yang
-     memastikan keduanya tetap sepasang. */
-  /* LEBAR LEMBAR DIPATOK selebar kertas, bukan selebar jendela. Jendela
-     cetak 900px, kertas A4 794px: tanpa patokan, tata letak di layar
-     (tempat pengepas kolom mengukur) berbeda dari yang tercetak. */
-  .ci-sheet { width: 210mm; padding: 19.05mm 6.35mm; }
-  .ci-page2 { page-break-before: always; break-before: page; }
-  .ci-box { border: var(--ci-line); }
-  table { width: 100%; border-collapse: separate; border-spacing: 0; }
-  td, th { vertical-align: top; }
-  /* Kop perusahaan: kini hanya dipakai Shipping Instruction (surat ke forwarder). */
-  .ci-kop td { border: 0; padding: 4px 6px; }
-  .ci-kop-logo { width: 70px; text-align: center; }
-  .ci-kop-logo img { width: 52px; }
-  .ci-kop-teks { text-align: center; padding-right: 70px; }
-  .ci-company { font-size: 18pt; font-weight: 700; letter-spacing: .5px; }
-  .ci-addr { font-size: 8pt; }
-  /* ================================================================
-     CI & PL DYNAMIC DESIGN — tema biru navy: pita kepala kartu & kepala
-     tabel navy berhuruf putih; garis judul hitam; isi hitam & abu.
-     .dd-halaman: kolom flex setinggi kertas (margin 10 mm, sama dengan
-     Excel-nya, cipl-excel-rapi.js); .dd-bingkai: bingkai luar tebal di garis
-     margin; .dd-ruang mendorong referensi & tanda tangan ke dasar.
-     ================================================================ */
-  .dd-halaman {
-    width: 210mm; min-height: 297mm; padding: 10mm;
-    display: flex; flex-direction: column;
-    font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 9pt;
-  }
-  .dd-bingkai {
-    flex: 1 1 auto; display: flex; flex-direction: column;
-    border: 2px solid #222; padding: 6mm 6mm 5mm;
-  }
-  .dd-kepala { text-align: center; border-bottom: 2px solid #222; padding-bottom: 6px; margin-bottom: 10px; }
-  .dd-judul { font-size: 20pt; font-weight: 800; color: #222; line-height: 1.1; }
-  /* Kiri: Shipper & Consignee. Kanan: Referensi dokumen (atas) & Notify
-     Party (bawah, setinggi kotak consignee di sebelahnya). */
-  .dd-pihak {
-    display: grid; grid-template-columns: 1fr 42%; gap: 8px; margin-bottom: 8px;
-    grid-template-areas: "shipper ref" "consignee notify";
-  }
-  .dd-shipper { grid-area: shipper; }
-  .dd-ref { grid-area: ref; }
-  .dd-consignee { grid-area: consignee; }
-  .dd-notify { grid-area: notify; }
-  .dd-ref-k { font-size: 6.8pt; font-weight: 700; color: #777; text-transform: uppercase; margin-top: 11px; }
-  .dd-ref-k:first-child { margin-top: 0; }
-  .dd-ref-v { display: flex; justify-content: space-between; gap: 8px; font-size: 8.8pt; font-weight: 700; line-height: 1.3; word-break: break-word; }
-  .dd-ref-v > span:first-child { flex: 1 1 auto; min-width: 0; }
-  .dd-ref-tgl { flex: none; text-align: right; white-space: nowrap; }
-  .dd-kartu, .dd-catatan { border: 1px solid #1f2a44; overflow: hidden; }
-  .dd-catatan-b { padding: 6px 9px 7px; font-size: 8.5pt; line-height: 1.55; }
-  /* Rincian kemasan: kotak selebar isinya (bukan selebar kolom), kepala di tengah */
-  .dd-kemasan { justify-self: start; width: max-content; max-width: 100%; }
-  .dd-kemasan .dd-catatan-k { text-align: center; }
-  .dd-kemasan .dd-catatan-b { padding-right: 14px; }
-  .dd-tebal { font-weight: 700; }
-  .dd-kartu-h, .dd-catatan-k {
-    background: #1f2a44; padding: 4px 9px;
-    font-size: 7pt; font-weight: 700; text-transform: uppercase; color: #fff;
-  }
-  .dd-kartu-b { padding: 6px 9px 7px; font-size: 8.5pt; line-height: 1.42; }
-  .dd-kartu-b .dd-nama { font-weight: 700; font-size: 9pt; }
-  .dd-rinci {
-    /* Sejajar dengan batas kolom tabel barang (No+Item | Type | HS+Qty+Unit |
-       Harga+Jumlah), supaya Excel-nya memakai SATU kisi kolom yang sama. */
-    display: grid; grid-template-columns: 22% 24% 26% 28%;
-    border: 1px solid #c8c8c8; margin-bottom: 10px;
-  }
-  .dd-rinci > div { padding: 5px 9px; border-right: 1px solid #e4e4e4; border-bottom: 1px solid #e4e4e4; }
-  .dd-rinci > div:nth-child(4n) { border-right: 0; }
-  .dd-rinci > div:nth-child(n+5) { border-bottom: 0; }
-  .dd-rinci-k { font-size: 6.8pt; font-weight: 700; color: #777; text-transform: uppercase; }
-  .dd-rinci-v { font-size: 9pt; font-weight: 700; margin-top: 2px; }
-  .dd-tabel { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  .dd-tabel thead th {
-    background: #1f2a44; color: #fff; font-size: 7pt; font-weight: 700; text-transform: uppercase;
-    padding: 6px 5px; text-align: center; vertical-align: middle;
-  }
-  .dd-tabel tbody td {
-    padding: 4px 5px; border-bottom: 1px solid #e2e2e2; font-size: 8.5pt; line-height: 1.3;
-    text-align: center; vertical-align: middle;
-  }
-  .dd-tabel tbody tr:nth-child(even) td { background: #fafafa; }
-  .dd-tabel .dd-kiri { text-align: left; }
-  /* Harga, jumlah & berat: rata tengah, angka dan satuannya tidak terpisah baris */
-  .dd-tabel .dd-angka { text-align: center; white-space: nowrap; }
-  /* TOTAL: satu baris memanjang tepat di bawah barang */
-  .dd-tabel tfoot td {
-    padding: 6px 5px; font-size: 9pt; font-weight: 700; text-align: center; vertical-align: middle;
-    background: #eeeeee; border-top: 1.5px solid #1f2a44; border-bottom: 1.5px solid #1f2a44;
-  }
-  .dd-tabel tfoot td.dd-kiri { text-align: left; padding-left: 9px; }
-  .dd-ruang { flex: 1 1 auto; min-height: 6mm; }
-  .dd-akhir { display: grid; grid-template-columns: 1fr 76mm; gap: 12px; align-items: start; break-inside: avoid; page-break-inside: avoid; }
-  /* 50 mm di kertas, muat stempel perusahaan */
-  .dd-ttd-kotak { height: 50mm; display: flex; flex-direction: column; text-align: center; font-size: 8pt; }
-  .dd-ttd-co { font-weight: 700; font-size: 8.5pt; margin-top: 1px; }
-  .dd-ttd-ruang { flex: 1; }
-  .dd-ttd-garis { border-top: 1px solid #222; padding-top: 3px; margin: 0 8mm; }
-  /* SHIPPING INSTRUCTION -- huruf besar & lega, supaya jelas terbaca saat
-     dicetak. Margin 10 mm di keempat sisi, sama dengan CI & PL (bukan
-     preset Narrow 19,05 mm atas-bawah): ruang yang dibebaskan dipakai
-     untuk huruf yang lebih besar, tetap satu halaman. */
-  .ci-sheet.si-sheet { padding: 10mm; font-size: 10.5pt; }
-  /* Bingkainya setinggi halaman, bukan setinggi isinya.
-
-     Halaman A4 dikurangi padding .si-sheet 10 mm atas & bawah. Angka
-     ini HARUS ikut kalau paddingnya diubah — kalau tidak, kotaknya lebih
-     tinggi daripada ruang yang tersisa dan mendorong satu halaman
-     kosong di belakangnya.
-
-     Tanpa min-height, kotaknya berhenti di baris terakhir yang terisi,
-     jadi tingginya berubah-ubah mengikuti panjang alamat consignee —
-     dua SI dari pengiriman berbeda tercetak dengan kotak berbeda. */
-  .si-box {
-    padding: 20px 36px 22px;
-    min-height: calc(297mm - 20mm - 2px);
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-  }
-  /* Blok penutup didorong ke bawah kotak. */
-  .si-tutup { margin-top: auto; }
-  .si-sheet .ci-company { font-size: 19pt; }
-  .si-sheet .ci-addr { font-size: 9pt; }
-  /* "To : ..." -- satu gaya dengan kalimat pembuka di bawahnya */
-  .si-lead.si-to { margin-bottom: 4px; }
-  /* Jarak kop -> judul tetap seperti saat baris "TO : ..." masih di
-     atasnya (8 px + satu baris 10,5pt + 12 px), walau baris itu kini
-     pindah ke bawah judul. */
-  .si-title {
-    margin-top: 36px;
-    text-align: center; font-weight: 700; font-size: 16pt;
-    text-decoration: underline;
-  }
-  .si-no { text-align: center; font-weight: 700; font-size: 11.5pt; margin: 2px 0 30px; }
-  .si-lead { font-size: 10.5pt; margin-bottom: 10px; }
-
-  .si-list { width: 100%; }
-  .si-list td { vertical-align: top; padding: 1px 0; font-size: 10.5pt; line-height: 1.15; }
-  .si-k { width: 240px; padding-left: 26px !important; }
-  /* Titik dua sejajar di satu kolom sendiri — kalau ditempel ke label,
-     posisinya ikut panjang labelnya dan barisnya terlihat goyah. */
-  .si-c { width: 16px; }
-  .si-v-bold { font-weight: 700; }
-  /* Penanda di depan label — huruf Wingdings "T" pada berkas asli. */
-  .si-b { display: inline-block; width: 20px; font-size: 8.5pt; }
-  /* "Address" sub-label. Disejajarkan dengan LABEL di atasnya —
-     penandanya selebar 20px, jadi teksnya digeser sejauh itu supaya
-     huruf pertamanya lurus dengan "Shipper" dan "Consignee". */
-  .si-sub {
-    padding-left: 46px !important;
-    font-size: 9.5pt;
-  }
-  .si-tutup { margin-top: 16px; font-size: 10.5pt; }
-  .si-kota { margin-top: 12px; }
-  /* Ruang untuk materai, tanda tangan basah, dan cap perusahaan (±22 mm
-     di atas tulisan SIGN & STAMP). 40px hanya cukup untuk tanda tangan;
-     materai 10.000 saja sudah sekitar 2 cm. */
-  .si-ttd {
-    margin-top: 84px;
-    text-decoration: underline;
-    font-weight: 600;
-  }
-  `;
 }

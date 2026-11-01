@@ -843,10 +843,6 @@ function deteksiCarrier(src, udara) {
       };
 }
 
-function carrierCodeOf(s) {
-  return detectCarrier(s).code || "";
-}
-
 /* ------------------------------------------------------------------
    NAMA SARANA ANGKUT = NAMA + NOMOR
 
@@ -902,19 +898,4 @@ function carrierCipl(p, shipment) {
     return carrierVesselFlight(shipment);
   }
   return isian;
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    CARRIER_MASTER,
-    detectCourier,
-    detectCourierService,
-    detectShippingLine,
-    detectAirline,
-    detectCarrier,
-    carrierCodeOf,
-    carrierNameFromShipment,
-    carrierVesselFlight,
-    carrierCipl,
-  };
 }

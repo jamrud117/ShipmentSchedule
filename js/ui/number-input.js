@@ -180,7 +180,3 @@ document.addEventListener(
   },
   true,
 );
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parseLooseNumber, formatNumberTyping, formatNumberValue };
-}

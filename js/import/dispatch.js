@@ -194,6 +194,8 @@ function ciplDariMesin(c, sumber, lama) {
     etd: c.etd || f.etd || "",
     package: kemasan || f.package || "",
     muatan: c.muatan || f.muatan || "",
+    // CIPL = Commercial Invoice & Packing List: nomor PL-nya (sheet PL, atau nomor invoice bila satu dokumen)
+    ...(c.packing_no ? { dataPabean: { packingListNomor: c.packing_no, packingListTanggal: c.packing_date || "" } } : {}),
   };
 
   // Catatan HS Code -- gugur kalau draft CEISA ikut dipilih (ciplTanpaCatatanHs)

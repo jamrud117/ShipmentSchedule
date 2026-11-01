@@ -461,7 +461,7 @@ if (elEtaForm) {
     if (predSedangMengisi || !etaAktifDiForm()) return;
     if (formEtaMode === "auto" && $("#fEta").value) {
       setFormEtaMode("manual", { recalc: false });
-      showToast(t("m.eta.diketik.manual.mode.eta.berpindah.ke.manua"), "dark");
+      showToast(t("m.eta.diketik.manual.mode.eta.berpindah.ke.manua"), "info");
       return;
     }
     syncPredictionForm();
@@ -515,7 +515,7 @@ if (elActualForm) {
       // Hanya berpindah kalau nilainya BEDA dari hitungan mesin.
       if (!d.ok || d.date !== $("#fActual").value) {
         setFormDeliveryMode("manual");
-        showToast(t("m.estimated.delivery.dikunci.mode.berpindah.ke.m"), "dark");
+        showToast(t("m.estimated.delivery.dikunci.mode.berpindah.ke.m"), "info");
       }
     }
   });
@@ -598,7 +598,7 @@ async function handleCardDateChange(s, field) {
     if (deliveryModeOf(s) === "auto" && s.actual) {
       s.deliveryMode = "manual";
       await persistFields(s.id, { deliveryMode: "manual" });
-      showToast(t("m.estimated.delivery.dikunci.mode.manual"), "dark");
+      showToast(t("m.estimated.delivery.dikunci.mode.manual"), "info");
       render();
     }
     return;
@@ -608,7 +608,7 @@ async function handleCardDateChange(s, field) {
   if (field === "eta" && etaModeOf(s) === "auto" && s.eta) {
     s.etaMode = "manual";
     await persistFields(s.id, { etaMode: "manual" });
-    showToast(t("m.eta.diketik.manual.mode.eta.jadwal.ini.berpind"), "dark");
+    showToast(t("m.eta.diketik.manual.mode.eta.jadwal.ini.berpind"), "info");
   }
 
   await refreshShipmentPrediction(s);

@@ -49,18 +49,18 @@
   font-size: var(--t-sm);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--d-900);
+  color: var(--tp-700);
   margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .panel-head h2 i {
-  color: var(--sec-600);
+  color: var(--tsec-600);
   font-size: 0.9rem;
 }
 .panel-head h2 .ic {
-  color: var(--sec-600);
+  color: var(--tsec-600);
   width: 17px;
   height: 17px;
 }
@@ -132,19 +132,19 @@
   letter-spacing: 0.02em;
 }
 .task--late .task-reason {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .task--soon .task-reason {
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .task--doc .task-reason {
-  color: var(--sec-600);
+  color: var(--tsec-600);
 }
 .task--asli .task-reason {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 .ov-asli .stat-line-label i {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 /* TIGA TINGKAT: perusahaan / keterangan / nama barang.
 
@@ -209,7 +209,7 @@
   font-size: 0.9rem;
 }
 .task:hover .task-go {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 
 /* Agenda 7 hari */
@@ -243,7 +243,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .agenda-date {
   font-family: var(--font-display);
@@ -266,7 +266,7 @@
   font-size: 0.7rem;
   font-weight: 700;
   background: var(--n-100);
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .agenda-count.has {
   background: var(--p-500);
@@ -277,13 +277,14 @@
   background: var(--sec-50);
 }
 .agenda-day--today .agenda-dow {
-  color: var(--sec-700);
+  color: var(--tsec-700);
 }
 .agenda-day--today .agenda-date {
-  color: var(--d-900);
+  color: var(--tp-700);
 }
+/* Akhir pekan lebih redup, tetap 4,5:1 (--text-placeholder hanya 4,3:1) */
 .agenda-day--weekend .agenda-date {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 
 /* ---- Ringkasan kecil di kolom kanan ---- */
@@ -316,10 +317,10 @@
   color: var(--ink);
 }
 .stat-line-value.is-alert {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .stat-line-value.is-quiet {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 /* Kiriman yang dimaksud baris "Paling lama": kotak tersendiri yang
    menempel ke barisnya. Dulu baris tugas tanpa wadah -- garis merahnya
@@ -452,7 +453,7 @@
   padding: 8px;
   border-radius: var(--r-sm);
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .quick-action b {
   display: block;

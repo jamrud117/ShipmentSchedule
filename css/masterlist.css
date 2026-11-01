@@ -15,7 +15,7 @@
 ------------------------------------------------------------------ */
 #viewMasterlist,
 #mstRealisasiModal {
-  --mst-ada: var(--p-500);
+  --mst-ada: var(--tp-500);
   --mst-pakai: var(--n-300);
 }
 
@@ -176,11 +176,13 @@
   color: var(--n-600);
 }
 /* Tautan dalam kalimat: tombol yang berwujud teks. */
+/* Area tekan diperbesar ke 25px tanpa menggeser baris teksnya. */
 .mst-taut {
-  padding: 0;
+  padding: 4px 0;
+  margin: -4px 0;
   border: 0;
   background: none;
-  color: var(--p-500);
+  color: var(--tp-500);
   font: inherit;
   font-weight: 600;
   text-align: left;
@@ -189,7 +191,7 @@
   text-underline-offset: 2px;
 }
 .mst-taut:hover {
-  color: var(--p-600);
+  color: var(--tp-600);
   text-decoration-color: currentColor;
 }
 @media (pointer: coarse) {
@@ -223,7 +225,7 @@
 }
 .mst-redup {
   font-weight: 400;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 /* Masa berlaku: warna status + ikon + kalimat. */
 .mst-masa {
@@ -236,7 +238,7 @@
   border: 1px solid var(--s-ok-line);
   border-radius: var(--r-pill);
   background: var(--s-ok-bg);
-  color: var(--s-ok);
+  color: var(--ts-ok);
   font-size: var(--t-xs);
   font-weight: 600;
   white-space: nowrap;
@@ -244,12 +246,12 @@
 .mst-masa--dekat {
   border-color: var(--s-warn-line);
   background: var(--s-warn-bg);
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
 }
 .mst-masa--lewat {
   border-color: var(--s-danger-line);
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .mst-dok-ket,
 .mst-dok-catatan {
@@ -281,7 +283,7 @@
   line-height: 1.55;
 }
 .mst-perlu-kosong i {
-  color: var(--p-500);
+  color: var(--tp-500);
 }
 /* Baris antrean di sini tidak punya label alasan di kirinya, jadi di
    ponsel ia TETAP sebaris: overview.css melipat .task jadi dua baris
@@ -321,7 +323,7 @@
 .btn.mst-tombol--hapus:hover {
   border-color: var(--s-danger-line);
   background: var(--s-danger-bg);
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .mst-aksi {
   display: flex;
@@ -357,7 +359,7 @@
   border: 1px solid var(--p-200);
   border-radius: var(--r-sm);
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: var(--t-sm);
 }
 .mst-cip-saring > span {
@@ -374,7 +376,7 @@
   border: 0;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: 0.68rem;
 }
 .mst-cip-saring button:hover {
@@ -403,8 +405,8 @@
   white-space: nowrap;
 }
 .mst-seg button:hover:not(.active) {
-  background: #fff;
-  color: var(--p-600);
+  background: var(--surface);
+  color: var(--tp-600);
 }
 .mst-seg button.active {
   background: var(--p-600);
@@ -504,7 +506,7 @@
    lebih dulu adalah baris yang masih bersisa. */
 .mst-tabel tr.is-habis td.mst-kol-sisa b {
   font-weight: 500;
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .mst-tabel .mst-kol-aksi {
   width: 1%;
@@ -615,7 +617,7 @@
   margin-top: 0;
 }
 .mst-ringkas-sel.is-habis b {
-  color: var(--n-400);
+  color: var(--text-subtle);
 }
 .mst-rinci-label {
   display: block;
@@ -735,7 +737,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: var(--t-xs);
   font-weight: 600;
 }
@@ -773,7 +775,7 @@
   border: 1px solid var(--p-200);
   border-radius: var(--r-xs);
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   font-size: var(--t-xs);
   font-weight: 700;
   white-space: nowrap;
@@ -788,11 +790,11 @@
    (pembaca layar), warna hanya pendukung. */
 .mst-nilai--lebih,
 .mst-nilai-ket--lebih i {
-  color: var(--s-danger);
+  color: var(--ts-danger);
 }
 .mst-nilai--selisih,
 .mst-nilai-ket--selisih i {
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .mst-nilai--belum,
 .mst-nilai-ket--belum i {
@@ -836,7 +838,7 @@
 /* Susunan Per PIB: tanggal PIB belum sama di semua catatannya. */
 .mst-tgl-beda {
   margin-left: 6px;
-  color: var(--s-warn);
+  color: var(--s-warn-ink);
   font-size: 0.8rem;
 }
 .mst-rinci-tabel td.mst-ubah,
@@ -901,7 +903,7 @@
 }
 .mst-pilih-awas i {
   margin-right: 5px;
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .mst-pilih .login-input {
   height: 40px;
@@ -960,7 +962,7 @@
 }
 .mst-pib-ket.is-awas i {
   margin-right: 5px;
-  color: var(--s-warn);
+  color: var(--ts-warn);
 }
 .mst-pib-saran {
   margin-top: 8px;

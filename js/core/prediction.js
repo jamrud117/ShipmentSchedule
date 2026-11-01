@@ -172,12 +172,3 @@ async function segarkanKirimanSekapal(s) {
   if (berubah.length && typeof render === "function") render();
   return berubah;
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    recomputeShipmentDates,
-    applyPredictionToAll,
-    refreshShipmentPrediction,
-    segarkanKirimanSekapal,
-  };
-}

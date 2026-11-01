@@ -115,7 +115,7 @@
 }
 .sheet-foot kbd {
   font-family: var(--font-mono);
-  font-size: 0.64rem;
+  font-size: 0.69rem;
   background: var(--n-200);
   color: var(--n-700);
   border-radius: 3px;
@@ -136,16 +136,122 @@
   }
 }
 
-/* Kepala isi panel (nama pihak + status). */
+/* Kepala isi panel: label pihak (Nama Shipper / Buyer), namanya, nomor
+   & tanggal dokumen; buku & status di kanan. Nama pihak hanya di sini --
+   tidak diulang di daftar Dokumen & Umum. */
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--sp-4);
+  gap: var(--sp-3) var(--sp-4);
   flex-wrap: wrap;
   padding-bottom: var(--sp-4);
   border-bottom: 1px solid var(--border);
-  margin-bottom: var(--sp-4);
+  margin-bottom: var(--sp-2);
+}
+.detail-header-isi {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.detail-header-label {
+  margin-bottom: 2px;
+  font-family: var(--font-board);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.detail-header-tanda {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+/* DAFTAR LABEL-NILAI PANEL DETAIL (detailBaris / detailDaftar,
+   detail-view.js). Satu kotak per bagian, dua lajur bergaris: label di
+   kiri, nilai rata kanan di baris yang sama. Nilai yang tidak muat di
+   samping labelnya turun UTUH ke baris sendiri (flex-wrap) -- teksnya
+   baru membungkus bila satu baris penuh pun tidak cukup. Baris ganjil
+   terakhir selebar kotak. Isi panel di bawah 760px: satu lajur. */
+#detailViewBody {
+  container: detail-isi / inline-size;
+}
+.detail-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+.detail-kv-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px var(--sp-4);
+  min-width: 0;
+  padding: 9px 14px;
+  /* Garis antarbaris & antarlajur sebagai bayangan: tidak memakan
+     tempat, dan garis atas baris pertama terpotong tepi kotak. */
+  box-shadow: 0 -1px 0 var(--border);
+}
+.detail-kv-baris:nth-child(odd) {
+  box-shadow: 0 -1px 0 var(--border), 1px 0 0 var(--border);
+}
+.detail-kv-baris:nth-child(odd):last-child {
+  grid-column: 1 / -1;
+}
+/* Daftar dokumen: satu lajur -- nama dokumen yang panjang ("Certificate
+   of Origin (COO / SKA)") tetap sebaris dengan nomor & tanggalnya. */
+.detail-kv--satu {
+  grid-template-columns: minmax(0, 1fr);
+}
+.detail-kv--satu > .detail-kv-baris {
+  box-shadow: 0 -1px 0 var(--border);
+}
+.detail-kv dt {
+  flex: 0 0 auto;
+  font-family: var(--font-board);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.detail-kv dd {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0 0 0 auto;
+  font-size: 0.87rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+/* Tanggal yang pernah diubah: rencana di atas, jadwal baru di bawahnya -- rata kanan */
+.detail-kv dd .tgl-revisi {
+  justify-content: flex-end;
+}
+.detail-kv-tag {
+  margin-top: 4px;
+}
+.detail-kv-catatan {
+  margin: calc(var(--sp-2) * -1) 0 var(--sp-4);
+}
+@container detail-isi (max-width: 759.98px) {
+  .detail-kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .detail-kv-baris:nth-child(odd) {
+    box-shadow: 0 -1px 0 var(--border);
+  }
 }
 .detail-badge-mode {
   font-family: var(--font-display);
@@ -153,7 +259,7 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
   border: 1px solid var(--p-100);
   border-radius: var(--r-xs);
   padding: 4px 9px;
@@ -245,6 +351,6 @@
   margin-right: 4px;
 }
 .detail-draft {
-  color: var(--p-500);
+  color: var(--tp-500);
   font-weight: 600;
 }

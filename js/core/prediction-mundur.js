@@ -107,7 +107,3 @@ function statusKebutuhan(s) {
   const kind = selisih < 0 ? "telat" : selisih <= KEBUTUHAN_MEPET_HARI ? "mepet" : "aman";
   return { kind, butuh, sampai, selisih, fakta: false };
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { rencanaMundur, statusKebutuhan };
-}

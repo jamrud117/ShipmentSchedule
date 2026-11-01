@@ -159,6 +159,12 @@ function shipmentToRow(payload, mode) {
     const ringkas = ringkasDokPelengkap(dok);
     Object.keys(ringkas).forEach((camel) => (row[FIELD_MAP[camel]] = ringkas[camel] || null));
   }
+  /* DATA PIB / PEB LENGKAP (core/data-pabean.js) di kolom jsonb
+     data_pabean (migration-data-pabean.sql; KOLOM_OPSIONAL). Kosong: NULL. */
+  if ("dataPabean" in payload) {
+    const dp = rapikanDataPabean(payload.dataPabean);
+    row.data_pabean = Object.keys(dp).length ? dp : null;
+  }
   return row;
 }
 
@@ -181,6 +187,8 @@ function rowToShipment(row) {
      lama (s.pi, s.piDate, ...) jadi ringkasannya. */
   s.dokPelengkap = row.dokumen_pelengkap ? rapikanDokPelengkap(row.dokumen_pelengkap) : dokPelengkapJadwal(s);
   Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
+  s.dataPabean = rapikanDataPabean(row.data_pabean);
+  pindahkanPackingList(s);
   s.items = (row.items || []).map(rowToItem);
   // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])
@@ -223,6 +231,8 @@ function itemToRow(it, shipmentId) {
     pi_no_item: String(it.piNoItem || "").trim(),
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 array yang sama
     skb: sanitizeSkbList(it.skb),
+    // Data PIB/PEB per barang (core/data-pabean.js; migration-data-pabean.sql)
+    data_pabean: adaDataPabeanBarang(it.dataPabean) ? rapikanDataPabeanBarang(it.dataPabean) : null,
   };
 }
 
@@ -273,6 +283,7 @@ function rowToItem(row) {
     piNomor: row.pi_nomor || "",
     piNoItem: row.pi_no_item || "",
     skb: sanitizeSkbList(row.skb),
+    dataPabean: rapikanDataPabeanBarang(row.data_pabean),
     _facOpen: false,
   };
 }

@@ -1166,7 +1166,6 @@ function lapSusunBlok(a, lap, ang) {
 
   // 6. Detail transportasi (format laporan DD Korea)
   const bln = Array.from({ length: 12 }, (_, i) => lapBulanPendek(i + 1));
-  const tot = lap.bulanan.reduce((x, b) => ({ penjualan: x.penjualan + b.penjualan, biaya: x.biaya + b.biaya, qty: x.qty + b.qty }), { penjualan: 0, biaya: 0, qty: 0 });
   B.modaBulan = {
     judul: "Spending by mode & direction per month",
     sub: "",
@@ -1274,7 +1273,7 @@ function lapSvgGaris(judul, seri, opsi) {
   return lapSvgKerangka(judul, lapSvgSumbu(maks, y, kiri, kanan, maks < 10 ? 2 : 0) + jalur + bulan, lapSvgLegenda(seri), o.satuan);
 }
 
-function lapGrafik(a, lap) {
+function lapGrafik(a) {
   const jt = (arr) => arr.map((v) => (v == null ? null : lapJuta(v)));
   let k = 0;
   const kumIni = a.ini.map((v, i) => (i < a.M ? (k += v) : null));
@@ -1399,8 +1398,8 @@ function lapKpi(a) {
 }
 
 function lapGambar(box) {
-  const { a, lap, blok: B } = lapHitungSekarang();
-  const graf = lapGrafik(a, lap);
+  const { a, blok: B } = lapHitungSekarang();
+  const graf = lapGrafik(a);
   const tahunData = [...new Set((lapData.dana || []).concat(lapData.invoice || []).map((r) => String(fsumTanggal(r) || r.doc_date || "").slice(0, 4)).filter(Boolean))];
   if (tahunData.indexOf(lapSaringan.tahun) < 0) tahunData.push(lapSaringan.tahun);
   tahunData.sort().reverse();
@@ -1750,7 +1749,7 @@ async function lapUnduhExcel() {
   try {
     await ensureExcelJS();
     const hasil = lapHitungSekarang();
-    const graf = lapGrafik(hasil.a, hasil.lap);
+    const graf = lapGrafik(hasil.a);
     const [yoy, kumulatif, ramalan, moda, pendapatan, rasio] = await Promise.all(
       [graf.yoy, graf.kumulatif, graf.ramalan, graf.moda, graf.pendapatan, graf.rasio].map((svg) => lapSvgKePng(svg, LAP_GRAFIK.W, LAP_GRAFIK.H)));
     const wb = lapSusunWorkbook(hasil, { yoy, kumulatif, ramalan, moda, pendapatan, rasio });

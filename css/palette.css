@@ -63,7 +63,7 @@
   box-shadow: none;
 }
 .cmdk-input::placeholder {
-  color: var(--n-400);
+  color: var(--text-placeholder);
 }
 /* Tombol hapus (×): di baris palet ia ikut susunan flex (di depan
    tanda Esc), bukan melayang absolut seperti di kotak cari lain. */
@@ -74,7 +74,7 @@
 }
 .cmdk-esc {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   color: var(--n-500);
   background: var(--n-100);
   border: 1px solid var(--n-200);
@@ -92,7 +92,7 @@
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--n-400);
+  color: var(--text-subtle);
   padding: 10px 10px 5px;
 }
 .cmdk-item {
@@ -171,11 +171,11 @@
 }
 .cmdk-item-tag--import {
   background: var(--p-50);
-  color: var(--p-600);
+  color: var(--tp-600);
 }
 .cmdk-item-tag--export {
   background: var(--sec-50);
-  color: var(--sec-700);
+  color: var(--tsec-700);
 }
 .cmdk-empty {
   padding: var(--sp-8) var(--sp-4);
@@ -195,7 +195,7 @@
 }
 .cmdk-foot kbd {
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.69rem;
   background: var(--n-200);
   color: var(--n-700);
   border-radius: 3px;

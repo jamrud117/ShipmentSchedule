@@ -18,6 +18,8 @@ function showPage(page) {
     const el = $(sel);
     if (el) el.classList.toggle("d-none", key !== page);
   });
+  // Dibaca CSS (scroll-padding per halaman, base.css)
+  document.documentElement.dataset.halaman = page;
   // Sidebar, bilah atas & footer disembunyikan HANYA di halaman form: saat mengisi data
   if (typeof aturKerangka === "function") aturKerangka(page !== "form");
   // Laci navigasi (ponsel) tertutup begitu halamannya berganti
@@ -213,6 +215,15 @@ function router() {
 // Jalankan router ketika URL berubah
 window.addEventListener("hashchange", router);
 
+/* Panggilan router KEDUA, sesudah data dimuat (initApp, masuk). Daftar
+   jadwal sudah digambar loadShipments() -- digambar ulang hanya membuang
+   waktu, dan kalau muatnya gagal, layar "Data tidak bisa dimuat" tertimpa
+   daftar kosong. Halaman lain (#/edit/<id>, Ringkasan, ...) baru bisa
+   lengkap sekarang. */
+function routerSesudahMuat() {
+  if (halamanDariHash(location.hash || "#/") !== "schedule") router();
+}
+
 // "12 BOX" <-> kotak angka + kotak satuan.
 /* Satu isian: angka & satuan ditulis apa adanya ("4 BOX"). */
 /* Nilai pungutan untuk ditampilkan di form. Berbeda dari
@@ -353,12 +364,14 @@ function renderFormPage(id) {
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     draftDokPelengkap = rapikanDokPelengkap(dokPelengkapJadwal(s));
+    draftDataPabean = rapikanDataPabean(s.dataPabean);
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
       JSON.stringify(s.items && s.items.length ? s.items : [newItem()]),
     );
     draftStops = JSON.parse(JSON.stringify(s.routeStops || []));
+    sidikAsalForm = sidikIsiJadwal(s.items, s.routeStops, s.id);
   } else {
     $("#modalTitle").textContent = lbl.modalTitleNew;
     $("#fId").value = "";
@@ -408,8 +421,15 @@ function renderFormPage(id) {
     draftItems = [newItem()];
     draftNotesLog = [];
     draftStops = [];
+    sidikAsalForm = null;
     draftDokPelengkap = dokPelengkapKosong();
+    draftDataPabean = {};
   }
+  /* Bea & Pajak Impor otomatis atau manual -- ditentukan SEBELUM apa pun
+     menghitung ulang (renderItemTable di bawah memanggil recalcCustoms).
+     Dulu ditentukan sesudahnya: penanda form SEBELUMNYA yang masih
+     menempel membuat angka tersimpan (mis. dari PIB) tertimpa hitungan. */
+  initAutoDutyFlags();
   // Lampiran yang dilepas & progres hasil impor milik form sebelumnya dibuang
   berkasDilepasForm = [];
   resetProgresImporForm();
@@ -434,9 +454,11 @@ function renderFormPage(id) {
   $("#fNoteDraft").value = "";
   renderItemTable();
   renderDokPelengkapForm();
+  // Nama Shipper/Buyer: daftarnya tertutup, keterangan "nama baru" mengikuti isinya (pilih-pihak.js)
+  if (typeof siapkanPilihPihak === "function") siapkanPilihPihak();
+  // Data PIB/PEB: nilai bawaan diisikan sesudah moda & Supplier/Customer terpasang
+  bukaDataPabeanForm();
   renderRouteStopsUI();
-  /* Urutannya penting */
-  initAutoDutyFlags();
   recalcCustoms();
   syncAffixState();
   syncFormValidity();
@@ -690,7 +712,7 @@ function kabarkanForm(...pesan) {
   const isi = pesan.filter(Boolean).join(" ");
   if (!isi) return;
   if (tampunganKabarForm) tampunganKabarForm.push(isi);
-  else showToast(isi, "dark");
+  else showToast(isi, "info");
 }
 function tampungKabarForm(fn) {
   const sebelum = tampunganKabarForm;
@@ -828,16 +850,14 @@ $("#btnSaveShipment").addEventListener("click", async () => {
   /* Isian yang kurang tidak hanya disebut di pesan: langkahnya dibuka
      dan kursornya dibawa ke kotak itu, siap diisi. */
   if (!$("#fEtd").value || !$("#fEta").value) {
-    showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger");
+    showToast(t("m.mohon.isi.etd.dan.eta.terlebih.dahulu"), "danger", { judul: tt("Belum lengkap", "Incomplete") });
     pilihTabForm("umum");
     tandaiIsianKurang($(!$("#fEtd").value ? "#fEtd" : "#fEta"));
     return;
   }
   const cleanItems = draftItems.filter((it) => it.namaBarang.trim() !== "");
   if (cleanItems.length === 0) {
-    showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"),
-      "danger",
-    );
+    showToast(t("m.mohon.isi.minimal.1.nama.barang.pada.tab.dafta"), "danger", { judul: tt("Belum lengkap", "Incomplete") });
     pilihTabForm("barang");
     tandaiIsianKurang($('#itemTableBody [data-f="namaBarang"]'));
     return;
@@ -852,6 +872,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     showToast(
       tt('Mohon tambahkan minimal 1 Terminal Transit, atau ganti Tipe Rute ke "Direct".', 'Please add at least 1 Transit Terminal, or change the Route Type to "Direct".'),
       "danger",
+      { judul: tt("Belum lengkap", "Incomplete") },
     );
     pilihTabForm("umum");
     const terminal = $('#routeStopsBody [data-f="terminal"]');
@@ -937,6 +958,8 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     /* PI, LS & Polis Asuransi (buku Import) + dokumen lain; kolom lama
        pi / pi_date, ... ditulis dari ringkasannya (shipmentToRow) */
     dokPelengkap: dokPelengkapForm(),
+    // Data PIB/PEB lengkap (data-pabean-form.js); per barang ikut di item.dataPabean
+    dataPabean: dataPabeanForm(),
     package: joinPackageFields(),
   };
 
@@ -984,14 +1007,12 @@ async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
     }
     const progres = progresSimpanForm(id);
     if (progres) payload.docProgress = progres;
-    if (id) {
-      await updateShipmentRecord(id, payload, cleanItems, cleanStops);
-    } else {
-      await createShipment(payload, cleanItems, cleanStops);
-    }
+    const tersimpan = id
+      ? await updateShipmentRecord(id, payload, cleanItems, cleanStops, sidikAsalForm)
+      : await createShipment(payload, cleanItems, cleanStops);
     hapusLampiran(berkasDilepasForm);
     berkasDilepasForm = [];
-    await loadShipments();
+    await terapkanJadwalTersimpan(tersimpan);
     goBackToList();
     showToast(t("m.jadwal.berhasil.disimpan"), "success");
   } catch (err) {

@@ -63,11 +63,6 @@ function predictionHistory() {
   return semuaKiriman();
 }
 
-function setPredictionHistory(list) {
-  PREDICTION_HISTORY_OVERRIDE = Array.isArray(list) ? list : null;
-  resetPredictionLearning();
-}
-
 /* RIWAYAT PENUH untuk sampel per kiriman (sampelKiriman). Uji mundur
    menyaring predictionHistory() per kiriman yang diuji, tapi sampel per
    kiriman disimpan sepanjang generasi -- jadi bukti kapal-yang-sama di
@@ -614,15 +609,4 @@ function learnedManifestLagDays(tipe) {
   const hasil = ringkasSampel(sampel, prior, "lag");
   JEDA_MANIFEST.hasil.set(tipe, hasil);
   return hasil;
-}
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    setPredictionHistory,
-    setPredictionAsOf,
-    resetPredictionLearning,
-    learnedTransitDays,
-    learnedOpsDays,
-    learnedManifestLagDays,
-  };
 }

@@ -331,7 +331,7 @@ function reportHeadline(s, mode) {
      Export -> Stuffing
 
    Keduanya kolom `actual`, hanya berbeda label per buku. */
-function reportSortDate(s, mode) {
+function reportSortDate(s) {
   return s.actual || "";
 }
 
@@ -357,8 +357,8 @@ function pendingByMode(mode) {
     .filter((s) => (mode === "export" ? exportStuffingBelumLewat(s) : true))
     // Yang paling DEKAT di paling atas
     .sort((a, b) => {
-      const da = reportSortDate(a, mode);
-      const db = reportSortDate(b, mode);
+      const da = reportSortDate(a);
+      const db = reportSortDate(b);
       // Jadwal yang tanggalnya BELUM diisi ditaruh paling bawah — belum bisa diurutkan
       if (!da && !db) return 0;
       if (!da) return 1;
@@ -539,7 +539,7 @@ async function copyShipment(templateId, id) {
 
   const text = tpl.getText(s);
   if (!text) {
-    showToast(tpl.emptyMsg || t("s.tidak.ada.data.untuk.disalin"), "dark");
+    showToast(tpl.emptyMsg || t("s.tidak.ada.data.untuk.disalin"), "info");
     return;
   }
 

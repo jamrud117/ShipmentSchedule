@@ -95,7 +95,7 @@ function mulaiPeringatanSesi() {
     if (sesiSisaDetik <= 0) {
       clearInterval(sesiTimerHitung);
       tutupKotakKonfirmasi();
-      showToast(t("m.sesi.berakhir.karena.tidak.ada.aktivitas"), "danger");
+      showToast(t("m.sesi.berakhir.karena.tidak.ada.aktivitas"), "warning", { judul: tt("Sesi berakhir", "Session ended") });
       setTimeout(signOut, 400);
     }
   }, 1000);

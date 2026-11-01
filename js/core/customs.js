@@ -68,31 +68,39 @@ function itemTotals(shipmentLike) {
 }
 
 /* ------------------------------------------------------------------
-   PUNGUTAN IMPOR PERSIS SEPERTI PIB CEISA
+   PUNGUTAN IMPOR PERSIS SEPERTI PIB CEISA, MENURUT FASILITAS BARANG
 
-   Aturannya (PMK 190/2022 Pasal 22, dan ketentuan perpajakan untuk
-   PDRI):
+   SATU hitungan untuk Bea & Pajak Impor di tab Kepabeanan & Biaya (=
+   kolom Dibayar) dan tab Pungutan Data PIB. Aturannya (PMK 190/2022
+   Pasal 22, dan ketentuan perpajakan untuk PDRI):
    1. Semua pungutan dihitung PER SERI BARANG -- tiap baris Daftar
-      Barang -- lalu dijumlahkan per jenis pungutan.
+      Barang -- lalu dijumlahkan per jenis pungutan & kolom.
    2. Nilai Pabean seri = porsi nilai barangnya x (Total Nilai Barang +
       Freight + Asuransi) x NDPBM.
-   3. BM seri = Nilai Pabean seri x tarif. TOTAL BM satu PIB dibulatkan
-      KE ATAS ke ribuan rupiah (Rp1.506.882,069 -> Rp1.507.000).
-   4. Nilai Impor seri = Nilai Pabean seri + BM seri SEBELUM dibulatkan.
-   5. PPN = Nilai Impor x 11% (12% x DPP nilai lain 11/12, PMK
+   3. BM seri = Nilai Pabean seri x Tarif BM barangnya (Data PIB barang),
+      atau Tarif (%) jadwal (kosong = 5%). TOTAL BM dibulatkan KE ATAS ke
+      ribuan rupiah (Rp1.506.882,069 -> Rp1.507.000).
+   4. Fasilitas barang di jadwal (item.skb) adalah patokannya: SKB BM &
+      Masterlist -> BM DIBEBASKAN, SKB PPN -> PPN dibebaskan, SKB PPh ->
+      PPh dibebaskan. Yang dibebaskan masuk kolom Dibebaskan, sisanya
+      Dibayar (kolom tabel 37-44 PIB).
+   5. Nilai Impor seri = Nilai Pabean seri + BM seri yang TIDAK
+      dibebaskan, sebelum dibulatkan.
+   6. PPN = Nilai Impor x 11% (12% x DPP nilai lain 11/12, PMK
       131/2024). TOTAL PPN dibulatkan KE BAWAH ke rupiah penuh.
-   6. PPh 22 = Nilai Impor seri DIBULATKAN KE BAWAH ke ribuan x tarif
-      (2,5% untuk importir ber-API), dijumlahkan.
+   7. PPh 22 = Nilai Impor seri DIBULATKAN KE BAWAH ke ribuan x Tarif
+      PPh barangnya (bawaan 2,5%: importir ber-API), dijumlahkan.
 
-   Diperiksa terhadap PIB sungguhan (CIP USD 4.780, 2 seri, NDPBM
-   17.707, BM 5%): BM 4.232.000, PPN 9.775.857, PPh 2.221.750 -- tepat
-   ketiganya. Rumus lama (tingkat total, tanpa aturan pembulatan, PPh
-   dari Nilai Pabean saja) meleset: 4.231.973 / 9.775.858 / 2.115.987.
+   Diperiksa terhadap PIB sungguhan: CIP USD 4.780, 2 seri, NDPBM 17.707,
+   BM 5% -> BM 4.232.000, PPN 9.775.857, PPh 2.221.750; dan 17 seri (BM
+   5/10/15%, BKPM + SKB PPN & PPh) -> Dibebaskan BM 556.112.000, PPN
+   721.904.414, PPh 164.069.075 -- tepat semuanya, juga per serinya.
 
-   bmManual: BM yang diketik sendiri (tarif HS Code tertentu). Dibagi ke
-   seri menurut porsinya, dan dipakai APA ADANYA sebagai dasar PPN &
-   PPh -- ia biasanya sudah angka yang dibulatkan dari PIB, jadi PPN-
-   nya bisa selisih beberapa rupiah dari CEISA. */
+   bmManual / ppnManual / pphManual: angka yang DIKETIK sendiri di tab
+   Kepabeanan & Biaya, tampil apa adanya di kolom Dibayar. BM manual
+   dibagi ke seri yang BM-nya tidak dibebaskan (menurut BM hitungannya)
+   dan menjadi dasar PPN & PPh -- ia biasanya angka PIB yang sudah
+   dibulatkan, jadi PPN-nya bisa selisih beberapa rupiah dari CEISA. */
 const TARIF_PPN_IMPOR = 11;
 const TARIF_PPH_IMPOR = 2.5;
 
@@ -115,32 +123,76 @@ function nilaiSeriUsd(items) {
   return (items || []).map((it) => parseLooseNumber(it.qty) * parseLooseNumber(it.harga));
 }
 
-function hitungPungutanImpor(o) {
-  // Dibersihkan ke 4 desimal sebelum dibulatkan (lihat bulatkanBm)
+const FASILITAS_PUNGUTAN = { BM: "BM", Masterlist: "BM", PPN: "PPN", PPH: "PPh" };
+const PUNGUTAN_KOLOM_DIBAYAR = 0;
+const PUNGUTAN_KOLOM_DIBEBASKAN = 4;
+const KUNCI_PUNGUTAN = { BM: "bm", PPN: "ppn", PPh: "pph" };
+
+function fasilitasPungutanBarang(it) {
+  const bebas = { BM: false, PPN: false, PPh: false };
+  ((it && it.skb) || []).forEach((sk) => {
+    const j = FASILITAS_PUNGUTAN[sk && sk.jenis];
+    if (j) bebas[j] = true;
+  });
+  return bebas;
+}
+
+const adaAngkaPungutan = (v) => v != null && v !== "" && isFinite(Number(v));
+
+/* Angka Dibayar yang diketik sendiri dibagi ke seri yang tidak
+   dibebaskan, menurut hitungannya (nilai pabeannya bila hitungannya nol
+   semua). Tanpa dasar sama sekali (nilai pabean nol) tidak dibagi. */
+function bagiPungutanManual(seri, jenis, total) {
+  if (!adaAngkaPungutan(total)) return;
+  const k = KUNCI_PUNGUTAN[jenis];
+  const bayar = seri.filter((s) => !s.bebas[jenis]);
+  let bobot = bayar.map((s) => s[k]);
+  if (!(bobot.reduce((a, b) => a + b, 0) > 0)) bobot = bayar.map((s) => s.nilaiPabean);
+  const jumlah = bobot.reduce((a, b) => a + b, 0);
+  if (!(jumlah > 0)) return;
+  bayar.forEach((s, i) => (s[k] = (Number(total) * bobot[i]) / jumlah));
+}
+
+function hitungPungutanFasilitas(o) {
   const bersih = (x) => Math.round(x * 1e4) / 1e4;
-  const nilai = (o.nilaiSeriUsd || []).filter((v) => v > 0);
+  const items = o.items || [];
+  const nilai = nilaiSeriUsd(items).map((v) => (v > 0 ? v : 0));
   const totalBarang = nilai.reduce((a, b) => a + b, 0);
   const nilaiPabean = (totalBarang + (o.freightUsd || 0) + (o.asuransiUsd || 0)) * (o.ndpbm || 0);
-  if (!nilaiPabean) return { nilaiPabean: 0, bm: 0, ppn: 0, pph: 0 };
-  const tarifPpn = o.tarifPpn == null ? TARIF_PPN_IMPOR : o.tarifPpn;
-  const tarifPph = o.tarifPph == null ? TARIF_PPH_IMPOR : o.tarifPph;
-  // Tanpa barang bernilai (hanya freight?), seluruhnya dianggap satu seri.
-  const porsi = totalBarang ? nilai.map((v) => v / totalBarang) : [1];
-  let bm = 0, ppn = 0, pph = 0;
-  porsi.forEach((p) => {
-    const npSeri = nilaiPabean * p;
-    const bmSeri = o.bmManual != null ? o.bmManual * p : (npSeri * (o.tarifBm || 0)) / 100;
-    const niSeri = bersih(npSeri + bmSeri);
-    bm += bmSeri;
-    ppn += (niSeri * tarifPpn) / 100;
-    pph += (Math.floor(niSeri / 1000) * 1000 * tarifPph) / 100;
+  const angka = (v) => (v === "" || v == null ? null : Number(v));
+  const seri = items.map((it, i) => {
+    const dp = it.dataPabean || {};
+    const np = totalBarang ? (nilaiPabean * nilai[i]) / totalBarang : 0;
+    const tarifBm = angka(dp.tarifBm) != null ? angka(dp.tarifBm) : o.tarifBm == null ? 5 : o.tarifBm;
+    const tarifPph = angka(dp.tarifPph) != null ? angka(dp.tarifPph) : TARIF_PPH_IMPOR;
+    return { nilaiUsd: nilai[i], nilaiPabean: np, tarifBm, tarifPph, bebas: fasilitasPungutanBarang(it), bm: (np * tarifBm) / 100 };
   });
-  return {
-    nilaiPabean,
-    bm: bulatkanBm(o.bmManual != null ? o.bmManual : bm),
-    ppn: Math.floor(bersih(ppn)),
-    pph: Math.floor(bersih(pph)),
-  };
+  bagiPungutanManual(seri, "BM", o.bmManual);
+  seri.forEach((s) => {
+    s.nilaiImpor = bersih(s.nilaiPabean + (s.bebas.BM ? 0 : s.bm));
+    s.ppn = (s.nilaiImpor * TARIF_PPN_IMPOR) / 100;
+    s.pph = (Math.floor(s.nilaiImpor / 1000) * 1000 * s.tarifPph) / 100;
+  });
+  bagiPungutanManual(seri, "PPN", o.ppnManual);
+  bagiPungutanManual(seri, "PPh", o.pphManual);
+
+  const kosong = () => [0, 0, 0, 0, 0, 0];
+  const tabel = { BM: kosong(), PPN: kosong(), PPh: kosong() };
+  seri.forEach((s) =>
+    Object.keys(KUNCI_PUNGUTAN).forEach((j) => {
+      tabel[j][s.bebas[j] ? PUNGUTAN_KOLOM_DIBEBASKAN : PUNGUTAN_KOLOM_DIBAYAR] += s[KUNCI_PUNGUTAN[j]];
+    }),
+  );
+  tabel.BM = tabel.BM.map((x) => bulatkanBm(x));
+  tabel.PPN = tabel.PPN.map((x) => Math.floor(bersih(x)));
+  tabel.PPh = tabel.PPh.map((x) => Math.floor(bersih(x)));
+  // Yang diketik sendiri tampil apa adanya -- juga bila semua serinya berfasilitas
+  const manual = { BM: o.bmManual, PPN: o.ppnManual, PPh: o.pphManual };
+  Object.keys(manual).forEach((j) => {
+    if (adaAngkaPungutan(manual[j])) tabel[j][PUNGUTAN_KOLOM_DIBAYAR] = j === "BM" ? bulatkanBm(Number(manual[j])) : Number(manual[j]);
+  });
+  tabel.TOTAL = kosong().map((_, k) => tabel.BM[k] + tabel.PPN[k] + tabel.PPh[k]);
+  return { nilaiPabean, seri, tabel };
 }
 
 // shipmentLike needs: items, incoterm, ndpbm, bm, ppn, pph

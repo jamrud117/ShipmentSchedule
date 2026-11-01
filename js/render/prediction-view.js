@@ -53,7 +53,7 @@ function deliveryModeChipHtml(mode) {
 
 function routeLayerHtml(rute) {
   const bagian = [];
-  const sisi = (kode, nama, negara) =>
+  const sisi = (kode, nama) =>
     kode
       ? `<b>${escapeHtml(kode)}</b>${nama ? ` <span class="pred-muted">${escapeHtml(nama)}</span>` : ""}`
       : `<span class="pred-muted">${t("c.belum.dikenali")}</span>`;

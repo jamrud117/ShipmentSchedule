@@ -30,6 +30,7 @@ const I18N = {
     "nav.checker": "Cek PIB/PEB",
     "nav.accounts": "Akun",
     "menu.language": "Bahasa",
+    "menu.theme": "Tampilan",
     "menu.logout": "Keluar",
 
     // -- Layar masuk
@@ -54,7 +55,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. “5 BOX”), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm, CBM otomatis — kolom Kemasan-nya sendiri tetap diisi seperti Import, dan Total Package-nya ikut terjumlah otomatis. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya — di surat jalan baris itu tercetak menyatu.",
     "form.note.duty":
-      "Terisi otomatis seperti PIB CEISA, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
+      "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Tarif BM & PPh per barang lewat tombol pena di Data PIB; barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
       "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak.",
     "form.note.totalValue":
@@ -200,11 +201,11 @@ const I18N = {
     "ph.kode.atau.nama.pelabuhan.asal": "Kode atau nama pelabuhan asal",
     "ph.kode.atau.nama.pelabuhan.tujuan": "Kode atau nama pelabuhan tujuan",
     "ph.nama.forwarder": "Nama forwarder",
-    "ph.nama.kapal.atau.nomor.penerbangan": "Nama kapal atau nomor penerbangan",
+    "ph.nama.kapal.atau.nomor.penerbangan": "Kapal / no. penerbangan",
     "ph.nama.kapal.atau.pesawat": "Nama kapal atau pesawat",
     "ph.nama.lengkap.pengguna": "Nama lengkap pengguna",
     "ph.nama.penerima": "Nama penerima",
-    "ph.nama.perusahaan": "Nama perusahaan",
+    "ph.nama.perusahaan": "Pilih atau ketik nama perusahaan",
     "ph.nama.perusahaan.penerima": "Nama perusahaan penerima",
     "ph.nama.pic": "Nama PIC",
     "ph.nomor.aju": "Nomor aju",
@@ -214,7 +215,7 @@ const I18N = {
     "ph.nomor.master.b.l.atau.awb": "Nomor Master B/L atau AWB",
     "ph.nomor.po.pembeli": "Nomor PO pembeli",
     "ph.nomor.polisi.kendaraan": "Nomor polisi kendaraan",
-    "ph.no.si.otomatis": "Otomatis: {n} — isi bila ingin nomor lain",
+    "ph.no.si.otomatis": "Otomatis: {n} — bisa diganti",
     "ph.nomor.si": "Nomor SI",
     "ph.nomor.sppb": "Nomor SPPB",
     "ph.nomor.voyage.atau.penerbangan": "Nomor voyage atau penerbangan",
@@ -231,7 +232,7 @@ const I18N = {
     "u.invoice.delivery.order.permintaan.dana.dan.sur": "Invoice, Delivery Order, Permintaan Dana, dan Surat — satu sumber nomor untuk seluruh tim.",
     "u.isi.otomatis.dari.dokumen": "Isi otomatis dari dokumen",
     "u.kolomnya.sudah.sesuai.lengkap.dengan.baris.con": "Kolomnya sudah sesuai, lengkap dengan baris contoh dan lembar cara mengisi.",
-    "u.langkah.1.dari.3": "Langkah 1 dari 3",
+    "u.langkah.1.dari.4": "Langkah 1 dari 4",
     "u.menyiapkan.papan.jadwal": "Menyiapkan Papan Jadwal…",
     "u.minggu.ini": "Minggu Ini",
     "u.bulan.ini": "Bulan Ini",
@@ -359,7 +360,6 @@ const I18N = {
     "a.ubah.data.akun": "Ubah data akun",
     "a.ubah.nama.username": "Ubah nama & username",
     "a.ubah.peran.akun.ini": "Ubah peran akun ini",
-    "a.ya.hapus.akun": "Ya, hapus akun",
     "f.barang": "Barang",
 
     // -- Teks pada kartu & layar masuk
@@ -597,6 +597,7 @@ const I18N = {
     "nav.checker": "PIB/PEB Check",
     "nav.accounts": "Accounts",
     "menu.language": "Language",
+    "menu.theme": "Appearance",
     "menu.logout": "Sign out",
 
     // -- Login screen
@@ -619,7 +620,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Filled automatically like the CEISA PIB, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Type your own value to override; clear it to return to automatic.",
+      "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Per-item BM & PPh rates via the pencil button in PIB Data; items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form.",
     "form.note.totalValue":
@@ -769,7 +770,7 @@ const I18N = {
     "ph.nama.kapal.atau.pesawat": "Vessel or aircraft name",
     "ph.nama.lengkap.pengguna": "User's full name",
     "ph.nama.penerima": "Recipient name",
-    "ph.nama.perusahaan": "Company name",
+    "ph.nama.perusahaan": "Select or type a company name",
     "ph.nama.perusahaan.penerima": "Receiving company name",
     "ph.nama.pic": "PIC name",
     "ph.nomor.aju": "AJU number",
@@ -779,7 +780,7 @@ const I18N = {
     "ph.nomor.master.b.l.atau.awb": "Master B/L or AWB number",
     "ph.nomor.po.pembeli": "Buyer's PO number",
     "ph.nomor.polisi.kendaraan": "Vehicle registration number",
-    "ph.no.si.otomatis": "Automatic: {n} — fill in to override",
+    "ph.no.si.otomatis": "Auto: {n} — type to override",
     "ph.nomor.si": "SI number",
     "ph.nomor.sppb": "SPPB number",
     "ph.nomor.voyage.atau.penerbangan": "Voyage or flight number",
@@ -796,7 +797,7 @@ const I18N = {
     "u.invoice.delivery.order.permintaan.dana.dan.sur": "Invoice, Delivery Order, Fund Request, and Letter — a single source of numbers for the whole team.",
     "u.isi.otomatis.dari.dokumen": "Auto-fill from a document",
     "u.kolomnya.sudah.sesuai.lengkap.dengan.baris.con": "The columns already match, complete with a sample row and a how-to-fill sheet.",
-    "u.langkah.1.dari.3": "Step 1 of 3",
+    "u.langkah.1.dari.4": "Step 1 of 4",
     "u.menyiapkan.papan.jadwal": "Preparing the schedule board…",
     "u.minggu.ini": "This Week",
     "u.bulan.ini": "This Month",
@@ -924,7 +925,6 @@ const I18N = {
     "a.ubah.data.akun": "Edit account details",
     "a.ubah.nama.username": "Edit name & username",
     "a.ubah.peran.akun.ini": "Change this account's role",
-    "a.ya.hapus.akun": "Yes, delete the account",
     "f.barang": "Items",
 
     // -- Teks pada kartu & layar masuk
@@ -1287,9 +1287,10 @@ function setLang(kode) {
   const layarForm = document.getElementById("viewForm");
   if (layarForm && !layarForm.classList.contains("d-none") && typeof terapkanLabelForm === "function") {
     terapkanLabelForm();
-    // Isian form yang dirakit JS -- tabel barang & kartu Dokumen Pelengkap Pabean
+    // Isian form yang dirakit JS -- tabel barang, kartu Dokumen Pelengkap Pabean & Data PIB/PEB Lengkap
     renderItemTable();
     renderDokPelengkapForm();
+    renderDataPabeanForm();
   }
   /* Label yang bergantung MODA (Nama Vessel/Voyager, No. Flight/Voyage,
      Pelabuhan/Terminal) ditulis dari JS, bukan lewat data-i18n --

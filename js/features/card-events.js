@@ -290,7 +290,16 @@ cardContainer.addEventListener("click", (e) => {
     const ekor = lampiran.length
       ? tt(` ${lampiran.length} lampiran berkasnya ikut terhapus.`, ` Its ${lampiran.length} attachment${lampiran.length === 1 ? "" : "s"} will be deleted too.`)
       : "";
-    showConfirm(tt("Hapus jadwal pengiriman ini secara permanen?", "Permanently delete this shipment schedule?") + ekor, async () => {
+    /* Kalimatnya menyebut JADWAL MANA dan APA SAJA yang ikut hilang --
+       daftar barang & rute ikut terhapus lewat "on delete cascade",
+       progres dokumen & kronologi tersimpan di baris jadwalnya sendiri. */
+    const nama = jadwal && String(jadwal.party || "").trim();
+    const pesan = nama
+      ? tt(`Jadwal ${nama} beserta daftar barang, progres dokumen, dan kronologinya akan dihapus permanen dan tidak bisa dikembalikan.`,
+        `The ${nama} schedule, with its item list, document progress and timeline, will be deleted permanently and cannot be restored.`)
+      : tt("Jadwal ini beserta daftar barang, progres dokumen, dan kronologinya akan dihapus permanen dan tidak bisa dikembalikan.",
+        "This schedule, with its item list, document progress and timeline, will be deleted permanently and cannot be restored.");
+    showConfirm(pesan + ekor, async () => {
       try {
         const { error } = await supabaseClient
           .from("shipments")
@@ -299,16 +308,30 @@ cardContainer.addEventListener("click", (e) => {
         if (error) throw error;
         hapusLampiran(lampiran);
         data[activeMode] = currentList().filter((x) => x.id !== id);
-        // Kiriman yang dihapus tidak boleh tetap jadi bahan belajar prediksi
-        if (typeof resetPredictionLearning === "function") resetPredictionLearning();
+        // Kiriman yang dihapus tidak boleh tetap jadi bahan belajar prediksi (data/api.js)
+        selaraskanPrediksi();
         render();
         showToast(t("m.jadwal.berhasil.dihapus"), "dark");
       } catch (err) {
         console.error(err);
         showToast(t("m.gagal.menghapus.data.dari.database"), "danger");
       }
-    });
+    }, { title: tt("Hapus Jadwal?", "Delete Schedule?"), confirmText: tt("Hapus Jadwal", "Delete Schedule"), icon: "bi-trash3" });
   }
+});
+
+/* Menu salin templat: kartunya digambar utuh selama menu terbuka
+   (content-visibility: auto memotong menu di tepi kartu). Lewat kelas,
+   bukan .ship-card:has(.dropdown-menu.show) -- :has() itu membuat tiap
+   .show yang berganti di mana pun (modal, toast, menu lain) memeriksa
+   ulang dokumen. */
+cardContainer.addEventListener("show.bs.dropdown", (e) => {
+  const kartu = e.target.closest(".ship-card");
+  if (kartu) kartu.classList.add("is-menu-buka");
+});
+cardContainer.addEventListener("hidden.bs.dropdown", (e) => {
+  const kartu = e.target.closest(".ship-card");
+  if (kartu) kartu.classList.remove("is-menu-buka");
 });
 
 $("#btnAdd").addEventListener("click", () => (location.hash = "#/new"));

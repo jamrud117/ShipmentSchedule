@@ -307,14 +307,3 @@ const PREDICTION_SOURCE_LABEL = {
   get today() { return tt("Hari Ini", "Today"); },
   get manual() { return tt("Diisi Manual", "Entered Manually"); },
 };
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    milestoneDateOf,
-    highestMilestoneOf,
-    remainingMilestonesOf,
-    jalurOf,
-    kedatanganSekapal,
-    kedatanganTercatat,
-  };
-}

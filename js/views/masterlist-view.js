@@ -1034,8 +1034,8 @@ function mstRincianRealisasiHtml(u, b) {
       <button type="button" class="mst-pib-tambah" data-mst-tambah-pib="${id}" title="${escapeAttr(
         tt("Tambah PIB kiriman berikutnya ke realisasi ini", "Add the next shipment's PIB to this realization"),
       )}"><i class="bi bi-plus-lg" aria-hidden="true"></i> PIB</button>
-      <button type="button" class="icon-btn" data-mst-ubah-realisasi="${id}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
-      <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${id}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
+      <button type="button" class="icon-btn" data-mst-ubah-realisasi="${id}" title="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}" aria-label="${escapeAttr(tt("Ubah realisasi", "Edit realization"))}"><i class="bi bi-pencil"></i></button>
+      <button type="button" class="icon-btn danger" data-mst-hapus-realisasi="${id}" title="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}" aria-label="${escapeAttr(tt("Hapus realisasi", "Delete realization"))}"><i class="bi bi-trash3"></i></button>
     </div></td>`;
   const aturDok = (i) =>
     pibs.length
@@ -1227,7 +1227,7 @@ function mstTabelBarisHtml(baris) {
             <td class="mst-kol-aksi"><div class="hscode-actions">
               ${
                 b.sisa > 0
-                  ? `<button type="button" class="icon-btn mst-ubah" data-mst-catat="${id}" title="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}"><i class="bi bi-journal-plus"></i></button>`
+                  ? `<button type="button" class="icon-btn mst-ubah" data-mst-catat="${id}" title="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}" aria-label="${escapeAttr(tt("Catat realisasi baris ini", "Record a realization for this line"))}"><i class="bi bi-journal-plus"></i></button>`
                   : ""
               }
               <button type="button" class="icon-btn" data-mst-detail="b:${id}" title="${escapeAttr(tt("Lihat rincian", "View details"))}"
@@ -1270,6 +1270,8 @@ function mstTabelPibHtml(kelompok) {
             <td class="mst-kol-angka mst-kol-nilai" data-label="${escapeAttr(L.nilai)}">${mstNilaiPibHtml(g)}</td>
             <td class="mst-kol-aksi"><div class="hscode-actions">
               <button type="button" class="icon-btn mst-ubah" data-mst-tanggal-pib="${kunci}" title="${escapeAttr(
+                tt("Atur tanggal PIB ini di semua catatannya", "Set this PIB's date on all its records"),
+              )}" aria-label="${escapeAttr(
                 tt("Atur tanggal PIB ini di semua catatannya", "Set this PIB's date on all its records"),
               )}"><i class="bi bi-calendar-event"></i></button>
               <button type="button" class="icon-btn" data-mst-detail="p:${kunci}" title="${escapeAttr(tt("Lihat rincian", "View details"))}"
@@ -2228,7 +2230,7 @@ function mstHapusRealisasi(id) {
       renderMasterlist();
       showToast(tt("Realisasi dihapus.", "Realization deleted."), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus Realisasi?", "Delete Realization?"), confirmText: tt("Hapus Realisasi", "Delete Realization"), icon: "bi-trash3" },
   );
 }
 
@@ -2601,7 +2603,7 @@ function mstHapusBaris(id) {
       renderMasterlist();
       showToast(tt(`Baris ${b.no} dihapus.`, `Line ${b.no} deleted.`), "dark");
     },
-    { confirmText: t("u.ya.hapus") },
+    { title: tt("Hapus Baris Masterlist?", "Delete Masterlist Line?"), confirmText: tt("Hapus Baris", "Delete Line"), icon: "bi-trash3" },
   );
 }
 

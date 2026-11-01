@@ -167,13 +167,13 @@ function renderTaskQueue() {
     (totalHalaman > 1
       ? `<div class="task-pager">
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage - 1}"
-                   ${ovTaskPage <= 1 ? "disabled" : ""} title="${tt("Sebelumnya", "Previous")}">
-             <i class="bi bi-chevron-left"></i>
+                   ${ovTaskPage <= 1 ? "disabled" : ""} title="${tt("Sebelumnya", "Previous")}" aria-label="${tt("Halaman tugas sebelumnya", "Previous task page")}">
+             <i class="bi bi-chevron-left" aria-hidden="true"></i>
            </button>
            <span class="task-pageinfo">${mulai + 1}\u2013${mulai + potong.length} ${tt("dari", "of")} ${tasks.length}</span>
            <button type="button" class="page-nav" data-ov-task-page="${ovTaskPage + 1}"
-                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="${tt("Berikutnya", "Next")}">
-             <i class="bi bi-chevron-right"></i>
+                   ${ovTaskPage >= totalHalaman ? "disabled" : ""} title="${tt("Berikutnya", "Next")}" aria-label="${tt("Halaman tugas berikutnya", "Next task page")}">
+             <i class="bi bi-chevron-right" aria-hidden="true"></i>
            </button>
          </div>`
       : "");

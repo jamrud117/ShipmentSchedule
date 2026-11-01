@@ -203,12 +203,3 @@ function predictEtaRevised(src) {
   const r = predictEta(src, src.etdUpdate);
   return r.ok ? r : null;
 }
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = {
-    predictionTransitDays,
-    predictEta,
-    etaModeOf,
-    predictionEtaBasis,
-  };
-}

@@ -6,6 +6,13 @@ function pilihTabForm(nama) {
   $$(".tab-pane").forEach((p) => p.classList.toggle("d-none", p.dataset.tabpane !== nama));
   // Penanda langkah di kepala halaman ikut berpindah.
   if (typeof syncFormStep === "function") syncFormStep();
+  /* Halaman Data PIB/PEB membaca isian tab lain (barang, nilai, moda,
+     Supplier/Customer -- termasuk yang baru diisi hasil impor dokumen):
+     nilai bawaannya disegarkan dan digambar ulang tiap dibuka. */
+  if (nama === "dpb" && typeof renderDataPabeanForm === "function") {
+    segarkanBawaanDataPabean(false);
+    renderDataPabeanForm();
+  }
   return $(`.tab-pane[data-tabpane="${nama}"]`);
 }
 
@@ -48,7 +55,6 @@ function applyTransportLabels() {
   const air = $("#fTransport").value === "udara";
   // Saran pelabuhan/bandara ikut moda yang dipilih
   if (typeof refreshUnlocodeDatalist === "function") refreshUnlocodeDatalist();
-  const lbl = ML();
   // Requirement B (label dinamis): moda LAUT -> "Nama Vessel" jadi "Nama Voyager", "No
   const transport = air ? "udara" : "laut";
   /* Awalannya lewat kamus, kata bendanya dari vesselNoun (Vessel /
@@ -123,12 +129,26 @@ $("#fBM").addEventListener("change", (e) => {
   );
 });
 
-// Dipanggil saat form dibuka: nilai yang sudah tersimpan dianggap dimasukkan dengan sengaja
+/* Dipanggil saat form dibuka. Kotak kosong = otomatis. Angka tersimpan
+   yang SAMA dengan hitungan otomatis -- menurut fasilitas & tarif barang,
+   atau cara lama tanpa keduanya (jadwal yang disimpan sebelum Bea & Pajak
+   Impor mengikuti tab Pungutan Data PIB) -- juga otomatis: ikut dihitung
+   ulang. Selain itu dianggap diketik / diimpor dari dokumen dengan
+   sengaja (mis. angka PIB) dan tidak disentuh. */
 function initAutoDutyFlags() {
-  AUTO_DUTY_FIELDS.forEach((id) => {
-    const el = $("#" + id);
-    el.dataset.auto = el.value.trim() === "" ? "1" : "0";
-  });
+  const dasar = dasarPungutanForm();
+  const polos = Object.assign({}, dasar, { items: dasar.items.map((it) => ({ qty: it.qty, harga: it.harga })) });
+  const el = { BM: $("#fBM"), PPN: $("#fPPN"), PPh: $("#fPPH") };
+  const isi = (e) => nilaiKotakAngka("#" + e.id);
+  const calon = (bmManual) => [dasar, polos].map((o) => hitungPungutanFasilitas(Object.assign({ bmManual }, o)).tabel);
+  const otomatis = (j, daftar) =>
+    el[j].value.trim() === "" || daftar.some((tb) => tb[j][PUNGUTAN_KOLOM_DIBAYAR] === isi(el[j]));
+  const bmOtomatis = otomatis("BM", calon(null));
+  // PPN & PPh otomatis dulu dihitung dari BM yang berlaku -- yang diketik sendiri juga
+  const dasarPajak = calon(bmOtomatis ? null : isi(el.BM));
+  el.BM.dataset.auto = bmOtomatis ? "1" : "0";
+  el.PPN.dataset.auto = otomatis("PPN", dasarPajak) ? "1" : "0";
+  el.PPh.dataset.auto = otomatis("PPh", dasarPajak) ? "1" : "0";
 }
 
 ["fFreight", "fInsurance", "fNdpbm", "fTarif", "fBM", "fPPN", "fPPH"].forEach(
@@ -162,14 +182,30 @@ function nilaiKotakAngka(sel) {
   return isFinite(n) ? n : 0;
 }
 
-function recalcCustoms(opsi) {
+// Dasar hitungan Bea & Pajak Impor dari isian form -- juga dibaca Data PIB (data-pabean-form.js)
+function dasarPungutanForm() {
+  const tarif = String($("#fTarif").value || "").trim();
+  return {
+    items: draftItems,
+    freightUsd: nilaiKotakAngka("#fFreight"),
+    asuransiUsd: nilaiKotakAngka("#fInsurance"),
+    ndpbm: nilaiKotakAngka("#fNdpbm"),
+    // Kotak Tarif kosong (jadwal lama) = 5%; "0" berarti 0% (mis. FTA)
+    tarifBm: tarif === "" ? 5 : nilaiKotakAngka("#fTarif"),
+  };
+}
+
+// BM / PPN / PPh yang DIKETIK sendiri (null = otomatis) -- kolom Dibayar apa adanya
+function pungutanManualForm() {
+  const m = (id) => (isAutoDuty($("#" + id)) ? null : nilaiKotakAngka("#" + id));
+  return { bmManual: m("fBM"), ppnManual: m("fPPN"), pphManual: m("fPPH") };
+}
+
+function recalcCustoms() {
   const tmp = {
     items: draftItems,
     incoterm: $("#fIncoterm").value,
     ndpbm: nilaiKotakAngka("#fNdpbm"),
-    bm: nilaiKotakAngka("#fBM"),
-    ppn: nilaiKotakAngka("#fPPN"),
-    pph: nilaiKotakAngka("#fPPH"),
   };
 
   /* DASAR PUNGUTAN = NILAI PABEAN, BUKAN HARGA BARANG SAJA.
@@ -179,40 +215,22 @@ function recalcCustoms(opsi) {
      $640 dengan freight $382,40 bukan hal aneh), jadi memakai
      `totalUSD * ndpbm` saja membuat pungutannya meleset jauh di bawah
      yang sebenarnya terutang. */
-  /* BM, PPN, PPh DIHITUNG PERSIS SEPERTI PIB CEISA -- per seri barang,
-     dengan aturan pembulatannya masing-masing. Lihat
-     hitungPungutanImpor() di core/customs.js.
+  /* BM, PPN, PPh = KOLOM DIBAYAR tab Pungutan Data PIB -- hitungan yang
+     sama persis (hitungPungutanFasilitas, core/customs.js): per seri
+     barang dengan aturan pembulatan CEISA, tarif BM & PPh barangnya (atau
+     kotak Tarif), dan fasilitas barangnya (SKB BM / Masterlist, SKB PPN,
+     SKB PPh = dibebaskan, tidak ikut dibayar).
 
-     Tarif BM dari kotak Tarif (%). Dulu kotak itu diabaikan dan BM
-     selalu 5%. Kotak yang kosong (jadwal lama) tetap dianggap 5%; "0"
-     berarti 0% (mis. fasilitas FTA).
-
-     Kalau BM diisi manual (tarif HS Code tertentu), PPN & PPh memakai
-     nilai manual itu -- yang penting keduanya dihitung dari BM yang
-     BENAR-BENAR berlaku. */
-  const elBm = $("#fBM");
-  const tarifTeks = String($("#fTarif").value || "").trim();
-  const pungutan = hitungPungutanImpor({
-    nilaiSeriUsd: nilaiSeriUsd(draftItems),
-    freightUsd: nilaiKotakAngka("#fFreight"),
-    asuransiUsd: nilaiKotakAngka("#fInsurance"),
-    ndpbm: tmp.ndpbm,
-    tarifBm: tarifTeks === "" ? 5 : nilaiKotakAngka("#fTarif"),
-    bmManual: isAutoDuty(elBm) ? null : nilaiKotakAngka("#fBM"),
-  });
+     Kalau BM diisi manual (tarif HS Code tertentu, angka PIB), PPN & PPh
+     memakai nilai manual itu -- yang penting keduanya dihitung dari BM
+     yang BENAR-BENAR berlaku. */
+  const pungutan = hitungPungutanFasilitas(Object.assign(dasarPungutanForm(), pungutanManualForm()));
   const dasarRupiah = pungutan.nilaiPabean;
-  if (isAutoDuty(elBm)) {
-    elBm.value = dasarRupiah ? formatNumberValue(pungutan.bm) : "";
-  }
-
-  const elPpn = $("#fPPN");
-  const elPph = $("#fPPH");
-  if (isAutoDuty(elPpn)) {
-    elPpn.value = dasarRupiah ? formatNumberValue(pungutan.ppn) : "";
-  }
-  if (isAutoDuty(elPph)) {
-    elPph.value = dasarRupiah ? formatNumberValue(pungutan.pph) : "";
-  }
+  // Nol yang dihitung (dibebaskan seluruhnya) ditulis "0", bukan kotak kosong
+  [["fBM", "BM"], ["fPPN", "PPN"], ["fPPH", "PPh"]].forEach(([id, j]) => {
+    const el = $("#" + id);
+    if (isAutoDuty(el)) el.value = dasarRupiah ? nilaiPungutan(pungutan.tabel[j][PUNGUTAN_KOLOM_DIBAYAR]) : "";
+  });
   // Nilai Pabean ditampilkan apa adanya — dasar yang sama persis yang
   // baru saja dipakai menghitung BM/PPN/PPH di atas, bukan dihitung ulang.
   $("#calcNilaiPabean").textContent = fmtRpPresisi(dasarRupiah);
