@@ -243,11 +243,7 @@ function dnRingkasBarisPayload(b) {
   const bagian = [
     b.desc || b.nama || "",
     [b.qty, b.satuan].filter((v) => String(v ?? "").trim()).join(" "),
-    b.amount != null && String(b.amount).trim()
-      ? (typeof formatRupiah === "function"
-          ? "Rp " + formatRupiah(parseRupiah(b.amount))
-          : String(b.amount))
-      : "",
+    b.amount != null && String(b.amount).trim() ? "Rp " + formatNilai(parseRupiah(b.amount)) : "",
     b.ppnRate ? "PPN " + b.ppnRate + "%" : "",
     b.ket || "",
   ].filter((v) => String(v).trim());
@@ -391,7 +387,7 @@ function dndBiayaHtml(r) {
      hanya menambah tinta dan membuat angkanya lebih sulit dibandingkan
      dari baris ke baris. Nol ditulis tanda pisah, bukan "0". */
   const satuan = `<span class="dnd-satuan">(${escapeHtml(mata === "IDR" ? "Rp" : mata)})</span>`;
-  const polos = (v) => (v ? (v < 0 ? "- " : "") + formatRupiah(Math.abs(v)) : "—");
+  const polos = (v) => (v ? (v < 0 ? "- " : "") + formatNilai(Math.abs(v)) : "—");
   const jumlah = (label, nilai, kelas) =>
     `<div class="fl-sum${kelas ? " " + kelas : ""}"><span>${escapeHtml(label)}</span><b>${escapeHtml(nilai)}</b></div>`;
 

@@ -118,7 +118,7 @@ function hitungBiayaKiriman(s, rows, kursFn) {
   };
 }
 
-const bkRp = (n) => (Math.round(n) ? "Rp " + Math.round(n).toLocaleString("id-ID") : "—");
+const bkRp = (n) => (Math.round(n) ? fmtRp(n) : "—");
 const bkNamaJenis = (j) => (j === "Lainnya" ? tt("Lainnya", "Other") : j);
 
 function bkHtml(s, h) {
@@ -178,7 +178,7 @@ function bkHtml(s, h) {
       </table>
     </div>
     ${h.nilaiBarang ? `<div class="form-text-note">${escapeHtml(tt(
-      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs NDPBM ${bkRp(h.kursBarang)}) — biaya kiriman ini ${angkaLokal(h.persen * 100, "id-ID", { maximumFractionDigits: 1 })}% dari nilai barang.`,
+      `Nilai barang ${bkRp(h.nilaiBarang)} (kurs NDPBM ${bkRp(h.kursBarang)}) — biaya kiriman ini ${angkaLokal(h.persen * 100, "en-US", { maximumFractionDigits: 1 })}% dari nilai barang.`,
       `Goods value ${bkRp(h.nilaiBarang)} (NDPBM rate ${bkRp(h.kursBarang)}) — this shipment's cost is ${angkaLokal(h.persen * 100, "en-US", { maximumFractionDigits: 1 })}% of the goods value.`))}</div>` : ""}`;
 }
 

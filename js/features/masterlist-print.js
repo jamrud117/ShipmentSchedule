@@ -51,8 +51,6 @@ const SO_LABEL_STATUS = {
   nilai: "Nilai perlu dicek",
 };
 
-const soAngka = (n) => angkaLokal(mstBulat(n), "id-ID", { maximumFractionDigits: 3 });
-
 /* ---------- data ---------- */
 
 /* Baris yang tampil di layar, per lini proses. Urutan lini mengikuti
@@ -171,7 +169,7 @@ function mstCetakKepalaTabel(ukur) {
 function mstCetakJudulLini(data, gi, lanjutan, atribut) {
   const g = data.kelompok[gi];
   const nama = g.lini || "Lini proses tidak tercantum";
-  const ket = lanjutan ? "lanjutan" : `${soAngka(g.isi.length)} baris`;
+  const ket = lanjutan ? "lanjutan" : `${mstFmt(g.isi.length)} baris`;
   return `<tr class="so-grup"${atribut || ""}><td colspan="${SO_KOLOM.length}">${escapeHtml(nama)} <span>· ${escapeHtml(ket)}</span></td></tr>`;
 }
 
@@ -184,9 +182,9 @@ function mstCetakBarisHtml(b, atribut) {
     sel(escapeHtml(b.nama)),
     sel(escapeHtml(mstSpekRingkas(b.spek))),
     sel(escapeHtml(b.satuan), "so-tengah"),
-    sel(escapeHtml(soAngka(b.kuota)), "so-angka"),
-    sel(escapeHtml(soAngka(b.terpakai)), "so-angka"),
-    sel(escapeHtml(soAngka(b.sisa)), "so-angka"),
+    sel(escapeHtml(mstFmt(b.kuota)), "so-angka"),
+    sel(escapeHtml(mstFmt(b.terpakai)), "so-angka"),
+    sel(escapeHtml(mstFmt(b.sisa)), "so-angka"),
     sel(daftar(pibs.map((p) => p.aju)), "so-pib"),
     sel(daftar(pibs.map((p) => (p.tanggal ? fmtDate(p.tanggal) : "-"))), "so-pib so-tengah"),
     sel("", "so-isi so-isi-awal"),
@@ -200,9 +198,9 @@ function mstCetakTfoot(data, ukur) {
   return `<tfoot${ukur ? ' data-so-ukur="tfoot"' : ""}><tr>
     <td colspan="3" class="so-total-label">TOTAL</td>
     <td class="so-tengah">${daftar((jml) => jml.satuan)}</td>
-    <td class="so-angka">${daftar((jml) => soAngka(jml.kuota))}</td>
-    <td class="so-angka">${daftar((jml) => soAngka(jml.terpakai))}</td>
-    <td class="so-angka">${daftar((jml) => soAngka(jml.sisa))}</td>
+    <td class="so-angka">${daftar((jml) => mstFmt(jml.kuota))}</td>
+    <td class="so-angka">${daftar((jml) => mstFmt(jml.terpakai))}</td>
+    <td class="so-angka">${daftar((jml) => mstFmt(jml.sisa))}</td>
     <td colspan="2"></td>
     <td class="so-isi so-isi-awal"></td>
     <td class="so-isi"></td>
@@ -221,8 +219,8 @@ function mstCetakKop(data, pertama, ukur) {
   const isian = (label, nilai, tangan) =>
     `<div class="so-f"><span class="so-l">${escapeHtml(label)}</span><span class="so-v${tangan ? " so-v--isi" : ""}">${tangan ? "" : escapeHtml(nilai || "-")}</span></div>`;
   const cakupan = data.saringan.length
-    ? `${soAngka(data.baris.length)} dari ${soAngka(data.total)} baris — ${data.saringan.join(" · ")}`
-    : `${soAngka(data.baris.length)} baris (semua baris)`;
+    ? `${mstFmt(data.baris.length)} dari ${mstFmt(data.total)} baris — ${data.saringan.join(" · ")}`
+    : `${mstFmt(data.baris.length)} baris (semua baris)`;
   return `<div class="so-awal"${ukur ? ' data-so-ukur="kop-pertama"' : ""}>
     <header class="so-kop">
       <img class="so-logo" src="${SJ_LOGO}" alt="">

@@ -1125,11 +1125,11 @@ t("Detail Pengajuan Dana: kepala memuat status & total, rincian biaya jadi tabel
   eq(baris.length, 4, "jumlah baris:");
   const nilai = w.fundLineValues(w.normalisasiBarisDana(p.lines));
   const ppn = w.fundLinePpnDaftar(w.normalisasiBarisDana(p.lines), nilai);
-  eq(dndSel(baris[0]).slice(0, 4).join("|"), "1|Freight Charges|18.389.000|1.1%");
-  eq(baris[0].children[4].firstChild.textContent, w.formatRupiah(ppn[0]), "PPN baris 1:");
-  eq(dndSel(baris[1])[2], "- 10.113.950", "diskon bertanda minus:");
+  eq(dndSel(baris[0]).slice(0, 4).join("|"), "1|Freight Charges|18,389,000|1.1%");
+  eq(baris[0].children[4].firstChild.textContent, w.formatNilai(ppn[0]), "PPN baris 1:");
+  eq(dndSel(baris[1])[2], "- 10,113,950", "diskon bertanda minus:");
   if (!baris[1].classList.contains("dnd-diskon")) throw new Error("baris diskon tidak ditandai");
-  eq(dndSel(baris[3]).slice(2).join("|"), "250.000|—|—", "tanpa PPN ditulis tanda pisah:");
+  eq(dndSel(baris[3]).slice(2).join("|"), "250,000|—|—", "tanpa PPN ditulis tanda pisah:");
   if (/Rp/.test(tabel.querySelector("tbody").textContent)) throw new Error("'Rp' masih diulang di tiap sel");
   // Tarif ikut di sel PPN untuk ponsel (kolom tarifnya disembunyikan di sana)
   eq(baris[0].querySelector(".dnd-tarif-kecil").textContent, "1.1%");
@@ -1179,13 +1179,13 @@ t("Detail Pengajuan Dana format lama / Billing: tabel pungutan + TOTAL", () => {
               feeBm: "9.780.000", feePpn: "22.591.800", feePph: "5.134.500" };
   const { kepala, badan } = dndBuka(dndDana("316/EXIM/DDI/X/2026", p));
   const baris = [...badan.querySelectorAll(".dnd-tabel tbody tr")].map((tr) => dndSel(tr).join("|"));
-  eq(baris.join(" > "), "1|Bea Masuk|9.780.000 > 2|PPN Import|22.591.800 > 3|PPH Import|5.134.500");
-  eq(dndJumlah(badan).join(" | "), "TOTAL Rp. 37.506.300");
-  eq(kepala.querySelector(".dnd-sisi-nilai").textContent, "Rp. 37.506.300");
+  eq(baris.join(" > "), "1|Bea Masuk|9,780,000 > 2|PPN Import|22,591,800 > 3|PPH Import|5,134,500");
+  eq(dndJumlah(badan).join(" | "), "TOTAL Rp. 37,506,300");
+  eq(kepala.querySelector(".dnd-sisi-nilai").textContent, "Rp. 37,506,300");
   if (badan.querySelector('[data-dnd="feeBm"]')) throw new Error("pungutan tampil dua kali");
   // Nominal format lama (tanpa rincian): satu baris bernama jenis pengeluarannya
   const lama = dndBuka(dndDana("9/EXIM", { expenseType: "Handling", payee: "PRIME", amount: "1.500.000" })).badan;
-  eq([...lama.querySelectorAll(".dnd-tabel tbody tr")].map((tr) => dndSel(tr).join("|")).join(" > "), "1|Handling|1.500.000");
+  eq([...lama.querySelectorAll(".dnd-tabel tbody tr")].map((tr) => dndSel(tr).join("|")).join(" > "), "1|Handling|1,500,000");
   if (lama.querySelector('[data-dnd="amount"]')) throw new Error("nominal tampil dua kali");
 });
 t("Detail Surat Jalan Lokal & Surat: daftar barang jadi tabel", () => {
@@ -3768,8 +3768,8 @@ t("surat cetak: baris diskon bertanda minus, tanpa keterangan diskon di samping 
   const html = w.frTabelRinci({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }, "IDR");
   if (/c-diskon|&minus; diskon/.test(html)) throw new Error("masih ada keterangan diskon di samping pos");
   if (!/Base Discount/.test(html)) throw new Error("baris diskon tidak tercetak");
-  if (!/- Rp\. 220\.000/.test(html)) throw new Error("nilai diskon tidak bertanda minus");
-  if (!/1\.980\.000/.test(html)) throw new Error("subtotal setelah diskon tidak tercetak");
+  if (!/- Rp\. 220,000/.test(html)) throw new Error("nilai diskon tidak bertanda minus");
+  if (!/1,980,000/.test(html)) throw new Error("subtotal setelah diskon tidak tercetak");
   eq(w.frTotalPengajuan({ lines: [pos("2.200.000", 11), diskon("10", "pct", 11)] }), 2158200, "nilai pengajuan:");
 });
 
@@ -5528,8 +5528,8 @@ t("Nilai Pabean ditampilkan di kotak sendiri, dasar yang SAMA dengan PPN/PPH oto
   eq($("#calcNilaiPabean").textContent, w.fmtRp(dasar), "tetap tampil walau Incoterm bukan CIF/FOB:");
 });
 t("Nilai CIF = barang + freight + asuransi (apa pun Incoterm-nya); Nilai Pabean presisi 2 desimal", () => {
-  /* Angka dari layar Yogi: FCA, barang $1.280, freight $688,62,
-     asuransi $9,84, NDPBM 17.707. CIF $1.978,46 x 17.707 = 35.032.591,22 */
+  /* Angka dari layar Yogi: FCA, barang $1,280, freight $688.62,
+     asuransi $9.84, NDPBM 17,707. CIF $1,978.46 x 17,707 = 35,032,591.22 */
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"1280" }]');
   $("#fIncoterm").value = "FCA";
   $("#fFreight").value = "688.62";
@@ -5537,18 +5537,18 @@ t("Nilai CIF = barang + freight + asuransi (apa pun Incoterm-nya); Nilai Pabean 
   $("#fNdpbm").value = "17,707";
   w.recalcCustoms();
   eq($("#calcCIF").textContent, "$1,978.46", "Nilai CIF:");
-  eq($("#calcNilaiPabean").textContent, "Rp 35.032.591,22", "Nilai Pabean bersen:");
+  eq($("#calcNilaiPabean").textContent, "Rp 35,032,591.22", "Nilai Pabean bersen:");
   // Bulat -> tanpa ",00".
   $("#fFreight").value = ""; $("#fInsurance").value = "";
   w.recalcCustoms();
   eq($("#calcCIF").textContent, "$1,280", "CIF tanpa ongkos:");
-  eq($("#calcNilaiPabean").textContent, "Rp 22.664.960", "Nilai Pabean bulat:");
+  eq($("#calcNilaiPabean").textContent, "Rp 22,664,960", "Nilai Pabean bulat:");
   // Kotak CIF Rupiah (= Nilai Pabean) & catatan "CIF dianggap 0" sudah tidak ada.
   if (w.document.getElementById("calcCIFRupiah")) throw new Error("kotak CIF Rupiah masih ada");
   if (w.document.getElementById("noCifFobNote")) throw new Error("catatan 'CIF dianggap 0' masih ada");
-  eq(w.fmtRpPresisi(84639460), "Rp 84.639.460", "pemformat, bulat:");
-  eq(w.fmtRpPresisi(1234.5), "Rp 1.234,50", "pemformat, bersen:");
-  eq(w.fmtRpPresisi(1234.567), "Rp 1.234,57", "pemformat, maks 2 desimal:");
+  eq(w.fmtRpPresisi(84639460), "Rp 84,639,460", "pemformat, bulat:");
+  eq(w.fmtRpPresisi(1234.5), "Rp 1,234.50", "pemformat, bersen:");
+  eq(w.fmtRpPresisi(1234.567), "Rp 1,234.57", "pemformat, maks 2 desimal:");
 });
 t("kotak ongkos kosong: dasarnya kembali ke harga barang saja", () => {
   w.eval('draftItems = [{ namaBarang:"X", qty:"1", satuan:"pcs", harga:"640" }]');
@@ -7174,10 +7174,10 @@ t("kotak Nama Shipper: klik membuka daftar, mengetik menyaring + baris Tambah, p
 });
 
 console.log("— TOTAL QTY DIJUMLAH PER SATUAN —");
-t("1 EA + 60.000 SET, bukan 60.001", () => {
+t("1 EA + 60,000 SET, bukan 60,001", () => {
   const c = w.computeCustoms({ items: [
     { qty: 1, satuan: "EA" }, { qty: 60000, satuan: "SET" } ] });
-  eq(w.fmtQtyBySatuan(c.qtyBySatuan), "1 EA + 60.000 SET");
+  eq(w.fmtQtyBySatuan(c.qtyBySatuan), "1 EA + 60,000 SET");
 });
 t("satuan yang sama digabung", () => {
   const c = w.computeCustoms({ items: [
@@ -10865,8 +10865,8 @@ t("nilai rupiah dibaca gaya Indonesia: titik ribuan, koma desimal", () => {
   eq(w.parseRupiah("1322640"), 1322640);
 });
 t("angka ditulis balik gaya Indonesia, tanpa nol desimal yang sia-sia", () => {
-  eq(w.formatRupiah(16873095.68), "16.873.095,68");
-  eq(w.formatRupiah(2500000), "2.500.000");
+  eq(w.formatNilai(16873095.68), "16,873,095.68");
+  eq(w.formatNilai(2500000), "2,500,000");
 });
 t("Pemohon jadi dropdown dengan dua nama", () => {
   const sel = w.document.querySelector('[data-docnum-panel="fund"] [data-dn="requester"]');
@@ -11028,7 +11028,7 @@ t('potongan nol ditulis "-" tunggal, bukan "- -"', () => {
   const tanpa = selPotongan([{ desc: "STORAGE", amount: 24998943, ppnRate: 0 }]);
   eq(tanpa[tanpa.length - 1], "-", "tanpa potongan:");
   const dengan = selPotongan([{ desc: "FREIGHT", amount: 1000000, ppnRate: 1.1 }]);
-  eq(dengan[dengan.length - 1], "- Rp. 20.000", "dengan potongan:");
+  eq(dengan[dengan.length - 1], "- Rp. 20,000", "dengan potongan:");
 });
 t("daftar nomor menampilkan nomor invoice untuk jenis selain Billing", () => {
   /* Kolomnya membaca billingNo saja, jadi kosong untuk jenis lain
@@ -11195,8 +11195,8 @@ t("kolom JUMLAH menampilkan nilai+PPN pada subtotal, dan potongan bertanda minus
     ],
   }));
   const bersih = h.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-  // 380.000 + 29.700 = 409.700 ; PPH 2% x 360.000 = 7.200 ; total 402.500
-  ["Rp. 380.000", "Rp. 29.700", "Rp. 409.700", "- Rp. 7.200", "Rp. 402.500"].forEach((x) => {
+  // 380,000 + 29,700 = 409,700 ; PPH 2% x 360,000 = 7,200 ; total 402,500
+  ["Rp. 380,000", "Rp. 29,700", "Rp. 409,700", "- Rp. 7,200", "Rp. 402,500"].forEach((x) => {
     if (!bersih.includes(x)) throw new Error("tidak tercetak: " + x);
   });
 });
@@ -11827,7 +11827,7 @@ t('nilai rupiah ditulis "Rp." dan dipusatkan seperti label AMOUNT', () => {
   const h = w.buildFundRequestHtml(barisFundUji({
     feeBm: "0", feePpn: "26000000", feePph: "0", currency: "IDR",
   }));
-  if (!h.includes("Rp. 26.000.000")) throw new Error('nilai tidak ditulis "Rp. 26.000.000"');
+  if (!h.includes("Rp. 26,000,000")) throw new Error('nilai tidak ditulis "Rp. 26,000,000"');
   if (/IDR\s/.test(h)) throw new Error('masih ada awalan "IDR"');
   /* Rata KANAN, bukan tengah: dengan enam kolom dan angka berdesimal,
      digit satuan harus sejajar antar baris supaya bisa dijumlah mata. */
@@ -11841,8 +11841,8 @@ t('mata uang selain rupiah tetap memakai kodenya, bukan "Rp."', () => {
   const h = w.buildFundRequestHtml(barisFundUji({
     expenseType: "Freight", amount: "1200", currency: "USD",
   }));
-  if (!h.includes("USD 1.200")) throw new Error("nilai USD tidak memakai kode USD");
-  if (h.includes("Rp. 1.200")) throw new Error('USD ikut diberi awalan "Rp."');
+  if (!h.includes("USD 1,200")) throw new Error("nilai USD tidak memakai kode USD");
+  if (h.includes("Rp. 1,200")) throw new Error('USD ikut diberi awalan "Rp."');
 });
 t('nilai nol dicetak "-", bukan "Rp. 0"', () => {
   const h = w.buildFundRequestHtml(barisFundUji({
@@ -20424,7 +20424,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     eq(b.total, 3000000, "B = 3 jt bagiannya saja:");
     eq(a.total + b.total, w.frTotalPengajuan(rows[0].payload) + w.frTotalPengajuan(rows[1].payload), "tidak ada yang dobel/hilang:");
     const html = w.bkHtml(kirimA, a);
-    if (!/bagian kiriman ini dari Rp 4\.000\.000 \(2 BL\/AWB\)/.test(html)) throw new Error("keterangan bagian tidak tampil: " + html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300));
+    if (!/bagian kiriman ini dari Rp 4,000,000 \(2 BL\/AWB\)/.test(html)) throw new Error("keterangan bagian tidak tampil: " + html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 300));
   });
 
   t("Laporan: biaya per kiriman & per kg memakai bagian tiap AWB; MAWB & HAWB satu jadwal = satu kiriman", () => {
@@ -20453,7 +20453,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       lines: [pos("AWB A", 1000000, 0, "877144218723"), pos("AWB B", 3000000, 0, "877334611529")] };
     const html = w.frTabelRinci(p, "IDR");
     if (!/BAGIAN PER BL\/AWB/.test(html)) throw new Error("bagian per BL/AWB tidak tercetak");
-    if (!/877144218723<\/td>\s*<td class="c-amt">Rp\. 1\.000\.000/.test(html)) throw new Error("bagian AWB A");
+    if (!/877144218723<\/td>\s*<td class="c-amt">Rp\. 1,000,000/.test(html)) throw new Error("bagian AWB A");
     const rata = w.frTabelRinci(Object.assign({}, p, { lines: [pos("Bersama", 4000000, 0)] }), "IDR");
     if (/BAGIAN PER BL\/AWB/.test(rata)) throw new Error("pembagian rata semata ikut tercetak");
     // Kotak Detail: kolom BL/AWB & bagian per BL/AWB

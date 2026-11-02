@@ -48,23 +48,12 @@ function parseRupiah(v) {
   return isFinite(n) ? n : 0;
 }
 
-/* Tampilan CETAKAN & rincian riwayat: "16.873.095,68" (gaya surat
-   Indonesia). Desimal ditulis hanya kalau memang ada -- angka bulat
-   tidak diberi ",00" supaya tabelnya tidak penuh nol yang tidak berarti.
-   Di FORM angkanya bergaya ketik aplikasi (formatNilaiForm). */
-function formatRupiah(n) {
-  const x = Number(n) || 0;
-  const desimal = Math.round(x * 100) % 100 !== 0;
-  return angkaLokal(x, "id-ID", {
-    minimumFractionDigits: desimal ? 2 : 0,
-    maximumFractionDigits: 2,
-  });
-}
-
-/* Angka DI FORM (kotak nilai, PPN per baris, kaki tabel): gaya ketik
-   aplikasi, sama dengan kotak angka lain -- koma ribuan, titik desimal
-   ("16,873,095.68"); desimal hanya kalau ada. */
-function formatNilaiForm(n) {
+/* NILAI RUPIAH -- di layar DAN di surat cetak: koma ribuan, titik
+   desimal ("16,873,095.68"), sama dengan kotak angka yang diketik.
+   Desimal ditulis hanya kalau memang ada -- angka bulat tidak diberi
+   ".00" supaya tabelnya tidak penuh nol yang tidak berarti. Berawalan
+   mata uang: frNilai (fund-request-print.js). */
+function formatNilai(n) {
   const x = Number(n) || 0;
   const desimal = Math.round(x * 100) % 100 !== 0;
   return angkaLokal(x, "en-US", {
@@ -82,7 +71,7 @@ function formatNilaiForm(n) {
    titik ribuan ("59.883.994,65") -- dikenali lalu ditulis ulang. */
 function formatRupiahKetik(mentah) {
   if (typeof mentah === "number") {
-    return isFinite(mentah) && mentah !== 0 ? formatNilaiForm(mentah) : "";
+    return isFinite(mentah) && mentah !== 0 ? formatNilai(mentah) : "";
   }
   const teks = String(mentah == null ? "" : mentah);
   const negatif = /^\s*-/.test(teks);
@@ -638,7 +627,7 @@ const isiKotakNilai = (b) =>
       ? (b.amount === "" || b.amount == null ? "" : String(parsePersenDiskon(b.amount)))
       : formatRupiahKetik(typeof b.amount === "number" ? b.amount : parseRupiah(b.amount));
 
-const teksPpnSel = (v) => (v < 0 ? "- " + formatNilaiForm(-v) : formatNilaiForm(v));
+const teksPpnSel = (v) => (v < 0 ? "- " + formatNilai(-v) : formatNilai(v));
 
 function pilihanTarifHtml(b) {
   return FUND_PPN_RATES.map(
@@ -651,7 +640,7 @@ function pilihanTarifHtml(b) {
    tinggi dari baris lain dan kotak-kotaknya tidak sejajar. Terutama
    untuk diskon persen, yang nilai rupiahnya tidak terlihat dari
    kotaknya sendiri; di mode Rp ia menegaskan tanda minusnya. */
-const teksNominalDiskon = (v) => (v ? "- " + formatNilaiForm(-v) : "0");
+const teksNominalDiskon = (v) => (v ? "- " + formatNilai(-v) : "0");
 
 /* Jenis transaksi yang sedang dipilih di form Pengajuan Dana. */
 function fundTransaksiForm() {
@@ -872,11 +861,11 @@ function gambarKakiRincian() {
   if (!kaki) return;
   const r = fundLineTotals(fundLines);
   kaki.innerHTML = `
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilaiForm(r.totalNilai)}</b></div>
-      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilaiForm(r.totalDiskon)}</b></div>` : ""}
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatNilaiForm(r.totalPpn)}</b></div>
-      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatNilaiForm(r.pph)}</b></div>
-      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatNilaiForm(r.grandTotal)}</b></div>
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilai(r.totalNilai)}</b></div>
+      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilai(r.totalDiskon)}</b></div>` : ""}
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatNilai(r.totalPpn)}</b></div>
+      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatNilai(r.pph)}</b></div>
+      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatNilai(r.grandTotal)}</b></div>
       ${kakiPerAwbHtml()}`;
 }
 
@@ -890,7 +879,7 @@ function kakiPerAwbHtml() {
       <div class="fl-awb-bagian">
         <div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>
         ${bagian.map((b) => `
-        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatNilaiForm(b.dibayar)}</b></div>`).join("")}
+        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatNilai(b.dibayar)}</b></div>`).join("")}
       </div>`;
 }
 

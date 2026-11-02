@@ -103,20 +103,21 @@ function fmtUSD(n) {
     })
   );
 }
+/* ANGKA -- di layar dan di cetakan: koma ribuan, titik desimal, sama
+   dengan kotak angka yang diketik ("Rp 1,544,000", "1,234.5 Kg"). */
 function fmtRp(n) {
-  n = Math.round(Number(n) || 0);
-  return "Rp " + n.toLocaleString("id-ID");
+  return "Rp " + angkaLokal(Math.round(Number(n) || 0), "en-US");
 }
 /* Rupiah PRESISI: desimal ditampilkan hanya kalau memang ada, paling
-   banyak 2 angka -- Rp 35.032.591,22, tapi Rp 84.639.460 (bukan
-   84.639.460,00). Untuk Nilai Pabean, yang di PIB pun bersen. */
+   banyak 2 angka -- Rp 35,032,591.22, tapi Rp 84,639,460 (bukan
+   84,639,460.00). Untuk Nilai Pabean, yang di PIB pun bersen. */
 function fmtRpPresisi(n) {
   const v = Math.round((Number(n) || 0) * 100) / 100;
   const bulat = Number.isInteger(v);
-  return "Rp " + angkaLokal(v, "id-ID", { minimumFractionDigits: bulat ? 0 : 2, maximumFractionDigits: 2 });
+  return "Rp " + angkaLokal(v, "en-US", { minimumFractionDigits: bulat ? 0 : 2, maximumFractionDigits: 2 });
 }
 function fmtNum(n) {
-  return (Number(n) || 0).toLocaleString("id-ID");
+  return angkaLokal(Number(n) || 0, "en-US");
 }
 function escapeHtml(str) {
   return String(str == null ? "" : str).replace(
@@ -135,7 +136,7 @@ function escapeAttr(str) {
   return escapeHtml(str);
 }
 
-/* "1 EA + 60.000 SET". Satuan kosong ditulis tanpa keterangan supaya
+/* "1 EA + 60,000 SET". Satuan kosong ditulis tanpa keterangan supaya
    barang yang satuannya belum diisi tidak menghilang dari total. */
 function fmtQtyBySatuan(list) {
   if (!list || !list.length) return "0";

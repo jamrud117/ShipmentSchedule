@@ -121,21 +121,18 @@ function frTotalPengajuan(p) {
   return frTotal(frBarisRincian(d));
 }
 
-/* Angka pada surat: "Rp. 6.975.012". Nilai nol dicetak sebagai "-",
+/* Nilai berawalan mata uang -- di surat cetak DAN di layar (riwayat,
+   panel Detail, Summary): "Rp. 6,975,012". Nilai nol ditulis "-",
    seperti pada berkas rujukan — bukan "Rp. 0", yang terbaca seolah
    memang ada tagihan sebesar nol.
 
-   Mata uang selain rupiah tetap memakai kodenya (USD 1.200): "Rp."
+   Mata uang selain rupiah tetap memakai kodenya (USD 1,200.50): "Rp."
    khusus untuk IDR, bukan awalan untuk semua mata uang. */
 function frNilai(n, mataUang) {
   const v = Number(n) || 0;
   if (!v) return "-";
   const kode = (mataUang || "IDR").toUpperCase();
-  /* formatRupiah, bukan fmtNum: angka rupiah di lembar ini ditulis
-     gaya Indonesia (titik ribuan, koma desimal) supaya cocok dengan
-     tagihan aslinya DAN dengan yang terlihat di form. */
-  const angka = typeof formatRupiah === "function" ? formatRupiah(v) : fmtNum(v);
-  return kode === "IDR" ? `Rp. ${angka}` : `${kode} ${angka}`;
+  return `${kode === "IDR" ? "Rp." : kode} ${formatNilai(v)}`;
 }
 
 function frTanggalSurat(iso) {
@@ -656,12 +653,12 @@ function fundRequestCss() {
      dikecilkan dan lebarnya dijatah.
 
      table-layout: fixed -- tanpa ini satu nilai panjang
-     ("Rp. 34.354.345.345") melebarkan kolomnya dan menyempitkan yang
+     ("Rp. 34,354,345,345") melebarkan kolomnya dan menyempitkan yang
      lain sampai angkanya membungkus.
 
      Jatah: isi lembar 210mm - 30mm margin = 180mm; 8 + 30x3 + 11 =
      109mm untuk kolom tetap, sisanya (~71mm) untuk uraian. 30mm pada
-     8pt memuat sekitar 21 karakter -- cukup untuk "Rp. 34.891.544.405"
+     8pt memuat sekitar 21 karakter -- cukup untuk "Rp. 34,891,544,405"
      (18) tanpa membungkus. */
   .rincian--detail {
     table-layout: fixed;

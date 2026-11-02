@@ -593,7 +593,7 @@ async function danaDariInvoicePdf(file) {
       return;
     }
     danaIsiForm(h);
-    const rp = (n) => "Rp " + Math.round(n).toLocaleString("id-ID");
+    const rp = fmtRp;
     const ringkas = h.jenisDokumen === "billing"
       ? tt(`Terisi dari billing ${h.billingNo}: total ${rp(h.dpp)}${h.blAwb ? `, BL/AWB ${h.blAwb}` : ""}. Periksa lalu simpan.`,
         `Filled from billing ${h.billingNo}: total ${rp(h.dpp)}${h.blAwb ? `, B/L/AWB ${h.blAwb}` : ""}. Check, then save.`)

@@ -72,7 +72,7 @@ function mstBulat(n) {
   return Math.round((Number(n) || 0) * 1000) / 1000;
 }
 function mstFmt(n) {
-  return angkaLokal(mstBulat(n), activeLang === "en" ? "en-US" : "id-ID", { maximumFractionDigits: 3 });
+  return angkaLokal(mstBulat(n), "en-US", { maximumFractionDigits: 3 });
 }
 
 /* NILAI (USD) -- dua desimal, ditulis seperti di invoice & kotak harga

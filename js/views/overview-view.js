@@ -222,11 +222,9 @@ function renderAgenda() {
   box.innerHTML = html.join("");
 }
 
-/* "2,5 hari" / "2.5 days" -- koma desimal untuk Bahasa Indonesia. */
+/* "2.5 hari" / "2.5 days" -- titik desimal di kedua bahasa. */
 function teksHariDesimal(n) {
-  return activeLang === "en"
-    ? `${n} ${Math.abs(n) === 1 ? "day" : "days"}`
-    : `${String(n).replace(".", ",")} hari`;
+  return activeLang === "en" ? `${n} ${Math.abs(n) === 1 ? "day" : "days"}` : `${n} hari`;
 }
 
 /* RATA-RATA DELAY KAPAL — jadwal rencana vs kenyataan, 12 bulan
@@ -481,7 +479,7 @@ function gambarAkurasi(box, hasil) {
       const nilai = r.n ? `${r.tepat1}%` : "—";
       const rinci = r.n
         ? tt(
-            `meleset rata-rata ${String(r.mae).replace(".", ",")} hari · ${r.n} kiriman`,
+            `meleset rata-rata ${r.mae} hari · ${r.n} kiriman`,
             `off by ${r.mae} days on average · ${r.n} shipments`,
           )
         : tt("belum ada kiriman selesai", "no completed shipments yet");
