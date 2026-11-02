@@ -268,6 +268,47 @@ Token di `css/tokens.css`; aturan lintas komponen di `css/system.css`
   komponen pakai token `--w-<bg|garis|teks>-<hex>`. Warna baru: token,
   bukan hex lepas.
 
+## Nomor dokumen: ditentukan database
+
+Nomor terbit dari fungsi database `next_document_number` (nomor urut di
+`document_number_counters`), bukan dari peramban: dua orang yang menekan
+Ajukan Nomor bersamaan dilayani bergiliran -- yang lebih dulu sampai
+mendapat 346, berikutnya 347. "Nomor berikutnya" di layar hanya
+perkiraan (`data-pasti` = sudah dibaca dari nomor urut); kalau yang
+terbit berbeda, pengguna diberi tahu di bawah tombol Ajukan.
+
+`next_document_number` atomik (`insert ... on conflict do update ...
+returning`), dan constraint `document_numbers_number_unique` /
+`_seq_unique` menolak nomor kembar dalam satu seri: nomor yang ternyata
+sudah tersimpan (nomor urut di belakang) langsung diganti nomor
+berikutnya oleh `submitDocNumRequest` -- paling banyak `DN_COBA_NOMOR`
+kali.
+
+## Database: aturan akses & optimasi
+
+`migration-optimasi-database.sql` (sekali jalan di SQL Editor; data
+tidak disentuh; dibatalkan persis oleh `migration-optimasi-database-
+batal.sql`):
+- **Akses**: semua yang login MEMBACA; hanya EXIM yang MENULIS -- satu
+  policy per perintah, peran dibaca sekali per perintah
+  (`(select public.is_exim())`, bukan per baris). Policy `dn_all` /
+  `dnc_all` (terbuka untuk semua peran, termasuk anon) dihapus.
+- **Fungsi nomor** (`next_document_number`, `delete_document_number`,
+  `set_document_counter`, `reset_document_series`): `assert_exim()`
+  dulu, search_path tetap. `set_fund_paid` (EXIM & Finance) mencari
+  lewat primary key.
+- **Tagihan ganda serentak**: pemicu `dn_cegah_tagihan_ganda` memeriksa
+  ulang nomor invoice / billing Pengajuan Dana di database, bergiliran
+  per nomor tagihan (advisory lock), aturan pembanding sama dengan
+  aplikasi (`dn_kunci_tagihan` = `dnPecahNomorTagihan` +
+  `dnKunciNomorTagihan`), dicari lewat index GIN
+  `document_numbers_dana_invoice_idx` / `_billing_idx`. Tolakannya
+  (`TAGIHAN_GANDA:...`, `dnTolakanTagihanGanda`) tampil sebagai pop-up
+  tagihan ganda biasa. Ubah isian yang tidak mengganti nomor tagihannya
+  (Paid / Unpaid, salah ketik lain) tidak diperiksa.
+- `hs_code_master.created_by` `on delete set null`: akun yang pernah
+  menambah HS Code bisa dihapus.
+
 ## Performa
 
 - **Simpan form jadwal** (`data/api.js`): jadwal, barang & terminal
@@ -360,8 +401,10 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `features/masterlist-print.js` | Cetak lembar STOCK OPNAME masterlist (A4 landscape): baris yang tersaring di layar, per lini proses, kolom sama dengan Excel unduhan kecuali HS CODE (hanya di Excel) + PIB DATE, ACTUAL QTY & REMARKS kosong untuk diisi tangan; total per satuan & kotak tanda tangan di halaman terakhir. Margin @page nol (tanpa kop/kaki peramban), jadi halaman dipecah sendiri: tinggi baris diukur di jendela cetak lalu dibagi `mstBagiHalaman()` (murni, teruji) -- tiap lembar berkepala tabel, "Halaman x dari y" & paraf |
 | `features/fund-docno.js` | Aturan "Doc No" di Form Pengajuan Dana: kotak Doc No ada & tersimpan untuk SEMUA vendor (termasuk PRIME & WIDE; bisa dicari di riwayat, tampil di Detail), yang diatur hanya CETAKANNYA -- daftar vendor yang Doc No-nya TIDAK dicetak (bawaan PRIME & WIDE), diatur dari kotak Aturan Doc No di halaman Nomor Dokumen. Daftar yang sama menentukan penanda tangan keempat (CFO). Tersimpan di `report_settings`; `fundPakaiDocNo()` ("vendor ini mencetak Doc No") dipakai cetakan dan isian CFO di form, `fundSelaraskanDocNo()` mengganti keterangan di bawah kotak Doc No |
 | `features/fund-vendor.js` | Dropdown "Dibayarkan Kepada" (vendor) di Pengajuan Dana: daftar tersimpan di `report_settings` (kunci `fund-vendor`) + vendor pengajuan lama, tanpa kembar; "+ Tambah vendor baru…" menyimpan ke daftar |
-| `features/fund-lines.js` | Rincian biaya Pengajuan Dana: rumus di kotak nilai (titik ribuan saat diketik), PPN/PPh, diskon, dan pembagian per BL/AWB (`fundBagiPerAwb`) supaya satu invoice beberapa AWB terhitung per kiriman. Inland Trucking (`fundTanpaPecahAwb`) TIDAK dipecah: isian BL/AWB-nya berisi nomor DO / Surat Jalan, jadi seluruh pengajuan satu bagian, tanpa kolom BL/AWB di rincian. Sel rincian membawa `data-label`: di wadah < 860px tiap pos jadi kartu isian (`.tabel-isian`, docnum.css) -- begitu juga barang Surat Jalan Lokal (do-lines.js) & Surat Keterangan Fungsi (surat-bc.js) |
-| `views/docnum-view.js` | Halaman Nomor Dokumen: penerbitan nomor, riwayat (cari -- teks lewat database, kolomnya `DN_KOLOM_CARI` termasuk Doc No Pengajuan Dana (`payload->>docNo`; di tab Summary lewat `fsumSaring`); kata kunci berupa angka juga mencocokkan Nilai / Amount yang tampil, dihitung di aplikasi atas seluruh riwayat (`dnAngkaCari`, `dnCocokCari`) --, status bayar, rentang tanggal Pengajuan Dana menurut Tanggal Terbit / Tanggal Invoice / Jatuh Tempo / Tanggal Bayar -- `DN_DASAR_TANGGAL`; kolom riwayat Pengajuan Dana di `DN_KOLOM_DANA`, Status Bayar terakhir sebelum aksi karena menempel di kanan, jatuh tempo terlewat ditandai), dan Ubah Isian lewat pop-up -- panel form jenisnya dipinjam ke `#dnEditModal` lalu dikembalikan, draf pengajuan baru di belakangnya dipulihkan utuh. Status bayar (EXIM & Finance) ditulis lewat fungsi database `set_fund_paid` (migration-finance-tanda-bayar.sql): hanya `paidAt`/`paidBy` yang berubah; sebelum migrasinya ada, EXIM memakai jalur lama (`dnSetelBayarLangsung`). Ubah Isian membawa status bayar dari database (`dnPayloadTerbaru`), bukan dari salinan di layar. Tab jenis dokumen selebar kartu & riwayat menurut lebar panelnya (container query `dn-shell` / `dn-riwayat`): riwayat < 560px = kartu ringkas berlabel (`data-label` tiap sel), menengah = tabel bergeser dengan kolom aksi menempel. Baris tab riwayat di ponsel: tepi yang masih bisa digeser memudar (`dnTandaiTepiTab`) |
+| `features/fund-lines.js` | Rincian biaya Pengajuan Dana: kotak nilai bergaya ketik aplikasi -- koma ribuan, titik desimal (`formatRupiahKetik`, `formatNilaiForm`; tempelan gaya Indonesia "59.883.994,65" dikenali) -- dan menerima rumus ("=1,000+500", `hitungRumus`). Nilai di larik & payload berupa ANGKA (`nilaiKotakDana`, `fundBarisDariSimpanan`); teks di payload = pengajuan lama gaya Indonesia, dibaca `parseRupiah`. Cetakan & rincian riwayat tetap "Rp. 1.234.567,89" (`formatRupiah`). PPN/PPh, diskon, dan pembagian per BL/AWB (`fundBagiPerAwb`) supaya satu invoice beberapa AWB terhitung per kiriman. Inland Trucking (`fundTanpaPecahAwb`) TIDAK dipecah: isian BL/AWB-nya berisi nomor DO / Surat Jalan, jadi seluruh pengajuan satu bagian, tanpa kolom BL/AWB di rincian. Sel rincian membawa `data-label`: di wadah < 860px tiap pos jadi kartu isian (`.tabel-isian`, docnum.css) -- begitu juga barang Surat Jalan Lokal (do-lines.js) & Surat Keterangan Fungsi (surat-bc.js) |
+| `features/fund-invoice-import.js` | Isi form Pengajuan Dana dari PDF tagihan (tombol "Isi dari invoice / billing"): FedEx & DHL Express per komponen tiap AWB -- uraiannya cukup nama komponennya ("Duty & Tax"); hanya invoice BEBERAPA AWB yang diberi "– AWB <nomor>" (`danaAkhiranAwb`), tanpa berat --, DHL Inbound Charges, billing DJBC, tabel forwarder (WIDE dsb.: nomor B/L / AWB berhenti di label kolom sebelahnya, AWB 11 angka ditulis "160-19815294", `danaNomorBlTabel`). Invoice kedua dari vendor yang sama bisa ditambahkan sebagai dokumen kedua. Rincian bawaan lewat fund-rincian.js |
+| `features/fund-rincian.js` | Rincian (Details, Subject surat cetak) bawaan Pengajuan Dana (`fundRincianBawaan`): Billing "Payment Request - Billing Import"; selainnya "Payment Request - Invoice <Vendor> <Freight Charge / Storage Charge / Tax Advance> <Import / Export> <barang>" -- barang = Uraian PERTAMA jadwal yang BL/AWB-nya cocok, ditambah "etc." bila barangnya lebih dari satu (`fundBarangDariAwb`). Diisi selama kosong / masih sama dengan bawaan terakhir (`data-auto-fill` = teksnya), ikut berganti saat Jenis Pengeluaran, Jenis Transaksi, vendor, atau BL/AWB berubah dan saat impor invoice (`fundSelaraskanRincian`) |
+| `views/docnum-view.js` | Halaman Nomor Dokumen: penerbitan nomor (dari database, nomor kembar diganti nomor berikutnya -- lihat "Nomor dokumen: ditentukan database"), TAGIHAN GANDA Pengajuan Dana: nomor invoice / billing yang sudah diajukan ditandai merah begitu diketik / terisi dari impor invoice (jeda 300 ms, `dnPeriksaTagihanGandaLangsung` atas daftar `bkAmbilDana`) dengan satu kalimat di bawah kotaknya ("Sudah diajukan di 344/EXIM/DDI/X/2026 (20-10-2026, FEDEX)", `dnTandaiTagihanGanda`); saat Simpan diperiksa lagi ke database (`dnCariTagihanGanda`) dengan pop-up singkat -- pengajuan serentak ditahan pemicu database --, riwayat (cari -- teks lewat database, kolomnya `DN_KOLOM_CARI` termasuk Doc No Pengajuan Dana (`payload->>docNo`; di tab Summary lewat `fsumSaring`); kata kunci berupa angka juga mencocokkan Nilai / Amount yang tampil, dihitung di aplikasi atas seluruh riwayat (`dnAngkaCari`, `dnCocokCari`) --, status bayar, rentang tanggal Pengajuan Dana menurut Tanggal Terbit / Tanggal Invoice / Jatuh Tempo / Tanggal Bayar -- `DN_DASAR_TANGGAL`; kolom riwayat Pengajuan Dana di `DN_KOLOM_DANA`, Status Bayar terakhir sebelum aksi karena menempel di kanan, jatuh tempo terlewat ditandai), dan Ubah Isian lewat pop-up -- panel form jenisnya dipinjam ke `#dnEditModal` lalu dikembalikan, draf pengajuan baru di belakangnya dipulihkan utuh. Status bayar (EXIM & Finance) ditulis lewat fungsi database `set_fund_paid` (migration-finance-tanda-bayar.sql): hanya `paidAt`/`paidBy` yang berubah; sebelum migrasinya ada, EXIM memakai jalur lama (`dnSetelBayarLangsung`). Ubah Isian membawa status bayar dari database (`dnPayloadTerbaru`), bukan dari salinan di layar. Tab jenis dokumen selebar kartu & riwayat menurut lebar panelnya (container query `dn-shell` / `dn-riwayat`): riwayat < 560px = kartu ringkas berlabel (`data-label` tiap sel), menengah = tabel bergeser dengan kolom aksi menempel. Baris tab riwayat di ponsel: tepi yang masih bisa digeser memudar (`dnTandaiTepiTab`) |
 | `features/docnum-detail.js` | Kotak Detail pengajuan nomor ("Lihat seluruh isian") untuk keempat jenis dokumen: susunan bagian per jenis (`DN_DETAIL_SUSUNAN`), tabel rincian biaya / daftar barang, dan bagian "Lainnya" untuk isian yang belum terdaftar. Nomor Mobil Delivery Order (`vehicle` + `vehicleExtra`) tampil satu butir per mobil (`dndDaftarKendaraan`) |
 | `features/vehicle-list.js` | Daftar Nomor Mobil di pengajuan Delivery Order (tombol "+ Nomor Mobil" di baris label No. Kendaraan): kotak pertama tetap `data-dn="vehicle"` (jalur simpan lama, jadi pengajuan lama terbaca tanpa migrasi data), mobil kedua dst. kotak `[data-veh-extra]` yang disimpan sebagai `vehicleExtra` di payload (`kendaraanTambahKotak`, `setKendaraanExtra`; dibaca `readDocNumForm`, ikut draf form & pop-up Ubah Isian). Enter tidak diambil alih -- tetap pindah ke isian berikutnya. Penyatuan daftarnya (kosong dibuang, nomor kembar dicetak sekali) ada di `sjDaftarKendaraan()` (`features/surat-jalan-print.js`), satu aturan untuk form, cetakan (kolom Nopol Surat Jalan: satu kotak per mobil, tinggi dibagi rata, hanya setinggi baris barang) & detail |
 | `features/cipl-tata.js` | Model kisi bersama CIPL (kolom mm, baris pt, sel gabungan, garis per sisi) -> `ttHtml` (cetak) & `ttExcel` (ExcelJS). Pemotongan baris & huruf yang dikecilkan dihitung dari metrik Arial / Times (`TT_METRIK`), jadi cetak & Excel sama persis. Excel: satu baris teks = satu baris Excel (`ttExcelRuns`, spasi tak-putus untuk rata kanan / tengah) + pengancar AutoFit di luar area cetak (`ttXlHurufPengancarBaris`) |

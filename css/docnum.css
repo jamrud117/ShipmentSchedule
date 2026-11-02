@@ -774,6 +774,12 @@ table.fund-lines select {
   color: var(--ts-danger);
   font-weight: 600;
 }
+/* Nomor tagihan yang sudah diajukan: satu kalimat merah di bawah kotaknya */
+.dn-ganda-ket {
+  margin-top: 3px;
+  color: var(--ts-danger);
+  font-weight: 600;
+}
 
 /* Riwayat nomor terbit. */
 .docnum-history {

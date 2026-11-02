@@ -57,7 +57,7 @@ const I18N = {
     "form.note.duty":
       "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Tarif BM & PPh per barang lewat tombol pena di Data PIB; barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
-      "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak.",
+      "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak. Terisi otomatis dari Jenis Pengeluaran, vendor, Jenis Transaksi & barang BL/AWB-nya selama belum diubah sendiri.",
     "form.note.totalValue":
       "Total nilai barang (USD) diambil otomatis dari penjumlahan qty × harga/unit pada tab Daftar Barang.",
     "form.note.customsBasis":
@@ -622,7 +622,7 @@ const I18N = {
     "form.note.duty":
       "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Per-item BM & PPh rates via the pencil button in PIB Data; items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
-      "Used as the <b>Subject</b> on the printed Fund Request form.",
+      "Used as the <b>Subject</b> on the printed Fund Request form. Filled automatically from the Expense Type, vendor, Transaction Type & the B/L/AWB's goods until you edit it.",
     "form.note.totalValue":
       "Total goods value (USD) is taken automatically from the sum of qty × unit price on the Item List tab.",
     "form.note.customsBasis":

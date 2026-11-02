@@ -618,27 +618,18 @@ function fundRequestCss() {
     vertical-align: middle;
   }
 
-  /* Hanya garis MENDATAR antar baris pos yang disembunyikan, supaya
-     daftar posnya terbaca sebagai satu bidang. Garis tegaknya utuh. */
-  .rincian .baris-pos td {
-    border-top-color: transparent;
-    border-bottom-color: transparent;
-  }
-  .rincian tbody tr:first-child td { border-top-color: #000; }
-  .rincian tbody tr:last-child td { border-bottom-color: #000; }
+  /* Hanya garis MENDATAR ANTARA DUA BARIS POS yang disembunyikan,
+     supaya daftar posnya terbaca sebagai satu bidang. Garis tegaknya
+     utuh, dan garis ke baris lain -- judul "Nomor Invoice / Nomor Debit
+     Note", TOTAL, potongan, tepi atas & bawah tabel -- tetap tergambar.
 
-  /* GARIS PEMBATAS LEBIH TEBAL, dan itu bukan soal tampilan.
-
-     Dengan border-collapse, dua garis yang bertemu di satu batas
-     diperebutkan: baris pos memberi garis TRANSPARAN di sisi bawahnya,
-     baris TOTAL memberi garis hitam di sisi atasnya. Kalau tebalnya
-     sama, peramban boleh memenangkan yang transparan -- dan garis di
-     atas TOTAL lenyap. Yang LEBIH TEBAL selalu menang, jadi 1.2px di
-     sini mengalahkan 1px milik baris pos. */
-  .rincian .baris-rujukan td,
-  .rincian .baris-potongan td,
-  .rincian .baris-subtotal td,
-  .rincian tfoot td { border-top: 1.2px solid #000; }
+     Gaya "hidden", bukan warna transparan: dengan border-collapse,
+     "hidden" mengalahkan garis apa pun di batas itu. Cara lama (garis baris pos
+     transparan + garis pembatas 1.2px supaya "yang lebih tebal menang")
+     gagal di cetakan: peramban membulatkan 1.2px jadi 1px, tebalnya
+     seri, dan garis transparan baris DI ATASNYA yang menang -- garis di
+     atas "Nomor Debit Note" dan di atas TOTAL lenyap. */
+  .rincian .baris-pos + .baris-pos td { border-top-style: hidden; }
   /* Bagian per BL/AWB: baris rincian kecil di bawah potongan */
   .rincian .baris-awb td { font-size: 0.95em; }
 

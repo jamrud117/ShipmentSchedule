@@ -124,6 +124,12 @@ function danaNamaVendor(teks, dikenal) {
   return pt ? pt.replace(/\s+/g, " ").trim() : "";
 }
 
+/* Uraian baris invoice kurir: cukup nama komponennya ("Duty & Tax") --
+   nomor AWB-nya sudah di isian BL/AWB & tautan baris. Hanya invoice
+   BEBERAPA AWB yang diberi "– AWB <nomor>", supaya baris tiap kiriman
+   tetap terbedakan di surat cetak. Berat tidak ditulis. */
+const danaAkhiranAwb = (jumlahAwb, nomor) => (jumlahAwb > 1 ? ` – AWB ${nomor}` : "");
+
 /* FedEx: satu baris per AWB */
 function bacaInvoiceFedex(teks) {
   const baris = String(teks).split(/\r?\n/);
@@ -132,13 +138,11 @@ function bacaInvoiceFedex(teks) {
   baris.forEach((l) => {
     let m = l.match(/Air Waybill Number\s+(\d{9,14})/);
     if (m) {
-      kini = { awb: m[1], berat: "", total: 0, ppn: 0, tarif: 0, komponen: [] };
+      kini = { awb: m[1], total: 0, ppn: 0, tarif: 0, komponen: [] };
       awb.push(kini);
       return;
     }
     if (!kini) return;
-    m = l.match(/Weight\s+([\d.]+)\s*kg/i);
-    if (m) kini.berat = m[1];
     // Komponen biaya: "Freight Charges 8,188,000", "Discounts Base Discount (4,503,400)",
     // "Other Charges Fuel Surcharge 1,822,359" -- bisa didahului isi kolom kiri
     m = l.match(/Freight Charges\s+(\(?-?[\d,]+\)?)\s*$/);
@@ -166,20 +170,21 @@ function bacaInvoiceFedex(teks) {
      PPN dibulatkan sekali per AWB lewat grupPpn. Kalau komponennya tidak
      menjumlah ke Total - PPN (format berubah), AWB itu jadi satu baris. */
   const lines = [];
-  awb.filter((a) => a.total).forEach((a) => {
+  const ditagih = awb.filter((a) => a.total);
+  ditagih.forEach((a) => {
     const tarif = a.tarif || danaTarifPpn(a.ppn, a.total - a.ppn);
     const bersih = a.total - a.ppn;
-    const label = `AWB ${a.awb}${a.berat ? ` (${a.berat} kg)` : ""}`;
+    const akhiran = danaAkhiranAwb(ditagih.length, a.awb);
     const jumlahKomponen = a.komponen.reduce((x, k) => x + k.nilai, 0);
     if (a.komponen.length && Math.abs(jumlahKomponen - bersih) < 1) {
       a.komponen.forEach((k) => {
         // awb: baris langsung tertaut ke kirimannya (tagihan per BL/AWB, fund-lines.js)
-        const baris = { desc: `${k.nama} – ${label}`, amount: String(Math.round(Math.abs(k.nilai))), ppnRate: tarif, grupPpn: a.awb, awb: a.awb };
+        const baris = { desc: k.nama + akhiran, amount: String(Math.round(Math.abs(k.nilai))), ppnRate: tarif, grupPpn: a.awb, awb: a.awb };
         if (k.nilai < 0) Object.assign(baris, { jenis: "diskon", discType: "rp" });
         lines.push(baris);
       });
     } else {
-      lines.push({ desc: `FedEx express ${label}`, amount: String(Math.round(bersih)), ppnRate: tarif, awb: a.awb });
+      lines.push({ desc: "FedEx Express" + akhiran, amount: String(Math.round(bersih)), ppnRate: tarif, awb: a.awb });
     }
   });
   if (!lines.length && subTotal) lines.push({ desc: "FedEx express charges", amount: String(Math.round(subTotal)), ppnRate: ppnTarif });
@@ -228,7 +233,7 @@ function bacaInvoiceDhlExpress(teks) {
   isi.split(/\r?\n/).forEach((l) => {
     let m = l.match(/^(\d{10})\s+\d{2}-\d{2}-\d{4}\b/);
     if (m) {
-      awb = { no: m[1], berat: "" };
+      awb = { no: m[1] };
       awbList.push(awb);
       n = 0;
     }
@@ -238,11 +243,11 @@ function bacaInvoiceDhlExpress(teks) {
     const diskon = l.match(/(-[\d,]+)\s*d\b/);
     let nama = "";
     let nilai = 0;
-    m = l.match(/(\d+\.\d+)\s+[A-Z]\s+\d+\s+([\d,]+)\s/);
+    // Baris pertama tiap AWB: berat, kode, koli, Standard Charge
+    m = l.match(/\d+\.\d+\s+[A-Z]\s+\d+\s+([\d,]+)\s/);
     if (m && n === 0) {
-      awb.berat = m[1];
       nama = "Standard Charge";
-      nilai = danaAngka(m[2]);
+      nilai = danaAngka(m[1]);
     } else {
       m = l.match(/([A-Z][A-Z ]*[A-Z](?:\s*-)?)\s+([\d,]+)\s+[\d,]+\s+A\s+[\d,]+\s*$/);
       if (!m) return;
@@ -251,13 +256,13 @@ function bacaInvoiceDhlExpress(teks) {
     }
     n += 1;
     const grup = `${awb.no}#${n}`;
-    const label = `AWB ${awb.no}${awb.berat ? ` (${awb.berat} kg)` : ""}`;
     // awb: baris langsung tertaut ke kirimannya (tagihan per BL/AWB, fund-lines.js)
-    lines.push({ desc: `${nama} – ${label}`, amount: String(Math.round(nilai)), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
+    lines.push({ desc: nama, amount: String(Math.round(nilai)), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
     if (diskon) {
-      lines.push({ jenis: "diskon", discType: "rp", desc: `Discount – ${label}`, amount: String(Math.abs(danaAngka(diskon[1]))), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
+      lines.push({ jenis: "diskon", discType: "rp", desc: "Discount", amount: String(Math.abs(danaAngka(diskon[1]))), ppnRate: 1.1, grupPpn: grup, awb: awb.no });
     }
   });
+  lines.forEach((x) => (x.desc += danaAkhiranAwb(awbList.length, x.awb)));
   const tarif = parseFloat(ambil(/Taxable\s+([\d.]+)%/)) || 1.1;
   lines.forEach((x) => (x.ppnRate = danaTarifPpn(tarif, 100) || x.ppnRate));
   const tanggal = danaTanggalIso(ambil(/Invoice Date:\s*(\d{2}-\d{2}-\d{4})/));
@@ -351,6 +356,20 @@ function bacaBillingDjbc(teks) {
   };
 }
 
+/* Nomor B/L / AWB invoice forwarder. Nilainya berhenti di label kolom
+   sebelahnya -- kata berhuruf besar-kecil ("Chargeable Weight :",
+   "Carrier :") atau label kapital CBM / ETD / ETA -- bukan di kata
+   kapital pertama: nomor B/L sendiri bisa berspasi ("WLS O260 9882 6").
+   Dulu daftar labelnya tetap, jadi "AWB No. : 160 1981 5294 Chargeable
+   Weight : 300.00 KG" terbaca "16019815294Chargeable". AWB IATA (11
+   angka) ditulis baku: "160-19815294". */
+function danaNomorBlTabel(teks) {
+  const m = String(teks || "").match(/(B\/L|BL|AWB|MAWB|HAWB)\s*(?:No\.?|Number)?\s*:\s*(.+?)(?=\s+(?:CBM|ETD|ETA|[A-Z][a-z])[^:\n]{0,30}:|\s*$)/m);
+  if (!m) return "";
+  const nomor = danaRapatBl(m[2].trim());
+  return /AWB/.test(m[1]) && /^\d{11}$/.test(nomor) ? nomor.replace(/^(\d{3})(\d{8})$/, "$1-$2") : nomor;
+}
+
 /* Tabel forwarder: Description | Qty | CURR | Rate | Amount | VAT | PPH 23 | Total */
 function bacaInvoiceTabel(teks) {
   const baris = String(teks).split(/\r?\n/);
@@ -392,9 +411,7 @@ function bacaInvoiceTabel(teks) {
     invoiceNo: ambil(/Invoice\s*(?:No\.?|Number)\s*:\s*([A-Z0-9][A-Z0-9\/.-]+)/i),
     invoiceDate: danaTanggalIso(ambil(/Invoice Date\s*:\s*([^\n]+?)(?:\s{2,}|$)/im)),
     invoiceDueDate: danaTanggalIso(ambil(/Due Date\s*:\s*([^\n]+?)(?:\s{2,}|$)/im)),
-    /* Nilai B/L berhenti di label kolom sebelahnya ("... JKT CBM : 4.07"),
-       bukan di kata kapital pertama -- nomor B/L sendiri bisa berspasi. */
-    blAwb: ambil(/(?:B\/L|BL|AWB|MAWB|HAWB)\s*(?:No\.?|Number)?\s*:\s*(.+?)(?=\s+(?:CBM|Package|Carrier|Container|Freight|Port|Reference|Arrive|Vessel|Voyage|Flight|ETD|ETA|Weight)\b[^:\n]{0,24}:|\s*$)/m).trim(),
+    blAwb: danaNomorBlTabel(teks),
     expenseType: jenis,
     transactionType: tipe,
     currency: "IDR",
@@ -463,21 +480,6 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
   return h;
 }
 
-/* Nama vendor untuk kalimat: singkatan tetap kapital (DHL), FedEx dengan
-   ejaan merknya, lainnya Huruf Awal Kapital ("WIDE" -> "Wide"). */
-function danaNamaRapi(nama) {
-  const n = String(nama || "").trim();
-  if (/^fedex$/i.test(n)) return "FedEx";
-  if (/^[A-Z]{2,3}$/.test(n)) return n;
-  return n.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
-}
-
-/* "Rincian" (Subject surat cetak) bawaan saat mengunggah PDF */
-function danaRincianBawaan(h) {
-  if (h.jenisDokumen === "billing") return "Payment Request Billing Import";
-  return h.payee ? `Payment Request Invoice ${danaNamaRapi(h.payee)}` : "Payment Request Invoice";
-}
-
 /* Invoice / debit note KEDUA dari vendor yang sama -> ditambahkan sebagai
    dokumen tambahan pengajuan yang sedang diisi (bukan menimpanya). */
 function danaTambahSebagaiDokumen(h) {
@@ -528,13 +530,10 @@ function danaIsiForm(h) {
   const dept = panel.querySelector('[data-dn="department"]');
   if (dept && !dept.value) setel("department", "EXIM");
   if (typeof setFundLines === "function" && (h.lines.length || h.jenisDokumen === "billing")) setFundLines(h.lines);
-  /* "Rincian" dicetak sebagai Subject Form Pengajuan Dana. Bawaannya
-     "Payment Request Invoice <Vendor>" / "Payment Request Billing Import";
-     ketikan pengguna sendiri tidak ditimpa. */
-  const catatan = panel.querySelector('[data-dn="notes"]');
-  if (catatan && (!catatan.value.trim() || /^Payment Request (Invoice|Billing)\b/.test(catatan.value.trim()))) {
-    setel("notes", danaRincianBawaan(h));
-  }
+  /* "Rincian" (Subject surat cetak): bawaan dari jenis, vendor, jenis
+     transaksi & barang BL/AWB-nya (fund-rincian.js); ketikan pengguna
+     sendiri tidak ditimpa. */
+  if (typeof fundSelaraskanRincian === "function") fundSelaraskanRincian(panel);
   return true;
 }
 

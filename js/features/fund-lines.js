@@ -26,14 +26,14 @@ const FUND_PPN_RATES = [0, 1.1, 11];
    pos tanpa PPN (storage) di luar objek PPH 23 ini. */
 const FUND_PPH23_RATE = 2;
 
-/* PEMBACA NILAI RUPIAH — konvensi Indonesia: titik ribuan, koma
-   desimal ("16.873.095,68").
-
-   parseLooseNumber() milik aplikasi memakai konvensi sebaliknya (koma
-   ribuan, titik desimal), jadi "256,66666" terbaca 25.666.666 di sana.
-   Tagihan forwarder yang diketik ulang di sini ditulis gaya Indonesia,
-   dan angkanya berdesimal, sehingga salah baca langsung menghasilkan
-   total yang meleset ribuan kali lipat. */
+/* NILAI RUPIAH TERSIMPAN -- dua bentuk:
+     - ANGKA (payload.lines[].amount = 16873095.68): pengajuan yang
+       disimpan sejak kotak nilai memakai gaya ketik aplikasi;
+     - TEKS: pengajuan lama, yang menyimpan ketikan gaya Indonesia
+       ("16.873.095,68": titik ribuan, koma desimal), dan angka polos
+       hasil impor invoice ("8153951").
+   Teks SELALU dibaca dengan aturan Indonesia -- teks gaya baru tidak
+   pernah tersimpan (fundBarisDariSimpanan mengubahnya jadi angka). */
 function parseRupiah(v) {
   if (v == null || v === "") return 0;
   if (typeof v === "number") return isFinite(v) ? v : 0;
@@ -48,9 +48,10 @@ function parseRupiah(v) {
   return isFinite(n) ? n : 0;
 }
 
-/* Tampilan balik: "16.873.095,68". Desimal ditulis hanya kalau memang
-   ada -- angka bulat tidak diberi ",00" supaya tabelnya tidak penuh nol
-   yang tidak berarti. */
+/* Tampilan CETAKAN & rincian riwayat: "16.873.095,68" (gaya surat
+   Indonesia). Desimal ditulis hanya kalau memang ada -- angka bulat
+   tidak diberi ",00" supaya tabelnya tidak penuh nol yang tidak berarti.
+   Di FORM angkanya bergaya ketik aplikasi (formatNilaiForm). */
 function formatRupiah(n) {
   const x = Number(n) || 0;
   const desimal = Math.round(x * 100) % 100 !== 0;
@@ -60,57 +61,68 @@ function formatRupiah(n) {
   });
 }
 
-/* FORMAT KETIKAN NOMINAL, gaya Indonesia: titik ribuan, koma desimal.
-     "133434343" -> "133.434.343"     "420,5" -> "420,5"
+/* Angka DI FORM (kotak nilai, PPN per baris, kaki tabel): gaya ketik
+   aplikasi, sama dengan kotak angka lain -- koma ribuan, titik desimal
+   ("16,873,095.68"); desimal hanya kalau ada. */
+function formatNilaiForm(n) {
+  const x = Number(n) || 0;
+  const desimal = Math.round(x * 100) % 100 !== 0;
+  return angkaLokal(x, "en-US", {
+    minimumFractionDigits: desimal ? 2 : 0,
+    maximumFractionDigits: 2,
+  });
+}
 
-   BUKAN formatNumberTyping() milik aplikasi: yang itu menulis gaya
-   Inggris (koma ribuan), sementara nominal di sini dibaca parseRupiah()
-   yang memperlakukan koma sebagai DESIMAL -- "133,434,343" akan
-   terbaca 133,43. Titik yang diketik pengguna dibuang lalu disusun
-   ulang: di konvensi ini titik hanyalah pemisah ribuan. Desimal
-   dibatasi dua angka (sen). */
+/* FORMAT KETIKAN NOMINAL: koma ribuan, titik desimal -- titik di papan
+   angka langsung jadi desimal.
+     "133434343" -> "133,434,343"     "420.5" -> "420.5"
+   Koma yang diketik dibuang lalu disusun ulang (koma hanya pemisah
+   ribuan); desimal dibatasi dua angka (sen). Tempelan bergaya Indonesia
+   -- titik ribuan berulang ("1.000.000") atau koma desimal sesudah
+   titik ribuan ("59.883.994,65") -- dikenali lalu ditulis ulang. */
 function formatRupiahKetik(mentah) {
   if (typeof mentah === "number") {
-    return isFinite(mentah) && mentah !== 0 ? formatRupiah(mentah) : "";
+    return isFinite(mentah) && mentah !== 0 ? formatNilaiForm(mentah) : "";
   }
   const teks = String(mentah == null ? "" : mentah);
   const negatif = /^\s*-/.test(teks);
-  const s = teks.replace(/[^\d,]/g, "");
+  let s = teks.replace(/[^\d.,]/g, "");
+  if (/^\d{1,3}(\.\d{3}){2,}(,\d*)?$/.test(s) || /^\d{1,3}(\.\d{3})+,\d*$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+  s = s.replace(/,/g, "");
   if (!s) return negatif ? "-" : "";
-  const koma = s.indexOf(",");
-  let bulat = koma >= 0 ? s.slice(0, koma) : s;
-  bulat = bulat.replace(/^0+(?=\d)/, "");
-  const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  const hasil = koma >= 0
-    ? `${berkelompok || "0"},${s.slice(koma + 1).replace(/,/g, "").slice(0, 2)}`
+  const titik = s.indexOf(".");
+  const bulat = (titik >= 0 ? s.slice(0, titik) : s).replace(/^0+(?=\d)/, "");
+  const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const hasil = titik >= 0
+    ? `${berkelompok || "0"}.${s.slice(titik + 1).replace(/\./g, "").slice(0, 2)}`
     : berkelompok;
   return (negatif ? "-" : "") + hasil;
 }
 
-/* RUMUS YANG SEDANG DIKETIK ikut diberi titik ribuan, per angkanya:
-     "=1000000+250000*2"  ->  "=1.000.000+250.000*2"
+/* RUMUS YANG SEDANG DIKETIK ikut diberi koma ribuan, per angkanya:
+     "=1000000+250000*2"  ->  "=1,000,000+250,000*2"
    Operator, kurung, dan persen tidak diubah. Bagian desimal (sesudah
-   koma) ditulis apa adanya -- di dalam rumus boleh lebih dari dua angka.
-   Titik yang diketik sendiri dibuang lalu disusun ulang, sama seperti
-   kotak nominal biasa: di konvensi ini titik hanya pemisah ribuan, dan
-   hitungRumus() membacanya dengan cara yang sama. */
+   titik) ditulis apa adanya -- di dalam rumus boleh lebih dari dua
+   angka. Koma yang diketik sendiri dibuang lalu disusun ulang, sama
+   seperti kotak nominal biasa; hitungRumus() membacanya dengan cara
+   yang sama. */
 function formatRumusKetik(teks) {
-  return String(teks == null ? "" : teks).replace(/\d[\d.]*(?:,\d*)?/g, (angka) => {
-    const koma = angka.indexOf(",");
-    const bulat = (koma >= 0 ? angka.slice(0, koma) : angka).replace(/\./g, "").replace(/^0+(?=\d)/, "");
-    const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return koma >= 0 ? berkelompok + angka.slice(koma) : berkelompok;
+  return String(teks == null ? "" : teks).replace(/\d[\d,]*(?:\.\d*)?/g, (angka) => {
+    const titik = angka.indexOf(".");
+    const bulat = (titik >= 0 ? angka.slice(0, titik) : angka).replace(/,/g, "").replace(/^0+(?=\d)/, "");
+    const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return titik >= 0 ? berkelompok + angka.slice(titik) : berkelompok;
   });
 }
 
-/* Kursor tetap di antara karakter yang sama setelah titik ribuan
-   disisipkan atau dipindah -- dihitung dari jumlah karakter BUKAN titik
-   di kirinya (angka & koma; untuk rumus juga operatornya), bukan dari
-   posisi karakter yang bergeser tiap kali titik bertambah. */
+/* Kursor tetap di antara karakter yang sama setelah koma ribuan
+   disisipkan atau dipindah -- dihitung dari jumlah karakter BUKAN koma
+   di kirinya (angka & titik desimal; untuk rumus juga operatornya),
+   bukan dari posisi karakter yang bergeser tiap kali koma bertambah. */
 function formatKotakRupiah(el) {
   const sebelum = el.value;
   const rumus = /^\s*=/.test(sebelum);
-  const berarti = rumus ? /[^.]/ : /[\d,]/;
+  const berarti = rumus ? /[^,]/ : /[\d.]/;
   const kiri = [...sebelum.slice(0, el.selectionStart || 0)].filter((c) => berarti.test(c)).length;
   const sesudah = rumus ? formatRumusKetik(sebelum) : formatRupiahKetik(sebelum);
   if (sesudah === sebelum) return;
@@ -139,13 +151,13 @@ function fundLineRate(baris) {
 
    Kotak nilai yang diawali "=" dihitung saat Enter atau saat pindah
    kotak, seperti sel spreadsheet:
-     =1.000+1.000        -> 2.000
-     =(1.500+500)*3      -> 6.000
-     =2.200.000*10%      -> 220.000
-     =10.000/4           -> 2.500
+     =1,000+1,000        -> 2,000
+     =(1,500+500)*3      -> 6,000
+     =2,200,000*10%      -> 220,000
+     =10,000/4           -> 2,500
    Operator: + - * / (juga x, ×, :, ÷), kurung, dan % (= dibagi 100).
-   Angkanya gaya Indonesia seperti isian lainnya: titik ribuan, koma
-   desimal.
+   Angkanya bergaya ketik aplikasi seperti kotak nilainya: koma ribuan,
+   titik desimal.
 
    Dihitung dengan pengurai sendiri, BUKAN eval(): isi kotak adalah
    ketikan bebas, dan eval() akan menjalankannya sebagai kode.
@@ -161,10 +173,10 @@ function hitungRumus(teks) {
   let i = 0;
   const gagal = () => { throw new Error("rumus"); };
   function angka() {
-    const m = /^(\d[\d.]*)(,\d+)?/.exec(s.slice(i));
+    const m = /^(\d[\d,]*)(\.\d+)?/.exec(s.slice(i));
     if (!m) gagal();
     i += m[0].length;
-    return Number(m[1].replace(/\./g, "") + (m[2] ? "." + m[2].slice(1) : ""));
+    return Number(m[1].replace(/,/g, "") + (m[2] || ""));
   }
   function faktor() {
     if (s[i] === "-") { i++; return -faktor(); }
@@ -222,18 +234,38 @@ function terapkanRumusKotak(el, persen) {
   if (!isFinite(hasil)) {
     el.classList.add("fl-rumus-salah");
     el.title = tt(
-      "Rumus tidak valid. Contoh: =1.000+500, =2.200.000*10%, =(1.000+500)/2",
-      "Invalid formula. Examples: =1.000+500, =2.200.000*10%, =(1.000+500)/2",
+      "Rumus tidak valid. Contoh: =1,000+500, =2,200,000*10%, =(1,000+500)/2",
+      "Invalid formula. Examples: =1,000+500, =2,200,000*10%, =(1,000+500)/2",
     );
     return false;
   }
   el.classList.remove("fl-rumus-salah");
   el.removeAttribute("title");
   const bulat = Math.round(hasil * 100) / 100;
-  el.value = persen
-    ? String(bulat).replace(".", ",")
-    : bulat === 0 ? "0" : formatRupiahKetik(bulat);
+  el.value = persen ? String(bulat) : bulat === 0 ? "0" : formatRupiahKetik(bulat);
   return true;
+}
+
+/* Isi kotak nilai -> larik fundLines: ANGKA (rupiah, atau persen untuk
+   diskon persen). Kotak kosong / hanya "-" = "", rumus yang belum
+   dihitung tetap teks (penyimpanannya ditolak validateDocNumForm). */
+function nilaiKotakDana(teks, persen) {
+  const v = String(teks == null ? "" : teks);
+  if (adalahRumus(v)) return v;
+  if (!v.trim() || v.trim() === "-") return "";
+  return persen ? parsePersenDiskon(v) : parseInputNumber(v);
+}
+
+/* Baris tersimpan -> larik form: SALINAN (mengubah form tidak menyentuh
+   data riwayat yang sedang dibuka) dengan nilai berupa angka. Teks =
+   data lama gaya Indonesia / angka polos hasil impor (parseRupiah). */
+function fundBarisDariSimpanan(b) {
+  const salinan = Object.assign({}, b);
+  const v = salinan.amount;
+  if (typeof v === "string" && v.trim() && !adalahRumus(v)) {
+    salinan.amount = barisDiskon(salinan) && salinan.discType === "pct" ? parsePersenDiskon(v) : parseRupiah(v);
+  }
+  return salinan;
 }
 
 /* ------------------------------------------------------------------
@@ -576,10 +608,11 @@ function fundLineDiskonBaru(tarif) {
   return { jenis: FUND_JENIS_DISKON, desc: "", amount: "", discType: "rp", ppnRate: tarif };
 }
 
+// Baris yang disimpan: yang berisi saja, nilainya angka (fundBarisDariSimpanan)
 function fundLinesBersih(lines) {
-  return normalisasiBarisDana(lines).filter(
-    (b) => String(b.desc || "").trim() !== "" || String(b.amount || "").trim() !== "",
-  );
+  return normalisasiBarisDana(lines)
+    .filter((b) => String(b.desc || "").trim() !== "" || String(b.amount || "").trim() !== "")
+    .map(fundBarisDariSimpanan);
 }
 
 // Rumus yang belum valid -- dicegah ikut tersimpan sebagai teks.
@@ -597,15 +630,15 @@ function fundLinesRumusGagal(lines) {
 
 let fundLines = [fundLineBaru()];
 
-// Nilai tersimpan -> isi kotak. Rumus yang belum valid dibiarkan utuh.
+// Nilai di larik -> isi kotak (koma ribuan, titik desimal). Rumus yang belum valid dibiarkan utuh.
 const isiKotakNilai = (b) =>
   adalahRumus(b.amount)
     ? b.amount
     : barisDiskon(b) && b.discType === "pct"
-      ? b.amount || ""
-      : formatRupiahKetik(b.amount || "");
+      ? (b.amount === "" || b.amount == null ? "" : String(parsePersenDiskon(b.amount)))
+      : formatRupiahKetik(typeof b.amount === "number" ? b.amount : parseRupiah(b.amount));
 
-const teksPpnSel = (v) => (v < 0 ? "- " + formatRupiah(-v) : formatRupiah(v));
+const teksPpnSel = (v) => (v < 0 ? "- " + formatNilaiForm(-v) : formatNilaiForm(v));
 
 function pilihanTarifHtml(b) {
   return FUND_PPN_RATES.map(
@@ -618,7 +651,7 @@ function pilihanTarifHtml(b) {
    tinggi dari baris lain dan kotak-kotaknya tidak sejajar. Terutama
    untuk diskon persen, yang nilai rupiahnya tidak terlihat dari
    kotaknya sendiri; di mode Rp ia menegaskan tanda minusnya. */
-const teksNominalDiskon = (v) => (v ? "- " + formatRupiah(-v) : "0");
+const teksNominalDiskon = (v) => (v ? "- " + formatNilaiForm(-v) : "0");
 
 /* Jenis transaksi yang sedang dipilih di form Pengajuan Dana. */
 function fundTransaksiForm() {
@@ -839,11 +872,11 @@ function gambarKakiRincian() {
   if (!kaki) return;
   const r = fundLineTotals(fundLines);
   kaki.innerHTML = `
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatRupiah(r.totalNilai)}</b></div>
-      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatRupiah(r.totalDiskon)}</b></div>` : ""}
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatRupiah(r.totalPpn)}</b></div>
-      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatRupiah(r.pph)}</b></div>
-      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatRupiah(r.grandTotal)}</b></div>
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilaiForm(r.totalNilai)}</b></div>
+      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilaiForm(r.totalDiskon)}</b></div>` : ""}
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatNilaiForm(r.totalPpn)}</b></div>
+      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatNilaiForm(r.pph)}</b></div>
+      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatNilaiForm(r.grandTotal)}</b></div>
       ${kakiPerAwbHtml()}`;
 }
 
@@ -857,12 +890,12 @@ function kakiPerAwbHtml() {
       <div class="fl-awb-bagian">
         <div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>
         ${bagian.map((b) => `
-        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatRupiah(b.dibayar)}</b></div>`).join("")}
+        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatNilaiForm(b.dibayar)}</b></div>`).join("")}
       </div>`;
 }
 
 function setFundLines(lines) {
-  fundLines = Array.isArray(lines) && lines.length ? lines.slice() : [fundLineBaru()];
+  fundLines = Array.isArray(lines) && lines.length ? lines.map(fundBarisDariSimpanan) : [fundLineBaru()];
   renderFundLines();
 }
 
@@ -876,7 +909,7 @@ if (fundLinesBodyEl) {
     if (!tr || !f) return;
     const baris = fundLines[Number(tr.dataset.fl)];
     if (f === "amount") {
-      // Rupiah & rumus ikut titik ribuan saat diketik; persen dibiarkan ("2,5").
+      // Rupiah & rumus ikut koma ribuan saat diketik; persen dibiarkan ("2.5").
       // Rumusnya sendiri baru DIHITUNG saat Enter / pindah kotak.
       if (!kotakPersen(baris, f)) formatKotakRupiah(e.target);
       if (!adalahRumus(e.target.value)) {
@@ -884,7 +917,7 @@ if (fundLinesBodyEl) {
         e.target.removeAttribute("title");
       }
     }
-    baris[f] = e.target.value;
+    baris[f] = f === "amount" ? nilaiKotakDana(e.target.value, kotakPersen(baris, f)) : e.target.value;
     // Tarif / jenis diskon / BL/AWB: digambar ulang. Selain itu hanya sel
     // hitungan, supaya fokus tidak direbut dari kotak yang sedang diketik.
     if (f === "ppnRate" || f === "discType" || f === "awb") return renderFundLines();
@@ -907,7 +940,7 @@ if (fundLinesBodyEl) {
     if (!tr || !adalahRumus(e.target.value)) return;
     const baris = fundLines[Number(tr.dataset.fl)];
     terapkanRumusKotak(e.target, kotakPersen(baris, "amount"));
-    baris.amount = e.target.value;
+    baris.amount = nilaiKotakDana(e.target.value, kotakPersen(baris, "amount"));
     perbaruiHitunganRincian();
   });
   fundLinesBodyEl.addEventListener("click", (e) => {
@@ -942,7 +975,7 @@ if (fundLinesBodyEl) {
     if (f === "amount" && adalahRumus(e.target.value)) {
       const baris = fundLines[idx];
       const ok = terapkanRumusKotak(e.target, kotakPersen(baris, f));
-      baris.amount = e.target.value;
+      baris.amount = nilaiKotakDana(e.target.value, kotakPersen(baris, f));
       perbaruiHitunganRincian();
       if (!ok) return;
     }

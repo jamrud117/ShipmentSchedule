@@ -2277,13 +2277,16 @@
                   <label class="form-label" data-i18n="f.nomor.billing"
                      for="dn-fund-billingNo">Nomor Billing</label
                   >
-                  <input id="dn-fund-billingNo" type="text" class="form-control" data-dn="billingNo" />
+                  <input id="dn-fund-billingNo" type="text" class="form-control" data-dn="billingNo" aria-describedby="dn-fund-billingNo-ganda" />
+                  <!-- Nomor yang sudah diajukan: ditandai begitu diketik (docnum-view.js, dnTandaiTagihanGanda) -->
+                  <div class="form-text-note dn-ganda-ket" id="dn-fund-billingNo-ganda" role="status" hidden></div>
                 </div>
                 <div data-dn-when="!Billing">
                   <label class="form-label" data-i18n="f.no.invoice"
                      for="dn-fund-invoiceNo">No. Invoice</label
                   >
-                  <input id="dn-fund-invoiceNo" type="text" class="form-control" data-dn="invoiceNo" />
+                  <input id="dn-fund-invoiceNo" type="text" class="form-control" data-dn="invoiceNo" aria-describedby="dn-fund-invoiceNo-ganda" />
+                  <div class="form-text-note dn-ganda-ket" id="dn-fund-invoiceNo-ganda" role="status" hidden></div>
                 </div>
                 <!-- Tanggal & jatuh tempo tagihan. Tanggal Invoice-lah yang
                      dipakai menyaring Ringkasan per Vendor -- bukan tanggal
@@ -2469,8 +2472,8 @@
                       <span data-en="Add Discount">Tambah Diskon</span>
                     </button>
                   </div>
-                  <div class="fl-petunjuk" data-en="Amounts accept formulas: start with = , e.g. =1.000+500 or =2.200.000*10%, then press Enter.">
-                    Kotak nilai menerima rumus: awali dengan = , mis. =1.000+500 atau =2.200.000*10%, lalu tekan Enter.
+                  <div class="fl-petunjuk" data-en="Amounts use a comma for thousands and a dot for decimals (1,250,000.50) and accept formulas: start with = , e.g. =1,000+500 or =2,200,000*10%, then press Enter.">
+                    Nilai memakai koma ribuan &amp; titik desimal (1,250,000.50) dan menerima rumus: awali dengan = , mis. =1,000+500 atau =2,200,000*10%, lalu tekan Enter.
                   </div>
                   <div class="fund-lines-foot" id="fundLinesFoot"></div>
                 </div>
@@ -4879,6 +4882,7 @@
     <script src="js/features/shipment-cost.js"></script>
     <script src="js/features/fund-invoice-import.js"></script>
     <script src="js/features/fund-vendor.js"></script>
+    <script src="js/features/fund-rincian.js"></script>
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>

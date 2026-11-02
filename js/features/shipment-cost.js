@@ -35,6 +35,8 @@ async function bkAmbilDana(paksa) {
   bkCache = { waktu: Date.now(), rows };
   return rows;
 }
+// Daftar yang sudah termuat (boleh lewat masa segarnya), tanpa memuat; null = belum pernah dimuat
+const bkDanaTermuat = () => (bkCache ? bkCache.rows : null);
 
 const bkNormal = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const bkAngka = (v) => {

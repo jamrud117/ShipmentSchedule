@@ -3384,8 +3384,7 @@ t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & 
     await w.submitDocNumRequest();
     eq(nomorDiambil(n), 0, "nomor urut tidak boleh terambil:");
     const pesan = w.document.getElementById("confirmMessage").textContent;
-    if (!pesan.includes("INV-002") || !pesan.includes("305/EXIM/DDI/IX/2026") || !pesan.includes("PT DSV"))
-      throw new Error("isi pop-up: " + pesan);
+    eq(pesan, "Nomor invoice INV-002 sudah diajukan di 305/EXIM/DDI/IX/2026 (22-09-2026, PT DSV).", "isi pop-up singkat:");
     eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
     eq(w.document.getElementById("confirmCancelBtn").classList.contains("d-none"), true, "pemberitahuan satu tombol:");
     eq(panelDana().querySelector('[data-dn="invoiceNo"]').classList.contains("is-invalid"), true, "isian ditandai merah:");
@@ -3427,14 +3426,204 @@ t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & 
     eq(jejakUpdate.length, n + 1, "tidak boleh tersimpan:");
     eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
   }));
+  t("tanda LANGSUNG saat diketik (tanpa menunggu Simpan): merah + satu kalimat; nomor baru melepasnya; Billing; pengajuan yang diubah tidak dihitung ganda", async () => denganDana(async () => {
+    const tungguCek = () => new Promise((r) => setTimeout(r, 380));
+    const kotak = (k) => panelDana().querySelector(`[data-dn="${k}"]`);
+    const ket = (k) => panelDana().querySelector(`#dn-fund-${k}-ganda`);
+    const ketik = (k, v) => {
+      kotak(k).value = v;
+      kotak(k).dispatchEvent(new w.Event("input", { bubbles: true }));
+    };
+    w.bkLupakan();
+    isiFormDana({ invoiceNo: "" });
+    ketik("invoiceNo", " inv-002 ");
+    await tungguCek();
+    eq([kotak("invoiceNo").classList.contains("is-invalid"), ket("invoiceNo").hidden, ket("invoiceNo").textContent].join(" | "),
+      "true | false | Sudah diajukan di 305/EXIM/DDI/IX/2026 (22-09-2026, PT DSV)", "nomor yang sudah diajukan:");
+    eq(w.document.getElementById("confirmMessage").textContent, "", "tanpa pop-up saat mengetik:");
+    ketik("invoiceNo", "INV-999");
+    await tungguCek();
+    eq([kotak("invoiceNo").classList.contains("is-invalid"), ket("invoiceNo").hidden].join(), "false,true", "nomor baru:");
+    isiFormDana({ expenseType: "Billing", billingNo: "" });
+    ketik("billingNo", "640260906211153");
+    await tungguCek();
+    eq([kotak("billingNo").classList.contains("is-invalid"), ket("billingNo").textContent].join(" | "),
+      "true | Sudah diajukan di 306/EXIM/DDI/IX/2026 (23-09-2026, KAS NEGARA)", "Billing:");
+    w.mulaiUbahDocNum("f1");
+    await tungguCek();
+    eq(kotak("invoiceNo").classList.contains("is-invalid"), false, "pengajuan yang dibuka tidak ganda dengan dirinya:");
+    w.batalUbahDocNum();
+  }));
+  /* NOMOR & TAGIHAN SERENTAK. Database tiruan: nomor urut (u.seq) naik
+     tiap next_document_number dipanggil -- seperti fungsi aslinya, yang
+     melayani pemanggil bergiliran; insert ditolak sesuai skenario
+     (constraint unik document_numbers_number_unique & pemicu tagihan ganda). */
+  const denganNomorDb = async (skenario, fn) => {
+    w.__asliNomor = { from: w.eval("supabaseClient.from"), rpc: w.eval("supabaseClient.rpc") };
+    w.__ujiNomor = Object.assign({ seq: 345, rpc: 0, insert: [], tolak: 0, tolakan: null }, skenario);
+    try {
+      w.eval(`supabaseClient.rpc = async (nama, args) => {
+        if (nama !== "next_document_number") return window.__asliNomor.rpc(nama, args);
+        const u = window.__ujiNomor;
+        u.rpc++;
+        u.seq++;
+        return { data: [{ out_number: docNumFormat(args.p_template, u.seq, args.p_pad), out_seq: u.seq }], error: null };
+      }`);
+      w.eval(`supabaseClient.from = (tabel) => {
+        const dasar = window.__asliNomor.from(tabel);
+        const u = window.__ujiNomor;
+        if (tabel === "document_number_counters") {
+          const rantai = { select: () => rantai, eq: () => rantai, maybeSingle: async () => ({ data: { last_seq: u.seq }, error: null }) };
+          return rantai;
+        }
+        if (tabel !== "document_numbers") return dasar;
+        return Object.assign({}, dasar, { insert: async (row) => {
+          u.insert.push(row.doc_number);
+          if (u.tolak > 0) {
+            u.tolak--;
+            if (u.sebelumTolak) u.sebelumTolak(row);
+            return { error: u.tolakan };
+          }
+          return { error: null };
+        } });
+      }`);
+      await fn(w.__ujiNomor);
+    } finally {
+      w.eval("supabaseClient.from = window.__asliNomor.from; supabaseClient.rpc = window.__asliNomor.rpc");
+    }
+  };
+  const NOMOR_KEMBAR = { code: "23505", message: 'duplicate key value violates unique constraint "document_numbers_number_unique"' };
+  const hintDana = () => w.document.getElementById("docNumHint").textContent;
+  t("dua orang mengajukan serentak: nomornya diputuskan database bergiliran -- yang kalah cepat mendapat nomor berikutnya & diberi tahu", async () => denganDana(async () => {
+    await denganNomorDb({}, async (u) => {
+      isiFormDana({ invoiceNo: "INV-BARU-1" });
+      await w.refreshDocNumPreview("fund");
+      eq(w.document.querySelector('[data-dn-preview="fund"]').textContent, "346/EXIM/DDI/VIII/2026", "perkiraan di layar:");
+      u.seq = 346; // orang lain menekan Ajukan lebih dulu dan mendapat 346
+      await w.submitDocNumRequest();
+      eq([u.rpc, u.insert.join()].join(" | "), "1 | 347/EXIM/DDI/VIII/2026", "langsung nomor berikutnya:");
+      eq(w.document.getElementById("docNumResultNumber").textContent, "347/EXIM/DDI/VIII/2026", "nomor yang terbit:");
+      eq(hintDana(), "Nomor 346/EXIM/DDI/VIII/2026 sudah lebih dulu dipakai pengajuan lain — pengajuan ini mendapat 347/EXIM/DDI/VIII/2026.", "pemberitahuan:");
+      eq(w.document.querySelector('[data-dn-preview="fund"]').textContent, "348/EXIM/DDI/VIII/2026", "perkiraan berikutnya:");
+    });
+  }));
+  t("perkiraan di layar masih benar: tanpa pemberitahuan", async () => denganDana(async () => {
+    await denganNomorDb({}, async () => {
+      isiFormDana({ invoiceNo: "INV-BARU-2" });
+      await w.refreshDocNumPreview("fund");
+      await w.submitDocNumRequest();
+      eq([w.document.getElementById("docNumResultNumber").textContent, hintDana()].join(" | "), "346/EXIM/DDI/VIII/2026 | ", "nomor & pemberitahuan:");
+    });
+  }));
+  t("nomor dari nomor urut ternyata sudah tersimpan (nomor urut disetel mundur): ditolak index unik -> langsung nomor berikutnya", async () => denganDana(async () => {
+    await denganNomorDb({ tolak: 1, tolakan: NOMOR_KEMBAR }, async (u) => {
+      isiFormDana({ invoiceNo: "INV-BARU-3" });
+      await w.refreshDocNumPreview("fund");
+      await w.submitDocNumRequest();
+      eq(u.insert.join(" | "), "346/EXIM/DDI/VIII/2026 | 347/EXIM/DDI/VIII/2026", "nomor kembar -> nomor berikutnya:");
+      eq(w.document.getElementById("docNumResultNumber").textContent, "347/EXIM/DDI/VIII/2026", "nomor yang terbit:");
+      eq(hintDana(), "Nomor 346/EXIM/DDI/VIII/2026 sudah lebih dulu dipakai pengajuan lain — pengajuan ini mendapat 347/EXIM/DDI/VIII/2026.", "pemberitahuan:");
+    });
+  }));
+  t("nomor urut berikutnya terpakai berturut-turut: berhenti sesudah 5 kali dengan pesan yang menunjuk Atur Nomor Urut", async () => denganDana(async () => {
+    await denganNomorDb({ tolak: 99, tolakan: NOMOR_KEMBAR }, async (u) => {
+      isiFormDana({ invoiceNo: "INV-BARU-4" });
+      await w.submitDocNumRequest();
+      eq(u.insert.length, 5, "percobaan:");
+      const pesan = w.document.getElementById("toastMsg").textContent;
+      if (!/Atur Nomor Urut/.test(pesan)) throw new Error("pesan: " + pesan);
+    });
+  }));
+  t("tagihan yang sama diajukan orang lain di detik yang sama: tolakan database TAGIHAN_GANDA -> pop-up tagihan ganda, tanpa mengambil nomor lagi", async () => denganDana(async () => {
+    w.jejakDocNum = BARIS_DANA.slice();
+    await denganNomorDb({
+      tolak: 1,
+      tolakan: { code: "23505", message: "TAGIHAN_GANDA:invoiceNo:inv-555:400/EXIM/DDI/VIII/2026" },
+      // Pengajuan orang lain tersimpan lebih dulu (lolos pemeriksaan aplikasi berdua)
+      sebelumTolak: () => w.jejakDocNum.push({ id: "f9", doc_type: "fund", doc_number: "400/EXIM/DDI/VIII/2026", doc_date: "2026-08-09",
+        payload: { expenseType: "Freight", invoiceNo: "INV-555", payee: "PT LAIN" } }),
+    }, async (u) => {
+      isiFormDana({ invoiceNo: "INV-555" });
+      await w.submitDocNumRequest();
+      eq([u.rpc, u.insert.length].join(), "1,1", "tanpa nomor baru:");
+      eq(w.document.getElementById("confirmMessage").textContent,
+        "Nomor invoice INV-555 sudah diajukan di 400/EXIM/DDI/VIII/2026 (09-08-2026, PT LAIN).", "pop-up:");
+    });
+  }));
+  t("Ubah Isian ditolak pemicu database (nomor tagihan baru saja dipakai pengajuan lain): pop-up tagihan ganda, tidak tersimpan", async () => denganDana(async () => {
+    w.jejakDocNum = BARIS_DANA.slice();
+    w.__asliUbah = w.eval("supabaseClient.from");
+    try {
+      w.eval(`supabaseClient.from = (tabel) => Object.assign({}, window.__asliUbah(tabel), {
+        update: () => ({ eq: async () => {
+          // Pengajuan orang lain dengan tagihan yang sama tersimpan lebih dulu
+          window.jejakDocNum.push({ id: "f9", doc_type: "fund", doc_number: "401/EXIM/DDI/VIII/2026", doc_date: "2026-08-09",
+            payload: { expenseType: "Freight", invoiceNo: "INV-556", payee: "PT LAIN" } });
+          return { error: { code: "23505", message: "TAGIHAN_GANDA:invoiceNo:inv-556:401/EXIM/DDI/VIII/2026" } };
+        } }),
+      })`);
+      w.mulaiUbahDocNum("f3");
+      panelDana().querySelector('[data-dn="invoiceNo"]').value = "INV-556";
+      await w.simpanUbahDocNum();
+      eq(w.document.getElementById("confirmMessage").textContent,
+        "Nomor invoice INV-556 sudah diajukan di 401/EXIM/DDI/VIII/2026 (09-08-2026, PT LAIN).", "pop-up:");
+      eq(baca("dnEditingId"), "f3", "pop-up Ubah tetap terbuka:");
+    } finally {
+      w.eval("supabaseClient.from = window.__asliUbah");
+    }
+  }));
+  /* Isi SQL tanpa komentar; `tanpaBadan` juga tanpa badan fungsi ($$...$$)
+     -- yang tersisa = perintah yang benar-benar dijalankan migrasinya. */
+  const sqlMigrasi = (nama) => bacaMigrasi(nama).replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
+  const tanpaBadan = (sql) => sql.replace(/\$\$[\s\S]*?\$\$/g, "$$$$");
+  const UBAH_DATA = /\b(truncate|drop\s+table|drop\s+column|insert\s+into|update\s+[\w.]+\s+set|delete\s+from)\b/i;
+  t("migrasi optimasi database: celah dn_all ditutup, fungsi nomor khusus EXIM, RLS sekali per perintah, pemicu tagihan ganda ber-index -- TANPA mengubah data", () => {
+    const sql = sqlMigrasi("migration-optimasi-database.sql");
+    [
+      "drop policy if exists dn_all on public.document_numbers",
+      "drop policy if exists dnc_all on public.document_number_counters",
+      "with check ((select public.is_exim()))",
+      "pg_advisory_xact_lock(hashtext('dn-tagihan:'",
+      "raise exception 'TAGIHAN_GANDA:%:%:%'",
+      "drop trigger if exists dn_cegah_tagihan_ganda on public.document_numbers",
+      "before insert or update of payload on public.document_numbers",
+      "if tg_op = 'UPDATE' and (old.payload ->> v_kolom) is not distinct from (new.payload ->> v_kolom) then",
+      "using gin (public.dn_kunci_tagihan(payload ->> 'invoiceNo')) where doc_type = 'fund'",
+      "where id = v_id and doc_type = 'fund'",
+      "foreign key (created_by) references public.profiles(id) on delete set null",
+    ].forEach((k) => {
+      if (!sql.includes(k)) throw new Error("migrasi tidak memuat " + k);
+    });
+    eq((sql.match(/perform public\.assert_exim\(\);/g) || []).length, 4, "fungsi nomor yang diperiksa perannya:");
+    // Aturan pembanding = aplikasi (dnPecahNomorTagihan): pisah , ; baris baru, tanpa beda huruf & spasi
+    if (!sql.includes("regexp_split_to_table(coalesce(p_teks, ''), '[,;\\n]')")) throw new Error("pemisah nomor tagihan berbeda dari aplikasi");
+    const ubah = UBAH_DATA.exec(tanpaBadan(sql));
+    if (ubah) throw new Error("migrasi mengubah data: " + ubah[0]);
+    const tagihan = w.eval("dnTolakanTagihanGanda"), kembar = w.eval("dnTolakanNomorKembar");
+    eq([tagihan({ code: "23505", message: "TAGIHAN_GANDA:invoiceNo:x:1" }), kembar({ code: "23505", message: "TAGIHAN_GANDA:x" }), kembar(NOMOR_KEMBAR),
+      kembar({ code: "42501", message: "permission denied" })].join(), "true,false,true,false", "tolakan dikenali:");
+  });
+  t("pembatal migrasi optimasi ikut di paket: mengembalikan aturan lama, tanpa mengubah data", () => {
+    const sql = sqlMigrasi("migration-optimasi-database-batal.sql");
+    [
+      "DROP TRIGGER IF EXISTS dn_cegah_tagihan_ganda ON public.document_numbers;",
+      "DROP FUNCTION IF EXISTS public.dn_kunci_tagihan(text);",
+      "CREATE POLICY dn_all ON public.document_numbers USING (true) WITH CHECK (true);",
+      "CREATE POLICY hs_code_master_write ON public.hs_code_master TO authenticated",
+      "FOREIGN KEY (created_by) REFERENCES public.profiles(id);",
+    ].forEach((k) => {
+      if (!sql.includes(k)) throw new Error("pembatal tidak memuat " + k);
+    });
+    const ubah = UBAH_DATA.exec(tanpaBadan(sql));
+    if (ubah) throw new Error("pembatal mengubah data: " + ubah[0]);
+  });
   t("pop-up ikut bahasa Inggris", async () => denganDana(async () => {
     w.setLang("en");
     isiFormDana({ invoiceNo: "INV-001" });
     await w.submitDocNumRequest();
     eq(judulPopup(), "Invoice Number Already Submitted", "judul (EN):");
-    if (!/^Invoice number INV-001 has already been submitted in Fund Request 305\/EXIM\/DDI\/IX\/2026/.test(
-      w.document.getElementById("confirmMessage").textContent))
-      throw new Error("pesan (EN): " + w.document.getElementById("confirmMessage").textContent);
+    eq(w.document.getElementById("confirmMessage").textContent,
+      "Invoice number INV-001 was already submitted in 305/EXIM/DDI/IX/2026 (22-09-2026, PT DSV).", "pesan (EN) singkat:");
     eq(w.document.getElementById("confirmActionBtn").textContent, "OK", "tombol (EN):");
   }));
 }
@@ -3508,11 +3697,12 @@ t("form: Tambah Diskon -> baris diskon bertarif pos di atasnya, mengetik memperb
     const kotak = tr.querySelector('[data-fl-f="amount"]');
     kotak.value = "200000";
     kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
-    eq(kotak.value, "200.000", "format rupiah:");
-    eq(tr.querySelector(".fl-ppn").textContent, "- 22.000", "PPN baris diskon:");
+    eq(kotak.value, "200,000", "format nilai (koma ribuan):");
+    eq(baca("fundLines")[1].amount, 200000, "tersimpan di larik sebagai angka:");
+    eq(tr.querySelector(".fl-ppn").textContent, "- 22,000", "PPN baris diskon:");
     const kaki = w.document.getElementById("fundLinesFoot").textContent.replace(/\s+/g, " ");
-    if (!/Total Diskon\s*- Rp\. 200\.000/.test(kaki)) throw new Error("Total Diskon: " + kaki);
-    if (!/TOTAL\s*Rp\. 2\.180\.000/.test(kaki)) throw new Error("TOTAL: " + kaki);
+    if (!/Total Diskon\s*- Rp\. 200,000/.test(kaki)) throw new Error("Total Diskon: " + kaki);
+    if (!/TOTAL\s*Rp\. 2,180,000/.test(kaki)) throw new Error("TOTAL: " + kaki);
   } finally {
     w.eval("fundLines = " + simpan + "; renderFundLines()");
   }
@@ -3525,11 +3715,11 @@ t("nominal diskon di kotak baca-saja sebaris, ikut berubah saat pos di atasnya d
     const nominal = () => w.document.querySelector('#fundLinesBody [data-fl="1"] .fl-disc-nominal');
     if (!nominal().readOnly) throw new Error("kotak nominal bisa diketik");
     if (nominal().dataset.flF) throw new Error("kotak nominal ikut dibaca sebagai isian");
-    eq(nominal().value, "- 1.987.451", "35% dari 5.678.432:");
+    eq(nominal().value, "- 1,987,451", "35% dari 5.678.432 (data lama gaya Indonesia):");
     const pos = w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
     pos.value = "1000000";
     pos.dispatchEvent(new w.Event("input", { bubbles: true }));
-    eq(nominal().value, "- 350.000", "setelah pos di atasnya diubah:");
+    eq(nominal().value, "- 350,000", "setelah pos di atasnya diubah:");
     if (w.document.querySelector("#fundLinesBody .fl-disc-hasil")) throw new Error("keterangan lama di bawah kotak masih ada");
     // Kedua tombol tambah dalam satu wadah sebaris.
     const aksi = w.document.querySelector(".fl-aksi");
@@ -3539,15 +3729,15 @@ t("nominal diskon di kotak baca-saja sebaris, ikut berubah saat pos di atasnya d
     w.eval("fundLines = " + simpan + "; renderFundLines()");
   }
 });
-t("hitungRumus: operator, kurung, persen, dan yang tidak valid", () => {
-  const kasus = { "=1.000+1.000": 2000, "=(1.500+500)*3": 6000, "=2.200.000*10%": 220000,
-    "=10.000/4": 2500, "=1000x2": 2000, "=10:4": 2.5, "=-500+1000": 500, "=2,5*4": 10 };
+t("hitungRumus: koma ribuan & titik desimal, operator, kurung, persen, dan yang tidak valid", () => {
+  const kasus = { "=1,000+1,000": 2000, "=(1,500+500)*3": 6000, "=2,200,000*10%": 220000,
+    "=10,000/4": 2500, "=1000x2": 2000, "=10:4": 2.5, "=-500+1000": 500, "=2.5*4": 10, "=1,000.5+0.5": 1001 };
   Object.entries(kasus).forEach(([r, v]) => eq(w.hitungRumus(r), v, r + ":"));
   ["=1000+", "=1000/0", "=abc", "=(1+2", "=", "=1000);alert(1)"].forEach((r) => {
     if (!isNaN(w.hitungRumus(r))) throw new Error("seharusnya tidak valid: " + r);
   });
 });
-t("rumus di kotak nilai: titik ribuan saat diketik, dihitung saat Enter; yang salah ditandai & diblokir", () => {
+t("rumus di kotak nilai: koma ribuan saat diketik, dihitung saat Enter; yang salah ditandai & diblokir", () => {
   const simpan = w.eval("JSON.stringify(fundLines)");
   const enter = (el) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   try {
@@ -3555,18 +3745,18 @@ t("rumus di kotak nilai: titik ribuan saat diketik, dihitung saat Enter; yang sa
     const kotak = () => w.document.querySelector('#fundLinesBody [data-fl="0"] [data-fl-f="amount"]');
     kotak().value = "=1000+1000";
     kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
-    eq(kotak().value, "=1.000+1.000", "angka di dalam rumus ikut titik ribuan saat diketik:");
+    eq(kotak().value, "=1,000+1,000", "angka di dalam rumus ikut koma ribuan saat diketik:");
     enter(kotak());
-    eq(kotak().value, "2.000", "setelah Enter:");
-    eq(baca("fundLines")[0].amount, "2.000", "tersimpan sebagai angka:");
-    kotak().value = "=2.200.000*10%";
+    eq(kotak().value, "2,000", "setelah Enter:");
+    eq(baca("fundLines")[0].amount, 2000, "tersimpan sebagai angka:");
+    kotak().value = "=2,200,000*10%";
     kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
     enter(kotak());
-    eq(kotak().value, "220.000", "persen:");
+    eq(kotak().value, "220,000", "persen:");
     kotak().value = "=1000+";
     kotak().dispatchEvent(new w.Event("input", { bubbles: true }));
     enter(kotak());
-    eq(kotak().value, "=1.000+", "rumus salah dibiarkan untuk diperbaiki:");
+    eq(kotak().value, "=1,000+", "rumus salah dibiarkan untuk diperbaiki:");
     if (!kotak().classList.contains("fl-rumus-salah")) throw new Error("rumus salah tidak ditandai");
     if (!w.fundLinesRumusGagal(baca("fundLines"))) throw new Error("rumus salah tidak terdeteksi");
     if (!w.validateDocNumForm("fund").some((m) => /rumus/i.test(m))) throw new Error("penyimpanan tidak diblokir");
@@ -3665,20 +3855,29 @@ t("tahun baru muncul SENDIRI: jam sistem di 2027 -> 2027 ada di pilihan, paling 
     if (w.Date !== DateAsli) w.Date = DateAsli;
   }
 });
-t("Amount di Rincian Biaya diformat titik ribuan saat diketik, dan terbaca kembali tepat", () => {
+t("Amount di Rincian Biaya: koma ribuan & titik desimal saat diketik, tersimpan sebagai angka; data lama gaya Indonesia terbaca tepat", () => {
   const simpan = w.eval("JSON.stringify(fundLines)");
+  const ketik = (kotak, v, kursor) => {
+    kotak.value = v;
+    kotak.setSelectionRange(kursor == null ? v.length : kursor, kursor == null ? v.length : kursor);
+    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
+  };
   try {
     w.eval('fundLines = [{ desc: "", amount: "", ppnRate: 1.1 }]; renderFundLines()');
     const kotak = w.document.querySelector('#fundLinesBody [data-fl-f="amount"]');
-    kotak.value = "133434343";
-    kotak.setSelectionRange(9, 9);
-    kotak.dispatchEvent(new w.Event("input", { bubbles: true }));
-    eq(kotak.value, "133.434.343", "tampilan:");
+    ketik(kotak, "133434343");
+    eq(kotak.value, "133,434,343", "tampilan:");
     eq(kotak.selectionStart, 11, "kursor tetap di ujung:");
-    eq(w.fundLineAmount(baca("fundLines")[0]), 133434343, "nilai yang dihitung:");
-    // Nilai lama yang tersimpan tanpa titik tampil berformat saat digambar.
-    w.eval('fundLines = [{ desc: "", amount: "6262200", ppnRate: 1.1 }]; renderFundLines()');
-    eq(w.document.querySelector('#fundLinesBody [data-fl-f="amount"]').value, "6.262.200", "nilai lama:");
+    eq(baca("fundLines")[0].amount, 133434343, "di larik: angka:");
+    ketik(kotak, "1250000.509");
+    eq([kotak.value, baca("fundLines")[0].amount].join(" | "), "1,250,000.50 | 1250000.5", "titik = desimal, dua angka:");
+    ketik(kotak, "59.883.994,65");
+    eq([kotak.value, baca("fundLines")[0].amount].join(" | "), "59,883,994.65 | 59883994.65", "tempelan gaya Indonesia:");
+    // Data lama: teks gaya Indonesia / angka polos hasil impor -> angka saat dimuat & disimpan
+    w.setFundLines([{ desc: "A", amount: "6.262.200", ppnRate: 1.1 }, { desc: "B", amount: "8153951", ppnRate: 0 }, { desc: "C", amount: "420,5", ppnRate: 0 }]);
+    eq([...w.document.querySelectorAll('#fundLinesBody [data-fl-f="amount"]')].map((k) => k.value).join(" | "), "6,262,200 | 8,153,951 | 420.50", "nilai lama tampil:");
+    eq(JSON.stringify(w.fundLinesBersih(baca("fundLines")).map((b) => b.amount)), "[6262200,8153951,420.5]", "tersimpan sebagai angka:");
+    eq(w.fundLineValues([{ amount: 1000.5, ppnRate: 0 }, { amount: "2.000", ppnRate: 0 }]).join("|"), "1000.5|2000", "angka baru & teks lama terbaca benar:");
   } finally {
     w.eval("fundLines = " + simpan + "; renderFundLines()");
   }
@@ -9233,8 +9432,9 @@ t("invoice FedEx (1 AWB): komponen Freight / Base Discount / Fuel Surcharge, PPN
   eq(h.expenseType, "Freight");
   eq(h.transactionType, "Air Import");
   eq(h.lines.map((l) => (l.jenis === "diskon" ? "-" : "") + l.amount).join(","), "8659000,-4762450,1792413", "komponen:");
-  eq(h.lines[0].desc, "Freight Charges – AWB 875599457076 (12.7 kg)");
-  eq(h.lines[1].desc, "Base Discount – AWB 875599457076 (12.7 kg)");
+  // Satu AWB: uraian cukup nama komponennya (nomornya di isian BL/AWB), tanpa berat
+  eq(h.lines[0].desc, "Freight Charges");
+  eq(h.lines[1].desc, "Base Discount");
   eq(h.dpp, 5688963, "DPP setelah diskon:");
   eq(h.ppn, 62579, "PPN dibulatkan sekali per AWB:");
   eq(h.cocok, true, "DPP + PPN = Grand Total invoice:");
@@ -9245,6 +9445,8 @@ t("invoice FedEx (2 AWB): komponen per AWB termasuk Demand Surcharge; PPN tepat 
   eq(h.lines.length, 8, "4 komponen x 2 AWB:");
   eq(h.lines.map((l) => l.desc.split(" – ")[0]).join("|"),
     "Freight Charges|Base Discount|Fuel Surcharge|Demand Surcharge|Freight Charges|Base Discount|Fuel Surcharge|Demand Surcharge");
+  // Beberapa AWB: "– AWB <nomor>" supaya baris tiap kiriman terbedakan di surat cetak; tanpa berat
+  eq([h.lines[0].desc, h.lines[7].desc].join(" | "), "Freight Charges – AWB 877144218723 | Demand Surcharge – AWB 877334611529", "akhiran AWB:");
   eq(h.lines.filter((l) => l.jenis === "diskon").length, 2, "baris diskon:");
   // Tanpa pembulatan berkelompok PPN-nya 89.695 (lebih Rp 2); FedEx: 60.956 + 28.737
   eq(h.ppn, 89693, "PPN:");
@@ -9297,6 +9499,16 @@ t("invoice forwarder ekspor CIF (WIDE, 14 komponen): semua baris, PPN 1,1%, PPh 
   const tl = w.fundLineTotals(h.lines);
   eq(tl.totalNet + tl.totalPpn - tl.pph, 13508592, "total form = total invoice:");
 });
+t("invoice forwarder udara (WIDE): nomor AWB berhenti di label sebelahnya (tidak terbawa 'Chargeable Weight'), AWB 11 angka ditulis baku", () => {
+  const h = w.bacaInvoiceVendor(fiksInvoice("invoice-wide-air-uji"), ["WIDE"]);
+  eq(h.blAwb, "160-12345675", "AWB:");
+  eq([h.payee, h.expenseType, h.transactionType, h.invoiceNo, h.invoiceDueDate].join(" | "), "WIDE | Tax Advance | Air Import | IN-WL2610-09901 | 2026-11-29");
+  eq(JSON.stringify(h.lines), '[{"desc":"TAX (Advance)","amount":"12345678","ppnRate":0}]');
+  eq(h.cocok, true);
+  eq(w.danaNomorBlTabel("B/L No. : WLS O260 9882 6 CBM : 4.7310"), "WLSO26098826", "B/L laut berspasi, berhenti di CBM:");
+  eq(w.danaNomorBlTabel("HAWB No. : SRE 454220 Carrier : CATHAY"), "SRE454220", "berhenti di label berhuruf besar-kecil:");
+  eq(w.danaNomorBlTabel("B/L No. : 12345678901 Vessel : X"), "12345678901", "11 angka di B/L laut tidak diubah:");
+});
 t("form Pengajuan Dana tanpa isian Moda Angkut -- moda tersirat di Jenis Transaksi", () => {
   const panel = w.docNumPanelEl("fund");
   if (panel.querySelector('[data-dn="transportMode"]')) throw new Error("isian Moda Angkut / Trucking masih ada");
@@ -9316,9 +9528,10 @@ t("invoice DHL Express (2 AWB): Standard Charge, Fuel Surcharge, GoGreen + disko
   eq(h.transactionType, "Air Import", "INBOUND:");
   eq(h.lines.map((l) => (l.jenis === "diskon" ? "-" : "") + l.amount).join(","),
     "4841000,-2420500,1851683,-925842,19500,2972000,-1486000,1136790,-568395,9000", "komponen & diskon:");
-  eq(h.lines[0].desc, "Standard Charge – AWB 8481290532 (6.50 kg)");
-  eq(h.lines[2].desc, "Fuel Surcharge – AWB 8481290532 (6.50 kg)");
-  eq(h.lines[4].desc, "Gogreen Plus - Carbon Reduced – AWB 8481290532 (6.50 kg)", "nama lengkap dari Analysis of Extra Charges:");
+  eq(h.lines[0].desc, "Standard Charge – AWB 8481290532");
+  eq(h.lines[1].desc, "Discount – AWB 8481290532");
+  eq(h.lines[2].desc, "Fuel Surcharge – AWB 8481290532");
+  eq(h.lines[4].desc, "Gogreen Plus - Carbon Reduced – AWB 8481290532", "nama lengkap dari Analysis of Extra Charges:");
   eq(h.dpp, 5429236, "DPP (Taxable Total):");
   eq(h.ppn, 59722, "PPN per baris DHL:");
   eq(h.cocok, true, "total 5.488.958:");
@@ -9349,13 +9562,59 @@ t("billing DJBC: Nomor Billing, tanggal & jatuh tempo, akun PPN Impor -> isian B
   eq(JSON.stringify(h.fee), '{"feeBm":0,"feePpn":37229287,"feePph":0}');
   eq(h.cocok, true, "jumlah akun = total billing:");
 });
-t("Rincian bawaan: 'Payment Request Invoice <Vendor>' / 'Payment Request Billing Import'; ketikan sendiri tidak ditimpa", () => {
-  eq(w.danaRincianBawaan({ payee: "WIDE" }), "Payment Request Invoice Wide");
-  eq(w.danaRincianBawaan({ payee: "FEDEX" }), "Payment Request Invoice FedEx");
-  eq(w.danaRincianBawaan({ payee: "DHL" }), "Payment Request Invoice DHL");
-  eq(w.danaRincianBawaan({ payee: "FREIGHT EXPRESS" }), "Payment Request Invoice Freight Express");
-  eq(w.danaRincianBawaan({ jenisDokumen: "billing", payee: "KAS NEGARA" }), "Payment Request Billing Import");
+t("Rincian bawaan menurut Jenis Pengeluaran, vendor, Jenis Transaksi & barang BL/AWB-nya", () => {
+  const r = (x) => w.fundRincianBawaan(x);
+  eq(r({}), "Payment Request - Invoice", "kosong:");
+  eq(r({ expenseType: "Billing", transactionType: "Sea Import", payee: "KAS NEGARA" }), "Payment Request - Billing Import", "Billing:");
+  eq(r({ expenseType: "Freight", transactionType: "Air Import", payee: "FEDEX", barang: "Bead Ring" }), "Payment Request - Invoice FedEx Freight Charge Import Bead Ring", "Freight:");
+  eq(r({ expenseType: "Storage", transactionType: "Sea Export", payee: "WIDE" }), "Payment Request - Invoice Wide Storage Charge Export", "Storage:");
+  eq(r({ expenseType: "Tax Advance", transactionType: "Air Import", payee: "WIDE" }), "Payment Request - Invoice Wide Tax Advance Import", "Tax Advance:");
+  eq(r({ expenseType: "Lainnya", transactionType: "Local Sale", payee: "PT SAMUDERA" }), "Payment Request - Invoice PT Samudera Inland Trucking", "lainnya & nama lama Local Sale:");
+  eq(r({ expenseType: "Freight", payee: "DHL" }), "Payment Request - Invoice DHL Freight Charge", "tanpa jenis transaksi:");
+  // Barang: jadwal yang Master / House BL/AWB-nya cocok (tanpa tanda baca), Uraian tanpa kembar
+  const simpanData = baca("JSON.stringify(data)");
+  try {
+    tulis("data", { import: [{ id: "j1", masterBL: "160-12345675", houseBL: "HAWB-1", items: [{ namaBarang: "BEAD RING" }, { namaBarang: "BEAD RING" }, { namaBarang: "TIRE MOLD" }] },
+      { id: "j3", masterBL: "SATU-0001", items: [{ namaBarang: "MASTER MODEL 255/40R18 PS72" }, { namaBarang: "MASTER MODEL 255/40R18 PS72" }] }],
+      export: [{ id: "j2", masterBL: "MEDU1234567", items: [{ namaBarang: "A" }, { namaBarang: "B" }, { namaBarang: "C" }] }] });
+    eq(w.fundBarangDariAwb("16012345675"), "Bead Ring etc.", "barang pertama saja (kembarnya tidak dihitung):");
+    eq(w.fundBarangDariAwb("MEDU 1234567"), "A etc.", "lebih dari dua:");
+    eq(w.fundBarangDariAwb("999"), "", "tanpa jadwal:");
+    eq(w.fundBarangDariAwb("SATU-0001"), "Master Model 255/40R18 PS72", "satu jenis barang: tanpa etc.:");
+    // Form: ikut berganti selama masih bawaan; ketikan sendiri tidak ditimpa
+    const panel = w.docNumPanelEl("fund");
+    w.resetDocNumForm("fund");
+    const catatan = panel.querySelector('[data-dn="notes"]');
+    const pilih = (k, v) => {
+      const el = panel.querySelector(`[data-dn="${k}"]`);
+      if (k === "payee") pilihVendor(el, v);
+      else el.value = v;
+      el.dispatchEvent(new w.Event("change", { bubbles: true }));
+    };
+    eq(catatan.value, "Payment Request - Invoice", "form baru:");
+    pilih("expenseType", "Freight");
+    pilih("transactionType", "Air Import");
+    pilih("payee", "FEDEX");
+    eq(catatan.value, "Payment Request - Invoice FedEx Freight Charge Import", "vendor & transaksi:");
+    pilih("blAwb", "160 1234 5675");
+    eq(catatan.value, "Payment Request - Invoice FedEx Freight Charge Import Bead Ring etc.", "barang dari BL/AWB:");
+    pilih("expenseType", "Storage");
+    eq(catatan.value, "Payment Request - Invoice FedEx Storage Charge Import Bead Ring etc.", "Storage:");
+    catatan.value = "Payment Request - Invoice FedEx Freight Charge Import Beadring";
+    catatan.dispatchEvent(new w.Event("input", { bubbles: true }));
+    pilih("transactionType", "Air Export");
+    eq(catatan.value, "Payment Request - Invoice FedEx Freight Charge Import Beadring", "diubah sendiri tidak ditimpa:");
+    catatan.value = "";
+    pilih("expenseType", "Billing");
+    eq(catatan.value, "Payment Request - Billing Export", "dikosongkan -> bawaan lagi:");
+    w.resetDocNumForm("fund");
+  } finally {
+    w.eval(`data = ${simpanData}`);
+  }
+});
+t("impor invoice: Rincian bawaan ikut jenis, vendor & transaksinya; ketikan sendiri tidak ditimpa", () => {
   const panel = w.docNumPanelEl("fund");
+  w.resetDocNumForm("fund");
   const catatan = panel.querySelector('[data-dn="notes"]');
   // Billing mengisi isian Billing + Rincian bawaannya
   w.danaIsiForm(w.bacaInvoiceVendor(fiksInvoice("billing-djbc-640261006322394"), ["KAS NEGARA"]));
@@ -9364,7 +9623,7 @@ t("Rincian bawaan: 'Payment Request Invoice <Vendor>' / 'Payment Request Billing
   eq(nilai("billingNo"), "640261006322394");
   eq(nilai("feePpn").replace(/[^\d]/g, ""), "37229287", "PPN Impor (diformat isian angka):");
   eq(nilai("payee"), "KAS NEGARA");
-  eq(catatan.value, "Payment Request Billing Import");
+  eq(catatan.value, "Payment Request - Billing Import");
   // Rincian yang diketik pengguna dipertahankan
   catatan.value = "Bayar PPN impor mold Kumho";
   w.danaIsiForm(w.bacaInvoiceVendor(fiksInvoice("invoice-wide-IN-WL2609-00159"), ["WIDE"]));
@@ -9395,7 +9654,7 @@ t("tombol 'Isi dari Invoice Vendor' ada di form Pengajuan Dana & mengisi isianny
   eq(nilai("invoiceDate"), "2026-09-28");
   eq(nilai("blAwb"), "877144218723/877334611529");
   eq(baca("fundLines").length, 8, "baris rincian (komponen per AWB):");
-  eq(nilai("notes"), "Payment Request Invoice FedEx", "Rincian (subject cetak) bawaan:");
+  eq(nilai("notes"), "Payment Request - Invoice FedEx Freight Charge Import", "Rincian (subject cetak) bawaan:");
   w.resetDocNumForm("fund");
 });
 
@@ -10808,28 +11067,23 @@ t("format Billing memakai setelan aslinya, tidak ikut dikecilkan tabel rinci", (
   if (!/font-size:\s*8pt/.test(blokRinci) || !/table-layout:\s*fixed/.test(blokRinci))
     throw new Error("penyesuaian tabel rinci hilang");
 });
-t("garis pembatas lebih TEBAL daripada garis baris pos", () => {
-  /* Dengan border-collapse, garis transparan milik baris pos bisa
-     memenangkan perebutan batas kalau tebalnya sama -- garis di atas
-     TOTAL lenyap. Yang lebih tebal selalu menang. */
-  const css = w.fundRequestCss();
-  const iPos = css.indexOf(".rincian .baris-pos td {");
-  const tebalPos = /border:\s*([\d.]+)px/.exec(
-    css.slice(css.indexOf(".rincian th,"), css.indexOf("}", css.indexOf(".rincian th,"))),
-  );
-  const iBatas = css.indexOf(".rincian .baris-rujukan td,");
-  const tebalBatas = /border-top:\s*([\d.]+)px/.exec(css.slice(iBatas, css.indexOf("}", iBatas)));
-  if (iPos < 0 || !tebalPos || !tebalBatas)
-    throw new Error("aturan tebal garis tidak lengkap");
-  if (Number(tebalBatas[1]) <= Number(tebalPos[1]))
-    throw new Error(
-      `garis pembatas ${tebalBatas[1]}px tidak lebih tebal daripada ${tebalPos[1]}px -- bisa kalah dan lenyap`,
-    );
-});
-t("baris pos TERAKHIR tetap bergaris di tepi bawah tabel", () => {
-  const css = w.fundRequestCss();
-  if (!/tbody tr:last-child td \{[^}]*border-bottom-color:\s*#000/.test(css))
-    throw new Error("tepi bawah tabel bisa lenyap di baris pos terakhir");
+t("garis antar baris pos disembunyikan (gaya hidden) hanya di antara DUA baris pos -- garis ke Nomor Invoice / Nomor Debit Note, TOTAL & tepi tabel tidak bergantung tebal garis", () => {
+  /* Cara lama (garis baris pos transparan + garis pembatas 1.2px supaya
+     yang lebih tebal menang) gagal di cetakan: 1.2px dibulatkan jadi
+     1px, tebalnya seri, dan garis transparan baris DI ATASNYA menang --
+     garis di atas "Nomor Debit Note" & TOTAL lenyap. */
+  const css = w.fundRequestCss().replace(/\/\*[\s\S]*?\*\//g, "");
+  if (!/\.rincian \.baris-pos \+ \.baris-pos td \{\s*border-top-style:\s*hidden;\s*\}/.test(css))
+    throw new Error("garis antar baris pos tidak disembunyikan lewat gaya hidden");
+  if (/transparent/.test(css)) throw new Error("masih ada garis transparan yang bisa memenangkan batas");
+  if (/\d\.\d+px solid/.test(css)) throw new Error("masih bergantung pada garis berpiksel pecahan");
+  // Judul dokumen kedua tepat sesudah baris pos: bukan sasaran aturan itu, garisnya tergambar
+  const t2 = w.document.createElement("div");
+  t2.innerHTML = w.frTabelRinci({ invoiceNo: "AI1", lines: [{ desc: "A", amount: 100, ppnRate: 1.1 }, { desc: "B", amount: 50, ppnRate: 0, dok: "d2" }],
+    dokumen: [{ id: "d2", jenis: "debit", nomor: "DN-1" }] }, "IDR");
+  const judul = [...t2.querySelectorAll("tr.baris-rujukan")].find((tr) => tr.textContent.includes("Nomor Debit Note"));
+  eq([judul.previousElementSibling.className, judul.matches(".baris-pos + .baris-pos"), t2.querySelector("tr.baris-subtotal").matches(".baris-pos + .baris-pos")].join(),
+    "baris-pos,false,false", "batas yang tetap bergaris:");
 });
 t("baris Nomor Billing & Potongan PPH melintang penuh, seperti baris TOTAL", () => {
   /* Dipecah jadi banyak sel, keduanya menyisakan garis tegak pendek
@@ -10885,11 +11139,11 @@ t("setiap sel bergaris penuh; hanya garis MENDATAR antar baris pos yang disembun
   const css = w.fundRequestCss();
   if (!/\.rincian th,\s*\r?\n\s*\.rincian td \{[^}]*border:\s*1px solid #000/.test(css))
     throw new Error("tidak semua sel bergaris penuh");
-  const i = css.indexOf(".rincian .baris-pos td {");
+  const i = css.indexOf(".rincian .baris-pos + .baris-pos td {");
   if (i < 0) throw new Error("aturan baris pos tidak ditemukan");
   const blok = css.slice(i, css.indexOf("}", i));
-  if (!/border-top-color:\s*transparent/.test(blok) || !/border-bottom-color:\s*transparent/.test(blok))
-    throw new Error("garis mendatar baris pos tidak disembunyikan lewat warna");
+  if (!/border-top-style:\s*hidden/.test(blok) || /border-(left|right)/.test(blok))
+    throw new Error("hanya garis atas baris pos yang boleh disembunyikan");
   if (/border-top:\s*0|border-bottom:\s*0/.test(blok))
     throw new Error("garis dimatikan dengan lebar 0 -- garis tegaknya ikut hilang di sebagian peramban");
 });
@@ -20035,12 +20289,12 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
   });
 
   console.log("— RUMUS DI KOTAK NILAI: TITIK RIBUAN SAAT DIKETIK —");
-  t("rumus ikut titik ribuan per angkanya; desimal & operator utuh; kursor tidak melompat", () => {
-    eq(w.formatRumusKetik("=1000000+250000*2"), "=1.000.000+250.000*2");
-    eq(w.formatRumusKetik("=2.200.000*10%"), "=2.200.000*10%", "yang sudah benar tidak berubah:");
-    eq(w.formatRumusKetik("=(1500+500)*3"), "=(1.500+500)*3", "kurung:");
-    eq(w.formatRumusKetik("=1000,125/3"), "=1.000,125/3", "desimal lebih dari dua angka dibiarkan:");
-    eq(w.formatRumusKetik("=12.34+1"), "=1.234+1", "titik ketikan disusun ulang (titik = ribuan):");
+  t("rumus ikut koma ribuan per angkanya; desimal & operator utuh; kursor tidak melompat", () => {
+    eq(w.formatRumusKetik("=1000000+250000*2"), "=1,000,000+250,000*2");
+    eq(w.formatRumusKetik("=2,200,000*10%"), "=2,200,000*10%", "yang sudah benar tidak berubah:");
+    eq(w.formatRumusKetik("=(1500+500)*3"), "=(1,500+500)*3", "kurung:");
+    eq(w.formatRumusKetik("=1000.125/3"), "=1,000.125/3", "desimal lebih dari dua angka dibiarkan:");
+    eq(w.formatRumusKetik("=12,34+1"), "=1,234+1", "koma ketikan disusun ulang (koma = ribuan):");
     eq(w.formatRumusKetik("=0005+1"), "=5+1", "nol di depan:");
     eq(w.hitungRumus(w.formatRumusKetik("=1000000+250000*2")), 1500000, "hasil hitungan tetap sama:");
     // Kursor tetap sesudah angka yang baru diketik
@@ -20050,8 +20304,8 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       el.value = "=1000+25000";
       el.setSelectionRange(5, 5); // sesudah "=1000"
       w.formatKotakRupiah(el);
-      eq(el.value, "=1.000+25.000", "kotak:");
-      eq(el.selectionStart, 6, "kursor tetap sesudah '1.000':");
+      eq(el.value, "=1,000+25,000", "kotak:");
+      eq(el.selectionStart, 6, "kursor tetap sesudah '1,000':");
     } finally { el.remove(); }
   });
 
@@ -20122,7 +20376,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       sel(1).value = "877334611529";
       sel(1).dispatchEvent(new w.Event("change", { bubbles: true }));
       const bagian = [...w.document.querySelectorAll("#fundLinesFoot .fl-sum--awb")].map((x) => [...x.children].map((c) => c.textContent.replace(/\s+/g, " ").trim()).join(" "));
-      eq(bagian.join(" ; "), "8771 4421 8723 Rp. 1.000.000 ; 877334611529 Rp. 2.000.000", "bagian tiap BL/AWB:");
+      eq(bagian.join(" ; "), "8771 4421 8723 Rp. 1,000,000 ; 877334611529 Rp. 2,000,000", "bagian tiap BL/AWB:");
       // Tersimpan sebagai kunci baku
       eq(JSON.stringify(w.readDocNumForm("fund").lines.map((b) => b.awb)), JSON.stringify(["877144218723", "877334611529"]), "tersimpan:");
       // Nomor dihapus dari isian -> baris bertaut ditandai & penyimpanan ditolak
@@ -20461,7 +20715,7 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
       // Di pop-up: isian nomor yang dibuka, bukan draf
       eq(kotak("invoiceNo").value, "LAMA-77", "pop-up memuat nomor yang dibuka:");
       eq(kotak("payee").value, "PT LAMA EKSPRES", "vendor nomor itu:");
-      eq(ringkasBaris(), JSON.stringify([["Air freight", "2.000.000", ""]]), "rincian nomor itu:");
+      eq(ringkasBaris(), JSON.stringify([["Air freight", 2000000, ""]]), "rincian nomor itu (nilai lama -> angka):");
       eq(baca("fundDokumen").length, 0, "tanpa dokumen tambahan:");
 
       w.batalUbahDocNum();
