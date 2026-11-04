@@ -26,6 +26,21 @@ const FUND_PPN_RATES = [0, 1.1, 11];
    pos tanpa PPN (storage) di luar objek PPH 23 ini. */
 const FUND_PPH23_RATE = 2;
 
+/* PPN DIHITUNG SAMPAI 2 DESIMAL (sen): 16.873.095,68 x 1,1% =
+   185.604,05248 -> 185.604,05. Angka bulat tetap tampil tanpa ".00"
+   (formatNilai).
+
+   Pembulatannya memakai BILANGAN BULAT (nilai dalam sen x tarif), bukan
+   pecahan biner: 2.902,50 x 11% = 319,275 tepat setengah sen dan harus
+   naik ke 319,28, tetapi hitungan pecahan biner menurunkannya ke 319,27.
+   Setengah dibulatkan menjauhi nol, jadi baris diskon seukuran pos yang
+   didiskon membatalkan PPN pos itu sampai sen terakhir. Penjumlahan PPN
+   juga dalam sen (fundBulatSen) supaya total tidak membawa derau biner
+   seperti 0.30000000000000004. */
+const FUND_SEN = 100;
+const fundSen = (v) => Math.round((Number(v) || 0) * FUND_SEN); // rupiah -> sen (bilangan bulat)
+const fundBulatSen = (v) => fundSen(v) / FUND_SEN || 0; // 2 desimal, tanpa derau biner dan tanpa -0
+
 /* NILAI RUPIAH TERSIMPAN -- dua bentuk:
      - ANGKA (payload.lines[].amount = 16873095.68): pengajuan yang
        disimpan sejak kotak nilai memakai gaya ketik aplikasi;
@@ -327,26 +342,46 @@ function fundLineValues(lines) {
   });
 }
 
-// PPN dari nilai bertanda sebuah baris (negatif untuk diskon).
+/* PPN dari nilai bertanda sebuah baris (negatif untuk diskon), dibulatkan
+   ke 2 desimal -- lihat FUND_SEN di atas. */
 function fundLinePpnNilai(nilai, baris) {
+  const sen = fundSen(nilai);
+  // Tarif dalam per-sepuluh-ribu supaya bulat: 1,1% = 110, 11% = 1100.
+  const tarif = Math.round(fundLineRate(baris) * 100);
+  const kali = Math.abs(sen) * tarif; // sen x tarif x 100: bilangan bulat, tepat
+  const sisa = kali % 10000;
+  const bulat = (kali - sisa) / 10000 + (sisa >= 5000 ? 1 : 0); // setengah naik, menjauhi nol
+  return bulat === 0 ? 0 : (sen < 0 ? -bulat : bulat) / FUND_SEN;
+}
+
+/* PPN dibulatkan ke RUPIAH PENUH. Hanya untuk baris ber-grupPpn (impor
+   invoice FedEx / DHL), yang meniru vendornya: PPN di invoice mereka
+   ditulis dalam rupiah penuh. Lihat fundLinePpnDaftar. */
+function fundLinePpnRupiah(nilai, baris) {
   const p = Math.round((nilai * fundLineRate(baris)) / 100);
   return p === 0 ? 0 : p;
 }
 
-/* PPN PER BARIS -- dengan KELOMPOK PEMBULATAN.
+const fundGrupPpn = (b) => String((b && b.grupPpn) || "").trim();
 
-   Biasanya tiap baris dibulatkan sendiri (seperti tagihan forwarder,
-   yang menulis PPN per baris). Baris ber-grupPpn sama -- komponen satu
-   AWB FedEx: freight, diskon, surcharge -- dibulatkan SEKALI dari
-   jumlahnya, persis cara vendor itu menghitung PPN-nya, lalu dibagikan
-   lagi ke tiap baris (sisa pembulatan terbesar dulu). Kolom PPN per
-   baris tetap menjumlah tepat ke total, dan totalnya sama dengan
-   invoice sampai rupiah terakhir. */
+/* PPN PER BARIS -- 2 desimal, dengan KELOMPOK PEMBULATAN.
+
+   Baris biasa: tiap baris dibulatkan sendiri ke 2 desimal (seperti
+   tagihan forwarder, yang menulis PPN per baris), dan PPN total adalah
+   jumlah PPN baris-barisnya.
+
+   Baris ber-grupPpn sama -- komponen satu AWB FedEx: freight, diskon,
+   surcharge -- mengikuti vendornya, yang menulis PPN dalam RUPIAH PENUH:
+   dibulatkan SEKALI dari jumlahnya, persis cara vendor itu menghitung
+   PPN-nya, lalu dibagikan lagi ke tiap baris (sisa pembulatan terbesar
+   dulu). Kolom PPN per baris tetap menjumlah tepat ke total, dan
+   totalnya sama dengan invoice sampai rupiah terakhir -- karena itu
+   baris ber-grupPpn tidak ikut 2 desimal. */
 function fundLinePpnDaftar(daftar, nilai) {
-  const hasil = daftar.map((b, i) => fundLinePpnNilai(nilai[i], b));
+  const hasil = daftar.map((b, i) => (fundGrupPpn(b) ? fundLinePpnRupiah(nilai[i], b) : fundLinePpnNilai(nilai[i], b)));
   const grup = new Map();
   daftar.forEach((b, i) => {
-    const g = String((b && b.grupPpn) || "").trim();
+    const g = fundGrupPpn(b);
     if (!g) return;
     const k = g + "|" + fundLineRate(b);
     if (!grup.has(k)) grup.set(k, []);
@@ -378,17 +413,18 @@ function fundLineTotals(lines) {
   const ppnBaris = fundLinePpnDaftar(daftar, nilai);
   let totalNilai = 0;
   let totalDiskon = 0;
-  let totalPpn = 0;
+  let totalPpnSen = 0; // dijumlah dalam sen: tanpa derau pecahan biner
   let dppPph = 0;
   daftar.forEach((b, i) => {
     const v = nilai[i];
     if (v >= 0) totalNilai += v;
     else totalDiskon -= v;
-    totalPpn += ppnBaris[i];
+    totalPpnSen += fundSen(ppnBaris[i]);
     // Hanya baris yang dipungut PPN yang masuk dasar PPH 23 -- dengan
     // nilai bertandanya, jadi diskon ikut mengurangi dasarnya.
     if (fundLineRate(b) > 0) dppPph += v;
   });
+  const totalPpn = totalPpnSen / FUND_SEN;
   const totalNet = Math.round(totalNilai) - totalDiskon;
   const pph = Math.max(0, Math.round((dppPph * FUND_PPH23_RATE) / 100));
   return {
@@ -401,7 +437,7 @@ function fundLineTotals(lines) {
     /* PPH 23 MEMOTONG, bukan menambah: ia dipungut pemberi kerja dan
        disetor atas nama penyedia jasa, jadi yang dibayarkan ke
        forwarder sudah dikurangi angka itu. */
-    grandTotal: totalNet + totalPpn - pph,
+    grandTotal: fundBulatSen(totalNet + totalPpn - pph),
   };
 }
 
@@ -469,21 +505,27 @@ function fundTotalKomponen(p) {
 }
 
 /* Membulatkan bagian-bagian supaya jumlahnya TEPAT `target` (metode
-   sisa terbesar): tiap bagian dibulatkan ke bawah, lalu rupiah yang
+   sisa terbesar): tiap bagian dibulatkan ke bawah, lalu satuan yang
    tersisa diberikan satu-satu ke bagian dengan pecahan terbesar --
    kalau sama, ke bagian yang lebih besar, lalu ke yang terakhir.
-   Pembagian rata 301 / 3 = 100 + 100 + 101. */
-function fundBulatkanBagian(mentah, target) {
-  const bulat = mentah.map((v) => Math.floor(v));
-  let sisa = Math.round(target) - bulat.reduce((x, v) => x + v, 0);
+   Pembagian rata 301 / 3 = 100 + 100 + 101.
+
+   `skala` = banyaknya satuan terkecil per rupiah: 1 (bawaan) = rupiah
+   penuh; FUND_SEN = sen, dipakai untuk PPN yang punya 2 desimal. */
+function fundBulatkanBagian(mentah, target, skala) {
+  const s = skala || 1;
+  const hitung = mentah.map((v) => v * s);
+  // + 1e-6: derau biner (mis. 2.9999999999999996) tidak boleh menurunkan satu satuan
+  const bulat = hitung.map((v) => Math.floor(v + 1e-6));
+  let sisa = Math.round(target * s) - bulat.reduce((x, v) => x + v, 0);
   if (!bulat.length) return bulat;
-  const urut = mentah
-    .map((v, i) => ({ i, pecahan: v - Math.floor(v), v }))
+  const urut = hitung
+    .map((v, i) => ({ i, pecahan: v - bulat[i], v }))
     .sort((a, b) => b.pecahan - a.pecahan || b.v - a.v || b.i - a.i);
   for (let n = 0; sisa > 0; n++, sisa--) bulat[urut[n % urut.length].i] += 1;
   // Total yang lebih kecil dari jumlah pembulatan ke bawah (sen): dikurangi dari pecahan terkecil
   for (let n = 0; sisa < 0; n++, sisa++) bulat[urut[urut.length - 1 - (n % urut.length)].i] -= 1;
-  return bulat;
+  return s === 1 ? bulat : bulat.map((v) => v / s);
 }
 
 /* Bagian tiap BL/AWB satu pengajuan:
@@ -539,7 +581,7 @@ function fundBagiPerAwb(p) {
     };
   });
   const dpp = fundBulatkanBagian(mentah.map((m) => m.dpp), total.dpp);
-  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn);
+  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn, FUND_SEN); // PPN: 2 desimal
   const pph = fundBulatkanBagian(mentah.map((m) => m.pph), total.pph);
   return awb.map((a, i) => ({
     kunci: a.kunci,
@@ -547,7 +589,7 @@ function fundBagiPerAwb(p) {
     dpp: dpp[i],
     ppn: ppnBagian[i],
     pph: pph[i],
-    dibayar: dpp[i] + ppnBagian[i] - pph[i],
+    dibayar: fundBulatSen(dpp[i] + ppnBagian[i] - pph[i]),
     rata: adaBersama,
     tautan: isi.get(a.kunci).tautan,
   }));

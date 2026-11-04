@@ -1363,6 +1363,30 @@ const DN_NOMOR_TAGIHAN = [
   { field: "billingNo", get label() { return tt("Nomor billing", "Billing number"); } },
 ];
 
+/* PENGECUALIAN: JNE. Untuk JNE isian "No. Invoice" berisi NOMOR REKENING
+   tujuan bayar, bukan nomor tagihan. Rekening yang sama dipakai di setiap
+   pengajuan, jadi nomor yang berulang itu wajar -- bukan tagihan yang
+   dibayar dua kali.
+
+   Yang dikecualikan HANYA pengecekan No. Invoice, dan HANYA bila
+   pengajuan yang sedang diisi / disimpan itu sendiri milik JNE. Nomor
+   Billing tetap diperiksa, dan pengajuan vendor lain tetap diperiksa
+   (juga terhadap nomor yang dipakai pengajuan JNE).
+
+   Vendor dikenali dari NAMA-nya (nama vendor diketik bebas, lihat
+   fund-vendor.js): kata "JNE" utuh -- "JNE", "PT JNE", "JNE EXPRESS" --
+   atau nama lengkapnya "Jalur Nugraha Ekakurir". Kata utuh, supaya nama
+   lain yang kebetulan memuat ketiga huruf itu tidak ikut terbawa.
+
+   Aturan yang sama ada di database (dn_tagihan_boleh_sama,
+   migration-tagihan-jne.sql). Mengubah yang satu berarti mengubah
+   keduanya. */
+const DN_TAGIHAN_BOLEH_SAMA = /\bJNE\b|JALUR\s+NUGRAHA\s+EKAKURIR/i;
+const dnTagihanBolehSama = (payee) => DN_TAGIHAN_BOLEH_SAMA.test(String(payee || ""));
+const dnTagihanDikecualikan = (form, field) => field === "invoiceNo" && dnTagihanBolehSama(form && form.payee);
+// Isian tagihan yang diperiksa untuk form ini: yang terisi dan tidak dikecualikan
+const dnJenisTagihan = (form) => DN_NOMOR_TAGIHAN.find((j) => form[j.field] && !dnTagihanDikecualikan(form, j.field));
+
 function dnPecahNomorTagihan(nilai) {
   return String(nilai || "")
     .split(/[,;\n]/)
@@ -1382,7 +1406,7 @@ function dnKunciNomorTagihan(no) {
    mengembalikan lebih banyak, tidak pernah melewatkan yang sama persis.
    Kecocokan pastinya diputuskan di sini. */
 async function dnCariTagihanGanda(form, kecualiId) {
-  const jenis = DN_NOMOR_TAGIHAN.find((j) => form[j.field]);
+  const jenis = dnJenisTagihan(form);
   if (!jenis) return null;
   const nomor = dnPecahNomorTagihan(form[jenis.field]);
   if (!nomor.length) return null;
@@ -1449,7 +1473,7 @@ function dnTandaiTagihanGanda(panel, temuan) {
    memuat daftarnya (ketikan / impor); penyegaran form (form dikosongkan,
    dibuka, ganti jenis) cukup memakai daftar yang sudah termuat. */
 function dnTagihanGandaLokal(form, rows, kecualiId) {
-  const jenis = DN_NOMOR_TAGIHAN.find((j) => form[j.field]);
+  const jenis = dnJenisTagihan(form);
   if (!jenis) return null;
   const dicari = new Set(dnPecahNomorTagihan(form[jenis.field]).map(dnKunciNomorTagihan));
   if (!dicari.size) return null;
@@ -1476,7 +1500,10 @@ function dnPeriksaTagihanGandaLangsung(panel, muat) {
       const el = panel.querySelector(`[data-dn="${j.field}"]`);
       form[j.field] = el && !el.disabled ? el.value.trim() : "";
     });
-    if (!DN_NOMOR_TAGIHAN.some((j) => form[j.field])) {
+    // Vendornya ikut menentukan: No. Invoice JNE tidak diperiksa (dnTagihanBolehSama)
+    const kotakVendor = panel.querySelector('[data-dn="payee"]');
+    form.payee = kotakVendor ? kotakVendor.value : "";
+    if (!dnJenisTagihan(form)) {
       dnTandaiTagihanGanda(panel, null);
       return;
     }
@@ -1507,6 +1534,22 @@ document.addEventListener("input", (e) => {
 const dnTolakanTagihanGanda = (err) => /TAGIHAN_GANDA/.test(String((err && err.message) || ""));
 const dnTolakanNomorKembar = (err) => !!err && err.code === "23505" && !dnTolakanTagihanGanda(err);
 const DN_COBA_NOMOR = 5;
+
+/* Pemicu database yang BELUM diperbarui (migration-tagihan-jne.sql belum
+   dijalankan) masih menolak No. Invoice kembar milik JNE. Di form ia tidak
+   dianggap ganda, jadi tolakannya tidak punya pop-up tagihan ganda --
+   tanpa ini yang muncul kode TAGIHAN_GANDA mentah. Galat lain, dan galat
+   pengajuan vendor lain, dikembalikan apa adanya. */
+function dnGalatTagihanJne(err, form) {
+  const kembar = /TAGIHAN_GANDA:invoiceNo:/.test(String((err && err.message) || ""));
+  if (!kembar || !dnTagihanDikecualikan(form, "invoiceNo")) return err;
+  return new Error(
+    tt(
+      "database masih menolak No. Invoice yang sama untuk JNE — jalankan migration-tagihan-jne.sql di Supabase (SQL Editor), lalu coba lagi.",
+      "the database still rejects a repeated Invoice No. for JNE — run migration-tagihan-jne.sql in Supabase (SQL Editor), then try again.",
+    ),
+  );
+}
 
 /* Saat Simpan: pop-up singkat + isiannya ditandai. */
 function dnTolakTagihanGanda(temuan) {
@@ -1601,7 +1644,7 @@ async function simpanUbahDocNum() {
         return;
       }
     }
-    if (error) throw error;
+    if (error) throw dnGalatTagihanJne(error, form);
     tersimpan = true;
   } catch (err) {
     console.error(err);
@@ -1731,7 +1774,7 @@ async function submitDocNumRequest() {
       if (typeKey === "fund" && dnTolakanTagihanGanda(errInsert)) {
         // Tagihan yang sama baru saja diajukan orang lain
         const ganda = await dnCariTagihanGanda(form);
-        if (!ganda) throw errInsert;
+        if (!ganda) throw dnGalatTagihanJne(errInsert, form);
         dnTolakTagihanGanda(ganda);
         return;
       }
@@ -2128,7 +2171,12 @@ document.addEventListener("input", (e) => {
   if (!el || (typeof FUND_VENDOR_BARU !== "undefined" && el.value === FUND_VENDOR_BARU)) return;
   delete el.dataset.autoFill;
   // Nama vendor berubah -> keterangan Doc No (dicetak / hanya tersimpan) & isian CFO ikut menyesuaikan
-  fundSelaraskanDocNo(el.closest("[data-docnum-panel]"));
+  const panelVendor = el.closest("[data-docnum-panel]");
+  fundSelaraskanDocNo(panelVendor);
+  /* ... dan tanda "sudah diajukan" dihitung ulang: No. Invoice JNE tidak
+     diperiksa (dnTagihanBolehSama), jadi berganti ke atau dari JNE
+     melepas atau memasang tandanya -- tanpa harus mengetik ulang nomornya. */
+  if (panelVendor && panelVendor.matches('[data-docnum-panel="fund"]')) dnPeriksaTagihanGandaLangsung(panelVendor, true);
 });
 
 /* ---------- riwayat nomor terbit ---------- */

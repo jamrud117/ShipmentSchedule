@@ -3351,7 +3351,7 @@ t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & 
     set("requester", "Yogi Firgiawan");
     set("department", "EXIM");
     set("expenseType", isi.expenseType || "Freight");
-    set("payee", "PT UJI");
+    set("payee", isi.payee || "PT UJI");
     w.syncDocNumConditional(panel);
     if (isi.invoiceNo != null) set("invoiceNo", isi.invoiceNo);
     if (isi.billingNo != null) set("billingNo", isi.billingNo);
@@ -3572,6 +3572,155 @@ t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & 
       w.eval("supabaseClient.from = window.__asliUbah");
     }
   }));
+  /* JNE: isian "No. Invoice"-nya berisi NOMOR REKENING, jadi nomor yang sama
+     berulang di tiap pengajuan itu wajar. Dikecualikan HANYA No. Invoice,
+     dan HANYA untuk pengajuan yang itu sendiri milik JNE -- Nomor Billing &
+     vendor lain tetap diperiksa (juga terhadap nomor yang dipakai JNE). */
+  const BARIS_JNE = [
+    { id: "j1", doc_type: "fund", doc_number: "308/EXIM/DDI/IX/2026", doc_date: "2026-09-25", requester: "Yogi Firgiawan",
+      department: "EXIM", payload: { expenseType: "Freight", invoiceNo: "1234567890", payee: "PT JNE" } },
+    { id: "j2", doc_type: "fund", doc_number: "309/EXIM/DDI/IX/2026", doc_date: "2026-09-26", requester: "Yogi Firgiawan",
+      department: "EXIM", payload: { expenseType: "Freight", invoiceNo: "1234567890", payee: "JNE EXPRESS" } },
+  ];
+  const denganDanaJne = async (fn) => denganDana(async () => {
+    w.jejakDocNum = BARIS_DANA.concat(BARIS_JNE);
+    tulis("docNumHistoryRows", w.jejakDocNum);
+    w.bkLupakan();
+    delete jejakDocNumFilter.or;
+    // Sisa isian otomatis (KAS NEGARA dari tes Billing) tidak boleh menimpa vendor yang diisi tes ini
+    delete panelDana().querySelector('[data-dn="payee"]').dataset.autoFill;
+    try { await fn(); } finally { w.bkLupakan(); }
+  });
+  const toastDana = () => w.document.getElementById("toastMsg").textContent;
+  t("JNE: nama vendor dikenali dari kata 'JNE' utuh atau 'Jalur Nugraha Ekakurir', tanpa beda huruf; nama yang hanya memuat hurufnya tidak ikut", () => {
+    const boleh = w.eval("dnTagihanBolehSama");
+    const jne = ["JNE", "jne", "Jne", "PT JNE", "PT. JNE", "PT.JNE", "JNE EXPRESS", "JNE-SURABAYA", "(JNE)", "TIKI JNE",
+      "Jalur Nugraha Ekakurir", "PT JALUR  NUGRAHA   EKAKURIR", "PT. JALUR NUGRAHA EKAKURIR (JNE)"];
+    const bukan = ["", null, undefined, "PT DSV", "KAS NEGARA", "JNEXT", "AJNE", "JNES", "JNE2", "2JNE", "J N E", "J&T", "JN", "NE", "TIKI", "JALUR NUGRAHA", "NUGRAHA EKAKURIR"];
+    eq(jne.filter((x) => !boleh(x)).join(" | "), "", "harus dikenali:");
+    eq(bukan.filter((x) => boleh(x)).join(" | "), "", "tidak boleh dikenali:");
+    // Yang dikecualikan hanya No. Invoice, dan hanya untuk form JNE
+    const kecuali = w.eval("dnTagihanDikecualikan");
+    eq([kecuali({ payee: "JNE" }, "invoiceNo"), kecuali({ payee: "JNE" }, "billingNo"), kecuali({ payee: "PT DSV" }, "invoiceNo"),
+      kecuali({}, "invoiceNo"), kecuali(null, "invoiceNo")].join(), "true,false,false,false,false", "dnTagihanDikecualikan:");
+    const jenis = w.eval("dnJenisTagihan");
+    eq([jenis({ payee: "JNE", invoiceNo: "1" }), (jenis({ payee: "JNE", billingNo: "2" }) || {}).field, (jenis({ payee: "PT DSV", invoiceNo: "1" }) || {}).field,
+      (jenis({ payee: "JNE", invoiceNo: "1", billingNo: "2" }) || {}).field].join(), ",billingNo,invoiceNo,billingNo", "isian yang diperiksa:");
+    // Pencocok daftar yang sudah dimuat (tanda langsung) memakai aturan yang sama dengan pemeriksaan saat Simpan
+    const lokal = w.eval("dnTagihanGandaLokal");
+    eq(lokal({ payee: "JNE", invoiceNo: "1234567890" }, BARIS_JNE), null, "pencocok lokal, JNE:");
+    eq(lokal({ payee: "PT UJI", invoiceNo: "1234567890" }, BARIS_JNE).baris.doc_number, "308/EXIM/DDI/IX/2026", "pencocok lokal, vendor lain:");
+    eq(lokal({ payee: "JNE", billingNo: "640260906211153" }, BARIS_DANA).baris.doc_number, "306/EXIM/DDI/IX/2026", "pencocok lokal, Nomor Billing JNE:");
+  });
+  t("JNE: No. Invoice yang sama dengan pengajuan JNE sebelumnya (nomor rekening) lolos -- nomor terbit, tanpa pop-up & tanpa kueri pemeriksa", async () => denganDanaJne(async () => {
+    isiFormDana({ payee: "PT JNE", invoiceNo: "1234567890" });
+    eq(panelDana().querySelector('[data-dn="payee"]').value, "PT JNE", "vendor terisi:");
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 1, "nomor urut terambil:");
+    eq(w.document.getElementById("confirmMessage").textContent, "", "tidak boleh ada pop-up:");
+    eq(toastDana(), w.t("x.nomor.berhasil.diterbitkan", { nomor: "001/UJI" }), "pesan berhasil:");
+    eq(jejakDocNumFilter.or, undefined, "pemeriksa tagihan ganda tidak dijalankan untuk JNE:");
+  }));
+  t("vendor lain: nomor yang dipakai pengajuan JNE tetap ditolak -- pengecualiannya hanya untuk JNE", async () => denganDanaJne(async () => {
+    isiFormDana({ payee: "PT UJI", invoiceNo: "1234567890" });
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 0, "nomor urut tidak boleh terambil:");
+    eq(w.document.getElementById("confirmMessage").textContent,
+      "Nomor invoice 1234567890 sudah diajukan di 308/EXIM/DDI/IX/2026 (25-09-2026, PT JNE).", "pop-up menunjuk pengajuan JNE yang pertama:");
+    eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
+  }));
+  t("JNE: Nomor Billing tetap diperiksa -- hanya No. Invoice yang dikecualikan", async () => denganDanaJne(async () => {
+    isiFormDana({ payee: "JNE", expenseType: "Billing", billingNo: "640260906211153" });
+    eq(panelDana().querySelector('[data-dn="payee"]').value, "JNE", "vendor tetap JNE (bukan KAS NEGARA otomatis):");
+    const n = jejakRpc.length;
+    await w.submitDocNumRequest();
+    eq(nomorDiambil(n), 0, "nomor urut tidak boleh terambil:");
+    eq(judulPopup(), "Nomor Billing Sudah Diajukan", "judul pop-up:");
+  }));
+  t("tanda LANGSUNG: nomor milik pengajuan JNE ditandai untuk vendor lain, tidak untuk JNE; berganti vendor memasang / melepas tandanya tanpa mengetik ulang", async () => denganDanaJne(async () => {
+    const tungguCek = () => new Promise((r) => setTimeout(r, 380));
+    const kotak = (k) => panelDana().querySelector(`[data-dn="${k}"]`);
+    const ket = (k) => panelDana().querySelector(`#dn-fund-${k}-ganda`);
+    const ketik = (k, v) => {
+      kotak(k).value = v;
+      kotak(k).dispatchEvent(new w.Event("input", { bubbles: true }));
+    };
+    const gantiVendor = (nama) => {
+      pilihVendor(kotak("payee"), nama);
+      kotak("payee").dispatchEvent(new w.Event("input", { bubbles: true }));
+    };
+    const tanda = () => [kotak("invoiceNo").classList.contains("is-invalid"), ket("invoiceNo").hidden].join();
+    isiFormDana({ payee: "PT UJI", invoiceNo: "" });
+    ketik("invoiceNo", "1234567890");
+    await tungguCek();
+    eq(tanda(), "true,false", "vendor lain, nomor milik JNE:");
+    eq(ket("invoiceNo").textContent, "Sudah diajukan di 308/EXIM/DDI/IX/2026 (25-09-2026, PT JNE)", "kalimat tanda:");
+    gantiVendor("PT JNE");
+    await tungguCek();
+    eq(tanda(), "false,true", "berganti ke JNE -- tanda lepas tanpa mengetik ulang:");
+    eq(ket("invoiceNo").textContent, "", "kalimat tanda dikosongkan:");
+    ketik("invoiceNo", "1234567890 ");
+    await tungguCek();
+    eq(tanda(), "false,true", "JNE mengetik nomor yang sama:");
+    gantiVendor("PT UJI");
+    await tungguCek();
+    eq(tanda(), "true,false", "kembali ke vendor lain -- tanda terpasang lagi:");
+    // Nomor Billing JNE tetap ditandai
+    isiFormDana({ payee: "JNE", expenseType: "Billing", billingNo: "" });
+    ketik("billingNo", "640260906211153");
+    await tungguCek();
+    eq([kotak("billingNo").classList.contains("is-invalid"), ket("billingNo").textContent].join(" | "),
+      "true | Sudah diajukan di 306/EXIM/DDI/IX/2026 (23-09-2026, KAS NEGARA)", "Nomor Billing JNE:");
+  }));
+  t("Ubah Isian: pengajuan JNE boleh memakai nomor pengajuan JNE lain; vendornya diganti jadi bukan JNE -> diperiksa; vendor lain tetap ditolak", async () => denganDanaJne(async () => {
+    const n = jejakUpdate.length;
+    w.mulaiUbahDocNum("j2"); // JNE EXPRESS, nomor yang sama dengan j1
+    await w.simpanUbahDocNum();
+    eq(jejakUpdate.length, n + 1, "pengajuan JNE dengan nomor kembar tersimpan:");
+    eq(w.document.getElementById("confirmMessage").textContent, "", "tanpa pop-up:");
+
+    w.mulaiUbahDocNum("j2");
+    pilihVendor(panelDana().querySelector('[data-dn="payee"]'), "PT UJI");
+    await w.simpanUbahDocNum();
+    eq(jejakUpdate.length, n + 1, "vendor bukan JNE + nomor milik j1: tidak tersimpan:");
+    eq(judulPopup(), "Nomor Invoice Sudah Diajukan", "judul pop-up:");
+    w.batalUbahDocNum();
+
+    w.mulaiUbahDocNum("f3"); // PT LAIN
+    panelDana().querySelector('[data-dn="invoiceNo"]').value = "1234567890";
+    await w.simpanUbahDocNum();
+    eq(jejakUpdate.length, n + 1, "vendor lain memakai nomor JNE: tidak tersimpan:");
+  }));
+  t("database belum diperbarui (migration-tagihan-jne.sql belum dijalankan) masih menolak JNE: pesannya menunjuk berkas migrasi, bukan kode mentah -- vendor lain tak berubah", async () => denganDanaJne(async () => {
+    const tolakan = { code: "23505", message: "TAGIHAN_GANDA:invoiceNo:1234567890:308/EXIM/DDI/IX/2026" };
+    await denganNomorDb({ tolak: 1, tolakan }, async () => {
+      isiFormDana({ payee: "PT JNE", invoiceNo: "1234567890" });
+      await w.submitDocNumRequest();
+      if (!/migration-tagihan-jne\.sql/.test(toastDana()) || /TAGIHAN_GANDA/.test(toastDana())) throw new Error("Ajukan: " + toastDana());
+      eq(w.document.getElementById("confirmMessage").textContent, "", "bukan pop-up tagihan ganda:");
+    });
+    // Vendor lain yang ditolak tanpa kembarannya di daftar: galat apa adanya (perilaku lama)
+    await denganNomorDb({ tolak: 1, tolakan: { code: "23505", message: "TAGIHAN_GANDA:invoiceNo:inv-aneh:999/EXIM/DDI/IX/2026" } }, async () => {
+      isiFormDana({ payee: "PT UJI", invoiceNo: "INV-ANEH" });
+      await w.submitDocNumRequest();
+      if (/migration-tagihan-jne/.test(toastDana()) || !/TAGIHAN_GANDA/.test(toastDana())) throw new Error("vendor lain: " + toastDana());
+    });
+    // Ubah Isian
+    w.__asliUbah = w.eval("supabaseClient.from");
+    try {
+      w.eval(`supabaseClient.from = (tabel) => Object.assign({}, window.__asliUbah(tabel), {
+        update: () => ({ eq: async () => ({ error: { code: "23505", message: "TAGIHAN_GANDA:invoiceNo:1234567890:308/EXIM/DDI/IX/2026" } }) }),
+      })`);
+      w.mulaiUbahDocNum("j2");
+      await w.simpanUbahDocNum();
+      if (!/migration-tagihan-jne\.sql/.test(toastDana()) || /TAGIHAN_GANDA/.test(toastDana())) throw new Error("Ubah Isian: " + toastDana());
+      eq(baca("dnEditingId"), "j2", "pop-up Ubah tetap terbuka:");
+    } finally {
+      w.eval("supabaseClient.from = window.__asliUbah");
+    }
+  }));
   /* Isi SQL tanpa komentar; `tanpaBadan` juga tanpa badan fungsi ($$...$$)
      -- yang tersisa = perintah yang benar-benar dijalankan migrasinya. */
   const sqlMigrasi = (nama) => bacaMigrasi(nama).replace(/\/\*[\s\S]*?\*\//g, "").replace(/--.*$/gm, "");
@@ -3616,6 +3765,56 @@ t("nomor tagihan dipecah per koma / titik koma, dibandingkan tanpa beda huruf & 
     });
     const ubah = UBAH_DATA.exec(tanpaBadan(sql));
     if (ubah) throw new Error("pembatal mengubah data: " + ubah[0]);
+    // Fungsi bantu milik migrasi JNE ikut terhapus
+    if (!sql.includes("DROP FUNCTION IF EXISTS public.dn_tagihan_boleh_sama(text);")) throw new Error("pembatal tidak menghapus dn_tagihan_boleh_sama");
+  });
+  /* Isi pemicu di migrasi JNE = isi aslinya (migration-optimasi-database.sql)
+     + SATU pengecualian; pembatalnya mengembalikan isi aslinya persis. Tanpa
+     ini, menyunting salinan pemicu di tiga berkas mudah berselisih. */
+  const badanPemicu = (sql) => {
+    const m = /create or replace function public\.dn_cegah_tagihan_ganda\(\)[\s\S]*?\$\$([\s\S]*?)\$\$;/i.exec(sql);
+    if (!m) throw new Error("badan dn_cegah_tagihan_ganda tidak ditemukan");
+    return m[1].replace(/\s+/g, " ").trim();
+  };
+  const PENGECUALIAN_JNE = "if v_kolom = 'invoiceNo' and public.dn_tagihan_boleh_sama(new.payload ->> 'payee') then continue; end if;";
+  t("migrasi JNE: pemicu = aslinya + satu pengecualian (hanya invoiceNo, hanya JNE); tanpa mengubah data; pembatalnya mengembalikan aslinya", () => {
+    const asli = sqlMigrasi("migration-optimasi-database.sql");
+    const jne = sqlMigrasi("migration-tagihan-jne.sql");
+    const batal = sqlMigrasi("migration-tagihan-jne-batal.sql");
+    const badanJne = badanPemicu(jne);
+    eq((badanJne.split(PENGECUALIAN_JNE).length - 1), 1, "tepat satu pengecualian, pada kolom invoiceNo saja:");
+    eq(badanJne.replace(PENGECUALIAN_JNE + " ", ""), badanPemicu(asli), "isi = aslinya + pengecualian:");
+    eq(badanPemicu(batal), badanPemicu(asli), "pembatal = aslinya:");
+    if (!batal.includes("drop function if exists public.dn_tagihan_boleh_sama(text);")) throw new Error("pembatal JNE tidak menghapus dn_tagihan_boleh_sama");
+    [
+      "create or replace function public.dn_tagihan_boleh_sama(p_payee text)",
+      "set search_path = ''",
+      "select coalesce(p_payee, '') ~* '\\mjne\\M|jalur\\s+nugraha\\s+ekakurir'",
+      "to_regprocedure('public.dn_kunci_tagihan(text)') is null",
+      "Jalankan migration-optimasi-database.sql lebih dulu",
+    ].forEach((k) => {
+      if (!jne.includes(k)) throw new Error("migrasi JNE tidak memuat " + k);
+    });
+    // Hanya fungsi yang diganti: pemicunya & index-nya tidak disentuh ulang
+    if (/create\s+(unique\s+)?index|create\s+trigger|drop\s+trigger/i.test(tanpaBadan(jne))) throw new Error("migrasi JNE menyentuh pemicu / index");
+    [["migrasi JNE", jne], ["pembatalnya", batal]].forEach(([nama, sql]) => {
+      const ubah = UBAH_DATA.exec(tanpaBadan(sql));
+      if (ubah) throw new Error(nama + " mengubah data: " + ubah[0]);
+    });
+  });
+  t("nama JNE: aturan di database (\\m..\\M) dan di form (\\b..\\b) sama -- pola & hasilnya", () => {
+    const sql = sqlMigrasi("migration-tagihan-jne.sql");
+    const m = /~\*\s*'([^']+)'/.exec(sql);
+    if (!m) throw new Error("pola di SQL tidak ditemukan");
+    const polaSql = m[1].replace(/\\[mM]/g, "\\b");
+    eq(w.eval("DN_TAGIHAN_BOLEH_SAMA.source").toLowerCase(), polaSql.toLowerCase(), "pola:");
+    eq(w.eval("DN_TAGIHAN_BOLEH_SAMA.flags"), "i", "tanpa beda huruf besar / kecil:");
+    const pola = new RegExp(polaSql, "i");
+    const boleh = w.eval("dnTagihanBolehSama");
+    ["JNE", "jne", "PT JNE", "PT.JNE", "(JNE)", "JNE-SBY", "JNE EXPRESS", "JNEXT", "AJNE", "JNES", "JNE2", "2JNE", "J N E", "PT DSV", "",
+      "Jalur Nugraha Ekakurir", "JALUR  NUGRAHA EKAKURIR", "PT. JALUR NUGRAHA EKAKURIR (JNE)", "JALUR NUGRAHA", "TIKI JNE"].forEach((nama) => {
+      eq(boleh(nama), pola.test(nama), `${JSON.stringify(nama)}:`);
+    });
   });
   t("pop-up ikut bahasa Inggris", async () => denganDana(async () => {
     w.setLang("en");
@@ -9464,9 +9663,17 @@ t("PPN berkelompok: dibulatkan sekali per grup, dibagi ke baris, total baris = t
   const ppn = w.fundLinePpnDaftar(baris, nilai);
   eq(ppn.reduce((x, y) => x + y, 0), 60956, "satu pembulatan per AWB (FedEx):");
   eq(w.fundLineTotals(baris).totalPpn, 60956);
-  // Tanpa grup: tetap dibulatkan per baris seperti semula
+  /* Tanpa grup: dibulatkan per baris, kini ke 2 desimal (bukan rupiah
+     penuh): 90.068 - 49.537,40 + 20.045,95 + 379,50 = 60.956,05. Hanya
+     baris ber-grupPpn yang tetap rupiah penuh, mengikuti vendornya. */
   const tanpa = baris.map(({ grupPpn, ...b }) => b);
-  eq(w.fundLineTotals(tanpa).totalPpn, 60957, "per baris (perilaku lama tidak berubah):");
+  eq(w.fundLineTotals(tanpa).totalPpn, 60956.05, "per baris, 2 desimal:");
+});
+t("PPN berkelompok tetap RUPIAH PENUH -- juga grup yang barisnya hanya satu; tanpa grup 2 desimal", () => {
+  const satu = { desc: "Freight", amount: "8153951", ppnRate: 1.1 };
+  // 8.153.951 x 1,1% = 89.693,461
+  eq(w.fundLineTotals([Object.assign({ grupPpn: "A" }, satu)]).totalPpn, 89693, "grup satu baris = rupiah penuh:");
+  eq(w.fundLineTotals([satu]).totalPpn, 89693.46, "tanpa grup = 2 desimal:");
 });
 t("invoice forwarder (WIDE): tabel Description..Total, Tax Advance, Sea Import, B/L tanpa spasi", () => {
   const h = w.bacaInvoiceVendor(fiksInvoice("invoice-wide-IN-WL2609-00159"), ["WIDE", "FEDEX"]);
@@ -9492,12 +9699,17 @@ t("invoice forwarder ekspor CIF (WIDE, 14 komponen): semua baris, PPN 1,1%, PPh 
   eq(h.lines.map((l) => l.desc).join("|"), "Administration Fee|Agency Fee|Certificate of Original ( CO ) Fee|Clearence Charge|CY-CFS Charge|Document Fee|EMERGENCY FUEL SURCHARGE|Fumigation|Insurance Fee|ISPM CHARGE|Manifest Fee|Ocean Freight|PE/PEB Charge|Trucking Charge");
   if (!h.lines.every((l) => l.ppnRate === 1.1)) throw new Error("tarif PPN tiap baris harus 1,1%");
   eq(h.dpp, 13631273, "DPP:");
-  eq(h.ppn, 149944, "PPN:");
+  /* Invoice WIDE menulis PPN per baris dalam rupiah penuh (jumlahnya
+     149.944); form kini menghitung PPN 2 desimal, jadi jumlahnya 149.944,01
+     -- selisih sen dari pembulatan vendor, bukan salah hitung. */
+  eq(h.ppn, 149944.01, "PPN (2 desimal):");
   eq(h.pphInvoice, 272625, "PPh 23 di invoice:");
   eq(h.cocok, true, "DPP + PPN - PPh 23 = total invoice:");
   // Potongan PPh 23 di form (2%) sama dengan yang dipotong forwarder
   const tl = w.fundLineTotals(h.lines);
-  eq(tl.totalNet + tl.totalPpn - tl.pph, 13508592, "total form = total invoice:");
+  eq(tl.pph, 272625, "PPh 23 form = invoice:");
+  eq(tl.grandTotal, 13508592.01, "total form:");
+  if (Math.abs(tl.grandTotal - 13508592) >= 1) throw new Error("total form menyimpang dari total invoice (13.508.592) lebih dari Rp 1");
 });
 t("invoice forwarder udara (WIDE): nomor AWB berhenti di label sebelahnya (tidak terbawa 'Chargeable Weight'), AWB 11 angka ditulis baku", () => {
   const h = w.bacaInvoiceVendor(fiksInvoice("invoice-wide-air-uji"), ["WIDE"]);
@@ -11252,11 +11464,93 @@ const FL_NYATA = [
   { desc: "STORAGE", amount: 1322640, ppnRate: 0 },
 ];
 t("hitungan cocok dengan invoice forwarder sungguhan", () => {
+  /* Invoice aslinya menulis PPN dalam rupiah penuh (247.197) dan TOTAL
+     23.592.861. Form kini menghitung PPN sampai 2 desimal: PPN 247.197,21
+     dan TOTAL 23.592.861,21 -- selisih di bawah Rp 1, dari pembulatan
+     rupiah di sisi vendor. */
   const r = w.fundLineTotals(FL_NYATA);
   eq(r.totalNilai, 23795113, "total nilai:");
-  eq(r.totalPpn, 247197, "total PPN:");
+  eq(r.totalPpn, 247197.21, "total PPN:");
   eq(r.pph, 449449, "potongan PPH 23:");
-  eq(r.grandTotal, 23592861, "TOTAL:");
+  eq(r.grandTotal, 23592861.21, "TOTAL:");
+  if (Math.abs(r.totalPpn - 247197) >= 1 || Math.abs(r.grandTotal - 23592861) >= 1) throw new Error("menyimpang dari invoice lebih dari Rp 1");
+  const baris = w.normalisasiBarisDana(FL_NYATA);
+  eq(w.fundLinePpnDaftar(baris, w.fundLineValues(baris)).join("|"),
+    "185604.05|594.68|7929.09|2973.41|4440.3|4955.68|3300|8250|1650|27500|0", "PPN per baris:");
+});
+t("PPN dihitung sampai 2 desimal per baris, bukan rupiah penuh", () => {
+  const ppn = (amount, ppnRate) => w.fundLinePpnNilai(amount, { ppnRate });
+  eq(ppn(16873095.68, 1.1), 185604.05, "16.873.095,68 x 1,1% = 185.604,05248:");
+  eq(ppn(54061.95, 1.1), 594.68, "594,68145:");
+  eq(ppn(720826, 1.1), 7929.09, "7.929,086:");
+  eq(ppn(1200.5, 1.1), 13.21, "pengajuan USD: 13,2055 -> 13,21 (bukan 13):");
+  eq(ppn(1000000, 11), 110000, "yang bulat tetap bulat:");
+  eq(ppn(1000, 0), 0, "tanpa PPN:");
+});
+t("PPN tepat setengah sen selalu naik -- dihitung dengan bilangan bulat, bukan pecahan biner", () => {
+  const ppn = (amount, ppnRate) => w.fundLinePpnNilai(amount, { ppnRate });
+  // 5 x 1,1% = 0,055 | 15 -> 0,165 | 25 -> 0,275 | 105 -> 1,155 | 1.234.565 -> 13.580,215
+  eq([5, 15, 25, 105, 1234565].map((v) => ppn(v, 1.1)).join("|"), "0.06|0.17|0.28|1.16|13580.22", "1,1%:");
+  // 100,50 x 11% = 11,055 | 0,50 -> 0,055 | 1,50 -> 0,165
+  eq([100.5, 0.5, 1.5].map((v) => ppn(v, 11)).join("|"), "11.06|0.06|0.17", "11%:");
+  /* Dua kasus yang DITURUNKAN oleh hitungan pecahan biner (Math.round(n * r / 100 * 100) / 100
+     memberi 319,27 dan 4.362.818,18): tepat setengah sen, jadi harus naik. */
+  eq(ppn(2902.5, 11), 319.28, "2.902,50 x 11% = 319,275:");
+  eq(ppn(39661983.5, 11), 4362818.19, "39.661.983,50 x 11% = 4.362.818,185:");
+});
+t("PPN baris diskon: dibulatkan simetris, tanpa -0, dan diskon seukuran pos membatalkan PPN-nya", () => {
+  eq(w.fundLinePpnNilai(-100.5, { ppnRate: 11 }), -11.06, "negatif: setengah menjauhi nol:");
+  if (!Object.is(w.fundLinePpnNilai(-0.001, { ppnRate: 1.1 }), 0)) throw new Error("PPN yang membulat ke nol harus +0, bukan -0");
+  const r = w.fundLineTotals([{ desc: "Freight", amount: 100.5, ppnRate: 11 }, { jenis: "diskon", desc: "Disc", amount: 100.5, discType: "rp", ppnRate: 11 }]);
+  eq(r.totalPpn, 0, "PPN pos 11,06 - PPN diskon 11,06:");
+});
+t("total PPN & TOTAL dijumlah dalam sen: tanpa derau pecahan biner", () => {
+  // PPN 0,10 + 0,20: sebagai pecahan biner 0.1 + 0.2 = 0.30000000000000004
+  const baris = [{ amount: 0.91, ppnRate: 11 }, { amount: 1.82, ppnRate: 11 }];
+  eq(w.fundLinePpnDaftar(baris, w.fundLineValues(baris)).join("|"), "0.1|0.2", "PPN baris:");
+  eq(w.fundLineTotals(baris).totalPpn, 0.3, "total PPN:");
+  // 16.873.095,68 + 1.000 (tanpa PPN): 16.874.096 + 185.604,05 - 337.462
+  const r = w.fundLineTotals([{ amount: 16873095.68, ppnRate: 1.1 }, { amount: 1000, ppnRate: 0 }]);
+  eq(r.grandTotal, 16722238.05, "TOTAL:");
+});
+t("fundBulatkanBagian: rupiah penuh seperti semula; skala sen untuk PPN", () => {
+  eq(w.fundBulatkanBagian([100.333333, 100.333333, 100.333334], 301).join("|"), "100|100|101", "301 / 3:");
+  eq(w.fundBulatkanBagian([5.505, 5.505], 11.01, w.eval("FUND_SEN")).join("|"), "5.5|5.51", "11,01 / 2 sen:");
+  eq(w.fundBulatkanBagian([0.29, 0.29], 0.58, w.eval("FUND_SEN")).join("|"), "0.29|0.29", "derau biner 0.29 x 100 = 28.999999999999996:");
+});
+t("pembagian per BL/AWB: PPN dibagi sampai sen, jumlah bagian tetap = total pengajuan", () => {
+  const p = {
+    blAwb: "AWB-A / AWB-B",
+    transactionType: "Sea Import",
+    lines: [
+      { desc: "Freight A", amount: 1000000, ppnRate: 1.1, awb: "AWBA" },
+      { desc: "Freight B", amount: 2000000, ppnRate: 1.1, awb: "AWBB" },
+      { desc: "Handling bersama", amount: 1000.5, ppnRate: 1.1 }, // PPN 11,0055 -> 11,01, dibagi dua tanpa kehilangan sen
+    ],
+  };
+  const tot = w.fundLineTotals(p.lines);
+  eq(tot.totalPpn, 33011.01, "total PPN:");
+  const bagian = w.fundBagiPerAwb(p);
+  eq(bagian.map((b) => b.ppn).join("|"), "11005.5|22005.51", "PPN per BL/AWB (sisa sen ke bagian terbesar):");
+  eq(bagian.map((b) => b.dibayar).join("|"), "991495.5|1982496.51", "dibayar per BL/AWB:");
+  eq(Math.round(bagian.reduce((x, b) => x + b.ppn * 100, 0)), Math.round(tot.totalPpn * 100), "jumlah PPN bagian = total PPN:");
+  eq(Math.round(bagian.reduce((x, b) => x + b.dibayar * 100, 0)), Math.round(tot.grandTotal * 100), "jumlah bagian = total pengajuan:");
+});
+t("form & surat cetak menampilkan PPN 2 desimal (kolom PPN, Total PPN, TOTAL)", () => {
+  const simpan = w.eval("JSON.stringify(fundLines)");
+  try {
+    const lines = [{ desc: "Freight", amount: 16873095.68, ppnRate: 1.1 }, { desc: "Storage", amount: 1000, ppnRate: 0 }];
+    w.setFundLines(lines);
+    eq([...w.document.querySelectorAll("#fundLinesBody .fl-ppn")].map((x) => x.textContent).join("|"), "185,604.05|0", "kolom PPN (Rp) di form:");
+    const kaki = w.document.getElementById("fundLinesFoot").textContent.replace(/\s+/g, " ");
+    if (!kaki.includes("Rp. 185,604.05")) throw new Error("Total PPN di kaki form bukan 2 desimal: " + kaki);
+    if (!kaki.includes("Rp. 16,722,238.05")) throw new Error("TOTAL di kaki form salah: " + kaki);
+    const cetak = w.buildFundRequestHtml(barisFundUji({ expenseType: "Freight", invoiceNo: "AI2601935", lines }));
+    if ((cetak.match(/Rp\. 185,604\.05/g) || []).length < 2) throw new Error("PPN 185,604.05 harus tercetak di baris & di TOTAL");
+    if (!cetak.includes("Rp. 16,722,238.05")) throw new Error("TOTAL di surat cetak salah");
+  } finally {
+    w.eval("fundLines = " + simpan + "; renderFundLines()");
+  }
 });
 t("DPP PPH 23 dari NILAI baris, bukan dari PPN-nya", () => {
   /* Agency Fee 150.000 dengan PPN 1,1% (1.650): PPH dihitung dari
