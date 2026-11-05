@@ -64,19 +64,45 @@ function ciplVnTotal(baris) {
   );
 }
 
-/* Baris DIMENSION pada Packing List: ukuran yang sama digabung dan
-   dihitung ("120 * 122 * 71 (cm) * 4 BX"). Dipakai juga lembar
-   Dynamic Design. */
-function ciplVnDimensi(baris) {
+/* Baris DIMENSION pada Packing List: peti seukuran dan sejenis digabung,
+   jumlahnya DIJUMLAHKAN dari kolom Kemasan tiap barang
+   ("120 * 122 * 71 (cm) * 4 BX", "100 * 100 * 90 (cm) * 2 PLT").
+   Dipakai juga lembar Dynamic Design.
+
+   Yang dihitung KEMASANNYA, bukan baris barangnya: satu barang bisa
+   terdiri dari beberapa peti, dan peti seukuran dari barang berbeda
+   dijumlahkan. (Dulu tiap baris barang dihitung satu, jadi barang
+   berkemasan 3 BOX tetap tercetak "* 1 BX" -- tak cocok dengan total
+   "N PACKAGES" dan CBM di bawahnya.) Jenisnya dari kolom Jenis Kemasan
+   barang itu; kosong = ikut barang di atasnya, BOX bila belum ada
+   ("↳ ikut" di tabel barang). Ukuran sama tapi jenis beda = baris sendiri.
+
+   Barang yang kolom Kemasan-nya KOSONG masih satu kemasan dengan barang
+   di atasnya, jadi tidak menambah hitungan -- sama dengan total
+   "N PACKAGES" (ciplTotalKoli). Satu-satunya pengecualian: data lama
+   yang sama sekali tak mencatat jumlah kemasan. Di sana satu set = satu
+   peti, jadi jumlahnya qty barang -- aturan yang sama dengan CBM
+   (computeItemCbm) dan total PACKAGES lembar Kumho. */
+function ciplVnDimensi(items) {
+  const daftar = items || [];
+  const adaJumlah = daftar.some((it) => ciplKoliBarang(it) > 0);
   const hitung = new Map();
-  baris.forEach((b) => {
-    const d = parsePackageDims(b.package);
+  let jenisAtas = "";
+  daftar.forEach((it) => {
+    const jumlah = ciplKoliBarang(it) || (adaJumlah ? 0 : parseLooseNumber(it && it.qty) || 1);
+    if (!jumlah) return;
+    const satuan = ciplSatuanKemasan(ciplJenisKemasanBarang(it) || jenisAtas || "BOX");
+    jenisAtas = satuan;
+    const d = parsePackageDims(it && it.package);
     if (!d) return;
-    const k = `${d.p} * ${d.l} * ${d.t}`;
-    hitung.set(k, (hitung.get(k) || 0) + 1);
+    const ukuran = `${d.p} * ${d.l} * ${d.t}`;
+    const kunci = `${ukuran}|${satuan}`;
+    const grup = hitung.get(kunci) || { ukuran, satuan, jumlah: 0 };
+    grup.jumlah += jumlah;
+    hitung.set(kunci, grup);
   });
-  return [...hitung.entries()].map(
-    ([ukuran, n]) => `DIMENSION : ${ukuran} (cm) * ${n} BX`,
+  return [...hitung.values()].map(
+    (g) => `DIMENSION : ${g.ukuran} (cm) * ${Math.round(g.jumlah * 1000) / 1000} ${g.satuan}`,
   );
 }
 

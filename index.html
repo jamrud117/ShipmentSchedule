@@ -2305,14 +2305,29 @@
                      kirimannya, dan bisa dicari dari kotak cari riwayat. -->
                 <div>
                   <label class="form-label" for="dn-fund-blAwb">BL/AWB</label>
-                  <input id="dn-fund-blAwb"
-                    type="text"
-                    class="form-control"
-                    data-dn="blAwb"
-                    placeholder="No. BL / AWB"
-                    data-en-ph="BL / AWB number"
-                    autocomplete="off"
-                  />
+                  <!-- Mengetik memunculkan paling banyak 4 saran nomor
+                       House BL / AWB dari jadwal, tepat di bawah kotak
+                       (js/features/fund-saran-awb.js). Kotaknya tetap teks
+                       bebas: nomor yang tidak ada di jadwal diketik biasa,
+                       dan beberapa nomor dipisah "/". -->
+                  <div class="saran-awb">
+                    <input id="dn-fund-blAwb"
+                      type="text"
+                      class="form-control"
+                      data-dn="blAwb"
+                      placeholder="No. BL / AWB"
+                      data-en-ph="BL / AWB number"
+                      autocomplete="off"
+                      spellcheck="false"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded="false"
+                      aria-controls="dn-fund-blAwb-saran"
+                    />
+                    <div class="saran-awb-daftar d-none" id="dn-fund-blAwb-saran" role="listbox"
+                      aria-label="Saran House BL/AWB dari jadwal"
+                      data-en-aria="House BL/AWB suggestions from the schedule"></div>
+                  </div>
                 </div>
                 <div>
                   <label class="form-label"
@@ -5141,6 +5156,7 @@
     <script src="js/features/fund-invoice-import.js"></script>
     <script src="js/features/fund-vendor.js"></script>
     <script src="js/features/fund-rincian.js"></script>
+    <script src="js/features/fund-saran-awb.js"></script>
     <script src="js/features/fund-invoice-summary.js"></script>
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>

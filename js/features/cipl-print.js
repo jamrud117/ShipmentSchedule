@@ -298,17 +298,51 @@ function ciplBarisBarang(shipment) {
     });
 }
 
+/* Jumlah kemasan SATU barang: angka pertama di kolom Kemasan ("3",
+   "2 PALLET", "1BOX"). 0 = kosong -- barang itu masih satu kemasan
+   dengan barang di atasnya ("↳ ikut" di tabel barang), jadi tidak
+   menambah hitungan. */
+function ciplKoliBarang(it) {
+  const m = String((it && it.packing) || "").match(/[\d.,]+/);
+  return m ? parseLooseNumber(m[0]) : 0;
+}
+
 /* Jumlah koli seluruh kiriman, untuk tulisan "4 Package" di Packing
    List. Diambil dari kolom `packing` per barang — di buku Export kolom
    `package` berisi DIMENSI, bukan jumlah. */
 function ciplTotalKoli(shipment) {
   const items = (shipment && shipment.items) || [];
-  let n = 0;
-  items.forEach((it) => {
-    const m = String(it.packing || "").match(/[\d.,]+/);
-    if (m) n += parseLooseNumber(m[0]);
-  });
-  return n;
+  return items.reduce((n, it) => n + ciplKoliBarang(it), 0);
+}
+
+/* Jenis kemasan yang tertulis pada barang: kolom Jenis Kemasan, atau
+   huruf sesudah angka di kolom Kemasan ("2 PALLET", "1BOX" -- data lama
+   dan hasil baca CIPL). "" = tidak disebut. */
+function ciplJenisKemasanBarang(it) {
+  const sendiri = String((it && it.packingUnit) || "").replace(/^[\d.,\s]+/, "").trim();
+  if (sendiri) return sendiri.toUpperCase();
+  const m = String((it && it.packing) || "").match(/[\d.,]+\s*([A-Za-z][A-Za-z ]*)/);
+  return m ? m[1].trim().toUpperCase() : "";
+}
+
+/* Singkatan jenis kemasan di lembar CIPL ("120 * 122 * 71 (cm) * 4 BX").
+   BOX tetap "BX" seperti lembar Kumho selama ini; jenis lain memakai
+   singkatan yang lazim di CIPL dan dikenali pembaca CIPL kita (mesin
+   EXIM: PLT, CTN, PKG, ...). Bentuk jamak & kode CEISA (PX, CT, ...) ikut
+   dikenali; jenis di luar daftar ditulis apa adanya. */
+const CIPL_SINGKATAN_KEMASAN = {
+  BOX: "BX", BOXES: "BX", BX: "BX",
+  PALLET: "PLT", PALLETS: "PLT", PLT: "PLT", PLTS: "PLT", PX: "PLT",
+  CARTON: "CTN", CARTONS: "CTN", CTN: "CTN", CTNS: "CTN", CT: "CTN",
+  PACKAGE: "PKG", PACKAGES: "PKG", PKG: "PKG", PKGS: "PKG", PK: "PKG",
+  CRATE: "CRATE", CRATES: "CRATE", CR: "CRATE",
+  CASE: "CASE", CASES: "CASE", CS: "CASE",
+  DRUM: "DRUM", DRUMS: "DRUM", DR: "DRUM",
+  ROLL: "ROLL", ROLLS: "ROLL", RO: "ROLL",
+};
+function ciplSatuanKemasan(jenis) {
+  const kunci = String(jenis || "").trim().toUpperCase();
+  return CIPL_SINGKATAN_KEMASAN[kunci] || kunci;
 }
 
 /* Angka bulat ditulis TANPA desimal; hanya yang pecahan yang diberi

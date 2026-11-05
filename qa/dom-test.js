@@ -1291,6 +1291,136 @@ t("baris tanpa dimensi tidak diberi satuan kosong", () => {
   if (/M<sup>3<\/sup>/.test(h)) throw new Error("M3 muncul padahal CBM kosong");
 });
 
+console.log("— PACKING LIST: BARIS DIMENSION MENGIKUTI KEMASAN TIAP BARANG —");
+/* Dulu tiap BARIS barang dihitung satu peti dan jenisnya selalu "BX": barang
+   berkemasan 3 BOX atau 2 PALLET tetap tercetak "* 1 BX", tak cocok dengan
+   total "N PACKAGES" dan CBM di bawahnya. */
+const barangDim = (nama, o) => Object.assign({ namaBarang: nama, qty: 1, satuan: "SET", harga: 100, netto: 100, bruto: 120 }, o);
+const dimTeks = (items) => w.ciplVnDimensi(items).join(" | ");
+const rincianDim = (items) => {
+  const kirim = { id: "dm", mode: "export", items };
+  return w.ciplRincianKemasan({ packing: "WOODEN PACKING" }, kirim, w.ciplBarisBarang(kirim)).map((x) => x[0]);
+};
+t("DIMENSION: ukuran beda-beda -- jumlah & jenis kemasan tiap barang dipakai, bukan '* 1 BX' untuk semuanya", () => {
+  const items = [
+    barangDim("A", { package: "120*122*71", packing: "3", packingUnit: "BOX" }),
+    barangDim("B", { package: "100*100*90", packing: "2", packingUnit: "PALLET" }),
+    barangDim("C", { package: "80*80*56", packing: "5", packingUnit: "CRATE" }),
+  ];
+  eq(dimTeks(items), "DIMENSION : 120 * 122 * 71 (cm) * 3 BX | DIMENSION : 100 * 100 * 90 (cm) * 2 PLT | DIMENSION : 80 * 80 * 56 (cm) * 5 CRATE");
+  // Cocok dengan kotak Packing details: jumlah semua baris DIMENSION = total PACKAGES; CBM = jumlah (ukuran x kemasan)
+  const kotak = rincianDim(items);
+  const jumlahBaris = kotak.filter((x) => /^DIMENSION/.test(x)).map((x) => Number(/\* (\d+) [A-Z]+$/.exec(x)[1])).reduce((a, b) => a + b, 0);
+  eq(jumlahBaris, 10, "jumlah kemasan di baris DIMENSION:");
+  eq(kotak.slice(-2).join(" | "), "MEASUREMENT : 6.710 M³ | 10 PACKAGES", "CBM & total koli:");
+});
+t("DIMENSION: ukuran & jenis sama dari barang berbeda dijumlahkan; ukuran sama tapi jenis beda = baris sendiri", () => {
+  eq(dimTeks([
+    barangDim("A", { package: "97*95*52", packing: "2", packingUnit: "BOX" }),
+    barangDim("B", { package: "80*80*56", packing: "1", packingUnit: "BOX" }),
+    barangDim("C", { package: "97*95*52", packing: "3", packingUnit: "BOX" }),
+  ]), "DIMENSION : 97 * 95 * 52 (cm) * 5 BX | DIMENSION : 80 * 80 * 56 (cm) * 1 BX", "dijumlahkan, urutan kemunculan pertama:");
+  eq(dimTeks([
+    barangDim("A", { package: "100*100*100", packing: "2", packingUnit: "PALLET" }),
+    barangDim("B", { package: "100*100*100", packing: "3", packingUnit: "BOX" }),
+  ]), "DIMENSION : 100 * 100 * 100 (cm) * 2 PLT | DIMENSION : 100 * 100 * 100 (cm) * 3 BX", "jenis beda dipisah:");
+  // Pembulatan: jumlah pecahan tidak menyisakan ekor biner
+  eq(dimTeks([barangDim("A", { package: "10*10*10", packing: "0.1", packingUnit: "BOX" }), barangDim("B", { package: "10*10*10", packing: "0.2", packingUnit: "BOX" })]),
+    "DIMENSION : 10 * 10 * 10 (cm) * 0.3 BX", "0,1 + 0,2:");
+});
+t("DIMENSION: jenis kemasan -- kolom Jenis Kemasan, lalu huruf di kolom Kemasan, lalu barang di atasnya, lalu BOX", () => {
+  eq(dimTeks([
+    barangDim("A", { package: "50*50*50", packing: "2 PALLET" }), // jenis dari teks kolom Kemasan (data lama / hasil baca CIPL)
+    barangDim("B", { package: "60*60*60", packing: "1", packingUnit: "" }), // kosong = ikut barang di atas
+    barangDim("C", { package: "70*70*70", packing: "4", packingUnit: "CARTON" }),
+    barangDim("D", { package: "80*80*80", packing: "1BOX", packingUnit: "" }), // "1BOX" tanpa spasi
+  ]), "DIMENSION : 50 * 50 * 50 (cm) * 2 PLT | DIMENSION : 60 * 60 * 60 (cm) * 1 PLT | DIMENSION : 70 * 70 * 70 (cm) * 4 CTN | DIMENSION : 80 * 80 * 80 (cm) * 1 BX");
+  // Barang pertama tanpa jenis sama sekali: BOX (bawaan kolom Jenis Kemasan)
+  eq(dimTeks([barangDim("A", { package: "50*50*50", packing: "2" })]), "DIMENSION : 50 * 50 * 50 (cm) * 2 BX", "bawaan BOX:");
+  // Barang tanpa ukuran tetap meneruskan jenisnya ke barang di bawahnya
+  eq(dimTeks([barangDim("A", { packing: "2", packingUnit: "PALLET" }), barangDim("B", { package: "50*50*50", packing: "1" })]),
+    "DIMENSION : 50 * 50 * 50 (cm) * 1 PLT", "jenis dari barang tanpa ukuran:");
+  // Jenis yang diketik dengan angka di depannya tidak ikut terbawa
+  eq(w.ciplJenisKemasanBarang({ packingUnit: "1 BOX" }), "BOX", "angka di depan jenis dibuang:");
+  // Jenis yang terdiri dari beberapa kata ditulis utuh (di luar daftar singkatan = apa adanya), bukan dipotong jadi "WOODEN"
+  eq(dimTeks([barangDim("A", { package: "50*50*50", packing: "2 WOODEN CRATE" })]), "DIMENSION : 50 * 50 * 50 (cm) * 2 WOODEN CRATE", "jenis dua kata:");
+});
+t("DIMENSION: barang dengan kolom Kemasan kosong masih satu kemasan dengan barang di atasnya -- tidak menambah hitungan", () => {
+  // Ukuran disamakan ke semua baris, tapi hanya baris pertama yang mencatat kemasan: satu peti, bukan tiga
+  eq(dimTeks([
+    barangDim("A", { package: "82*82*75", packing: "1", packingUnit: "BOX" }),
+    barangDim("B", { package: "82*82*75", packing: "", packingUnit: "BOX" }),
+    barangDim("C", { package: "82*82*75", packing: "", packingUnit: "BOX" }),
+  ]), "DIMENSION : 82 * 82 * 75 (cm) * 1 BX", "tiga barang satu peti:");
+  eq(rincianDim([
+    barangDim("A", { package: "82*82*75", packing: "1", packingUnit: "BOX" }),
+    barangDim("B", { package: "82*82*75", packing: "", packingUnit: "BOX" }),
+  ]).slice(-1)[0], "1 PACKAGE", "sejalan dengan total koli:");
+  // Isi per peti (qty = pieces) tidak pernah dikira jumlah peti selama ada barang yang mencatat jumlah kemasannya
+  eq(dimTeks([
+    barangDim("A", { package: "46*24*14", qty: 60000, packing: "1", packingUnit: "BOX" }),
+    barangDim("B", { package: "46*24*14", qty: 60000, packing: "", packingUnit: "BOX" }),
+  ]), "DIMENSION : 46 * 24 * 14 (cm) * 1 BX", "qty (pieces) tidak dianggap jumlah peti:");
+  // Barang "ikut" yang ukuran / jenisnya tertulis lain tidak membuat baris sendiri -- tidak pernah ada baris "* 0 ..."
+  const ikutLain = dimTeks([
+    barangDim("A", { package: "82*82*75", packing: "2", packingUnit: "BOX" }),
+    barangDim("B", { package: "50*50*50", packing: "", packingUnit: "PALLET" }),
+  ]);
+  eq(ikutLain, "DIMENSION : 82 * 82 * 75 (cm) * 2 BX", "barang ikut tak membuat baris sendiri:");
+  if (/\* 0 /.test(ikutLain)) throw new Error("muncul baris berjumlah 0");
+});
+t("DIMENSION: data lama tanpa jumlah kemasan sama sekali -- satu set satu peti (qty), seperti CBM & total PACKAGES Kumho", () => {
+  eq(dimTeks([
+    barangDim("A", { package: "97*95*52", qty: 2 }),
+    barangDim("B", { package: "97*95*52", qty: 3 }),
+    barangDim("C", { package: "80*80*56" , qty: 0 }),
+  ]), "DIMENSION : 97 * 95 * 52 (cm) * 5 BX | DIMENSION : 80 * 80 * 56 (cm) * 1 BX", "qty dijumlahkan; qty kosong dihitung satu:");
+  // Tanpa ukuran sama sekali tak ada baris DIMENSION
+  eq(w.ciplVnDimensi([barangDim("A", { packing: "2", packingUnit: "BOX" })]).length, 0, "tanpa ukuran:");
+  eq(w.ciplVnDimensi([]).length + "|" + w.ciplVnDimensi(null).length, "0|0", "kosong / null:");
+});
+t("singkatan jenis kemasan di CIPL: BOX = BX (seperti lembar Kumho), PALLET = PLT, dst.; jamak & kode CEISA dikenali; selebihnya apa adanya", () => {
+  const s = w.ciplSatuanKemasan;
+  // Setiap tulisan yang dikenali diperiksa satu per satu: singkatan -> semua tulisan yang harus menghasilkannya
+  const peta = {
+    BX: ["BOX", "BOXES", "BX"],
+    PLT: ["PALLET", "PALLETS", "PLT", "PLTS", "PX"],
+    CTN: ["CARTON", "CARTONS", "CTN", "CTNS", "CT"],
+    PKG: ["PACKAGE", "PACKAGES", "PKG", "PKGS", "PK"],
+    CRATE: ["CRATE", "CRATES", "CR"],
+    CASE: ["CASE", "CASES", "CS"],
+    DRUM: ["DRUM", "DRUMS", "DR"],
+    ROLL: ["ROLL", "ROLLS", "RO"],
+  };
+  Object.entries(peta).forEach(([singkatan, tulisan]) => tulisan.forEach((x) => eq(s(x), singkatan, `"${x}":`)));
+  eq(s(" pallets ") + "|" + s("Boxes") + "|" + s("ctn"), "PLT|BX|CTN", "huruf kecil & spasi di tepi diabaikan:");
+  eq(s("wooden case") + "|" + s("SET") + "|" + s("") + "|" + s(null), "WOODEN CASE|SET||", "di luar daftar apa adanya; kosong tetap kosong:");
+});
+t("DIMENSION: sampai ke lembar Packing List cetak (CIPL biasa) dan lembar Kumho -- satu sumber dengan Excel", () => {
+  const items = [
+    barangDim("A", { package: "120*122*71", packing: "3", packingUnit: "BOX" }),
+    barangDim("B", { package: "100*100*90", packing: "2", packingUnit: "PALLET" }),
+  ];
+  const kirim = { id: "dm2", mode: "export", items };
+  const h = ciplHalaman("PL", { id: "pd2", doc_number: "X", doc_date: "2026-08-03", payload: {} }, kirim, w.ciplBarisBarang(kirim));
+  if (!h.includes("DIMENSION : 120 * 122 * 71 (cm) * 3 BX")) throw new Error("cetak: baris kemasan 3 BX tidak ada");
+  if (!h.includes("DIMENSION : 100 * 100 * 90 (cm) * 2 PLT")) throw new Error("cetak: baris 2 PLT tidak ada");
+  if (!h.includes("5 PACKAGES")) throw new Error("cetak: total koli");
+  // Cetak & unduhan Excel sama-sama digambar dari model kisi (ciplDdTata): isi modelnya yang harus benar
+  const model = w.ciplDdTata("PL", { id: "pd2", doc_number: "X", doc_date: "2026-08-03", payload: {} }, kirim, w.ciplBarisBarang(kirim));
+  const teksModel = model.sel.map((c) => c.isi.map((b) => b.runs.map((r) => r.t).join("")).join("\n")).join("\n");
+  if (!teksModel.includes("DIMENSION : 120 * 122 * 71 (cm) * 3 BX") || !teksModel.includes("DIMENSION : 100 * 100 * 90 (cm) * 2 PLT"))
+    throw new Error("model kisi (dipakai cetak & Excel): baris DIMENSION per kemasan tidak ada");
+  // Lembar bentuk Kumho (ciplVnTata) memakai pembangun kotak yang sama
+  const u = ciplVnUji({ items });
+  const vn = ciplVnHalaman("PL", u.row, u.shipment);
+  if (!vn.includes("DIMENSION : 120 * 122 * 71 (cm) * 3 BX")) throw new Error("lembar Kumho: baris kemasan 3 BX tidak ada");
+  if (!vn.includes("DIMENSION : 100 * 100 * 90 (cm) * 2 PLT")) throw new Error("lembar Kumho: baris 2 PLT tidak ada");
+  if (!vn.includes("5 PACKAGES")) throw new Error("lembar Kumho: total koli");
+  if (/\(cm\) \* 1 BX/.test(vn)) throw new Error("lembar Kumho: masih '* 1 BX' padahal kemasan tiap barang berbeda");
+  if (/\(cm\) \* 1 BX/.test(h)) throw new Error("cetak: masih '* 1 BX' padahal kemasan tiap barang berbeda");
+});
+
 console.log("— CARRIER CIPL: GABUNGAN VOYAGER/VESSEL + VOYAGE/FLIGHT —");
 
 console.log("— ISIAN OTOMATIS DARI KARTU YANG DITAUTKAN —");
@@ -6711,7 +6841,8 @@ t("susunan & tema: kepala navy, judul bergaris hitam, referensi kanan atas, TOTA
   // TOTAL satu baris tepat di bawah barang; koli & CBM di Packing details
   const tot = ttWajib(T, "TOTAL");
   eq(tot.ha, "left", "TOTAL rata kiri:");
-  ["MEASUREMENT : 2.126 M³", "4 PACKAGES", "DIMENSION : 81 * 81 * 81 (cm) * 2 BX"].forEach((x) => {
+  // 1 BOX + 3 BOX seukuran = 4 peti (cocok dengan "4 PACKAGES" dan 2,126 M³ = 4 x 0,531); dulu tercetak "* 2 BX" (jumlah baris barang)
+  ["MEASUREMENT : 2.126 M³", "4 PACKAGES", "DIMENSION : 81 * 81 * 81 (cm) * 4 BX"].forEach((x) => {
     const s = ttWajib(T, x);
     if (!(s.r1 > tot.r1 && s.c1 === ttWajib(T, "PACKING DETAILS").c1)) throw new Error(x + " harus di kotak Packing details");
   });
@@ -14115,6 +14246,421 @@ t("ocrBacaPiksel dengan pekerja Tesseract tiruan: tiga mode baca berurutan (6, 4
     eq(jejak.param[jejak.param.length - 1], "6", "parameter dikembalikan:");
   } finally { w.ocrPekerja = asli.pekerja; w.ocrBwKePng = asli.png; }
 });
+
+console.log("\u2014 PENGAJUAN DANA: SARAN HOUSE BL/AWB DI KOTAK BL/AWB \u2014");
+/* Jadwal contoh: House BL, pihak, moda, tanggal. */
+const jadwalSaran = (houseBL, o) => Object.assign({ id: "sa_" + String(houseBL).replace(/\W/g, ""), houseBL, masterBL: "", party: "PT CONTOH", transport: "laut", eta: "2026-10-01", etd: "2026-09-01", items: [] }, o || {});
+const aturJadwalSaran = w.eval("(imp, eks) => { data.import = imp; data.export = eks; saranAwb.daftar = null; }");
+const denganJadwalSaran = (impor, ekspor, fn) => {
+  const asli = [w.eval("data.import"), w.eval("data.export")];
+  aturJadwalSaran(impor, ekspor);
+  try { return fn(); } finally { aturJadwalSaran(asli[0], asli[1]); }
+};
+/* jsdom tanpa tata letak: tampilDiLayar() dianggap benar (seperti uji FOKUS) */
+const denganTampilSaran = (fn) => {
+  const asli = w.tampilDiLayar;
+  w.tampilDiLayar = (el) => !el.closest(".modal:not(.show)");
+  try { return fn(); } finally { w.tampilDiLayar = asli; }
+};
+const kotakSaran = () => w.docNumPanelEl("fund").querySelector('[data-dn="blAwb"]');
+const daftarSaran = () => kotakSaran().closest(".saran-awb").querySelector(".saran-awb-daftar");
+const barisSaran = () => [...daftarSaran().querySelectorAll(".saran-awb-opsi .saran-awb-nomor")].map((x) => x.textContent);
+const saranTerbuka = () => !daftarSaran().classList.contains("d-none");
+const sorotanSaran = () => [...daftarSaran().querySelectorAll(".saran-awb-opsi.is-aktif .saran-awb-nomor")].map((x) => x.textContent).join();
+const ketikSaran = (teks, kursor) => {
+  const el = kotakSaran();
+  el.focus();
+  el.value = teks;
+  const k = kursor == null ? teks.length : kursor;
+  el.setSelectionRange(k, k);
+  el.dispatchEvent(new w.InputEvent("input", { bubbles: true, inputType: "insertText" }));
+};
+const tombolSaran = (kunci, opsi) => {
+  const e = new w.KeyboardEvent("keydown", Object.assign({ key: kunci, bubbles: true, cancelable: true }, opsi));
+  kotakSaran().dispatchEvent(e);
+  return e;
+};
+const bersihSaran = () => {
+  const el = kotakSaran();
+  el.blur();
+  w.resetDocNumForm("fund");
+  el.value = "";
+};
+// Enam kiriman impor dengan nomor berurutan; makin besar makin baru
+const enamImporSaran = () => Array.from({ length: 6 }, (_, i) => jadwalSaran("SRE45381" + i, { party: "PT P" + i, eta: "2026-10-0" + (i + 1) }));
+
+t("saran BL/AWB: daftar = House BL/AWB semua jadwal -- satu per nomor, ejaan terbanyak, keterangan dari jadwal terbaru", () => denganJadwalSaran(
+  [
+    jadwalSaran("SRE-453812", { party: "PT AAA", eta: "2026-10-01" }),
+    jadwalSaran("SRE 453812", { id: "x2", party: "PT AAA LAMA", eta: "2026-05-01" }),
+    jadwalSaran("SRE-453812", { id: "x3", party: "PT AAA LAMA", eta: "2026-04-01" }),
+    jadwalSaran("", { id: "x4" }),
+    jadwalSaran("-", { id: "x5" }),
+    jadwalSaran("AB1", { id: "x6" }),
+    jadwalSaran("", { id: "x7", masterBL: "MAEU12345678" }), // hanya Master: bukan House
+  ],
+  [jadwalSaran("877334611529", { id: "e1", transport: "udara", party: "BUYER   X", etd: "2026-09-10", eta: "" })],
+  () => {
+    const d = w.fundDaftarHouseAwb();
+    eq(d.map((n) => n.kunci).sort().join(), "877334611529,SRE453812", "satu per nomor; kosong, '-', terlalu pendek, dan hanya-Master tidak ikut:");
+    const sre = d.find((n) => n.kunci === "SRE453812");
+    eq(sre.nomor, "SRE-453812", "ejaan terbanyak:");
+    eq([sre.jenis, sre.pihak, sre.tgl].join("|"), "Sea Import|PT AAA|2026-10-01", "keterangan dari jadwal terbaru:");
+    const awb = d.find((n) => n.kunci === "877334611529");
+    eq([awb.jenis, awb.pihak, awb.tgl].join("|"), "Air Export|BUYER X|2026-09-10", "udara + buku Export, tanggal ETD, spasi ganda dirapikan:");
+  }));
+
+t("saran BL/AWB: tanggal revisi (Update Delay) yang berlaku menentukan jadwal terbaru", () => denganJadwalSaran(
+  [jadwalSaran("SRE111111", { id: "r1", party: "LAMA", eta: "2026-10-01", etaUpdate: "2026-12-01" }), jadwalSaran("SRE111111", { id: "r2", party: "BARU", eta: "2026-11-01" })],
+  [],
+  () => eq(w.fundDaftarHouseAwb()[0].pihak, "LAMA", "ETA revisi 2026-12-01 mengalahkan 2026-11-01:")));
+
+t("saran BL/AWB: mirip ketikan -- memuat; spasi, strip, huruf besar-kecil tak dihitung; urut sama persis > awalan > akhiran > memuat", () => {
+  const daftar = ["XABC12Y", "XXABC12", "ABC123456", "ABC12", "ZZZ999999"].map((nomor, i) => ({ kunci: nomor, nomor, jenis: "Sea Import", pihak: "P", tgl: "2026-01-0" + (i + 1) }));
+  const nomor = (teks) => w.fundSaranAwb(teks, null, daftar).saran.map((n) => n.nomor).join();
+  eq(nomor("ABC12"), "ABC12,ABC123456,XXABC12,XABC12Y", "sama persis > awalan > akhiran > memuat:");
+  eq(nomor("abc-12"), "ABC12,ABC123456,XXABC12,XABC12Y", "huruf kecil & strip diabaikan:");
+  eq(nomor("  a b c 1 2 "), "ABC12,ABC123456,XXABC12,XABC12Y", "spasi diabaikan:");
+  eq(nomor("C12"), "ABC12,XXABC12,ABC123456,XABC12Y", "akhiran dulu (jadwal terbaru dulu), baru yang sekadar memuat:");
+  eq(nomor("ZZZ"), "ZZZ999999", "awalan:");
+  eq(nomor("999999"), "ZZZ999999", "akhiran -- cukup mengetik angka belakang:");
+  eq(nomor("QQQ"), "", "tak ada yang mirip:");
+  eq(w.fundSaranAwb("ABC12", null, daftar).saran.map((n) => n.peringkat).join(), "0,1,2,3", "peringkat:");
+});
+
+t("saran BL/AWB: mulai 2 huruf / angka, paling banyak 4 baris, yang setara diurut dari jadwal terbaru", () => {
+  const daftar = Array.from({ length: 7 }, (_, i) => ({ kunci: "SRE45000" + i, nomor: "SRE45000" + i, jenis: "Sea Import", pihak: "P", tgl: "2026-0" + (i + 1) + "-01" }));
+  eq(w.fundSaranAwb("S", null, daftar).saran.length, 0, "1 karakter belum:");
+  eq(w.fundSaranAwb(" - S - ", null, daftar).saran.length, 0, "tanda baca dan spasi tidak dihitung:");
+  const r = w.fundSaranAwb("SR", null, daftar).saran;
+  eq(r.length, 4, "paling banyak 4:");
+  eq(r.map((n) => n.nomor).join(), "SRE450006,SRE450005,SRE450004,SRE450003", "jadwal terbaru dulu:");
+  eq(w.fundSaranAwb("", null, daftar).saran.length, 0, "kosong:");
+});
+
+t("saran BL/AWB: beberapa nomor dalam satu kotak -- hanya nomor di sekitar kursor disaring, nomor yang sudah ada tak disarankan, memilih hanya mengganti nomor itu", () => {
+  const daftar = ["AAA111", "AAA222", "BBB333"].map((nomor) => ({ kunci: nomor, nomor, jenis: "Sea Import", pihak: "P", tgl: "2026-01-01" }));
+  const p = w.fundPecahAwb("AAA111/BB222/CCC", 9);
+  eq([p.awal, p.ketik, p.akhir].join("|"), "AAA111/|BB222|/CCC", "kursor di tengah nomor kedua:");
+  const q = w.fundPecahAwb("AAA111 / BB");
+  eq([q.awal, q.ketik, q.akhir].join("|"), "AAA111 /| BB|", "tanpa kursor = akhir isian; spasi ikut bagian itu:");
+  for (const pemisah of [",", ";", "|", "\n"]) eq(w.fundPecahAwb("AAA111" + pemisah + "BB").ketik, "BB", "pemisah " + JSON.stringify(pemisah) + ":");
+  eq(w.fundPecahAwb("AAA111/BB", 99).ketik, "BB", "kursor di luar isi = akhir:");
+  eq(w.fundSaranAwb("AAA111/AAA", null, daftar).saran.map((n) => n.nomor).join(), "AAA222", "AAA111 sudah ada di isian:");
+  eq(w.fundSaranAwb("AAA/AAA222", 3, daftar).saran.map((n) => n.nomor).join(), "AAA111", "nomor di SESUDAH kursor juga dihitung:");
+  const a = w.fundPasangSaranAwb(w.fundSaranAwb("AAA111 / BB", null, daftar), "BBB333");
+  eq(a.nilai + "|" + a.kursor, "AAA111 / BBB333|15", "nomor kedua diganti, spasi dibiarkan, kursor di belakangnya:");
+  const b = w.fundPasangSaranAwb(w.fundSaranAwb("AAA111/BB/CCC333", 9, daftar), "BBB333");
+  eq(b.nilai + "|" + b.kursor, "AAA111/BBB333/CCC333|13", "nomor di tengah diganti, yang lain utuh:");
+  const c = w.fundPasangSaranAwb(w.fundSaranAwb("BB ", 1, daftar), "BBB333");
+  eq(c.nilai + "|" + c.kursor, "BBB333 |6", "spasi sesudah nomor dibiarkan:");
+});
+
+t("saran BL/AWB: bagian yang cocok ditebalkan menurut tulisan aslinya; teks aneh di-escape", () => {
+  eq(w.fundSorotAwb("SRE-453812", "4538"), "SRE-<mark>4538</mark>12", "strip di luar bagian cocok:");
+  eq(w.fundSorotAwb("8771 4421 8723", "44218"), "8771 <mark>4421 8</mark>723", "spasi di dalam bagian cocok ikut:");
+  eq(w.fundSorotAwb("877334611529", "877"), "<mark>877</mark>334611529", "awalan:");
+  eq(w.fundSorotAwb("PFIJKT006787", "6787"), "PFIJKT00<mark>6787</mark>", "akhiran:");
+  eq(w.fundSorotAwb("ABC123", "ZZZ"), "ABC123", "tak cocok: apa adanya:");
+  const aneh = w.fundSorotAwb("A<B>12345", "B12");
+  eq(aneh, "A&lt;<mark>B&gt;12</mark>345", "tanda kurung sudut di-escape:");
+});
+
+t("saran BL/AWB di form: mengetik memunculkan paling banyak 4 saran di bawah kotak; satu karakter, nomor tak dikenal, atau isi kosong menutupnya", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  try {
+    eq(saranTerbuka(), false, "tertutup sebelum mengetik:");
+    ketikSaran("SRE45");
+    eq(saranTerbuka(), true, "terbuka:");
+    eq(barisSaran().join(), "SRE453815,SRE453814,SRE453813,SRE453812", "4 baris, jadwal terbaru dulu:");
+    eq(kotakSaran().getAttribute("aria-expanded"), "true", "aria-expanded:");
+    eq(daftarSaran().getAttribute("role"), "listbox", "role listbox:");
+    eq(daftarSaran().querySelectorAll('[role="option"]').length, 4, "role option:");
+    eq(daftarSaran().querySelector(".saran-awb-ket").textContent, "Sea Import · PT P5", "keterangan: jenis · pihak:");
+    eq(daftarSaran().querySelector(".saran-awb-nomor mark").textContent, "SRE45", "bagian cocok ditebalkan:");
+    ketikSaran("SRE45381");
+    eq(barisSaran().length, 4, "tetap 4 walau 6 cocok:");
+    ketikSaran("S");
+    eq(saranTerbuka() + "|" + daftarSaran().innerHTML + "|" + kotakSaran().getAttribute("aria-expanded"), "false||false", "1 karakter menutup:");
+    ketikSaran("ZZZ99");
+    eq(saranTerbuka() + "|" + daftarSaran().innerHTML, "false|", "nomor tak dikenal: tanpa daftar, tanpa pesan 'tidak ada':");
+    ketikSaran("SRE45");
+    ketikSaran("");
+    eq(saranTerbuka(), false, "isi dikosongkan:");
+    ketikSaran("SRE453815");
+    eq(barisSaran().join() + "|" + daftarSaran().querySelectorAll(".bi-check2").length + "|" + daftarSaran().querySelector("[role=option]").getAttribute("aria-selected"), "SRE453815|1|true", "nomor lengkap yang ada di jadwal: satu baris bertanda centang:");
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: Import & Export sama-sama jadi sumber; keterangan Air / Sea + Import / Export", () => denganJadwalSaran(
+  [jadwalSaran("SRE700001", { party: "SHIPPER IMP", transport: "udara" })],
+  [jadwalSaran("SRE700002", { party: "BUYER EXP", transport: "laut", etd: "2026-10-05" })],
+  () => {
+    try {
+      ketikSaran("SRE7");
+      eq([...daftarSaran().querySelectorAll(".saran-awb-opsi")].map((x) => x.textContent.replace(/\s+/g, " ").trim()).join(" ; "),
+        "SRE700002 Sea Export · BUYER EXP ; SRE700001 Air Import · SHIPPER IMP", "kedua buku, jadwal terbaru dulu:");
+    } finally { bersihSaran(); }
+  }));
+
+t("saran BL/AWB: klik memilih -- isian terisi, daftar tertutup, kursor di belakang nomor, dan isian otomatis dari jadwal (Jenis Transaksi) ikut jalan", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  const panel = w.docNumPanelEl("fund");
+  try {
+    w.resetDocNumForm("fund");
+    const jenis = panel.querySelector('[data-dn="transactionType"]');
+    eq(jenis.value, "", "Jenis Transaksi mula-mula kosong:");
+    let masuk = 0; let berubah = 0;
+    const hitung = () => { masuk++; }; const ubah = () => { berubah++; };
+    kotakSaran().addEventListener("input", hitung); kotakSaran().addEventListener("change", ubah);
+    try {
+      ketikSaran("SRE45");
+      masuk = 0; berubah = 0;
+      daftarSaran().querySelector('[data-i="1"]').click();
+      eq(kotakSaran().value, "SRE453814", "nomor terpasang:");
+      eq(saranTerbuka(), false, "tertutup:");
+      eq(kotakSaran().selectionStart + "," + kotakSaran().selectionEnd, "9,9", "kursor di belakang nomor:");
+      eq(masuk + "," + berubah, "1,1", "satu input + satu change (daftar tidak terbuka lagi karenanya):");
+      eq(jenis.value, "Sea Import", "Jenis Transaksi terisi dari jadwal yang dipilih:");
+      eq(w.readDocNumForm("fund").blAwb, "SRE453814", "dibaca form seperti diketik:");
+    } finally { kotakSaran().removeEventListener("input", hitung); kotakSaran().removeEventListener("change", ubah); }
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: panah menyorot, Enter memilih yang disorot, Esc / Tab menutup tanpa mengubah isian", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  try {
+    ketikSaran("SRE45");
+    eq(kotakSaran().hasAttribute("aria-activedescendant"), false, "belum ada sorotan sesudah mengetik:");
+    eq(sorotanSaran(), "", "sorotan kosong:");
+    const bawah = tombolSaran("ArrowDown");
+    eq(bawah.defaultPrevented, true, "panah bawah tidak menggeser kursor di kotak:");
+    eq(sorotanSaran(), "SRE453815", "panah bawah -> saran pertama:");
+    eq(kotakSaran().getAttribute("aria-activedescendant"), "saranAwbOpsi0", "aria-activedescendant:");
+    tombolSaran("ArrowDown");
+    eq(sorotanSaran(), "SRE453814", "panah bawah lagi:");
+    tombolSaran("ArrowUp");
+    eq(sorotanSaran(), "SRE453815", "panah atas:");
+    tombolSaran("ArrowUp");
+    eq(sorotanSaran() + "|" + kotakSaran().hasAttribute("aria-activedescendant"), "|false", "panah atas dari saran pertama = tanpa sorotan:");
+    for (let i = 0; i < 9; i++) tombolSaran("ArrowDown");
+    eq(sorotanSaran(), "SRE453812", "berhenti di saran terakhir:");
+    tombolSaran("ArrowUp"); tombolSaran("ArrowUp");
+    tombolSaran("Enter");
+    eq(kotakSaran().value + "|" + saranTerbuka(), "SRE453814|false", "Enter memilih yang disorot (SRE453814):");
+
+    // Enter TANPA sorotan tidak memilih apa pun: ketikan tidak pernah diganti diam-diam
+    ketikSaran("SRE4538");
+    tombolSaran("Enter");
+    eq(kotakSaran().value + "|" + saranTerbuka(), "SRE4538|false", "Enter tanpa sorotan: isi utuh, daftar tertutup:");
+
+    // Esc: menutup, tidak mengubah isi, dan tidak sampai ke pendengar lain (mis. penutup halaman)
+    let esc = 0;
+    const mata = (e) => { if (e.key === "Escape") esc++; };
+    w.document.addEventListener("keydown", mata);
+    try {
+      ketikSaran("SRE45");
+      const e1 = tombolSaran("Escape");
+      eq(kotakSaran().value + "|" + saranTerbuka() + "|" + e1.defaultPrevented + "|" + esc, "SRE45|false|true|0", "Esc saat terbuka: tutup, tertahan di sini:");
+      tombolSaran("Escape");
+      eq(esc, 1, "Esc saat tertutup diteruskan seperti biasa:");
+    } finally { w.document.removeEventListener("keydown", mata); }
+    // Panah bawah membuka lagi daftar yang ditutup Esc
+    tombolSaran("ArrowDown");
+    eq(saranTerbuka() + "|" + sorotanSaran(), "true|SRE453815", "panah bawah membuka lagi, saran pertama disorot:");
+    tombolSaran("Tab");
+    eq(saranTerbuka() + "|" + kotakSaran().value, "false|SRE45", "Tab menutup:");
+
+    // Tak ada saran: panah bawah dibiarkan (kursor boleh bergerak seperti biasa)
+    ketikSaran("ZZZ99");
+    eq(tombolSaran("ArrowDown").defaultPrevented + "|" + saranTerbuka(), "false|false", "tanpa saran, panah tak dicegah:");
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: Enter pada saran yang disorot memilihnya DAN tetap memindahkan kursor ke isian berikutnya (pilih dulu, pindah kemudian)", () => denganTampilSaran(() => denganJadwalSaran(enamImporSaran(), [], () => {
+  const panel = w.docNumPanelEl("fund");
+  const tersembunyi = $("#viewDocNum").classList.contains("d-none");
+  const aktifSebelum = panel.classList.contains("active");
+  $("#viewDocNum").classList.remove("d-none");
+  panel.classList.add("active");
+  try {
+    ketikSaran("SRE45");
+    tombolSaran("ArrowDown");
+    tombolSaran("ArrowDown");
+    tombolSaran("Enter");
+    eq(kotakSaran().value, "SRE453814", "saran terpilih:");
+    const kini = w.document.activeElement;
+    if (kini === kotakSaran()) throw new Error("kursor harus pindah ke isian berikutnya");
+    eq(!!kini.closest('[data-docnum-panel="fund"]'), true, "masih di form Pengajuan Dana (" + kini.id + "):");
+    eq(saranTerbuka(), false, "daftar tertutup:");
+  } finally {
+    if (!aktifSebelum) panel.classList.remove("active");
+    if (tersembunyi) $("#viewDocNum").classList.add("d-none");
+    bersihSaran();
+  }
+})));
+
+t("saran BL/AWB: nomor di tengah isian diganti tanpa menyentuh nomor lain; nomor yang sudah ada tidak disarankan lagi", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  try {
+    ketikSaran("AAA111/SR/CCC333", 9);
+    eq(barisSaran().join(), "SRE453815,SRE453814,SRE453813,SRE453812", "disaring dari nomor di sekitar kursor (SR):");
+    daftarSaran().querySelector('[data-i="0"]').click();
+    eq(kotakSaran().value + "|" + kotakSaran().selectionStart, "AAA111/SRE453815/CCC333|16", "hanya nomor kedua diganti, kursor di belakangnya:");
+    ketikSaran("SRE453815/SRE45");
+    eq(barisSaran().join(), "SRE453814,SRE453813,SRE453812,SRE453811", "SRE453815 sudah ada di isian:");
+    ketikSaran("SRE453815 / SRE45");
+    daftarSaran().querySelector('[data-i="0"]').click();
+    eq(kotakSaran().value, "SRE453815 / SRE453814", "pemisah dengan spasi dipertahankan:");
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: ketikan TIDAK PERNAH diganti sendiri -- nomor di luar jadwal tetap bebas, Enter/Tab/blur tidak memilih apa pun", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  try {
+    ketikSaran("NOMORBARU12345");
+    tombolSaran("Enter");
+    eq(kotakSaran().value, "NOMORBARU12345", "nomor baru, Enter:");
+    ketikSaran("SRE45381");
+    tombolSaran("Tab");
+    kotakSaran().blur();
+    eq(kotakSaran().value + "|" + saranTerbuka(), "SRE45381|false", "mirip tapi tidak dipilih: Tab / blur membiarkannya:");
+    // Daftar tidak muncul untuk isian yang diisi program (impor invoice, draf dipulihkan) selagi kotak tidak difokus
+    kotakSaran().blur();
+    kotakSaran().value = "SRE45";
+    kotakSaran().dispatchEvent(new w.Event("input", { bubbles: true }));
+    eq(saranTerbuka(), false, "isian oleh program tidak membuka daftar:");
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: daftar tertutup saat fokus keluar, tetap terbuka bila fokus masih di dalam wadahnya; jadwal baru terbaca saat kotak difokus lagi", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  try {
+    ketikSaran("SRE45");
+    eq(saranTerbuka(), true, "terbuka:");
+    const luar = w.document.createElement("button");
+    w.document.body.appendChild(luar);
+    try {
+      luar.focus();
+      eq(saranTerbuka(), false, "fokus ke tombol di luar -> tertutup:");
+    } finally { luar.remove(); }
+    // Jadwal baru masuk sesudah kotak sempat dipakai: terbaca begitu kotak difokus lagi
+    ketikSaran("NEWB9");
+    eq(saranTerbuka(), false, "belum ada:");
+    const lama = w.eval("data.import");
+    // Pengganti data TANPA mengosongkan cache daftar: yang menyegarkannya hanya fokus berikutnya ke kotak
+    const gantiData = w.eval("(imp) => { data.import = imp; }");
+    gantiData(lama.concat([jadwalSaran("NEWB900001", { id: "baru1" })]));
+    kotakSaran().blur();
+    ketikSaran("NEWB9");
+    eq(barisSaran().join(), "NEWB900001", "jadwal baru muncul:");
+    gantiData(lama);
+  } finally { bersihSaran(); }
+}));
+
+t("saran BL/AWB: teks jadwal di-escape (tak menyisipkan HTML); markup kotak: combobox + listbox bertaut, data-dn tetap", () => denganJadwalSaran(
+  [jadwalSaran("<img src=x onerror=alert(1)>12345", { party: '"><script>alert(2)</script>' })],
+  [],
+  () => {
+    try {
+      const el = kotakSaran();
+      eq([el.getAttribute("role"), el.getAttribute("aria-autocomplete"), el.getAttribute("aria-controls"), el.getAttribute("data-dn"), el.getAttribute("autocomplete"), el.getAttribute("spellcheck")].join("|"),
+        "combobox|list|dn-fund-blAwb-saran|blAwb|off|false", "atribut kotak:");
+      eq(daftarSaran().id + "|" + daftarSaran().getAttribute("role") + "|" + daftarSaran().classList.contains("d-none"), "dn-fund-blAwb-saran|listbox|true", "daftar:");
+      eq(el.parentElement.classList.contains("saran-awb") && el.parentElement.parentElement.matches(".fgrid > *"), true, "kotak dibungkus .saran-awb di dalam sel kisi:");
+      eq(!!daftarSaran().getAttribute("data-en-aria") && !!daftarSaran().getAttribute("aria-label"), true, "label dua bahasa:");
+      ketikSaran("img");
+      eq(saranTerbuka(), true, "terbuka:");
+      eq(daftarSaran().querySelectorAll("img, script").length, 0, "tidak ada elemen sisipan:");
+      eq(daftarSaran().textContent.includes("<img src=x onerror=alert(1)>12345"), true, "teksnya tampil apa adanya:");
+    } finally { bersihSaran(); }
+  }));
+
+t("saran BL/AWB: 5.000 jadwal tetap cepat (daftar disusun sekali per giliran mengetik, bukan tiap ketikan)", () => {
+  const banyak = Array.from({ length: 5000 }, (_, i) => jadwalSaran("HBL" + String(100000 + i), { id: "p" + i, eta: "2026-01-01" }));
+  return denganJadwalSaran(banyak, [], () => {
+    try {
+      const mulai = Date.now();
+      ketikSaran("HBL10");
+      for (let i = 0; i < 5; i++) ketikSaran("HBL10" + i); // HBL100 .. HBL104: semuanya ada
+      ketikSaran("HBL1049");
+      const lama = Date.now() - mulai;
+      eq(barisSaran().length, 4, "tetap 4 baris (100 yang cocok):");
+      eq(w.eval("saranAwb.daftar.length"), 5000, "daftar disusun sekali:");
+      if (lama > 2500) throw new Error("terlalu lambat: " + lama + " ms untuk 7 ketikan pada 5.000 jadwal");
+    } finally { bersihSaran(); }
+  });
+});
+
+t("saran BL/AWB: aturan naik/turun -- naik HANYA bila ruang bawah kurang DAN ruang atas muat penuh", () => {
+  const R = w.eval("FUND_SARAN_AWB_RUANG");
+  const naik = w.fundNaikSaranAwb;
+  eq(naik(R + 1, 1000), false, "di bawah lega -> tetap di bawah:");
+  eq(naik(R, 1000), false, "di bawah tepat cukup -> tetap di bawah:");
+  eq(naik(R - 1, R), true, "di bawah kurang, di atas tepat muat -> naik:");
+  eq(naik(R - 1, R - 1), false, "di atas kurang sedikit -> tetap di bawah (jangan terpotong):");
+  eq(naik(0, 195), false, "kasus nyata: bingkai halaman hanya 195px di atas kotak -> tetap di bawah:");
+});
+
+t("saran BL/AWB: letak daftar mengikuti ruang yang benar-benar terlihat -- bingkai pemotong, tinggi layar, papan ketik ponsel", () => denganJadwalSaran(enamImporSaran(), [], () => {
+  const el = kotakSaran();
+  const bingkai = el.closest(".docnum-shell");
+  eq(!!bingkai, true, "bingkai .docnum-shell (pemotong isi) ada:");
+  const dl = daftarSaran();
+  const gulir = [];
+  dl.scrollIntoView = (o) => gulir.push(JSON.stringify(o));
+  const rect = (atas, bawah) => () => ({ top: atas, bottom: bawah, left: 0, right: 300, width: 300, height: bawah - atas, x: 0, y: atas });
+  const tinggiAsli = w.innerHeight;
+  /* Kotak setinggi 41px dengan sisi atas di kotakAtas; bingkai pemotong mulai di bingkaiAtas; layar setinggi tinggiLayar;
+     vv = visualViewport (papan ketik ponsel mengecilkannya, bukan innerHeight) */
+  const coba = ({ kotakAtas, tinggiLayar, bingkaiAtas, vv, lanjut }) => {
+    el.getBoundingClientRect = rect(kotakAtas, kotakAtas + 41);
+    bingkai.getBoundingClientRect = rect(bingkaiAtas, bingkaiAtas + 3000);
+    bingkai.style.overflowY = "hidden";
+    w.innerHeight = tinggiLayar;
+    if (vv) w.visualViewport = vv;
+    gulir.length = 0;
+    try {
+      ketikSaran("SRE45");
+      const wadah = el.closest(".saran-awb");
+      const hasil = { naik: wadah.classList.contains("is-atas"), gulir: gulir.length, gulirOpsi: gulir[0] || "", baris: barisSaran().length };
+      if (lanjut) lanjut(hasil, wadah);
+      return hasil;
+    } finally {
+      delete el.getBoundingClientRect;
+      delete bingkai.getBoundingClientRect;
+      bingkai.style.overflowY = "";
+      delete w.visualViewport;
+      w.innerHeight = tinggiAsli;
+      bersihSaran();
+    }
+  };
+  const ringkas = (h) => (h.naik ? "naik" : "bawah") + "/gulir " + h.gulir;
+  try {
+    // Kasus nyata yang pernah terpotong: kotak 195px di bawah tepi bingkai, jendela pendek -> di atas tak muat
+    eq(ringkas(coba({ kotakAtas: 346, tinggiLayar: 560, bingkaiAtas: 151 })), "bawah/gulir 1", "jendela pendek, bingkai dekat: tetap di bawah & digulir:");
+    eq(coba({ kotakAtas: 346, tinggiLayar: 560, bingkaiAtas: 151 }).gulirOpsi, '{"block":"nearest"}', "digulir secukupnya (nearest):");
+    // Layar tinggi: tidak naik, tidak menggulir halaman tanpa perlu
+    eq(ringkas(coba({ kotakAtas: 346, tinggiLayar: 900, bingkaiAtas: 151 })), "bawah/gulir 0", "ruang bawah lega: diam di bawah, tanpa gulir:");
+    // Bingkai sudah tergulir keluar layar: di atas kotak muat -> naik, tanpa gulir; tetap naik walau barisnya tinggal satu
+    eq(ringkas(coba({
+      kotakAtas: 600, tinggiLayar: 800, bingkaiAtas: -200,
+      lanjut: (h, wadah) => {
+        eq(h.baris, 4, "empat baris:");
+        ketikSaran("SRE453810");
+        eq(barisSaran().length + "|" + wadah.classList.contains("is-atas"), "1|true", "daftar tidak berpindah ke bawah selagi barisnya berkurang:");
+        el.getBoundingClientRect = rect(100, 141); // kotak kini di atas layar dengan ruang bawah lega
+        ketikSaran("SRE45");
+        eq(wadah.classList.contains("is-atas"), false, "ruang bawah lega lagi: kembali ke bawah (kelas naik tidak tertinggal):");
+      },
+    })), "naik/gulir 0", "ruang bawah kurang, di atas muat: naik:");
+    // Bingkai dekat di atas kotak: di atas tak muat walau di bawah sempit -> tetap di bawah
+    eq(ringkas(coba({ kotakAtas: 600, tinggiLayar: 800, bingkaiAtas: 500 })), "bawah/gulir 1", "bingkai 100px di atas kotak: tetap di bawah:");
+    // Papan ketik ponsel: layout viewport tinggi (900) tapi yang tampak hanya 420px
+    eq(ringkas(coba({ kotakAtas: 300, tinggiLayar: 900, bingkaiAtas: -100, vv: { offsetTop: 0, height: 420 } })), "naik/gulir 0", "papan ketik membuka: daftar naik (ruang tampak di bawah kotak hanya 79px):");
+    // Layar tampak bergeser (offsetTop 100): ruang atas dihitung dari tepi atas layar tampak
+    eq(ringkas(coba({ kotakAtas: 300, tinggiLayar: 900, bingkaiAtas: -100, vv: { offsetTop: 100, height: 300 } })), "bawah/gulir 1", "layar tampak bergeser: ruang atas hanya 200px -> tetap di bawah:");
+    // Layar tampak bergeser tetapi ruang di bawah kotak masih lega (600 - 341 = 259px): diam di bawah, tanpa gulir
+    eq(ringkas(coba({ kotakAtas: 300, tinggiLayar: 900, bingkaiAtas: -100, vv: { offsetTop: 100, height: 500 } })), "bawah/gulir 0", "layar tampak bergeser, ruang bawah 259px: tanpa gulir:");
+  } finally {
+    delete dl.scrollIntoView;
+    w.innerHeight = tinggiAsli;
+  }
+}));
 
 console.log("\u2014 TOMBOL KEMBALI KE ATAS \u2014");
 t("tersembunyi saat di puncak halaman, muncul sesudah melewati ambang", () => {
