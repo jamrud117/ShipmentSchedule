@@ -2696,6 +2696,12 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
   color: var(--text-muted);
   white-space: nowrap;
 }
+/* Nomor & tanggal dokumen UTUH satu baris -- "29-10-2026" tidak pecah jadi
+   "29-10-" / "2026", nomor SKB tidak terbelah di tanda hubungnya. Tabel
+   yang tidak muat digeser ke samping (.dpb-tabel-gulir), bukan dibungkus. */
+.dpb-tabel .dpb-utuh {
+  white-space: nowrap;
+}
 .dpb-tabel-barang {
   min-width: 760px;
 }

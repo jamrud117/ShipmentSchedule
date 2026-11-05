@@ -238,13 +238,16 @@ function ktPemilih() {
   p.setAttribute("data-kotak-tanggal-off", "");
   p._bukaKe = 0;
   p.addEventListener("change", () => {
-    const el = p._sasaran;
+    // Daftarnya digambar ulang selagi kalender terbuka (pembaruan realtime): isi kembarannya
+    const el = ktKembaran(p._sasaran);
     if (!el || !p.value) return;
     const lama = KT_KEADAAN.get(el).iso;
     ktIsi(el, p.value);
     if (KT_KEADAAN.get(el).iso !== lama) ktKabarkan(el);
     ktLepasPemilih();
-    try { el.focus(); } catch (e) { /* kotaknya sudah dibuang dari halaman */ }
+    // Mengabarkan tanggalnya bisa menggambar ulang daftar: fokus ke kembarannya
+    const tuju = ktKembaran(el);
+    try { if (tuju) tuju.focus(); } catch (e) { /* abaikan */ }
   });
   ktPemilihEl = p;
   return p;
@@ -276,9 +279,29 @@ function ktAsalPatokan(el) {
   return a;
 }
 
+/* Kotak yang SAMA sesudah daftarnya digambar ulang.
+
+   Merapikan ketikan menembakkan `change`, dan pendengar daftar jadwal
+   langsung menggambar ulang seluruh kartu (render() -> innerHTML): kotak
+   yang baru saja diklik sudah dibuang dari halaman dan diganti kembarannya
+   -- id-nya sama, dicari dengan kunciFokus() (js/ui/fokus.js) seperti
+   fokus yang dipulihkan render(). Tanpa ini kalender tidak terbuka pada
+   klik pertama sesudah mengetik tanggal: terasa "lama munculnya", baru
+   muncul pada klik kedua. */
+function ktKembaran(el) {
+  if (!el || el.isConnected) return el;
+  const kunci = typeof kunciFokus === "function" ? kunciFokus(el) : null;
+  const baru = kunci ? document.querySelector(kunci) : null;
+  // Baru saja digambar (masih di pendengar yang sama): MutationObserver belum sempat merapikannya
+  if (baru && baru.tagName === "INPUT") pasangKotakTanggal(baru);
+  return ktKotak(baru) ? baru : null;
+}
+
 function bukaPemilihTanggal(el) {
   if (!ktKotak(el) || !ktPunyaIkon(el)) return;
   ktKomit(el, "buka");
+  el = ktKembaran(el);
+  if (!el || !ktPunyaIkon(el)) return;
   const p = ktPemilih();
   // Selalu mulai dari kotak pembantu yang baru dipasang (tata letaknya dibangun dari nol)
   ktLepasPemilih();
@@ -405,6 +428,27 @@ if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
     const el = e.target;
     if (ktKotak(el) && ktPunyaIkon(el) && ktDiIkon(e, el)) bukaPemilihTanggal(el);
+  }, true);
+  /* Ikon yang kotaknya DIGAMBAR ULANG di tengah klik. Kotak lain yang masih
+     berisi ketikan dirapikan begitu fokus berpindah (focusout, saat tombol
+     tetikus ditekan); pendengar daftar jadwal lalu menggambar ulang kartunya,
+     dan klik yang dimulai pada kotak lama tidak pernah sampai ke kembarannya
+     -- kalender baru terbuka pada klik kedua. Kalau penunjuk dilepas tepat
+     di atas ikon kembarannya (kartunya tidak berpindah tempat), kalendernya
+     dibuka dari sini. Klik biasa tetap lewat pendengar click di atas. */
+  let ktIkonDitekan = null;
+  document.addEventListener("pointerdown", (e) => {
+    const el = e.target;
+    ktIkonDitekan = ktKotak(el) && ktPunyaIkon(el) && ktDiIkon(e, el) ? el : null;
+  }, true);
+  document.addEventListener("pointerup", (e) => {
+    const lama = ktIkonDitekan;
+    ktIkonDitekan = null;
+    if (!lama || lama.isConnected) return;
+    const baru = ktKembaran(lama);
+    if (!baru || !ktPunyaIkon(baru) || !ktDiIkon(e, baru)) return;
+    const r = baru.getBoundingClientRect();
+    if (e.clientY >= r.top && e.clientY <= r.bottom) bukaPemilihTanggal(baru);
   }, true);
   /* Layar sentuh: mengetuk ikon kalender tidak boleh sekaligus memfokus
      kotaknya -- papan ketik yang muncul menutupi separuh layar tepat di

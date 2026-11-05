@@ -1046,7 +1046,7 @@ function mstRincianRealisasiHtml(u, b) {
   return `<tbody class="${isi.length > 1 ? "mst-rinci-parsial" : ""}">${isi
     .map(
       (p, i) => `<tr>
-        <td class="mst-mono" data-label="${escapeAttr(L.tanggal)}">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
+        <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
         <td class="mst-rinci-aju" data-label="${escapeAttr(L.aju)}">${mstAjuTautHtml(p.aju)}${mstDokPibHtml(mstDokumenPib(p, b), aturDok(i))}</td>${i === 0 ? milikRealisasi : ""}
       </tr>`,
     )
@@ -1525,6 +1525,8 @@ async function loadMasterlist() {
   try {
     await mstAmbil();
     mstTermuat = true;
+    // Masa berlaku terbaru ikut ke lonceng notifikasi (notifikasi.js)
+    if (typeof jadwalkanNotif === "function") jadwalkanNotif();
   } catch (e) {
     console.error(e);
     if (halaman) halaman.classList.remove("is-memuat");

@@ -1974,8 +1974,17 @@ function cekSelHtml(x) {
     const f = (v) => (angka(v) ? escapeHtml(cekAngka(EximEngine.num(v))) : cekKosongHtml(v));
     return [f(l), f(r)];
   }
-  if (x.status === "MISMATCH" && cekAda(l) && cekAda(r)) return cekBeda(l, r, !!x.aligned);
-  return [cekKosongHtml(l), cekKosongHtml(r)];
+  const [a, b] = x.status === "MISMATCH" && cekAda(l) && cekAda(r) ? cekBeda(l, r, !!x.aligned) : [cekKosongHtml(l), cekKosongHtml(r)];
+  return [cekUtuhBilaTanggal(a, l), cekUtuhBilaTanggal(b, r)];
+}
+
+/* Nilai yang berupa TANGGAL ("2026-10-16", "16-10-2026", "16 Oct 2026")
+   tidak dipecah di tanda hubungnya ("2026-10-" / "16"): kolom nilai
+   boleh membungkus teks panjang (alamat, uraian) di mana saja, tetapi
+   tanggal tetap satu baris -- tabelnya yang digulir. */
+const CEK_POLA_TANGGAL = /^\s*(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,9}[ -]\d{2,4})\s*$/;
+function cekUtuhBilaTanggal(html, nilai) {
+  return typeof nilai === "string" && CEK_POLA_TANGGAL.test(nilai) ? `<span class="cek-utuh">${html}</span>` : html;
 }
 
 function cekBarisHtml(x, kiriLabel, kananLabel) {

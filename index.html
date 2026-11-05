@@ -1719,50 +1719,74 @@
                     <span class="inv-pihak-judul" data-en="Seller / Shipper">Penjual / Shipper</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="penjual" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-penjualNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-penjualNama" type="text" class="form-control" data-dn="penjualNama" aria-label="Nama Penjual" data-en-aria="Seller name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-penjualAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-penjualAlamat" class="form-control" rows="4" data-dn="penjualAlamat" aria-label="Alamat Penjual" data-en-aria="Seller address"></textarea>
-                  <label class="form-label" for="dn-invoice-penjualNpwp" data-en="Tax ID (NPWP)">NPWP</label>
-                  <input id="dn-invoice-penjualNpwp" type="text" class="form-control" data-dn="penjualNpwp" aria-label="NPWP Penjual" data-en-aria="Seller tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-penjualNama" type="text" class="form-control" data-dn="penjualNama" aria-label="Nama Penjual" data-en-aria="Seller name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-penjualAlamat" class="form-control" rows="4" data-dn="penjualAlamat" aria-label="Alamat Penjual" data-en-aria="Seller address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                    <input id="dn-invoice-penjualNpwp" type="text" class="form-control" data-dn="penjualNpwp" aria-label="NPWP Penjual" data-en-aria="Seller tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="pemilik">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Goods Owner">Pemilik Barang</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="pemilik" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-pemilikNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-pemilikNama" type="text" class="form-control" data-dn="pemilikNama" aria-label="Nama Pemilik Barang" data-en-aria="Goods Owner name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-pemilikAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-pemilikAlamat" class="form-control" rows="4" data-dn="pemilikAlamat" aria-label="Alamat Pemilik Barang" data-en-aria="Goods Owner address"></textarea>
-                  <label class="form-label" for="dn-invoice-pemilikNpwp" data-en="Tax ID (NPWP)">NPWP</label>
-                  <input id="dn-invoice-pemilikNpwp" type="text" class="form-control" data-dn="pemilikNpwp" aria-label="NPWP Pemilik Barang" data-en-aria="Goods Owner tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-pemilikNama" type="text" class="form-control" data-dn="pemilikNama" aria-label="Nama Pemilik Barang" data-en-aria="Goods Owner name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-pemilikAlamat" class="form-control" rows="4" data-dn="pemilikAlamat" aria-label="Alamat Pemilik Barang" data-en-aria="Goods Owner address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                    <input id="dn-invoice-pemilikNpwp" type="text" class="form-control" data-dn="pemilikNpwp" aria-label="NPWP Pemilik Barang" data-en-aria="Goods Owner tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="pembeli">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Buyer">Pembeli / Buyer</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="pembeli" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-pembeliAlamat" class="form-control" rows="4" data-dn="pembeliAlamat" aria-label="Alamat Pembeli" data-en-aria="Buyer address"></textarea>
-                  <label class="form-label" for="dn-invoice-pembeliNegara" data-en="Country">Negara</label>
-                  <input id="dn-invoice-pembeliNegara" type="text" class="form-control" data-dn="pembeliNegara" aria-label="Negara Pembeli" data-en-aria="Buyer country" autocomplete="off" placeholder="mis. KR / KOREA" data-en-ph="e.g. KR / KOREA" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-pembeliAlamat" class="form-control" rows="4" data-dn="pembeliAlamat" aria-label="Alamat Pembeli" data-en-aria="Buyer address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliNegara" data-en="Country">Negara</label>
+                    <input id="dn-invoice-pembeliNegara" type="text" class="form-control" data-dn="pembeliNegara" aria-label="Negara Pembeli" data-en-aria="Buyer country" autocomplete="off" placeholder="mis. KR / KOREA" data-en-ph="e.g. KR / KOREA" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="penerima">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Consignee">Penerima / Consignee</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="penerima" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-consigneeAddress" class="form-control" rows="4" data-dn="consigneeAddress" aria-label="Alamat Penerima" data-en-aria="Consignee address"
-                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
-                    data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"></textarea>
-                  <label class="form-label" for="dn-invoice-penerimaNegara" data-en="Country">Negara</label>
-                  <input id="dn-invoice-penerimaNegara" type="text" class="form-control" data-dn="penerimaNegara" aria-label="Negara Penerima" data-en-aria="Consignee country" autocomplete="off" placeholder="mis. VN / VIETNAM" data-en-ph="e.g. VN / VIETNAM" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-consigneeAddress" class="form-control" rows="4" data-dn="consigneeAddress" aria-label="Alamat Penerima" data-en-aria="Consignee address"
+                      placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
+                      data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penerimaNegara" data-en="Country">Negara</label>
+                    <input id="dn-invoice-penerimaNegara" type="text" class="form-control" data-dn="penerimaNegara" aria-label="Negara Penerima" data-en-aria="Consignee country" autocomplete="off" placeholder="mis. VN / VIETNAM" data-en-ph="e.g. VN / VIETNAM" />
+                  </div>
                 </div>
                 <div class="s12">
                   <label class="form-label" data-i18n="f.keterangan"
@@ -4299,7 +4323,7 @@
         </button>
       </div>
       <div class="notif-isi" id="notifIsi"></div>
-      <div class="notif-kaki" data-en="Appears one day before ETD, ETA &amp; Estimated Delivery, until the day itself.">Muncul H-1 sebelum ETD, ETA &amp; Estimated Delivery, sampai hari H.</div>
+      <div class="notif-kaki" data-en="Appears one day before ETD, ETA &amp; Estimated Delivery, until the day itself. SKB PPh &amp; Masterlist: from one month before they expire.">Muncul H-1 sebelum ETD, ETA &amp; Estimated Delivery, sampai hari H. SKB PPh &amp; Masterlist: sejak sebulan sebelum masa berlakunya habis.</div>
     </section>
 
     <div class="sheet-scrim" id="detailScrim" hidden></div>

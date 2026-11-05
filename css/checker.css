@@ -621,6 +621,10 @@
   width: 27%;
   overflow-wrap: anywhere;
 }
+/* Nilai tanggal tetap satu baris (cekUtuhBilaTanggal) */
+.cek-kol-nilai .cek-utuh {
+  white-space: nowrap;
+}
 .cek-kol-hasil {
   width: 12%;
   text-align: right;

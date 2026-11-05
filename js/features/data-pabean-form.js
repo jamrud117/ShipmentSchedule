@@ -225,8 +225,9 @@ const dpbTabEntitas = () => DP_PIHAK.filter((p) => dpBerlaku(p, activeMode)).map
 
 function dpbTabDokumen(c) {
   const daftar = dpDokumenJadwal(c.jadwal);
+  // Nomor & tanggal tidak dibungkus ("29-10-" / "2026"): tabelnya yang digeser (.dpb-tabel-gulir)
   const baris = daftar.map((d, i) => `<tr><td class="dpb-no">${i + 1}</td><td>${dpbEsc(d.kode || "—")}</td><td>${dpbEsc(d.nama)}</td>
-    <td>${dpbEsc(d.nomor)}</td><td>${d.tanggal ? dpbEsc(fmtDate(d.tanggal)) : "—"}</td><td class="dpb-asal">${dpbEsc(dpbNamaTab(d.asal))}</td></tr>`).join("");
+    <td class="dpb-utuh">${dpbEsc(d.nomor)}</td><td class="dpb-utuh">${d.tanggal ? dpbEsc(fmtDate(d.tanggal)) : "—"}</td><td class="dpb-asal">${dpbEsc(dpbNamaTab(d.asal))}</td></tr>`).join("");
   const tabel = daftar.length
     ? `<div class="dpb-tabel-gulir"><table class="dpb-tabel"><thead><tr><th scope="col">${tt("No.", "No.")}</th><th scope="col">${tt("Kode", "Code")}</th>
         <th scope="col">${tt("Jenis Dokumen", "Document Type")}</th><th scope="col">${tt("Nomor", "Number")}</th><th scope="col">${tt("Tanggal", "Date")}</th>

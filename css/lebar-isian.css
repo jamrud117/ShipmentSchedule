@@ -68,7 +68,9 @@
   .date-field input[type="date"] {
     max-width: var(--lebar-tanggal-kartu);
   }
+  /* Selebar kolom baris tanggal di atasnya (.date-strip, css/card.css):
+     Updated ETD tepat di bawah ETD, Updated ETA di bawah ETA. */
   .delay-strip-fields .date-field {
-    flex: 0 1 var(--lebar-tanggal-kartu);
+    flex: 0 1 224px;
   }
 }

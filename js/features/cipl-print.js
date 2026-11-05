@@ -391,8 +391,9 @@ const ddH = (s, o) => ttH("arial", s, Object.assign({ c: DD_WARNA.teks }, o || {
 
 /* NOMOR + TANGGAL satu baris: nomor di kiri, tanggalnya menempel ke
    kanan kotak ("DD-260928-DDI-01_R1 ........ 28 SEP 2026"), tanpa tanda
-   kurung. Tiap PO punya tanggalnya sendiri (po-list.js), satu PO per baris. */
-const ciplNoTanggal = (no, tanggal) => ({ no, tgl: ciplTanggal(tanggal || "").toUpperCase() });
+   kurung. Tiap PO punya tanggalnya sendiri (po-list.js), satu PO per baris.
+   satuBaris: nomor dokumen tidak dibungkus (ddIsiReferensi). */
+const ciplNoTanggal = (no, tanggal) => ({ no, tgl: ciplTanggal(tanggal || "").toUpperCase(), satuBaris: true });
 function ciplPoPasangan(p) {
   const no = [p.poNo].concat(p.poNoExtra || []);
   const tanggal = [p.poDate].concat(p.poDateExtra || []);
@@ -531,7 +532,13 @@ function ddIsiPihak(teks, lebar, alamatSatuBaris) {
 }
 
 /* Isi kotak Document reference: dua sel berdampingan dengan baris yang
-   sejajar -- nomor (kiri) & tanggalnya (rata kanan). */
+   sejajar -- nomor (kiri) & tanggalnya (rata kanan).
+
+   NOMOR DOKUMEN SATU BARIS (x.satuBaris: Invoice, PO): nomor yang
+   terbelah dua baris terbaca seperti dua nomor -- nomor Kumho "DDI - CRBM
+   - X - 067 - 20261029" dulu turun ke baris kedua. Hurufnya dikecilkan
+   seperlunya (paling kecil CIPL_UKURAN_MIN_PT); baru kalau itu pun tidak
+   muat, dibungkus. Nama (Notify party) tetap boleh membungkus. */
 function ddIsiReferensi(kelompok, lebarNo, lebarLabel) {
   const no = [ttSpasi(ttPx(6))];
   const tgl = [ttSpasi(ttPx(6))];
@@ -544,8 +551,10 @@ function ddIsiReferensi(kelompok, lebarNo, lebarLabel) {
       tgl.push(ttSpasi(6.8 * 1.42));
     });
     isi.forEach((x) => {
-      ttBungkus(x.no, hV, lebarNo).forEach((tx, i) => {
-        no.push(ttBaris(tx, hV, 8.8 * 1.3));
+      const s = x.satuBaris ? ttUkuranPas([x.no], hV, lebarNo, CIPL_UKURAN_MIN_PT) : null;
+      const h = s ? ddH(s, { b: true }) : hV;
+      (s ? [x.no] : ttBungkus(x.no, hV, lebarNo)).forEach((tx, i) => {
+        no.push(ttBaris(tx, h, 8.8 * 1.3));
         tgl.push(i === 0 && x.tgl ? ttBaris(x.tgl, hV, 8.8 * 1.3) : ttSpasi(8.8 * 1.3));
       });
     });

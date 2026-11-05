@@ -494,6 +494,25 @@ button.site-nav-link {
   background: var(--p-100);
   color: var(--tp-600);
 }
+/* MASA BERLAKU (SKB PPh & Masterlist): kuning peringatan; yang sudah
+   berakhir statusnya merah. Warna selalu disertai kalimat statusnya. */
+.notif-ikon--masa {
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-95610c);
+}
+.notif-masa-status {
+  font-weight: 700;
+  color: var(--w-teks-95610c);
+}
+.notif-item.is-lewat .notif-masa-status {
+  color: var(--ts-danger);
+}
+.notif-masa-aksi {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--tp-600);
+}
 .notif-teks {
   flex: 1;
   min-width: 0;

@@ -1927,6 +1927,7 @@ button.dn-bayar--lunas:hover {
   font-weight: 500;
   opacity: 0.85;
   margin-left: 2px;
+  white-space: nowrap; /* "Lunas 03-11-" / "2026": tanggalnya utuh */
 }
 
 /* ------------------------------------------------------------------
@@ -2751,6 +2752,11 @@ button.dn-bayar--lunas:hover {
     white-space: normal;
     overflow-wrap: anywhere;
   }
+  /* Tanggal tetap utuh ("02-11-" / "2026"): setengah kartu selalu cukup */
+  .docnum-history-wrap .docnum-table td:is(.dn-col-tgl, .dn-col-tglinv, .dn-col-jatuh) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
   .docnum-history-wrap .docnum-table td[data-label]::before {
     content: attr(data-label);
     display: block;
@@ -3004,15 +3010,32 @@ button.dn-bayar--lunas:hover {
 
 /* ------------------------------------------------------------------
    PIHAK INVOICE (js/features/invoice-pihak.js)
-   Empat kolom sejajar -- Penjual, Pemilik Barang, Pembeli, Penerima --
-   masing-masing Nama, Alamat, NPWP/Negara bertumpuk, jadi Tab berjalan
-   per pihak. Chip "= Penjual" / "= Penerima" tampil selama pihak itu
-   masih sama dengan sumbernya (Tipe Customer).
+   Empat kolom -- Penjual, Pemilik Barang, Pembeli, Penerima -- masing-
+   masing Kepala, Nama, Alamat, NPWP/Negara (.inv-isian = label + isian).
+   Urutan DOM per pihak, jadi Tab berjalan per pihak. Chip "= Penjual" /
+   "= Penerima" tampil selama pihak itu masih sama dengan sumbernya.
+
+   SEJAJAR PER BARIS: keempat kolom berbagi baris kisi induknya (.fgrid)
+   lewat subgrid -- tiap kolom membentang 4 baris yang sama. Tinggi baris
+   Alamat = alamat terpanjang; alamat lain ikut setinggi itu, jadi baris
+   NPWP/Negara selalu satu garis, berapa pun panjang alamat tiap pihak
+   (dulu Negara "bertingkat" mengikuti tinggi alamatnya masing-masing).
+   Di tablet (2 kolom) & ponsel (1 kolom) aturan yang sama berlaku per
+   baris kolom. Peramban tanpa subgrid: kolom bertumpuk seperti biasa.
 ------------------------------------------------------------------ */
 .inv-pihak {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   min-width: 0;
+}
+@supports (grid-template-rows: subgrid) {
+  .inv-pihak {
+    display: grid;
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    row-gap: 8px;
+  }
 }
 .inv-pihak-kepala {
   display: flex;
@@ -3020,7 +3043,6 @@ button.dn-bayar--lunas:hover {
   justify-content: space-between;
   gap: var(--sp-2);
   min-height: 24px;
-  margin-bottom: 4px;
   font-size: var(--t-sm);
   font-weight: 700;
   color: var(--n-700);
@@ -3034,12 +3056,21 @@ button.dn-bayar--lunas:hover {
   font-weight: 600;
   white-space: nowrap;
 }
-.inv-pihak .form-control + .form-label {
-  margin-top: 8px;
+/* Label + isiannya. Alamat mengisi sisa tinggi barisnya: alamat yang
+   lebih pendek ikut setinggi alamat terpanjang di baris itu. */
+.inv-isian {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.inv-isian > textarea {
+  flex: 1 1 auto;
 }
 /* Alamat setinggi isinya (ATTN / TEL / TAX ID ikut terlihat) tanpa skrip:
-   field-sizing di Chromium; peramban lain tetap 4 baris + gulir. */
-.inv-pihak textarea {
+   field-sizing di Chromium; peramban lain tetap 4 baris + gulir. Paling
+   sedikit 4 baris -- ditulis textarea.form-control supaya mengalahkan
+   lantai 40px semua isian (.docnum-panel .form-control, css/form.css). */
+.inv-pihak textarea.form-control {
   resize: vertical;
   field-sizing: content;
   min-height: 7.2em;
