@@ -64,7 +64,6 @@ const I18N = {
       "CIF = Total Nilai Barang + Freight + Insurance. Nilai Pabean = CIF × NDPBM — dasar BM, PPN, dan PPH di bawah.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
-    "f.alamat.consignee.buyer": "Alamat Consignee / Buyer",
     "f.approved.by.1.jabatan": "Approved By — Jabatan",
     "f.approved.by.1.nama": "Approved By — Nama",
     "f.bruto.kg": "Bruto (Kg)",
@@ -206,7 +205,6 @@ const I18N = {
     "ph.nama.lengkap.pengguna": "Nama lengkap pengguna",
     "ph.nama.penerima": "Nama penerima",
     "ph.nama.perusahaan": "Pilih atau ketik nama perusahaan",
-    "ph.nama.perusahaan.penerima": "Nama perusahaan penerima",
     "ph.nama.pic": "Nama PIC",
     "ph.nomor.aju": "Nomor aju",
     "ph.nomor.house.b.l.atau.awb": "Nomor House B/L atau AWB",
@@ -539,6 +537,8 @@ const I18N = {
     "z.rata.rata.pencilan.dibuang": "rata-rata (pencilan dibuang)",
     "z.ringkasan.belajar": "Rata-rata {avg} hari · min {min} · maks {maks} · simpangan baku {sd} · {buang} pencilan dibuang · metode {metode}",
     "y.ada.catatan.perlu.dicek": " Ada catatan yang perlu dicek di atas form.",
+    "y.cipl.invoice.packing.beda": "Invoice & Packing List di {dok} tidak sama: {beda}. Seharusnya nomor dan tanggal Invoice dan Packing List sama — periksa dokumennya sebelum disimpan.",
+    "y.cipl.invoice.packing.beda.form": "Sesudah impor, Invoice & Packing List di form tidak sama: {beda}. Seharusnya nomor dan tanggal Invoice dan Packing List sama — periksa dokumennya sebelum disimpan.",
     "y.bukan.format.dikenali": "\"{nama}\" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil pindaian/gambar).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" tidak terbaca sebagai dokumen BC (sheet HEADER/BARANG) maupun CIPL mana pun yang dikenali.",
     "y.fasilitas.diterapkan.semua.barang": "Fasilitas SKB/COO dari PDF diterapkan ke SEMUA barang secara bawaan (lembar Pemenuhan Persyaratan tidak memisahkan per barang) — periksa tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya mendapatkannya (COO biasanya hanya berlaku untuk barang tertentu, bukan semuanya).",
@@ -629,7 +629,6 @@ const I18N = {
       "CIF = Total Goods Value + Freight + Insurance. Customs Value = CIF × NDPBM — the basis for BM, PPN, and PPH below.",
 
     // -- Label isian, kolom tabel & pilihan dropdown
-    "f.alamat.consignee.buyer": "Consignee / Buyer Address",
     "f.approved.by.1.jabatan": "Approved By — Position",
     "f.approved.by.1.nama": "Approved By — Name",
     "f.bruto.kg": "Gross (Kg)",
@@ -771,7 +770,6 @@ const I18N = {
     "ph.nama.lengkap.pengguna": "User's full name",
     "ph.nama.penerima": "Recipient name",
     "ph.nama.perusahaan": "Select or type a company name",
-    "ph.nama.perusahaan.penerima": "Receiving company name",
     "ph.nama.pic": "PIC name",
     "ph.nomor.aju": "AJU number",
     "ph.nomor.house.b.l.atau.awb": "House B/L or AWB number",
@@ -1105,6 +1103,8 @@ const I18N = {
     "z.rata.rata.pencilan.dibuang": "average (outliers removed)",
     "z.ringkasan.belajar": "Average {avg} days · min {min} · max {maks} · std dev {sd} · {buang} outlier(s) removed · method {metode}",
     "y.ada.catatan.perlu.dicek": " There are notes to review above the form.",
+    "y.cipl.invoice.packing.beda": "The Invoice & Packing List in the {dok} do not match: {beda}. The Invoice and Packing List number and date should be the same — check the documents before saving.",
+    "y.cipl.invoice.packing.beda.form": "After the import, the Invoice & Packing List on the form do not match: {beda}. The Invoice and Packing List number and date should be the same — check the documents before saving.",
     "y.bukan.format.dikenali": "\"{nama}\" does not appear to be a recognised PIB BC 2.0, PEB BC 3.0, Packing List, or Commercial Invoice, or its text could not be read (e.g. a scan/image).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" could not be read as a BC document (HEADER/BARANG sheets) or as any recognised CIPL.",
     "y.fasilitas.diterapkan.semua.barang": "The SKB/COO facilities from the PDF are applied to ALL items by default (the requirements sheet does not separate them per item) — check each item via the Facilities button and remove any that should not have it (COO usually applies only to certain items, not all of them).",
@@ -1330,6 +1330,8 @@ function setLang(kode) {
       suratPerbaruiLabelAngkut(docNumPanelEl("letter"));
     // Kotak "Aturan Doc No": jumlah vendor & keterangan tombolnya dirakit JS
     if (typeof fundDocNoGambar === "function") fundDocNoGambar();
+    // Kotak "Aturan No. Invoice": idem
+    if (typeof fundInvoiceGambar === "function") fundInvoiceGambar();
   }
   /* Tabel isian No. Dokumen yang dirakit JS (placeholder, label kartu di
      layar sempit, judul kelompok & kaki totalnya) -- juga saat halamannya

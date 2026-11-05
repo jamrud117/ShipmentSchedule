@@ -308,6 +308,53 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   padding-bottom: var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
+/* Kotak ketik "Dari" / "Sampai" di atas kalender: tanggal rentang bisa
+   diketik langsung (format apa pun), tidak harus diklik satu per satu.
+   Kotaknya bertipe teks ber-data-kotak-tanggal (js/ui/date-input.js);
+   tanpa ikon kalender karena kalendernya terbuka tepat di bawahnya. */
+.drp-typed {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.drp-typed-field {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.drp-typed-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-md);
+  background-color: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+.drp-typed-input:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: var(--sh-focus);
+}
+.drp-typed-input::placeholder {
+  color: var(--text-placeholder);
+  font-weight: 400;
+}
+.drp-typed-sep {
+  flex: 0 0 auto;
+  padding-bottom: 6px;
+  color: var(--n-400);
+}
 .drp-header {
   display: flex;
   align-items: center;
@@ -898,6 +945,7 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   .basis-select-wrap select,
   .date-range-trigger,
   .drp-nav,
+  .drp-typed-input,
   .btn-primary-navy {
     min-height: 44px;
   }

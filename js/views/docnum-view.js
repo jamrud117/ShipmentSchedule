@@ -623,6 +623,22 @@ function validateDocNumForm(typeKey) {
     }
   }
 
+  /* Nomor invoice bawaan vendor (WIDE: IN-WL2609-00000) yang belum diganti
+     bukan nomor invoice sungguhan: "00000" tidak boleh ikut tersimpan dan
+     tercetak. Kotak yang dikosongkan tetap boleh -- nomor invoice memang
+     tidak wajib. */
+  if (typeKey === "fund") {
+    const kotakInvoice = panel.querySelector('[data-dn="invoiceNo"]');
+    if (kotakInvoice && !kotakInvoice.disabled && fundNoInvoiceMasihBawaan(kotakInvoice)) {
+      const bawaan = kotakInvoice.value.trim();
+      errors.push(tt(
+        `No. Invoice masih berisi nomor bawaan ${bawaan} — ganti 00000 dengan nomor urut di invoice vendor.`,
+        `Invoice No still holds the default number ${bawaan} — replace 00000 with the sequence number on the vendor's invoice.`,
+      ));
+      kotakInvoice.classList.add("is-invalid");
+    }
+  }
+
   panel.querySelectorAll("[data-dn]").forEach((el) => {
     // Isian tersembunyi tidak boleh dituntut wajib diisi.
     if (el.disabled) return;
@@ -1101,8 +1117,7 @@ function dnSetelIsian(el, nilai) {
        pengajuan baru. Disisipkan sebelum "+ Tambah vendor baru…"
        (dropdown vendor), supaya pilihan itu tetap paling bawah. */
     opsi.dataset.dnLawas = "1";
-    const akhir = typeof FUND_VENDOR_BARU !== "undefined" ? [...el.options].find((o) => o.value === FUND_VENDOR_BARU) : null;
-    el.insertBefore(opsi, akhir || null);
+    el.insertBefore(opsi, el.querySelector("option[data-pilihan-tambah]"));
   }
   el.value = nilai;
 }
@@ -1163,6 +1178,7 @@ function dnPulihkanDraf(panel, tab, draf) {
   dnIsianOtomatis = draf.isianOtomatis || {};
   syncDocNumConditional(panel);
   if (tab === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
+  if (tab === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan();
 }
 
 /* Pesan isian yang belum benar: di kaki pop-up saat mengubah, di baris
@@ -1269,6 +1285,10 @@ function mulaiUbahDocNum(id) {
      lebih awal, ia membaca dropdown yang masih kosong dan menyembunyikan
      isian yang justru berisi data. */
   syncDocNumConditional(panel);
+  /* Pihak invoice: pasangan yang sama jadi ikutan; pengajuan LAMA tanpa
+     isian pihak dilengkapi dari profil customernya (invoice-pihak.js). */
+  if (tabKey === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan({ lengkapi: true });
+  if (tabKey === "invoice") document.querySelectorAll(DN_ISIAN_PELABUHAN).forEach(dnPelabuhanJadiAlias);
 
   /* SUB-JENIS = DERET NOMOR, jadi dikunci selama diubah. Nomornya tidak
      ikut berubah (lihat simpanUbahDocNum), sehingga mengganti Commercial
@@ -1363,26 +1383,21 @@ const DN_NOMOR_TAGIHAN = [
   { field: "billingNo", get label() { return tt("Nomor billing", "Billing number"); } },
 ];
 
-/* PENGECUALIAN: JNE. Untuk JNE isian "No. Invoice" berisi NOMOR REKENING
-   tujuan bayar, bukan nomor tagihan. Rekening yang sama dipakai di setiap
-   pengajuan, jadi nomor yang berulang itu wajar -- bukan tagihan yang
-   dibayar dua kali.
+/* PENGECUALIAN: VENDOR DI DAFTAR "ATURAN NO. INVOICE". Untuk sebagian vendor
+   isian "No. Invoice" bukan nomor tagihan -- JNE, misalnya, diisi NOMOR
+   REKENING tujuan bayar, yang sama di tiap pengajuan. Nomor yang berulang
+   itu wajar, bukan tagihan yang dibayar dua kali.
 
-   Yang dikecualikan HANYA pengecekan No. Invoice, dan HANYA bila
-   pengajuan yang sedang diisi / disimpan itu sendiri milik JNE. Nomor
+   Daftar vendornya diatur pengguna (kotak "Aturan No. Invoice" di halaman
+   Nomor Dokumen, js/features/fund-invoice-sama.js; bawaannya JNE) dan dibaca
+   juga oleh pemicu database (dn_tagihan_boleh_sama,
+   migration-invoice-boleh-sama.sql).
+
+   Yang dikecualikan HANYA pengecekan No. Invoice, dan HANYA bila pengajuan
+   yang sedang diisi / disimpan itu sendiri milik vendor di daftar. Nomor
    Billing tetap diperiksa, dan pengajuan vendor lain tetap diperiksa
-   (juga terhadap nomor yang dipakai pengajuan JNE).
-
-   Vendor dikenali dari NAMA-nya (nama vendor diketik bebas, lihat
-   fund-vendor.js): kata "JNE" utuh -- "JNE", "PT JNE", "JNE EXPRESS" --
-   atau nama lengkapnya "Jalur Nugraha Ekakurir". Kata utuh, supaya nama
-   lain yang kebetulan memuat ketiga huruf itu tidak ikut terbawa.
-
-   Aturan yang sama ada di database (dn_tagihan_boleh_sama,
-   migration-tagihan-jne.sql). Mengubah yang satu berarti mengubah
-   keduanya. */
-const DN_TAGIHAN_BOLEH_SAMA = /\bJNE\b|JALUR\s+NUGRAHA\s+EKAKURIR/i;
-const dnTagihanBolehSama = (payee) => DN_TAGIHAN_BOLEH_SAMA.test(String(payee || ""));
+   (juga terhadap nomor yang dipakai pengajuan vendor di daftar). */
+const dnTagihanBolehSama = (payee) => typeof fundInvoiceBolehSama === "function" && fundInvoiceBolehSama(payee);
 const dnTagihanDikecualikan = (form, field) => field === "invoiceNo" && dnTagihanBolehSama(form && form.payee);
 // Isian tagihan yang diperiksa untuk form ini: yang terisi dan tidak dikecualikan
 const dnJenisTagihan = (form) => DN_NOMOR_TAGIHAN.find((j) => form[j.field] && !dnTagihanDikecualikan(form, j.field));
@@ -1406,6 +1421,8 @@ function dnKunciNomorTagihan(no) {
    mengembalikan lebih banyak, tidak pernah melewatkan yang sama persis.
    Kecocokan pastinya diputuskan di sini. */
 async function dnCariTagihanGanda(form, kecualiId) {
+  // Daftar vendor yang dikecualikan (diatur pengguna) harus yang terbaru
+  if (typeof fundInvoiceSiap === "function") await fundInvoiceSiap();
   const jenis = dnJenisTagihan(form);
   if (!jenis) return null;
   const nomor = dnPecahNomorTagihan(form[jenis.field]);
@@ -1535,18 +1552,19 @@ const dnTolakanTagihanGanda = (err) => /TAGIHAN_GANDA/.test(String((err && err.m
 const dnTolakanNomorKembar = (err) => !!err && err.code === "23505" && !dnTolakanTagihanGanda(err);
 const DN_COBA_NOMOR = 5;
 
-/* Pemicu database yang BELUM diperbarui (migration-tagihan-jne.sql belum
-   dijalankan) masih menolak No. Invoice kembar milik JNE. Di form ia tidak
-   dianggap ganda, jadi tolakannya tidak punya pop-up tagihan ganda --
+/* Pemicu database yang BELUM diperbarui (migration-invoice-boleh-sama.sql
+   belum dijalankan) tidak membaca daftar "Aturan No. Invoice" -- ia masih
+   menolak No. Invoice kembar milik vendor di daftar. Di form vendor itu
+   tidak dianggap ganda, jadi tolakannya tidak punya pop-up tagihan ganda;
    tanpa ini yang muncul kode TAGIHAN_GANDA mentah. Galat lain, dan galat
    pengajuan vendor lain, dikembalikan apa adanya. */
-function dnGalatTagihanJne(err, form) {
+function dnGalatInvoiceSama(err, form) {
   const kembar = /TAGIHAN_GANDA:invoiceNo:/.test(String((err && err.message) || ""));
   if (!kembar || !dnTagihanDikecualikan(form, "invoiceNo")) return err;
   return new Error(
     tt(
-      "database masih menolak No. Invoice yang sama untuk JNE — jalankan migration-tagihan-jne.sql di Supabase (SQL Editor), lalu coba lagi.",
-      "the database still rejects a repeated Invoice No. for JNE — run migration-tagihan-jne.sql in Supabase (SQL Editor), then try again.",
+      "database belum memakai aturan No. Invoice yang terbaru — jalankan migration-invoice-boleh-sama.sql di Supabase (SQL Editor), lalu coba lagi.",
+      "the database does not use the latest Invoice No rule yet — run migration-invoice-boleh-sama.sql in Supabase (SQL Editor), then try again.",
     ),
   );
 }
@@ -1644,7 +1662,7 @@ async function simpanUbahDocNum() {
         return;
       }
     }
-    if (error) throw dnGalatTagihanJne(error, form);
+    if (error) throw dnGalatInvoiceSama(error, form);
     tersimpan = true;
   } catch (err) {
     console.error(err);
@@ -1661,6 +1679,8 @@ async function simpanUbahDocNum() {
   }
   if (!tersimpan) return; // pop-up tetap terbuka: isiannya bisa dibetulkan lalu disimpan lagi
 
+  // Data pengisian customer invoice diperbarui -- tidak ditunggu (invoice-pihak.js)
+  if (typeKey === "invoice" && typeof invCustomerIngat === "function") invCustomerIngat(payload);
   // Sesudah docNumBusy dilepas -- selama menyimpan, pop-up menolak ditutup
   batalUbahDocNum();
   await renderDocNumHistory();
@@ -1774,7 +1794,7 @@ async function submitDocNumRequest() {
       if (typeKey === "fund" && dnTolakanTagihanGanda(errInsert)) {
         // Tagihan yang sama baru saja diajukan orang lain
         const ganda = await dnCariTagihanGanda(form);
-        if (!ganda) throw dnGalatTagihanJne(errInsert, form);
+        if (!ganda) throw dnGalatInvoiceSama(errInsert, form);
         dnTolakTagihanGanda(ganda);
         return;
       }
@@ -1786,6 +1806,8 @@ async function submitDocNumRequest() {
     }
 
     tampilkanHasilDocNum(baris.out_number);
+    // Data pengisian customer invoice diperbarui -- tidak ditunggu (invoice-pihak.js)
+    if (typeKey === "invoice" && typeof invCustomerIngat === "function") invCustomerIngat(payload);
     if (perkiraan && perkiraan !== baris.out_number) {
       dnTulisHint(tt(`Nomor ${perkiraan} sudah lebih dulu dipakai pengajuan lain — pengajuan ini mendapat ${baris.out_number}.`,
         `Number ${perkiraan} was taken by another request first — this request got ${baris.out_number}.`));
@@ -1965,6 +1987,19 @@ if (elCustomerInv) {
   elCustomerInv.addEventListener("change", isiAlamatConsignee);
 }
 
+/* Port of Loading & Final Destination memakai ALIAS dokumen ("BUSAN,
+   KOREA"), bukan kode pelabuhan: kode yang diketik -- atau yang tersimpan
+   di pengajuan lama, saat dibuka untuk diubah -- diganti aliasnya. */
+const DN_ISIAN_PELABUHAN = '[data-docnum-panel="invoice"] :is([data-dn="portLoading"], [data-dn="finalDestination"])';
+function dnPelabuhanJadiAlias(el) {
+  const alias = portKodeKeAlias(el.value);
+  if (alias !== el.value.trim()) el.value = alias;
+}
+document.addEventListener("change", (e) => {
+  const el = e.target.closest && e.target.closest(DN_ISIAN_PELABUHAN);
+  if (el) dnPelabuhanJadiAlias(el);
+});
+
 function isiOtomatisDariJadwal() {
   const sel = $("#dnInvoiceShipmentPick");
   if (!sel) return;
@@ -1984,8 +2019,11 @@ function isiOtomatisDariJadwal() {
     dnIsianOtomatis[nama] = el.value;
   };
 
-  set("customer", s.party);
+  // Customer = dropdown: nama buyer jadwal dijadikan pilihan dulu (invoice-pihak.js)
+  set("customer", typeof invCustomerPastikan === "function" ? invCustomerPastikan(s.party) : s.party);
   isiAlamatConsignee();
+  // Pihak (Penjual, Pemilik, Pembeli, Penerima) dari Data PEB jadwalnya, bila ada
+  if (typeof invIsiDariJadwal === "function") invIsiDariJadwal(s, set);
 
   /* Nilai invoice diambil dari total nilai barang di jadwalnya.
 
@@ -2006,8 +2044,8 @@ function isiOtomatisDariJadwal() {
       dnIsianOtomatis.amount = elNilai.value;
     }
   }
-  set("portLoading", portCodeLabel(s.origin));
-  set("finalDestination", portCodeLabel(s.destination));
+  set("portLoading", portKotaNegara(s.origin));
+  set("finalDestination", portKotaNegara(s.destination)); // "BUSAN, KOREA", bukan KRPUS
   set("carrier", carrierVesselFlight(s)); // udara: No Flight saja
   set("termsDelivery", s.incoterm);
   /* Sailing on or About SENGAJA tidak diisi dari ETD. Tanggal berlayar
@@ -2070,6 +2108,11 @@ function syncDocNumConditional(panel) {
      (fund-rincian.js). */
   fundSelaraskanDocNo(panel);
   if (typeof fundSelaraskanRincian === "function") fundSelaraskanRincian(panel);
+  /* Keterangan nomor invoice bawaan vendor ikut isi kotaknya (form baru
+     dikosongkan, draf dipulihkan). Hanya keterangannya: kotaknya sendiri
+     tidak diisi dari sini -- pengajuan tersimpan yang dibuka untuk diubah
+     tidak boleh mendadak mendapat nomor bawaan (fund-vendor-aturan.js). */
+  fundNoInvoiceKeterangan(panel);
   // Isian nomor tagihan yang tampil bisa berganti (Billing / invoice), dan form bisa baru dikosongkan / dibuka
   if (panel.matches && panel.matches('[data-docnum-panel="fund"]')) dnPeriksaTagihanGandaLangsung(panel);
 }
@@ -2106,6 +2149,9 @@ function resetDocNumForm(typeKey, opts) {
       el.value = el.defaultValue || "";
     }
     el.classList.remove("is-invalid");
+    // Nomor invoice bawaan vendor & isian dari BL/AWB milik form yang LAMA -- bukan form kosong ini
+    if (el.dataset.dn === "invoiceNo") delete el.dataset.autoFill;
+    delete el.dataset.autoAwb;
   });
   /* Kotak ketik pemilih jadwal tidak ber-data-dn (yang ber-data-dn
      kotak tersembunyinya), jadi ia tidak ikut terhapus di atas. */
@@ -2128,6 +2174,8 @@ function resetDocNumForm(typeKey, opts) {
     suratPerbaruiLabelAngkut(panel);
   }
   syncDocNumConditional(panel);
+  // Pihak invoice: tanda "= Penjual" & keterangan Skema Invoice mengikuti isian bawaan
+  if (typeKey === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan();
 }
 
 /* Pilihan jenis pengeluaran menentukan isian mana yang tampil. */
@@ -2403,7 +2451,7 @@ async function renderDocNumHistory() {
                   jenis.key === "invoice"
                     ? [
                         ["terms", "Terms of Delivery", p.termsDelivery],
-                        ["tujuan", "Final Destination", p.finalDestination],
+                        ["tujuan", "Final Destination", portKodeKeAlias(p.finalDestination)],
                         ["bayar", "Terms of Payment", p.termPayment],
                         ["carrier", "Carrier", dnCarrierInvoice(p)],
                       ]
@@ -2445,7 +2493,9 @@ async function renderDocNumHistory() {
                        sendiri, jadi setiap nomor "fund" bisa dicetak. */
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
-                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>`
+                                 title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>
+                         <button type="button" class="icon-btn" data-copy-invsum="${r.id}"
+                                 title="${tt("Salin untuk Invoice Summary (tempel di kolom INVOICE DATE)", "Copy for Invoice Summary (paste into the INVOICE DATE column)")}" aria-label="${tt("Salin untuk Invoice Summary", "Copy for Invoice Summary")}"><i class="bi bi-clipboard-data"></i></button>`
                       : ""
                   }
                   ${
@@ -2663,8 +2713,9 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
-  // Kotak "Aturan Doc No" hanya milik Pengajuan Dana
+  // Kotak "Aturan Doc No" & "Aturan No. Invoice" hanya milik Pengajuan Dana
   fundDocNoTampilkanKotak(active);
+  if (typeof fundInvoiceTampilkanKotak === "function") fundInvoiceTampilkanKotak(active);
 
   // Tanggal dokumen default = hari ini, biar tidak perlu diketik tiap kali.
   const panel = docNumPanelEl(active);

@@ -13,6 +13,9 @@ vm.createContext(ctx);
  /* i18n PALING AWAL, sama seperti urutan <script> di index.html:
     berkas lain memanggil t() dan kamusnya harus sudah ada. */
  "js/core/helpers.js",
+ /* Pembaca tanggal ketikan: murni string, tapi memanggil todayISO() (helpers.js),
+    jadi dimuat sesudahnya -- dan ikut dibekukan oleh HARI_INI_UJI di bawah. */
+ "js/core/date-parse.js",
  /* Model status ikut dimuat: aturan "kolom mana yang menandai tiba"
     murni aritmetika tanggal, jadi tempatnya di sini. */
  "js/core/status.js",
@@ -1476,6 +1479,126 @@ t("status kebutuhan: telat / mepet / aman (Estimated Delivery) & tepat (In Facto
   eq(k({}).kind, "belum");
   eq(statusKebutuhan({ mode: "export", neededDate: "2026-08-20", actual: "2026-08-25" }), null);
   eq(statusKebutuhan({ mode: "import", actual: "2026-08-25" }), null);
+});
+
+/* ------------------------------------------------------------------
+   PEMBACA TANGGAL YANG DIKETIK (js/core/date-parse.js)
+
+   Semua tanggal di bawah dibaca pada hari-ini 04-11-2026 (opsi.hariIni),
+   bukan hari-ini sungguhan -- "5/11" dan "besok" bergantung padanya.
+------------------------------------------------------------------ */
+const { bacaTanggalKetik, tanggalIsoSah } = ctx;
+const bacaTgl = (teks) => bacaTanggalKetik(teks, { hariIni: "2026-11-04" });
+const tabelTgl = (tabel) => tabel.forEach(([masuk, harap]) => eq(bacaTgl(masuk), harap, `${JSON.stringify(masuk)}:`));
+
+t("tanggal ketikan: angka dengan pemisah apa pun dibaca hari-bulan-tahun", () => tabelTgl([
+  ["05/11/2026", "2026-11-05"], ["5-11-2026", "2026-11-05"], ["5.11.2026", "2026-11-05"], ["5 11 2026", "2026-11-05"],
+  ["05 / 11 / 2026", "2026-11-05"], ["5,11,2026", "2026-11-05"], ["  5/11/2026  ", "2026-11-05"],
+  ["05/11/26", "2026-11-05"], ["5-11-26", "2026-11-05"], ["1/1/2027", "2027-01-01"], ["31-12-2026", "2026-12-31"],
+]));
+t("tanggal ketikan: tahun di depan = ISO (tahun-bulan-hari), nol di depan boleh dihilangkan", () => tabelTgl([
+  ["2026-11-05", "2026-11-05"], ["2026/11/5", "2026-11-05"], ["2026.1.5", "2026-01-05"], ["2026 11 05", "2026-11-05"],
+]));
+t("tanggal ketikan: jam di belakang tanggal & nama hari diabaikan", () => tabelTgl([
+  ["2026-11-05T10:30:00Z", "2026-11-05"], ["2026-11-05 10:30", "2026-11-05"], ["05/11/2026 14:30", "2026-11-05"],
+  ["2026-11-05T10:30:00.123+07:00", "2026-11-05"], ["5 nov 2026 10:30 pm", "2026-11-05"],
+  ["Rabu, 4 November 2026", "2026-11-04"], ["Wed 4 Nov 2026", "2026-11-04"], ["Jum'at, 6 Nov 2026", "2026-11-06"],
+  ["tgl 5 november 2026", "2026-11-05"], ["tanggal 5 nov 2026", "2026-11-05"], ["4th Nov 2026", "2026-11-04"], ["1st Dec 2026", "2026-12-01"],
+]));
+t("tanggal ketikan: titik pada '5.11' adalah pemisah tanggal, BUKAN jam", () => tabelTgl([
+  ["5.11", "2026-11-05"], ["10.30", "2026-10-30"], ["5.11.2026", "2026-11-05"],
+]));
+t("tanggal ketikan: nama bulan Indonesia & Inggris, lengkap atau singkat, besar-kecil bebas", () => tabelTgl([
+  ["5 nov 2026", "2026-11-05"], ["5 November 2026", "2026-11-05"], ["5 NOV 2026", "2026-11-05"], ["5 Nopember 2026", "2026-11-05"],
+  ["November 5, 2026", "2026-11-05"], ["Nov 5 2026", "2026-11-05"], ["5-nov-2026", "2026-11-05"], ["05-Nov-26", "2026-11-05"], ["5 nov 26", "2026-11-05"],
+  ["2026 nov 5", "2026-11-05"],
+  ["5 jan 2026", "2026-01-05"], ["5 januari 2026", "2026-01-05"], ["5 feb 2026", "2026-02-05"], ["5 pebruari 2026", "2026-02-05"],
+  ["5 mar 2026", "2026-03-05"], ["5 maret 2026", "2026-03-05"], ["5 march 2026", "2026-03-05"], ["5 apr 2026", "2026-04-05"],
+  ["5 mei 2026", "2026-05-05"], ["5 may 2026", "2026-05-05"], ["5 jun 2026", "2026-06-05"], ["5 juni 2026", "2026-06-05"],
+  ["5 jul 2026", "2026-07-05"], ["5 juli 2026", "2026-07-05"], ["5 agu 2026", "2026-08-05"], ["5 agt 2026", "2026-08-05"], ["5 ags 2026", "2026-08-05"],
+  ["5 agst 2026", "2026-08-05"], ["5 agustus 2026", "2026-08-05"], ["5 aug 2026", "2026-08-05"], ["5 sep 2026", "2026-09-05"],
+  ["5 sept 2026", "2026-09-05"], ["5 okt 2026", "2026-10-05"], ["5 oktober 2026", "2026-10-05"], ["5 oct 2026", "2026-10-05"],
+  ["5 des 2026", "2026-12-05"], ["5 desember 2026", "2026-12-05"], ["5 dec 2026", "2026-12-05"],
+]));
+t("tanggal ketikan: bulan Romawi seperti di nomor surat", () => tabelTgl([
+  ["5/XI/2026", "2026-11-05"], ["05-xi-26", "2026-11-05"], ["1/I/2026", "2026-01-01"], ["15/IV/2026", "2026-04-15"],
+  ["9/IX/2026", "2026-09-09"], ["30/XII/2026", "2026-12-30"],
+]));
+t("tanggal ketikan: tanpa pemisah -- 8, 6 dan 4 angka; panjang lain tidak ditebak", () => tabelTgl([
+  ["05112026", "2026-11-05"], ["20261105", "2026-11-05"], ["051126", "2026-11-05"], ["0511", "2026-11-05"],
+  ["31122026", "2026-12-31"], ["20260229", ""], ["29022028", "2028-02-29"],
+  ["41126", ""], ["4112026", ""], ["5", ""], ["15", ""], ["2026", ""], ["123456789", ""], ["411", ""],
+]));
+t("tanggal ketikan: tahun tidak ditulis = tahun ini; tahun dua angka = yang terdekat dengan tahun ini", () => tabelTgl([
+  ["5/11", "2026-11-05"], ["5-11", "2026-11-05"], ["5 nov", "2026-11-05"], ["05 Nopember", "2026-11-05"],
+  ["5/11/26", "2026-11-05"], ["5/11/75", "2075-11-05"], ["5/11/76", "1976-11-05"], ["5/11/00", "2000-11-05"], ["5/11/99", "1999-11-05"],
+  ["29-02-24", "2024-02-29"], ["29-02-28", "2028-02-29"],
+]));
+t("tanggal ketikan: hari-bulan dulu; bulan-hari HANYA kalau hari-bulan mustahil", () => tabelTgl([
+  ["5/11/2026", "2026-11-05"], ["11/5/2026", "2026-05-11"], ["13/11/2026", "2026-11-13"], ["11/13/2026", "2026-11-13"],
+  ["12/12/2026", "2026-12-12"], ["1/12/2026", "2026-12-01"], ["12/1/2026", "2026-01-12"], ["13/13/2026", ""],
+  ["99-11-04", "1999-11-04"],
+]));
+t("tanggal ketikan: kata kunci hari ini / besok / kemarin / lusa dan padanan Inggrisnya", () => tabelTgl([
+  ["hari ini", "2026-11-04"], ["Hari Ini", "2026-11-04"], ["today", "2026-11-04"], ["sekarang", "2026-11-04"], ["now", "2026-11-04"],
+  ["besok", "2026-11-05"], ["esok", "2026-11-05"], ["tomorrow", "2026-11-05"], ["kemarin", "2026-11-03"], ["yesterday", "2026-11-03"], ["lusa", "2026-11-06"],
+  ["Rabu, hari ini", "2026-11-04"],
+]));
+t("tanggal ketikan: kata kunci menyeberangi akhir bulan & tahun", () => {
+  eq(bacaTanggalKetik("besok", { hariIni: "2026-12-31" }), "2027-01-01");
+  eq(bacaTanggalKetik("kemarin", { hariIni: "2027-03-01" }), "2027-02-28");
+  eq(bacaTanggalKetik("lusa", { hariIni: "2028-02-28" }), "2028-03-01");
+  eq(bacaTanggalKetik("5/11", { hariIni: "2031-02-02" }), "2031-11-05", "tahun ini mengikuti hari-ini:");
+});
+t("tanggal ketikan: tanggal yang tidak ada DITOLAK, bukan digeser ke bulan lain", () => tabelTgl([
+  ["31/04/2026", ""], ["30/02/2026", ""], ["29/02/2026", ""], ["31/06/2026", ""], ["31/09/2026", ""], ["31/11/2026", ""],
+  ["0/11/2026", ""], ["00/00/2026", ""], ["32/01/2026", ""], ["2026-02-30", ""], ["2026-13-01", ""], ["2026-00-10", ""],
+  ["31 apr 2026", ""], ["30 feb 2026", ""], ["29 feb 2026", ""], ["29 feb 2028", "2028-02-29"],
+  ["31/01/2026", "2026-01-31"], ["30/04/2026", "2026-04-30"], ["28/02/2026", "2026-02-28"],
+]));
+t("tanggal ketikan: tahun di luar 1900-2100 atau salah jumlah angka ditolak", () => tabelTgl([
+  ["1/1/1899", ""], ["1/1/1900", "1900-01-01"], ["1/1/2100", "2100-01-01"], ["1/1/2101", ""], ["5/11/0026", ""],
+  ["5/11/2", ""], ["5/11/202", ""], ["5/11/20266", ""], ["nov 2026", ""], ["11/2026", ""], ["2026-11", ""],
+]));
+t("tanggal ketikan: yang bukan tanggal -> kosong (bukan tebakan)", () => tabelTgl([
+  ["", ""], ["   ", ""], ["abc", ""], ["tidak tahu", ""], ["5 xyz 2026", ""], ["5 nov 2026 jam", ""], ["--", ""], ["//", ""], ["rabu", ""],
+  ["5 nov nov 2026", ""], ["1 2 3 4", ""], ["5/11/2026/7", ""], ["jan", ""], ["ma 5 2026", ""], ["ju 5 2026", ""],
+]));
+t("tanggal ketikan: bukan string / null / undefined tidak melempar galat", () => {
+  eq(bacaTanggalKetik(null), "");
+  eq(bacaTanggalKetik(undefined), "");
+  eq(bacaTanggalKetik(20261105), "2026-11-05", "angka murni dibaca sebagai teks:");
+  eq(bacaTanggalKetik({}), "");
+});
+t("tanggal ketikan: hasil perapian dibaca ULANG menjadi tanggal yang sama (setiap hari 1990-2100, empat bentuk)", () => {
+  const bulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const p2 = (n) => String(n).padStart(2, "0");
+  let n = 0;
+  for (let d = new Date(1990, 0, 1); d.getFullYear() <= 2100; d.setDate(d.getDate() + 1)) {
+    const th = d.getFullYear(), bl = d.getMonth() + 1, hr = d.getDate();
+    const iso = `${th}-${p2(bl)}-${p2(hr)}`;
+    const bentuk = [iso, `${p2(hr)}-${p2(bl)}-${th}`, `${hr} ${bulan[bl - 1]} ${th}`, `${p2(hr)}${p2(bl)}${th}`, `${th}${p2(bl)}${p2(hr)}`];
+    for (const b of bentuk) if (bacaTgl(b) !== iso) throw new Error(`${JSON.stringify(b)} -> ${JSON.stringify(bacaTgl(b))}, diharap ${iso}`);
+    n++;
+  }
+  eq(n > 40000, true, "cakupan hari:");
+});
+t("tanggal ketikan: tidak ada tanggal yang tidak ada lolos (semua hari 1-33 x bulan 1-13 pada 2026)", () => {
+  const p2 = (n) => String(n).padStart(2, "0");
+  for (let bl = 1; bl <= 13; bl++) for (let hr = 0; hr <= 33; hr++) {
+    const hasil = bacaTgl(`${hr}/${bl}/2026`);
+    if (!hasil) continue;
+    const [th, m, h] = hasil.split("-").map(Number);
+    const nyata = new Date(th, m - 1, h);
+    if (nyata.getFullYear() !== th || nyata.getMonth() !== m - 1 || nyata.getDate() !== h) throw new Error(`${hr}/${bl}/2026 -> ${hasil} bukan tanggal`);
+    // Tafsir bulan-hari hanya boleh muncul bila hari-bulan mustahil
+    if (!(hr === h && bl === m) && !(bl > 12 && hr <= 12 && hr === m && bl === h)) throw new Error(`${hr}/${bl}/2026 ditafsir ${hasil}`);
+  }
+});
+t("tanggalIsoSah: hanya yyyy-mm-dd baku yang tanggalnya ada (seperti <input type=date> bawaan)", () => {
+  ["2026-11-05", "2028-02-29", "1999-12-31", "2100-01-01", "1950-06-15"].forEach((v) => eq(tanggalIsoSah(v), true, v));
+  ["", null, undefined, "2026-2-5", "2026/11/05", "05-11-2026", "2026-11-05T00:00:00", "2026-02-29", "2026-13-01", "2026-00-01", "2026-11-00", "2026-11-31",
+    "0001-01-01", "abc", "20261105", " 2026-11-05"].forEach((v) => eq(tanggalIsoSah(v), false, JSON.stringify(v)));
 });
 
 console.log(`\n${pass} lulus, ${fail} gagal\n`);

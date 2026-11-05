@@ -586,7 +586,7 @@ function ppSlotDokumen(d, m) {
   if (d.kode === "714" || d.kode === "703") slot.push("bl:house");
   if (d.kode === "705" || d.kode === "740") {
     const f = (m.bc && m.bc.fields) || {};
-    const sama = (a) => cekAlnum(a) && cekAlnum(a) === cekAlnum(d.nomor);
+    const sama = (a) => kunciAlnum(a) && kunciAlnum(a) === kunciAlnum(d.nomor);
     if (sama(f.masterBL)) slot.push("bl:master");
     if (sama(f.houseBL)) slot.push("bl:house");
     if (!sama(f.masterBL) && !sama(f.houseBL)) slot.push(d === m.master ? "bl:master" : "bl:house");

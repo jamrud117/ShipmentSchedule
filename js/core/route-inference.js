@@ -32,10 +32,9 @@
 /* Kunci "sarana yang sama": nama kapal tanpa nomor voyage, atau nomor
    penerbangan untuk udara (nama maskapai saja terlalu umum). */
 function kunciSarana(s) {
-  const bersih = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if ((s.transport || "laut") === "udara") return bersih(s.voyage) || bersih(s.vessel);
+  if ((s.transport || "laut") === "udara") return kunciAlnum(s.voyage) || kunciAlnum(s.vessel);
   // Nomor di ujung nama kapal biasanya nomor voyage yang ikut terketik
-  return bersih(String(s.vessel || "").replace(/\s+\d+[A-Z]?\s*$/i, ""));
+  return kunciAlnum(String(s.vessel || "").replace(/\s+\d+[A-Z]?\s*$/i, ""));
 }
 
 function terminalTransitPertama(s) {

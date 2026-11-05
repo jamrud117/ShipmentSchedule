@@ -254,7 +254,6 @@ function dpAngka(v) {
   return isFinite(n) ? n : null;
 }
 const dpAda = (v) => v != null && v !== "" && !(typeof v === "number" && !isFinite(v));
-const dpSederhana = (s) => String(s == null ? "" : s).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 /* Teks apa pun -> kode daftar pilihan: kodenya sendiri, "1 - BIASA",
    nama ("Biasa", "UNTUK DIPAKAI"), atau "nama (KODE)". Yang tidak dikenal
@@ -274,7 +273,7 @@ function dpKodePilihan(pilihan, nilai) {
     const k2 = daftar.find(([k]) => samaKode(k, m[1].trim()));
     if (k2) return k2[0];
   }
-  const nama = daftar.find(([, n]) => dpSederhana(n) === dpSederhana(s.replace(/\s*\([^)]*\)\s*$/, "")));
+  const nama = daftar.find(([, n]) => kunciAlnum(n) === kunciAlnum(s.replace(/\s*\([^)]*\)\s*$/, "")));
   if (nama) return nama[0];
   // Nama kantor yang sedikit berbeda ("TANJUNG PRIOK" / "TJ. PRIOK")
   if (pilihan === "kantor") {
@@ -521,7 +520,7 @@ function dpNilaiHitung(s) {
 const DP_KODE_FASILITAS = { PPN: "456", PPH: "457", Masterlist: "912", "E-COO": "861" };
 function dpDokumenJadwal(s) {
   const out = [];
-  const alnum = (x) => dpSederhana(x);
+  const alnum = (x) => kunciAlnum(x);
   const tambah = (kode, nomor, tanggal, asal, nama) => {
     const n = dpTeks(nomor);
     if (!n && !tanggal) return;

@@ -432,6 +432,8 @@ function renderItemTable() {
   recalcCustoms();
   // Tawaran "Samakan … ke baris 2–N?" & Urungkan (item-samakan.js) mengikuti isi tabel
   if (typeof perbaruiTawaranSamakan === "function") perbaruiTawaranSamakan();
+  // Bilah SKB PPh bawaan: tombol "Pasang ke semua barang" mengikuti isi daftar (skb-bawaan.js)
+  if (typeof skbBawaanGambar === "function") skbBawaanGambar();
 }
 $("#itemTableBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr");

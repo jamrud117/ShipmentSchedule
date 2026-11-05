@@ -595,6 +595,18 @@
   color: var(--ts-danger);
   border-color: var(--w-garis-f3c6c6);
 }
+/* Layar sentuh: naik / turun / hapus terminal 36px dengan jarak 8px. Tiga
+   tombol 26px yang berdempet 4px mudah salah ketuk -- dan salah satunya
+   menghapus terminalnya. */
+@media (pointer: coarse) {
+  .route-stop-actions {
+    gap: 8px;
+  }
+  .route-stop-actions button {
+    width: 36px;
+    height: 36px;
+  }
+}
 
 /* ---- Terminal Transit (read-only, detail view) ---- */
 .detail-stop-list {
@@ -1389,7 +1401,8 @@ tr.item-fac-row td {
   flex: 1 1 140px;
   min-width: 100px;
 }
-.item-fac-skb-row input[type="date"] {
+.item-fac-skb-row input[type="date"],
+.item-fac-skb-row input[data-kotak-tanggal] {
   flex: 0 0 142px;
 }
 .item-fac-skb-row .rm-skb {
@@ -2234,21 +2247,34 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
 }
 
 /* ==================================================================
-   DAFTAR BARANG DI FORM, WADAH SEMPIT: KARTU ISIAN PER BARANG
+   DAFTAR BARANG DI FORM: KARTU ISIAN PER BARANG (BAWAAN) ATAU TABEL
 
-   Tabelnya 24 kolom (±2.900px). Di ponsel hanya satu setengah kolom
-   yang tampak, dan kotak yang sedang diisi tidak ketahuan milik kolom
-   apa tanpa menggeser kembali ke judulnya. Di wadah < 760px (ponsel,
-   tablet tegak) tiap barang jadi kartu: Seri & tombol hapus di kepala,
-   Uraian selebar kartu, isian lainnya berlabel (data-label,
-   item-table.js) dalam kisi yang mengisi lebar kartu; panel fasilitas
-   menempel di bawah kartunya. Di layar lebar tetap tabel -- mengisi
-   banyak barang lebih cepat di kisi.
+   Tabelnya 24 kolom (±2.900px). Di layar laptop 1440px hanya enam
+   kolom pertama yang tampak; Qty, Satuan & Harga ada di x = 2.028px --
+   harus digeser mendatar jauh-jauh, dan kotak yang sedang diisi tidak
+   ketahuan milik kolom apa tanpa menggeser kembali ke judulnya. Maka
+   BAWAANNYA tiap barang adalah kartu, di ponsel, tablet, laptop, dan
+   monitor lebar: Seri & tombol hapus di kepala, Uraian dua kolom,
+   isian lainnya berlabel (data-label, item-table.js) dalam kisi yang
+   mengisi lebar kartu; panel fasilitas menempel di bawah kartunya.
+
+   Tabel tetap ada untuk yang lebih suka mengisi banyak barang di kisi:
+   tombol Kartu / Tabel di kepala daftar (features/barang-tampilan.js)
+   memasang .barang-isi--tabel, dan kelas itu MENGGANTI NAMA wadah
+   (barang-isi -> barang-tabel). Aturan kartu di bawah hanya cocok
+   dengan wadah bernama barang-isi, jadi di mode tabel semuanya berhenti
+   berlaku tanpa satu pun selektor yang perlu dibalik.
+
+   Syarat "(min-width: 0px)" selalu benar: sebuah @container wajib
+   punya syarat ukuran, padahal yang kita butuhkan hanya NAMA-nya.
 ================================================================== */
 .barang-isi {
   container: barang-isi / inline-size;
 }
-@container barang-isi (max-width: 759.98px) {
+.barang-isi.barang-isi--tabel {
+  container-name: barang-tabel;
+}
+@container barang-isi (min-width: 0px) {
   .barang-isi .item-table-wrap {
     border: 0;
     border-radius: 0;
@@ -2321,8 +2347,10 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
     right: 12px;
   }
   /* Uraian dua kolom: di ponsel selebar kartu; di tablet mengisi baris
-     HS Code & Kode Barang tanpa lubang */
-  .barang-isi table.item-table--form > tbody > tr > td.uraian-col {
+     HS Code & Kode Barang tanpa lubang. Jenis Barang juga dua kolom:
+     pilihan terpanjangnya ("BARANG PENOLONG") tidak muat di satu sel --
+     di tablet 820px kotaknya 134px dan teksnya terpotong. */
+  .barang-isi table.item-table--form > tbody > tr > td:is(.uraian-col, .jenis-col) {
     grid-column: span 2;
   }
   /* Isian mengisi selnya: lebar minimum kolom tabel dilepas; isinya
@@ -2371,14 +2399,14 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
   .barang-isi .item-fac-skb-row {
     flex-wrap: wrap;
   }
-  .barang-isi .item-fac-skb-row :is(select, input[type="date"]) {
+  .barang-isi .item-fac-skb-row :is(select, input[type="date"], input[data-kotak-tanggal]) {
     flex: 1 1 120px;
   }
 }
-/* Kartu dua kolom (ponsel): isian berpasangan tanpa lubang -- Jenis
-   Barang (pilihan terpanjang) & Subtotal selebar kartu. */
+/* Kartu dua kolom (ponsel): isian berpasangan tanpa lubang -- Subtotal
+   selebar kartu (Jenis Barang sudah dua kolom = selebar kartu). */
 @container barang-isi (max-width: 419.98px) {
-  .barang-isi table.item-table--form > tbody > tr > td:is(.jenis-col, .subtotal-col) {
+  .barang-isi table.item-table--form > tbody > tr > td.subtotal-col {
     grid-column: 1 / -1;
   }
 }
@@ -2387,6 +2415,53 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
 @container barang-isi (min-width: 420px) and (max-width: 551.98px) {
   .barang-isi table.item-table--form > tbody > tr > td.uraian-col {
     grid-column: auto;
+  }
+}
+/* Kartu di wadah lebar (tablet datar, laptop, monitor): sel 136px dan
+   ruang kartu lebih lega. Di 1366 - 1920px layar (form tanpa menu
+   samping) kisinya 8 kolom: 21 sel Import (Uraian & Jenis Barang masing-
+   masing dua kolom) mengisi tiga baris -- Qty, Satuan & Harga ada di
+   baris kedua, tanpa menggeser ke kanan. */
+@container barang-isi (min-width: 760px) {
+  .barang-isi table.item-table--form > tbody > tr:not(.item-fac-row) {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    gap: 12px 14px;
+    padding: 14px 16px;
+  }
+  .barang-isi table.item-table--form > tbody > tr > td.hapus-col {
+    top: 14px;
+    right: 16px;
+  }
+}
+
+/* Pengalih Kartu / Tabel di kepala Daftar Barang. Bentuknya sama dengan
+   pengalih Auto/Manual (.eta-mode-switch, prediction.css); di sini hanya
+   ukurannya yang disamakan dengan tombol di sebelahnya, dan di ponsel
+   tulisannya dibuang -- ikonnya cukup, dua tombol berbagi lebar rata. */
+.barang-tampilan {
+  align-self: stretch;
+}
+.barang-tampilan .eta-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: var(--t-sm);
+  letter-spacing: 0.02em;
+}
+@media (pointer: coarse) {
+  .barang-tampilan .eta-mode-btn {
+    min-height: 44px;
+    padding: 0 16px;
+  }
+}
+@media (max-width: 575.98px) {
+  .barang-tampilan .eta-mode-btn {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+  .barang-tampilan .eta-mode-btn > span {
+    display: none;
   }
 }
 
@@ -2544,6 +2619,20 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
 }
 .dpb-ke:hover {
   color: var(--tp-700);
+}
+/* Layar sentuh: tautan "Ubah" setinggi 19px sulit diketuk. Sasarannya
+   32px; margin negatif membuat kotak marginnya tetap 22px, jadi baris
+   label (dan kotak di bawahnya) tidak bergeser. */
+@media (pointer: coarse) {
+  .dpb-ke {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    min-width: 44px;
+    margin: -5px -6px;
+    padding: 0 6px;
+  }
 }
 .dpb-chip {
   flex: none;
@@ -2764,4 +2853,72 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
   .dpb-tab {
     padding: 8px 12px;
   }
+}
+
+/* ------------------------------------------------------------------
+   INVOICE vs PACKING LIST BERBEDA (tandaiCiplBeda, form-router.js)
+   Nomor / tanggal Packing List yang tidak sama dengan Invoice-nya:
+   bingkai kuning pada kotaknya + satu kalimat di bawah barisnya.
+   Peringatan, bukan galat -- jadwal tetap bisa disimpan.
+------------------------------------------------------------------ */
+.form-control.is-beda {
+  border-color: var(--s-warn);
+  background-color: var(--s-warn-bg);
+}
+.cipl-beda-ket {
+  color: var(--s-warn-ink);
+}
+.cipl-beda-ket::before {
+  content: "\F33B"; /* bi-exclamation-triangle */
+  font-family: "bootstrap-icons";
+  margin-right: 6px;
+}
+
+/* ------------------------------------------------------------------
+   SKB PPh BAWAAN (bilah di tab Daftar Barang, js/features/skb-bawaan.js)
+   Satu baris tenang di atas daftar barang: nomor & tanggal yang dipasang
+   ke tiap barang baru + tombol Ubah. Kuning bila belum diatur atau masa
+   berlakunya lewat. Buku Export tidak memakai SKB PPh impor.
+------------------------------------------------------------------ */
+.skb-bawaan {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: var(--t-sm, 0.85rem);
+  line-height: 1.4;
+}
+.skb-bawaan:empty,
+body.mode-export .skb-bawaan {
+  display: none;
+}
+.skb-bawaan > .bi {
+  color: var(--s-ok);
+}
+.skb-bawaan-teks {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.skb-bawaan-aksi {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.skb-bawaan.is-kosong,
+.skb-bawaan.is-lewat {
+  background: var(--s-warn-bg);
+  border-color: var(--s-warn-line);
+  color: var(--s-warn-ink);
+}
+.skb-bawaan.is-kosong > .bi,
+.skb-bawaan.is-lewat > .bi {
+  color: var(--s-warn);
+}
+.skb-bawaan.is-sibuk {
+  opacity: 0.6;
+  pointer-events: none;
 }

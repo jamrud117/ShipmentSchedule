@@ -96,7 +96,97 @@ function fundSelaraskanRincian(panel) {
   el.dataset.autoFill = bawaan;
 }
 
+/* ISI DARI BL/AWB -- isian PERTAMA form Pengajuan Dana.
+
+   Begitu BL/AWB diketik, jadwal yang BL/AWB-nya (Master / House) cocok
+   mengisi:
+     Jenis Transaksi    moda (laut -> Sea, udara -> Air) + buku (Import /
+                        Export) -> "Sea Import", "Air Export", dst.
+     Dibayarkan Kepada  forwarder jadwal, dipetakan ke vendor di daftar
+                        yang namanya termuat di nama forwarder ("PT WIDE
+                        LOGISTIK" -> WIDE); tanpa padanan -> nama
+                        forwarder-nya sendiri jadi pilihan
+     Customer           buyer jadwal EXPORT
+     (Rincian ikut lewat fundSelaraskanRincian: nama barang jadwal.)
+
+   Tiap isian hanya diisi bila masih KOSONG atau masih isian otomatis
+   sebelumnya (data-auto-awb). Yang dipilih / diketik sendiri -- termasuk
+   Inland Trucking dan KAS NEGARA untuk Billing -- tidak ditimpa. Beberapa
+   BL/AWB yang jadwalnya berbeda isi, atau tidak ada jadwal yang cocok ->
+   isian itu dibiarkan. */
+function fundJadwalDariAwb(blAwb) {
+  const kunci = new Set(fundDaftarAwb(blAwb).map((a) => a.kunci).filter((k) => k.length >= 5));
+  if (!kunci.size || typeof data === "undefined" || !data) return [];
+  return ["import", "export"].flatMap((buku) =>
+    (data[buku] || []).filter((s) => bkKunciKiriman(s).some((k) => kunci.has(k))).map((s) => ({ s, buku })),
+  );
+}
+// Satu-satunya nilai (tanpa kosong) di antara jadwal yang cocok, atau ""
+function fundSatuNilai(cocok, ambil) {
+  const nilai = new Set(cocok.map(ambil).map((v) => String(v || "").trim()).filter(Boolean));
+  return nilai.size === 1 ? [...nilai][0] : "";
+}
+
+function fundTransaksiDariAwb(blAwb) {
+  return fundSatuNilai(fundJadwalDariAwb(blAwb), ({ s, buku }) => `${s.transport === "udara" ? "Air" : "Sea"} ${buku === "export" ? "Export" : "Import"}`);
+}
+
+// Vendor di daftar yang namanya termuat di nama forwarder (yang terpanjang), atau forwarder itu sendiri
+function fundVendorDariForwarder(forwarder) {
+  const kata = fundDocNoKata(forwarder);
+  const umum = (k) => FUND_DOCNO_KATA_UMUM.indexOf(k) >= 0;
+  const cocok = fundVendorDaftar()
+    .map((v) => ({ v, kata: fundDocNoKata(v) }))
+    .filter((x) => x.kata.some((k) => !umum(k)) && fundDocNoCocok(kata, x.kata))
+    .sort((a, b) => b.kata.length - a.kata.length)[0];
+  return cocok ? cocok.v : fundVendorRapikan(forwarder).toUpperCase();
+}
+
+/* Mengisi satu isian otomatis: hanya bila kosong / masih isian otomatis
+   sebelumnya. Mengembalikan true bila nilainya berubah. */
+function fundIsiOtomatisAwb(el, nilai) {
+  if (!el || !nilai) return false;
+  if (el.value && el.value !== el.dataset.autoAwb) return false; // diisi sendiri
+  if (el.tagName === "SELECT") {
+    nilai = el.dataset.dn === "payee" ? fundVendorPastikan(nilai, el) : nilai;
+    if (![...el.options].some((o) => o.value === nilai)) return false;
+  }
+  if (el.value === nilai) return false;
+  el.value = nilai;
+  el.dataset.autoAwb = nilai;
+  // Aturan yang menempel (Rincian, aturan vendor, Inland Trucking) ikut lewat event yang sama dengan pilihan tangan
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
+function fundIsiDariAwb(panel) {
+  if (!panel) return false;
+  const awb = panel.querySelector('[data-dn="blAwb"]');
+  if (!awb) return false;
+  const cocok = fundJadwalDariAwb(awb.value);
+  if (!cocok.length) return false;
+  const kotak = (k) => panel.querySelector(`[data-dn="${k}"]`);
+  const forwarder = fundSatuNilai(cocok, ({ s }) => s.forwarder);
+  const hasil = [
+    fundIsiOtomatisAwb(kotak("transactionType"), fundTransaksiDariAwb(awb.value)),
+    fundIsiOtomatisAwb(kotak("payee"), forwarder && fundVendorDariForwarder(forwarder)),
+    fundIsiOtomatisAwb(kotak("customer"), fundSatuNilai(cocok.filter((x) => x.buku === "export"), ({ s }) => s.party)),
+  ];
+  return hasil.some(Boolean);
+}
+
+document.addEventListener("input", (e) => {
+  const el = e.target.closest('[data-docnum-panel="fund"] [data-dn="blAwb"]');
+  if (el) fundIsiDariAwb(el.closest("[data-docnum-panel]"));
+});
+// Dipilih / diketik sendiri (bukan oleh fundIsiOtomatisAwb): bukan otomatis lagi
 document.addEventListener("change", (e) => {
+  const el = e.target.closest('[data-docnum-panel="fund"] :is([data-dn="transactionType"], [data-dn="payee"], [data-dn="customer"])');
+  if (el && e.isTrusted && el.value !== el.dataset.autoAwb) delete el.dataset.autoAwb;
+});
+
+document.addEventListener("change", (e) => {
+  if (e.target.closest && e.target.closest('[data-docnum-panel="fund"] [data-dn="blAwb"]')) fundIsiDariAwb(e.target.closest("[data-docnum-panel]"));
   const el = e.target.closest(["transactionType", "payee", "blAwb"].map((k) => `[data-docnum-panel="fund"] [data-dn="${k}"]`).join(", "));
   if (el) fundSelaraskanRincian(el.closest("[data-docnum-panel]"));
 });

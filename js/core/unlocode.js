@@ -504,6 +504,47 @@ function portCodeLabel(raw) {
   return s;
 }
 
+/* KOTA, NEGARA untuk DOKUMEN EKSPOR (Port of Loading / Final Destination
+   CIPL): "BUSAN, KOREA", "HOCHIMINH, VIETNAM", "JAKARTA, INDONESIA" --
+   bukan kode pelabuhannya. Terminal & bandara memakai kota induknya
+   (Cat Lai -> Ho Chi Minh, Soekarno-Hatta -> Jakarta). Nama kota yang
+   lazim ditulis lain di dokumen ada di PORT_KOTA_DOKUMEN; negara dengan
+   nama dagang bahasa Inggrisnya (PORT_NEGARA_DOKUMEN). Teks yang tidak
+   dikenali dikembalikan apa adanya. */
+const PORT_KOTA_DOKUMEN = { "HO CHI MINH": "HOCHIMINH" };
+const PORT_NEGARA_DOKUMEN = {
+  ID: "INDONESIA", KR: "KOREA", CN: "CHINA", VN: "VIETNAM", JP: "JAPAN", TW: "TAIWAN", HK: "HONG KONG",
+  SG: "SINGAPORE", MY: "MALAYSIA", TH: "THAILAND", PH: "PHILIPPINES", IN: "INDIA", AE: "UAE", QA: "QATAR",
+  TR: "TURKEY", RU: "RUSSIA", MX: "MEXICO", US: "USA", AU: "AUSTRALIA", NL: "NETHERLANDS", BE: "BELGIUM",
+  DE: "GERMANY", FR: "FRANCE", IT: "ITALY", GB: "UNITED KINGDOM",
+};
+function portKotaNegara(raw) {
+  const s = String(raw || "").trim();
+  const e = resolvePortEntry(s);
+  if (!e) return s;
+  const induk = (e.metro && PORT_BY_UNLOCODE.get(e.metro)) || e;
+  // "Soekarno-Hatta Intl Airport, Jakarta" -> "Jakarta"; "Kuala Lumpur Intl Airport" -> "Kuala Lumpur"
+  const bagian = induk.name.split(",");
+  const kota = bagian[bagian.length - 1]
+    .replace(/\b(intl|international)\b|\b(airport|terminal|port)\b|\bcity$/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+  const negara = PORT_NEGARA_DOKUMEN[induk.country] || induk.country;
+  const tulis = PORT_KOTA_DOKUMEN[kota] || kota;
+  return !tulis || tulis === negara ? negara : `${tulis}, ${negara}`;
+}
+
+/* Isian dokumen yang berisi UN/LOCODE polos ("VNSGN", "KRPUS") -> alias
+   dokumennya ("HOCHIMINH, VIETNAM"). Pengajuan lama menyimpan kodenya,
+   dan kode yang diketik ikut diganti. Teks lain -- termasuk nama yang
+   ditulis sendiri ("HOCHIMINH CITY, VIETNAM") -- dibiarkan apa adanya. */
+function portKodeKeAlias(raw) {
+  const s = String(raw || "").trim();
+  const kode = s.toUpperCase();
+  return UNLOCODE_PATTERN.test(kode) && PORT_BY_UNLOCODE.has(kode) ? portKotaNegara(kode) : s;
+}
+
 /* Saran pelabuhan/bandara, disaring menurut moda transportasi.
 
    Daftar disaring menurut moda: pengiriman lewat laut

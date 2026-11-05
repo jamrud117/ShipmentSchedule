@@ -550,6 +550,42 @@ table.fund-lines select {
   height: 34px;
   padding: 0 12px;
 }
+/* SERET & LEPAS PDF ke form Pengajuan Dana (js/features/fund-invoice-import.js).
+   Selagi berkas diseret di atas form: bingkai putus-putus + selaput tipis
+   di seluruh form, dan petunjuknya melayang di tengah layar (teks dari
+   data-drop-teks, sudah dalam bahasa yang dipakai). Semuanya
+   pointer-events: none -- sorotan tidak boleh menghalangi pelepasan. */
+.docnum-panel.is-dragover {
+  position: relative;
+}
+.docnum-panel.is-dragover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  border: 2px dashed var(--p-500);
+  border-radius: var(--r-lg);
+  background: rgba(29, 81, 136, 0.07);
+  pointer-events: none;
+}
+.docnum-panel.is-dragover::after {
+  content: attr(data-drop-teks);
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+  max-width: min(90vw, 420px);
+  padding: 14px 22px;
+  border-radius: var(--r-lg);
+  background: var(--p-500);
+  color: #fff;
+  font-size: var(--t-base);
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(10, 27, 51, 0.28);
+  pointer-events: none;
+}
 .docnum-panel-head h6 {
   margin: 0;
   font-family: var(--font-display);
@@ -593,25 +629,71 @@ table.fund-lines select {
 /* PERMINTAAN NOMOR DOKUMEN — hasil, aksi, & riwayat */
 
 /* ------------------------------------------------------------------
-   PENGATURAN DI BAWAH FORM: Atur Nomor Urut + Aturan Doc No
+   PENGATURAN DI BAWAH FORM: Atur Nomor Urut + Aturan Doc No + Aturan
+   No. Invoice
 
-   Dua kotak bergaris putus (.counter-box, system.css). Di tab Pengajuan
-   Dana keduanya berdampingan di layar lebar -- ditumpuk, riwayat nomor
-   terdorong 150px lebih ke bawah untuk pengaturan yang jarang disentuh.
-   Di tab lain kotak aturan tersembunyi dan Atur Nomor Urut selebar
-   panel seperti biasa.
+   Kotak bergaris putus (.counter-box, system.css) yang RINGKAS: di tab
+   Pengajuan Dana ketiganya TIGA SEBARIS di layar lebar (dulu dua kolom,
+   kotak ketiga turun ke baris baru dan riwayat nomor terdorong jauh ke
+   bawah untuk pengaturan yang jarang disentuh). Penjelasan panjangnya
+   dilipat di "Cara kerja" (.dn-bantuan). Di tab lain kotak aturan
+   tersembunyi dan Atur Nomor Urut selebar panel seperti biasa.
 
-   Pembungkusnya TANPA jarak sendiri: untuk peran hanya-baca kedua
-   kotaknya disembunyikan auth.css, dan pembungkus yang berjarak akan
-   meninggalkan celah kosong di atas riwayat.
+   Pembungkusnya TANPA jarak sendiri: untuk peran hanya-baca kotaknya
+   disembunyikan auth.css, dan pembungkus yang berjarak akan meninggalkan
+   celah kosong di atas riwayat.
 ------------------------------------------------------------------ */
 .dn-pengaturan {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  column-gap: var(--sp-4);
+  column-gap: var(--sp-3);
+  align-items: start;
+}
+.dn-pengaturan > .counter-box {
+  padding: var(--sp-3);
 }
 .dn-pengaturan > .counter-box + .counter-box {
-  margin-top: var(--sp-4);
+  margin-top: var(--sp-3);
+}
+.dn-pengaturan .counter-head {
+  margin-bottom: var(--sp-2);
+}
+/* Atur Nomor Urut sebaris di kotak sepertiga lebar: nomor maks. 6 angka */
+.dn-pengaturan .counter-body .form-control {
+  width: 90px;
+}
+.dn-pengaturan .counter-body .btn,
+.dn-pengaturan .dn-aturan-tambah .btn {
+  padding: 0 12px;
+}
+/* "Cara kerja": penjelasan dilipat, satu baris kecil saat tertutup */
+.dn-bantuan {
+  margin-top: var(--sp-2);
+}
+.dn-bantuan > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  cursor: pointer;
+  list-style: none;
+}
+.dn-bantuan > summary::-webkit-details-marker {
+  display: none;
+}
+.dn-bantuan > summary::before {
+  content: "\F431"; /* bi-info-circle */
+  font-family: "bootstrap-icons";
+}
+.dn-bantuan > summary:hover {
+  color: var(--n-700);
+}
+.dn-bantuan .form-text-note {
+  margin-top: var(--sp-1);
+}
+.dn-bantuan .form-text-note > .bi-info-circle:first-child {
+  display: none;
 }
 /* Vendor di daftar: label, lalu cip yang bisa dihapus. */
 .dn-aturan-isi {
@@ -712,11 +794,11 @@ table.fund-lines select {
   .fgrid:has(> .sb-tanpabayar.d-none) > .sb-tiba {
     grid-column: span 6;
   }
-  /* Pengaturan di bawah form: Atur Nomor Urut & Aturan Doc No
-     berdampingan (tab Pengajuan Dana). Sejajar atas, jadi jarak atas
-     kotak kedua disamakan dengan yang pertama. */
+  /* Pengaturan di bawah form: tiga kotak SEBARIS (tab Pengajuan Dana).
+     Sejajar atas, jadi jarak atas kotak berikutnya disamakan dengan yang
+     pertama. */
   .dn-pengaturan:has(> .dn-aturan:not(.d-none)) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .dn-pengaturan > .counter-box + .counter-box {
     margin-top: var(--sp-6);
@@ -779,6 +861,10 @@ table.fund-lines select {
   margin-top: 3px;
   color: var(--ts-danger);
   font-weight: 600;
+}
+/* Keterangan nomor invoice bawaan vendor: petunjuk, bukan peringatan */
+.dn-bawaan-ket {
+  margin-top: 3px;
 }
 
 /* Riwayat nomor terbit. */
@@ -2914,4 +3000,50 @@ button.dn-bayar--lunas:hover {
     grid-column: 3;
     grid-row: 1;
   }
+}
+
+/* ------------------------------------------------------------------
+   PIHAK INVOICE (js/features/invoice-pihak.js)
+   Empat kolom sejajar -- Penjual, Pemilik Barang, Pembeli, Penerima --
+   masing-masing Nama, Alamat, NPWP/Negara bertumpuk, jadi Tab berjalan
+   per pihak. Chip "= Penjual" / "= Penerima" tampil selama pihak itu
+   masih sama dengan sumbernya (Tipe Customer).
+------------------------------------------------------------------ */
+.inv-pihak {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.inv-pihak-kepala {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-height: 24px;
+  margin-bottom: 4px;
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--n-700);
+}
+.inv-pihak-ikut {
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  background: var(--p-50);
+  color: var(--tp-600);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.inv-pihak .form-control + .form-label {
+  margin-top: 8px;
+}
+/* Alamat setinggi isinya (ATTN / TEL / TAX ID ikut terlihat) tanpa skrip:
+   field-sizing di Chromium; peramban lain tetap 4 baris + gulir. */
+.inv-pihak textarea {
+  resize: vertical;
+  field-sizing: content;
+  min-height: 7.2em;
+}
+.inv-pola-ket {
+  margin-top: 6px;
 }

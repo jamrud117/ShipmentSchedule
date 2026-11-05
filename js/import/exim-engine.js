@@ -2150,6 +2150,8 @@ function extractDeclaration(wb){
         gross:num(getCellAny(r,idx,['BRUTO','GW','GROSS WEIGHT'])),
         fob:num(getCell(r,idx,'FOB')),
         cif:num(getCell(r,idx,'CIF')),
+        // `cif` below may be replaced by a derived value (PEB); the column as the draft filled it stays here
+        cif_raw:num(getCell(r,idx,'CIF')),
         origin:getCell(r,idx,'KODE NEGARA ASAL')
       });
     }
@@ -2218,6 +2220,81 @@ function compareNum(field,left,right,section='GENERAL',tol=.01){
   const ln=num(left),rn=num(right);
   const equal=ln!==null&&rn!==null?Math.abs(ln-rn)<=tol:norm(left)===norm(right);
   return {section,field,status:equal?'MATCH':'MISMATCH',severity:equal?'OK':'ERROR',cipl:left,pib:right,cipl_display:left,pib_display:right,numeric:true,diff:(ln!==null&&rn!==null)?round3(ln-rn):null};
+}
+
+/* ---- PRICE OF EACH ITEM: the FOB or CIF column of the BARANG sheet that is FILLED -----------------------------------------
+   The BARANG sheet has two value columns, but a draft normally fills only one of them: a PEB draft fills FOB and leaves CIF at 0,
+   a PIB draft fills CIF and leaves FOB empty. The price is checked against the column that HAS A VALUE (a number above 0), not
+   the column the Incoterm says it should be.
+     one column filled      -> that column
+     both columns filled    -> the one in line with `hint` ('FOB' | 'CIF') first; the other is accepted too when it is the one that agrees
+     only FOB, hint = CIF   -> the reference is priced with freight in it (CFR, CIF, ...): the CIF extractDeclaration derives
+                               (FOB + FREIGHT + ASURANSI, shared equally over the items) comes first, the FOB as such is accepted too
+                               (a schedule filled in from that very PEB draft carries the FOB price)
+     nothing filled         -> no candidate
+   Returns candidates [{column, basis, value, derived}]; the first is the one shown when none of them agrees. */
+function declaredItemValues(d,hint){
+  const pos=v=>{const n=num(v);return n!==null&&n>0?n:null;};
+  const fob=pos(d&&d.fob);
+  // d.cif may be derived (cif_derived); what the draft itself filled is cif_raw
+  const cifRaw=pos(d&&(d.cif_raw!==undefined?d.cif_raw:(d.cif_derived?null:d.cif)));
+  const derived=cifRaw===null&&fob!==null&&d&&d.cif_derived?pos(d.cif):null;
+  const out=[];
+  const addFob=()=>{if(fob!==null)out.push({column:'FOB',basis:'FOB',value:fob,derived:false});};
+  const addCif=()=>{if(cifRaw!==null)out.push({column:'CIF',basis:'CIF',value:cifRaw,derived:false});};
+  if(hint==='FOB'){addFob();addCif();}
+  else{addCif();if(derived!==null)out.push({column:'FOB',basis:'CIF',value:derived,derived:true});addFob();}
+  return out;
+}
+/* Same amount within the cent. A unit price is stored with 4 decimals (the draft's value ÷ quantity, rounded), so qty × price can
+   miss the draft's value by that rounding alone: it also agrees when the unit price IS the draft's value ÷ quantity at 4 decimals. */
+function amountsAgree(amount,declared,qty,unitPrice,tol){
+  const a=num(amount),b=num(declared);
+  if(a===null||b===null) return false;
+  // + 1e-9: 100.01 - 100 is 0.010000000000005 in floating point, still "within the cent"
+  if(Math.abs(a-b)<=(tol===undefined?.01:tol)+1e-9) return true;
+  const q=num(qty),u=num(unitPrice);
+  if(q===null||q<=0||u===null||u<=0) return false;
+  const r4=v=>Math.round(v*10000)/10000;
+  return Math.abs(u-r4(u))<1e-9&&Math.abs(r4(b/q)-u)<1e-9;
+}
+// One formatter, built once (a new Intl formatter per call is what the toLocaleString guard test is there to prevent)
+const amountFmt=(()=>{const f=new Intl.NumberFormat('en-US',{maximumFractionDigits:4});return v=>f.format(Number(v));})();
+// Notes of the price rows. The host may pass its own wording (opts.say, e.g. in the language of the page); these are the default.
+function amountNote(code,x){
+  switch(code){
+    case 'derived': return `Kolom CIF draft 0; CIF dihitung dari FOB ${amountFmt(x.fob)} + Freight/Asuransi ${amountFmt(x.extra)} (dibagi rata per barang).`;
+    case 'both': return `Kolom FOB (${amountFmt(x.fob)}) dan CIF (${amountFmt(x.cif)}) sama-sama terisi di draft; ${x.agree?'cocok dengan':'dibandingkan dengan'} kolom ${x.column}.`;
+    case 'rounding': return `Harga satuan ${amountFmt(x.unitPrice)} sama dengan nilai draft ÷ jumlah (dibulatkan 4 desimal); selisih ${amountFmt(x.diff)} hanya karena pembulatan itu.`;
+    case 'none': return 'Kolom FOB dan CIF sheet BARANG draft sama-sama kosong atau 0 untuk barang ini.';
+    case 'noAmount': return `Nilai barang ini belum ada di ${x.side||'sumber pembanding'}.`;
+    default: return '';
+  }
+}
+/* One row 'Item N Amount / FOB|CIF': the value of the item on the reference side (schedule / CIPL) against the draft's value.
+   `hint`: which column the reference is priced on ('FOB' | 'CIF'); opts: {qty, unitPrice} (rounding, see amountsAgree), {tol}, {side}, {say}. */
+function itemAmountRow(no,amount,d,hint,opts){
+  const o=opts||{};
+  const say=typeof o.say==='function'?o.say:amountNote;
+  const cands=declaredItemValues(d,hint);
+  if(!cands.length){
+    return {section:'ITEM',field:`Item ${no} Amount / ${hint}`,status:'MISMATCH',severity:'ERROR',cipl:amount,pib:'Not found',cipl_display:amount,pib_display:'Not found',expected_note:say('none',{})};
+  }
+  const a=num(amount);
+  const hit=a===null?null:cands.find(c=>amountsAgree(a,c.value,o.qty,o.unitPrice,o.tol));
+  const use=hit||cands[0];
+  const equal=!!hit;
+  const notes=[];
+  if(a===null) notes.push(say('noAmount',{side:o.side,reason:o.reason}));
+  const raw=cands.filter(c=>!c.derived);
+  if(use.derived){
+    const fob=(raw.find(c=>c.column==='FOB')||{}).value;
+    notes.push(say('derived',{fob:fob,extra:round2(use.value-fob)}));
+  }
+  const rawFob=raw.find(c=>c.column==='FOB'),rawCif=raw.find(c=>c.column==='CIF');
+  if(rawFob&&rawCif) notes.push(say('both',{fob:rawFob.value,cif:rawCif.value,column:use.column,agree:equal}));
+  if(equal&&a!==null&&Math.abs(a-use.value)>.01) notes.push(say('rounding',{unitPrice:num(o.unitPrice),diff:round2(a-use.value)}));
+  return {section:'ITEM',field:`Item ${no} Amount / ${use.basis}`,status:equal?'MATCH':'MISMATCH',severity:equal?'OK':'ERROR',cipl:amount,pib:use.value,cipl_display:amount,pib_display:use.value,numeric:true,diff:a!==null?round3(a-use.value):null,expected_note:notes.filter(Boolean).join(' ')};
 }
 // HS codes are compared on digits only ("3824.10-0000" = "3824100000"). CEISA holds 8 digits; a CIPL may print 6 (international HS) or
 // the 10 digits of the exporter's own tariff. Equal on the first 8 digits (or on all digits of the shorter code, at least 6) is a match.
@@ -2653,13 +2730,10 @@ function runCheck(cipl,decl,extra={}){
     if(norm(c.brand))checks.push(compareText(`Item ${c.no} Brand`,c.brand,d.brand,'ITEM'));
     if(c.qty!==null)checks.push(compareNum(`Item ${c.no} Quantity`,c.qty,d.qty,'ITEM',0));
     if(norm(c.unit))checks.push(compareUnit(`Item ${c.no} Unit`,c.unit,d.unit,'ITEM'));
-    // IMPORTANT: Amount per item only. Unit price is intentionally NOT checked.
-    const itemDeclared=isFob?d.fob:d.cif;
-    if(itemDeclared!==null && itemDeclared!==undefined){
-      checks.push(compareNum(`Item ${c.no} Amount / ${amountBasis}`,c.amount,itemDeclared,'ITEM'));
-    }else{
-      checks.push({section:'ITEM',field:`Item ${c.no} Amount / ${amountBasis}`,status:'MISMATCH',severity:'ERROR',cipl:c.amount,pib:'Not found',cipl_display:c.amount,pib_display:'Not found',expected_note:`Incoterm ${cipl.incoterm||'(blank)'} requires item ${amountBasis}.`});
-    }
+    // IMPORTANT: Amount per item only. The CIPL unit price is intentionally NOT checked against the draft (it has no unit price column);
+    // it only lets the amount agree when the two differ by the 4-decimal rounding of the price (amountsAgree).
+    // The draft's value is the FOB or CIF column that is FILLED (declaredItemValues); the Incoterm only decides which comes first.
+    checks.push(itemAmountRow(c.no,c.amount,d,amountBasis,{qty:c.qty,unitPrice:c.unit_price,side:'CIPL',say:extra.catatanNilai}));
     checks.push(compareNum(`Item ${c.no} Net Weight`,c.net,d.net,'ITEM'));
   }
   const cNos=new Set(cipl.items.map(x=>String(x.no)));
@@ -3051,6 +3125,8 @@ const API={
   // draft PIB / PEB and the check
   extractDeclaration, detectDeclarationType, runCheck, summarize, blChecks,
   compareText, compareNum, compareUnit, compareHs, hsCheckRow, ciplBlankInfo,
+  // price of each item: the FOB or CIF column of the draft that is filled
+  declaredItemValues, amountsAgree, itemAmountRow,
   // shared rules
   normalizeDate, isIsoDate, norm, num, normName, alnum, hsDigits, fmtHs, canonUnit, taxIdEquivalent, labelCanon, colRoleOf, isKnownLabel,
   addPlaces, placeGroupOf, resolvePlace, portEquivalent, placeKind, canonicalPort, countryLabel, countryFromDestination,

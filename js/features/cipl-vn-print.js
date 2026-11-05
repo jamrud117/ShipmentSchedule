@@ -131,8 +131,10 @@ function ciplVnTata(jenis, row, shipment) {
     return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
   };
   const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f, teks: uang.teks(n) } });
-  const consignee = [p.customer || (shipment && shipment.party) || "",
-    ...(p.consigneeAddress ? ciplBarisTeks(p.consigneeAddress) : prof.lines || [])].filter(Boolean).map(ciplKapital);
+  // Consignee = Penerima (alamat profil bila belum diisi); Seller = Pembeli; Shipper = Penjual
+  const consignee = ciplPihakBaris(p.penerimaNama || p.customer || (shipment && shipment.party) || "",
+    p.consigneeAddress || (prof.lines || []).join("\n"));
+  const seller = String(p.pembeliNama || "").trim() ? ciplPihakBaris(p.pembeliNama, p.pembeliAlamat) : CIPL_VN_SELLER.map(ciplKapital);
   const packing = p.packing || "WOODEN PACKING";
   const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
   const berangkat = p.sailingDate || (shipment ? shipment.etd : "") || "";
@@ -148,8 +150,8 @@ function ciplVnTata(jenis, row, shipment) {
     judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
     persen: [15, 7, 24, 12, 7, 7, 14, 14],
     kartu: [
-      { kiri: { judul: "Shipper", isi: (l) => ddIsiPihak(CIPL_VN_SHIPPER.map(ciplKapital), l, true) },
-        kanan: { judul: "Seller", isi: (l) => ddIsiPihak(CIPL_VN_SELLER.map(ciplKapital), l, true) } },
+      { kiri: { judul: "Shipper", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_VN_SHIPPER), l, true) },
+        kanan: { judul: "Seller", isi: (l) => ddIsiPihak(seller, l, true) } },
       { kiri: { judul: "Consignee", isi: (l) => ddIsiPihak(consignee, l, true) },
         kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi([
           ["Invoice No. & Date", [row.doc_number ? ciplNoTanggal(row.doc_number, row.doc_date) : { no: "—", tgl: "" }]],
@@ -159,9 +161,9 @@ function ciplVnTata(jenis, row, shipment) {
     ],
     rinci: [
       ["Departure Date", ciplTanggal(berangkat)],
-      ["Port of Loading", p.portLoading || prof.portLoading || (shipment ? portCodeLabel(shipment.origin) : "")],
+      ["Port of Loading", portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "")],
       ["Port of Discharge", p.portDischarge || prof.portDischarge || ""],
-      ["Final Destination", p.finalDestination || prof.finalDestination || (shipment ? portCodeLabel(shipment.destination) : "")],
+      ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
       ["Vessel / Flight", carrierCipl(p, shipment)],
       ["Price Term", p.termsDelivery || ""],
       ["Terms of Payment", p.termPayment || "T/T 60 days after B/L date"],

@@ -28,20 +28,12 @@ const FUND_VENDOR_BAWAAN = ["KAS NEGARA"];
 let fundVendorTersimpan = [];
 let fundVendorRiwayat = [];
 
-const fundVendorRapikan = (teks) => String(teks == null ? "" : teks).replace(/\s+/g, " ").trim();
-const fundVendorKunci = (teks) => fundVendorRapikan(teks).toUpperCase().replace(/[^\p{L}\p{N}]+/gu, "");
+// Perilaku dropdown-nya bersama dropdown Customer invoice: js/ui/pilihan-tambah.js
+const fundVendorRapikan = pilihanRapikan;
+const fundVendorKunci = pilihanKunci;
 
 function fundVendorDaftar() {
-  const hasil = [];
-  const ada = new Set();
-  FUND_VENDOR_BAWAAN.concat(fundVendorTersimpan, fundVendorRiwayat).forEach((v) => {
-    const nama = fundVendorRapikan(v);
-    const kunci = fundVendorKunci(nama);
-    if (!kunci || nama === FUND_VENDOR_BARU || ada.has(kunci)) return;
-    ada.add(kunci);
-    hasil.push(nama);
-  });
-  return hasil.sort((a, b) => a.localeCompare(b, "id", { sensitivity: "base" }));
+  return pilihanSatukan(FUND_VENDOR_BAWAAN, fundVendorTersimpan, fundVendorRiwayat).filter((n) => n !== FUND_VENDOR_BARU);
 }
 
 function fundVendorKotak() {
@@ -49,46 +41,23 @@ function fundVendorKotak() {
   return panel ? panel.querySelector('[data-dn="payee"]') : null;
 }
 
-const fundVendorOpsiHtml = (nama) => `<option value="${escapeAttr(nama)}">${escapeHtml(nama)}</option>`;
-
-/* Pilihan digambar ulang dari daftar; nilai yang sedang terpilih tetap
-   terpilih, termasuk yang tidak ada di daftar. Tidak ada pilihan
-   bertanda `selected` di HTML-nya, jadi mengosongkan form
-   (resetDocNumForm) kembali ke "— pilih vendor —". */
+/* Tidak ada pilihan bertanda `selected` di HTML-nya, jadi mengosongkan
+   form (resetDocNumForm) kembali ke "— pilih vendor —". */
 function fundVendorGambar(el) {
-  const kotak = el || fundVendorKotak();
-  if (!kotak) return;
-  const kini = kotak.value === FUND_VENDOR_BARU ? "" : kotak.value;
-  const daftar = fundVendorDaftar();
-  if (kini && daftar.indexOf(kini) < 0) daftar.push(kini);
-  kotak.innerHTML =
-    `<option value="">${escapeHtml(tt("— pilih vendor —", "— choose a vendor —"))}</option>` +
-    daftar.map(fundVendorOpsiHtml).join("") +
-    `<option value="${FUND_VENDOR_BARU}">${escapeHtml(tt("+ Tambah vendor baru…", "+ Add a new vendor…"))}</option>`;
-  kotak.value = kini;
+  pilihanGambar(el || fundVendorKotak(), fundVendorDaftar(), {
+    kosong: tt("— pilih vendor —", "— choose a vendor —"),
+    tambah: tt("+ Tambah vendor baru…", "+ Add a new vendor…"),
+    sentinel: FUND_VENDOR_BARU,
+  });
 }
 
-/* Memastikan sebuah nama ada di pilihan, lalu mengembalikan nilai yang
-   dipakai: vendor yang sama dengan tulisan lain ("pt. dsv" vs "PT DSV")
-   memakai nama yang sudah ada -- itulah gunanya dropdown ini. */
+/* Vendor yang sama dengan tulisan lain ("pt. dsv" vs "PT DSV") memakai
+   nama yang sudah ada. */
 function fundVendorPastikan(nama, el) {
-  const kotak = el || fundVendorKotak();
-  const rapi = fundVendorRapikan(nama);
-  if (!kotak || !rapi) return rapi;
-  const kunci = fundVendorKunci(rapi);
-  const ada = [...kotak.options].find((o) => o.value && o.value !== FUND_VENDOR_BARU && fundVendorKunci(o.value) === kunci);
-  if (ada) return ada.value;
-  const opsi = document.createElement("option");
-  opsi.value = rapi;
-  opsi.textContent = rapi;
-  kotak.insertBefore(opsi, [...kotak.options].find((o) => o.value === FUND_VENDOR_BARU) || null);
-  return rapi;
+  return pilihanPastikan(el || fundVendorKotak(), nama);
 }
-
 function fundVendorPilih(el, nama) {
-  el.value = fundVendorPastikan(nama, el);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+  pilihanPilih(el, nama);
 }
 
 /* Dimuat tiap halaman Nomor Dokumen dibuka (bersama Aturan Doc No).
@@ -184,7 +153,7 @@ function fundVendorTambah(el) {
       if (!nama) return tt("Nama vendor harus diisi.", "The vendor name is required.");
       if (nama.length > FUND_VENDOR_MAKS_HURUF)
         return tt(`Nama vendor paling panjang ${FUND_VENDOR_MAKS_HURUF} huruf.`, `The vendor name can have at most ${FUND_VENDOR_MAKS_HURUF} characters.`);
-      const sudah = [...el.options].find((o) => o.value && o.value !== FUND_VENDOR_BARU && fundVendorKunci(o.value) === fundVendorKunci(nama));
+      const sudah = [...el.options].find((o) => o.value && !o.hasAttribute("data-pilihan-tambah") && fundVendorKunci(o.value) === fundVendorKunci(nama));
       fundVendorPilih(el, nama);
       if (sudah) showToast(tt(`${sudah.value} sudah ada di daftar — langsung dipilih.`, `${sudah.value} is already on the list — selected.`), "info");
       else fundVendorSimpan(nama);
@@ -193,24 +162,7 @@ function fundVendorTambah(el) {
   });
 }
 
-/* Pilihan "+ Tambah vendor baru…": dropdown kembali ke pilihan
-   sebelumnya dulu (membatalkan kotak isiannya tidak boleh meninggalkan
-   pilihan aneh itu terpilih), lalu kotak nama vendor dibuka. */
-document.addEventListener("focusin", (e) => {
-  const el = e.target.closest && e.target.closest('[data-docnum-panel="fund"] [data-dn="payee"]');
-  if (el && el.value !== FUND_VENDOR_BARU) el.dataset.sebelum = el.value;
-});
-document.addEventListener("change", (e) => {
-  const el = e.target.closest && e.target.closest('[data-docnum-panel="fund"] [data-dn="payee"]');
-  if (!el) return;
-  if (el.value !== FUND_VENDOR_BARU) {
-    el.dataset.sebelum = el.value;
-    return;
-  }
-  el.value = el.dataset.sebelum || "";
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  if (!requireEdit()) return;
-  fundVendorTambah(el);
-});
+// "+ Tambah vendor baru…" membuka isian nama vendor
+pilihanPasangTambah('[data-docnum-panel="fund"] [data-dn="payee"]', FUND_VENDOR_BARU, fundVendorTambah);
 
 fundVendorGambar();

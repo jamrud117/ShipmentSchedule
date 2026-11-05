@@ -803,9 +803,12 @@ table.item-table .is-disamakan {
    Nomor Dokumen, kartu Terminal Transit. Dua belas lajur; tiap isian
    memakai kelas lebar:
 
+     .s2            2 lajur  TANGGAL -- kotak "dd-mm-yyyy" + ikon kalender
+                    tidak butuh lebih. Di layar sedang ikut dua per baris.
      (tanpa kelas)  3 lajur  seperempat baris -- isian standar
-     .s4            4 lajur  sepertiga
+     .s4            4 lajur  sepertiga -- nomor dokumen (pasangannya .s2)
      .s6            6 lajur  setengah
+     .s8            8 lajur  dua pertiga (kotak teks di samping dua isian pendek)
      .s9            9 lajur  tiga perempat
      .s12           selebar baris (tabel, catatan, judul kelompok)
      .r2            setinggi dua baris (alamat di samping dua baris isian)
@@ -814,6 +817,12 @@ table.item-table .is-disamakan {
 
    Tiap baris disusun berjumlah 12 lajur, jadi tepi isian SEJAJAR dari
    baris ke baris dan tidak ada isian yang melebar tanpa alasan.
+
+   LEBAR ISIAN = LEBAR SELNYA. Kotak selalu mengisi selnya; yang diatur
+   adalah banyaknya lajur. Nomor dokumen + tanggalnya = .s4 + .s2 (setengah
+   baris), jadi dua dokumen sebaris tanpa ruang kosong di samping kotak
+   tanggal. (Membatasi lebar kotak di dalam sel yang lebar meninggalkan
+   lubang kosong di kanannya -- itu yang dihindari.)
 
    TIGA LEBAR LAYAR
      >= 1080px      empat isian per baris. Ambangnya 1080, bukan 1200:
@@ -835,11 +844,17 @@ table.item-table .is-disamakan {
   grid-column: span 3;
   min-width: 0;
 }
+.fgrid > .s2 {
+  grid-column: span 2;
+}
 .fgrid > .s4 {
   grid-column: span 4;
 }
 .fgrid > .s6 {
   grid-column: span 6;
+}
+.fgrid > .s8 {
+  grid-column: span 8;
 }
 .fgrid > .s9 {
   grid-column: span 9;
@@ -860,10 +875,12 @@ table.item-table .is-disamakan {
 }
 @media (max-width: 1079.98px) {
   .fgrid > *,
+  .fgrid > .s2,
   .fgrid > .s4 {
     grid-column: span 6;
   }
   .fgrid > .s6,
+  .fgrid > .s8,
   .fgrid > .s9 {
     grid-column: 1 / -1;
   }
@@ -877,6 +894,7 @@ table.item-table .is-disamakan {
 }
 @media (max-width: 767.98px) {
   .fgrid > *,
+  .fgrid > .s2,
   .fgrid > .s4,
   .fgrid > .m4 {
     grid-column: 1 / -1;
@@ -904,8 +922,14 @@ table.item-table .is-disamakan {
   margin: 0;
   min-width: 0;
 }
+/* Sakelar 26px duduk di baris label 22px: margin negatif membuat kotak
+   marginnya pas 22px, jadi baris label ini TIDAK lebih tinggi daripada
+   label biasa di sebelahnya -- tanpa itu kotak ETA & Estimated Delivery
+   4px lebih rendah daripada ETD & Tanggal In Factory. (Cara yang sama
+   dengan "+ Nomor Mobil", docnum.css.) */
 .fl-head .eta-mode-switch {
   height: 26px;
+  margin: -2px 0;
 }
 .fl-head .eta-mode-btn {
   padding: 0 10px;
@@ -914,6 +938,7 @@ table.item-table .is-disamakan {
 @media (pointer: coarse) {
   .fl-head .eta-mode-switch {
     height: 32px;
+    margin: -5px 0;
   }
   .fl-head .eta-mode-btn {
     padding: 0 13px;

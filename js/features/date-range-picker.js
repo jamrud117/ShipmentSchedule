@@ -72,6 +72,20 @@ let drpViewMonth = 0; // bulan PERTAMA dari dua yang ditampilkan (0-11)
 let drpTempFrom = "";
 let drpTempTo = "";
 
+/* Penanda sebuah hari terhadap rentang yang sedang dipilih: ujung
+   (awal/akhir) atau di antaranya. Satu-satunya tempat aturan ini ada --
+   dipakai menggambar kotak-kotak (drpMonthGridHtml) dan mewarnai ulang
+   yang sudah tergambar (drpWarnaiUlang). */
+function drpKelasHari(iso, dari, sampai) {
+  if (iso === dari || iso === sampai) return "drp-day--endpoint";
+  if (dari && sampai) {
+    const min = dari < sampai ? dari : sampai;
+    const maks = dari < sampai ? sampai : dari;
+    if (iso > min && iso < maks) return "drp-day--inrange";
+  }
+  return "";
+}
+
 /* `dari`/`sampai` bawaannya status pemilih di halaman Jadwal; pemilih
    lain (lihat buatRentangTanggal() di bawah) mengirim rentangnya
    sendiri, jadi kotak-kotak ini tidak perlu tahu milik siapa. */
@@ -79,8 +93,6 @@ function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
   const sel = drpBuildMonthCells(year, month);
   const baris = [];
   for (let i = 0; i < sel.length; i += 7) baris.push(sel.slice(i, i + 7));
-  const min = dari && sampai ? (dari < sampai ? dari : sampai) : "";
-  const maks = dari && sampai ? (dari < sampai ? sampai : dari) : "";
 
   const kepala = drpNama().hari.map((h) => `<div class="drp-dow">${h}</div>`).join("");
   const badan = baris
@@ -90,8 +102,8 @@ function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
           .map((c) => {
             const kelas = ["drp-day"];
             if (c.diLuarBulan) kelas.push("drp-day--muted");
-            if (c.iso === dari || c.iso === sampai) kelas.push("drp-day--endpoint");
-            else if (min && c.iso > min && c.iso < maks) kelas.push("drp-day--inrange");
+            const tanda = drpKelasHari(c.iso, dari, sampai);
+            if (tanda) kelas.push(tanda);
             return `<button type="button" class="${kelas.join(" ")}" data-drp-day="${c.iso}">${c.label}</button>`;
           })
           .join("")}</div>`,
@@ -100,6 +112,31 @@ function drpMonthGridHtml(year, month, dari = drpTempFrom, sampai = drpTempTo) {
   return `<div class="drp-dow-row">${kepala}</div>${badan}`;
 }
 
+/* Mewarnai ulang kotak-kotak hari yang SUDAH tergambar, tanpa
+   menggantinya. Dipakai saat tanggalnya diketik di kotak Dari/Sampai:
+   mengganti tombol hari pada saat itu bisa membuang tombol yang sedang
+   ditekan pengguna (ketikan selesai karena fokus pindah ke tombol itu),
+   sehingga kliknya tidak pernah sampai. */
+function drpWarnaiUlang(grid, dari, sampai) {
+  if (!grid) return;
+  grid.querySelectorAll("[data-drp-day]").forEach((btn) => {
+    btn.classList.remove("drp-day--endpoint", "drp-day--inrange");
+    const tanda = drpKelasHari(btn.dataset.drpDay, dari, sampai);
+    if (tanda) btn.classList.add(tanda);
+  });
+}
+
+/* Bulan `iso` sudah terlihat di kalender? Selisihnya dalam bulan dari
+   bulan pertama yang tampil; bulan kedua dihitung hanya bila memang
+   ditampilkan (di layar sempit disembunyikan lewat CSS). */
+function drpTerlihat(iso, tahunLihat, bulanLihat, duaBulan) {
+  const dt = parseLocalDate(iso);
+  if (!dt) return true;
+  const selisih = (dt.getFullYear() - tahunLihat) * 12 + dt.getMonth() - bulanLihat;
+  return selisih === 0 || (duaBulan && selisih === 1);
+}
+const drpTampilDuaBulan = (grid) => !!grid && getComputedStyle(grid).display !== "none";
+
 function drpRenderCalendars() {
   $("#drpMonthLabel0").textContent = `${bulanPanjang(drpViewMonth)} ${drpViewYear + Math.floor(drpViewMonth / 12)}`;
   const m1 = drpViewMonth + 1;
@@ -107,6 +144,17 @@ function drpRenderCalendars() {
   $("#drpGrid0").innerHTML = drpMonthGridHtml(drpViewYear, drpViewMonth);
   $("#drpGrid1").innerHTML = drpMonthGridHtml(drpViewYear, drpViewMonth + 1);
   drpSyncTriggerPreview();
+  drpSyncKotak();
+}
+
+/* Kotak ketik Dari/Sampai mengikuti rentang sementara kalender. Menulis
+   `.value` tidak menembakkan peristiwa (sama seperti kotak bawaan),
+   jadi tidak berputar balik ke drpKotakBerubah(). */
+function drpSyncKotak() {
+  const dari = $("#drpInputFrom");
+  const sampai = $("#drpInputTo");
+  if (dari) dari.value = drpTempFrom || "";
+  if (sampai) sampai.value = drpTempTo || "";
 }
 
 function drpSyncTriggerPreview() {
@@ -158,16 +206,22 @@ function drpClose() {
   $("#dateRangePopover").classList.add("d-none");
   $("#dateRangeTrigger").setAttribute("aria-expanded", "false");
   $("#dateRangeTrigger").classList.remove("is-open");
+  /* Ditutup tanpa Terapkan (Esc, klik di luar): teks pemicu kembali ke
+     saringan yang BERLAKU, bukan sisa pratinjau pilihan yang dibatalkan
+     (drpSyncTriggerPreview menulisnya selama memilih). */
+  drpSyncTriggerFromFilter();
 }
 function drpIsOpen() {
   return !$("#dateRangePopover").classList.contains("d-none");
 }
 
 function drpApply() {
-  // Baru satu tanggal diklik (belum ada akhir) -> jadi rentang sehari: dari = sampai.
+  /* Baru satu tanggal (diklik, atau hanya salah satu kotak ketik yang
+     terisi) -> rentang sehari: dari = sampai. */
+  const awal = drpTempFrom || drpTempTo;
   const akhir = drpTempTo || drpTempFrom;
-  const a = drpTempFrom && akhir && drpTempFrom > akhir ? akhir : drpTempFrom;
-  const b = drpTempFrom && akhir && drpTempFrom > akhir ? drpTempFrom : akhir;
+  const a = awal && akhir && awal > akhir ? akhir : awal;
+  const b = awal && akhir && awal > akhir ? awal : akhir;
   $("#filterDateFrom").value = a || "";
   $("#filterDateTo").value = b || "";
   $("#filterDateFrom").dispatchEvent(new Event("change"));
@@ -228,6 +282,44 @@ const drpPrev = $("#drpNavPrev");
 if (drpPrev) drpPrev.addEventListener("click", (e) => { e.stopPropagation(); drpViewMonth--; drpRenderCalendars(); });
 const drpNext = $("#drpNavNext");
 if (drpNext) drpNext.addEventListener("click", (e) => { e.stopPropagation(); drpViewMonth++; drpRenderCalendars(); });
+/* KOTAK KETIK DARI / SAMPAI. Tanggal rentang bisa diketik langsung
+   (format apa pun -- dirapikan js/ui/date-input.js), selain diklik di
+   kalender. Yang sampai ke sini hanya `change` yang sudah rapi, yaitu
+   saat kotaknya ditinggalkan atau Enter. Urutannya diluruskan seperti
+   klik di kalender: tanggal akhir yang mendahului awal ditukar. */
+function drpKotakBerubah(e) {
+  const dari = $("#drpInputFrom").value;
+  const sampai = $("#drpInputTo").value;
+  const diketik = e.target.value; // "" = baru dikosongkan
+  [drpTempFrom, drpTempTo] = dari && sampai && dari > sampai ? [sampai, dari] : [dari, sampai];
+  if (diketik && !drpTerlihat(diketik, drpViewYear, drpViewMonth, drpTampilDuaBulan($("#drpGrid1")))) {
+    // Bulannya belum terlihat: kalender pindah ke sana (digambar ulang).
+    const dt = parseLocalDate(diketik);
+    drpViewYear = dt.getFullYear();
+    drpViewMonth = dt.getMonth();
+    drpRenderCalendars();
+    return;
+  }
+  drpWarnaiUlang($("#drpGrid0"), drpTempFrom, drpTempTo);
+  drpWarnaiUlang($("#drpGrid1"), drpTempFrom, drpTempTo);
+  drpSyncTriggerPreview();
+  drpSyncKotak();
+}
+/* Enter di "Dari" pindah ke "Sampai"; Enter di "Sampai" menerapkan
+   (rapi-rapinya sudah selesai: pendengar Enter milik date-input.js
+   jalan lebih dulu, di fase tangkap `document`). */
+function drpKotakTombol(e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  if (e.target.id === "drpInputFrom") $("#drpInputTo").focus();
+  else drpApply();
+}
+["drpInputFrom", "drpInputTo"].forEach((id) => {
+  const el = $("#" + id);
+  if (!el) return;
+  el.addEventListener("change", drpKotakBerubah);
+  el.addEventListener("keydown", drpKotakTombol);
+});
 const drpApplyBtn = $("#drpApply");
 if (drpApplyBtn) drpApplyBtn.addEventListener("click", drpApply);
 const drpResetBtn = $("#drpReset");
@@ -313,6 +405,13 @@ function buatRentangTanggal(akar, opsi) {
       ${pintas.length ? `<div class="drp-quick-row">${pintas
         .map((p, i) => `<button type="button" class="quick-date-btn" data-rt-pintas="${i}"></button>`)
         .join("")}</div>` : ""}
+      <div class="drp-typed" role="group" data-rt="ketik">
+        <label class="drp-typed-field"><span data-rt="labelDari"></span>
+          <input type="date" class="drp-typed-input" data-rt="isiDari" data-kotak-tanggal-tanpa-ikon></label>
+        <span class="drp-typed-sep" aria-hidden="true">–</span>
+        <label class="drp-typed-field"><span data-rt="labelSampai"></span>
+          <input type="date" class="drp-typed-input" data-rt="isiSampai" data-kotak-tanggal-tanpa-ikon></label>
+      </div>
       <div class="drp-header">
         <button type="button" class="drp-nav" data-rt="mundur" aria-label="${tt("Bulan sebelumnya", "Previous month")}"><i class="bi bi-chevron-left"></i></button>
         <div class="drp-months">
@@ -330,6 +429,10 @@ function buatRentangTanggal(akar, opsi) {
         <button type="button" class="drp-apply" data-rt="terapkan"></button>
       </div>
     </div>`;
+  /* Pengamat DOM baru mengubah kotak <input type="date"> sesudah kode
+     ini selesai; yang dibutuhkan di bawah (nilai ISO, peristiwa
+     rapi-rapi) harus sudah ada sekarang. */
+  if (typeof pasangSemuaKotakTanggal === "function") pasangSemuaKotakTanggal(akar);
 
   const q = (n) => akar.querySelector(`[data-rt="${n}"]`);
   const urut = (a, b) => (a && b && a > b ? [b, a] : [a, b]);
@@ -347,6 +450,10 @@ function buatRentangTanggal(akar, opsi) {
     });
     q("reset").textContent = "Reset";
     q("terapkan").textContent = tt("Terapkan", "Apply");
+    q("labelDari").textContent = tt("Dari", "From");
+    q("labelSampai").textContent = tt("Sampai", "To");
+    q("isiDari").setAttribute("aria-label", tt("Tanggal awal", "Start date"));
+    q("isiSampai").setAttribute("aria-label", tt("Tanggal akhir", "End date"));
     q("mundur").setAttribute("aria-label", tt("Bulan sebelumnya", "Previous month"));
     q("maju").setAttribute("aria-label", tt("Bulan berikutnya", "Next month"));
   }
@@ -369,7 +476,13 @@ function buatRentangTanggal(akar, opsi) {
     q("grid0").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan, a, b || a);
     q("grid1").innerHTML = drpMonthGridHtml(lihatTahun, lihatBulan + 1, a, b || a);
     q("teks").textContent = teksRentang(tDari, tSampai);
+    sinkronKotak();
     if (!q("popover").classList.contains("d-none")) posisikan();
+  }
+  // Kotak ketik Dari/Sampai mengikuti rentang sementara (tanpa menembakkan peristiwa)
+  function sinkronKotak() {
+    q("isiDari").value = tDari || "";
+    q("isiSampai").value = tSampai || "";
   }
   const terbuka = () => !q("popover").classList.contains("d-none");
 
@@ -429,7 +542,8 @@ function buatRentangTanggal(akar, opsi) {
     gambarPemicu();
   }
   function terapkan(a, b) {
-    [dari, sampai] = urut(a || "", b || a || "");
+    // Satu tanggal saja (di kotak mana pun) = rentang sehari
+    [dari, sampai] = urut(a || b || "", b || a || "");
     tutup();
     if (typeof o.onApply === "function") o.onApply(dari, sampai);
   }
@@ -447,6 +561,35 @@ function buatRentangTanggal(akar, opsi) {
   q("mundur").addEventListener("click", (e) => { e.stopPropagation(); lihatBulan--; gambarKalender(); });
   q("maju").addEventListener("click", (e) => { e.stopPropagation(); lihatBulan++; gambarKalender(); });
   q("terapkan").addEventListener("click", () => terapkan(tDari, tSampai));
+  /* Kotak ketik Dari/Sampai -- lihat drpKotakBerubah() di pemilih halaman
+     Jadwal untuk alasan tiap langkahnya. */
+  function kotakBerubah(e) {
+    const a = q("isiDari").value;
+    const b = q("isiSampai").value;
+    const diketik = e.target.value;
+    [tDari, tSampai] = urut(a, b);
+    if (diketik && !drpTerlihat(diketik, lihatTahun, lihatBulan, drpTampilDuaBulan(q("grid1")))) {
+      const dt = parseLocalDate(diketik);
+      lihatTahun = dt.getFullYear();
+      lihatBulan = dt.getMonth();
+      gambarKalender();
+      return;
+    }
+    drpWarnaiUlang(q("grid0"), tDari, tSampai);
+    drpWarnaiUlang(q("grid1"), tDari, tSampai);
+    q("teks").textContent = teksRentang(tDari, tSampai);
+    sinkronKotak();
+  }
+  q("isiDari").addEventListener("change", kotakBerubah);
+  q("isiSampai").addEventListener("change", kotakBerubah);
+  [q("isiDari"), q("isiSampai")].forEach((kotak) =>
+    kotak.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (kotak === q("isiDari")) q("isiSampai").focus();
+      else terapkan(tDari, tSampai);
+    }),
+  );
   q("reset").addEventListener("click", () => terapkan("", ""));
   akar.querySelectorAll("[data-rt-pintas]").forEach((btn) =>
     btn.addEventListener("click", (e) => {

@@ -866,9 +866,8 @@ function carrierNameFromShipment(s) {
   const nama = rapi(src.vessel);
   const nomor = rapi(src.voyage);
   if (!nama || !nomor) return nama || nomor;
-  const kunci = (x) => x.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (kunci(nama).endsWith(kunci(nomor))) return nama;
-  if (kunci(nomor).startsWith(kunci(nama))) return nomor;
+  if (kunciAlnum(nama).endsWith(kunciAlnum(nomor))) return nama;
+  if (kunciAlnum(nomor).startsWith(kunciAlnum(nama))) return nomor;
   return nama + " " + nomor;
 }
 

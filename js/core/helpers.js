@@ -1,6 +1,13 @@
 "use strict";
 
 /* HELPERS */
+
+/* KUNCI PEMBANDING TEKS: huruf besar, hanya A-Z & 0-9. "PT. Dsv" =
+   "pt dsv" = "PTDSV"; "205-3461 1695" = "20534611695". Dipakai semua
+   pencocokan nama pihak, nomor aju, BL/AWB & kode -- SATU aturan,
+   bukan salinan di tiap berkas. */
+const kunciAlnum = (v) => String(v == null ? "" : v).toUpperCase().replace(/[^A-Z0-9]/g, "");
+
 function uid(p) {
   return (p || "s") + "_" + Math.random().toString(36).slice(2, 10);
 }
@@ -45,7 +52,7 @@ function fmtDate(d) {
    atau tanggalnya tidak sah -> "". Dipakai sebagai tanggal PIB/PEB
    BAWAAN -- isiannya tetap bisa diubah pengguna. */
 function tanggalDariAju(aju) {
-  const k = String(aju == null ? "" : aju).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const k = kunciAlnum(aju);
   const m = /^\d{6}[A-Z0-9]{6}(20\d{2})(\d{2})(\d{2})\d{6}$/.exec(k);
   if (!m) return "";
   const iso = `${m[1]}-${m[2]}-${m[3]}`;
@@ -328,8 +335,11 @@ function newItem(mode) {
        urut barang ini di dokumen PI itu -- buku Import. */
     piNomor: "",
     piNoItem: "",
-    // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang sama (skb)
-    skb: [],
+    /* Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang
+       sama (skb). Buku Import: barang baru langsung membawa SKB PPh
+       bawaan (nomor & tanggal yang diatur di tab Daftar Barang,
+       features/skb-bawaan.js); belum diatur / kedaluwarsa / Export -> []. */
+    skb: typeof skbBawaanBarang === "function" ? skbBawaanBarang(modeKini) : [],
     // _facOpen: state UI murni (panel fasilitas terbuka/tertutup di tabel draft)
     _facOpen: false,
   };

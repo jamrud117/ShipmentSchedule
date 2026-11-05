@@ -401,14 +401,18 @@ table.item-table tbody tr:hover,
   color: inherit;
 }
 
-/* Kotak tanggal kini bisa diklik di mana saja (lihat js/ui/dom.js) */
+/* Kotak tanggal yang masih type="date" (pemilih rentang, pemilih pembantu)
+   bisa diklik di mana saja (lihat js/ui/dom.js). Kotak tanggal biasa kini
+   kotak teks yang bisa diketik: js/ui/date-input.js, css/date-input.css. */
 input[type="date"],
 input[type="time"],
 input[type="month"] {
   cursor: pointer;
 }
 input[type="date"]:disabled,
-input[type="date"][readonly] {
+input[type="date"][readonly],
+input[data-kotak-tanggal]:disabled,
+input[data-kotak-tanggal][readonly] {
   cursor: not-allowed;
 }
 
@@ -447,8 +451,10 @@ input[type="date"][readonly] {
   gap: var(--sp-2);
   flex-wrap: wrap;
 }
+/* Label di barisnya sendiri, lalu [ nomor ][ Simpan ][ Reset ] sebaris */
 .counter-body .form-label {
-  margin: 0 var(--sp-1) 0 0;
+  flex: 0 0 100%;
+  margin: 0;
 }
 .counter-body .form-control {
   width: 130px;
@@ -610,6 +616,8 @@ select,
 .pagination-size select,
 .date-field input[type="date"],
 .delay-strip-fields input[type="date"],
+.date-field input[data-kotak-tanggal],
+.delay-strip-fields input[data-kotak-tanggal],
 select.acct-role,
 .btn-quiet,
 .btn-more,
@@ -685,6 +693,8 @@ select:focus,
 .pagination-size select:focus,
 .date-field input[type="date"]:focus,
 .delay-strip-fields input[type="date"]:focus,
+.date-field input[data-kotak-tanggal]:focus,
+.delay-strip-fields input[data-kotak-tanggal]:focus,
 .basis-select-wrap select:focus,
 .dn-saring-bayar select:focus,
 .dn-saring-dasar select:focus,

@@ -31,14 +31,73 @@ const SJ_PERUSAHAAN = {
   cabang: "Cabang: JL. BKR No.27 Pasirluyu, Regol 40254 Kota Bandung",
 };
 
+/* ------------------------------------------------------------------
+   KOP SURAT PERUSAHAAN -- SATU untuk semua surat berkop:
+   Form Pengajuan Dana, Surat BC, dan Surat Jalan Export.
+
+   Logo 22 mm, nama perusahaan 20pt, alamat Pusat & Cabang 9,5pt,
+   ditutup garis kop tebal-tipis. Dulu bentuk ini disalin di tiap lembar
+   (dan kop surat jalan punya bentuk kecilnya sendiri); kini satu sumber,
+   jadi ketiganya selalu sama persis.
+
+   Ukurannya dalam MILIMETER & POIN (satuan kertas). Hurufnya dipatok di
+   sini (Times New Roman), bukan diwarisi dari badan surat: Surat Jalan
+   memakai Arial, dan kopnya tetap harus sama dengan surat lainnya.
+------------------------------------------------------------------ */
+function kopSuratHtml() {
+  return `
+  <div class="kop">
+    <img src="${SJ_LOGO}" alt="">
+    <div class="kop-teks">
+      <div class="kop-nama">${escapeHtml(SJ_PERUSAHAAN.nama)}</div>
+      <div class="kop-alamat">${escapeHtml(SJ_PERUSAHAAN.pusat)}</div>
+      <div class="kop-alamat">${escapeHtml(SJ_PERUSAHAAN.cabang)}</div>
+    </div>
+  </div>`;
+}
+
+function kopSuratCss() {
+  return `
+  /* KOP SURAT (kopSuratHtml). Dulu logonya 15 mm dan namanya 16pt --
+     seluruh kop hanya setinggi 15 mm dan selebar separuh kertas, jadi
+     terlihat seperti catatan di pojok, bukan kepala surat. */
+  .kop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.7mm solid #000;
+    position: relative;
+    font-family: "Times New Roman", Times, serif;
+    color: #000;
+  }
+  /* Garis tipis kedua di bawah garis tebal -- bentuk garis kop surat
+     resmi. Selebar garis tebalnya (seluruh lebar isi). */
+  .kop::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1.4mm;
+    border-bottom: 0.25mm solid #000;
+  }
+  .kop img { height: 22mm; width: auto; }
+  .kop-teks { text-align: center; }
+  .kop-nama { font-size: 20pt; font-weight: 700; letter-spacing: .3px; line-height: 1.2; }
+  .kop-alamat { font-size: 9.5pt; line-height: 1.35; }
+  `;
+}
+
 /* Sisa tabel diisi satu ruang kosong setinggi baris yang tersisa,
    supaya blok Total dan tanda tangan selalu jatuh di tempat yang sama
    berapa pun jumlah barangnya.
 
-   Ini tinggi MINIMUM ruang kosong itu. Di jendela cetak, sjIsiKertas()
-   melebarkannya lagi sampai kotak surat jalan memenuhi kertas A4. */
+   Ini tinggi MINIMUM ruang kosong itu (px; 26px = 7 mm, tinggi satu
+   baris barang). Di jendela cetak, sjIsiKertas() melebarkannya lagi
+   sampai surat jalan memenuhi kertas A4. */
 const SJ_MIN_BARIS = 10;
-const SJ_TINGGI_BARIS = 19;
+const SJ_TINGGI_BARIS = 26;
 
 /* Selisih aman (px) yang SENGAJA disisakan sjIsiKertas() di dasar kotak.
    Tata letak saat diukur (layar jendela cetak) dan saat dicetak bisa
@@ -333,10 +392,10 @@ function buildSuratJalanHtml(row, shipment) {
      yang dilebarkan sjIsiKertas() supaya tabel memenuhi kertas.
 
      Kolom yang tidak berisi barang tidak digariskan, sama seperti
-     Commercial Invoice. Yang dipertahankan cuma garis ATAS-nya:
-     itulah penutup baris barang terakhir. Sel kelimanya (kolom Nopol)
-     wajib ada walau kosong: garis atasnya menutup sisi bawah sel Nopol
-     di atasnya, dan di bawah itu kolomnya terbuka. */
+     Commercial Invoice: yang tergambar hanya tepi kiri & kanan tabel dan
+     garis bawahnya (= garis atas baris Total). Sel kelimanya (kolom
+     Nopol) wajib ada walau kosong: dialah yang menggambar tepi kanan di
+     bawah sel Nopol, dan di bawah barang terakhir kolomnya terbuka. */
   const barisKosong = [
     `<tr class="sj-fill" style="height:${kosong * SJ_TINGGI_BARIS}px">
         <td></td>${selCatatan}<td></td><td></td><td></td>
@@ -351,43 +410,32 @@ function buildSuratJalanHtml(row, shipment) {
   return `
   <div class="sj-sheet">
    <div class="sj-box">
-
-    <table class="sj-kop">
-      <tr>
-        <td class="sj-kop-logo"><img src="${SJ_LOGO}" alt="" /></td>
-        <td class="sj-kop-teks">
-          <div class="sj-company">${escapeHtml(SJ_PERUSAHAAN.nama)}</div>
-          <div class="sj-addr">${escapeHtml(SJ_PERUSAHAAN.pusat)}</div>
-          <div class="sj-addr">${escapeHtml(SJ_PERUSAHAAN.cabang)}</div>
-        </td>
-      </tr>
-    </table>
+    ${kopSuratHtml()}
 
     <div class="sj-title">SURAT JALAN</div>
 
+    <!-- Penerima di kiri (KEPADA / nama / garis / ALAMAT PENERIMA /
+         alamat: label kecil di atas isinya), data surat di kanan -- satu
+         baris per butir, label kecil di samping isinya. -->
     <table class="sj-meta">
       <tr>
         <td class="sj-meta-kiri" rowspan="3">
-          <!-- KEPADA / nama / garis / ALAMAT PENERIMA / alamat: label
-               kecil di atas isinya, supaya jelas siapa yang dituju dan
-               ke mana barangnya dikirim. -->
           <div class="sj-kepada">KEPADA</div>
           <div class="sj-to">${escapeHtml(sjKapital(p.receiver))}</div>
           <div class="sj-garis"></div>
           <div class="sj-alamat-k">ALAMAT PENERIMA</div>
           <div class="sj-to-addr">${escapeHtml(sjKapital(p.address))}</div>
         </td>
-        <td class="sj-lbl">Nomor :</td>
-        <td class="sj-lbl">Tanggal :</td>
+        <td class="sj-info-k">NOMOR</td>
+        <td class="sj-info-v sj-nomor">${escapeHtml(row.doc_number || "")}</td>
       </tr>
       <tr>
-        <td class="sj-val">${escapeHtml(row.doc_number || "")}</td>
-        <td class="sj-val">${escapeHtml(fmtDate(row.doc_date))}</td>
+        <td class="sj-info-k">TANGGAL</td>
+        <td class="sj-info-v">${escapeHtml(fmtDate(row.doc_date))}</td>
       </tr>
       <tr>
-        <td class="sj-ref" colspan="2">Ref : ${escapeHtml(
-          (shipment && shipment.invoice) || p.reference || "",
-        )}</td>
+        <td class="sj-info-k">REF</td>
+        <td class="sj-info-v">${escapeHtml((shipment && shipment.invoice) || p.reference || "")}</td>
       </tr>
     </table>
 
@@ -479,8 +527,9 @@ function cetakSuratJalan(rowId) {
   // tanpa ini sebagian peramban mencetak halaman yang masih kosong.
   w.onload = () => {
     /* Surat jalan memenuhi kertas A4: ruang kosong tabel dilebarkan
-       (Export) / baris kosong ditambah (Lokal) sampai tanda tangan jatuh
-       di dasar halaman. Harus SESUDAH tata letak jadi -- ia mengukur. */
+       (Export; daftar yang panjang dirapatkan dulu) / baris kosong
+       ditambah (Lokal) sampai tanda tangan jatuh di dasar halaman. Harus
+       SESUDAH tata letak jadi -- ia mengukur. */
     if (lokal) sjlIsiKertas(w.document);
     else sjIsiKertas(w.document);
     w.focus();
@@ -490,12 +539,13 @@ function cetakSuratJalan(rowId) {
 
 /* SURAT JALAN EXPORT MEMENUHI KERTAS A4.
 
-   Kotak surat jalan sudah dipatok setinggi kertas (min-height di CSS),
-   tapi tanpa ini isinya berhenti di tanda tangan dan sisa kotaknya
-   kosong. Yang dilakukan di sini: mengukur jarak antara tanda tangan dan
-   dasar kotak, lalu menambahkannya ke ruang kosong tabel barang. Hasilnya
-   daftar barang di atas, ruang lega di tengah, Total dan tanda tangan di
-   dasar halaman -- seperti lembar Excel aslinya.
+   Kotak surat jalan (.sj-box, pembungkus seluruh isi lembar) sudah
+   dipatok setinggi kertas (min-height di CSS), tapi tanpa ini isinya
+   berhenti di tanda tangan dan sisa kertasnya kosong. Yang dilakukan di
+   sini: mengukur jarak antara tanda tangan dan dasar kotak, lalu
+   menambahkannya ke ruang kosong tabel barang. Hasilnya daftar barang di
+   atas, ruang lega di tengah, Total dan tanda tangan di dasar halaman --
+   seperti lembar Excel aslinya.
 
    Diukur, bukan dihitung dari jumlah baris: nama barang yang membungkus
    atau nomor mobil yang banyak membuat tinggi tabel berbeda-beda, dan
@@ -504,38 +554,67 @@ function cetakSuratJalan(rowId) {
 
    SJ_SISA_AMAN_PX sengaja disisakan, dan pelebaran yang kelewat ditarik
    kembali. Kalau tidak ada ruang kosongnya atau sudah penuh, tidak ada
-   yang diubah. Mengembalikan jumlah piksel yang ditambahkan. */
+   yang diubah. Mengembalikan jumlah piksel yang ditambahkan.
+
+   Sebelum mengisi, daftar yang terlalu panjang untuk huruf normal
+   dirapatkan dulu (sjPasKertas). */
 function sjIsiKertas(dok) {
   const d = dok || document;
-  const kotak = d.querySelector(".sj-box");
+  sjPasKertas(d);
   const isi = d.querySelector(".sj-fill");
-  const ttd = d.querySelector(".sj-sign");
-  if (!kotak || !isi || !ttd) return 0;
-  const jendela = d.defaultView || window;
-  const angka = (v) => parseFloat(v) || 0;
-  // Jarak (px) dari bawah tanda tangan (termasuk jaraknya sendiri) ke dasar kotak.
-  const sisa = () => {
-    const gk = jendela.getComputedStyle(kotak);
-    const dasar =
-      kotak.getBoundingClientRect().bottom -
-      angka(gk.borderBottomWidth) -
-      angka(gk.paddingBottom);
-    return (
-      dasar -
-      (ttd.getBoundingClientRect().bottom +
-        angka(jendela.getComputedStyle(ttd).marginBottom))
-    );
-  };
-  const tambah = Math.floor(sisa() - SJ_SISA_AMAN_PX);
+  if (!isi || sjSisaKertas(d) === null) return 0;
+  const tambah = Math.floor(sjSisaKertas(d) - SJ_SISA_AMAN_PX);
   if (!(tambah > 0)) return 0;
   const semula = isi.getBoundingClientRect().height;
   isi.style.height = semula + tambah + "px";
   // Tabel kadang membulatkan tinggi barisnya; yang melewati batas aman ditarik kembali.
-  const lebih = SJ_SISA_AMAN_PX - sisa();
+  const lebih = SJ_SISA_AMAN_PX - sjSisaKertas(d);
   if (lebih > 0) {
     isi.style.height = Math.max(semula, semula + tambah - Math.ceil(lebih)) + "px";
   }
   return tambah;
+}
+
+/* Jarak (px) dari bawah tanda tangan (termasuk jarak bawahnya) ke dasar
+   kotak surat jalan. Tidak pernah negatif: isi yang melewati kertas
+   memanjangkan kotaknya, jadi sisanya nol. null = bukan lembar surat
+   jalan Export. */
+function sjSisaKertas(d) {
+  const kotak = d.querySelector(".sj-box");
+  const ttd = d.querySelector(".sj-sign");
+  if (!kotak || !ttd) return null;
+  const jendela = d.defaultView || window;
+  const angka = (v) => parseFloat(v) || 0;
+  const gk = jendela.getComputedStyle(kotak);
+  const dasar = kotak.getBoundingClientRect().bottom - angka(gk.borderBottomWidth) - angka(gk.paddingBottom);
+  return dasar - (ttd.getBoundingClientRect().bottom + angka(jendela.getComputedStyle(ttd).marginBottom));
+}
+
+/* SATU SURAT JALAN = SATU LEMBAR, sebisanya.
+
+   Tabel barang berhuruf 10pt memuat sekitar 16 baris barang. Daftar yang
+   lebih panjang membuat lembarnya melewati kertas -- kotaknya memanjang,
+   dan sisa di bawah tanda tangan habis. Saat sisa itu kurang dari
+   SJ_SISA_AMAN_PX (selisih aman yang sama dengan sjIsiKertas), tabelnya
+   dirapatkan setingkat demi setingkat (SJ_TINGKAT_RAPAT: huruf 9pt,
+   8,5pt, lalu 8pt dengan baris makin pendek) sampai barang, Total, dan
+   tanda tangan kembali satu lembar -- sekitar 21, 26, dan 31 baris
+   (lebih sedikit bila banyak nama barang yang membungkus). Yang masih
+   belum muat dibiarkan menyambung ke halaman berikutnya; judul kolomnya
+   berulang.
+
+   Kop, judul, dan blok penerima tidak ikut dikecilkan. Mengembalikan
+   jumlah tingkat yang dipakai (0 = tidak dirapatkan). */
+const SJ_TINGKAT_RAPAT = ["sj-rapat-1", "sj-rapat-2", "sj-rapat-3"];
+function sjPasKertas(dok) {
+  const d = dok || document;
+  const lembar = d.querySelector(".sj-sheet");
+  if (!lembar || !lembar.classList || sjSisaKertas(d) === null) return 0;
+  let tingkat = 0;
+  while (tingkat < SJ_TINGKAT_RAPAT.length && sjSisaKertas(d) < SJ_SISA_AMAN_PX) {
+    lembar.classList.add(SJ_TINGKAT_RAPAT[tingkat++]);
+  }
+  return tingkat;
 }
 
 function suratJalanCss() {
@@ -555,14 +634,16 @@ function suratJalanCss() {
      separate membuat garis tabel tergambar penuh di dalam selnya,
      sama seperti border elemen, sehingga tidak ada yang mendarat di
      tengah piksel lalu terbaca lebih tipis. Konsekuensinya tiap batas
-     harus dimiliki SATU sisi saja — di seluruh berkas ini: ATAS dan
-     KIRI. */
+     harus dimiliki SATU sisi saja: sel menggambar garis ATAS & KIRI-nya,
+     tabel menggambar tepi KANAN (dan bawah, bila barisnya tidak
+     menutup sendiri). */
   :root { --sj-line: 1px solid #000; }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
     font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
     color: #000;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
     /* Ukuran huruf persis seperti yang ditulis di sini. Tanpa ini peramban
@@ -580,76 +661,66 @@ function suratJalanCss() {
      di layar dan di kertas tata letaknya jadi SAMA, dan pengukur tinggi
      di sjIsiKertas() mengukur apa yang benar-benar tercetak. */
   .sj-sheet { width: 210mm; padding: 12.7mm; }
-  /* Seluruh isi dikurung satu bingkai, seperti berkas aslinya.
-
-     DASAR BINGKAI = DASAR KERTAS: tinggi minimumnya kertas A4 (297 mm)
+  /* DASAR LEMBAR = DASAR KERTAS: tinggi minimumnya kertas A4 (297 mm)
      dikurangi padding atas + bawah .sj-sheet (2 x 12,7 mm) dan 2px
-     selisih aman. Angka 25.4mm HARUS ikut kalau padding di atas diubah
-     -- bingkai yang lebih tinggi dari sisa kertas mendorong satu halaman
-     kosong di belakangnya; yang lebih rendah menyisakan kertas kosong. */
-  .sj-box { border: var(--sj-line); min-height: calc(297mm - 25.4mm - 2px); }
+     selisih aman. sjIsiKertas() mengukur jarak tanda tangan ke dasar
+     inilah. Angka 25.4mm HARUS ikut kalau padding di atas diubah --
+     yang lebih tinggi dari sisa kertas mendorong satu halaman kosong di
+     belakangnya; yang lebih rendah menyisakan kertas kosong.
+
+     Tanpa bingkai: kop surat (sama dengan Form Pengajuan Dana) berdiri
+     di atas, dan tiap blok di bawahnya bergaris sendiri. */
+  .sj-box { min-height: calc(297mm - 25.4mm - 2px); }
 
   table { border-collapse: separate; border-spacing: 0; width: 100%; }
-
-  .sj-kop td { border-bottom: var(--sj-line); padding: 4px 6px; }
-  /* LOGO DIPERBESAR — 58px -> 72px.
-
-     Tiga angka ini HARUS bergerak bersama:
-       - lebar sel logo
-       - lebar gambarnya
-       - padding kanan sel teks
-
-     Yang terakhir sering terlupa. Nama perusahaan dipusatkan pada sel
-     di sebelah kanan logo; padding kanan itulah yang menyeimbangkannya
-     supaya terlihat di tengah HALAMAN, bukan di tengah selnya sendiri.
-     Kalau logonya diperbesar tanpa paddingnya ikut, judulnya bergeser
-     ke kiri — halus, dan justru karena halus tidak ada yang menyadari.
-
-     Selnya 88px dengan padding 6px di kiri-kanan, jadi ruang isinya
-     76px: gambar 72px masih menyisakan 4px dan tidak menyentuh garis
-     bawah kop. Ada ujinya. */
-  .sj-kop-logo { width: 88px; vertical-align: middle; text-align: center; }
-  .sj-kop-logo img { width: 72px; height: auto; display: inline-block; }
-  .sj-kop-teks { text-align: center; padding-right: 88px !important; }
-  .sj-company { font-size: 15pt; font-weight: 700; }
-  .sj-addr { font-size: 7.5pt; line-height: 1.3; }
-
-  /* TANPA border-bottom. Baris pertama blok meta di bawahnya sudah
-     menggambar border-top di batas yang sama — dua pemilik untuk satu
-     garis, dan di situ saja tebalnya jadi dua kali lipat. */
+  /* Baris tidak terbelah di batas halaman (daftar barang yang panjang). */
+  tr { break-inside: avoid; page-break-inside: avoid; }
+${kopSuratCss()}
+  /* Jarak atas lebih besar daripada garis kop tipis (1,4 mm di bawah
+     garis tebal), supaya judul tidak terbaca menempel padanya. */
   .sj-title {
-    text-align: center; font-size: 11pt; font-weight: 700;
-    padding: 2px 0;
+    text-align: center; font-size: 16pt; font-weight: 700;
+    letter-spacing: 2px;
+    margin: 6mm 0 4mm;
   }
 
-  /* Blok Kepada / Nomor / Tanggal / Ref — bergaris seperti aslinya. */
-  /* Atas+kiri saja. Dengan separate, dua sel bersebelahan yang
-     sama-sama menggambar sisi kanan/kiri menghasilkan garis ganda. */
+  /* BLOK PENERIMA & DATA SURAT. Sel menggambar atas+kiri; tepi kanan
+     dan bawah milik tabelnya. */
+  .sj-meta { border-right: var(--sj-line); border-bottom: var(--sj-line); }
   .sj-meta td { border-top: var(--sj-line); border-left: var(--sj-line);
-    padding: 3px 6px; font-size: 9pt; }
-  .sj-meta-kiri { width: 55%; vertical-align: top; border-left: 0 !important; }
-  /* Blok penerima: label kecil abu-abu (KEPADA, ALAMAT PENERIMA) di atas
-     isinya -- nama tebal, garis tipis, lalu alamat -- supaya jelas siapa
-     yang dituju dan ke mana. Garis tipisnya latar setinggi 1px, bukan
-     border: semua border surat jalan lewat satu variabel (--sj-line). */
-  /* Seluruh blok Kepada diperkecil supaya tidak padat: label 7pt -> 6pt,
-     nama 10pt -> 9pt (tetap tebal), alamat 7.5pt -> 6.5pt. Jarak di
-     sekitar garis pemisah dan antarbaris alamat dilonggarkan sedikit --
-     alamat tiga baris yang panjang sebelumnya membuat kotak ini penuh
-     dan ikut menarik tinggi baris Nomor/Tanggal/Ref di sebelahnya. */
-  .sj-kepada, .sj-alamat-k { font-size: 6pt; letter-spacing: .5px; color: #555; }
-  .sj-to { font-weight: 700; font-size: 9pt; margin-top: 2px; }
-  .sj-garis { height: 1px; background: #999; margin: 5px 0 4px; }
-  .sj-to-addr { font-size: 6.5pt; line-height: 1.35; white-space: pre-line; margin-top: 1px; }
-  .sj-lbl { font-size: 8.5pt; text-align: center; }
-  .sj-val { text-align: center; font-size: 9pt; }
-  .sj-ref { font-size: 9pt; }
+    padding: 2mm 3mm; vertical-align: middle; }
+  .sj-meta-kiri { width: 54%; }
+  /* Penerima: label kecil abu-abu (KEPADA, ALAMAT PENERIMA) di atas
+     isinya -- nama tebal, garis tipis, lalu alamat. Garis tipisnya latar
+     setinggi 1px, bukan border: semua border surat jalan lewat satu
+     variabel (--sj-line). Sel ini membentang tiga baris data surat di
+     sebelahnya; alamat yang panjang cukup membuat ketiganya ikut lega,
+     tidak mendesak isinya. */
+  .sj-meta td.sj-meta-kiri { vertical-align: top; padding: 2.5mm 3.5mm 3mm; }
+  .sj-kepada, .sj-alamat-k { font-size: 7.5pt; letter-spacing: .6px; color: #555; }
+  .sj-to { font-weight: 700; font-size: 12pt; margin-top: 1mm; }
+  .sj-garis { height: 1px; background: #999; margin: 2.2mm 0 1.8mm; }
+  .sj-to-addr { font-size: 9.5pt; line-height: 1.4; white-space: pre-line; margin-top: 0.6mm; }
+  /* Data surat: label kecil di kiri, isinya di sebelahnya -- satu garis
+     di antara butir, tanpa garis antara label & isinya. */
+  .sj-meta td.sj-info-k {
+    width: 12%;
+    font-size: 7.5pt; letter-spacing: .6px; color: #555;
+    white-space: nowrap;
+  }
+  .sj-meta td.sj-info-v { border-left: 0; padding-left: 0; font-size: 11pt; }
+  .sj-meta td.sj-nomor { font-weight: 700; }
 
-  .sj-items { table-layout: fixed; }
-  /* Garis bawah blok meta digambar baris judul tabel barang. */
+  /* TABEL BARANG: tiap sel menggambar garis BAWAH & KIRI-nya, jadi tiap
+     baris menutup dirinya sendiri -- daftar panjang yang menyambung ke
+     halaman berikutnya tetap tertutup di dasar halaman pertama. Judul
+     kolom menggambar tepi atasnya (juga saat berulang di halaman
+     berikutnya); tepi kanan digambar kolom terakhir (Nopol), bukan
+     tabelnya, supaya berhenti tepat di baris terakhir sebuah halaman. */
+  .sj-items { table-layout: fixed; margin-top: 4mm; }
   .sj-items th, .sj-items td {
-    border-top: var(--sj-line); border-left: var(--sj-line);
-    padding: 2px 5px; font-size: 8.5pt;
+    border-bottom: var(--sj-line); border-left: var(--sj-line);
+    padding: 1.4mm 2mm; font-size: 10pt;
     vertical-align: top;
     /* Satu baris untuk semua kolom; overflow: hidden jadi jaring
        pengaman supaya teks yang kepanjangan terpotong rapi alih-alih
@@ -664,16 +735,22 @@ function suratJalanCss() {
     overflow: visible;
   }
   .sj-items th {
-    text-align: center; font-weight: 400;
-    background: #d9d9d9; font-size: 8.5pt;
+    border-top: var(--sj-line);
+    text-align: center; font-weight: 700;
+    background: #e3e3e3; font-size: 9.5pt;
+    padding-top: 1.8mm; padding-bottom: 1.8mm;
   }
-  .sj-items tbody td { height: 15px; }
-  /* Tepi kiri & kanan diambil alih bingkai kotak. */
-  .sj-items tr th:first-child, .sj-items tr td:first-child { border-left: 0; }
-  /* Ruang kosong: garis tegaknya tidak digambar, garis atasnya iya --
-     juga di kolom Nopol, jadi kolom itu berhenti di barang terakhir dan
-     terbuka di bawahnya. */
+  .sj-items .sj-nopol,
+  .sj-fill td:last-child,
+  .sj-items tfoot td:last-child { border-right: var(--sj-line); }
+  /* Tinggi minimum satu baris barang (= SJ_TINGGI_BARIS). */
+  .sj-items tbody td { height: 7mm; }
+  /* Ruang kosong: garis tegak di DALAM tabel tidak digambar -- juga di
+     kolom Nopol, jadi kolom itu berhenti di barang terakhir dan terbuka
+     di bawahnya. Tepi kiri & kanan tabel tetap utuh: digambar sel
+     pertama & terakhirnya. Garis bawahnya = garis atas baris Total. */
   .sj-fill td { border-left: 0; }
+  .sj-fill td:first-child { border-left: var(--sj-line); }
   /* Ruang kosong dilebarkan sjIsiKertas() lewat tinggi barisnya; tanpa
      padding, yang tersisa kalau kertas sudah penuh hanya garisnya. */
   .sj-fill td { padding-top: 0; padding-bottom: 0; }
@@ -682,11 +759,11 @@ function suratJalanCss() {
   .sj-items td.sj-catatan {
     text-align: left; vertical-align: top;
     white-space: normal; word-break: break-word; overflow: visible;
-    padding: 6px 8px 0; font-size: 7.5pt; color: #333;
+    padding: 2mm 2.5mm 0; font-size: 9pt; color: #333;
   }
-  .sj-no  { width: 26px; text-align: center; }
-  .sj-qty { width: 62px; text-align: center; }
-  .sj-pkg { width: 62px; text-align: center; }
+  .sj-no  { width: 10mm; text-align: center; }
+  .sj-qty { width: 25mm; text-align: center; }
+  .sj-pkg { width: 25mm; text-align: center; }
   /* ISI BARIS DATA rata tengah HORIZONTAL dan VERTIKAL di semua kolom:
      No, Nama Barang, Quantity, Package (Nopol punya aturan sendiri di
      bawah). Nama barang yang membungkus membuat barisnya lebih tinggi --
@@ -701,7 +778,7 @@ function suratJalanCss() {
   .sj-items td.sj-nama,
   .sj-items td.sj-qty,
   .sj-items td.sj-pkg { text-align: center; vertical-align: middle; }
-  /* KOLOM NOPOL. Lebarnya tetap 132px (dulu kolom Keterangan).
+  /* KOLOM NOPOL.
 
      Ditulis td.sj-nopol, bukan .sj-nopol saja: aturan ".sj-items td" di
      atas ber-kekhususan (0,1,1) dan mengalahkan kelas tunggal (0,1,0),
@@ -716,15 +793,15 @@ function suratJalanCss() {
      menjadi acuan penempatannya, makanya position: relative.
 
      Garis antarkotak hanya sisi ATAS kotak kedua dan seterusnya; garis
-     atas kotak pertama milik selnya sendiri, dan garis bawah kotak
-     terakhir milik sel kelima baris ruang kosong di bawahnya.
+     atas kotak pertama milik judul kolom di atasnya, dan garis bawah
+     kotak terakhir milik sel Nopol itu sendiri.
 
      Tanda petik-balik sengaja TIDAK dipakai di komentar ini — seluruh
      CSS ini berada di dalam template literal, dan satu petik-balik saja
      memotongnya di tengah. */
   .sj-items td.sj-nopol,
   .sj-items th.sj-nopol {
-    width: 132px;
+    width: 34mm;
     text-align: center;
     vertical-align: middle;
   }
@@ -739,33 +816,59 @@ function suratJalanCss() {
     white-space: nowrap; overflow: hidden;
   }
   .sj-nopol-sel + .sj-nopol-sel { border-top: var(--sj-line); }
-  /* Baris Total adalah baris TERAKHIR tabel. Di bawah konvensi
-     atas+kiri, sisi bawahnya tidak dimiliki siapa pun — tidak ada
-     baris berikutnya yang menggambar border-top. Jadi ia menutup
-     dirinya sendiri. */
-  .sj-items tfoot td { border-bottom: var(--sj-line); }
-  .sj-total-label { text-align: center; font-weight: 700; }
-  /* Baris Total tetap bergaris penuh — mematikan border-bottom-nya
-     membuat sisi bawahnya menggantung. */
-  .sj-items tfoot td { font-weight: 700; }
+  /* Jumlah per satuan boleh membungkus ("5 SET · 2 PCS"), tidak
+     terpotong. Daftar panjang yang menyambung ke halaman berikutnya:
+     baris Total hanya sekali, di akhir -- bukan diulang tiap halaman
+     seperti judul kolom. */
+  .sj-items tfoot { display: table-row-group; }
+  .sj-items tfoot td {
+    font-weight: 700; font-size: 10.5pt;
+    padding-top: 2mm; padding-bottom: 2mm;
+    white-space: normal;
+  }
+  .sj-total-label { text-align: center; letter-spacing: 1px; }
 
-  /* Empat kotak tanda tangan, masing-masing berbingkai. */
-  .sj-sign { margin: 10px 0; padding: 0 8px; }
-  /* Empat kotak berdampingan: tiap sel menggambar atas & kiri, dan
-     sel terakhir menutup sisi kanannya karena tidak ada tetangga. */
+  /* Empat kotak tanda tangan berdampingan: tiap sel menggambar atas,
+     kiri & bawah; sel terakhir menutup sisi kanannya karena tidak ada
+     tetangga. Tanpa jarak bawah -- sjIsiKertas() menaruh kotak ini di
+     dasar kertas.
+
+     Daftar yang tetap lebih dari satu lembar: tanda tangan tidak
+     terpisah sendirian di halaman berikutnya -- baris Total ikut turun
+     bersamanya. */
+  .sj-sign {
+    margin: 6mm 0 0; table-layout: fixed;
+    break-before: avoid; page-break-before: avoid; break-inside: avoid;
+  }
+  .sj-items tfoot tr { break-before: avoid; page-break-before: avoid; }
   .sj-sign td {
     width: 25%;
     border-top: var(--sj-line); border-left: var(--sj-line);
     border-bottom: var(--sj-line);
-    padding: 6px 4px 4px;
-    text-align: center; font-size: 8pt; color: #333;
-    height: 62px; vertical-align: top;
+    padding: 2mm 2mm 2.5mm;
+    text-align: center; font-size: 10pt;
+    vertical-align: top;
   }
-  /* Label & nama sama-sama rata tengah. */
   .sj-sign td:last-child { border-right: var(--sj-line); }
-  .sj-sign-k { text-align: center; }
-  /* Ruang tanda tangan. 34px terlalu sempit untuk tanda tangan basah
-     di atas kertas — nama di bawahnya tertindih. */
-  .sj-sign-v { margin-top: 62px; font-size: 8pt; text-align: center; }
+  /* Label & nama sama-sama rata tengah. */
+  .sj-sign-k { text-align: center; color: #333; }
+  /* Ruang tanda tangan basah: 22 mm -- tanda tangan tidak menindih nama
+     di bawahnya. */
+  .sj-sign-v { margin-top: 22mm; font-size: 10pt; font-weight: 700; text-align: center; }
+
+  /* MODE RAPAT BERTINGKAT (sjPasKertas): daftar barang yang terlalu
+     panjang untuk satu lembar berhuruf normal. Tingkatnya bertumpuk --
+     kelas tingkat berikutnya ditambahkan, bukan menggantikan -- dan yang
+     ditulis belakangan menang. Tabelnya saja yang dirapatkan, ditambah
+     sedikit jarak judul & ruang tanda tangan; kop & blok penerima tetap. */
+  .sj-rapat-1 .sj-title { margin: 4mm 0 3mm; }
+  .sj-rapat-1 .sj-sign-v { margin-top: 16mm; }
+  .sj-rapat-1 .sj-items th, .sj-rapat-1 .sj-items td { padding: 1mm 1.8mm; font-size: 9pt; }
+  .sj-rapat-1 .sj-items tbody td { height: 5.6mm; }
+  .sj-rapat-1 .sj-items tfoot td { font-size: 9.5pt; }
+  .sj-rapat-2 .sj-items th, .sj-rapat-2 .sj-items td { padding: 0.7mm 1.6mm; font-size: 8.5pt; }
+  .sj-rapat-2 .sj-items tbody td { height: 4.6mm; }
+  .sj-rapat-3 .sj-items th, .sj-rapat-3 .sj-items td { padding: 0.4mm 1.4mm; font-size: 8pt; }
+  .sj-rapat-3 .sj-items tbody td { height: 4mm; }
   `;
 }

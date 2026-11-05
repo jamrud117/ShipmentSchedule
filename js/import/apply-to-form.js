@@ -455,6 +455,24 @@ function applyImportedBcData(parsed) {
     terapkanDataPabeanImpor(f.dataPabean);
     filled++;
   }
+  /* INVOICE & PACKING LIST: nomor & tanggal yang dibawa berkas = isian
+     MANUAL (bukan ikutan); yang kosong pasangannya mengikuti (aturan yang
+     sama dengan mengetik, form-router.js). Berkas yang membawa keduanya
+     dengan nomor / tanggal BERBEDA diberi peringatan -- CI & PL satu
+     kiriman seharusnya sama (bedaCiplDiBerkas). */
+  const bedaCipl = bedaCiplDiBerkas(f, src);
+  const dpBerkas = f.dataPabean || {};
+  [
+    ["fInvoice", f.invoice],
+    ["fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : "")],
+    ["fPackingList", dpBerkas.packingListNomor],
+    ["fPackingListDate", dpBerkas.packingListTanggal],
+  ].forEach(([id, nilai]) => {
+    const el = $("#" + id);
+    if (el && nilai && el.value === String(nilai).trim()) delete el.dataset.ikut;
+  });
+  if (typeof lengkapiPasangan === "function") lengkapiPasangan(PASANGAN_CI_PL);
+  if (bedaCipl.length) notes.unshift(t("y.cipl.invoice.packing.beda", { dok: labelDokumenImpor(src), beda: kalimatBedaCipl(bedaCipl) }));
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
   /* Tanggal B/L-AWB dari dokumen = isian MANUAL (bukan ikutan); yang
@@ -661,7 +679,33 @@ function applyImportedBcData(parsed) {
   const summary = t("x.field.barang.terisi.otomatis", { f: filled, b: items.length, dok: docLabel, sumber: sourceLabel, fac: facSuffix });
   // Nomor dari berkas bisa saja sudah dipakai jadwal lain (cek-duplikat.js)
   if (typeof periksaNomorGandaForm === "function") periksaNomorGandaForm();
-  return { summary, notes };
+  return { summary, notes, bedaCipl: bedaCipl.length > 0 };
+}
+
+/* Nama jenis berkas untuk kalimat peringatan */
+function labelDokumenImpor(src) {
+  if (isCiplSource(src)) return "CIPL";
+  if (src === "pdf") return "PIB PDF";
+  if (src === "pdf-peb") return "PEB PDF";
+  return tt("draft CEISA", "CEISA draft");
+}
+
+/* Nomor / tanggal Invoice vs Packing List DI DALAM SATU BERKAS: CIPL
+   (sheet CI vs sheet PL) atau draft CEISA / PIB-PEB (dokumen 380 vs 217).
+   CIPL tanpa sheet PL memakai nomor invoice sebagai nomor PL -- selalu
+   sama, tidak pernah diperingatkan. Bentuknya sama dengan
+   bedaInvoicePackingList (form-router.js). */
+function bedaCiplDiBerkas(f, src) {
+  const dp = (f && f.dataPabean) || {};
+  const inv = String(f.invoice || "").trim();
+  const pl = String(dp.packingListNomor || "").trim();
+  const tglInv = String(f.invoiceDate || (isCiplSource(src) ? f.docDate || "" : "")).trim();
+  const tglPl = String(dp.packingListTanggal || "").trim();
+  const kunci = (x) => x.replace(/\s+/g, "").toUpperCase();
+  const beda = [];
+  if (inv && pl && kunci(inv) !== kunci(pl)) beda.push({ jenis: "nomor", invoice: inv, pl });
+  if (tglInv && tglPl && tglInv !== tglPl) beda.push({ jenis: "tanggal", invoice: tglInv, pl: tglPl });
+  return beda;
 }
 
 function showImportNotes(summary, notes) {

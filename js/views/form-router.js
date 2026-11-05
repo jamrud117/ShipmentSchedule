@@ -54,7 +54,11 @@ function showDocNumView() {
   }
   // Aturan Doc No (vendor yang Doc No-nya tidak dicetak) & daftar vendor dimuat ulang tiap halaman dibuka
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
+  // Aturan No. Invoice (vendor yang No. Invoice-nya boleh sama) dimuat bersamanya
+  if (typeof fundInvoiceMuat === "function") fundInvoiceMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
+  // Daftar customer invoice & data pengisiannya (invoice-pihak.js)
+  if (typeof invCustomerMuat === "function") invCustomerMuat();
   /* Halaman ini untuk mengisi permintaan nomor: kursor langsung di isian
      kosong pertama. Tidak di layar sentuh -- membuka halaman bukan
      berarti mau mengetik, dan papan ketiknya menutupi riwayat nomor. */
@@ -458,6 +462,10 @@ function renderFormPage(id) {
   if (typeof siapkanPilihPihak === "function") siapkanPilihPihak();
   // Data PIB/PEB: nilai bawaan diisikan sesudah moda & Supplier/Customer terpasang
   bukaDataPabeanForm();
+  // SKB PPh bawaan terbaru (pengguna lain bisa saja sudah menggantinya) -- tidak ditunggu (skb-bawaan.js)
+  if (typeof skbBawaanMuat === "function") skbBawaanMuat();
+  // No. & Tanggal Packing List baru terisi di atas: pasangan Invoice / Packing List ditandai sekarang
+  tandaiPasanganTersimpan(PASANGAN_CI_PL);
   renderRouteStopsUI();
   recalcCustoms();
   syncAffixState();
@@ -472,63 +480,149 @@ function renderFormPage(id) {
   if (!id || !layarSentuh()) fokusIsianPertama($('.tab-pane[data-tabpane="umum"]'), { pertama: !!id, tanpaGulir: true });
 }
 
-/* TANGGAL MASTER & HOUSE B/L-AWB SALING MENGIKUTI.
+/* PASANGAN ISIAN YANG SALING MENGIKUTI.
 
-   Begitu salah satu diisi, yang lain ikut bertanggal sama -- kiriman
-   langsung memang memakai satu tanggal untuk keduanya. Tetap bisa
-   diketik sendiri: kotak yang diubah langsung menjadi isian MANUAL dan
-   tidak pernah ditimpa lagi. Yang ikut ditandai data-ikut, jadi:
-     - kotak kosong, atau berisi tanggal ikutan -> mengikuti yang lain;
+     Tanggal Master B/L-AWB  <->  Tanggal House B/L-AWB
+     No. Invoice             <->  No. Packing List
+     Tanggal Invoice         <->  Tanggal Packing List
+
+   Begitu salah satu diisi, yang lain ikut sama -- kiriman langsung memakai
+   satu tanggal B/L untuk keduanya, dan Commercial Invoice & Packing List
+   satu kiriman SEHARUSNYA bernomor & bertanggal sama. Tetap bisa diketik
+   sendiri: kotak yang diubah langsung menjadi isian MANUAL dan tidak
+   pernah ditimpa lagi. Yang ikut ditandai data-ikut, jadi:
+     - kotak kosong, atau berisi isian ikutan -> mengikuti yang lain;
      - kotak yang diketik sendiri -> dibiarkan.
-   Mengosongkan satu kotak ikut mengosongkan pasangannya yang masih
-   ikutan. Tanggal tersimpan yang sama dianggap ikutan keduanya. */
-const PASANGAN_TANGGAL_BL = { fMasterBLDate: "fHouseBLDate", fHouseBLDate: "fMasterBLDate" };
+   Yang diteruskan HANYA isian yang diisi. Mengosongkan satu kotak TIDAK
+   mengosongkan pasangannya: isian tidak boleh hilang dua-duanya sekaligus
+   gara-gara satu kotak dihapus (untuk diketik ulang, atau karena kiriman
+   ini memang hanya punya Master / hanya House). Kotak yang ditinggal tetap
+   ikutan, jadi begitu kotak yang kosong diisi lagi ia ikut berganti. Isian
+   tersimpan yang sama dianggap ikutan keduanya.
 
-function samakanTanggalBl(dariId) {
+   Invoice & Packing List yang BERBEDA tidak dicegah (bisa saja memang
+   begitu), tetapi ditandai: keterangan di bawah barisnya (tandaiCiplBeda)
+   dan peringatan saat impor CIPL / draft CEISA (apply-to-form.js). */
+const PASANGAN_TANGGAL_BL = { fMasterBLDate: "fHouseBLDate", fHouseBLDate: "fMasterBLDate" };
+const PASANGAN_CI_PL = {
+  fInvoice: "fPackingList",
+  fPackingList: "fInvoice",
+  fInvoiceDate: "fPackingListDate",
+  fPackingListDate: "fInvoiceDate",
+};
+const PASANGAN_ISIAN = Object.assign({}, PASANGAN_TANGGAL_BL, PASANGAN_CI_PL);
+/* No. & Tanggal Packing List tersimpan di Data PIB/PEB (draftDataPabean,
+   data-pabean-form.js) -- isian ikutan yang ditulis di sini ikut ke sana. */
+const SIMPAN_PASANGAN = { fPackingList: "packingListNomor", fPackingListDate: "packingListTanggal" };
+
+function samakanPasangan(dariId) {
   const dari = $("#" + dariId);
-  const ke = $("#" + PASANGAN_TANGGAL_BL[dariId]);
+  const ke = $("#" + PASANGAN_ISIAN[dariId]);
   if (!dari || !ke) return;
+  if (!dari.value) return; // dikosongkan: pasangannya tetap (lihat catatan di atas)
   if (ke.value && ke.dataset.ikut !== "1") return; // diisi sendiri: dibiarkan
   ke.value = dari.value;
-  if (ke.value) ke.dataset.ikut = "1";
-  else delete ke.dataset.ikut;
+  ke.dataset.ikut = "1";
+  const k = SIMPAN_PASANGAN[ke.id];
+  if (k && typeof draftDataPabean === "object" && draftDataPabean) draftDataPabean[k] = ke.value;
 }
 
-/* Saat form dibuka: dua tanggal yang sama = ikutan (yang mana pun yang
+/* Saat form dibuka: dua isian yang sama = ikutan (yang mana pun yang
    diubah, yang lain mengikuti); yang berbeda = dua-duanya manual. */
+function tandaiPasanganTersimpan(pasangan) {
+  const sudah = new Set();
+  Object.keys(pasangan || PASANGAN_ISIAN).forEach((id) => {
+    if (sudah.has(id)) return;
+    const pid = PASANGAN_ISIAN[id];
+    sudah.add(id).add(pid);
+    const a = $("#" + id);
+    const b = $("#" + pid);
+    if (!a || !b) return;
+    const sama = !!a.value && a.value.trim() === b.value.trim();
+    [a, b].forEach((el) => {
+      if (sama) el.dataset.ikut = "1";
+      else delete el.dataset.ikut;
+    });
+  });
+  tandaiCiplBeda();
+}
 function tandaiTanggalBlTersimpan() {
-  const m = $("#fMasterBLDate");
-  const h = $("#fHouseBLDate");
-  if (!m || !h) return;
-  const sama = !!m.value && m.value === h.value;
-  [m, h].forEach((el) => {
-    if (sama) el.dataset.ikut = "1";
-    else delete el.dataset.ikut;
+  tandaiPasanganTersimpan(PASANGAN_TANGGAL_BL);
+}
+
+/* Sesudah impor berkas: isian yang terbaca mengisi pasangannya yang masih
+   kosong -- aturan yang sama dengan mengetik. */
+function lengkapiPasangan(pasangan) {
+  const sudah = new Set();
+  Object.keys(pasangan || PASANGAN_ISIAN).forEach((id) => {
+    if (sudah.has(id)) return;
+    const pid = PASANGAN_ISIAN[id];
+    sudah.add(id).add(pid);
+    const a = $("#" + id);
+    const b = $("#" + pid);
+    if (!a || !b) return;
+    if (a.value && !b.value) samakanPasangan(id);
+    else if (b.value && !a.value) samakanPasangan(pid);
+  });
+  tandaiCiplBeda();
+}
+function lengkapiTanggalBl() {
+  lengkapiPasangan(PASANGAN_TANGGAL_BL);
+}
+
+/* Invoice vs Packing List yang berbeda: daftar perbedaannya (kosong =
+   sama, atau salah satunya belum diisi). Nomor dibandingkan tanpa beda
+   huruf besar/kecil & spasi. */
+function bedaInvoicePackingList() {
+  const v = (id) => ($("#" + id) ? String($("#" + id).value || "").trim() : "");
+  const kunci = (x) => x.replace(/\s+/g, "").toUpperCase();
+  const beda = [];
+  if (v("fInvoice") && v("fPackingList") && kunci(v("fInvoice")) !== kunci(v("fPackingList")))
+    beda.push({ jenis: "nomor", invoice: v("fInvoice"), pl: v("fPackingList") });
+  if (v("fInvoiceDate") && v("fPackingListDate") && v("fInvoiceDate") !== v("fPackingListDate"))
+    beda.push({ jenis: "tanggal", invoice: v("fInvoiceDate"), pl: v("fPackingListDate") });
+  return beda;
+}
+function kalimatBedaCipl(beda) {
+  return beda
+    .map((b) =>
+      b.jenis === "nomor"
+        ? tt(`No. Packing List (${b.pl}) berbeda dengan No. Invoice (${b.invoice})`, `Packing List No. (${b.pl}) differs from Invoice No. (${b.invoice})`)
+        : tt(
+            `Tanggal Packing List (${fmtDate(b.pl)}) berbeda dengan Tanggal Invoice (${fmtDate(b.invoice)})`,
+            `Packing List Date (${fmtDate(b.pl)}) differs from Invoice Date (${fmtDate(b.invoice)})`,
+          ),
+    )
+    .join("; ");
+}
+// Keterangan di bawah baris Invoice | Packing List, selama keduanya berbeda
+function tandaiCiplBeda() {
+  const ket = $("#ciplBedaKet");
+  if (!ket) return;
+  const beda = bedaInvoicePackingList();
+  ket.hidden = !beda.length;
+  ket.textContent = beda.length
+    ? `${kalimatBedaCipl(beda)}. ${tt("Seharusnya nomor & tanggal Invoice dan Packing List sama — periksa dokumennya.", "Invoice and Packing List number & date should match — check the documents.")}`
+    : "";
+  ["fPackingList", "fPackingListDate"].forEach((id, i) => {
+    const el = $("#" + id);
+    if (el) el.classList.toggle("is-beda", beda.some((b) => b.jenis === (i ? "tanggal" : "nomor")));
   });
 }
 
-/* Sesudah impor berkas: tanggal yang terbaca mengisi pasangannya yang
-   masih kosong -- aturan yang sama dengan mengetik. */
-function lengkapiTanggalBl() {
-  const m = $("#fMasterBLDate");
-  const h = $("#fHouseBLDate");
-  if (!m || !h) return;
-  if (m.value && !h.value) samakanTanggalBl("fMasterBLDate");
-  else if (h.value && !m.value) samakanTanggalBl("fHouseBLDate");
-}
-
 // Diubah sendiri = isian manual; pasangannya mengikuti kalau masih kosong / ikutan
-Object.keys(PASANGAN_TANGGAL_BL).forEach((id) => {
+Object.keys(PASANGAN_ISIAN).forEach((id) => {
   const el = $("#" + id);
   if (!el) return;
   const ubah = () => {
     delete el.dataset.ikut;
-    samakanTanggalBl(id);
+    samakanPasangan(id);
+    tandaiCiplBeda();
   };
   el.addEventListener("input", ubah);
   el.addEventListener("change", () => {
     ubah();
-    etdIkutTanggalBl();
+    if (PASANGAN_TANGGAL_BL[id]) etdIkutTanggalBl();
   });
 });
 

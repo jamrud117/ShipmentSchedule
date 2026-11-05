@@ -52,7 +52,10 @@ function ensureExcelJS() {
   return exceljsPromise;
 }
 
-/* KOTAK TANGGAL: klik di mana saja membuka pemilih tanggal */
+/* KOTAK JAM / BULAN: klik di mana saja membuka pemilih. <input type="date">
+   tidak lagi lewat sini -- semuanya kotak ketik (ui/date-input.js) yang
+   membuka kalender dari ikon di ujung kanan; yang masih bertipe date
+   (filter tersembunyi, kotak pembantu kalender) memang tidak diklik. */
 document.addEventListener("click", (e) => {
   const el = e.target.closest(
     'input[type="date"], input[type="time"], input[type="month"]',

@@ -26,20 +26,49 @@ const FUND_PPN_RATES = [0, 1.1, 11];
    pos tanpa PPN (storage) di luar objek PPH 23 ini. */
 const FUND_PPH23_RATE = 2;
 
-/* PPN DIHITUNG SAMPAI 2 DESIMAL (sen): 16.873.095,68 x 1,1% =
-   185.604,05248 -> 185.604,05. Angka bulat tetap tampil tanpa ".00"
-   (formatNilai).
+/* PPN PER BARIS MENGIKUTI VENDORNYA (fund-vendor-aturan.js):
+     - PRIME (dan mata uang selain IDR): sampai 2 desimal (sen) --
+       16.873.095,68 x 1,1% = 185.604,05248 -> 185.604,05. Angka bulat
+       tetap tampil tanpa ".00" (formatNilai).
+     - WIDE dan vendor lain (IDR): RUPIAH PENUH per baris, ke rupiah
+       terdekat -- 1.291.512 x 1,1% = 14.206,632 -> 14.207.
+   Total PPN dan TOTAL sesudahnya dibulatkan ke rupiah penuh (fundLineTotals).
 
    Pembulatannya memakai BILANGAN BULAT (nilai dalam sen x tarif), bukan
    pecahan biner: 2.902,50 x 11% = 319,275 tepat setengah sen dan harus
    naik ke 319,28, tetapi hitungan pecahan biner menurunkannya ke 319,27.
    Setengah dibulatkan menjauhi nol, jadi baris diskon seukuran pos yang
-   didiskon membatalkan PPN pos itu sampai sen terakhir. Penjumlahan PPN
+   didiskon membatalkan PPN pos itu sampai satuan terakhir. Penjumlahan PPN
    juga dalam sen (fundBulatSen) supaya total tidak membawa derau biner
    seperti 0.30000000000000004. */
 const FUND_SEN = 100;
 const fundSen = (v) => Math.round((Number(v) || 0) * FUND_SEN); // rupiah -> sen (bilangan bulat)
 const fundBulatSen = (v) => fundSen(v) / FUND_SEN || 0; // 2 desimal, tanpa derau biner dan tanpa -0
+
+/* ANGKA TOTAL DALAM RUPIAH PENUH, DIBULATKAN KE ATAS. PPN per baris boleh
+   2 desimal (di atas), tetapi Total PPN dan TOTAL yang dibayar -- yang
+   tertulis di kaki form, surat cetak, dan Terbilang -- dibulatkan ke rupiah
+   penuh sesuai hitungan akunting: 8.758.011,35 -> 8.758.012, berapa pun
+   pecahannya. Total PPN dibulatkan lebih dulu, lalu TOTAL dijumlah dari
+   angka-angka bulat (fundLineTotals), jadi yang tercetak selalu menjumlah
+   tepat dan Terbilang sama dengan TOTAL.
+
+   Hanya untuk IDR. Pengajuan dalam mata uang lain (USD) tetap memakai sen:
+   1.213,71 dolar tidak boleh menjadi 1.214. Mata uang kosong = IDR, seperti
+   di seluruh aplikasi (p.currency || "IDR"). */
+const fundRupiahPenuh = (mata) => {
+  const kode = String(mata == null ? "" : mata).trim().toUpperCase();
+  return kode === "" || kode === "IDR";
+};
+// Sen (bilangan bulat) -> rupiah penuh, ke atas; `|| 0` supaya tanpa -0
+const fundNaikRupiah = (sen) => Math.ceil(sen / FUND_SEN) || 0;
+
+/* PPN PER BARIS sampai 2 desimal (true) atau rupiah penuh (false) untuk
+   pengajuan ini. Mata uang selain IDR: selalu sen (1.213,71 dolar tidak
+   boleh jadi 1.214). IDR: ikut vendornya -- hanya vendor yang menulis PPN
+   per barisnya dengan desimal (PRIME) yang 2 desimal; WIDE dan vendor lain
+   rupiah penuh. Lihat fund-vendor-aturan.js. */
+const fundPpnSen = (mata, payee) => !fundRupiahPenuh(mata) || fundVendorPpnDesimal(payee);
 
 /* NILAI RUPIAH TERSIMPAN -- dua bentuk:
      - ANGKA (payload.lines[].amount = 16873095.68): pengajuan yang
@@ -342,16 +371,23 @@ function fundLineValues(lines) {
   });
 }
 
-/* PPN dari nilai bertanda sebuah baris (negatif untuk diskon), dibulatkan
-   ke 2 desimal -- lihat FUND_SEN di atas. */
-function fundLinePpnNilai(nilai, baris) {
+/* PPN dari nilai bertanda sebuah baris (negatif untuk diskon).
+
+   `perSen` (bawaan true): dibulatkan ke 2 desimal -- lihat FUND_SEN di atas.
+   false: dibulatkan ke RUPIAH PENUH, rupiah terdekat per baris dengan
+   setengah menjauhi nol, seperti vendor yang menulis PPN per barisnya dalam
+   rupiah (WIDE). Nilai barisnya tetap dibaca sampai sen: 2.902,50 x 11% =
+   319,275 -> 319. */
+function fundLinePpnNilai(nilai, baris, perSen = true) {
   const sen = fundSen(nilai);
   // Tarif dalam per-sepuluh-ribu supaya bulat: 1,1% = 110, 11% = 1100.
   const tarif = Math.round(fundLineRate(baris) * 100);
   const kali = Math.abs(sen) * tarif; // sen x tarif x 100: bilangan bulat, tepat
-  const sisa = kali % 10000;
-  const bulat = (kali - sisa) / 10000 + (sisa >= 5000 ? 1 : 0); // setengah naik, menjauhi nol
-  return bulat === 0 ? 0 : (sen < 0 ? -bulat : bulat) / FUND_SEN;
+  // PPN dalam sen = kali / 10.000; dalam rupiah penuh = kali / 1.000.000
+  const pembagi = perSen ? 10000 : 10000 * FUND_SEN;
+  const sisa = kali % pembagi;
+  const bulat = (kali - sisa) / pembagi + (sisa * 2 >= pembagi ? 1 : 0); // setengah naik, menjauhi nol
+  return bulat === 0 ? 0 : (sen < 0 ? -bulat : bulat) / (perSen ? FUND_SEN : 1);
 }
 
 /* PPN dibulatkan ke RUPIAH PENUH. Hanya untuk baris ber-grupPpn (impor
@@ -364,11 +400,12 @@ function fundLinePpnRupiah(nilai, baris) {
 
 const fundGrupPpn = (b) => String((b && b.grupPpn) || "").trim();
 
-/* PPN PER BARIS -- 2 desimal, dengan KELOMPOK PEMBULATAN.
+/* PPN PER BARIS -- dengan KELOMPOK PEMBULATAN.
 
-   Baris biasa: tiap baris dibulatkan sendiri ke 2 desimal (seperti
-   tagihan forwarder, yang menulis PPN per baris), dan PPN total adalah
-   jumlah PPN baris-barisnya.
+   Baris biasa: tiap baris dibulatkan sendiri (seperti tagihan forwarder,
+   yang menulis PPN per baris) -- ke 2 desimal untuk PRIME dan mata uang
+   selain IDR, ke rupiah penuh untuk WIDE dan vendor lain (fundPpnSen) --
+   dan PPN total adalah jumlah PPN baris-barisnya.
 
    Baris ber-grupPpn sama -- komponen satu AWB FedEx: freight, diskon,
    surcharge -- mengikuti vendornya, yang menulis PPN dalam RUPIAH PENUH:
@@ -376,9 +413,13 @@ const fundGrupPpn = (b) => String((b && b.grupPpn) || "").trim();
    PPN-nya, lalu dibagikan lagi ke tiap baris (sisa pembulatan terbesar
    dulu). Kolom PPN per baris tetap menjumlah tepat ke total, dan
    totalnya sama dengan invoice sampai rupiah terakhir -- karena itu
-   baris ber-grupPpn tidak ikut 2 desimal. */
-function fundLinePpnDaftar(daftar, nilai) {
-  const hasil = daftar.map((b, i) => (fundGrupPpn(b) ? fundLinePpnRupiah(nilai[i], b) : fundLinePpnNilai(nilai[i], b)));
+   baris ber-grupPpn tidak ikut 2 desimal.
+
+   `mata` & `payee` = mata uang dan "Dibayarkan Kepada" pengajuannya; tanpa
+   keduanya, IDR tanpa vendor -> rupiah penuh. */
+function fundLinePpnDaftar(daftar, nilai, mata, payee) {
+  const perSen = fundPpnSen(mata, payee);
+  const hasil = daftar.map((b, i) => (fundGrupPpn(b) ? fundLinePpnRupiah(nilai[i], b) : fundLinePpnNilai(nilai[i], b, perSen)));
   const grup = new Map();
   daftar.forEach((b, i) => {
     const g = fundGrupPpn(b);
@@ -406,11 +447,19 @@ function fundLinePpnDaftar(daftar, nilai) {
 }
 
 /* Seluruh angka lembar rincian, dihitung dari satu tempat supaya form
-   dan surat cetak tidak mungkin menampilkan total yang berbeda. */
-function fundLineTotals(lines) {
+   dan surat cetak tidak mungkin menampilkan total yang berbeda.
+
+   `mata` = mata uang pengajuan. IDR (juga kosong): Total PPN dibulatkan ke
+   rupiah penuh ke atas, Total Diskon ke rupiah terdekat, dan TOTAL dijumlah
+   dari angka-angka bulat itu -- lihat fundRupiahPenuh. Mata uang lain:
+   sampai sen, seperti sebelumnya.
+
+   `payee` = "Dibayarkan Kepada": menentukan PPN per baris 2 desimal (PRIME)
+   atau rupiah penuh (selain itu) -- fundPpnSen. */
+function fundLineTotals(lines, mata, payee) {
   const daftar = normalisasiBarisDana(lines);
   const nilai = fundLineValues(daftar);
-  const ppnBaris = fundLinePpnDaftar(daftar, nilai);
+  const ppnBaris = fundLinePpnDaftar(daftar, nilai, mata, payee);
   let totalNilai = 0;
   let totalDiskon = 0;
   let totalPpnSen = 0; // dijumlah dalam sen: tanpa derau pecahan biner
@@ -424,12 +473,14 @@ function fundLineTotals(lines) {
     // nilai bertandanya, jadi diskon ikut mengurangi dasarnya.
     if (fundLineRate(b) > 0) dppPph += v;
   });
-  const totalPpn = totalPpnSen / FUND_SEN;
-  const totalNet = Math.round(totalNilai) - totalDiskon;
+  const rupiah = fundRupiahPenuh(mata);
+  const totalPpn = rupiah ? fundNaikRupiah(totalPpnSen) : totalPpnSen / FUND_SEN;
+  const diskon = rupiah ? Math.round(totalDiskon) : totalDiskon;
+  const totalNet = Math.round(totalNilai) - diskon;
   const pph = Math.max(0, Math.round((dppPph * FUND_PPH23_RATE) / 100));
   return {
     totalNilai: Math.round(totalNilai), // pos biaya, SEBELUM diskon
-    totalDiskon,
+    totalDiskon: diskon,
     totalNet, // setelah diskon, sebelum pajak
     totalPpn,
     dppPph: Math.round(dppPph),
@@ -459,7 +510,6 @@ function fundLineTotals(lines) {
    pembulatan ke bagian terbesar), jadi biaya per kiriman tidak pernah
    dobel dan tidak ada rupiah yang hilang.
 ================================================================== */
-const fundKunciAwb = (x) => String(x == null ? "" : x).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 /* INLAND TRUCKING TIDAK DIPECAH PER BL/AWB. Angkutan darat tidak punya
    BL/AWB -- isiannya diisi nomor DO / Surat Jalan, dan beberapa nomor DO
@@ -483,7 +533,7 @@ function fundDaftarAwb(teks) {
     .split(/[\/,;|\r\n]+/)
     .forEach((x) => {
       const tampil = x.replace(/\s+/g, " ").trim();
-      const kunci = fundKunciAwb(tampil);
+      const kunci = kunciAlnum(tampil);
       if (!kunci || ada.has(kunci)) return;
       ada.add(kunci);
       hasil.push({ kunci, teks: tampil });
@@ -497,7 +547,7 @@ function fundDaftarAwb(teks) {
 function fundTotalKomponen(p) {
   const d = p || {};
   if (Array.isArray(d.lines) && d.lines.length) {
-    const jumlah = fundLineTotals(d.lines);
+    const jumlah = fundLineTotals(d.lines, d.currency, d.payee);
     return { dpp: jumlah.totalNet, ppn: jumlah.totalPpn, pph: jumlah.pph, dibayar: jumlah.grandTotal };
   }
   const total = typeof frTotalPengajuan === "function" ? frTotalPengajuan(d) : 0;
@@ -542,7 +592,7 @@ function fundBagiPerAwb(p) {
   // Inland Trucking: semua nomor DO / Surat Jalan = satu bagian utuh
   if (fundTanpaPecahAwb(d)) {
     const teks = awb.map((a) => a.teks).join(" / ");
-    return [Object.assign({ kunci: fundKunciAwb(teks), teks }, total, { rata: false, tautan: true })];
+    return [Object.assign({ kunci: kunciAlnum(teks), teks }, total, { rata: false, tautan: true })];
   }
 
   const n = awb.length;
@@ -552,10 +602,10 @@ function fundBagiPerAwb(p) {
   const lines = Array.isArray(d.lines) && d.lines.length ? normalisasiBarisDana(d.lines) : [];
   if (lines.length) {
     const nilai = fundLineValues(lines);
-    const ppn = fundLinePpnDaftar(lines, nilai);
+    const ppn = fundLinePpnDaftar(lines, nilai, d.currency, d.payee);
     let kunciPos = "";
     lines.forEach((b, i) => {
-      let k = fundKunciAwb(b.awb);
+      let k = kunciAlnum(b.awb);
       if (!ada.has(k)) k = "";
       if (barisDiskon(b)) {
         if (!k) k = kunciPos; // diskon tanpa tautan mengikuti pos di atasnya
@@ -581,7 +631,9 @@ function fundBagiPerAwb(p) {
     };
   });
   const dpp = fundBulatkanBagian(mentah.map((m) => m.dpp), total.dpp);
-  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn, FUND_SEN); // PPN: 2 desimal
+  /* Total PPN bulat (IDR): bagiannya juga rupiah penuh, seperti DPP & PPH,
+     dan menjumlah tepat ke total. Mata uang lain: sampai sen. */
+  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn, fundRupiahPenuh(d.currency) ? 1 : FUND_SEN);
   const pph = fundBulatkanBagian(mentah.map((m) => m.pph), total.pph);
   return awb.map((a, i) => ({
     kunci: a.kunci,
@@ -603,7 +655,7 @@ function fundTautanAwbHilang(lines, blAwb) {
   const ada = new Set(fundDaftarAwb(blAwb).map((a) => a.kunci));
   const hasil = [];
   (Array.isArray(lines) ? lines : []).forEach((b, i) => {
-    const k = fundKunciAwb(b && b.awb);
+    const k = kunciAlnum(b && b.awb);
     const berisi = b && (String(b.desc || "").trim() || String(b.amount || "").trim());
     if (k && berisi && !ada.has(k)) hasil.push(i + 1);
   });
@@ -617,7 +669,7 @@ function fundTautanAwbHilang(lines, blAwb) {
 function fundRapikanTautanAwb(lines, blAwb, transaksi) {
   const banyak = fundDaftarAwb(blAwb).length > 1 && !fundTanpaPecahAwb({ transactionType: transaksi });
   return (Array.isArray(lines) ? lines : []).map((b) => {
-    const k = fundKunciAwb(b && b.awb);
+    const k = kunciAlnum(b && b.awb);
     const salinan = Object.assign({}, b);
     if (k && banyak) salinan.awb = k;
     else delete salinan.awb;
@@ -690,6 +742,20 @@ function fundTransaksiForm() {
   return el ? el.value : "";
 }
 
+/* Mata uang yang sedang dipilih di form Pengajuan Dana (kosong = IDR). */
+function fundMataForm() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="currency"]');
+  return el ? el.value : "";
+}
+
+/* "Dibayarkan Kepada" yang sedang dipilih di form Pengajuan Dana. Pilihan
+   "+ Tambah vendor baru…" hanya penanda sesaat (fund-vendor.js) -- bukan nama. */
+function fundPayeeForm() {
+  const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="payee"]');
+  const nama = el ? String(el.value || "") : "";
+  return typeof FUND_VENDOR_BARU !== "undefined" && nama === FUND_VENDOR_BARU ? "" : nama;
+}
+
 /* BL/AWB yang sedang diketik di isian BL/AWB form Pengajuan Dana --
    kosong untuk Inland Trucking (tidak dipecah, lihat fundTanpaPecahAwb). */
 function fundAwbForm() {
@@ -703,7 +769,7 @@ function fundAwbForm() {
    sudah dihapus dari isian BL/AWB tetap terlihat (bertanda) supaya bisa
    dibetulkan -- menyimpannya ditolak (validateDocNumForm). */
 function selAwbHtml(b, daftar) {
-  const kini = fundKunciAwb(b.awb);
+  const kini = kunciAlnum(b.awb);
   const ada = daftar.some((a) => a.kunci === kini);
   const pertama = barisDiskon(b) ? tt("Ikut pos di atas", "Same as line above") : tt("Dibagi rata", "Split evenly");
   return `<td class="fl-awb" data-label="BL/AWB"><select data-fl-f="awb" class="${kini && !ada ? "fl-awb-hilang" : ""}" aria-label="BL/AWB">
@@ -853,7 +919,7 @@ function renderFundLines() {
   if (!fundLines.length) fundLines = [fundLineBaru()];
   if (fundDokumen.length) fundLinesUrutkan();
   const nilai = fundLineValues(fundLines);
-  const ppn = fundLinePpnDaftar(fundLines, nilai);
+  const ppn = fundLinePpnDaftar(fundLines, nilai, fundMataForm(), fundPayeeForm());
   // Kolom BL/AWB hanya saat pengajuan ini menagih dua BL/AWB atau lebih
   const daftarAwb = fundAwbForm();
   const pakaiAwb = daftarAwb.length > 1;
@@ -883,7 +949,7 @@ function renderFundLines() {
    bergantung pada pos di atasnya. */
 function perbaruiHitunganRincian() {
   const nilai = fundLineValues(fundLines);
-  const ppnBaris = fundLinePpnDaftar(fundLines, nilai);
+  const ppnBaris = fundLinePpnDaftar(fundLines, nilai, fundMataForm(), fundPayeeForm());
   fundLines.forEach((b, i) => {
     const tr = document.querySelector(`#fundLinesBody [data-fl="${i}"]`);
     if (!tr) return;
@@ -901,7 +967,7 @@ function perbaruiHitunganRincian() {
 function gambarKakiRincian() {
   const kaki = document.getElementById("fundLinesFoot");
   if (!kaki) return;
-  const r = fundLineTotals(fundLines);
+  const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm());
   kaki.innerHTML = `
       <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilai(r.totalNilai)}</b></div>
       ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilai(r.totalDiskon)}</b></div>` : ""}
@@ -915,7 +981,13 @@ function gambarKakiRincian() {
    dibebankan ke tiap kiriman (Biaya Kiriman Ini di panel detail jadwal). */
 function kakiPerAwbHtml() {
   const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="blAwb"]');
-  const bagian = fundBagiPerAwb({ lines: fundLinesBersih(fundLines), blAwb: el ? el.value : "", transactionType: fundTransaksiForm() });
+  const bagian = fundBagiPerAwb({
+    lines: fundLinesBersih(fundLines),
+    blAwb: el ? el.value : "",
+    transactionType: fundTransaksiForm(),
+    currency: fundMataForm(),
+    payee: fundPayeeForm(),
+  });
   if (bagian.length < 2) return "";
   return `
       <div class="fl-awb-bagian">
@@ -1135,5 +1207,17 @@ document.addEventListener("change", (e) => {
   fundSelaraskanIsianAwb();
   renderFundLines();
 });
+/* Mata uang atau vendor berganti -> PPN tiap baris dan angka di kaki
+   dihitung ulang: IDR dibulatkan ke rupiah penuh, mata uang lain tetap
+   sampai sen (fundRupiahPenuh), dan PPN per baris mengikuti vendornya --
+   PRIME 2 desimal, selebihnya rupiah penuh (fundPpnSen). Vendor didengarkan
+   lewat "input" juga: pilihan "+ Tambah vendor baru…" mengembalikan nilai
+   sebelumnya lewat "input" (fund-vendor.js). */
+["input", "change"].forEach((jenis) =>
+  document.addEventListener(jenis, (e) => {
+    if (!e.target.closest) return;
+    if (e.target.closest('[data-docnum-panel="fund"] [data-dn="currency"], [data-docnum-panel="fund"] [data-dn="payee"]')) perbaruiHitunganRincian();
+  }),
+);
 
 renderFundLines();

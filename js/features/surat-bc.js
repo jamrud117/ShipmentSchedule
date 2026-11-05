@@ -54,7 +54,6 @@ function suratNamaNegara(kode) {
   return k;
 }
 
-const suratRapatAju = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 /* Daftar barang unik (per nama yang ditampilkan, itemDisplayName) sebuah jadwal */
 function suratBarangUnik(s) {
@@ -114,9 +113,9 @@ function isiPilihanAju() {
 }
 
 function suratCariJadwalAju(aju) {
-  const k = suratRapatAju(aju);
+  const k = kunciAlnum(aju);
   if (!k || typeof data === "undefined" || !data) return null;
-  return (data.import || []).find((s) => suratRapatAju(s.noAju) === k) || null;
+  return (data.import || []).find((s) => kunciAlnum(s.noAju) === k) || null;
 }
 
 /* Isi kotak dari jadwal. Kotak yang isinya sudah diubah pengguna (beda
@@ -292,23 +291,6 @@ function suratBcBolehCetak(r) {
   return !!r && r.doc_type === "letter" && SURAT_BC_JENIS.indexOf((r.payload || {}).letterType) >= 0;
 }
 
-/* Kop surat SAMA dengan Form Pengajuan Dana (fund-request-print.js):
-   logo + nama + alamat Pusat/Cabang (SJ_PERUSAHAAN), ditutup garis kop
-   tebal-tipis. */
-function suratKopHtml() {
-  const kop = typeof SJ_PERUSAHAAN !== "undefined" ? SJ_PERUSAHAAN : { nama: SURAT_BC_PERUSAHAAN.nama, pusat: "", cabang: "" };
-  const logo = typeof SJ_LOGO !== "undefined" ? `<img src="${SJ_LOGO}" alt="">` : "";
-  return `
-  <div class="kop">
-    ${logo}
-    <div class="kop-teks">
-      <div class="kop-nama">${escapeHtml(kop.nama)}</div>
-      <div class="kop-alamat">${escapeHtml(kop.pusat)}</div>
-      <div class="kop-alamat">${escapeHtml(kop.cabang)}</div>
-    </div>
-  </div>`;
-}
-
 function suratDaftarHtml(baris) {
   return `<table class="daftar">${baris
     .map(([k, v]) => `<tr><td class="d-k">${escapeHtml(k)}</td><td class="d-t">:</td><td class="d-v">${escapeHtml(v || "-")}</td></tr>`)
@@ -345,7 +327,7 @@ function suratBcHtml(row) {
   if (p.letterType === SURAT_BC_TANPA_BAYAR) {
     return `
   <div class="lembar">
-    ${suratKopHtml()}
+    ${kopSuratHtml()}
     <div class="judul">SURAT PERNYATAAN TANPA BUKTI BAYAR</div>
     <div class="nomor">Nomor : ${escapeHtml(nomor)}</div>
     <p>Yang bertanda tangan di bawah ini :</p>
@@ -365,7 +347,7 @@ function suratBcHtml(row) {
   const barang = (p.itemsFungsi || []).filter((b) => b && (b.nama || b.fungsi || b.foto));
   return `
   <div class="lembar">
-    ${suratKopHtml()}
+    ${kopSuratHtml()}
     <table class="kepala-surat">
       <tr><td class="ks-k">Nomor</td><td class="ks-t">:</td><td>${escapeHtml(nomor)}</td>
           <td class="ks-tgl" rowspan="3">${escapeHtml(SURAT_BC_PERUSAHAAN.kota)}, ${escapeHtml(suratTanggalPanjang(tgl))}</td></tr>
@@ -404,19 +386,10 @@ function suratBcCss() {
   .lembar { width: 210mm; min-height: 297mm; padding: 14mm 22mm 12mm; page-break-after: always; break-after: page; }
   .lembar:last-child { page-break-after: auto; break-after: auto; }
 
-  /* KOP: sama dengan Form Pengajuan Dana -- logo, nama, alamat, garis tebal-tipis */
-  .kop {
-    display: flex; align-items: center; justify-content: center; gap: 5mm;
-    padding-bottom: 3mm; border-bottom: 0.7mm solid #000; position: relative;
-  }
-  .kop::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: -1.4mm;
-    border-bottom: 0.25mm solid #000;
-  }
-  .kop img { height: 22mm; width: auto; }
-  .kop-teks { text-align: center; }
-  .kop-nama { font-size: 20pt; font-weight: 700; letter-spacing: .3px; line-height: 1.2; }
-  .kop-alamat { font-size: 9.5pt; line-height: 1.35; }
+  /* KOP SURAT bersama (kopSuratCss, surat-jalan-print.js): sama persis
+     dengan Form Pengajuan Dana & Surat Jalan Export -- logo, nama,
+     alamat, garis tebal-tipis. */
+${kopSuratCss()}
 
   /* Jarak antarbagian: lega & seragam */
   .judul { text-align: center; font-weight: 700; font-size: 13pt; text-decoration: underline; margin: 7mm 0 0; }

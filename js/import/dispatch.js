@@ -433,11 +433,19 @@ async function prosesBerkasImport(files) {
 
     const summaries = [];
     let allNotes = [];
+    let bedaCiplDicatat = false;
     toApply.forEach((parsed) => {
-      const { summary, notes } = applyImportedBcData(parsed);
+      const { summary, notes, bedaCipl } = applyImportedBcData(parsed);
       summaries.push(summary);
       allNotes = allNotes.concat(notes);
+      if (bedaCipl) bedaCiplDicatat = true;
     });
+    /* Invoice & Packing List yang berbeda karena datang dari DUA berkas
+       (mis. CIPL + draft CEISA) -- tiap berkasnya sendiri konsisten. */
+    if (!bedaCiplDicatat && typeof bedaInvoicePackingList === "function") {
+      const beda = bedaInvoicePackingList();
+      if (beda.length) allNotes.unshift(t("y.cipl.invoice.packing.beda.form", { beda: kalimatBedaCipl(beda) }));
+    }
     allNotes = [...new Set(allNotes)];
 
     showImportNotes(summaries.join(" "), allNotes);

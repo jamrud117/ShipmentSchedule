@@ -24,9 +24,15 @@
        jadwal impornya dicari lewat nomor aju PIB (BL/AWB & jenis transaksi).
      - Tabel forwarder (WIDE dan sejenisnya): kolom Description, Qty,
        CURR, Rate, Amount, VAT, PPH 23, Total.
+     - Prime Freight: Invoice dan Debit Note satu format (kolom CUR, RATE,
+       AMT (CUR), AMOUNT (IDR), VAT) -- yang membedakan hanya judul lembarnya.
      - Umum: nomor, tanggal, BL/AWB, dan total saja -- satu baris.
    Teksnya dari extractPdfText() (js/import/pdf.js), pembaca PDF yang
    sama dengan impor PIB/CIPL.
+
+   Unggahnya boleh banyak berkas sekaligus (pilih beberapa PDF, atau seret
+   ke form): invoice + debit note vendor yang sama masuk ke satu pengajuan
+   -- lihat danaDariBerkasPdf() di bawah.
 ================================================================== */
 
 const DANA_BULAN = {
@@ -421,6 +427,85 @@ function bacaInvoiceTabel(teks) {
   };
 }
 
+/* PRIME FREIGHT INDONESIA (cetakan Crystal Reports). INVOICE dan DEBIT NOTE
+   satu format; yang membedakan hanya judul lembarnya:
+
+     DEBIT NOTE                      <- judul (atau INVOICE)
+     REF NO.   AOR26080219           INVOICE DATE  2026-08-23
+     MAWB NO.  12604393060          INVOICE NO.   AO2607102
+     HAWB NO.  PFIJKT006824         E.T.D. / E.T.A. ...
+     DESCRIPTION  CUR  RATE  AMT (CUR)  AMOUNT (IDR)  VAT
+     FREIGHT CHARGE IDR 380,000.00 380,000.00 4,180.00
+     FUEL SURCHARGES IDR 1,887.00 16,983.00 186.81     <- RATE x berat
+     STORAGE AVATAR IDR 17,538.00 17,538.00            <- tanpa PPN
+     SUB TOTAL 8,543,486.00 93,978.35
+     TOTAL : (IDR) 0.00 (IDR) 8,637,464.35             <- DPP + PPN
+
+   Kolom yang kosong tidak tercetak, jadi kolomnya dibaca dari URUTAN
+   angka: baris IDR = RATE, AMOUNT[, VAT]; mata uang lain = RATE, AMT (CUR),
+   AMOUNT (IDR)[, VAT]. Selalu kolom AMOUNT (IDR) yang dipakai, jadi
+   pengajuannya IDR walau ada baris berkurs.
+
+   PPN tiap baris vendor ini 2 desimal (186,81 ; 22.571,40) dan tarif barisnya
+   dihitung dari PPN / nilai; form menghitung ulang dengan aturan PRIME
+   (fund-vendor-aturan.js), jadi jumlahnya sama dengan yang tercetak.
+
+   BL/AWB: nomor HAWB (nomor forwarder, yang juga dipakai menamai berkas);
+   MAWB hanya kalau tidak ada HAWB. Keduanya satu kiriman -- mengisi dua
+   nomor akan membagi biayanya jadi dua kiriman (fundBagiPerAwb). */
+function bacaInvoicePrime(teks) {
+  const isi = String(teks);
+  const ambil = (re) => (isi.match(re) || [])[1] || "";
+  const baris = isi.split(/\r?\n/);
+  const reKepala = /DESCRIPTION\s+CUR\s+RATE\s+AMT\s*\(CUR\)\s+AMOUNT\s*\(IDR\)/i;
+  const awal = baris.findIndex((l) => reKepala.test(l));
+  const rincian = [];
+  for (let i = awal + 1; awal >= 0 && i < baris.length; i++) {
+    const l = baris[i].trim();
+    if (!l || reKepala.test(l)) continue; // kepala tabel yang berulang di halaman berikutnya
+    if (/^(SUB\s*TOTAL|TOTAL)\b/i.test(l)) break;
+    const m = l.match(/^(.+?)\s+([A-Z]{3})((?:\s+-?[\d,]+(?:\.\d+)?)+)\s*$/);
+    if (!m) {
+      // Uraian panjang yang terpotong ke baris berikutnya (tanpa angka)
+      if (rincian.length && /^[A-Z][A-Z &().,\/-]{1,40}$/.test(l)) rincian[rincian.length - 1].desc += " " + l;
+      continue;
+    }
+    const angka = m[3].trim().split(/\s+/).map(danaAngka);
+    const kolomAmount = m[2] === "IDR" ? 1 : 2;
+    if (angka.length <= kolomAmount) continue;
+    rincian.push({ desc: m[1].trim(), amount: angka[kolomAmount], ppn: angka.length > kolomAmount + 1 ? angka[kolomAmount + 1] : 0 });
+  }
+  const angkaBaris = (re) => {
+    const b = baris.find((l) => re.test(l.trim()));
+    return b ? (b.match(/-?[\d,]+\.\d{2}/g) || []).map(danaAngka) : [];
+  };
+  const angkaSub = angkaBaris(/^SUB\s*TOTAL\b/i);
+  const angkaTotal = angkaBaris(/^TOTAL\b/i);
+  // "TOTAL : (IDR) 0.00 (IDR) 8,637,464.35" -- angka terakhir = total dalam rupiah
+  const total = angkaTotal.length ? angkaTotal[angkaTotal.length - 1] : angkaSub.length ? angkaSub.reduce((x, y) => x + y, 0) : 0;
+  const judul = ambil(/^\s*(INVOICE|DEBIT\s*NOTE|CREDIT\s*NOTE)\s*$/im);
+  const hawb = ambil(/\bH(?:AWB|BL)\s*NO\.?\s*:?\s*([A-Z0-9][A-Z0-9-]*)/i);
+  const mawb = ambil(/\bM(?:AWB|BL)\s*NO\.?\s*:?\s*([A-Z0-9][A-Z0-9-]*)/i);
+  const arah = isi.match(/\((AIR|SEA)\s+(INBOUND|OUTBOUND)\)/i);
+  // Nilai bulat tetap teks ("380000"); yang berpecahan tetap ANGKA -- teks "1234.5" dibaca gaya Indonesia (parseRupiah)
+  const nilaiBaris = (x) => (Number.isInteger(x) ? String(x) : Math.round(x * 100) / 100);
+  return {
+    sumber: "Prime",
+    payee: ambil(/^\s*(PT\.?\s+[A-Z][A-Z0-9 .&-]+?)\s*$/m),
+    debitNote: /DEBIT\s*NOTE/i.test(judul),
+    invoiceNo: ambil(/INVOICE\s*NO\.?\s*:?\s*([A-Z0-9][A-Z0-9\/.-]*)/i),
+    invoiceDate: danaTanggalIso(ambil(/INVOICE\s*DATE\s*:?\s*(\d{4}-\d{2}-\d{2})/i)),
+    invoiceDueDate: danaTanggalIso(ambil(/DUE\s*DATE\s*:?\s*(\d{4}-\d{2}-\d{2})/i)),
+    blAwb: hawb || (/^\d{11}$/.test(mawb) ? mawb.replace(/^(\d{3})(\d{8})$/, "$1-$2") : mawb),
+    expenseType: danaJenisInvoice(rincian),
+    transactionType: arah ? `${arah[1][0].toUpperCase()}${arah[1].slice(1).toLowerCase()} ${/^IN/i.test(arah[2]) ? "Import" : "Export"}` : "",
+    currency: "IDR",
+    lines: rincian.map((r) => ({ desc: r.desc, amount: nilaiBaris(r.amount), ppnRate: danaTarifPpn(r.ppn, r.amount) })),
+    totalInvoice: total,
+    pphInvoice: 0,
+  };
+}
+
 /* Umum: hanya yang bisa dikenali dengan aman -- satu baris total */
 function bacaInvoiceUmum(teks) {
   const ambil = (re) => (String(teks).match(re) || [])[1] || "";
@@ -451,6 +536,7 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
   else if (/DHL/i.test(isi) && /REGULAR INVOICE/i.test(isi)) h = bacaInvoiceDhlExpress(isi);
   else if (/DHL/i.test(isi) && /CHARGES INVOICE/i.test(isi)) h = bacaInvoiceDhlCharges(isi);
   else if (/FedEx Express|fedex\.com/i.test(isi) && /Invoice Number/i.test(isi)) h = bacaInvoiceFedex(isi);
+  else if (/DESCRIPTION\s+CUR\s+RATE\s+AMT\s*\(CUR\)\s+AMOUNT\s*\(IDR\)/i.test(isi) && /INVOICE\s*NO\./i.test(isi)) h = bacaInvoicePrime(isi);
   else {
     h = bacaInvoiceTabel(isi);
     if (!h.lines.length) h = bacaInvoiceUmum(isi);
@@ -465,11 +551,12 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
     return h;
   }
   h.payee = h.payee && !vendorDikenal ? h.payee : danaNamaVendor(isi, vendorDikenal) || h.payee || "";
-  h.debitNote = /DEBIT\s*NOTE/i.test(isi);
+  // Pembaca yang membaca judul lembarnya sendiri (Prime) sudah menentukan; selebihnya: kata "debit note" di mana saja
+  if (typeof h.debitNote !== "boolean") h.debitNote = /DEBIT\s*NOTE/i.test(isi);
   /* DPP & PPN dihitung dengan rumus FORM itu sendiri (fundLineTotals):
      diskon mengurangi, PPN berkelompok dibulatkan sekali -- jadi yang
      diperiksa adalah angka yang nanti benar-benar tersimpan. */
-  const tl = typeof fundLineTotals === "function" ? fundLineTotals(h.lines) : null;
+  const tl = typeof fundLineTotals === "function" ? fundLineTotals(h.lines, h.currency, h.payee) : null;
   const dpp = tl ? tl.totalNet : h.lines.reduce((x, l) => x + (l.jenis === "diskon" ? -1 : 1) * danaAngka(l.amount), 0);
   const ppn = tl ? tl.totalPpn : h.lines.reduce((x, l) => x + (l.jenis === "diskon" ? -1 : 1) * Math.round((danaAngka(l.amount) * Number(l.ppnRate || 0)) / 100), 0);
   h.dpp = dpp;
@@ -529,7 +616,11 @@ function danaIsiForm(h) {
   if (tglButuh && !tglButuh.value) setel("docDate", h.invoiceDueDate || h.invoiceDate);
   const dept = panel.querySelector('[data-dn="department"]');
   if (dept && !dept.value) setel("department", "EXIM");
-  if (typeof setFundLines === "function" && (h.lines.length || h.jenisDokumen === "billing")) setFundLines(h.lines);
+  if (typeof setFundLines === "function" && (h.lines.length || h.jenisDokumen === "billing")) {
+    // Mengisi = mengganti: dokumen tambahan form lama ikut hilang bersama barisnya (tidak tersisa judul kosong)
+    if (typeof setFundDokumen === "function") setFundDokumen([]);
+    setFundLines(h.lines);
+  }
   /* "Rincian" (Subject surat cetak): bawaan dari jenis, vendor, jenis
      transaksi & barang BL/AWB-nya (fund-rincian.js); ketikan pengguna
      sendiri tidak ditimpa. */
@@ -537,79 +628,235 @@ function danaIsiForm(h) {
   return true;
 }
 
-async function danaDariInvoicePdf(file) {
-  if (!file) return;
+/* ==================================================================
+   SATU ATAU BEBERAPA PDF SEKALIGUS
+
+   Dipilih lewat tombol (boleh banyak berkas) atau diseret ke form --
+   keduanya masuk ke danaDariBerkasPdf(), satu penangan satu perilaku.
+
+   Beberapa berkas = satu pengajuan, jadi hanya yang cocok yang digabung:
+     - vendor yang sama (nama dibandingkan tanpa titik / spasi / huruf besar);
+     - sama-sama tagihan: billing DJBC berdiri sendiri (satu form hanya
+       memuat satu billing);
+     - nomor yang sama dengan dokumen lain dilewati (berkas yang terseret dua kali).
+   Dokumen UTAMA (isian No. Invoice) = invoice pertama; debit note tidak
+   boleh menjadi "No. Invoice". Sisanya menyusul sebagai dokumen tambahan,
+   invoice dulu lalu debit note, menurut urutan berkasnya -- urutan memilih
+   berkas tidak menentukan hasil. Yang tidak digabung disebut di pesan.
+================================================================== */
+
+const DANA_MAKS_BERKAS = 10;
+let danaSedangMembaca = false;
+
+const danaAdalahPdf = (f) => !!f && (/^application\/pdf$/i.test(f.type || "") || /\.pdf$/i.test(f.name || ""));
+const danaNomorKunci = (n) => String(n || "").trim().toUpperCase();
+const danaNamaJenis = (h) => (h.debitNote ? "Debit Note" : "Invoice");
+const danaTerbaca = (h) => !!(h && (h.lines.length || h.invoiceNo || h.billingNo));
+/* "PT. PRIME FREIGHT INDONESIA" = "PT Prime Freight Indonesia": kunci
+   vendor yang sama dengan dropdown "Dibayarkan Kepada" (fund-vendor.js) */
+const danaKunciVendor = (nama) => (typeof fundVendorKunci === "function" ? fundVendorKunci(nama) : String(nama || "").toUpperCase());
+const danaVendorSama = (a, b) => danaKunciVendor(a) === danaKunciVendor(b);
+
+/* "Invoice AO2607101 (12 baris) + Debit Note AO2607102 (2 baris)" */
+const danaRingkasDokumen = (daftar) =>
+  daftar
+    .map((h) => `${danaNamaJenis(h)} ${h.invoiceNo || "?"} (${tt(`${h.lines.length} baris`, `${h.lines.length} lines`)})`)
+    .join(" + ");
+
+async function danaDaftarVendor() {
   try {
-    if (typeof showToast === "function") showToast(tt("Membaca invoice…", "Reading invoice…"), "info");
-    const { text } = await extractPdfText(file);
-    let vendor = [];
-    try {
-      const rows = typeof bkAmbilDana === "function" ? await bkAmbilDana() : [];
-      vendor = [...new Set(rows.map((r) => String((r.payload || {}).payee || "").trim()).filter(Boolean))];
-    } catch (e) {
-      /* tanpa daftar vendor lama: nama diambil dari invoice */
+    const rows = typeof bkAmbilDana === "function" ? await bkAmbilDana() : [];
+    return [...new Set(rows.map((r) => String((r.payload || {}).payee || "").trim()).filter(Boolean))];
+  } catch (e) {
+    return []; /* tanpa daftar vendor lama: nama diambil dari invoice */
+  }
+}
+
+/* Satu PDF -> satu hasil baca (h). Billing dilengkapi dari jadwal impor. */
+async function danaBacaBerkas(file, vendor) {
+  const { text } = await extractPdfText(file);
+  const h = bacaInvoiceVendor(text, vendor);
+  if (h.jenisDokumen === "billing" && h.noAju && typeof data !== "undefined" && data) {
+    const kirim = (data.import || []).find((s) => kunciAlnum(s.noAju) && kunciAlnum(s.noAju) === kunciAlnum(h.noAju));
+    if (kirim) {
+      h.blAwb = danaRapatBl([kirim.masterBL, kirim.houseBL].filter(Boolean).join("/"));
+      if (!h.transactionType) h.transactionType = kirim.transport === "udara" ? "Air Import" : "Sea Import";
     }
-    const h = bacaInvoiceVendor(text, vendor);
-    if (h.jenisDokumen === "billing" && h.noAju && typeof data !== "undefined" && data) {
-      const rapat = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      const kirim = (data.import || []).find((s) => rapat(s.noAju) && rapat(s.noAju) === rapat(h.noAju));
-      if (kirim) {
-        h.blAwb = danaRapatBl([kirim.masterBL, kirim.houseBL].filter(Boolean).join("/"));
-        if (!h.transactionType) h.transactionType = kirim.transport === "udara" ? "Air Import" : "Sea Import";
+  }
+  h.berkas = String(file.name || "");
+  return h;
+}
+
+/* Dari semua hasil baca: yang dipakai (utama dulu) dan yang dilewati + alasannya */
+function danaSusunSet(terbaca) {
+  const bukanBilling = (h) => h.jenisDokumen !== "billing";
+  const utama = terbaca.find((h) => bukanBilling(h) && !h.debitNote) || terbaca.find(bukanBilling) || terbaca[0];
+  const pakai = [utama];
+  const lewat = [];
+  terbaca.forEach((h) => {
+    if (h === utama) return;
+    const nomor = danaNomorKunci(h.invoiceNo);
+    if (!bukanBilling(utama) || !bukanBilling(h)) lewat.push({ h, id: "billing tidak bisa digabung dengan dokumen lain", en: "a billing cannot be combined with other documents" });
+    else if (!danaVendorSama(h.payee, utama.payee)) lewat.push({ h, id: "vendor berbeda", en: "different vendor" });
+    else if (nomor && pakai.some((x) => danaNomorKunci(x.invoiceNo) === nomor)) lewat.push({ h, id: "nomor sama dengan dokumen lain", en: "same number as another document" });
+    else pakai.push(h);
+  });
+  return { pakai: pakai.filter((h) => !h.debitNote).concat(pakai.filter((h) => h.debitNote)), lewat };
+}
+
+/* Terapkan hasil baca ke form. `catatan` = pesan tambahan dari pemanggil
+   (berkas bukan PDF / tidak terbaca / kelebihan) yang ikut ditampilkan. */
+function danaTerapkanDokumen(terbaca, catatan) {
+  if (!terbaca || !terbaca.length) return;
+  const rp = fmtRp;
+  const peringatan = (catatan || []).slice();
+  const { pakai, lewat } = danaSusunSet(terbaca);
+  lewat.forEach(({ h, id, en }) => {
+    const nama = h.berkas || h.invoiceNo || "?";
+    peringatan.push(tt(`Tidak digabung: ${nama} (${id}).`, `Not combined: ${nama} (${en}).`));
+  });
+  const utama = pakai[0];
+  const banyak = pakai.length > 1;
+
+  const panel = typeof docNumPanelEl === "function" ? docNumPanelEl("fund") : null;
+  const nilaiForm = (k) => String(((panel && panel.querySelector(`[data-dn="${k}"]`)) || {}).value || "").trim();
+  const adaRincian = typeof fundLines !== "undefined" && fundLines.some((b) => String(b.desc || "").trim() || parseRupiah(b.amount));
+  const nomorUtamaForm = nilaiForm("invoiceNo");
+  const nomorForm = new Set([nomorUtamaForm].concat(typeof fundDokumen !== "undefined" ? fundDokumen.map((d) => d.nomor) : []).map(danaNomorKunci).filter(Boolean));
+  const sudahAda = (h) => !!h.invoiceNo && nomorForm.has(danaNomorKunci(h.invoiceNo));
+  const baru = pakai.filter((h) => h.invoiceNo && !sudahAda(h));
+  /* Form sudah berisi tagihan vendor yang SAMA -> dokumen baru bisa
+     ditambahkan sebagai invoice / debit note berikutnya (bukan menimpa). */
+  const formSama = utama.jenisDokumen !== "billing" && adaRincian && !!nomorUtamaForm && !!nilaiForm("payee") && danaVendorSama(nilaiForm("payee"), utama.payee);
+
+  /* Peringatan per dokumen yang baru saja dimasukkan, lalu satu pemberitahuan */
+  const selesai = (pesan, dokumen) => {
+    dokumen.forEach((h) => {
+      if (h.akunLain && h.akunLain.length) {
+        peringatan.push(tt(`Akun lain tidak punya isian: ${h.akunLain.map((a) => a.nama).join(", ")} — cek totalnya.`,
+          `Other accounts have no field: ${h.akunLain.map((a) => a.nama).join(", ")} — check the total.`));
+      } else if (h.cocok === false) {
+        peringatan.push(dokumen.length > 1
+          ? tt(`Total di ${danaNamaJenis(h)} ${h.invoiceNo} ${rp(h.totalInvoice)} berbeda — cek rinciannya.`, `Total of ${danaNamaJenis(h)} ${h.invoiceNo} ${rp(h.totalInvoice)} differs — check the lines.`)
+          : tt(`Total di invoice ${rp(h.totalInvoice)} berbeda — cek rinciannya.`, `Invoice total ${rp(h.totalInvoice)} differs — check the lines.`));
+      }
+    });
+    showToast(peringatan.length ? `${pesan} ${peringatan.join(" ")}` : pesan, peringatan.length ? "warning" : "success");
+  };
+
+  /* Dokumen BARU saja yang masuk; yang sudah ada di form dibiarkan */
+  const tambah = () => {
+    baru.forEach(danaTambahSebagaiDokumen);
+    selesai(baru.length === 1
+      ? tt(`${danaNamaJenis(baru[0])} ${baru[0].invoiceNo} ditambahkan: ${baru[0].lines.length} baris. Periksa lalu simpan.`,
+        `${danaNamaJenis(baru[0])} ${baru[0].invoiceNo} added: ${baru[0].lines.length} line(s). Check, then save.`)
+      : tt(`${baru.length} dokumen ditambahkan: ${danaRingkasDokumen(baru)}. Periksa lalu simpan.`,
+        `${baru.length} documents added: ${danaRingkasDokumen(baru)}. Check, then save.`), baru);
+  };
+
+  /* Isi form dari awal: dokumen utama mengisi form, sisanya jadi dokumen tambahan */
+  const ganti = (diganti) => {
+    danaIsiForm(utama);
+    pakai.slice(1).forEach(danaTambahSebagaiDokumen);
+    let pesan;
+    if (diganti) {
+      pesan = banyak
+        ? tt(`Form diganti dengan ${pakai.length} dokumen: ${danaRingkasDokumen(pakai)}. Periksa lalu simpan.`, `Form replaced with ${pakai.length} documents: ${danaRingkasDokumen(pakai)}. Check, then save.`)
+        : tt(`Form diganti dengan ${danaNamaJenis(utama)} ${utama.invoiceNo}. Periksa lalu simpan.`, `Form replaced with ${danaNamaJenis(utama)} ${utama.invoiceNo}. Check, then save.`);
+    } else if (utama.jenisDokumen === "billing") {
+      pesan = tt(`Terisi dari billing ${utama.billingNo}: total ${rp(utama.dpp)}${utama.blAwb ? `, BL/AWB ${utama.blAwb}` : ""}. Periksa lalu simpan.`,
+        `Filled from billing ${utama.billingNo}: total ${rp(utama.dpp)}${utama.blAwb ? `, B/L/AWB ${utama.blAwb}` : ""}. Check, then save.`);
+    } else if (banyak) {
+      // Total gabungan, dihitung form sendiri (PPN dibulatkan SEKALI untuk seluruh pengajuan)
+      const tl = typeof fundLineTotals === "function" ? fundLineTotals(fundLines, fundMataForm(), fundPayeeForm()) : null;
+      const jumlah = tl ? tl.totalNet + tl.totalPpn : pakai.reduce((x, h) => x + h.dpp + h.ppn, 0);
+      pesan = tt(`Terisi dari ${pakai.length} dokumen ${utama.payee || ""}: ${danaRingkasDokumen(pakai)}, total ${rp(jumlah)} (sebelum potong PPh). Periksa lalu simpan.`,
+        `Filled from ${pakai.length} documents of ${utama.payee || ""}: ${danaRingkasDokumen(pakai)}, total ${rp(jumlah)} (before withholding tax). Check, then save.`);
+    } else {
+      pesan = tt(`Terisi dari invoice ${utama.payee || ""} ${utama.invoiceNo || ""}: ${utama.lines.length} baris, total ${rp(utama.dpp + utama.ppn)} (sebelum potong PPh). Periksa lalu simpan.`,
+        `Filled from invoice ${utama.payee || ""} ${utama.invoiceNo || ""}: ${utama.lines.length} line(s), total ${rp(utama.dpp + utama.ppn)} (before withholding tax). Check, then save.`);
+    }
+    selesai(pesan, pakai);
+  };
+
+  if (formSama && baru.length && typeof showConfirm === "function") {
+    const sebut = danaRingkasDokumen(baru);
+    const judulBaru = baru.length === 1 ? danaNamaJenis(baru[0]) : tt(`${baru.length} Dokumen`, `${baru.length} Documents`);
+    showConfirm(
+      tt(`Form ini sudah berisi invoice ${nomorUtamaForm} dari ${utama.payee}. ${sebut} bisa ditambahkan ke pengajuan yang sama — rinciannya dikelompokkan terpisah — atau menggantikan isi form.`,
+        `This form already holds invoice ${nomorUtamaForm} from ${utama.payee}. ${sebut} can be added to the same request — its lines grouped separately — or replace the form.`),
+      tambah,
+      {
+        title: tt(`Tambahkan ${judulBaru} ke Pengajuan Ini?`, `Add ${judulBaru} to This Request?`),
+        confirmText: tt(`Tambahkan ${judulBaru}`, `Add ${judulBaru}`),
+        cancelText: tt("Ganti Isi Form", "Replace the Form"),
+        tone: "primary",
+        icon: "bi-file-earmark-plus",
+        onCancel: () => ganti(true),
+      });
+    return;
+  }
+  /* Semuanya sudah ada di form dan yang diunggah bukan dokumen utamanya
+     (mis. debit note yang sama terseret lagi): jangan menimpa apa pun. */
+  if (formSama && pakai.every(sudahAda) && danaNomorKunci(utama.invoiceNo) !== danaNomorKunci(nomorUtamaForm)) {
+    showToast(`${tt(`Dokumen ini sudah ada di pengajuan: ${pakai.map((h) => h.invoiceNo).join(", ")}.`, `Already in this request: ${pakai.map((h) => h.invoiceNo).join(", ")}.`)}${peringatan.length ? " " + peringatan.join(" ") : ""}`, "info");
+    return;
+  }
+  ganti(false);
+}
+
+/* Pintu masuk tunggal: daftar berkas dari tombol ATAU dari seret-lepas */
+async function danaDariBerkasPdf(berkas) {
+  const semua = Array.from(berkas || []).filter(Boolean);
+  if (!semua.length) return;
+  const pdf = semua.filter(danaAdalahPdf);
+  const bukanPdf = semua.filter((f) => !danaAdalahPdf(f)).map((f) => f.name || "?");
+  if (!pdf.length) {
+    showToast(tt(`Hanya berkas PDF yang bisa dibaca (dilewati: ${bukanPdf.join(", ")}).`, `Only PDF files can be read (skipped: ${bukanPdf.join(", ")}).`), "warning");
+    return;
+  }
+  if (danaSedangMembaca) {
+    showToast(tt("Masih membaca berkas sebelumnya — tunggu sebentar.", "Still reading the previous files — please wait."), "info");
+    return;
+  }
+  danaSedangMembaca = true;
+  try {
+    const dipakai = pdf.slice(0, DANA_MAKS_BERKAS);
+    const catatan = [];
+    if (bukanPdf.length) catatan.push(tt(`Bukan PDF, dilewati: ${bukanPdf.join(", ")}.`, `Not a PDF, skipped: ${bukanPdf.join(", ")}.`));
+    if (pdf.length > dipakai.length) {
+      catatan.push(tt(`Paling banyak ${DANA_MAKS_BERKAS} berkas sekali unggah; ${pdf.length - dipakai.length} berkas terakhir dilewati.`,
+        `At most ${DANA_MAKS_BERKAS} files per upload; the last ${pdf.length - dipakai.length} were skipped.`));
+    }
+    showToast(dipakai.length > 1 ? tt(`Membaca ${dipakai.length} berkas…`, `Reading ${dipakai.length} files…`) : tt("Membaca invoice…", "Reading invoice…"), "info");
+    const vendor = await danaDaftarVendor();
+    const terbaca = [];
+    const tidakTerbaca = [];
+    let galat = 0;
+    for (const f of dipakai) {
+      try {
+        const h = await danaBacaBerkas(f, vendor);
+        if (danaTerbaca(h)) terbaca.push(h);
+        else tidakTerbaca.push(f.name || "?");
+      } catch (e) {
+        console.warn("Invoice vendor tidak terbaca:", e);
+        galat++;
+        tidakTerbaca.push(f.name || "?");
       }
     }
-    if (!h.lines.length && !h.invoiceNo && !h.billingNo) {
-      showToast(tt("Invoice ini tidak bisa dibaca otomatis — isi form secara manual.", "This invoice could not be read automatically — please fill the form manually."), "warning");
+    if (!terbaca.length) {
+      if (galat === dipakai.length) showToast(tt("Gagal membaca PDF invoice.", "Could not read the invoice PDF."), "error");
+      else if (dipakai.length > 1) showToast(tt("Tidak satu pun berkas bisa dibaca otomatis — isi form secara manual.", "None of the files could be read automatically — please fill the form manually."), "warning");
+      else showToast(tt("Invoice ini tidak bisa dibaca otomatis — isi form secara manual.", "This invoice could not be read automatically — please fill the form manually."), "warning");
       return;
     }
-    /* Form sudah berisi tagihan vendor yang SAMA dengan nomor berbeda ->
-       tawarkan menambahkannya sebagai invoice / debit note kedua. */
-    const panelDana = typeof docNumPanelEl === "function" ? docNumPanelEl("fund") : null;
-    const nilaiForm = (k) => String(((panelDana && panelDana.querySelector(`[data-dn="${k}"]`)) || {}).value || "").trim();
-    const adaRincian = typeof fundLines !== "undefined" && fundLines.some((b) => String(b.desc || "").trim() || parseRupiah(b.amount));
-    if (h.jenisDokumen !== "billing" && adaRincian && nilaiForm("invoiceNo") && h.invoiceNo && nilaiForm("invoiceNo") !== h.invoiceNo &&
-      nilaiForm("payee").toUpperCase() === String(h.payee || "").toUpperCase() && typeof showConfirm === "function") {
-      const jenisBaru = h.debitNote ? "Debit Note" : "Invoice";
-      showConfirm(
-        tt(`Form ini sudah berisi invoice ${nilaiForm("invoiceNo")} dari ${h.payee}. ${jenisBaru} ${h.invoiceNo} (${h.lines.length} baris) bisa ditambahkan ke pengajuan yang sama — rinciannya dikelompokkan terpisah — atau menggantikan isi form.`,
-          `This form already holds invoice ${nilaiForm("invoiceNo")} from ${h.payee}. ${jenisBaru} ${h.invoiceNo} (${h.lines.length} lines) can be added to the same request — its lines grouped separately — or replace the form.`),
-        () => {
-          danaTambahSebagaiDokumen(h);
-          showToast(tt(`${jenisBaru} ${h.invoiceNo} ditambahkan: ${h.lines.length} baris. Periksa lalu simpan.`,
-            `${jenisBaru} ${h.invoiceNo} added: ${h.lines.length} line(s). Check, then save.`), "success");
-        },
-        {
-          title: tt(`Tambahkan ${jenisBaru} ke Pengajuan Ini?`, `Add ${jenisBaru} to This Request?`),
-          confirmText: tt(`Tambahkan ${jenisBaru}`, `Add ${jenisBaru}`),
-          cancelText: tt("Ganti Isi Form", "Replace the Form"),
-          tone: "primary",
-          icon: "bi-file-earmark-plus",
-          onCancel: () => {
-            if (typeof setFundDokumen === "function") setFundDokumen([]);
-            danaIsiForm(h);
-            showToast(tt(`Form diganti dengan invoice ${h.invoiceNo}. Periksa lalu simpan.`, `Form replaced with invoice ${h.invoiceNo}. Check, then save.`), "success");
-          },
-        });
-      return;
-    }
-    danaIsiForm(h);
-    const rp = fmtRp;
-    const ringkas = h.jenisDokumen === "billing"
-      ? tt(`Terisi dari billing ${h.billingNo}: total ${rp(h.dpp)}${h.blAwb ? `, BL/AWB ${h.blAwb}` : ""}. Periksa lalu simpan.`,
-        `Filled from billing ${h.billingNo}: total ${rp(h.dpp)}${h.blAwb ? `, B/L/AWB ${h.blAwb}` : ""}. Check, then save.`)
-      : tt(`Terisi dari invoice ${h.payee || ""} ${h.invoiceNo || ""}: ${h.lines.length} baris, total ${rp(h.dpp + h.ppn)} (sebelum potong PPh). Periksa lalu simpan.`,
-        `Filled from invoice ${h.payee || ""} ${h.invoiceNo || ""}: ${h.lines.length} line(s), total ${rp(h.dpp + h.ppn)} (before withholding tax). Check, then save.`);
-    if (h.akunLain && h.akunLain.length) {
-      showToast(ringkas + " " + tt(`Akun lain tidak punya isian: ${h.akunLain.map((a) => a.nama).join(", ")} — cek totalnya.`,
-        `Other accounts have no field: ${h.akunLain.map((a) => a.nama).join(", ")} — check the total.`), "warning");
-      return;
-    }
-    if (h.cocok === false) {
-      showToast(ringkas + " " + tt(`Total di invoice ${rp(h.totalInvoice)} berbeda — cek rinciannya.`, `Invoice total ${rp(h.totalInvoice)} differs — check the lines.`), "warning");
-    } else showToast(ringkas, "success");
+    if (tidakTerbaca.length) catatan.push(tt(`Tidak terbaca: ${tidakTerbaca.join(", ")}.`, `Could not be read: ${tidakTerbaca.join(", ")}.`));
+    danaTerapkanDokumen(terbaca, catatan);
   } catch (e) {
     console.warn("Invoice vendor tidak terbaca:", e);
     showToast(tt("Gagal membaca PDF invoice.", "Could not read the invoice PDF."), "error");
+  } finally {
+    danaSedangMembaca = false;
   }
 }
 
@@ -619,8 +866,42 @@ async function danaDariInvoicePdf(file) {
   if (!tombol || !berkas) return;
   tombol.addEventListener("click", () => berkas.click());
   berkas.addEventListener("change", async () => {
-    const f = berkas.files && berkas.files[0];
+    const daftar = Array.from(berkas.files || []);
     berkas.value = "";
-    await danaDariInvoicePdf(f);
+    await danaDariBerkasPdf(daftar);
+  });
+
+  /* SERET & LEPAS: seluruh form Pengajuan Dana adalah area lepasnya.
+     Hanya seretan BERKAS yang ditangani -- menyeret teks antar kotak isian
+     tetap bekerja seperti biasa. Sorotan + petunjuknya lewat CSS
+     (.is-dragover, teks dari data-drop-teks dalam bahasa yang sedang
+     dipakai); pelepasan memakai penangan yang sama dengan tombol. */
+  const form = berkas.closest("[data-docnum-panel]");
+  if (!form) return;
+  const bawaBerkas = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+  const sorot = (hidup) => {
+    if (hidup && !form.classList.contains("is-dragover")) {
+      form.setAttribute("data-drop-teks", tt("Lepas PDF Invoice / Debit Note / Billing di sini", "Drop the Invoice / Debit Note / Billing PDF here"));
+    }
+    form.classList.toggle("is-dragover", hidup);
+  };
+  ["dragenter", "dragover"].forEach((ev) =>
+    form.addEventListener(ev, (e) => {
+      if (!bawaBerkas(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      sorot(true);
+    }),
+  );
+  form.addEventListener("dragleave", (e) => {
+    /* dragleave juga menyala saat kursor melintas ke elemen ANAK */
+    if (!bawaBerkas(e) || form.contains(e.relatedTarget)) return;
+    sorot(false);
+  });
+  form.addEventListener("drop", (e) => {
+    if (!bawaBerkas(e)) return;
+    e.preventDefault();
+    sorot(false);
+    danaDariBerkasPdf(Array.from(e.dataTransfer.files || []));
   });
 })();

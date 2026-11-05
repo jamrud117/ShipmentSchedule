@@ -66,11 +66,6 @@ const ciplKapital = (s) => String(s == null ? "" : s).toUpperCase();
 
    Menambah buyer baru cukup satu entri di sini.
 ------------------------------------------------------------------ */
-function ciplNormalNama(s) {
-  return String(s || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "");
-}
 
 /* ------------------------------------------------------------------
    PROFIL PELANGGAN
@@ -90,8 +85,21 @@ function ciplNormalNama(s) {
 const CIPL_PROFIL = [
   {
     id: "kumho-vn",
+    nama: "KUMHO TIRE (VIETNAM) CO., LTD",
     match: ["KUMHO TIRE VIETNAM", "KUMHO TIRE"],
     layout: "vn",
+    /* Isian form Pihak saat customer ini dipilih (invoice-pihak.js):
+       PIHAK KETIGA -- shipper PT DDI, pembeli Dynamic Design Korea
+       (kotak "Seller" CIPL Kumho), penerima Kumho Vietnam. */
+    isianPihak: {
+      polaPihak: "pihak-ketiga",
+      penjualNama: CIPL_VN_SHIPPER[0],
+      penjualAlamat: CIPL_VN_SHIPPER.slice(1).join("\n"),
+      pembeliNama: CIPL_VN_SELLER[0],
+      pembeliAlamat: CIPL_VN_SELLER.slice(1).join("\n"),
+      pembeliNegara: "KR",
+      penerimaNegara: "VN",
+    },
     /* Bentuk nomor invoice khusus pembeli ini. {SEQ} tetap mengambil
        urutan yang sama dengan invoice lain -- lihat docNumTemplate(). */
     invoicePattern: "DDI - CRBM - {MM} - {SEQ} - {YYYYMMDD}",
@@ -109,8 +117,11 @@ const CIPL_PROFIL = [
   },
   {
     id: "ddi-kr",
+    nama: "DYNAMIC DESIGN CO., LTD.",
     match: ["DYNAMIC DESIGN CO", "DYNAMIC DESIGN COLTD"],
     layout: "kr",
+    // LANGSUNG: pembeli = penerima
+    isianPihak: { polaPihak: "langsung", penerimaNegara: "KR" },
     portLoading: "Jakarta, Indonesia",
     portDischarge: "BUSAN, KOREA",
     finalDestination: "BUSAN, KOREA",
@@ -122,28 +133,24 @@ const CIPL_PROFIL = [
   },
 ];
 
-/* Profil yang dipakai untuk satu pengajuan. Dicocokkan ke nama
-   consignee; kalau tidak ada yang cocok, dipakai profil pertama yang
-   layout-nya "kr" -- bentuk yang sudah dipakai selama ini. */
-function ciplProfil(nama) {
-  const key = ciplNormalNama(nama);
-  const hit = key
-    ? CIPL_PROFIL.find((b) =>
-        (b.match || []).some((m) => key.includes(ciplNormalNama(m))),
-      )
-    : null;
-  return hit || CIPL_PROFIL.find((b) => b.layout === "kr") || CIPL_PROFIL[0];
+// Profil yang COCOK dengan nama customer, atau null
+function ciplProfilCocok(nama) {
+  const key = kunciAlnum(nama);
+  return (key && CIPL_PROFIL.find((b) => (b.match || []).some((m) => key.includes(kunciAlnum(m))))) || null;
 }
 
-/* Dipertahankan: dipakai di beberapa tempat untuk alamat saja. */
-const CIPL_ALAMAT_BUYER = CIPL_PROFIL;
+/* Profil yang dipakai untuk BENTUK LEMBAR satu pengajuan. Kalau tidak
+   ada yang cocok, dipakai profil pertama yang layout-nya "kr" -- bentuk
+   yang sudah dipakai selama ini. Isian bawaan profil (pelabuhan, alamat)
+   hanya untuk customer yang COCOK (ciplProfilCocok): customer lain tidak
+   ikut bertujuan Busan. */
+function ciplProfil(nama) {
+  return ciplProfilCocok(nama) || CIPL_PROFIL.find((b) => b.layout === "kr") || CIPL_PROFIL[0];
+}
 
+// Alamat consignee buyer yang dikenal (diisikan otomatis di form invoice)
 function ciplAlamatBuyer(nama) {
-  const key = ciplNormalNama(nama);
-  if (!key) return "";
-  const hit = CIPL_ALAMAT_BUYER.find((b) =>
-    (b.match || []).some((m) => key.includes(ciplNormalNama(m))),
-  );
+  const hit = ciplProfilCocok(nama);
   return hit ? hit.lines.join("\n") : "";
 }
 
@@ -405,13 +412,31 @@ function ciplRefBaris(row) {
   ];
 }
 
-/* Baris kotak Consignee: nama pembeli lalu alamatnya (cetak & Excel),
-   KAPITAL semua -- lihat ciplKapital(). */
+/* KOTAK PIHAK dari isian Pihak form invoice (invoice-pihak.js), KAPITAL
+   semua -- lihat ciplKapital(). Pengajuan lama tanpa isian itu tercetak
+   seperti dulu: Shipper tetap, Consignee = customer + alamat consignee. */
+const ciplPihakBaris = (nama, alamat) => [nama, ...ciplBarisTeks(alamat)].filter(Boolean).map(ciplKapital);
+
+// Shipper / Exporter = Penjual; cadangan = kotak tetap layout-nya
+function ciplShipperBaris(row, cadangan) {
+  const p = row.payload || {};
+  return p.penjualNama ? ciplPihakBaris(p.penjualNama, p.penjualAlamat) : cadangan.map(ciplKapital);
+}
+
+// Consignee = Penerima (namanya mengikuti customer)
 function ciplKonsigneeBaris(row, shipment) {
   const p = row.payload || {};
-  return [p.customer || (shipment && shipment.party) || "", ...ciplBarisTeks(p.consigneeAddress)]
-    .filter(Boolean)
-    .map(ciplKapital);
+  return ciplPihakBaris(p.penerimaNama || p.customer || (shipment && shipment.party) || "", p.consigneeAddress);
+}
+
+/* Buyer = Pembeli, hanya untuk customer PIHAK KETIGA yang pembelinya
+   memang lain dari penerimanya; selain itu [] (kotak Consignee / Buyer
+   sudah mewakili keduanya). */
+function ciplPembeliBaris(row, shipment) {
+  const p = row.payload || {};
+  if (p.polaPihak !== "pihak-ketiga" || !String(p.pembeliNama || "").trim()) return [];
+  const pembeli = ciplPihakBaris(p.pembeliNama, p.pembeliAlamat);
+  return pembeli.join("\n") === ciplKonsigneeBaris(row, shipment).join("\n") ? [] : pembeli;
 }
 
 /* NAMA BARANG DUA BARIS: "TYRE MOLD" di atas, jenisnya di bawah
@@ -464,10 +489,10 @@ function ciplRincianKemasan(p, shipment, baris) {
    itu keterangan pengangkut, dan kosong lebih jujur. */
 function ciplDdRincianData(row, shipment) {
   const p = row.payload || {};
-  const prof = ciplProfil(p.customer || (shipment && shipment.party));
+  const prof = ciplProfilCocok(p.customer || (shipment && shipment.party)) || {};
   return [
-    ["Port of Loading", p.portLoading || prof.portLoading || (shipment ? portCodeLabel(shipment.origin) : "")],
-    ["Final Destination", p.finalDestination || prof.finalDestination || (shipment ? portCodeLabel(shipment.destination) : "")],
+    ["Port of Loading", portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "")],
+    ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
     // Udara: No Flight saja; laut: kapal + voyage (carrierCipl, core/carrier-master.js)
     ["Vessel / Flight", carrierCipl(p, shipment)],
     ["Sailing on or About", ciplTanggal(p.sailingDate || "")],
@@ -735,6 +760,33 @@ function ciplTataFormal(spek) {
   return T;
 }
 
+/* KARTU PIHAK lembar Dynamic Design.
+     Biasa         [Shipper / Exporter | Document reference]
+                   [Consignee / Buyer  | Notify Party]
+     Pihak ketiga  [Shipper / Exporter | Document reference + Notify]
+                   [Consignee          | Buyer]
+   (pembeli lain dari penerima -- notify pindah ke referensi, seperti
+   lembar Kumho). */
+function ciplDdKartu(row, shipment) {
+  const p = row.payload || {};
+  const shipper = { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_SHIPPER), l, true) };
+  const notify = ciplKapital(p.notifyParty || "SAME AS CONSIGNEE");
+  const pembeli = ciplPembeliBaris(row, shipment);
+  if (!pembeli.length) {
+    return [
+      { kiri: shipper, kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(ciplRefBaris(row), lNo, lLabel) } },
+      { kiri: { judul: "Consignee / Buyer", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
+        kanan: { judul: "Notify Party", isi: (l) => ddIsiPihak([notify], l, false) } },
+    ];
+  }
+  const referensi = ciplRefBaris(row).concat([["Notify (if other than consignee)", [{ no: notify, tgl: "" }]]]);
+  return [
+    { kiri: shipper, kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(referensi, lNo, lLabel) } },
+    { kiri: { judul: "Consignee", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
+      kanan: { judul: "Buyer", isi: (l) => ddIsiPihak(pembeli, l, true) } },
+  ];
+}
+
 /* ---------------- LEMBAR CI / PL DYNAMIC DESIGN ---------------- */
 function ciplDdTata(jenis, row, shipment, baris) {
   const ci = jenis === "CI";
@@ -751,12 +803,7 @@ function ciplDdTata(jenis, row, shipment, baris) {
     nama: jenis,
     judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
     persen: DD_TABEL_PERSEN,
-    kartu: [
-      { kiri: { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(CIPL_SHIPPER, l, true) },
-        kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(ciplRefBaris(row), lNo, lLabel) } },
-      { kiri: { judul: "Consignee / Buyer", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
-        kanan: { judul: "Notify Party", isi: (l) => ddIsiPihak([ciplKapital(p.notifyParty || "SAME AS CONSIGNEE")], l, false) } },
-    ],
+    kartu: ciplDdKartu(row, shipment),
     rinci: ciplDdRincianData(row, shipment),
     tabel: {
       kolom: [[0, 0], [1, 1], [2, 2], [3, 3.5], [4, 4], [5, 5], [6, 6], [7, 7]],
@@ -878,7 +925,7 @@ function ciplSiData(row, shipment, baris) {
   return {
     tujuan: p.siTo || (shipment && shipment.forwarder) || "",
     no: p.siNo || ciplNoSiBawaan(row),
-    shipper: CIPL_SHIPPER,
+    shipper: ciplShipperBaris(row, CIPL_SHIPPER),
     consignee: consignee,
     // Nama dasar barang ("TYRE MOLD"), tanpa jenisnya (TREAD ONLY, FULL SET, ...)
     barang: [...new Set(baris.map((b) => ciplNamaDuaBaris(b.item)[0].trim()).filter(Boolean))].join(", "),
@@ -905,11 +952,12 @@ function ciplSiNilaiMentah(def, d) {
   if (def.kosong) return "";
   if (def.hitung) return d[def.hitung] || "";
   if (def.f) {
-    const v = d.payload[def.f];
+    // Baris pelabuhan (`dari`): kode tersimpan dicetak sebagai aliasnya
+    const v = def.dari ? portKodeKeAlias(d.payload[def.f]) : d.payload[def.f];
     if (v) return v;
     if (def.bawaan) return def.bawaan;
   }
-  if (def.dari && d.shipment) return portCodeLabel(d.shipment[def.dari]);
+  if (def.dari && d.shipment) return portKotaNegara(d.shipment[def.dari]);
   return "";
 }
 

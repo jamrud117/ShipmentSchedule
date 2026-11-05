@@ -314,7 +314,16 @@ function orderedFiltered() {
         digulir halus (html memakai scroll-behavior: smooth).
    Kartu yang hilang dari daftar (pindah halaman, tersaring) tidak
    dikejar: posisi gulir dibiarkan apa adanya. */
+/* Halaman sedang tergulir? Dicatat dari peristiwa scroll, BUKAN dibaca
+   saat render: window.scrollY / getBoundingClientRect di tengah skrip
+   MEMAKSA peramban menata seluruh halaman -- saat aplikasi dibuka itu
+   40-70 ms tiap render, sebelum isi barunya pun ditulis. */
+let halamanTergulir = false;
+window.addEventListener("scroll", () => (halamanTergulir = window.scrollY > 0), { passive: true });
+
 function catatPenandaGulir() {
+  // Belum digulir (muat awal, kembali ke atas): tidak ada yang bisa bergeser
+  if (!halamanTergulir) return null;
   const wadah = cardContainer.getBoundingClientRect();
   // Daftar belum tergulir (atau tidak tampil): tidak ada yang bisa bergeser
   if (wadah.top >= 0 || wadah.bottom <= 0) return null;

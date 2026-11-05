@@ -644,7 +644,8 @@
   gap: 6px;
   flex-wrap: wrap;
 }
-.date-field input[type="date"] {
+.date-field input[type="date"],
+.date-field input[data-kotak-tanggal] {
   margin-top: auto;
   border: 1px solid var(--border);
   border-radius: 8px;

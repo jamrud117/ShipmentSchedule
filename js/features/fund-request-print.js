@@ -9,9 +9,6 @@
    orangnya berganti, dan jabatannya pun tidak selalu sama.
 ------------------------------------------------------------------ */
 
-const FR_PERUSAHAAN = SJ_PERUSAHAAN;
-const FR_LOGO = SJ_LOGO;
-
 /* Sisa tabel diisi ruang kosong supaya blok TOTAL selalu jatuh di
    tempat yang sama berapa pun jumlah barisnya. */
 const FR_MIN_BARIS = 9;
@@ -117,7 +114,7 @@ function frTotal(baris) {
    tertulis di surat pengajuannya sendiri. */
 function frTotalPengajuan(p) {
   const d = p || {};
-  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines).grandTotal;
+  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines, d.currency, d.payee).grandTotal;
   return frTotal(frBarisRincian(d));
 }
 
@@ -247,14 +244,7 @@ function buildFundRequestHtml(row) {
      tercetak seperti biasa, tanpa baris itu. */
   return `
   <div class="sheet">
-    <div class="kop">
-      <img src="${FR_LOGO}" alt="">
-      <div class="kop-teks">
-        <div class="kop-nama">${escapeHtml(FR_PERUSAHAAN.nama)}</div>
-        <div class="kop-alamat">${escapeHtml(FR_PERUSAHAAN.pusat)}</div>
-        <div class="kop-alamat">${escapeHtml(FR_PERUSAHAAN.cabang)}</div>
-      </div>
-    </div>
+    ${kopSuratHtml()}
 
     <div class="judul">FORM PENGAJUAN DANA</div>
 
@@ -368,8 +358,8 @@ function frTabelRinci(p, mataUang) {
      dipecah dulu oleh normalisasiBarisDana(), jadi tercetak sama. */
   const daftar = normalisasiBarisDana(p.lines || []);
   const nilaiBaris = fundLineValues(daftar);
-  const ppnBaris = fundLinePpnDaftar(daftar, nilaiBaris);
-  const r = fundLineTotals(daftar);
+  const ppnBaris = fundLinePpnDaftar(daftar, nilaiBaris, mataUang, p.payee);
+  const r = fundLineTotals(daftar, mataUang, p.payee);
   const KOLOM = 6;
   const uang = (v) => (v < 0 ? "- " + frNilai(-v, mataUang) : frNilai(v, mataUang));
 
@@ -527,36 +517,9 @@ function fundRequestCss() {
      menghasilkan halaman kosong. */
   .sheet { width: 100%; padding: 15mm 20mm 0; }
 
-  /* KOP SURAT: logo, nama, dan alamat berukuran surat resmi, ditutup
-     garis kop tebal-tipis.
-
-     Dulu logonya 15 mm dan namanya 16pt -- seluruh kop hanya setinggi
-     15 mm dan selebar separuh kertas, jadi terlihat seperti catatan di
-     pojok, bukan kepala surat. Ukurannya dalam MILIMETER & POIN (satuan
-     kertas), sama dengan jarak-jarak lain di lembar ini. */
-  .kop {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5mm;
-    padding-bottom: 3mm;
-    border-bottom: 0.7mm solid #000;
-    position: relative;
-  }
-  /* Garis tipis kedua di bawah garis tebal -- bentuk garis kop surat
-     resmi. Selebar garis tebalnya (seluruh lebar isi). */
-  .kop::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1.4mm;
-    border-bottom: 0.25mm solid #000;
-  }
-  .kop img { height: 22mm; width: auto; }
-  .kop-teks { text-align: center; }
-  .kop-nama { font-size: 20pt; font-weight: 700; letter-spacing: .3px; line-height: 1.2; }
-  .kop-alamat { font-size: 9.5pt; line-height: 1.35; }
+  /* KOP SURAT bersama (kopSuratCss, surat-jalan-print.js): sama persis
+     dengan Surat BC & Surat Jalan Export. */
+${kopSuratCss()}
 
   .judul {
     text-align: center;

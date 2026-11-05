@@ -91,7 +91,20 @@ const DN_LABEL_FIELD = {
   get items() { return tt("Daftar Barang", "Item List"); },
   // Isian CIPL
   get invoiceKind() { return tt("Jenis Invoice", "Invoice Type"); },
-  get consigneeAddress() { return tt("Alamat Consignee", "Consignee Address"); },
+  get consigneeAddress() { return tt("Alamat Penerima (Consignee)", "Consignee Address"); },
+  // Pihak invoice (invoice-pihak.js)
+  get polaPihak() { return tt("Skema Invoice", "Invoice Scheme"); },
+  get penjualNama() { return tt("Penjual / Shipper", "Seller / Shipper"); },
+  get penjualAlamat() { return tt("Alamat Penjual", "Seller Address"); },
+  get penjualNpwp() { return tt("NPWP Penjual", "Seller Tax ID"); },
+  get pemilikNama() { return tt("Pemilik Barang", "Goods Owner"); },
+  get pemilikAlamat() { return tt("Alamat Pemilik Barang", "Goods Owner Address"); },
+  get pemilikNpwp() { return tt("NPWP Pemilik Barang", "Goods Owner Tax ID"); },
+  get pembeliNama() { return tt("Pembeli / Buyer", "Buyer"); },
+  get pembeliAlamat() { return tt("Alamat Pembeli", "Buyer Address"); },
+  get pembeliNegara() { return tt("Negara Pembeli", "Buyer Country"); },
+  get penerimaNama() { return tt("Penerima / Consignee", "Consignee"); },
+  get penerimaNegara() { return tt("Negara Penerima", "Consignee Country"); },
   get notifyParty() { return tt("Notify Party", "Notify Party"); },
   get poNo() { return tt("PO No.", "PO No."); },
   get poDate() { return tt("Tanggal PO", "PO Date"); },
@@ -135,9 +148,18 @@ const DN_DETAIL_SUSUNAN = {
       isian: ["customer", "currency", "amount", { k: "notes", lebar: true }],
     },
     {
+      judul: () => tt("Pihak", "Parties"),
+      isian: [
+        "polaPihak", "penjualNama", "penjualNpwp", { k: "penjualAlamat", lebar: true },
+        "pemilikNama", "pemilikNpwp", { k: "pemilikAlamat", lebar: true },
+        "pembeliNama", "pembeliNegara", { k: "pembeliAlamat", lebar: true },
+        "penerimaNama", "penerimaNegara", { k: "consigneeAddress", lebar: true },
+      ],
+    },
+    {
       judul: () => tt("Data Cetak Commercial Invoice & Packing List", "Commercial Invoice & Packing List Print Data"),
       isian: [
-        { k: "shipmentId", lebar: 2 }, "poNo", { k: "consigneeAddress", lebar: true }, "notifyParty",
+        { k: "shipmentId", lebar: 2 }, "poNo", "notifyParty",
         "termsDelivery", "termPayment", "portLoading", "finalDestination", "carrier",
         "sailingDate", "siTo", "siNo", "blType", "oceanFreight",
         { k: "specialInstruction", lebar: true }, { k: "remarks", lebar: true },
@@ -302,6 +324,8 @@ function dndNilai(k, r) {
   }
   if (k === "poNo") return dndDaftarPo(p);
   if (k === "vehicle") return dndDaftarKendaraan(p);
+  if (k === "polaPihak") return INV_POLA_LABEL[v] ? escapeHtml(tt(...INV_POLA_LABEL[v])) : "";
+  if (k === "portLoading" || k === "finalDestination") return escapeHtml(portKodeKeAlias(v));
   // Nama lama "Local Sale" tampil dengan nama barunya (fund-summary.js)
   if (k === "transactionType") {
     const jenis = fundJenisTransaksiBaku(v);
@@ -394,15 +418,15 @@ function dndBiayaHtml(r) {
   if (Array.isArray(p.lines) && p.lines.length) {
     const daftar = normalisasiBarisDana(p.lines);
     const nilai = fundLineValues(daftar);
-    const ppn = fundLinePpnDaftar(daftar, nilai);
-    const tot = fundLineTotals(daftar);
+    const ppn = fundLinePpnDaftar(daftar, nilai, mata, p.payee);
+    const tot = fundLineTotals(daftar, mata, p.payee);
     /* Pengajuan untuk beberapa BL/AWB: kolom BL/AWB per baris dan bagian
        tiap BL/AWB di bawah TOTAL -- sama dengan form & surat cetaknya. */
     const awb = fundDaftarAwb(p.blAwb);
     // Inland Trucking: nomor DO / Surat Jalan, tidak dipecah per BL/AWB
     const pakaiAwb = awb.length > 1 && !fundTanpaPecahAwb(p);
     const teksAwb = (b) => {
-      const k = fundKunciAwb(b.awb);
+      const k = kunciAlnum(b.awb);
       const a = awb.find((x) => x.kunci === k);
       if (a) return escapeHtml(a.teks);
       return `<span class="dnd-redup">${escapeHtml(barisDiskon(b) ? tt("ikut pos di atas", "same as above") : tt("dibagi rata", "split evenly"))}</span>`;

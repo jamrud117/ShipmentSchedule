@@ -72,6 +72,10 @@
     <link rel="stylesheet" href="css/docnum.css" />
     <link rel="stylesheet" href="css/prediction.css" />
     <link rel="stylesheet" href="css/system.css" />
+    <!-- Kotak tanggal yang bisa diketik: ikon kalender, tanda tidak terbaca -->
+    <link rel="stylesheet" href="css/date-input.css" />
+    <!-- Batas lebar kotak isian per jenis & lebar halaman form: PALING AKHIR -->
+    <link rel="stylesheet" href="css/lebar-isian.css" />
   </head>
   <body>
     <!-- IKON HALAMAN -- satu set garis (Lucide, lisensi ISC) untuk semua
@@ -1213,9 +1217,12 @@
                 <!-- Sumber kebenaran sesungguhnya -- lihat catatan di
                      date-range-picker.js. Disembunyikan, bukan
                      type="hidden": beberapa test & kode lain memang
-                     mengandalkan tipenya date. -->
-                <input type="date" id="filterDateFrom" class="d-none" />
-                <input type="date" id="filterDateTo" class="d-none" />
+                     mengandalkan tipenya date. data-kotak-tanggal-off:
+                     tetap type=date asli (tak pernah tampil), tidak
+                     dijadikan kotak ketik -- yang bisa diketik adalah
+                     kotak Dari/Sampai di dalam panel kalender. -->
+                <input type="date" id="filterDateFrom" class="d-none" data-kotak-tanggal-off />
+                <input type="date" id="filterDateTo" class="d-none" data-kotak-tanggal-off />
 
                 <div class="drp-popover d-none" id="dateRangePopover">
                   <!-- Jalan pintas: mengisi filterDateFrom/To yang
@@ -1248,6 +1255,36 @@
                      data-en="Next Week">
                       Minggu Depan
                     </button>
+                  </div>
+                  <!-- Tanggal rentang juga bisa DIKETIK (format apa pun,
+                       dirapikan js/ui/date-input.js), tidak harus diklik
+                       satu per satu di kalender. Mengisi & diisi oleh
+                       kalender di bawahnya: lihat drpKotakBerubah() dan
+                       drpSyncKotak() di date-range-picker.js. -->
+                  <div class="drp-typed" role="group" aria-label="Ketik tanggal rentang" data-en-aria="Type the date range">
+                    <label class="drp-typed-field">
+                      <span data-en="From">Dari</span>
+                      <input
+                        type="date"
+                        id="drpInputFrom"
+                        class="drp-typed-input"
+                        data-kotak-tanggal-tanpa-ikon
+                        aria-label="Tanggal awal"
+                        data-en-aria="Start date"
+                      />
+                    </label>
+                    <span class="drp-typed-sep" aria-hidden="true">–</span>
+                    <label class="drp-typed-field">
+                      <span data-en="To">Sampai</span>
+                      <input
+                        type="date"
+                        id="drpInputTo"
+                        class="drp-typed-input"
+                        data-kotak-tanggal-tanpa-ikon
+                        aria-label="Tanggal akhir"
+                        data-en-aria="End date"
+                      />
+                    </label>
                   </div>
                   <div class="drp-header">
                     <button
@@ -1560,7 +1597,7 @@
               <!-- Kisi .fgrid (css/components.css): tiap baris 12 lajur,
                    isian standar seperempat baris. -->
               <div class="fgrid">
-                <div>
+                <div class="s4">
                   <label class="form-label"
                      data-en="Invoice Type <span class=&quot;req&quot;>*</span>" for="dn-invoice-invoiceKind">Jenis Invoice <span class="req">*</span></label
                   >
@@ -1574,7 +1611,7 @@
                     <option value="Non-Commercial">Non-Commercial</option>
                   </select>
                 </div>
-                <div>
+                <div class="s2">
                   <label class="form-label"
                      data-en="Request Date <span class=&quot;req&quot;>*</span>" for="dn-invoice-docDate">Tanggal Permintaan <span class="req">*</span></label
                   >
@@ -1614,20 +1651,33 @@
                     <option value="Produksi" data-en="Production">Produksi</option>
                   </select>
                 </div>
-                <div class="s6">
+                <!-- CUSTOMER + SKEMA INVOICE. Customer = dropdown yang bisa
+                     ditambah ("+ Tambah customer baru…", js/ui/pilihan-tambah.js):
+                     customer tersimpan, profil pelanggan, customer invoice di
+                     riwayat, buyer jadwal export. Memilihnya mengisi Skema
+                     Invoice & kartu Pihak dari data tersimpan customer itu --
+                     tiap nomor yang terbit memperbarui datanya
+                     (invoice-pihak.js). -->
+                <div class="s4">
                   <label class="form-label"
-                     for="dn-invoice-customer">Customer / Buyer <span class="req">*</span></label
+                     for="dn-invoice-customer">Customer <span class="req">*</span></label
                   >
-                  <input id="dn-invoice-customer"
-                    type="text"
-                    class="form-control"
+                  <select id="dn-invoice-customer"
+                    class="form-select"
                     data-dn="customer"
                     data-dn-required
-                    placeholder="Nama perusahaan penerima"
-                    data-i18n-ph="ph.nama.perusahaan.penerima"
-                  />
+                  >
+                    <option value="" data-en="— choose a customer —">— pilih customer —</option>
+                  </select>
                 </div>
-                <div>
+                <div class="s4">
+                  <label class="form-label" for="dn-invoice-polaPihak" data-en="Invoice Scheme">Skema Invoice</label>
+                  <select id="dn-invoice-polaPihak" class="form-select" data-dn="polaPihak" aria-describedby="dnPolaKet">
+                    <option value="langsung" selected data-en="Direct Invoice — Buyer = Consignee">Direct Invoice — Pembeli = Penerima</option>
+                    <option value="pihak-ketiga" data-en="Third Party Invoice — Buyer ≠ Consignee">Third Party Invoice — Pembeli ≠ Penerima</option>
+                  </select>
+                </div>
+                <div class="s2">
                   <label class="form-label" data-i18n="f.mata.uang"
                      for="dn-invoice-currency">Mata Uang</label
                   >
@@ -1636,7 +1686,7 @@
                     <option>IDR</option>
                   </select>
                 </div>
-                <div>
+                <div class="s2">
                   <label class="form-label" data-i18n="f.nilai" for="dn-invoice-amount">Nilai</label>
                   <input id="dn-invoice-amount"
                     type="text"
@@ -1645,6 +1695,74 @@
                     data-dn-number
                     placeholder="0"
                   />
+                </div>
+                <!-- PIHAK -- seperti entitas PEB: Penjual (Eksportir/Shipper),
+                     Pemilik Barang, Pembeli, Penerima (Consignee). Skema Invoice
+                     menentukan pihak mana yang otomatis sama:
+                       Direct        Pemilik = Penjual, Pembeli = Penerima
+                                     (mis. Dynamic Design)
+                       Third Party   Pemilik = Penjual; Pembeli & Penerima
+                                     diisi masing-masing (mis. Kumho)
+                     Isian yang diubah sendiri tidak ditimpa lagi. Penjual
+                     bawaannya perusahaan sendiri; Penerima mengikuti Customer.
+                     Alamat Penerima = Alamat Consignee yang tercetak di CIPL
+                     (kunci lama consigneeAddress). Mesinnya: invoice-pihak.js. -->
+                <div class="s12">
+                  <div class="dn-sub" data-en="<i class=&quot;bi bi-people&quot;></i> Parties <span class=&quot;dn-sub-note&quot;>like the PEB entities — printed on the CIPL</span>">
+                    <i class="bi bi-people"></i> Pihak
+                    <span class="dn-sub-note">seperti entitas PEB — tercetak di CIPL</span>
+                  </div>
+                  <div class="form-text-note inv-pola-ket" id="dnPolaKet" role="status"></div>
+                </div>
+                <div class="inv-pihak" data-inv-pihak="penjual">
+                  <div class="inv-pihak-kepala">
+                    <span class="inv-pihak-judul" data-en="Seller / Shipper">Penjual / Shipper</span>
+                    <span class="inv-pihak-ikut" data-inv-ikut="penjual" hidden></span>
+                  </div>
+                  <label class="form-label" for="dn-invoice-penjualNama" data-en="Name">Nama</label>
+                  <input id="dn-invoice-penjualNama" type="text" class="form-control" data-dn="penjualNama" aria-label="Nama Penjual" data-en-aria="Seller name" autocomplete="off" />
+                  <label class="form-label" for="dn-invoice-penjualAlamat" data-en="Address">Alamat</label>
+                  <textarea id="dn-invoice-penjualAlamat" class="form-control" rows="4" data-dn="penjualAlamat" aria-label="Alamat Penjual" data-en-aria="Seller address"></textarea>
+                  <label class="form-label" for="dn-invoice-penjualNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                  <input id="dn-invoice-penjualNpwp" type="text" class="form-control" data-dn="penjualNpwp" aria-label="NPWP Penjual" data-en-aria="Seller tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                </div>
+                <div class="inv-pihak" data-inv-pihak="pemilik">
+                  <div class="inv-pihak-kepala">
+                    <span class="inv-pihak-judul" data-en="Goods Owner">Pemilik Barang</span>
+                    <span class="inv-pihak-ikut" data-inv-ikut="pemilik" hidden></span>
+                  </div>
+                  <label class="form-label" for="dn-invoice-pemilikNama" data-en="Name">Nama</label>
+                  <input id="dn-invoice-pemilikNama" type="text" class="form-control" data-dn="pemilikNama" aria-label="Nama Pemilik Barang" data-en-aria="Goods Owner name" autocomplete="off" />
+                  <label class="form-label" for="dn-invoice-pemilikAlamat" data-en="Address">Alamat</label>
+                  <textarea id="dn-invoice-pemilikAlamat" class="form-control" rows="4" data-dn="pemilikAlamat" aria-label="Alamat Pemilik Barang" data-en-aria="Goods Owner address"></textarea>
+                  <label class="form-label" for="dn-invoice-pemilikNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                  <input id="dn-invoice-pemilikNpwp" type="text" class="form-control" data-dn="pemilikNpwp" aria-label="NPWP Pemilik Barang" data-en-aria="Goods Owner tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                </div>
+                <div class="inv-pihak" data-inv-pihak="pembeli">
+                  <div class="inv-pihak-kepala">
+                    <span class="inv-pihak-judul" data-en="Buyer">Pembeli / Buyer</span>
+                    <span class="inv-pihak-ikut" data-inv-ikut="pembeli" hidden></span>
+                  </div>
+                  <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
+                  <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
+                  <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
+                  <textarea id="dn-invoice-pembeliAlamat" class="form-control" rows="4" data-dn="pembeliAlamat" aria-label="Alamat Pembeli" data-en-aria="Buyer address"></textarea>
+                  <label class="form-label" for="dn-invoice-pembeliNegara" data-en="Country">Negara</label>
+                  <input id="dn-invoice-pembeliNegara" type="text" class="form-control" data-dn="pembeliNegara" aria-label="Negara Pembeli" data-en-aria="Buyer country" autocomplete="off" placeholder="mis. KR / KOREA" data-en-ph="e.g. KR / KOREA" />
+                </div>
+                <div class="inv-pihak" data-inv-pihak="penerima">
+                  <div class="inv-pihak-kepala">
+                    <span class="inv-pihak-judul" data-en="Consignee">Penerima / Consignee</span>
+                    <span class="inv-pihak-ikut" data-inv-ikut="penerima" hidden></span>
+                  </div>
+                  <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
+                  <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
+                  <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>
+                  <textarea id="dn-invoice-consigneeAddress" class="form-control" rows="4" data-dn="consigneeAddress" aria-label="Alamat Penerima" data-en-aria="Consignee address"
+                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
+                    data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"></textarea>
+                  <label class="form-label" for="dn-invoice-penerimaNegara" data-en="Country">Negara</label>
+                  <input id="dn-invoice-penerimaNegara" type="text" class="form-control" data-dn="penerimaNegara" aria-label="Negara Penerima" data-en-aria="Consignee country" autocomplete="off" placeholder="mis. VN / VIETNAM" data-en-ph="e.g. VN / VIETNAM" />
                 </div>
                 <div class="s12">
                   <label class="form-label" data-i18n="f.keterangan"
@@ -1740,20 +1858,6 @@
                     >
                   </button>
                 </div>
-                <!-- Alamat setinggi dua baris (.r2) di samping Notify Party
-                     dan pasangan syarat penyerahan/pembayaran. -->
-                <div class="s6 r2">
-                  <label class="form-label" data-i18n="f.alamat.consignee.buyer"
-                     for="dn-invoice-consigneeAddress">Alamat Consignee / Buyer</label
-                  >
-                  <textarea id="dn-invoice-consigneeAddress"
-                    class="form-control"
-                    rows="3"
-                    data-dn="consigneeAddress"
-                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
-                    data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"
-                  ></textarea>
-                </div>
                 <div class="s6">
                   <label class="form-label" for="dn-invoice-notifyParty">Notify Party</label>
                   <input id="dn-invoice-notifyParty"
@@ -1807,7 +1911,7 @@
                     data-i18n-ph="ph.kota.negara.tujuan.akhir"
                   />
                 </div>
-                <div>
+                <div class="s4">
                   <label class="form-label" for="dn-invoice-carrier">Carrier</label>
                   <input id="dn-invoice-carrier"
                     type="text"
@@ -1817,7 +1921,7 @@
                     data-i18n-ph="ph.nama.kapal.atau.nomor.penerbangan"
                   />
                 </div>
-                <div>
+                <div class="s2">
                   <label class="form-label" for="dn-invoice-sailingDate">Sailing on or About</label>
                   <input id="dn-invoice-sailingDate"
                     type="date"
@@ -1906,7 +2010,7 @@
                 </span>
               </div>
               <div class="fgrid">
-                <div>
+                <div class="s4">
                   <label class="form-label"
                      data-en="Delivery Note Type <span class=&quot;req&quot;>*</span>" for="dn-do-doKind">Jenis Surat Jalan <span class="req">*</span></label
                   >
@@ -1920,7 +2024,7 @@
                     <option value="Lokal" data-en="Local">Lokal</option>
                   </select>
                 </div>
-                <div>
+                <div class="s2">
                   <label class="form-label"
                      data-en="Delivery Date <span class=&quot;req&quot;>*</span>" for="dn-do-docDate">Tanggal Kirim <span class="req">*</span></label
                   >
@@ -2149,53 +2253,52 @@
                      (js/features/fund-invoice-import.js). Tetap diperiksa
                      dulu sebelum disimpan. -->
                 <button type="button" class="btn-import-excel dn-dari-invoice" id="btnDanaDariInvoice"
+                  title="Pilih satu atau beberapa PDF (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini"
+                  data-en-title="Choose one or more PDFs (Invoice, Debit Note, Billing) — or drag the files onto this form"
                   data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF)">
                   <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF)
                 </button>
-                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf" hidden />
+                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf" multiple hidden />
                 <span class="docnum-preview">
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="fund">&mdash;</b>
                 </span>
               </div>
               <div class="fgrid">
+                <!-- URUTAN PENGISIAN (= urutan Tab), tiap baris 12 lajur:
+                       1. BL/AWB | Dibayarkan Kepada | Jenis Pengeluaran | Jenis Transaksi
+                       2. No. Invoice/Billing + Tanggal + Due Date | Customer
+                       3. Rincian | Mata Uang | Lampiran
+                       4. Doc No | Tanggal Dibutuhkan | Pemohon | Departemen
+                     BL/AWB PALING ATAS: begitu diketik, jadwal yang BL/AWB-nya
+                     cocok mengisi Jenis Transaksi, vendor (forwarder jadwal),
+                     Customer (buyer jadwal export) & Rincian (fund-rincian.js).
+                     Vendor menentukan aturan nomor invoice & Doc No
+                     (fund-vendor-aturan.js). Baris 4 sudah terisi bawaan
+                     (hari ini, pengguna, EXIM) -- jarang diubah, jadi paling
+                     akhir. Tanggal = .s2. -->
+                <!-- Nomor BL (laut) / AWB (udara) dokumen angkut yang
+                     ditagihkan -- mencocokkan tagihan forwarder dengan
+                     kirimannya, dan bisa dicari dari kotak cari riwayat. -->
                 <div>
-                  <label class="form-label"
-                     data-en="Date Needed <span class=&quot;req&quot;>*</span>" for="dn-fund-docDate">Tanggal Dibutuhkan <span class="req">*</span></label
-                  >
-                  <input id="dn-fund-docDate"
-                    type="date"
+                  <label class="form-label" for="dn-fund-blAwb">BL/AWB</label>
+                  <input id="dn-fund-blAwb"
+                    type="text"
                     class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
+                    data-dn="blAwb"
+                    placeholder="No. BL / AWB"
+                    data-en-ph="BL / AWB number"
+                    autocomplete="off"
                   />
                 </div>
                 <div>
                   <label class="form-label"
-                     data-en="Requester <span class=&quot;req&quot;>*</span>" for="dn-fund-requester">Pemohon <span class="req">*</span></label
+                     data-en="Paid To <span class=&quot;req&quot;>*</span>" for="dn-fund-payee">Dibayarkan Kepada <span class="req">*</span></label
                   >
-                  <select id="dn-fund-requester"
-                    class="form-select"
-                    data-dn="requester"
-                    data-dn-required
-                  >
-                    <option value="" data-i18n="f.pilih">— pilih —</option>
-                    <option>Ahmad Riyan</option>
-                    <option selected>Yogi Firgiawan</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="form-label"
-                     data-en="Department <span class=&quot;req&quot;>*</span>" for="dn-fund-department">Departemen <span class="req">*</span></label
-                  >
-                  <select id="dn-fund-department"
-                    class="form-select"
-                    data-dn="department"
-                    data-dn-required
-                  >
-                    <option value="" data-i18n="f.pilih">— pilih —</option>
-                    <option selected>EXIM</option>
-                    <option>Finance</option>
-                    <option value="Produksi" data-en="Production">Produksi</option>
+                  <!-- Dropdown vendor; pilihannya diisi fund-vendor.js
+                       (daftar tersimpan + vendor pengajuan lama). Vendor
+                       baru lewat pilihan "+ Tambah vendor baru…". -->
+                  <select id="dn-fund-payee" class="form-select" data-dn="payee" data-dn-required>
+                    <option value="">— pilih vendor —</option>
                   </select>
                 </div>
                 <div>
@@ -2234,27 +2337,51 @@
                     <option value="Inland Trucking">Inland Trucking</option>
                   </select>
                 </div>
-                <div>
-                  <label class="form-label" data-i18n="f.mata.uang"
-                     for="dn-fund-currency">Mata Uang</label
+                <!-- Nomor Billing & Nomor Invoice BERGANTIAN, mengikuti
+                     Jenis Pengeluaran: tagihan Billing dirujuk lewat nomor
+                     billing, sisanya lewat nomor invoice. Keduanya tetap
+                     ada di DOM (bukan dibuat ulang) supaya isinya tidak
+                     hilang kalau pengguna berganti pilihan lalu kembali.
+                     Karena hanya satu yang tampil, barisnya tetap penuh. -->
+                <div class="s4" data-dn-when="Billing">
+                  <label class="form-label" data-i18n="f.nomor.billing"
+                     for="dn-fund-billingNo">Nomor Billing</label
                   >
-                  <select id="dn-fund-currency" class="form-select" data-dn="currency">
-                    <option selected>IDR</option>
-                    <option>USD</option>
-                  </select>
+                  <input id="dn-fund-billingNo" type="text" class="form-control" data-dn="billingNo" aria-describedby="dn-fund-billingNo-ganda" />
+                  <!-- Nomor yang sudah diajukan: ditandai begitu diketik (docnum-view.js, dnTandaiTagihanGanda) -->
+                  <div class="form-text-note dn-ganda-ket" id="dn-fund-billingNo-ganda" role="status" hidden></div>
                 </div>
-                <div>
-                  <label class="form-label"
-                     data-en="Paid To <span class=&quot;req&quot;>*</span>" for="dn-fund-payee">Dibayarkan Kepada <span class="req">*</span></label
+                <div class="s4" data-dn-when="!Billing">
+                  <label class="form-label" data-i18n="f.no.invoice"
+                     for="dn-fund-invoiceNo">No. Invoice</label
                   >
-                  <!-- Dropdown vendor; pilihannya diisi fund-vendor.js
-                       (daftar tersimpan + vendor pengajuan lama). Vendor
-                       baru lewat pilihan "+ Tambah vendor baru…". -->
-                  <select id="dn-fund-payee" class="form-select" data-dn="payee" data-dn-required>
-                    <option value="">— pilih vendor —</option>
-                  </select>
+                  <input id="dn-fund-invoiceNo" type="text" class="form-control" data-dn="invoiceNo" aria-describedby="dn-fund-invoiceNo-ganda dn-fund-invoiceNo-bawaan" />
+                  <div class="form-text-note dn-ganda-ket" id="dn-fund-invoiceNo-ganda" role="status" hidden></div>
+                  <!-- Nomor bawaan vendor (WIDE: IN-WL<tahun><bulan>-00000, dari
+                       Tanggal Invoice) -- tampil selama isinya belum diganti
+                       (fund-vendor-aturan.js). -->
+                  <div class="form-text-note dn-bawaan-ket" id="dn-fund-invoiceNo-bawaan" hidden
+                    data-en="Default number for this vendor: the year and month follow the Invoice Date. Replace 00000 with the sequence number on the invoice.">
+                    Nomor bawaan vendor ini: tahun dan bulan mengikuti Tanggal Invoice. Ganti 00000 dengan nomor urut di invoice.
+                  </div>
                 </div>
-                <div>
+                <!-- Tanggal & jatuh tempo tagihan. Tanggal Invoice-lah yang
+                     dipakai menyaring Ringkasan per Vendor -- bukan tanggal
+                     surat pengajuan, yang bisa terbit berminggu-minggu
+                     kemudian. -->
+                <div class="s2">
+                  <label class="form-label" data-i18n="f.tanggal.invoice"
+                     for="dn-fund-invoiceDate">Tanggal Invoice</label
+                  >
+                  <input id="dn-fund-invoiceDate" type="date" class="form-control" data-dn="invoiceDate" />
+                </div>
+                <div class="s2">
+                  <label class="form-label" data-i18n="f.due.date.invoice"
+                     for="dn-fund-invoiceDueDate">Due Date Invoice</label
+                  >
+                  <input id="dn-fund-invoiceDueDate" type="date" class="form-control" data-dn="invoiceDueDate" />
+                </div>
+                <div class="s4">
                   <label class="form-label" data-i18n="f.customer"
                      for="dn-fund-customer">Customer</label
                   >
@@ -2267,55 +2394,38 @@
                   />
                   <datalist id="dnFundCustomerList"></datalist>
                 </div>
-                <!-- Nomor Billing & Nomor Invoice BERGANTIAN, mengikuti
-                     Jenis Pengeluaran: tagihan Billing dirujuk lewat nomor
-                     billing, sisanya lewat nomor invoice. Keduanya tetap
-                     ada di DOM (bukan dibuat ulang) supaya isinya tidak
-                     hilang kalau pengguna berganti pilihan lalu kembali.
-                     Karena hanya satu yang tampil, barisnya tetap penuh. -->
-                <div data-dn-when="Billing">
-                  <label class="form-label" data-i18n="f.nomor.billing"
-                     for="dn-fund-billingNo">Nomor Billing</label
+                <div class="s8">
+                  <label class="form-label" data-i18n="f.rincian"
+                     for="dn-fund-notes">Rincian</label
                   >
-                  <input id="dn-fund-billingNo" type="text" class="form-control" data-dn="billingNo" aria-describedby="dn-fund-billingNo-ganda" />
-                  <!-- Nomor yang sudah diajukan: ditandai begitu diketik (docnum-view.js, dnTandaiTagihanGanda) -->
-                  <div class="form-text-note dn-ganda-ket" id="dn-fund-billingNo-ganda" role="status" hidden></div>
+                  <textarea id="dn-fund-notes"
+                    class="form-control"
+                    rows="2"
+                    data-dn="notes"
+                  ></textarea>
+                  <div
+                    class="form-text-note"
+                    data-i18n="form.note.fundSubject"
+                  ></div>
                 </div>
-                <div data-dn-when="!Billing">
-                  <label class="form-label" data-i18n="f.no.invoice"
-                     for="dn-fund-invoiceNo">No. Invoice</label
+                <div class="s2">
+                  <label class="form-label" data-i18n="f.mata.uang"
+                     for="dn-fund-currency">Mata Uang</label
                   >
-                  <input id="dn-fund-invoiceNo" type="text" class="form-control" data-dn="invoiceNo" aria-describedby="dn-fund-invoiceNo-ganda" />
-                  <div class="form-text-note dn-ganda-ket" id="dn-fund-invoiceNo-ganda" role="status" hidden></div>
+                  <select id="dn-fund-currency" class="form-select" data-dn="currency">
+                    <option selected>IDR</option>
+                    <option>USD</option>
+                  </select>
                 </div>
-                <!-- Tanggal & jatuh tempo tagihan. Tanggal Invoice-lah yang
-                     dipakai menyaring Ringkasan per Vendor -- bukan tanggal
-                     surat pengajuan, yang bisa terbit berminggu-minggu
-                     kemudian. -->
-                <div>
-                  <label class="form-label" data-i18n="f.tanggal.invoice"
-                     for="dn-fund-invoiceDate">Tanggal Invoice</label
+                <div class="s2">
+                  <label class="form-label" data-i18n="f.lampiran"
+                     for="dn-fund-attachment">Lampiran</label
                   >
-                  <input id="dn-fund-invoiceDate" type="date" class="form-control" data-dn="invoiceDate" />
-                </div>
-                <div>
-                  <label class="form-label" data-i18n="f.due.date.invoice"
-                     for="dn-fund-invoiceDueDate">Due Date Invoice</label
-                  >
-                  <input id="dn-fund-invoiceDueDate" type="date" class="form-control" data-dn="invoiceDueDate" />
-                </div>
-                <!-- Nomor BL (laut) / AWB (udara) dokumen angkut yang
-                     ditagihkan -- mencocokkan tagihan forwarder dengan
-                     kirimannya, dan bisa dicari dari kotak cari riwayat. -->
-                <div>
-                  <label class="form-label" for="dn-fund-blAwb">BL/AWB</label>
-                  <input id="dn-fund-blAwb"
+                  <input id="dn-fund-attachment"
                     type="text"
                     class="form-control"
-                    data-dn="blAwb"
-                    placeholder="No. BL / AWB"
-                    data-en-ph="BL / AWB number"
-                    autocomplete="off"
+                    data-dn="attachment"
+                    value="1 Set"
                   />
                 </div>
                 <!-- Doc No, Rincian (Subject surat) & Lampiran sebaris --
@@ -2332,7 +2442,7 @@
                      Keterangan di bawah kotak mengikuti vendor yang
                      dipilih: .fund-docno-cetak atau .fund-docno-tak-cetak
                      (fundSelaraskanDocNo). -->
-                <div class="fund-docno" id="fundDocNoWrap">
+                <div class="s4 fund-docno" id="fundDocNoWrap">
                   <label class="form-label" for="fundDocNo">Doc No</label>
                   <input
                     type="text"
@@ -2348,30 +2458,45 @@
                     Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.
                   </div>
                 </div>
-                <div class="s6">
-                  <label class="form-label" data-i18n="f.rincian"
-                     for="dn-fund-notes">Rincian</label
+                <div class="s2">
+                  <label class="form-label"
+                     data-en="Date Needed <span class=&quot;req&quot;>*</span>" for="dn-fund-docDate">Tanggal Dibutuhkan <span class="req">*</span></label
                   >
-                  <textarea id="dn-fund-notes"
+                  <input id="dn-fund-docDate"
+                    type="date"
                     class="form-control"
-                    rows="2"
-                    data-dn="notes"
-                  ></textarea>
-                  <div
-                    class="form-text-note"
-                    data-i18n="form.note.fundSubject"
-                  ></div>
+                    data-dn="docDate"
+                    data-dn-required
+                  />
                 </div>
                 <div>
-                  <label class="form-label" data-i18n="f.lampiran"
-                     for="dn-fund-attachment">Lampiran</label
+                  <label class="form-label"
+                     data-en="Requester <span class=&quot;req&quot;>*</span>" for="dn-fund-requester">Pemohon <span class="req">*</span></label
                   >
-                  <input id="dn-fund-attachment"
-                    type="text"
-                    class="form-control"
-                    data-dn="attachment"
-                    value="1 Set"
-                  />
+                  <select id="dn-fund-requester"
+                    class="form-select"
+                    data-dn="requester"
+                    data-dn-required
+                  >
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option>Ahmad Riyan</option>
+                    <option selected>Yogi Firgiawan</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label"
+                     data-en="Department <span class=&quot;req&quot;>*</span>" for="dn-fund-department">Departemen <span class="req">*</span></label
+                  >
+                  <select id="dn-fund-department"
+                    class="form-select"
+                    data-dn="department"
+                    data-dn-required
+                  >
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option selected>EXIM</option>
+                    <option>Finance</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
+                  </select>
                 </div>
                 <!-- Rincian pungutan: OPSIONAL. Kalau ketiganya kosong,
                      Form Pengajuan Dana mencetak satu baris memakai Jenis
@@ -2574,18 +2699,7 @@
                 </span>
               </div>
               <div class="fgrid">
-                <div>
-                  <label class="form-label"
-                     data-en="Letter Date <span class=&quot;req&quot;>*</span>" for="dn-letter-docDate">Tanggal Surat <span class="req">*</span></label
-                  >
-                  <input id="dn-letter-docDate"
-                    type="date"
-                    class="form-control"
-                    data-dn="docDate"
-                    data-dn-required
-                  />
-                </div>
-                <div>
+                <div class="s4">
                   <label class="form-label"
                      data-en="Letter Type <span class=&quot;req&quot;>*</span>" for="dn-letter-letterType">Jenis Surat <span class="req">*</span></label
                   >
@@ -2604,6 +2718,17 @@
                     <option value="Certificate of No Proof of Payment" data-en="Certificate of No Proof of Payment">Surat Pernyataan Tanpa Bukti Bayar</option>
                     <option value="Certificate of Function and Use of Goods" data-en="Certificate of Function and Use of Goods">Surat Keterangan Fungsi Barang</option>
                   </select>
+                </div>
+                <div class="s2">
+                  <label class="form-label"
+                     data-en="Letter Date <span class=&quot;req&quot;>*</span>" for="dn-letter-docDate">Tanggal Surat <span class="req">*</span></label
+                  >
+                  <input id="dn-letter-docDate"
+                    type="date"
+                    class="form-control"
+                    data-dn="docDate"
+                    data-dn-required
+                  />
                 </div>
                 <div>
                   <label class="form-label"
@@ -2757,8 +2882,10 @@
             </div>
 
             <!-- PENGATURAN (khusus EXIM): Atur Nomor Urut, dan -- di tab
-                 Pengajuan Dana -- Aturan Doc No di sebelahnya. Ditaruh
-                 SEBELUM riwayat. -->
+                 Pengajuan Dana -- Aturan Doc No & Aturan No. Invoice di
+                 sebelahnya, TIGA SEBARIS di layar lebar. Ditaruh SEBELUM
+                 riwayat. Penjelasan panjang tiap kotak dilipat di "Cara
+                 kerja" (details.dn-bantuan) supaya kotaknya pendek. -->
             <div class="dn-pengaturan">
             <div class="counter-box">
               <div class="counter-head">
@@ -2767,7 +2894,7 @@
               </div>
               <div class="counter-body">
                 <label class="form-label" for="counterNext"
-                   data-en="Next number">Nomor berikutnya</label
+                   data-en="Next number:">Nomor berikutnya:</label
                 >
                 <input
                   type="text"
@@ -2785,15 +2912,20 @@
                   type="button"
                   class="btn btn-outline-danger"
                   id="btnCounterReset"
-                 data-en="<i class=&quot;bi bi-arrow-counterclockwise&quot;></i> Reset to 001">
-                  <i class="bi bi-arrow-counterclockwise"></i> Reset ke 001
+                  title="Reset ke 001"
+                  data-en-title="Reset to 001"
+                 data-en="<i class=&quot;bi bi-arrow-counterclockwise&quot;></i> Reset">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </button>
               </div>
-              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the number you want issued <b>next</b> &amp;mdash; e.g. if the last invoice was 035, enter 036. Applies to the active document type &amp;amp; period.">
+              <details class="dn-bantuan">
+                <summary data-en="How it works">Cara kerja</summary>
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the number you want issued <b>next</b> &amp;mdash; e.g. if the last invoice was 035, enter 036. Applies to the active document type &amp;amp; period.">
                 <i class="bi bi-info-circle"></i> Isi nomor yang ingin terbit
                 <b>berikutnya</b> &mdash; misal invoice terakhir 035, isi 036.
                 Berlaku untuk jenis dokumen &amp; periode yang sedang aktif.
               </div>
+              </details>
             </div>
 
             <!-- ATURAN DOC NO: vendor yang Doc No-nya TIDAK DICETAK di Form
@@ -2828,7 +2960,9 @@
                   <i class="bi bi-plus-lg"></i> Tambah
                 </button>
               </div>
-              <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+              <details class="dn-bantuan">
+                <summary data-en="How it works">Cara kerja</summary>
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
                 <i class="bi bi-info-circle"></i> Doc No bisa diisi dan
                 tersimpan untuk semua vendor. Pada form yang dicetak, Doc No
                 tampil di bawah No Surat (beserta tanda tangan CFO) untuk
@@ -2837,6 +2971,56 @@
                 <b>PRIME</b> mengenai &ldquo;PT PRIME CARGO&rdquo;, tidak
                 mengenai &ldquo;PRIMERA&rdquo;.
               </div>
+              </details>
+            </div>
+
+            <!-- ATURAN NO. INVOICE: vendor yang No. Invoice-nya BOLEH SAMA di
+                 beberapa pengajuan -- mis. JNE, yang isiannya nomor rekening,
+                 bukan nomor tagihan. Diperiksa di form (docnum-view.js) dan
+                 oleh pemicu database; bisa ditambah & dihapus di sini, jadi
+                 pengecualian berikutnya tidak butuh perubahan kode
+                 (js/features/fund-invoice-sama.js). Tampil hanya di tab
+                 Pengajuan Dana; untuk peran hanya-baca ikut tersembunyi
+                 bersama kotak Atur Nomor Urut (.counter-box di auth.css). -->
+            <div class="counter-box dn-aturan d-none" id="fundInvoiceBox">
+              <div class="counter-head">
+                <span data-en="<i class=&quot;bi bi-files&quot;></i> Invoice No Rule"><i class="bi bi-files"></i> Aturan No. Invoice</span>
+                <span class="counter-info" id="fundInvoiceInfo">&mdash;</span>
+              </div>
+              <div class="dn-aturan-isi">
+                <span class="dn-aturan-label" data-en="Invoice No may repeat for:">No. Invoice boleh sama untuk:</span>
+                <div class="dn-aturan-daftar" id="fundInvoiceDaftar"></div>
+              </div>
+              <div class="dn-aturan-tambah">
+                <input
+                  type="text"
+                  class="form-control"
+                  id="fundInvoiceBaru"
+                  maxlength="60"
+                  autocomplete="off"
+                  placeholder="Nama vendor, mis. JNE"
+                  data-en-ph="Vendor name, e.g. JNE"
+                  aria-label="Vendor yang No. Invoice-nya boleh sama"
+                  data-en-aria="Vendor whose Invoice No may repeat"
+                />
+                <button type="button" class="btn btn-teal" id="btnFundInvoiceTambah" data-en="<i class=&quot;bi bi-plus-lg&quot;></i> Add">
+                  <i class="bi bi-plus-lg"></i> Tambah
+                </button>
+              </div>
+              <details class="dn-bantuan">
+                <summary data-en="How it works">Cara kerja</summary>
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> An Invoice No can be submitted only once &amp;mdash; except for the vendors listed here, whose Invoice No field is not an invoice number (e.g. a bank account number). Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>JNE</b> covers &amp;ldquo;PT JNE EXPRESS&amp;rdquo; but not &amp;ldquo;JNEXT&amp;rdquo;. Billing Numbers are still checked for every vendor. <b>Careful:</b> vendors on this list are no longer protected from being paid twice for the same invoice.">
+                <i class="bi bi-info-circle"></i> Satu No. Invoice hanya boleh
+                diajukan sekali &mdash; <b>kecuali</b> untuk vendor di daftar
+                ini, yang isian No. Invoice-nya bukan nomor tagihan (mis.
+                nomor rekening). Dicocokkan per kata dengan &ldquo;Dibayarkan
+                Kepada&rdquo;: <b>JNE</b> mengenai &ldquo;PT JNE
+                EXPRESS&rdquo;, tidak mengenai &ldquo;JNEXT&rdquo;. Nomor
+                Billing tetap diperiksa untuk semua vendor.
+                <b>Hati-hati:</b> vendor di daftar ini tidak lagi dijaga dari
+                tagihan yang dibayar dua kali.
+              </div>
+              </details>
             </div>
             </div>
 
@@ -3033,12 +3217,18 @@
               ></span>
               <span data-en="Documents">Dokumen</span>
             </div>
-            <!-- Urutan baris: Nama Shipper/Customer (judul jadwal di kartu,
-                 selebar baris) -> No. & Tanggal SPPB/PEB + No. Aju ->
-                 Invoice + Packing List -> Master + House B/L-AWB. Tiap
-                 baris penuh 12 lajur, tanpa baris setengah kosong. -->
+            <!-- Urutan = urutan dokumen datang, dan urutan Tab:
+                   1. Nama Shipper/Buyer (judul jadwal) | No. Aju
+                   2. Invoice (nomor + tanggal)          | Packing List
+                   3. Master B/L-AWB                     | House B/L-AWB
+                   4. SPPB / PEB (terbit paling akhir)
+                 Tiap dokumen = nomor .s4 + tanggal .s2 (setengah baris),
+                 jadi pasangan Invoice/Packing List dan Master/House tepat
+                 bersebelahan dan kotak tanggal tidak menyisakan ruang
+                 kosong. Tanggal Packing List mengikuti Tanggal Invoice,
+                 Tanggal House mengikuti Master (form-router.js). -->
             <div class="fgrid">
-              <div class="s12">
+              <div class="s6">
                 <label
                   class="form-label"
                   id="lblParty"
@@ -3080,28 +3270,6 @@
                   Nama baru — masuk daftar setelah jadwal disimpan.
                 </div>
               </div>
-              <div>
-                <label class="form-label" id="lblDocNo" for="fDocNo" data-i18n="f.no.sppb"
-                  >No. SPPB</label
-                >
-                <input
-                  type="text"
-                  class="form-control"
-                  id="fDocNo"
-                  placeholder="Nomor SPPB"
-                  data-i18n-ph="ph.nomor.sppb"
-                />
-              </div>
-              <div>
-                <label
-                  class="form-label"
-                  id="lblDocDate"
-                  for="fDocDate"
-                  data-i18n="f.tanggal.sppb"
-                  >Tanggal SPPB</label
-                >
-                <input type="date" class="form-control" id="fDocDate" />
-              </div>
               <!-- Selebar setengah baris: nomor aju 26 angka. Kiriman kurir
                    bernilai di bawah USD 1.500 terisi "CONSIGNEE NOTE"
                    sendiri, keterangannya di #ajuKurirKet
@@ -3119,7 +3287,7 @@
                 />
                 <div class="form-text-note" id="ajuKurirKet" role="status" hidden></div>
               </div>
-              <div>
+              <div class="s4">
                 <label class="form-label" for="fInvoice" data-i18n="f.no.invoice"
                   >No. Invoice</label
                 >
@@ -3131,22 +3299,26 @@
                   data-i18n-ph="ph.nomor.invoice"
                 />
               </div>
-              <div>
+              <div class="s2">
                 <label class="form-label" for="fInvoiceDate" data-en="Invoice Date">Tanggal Invoice</label>
                 <input type="date" class="form-control" id="fInvoiceDate" />
               </div>
               <!-- Packing List di samping Invoice: disimpan di Data PIB/PEB
                    (draftDataPabean, data-pabean-form.js), dibandingkan Cek
                    PIB/PEB dengan dokumen kode 217 draft. -->
-              <div>
+              <div class="s4">
                 <label class="form-label" for="fPackingList" data-en="Packing List No.">No. Packing List</label>
                 <input type="text" class="form-control" id="fPackingList" placeholder="Nomor packing list" data-en-ph="Packing list number" />
               </div>
-              <div>
+              <div class="s2">
                 <label class="form-label" for="fPackingListDate" data-en="Packing List Date">Tanggal Packing List</label>
                 <input type="date" class="form-control" id="fPackingListDate" />
               </div>
-              <div>
+              <!-- Invoice & Packing List berbeda nomor / tanggal: satu kalimat
+                   selebar baris tepat di bawah pasangannya (tandaiCiplBeda,
+                   form-router.js). Tidak mencegah simpan. -->
+              <div class="s12 form-text-note fg-note cipl-beda-ket" id="ciplBedaKet" role="status" hidden></div>
+              <div class="s4">
                 <label class="form-label" id="lblMasterBL" for="fMasterBL"
                   >Master B/L / AWB</label
                 >
@@ -3160,12 +3332,14 @@
               </div>
               <!-- Tanggal Master & House saling mengikuti selama salah satunya
                    belum diubah sendiri (samakanTanggalBl, form-router.js).
+                   Yang diteruskan hanya tanggal yang DIISI: mengosongkan satu
+                   kotak tidak mengosongkan pasangannya.
                    Labelnya ikut moda: B/L atau AWB (applyTransportLabels). -->
-              <div>
+              <div class="s2">
                 <label class="form-label" id="lblMasterBLDate" for="fMasterBLDate">Tanggal Master B/L</label>
                 <input type="date" class="form-control" id="fMasterBLDate" />
               </div>
-              <div>
+              <div class="s4">
                 <label class="form-label" id="lblHouseBL" for="fHouseBL"
                   >House B/L / AWB</label
                 >
@@ -3177,9 +3351,31 @@
                   data-i18n-ph="ph.nomor.house.b.l.atau.awb"
                 />
               </div>
-              <div>
+              <div class="s2">
                 <label class="form-label" id="lblHouseBLDate" for="fHouseBLDate">Tanggal House B/L</label>
                 <input type="date" class="form-control" id="fHouseBLDate" />
+              </div>
+              <div class="s4">
+                <label class="form-label" id="lblDocNo" for="fDocNo" data-i18n="f.no.sppb"
+                  >No. SPPB</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  id="fDocNo"
+                  placeholder="Nomor SPPB"
+                  data-i18n-ph="ph.nomor.sppb"
+                />
+              </div>
+              <div class="s2">
+                <label
+                  class="form-label"
+                  id="lblDocDate"
+                  for="fDocDate"
+                  data-i18n="f.tanggal.sppb"
+                  >Tanggal SPPB</label
+                >
+                <input type="date" class="form-control" id="fDocDate" />
               </div>
             </div>
           </div>
@@ -3670,6 +3866,21 @@
                 Daftar Barang dalam Pengiriman Ini
               </div>
               <div class="barang-aksi">
+                <!-- Tampilan daftar: kartu per barang (bawaan) atau tabel
+                     24 kolom. Pilihannya diingat per peramban
+                     (js/features/barang-tampilan.js). -->
+                <div class="eta-mode-switch barang-tampilan" role="group" aria-label="Tampilan daftar barang" data-en-aria="Items view">
+                  <button type="button" class="eta-mode-btn is-active" data-barang-tampilan="kartu" aria-pressed="true"
+                    title="Satu kartu isian per barang — semua kolom terlihat tanpa menggeser" data-en-title="One card per item — every column visible without scrolling sideways"
+                    aria-label="Tampilan kartu" data-en-aria="Card view">
+                    <i class="bi bi-card-text" aria-hidden="true"></i><span data-en="Cards">Kartu</span>
+                  </button>
+                  <button type="button" class="eta-mode-btn" data-barang-tampilan="tabel" aria-pressed="false"
+                    title="Tabel 24 kolom — satu baris per barang, digeser mendatar" data-en-title="24-column table — one row per item, scrolls sideways"
+                    aria-label="Tampilan tabel" data-en-aria="Table view">
+                    <i class="bi bi-table" aria-hidden="true"></i><span data-en="Table">Tabel</span>
+                  </button>
+                </div>
                 <!-- Samakan isian baris 1 ke semua baris, kolom mana pun
                      (item-samakan.js: isinya dirakit saat dibuka) -->
                 <div class="dropdown" id="samakanMenu" hidden>
@@ -3685,8 +3896,15 @@
               </div>
             </div>
 
-            <!-- Wadah ukuran (@container barang-isi, form.css): di layar
-                 sempit tiap barang jadi kartu isian. Hanya tabelnya --
+            <!-- SKB PPh bawaan (buku Import): nomor & tanggal yang otomatis
+                 dipasang ke tiap barang baru; diatur di sini
+                 (js/features/skb-bawaan.js). Isinya digambar skrip. -->
+            <div class="skb-bawaan" id="skbBawaanBar" role="status" aria-live="polite"></div>
+
+            <!-- Wadah ukuran (@container barang-isi, form.css): tiap
+                 barang tampil sebagai kartu isian, di layar mana pun;
+                 pengalih Kartu/Tabel di atas memasang .barang-isi--tabel
+                 untuk kembali ke tabel 24 kolom. Hanya tabelnya --
                  popover HS Code di bawah (position: fixed) sengaja di
                  luar wadah ini. -->
             <div class="barang-isi"><div class="item-table-wrap">
@@ -4746,6 +4964,8 @@
     <!-- CORE -->
     <!-- ========================================= -->
     <script src="js/core/helpers.js"></script>
+    <!-- Pembaca tanggal ketikan (5/11/26, 5 nov 2026, 20261105 -> yyyy-mm-dd) -->
+    <script src="js/core/date-parse.js"></script>
     <script src="js/core/num-format.js"></script>
     <!-- Kode negara ISO 3166-1 (Referensi Negara CEISA): kotak Kode Negara
          Asal di tabel barang, impor CEISA/PIB/CIPL, Cek PIB/PEB. Sesudah
@@ -4793,8 +5013,11 @@
     <script src="js/ui/icons.js"></script>
     <script src="js/ui/number-input.js"></script>
     <script src="js/ui/time-input.js"></script>
+    <!-- SEMUA <input type="date"> jadi kotak ketik; id/kelas/nilai yyyy-mm-dd tetap -->
+    <script src="js/ui/date-input.js"></script>
     <script src="js/ui/fokus.js"></script>
     <script src="js/ui/feedback.js"></script>
+    <script src="js/ui/pilihan-tambah.js"></script>
     <script src="js/ui/tooltip.js"></script>
     <script src="js/ui/sidebar.js"></script>
     <script src="js/ui/search-clear.js"></script>
@@ -4817,6 +5040,8 @@
     <script src="js/features/modal-fields.js"></script>
     <script src="js/features/pilih-pihak.js"></script>
     <script src="js/features/item-table.js"></script>
+    <script src="js/features/barang-tampilan.js"></script>
+    <script src="js/features/skb-bawaan.js"></script>
     <script src="js/features/item-samakan.js"></script>
     <script src="js/features/dok-pelengkap.js"></script>
     <script src="js/features/data-pabean-form.js"></script>
@@ -4867,8 +5092,14 @@
     <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/po-list.js"></script>
     <script src="js/features/vehicle-list.js"></script>
-    <script src="js/features/fund-lines.js"></script>
+    <!-- fund-docno.js & fund-vendor-aturan.js SEBELUM fund-lines.js: berkas
+         itu menggambar tabel rinciannya saat dimuat, dan PPN per item
+         bergantung pada aturan vendor (pencocok nama per kata ada di
+         fund-docno.js). -->
     <script src="js/features/fund-docno.js"></script>
+    <script src="js/features/fund-vendor-aturan.js"></script>
+    <script src="js/features/fund-lines.js"></script>
+    <script src="js/features/fund-invoice-sama.js"></script>
     <script src="js/features/do-lines.js"></script>
     <script src="js/features/fund-request-print.js"></script>
     <script src="js/features/cipl-tata.js"></script>
@@ -4877,12 +5108,14 @@
     <script src="js/features/cipl-excel.js"></script>
     <script src="js/views/docnum-view.js"></script>
     <script src="js/features/docnum-detail.js"></script>
+    <script src="js/features/invoice-pihak.js"></script>
     <script src="js/features/fund-summary.js"></script>
     <script src="js/features/fund-report.js"></script>
     <script src="js/features/shipment-cost.js"></script>
     <script src="js/features/fund-invoice-import.js"></script>
     <script src="js/features/fund-vendor.js"></script>
     <script src="js/features/fund-rincian.js"></script>
+    <script src="js/features/fund-invoice-summary.js"></script>
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>

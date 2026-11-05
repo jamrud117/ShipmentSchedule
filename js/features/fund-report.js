@@ -116,7 +116,7 @@ function lapBarisDana(row, kurs) {
   let kenaPpn = 0;
   let ppn = 0;
   if (Array.isArray(p.lines) && p.lines.length) {
-    const total = fundLineTotals(p.lines);
+    const total = fundLineTotals(p.lines, mata, p.payee);
     dpp = total.totalNet;
     kenaPpn = total.dppPph;
     ppn = total.totalPpn;

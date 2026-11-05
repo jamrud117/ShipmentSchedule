@@ -21,7 +21,6 @@
    Data PIB/PEB yang mengisi / membaca #fParty tidak berubah.
 ================================================================== */
 
-const kunciNamaPihak = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const rapikanNamaPihak = (s) => String(s || "").replace(/\s+/g, " ").trim().toUpperCase();
 
 // Nama pihak jadwal satu buku: satu per kunci (ejaan terbanyak), urut abjad
@@ -29,7 +28,7 @@ function daftarNamaPihak(mode) {
   const perKunci = new Map();
   ((typeof data !== "undefined" && data[mode]) || []).forEach((s) => {
     const nama = rapikanNamaPihak(s && s.party);
-    const k = kunciNamaPihak(nama);
+    const k = kunciAlnum(nama);
     if (!k) return;
     if (!perKunci.has(k)) perKunci.set(k, new Map());
     const ejaan = perKunci.get(k);
@@ -42,8 +41,8 @@ function daftarNamaPihak(mode) {
 
 // Ejaan di daftar untuk sebuah nama (kunci sama), atau "" bila namanya baru
 function namaPihakTerdaftar(nama, daftar) {
-  const k = kunciNamaPihak(nama);
-  return (k && daftar.find((n) => kunciNamaPihak(n) === k)) || "";
+  const k = kunciAlnum(nama);
+  return (k && daftar.find((n) => kunciAlnum(n) === k)) || "";
 }
 
 const pilihPihak = {
@@ -82,18 +81,18 @@ function sorotPihak(i, gulir) {
    teksnya belum ada di daftar. */
 function gambarDaftarPihak(saring) {
   const p = pilihPihak;
-  const q = kunciNamaPihak(saring);
-  const kini = kunciNamaPihak(p.isian.value);
+  const q = kunciAlnum(saring);
+  const kini = kunciAlnum(p.isian.value);
   const peringkat = (n) => {
-    const k = kunciNamaPihak(n);
+    const k = kunciAlnum(n);
     return k === q ? 0 : k.startsWith(q) ? 1 : 2;
   };
-  const cocok = q ? p.semua.filter((n) => kunciNamaPihak(n).includes(q)).sort((a, b) => peringkat(a) - peringkat(b)) : p.semua.slice();
+  const cocok = q ? p.semua.filter((n) => kunciAlnum(n).includes(q)).sort((a, b) => peringkat(a) - peringkat(b)) : p.semua.slice();
   p.tampil = cocok.map((nama) => ({ nama, baru: false }));
-  if (q && !p.semua.some((n) => kunciNamaPihak(n) === q)) p.tampil.push({ nama: rapikanNamaPihak(saring), baru: true });
+  if (q && !p.semua.some((n) => kunciAlnum(n) === q)) p.tampil.push({ nama: rapikanNamaPihak(saring), baru: true });
   p.daftar.innerHTML = p.tampil.length
     ? p.tampil.map((o, i) => {
-      const dipilih = !o.baru && kunciNamaPihak(o.nama) === kini;
+      const dipilih = !o.baru && kunciAlnum(o.nama) === kini;
       const isi = o.baru
         ? `<i class="bi bi-plus-lg" aria-hidden="true"></i><span>${escapeHtml(tt(`Tambah "${o.nama}"`, `Add "${o.nama}"`))}</span>`
         : `<span>${escapeHtml(o.nama)}</span>${dipilih ? '<i class="bi bi-check2" aria-hidden="true"></i>' : ""}`;
@@ -101,7 +100,7 @@ function gambarDaftarPihak(saring) {
     }).join("")
     : `<div class="pilih-pihak-kosong">${escapeHtml(tt("Belum ada nama tersimpan — ketik nama baru.", "No saved names yet — type a new one."))}</div>`;
   // Sorotan: hasil teratas (sedang menyaring) atau nama yang sedang terpilih (daftar lengkap)
-  const terpilih = p.tampil.findIndex((o) => !o.baru && kunciNamaPihak(o.nama) === kini);
+  const terpilih = p.tampil.findIndex((o) => !o.baru && kunciAlnum(o.nama) === kini);
   sorotPihak(q ? 0 : terpilih, true);
 }
 

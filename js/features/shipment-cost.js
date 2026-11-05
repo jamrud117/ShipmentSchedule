@@ -38,7 +38,6 @@ async function bkAmbilDana(paksa) {
 // Daftar yang sudah termuat (boleh lewat masa segarnya), tanpa memuat; null = belum pernah dimuat
 const bkDanaTermuat = () => (bkCache ? bkCache.rows : null);
 
-const bkNormal = (x) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const bkAngka = (v) => {
   const n = parseFloat(String(v == null ? "" : v).replace(/[^\d.-]/g, ""));
   return isFinite(n) ? n : 0;
@@ -46,7 +45,7 @@ const bkAngka = (v) => {
 
 /* Nomor BL/AWB kiriman (Master & House) */
 function bkKunciKiriman(s) {
-  return [...new Set([s && s.masterBL, s && s.houseBL].map(bkNormal).filter((k) => k.length >= 5))];
+  return [...new Set([s && s.masterBL, s && s.houseBL].map(kunciAlnum).filter((k) => k.length >= 5))];
 }
 
 /* Nomor BL/AWB di sebuah pengajuan -- bisa lebih dari satu, dipisah
