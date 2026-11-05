@@ -2277,12 +2277,12 @@
                      (js/features/fund-invoice-import.js). Tetap diperiksa
                      dulu sebelum disimpan. -->
                 <button type="button" class="btn-import-excel dn-dari-invoice" id="btnDanaDariInvoice"
-                  title="Pilih satu atau beberapa PDF (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini"
-                  data-en-title="Choose one or more PDFs (Invoice, Debit Note, Billing) — or drag the files onto this form"
-                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF)">
-                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF)
+                  title="Pilih satu atau beberapa PDF atau gambar scan/foto (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini. PDF hasil scan dibaca dengan OCR."
+                  data-en-title="Choose one or more PDFs or scanned images / photos (Invoice, Debit Note, Billing) — or drag the files onto this form. Scanned PDFs are read with OCR."
+                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF / scan)">
+                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF / scan)
                 </button>
-                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf" multiple hidden />
+                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple hidden />
                 <span class="docnum-preview">
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="fund">&mdash;</b>
                 </span>
@@ -5105,6 +5105,8 @@
     <!-- PDF -->
     <script src="js/import/pdf.js"></script>
     <script src="js/import/pdf-peb.js"></script>
+    <!-- OCR untuk PDF hasil scan & foto invoice (Tesseract.js dimuat lazy, hanya saat dibutuhkan) -->
+    <script src="js/import/ocr.js"></script>
 
     <!-- Dispatcher -->
     <script src="js/import/dispatch.js"></script>

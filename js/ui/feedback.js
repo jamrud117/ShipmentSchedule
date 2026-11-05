@@ -55,6 +55,11 @@ let toastSisa = 0;
 let toastMulai = 0;
 let toastTetap = false;
 let toastTerakhir = "";
+/* Pembukaan toast ditunda satu bingkai (supaya transisinya berjalan). Bila toast
+   ditutup SEBELUM bingkai itu tiba, pembukaan tertunda itu dibatalkan -- kalau
+   tidak, toast yang sudah ditutup muncul lagi dan tak pernah hilang (toast
+   kemajuan OCR yang "tetap" ditutup sesaat setelah pesan terakhirnya). */
+let toastBukaRaf = null;
 
 function jalankanWaktuToast(ms) {
   clearTimeout(toastTimer);
@@ -125,7 +130,11 @@ function showToast(msg, type, opsi) {
      dimunculkan berturut-turut. */
   if (!sama) {
     el.classList.remove("is-open");
-    requestAnimationFrame(() => el.classList.add("is-open"));
+    cancelAnimationFrame(toastBukaRaf);
+    toastBukaRaf = requestAnimationFrame(() => {
+      toastBukaRaf = null;
+      el.classList.add("is-open");
+    });
   }
   jalankanWaktuToast(lama);
 }
@@ -134,6 +143,8 @@ function hideToast() {
   clearTimeout(toastTimer);
   toastTimer = null;
   toastTetap = false;
+  cancelAnimationFrame(toastBukaRaf);
+  toastBukaRaf = null;
   const el = $("#appToast");
   if (!el) return;
   el.classList.remove("is-open", "is-jeda");
