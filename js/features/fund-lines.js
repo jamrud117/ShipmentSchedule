@@ -901,6 +901,14 @@ function fundLinesUrutkan() {
   fundLines = fundLines.map((b, i) => ({ b, i })).sort((x, y) => posisi(x.b) - posisi(y.b) || x.i - y.i).map((x) => x.b);
 }
 
+/* Kelompok sebuah baris = id dokumennya; "" = dokumen utama. Baris yang
+   dokumennya sudah tidak ada tampil di kelompok utama -- sama seperti
+   di fundLinesUrutkan() dan renderFundLines(). */
+function fundKelompokBaris(b) {
+  const dok = String((b && b.dok) || "");
+  return dok && fundDokumen.some((d) => d.id === dok) ? dok : "";
+}
+
 function setFundDokumen(list) {
   fundDokumen = (Array.isArray(list) ? list : [])
     .filter((d) => d && d.id)
@@ -1096,9 +1104,12 @@ if (fundLinesBodyEl) {
 
    Mengisi tabel ini berarti menyalin daftar pos dari tagihan dari atas
    ke bawah; berpindah dengan Tab menyeberang kolom dulu, dan mengetik
-   lalu meraih tetikus tiap baris jauh lebih lambat. Di baris terakhir,
-   Enter menambah baris baru sekalian. Rumus yang TIDAK valid menahan
-   kursor di kotaknya supaya bisa langsung diperbaiki.
+   lalu meraih tetikus tiap baris jauh lebih lambat. Di baris terakhir
+   KELOMPOKNYA -- invoice utama, tiap invoice tambahan, tiap Debit Note --
+   Enter menambah baris baru sekalian, di kelompok itu juga. Di baris
+   tengah, Enter turun ke baris berikutnya di kelompok yang sama. Rumus
+   yang TIDAK valid menahan kursor di kotaknya supaya bisa langsung
+   diperbaiki.
 
    Enter DICEGAH mengirim form: kotak-kotak ini hidup di dalam <form>
    penerbitan nomor, dan tanpa preventDefault satu ketukan Enter akan
@@ -1119,8 +1130,15 @@ if (fundLinesBodyEl) {
       perbaruiHitunganRincian();
       if (!ok) return;
     }
-    if (idx === fundLines.length - 1) {
-      fundLines.push(fundLineBaru());
+    /* Baris terakhir KELOMPOKNYA, bukan terakhir seluruh tabel. Dulu yang
+       dilihat hanya baris terakhir tabel, dan baris barunya tanpa dokumen
+       -- jatuh ke kelompok utama: di Debit Note atau invoice tambahan
+       baris baru hanya bisa ditambah lewat tombol "+ Baris". Disisipkan
+       tepat di bawah baris ini, jadi larik tetap berurutan per kelompok. */
+    const kelompok = fundKelompokBaris(fundLines[idx]);
+    const masihAdaDiKelompok = idx + 1 < fundLines.length && fundKelompokBaris(fundLines[idx + 1]) === kelompok;
+    if (!masihAdaDiKelompok) {
+      fundLines.splice(idx + 1, 0, Object.assign(fundLineBaru(), kelompok ? { dok: kelompok } : {}));
       renderFundLines();
     }
     const berikut = fundLinesBodyEl.querySelector(

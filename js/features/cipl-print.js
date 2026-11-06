@@ -120,6 +120,13 @@ const CIPL_PROFIL = [
     nama: "DYNAMIC DESIGN CO., LTD.",
     match: ["DYNAMIC DESIGN CO", "DYNAMIC DESIGN COLTD"],
     layout: "kr",
+    /* SHIPPER BAKU: kiriman ke Dynamic Design Co., Ltd. SELALU memakai
+       blok CIPL_SHIPPER yang sama di setiap invoice (CI, PL, SI & Excel).
+       Isian Penjual per invoice -- dari data PEB jadwal, sisa customer
+       sebelumnya, data tersimpan atau ketikan -- tidak dipakai. Dulu
+       itulah yang membuat alamat shipper berbeda dari satu invoice ke
+       invoice lain. Lihat ciplShipperBaku(). */
+    shipper: CIPL_SHIPPER,
     // LANGSUNG: pembeli = penerima
     isianPihak: { polaPihak: "langsung", penerimaNegara: "KR" },
     portLoading: "Jakarta, Indonesia",
@@ -452,9 +459,22 @@ function ciplRefBaris(row) {
    seperti dulu: Shipper tetap, Consignee = customer + alamat consignee. */
 const ciplPihakBaris = (nama, alamat) => [nama, ...ciplBarisTeks(alamat)].filter(Boolean).map(ciplKapital);
 
-// Shipper / Exporter = Penjual; cadangan = kotak tetap layout-nya
-function ciplShipperBaris(row, cadangan) {
+/* Shipper BAKU customer ini (`shipper` di CIPL_PROFIL), atau null bila
+   customernya tidak punya -- Shipper-nya lalu mengikuti isian Penjual
+   invoice. Satu sumber untuk cetak, Excel & form Permintaan Nomor
+   (invoice-pihak.js), jadi ketiganya tidak bisa berbeda. */
+function ciplShipperBaku(namaCustomer) {
+  const prof = ciplProfilCocok(namaCustomer);
+  return prof && prof.shipper ? prof.shipper : null;
+}
+
+/* Shipper / Exporter: blok baku customer-nya bila ada (pengiriman ke
+   Dynamic Design Co., Ltd.); selain itu = Penjual; cadangan = kotak tetap
+   layout-nya. Customer dibaca dari pengajuan, lalu dari jadwal tertaut. */
+function ciplShipperBaris(row, cadangan, shipment) {
   const p = row.payload || {};
+  const baku = ciplShipperBaku(p.customer || (shipment && shipment.party));
+  if (baku) return baku.map(ciplKapital);
   return p.penjualNama ? ciplPihakBaris(p.penjualNama, p.penjualAlamat) : cadangan.map(ciplKapital);
 }
 
@@ -812,7 +832,7 @@ function ciplTataFormal(spek) {
    lembar Kumho). */
 function ciplDdKartu(row, shipment) {
   const p = row.payload || {};
-  const shipper = { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_SHIPPER), l, true) };
+  const shipper = { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_SHIPPER, shipment), l, true) };
   const notify = ciplKapital(p.notifyParty || "SAME AS CONSIGNEE");
   const pembeli = ciplPembeliBaris(row, shipment);
   if (!pembeli.length) {
@@ -968,7 +988,7 @@ function ciplSiData(row, shipment, baris) {
   return {
     tujuan: p.siTo || (shipment && shipment.forwarder) || "",
     no: p.siNo || ciplNoSiBawaan(row),
-    shipper: ciplShipperBaris(row, CIPL_SHIPPER),
+    shipper: ciplShipperBaris(row, CIPL_SHIPPER, shipment),
     consignee: consignee,
     // Nama dasar barang ("TYRE MOLD"), tanpa jenisnya (TREAD ONLY, FULL SET, ...)
     barang: [...new Set(baris.map((b) => ciplNamaDuaBaris(b.item)[0].trim()).filter(Boolean))].join(", "),

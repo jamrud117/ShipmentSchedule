@@ -522,34 +522,33 @@ function frTabelRinci(p, mataUang) {
     </table>`;
 }
 
+/* Tombol cetak di riwayat: surat tampil sebagai pratinjau di kotak cetak
+   aplikasi (ui/cetak-modal.js), lalu dicetak dari situ -- tidak ada jendela
+   kedua yang harus ditutup terpisah dari dialog cetak peramban. */
 async function cetakFundRequest(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
     showToast(t("m.data.pengajuan.dana.tidak.ditemukan"), "danger");
     return;
   }
-  /* Jendelanya dibuka DULU, selagi masih di dalam klik pengguna --
-     dibuka sesudah menunggu apa pun, peramban menganggapnya pop-up liar
-     dan memblokirnya. */
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
-     dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang dicetak
-     sesaat setelah halaman tampil tidak memakai aturan lama. */
-  await fundDocNoSiap();
-  w.document.write(`<!doctype html>
+  const nomor = row.doc_number || "";
+  return bukaModalCetak({
+    jenis: tt("Form Pengajuan Dana", "Fund Request Form"),
+    nomor,
+    judulBerkas: `Form Pengajuan Dana ${nomor}`,
+    muat: async () => {
+      /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
+         dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang
+         dicetak sesaat setelah halaman tampil tidak memakai aturan lama.
+         Kotaknya sudah tampil selagi menunggu. */
+      await fundDocNoSiap();
+      return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
-<title>Form Pengajuan Dana ${escapeHtml(row.doc_number || "")}</title>
+<title>Form Pengajuan Dana ${escapeHtml(nomor)}</title>
 <style>${fundRequestCss()}</style></head>
-<body>${buildFundRequestHtml(row)}</body></html>`);
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+<body>${buildFundRequestHtml(row)}</body></html>`;
+    },
+  });
 }
 
 function fundRequestCss() {

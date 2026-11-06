@@ -4588,6 +4588,61 @@
       </div>
     </div>
 
+    <!-- CETAK DI DALAM APLIKASI (js/ui/cetak-modal.js). Surat tampil sebagai
+         pratinjau selebar kertas A4 di kotak ini, lalu dicetak dari bingkainya:
+         tanpa jendela kosong (about:blank) yang harus ditutup terpisah dari
+         dialog cetak peramban. Kepala & isinya diisi bukaModalCetak().
+         Bingkainya tanpa izin skrip (sandbox): isi surat hanya untuk dibaca. -->
+    <div class="modal fade" id="cetakModal" tabindex="-1" aria-labelledby="cetakNomor">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down cetak-dialog">
+        <div class="modal-content">
+          <div class="dnd-kepala cetak-kepala">
+            <div class="dnd-utama">
+              <div class="dnd-jenis"><i class="bi bi-printer" aria-hidden="true"></i><span id="cetakJenis"></span></div>
+              <div class="dnd-nomor"><span id="cetakNomor">&mdash;</span></div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
+          </div>
+          <div class="modal-body cetak-badan">
+            <div class="cetak-meja" id="cetakMeja">
+              <div class="cetak-status" id="cetakStatus" role="status">
+                <span class="cetak-putar" aria-hidden="true"></span>
+                <span data-en="Preparing the document&hellip;">Menyiapkan surat&hellip;</span>
+              </div>
+              <div class="cetak-ukur" id="cetakUkur" hidden>
+                <div class="cetak-kertas" id="cetakKertas">
+                  <iframe
+                    class="cetak-bingkai"
+                    id="cetakBingkai"
+                    title="Pratinjau cetak"
+                    data-en-title="Print preview"
+                    tabindex="-1"
+                    sandbox="allow-same-origin allow-modals"
+                  ></iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer dialog-foot cetak-kaki">
+            <label class="cetak-otomatis">
+              <input type="checkbox" id="cetakTutupOtomatis" />
+              <span data-en="Close automatically after printing">Tutup otomatis setelah dicetak</span>
+            </label>
+            <button type="button" class="btn-quiet" data-bs-dismiss="modal" data-i18n="a.tutup">Tutup</button>
+            <button
+              type="button"
+              class="btn-primary-navy"
+              id="cetakTombol"
+              disabled
+              data-en="<i class=&quot;bi bi-printer&quot;></i> Print"
+            >
+              <i class="bi bi-printer"></i> Cetak
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- UBAH ISIAN NOMOR YANG SUDAH TERBIT (tombol pensil di riwayat No.
          Dokumen). Badannya kosong: panel form jenis dokumennya DIPINJAM
          ke sini selama diubah, lalu dikembalikan ke halaman
@@ -5056,6 +5111,7 @@
     <script src="js/ui/date-input.js"></script>
     <script src="js/ui/fokus.js"></script>
     <script src="js/ui/feedback.js"></script>
+    <script src="js/ui/cetak-modal.js"></script>
     <script src="js/ui/pilihan-tambah.js"></script>
     <script src="js/ui/tooltip.js"></script>
     <script src="js/ui/sidebar.js"></script>

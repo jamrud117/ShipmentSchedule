@@ -116,7 +116,26 @@ function invTeruskan(panel, kunci, sudah) {
       invTeruskan(panel, b, sudah);
     });
 }
+/* SHIPPER BAKU. Customer yang punya `shipper` di profilnya (CIPL_PROFIL --
+   Dynamic Design Co., Ltd.) selalu tercetak dengan blok yang sama di CI,
+   PL, SI & Excel (ciplShipperBaris). Supaya form tidak menampilkan alamat
+   lain -- dari data PEB jadwal, sisa customer sebelumnya atau data
+   tersimpan -- kolom Penjual (nama & alamat) diisi blok itu dan dikunci.
+   Customer lain: kolom bebas diisi seperti biasa. Dipanggil di awal
+   penerusan, jadi Pemilik yang masih ikut Penjual ikut berganti. */
+const invShipperBakuKini = (panel) => ciplShipperBaku(invNilai(invEl(panel, "customer")));
+function invTerapkanShipperBaku(panel) {
+  const baku = invShipperBakuKini(panel);
+  [["penjualNama", baku && baku[0]], ["penjualAlamat", baku && baku.slice(1).join("\n")]].forEach(([k, isi]) => {
+    const el = invEl(panel, k);
+    if (!el) return;
+    el.readOnly = !!baku;
+    if (baku && el.value !== isi) invIsiOtomatis(el, isi);
+  });
+}
+
 function invTeruskanSemua(panel) {
+  invTerapkanShipperBaku(panel);
   const sudah = new Set();
   [...new Set(invPasanganKunci(invPolaForm(panel)).map(([a]) => a))].forEach((k) => invTeruskan(panel, k, sudah));
 }
@@ -138,11 +157,15 @@ function invSegarkanTanda(panel) {
   const ket = panel.querySelector("#dnPolaKet");
   if (ket)
     ket.textContent =
-      pola === "langsung"
+      (pola === "langsung"
         ? tt("Direct Invoice: Pemilik Barang = Penjual, Pembeli = Penerima — terisi sama otomatis, tetap bisa diubah.",
           "Direct Invoice: Goods Owner = Seller, Buyer = Consignee — filled in automatically, still editable.")
         : tt("Third Party Invoice: Pemilik Barang = Penjual; Pembeli & Penerima berbeda — isi masing-masing.",
-          "Third Party Invoice: Goods Owner = Seller; Buyer & Consignee differ — fill in each.");
+          "Third Party Invoice: Goods Owner = Seller; Buyer & Consignee differ — fill in each.")) +
+      (invShipperBakuKini(panel)
+        ? " " + tt("Shipper di CI, PL & SI customer ini baku: alamat yang sama di setiap invoice (kolom Penjual terkunci).",
+          "This customer's CI, PL & SI Shipper is fixed: the same address on every invoice (Seller column locked).")
+        : "");
   panel.dataset.polaKini = pola;
 }
 

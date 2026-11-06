@@ -202,6 +202,10 @@ body {
   --teks-di-navy: #b4cde6;
   /* Isian putih di atas permukaan navy / biru langkah aktif (tetap di kedua tema) */
   --isi-di-navy: #ffffff;
+  /* Lembar kertas di pratinjau cetak (tetap di kedua tema): yang tampil di layar
+     adalah salinan kertas yang keluar dari printer, dan kertas selalu putih --
+     bukan permukaan aplikasi yang ikut menggelap. */
+  --kertas-cetak: #ffffff;
 
   /* ---- WARNA KHUSUS KOMPONEN ------------------------------------
      Warna lepas komponen (lencana, pita status, latar sorot) sebagai

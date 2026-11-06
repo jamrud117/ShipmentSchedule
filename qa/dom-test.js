@@ -10289,6 +10289,157 @@ t("dua dokumen dalam satu pengajuan: rincian dikelompokkan per invoice / debit n
   eq(baca("fundDokumen").length, 0, "reset mengosongkan dokumen tambahan:");
 });
 
+/* ENTER DI TIAP KELOMPOK: baris terakhir Debit Note / invoice tambahan juga menambah baris.
+   Dulu penangan Enter hanya melihat baris terakhir SELURUH tabel dan baris barunya tanpa
+   dokumen -- jatuh ke kelompok utama, jadi di Debit Note baris harus ditambah dengan tombol. */
+{
+  const enterFund = (el) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  const kotakFund = (i, f) => w.document.querySelector(`#fundLinesBody [data-fl="${i}"] [data-fl-f="${f}"]`);
+  // "#nomor" = judul kelompok; "·" = baris kosong; selain itu isi uraiannya
+  const susunanFund = () => [...w.document.querySelectorAll("#fundLinesBody tr")].map((tr) =>
+    tr.dataset.flGrup !== undefined ? "#" + (tr.querySelector(".fl-grup-nomor") || {}).textContent : ((tr.querySelector("[data-fl-f='desc']") || {}).value || "·")).join(" | ");
+  const dokFund = () => baca("fundLines").map((b) => b.dok || "-").join(",");
+  const siapkanFund = (dokumen, baris) => {
+    w.resetDocNumForm("fund");
+    w.docNumPanelEl("fund").querySelector('[data-dn="invoiceNo"]').value = "AI-UTAMA";
+    w.setFundDokumen(dokumen);
+    w.setFundLines(baris);
+  };
+  const aktifFund = () => {
+    const a = w.document.activeElement;
+    const tr = a && a.closest && a.closest("[data-fl]");
+    return tr ? `${tr.dataset.fl}:${a.dataset.flF}` : "(bukan kotak rincian)";
+  };
+
+  t("Enter di baris terakhir DEBIT NOTE menambah baris di Debit Note itu -- bukan di invoice utama; kursor pindah ke baris barunya, kolom yang sama", () => {
+    try {
+      siapkanFund([{ id: "dn1", jenis: "debit", nomor: "DN-001" }], [
+        { desc: "FREIGHT", amount: "1000", ppnRate: 1.1 }, { desc: "THC", amount: "2000", ppnRate: 1.1 },
+        { desc: "ADMIN", amount: "300", ppnRate: 1.1, dok: "dn1" }, { desc: "COURIER", amount: "400", ppnRate: 1.1, dok: "dn1" },
+      ]);
+      eq(susunanFund(), "#AI-UTAMA | FREIGHT | THC | #DN-001 | ADMIN | COURIER", "awal:");
+      const akhir = kotakFund(3, "desc");
+      akhir.focus();
+      enterFund(akhir);
+      eq(susunanFund(), "#AI-UTAMA | FREIGHT | THC | #DN-001 | ADMIN | COURIER | ·", "baris baru di bawah COURIER, di Debit Note:");
+      eq(dokFund(), "-,-,dn1,dn1,dn1", "baris baru milik Debit Note:");
+      eq(aktifFund(), "4:desc", "kursor di baris baru, kolom sama:");
+      // Enter lagi di baris baru -> satu baris lagi di Debit Note yang sama
+      enterFund(kotakFund(4, "desc"));
+      eq(dokFund(), "-,-,dn1,dn1,dn1,dn1", "Enter lagi:");
+      eq(aktifFund(), "5:desc", "kursor ikut turun:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+
+  t("Enter di baris terakhir INVOICE TAMBAHAN (kelompok tengah) menambah baris di kelompok itu, sebelum kelompok sesudahnya; kolom Jumlah ikut terjaga", () => {
+    try {
+      siapkanFund([{ id: "d2", jenis: "invoice", nomor: "AI-2" }, { id: "dn3", jenis: "debit", nomor: "DN-3" }], [
+        { desc: "A1", amount: "10", ppnRate: 1.1 },
+        { desc: "B1", amount: "20", ppnRate: 1.1, dok: "d2" }, { desc: "B2", amount: "30", ppnRate: 1.1, dok: "d2" },
+        { desc: "C1", amount: "40", ppnRate: 1.1, dok: "dn3" },
+      ]);
+      eq(susunanFund(), "#AI-UTAMA | A1 | #AI-2 | B1 | B2 | #DN-3 | C1", "awal:");
+      const b2 = kotakFund(2, "amount");
+      b2.focus();
+      enterFund(b2);
+      eq(susunanFund(), "#AI-UTAMA | A1 | #AI-2 | B1 | B2 | · | #DN-3 | C1", "baris baru di AI-2, sebelum DN-3:");
+      eq(dokFund(), "-,d2,d2,d2,dn3", "kepemilikan baris:");
+      eq(aktifFund(), "3:amount", "kursor di kolom Jumlah baris baru:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+
+  t("Enter di baris terakhir invoice UTAMA yang masih punya kelompok di bawahnya menambah baris di invoice utama -- tidak meloncat ke kelompok berikutnya", () => {
+    try {
+      siapkanFund([{ id: "dn1", jenis: "debit", nomor: "DN-001" }], [
+        { desc: "A", amount: "10", ppnRate: 1.1 }, { desc: "B", amount: "20", ppnRate: 1.1 },
+        { desc: "C", amount: "30", ppnRate: 1.1, dok: "dn1" },
+      ]);
+      const b = kotakFund(1, "desc");
+      b.focus();
+      enterFund(b);
+      eq(susunanFund(), "#AI-UTAMA | A | B | · | #DN-001 | C", "baris baru di invoice utama:");
+      eq(dokFund(), "-,-,-,dn1", "kepemilikan baris:");
+      eq(aktifFund(), "2:desc", "kursor di baris baru invoice utama:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+
+  t("Enter di baris TENGAH kelompok hanya turun ke baris berikutnya di kelompok yang sama -- tidak menyisipkan baris", () => {
+    try {
+      siapkanFund([{ id: "dn1", jenis: "debit", nomor: "DN-001" }], [
+        { desc: "A", amount: "10", ppnRate: 1.1 },
+        { desc: "X", amount: "1", ppnRate: 1.1, dok: "dn1" }, { desc: "Y", amount: "2", ppnRate: 1.1, dok: "dn1" }, { desc: "Z", amount: "3", ppnRate: 1.1, dok: "dn1" },
+      ]);
+      const x = kotakFund(1, "desc");
+      x.focus();
+      enterFund(x);
+      eq(susunanFund(), "#AI-UTAMA | A | #DN-001 | X | Y | Z", "tidak ada baris baru:");
+      eq(aktifFund(), "2:desc", "turun ke Y:");
+      enterFund(kotakFund(2, "desc"));
+      eq(aktifFund(), "3:desc", "turun ke Z:");
+      eq(dokFund(), "-,dn1,dn1,dn1", "kepemilikan tetap:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+
+  t("Enter di Debit Note yang BARU dibuat (satu baris kosong) menambah baris di Debit Note itu; rumus di baris terakhir dihitung dulu, rumus salah menahan kursor dan tidak menambah baris", () => {
+    try {
+      siapkanFund([], [{ desc: "A", amount: "10", ppnRate: 1.1 }]);
+      w.document.getElementById("btnFundTambahDebit").click(); // dokumen + satu baris kosong miliknya
+      const id = baca("fundDokumen")[0].id;
+      eq(baca("fundLines").map((b) => b.dok || "-").join(",") , "-," + id, "Debit Note baru punya satu baris:");
+      const kosong = kotakFund(1, "amount");
+      kosong.focus();
+      kosong.value = "=100+50";
+      kosong.dispatchEvent(new w.Event("input", { bubbles: true }));
+      enterFund(kosong);
+      eq(dokFund(), "-," + id + "," + id, "rumus valid: baris baru di Debit Note:");
+      eq(kotakFund(1, "amount").value, "150", "rumus dihitung:");
+      eq(aktifFund(), "2:amount", "kursor di baris baru:");
+      // rumus tidak valid: kursor tertahan, tidak ada baris baru
+      const salah = kotakFund(2, "amount");
+      salah.focus();
+      salah.value = "=1+";
+      salah.dispatchEvent(new w.Event("input", { bubbles: true }));
+      enterFund(salah);
+      eq(baca("fundLines").length, 3, "tidak bertambah:");
+      eq(w.document.activeElement, kotakFund(2, "amount"), "kursor tertahan:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+
+  t("Enter: baris yatim (dokumennya sudah dihapus) dihitung sebagai kelompok utama -- baris barunya tidak membawa dokumen hantu; tanpa dokumen tambahan perilaku lama tetap", () => {
+    try {
+      siapkanFund([{ id: "dn1", jenis: "debit", nomor: "DN-001" }], [
+        { desc: "A", amount: "10", ppnRate: 1.1 }, { desc: "YATIM", amount: "20", ppnRate: 1.1, dok: "sudah-dihapus" },
+        { desc: "C", amount: "30", ppnRate: 1.1, dok: "dn1" },
+      ]);
+      eq(susunanFund(), "#AI-UTAMA | A | YATIM | #DN-001 | C", "yatim tampil di kelompok utama:");
+      const y = kotakFund(1, "desc");
+      y.focus();
+      enterFund(y);
+      eq(susunanFund(), "#AI-UTAMA | A | YATIM | · | #DN-001 | C", "baris baru di kelompok utama:");
+      eq(baca("fundLines")[2].dok, undefined, "tanpa dokumen:");
+      // satu kelompok saja (tanpa dokumen tambahan): sama seperti dulu
+      siapkanFund([], [{ desc: "A", amount: "10", ppnRate: 1.1 }, { desc: "B", amount: "20", ppnRate: 1.1 }]);
+      enterFund(kotakFund(0, "desc"));
+      eq(baca("fundLines").length, 2, "baris tengah: tidak menambah:");
+      enterFund(kotakFund(1, "desc"));
+      eq(baca("fundLines").length, 3, "baris terakhir: menambah:");
+      eq(JSON.stringify(baca("fundLines")[2]), JSON.stringify(w.fundLineBaru()), "bentuk baris baru sama seperti dulu:");
+    } finally {
+      w.resetDocNumForm("fund");
+    }
+  });
+}
+
 t("unggah invoice kedua dari vendor yang sama -> ditambahkan sebagai dokumen kedua, bukan menimpa", () => {
   const panel = w.docNumPanelEl("fund");
   w.resetDocNumForm("fund");
@@ -12641,10 +12792,13 @@ t("kotak Aturan Doc No: hanya di tab Pengajuan Dana, tersembunyi untuk peran han
 });
 t("cetak menunggu aturan yang sedang dimuat, tapi tidak selamanya", async () => {
   const src = fs.readFileSync(path.join(ROOT, "js", "features", "fund-request-print.js"), "utf8");
-  // Jendela dibuka SEBELUM menunggu (kalau tidak, peramban memblokirnya)
+  /* Kotak cetak dibuka SEBELUM menunggu: pengguna langsung melihat sesuatu,
+     lalu surat dimuat di dalamnya. Tidak ada jendela baru (window.open) --
+     itulah yang dulu diblokir peramban dan harus ditutup terpisah. */
   const badan = src.slice(src.indexOf("async function cetakFundRequest"), src.indexOf("function fundRequestCss"));
-  if (!(badan.indexOf("window.open") > 0 && badan.indexOf("window.open") < badan.indexOf("await fundDocNoSiap()")))
-    throw new Error("jendela cetak dibuka sesudah menunggu");
+  if (!(badan.indexOf("bukaModalCetak(") > 0 && badan.indexOf("bukaModalCetak(") < badan.indexOf("await fundDocNoSiap()")))
+    throw new Error("kotak cetak dibuka sesudah menunggu");
+  if (/window\.open|\.print\(\)|document\.write/.test(badan)) throw new Error("cetakFundRequest masih membuka jendela / mencetak sendiri");
   const simpan = baca("fundDocNoJanjiMuat");
   try {
     w.eval("fundDocNoJanjiMuat = new Promise(() => {})"); // tidak pernah selesai
@@ -12656,6 +12810,539 @@ t("cetak menunggu aturan yang sedang dimuat, tapi tidak selamanya", async () => 
     w.__janji = simpan; w.eval("fundDocNoJanjiMuat = window.__janji"); delete w.__janji;
   }
 });
+/* ---- KOTAK CETAK (ui/cetak-modal.js): pratinjau di aplikasi, tanpa jendela kedua ---- */
+{
+  const kotakCetak = () => w.document.getElementById("cetakModal");
+  const bingkaiCetak = () => w.document.getElementById("cetakBingkai");
+  // Dokumen yang baru dibuka-tutup kosong: bodinya bisa belum ada (jsdom) atau kosong (peramban)
+  const isiBingkai = () => { const b = bingkaiCetak().contentDocument.body; return b ? b.innerHTML : ""; };
+  const kunciTutup = "cetak-tutup-otomatis";
+  const tungguCetak = (ms) => new Promise((ok) => setTimeout(ok, ms || 15));
+  /* Bootstrap ditiru: show/hide dicatat, dan hide() menembakkan kejadian yang dikirim Bootstrap sungguhan. */
+  const tiruModal = () => {
+    const el = kotakCetak();
+    const catatan = { tampil: 0, tutup: 0 };
+    const asli = w.bootstrap.Modal.getOrCreateInstance;
+    w.bootstrap.Modal.getOrCreateInstance = () => ({
+      show() { catatan.tampil++; el.classList.add("show"); },
+      hide() { catatan.tutup++; el.classList.remove("show"); el.dispatchEvent(new w.Event("hide.bs.modal")); el.dispatchEvent(new w.Event("hidden.bs.modal")); },
+    });
+    return { el, catatan, lepas: () => { w.bootstrap.Modal.getOrCreateInstance = asli; } };
+  };
+  // Seluruh keadaan yang disentuh uji dikembalikan, lulus maupun gagal
+  const denganKotakCetak = async (fn) => {
+    const m = tiruModal();
+    const riwayat = baca("docNumHistoryRows");
+    const bukaAsli = w.open, judulAsli = w.document.title;
+    let ingat = null;
+    try { ingat = w.localStorage.getItem(kunciTutup); } catch (e) { /* tak ada */ }
+    let dibuka = 0;
+    w.open = () => { dibuka++; return null; };
+    try {
+      tulis("docNumHistoryRows", [barisFundUji({}, { id: "fr-cetak", doc_number: "374/EXIM/DDI/XI/2026" })]);
+      w.localStorage.removeItem(kunciTutup);
+      // Kotak yang macet (janji tak pernah selesai) harus menggagalkan tes, bukan menggantung seluruh suite
+      let pewaktu;
+      const macet = new Promise((ok, tolak) => { pewaktu = setTimeout(() => tolak(new Error("uji kotak cetak macet: lebih dari 5 detik")), 5000); });
+      try { return await Promise.race([fn(m, () => dibuka), macet]); } finally { clearTimeout(pewaktu); }
+    } finally {
+      if (w.document.getElementById("cetakModal").classList.contains("show") || baca("cetakSesi")) {
+        m.el.dispatchEvent(new w.Event("hide.bs.modal")); m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+      }
+      m.lepas();
+      w.open = bukaAsli;
+      w.document.title = judulAsli;
+      tulis("docNumHistoryRows", riwayat);
+      if (ingat == null) w.localStorage.removeItem(kunciTutup); else w.localStorage.setItem(kunciTutup, ingat);
+    }
+  };
+  // Dialog cetak peramban ditiru: print() dicatat bersama judul halaman saat itu
+  const tiruCetak = () => {
+    const jendela = bingkaiCetak().contentWindow;
+    const catatan = { kali: 0, judul: [], urutan: [] };
+    jendela.focus = () => { catatan.urutan.push("fokus"); };
+    jendela.print = () => { catatan.kali++; catatan.judul.push(w.document.title); catatan.urutan.push("cetak"); };
+    return { catatan, selesai: () => jendela.dispatchEvent(new w.Event("afterprint")) };
+  };
+
+  t("Cetak Pengajuan Dana: kotak cetak di aplikasi terbuka LEBIH DULU (kepala terisi, tombol Cetak mati), lalu surat tampil di bingkai -- tanpa window.open; kursor ke Cetak saat tampil & kembali ke tombol pemicu saat ditutup", async () => denganKotakCetak(async (m, jumlahBuka) => {
+    const pemicu = w.document.createElement("button");
+    w.document.body.appendChild(pemicu);
+    pemicu.focus();
+    try {
+    const janji = w.cetakFundRequest("fr-cetak");
+    // Seketika, sebelum suratnya selesai dimuat
+    eq(m.catatan.tampil, 1, "kotak dibuka:");
+    eq(w.document.getElementById("cetakJenis").textContent, "Form Pengajuan Dana", "jenis di kepala:");
+    eq(w.document.getElementById("cetakNomor").textContent, "374/EXIM/DDI/XI/2026", "nomor di kepala:");
+    eq(w.document.getElementById("cetakStatus").hidden, false, "status memuat tampil:");
+    eq(w.document.getElementById("cetakUkur").hidden, true, "kertas belum tampil:");
+    eq(w.document.getElementById("cetakTombol").disabled, true, "Cetak mati selama memuat:");
+    eq(await janji, true, "janji:");
+    eq(w.document.getElementById("cetakStatus").hidden, true, "status memuat hilang:");
+    eq(w.document.getElementById("cetakUkur").hidden, false, "kertas tampil:");
+    eq(w.document.getElementById("cetakTombol").disabled, false, "Cetak aktif:");
+    const dok = bingkaiCetak().contentDocument;
+    if (!dok.body.innerHTML.includes("374/EXIM/DDI/XI/2026")) throw new Error("nomor surat tidak ada di bingkai");
+    if (!/Pembayaran Billing Import IKR Guide/.test(dok.body.textContent)) throw new Error("isi surat tidak ada di bingkai");
+    if (!/@page\s*\{\s*size:\s*A4/.test(dok.head.innerHTML)) throw new Error("gaya cetak surat tidak ikut");
+    eq(jumlahBuka(), 0, "window.open tidak dipanggil:");
+    eq(m.catatan.tutup, 0, "kotak tetap terbuka sampai dicetak/ditutup:");
+    eq(w.document.activeElement, w.document.getElementById("cetakTombol"), "kursor sudah di Cetak begitu surat siap:");
+    // Bootstrap memindahkan kursor ke kotaknya saat selesai tampil: Enter harus tetap jatuh di Cetak
+    m.el.focus();
+    eq(w.document.activeElement, m.el, "prasyarat: kursor di kotak:");
+    m.el.dispatchEvent(new w.Event("shown.bs.modal"));
+    eq(w.document.activeElement, w.document.getElementById("cetakTombol"), "kursor di Cetak saat tampil:");
+    let opsiFokus = null;
+    const fokusAsli = pemicu.focus;
+    pemicu.focus = function (o) { opsiFokus = o; return fokusAsli.call(this, o); };
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    eq(w.document.activeElement, pemicu, "kursor kembali ke tombol pemicu:");
+    eq(JSON.stringify(opsiFokus), '{"preventScroll":true}', "halaman tidak melompat saat kursor kembali:");
+    } finally {
+      pemicu.remove();
+    }
+  }));
+
+  t("Kotak cetak: Cetak -> print() dari BINGKAI (bukan jendela lain), judul halaman jadi nama berkas selama dialog terbuka lalu kembali; sesudah dialog ditutup kotak menutup SENDIRI (satu langkah)", async () => denganKotakCetak(async (m) => {
+    await w.cetakFundRequest("fr-cetak");
+    const cetak = tiruCetak();
+    const judulAwal = w.document.title;
+    w.document.getElementById("cetakTombol").click();
+    eq(cetak.catatan.kali, 1, "print() dipanggil sekali:");
+    eq(cetak.catatan.judul[0], "Form Pengajuan Dana 374/EXIM/DDI/XI/2026", "judul saat dialog cetak terbuka (nama berkas PDF):");
+    eq(cetak.catatan.urutan.join(","), "fokus,cetak", "bingkai difokuskan dulu, baru dicetak:");
+    // klik ganda saat dialog masih terbuka tidak mencetak dua kali
+    w.document.getElementById("cetakTombol").click();
+    eq(cetak.catatan.kali, 1, "tidak ganda:");
+    eq(m.catatan.tutup, 0, "belum menutup selagi dialog terbuka:");
+    cetak.selesai();
+    eq(w.document.title, judulAwal, "judul halaman kembali:");
+    eq(m.catatan.tutup, 0, "penutupan ditunda satu putaran, tidak di dalam kejadian afterprint:");
+    await tungguCetak();
+    eq(m.catatan.tutup, 1, "kotak menutup sendiri sesudah dialog cetak:");
+    eq(baca("cetakSesi"), null, "sesi dibersihkan:");
+    eq(isiBingkai(), "", "isi bingkai dibuang:");
+  }));
+
+  t("Kotak cetak: kotak centang 'Tutup otomatis' dimatikan -> kotak TETAP terbuka sesudah dicetak, kursor di tombol Cetak, dan pilihan diingat untuk pembukaan berikutnya", async () => denganKotakCetak(async (m) => {
+    await w.cetakFundRequest("fr-cetak");
+    const kotak = w.document.getElementById("cetakTutupOtomatis");
+    eq(kotak.checked, true, "bawaan menyala:");
+    kotak.checked = false;
+    kotak.dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq(w.localStorage.getItem(kunciTutup), "0", "tersimpan:");
+    const cetak = tiruCetak();
+    w.document.getElementById("cetakTombol").click();
+    kotak.focus(); // dialog cetak menarik kursor dari tombol
+    eq(w.document.activeElement, kotak, "prasyarat: kursor di kotak centang:");
+    cetak.selesai();
+    await tungguCetak();
+    eq(m.catatan.tutup, 0, "tidak menutup sendiri:");
+    eq(w.document.activeElement, w.document.getElementById("cetakTombol"), "kursor kembali ke Cetak:");
+    // Dicetak lagi dari kotak yang sama: sah (bendera 'sedang mencetak' sudah dilepas)
+    w.document.getElementById("cetakTombol").click();
+    eq(cetak.catatan.kali, 2, "cetak ulang:");
+    w.dispatchEvent(new w.Event("afterprint")); // sebagian peramban menembakkan afterprint di jendela induk
+    w.document.getElementById("cetakTombol").click();
+    eq(cetak.catatan.kali, 3, "afterprint di jendela induk juga melepas bendera:");
+    cetak.selesai();
+    // Judul yang berubah sesudah dicetak tidak ditimpa lagi saat kotak ditutup
+    w.document.title = "JUDUL BARU UJI";
+    // Ditutup & dibuka lagi: pilihan diingat
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    eq(w.document.title, "JUDUL BARU UJI", "judul tidak ditimpa ulang:");
+    await w.cetakFundRequest("fr-cetak");
+    eq(w.document.getElementById("cetakTutupOtomatis").checked, false, "pilihan diingat:");
+    // Dinyalakan lagi
+    const lagi = w.document.getElementById("cetakTutupOtomatis");
+    lagi.checked = true;
+    lagi.dispatchEvent(new w.Event("change", { bubbles: true }));
+    eq(w.localStorage.getItem(kunciTutup), "1", "menyala lagi tersimpan:");
+  }));
+
+  t("Kotak cetak: Ctrl/Cmd+P mencetak SURAT (bukan halaman aplikasi) dan menahan cetak bawaan; sebelum surat siap tidak mencetak apa pun; tanpa kotak terbuka dibiarkan; Esc di dalam bingkai menutup", async () => denganKotakCetak(async (m) => {
+    const tekan = (sasaran, o) => { const e = new w.KeyboardEvent("keydown", Object.assign({ bubbles: true, cancelable: true }, o)); sasaran.dispatchEvent(e); return e; };
+    // tanpa kotak terbuka: Ctrl+P dibiarkan
+    eq(tekan(w.document, { key: "p", ctrlKey: true }).defaultPrevented, false, "tanpa kotak:");
+    let lepasMuat;
+    const janji = w.bukaModalCetak({ jenis: "Uji", nomor: "X-1", muat: () => new Promise((ok) => { lepasMuat = ok; }) });
+    const cetak = tiruCetak();
+    // surat belum siap: Ctrl+P ditelan, tidak ada yang tercetak
+    eq(tekan(w.document, { key: "p", ctrlKey: true }).defaultPrevented, true, "selagi memuat ditahan:");
+    eq(cetak.catatan.kali, 0, "belum mencetak:");
+    lepasMuat("<!doctype html><html><head><title>Uji</title></head><body><p>ISI UJI</p></body></html>");
+    await janji;
+    eq(tekan(w.document, { key: "P", metaKey: true }).defaultPrevented, true, "Cmd+P ditahan:");
+    eq(cetak.catatan.kali, 1, "dicetak lewat papan ketik:");
+    cetak.selesai();
+    await tungguCetak();
+    // Ctrl+Alt+P bukan perintah cetak
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    const lagi = w.bukaModalCetak({ jenis: "Uji", nomor: "X-2", muat: async () => "<!doctype html><body>dua</body>" });
+    await lagi;
+    const cetak2 = tiruCetak();
+    eq(tekan(w.document, { key: "p", ctrlKey: true, altKey: true }).defaultPrevented, false, "Ctrl+Alt+P:");
+    eq(tekan(w.document, { key: "p" }).defaultPrevented, false, "huruf p tanpa Ctrl:");
+    eq(tekan(w.document, { key: "s", ctrlKey: true }).defaultPrevented, false, "Ctrl+S:");
+    eq(cetak2.catatan.kali, 0, "tombol lain tidak mencetak:");
+    // Esc & Ctrl+P juga berfungsi bila kursor ada DI DALAM bingkai
+    const dok = bingkaiCetak().contentDocument;
+    eq(tekan(dok, { key: "p", ctrlKey: true }).defaultPrevented, true, "Ctrl+P di bingkai ditahan:");
+    eq(cetak2.catatan.kali, 1, "Ctrl+P di bingkai mencetak:");
+    const tutupSebelum = m.catatan.tutup;
+    tekan(dok, { key: "Escape" });
+    eq(m.catatan.tutup, tutupSebelum + 1, "Esc di bingkai menutup:");
+  }));
+
+  t("Kotak cetak: ditutup selagi surat dimuat -> janji false & bingkai tetap kosong; judul halaman dikembalikan bila ditutup selagi dialog cetak belum selesai; surat gagal dibuat -> kotak ditutup & toast galat", async () => denganKotakCetak(async (m) => {
+    let lepasMuat;
+    const janji = w.bukaModalCetak({ jenis: "Uji", nomor: "X-3", muat: () => new Promise((ok) => { lepasMuat = ok; }) });
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    lepasMuat("<!doctype html><body>TERLAMBAT</body>");
+    eq(await janji, false, "janji ditutup:");
+    eq(isiBingkai(), "", "bingkai tetap kosong:");
+    // sedang menutup (memudar): tombol Cetak yang masih tampak tidak lagi mencetak
+    await w.bukaModalCetak({ jenis: "Uji", nomor: "X-6", muat: async () => "<!doctype html><body>enam</body>" });
+    const enam = tiruCetak();
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    w.document.getElementById("cetakTombol").click();
+    eq(enam.catatan.kali, 0, "selagi menutup tidak mencetak:");
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    // ditutup selagi dialog cetak terbuka: judul kembali
+    await w.bukaModalCetak({ jenis: "Uji", nomor: "X-4", judulBerkas: "BERKAS UJI", muat: async () => "<!doctype html><body>empat</body>" });
+    const cetak = tiruCetak();
+    const judulAwal = w.document.title;
+    w.document.getElementById("cetakTombol").click();
+    eq(w.document.title, "BERKAS UJI", "judul diganti:");
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    eq(w.document.title, judulAwal, "judul kembali:");
+    cetak.selesai(); // dialog selesai belakangan: tidak berbuat apa-apa
+    eq(m.catatan.tutup, 0, "tidak menutup apa pun:");
+    // surat gagal disiapkan
+    w.document.getElementById("toastMsg").textContent = "";
+    const galat = console.error; console.error = () => {};
+    let hasil;
+    try { hasil = await w.bukaModalCetak({ jenis: "Uji", nomor: "X-5", muat: async () => { throw new Error("uji gagal"); } }); } finally { console.error = galat; }
+    eq(hasil, false, "janji gagal:");
+    eq(m.catatan.tutup, 1, "kotak ditutup:");
+    eq(w.document.getElementById("toastMsg").textContent, "Surat tidak bisa disiapkan. Coba lagi.", "toast galat:");
+    // Pengajuan yang tidak ada: toast lama, kotak tidak dibuka
+    const tampil = m.catatan.tampil;
+    w.document.getElementById("toastMsg").textContent = "";
+    await w.cetakFundRequest("tidak-ada");
+    eq(m.catatan.tampil, tampil, "kotak tidak dibuka:");
+    if (!w.document.getElementById("toastMsg").textContent) throw new Error("tidak ada pemberitahuan");
+  }));
+
+  t("Kotak cetak: gambar di dalam surat ditunggu sampai selesai atau galat (paling lama batas waktu); ditutup selagi gambar ditunggu -> pratinjau tidak muncul di kotak yang sudah tertutup", async () => denganKotakCetak(async (m) => {
+    const tiruGambar = () => { const g = { complete: false, pendengar: {} }; g.addEventListener = (nama, fn) => { g.pendengar[nama] = fn; }; return g; };
+    const asliSet = w.setTimeout, asliHapus = w.clearTimeout;
+    const pewaktu = [];
+    w.setTimeout = (fn, ms) => { pewaktu.push({ fn, ms, batal: false }); return pewaktu.length; };
+    w.clearTimeout = (id) => { if (pewaktu[id - 1]) pewaktu[id - 1].batal = true; };
+    try {
+      // Hasil tiap janji dicatat sebagai teks: '' = belum selesai
+      const jalan = (janji) => { const r = { status: "" }; janji.then(() => { r.status = "selesai"; }, (e) => { r.status = "GALAT " + e.message; }); return r; };
+      const kosong = jalan(w.cetakTungguGambar({ images: [] }));
+      const sudah = jalan(w.cetakTungguGambar({ images: [{ complete: true }] }));
+      await tungguCetak(1);
+      eq(kosong.status + " / " + sudah.status, "selesai / selesai", "tanpa gambar yang perlu ditunggu langsung siap:");
+      eq(pewaktu.length, 0, "tanpa pewaktu:");
+      const g1 = tiruGambar(), g2 = tiruGambar();
+      const dua = jalan(w.cetakTungguGambar({ images: [g1, g2, { complete: true }] }));
+      await tungguCetak(1);
+      eq(dua.status, "", "menunggu:");
+      eq(pewaktu.length, 1, "satu pewaktu batas:");
+      if (!(pewaktu[0].ms > 0 && pewaktu[0].ms <= 3000)) throw new Error("batas tunggu gambar tidak wajar: " + pewaktu[0].ms);
+      g1.pendengar.load();
+      await tungguCetak(1);
+      eq(dua.status, "", "satu gambar belum cukup:");
+      g2.pendengar.error();
+      await tungguCetak(1);
+      eq(dua.status, "selesai", "kedua gambar selesai (load / error):");
+      eq(pewaktu[0].batal, true, "pewaktu dibatalkan:");
+      const g3 = tiruGambar();
+      const lambat = jalan(w.cetakTungguGambar({ images: [g3] }));
+      await tungguCetak(1);
+      eq(lambat.status, "", "gambar belum selesai:");
+      eq(pewaktu.length, 2, "pewaktu batas kedua terpasang:");
+      pewaktu[1].fn();
+      await tungguCetak(1);
+      eq(lambat.status, "selesai", "batas waktu melepas gambar yang tak kunjung selesai:");
+    } finally {
+      w.setTimeout = asliSet;
+      w.clearTimeout = asliHapus;
+    }
+    // Alur sungguhan: gambar yang belum selesai menahan pratinjau
+    const protoGambar = bingkaiCetak().contentWindow.HTMLImageElement.prototype;
+    const asliSelesai = Object.getOwnPropertyDescriptor(protoGambar, "complete");
+    Object.defineProperty(protoGambar, "complete", { configurable: true, get() { return false; } });
+    try {
+      const html = '<!doctype html><body><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw="></body>';
+      let janji = w.bukaModalCetak({ jenis: "Uji", nomor: "G-1", muat: async () => html });
+      await tungguCetak(10);
+      eq(w.document.getElementById("cetakTombol").disabled, true, "Cetak mati selagi gambar ditunggu:");
+      eq(w.document.getElementById("cetakUkur").hidden, true, "pratinjau belum tampil:");
+      bingkaiCetak().contentDocument.images[0].dispatchEvent(new w.Event("load"));
+      eq(await janji, true, "siap sesudah gambar selesai:");
+      eq(w.document.getElementById("cetakTombol").disabled, false, "Cetak aktif:");
+      m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+      m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+      janji = w.bukaModalCetak({ jenis: "Uji", nomor: "G-2", muat: async () => html });
+      await tungguCetak(10);
+      const gambar = bingkaiCetak().contentDocument.images[0];
+      m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+      m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+      gambar.dispatchEvent(new w.Event("error"));
+      eq(await janji, false, "ditutup selagi gambar ditunggu:");
+      eq(w.document.getElementById("cetakUkur").hidden, true, "pratinjau tidak muncul di kotak yang sudah tertutup:");
+      eq(w.document.getElementById("cetakTombol").disabled, true, "Cetak tetap mati:");
+    } finally {
+      Object.defineProperty(protoGambar, "complete", asliSelesai);
+    }
+  }));
+
+  t("Kotak cetak: kursor yang sudah dipindah pengguna ke kontrol lain di kotak tidak direbut; dua pembukaan beruntun -> hanya yang terakhir yang tampil; tanpa fungsi muat kotak tidak dibuka; nomor kosong jadi strip; nama berkas bawaan = nomor", async () => denganKotakCetak(async (m) => {
+    let lepasF;
+    const janjiF = w.bukaModalCetak({ jenis: "Uji", nomor: "F-1", muat: () => new Promise((ok) => { lepasF = ok; }) });
+    const centang = w.document.getElementById("cetakTutupOtomatis");
+    centang.focus();
+    eq(w.document.activeElement, centang, "prasyarat: kursor di kotak centang:");
+    lepasF("<!doctype html><body>F</body>");
+    await janjiF;
+    eq(w.document.activeElement, centang, "kursor pengguna tidak direbut:");
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+
+    // Bootstrap sudah memindahkan kursor ke kotaknya sebelum surat siap: tetap berakhir di Cetak
+    let lepasK;
+    const janjiK = w.bukaModalCetak({ jenis: "Uji", nomor: "K-1", muat: () => new Promise((ok) => { lepasK = ok; }) });
+    m.el.focus();
+    eq(w.document.activeElement, m.el, "prasyarat: kursor di kotak:");
+    lepasK("<!doctype html><body>K</body>");
+    await janjiK;
+    eq(w.document.activeElement, w.document.getElementById("cetakTombol"), "kotak memegang kursor -> pindah ke Cetak:");
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+
+    // dua pembukaan beruntun (klik ganda di daftar): yang lebih dulu selesai belakangan tidak boleh menimpa
+    let lepasA;
+    const janjiA = w.bukaModalCetak({ jenis: "Uji", nomor: "A-1", muat: () => new Promise((ok) => { lepasA = ok; }) });
+    const janjiB = w.bukaModalCetak({ jenis: "Uji", nomor: "B-1", muat: async () => "<!doctype html><body>ISI-B</body>" });
+    eq(await janjiB, true, "yang terakhir siap:");
+    lepasA("<!doctype html><body>ISI-A</body>");
+    eq(await janjiA, false, "yang lebih dulu sudah basi:");
+    eq(w.document.getElementById("cetakNomor").textContent, "B-1", "kepala milik yang terakhir:");
+    eq(bingkaiCetak().contentDocument.body.textContent, "ISI-B", "isi milik yang terakhir:");
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+
+    // tanpa fungsi muat: tidak ada yang dibuka
+    const tampil = m.catatan.tampil;
+    eq(await w.bukaModalCetak({ jenis: "Uji", nomor: "TANPA" }), false, "tanpa muat:");
+    eq(m.catatan.tampil, tampil, "kotak tidak dibuka tanpa muat:");
+    eq(baca("cetakSesi"), null, "tidak ada sesi:");
+
+    // nomor kosong -> strip; nama berkas bawaan = nomor
+    await w.bukaModalCetak({ jenis: "Uji", muat: async () => "<!doctype html><body>kosong</body>" });
+    eq(w.document.getElementById("cetakNomor").textContent, "—", "nomor kosong:");
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    await w.bukaModalCetak({ jenis: "Uji", nomor: "X-7", muat: async () => "<!doctype html><body>tujuh</body>" });
+    const cetak = tiruCetak();
+    w.document.getElementById("cetakTombol").click();
+    eq(cetak.catatan.judul[0], "X-7", "nama berkas bawaan = nomor:");
+    cetak.selesai();
+    await tungguCetak();
+  }));
+
+  t("Kotak cetak: dialog cetak gagal dibuka -> toast galat, judul halaman kembali, kotak TIDAK ikut menutup dan boleh dicoba lagi; surat gagal dimuat sesudah kotak ditutup -> tidak ada toast", async () => denganKotakCetak(async (m) => {
+    await w.bukaModalCetak({ jenis: "Uji", nomor: "P-1", judulBerkas: "BERKAS P", muat: async () => "<!doctype html><body>p</body>" });
+    const jendela = bingkaiCetak().contentWindow;
+    let kali = 0;
+    jendela.focus = () => {};
+    jendela.print = () => { kali++; if (kali === 1) throw new Error("tak bisa"); };
+    const judulAwal = w.document.title;
+    w.document.getElementById("toastMsg").textContent = "";
+    const galat = console.error;
+    console.error = () => {};
+    try { w.document.getElementById("cetakTombol").click(); } finally { console.error = galat; }
+    eq(w.document.getElementById("toastMsg").textContent, "Dialog cetak tidak bisa dibuka.", "toast:");
+    eq(w.document.title, judulAwal, "judul kembali:");
+    await tungguCetak();
+    eq(m.catatan.tutup, 0, "kotak tidak ikut menutup:");
+    w.document.getElementById("cetakTombol").click();
+    eq(kali, 2, "bisa dicoba lagi:");
+    jendela.dispatchEvent(new w.Event("afterprint"));
+    await tungguCetak();
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+
+    // gagal memuat SESUDAH kotak ditutup: tidak ada toast dan tidak menutup apa pun
+    let tolakMuat;
+    const janji = w.bukaModalCetak({ jenis: "Uji", nomor: "P-2", muat: () => new Promise((ok, tolak) => { tolakMuat = tolak; }) });
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+    const tutupSebelum = m.catatan.tutup;
+    w.document.getElementById("toastMsg").textContent = "";
+    console.error = () => {};
+    try { tolakMuat(new Error("terlambat")); eq(await janji, false, "janji:"); } finally { console.error = galat; }
+    eq(w.document.getElementById("toastMsg").textContent, "", "tanpa toast untuk kotak yang sudah tertutup:");
+    eq(m.catatan.tutup, tutupSebelum, "tidak menutup lagi:");
+  }));
+
+  t("Kotak cetak: pendengar afterprint dilepas sesudah dialog selesai atau kotak ditutup (tidak menumpuk); penyimpanan peramban diblokir -> tutup otomatis menyala & memilih tidak membuat galat", async () => denganKotakCetak(async (m) => {
+    const hitung = { jendela: 0, bingkai: 0 };
+    const bungkus = (obj, kunci) => {
+      const tambah = obj.addEventListener, buang = obj.removeEventListener;
+      obj.addEventListener = function (nama, fn, o) { if (nama === "afterprint") hitung[kunci]++; return tambah.call(this, nama, fn, o); };
+      obj.removeEventListener = function (nama, fn, o) { if (nama === "afterprint") hitung[kunci]--; return buang.call(this, nama, fn, o); };
+      return () => { obj.addEventListener = tambah; obj.removeEventListener = buang; };
+    };
+    const keadaan = () => hitung.jendela + "/" + hitung.bingkai;
+    await w.cetakFundRequest("fr-cetak");
+    const lepasJendela = bungkus(w, "jendela");
+    const lepasBingkai = bungkus(bingkaiCetak().contentWindow, "bingkai");
+    try {
+      const cetak = tiruCetak();
+      w.document.getElementById("cetakTombol").click();
+      eq(keadaan(), "1/1", "terpasang selama dialog terbuka:");
+      cetak.selesai();
+      eq(keadaan(), "0/0", "dilepas sesudah dialog selesai:");
+      await tungguCetak();
+      // kotak ditutup selagi dialog masih terbuka
+      await w.cetakFundRequest("fr-cetak");
+      const cetak2 = tiruCetak();
+      w.document.getElementById("cetakTombol").click();
+      eq(keadaan(), "1/1", "terpasang lagi:");
+      m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+      m.el.dispatchEvent(new w.Event("hidden.bs.modal"));
+      eq(keadaan(), "0/0", "dilepas juga bila kotak ditutup selagi dialog terbuka:");
+      eq(cetak2.catatan.kali, 1, "dicetak sekali:");
+    } finally {
+      lepasJendela();
+      lepasBingkai();
+    }
+
+    // penyimpanan diblokir
+    const asliAmbil = w.Storage.prototype.getItem, asliSimpan = w.Storage.prototype.setItem;
+    const galat = [];
+    const tangkap = (e) => { galat.push(String(e.message)); e.preventDefault(); };
+    w.addEventListener("error", tangkap);
+    w.Storage.prototype.getItem = () => { throw new Error("diblokir"); };
+    w.Storage.prototype.setItem = () => { throw new Error("diblokir"); };
+    try {
+      eq(w.cetakTutupOtomatisAktif(), true, "diblokir -> menyala:");
+      const centang = w.document.getElementById("cetakTutupOtomatis");
+      centang.checked = false;
+      centang.dispatchEvent(new w.Event("change", { bubbles: true }));
+      eq(galat.join(" | "), "", "memilih tanpa penyimpanan tidak membuat galat:");
+    } finally {
+      w.Storage.prototype.getItem = asliAmbil;
+      w.Storage.prototype.setItem = asliSimpan;
+      w.removeEventListener("error", tangkap);
+    }
+  }));
+
+  t("Cetak Pengajuan Dana: kotak sudah tampil selagi aturan Doc No dimuat, tetapi suratnya baru dibuat SESUDAH aturan itu siap", async () => denganKotakCetak(async (m) => {
+    const simpan = baca("fundDocNoJanjiMuat");
+    let selesai;
+    try {
+      w.__janji = new Promise((ok) => { selesai = ok; });
+      w.eval("fundDocNoJanjiMuat = window.__janji");
+      const janji = w.cetakFundRequest("fr-cetak");
+      await tungguCetak(30);
+      eq(m.catatan.tampil, 1, "kotak sudah tampil selagi menunggu:");
+      eq(w.document.getElementById("cetakStatus").hidden, false, "status memuat terlihat:");
+      eq(w.document.getElementById("cetakTombol").disabled, true, "Cetak mati selagi menunggu:");
+      eq(isiBingkai(), "", "surat belum dibuat sebelum aturan siap:");
+      selesai();
+      eq(await janji, true, "janji:");
+      if (!isiBingkai().includes("374/EXIM/DDI/XI/2026")) throw new Error("surat tidak dibuat sesudah aturan siap");
+    } finally {
+      w.__janji = simpan;
+      w.eval("fundDocNoJanjiMuat = window.__janji");
+      delete w.__janji;
+    }
+  }));
+
+  t("Kotak cetak: pratinjau selebar kertas, dikecilkan di layar sempit (pembungkus ikut ukuran hasil kecilnya), setinggi isi surat (minimal satu kertas A4); jenis & nomor di kepala memakai teks bukan HTML", async () => denganKotakCetak(async (m) => {
+    await w.bukaModalCetak({ jenis: "<b>Jenis</b>", nomor: "<i>NO</i>", muat: async () => "<!doctype html><body>uji</body>" });
+    eq(w.document.getElementById("cetakJenis").innerHTML, "&lt;b&gt;Jenis&lt;/b&gt;", "jenis tidak jadi HTML:");
+    eq(w.document.getElementById("cetakNomor").innerHTML, "&lt;i&gt;NO&lt;/i&gt;", "nomor tidak jadi HTML:");
+    const meja = w.document.getElementById("cetakMeja"), ukur = w.document.getElementById("cetakUkur");
+    const kertas = w.document.getElementById("cetakKertas"), bingkai = bingkaiCetak();
+    const ukurDengan = (lebarMeja, tinggiIsi, pemicu) => {
+      Object.defineProperty(meja, "clientWidth", { value: lebarMeja, configurable: true });
+      Object.defineProperty(bingkai.contentDocument.documentElement, "scrollHeight", { value: tinggiIsi, configurable: true });
+      if (pemicu === "tampil") m.el.dispatchEvent(new w.Event("shown.bs.modal"));
+      else w.dispatchEvent(new w.Event("resize"));
+      return [bingkai.style.height, ukur.style.width, ukur.style.height, kertas.style.transform].join(" | ");
+    };
+    eq(ukurDengan(900, 2000), "2000px | 794px | 2000px | ", "lega: ukuran asli:");
+    eq(ukurDengan(397, 2000), "2000px | 397px | 1000px | scale(0.5)", "sempit: separuh:");
+    eq(ukurDengan(900, 300), "1123px | 794px | 1123px | ", "surat pendek: setinggi A4:");
+    eq(ukurDengan(397, 2000, "tampil"), "2000px | 397px | 1000px | scale(0.5)", "dihitung ulang begitu kotak benar-benar tampil:");
+    eq(ukurDengan(0, 2000), "2000px | 794px | 2000px | ", "lebar belum terukur (0): ukuran asli, bukan nol:");
+    // tidak ada ukuran yang dihitung sementara kotak sedang menutup
+    m.el.dispatchEvent(new w.Event("hide.bs.modal"));
+    eq(ukurDengan(397, 2000), "2000px | 794px | 2000px | ", "selagi menutup tidak dihitung ulang:");
+    // bingkai & pembungkus: bukan kotak yang bisa diklik / difokus
+    const css = fs.readFileSync(path.join(ROOT, "css", "components.css"), "utf8");
+    const aturan = css.slice(css.indexOf(".cetak-bingkai {"), css.indexOf("}", css.indexOf(".cetak-bingkai {")));
+    if (!/pointer-events:\s*none/.test(aturan)) throw new Error("bingkai pratinjau masih menangkap tetikus");
+  }));
+
+  t("Kotak cetak: markup & pemasangan -- ada di index.html, dimuat sebelum fitur yang memakainya; bingkai tanpa izin skrip tapi boleh mencetak; bahasa Inggris; README mencatat", () => {
+    const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+    const iModal = html.indexOf('id="cetakModal"');
+    if (iModal < 0) throw new Error("#cetakModal tidak ada di index.html");
+    const kotak = html.slice(iModal, html.indexOf("<!-- UBAH ISIAN NOMOR", iModal));
+    const sandbox = (kotak.match(/<iframe[^>]*sandbox="([^"]*)"/) || [])[1] || "";
+    eq(sandbox.split(/\s+/).sort().join(" "), "allow-modals allow-same-origin", "sandbox bingkai:");
+    if (/allow-scripts/.test(sandbox)) throw new Error("bingkai pratinjau boleh menjalankan skrip");
+    ["cetakJenis", "cetakNomor", "cetakStatus", "cetakMeja", "cetakUkur", "cetakKertas", "cetakBingkai", "cetakTutupOtomatis", "cetakTombol"].forEach((id) => {
+      if (!w.document.getElementById(id)) throw new Error("elemen #" + id + " tidak ada");
+    });
+    /* Seperti semua tombol utama lain di aplikasi: TANPA kelas Bootstrap .btn. Kelas itu membawa
+       .btn:focus-visible { background-color: var(--bs-btn-hover-bg) } -- variabel yang tidak ada di
+       tombol navy kita, jadi latar tombol HILANG (putih) begitu kursor papan ketik mendarat di sana
+       (Enter langsung mencetak, jadi itulah keadaan tombol yang paling sering terlihat). */
+    eq(w.document.getElementById("cetakTombol").className, "btn-primary-navy", "kelas tombol Cetak:");
+    const iCetak = html.indexOf('<script src="js/ui/cetak-modal.js"></script>');
+    if (!(iCetak > html.indexOf('<script src="js/ui/feedback.js"></script>') && iCetak < html.indexOf('<script src="js/features/fund-request-print.js"></script>')))
+      throw new Error("cetak-modal.js tidak dimuat sesudah feedback.js & sebelum fund-request-print.js");
+    const bahasa = baca("activeLang");
+    try {
+      w.setLang("en");
+      eq(w.document.getElementById("cetakTombol").textContent.trim(), "Print", "tombol (EN):");
+      eq(w.document.querySelector("#cetakModal .cetak-otomatis span").textContent, "Close automatically after printing", "kotak centang (EN):");
+      eq(w.document.querySelector("#cetakModal .cetak-status span:last-child").textContent, "Preparing the document…", "status (EN):");
+    } finally {
+      w.setLang(bahasa);
+    }
+    eq(w.document.getElementById("cetakTombol").textContent.trim(), "Cetak", "tombol (ID):");
+    /* Dua aturan gaya yang hanya terlihat di peramban sungguhan (jsdom tidak menata letak): */
+    const cssKotak = fs.readFileSync(path.join(ROOT, "css", "components.css"), "utf8");
+    // lebar maksimum HANYA di layar lebar: di bawah 768px kotak layar penuh -- aturan ini tidak boleh menimpanya (sebilah latar tersisa di kanan)
+    if (!/@media \(min-width: 768px\) \{\s*\.cetak-dialog \{\s*max-width:/.test(cssKotak))
+      throw new Error(".cetak-dialog max-width harus di dalam @media (min-width: 768px): di layar ponsel kotak ini layar penuh");
+    // kertas pratinjau tetap PUTIH di tema gelap (salinan lembar yang dicetak): satu token, satu nilai, dipakai pembungkus & bingkai
+    const tokenKotak = fs.readFileSync(path.join(ROOT, "css", "tokens.css"), "utf8");
+    eq((tokenKotak.match(/--kertas-cetak\s*:/g) || []).length, 1, "token --kertas-cetak (satu nilai untuk kedua tema):");
+    eq((cssKotak.match(/background:\s*var\(--kertas-cetak\)/g) || []).length, 2, "pembungkus & bingkai memakai --kertas-cetak:");
+    // kartu setinggi dialog sejak 'Menyiapkan surat': tanpa ini kartu memendek lalu melompat membesar saat surat tampil
+    if (!/\.cetak-dialog \.modal-content \{\s*height: 100%;/.test(cssKotak))
+      throw new Error(".cetak-dialog .modal-content harus height: 100% (kartu tidak boleh melompat saat surat tampil)");
+    const readme = fs.readFileSync(path.join(ROOT, "js", "README.md"), "utf8");
+    if (!/`ui\/cetak-modal\.js`/.test(readme)) throw new Error("js/README.md belum mencatat ui/cetak-modal.js");
+  });
+}
 t("rincian pungutan terisi -> tiga baris, TOTAL dijumlahkan dari situ", () => {
   const h = w.buildFundRequestHtml(barisFundUji({
     feeBm: "0", feePpn: "6975012", feePph: "0", currency: "IDR",
@@ -28646,6 +29333,176 @@ t("pane tab barang diamati, bukan tombol tabnya", () => {
     const vn = (p) => sel(w.ciplVnTata("CI", { doc_number: "K", doc_date: "2026-11-05", payload: Object.assign({ customer: "KUMHO TIRE (VIETNAM) CO., LTD" }, p) }, null));
     if (!vn({}).includes(baca("CIPL_VN_SELLER")[0].toUpperCase())) throw new Error("Kumho lama: seller konstanta hilang");
     if (!vn({ pembeliNama: "Pembeli Baru Korea", pembeliAlamat: "Seoul" }).includes("PEMBELI BARU KOREA")) throw new Error("Kumho: seller = pembeli");
+  });
+
+  /* ---- SHIPPER BAKU: pengiriman ke Dynamic Design Co., Ltd. ----
+     Dulu kotak Shipper mengikuti isian Penjual tiap invoice. Isian itu
+     terisi dari data PEB jadwal, sisa customer sebelumnya (Kumho lalu pindah
+     ke Dynamic Design), data customer tersimpan, atau ketikan -- jadi alamat
+     shipper berbeda-beda dari satu invoice ke invoice lain. */
+  const bakuDD = () => baca("CIPL_SHIPPER");
+  const teksModelSb = (T) => T.sel.map(ttTeksSel).join("\n");
+  t("Shipper baku: kiriman ke Dynamic Design Co., Ltd. SELALU memakai blok CIPL_SHIPPER -- isian Penjual per invoice tidak dipakai; customer lain tetap mengikuti Penjual", () => {
+    const baku = bakuDD();
+    const diketik = { penjualNama: "PT Lain Sekali", penjualAlamat: "Jl Lain 1\nCirebon" };
+    // ejaan customer apa pun yang cocok dengan profil
+    ["Dynamic Design Co., Ltd.", "DYNAMIC DESIGN CO., LTD.", "Dynamic Design Co Ltd", "dynamic design co.,ltd"].forEach((nama) =>
+      eq(w.ciplShipperBaris({ payload: Object.assign({ customer: nama }, diketik) }, baku).join("|"), baku.join("|"), `${nama}:`));
+    // customer kosong di pengajuan -> dibaca dari jadwal tertaut (parameter ketiga)
+    eq(w.ciplShipperBaris({ payload: Object.assign({}, diketik) }, baku, { party: "DYNAMIC DESIGN CO., LTD." }).join("|"), baku.join("|"), "customer dari jadwal:");
+    eq(w.ciplShipperBaris({ payload: { customer: "DYNAMIC DESIGN CO., LTD." } }, baku).join("|"), baku.join("|"), "tanpa isian Penjual:");
+    // pengajuan menang atas jadwal tertaut (urutan yang sama dengan pemilihan layout di ciplDaftarTata)
+    eq(w.ciplShipperBaris({ payload: Object.assign({ customer: "DYNAMIC DESIGN CO., LTD." }, diketik) }, baku, { party: "PT LAIN" }).join("|"), baku.join("|"), "pengajuan DD, jadwal lain:");
+    eq(w.ciplShipperBaris({ payload: Object.assign({ customer: "PT LAIN" }, diketik) }, baku, { party: "DYNAMIC DESIGN CO., LTD." }).join("|"), "PT LAIN SEKALI|JL LAIN 1|CIREBON", "pengajuan lain, jadwal DD:");
+    // customer lain: Penjual yang diketik tetap dipakai; kosong -> cadangan layout-nya
+    eq(w.ciplShipperBaris({ payload: Object.assign({ customer: "PT LAIN" }, diketik) }, baku).join("|"), "PT LAIN SEKALI|JL LAIN 1|CIREBON", "customer lain:");
+    eq(w.ciplShipperBaris({ payload: { customer: "PT LAIN" } }, baku).join("|"), baku.join("|"), "customer lain tanpa isian:");
+    // Kumho (Third Party) tidak ikut baku: Penjual dari isiannya, cadangan = kotak lembar Kumho
+    const vn = baca("CIPL_VN_SHIPPER");
+    eq(w.ciplShipperBaris({ payload: Object.assign({ customer: "KUMHO TIRE (VIETNAM) CO., LTD" }, diketik) }, vn).join("|"), "PT LAIN SEKALI|JL LAIN 1|CIREBON", "Kumho: Penjual diketik:");
+    eq(w.ciplShipperBaris({ payload: { customer: "KUMHO TIRE (VIETNAM) CO., LTD" } }, vn).join("|"), vn.map((x) => x.toUpperCase()).join("|"), "Kumho: cadangan:");
+    // pencari blok baku
+    const cari = (nama) => { const b = w.ciplShipperBaku(nama); return b ? b.join("|") : String(b); };
+    eq([cari("Dynamic Design Co., Ltd.") === baku.join("|"), cari("KUMHO TIRE (VIETNAM) CO., LTD"), cari(""), cari(null), cari("PT DYNAMIC DESIGN INDONESIA")].join(" ; "), "true ; null ; null ; null ; null", "ciplShipperBaku:");
+  });
+
+  t("Shipper baku: CI, PL & SI Dynamic Design memuat blok yang SAMA di setiap invoice walau isian Penjual-nya berbeda-beda; data SI ikut", () => {
+    const baku = bakuDD();
+    const kirim = Object.assign({}, jadwalCipl, { party: "DYNAMIC DESIGN CO., LTD." });
+    const vn = baca("CIPL_VN_SHIPPER");
+    const varian = [
+      {}, // tanpa isian Penjual
+      { penjualNama: "PT DYNAMIC DESIGN INDONESIA", penjualAlamat: "JL. MAYJEND SUTOYO NO. 1 DESA/KELURAHAN PABEDILAN KULON KEC. PABEDILAN" }, // gaya data PEB
+      { penjualNama: vn[0], penjualAlamat: vn.slice(1).join("\n") }, // sisa customer Kumho
+      { penjualNama: "PT MAKLON", penjualAlamat: "JL. MAKLON 7" }, // ketikan
+      { customer: "", penjualNama: "PT MAKLON", penjualAlamat: "JL. MAKLON 7" }, // customer kosong: dibaca dari jadwal tertaut
+    ];
+    // SI membungkus alamat di kolom isinya yang sempit: bandingkan teks yang diratakan
+    const rata = (x) => x.replace(/\s+/g, " ").trim();
+    const hasil = varian.map((v, i) => {
+      const row = { id: "sb" + i, doc_number: "DDI - CRBM - X - 061", doc_date: "2026-09-29", payload: Object.assign({ customer: "DYNAMIC DESIGN CO., LTD.", shipmentId: "sx1", termsDelivery: "FOB" }, v) };
+      const daftar = w.ciplDaftarTata(row, kirim);
+      eq(daftar.map((T) => T.nama).join(), "CI,PL,SI", "lembar:");
+      daftar.forEach((T) => {
+        const teks = teksModelSb(T);
+        // CI & PL: satu kotak berisi seluruh blok; SI: nama di baris Shipper, alamat di baris Address
+        const harusAda = T.nama === "SI" ? [baku[0], baku.slice(1).join(" ")] : [baku.join(" ")];
+        harusAda.forEach((blok) => { if (!rata(teks).includes(rata(blok))) throw new Error(`${T.nama}: blok shipper '${blok}' tidak ada`); });
+        if (/MAKLON|KELURAHAN|JEON JEONGHO/.test(teks)) throw new Error(`${T.nama}: isian Penjual lain ikut tercetak`);
+      });
+      eq(w.ciplSiData(row, kirim, w.ciplBarisBarang(kirim)).shipper.join("|"), baku.join("|"), "data SI:");
+      return daftar.map(teksModelSb).join("\n#\n");
+    });
+    // hanya Penjual yang berbeda antar varian -> seluruh teks ketiga lembar HARUS identik
+    eq(new Set(hasil).size, 1, "teks CI, PL & SI sama di semua invoice:");
+  });
+
+  t("Form invoice: customer Dynamic Design -> Penjual (nama & alamat) = blok baku & terkunci, Pemilik ikut; pindah dari Kumho / data tersimpan lama tidak menyisakan alamat lain; customer lain membuka kunci & tetap bebas", () => {
+    const baku = bakuDD(), alamatBaku = baku.slice(1).join("\n");
+    const kunci = () => `${invK("penjualNama").readOnly}|${invK("penjualAlamat").readOnly}`;
+    const ket = () => $("#dnPolaKet").textContent;
+    const simpanTersimpan = baca("invCustomerTersimpan");
+    try {
+      tulis("invCustomerTersimpan", []);
+      invBersih();
+      eq(kunci(), "false|false", "awal bebas:");
+      // Kumho dulu: Penjual = shipper lembar Kumho, bebas
+      invPilihCustomer("KUMHO TIRE (VIETNAM) CO., LTD");
+      eq(invK("penjualNama").value, baca("CIPL_VN_SHIPPER")[0], "Kumho: penjual:");
+      eq(kunci(), "false|false", "Kumho bebas:");
+      if (/baku/i.test(ket())) throw new Error("Kumho: keterangan menyebut shipper baku");
+      // Pindah ke Dynamic Design: blok baku, sisa Kumho hilang, terkunci, Pemilik ikut
+      invPilihCustomer("DYNAMIC DESIGN CO., LTD.");
+      eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, `${baku[0]}|${alamatBaku}`, "Dynamic Design: penjual = baku:");
+      eq(kunci(), "true|true", "Dynamic Design: terkunci:");
+      eq(`${invK("pemilikNama").value}|${invK("pemilikAlamat").value}`, `${baku[0]}|${alamatBaku}`, "Dynamic Design: pemilik ikut:");
+      if (!/Shipper di CI, PL & SI customer ini baku/.test(ket())) throw new Error("keterangan shipper baku tidak tampil: " + ket());
+      eq(w.readDocNumForm("invoice").penjualAlamat, alamatBaku, "payload yang disimpan:");
+      // Customer lain: kunci dibuka, kolom bebas diketik, keterangan kembali biasa
+      invPilihCustomer("PT UJI BUYER");
+      eq(kunci(), "false|false", "customer lain bebas:");
+      if (/baku/i.test(ket())) throw new Error("customer lain: keterangan masih menyebut shipper baku");
+      invKetik("penjualNama", "PT MAKLON");
+      eq(w.readDocNumForm("invoice").penjualNama, "PT MAKLON", "customer lain: diketik:");
+      // Kembali ke Dynamic Design: ketikan customer lain tidak terbawa
+      invPilihCustomer("DYNAMIC DESIGN CO., LTD.");
+      eq(invK("penjualNama").value, baku[0], "kembali: baku lagi:");
+      eq(kunci(), "true|true", "kembali: terkunci:");
+      // Data customer TERSIMPAN yang lama (Penjual berbeda) tidak mengalahkan blok baku
+      invBersih();
+      tulis("invCustomerTersimpan", [{ nama: "DYNAMIC DESIGN CO., LTD.", isian: { polaPihak: "langsung", penjualNama: "PT LAMA", penjualAlamat: "ALAMAT TERSIMPAN LAMA" } }]);
+      w.invCustomerGambar();
+      invPilihCustomer("DYNAMIC DESIGN CO., LTD.");
+      eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, `${baku[0]}|${alamatBaku}`, "data tersimpan lama:");
+    } finally {
+      tulis("invCustomerTersimpan", simpanTersimpan);
+      w.invCustomerGambar();
+      invBersih();
+    }
+    eq(kunci(), "false|false", "form dikosongkan: bebas lagi:");
+  });
+
+  t("Form invoice: blok baku yang BERBEDA dari bawaan form (kelak diganti) tetap dianggap isian mesin -- pindah ke Kumho menggantinya dengan Penjual Kumho dan membuka kunci", () => {
+    const profil = w.eval('CIPL_PROFIL.find((b) => b.id === "ddi-kr")');
+    const asli = profil.shipper;
+    const simpanTersimpan = baca("invCustomerTersimpan");
+    try {
+      tulis("invCustomerTersimpan", []);
+      profil.shipper = ["PT BAKU LAIN", "JL. BAKU LAIN 5", "CIREBON"];
+      invBersih();
+      invPilihCustomer("DYNAMIC DESIGN CO., LTD.");
+      eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, "PT BAKU LAIN|JL. BAKU LAIN 5\nCIREBON", "baku lain terisi:");
+      eq(invK("penjualNama").readOnly, true, "terkunci:");
+      invPilihCustomer("KUMHO TIRE (VIETNAM) CO., LTD");
+      const vn = baca("CIPL_VN_SHIPPER");
+      eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, `${vn[0]}|${vn.slice(1).join("\n")}`, "Kumho menggantikan blok baku:");
+      eq(invK("penjualNama").readOnly, false, "kunci dibuka:");
+    } finally {
+      profil.shipper = asli;
+      tulis("invCustomerTersimpan", simpanTersimpan);
+      w.invCustomerGambar();
+      invBersih();
+    }
+  });
+
+  t("Form invoice: jadwal ditautkan dengan Data PEB beralamat eksportir lain -- Penjual customer berbaku TETAP blok baku; customer tanpa baku tetap mengikuti eksportir PEB", () => {
+    const baku = bakuDD();
+    const simpanData = baca("data");
+    try {
+      [["DYNAMIC DESIGN CO., LTD.", baku[0], baku.slice(1).join("\n"), false], ["PT UJI JADWAL", "PT EKSPORTIR PEB", "JL. PEB 9, KAB. CIREBON", true]].forEach(([party, nama, alamat, kosongkan]) => {
+        invBersih();
+        /* Bawaan form (blok perusahaan sendiri) dianggap isian pengguna oleh pengisi otomatis jadwal
+           (sama seperti sebelumnya): untuk customer tanpa baku, kosongkan dulu supaya data PEB masuk */
+        if (kosongkan) { invK("penjualNama").value = ""; invK("penjualAlamat").value = ""; }
+        const jadwal = Object.assign({}, jadwalCipl, { id: "sx-baku", party, dataPabean: { pihak: { eksportir: { nama: "PT EKSPORTIR PEB", alamat: "JL. PEB 9, KAB. CIREBON" } } } });
+        tulis("data", { import: [], export: [jadwal] });
+        w.isiPilihanJadwal();
+        $("#dnInvoiceShipmentPick").value = "sx-baku";
+        w.isiOtomatisDariJadwal();
+        eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, `${nama}|${alamat}`, `${party}:`);
+      });
+    } finally {
+      tulis("data", simpanData);
+      invBersih();
+    }
+  });
+
+  t("Form invoice: pengajuan Dynamic Design LAMA dengan Penjual berbeda dibuka untuk diubah -- Penjual jadi blok baku (yang tersimpan ulang seragam)", () => {
+    const baku = bakuDD();
+    const simpanRiwayat = baca("docNumHistoryRows");
+    try {
+      invBersih();
+      tulis("docNumHistoryRows", [{ id: "lama-dd", doc_type: "invoice", doc_number: "DDI - CRBM - IX - 040", doc_date: "2026-09-01",
+        payload: { customer: "DYNAMIC DESIGN CO., LTD.", penjualNama: "PT DYNAMIC DESIGN INDONESIA", penjualAlamat: "ALAMAT PEB LAMA", currency: "USD" } }]);
+      w.mulaiUbahDocNum("lama-dd");
+      eq(`${invK("penjualNama").value}|${invK("penjualAlamat").value}`, `${baku[0]}|${baku.slice(1).join("\n")}`, "dibuka:");
+      eq(invK("penjualAlamat").readOnly, true, "terkunci:");
+      eq(w.readDocNumForm("invoice").penjualAlamat, baku.slice(1).join("\n"), "isi yang akan disimpan:");
+      w.batalUbahDocNum();
+    } finally {
+      tulis("docNumHistoryRows", simpanRiwayat);
+      invBersih();
+    }
   });
 
   t("CIPL Kumho: nomor invoice di Document Reference CI & PL SATU baris -- dikecilkan seperlunya (>= 7pt); nomor pendek tetap 8,8pt; Notify tetap boleh membungkus", () => {

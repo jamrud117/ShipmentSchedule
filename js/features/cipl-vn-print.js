@@ -176,7 +176,7 @@ function ciplVnTata(jenis, row, shipment) {
     judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
     persen: [15, 7, 24, 12, 7, 7, 14, 14],
     kartu: [
-      { kiri: { judul: "Shipper", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_VN_SHIPPER), l, true) },
+      { kiri: { judul: "Shipper", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_VN_SHIPPER, shipment), l, true) },
         kanan: { judul: "Seller", isi: (l) => ddIsiPihak(seller, l, true) } },
       { kiri: { judul: "Consignee", isi: (l) => ddIsiPihak(consignee, l, true) },
         kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi([

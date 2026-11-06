@@ -1,2 +1,8 @@
-# Ignore QA and testing files
+# Ignore folder QA
 qa/
+
+# Ignore folder beserta seluruh isinya
+/qa/
+
+# Ignore file tertentu
+*.log
