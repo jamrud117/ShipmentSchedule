@@ -89,12 +89,11 @@ const CIPL_PROFIL = [
     match: ["KUMHO TIRE VIETNAM", "KUMHO TIRE"],
     layout: "vn",
     /* Isian form Pihak saat customer ini dipilih (invoice-pihak.js):
-       PIHAK KETIGA -- shipper PT DDI, pembeli Dynamic Design Korea
-       (kotak "Seller" CIPL Kumho), penerima Kumho Vietnam. */
+       PIHAK KETIGA -- pembeli Dynamic Design Korea (kotak "Seller" CIPL
+       Kumho), penerima Kumho Vietnam. Penjual tidak diisi di sini: untuk
+       SEMUA customer Penjual = blok baku CIPL_SHIPPER (ciplShipperBaku). */
     isianPihak: {
       polaPihak: "pihak-ketiga",
-      penjualNama: CIPL_VN_SHIPPER[0],
-      penjualAlamat: CIPL_VN_SHIPPER.slice(1).join("\n"),
       pembeliNama: CIPL_VN_SELLER[0],
       pembeliAlamat: CIPL_VN_SELLER.slice(1).join("\n"),
       pembeliNegara: "KR",
@@ -277,6 +276,8 @@ function ciplBarisBarang(shipment) {
       return {
         item: n.item,
         type: n.type,
+        // Nama utuh untuk kolom Goods Description (lembar CI / PL Dynamic Design, gaya Kumho)
+        uraian: itemDisplayName(it),
         hs: String(it.hsCode || "").trim(),
         qty: qty,
         satuan: String(it.satuan || "").trim().toUpperCase(),
@@ -298,17 +299,51 @@ function ciplBarisBarang(shipment) {
     });
 }
 
+/* Jumlah kemasan SATU barang: angka pertama di kolom Kemasan ("3",
+   "2 PALLET", "1BOX"). 0 = kosong -- barang itu masih satu kemasan
+   dengan barang di atasnya ("↳ ikut" di tabel barang), jadi tidak
+   menambah hitungan. */
+function ciplKoliBarang(it) {
+  const m = String((it && it.packing) || "").match(/[\d.,]+/);
+  return m ? parseLooseNumber(m[0]) : 0;
+}
+
 /* Jumlah koli seluruh kiriman, untuk tulisan "4 Package" di Packing
    List. Diambil dari kolom `packing` per barang — di buku Export kolom
    `package` berisi DIMENSI, bukan jumlah. */
 function ciplTotalKoli(shipment) {
   const items = (shipment && shipment.items) || [];
-  let n = 0;
-  items.forEach((it) => {
-    const m = String(it.packing || "").match(/[\d.,]+/);
-    if (m) n += parseLooseNumber(m[0]);
-  });
-  return n;
+  return items.reduce((n, it) => n + ciplKoliBarang(it), 0);
+}
+
+/* Jenis kemasan yang tertulis pada barang: kolom Jenis Kemasan, atau
+   huruf sesudah angka di kolom Kemasan ("2 PALLET", "1BOX" -- data lama
+   dan hasil baca CIPL). "" = tidak disebut. */
+function ciplJenisKemasanBarang(it) {
+  const sendiri = String((it && it.packingUnit) || "").replace(/^[\d.,\s]+/, "").trim();
+  if (sendiri) return sendiri.toUpperCase();
+  const m = String((it && it.packing) || "").match(/[\d.,]+\s*([A-Za-z][A-Za-z ]*)/);
+  return m ? m[1].trim().toUpperCase() : "";
+}
+
+/* Singkatan jenis kemasan di lembar CIPL ("120 * 122 * 71 (cm) * 4 BX").
+   BOX tetap "BX" seperti lembar Kumho selama ini; jenis lain memakai
+   singkatan yang lazim di CIPL dan dikenali pembaca CIPL kita (mesin
+   EXIM: PLT, CTN, PKG, ...). Bentuk jamak & kode CEISA (PX, CT, ...) ikut
+   dikenali; jenis di luar daftar ditulis apa adanya. */
+const CIPL_SINGKATAN_KEMASAN = {
+  BOX: "BX", BOXES: "BX", BX: "BX",
+  PALLET: "PLT", PALLETS: "PLT", PLT: "PLT", PLTS: "PLT", PX: "PLT",
+  CARTON: "CTN", CARTONS: "CTN", CTN: "CTN", CTNS: "CTN", CT: "CTN",
+  PACKAGE: "PKG", PACKAGES: "PKG", PKG: "PKG", PKGS: "PKG", PK: "PKG",
+  CRATE: "CRATE", CRATES: "CRATE", CR: "CRATE",
+  CASE: "CASE", CASES: "CASE", CS: "CASE",
+  DRUM: "DRUM", DRUMS: "DRUM", DR: "DRUM",
+  ROLL: "ROLL", ROLLS: "ROLL", RO: "ROLL",
+};
+function ciplSatuanKemasan(jenis) {
+  const kunci = String(jenis || "").trim().toUpperCase();
+  return CIPL_SINGKATAN_KEMASAN[kunci] || kunci;
 }
 
 /* Angka bulat ditulis TANPA desimal; hanya yang pecahan yang diberi
@@ -358,10 +393,10 @@ function ciplBarisTeks(teks) {
 /* ==================================================================
    COMMERCIAL INVOICE & PACKING LIST — DYNAMIC DESIGN (desain formal)
 
-   Disusun sebagai MODEL KISI (cipl-tata.js). Lembar cetak (ttHtml) dan
-   lembar Excel (ttExcel) digambar dari model yang SAMA -- kolom, baris,
-   gabungan sel, garis, huruf, pemotongan baris -- jadi keduanya sama
-   persis, dan Excel-nya cukup 11 kolom dengan satu sel per kotak.
+   Disusun sebagai MODEL KISI (cipl-tata.js) yang digambar cetakan
+   (ttHtml). Unduhan Excel (cipl-excel.js) menyusun lembar kerjanya dari
+   spek YANG SAMA (T.spek) -- isi, urutan & angkanya sama dengan cetakan,
+   bentuknya lembar kerja biasa (kolom = kolom tabel barang).
 
    Dibaca dari atas:
      judul (garis hitam di bawahnya)
@@ -391,8 +426,11 @@ const ddH = (s, o) => ttH("arial", s, Object.assign({ c: DD_WARNA.teks }, o || {
 
 /* NOMOR + TANGGAL satu baris: nomor di kiri, tanggalnya menempel ke
    kanan kotak ("DD-260928-DDI-01_R1 ........ 28 SEP 2026"), tanpa tanda
-   kurung. Tiap PO punya tanggalnya sendiri (po-list.js), satu PO per baris. */
-const ciplNoTanggal = (no, tanggal) => ({ no, tgl: ciplTanggal(tanggal || "").toUpperCase() });
+   kurung. Tiap PO punya tanggalnya sendiri (po-list.js), satu PO per baris.
+   satuBaris: nomor dokumen tidak dibungkus (ddIsiReferensi).
+   iso: tanggal aslinya (YYYY-MM-DD) -- unduhan Excel menulisnya sebagai sel
+   TANGGAL sungguhan (cipl-excel.js); cetakan memakai `tgl`. */
+const ciplNoTanggal = (no, tanggal) => ({ no, tgl: ciplTanggal(tanggal || "").toUpperCase(), iso: String(tanggal || ""), satuBaris: true });
 function ciplPoPasangan(p) {
   const no = [p.poNo].concat(p.poNoExtra || []);
   const tanggal = [p.poDate].concat(p.poDateExtra || []);
@@ -417,10 +455,27 @@ function ciplRefBaris(row) {
    seperti dulu: Shipper tetap, Consignee = customer + alamat consignee. */
 const ciplPihakBaris = (nama, alamat) => [nama, ...ciplBarisTeks(alamat)].filter(Boolean).map(ciplKapital);
 
-// Shipper / Exporter = Penjual; cadangan = kotak tetap layout-nya
-function ciplShipperBaris(row, cadangan) {
-  const p = row.payload || {};
-  return p.penjualNama ? ciplPihakBaris(p.penjualNama, p.penjualAlamat) : cadangan.map(ciplKapital);
+/* SHIPPER BAKU UNTUK SEMUA CUSTOMER: blok CIPL_SHIPPER -- alamat PT Dynamic
+   Design Indonesia yang dipakai CIPL kiriman ke Dynamic Design Co., Ltd.
+   -- tercetak SAMA di CI, PL, SI & Excel setiap invoice, customer apa pun
+   (Dynamic Design, Kumho Vietnam, customer baru).
+
+   Dulu kotak Shipper mengikuti isian Penjual tiap invoice (kecuali
+   Dynamic Design), dan isian itu terisi dari data PEB jadwal, sisa
+   customer sebelumnya, data customer tersimpan, atau ketikan. Akibatnya
+   alamatnya berbeda-beda: "DESA/KELURAHAN PABEDILAN KULON" (gaya data
+   PEB, juga kotak Shipper lembar Kumho) di satu invoice, "DESA PABEDILAN
+   KULON" di invoice lain. Isian Penjual tersimpan TIDAK dipakai lagi
+   untuk mencetak; di form ia diisi blok ini dan dikunci
+   (invTerapkanShipperBaku, invoice-pihak.js). Satu sumber untuk cetak,
+   Excel & form, jadi ketiganya tidak bisa berbeda. */
+function ciplShipperBaku() {
+  return CIPL_SHIPPER;
+}
+
+// Shipper / Exporter di kotak lembar: blok baku, KAPITAL (ciplKapital)
+function ciplShipperBaris() {
+  return ciplShipperBaku().map(ciplKapital);
 }
 
 // Consignee = Penerima (namanya mengikuti customer)
@@ -449,13 +504,20 @@ function ciplNamaDuaBaris(nama) {
 
 /* FORMAT ANGKA BERSAMA cetak & Excel -- teks cetaknya dan format sel
    Excel-nya menampilkan hal yang sama.
-   Uang: mata uang di kiri; desimal seragam satu kolom (dua desimal kalau
-   ada satu saja yang bersen). */
-function ciplFormatUang(mata, nilai) {
-  const d = (nilai || []).some((n) => Math.round(Number(n) * 100) % 100 !== 0) ? 2 : 0;
+   Uang: mata uang di kiri; desimal PER ANGKA, sama dengan surat Pengajuan
+   Dana (frSelUang): yang bersen ditulis dua desimal ("USD 6,300.25",
+   "USD 12.50"), yang bulat tanpa ".00" ("USD 5,800") -- walau angka lain
+   di kolom yang sama bersen. Aturan lama (satu bersen -> sekolom ".00")
+   dicabut atas permintaan pengguna. `f(n)` & `teks(n)` per nilai, jadi
+   sel Excel tiap angka diformat sama dengan teks cetaknya. */
+const ciplAdaSen = (n) => Math.round((Number(n) || 0) * 100) % 100 !== 0;
+function ciplFormatUang(mata) {
   return {
-    f: `"${mata} "#,##0${d ? ".00" : ""}`,
-    teks: (n) => `${mata} ${angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`,
+    f: (n) => `"${mata} "#,##0${ciplAdaSen(n) ? ".00" : ""}`,
+    teks: (n) => {
+      const d = ciplAdaSen(n) ? 2 : 0;
+      return `${mata} ${angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+    },
   };
 }
 /* Angka bersatuan (berat KG, jumlah): desimal mengikuti nilainya
@@ -495,7 +557,8 @@ function ciplDdRincianData(row, shipment) {
     ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
     // Udara: No Flight saja; laut: kapal + voyage (carrierCipl, core/carrier-master.js)
     ["Vessel / Flight", carrierCipl(p, shipment)],
-    ["Sailing on or About", ciplTanggal(p.sailingDate || "")],
+    // Elemen ke-3 { iso }: unduhan Excel menulis sel tanggal sungguhan (cetakan hanya membaca [label, nilai])
+    ["Sailing on or About", ciplTanggal(p.sailingDate || ""), { iso: p.sailingDate || "" }],
     ["Terms of Delivery", p.termsDelivery || ""],
     ["Terms of Payment", p.termPayment || ""],
     ["Country of Origin", CIPL_ASAL_BARANG],
@@ -531,7 +594,13 @@ function ddIsiPihak(teks, lebar, alamatSatuBaris) {
 }
 
 /* Isi kotak Document reference: dua sel berdampingan dengan baris yang
-   sejajar -- nomor (kiri) & tanggalnya (rata kanan). */
+   sejajar -- nomor (kiri) & tanggalnya (rata kanan).
+
+   NOMOR DOKUMEN SATU BARIS (x.satuBaris: Invoice, PO): nomor yang
+   terbelah dua baris terbaca seperti dua nomor -- nomor Kumho "DDI - CRBM
+   - X - 067 - 20261029" dulu turun ke baris kedua. Hurufnya dikecilkan
+   seperlunya (paling kecil CIPL_UKURAN_MIN_PT); baru kalau itu pun tidak
+   muat, dibungkus. Nama (Notify party) tetap boleh membungkus. */
 function ddIsiReferensi(kelompok, lebarNo, lebarLabel) {
   const no = [ttSpasi(ttPx(6))];
   const tgl = [ttSpasi(ttPx(6))];
@@ -544,8 +613,14 @@ function ddIsiReferensi(kelompok, lebarNo, lebarLabel) {
       tgl.push(ttSpasi(6.8 * 1.42));
     });
     isi.forEach((x) => {
-      ttBungkus(x.no, hV, lebarNo).forEach((tx, i) => {
-        no.push(ttBaris(tx, hV, 8.8 * 1.3));
+      const s = x.satuBaris ? ttUkuranPas([x.no], hV, lebarNo, CIPL_UKURAN_MIN_PT) : null;
+      const h = s ? ddH(s, { b: true }) : hV;
+      const baris = s ? [x.no] : ttBungkus(x.no, hV, lebarNo);
+      baris.forEach((tx, i) => {
+        const b = ttBaris(tx, h, 8.8 * 1.3);
+        // Nomor satu baris yang berupa angka (HS Code) -> angka di Excel
+        if (x.nilaiExcel && baris.length === 1) b.angka = x.nilaiExcel;
+        no.push(b);
         tgl.push(i === 0 && x.tgl ? ttBaris(x.tgl, hV, 8.8 * 1.3) : ttSpasi(8.8 * 1.3));
       });
     });
@@ -621,6 +696,10 @@ function ciplTataFormal(spek) {
   const rentang = ([k1, k2]) => [awal(k1), k2 === 3.5 ? cCelah : akhir(k2)];
 
   const T = ttTataBaru(spek.nama, kolom);
+  /* Spek ikut disimpan di model: unduhan Excel (cipl-excel.js) menyusun
+     lembarnya dari spek yang SAMA dengan cetakan ini -- satu sumber data,
+     bentuk lembar kerjanya sendiri. Cetakan (ttHtml) tidak membacanya. */
+  T.spek = spek;
   const tambah = (pt) => ttTambahBaris(T, pt);
 
   // JARAK DALAM ATAS + JUDUL (garis hitam 2 px di bawahnya)
@@ -697,16 +776,28 @@ function ciplTataFormal(spek) {
   const hIsi = ddH(8.5);
   const pitchIsi = 8.5 * 1.3;
   const padIsi = tb.padBaris == null ? ttPx(8) : tb.padBaris;
+  /* SEMUA BARIS BARANG SAMA TINGGI -- setinggi barang yang teksnya paling
+     banyak baris. Satu nama barang yang turun baris tidak lagi membuat
+     barisnya sendiri lebih tinggi daripada yang lain (tabel tampak tidak
+     rata); teks yang lebih pendek berada di tengah barisnya (va: middle).
+     Kolom di tb.rataKiri (GOODS DESCRIPTION) RATA KIRI, berjarak 9 px
+     seperti TOTAL: nama barang yang panjang-pendek / turun baris berbaris
+     lurus di tepi kiri. Kepala tabel & kolom lain tetap rata tengah. */
+  const rataKiri = new Set(tb.rataKiri || []);
+  const padKiri = ttPx(9);
+  const lebarBarang = (k) => (rataKiri.has(k) ? ttLebarIsi(T, kol[k][0], kol[k][1], padKiri, ttPx(5)) : lebarKol(k));
+  const teksBarang = tb.baris.map((sel) => sel.map((x, k) => (x && x.teks ? x.teks.flatMap((tx) => ttBungkus(tx, hIsi, lebarBarang(k))) : null)));
+  const nBarisBarang = Math.max(1, ...teksBarang.map((teks) => Math.max(1, ...teks.map((x) => (x ? x.length : 1)))));
   tb.baris.forEach((sel, i) => {
-    const teks = sel.map((x, k) => (x && x.teks ? x.teks.flatMap((tx) => ttBungkus(tx, hIsi, lebarKol(k))) : null));
-    const n = Math.max(1, ...teks.map((x) => (x ? x.length : 1)));
-    const r = tambah(n * pitchIsi + padIsi + ttPx(1));
+    const teks = teksBarang[i];
+    const r = tambah(nBarisBarang * pitchIsi + padIsi + ttPx(1));
     const g = { ha: "center", va: "middle", fill: i % 2 === 1 ? W.zebra : null };
     sel.forEach((x, k) => {
       const [c1, c2] = kol[k];
       if (x && x.angka) ddSelAngka(T, r, c1, c2, x.angka.v, x.angka.fmt, x.angka.teks, hIsi, g);
       else {
-        const s = ttSel(T, r, c1, r, c2, (teks[k] || [""]).map((tx) => ttBaris(tx, hIsi, pitchIsi)), g);
+        const gaya = rataKiri.has(k) ? Object.assign({}, g, { ha: "left", padL: padKiri, padR: ttPx(5) }) : g;
+        const s = ttSel(T, r, c1, r, c2, (teks[k] || [""]).map((tx) => ttBaris(tx, hIsi, pitchIsi)), gaya);
         if (x && x.nilaiExcel) s.angka = x.nilaiExcel;
       }
     });
@@ -767,70 +858,99 @@ function ciplTataFormal(spek) {
                    [Consignee          | Buyer]
    (pembeli lain dari penerima -- notify pindah ke referensi, seperti
    lembar Kumho). */
-function ciplDdKartu(row, shipment) {
+/* Selain fungsi penggambar cetaknya (isi / referensi), tiap kotak membawa
+   DATANYA: `teks` (baris kotak pihak) atau `ref` (butir referensi) --
+   unduhan Excel menulis data yang sama ke sel lembar kerjanya. */
+function ciplKotakPihak(judul, teks, alamatSatuBaris) {
+  return { judul, teks, alamatSatuBaris, isi: (l) => ddIsiPihak(teks, l, alamatSatuBaris) };
+}
+function ciplKotakReferensi(judul, ref) {
+  return { judul, ref, referensi: (lNo, lLabel) => ddIsiReferensi(ref, lNo, lLabel) };
+}
+function ciplDdKartu(row, shipment, baris) {
   const p = row.payload || {};
-  const shipper = { judul: "Shipper / Exporter", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_SHIPPER), l, true) };
+  const shipper = ciplKotakPihak("Shipper / Exporter", ciplShipperBaris(), true);
   const notify = ciplKapital(p.notifyParty || "SAME AS CONSIGNEE");
   const pembeli = ciplPembeliBaris(row, shipment);
+  const hs = ciplRefHsCode(baris);
   if (!pembeli.length) {
     return [
-      { kiri: shipper, kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(ciplRefBaris(row), lNo, lLabel) } },
-      { kiri: { judul: "Consignee / Buyer", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
-        kanan: { judul: "Notify Party", isi: (l) => ddIsiPihak([notify], l, false) } },
+      { kiri: shipper, kanan: ciplKotakReferensi("Document reference", ciplRefBaris(row).concat(hs)) },
+      { kiri: ciplKotakPihak("Consignee / Buyer", ciplKonsigneeBaris(row, shipment), true),
+        kanan: ciplKotakPihak("Notify Party", [notify], false) },
     ];
   }
-  const referensi = ciplRefBaris(row).concat([["Notify (if other than consignee)", [{ no: notify, tgl: "" }]]]);
+  const referensi = ciplRefBaris(row).concat(hs, [["Notify (if other than consignee)", [{ no: notify, tgl: "" }]]]);
   return [
-    { kiri: shipper, kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi(referensi, lNo, lLabel) } },
-    { kiri: { judul: "Consignee", isi: (l) => ddIsiPihak(ciplKonsigneeBaris(row, shipment), l, true) },
-      kanan: { judul: "Buyer", isi: (l) => ddIsiPihak(pembeli, l, true) } },
+    { kiri: shipper, kanan: ciplKotakReferensi("Document reference", referensi) },
+    { kiri: ciplKotakPihak("Consignee", ciplKonsigneeBaris(row, shipment), true),
+      kanan: ciplKotakPihak("Buyer", pembeli, true) },
   ];
 }
 
+/* HS CODE SEKALI, sebagai butir kartu DOCUMENT REFERENCE CI & PL Dynamic
+   Design -- label abu-abu & nomor tebal, sama seperti No. Invoice & PO di
+   atasnya. Barangnya memakai HS Code yang sama, jadi menulisnya di tiap
+   baris tabel hanya mengulang angka yang sama. HS berbeda (jarang)
+   dipisah koma; tanpa HS Code sama sekali butirnya tidak ada. Satu HS
+   berupa angka murni -> angka di Excel (tanpa segitiga hijau "angka
+   sebagai teks"). */
+function ciplRefHsCode(baris) {
+  const hs = [...new Set((baris || []).map((b) => String((b && b.hs) || "").trim()).filter(Boolean))];
+  if (!hs.length) return [];
+  const teks = hs.join(", ");
+  const angka = /^[1-9]\d{3,11}$/.test(teks) ? { nilaiExcel: { v: Number(teks), fmt: "0" } } : {};
+  return [["HS Code", [Object.assign({ no: teks, tgl: "" }, angka)]]];
+}
+
 /* ---------------- LEMBAR CI / PL DYNAMIC DESIGN ---------------- */
+/* TABEL BARANG gaya lembar Kumho (cipl-vn-print.js): NO | GOODS
+   DESCRIPTION (nama barang utuh -- kolom barang CEISA kiri ke kanan,
+   itemDisplayName; sub-judul "Description info : PTN, SIZE, MOLD NO"
+   seperti lembar Kumho) | QTY | UNIT | UNIT PRICE & AMOUNT (CI) atau NET
+   WT. & GROSS WT. (PL). Kolom Marks & No. PKGS lembar Kumho di sini
+   cukup nomor urut barang; HS Code ditulis sekali di kartu Document
+   reference (ciplRefHsCode). */
 function ciplDdTata(jenis, row, shipment, baris) {
   const ci = jenis === "CI";
   const p = row.payload || {};
-  const uang = ciplFormatUang(p.currency || "USD", baris.flatMap((b) => [b.harga, b.amount]));
+  const uang = ciplFormatUang(p.currency || "USD");
   const angka = (n, satuan) => {
     const f = ciplFormatAngka(n, satuan);
     return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
   };
-  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f, teks: uang.teks(n) } });
+  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n) } });
   const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
   const kemasan = ci ? [] : ciplRincianKemasan(p, shipment, baris);
   return ciplTataFormal({
     nama: jenis,
     judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
     persen: DD_TABEL_PERSEN,
-    kartu: ciplDdKartu(row, shipment),
+    kartu: ciplDdKartu(row, shipment, baris),
     rinci: ciplDdRincianData(row, shipment),
     tabel: {
-      kolom: [[0, 0], [1, 1], [2, 2], [3, 3.5], [4, 4], [5, 5], [6, 6], [7, 7]],
-      kepala: (ci ? ["No", "Item", "Type", "HS Code", "Qty", "Unit", "Unit Price", "Amount"]
-        : ["No", "Item Description", "Type", "HS Code", "Qty", "Unit", "Net Weight", "Gross Weight"]).map((k) => [k]),
-      baris: baris.map((b, i) => {
-        const hs = String(b.hs || "");
-        return [
-          { teks: [String(i + 1)], nilaiExcel: { v: i + 1, fmt: "0" } },
-          { teks: ciplNamaDuaBaris(b.item) },
-          { teks: [b.type || ""] },
-          // HS Code berupa angka murni -> angka di Excel (tanpa segitiga hijau "angka sebagai teks")
-          Object.assign({ teks: [hs] }, /^[1-9]\d{3,11}$/.test(hs) ? { nilaiExcel: { v: Number(hs), fmt: "0" } } : {}),
-          angka(b.qty, ""),
-          { teks: [b.satuan || ""] },
-          ci ? duit(b.harga) : angka(b.netto, "KG"),
-          ci ? duit(b.amount) : angka(b.bruto, "KG"),
-        ];
-      }),
+      kolom: [[0, 0], [1, 3.5], [4, 4], [5, 5], [6, 6], [7, 7]],
+      kepala: [["No"], ["Goods Description", "Description info : PTN, SIZE, MOLD NO"], ["Qty"], ["Unit"], [ci ? "Unit Price" : "Net Wt."], [ci ? "Amount" : "Gross Wt."]],
+      baris: baris.map((b, i) => [
+        { teks: [String(i + 1)], nilaiExcel: { v: i + 1, fmt: "0" } },
+        { teks: [b.uraian || [b.item, b.type].filter(Boolean).join(" ")] },
+        angka(b.qty, ""),
+        { teks: [b.satuan || ""] },
+        ci ? duit(b.harga) : angka(b.netto, "KG"),
+        ci ? duit(b.amount) : angka(b.bruto, "KG"),
+      ]),
       total: [
         { rentang: [0, 3.5], teks: "TOTAL", kiri: true },
-        Object.assign({ kolom: 4 }, angka(baris.reduce((x, b) => x + (Number(b.qty) || 0), 0), "")),
-        { kolom: 5, teks: satuan.length === 1 ? satuan[0] : "" },
-        ci ? { kolom: 6 } : Object.assign({ kolom: 6 }, angka(baris.reduce((x, b) => x + b.netto, 0), "KG")),
-        ci ? Object.assign({ kolom: 7 }, duit(baris.reduce((x, b) => x + b.amount, 0)))
-          : Object.assign({ kolom: 7 }, angka(baris.reduce((x, b) => x + b.bruto, 0), "KG")),
+        Object.assign({ kolom: 2 }, angka(baris.reduce((x, b) => x + (Number(b.qty) || 0), 0), "")),
+        { kolom: 3, teks: satuan.length === 1 ? satuan[0] : "" },
+        ci ? { kolom: 4 } : Object.assign({ kolom: 4 }, angka(baris.reduce((x, b) => x + b.netto, 0), "KG")),
+        ci ? Object.assign({ kolom: 5 }, duit(baris.reduce((x, b) => x + b.amount, 0)))
+          : Object.assign({ kolom: 5 }, angka(baris.reduce((x, b) => x + b.bruto, 0), "KG")),
       ],
+      // Kolom 5 = kolom 2 x kolom 4 (Amount = Qty x Unit Price): rumus di Excel, cetakan tidak membacanya
+      kali: ci ? { 5: [2, 4] } : null,
+      // GOODS DESCRIPTION rata kiri di baris barang (kepala tetap di tengah)
+      rataKiri: [1],
     },
     kiriBawah: ci ? [] : [{ judul: "Packing details", baris: kemasan }],
     ttd: { atas: ["For and on behalf of", CIPL_PERUSAHAAN.nama] },
@@ -843,7 +963,7 @@ function ciplDdTata(jenis, row, shipment, baris) {
    Berbeda bentuk dari dua halaman di atas: bukan tabel barang,
    melainkan surat berisi daftar instruksi ke forwarder, berkop
    perusahaan (Times New Roman). Disusun dengan model kisi yang sama
-   (ciplSiTata), jadi cetakan & Excel-nya pun sama persis.
+   (ciplSiTata); unduhan Excel memakai data yang sama (T.si = ciplSiData).
 
    Beberapa baris SENGAJA dibiarkan kosong (PEB Number, Booking
    Number, Vessel, ETD/ETA, Stuffing Date). Itu yang diisi forwarder
@@ -925,7 +1045,7 @@ function ciplSiData(row, shipment, baris) {
   return {
     tujuan: p.siTo || (shipment && shipment.forwarder) || "",
     no: p.siNo || ciplNoSiBawaan(row),
-    shipper: ciplShipperBaris(row, CIPL_SHIPPER),
+    shipper: ciplShipperBaris(),
     consignee: consignee,
     // Nama dasar barang ("TYRE MOLD"), tanpa jenisnya (TREAD ONLY, FULL SET, ...)
     barang: [...new Set(baris.map((b) => ciplNamaDuaBaris(b.item)[0].trim()).filter(Boolean))].join(", "),
@@ -933,6 +1053,8 @@ function ciplSiData(row, shipment, baris) {
     gw: ciplAngka(baris.reduce((s, b) => s + b.bruto, 0)),
     nw: ciplAngka(baris.reduce((s, b) => s + b.netto, 0)),
     koli: koli ? ciplAngka(koli) + " PACKAGE" : "",
+    // Angka di balik teks di atas -- unduhan Excel menulis sel angka berformat
+    angka: { gw: baris.reduce((s, b) => s + b.bruto, 0), nw: baris.reduce((s, b) => s + b.netto, 0), koli },
     hs: (baris.find((b) => b.hs) || {}).hs || "",
     tanggal: ciplTanggalId(row.doc_date),
     payload: p,
@@ -976,6 +1098,8 @@ function ciplSiTata(row, shipment, baris) {
   const kolom = [garis + dalam + ttMm(ttPx(26)), ttMm(ttPx(20)), ttMm(ttPx(194)), ttMm(ttPx(16)), 0, garis + dalam];
   kolom[4] = 190 - kolom.reduce((a, b) => a + b, 0);
   const T = ttTataBaru("SI", kolom);
+  // Data SI ikut disimpan: unduhan Excel menyusun lembarnya dari data yang SAMA (cipl-excel.js)
+  T.si = d;
   const tambah = (pt) => ttTambahBaris(T, pt);
   const [cA, cTanda, cLabel, cTitik, cIsi, cF] = [0, 1, 2, 3, 4, 5];
   const padTeks = ttPx(37); // garis + jarak dalam: tepi kiri teks bebas
@@ -1107,17 +1231,16 @@ function cetakCipl(rowId) {
     );
   }
 
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  /* Lembar dipilih dari PROFIL PEMBELI (ciplDaftarTata) -- model yang
-     sama dipakai unduhan Excel, jadi cetakan & Excel tidak bisa berbeda. */
-  w.document.write(ttDokumenHtml(`${ciplJudulInvoice(row)} ${row.doc_number || ""}`, ciplDaftarTata(row, shipment)));
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+  /* Lembar dipilih dari PROFIL PEMBELI (ciplDaftarTata) -- daftar & data
+     yang sama dipakai unduhan Excel, jadi isi cetakan & Excel tidak bisa
+     berbeda.
+     Pratinjau & cetak di kotak cetak aplikasi (ui/cetak-modal.js): CI, PL
+     (& SI) satu dokumen, tanpa jendela pop-up kedua. */
+  const judul = `${ciplJudulInvoice(row)} ${row.doc_number || ""}`.trim();
+  return bukaModalCetak({
+    jenis: tt("Commercial Invoice & Packing List", "Commercial Invoice & Packing List"),
+    nomor: row.doc_number || "",
+    judulBerkas: judul,
+    muat: async () => ttDokumenHtml(judul, ciplDaftarTata(row, shipment)),
+  });
 }

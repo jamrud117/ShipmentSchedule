@@ -908,6 +908,11 @@ table.item-table textarea:focus,
     white-space: normal;
     overflow-wrap: anywhere;
   }
+  /* Tanggal tetap utuh ("29-10-" / "2026"): setengah kartu selalu cukup */
+  .bk-isi .bk-tabel td.bk-tanggal {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
   .bk-isi .bk-tabel tbody td::before {
     content: attr(data-label);
     display: block;

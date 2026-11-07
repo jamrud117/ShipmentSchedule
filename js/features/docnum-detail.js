@@ -326,7 +326,7 @@ function dndNilai(k, r) {
   if (k === "vehicle") return dndDaftarKendaraan(p);
   if (k === "polaPihak") return INV_POLA_LABEL[v] ? escapeHtml(tt(...INV_POLA_LABEL[v])) : "";
   if (k === "portLoading" || k === "finalDestination") return escapeHtml(portKodeKeAlias(v));
-  // Nama lama "Local Sale" tampil dengan nama barunya (fund-summary.js)
+  // Nama lama "Local Sale" / "Inland Trucking" tampil dengan nama barunya, Trucking (fund-summary.js)
   if (k === "transactionType") {
     const jenis = fundJenisTransaksiBaku(v);
     return dndKosong(jenis) ? "" : escapeHtml(jenis);
@@ -403,6 +403,29 @@ function dndBagianHtml(judul, isi) {
 
    Tidak ada -> format lama / Billing: Bea Masuk, PPN Import, PPH
    Import (atau satu baris Jenis Pengeluaran), lalu TOTAL. */
+/* TOTAL PER DOKUMEN (invoice + invoice / debit note) -- sama dengan kaki
+   form dan baris total per dokumen di surat cetak: Total Nilai, PPN,
+   PPH 23 dan TOTAL tiap dokumen yang berisi pos. Satu dokumen saja ->
+   tidak ada apa-apa (angkanya sama dengan TOTAL di atasnya). */
+function dndTotalPerDokumenHtml(kelompok, tot, mata, jumlah) {
+  const perDok = new Map(((tot && tot.perDokumen) || []).map((x) => [x.id, x]));
+  const blok = (kelompok || [])
+    .filter((d) => perDok.has(d.id))
+    .map((d) => {
+      const x = perDok.get(d.id);
+      const nomor = String(d.nomor || "").trim();
+      return `<div class="fl-dok-blok">
+          <div class="fl-dok-judul">${escapeHtml(fundDokNama(d.jenis))}${nomor ? ` <b>${escapeHtml(nomor)}</b>` : ""}</div>
+          ${jumlah(tt("Total Nilai", "Total Amount"), frNilai(x.totalNet, mata))}
+          ${jumlah(tt("Total PPN", "Total PPN"), frNilai(x.totalPpn, mata))}
+          ${jumlah(tt(`Potongan PPH 23 (${FUND_PPH23_RATE}%)`, `PPH 23 deduction (${FUND_PPH23_RATE}%)`), x.pph ? "- " + frNilai(x.pph, mata) : "-", "fl-sum--minus")}
+          ${jumlah("TOTAL", frNilai(x.grandTotal, mata), "fl-sum--total")}
+        </div>`;
+    });
+  if (blok.length < 2) return "";
+  return `<div class="fl-dok-bagian"><div class="fl-dok-kepala">${escapeHtml(tt("Total per dokumen", "Totals per document"))}</div><div class="fl-dok-daftar">${blok.join("")}</div></div>`;
+}
+
 function dndBiayaHtml(r) {
   const p = r.payload || {};
   const mata = String(p.currency || "IDR").toUpperCase();
@@ -419,11 +442,11 @@ function dndBiayaHtml(r) {
     const daftar = normalisasiBarisDana(p.lines);
     const nilai = fundLineValues(daftar);
     const ppn = fundLinePpnDaftar(daftar, nilai, mata, p.payee);
-    const tot = fundLineTotals(daftar, mata, p.payee);
+    const tot = fundLineTotals(daftar, mata, p.payee, p.dokumen || []);
     /* Pengajuan untuk beberapa BL/AWB: kolom BL/AWB per baris dan bagian
        tiap BL/AWB di bawah TOTAL -- sama dengan form & surat cetaknya. */
     const awb = fundDaftarAwb(p.blAwb);
-    // Inland Trucking: nomor DO / Surat Jalan, tidak dipecah per BL/AWB
+    // Trucking: nomor DO / Surat Jalan, tidak dipecah per BL/AWB
     const pakaiAwb = awb.length > 1 && !fundTanpaPecahAwb(p);
     const teksAwb = (b) => {
       const k = kunciAlnum(b.awb);
@@ -480,6 +503,7 @@ function dndBiayaHtml(r) {
         ${jumlah(tt("Total PPN", "Total PPN"), frNilai(tot.totalPpn, mata))}
         ${jumlah(tt(`Potongan PPH 23 (${FUND_PPH23_RATE}%)`, `PPH 23 deduction (${FUND_PPH23_RATE}%)`), tot.pph ? "- " + frNilai(tot.pph, mata) : "-", "fl-sum--minus")}
         ${jumlah("TOTAL", frNilai(tot.grandTotal, mata), "fl-sum--total")}
+        ${dndTotalPerDokumenHtml(kelompok, tot, mata, jumlah)}
         ${
           pakaiAwb
             ? `<div class="fl-awb-bagian"><div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>${fundBagiPerAwb(p)
@@ -703,16 +727,42 @@ function dndBadanHtml(r, tab) {
   return html || `<div class="dnd-kosong">${escapeHtml(tt("Pengajuan ini tidak membawa isian lain.", "This request carries no other fields."))}</div>`;
 }
 
-function tampilkanDetailNomor(id) {
-  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
-  if (!r) return;
+let dndTerbuka = null; // id nomor yang sedang dibuka di pop-up Detail
+
+function dndGambar(r) {
   /* doc_type selalu ikut diambil bersama riwayat; penjagaan ini hanya
      untuk baris yang tidak membawanya -- lebih baik membaca jenis dari
      tab yang sedang dibuka daripada menebak "invoice". */
   const tab = r.doc_type ? docNumTabKeyFor(r.doc_type) : docNumActiveTab;
   $("#dnDetailKepala").innerHTML = dndKepalaHtml(r, tab);
   $("#dnDetailBadan").innerHTML = dndBadanHtml(r, tab);
+}
+
+function tampilkanDetailNomor(id) {
+  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
+  if (!r) return;
+  dndGambar(r);
+  dndTerbuka = r.id;
   bootstrap.Modal.getOrCreateInstance($("#dnDetailModal")).show();
+}
+$("#dnDetailModal")?.addEventListener("hidden.bs.modal", () => {
+  dndTerbuka = null;
+});
+
+/* Pembaruan realtime (docnum-view.js): pop-up yang sedang membuka nomor
+   yang diubah pengguna lain digambar ulang dari riwayat yang baru saja
+   disegarkan; yang dihapus diberi tahu di kepalanya. */
+function dndSegarkan(id, dihapus) {
+  if (dndTerbuka == null || String(dndTerbuka) !== String(id)) return;
+  if (dihapus) {
+    const nomor = $("#dnDetailKepala .dnd-nomor");
+    if (nomor && !nomor.querySelector(".dnd-dihapus")) {
+      nomor.insertAdjacentHTML("beforeend", ` <span class="dnd-dihapus">${escapeHtml(tt("— baru saja dihapus pengguna lain", "— just deleted by another user"))}</span>`);
+    }
+    return;
+  }
+  const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
+  if (r) dndGambar(r);
 }
 
 document.addEventListener("click", async (e) => {

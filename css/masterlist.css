@@ -491,6 +491,13 @@
   font-size: var(--t-xs);
   color: var(--n-500);
 }
+/* Tanggal PIB utuh ("21-10-" / "2026") di daftar per PIB & rincian, juga
+   saat tabelnya jadi kartu di layar sempit (pemilih ini lebih kuat dari
+   `.mst-tabel > tbody > tr > td { white-space: normal }` di sana). */
+.mst-tabel > tbody > tr > td.mst-kol-tgl,
+.mst-rinci-tabel td.mst-kol-tgl {
+  white-space: nowrap;
+}
 .mst-tabel .mst-kol-sisa {
   white-space: nowrap;
 }

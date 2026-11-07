@@ -427,19 +427,16 @@ function cetakSuratBc(rowId) {
     showToast(tt("Data surat tidak ditemukan.", "Letter data not found."), "danger");
     return;
   }
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  w.document.write(`<!doctype html>
+  // Pratinjau & cetak di kotak cetak aplikasi (ui/cetak-modal.js), tanpa jendela pop-up
+  const nomor = row.doc_number || "";
+  return bukaModalCetak({
+    jenis: tt("Surat ke Bea Cukai", "Letter to Customs"),
+    nomor,
+    judulBerkas: nomor || "Surat",
+    muat: async () => `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
-<title>${escapeHtml(row.doc_number || "Surat")}</title>
+<title>${escapeHtml(nomor || "Surat")}</title>
 <style>${suratBcCss()}</style></head>
-<body>${suratBcHtml(row)}</body></html>`);
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+<body>${suratBcHtml(row)}</body></html>`,
+  });
 }

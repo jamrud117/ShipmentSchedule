@@ -1046,7 +1046,7 @@ function mstRincianRealisasiHtml(u, b) {
   return `<tbody class="${isi.length > 1 ? "mst-rinci-parsial" : ""}">${isi
     .map(
       (p, i) => `<tr>
-        <td class="mst-mono" data-label="${escapeAttr(L.tanggal)}">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
+        <td class="mst-kol-tgl mst-mono" data-label="${escapeAttr(L.tanggal)}">${p.tanggal ? escapeHtml(fmtDate(p.tanggal)) : `<span class="mst-redup">—</span>`}</td>
         <td class="mst-rinci-aju" data-label="${escapeAttr(L.aju)}">${mstAjuTautHtml(p.aju)}${mstDokPibHtml(mstDokumenPib(p, b), aturDok(i))}</td>${i === 0 ? milikRealisasi : ""}
       </tr>`,
     )
@@ -1525,6 +1525,8 @@ async function loadMasterlist() {
   try {
     await mstAmbil();
     mstTermuat = true;
+    // Masa berlaku terbaru ikut ke lonceng notifikasi (notifikasi.js)
+    if (typeof jadwalkanNotif === "function") jadwalkanNotif();
   } catch (e) {
     console.error(e);
     if (halaman) halaman.classList.remove("is-memuat");
@@ -1550,6 +1552,30 @@ async function loadMasterlist() {
   if (halaman) halaman.classList.remove("is-memuat");
   renderMasterlist();
   return true;
+}
+
+/* PEMBARUAN REALTIME (js/data/realtime.js): masterlist, barisnya, atau
+   realisasinya diubah pengguna lain. Halaman yang sedang dilihat dimuat
+   ulang tanpa berkedip (loadMasterlist menahan tampilan yang ada); halaman
+   yang tersembunyi dimuat ulang saat dibuka seperti biasa. Masa berlaku
+   masterlist ikut ke lonceng notifikasi. */
+let mstRtTunda = null;
+if (typeof realtimeDaftar === "function") {
+  ["masterlists", "masterlist_items", "masterlist_usages"].forEach((tabel) =>
+    realtimeDaftar(tabel, () => {
+      clearTimeout(mstRtTunda);
+      mstRtTunda = setTimeout(() => {
+        if (document.documentElement.dataset.halaman === "masterlist" && mstTermuat) {
+          const halaman = $("#viewMasterlist");
+          // Muat ulang yang sedang berjalan (sesudah simpanan sendiri) sudah memuat perubahannya
+          if (!halaman || !halaman.classList.contains("is-memuat")) loadMasterlist();
+        }
+        if (typeof notifMuatMasterlist === "function") {
+          notifMuatMasterlist().then(() => typeof jadwalkanNotif === "function" && jadwalkanNotif());
+        }
+      }, RT_JEDA.umum);
+    }),
+  );
 }
 
 function showMasterlistView() {

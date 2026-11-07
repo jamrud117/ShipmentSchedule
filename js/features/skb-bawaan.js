@@ -179,6 +179,8 @@ function skbBawaanTerapkan(baru) {
     /* penyimpanan peramban diblokir: tetap berlaku selama halaman terbuka */
   }
   skbBawaanGambar();
+  // Peringatan masa berlaku di lonceng notifikasi ikut SKB yang baru (notifikasi.js)
+  if (typeof jadwalkanNotif === "function") jadwalkanNotif();
 }
 
 /* Jadwal BARU yang sedang dibuka: barang yang masih membawa bawaan LAMA

@@ -173,7 +173,6 @@ const I18N = {
     "m.jadwal.berhasil.dihapus": "Jadwal berhasil dihapus.",
     "m.jadwal.berhasil.disimpan": "Jadwal berhasil disimpan.",
     "m.jadwal.yang.ditautkan.tidak.ditemukan.daftar.b": "Jadwal yang ditautkan tidak ditemukan — daftar barang dikosongkan.",
-    "m.jendela.cetak.diblokir.peramban.izinkan.pop.up": "Jendela cetak diblokir peramban. Izinkan pop-up dulu.",
     "m.kronologi.diperbarui": "Kronologi diperbarui.",
     "m.minimal.harus.ada.1.barang.dalam.pengiriman.in": "Minimal harus ada 1 barang dalam pengiriman ini.",
     "m.mohon.isi.etd.dan.eta.terlebih.dahulu": "Mohon isi ETD dan ETA terlebih dahulu.",
@@ -738,7 +737,6 @@ const I18N = {
     "m.jadwal.berhasil.dihapus": "The schedule has been deleted.",
     "m.jadwal.berhasil.disimpan": "The schedule has been saved.",
     "m.jadwal.yang.ditautkan.tidak.ditemukan.daftar.b": "The linked schedule was not found — the item list has been cleared.",
-    "m.jendela.cetak.diblokir.peramban.izinkan.pop.up": "The print window was blocked by the browser. Please allow pop-ups first.",
     "m.kronologi.diperbarui": "The timeline has been updated.",
     "m.minimal.harus.ada.1.barang.dalam.pengiriman.in": "This shipment must contain at least one item.",
     "m.mohon.isi.etd.dan.eta.terlebih.dahulu": "Please fill in ETD and ETA first.",
@@ -1320,6 +1318,8 @@ function setLang(kode) {
      tidak menggambar ulang penandanya sendiri (Jadwal, HS Code),
      tanggalnya tertinggal di bahasa lama. */
   if (typeof paintTodayStamps === "function") paintTodayStamps();
+  // Keadaan pembaruan langsung di menu akun (data/realtime.js)
+  if (typeof rtGambarStatus === "function") rtGambarStatus();
   if (tampil("viewDocNum")) {
     if (typeof renderDocNumSubTabs === "function") renderDocNumSubTabs();
     if (typeof renderDocNumHistory === "function") renderDocNumHistory();

@@ -479,11 +479,11 @@ function buildSuratJalanHtml(row, shipment) {
 /* ------------------------------------------------------------------
    MENCETAK
 
-   Dibuka di jendela terpisah, bukan menyembunyikan halaman utama
-   dengan @media print. Alasannya: halaman ini punya bilah menempel,
-   panel geser, dan tombol mengambang — menyembunyikan semuanya lewat
-   CSS cetak berarti daftar pengecualian yang harus dijaga terus. Satu
-   jendela bersih jauh lebih pasti hasilnya.
+   Surat tampil di KOTAK CETAK aplikasi (ui/cetak-modal.js) -- pratinjau
+   selebar A4 di bingkai sendiri, dicetak dari situ -- bukan menyembunyikan
+   halaman utama dengan @media print (bilah menempel, panel geser, tombol
+   mengambang: daftar pengecualian yang harus dijaga terus) dan bukan lagi
+   jendela pop-up terpisah yang harus ditutup sendiri sesudah dialog cetak.
 ------------------------------------------------------------------ */
 function cetakSuratJalan(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
@@ -508,33 +508,22 @@ function cetakSuratJalan(rowId) {
     );
   }
 
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  const gaya = lokal ? suratJalanLokalCss() : suratJalanCss();
-  const isi = lokal
-    ? buildSuratJalanLokalHtml(row)
-    : buildSuratJalanHtml(row, shipment);
-  w.document.write(`<!doctype html>
+  const nomor = row.doc_number || "";
+  return bukaModalCetak({
+    jenis: lokal ? tt("Surat Jalan Lokal", "Local Delivery Order") : tt("Surat Jalan Export", "Export Delivery Order"),
+    nomor,
+    judulBerkas: `Surat Jalan ${nomor}`.trim(),
+    muat: async () => `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
-<title>Surat Jalan ${escapeHtml(row.doc_number || "")}</title>
-<style>${gaya}</style></head>
-<body>${isi}</body></html>`);
-  w.document.close();
-  // Menunggu tata letaknya selesai digambar sebelum kotak cetak muncul;
-  // tanpa ini sebagian peramban mencetak halaman yang masih kosong.
-  w.onload = () => {
+<title>Surat Jalan ${escapeHtml(nomor)}</title>
+<style>${lokal ? suratJalanLokalCss() : suratJalanCss()}</style></head>
+<body>${lokal ? buildSuratJalanLokalHtml(row) : buildSuratJalanHtml(row, shipment)}</body></html>`,
     /* Surat jalan memenuhi kertas A4: ruang kosong tabel dilebarkan
        (Export; daftar yang panjang dirapatkan dulu) / baris kosong
        ditambah (Lokal) sampai tanda tangan jatuh di dasar halaman. Harus
-       SESUDAH tata letak jadi -- ia mengukur. */
-    if (lokal) sjlIsiKertas(w.document);
-    else sjIsiKertas(w.document);
-    w.focus();
-    w.print();
-  };
+       SESUDAH tata letak jadi -- ia mengukur -- jadi lewat siapkan(). */
+    siapkan: (dok) => (lokal ? sjlIsiKertas(dok) : sjIsiKertas(dok)),
+  });
 }
 
 /* SURAT JALAN EXPORT MEMENUHI KERTAS A4.

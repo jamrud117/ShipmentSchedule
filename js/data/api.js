@@ -54,9 +54,14 @@ function buangAmbilAwalShipments() {
   ambilAwalShipments = null;
 }
 
-async function loadShipments() {
+/* opsi.diam: muat ulang DI LATAR (pembaruan realtime sesudah sambungan
+   tersambung lagi, Bulk Import pengguna lain -- js/data/realtime.js):
+   tanpa kerangka muat, dan kalau gagal papan yang ada tetap tampil --
+   bukan layar "Data tidak bisa dimuat" untuk data yang masih benar. */
+async function loadShipments(opsi) {
+  const diam = !!(opsi && opsi.diam);
   const nomor = ++muatKe;
-  showLoadingSkeleton(3);
+  if (!diam) showLoadingSkeleton(3);
   const permintaan = ambilAwalShipments || kueriShipments();
   ambilAwalShipments = null;
   const { data: rows, error } = await permintaan;
@@ -69,7 +74,7 @@ async function loadShipments() {
 
   if (error) {
     console.error(error);
-    showDbErrorState();
+    if (!diam) showDbErrorState();
     return;
   }
 
@@ -180,6 +185,8 @@ async function syncArrivedStatuses() {
   if (!tertinggal.length) return;
 
   const ids = tertinggal.map((x) => x.s.id);
+  // Gema perubahan ini sendiri tidak perlu diambil ulang (realtime.js)
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", ids);
   const { error } = await supabaseClient
     .from("shipments")
     .update({ status: "arrived" })
@@ -455,14 +462,18 @@ async function tungguSemua(janji) {
 /* Jadwal, barang & terminal transit ada di tabel yang saling lepas:
    ditulis BERSAMAAN, bukan berurutan -- satu perjalanan ke server, bukan
    lima. Mengembalikan baris jadwal lengkap (barang + terminal transit)
-   untuk terapkanJadwalTersimpan. */
-async function createShipment(payload, items, stops) {
+   untuk terapkanJadwalTersimpan. opsi.tanpaSiaran: Bulk Import menyiarkan
+   sekali sesudah semua jadwalnya tersimpan, bukan sekali per jadwal. */
+async function createShipment(payload, items, stops, opsi) {
   const row = shipmentToRow(payload, activeMode);
   row.mode = activeMode;
   const { data: inserted, error } = await simpanDenganCadangan(
     (r) => supabaseClient.from("shipments").insert(r).select().single(), row);
   if (error) throw error;
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", inserted.id);
   const [barang, transit] = await tungguSemua([sisipkanBarang(items, inserted.id), sisipkanTransit(stops, inserted.id)]);
+  // Pengguna lain mengambil jadwal ini SESUDAH barang & terminal transitnya ikut tersimpan
+  if (!(opsi && opsi.tanpaSiaran) && typeof realtimeSiarkanJadwal === "function") realtimeSiarkanJadwal([inserted.id]);
   return Object.assign({}, inserted, { items: barang, routeStops: transit });
 }
 
@@ -477,6 +488,7 @@ async function updateShipmentRecord(id, payload, items, stops, asal) {
   const pilih = ["*"]
     .concat(tulisBarang ? [] : ["items:shipment_items(*)"], tulisTransit ? [] : ["routeStops:shipment_route_stops(*)"])
     .join(", ");
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", id);
   const [jadwal, barang, transit] = await tungguSemua([
     simpanDenganCadangan((r) => supabaseClient.from("shipments").update(r).eq("id", id).select(pilih).single(), row).then(
       ({ data: baris, error }) => {
@@ -487,6 +499,7 @@ async function updateShipmentRecord(id, payload, items, stops, asal) {
     tulisBarang ? gantiBarang(id, items) : null,
     tulisTransit ? gantiTransit(id, stops) : null,
   ]);
+  if (typeof realtimeSiarkanJadwal === "function") realtimeSiarkanJadwal([id]);
   return Object.assign({}, jadwal, tulisBarang ? { items: barang } : {}, tulisTransit ? { routeStops: transit } : {});
 }
 
@@ -496,6 +509,8 @@ async function persistFields(id, patch) {
     const kolom = columnFor(camel);
     row[kolom] = patch[camel] === "" ? nilaiKosongKolom(kolom) : patch[camel];
   });
+  // Papan tab ini sudah memuat perubahannya; gemanya dari realtime dilewati
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", id);
   const { error } = await supabaseClient
     .from("shipments")
     .update(row)

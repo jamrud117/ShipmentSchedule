@@ -3,9 +3,14 @@
 /* SUPABASE CONFIG */
 const SUPABASE_URL = "https://nigxxpzgunibuotluapv.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZMgHTAl6ELfm4UeR-Gqn6w_by8JbSFd";
+/* realtime.worker: detak jantung sambungan realtime (js/data/realtime.js)
+   dijalankan di Web Worker. Peramban memperlambat pewaktu tab yang
+   sedang di latar sampai sekali per menit; tanpa worker, tab yang
+   ditinggal lama kehilangan sambungannya dan harus menyambung ulang. */
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
+  { realtime: { worker: typeof Worker === "function" } },
 );
 
 /* CONSTANTS */

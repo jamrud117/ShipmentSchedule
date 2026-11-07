@@ -453,24 +453,24 @@ function cetakMasterlist() {
     );
     return;
   }
-  const w = window.open("", "_blank", "width=1200,height=900");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
   const judul = `Stock Opname ${data.dok.name || "Masterlist"} ${fmtDate(data.tanggal)}`;
-  w.document.write(`<!doctype html>
+  // Pratinjau & cetak di kotak cetak aplikasi (ui/cetak-modal.js), A4 mendatar, tanpa jendela pop-up
+  return bukaModalCetak({
+    jenis: "Stock Opname",
+    nomor: `${data.dok.name || "Masterlist"} · ${fmtDate(data.tanggal)}`,
+    judulBerkas: judul,
+    kertas: "a4-mendatar",
+    muat: async () => `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>${escapeHtml(judul)}</title>
 <style>${mstCetakCss()}</style></head>
-<body>${mstCetakUkurHtml(data)}</body></html>`);
-  w.document.close();
-  // Diukur di jendela cetak itu sendiri (lebar, huruf & CSS-nya sama), lalu diganti lembar-lembar akhirnya
-  const ukur = mstCetakUkur(w.document, data);
-  const halaman = mstBagiHalaman(ukur.unit, ukur.ukuran);
-  w.document.body.innerHTML = mstCetakLembarHtml(data, halaman);
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+<body>${mstCetakUkurHtml(data)}</body></html>`,
+    /* Diukur di bingkai cetak itu sendiri (lebar kertas, huruf & CSS-nya
+       sama), lalu diganti lembar-lembar akhirnya. */
+    siapkan: (dok) => {
+      const ukur = mstCetakUkur(dok, data);
+      const halaman = mstBagiHalaman(ukur.unit, ukur.ukuran);
+      dok.body.innerHTML = mstCetakLembarHtml(data, halaman);
+    },
+  });
 }

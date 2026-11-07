@@ -277,8 +277,38 @@ function terapkanLabelForm() {
   $("#dutySection").classList.toggle("d-none", !lbl.showDuty);
 }
 
+/* JADWAL YANG SEDANG DIUBAH, DIUBAH JUGA OLEH PENGGUNA LAIN (pembaruan
+   realtime, js/data/realtime.js). Isian form TIDAK ditimpa -- yang sedang
+   diketik tetap di tempatnya; pemberitahuan di atas form menyebutnya,
+   dengan tombol untuk memuat versi terbarunya. Jadwal yang sudah dihapus
+   tidak bisa disimpan lagi -- itu yang disebut. */
+function tandaiFormDiubahLain(id, dihapus) {
+  const ket = $("#formRemoteKet");
+  if (!ket) return;
+  ket.dataset.id = id;
+  $("#formRemoteTeks").innerHTML = dihapus
+    ? tt("<b>Jadwal ini baru saja dihapus pengguna lain.</b> Isian di form ini tidak bisa disimpan lagi.",
+        "<b>This schedule was just deleted by another user.</b> The form can no longer be saved.")
+    : tt("<b>Jadwal ini baru saja diubah pengguna lain.</b> Form ini belum memuat perubahan itu — kalau disimpan, isian di form ini yang dipakai.",
+        "<b>This schedule was just changed by another user.</b> This form does not include that change yet — saving it keeps what is in this form.");
+  $("#btnFormRemoteMuat").hidden = !!dihapus;
+  ket.classList.remove("d-none");
+}
+function lepasTandaFormDiubahLain() {
+  const ket = $("#formRemoteKet");
+  if (ket) ket.classList.add("d-none");
+}
+$("#btnFormRemoteMuat")?.addEventListener("click", () => {
+  const ket = $("#formRemoteKet");
+  const id = ket && ket.dataset.id;
+  if (!id || !currentList().some((x) => String(x.id) === String(id))) return lepasTandaFormDiubahLain();
+  renderFormPage(currentList().find((x) => String(x.id) === String(id)).id);
+  showToast(tt("Form dimuat ulang dengan versi terbaru jadwal ini.", "The form was reloaded with the latest version of this schedule."), "success");
+});
+
 function renderFormPage(id) {
   const lbl = ML();
+  lepasTandaFormDiubahLain();
   // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka
   resetImportFieldOrigins();
   // Dropdown status hanya menampilkan status yang berlaku di section ini (requirement D)
@@ -941,6 +971,20 @@ function syncStatusTibaHint() {
 
 $("#btnSaveShipment").addEventListener("click", async () => {
   if (!requireEdit()) return;
+  /* Rumus "=" di Unit Price / Neto / Bruto yang belum dihitung (Simpan
+     ditekan tanpa meninggalkan kotaknya) dihitung dulu; yang tidak valid
+     menahan simpanan -- angka yang tersimpan harus angka yang terlihat. */
+  const rumusSalah = typeof terapkanRumusBarangSemua === "function" ? terapkanRumusBarangSemua() : null;
+  if (rumusSalah) {
+    showToast(
+      tt("Rumus di Daftar Barang belum benar — perbaiki kotak yang bergaris merah. Contoh: =1250*4", "A formula in the Item List is invalid — fix the box outlined in red. Example: =1250*4"),
+      "danger",
+      { judul: tt("Rumus tidak valid", "Invalid formula") },
+    );
+    pilihTabForm("barang");
+    fokuskan(rumusSalah);
+    return;
+  }
   /* Isian yang kurang tidak hanya disebut di pesan: langkahnya dibuka
      dan kursornya dibawa ke kotak itu, siap diisi. */
   if (!$("#fEtd").value || !$("#fEta").value) {

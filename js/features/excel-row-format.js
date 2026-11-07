@@ -219,8 +219,10 @@ function buildExcelCopyRows(s, formatter) {
       formatter.num(ppnVal, 2), // 20 PPN 11%
       formatter.num(pphVal, 2), // 21 PPH
       formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
-      // 23 PI -- LS (Laporan Surveyor) ikut di baris sendiri: "LS <nomor>" (gabungPiLs)
-      formatter.text(gabungPiLs(s.pi, s.ls)),
+      /* 23 PI -- SEMUA dokumen pelengkap non-fasilitas, satu per baris:
+         PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>"
+         (kolomPiJadwal, core/helpers.js); fasilitas tetap di kolom 24 */
+      formatter.text(kolomPiJadwal(s)),
       formatter.text(facilitiesSummary[idx] || ""), // 24
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE

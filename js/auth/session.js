@@ -348,6 +348,7 @@ async function handleLoginSubmit() {
   router();
   await loadShipments();
   routerSesudahMuat();
+  if (typeof realtimeMulai === "function") realtimeMulai();
 }
 
 $("#btnLogin").addEventListener("click", handleLoginSubmit);
@@ -408,6 +409,7 @@ function isiUserMenu() {
       authState.profile.username ||
       "";
   }
+  if (typeof rtGambarStatus === "function") rtGambarStatus();
 }
 
 function bukaUserMenu() {
@@ -575,12 +577,46 @@ async function initAuth() {
   return true;
 }
 
+/* PROFIL SENDIRI DIUBAH (pembaruan realtime, js/data/realtime.js): nama
+   & peran yang diubah EXIM dari halaman Akun langsung terbaca di bilah
+   atas. Peran yang berubah memakai aturan barunya seketika untuk tautan &
+   tombol (applyPermissions), halaman yang kini tertutup dikembalikan ke
+   Jadwal; muat ulang sekali supaya semua isian ikut peran barunya. */
+if (typeof realtimeDaftar === "function") {
+  realtimeDaftar("profiles", async (k) => {
+    const saya = authState.user && authState.user.id;
+    if (!saya || k.jenis === "DELETE" || (k.jenis !== "SAMBUNG" && String(k.id) !== String(saya))) return;
+    const lama = authState.profile;
+    /* Dibaca langsung, bukan lewat loadProfile: baris yang (sesaat) tidak
+       terbaca TIDAK menurunkan akun jadi viewer di tengah sesi -- itu
+       aturan saat masuk, bukan saat menyegarkan. */
+    const { data: baru, error } = await supabaseClient
+      .from("profiles")
+      .select("id, email, full_name, username, role")
+      .eq("id", saya)
+      .maybeSingle();
+    if (error || !baru || typeof baru.role !== "string" || !authState.user || authState.user.id !== saya) return;
+    authState.profile = baru;
+    applyPermissions();
+    if (lama && lama.role !== baru.role) {
+      showToast(
+        tt(`Peran akun Anda diubah menjadi ${currentRoleLabel()}. Muat ulang halaman sekali supaya semua halaman mengikuti peran barunya.`,
+          `Your account role was changed to ${currentRoleLabel()}. Reload the page once so every page follows the new role.`),
+        "warning",
+      );
+      if (!bolehBuka(halamanDariHash(location.hash || "#/"))) router();
+    }
+  });
+}
+
 /* Sesi bisa berakhir sendiri (token kedaluwarsa, atau ditutup dari tab
    lain). Kalau itu terjadi, halaman dikembalikan ke layar login */
 supabaseClient.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT" && authState.siap) {
     authState.user = null;
     authState.profile = null;
+    // Kanal realtime milik sesi yang sudah berakhir ditutup (data/realtime.js)
+    if (typeof realtimeBerhenti === "function") realtimeBerhenti();
     showLoginView();
   }
 });

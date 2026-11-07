@@ -37,6 +37,14 @@ async function bkAmbilDana(paksa) {
 }
 // Daftar yang sudah termuat (boleh lewat masa segarnya), tanpa memuat; null = belum pernah dimuat
 const bkDanaTermuat = () => (bkCache ? bkCache.rows : null);
+/* Pengajuan yang baru disimpan / diubah / dihapus pengguna lain (realtime,
+   docnum-view.js) dipasang di salinan yang sudah termuat -- tanda "sudah
+   diajukan" langsung tahu, tanpa memuat ulang semua pengajuan.
+   baris = { id, doc_number, doc_date, payload } atau null (dilepas). */
+function bkTerapkanBaris(id, baris) {
+  if (!bkCache || typeof realtimePasangBaris !== "function") return false;
+  return realtimePasangBaris(bkCache.rows, id, baris);
+}
 
 const bkAngka = (v) => {
   const n = parseFloat(String(v == null ? "" : v).replace(/[^\d.-]/g, ""));

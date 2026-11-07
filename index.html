@@ -466,6 +466,14 @@
                 <button type="button" data-tema-pick="sistem" title="Ikuti sistem" data-en-title="Follow system" aria-label="Ikuti sistem" data-en-aria="Follow system"><i class="bi bi-circle-half" aria-hidden="true"></i></button>
               </div>
             </div>
+            <!-- Keadaan pembaruan langsung (js/data/realtime.js, rtGambarStatus):
+                 keterangan lengkapnya di title. -->
+            <div class="user-menu-lang user-menu-rt">
+              <span class="user-menu-lang-label" data-en="Live updates">Pembaruan langsung</span>
+              <span class="rt-status" id="rtStatus" data-rt="mati" title="Pembaruan langsung berjalan sesudah masuk.">
+                <span class="rt-titik" aria-hidden="true"></span><span class="rt-teks">Tidak aktif</span>
+              </span>
+            </div>
             <button
               type="button"
               class="user-menu-item danger"
@@ -1719,50 +1727,74 @@
                     <span class="inv-pihak-judul" data-en="Seller / Shipper">Penjual / Shipper</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="penjual" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-penjualNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-penjualNama" type="text" class="form-control" data-dn="penjualNama" aria-label="Nama Penjual" data-en-aria="Seller name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-penjualAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-penjualAlamat" class="form-control" rows="4" data-dn="penjualAlamat" aria-label="Alamat Penjual" data-en-aria="Seller address"></textarea>
-                  <label class="form-label" for="dn-invoice-penjualNpwp" data-en="Tax ID (NPWP)">NPWP</label>
-                  <input id="dn-invoice-penjualNpwp" type="text" class="form-control" data-dn="penjualNpwp" aria-label="NPWP Penjual" data-en-aria="Seller tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-penjualNama" type="text" class="form-control" data-dn="penjualNama" aria-label="Nama Penjual" data-en-aria="Seller name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-penjualAlamat" class="form-control" rows="4" data-dn="penjualAlamat" aria-label="Alamat Penjual" data-en-aria="Seller address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penjualNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                    <input id="dn-invoice-penjualNpwp" type="text" class="form-control" data-dn="penjualNpwp" aria-label="NPWP Penjual" data-en-aria="Seller tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="pemilik">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Goods Owner">Pemilik Barang</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="pemilik" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-pemilikNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-pemilikNama" type="text" class="form-control" data-dn="pemilikNama" aria-label="Nama Pemilik Barang" data-en-aria="Goods Owner name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-pemilikAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-pemilikAlamat" class="form-control" rows="4" data-dn="pemilikAlamat" aria-label="Alamat Pemilik Barang" data-en-aria="Goods Owner address"></textarea>
-                  <label class="form-label" for="dn-invoice-pemilikNpwp" data-en="Tax ID (NPWP)">NPWP</label>
-                  <input id="dn-invoice-pemilikNpwp" type="text" class="form-control" data-dn="pemilikNpwp" aria-label="NPWP Pemilik Barang" data-en-aria="Goods Owner tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-pemilikNama" type="text" class="form-control" data-dn="pemilikNama" aria-label="Nama Pemilik Barang" data-en-aria="Goods Owner name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-pemilikAlamat" class="form-control" rows="4" data-dn="pemilikAlamat" aria-label="Alamat Pemilik Barang" data-en-aria="Goods Owner address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pemilikNpwp" data-en="Tax ID (NPWP)">NPWP</label>
+                    <input id="dn-invoice-pemilikNpwp" type="text" class="form-control" data-dn="pemilikNpwp" aria-label="NPWP Pemilik Barang" data-en-aria="Goods Owner tax ID" autocomplete="off" placeholder="16 digit" data-en-ph="16 digits" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="pembeli">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Buyer">Pembeli / Buyer</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="pembeli" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-pembeliAlamat" class="form-control" rows="4" data-dn="pembeliAlamat" aria-label="Alamat Pembeli" data-en-aria="Buyer address"></textarea>
-                  <label class="form-label" for="dn-invoice-pembeliNegara" data-en="Country">Negara</label>
-                  <input id="dn-invoice-pembeliNegara" type="text" class="form-control" data-dn="pembeliNegara" aria-label="Negara Pembeli" data-en-aria="Buyer country" autocomplete="off" placeholder="mis. KR / KOREA" data-en-ph="e.g. KR / KOREA" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-pembeliAlamat" class="form-control" rows="4" data-dn="pembeliAlamat" aria-label="Alamat Pembeli" data-en-aria="Buyer address"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-pembeliNegara" data-en="Country">Negara</label>
+                    <input id="dn-invoice-pembeliNegara" type="text" class="form-control" data-dn="pembeliNegara" aria-label="Negara Pembeli" data-en-aria="Buyer country" autocomplete="off" placeholder="mis. KR / KOREA" data-en-ph="e.g. KR / KOREA" />
+                  </div>
                 </div>
                 <div class="inv-pihak" data-inv-pihak="penerima">
                   <div class="inv-pihak-kepala">
                     <span class="inv-pihak-judul" data-en="Consignee">Penerima / Consignee</span>
                     <span class="inv-pihak-ikut" data-inv-ikut="penerima" hidden></span>
                   </div>
-                  <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
-                  <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
-                  <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>
-                  <textarea id="dn-invoice-consigneeAddress" class="form-control" rows="4" data-dn="consigneeAddress" aria-label="Alamat Penerima" data-en-aria="Consignee address"
-                    placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
-                    data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"></textarea>
-                  <label class="form-label" for="dn-invoice-penerimaNegara" data-en="Country">Negara</label>
-                  <input id="dn-invoice-penerimaNegara" type="text" class="form-control" data-dn="penerimaNegara" aria-label="Negara Penerima" data-en-aria="Consignee country" autocomplete="off" placeholder="mis. VN / VIETNAM" data-en-ph="e.g. VN / VIETNAM" />
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
+                    <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>
+                    <textarea id="dn-invoice-consigneeAddress" class="form-control" rows="4" data-dn="consigneeAddress" aria-label="Alamat Penerima" data-en-aria="Consignee address"
+                      placeholder="Alamat lengkap consignee — terisi otomatis untuk buyer yang sudah dikenal"
+                      data-i18n-ph="ph.alamat.lengkap.consignee.terisi.otomatis.untuk"></textarea>
+                  </div>
+                  <div class="inv-isian">
+                    <label class="form-label" for="dn-invoice-penerimaNegara" data-en="Country">Negara</label>
+                    <input id="dn-invoice-penerimaNegara" type="text" class="form-control" data-dn="penerimaNegara" aria-label="Negara Penerima" data-en-aria="Consignee country" autocomplete="off" placeholder="mis. VN / VIETNAM" data-en-ph="e.g. VN / VIETNAM" />
+                  </div>
                 </div>
                 <div class="s12">
                   <label class="form-label" data-i18n="f.keterangan"
@@ -2253,12 +2285,12 @@
                      (js/features/fund-invoice-import.js). Tetap diperiksa
                      dulu sebelum disimpan. -->
                 <button type="button" class="btn-import-excel dn-dari-invoice" id="btnDanaDariInvoice"
-                  title="Pilih satu atau beberapa PDF (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini"
-                  data-en-title="Choose one or more PDFs (Invoice, Debit Note, Billing) — or drag the files onto this form"
-                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF)">
-                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF)
+                  title="Pilih satu atau beberapa PDF atau gambar scan/foto (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini. PDF hasil scan dibaca dengan OCR."
+                  data-en-title="Choose one or more PDFs or scanned images / photos (Invoice, Debit Note, Billing) — or drag the files onto this form. Scanned PDFs are read with OCR."
+                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF / scan)">
+                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF / scan)
                 </button>
-                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf" multiple hidden />
+                <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple hidden />
                 <span class="docnum-preview">
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="fund">&mdash;</b>
                 </span>
@@ -2281,14 +2313,29 @@
                      kirimannya, dan bisa dicari dari kotak cari riwayat. -->
                 <div>
                   <label class="form-label" for="dn-fund-blAwb">BL/AWB</label>
-                  <input id="dn-fund-blAwb"
-                    type="text"
-                    class="form-control"
-                    data-dn="blAwb"
-                    placeholder="No. BL / AWB"
-                    data-en-ph="BL / AWB number"
-                    autocomplete="off"
-                  />
+                  <!-- Mengetik memunculkan paling banyak 4 saran nomor
+                       House BL / AWB dari jadwal, tepat di bawah kotak
+                       (js/features/fund-saran-awb.js). Kotaknya tetap teks
+                       bebas: nomor yang tidak ada di jadwal diketik biasa,
+                       dan beberapa nomor dipisah "/". -->
+                  <div class="saran-awb">
+                    <input id="dn-fund-blAwb"
+                      type="text"
+                      class="form-control"
+                      data-dn="blAwb"
+                      placeholder="No. BL / AWB"
+                      data-en-ph="BL / AWB number"
+                      autocomplete="off"
+                      spellcheck="false"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded="false"
+                      aria-controls="dn-fund-blAwb-saran"
+                    />
+                    <div class="saran-awb-daftar d-none" id="dn-fund-blAwb-saran" role="listbox"
+                      aria-label="Saran House BL/AWB dari jadwal"
+                      data-en-aria="House BL/AWB suggestions from the schedule"></div>
+                  </div>
                 </div>
                 <div>
                   <label class="form-label"
@@ -2321,9 +2368,9 @@
                   </select>
                 </div>
                 <!-- JENIS TRANSAKSI: kegiatan yang dibiayai pengajuan ini.
-                     Bukan "Jenis Pengiriman" -- Inland Trucking (angkutan
-                     darat dalam negeri, dulu bernama Local Sale) bukan
-                     kiriman laut/udara. Nilainya istilah baku perdagangan,
+                     Bukan "Jenis Pengiriman" -- Trucking (angkutan darat
+                     dalam negeri, dulu bernama Local Sale lalu Inland
+                     Trucking) bukan kiriman laut/udara. Nilainya istilah baku perdagangan,
                      sama di kedua bahasa (seperti Billing/Freight). Tidak
                      wajib: pengajuan lama tidak punya isian ini. -->
                 <div>
@@ -2334,7 +2381,7 @@
                     <option value="Sea Export">Sea Export</option>
                     <option value="Air Import">Air Import</option>
                     <option value="Air Export">Air Export</option>
-                    <option value="Inland Trucking">Inland Trucking</option>
+                    <option value="Trucking">Trucking</option>
                   </select>
                 </div>
                 <!-- Nomor Billing & Nomor Invoice BERGANTIAN, mengikuti
@@ -2451,6 +2498,14 @@
                     data-dn="docNo"
                     autocomplete="off"
                   />
+                  <!-- Doc No BAWAAN "EI-<YYMM>-0000" (bulan berjalan) di form
+                       baru: keterangan ini tampil selama 0000-nya belum
+                       diganti -- isian begitu tidak ikut tersimpan
+                       (fundIsiDocNoBawaan, js/features/fund-docno.js). -->
+                  <div class="form-text-note fund-docno-bawaan d-none" id="fundDocNoBawaanKet"
+                    data-en="Replace 0000 with the Doc No sequence number — left as 0000, no Doc No is saved.">
+                    Ganti 0000 dengan nomor urut Doc No — dibiarkan 0000, Doc No tidak ikut tersimpan.
+                  </div>
                   <div class="form-text-note fund-docno-cetak" data-en="Printed under No Surat on the form.">
                     Tercetak di bawah No Surat pada form.
                   </div>
@@ -3145,6 +3200,14 @@
       </div>
       <div class="page-form-body container">
         <input type="hidden" id="fId" />
+
+        <!-- Jadwal ini diubah / dihapus pengguna lain selagi form terbuka
+             (tandaiFormDiubahLain, js/views/form-router.js) -->
+        <div class="form-remote-ket d-none" id="formRemoteKet" role="status">
+          <span class="form-remote-ikon"><i class="bi bi-people" aria-hidden="true"></i></span>
+          <div class="form-remote-teks" id="formRemoteTeks"></div>
+          <button type="button" class="btn btn-form-cancel btn-sm" id="btnFormRemoteMuat" data-en="Load latest version">Muat versi terbaru</button>
+        </div>
 
         <div class="page-form-import-row" id="importZone">
           <div class="import-zone-copy">
@@ -4299,7 +4362,7 @@
         </button>
       </div>
       <div class="notif-isi" id="notifIsi"></div>
-      <div class="notif-kaki" data-en="Appears one day before ETD, ETA &amp; Estimated Delivery, until the day itself.">Muncul H-1 sebelum ETD, ETA &amp; Estimated Delivery, sampai hari H.</div>
+      <div class="notif-kaki" data-en="Appears one day before ETD, ETA &amp; Estimated Delivery, until the day itself. SKB PPh &amp; Masterlist: from 2 months before they expire.">Muncul H-1 sebelum ETD, ETA &amp; Estimated Delivery, sampai hari H. SKB PPh &amp; Masterlist: sejak 2 bulan sebelum masa berlakunya habis.</div>
     </section>
 
     <div class="sheet-scrim" id="detailScrim" hidden></div>
@@ -4543,6 +4606,61 @@
               data-i18n="a.tutup"
             >
               Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CETAK DI DALAM APLIKASI (js/ui/cetak-modal.js). Surat tampil sebagai
+         pratinjau selebar kertas A4 di kotak ini, lalu dicetak dari bingkainya:
+         tanpa jendela kosong (about:blank) yang harus ditutup terpisah dari
+         dialog cetak peramban. Kepala & isinya diisi bukaModalCetak().
+         Bingkainya tanpa izin skrip (sandbox): isi surat hanya untuk dibaca. -->
+    <div class="modal fade" id="cetakModal" tabindex="-1" aria-labelledby="cetakNomor">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down cetak-dialog">
+        <div class="modal-content">
+          <div class="dnd-kepala cetak-kepala">
+            <div class="dnd-utama">
+              <div class="dnd-jenis"><i class="bi bi-printer" aria-hidden="true"></i><span id="cetakJenis"></span></div>
+              <div class="dnd-nomor"><span id="cetakNomor">&mdash;</span></div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
+          </div>
+          <div class="modal-body cetak-badan">
+            <div class="cetak-meja" id="cetakMeja">
+              <div class="cetak-status" id="cetakStatus" role="status">
+                <span class="cetak-putar" aria-hidden="true"></span>
+                <span data-en="Preparing the document&hellip;">Menyiapkan surat&hellip;</span>
+              </div>
+              <div class="cetak-ukur" id="cetakUkur" hidden>
+                <div class="cetak-kertas" id="cetakKertas">
+                  <iframe
+                    class="cetak-bingkai"
+                    id="cetakBingkai"
+                    title="Pratinjau cetak"
+                    data-en-title="Print preview"
+                    tabindex="-1"
+                    sandbox="allow-same-origin allow-modals"
+                  ></iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer dialog-foot cetak-kaki">
+            <label class="cetak-otomatis">
+              <input type="checkbox" id="cetakTutupOtomatis" />
+              <span data-en="Close automatically after printing">Tutup otomatis setelah dicetak</span>
+            </label>
+            <button type="button" class="btn-quiet" data-bs-dismiss="modal" data-i18n="a.tutup">Tutup</button>
+            <button
+              type="button"
+              class="btn-primary-navy"
+              id="cetakTombol"
+              disabled
+              data-en="<i class=&quot;bi bi-printer&quot;></i> Print"
+            >
+              <i class="bi bi-printer"></i> Cetak
             </button>
           </div>
         </div>
@@ -5004,6 +5122,7 @@
     <!-- DATA -->
     <!-- ========================================= -->
     <script src="js/data/api.js"></script>
+    <script src="js/data/realtime.js"></script>
     <script src="js/data/lampiran.js"></script>
 
     <!-- ========================================= -->
@@ -5017,6 +5136,7 @@
     <script src="js/ui/date-input.js"></script>
     <script src="js/ui/fokus.js"></script>
     <script src="js/ui/feedback.js"></script>
+    <script src="js/ui/cetak-modal.js"></script>
     <script src="js/ui/pilihan-tambah.js"></script>
     <script src="js/ui/tooltip.js"></script>
     <script src="js/ui/sidebar.js"></script>
@@ -5081,6 +5201,8 @@
     <!-- PDF -->
     <script src="js/import/pdf.js"></script>
     <script src="js/import/pdf-peb.js"></script>
+    <!-- OCR untuk PDF hasil scan & foto invoice (Tesseract.js dimuat lazy, hanya saat dibutuhkan) -->
+    <script src="js/import/ocr.js"></script>
 
     <!-- Dispatcher -->
     <script src="js/import/dispatch.js"></script>
@@ -5115,6 +5237,7 @@
     <script src="js/features/fund-invoice-import.js"></script>
     <script src="js/features/fund-vendor.js"></script>
     <script src="js/features/fund-rincian.js"></script>
+    <script src="js/features/fund-saran-awb.js"></script>
     <script src="js/features/fund-invoice-summary.js"></script>
     <script src="js/features/surat-bc.js"></script>
     <script src="js/features/surat-bc-word.js"></script>

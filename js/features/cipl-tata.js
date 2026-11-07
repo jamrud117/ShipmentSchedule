@@ -1,18 +1,22 @@
 "use strict";
 
 /* ==================================================================
-   TATA LETAK BERSAMA -- SATU MODEL, DUA KELUARAN (CETAK & EXCEL)
+   TATA LETAK BERSAMA -- MODEL KISI LEMBAR CETAK CIPL
 
-   CIPL dicetak dari peramban DAN diunduh sebagai Excel, dan keduanya
-   harus sama persis. Karena itu lembarnya disusun SEKALI sebagai kisi:
+   Lembar cetak CIPL disusun SEKALI sebagai kisi:
 
      kolom  lebar dalam mm          baris  tinggi dalam pt
      sel    rentang (gabungan), isi per baris teks, rata, warna latar
      garis  per sisi sel: tebal (1/2 px), gaya, warna
 
-   lalu digambar dua kali dengan angka yang sama:
+   lalu digambar:
      ttHtml()  -> tabel HTML (table-layout tetap, kolom mm, baris pt)
-     ttExcel() -> lembar ExcelJS (kolom, baris, gabungan sel yang sama)
+     ttExcel() -> replika kisi yang sama sebagai lembar ExcelJS
+
+   Unduhan Excel CIPL TIDAK lagi memakai ttExcel: ia menyusun lembar
+   kerja biasa (kolom = kolom tabel barang, satu barang satu baris) dari
+   spek yang disimpan model ini (T.spek / T.si) -- lihat cipl-excel.js.
+   ttExcel tetap tersedia untuk model tanpa spek (ciplXlLembar).
 
    TEKS DIPECAH DI SINI, bukan oleh peramban / Excel. Dua mesin
    pembungkus memotong di tempat berbeda; di sini lebar tiap huruf
@@ -376,7 +380,9 @@ function ttKolomHuruf(n) {
    AutoFit = huruf x 1,117 (Arial, dibulatkan ke piksel) + 2 px. */
 const ttXlHurufPengancarBaris = (pt) => Math.min(409, Math.max(1, Math.ceil(((pt / 0.75 - 2) / 1.117) * 0.75 * 4) / 4));
 
-/* Gambar lembar ke workbook ExcelJS. `lebarAngkaPt` dari ttExcelHurufNormal(). */
+/* Gambar lembar ke workbook ExcelJS sebagai replika kisi cetaknya.
+   `lebarAngkaPt` dari ttExcelHurufNormal(). Unduhan CIPL memakainya hanya
+   untuk model tanpa spek (ciplXlLembar, cipl-excel.js). */
 function ttExcel(wb, T, lebarAngkaPt) {
   const ws = wb.addWorksheet(T.nama, { views: [{ showGridLines: false }], properties: { defaultRowHeight: 15 } });
   const mdw = lebarAngkaPt || (1139 / 2048) * 11;
@@ -430,9 +436,11 @@ function ttExcel(wb, T, lebarAngkaPt) {
       if (z > a || s.c2 > s.c1) ws.mergeCells(a + 1, s.c1 + 1, z + 1, s.c2 + 1);
       const sel = ws.getCell(a + 1, s.c1 + 1);
       const h0 = b.runs.find((r) => r.t !== "").h;
-      if (angka) {
-        sel.value = s.angka.v;
-        if (s.angka.fmt) sel.numFmt = s.angka.fmt;
+      // Angka satu sel (b.angka: satu baris di sel bertingkat, mis. HS Code di kartu referensi)
+      const nilai = b.angka || (angka ? s.angka : null);
+      if (nilai) {
+        sel.value = nilai.v;
+        if (nilai.fmt) sel.numFmt = nilai.fmt;
         sel.font = ttXlHuruf(h0);
       } else {
         const runs = ttExcelRuns(s, b);
@@ -445,6 +453,13 @@ function ttExcel(wb, T, lebarAngkaPt) {
         }
       }
       sel.alignment = { horizontal: s.ha || "left", vertical: "middle", wrapText: false };
+      /* Angka tidak bisa diberi spasi pengancar seperti teks (ttExcelRuns):
+         jarak dalam kirinya lewat indent -- satu tingkat = lebar satu angka
+         huruf Normal -- supaya sejajar teks di atas & bawahnya. */
+      if (b.angka && (s.ha || "left") === "left" && lebarAngkaPt) {
+        const indent = Math.round(Math.max(0, (s.padL || 0) - TT_XL_TEPI) / lebarAngkaPt);
+        if (indent) sel.alignment.indent = indent;
+      }
     });
   });
 

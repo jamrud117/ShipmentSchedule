@@ -1197,15 +1197,13 @@ function cekCetakDraft() {
     return;
   }
   const html = cekCetakHtml(k);
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  w.document.write(html);
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+  const m = ppData(k);
+  const judul = `Draft ${m.isPeb ? "PEB" : "PIB"} ${m.aju || ""} - koreksi`.replace(/\s+/g, " ");
+  // Pratinjau & cetak di kotak cetak aplikasi (ui/cetak-modal.js), tanpa jendela pop-up
+  return bukaModalCetak({
+    jenis: tt(`Draf ${m.isPeb ? "PEB" : "PIB"} + Lembar Koreksi`, `${m.isPeb ? "PEB" : "PIB"} Draft + Correction Sheet`),
+    nomor: m.aju || "",
+    judulBerkas: judul,
+    muat: async () => html,
+  });
 }

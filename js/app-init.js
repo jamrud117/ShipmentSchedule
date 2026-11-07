@@ -43,6 +43,9 @@ async function initApp() {
 
   routerSesudahMuat();
 
+  // Simpanan pengguna lain tampil tanpa memuat ulang halaman (data/realtime.js)
+  if (typeof realtimeMulai === "function") realtimeMulai();
+
   // Tanggal papan diperbarui kalau aplikasi dibiarkan terbuka melewati tengah malam
   setInterval(() => {
     if (boardStampDay === todayISO()) return;

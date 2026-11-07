@@ -1,14 +1,21 @@
 "use strict";
 
 /* IMPORT DARI PDF (dokumen PIB BC 2.0) */
+const PDFJS_VER = "6.1.200";
+/* Decoder WebAssembly pdf.js (JBIG2, JPEG 2000, profil warna ICC).
+   WAJIB untuk membaca PDF hasil scan: mesin fotokopi / scanner kantor
+   hampir selalu menyimpan halaman sebagai gambar JBIG2, dan tanpa
+   wasmUrl pdf.js menolak menggambarnya -- halaman keluar KOSONG tanpa
+   pesan galat (invoice scan AI2602950 persis begitu). Hanya diunduh
+   kalau PDF-nya memang memuat gambar jenis itu. Wajib berakhiran "/". */
+const PDFJS_WASM_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VER}/wasm/`;
 let pdfjsLibPromise = null;
 function ensurePdfJs() {
   if (!pdfjsLibPromise) {
-    const VER = "6.1.200";
     pdfjsLibPromise = import(
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${VER}/build/pdf.mjs`
+      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VER}/build/pdf.mjs`
     ).then((lib) => {
-      lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${VER}/build/pdf.worker.mjs`;
+      lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VER}/build/pdf.worker.mjs`;
       return lib;
     });
   }
@@ -37,7 +44,7 @@ function groupPdfItemsIntoLines(items, yTolerance = 2.5) {
 async function extractPdfText(file) {
   const pdfjsLib = await ensurePdfJs();
   const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pdf = await pdfjsLib.getDocument({ data: buf, wasmUrl: PDFJS_WASM_URL }).promise;
   const pageTexts = [];
   const pagesItems = [];
   for (let p = 1; p <= pdf.numPages; p++) {
@@ -47,8 +54,11 @@ async function extractPdfText(file) {
     pagesItems.push(content.items);
   }
   /* pdf & lib ikut dikembalikan: mesin EXIM (impor CIPL di dispatch.js)
-     membaca halamannya sendiri lewat EximEngine.pdfPagesFromDocument. */
-  return { text: pageTexts.join("\n\n"), pagesItems, pdf, lib: pdfjsLib };
+     membaca halamannya sendiri lewat EximEngine.pdfPagesFromDocument;
+     pembaca invoice (fund-invoice-import.js) memakai pdf untuk OCR bila
+     PDF-nya hasil scan (tanpa teks), dan pageTexts untuk memecah PDF
+     berisi beberapa dokumen. */
+  return { text: pageTexts.join("\n\n"), pageTexts, pagesItems, pdf, lib: pdfjsLib };
 }
 
 function pibDateToISO(dmy) {

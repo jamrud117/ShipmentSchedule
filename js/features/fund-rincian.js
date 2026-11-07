@@ -9,7 +9,7 @@
      Storage         "Payment Request - Invoice Wide Storage Charge Import ..."
      Tax Advance     "Payment Request - Invoice Wide Tax Advance Export ..."
      Lainnya/kosong  "Payment Request - Invoice <Vendor> <Import/Export>"
-   Import / Export dari Jenis Transaksi (Inland Trucking ditulis apa
+   Import / Export dari Jenis Transaksi (Trucking ditulis apa
    adanya); nama barang dari jadwal yang BL/AWB-nya (Master / House)
    cocok dengan isian BL/AWB.
 
@@ -38,7 +38,7 @@ function fundKataJudul(teks) {
     .join(" ");
 }
 
-// "Air Import" -> "Import", "Sea Export" -> "Export"; selain itu apa adanya ("Inland Trucking")
+// "Air Import" -> "Import", "Sea Export" -> "Export"; selain itu apa adanya ("Trucking")
 function fundArahTransaksi(jenis) {
   const j = String((typeof fundJenisTransaksiBaku === "function" ? fundJenisTransaksiBaku(jenis) : jenis) || "").trim();
   const m = /\b(import|export)\b/i.exec(j);
@@ -111,7 +111,7 @@ function fundSelaraskanRincian(panel) {
 
    Tiap isian hanya diisi bila masih KOSONG atau masih isian otomatis
    sebelumnya (data-auto-awb). Yang dipilih / diketik sendiri -- termasuk
-   Inland Trucking dan KAS NEGARA untuk Billing -- tidak ditimpa. Beberapa
+   Trucking dan KAS NEGARA untuk Billing -- tidak ditimpa. Beberapa
    BL/AWB yang jadwalnya berbeda isi, atau tidak ada jadwal yang cocok ->
    isian itu dibiarkan. */
 function fundJadwalDariAwb(blAwb) {
@@ -154,7 +154,7 @@ function fundIsiOtomatisAwb(el, nilai) {
   if (el.value === nilai) return false;
   el.value = nilai;
   el.dataset.autoAwb = nilai;
-  // Aturan yang menempel (Rincian, aturan vendor, Inland Trucking) ikut lewat event yang sama dengan pilihan tangan
+  // Aturan yang menempel (Rincian, aturan vendor, Trucking) ikut lewat event yang sama dengan pilihan tangan
   el.dispatchEvent(new Event("change", { bubbles: true }));
   return true;
 }

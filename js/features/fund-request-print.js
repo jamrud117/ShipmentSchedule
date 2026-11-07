@@ -114,7 +114,7 @@ function frTotal(baris) {
    tertulis di surat pengajuannya sendiri. */
 function frTotalPengajuan(p) {
   const d = p || {};
-  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines, d.currency, d.payee).grandTotal;
+  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines, d.currency, d.payee, d.dokumen || []).grandTotal;
   return frTotal(frBarisRincian(d));
 }
 
@@ -130,6 +130,37 @@ function frNilai(n, mataUang) {
   if (!v) return "-";
   const kode = (mataUang || "IDR").toUpperCase();
   return `${kode === "IDR" ? "Rp." : kode} ${formatNilai(v)}`;
+}
+
+/* ---------- SEL UANG GAYA AKUNTING ----------
+
+   Di tabel surat, kode mata uang ("Rp.") menempel di tepi KIRI sel dan
+   angkanya di tepi KANAN -- seperti format Accounting di Excel. Kode
+   mata uang tidak lagi ikut mendorong angka, jadi seluruh angka dalam
+   satu kolom berakhir di garis yang sama dan bisa dijumlah dengan mata.
+
+   Desimal: TIAP ANGKA berdiri sendiri. Yang punya sen ditulis lengkap dua
+   desimal ("58,395,870.78", "8,250.50"); yang bulat ditulis bulat
+   ("714,716") -- TIDAK PERNAH ".00", walaupun baris di sebelahnya
+   bersen. Aturan lama (satu angka bersen -> semua angka diberi ".00"
+   supaya titik desimalnya sejajar) dicabut atas permintaan: ".00" yang
+   tidak berarti hanya memenuhi tabel dengan nol. Konsekuensinya angka
+   bulat rata kanan apa adanya, jadi titik desimal antar-baris tidak lagi
+   sejajar -- sengaja, tanpa spasi tak terlihat sebagai penyejajar.
+
+   Yang tidak berubah dari frNilai(): nol ditulis "-" saja (bukan
+   "Rp. 0"), dan mata uang selain rupiah memakai kodenya sendiri (USD).
+   Nilai negatif -- baris diskon, potongan PPH -- bertanda minus di sisi
+   kiri: "- Rp." lalu angkanya, sama dengan tulisan lamanya "- Rp. 1,000". */
+function frSelUang(n, mataUang) {
+  const v = Number(n) || 0;
+  if (!v) return "-";
+  const kode = (mataUang || "IDR").toUpperCase();
+  const mutlak = Math.abs(v);
+  const angka = formatNilai(mutlak);
+  const kiri = `${v < 0 ? "- " : ""}${kode === "IDR" ? "Rp." : kode}`;
+  // Spasi di antara kedua span tidak tergambar (kotak flex), tapi membuat salinan teksnya "Rp. 1,000"
+  return `<span class="akun"><span class="akun-kode">${escapeHtml(kiri)}</span> <span class="akun-angka">${escapeHtml(angka)}</span></span>`;
 }
 
 function frTanggalSurat(iso) {
@@ -225,7 +256,7 @@ function buildFundRequestHtml(row) {
       (b, i) => `<tr class="baris-pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.label)}</td>
-        <td class="c-amt">${escapeHtml(frNilai(b.nilai, mataUang))}</td>
+        <td class="c-amt">${frSelUang(b.nilai, mataUang)}</td>
       </tr>`,
     )
     .join("");
@@ -242,8 +273,19 @@ function buildFundRequestHtml(row) {
      vendor di luar daftar Aturan Doc No (bawaan: PRIME & WIDE tidak
      dicetak). Jadi pengajuan PRIME/WIDE yang menyimpan Doc No tetap
      tercetak seperti biasa, tanpa baris itu. */
+  /* PEMBUNGKUS HALAMAN (.halaman): satu tabel luar dengan satu sel isi,
+     ditambah kepala & kaki kosong yang tingginya sama dengan margin atas
+     & bawah kertas. Peramban mengulang kepala & kaki tabel di SETIAP
+     halaman cetak, jadi halaman ke-2 dan seterusnya juga mendapat margin
+     -- padahal @page sengaja bermargin nol (kop & kaki peramban hilang,
+     lihat fundRequestCss). Isinya sendiri mengalir apa adanya dan
+     terpotong di antara blok, bukan di tengah baris. */
   return `
   <div class="sheet">
+   <table class="halaman">
+    <thead><tr><td class="tepi-atas"></td></tr></thead>
+    <tfoot><tr><td class="tepi-bawah"></td></tr></tfoot>
+    <tbody><tr><td class="isi-halaman">
     ${kopSuratHtml()}
 
     <div class="judul">FORM PENGAJUAN DANA</div>
@@ -259,10 +301,6 @@ function buildFundRequestHtml(row) {
       <tr><td class="meta-k">Lampiran</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.attachment || "1 Set")}</td></tr>
     </table>
 
-    <div class="salam">
-      <div>안녕하세요.</div>
-    </div>
-
     <!-- SATU BARIS SAJA. "Sincerely," sebagai pembuka memang keliru
          (itu salam penutup), dan Subject-nya sudah tertulis utuh di
          blok No Surat di atas -- mengulangnya di sini cuma menambah
@@ -276,7 +314,7 @@ function buildFundRequestHtml(row) {
       <thead>
         <tr>
           <th class="c-no">NO.</th>
-          <th class="c-desc">D E S C R I P T I O N S 정보</th>
+          <th class="c-desc">D E S C R I P T I O N S</th>
           <th class="c-amt">AMOUNT</th>
         </tr>
       </thead>
@@ -290,59 +328,86 @@ function buildFundRequestHtml(row) {
         }
         ${barisHtml}
         ${kosongHtml}
-      </tbody>
-      <tfoot>
-        <tr>
+        <tr class="baris-total">
           <td class="c-total" colspan="2">TOTAL</td>
-          <td class="c-amt">${escapeHtml(frNilai(total, mataUang))}</td>
+          <td class="c-amt">${frSelUang(total, mataUang)}</td>
         </tr>
-      </tfoot>
+      </tbody>
+      ${frKakiTutup(3)}
     </table>`}
 
-    <div class="terbilang">Terbilang : ${escapeHtml(
-      terbilangRupiah(frTotalPengajuan(p)),
-    )}</div>
+    <!-- Terbilang sampai catatan = SATU blok (.penutup-blok): tidak
+         pernah terpecah antar halaman. Label "Made by ;" tidak terpisah
+         dari nama penanda tangannya, dan catatan kaki tidak tertinggal
+         sendirian di halaman berikutnya. -->
+    <div class="penutup-blok">
+      <div class="terbilang">Terbilang : ${escapeHtml(
+        terbilangRupiah(frTotalPengajuan(p)),
+      )}</div>
 
-    <div class="penutup">
-      Thus we convey this letter, for your attention and cooperation,
-      we thank you 감사합니다
+      <div class="penutup">
+        Thus we convey this letter, for your attention and cooperation,
+        we thank you
+      </div>
+
+      <div class="tempat-tanggal">Cirebon, ${escapeHtml(frTanggalSurat(row.doc_date))}</div>
+
+      <table class="ttd${frPakaiTtdCfo(p) ? " ttd--empat" : ""}">
+        <tr>
+          ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
+          ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
+          ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
+          ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
+        </tr>
+      </table>
+
+      <div class="catatan">
+        <b>Notes (PERHATIAN)</b> : pengajuan dana adalah dokumen tertulis yang
+        digunakan untuk meminta dukungan kegiatan, dan menunjukkan dampak positif
+        yang dapat dihasilkan finansial dari individu organisasi, atau lembaga
+        tertentu. Tujuan utama proposal ini adalah untuk menjelaskan kebutuhan
+        dana, menyampaikan rencana.
+      </div>
     </div>
-
-    <div class="tempat-tanggal">Cirebon, ${escapeHtml(frTanggalSurat(row.doc_date))}</div>
-
-    <table class="ttd${frPakaiTtdCfo(p) ? " ttd--empat" : ""}">
-      <tr>
-        ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
-        ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
-        ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
-        ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
-      </tr>
-    </table>
-
-    <div class="catatan">
-      <b>Notes (PERHATIAN)</b> : pengajuan dana adalah dokumen tertulis yang
-      digunakan untuk meminta dukungan kegiatan, dan menunjukkan dampak positif
-      yang dapat dihasilkan finansial dari individu organisasi, atau lembaga
-      tertentu. Tujuan utama proposal ini adalah untuk menjelaskan kebutuhan
-      dana, menyampaikan rencana.
-    </div>
+    </td></tr></tbody>
+   </table>
   </div>`;
+}
+
+/* KAKI TABEL = GARIS PENUTUP, tanpa isi.
+
+   Peramban mengulang kaki tabel di dasar SETIAP halaman yang dilewati
+   tabel. Dulu baris TOTAL ada di kaki, sehingga TOTAL tercetak juga di
+   dasar halaman 1 padahal barisnya masih berlanjut di halaman 2 --
+   terbaca seolah semuanya sudah dijumlah. Sekarang TOTAL menjadi baris
+   terakhir badan tabel (muncul sekali, di ujung), dan kaki hanya satu
+   sel kosong yang bergaris atas: di dasar tiap halaman ia menutup tabel
+   dengan garis (garis antar-baris pos sengaja disembunyikan, jadi tanpa
+   penutup tabel tampak terbuka di dasar halaman); di halaman terakhir
+   garisnya menyatu dengan garis bawah baris TOTAL, tidak menambah garis. */
+function frKakiTutup(kolom) {
+  return `<tfoot class="tutup" aria-hidden="true"><tr><td colspan="${kolom}"></td></tr></tfoot>`;
 }
 
 /* BAGIAN PER BL/AWB -- satu invoice untuk beberapa kiriman. Dicetak
    hanya kalau ada baris yang SENGAJA ditautkan ke BL/AWB-nya (kolom
    BL/AWB di form); pembagian rata semata hitungan aplikasi untuk biaya
    per kiriman, bukan hal yang perlu disetujui di surat. */
-function frBarisPerAwb(p, mataUang, kolom) {
+function frBagianPerAwb(p) {
   const bagian = typeof fundBagiPerAwb === "function" ? fundBagiPerAwb(p) : [];
-  if (bagian.length < 2 || !bagian.some((b) => b.tautan)) return "";
+  return bagian.length < 2 || !bagian.some((b) => b.tautan) ? [] : bagian;
+}
+
+function frBarisPerAwb(p, mataUang, kolom) {
+  const bagian = frBagianPerAwb(p);
+  if (!bagian.length) return "";
   return `
       <tr class="baris-rujukan"><td class="c-desc" colspan="${kolom}"><b>BAGIAN PER BL/AWB</b></td></tr>${bagian
         .map(
           (b) => `
       <tr class="baris-awb">
         <td class="c-desc" colspan="${kolom - 1}">${escapeHtml(b.teks)}${b.rata ? " (termasuk bagian rata)" : ""}</td>
-        <td class="c-amt">${escapeHtml(frNilai(b.dibayar, mataUang))}</td>
+        <td class="c-amt">${frSelUang(b.dibayar, mataUang)}</td>
       </tr>`,
         )
         .join("")}`;
@@ -359,42 +424,82 @@ function frTabelRinci(p, mataUang) {
   const daftar = normalisasiBarisDana(p.lines || []);
   const nilaiBaris = fundLineValues(daftar);
   const ppnBaris = fundLinePpnDaftar(daftar, nilaiBaris, mataUang, p.payee);
-  const r = fundLineTotals(daftar, mataUang, p.payee);
+  const dokumen = (Array.isArray(p.dokumen) ? p.dokumen : []).filter((d) => d && d.id);
+  const r = fundLineTotals(daftar, mataUang, p.payee, dokumen);
   const KOLOM = 6;
-  const uang = (v) => (v < 0 ? "- " + frNilai(-v, mataUang) : frNilai(v, mataUang));
+  const uang = (v) => frSelUang(v, mataUang);
 
   const barisPos = (b, i) => {
     const nilai = nilaiBaris[i];
     const ppn = ppnBaris[i];
     const tarif = fundLineRate(b);
+    /* JUMLAH per baris = nilai + PPN baris itu. Kolomnya dulu dibiarkan
+       kosong (hanya baris TOTAL yang berisi), dan tabel yang separuh
+       kosong terbaca aneh. Dibulatkan ke sen supaya sisa pecahan biner
+       (0.1 + 0.2) tidak muncul; baris diskon ikut bertanda minus, baris
+       bernilai nol tetap "-". Untuk vendor yang Total PPN-nya dibulatkan
+       ke rupiah penuh (PRIME), jumlah per baris memakai PPN per baris
+       apa adanya -- sama dengan kolom PPN di sebelahnya. */
+    const jumlah = Math.round((nilai + ppn) * 100) / 100;
     return `<tr class="baris-pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.desc || "")}</td>
-        <td class="c-amt">${escapeHtml(uang(nilai))}</td>
+        <td class="c-amt">${uang(nilai)}</td>
         <td class="c-rate">${tarif ? tarif + "%" : "-"}</td>
-        <td class="c-amt">${escapeHtml(uang(ppn))}</td>
-        <td class="c-amt"></td>
+        <td class="c-amt">${uang(ppn)}</td>
+        <td class="c-amt">${uang(jumlah)}</td>
       </tr>`;
   };
   /* BEBERAPA DOKUMEN (invoice + invoice / debit note): pos dicetak per
      dokumennya, masing-masing di bawah judul "Nomor Invoice : ..." /
      "Nomor Debit Note : ...". Satu dokumen saja -> bentuk lama, dengan
      satu baris rujukan di atas. */
-  const dokumen = (Array.isArray(p.dokumen) ? p.dokumen : []).filter((d) => d && d.id);
   const kelompok = [{ id: "", jenis: "invoice", nomor: p.invoiceNo }].concat(dokumen);
   const adaKelompok = new Set(kelompok.map((d) => d.id));
   const judulKelompok = (d) =>
     `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}"><b>${escapeHtml(d.jenis === "debit" ? "Nomor Debit Note" : "Nomor Invoice")} : ${escapeHtml(d.nomor || "-")}</b></td></tr>`;
+  /* TOTAL PER DOKUMEN, tepat di bawah pos-pos dokumen itu: nilai, PPN
+     dan jumlahnya, potongan PPH 23-nya, lalu TOTAL dokumen itu -- supaya
+     PPN & PPH 23 invoice pertama dan invoice / debit note kedua bisa
+     dicocokkan masing-masing dengan dokumen aslinya. Angkanya dari
+     fundLineTotals().perDokumen; TOTAL pengajuan di bawah = jumlah
+     TOTAL tiap dokumen. Dokumen tanpa pos tidak diberi baris total. */
+  const perDok = new Map((r.perDokumen || []).map((x) => [x.id, x]));
+  const totalDokumen = (d) => {
+    const x = perDok.get(d.id);
+    if (!x) return "";
+    const nama = `${d.jenis === "debit" ? "DEBIT NOTE" : "INVOICE"}${String(d.nomor || "").trim() ? " " + String(d.nomor).trim() : ""}`;
+    return `
+      <tr class="baris-subtotal baris-dok">
+        <td class="c-no"></td>
+        <td class="c-desc">SUBTOTAL ${escapeHtml(nama)} :</td>
+        <td class="c-amt">${uang(x.totalNet)}</td>
+        <td class="c-rate"></td>
+        <td class="c-amt">${uang(x.totalPpn)}</td>
+        <td class="c-amt">${uang(x.totalNet + x.totalPpn)}</td>
+      </tr>
+      <tr class="baris-potongan baris-dok">
+        <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%) ${escapeHtml(nama)}</td>
+        <td class="c-amt">${uang(x.pph)}</td>
+        <td class="c-amt">${uang(-x.pph)}</td>
+      </tr>
+      <tr class="baris-total-dok baris-dok">
+        <td class="c-total" colspan="${KOLOM - 1}">TOTAL ${escapeHtml(nama)}</td>
+        <td class="c-amt">${uang(x.grandTotal)}</td>
+      </tr>`;
+  };
   const baris = dokumen.length
     ? kelompok.map((d) => judulKelompok(d) + daftar
       .map((b, i) => (String(b.dok || "") === d.id || (!d.id && !adaKelompok.has(String(b.dok || ""))) ? barisPos(b, i) : ""))
-      .join("")).join("")
+      .join("") + totalDokumen(d)).join("")
     : daftar.map(barisPos).join("");
 
   /* Penambal dibatasi: tabel rinci bisa berisi belasan pos, dan
      menambahkan baris kosong di atasnya membuat lembarnya tumbuh
-     melewati satu halaman padahal ruangnya masih cukup. */
-  const kosong = Math.max(0, 6 - daftar.length - (dokumen.length ? kelompok.length : 0));
+     melewati satu halaman padahal ruangnya masih cukup. Judul dan baris
+     total per dokumen ikut dihitung sebagai isi. */
+  const isiDokumen = dokumen.length ? kelompok.length + 3 * perDok.size : 0;
+  const kosong = Math.max(0, 6 - daftar.length - isiDokumen);
   const kosongHtml = Array.from(
     { length: kosong },
     () =>
@@ -409,20 +514,20 @@ function frTabelRinci(p, mataUang) {
   const subtotal = `
       <tr class="baris-subtotal">
         <td class="c-no"></td>
-        <td class="c-desc">TOTAL :</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNet, mataUang))}</td>
+        <td class="c-desc">${dokumen.length ? "TOTAL SEMUA DOKUMEN :" : "TOTAL :"}</td>
+        <td class="c-amt">${uang(r.totalNet)}</td>
         <td class="c-rate"></td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalPpn, mataUang))}</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.totalNet + r.totalPpn, mataUang))}</td>
+        <td class="c-amt">${uang(r.totalPpn)}</td>
+        <td class="c-amt">${uang(r.totalNet + r.totalPpn)}</td>
       </tr>
       <tr class="baris-potongan">
         <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%)</td>
-        <td class="c-amt">${escapeHtml(frNilai(r.pph, mataUang))}</td>
+        <td class="c-amt">${uang(r.pph)}</td>
         <td class="c-amt">${
-          /* Tanpa potongan, cukup "-" saja. frNilai() sudah menuliskan
-             nol sebagai "-", jadi menambahkan tanda minus di depannya
-             menghasilkan "- -" yang terbaca seperti salah cetak. */
-          r.pph ? "- " + escapeHtml(frNilai(r.pph, mataUang)) : "-"
+          /* Tanpa potongan, cukup "-" saja. frSelUang() menuliskan nol
+             sebagai "-", jadi tidak ada "- -" yang terbaca seperti salah
+             cetak; potongannya sendiri bertanda minus di sisi kiri. */
+          uang(-r.pph)
         }</td>
       </tr>${frBarisPerAwb(p, mataUang, KOLOM)}`;
 
@@ -431,7 +536,7 @@ function frTabelRinci(p, mataUang) {
       <thead>
         <tr>
           <th class="c-no">NO.</th>
-          <th class="c-desc">D E S C R I P T I O N S 정보</th>
+          <th class="c-desc">D E S C R I P T I O N S</th>
           <th class="c-amt">AMOUNT (Rp)</th>
           <th class="c-rate">PPN</th>
           <th class="c-amt">PPN (Rp)</th>
@@ -443,44 +548,42 @@ function frTabelRinci(p, mataUang) {
         ${baris}
         ${kosongHtml}
         ${subtotal}
-      </tbody>
-      <tfoot>
         <tr class="baris-total">
           <td class="c-total" colspan="${KOLOM - 1}">TOTAL</td>
-          <td class="c-amt">${escapeHtml(frNilai(r.grandTotal, mataUang))}</td>
+          <td class="c-amt">${uang(r.grandTotal)}</td>
         </tr>
-      </tfoot>
+      </tbody>
+      ${frKakiTutup(KOLOM)}
     </table>`;
 }
 
+/* Tombol cetak di riwayat: surat tampil sebagai pratinjau di kotak cetak
+   aplikasi (ui/cetak-modal.js), lalu dicetak dari situ -- tidak ada jendela
+   kedua yang harus ditutup terpisah dari dialog cetak peramban. */
 async function cetakFundRequest(rowId) {
   const row = (docNumHistoryRows || []).find((r) => String(r.id) === String(rowId));
   if (!row) {
     showToast(t("m.data.pengajuan.dana.tidak.ditemukan"), "danger");
     return;
   }
-  /* Jendelanya dibuka DULU, selagi masih di dalam klik pengguna --
-     dibuka sesudah menunggu apa pun, peramban menganggapnya pop-up liar
-     dan memblokirnya. */
-  const w = window.open("", "_blank", "width=900,height=1000");
-  if (!w) {
-    showToast(t("m.jendela.cetak.diblokir.peramban.izinkan.pop.up"), "danger", { judul: tt("Pop-up diblokir", "Pop-up blocked"), tetap: true });
-    return;
-  }
-  /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
-     dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang dicetak
-     sesaat setelah halaman tampil tidak memakai aturan lama. */
-  await fundDocNoSiap();
-  w.document.write(`<!doctype html>
+  const nomor = row.doc_number || "";
+  return bukaModalCetak({
+    jenis: tt("Form Pengajuan Dana", "Fund Request Form"),
+    nomor,
+    judulBerkas: `Form Pengajuan Dana ${nomor}`,
+    muat: async () => {
+      /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
+         dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang
+         dicetak sesaat setelah halaman tampil tidak memakai aturan lama.
+         Kotaknya sudah tampil selagi menunggu. */
+      await fundDocNoSiap();
+      return `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
-<title>Form Pengajuan Dana ${escapeHtml(row.doc_number || "")}</title>
+<title>Form Pengajuan Dana ${escapeHtml(nomor)}</title>
 <style>${fundRequestCss()}</style></head>
-<body>${buildFundRequestHtml(row)}</body></html>`);
-  w.document.close();
-  w.onload = () => {
-    w.focus();
-    w.print();
-  };
+<body>${buildFundRequestHtml(row)}</body></html>`;
+    },
+  });
 }
 
 function fundRequestCss() {
@@ -488,7 +591,8 @@ function fundRequestCss() {
   /* margin: 0 menghilangkan kop & kaki bawaan peramban -- baris
      "9/11/26 ... about:blank ... 1/1" itu digambar peramban DI DALAM
      margin halaman, jadi ia lenyap sendiri begitu marginnya nol.
-     Jarak ke tepi kertas pindah ke padding .sheet. */
+     Jarak ke tepi kertas pindah ke lembar itu sendiri: kiri-kanan di
+     padding .sheet, atas-bawah di kepala & kaki .halaman (di bawah). */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
   body {
@@ -505,17 +609,31 @@ function fundRequestCss() {
      antar mesin. Lebar kolom, padding sel, dan ukuran logo tetap px --
      itu detail di dalam tabel yang relatif terhadap ukuran huruf,
      bukan terhadap kertas. */
-  /* MARGIN A4: 15 mm atas, 20 mm kiri & kanan. Dulu 14 mm atas & 15 mm
-     kiri-kanan, angka tanggung yang tidak sama di sisi mana pun. Kop
-     surat memang lazim duduk tinggi di kertas.
+  /* MARGIN A4: 15 mm atas, 10 mm bawah, 20 mm kiri & kanan. Kop surat
+     memang lazim duduk tinggi di kertas.
 
-     TANPA padding bawah -- DISENGAJA. Padding bawah ikut dihitung
-     sebagai isi lembar: surat yang isinya masih muat di kertas (14-16
-     pos biaya, berakhir 6-10 mm dari tepi) tetap mendorong padding itu
-     ke HALAMAN KEDUA YANG KOSONG. Surat biasa tidak berubah apa pun --
-     bagian bawahnya memang ruang kosong -- dan surat panjang tidak lagi
-     menghasilkan halaman kosong. */
-  .sheet { width: 100%; padding: 15mm 20mm 0; }
+     ATAS & BAWAH BERLAKU DI SETIAP HALAMAN, bukan hanya halaman pertama.
+
+     Margin kertas (@page) sengaja nol, jadi jarak ke tepi harus datang
+     dari isi lembar sendiri. Padding .sheet hanya menjaga halaman
+     PERTAMA: surat yang berlanjut ke halaman ke-2 akan menempel di tepi
+     atas kertas, dan barisnya terpotong di tepi bawah. Maka isi lembar
+     dibungkus tabel (.halaman) berkepala & berkaki KOSONG setinggi
+     margin itu -- peramban mengulang kepala dan kaki tabel di tiap
+     halaman cetak, sehingga margin ikut berulang tanpa @page margin.
+
+     Kaki 10 mm itu ikut dihitung sebagai isi lembar, jadi isi surat
+     harus berakhir minimal 10 mm dari tepi bawah. Memang itulah
+     margin-nya; surat yang tidak muat berlanjut rapi ke halaman ke-2
+     (lihat aturan pemecahan di bawah), bukan terpotong. */
+  .sheet { width: 100%; padding: 0 20mm; }
+  .halaman { width: 100%; border-collapse: collapse; }
+  .halaman > thead > tr > td,
+  .halaman > tfoot > tr > td,
+  .halaman > tbody > tr > td { padding: 0; border: 0; }
+  .halaman > thead > tr > td { height: 15mm; }
+  .halaman > tfoot > tr > td { height: 10mm; }
+  .halaman > tbody > tr > td { vertical-align: top; }
 
   /* KOP SURAT bersama (kopSuratCss, surat-jalan-print.js): sama persis
      dengan Surat BC & Surat Jalan Export. */
@@ -546,8 +664,10 @@ ${kopSuratCss()}
   .meta-s { width: 12px; padding: 1px 0; vertical-align: top; }
   .meta-v { padding: 1px 0 1px 8px; }
 
-  .salam { margin: 4mm 0 13mm; }
-  .pembuka { margin-bottom: 3mm; }
+  /* Tidak ada lagi salam pembuka berbahasa Korea (dulu .salam, tinggi
+     ~25 mm): ruangnya dipakai untuk pos biaya. Jarak di atas "Please
+     find..." menggantikan margin bawah blok salam yang dulu. */
+  .pembuka { margin: 7mm 0 3mm; break-after: avoid; }
 
   /* border-collapse, bukan border per elemen: garis tabel harus jatuh
      TEPAT di batas antar sel, tidak menggandakan diri di pertemuan
@@ -595,8 +715,54 @@ ${kopSuratCss()}
 
   .c-desc { text-align: left; }
   .c-total { text-align: right; font-weight: 700; }
-  .rincian .baris-subtotal td { font-weight: 700; }
-  .rincian tfoot td { font-weight: 700; }
+  .rincian .baris-subtotal td,
+  .rincian .baris-total td,
+  .rincian .baris-total-dok td { font-weight: 700; }
+
+  /* ---------- TABEL YANG BERLANJUT KE HALAMAN BERIKUTNYA ----------
+
+     Pos biaya bisa puluhan baris. Aturannya supaya hasilnya tetap rapi:
+
+     - Baris tidak pernah terpotong di tengah (break-inside).
+     - Kepala kolom (NO. / DESCRIPTIONS / AMOUNT ...) diulang di tiap
+       halaman -- perilaku bawaan thead -- dan tidak pernah tertinggal
+       sendirian di dasar halaman.
+     - Judul "Nomor Invoice / Debit Note" selalu bersama baris pertama
+       di bawahnya.
+     - TOTAL, potongan PPH, dan subtotal tidak ditinggal sendirian di
+       halaman baru tanpa satu pun pos di atasnya.
+     - Garis penutup di dasar tiap halaman (tfoot.tutup, lihat
+       frKakiTutup): garis antar-baris pos disembunyikan, jadi tanpa
+       ini tabelnya tampak terbuka di dasar halaman yang disambung. */
+  .rincian tr { break-inside: avoid; }
+  .rincian thead { break-after: avoid; }
+  .rincian .baris-rujukan { break-after: avoid; }
+  .rincian .baris-subtotal,
+  .rincian .baris-potongan,
+  .rincian .baris-total-dok,
+  .rincian .baris-total { break-before: avoid; }
+  .rincian tfoot.tutup { display: table-footer-group; }
+  .rincian tfoot.tutup td {
+    padding: 0;
+    border: 0;
+    border-top: 1px solid #000;
+    height: 0;
+    line-height: 0;
+    font-size: 0;
+  }
+
+  /* SEL UANG GAYA AKUNTING (frSelUang): "Rp." menempel di tepi kiri sel,
+     angkanya di tepi kanan. flex + space-between, bukan tabulasi, supaya
+     tetap benar di cetakan mana pun; baseline dijaga agar huruf "Rp."
+     dan angkanya satu garis tulisan. */
+  .akun {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .akun-kode { flex: none; }
+  .akun-angka { text-align: right; }
 
   /* Format sederhana: lebar kolom seperti semula. */
   .c-no { width: 34px; text-align: center; }
@@ -636,6 +802,11 @@ ${kopSuratCss()}
   .terbilang { margin: 4mm 0 5mm; }
   .penutup { margin-bottom: 6mm; }
   .tempat-tanggal { margin-bottom: 7mm; }
+  /* Terbilang sampai catatan = satu kesatuan: kalau tidak muat di sisa
+     halaman, seluruhnya pindah ke halaman berikutnya -- label "Made by ;"
+     tidak pernah terpisah dari kotak tanda tangannya, dan catatan kaki
+     tidak pernah menjadi satu-satunya isi sebuah halaman. */
+  .penutup-blok { break-inside: avoid; }
 
   /* table-layout: fixed supaya ketiga kolom benar-benar SAMA LEBAR.
      Tanpa itu lebarnya mengikuti isi, dan kotak dengan jabatan

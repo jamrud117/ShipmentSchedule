@@ -4,9 +4,26 @@
 
 let accountRows = [];
 
-async function loadAccounts() {
+/* opsi.diam: disegarkan di latar (akun diubah pengguna lain, realtime):
+   daftar yang ada tetap tampil sampai yang baru tiba. */
+let akunRtTunda = null;
+if (typeof realtimeDaftar === "function") {
+  realtimeDaftar("profiles", () => {
+    if (document.documentElement.dataset.halaman !== "accounts") return;
+    clearTimeout(akunRtTunda);
+    akunRtTunda = setTimeout(() => {
+      const box = $("#accountList");
+      const muat = () => loadAccounts({ diam: true });
+      if (typeof realtimeGambarUlang === "function") realtimeGambarUlang(box, muat);
+      else muat();
+    }, RT_JEDA.umum);
+  });
+}
+
+async function loadAccounts(opsi) {
+  const diam = !!(opsi && opsi.diam);
   const box = $("#accountList");
-  box.innerHTML = `<div class="panel-empty"><i class="bi bi-hourglass"></i> ${tt("Memuat daftar akun…", "Loading accounts…")}</div>`;
+  if (!diam) box.innerHTML = `<div class="panel-empty"><i class="bi bi-hourglass"></i> ${tt("Memuat daftar akun…", "Loading accounts…")}</div>`;
 
   const { data, error } = await supabaseClient
     .from("profiles")
@@ -16,6 +33,7 @@ async function loadAccounts() {
 
   if (error) {
     console.error(error);
+    if (diam) return; // daftar yang ada tetap tampil
     box.innerHTML = `
       <div class="panel-empty">
         <i class="bi bi-exclamation-triangle"></i>

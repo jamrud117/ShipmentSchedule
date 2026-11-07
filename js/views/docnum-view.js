@@ -522,6 +522,9 @@ function readDocNumForm(typeKey) {
     if (el.disabled && !el.hasAttribute("data-dn-subtype")) return;
     out[el.dataset.dn] = String(el.value || "").trim();
   });
+  /* Doc No bawaan pengajuan dana (EI-<YYMM>-0000) yang 0000-nya belum
+     diganti bukan Doc No: tidak disimpan, tidak dicetak (fund-docno.js). */
+  if (typeKey === "fund" && "docNo" in out && typeof fundDocNoTanpaBawaan === "function") out.docNo = fundDocNoTanpaBawaan(out.docNo);
   /* Rincian biaya bukan isian ber-data-dn (ia tabel tersendiri), jadi
      disisipkan di sini supaya ikut tersimpan lewat jalur yang sama
      dengan isian lain -- tidak ada cabang penyimpanan kedua. */
@@ -612,7 +615,7 @@ function validateDocNumForm(typeKey) {
     const isianAwb = panel.querySelector('[data-dn="blAwb"]');
     const nilaiAwb = isianAwb && !isianAwb.disabled ? isianAwb.value : "";
     const pakaiRinci = (panel.querySelector('[data-dn="expenseType"]') || {}).value !== "Billing";
-    // Inland Trucking tidak dipecah per BL/AWB: tautan barisnya tidak dipakai
+    // Trucking tidak dipecah per BL/AWB: tautan barisnya tidak dipakai
     const darat = fundTanpaPecahAwb({ transactionType: (panel.querySelector('[data-dn="transactionType"]') || {}).value });
     const hilang = pakaiRinci && !darat && fundDaftarAwb(nilaiAwb).length > 1 ? fundTautanAwbHilang(fundLines, nilaiAwb) : [];
     if (hilang.length) {
@@ -705,7 +708,10 @@ let dnPratinjauKe = 0;
    melempar TypeError yang -- karena fungsinya asinkron -- cuma muncul
    di konsol. Persis jebakan yang sudah pernah kena di
    renderCounterPanel(). */
-async function refreshDocNumPreview(typeKey) {
+/* opsi.diam: dibaca ulang karena pengguna lain baru menerbitkan nomor
+   (realtime) -- nomor yang sedang tampil tidak diganti tampilan
+   sementara dulu, jadi tidak berkedip "001" sebelum nomor sebenarnya. */
+async function refreshDocNumPreview(typeKey, opsi) {
   const el = document.querySelector(`[data-dn-preview="${typeKey}"]`);
   if (!el) return;
   const nomorMinta = ++dnPratinjauKe;
@@ -713,8 +719,10 @@ async function refreshDocNumPreview(typeKey) {
   const isoDate = readDocNumForm(typeKey).docDate;
   const template = docNumTemplate(typeKey, isoDate);
 
-  el.textContent = docNumFormat(template, 1, jenis.pad); // tampilan sementara
-  delete el.dataset.pasti; // belum dibaca dari nomor urut database
+  if (!(opsi && opsi.diam)) {
+    el.textContent = docNumFormat(template, 1, jenis.pad); // tampilan sementara
+    delete el.dataset.pasti; // belum dibaca dari nomor urut database
+  }
   try {
     const periodKey = await muatSeri(jenis.key);
     const { data, error } = await supabaseClient
@@ -775,7 +783,8 @@ function renderCounterPanel(jenis, periodKey, lastSeq) {
     `${jenis.label} · seri ${periodKey} · nomor terakhir terbit: ${terakhir}`,
     `${jenis.label} · series ${periodKey} · last issued number: ${terakhir}`,
   );
-  input.value = String((lastSeq || 0) + 1);
+  // Angka yang sedang diketik tidak ditimpa (penyegaran realtime saat nomor lain terbit)
+  if (document.activeElement !== input) input.value = String((lastSeq || 0) + 1);
   input.placeholder = String(1).padStart(jenis.pad, "0");
 }
 
@@ -956,6 +965,8 @@ const dnFungsiBayarBelumAda = (e) =>
 
 async function dnSetelBayar(id, tanggal) {
   if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
+  // Gema perubahan ini sendiri tidak memicu pemberitahuan "diubah pengguna lain" (realtime)
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
   const { data, error } = await supabaseClient.rpc("set_fund_paid", { p_id: String(id), p_paid_at: tanggal || null });
   let payload;
   if (!error) payload = data || {};
@@ -1245,7 +1256,7 @@ function mulaiUbahDocNum(id) {
   isi("requester", r.requester);
   isi("department", r.department);
   Object.keys(r.payload || {}).forEach((k) =>
-    // Nama lama "Local Sale" dibuka dengan nama barunya (Inland Trucking)
+    // Nama lama "Local Sale" / "Inland Trucking" dibuka dengan nama barunya (Trucking)
     isi(k, k === "transactionType" ? fundJenisTransaksiBaku(r.payload[k]) : r.payload[k]),
   );
   /* Kotak tersembunyi sudah terisi id-nya oleh isi() di atas, tapi
@@ -1400,7 +1411,7 @@ const DN_NOMOR_TAGIHAN = [
 const dnTagihanBolehSama = (payee) => typeof fundInvoiceBolehSama === "function" && fundInvoiceBolehSama(payee);
 const dnTagihanDikecualikan = (form, field) => field === "invoiceNo" && dnTagihanBolehSama(form && form.payee);
 // Isian tagihan yang diperiksa untuk form ini: yang terisi dan tidak dikecualikan
-const dnJenisTagihan = (form) => DN_NOMOR_TAGIHAN.find((j) => form[j.field] && !dnTagihanDikecualikan(form, j.field));
+const dnJenisTagihan = (form) => DN_NOMOR_TAGIHAN.find((j) => dnNomorTagihan(form, j.field).length && !dnTagihanDikecualikan(form, j.field));
 
 function dnPecahNomorTagihan(nilai) {
   return String(nilai || "")
@@ -1410,6 +1421,40 @@ function dnPecahNomorTagihan(nilai) {
 }
 function dnKunciNomorTagihan(no) {
   return String(no || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/* SEMUA NOMOR TAGIHAN sebuah form / pengajuan untuk satu jenis isian.
+   invoiceNo = No. Invoice utama + invoice / debit note tambahannya
+   (payload.dokumen, js/features/fund-lines.js): satu pengajuan bisa
+   menagih beberapa dokumen, dan tiap nomornya sama-sama tidak boleh
+   dibayar dua kali -- dulu hanya No. Invoice utama yang diperiksa, jadi
+   invoice kedua / debit note yang sudah pernah diajukan lolos. billingNo
+   = Nomor Billing. Pemicu database memakai aturan yang sama
+   (dn_kunci_tagihan_dokumen, migration-tagihan-ganda-dokumen.sql). */
+function dnNomorTagihan(p, field) {
+  const sumber =
+    field === "invoiceNo"
+      ? [p && p.invoiceNo].concat(Array.isArray(p && p.dokumen) ? p.dokumen.map((d) => d && d.nomor) : [])
+      : [p && p[field]];
+  return sumber.flatMap((x) => dnPecahNomorTagihan(x));
+}
+
+/* Dokumen tambahan di form yang memakai nomor itu -- null = No. Invoice
+   utama (atau Nomor Billing). Menentukan kotak mana yang ditandai merah
+   dan nama dokumen di pesannya. */
+function dnDokTagihan(form, field, nomor) {
+  if (field !== "invoiceNo" || !form) return null;
+  const kunci = dnKunciNomorTagihan(nomor);
+  const sama = (teks) => dnPecahNomorTagihan(teks).some((no) => dnKunciNomorTagihan(no) === kunci);
+  if (sama(form.invoiceNo)) return null;
+  return (Array.isArray(form.dokumen) ? form.dokumen : []).find((d) => d && sama(d.nomor)) || null;
+}
+const dnNamaDokTagihan = (d) => (typeof fundDokNama === "function" ? fundDokNama(d.jenis) : d.jenis === "debit" ? "Debit Note" : "Invoice");
+// "Nomor invoice" / "Nomor Debit Note" / "Nomor billing" -- dokumen yang kembar
+function dnLabelTemuan(temuan) {
+  if (!temuan.dok) return temuan.jenis.label;
+  const nama = dnNamaDokTagihan(temuan.dok);
+  return tt(`Nomor ${nama}`, `${nama} number`);
 }
 
 /* Pengajuan Dana LAIN yang sudah memakai nomor tagihan di form ini,
@@ -1425,24 +1470,26 @@ async function dnCariTagihanGanda(form, kecualiId) {
   if (typeof fundInvoiceSiap === "function") await fundInvoiceSiap();
   const jenis = dnJenisTagihan(form);
   if (!jenis) return null;
-  const nomor = dnPecahNomorTagihan(form[jenis.field]);
+  const nomor = dnNomorTagihan(form, jenis.field);
   if (!nomor.length) return null;
   const pola = (no) => no.replace(/[,()"\\%*_]/g, "_").replace(/\s+/g, "%");
+  /* No. Invoice dicari juga di invoice / debit note tambahan pengajuan
+     lain (payload->>dokumen = teks JSON daftarnya) -- calon saja,
+     kecocokan pastinya tetap diputuskan per nomor di bawah. */
+  const kolom = jenis.field === "invoiceNo" ? ["invoiceNo", "dokumen"] : [jenis.field];
   const { data, error } = await supabaseClient
     .from("document_numbers")
     .select("id, doc_number, doc_date, payload")
     .eq("doc_type", "fund")
-    .or(nomor.map((no) => `payload->>${jenis.field}.ilike."%${pola(no)}%"`).join(","))
+    .or(nomor.flatMap((no) => kolom.map((k) => `payload->>${k}.ilike."%${pola(no)}%"`)).join(","))
     // Yang pertama kali memakai nomornya -- itu yang disebut di pesan.
     .order("created_at", { ascending: true });
   if (error) throw error;
   const dicari = new Set(nomor.map(dnKunciNomorTagihan));
   for (const r of data || []) {
     if (kecualiId && r.id === kecualiId) continue;
-    const sama = dnPecahNomorTagihan((r.payload || {})[jenis.field]).find((no) =>
-      dicari.has(dnKunciNomorTagihan(no)),
-    );
-    if (sama) return { jenis, nomor: sama, baris: r };
+    const sama = dnNomorTagihan(r.payload || {}, jenis.field).find((no) => dicari.has(dnKunciNomorTagihan(no)));
+    if (sama) return { jenis, nomor: sama, baris: r, dok: dnDokTagihan(form, jenis.field, sama) };
   }
   return null;
 }
@@ -1464,7 +1511,8 @@ function dnTandaiTagihanGanda(panel, temuan) {
   DN_NOMOR_TAGIHAN.forEach((j) => {
     const kotak = panel.querySelector(`[data-dn="${j.field}"]`);
     const ket = panel.querySelector(`#dn-fund-${j.field}-ganda`);
-    const kena = !!temuan && temuan.jenis.field === j.field;
+    // Invoice / debit note tambahan yang kembar ditandai di kotaknya sendiri (di bawah)
+    const kena = !!temuan && temuan.jenis.field === j.field && !temuan.dok;
     if (kotak && kena) {
       kotak.classList.add("is-invalid");
       kotak.dataset.ganda = "1";
@@ -1479,6 +1527,39 @@ function dnTandaiTagihanGanda(panel, temuan) {
         : "";
     }
   });
+  /* Invoice / debit note tambahan (#fundDokList, fund-lines.js): kotak
+     nomornya merah + satu kalimat selebar barisnya. Barisnya digambar
+     ulang tiap dokumen ditambah / dihapus -- renderFundDokumen memanggil
+     pemeriksaan ini lagi. */
+  panel.querySelectorAll("#fundDokList [data-fd]").forEach((baris) => {
+    const kotak = baris.querySelector('[data-fd-f="nomor"]');
+    const kena = !!temuan && !!temuan.dok && temuan.dok.id === baris.dataset.fd;
+    let ket = baris.querySelector(".fd-ganda");
+    if (kotak && kena) {
+      kotak.classList.add("is-invalid");
+      kotak.dataset.ganda = "1";
+    } else if (kotak && kotak.dataset.ganda) {
+      kotak.classList.remove("is-invalid");
+      delete kotak.dataset.ganda;
+    }
+    if (!kena) {
+      if (ket) ket.remove();
+      if (kotak) kotak.removeAttribute("aria-describedby");
+      return;
+    }
+    if (!ket) {
+      ket = document.createElement("div");
+      ket.className = "form-text-note dn-ganda-ket fd-ganda";
+      ket.setAttribute("role", "status");
+      ket.id = `fd-ganda-${baris.dataset.fd}`;
+      baris.appendChild(ket);
+    }
+    ket.textContent = tt(
+      `${dnNamaDokTagihan(temuan.dok)} ${temuan.nomor} sudah diajukan di ${dnRujukanTagihanGanda(temuan.baris)}`,
+      `${dnNamaDokTagihan(temuan.dok)} ${temuan.nomor} was already submitted in ${dnRujukanTagihanGanda(temuan.baris)}`,
+    );
+    if (kotak) kotak.setAttribute("aria-describedby", ket.id);
+  });
 }
 
 /* TANDA LANGSUNG, tanpa menunggu Simpan: nomor tagihan yang sudah
@@ -1492,24 +1573,31 @@ function dnTandaiTagihanGanda(panel, temuan) {
 function dnTagihanGandaLokal(form, rows, kecualiId) {
   const jenis = dnJenisTagihan(form);
   if (!jenis) return null;
-  const dicari = new Set(dnPecahNomorTagihan(form[jenis.field]).map(dnKunciNomorTagihan));
+  const dicari = new Set(dnNomorTagihan(form, jenis.field).map(dnKunciNomorTagihan));
   if (!dicari.size) return null;
   // Yang pertama kali memakai nomornya -- itu yang disebut
   const urut = (rows || []).slice().sort((a, b) => String(a.created_at || a.doc_date || "").localeCompare(String(b.created_at || b.doc_date || "")));
   for (const r of urut) {
     if (!r || (kecualiId && r.id === kecualiId)) continue;
-    const sama = dnPecahNomorTagihan((r.payload || {})[jenis.field]).find((no) => dicari.has(dnKunciNomorTagihan(no)));
-    if (sama) return { jenis, nomor: sama, baris: r };
+    const sama = dnNomorTagihan(r.payload || {}, jenis.field).find((no) => dicari.has(dnKunciNomorTagihan(no)));
+    if (sama) return { jenis, nomor: sama, baris: r, dok: dnDokTagihan(form, jenis.field, sama) };
   }
   return null;
 }
 
 let dnGandaJeda = null;
 let dnGandaUrutan = 0;
+/* Pemeriksaan tanpa memuat (penggambaran ulang daftar dokumen, ganti
+   bahasa, pembaruan realtime) TIDAK menunda pemeriksaan yang sudah
+   menunggu -- yang menunggu itu membaca isian terbaru saat berjalan, dan
+   permintaan memuatnya (ketikan) tetap terbawa. Hanya ketikan yang
+   menggeser jedanya. */
 function dnPeriksaTagihanGandaLangsung(panel, muat) {
-  clearTimeout(dnGandaJeda);
   if (!panel || typeof bkAmbilDana !== "function") return;
+  if (!muat && dnGandaJeda) return;
+  clearTimeout(dnGandaJeda);
   dnGandaJeda = setTimeout(async () => {
+    dnGandaJeda = null;
     const urutan = ++dnGandaUrutan;
     // Isian yang tersembunyi (Nomor Billing / No. Invoice lawannya) dinonaktifkan -- tidak ikut
     const form = {};
@@ -1520,6 +1608,14 @@ function dnPeriksaTagihanGandaLangsung(panel, muat) {
     // Vendornya ikut menentukan: No. Invoice JNE tidak diperiksa (dnTagihanBolehSama)
     const kotakVendor = panel.querySelector('[data-dn="payee"]');
     form.payee = kotakVendor ? kotakVendor.value : "";
+    /* Invoice / debit note tambahan -- hanya bila ikut tersimpan
+       (readDocNumForm: format rinci, bukan Billing) dan No. Invoice-nya
+       memang diperiksa (kotaknya tidak tersembunyi). */
+    const jenisBiaya = (panel.querySelector('[data-dn="expenseType"]') || {}).value;
+    const kotakInvoice = panel.querySelector('[data-dn="invoiceNo"]');
+    if (jenisBiaya && jenisBiaya !== "Billing" && kotakInvoice && !kotakInvoice.disabled && typeof fundDokumenBersih === "function") {
+      form.dokumen = fundDokumenBersih();
+    }
     if (!dnJenisTagihan(form)) {
       dnTandaiTagihanGanda(panel, null);
       return;
@@ -1537,7 +1633,11 @@ function dnPeriksaTagihanGandaLangsung(panel, muat) {
 }
 
 document.addEventListener("input", (e) => {
-  const el = e.target.closest(DN_NOMOR_TAGIHAN.map((j) => `[data-docnum-panel="fund"] [data-dn="${j.field}"]`).join(", "));
+  const el = e.target.closest(
+    DN_NOMOR_TAGIHAN.map((j) => `[data-docnum-panel="fund"] [data-dn="${j.field}"]`)
+      .concat('[data-docnum-panel="fund"] #fundDokList [data-fd-f="nomor"]')
+      .join(", "),
+  );
   if (el) dnPeriksaTagihanGandaLangsung(el.closest("[data-docnum-panel]"), true);
 });
 
@@ -1563,8 +1663,8 @@ function dnGalatInvoiceSama(err, form) {
   if (!kembar || !dnTagihanDikecualikan(form, "invoiceNo")) return err;
   return new Error(
     tt(
-      "database belum memakai aturan No. Invoice yang terbaru — jalankan migration-invoice-boleh-sama.sql di Supabase (SQL Editor), lalu coba lagi.",
-      "the database does not use the latest Invoice No rule yet — run migration-invoice-boleh-sama.sql in Supabase (SQL Editor), then try again.",
+      "database belum memakai aturan No. Invoice yang terbaru — jalankan migration-tagihan-ganda-dokumen.sql di Supabase (SQL Editor), lalu coba lagi.",
+      "the database does not use the latest Invoice No rule yet — run migration-tagihan-ganda-dokumen.sql in Supabase (SQL Editor), then try again.",
     ),
   );
 }
@@ -1573,7 +1673,7 @@ function dnGalatInvoiceSama(err, form) {
 function dnTolakTagihanGanda(temuan) {
   const r = temuan.baris;
   const di = dnRujukanTagihanGanda(r);
-  const label = temuan.jenis.label;
+  const label = dnLabelTemuan(temuan);
   dnTandaiTagihanGanda(docNumPanelEl("fund"), temuan);
   dnTulisHint(tt(`${label} ${temuan.nomor} sudah diajukan di ${r.doc_number}.`,
     `${label} ${temuan.nomor} was already submitted in ${r.doc_number}.`), true);
@@ -1583,7 +1683,9 @@ function dnTolakTagihanGanda(temuan) {
     {
       title: temuan.jenis.field === "billingNo"
         ? tt("Nomor Billing Sudah Diajukan", "Billing Number Already Submitted")
-        : tt("Nomor Invoice Sudah Diajukan", "Invoice Number Already Submitted"),
+        : temuan.dok && temuan.dok.jenis === "debit"
+          ? tt("Nomor Debit Note Sudah Diajukan", "Debit Note Number Already Submitted")
+          : tt("Nomor Invoice Sudah Diajukan", "Invoice Number Already Submitted"),
       icon: "bi-exclamation-triangle-fill",
       tone: "warning",
       tanpaBatal: true,
@@ -1645,6 +1747,7 @@ async function simpanUbahDocNum() {
     DN_FIELD_BAYAR.forEach((k) => {
       if (terbaru[k] != null && terbaru[k] !== "") payload[k] = terbaru[k];
     });
+    if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
     const { error } = await supabaseClient
       .from("document_numbers")
       .update({
@@ -1889,11 +1992,13 @@ function isiPilihanJadwal() {
   DN_PEMILIH_JADWAL.forEach((pas) => dnSegarkanLabelPemilih(pas));
 }
 
-/* Menulis ulang label yang terlihat dari id yang tersimpan. */
+/* Menulis ulang label yang terlihat dari id yang tersimpan. Kotak yang
+   sedang diketik tidak disentuh -- daftar jadwal bisa digambar ulang di
+   tengah mengetik (pembaruan realtime dari pengguna lain). */
 function dnSegarkanLabelPemilih(pas) {
   const elId = $(pas.id);
   const elCari = $(pas.cari);
-  if (!elId || !elCari) return;
+  if (!elId || !elCari || document.activeElement === elCari) return;
   if (!elId.value) {
     elCari.value = "";
     return;
@@ -2107,6 +2212,8 @@ function syncDocNumConditional(panel) {
      vendornya (fund-docno.js), Rincian bawaan pada jenis & vendornya
      (fund-rincian.js). */
   fundSelaraskanDocNo(panel);
+  // Doc No bawaan yang masih utuh ikut bulan berjalan; keterangannya ikut isi kotak
+  if (typeof fundIsiDocNoBawaan === "function") fundIsiDocNoBawaan(panel, false);
   if (typeof fundSelaraskanRincian === "function") fundSelaraskanRincian(panel);
   /* Keterangan nomor invoice bawaan vendor ikut isi kotaknya (form baru
      dikosongkan, draf dipulihkan). Hanya keterangannya: kotaknya sendiri
@@ -2173,6 +2280,8 @@ function resetDocNumForm(typeKey, opts) {
     suratIsianOtomatis = {};
     suratPerbaruiLabelAngkut(panel);
   }
+  // Pengajuan dana baru: Doc No bawaan EI-<YYMM>-0000 bulan berjalan (fund-docno.js)
+  if (typeKey === "fund" && typeof fundIsiDocNoBawaan === "function") fundIsiDocNoBawaan(panel, true);
   syncDocNumConditional(panel);
   // Pihak invoice: tanda "= Penjual" & keterangan Skema Invoice mengikuti isian bawaan
   if (typeKey === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan();
@@ -2285,7 +2394,12 @@ const DN_KOLOM_DANA = [
 let docNumPage = 1;
 let docNumPageSize = 10;
 
-async function renderDocNumHistory() {
+/* opsi.diam: digambar ulang DI LATAR (pembaruan realtime, lihat bagian
+   akhir berkas ini) -- tanpa "Memuat…" dan tanpa mengosongkan halaman
+   dulu. Summary & Report cukup dihitung ulang dari salinannya yang sudah
+   dipasangi baris barunya, bukan memuat ulang seluruh pengajuan. */
+async function renderDocNumHistory(opsi) {
+  const diam = !!(opsi && opsi.diam);
   const box = $("#docNumHistory");
   const bar = $("#docNumPagination");
   if (!box) return;
@@ -2295,13 +2409,17 @@ async function renderDocNumHistory() {
      seluruh pengajuan, dan penanda tab-nya bukan jenis pengeluaran --
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
   if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
+    if (diam && typeof fsumGambarUlangDiam === "function" && fsumGambarUlangDiam()) return;
     return renderRingkasanDana(box, bar);
   }
   if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) {
+    if (diam && typeof lapGambarUlangDiam === "function" && lapGambarUlangDiam()) return;
     return renderLaporanBiaya(box, bar);
   }
-  box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
-  if (bar) bar.innerHTML = "";
+  if (!diam) {
+    box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
+    if (bar) bar.innerHTML = "";
+  }
 
   const jenis = resolveDocNumType(docNumActiveTab);
   try {
@@ -2854,3 +2972,128 @@ document.addEventListener("change", (e) => {
   docNumPage = 1;
   renderDocNumHistory();
 });
+
+/* ------------------------------------------------------------------
+   PEMBARUAN REALTIME (js/data/realtime.js)
+
+   Nomor yang diterbitkan, diubah, atau dihapus pengguna lain:
+     - salinan daftar Pengajuan Dana di memori (tanda "sudah diajukan",
+       Summary, Report, biaya per kiriman) dipasangi barisnya -- tanpa
+       memuat ulang seluruh pengajuan;
+     - TANDA "SUDAH DIAJUKAN" di form Pengajuan Dana dihitung ulang
+       seketika: invoice yang baru saja diajukan orang lain langsung
+       merah, sebelum Ajukan ditekan (Ajukan tetap memeriksa database,
+       dan pemicu database tetap penjaga terakhir);
+     - halaman Nomor Dokumen yang sedang dilihat menggambar ulang riwayat
+       jenis yang terkena diam-diam, dan membaca ulang "nomor berikutnya";
+     - pop-up Ubah isian / Detail yang sedang membuka nomor itu ikut tahu.
+------------------------------------------------------------------ */
+const dnRtKabar = new Map(); // String(id) -> kabar terakhir
+let dnRtSambung = false;
+let dnRtTunda = null;
+let dnRtTundaSeri = null;
+const dnRtHalamanTampil = () => document.documentElement.dataset.halaman === "docnum";
+const dnRtBarisDana = (r) => ({ id: r.id, doc_number: r.doc_number, doc_date: r.doc_date, payload: r.payload || {} });
+
+if (typeof realtimeDaftar === "function") {
+  realtimeDaftar("document_numbers", (k) => {
+    if (k.jenis === "SAMBUNG") dnRtSambung = true;
+    else if (k.id != null) dnRtKabar.set(String(k.id), k);
+    else return;
+    clearTimeout(dnRtTunda);
+    dnRtTunda = setTimeout(dnRtProses, RT_JEDA.umum);
+  });
+  // Nomor urut berubah (nomor terbit, Atur Nomor Urut): "nomor berikutnya" dibaca ulang
+  realtimeDaftar("document_number_counters", () => {
+    if (!dnRtHalamanTampil()) return;
+    clearTimeout(dnRtTundaSeri);
+    dnRtTundaSeri = setTimeout(() => refreshDocNumPreview(docNumActiveTab, { diam: true }), RT_JEDA.umum);
+  });
+}
+
+// Baris lengkap yang dikabarkan; kabar yang terpotong (baris sangat besar) diambil ulang dari database
+async function dnRtBaris(k) {
+  if (k.jenis === "DELETE") return null;
+  if (k.utuh && k.baru && k.baru.doc_type) return k.baru;
+  const { data, error } = await supabaseClient
+    .from("document_numbers")
+    .select("id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at")
+    .eq("id", k.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function dnRtProses() {
+  const kabar = [...dnRtKabar.values()];
+  dnRtKabar.clear();
+  const sambung = dnRtSambung;
+  dnRtSambung = false;
+
+  /* 1. Salinan di memori. Sambung ulang: kabar selama terputus hilang --
+        salinannya dilupakan, dimuat ulang saat dipakai berikutnya. */
+  if (sambung && typeof bkLupakan === "function") bkLupakan();
+  const terkena = []; // { id, docType, baris, kabar }
+  for (const k of kabar) {
+    let baris = null;
+    try {
+      baris = await dnRtBaris(k);
+    } catch (e) {
+      console.error(e);
+      if (typeof bkLupakan === "function") bkLupakan();
+      continue;
+    }
+    const docType = baris ? baris.doc_type : null; // kabar hapus: jenisnya tidak diketahui
+    const dana = docType === "fund" ? dnRtBarisDana(baris) : null;
+    if (typeof bkTerapkanBaris === "function") bkTerapkanBaris(k.id, dana);
+    if (typeof fsumTerapkanBaris === "function") fsumTerapkanBaris(k.id, dana);
+    if (typeof lapTerapkanBaris === "function") lapTerapkanBaris(k.id, baris ? dnRtBarisDana(baris) : null, docType);
+    terkena.push({ id: k.id, docType, baris, kabar: k });
+  }
+  if (!sambung && !terkena.length) return;
+  const kenaDana = sambung || terkena.some((x) => x.docType === "fund" || x.docType == null);
+
+  // 2. Biaya per kiriman di panel detail jadwal yang sedang terbuka
+  if (kenaDana && typeof isDetailOpen === "function" && isDetailOpen() && typeof isiBiayaKiriman === "function" && typeof kirimanDenganId === "function") {
+    const s = kirimanDenganId(currentDetailId);
+    if (s) isiBiayaKiriman(s);
+  }
+
+  // 3. Pop-up Ubah isian yang sedang membuka nomor yang diubah / dihapus orang lain
+  const ubahan = dnEditingId != null && terkena.find((x) => String(x.id) === String(dnEditingId) && !x.kabar.sendiri);
+  if (ubahan) {
+    dnTulisHint(
+      ubahan.baris
+        ? tt("Nomor ini baru saja diubah pengguna lain. Kalau disimpan, isian di sini yang dipakai — tutup lalu buka lagi untuk melihat versi terbarunya.",
+            "This number was just changed by another user. Saving keeps what is here — close and reopen to see the latest version.")
+        : tt("Nomor ini baru saja dihapus pengguna lain — perubahannya tidak bisa disimpan lagi.",
+            "This number was just deleted by another user — the changes can no longer be saved."),
+      !ubahan.baris,
+    );
+  }
+
+  if (!dnRtHalamanTampil()) return;
+
+  // 4. Tanda "sudah diajukan" di form Pengajuan Dana -- dari salinan yang baru dipasangi
+  if (kenaDana && typeof docNumPanelEl === "function") {
+    const panel = docNumPanelEl("fund");
+    if (panel) dnPeriksaTagihanGandaLangsung(panel, sambung);
+  }
+
+  // 5. Riwayat jenis yang sedang dilihat & nomor berikutnya
+  const tabKena =
+    sambung ||
+    terkena.some((x) =>
+      x.docType
+        ? docNumTabKeyFor(x.docType) === docNumActiveTab
+        : (docNumHistoryRows || []).some((r) => String(r.id) === String(x.id)) || docNumActiveTab === "fund",
+    );
+  if (!tabKena) return;
+  const box = $("#docNumHistory");
+  const gambar = () => (sambung ? renderDocNumHistory() : renderDocNumHistory({ diam: true }));
+  await (typeof realtimeGambarUlang === "function" ? realtimeGambarUlang(box, gambar) : gambar());
+  if (sambung || terkena.some((x) => x.kabar.jenis !== "UPDATE")) refreshDocNumPreview(docNumActiveTab, { diam: true });
+  // Detail nomor yang sedang terbuka ikut isi terbarunya
+  if (typeof dndSegarkan === "function") terkena.forEach((x) => dndSegarkan(x.id, !x.baris));
+}
+

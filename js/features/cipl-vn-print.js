@@ -9,7 +9,7 @@
    pengapalan. Tampilannya mengikuti lembar Dynamic Design -- kartu
    berkepala navy, rincian pengiriman, tabel bergaris tipis, TOTAL satu
    baris, tanda tangan 50 mm -- lewat penyusun yang SAMA
-   (ciplTataFormal, cipl-print.js), jadi cetakan & Excel-nya sama persis.
+   (ciplTataFormal, cipl-print.js); unduhan Excel memakai spek yang sama.
 
    Dipilih lewat profil pelanggan (`layout: "vn"` di cipl-print.js).
 
@@ -64,23 +64,52 @@ function ciplVnTotal(baris) {
   );
 }
 
-/* Baris DIMENSION pada Packing List: ukuran yang sama digabung dan
-   dihitung ("120 * 122 * 71 (cm) * 4 BX"). Dipakai juga lembar
-   Dynamic Design. */
-function ciplVnDimensi(baris) {
+/* Baris DIMENSION pada Packing List: peti seukuran dan sejenis digabung,
+   jumlahnya DIJUMLAHKAN dari kolom Kemasan tiap barang
+   ("120 * 122 * 71 (cm) * 4 BX", "100 * 100 * 90 (cm) * 2 PLT").
+   Dipakai juga lembar Dynamic Design.
+
+   Yang dihitung KEMASANNYA, bukan baris barangnya: satu barang bisa
+   terdiri dari beberapa peti, dan peti seukuran dari barang berbeda
+   dijumlahkan. (Dulu tiap baris barang dihitung satu, jadi barang
+   berkemasan 3 BOX tetap tercetak "* 1 BX" -- tak cocok dengan total
+   "N PACKAGES" dan CBM di bawahnya.) Jenisnya dari kolom Jenis Kemasan
+   barang itu; kosong = ikut barang di atasnya, BOX bila belum ada
+   ("↳ ikut" di tabel barang). Ukuran sama tapi jenis beda = baris sendiri.
+
+   Barang yang kolom Kemasan-nya KOSONG masih satu kemasan dengan barang
+   di atasnya, jadi tidak menambah hitungan -- sama dengan total
+   "N PACKAGES" (ciplTotalKoli). Satu-satunya pengecualian: data lama
+   yang sama sekali tak mencatat jumlah kemasan. Di sana satu set = satu
+   peti, jadi jumlahnya qty barang -- aturan yang sama dengan CBM
+   (computeItemCbm) dan total PACKAGES lembar Kumho. */
+function ciplVnDimensi(items) {
+  const daftar = items || [];
+  const adaJumlah = daftar.some((it) => ciplKoliBarang(it) > 0);
   const hitung = new Map();
-  baris.forEach((b) => {
-    const d = parsePackageDims(b.package);
+  let jenisAtas = "";
+  daftar.forEach((it) => {
+    const jumlah = ciplKoliBarang(it) || (adaJumlah ? 0 : parseLooseNumber(it && it.qty) || 1);
+    if (!jumlah) return;
+    const satuan = ciplSatuanKemasan(ciplJenisKemasanBarang(it) || jenisAtas || "BOX");
+    jenisAtas = satuan;
+    const d = parsePackageDims(it && it.package);
     if (!d) return;
-    const k = `${d.p} * ${d.l} * ${d.t}`;
-    hitung.set(k, (hitung.get(k) || 0) + 1);
+    const ukuran = `${d.p} * ${d.l} * ${d.t}`;
+    const kunci = `${ukuran}|${satuan}`;
+    const grup = hitung.get(kunci) || { ukuran, satuan, jumlah: 0 };
+    grup.jumlah += jumlah;
+    hitung.set(kunci, grup);
   });
-  return [...hitung.entries()].map(
-    ([ukuran, n]) => `DIMENSION : ${ukuran} (cm) * ${n} BX`,
+  return [...hitung.values()].map(
+    (g) => `DIMENSION : ${g.ukuran} (cm) * ${Math.round(g.jumlah * 1000) / 1000} ${g.satuan}`,
   );
 }
 
-/* Seller & Shipper tetap. */
+/* Seller tetap. Shipper-nya blok baku yang sama dengan semua customer
+   (CIPL_SHIPPER lewat ciplShipperBaris, cipl-print.js) -- kotak Shipper
+   lembar ini dulu punya tulisan sendiri ("Desa/Kelurahan Pabedilan
+   Kulon", ATTN Mr. Jeon Jeongho) yang berbeda dari invoice Dynamic Design. */
 const CIPL_VN_SELLER = [
   "Dynamic Design CO., LTD.",
   "12, CHEOMDANYEONSIN-RO 29BEON-GIL,",
@@ -88,15 +117,6 @@ const CIPL_VN_SELLER = [
   "ATTN : Jae Jun, Kim",
   "TEL :+82-62-720-7845",
   "E-MAIL : info@dynamicdesign.co.kr",
-];
-
-const CIPL_VN_SHIPPER = [
-  "PT Dynamic Design Indonesia",
-  "Jalan Mayjend Sutoyo No. 1 Desa/Kelurahan Pabedilan Kulon,",
-  "Kec. Pabedilan Kab. Cirebon, Provinsi Jawa Barat, 45193",
-  "ATTN : MR. JEON JEONGHO",
-  "E-mail : jjh2296@dynamicdesign.co.kr",
-  "Tel : +622318886161     TAX ID : 0656 3197 7906 1000",
 ];
 
 /* Keterangan bank penerima pembayaran (Seller) -- kotak kiri bawah CI. */
@@ -125,12 +145,12 @@ function ciplVnTata(jenis, row, shipment) {
   const prof = ciplProfil(p.customer || (shipment && shipment.party));
   const baris = ciplVnBaris(shipment);
   const total = ciplVnTotal(baris);
-  const uang = ciplFormatUang(p.currency || "USD", baris.flatMap((b) => [b.harga, b.qty * b.harga]));
+  const uang = ciplFormatUang(p.currency || "USD");
   const angka = (n, satuan) => {
     const f = ciplFormatAngka(n, satuan);
     return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
   };
-  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f, teks: uang.teks(n) } });
+  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n) } });
   // Consignee = Penerima (alamat profil bila belum diisi); Seller = Pembeli; Shipper = Penjual
   const consignee = ciplPihakBaris(p.penerimaNama || p.customer || (shipment && shipment.party) || "",
     p.consigneeAddress || (prof.lines || []).join("\n"));
@@ -149,18 +169,20 @@ function ciplVnTata(jenis, row, shipment) {
     nama: jenis,
     judul: ci ? ciplJudulInvoice(row) : "PACKING LIST",
     persen: [15, 7, 24, 12, 7, 7, 14, 14],
+    // Kotak membawa datanya (ciplKotakPihak / ciplKotakReferensi, cipl-print.js) -- dipakai unduhan Excel
     kartu: [
-      { kiri: { judul: "Shipper", isi: (l) => ddIsiPihak(ciplShipperBaris(row, CIPL_VN_SHIPPER), l, true) },
-        kanan: { judul: "Seller", isi: (l) => ddIsiPihak(seller, l, true) } },
-      { kiri: { judul: "Consignee", isi: (l) => ddIsiPihak(consignee, l, true) },
-        kanan: { judul: "Document reference", referensi: (lNo, lLabel) => ddIsiReferensi([
+      { kiri: ciplKotakPihak("Shipper", ciplShipperBaris(), true),
+        kanan: ciplKotakPihak("Seller", seller, true) },
+      { kiri: ciplKotakPihak("Consignee", consignee, true),
+        kanan: ciplKotakReferensi("Document reference", [
           ["Invoice No. & Date", [row.doc_number ? ciplNoTanggal(row.doc_number, row.doc_date) : { no: "—", tgl: "" }]],
           ["L/C No. & Date", [{ no: "—", tgl: "" }]],
           ["Notify (if other than consignee)", [{ no: ciplKapital(p.notifyParty || "SAME AS CONSIGNEE"), tgl: "" }]],
-        ], lNo, lLabel) } },
+        ]) },
     ],
     rinci: [
-      ["Departure Date", ciplTanggal(berangkat)],
+      // Elemen ke-3 { iso }: sel tanggal sungguhan di Excel (cetakan hanya membaca [label, nilai])
+      ["Departure Date", ciplTanggal(berangkat), { iso: berangkat }],
       ["Port of Loading", portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "")],
       ["Port of Discharge", p.portDischarge || prof.portDischarge || ""],
       ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
@@ -189,6 +211,10 @@ function ciplVnTata(jenis, row, shipment) {
         ci ? { kolom: 4 } : Object.assign({ kolom: 4 }, angka(total.netto, "KG")),
         Object.assign({ kolom: 5 }, ci ? duit(total.nilai) : angka(total.bruto, "KG")),
       ],
+      // Amount = Qty x Unit Price: rumus di Excel (cetakan tidak membacanya)
+      kali: ci ? { 5: [2, 4] } : null,
+      // GOODS DESCRIPTION rata kiri di baris barang (kepala tetap di tengah)
+      rataKiri: [1],
       padBaris: ttPx(6),
     },
     kiriBawah: [

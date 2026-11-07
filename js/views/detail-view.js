@@ -327,6 +327,36 @@ function openDetailView(id) {
   $("#btnDetailClose").focus();
 }
 
+/* PEMBARUAN REALTIME (js/data/realtime.js): panel yang sedang terbuka
+   digambar ulang dari data terbaru -- posisi gulir & fokus tetap, tanpa
+   transisi buka lagi. Jadwal yang baru dihapus pengguna lain menutup
+   panelnya dengan pemberitahuan. */
+function segarkanDetailView() {
+  if (!isDetailOpen() || currentDetailId == null) return;
+  const s = kirimanDenganId(currentDetailId);
+  if (!s) {
+    closeDetailView();
+    showToast(tt("Jadwal yang sedang dibuka baru saja dihapus pengguna lain.", "The schedule you had open was just deleted by another user."), "warning");
+    return;
+  }
+  const badan = $("#detailViewBody");
+  if (!badan) return;
+  const aktif = document.activeElement;
+  const kunci = aktif && badan.contains(aktif) && typeof kunciFokus === "function" ? kunciFokus(aktif) : null;
+  const gulir = badan.scrollTop;
+  badan.innerHTML = buildDetailHtml(s);
+  if (typeof isiBiayaKiriman === "function") isiBiayaKiriman(s);
+  $("#detailSheetTitle").textContent = dispVal(s.party);
+  const list = detailNavList();
+  const idx = list.findIndex((x) => x.id === s.id);
+  $("#detailSheetPos").textContent = idx >= 0 ? `${idx + 1} / ${list.length}` : "";
+  $("#btnDetailPrev").disabled = idx <= 0;
+  $("#btnDetailNext").disabled = idx < 0 || idx >= list.length - 1;
+  badan.scrollTop = gulir;
+  const kembali = kunci ? badan.querySelector(kunci) : null;
+  if (kembali) fokuskan(kembali, { tanpaGulir: true });
+}
+
 function closeDetailView() {
   detailScrimEl.classList.remove("is-open");
   detailSheetEl.classList.remove("is-open");

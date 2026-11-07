@@ -215,6 +215,33 @@
   box-shadow: 0 8px 18px -8px rgba(18, 58, 99, 0.7);
 }
 
+/* Jadwal yang sedang diubah, diubah juga oleh pengguna lain (realtime) */
+.form-remote-ket {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  background: var(--s-info-bg, var(--surface));
+  border: 1px solid var(--s-info-line, var(--border));
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.form-remote-ikon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--ts-info);
+  background: var(--surface);
+}
+.form-remote-teks {
+  flex: 1 1 260px;
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
 .import-notes-box {
   display: flex;
   align-items: flex-start;
@@ -1088,6 +1115,75 @@ table.item-table input.hs-otomatis {
   padding: 10px;
   color: var(--n-500);
   font-size: var(--t-sm);
+}
+
+/* SARAN HOUSE BL/AWB di kotak BL/AWB form Pengajuan Dana
+   (js/features/fund-saran-awb.js). Daftar menggantung tepat di bawah
+   kotak -- atau di atasnya (.is-atas) bila ruang bawah sempit -- dan
+   memuat paling banyak 4 baris: nomor di atas, keterangan kiriman (jenis
+   + Shipper / Buyer) di bawahnya. Gayanya sama dengan dropdown Nama
+   Shipper / Buyer di atas (.pilih-pihak-daftar). */
+.saran-awb {
+  position: relative;
+}
+.saran-awb-daftar {
+  position: absolute;
+  z-index: 1035;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-lg);
+}
+.saran-awb.is-atas .saran-awb-daftar {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.saran-awb-opsi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.saran-awb-opsi:hover,
+.saran-awb-opsi.is-aktif {
+  background: var(--p-50);
+}
+.saran-awb-isi {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.saran-awb-nomor {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  overflow-wrap: anywhere;
+}
+/* Bagian yang cocok dengan ketikan: tebal, bukan stabilo kuning bawaan <mark> */
+.saran-awb-nomor mark {
+  padding: 0;
+  background: transparent;
+  color: var(--tp-700);
+  font-weight: 700;
+}
+.saran-awb-ket {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  color: var(--muted);
+}
+.saran-awb-opsi .bi-check2 {
+  flex: none;
+  color: var(--tp-700);
 }
 
 /* Kolom Kemasan per barang: Jumlah+Jenis (Import) / dimensi (Export) */
@@ -2694,6 +2790,12 @@ table.item-table input[data-f="packing"].is-ikut::placeholder {
 }
 .dpb-tabel .dpb-asal {
   color: var(--text-muted);
+  white-space: nowrap;
+}
+/* Nomor & tanggal dokumen UTUH satu baris -- "29-10-2026" tidak pecah jadi
+   "29-10-" / "2026", nomor SKB tidak terbelah di tanda hubungnya. Tabel
+   yang tidak muat digeser ke samping (.dpb-tabel-gulir), bukan dibungkus. */
+.dpb-tabel .dpb-utuh {
   white-space: nowrap;
 }
 .dpb-tabel-barang {

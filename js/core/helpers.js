@@ -647,18 +647,91 @@ function gabungPiLs(pi, ls) {
   return [p, l ? "LS " + l : ""].filter(Boolean).join("\n");
 }
 function pecahPiLs(teks) {
-  const pi = [];
-  const ls = [];
+  const k = pecahKolomPi(teks);
+  return { pi: k.pi, ls: k.ls };
+}
+
+/* KOLOM PI templat salin All Import (laporan harian) & Bulk Excel memuat
+   SEMUA dokumen pelengkap NON-FASILITAS satu jadwal, satu jenis / dokumen
+   per baris:
+     PI            nomornya apa adanya, "A, B" (sama seperti dulu)
+     LS            "LS <nomor>"
+     Polis         "POLIS <nomor>"
+     Dokumen Lain  "<NAMA DOKUMEN CEISA> <nomor>" -- L/C, sertifikat,
+                   izin, surat keputusan ... (huruf besar, nama baku
+                   KODE_DOKUMEN_CEISA; kode di luar daftar "DOKUMEN KODE
+                   <kode> <nomor>", tanpa kode "DOKUMEN LAIN <nomor>")
+   Fasilitas -- SKB PPN/PPh, Masterlist, COO -- tetap di kolom FASILITAS /
+   SKB (shipmentFacilitiesSummary): Dokumen Lain berkode fasilitas
+   (KODE_DOKUMEN_FASILITAS), atau berkode umum (911 / 999) yang nomornya
+   menunjukkan fasilitas (jenisFasilitasDariNomor), tidak ditulis di sini.
+   Invoice, packing list & B/L-AWB punya kolomnya sendiri dan memang
+   tidak pernah masuk Dokumen Lain (KODE_DOKUMEN_BERISIAN, dilewati juga
+   di sini). Bulk Import memisahkannya lagi lewat pecahKolomPi(). */
+const KOLOM_PI_POLIS = "POLIS";
+// Kode yang namanya bisa tertulis di kolom PI sebagai Dokumen Lain
+const kodeDokLainKolomPi = (kode) =>
+  !KODE_DOKUMEN_FASILITAS[kode] && !KODE_DOKUMEN_BERISIAN.has(kode) && !JENIS_DOK_PENGIRIMAN.some((j) => DOK_PENGIRIMAN[j].kode === kode);
+function dokLainKolomPi(d) {
+  const kode = kodeDokumen(d && d.kode);
+  const nomor = String((d && d.nomor) || "").replace(/\s+/g, " ").trim();
+  if (!kode && !nomor) return "";
+  if (KODE_DOKUMEN_FASILITAS[kode] || KODE_DOKUMEN_BERISIAN.has(kode)) return "";
+  if ((KODE_DOKUMEN_UMUM.has(kode) || !kode) && jenisFasilitasDariNomor(nomor)) return "";
+  const nama = KODE_DOKUMEN_CEISA[kode] ? KODE_DOKUMEN_CEISA[kode][0].toUpperCase() : kode ? `DOKUMEN KODE ${kode}` : "DOKUMEN LAIN";
+  return [nama, nomor].filter(Boolean).join(" ");
+}
+function kolomPiJadwal(s) {
+  const dok = dokPelengkapJadwal(s);
+  const nomor = (jenis, kolomLama) => ringkasDokumen(dok[jenis]).nomor || String((s && s[kolomLama]) || "").trim();
+  const baris = [
+    nomor("pi", "pi"),
+    nomor("ls", "ls") ? "LS " + nomor("ls", "ls") : "",
+    nomor("polis", "polisAsuransi") ? `${KOLOM_PI_POLIS} ${nomor("polis", "polisAsuransi")}` : "",
+  ].concat((dok.lain || []).map(dokLainKolomPi));
+  const sudah = new Set();
+  return baris.filter((b) => b && !sudah.has(b) && sudah.add(b)).join("\n");
+}
+
+/* Kebalikan kolomPiJadwal: teks kolom PI -> { pi, ls, polis, lain }.
+   pi/ls/polis = nomor gabungan "A, B" (dipecah pecahNomorDokumen); lain =
+   [{ kode, nomor }]. Baris berawalan "LS" / "POLIS" / nama dokumen CEISA
+   (yang TERPANJANG yang cocok, tanpa beda huruf besar-kecil, kedua
+   bahasa) / "DOKUMEN KODE <kode>" / "DOKUMEN LAIN" dikenali; sisanya
+   nomor PI -- berkas lama yang kolom PI-nya hanya berisi PI tetap
+   terbaca sama. */
+let KOLOM_PI_NAMA_DOKUMEN = null; // [[NAMA, kode]] terpanjang dulu, disusun sekali
+function pecahKolomPi(teks) {
+  const pi = [], ls = [], polis = [], lain = [];
+  if (!KOLOM_PI_NAMA_DOKUMEN) {
+    /* Hanya nama yang memang bisa ditulis kolomPiJadwal: fasilitas,
+       invoice / packing list / B/L-AWB, dan PI / LS / Polis (ditulis
+       dengan awalannya sendiri) tetap terbaca sebagai teks PI, sama
+       seperti sebelum Dokumen Lain ikut di kolom ini. */
+    KOLOM_PI_NAMA_DOKUMEN = Object.keys(KODE_DOKUMEN_CEISA)
+      .filter(kodeDokLainKolomPi)
+      .flatMap((k) => KODE_DOKUMEN_CEISA[k].map((nama) => [String(nama).toUpperCase(), k]))
+      .sort((a, b) => b[0].length - a[0].length);
+  }
   String(teks == null ? "" : teks)
     .split(/\n+/)
     .map((x) => x.trim())
     .filter(Boolean)
     .forEach((baris) => {
-      const m = /^LS(?:\s*:\s*|\s+)(.+)$/i.exec(baris);
-      if (m) ls.push(m[1].trim());
-      else pi.push(baris);
+      const mLs = /^LS(?:\s*:\s*|\s+)(.+)$/i.exec(baris);
+      if (mLs) return void ls.push(mLs[1].trim());
+      const mPolis = /^POLIS(?:\s+ASURANSI)?(?:\s*:\s*|\s+)(.+)$/i.exec(baris);
+      if (mPolis) return void polis.push(mPolis[1].trim());
+      const mKode = /^DOKUMEN\s+KODE\s+(\S+)(?:\s+(.+))?$/i.exec(baris);
+      if (mKode) return void lain.push({ kode: mKode[1], nomor: (mKode[2] || "").trim() });
+      const mLain = /^DOKUMEN\s+LAIN(?:\s+(.+))?$/i.exec(baris);
+      if (mLain) return void lain.push({ kode: "", nomor: (mLain[1] || "").trim() });
+      const atas = baris.toUpperCase();
+      const cocok = KOLOM_PI_NAMA_DOKUMEN.find(([nama]) => atas === nama || atas.startsWith(nama + " "));
+      if (cocok) return void lain.push({ kode: cocok[1], nomor: baris.slice(cocok[0].length).trim() });
+      pi.push(baris);
     });
-  return { pi: pi.join(", "), ls: ls.join(", ") };
+  return { pi: pi.join(", "), ls: ls.join(", "), polis: polis.join(", "), lain };
 }
 
 /* Satu baris kolom FASILITAS / SKB (templat salin & Bulk Excel) kembali

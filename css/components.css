@@ -1189,3 +1189,153 @@ table.item-table .is-disamakan {
   top: 50%;
   margin: -4px 0 0;
 }
+
+/* ------------------------------------------------------------------
+   MODAL CETAK (js/ui/cetak-modal.js)
+
+   Surat tampil sebagai pratinjau selebar kertas A4 di atas "meja"
+   abu-abu, lalu dicetak dari kotak ini -- tanpa jendela kedua. Kepala
+   memakai gaya kotak Detail (.dnd-kepala) supaya nomornya sama
+   menonjolnya; kakinya sama dengan dialog lain (.dialog-foot).
+------------------------------------------------------------------ */
+/* Selebar kertas (794px) + ruang di kiri-kanannya; tidak pernah menempel tepi layar.
+   Hanya di layar lebar: di bawah 768px kotak ini layar penuh
+   (.modal-fullscreen-md-down, max-width: none) -- aturan ini tidak boleh
+   menimpanya, kalau tidak sebilah latar tersisa di sisi kanan. */
+@media (min-width: 768px) {
+  .cetak-dialog {
+    max-width: min(900px, calc(100% - 2 * var(--bs-modal-margin)));
+  }
+}
+/* Isinya hanya judul + tombol tutup: tombolnya tetap di kanan, tidak
+   turun ke baris sendiri di ponsel (.dnd-kepala dasarnya melipat). */
+.cetak-kepala {
+  flex-wrap: nowrap;
+}
+.cetak-kepala .dnd-utama {
+  flex: 1 1 auto;
+}
+.cetak-kepala .btn-close {
+  flex: 0 0 auto;
+  margin: 2px -4px 0 0;
+}
+/* Kartu kotak selalu setinggi dialognya (layar dikurangi margin), baik saat
+   "Menyiapkan surat" maupun sesudah suratnya tampil -- tanpa ini kartu
+   memendek di tengah layar selagi memuat lalu melompat membesar. Surat
+   minimal setinggi satu A4, jadi badannya toh selalu menggulir. */
+.cetak-dialog .modal-content {
+  height: 100%;
+}
+.cetak-badan {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-6);
+  background: var(--n-100);
+}
+.cetak-meja {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-height: 240px;
+}
+/* Sedang menyiapkan surat: di tengah area badan */
+.cetak-status {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  font-size: var(--t-base);
+  color: var(--n-500);
+}
+.cetak-putar {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--n-300);
+  border-top-color: var(--p-600);
+  border-radius: 50%;
+  animation: cetak-putar 0.8s linear infinite;
+}
+@keyframes cetak-putar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Kertasnya: ukurannya diisi JS (cetakUkurKertas) -- di layar sempit
+   seluruh kertas dikecilkan, dan kotak pembungkusnya mengikuti. Bayangan
+   ada di pembungkus (bukan di kertas) supaya tidak terpotong overflow. */
+.cetak-ukur {
+  flex: 0 0 auto;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--kertas-cetak);
+  box-shadow: var(--sh-lg);
+}
+.cetak-kertas {
+  width: 794px;
+  transform-origin: top left;
+}
+/* Pratinjau untuk dilihat, bukan diklik: kejadian tetikus & sentuh
+   dibiarkan lewat ke kotak di belakangnya, jadi menggulir tetap jalan
+   dan kursor papan ketik tidak pernah terjebak di dalam bingkai. */
+.cetak-bingkai {
+  display: block;
+  width: 794px;
+  height: 1123px;
+  border: 0;
+  background: var(--kertas-cetak);
+  pointer-events: none;
+}
+.cetak-kaki {
+  align-items: center;
+}
+.cetak-otomatis {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto 0 0;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+  cursor: pointer;
+  user-select: none;
+}
+.cetak-otomatis input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--tp-700);
+  cursor: pointer;
+}
+@media (max-width: 767.98px) {
+  /* Layar penuh: sudut kepala tidak perlu membulat */
+  .cetak-kepala {
+    border-radius: 0;
+  }
+  .cetak-badan {
+    padding: var(--sp-4);
+  }
+}
+@media (max-width: 575.98px) {
+  .cetak-dialog .dnd-kepala {
+    padding: var(--sp-4);
+  }
+  .cetak-dialog .dnd-nomor {
+    font-size: 1.15rem;
+  }
+  .cetak-kaki {
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  }
+}
+@media (max-width: 419.98px) {
+  /* Kotak centang di barisnya sendiri, di atas tombol-tombol */
+  .cetak-otomatis {
+    flex-basis: 100%;
+    margin-bottom: var(--sp-1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cetak-putar {
+    animation-duration: 2.4s;
+  }
+}

@@ -116,7 +116,26 @@ function invTeruskan(panel, kunci, sudah) {
       invTeruskan(panel, b, sudah);
     });
 }
+/* SHIPPER BAKU UNTUK SEMUA CUSTOMER. CI, PL, SI & Excel setiap invoice
+   mencetak blok yang sama (ciplShipperBaku, cipl-print.js) -- alamat PT
+   Dynamic Design Indonesia yang dipakai CIPL kiriman ke Dynamic Design
+   Co., Ltd. Supaya form tidak menampilkan alamat lain -- dari data PEB
+   jadwal ("Desa/Kelurahan ..."), sisa customer sebelumnya atau data
+   customer tersimpan -- kolom Penjual (nama & alamat) selalu diisi blok
+   itu dan dikunci, customer apa pun. NPWP Penjual tetap bebas. Dipanggil
+   di awal penerusan, jadi Pemilik yang masih ikut Penjual ikut berganti. */
+function invTerapkanShipperBaku(panel) {
+  const baku = ciplShipperBaku();
+  [["penjualNama", baku[0]], ["penjualAlamat", baku.slice(1).join("\n")]].forEach(([k, isi]) => {
+    const el = invEl(panel, k);
+    if (!el) return;
+    el.readOnly = true;
+    if (el.value !== isi) invIsiOtomatis(el, isi);
+  });
+}
+
 function invTeruskanSemua(panel) {
+  invTerapkanShipperBaku(panel);
   const sudah = new Set();
   [...new Set(invPasanganKunci(invPolaForm(panel)).map(([a]) => a))].forEach((k) => invTeruskan(panel, k, sudah));
 }
@@ -138,11 +157,13 @@ function invSegarkanTanda(panel) {
   const ket = panel.querySelector("#dnPolaKet");
   if (ket)
     ket.textContent =
-      pola === "langsung"
+      (pola === "langsung"
         ? tt("Direct Invoice: Pemilik Barang = Penjual, Pembeli = Penerima — terisi sama otomatis, tetap bisa diubah.",
           "Direct Invoice: Goods Owner = Seller, Buyer = Consignee — filled in automatically, still editable.")
         : tt("Third Party Invoice: Pemilik Barang = Penjual; Pembeli & Penerima berbeda — isi masing-masing.",
-          "Third Party Invoice: Goods Owner = Seller; Buyer & Consignee differ — fill in each.");
+          "Third Party Invoice: Goods Owner = Seller; Buyer & Consignee differ — fill in each.")) +
+      " " + tt("Shipper di CI, PL & SI baku untuk semua customer: alamat PT Dynamic Design Indonesia yang sama di setiap invoice (kolom Penjual terkunci).",
+        "The CI, PL & SI Shipper is fixed for every customer: the same PT Dynamic Design Indonesia address on every invoice (Seller column locked).");
   panel.dataset.polaKini = pola;
 }
 

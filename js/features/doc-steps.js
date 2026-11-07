@@ -957,6 +957,8 @@ async function simpanDocStep(s, progresBaru, lampiran) {
   s.docProgress = progresBaru; // layar berubah lebih dulu
   render();
 
+  // Gema perubahan ini dari realtime dilewati: layarnya sudah berubah
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", s.id);
   const { error } = await supabaseClient
     .from("shipments")
     .update({ doc_progress: progresBaru })

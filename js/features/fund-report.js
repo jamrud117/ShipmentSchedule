@@ -70,8 +70,8 @@ let lapData = null;
 
 /* ---------------------------- pemetaan ---------------------------- */
 
-/* Moda dari JENIS TRANSAKSI: Sea -> laut, Air -> udara, Inland Trucking
-   (dulu Local Sale) -> darat (truk). Isian Moda Angkut lama hanya dibaca
+/* Moda dari JENIS TRANSAKSI: Sea -> laut, Air -> udara, Trucking (dulu
+   Local Sale / Inland Trucking) -> darat (truk). Isian Moda Angkut lama hanya dibaca
    untuk pengajuan terdahulu yang tidak punya Jenis Transaksi. */
 function lapModa(p) {
   const m = String((p && p.transportMode) || "").toLowerCase();
@@ -116,7 +116,7 @@ function lapBarisDana(row, kurs) {
   let kenaPpn = 0;
   let ppn = 0;
   if (Array.isArray(p.lines) && p.lines.length) {
-    const total = fundLineTotals(p.lines, mata, p.payee);
+    const total = fundLineTotals(p.lines, mata, p.payee, p.dokumen || []);
     dpp = total.totalNet;
     kenaPpn = total.dppPph;
     ppn = total.totalPpn;
@@ -194,19 +194,19 @@ function lapKursBawaan() {
 
 const lapModaKosong = () => ({ udara: 0, laut: 0, darat: 0, lain: 0 });
 
-/* MODA + ARAH: "Air Import", "Sea Export", "Inland Trucking" -- semuanya
+/* MODA + ARAH: "Air Import", "Sea Export", "Trucking" -- semuanya
    dari Jenis Transaksi. Laut/udara selalu jelas impor atau ekspornya. */
 function lapArah(transaksi) {
   const jenis = fundJenisTransaksiBaku(transaksi);
   if (/import/i.test(jenis)) return "Import";
   if (/export/i.test(jenis)) return "Export";
-  if (/inland|truck/i.test(jenis)) return "Inland Trucking";
+  if (/inland|truck/i.test(jenis)) return "Trucking";
   return "";
 }
 function lapModaArah(d) {
   const arah = lapArah(d.transaksi);
-  // Inland Trucking: angkutan darat dalam negeri -- cukup namanya, tanpa moda
-  if (arah === "Inland Trucking") return "Inland Trucking";
+  // Trucking: angkutan darat dalam negeri -- cukup namanya, tanpa moda
+  if (arah === "Trucking") return "Trucking";
   if (d.moda === "udara") return arah ? `Air ${arah}` : "Air (direction not set)";
   if (d.moda === "laut") return arah ? `Sea ${arah}` : "Sea (direction not set)";
   if (d.moda === "darat") return "Truck";
@@ -339,6 +339,42 @@ async function lapAmbilAnggaran(tahun) {
     .maybeSingle();
   if (error) return { gagal: true };
   return (hasil && hasil.value) || {};
+}
+
+/* Pembaruan realtime (docnum-view.js): pengajuan dana / invoice yang
+   baru disimpan, diubah, atau dihapus pengguna lain dipasang di data
+   laporan yang sudah termuat. docType null (kabar hapus) = dilepas dari
+   keduanya. */
+function lapTerapkanBaris(id, baris, docType) {
+  if (!lapData || typeof realtimePasangBaris !== "function") return false;
+  let berubah = false;
+  if (docType !== "invoice") berubah = realtimePasangBaris(lapData.dana, id, docType === "fund" ? baris : null) || berubah;
+  if (docType !== "fund") berubah = realtimePasangBaris(lapData.invoice, id, docType === "invoice" ? baris : null) || berubah;
+  return berubah;
+}
+/* Anggaran tahun yang sedang dilihat diubah pengguna lain (realtime):
+   dibaca ulang, laporannya digambar ulang bila sedang tampil. kunci ""
+   = sambung ulang, anggaran tahun itu dibaca ulang saja. */
+async function lapSegarkanAnggaran(kunci) {
+  if (!lapData || !lapSaringan.tahun || (kunci && kunci !== lapKunciAnggaran(lapSaringan.tahun))) return;
+  lapData.anggaran = await lapAmbilAnggaran(lapSaringan.tahun).catch(() => ({ gagal: true }));
+  const tampil =
+    document.documentElement.dataset.halaman === "docnum" &&
+    typeof docNumActiveTab !== "undefined" && docNumActiveTab === "fund" &&
+    typeof docNumHistorySub !== "undefined" && docNumHistorySub === LAPORAN_TAB;
+  if (tampil) {
+    const box = $("#docNumHistory");
+    if (typeof realtimeGambarUlang === "function") realtimeGambarUlang(box, lapGambarUlangDiam);
+    else lapGambarUlangDiam();
+  }
+}
+
+// false = belum pernah dimuat: muat penuh seperti biasa
+function lapGambarUlangDiam() {
+  const box = $("#docNumHistory");
+  if (!lapData || !box) return false;
+  lapGambar(box);
+  return true;
 }
 
 async function renderLaporanBiaya(box, bar) {

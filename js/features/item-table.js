@@ -496,9 +496,24 @@ $("#itemTableBody").addEventListener("input", (e) => {
          ribuan, titik = desimal), jadi tidak ada yang perlu ditebak.
          parseLooseNumber menebak, dan tebakannya salah seribu kali
          lipat untuk "1.050" — berat 1,05 kg tersimpan jadi 1.050 kg. */
-      draftItems[idx][field] = ["qty", "harga", "netto", "bruto"].includes(field)
-        ? parseInputNumber(e.target.value)
-        : e.target.value;
+      if (["qty", "harga", "netto", "bruto"].includes(field)) {
+        /* Rumus "=" (Unit Price, Neto, Bruto) yang sedang diketik belum
+           mengubah apa pun: angka barang tetap yang lama sampai rumusnya
+           dihitung saat kotaknya ditinggalkan / Enter / Simpan
+           (terapkanRumusBarang). Potongan rumus yang kebetulan sah di
+           tengah ketikan ("=1" dalam "=1250*4") tidak ikut tersimpan,
+           dan rumus yang akhirnya salah tidak meninggalkan angka setengah
+           jadi. */
+        if (adalahRumus(e.target.value) && RUMUS_BARANG.includes(field)) {
+          // dibiarkan -- dihitung saat ditinggalkan
+        } else {
+          e.target.classList.remove("fl-rumus-salah");
+          e.target.removeAttribute("title");
+          draftItems[idx][field] = parseInputNumber(e.target.value);
+        }
+      } else {
+        draftItems[idx][field] = e.target.value;
+      }
     }
     if (e.target.tagName === "TEXTAREA") autoGrowTextarea(e.target);
     // Saran yang dipilih / kode yang diketik langsung bernama; ketikan lain dibakukan saat ditinggalkan
@@ -556,6 +571,10 @@ $("#itemTableBody").addEventListener("keydown", (e) => {
     return;
   }
   e.preventDefault();
+  /* Rumus "=" dihitung di tempat dulu -- juga di baris terakhir, yang
+     tidak punya baris berikutnya untuk dituju. Rumus yang tidak valid:
+     kursor tetap di kotaknya supaya bisa langsung diperbaiki. */
+  if (RUMUS_BARANG.includes(field.dataset.f) && adalahRumus(field.value) && !terapkanRumusBarang(field)) return;
   keBarisBerikutnya(field, idx);
 });
 
@@ -588,10 +607,56 @@ function keBarisBerikutnya(field, idx) {
   if (typeof nextField.select === "function") nextField.select();
 }
 
+/* ------------------------------------------------------------------
+   RUMUS "=" DI UNIT PRICE, NETO & BRUTO
+
+   Seperti sel spreadsheet: "=1250*4", "=(12.5+3)/2", "=1,000-15%" --
+   pengurai bersama hitungRumus (ui/number-input.js; + - * / x : ÷,
+   kurung, % = dibagi 100; koma ribuan, titik desimal), BUKAN eval().
+   Dihitung saat kotaknya ditinggalkan atau Enter (pindah ke baris
+   berikutnya = kotaknya ditinggalkan) dan sekali lagi saat Simpan.
+   Hasilnya dibulatkan ke 4 desimal -- batas desimal berat & harga
+   satuan di dokumen pabean -- lalu ditulis sebagai angka biasa. Rumus
+   yang tidak bisa dihitung ditandai merah, teksnya dibiarkan untuk
+   diperbaiki, dan Simpan ditolak sampai diperbaiki.
+------------------------------------------------------------------ */
+const RUMUS_BARANG = ["harga", "netto", "bruto"];
+const bulatRumusBarang = (v) => Math.round(v * 10000) / 10000;
+
+/* true = kotaknya kini angka biasa (atau memang bukan rumus);
+   false = rumusnya tidak valid. */
+function terapkanRumusBarang(el) {
+  if (!el || !adalahRumus(el.value)) return true;
+  const hasil = hitungRumus(el.value);
+  if (!isFinite(hasil)) {
+    el.classList.add("fl-rumus-salah");
+    el.title = tt("Rumus tidak valid. Contoh: =1250*4, =(12.5+3)/2, =1,000-15%", "Invalid formula. Examples: =1250*4, =(12.5+3)/2, =1,000-15%");
+    return false;
+  }
+  el.classList.remove("fl-rumus-salah");
+  el.removeAttribute("title");
+  el.value = formatNumberValue(bulatRumusBarang(hasil));
+  // Disimpan & dihitung ulang lewat jalur ketikan yang sama (Subtotal, CBM, total pabean)
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+/* Semua rumus di tabel barang dihitung (dipanggil Simpan). Kotak pertama
+   yang rumusnya tidak valid, atau null. */
+function terapkanRumusBarangSemua() {
+  let salah = null;
+  document.querySelectorAll(NUMBER_INPUT_RUMUS).forEach((el) => {
+    if (!terapkanRumusBarang(el) && !salah) salah = el;
+  });
+  return salah;
+}
+
 $("#itemTableBody").addEventListener("change", (e) => {
   const tr = e.target.closest("tr");
   if (!tr) return;
   const idx = Number(tr.dataset.idx);
+  // Rumus di Unit Price / Neto / Bruto: dihitung begitu kotaknya ditinggalkan
+  if (RUMUS_BARANG.includes(e.target.dataset.f) && !terapkanRumusBarang(e.target)) return;
   /* Isian BARIS PERTAMA selesai diisi -> tawarkan menyamakannya ke baris
      di bawahnya (item-samakan.js; baris lain & kolom lain diabaikan di
      sana). Untuk negara, SESUDAH dibakukan ke kodenya. */

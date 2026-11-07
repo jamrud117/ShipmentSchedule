@@ -139,6 +139,95 @@ function fundSelaraskanDocNo(panel) {
   });
 }
 
+/* ---------- Doc No bawaan: EI-<YYMM>-0000 ----------
+
+   Doc No pengajuan bernomor EI-<YYMM>-<4 angka urut>, mis. EI-2611-0153.
+   Form pengajuan BARU (pertama dibuka, dikosongkan, sesudah nomor
+   terbit) diisi EI-<YYMM>-0000 dengan YYMM = tahun & bulan BERJALAN
+   (2 digit tahun + bulan, todayISO), jadi tinggal nomor urutnya yang
+   diganti -- kotaknya memilih "0000" begitu diklik.
+
+   "0000" bukan nomor sungguhan. Doc No tidak wajib, jadi bawaan yang
+   dibiarkan TIDAK ikut tersimpan (fundDocNoTanpaBawaan, dipanggil
+   readDocNumForm) dan tidak tercetak; keterangan di bawah kotak
+   mengatakannya selama 0000-nya belum diganti. Semua bentuk EI-<4
+   angka>-0000 dianggap bawaan -- juga milik bulan lalu yang tersisa di
+   draf -- dan selama masih bawaan isinya ikut berganti ke bulan berjalan.
+
+   Kotak yang sudah diketik / dikosongkan sendiri tidak diisi lagi
+   sampai formnya dikosongkan. Pengajuan tersimpan yang dibuka untuk
+   diubah tidak pernah diberi bawaan: Doc No yang tidak pernah ada tidak
+   boleh mendadak muncul di sana. */
+const FUND_DOCNO_POLA = { awalan: "EI-", urut: "0000" };
+const FUND_DOCNO_POLA_BAWAAN = /^EI-\d{4}-0000$/i;
+
+function fundDocNoBawaan(tanggal) {
+  const iso = /^\d{4}-\d{2}/.test(String(tanggal || "")) ? String(tanggal) : todayISO();
+  return `${FUND_DOCNO_POLA.awalan}${iso.slice(2, 4)}${iso.slice(5, 7)}-${FUND_DOCNO_POLA.urut}`;
+}
+
+function fundDocNoAdalahBawaan(v) {
+  return FUND_DOCNO_POLA_BAWAAN.test(String(v == null ? "" : v).trim());
+}
+
+// Isi Doc No yang disimpan: bawaan yang belum diganti = tidak ada Doc No
+function fundDocNoTanpaBawaan(v) {
+  return fundDocNoAdalahBawaan(v) ? "" : String(v == null ? "" : v).trim();
+}
+
+function fundDocNoKeterangan(panel) {
+  const ket = panel && panel.querySelector ? panel.querySelector("#fundDocNoBawaanKet") : null;
+  const kotak = panel && panel.querySelector ? panel.querySelector('[data-dn="docNo"]') : null;
+  if (ket) ket.classList.toggle("d-none", !(kotak && !kotak.disabled && fundDocNoAdalahBawaan(kotak.value)));
+}
+
+/* `baru` = form baru saja dikosongkan / pertama dibuka: kotak kosong
+   diisi bawaan. Tanpa itu (penyelarasan biasa) hanya bawaan yang masih
+   utuh yang diperbarui ke bulan berjalan -- kotak yang sengaja
+   dikosongkan tetap kosong. */
+function fundIsiDocNoBawaan(panel, baru) {
+  if (!panel || !panel.matches || !panel.matches('[data-docnum-panel="fund"]')) return;
+  const kotak = panel.querySelector('[data-dn="docNo"]');
+  if (!kotak) return;
+  /* Sedang mengubah pengajuan tersimpan: panelnya dipinjam pop-up Ubah
+     Isian (mulaiUbahDocNum memindahkannya ke #dnEditBadan SEBELUM form
+     dikosongkan, dnEditingId baru dipasang sesudahnya) -- tidak disentuh. */
+  const sedangUbah = (typeof dnEditingId !== "undefined" && !!dnEditingId) || !!panel.closest("#dnEditBadan, #dnEditModal");
+  const kini = kotak.value.trim();
+  if (!sedangUbah && !kotak.disabled && ((baru && !kini) || fundDocNoAdalahBawaan(kini))) {
+    const bawaan = fundDocNoBawaan();
+    if (kotak.value !== bawaan) kotak.value = bawaan;
+  }
+  fundDocNoKeterangan(panel);
+}
+
+/* Klik / fokus ke kotak yang masih bawaan: "0000" langsung terpilih,
+   tinggal diketik nomor urutnya. Ditunda sesaat -- klik menaruh kursor
+   SESUDAH fokus, dan pilihan yang dibuat sebelum itu akan hilang. */
+function fundDocNoPilihUrut(kotak) {
+  if (!kotak || !fundDocNoAdalahBawaan(kotak.value)) return;
+  const pilih = () => {
+    if (document.activeElement !== kotak || !fundDocNoAdalahBawaan(kotak.value)) return;
+    const n = kotak.value.length;
+    try {
+      kotak.setSelectionRange(n - FUND_DOCNO_POLA.urut.length, n);
+    } catch (e) {
+      /* kotak tanpa kursor */
+    }
+  };
+  pilih();
+  setTimeout(pilih, 0);
+}
+
+document.addEventListener("focusin", (e) => {
+  const kotak = e.target && e.target.closest ? e.target.closest('[data-docnum-panel="fund"] [data-dn="docNo"]') : null;
+  if (kotak) fundDocNoPilihUrut(kotak);
+});
+document.addEventListener("input", (e) => {
+  const kotak = e.target && e.target.closest ? e.target.closest('[data-docnum-panel="fund"] [data-dn="docNo"]') : null;
+  if (kotak) fundDocNoKeterangan(kotak.closest("[data-docnum-panel]"));
+});
+
 /* ---------- kotak "Aturan Doc No" ---------- */
 
 function fundDocNoGambar() {
@@ -286,3 +375,6 @@ if (fundDocNoBoxEl) {
   });
   fundDocNoGambar();
 }
+
+// Form pengajuan baru saat aplikasi dibuka: Doc No bawaan bulan berjalan
+fundIsiDocNoBawaan(document.querySelector('[data-docnum-panel="fund"]'), true);

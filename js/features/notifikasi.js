@@ -26,6 +26,11 @@
    jadi tidak disaring: ETA ke pelabuhan pembeli tetap diberitahukan.
    Delivery to Factory hanya Import -- kolom `actual` di buku Export
    adalah tanggal Stuffing, bukan pengantaran ke pabrik.
+
+   MASA BERLAKU DOKUMEN (hitungNotifMasa): SKB PPh bawaan (skb-bawaan.js)
+   dan Masterlist (masterlist-view.js) yang "berlaku sampai"-nya tinggal
+   2 bulan (NOTIF_MASA_BULAN) -- lalu sekali lagi begitu sudah berakhir --
+   tampil di bagian "Masa berlaku" di atas panel.
 ================================================================== */
 
 const NOTIF_AWALAN_SIMPAN = "exim.notif.";
@@ -123,6 +128,7 @@ function hitungNotifikasi(hariIni) {
       }
     });
     Object.keys(keadaan.dibaca).forEach((k) => {
+      if (k.startsWith(NOTIF_MASA_AWALAN)) return; // milik hitungNotifMasa()
       const tgl = k.split("|")[2] || "";
       if (!ada.has(k.split("|")[0]) || tgl < batas) {
         delete keadaan.dibaca[k];
@@ -141,6 +147,151 @@ function hitungNotifikasi(hariIni) {
       String(a.s.party || "").localeCompare(String(b.s.party || "")),
   );
   return hasil;
+}
+
+/* ---------- MASA BERLAKU: SKB PPh bawaan & Masterlist ----------
+
+   Peringatan dua tahap per dokumen, masing-masing satu notifikasi:
+     dekat  sejak 2 BULAN sebelum "berlaku sampai" (NOTIF_MASA_BULAN) sampai
+            harinya -- "Berakhir dalam 12 hari". Dua bulan KALENDER, bukan
+            60 hari: berlaku s.d. 31 Desember -> mulai 31 Oktober; tanggal
+            yang tidak ada di bulan itu jatuh ke akhir bulannya (30 April
+            -> 28/29 Februari, 31 Desember -> 31 Oktober);
+     lewat  sesudahnya, sampai dokumen barunya dicatat -- "Sudah berakhir".
+   Kuncinya memuat nomor/id & tanggal berlakunya: SKB atau masterlist baru
+   (tanggal baru) = notifikasi baru, yang lama hilang sendiri.
+
+   Sumbernya data yang sudah ada: `skbBawaan` (report_settings, salinan
+   di peramban) dan baris tabel masterlists -- `mstDok` kalau halaman
+   Masterlist sudah dimuat, selain itu dibaca sekali saat aplikasi
+   dibuka (notifMuatMasaBerlaku). */
+const NOTIF_MASA_BULAN = 2;
+const NOTIF_MASA_AWALAN = "masa|";
+
+/* Hari pertama peringatan "dekat": `sampai` mundur NOTIF_MASA_BULAN bulan
+   kalender, tanggalnya dipotong ke akhir bulan bila tidak ada. "" bila
+   tanggalnya tak terbaca. */
+function notifMasaMulai(sampai) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sampai || "").slice(0, 10));
+  if (!m) return "";
+  let tahun = Number(m[1]);
+  let bulan = Number(m[2]) - NOTIF_MASA_BULAN; // 1..12, boleh <= 0 sebelum dirapikan
+  while (bulan < 1) {
+    bulan += 12;
+    tahun -= 1;
+  }
+  const akhirBulan = new Date(tahun, bulan, 0).getDate();
+  const hari = Math.min(Number(m[3]), akhirBulan);
+  return `${tahun}-${String(bulan).padStart(2, "0")}-${String(hari).padStart(2, "0")}`;
+}
+let notifMasterlist = null; // { id, name, valid_until } -- baris pertama tabel masterlists
+let notifMasaJanji = null;
+let notifMasaSiap = false;
+
+async function notifMuatMasterlist() {
+  if (typeof supabaseClient === "undefined" || !supabaseClient) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("masterlists")
+      .select("id, name, valid_until")
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (error) throw error;
+    notifMasterlist = (data || [])[0] || null;
+  } catch (e) {
+    console.error(e); // tabel belum ada / tak terbaca: tanpa peringatan masterlist
+  }
+}
+
+/* Sekali per sesi: SKB PPh bawaan terbaru & masa berlaku masterlist. */
+function notifMuatMasaBerlaku() {
+  if (!notifMasaJanji) {
+    notifMasaJanji = Promise.all([typeof skbBawaanMuat === "function" ? skbBawaanMuat() : null, notifMuatMasterlist()]).then(() => {
+      notifMasaSiap = true;
+      jadwalkanNotif();
+    });
+  }
+  return notifMasaJanji;
+}
+
+// Masterlist yang berlaku: dari halaman Masterlist bila sudah dimuat (paling baru)
+function notifMasterlistKini() {
+  return typeof mstTermuat !== "undefined" && mstTermuat ? mstDok || null : notifMasterlist;
+}
+
+/* Peringatan masa berlaku yang aktif hari ini. `hariIni` untuk pengujian. */
+function hitungNotifMasa(hariIni) {
+  const kini = hariIni || todayISO();
+  const keadaan = notifMuatKeadaan();
+  const hasil = [];
+  const tambah = (dok, id, nama, sampai, buka) => {
+    const sisa = calendarDaysBetweenISO(kini, sampai);
+    const mulai = notifMasaMulai(sampai);
+    if (sisa == null || !mulai || kini < mulai) return;
+    const tahap = sisa < 0 ? "lewat" : "dekat";
+    const kunci = `${NOTIF_MASA_AWALAN}${dok}|${String(id).replace(/\|/g, "/")}|${sampai}|${tahap}`;
+    hasil.push({ kunci, jenis: "masa", dok, nama, tgl: sampai, sisa, lewat: sisa < 0, buka, dibaca: !!keadaan.dibaca[kunci] });
+  };
+  const skb = typeof skbBawaan !== "undefined" ? skbBawaan : null;
+  if (skb && skb.nomor && skb.berlakuSampai) tambah("skb", skb.nomor, `SKB PPh ${skb.nomor}`, skb.berlakuSampai, "skb");
+  const ml = notifMasterlistKini();
+  if (ml && ml.valid_until) {
+    const namaMl = String(ml.name || "").trim();
+    tambah("masterlist", ml.id, /masterlist/i.test(namaMl) ? namaMl : ["Masterlist", namaMl].filter(Boolean).join(" "), ml.valid_until, "masterlist");
+  }
+
+  // Catatan dibaca milik peringatan yang sudah tidak aktif dibuang -- hanya
+  // sesudah sumbernya termuat (sebelum itu "tidak ada" belum tentu benar)
+  if (notifMasaSiap) {
+    const aktif = new Set(hasil.map((n) => n.kunci));
+    const basi = Object.keys(keadaan.dibaca).filter((k) => k.startsWith(NOTIF_MASA_AWALAN) && !aktif.has(k));
+    if (basi.length) {
+      basi.forEach((k) => delete keadaan.dibaca[k]);
+      notifSimpanKeadaan(keadaan);
+    }
+  }
+  // Yang sudah berakhir dulu, lalu yang paling dekat
+  return hasil.sort((a, b) => a.sisa - b.sisa);
+}
+
+function notifMasaStatus(n) {
+  if (n.sisa < 0) return tt(`Sudah berakhir ${-n.sisa} hari lalu`, `Expired ${-n.sisa} ${n.sisa === -1 ? "day" : "days"} ago`);
+  if (n.sisa === 0) return tt("Berakhir hari ini", "Expires today");
+  return tt(`Berakhir dalam ${n.sisa} hari`, `Expires in ${n.sisa} ${n.sisa === 1 ? "day" : "days"}`);
+}
+
+function notifMasaItemHtml(n) {
+  const aksi =
+    n.buka === "masterlist"
+      ? tt("Buka Masterlist", "Open the Masterlist")
+      : typeof canEdit !== "function" || canEdit()
+        ? tt("Perbarui SKB PPh bawaan", "Update the default SKB PPh")
+        : "";
+  return `<button type="button" class="notif-item${n.dibaca ? "" : " is-baru"}${n.lewat ? " is-lewat" : ""}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-masa="${escapeAttr(n.buka)}">
+    <span class="notif-teks">
+      <span class="notif-pihak">${escapeHtml(n.nama)}</span>
+      <span class="notif-meta"><span class="notif-masa-status">${escapeHtml(notifMasaStatus(n))}</span> · ${escapeHtml(tt("berlaku s.d.", "valid until"))} ${escapeHtml(fmtDate(n.tgl))}</span>
+      ${aksi ? `<span class="notif-masa-aksi">${escapeHtml(aksi)} <i class="bi bi-arrow-right" aria-hidden="true"></i></span>` : ""}
+    </span>
+    ${n.dibaca ? "" : `<span class="notif-titik"><span class="visually-hidden">${escapeHtml(tt("Belum dibaca", "Unread"))}</span></span>`}
+  </button>`;
+}
+
+function notifMasaHtml(daftar) {
+  if (!daftar.length) return "";
+  const judul = tt("Masa berlaku", "Validity");
+  return `<section class="notif-hari" aria-label="${escapeAttr(judul)}">
+    <h3 class="notif-kelompok"><span class="notif-kelompok-judul">${escapeHtml(judul)}</span><span class="notif-kelompok-tgl">${escapeHtml(tt("SKB & Masterlist", "SKB & Masterlist"))}</span></h3>
+    <div class="notif-jenis notif-jenis--masa" role="group" aria-label="${escapeAttr(`${tt("Dokumen yang segera berakhir", "Documents expiring soon")} (${daftar.length})`)}">
+      <div class="notif-jenis-kepala" aria-hidden="true">
+        <span class="notif-ikon notif-ikon--masa"><i class="bi bi-shield-exclamation"></i></span>
+        <span class="notif-jenis-nama">${escapeHtml(tt("Segera berakhir", "Expiring soon"))}</span>
+        <span class="notif-jenis-acuan">${escapeHtml(tt(`≤ ${NOTIF_MASA_BULAN} bulan`, `≤ ${NOTIF_MASA_BULAN} months`))}</span>
+        <span class="notif-jenis-jumlah">${daftar.length}</span>
+      </div>
+      ${daftar.map(notifMasaItemHtml).join("")}
+    </div>
+  </section>`;
 }
 
 function tandaiNotifDibaca(kunciDaftar) {
@@ -226,15 +377,16 @@ function gambarPanelNotif() {
   if (!notifDaftar.length) {
     isi.innerHTML = `<div class="notif-kosong"><i class="bi bi-bell-slash" aria-hidden="true"></i><p>${escapeHtml(
       tt(
-        "Belum ada notifikasi. Jadwal yang berangkat, tiba, atau dikirim ke pabrik besok akan muncul di sini.",
-        "No notifications yet. Schedules departing, arriving or being delivered to the factory tomorrow will appear here.",
+        "Belum ada notifikasi. Jadwal yang berangkat, tiba, atau dikirim ke pabrik besok — serta SKB PPh & Masterlist yang masa berlakunya tinggal 2 bulan — akan muncul di sini.",
+        "No notifications yet. Schedules departing, arriving or being delivered to the factory tomorrow — and an SKB PPh or Masterlist within 2 months of expiry — will appear here.",
       ),
     )}</p></div>`;
     return;
   }
-  isi.innerHTML = [
-    [tt("Hari ini", "Today"), notifDaftar.filter((n) => n.hariIni)],
-    [tt("Besok", "Tomorrow"), notifDaftar.filter((n) => !n.hariIni)],
+  const jadwal = notifDaftar.filter((n) => n.jenis !== "masa");
+  isi.innerHTML = notifMasaHtml(notifDaftar.filter((n) => n.jenis === "masa")) + [
+    [tt("Hari ini", "Today"), jadwal.filter((n) => n.hariIni)],
+    [tt("Besok", "Tomorrow"), jadwal.filter((n) => !n.hariIni)],
   ]
     .filter(([, daftar]) => daftar.length)
     .map(
@@ -299,7 +451,8 @@ function jadwalkanNotif() {
 function notifSegarkan() {
   if (typeof authState === "undefined" || !authState.user) return;
   if (typeof shipmentsLoaded !== "undefined" && !shipmentsLoaded) return;
-  notifDaftar = hitungNotifikasi();
+  notifMuatMasaBerlaku();
+  notifDaftar = hitungNotifMasa().concat(hitungNotifikasi());
   gambarLonceng();
   if (panelNotifTerbuka()) gambarPanelNotif();
 }
@@ -352,10 +505,14 @@ document.addEventListener("click", (e) => {
   }
   const item = e.target.closest("[data-notif-kunci]");
   if (item) {
-    // Klik notifikasi: tandai dibaca, lalu buka detail jadwalnya
+    // Klik notifikasi: tandai dibaca, lalu buka detail jadwalnya / dokumennya
     tandaiNotifDibaca(item.dataset.notifKunci);
     tutupPanelNotif(false);
-    openDetailView(item.dataset.notifJadwal);
+    const masa = item.dataset.notifMasa;
+    if (masa === "masterlist") location.hash = "#/masterlist";
+    else if (masa === "skb") {
+      if (typeof skbBawaanBukaUbah === "function" && (typeof canEdit !== "function" || canEdit())) skbBawaanBukaUbah();
+    } else openDetailView(item.dataset.notifJadwal);
     return;
   }
   // Klik di luar panel menutupnya

@@ -158,16 +158,34 @@ async function segarkanHsCodeDiam() {
   return true;
 }
 
-window.addEventListener("storage", (e) => {
-  if (e.key !== HSCODE_SINYAL) return;
-  segarkanHsCodeDiam().then((ok) => {
-    // Popover cari HS Code yang sedang terbuka ikut disegarkan.
-    if (ok && typeof saringHscodeLookup === "function") {
+/* Database HS Code berubah di luar tab ini -- tab sebelah (storage) atau
+   pengguna lain (pembaruan realtime, js/data/realtime.js). Daftar yang
+   pernah dimuat disegarkan diam-diam; popover cari HS Code yang sedang
+   terbuka ikut, dan tanda lartas di papan dihitung ulang. Tab yang belum
+   pernah memuatnya tidak perlu apa-apa: memuatnya nanti sudah terbaru. */
+function segarkanHsCodeDariLuar() {
+  if (!versiHsCode) return Promise.resolve(false);
+  return segarkanHsCodeDiam().then((ok) => {
+    if (!ok) return false;
+    if (typeof saringHscodeLookup === "function") {
       const pop = $("#hscodeLookupPop");
       if (pop && !pop.classList.contains("d-none")) saringHscodeLookup();
     }
+    if (document.documentElement.dataset.halaman === "schedule" && typeof render === "function") render();
+    return true;
   });
+}
+window.addEventListener("storage", (e) => {
+  if (e.key !== HSCODE_SINYAL) return;
+  segarkanHsCodeDariLuar();
 });
+let hsRtTunda = null;
+if (typeof realtimeDaftar === "function") {
+  realtimeDaftar("hs_code_master", () => {
+    clearTimeout(hsRtTunda);
+    hsRtTunda = setTimeout(segarkanHsCodeDariLuar, RT_JEDA.umum);
+  });
+}
 
 /* Halaman yang sedang dilihat. Dijepit ke jumlah halaman yang benar
    di setiap render -- menghapus baris terakhir di halaman terakhir

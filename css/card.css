@@ -605,12 +605,16 @@
 /* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
 .date-strip {
   display: grid;
-  /* auto-fit, bukan repeat(3): tiga kolom hanya selama masing-masing
-     masih muat 200px. Di bawah itu label "Estimated Delivery" beserta
-     lencananya pecah dua baris — jadi barisnya turun ke dua kolom
-     tepat sebelum itu terjadi, bukan setelahnya. */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  /* Kolom 200-224px DIRAPATKAN KE KIRI, bukan 1fr: sejak halaman selebar
+     layar, tiga kolom 1fr di kartu 1.500px berjarak 500px -- ETD, ETA dan
+     Estimated Delivery terbaca terpisah-pisah. 224px = kotak tanggal
+     (190px, css/lebar-isian.css) atau label terpanjang beserta lencananya
+     ("Estimated Delivery" + MANUAL), mana yang lebih lebar; sisanya kosong
+     di kanan. Di bawah 200px label itu pecah dua baris -- jadi barisnya
+     turun kolom tepat sebelum itu terjadi. */
+  grid-template-columns: repeat(auto-fill, minmax(200px, 224px));
+  justify-content: start;
+  gap: 12px 28px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -701,6 +705,8 @@
 .collapsed-meta b {
   color: var(--ink);
   font-weight: 600;
+  /* tanggalnya utuh ("24-10-" / "2026" di ponsel): barisnya yang turun */
+  white-space: nowrap;
 }
 
 /* STRIP JADWAL AWAL DI KARTU (status DELAY) */
@@ -709,7 +715,9 @@
   border: 1px dashed var(--amber);
   border-radius: 10px;
   background: var(--w-bg-fffaf0);
-  padding: 8px 12px 10px;
+  /* Tepi kiri & jarak antarkotak sama dengan baris tanggal di atasnya
+     (.date-strip): Updated ETD tepat di bawah ETD, Updated ETA di bawah ETA. */
+  padding: 8px 14px 10px;
 }
 .delay-strip-head {
   font-size: 0.72rem;
@@ -730,7 +738,7 @@
 }
 .delay-strip-fields {
   display: flex;
-  gap: 14px;
+  gap: 12px 28px;
   flex-wrap: wrap;
 }
 .delay-strip-fields .date-field {

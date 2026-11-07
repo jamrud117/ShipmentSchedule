@@ -605,6 +605,42 @@ body.is-viewer .delay-strip-fields input {
 .user-menu-lang + .user-menu-lang {
   padding-top: 0;
 }
+/* Pembaruan langsung (js/data/realtime.js): titik warna + satu kata */
+.rt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-600);
+  white-space: nowrap;
+}
+.rt-titik {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--n-400);
+  flex-shrink: 0;
+}
+.rt-status[data-rt="aktif"] {
+  color: var(--ts-success);
+}
+.rt-status[data-rt="aktif"] .rt-titik {
+  background: var(--ts-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ts-success) 22%, transparent);
+}
+.rt-status[data-rt="menyambung"] .rt-titik,
+.rt-status[data-rt="sebagian"] .rt-titik {
+  background: var(--ts-warn);
+}
+.rt-status[data-rt="sebagian"],
+.rt-status[data-rt="belum-aktif"] {
+  color: var(--ts-warn);
+}
+.rt-status[data-rt="belum-aktif"] .rt-titik {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ts-warn);
+}
 
 /* ------------------------------------------------------------------
    HALAMAN HS CODE -- satu panel: bilah atas + tabel selebar halaman

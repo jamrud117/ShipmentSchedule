@@ -113,13 +113,14 @@ function fsumTeksBulan(kunci) {
 }
 
 /* Pilihan Jenis Transaksi -- sama dengan dropdown di form Pengajuan Dana. */
-const FUND_JENIS_TRANSAKSI = ["Sea Import", "Sea Export", "Air Import", "Air Export", "Inland Trucking"];
+const FUND_JENIS_TRANSAKSI = ["Sea Import", "Sea Export", "Air Import", "Air Export", "Trucking"];
 
-/* Nama lama -> nama baru. "Local Sale" kini "Inland Trucking" (angkutan
-   darat dalam negeri). migration-fund-inland-trucking.sql mengganti data
-   yang tersimpan; selama belum dijalankan, pengajuan lama tetap terbaca
-   dengan nama baru di semua tampilan, ringkasan, dan laporan. */
-const FUND_TRANSAKSI_LAMA = { "Local Sale": "Inland Trucking" };
+/* Nama lama -> nama baru. Angkutan darat dalam negeri dulu "Local Sale",
+   lalu "Inland Trucking", kini "Trucking" saja.
+   migration-fund-trucking.sql mengganti data yang tersimpan (keduanya);
+   selama belum dijalankan, pengajuan lama tetap terbaca dengan nama baru
+   di semua tampilan, ringkasan, laporan, dan saat dibuka untuk diubah. */
+const FUND_TRANSAKSI_LAMA = { "Local Sale": "Trucking", "Inland Trucking": "Trucking" };
 function fundJenisTransaksiBaku(v) {
   const teks = String(v == null ? "" : v).trim();
   return FUND_TRANSAKSI_LAMA[teks] || teks;
@@ -147,7 +148,7 @@ const FSUM_KELOMPOK = {
     tampil: (k) => fsumTeksJenis(k.jenis),
     saring: (kunci) => ({ jenis: kunci }),
   },
-  /* Sea Import / Air Export / Inland Trucking ... -- pengajuan lama tanpa
+  /* Sea Import / Air Export / Trucking ... -- pengajuan lama tanpa
      isian ini terkumpul di satu baris "—". */
   transaksi: {
     label: () => tt("Jenis Transaksi", "Transaction Type"),
@@ -521,6 +522,20 @@ function fsumGambarHasil() {
   /* Rekap bulanan SELALU tampil, juga saat rentang tanggal di atas tidak
      memuat apa pun -- ia tidak memakai rentang itu. */
   box.innerHTML = html + fsumRekapHtml(semua, saringan);
+}
+
+/* Pembaruan realtime (docnum-view.js): pengajuan yang baru disimpan /
+   diubah / dihapus pengguna lain dipasang di salinan yang sudah termuat,
+   lalu hasilnya dihitung ulang -- penyaring yang sedang dipakai tetap. */
+function fsumTerapkanBaris(id, baris) {
+  if (!fsumBaris || typeof realtimePasangBaris !== "function") return false;
+  return realtimePasangBaris(fsumBaris, id, baris);
+}
+// false = belum pernah dimuat / panelnya tidak ada: muat penuh seperti biasa
+function fsumGambarUlangDiam() {
+  if (!fsumBaris || !$("#fsumHasil")) return false;
+  fsumGambarHasil();
+  return true;
 }
 
 /* Dipanggil renderDocNumHistory() saat tab Summary aktif. Datanya

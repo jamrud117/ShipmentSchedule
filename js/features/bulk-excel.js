@@ -413,9 +413,18 @@ function reconstructShipmentFromGroup(group, mode) {
   if (mode === "import") {
     s.ndpbm = excelNum(first[idx.NDPBM]);
     s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
-    // Kolom PI memuat PI dan LS ("LS <nomor>" di baris sendiri); nomor "A, B" jadi daftarnya
-    const piLs = pecahPiLs(excelStr(first[idx.PI]));
-    s.dokPelengkap = Object.assign(dokPelengkapKosong(), { pi: pecahNomorDokumen(piLs.pi), ls: pecahNomorDokumen(piLs.ls) });
+    /* Kolom PI memuat semua dokumen pelengkap non-fasilitas (kolomPiJadwal):
+       PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>";
+       nomor "A, B" jadi daftarnya */
+    const kolomPi = pecahKolomPi(excelStr(first[idx.PI]));
+    const lain = [];
+    kolomPi.lain.forEach((d) => tambahDokumenPengiriman(lain, d.nomor, "", d.kode));
+    s.dokPelengkap = Object.assign(dokPelengkapKosong(), {
+      pi: pecahNomorDokumen(kolomPi.pi),
+      ls: pecahNomorDokumen(kolomPi.ls),
+      polis: pecahNomorDokumen(kolomPi.polis),
+      lain,
+    });
     Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
     s.bm = bulatkanBm(excelNum(first[idx.BM])); // ke atas ke ribuan, seperti semua jalan masuk BM
     s.ppn = excelNum(first[idx.PPN]);
@@ -545,9 +554,13 @@ async function handleBulkImport(mode, file) {
             .eq("mode", mode);
           if (delErr) throw delErr;
           hapusLampiran(lampiranLama);
+          const baru = [];
           for (const r of reconstructed) {
-            await createShipment(r.shipment, r.items);
+            const baris = await createShipment(r.shipment, r.items, undefined, { tanpaSiaran: true });
+            if (baris && baris.id) baru.push(baris.id);
           }
+          // Satu siaran untuk seluruh berkas: pengguna lain memuat ulang papannya sekali (realtime.js)
+          if (typeof realtimeSiarkanJadwal === "function") realtimeSiarkanJadwal(baru);
           await loadShipments();
           showToast(
             t("x.jadwal.berhasil.diimpor", { n: reconstructed.length, mode: modeLabel }),
