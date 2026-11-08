@@ -151,7 +151,7 @@ function initAutoDutyFlags() {
   el.PPh.dataset.auto = otomatis("PPh", dasarPajak) ? "1" : "0";
 }
 
-["fFreight", "fInsurance", "fNdpbm", "fTarif", "fBM", "fPPN", "fPPH"].forEach(
+["fFreight", "fInsurance", "fNdpbm", "fBM", "fPPN", "fPPH"].forEach(
   (id) => {
     $("#" + id).addEventListener("input", recalcCustoms);
   },
@@ -184,14 +184,15 @@ function nilaiKotakAngka(sel) {
 
 // Dasar hitungan Bea & Pajak Impor dari isian form -- juga dibaca Data PIB (data-pabean-form.js)
 function dasarPungutanForm() {
-  const tarif = String($("#fTarif").value || "").trim();
   return {
     items: draftItems,
     freightUsd: nilaiKotakAngka("#fFreight"),
     asuransiUsd: nilaiKotakAngka("#fInsurance"),
     ndpbm: nilaiKotakAngka("#fNdpbm"),
-    // Kotak Tarif kosong (jadwal lama) = 5%; "0" berarti 0% (mis. FTA)
-    tarifBm: tarif === "" ? 5 : nilaiKotakAngka("#fTarif"),
+    /* Tarif BM milik TIAP BARANG (item.dataPabean.tarifBm, kolom Tarif BM
+       di Daftar Barang -- tarif-hs.js); barang tanpa tarif = 5% bawaan.
+       "0" berarti 0% (mis. FTA). */
+    tarifBm: TARIF_BM_BAWAAN,
   };
 }
 
@@ -257,10 +258,11 @@ function recalcCustoms() {
   $$(".calc-box--fob").forEach((el) => {
     el.classList.toggle("d-none", !isFOB);
   });
-  if (isFOB) {
-    $("#calcFOB").textContent = fmtUSD(calc.fobUsd);
-    $("#calcFOBRupiah").textContent = fmtRp(calc.fobRupiah);
-  }
+  if (isFOB) $("#calcFOBRupiah").textContent = fmtRp(calc.fobRupiah);
+  // Incoterm CIF: CIF Rupiah = Total Nilai Barang (USD) × NDPBM
+  const isCIF = tmp.incoterm === "CIF";
+  $$(".calc-box--cif").forEach((el) => el.classList.toggle("d-none", !isCIF));
+  if (isCIF) $("#calcCIFRupiah").textContent = fmtRp(calc.cifRupiah);
 
   // Tanpa awalan "Rp" di dalam nilainya
   $("#calcPDRI").value = formatNumberValue(calc.bmPdri);

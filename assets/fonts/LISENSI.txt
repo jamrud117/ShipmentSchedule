@@ -1,0 +1,16 @@
+Huruf yang dikemas di folder ini
+
+IBM Plex Sans, IBM Plex Mono
+  Copyright 2017-2019 IBM Corp. All rights reserved.
+  https://github.com/IBM/plex
+
+Barlow Condensed
+  Copyright 2017 The Barlow Project Authors
+  https://github.com/jpt/barlow
+
+Ketiganya dilisensikan di bawah SIL Open Font License, Version 1.1
+(https://openfontlicense.org). Berkas di sini adalah subset latin dalam
+format woff2, disalin dari paket @fontsource tanpa perubahan pada
+desain hurufnya. Huruf boleh dipakai, disalin, dan dibagikan bersama
+aplikasi, asal pemberitahuan hak cipta ini ikut disertakan dan huruf
+tidak dijual tersendiri.

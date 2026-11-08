@@ -73,11 +73,17 @@ function kebutuhanLartas(s, items) {
   if (!s || s.mode === "export") return out;
   (items || s.items || []).forEach((it) => {
     if (!it) return;
+    const hs = hsDelapanDigit(it.hsCode);
+    const kode = lartasHsCode(hs);
+    const bukanBaru = kodeKondisiBarang(it.kondisiBarang) === "2";
+    /* Nama tampilan barang (itemDisplayName: gabungan 5 kolom CEISA) baru
+       dirakit untuk barang yang memang berlartas -- dipanggil untuk SEMUA
+       barang semua jadwal tiap lonceng notifikasi & Ringkasan dihitung. */
+    if (!kode.length && !bukanBaru) return;
     const barang = (typeof itemDisplayName === "function" ? itemDisplayName(it) : it.namaBarang) || "";
     if (!String(barang).trim() && !it.hsCode) return;
-    const hs = hsDelapanDigit(it.hsCode);
-    lartasHsCode(hs).forEach((k) => out[k].push({ sebab: "hs", hs, barang }));
-    if (kodeKondisiBarang(it.kondisiBarang) === "2") out.PI.push({ sebab: "bukanBaru", hs, barang });
+    kode.forEach((k) => out[k].push({ sebab: "hs", hs, barang }));
+    if (bukanBaru) out.PI.push({ sebab: "bukanBaru", hs, barang });
   });
   return out;
 }

@@ -31,8 +31,7 @@ html[data-halaman="form"] {
 
 /* Scrollbar disembunyikan, gulir tetap jalan. overflow-y: scroll ditahan agar lebar isi tidak bergeser antar halaman */
 html {
-  overflow-y: scroll;
-  scrollbar-width: none; /* Firefox */
+  overflow-y: scroll; /* Firefox */
   -ms-overflow-style: none; /* Edge lama */
 }
 html::-webkit-scrollbar,
@@ -59,9 +58,6 @@ body::-webkit-scrollbar {
   display: none;
 }
 body {
-  background: var(--bg);
-  font-family: var(--font-body);
-  color: var(--ink);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -84,8 +80,6 @@ body {
   font-family: var(--font-display);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--n-500);
 }
 
 /* Penanda dokumen */
@@ -173,11 +167,7 @@ body {
   height: var(--ctl-h);
   padding: 0 18px;
   border: 1px solid var(--p-600);
-  border-radius: var(--r-md);
-  background: var(--p-600);
-  color: #fff;
   font-size: var(--t-base);
-  font-weight: 600;
   white-space: nowrap;
 }
 .btn-primary-navy:hover,
@@ -236,7 +226,6 @@ body {
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
   background: var(--surface);
   color: var(--n-600);
 }

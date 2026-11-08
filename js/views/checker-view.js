@@ -961,9 +961,10 @@ function cekBlokBarang(no, it, kd, bc, sumber, isPib) {
    Isian Data PIB/PEB jadwal -- yang tersimpan, isian kosongnya diisi
    nilai bawaan (dpEfektif: kantor & jenis per moda, data perusahaan,
    valuta USD, ...) -- dibandingkan dengan isian yang sama di draft
-   (ceisaDataPabean, dibaca menurut jenis draftnya). SEMUANYA OPSIONAL:
-   isian yang kosong di jadwal tidak diperiksa; yang tidak tercantum di
-   draft cukup INFO; alamat yang ditulis lain INFO. Kunci barisnya
+   (ceisaDataPabean, dibaca menurut jenis draftnya). Tiap isian yang
+   terisi di salah satu sisi punya baris: kosong di jadwal atau tidak
+   tercantum di draft INFO; alamat yang ditulis lain INFO; selebihnya
+   MISMATCH bila berbeda. Kunci barisnya
    "dp:<isian>" / "barang:<seri>:<isian>" -- letaknya di cetak draft
    (cek-cetak.js). Keterangan Pembayaran & nomor/tanggal transaksi tidak
    ada di Excel CEISA, jadi tidak dibandingkan. */
@@ -1000,7 +1001,11 @@ const cekTampilDp = (v, jenis, pilihan) => (jenis === "pilihan" ? dpNamaPilihan(
 
 function cekBandingDp(rows, baris, a, b, jenis, pilihan, opsi) {
   const o = opsi || {};
-  if (!dpAda(a)) return;
+  if (!dpAda(a)) {
+    // Kosong di jadwal, terisi di draft: tetap tampil (INFO) -- tidak ada isian draft yang lolos tanpa terlihat
+    if (dpAda(b)) rows.push(baris("INFO", "", cekTampilDp(b, jenis, pilihan), tt("Belum diisi di jadwal.", "Not filled in on the schedule.")));
+    return;
+  }
   const kiri = cekTampilDp(a, jenis, pilihan);
   if (!dpAda(b)) return rows.push(baris("INFO", kiri, "", tt("Draft tidak mencantumkannya.", "The draft does not state it.")));
   const sama = (o.sama || cekSamaDp)(a, b, jenis);
@@ -1015,7 +1020,8 @@ function cekBarisDataPabean(s, bc, isPeb) {
   const draft = cekDpDraft(bc, mode).jadwal;
   const rows = [];
   const pembuat = (seksi, kunci, field) => (status, kiri, kanan, catatan) =>
-    Object.assign(cekBarisBaru(seksi, tt("Jadwal", "Schedule"))(field, status, kiri, kanan, catatan), { kunci, dariJadwal: true });
+    // dariJadwal = jadwal MEMUAT nilainya. Baris INFO "belum diisi di jadwal" tidak boleh menggeser baris CIPL yang punya nilai (cekRujukJadwal)
+    Object.assign(cekBarisBaru(seksi, tt("Jadwal", "Schedule"))(field, status, kiri, kanan, catatan), { kunci, dariJadwal: dpAda(kiri) });
   DP_GRUP.forEach((g) => g.isian.forEach((f) => {
     if (!dpBerlaku(g, mode) || !dpBerlaku(f, mode) || CEK_DP_TANPA.has(f.k)) return;
     const kunci = /^packingList/.test(f.k) ? "packingList" : `dp:${f.k}`;
@@ -1194,6 +1200,66 @@ function cekTanggalJadwal(s, kolom) {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : "";
 }
 
+/* NDPBM -- sisi jadwal = KURS TERBARU dari sheet KURS (core/kurs.js).
+
+   Yang dibandingkan dengan NDPBM draft adalah kurs terbaru sheet untuk
+   valuta draft, BUKAN NDPBM yang tersimpan di jadwal (kurs pekan saat
+   jadwal dibuat). NDPBM jadwal tidak disentuh di sini dan tidak pernah
+   berubah sendiri; ia hanya berganti lewat tombol "Sync kurs terbaru"
+   di form jadwal. Beda keduanya cukup disebut di catatan.
+
+   Kurs tidak terbaca (tanpa internet dan tanpa salinan) -> valuta USD
+   dibandingkan dengan NDPBM tersimpan di jadwal seperti sebelum ada
+   kurs otomatis; valuta lain tidak bisa diperiksa (INFO). */
+function cekBarisNdpbm(s, decl, tambah, kosong, tanpaDraft) {
+  const field = "NDPBM";
+  const kode = String(decl.currency || "").trim().toUpperCase() || "USD";
+  const draft = decl.ndpbm == null || decl.ndpbm === "" ? null : Number(decl.ndpbm);
+  const tersimpan = Number(s.ndpbm) || 0;
+  const sumberOto = tt("Kurs otomatis", "Auto rate");
+  const b = kode === "IDR" || kursAdaData() ? kursBandingkan(draft || 0, kode) : null;
+
+  if (b && b.ada) {
+    if (!draft) {
+      if (kode === "IDR") return;
+      return tambah("VALUE", "ndpbm", field, "INFO", b.harapan, "", tt(`Draft tidak mencantumkan NDPBM. Kurs ${kode} terbaru di sheet KURS: ${kursFormat(b.harapan)}.`, `The draft does not state the NDPBM. Latest ${kode} rate in the KURS sheet: ${kursFormat(b.harapan)}.`), { numeric: true, left_source: sumberOto });
+    }
+    const dasar = kode === "IDR"
+      ? tt("Valuta IDR: NDPBM 1.", "Currency IDR: NDPBM is 1.")
+      : tt(`Kurs ${kode} terbaru dari sheet KURS (${kursUmurTeks()}${kursKeadaan.data.dariCache ? ", salinan tersimpan karena sheet tidak terbaca" : ""}).`, `Latest ${kode} rate from the KURS sheet (${kursUmurTeks()}${kursKeadaan.data.dariCache ? ", saved copy because the sheet could not be read" : ""}).`);
+    const catatan = [];
+    if (!b.sama) {
+      const r = b.kurs;
+      if (b.skalaMentah) catatan.push(tt(`Angka draft sama dengan kurs per ${b.satuan} ${kode}; NDPBM harus per 1 ${kode} (${kursFormat(b.harapan)}).`, `The draft figure is the rate per ${b.satuan} ${kode}; the NDPBM must be per 1 ${kode} (${kursFormat(b.harapan)}).`));
+      else if (r && r.sebelumnya != null && Math.abs(draft - r.sebelumnya / r.satuan) <= 0.01 + 1e-9)
+        catatan.push(tt(`Draft memakai kurs sebelumnya (${kursFormat(r.sebelumnya / r.satuan)}). Kurs pajak berganti tiap pekan.`, `The draft uses the previous rate (${kursFormat(r.sebelumnya / r.satuan)}). The tax rate changes every week.`));
+      else catatan.push(tt("NDPBM draft berbeda dengan kurs terbaru. Kurs pajak berganti tiap pekan.", "The draft NDPBM differs from the latest rate. The tax rate changes every week."));
+      // Dampaknya pada Nilai Pabean PIB (baris Rupiah di bawah memakai NDPBM draft, jadi dampak kurs disebut di sini saja)
+      const nilaiValuta = (Number(decl.cif) || 0) + (Number(decl.freight) || 0) + (Number(decl.insurance) || 0);
+      const dampak = Math.round(nilaiValuta * (b.harapan - draft));
+      if (decl.type !== "PEB" && kode !== "IDR" && nilaiValuta > 0 && dampak)
+        catatan.push(tt(`Dengan kurs terbaru, Nilai Pabean sekitar ${fmtRp(Math.abs(dampak))} ${dampak > 0 ? "lebih tinggi" : "lebih rendah"} dari draft.`, `At the latest rate the customs value would be about ${fmtRp(Math.abs(dampak))} ${dampak > 0 ? "higher" : "lower"} than the draft.`));
+    }
+    catatan.push(dasar);
+    if (kode === "USD" && tersimpan > 0 && Math.abs(tersimpan - b.harapan) > 0.01)
+      catatan.push(tt(`NDPBM tersimpan di jadwal (${kursFormat(tersimpan)}) tidak ikut dibandingkan. Pakai "Sync kurs terbaru" di form jadwal bila ingin memperbaruinya.`, `The NDPBM saved on the schedule (${kursFormat(tersimpan)}) is not compared. Use "Sync latest rate" in the schedule form to update it.`));
+    return tambah("VALUE", "ndpbm", field, b.sama ? "MATCH" : "MISMATCH", b.harapan, draft, catatan.join(" "), { numeric: true, diff: Math.round((b.harapan - draft) * 10000) / 10000, left_source: sumberOto });
+  }
+
+  // Tanpa kurs otomatis
+  const alasan = b ? tt(`Valuta ${kode} tidak ada di sheet KURS.`, `Currency ${kode} is not in the KURS sheet.`) : tt("Kurs otomatis tidak terbaca (tanpa internet / sheet tidak bisa dibuka).", "The automatic rate could not be read (offline / the sheet cannot be opened).");
+  if (kode !== "USD") {
+    if (draft) tambah("VALUE", "ndpbm", field, "INFO", "", draft, `${alasan} ${tt("NDPBM tidak bisa diperiksa.", "The NDPBM cannot be checked.")}`, { left_source: sumberOto });
+    return;
+  }
+  // USD: NDPBM tersimpan di jadwal (kurs jadwal selalu dalam USD)
+  if (!tersimpan && !draft) return;
+  if (!tersimpan) return kosong("VALUE", "ndpbm", field, cekAngka(draft));
+  if (!draft) return tanpaDraft("VALUE", "ndpbm", field, cekAngka(tersimpan), field);
+  const beda = Math.round((tersimpan - draft) * 1000) / 1000;
+  tambah("VALUE", "ndpbm", field, Math.abs(beda) <= 0.01 ? "MATCH" : "MISMATCH", tersimpan, draft, `${alasan} ${tt("Dibandingkan dengan NDPBM tersimpan di jadwal.", "Compared with the NDPBM saved on the schedule.")}`, { numeric: true, diff: beda });
+}
+
 /* ISIAN JADWAL TERKAIT VS DRAFT -- jadwal RUJUKAN UTAMA pemeriksaan.
 
    Tiap baris ditaruh di bagian yang sama dengan isiannya di draft
@@ -1226,6 +1292,18 @@ function cekBarisJadwal(s, decl, bc, opsi) {
   const kosong = (seksi, kunci, field, kanan) => tambah(seksi, kunci, field, "INFO", "", kanan, tt("Belum diisi di jadwal.", "Not filled in on the schedule."));
   const tanpaDraft = (seksi, kunci, field, kiri, apa) => tambah(seksi, kunci, field, "INFO", kiri, "", tt(`Draft tidak mencantumkan ${apa}.`, `The draft does not state the ${apa}.`));
 
+  /* No. Aju dan No. SPPB / No. Daftar: HANYA INFORMASI. Nomornya lahir
+     dari proses lain (aju dibuat bersama draft, SPPB terbit sesudah PIB
+     lolos), jadi bedanya bukan isian yang harus dibetulkan. Selalu INFO:
+     tidak menambah MISMATCH, tidak mengubah vonis, tidak diberi nomor
+     temuan di cetakan. Semua isian lain di halaman ini wajib cocok. */
+  const infoSaja = (kunci, field, kiri, kanan, sama) =>
+    tambah("HEADER", kunci, field, "INFO", kiri, kanan,
+      sama
+        ? tt("Sama dengan draft. Hanya informasi, tidak ikut penilaian.", "Same as the draft. Information only, not part of the verdict.")
+        : tt("Berbeda dengan draft. Hanya informasi, tidak ikut penilaian.", "Differs from the draft. Information only, not part of the verdict."),
+      { aligned: true, infoSaja: true });
+
   // No. Aju
   if (cekDigit(decl.aju) || cekDigit(s.noAju)) {
     const field = tt("No. Aju", "Aju No.");
@@ -1233,13 +1311,15 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     const B = cekDigit(decl.aju);
     if (!A) kosong("HEADER", "aju", field, decl.aju);
     else if (!B) tanpaDraft("HEADER", "aju", field, s.noAju, tt("nomor aju", "aju number"));
-    else tambah("HEADER", "aju", field, A === B ? "MATCH" : "MISMATCH", s.noAju, decl.aju, A === B ? "" : tt("Nomor aju di jadwal berbeda dengan draft.", "The aju number on the schedule differs from the draft."), { aligned: true });
+    else infoSaja("aju", field, s.noAju, decl.aju, A === B);
   }
 
-  // Nomor daftar (draft yang sudah didaftarkan)
-  if (cekAda(f.docNo) && cekAda(s.docNo)) {
-    const sama = kunciAlnum(f.docNo) === kunciAlnum(s.docNo);
-    tambah("HEADER", "docNo", isPeb ? tt("No. PEB (daftar)", "PEB No. (registration)") : tt("No. Daftar PIB", "PIB registration No."), sama ? "MATCH" : "MISMATCH", s.docNo, f.docNo);
+  // No. SPPB (jadwal) vs nomor daftar draft yang sudah didaftarkan
+  if (cekAda(f.docNo) || cekAda(s.docNo)) {
+    const field = isPeb ? tt("No. PEB / No. Daftar", "PEB No. / Registration No.") : tt("No. SPPB / No. Daftar", "SPPB No. / Registration No.");
+    if (!cekAda(s.docNo)) kosong("HEADER", "docNo", field, f.docNo);
+    else if (!cekAda(f.docNo)) tanpaDraft("HEADER", "docNo", field, s.docNo, tt("nomor daftar", "registration number"));
+    else infoSaja("docNo", field, s.docNo, f.docNo, kunciAlnum(f.docNo) === kunciAlnum(s.docNo));
   }
 
   // Invoice: semua nomor di jadwal harus ada sebagai dokumen 380, dan sebaliknya
@@ -1385,7 +1465,7 @@ function cekBarisJadwal(s, decl, bc, opsi) {
   };
   uang("freight", "Freight", s.freight, decl.freight, /^(?:EXW|FCA|FAS|FOB)$/.test(incoterm));
   uang("asuransi", tt("Asuransi", "Insurance"), s.insurance, decl.insurance, !!incoterm && !/^(?:CIF|CIP)$/.test(incoterm));
-  uang("ndpbm", "NDPBM", s.ndpbm, decl.ndpbm, false);
+  cekBarisNdpbm(s, decl, tambah, kosong, tanpaDraft);
 
   // Kemasan: jumlah harus sama; jenisnya dibandingkan menurut maknanya (BOX = BX)
   {
@@ -1451,16 +1531,154 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     });
   }
 
-  /* PEB: ETD jadwal vs TANGGAL EKSPOR -- perkiraan, jadi INFO bila
-     berbeda. ETD vs tanggal B/L-AWB dan ETA vs TANGGAL TIBA tidak
+  /* PEB: ETD jadwal vs TANGGAL EKSPOR; PIB: ETA jadwal vs TANGGAL TIBA --
+     perkiraan, jadi INFO bila berbeda. ETD vs tanggal B/L-AWB tidak
      diperiksa. */
+  if (!isPeb && bc && bc.lembar) {
+    const eta = cekTanggalJadwal(s, "eta");
+    const tiba = excelValueToISODate((bc.lembar.header || {})["TANGGAL TIBA"]) || "";
+    const field = tt("ETA ↔ tanggal tiba", "ETA ↔ arrival date");
+    if (eta && tiba) tambah("TRANSPORT", "eta", field, eta === tiba ? "MATCH" : "INFO", eta, tiba, eta === tiba ? "" : tt("TANGGAL TIBA di draft berbeda dengan ETA jadwal.", "The draft's TANGGAL TIBA differs from the schedule's ETA."));
+    else if (tiba) kosong("TRANSPORT", "eta", field, tiba);
+    else if (eta) tanpaDraft("TRANSPORT", "eta", field, eta, tt("tanggal tiba", "arrival date"));
+  }
+  // PEB: volume (CBM) di header draft vs total CBM barang jadwal
+  if (isPeb && Number(decl.volume) > 0) {
+    const cbm = itemTotals({ items: s.items || [] }).totalCbm;
+    const field = tt("Volume (CBM)", "Volume (CBM)");
+    if (!(cbm > 0)) kosong("WEIGHT", "volume", field, cekAngka(decl.volume));
+    else {
+      const beda = Math.round((cbm - Number(decl.volume)) * 1000) / 1000;
+      tambah("WEIGHT", "volume", field, Math.abs(beda) <= 0.01 ? "MATCH" : "INFO", cbm, Number(decl.volume), Math.abs(beda) <= 0.01 ? "" : tt("Volume di jadwal berbeda dengan draft.", "The volume on the schedule differs from the draft."), { numeric: true, diff: beda });
+    }
+  }
   if (isPeb) {
     const etd = cekTanggalJadwal(s, "etd");
     const ex = E.normalizeDate(decl.export_date || "");
     if (etd && ex) tambah("TRANSPORT", "etd", tt("ETD ↔ tanggal ekspor", "ETD ↔ export date"), ex === etd ? "MATCH" : "INFO", etd, ex, ex === etd ? "" : tt("TANGGAL EKSPOR di draft berbeda dengan ETD jadwal.", "TANGGAL EKSPOR in the draft differs from the schedule's ETD."));
   }
-  // Data PIB/PEB (halaman Data PIB/PEB form jadwal, termasuk nilai bawaannya)
-  return rows.concat(cekBarisDataPabean(s, bc, isPeb));
+  // Nilai Rupiah (Nilai Pabean & tabel pungutan), dokumen lain, lalu Data PIB/PEB (halaman Data PIB/PEB form jadwal, termasuk nilai bawaannya)
+  return rows.concat(cekBarisRupiah(s, decl, bc, isPeb), cekBarisDokumenLain(s, decl), cekBarisDataPabean(s, bc, isPeb));
+}
+
+/* NILAI RUPIAH PIB -- Nilai Pabean & tabel pungutan (BM, PPN, PPh x kolom
+   fasilitas) yang tercetak di draft vs hitungan dari data jadwal (barang,
+   tarif, freight, asuransi, fasilitas barang). Hitungannya SATU dengan
+   form jadwal (dpNilaiHitung -> hitungPungutanFasilitas, core/customs.js).
+
+   Kursnya NDPBM DRAFT. Kurs sudah diperiksa sendiri di baris NDPBM
+   (terhadap kurs otomatis sheet KURS); kalau baris Rupiah ikut kurs
+   otomatis, satu kurs yang berbeda menjadi lima MISMATCH yang menutupi
+   kesalahan lain (tarif, fasilitas, freight). Dengan kurs draft, baris
+   ini memeriksa SELAIN kurs; dampak kurs dalam Rupiah ditulis di catatan
+   baris NDPBM. Hanya PIB: draft PEB tidak memuat pungutan yang dihitung
+   jadwal. Draft tanpa sheet PUNGUTAN: satu baris INFO. */
+const CEK_KOLOM_FASILITAS = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 };
+const CEK_PUNGUTAN_JENIS = { BM: "BM", BMKITE: "BM KITE", "BM KITE": "BM KITE", BMT: "BMT", CUKAI: "Cukai", PPN: "PPN", PPNBM: "PPnBM", PPH: "PPh" };
+const CEK_PUNGUTAN_DIHITUNG = ["BM", "PPN", "PPh", "TOTAL"];
+
+// Tabel pungutan draft: { BM: [6 kolom], ..., TOTAL: [6 kolom] }; null bila drafnya tidak memuat sheet PUNGUTAN
+function cekPungutanDraft(lembar) {
+  const baris = (lembar && lembar.pungutan) || [];
+  const tabel = {};
+  baris.forEach((x) => {
+    const j = CEK_PUNGUTAN_JENIS[String(x["KODE JENIS PUNGUTAN"] == null ? "" : x["KODE JENIS PUNGUTAN"]).trim().toUpperCase()];
+    const kol = CEK_KOLOM_FASILITAS[String(x["KODE FASILITAS TARIF"] == null ? "" : x["KODE FASILITAS TARIF"]).trim()];
+    if (!j || kol == null) return;
+    tabel[j] = tabel[j] || [0, 0, 0, 0, 0, 0];
+    tabel[j][kol] += Number(x["NILAI PUNGUTAN"]) || 0;
+  });
+  if (!Object.keys(tabel).length) return null;
+  tabel.TOTAL = [0, 1, 2, 3, 4, 5].map((i) => Object.values(tabel).reduce((a, b) => a + b[i], 0));
+  return tabel;
+}
+
+function cekBarisRupiah(s, decl, bc, isPeb) {
+  if (!s || isPeb) return [];
+  const rows = [];
+  const baris = (kunci, field) => (status, kiri, kanan, catatan) =>
+    Object.assign(cekBarisBaru("VALUE", tt("Jadwal", "Schedule"))(field, status, kiri, kanan, catatan, { numeric: true }), { kunci, dariJadwal: cekAda(kiri) });
+  const fieldPabean = tt("Nilai Pabean (Rp)", "Customs Value (Rp)");
+  const info = (kunci, field, catatan) => [baris(kunci, field)("INFO", "", "", catatan)];
+  const mataUang = String(decl.currency || "").trim().toUpperCase();
+  if (mataUang && mataUang !== "USD")
+    return info("nilaiPabeanRp", fieldPabean, tt(`Valuta draft ${mataUang}: jadwal berhitung dalam USD, jadi nilai Rupiah tidak dibandingkan.`, `Draft currency ${mataUang}: the schedule works in USD, so the Rupiah amounts are not compared.`));
+  const ndpbm = Number(decl.ndpbm) || 0;
+  if (!(ndpbm > 0)) return info("nilaiPabeanRp", fieldPabean, tt("NDPBM draft kosong, jadi nilai Rupiah tidak bisa dihitung.", "The draft NDPBM is empty, so the Rupiah amounts cannot be calculated."));
+  if (!(itemTotals({ items: s.items || [] }).totalUSD > 0)) return info("nilaiPabeanRp", fieldPabean, tt("Jadwal belum memuat nilai barang, jadi nilai Rupiah tidak dihitung.", "The schedule has no goods value yet, so the Rupiah amounts are not calculated."));
+
+  const hitung = dpNilaiHitung(Object.assign({}, s, { mode: "import", ndpbm }));
+  const bulat2 = (v) => Math.round(v * 100) / 100;
+  const dasar = tt("Dihitung dari barang, tarif, freight, asuransi & fasilitas jadwal dengan NDPBM draft.", "Calculated from the schedule's items, rates, freight, insurance & facilities with the draft NDPBM.");
+  const nilaiDraft = (Number(decl.cif) || 0) + (Number(decl.freight) || 0) + (Number(decl.insurance) || 0);
+  const a = bulat2(hitung.nilaiPabean);
+  const b = bulat2(nilaiDraft * ndpbm);
+  const sama = Math.abs(a - b) <= 1;
+  rows.push(Object.assign(baris("nilaiPabeanRp", fieldPabean)(sama ? "MATCH" : "MISMATCH", a, b, dasar), { diff: bulat2(a - b) }));
+
+  const draft = cekPungutanDraft(bc && bc.lembar);
+  if (!draft) return rows.concat(info("dp:pungutan", tt("Pungutan (BM, PPN, PPh)", "Duties & taxes (BM, PPN, PPh)"), tt("Draft tidak memuat sheet PUNGUTAN, jadi BM, PPN & PPh tidak dibandingkan.", "The draft has no PUNGUTAN sheet, so BM, PPN & PPh are not compared.")));
+  const jadwal = hitung.pungutan.tabel;
+  const lain = DP_PUNGUTAN_JENIS.filter((j) => !CEK_PUNGUTAN_DIHITUNG.includes(j) && (draft[j] || []).some((v) => v));
+  DP_PUNGUTAN_JENIS.forEach((j) => {
+    if (j === "TOTAL" && lain.length) return; // total draft memuat jenis yang tidak dihitung jadwal
+    const dihitung = CEK_PUNGUTAN_DIHITUNG.includes(j);
+    for (let c = 0; c < 6; c++) {
+      const kiri = dihitung ? jadwal[j][c] : null;
+      const kanan = (draft[j] || [])[c] || 0;
+      if (!kiri && !kanan) continue;
+      const field = dpLabelKunci(`pungutan.${j}.${c}`);
+      const kunci = `dp:pungutan.${j}.${c}`;
+      if (!dihitung) {
+        rows.push(baris(kunci, field)("INFO", "", kanan, tt("Jadwal tidak menghitung jenis pungutan ini.", "The schedule does not calculate this kind of levy.")));
+        continue;
+      }
+      const beda = bulat2(kiri - kanan);
+      const ok = Math.abs(beda) <= 1;
+      rows.push(Object.assign(baris(kunci, field)(ok ? "MATCH" : "MISMATCH", kiri, kanan, ok ? "" : dasar), { diff: beda }));
+    }
+  });
+  return rows;
+}
+
+/* DOKUMEN LAIN -- dokumen di sheet DOKUMEN draft yang tidak punya baris
+   sendiri (invoice, packing list, B/L-AWB, polis, PI, LS, SKB, COO,
+   masterlist sudah diperiksa di tempatnya) vs "Dokumen lain" jadwal:
+   nomor & tanggalnya dicocokkan menurut kode dokumen. Dokumen jadwal yang
+   tidak ada di draft MISMATCH; dokumen draft yang belum ada di jadwal INFO. */
+const CEK_DOK_TERCAKUP = /^(?:380|217|530|958|959|912|456|457|860|861|703|704|705|714|740|741)$/;
+function cekBarisDokumenLain(s, decl) {
+  if (!s) return [];
+  const kodeDok = (d) => String(d.code == null ? "" : d.code).trim();
+  const draft = (decl.documents || []).filter((d) => kodeDok(d) && !CEK_DOK_TERCAKUP.test(kodeDok(d)));
+  const jadwal = dpDokumenJadwal(s).filter((d) => d.kode && !CEK_DOK_TERCAKUP.test(d.kode));
+  if (!draft.length && !jadwal.length) return [];
+  const baris = cekBarisBaru("DOCUMENT", tt("Jadwal", "Schedule"));
+  const nama = (kode) => (typeof namaDokumenCeisa === "function" && namaDokumenCeisa(kode)) || kode;
+  const ringkas = (nomor, tanggal) => [String(nomor == null ? "" : nomor).trim(), tanggal ? `(${String(tanggal).slice(0, 10)})` : ""].filter(Boolean).join(" ");
+  const rows = [];
+  const tambah = (kode, status, kiri, kanan, catatan) =>
+    rows.push(Object.assign(baris(`${tt("Dokumen", "Document")} ${kode} — ${nama(kode)}`, status, kiri, kanan, catatan), { kunci: `dok:${kode}`, dariJadwal: cekAda(kiri) }));
+  const dipakai = new Set();
+  jadwal.forEach((j) => {
+    const nomorJ = kunciAlnum(j.nomor);
+    let i = nomorJ ? draft.findIndex((d, k) => !dipakai.has(k) && kodeDok(d) === j.kode && kunciAlnum(d.number) === nomorJ) : -1;
+    const nomorSama = i >= 0;
+    if (i < 0) i = draft.findIndex((d, k) => !dipakai.has(k) && kodeDok(d) === j.kode);
+    const kiri = ringkas(j.nomor, j.tanggal);
+    if (i < 0) return tambah(j.kode, "MISMATCH", kiri, "", tt("Ada di jadwal, tidak ada di sheet DOKUMEN draft.", "On the schedule, not in the draft's DOKUMEN sheet."));
+    dipakai.add(i);
+    const d = draft[i];
+    const tglDraft = EximEngine.normalizeDate(d.date || "");
+    const tglJadwal = String(j.tanggal || "").slice(0, 10);
+    const noSama = nomorSama || !nomorJ;
+    const tglSama = !tglJadwal || !tglDraft || tglJadwal === tglDraft;
+    tambah(j.kode, noSama && tglSama ? "MATCH" : "MISMATCH", kiri, ringkas(d.number, tglDraft), !noSama ? tt("Nomor dokumen berbeda.", "The document number differs.") : !tglSama ? tt("Tanggal dokumen berbeda.", "The document date differs.") : "");
+  });
+  draft.forEach((d, k) => {
+    if (!dipakai.has(k)) tambah(kodeDok(d), "INFO", "", ringkas(d.number, EximEngine.normalizeDate(d.date || "")), tt("Draft memuat dokumen ini, belum ada di jadwal.", "The draft holds this document; it is not on the schedule yet."));
+  });
+  return rows;
 }
 
 /* PETI KEMAS -- "Nomor, Ukuran, dan Tipe Peti Kemas" draft (sheet
@@ -1815,6 +2033,26 @@ function cekBarisBarangJadwal(s, decl, resolve, bc) {
 
 /* ---------- menjalankan pemeriksaan ---------- */
 
+/* Kurs terbaru (sheet KURS) untuk baris NDPBM. Pemeriksaan menunggu
+   unduhannya paling lama CEK_TUNGGU_KURS_MS; bila sheet lambat dijawab,
+   hasil digambar lebih dulu dengan salinan terakhir (atau NDPBM jadwal
+   bila belum ada salinan), lalu diperiksa ulang begitu kurs tiba. */
+const CEK_TUNGGU_KURS_MS = 5000;
+function cekMuatKurs(nomor) {
+  const unduh = kursMuat();
+  let timer;
+  const lambat = new Promise((selesai) => {
+    timer = setTimeout(() => selesai("lambat"), CEK_TUNGGU_KURS_MS);
+  });
+  return Promise.race([unduh, lambat]).then((r) => {
+    clearTimeout(timer);
+    if (r !== "lambat") return;
+    unduh.then(() => {
+      if (nomor === cekKeadaan.jalanKe && cekKeadaan.hasil) cekJalankan();
+    });
+  });
+}
+
 async function cekJalankan() {
   const nomor = ++cekKeadaan.jalanKe;
   const { cipl, decl, bc } = cekKeadaan;
@@ -1825,7 +2063,7 @@ async function cekJalankan() {
     renderChecker();
     return;
   }
-  await cekMuatPendukung();
+  await Promise.all([cekMuatPendukung(), cekMuatKurs(nomor)]);
   if (nomor !== cekKeadaan.jalanKe) return;
   cekSiapkanTempat();
   const E = EximEngine;
@@ -2313,6 +2551,74 @@ function cekGambarStatus() {
   el.innerHTML = `<span class="cek-status-titik" aria-hidden="true"></span><span>${escapeHtml(teks)}${db.length ? ` <small>(${escapeHtml(db.join(", "))})</small>` : ""}</span>`;
 }
 
+/* ---------- kepingan kurs otomatis (sheet KURS) ----------
+
+   Menunjukkan kurs yang dipakai baris NDPBM: dari mana, seberapa baru,
+   dan bahwa NDPBM di jadwal tidak ikut berubah. Tombol Perbarui memaksa
+   unduhan baru lalu memeriksa ulang. Semua mata uang di sheet bisa
+   dilihat di bagian "Semua kurs" (acuan cepat, tanpa membuka sheet). */
+function cekKursStatus() {
+  const k = kursKeadaan;
+  const ada = kursAdaData();
+  if (!ada) return k.memuat ? "memuat" : "galat";
+  if (kursBasi()) return "galat";
+  if (k.data && k.data.dariCache) return "salinan";
+  return "ok";
+}
+
+function cekKursSelisihHtml(r) {
+  if (!r || !r.perubahan) return "";
+  const naik = r.perubahan > 0;
+  return `<span class="cek-kurs-ubah ${naik ? "is-naik" : "is-turun"}" title="${escapeAttr(tt("Perubahan dari nilai sebelumnya di sheet", "Change from the previous value in the sheet"))}">${naik ? "▲" : "▼"} ${escapeHtml(kursFormat(Math.abs(r.perubahan)))}</span>`;
+}
+
+function cekGambarKurs() {
+  const el = $("#cekKurs");
+  if (!el) return;
+  const k = kursKeadaan;
+  const status = cekKursStatus();
+  const draft = String((cekKeadaan.decl && cekKeadaan.decl.currency) || "").trim().toUpperCase();
+  const dipakai = ["USD"].concat(draft && draft !== "USD" && draft !== "IDR" ? [draft] : []);
+  const chip = (kode) => {
+    const r = kursCari(kode);
+    if (!r) return `<span class="cek-kurs-chip is-kosong"><span class="cek-kurs-kode">${escapeHtml(kode)}</span><b>—</b></span>`;
+    const per = r.satuan > 1 ? ` <small>/ ${escapeHtml(String(r.satuan))}</small>` : "";
+    return `<span class="cek-kurs-chip"><span class="cek-kurs-kode">${escapeHtml(kode)}</span><b>${escapeHtml(kursFormat(r.nilai))}</b>${per}${cekKursSelisihHtml(r)}</span>`;
+  };
+  const umur = kursUmurTeks();
+  let ket;
+  if (status === "memuat") ket = tt("Membaca kurs dari sheet KURS…", "Reading the rate from the KURS sheet…");
+  else if (status === "galat" && !kursAdaData()) ket = tt("Kurs belum terbaca dari sheet. Baris NDPBM sementara dibandingkan dengan NDPBM di jadwal; tekan Perbarui untuk mencoba lagi.", "The rate has not been read from the sheet. The NDPBM row is compared with the schedule NDPBM for now; press Refresh to try again.");
+  else if (status === "galat") ket = tt(`Kurs ini sudah lama (${umur}) dan sheet belum terbaca. Perbarui sebelum mempercayai hasil baris NDPBM.`, `This rate is old (${umur}) and the sheet could not be read. Refresh before trusting the NDPBM row.`);
+  else if (status === "salinan") ket = tt(`Sheet tidak terbaca; memakai salinan tersimpan (${umur}).`, `The sheet could not be read; using the saved copy (${umur}).`);
+  else ket = tt(`Dari sheet KURS, diambil ${umur}.`, `From the KURS sheet, read ${umur}.`);
+  const catatan = tt("Hanya dipakai untuk memeriksa NDPBM draft. NDPBM di jadwal tidak berubah sendiri.", "Used only to check the draft NDPBM. The NDPBM saved in a schedule never changes by itself.");
+  const semua = k.data && k.data.daftar.length
+    ? `<details class="cek-kurs-semua"><summary>${escapeHtml(tt(`Semua kurs (${k.data.daftar.length})`, `All rates (${k.data.daftar.length})`))}</summary><div class="cek-kurs-kisi">${k.data.daftar
+        .map((r) => `<div class="cek-kurs-baris${r.kode === draft ? " is-dipakai" : ""}"><span class="cek-kurs-kode">${escapeHtml(r.kode)}</span><span class="cek-kurs-nama">${escapeHtml(r.nama || "")}</span><b>${escapeHtml(kursFormat(r.nilai))}${r.satuan > 1 ? ` <small>/ ${escapeHtml(String(r.satuan))}</small>` : ""}</b>${cekKursSelisihHtml(r)}</div>`)
+        .join("")}</div></details>`
+    : "";
+  el.dataset.status = status;
+  el.innerHTML = `
+    <div class="cek-kurs-kepala">
+      <span class="cek-kurs-titik" aria-hidden="true"></span>
+      <div class="cek-kurs-judul"><b>${escapeHtml(tt("Kurs otomatis", "Automatic rate"))}</b></div>
+      <div class="cek-kurs-nilai">${dipakai.map(chip).join("")}</div>
+      <div class="cek-kurs-aksi">
+        <button type="button" class="cek-kurs-tombol" id="btnCekKursSegarkan"${k.memuat ? " disabled" : ""}><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>${escapeHtml(k.memuat ? tt("Membaca…", "Reading…") : tt("Perbarui", "Refresh"))}</span></button>
+        <a class="cek-kurs-tautan" href="${escapeAttr(KURS_SHEET_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(tt("Buka sheet", "Open sheet"))}</a>
+      </div>
+    </div>
+    <p class="cek-kurs-ket" role="status">${escapeHtml(ket)} ${escapeHtml(catatan)}</p>
+    ${semua}`;
+}
+
+async function cekSegarkanKurs() {
+  const hasil = await kursMuat({ paksa: true });
+  if (!hasil.ok || hasil.dariCache) showToast(tt("Sheet KURS belum bisa dibaca. Pemeriksaan memakai salinan terakhir yang tersimpan.", "The KURS sheet could not be read. The check uses the last saved copy."), "warning", { judul: tt("Kurs belum terbaru", "Rate is not current") });
+  if (cekKeadaan.hasil) cekJalankan();
+}
+
 function renderChecker() {
   if (!$("#viewChecker")) return;
   const k = cekKeadaan;
@@ -2326,6 +2632,7 @@ function renderChecker() {
     ket: tt("PIB atau PEB — jenisnya dikenali sendiri.", "PIB or PEB — the type is recognised automatically."),
     ikon: "bi-file-earmark-spreadsheet",
   });
+  cekGambarKurs();
   cekGambarJadwal();
   cekGambarSumberBl();
   cekGambarStatus();
@@ -2382,6 +2689,8 @@ function showCheckerView() {
      disimpan di tab lain. */
   cekKeadaan.pendukung = null;
   const pendukung = cekMuatPendukung();
+  // Kurs dibaca (diam-diam) begitu halaman dibuka: kepingan kurs terisi sebelum Periksa ditekan
+  kursMuat();
   // Jadwal bisa saja selesai dimuat sesudah berkasnya dipilih
   if (cekKeadaan.decl || cekKeadaan.cipl) {
     cekPerbaruiKandidat();
@@ -2396,6 +2705,8 @@ function showCheckerView() {
 (function cekKabel() {
   const halaman = $("#viewChecker");
   if (!halaman) return;
+  // Kepingan kurs ikut berganti tiap keadaan kurs berubah (memuat, tiba, galat)
+  kursPantau(() => cekGambarKurs());
   [
     ["#cekFileCipl", "cipl"],
     ["#cekFileDraft", "draft"],
@@ -2453,6 +2764,7 @@ function showCheckerView() {
     if (!el) return;
     if (el.id === "btnCekPeriksa") return void cekJalankan();
     if (el.id === "btnCekReset") return void cekMulaiUlang();
+    if (el.id === "btnCekKursSegarkan") return void cekSegarkanKurs();
     // Draft dalam tata letak PIB/PEB, isian yang tidak sesuai distabilo (features/cek-cetak.js)
     if (el.id === "btnCekCetak") return void cekCetakDraft();
     if (el.id === "btnCekSalin") {

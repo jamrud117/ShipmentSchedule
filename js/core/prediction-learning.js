@@ -212,7 +212,10 @@ function buangPencilan(sampel, sigma) {
    jumlah sampel yang sudah terkumpul, supaya layar bisa menunjukkan
    "riwayat 1/2" -- pengguna melihat mesin sedang mengumpulkan.
 ------------------------------------------------------------------ */
-function ringkasSampel(sampel, prior, tipe) {
+/* `raguPrior` (opsional): ketidakpastian asumsi dalam hari, menggantikan
+   priorSpreadDays tipe ini -- mis. asumsi dari aturan cadangan jauh lebih
+   ragu daripada angka pelabuhan yang pasti (asumsiTransitKonfigurasi). */
+function ringkasSampel(sampel, prior, tipe, raguPrior) {
   const cfg = learningConfig();
   const butuh = cfg.minSamples || 2;
 
@@ -232,7 +235,7 @@ function ringkasSampel(sampel, prior, tipe) {
   // Sebaran yang dipakai menimbang: diukur sendiri kalau sampelnya
   // cukup (>= 3), kalau tidak memakai sebaran wajar tipe ini.
   const sebaran = bersih.length >= 3 ? Math.max(sd, 0.5) : sebaranTipe(cfg.typicalSpreadDays, tipe);
-  const ragu = sebaranTipe(cfg.priorSpreadDays, tipe);
+  const ragu = raguPrior != null && raguPrior > 0 ? raguPrior : sebaranTipe(cfg.priorSpreadDays, tipe);
   const k = prior == null ? 0 : (sebaran * sebaran) / (ragu * ragu);
   const bobotRiwayat = totalBobot / (totalBobot + k);
   const nilai = prior == null ? pusat : bobotRiwayat * pusat + (1 - bobotRiwayat) * prior;
@@ -307,6 +310,22 @@ function kunciForwarder(nama) {
     .join(" ");
 }
 
+/* Asumsi konfigurasi sebuah kiriman riwayat hanya bergantung pada
+   rutenya & tabel -- tidak pada riwayat. Disimpan LINTAS generasi
+   (generasi berganti tiap kali satu tanggal diubah), dihitung ulang hanya
+   kalau kolom rutenya atau jumlah aturan rute berubah. */
+const PRIOR_SAMPEL = new WeakMap();
+function priorKonfigurasiSampel(s, ctx) {
+  const tanda = [s.origin, s.destination, s.transport, s.muatan, s.routeType, s.vessel, s.voyage, s.forwarder, s.mode,
+    (PREDICTION_CONFIG.routes || []).length].join("|");
+  const ada = PRIOR_SAMPEL.get(s);
+  if (ada && ada.tanda === tanda) return ada.a;
+  const hasil = asumsiTransitKonfigurasi(ctx);
+  const a = { asumsi: hasil.asumsi, cadangan: hasil.cadangan };
+  PRIOR_SAMPEL.set(s, { tanda, a });
+  return a;
+}
+
 const SAMPEL_KIRIMAN = new WeakMap();
 function sampelKiriman(s) {
   const ada = SAMPEL_KIRIMAN.get(s);
@@ -331,6 +350,14 @@ function sampelKiriman(s) {
   if (etdNyata && tiba) {
     const n = selisihKalender(etdNyata, tiba);
     if (n != null && n >= 0 && n <= 200) out.transit = n;
+  }
+  /* Asumsi konfigurasi kiriman ini SENDIRI (tanpa riwayat): selisih
+     kenyataan terhadapnya yang dipelajari lintas rute
+     (geserDariRuteLain di bawah). */
+  if (out.transit != null && typeof asumsiTransitKonfigurasi === "function") {
+    const a = priorKonfigurasiSampel(s, ctx);
+    out.priorTransit = a.asumsi;
+    out.priorCadangan = a.cadangan;
   }
 
   if (s.mode !== "export") {
@@ -408,17 +435,96 @@ function transitSengaja(s) {
    kenyataan -- penyesuaian manual itu berangsur tergantikan begitu
    kiriman forwarder tersebut terkumpul, tanpa dihitung dua kali.
 ------------------------------------------------------------------ */
-function learnedTransitDays(ctx, prior) {
-  return denganPenjagaRekursi(() => hitungTransitDariRiwayat(ctx, prior));
+/* `info` (opsional, dari asumsiTransitKonfigurasi): { ragu, cadangan } --
+   seberapa ragu asumsinya, dan apakah ia aturan cadangan. */
+function learnedTransitDays(ctx, prior, info) {
+  return denganPenjagaRekursi(() => hitungTransitDariRiwayat(ctx, prior, info));
 }
 
-function hitungTransitDariRiwayat(ctx, prior) {
+/* Arah rute terhadap Indonesia: impor "masuk", ekspor "keluar". Selisih
+   kenyataan terhadap tabel dipelajari per arah -- putaran pelayaran ke
+   utara kerap singgah lebih banyak daripada ke selatan. */
+function arahRute(ctx) {
+  if (ctx.toCountry === "ID" && ctx.fromCountry !== "ID") return "masuk";
+  if (ctx.fromCountry === "ID" && ctx.toCountry !== "ID") return "keluar";
+  return "lain";
+}
+
+/* ------------------------------------------------------------------
+   SELISIH DARI RUTE LAIN -- riwayat yang menarik ASUMSI sebuah rute,
+   sebelum rute itu sendiri punya riwayat yang cukup.
+
+   Tiap kiriman riwayat diukur terhadap asumsi konfigurasinya SENDIRI
+   (sampelKiriman: priorTransit), lalu selisihnya dikumpulkan:
+
+     umum    seluruh rute searah (impor / ekspor) bertipe sama -- mis.
+             semua kapal ke Priok sandar sehari lebih lambat dari tabel
+             (antrean sandar). Ditarik ke nol: butuh banyak kiriman yang
+             konsisten sebelum berpengaruh.
+     negara  rute lain dari negara asal ke negara tujuan yang sama
+             (Incheon & Gwangyang untuk Busan → Priok), ditarik ke
+             selisih umum.
+
+   Rute yang sedang diprediksi sendiri TIDAK ikut -- kirimannya sudah
+   dihitung di tingkat rute; memasukkannya dua kali membuat mesin
+   terlalu yakin pada sedikit bukti.
+
+   Aturan CADANGAN (rute yang tidak ada di tabel) dipisah: angka 14 hari
+   untuk Singapura dan untuk Hamburg sama-sama salah, ke arah yang
+   berlawanan, jadi selisihnya tidak berarti apa pun bagi rute lain.
+   Yang dipakai hanya kiriman bercadangan dari negara yang sama --
+   pelabuhan Singapura mana pun ±2 hari ke Priok.
+------------------------------------------------------------------ */
+function geserDariRuteLain(ctx, cadangan, dari, ke) {
+  const cfg = learningConfig();
+  const arah = arahRute(ctx);
+  const kunci = `geser|${ctx.shipmentType}|${arah}|${ctx.fromCountry}|${ctx.toCountry}|${dari}|${ke}|${cadangan ? 1 : 0}`;
+  if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
+
+  const umum = [];
+  const negara = [];
+  const pakaiNegara = !!(dari && ke && ctx.fromCountry && ctx.toCountry);
+  sampelRelevan().forEach(({ k }) => {
+    if (k.transit == null || k.priorTransit == null) return;
+    const c = k.ctx;
+    if (c.shipmentType !== ctx.shipmentType || arahRute(c) !== arah) return;
+    if (dari && ke && (c.fromMetro || c.fromPort) === dari && (c.toMetro || c.toPort) === ke) return;
+    const r = { n: k.transit - k.priorTransit, w: bobotKebaruan(k.tEtd) };
+    if (!k.priorCadangan) umum.push(r);
+    if (pakaiNegara && c.fromCountry === ctx.fromCountry && c.toCountry === ctx.toCountry && !!k.priorCadangan === !!cadangan) negara.push(r);
+  });
+
+  const ragu = cfg.poolSpreadDays || {};
+  // umum 0 / kosong = tingkat umum mati (prediction-config.js)
+  const hUmum = cadangan || !(Number(ragu.umum) > 0) ? null : ringkasSampel(umum, 0, ctx.shipmentType, Number(ragu.umum));
+  const dasar = hUmum && hUmum.cukup ? hUmum.exact : 0;
+  const hNegara = negara.length ? ringkasSampel(negara, dasar, ctx.shipmentType, Number(cadangan ? ragu.cadangan : ragu.negara) || 1.5) : null;
+
+  const pilih = hNegara && hNegara.cukup ? { h: hNegara, scope: "negara" } : hUmum && hUmum.cukup ? { h: hUmum, scope: "umum" } : null;
+  const hasil = pilih
+    ? {
+        nilai: pilih.h.exact,
+        scope: pilih.scope,
+        samples: pilih.h.samples,
+        used: pilih.h.used,
+        dropped: pilih.h.dropped,
+        stdDev: pilih.h.stdDev,
+        weight: pilih.h.weight,
+      }
+    : null;
+  PREDICTION_LEARN_CACHE.set(kunci, hasil);
+  return hasil;
+}
+
+function hitungTransitDariRiwayat(ctx, prior, info) {
   const cfg = learningConfig();
   if (!cfg.enabled) return null;
 
   const dari = ctx.fromMetro || ctx.fromPort;
   const ke = ctx.toMetro || ctx.toPort;
-  const kunci = `transit|${ctx.carrier}|${dari}|${ke}|${ctx.fromCountry}|${ctx.toCountry}|${ctx.shipmentType}|${ctx.routeType}|${prior}`;
+  const ragu = info && info.ragu != null ? info.ragu : null;
+  const cadangan = !!(info && info.cadangan);
+  const kunci = `transit|${ctx.carrier}|${dari}|${ke}|${ctx.fromCountry}|${ctx.toCountry}|${ctx.shipmentType}|${ctx.routeType}|${prior}|${ragu}|${cadangan ? 1 : 0}`;
   if (PREDICTION_LEARN_CACHE.has(kunci)) return PREDICTION_LEARN_CACHE.get(kunci);
 
   /* Impor DAN ekspor. Rute ekspor (Jakarta -> Busan) dulu tidak pernah
@@ -481,8 +587,42 @@ function hitungTransitDariRiwayat(ctx, prior) {
      pelayaran pada rute yang sama bisa beberapa hari -- HMM 9 hari, MSC
      11 hari untuk Busan -> Priok -- tapi dua kiriman HMM saja belum
      cukup untuk mengabaikan apa yang diketahui tentang rutenya. */
-  const rute = ringkasSampel(terpakai, prior, ctx.shipmentType);
+  /* Asumsi rute ini lebih dulu digeser riwayat RUTE LAIN (negara yang
+     sama / seluruh rute searah); riwayat rute ini sendiri lalu menarik
+     asumsi yang sudah digeser itu. */
+  const geser = prior == null ? null : geserDariRuteLain(ctx, cadangan, dari, ke);
+  const priorRute = prior == null ? null : prior + (geser ? geser.nilai : 0);
+  const rute = ringkasSampel(terpakai, priorRute, ctx.shipmentType, ragu);
   let hasil = { ...rute, scope: "rute" };
+  if (rute.cukup && geser) hasil.pool = geser;
+  /* Rute ini belum punya riwayat yang cukup, tapi rute lain sudah
+     menunjukkan tabelnya meleset (setengah hari atau lebih): pakai
+     asumsi yang sudah digeser, berlabel jelas dari mana asalnya. */
+  if (!rute.cukup && geser && Math.abs(geser.nilai) >= 0.5) {
+    const nilai = Math.max(0, priorRute);
+    const hari = Math.max(0, Math.round(nilai));
+    hasil = {
+      cukup: true,
+      days: hari,
+      exact: Math.round(nilai * 100) / 100,
+      weight: geser.weight,
+      prior: Math.round(prior * 10) / 10,
+      center: Math.round(nilai * 10) / 10,
+      samples: geser.samples,
+      used: geser.used,
+      dropped: geser.dropped,
+      effective: geser.samples,
+      avg: Math.round(nilai * 10) / 10,
+      min: hari,
+      max: hari,
+      stdDev: geser.stdDev,
+      stdError: 0,
+      method: cfg.method === "median" ? "median" : t("z.rata.rata.pencilan.dibuang"),
+      scope: geser.scope,
+      shift: Math.round(geser.nilai * 10) / 10,
+      routeSamples: rute.samples,
+    };
+  }
   if (rute.cukup && ctx.carrier) {
     const milikCarrier = terpakai.filter((x) => x.carrier === ctx.carrier);
     const perCarrier = ringkasSampel(milikCarrier, rute.exact, ctx.shipmentType);

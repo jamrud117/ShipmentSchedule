@@ -165,3 +165,47 @@ WHERE schemaname = 'storage'
   AND tablename = 'objects'
   AND policyname LIKE 'lampiran-jadwal%'
 ORDER BY policyname;
+
+
+/* ------------------------------------------------------------------
+   7. KEBIJAKAN BACA "SEMUA YANG LOGIN" (using true)
+
+   Pendaftaran Supabase terbuka (halaman Akun memakai auth.signUp),
+   jadi "semua yang login" = siapa saja yang mau mendaftar. Kebijakan
+   baca harus menuntut peran aktif (public.peran_aktif(),
+   migration-keamanan.sql). Kosong = bagus.
+------------------------------------------------------------------ */
+SELECT
+  '7. BACA TERBUKA'                         AS bagian,
+  tablename                                 AS tabel,
+  policyname                                AS kebijakan,
+  'BAHAYA — jalankan migration-keamanan.sql' AS vonis
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND cmd IN ('SELECT', 'ALL')
+  AND qual = 'true'
+ORDER BY tablename;
+
+
+/* ------------------------------------------------------------------
+   8. PERAN BAWAAN AKUN BARU
+
+   Harus 'nonaktif': akun yang mendaftar sendiri tidak boleh langsung
+   membaca apa pun. Akun nonaktif yang tidak Anda kenal -> hapus dari
+   halaman Akun.
+------------------------------------------------------------------ */
+SELECT
+  '8. PERAN BAWAAN'                         AS bagian,
+  column_default                            AS bawaan,
+  CASE WHEN column_default LIKE '%nonaktif%' THEN 'aman'
+       ELSE 'BAHAYA — akun baru langsung mendapat akses' END AS vonis
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'role';
+
+SELECT
+  '8. AKUN NONAKTIF'                        AS bagian,
+  username, full_name, email, created_at,
+  'periksa: kenal akun ini?'                AS vonis
+FROM public.profiles
+WHERE role = 'nonaktif'
+ORDER BY created_at DESC;

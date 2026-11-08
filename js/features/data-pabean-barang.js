@@ -44,9 +44,13 @@ function dpbbSimpan() {
   const it = draftItems[dpbbIdx];
   if (!it) return;
   const d = rapikanDataPabeanBarang(dpbbIsi);
+  // Tarif BM yang diganti di sini = isian sendiri (tarif-hs.js), sama dengan kolom Tarif BM di Daftar Barang
+  if (String(d.tarifBm) !== String(rapikanDataPabeanBarang(it.dataPabean).tarifBm)) delete it._tarifOtomatis;
   if (Object.keys(d).length) it.dataPabean = d;
   else delete it.dataPabean;
   dpbbAwal = JSON.stringify(d);
+  const baris = $(`#itemTableBody tr[data-idx="${dpbbIdx}"]:not(.item-fac-row)`);
+  if (baris && typeof tulisKotakTarifBm === "function") tulisKotakTarifBm(baris, it);
   // Tarif BM / PPh barang ikut menentukan Bea & Pajak Impor di Kepabeanan & Biaya
   recalcCustoms();
 }
@@ -93,7 +97,7 @@ function dpbbPungutan() {
   const items = draftItems.map((it, i) => (i === dpbbIdx ? Object.assign({}, it, { dataPabean: rapikanDataPabeanBarang(dpbbIsi) }) : it));
   const jadwal = Object.assign(dpbJadwalForm(), { items });
   const n = dpNilaiHitung(jadwal);
-  return { seri: n.pungutan ? n.pungutan.seri[dpbbIdx] : null, tarifJadwal: jadwal.tarif == null ? 5 : jadwal.tarif };
+  return { seri: n.pungutan ? n.pungutan.seri[dpbbIdx] : null, tarifJadwal: jadwal.tarif == null ? TARIF_BM_BAWAAN : jadwal.tarif };
 }
 
 function dpbbBarisTarifHtml() {
@@ -107,7 +111,7 @@ function dpbbBarisTarifHtml() {
   };
   const rp = (x) => formatNumberValue(Math.round(x || 0)) || "0";
   const baris = [
-    ["BM", dpbbIsianTarif("tarifBm", tt(`${formatNumberValue(tarifJadwal) || "0"} (jadwal)`, `${formatNumberValue(tarifJadwal) || "0"} (schedule)`)), seri ? seri.bm : 0, seri && seri.bebas.BM],
+    ["BM", dpbbIsianTarif("tarifBm", tt(`${formatNumberValue(tarifJadwal) || "0"} (bawaan)`, `${formatNumberValue(tarifJadwal) || "0"} (default)`)), seri ? seri.bm : 0, seri && seri.bebas.BM],
     ["PPN", `<span class="dpbb-tetap">12% × DPP 11/12</span>`, seri ? seri.ppn : 0, seri && seri.bebas.PPN],
     ["PPh", dpbbIsianTarif("tarifPph", tt("2,5", "2.5")), seri ? seri.pph : 0, seri && seri.bebas.PPh],
   ];

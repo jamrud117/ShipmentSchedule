@@ -1,35 +1,24 @@
 /* ==================================================================
    KOTAK TANGGAL YANG BISA DIKETIK (js/ui/date-input.js)
 
-   Semua <input type="date"> dijadikan kotak teks ber-data-kotak-tanggal.
-   Bentuknya diwarisi dari aturan kotak teks biasa; di sini hanya yang
-   khas tanggal:
+   Semua <input type="date"> dijadikan kotak teks ber-data-kotak-tanggal
+   DAN berkelas kt-nilai -- SATU model untuk semua tanggal di aplikasi:
+   kartu jadwal, form jadwal, No. Dokumen, kotak dialog, tabel isian.
+   Dulu tanggal di kartu bergaya lain (tanpa bingkai, huruf tegas, ikon
+   pucat yang menebal saat disorot) dari tanggal di form (kotak isian
+   biasa), jadi tanggal yang sama terlihat seperti dua komponen berbeda.
 
-   - Ikon kalender di ujung kanan. Gambar latar, bukan elemen tambahan,
-     supaya tata letak kotak di 40-an tempat (kartu, form, tabel,
-     kotak dialog) tidak berubah sedikit pun. Klik di area ikon membuka
-     kalender (lebar areanya KT_LEBAR_IKON di date-input.js, 34px).
+   Pengecualian: data-kotak-tanggal-tanpa-ikon (Dari/Sampai di panel
+   kalender pemilih rentang) -- bagian dari pemilihnya sendiri, tetap
+   kotak biasa tanpa ikon (lihat dashboard.css .drp-typed-input).
+
+   - Ikon kalender = gambar latar, bukan elemen tambahan, supaya tata
+     letak kotak di 40-an tempat tidak berubah. Klik di area ikon membuka
+     kalender (lebar areanya = padding kanan kotaknya, dibaca
+     date-input.js).
    - Kotak baca-saja & nonaktif tanpa ikon: tidak ada yang bisa dipilih.
-     Begitu pula yang ber-data-kotak-tanggal-tanpa-ikon (Dari/Sampai di
-     panel kalender pemilih rentang).
    - Garis merah sebentar bila yang diketik tidak terbaca.
-
-   Selektor ikon sengaja berat (0,4,1): aturan kartu `.date-field
-   input` memakai singkatan `background:` yang membuang gambar latar,
-   dan banyak aturan form menyetel `padding` dengan selektor lebih
-   khusus daripada `input[...]` polos.
 ================================================================== */
-input[data-kotak-tanggal]:not([readonly]):not(:disabled):not([data-kotak-tanggal-tanpa-ikon]) {
-  padding-right: 34px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237b8794' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='12' height='11' rx='2'/%3E%3Cpath d='M2 6.6h12M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 16px 16px;
-}
-/* Penunjuk berubah jadi tangan hanya di atas ikonnya (kelas dipasang js) */
-input[data-kotak-tanggal].kt-di-ikon {
-  cursor: pointer;
-}
 
 /* Tidak terbaca: garis merah + getar singkat. Sama dengan .is-invalid,
    kecuali memakai background-color supaya ikonnya tidak ikut hilang. */
@@ -48,6 +37,175 @@ input[data-kotak-tanggal].kt-salah {
 @media (prefers-reduced-motion: reduce) {
   input[data-kotak-tanggal].kt-salah {
     animation: none;
+  }
+}
+
+/* ==================================================================
+   MODEL KOTAK TANGGAL (kelas kt-nilai) -- satu untuk semua halaman
+
+   Huruf tegas berangka tabular, ikon kalender pucat yang menebal saat
+   disorot, dan BINGKAI SELALU TAMPAK (--border-control, 3:1 terhadap
+   latar): tanggal yang bisa diubah tidak boleh menyaru jadi teks biasa.
+   Sempat hanya berbingkai saat disorot -- di kartu & form ia terbaca
+   seperti tulisan, bukan isian.
+
+     diam      bingkai + tanggal + ikon kalender pucat di kanannya
+     disorot   latar tipis, ikon menebal; di atas ikon penunjuk jadi
+               tangan (kt-di-ikon, date-input.js)
+     diketik   bingkai & cincin fokus seperti kotak isian lain, seluruh
+               tanggal terpilih -- tinggal ketik yang baru
+     kosong    "dd-mm-yyyy" pucat sebagai petunjuk format
+     baca-saja tanpa bingkai & ikon: memang nilai, bukan isian (tanggal
+               kartu selesai, kartu bagi akun Viewer)
+
+   LEBARNYA SELEBAR TANGGALNYA (field-sizing) di mana pun: kartu, form,
+   kotak dialog, tabel isian -- ikonnya menempel di ujung tanggal. Sempat
+   dibuat mengisi sel di form: kotak tanggal selebar 300-an px untuk
+   sepuluh angka. Ruang sisanya bukan diisi kotak, tapi diatur TATA
+   LETAKNYA: baris tanggal di form jadwal merapat (.fl-tanggal,
+   components.css), nomor dokumen + tanggalnya sepasang (.fl-bertanggal) --
+   nomornya yang mengisi sisa sel, tanggalnya tetap selebar isinya.
+   Selektor (0,2,1) / (0,5,1) sengaja: menimpa bentuk kotak isian umum
+   (.form-control, .page-form .form-control, .modal .form-control, tabel
+   isian) yang dimuat lebih dulu atau lebih umum.
+================================================================== */
+input[data-kotak-tanggal].kt-nilai {
+  /* Ruang kiri & kanan teks (kanan = ruang ikon kalender bila berikon).
+     Diatur lewat variabel, bukan padding langsung: lebar minimum di
+     bawah menghitung keduanya. */
+  --kt-kiri: 6px;
+  --kt-kanan: 6px;
+  /* align-self / justify-self: di kolom lentur (.date-field) dan sel kisi
+     anak bawaannya direntang selebar kolom/selnya -- field-sizing tidak
+     akan pernah terasa. */
+  align-self: flex-start;
+  justify-self: start;
+  width: auto;
+  /* Paling sempit selebar "dd-mm-yyyy" (9,7 angka): kotak kosong &
+     berisi sama lebar -- tepi isian di baris lain tetap lurus -- dan
+     tidak menyusut mengikuti ketikan yang belum utuh ("0", "08-1"). */
+  min-width: calc(9.7ch + var(--kt-kiri) + var(--kt-kanan) + 2px);
+  max-width: 100%;
+  field-sizing: content;
+  margin: 0;
+  padding: 2px var(--kt-kanan) 2px var(--kt-kiri);
+  border: 1px solid var(--border-control);
+  border-radius: 6px;
+  background-color: transparent;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 1.5rem;
+  color: var(--n-900);
+  box-shadow: none;
+  transition:
+    background-color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+@supports not (field-sizing: content) {
+  input[data-kotak-tanggal].kt-nilai {
+    width: calc(9.7ch + var(--kt-kiri) + var(--kt-kanan) + 2px);
+  }
+}
+/* DI LUAR KARTU JADWAL (form, kotak dialog, tabel isian): setinggi kotak
+   isian di sebelahnya (--ctl-h 38px; 32px di kotak kecil
+   .form-control-sm) supaya teks & bingkainya sebaris, dan teksnya mulai
+   di garis yang sama dengan teks kotak isian lain (12px). Di kartu
+   kotaknya lebih pendek (30px): tiga tanggal sebaris dengan keterangan di
+   bawahnya.
+   :where() -- kekhususannya tetap (0,2,1), jadi aturan tempat tertentu
+   (tabel isian, baris fasilitas barang) cukup satu kelas lebih khusus. */
+input[data-kotak-tanggal].kt-nilai:where(:not(.date-field > input)) {
+  --kt-kiri: 12px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+input[data-kotak-tanggal].kt-nilai.form-control-sm:where(:not(.date-field > input)) {
+  --kt-kiri: 8px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+input[data-kotak-tanggal].kt-nilai::placeholder {
+  font-weight: 500;
+  color: var(--text-placeholder);
+}
+/* IKON KALENDER: gambar, ulang, posisi & ukurannya ditulis di SATU aturan
+   ini. Keadaan sorot / fokus / tema / layar sentuh hanya mengganti
+   --kt-ikon, tidak pernah background-image -- kalau aturan keadaan
+   memasang gambarnya sendiri, satu shorthand `background:` di tengahnya
+   (mis. aturan peran baca-saja dulu) mengembalikan background-repeat ke
+   repeat dan ikonnya tergambar berulang memenuhi kotak. */
+input[data-kotak-tanggal].kt-nilai:not([readonly]):not(:disabled):not([data-kotak-tanggal-tanpa-ikon]) {
+  --kt-kanan: 34px;
+  --kt-ikon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2393a1b5' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='12' height='11' rx='2'/%3E%3Cpath d='M2 6.6h12M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/svg%3E");
+  background-image: var(--kt-ikon);
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 15px 15px;
+}
+input[data-kotak-tanggal].kt-nilai:not([readonly]):not(:disabled):hover {
+  background-color: var(--n-100);
+}
+input[data-kotak-tanggal].kt-nilai:not([readonly]):not(:disabled):not([data-kotak-tanggal-tanpa-ikon]):is(:hover, :focus) {
+  --kt-ikon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%231d5188' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='12' height='11' rx='2'/%3E%3Cpath d='M2 6.6h12M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/svg%3E");
+}
+:root[data-tema="gelap"] input[data-kotak-tanggal].kt-nilai:not([readonly]):not(:disabled):not([data-kotak-tanggal-tanpa-ikon]):is(:hover, :focus) {
+  --kt-ikon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%238fbaea' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='12' height='11' rx='2'/%3E%3Cpath d='M2 6.6h12M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/svg%3E");
+}
+input[data-kotak-tanggal].kt-nilai:not([readonly]):focus {
+  background-color: var(--surface);
+  border-color: var(--focus-ring);
+  box-shadow: var(--sh-focus);
+  outline: none;
+}
+/* Penunjuk jadi TANGAN di atas ikon kalender (kelas dipasang date-input.js
+   saat penunjuk bergerak di area ikon); di atas angkanya tetap kursor teks.
+   Sengaja sesudah & sekuat aturan sorot di atas. */
+input[data-kotak-tanggal].kt-nilai.kt-di-ikon:not([readonly]):not(:disabled) {
+  cursor: pointer;
+}
+/* Tidak terbaca: tanda merahnya tetap menang atas latar polos di atas */
+input[data-kotak-tanggal].kt-nilai.kt-salah {
+  background-color: var(--s-danger-bg);
+}
+/* Tanda di form tetap utuh di kotak tanggal (latar & bingkainya milik
+   model ini): galat wajib isi (.is-invalid, bingkainya !important di
+   system.css), Invoice vs Packing List berbeda (.is-beda, form.css). */
+input[data-kotak-tanggal].kt-nilai.is-invalid {
+  background-color: var(--s-danger-bg);
+}
+input[data-kotak-tanggal].kt-nilai.is-beda {
+  border-color: var(--s-warn);
+  background-color: var(--s-warn-bg);
+}
+/* Hanya baca (kartu selesai): nilai polos tanpa bingkai & sorot, angkanya
+   sejajar label di atasnya (geser kiri 6px = padding kirinya; batas
+   lebarnya ikut dilebarkan 6px -- tanpa itu induk yang selebar isinya
+   memotong angka terakhir di ponsel: "22-10-202"). */
+input[data-kotak-tanggal].kt-nilai[readonly] {
+  cursor: default;
+  max-width: calc(100% + 6px);
+  margin-left: -6px;
+  background-color: transparent;
+  border-color: transparent;
+}
+/* ...juga saat difokus (klik labelnya memfokuskannya): nilai, bukan
+   isian -- tanpa cincin fokus (system.css) di sekeliling angkanya. Di
+   kartu kotak ini dilewati Tab (tabindex -1, cards.js). */
+input[data-kotak-tanggal].kt-nilai[readonly]:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+/* Nonaktif: nilai redup */
+input[data-kotak-tanggal].kt-nilai:disabled {
+  color: var(--n-500);
+}
+/* Layar sentuh: tidak ada sorot, jadi ikonnya selalu bertinta penuh */
+@media (hover: none) {
+  input[data-kotak-tanggal].kt-nilai:not([readonly]):not(:disabled):not([data-kotak-tanggal-tanpa-ikon]) {
+    --kt-ikon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%235a6879' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='12' height='11' rx='2'/%3E%3Cpath d='M2 6.6h12M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/svg%3E");
   }
 }
 

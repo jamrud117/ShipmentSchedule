@@ -68,7 +68,10 @@ function siapkanUjiMundur(list) {
     fakta,
     penuh,
     i: 0,
-    selisih: { eta: { laut: [], udara: [] }, delivery: { laut: [], udara: [] } },
+    /* ETA laut dipecah impor / ekspor juga: rute ekspor punya sumber
+       kenyataan sendiri (ETA manual forwarder) dan tabel yang berbeda,
+       jadi ketepatannya dilaporkan terpisah. `laut` tetap gabungan. */
+    selisih: { eta: { laut: [], udara: [], lautImpor: [], lautEkspor: [] }, delivery: { laut: [], udara: [] } },
   };
 }
 
@@ -100,7 +103,11 @@ function ujiMundurLangkah(uji, maks) {
       const p = predictEta(rencana);
       if (!p.ok || !p.eta) continue;
       const jenis = f.s.transport === "udara" ? "udara" : "laut";
-      if (f.tiba) selisih.eta[jenis].push(calendarDaysBetweenISO(f.tiba, p.eta));
+      if (f.tiba) {
+        const d = calendarDaysBetweenISO(f.tiba, p.eta);
+        selisih.eta[jenis].push(d);
+        if (jenis === "laut") selisih.eta[f.s.mode === "export" ? "lautEkspor" : "lautImpor"].push(d);
+      }
       if (f.pabrik) {
         const d = predictDelivery(Object.assign({}, rencana, { eta: p.eta }));
         if (d.ok && d.date) selisih.delivery[jenis].push(calendarDaysBetweenISO(f.pabrik, d.date));
@@ -118,7 +125,12 @@ function ujiMundurLangkah(uji, maks) {
 function ringkasUjiMundur(uji) {
   const { selisih } = uji;
   return {
-    eta: { laut: ringkasMeleset(selisih.eta.laut), udara: ringkasMeleset(selisih.eta.udara) },
+    eta: {
+      laut: ringkasMeleset(selisih.eta.laut),
+      udara: ringkasMeleset(selisih.eta.udara),
+      lautImpor: ringkasMeleset(selisih.eta.lautImpor),
+      lautEkspor: ringkasMeleset(selisih.eta.lautEkspor),
+    },
     delivery: { laut: ringkasMeleset(selisih.delivery.laut), udara: ringkasMeleset(selisih.delivery.udara) },
   };
 }

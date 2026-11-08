@@ -32,13 +32,15 @@ function stopCardHtml(st, idx, total) {
                modanya diganti, jadi daftarnya ikut berganti. -->
           <input type="text" class="form-control form-control-sm" id="${idIsian("terminal")}" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? tt("Nama bandara transit", "Transit airport name") : tt("Nama pelabuhan transit", "Transit port name")}">
         </div>
-        <div>
-          <label class="form-label" for="${idIsian("tiba")}">${tt("Tiba di Terminal Ini", "Arrival at This Terminal")}</label>
-          <input type="date" class="form-control form-control-sm" id="${idIsian("tiba")}" data-f="arrivalDate" value="${st.arrivalDate || ""}">
-        </div>
-        <div>
-          <label class="form-label" for="${idIsian("berangkat")}">${tt("Berangkat dari Terminal Ini", "Departure from This Terminal")}</label>
-          <input type="date" class="form-control form-control-sm" id="${idIsian("berangkat")}" data-f="departureDate" value="${st.departureDate || ""}">
+        <div class="s6 fl-tanggal">
+          <div>
+            <label class="form-label" for="${idIsian("tiba")}">${tt("Tiba di Terminal Ini", "Arrival at This Terminal")}</label>
+            <input type="date" class="form-control form-control-sm" id="${idIsian("tiba")}" data-f="arrivalDate" value="${st.arrivalDate || ""}">
+          </div>
+          <div>
+            <label class="form-label" for="${idIsian("berangkat")}">${tt("Berangkat dari Terminal Ini", "Departure from This Terminal")}</label>
+            <input type="date" class="form-control form-control-sm" id="${idIsian("berangkat")}" data-f="departureDate" value="${st.departureDate || ""}">
+          </div>
         </div>
         <div class="m4">
           <label class="form-label" for="${idIsian("moda")}">${tt("Moda", "Mode")}</label>

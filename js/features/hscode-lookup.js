@@ -188,6 +188,8 @@ function tandaiHsOtomatis(tr, it) {
     tombol.title = judulTombolCariHs(it);
     tombol.setAttribute("aria-label", tombol.title);
   }
+  // HS Code berganti -> Tarif BM otomatisnya ikut dicari ulang (tarif-hs.js)
+  if (typeof segarkanTarifBaris === "function") segarkanTarifBaris(tr, it);
 }
 
 function jalankanHsOtomatis() {

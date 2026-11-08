@@ -1,9 +1,6 @@
 /* KARTU PENGIRIMAN */
 .ship-card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
-  padding: 19px 21px;
   /* border-radius & box-shadow datang dari aturan bersama ".ship-card" */
 
   /* DIGAMBAR SAAT MENDEKATI LAYAR. Satu halaman ±10 kartu x ±180
@@ -26,26 +23,10 @@
     content-visibility: visible;
   }
 }
-.ship-card + .ship-card {
-  margin-top: 13px;
-}
-.ship-card--process {
-  border-left-color: var(--amber);
-}
-.ship-card--transit {
-  border-left-color: var(--teal);
-}
-.ship-card--delayed {
-  border-left-color: var(--coral);
-}
-.ship-card--arrived {
-  border-left-color: var(--n-300);
-}
 
 .ship-card-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -77,18 +58,32 @@
 }
 
 .item-name {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.02rem;
-  letter-spacing: -0.01em;
   color: var(--tp-700);
   line-height: 1.25;
 }
+/* "· 3 Barang": keterangan nama pihak, bukan bagian namanya */
+.item-count {
+  font-family: var(--font-body);
+  letter-spacing: 0;
+  color: var(--n-500);
+  white-space: nowrap;
+}
+/* Nomor dokumen & No. Aju: dua pasangan label-nomor yang berjarak,
+   tanpa titik pemisah; label huruf biasa, nomornya monospace. */
 .po-code {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 3px;
+  color: var(--n-700);
+}
+.po-ref {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.po-ref-label {
+  font-family: var(--font-body);
+  color: var(--n-500);
 }
 
 /* ---- Badan kartu: rincian di KIRI, daftar nama barang di KANAN ----
@@ -98,14 +93,15 @@
    jadi kosong sepanjang lima baris itu. Di sini rincian dipadatkan jadi
    dua baris empat kolom, dan nama barang mengisi kolom kanan sejajar
    dengannya. */
+/* Rincian di bawah panel perjalanan, dipisah GARIS TIPIS + jarak dari
+   baris tanggal (css/desain.css): panel perjalanan kini tanpa latar, jadi
+   tanpa garis keterangan tanggal ("Jum", "Auto · ETD + 1 hari") langsung
+   menyambung ke label rincian dan keduanya terbaca bercampur. Progres
+   dokumen di bawahnya punya garis atasnya sendiri. */
 .ship-body-split {
   display: flex;
   align-items: flex-start;
-  gap: 22px;
-  padding: 15px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  margin: 13px 0;
+  gap: 24px;
 }
 .info-grid {
   display: grid;
@@ -113,47 +109,66 @@
      rincian muat sebaris di layar lebar, dan blok kirinya jadi setinggi
      satu baris lagi — persis keadaan yang dihindari di atas. */
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 17px 22px;
+  gap: 16px 24px;
   flex: 1 1 0;
   min-width: 0;
 }
 .info-names {
   /* Selebar kira-kira seperempat kartu, dibatasi supaya nama barang
-     yang panjang tidak menggencet rincian di kirinya. */
+     yang panjang tidak menggencet rincian di kirinya. Garis tipis di
+     kirinya: daftar barang adalah isi kiriman, bukan rincian kelima. */
   flex: 0 0 clamp(240px, 26%, 400px);
   min-width: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--n-200);
 }
 .info-item {
   min-width: 0;
 }
+/* Label & nilai tiap baris rincian sejajar walau ada label yang dua
+   baris ("Container/Seal Number"): tiap sel memakai dua baris kisi
+   induknya (subgrid). Peramban tanpa subgrid: sel biasa. */
+@supports (grid-template-rows: subgrid) {
+  .info-grid > .info-item {
+    display: grid;
+    grid-row: span 2;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+    align-content: start;
+  }
+  .info-grid > .info-item > .info-label {
+    align-self: end;
+  }
+}
+.info-value--list div {
+  padding: 3px 0;
+}
 .info-value--list div + div {
-  margin-top: 2px;
+  border-top: 1px solid var(--n-100);
 }
 .info-label {
-  font-family: var(--font-board);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--n-500);
-  margin-bottom: 3px;
   display: flex;
   align-items: center;
   gap: 5px;
 }
+/* Ikon label diredam: penunjuk jenis rincian, bukan aksen warna */
 .info-label i {
-  color: var(--tp-500);
-  font-size: 0.8rem;
+  color: var(--n-400);
+  font-size: 0.78rem;
 }
 .info-value {
-  font-size: 0.87rem;
-  font-weight: 600;
   color: var(--ink);
   line-height: 1.4;
   word-break: break-word;
 }
+.info-value .muted-value,
 .info-value.muted-value {
-  color: var(--muted);
+  color: var(--n-500);
   font-weight: 500;
+}
+/* "CIF · $34,740" di bawah nomor invoice */
+.info-nilai-invoice {
+  font-variant-numeric: tabular-nums;
 }
 /* Tanggal yang pernah diubah (panel detail): rencana awal di atas,
    jadwal baru di bawahnya dengan panah ke bawah. */
@@ -193,22 +208,18 @@
 .tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 4px;
+}
+/* Peringatan (telat, kebutuhan pabrik, lartas) tepat di bawah judul */
+.ship-alerts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
 }
 .tag {
-  font-size: 0.71rem;
-  font-weight: 600;
-  padding: 4px 11px;
-  border-radius: 999px;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--tp-500);
-}
-.tag.tag-usd {
-  background: var(--w-bg-eef6ff);
-  color: var(--tp-500);
-  border-color: var(--w-garis-d5e8fb);
 }
 .tag.tag-pi {
   background: var(--w-bg-f3eefe);
@@ -219,11 +230,6 @@
   background: var(--w-bg-fff3de);
   color: var(--w-teks-95610c);
   border-color: var(--w-garis-f7e2b8);
-}
-.tag.tag-muatan {
-  background: var(--w-bg-efeffb);
-  color: var(--w-teks-5347c7);
-  border-color: var(--w-garis-dcdafb);
 }
 .tag.tag-transit {
   background: var(--sec-50);
@@ -270,12 +276,7 @@
   field-sizing: content;
   appearance: none;
   -webkit-appearance: none;
-  border: none;
   border-radius: 999px;
-  padding: 7px 30px 7px 14px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
   cursor: pointer;
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -316,7 +317,6 @@
 .icon-btn {
   width: 34px;
   height: 34px;
-  border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -334,13 +334,9 @@
   background: var(--p-100);
 }
 .icon-btn.primary {
-  background: var(--navy);
   color: #fff;
-  border-color: var(--navy);
 }
 .icon-btn.primary:hover:not(:disabled) {
-  background: var(--ocean);
-  border-color: var(--ocean);
   color: #fff;
 }
 .icon-btn.danger:hover:not(:disabled) {
@@ -381,29 +377,33 @@
   color: var(--tp-500);
 }
 
+/* ---- Panel perjalanan: jalur + tanggal kunci ----
+
+   Satu panel bertinta kertas untuk semua yang menjawab "di mana &
+   kapan": keadaan sekarang, jalur, ETD / ETA / Estimated Delivery.
+   Rincian dokumen di bawahnya tetap di atas latar kartu. */
+.ship-journey {
+  /* Wadah kueri: kolom tanggal di dalamnya mengikuti lebar PANEL,
+     bukan lebar layar -- kartu bisa sempit di layar lebar (bilah sisi
+     terbuka) dan lebar di tablet. */
+  container: perjalanan / inline-size;
+}
+
 /* ---- Shipping lane ---- */
 .lane-title {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  /* 18px, bukan 10px.
-
-     Penanda kapal setinggi 26px dan dipusatkan pada jalur setebal 3px,
-     jadi ia menonjol ~11px ke ATAS jalurnya. Dengan jarak 10px,
-     lingkaran penanda menindih tulisan "Telat 1 Hari" / "Diantar 2
-     Hari Lagi" di kanan atas — justru saat pengiriman hampir sampai,
-     ketika keterangan itu paling dicari. */
-  margin-bottom: 18px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-height: 1.2rem;
 }
 .lane {
-  margin-bottom: 16px;
+  margin: 0;
 }
 .lane-track {
   position: relative;
-  height: 3px;
-  border-radius: 3px;
-  background: var(--border);
+  border-radius: 4px;
   margin: 0 6px;
 }
 .lane-track.is-delayed {
@@ -413,25 +413,15 @@
   position: absolute;
   top: 0;
   left: 0;
-  height: 3px;
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--teal);
   transition: width 0.5s ease;
-}
-.lane-track.is-delayed .lane-fill {
-  background: var(--coral);
-}
-.lane-track.is-process .lane-fill {
-  background: var(--amber);
 }
 .port-node {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
   border-radius: 50%;
-  background: var(--ocean);
   border: 2px solid var(--surface);
   box-shadow: 0 0 0 1px var(--border);
 }
@@ -440,7 +430,6 @@
 }
 .port-node.destination {
   left: 100%;
-  background: var(--navy);
 }
 .port-node.destination.reached {
   background: var(--green);
@@ -468,7 +457,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(11, 31, 58, 0.22);
 }
 /* Penanda bergerak.
 
@@ -553,23 +541,43 @@
 .port-labels {
   display: flex;
   justify-content: space-between;
-  margin-top: 10px;
+  gap: 16px;
+  margin-top: 12px;
 }
+/* Ujung rute langsung: kode pelabuhan (bentuk dokumen) + namanya */
 .port-labels .p {
-  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 48%;
   color: var(--muted);
 }
 .port-labels .p b {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.port-labels .p-nama {
+  max-width: 100%;
+  color: var(--n-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .port-labels .p.text-end {
   text-align: right;
+  align-items: flex-end;
 }
+/* Label simpul transit berposisi mutlak (route-model.js): wadahnya
+   setinggi satu baris label (kode terminal + tanggal), dua baris hanya
+   bila ada label berdekatan yang diturunkan ke baris kedua (top 36px). */
 .port-labels--multi {
   position: relative;
-  min-height: 72px;
+  min-height: 38px;
   display: block;
+}
+.port-labels--multi.port-labels--dua-baris {
+  min-height: 74px;
 }
 .port-labels--multi .p {
   position: absolute;
@@ -602,62 +610,130 @@
   max-width: 120px;
 }
 /* ---- Date strip ---- */
-/* minmax(0,1fr), bukan 1fr: batas bawah `auto` memakai lebar min-content */
+/* Di dalam panel perjalanan, dipisah dari jalurnya dengan garis tipis.
+
+   ETD & ETA: kolom 200-224px DIRAPATKAN KE KIRI, bukan 1fr -- tiga kolom
+   1fr di kartu 1.500px berjarak 500px, dan ketiga tanggal terbaca
+   terpisah-pisah. Estimated Delivery: kolom ketiga yang LEBIH LEBAR
+   (minimal 300px), karena keterangannya paling panjang -- hari, mode,
+   sumber, dan keyakinan harus SEBARIS ("Sel [Auto] dari ETA ▮▮▯▯▯ 50%
+   · Sedang"). Di kolom 224px keterangan itu pecah dua baris. */
 .date-strip {
   display: grid;
-  /* Kolom 200-224px DIRAPATKAN KE KIRI, bukan 1fr: sejak halaman selebar
-     layar, tiga kolom 1fr di kartu 1.500px berjarak 500px -- ETD, ETA dan
-     Estimated Delivery terbaca terpisah-pisah. 224px = kotak tanggal
-     (190px, css/lebar-isian.css) atau label terpanjang beserta lencananya
-     ("Estimated Delivery" + MANUAL), mana yang lebih lebar; sisanya kosong
-     di kanan. Di bawah 200px label itu pecah dua baris -- jadi barisnya
-     turun kolom tepat sebelum itu terjadi. */
-  grid-template-columns: repeat(auto-fill, minmax(200px, 224px));
+  grid-template-columns: minmax(200px, 224px) minmax(200px, 224px) minmax(300px, 1fr);
   justify-content: start;
-  gap: 12px 28px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
 }
-/* Kotak tanggal: label boleh setinggi apa pun, kotak isiannya TETAP
-   sejajar.
+/* Kotak tanggal: label SATU BARIS (tidak pernah dibungkus), tanggal,
+   lalu keterangannya.
 
-   Tiga label di baris ini tidak sama tingginya — "ETD" teks polos,
-   "ETA" dan "Estimated Delivery" membawa lencana AUTO/MANUAL, dan di
-   layar sempit label terpanjang turun ke baris kedua. Kalau label &
-   isian sekadar ditumpuk biasa, tinggi label langsung menggeser kotak
-   di bawahnya sampai ketiganya tidak sejajar.
-
-   Tiap kotak jadi kolom lentur setinggi barisnya, dan
-   isiannya didorong ke dasar — berapa pun tinggi labelnya, ketiga
-   kotak tanggal berhenti di garis yang sama. */
+   Labelnya selalu sebaris -- lencana mode yang dulu menumpang di label
+   kini di keterangan bawah -- jadi ketiga tanggal berhenti di garis yang
+   sama berapa pun panjang keterangannya. */
 .date-field {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 .date-field label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  color: var(--muted);
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.date-field input[type="date"],
-.date-field input[data-kotak-tanggal] {
-  margin-top: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 0.85rem;
-  font-family: var(--font-mono);
-  width: 100%;
-  background: var(--surface);
+/* Kotak tanggalnya: model bergaya nilai bersama (css/date-input.css) --
+   selebar isinya, ikon tepat di kanan tanggal. */
+/* Keterangan di bawah tanggal: hari (& jam), lalu asal angkanya */
+.date-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 3px;
+  min-height: 1.1rem;
+  line-height: 1.35;
+  color: var(--n-500);
+}
+.date-caption:empty {
+  display: none;
+}
+.date-hari {
+  font-weight: 500;
+  color: var(--n-600);
+  white-space: nowrap;
+}
+.date-ket {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+/* Keterangan Estimated Delivery (predictionStripHtml) mengalir bersama
+   hari di depannya: "Sen [Auto] dari ETA" sebaris, keyakinan menyusul
+   kalau tidak muat -- bukan seluruh keterangan turun satu blok. */
+.date-caption > .pred-strip {
+  display: contents;
+}
+.date-ket-ringkas {
+  display: none;
+}
+/* Panel sempit (ponsel): keterangan dipadatkan supaya tetap SEBARIS
+   dengan harinya -- "ETD + 10 hari" jadi "+10 hari", label keyakinan
+   ("Sedang") disembunyikan (meteran & title tetap menunjukkannya). */
+@container perjalanan (max-width: 559.98px) {
+  .date-caption {
+    gap: 4px 6px;
+    font-size: 0.72rem;
+  }
+  .date-ket-lengkap {
+    display: none;
+  }
+  .date-ket-ringkas {
+    display: inline;
+  }
+  .date-caption .pred-conf-label {
+    display: none;
+  }
+}
+/* "Telat 3 hari — dihitung ulang" kabar buruk: baris sendiri */
+.date-caption .pred-late {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+/* Nama barang di baris tanggal (barangRingkasHtml, render/cards.js):
+   hanya tampil di tampilan Ringkas -- letak & kolomnya di css/desain.css
+   (KEPADATAN DAFTAR). Di Nyaman namanya sudah ada di rincian kartu. Label
+   & jaraknya meniru label tanggal di sebelahnya. */
+.date-barang {
+  display: none;
+  min-width: 0;
+}
+.date-barang-label {
+  font-size: var(--t-xs);
+  line-height: 1.2rem;
+  margin-bottom: 3px;
+  color: var(--n-500);
+  white-space: nowrap;
+}
+.date-barang-isi {
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+/* Satu barang paling banyak dua baris; selebihnya di tooltip blok */
+.date-barang-isi > div {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.date-barang-isi > div + div {
+  margin-top: 3px;
+}
+.date-barang-isi > .date-barang-lagi {
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--n-500);
 }
 
 /* ================= COLLAPSED CARD (arrived) ================= */
@@ -698,9 +774,15 @@
   color: var(--tp-700);
 }
 .collapsed-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
   font-size: 0.8rem;
   color: var(--muted);
   margin-top: 2px;
+}
+.collapsed-meta .po-ref-label {
+  font-size: 0.78rem;
 }
 .collapsed-meta b {
   color: var(--ink);
@@ -709,75 +791,82 @@
   white-space: nowrap;
 }
 
-/* STRIP JADWAL AWAL DI KARTU (status DELAY) */
+/* STRIP UPDATE DELAY — bagian bawah panel perjalanan.
+
+   Dipisah garis tipis bertinta peringatan, bukan kotak bergaris
+   putus-putus. Isiannya memakai kisi yang SAMA dengan baris tanggal di
+   atasnya (.date-strip): Update ETD tepat di bawah ETD, Update ETA di
+   bawah ETA. Selisihnya ("+3 hari dari ETD") di keterangan bawah
+   tanggalnya. */
 .delay-strip {
-  margin-top: 8px;
-  border: 1px dashed var(--amber);
-  border-radius: 10px;
-  background: var(--w-bg-fffaf0);
-  /* Tepi kiri & jarak antarkotak sama dengan baris tanggal di atasnya
-     (.date-strip): Updated ETD tepat di bawah ETD, Updated ETA di bawah ETA. */
-  padding: 8px 14px 10px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--s-warn-line);
 }
 .delay-strip-head {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--w-teks-a35a00);
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--s-warn-ink);
+  margin-bottom: 8px;
 }
 /* Revisi yang tertinggal di jadwal yang sudah bukan Delay: tetap
-   tampil (tanggal itulah yang berlaku), garisnya tidak putus-putus. */
+   tampil (tanggal itulah yang berlaku), kalimatnya lebih tenang. */
 .delay-strip--sisa {
-  border-style: solid;
-  border-color: var(--s-warn-line);
+  border-top-color: var(--n-200);
 }
 .delay-strip--sisa .delay-strip-head {
-  font-weight: 600;
-  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--n-600);
 }
 .delay-strip-fields {
-  display: flex;
-  gap: 12px 28px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(200px, 224px) minmax(200px, 224px) minmax(300px, 1fr);
+  justify-content: start;
 }
-.delay-strip-fields .date-field {
-  /* 200px, bukan 160px: di bawah itu kotak tanggal dua kolom lebih
-     sempit daripada isian tanggalnya sendiri. */
-  flex: 1 1 200px;
+/* Panel sempit (tablet, ponsel, kartu di samping bilah sisi): ETD & ETA
+   berdampingan (pasangan), Estimated Delivery selebar panel di bawahnya.
+   Update ETD/ETA di strip delay berdampingan juga -- tepat di bawah ETD
+   & ETA. 812px = 224 + 224 + 300 + dua jarak 28px + sedikit kelonggaran. */
+@container perjalanan (max-width: 811.98px) {
+  .date-strip,
+  .delay-strip-fields {
+    grid-template-columns: repeat(2, minmax(0, 224px));
+    gap: 12px 16px;
+  }
+  .date-strip > .date-field:nth-child(3) {
+    grid-column: 1 / -1;
+  }
 }
 .delay-delta {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 0.7rem;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--w-bg-eef2f6);
-  color: var(--muted);
-  margin-left: 4px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.74rem;
+  color: var(--n-500);
+  white-space: nowrap;
 }
 .delay-delta--late {
-  background: var(--w-bg-ffe7cc);
-  color: var(--w-teks-a35a00);
+  color: var(--s-warn-ink);
 }
 .delay-delta--early {
-  background: var(--sec-50);
   color: var(--tsec-700);
 }
 
 /* ISI TAMBAHAN DI KARTU SELESAI (ARRIVED / DELIVERED) */
 .collapsed-extra {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--n-200);
 }
 /* Rincian & nama barang memakai blok yang sama dengan kartu berjalan
-   (cardBodySplitHtml). Di sini garis atas pemisahnya saja yang perlu
-   dirapatkan, karena blok itu sudah punya jaraknya sendiri. */
+   (cardBodySplitHtml). Di sini jarak atasnya saja yang dirapatkan --
+   blok tanggal di atasnya sudah bergaris bawah. */
 .collapsed-extra .ship-body-split {
   margin-top: 0;
   border-top: 0;
-  padding-top: 0;
+  padding-top: 4px;
 }
 /* Kronologi pada kartu selesai: jarak atas dirapatkan */
 .collapsed-extra .card-notes {
@@ -786,20 +875,21 @@
 }
 
 /* ANIMASI "BERANGKAT HARI INI" (ETD == hari ini) */
+/* Di dalam panel perjalanan, di bawah baris tanggal. Latar polos --
+   gerak penandanya sudah cukup menarik mata. */
 .depart-strip {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 7px 12px;
   border-radius: 10px;
-  background: linear-gradient(90deg, rgba(138, 106, 40, 0.1), transparent);
-  border: 1px solid rgba(138, 106, 40, 0.28);
+  background: var(--surface);
+  border: 1px solid var(--sec-200);
   overflow: hidden;
 }
 .depart-strip--air {
-  background: linear-gradient(90deg, rgba(20, 73, 122, 0.1), transparent);
-  border-color: rgba(20, 73, 122, 0.28);
+  border-color: var(--p-200);
 }
 .depart-label {
   flex-shrink: 0;
@@ -886,14 +976,16 @@
 }
 
 
+/* Lencana fasilitas di bawah rincian, sebelum progres dokumen */
 .tag-row {
-  gap: 5px;
-  margin: 10px 0 0;
+  gap: 6px;
+  margin: 0 0 4px;
 }
 .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--t-xs);
-  padding: 3px 8px;
-  border-radius: var(--r-xs);
 }
 
 /* Kartu di layar sempit */
@@ -909,9 +1001,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
+  /* Ditumpuk: garis pemisahnya pindah ke atas daftar barang */
   .info-names {
     flex: 1 1 auto;
     width: 100%;
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 14px;
+    border-top: 1px solid var(--n-100);
   }
 }
 
@@ -980,31 +1077,38 @@
     gap: 13px 14px;
   }
 
-  .date-strip {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+  /* Panel perjalanan di HP: kolomnya sudah dua (kueri wadah di atas);
+     di sini jarak antarkolomnya dirapatkan. */
+  .date-strip,
+  .delay-strip-fields {
+    gap: 12px 10px;
+  }
+  /* Dua tanggal sebaris di 320-390px: huruf & ruang ikonnya dirapatkan
+     sedikit supaya "03-11-2026" tidak terpotong di kolom ±140px. */
+  .ship-card .date-field input.kt-nilai[data-kotak-tanggal] {
+    font-size: 0.94rem;
+  }
+  .ship-card .date-field input.kt-nilai[data-kotak-tanggal]:not([readonly]):not(:disabled) {
+    --kt-kanan: 28px;
+    background-position: right 6px center;
+    background-size: 14px 14px;
   }
   .date-field {
     min-width: 0;
   }
-  /* .delay-strip-fields memakai FLEX, bukan grid — aturan
-     grid-template-columns di sini tidak pernah berlaku sama sekali.
-     Yang dibutuhkan pembungkusnya dipaksa satu per baris. */
-  .delay-strip-fields {
-    flex-direction: column;
-    gap: 10px;
-  }
 }
 
-/* Keterangan sisa hari di sebelah judul jalur */
+/* Keadaan sekarang = judul panel perjalanan: "Sampai Terminal 3 Hari
+   Lagi", "Di Terminal · Telat 2 Hari". */
 .lane-remaining {
-  float: right;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0;
   text-transform: none;
+  color: var(--n-900);
+}
+.lane-rute-tipe {
+  font-size: 0.74rem;
+  font-weight: 600;
   color: var(--n-500);
+  white-space: nowrap;
 }
 
 /* Di 0% dan 100% penanda digeser ke dalam supaya tidak setengah
@@ -1073,51 +1177,57 @@
    tahap BERIKUTNYA diberi cincin kuningan supaya jelas mana yang
    menunggu tindakan, sisanya tenang.
 ================================================================== */
-.docsteps {
-  border-top: 1px dashed var(--border);
-  margin-top: 14px;
-  padding-top: 12px;
-}
 .docsteps-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-3);
+  flex-wrap: wrap;
+  gap: 6px var(--sp-3);
   font-family: var(--font-display);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  color: var(--n-500);
   margin-bottom: 10px;
 }
+.docsteps-judul {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .docsteps-head i {
-  color: var(--tsec-600);
+  color: var(--n-400);
 }
 .docsteps-count {
-  font-family: var(--font-mono);
   letter-spacing: 0;
-  color: var(--tp-600);
 }
 .docsteps-hitung {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-family: var(--font-body);
+  font-weight: 500;
 }
-/* "· 2 draft": berkas yang aslinya masih ditunggu */
+/* "2 draft": berkas yang aslinya masih ditunggu */
 .docsteps-draft {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
+  padding: 0 7px;
+  line-height: 1.25rem;
+  border-radius: var(--r-xs);
   background: var(--p-50);
-  border: 1px dashed var(--p-300);
-  font-family: var(--font-mono);
+  border: 1px solid var(--p-200);
+  font-size: 0.72rem;
   letter-spacing: 0;
-  color: var(--tp-500);
+  color: var(--tp-600);
 }
 .docsteps-draft i {
   color: var(--tp-500);
+}
+/* "Berikutnya: Billing" -- tahap bercincin kuningan, disebut namanya */
+.docsteps-next {
+  color: var(--n-500);
+}
+.docsteps-next b {
+  font-weight: 600;
 }
 .docsteps-track {
   display: flex;
@@ -1157,21 +1267,12 @@
   border: 1.5px solid var(--border-control);
   background: var(--surface);
   color: var(--n-500);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 700;
   transition:
     background var(--dur-1) var(--ease),
     border-color var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease);
 }
 .docstep-label {
-  font-family: var(--font-board);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--n-500);
   white-space: nowrap;
 }
 /* Fokus keyboard: cincin di bulatannya, bukan kotak tinggi yang
@@ -1232,10 +1333,9 @@
 }
 
 /* DRAFT DISETUJUI, ASLINYA DITUNGGU: terkumpul, tapi bukan selesai --
-   garis putus-putus navy & jam pasir, bukan centang penuh. */
+   bulatan navy muda berbingkai navy & jam pasir, bukan centang penuh. */
 .docstep.is-draft .docstep-dot {
-  background: var(--p-50);
-  border-style: dashed;
+  background: var(--p-100);
   border-color: var(--p-500);
   color: var(--tp-600);
   font-size: 0.72rem;
@@ -1269,19 +1369,13 @@
   font-size: 0.66rem;
 }
 
-/* Viewer tidak boleh mengubah, tapi tetap harus bisa membacanya. */
-body.is-viewer .docstep {
-  pointer-events: none;
-}
-
 /* Tahap yang ditandai TIDAK DIPAKAI — mis. COO untuk barang tanpa
-   fasilitas tarif preferensi (E-COO ikut dengan sendirinya). Digambar
-   bergaris putus-putus dan diredupkan: jelas sudah dilewati, jelas
-   pula bukan "selesai". */
+   fasilitas tarif preferensi (E-COO ikut dengan sendirinya). Diredupkan
+   dan labelnya dicoret: jelas sudah dilewati, jelas pula bukan
+   "selesai". */
 .docstep.is-skipped .docstep-dot {
-  border-style: dashed;
-  border-color: var(--n-300);
-  background: var(--n-50);
+  border-color: var(--n-200);
+  background: var(--n-100);
   color: var(--n-400);
 }
 .docstep.is-skipped .docstep-label {
@@ -1290,45 +1384,27 @@ body.is-viewer .docstep {
   text-decoration-color: var(--n-300);
 }
 
-/* ETD & ETA hanya-baca pada kartu Export yang sudah Delivered. */
+/* ETD & ETA hanya-baca pada kartu yang sudah selesai: nilai biasa
+   (kt-nilai, css/date-input.css) yang berjajar, dipisah garis tipis dari
+   rincian di bawahnya. */
 .collapsed-dates {
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  gap: var(--sp-3) 28px;
   margin-bottom: var(--sp-3);
   padding-bottom: var(--sp-3);
-  border-bottom: 1px dashed var(--border);
+  border-bottom: 1px solid var(--n-200);
 }
-/* Selebar isinya saja. Kotak tanggal yang melar jauh melewati
-   "05/08/2026" membuat kartu terlihat separuh kosong. */
+/* Selebar isinya saja (kotaknya selebar tanggalnya, css/date-input.css).
+   Kotak tanggal yang melar jauh melewati "05/08/2026" membuat kartu
+   terlihat separuh kosong. */
 .collapsed-dates .date-field {
   flex: 0 0 auto;
 }
-/* `width: auto` pada input[type=date] memberi lebar BAWAAN peramban —
-   cukup untuk tanggal terpanjang plus ikon pemilih, bukan untuk teks
-   yang benar-benar ada. Karena kotak ini hanya dibaca, ikonnya
-   disembunyikan dan lebarnya dipatok sepanjang "00/00/0000". */
-.collapsed-dates .date-field input {
-  width: auto;
-  min-width: 0;
-  padding: 4px 8px;
-  field-sizing: content;
-}
-.collapsed-dates .date-field input::-webkit-calendar-picker-indicator {
-  display: none;
-}
-.collapsed-dates .date-field input::-webkit-inner-spin-button {
-  display: none;
-}
-/* Cadangan untuk peramban tanpa field-sizing: 10 karakter + padding. */
-@supports not (field-sizing: content) {
-  .collapsed-dates .date-field input { width: calc(10ch + 18px); }
-}
+/* Lencana fasilitas kartu selesai: di bawah rincian, sebelum progres dokumen */
 .tag-row--collapsed {
-  margin-bottom: var(--sp-3);
-  padding-bottom: var(--sp-3);
-  border-bottom: 1px dashed var(--border);
+  margin: 0 0 var(--sp-2);
 }
 .collapsed-dates-note {
   display: inline-flex;

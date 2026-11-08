@@ -80,8 +80,6 @@
 .cek-drop-judul {
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .cek-drop-nama {
@@ -227,10 +225,16 @@
   font-size: var(--t-xs);
   color: var(--n-500);
 }
+/* [ nomor Master ][ tanggal ]  [ nomor House ][ tanggal ]: nomornya
+   mengisi, kotak tanggalnya selebar tanggalnya (css/date-input.css);
+   pasangan House dijauhkan sedikit dari tanggal Master. */
 .cek-bl-kisi {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr) max-content;
   gap: var(--sp-3);
+}
+.cek-bl-isian:nth-child(3) {
+  margin-left: var(--sp-3);
 }
 .cek-bl-isian {
   min-width: 0;
@@ -595,9 +599,6 @@
   border-bottom: 1px solid var(--n-100);
   color: var(--n-500);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
@@ -744,7 +745,10 @@
 /* ---------- layar sempit ---------- */
 @media (max-width: 991.98px) {
   .cek-bl-kisi {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+  .cek-bl-isian:nth-child(3) {
+    margin-left: 0;
   }
   .cek-vonis {
     flex-wrap: wrap;

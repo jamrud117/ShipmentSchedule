@@ -6,7 +6,7 @@
    "DAFTAR BARANG DI FORM")
 
    Bawaannya KARTU: satu kartu berlabel per barang, semua kolom terlihat
-   tanpa menggeser ke kanan. TABEL = 24 kolom satu baris per barang,
+   tanpa menggeser ke kanan. TABEL = 25 kolom satu baris per barang,
    untuk yang lebih suka mengisi banyak barang di kisi.
 
    Pilihannya hanya mengganti satu kelas di .barang-isi

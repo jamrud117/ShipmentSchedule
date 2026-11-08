@@ -95,23 +95,64 @@ function isianLartasHs(nilai) {
     hint: tt("Jadwal Import yang barangnya ber-HS ini diingatkan bila dokumennya belum ada.", "Import schedules with items under this HS are reminded when the document is missing."),
   };
 }
+/* Kolom opsional hs_code_master yang mungkin belum dimigrasi: lartas
+   (migration-lampiran-lartas-kebutuhan.sql) & tarif_bm
+   (migration-hs-tarif-bm.sql, tarif-hs.js). Ditolak karena kolomnya
+   belum ada -> disimpan ulang tanpa kolom itu, dan pengguna diberi tahu
+   berkas migrasinya. Hasil: { data, error, lartasDitinggal, tarifDitinggal }. */
 async function simpanHsDenganLartas(kirim, row) {
   let hasil = await kirim(row);
-  if (hasil.error && "lartas" in row && kolomBelumDikenal(hasil.error, ["lartas"])) {
-    const lartas = row.lartas;
-    delete row.lartas;
+  const ditinggal = {};
+  for (let i = 0; i < 2 && hasil.error; i++) {
+    const kolom = kolomBelumDikenal(hasil.error, ["lartas", "tarif_bm"].filter((k) => k in row));
+    if (!kolom) break;
+    ditinggal[kolom] = row[kolom];
+    delete row[kolom];
     hasil = await kirim(row);
-    if (!hasil.error && lartas.length) {
-      showToast(
-        tt(`HS Code tersimpan, tetapi tanda lartas belum: database belum mengenal kolomnya. Jalankan ${BERKAS_MIGRASI_LAMPIRAN} di Supabase.`,
-          `HS Code saved, but the restriction flags were not: the database does not know the column yet. Run ${BERKAS_MIGRASI_LAMPIRAN} in Supabase.`),
-        "warning",
-      );
-      hasil.lartasDitinggal = true;
-    }
+  }
+  if (hasil.error) return hasil;
+  if ("lartas" in ditinggal && (ditinggal.lartas || []).length) {
+    showToast(
+      tt(`HS Code tersimpan, tetapi tanda lartas belum: database belum mengenal kolomnya. Jalankan ${BERKAS_MIGRASI_LAMPIRAN} di Supabase.`,
+        `HS Code saved, but the restriction flags were not: the database does not know the column yet. Run ${BERKAS_MIGRASI_LAMPIRAN} in Supabase.`),
+      "warning",
+    );
+    hasil.lartasDitinggal = true;
+  }
+  if ("tarif_bm" in ditinggal && ditinggal.tarif_bm != null) {
+    showToast(
+      tt(`HS Code tersimpan, tetapi Tarif BM belum: database belum mengenal kolomnya. Jalankan ${BERKAS_MIGRASI_TARIF_HS} di Supabase.`,
+        `HS Code saved, but the duty rate was not: the database does not know the column yet. Run ${BERKAS_MIGRASI_TARIF_HS} in Supabase.`),
+      "warning",
+    );
+    hasil.tarifDitinggal = true;
   }
   return hasil;
 }
+
+// Isian Tarif BM (%) di kotak Tambah / Ubah HS Code
+function isianTarifHs(nilai) {
+  const n = angkaTarifBm(nilai);
+  return {
+    key: "tarif",
+    label: tt("Tarif BM (%) — opsional", "Duty rate (%) — optional"),
+    placeholder: tt("Cth: 5", "e.g. 5"),
+    value: n == null ? "" : String(n),
+    inputmode: "decimal",
+    hint: tt("Mengisi kolom Tarif BM barang ber-HS ini di Daftar Barang secara otomatis.", "Fills the Duty Rate of items with this HS in the Item List automatically."),
+  };
+}
+// Kosong = null; selain angka 0-100 = pesan galat
+function bacaTarifHs(teks) {
+  const t2 = String(teks == null ? "" : teks).trim();
+  if (!t2) return { nilai: null };
+  const n = angkaTarifBm(t2);
+  return n == null ? { galat: tt("Tarif BM harus angka 0–100.", "The duty rate must be a number from 0–100.") } : { nilai: n };
+}
+const teksTarifHs = (v) => {
+  const n = angkaTarifBm(v);
+  return n == null ? "\u2014" : `${formatNumberValue(n) || "0"}%`;
+};
 function chipLartasHtml(lartas) {
   const daftar = rapikanLartas(lartas);
   return daftar.length
@@ -244,6 +285,7 @@ function renderHsCodes() {
         <thead><tr>
           <th class="hs-kol-nama">${tt("Nama Barang", "Item Name")}</th>
           <th class="hs-kol-kode">HS Code</th>
+          <th class="hs-kol-tarif">${tt("Tarif BM", "Duty Rate")}</th>
           <th class="hs-kol-lartas">${tt("Lartas", "Restrictions")}</th>
           <th class="hs-kol-catatan">${tt("Catatan", "Notes")}</th>
           <th class="hs-kol-aksi"></th>
@@ -260,6 +302,7 @@ function renderHsCodes() {
                 <i class="bi bi-clipboard" aria-hidden="true"></i>
               </button>
             </td>
+            <td class="hs-kol-tarif${angkaTarifBm(r.tarif_bm) == null ? " hs-tanpa-tarif" : ""}" data-label="${escapeAttr(tt("Tarif BM", "Duty Rate"))}">${teksTarifHs(r.tarif_bm)}</td>
             <td class="hs-kol-lartas${rapikanLartas(r.lartas).length ? "" : " hs-tanpa-lartas"}" data-label="${escapeAttr(tt("Lartas", "Restrictions"))}">${chipLartasHtml(r.lartas)}</td>
             <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
             <td class="hs-kol-aksi">
@@ -445,6 +488,7 @@ function tambahHsCodeBaru() {
         inputmode: "numeric",
         filter: batasiHsCode,
       },
+      isianTarifHs(null),
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), placeholder: tt("Cth: EVA Sole", "e.g. EVA Sole") },
       isianLartasHs([]),
     ],
@@ -452,14 +496,16 @@ function tambahHsCodeBaru() {
       if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
-      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas));
+      const tarif = bacaTarifHs(v.tarif);
+      if (tarif.galat) return tarif.galat;
+      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai);
       return true;
     },
   });
 }
 
-async function simpanHsCodeBaru(nama, kode, catatan, lartas) {
-  const { data, error, lartasDitinggal } = await simpanHsDenganLartas(
+async function simpanHsCodeBaru(nama, kode, catatan, lartas, tarif) {
+  const { data, error, lartasDitinggal, tarifDitinggal } = await simpanHsDenganLartas(
     (row) => supabaseClient.from("hs_code_master").insert(row).select().single(),
     {
       item_name: nama,
@@ -467,6 +513,7 @@ async function simpanHsCodeBaru(nama, kode, catatan, lartas) {
       notes: catatan || null,
       created_by: authState.user ? authState.user.id : null,
       lartas: lartas || [],
+      ...(tarif != null ? { tarif_bm: tarif } : {}),
     },
   );
   if (error) {
@@ -478,7 +525,7 @@ async function simpanHsCodeBaru(nama, kode, catatan, lartas) {
   versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  if (!lartasDitinggal) showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
+  if (!lartasDitinggal && !tarifDitinggal) showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
 }
 
 function editHsCode(id) {
@@ -499,6 +546,7 @@ function editHsCode(id) {
         inputmode: "numeric",
         filter: batasiHsCode,
       },
+      isianTarifHs(r.tarif_bm),
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), value: r.notes || "" },
       isianLartasHs(r.lartas),
     ],
@@ -506,16 +554,21 @@ function editHsCode(id) {
       if (!(v.nama || "").trim()) return tt("Nama barang harus diisi.", "Item name is required.");
       const galat = periksaHsCode(v.kode);
       if (galat) return galat;
-      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas));
+      const tarif = bacaTarifHs(v.tarif);
+      if (tarif.galat) return tarif.galat;
+      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai);
       return true;
     },
   });
 }
 
-async function simpanUbahHsCode(id, nama, kode, catatan, lartas) {
-  const { error, lartasDitinggal } = await simpanHsDenganLartas(
+async function simpanUbahHsCode(id, nama, kode, catatan, lartas, tarif) {
+  const awal = hsCodeRows.find((x) => x.id === id);
+  // Tarif dikirim bila diisi, atau bila dikosongkan dari nilai yang ada (database lama tanpa kolomnya tidak ikut ditanya)
+  const kirimTarif = tarif != null || (awal && angkaTarifBm(awal.tarif_bm) != null);
+  const { error, lartasDitinggal, tarifDitinggal } = await simpanHsDenganLartas(
     (row) => supabaseClient.from("hs_code_master").update(row).eq("id", id),
-    { item_name: nama, hs_code: kode, notes: catatan || null, lartas: lartas || [] },
+    { item_name: nama, hs_code: kode, notes: catatan || null, lartas: lartas || [], ...(kirimTarif ? { tarif_bm: tarif == null ? null : tarif } : {}) },
   );
   if (error) {
     console.error(error);
@@ -528,11 +581,12 @@ async function simpanUbahHsCode(id, nama, kode, catatan, lartas) {
     r.hs_code = kode;
     r.notes = catatan || null;
     if (!lartasDitinggal) r.lartas = lartas || [];
+    if (!tarifDitinggal && kirimTarif) r.tarif_bm = tarif;
   }
   versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  if (!lartasDitinggal) showToast(t("m.perubahan.tersimpan"), "dark");
+  if (!lartasDitinggal && !tarifDitinggal) showToast(t("m.perubahan.tersimpan"), "dark");
 }
 
 function deleteHsCode(id) {

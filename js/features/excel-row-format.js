@@ -61,6 +61,10 @@ const clipboardFormatter = {
        nol, dan menempelkan "%" begitu saja menghasilkan sel berisi
        tanda persen telanjang — teks, bukan angka, dan Excel akan
        memperlakukan seluruh kolomnya sebagai teks. */
+    if (percent === "" || percent == null || !isFinite(Number(percent))) return "";
+    /* Tarif sekarang per barang dan SELALU berarti (barang tanpa tarif =
+       bawaan 5%): 0% (mis. FTA) ditulis "0%", bukan dikosongkan. */
+    if (Number(percent) === 0) return "0%";
     const s = clipboardFormatter.num(percent, 2);
     return s ? s + "%" : "";
   },
@@ -156,11 +160,11 @@ function buildExcelCopyRows(s, formatter) {
     12,
     13,
     14, // NDPBM, INCOTERMS
-    18,
+    // 18 (TARIF) SENGAJA TIDAK di sini -- Tarif BM per barang (tarif-hs.js)
     19,
     20,
     21,
-    22, // TARIF, BEA MASUK, PPN, PPH, TOTAL BM+PDRI
+    22, // BEA MASUK, PPN, PPH, TOTAL BM+PDRI
     // 24 (FASILITAS/SKB) SENGAJA TIDAK di sini lagi — SKB sekarang per barang
     26,
     27,
@@ -214,7 +218,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.num(cifUsdBaris, 2), // 15 CIF
       formatter.num(fobRupiahBaris, 2), // 16 FOB RUPIAH
       formatter.num(cifRupiahBaris, 2), // 17 CIF RUPIAH
-      formatter.tarif(s.tarif), // 18 TARIF
+      formatter.tarif(tarifBmBerlaku(it, s)), // 18 TARIF -- per barang: tarifnya sendiri / tarif jadwal lama / 5%
       formatter.num(bmVal, 2), // 19 BEA MASUK
       formatter.num(ppnVal, 2), // 20 PPN 11%
       formatter.num(pphVal, 2), // 21 PPH
@@ -248,9 +252,21 @@ function buildExcelCopyRows(s, formatter) {
   return rows;
 }
 
+/* INJEKSI RUMUS. Teks yang ditempel ke Excel / Google Sheets dan diawali
+   = + - @ dibaca sebagai RUMUS, bukan teks -- nama barang atau uraian
+   dari CIPL / PDF vendor seperti =HYPERLINK("http://…") atau =WEBSERVICE(…)
+   ikut dijalankan begitu ditempel. Diberi awalan kutip tunggal: tanda
+   "ini teks" yang tidak ikut tampil di sel. Angka biasa (-12,5 / +62)
+   dan tanda kosong "-" dibiarkan. */
+function selAmanRumus(val) {
+  if (!/^[=+\-@\t\r]/.test(val)) return val;
+  if (val === "-" || /^[+-]?\d[\d.,]*%?$/.test(val)) return val;
+  return "'" + val;
+}
+
 // Escaping ala TSV: field yang mengandung tab/newline/quote dibungkus tanda kutip
 function tsvField(val) {
-  val = val == null ? "" : String(val);
+  val = selAmanRumus(val == null ? "" : String(val));
   if (/[\t\n\r"]/.test(val)) {
     return '"' + val.replace(/"/g, '""') + '"';
   }

@@ -257,11 +257,18 @@ document.addEventListener("keydown", (e) => {
     $("#searchInput").focus();
     $("#searchInput").select();
   } else if (k === "n") {
+    /* Hanya bagi yang boleh membuka form (tabel PERAN, session.js) --
+       sama dengan perintah "Tambah jadwal baru" di palet. Menawarkannya
+       ke peran baca-saja cuma berujung penolakan router. */
+    if (!bolehBuka("form")) return;
     e.preventDefault();
     location.hash = "#/new";
   } else if (k === "?") {
     e.preventDefault();
-    showToast(t("m.pintasan.ctrl.k.cari.cepat.pencarian.n.jadwal."),
+    showToast(
+      bolehBuka("form")
+        ? t("m.pintasan.ctrl.k.cari.cepat.pencarian.n.jadwal.")
+        : tt("Pintasan: Ctrl+K cari cepat · / pencarian · T kembali ke atas", "Shortcuts: Ctrl+K quick search · / search · T back to top"),
       "dark",
     );
   }

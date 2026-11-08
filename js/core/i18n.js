@@ -55,7 +55,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. “5 BOX”), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm, CBM otomatis — kolom Kemasan-nya sendiri tetap diisi seperti Import, dan Total Package-nya ikut terjumlah otomatis. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya — di surat jalan baris itu tercetak menyatu.",
     "form.note.duty":
-      "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. Tarif BM & PPh per barang lewat tombol pena di Data PIB; barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
+      "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif BM barangnya, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. <b>Tarif BM diisi per barang</b> di kolom Tarif BM (%) tab 2. Daftar Barang — terisi otomatis dari HS Code-nya. Barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
       "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak. Terisi otomatis dari Jenis Pengeluaran, vendor, Jenis Transaksi & barang BL/AWB-nya selama belum diubah sendiri.",
     "form.note.totalValue":
@@ -115,7 +115,6 @@ const I18N = {
     "f.status": "Status",
     "f.subtotal.usd": "Subtotal (USD)",
     "f.tanggal.sppb": "Tanggal SPPB",
-    "f.tarif": "Tarif (%)",
     "f.tipe.rute": "Tipe Rute",
     "f.transit.singgah": "Transit (Singgah)",
     "f.udara.pesawat": "Udara (Pesawat)",
@@ -238,10 +237,6 @@ const I18N = {
     "f.tanggal.invoice": "Tanggal Invoice",
     "f.due.date.invoice": "Due Date Invoice",
     "f.customer": "Customer",
-    "u.nomor.invoice.penjualan.jasa": "Nomor invoice penjualan / jasa",
-    "u.nomor.permintaan.dana": "Nomor permintaan dana",
-    "u.nomor.surat.jalan.pengiriman": "Nomor surat jalan pengiriman",
-    "u.nomor.surat.keluar": "Nomor surat keluar",
     "u.nomor.terbit.berurutan.tercatat": "Nomor terbit berurutan & tercatat",
     "u.pelacakan.jadwal.internal.gunakan.akun.yang.di": "Pelacakan jadwal internal. Gunakan akun yang diberikan admin.",
     "u.permintaan.nomor.delivery.order": "Permintaan Nomor Delivery Order",
@@ -333,7 +328,6 @@ const I18N = {
     "ph.kota.negara.tujuan.akhir": "Kota, negara tujuan akhir",
     "ph.minimal.8.karakter": "Minimal 8 karakter",
     "ph.pihak.yang.diberi.tahu": "Pihak yang diberi tahu",
-    "ph.tarif.bea.masuk": "Tarif bea masuk",
     "ph.username.atau.email": "Username atau email",
     "ti.cari.cepat.lintas.import.export": "Cari Cepat Lintas Import & Export",
     "ti.eta.diisi.manual.dari.forwarder.mesin.tidak.ak": "ETA diisi manual dari forwarder — mesin tidak akan menimpanya",
@@ -619,7 +613,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. Per-item BM & PPh rates via the pencil button in PIB Data; items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Type your own value to override; clear it to return to automatic.",
+      "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × the item's Duty Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. <b>The duty rate is set per item</b> in the Duty Rate (%) column on tab 2. Item List — filled automatically from its HS Code. Items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form. Filled automatically from the Expense Type, vendor, Transaction Type & the B/L/AWB's goods until you edit it.",
     "form.note.totalValue":
@@ -679,7 +673,6 @@ const I18N = {
     "f.status": "Status",
     "f.subtotal.usd": "Subtotal (USD)",
     "f.tanggal.sppb": "SPPB Date",
-    "f.tarif": "Rate (%)",
     "f.tipe.rute": "Route Type",
     "f.transit.singgah": "Transit (Stopover)",
     "f.udara.pesawat": "Air (Aircraft)",
@@ -802,10 +795,6 @@ const I18N = {
     "f.tanggal.invoice": "Invoice Date",
     "f.due.date.invoice": "Invoice Due Date",
     "f.customer": "Customer",
-    "u.nomor.invoice.penjualan.jasa": "Sales / service invoice number",
-    "u.nomor.permintaan.dana": "Fund request number",
-    "u.nomor.surat.jalan.pengiriman": "Delivery note number",
-    "u.nomor.surat.keluar": "Outgoing letter number",
     "u.nomor.terbit.berurutan.tercatat": "Numbers issued in sequence and recorded",
     "u.pelacakan.jadwal.internal.gunakan.akun.yang.di": "Internal schedule tracking. Please use the account provided by your administrator.",
     "u.permintaan.nomor.delivery.order": "Delivery Order Number Request",
@@ -897,7 +886,6 @@ const I18N = {
     "ph.kota.negara.tujuan.akhir": "City, country of the final destination",
     "ph.minimal.8.karakter": "At least 8 characters",
     "ph.pihak.yang.diberi.tahu": "Party to be notified",
-    "ph.tarif.bea.masuk": "Import duty rate",
     "ph.username.atau.email": "Username or email",
     "ti.cari.cepat.lintas.import.export": "Quick search across Import & Export",
     "ti.eta.diisi.manual.dari.forwarder.mesin.tidak.ak": "ETA entered manually from the forwarder — the engine will not overwrite it",
@@ -1289,6 +1277,10 @@ function setLang(kode) {
     renderItemTable();
     renderDokPelengkapForm();
     renderDataPabeanForm();
+    // Papan Mesin Prediksi + Rencana Mundur, kronologi catatan, keterangan kurs NDPBM
+    if (typeof syncPredictionForm === "function") syncPredictionForm();
+    if (typeof renderNotesTimeline === "function") renderNotesTimeline();
+    if (typeof kursSyncSegarkan === "function") kursSyncSegarkan();
   }
   /* Label yang bergantung MODA (Nama Vessel/Voyager, No. Flight/Voyage,
      Pelabuhan/Terminal) ditulis dari JS, bukan lewat data-i18n --
@@ -1332,6 +1324,9 @@ function setLang(kode) {
     if (typeof fundDocNoGambar === "function") fundDocNoGambar();
     // Kotak "Aturan No. Invoice": idem
     if (typeof fundInvoiceGambar === "function") fundInvoiceGambar();
+    // Keterangan skema pihak invoice & tanda "= Penjual/Penerima"
+    if (typeof invSegarkanTanda === "function" && typeof invPanel === "function" && invPanel())
+      invSegarkanTanda(invPanel());
   }
   /* Tabel isian No. Dokumen yang dirakit JS (placeholder, label kartu di
      layar sempit, judul kelompok & kaki totalnya) -- juga saat halamannya

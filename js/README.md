@@ -23,9 +23,12 @@ dalam function/arrow function, bukan langsung di top-level). Urutan di
 aman — tapi kalau mau menambah file baru atau mengubah urutan, perhatikan
 dependency-nya dulu.
 
-Pengecualian: `core/tema.js` dimuat di `<head>` SEBELUM lembar gaya (tanpa
-defer) supaya mode gelap terpasang sebelum halaman digambar. File itu
+Pengecualian: `core/anti-bingkai.js` lalu `core/tema.js` dimuat di `<head>`
+SEBELUM lembar gaya (tanpa defer): penjaga clickjacking sebelum apa pun
+tampil, dan mode gelap terpasang sebelum halaman digambar. Keduanya
 mandiri -- tidak boleh memakai fungsi file lain (termasuk `t` / `tt`).
+Tidak ada `<script>` sebaris sama sekali (CSP menolaknya -- lihat
+"Keamanan").
 
 ## Tabel di layar sempit: kartu berlabel
 
@@ -42,14 +45,23 @@ Barang form -- KARTU di semua lebar, lihat di bawah), `.detail-barang` & `.bk-is
 posisinya; (2) jangan menyetel `display` sel yang kolomnya bisa
 disembunyikan per buku (`.dim-col`, `.export-col`, `.import-col`) --
 anak kisi sudah jadi blok dengan sendirinya. Label ikut ganti bahasa:
-`setLang()` menggambar ulang tabel-tabel isian ini.
+`setLang()` menggambar ulang tabel-tabel isian ini -- juga, selagi form
+jadwal terbuka, papan Mesin Prediksi + Rencana Mundur, kronologi catatan
+& keterangan kurs NDPBM, dan di Nomor Dokumen keterangan skema pihak
+invoice (`invSegarkanTanda`).
 
-**Daftar Barang di form: kartu bawaan, tabel pilihan.** Tabelnya 24 kolom
-(±2.900px): di layar 1440px hanya enam kolom pertama yang tampak, Qty /
-Satuan / Harga ada di x = 2.028px. Maka tiap barang tampil sebagai kartu
-berlabel di SEMUA lebar (kisi `repeat(auto-fill, minmax(124px, 1fr))`;
-136px di wadah >= 760px; Uraian & Jenis Barang dua kolom). Pengalih
-Kartu / Tabel di kepala daftar (`features/barang-tampilan.js`) memasang
+**Daftar Barang di form: kartu bawaan, tabel pilihan.** Tabelnya 25 kolom
+(±3.000px): di layar 1440px hanya enam kolom pertama yang tampak, Qty /
+Satuan / Harga jauh di kanan. Maka tiap barang tampil sebagai kartu
+berlabel di SEMUA lebar. Kartunya (css/form.css, "DAFTAR BARANG DI
+FORM") satu "lembar barang" bersusunan TETAP: pita kepala (Seri, Subtotal, hapus),
+lalu tiga bagian berjudul -- Identitas barang (HS Code, Tarif BM, kolom
+CEISA), Klasifikasi & fasilitas, Jumlah, nilai & kemasan. Kisinya 2 / 4 /
+8 kolom menurut lebar WADAH (`@container barang-isi`), lebar tiap isian
+ditetapkan per isian lewat `td[data-k]` (item-table.js) dan per buku
+(`body.mode-import/-export`) sehingga tiap baris kisi terisi penuh; judul
+bagian = sel `td.kartu-grup` (aria-hidden, disembunyikan di mode Tabel).
+Pengalih Kartu / Tabel di kepala daftar (`features/barang-tampilan.js`) memasang
 `.barang-isi--tabel`, dan kelas itu MENGGANTI NAMA kontainer wadah
 (`barang-isi` -> `barang-tabel`): semua aturan kartu ditulis di
 `@container barang-isi (min-width: 0px)` -- syarat yang selalu benar,
@@ -65,16 +77,31 @@ pertama membatasi KOTAKNYA (tanggal 190px di sel 325px, dst.) -- hasilnya
 lubang kosong di samping tiap kotak. Sekarang:
 
 - Di dalam kisi `.fgrid` kotak SELALU mengisi selnya; yang diatur banyaknya
-  lajur (css/components.css): tanggal `.s2`, nomor dokumen `.s4` (pasangan
-  nomor + tanggal = setengah baris), isian biasa 3 lajur, `.s6` / `.s12`.
-  Di layar sedang `.s2` / `.s4` jadi setengah baris, di ponsel penuh.
+  lajur (css/components.css): isian biasa 3 lajur, `.s2` isian pendek
+  (Mata Uang, Nilai), `.s4`, `.s6` / `.s12`. Di layar sedang jadi setengah
+  baris, di ponsel penuh.
+- KECUALI KOTAK TANGGAL: selebar tanggalnya di mana pun (css/date-input.css),
+  jadi ia tidak diberi sel sendiri (sel 200-300px untuk kotak 140px =
+  lubang kosong). Dua pola menggantikannya:
+  - `.fl-bertanggal` (sel `.s6` / `.s8`): isian + tanggalnya sepasang --
+    No. Invoice + Tanggal Invoice, Jenis Surat + Tanggal Surat, Nomor BC
+    1.1 + Tanggalnya, Nilai Barang + Tanggal Bayar. Isiannya mengisi sisa
+    sel, tanggalnya di ujung kanan; tidak muat sebaris (isian < 200px,
+    ponsel) -> tanggalnya turun. Label galat wajib isi dicari dari sel
+    berlabel terdekat (`.fl-bertanggal > *, .fgrid > *`, docnum-view.js).
+  - `.fl-tanggal` (baris): kelompok tanggal berjajar selebar isinya dengan
+    jarak tetap 40px -- ETD / ETA / Estimated Delivery / In Factory,
+    Update ETA / ETD (+ ringkasan delay yang mengisi sisa baris), Tiba /
+    Berangkat di kartu Terminal Transit. Dilipat bila tidak muat.
+  Baris di luar kisi mengikuti hal yang sama: lajur tanggal `max-content`
+  (Dokumen Pelengkap `.dp-baris`, invoice/debit note tambahan `.fd-baris`,
+  baris PO, B/L-AWB pembanding di halaman Cek, Dibutuhkan di Pabrik).
 - Halaman form Jadwal & No. Dokumen SELEBAR LAYAR (batas 1440px / 1280px
   sempat dicoba lalu dicabut: di monitor lebar lebih banyak informasi
   harus terlihat tanpa menggulir).
 - `css/lebar-isian.css` (dimuat PALING AKHIR, hanya `max-width`) membatasi
-  yang di LUAR kisi: kotak isian pop-up, kotak tanggal di luar kisi 190px,
-  tanggal di kartu jadwal 260px. Tidak boleh ada batas kotak di dalam `.fgrid` dan tidak
-  boleh mengatur kisi atau `width` di lembar ini (dijaga tes).
+  kotak isian pop-up saja. Tidak boleh ada batas kotak di dalam `.fgrid`,
+  batas kotak tanggal, atau aturan kisi / `width` di lembar ini (dijaga tes).
 
 URUTAN ISIAN = urutan dokumen datang, dan itulah urutan Tab:
 
@@ -129,6 +156,37 @@ Angka & data ada di `core/prediction-config.js`; hitungannya di
   `rataDelayKapalHtml`, views/overview-view.js): rata-rata telat dari
   ETA rencana (Import) / ETD rencana (Export), 12 bulan, per moda &
   pelayaran.
+- **Lama transit laut impor & ekspor** (`asumsiTransitKonfigurasi`,
+  core/prediction-eta.js):
+  - Aturan rute **dua arah** (`rankRouteRules`, core/prediction-rules.js):
+    tabel ditulis per arah impor; ekspor memakai angka arah sebaliknya
+    (skor −0,5, jadi aturan searah yang sama rincinya selalu menang;
+    `searah: true` mematikannya per aturan). Dulu ekspor jatuh ke 14 hari
+    bawaan -- Singapura maupun Manzanillo "dua minggu".
+  - **Tingkat 3** di `routes[]`: rentang per negara/wilayah di luar tabel
+    forwarder (SG, MY, TH, PH, HK, TW, JP, IN, Timur Tengah, TR, Eropa,
+    AS barat/lainnya, AU) dari jadwal pelayaran publik.
+  - Laut berlabel **Direct** yang pelabuhannya hanya punya angka Transit
+    memakai angka pelabuhan itu (Vladivostok 23), bukan aturan negara.
+  - **Keraguan asumsi** (`ragu`): rentang, arah sebaliknya
+    (`reverseLaneExtraDays`), dan aturan cadangan
+    (`priorSpreadFallbackDays`) membuat riwayat lebih cepat mengambil alih.
+  - **Belajar lintas rute** (`geserDariRuteLain`, core/prediction-learning.js):
+    rute tanpa riwayat digeser selisih rute lain dari negara yang sama
+    (tiap kiriman diukur terhadap asumsinya sendiri; rute itu sendiri
+    tidak dihitung dua kali; per arah impor/ekspor). Tingkat "umum"
+    (`poolSpreadDays.umum`) mati secara bawaan -- di uji tiruan menambah
+    meleset.
+  - **Kapal yang sama** (`etaSekapal`, core/prediction-milestones.js):
+    ETA otomatis ikut Sandar/ATA atau ETA MANUAL kiriman lain di kapal +
+    voyage + tujuan yang sama (impor & ekspor; bukan Transit/kurir).
+    `segarkanKirimanSekapal` menyegarkan kiriman sekapalnya saat ETA/ETD
+    diubah dari kartu.
+  - **Uji mundur** (core/prediction-backtest.js) memisah ETA laut impor &
+    ekspor (`eta.lautImpor`, `eta.lautEkspor`); panel Akurasi Ringkasan
+    menampilkan keduanya. Pada riwayat tiruan bergaya DDI (8 benih,
+    190 kiriman/benih) MAE ETA laut impor 2,58 → 1,69 hari (±1 hari
+    52 → 59%), ekspor 6,05 → 2,03 hari (±1 hari 28 → 54%).
 
 Uji: `qa/engine-test.js` & `qa/dom-test.js` memakai kalender netral untuk
 uji aturan lama; data aslinya diuji lewat `pakaiKalenderAsli()`.
@@ -140,13 +198,26 @@ Migrasi: `migration-lampiran-lartas-kebutuhan.sql` (bucket Storage privat
 `shipments.needed_date`). Sebelum dijalankan aplikasi tetap jalan.
 
 - **Draft / Asli di stepper** (`features/doc-steps.js`): CI/PL, B/L-AWB,
-  COO, PIB (+ PEB & Fumigasi di Export) bertanda `bisaDraft` -- dicentang
-  sebagai Draft (`draft: true`, jam pasir, "· N draft" di kepala stepper,
-  tugas "Menunggu asli" di Ringkasan) lalu dinaikkan ke Asli (`tglDraft`
-  menyimpan tanggal draftnya). PIB draft bukan milestone prediksi
+  Asuransi, COO, Manifest, PIB (+ PEB & Fumigasi di Export) bertanda
+  `bisaDraft` -- dicentang sebagai Draft (`draft: true`, jam pasir,
+  "· N draft" di kepala stepper, tugas "Menunggu asli" di Ringkasan) lalu
+  dinaikkan ke Asli (`tglDraft` menyimpan tanggal draftnya). PIB draft &
+  Manifest draft (belum BC 1.1) bukan milestone prediksi
   (`milestoneDateOf`, `jalurOf` melewatinya). Satu kotak tahap untuk
   semua keadaan (`bukaTahapDokumen`): status, tanggal, jalur, lampiran,
   dan "Batalkan tahap" (`batalkanTahapDokumen`).
+- **Tahap per buku & bersyarat**: E-COO hanya di buku Import (sesudah
+  COO, mengikuti COO yang tidak dipakai). Export: COO & Fumigasi sama-sama
+  opsional ("Tidak dipakai"); kotak & tooltip Fumigasi menyebut kemasan
+  barangnya sebagai petunjuk (`petunjukFumigasi`: kolom Jenis Kemasan,
+  nama bebas atau kode kemasan CEISA -- kayu / palet / peti -> umumnya
+  wajib fumigasi / ISPM-15, karton / plastik / karung -> biasanya tidak)
+  tanpa mencentang apa pun. **Asuransi** (polis / sertifikat, draft &
+  final) hanya untuk incoterm CIF & CIP (`INCOTERM_BERASURANSI`,
+  `berlaku` di definisi tahap, disaring `docStepsFor`), sesudah B/L-AWB di
+  kedua buku; incoterm lain tidak menggambar tahapnya. Petunjuk tahap
+  (`petunjuk`: FTA di COO Import, kemasan di Fumigasi) satu jalur untuk
+  tooltip & kotak tahap.
 - **Lampiran** (`data/lampiran.js`): `berkas: [{ path, nama, ukuran, tipe,
   at, by, versi? }]` di entri tahap dan di baris PI / LS
   (`s.dokPelengkap`). Berkas baru diunggah saat Simpan, yang dilepas
@@ -227,7 +298,8 @@ isiannya hanya belum tersimpan.
   bersambung (Shipper -> Pengirim -> Penjual -> Afiliasi) diulang
   sampai tetap (`segarkanBawaanDataPabean`).
 - **Pungutan per fasilitas** (`hitungPungutanFasilitas`, core/customs.js):
-  per seri barang, tarif BM / PPh barang atau Tarif (%) jadwal, PPN 11%;
+  per seri barang, tarif BM / PPh barang (kolom jadwal `tarif` lama hanya
+  cadangan; 0 / kosong = 5%), PPN 11%;
   fasilitas barang di Daftar Barang (SKB BM / Masterlist, SKB PPN, SKB
   PPh) memindahkan pungutannya ke kolom Dibebaskan dan BM yang
   dibebaskan tidak masuk Nilai Impor. Tepat sama dengan PIB sungguhan 17
@@ -343,9 +415,53 @@ sama dengan cetakan; data tambahan itu tidak dibaca cetakan.
 
 ## Sistem tampilan (UI) -- komponen bersama
 
-Identitas DDI tetap: navy (`--p-*`, `--d-*`) + kuningan (`--sec-*`).
-Token di `css/tokens.css`; aturan lintas komponen di `css/system.css`
-(dimuat terakhir).
+Identitas DDI tetap: navy + kuningan (`--sec-*`), kini dalam konsep
+"Lajur" (papan jadwal pelabuhan): kanvas abu beton, lembar putih datar
+bergaris tipis (tanpa bayangan kecuali yang melayang), navy HANYA di
+sidebar, biru sinyal untuk aksi (`--p-600`), kuningan hanya untuk "hari
+ini / sekarang" dan merek, merah-ambar-hijau hanya untuk status.
+
+- **Berkas CSS & urutannya** (index.html): `tokens.css` (warna, huruf,
+  jarak, sudut, bayangan -- NAMA token tidak berubah, hanya nilainya) ->
+  `fonts.css` -> ... -> `system.css` (aturan lintas komponen) ->
+  **`desain.css`** (lapisan penimpa konsep Lajur) -> `date-input.css`
+  -> `lebar-isian.css` (HARUS terakhir). Tidak ada deklarasi yang ditulis
+  di dua lapisan: bila desain.css (atau aturan mana pun) menimpa selektor
+  yang persis sama di konteks @media/@container yang sama, deklarasi lama
+  DIHAPUS, bukan dibiarkan kalah -- dijaga uji "CSS: tidak ada deklarasi
+  yang pasti tertimpa" (qa/dom-test.js; cadangan sengaja seperti
+  `100vh` lalu `100dvh` di satu blok dikecualikan). Uji CSS yang butuh
+  nilai berlaku membacanya lewat `nilaiCssBerlaku(pemilih, properti)`,
+  bukan teks satu berkas.
+  Bagian desain.css: A dasar, B sidebar, C kepala halaman `.board`,
+  D panel & lembar, E tombol, F footer, G Jadwal, H Ringkasan, I form,
+  J Cek PIB/PEB, K Masterlist / HS / Akun / Login (+K2 layar masuk),
+  L kurs, M huruf kecil & kotak hitung, N panel detail & Cari cepat.
+- **Huruf dikemas sendiri** (`css/fonts.css`, `assets/fonts/*.woff2`,
+  lisensi OFL di `assets/fonts/LISENSI.txt`), tanpa Google Fonts: tetap
+  tampil saat offline dan tidak ada pergeseran saat huruf pengganti
+  dipasang. IBM Plex Sans = seluruh antarmuka; **Barlow Condensed**
+  (`--font-board`) = judul halaman, angka besar, tanggal, merek -- seperti
+  papan penunjuk di pelabuhan; IBM Plex Mono = hanya pengenal (no. aju,
+  B/L, invoice, HS Code, nilai kurs). Label kecil memakai huruf
+  antarmuka, bukan huruf papan (terlalu rapat pada 11px).
+- **Label berhuruf biasa**: tidak ada lagi label struktur huruf besar
+  berjarak renggang; ukuran & bobot yang membedakannya dari isi data.
+- **Kepadatan daftar jadwal** (`ui/kepadatan.js`, tombol Ringkas /
+  Nyaman di bilah kendali; diingat di `exim.kepadatan`): Ringkas
+  menyembunyikan rincian & catatan kartu lewat CSS
+  (`html[data-kepadatan="ringkas"]`) -- murni tampilan, data tak berubah.
+  NAMA BARANG tetap tampil di Ringkas, di KANAN baris tanggal
+  (`barangRingkasHtml`: kolom keempat bergaris kiri; panel < 900px kisi
+  2x2 ETD | ETA, Estimated Delivery | Nama Barang; paling banyak dua nama +
+  "+n lainnya", daftar utuh di tooltip; kartu selesai juga). Lencana &
+  progres dokumen satu wadah (`cardDokumenHtml`, `.ship-dokumen`): di
+  Ringkas lencana kiri, hitungan progres kanan, stepper di bawahnya;
+  garis tipis di atas baris lencana DAN di atas stepper (ponsel < 576px:
+  lencana & hitungan bertumpuk berjarak).
+- **Layar masuk**: dua kolom di layar >= 900px (papan navy dengan lajur
+  status Diproses -> Transit -> Tiba -> Dokumen lengkap, penanda kuningan
+  berjalan satu kali; formulir di kanan), satu kolom di ponsel.
 
 - **Warna teks** lolos AA (4,5:1): `--text-subtle` (n-500) untuk teks
   redup, `--text-placeholder` (4,54:1) untuk teks contoh, `--s-warn-ink`
@@ -381,6 +497,78 @@ Token di `css/tokens.css`; aturan lintas komponen di `css/system.css`
   (bukan `--p-*` / `--s-*`, yang di mode gelap tetap warna isian); warna
   komponen pakai token `--w-<bg|garis|teks>-<hex>`. Warna baru: token,
   bukan hex lepas.
+- **Kartu jadwal** (render/cards.js, css/card.css): judul (pihak, jumlah
+  barang, nomor dokumen & No. Aju) → peringatan (`cardAlertsHtml`: telat,
+  kebutuhan pabrik, lartas) → **panel perjalanan** (`shipJourneyHtml`:
+  keadaan sekarang sebagai judul, jalur dengan kode + nama pelabuhan,
+  baris tanggal ETD / ETA / Estimated Delivery, strip delay) → rincian
+  (incoterm & nilai di bawah nomor invoice, jenis muatan di sel
+  kontainer; dipisah GARIS TIPIS + jarak dari baris tanggal supaya
+  keterangan tanggal tidak menyambung ke label rincian) → lencana
+  fasilitas → progres dokumen ("Berikutnya: …") → kronologi. Garis
+  pemisah selalu garis penuh tipis, tidak putus-putus.
+  Kolom tanggal mengikuti lebar PANEL (kueri wadah `perjalanan`), bukan
+  layar.
+- **Satu model kotak tanggal** (`kt-nilai`, css/date-input.css): SEMUA
+  kotak tanggal -- kartu, form jadwal, No. Dokumen, kotak dialog, tabel
+  isian -- diberi kelas `kt-nilai` oleh js/ui/date-input.js (kecuali
+  Dari/Sampai pemilih rentang, `data-kotak-tanggal-tanpa-ikon`): kotak
+  BERBINGKAI (selalu, bukan hanya saat disorot -- supaya tidak menyaru
+  jadi teks), huruf tegas berangka tabular, ikon kalender pucat yang
+  menebal saat disorot, latar tipis saat disorot, cincin fokus saat
+  diketik, penunjuk tangan di atas ikonnya (`kt-di-ikon`); klik pertama
+  memilih seluruh tanggal. LEBARNYA SELEBAR TANGGALNYA di mana pun
+  (field-sizing; paling sempit selebar "dd-mm-yyyy" -- `min-width`
+  9,7ch + padding lewat variabel `--kt-kiri` / `--kt-kanan` -- jadi kotak
+  kosong & berisi sama lebar dan tidak menyusut mengikuti ketikan yang
+  belum utuh). Tinggi mengikuti tempatnya: 30px di kartu, setinggi
+  tetangganya di form/dialog/tabel (38px / 32px `.form-control-sm`). Ruang
+  sisa diatur TATA LETAKNYA (`.fl-bertanggal`, `.fl-tanggal`, lajur
+  `max-content` -- lihat "Lebar isian"), bukan dengan melebarkan kotaknya
+  (sempat dicoba: kotak 300-an px untuk sepuluh angka). Hanya-baca (kartu
+  selesai, kartu bagi Viewer / Marketing / Finance) = nilai polos tanpa
+  bingkai, ikon & cincin fokus. Kartu peran baca-saja menggambar
+  tanggalnya `readonly tabindex="-1"` dan status `disabled` SEJAK
+  DIGAMBAR (`atributKendaliKartu`, cards.js) -- bukan disamarkan CSS:
+  dulu kotaknya tetap bisa difokus lewat label/Tab, ikon kalendernya
+  tergambar berulang, dan status bisa diganti panah papan ketik. Ikon
+  kalender: gambar, ulang, posisi & ukurannya di SATU aturan; sorot /
+  fokus / tema gelap / layar sentuh hanya mengganti `--kt-ikon` (aturan
+  keadaan yang memasang background-image sendiri bisa berulang begitu
+  ada shorthand `background:` di antaranya). Tetap
+  bisa diketik format apa pun & tetap punya kalender. Di kartu, di
+  bawahnya keterangan SEBARIS dengan harinya (`hariTanggalKartu`,
+  `keteranganEtaKartu`, `predictionStripHtml`).
+- **Kerangka muat** (`showLoadingSkeleton`, data/api.js; css/dashboard.css):
+  kartu kerangka berbentuk kartu jadwal (judul & status, jalur, tiga
+  tanggal, progres) yang MENGISI LAYAR sampai tepi bawah -- wadahnya
+  setinggi sisa layar (`--kerangka-atas`, diukur di bingkai berikutnya
+  lewat requestAnimationFrame: mengukur saat itu juga memaksa seluruh
+  halaman ditata di tengah pembukaan aplikasi), banyaknya kartu dari
+  tinggi layar; warna baloknya token `--kerangka` / `--kerangka-kilau`
+  (mode gelap punya pasangannya sendiri, --n-100 nyaris sama dengan
+  --surface).
+- **Pengalih Auto/Manual di form** (`.fl-mode`, components.css): di BAWAH
+  kotak ETA & Estimated Delivery, sekecil & sewarna penanda Auto/Manual
+  di kartu (Auto kuningan, Manual navy + pin), tidak lebih lebar daripada
+  kotaknya -- kepala kedua kelompok itu cuma label, sebaris rapi dengan
+  ETD & In Factory. Chip "Auto"/"Manual" di samping label dicabut (hanya
+  mengulang pengalihnya); tombol yang berlaku ditandai `is-active` +
+  `aria-pressed` (`tandaiSakelarMode`, prediction-ui.js). Keterangan di
+  bawah Estimated Delivery ikut mode: "Dihitung otomatis." / "Dikunci
+  untuk laporan." (`[data-ket-mode]`).
+- **Bilah ringkasan** (Total / In Process / Delayed / Arrived) di layar
+  <= 991px = kisi 2x2 bersekat garis tipis antarkolom & antarbaris
+  (desain.css bagian G), bukan lajur lentur 3 + 1 yang rapat.
+- **Sekat kartu**: tiap bagian kartu berjalan dipisah garis tipis penuh --
+  kepala (judul, tombol, peringatan) | perjalanan & tanggal | rincian |
+  progres dokumen | kronologi; di Ringkas: kepala | tanggal & nama barang
+  | lencana & hitungan progres | stepper.
+- **Penanda mode & keyakinan** (render/prediction-view.js): Auto
+  (kuningan) / Manual (navy + pin) berbingkai tipis huruf biasa
+  (`modeChipHtml`); keyakinan = meteran lima ruas + "60% · Sedang"
+  (`confidenceChipHtml`). Tanggal hasil hitungan bertinta kuningan
+  (`.date-field--auto`).
 
 ## Nomor dokumen: ditentukan database
 
@@ -459,6 +647,61 @@ batal.sql`):
 - `hs_code_master.created_by` `on delete set null`: akun yang pernah
   menambah HS Code bisa dihapus.
 
+## Keamanan
+
+Kunci publishable di `js/config.js` terbaca oleh siapa pun yang membuka
+situsnya. Itu memang disengaja: penyerang bisa memanggil Supabase
+langsung, tanpa aplikasi ini. Penjaga sebenarnya ada tiga: RLS di
+database, CSP di peramban, dan escape setiap teks yang ditulis ke HTML.
+
+- **Akun baru `nonaktif`** (`migration-keamanan.sql`). Pendaftaran Supabase
+  terbuka, karena halaman Akun membuat akun lewat `auth.signUp`. Dulu
+  setiap pendaftar langsung menjadi viewer yang emailnya terverifikasi, dan
+  bisa membaca semua jadwal, invoice, pengajuan dana, profil, dan lampiran.
+  Kini setiap akun baru berperan `nonaktif`. Kebijakan baca & lampiran
+  menuntut `public.peran_aktif()`. Halaman Akun langsung menetapkan peran
+  Viewer (`registerAccount`). Akun nonaktif dikeluarkan dengan pesan, baik
+  saat login maupun saat dinonaktifkan di tengah sesi (`akunNonaktif`).
+  Hitungannya tampil di kepala halaman Akun.
+  MENJALANKAN ULANG migrasi lama yang membuat kebijakan
+  `using (true)` membuka celahnya lagi: jalankan `migration-keamanan.sql`
+  sesudahnya.
+- **Uji dari luar**: `qa/uji-penetrasi.sql` (SQL Editor, aman di database
+  sungguhan: semua percobaan menulis dibatalkan, akun ujinya dihapus).
+  Yang dicoba: pendaftar mandiri, pengunjung tanpa login (anon), dan
+  viewer yang mencoba menulis. Semua vonis harus AMAN.
+  `qa/ekspor-skema.sql` mengekspor struktur (tanpa data) untuk ditinjau.
+- **anon**: hak tabel & fungsi dicabut, kecuali `email_for_login`. Fungsi
+  itu kini selalu menjawab dengan alamat email (username tak terdaftar
+  dijawab alamat bentukan), jadi daftar username tidak bisa ditebak.
+- **CSP** (`<meta>` di `index.html`): tidak ada skrip atau penangan
+  sebaris, tidak ada `eval`. Pustaka CDN diizinkan per paket & versi,
+  bukan seluruh jsDelivr. Form pakai `data-tanpa-kirim` (`ui/dom.js`),
+  bukan `onsubmit`. Tombol pakai `data-*` + pendengar, bukan `onclick`.
+  Menaikkan versi pustaka, mengganti proyek Supabase, atau mengganti
+  lembar kurs = perbarui CSP juga (dijaga tes).
+- **SRI**: Bootstrap, Bootstrap Icons, supabase-js, dan ExcelJS ber-`integrity`
+  (sha384 berkas npm-nya). Cara menghitung hash versi baru:
+  `npm pack <paket>@<versi>`, lalu `openssl dgst -sha384 -binary <berkas> | openssl base64 -A`.
+  SheetJS dari `cdn.sheetjs.com` (0.20.3). Versi npm berhenti di 0.18.5,
+  yang rentan CVE-2023-30533 & CVE-2024-22363 saat membaca berkas buatan
+  orang lain.
+- **Anti-bingkai** (`core/anti-bingkai.js`, skrip pertama di `<head>`):
+  halaman disembunyikan bila dimuat di dalam iframe situs lain
+  (clickjacking). GitHub Pages tidak bisa mengirim X-Frame-Options.
+- **Salin ke Excel**: sel berawalan `= + - @` diberi awalan `'`
+  (`selAmanRumus`). Nama barang dari CIPL vendor tidak bisa menjadi rumus
+  saat ditempel.
+- **Lampiran**: jenis berkas diperiksa dari ekstensi (`LAMPIRAN_JENIS`), dan
+  Content-Type dikirim sesuai ekstensi itu. Bucket privat, maks. 20 MB,
+  dengan daftar jenis yang sama (bukan HTML / SVG / skrip).
+- **`.gitignore`**: kunci, `.env`, dump & CSV database, dokumen kerja
+  (PDF/Excel/Word/ZIP), dan seluruh `qa/` tidak ikut ter-push. Fixture uji
+  berisi teks dokumen asli (NPWP, rekening, email vendor), dan GitHub Pages
+  menerbitkan setiap berkas yang di-commit ke internet. `js/config.js` tetap
+  di-commit karena kuncinya publishable. Kunci `service_role` /
+  `sb_secret_…` dan sandi database tidak boleh ada di repositori ini.
+
 ## Pembaruan langsung (realtime)
 
 Simpanan satu pengguna tampil di layar pengguna lain tanpa memuat ulang
@@ -523,6 +766,22 @@ per sesi bila migrasinya belum dijalankan).
 - **Mulai**: `routerSesudahMuat` tidak menggambar ulang daftar yang
   baru saja digambar `loadShipments` (dan tidak menimpa layar "Data
   tidak bisa dimuat").
+- **Jangan memaksa tata letak di tengah penggambaran.** Membaca ukuran
+  (getBoundingClientRect, offsetHeight, scrollWidth) sesudah menulis DOM
+  memaksa seluruh halaman ditata saat itu juga -- lalu ditata lagi
+  sesudah tulisan berikutnya. Yang perlu ukuran diukur di bingkai
+  berikutnya (`requestAnimationFrame`: jarak atas kerangka muat, geser
+  tab aktif No. Dokumen `dnTabAktifTerlihat`), atau dibaca dari yang
+  sudah tersedia (ResizeObserver: `borderBoxSize`; tinggi bilah lengket
+  dibaca semua dulu baru ditulis, dan hanya yang berubah -- variabel di
+  `:root` diwarisi seluruh halaman). Belum digulir = posisi daftar
+  sebelum form tidak perlu mengukur kartu (`catatPosisiDaftar`). Saat
+  aplikasi dibuka kini tidak ada pemaksaan tata letak sama sekali (dulu
+  ±40ms).
+- **Pencarian daftar**: teks cari tiap jadwal (`teksCariJadwal`, semua
+  kolom + barang) diingat selama mengetik (`teksCariIngat`, list.js) --
+  dibuang setiap kali daftar digambar ulang karena sebab lain, jadi teks
+  basi tidak pernah dipakai.
 
 ## Uji
 
@@ -537,7 +796,11 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | File | Isi |
 |---|---|
 | `config.js` | Koneksi Supabase, STATUS_META, MODE_LABELS, JENIS_OPTIONS, SKB_TYPE_OPTIONS. `normalisasiJenisBarang()` membakukan ejaan jenis barang ("SPARE PART", "SPARE-PARTS" -> SPAREPART) Klien dibuat dengan `realtime.worker` (detak realtime di Web Worker, lihat "Pembaruan langsung (realtime)"). |
+| `core/anti-bingkai.js` | Anti-clickjacking: dimuat di dalam iframe situs lain -> halaman disembunyikan & jendela teratas diarahkan ke alamat aplikasi. Skrip PERTAMA di `<head>` (GitHub Pages tidak bisa mengirim X-Frame-Options) |
 | `core/tema.js` | Mode gelap: Terang / Gelap / Ikuti sistem (`setTema`, `terapkanTema`; `data-tema` & `data-bs-theme` di `<html>`, tombol `[data-tema-pick]` di menu akun). Dimuat di `<head>` sebelum CSS, mandiri. Warnanya di css/tokens.css |
+| `core/kurs.js` | KURS TERBARU DARI GOOGLE SHEET (sheet "KURS", id & gid di `KURS_SHEET_*`). Membaca lewat gviz (JSON, JSONP, CSV, JSON-gid -- berurutan sampai ada yang berhasil), menyimpan salinan di `exim.kurs.sheet` (segar 10 menit, basi 8 hari). `kursMuat({paksa})` -> `{ok, dariCache, galat, data}` (tidak pernah menolak), `kursCari(kode)`, `kursUsd()`, `kursBandingkan(ndpbmDraft, kode)` (JPY: sheet per 100, NDPBM per 1 yen; `skalaMentah` = draft salah skala), `kursPantau(fn)`, `kursPasang(daftar, opsi)` (kait uji). **Dipakai HANYA di Cek PIB/PEB (checker-view.js) dan tombol Sync kurs (features/kurs-sync.js)** -- dijaga qa/dom-test.js; laporan biaya & dana tetap `kursNdpbm` (customs.js, NDPBM jadwal terdekat tanggalnya) karena sheet tidak bertanggal. Dimuat sesudah customs.js |
+| `features/kurs-sync.js` | Tombol "Sync kurs terbaru" di kotak NDPBM form jadwal. NDPBM jadwal TIDAK PERNAH berubah sendiri (membuka / mengedit / menyimpan tidak menyentuhnya); kurs USD sheet hanya masuk ke kotak saat tombol ditekan, lalu berlaku bila jadwal disimpan. Keterangan di bawah kotak (`#kursSyncInfo`, `data-status` = info / sama / beda / kosong), tombol "Kembalikan <nilai lama>" (`#btnSyncKursKembali`); gagal baca / hanya salinan = isian tak diubah + toast. Dimuat sesudah form-router.js (`kursSyncMulai()` dipanggil saat form dibuka: hanya membaca kurs & menggambar keterangan) |
+| `ui/kepadatan.js` | Tombol Ringkas / Nyaman (`#btnKepadatan`): `html[data-kepadatan]` + `aria-pressed`, diingat di `exim.kepadatan` (penyimpanan diblokir: tetap bisa bolak-balik, keadaan dibaca dari `<html>`). Murni tampilan. Dimuat sesudah sidebar.js |
 | `core/helpers.js` | Formatter tanggal/angka (angka di layar & cetakan koma ribuan, titik desimal: `fmtRp`, `fmtRpPresisi`, `fmtNum`), escapeHtml, factory objek baru (newItem/newSkbEntry/newStop). Kolom barang CEISA & nama barang: `KOLOM_NAMA_BARANG`, `newItem(mode)` (Kode Barang "-", Merek TANPA MEREK, Tipe TANPA TIPE di Import), `itemDisplayName()` = kolom kiri ke kanan tanpa tanda kosong (`rapiBagianNama`: "-", TANPA MEREK/TIPE/...) dan tanpa bagian yang sudah tertulis -- satu aturan untuk kartu, salinan, laporan, surat & CIPL; `barangBerkolomCeisa()` membedakan barang lama (nama utuh di Uraian). Kode CEISA per barang: `KONDISI_BARANG` / `kodeKondisiBarang()` / `labelKondisiBarang()` (1 = BARU, 2 = BUKAN BARU; bawaan Import 1, Export kosong). Peti kemas di Container/Seal Number: `teksKontainer()` = "NOMOR / UKURAN / TIPE" per kontainer, `muatanDariKode()` (KODE JENIS KONTAINER F/L -> FCL/LCL). Jenis muatan & peti kemas hanya untuk kiriman laut (`muatanKiriman`, `kontainerKiriman`; isian lama di jadwal udara tidak ditampilkan / disalin). DOKUMEN PELENGKAP: `KODE_DOKUMEN_CEISA` = nama seluruh kode dokumen pelengkap pabean (`namaDokumenCeisa`; kode di luar daftar tetap terbaca "Dokumen kode 123"); `kenaliDokumenPelengkap(dok, opsi)` menentukan peran satu dokumen -- dokumen pengiriman PI 959 / LS 958 / Polis 530 (`DOK_PENGIRIMAN`), fasilitas per barang (456 SKB PPN, 457 SKB PPh, 912 Masterlist, 860/861 COO), atau dokumen lain; kode umum (911, 999) / tak dikenal lewat label PDF, dan lewat nomornya bila `opsi.tebakNomor`. Satu jadwal: `s.dokPelengkap` = `{ pi: [], ls: [], polis: [], lain: [] }` -- tiap dokumen `{ nomor, tanggal }` (dokumen lain + `kode`), nomor yang sama tidak diulang (`tambahDokumenPengiriman`, `rapikanDokPelengkap`, `dokPelengkapKosong`); `dokPelengkapJadwal(s)` membacanya, atau menyusunnya dari kolom lama (`pecahNomorDokumen`: "A, B" -> dua dokumen); `ringkasDokPelengkap()` = kolom lama (nomor "A, B" + tanggal dokumen pertama) untuk templat salin, Bulk Excel & data lama. `semuaKiriman()` = jadwal kedua buku. `tanggalDariAju()`: tanggal di nomor aju CEISA (karakter 13-20 = tahun-bulan-tanggal, `000020POL85820261016024172` -> 2026-10-16; tanda pisah diabaikan, yang tidak sah -> "") -- dipakai sebagai tanggal PIB/PEB BAWAAN, selalu bisa diubah. Format BEROPSI selalu lewat `angkaLokal()` / `tanggalLokal()` (formatter Intl disimpan) -- `toLocaleString(locale, opsi)` membangun formatter baru tiap panggilan. `kunciAlnum(v)` = SATU kunci pembanding nomor & nama (huruf besar, hanya A-Z 0-9: "PT. Abc-1" -> "PTABC1") -- dipakai nomor aju, BL/AWB, nomor invoice, nama pihak/customer, kode sarana angkut; jangan menulis normalisasi serupa lagi di berkas lain |
 | `core/date-parse.js` | Pembaca tanggal yang DIKETIK: `bacaTanggalKetik(teks)` -> "yyyy-mm-dd" atau "" (murni string, tanpa DOM; diuji di qa/engine-test.js). Hari dulu baru bulan ("5/11/2026" = 5 November; bulan-hari hanya bila hari-bulan mustahil), tahun di depan = ISO, nama bulan Indonesia / Inggris / Romawi, lengkap atau singkatan (Agu, Agt, Ags, Agst, Okt, Des, Mei, Sept, ...), nama hari / "tgl" / jam di belakang diabaikan, tahun dua angka = yang terdekat dengan tahun ini, tahun tak ditulis = tahun ini, tanpa pemisah hanya 8 / 6 / 4 angka (panjang lain tidak ditebak), kata hari ini / besok / kemarin / lusa. Tanggal yang tidak ada ("31/04/2026") dan tahun di luar 1900-2100 DITOLAK, tidak digeser ke bulan lain. `tanggalIsoSah(iso)` = syarat penyetel `.value` kotak tanggal (hanya yyyy-mm-dd baku yang tanggalnya ada). "Hari ini" memakai `todayISO()` bila ada, supaya uji bisa membekukannya |
 | `core/lartas.js` | Lartas per barang (buku Import): `kebutuhanLartas(s, items)` = PI / LS / SNI yang wajib beserta sebabnya -- HS Code bertanda di Database HS Code (`lartasHsCode`, peta per HS disusun ulang tiap `versiHsCode` berubah) atau barang bukan baru (PI, Permendag 24/2025 Pasal 5); `lartasKurang(s, items, dok)` = PI / LS yang wajib tapi belum bernomor. `FTA_INDONESIA` (perjanjian dagang yang berlaku untuk impor, form SKA-nya bila baku) & `petunjukFtaCoo(s, items)` = kalimat petunjuk COO menurut negara asal barang |
@@ -563,26 +826,27 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `ui/date-input.js` | Kotak tanggal yang bisa diketik dengan format apa pun. SEMUA `<input type="date">` -- di index.html, dibuat render() / showPrompt() / baris dinamis, atau muncul belakangan (MutationObserver) -- dijadikan `type="text"` + `data-kotak-tanggal` (placeholder dd-mm-yyyy); kode pemanggil tetap menulis `type="date"`. `el.value` TETAP "yyyy-mm-dd" dibaca maupun ditulis (penyetel ketat seperti kotak bawaan: bentuk lain dikosongkan). Dirapikan saat keluar kotak / Enter / change, bukan tiap ketikan; `input` & `change` hanya menembak SAAT TANGGALNYA BERUBAH (ketikan setengah jalan tidak sampai ke pendengar mana pun, peristiwa buatan kode lewat apa adanya). Tidak terbaca -> dikembalikan ke tanggal sebelumnya (BUKAN dikosongkan) + garis merah + toast; mengosongkan kotak sah. Ikon kalender di ujung kanan (gambar latar, css/date-input.css) atau Alt+Panah-bawah / F4 membuka kalender bawaan peramban lewat `<input type="date">` pembantu sesaat. Pengecualian: `data-kotak-tanggal-off` (#filterDateFrom/To -- sumber kebenaran pemilih rentang, tetap type=date) dan `data-kotak-tanggal-tanpa-ikon` (kotak Dari/Sampai di panel kalender pemilih rentang). Letak kalender: kotak pembantu `position:fixed` DIPATOKKAN ke patokan yang DIUKUR (`ktAsalPatokan` -- penanda sekali pakai di sebelah kotak; leluhur ber-`contain`/`content-visibility:auto` seperti `.ship-card` membuat `fixed` berpatokan pada leluhur itu, bukan layar), gayanya dipasang SEBELUM disisipkan, dan `showPicker()` ditunda dua bingkai (`ktBukaKalenderSetelahTergambar`, penghitung `_bukaKe` membatalkan pembukaan yang basi) supaya peramban menempelkan kalender pada letak yang sudah tergambar. KOTAK YANG DIGAMBAR ULANG DI TENGAH KLIK: merapikan ketikan menembakkan `change` dan daftar jadwal langsung menggambar ulang kartunya (innerHTML), jadi kotak yang diklik sudah dibuang -- kalender dibuka untuk KEMBARANNYA (`ktKembaran`: kunciFokus() di ui/fokus.js, kotak yang belum dirapikan MutationObserver dirapikan saat itu juga), begitu juga pilihan kalender & fokus sesudahnya. Klik yang tak pernah sampai (ketikan di kotak LAIN dirapikan saat fokus berpindah -> kartu digambar ulang di antara pointerdown & click) ditangkap di pointerup bila penunjuk dilepas di atas ikon kembarannya. Dulu kalender baru muncul pada klik kedua. Dicoba di Chromium saja; Safari/Firefox/iOS belum |
 | `core/customs.js` | Perhitungan CIF/FOB/BM+PDRI (satu-satunya sumber kebenaran). `bulatkanBm()` = aturan tunggal BM ke atas ke ribuan, dipakai semua jalan masuk BM (hitungan tarif, draft CEISA, PIB PDF, Bulk Import, form). `hitungPungutanFasilitas()` = tabel pungutan PIB per seri menurut tarif & fasilitas barang (tab Pungutan Data PIB; kolom Dibayar = Bea & Pajak Impor tab Kepabeanan & Biaya) |
 | `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi. `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL. Hasil deteksi diingat per teks (`ingatDeteksi`) |
-| `core/route-model.js` | Progres lane pengiriman + rute transit multi-terminal + aturan auto-arrive |
-| `render/cards.js` | Render kartu pengiriman (expanded & collapsed). Tag PI: "PI × 2" untuk lebih dari satu dokumen PI (`tagPiHtml`); sel peti kemas hanya untuk kiriman laut (`infoKontainerHtml`). Tag Dibutuhkan di Pabrik (`tagKebutuhanHtml`: telat merah / mepet kuning / aman) & lartas yang belum bernomor (`tagLartasHtml`) di baris tag kartu aktif. Baris tanggal (ETD / ETA / Estimated Delivery, `.date-strip`) = kolom selebar isinya (`repeat(auto-fill, minmax(200px, 224px))`, card.css) rata kiri berjarak tetap 28px -- bukan 1fr yang merentangkan tanggal sejauh lebar kartu; isian Delay Update di bawahnya selebar & sejajar kolom yang sama (`.delay-strip-fields`, lebar-isian.css). Kartu terkuncup: tanggal tibanya utuh di ponsel (`.collapsed-meta b` nowrap) -- barisnya yang turun. |
+| `core/route-model.js` | Progres lane pengiriman + rute transit multi-terminal + aturan auto-arrive. Label simpul transit: baris kedua (`assignLabelRows`) hanya untuk label yang berdekatan -- wadahnya setinggi satu baris kecuali ada yang memakai baris kedua (`.port-labels--dua-baris`) |
+| `render/cards.js` | Render kartu pengiriman (expanded & collapsed). Tag PI: "PI × 2" untuk lebih dari satu dokumen PI (`tagPiHtml`); sel peti kemas hanya untuk kiriman laut (`infoKontainerHtml`). Tag Dibutuhkan di Pabrik (`tagKebutuhanHtml`: telat merah / mepet kuning / aman) & lartas yang belum bernomor (`tagLartasHtml`) di baris tag kartu aktif. Baris tanggal (ETD / ETA / Estimated Delivery, `.date-strip`) = kolom selebar isinya (`repeat(auto-fill, minmax(200px, 224px))`, card.css) rata kiri berjarak tetap 28px -- bukan 1fr yang merentangkan tanggal sejauh lebar kartu; isian Delay Update di bawahnya selebar & sejajar kolom yang sama (`.delay-strip-fields`, lebar-isian.css). Kartu terkuncup: tanggal tibanya utuh di ponsel (`.collapsed-meta b` nowrap) -- barisnya yang turun. Nama barang untuk tampilan Ringkas di baris tanggal (`barangRingkasHtml`, tersembunyi di Nyaman); lencana + progres dokumen dalam satu wadah `.ship-dokumen` (`cardDokumenHtml`) yang di Ringkas menjadi kisi lencana kiri / hitungan kanan / stepper. |
 | `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch. Teks pencarian (`teksCariJadwal`) hanya dirakit saat ada kata kunci; lebar pil status & kartu di luar layar diurus CSS (`field-sizing`, `content-visibility`). Saat daftar digambar ulang posisi gulir tidak melompat (tinggi kartu diwariskan + penanda gulir) dan fokus/isi kotak yang sedang diketik ikut bertahan. Kembali dari form jadwal (Simpan / Batal): daftar kembali ke posisi gulir sebelum form dibuka (`catatPosisiDaftar` / `pulihkanPosisiDaftar`). Penanda gulir hanya diukur bila halaman SUDAH tergulir (`halamanTergulir`, dari event `scroll` pasif): membaca `scrollY` / `getBoundingClientRect()` di tengah render memaksa tata letak sinkron (dulu terjadi tiap muat halaman) |
-| `features/excel-row-format.js` | Format baris Excel (clipboard & native) utk mode Import & Export. Kolom PI (All Import / laporan harian) memuat SEMUA dokumen pelengkap non-fasilitas, satu per baris (`kolomPiJadwal`, core/helpers.js): nomor PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA DOKUMEN CEISA> <nomor>" (kode di luar daftar "DOKUMEN KODE <kode> <nomor>", tanpa kode "DOKUMEN LAIN <nomor>"); SKB PPN/PPh, Masterlist & COO tetap di kolom FASILITAS / SKB. Bulk Import memisahkannya lagi lewat `pecahKolomPi` (PI, LS, Polis & Dokumen Lain kembali ke daftarnya masing-masing). Kolom FASILITAS / SKB: satu dokumen per baris, label + nomor ("MASTER LIST 72/PABEAN-PB/..."), dibaca balik Bulk Import lewat `skbTextToEntries()`. `formatter.vessel`: salinan (clipboard) menulis No Flight saja untuk kiriman udara; Bulk Excel (native) tetap nama + nomor supaya Bulk Import tidak kehilangan nama maskapai |
+| `features/excel-row-format.js` | Format baris Excel (clipboard & native) utk mode Import & Export. Kolom TARIF ditulis PER BARIS (Tarif BM barang itu, `tarifBmBerlaku`; 0% tertulis "0%"), bukan lagi baris pertama saja; Bulk Import membacanya balik per baris ke `dataPabean.tarifBm` (berkas lama berisi baris pertama saja -> tarif jadwal cadangan). Kotak FOB (USD) di tab Kepabeanan sudah tidak ada: FOB Rupiah (Incoterm FOB) & CIF Rupiah (Incoterm CIF) = Total Nilai Barang (USD) × NDPBM, sama dengan jumlah kolom FOB/CIF RUPIAH per baris di sini. Kolom PI (All Import / laporan harian) memuat SEMUA dokumen pelengkap non-fasilitas, satu per baris (`kolomPiJadwal`, core/helpers.js): nomor PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA DOKUMEN CEISA> <nomor>" (kode di luar daftar "DOKUMEN KODE <kode> <nomor>", tanpa kode "DOKUMEN LAIN <nomor>"); SKB PPN/PPh, Masterlist & COO tetap di kolom FASILITAS / SKB. Bulk Import memisahkannya lagi lewat `pecahKolomPi` (PI, LS, Polis & Dokumen Lain kembali ke daftarnya masing-masing). Kolom FASILITAS / SKB: satu dokumen per baris, label + nomor ("MASTER LIST 72/PABEAN-PB/..."), dibaca balik Bulk Import lewat `skbTextToEntries()`. `formatter.vessel`: salinan (clipboard) menulis No Flight saja untuk kiriman udara; Bulk Excel (native) tetap nama + nomor supaya Bulk Import tidak kehilangan nama maskapai |
 | `features/copy-templates.js` | Dropdown pilihan template di tombol Copy (All Import/Export, Daily Import/Export, Report) — builder & dispatcher-nya, TANPA mengubah excel-row-format.js |
 | `features/card-events.js` | Delegasi event di kartu (status, tanggal, edit, hapus, dll) |
-| `features/doc-steps.js` | Progres Dokumen di kartu (stepper). Satu kotak tahap untuk semua keadaan (`bukaTahapDokumen`): status Draft / Asli / Tidak dipakai (`opsiStatusTahap`; tahap `bisaDraft` dibuka sebagai Draft), tanggal, jalur, lampiran (diunggah saat Simpan; kotaknya menunggu, gagal = tetap terbuka), "Batalkan tahap" (`batalkanTahapDokumen`, lampirannya ikut dihapus). Draft digambar jam pasir & dihitung terkumpul (`docStepsDraft`, `draftDocs`). Impor dokumen pabean di form ikut mencentang tahap (`progresDariDokumenPabean`, `gabungProgresImpor`, `catatProgresImporForm`, `progresSimpanForm`). Tiap tahap dikonfirmasi dengan TANGGAL DITERIMA-nya (tooltip menampilkan tanggal itu, bukan waktu klik); tahap E-COO sesudah COO ikut strip kalau COO tidak dipakai (`docStepEntri`), tapi tidak ikut terisi saat COO diterima. Tahap PIB / PEB: tanggal bawaan dari nomor aju jadwalnya (`docTanggalBawaan`; aju yang belum tiba / tidak lengkap -> hari ini). Konfirmasi PIB, Billing & SPPB juga menanyakan JALUR (MITA/Hijau/Merah, `docIsianJalur`; disimpan di entri tahapnya dan disamakan ke tahap lain, `docProgresDenganJalur`). Sandar/Manifest yang dicatat ikut menghitung ulang kiriman lain di kapal yang sama (`segarkanKirimanSekapal`) |
+| `features/doc-steps.js` | Progres Dokumen di kartu (stepper). Satu kotak tahap untuk semua keadaan (`bukaTahapDokumen`): status Draft / Asli / Tidak dipakai (`opsiStatusTahap`; tahap `bisaDraft` dibuka sebagai Draft), tanggal, jalur, lampiran (diunggah saat Simpan; kotaknya menunggu, gagal = tetap terbuka), "Batalkan tahap" (`batalkanTahapDokumen`, lampirannya ikut dihapus). Draft digambar jam pasir & dihitung terkumpul (`docStepsDraft`, `draftDocs`). Impor dokumen pabean di form ikut mencentang tahap (`progresDariDokumenPabean`, `gabungProgresImpor`, `catatProgresImporForm`, `progresSimpanForm`). Tiap tahap dikonfirmasi dengan TANGGAL DITERIMA-nya (tooltip menampilkan tanggal itu, bukan waktu klik); tahap E-COO (buku Import saja) sesudah COO ikut strip kalau COO tidak dipakai (`docStepEntri`), tapi tidak ikut terisi saat COO diterima. Manifest berstatus Draft / Asli (draft bukan bukti kedatangan); tahap Asuransi hanya untuk incoterm CIF / CIP (`pakaiAsuransi`); petunjuk kemasan di Fumigasi (`petunjukFumigasi`). Tahap PIB / PEB: tanggal bawaan dari nomor aju jadwalnya (`docTanggalBawaan`; aju yang belum tiba / tidak lengkap -> hari ini). Konfirmasi PIB, Billing & SPPB juga menanyakan JALUR (MITA/Hijau/Merah, `docIsianJalur`; disimpan di entri tahapnya dan disamakan ke tahap lain, `docProgresDenganJalur`). Sandar/Manifest yang dicatat ikut menghitung ulang kiriman lain di kapal yang sama (`segarkanKirimanSekapal`) |
 | `features/date-range-picker.js` | Pemilih rentang tanggal dua bulan: halaman Jadwal (sumber kebenaran #filterDateFrom/To) dan `buatRentangTanggal(akar, opsi)` untuk tempat lain (Nomor Dokumen, Ringkasan Pengajuan Dana). Tanggal dipilih di kalender ATAU diketik di kotak Dari/Sampai di atasnya (format apa pun, lewat ui/date-input.js): Tab / Enter / klik di luar merapikan, Dari lebih akhir dari Sampai ditukar seperti klik di kalender, bulan yang belum terlihat memindahkan kalender; mewarnai ulang tombol hari yang sudah ada alih-alih menggantinya (klik yang sedang berjalan tidak hilang). Enter di Dari pindah ke Sampai, Enter di Sampai = Terapkan. Satu tanggal saja (kotak mana pun) = rentang sehari. Ditutup tanpa Terapkan: teks pemicu kembali ke saringan yang berlaku |
 | `features/modal-fields.js` | Tab modal, toggle label transport (termasuk label Tanggal Master / House B/L atau AWB; moda udara menyembunyikan Jenis Muatan LCL/FCL & No. Kontainer), live feedback auto-arrive, recalc kepabeanan. No. Aju bawaan "CONSIGNEE NOTE" untuk kiriman kurir (FedEx/DHL/UPS, `isKurirNilaiRendah`) Import bernilai di bawah USD 1.500 (`aturAjuConsigneeNote`): diisi bila kosong atau berisi tanda kosong ("-", "N/A", "TBA"), dikosongkan lagi bila syaratnya tidak berlaku, terisi lagi bila dikosongkan lalu ditinggalkan; ketikan pengguna tidak disentuh. Keterangan di bawah No. Aju (`#ajuKurirKet`, `gambarKetAjuKurir`) menjelaskan kenapa terisi / belum (harga belum diisi, USD 1.500 ke atas, kotak sudah berisi nomor lain). Buku Export: Tanggal PEB yang kosong diisi dari nomor aju & ikut berubah (`aturTanggalPebDariAju`, data-auto="aju"); yang diubah sendiri tidak ditimpa |
 | `features/pilih-pihak.js` | Nama Shipper (Import) / Buyer (Export) `#fParty` = dropdown bersaring yang bisa ditambah (combobox): daftar nama dari jadwal buku itu (`daftarNamaPihak`: satu per kunci huruf & angka, ejaan terbanyak), mengetik menyaring, baris 'Tambah "…"' untuk nama baru (masuk daftar setelah jadwal disimpan, `#fPartyKet`). Ejaan lain dari nama yang sudah ada disamakan saat ditinggalkan & saat impor dokumen (`samakanNamaPihakForm`). `.value` tetap teks biasa |
-| `features/item-table.js` | Tabel draft barang + panel fasilitas SKB/COO (tombol berhitungan "SKB 1 · COO 1"; jenis tersimpan "E-COO" tampil sebagai COO lewat `skbJenisLabel`). Kolom barang = kolom CEISA kiri ke kanan sesudah HS Code: Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain (+ Marks di Export) -- textarea adaptif selebar sama (`--lebar-kolom-ceisa`), selalu huruf besar (`ISIAN_BARANG_KAPITAL`, juga Satuan & Jenis Kemasan); lalu Kondisi Barang (pilihan 1 / 2, buku Import saja: `.import-col`) & Negara Asal (kotak ketik + saran `#negaraList`, dibakukan ke kode saat ditinggalkan / Enter -- `bakukanIsianNegara`; nama negaranya redup di DALAM kotak sesudah kodenya, kode tak dikenal ditandai merah + tooltip) -- kedua kolom selebar isinya, judulnya boleh dua baris; semua isian satu garis (textarea `display: block`). Enter di kotak bersaran menunggu sarannya terpasang dulu. Panel fasilitas (buku Import): PI barang ini dipilih dari daftar PI jadwal (`piBarangHtml`; barang BARU: "Tidak Menggunakan PI") + No. item di PI. Tiap sel membawa `data-label`: di wadah < 760px tabelnya jadi satu kartu per barang (`.barang-isi`, form.css) RUMUS "=" di Unit Price, Neto & Bruto (`RUMUS_BARANG`; Qty tidak): diketik apa adanya (angka berkoma ribuan, `applyLiveRumusFormat`), angka barang BELUM berubah selama diketik; dihitung `terapkanRumusBarang` saat kotak ditinggalkan (`change`), Enter (juga baris terakhir; rumus salah menahan kursor), dan Simpan (`terapkanRumusBarangSemua`, form-router.js -- rumus salah menahan simpanan & membawa ke kotaknya); hasil dibulatkan 4 desimal (`bulatRumusBarang`); rumus salah bertanda `.fl-rumus-salah`, teksnya dibiarkan. |
+| `features/tarif-hs.js` | TARIF BM PER BARANG (`item.dataPabean.tarifBm`), kolom Tarif BM (%) di Daftar Barang tepat sesudah HS Code (buku Import, `.import-col`). Terisi otomatis menurut HS Code (`segarkanTarifOtomatis`): Database HS Code (`hs_code_master.tarif_bm`, `migration-hs-tarif-bm.sql`; beberapa baris ber-HS sama -> tarif terbanyak) lalu tarif terakhir untuk HS itu di jadwal Import lain (tanggal dokumen terbaru; jadwal yang sedang disunting dilewati). Tarif otomatis ditandai (`it._tarifOtomatis`, kotak `.tarif-otomatis`) dan mengikuti HS-nya: HS berganti -> dicari ulang, HS tak dikenal mencabutnya; yang diketik sendiri / disamakan / dari editor pena tidak pernah ditimpa. Dipanggil di `renderItemTable` (hasil impor, pilihan pencarian, penyamaan), ketikan HS Code, dan HS Code otomatis dari nama (`tandaiHsOtomatis`). Jadwal lama dibuka: kolom jadwal `tarif` turun ke barang yang belum bertarif (`siapkanTarifBarangForm`, sebelum sidik; 0 = tidak diisi); disimpan: `tarif` = tarif bersama bila semua barang bertarif sama, selain itu null (`tarifRingkasJadwal`). `tarifBmBerlaku` (tarif barang / tarif jadwal lama / 5%) dipakai copy template All Import & Bulk Export (kolom TARIF per baris) dan panel detail |
+| `features/item-table.js` | Tabel draft barang + panel fasilitas SKB/COO (tombol berhitungan "SKB 1 · COO 1"; jenis tersimpan "E-COO" tampil sebagai COO lewat `skbJenisLabel`). Kolom barang = kolom CEISA kiri ke kanan sesudah HS Code (& Tarif BM, tarif-hs.js): Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain (+ Marks di Export) -- textarea adaptif selebar sama (`--lebar-kolom-ceisa`; tingginya ditumbuhkan peramban lewat `field-sizing: content`, form.css -- autoGrowTextarea / autoGrowAllItemNames hanya untuk peramban tanpa field-sizing, berkelompok: semua tulis, semua baca, semua tulis), selalu huruf besar (`ISIAN_BARANG_KAPITAL`, juga Satuan & Jenis Kemasan); lalu Kondisi Barang (pilihan 1 / 2, buku Import saja: `.import-col`) & Negara Asal (kotak ketik + saran `#negaraList`, dibakukan ke kode saat ditinggalkan / Enter -- `bakukanIsianNegara`; nama negaranya redup di DALAM kotak sesudah kodenya, kode tak dikenal ditandai merah + tooltip) -- kedua kolom selebar isinya, judulnya boleh dua baris; semua isian satu garis (textarea `display: block`). Enter di kotak bersaran menunggu sarannya terpasang dulu. Panel fasilitas (buku Import): PI barang ini dipilih dari daftar PI jadwal (`piBarangHtml`; barang BARU: "Tidak Menggunakan PI") + No. item di PI. Tiap sel membawa `data-label`: di wadah < 760px tabelnya jadi satu kartu per barang (`.barang-isi`, form.css) RUMUS "=" di Unit Price, Neto & Bruto (`RUMUS_BARANG`; Qty tidak): diketik apa adanya (angka berkoma ribuan, `applyLiveRumusFormat`), angka barang BELUM berubah selama diketik; dihitung `terapkanRumusBarang` saat kotak ditinggalkan (`change`), Enter (juga baris terakhir; rumus salah menahan kursor), dan Simpan (`terapkanRumusBarangSemua`, form-router.js -- rumus salah menahan simpanan & membawa ke kotaknya); hasil dibulatkan 4 desimal (`bulatRumusBarang`); rumus salah bertanda `.fl-rumus-salah`, teksnya dibiarkan. |
 | `features/fund-invoice-summary.js` | Tombol SALIN KE INVOICE SUMMARY (ikon clipboard di riwayat Pengajuan Dana, `[data-copy-invsum]`): satu baris dalam urutan kolom B-K tabel INVOICE SUMMARY akunting -- INVOICE DATE, DUE DATE, Paid Date (`paidAt`), INVOICE NUMBER (Billing -> Nomor Billing; disalin sebagai teks), COMPANY (KAS NEGARA -> STATE TREASURY), CUSTOMER, DETAILS (nama barang jadwal yang BL/AWB-nya cocok, " - "; tanpa jadwal -> Rincian), COST(RP) (TOTAL dibayar), EXPENSES CATEGORY (Billing/Tax Advance -> IMPORT DUTY TAX [+ STORAGE], Freight -> FREIGHT CHARGE, Storage -> STORAGE, lainnya OTHER), TRANSPORT MODE (Trucking, juga nama lama Inland Trucking / Local Sale -> TRUCKING). HTML + teks bertab (`copyRichToClipboard`); ditempel di kolom INVOICE DATE baris kosong (kolom NO berisi rumus) |
 | `features/invoice-pihak.js` | CUSTOMER, SKEMA INVOICE & PIHAK form Permintaan Nomor Invoice. Empat pihak seperti entitas PEB -- Penjual/Shipper, Pemilik Barang, Pembeli/Buyer, Penerima/Consignee -- nama + alamat + NPWP (Penjual, Pemilik) / Negara (Pembeli, Penerima); kunci payload `penjualNama`, `pemilikNpwp`, `pembeliNegara`, ..., alamat Penerima = kunci lama `consigneeAddress`, nama Penerima mengikuti Customer. SKEMA INVOICE (`polaPihak`): Direct Invoice (Pemilik = Penjual, Pembeli = Penerima) / Third Party Invoice (Pemilik = Penjual; Pembeli & Penerima diisi masing-masing, mis. Kumho). Pengikut yang masih kosong / bawaan / isian mesin (`dnIsianOtomatis`) ikut sumbernya; yang diketik sendiri tidak ditimpa; mengosongkan sumber tidak mengosongkan pengikut; pindah ke Third Party mengosongkan Pembeli yang hanya salinan Penerima. Bawaan Penjual & Pemilik = `CIPL_SHIPPER` + NPWP `DP_PERUSAHAAN`. SHIPPER BAKU UNTUK SEMUA CUSTOMER (`ciplShipperBaku()` = `CIPL_SHIPPER`, alamat CIPL Dynamic Design: "DESA PABEDILAN KULON", bukan gaya data PEB "DESA/KELURAHAN") -- kolom Penjual (nama & alamat) selalu berisi blok itu dan TERKUNCI (`readOnly`) lewat `invTerapkanShipperBaku`, customer apa pun (Dynamic Design, Kumho, customer baru, form kosong), dipanggil paling awal di `invTeruskanSemua` sehingga semua jalur pengisian (ganti customer, jadwal ditautkan, draf dipulihkan, pengajuan dibuka untuk diubah, form dikosongkan) ikut dan data PEB / data tersimpan / riwayat / sisa customer sebelumnya tidak bisa mengubahnya; Pemilik yang masih ikut Penjual ikut berganti; NPWP Penjual tetap bebas; keterangan di `#dnPolaKet`. CUSTOMER = dropdown bisa ditambah (ui/pilihan-tambah.js): customer tersimpan + profil pelanggan (`CIPL_PROFIL.nama`) + customer invoice di riwayat + buyer jadwal export. Tiap customer punya DATA PENGISIAN (skema + isian pihak) di report_settings `invoice-customer` (`{ customer: [{ nama, isian }] }`), diperbarui tiap nomor invoice terbit / diubah (`invCustomerIngat`); memilih customer mengisi dari data itu, lalu pengajuan terakhirnya di riwayat, lalu profilnya (`isianPihak`). Jadwal export ditautkan: pihak dari Data PEB jadwal (`invIsiDariJadwal`). Pengajuan lama tanpa pihak dilengkapi dari profil saat dibuka untuk diubah. TATA LETAK (docnum.css, PIHAK INVOICE): keempat kolom pihak berbagi baris kisi (subgrid, `.inv-isian` = satu pasang label + isian), jadi Nama / Alamat / NPWP-Negara sejajar meski panjang alamatnya berbeda; kotak alamat tumbuh mengikuti isi (`field-sizing: content`, paling pendek 7.2em) dan barisnya ikut setinggi alamat terpanjang |
 | `features/skb-bawaan.js` | SKB PPh BAWAAN (buku Import): nomor, tanggal & (boleh kosong) "berlaku sampai" yang otomatis dipasang ke tiap barang BARU -- baris pertama jadwal baru, Tambah Barang, barang hasil impor CIPL (`newItem()` memanggil `skbBawaanBarang(mode)`). Barang dari draft CEISA / PIB PDF mengikuti dokumennya. Diatur di bilah `#skbBawaanBar` tab Daftar Barang (Atur / Ubah / Perbarui, `showPrompt`); tombol "Pasang ke semua barang" untuk barang jadwal yang sedang dibuka yang belum punya SKB PPh. Lewat "berlaku sampai" -> tidak dipasang lagi dan bilahnya kuning. Tersimpan di `report_settings` kunci `skb-pph-bawaan` (sama untuk semua pengguna, hanya EXIM yang menulis) + salinan peramban `exim.skbPphBawaan`; dimuat ulang tiap form dibuka (`skbBawaanMuat`) -- jadwal baru yang sedang terbuka ikut diganti bila bawaannya berubah. Barang yang sudah tersimpan tidak pernah diubah |
 | `features/barang-tampilan.js` | Pengalih Kartu / Tabel di kepala Daftar Barang form (`.barang-tampilan`, tombol `[data-barang-tampilan]`). BAWAANNYA kartu: satu kartu berlabel per barang di layar mana pun, supaya Qty / Satuan / Harga tidak tersembunyi di x = 2.000px. Memilih Tabel hanya memasang `.barang-isi--tabel` -- kelas itu mengganti NAMA wadah kontainer (`barang-isi` -> `barang-tabel`, form.css), jadi seluruh aturan `@container barang-isi` berhenti cocok tanpa satu selektor pun yang dibalik. Pilihan diingat per peramban (`exim.barangTampilan` = `kartu` / `tabel`; ditulis hanya saat pengguna memilih -- `pasangTampilanBarang(mode, simpan)`), penyimpanan yang diblokir tidak merusak apa pun, dan tinggi kotak Uraian diukur ulang sesudah pergantian (`autoGrowAllItemNames`) |
 | `features/item-samakan.js` | Samakan isian baris 1 ke baris di bawahnya, dan Urungkan -- SEMUA isian barang (`SAMAKAN_KOLOM`, urut kolom tabel; termasuk Fasilitas SKB/COO -- disalin sebagai salinan sendiri tiap baris -- dan PI barang, yang mengosongkan No. item baris yang PI-nya berganti: `pasang` / `simpan` / `pulihkan`). Tawaran OTOMATIS saat isian baris 1 selesai diisi (kejadian `change`, atau HS Code dipilih lewat pencarian; `tawarkanSamakan(kolom, idx)`) menurut `otomatis` kolomnya: "selalu" (HS Code, Kode Kondisi, Negara Asal, Jenis Barang, Qty, Satuan, Jenis Kemasan) bila ada baris yang berbeda; "pintar" (Kode Barang, Merek, Tipe, Spesifikasi Lain, PI) hanya bila baris lain belum diisi sendiri -- kosong / bawaan, atau masih sama dengan isian LAMA baris 1 (`samakanAwal`, dicatat saat kotaknya mulai dipakai); kolom yang biasanya beda per barang (Uraian, Ukuran, Marks, Harga, Netto, Bruto, Dimensi, Kemasan, No. item di PI, Fasilitas) tidak menawarkan sendiri. ATAS PERMINTAAN, semua kolom kapan pun (`samakanAtasPermintaan`, langsung dijalankan -- Urungkan pengamannya; tak ada yang berbeda -> alasannya di bilah): menu "Samakan baris 1" di kepala Daftar Barang (`#samakanMenu`, dirakit saat dibuka -- `isiMenuSamakan`: kolom yang berbeda, nilai baris 1, jumlah baris yang berubah; tersembunyi bila barangnya satu) dan Ctrl/⌘+D di kotak baris 1. Tawaran otomatis = KOTAK DIALOG di tengah layar (`#samakanLapis`, markup di index.html; rupa `.dialog-*` tapi bukan modal Bootstrap -- buka/tutup seketika, gulir tidak dikunci): "Samakan Satuan ke baris 2–12?" + nilai baris 1 + catatan isian yang akan ditimpa. Fokus pindah ke "Ya, samakan" sesudah kejadian pemicunya selesai (`setTimeout 0` -> `fokuskanTawaranSamakan`): Enter = tombol yang berfokus, Esc / "Tidak" / klik latar = tolak, Tab berputar di kedua tombol, mengetik huruf = mengisi sendiri (kotak menutup, hurufnya masuk ke kotak isian). Sesudah dijawab fokus & seleksi kembali ke kotak yang dipakai (baris 2 sesudah Enter; isian panel fasilitas juga, `letakKotakSamakan`). HANYA baris 1; tidak ada yang disamakan bila barisnya satu, isian baris 1 kosong (qty 0), kode negara tak dikenal, atau semua baris di bawahnya sudah sama; nilai bawaan baris baru (SET, BOX, BAHAN BAKU, kondisi 1, TANPA MEREK, ...) tidak dihitung sebagai isian yang ditimpa. Hasil impor tidak memicunya; Enter di baris terakhir (menambah baris) juga tidak -- `tanpaTawaranSamakan`. Menyamakan (`salinBaris1`) menghitung ulang dari data hidup, menyalin hanya kolom itu, sel yang berubah berkedip (`.is-disamakan`; kolom fasilitas/PI: tombol Fasilitas-nya), Uraian / Tipe yang disamakan ikut mengisi HS Code otomatis baris itu, lalu BILAH URUNGKAN navy di kiri bawah (`#samakanUrung`), tepat di atas bilah Simpan form / papan ketik layar (`letakkanBilahUrung`, `--samakan-dasar`): cincin hitung mundur 15 detik yang berhenti selama bilahnya ditunjuk / difokus atau kotak dialog terbuka (`jedaBilahUrung`), tombol Urungkan (juga Ctrl/⌘+Z, kecuali di kotak teks yang sudah diketik) yang tidak mengambil fokus. `urungkanSamakan` mengembalikan nilai LAMA tiap sel (dicatat per objek barang, bukan nomor baris), MELEWATI sel yang diubah lagi / baris yang dihapus, dan mengabarkan hasilnya di bilah yang sama. Hanya penyamaan TERAKHIR yang bisa diurungkan. `perbaruiTawaranSamakan()` dipanggil di ujung `renderItemTable()`; semuanya menutup saat pindah halaman (`hashchange`) atau tab Barang disembunyikan |
 | `features/dok-pelengkap.js` | Kartu "Dokumen Pelengkap Pabean" di tab Kepabeanan form: PI, LS & Polis Asuransi (buku Import) -- masing-masing bisa lebih dari satu, tiap dokumen bernomor & bertanggal -- dan Dokumen Lain ber-kode CEISA (kedua buku). Keadaannya di `draftDokPelengkap`; `dokPelengkapForm()` = isi yang disimpan (jenis yang tidak tampil di buku ini dikosongkan). Nomor PI yang diubah ikut berubah di barangnya, PI yang dihapus dilepas dari barangnya (`ikutkanPiBarang`). Hasil impor digabung per nomor (`gabungDokPelengkapImpor`). Baris PI & LS berlampiran (tombol klip; `entri._baru` menunggu Simpan -> `unggahLampiranForm`, yang dilepas di `berkasDilepasForm`). Kotak lartas & petunjuk COO di atas daftarnya (`segarkanLartasForm`, dipanggil juga oleh `recalcCustoms`) |
-| `features/data-pabean-form.js` | Tab 4 form "Data PIB" / "Data PEB": deret tab bergaya CEISA (`dpbTabDaftar`, panah kiri/kanan antar tab, Enter di isian terakhir pindah tab), isian tersimpan (`dpbIsian`; pilihan panjang = kotak bersaran), nilai tab lain hanya-baca + tombol Ubah (`dpbBacaHtml`), hasil hitung, tabel Dokumen / Barang / Pungutan (nomor & tanggal dokumen tidak dibungkus -- `.dpb-utuh`; tabelnya yang digulir ke samping), No. & Tgl Packing List tab 1. Nilai bawaan diisikan saat form dibuka (`bukaDataPabeanForm`) & mengikuti moda / Shipper-Buyer / pihak pertama pasangannya (`segarkanBawaanDataPabean`, `dpbPihakPenentu`). Tabel Barang rata tengah. Keadaan `draftDataPabean`; impor mengisinya lewat `terapkanDataPabeanImpor()` |
+| `features/data-pabean-form.js` | Tab 4 form "Data PIB" / "Data PEB": deret tab bergaya CEISA (`dpbTabDaftar`, panah kiri/kanan antar tab, Enter di isian terakhir pindah tab), isian tersimpan (`dpbIsian`; pilihan panjang = kotak bersaran; nomor + tanggalnya sepasang setengah baris, `dpbPasangTanggal`), nilai tab lain hanya-baca + tombol Ubah (`dpbBacaHtml`), hasil hitung, tabel Dokumen / Barang / Pungutan (nomor & tanggal dokumen tidak dibungkus -- `.dpb-utuh`; tabelnya yang digulir ke samping), No. & Tgl Packing List tab 1. Nilai bawaan diisikan saat form dibuka (`bukaDataPabeanForm`) & mengikuti moda / Shipper-Buyer / pihak pertama pasangannya (`segarkanBawaanDataPabean`, `dpbPihakPenentu`). Tabel Barang rata tengah. Keadaan `draftDataPabean`; impor mengisinya lewat `terapkanDataPabeanImpor()` |
 | `features/data-pabean-barang.js` | Editor Data PIB/PEB per barang (tombol pena tab Barang, dialog `#dpbBarangModal`): data barang hanya-baca, isian `item.dataPabean`, tabel tarif & fasilitas dengan pungutan barang yang dihitung ulang tiap tarif diketik, ‹ › antar barang (menyimpan), Tutup dengan perubahan bertanya dulu |
-| `features/route-stops.js` | Kartu draft terminal transit |
+| `features/route-stops.js` | Kartu draft terminal transit (Nama Terminal setengah baris; Tiba & Berangkat berjajar selebar isinya, `.fl-tanggal`) |
 | `import/excel-bc.js` | Parser Excel dokumen BC mentah (HEADER/BARANG/dst). Barang diurutkan menurut SERI BARANG lebih dulu (`urutMenurutSeri`, numerik; baris sheet BARANG tidak selalu berurutan), dan tiap rincian dibaca dari barisnya sendiri atau lewat Seri Barang-nya (`kunciSeri`: "1" = 1 = "001"), tidak pernah lewat posisi; kepala kolom dibakukan (`kunciKolomExcel`: "Seri Barang" = "SERI BARANG"). Sheet DOKUMEN dikenali lewat `kenaliDokumenPelengkap()` (core/helpers.js, aturan yang sama dengan PIB PDF): 912 Masterlist, 457 SKB PPh, 456 SKB PPN, 860/861 COO menjadi fasilitas per barang lengkap dengan nomor & tanggalnya (lewat BARANGDOKUMEN -- seri dokumen dari kolom SERI atau SERI DOKUMEN; yang tak bertaut berlaku untuk semua barang), 959 PI, 958 LS & 530 Polis Asuransi masuk daftar dokumen pengiriman (`dokPelengkap`, semuanya, beserta tanggalnya; PI yang ditautkan ke barang jadi PI barang itu), dokumen lain (selain invoice & B/L-AWB) dicatat beserta kodenya. ETD dari tanggal berangkat / perkiraan tanggal ekspor HEADER, ETA dari perkiraan tanggal tiba (diterapkan `terapkanTanggalDokumen`). Kolom barang KODE BARANG, URAIAN, MEREK, TIPE, UKURAN & SPESIFIKASI LAIN masuk satu lawan satu ke kolom barang jadwal (`kolomBarangDraft`), dan disimpan mentah per Seri Barang (`kolomBarang`) untuk Cek PIB/PEB; KODE KONDISI BARANG & KODE NEGARA ASAL ke kolom kodenya (`kodeBarangDraft`; kolom yang tidak ada = undefined, bukan kosong). Dokumen fasilitas yang ditautkan per Seri Barang beserta No. Urut-nya (`fasilitasBarang`, `fasilitasUmum`) dan sheet KONTAINER (`kontainer`: nomor, ukuran, jenis, tipe) ikut dikembalikan untuk Cek PIB/PEB; Container/Seal Number diisi "NOMOR / UKURAN / TIPE" (`teksKontainer`), Jenis Muatan dari KODE JENIS KONTAINER F/L. B/L-AWB menurut UN/EDIFACT 1001: Master 704 / 741, House 714 / 703 lalu 705 / 740 (umum) -- nomor & tanggalnya; 380 memberi tanggal invoice. Bahan progres dokumen (`progres`): nomor & tanggal daftar apa adanya, SPPB (respon 2003), BC 1.1 HEADER, jalur dari tulisan respon (`jalurDokumenCeisa`: SPJM/SPJH/MITA; tanpa tulisan = kosong, tidak ditebak), NPE (Export). Data PIB/PEB lengkap lewat `ceisaDataPabean` (data-pabean-baca.js). KODE JENIS KONTAINER 8 = FCL (`muatanDariKode`). |
 | `import/data-pabean-baca.js` | Pembaca data PIB/PEB lengkap: PDF PIB (`pibDataPabean`; per barang `pibBarangDataPabean` -- kolom 33, 34 & 36, "-" = kosong), PDF PEB (`pebDataPabean`, `pebBarangDataPabean`; pihak lewat pengelompokan kolom), Excel CEISA (`ceisaDataPabean`). Semua isian berkode (kantor, jenis, cara bayar, bendera, pelabuhan, negara, API, status). Tidak pernah menebak |
 | `import/exim-engine.js` | MESIN EXIM BERSAMA (`window.EximEngine`): berkas yang SAMA PERSIS dengan exim-engine.js di EXIM Checker -- jangan diubah di satu sisi saja. Ekstraksi CIPL Excel & PDF (satu berkas atau CI + PL terpisah, label dikenali dari artinya), pembacaan draft PIB/PEB CEISA, dan seluruh aturan pemeriksaannya. Berdiri sendiri: tidak memanggil `t()`, DOM, atau data aplikasi (diuji di qa/dom-test.js), pesannya berbahasa Indonesia milik mesin. Dimuat SEBELUM dispatch.js & checker-view.js |
@@ -592,7 +856,7 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `import/ocr.js` | OCR hasil scan -- Tesseract.js 7.0.0 dari jsDelivr (±7 MB, diunduh sekali saat pertama dibutuhkan lalu di-cache peramban; satu pekerja WebAssembly dipakai bersama dan dilepas setelah 5 menit menganggur). `ocrBacaBerkas(berkas, { pdf, progres })` -> teks per halaman: PDF dirender 300 dpi lewat pdf.js (`wasmUrl` WAJIB, tanpa itu halaman scan JBIG2 keluar kosong), gambar JPG / PNG / WEBP dibawa ke sisi panjang ±3300 px. Pra-proses murni larik bertipe (`ocrPraolah`, bisa diuji tanpa DOM): abu-abu, perataan latar tak rata, tinta berhisterisis, buang garis tabel, luruskan miring (`ocrMiring`), buang noda (`ocrBuangNoda`: bintik, coretan datar, bayangan pucat). Halaman dibaca TIGA kali -- PSM 6 "blok", PSM 4 "kolom", PSM 11 "jarang"; tiap mode punya titik buta sendiri (PSM 11 dan baca-ulang sendirian sama-sama membaca "17,538.00" sebagai "17,638.00") -- lalu digabung menurut kotak kata (`ocrGabungBacaan`): angka dipungut suara menurut DIGIT (dua pembacaan yang sama menang, apa pun pemisah ribuannya), kode (nomor invoice / HAWB) menurut huruf besar + angka, kata biasa dari pembacaan blok; kata yang hanya ditemukan pembacaan pelengkap diterima bila meyakinkan (`OCR_ISI_MIN`), serpihan kata yang sudah dicakup ditolak. Angka yang tak disepakati dibaca ULANG sendirian (`ocrBacaUlangAngka`, PSM 7, hanya "0123456789.,()-") lalu dipungut suara lagi; bentuk uang yang sah (`ocrAngkaSah`) menentukan "pasti" / "meragukan". Keluarannya baris teks yang bentuknya SAMA dengan `extractPdfText` (`ocrSusunBaris`), jadi pembaca invoice tidak membedakan teks digital dan hasil scan. Dimuat sesudah pdf.js, sebelum fund-invoice-import.js |
 | `import/dispatch.js` | Deteksi file PDF vs Excel BC vs Excel CIPL, panggil parser yang sesuai. CIPL dibaca mesin EXIM (`readCiplSources`; dua berkas CI & PL = satu CIPL; uraian / tipe / merek CIPL -> Uraian / Tipe / Merek, `kolomBarangCipl`; COUNTRY OF ORIGIN -> Kode Negara Asal semua barang), HS Code 8 digit dilengkapi dari Database HS Code menurut nama barang (`hsDatabaseUntukBarang`). CIPL selalu diterapkan sebelum draft CEISA; bila draft ikut dipilih dan memberi HS 8 digit semua barangnya, catatan HS Code dari CIPL dibuang (`ciplTanpaCatatanHs`) |
 | `views/form-router.js` | Routing hash (#/new, #/edit/:id, #/cek, ...), render & simpan halaman form. PASANGAN ISIAN yang saling mengikuti (`PASANGAN_ISIAN`, `samakanPasangan`): Tanggal Master <-> House B/L-AWB, No. Invoice <-> No. Packing List, Tanggal Invoice <-> Tanggal Packing List (Packing List ikutan ikut ditulis ke `draftDataPabean`). Invoice & Packing List yang berbeda ditandai kuning + satu kalimat di bawah barisnya (`tandaiCiplBeda`, `bedaInvoicePackingList`); impor CIPL / draft CEISA yang nomor / tanggal CI & PL-nya berbeda diberi peringatan di catatan impor (`bedaCiplDiBerkas`, import/apply-to-form.js). Aturan pasangannya: mengisi satu mengisi yang lain selama yang lain kosong atau masih ikut; yang diketik sendiri tidak ditimpa; MENGOSONGKAN satu TIDAK mengosongkan yang lain (hanya tanggal yang diisi yang diteruskan -- tanggal tidak boleh hilang dua-duanya sekaligus). ETD mengikuti tanggal B/L-AWB (`etdIkutTanggalBl`; status Delay: ETD revisi). Buku Import: status Arrived <-> Tanggal In Factory dua arah (`selaraskanTibaDariStatus` / `selaraskanStatusDariTiba`). Kalimat penyesuaian satu perubahan digabung jadi satu toast (`tampungKabarForm`). PI, LS, Polis Asuransi & dokumen lain di kartu Dokumen Pelengkap Pabean (features/dok-pelengkap.js) `tandaiFormDiubahLain(id, dihapus)`: jadwal yang sedang diubah, diubah / dihapus pengguna lain (realtime) -- isian tidak ditimpa, pemberitahuan + "Muat versi terbaru" (`#formRemoteKet`). |
-| `views/checker-view.js` | Halaman Cek PIB/PEB (#/cek, khusus EXIM): CIPL vs draft CEISA lewat mesin EXIM, dibantu data Shipment Schedule -- jadwal terkait dicari dari aju / invoice / B/L-AWB / kontainer (Master & House B/L-AWB + tanggalnya mengisi kotak pembanding), hanya di antara jadwal yang PIB/PEB-nya masih mungkin diperiksa (`cekJadwalTerbuka`: Import berstatus process / delay, Export yang ETD-nya belum lewat). JADWAL RUJUKAN UTAMA: isian jadwal vs draft (`cekBarisJadwal`) di bagiannya masing-masing (Dokumen, Header, Pengangkutan, Nilai, Kemasan, Entitas); baris mesin CIPL untuk isian yang sama diganti baris jadwalnya, CIPL hanya untuk isian yang kosong di jadwal (`cekRujukJadwal`, ditandai "CIPL"); kode kantor, ETD ↔ tanggal B/L-AWB dan ETA ↔ tanggal tiba tidak diperiksa (PEB: ETD ↔ TANGGAL EKSPOR tetap, INFO). Peti kemas: nomor, ukuran & tipe tiap kontainer vs Container/Seal Number (`cekBarisPetiKemas`, `cekUraiKontainer`). BARANG DARI JADWAL DULU (`cekBarangGabungan`): ada jadwal terkait -> nama, HS, jumlah, satuan, nilai & berat pembanding diambil dari barang jadwal (sudah diperiksa EXIM); isian jadwal yang kosong dan barang yang tidak ada di jadwal diambil dari CIPL (dipasangkan per kata nama, `cekPasangkanBarang`), sumber tiap baris ditandai (kolom "Jadwal", tanda "CIPL"); kolom barang CEISA dibandingkan kolom demi kolom dengan kolom yang sama di draft (`cekBarisKolomBarang`; tanda kosong setara), barang lama per kata dengan gabungan kolom draft (`cekBandingNama`); Kode Kondisi Barang (PIB) & Kode Negara Asal (`cekBarisKodeBarang`) dan Fasilitas & No. Urut -- dokumen yang ditautkan ke Seri Barang-nya (`cekBarisFasilitasBarang`; nilai draft ditulis seperti jadwal, urutan pasangannya, No. Urut di catatan); barang draft diurutkan menurut Seri Barang begitu dibaca (`cekBacaDraft`; bila urutan di berkasnya memang acak, `draftDiurutkan` menambah keterangan "barang diurutkan menurut Seri Barang" di kotak draft, `cekRingkasDraft`) dan RINCIAN BARANG URUT SERI BARANG: "Barang n" = Seri Barang n, dibandingkan dengan barang jadwal / CIPL yang sama menurut isinya -- nama lengkap, Uraian, kata Uraian, HS 8 lalu 6 digit, sisanya urutan; tiap Seri Barang mengambil kandidat paling awal, jadi barang kembar tetap berurutan (`cekSeriPasangan`, `cekNomoriMenurutSeri`), barang yang tidak ada di draft sesudah seri terakhir, HS Code 8 digit dari Database HS Code -> barang jadwal terkait -> riwayat jadwal (kode draft yang belum dikenal bisa langsung disimpan ke database), PI 959 / LS 958 -- tiap nomor di daftar jadwal -- beserta tanggalnya (`cekNomorDokumen`, `cekBarisTanggalDokumen`) / fasilitas barang vs dokumen draft (dokumen 912 tidak dibandingkan dengan halaman Masterlist), Polis Asuransi 530 + tanggalnya di bagian Dokumen. Tanpa CIPL: draft vs barang jadwal terkait. Kolom nilai membungkus teks panjang di mana saja, tetapi nilai yang berupa TANGGAL tetap satu baris (`cekUtuhBilaTanggal` -> `.cek-utuh`). Gaya di css/checker.css. Tombol "Cetak draft" -> `cekCetakDraft()` |
+| `views/checker-view.js` | Halaman Cek PIB/PEB (#/cek, khusus EXIM): CIPL vs draft CEISA lewat mesin EXIM, dibantu data Shipment Schedule -- jadwal terkait dicari dari aju / invoice / B/L-AWB / kontainer (Master & House B/L-AWB + tanggalnya mengisi kotak pembanding), hanya di antara jadwal yang PIB/PEB-nya masih mungkin diperiksa (`cekJadwalTerbuka`: Import berstatus process / delay, Export yang ETD-nya belum lewat). JADWAL RUJUKAN UTAMA: isian jadwal vs draft (`cekBarisJadwal`) di bagiannya masing-masing (Dokumen, Header, Pengangkutan, Nilai, Kemasan, Entitas); baris mesin CIPL untuk isian yang sama diganti baris jadwalnya, CIPL hanya untuk isian yang kosong di jadwal (`cekRujukJadwal`, ditandai "CIPL"); kode kantor dan ETD ↔ tanggal B/L-AWB tidak diperiksa (PEB: ETD ↔ TANGGAL EKSPOR tetap, INFO; PIB: ETA ↔ tanggal tiba, INFO bila beda). SEMUA isian draft yang tercetak punya baris -- yang tidak bisa dibandingkan tampil INFO ("Belum diisi di jadwal" / "Draft tidak mencantumkannya"), tidak dilewati; PENGECUALIAN: **No. Aju dan No. SPPB / No. Daftar hanya INFO** (`infoSaja`, tidak pernah MISMATCH, tidak ikut vonis, tidak bernomor temuan). **NDPBM = kurs otomatis** (`cekBarisNdpbm`): sisi "jadwal" = kurs terbaru sheet KURS (core/kurs.js) untuk valuta draft, JPY per 1 yen; tanpa data kurs, USD kembali ke NDPBM tersimpan jadwal, valuta lain INFO; NDPBM di jadwal TIDAK disentuh. Kepingan "Kurs otomatis" (`cekGambarKurs`, `#cekKurs`) menampilkan status, kurs USD + valuta draft, umur data, Perbarui, tautan sheet. Baris Rupiah (`cekBarisRupiah`, hanya PIB): Nilai Pabean (Rp) & tabel pungutan (BM, PPN, PPh, TOTAL per kolom fasilitas) dihitung dari jadwal dengan NDPBM DRAFT lalu dibandingkan dengan draft & sheet PUNGUTAN (tanpa sheet = INFO; valuta bukan USD = INFO). Dokumen lain di sheet DOKUMEN (`cekBarisDokumenLain`, nomor & tanggal menurut kode). PEB: volume (CBM). Peti kemas: nomor, ukuran & tipe tiap kontainer vs Container/Seal Number (`cekBarisPetiKemas`, `cekUraiKontainer`). BARANG DARI JADWAL DULU (`cekBarangGabungan`): ada jadwal terkait -> nama, HS, jumlah, satuan, nilai & berat pembanding diambil dari barang jadwal (sudah diperiksa EXIM); isian jadwal yang kosong dan barang yang tidak ada di jadwal diambil dari CIPL (dipasangkan per kata nama, `cekPasangkanBarang`), sumber tiap baris ditandai (kolom "Jadwal", tanda "CIPL"); kolom barang CEISA dibandingkan kolom demi kolom dengan kolom yang sama di draft (`cekBarisKolomBarang`; tanda kosong setara), barang lama per kata dengan gabungan kolom draft (`cekBandingNama`); Kode Kondisi Barang (PIB) & Kode Negara Asal (`cekBarisKodeBarang`) dan Fasilitas & No. Urut -- dokumen yang ditautkan ke Seri Barang-nya (`cekBarisFasilitasBarang`; nilai draft ditulis seperti jadwal, urutan pasangannya, No. Urut di catatan); barang draft diurutkan menurut Seri Barang begitu dibaca (`cekBacaDraft`; bila urutan di berkasnya memang acak, `draftDiurutkan` menambah keterangan "barang diurutkan menurut Seri Barang" di kotak draft, `cekRingkasDraft`) dan RINCIAN BARANG URUT SERI BARANG: "Barang n" = Seri Barang n, dibandingkan dengan barang jadwal / CIPL yang sama menurut isinya -- nama lengkap, Uraian, kata Uraian, HS 8 lalu 6 digit, sisanya urutan; tiap Seri Barang mengambil kandidat paling awal, jadi barang kembar tetap berurutan (`cekSeriPasangan`, `cekNomoriMenurutSeri`), barang yang tidak ada di draft sesudah seri terakhir, HS Code 8 digit dari Database HS Code -> barang jadwal terkait -> riwayat jadwal (kode draft yang belum dikenal bisa langsung disimpan ke database), PI 959 / LS 958 -- tiap nomor di daftar jadwal -- beserta tanggalnya (`cekNomorDokumen`, `cekBarisTanggalDokumen`) / fasilitas barang vs dokumen draft (dokumen 912 tidak dibandingkan dengan halaman Masterlist), Polis Asuransi 530 + tanggalnya di bagian Dokumen. Tanpa CIPL: draft vs barang jadwal terkait. Kolom nilai membungkus teks panjang di mana saja, tetapi nilai yang berupa TANGGAL tetap satu baris (`cekUtuhBilaTanggal` -> `.cek-utuh`). Gaya di css/checker.css. Tombol "Cetak draft" -> `cekCetakDraft()` |
 | `features/cek-cetak.js` | Cetak draft PIB/PEB berstabilo dari halaman Cek PIB/PEB: halaman muka, lanjutan barang & dokumen dalam tata letak PIB (BC 2.0) / PEB (BC 3.0), isian MISMATCH distabilo kuning + nomor (`ppPenanda`), Lembar Koreksi di akhir. Pemetaan baris hasil -> isian lembar: `ppSlot`. Selalu berbahasa Indonesia |
 | `views/hscode-view.js` | Halaman HS Code (#/hscode) + pencarian HS menurut nama barang yang dipakai bersama impor CIPL, HS Code otomatis di form & halaman Cek PIB/PEB (`kunciNamaHs`, `cariHsMenurutNama`, `hsDatabaseUntukBarang`): sama persis > nama database terkandung di uraian (yang terpanjang) > uraian terkandung di nama; beberapa kode setara = kandidat (+ `cari`: nama yang cocok), bukan tebakan. `hsDatabaseUntukBarang` melipat kata jamak di kedua sisi (`lipatJamakHs`: SIPES = SIPE, bukan PRESS). Kolom Lartas (PI / LS / SNI, kotak centang `isianLartasHs` di Tambah/Ubah); database tanpa kolom `lartas` -> tersimpan tanpanya & pengguna diberi tahu berkas migrasinya (`simpanHsDenganLartas`). Data dimuat dengan `select("*")` |
 | `features/hscode-lookup.js` | Tombol cari HS Code di Daftar Barang (popover `#hscodeLookupPop`, `position: fixed`), dan HS CODE OTOMATIS DARI NAMA BARANG: Uraian / Tipe yang diketik dicocokkan dengan Database HS Code sesaat sesudahnya (`jadwalkanHsOtomatis`, jeda 250 ms; database dimuat begitu tabel barang mulai dipakai) -- HS Code yang KOSONG atau masih otomatis terisi (`hsOtomatisBarang`; `it._hsOtomatis` = nama yang cocok, kotaknya `.hs-otomatis` berketerangan), nama yang tak lagi cocok mencabutnya, beberapa kode setara tidak ditebak (`it._hsSaran`: tombol cari `.is-saran`, pencariannya dibuka dengan nama itu). Kode yang diketik sendiri, dipilih lewat pencarian, disamakan, atau dari berkas impor tidak pernah ditimpa. Hanya kotak HS Code & tombol cari baris itu yang ditulis ulang (`tandaiHsOtomatis`) -- kursor di Uraian tidak terganggu |
@@ -600,8 +864,8 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `features/bulk-excel.js` | Bulk export/import seluruh data lewat file Excel. Kolom DESCRIPTION berisi nama barang utuh: diimpor ke Uraian, kolom CEISA lain dikosongkan (seperti barang lama). Sheet "DATA PIB-PEB" (`barisSheetPabean` / `terapkanSheetPabean`). Tanggal ditulis sebagai tengah malam UTC dan dibaca dari angka serial -- tidak bergeser di WIB |
 | `features/cek-duplikat.js` | Nomor ganda di form jadwal: hanya HOUSE B/L-AWB yang harus unik (kedua buku) -- ditandai di bawah kotaknya saat diketik, lalu ditanyakan saat Simpan ("Tetap Simpan" / "Periksa Lagi"). No. Aju & No. SPPB/PEB boleh sama (kiriman kurir bernilai rendah berisi CONSIGNEE NOTE), Master B/L-AWB juga (konsolidasi), Invoice juga (kirim bertahap) |
 | `features/notifikasi.js` | Lonceng notifikasi (sidebar & bilah atas ponsel): jadwal yang berangkat / tiba / dikirim ke pabrik besok -- H-1 dari ETD & ETA yang berlaku dan dari Estimated Delivery jadwal Import (Delivery to Factory) -- tampil sampai hari H. Dihitung dari data jadwal; yang disimpan (localStorage per akun & perangkat) hanya status dibaca & pelacak tanggal: ETD/ETA yang diubah sesudah dinotifikasi (juga Estimated Delivery) memunculkan notifikasi ULANG di H-1 tanggal barunya. Panel dikelompokkan dua tingkat: HARI (Hari ini / Besok, kepalanya menempel saat digulir) lalu JENIS -- Berangkat, Tiba, Dikirim ke pabrik (`NOTIF_JENIS_TAMPIL`) -- masing-masing satu kotak berkepala ikon, nama, tanggal acuan & jumlahnya (`notifGrupHtml`); tiap notifikasi cukup nama pihak + rute/angkutan. Klik satu notifikasi = panel detail jadwalnya. MASA BERLAKU (`hitungNotifMasa`): SKB PPh bawaan (skb-bawaan.js) & Masterlist (`valid_until` tabel masterlists -- dibaca sekali per sesi, `notifMuatMasaBerlaku`, atau `mstDok` bila halaman Masterlist sudah dimuat). Dua tahap per dokumen: sejak 2 bulan kalender sebelum berlaku sampai (`NOTIF_MASA_BULAN`, `notifMasaMulai`: 31 Des -> 31 Okt, 30 Apr -> akhir Februari) "Berakhir dalam N hari", sesudah lewat "Sudah berakhir" (merah) sampai dokumen barunya dicatat; kunci `masa|dok|id|tanggal|tahap`, jadi SKB / masterlist baru = notifikasi baru dan catatan dibaca yang lama dibuang. Bagian "Masa berlaku" paling atas di panel; klik SKB = kotak Ubah SKB bawaan (hanya yang boleh menyunting), klik masterlist = #/masterlist |
-| `auth/session.js` | Sesi login & hak akses. Tabel `PERAN` (exim, marketing, finance, viewer): nama tampil, boleh mengubah atau tidak, dan halaman yang boleh dibuka — router, navbar, palet perintah, dan halaman Akun membaca dari sini. Peran baru = satu baris di tabel itu + nilainya di database (contoh: migration-role-finance.sql). `tandaiBayar` / `bolehTandaiBayar()` = satu-satunya hak ubah di luar EXIM: Finance menandai Pengajuan Dana Paid / Unpaid (selebihnya `canEdit()` tetap false) |
-| `views/masterlist-view.js` | Halaman Masterlist (#/masterlist): kuota fasilitas per baris barang & realisasinya per PIB. DAFTAR RINGKAS + KOTAK RINCIAN: tiap baris (per baris / per PIB) hanya yang perlu terlihat sekilas -- nomor, barang, kuota, terpakai, sisa -- dan tombol mata (atau klik barisnya) membuka kotak rincian `#mstDetailModal` (`mstBukaDetail`, `mstGambarDetail`; kunci "b:<id>" / "p:<PIB>" di `mstKeadaan.detail`): HS Code, spesifikasi, lini, nilai USD, realisasi & dokumennya; isinya dirakit ulang dari data hidup setiap halaman digambar ulang dan menutup sendiri kalau yang dibukanya sudah tidak ada. Satu penangan klik untuk halaman & kotak itu (`mstTanganiKlik`). Tata letak menurut lebar panelnya (container query `mst-daftar` / `mst-rinci`): panel < 820px = kartu. DOKUMEN TIAP PIB -- PI, LS, SKB PPh, SKB PPN, Masterlist 912 -- dari jadwal import yang nomor ajunya cocok (`mstDokumenJadwal`, barang jadwal dipasangkan dengan baris masterlist lewat uraiannya), atau diatur sendiri per PIB ("Atur dokumen", `mstAturDokumen`); ikut di unduhan Excel ("nomor (dd-mm-yyyy)", PI dengan " ITEM n"). Terpakai & sisa selalu DIHITUNG dari catatan realisasi; panel "Kuota yang masih tersedia" per jenis mesin, masa berlaku dokumen, jadwal import berfasilitas Masterlist yang belum dicatat, daftar per baris / per PIB, unduh Excel dalam susunan berkas aslinya, mulai kolom A, dengan HS CODE di samping DESCRIPTION (+ lembar "REALISASI PER PIB": nomor aju berpasangan dengan tanggalnya, juga ber-HS CODE). HS Code per baris (`hs_code`, isian di samping Uraian barang di Tambah/Ubah baris, dibatasi 8 angka lewat `batasiHsCode`): tampil di rincian baris & ikut dicari, ikut di unduhan Excel, TIDAK di cetakan stock opname. Satu realisasi bisa memuat BEBERAPA PIB (mesin dikirim bertahap; kuota dihitung sekali), masing-masing bernomor aju + tanggal sendiri -- kolom `pibs`; PIB kiriman berikutnya ditambahkan ke realisasi yang ada ("kiriman lanjutan" / tombol + PIB), dan tanggal satu PIB diatur sekali untuk semua catatannya dari susunan Per PIB. Tanggal PIB yang belum tercatat di realisasi lain diisi dari nomor ajunya (`mstTanggalDariAju`; ekor aju -> jadwal yang cocok), tetap bisa diubah. NILAI (USD) dilacak seperti unit: nilai masterlist per baris (`value_quota`) & nilai invoice per realisasi (`invoice_value`); terpakai & sisa nilai dihitung, baris yang nilainya lebih / unit habis tapi nilai belum sama / realisasi belum bernilai ditandai (saringan "Nilai perlu dicek"). Kolom dari migrasi lanjutan dibaca & ditulis lewat `mstBacaKolom` / `mstKirim`, jadi halaman tetap jalan sebelum migrasinya dijalankan. Tabel `masterlists`, `masterlist_items`, `masterlist_usages` (migration-masterlist.sql, lalu migration-masterlist-pib-parsial.sql, migration-masterlist-nilai.sql & migration-masterlist-hs-code.sql) |
+| `auth/session.js` | Sesi login & hak akses. Tabel `PERAN` (exim, marketing, finance, viewer): nama tampil, boleh mengubah atau tidak, dan halaman yang boleh dibuka — router, navbar, palet perintah, pintasan N (jadwal baru: hanya bila form boleh dibuka; baris N di kaki halaman ikut `body.tutup-form`), dan halaman Akun membaca dari sini. Peran baru = satu baris di tabel itu + nilainya di database (contoh: migration-role-finance.sql). `tandaiBayar` / `bolehTandaiBayar()` = satu-satunya hak ubah di luar EXIM: Finance menandai Pengajuan Dana Paid / Unpaid (selebihnya `canEdit()` tetap false) |
+| `views/masterlist-view.js` | Halaman Masterlist (#/masterlist): kuota fasilitas per baris barang & realisasinya per PIB. DAFTAR RINGKAS + KOTAK RINCIAN: tiap baris (per baris / per PIB) hanya yang perlu terlihat sekilas -- nomor, barang, kuota, terpakai, sisa -- dan tombol mata (atau klik barisnya) membuka kotak rincian `#mstDetailModal` (`mstBukaDetail`, `mstGambarDetail`; kunci "b:<id>" / "p:<PIB>" di `mstKeadaan.detail`): HS Code, spesifikasi, lini, nilai USD, realisasi & dokumennya; isinya dirakit ulang dari data hidup setiap halaman digambar ulang dan menutup sendiri kalau yang dibukanya sudah tidak ada. Satu penangan klik untuk halaman & kotak itu (`mstTanganiKlik`). Tata letak menurut lebar panelnya (container query `mst-daftar` / `mst-rinci`): panel < 820px = kartu. DOKUMEN TIAP PIB -- PI, LS, SKB PPh, SKB PPN, Masterlist 912 -- dari jadwal import yang nomor ajunya cocok (`mstDokumenJadwal`, barang jadwal dipasangkan dengan baris masterlist lewat uraiannya), atau diatur sendiri per PIB ("Atur dokumen", `mstAturDokumen`); ikut di unduhan Excel ("nomor (dd-mm-yyyy)", PI dengan " ITEM n"). Terpakai & sisa selalu DIHITUNG dari catatan realisasi; panel "Kuota yang masih tersedia" per jenis mesin, masa berlaku dokumen, jadwal import berfasilitas Masterlist yang belum dicatat, daftar per baris / per PIB, unduh Excel dalam susunan berkas aslinya, mulai kolom A, dengan HS CODE di samping DESCRIPTION (+ lembar "REALISASI PER PIB": nomor aju berpasangan dengan tanggalnya, juga ber-HS CODE). HS Code per baris (`hs_code`, isian di samping Uraian barang di Tambah/Ubah baris, dibatasi 8 angka lewat `batasiHsCode`): tampil di rincian baris & ikut dicari, ikut di unduhan Excel, TIDAK di cetakan stock opname. Satu realisasi bisa memuat BEBERAPA PIB (mesin dikirim bertahap; kuota dihitung sekali), masing-masing bernomor aju + tanggal sendiri -- kolom `pibs`; PIB kiriman berikutnya ditambahkan ke realisasi yang ada ("kiriman lanjutan" / tombol + PIB), dan tanggal satu PIB diatur sekali untuk semua catatannya dari susunan Per PIB. Tanggal PIB yang belum tercatat di realisasi lain diisi dari nomor ajunya (`mstTanggalDariAju`; ekor aju -> jadwal yang cocok), tetap bisa diubah. NILAI (USD) dilacak seperti unit: nilai masterlist per baris (`value_quota`) & nilai invoice per realisasi (`invoice_value`); terpakai & sisa nilai dihitung, baris yang nilainya lebih / unit habis tapi nilai belum sama / realisasi belum bernilai ditandai (saringan "Nilai perlu dicek"). Kolom dari migrasi lanjutan dibaca & ditulis lewat `mstBacaKolom` / `mstKirim`, jadi halaman tetap jalan sebelum migrasinya dijalankan. Tanpa satu baris pun, Unduh Excel & Cetak nonaktif (`mstSegarkanTombolEkspor`; Excel juga selama berkasnya dibuat) dan petunjuk "Tambah baris" hanya untuk peran yang punya tombolnya. Tabel `masterlists`, `masterlist_items`, `masterlist_usages` (migration-masterlist.sql, lalu migration-masterlist-pib-parsial.sql, migration-masterlist-nilai.sql & migration-masterlist-hs-code.sql) |
 | `features/masterlist-print.js` | Cetak lembar STOCK OPNAME masterlist (A4 landscape): baris yang tersaring di layar, per lini proses, kolom sama dengan Excel unduhan kecuali HS CODE (hanya di Excel) + PIB DATE, ACTUAL QTY & REMARKS kosong untuk diisi tangan; total per satuan & kotak tanda tangan di halaman terakhir. Margin @page nol (tanpa kop/kaki peramban), jadi halaman dipecah sendiri: tinggi baris diukur di bingkai kotak cetak (`siapkan`, A4 mendatar) lalu dibagi `mstBagiHalaman()` (murni, teruji) -- tiap lembar berkepala tabel, "Halaman x dari y" & paraf |
 | `features/surat-jalan-print.js` | Cetak SURAT JALAN EXPORT (A4, di kotak cetak aplikasi `ui/cetak-modal.js`) + KOP SURAT BERSAMA. `kopSuratHtml()` / `kopSuratCss()` = satu-satunya kop berlogo: logo DDI 22 mm, nama perusahaan 20pt (huruf Times dipatok di kop), alamat Pusat/Cabang 9,5pt, garis kop tebal-tipis -- dipakai Form Pengajuan Dana (`fund-request-print.js`), Surat BC (`surat-bc.js`) dan Surat Jalan Export, jadi ketiganya sama persis (`SJ_LOGO`, `SJ_PERUSAHAAN` juga dipakai CIPL, masterlist, Surat Jalan Lokal). Tata letak tanpa bingkai luar: kop -> judul -> blok penerima (KEPADA / nama / garis / ALAMAT PENERIMA / alamat, kapital) di samping Nomor / Tanggal / Ref -> tabel barang (No, Nama, Quantity, Package -- satu sel per box, `sjKelompokBox` -- dan Nopol: satu kotak per mobil dibagi rata setinggi baris barang, `sjSelNopol`) -> Total per satuan -> empat kotak tanda tangan. Huruf isi 10pt (judul 16pt, nama penerima 12pt). Garis lewat SATU variabel `--sj-line`; tabel barang memakai konvensi bawah+kiri (tiap baris menutup dirinya sendiri) dan tepi kanannya digambar kolom Nopol. MEMENUHI A4: `sjIsiKertas()` melebarkan ruang kosong tabel sampai tanda tangan jatuh di dasar kertas; sebelumnya `sjPasKertas()` merapatkan tabel BERTINGKAT (`SJ_TINGKAT_RAPAT`: 9pt / 8,5pt / 8pt) bila daftar barang tidak muat satu lembar (huruf normal sekitar 16 baris; tingkat 1-3 sekitar 21, 26, 31); yang tetap tidak muat menyambung ke halaman berikutnya (judul kolom berulang, Total sekali, tanda tangan tidak sendirian). Kop, judul & blok penerima tidak ikut dirapatkan |
 | `features/fund-docno.js` | Aturan "Doc No" di Form Pengajuan Dana: kotak Doc No ada & tersimpan untuk SEMUA vendor (termasuk PRIME & WIDE; bisa dicari di riwayat, tampil di Detail), yang diatur hanya CETAKANNYA -- daftar vendor yang Doc No-nya TIDAK dicetak (bawaan PRIME & WIDE), diatur dari kotak Aturan Doc No di halaman Nomor Dokumen. Daftar yang sama menentukan penanda tangan keempat (CFO). Tersimpan di `report_settings`; `fundPakaiDocNo()` ("vendor ini mencetak Doc No") dipakai cetakan dan isian CFO di form, `fundSelaraskanDocNo()` mengganti keterangan di bawah kotak Doc No DOC NO BAWAAN `EI-<YYMM>-0000` (YYMM = tahun & bulan berjalan, `fundDocNoBawaan`): diisikan `fundIsiDocNoBawaan` ke form BARU (resetDocNumForm & saat aplikasi dibuka), diperbarui ke bulan berjalan selama masih bawaan (syncDocNumConditional), TIDAK diberikan ke pengajuan yang dibuka untuk diubah (panel di #dnEditBadan / dnEditingId); kotak yang dikosongkan / diketik sendiri tidak diisi lagi; klik memilih "0000"; keterangan `#fundDocNoBawaanKet` selama masih bawaan; bawaan yang belum diganti TIDAK tersimpan & tidak tercetak (`fundDocNoTanpaBawaan` di readDocNumForm -- semua bentuk `EI-<4 angka>-0000`). |

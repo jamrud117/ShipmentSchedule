@@ -16,17 +16,28 @@
    POTONGAN TAMPILAN BERSAMA
 ------------------------------------------------------------------ */
 
-function confidenceChipHtml(conf, prefix) {
+/* Tingkat keyakinan: meteran lima ruas + "60% · Sedang".
+
+   Persen DAN label. Persen sendirian terkesan lebih tepat daripada
+   yang sebenarnya; label sendirian menyembunyikan bahwa 79% dan 89%
+   dua hal yang berbeda. Meterannya membuat keduanya terbaca sekilas
+   saat membandingkan kartu satu dengan yang lain -- ruasnya mengikuti
+   tingkat (Rendah 1 ... Sangat Tinggi 5, Final penuh), bukan persennya.
+   Alasan hitungannya ditaruh di title supaya bisa ditelusuri tanpa
+   memenuhi layar. */
+function confidenceChipHtml(conf, prefix, judulTambahan) {
   if (!conf) return "";
-  /* Persen DAN label. Persen sendirian terkesan lebih tepat daripada
-     yang sebenarnya; label sendirian menyembunyikan bahwa 79% dan 89%
-     dua hal yang berbeda. Alasan hitungannya ditaruh di title supaya
-     bisa ditelusuri tanpa memenuhi layar. */
-  const rinci = (conf.reasons || [])
-    .map((r) => `${r.delta > 0 ? "+" : ""}${r.delta}% ${r.text}`)
+  const rinci = [judulTambahan || ""].concat((conf.reasons || [])
+    .map((r) => `${r.delta > 0 ? "+" : ""}${r.delta}% ${r.text}`))
+    .filter(Boolean)
     .join("\n");
-  const persen = conf.percent != null ? `${conf.percent}% · ` : "";
-  return `<span class="pred-conf pred-conf--${conf.tone}"${rinci ? ` title="${escapeHtml(rinci)}"` : ""}>${escapeHtml((prefix || "") + persen + conf.label)}</span>`;
+  const tingkat = { low: 1, medium: 2, medhigh: 3, high: 4, veryhigh: 5, final: 5 }[conf.tone] || 1;
+  const ruas = [1, 2, 3, 4, 5].map((i) => `<i${i <= tingkat ? ' class="on"' : ""}></i>`).join("");
+  const judul = [tt(`Keyakinan ${conf.percent != null ? conf.percent + "% · " : ""}${conf.label}`, `Confidence ${conf.percent != null ? conf.percent + "% · " : ""}${conf.label}`), rinci].filter(Boolean).join("\n");
+  /* Persen & label dua bagian: di panel tanggal yang sempit (kartu di
+     ponsel) labelnya disembunyikan -- meteran sudah menunjukkan
+     tingkatnya, dan label lengkapnya tetap di title. */
+  return `<span class="pred-conf pred-conf--${conf.tone}" title="${escapeHtml(judul)}"><span class="pred-conf-meter" aria-hidden="true">${ruas}</span><span class="pred-conf-persen">${escapeHtml((prefix || "") + (conf.percent != null ? `${conf.percent}%` : ""))}</span><span class="pred-conf-label">${escapeHtml((conf.percent != null ? " · " : "") + conf.label)}</span></span>`;
 }
 /* MEKANIKA MESIN PREDIKSI HANYA UNTUK YANG BISA MENGUBAHNYA.
 
@@ -41,12 +52,21 @@ function tampilkanMekanikaPrediksi() {
   return typeof canEdit !== "function" || canEdit();
 }
 
+/* Penanda mode: label kecil berbingkai tipis, huruf biasa.
+
+   Auto bertinta kuningan -- warna "hasil hitungan" di seluruh berkas
+   prediction.css. Manual bertinta navy dengan ikon pin: tanggal yang
+   DIPATOK orang, mesin tidak akan menggesernya. Tanpa isian warna dan
+   tanpa ikon tongkat sihir: dulu "AUTO ETA" berkapital, berlatar
+   kuningan, dan berikon -- lebih ramai daripada tanggal yang diberinya
+   keterangan. */
+function modeChipHtml(manual, label) {
+  return `<span class="eta-mode-chip eta-mode-chip--${manual ? "manual" : "auto"}">${manual ? '<i class="bi bi-pin-angle-fill" aria-hidden="true"></i>' : ""}${escapeHtml(label)}</span>`;
+}
+
 function deliveryModeChipHtml(mode) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  const manual = mode === "manual";
-  return `<span class="eta-mode-chip eta-mode-chip--${manual ? "manual" : "auto"}">
-    <i class="bi ${manual ? "bi-lock-fill" : "bi-magic"}"></i> ${escapeHtml(deliveryModeLabel(mode))}
-  </span>`;
+  return modeChipHtml(mode === "manual", deliveryModeLabel(mode));
 }
 /* Ringkasan Lapis 0. Kalau ETA terlihat aneh, pertanyaan pertamanya
    selalu "rutenya kebaca benar tidak" — dan ini yang menjawabnya. */
@@ -79,18 +99,20 @@ function routeLayerHtml(rute) {
 }
 function etaModeChipHtml(mode) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  const manual = mode === "manual";
-  return `<span class="eta-mode-chip eta-mode-chip--${manual ? "manual" : "auto"}">
-    <i class="bi ${manual ? "bi-pencil-fill" : "bi-magic"}"></i> ${escapeHtml(etaModeLabel(mode))}
-  </span>`;
+  return modeChipHtml(mode === "manual", etaModeLabel(mode));
 }
 /* Rentang ditulis sebagai kalimat pendek, bukan angka telanjang.
    "18-08-2026 – 24-08-2026" tanpa keterangan mudah dibaca terbalik
    sebagai dua tanggal berbeda yang tidak berhubungan. */
 
-function predRangeHtml(dari, sampai, label) {
+function predRangeHtml(dari, sampai, label, pendek) {
   if (!dari || !sampai || dari === sampai) return "";
-  return `<span class="pred-range"><i class="bi bi-arrows-expand-vertical"></i> ${escapeHtml(label || tt("Rentang", "Range"))} ${fmtDate(dari)} – ${fmtDate(sampai)}</span>`;
+  /* `pendek` (kartu): tahun dibuang bila sama -- "08-11 – 10-11";
+     tanggal lengkapnya di title. */
+  const sama = pendek && dari.slice(0, 4) === sampai.slice(0, 4);
+  const tulis = (iso) => (sama ? fmtDate(iso).slice(0, 5) : fmtDate(iso));
+  const judul = pendek ? ` title="${escapeHtml(`${label || tt("Rentang", "Range")} ${fmtDate(dari)} – ${fmtDate(sampai)}`)}"` : "";
+  return `<span class="pred-range"${judul}>${pendek ? "" : '<i class="bi bi-arrows-expand-vertical"></i> '}${escapeHtml(label || tt("Rentang", "Range"))} ${tulis(dari)} – ${tulis(sampai)}</span>`;
 }
 /* DARI MANA angka transit itu datang.
 
@@ -104,7 +126,33 @@ function transitSourceHtml(e) {
   const tr = e.transit || {};
   const bagian = [];
 
-  if (tr.learned) {
+  /* ETA dari kiriman lain di kapal yang sama (etaSekapal) -- bukan dari
+     tabel rute sama sekali. */
+  if (e.sekapal) {
+    const asal = e.sekapal.sumber || {};
+    bagian.push(
+      `<span class="pred-src-tag pred-src-tag--learned"><i class="bi bi-link-45deg"></i> ${escapeHtml(
+        `${e.ruleLabel}${asal.party ? ` — ${asal.party}` : ""}`,
+      )}</span>`,
+    );
+    return bagian.join(" ");
+  }
+
+  if (tr.learned && (tr.learned.scope === "negara" || tr.learned.scope === "umum")) {
+    /* Rute ini sendiri belum punya riwayat; asumsinya digeser riwayat
+       RUTE LAIN (geserDariRuteLain, prediction-learning.js). */
+    const g = tr.learned.shift;
+    const geser = `${g > 0 ? "+" : ""}${g}`;
+    bagian.push(
+      `<span class="pred-src-tag pred-src-tag--learned" title="${escapeHtml(tt(
+        `Rute ini belum punya riwayat. ${tr.learned.samples} kiriman rute lain ${tr.learned.scope === "negara" ? "dari negara yang sama" : "searah"} rata-rata meleset ${geser} hari dari tabel; asumsi rute ini ikut digeser.`,
+        `This route has no history yet. ${tr.learned.samples} shipments on other ${tr.learned.scope === "negara" ? "routes from the same country" : "routes in this direction"} ran ${geser} days off the table on average; this route's assumption is shifted too.`,
+      ))}"><i class="bi bi-mortarboard-fill"></i> ${tt(
+        `Riwayat ${tr.learned.samples} kiriman rute lain${tr.learned.scope === "negara" ? " (negara sama)" : ""} · ${geser} hari dari tabel`,
+        `History of ${tr.learned.samples} shipments on other routes${tr.learned.scope === "negara" ? " (same country)" : ""} · ${geser} days vs table`,
+      )}</span>`,
+    );
+  } else if (tr.learned) {
     bagian.push(
       `<span class="pred-src-tag pred-src-tag--learned" title="${escapeHtml(
         t("z.ringkasan.belajar", { avg: tr.learned.avg, min: tr.learned.min, maks: tr.learned.max, sd: tr.learned.stdDev, buang: tr.learned.dropped, metode: tr.learned.method }),
@@ -207,34 +255,40 @@ function predStepsHtml(d) {
    BARIS RINGKAS DI KARTU
 ------------------------------------------------------------------ */
 
+/* Keterangan Estimated Delivery di kartu -- duduk di BAWAH tanggalnya,
+   SEBARIS dengan harinya (dateStripHtml, js/render/cards.js), bukan lagi
+   pita tersendiri yang menulis Estimated Delivery & tanggalnya sekali
+   lagi:
+
+     Sen  [Auto] dari PIB  ▮▮▮▮▯ 90% · Sangat Tinggi
+     Sen  [Manual]  ▮▮▯▯▯ 60% · Sedang
+
+   Sumber disebut hanya untuk Auto ("dari ETA", "dari PIB"); Manual
+   sumbernya memang orang yang mengetiknya. Rentang tanggalnya di
+   tooltip keyakinan -- sebagai teks ia memaksa keterangan pecah dua
+   baris di kolom tanggal. */
 function predictionStripHtml(s) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  /* Baris ini seluruhnya tentang Estimated Delivery, yang tidak berlaku
-     di Export. ETA otomatis Export tetap jalan — hanya papan
-     mekanikanya yang belum menampilkannya. */
+  /* Seluruhnya tentang Estimated Delivery, yang tidak berlaku di
+     Export. ETA otomatis Export tetap jalan (keterangannya di bawah
+     tanggal ETA). */
   if (!deliveryPredictionAppliesTo(s)) return "";
   const d = predictDelivery(s);
 
   if (!d.ok) {
-    return `
-    <div class="pred-strip pred-strip--empty">
-      <span class="pred-strip-head"><i class="bi bi-graph-up-arrow"></i> Estimated Delivery</span>
-      <span class="pred-strip-note">${escapeHtml(d.reason)}</span>
-    </div>`;
+    return `<span class="pred-strip pred-strip--empty"><span class="pred-strip-note">${escapeHtml(d.reason)}</span></span>`;
   }
 
-  const modeEta = etaModeOf(s);
-  return `
-  <div class="pred-strip">
-    <span class="pred-strip-head"><i class="bi bi-graph-up-arrow"></i> Estimated Delivery</span>
-    <span class="pred-strip-date">${fmtDate(d.date)}</span>
-    ${d.range ? predRangeHtml(d.range.earliest, d.range.latest) : ""}
-    <span class="pred-strip-src">${tt("Sumber", "Source")}: <b>${escapeHtml(d.sourceLabel)}</b></span>
-    ${d.source === "eta" ? etaModeChipHtml(modeEta) : ""}
-    ${d.source === "manual" ? deliveryModeChipHtml("manual") : ""}
-    ${confidenceChipHtml(d.confidence, "")}
-    ${d.shifted ? `<span class="pred-late"><i class="bi bi-clock-history"></i> ${tt(`Telat ${d.overdueDays} hari — dihitung ulang dari hari ini`, `${d.overdueDays} days late — recalculated from today`)}</span>` : ""}
-  </div>`;
+  const manual = d.source === "manual";
+  const rentang =
+    d.range && d.range.earliest && d.range.latest && d.range.earliest !== d.range.latest
+      ? `${tt("Rentang", "Range")} ${fmtDate(d.range.earliest)} – ${fmtDate(d.range.latest)}`
+      : "";
+  return `<span class="pred-strip">${deliveryModeChipHtml(manual ? "manual" : "auto")}${
+    manual ? "" : `<span class="pred-strip-src">${tt("dari", "from")} <b>${escapeHtml(d.sourceLabel)}</b></span>`
+  }${confidenceChipHtml(d.confidence, "", rentang)}${
+    d.shifted ? `<span class="pred-late"><i class="bi bi-clock-history" aria-hidden="true"></i> ${tt(`Telat ${d.overdueDays} hari — dihitung ulang dari hari ini`, `${d.overdueDays} days late — recalculated from today`)}</span>` : ""
+  }</span>`;
 }
 /* ------------------------------------------------------------------
    BAGIAN PENUH DI PANEL DETAIL

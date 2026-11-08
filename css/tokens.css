@@ -2,7 +2,7 @@
 
 /* GAYA PALING DASAR.
 
-   Dulu ditanam sebagai <style> di dalam index.html supaya warna latar
+   Dulu ditanam sebagai \3c style> di dalam index.html supaya warna latar
    & huruf sudah benar sebelum lembar gaya besar selesai dimuat.
    Sekarang tinggal di sini: tokens.css adalah lembar gaya PERTAMA yang
    dipanggil halaman, jadi urutannya tetap sama -- tapi tidak ada lagi
@@ -15,34 +15,39 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #f5f7fa;
-  color: #0a1b33;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: #edf1f4;
+  color: #0f1b27;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root {
-  /* Netral: kertas & tinta */
-  --n-50: #f5f7fa;
-  --n-100: #eef1f6;
-  --n-200: #dfe5ed;
-  --n-300: #c4cedb;
-  --n-400: #93a1b5;
-  /* Bukan #64748b: warna itu hanya 4,43:1 di atas putih, gagal AA */
-  --n-500: #5a6879;
-  --n-600: #48566b;
-  --n-700: #33415a;
-  --n-800: #1c2b45;
-  --n-900: #0a1b33;
+  /* Netral: beton dermaga & tinta. Sedikit condong ke hijau-biru supaya
+     tidak terbaca sebagai "abu-abu bawaan" -- kanvas (--bg) lebih gelap
+     dari permukaan (--surface), jadi lembar putih terangkat tanpa perlu
+     bayangan. */
+  --n-50: #f3f6f8;
+  --n-100: #e9eef1;
+  --n-200: #d8dfe5;
+  --n-300: #bdc8d1;
+  --n-400: #8b98a6;
+  /* --n-500 ke atas lolos AA sebagai teks di atas putih (5,9:1) */
+  --n-500: #566472;
+  --n-600: #434f5c;
+  --n-700: #2e3a47;
+  --n-800: #1b2733;
+  --n-900: #0f1b27;
 
-  /* Aksen utama: RAMP NAVY */
-  --p-50: #eef4fa;
-  --p-100: #dae7f4;
-  --p-200: #b4cde6;
-  --p-300: #86aed4;
-  --p-400: #5588bb;
-  --p-500: #1d5188;
-  --p-600: #16375e;
-  --p-700: #0a1b33;
+  /* Aksen utama: BIRU SINYAL. Navy tinggal di permukaan gelap (sidebar,
+     toast); yang bisa diklik berwarna biru, supaya tombol & tautan
+     terbaca sebagai bisa-disentuh tanpa perlu garis tebal. */
+  --p-50: #ebf2fc;
+  --p-100: #d6e4f8;
+  --p-200: #aecbf0;
+  --p-300: #7faae3;
+  --p-400: #4a83d1;
+  --p-500: #1f62c2;
+  --p-600: #164e9e;
+  --p-700: #0d3573;
 
   /* Aksen sekunder: RAMP KUNINGAN (brass) */
   --sec-50: #fbf8f1;
@@ -55,10 +60,10 @@ body {
   --sec-700: #644a1c;
 
   /* ---- Permukaan gelap (identitas merek) ---- */
-  --d-900: #0a1b33;
-  --d-800: #102643;
-  --d-700: #16375e;
-  --d-600: #1d5188;
+  --d-900: #0b1d33;
+  --d-800: #112a47;
+  --d-700: #183a5f;
+  --d-600: #1f4e80;
 
   /* Status: semantik, bukan dekorasi */
   --s-warn: #b5730f;
@@ -78,7 +83,6 @@ body {
   /* Hijau HANYA untuk "berhasil" (toast, lunas) -- bukan aksen. 5,32:1. */
   --s-success: #1e7a4d;
   --s-success-bg: #edf7f1;
-  --s-success-line: #bfe0cd;
   --s-info: #3f5fb8;
   --s-info-bg: #eef1fb;
   --s-info-line: #c9d3f0;
@@ -89,7 +93,7 @@ body {
   --text-subtle: var(--n-500);
   /* Teks contoh di dalam isian: 4,54:1 -- terbaca, tetap jelas lebih
      pucat dari isian sungguhan (--n-800, 13,6:1). */
-  --text-placeholder: #6b7789;
+  --text-placeholder: #687583;
 
   /* ---- Ukuran kontrol: tombol & isian satu baris ---- */
   --ctl-h-sm: 32px;
@@ -97,10 +101,10 @@ body {
   --ctl-h-lg: 42px;
 
   /* ---- Radius ---- */
-  --r-xs: 5px;
-  --r-sm: 7px;
-  --r-md: 9px;
-  --r-lg: 12px;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
   --r-xl: 14px;
   --r-pill: 999px;
 
@@ -115,13 +119,14 @@ body {
   --sp-10: 40px;
   --sp-12: 48px;
 
-  /* ---- Bayangan: halus & berlapis, bukan blok gelap ---- */
-  --sh-xs: 0 1px 2px rgba(10, 27, 51, 0.05);
-  --sh-sm: 0 1px 3px rgba(10, 27, 51, 0.07), 0 1px 2px rgba(10, 27, 51, 0.04);
-  --sh-md: 0 4px 12px -4px rgba(10, 27, 51, 0.12), 0 2px 4px rgba(10, 27, 51, 0.04);
-  --sh-lg: 0 14px 32px -14px rgba(10, 27, 51, 0.22), 0 4px 8px rgba(10, 27, 51, 0.05);
-  --sh-panel: -22px 0 60px -30px rgba(10, 27, 51, 0.45);
-  --sh-focus: 0 0 0 3px rgba(29, 81, 136, 0.26);
+  /* ---- Bayangan: hanya untuk benda yang MELAYANG (menu, panel, kotak
+     dialog). Lembar di kanvas dibedakan oleh warna & garis tipis. ---- */
+  --sh-xs: 0 1px 1px rgba(11, 29, 51, 0.05);
+  --sh-sm: 0 1px 2px rgba(11, 29, 51, 0.08);
+  --sh-md: 0 6px 16px -8px rgba(11, 29, 51, 0.2), 0 1px 3px rgba(11, 29, 51, 0.06);
+  --sh-lg: 0 18px 40px -16px rgba(11, 29, 51, 0.32), 0 3px 8px rgba(11, 29, 51, 0.07);
+  --sh-panel: -22px 0 60px -30px rgba(11, 29, 51, 0.45);
+  --sh-focus: 0 0 0 3px rgba(31, 98, 194, 0.28);
 
   /* ---- Fokus: satu warna untuk seluruh aplikasi (lihat FOKUS di
      css/system.css). Versi terang untuk di atas permukaan navy. ---- */
@@ -134,23 +139,27 @@ body {
   --dur-2: 190ms;
   --dur-3: 280ms;
 
-  /* Tipografi */
-  --font-display: "Archivo", "Inter", system-ui, sans-serif;
-  --font-board: "Archivo Narrow", "Archivo", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  /* Tipografi (css/fonts.css memuat berkasnya).
+     --font-display : judul komponen & tombol (Plex Sans, tebal)
+     --font-board   : papan penunjuk -- judul halaman, angka besar
+                      (Barlow Condensed)
+     --font-body    : seluruh isi
+     --font-mono    : HANYA pengenal (no. aju, B/L, invoice, HS Code) */
+  --font-display: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-board: "Barlow Condensed", "IBM Plex Sans", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  --t-xs: 0.7rem;
-  --t-sm: 0.78rem;
-  --t-base: 0.86rem;
-  --t-md: 0.95rem;
-  --t-lg: 1.1rem;
-  --t-xl: 1.3rem;
-  --t-2xl: 1.7rem;
-  --t-3xl: 2.3rem;
-
-  /* Jejak huruf untuk label struktur */
-  --track-label: 0.1em;
+  /* Plex bertubuh sedikit lebih kecil dari Inter pada ukuran yang sama:
+     skala dinaikkan setengah langkah supaya teks tabel tetap enak dibaca. */
+  --t-xs: 0.75rem;
+  --t-sm: 0.8125rem;
+  --t-base: 0.875rem;
+  --t-md: 0.9375rem;
+  --t-lg: 1.0625rem;
+  --t-xl: 1.375rem;
+  --t-2xl: 1.875rem;
+  --t-3xl: 2.5rem;
 
   /* ---- Ukuran kerangka aplikasi ---- */
   --topbar-h: 56px; /* bilah atas ponsel & tablet; 0 di desktop (shell.css) */
@@ -164,11 +173,16 @@ body {
   --coral: var(--s-danger);
   --green: var(--s-ok);
   --violet: var(--s-info);
-  --bg: var(--n-50);
+  --bg: #edf1f4;
   --surface: #ffffff;
   --ink: var(--n-900);
   --muted: var(--n-500);
   --border: var(--n-200);
+  /* Kerangka muat (css/dashboard.css): balok abu & kilau yang menyapu.
+     Di mode gelap --n-100 hampir sama dengan --surface, jadi baloknya
+     memakai pasangan tersendiri. */
+  --kerangka: var(--n-100);
+  --kerangka-kilau: var(--n-200);
 
   /* ---- Garis tepi KONTROL ---------------------------------------
      --border (#dfe5ed) hanya 1,27:1 terhadap putih. Untuk garis
@@ -180,7 +194,7 @@ body {
      meminta minimal 3:1 untuk batas seperti itu. #7d8b9f mencapai
      3,46:1 di atas putih dan 3,23:1 di atas kertas — cukup terlihat
      tanpa berubah jadi kotak bergaris tebal. */
-  --border-control: #7d8b9f;
+  --border-control: #7a8795;
 
   /* ---- TEKS BERAKSEN --------------------------------------------
      Aksen kuat (--p-500..700, navy, kuningan, warna status) dipakai
@@ -190,7 +204,8 @@ body {
      `color:` memakai --tp-* / --tsec-* / --ts-*; isian tetap --p-*. */
   --tp-500: var(--p-500);
   --tp-600: var(--p-600);
-  --tp-700: var(--p-700);
+  /* Teks judul tetap tinta navy, bukan biru aksi: biru hanya untuk yang bisa diklik */
+  --tp-700: #0b1d33;
   --tsec-600: var(--sec-600);
   --tsec-700: var(--sec-700);
   --ts-danger: var(--s-danger);
@@ -200,8 +215,6 @@ body {
   --ts-ok: var(--s-ok);
   /* Teks terang di atas permukaan navy (tetap di kedua tema) */
   --teks-di-navy: #b4cde6;
-  /* Isian putih di atas permukaan navy / biru langkah aktif (tetap di kedua tema) */
-  --isi-di-navy: #ffffff;
   /* Lembar kertas di pratinjau cetak (tetap di kedua tema): yang tampil di layar
      adalah salinan kertas yang keluar dari printer, dan kertas selalu putih --
      bukan permukaan aplikasi yang ikut menggelap. */
@@ -213,16 +226,11 @@ body {
      terangnya: --w-bg-* latar, --w-garis-* tepi, --w-teks-* teks. */
   --w-bg-d6efe1: #d6efe1;
   --w-bg-e3f4ee: #e3f4ee;
-  --w-bg-e3f6ea: #e3f6ea;
   --w-bg-e7f0ff: #e7f0ff;
   --w-bg-e8f5ee: #e8f5ee;
   --w-bg-e9f9ee: #e9f9ee;
-  --w-bg-eaf0f8: #eaf0f8;
   --w-bg-edf7f1: #edf7f1;
-  --w-bg-eef2f6: #eef2f6;
   --w-bg-eef2fc: #eef2fc;
-  --w-bg-eef6ff: #eef6ff;
-  --w-bg-efeffb: #efeffb;
   --w-bg-eff2fb: #eff2fb;
   --w-bg-f2fbf8: #f2fbf8;
   --w-bg-f3c6c6: #f3c6c6;
@@ -234,14 +242,11 @@ body {
   --w-bg-fde2de: #fde2de;
   --w-bg-fde7e4: #fde7e4;
   --w-bg-fdeaea: #fdeaea;
-  --w-bg-ffe7cc: #ffe7cc;
   --w-bg-ffefcc: #ffefcc;
   --w-bg-fff3de: #fff3de;
   --w-bg-fff3e0: #fff3e0;
-  --w-bg-fff4e0: #fff4e0;
   --w-bg-fff6f6: #fff6f6;
   --w-bg-fff7e6: #fff7e6;
-  --w-bg-fff7e9: #fff7e9;
   --w-bg-fff7ed: #fff7ed;
   --w-bg-fff8f7: #fff8f7;
   --w-bg-fffaf0: #fffaf0;
@@ -251,14 +256,11 @@ body {
   --w-garis-c9d3f0: #c9d3f0;
   --w-garis-c9edd6: #c9edd6;
   --w-garis-d5def6: #d5def6;
-  --w-garis-d5e8fb: #d5e8fb;
-  --w-garis-dcdafb: #dcdafb;
   --w-garis-e3d9fb: #e3d9fb;
   --w-garis-f1d9a6: #f1d9a6;
   --w-garis-f3c6c6: #f3c6c6;
   --w-garis-f6d4cf: #f6d4cf;
   --w-garis-f7e2b8: #f7e2b8;
-  --w-garis-fce6c2: #fce6c2;
   --w-garis-fdba74: #fdba74;
   --w-garis-ffd8a8: #ffd8a8;
   --w-teks-0f6b52: #0f6b52;
@@ -269,7 +271,6 @@ body {
   --w-teks-1d4ed8: #1d4ed8;
   --w-teks-1e7a4d: #1e7a4d;
   --w-teks-1f7a56: #1f7a56;
-  --w-teks-5347c7: #5347c7;
   --w-teks-6a3fc2: #6a3fc2;
   --w-teks-7a4f0c: #7a4f0c;
   --w-teks-8a5a00: #8a5a00;
@@ -301,28 +302,28 @@ body {
   :root[data-tema="gelap"] {
     color-scheme: dark;
 
-    --n-50: #0c1422;
-    --n-100: #131d2f;
-    --n-200: #25324a;
-    --n-300: #35455f;
-    --n-400: #6d7c94;
-    --n-500: #9aa9bd;
-    --n-600: #b4c0d1;
-    --n-700: #cbd5e2;
-    --n-800: #e0e7f0;
-    --n-900: #eef2f8;
+    --n-50: #0d151d;
+    --n-100: #131e29;
+    --n-200: #243241;
+    --n-300: #354558;
+    --n-400: #6c7c8f;
+    --n-500: #98a8b9;
+    --n-600: #b2bfcd;
+    --n-700: #cad4df;
+    --n-800: #e0e7ee;
+    --n-900: #eef2f6;
 
-    --p-50: #13233a;
-    --p-100: #182d4a;
-    --p-200: #27476f;
-    --p-300: #3c6697;
-    --p-400: #5b8dc5;
-    --p-500: #3570b0;
-    --p-600: #2a5f9a;
-    --p-700: #3a78bd;
-    --tp-500: #8fbaea;
-    --tp-600: #a9cbf1;
-    --tp-700: #d6e5f7;
+    --p-50: #122338;
+    --p-100: #172c49;
+    --p-200: #264a78;
+    --p-300: #3b6ba3;
+    --p-400: #5a92d0;
+    --p-500: #356fc4;
+    --p-600: #2a63b5;
+    --p-700: #3d7cc9;
+    --tp-500: #90b8ee;
+    --tp-600: #aac9f3;
+    --tp-700: #dce8f8;
 
     --sec-50: #251f13;
     --sec-100: #2f271a;
@@ -337,7 +338,6 @@ body {
     --s-danger-line: #6a2f29;
     --s-ok: #a9cbf1;
     --s-success-bg: #11291d;
-    --s-success-line: #24523b;
     --s-info-bg: #171f39;
     --s-info-line: #2d3b68;
     --ts-danger: #f2837a;
@@ -346,30 +346,28 @@ body {
     --ts-info: #a3b5f0;
     --ts-ok: #a9cbf1;
 
-    --text-placeholder: #7f8ca2;
-    --surface: #121c2e;
-    --border-control: #61728c;
+    --text-placeholder: #7d8b9d;
+    --surface: #121d29;
+    --bg: var(--n-50);
+    --border-control: #5f7186;
+    --kerangka: var(--n-200);
+    --kerangka-kilau: var(--n-300);
 
     --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
     --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
     --sh-md: 0 4px 12px -4px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.3);
     --sh-lg: 0 14px 32px -14px rgba(0, 0, 0, 0.7), 0 4px 8px rgba(0, 0, 0, 0.35);
     --sh-panel: -22px 0 60px -30px rgba(0, 0, 0, 0.8);
-    --sh-focus: 0 0 0 3px rgba(122, 170, 230, 0.35);
-    --focus-ring: #7aaae6;
+    --sh-focus: 0 0 0 3px rgba(126, 174, 234, 0.38);
+    --focus-ring: #7eaeea;
 
     --w-bg-d6efe1: #273f32;
     --w-bg-e3f4ee: #243a32;
-    --w-bg-e3f6ea: #213c2b;
     --w-bg-e7f0ff: #1d283a;
     --w-bg-e8f5ee: #24382d;
     --w-bg-e9f9ee: #1f3b27;
-    --w-bg-eaf0f8: #202b39;
     --w-bg-edf7f1: #23352a;
-    --w-bg-eef2f6: #252c34;
     --w-bg-eef2fc: #1d2539;
-    --w-bg-eef6ff: #1c2938;
-    --w-bg-efeffb: #1d1d39;
     --w-bg-eff2fb: #1d2439;
     --w-bg-f2fbf8: #1e362e;
     --w-bg-f3c6c6: #482424;
@@ -381,14 +379,11 @@ body {
     --w-bg-fde2de: #3d231f;
     --w-bg-fde7e4: #3c221e;
     --w-bg-fdeaea: #3a1d1d;
-    --w-bg-ffe7cc: #423321;
     --w-bg-ffefcc: #423821;
     --w-bg-fff3de: #3d321f;
     --w-bg-fff3e0: #3c311e;
-    --w-bg-fff4e0: #3c321e;
     --w-bg-fff6f6: #361b1b;
     --w-bg-fff7e6: #3a311d;
-    --w-bg-fff7e9: #392f1d;
     --w-bg-fff7ed: #382c1c;
     --w-bg-fff8f7: #351e1b;
     --w-bg-fffaf0: #372e1c;
@@ -398,14 +393,11 @@ body {
     --w-garis-c9d3f0: #344167;
     --w-garis-c9edd6: #366547;
     --w-garis-d5def6: #324064;
-    --w-garis-d5e8fb: #324b63;
-    --w-garis-dcdafb: #353262;
     --w-garis-e3d9fb: #403263;
     --w-garis-f1d9a6: #6d5b37;
     --w-garis-f3c6c6: #673434;
     --w-garis-f6d4cf: #653933;
     --w-garis-f7e2b8: #695735;
-    --w-garis-fce6c2: #665333;
     --w-garis-fdba74: #73573a;
     --w-garis-ffd8a8: #6a5235;
     --w-teks-0f6b52: #a5ebd8;
@@ -416,7 +408,6 @@ body {
     --w-teks-1d4ed8: #7995e1;
     --w-teks-1e7a4d: #97debb;
     --w-teks-1f7a56: #97ddc1;
-    --w-teks-5347c7: #8f88d2;
     --w-teks-6a3fc2: #a189d1;
     --w-teks-7a4f0c: #e9cb9c;
     --w-teks-8a5a00: #e8cd99;

@@ -1,3 +1,5 @@
+"use strict";
+
 let boardStampDay = "";
 
 async function initApp() {
@@ -92,16 +94,27 @@ if (typeof ResizeObserver === "function") {
     "--lengket-form-atas": () => $(".page-form-header"),
     "--lengket-form-bawah": () => $(".page-form-actions-inner"),
   };
+  /* Semua tinggi DIBACA dulu (dari ukuran yang sudah dibawa pengamatnya,
+     bukan offsetHeight), baru DITULIS -- dan hanya yang berubah.
+     Variabel di :root diwarisi seluruh halaman: menulisnya lalu membaca
+     tinggi bilah berikutnya memaksa gaya & tata letak seluruh halaman
+     dihitung di tengah skrip (±12ms saat aplikasi dibuka). */
   const amatiLengket = new ResizeObserver((daftar) => {
-    daftar.forEach(({ target }) => {
-      if (!target.offsetHeight) return; // halamannya sedang tersembunyi
+    const tulis = [];
+    daftar.forEach(({ target, borderBoxSize }) => {
+      const ukuran = borderBoxSize && borderBoxSize[0] ? borderBoxSize[0].blockSize : target.offsetHeight;
+      if (!ukuran) return; // halamannya sedang tersembunyi
       const nama = Object.keys(ukurLengket).find((k) => ukurLengket[k]() === target);
-      let tinggi = target.offsetHeight;
+      let tinggi = ukuran;
       if (nama === "--lengket-form-bawah") {
         const baris = target.parentElement;
         tinggi += baris ? parseFloat(getComputedStyle(baris).paddingBottom) || 0 : 0;
       }
-      document.documentElement.style.setProperty(nama, Math.round(tinggi) + "px");
+      tulis.push([nama, Math.round(tinggi) + "px"]);
+    });
+    const akar = document.documentElement.style;
+    tulis.forEach(([nama, nilai]) => {
+      if (akar.getPropertyValue(nama) !== nilai) akar.setProperty(nama, nilai);
     });
   });
   Object.values(ukurLengket).forEach((cari) => {

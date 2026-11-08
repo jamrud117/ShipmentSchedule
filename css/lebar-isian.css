@@ -11,23 +11,24 @@
    Dua alat, masing-masing di tempatnya:
 
    1. DI DALAM KISI FORM (.fgrid) kotak SELALU mengisi selnya -- yang
-      diatur banyaknya LAJUR (components.css): tanggal .s2, nomor dokumen
-      .s4, isian biasa 3 lajur. Dulu kotak dibatasi di dalam sel yang
-      lebar (tanggal 190px di sel 325px, Nama Shipper 520px di sel
-      selebar halaman) -- hasilnya lubang kosong di kanan tiap kotak.
-      Karena itu lembar ini TIDAK lagi membatasi kotak di dalam .fgrid.
+      diatur banyaknya LAJUR (components.css). Dulu kotak dibatasi di
+      dalam sel yang lebar (Nama Shipper 520px di sel selebar halaman)
+      -- hasilnya lubang kosong di kanan tiap kotak. Karena itu lembar
+      ini TIDAK membatasi kotak di dalam .fgrid.
 
    2. HALAMAN TIDAK DIBATASI: form Jadwal & No. Dokumen selebar layar,
       supaya sebanyak mungkin informasi terlihat tanpa menggulir (batas
       1440px / 1280px sempat dicoba dan dicabut -- di monitor lebar
       isinya jadi lebih panjang ke bawah).
 
-   3. KOTAK DI LUAR KISI dibatasi di sini:
-     tanggal        190px   kotak tanggal di luar kisi form (pop-up, saringan)
-     tanggal kartu  260px   di kartu jadwal (huruf mono, kolom 3 sejajar)
+   3. KOTAK DI POP-UP dibatasi di sini:
      pilihan        400px   dropdown di kotak isian pop-up
      teks 1 baris   520px   kotak isian pop-up
      teks panjang   760px   kotak teks di pop-up
+
+   KOTAK TANGGAL tidak diatur di sini: di mana pun ia selebar tanggalnya
+   (css/date-input.css) -- batas 190px / 260px yang dulu di sini tidak
+   pernah tercapai lagi.
 
    Hanya layar >= 768px. Di ponsel satu kolom penuh lebih mudah diketuk
    dan tidak ada ruang kosong yang perlu dicegah.
@@ -37,8 +38,6 @@
    perlu mengatur urutan.
 ================================================================== */
 :root {
-  --lebar-tanggal: 190px;
-  --lebar-tanggal-kartu: 260px;
   --lebar-pilihan: 400px;
   --lebar-teks: 520px;
   --lebar-teks-panjang: 760px;
@@ -54,23 +53,5 @@
   }
   .prompt-field select {
     max-width: var(--lebar-pilihan);
-  }
-
-  /* Tanggal DI LUAR kisi form (pop-up, halaman Cek, saringan). Di dalam
-     .fgrid kotak tanggal mengisi selnya (.s2). Kotak Dari/Sampai di panel
-     kalender pemilih rentang dikecualikan -- lebarnya diatur panelnya. */
-  input[data-kotak-tanggal]:not([data-kotak-tanggal-tanpa-ikon]):not(.fgrid *) {
-    max-width: var(--lebar-tanggal);
-  }
-  /* Kartu jadwal: kotak tanggal sebaris di atas progres (ETD / ETA /
-     Estimated Delivery) dan strip update delay. */
-  .date-field input[data-kotak-tanggal],
-  .date-field input[type="date"] {
-    max-width: var(--lebar-tanggal-kartu);
-  }
-  /* Selebar kolom baris tanggal di atasnya (.date-strip, css/card.css):
-     Updated ETD tepat di bawah ETD, Updated ETA di bawah ETA. */
-  .delay-strip-fields .date-field {
-    flex: 0 1 224px;
   }
 }

@@ -468,8 +468,16 @@ function renderPredictionAccuracy() {
 }
 
 function gambarAkurasi(box, hasil) {
+  /* ETA laut dipisah impor / ekspor bila hasilnya ada (uji mundur
+     prediction-backtest.js); hasil lama tanpa pecahan tetap satu baris. */
+  const lautPecah = hasil.eta.lautImpor && hasil.eta.lautEkspor;
   const baris = [
-    ["bi-water", tt("ETA laut", "Sea ETA"), hasil.eta.laut],
+    ...(lautPecah
+      ? [
+          ["bi-water", tt("ETA laut impor", "Sea import ETA"), hasil.eta.lautImpor],
+          ["bi-water", tt("ETA laut ekspor", "Sea export ETA"), hasil.eta.lautEkspor],
+        ]
+      : [["bi-water", tt("ETA laut", "Sea ETA"), hasil.eta.laut]]),
     ["bi-airplane", tt("ETA udara", "Air ETA"), hasil.eta.udara],
     ["bi-truck", tt("Estimasi delivery laut", "Sea estimated delivery"), hasil.delivery.laut],
     ["bi-truck", tt("Estimasi delivery udara", "Air estimated delivery"), hasil.delivery.udara],

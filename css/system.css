@@ -3,12 +3,8 @@
 /* ---- Dasar ---- */
 body {
   font-family: var(--font-body);
-  font-size: var(--t-base);
-  line-height: 1.55;
   color: var(--n-800);
   background: var(--bg);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 h1, h2, h3, h4, h5, h6,
 .page-form-title,
@@ -96,16 +92,8 @@ button[aria-busy="true"],
 button:disabled:has(.spinner-border) {
   cursor: progress;
 }
-.btn-teal,
-.btn-save-primary {
-  background: var(--p-600);
-  border-color: var(--p-600);
-  color: #fff;
-}
 .btn-teal:hover:not(:disabled),
 .btn-save-primary:hover:not(:disabled) {
-  background: var(--p-700);
-  border-color: var(--p-700);
   color: #fff;
 }
 /* Ditekan: satu tingkat lebih gelap dari hover */
@@ -339,10 +327,6 @@ table.item-table tbody tr,
 .docnum-table tbody tr {
   transition: background-color var(--dur-1) var(--ease);
 }
-table.item-table tbody tr:hover,
-.docnum-table tbody tr:hover {
-  background: var(--p-50);
-}
 
 /* ---- MODAL, TOAST, DROPDOWN, TOOLTIP ---- */
 .modal-content {
@@ -361,11 +345,6 @@ table.item-table tbody tr:hover,
   font-size: var(--t-sm);
   padding: var(--sp-2) var(--sp-3);
   transition: background-color var(--dur-1) var(--ease);
-}
-.dropdown-item:hover,
-.dropdown-item:focus {
-  background: var(--p-50);
-  color: var(--tp-700);
 }
 
 /* PENYESUAIAN KONTRAS SETELAH AKSEN JADI NAVY */
@@ -532,39 +511,6 @@ input[data-kotak-tanggal][readonly] {
   }
 }
 
-/* ==================================================================
-   LABEL STRUKTUR — huruf besar
-
-   Label kecil (eyebrow, kepala kolom, penanda) lebih terbaca dalam
-   huruf besar berspasi renggang: bentuknya berbeda tegas dari isi
-   datanya. Yang TIDAK ikut adalah kalimat keterangan — itu teks yang
-   dibaca, bukan penanda — dan label ISIAN (login, pop-up): ditulis
-   seperti label form jadwal & nomor dokumen, huruf biasa yang lebih
-   besar, supaya semua kotak isian di aplikasi berlabel sama.
-================================================================== */
-.board-label,
-.panel-eyebrow,
-.board-today-label,
-.brand-name,
-.footer-brand,
-.footer-heading,
-.mode-tabs button,
-.info-label,
-.panel-head h2,
-.task-reason,
-.agenda-dow,
-.cmdk-group,
-.cmdk-item-tag,
-.detail-badge-mode,
-.user-chip-role,
-.acct-self,
-.form-progress,
-.date-section-badge,
-.status-select {
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
 /* Judul besar & tombol utama tetap huruf biasa — keduanya kalimat,
    bukan penanda. */
 .board-title,
@@ -614,8 +560,6 @@ select,
 .control-select,
 .search-box input[type="text"],
 .pagination-size select,
-.date-field input[type="date"],
-.delay-strip-fields input[type="date"],
 .date-field input[data-kotak-tanggal],
 .delay-strip-fields input[data-kotak-tanggal],
 select.acct-role,
@@ -691,8 +635,6 @@ select:focus,
 .control-select:focus,
 .search-box input[type="text"]:focus,
 .pagination-size select:focus,
-.date-field input[type="date"]:focus,
-.delay-strip-fields input[type="date"]:focus,
 .date-field input[data-kotak-tanggal]:focus,
 .delay-strip-fields input[data-kotak-tanggal]:focus,
 .basis-select-wrap select:focus,

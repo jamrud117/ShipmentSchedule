@@ -508,7 +508,8 @@ function dpNilaiHitung(s) {
     fob: Math.max(0, tot.totalUSD - potong), bruto: tot.totalBruto, netto: tot.totalNetto,
   };
   if (s.mode !== "export") {
-    const tarif = s.tarif == null || s.tarif === "" ? 5 : angka(s.tarif);
+    // Tarif per barang (item.dataPabean.tarifBm) menang; kolom jadwal lama hanya cadangan, 0 = tidak diisi (tarif-hs.js)
+    const tarif = angka(s.tarif) || 5;
     hasil.pungutan = hitungPungutanFasilitas(Object.assign({ items: s.items || [], freightUsd: freight, asuransiUsd: asuransi, ndpbm, tarifBm: tarif }, s.pungutanManual));
   }
   return hasil;

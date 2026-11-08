@@ -2,7 +2,6 @@
 .ov-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  gap: var(--sp-4);
   align-items: start;
 }
 @media (max-width: 991px) {
@@ -27,9 +26,6 @@
 }
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
   overflow: hidden;
 }
 .panel + .panel {
@@ -40,16 +36,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 14px var(--sp-5);
-  border-bottom: 1px solid var(--n-100);
-  background: var(--n-50);
 }
 .panel-head h2 {
-  font-family: var(--font-display);
-  font-size: var(--t-sm);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--tp-700);
   margin: 0;
   display: flex;
   align-items: center;
@@ -63,10 +51,6 @@
   color: var(--tsec-600);
   width: 17px;
   height: 17px;
-}
-.panel-head-note {
-  font-size: var(--t-xs);
-  color: var(--n-500);
 }
 /* Ponsel: keterangan panel turun ke baris sendiri di bawah judul --
    berdampingan, judulnya ("AGENDA 7 HARI") ikut patah jadi dua baris. */
@@ -95,9 +79,6 @@
   border: 0;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: 14px var(--sp-5);
-  border-bottom: 1px solid var(--n-100);
   width: 100%;
   text-align: left;
   background: transparent;
@@ -107,41 +88,15 @@
 .task:last-child {
   border-bottom: 0;
 }
-.task:hover {
-  background: var(--p-50);
-}
 .task--late {
   border-left-color: var(--s-danger);
 }
 .task--soon {
   border-left-color: var(--s-warn);
 }
-.task--doc {
-  border-left-color: var(--sec-500);
-}
 /* Draft sudah disetujui, aslinya belum datang */
 .task--asli {
   border-left-color: var(--p-300);
-}
-.task-reason {
-  flex-shrink: 0;
-  width: 92px;
-  font-family: var(--font-board);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.task--late .task-reason {
-  color: var(--ts-danger);
-}
-.task--soon .task-reason {
-  color: var(--s-warn-ink);
-}
-.task--doc .task-reason {
-  color: var(--tsec-600);
-}
-.task--asli .task-reason {
-  color: var(--tp-500);
 }
 .ov-asli .stat-line-label i {
   color: var(--tp-500);
@@ -156,12 +111,6 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-}
-/* Nama barang -- baris pengenal, bukan daftar isi. Dibedakan warnanya
-   dari keterangan di atasnya supaya ketiganya terbaca bertingkat. */
-.task-goods {
-  font-size: var(--t-xs);
-  color: var(--n-600);
 }
 /* Pengatur halaman daftar tugas. */
 .task-pager {
@@ -183,8 +132,6 @@
 /* Dibungkus, bukan dipotong satu baris: "belum ada CI/PL, AWB, COO…"
    terpotong tepat di daftar yang perlu dibaca. Paling banyak dua baris. */
 .task-party {
-  font-weight: 600;
-  font-size: var(--t-base);
   color: var(--ink);
   overflow-wrap: anywhere;
 }
@@ -196,7 +143,6 @@
   overflow: hidden;
 }
 .task-detail {
-  font-size: var(--t-xs);
   color: var(--n-500);
   margin-top: 1px;
 }
@@ -205,7 +151,6 @@
 }
 .task-go {
   flex-shrink: 0;
-  color: var(--n-300);
   font-size: 0.9rem;
 }
 .task:hover .task-go {
@@ -216,12 +161,9 @@
 .agenda {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
 }
 .agenda-day {
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 9px 6px 10px;
   text-align: center;
   background: var(--surface);
   transition:
@@ -238,20 +180,9 @@
 .agenda-date {
   display: block;
 }
-.agenda-dow {
-  font-family: var(--font-board);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text-subtle);
-}
 .agenda-date {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--t-md);
   font-variant-numeric: tabular-nums;
   color: var(--n-700);
-  line-height: 1.15;
 }
 .agenda-count {
   margin-top: 5px;
@@ -262,19 +193,12 @@
   height: 20px;
   padding: 0 6px;
   border-radius: var(--r-pill);
-  font-family: var(--font-mono);
   font-size: 0.7rem;
-  font-weight: 700;
   background: var(--n-100);
   color: var(--text-subtle);
 }
 .agenda-count.has {
-  background: var(--p-500);
   color: #fff;
-}
-.agenda-day--today {
-  border-color: var(--sec-500);
-  background: var(--sec-50);
 }
 .agenda-day--today .agenda-dow {
   color: var(--tsec-700);
@@ -311,8 +235,6 @@
   font-size: 0.85rem;
 }
 .stat-line-value {
-  font-family: var(--font-display);
-  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -332,11 +254,6 @@
 /* Akurasi prediksi */
 .acc-head {
   text-align: right;
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--n-500);
   margin-bottom: 2px;
 }
 /* Label baris berupa flex: rinciannya turun ke baris kedua, sejajar
@@ -470,7 +387,6 @@
 .panel-empty {
   text-align: center;
   padding: var(--sp-8) var(--sp-4);
-  color: var(--n-500);
   font-size: var(--t-sm);
 }
 .panel-empty i {

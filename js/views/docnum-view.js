@@ -1,6 +1,6 @@
-let docNumHistoryRows = [];
-
 "use strict";
+
+let docNumHistoryRows = [];
 
 /* HALAMAN: PERMINTAAN NOMOR DOKUMEN */
 
@@ -413,10 +413,16 @@ function renderDocNumSubTabs() {
    scrollIntoView: yang terakhir juga menggulir halaman kalau barisnya
    sedang di luar layar. */
 function dnTabAktifTerlihat(baris) {
-  const aktif = baris.querySelector(".docnum-subtab.active");
-  if (aktif && baris.scrollWidth > baris.clientWidth)
-    baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
-  dnTandaiTepiTab(baris);
+  /* Diukur di bingkai berikutnya, sesudah seluruh layar No. Dokumen
+     selesai digambar: mengukur di tengah penggambaran memaksa halaman
+     ditata dua kali (±25ms tiap kali layar ini dibuka). */
+  requestAnimationFrame(() => {
+    if (!baris.isConnected) return;
+    const aktif = baris.querySelector(".docnum-subtab.active");
+    if (aktif && baris.scrollWidth > baris.clientWidth)
+      baris.scrollLeft = aktif.offsetLeft - (baris.clientWidth - aktif.offsetWidth) / 2;
+    dnTandaiTepiTab(baris);
+  });
 }
 
 /* Tepi baris tab yang masih bisa digeser memudar (docnum.css) -- tanda
@@ -646,8 +652,9 @@ function validateDocNumForm(typeKey) {
     // Isian tersembunyi tidak boleh dituntut wajib diisi.
     if (el.disabled) return;
     const nilai = String(el.value || "").trim();
+    // Sel berlabel terdekat: anak pasangan isian + tanggal (.fl-bertanggal) atau sel kisinya
     const label = (
-      el.closest(".fgrid > *")
+      el.closest(".fl-bertanggal > *, .fgrid > *")
         ?.querySelector(".form-label")
         ?.textContent || el.dataset.dn
     )
@@ -2538,7 +2545,7 @@ async function renderDocNumHistory(opsi) {
                  menampilkan nama customer di bawah judul Vendor.
                  Customer & Vendor dua pihak yang berbeda: yang satu
                  menanggung biayanya, yang lain ditagih pembayarannya. */
-              let ringkas =
+              const ringkas =
                 (jenis.key === "fund" ? p.payee : "") ||
                 p.customer ||
                 p.receiver ||

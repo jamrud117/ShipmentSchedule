@@ -18,20 +18,11 @@
   z-index: 1020;
   background: transparent;
 }
-/* Jarak antar baris dinaikkan 12 -> 18px, dan ruang di bawah bilah */
-.controlbar-inner {
-  padding-top: 14px;
-  padding-bottom: 12px;
-}
 .controlbar-box {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 15px 17px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-sm);
 }
 .controlbar-row {
   display: flex;
@@ -96,7 +87,6 @@
   height: 38px;
   padding: 0 34px 0 32px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
   font-size: var(--t-base);
   background: var(--surface);
   color: var(--ink);
@@ -157,7 +147,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
 .control-select {
   height: 38px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
   background: var(--surface);
   font-size: var(--t-base);
   color: var(--ink);
@@ -532,18 +521,12 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-sm);
-  padding: var(--sp-4) var(--sp-5);
-  gap: var(--sp-5);
   flex-wrap: wrap;
 }
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 13px;
-  flex: 1 1 180px;
   min-width: 0;
-  padding-right: var(--sp-5);
   border-right: 1px solid var(--border);
 }
 .stat-item:last-child {
@@ -551,28 +534,18 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   padding-right: 0;
 }
 .stat-icon {
-  width: 44px;
-  height: 44px;
   border-radius: var(--r-sm);
   display: grid;
   place-items: center;
-  font-size: 1.1rem;
   flex: 0 0 auto;
 }
-.stat-icon--total {
-  background: var(--p-50);
-  color: var(--tp-600);
-}
 .stat-icon--process {
-  background: var(--w-bg-fff4e0);
   color: var(--w-teks-b26a00);
 }
 .stat-icon--delayed {
-  background: var(--s-danger-bg);
   color: var(--ts-danger);
 }
 .stat-icon--arrived {
-  background: var(--w-bg-e3f6ea);
   color: var(--w-teks-1a8a4d);
 }
 .stat-text {
@@ -582,20 +555,12 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   min-width: 0;
 }
 .stat-label {
-  font-size: var(--t-sm);
-  color: var(--n-500);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .stat-value {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--ink);
   white-space: nowrap;
-}
-.stat-value span:first-child {
-  font-family: var(--font-mono);
 }
 
 /* ---- Sakelar tampilan Tabel / Kartu ---- */
@@ -649,13 +614,12 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
     padding-left: 11px;
     padding-right: 11px;
   }
-  /* Empat kartu jadi 2×2: dengan ikon + dua baris teks, empat kartu
-     berdampingan di lebar ini membuat tiap kartu terlalu sempit dan
-     labelnya terpotong. */
+  /* Empat kartu jadi 2×2 (kisi & sekatnya di css/desain.css, bagian G):
+     dengan ikon + dua baris teks, empat kartu berdampingan di lebar ini
+     membuat tiap kartu terlalu sempit dan labelnya terpotong. Garis kanan
+     hanya untuk kolom kiri kisi -- dipasang di desain.css. */
   .stat-item {
-    flex: 1 1 calc(50% - var(--sp-5));
     border-right: 0;
-    padding-right: 0;
   }
 }
 
@@ -738,7 +702,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
      berbagi baris -- menciutkannya jadi ikon di sana cuma membuat
      kotaknya sempit tanpa alasan. */
   .controlbar .search-box {
-    flex: 0 0 44px;
     width: 44px;
     min-width: 0;
     max-width: none;
@@ -769,7 +732,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
      kotak ikon 44px -- sementara teksnya, yang di sini disembunyikan
      lewat ID khusus Jadwal, meluber keluar kotak itu. */
   .controlbar .date-range-picker {
-    flex: 0 0 auto;
     margin-left: 0;
   }
   .controlbar .date-range-trigger:not(.has-value) #dateRangeTriggerText,
@@ -965,7 +927,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  margin: var(--sp-8) 0 var(--sp-3);
 }
 .date-section:first-of-type {
   margin-top: var(--sp-4);
@@ -974,11 +935,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--t-sm);
-  letter-spacing: 0.02em;
-  color: var(--tp-700);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1001,9 +957,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   display: none;
 }
 .date-section-count {
-  font-family: var(--font-mono);
-  font-size: var(--t-xs);
-  color: var(--n-500);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1107,33 +1060,9 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
     width: 100%;
     text-align: center;
   }
-  /* Satu kolom penuh: 2×2 pada 576-767px sudah pas, tapi di bawah itu
-     ikon + dua baris teks kembali berdesakan dalam setengah lebar. */
-  /* TETAP 2x2, bukan satu kolom -- empat kartu bertumpuk memakan
-     hampir setinggi layar sebelum satu jadwal pun terlihat. Ikon &
-     jaraknya yang dikecilkan supaya dua kolom tetap muat di 360px. */
-  .stats-bar-inner {
-    padding: var(--sp-3);
-    gap: var(--sp-3);
-  }
-  .stat-item {
-    flex: 1 1 calc(50% - var(--sp-3));
-    border-right: 0;
-    padding-right: 0;
-    gap: 9px;
-  }
-  .stat-icon {
-    width: 34px;
-    height: 34px;
-    font-size: 0.9rem;
-  }
-  .stat-value {
-    font-size: 1rem;
-  }
-  .stat-item:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
+  /* Bilah ringkasan TETAP 2x2 di ponsel, bukan satu kolom -- empat kartu
+     bertumpuk memakan hampir setinggi layar sebelum satu jadwal pun
+     terlihat. Jarak & ukuran angkanya di css/desain.css (bagian G). */
 }
 
 /* KEADAAN LAYAR: memuat, kosong, gagal */
@@ -1182,41 +1111,116 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   color: var(--tp-600);
 }
 
-/* Kerangka muat: meniru bentuk baris manifes supaya tata letaknya */
+/* KERANGKA MUAT -- meniru kartu jadwal (judul & status, jalur, tiga
+   tanggal, progres dokumen) dan MENGISI LAYAR sampai tepi bawah.
+
+   Wadahnya (.skeleton-list) setinggi sisa layar dari tempatnya mulai
+   (--kerangka-atas, dipasang showLoadingSkeleton() di js/data/api.js);
+   kartu terakhir terpotong di tepi bawah seperti daftar yang berlanjut,
+   dan kaki halaman baru tampak setelah jadwalnya datang. 240px = batas
+   bawah untuk layar yang sangat pendek. */
+.skeleton-list {
+  height: max(240px, calc(100vh - var(--kerangka-atas, 0px)));
+  height: max(240px, calc(100dvh - var(--kerangka-atas, 0px)));
+  overflow: hidden;
+}
 .skeleton-card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
   border-radius: var(--r-lg);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-2);
+  padding: 18px 22px 16px;
 }
-.skeleton-line {
-  height: 10px;
-  border-radius: var(--r-pill);
+.skeleton-card + .skeleton-card {
+  margin-top: 12px;
+}
+.skeleton-line,
+.skeleton-pill,
+.skeleton-lane,
+.skeleton-dot {
   background: linear-gradient(
     90deg,
-    var(--n-100) 25%,
-    var(--n-200) 37%,
-    var(--n-100) 63%
+    var(--kerangka) 25%,
+    var(--kerangka-kilau) 37%,
+    var(--kerangka) 63%
   );
   background-size: 400% 100%;
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
-.skeleton-line + .skeleton-line {
-  margin-top: 9px;
+.skeleton-line {
+  height: 10px;
+  border-radius: var(--r-pill);
+}
+.skeleton-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-4);
+}
+.skeleton-top > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .skeleton-line--title {
-  width: 38%;
-  height: 13px;
+  width: min(320px, 70%);
+  height: 14px;
 }
-.skeleton-line--wide {
-  width: 82%;
+.skeleton-line--sub {
+  width: min(240px, 50%);
+  margin-top: 10px;
 }
-.skeleton-line--mid {
-  width: 58%;
+.skeleton-pill {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 30px;
+  border-radius: var(--r-pill);
 }
-.skeleton-line--short {
-  width: 30%;
+.skeleton-lane {
+  height: 3px;
+  margin: 26px 0 22px;
+  border-radius: var(--r-pill);
+}
+.skeleton-dates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 200px));
+  gap: 10px 24px;
+}
+.skeleton-date .skeleton-line:first-child {
+  width: 46px;
+  height: 8px;
+}
+.skeleton-date .skeleton-line + .skeleton-line {
+  width: 112px;
+  height: 14px;
+  margin-top: 9px;
+}
+.skeleton-steps {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.skeleton-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+/* Ponsel: dua tanggal sebaris (seperti kartunya) & lima titik progres */
+@media (max-width: 575.98px) {
+  .skeleton-card {
+    padding: 14px 14px 12px;
+  }
+  .skeleton-dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .skeleton-date:nth-child(3) {
+    display: none;
+  }
+  .skeleton-dot:nth-child(n + 6) {
+    display: none;
+  }
 }
 @keyframes skeleton-pulse {
   0% {
@@ -1227,7 +1231,10 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeleton-line {
+  .skeleton-line,
+  .skeleton-pill,
+  .skeleton-lane,
+  .skeleton-dot {
     animation: none;
   }
 }
@@ -1235,15 +1242,12 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
 /* Label bagian di atas daftar + jumlah hasil. */
 .list-head {
   display: flex;
-  align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-3);
-  margin: var(--sp-6) 0 var(--sp-2);
   flex-wrap: wrap;
 }
 
 .filter-note {
-  font-size: var(--t-sm);
   color: var(--n-500);
   display: inline-flex;
   align-items: center;
@@ -1281,10 +1285,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-display);
-  font-size: var(--t-lg);
-  font-weight: 800;
-  letter-spacing: -0.01em;
   color: var(--tp-700);
   margin: 0;
 }
@@ -1295,9 +1295,5 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   height: 24px;
   padding: 0 8px;
   border-radius: var(--r-pill);
-  background: var(--p-600);
-  color: #fff;
-  font-family: var(--font-mono);
   font-size: var(--t-xs);
-  font-weight: 700;
 }

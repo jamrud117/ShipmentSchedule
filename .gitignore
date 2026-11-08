@@ -1,0 +1,116 @@
+# ==================================================================
+#  .gitignore — ShipmentSchedule
+#
+#  Yang TIDAK boleh ikut ke GitHub: kunci & sandi, salinan data
+#  database, dokumen kerja perusahaan, dan sampah alat kerja.
+#
+#  PENTING
+#  - js/config.js TETAP di-commit. Isinya SUPABASE_URL + kunci
+#    PUBLISHABLE (sb_publishable_…) yang memang terkirim ke setiap
+#    peramban; tanpa berkas itu situs GitHub Pages tidak jalan.
+#    Penjaga data adalah RLS di database (migration-keamanan.sql),
+#    bukan kerahasiaan kunci itu.
+#  - Kunci service_role / sb_secret_… dan sandi database TIDAK BOLEH
+#    ditulis di berkas mana pun di repositori ini (termasuk js/) —
+#    kunci itu menembus seluruh RLS. Simpan di pengelola sandi.
+#  - .gitignore hanya menahan berkas yang BELUM pernah di-commit.
+#    Berkas rahasia yang terlanjur ter-push: `git rm --cached <berkas>`,
+#    commit, LALU ganti kuncinya di Supabase — riwayat git tetap
+#    menyimpan salinan lamanya.
+# ==================================================================
+
+# ---------- Kunci, sandi & berkas lingkungan ----------
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ecdsa*
+id_ed25519*
+*.secret
+*.secrets
+secrets/
+credentials*
+*.credentials
+*-credentials.*
+service-account*.json
+*-service-account.json
+.npmrc
+.netrc
+.pgpass
+.git-credentials
+
+# Supabase CLI: token login, tautan proyek & cabang lokal
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.*
+.supabase/
+
+# Konfigurasi pribadi per komputer (bila kelak dipakai), mis. js/config.local.js
+*.local.js
+*.local.json
+
+# ---------- Salinan database ----------
+# Dump / cadangan berisi DATA. Berkas migrasi (migration-*.sql,
+# schema-migration.sql, auth-roles-migration.sql, qa/*.sql) tetap di-commit.
+*.dump
+*.backup
+*.bak
+dump*.sql
+*-dump.sql
+*_dump.sql
+backup*.sql
+cadangan*.sql
+skema*.sql
+# Hasil "Export -> Download CSV" dari SQL Editor / ekspor data lain
+*.csv
+
+# ---------- Dokumen kerja yang tak sengaja tersimpan di folder proyek ----------
+# Invoice, PIB/PEB, CIPL, B/L, Pengajuan Dana, hasil unduhan Excel/Word.
+# Semua templat & cetakan aplikasi dibuat oleh kode, bukan berkas.
+*.pdf
+*.xls
+*.xlsx
+*.xlsm
+*.doc
+*.docx
+*.msg
+*.eml
+*.zip
+*.rar
+*.7z
+
+# ---------- QA: uji & fixture ----------
+# qa/fixtures & qa/fixture-*.json berisi teks dokumen ASLI (invoice DHL,
+# FedEx, Prime, WIDE, billing DJBC, CIPL): NPWP, nomor rekening & virtual
+# account, email staf vendor. GitHub Pages menerbitkan SETIAP berkas yang
+# di-commit ke internet, dan folder ini tidak dibutuhkan situsnya -- jadi
+# seluruh qa/ tinggal di komputer (tetap ada di paket zip untuk menjalankan
+# uji & skrip SQL keamanan).
+qa/
+
+# ---------- Alat uji & paket ----------
+node_modules/
+coverage/
+test-results/
+playwright-report/
+.cache/
+*.log
+npm-debug.log*
+
+# ---------- Sistem operasi & editor ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

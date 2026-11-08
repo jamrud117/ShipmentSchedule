@@ -231,6 +231,108 @@ function pilihKedatanganSekapal(cocok) {
   return { date: tanggal, confirmed: pasti.length > 0 };
 }
 
+/* ------------------------------------------------------------------
+   ETA DARI KAPAL YANG SAMA -- untuk ETA OTOMATIS (predictEta)
+
+   Kiriman lain di kapal + voyage + pelabuhan tujuan yang sama tiba pada
+   hari yang sama -- impor maupun ekspor. Kalau salah satunya sudah
+   punya angka yang lebih kuat daripada tabel rute, kiriman ber-ETA
+   otomatis ikut memakainya:
+     tiba      ATA / tahap Sandar sudah dikonfirmasi (fakta)
+     ETA       ETA MANUAL -- angka dari forwarder (arrival notice,
+               jadwal kapal), bukan hitungan mesin
+   Syarat kapal yang sama (sekapalCocok) sama ketatnya dengan bukti
+   kedatangan di atas: nama kapal + voyage + ETD berdekatan, bukan rute
+   Transit, bukan kurir. Yang dibaca riwayat yang berlaku
+   (predictionHistory), jadi uji mundur tidak bisa mengintip ETA
+   kiriman yang baru diketahui sesudah ETD kiriman yang diuji.
+------------------------------------------------------------------ */
+const KUNCI_ETA_SEKAPAL = new WeakMap();
+function kunciEtaSekapal(s) {
+  if (!s || typeof s !== "object") return null;
+  const gen = typeof GENERASI_BELAJAR !== "undefined" ? GENERASI_BELAJAR : 0;
+  const ada = KUNCI_ETA_SEKAPAL.get(s);
+  if (ada && ada.gen === gen) return ada.k;
+  let k = null;
+  if (s.transport !== "udara") {
+    const kurir = typeof isKurirEkspres === "function" && (isKurirEkspres(s.vessel) || isKurirEkspres(s.forwarder));
+    const tujuan = typeof resolvePortCode === "function" ? resolvePortCode(s.destination) : "";
+    const kapal = kunciKapalTeks(s.vessel);
+    const voyage = kunciVoyageTeks(s.voyage);
+    const etd = s.etdUpdate || s.etd || "";
+    const etdHari = etd ? nomorHariISO(etd) : null;
+    if (!kurir && tujuan && kapal && etdHari != null && s.routeType !== "transit") {
+      k = { udara: false, tujuan, kapal, voyage, etd, etdHari, grup: "E|" + kapal + "|" + tujuan };
+    }
+  }
+  KUNCI_ETA_SEKAPAL.set(s, { gen, k });
+  return k;
+}
+
+function buktiEtaSendiri(s) {
+  const tiba = s.ata || milestoneDateOf(s, "berth");
+  if (tiba) return { date: tiba, confirmed: true };
+  if (typeof etaModeOf === "function" && etaModeOf(s) === "manual") {
+    const eta = s.etaUpdate || s.eta;
+    if (eta) return { date: eta, confirmed: false };
+  }
+  return null;
+}
+
+const INDEKS_ETA_TIRUAN = new WeakMap();
+const INDEKS_ETA_HIDUP = { gen: -1, peta: null };
+function indeksEtaSekapal() {
+  const gen = typeof GENERASI_BELAJAR !== "undefined" ? GENERASI_BELAJAR : 0;
+  const tiruan = typeof PREDICTION_HISTORY_OVERRIDE !== "undefined" ? PREDICTION_HISTORY_OVERRIDE : null;
+  const susun = (daftar) => {
+    const peta = new Map();
+    (daftar || []).forEach((x) => {
+      const k = kunciEtaSekapal(x);
+      const bukti = k && buktiEtaSendiri(x);
+      const hari = bukti && nomorHariISO(bukti.date);
+      if (hari == null) return;
+      if (!peta.has(k.grup)) peta.set(k.grup, []);
+      peta.get(k.grup).push({ s: x, k, bukti, hari });
+    });
+    return peta;
+  };
+  if (tiruan) {
+    const ada = INDEKS_ETA_TIRUAN.get(tiruan);
+    if (ada && ada.gen === gen) return ada.peta;
+    const peta = susun(tiruan);
+    INDEKS_ETA_TIRUAN.set(tiruan, { gen, peta });
+    return peta;
+  }
+  if (INDEKS_ETA_HIDUP.peta && INDEKS_ETA_HIDUP.gen === gen) return INDEKS_ETA_HIDUP.peta;
+  INDEKS_ETA_HIDUP.peta = susun(typeof predictionHistory === "function" ? predictionHistory() : []);
+  INDEKS_ETA_HIDUP.gen = gen;
+  return INDEKS_ETA_HIDUP.peta;
+}
+
+/* { date, confirmed, n, sumber } atau null. `etdAcuan`: tanggal berangkat
+   yang dipakai menghitung -- bukti sebelum itu, atau lebih dari 120 hari
+   sesudahnya, dianggap salah ketik dan diabaikan. */
+function etaSekapal(s, etdAcuan) {
+  const k = kunciEtaSekapal(s);
+  if (!k) return null;
+  const kelompok = indeksEtaSekapal().get(k.grup);
+  if (!kelompok) return null;
+  const mulai = nomorHariISO(etdAcuan || k.etd);
+  const cocok = kelompok.filter((x) => {
+    if (x.s === s || (s.id && x.s.id === s.id) || !sekapalCocok(k, x.k)) return false;
+    return mulai == null || (x.hari >= mulai && x.hari <= mulai + 120);
+  });
+  if (!cocok.length) return null;
+  const pasti = cocok.filter((x) => x.bukti.confirmed);
+  const pilih = pasti.length ? pasti : cocok;
+  // Tanggal yang paling sering disebut; seri -> yang paling awal
+  const hitung = new Map();
+  pilih.forEach((x) => hitung.set(x.bukti.date, (hitung.get(x.bukti.date) || 0) + 1));
+  const tanggal = [...hitung.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
+  const sumber = pilih.find((x) => x.bukti.date === tanggal).s;
+  return { date: tanggal, confirmed: pasti.length > 0, n: pilih.length, sumber };
+}
+
 /* Jeda BC 1.1 -> kapal benar-benar sandar, dalam hari kalender. BC 1.1
    wajib diserahkan paling lambat 24 jam SEBELUM kapal tiba (laut) atau
    sebelum pesawat mendarat (udara), jadi tanggal Manifest hampir selalu

@@ -165,6 +165,28 @@ const SAMAKAN_KOLOM = {
         else it[k] = lama[k];
       }),
   },
+  // Tarif BM per barang (tarif-hs.js, item.dataPabean.tarifBm): disamakan = isian sendiri
+  tarifBm: {
+    label: () => tt("Tarif BM (%)", "Duty Rate (%)"),
+    otomatis: false,
+    ada: bukuImport,
+    kunci: (it) => {
+      const n = tarifBmBarang(it);
+      return n == null ? "" : String(n);
+    },
+    salin: (it) => tarifBmBarang(it),
+    tampil: (it) => `${formatNumberValue(tarifBmBarang(it)) || "0"}%`,
+    pasang: (it, v) => {
+      pasangTarifBmBarang(it, v);
+      delete it._tarifOtomatis;
+    },
+    simpan: (it) => ({ tarif: tarifBmBarang(it), auto: it._tarifOtomatis }),
+    pulihkan: (it, lama) => {
+      pasangTarifBmBarang(it, lama.tarif);
+      if (lama.auto === undefined) delete it._tarifOtomatis;
+      else it._tarifOtomatis = lama.auto;
+    },
+  },
   kodeBarang: kolomTeksSamakan("kodeBarang", () => tt("Kode Barang", "Item Code"), "pintar"),
   namaBarang: kolomTeksSamakan("namaBarang", () => tt("Uraian", "Description"), false),
   merek: kolomTeksSamakan("merek", () => tt("Merek", "Brand"), "pintar"),

@@ -151,12 +151,18 @@ async function refreshShipmentPrediction(s, opsi) {
    ulang. Panggil SESUDAH refreshShipmentPrediction(s) -- riwayatnya
    sudah disegarkan di sana. Hasil: kiriman yang berubah. */
 async function segarkanKirimanSekapal(s) {
+  /* Dua jenis "kapal yang sama": bukti kedatangan impor (kunciSekapal)
+     dan ETA bersama impor/ekspor (kunciEtaSekapal) -- ETA manual yang
+     baru diketik ikut menggeser ETA otomatis kiriman sekapalnya. */
   const k = kunciSekapal(s);
-  if (!k) return [];
+  const ke = typeof kunciEtaSekapal === "function" ? kunciEtaSekapal(s) : null;
+  if (!k && !ke) return [];
   const lain = semuaKiriman().filter((x) => {
     if (!x || x === s || (s.id && x.id === s.id)) return false;
-    const kx = kunciSekapal(x);
-    return !!kx && kx.grup === k.grup && sekapalCocok(k, kx);
+    const kx = k && kunciSekapal(x);
+    if (kx && kx.grup === k.grup && sekapalCocok(k, kx)) return true;
+    const kex = ke && kunciEtaSekapal(x);
+    return !!kex && kex.grup === ke.grup && sekapalCocok(ke, kex);
   });
   const berubah = [];
   for (const x of lain) {

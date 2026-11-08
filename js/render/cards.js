@@ -82,27 +82,29 @@ function delayDeltaText(baseline, update, basis) {
 /* Tampil saat status DELAY, dan juga selama tanggal revisinya masih
    terisi walau statusnya sudah bukan Delay: tanggal itulah yang
    berlaku, jadi tidak boleh tersembunyi (aturan 1 di core/status.js). */
+/* Isinya sebaris dengan baris tanggal di atasnya (kisi kolom yang sama,
+   css/card.css): Update ETD tepat di bawah ETD, Update ETA di bawah ETA.
+   Selisihnya terhadap rencana ditulis di bawah tanggalnya, seperti
+   keterangan tanggal lain di kartu. */
 function delayStripHtml(s) {
   const delay = s.status === "delayed";
   if (!delay && !adaRevisiJadwal(s)) return "";
+  const kotak = (kolom, label, rencana, basis) => `
+        <div class="date-field">
+          <label for="${idTglKartu(s, kolom)}">${label}</label>
+          <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${atributKendaliKartu("readonly")}>
+          <div class="date-caption">${delayDeltaText(rencana, s[kolom], basis)}</div>
+        </div>`;
   return `
     <div class="delay-strip${delay ? "" : " delay-strip--sisa"}">
       <div class="delay-strip-head">
-        <i class="bi bi-clock-history"></i> ${
+        <i class="bi bi-clock-history" aria-hidden="true"></i> ${
           delay
             ? tt("Tanggal Update Delay", "Delay Update Dates")
             : tt("Tanggal revisi yang masih berlaku — mengubah ETD/ETA di atas menggantikannya", "Revised dates still in force — changing ETD/ETA above replaces them")
         }
       </div>
-      <div class="delay-strip-fields">
-        <div class="date-field">
-          <label for="${idTglKartu(s, "etdUpdate")}">${tt("Update ETD", "Updated ETD")} ${delayDeltaText(s.etd, s.etdUpdate, "ETD")}</label>
-          <input type="date" id="${idTglKartu(s, "etdUpdate")}" value="${s.etdUpdate || ""}" data-action="date" data-field="etdUpdate" data-id="${s.id}">
-        </div>
-        <div class="date-field">
-          <label for="${idTglKartu(s, "etaUpdate")}">${tt("Update ETA", "Updated ETA")} ${delayDeltaText(s.eta, s.etaUpdate, "ETA")}</label>
-          <input type="date" id="${idTglKartu(s, "etaUpdate")}" value="${s.etaUpdate || ""}" data-action="date" data-field="etaUpdate" data-id="${s.id}">
-        </div>
+      <div class="delay-strip-fields">${kotak("etdUpdate", tt("Update ETD", "Updated ETD"), s.etd, "ETD")}${kotak("etaUpdate", tt("Update ETA", "Updated ETA"), s.eta, "ETA")}
       </div>
     </div>`;
 }
@@ -172,16 +174,17 @@ function tagPiHtml(s) {
   return n ? `<span class="tag tag-pi"><i class="bi bi-file-earmark-check"></i> PI${n > 1 ? ` × ${n}` : ""}</span>` : "";
 }
 
-function buildTags(s, totals) {
+/* Lencana FASILITAS & DOKUMEN: rute transit, PI, SKB/COO.
+
+   Incoterm & nilai invoice tidak lagi lencana lepas: keduanya keterangan
+   invoice, jadi ditulis di bawah nomor invoice (cardBodySplitHtml) --
+   "CIF · $34,740" terbaca sebagai nilai invoice itu, bukan dua tanda
+   yang harus ditebak artinya. Jenis muatan (FCL/LCL) begitu pula, di sel
+   kontainer. */
+function buildTags(s) {
   const lbl = ML();
   const stopCount = routeStopList(s).length;
-  const muatan = muatanKiriman(s);
   return [
-    s.incoterm ? `<span class="tag">${escapeHtml(s.incoterm)}</span>` : "",
-    totals.totalUSD
-      ? `<span class="tag tag-usd">${fmtUSD(totals.totalUSD)}</span>`
-      : "",
-    muatan ? `<span class="tag tag-muatan">${escapeHtml(muatan)}</span>` : "",
     isTransitRoute(s)
       ? `<span class="tag tag-transit"><i class="bi bi-signpost-split"></i> Transit · ${stopCount} Stop</span>`
       : "",
@@ -216,6 +219,16 @@ function actionButtons(s) {
    dan tiap jadwal hanya punya satu kartu di halaman. */
 const idTglKartu = (s, kolom) => "tgl-" + String(s.id).replace(/[^\w-]/g, "") + "-" + String(kolom).replace(/[^\w-]/g, "");
 
+/* KONTROL KARTU BAGI PERAN BACA-SAJA (viewer, marketing, finance): tanggal
+   readonly & status disabled SEJAK DIGAMBAR -- tiap penggambaran ulang
+   membawanya lagi. Dulu hanya disamarkan CSS (pointer-events: none):
+   kotaknya tetap bisa difokus lewat labelnya atau Tab, lalu ikon kalender
+   tergambar berulang memenuhi kotak, tanggal bisa diketik, dan status
+   bisa diganti dengan panah papan ketik -- ditolak requireEdit(), tapi
+   pilihan yang salah tetap tampil sampai penggambaran berikutnya.
+   Tanggal hanya-baca dilewati Tab (tabindex -1): nilai, bukan isian. */
+const atributKendaliKartu = (atribut) => (canEdit() ? "" : atribut === "readonly" ? ' readonly tabindex="-1"' : " " + atribut);
+
 // Dropdown status di kartu: pilihannya mengikuti section aktif (requirement D)
 function statusSelectHtml(s) {
   /* Yang ditampilkan status EFEKTIF: begitu tanggal Actual Delivery
@@ -223,7 +236,7 @@ function statusSelectHtml(s) {
      database belum sempat diperbarui */
   const st = effectiveStatus(s);
 
-  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}" aria-label="${escapeAttr(tt("Status pengiriman", "Shipment status"))}">
+  return `<select class="status-select ${statusClass(st)}" data-action="status" data-id="${s.id}" aria-label="${escapeAttr(tt("Status pengiriman", "Shipment status"))}"${atributKendaliKartu("disabled")}>
       ${statusOptionsHtml(activeMode, st)}
     </select>`;
 }
@@ -261,7 +274,13 @@ function cardBodySplitHtml(s, totals) {
         escapeHtml(dispVal(carrierNameFromShipment(s)))
       }</div></div>
       ${infoKontainerHtml(s)}
-      <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}</div></div>
+      <div class="info-item"><div class="info-label"><i class="bi bi-receipt-cutoff"></i> Invoice</div><div class="info-value">${escapeHtml(dispVal(s.invoice))}${
+        /* Incoterm & nilai invoice di bawah nomornya: "CIF · $34,740". */
+        (() => {
+          const ket = [s.incoterm ? escapeHtml(s.incoterm) : "", totals.totalUSD ? fmtUSD(totals.totalUSD) : ""].filter(Boolean).join(" · ");
+          return ket ? `<br><span class="muted-value info-nilai-invoice">${ket}</span>` : "";
+        })()
+      }</div></div>
       <div class="info-item"><div class="info-label"><i class="bi bi-file-earmark-text"></i> ${s.transport === "udara" ? "House AWB" : "House B/L"}</div><div class="info-value">${escapeHtml(dispVal(s.houseBL))}</div></div>
       ${
         /* Import: No. Kendaraan menumpang di sel In Factory (truk yang
@@ -291,18 +310,174 @@ function cardBodySplitHtml(s, totals) {
     </div>`;
 }
 
-function renderExpandedCard(s) {
+/* ------------------------------------------------------------------
+   TANGGAL KUNCI DI KARTU — ETD, ETA, Estimated Delivery / Stuffing
+
+   Tampil sebagai NILAI, bukan kotak isian (kelas kt-nilai, css/date-
+   input.css): tanpa bingkai, latar tipis saat disorot, bingkai fokus
+   saat diketik. Tetap bisa diketik dalam format apa pun dan tetap punya
+   kalender (js/ui/date-input.js).
+
+   Di bawah tiap tanggal satu baris keterangan: hari (dan jam), lalu --
+   khusus akun penyunting -- dari mana angkanya: "Auto · ETD + 11 hari",
+   "Manual", sumber & keyakinan Estimated Delivery. Dulu keterangan itu
+   lencana AUTO ETA / MANUAL berwarna di label dan pita kuningan
+   tersendiri yang mengulang Estimated Delivery sekali lagi.
+------------------------------------------------------------------ */
+
+/* "Sel" / "Tue", dengan jam kalau terisi: "Sel · 09:15". Hari penting
+   bagi orang yang merencanakan: ETA hari Sabtu berarti clearance Senin. */
+function hariTanggalKartu(iso, jam) {
+  const d = iso ? parseLocalDate(iso) : null;
+  if (!d) return "";
+  const hari = tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", { weekday: "short" });
+  return jam ? `${hari} · ${jam}` : hari;
+}
+
+function hariKartuHtml(iso, jam) {
+  const teks = hariTanggalKartu(iso, jam);
+  return teks ? `<span class="date-hari">${escapeHtml(teks)}</span>` : "";
+}
+
+/* ETA: Auto = ETD + lama transit dari mesin; Manual = angka yang diketik
+   (biasanya dari forwarder). */
+function keteranganEtaKartu(s) {
+  if (!etaPredictionAppliesTo(s) || !tampilkanMekanikaPrediksi()) return "";
+  const mode = etaModeOf(s);
+  if (mode === "manual") return `<span class="date-ket">${etaModeChipHtml(mode)}</span>`;
+  const e = predictEta(s);
+  if (!e.ok) return `<span class="date-ket">${etaModeChipHtml(mode)} ${escapeHtml(e.reason)}</span>`;
+  /* ETA ikut kiriman lain di kapal yang sama (etaSekapal): disebut, dan
+     dari kiriman mana, supaya angka yang "beda dari tabel" bisa
+     ditelusuri. */
+  if (e.sekapal) {
+    const asal = e.sekapal.sumber || {};
+    const judul = `${e.ruleLabel}: ${[asal.party, carrierNameFromShipment(asal)].filter(Boolean).join(" · ")}`;
+    return `<span class="date-ket" title="${escapeAttr(judul)}">${etaModeChipHtml(mode)} ${escapeHtml(tt("ikut kapal yang sama", "same vessel"))}</span>`;
+  }
+  /* "ETD + 10 hari", di panel sempit cukup "+10 hari" (css/card.css) --
+     keterangan tetap sebaris dengan harinya. */
+  const n = e.hasRange ? `${e.daysMin}–${e.daysMax}` : `${e.days}`;
+  const satuan = e.days === 1 && !e.hasRange ? tt("hari", "day") : tt("hari", "days");
+  const judul = tt(`ETA = ETD + ${n} hari perjalanan`, `ETA = ETD + ${n} ${satuan} in transit`);
+  return `<span class="date-ket" title="${escapeAttr(judul)}">${etaModeChipHtml(mode)} <span class="date-ket-lengkap">ETD + ${n} ${satuan}</span><span class="date-ket-ringkas" aria-hidden="true">+${n} ${satuan}</span></span>`;
+}
+
+function kotakTanggalKartu(s, kolom, label, opsi) {
+  const o = opsi || {};
+  const kelas = ["date-field", o.kelas || ""].filter(Boolean).join(" ");
+  return `<div class="${kelas}">
+        <label for="${idTglKartu(s, kolom)}">${label}</label>
+        <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${atributKendaliKartu("readonly")}>
+        <div class="date-caption">${hariKartuHtml(s[kolom], o.jam)}${o.keterangan || ""}</div>
+      </div>`;
+}
+
+function dateStripHtml(s) {
   const lbl = ML();
+  const etaAuto = etaPredictionAppliesTo(s) && etaModeOf(s) === "auto";
+  const prediksiDelivery = deliveryPredictionAppliesTo(s);
+  const deliveryManual = prediksiDelivery && deliveryModeOf(s) === "manual";
+  return `
+    <div class="date-strip">
+      ${kotakTanggalKartu(s, "etd", "ETD", { jam: s.etdTime })}
+      ${kotakTanggalKartu(s, "eta", "ETA", { jam: s.etaTime, keterangan: keteranganEtaKartu(s), kelas: etaAuto ? "date-field--auto" : "" })}
+      ${
+        /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
+           sini mengunci tanggalnya ke mode Manual. Kalau terpikir
+           menguncinya supaya tidak ada dua sumber kebenaran: laporan
+           butuh tanggal yang bisa dipatok, dan mode Manual itulah
+           jawabannya. Di Export kolom ini Stuffing -- fakta milik
+           pengguna, tanpa keterangan mesin. */
+        kotakTanggalKartu(s, "actual", lbl.actual, {
+          keterangan: prediksiDelivery ? predictionStripHtml(s) : "",
+          kelas: deliveryManual ? "date-field--pinned" : prediksiDelivery ? "date-field--auto" : "",
+        })
+      }
+      ${barangRingkasHtml(s)}
+    </div>`;
+}
+
+/* NAMA BARANG DI SAMPING TANGGAL -- khusus tampilan Ringkas.
+
+   Ringkas melipat rincian kartu (.ship-body-split), termasuk daftar nama
+   barang di kanannya -- padahal nama barang itulah yang dipakai mengenali
+   jadwal sekali pandang ("yang mold HA52"). Jadi di Ringkas namanya pindah
+   ke kanan baris tanggal: kolom keempat di layar lebar, di samping
+   Estimated Delivery (kisi 2x2) di panel sempit (css/desain.css, bagian
+   KEPADATAN DAFTAR). Di Nyaman blok ini disembunyikan -- namanya sudah
+   tampil di rincian. Paling banyak dua nama + "+n lainnya"; daftar
+   lengkapnya di tooltip. Kartu selesai memakai blok yang sama
+   (collapsedDatesHtml). */
+const BARANG_RINGKAS_MAKS = 2;
+function barangRingkasHtml(s) {
+  const semua = (s.items || []).map((it) => itemDisplayName(it)).filter(Boolean);
+  const sisa = semua.length - BARANG_RINGKAS_MAKS;
+  const isi = semua.length
+    ? semua.slice(0, BARANG_RINGKAS_MAKS).map((n) => `<div>${escapeHtml(n)}</div>`).join("") +
+      (sisa > 0 ? `<div class="date-barang-lagi">${tt(`+${sisa} lainnya`, `+${sisa} more`)}</div>` : "")
+    : "<div>—</div>";
+  // Nama panjang dipotong dua baris (css/card.css): daftar utuhnya di tooltip
+  const judul = semua.length ? ` title="${escapeAttr(semua.join("\n"))}"` : "";
+  return `<div class="date-barang"${judul}>
+        <div class="date-barang-label">${t("f.nama.barang")}</div>
+        <div class="date-barang-isi">${isi}</div>
+      </div>`;
+}
+
+/* PERJALANAN — jalur, tanggal kunci, keberangkatan hari ini, revisi
+   delay dalam SATU panel: semuanya menjawab "kapan & di mana". */
+function shipJourneyHtml(s) {
+  return `
+    <div class="ship-journey">
+      <div class="lane">
+        ${buildLaneHtml(s)}
+      </div>
+      ${dateStripHtml(s)}
+      ${departingTodayHtml(s)}
+      ${delayStripHtml(s)}
+    </div>`;
+}
+
+/* Yang menuntut perhatian -- telat dari jadwal, kebutuhan pabrik,
+   lartas yang belum ada -- tepat di bawah judul, bukan di antara
+   lencana keterangan. */
+function cardAlertsHtml(s) {
+  const isi = `${delayBadgeHtml(s)}${tagKebutuhanHtml(s)}${tagLartasHtml(s)}`;
+  return isi ? `<div class="ship-alerts">${isi}</div>` : "";
+}
+
+/* LENCANA + PROGRES DOKUMEN dalam satu wadah (.ship-dokumen). Di Nyaman
+   tampilannya tidak berubah: lencana, lalu progres bergaris atas. Di
+   Ringkas wadahnya jadi kisi -- lencana di KIRI dan hitungan progres
+   ("6 / 9 · 1 draft · Berikutnya: Billing") di KANAN pada satu baris,
+   stepper di bawahnya; garis tipis memisahkan baris ini dari baris
+   tanggal dan dari stepper. Dulu keduanya menumpuk rapat di kiri di bawah
+   ETD. */
+function cardDokumenHtml(s, lencana, kelasLencana) {
+  const progres = docStepHtml(s);
+  if (!lencana && !progres) return "";
+  return `<div class="ship-dokumen">${lencana ? `<div class="${kelasLencana}">${lencana}</div>` : ""}${progres}</div>`;
+}
+
+/* Nomor dokumen & No. Aju: label huruf biasa, nomornya monospace. */
+function cardRefsHtml(s) {
+  const lbl = ML();
+  return `<div class="po-code"><span class="po-ref"><span class="po-ref-label">${lbl.docNo}:</span> ${escapeHtml(dispVal(s.docNo))}</span><span class="po-ref"><span class="po-ref-label">No. Aju:</span> ${escapeHtml(dispVal(s.noAju))}</span></div>`;
+}
+
+function renderExpandedCard(s) {
   const totals = itemTotals(s);
   const itemCount = (s.items || []).length;
+  const lencana = buildTags(s);
 
   return `
   <div class="ship-card ship-card--${effectiveStatus(s)}" data-id="${s.id}">
     <div class="ship-card-top">
       <div class="ship-title-block">
-                <div class="ship-title-text">
-          <div class="item-name">${escapeHtml(dispVal(s.party))} · ${itemCount} ${itemCount === 1 ? tt("Barang", "Item") : t("f.barang")}</div>
-          <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;•&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))}</div>
+        <div class="ship-title-text">
+          <div class="item-name">${escapeHtml(dispVal(s.party))}<span class="item-count"> · ${itemCount} ${itemCount === 1 ? tt("Barang", "Item") : t("f.barang")}</span></div>
+          ${cardRefsHtml(s)}
         </div>
       </div>
       <div class="ship-actions-block">
@@ -310,32 +485,10 @@ function renderExpandedCard(s) {
         ${actionButtons(s)}
       </div>
     </div>
-
-${cardBodySplitHtml(s, totals)}
-
-    <div class="tag-row">${delayBadgeHtml(s)}${tagKebutuhanHtml(s)}${tagLartasHtml(s)}${buildTags(s, totals)}</div>
-
-    <div class="lane">
-      ${buildLaneHtml(s)}
-    </div>
-
-    <div class="date-strip">
-      <div class="date-field"><label for="${idTglKartu(s, "etd")}">ETD</label><input type="date" id="${idTglKartu(s, "etd")}" value="${s.etd || ""}" data-action="date" data-field="etd" data-id="${s.id}"></div>
-      <div class="date-field"><label for="${idTglKartu(s, "eta")}">ETA ${etaPredictionAppliesTo(s) ? etaModeChipHtml(etaModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "eta")}" value="${s.eta || ""}" data-action="date" data-field="eta" data-id="${s.id}"></div>
-      ${
-        /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
-           sini mengunci tanggalnya ke mode Manual. Kalau terpikir
-           menguncinya supaya tidak ada dua sumber kebenaran: laporan
-           butuh tanggal yang bisa dipatok, dan mode Manual itulah
-           jawabannya. */
-        `<div class="date-field${deliveryPredictionAppliesTo(s) && deliveryModeOf(s) === "manual" ? " date-field--pinned" : ""}"><label for="${idTglKartu(s, "actual")}">${lbl.actual} ${deliveryPredictionAppliesTo(s) ? deliveryModeChipHtml(deliveryModeOf(s)) : ""}</label><input type="date" id="${idTglKartu(s, "actual")}" value="${s.actual || ""}" data-action="date" data-field="actual" data-id="${s.id}"></div>`
-      }
-    </div>
-
-    ${predictionStripHtml(s)}
-    ${departingTodayHtml(s)}
-    ${delayStripHtml(s)}
-    ${docStepHtml(s)}
+    ${cardAlertsHtml(s)}
+    ${shipJourneyHtml(s)}
+    ${cardBodySplitHtml(s, totals)}
+    ${cardDokumenHtml(s, lencana, "tag-row")}
     ${cardNotesHtml(s)}
   </div>`;
 }
@@ -363,10 +516,12 @@ function collapsedDatesHtml(s) {
     ? tt(` Jadwal ini pernah dimundurkan — lihat Tanggal Update Delay lewat tombol pensil.`,
         ` This schedule has been postponed — see the Delay Update Dates via the pencil button.`)
     : "";
+  /* Nilai biasa (kt-nilai), bukan kotak isian: tanpa bingkai & tanpa
+     ikon kalender -- tidak ada yang bisa diubah di sini. */
   const kotak = (label, nilai) => `
       <div class="date-field date-field--locked">
         <label for="${idTglKartu(s, "kunci-" + label)}">${label}</label>
-        <input type="date" id="${idTglKartu(s, "kunci-" + label)}" value="${nilai || ""}" readonly
+        <input type="date" class="kt-nilai" id="${idTglKartu(s, "kunci-" + label)}" value="${nilai || ""}" readonly tabindex="-1"
                title="${tt("Hanya baca. Tekan tombol pensil untuk mengubahnya.", "Read-only. Press the pencil button to change it.")}${catatan}">
       </div>`;
 
@@ -381,23 +536,27 @@ function collapsedDatesHtml(s) {
         kotak(ML().actual, s.actual)
       }
       ${mundur ? `<div class="collapsed-dates-note"><i class="bi bi-clock-history"></i> ${tt("Pernah dimundurkan", "Previously postponed")}</div>` : ""}
+      ${barangRingkasHtml(s)}
     </div>`;
 }
 
 function renderCollapsedCard(s) {
   const lbl = ML();
+  const totals = itemTotals(s);
+  const lencana = buildTags(s);
+  const n = (s.items || []).length;
   return `
   <div class="ship-card ship-card--arrived ship-card--collapsed" data-id="${s.id}">
     <div class="collapsed-row">
       <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
-            <div class="collapsed-main">
-        <div class="collapsed-party">${escapeHtml(dispVal(s.party))} · ${(s.items || []).length} ${(s.items || []).length === 1 ? tt("Barang", "Item") : t("f.barang")}</div>
-        <div class="collapsed-meta">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} &nbsp;·&nbsp; No. Aju: ${escapeHtml(dispVal(s.noAju))} &nbsp;·&nbsp; ${lbl.arrivedStat}: <b>${
+      <div class="collapsed-main">
+        <div class="collapsed-party">${escapeHtml(dispVal(s.party))}<span class="item-count"> · ${n} ${n === 1 ? tt("Barang", "Item") : t("f.barang")}</span></div>
+        <div class="collapsed-meta"><span class="po-ref"><span class="po-ref-label">${lbl.docNo}:</span> ${escapeHtml(dispVal(s.docNo))}</span><span class="po-ref"><span class="po-ref-label">No. Aju:</span> ${escapeHtml(dispVal(s.noAju))}</span><span class="po-ref po-ref--tiba"><span class="po-ref-label">${lbl.arrivedStat}:</span> <b>${
           /* Tanggal yang MEMBUATNYA selesai (kolomPenyebabTiba): Export =
              ETD yang berlaku (kapal berangkat), bukan tanggal Stuffing;
              Import = In Factory. */
           fmtDate(s.mode === "export" ? effectiveEtd(s) : s.factoryDate)
-        }</b></div>
+        }</b></span></div>
       </div>
       <div class="ship-actions-block">
         ${statusSelectHtml(s)}
@@ -408,21 +567,19 @@ function renderCollapsedCard(s) {
     <div class="collapsed-extra">
       ${collapsedDatesHtml(s)}
       ${
-        /* Lencana yang sama dengan kartu aktif: incoterm, nilai, jenis
-           muatan, fasilitas. Kiriman yang sudah selesai justru paling
-           sering dicari ulang untuk angka-angka itu — menyembunyikannya
-           memaksa membuka detail hanya untuk melihat satu nilai. */
-        `<div class="tag-row tag-row--collapsed">${buildTags(s, itemTotals(s))}</div>`
+        /* Rincian LENGKAP, sama dengan kartu berjalan: rute, forwarder,
+           sarana angkut, kontainer, invoice (dengan incoterm & nilainya),
+           House B/L, dan nama barang. Kiriman yang sudah tiba paling
+           sering dibuka lagi justru untuk angka-angka itu --
+           menyembunyikannya memaksa membuka panel detail hanya untuk
+           membaca satu nomor. */
+        cardBodySplitHtml(s, totals)
       }
       ${
-        /* Rincian LENGKAP, sama dengan kartu berjalan: rute, forwarder,
-           sarana angkut, kontainer, invoice, House B/L, dan nama
-           barang. Kiriman yang sudah tiba paling sering dibuka lagi
-           justru untuk angka-angka itu -- menyembunyikannya memaksa
-           membuka panel detail hanya untuk membaca satu nomor. */
-        cardBodySplitHtml(s, itemTotals(s))
+        /* Lencana fasilitas yang sama dengan kartu aktif (PI, SKB, COO,
+           transit) -- hanya kalau ada -- bersama progres dokumennya. */
+        cardDokumenHtml(s, lencana, "tag-row tag-row--collapsed")
       }
-      ${docStepHtml(s)}
       ${cardNotesHtml(s)}
     </div>
   </div>`;

@@ -148,8 +148,8 @@ t("AIR direct KR->ID = ETD + 1", () =>
   eq(predictEta({ ...KR, transport: "udara", origin: "KRICN", destination: "IDCGK" }).eta, "2026-08-04"));
 t("AIR transit KR->ID = ETD + 3", () =>
   eq(predictEta({ ...KR, transport: "udara", origin: "KRICN", destination: "IDCGK", routeType: "transit" }).eta, "2026-08-06"));
-t("rute tak terdaftar pakai aturan bawaan (JP->ID FCL = +14)", () =>
-  eq(predictEta({ ...KR, origin: "JPYOK", transport: "laut", muatan: "FCL" }).eta, "2026-08-17"));
+t("rute tak terdaftar pakai aturan bawaan (Santos -> ID FCL = +14)", () =>
+  eq(predictEta({ ...KR, origin: "SANTOS BRAZIL", transport: "laut", muatan: "FCL" }).eta, "2026-08-17"));
 t("tanpa ETD -> tidak ok", () => eq(predictEta({ ...KR, etd: "" }).ok, false));
 t("ETA tidak terpengaruh dokumen", () => {
   const a = predictEta({ ...KR, transport: "laut", muatan: "FCL" }).eta;
@@ -961,12 +961,20 @@ t("aturan pelabuhan memberi angka PASTI, bukan rentang", () => {
 });
 
 console.log("— JATUH-TINGKAT KE ATURAN NEGARA —");
-t("Direct yang tidak ada di tabel pelabuhan turun ke aturan negara", () => {
-  // Vladivostok hanya punya angka Transit. Direct harus jatuh ke ru-id (30–40), BUKAN nol.
+t("LAUT berlabel Direct, pelabuhannya hanya punya angka Transit -> angka pelabuhan itu, bukan aturan negara", () => {
+  /* "Direct" adalah nilai bawaan form; untuk laut pengguna tidak tahu
+     kapalnya langsung atau singgah. Vladivostok -> Priok hanya tertulis
+     Transit 23 hari. Dulu jatuh ke "Rusia -> Indonesia" 30-40 hari --
+     angka St Petersburg di ujung lain benua. */
   const e = port("RUVVO", "IDTPP", "SEA_FCL", "direct");
-  eq(e.ruleId, "ru-id");
-  eq(e.daysMin, 30); eq(e.daysMax, 40);
+  eq(e.ruleId, "ru-sea-vvo-tpp");
+  eq(e.days, 23);
   if (e.days === 0) throw new Error("angka nol — jatuh-tingkat gagal");
+  if (!/angka transit|transit figure/.test(e.ruleLabel)) throw new Error("asal angkanya tidak disebut: " + e.ruleLabel);
+});
+t("...tapi UDARA tetap jatuh ke aturan negara (nomor penerbangan memang menentukan direct/transit)", () => {
+  const e = port("RULED", "IDCGK", "AIR", "direct");
+  eq(e.ruleId, "ru-id");
 });
 t("LCL tidak ada di tabel pelabuhan -> turun ke rentang negara", () => {
   const e = port("CNSHA", "IDTPP", "SEA_LCL", "direct");
@@ -983,8 +991,16 @@ t("pelabuhan tak terdaftar turun ke aturan negara", () => {
   eq(port("RUVYP", "IDTPP", "SEA_FCL", "direct").ruleId, "ru-id");
   eq(port("MXATM", "IDTPP", "SEA_FCL", "direct").ruleId, "mx-id");
 });
-t("negara tak terdaftar turun ke aturan bawaan", () =>
-  eq(port("JPYOK", "IDTPP", "SEA_FCL", "direct").ruleId, "default"));
+t("pelabuhan yang tidak dikenali sama sekali turun ke aturan bawaan", () =>
+  eq(port("SANTOS BRAZIL", "IDTPP", "SEA_FCL", "direct").ruleId, "default"));
+t("negara di luar tabel forwarder memakai rentang wilayah (Tingkat 3), bukan 14 hari bawaan", () => {
+  const sg = port("SGSIN", "IDTPP", "SEA_FCL", "direct");
+  eq([sg.ruleId, sg.daysMin, sg.daysMax].join(), "sg-id,2,3", "Singapura:");
+  eq(port("JPYOK", "IDTPP", "SEA_FCL", "direct").ruleId, "jp-id", "Jepang:");
+  eq(port("NLRTM", "IDTPP", "SEA_FCL", "direct").ruleId, "eu-id", "Rotterdam:");
+  eq(port("USLAX", "IDTPP", "SEA_FCL", "direct").ruleId, "us-west-id", "Los Angeles (pantai barat lebih rinci):");
+  eq(port("USNYC", "IDTPP", "SEA_FCL", "direct").ruleId, "us-id", "New York:");
+});
 t("Busan → Priok kini punya entri Master Route sendiri", () => {
   const e = predictEta({ ...rute("KRPUS"), transport: "laut", muatan: "FCL" });
   eq(e.ruleId, "sea-pus-tpp");
@@ -992,6 +1008,64 @@ t("Busan → Priok kini punya entri Master Route sendiri", () => {
 });
 t("pelabuhan Korea lain tetap memakai aturan negara", () =>
   eq(predictEta({ ...rute("KRINC"), transport: "laut", muatan: "FCL" }).ruleId, "kr-id"));
+
+console.log("— ATURAN DUA ARAH: EKSPOR MEMAKAI ANGKA ARAH SEBALIKNYA —");
+/* Dulu kiriman ekspor tidak cocok dengan satu aturan pun (tabelnya per
+   arah impor) dan jatuh ke 14 hari bawaan: Singapura dan Manzanillo
+   sama-sama "dua minggu". */
+const ekspor = (asal, tujuan, tipe, jenis, lain) => predictEta(Object.assign({
+  mode: "export", etd: "2026-08-03", origin: asal, destination: tujuan, routeType: jenis || "direct",
+  transport: tipe === "AIR" ? "udara" : "laut", muatan: tipe === "SEA_LCL" ? "LCL" : tipe === "SEA_FCL" ? "FCL" : "",
+}, lain || {}));
+t("Priok -> Busan memakai angka Busan -> Priok, berlabel arah sebaliknya", () => {
+  const e = ekspor("IDTPP", "KRPUS", "SEA_FCL");
+  eq([e.ruleId, e.days, e.transit.ruleReverse].join(), "sea-pus-tpp,10,true");
+  if (!/arah sebaliknya|reverse lane/.test(e.ruleLabel)) throw new Error("label tidak menyebut arah sebaliknya: " + e.ruleLabel);
+});
+t("Priok -> Singapura ±2-3 hari, bukan 14", () => {
+  const e = ekspor("IDTPP", "SGSIN", "SEA_FCL");
+  eq([e.ruleId, e.daysMin, e.daysMax].join(), "sg-id,2,3");
+});
+t("Priok -> Manzanillo & Vladivostok memakai angka pelabuhannya", () => {
+  eq(ekspor("IDTPP", "MXZLO", "SEA_FCL").days, 35, "Manzanillo:");
+  eq(ekspor("IDTPP", "RUVVO", "SEA_FCL").days, 23, "Vladivostok:");
+});
+t("pelayaran per carrier ikut berlaku dua arah (HMM Priok -> Busan = 9)", () =>
+  eq(ekspor("IDTPP", "KRPUS", "SEA_FCL", "direct", { vessel: "HMM BLESSING", voyage: "012N" }).days, 9));
+t("impor TIDAK berubah oleh aturan dua arah", () => {
+  const e = port("KRPUS", "IDTPP", "SEA_FCL", "direct");
+  eq([e.ruleId, e.days, e.transit.ruleReverse].join(), "sea-pus-tpp,10,false");
+});
+t("aturan searah yang sama rincinya MENANG atas arah sebaliknya", () => {
+  PREDICTION_CONFIG.routes.unshift({ id: "uji-id-kr", label: "Indonesia → Korea", match: { fromCountry: "ID", toCountry: "KR" }, days: { SEA_FCL: 13 } });
+  PREDICTION_CONFIG.routes.unshift({ id: "uji-kr-id", label: "Korea → Indonesia (uji)", match: { fromCountry: "KR", toCountry: "ID" }, days: { SEA_FCL: 7 } });
+  try {
+    eq(ekspor("IDTPP", "KRINC", "SEA_FCL").ruleId, "uji-id-kr", "searah menang (skor sama):");
+    // pelabuhan arah sebaliknya (16 - 0,5) tetap lebih rinci daripada negara searah (6)
+    eq(ekspor("IDTPP", "KRPUS", "SEA_FCL").ruleId, "sea-pus-tpp", "pelabuhan arah sebaliknya > negara searah:");
+  } finally {
+    PREDICTION_CONFIG.routes.shift();
+    PREDICTION_CONFIG.routes.shift();
+  }
+});
+t("aturan bertanda searah tidak dibalik; aturan cadangan tetap cadangan", () => {
+  const r = PREDICTION_CONFIG.routes.find((x) => x.id === "sg-id");
+  r.searah = true;
+  try {
+    eq(ekspor("IDTPP", "SGSIN", "SEA_FCL").ruleId, "default");
+  } finally {
+    delete r.searah;
+  }
+  eq(ekspor("IDTPP", "SANTOS BRAZIL", "SEA_FCL").ruleId, "default");
+});
+t("keraguan asumsi: arah sebaliknya & aturan cadangan lebih ragu daripada angka pelabuhan pasti", () => {
+  const ragu = (src) => ctx.asumsiTransitKonfigurasi(predictionContext(src)).ragu;
+  const pasti = ragu({ origin: "KRPUS", destination: "IDTPP", transport: "laut", muatan: "FCL", routeType: "direct" });
+  const balik = ragu({ origin: "IDTPP", destination: "KRPUS", transport: "laut", muatan: "FCL", routeType: "direct" });
+  const cadangan = ragu({ origin: "SANTOS BRAZIL", destination: "IDTPP", transport: "laut", muatan: "FCL", routeType: "direct" });
+  const rentang = ragu({ origin: "CNCAN", destination: "IDTPP", transport: "laut", muatan: "FCL", routeType: "direct" });
+  eq([pasti, balik, cadangan, rentang].join(), "2,3,5,2", "pasti, arah sebaliknya, cadangan, rentang 8-12:");
+});
 
 console.log("— SATU ATURAN, BANYAK PELABUHAN —");
 t("CNTXG & CNTSN dua-duanya menunjuk angka Tianjin yang sama", () => {
@@ -1269,7 +1343,9 @@ t("aturan lebih spesifik menang atas yang umum", () => {
   PREDICTION_CONFIG.routes.shift();
 });
 t("aturan tidak cocok gugur seluruhnya", () => {
-  eq(predictEta({ ...KR, origin: "JPYOK", transport: "laut", muatan: "FCL" }).ruleId, "default");
+  // Aturan Korea tidak ikut terpakai untuk kiriman Jepang hanya karena tujuannya sama
+  eq(predictEta({ ...KR, origin: "JPYOK", transport: "laut", muatan: "FCL" }).ruleId, "jp-id");
+  eq(predictEta({ ...KR, origin: "SANTOS BRAZIL", transport: "laut", muatan: "FCL" }).ruleId, "default");
 });
 t("angka operasional dibaca dari konfigurasi", () => {
   const ops = predictionOpsDays(predictionContext({ transport: "laut", muatan: "FCL" }));

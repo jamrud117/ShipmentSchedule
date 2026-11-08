@@ -201,7 +201,9 @@ function terapkanSheetPabean(wb, reconstructed) {
     if (Object.keys(jadwal).length) r.shipment.dataPabean = jadwal;
     r.items.forEach((it, j) => {
       const dp = dpBarangDariBaris(milik.filter((b) => excelStr(b[kunciKolom["SERI BARANG"]]) === String(j + 1)).map(isi));
-      if (Object.keys(dp).length) it.dataPabean = dp;
+      // Kolom TARIF sheet utama (per barang) menang atas Tarif BM di sheet ini -- itu yang terlihat & disunting
+      const tarifUtama = it.dataPabean && it.dataPabean.tarifBm != null ? { tarifBm: it.dataPabean.tarifBm } : {};
+      if (Object.keys(dp).length) it.dataPabean = Object.assign({}, dp, tarifUtama);
     });
   });
 }
@@ -412,7 +414,10 @@ function reconstructShipmentFromGroup(group, mode) {
   };
   if (mode === "import") {
     s.ndpbm = excelNum(first[idx.NDPBM]);
-    s.tarif = roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
+    /* Kolom TARIF kini per barang (dibaca di daftar barang di bawah).
+       Berkas lama hanya mengisinya di baris pertama: angka itu jadi tarif
+       jadwal -- cadangan untuk barang yang barisnya kosong. */
+    s.tarif = excelStr(first[idx.TARIF]) === "" ? null : roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
     /* Kolom PI memuat semua dokumen pelengkap non-fasilitas (kolomPiJadwal):
        PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>";
        nomor "A, B" jadi daftarnya */
@@ -478,6 +483,8 @@ function reconstructShipmentFromGroup(group, mode) {
       satuan: mode === "import" ? excelStr(row[idx.SAT]) : "",
       package: excelStr(row[idx.PACKAGE]),
       harga: qty ? roundNum(amount / qty, 4) : amount,
+      // Tarif BM barang ini (kolom TARIF per baris; kosong = tarif jadwal / 5%)
+      ...(mode === "import" && excelStr(row[idx.TARIF]) !== "" ? { dataPabean: { tarifBm: roundNum(excelNum(row[idx.TARIF]) * 100, 4) } } : {}),
     });
   });
 

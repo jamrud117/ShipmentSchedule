@@ -5,7 +5,7 @@
 // Angka -> teks gaya PIB
 function fmtPibNumber(n, maxDecimals) {
   const dec = maxDecimals == null ? 4 : maxDecimals;
-  let num = Number(n);
+  const num = Number(n);
   if (!isFinite(num) || num === 0) return "";
   // toFixed dulu supaya pembulatan konsisten, baru buang nol di belakang koma desimal
   let s = num.toFixed(dec);

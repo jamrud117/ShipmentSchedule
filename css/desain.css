@@ -1,0 +1,1848 @@
+/* DESAIN — "LAJUR"
+
+   Lapisan tampilan di atas komponen yang sudah ada. Komponen tidak ditulis
+   ulang: yang berubah adalah bahasa visualnya, dan perubahan itu dikumpulkan
+   di satu berkas supaya mudah dibaca, disetel, dan dicabut.
+
+   Arahnya, dalam satu kalimat: papan jaga operator pelabuhan -- kanvas abu
+   beton yang tenang, lembar putih bergaris tipis, dan warna HANYA untuk
+   keadaan (terlambat, kurang dokumen, aman), bukan untuk hiasan.
+
+     Warna   Navy hanya di sidebar (merek). Biru sinyal untuk yang bisa
+             diklik. Kuningan hanya untuk "hari ini" & merek. Merah / ambar
+             / hijau hanya untuk status.
+     Huruf   Barlow Condensed untuk judul halaman & angka besar (papan
+             penunjuk). IBM Plex Sans untuk semua isi. IBM Plex Mono hanya
+             untuk pengenal (no. aju, B/L, invoice, HS Code).
+     Bentuk  Lembar datar bergaris tipis; bayangan hanya untuk yang
+             melayang (menu, panel, dialog). Radius berbeda per peran:
+             kontrol kecil, lembar sedang, dialog besar, status berbentuk pil.
+     Label   Huruf biasa, bukan huruf besar berspasi renggang. Hierarki
+             dibentuk oleh ukuran & bobot huruf, bukan kotak.
+     Gerak   Hanya sebagai jawaban atas tindakan pengguna.
+
+   DIMUAT SESUDAH system.css dan SEBELUM lebar-isian.css (yang tetap paling
+   akhir). Selektornya sengaja sama dengan yang ditimpanya: yang menang
+   adalah urutan berkas, bukan perang kekhususan.
+
+   Daftar isi:
+     A. Dasar            B. Sidebar & bilah atas   C. Kepala halaman
+     D. Panel & lembar   E. Kontrol & tombol        F. Footer
+     G. Jadwal: bilah kendali, ringkasan, kartu
+     H. Ringkasan (overview)   I. Form jadwal   J. Cek PIB/PEB
+     K. No. Dokumen, Masterlist, HS Code, Akun, Login
+     L. Kurs (sync di form, kepingan di Cek PIB/PEB)
+     M. Ponsel & preferensi gerak */
+
+/* ==================================================================
+   A. DASAR
+================================================================== */
+body {
+  font-size: var(--t-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* Angka rata lebar di semua tempat angka dibandingkan atas-bawah */
+table,
+.stat-value,
+.kt-nilai,
+.docsteps-count,
+.date-section-count,
+.list-count,
+.board-today-date,
+.agenda-count,
+.task-detail,
+.pagination-info {
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+::selection {
+  background: var(--p-200);
+  color: var(--n-900);
+}
+
+/* Scrollbar tipis & terlihat. Dulu disembunyikan seluruhnya: halaman
+   panjang kehilangan penunjuk posisi, dan tabel lebar tak punya pegangan
+   untuk diseret di desktop. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-300) transparent;
+}
+html::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb {
+  background: var(--n-300);
+  border-radius: 10px;
+  border: 2px solid var(--bg);
+}
+html::-webkit-scrollbar-thumb:hover {
+  background: var(--n-400);
+}
+
+/* ==================================================================
+   B. SIDEBAR & BILAH ATAS
+
+   Navy dipakai HANYA di sini: ia penanda merek, bukan latar seluruh
+   aplikasi. Tautan tidak lagi berhuruf tebal semua; yang aktif ditandai
+   garis kuningan di tepi kiri (arti: "kamu di sini") dan teks putih
+   penuh.
+================================================================== */
+.app-sidebar {
+  background: var(--d-900);
+  border-right: 0;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
+.app-topbar {
+  background: var(--d-900);
+  border-bottom: 0;
+}
+.sb-kepala {
+  height: 60px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.brand-name {
+  font-family: var(--font-board);
+  font-weight: 700;
+  font-size: 1.45rem;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+.brand-name span {
+  color: var(--sec-400);
+  padding: 0 1px;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+}
+
+.cmd-trigger {
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--r-sm);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--t-base);
+}
+.cmd-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.cmd-trigger kbd {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.sb-isi {
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+}
+.site-nav {
+  gap: 1px;
+}
+.site-nav-link {
+  height: 38px;
+  gap: 11px;
+  padding: 0 11px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-base);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+}
+.site-nav-link .ic {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 0.78;
+}
+.site-nav-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+.site-nav-link.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 600;
+}
+.site-nav-link.active::before {
+  top: 8px;
+  bottom: 8px;
+  background: var(--sec-400);
+}
+.site-nav-link.active .ic {
+  color: var(--sec-300);
+}
+/* Kelompok halaman dipisah garis tipis, bukan label huruf besar. Garis
+   itu milik tautan pertama tiap kelompok, jadi ikut hilang bersama
+   tautannya bila peran tertentu tidak boleh membukanya. */
+.site-nav-link[data-page="docnum"],
+.site-nav-link[data-page="hscode"],
+.site-nav-link[data-page="accounts"] {
+  margin-top: 9px;
+}
+.site-nav-link[data-page="docnum"]::after,
+.site-nav-link[data-page="hscode"]::after,
+.site-nav-link[data-page="accounts"]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -5px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+button.site-nav-link {
+  margin-bottom: 4px;
+}
+.notif-lencana {
+  background: var(--s-danger);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.sb-kaki {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.sb-ciut {
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+.user-chip-role {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.72rem;
+}
+.user-chip-name {
+  font-weight: 600;
+}
+
+/* ==================================================================
+   C. KEPALA HALAMAN (.board)
+
+   Dulu pita navy tinggi di setiap halaman: bobot visual terbesar di
+   layar, padahal isinya hanya judul. Sekarang baris judul terang di atas
+   kanvas -- judul dalam huruf papan penunjuk, kalimat keadaan di
+   bawahnya, tombol di kanan. Navy tinggal di sidebar.
+================================================================== */
+.board {
+  background: var(--surface);
+  color: var(--ink);
+  padding: 22px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+.board::after {
+  display: none;
+}
+.board-head {
+  align-items: center;
+}
+.board-title {
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 2.1rem;
+  letter-spacing: 0;
+  line-height: 1.04;
+  color: var(--tp-700);
+  margin: 0;
+}
+.board-label {
+  color: var(--tsec-600);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.board-sub {
+  color: var(--n-500);
+  font-size: var(--t-base);
+  margin-top: 6px;
+  max-width: 78ch;
+}
+.board-sub b {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* Tanggal hari ini: penanda kuningan = "sekarang". Satu-satunya
+   hiasan di kepala halaman, dan ia berarti. */
+.board-today {
+  border-left: 3px solid var(--sec-400);
+  padding-left: var(--sp-3);
+  text-align: left;
+}
+.board-today-label {
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--n-500);
+}
+.board-today-date {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--t-md);
+  color: var(--ink);
+}
+.board :focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+/* Sakelar Import / Export: ia memilih BUKU yang sedang dibaca, jadi
+   bentuknya sakelar segmen, bukan dua tombol terpisah. */
+.mode-tabs {
+  background: var(--n-100);
+  border: 1px solid var(--border);
+  padding: 3px;
+  border-radius: var(--r-md);
+}
+.mode-tabs button {
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-600);
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+}
+.mode-tabs button:hover:not(.active) {
+  background: var(--surface);
+  color: var(--tp-600);
+}
+.mode-tabs button.active,
+.controlbar .mode-tabs button.active {
+  background: var(--p-600);
+  color: #fff;
+  box-shadow: var(--sh-xs);
+}
+.mode-tabs--board button {
+  font-size: var(--t-sm);
+  padding: 6px 16px;
+}
+.controlbar .mode-tabs {
+  background: var(--n-100);
+  border-color: var(--border);
+}
+
+/* Huruf kecil yang dulu "label struktur huruf besar" kini huruf biasa:
+   ukuran & bobot sudah cukup membedakannya dari isi data. */
+.panel-eyebrow,
+.info-label,
+.task-reason,
+.agenda-dow,
+.cmdk-group,
+.cmdk-item-tag,
+.detail-badge-mode,
+.acct-self,
+.form-progress,
+.date-section-badge,
+.footer-brand,
+.footer-heading,
+.acct-legend-judul,
+.samakan-nilai-label,
+.form-subhead,
+.fl-awb-judul,
+.fl-grup-judul,
+.dnd-jenis,
+.dnd-bagian > h3,
+.lap-kpi-judul,
+.mst-rinci-label,
+.detail-header-label,
+.cek-drop-judul,
+.docstep-label,
+.date-field label,
+.notif-kelompok {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.status-select {
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+/* ==================================================================
+   D. PANEL & LEMBAR
+
+   Lembar putih di atas kanvas, bergaris tipis, tanpa bayangan. Kepala
+   panel tidak lagi punya latar sendiri dan ikon hiasan: judulnya
+   berbobot, kalimat catatannya redup di kanan, garis tipis di bawahnya.
+================================================================== */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: none;
+}
+.panel-head {
+  background: transparent;
+  padding: 14px var(--sp-5) 12px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tp-700);
+}
+.panel-head h2 > i,
+.panel-head h2 > .ic {
+  display: none;
+}
+.panel-head-note {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.panel-empty {
+  color: var(--n-500);
+}
+
+/* Kepala kolom tabel: huruf biasa, tebal, redup -- bukan huruf besar */
+.hs-tabel th,
+.mst-tabel th,
+.cek-tabel th,
+.dnd-tabel th,
+.sb-tabel th,
+table.fund-lines th,
+table.item-table th,
+.acc-head {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+}
+.acc-head {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+
+/* ==================================================================
+   F. FOOTER
+
+   Dulu blok navy setinggi 230px di dasar SETIAP halaman. Isinya (catatan
+   data & pintasan) tetap ada, tapi kini tenang: teks kecil di atas
+   kanvas, dipisah satu garis tipis.
+================================================================== */
+.app-footer {
+  background: transparent;
+  color: var(--n-500);
+  padding: 22px 0 20px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  font-size: var(--t-sm);
+}
+.footer-brand {
+  font-family: var(--font-board);
+  font-weight: 700;
+  font-size: 1.2rem;
+  letter-spacing: 0.03em;
+  color: var(--tp-700);
+  margin-bottom: 4px;
+}
+.footer-brand span {
+  color: var(--sec-500);
+}
+.footer-heading {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-700);
+  margin-bottom: 6px;
+}
+.footer-text {
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.footer-text b {
+  color: var(--n-800);
+  font-weight: 600;
+}
+.footer-pintasan {
+  gap: 5px;
+}
+.footer-pintasan li {
+  grid-template-columns: 70px 1fr;
+}
+.footer-pintasan kbd {
+  border: 1px solid var(--border-control);
+  border-bottom-width: 2px;
+  background: var(--surface);
+  color: var(--n-700);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+.footer-divider {
+  border-color: var(--border);
+  margin: 16px 0 12px;
+}
+.footer-bottom {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.app-footer :focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+/* ==================================================================
+   E. KONTROL & TOMBOL
+================================================================== */
+.btn-primary-navy,
+.btn-teal,
+.btn-save-primary {
+  background: var(--p-600);
+  border-color: var(--p-600);
+  color: #fff;
+  font-weight: 600;
+  border-radius: var(--r-sm);
+}
+.btn-primary-navy:hover:not(:disabled),
+.btn-teal:hover:not(:disabled),
+.btn-save-primary:hover:not(:disabled) {
+  background: var(--p-700);
+  border-color: var(--p-700);
+}
+.btn-quiet,
+.btn-more,
+.btn-form-cancel,
+.btn-import-excel {
+  border-radius: var(--r-sm);
+  font-weight: 600;
+}
+.icon-btn {
+  border-radius: var(--r-sm);
+}
+.icon-btn.primary {
+  background: var(--p-600);
+  border-color: var(--p-600);
+}
+.icon-btn.primary:hover:not(:disabled) {
+  background: var(--p-700);
+  border-color: var(--p-700);
+}
+.form-control,
+.form-select,
+.control-select,
+.search-box input[type="text"] {
+  border-radius: var(--r-sm);
+}
+
+/* ==================================================================
+   G. JADWAL: bilah kendali, ringkasan, kartu
+================================================================== */
+.controlbar-inner {
+  padding-top: 12px;
+  padding-bottom: 10px;
+}
+.controlbar-box {
+  gap: 10px;
+  padding: 12px 14px;
+  box-shadow: none;
+  border-radius: var(--r-lg);
+}
+
+/* Ringkasan angka: bukan ubin berwarna, melainkan empat angka papan
+   penunjuk. Warna ikonnya satu-satunya penanda jenis. */
+.stats-bar {
+  padding-bottom: var(--sp-3);
+}
+.stats-bar-inner {
+  padding: 12px 6px;
+  gap: 0;
+  box-shadow: none;
+}
+.stat-item {
+  gap: 12px;
+  flex: 1 1 150px;
+  padding: 0 var(--sp-5);
+}
+.stat-icon,
+.stat-icon--total,
+.stat-icon--process,
+.stat-icon--delayed,
+.stat-icon--arrived {
+  width: auto;
+  height: auto;
+  background: none;
+  font-size: 1.3rem;
+}
+.stat-icon--total {
+  color: var(--tp-500);
+}
+.stat-label {
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--n-500);
+}
+.stat-value span:first-child {
+  font-family: var(--font-board);
+  font-size: 1.85rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+/* Layar sempit: empat angka jadi kisi 2x2 BERSEKAT -- garis tipis di
+   antara kolom (seperti pemisah keempat angka di layar lebar) dan di antara
+   baris. Lajur lentur 150px di atas memberi 3 + 1 tanpa jarak baris di
+   ponsel lebar ("Arrived" menempel tepat di bawah "106 Jadwal"), dan 2 + 2
+   yang juga rapat di ponsel kecil. */
+@media (max-width: 991px) {
+  .stats-bar-inner {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding: 2px 4px;
+  }
+  .stat-item {
+    padding: 12px var(--sp-4);
+  }
+  .stat-item:nth-child(odd) {
+    border-right: 1px solid var(--border);
+  }
+  .stat-item:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+@media (max-width: 575px) {
+  .stat-item {
+    gap: 10px;
+    padding: 11px 12px;
+  }
+  .stat-value span:first-child {
+    font-size: 1.6rem;
+  }
+}
+
+.list-head {
+  margin: var(--sp-5) 0 var(--sp-1);
+}
+.list-title {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.list-count {
+  background: var(--n-100);
+  border: 1px solid var(--border);
+  color: var(--n-700);
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+.filter-note {
+  font-size: var(--t-sm);
+}
+
+/* Pemisah tanggal: judul kelompok dan hitungan, satu garis tipis */
+.date-section {
+  margin: var(--sp-6) 0 var(--sp-2);
+}
+.date-section-badge {
+  font-family: var(--font-display);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--tp-700);
+}
+.date-section-badge i {
+  display: none;
+}
+.date-section-count {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+
+/* KARTU PENGIRIMAN
+   Satu lembar: perjalanan, tanggal, rincian, dokumen. Kotak abu di dalam
+   kartu dilepas -- kartu di dalam kartu membuat hierarki kabur. Tepi kiri
+   4px adalah satu-satunya warna besar di kartu, dan ia berarti status. */
+.ship-card {
+  padding: 18px 22px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: none;
+}
+.ship-card + .ship-card {
+  margin-top: 12px;
+}
+.ship-card--process {
+  border-left-color: var(--s-warn);
+}
+.ship-card--transit {
+  border-left-color: var(--p-400);
+}
+.ship-card--delayed {
+  border-left-color: var(--s-danger);
+}
+.ship-card--arrived {
+  border-left-color: var(--s-success);
+}
+.item-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--t-lg);
+  letter-spacing: 0;
+}
+.item-count {
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+.po-code {
+  font-size: var(--t-xs);
+  margin-top: 4px;
+}
+.po-ref-label {
+  font-size: var(--t-xs);
+}
+
+/* Panel perjalanan dipisah garis tipis dari kepala kartu (judul, tombol,
+   peringatan) -- sama dengan sekat antarbagian kartu di bawahnya, dan
+   di ponsel, tempat tombol aksi turun ke baris sendiri, kepala kartu tidak
+   lagi menyambung ke "Tiba 2 Hari Lagi". */
+.ship-journey {
+  margin-top: 14px;
+  padding: 14px 0 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+.lane-remaining {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--t-md);
+  letter-spacing: 0;
+}
+.lane-title {
+  margin-bottom: 14px;
+}
+.lane-track {
+  height: 3px;
+  background: var(--n-200);
+}
+.lane-fill {
+  height: 3px;
+}
+.lane-track.is-process .lane-fill {
+  background: var(--s-warn);
+}
+.lane-track.is-delayed .lane-fill {
+  background: var(--s-danger);
+}
+.port-node {
+  width: 11px;
+  height: 11px;
+  background: var(--n-600);
+}
+.port-node.destination {
+  background: var(--n-800);
+}
+.ship-marker {
+  box-shadow: 0 0 0 1px var(--border), var(--sh-sm);
+}
+.port-labels .p b {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+}
+.port-labels .p,
+.port-labels .p-nama {
+  font-size: var(--t-xs);
+}
+
+/* Tanggal = angka papan penunjuk. Kotaknya tetap bisa diklik & diketik,
+   garis tipisnya cukup menandai itu. */
+.date-strip {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: 0;
+}
+/* Update ETD/ETA di strip delay tepat di bawah ETD/ETA: kisinya sama
+   (card.css), jaraknya juga harus sama */
+.date-strip,
+.delay-strip-fields {
+  gap: 10px 24px;
+}
+.date-field label {
+  font-size: var(--t-xs);
+  line-height: 1.2rem;
+  color: var(--n-500);
+  margin-bottom: 3px;
+}
+/* Kotak tanggalnya: model bergaya nilai bersama (css/date-input.css) */
+.date-caption {
+  font-size: var(--t-xs);
+}
+.date-field--auto input.kt-nilai[data-kotak-tanggal] {
+  color: var(--tp-600);
+}
+
+/* Rincian: label biasa yang redup, nilai tegas. Ikon label dilepas --
+   kata labelnya sudah menjelaskan. Garis tipis + jarak lega di atasnya
+   memisahkan rincian dari baris tanggal (lihat card.css). */
+.ship-body-split {
+  margin-top: 18px;
+  padding: 18px 0 14px;
+  border-top: 1px solid var(--border);
+}
+.info-label {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+  margin-bottom: 2px;
+}
+.info-label i {
+  display: none;
+}
+.info-value {
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+.info-value .muted-value,
+.info-value.muted-value {
+  font-size: var(--t-sm);
+}
+.info-names {
+  border-left-color: var(--border);
+}
+.tag {
+  font-weight: 600;
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
+}
+.status-select {
+  padding: 6px 28px 6px 12px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+/* Progres dokumen: titiknya adalah "rel" kartu. Selesai = terisi navy,
+   berikutnya = biru sinyal bergaris tebal, sisanya kosong. */
+.docsteps {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.docsteps-head {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-700);
+}
+.docsteps-head > .docsteps-judul i {
+  display: none;
+}
+.docsteps-count {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--tp-600);
+}
+.docsteps-next {
+  font-size: var(--t-xs);
+}
+.docsteps-next b {
+  color: var(--tp-600);
+}
+.docstep-dot {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+.docstep-label {
+  font-size: 0.7rem;
+  color: var(--n-600);
+}
+
+/* KEPADATAN DAFTAR (tombol "Ringkas" di bilah kendali, js/ui/kepadatan.js).
+   Nyaman = seperti di atas. Ringkas = perjalanan, tanggal, NAMA BARANG &
+   progres dokumen; rincian lain dan catatan dilipat supaya lebih banyak
+   jadwal terlihat sekali pandang. Hanya tampilan: tak ada data yang
+   berubah.
+
+   Susunan Ringkas (kartu lebar):
+     ETD | ETA | Estimated Delivery || Nama Barang      <- baris tanggal
+     ────────────────────────────────────────────────── <- garis tipis
+     [PPH] [COO x 1]        6 / 9 · 1 draft · Berikutnya <- lencana | hitungan
+     ────────────────────────────────────────────────── <- garis tipis
+     ①──②──③──④──⑤──⑥──⑦──⑧──⑨                          <- stepper
+   Panel sempit (< 900px): tanggal & nama barang jadi kisi 2x2 -- ETD |
+   ETA, lalu Estimated Delivery | Nama Barang. Ponsel (< 576px): lencana,
+   hitungan & stepper bertumpuk berjarak. Dulu lencana, hitungan, dan
+   stepper menumpuk rapat di kiri di bawah ETD dan sisi kanan kosong. */
+html[data-kepadatan="ringkas"] .ship-card:not(.ship-card--collapsed) {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+html[data-kepadatan="ringkas"] .ship-card .ship-body-split,
+html[data-kepadatan="ringkas"] .ship-card .card-notes,
+html[data-kepadatan="ringkas"] .ship-card .docsteps-head .docsteps-judul {
+  display: none;
+}
+html[data-kepadatan="ringkas"] .ship-card .ship-journey {
+  margin-top: 10px;
+}
+/* Nama barang: kolom keempat baris tanggal, bergaris kiri seperti daftar
+   nama barang di rincian Nyaman. Strip update delay memakai kisi yang
+   sama supaya Update ETD/ETA tetap tepat di bawah ETD/ETA. */
+html[data-kepadatan="ringkas"] .ship-card .date-barang {
+  display: block;
+}
+html[data-kepadatan="ringkas"] .ship-card :is(.date-strip, .delay-strip-fields) {
+  grid-template-columns: minmax(180px, 224px) minmax(180px, 224px) minmax(260px, 1fr) minmax(200px, 300px);
+}
+html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang {
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+/* 900px = 180 + 180 + 260 + 200 + tiga jarak 24px + sedikit kelonggaran */
+@container perjalanan (max-width: 899.98px) {
+  html[data-kepadatan="ringkas"] .ship-card :is(.date-strip, .delay-strip-fields) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-field:nth-child(3) {
+    grid-column: auto;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+/* Kartu selesai: baris tanggal hanya-baca berupa baris lentur -- nama
+   barang menempel di ujung kanannya, tanggalnya rata atas dengan label
+   nama barang. Ponsel: kisi 2x2 seperti kartu berjalan (ETD | ETA, lalu
+   Estimated Delivery | Nama Barang), catatan "pernah dimundurkan" paling
+   bawah selebar kartu. */
+html[data-kepadatan="ringkas"] .ship-card .collapsed-dates {
+  align-items: flex-start;
+}
+html[data-kepadatan="ringkas"] .ship-card .collapsed-dates > .date-barang {
+  flex: 0 1 300px;
+  margin-left: auto;
+  padding-left: 20px;
+  border-left: 1px solid var(--border);
+}
+@media (max-width: 575.98px) {
+  html[data-kepadatan="ringkas"] .ship-card .collapsed-dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .collapsed-dates > .date-barang {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .collapsed-dates > .collapsed-dates-note {
+    order: 1;
+    grid-column: 1 / -1;
+  }
+}
+/* Lencana di kiri, hitungan progres di kanan, stepper selebar kartu di
+   bawahnya. .docsteps "dilebur" (display: contents) supaya kepala &
+   deretan tahapnya jadi sel kisi wadah ini. */
+html[data-kepadatan="ringkas"] .ship-card .ship-dokumen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "lencana hitung" "rel rel";
+  align-items: center;
+  column-gap: 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+/* Kartu selesai: baris tanggalnya sudah bergaris bawah */
+html[data-kepadatan="ringkas"] .ship-card--collapsed .ship-dokumen {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+html[data-kepadatan="ringkas"] .ship-card .ship-dokumen > .docsteps {
+  display: contents;
+}
+html[data-kepadatan="ringkas"] .ship-card .ship-dokumen > .tag-row {
+  grid-area: lencana;
+  margin: 0;
+}
+html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-head {
+  grid-area: hitung;
+  justify-content: flex-end;
+  margin: 0;
+}
+/* Sekat tipis antara baris lencana/hitungan dan stepper -- sama dengan
+   garis di atasnya: tiga pita yang jelas (tanggal | keterangan | tahap). */
+html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
+  grid-area: rel;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 575.98px) {
+  html[data-kepadatan="ringkas"] .ship-card .ship-dokumen {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "lencana" "hitung" "rel";
+    row-gap: 10px;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-head {
+    justify-content: flex-start;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
+    margin-top: 4px;
+  }
+}
+
+/* ==================================================================
+   H. RINGKASAN (overview)
+================================================================== */
+.ov-grid {
+  gap: var(--sp-5);
+}
+/* Antrean tindakan: satu baris = satu pengiriman. Alasannya berbentuk
+   pil berwarna keadaan di kiri -- terlambat merah, mepet ambar, kurang
+   dokumen biru. */
+.task {
+  gap: var(--sp-4);
+  padding: 13px var(--sp-5) 13px 17px;
+  border-bottom: 1px solid var(--border);
+  border-left-width: 4px;
+}
+.task:hover {
+  background: var(--n-50);
+}
+.task--doc {
+  border-left-color: var(--p-400);
+}
+.task-reason {
+  flex: 0 0 112px;
+  width: 112px;
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-width: 0;
+  max-width: 112px;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.task--late .task-reason {
+  background: var(--s-danger-bg);
+  color: var(--ts-danger);
+}
+.task--soon .task-reason {
+  background: var(--s-warn-bg);
+  color: var(--s-warn-ink);
+}
+.task--doc .task-reason,
+.task--asli .task-reason {
+  background: var(--p-50);
+  color: var(--tp-600);
+}
+.task-party {
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+.task-detail,
+.task-goods {
+  font-size: var(--t-sm);
+}
+.task-goods {
+  color: var(--n-500);
+}
+.task-go {
+  color: var(--n-400);
+}
+
+.agenda {
+  gap: 8px;
+}
+.agenda-day {
+  padding: 8px 6px 9px;
+  border-radius: var(--r-md);
+}
+.agenda-dow {
+  font-size: var(--t-xs);
+  letter-spacing: 0;
+  color: var(--n-500);
+}
+.agenda-date {
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+.agenda-count {
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+.agenda-count.has {
+  background: var(--p-600);
+}
+.agenda-day--today {
+  border-color: var(--sec-400);
+  background: var(--sec-50);
+}
+.stat-line-value {
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+
+/* Tombol kepadatan di bilah kendali (js/ui/kepadatan.js) */
+.btn-kepadatan {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--n-700);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.btn-kepadatan:hover {
+  background: var(--n-50);
+  color: var(--tp-600);
+}
+.btn-kepadatan[aria-pressed="true"] {
+  background: var(--p-50);
+  border-color: var(--p-400);
+  color: var(--tp-600);
+}
+
+/* Eyebrow di atas judul halaman mengulang apa yang sudah dikatakan
+   sidebar dan judulnya sendiri */
+.board-label {
+  display: none;
+}
+
+/* ==================================================================
+   I. FORM JADWAL
+
+   Bilah atas form ikut menjadi baris judul terang (navy hanya di
+   sidebar, dan form menyembunyikan sidebar -- jadi di sini merek tidak
+   perlu diteriakkan). Langkah = tab bergaris bawah: satu baris yang
+   langsung terbaca sebagai "empat bagian dari satu form".
+================================================================== */
+.page-form-header {
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  padding: 9px var(--sp-6);
+}
+.page-form-header :focus-visible {
+  outline-color: var(--focus-ring);
+}
+.btn-back {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--n-700);
+  box-shadow: none;
+}
+.btn-back:hover {
+  background: var(--n-50);
+  border-color: var(--p-400);
+  color: var(--tp-600);
+  transform: none;
+}
+.page-form-title-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--p-50);
+  color: var(--tp-600);
+  box-shadow: none;
+}
+.page-form-title {
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 1.55rem;
+  letter-spacing: 0;
+  color: var(--tp-700);
+}
+.form-progress {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--n-500);
+}
+.form-progress-dot {
+  background: var(--n-300);
+}
+.form-progress-dot.is-done {
+  background: var(--p-400);
+}
+.form-progress-dot.is-current {
+  background: var(--p-600);
+}
+
+.nav-detail {
+  gap: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
+  margin: 0 0 var(--sp-5);
+}
+.nav-detail .nav-link {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 12px 10px 10px;
+  color: var(--n-600);
+  font-size: var(--t-base);
+}
+.nav-detail .nav-link:hover:not(.active),
+.nav-detail .nav-link:not(.active):hover {
+  background: var(--n-50);
+  border-color: transparent;
+  color: var(--tp-700);
+}
+.nav-detail .nav-link.active {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--p-600);
+  box-shadow: none;
+  color: var(--tp-700);
+}
+.nav-detail .step-num {
+  font-family: var(--font-body);
+  background: var(--n-100);
+  color: var(--n-600);
+}
+.nav-detail .nav-link.active .step-num {
+  background: var(--p-600);
+  color: #fff;
+}
+
+.form-section-card {
+  border-radius: var(--r-lg);
+  box-shadow: none;
+  padding: 20px 22px 18px;
+}
+.subsection-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--t-md);
+}
+.page-form-actions-inner {
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+}
+
+/* ==================================================================
+   K. MASTERLIST, HS CODE, AKUN, LOGIN
+================================================================== */
+/* Kolom "Sisa": batang + angka kini selebar isinya. Sebelumnya kolom
+   Barang menyerap sisa lebar tabel, kolom Sisa dipaksa lebih sempit
+   dari isinya (319px di kolom 276px), dan angkanya tertutup tombol aksi.
+   Hanya di mode tabel -- mode kartu (<= 820px) punya aturannya sendiri. */
+@container mst-daftar (min-width: 821px) {
+  .mst-tabel td.mst-kol-sisa {
+    width: 1%;
+  }
+  .mst-tabel td.mst-kol-sisa .mst-meter {
+    width: 150px;
+    max-width: 150px;
+  }
+}
+.mst-nama {
+  font-weight: 600;
+}
+.mst-mono {
+  font-size: var(--t-sm);
+}
+
+/* ==================================================================
+   J. CEK PIB/PEB
+================================================================== */
+.cek-berkas .panel-head {
+  padding-top: 14px;
+}
+/* Di layar sempit baris tabel jadi kartu dan tiap sel sudah berlabel
+   (data-label = sumbernya: "Jadwal", "CIPL", "Kurs otomatis"), jadi pita
+   sumber di bawah nilai tak perlu mengulang label itu. */
+@media (max-width: 575.98px) {
+  .cek-kol-nilai .cek-sumber {
+    display: none;
+  }
+}
+
+/* ==================================================================
+   L. KURS
+
+   Dua tempat, dua tugas yang tak boleh tertukar:
+   - Di Cek PIB/PEB, kurs otomatis (sheet KURS) HANYA acuan pembanding.
+   - Di form jadwal, kurs itu hanya masuk lewat tombol "Sync kurs terbaru",
+     yang mengisi kotak NDPBM; baru tersimpan bila jadwalnya disimpan.
+   Warna tepi kiri kepingan = keadaan kurs: hijau terbaru, biru membaca,
+   ambar salinan tersimpan, merah belum terbaca / terlalu lama.
+================================================================== */
+.cek-kurs {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--s-success);
+  border-radius: var(--r-lg);
+  padding: 11px 18px 11px 16px;
+  margin-bottom: var(--sp-4);
+}
+.cek-kurs[data-status="memuat"] {
+  border-left-color: var(--p-400);
+}
+.cek-kurs[data-status="salinan"] {
+  border-left-color: var(--s-warn);
+}
+.cek-kurs[data-status="galat"] {
+  border-left-color: var(--s-danger);
+}
+.cek-kurs-kepala {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px var(--sp-4);
+}
+.cek-kurs-titik {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--s-success);
+}
+.cek-kurs[data-status="memuat"] .cek-kurs-titik {
+  background: var(--p-400);
+}
+.cek-kurs[data-status="salinan"] .cek-kurs-titik {
+  background: var(--s-warn);
+}
+.cek-kurs[data-status="galat"] .cek-kurs-titik {
+  background: var(--s-danger);
+}
+.cek-kurs-judul b {
+  font-weight: 600;
+  font-size: var(--t-md);
+  color: var(--tp-700);
+}
+.cek-kurs-nilai {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+.cek-kurs-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--n-50);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+.cek-kurs-kode {
+  font-weight: 600;
+  color: var(--n-600);
+}
+.cek-kurs-chip b,
+.cek-kurs-baris b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--t-base);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.cek-kurs-chip small,
+.cek-kurs-baris small {
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.cek-kurs-chip.is-kosong b {
+  color: var(--n-500);
+}
+.cek-kurs-ubah {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+}
+.cek-kurs-aksi {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.cek-kurs-tombol {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--tp-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.cek-kurs-tombol:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-400);
+}
+.cek-kurs-tombol:disabled {
+  opacity: 0.6;
+}
+.cek-kurs-tautan {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--tp-500);
+  text-underline-offset: 2px;
+}
+.cek-kurs-ket {
+  margin: 5px 0 0 21px;
+  max-width: 96ch;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.cek-kurs-semua {
+  margin: 6px 0 0 21px;
+  font-size: var(--t-sm);
+}
+.cek-kurs-semua > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--tp-500);
+  font-weight: 600;
+}
+.cek-kurs-kisi {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0 var(--sp-6);
+  margin-top: 8px;
+}
+.cek-kurs-baris {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--n-100);
+}
+.cek-kurs-baris.is-dipakai {
+  background: var(--p-50);
+  border-radius: var(--r-xs);
+}
+.cek-kurs-nama {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--n-500);
+  font-size: var(--t-xs);
+}
+
+/* Tombol "Sync kurs terbaru" di form jadwal (js/features/kurs-sync.js) */
+.kurs-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+.kurs-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--tp-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kurs-sync-btn:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-400);
+}
+.kurs-sync-btn:disabled {
+  opacity: 0.65;
+}
+.kurs-sync-btn.is-sibuk i {
+  animation: kurs-putar 0.9s linear infinite;
+}
+@keyframes kurs-putar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.kurs-sync-info {
+  flex: 1 1 180px;
+  min-width: 0;
+  font-size: var(--t-xs);
+  line-height: 1.4;
+  color: var(--n-500);
+}
+.kurs-sync-info[data-status="sama"] {
+  color: var(--ts-success);
+}
+.kurs-sync-info[data-status="beda"] {
+  color: var(--s-warn-ink);
+}
+.kurs-sync-info[data-status="kosong"] {
+  color: var(--ts-danger);
+}
+.kurs-sync-kembali {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tp-500);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kurs-sync-btn.is-sibuk i {
+    animation: none;
+  }
+}
+
+/* ==================================================================
+   K2. LOGIN -- papan pelabuhan
+
+   Layar lebar dibelah dua: kiri papan navy dengan lajur status
+   (kosakata yang sama dengan kartu jadwal), kanan formulir tanpa
+   kartu. Penanda kuningan berjalan SATU kali dari "Diproses" ke
+   "Transit" lalu diam -- satu-satunya gerak otomatis di layar ini.
+   Di bawah 900px hanya formulir (kartu di atas navy, seperti semula).
+================================================================== */
+.login-papan {
+  display: none;
+}
+.login-judul {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 2.1rem;
+  line-height: 1.1;
+  color: var(--tp-700);
+}
+@media (min-width: 900px) {
+  .login-screen {
+    grid-template-columns: minmax(0, 1.2fr) minmax(400px, 0.8fr);
+    place-items: stretch;
+    padding: 0;
+    background: var(--surface);
+  }
+  .login-screen::before {
+    display: none;
+  }
+  .login-papan {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--sp-8);
+    padding: 44px clamp(40px, 6vw, 88px) 56px;
+    background: var(--d-900);
+    color: #fff;
+  }
+  .login-papan-merek {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--font-board);
+    font-weight: 700;
+    font-size: 1.9rem;
+    line-height: 1;
+    letter-spacing: 0.03em;
+  }
+  .login-papan-merek svg {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    padding: 3px;
+  }
+  .login-papan-merek span span {
+    color: #dcb45f;
+  }
+  .login-papan-judul {
+    max-width: 15ch;
+    text-wrap: balance;
+    margin: 0;
+    font-family: var(--font-board);
+    font-weight: 600;
+    font-size: clamp(3.4rem, 6.4vw, 5.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.005em;
+  }
+  .login-papan-ket {
+    max-width: 44ch;
+    margin: var(--sp-5) 0 0;
+    font-size: var(--t-md);
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.74);
+  }
+
+  /* Lajur: garis dengan empat perhentian, penanda di salah satunya */
+  .login-lajur {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+    padding: 28px 0 0;
+    list-style: none;
+    max-width: 640px;
+  }
+  .login-lajur::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 5px;
+    right: 5px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .login-lajur li {
+    position: relative;
+    padding-top: 14px;
+    font-size: var(--t-sm);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.62);
+  }
+  .login-lajur li::before {
+    content: "";
+    position: absolute;
+    top: -28px;
+    left: 0;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--d-900);
+    border: 3px solid rgba(255, 255, 255, 0.34);
+    transform: translateY(0);
+  }
+  .login-lajur li.is-lewat::before {
+    background: var(--p-400);
+    border-color: var(--p-400);
+  }
+  .login-lajur li.is-kini {
+    color: #fff;
+  }
+  .login-lajur li.is-kini::before {
+    background: #dcb45f;
+    border-color: #dcb45f;
+    animation: login-laju 1.1s cubic-bezier(0.22, 0.8, 0.3, 1) 0.35s both;
+  }
+  @keyframes login-laju {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .login-lajur li.is-kini::before {
+      animation: none;
+    }
+  }
+
+  /* Formulir tanpa kartu di kolom kanan */
+  .login-card {
+    align-self: center;
+    justify-self: center;
+    width: min(380px, calc(100% - 48px));
+    padding: var(--sp-8) 0;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .login-card .login-brand {
+    display: none;
+  }
+  .login-card .login-sub {
+    margin-top: 0;
+    font-size: var(--t-base);
+  }
+}
+
+/* ==================================================================
+   M. HURUF KECIL & KOTAK HITUNG
+
+   Label kecil di CSS lama memakai huruf papan (kini Barlow Condensed)
+   pada 11px: terlalu rapat untuk dibaca cepat. Huruf papan dipakai
+   untuk judul & angka besar saja; label kecil memakai huruf antarmuka.
+================================================================== */
+.user-chip-role,
+.acct-self,
+.acct-legend-judul,
+.acct-legend-peran,
+.info-label,
+.date-field label,
+.docstep-label,
+.form-subhead,
+.dnd-bagian > h3,
+.agenda-dow,
+.cmdk-item-tag,
+.detail-header-label,
+.detail-kv dt {
+  font-family: var(--font-body);
+  font-weight: 600;
+}
+.acct-legend-judul {
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.acct-legend-peran {
+  font-size: var(--t-xs);
+  letter-spacing: 0;
+  padding: 2px 9px;
+}
+
+/* Kotak hitung (barang -> CIF -> x NDPBM -> Nilai Pabean): rata, tanpa
+   bayangan, angka di huruf papan. Kotak ketiga (Nilai Pabean) adalah
+   hasil akhir rantainya, jadi diberi tepi biru. */
+.calc-box {
+  padding: 12px 16px 13px;
+  background: var(--n-50);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: none;
+}
+.calc-box .calc-label {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--n-600);
+}
+.calc-box .calc-value {
+  margin-top: 1px;
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 1.7rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-700);
+}
+.calc-row > .calc-box:nth-child(3) {
+  border-left: 3px solid var(--p-600);
+}
+.calc-box.fob {
+  background: var(--n-50);
+  border-color: var(--border);
+}
+
+/* ==================================================================
+   N. PANEL DETAIL & CARI CEPAT
+
+   Panel detail ikut terang seperti halaman lain (navy hanya di
+   sidebar); label baris memakai huruf biasa, bukan huruf besar
+   monospace bertanda baca renggang. Yang tetap monospace hanya
+   pengenal (no. aju, B/L) -- dan itu sudah diatur per elemen.
+================================================================== */
+.sheet-head {
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+  padding: 11px var(--sp-5);
+}
+.sheet-head :focus-visible {
+  outline-color: var(--focus-ring);
+}
+.sheet-head .panel-eyebrow {
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--n-500);
+}
+.sheet-title {
+  font-family: var(--font-board);
+  font-weight: 600;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  color: var(--tp-700);
+}
+.sheet-btn {
+  border: 1px solid var(--border-control);
+  background: var(--surface);
+  color: var(--n-700);
+}
+.sheet-btn:hover:not(:disabled) {
+  background: var(--p-50);
+  border-color: var(--p-400);
+  color: var(--tp-600);
+}
+.sheet-pos {
+  color: var(--n-500);
+}
+.detail-kv dt {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--n-600);
+}
+.detail-kv dd {
+  font-size: var(--t-base);
+}
+.detail-header-label {
+  font-size: var(--t-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.cmdk-item-sub {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+}

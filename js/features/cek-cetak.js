@@ -114,7 +114,7 @@ const PP_NAMA_PIHAK = {
 const PP_KUNCI_JADWAL = {
   aju: ["aju"], docNo: ["daftar"], invoice: ["invoice"], invoiceDate: ["invoice"], polis: ["dok:530"], polisDate: ["dok:530"],
   moda: ["moda"], kapal: ["kapal"], muat: ["muat"], tujuan: ["tujuan"], negaraTujuan: ["negaraTujuan"], incoterm: ["incoterm"],
-  freight: ["freight"], asuransi: ["asuransi"], ndpbm: ["ndpbm"], kemasan: ["kemasan"], kontainer: ["kontainer"],
+  freight: ["freight"], asuransi: ["asuransi"], ndpbm: ["ndpbm"], nilaiPabeanRp: ["nilaiPabeanRp"], kemasan: ["kemasan"], kontainer: ["kontainer"],
   netto: ["netto"], bruto: ["bruto"], etd: ["tglEkspor"], packingList: ["packingList"],
 };
 const PP_KUNCI_MESIN = {
@@ -134,7 +134,7 @@ const PP_KOLOM_BARANG = [
 function ppSlot(x, isPeb) {
   if (x.kunci) {
     if (x.kunci === "pihak") return isPeb ? ["entitas:6", "entitas:8"] : ["entitas:9", "entitas:10"];
-    if (/^(?:dp|barang):/.test(x.kunci)) return [x.kunci];
+    if (/^(?:dp|barang|dok):/.test(x.kunci)) return [x.kunci];
     return PP_KUNCI_JADWAL[x.kunci] || [];
   }
   const f = ppTeks(x.field);
@@ -166,7 +166,7 @@ const PP_LABEL = {
     aju: "Nomor Pengajuan", daftar: "G. Nomor dan Tanggal Pendaftaran", kantor: "Kantor Pabean", moda: "9. Cara Pengangkutan",
     kapal: "10. Nama Sarana Pengangkutan & No. Voy/Flight", muat: "12. Pelabuhan Muat", tujuan: "14. Pelabuhan Tujuan", negaraTujuan: "Negara Tujuan",
     invoice: "15. Invoice", "bl:house": "17. House-BL/AWB", "bl:master": "17. Master-BL/AWB", valuta: "21. Valuta", ndpbm: "22. NDPBM",
-    incoterm: "23. Nilai (dasar nilai)", nilai: "23. Nilai", asuransi: "24. Asuransi/LDN", freight: "25. Freight",
+    incoterm: "23. Nilai (dasar nilai)", nilai: "23. Nilai", nilaiPabeanRp: "26. Nilai Pabean (Rp)", asuransi: "24. Asuransi/LDN", freight: "25. Freight",
     kontainer: "27. Nomor, Ukuran, dan Tipe Peti Kemas", kemasan: "28. Jumlah, Jenis, dan Merek Kemasan", bruto: "29. Berat Kotor (Kg)",
     netto: "30. Berat Bersih (Kg)", packingList: "Lembar Dokumen: Packing List (217)",
   },
@@ -313,11 +313,9 @@ function ppKanvas(pn) {
         g(w, `M${ppR(x0)} ${ppR(y + dy)}H${ppR(x1)}`);
       });
       (tpl.v || "").split("|").filter(Boolean).forEach((x) => {
-        let [xv, y0, y1, w] = angka(x);
-        if (judul != null) {
-          if (y1 <= judul) return;
-          y0 = Math.max(y0, judul - 0.25);
-        }
+        const [xv, y0Asli, y1, w] = angka(x);
+        if (judul != null && y1 <= judul) return;
+        const y0 = judul != null ? Math.max(y0Asli, judul - 0.25) : y0Asli;
         g(w, `M${ppR(xv)} ${ppR(y0 + dy)}V${ppR(y1 + dy)}`);
       });
       (tpl.r || "").split("|").filter(Boolean).forEach((x) => {
@@ -756,7 +754,7 @@ function ppPibHal1(m, pn, jumlahHal) {
   kv.isian(372, 372.95, 7, ppAngka(m.freight, 2), { slot: "freight" });
   kv.isian(379, 382.95, 7, m.ikb, { slot: "dp:ikb" });
   kv.isian(460, 361.95, 7, ppAngka(m.nilaiPabean, 2));
-  kv.isian(460, 375.95, 7, m.nilaiPabeanRp == null ? "" : `RP ${ppAngka(m.nilaiPabeanRp, 2)}`);
+  kv.isian(460, 375.95, 7, m.nilaiPabeanRp == null ? "" : `RP ${ppAngka(m.nilaiPabeanRp, 2)}`, { slot: "nilaiPabeanRp" });
 
   // 27-30
   m.kontainer.slice(0, 8).forEach((k, i) => {

@@ -637,20 +637,6 @@ function dokPelengkapJadwal(s) {
   return out;
 }
 
-/* KOLOM PI templat salin & Bulk Excel memuat PI DAN LS -- dua dokumen
-   yang biasanya sepaket. PI ditulis apa adanya (sama seperti sebelum LS
-   ada), LS di baris sendiri berawalan "LS ", supaya Bulk Import bisa
-   memisahkannya lagi (pecahPiLs). */
-function gabungPiLs(pi, ls) {
-  const p = String(pi == null ? "" : pi).trim();
-  const l = String(ls == null ? "" : ls).trim();
-  return [p, l ? "LS " + l : ""].filter(Boolean).join("\n");
-}
-function pecahPiLs(teks) {
-  const k = pecahKolomPi(teks);
-  return { pi: k.pi, ls: k.ls };
-}
-
 /* KOLOM PI templat salin All Import (laporan harian) & Bulk Excel memuat
    SEMUA dokumen pelengkap NON-FASILITAS satu jadwal, satu jenis / dokumen
    per baris:

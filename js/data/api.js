@@ -61,7 +61,7 @@ function buangAmbilAwalShipments() {
 async function loadShipments(opsi) {
   const diam = !!(opsi && opsi.diam);
   const nomor = ++muatKe;
-  if (!diam) showLoadingSkeleton(3);
+  if (!diam) showLoadingSkeleton();
   const permintaan = ambilAwalShipments || kueriShipments();
   ambilAwalShipments = null;
   const { data: rows, error } = await permintaan;
@@ -206,21 +206,50 @@ async function syncArrivedStatuses() {
   );
 }
 
-// Kerangka muat (skeleton)
-function showLoadingSkeleton(jumlah) {
+/* KERANGKA MUAT (skeleton) -- SELAYAR PENUH.
+
+   Dulu tiga kartu tetap: di monitor setinggi 900px kerangkanya berhenti
+   di tengah layar dan kaki halaman ikut naik, jadi halaman sesudah login
+   terlihat setengah kosong. Sekarang wadahnya setinggi sisa layar dari
+   tempatnya mulai (--kerangka-atas -> .skeleton-list, css/dashboard.css)
+   dan isinya kartu secukupnya untuk layar setinggi apa pun yang mungkin
+   dipakai jendela ini (screen.availHeight: jendela yang dibesarkan
+   selagi memuat tetap penuh). Kelebihannya terpotong di tepi bawah. */
+const KERANGKA_TINGGI_KARTU = 200; // perkiraan tinggi satu kartu kerangka + jaraknya (px)
+function jumlahKartuKerangka() {
+  const layar = Math.max(window.innerHeight || 0, (window.screen && window.screen.availHeight) || 0, 800);
+  return Math.ceil(layar / KERANGKA_TINGGI_KARTU) + 1;
+}
+function showLoadingSkeleton() {
   emptyState.classList.add("d-none");
+  const titik = '<div class="skeleton-dot"></div>'.repeat(9);
+  const tanggal = '<div class="skeleton-date"><div class="skeleton-line"></div><div class="skeleton-line"></div></div>'.repeat(3);
   const satu = `
     <div class="skeleton-card" aria-hidden="true">
-      <div class="skeleton-line skeleton-line--title"></div>
-      <div class="skeleton-line skeleton-line--wide"></div>
-      <div class="skeleton-line skeleton-line--mid"></div>
-      <div class="skeleton-line skeleton-line--short"></div>
+      <div class="skeleton-top">
+        <div><div class="skeleton-line skeleton-line--title"></div><div class="skeleton-line skeleton-line--sub"></div></div>
+        <div class="skeleton-pill"></div>
+      </div>
+      <div class="skeleton-lane"></div>
+      <div class="skeleton-dates">${tanggal}</div>
+      <div class="skeleton-steps">${titik}</div>
     </div>`;
   cardContainer.innerHTML =
-    `<div role="status" aria-live="polite" aria-busy="true">
+    `<div class="skeleton-list" role="status" aria-live="polite" aria-busy="true">
        <span class="visually-hidden">${tt("Memuat jadwal…", "Loading schedules…")}</span>
-       ${satu.repeat(jumlah || 3)}
+       ${satu.repeat(jumlahKartuKerangka())}
      </div>`;
+  const daftar = cardContainer.firstElementChild;
+  /* Jarak dari puncak HALAMAN (bukan layar): halaman yang sudah tergulir
+     tetap penuh sampai bawah. Diukur di bingkai berikutnya, tepat
+     sebelum kerangkanya tergambar -- bukan di sini: mengukur sekarang
+     memaksa seluruh halaman ditata saat aplikasi baru dibuka (±30ms), dan
+     kalau datanya keburu tiba kerangka itu dibuang tanpa pernah terlihat. */
+  requestAnimationFrame(() => {
+    if (!daftar.isConnected) return;
+    const atas = daftar.getBoundingClientRect().top + (window.scrollY || 0);
+    daftar.style.setProperty("--kerangka-atas", `${Math.max(0, Math.round(atas))}px`);
+  });
 }
 
 // Layar gagal: sebutkan APA yang gagal dan APA langkah berikutnya
@@ -238,7 +267,7 @@ function showDbErrorState() {
         <code>SUPABASE_ANON_KEY</code> in <b>js/config.js</b>, then make sure
         <b>schema-migration.sql</b> has been run in the Supabase SQL Editor.`,
       )}</div>
-      <button class="btn btn-teal" onclick="loadShipments()">
+      <button type="button" class="btn btn-teal" data-muat-ulang-jadwal>
         <i class="bi bi-arrow-clockwise"></i> ${tt("Coba muat ulang", "Try reloading")}
       </button>
     </div>`;
@@ -523,3 +552,9 @@ async function persistFields(id, patch) {
     loadShipments();
   }
 }
+
+/* Tombol "Coba muat ulang" di layar galat sambungan. Dulu onclick="..."
+   sebaris -- diblokir Content-Security-Policy (index.html). */
+document.addEventListener("click", (e) => {
+  if (e.target.closest && e.target.closest("[data-muat-ulang-jadwal]")) loadShipments();
+});

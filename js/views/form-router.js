@@ -382,7 +382,6 @@ function renderFormPage(id) {
     $("#fFreight").value = formatNumberValue(s.freight);
     $("#fInsurance").value = formatNumberValue(s.insurance);
     $("#fNdpbm").value = formatNumberValue(s.ndpbm);
-    $("#fTarif").value = formatNumberValue(s.tarif);
     /* NOL DITULIS APA ADANYA, tidak dikosongkan.
 
        formatNumberValue(0) mengembalikan string kosong — masuk akal
@@ -404,6 +403,11 @@ function renderFormPage(id) {
     draftItems = JSON.parse(
       JSON.stringify(s.items && s.items.length ? s.items : [newItem()]),
     );
+    /* Tarif BM per barang (tarif-hs.js): tarif jadwal lama (kolom
+       `tarif`, sebelum tarifnya per barang) turun ke barang yang belum
+       bertarif. Sidik tetap dari data TERSIMPAN (s.items), jadi barang
+       yang baru menerima tarifnya ikut ditulis saat disimpan. */
+    if (s.mode !== "export") siapkanTarifBarangForm(draftItems, s.tarif);
     draftStops = JSON.parse(JSON.stringify(s.routeStops || []));
     sidikAsalForm = sidikIsiJadwal(s.items, s.routeStops, s.id);
   } else {
@@ -439,7 +443,6 @@ function renderFormPage(id) {
       "fFreight",
       "fInsurance",
       "fNdpbm",
-      "fTarif",
       "fBM",
       "fPPN",
       "fPPH",
@@ -450,8 +453,6 @@ function renderFormPage(id) {
     $("#fStatus").value = "process";
     $("#fIncoterm").value = "FOB";
     $("#fRouteType").value = "direct";
-    // Tarif bea masuk hampir selalu 5% untuk barang yang dibawa DDI, jadi diisi lebih dulu
-    $("#fTarif").value = "5";
     draftItems = [newItem()];
     draftNotesLog = [];
     draftStops = [];
@@ -502,6 +503,8 @@ function renderFormPage(id) {
   syncFormValidity();
   // Nomor yang sudah dipakai jadwal lain langsung ditandai (cek-duplikat.js)
   if (typeof periksaNomorGandaForm === "function") periksaNomorGandaForm();
+  // Keterangan kurs terbaru di bawah NDPBM -- hanya keterangan, kotaknya tidak disentuh (kurs-sync.js)
+  if (typeof kursSyncMulai === "function") kursSyncMulai();
   showFormView();
   /* SIAP MENGETIK. Jadwal baru: kursor langsung di isian kosong pertama.
      Mengubah jadwal: isian pertama -- tapi tidak di layar sentuh, di
@@ -1089,7 +1092,10 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     freight: parseInputNumber($("#fFreight").value),
     insurance: parseInputNumber($("#fInsurance").value),
     ndpbm: parseInputNumber($("#fNdpbm").value),
-    tarif: parseInputNumber($("#fTarif").value),
+    /* Tarif BM kini per barang (item.dataPabean.tarifBm). Kolom jadwal
+       `tarif` = tarif bersama bila semua barang bertarif sama, selain
+       itu kosong (tarifRingkasJadwal, tarif-hs.js). */
+    tarif: activeMode === "export" ? null : tarifRingkasJadwal(draftItems),
     bm: parseInputNumber($("#fBM").value),
     ppn: parseInputNumber($("#fPPN").value),
     pph: parseInputNumber($("#fPPH").value),

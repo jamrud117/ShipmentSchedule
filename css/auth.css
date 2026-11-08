@@ -151,16 +151,11 @@ body.is-locked {
 .user-chip-name {
   font-size: var(--t-sm);
   color: #fff;
-  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .user-chip-role {
-  font-family: var(--font-board);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.55);
 }
 .user-chip-role.is-exim {
@@ -351,7 +346,9 @@ body.tutup-docnum .nav-docnum,
 body.tutup-hscode .site-nav-link[data-page="hscode"],
 body.tutup-masterlist .site-nav-link[data-page="masterlist"],
 body.tutup-checker .site-nav-link[data-page="checker"],
-body.tutup-accounts .site-nav-link[data-page="accounts"] {
+body.tutup-accounts .site-nav-link[data-page="accounts"],
+/* Pintasan N (jadwal baru) di kaki halaman */
+body.tutup-form .pintasan-form {
   display: none !important;
 }
 
@@ -373,11 +370,12 @@ body.is-viewer .counter-box {
   display: none !important;
 }
 
-/* Kontrol yang tetap terlihat supaya isinya terbaca, tapi tidak bisa
-   disentuh — mis. dropdown status pada kartu. */
-body.is-viewer .status-select,
-body.is-viewer .date-field input,
-body.is-viewer .delay-strip-fields input {
+/* Dropdown status di kartu: tetap terlihat supaya isinya terbaca, tapi
+   tidak bisa disentuh -- digambar disabled bagi peran baca-saja
+   (cards.js), tanpa panah pilihan. Tanggal kartunya digambar readonly:
+   tampil sebagai nilai polos tanpa bingkai & ikon (css/date-input.css)
+   -- dulu disamarkan di sini dan tetap bisa difokus lewat labelnya. */
+body.is-viewer .status-select {
   pointer-events: none;
   opacity: 0.72;
   background: var(--n-50);
@@ -440,6 +438,18 @@ body.is-viewer .delay-strip-fields input {
   background: var(--w-bg-e3f4ee);
   color: var(--w-teks-0f6b52);
 }
+/* Hitungan akun nonaktif di kepala halaman Akun: warna peringatan --
+   akun yang belum dibuka EXIM bisa saja didaftarkan orang luar. */
+.acct-nonaktif-hitung {
+  color: var(--s-warn);
+}
+/* Nonaktif: belum dibuka EXIM -- hanya garis tepi, tanpa warna peran. */
+.acct-avatar.is-nonaktif,
+.acct-legend-peran.is-nonaktif {
+  background: transparent;
+  color: var(--n-500);
+  box-shadow: inset 0 0 0 1px var(--n-300);
+}
 .acct-main {
   flex: 1;
   min-width: 0;
@@ -461,10 +471,7 @@ body.is-viewer .delay-strip-fields input {
   white-space: nowrap;
 }
 .acct-self {
-  font-family: var(--font-board);
   font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
   background: var(--sec-50);
   color: var(--tsec-700);
   border: 1px solid var(--sec-200);
@@ -508,14 +515,6 @@ body.is-viewer .delay-strip-fields input {
 .acct-legend:empty {
   display: none;
 }
-.acct-legend-judul {
-  font-family: var(--font-board);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--n-500);
-}
 .acct-legend-baris {
   display: grid;
   grid-template-columns: 86px minmax(0, 1fr);
@@ -524,11 +523,6 @@ body.is-viewer .delay-strip-fields input {
 }
 .acct-legend-peran {
   justify-self: start;
-  font-family: var(--font-board);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  padding: 2px 7px;
   border-radius: 999px;
   background: var(--n-100);
   color: var(--n-600);
@@ -716,9 +710,6 @@ body.is-viewer .delay-strip-fields input {
 .hs-tabel th {
   padding: 10px var(--sp-5);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--n-500);
   border-bottom: 1px solid var(--n-100);
   text-align: left;
@@ -753,6 +744,17 @@ body.is-viewer .delay-strip-fields input {
 .hs-tabel td.hs-kol-lartas {
   width: 1%;
   white-space: nowrap;
+}
+/* Tarif BM per HS Code (tarif-hs.js): angka rata kanan; kosong = redup */
+.hs-tabel th.hs-kol-tarif,
+.hs-tabel td.hs-kol-tarif {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hs-tanpa-tarif {
+  color: var(--text-subtle);
 }
 /* Tanda lartas per HS Code (PI / LS / SNI) -- juga dipakai kartu
    Dokumen Pelengkap di form. */
@@ -856,11 +858,11 @@ body.is-viewer .delay-strip-fields input {
   }
   .hs-tabel tr {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     grid-template-areas:
-      "nama nama aksi"
-      "kode lartas aksi"
-      "catatan catatan catatan";
+      "nama nama nama aksi"
+      "kode tarif lartas aksi"
+      "catatan catatan catatan catatan";
     gap: 4px var(--sp-3);
     padding: 11px var(--sp-4);
     border-bottom: 1px solid var(--n-100);
@@ -880,8 +882,11 @@ body.is-viewer .delay-strip-fields input {
   .hs-tabel td.hs-kol-catatan { grid-area: catatan; font-size: var(--t-xs); }
   .hs-tabel td.hs-kol-aksi { grid-area: aksi; align-self: center; width: auto; }
   .hs-tabel td.hs-kol-lartas { grid-area: lartas; align-self: center; width: auto; }
+  .hs-tabel td.hs-kol-tarif { grid-area: tarif; align-self: center; width: auto; text-align: left; }
+  .hs-tabel td.hs-kol-tarif::before { content: attr(data-label) " "; color: var(--text-subtle); font-size: var(--t-xs); }
   .hs-tabel td.hs-tanpa-catatan,
-  .hs-tabel td.hs-tanpa-lartas { display: none; }
+  .hs-tabel td.hs-tanpa-lartas,
+  .hs-tabel td.hs-tanpa-tarif { display: none; }
   .pagination-bar.hs-halaman {
     padding: 10px var(--sp-4);
   }

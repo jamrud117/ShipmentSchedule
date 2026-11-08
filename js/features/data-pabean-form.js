@@ -156,6 +156,12 @@ function dpbIsian(k, lebar) {
   return dpbKotakHtml({ id: `dpb-${k}`, label: dpLabel(f.label), nilai: draftDataPabean[k], jenis: f.jenis, pilihan: dpPilihanIsian(f, activeMode), saran: f.saran, alamat: `data-dpb="${k}"`, lebar });
 }
 
+/* Isian + tanggalnya sepasang setengah baris (.fl-bertanggal, components.css):
+   isiannya mengisi sisa sel, kotak tanggalnya selebar tanggalnya -- bukan
+   dua sel seperempat baris dengan celah kosong di samping kotak tanggal.
+   Salah satunya bukan isian buku ini (dpbIsian kosong): tanpa pasangan. */
+const dpbPasangTanggal = (isian, tanggal) => (isian && tanggal ? `<div class="s6 fl-bertanggal">${isian}${tanggal}</div>` : isian + tanggal);
+
 function dpbBagian(judul, isi, opsi) {
   if (!isi) return "";
   const o = opsi || {};
@@ -167,14 +173,15 @@ function dpbBagian(judul, isi, opsi) {
 
 // Jadwal dalam bentuk tersimpan dari isian form -- untuk dpNilaiHitung & dpDokumenJadwal
 function dpbJadwalForm() {
-  const tarif = String($("#fTarif").value || "").trim();
   return {
     mode: activeMode, transport: $("#fTransport").value, party: $("#fParty").value.trim(), noAju: $("#fNoAju").value.trim(),
     invoice: $("#fInvoice").value.trim(), invoiceDate: $("#fInvoiceDate").value,
     masterBL: $("#fMasterBL").value.trim(), masterBLDate: $("#fMasterBLDate").value,
     houseBL: $("#fHouseBL").value.trim(), houseBLDate: $("#fHouseBLDate").value,
     incoterm: $("#fIncoterm").value, freight: parseInputNumber($("#fFreight").value), insurance: parseInputNumber($("#fInsurance").value),
-    ndpbm: parseInputNumber($("#fNdpbm").value), tarif: tarif === "" ? null : parseInputNumber(tarif),
+    ndpbm: parseInputNumber($("#fNdpbm").value),
+    // Tarif BM per barang (item.dataPabean.tarifBm); barang tanpa tarif = bawaan 5%
+    tarif: null,
     dokPelengkap: typeof dokPelengkapForm === "function" ? dokPelengkapForm() : null,
     dataPabean: draftDataPabean, items: draftItems,
     // BM / PPN / PPh yang diketik sendiri di Kepabeanan & Biaya = kolom Dibayar (modal-fields.js)
@@ -248,7 +255,7 @@ function dpbTabPengangkut(c) {
     + dpbBacaHtml({ id: "dpbr-voy", label: tt("No. Voy / Flight", "Voyage / Flight No."), nilai: dpbKotakIsi("#fVoyage"), ke: "#fVoyage", tab: "umum" });
   const muat = dpbBacaHtml({ id: "dpbr-muat", label: c.pib ? tt("Pelabuhan Muat", "Port of Loading") : tt("Pelabuhan Muat Asal", "Port of Origin"), nilai: dpbKotakIsi("#fOrigin"), ke: "#fOrigin", tab: "umum" });
   const tujuan = dpbBacaHtml({ id: "dpbr-tujuan", label: tt("Pelabuhan Tujuan", "Port of Destination"), nilai: dpbKotakIsi("#fDestination"), ke: "#fDestination", tab: "umum" });
-  const bc11 = dpbIsian("bc11Nomor") + dpbIsian("bc11Tanggal") + dpbIsian("bc11Pos") + dpbIsian("bc11SubPos");
+  const bc11 = dpbPasangTanggal(dpbIsian("bc11Nomor"), dpbIsian("bc11Tanggal")) + dpbIsian("bc11Pos") + dpbIsian("bc11SubPos");
   if (c.pib) {
     const eta = dpbKotakIsi("#fEta");
     return dpbBagian(tt("BC 1.1 (Tutup PU)", "BC 1.1 (Manifest)"), bc11)
@@ -290,7 +297,7 @@ function dpbTabTransaksi(c) {
         + freight + dpbIsian("kodeAsuransi") + asuransi + hitung("dpbr-cif", tt("Nilai CIF", "CIF Value"), dpbUsd(n.cif))
         + hitung("dpbr-pabean", tt("Nilai Pabean (Rp)", "Customs Value (IDR)"), dpbRp(n.nilaiPabean), "s6"),
       { catatan: tt("Harga Barang = jumlah Amount barang; Nilai CIF = Harga Barang + Freight + Asuransi; Nilai Pabean = CIF × NDPBM.", "Goods Price = sum of item Amounts; CIF = Goods Price + Freight + Insurance; Customs Value = CIF × NDPBM.") })
-      + dpbBagian(tt("Transaksi Perdagangan", "Trade Transaction"), dpbIsian("transaksiJenis", "s6") + dpbIsian("transaksiNomor") + dpbIsian("transaksiTanggal") + dpbIsian("ikb", "s6"))
+      + dpbBagian(tt("Transaksi Perdagangan", "Trade Transaction"), dpbIsian("transaksiJenis", "s6") + dpbPasangTanggal(dpbIsian("transaksiNomor"), dpbIsian("transaksiTanggal")) + dpbIsian("ikb", "s6"))
       + dpbBagian(tt("Berat", "Weight"), berat, { catatan: catatanBerat });
   }
   return dpbBagian(tt("Harga", "Price"), dpbIsian("valuta") + ndpbm + incoterm + hitung("dpbr-harga", tt("Harga Penyerahan", "Delivery Price"), dpbUsd(n.harga))
@@ -314,8 +321,8 @@ function dpbFasilitasRingkas(it) {
 function dpbTabBarang(c) {
   const barang = draftItems.map((it, i) => ({ it, i })).filter(({ it }) => dpbBarangAda(it));
   if (!barang.length) return dpbBagian(tt("Barang", "Items"), `<p class="dpb-kosong">${tt("Belum ada barang di tab Daftar Barang.", "No items on the Item List tab yet.")}</p>`, { mentah: true });
-  const tarifJadwal = c.jadwal.tarif == null ? 5 : c.jadwal.tarif;
-  const persen = (v, cadangan) => (dpAda(v) ? `${formatNumberValue(v) || "0"}%` : `<span class="dpb-redup" title="${dpbEsc(tt("Tarif jadwal", "Schedule rate"))}">${formatNumberValue(cadangan) || "0"}%</span>`);
+  const tarifJadwal = c.jadwal.tarif == null ? TARIF_BM_BAWAAN : c.jadwal.tarif;
+  const persen = (v, cadangan) => (dpAda(v) ? `${formatNumberValue(v) || "0"}%` : `<span class="dpb-redup" title="${dpbEsc(c.jadwal.tarif == null ? tt("Tarif bawaan", "Default rate") : tt("Tarif jadwal", "Schedule rate"))}">${formatNumberValue(cadangan) || "0"}%</span>`);
   const kepala = c.pib
     ? [tt("Seri", "Serial"), tt("Pos Tarif / HS", "HS Code"), tt("Uraian Barang", "Description"), tt("Jumlah Satuan", "Quantity"), tt("Nilai (USD)", "Value (USD)"), tt("Fasilitas", "Facility"), "BM", "PPh", ""]
     : [tt("Seri", "Serial"), tt("Pos Tarif / HS", "HS Code"), tt("Uraian Barang", "Description"), tt("Jumlah Satuan", "Quantity"), tt("Nilai (USD)", "Value (USD)"), tt("Jenis Ekspor", "Export Type"), tt("Daerah Asal", "Region of Origin"), ""];
@@ -357,10 +364,10 @@ function dpbTabPungutan(c) {
     mentah: true,
     catatan: tt("Dihitung otomatis per seri barang: tarif BM & PPh tiap barang (tab Barang) atau Tarif (%) jadwal, PPN 12% × DPP 11/12. Fasilitas barang di Daftar Barang (SKB BM / Masterlist, SKB PPN, SKB PPh) memindahkan pungutannya ke kolom Dibebaskan. Kolom Dibayar = Bea Masuk, PPN & PPH di tab Kepabeanan &amp; Biaya (yang diketik sendiri di sana tampil apa adanya); NDPBM, Freight & Asuransi juga dari tab itu.",
       "Calculated per item: each item's BM & PPh rate (Items tab) or the schedule's Rate (%), PPN 12% × 11/12 base. Item facilities on the Item List (SKB BM / Masterlist, SKB PPN, SKB PPh) move the levy to the Exempted column. The Paid column = Import Duty, PPN & PPH on the Customs &amp; Charges tab (values typed there are shown as typed); NDPBM, Freight & Insurance also come from that tab."),
-  }) + dpbBagian(tt("Pembayaran & Jaminan", "Payment & Guarantee"), dpbIsian("pembayaran", "s6") + dpbIsian("jaminanJenis", "s6") + dpbIsian("jaminanNomor") + dpbIsian("jaminanTanggal"));
+  }) + dpbBagian(tt("Pembayaran & Jaminan", "Payment & Guarantee"), dpbIsian("pembayaran", "s6") + dpbIsian("jaminanJenis", "s6") + dpbPasangTanggal(dpbIsian("jaminanNomor"), dpbIsian("jaminanTanggal")));
 }
 
-const dpbTabPernyataan = () => dpbBagian(tt("Pernyataan", "Declaration"), dpbIsian("kotaPernyataan") + dpbIsian("tanggalPernyataan") + dpbIsian("namaPernyataan") + dpbIsian("jabatanPernyataan"));
+const dpbTabPernyataan = () => dpbBagian(tt("Pernyataan", "Declaration"), dpbPasangTanggal(dpbIsian("kotaPernyataan"), dpbIsian("tanggalPernyataan")) + dpbIsian("namaPernyataan") + dpbIsian("jabatanPernyataan"));
 
 function dpbTabDaftar(mode) {
   return [

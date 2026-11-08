@@ -4,9 +4,23 @@
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
-/* PUSTAKA EXCEL DIMUAT SAAT DIBUTUHKAN */
+/* FORM YANG TIDAK PERNAH DIKIRIM (panel Nomor Dokumen, data-tanpa-kirim):
+   Enter tidak boleh memuat ulang halaman. Dulu onsubmit="return false;"
+   di HTML -- penangan sebaris seperti itu diblokir Content-Security-Policy
+   (index.html), jadi dijaga dari sini. */
+document.addEventListener("submit", (e) => {
+  if (e.target && e.target.matches && e.target.matches("form[data-tanpa-kirim]")) e.preventDefault();
+});
+
+/* PUSTAKA EXCEL DIMUAT SAAT DIBUTUHKAN
+
+   SheetJS (MEMBACA berkas impor: CIPL vendor, Bulk Import, draft CEISA)
+   dari CDN resminya. Versi di npm berhenti di 0.18.5 -- yang rentan
+   prototype pollution (CVE-2023-30533) dan ReDoS (CVE-2024-22363) saat
+   membaca berkas buatan orang lain; perbaikannya hanya terbit di
+   cdn.sheetjs.com. */
 const XLSX_CDN =
-  "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+  "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js";
 let xlsxPromise = null;
 function ensureXLSX() {
   if (typeof XLSX !== "undefined") return Promise.resolve();
@@ -34,12 +48,16 @@ function ensureXLSX() {
    seperti SheetJS. */
 const EXCELJS_CDN =
   "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+// Subresource Integrity berkas di atas (sama dengan paket npm exceljs@4.4.0)
+const EXCELJS_SRI = "sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz";
 let exceljsPromise = null;
 function ensureExcelJS() {
   if (typeof ExcelJS !== "undefined") return Promise.resolve();
   if (!exceljsPromise) {
     exceljsPromise = new Promise((resolve, reject) => {
       const el = document.createElement("script");
+      el.integrity = EXCELJS_SRI;
+      el.crossOrigin = "anonymous";
       el.src = EXCELJS_CDN;
       el.onload = () => resolve();
       el.onerror = () => {

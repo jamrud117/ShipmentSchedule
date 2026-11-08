@@ -24,7 +24,31 @@
 const BUCKET_LAMPIRAN = "lampiran-jadwal";
 const LAMPIRAN_MAKS_MB = 20;
 const LAMPIRAN_MAKS_BYTE = LAMPIRAN_MAKS_MB * 1024 * 1024;
-const LAMPIRAN_TERIMA = ".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.tif,.tiff,.xls,.xlsx,.csv,.doc,.docx,.zip,.msg,.eml,.txt";
+/* Jenis yang diterima, PER EKSTENSI, beserta jenis isi (Content-Type) yang
+   dikirim ke Storage. Jenisnya ditetapkan dari ekstensi, bukan dari
+   laporan peramban: berkas .html / .svg / .js yang menyaru tidak bisa
+   lolos, dan bucket menolak jenis lain (allowed_mime_types,
+   migration-keamanan.sql). Yang tidak dikenali peramban (.msg di Windows)
+   dikirim sebagai application/octet-stream -- diunduh, tidak dibuka. */
+const LAMPIRAN_JENIS = {
+  pdf: "application/pdf",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+  heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  zip: "application/zip",
+  msg: "application/octet-stream",
+  eml: "message/rfc822",
+  txt: "text/plain",
+};
+const LAMPIRAN_TERIMA = Object.keys(LAMPIRAN_JENIS).map((x) => "." + x).join(",");
+function ekstensiLampiran(nama) {
+  const m = /\.([A-Za-z0-9]+)$/.exec(String(nama || ""));
+  return m ? m[1].toLowerCase() : "";
+}
 const BERKAS_MIGRASI_LAMPIRAN = "migration-lampiran-lartas-kebutuhan.sql";
 
 /* Nama di bucket: huruf, angka, titik, minus & garis bawah saja --
@@ -93,6 +117,9 @@ function ukuranBerkasTeks(byte) {
    lebih dari batas bucket. Pesan, atau "" kalau boleh. */
 function periksaBerkasLampiran(file) {
   if (!file || !file.size) return tt(`${(file && file.name) || "Berkas"} kosong.`, `${(file && file.name) || "File"} is empty.`);
+  if (!Object.prototype.hasOwnProperty.call(LAMPIRAN_JENIS, ekstensiLampiran(file.name)))
+    return tt(`${file.name}: jenis berkas ini tidak diterima. Gunakan PDF, gambar, Excel, Word, ZIP, email, atau teks.`,
+      `${file.name}: this file type is not accepted. Use PDF, images, Excel, Word, ZIP, email, or text.`);
   if (file.size > LAMPIRAN_MAKS_BYTE)
     return tt(`${file.name} lebih dari ${LAMPIRAN_MAKS_MB} MB.`, `${file.name} is larger than ${LAMPIRAN_MAKS_MB} MB.`);
   return "";
@@ -128,7 +155,7 @@ async function unggahLampiran(baru, folder) {
       if (galat) throw Object.assign(new Error(galat), { pesanPengguna: galat });
       const path = `${folder}/${idAcakLampiran()}-${namaBerkasAman(b.file.name)}`;
       const { error } = await storageLampiran().upload(path, b.file, {
-        contentType: b.file.type || "application/octet-stream",
+        contentType: LAMPIRAN_JENIS[ekstensiLampiran(b.file.name)] || "application/octet-stream",
         upsert: false,
       });
       if (error) throw error;

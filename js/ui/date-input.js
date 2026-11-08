@@ -63,6 +63,16 @@
      kotak yang baru dipasang belum punya letak yang bisa dijadikan
      tempat menempel.
 
+   SATU MODEL: BERGAYA NILAI (kelas `kt-nilai`, css/date-input.css)
+
+   Dulu hanya tanggal di kartu jadwal yang bergaya nilai; kotak tanggal
+   di form, kotak dialog, dan tabel isian bergaya kotak isian biasa. Kini
+   SEMUA kotak tanggal diberi kelas kt-nilai saat dirapikan
+   (pasangKotakTanggal): satu rupa (bingkai selalu tampak, huruf tegas,
+   ikon kalender yang menebal saat disorot, penunjuk tangan di atas
+   ikonnya) dan klik yang memfokuskannya memilih seluruh tanggal (lihat
+   pendengar focusin di bawah). Kecuali yang tanpa ikon (lihat di bawah).
+
    KOTAK YANG DIKECUALIKAN
 
    `data-kotak-tanggal-off` -- dipakai #filterDateFrom/To (disembunyikan,
@@ -191,6 +201,8 @@ function pasangKotakTanggal(el) {
   KT_KEADAAN.set(el, k);
   el.type = "text";
   el.setAttribute("data-kotak-tanggal", "");
+  // Satu model untuk semua tanggal (lihat SATU MODEL di atas); kotak Dari/Sampai pemilih rentang tetap kotak biasa
+  if (!el.hasAttribute("data-kotak-tanggal-tanpa-ikon")) el.classList.add("kt-nilai");
   if (!el.hasAttribute("placeholder")) el.placeholder = "dd-mm-yyyy";
   if (!el.hasAttribute("size")) el.size = 10;
   el.setAttribute("autocomplete", "off");
@@ -412,18 +424,44 @@ if (typeof document !== "undefined") {
     setTimeout(() => (ktPointerBaru = false), 0);
     if (ktPemilihEl && e.target !== ktPemilihEl) ktLepasPemilih();
   }, true);
+  /* Kotak BERGAYA NILAI (kelas kt-nilai -- semua kotak tanggal kecuali
+     Dari/Sampai pemilih rentang): klik yang memfokuskannya juga memilih
+     seluruh tanggal, karena yang dilakukan hampir selalu mengganti
+     tanggalnya utuh -- tinggal ketik yang baru. Klik berikutnya (sudah
+     terfokus) menaruh kursor seperti biasa. mouseup sesudah klik
+     pemfokus itu dicegah -- tanpa itu peramban langsung menggantinya
+     dengan kursor di titik yang diklik. */
+  let ktNilaiBaruFokus = null;
   document.addEventListener("focusin", (e) => {
     const el = e.target;
-    if (ktKotak(el) && !ktPointerBaru && !el.readOnly && typeof el.select === "function") el.select();
+    if (!ktKotak(el) || el.readOnly || typeof el.select !== "function") return;
+    if (!ktPointerBaru) el.select();
+    else if (el.classList.contains("kt-nilai")) {
+      el.select();
+      ktNilaiBaruFokus = el;
+    }
+  }, true);
+  document.addEventListener("mouseup", (e) => {
+    const el = ktNilaiBaruFokus;
+    ktNilaiBaruFokus = null;
+    if (el && e.target === el && document.activeElement === el) e.preventDefault();
   }, true);
 
   // Ikon kalender di ujung kanan: klik membuka kalender, penunjuk berubah jadi tangan
   /* Kotak tanpa ukuran (belum ditata: display:none, atau jsdom yang tidak punya
      tata letak) tidak punya "ujung kanan" -- klik sintetis ber-clientX 0 di
      sana tidak boleh dibaca sebagai klik pada ikon. */
+  /* Lebar area ikon = ruang kanan yang disediakan CSS untuk ikonnya
+     (padding kanan): 34px pada kotak biasa, lebih rapat pada kotak
+     bergaya nilai di ponsel (css/card.css). Tanpa padding terbaca
+     (jsdom), KT_LEBAR_IKON. */
+  const ktLebarIkon = (el) => {
+    const pad = parseFloat(getComputedStyle(el).paddingRight);
+    return pad >= 16 ? pad : KT_LEBAR_IKON;
+  };
   const ktDiIkon = (e, el) => {
     const r = el.getBoundingClientRect();
-    return r.width > 0 && e.clientX <= r.right && e.clientX >= r.right - KT_LEBAR_IKON;
+    return r.width > 0 && e.clientX <= r.right && e.clientX >= r.right - ktLebarIkon(el);
   };
   document.addEventListener("click", (e) => {
     const el = e.target;

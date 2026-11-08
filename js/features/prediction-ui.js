@@ -112,14 +112,21 @@ function predictionFormSource() {
    FORM
 ================================================================== */
 
+/* Pengalih Auto/Manual di bawah kotak ETA & Estimated Delivery: tombol
+   yang berlaku ditandai is-active (tampilan) & aria-pressed (pembaca
+   layar). Pengalih inilah satu-satunya penanda mode di form -- chip
+   "Auto"/"Manual" di samping labelnya dulu hanya mengulang isinya. */
+function tandaiSakelarMode(sakelar, kunci, mode) {
+  $$(sakelar + " .eta-mode-btn").forEach((b) => {
+    const aktif = b.dataset[kunci] === mode;
+    b.classList.toggle("is-active", aktif);
+    b.setAttribute("aria-pressed", aktif ? "true" : "false");
+  });
+}
 function setFormEtaMode(mode, opsi) {
   const o = opsi || {};
   formEtaMode = mode === "manual" ? "manual" : "auto";
-  $$("#etaModeSwitch .eta-mode-btn").forEach((b) =>
-    b.classList.toggle("is-active", b.dataset.etaMode === formEtaMode),
-  );
-  const chip = $("#etaModeChip");
-  if (chip) chip.outerHTML = etaModeChipHtml(formEtaMode).replace("<span", '<span id="etaModeChip"');
+  tandaiSakelarMode("#etaModeSwitch", "etaMode", formEtaMode);
   sembunyikanNoticeEta();
   if (o.recalc !== false) hitungUlangEtaForm({ paksa: formEtaMode === "auto" });
   syncPredictionForm();
@@ -180,16 +187,11 @@ function isiEstimatedDeliveryForm() {
 function setFormDeliveryMode(mode, opsi) {
   const o = opsi || {};
   formDeliveryMode = mode === "manual" ? "manual" : "auto";
-  $$("#deliveryModeSwitch .eta-mode-btn").forEach((b) =>
-    b.classList.toggle("is-active", b.dataset.deliveryMode === formDeliveryMode),
-  );
-  const chip = $("#deliveryModeChip");
-  if (chip) {
-    chip.outerHTML = deliveryModeChipHtml(formDeliveryMode).replace(
-      "<span",
-      '<span id="deliveryModeChip"',
-    );
-  }
+  tandaiSakelarMode("#deliveryModeSwitch", "deliveryMode", formDeliveryMode);
+  // Keterangan di bawahnya ikut mode: "Dihitung otomatis." / "Dikunci untuk laporan."
+  $$("#actualAutoHint [data-ket-mode]").forEach((el) => {
+    el.hidden = el.dataset.ketMode !== formDeliveryMode;
+  });
   if (o.sync !== false) syncPredictionForm();
 }
 /* Saat Estimated Delivery dikunci manual, hitungan mesin tetap
@@ -543,15 +545,7 @@ function initPredictionForm(s) {
   if (typeof resetRuteOtomatis === "function") resetRuteOtomatis(s);
   formEtaMode = s ? etaModeOf(s) : "auto";
   sembunyikanNoticeEta();
-  $$("#etaModeSwitch .eta-mode-btn").forEach((b) =>
-    b.classList.toggle("is-active", b.dataset.etaMode === formEtaMode),
-  );
-  const chip = $("#etaModeChip");
-  if (chip)
-    chip.outerHTML = etaModeChipHtml(formEtaMode).replace(
-      "<span",
-      '<span id="etaModeChip"',
-    );
+  tandaiSakelarMode("#etaModeSwitch", "etaMode", formEtaMode);
   setFormDeliveryMode(s ? deliveryModeOf(s) : "auto", { sync: false });
   // Jadwal BARU dengan mode auto: ETA langsung terisi begitu ETD diketik
   if (!s && formEtaMode === "auto") hitungUlangEtaForm();
@@ -612,4 +606,9 @@ async function handleCardDateChange(s, field) {
   }
 
   await refreshShipmentPrediction(s);
+  /* ETA manual / ETD baru di kiriman ini juga ETA kiriman lain di kapal +
+     voyage yang sama yang ETA-nya otomatis (etaSekapal). */
+  if (["eta", "etaUpdate", "etd", "etdUpdate"].includes(field) && typeof segarkanKirimanSekapal === "function") {
+    await segarkanKirimanSekapal(s);
+  }
 }

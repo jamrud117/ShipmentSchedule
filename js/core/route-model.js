@@ -390,6 +390,18 @@ function laneNodeTitle(nd) {
   return escapeAttr(parts.join(" · "));
 }
 
+/* Ujung jalur rute langsung: kode pelabuhan dalam bentuk dokumen
+   (portCodeLabel -- KRPUS, IDTPP) dan namanya di bawahnya ("Tanjung
+   Priok, Jakarta"). Nama yang sama dengan kodenya (pelabuhan diketik
+   sebagai nama) tidak diulang. */
+function laneUjungHtml(raw, kelas) {
+  const kode = portCodeLabel(raw);
+  const e = typeof resolvePortEntry === "function" ? resolvePortEntry(raw) : null;
+  const nama = e && e.name ? e.name : "";
+  const beda = nama && nama.toUpperCase() !== String(kode || "").toUpperCase();
+  return `<div class="${kelas}"><b>${escapeHtml(dispVal(kode))}</b>${beda ? `<span class="p-nama" title="${escapeAttr(nama)}">${escapeHtml(nama)}</span>` : ""}</div>`;
+}
+
 // Render seluruh isi ".lane" (judul + track + label tanggal)
 function assignLabelRows(fractions) {
   const MIN_GAP = 0.12;
@@ -443,22 +455,25 @@ function buildLaneHtml(s) {
     .join("");
 
   const labelRows = multi ? assignLabelRows(fractions) : [];
+  /* Baris kedua hanya dipakai bila ada label yang berdekatan; tanpa itu
+     wadahnya setinggi SATU baris (dulu selalu dua: celah 35px kosong di
+     atas baris tanggal kartu transit). */
+  const duaBaris = labelRows.some((r) => r > 0);
   const labelsHtml = !multi
     ? `
       <div class="port-labels">
-        <!-- TANGGAL EFEKTIF, bukan tanggal awal.
+        <!-- PELABUHAN DI KEDUA UJUNG, bukan tanggal.
 
-             Penanda di jalur sudah dihitung dari tanggal update delay
-             (lihat laneProgress di atas), jadi label yang menyebut
-             tanggal ASLI membuat keduanya saling membantah: penanda
-             menunjukkan perjalanan baru dimulai, sementara labelnya
-             menyebut ETD yang sudah lewat seminggu. Yang dibaca orang
-             harus tanggal yang sama dengan yang dipakai menghitung. -->
-        <div class="p">ETD <b>${fmtDate(effectiveEtd(s))}${s.etdTime ? " · " + escapeHtml(s.etdTime) : ""}</b></div>
-        <div class="p text-end">ETA <b>${fmtDate(effectiveEta(s))}${s.etaTime ? " · " + escapeHtml(s.etaTime) : ""}</b></div>
+             Tanggal ETD & ETA sudah ditulis tepat di bawah jalur ini
+             (baris tanggal kartu, dateStripHtml di js/render/cards.js,
+             lengkap dengan jamnya), dan tanggal revisinya di strip
+             delay. Yang belum terbaca dari mana pun adalah KE MANA:
+             kode pelabuhan seperti di dokumen, dan namanya. -->
+        ${laneUjungHtml(s.origin, "p")}
+        ${laneUjungHtml(s.destination, "p text-end")}
       </div>`
     : `
-      <div class="port-labels port-labels--multi">
+      <div class="port-labels port-labels--multi${duaBaris ? " port-labels--dua-baris" : ""}">
         ${nodes
           .map((nd, i) => {
             /* Perataan mengikuti POSISI, bukan urutan simpul.
@@ -501,10 +516,15 @@ function buildLaneHtml(s) {
      Menyalakan peringatan untuk sesuatu yang tidak dijanjikan hanya
      melatih orang mengabaikan peringatan. */
 
+  /* Judul jalur = KEADAANNYA ("Sampai Terminal 3 Hari Lagi"), bukan
+     tulisan "Progres Pengiriman" -- jalurnya sudah menjelaskan dirinya.
+     Rute transit menyebut jumlah persinggahannya di kanan. */
+  const singgah = routeStopList(s).length;
   return `
-    <div class="lane-title mt-3">
-      ${tt("Progres Pengiriman", "Shipment Progress")}
+    <div class="lane-title">
+      <span class="visually-hidden">${tt("Progres Pengiriman", "Shipment Progress")}: </span>
       <span class="lane-remaining">${escapeHtml(laneRemainingLabel(s))}</span>
+      ${multi ? `<span class="lane-rute-tipe">Transit · ${singgah} Stop</span>` : ""}
     </div>
     <div class="lane-track ${laneClass}">
       <div class="lane-fill" style="width:${progress * 100}%"></div>

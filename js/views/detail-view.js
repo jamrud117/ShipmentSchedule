@@ -152,7 +152,6 @@ function buildDetailHtml(s) {
       detailBaris(tt("Total Nilai Barang (USD)", "Total Goods Value (USD)"), fmtUSD(calc.totalUSD)),
       cif && detailBaris("CIF (USD)", fmtUSD(calc.cifUsd)),
       cif && detailBaris(tt("CIF Rupiah", "CIF (IDR)"), fmtRp(calc.cifRupiah)),
-      fob && detailBaris("FOB (USD)", fmtUSD(calc.fobUsd)),
       fob && detailBaris(tt("FOB Rupiah", "FOB (IDR)"), fmtRp(calc.fobRupiah)),
     ])}`;
 
@@ -164,7 +163,8 @@ function buildDetailHtml(s) {
     customsHtml += `
       <div class="subsection-title"><i class="bi bi-receipt"></i> ${tt("Bea &amp; Pajak Impor", "Import Duties &amp; Taxes")}</div>
       ${detailDaftar([
-        detailBaris(tt("Tarif", "Tariff"), (Number(s.tarif) || 0) + " %"),
+        // Tarif BM kini per barang (tarif-hs.js): "5%", atau "5% · 10% (per barang)"
+        detailBaris(tt("Tarif", "Tariff"), escapeHtml(ringkasTarifBm(s))),
         detailBaris(tt("Bea Masuk", "Import Duty"), fmtRp(s.bm)),
         detailBaris("PPN", fmtRp(s.ppn)),
         detailBaris("PPH", fmtRp(s.pph)),
@@ -195,7 +195,7 @@ function buildDetailHtml(s) {
       </div>
       <div class="detail-header-tanda">
         <span class="detail-badge-mode">${mode === "import" ? "Import" : "Export"}</span>
-        <span class="status-select ${statusClass(statusBerlaku)}" style="pointer-events:none; padding-right:14px; background-image:none;">${escapeHtml(statusLabel(statusBerlaku, s.mode).toUpperCase())}</span>
+        <span class="status-select ${statusClass(statusBerlaku)}" style="pointer-events:none; padding-right:14px; background-image:none;">${escapeHtml(statusLabel(statusBerlaku, s.mode))}</span>
       </div>
     </div>
 

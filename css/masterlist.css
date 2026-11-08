@@ -426,9 +426,6 @@
   border-bottom: 1px solid var(--n-100);
   color: var(--n-500);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
@@ -465,7 +462,6 @@
 .mst-nama {
   display: block;
   font-size: var(--t-base);
-  font-weight: 600;
   color: var(--ink);
   overflow-wrap: break-word;
 }
@@ -530,7 +526,6 @@
 }
 .mst-mono {
   font-family: var(--font-mono);
-  font-size: var(--t-xs);
 }
 .mst-nama.mst-mono {
   font-size: var(--t-sm);
@@ -631,8 +626,6 @@
   margin-bottom: 4px;
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 /* HS Code & lini selebar isinya, lalu spesifikasi (urutan unduhan Excel) */

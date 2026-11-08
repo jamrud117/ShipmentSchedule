@@ -506,7 +506,8 @@ function applyImportedBcData(parsed) {
     }
   }
 
-  ["freight", "insurance", "ndpbm", "bm", "ppn", "pph", "tarif"].forEach(
+  // Tarif BM tidak di sini: tarifnya per barang (item.dataPabean.tarifBm, tarif-hs.js)
+  ["freight", "insurance", "ndpbm", "bm", "ppn", "pph"].forEach(
     (key) => {
       const id =
         "f" +

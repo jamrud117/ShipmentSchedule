@@ -28,14 +28,15 @@
    (draft CEISA / PIB / PEB) -- lihat PROGRES DARI DOKUMEN PABEAN di
    bawah.
 
-   DRAFT DULU, ASLI MENYUSUL. CI/PL, B/L-AWB, COO, PIB / PEB (dan
-   Fumigasi di Export) biasanya datang sebagai DRAFT untuk disetujui,
-   aslinya menyusul. Tahap itu dicentang begitu draftnya disetujui --
-   `bisaDraft` -- dengan status "Draft" (entri `draft: true`): dihitung
-   terkumpul, tapi digambar lain dan diingatkan "menunggu asli" di
-   Ringkasan sampai statusnya diubah ke Asli. Tanggal draft disimpan di
-   `tglDraft` begitu aslinya dicatat. PIB berstatus draft BELUM diajukan,
-   jadi bukan milestone prediksi (milestoneDateOf).
+   DRAFT DULU, ASLI MENYUSUL. CI/PL, B/L-AWB, Asuransi, COO, Manifest,
+   PIB / PEB (dan Fumigasi di Export) biasanya datang sebagai DRAFT untuk
+   disetujui, aslinya menyusul. Tahap itu dicentang begitu draftnya
+   disetujui -- `bisaDraft` -- dengan status "Draft" (entri `draft: true`):
+   dihitung terkumpul, tapi digambar lain dan diingatkan "menunggu asli"
+   di Ringkasan sampai statusnya diubah ke Asli. Tanggal draft disimpan
+   di `tglDraft` begitu aslinya dicatat. PIB berstatus draft BELUM
+   diajukan dan Manifest draft belum menjadi BC 1.1, jadi keduanya bukan
+   milestone prediksi (milestoneDateOf melewati entri draft).
 
    LAMPIRAN. Tiap tahap berkas bisa membawa berkasnya (`berkas`, lihat
    js/data/lampiran.js) -- draft maupun asli, ditandai versinya. */
@@ -50,8 +51,10 @@
    Label AWB/BL ditulis sebagai fungsi, bukan teks mati: yang benar
    tergantung moda pengangkutnya — AWB untuk udara, B/L untuk laut.
 ------------------------------------------------------------------ */
-/* E-COO -- COO elektronik. Datangnya terpisah dari lembar COO, jadi
-   tahap sendiri tepat sesudahnya, di kedua buku. `induk: "coo"`: kalau
+/* E-COO -- COO elektronik dari negara asal barang impor. Datangnya
+   terpisah dari lembar COO, jadi tahap sendiri tepat sesudahnya -- HANYA
+   di buku Import; di Export cukup satu tahap COO (opsional) tanpa
+   E-COO. `induk: "coo"`: kalau
    COO ditandai tidak dipakai, E-COO ikut tidak dipakai (strip) dengan
    sendirinya; kalau COO DITERIMA, E-COO tidak ikut terisi -- ia
    dikonfirmasi sendiri saat memang sudah ada. Lihat docStepEntri(). */
@@ -63,12 +66,50 @@ const DOC_STEP_ECOO = {
   induk: "coo",
 };
 
+/* ASURANSI -- hanya kiriman yang incoterm-nya mewajibkan penjual
+   mengasuransikan barangnya: CIF (laut) dan padanannya untuk moda apa
+   pun, CIP. Polis / sertifikatnya datang seperti berkas pengiriman lain:
+   draft lebih dulu, final menyusul. Incoterm lain tidak menggambar
+   tahapnya sama sekali (`berlaku`, docStepsFor) -- bukan strip "tidak
+   dipakai", karena memang bukan bagian dari kiriman itu. Entri yang
+   sudah tercatat tetap tersimpan kalau incoterm-nya diganti; ia muncul
+   lagi bila incoterm kembali ke CIF / CIP. */
+const INCOTERM_BERASURANSI = ["CIF", "CIP"];
+function pakaiAsuransi(s) {
+  return INCOTERM_BERASURANSI.indexOf(String((s && s.incoterm) || "").trim().toUpperCase()) >= 0;
+}
+const DOC_STEP_ASURANSI = {
+  key: "asuransi",
+  label: () => tt("Asuransi", "Insurance"),
+  full: () => tt("Polis / Sertifikat Asuransi", "Insurance Policy / Certificate"),
+  bisaDraft: true,
+  berlaku: pakaiAsuransi,
+};
+
+/* MANIFEST -- draft dari forwarder / pengangkut kerap sampai lebih dulu
+   untuk dicek (nama pihak, jumlah koli, berat harus sama dengan B/L-AWB),
+   BC 1.1-nya terbit menyusul. Draft dihitung terkumpul; di buku Import
+   hanya Manifest final (BC 1.1) yang menjadi bukti kedatangan mesin
+   prediksi. */
+const DOC_STEP_MANIFEST = {
+  key: "manifest",
+  label: "Manifest",
+  full: "Manifest (BC 1.1)",
+  bisaDraft: true,
+  keteranganDraft: (nama) =>
+    tt(
+      `${nama}. Draft dari forwarder dicatat sebagai Draft; begitu BC 1.1 terbit, ubah ke Asli / final dan isi tanggal BC 1.1-nya — tanggal itulah yang dipakai mesin prediksi.`,
+      `${nama}. A draft from the forwarder is recorded as Draft; once the BC 1.1 is issued, change it to Original / final and enter the BC 1.1 date — that date is what the prediction engine uses.`,
+    ),
+};
+
 const DOC_STEPS_IMPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
   { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
-  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true, bisaDraft: true },
+  DOC_STEP_ASURANSI,
+  { key: "coo", label: "COO", full: "Certificate of Origin", optional: true, bisaDraft: true, petunjuk: (s) => petunjukFtaCoo(s) },
   DOC_STEP_ECOO,
-  { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
+  DOC_STEP_MANIFEST,
   /* KEDATANGAN — satu-satunya tahap yang bukan berkas.
 
      Ditambahkan karena mesin prediksi butuh tahu KAPAN alat angkut
@@ -87,25 +128,33 @@ const DOC_STEPS_IMPORT = [
      halaman dimuat. Teks biasa -- termasuk hasil t() -- akan terkunci
      di bahasa saat itu, dan ganti bahasa tidak lagi mengubahnya.
      stepText() memanggil fungsinya saat ditampilkan. */
-  { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean },
+  { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean, keteranganDraft: keteranganDraftPabean },
   { key: "billing", label: "Billing", full: () => tt("Billing / bukti bayar", "Billing / proof of payment") },
   { key: "sppb", label: "SPPB", full: () => tt("Surat Persetujuan Pengeluaran Barang", "Goods Release Approval (SPPB)") },
 ];
 
+/* Export: tanpa E-COO (lihat DOC_STEP_ECOO). COO & Fumigasi sama-sama
+   OPSIONAL -- kadang dipakai, kadang tidak: COO menurut permintaan
+   pembeli / negara tujuan, Fumigasi menurut KEMASAN barangnya (kemasan
+   kayu -> fumigasi / ISPM-15; karton, plastik -> tidak perlu). Keduanya
+   bisa ditandai "Tidak dipakai", dan kotak Fumigasi menyebut kemasan
+   jadwalnya sebagai petunjuk (petunjukFumigasi) -- tidak menandai apa
+   pun sendiri. */
 const DOC_STEPS_EXPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
   { key: "peb", label: "PEB", full: () => t("c.pemberitahuan.ekspor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean },
   { key: "npe", label: "NPE", full: () => tt("Nota Pelayanan Ekspor", "Export Service Note (NPE)") },
   { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
-  { key: "manifest", label: "Manifest", full: "Manifest (BC 1.1)" },
+  DOC_STEP_ASURANSI,
+  DOC_STEP_MANIFEST,
   { key: "coo", label: "COO", full: "Certificate of Origin", optional: true, bisaDraft: true },
-  DOC_STEP_ECOO,
   {
     key: "fumigasi",
     label: () => tt("Fumigasi", "Fumigation"),
     full: () => tt("Sertifikat Fumigasi & ISPM-15", "Fumigation & ISPM-15 Certificate"),
     optional: true,
     bisaDraft: true,
+    petunjuk: (s) => petunjukFumigasi(s),
   },
   { key: "tally", label: "Tally", full: () => tt("Tally sheet (hitung fisik saat muat)", "Tally sheet (physical count at loading)") },
   /* BERANGKAT — seperti Berths/ATA di buku Import, ini tahap yang
@@ -168,6 +217,58 @@ function labelDraftPabean() {
 function labelAsliPabean() {
   return tt("Terdaftar — sudah bernomor pendaftaran", "Lodged — registration number issued");
 }
+// Keterangan kotak PIB (milestone prediksi yang mengenal draft) yang belum dicatat
+function keteranganDraftPabean(nama) {
+  return tt(
+    `${nama}. Draft yang sudah dicek dicatat sebagai Draft; begitu terdaftar, isi tanggal pendaftarannya — tanggal itulah yang dipakai mesin prediksi.`,
+    `${nama}. A checked draft is recorded as Draft; once lodged, enter its registration date — that date is what the prediction engine uses.`,
+  );
+}
+
+/* FUMIGASI MENGIKUTI KEMASAN. Sertifikat fumigasi / cap ISPM-15 diminta
+   negara tujuan untuk kemasan KAYU (palet, peti, krat, wooden case);
+   karton, plastik, karung, drum logam tidak perlu. Jenis kemasan dibaca
+   dari kolom Jenis Kemasan barang (nama bebas atau kode kemasan CEISA,
+   REF_CEISA.kemasan). Hasilnya satu kalimat PETUNJUK di kotak & tooltip
+   tahap Fumigasi -- tidak ada yang dicentang atau dilewati sendiri.
+   Kemasan yang tidak jelas bahannya ("PACKAGE", "CASE") -> tanpa
+   petunjuk. */
+const KEMASAN_KAYU = /WOOD|KAYU|TIMBER|LUMBER/;
+const KEMASAN_BENTUK_KAYU = /\b(PALL?ETS?|PALET|SKIDS?|CRATES?|PETI)\b/;
+const KEMASAN_BUKAN_KAYU = /\b(CARTONS?|CTNS?|CARDBOARD|KARTON|KARDUS|FIBRE|FIBER|PAPER|KERTAS|PLASTIC|PLASTIK|POLYBAGS?|BAGS?|SACKS?|KARUNG|DRUMS?|STEEL|METAL|ALUMINIUM|BESI|ENVELOPES?|AMPLOP)\b/;
+function namaJenisKemasan(jenis) {
+  const j = String(jenis || "").trim().toUpperCase();
+  const ref = typeof REF_CEISA !== "undefined" && REF_CEISA && Array.isArray(REF_CEISA.kemasan) ? REF_CEISA.kemasan : [];
+  const kode = ref.find((x) => x[0] === j);
+  return kode ? kode[1] : j;
+}
+function bahanKemasan(jenis) {
+  const nama = namaJenisKemasan(jenis);
+  if (!nama) return "";
+  if (KEMASAN_KAYU.test(nama)) return "kayu";
+  if (KEMASAN_BUKAN_KAYU.test(nama)) return "bukan";
+  return KEMASAN_BENTUK_KAYU.test(nama) ? "kayu" : "";
+}
+function petunjukFumigasi(s) {
+  if (!s || s.mode !== "export") return "";
+  const jenis = [...new Set((s.items || []).map((it) => String((it && it.packingUnit) || "").trim().toUpperCase()).filter(Boolean))];
+  if (!jenis.length) return "";
+  const bahan = jenis.map((j) => ({ j, b: bahanKemasan(j) }));
+  const kayu = bahan.filter((x) => x.b === "kayu").map((x) => x.j);
+  if (kayu.length) {
+    return tt(
+      `Kemasan ${kayu.join(", ")} — kemasan kayu umumnya wajib fumigasi / cap ISPM-15 di negara tujuan.`,
+      `${kayu.join(", ")} packaging — wooden packaging generally needs fumigation / an ISPM-15 mark at the destination.`,
+    );
+  }
+  if (bahan.every((x) => x.b === "bukan")) {
+    return tt(
+      `Kemasan ${jenis.join(", ")} bukan kayu — fumigasi biasanya tidak perlu; tandai "Tidak dipakai" kalau memang tidak ada.`,
+      `${jenis.join(", ")} packaging is not wood — fumigation is usually not needed; mark it "Not used" if there is none.`,
+    );
+  }
+  return "";
+}
 
 /* Daftar tahap milik SEBUAH pengiriman — dibaca dari mode pengiriman
    itu sendiri, bukan dari buku yang sedang dibuka. Kalau tidak,
@@ -204,9 +305,11 @@ function docStepsForDasar(s) {
    dari daftar KURIR_EKSPRES_TANPA_PIB, definisi "kurir" untuk kedua
    keperluan ini sengaja sama). */
 function docStepsFor(s) {
-  const dasar = docStepsForDasar(s);
-  if (!pakaiKurirEkspres(s)) return dasar;
-  return dasar.filter((x) => x.key !== "manifest");
+  const kurir = pakaiKurirEkspres(s);
+  /* Tahap bersyarat (`berlaku`: Asuransi hanya untuk CIF / CIP) ikut
+     disaring di sini, satu tempat untuk stepper, hitungan, saran
+     berikutnya, "berkas belum ada", dan "menunggu asli". */
+  return docStepsForDasar(s).filter((x) => !(kurir && x.key === "manifest") && (!x.berlaku || x.berlaku(s)));
 }
 
 /* Teks tahap bisa berupa fungsi (label dinamis) atau string biasa. */
@@ -320,10 +423,11 @@ function docStepJudul(s, st, entri, kini) {
      ("Bill of Lading" vs "Air Waybill"). Ditempel apa adanya ke
      template, fungsinya diubah jadi string dan tooltip menampilkan
      kode sumber JavaScript. */
-  // COO buku Import: skema FTA negara asal barangnya ikut disebut (lartas.js)
-  const fta = st.key === "coo" ? petunjukFtaCoo(s) : "";
-  if (kini) return t("x.klik.kalau.berkasnya.ada", { x: nama, opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" }) + (fta ? `. ${fta}` : "");
-  return tt(`${nama} — menunggu tahap sebelumnya`, `${nama} — waiting for the previous step`) + (fta ? ` · ${fta}` : "");
+  /* Petunjuk tahap (`petunjuk`): COO buku Import menyebut skema FTA negara
+     asal barangnya (lartas.js), Fumigasi menyebut kemasannya. */
+  const petunjuk = st.petunjuk ? st.petunjuk(s) : "";
+  if (kini) return t("x.klik.kalau.berkasnya.ada", { x: nama, opsional: st.optional ? t("x.atau.tandai.tidak.dipakai") : "" }) + (petunjuk ? `. ${petunjuk}` : "");
+  return tt(`${nama} — menunggu tahap sebelumnya`, `${nama} — waiting for the previous step`) + (petunjuk ? ` · ${petunjuk}` : "");
 }
 
 /* ------------------------------------------------------------------
@@ -441,12 +545,18 @@ function docStepHtml(s) {
      terbaca seperti data yang gagal dimuat. */
   if (typeof canEdit === "function" && !canEdit()) return "";
 
+  /* Tahap berikutnya disebut dengan kata-kata, bukan hanya cincin
+     kuningan di deretannya: "Berikutnya: Billing". */
+  const tahapBerikut = berikut >= 0 ? docStepsFor(s)[berikut] : null;
+  const hitung = docStepCount(s);
   return `
   <div class="docsteps">
     <div class="docsteps-head">
-      <span><i class="bi bi-files"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
-      <span class="docsteps-hitung"><span class="docsteps-count">${docStepCount(s).selesai} / ${docStepCount(s).berlaku}</span>${
-        jumlahDraft ? `<span class="docsteps-draft" title="${escapeAttr(tt("Draft sudah disetujui, aslinya masih ditunggu", "Draft approved, the original is still awaited"))}"><i class="bi bi-hourglass-split"></i> ${jumlahDraft} draft</span>` : ""
+      <span class="docsteps-judul"><i class="bi bi-files" aria-hidden="true"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
+      <span class="docsteps-hitung"><span class="docsteps-count">${hitung.selesai} / ${hitung.berlaku}</span>${
+        jumlahDraft ? `<span class="docsteps-draft" title="${escapeAttr(tt("Draft sudah disetujui, aslinya masih ditunggu", "Draft approved, the original is still awaited"))}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> ${jumlahDraft} draft</span>` : ""
+      }${
+        tahapBerikut ? `<span class="docsteps-next">${tt("Berikutnya", "Next")}: <b>${escapeHtml(stepText(tahapBerikut.label, s))}</b></span>` : ""
       }</span>
     </div>
     <div class="docsteps-track">${langkah}</div>
@@ -531,7 +641,7 @@ function statusEntriTahap(entri) {
 }
 
 /* Pilihan status sebuah tahap. Kosong = tahap tanpa pilihan (hanya
-   tanggal): Manifest, Billing, SPPB, NPE, Tally, kejadian. */
+   tanggal): Billing, SPPB, NPE, Tally, kejadian. */
 function opsiStatusTahap(st) {
   const opsi = [];
   if (st.bisaDraft) {
@@ -666,15 +776,11 @@ function bukaTahapDokumen(s, st) {
     });
   }
 
-  const fta = st.key === "coo" ? petunjukFtaCoo(s) : "";
+  const petunjuk = st.petunjuk ? st.petunjuk(s) : "";
   // Keterangan kotak: keadaan tersimpan, atau apa yang ditanyakan untuk tahap ini
   const keteranganBaru = () => {
-    if (milestone && st.bisaDraft) {
-      return tt(
-        `${nama}. Draft yang sudah dicek dicatat sebagai Draft; begitu terdaftar, isi tanggal pendaftarannya — tanggal itulah yang dipakai mesin prediksi.`,
-        `${nama}. A checked draft is recorded as Draft; once lodged, enter its registration date — that date is what the prediction engine uses.`,
-      );
-    }
+    // Milestone prediksi yang mengenal draft (PIB, Manifest buku Import): kalimatnya milik tahapnya
+    if (milestone && st.bisaDraft) return (st.keteranganDraft || keteranganDraftPabean)(nama);
     if (milestone) return t("x.isi.tanggal.dokumen", { x: nama });
     if (st.optional) return t("x.tandai.sudah.diterima", { x: nama });
     if (st.peristiwa) return tt(`${nama}? Isi tanggalnya.`, `${nama}? Enter the date.`);
@@ -684,7 +790,7 @@ function bukaTahapDokumen(s, st) {
 
   showPrompt({
     title: lama || st.optional ? tt(`Tahap ${label}`, `Step: ${label}`) : t("x.konfirmasi.tahap", { x: label }),
-    desc: keterangan + (fta ? "\n" + fta : ""),
+    desc: keterangan + (petunjuk ? "\n" + petunjuk : ""),
     icon: lama ? "bi-pencil-square" : milestone ? "bi-calendar-check" : st.optional ? "bi-patch-question" : "bi-check2-circle",
     okText: lama || opsiStatus.length || st.peristiwa || milestone ? tt("Simpan", "Save") : tt("Ya, Sudah Ada", "Yes, it's here"),
     busyText: tt("Mengunggah…", "Uploading…"),

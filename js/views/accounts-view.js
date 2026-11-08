@@ -68,6 +68,10 @@ function renderAccounts() {
     const el = $("#accountCount" + peran.charAt(0).toUpperCase() + peran.slice(1));
     if (el) el.textContent = jumlah[peran] || 0;
   });
+  /* Akun nonaktif disebut hanya bila ada: akun yang baru dibuat atau
+     didaftarkan sendiri dari luar -- yang terakhir patut dicurigai. */
+  const wadahNonaktif = $("#accountNonaktifWrap");
+  if (wadahNonaktif) wadahNonaktif.hidden = !jumlah.nonaktif;
   renderLegendaPeran();
 
   if (!rows.length) {
@@ -162,8 +166,8 @@ function peranAkun(r) {
    Fungsi, bukan nilai tetap: session.js (pemilik PERAN) dimuat SETELAH
    berkas ini. */
 function urutanPilihanPeran() {
-  const dikenal = ["viewer", "finance", "marketing", "exim"];
-  return ["viewer", "finance", "marketing"]
+  const dikenal = ["nonaktif", "viewer", "finance", "marketing", "exim"];
+  return ["nonaktif", "viewer", "finance", "marketing"]
     .concat(Object.keys(PERAN).filter((p) => dikenal.indexOf(p) < 0))
     .concat(["exim"]);
 }
@@ -357,8 +361,11 @@ function pesanHapusAkun(error) {
    boleh ada di dalam berkas yang dikirim ke peramban, karena siapa pun
    bisa membacanya dan memakainya untuk apa saja.
 
-   Akibatnya akun baru selalu berperan viewer (ditetapkan oleh trigger
-   di database), lalu dinaikkan dari daftar di halaman ini.
+   Akibatnya pendaftaran Supabase terbuka untuk SIAPA PUN yang memegang
+   kunci publishable (js/config.js, terbaca semua peramban). Karena itu
+   akun baru berperan 'nonaktif' (pemicu handle_new_user,
+   migration-keamanan.sql) dan tidak membuka data apa pun; peran Viewer
+   ditetapkan di sini, oleh EXIM, sesudah akunnya dibuat.
 ------------------------------------------------------------------ */
 async function registerAccount() {
   if (!requireEdit()) return;
@@ -436,6 +443,28 @@ async function registerAccount() {
     if (asli.includes("password"))
       return gagal(t("a.kata.sandi.terlalu.lemah.gunakan.minimal.8.kar"));
     return gagal(error.message || tt("Pendaftaran gagal.", "Registration failed."));
+  }
+
+  /* Akun baru masih 'nonaktif' (lihat di atas): dibuka sebagai Viewer
+     oleh sesi EXIM yang sudah dipulihkan. Gagal = tetap nonaktif, dan
+     perannya bisa dipilih dari daftar. */
+  const idBaru = data && data.user && data.user.id;
+  if (idBaru) {
+    let galatPeran = null;
+    try {
+      ({ error: galatPeran } = await supabaseClient.from("profiles").update({ role: "viewer" }).eq("id", idBaru));
+    } catch (err) {
+      galatPeran = err;
+    }
+    if (galatPeran) {
+      console.error(galatPeran);
+      info.className = "reg-info is-error";
+      info.textContent = tt(`Akun "${username}" dibuat, tetapi masih Nonaktif. Pilih perannya di daftar akun.`,
+        `Account "${username}" was created but is still Inactive. Choose its role in the account list.`);
+      ["#regName", "#regUsername", "#regPassword"].forEach((sel) => ($(sel).value = ""));
+      await loadAccounts();
+      return;
+    }
   }
 
   info.className = "reg-info is-ok";

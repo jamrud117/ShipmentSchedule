@@ -474,7 +474,7 @@ function ocrPraolah(rgba, w, h) {
   ocrRataiLatar(abu, w, h);
   let ink = ocrTinta(abu, w, h);
   ocrBuangGaris(ink, w, h);
-  let miring = ocrMiring(ink, w, h);
+  const miring = ocrMiring(ink, w, h);
   if (miring) {
     abu = ocrPutar(abu, w, h, miring);
     ink = ocrTinta(abu, w, h);

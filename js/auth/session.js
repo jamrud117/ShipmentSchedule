@@ -65,6 +65,19 @@ const PERAN = {
     halaman: ["overview", "schedule", "hscode", "masterlist"],
     get ket() { return tt("hanya lihat", "read only"); },
   },
+  /* BELUM DIAKTIFKAN: setiap akun baru (pemicu handle_new_user,
+     migration-keamanan.sql) -- pendaftaran Supabase terbuka untuk umum,
+     jadi akun hasil daftar sendiri tidak boleh langsung membaca apa pun.
+     Database tidak memberinya satu baris data; aplikasi mengeluarkannya
+     dengan pesan di layar login (akunNonaktif). EXIM membukanya dengan
+     memilih peran di halaman Akun -- atau menonaktifkan akun yang sudah
+     tidak dipakai tanpa menghapusnya. */
+  nonaktif: {
+    get label() { return tt("Nonaktif", "Inactive"); },
+    ubah: false,
+    halaman: ["schedule"],
+    get ket() { return tt("belum diaktifkan: tidak bisa membuka data apa pun", "not activated: cannot open any data"); },
+  },
 };
 
 function peranSaya() {
@@ -114,8 +127,36 @@ async function loadProfile(userId) {
     console.error("Gagal membaca profil:", error);
     return null;
   }
-  /* Belum punya baris profil: diperlakukan sebagai viewer, bukan exim */
-  return data || { id: userId, email: "", full_name: "", username: "", role: "viewer" };
+  /* Belum punya baris profil: nonaktif -- database pun tidak memberinya
+     data (kebijakan baca menuntut peran aktif, migration-keamanan.sql). */
+  return data || { id: userId, email: "", full_name: "", username: "", role: "nonaktif" };
+}
+
+/* Akun yang belum (atau tidak lagi) diaktifkan EXIM. */
+function akunNonaktif(profil) {
+  return !!profil && profil.role === "nonaktif";
+}
+function pesanAkunNonaktif() {
+  return tt("Akun ini belum diaktifkan. Minta admin EXIM memilih perannya di halaman Akun.",
+    "This account has not been activated yet. Ask an EXIM admin to set its role on the Accounts page.");
+}
+/* Pesan untuk layar login sesudah halaman dimuat ulang (keluar paksa). */
+const PESAN_LOGIN_KEY = "exim.pesan-login";
+function titipPesanLogin(pesan) {
+  try {
+    sessionStorage.setItem(PESAN_LOGIN_KEY, pesan);
+  } catch (e) {
+    /* Penyimpanan sesi tidak tersedia: keluar tetap jalan, tanpa pesan. */
+  }
+}
+function ambilPesanLogin() {
+  try {
+    const pesan = sessionStorage.getItem(PESAN_LOGIN_KEY);
+    sessionStorage.removeItem(PESAN_LOGIN_KEY);
+    return pesan || "";
+  } catch (e) {
+    return "";
+  }
 }
 
 /* Supabase Auth hanya mengenal email. Username ditukar jadi email lebih
@@ -152,6 +193,12 @@ async function signIn(masukan, password) {
   if (error) return { ok: false, message: pesanLogin(error) };
   authState.user = data.user;
   authState.profile = await loadProfile(data.user.id);
+  if (akunNonaktif(authState.profile)) {
+    await supabaseClient.auth.signOut();
+    authState.user = null;
+    authState.profile = null;
+    return { ok: false, message: pesanAkunNonaktif() };
+  }
   return { ok: true };
 }
 
@@ -563,6 +610,7 @@ async function initAuth() {
     authState.siap = true;
     siapkanFormRemember();
     showLoginView();
+    setLoginError(ambilPesanLogin());
     return false;
   }
 
@@ -570,6 +618,18 @@ async function initAuth() {
   // Jadwal mulai diambil sekarang, sambil menunggu profil (lihat api.js)
   if (typeof mulaiAmbilShipments === "function") mulaiAmbilShipments();
   authState.profile = await loadProfile(sesi.user.id);
+  if (akunNonaktif(authState.profile)) {
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (e) {}
+    authState.user = null;
+    authState.profile = null;
+    authState.siap = true;
+    siapkanFormRemember();
+    showLoginView();
+    setLoginError(pesanAkunNonaktif());
+    return false;
+  }
   authState.siap = true;
   hideLoginView();
   applyPermissions();
@@ -596,6 +656,11 @@ if (typeof realtimeDaftar === "function") {
       .eq("id", saya)
       .maybeSingle();
     if (error || !baru || typeof baru.role !== "string" || !authState.user || authState.user.id !== saya) return;
+    if (akunNonaktif(baru)) {
+      titipPesanLogin(pesanAkunNonaktif());
+      signOut();
+      return;
+    }
     authState.profile = baru;
     applyPermissions();
     if (lama && lama.role !== baru.role) {
@@ -605,6 +670,10 @@ if (typeof realtimeDaftar === "function") {
         "warning",
       );
       if (!bolehBuka(halamanDariHash(location.hash || "#/"))) router();
+      /* Kartu membawa hak ubahnya di markup (tanggal readonly, status
+         disabled, stepper & mekanika prediksi hanya bagi yang boleh
+         mengubah) -- digambar ulang supaya langsung ikut peran barunya. */
+      if (typeof render === "function") render();
     }
   });
 }

@@ -150,11 +150,7 @@
 /* Pemisah kelompok DI DALAM satu panel — memecah form panjang jadi
    bagian yang terbaca, tanpa menjadikannya panel tersendiri. */
 .form-subhead {
-  font-family: var(--font-board);
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--n-600);
   padding-top: 6px;
   padding-bottom: 8px;
@@ -206,9 +202,6 @@ table.fund-lines th {
   background: var(--n-50);
   color: var(--n-600);
   font-size: var(--t-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   padding: 8px 10px;
   text-align: left;
   white-space: nowrap;
@@ -300,8 +293,6 @@ table.fund-lines select {
 .fl-awb-judul {
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .fl-sum--awb span {
@@ -475,14 +466,12 @@ table.fund-lines select {
   }
 }
 
-/* Baris nomor PO tambahan: kotak + tombol hapus sebaris. */
-/* Satu baris PO = nomor + tanggalnya, sejajar. Kotak tanggal diberi
-   jatah tetap supaya kolom tanggal seluruh baris lurus ke bawah --
-   dengan flex bebas, baris yang nomornya panjang akan menyempitkan
-   tanggalnya sendiri dan kolomnya bergerigi. */
+/* Satu baris PO = nomor + tanggalnya, sejajar. Nomornya mengisi sisa
+   baris, kotak tanggalnya selebar tanggalnya -- semua kotak tanggal sama
+   lebar (css/date-input.css), jadi kolom tanggalnya tetap lurus ke bawah. */
 .po-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 170px;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 6px;
   align-items: center;
 }
@@ -495,7 +484,7 @@ table.fund-lines select {
    baris sama lebar dan kolom tanggalnya lurus ke bawah. */
 .po-extra-row,
 #poNoList:has(.po-extra-row) > .po-row {
-  grid-template-columns: minmax(0, 1fr) 170px 30px;
+  grid-template-columns: minmax(0, 1fr) max-content 30px;
 }
 .po-extra-row {
   margin-top: 6px;
@@ -925,7 +914,6 @@ table.fund-lines select {
 }
 .docnum-table {
   width: 100%;
-  border-collapse: collapse;
   font-size: 0.84rem;
 }
 /* SELURUH TABEL RIWAYAT RATA TENGAH, kepala & isi, mendatar & tegak. */
@@ -1191,9 +1179,7 @@ table.fund-lines select {
    5 x 33px + 4 celah + padding = 205px. */
 .docnum-table td.dn-act,
 .docnum-table th.dn-act {
-  width: 1%;
   min-width: 205px;
-  white-space: nowrap;
 }
 
 /* KOLOM AKSI -- DAN STATUS BAYAR DI PENGAJUAN DANA -- MENEMPEL DI KANAN.
@@ -1332,8 +1318,6 @@ table.fund-lines select {
   font-family: var(--font-board);
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--tsec-600);
 }
 .dnd-jenis > i {
@@ -1439,11 +1423,7 @@ table.fund-lines select {
 }
 .dnd-bagian > h3 {
   margin: 0 0 var(--sp-3);
-  font-family: var(--font-board);
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--n-600);
 }
 /* Isian: label kecil di atas nilainya, beberapa kolom per baris. Kisi
@@ -1539,9 +1519,6 @@ table.fund-lines select {
   background: var(--n-50);
   color: var(--n-600);
   font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
@@ -1725,15 +1702,6 @@ table.fund-lines select {
   .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal .date-range-trigger {
     margin-left: 0;
     border-radius: 8px;
-  }
-  /* Kotak tanggal PO cukup selebar "dd/mm/yyyy" + ikonnya, sisanya
-     untuk nomor PO -- dulu 170px dan nomor PO tinggal separuh kata. */
-  .po-row {
-    grid-template-columns: minmax(0, 1fr) 136px;
-  }
-  .po-extra-row,
-  #poNoList:has(.po-extra-row) > .po-row {
-    grid-template-columns: minmax(0, 1fr) 136px 30px;
   }
   .dn-edit-dialog .dnd-kepala,
   .dn-edit-badan {
@@ -2359,8 +2327,6 @@ button.dn-bayar--lunas:hover {
 .lap-kpi-judul {
   font-size: var(--t-xs);
   font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .lap-kpi--sorot .lap-kpi-judul,
@@ -2548,9 +2514,6 @@ button.dn-bayar--lunas:hover {
   background: var(--n-50);
   color: var(--n-600);
   font-size: var(--t-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   text-align: left;
   white-space: nowrap;
 }
@@ -2594,7 +2557,8 @@ button.dn-bayar--lunas:hover {
 }
 .fd-baris {
   display: grid;
-  grid-template-columns: 110px 1fr 170px 34px;
+  /* [ jenis ][ nomor ][ tanggal selebar tanggalnya ][ x ] */
+  grid-template-columns: 110px minmax(0, 1fr) max-content 34px;
   gap: 8px;
   align-items: center;
   margin-bottom: 6px;
@@ -2638,8 +2602,6 @@ button.dn-bayar--lunas:hover {
   font-size: var(--t-xs);
   font-weight: 700;
   color: var(--n-600);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
 }
 .fl-grup-nomor {
   margin: 0 10px 0 4px;

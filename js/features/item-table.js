@@ -117,7 +117,7 @@ function facilitiesPanelHtml(it, idx) {
 
   return `
     <tr class="item-fac-row" data-idx="${idx}">
-      <td colspan="24">
+      <td colspan="25">
         <div class="item-fac-panel">
           ${piBarangHtml(it, idx)}
           <div class="item-fac-skb-head">
@@ -170,11 +170,23 @@ function terlihat(el) {
   return !!(el && el.getClientRects && el.getClientRects().length);
 }
 
+/* Peramban yang menumbuhkan textarea sendiri (field-sizing: content,
+   form.css) tidak perlu diukur sama sekali. */
+const TINGGI_ISIAN_OLEH_CSS = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("field-sizing", "content");
+
+/* scrollHeight = isi + padding, TANPA garis tepi; dengan box-sizing
+   border-box garis tepinya harus ditambahkan, kalau tidak 2px terbawah
+   terpotong -- dan tingginya beda dengan peramban ber-field-sizing. */
+function tepiTegakIsian(el) {
+  const cs = getComputedStyle(el);
+  return cs.boxSizing === "border-box" ? (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0) : 0;
+}
+
 function autoGrowTextarea(el) {
-  if (!terlihat(el)) return;
+  if (TINGGI_ISIAN_OLEH_CSS || !terlihat(el)) return;
   el.style.height = "auto";
   // TANPA batas atas: nama barang bisa sangat panjang
-  el.style.height = `${el.scrollHeight}px`;
+  el.style.height = `${el.scrollHeight + tepiTegakIsian(el)}px`;
 }
 
 /* Menyesuaikan SELURUH kolom nama barang.
@@ -194,6 +206,7 @@ function autoGrowTextarea(el) {
    Di sini semuanya ditulis dulu, baru semuanya dibaca, baru semuanya
    ditulis lagi. Peramban cukup menghitung sekali. */
 function autoGrowAllItemNames() {
+  if (TINGGI_ISIAN_OLEH_CSS) return;
   const kotak = [];
   document
     .querySelectorAll("textarea.isian-barang")
@@ -201,7 +214,8 @@ function autoGrowAllItemNames() {
   if (!kotak.length) return;
 
   kotak.forEach((el) => (el.style.height = "auto"));       // tulis semua
-  const tinggi = kotak.map((el) => el.scrollHeight);        // baca semua
+  const tepi = tepiTegakIsian(kotak[0]);                    // semua kotak bergaya sama
+  const tinggi = kotak.map((el) => el.scrollHeight + tepi); // baca semua
   kotak.forEach((el, i) => (el.style.height = `${tinggi[i]}px`));
 }
 
@@ -269,11 +283,7 @@ amatiPaneBarang();
 
 // Font body (Inter) dimuat dengan `display=swap` (lihat index.html)
 if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(() => {
-    document
-      .querySelectorAll("textarea.isian-barang")
-      .forEach(autoGrowTextarea);
-  });
+  document.fonts.ready.then(autoGrowAllItemNames);
 }
 
 /* Kolom barang CEISA di tabel isian, kiri ke kanan -- sesudah HS Code
@@ -298,7 +308,7 @@ const KELAS_KARTU_BARANG = { namaBarang: "uraian-col" };
 const ISIAN_BARANG_KAPITAL = new Set(KOLOM_NAMA_BARANG.concat(["marks", "satuan", "packingUnit"]));
 
 function isianBarangHtml(it, field, label, placeholder, kelas) {
-  return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}" data-label="${escapeAttr(label)}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
+  return `<td class="kolom-ceisa${kelas ? " " + kelas : ""}" data-k="${field}" data-label="${escapeAttr(label)}"><textarea rows="1" class="isian-barang" data-f="${field}" placeholder="${escapeAttr(placeholder || label)}" aria-label="${escapeAttr(label)}">${escapeHtml(it[field] || "")}</textarea></td>`;
 }
 
 /* KODE KONDISI BARANG (buku Import; kolomnya disembunyikan di Export,
@@ -309,7 +319,7 @@ function isianKondisiHtml(it) {
   const kini = kodeKondisiBarang(it.kondisiBarang);
   const opsi = [["", "—"]].concat(KONDISI_BARANG.map((k) => [k[0], labelKondisiBarang(k[0])]));
   if (kini && !opsi.some((o) => o[0] === kini)) opsi.push([kini, kini]);
-  return `<td class="kolom-kode import-col" data-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}">${opsi
+  return `<td class="kolom-kode import-col" data-k="kondisiBarang" data-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}"><select data-f="kondisiBarang" aria-label="${escapeAttr(tt("Kondisi Barang", "Goods Condition"))}">${opsi
     .map(([v, label]) => `<option value="${escapeAttr(v)}"${v === kini ? " selected" : ""}>${escapeHtml(label)}</option>`)
     .join("")}</select></td>`;
 }
@@ -333,7 +343,7 @@ function keteranganNegara(kode) {
 function isianNegaraHtml(it) {
   const kode = String(it.negaraAsal || "").trim().toUpperCase();
   const ket = keteranganNegara(kode);
-  return `<td class="kolom-kode" data-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
+  return `<td class="kolom-kode" data-k="negaraAsal" data-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}"><div class="negara-isian"><input type="text" data-f="negaraAsal" list="negaraList" value="${escapeAttr(kode)}" placeholder="${escapeAttr(tt("Kode / nama", "Code / name"))}" autocomplete="off" spellcheck="false" aria-label="${escapeAttr(tt("Negara Asal", "Country of Origin"))}" title="${escapeAttr(ket.judul)}"${ket.salah ? ' class="negara-salah"' : ""}><span class="negara-nama" aria-hidden="true">${escapeHtml(ket.teks)}</span></div></td>`;
 }
 
 // Keterangan di bawah kotak negara mengikuti isinya: `kode` = yang sudah dibakukan, atau tebakan dari ketikan
@@ -353,22 +363,41 @@ function bakukanIsianNegara(el, idx) {
   tulisKeteranganNegara(el, nilai);
 }
 
+/* JUDUL BAGIAN KARTU BARANG. Kartu (form.css + desain.css, @container
+   barang-isi) membagi isian satu barang jadi tiga bagian: identitas
+   (HS Code, Tarif BM, kolom barang CEISA), klasifikasi & fasilitas, lalu
+   jumlah, nilai & kemasan. Judulnya sel <td> tersendiri -- elemen lain di
+   dalam <tr> dipindahkan pengurai HTML ke luar tabel -- yang di mode
+   Tabel disembunyikan (tidak ada kolomnya di kepala tabel). */
+function grupKartuHtml(k) {
+  const judul = {
+    identitas: tt("Identitas barang", "Item identity"),
+    klasifikasi: tt("Klasifikasi & fasilitas", "Classification & facilities"),
+    jumlah: tt("Jumlah, nilai & kemasan", "Quantity, value & packaging"),
+  }[k];
+  return `<td class="kartu-grup kartu-grup--${k}" data-k="grup-${k}" data-label="${escapeAttr(judul)}" aria-hidden="true"></td>`;
+}
+
 function renderItemTable() {
   // Penanda kelengkapan & tinggi isian barang ikut diperbarui tiap tabel
   // digambar ulang — termasuk setelah data hasil impor masuk.
+  // (tingginya diukur di ujung fungsi ini, berkelompok; pengamat tbody menangkap isian dari kode sesudahnya)
   setTimeout(() => {
     if (typeof syncFormValidity === "function") syncFormValidity();
     amatiTabelBarang();
-    requestAnimationFrame(autoGrowAllItemNames);
   }, 0);
+  // Tarif BM per barang mengikuti HS Code-nya (tarif-hs.js): hasil impor, pilihan pencarian, penyamaan
+  const idJadwal = idJadwalForm();
+  draftItems.forEach((it) => segarkanTarifOtomatis(it, idJadwal));
   const kolom = kolomIsianBarang();
   const tbody = $("#itemTableBody");
   tbody.innerHTML = draftItems
     .map((it, idx) => {
       const mainRow = `
     <tr data-idx="${idx}">
-      <td class="seri-col" data-label="${escapeAttr(t("f.seri"))}" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
-      <td data-label="HS Code">
+      <td class="seri-col" data-k="seri" data-label="${escapeAttr(t("f.seri"))}" title="${tt("Nomor urut barang, mengikuti urutan baris", "Item sequence number, follows the row order")}">${idx + 1}</td>
+      ${grupKartuHtml("identitas")}
+      <td data-k="hsCode" data-label="HS Code">
         <div class="hscode-cell">
           <input type="text" data-f="hsCode" value="${escapeAttr(it.hsCode)}" placeholder="00000000" inputmode="numeric" aria-label="HS Code"${
             it._hsOtomatis ? ` class="hs-otomatis" title="${escapeAttr(judulHsOtomatis(it._hsOtomatis))}"` : ""
@@ -378,30 +407,33 @@ function renderItemTable() {
           </button>
         </div>
       </td>
+      ${isianTarifBmHtml(it)}
       ${kolom.map(([field, label]) => isianBarangHtml(it, field, label, "", KELAS_KARTU_BARANG[field])).join("")}
+      ${grupKartuHtml("klasifikasi")}
       ${isianKondisiHtml(it)}
       ${isianNegaraHtml(it)}
       ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
-      <td class="jenis-col" data-label="${escapeAttr(t("f.jenis.barang"))}">
+      <td class="jenis-col" data-k="jenisBarang" data-label="${escapeAttr(t("f.jenis.barang"))}">
         <select data-f="jenisBarang" aria-label="${escapeAttr(t("f.jenis.barang"))}">
           ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
         </select>
       </td>
-      <td data-label="${escapeAttr(t("f.fasilitas"))}">
+      <td data-k="fasilitas" data-label="${escapeAttr(t("f.fasilitas"))}">
         <button type="button" class="btn-facilities ${(it.skb || []).length || piBarangBerlaku(it) ? "has-value" : ""}" data-act="toggle-fac" data-idx="${idx}">
           <span>${facilitiesButtonLabel(it)}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
         </button>
       </td>
-      <td data-label="Qty"><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal" aria-label="Qty"></td>
-      <td data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList" aria-label="${escapeAttr(t("f.satuan"))}"></td>
-      <td data-label="${escapeAttr(t("f.harga.unit.usd"))}"><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal" aria-label="${escapeAttr(t("f.harga.unit.usd"))}"></div></td>
-      <td data-label="${escapeAttr(t("f.netto.kg"))}"><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.netto.kg"))}"></td>
-      <td data-label="${escapeAttr(t("f.bruto.kg"))}"><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.bruto.kg"))}"></td>
-      <td class="pkg-cell dim-col" data-label="${escapeAttr(t("f.dimensi"))}">
+      ${grupKartuHtml("jumlah")}
+      <td data-k="qty" data-label="Qty"><input type="text" data-f="qty" value="${formatNumberValue(it.qty)}" inputmode="decimal" aria-label="Qty"></td>
+      <td data-k="satuan" data-label="${escapeAttr(t("f.satuan"))}"><input type="text" data-f="satuan" value="${escapeAttr(it.satuan)}" placeholder="${tt("Satuan", "Unit")}" list="satuanList" aria-label="${escapeAttr(t("f.satuan"))}"></td>
+      <td data-k="harga" data-label="${escapeAttr(t("f.harga.unit.usd"))}"><div class="input-affix input-affix--tight" data-affix="$"><input type="text" data-f="harga" value="${formatNumberValue(it.harga)}" inputmode="decimal" aria-label="${escapeAttr(t("f.harga.unit.usd"))}"></div></td>
+      <td data-k="netto" data-label="${escapeAttr(t("f.netto.kg"))}"><input type="text" data-f="netto" value="${formatNumberValue(it.netto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.netto.kg"))}"></td>
+      <td data-k="bruto" data-label="${escapeAttr(t("f.bruto.kg"))}"><input type="text" data-f="bruto" value="${formatNumberValue(it.bruto)}" inputmode="decimal" aria-label="${escapeAttr(t("f.bruto.kg"))}"></td>
+      <td class="pkg-cell dim-col" data-k="package" data-label="${escapeAttr(t("f.dimensi"))}">
         <input type="text" data-f="package" value="${escapeAttr(it.package)}" placeholder="P*L*T (cm)" aria-label="${escapeAttr(t("f.dimensi"))}">
 
       </td>
-      <td data-label="${escapeAttr(t("f.kemasan"))}">
+      <td data-k="packing" data-label="${escapeAttr(t("f.kemasan"))}">
         <input type="text" data-f="packing" value="${escapeAttr(it.packing || "")}" aria-label="${escapeAttr(t("f.kemasan"))}"
                placeholder="${idx === 0 ? "1" : tt("↳ ikut", "↳ same")}"
                title="${
@@ -411,24 +443,29 @@ function renderItemTable() {
                }"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
-      <td data-label="${escapeAttr(t("f.jenis.kemasan"))}">
+      <td data-k="packingUnit" data-label="${escapeAttr(t("f.jenis.kemasan"))}">
         <input type="text" data-f="packingUnit" value="${escapeAttr(it.packingUnit || "")}" aria-label="${escapeAttr(t("f.jenis.kemasan"))}"
                list="packageUnitList" placeholder="${idx === 0 ? "BOX" : tt("↳ ikut", "↳ same")}"
                class="${idx > 0 && !(it.packing || "").trim() ? "is-ikut" : ""}">
       </td>
-      <td class="cbm-col${activeMode === "import" ? " d-none" : ""}" data-label="CBM (m³)">
+      <td data-k="cbm" class="cbm-col${activeMode === "import" ? " d-none" : ""}" data-label="CBM (m³)">
         <input type="text" class="cbm-readonly" readonly value="${computeItemCbm(it)}" aria-label="CBM (m³)">
       </td>
-      <td class="subtotal-col" data-label="${escapeAttr(t("f.subtotal.usd"))}"><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}" aria-label="${escapeAttr(t("f.subtotal.usd"))}"></td>
-      <td class="hapus-col"><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}" aria-label="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
+      <td class="subtotal-col" data-k="subtotal" data-label="${escapeAttr(t("f.subtotal.usd"))}"><input type="text" class="subtotal" readonly value="${fmtUSD(parseLooseNumber(it.qty) * parseLooseNumber(it.harga))}" aria-label="${escapeAttr(t("f.subtotal.usd"))}"></td>
+      <td class="hapus-col" data-k="hapus"><button type="button" class="rm-row" data-idx="${idx}" title="${tt("Hapus barang ini", "Remove this item")}" aria-label="${tt("Hapus barang ini", "Remove this item")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
     </tr>`;
       return mainRow + (it._facOpen ? facilitiesPanelHtml(it, idx) : "");
     })
     .join("");
-  tbody.querySelectorAll("textarea.isian-barang").forEach(autoGrowTextarea);
-  tbody
-    .querySelectorAll('.pkg-cell input[data-f="package"]')
-    .forEach((el) => autoSizeInput(el, 96, 210));
+  // Berkelompok (satu kali tata letak), bukan autoGrowTextarea per kotak: 60 barang x 6 kotak
+  // = 360 tata letak paksa berselang-seling -- ±250 ms tiap tabel digambar ulang.
+  autoGrowAllItemNames();
+  // Kotak Dimensi hanya ada di buku Export (.dim-col); di Import kolomnya tersembunyi -- tidak perlu diukur
+  if (activeMode === "export") {
+    tbody
+      .querySelectorAll('.pkg-cell input[data-f="package"]')
+      .forEach((el) => autoSizeInput(el, 96, 210));
+  }
   recalcCustoms();
   // Tawaran "Samakan … ke baris 2–N?" & Urungkan (item-samakan.js) mengikuti isi tabel
   if (typeof perbaruiTawaranSamakan === "function") perbaruiTawaranSamakan();
@@ -489,6 +526,10 @@ $("#itemTableBody").addEventListener("input", (e) => {
       const cleaned = normalizeHsCodeInput(e.target.value);
       if (e.target.value !== cleaned) e.target.value = cleaned;
       draftItems[idx][field] = cleaned;
+      // Tarif BM otomatis mengikuti HS Code (tarif-hs.js); tarif yang diketik sendiri tidak disentuh
+      segarkanTarifBaris(tr, draftItems[idx]);
+    } else if (field === "tarifBm") {
+      ketikTarifBm(e.target, draftItems[idx]);
     } else {
       /* parseInputNumber, BUKAN parseLooseNumber.
 

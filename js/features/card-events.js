@@ -149,7 +149,11 @@ function terapkanEtdBaru(s, statusBaru, tanggal, lama) {
 
 /* CARD EVENT DELEGATION */
 cardContainer.addEventListener("change", (e) => {
-  if (!requireEdit()) return;
+  if (!requireEdit()) {
+    // Pilihan / ketikan yang ditolak tidak boleh tetap tampil di kartu
+    render();
+    return;
+  }
   /* `el`, bukan `t`: nama t milik penerjemah t(). Dulu elemennya bernama
      t, sehingga t("...") di cabang status memanggil elemen itu dan
      melempar galat -- mengembalikan jadwal yang terbaca tiba ke Process

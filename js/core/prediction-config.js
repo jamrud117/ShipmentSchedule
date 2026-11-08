@@ -519,6 +519,168 @@ const PREDICTION_CONFIG = {
       },
     },
 
+    /* ================================================================
+       TINGKAT 3 — NEGARA & WILAYAH LAIN (perkiraan umum)
+
+       Rute yang tidak ada di tabel forwarder di atas. Sebelumnya semua
+       jatuh ke angka bawaan 14 hari -- Singapura (±2 hari ke Priok)
+       maupun Rotterdam (±37 hari) sama-sama "dua minggu".
+
+       Angkanya RENTANG dari jadwal pelayaran publik tercepat-terlazim
+       (Fluent Cargo, iContainers; dicek November 2026), sengaja lebar:
+       ini tebakan awal per wilayah, bukan janji. Karena rentang,
+       ketidakpastiannya ikut terbaca, dan riwayat DDI sendiri menariknya
+       ke kenyataan begitu dua-tiga kiriman tercatat (prediction-
+       learning.js). Ekspor ke negara-negara ini memakai baris yang sama
+       lewat aturan dua arah (rankRouteRules, prediction-rules.js).
+
+       Eropa: kapal Asia–Eropa sedang kembali lewat Suez (±30 hari)
+       setelah memutar Tanjung Harapan (±40 hari) -- rentangnya mencakup
+       keduanya sampai riwayat menunjukkan yang mana.
+    ================================================================ */
+    {
+      id: "sg-id",
+      get label() { return tt("Singapura → Indonesia", "Singapore → Indonesia"); },
+      match: { fromCountry: "SG", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: 2 },
+        SEA_FCL: { direct: [2, 3], transit: [3, 5] },
+        SEA_LCL: { direct: [4, 6], transit: [5, 8] },
+      },
+    },
+    {
+      id: "my-id",
+      label: "Malaysia → Indonesia",
+      match: { fromCountry: "MY", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [3, 4], transit: [5, 7] },
+        SEA_LCL: { direct: [5, 8], transit: [7, 10] },
+      },
+    },
+    {
+      id: "th-id",
+      get label() { return tt("Thailand → Indonesia", "Thailand → Indonesia"); },
+      match: { fromCountry: "TH", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [5, 7], transit: [7, 10] },
+        SEA_LCL: { direct: [8, 11], transit: [10, 14] },
+      },
+    },
+    {
+      id: "ph-id",
+      get label() { return tt("Filipina → Indonesia", "Philippines → Indonesia"); },
+      match: { fromCountry: "PH", toCountry: "ID" },
+      days: {
+        AIR: { direct: [1, 2], transit: [2, 4] },
+        SEA_FCL: { direct: [5, 8], transit: [8, 12] },
+        SEA_LCL: { direct: [9, 13], transit: [12, 16] },
+      },
+    },
+    {
+      id: "hk-id",
+      label: "Hong Kong → Indonesia",
+      match: { fromCountry: "HK", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [5, 7], transit: [8, 11] },
+        SEA_LCL: { direct: [8, 12], transit: [11, 15] },
+      },
+    },
+    {
+      id: "tw-id",
+      label: "Taiwan → Indonesia",
+      match: { fromCountry: "TW", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [7, 10], transit: [10, 13] },
+        SEA_LCL: { direct: [11, 15], transit: [14, 18] },
+      },
+    },
+    {
+      id: "jp-id",
+      get label() { return tt("Jepang → Indonesia", "Japan → Indonesia"); },
+      match: { fromCountry: "JP", toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [10, 14], transit: [13, 18] },
+        SEA_LCL: { direct: [15, 20], transit: [18, 24] },
+      },
+    },
+    {
+      id: "in-id",
+      label: "India → Indonesia",
+      match: { fromCountry: "IN", toCountry: "ID" },
+      days: {
+        AIR: { direct: [1, 2], transit: [2, 4] },
+        /* Chennai/pantai timur ±9 hari, Nhava Sheva/pantai barat 13–16
+           (umumnya lewat Port Klang / Singapura) */
+        SEA_FCL: { direct: [11, 16], transit: [14, 20] },
+        SEA_LCL: { direct: [16, 22], transit: [20, 26] },
+      },
+    },
+    {
+      id: "me-id",
+      get label() { return tt("Timur Tengah → Indonesia", "Middle East → Indonesia"); },
+      match: { fromCountry: ["AE", "QA", "SA", "OM", "KW", "BH"], toCountry: "ID" },
+      days: {
+        AIR: { direct: [1, 2], transit: [2, 4] },
+        SEA_FCL: { direct: [14, 18], transit: [17, 24] },
+        SEA_LCL: { direct: [20, 26], transit: [24, 30] },
+      },
+    },
+    {
+      id: "tr-id",
+      get label() { return tt("Turki → Indonesia", "Turkey → Indonesia"); },
+      match: { fromCountry: "TR", toCountry: "ID" },
+      days: {
+        AIR: { direct: [2, 3], transit: [3, 5] },
+        SEA_FCL: { direct: [24, 32], transit: [26, 36] },
+        SEA_LCL: { direct: [30, 40], transit: [32, 44] },
+      },
+    },
+    {
+      id: "eu-id",
+      get label() { return tt("Eropa → Indonesia", "Europe → Indonesia"); },
+      match: { fromCountry: ["NL", "DE", "BE", "GB", "FR", "IT", "ES", "PL", "SE", "DK", "FI", "PT", "AT", "CZ", "CH", "GR", "IE", "NO", "SI", "HR", "RO"], toCountry: "ID" },
+      days: {
+        AIR: { direct: [1, 2], transit: [2, 4] },
+        SEA_FCL: { direct: [30, 40], transit: [34, 45] },
+        SEA_LCL: { direct: [38, 48], transit: [42, 52] },
+      },
+    },
+    {
+      id: "us-west-id",
+      get label() { return tt("AS pantai barat → Indonesia", "US West Coast → Indonesia"); },
+      match: { fromCountry: "US", fromPort: ["LAX", "LGB", "SEA", "OAK", "TIW", "PDX"], toCountry: "ID" },
+      days: {
+        AIR: { direct: [1, 2], transit: [2, 4] },
+        SEA_FCL: { direct: [22, 28], transit: [25, 33] },
+        SEA_LCL: { direct: [28, 35], transit: [30, 40] },
+      },
+    },
+    {
+      id: "us-id",
+      get label() { return tt("Amerika Serikat → Indonesia", "United States → Indonesia"); },
+      match: { fromCountry: ["US", "CA"], toCountry: "ID" },
+      days: {
+        AIR: { direct: [2, 3], transit: [3, 5] },
+        SEA_FCL: { direct: [30, 40], transit: [33, 45] },
+        SEA_LCL: { direct: [36, 46], transit: [38, 50] },
+      },
+    },
+    {
+      id: "au-id",
+      label: "Australia → Indonesia",
+      match: { fromCountry: ["AU", "NZ"], toCountry: "ID" },
+      days: {
+        AIR: { direct: 1, transit: [2, 3] },
+        SEA_FCL: { direct: [12, 18], transit: [15, 22] },
+        SEA_LCL: { direct: [16, 22], transit: [19, 26] },
+      },
+    },
+
     /* CADANGAN — dipakai untuk rute yang belum didaftarkan.
        Angkanya sengaja sedikit lebih longgar daripada rute yang sudah
        diketahui: perkiraan yang kelewat optimis pada rute asing lebih
@@ -858,6 +1020,29 @@ const PREDICTION_CONFIG = {
        dengan outlierSigma: 0 (rata-rata mentah). */
     method: "mean",
     outlierSigma: 2,
+
+    /* KERAGUAN ASUMSI YANG BUKAN ANGKA PELABUHAN PASTI (hari). Makin
+       besar, makin cepat riwayat mengambil alih (asumsiTransitKonfigurasi,
+       prediction-eta.js):
+         reverseLaneExtraDays    aturan dari arah sebaliknya (ekspor
+                                 yang memakai angka impor) -- putarannya
+                                 bisa berbeda beberapa hari;
+         priorSpreadFallbackDays aturan cadangan untuk rute yang tidak
+                                 ada di tabel sama sekali. */
+    reverseLaneExtraDays: 1,
+    priorSpreadFallbackDays: { AIR: 2, SEA_FCL: 5, SEA_LCL: 6, default: 5 },
+
+    /* SELISIH DARI RUTE LAIN (geserDariRuteLain, prediction-learning.js):
+       seberapa jauh, menurut dugaan awal, tabel bisa meleset untuk satu
+       negara (negara), dan untuk rute bercadangan (cadangan -- hampir
+       sepenuhnya mengikuti riwayat negaranya).
+
+       `umum` (seluruh rute searah sekaligus) 0 = MATI. Diuji pada
+       riwayat tiruan: selisih tiap rute umumnya tidak searah, dan
+       menarik semua rute ke rata-rata bersama justru menambah meleset
+       (MAE impor 1,70 -> 1,74 hari). Nyalakan (mis. 1) hanya kalau
+       memang ada sebab bersama -- antrean sandar Priok yang panjang. */
+    poolSpreadDays: { umum: 0, negara: 1, cadangan: 6 },
   },
 
   /* ----------------------------------------------------------------

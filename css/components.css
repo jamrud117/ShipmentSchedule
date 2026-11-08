@@ -51,8 +51,6 @@
 
 /* ---- panel di FORM ---- */
 .notes-panel {
-  border: 1px solid var(--border);
-  border-radius: 10px;
   background: var(--w-bg-fbfdff);
   padding: 12px;
 }
@@ -158,43 +156,64 @@
 
 /* ---- panel ringkas di KARTU dashboard ---- */
 .card-notes {
-  margin-top: 12px;
-  border-top: 1px dashed var(--border);
-  padding-top: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--n-200);
+  padding-top: 14px;
 }
 .card-notes-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  font-size: 0.74rem;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--muted);
+  color: var(--n-700);
   margin-bottom: 8px;
 }
+.card-notes-head i {
+  color: var(--n-400);
+  margin-right: 2px;
+}
 .card-notes-more {
+  font-family: var(--font-body);
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
   font-size: 0.72rem;
+  color: var(--n-500);
 }
 .card-notes-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .card-note {
   background: var(--bg);
   border-radius: 8px;
-  padding: 6px 9px;
+  padding: 7px 10px;
 }
 .card-note-stamp {
   font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--muted);
   margin-bottom: 2px;
+}
+/* Kartu jadwal yang lebar: cap waktu di kolom kiri, catatannya di kanan
+   -- kronologi terbaca menurun seperti log. Panel detail tetap
+   bertumpuk (wadahnya sempit). */
+@media (min-width: 768px) {
+  .ship-card .card-note {
+    display: grid;
+    grid-template-columns: 9.5rem minmax(0, 1fr);
+    gap: 12px;
+    align-items: baseline;
+  }
+  .ship-card .card-note-stamp {
+    margin-bottom: 0;
+  }
 }
 .card-note-text {
   font-size: 0.82rem;
@@ -217,8 +236,6 @@
 }
 .btn-note-send {
   border: none;
-  background: var(--teal);
-  color: #fff;
   border-radius: 8px;
   padding: 0 12px;
   cursor: pointer;
@@ -238,7 +255,6 @@
   border-bottom: 1px solid var(--n-100);
 }
 .modal-title {
-  font-family: var(--font-display);
   font-size: var(--t-lg);
   font-weight: 700;
   color: var(--ink);
@@ -539,8 +555,6 @@ body:not(.punya-kerangka) .toast-stack {
 .samakan-nilai-label {
   font-size: var(--t-xs);
   font-weight: 600;
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
   color: var(--n-500);
 }
 .samakan-nilai-isi {
@@ -803,11 +817,12 @@ table.item-table .is-disamakan {
    Nomor Dokumen, kartu Terminal Transit. Dua belas lajur; tiap isian
    memakai kelas lebar:
 
-     .s2            2 lajur  TANGGAL -- kotak "dd-mm-yyyy" + ikon kalender
-                    tidak butuh lebih. Di layar sedang ikut dua per baris.
+     .s2            2 lajur  isian pendek (Mata Uang, Nilai, Lampiran). Di
+                    layar sedang ikut dua per baris.
      (tanpa kelas)  3 lajur  seperempat baris -- isian standar
-     .s4            4 lajur  sepertiga -- nomor dokumen (pasangannya .s2)
-     .s6            6 lajur  setengah
+     .s4            4 lajur  sepertiga
+     .s6            6 lajur  setengah -- juga nomor dokumen + tanggalnya
+                    (.fl-bertanggal, di bawah)
      .s8            8 lajur  dua pertiga (kotak teks di samping dua isian pendek)
      .s9            9 lajur  tiga perempat
      .s12           selebar baris (tabel, catatan, judul kelompok)
@@ -819,10 +834,10 @@ table.item-table .is-disamakan {
    baris ke baris dan tidak ada isian yang melebar tanpa alasan.
 
    LEBAR ISIAN = LEBAR SELNYA. Kotak selalu mengisi selnya; yang diatur
-   adalah banyaknya lajur. Nomor dokumen + tanggalnya = .s4 + .s2 (setengah
-   baris), jadi dua dokumen sebaris tanpa ruang kosong di samping kotak
-   tanggal. (Membatasi lebar kotak di dalam sel yang lebar meninggalkan
-   lubang kosong di kanannya -- itu yang dihindari.)
+   adalah banyaknya lajur. Kecuali KOTAK TANGGAL: selebar tanggalnya
+   (css/date-input.css), jadi tanggal tidak diberi sel sendiri -- ia
+   berbagi sel dengan isian pasangannya (.fl-bertanggal) atau berjajar di baris
+   tanggal (.fl-tanggal), supaya tidak ada lubang kosong di sampingnya.
 
    TIGA LEBAR LAYAR
      >= 1080px      empat isian per baris. Ambangnya 1080, bukan 1200:
@@ -902,8 +917,8 @@ table.item-table .is-disamakan {
 }
 
 /* LABEL SETINGGI SERAGAM. Kotak isian satu baris hanya sejajar kalau
-   label di atasnya sama tinggi -- termasuk label yang membawa chip
-   "Auto ETA" atau sakelar Auto/Manual (.fl-head). */
+   label di atasnya sama tinggi -- termasuk kepala isian yang membawa
+   tombol (.fl-head, "+ Nomor Mobil"). */
 .fgrid .form-label,
 .fgrid .fl-head {
   display: flex;
@@ -912,9 +927,9 @@ table.item-table .is-disamakan {
   min-height: 22px;
   margin-bottom: 6px;
 }
-/* Kepala isian: label di kiri, sakelar di kanan. Bukan sakelar di dalam
+/* Kepala isian: label di kiri, tombol di kanan. Bukan tombol di dalam
    <label> -- tombol adalah kontrol berlabel, jadi klik pada teks label
-   akan ikut menekan tombol Auto. */
+   akan ikut menekannya. */
 .fl-head {
   justify-content: space-between;
 }
@@ -922,48 +937,108 @@ table.item-table .is-disamakan {
   margin: 0;
   min-width: 0;
 }
-/* Sakelar 26px duduk di baris label 22px: margin negatif membuat kotak
-   marginnya pas 22px, jadi baris label ini TIDAK lebih tinggi daripada
-   label biasa di sebelahnya -- tanpa itu kotak ETA & Estimated Delivery
-   4px lebih rendah daripada ETD & Tanggal In Factory. (Cara yang sama
-   dengan "+ Nomor Mobil", docnum.css.) */
-.fl-head .eta-mode-switch {
-  height: 26px;
-  margin: -2px 0;
-}
-.fl-head .eta-mode-btn {
-  padding: 0 10px;
-  font-size: 0.7rem;
-}
-@media (pointer: coarse) {
-  .fl-head .eta-mode-switch {
-    height: 32px;
-    margin: -5px 0;
-  }
-  .fl-head .eta-mode-btn {
-    padding: 0 13px;
-  }
-}
-/* Di sel yang sempit chip "Auto ETA" disembunyikan -- sakelar di
-   sebelahnya sudah menunjukkan mode yang sama. */
-@media (max-width: 1399.98px) and (min-width: 1080px) {
-  .fl-head .eta-mode-chip {
-    display: none;
-  }
-}
-
-/* Tanggal + jam dalam satu sel: [ tanggal ][ jam ]. */
+/* Tanggal + jam dalam satu sel: [ tanggal ][ jam ] -- keduanya selebar
+   isinya, jam menempel di samping tanggal. */
 .fl-pair {
   display: flex;
   gap: 8px;
 }
 .fl-pair > :first-child {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .fl-pair > .fl-jam {
   flex: 0 0 84px;
   text-align: center;
+}
+
+/* BARIS TANGGAL (.fl-tanggal) -- ETD / ETA / Estimated Delivery / In
+   Factory, Update ETA / ETD: kelompok tanggal (label + kotak [+ jam])
+   sebaris, tiap kelompok SELEBAR ISINYA dengan jarak tetap 40px di
+   antaranya. Di kisi biasa tiap kelompok mendapat seperempat baris; kotak
+   tanggal yang selebar tanggalnya lalu menyisakan celah 100-250px sebelum
+   kelompok berikutnya. Baris yang tidak muat dilipat: dua kelompok per
+   baris di layar sedang, satu di ponsel. */
+.fl-tanggal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 40px;
+}
+.fl-tanggal > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+/* Keterangan di bawah kotak (Dihitung otomatis...) dilipat selebar
+   kelompoknya -- tidak ikut melebarkannya. */
+.fl-tanggal .form-text-note {
+  contain: inline-size;
+}
+
+/* PENGALIH AUTO / MANUAL (.fl-mode) -- di bawah kotak ETA & Estimated
+   Delivery. Dulu dua tombol 26px di samping label: kepala kelompoknya
+   jadi lebih lebar daripada kotak tanggalnya dan pengalihnya menggantung
+   jauh dari kotak. Kini sekecil penanda Auto/Manual di kartu (warnanya
+   sama: Auto kuningan = hitungan mesin, Manual navy + pin = dipatok
+   orang) dan tidak lebih lebar daripada kotaknya. Keduanya tetap terbaca
+   tanpa dibuka -- dua tombol, bukan satu yang berganti tulisan. */
+.fl-mode {
+  margin-top: 6px;
+  height: 24px;
+  border-color: var(--border);
+  border-radius: var(--r-xs);
+}
+.fl-mode .eta-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 8px;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.fl-mode .eta-mode-btn i {
+  font-size: 0.62rem;
+}
+.fl-mode .eta-mode-btn.is-active:first-child {
+  background: var(--sec-100);
+  color: var(--tsec-700);
+}
+.fl-mode .eta-mode-btn.is-active:last-child {
+  background: var(--p-100);
+  color: var(--tp-600);
+}
+@media (pointer: coarse) {
+  .fl-mode {
+    height: 32px;
+  }
+  .fl-mode .eta-mode-btn {
+    padding: 0 12px;
+  }
+}
+
+/* ISIAN + TANGGALNYA SEPASANG (.fl-bertanggal, sel .s6 / .s8): No. Invoice +
+   Tanggal Invoice, Jenis Surat + Tanggal Surat, ... Isiannya mengisi sisa
+   sel, tanggalnya selebar tanggalnya di ujung kanan -- tepinya sejajar
+   tepi sel di baris lain. Dulu .s4 + .s2: kotak tanggal 140px di sel
+   200-300px, celah kosong di sampingnya. Tiap anak berlabel sendiri
+   seperti sel kisi biasa; anak yang tersembunyi (data-dn-when) tidak
+   memakan tempat. Tidak muat sebaris (ponsel, isian < 200px): isiannya
+   selebar baris, tanggalnya turun ke bawah. */
+.fl-bertanggal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 12px;
+}
+.fl-bertanggal > * {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.fl-bertanggal > :has(> input[data-kotak-tanggal], > input[type="date"]) {
+  flex: 0 0 auto;
 }
 
 .fgrid .form-text-note {

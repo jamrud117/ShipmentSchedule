@@ -82,6 +82,22 @@ function teksCariJadwal(s) {
     .toLowerCase();
 }
 
+/* TEKS CARI DIINGAT SELAMA MENGETIK. Tiap ketukan menyaring SEMUA
+   jadwal, dan merakit teks semua kolom + barangnya (±13ms untuk 1.000
+   jadwal) berulang untuk data yang sama. Ingatannya dibuang setiap kali
+   daftar digambar ulang karena sebab lain (data berubah, ganti buku,
+   simpan form, kabar realtime) -- teks basi tidak pernah dipakai. */
+let teksCariIngat = new WeakMap();
+let renderDariCari = false;
+function teksCariIngatan(s) {
+  let x = teksCariIngat.get(s);
+  if (!x) {
+    x = { hay: teksCariJadwal(s), rapat: null };
+    teksCariIngat.set(s, x);
+  }
+  return x;
+}
+
 function getFiltered() {
   const q = $("#searchInput").value.trim().toLowerCase();
   const qRapat = tanpaPemisah(q);
@@ -97,8 +113,11 @@ function getFiltered() {
        ada yang dicari. */
     let matchQ = true;
     if (q) {
-      const hay = teksCariJadwal(s);
-      matchQ = hay.includes(q) || tanpaPemisah(hay).includes(qRapat);
+      const c = teksCariIngatan(s);
+      if (!c.hay.includes(q)) {
+        if (c.rapat == null) c.rapat = tanpaPemisah(c.hay);
+        matchQ = c.rapat.includes(qRapat);
+      }
     }
     const matchStatus = !statusFilter || s.status === statusFilter;
 
@@ -369,6 +388,14 @@ function pulihkanPenandaGulir(penanda) {
 let posisiDaftarSebelumForm = null;
 function catatPosisiDaftar() {
   if ($("#viewList").classList.contains("d-none")) return;
+  /* Belum digulir: kembali ke puncak, tidak ada kartu di atas layar yang
+     tingginya perlu diwariskan. Membaca tinggi kartu di sini memaksa
+     seluruh halaman ditata (±20ms, mis. membuka tautan #/edit/<id>
+     langsung). */
+  if (!halamanTergulir) {
+    posisiDaftarSebelumForm = { y: 0, tinggi: new Map() };
+    return;
+  }
   const tinggi = new Map();
   cardContainer.querySelectorAll(":scope > .ship-card").forEach((k) => tinggi.set(k.dataset.id, k.getBoundingClientRect().height));
   posisiDaftarSebelumForm = { y: window.scrollY, tinggi };
@@ -417,6 +444,8 @@ function pulihkanFokusDaftar(lama) {
 }
 
 function render() {
+  if (!renderDariCari) teksCariIngat = new WeakMap();
+  renderDariCari = false;
   const penanda = catatPenandaGulir();
   const fokusLama = catatFokusDaftar();
   // Data jadwal mungkin berubah -> notifikasi lonceng dihitung ulang (notifikasi.js)
@@ -733,6 +762,7 @@ $("#searchInput").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     currentPage = 1;
+    renderDariCari = true; // datanya tidak berubah: teks cari yang diingat boleh dipakai
     render();
   }, 180);
 });

@@ -84,7 +84,7 @@ function formatNumberTyping(raw) {
   const potong = s.split(".");
   let bulat = potong.shift() || "";
   const adaTitik = potong.length > 0;
-  let desimal = potong.join("");
+  const desimal = potong.join("");
 
   bulat = bulat.replace(/^0+(?=\d)/, ""); // buang nol di depan
   const berkelompok = bulat.replace(/\B(?=(\d{3})+(?!\d))/g, ",");

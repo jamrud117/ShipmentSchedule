@@ -1393,9 +1393,13 @@ function mstGambarDaftar(baris) {
   const box = $("#mstDaftar");
   if (!box) return;
   if (!baris.length) {
+    /* Petunjuk "Tambah baris" hanya bagi yang memang punya tombolnya --
+       peran baca-saja tidak melihatnya (.mst-ubah). */
     box.innerHTML = mstKosongHtml(
       "bi-card-checklist",
-      tt("Belum ada baris. Tambahkan lewat tombol Tambah baris di atas.", "No lines yet. Add one with the Add line button above."),
+      canEdit()
+        ? tt("Belum ada baris. Tambahkan lewat tombol Tambah baris di atas.", "No lines yet. Add one with the Add line button above.")
+        : tt("Belum ada baris masterlist.", "No masterlist lines yet."),
     );
     mstGambarPaginasi(0);
     return;
@@ -1465,9 +1469,24 @@ function mstGambarPaginasi(total) {
     </div>`;
 }
 
+/* Unduh Excel & Cetak tanpa satu baris pun: tidak ada yang bisa
+   dihasilkan -- tombolnya nonaktif, bukan menjawab klik dengan galat.
+   Selagi berkas Excel dibuat tombolnya tetap nonaktif walau daftar
+   digambar ulang (realtime) -- tanpa itu klik kedua membuat berkas
+   kedua. */
+let mstMengunduhExcel = false;
+function mstSegarkanTombolEkspor() {
+  const kosong = !mstBarisDb.length;
+  const excel = $("#btnMstExcel");
+  if (excel) excel.disabled = kosong || mstMengunduhExcel;
+  const cetak = $("#btnMstCetak");
+  if (cetak) cetak.disabled = kosong;
+}
+
 function renderMasterlist() {
   if (!$("#viewMasterlist")) return;
   const baris = mstSusun();
+  mstSegarkanTombolEkspor();
   mstGambarPapan(mstRingkasan(baris));
   mstGambarTersedia(baris);
   mstGambarDokumen();
@@ -2782,8 +2801,8 @@ async function mstUnduhExcel() {
     showToast(tt("Belum ada baris untuk diunduh.", "There are no lines to download."), "danger");
     return;
   }
-  const tombol = $("#btnMstExcel");
-  if (tombol) tombol.disabled = true;
+  mstMengunduhExcel = true;
+  mstSegarkanTombolEkspor();
   try {
     await ensureExcelJS();
     const wb = new ExcelJS.Workbook();
@@ -2915,7 +2934,8 @@ async function mstUnduhExcel() {
     console.error(e);
     showToast(tt("Berkas Excel gagal dibuat.", "The Excel file could not be created."), "danger");
   } finally {
-    if (tombol) tombol.disabled = false;
+    mstMengunduhExcel = false;
+    mstSegarkanTombolEkspor();
   }
 }
 

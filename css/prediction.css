@@ -12,41 +12,40 @@
 ================================================================== */
 
 /* ------------------------------------------------------------------
-   PENANDA MODE ETA
+   PENANDA MODE ETA / ESTIMATED DELIVERY
+
+   Label kecil berbingkai tipis, huruf biasa, tanpa isian warna:
+     Auto    tinta kuningan -- angka hasil hitungan mesin
+     Manual  tinta navy + pin -- tanggal yang dipatok orang
+   Dulu "AUTO ETA" berkapital, berlatar kuningan, dan berikon tongkat
+   sihir: lebih ramai daripada tanggal yang diberinya keterangan.
 ------------------------------------------------------------------ */
 .eta-mode-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: var(--r-pill);
-  border: 1px solid transparent;
-  font-family: var(--font-display);
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--sec-200);
+  font-family: var(--font-body);
   font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 600;
+  line-height: 1.15rem;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   vertical-align: middle;
+  background: transparent;
 }
 .eta-mode-chip i {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
 }
 .eta-mode-chip--auto {
-  background: var(--sec-50);
   border-color: var(--sec-200);
-  color: var(--tsec-600);
+  color: var(--tsec-700);
 }
 .eta-mode-chip--manual {
-  background: var(--p-50);
   border-color: var(--p-200);
   color: var(--tp-600);
-}
-
-.eta-label {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
 }
 
 /* Pengalih Auto/Manual — dua tombol berdempet, bukan dropdown: hanya
@@ -92,119 +91,89 @@
 /* ------------------------------------------------------------------
    TINGKAT KEYAKINAN
 
-   Enam tingkat, satu ramp. Sengaja TIDAK memakai hijau/merah: ini
-   bukan lulus/gagal, melainkan seberapa banyak yang sudah diketahui.
-   Yang berubah adalah kepekatannya — makin pekat, makin sedikit yang
-   masih ditebak.
+   Meteran lima ruas + "60% · Sedang", tanpa kapsul berwarna. Sengaja
+   TIDAK memakai hijau/merah: ini bukan lulus/gagal, melainkan seberapa
+   banyak yang sudah diketahui. Yang bertambah adalah ruas yang terisi
+   (Rendah 1 ... Sangat Tinggi 5) dan pekatnya tinta.
 ------------------------------------------------------------------ */
 .pred-conf {
   display: inline-flex;
   align-items: center;
-  padding: 1px 8px;
-  border-radius: var(--r-pill);
-  border: 1px solid;
-  font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  gap: 5px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
   white-space: nowrap;
+  color: var(--n-600);
+}
+.pred-conf-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 10px;
+}
+.pred-conf-meter i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--n-200);
+}
+.pred-conf-meter i:nth-child(1) { height: 4px; }
+.pred-conf-meter i:nth-child(2) { height: 5.5px; }
+.pred-conf-meter i:nth-child(3) { height: 7px; }
+.pred-conf-meter i:nth-child(4) { height: 8.5px; }
+.pred-conf-meter i:nth-child(5) { height: 10px; }
+.pred-conf-meter i.on {
+  background: currentColor;
 }
 .pred-conf--low {
-  background: var(--n-50);
-  border-color: var(--n-200);
   color: var(--n-500);
 }
-.pred-conf--medium {
-  background: var(--sec-50);
-  border-color: var(--sec-200);
-  color: var(--tsec-600);
-}
+.pred-conf--medium,
 .pred-conf--medhigh {
-  background: var(--sec-100);
-  border-color: var(--sec-300);
   color: var(--tsec-700);
 }
-.pred-conf--high {
-  background: var(--p-50);
-  border-color: var(--p-200);
+.pred-conf--high,
+.pred-conf--veryhigh {
   color: var(--tp-600);
 }
-.pred-conf--veryhigh {
-  background: var(--p-100);
-  border-color: var(--p-300);
-  color: var(--tp-700);
-}
 .pred-conf--final {
-  background: var(--d-900);
-  border-color: var(--d-900);
-  color: #fff;
+  color: var(--n-900);
 }
 
 /* ------------------------------------------------------------------
-   BARIS RINGKAS DI KARTU
+   KETERANGAN ESTIMATED DELIVERY DI KARTU
+
+   Bukan pita tersendiri lagi: isinya (mode, sumber, keyakinan, rentang)
+   mengalir di keterangan bawah tanggalnya (.date-caption, css/card.css).
 ------------------------------------------------------------------ */
 .pred-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-3);
-  margin-top: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--sec-200);
-  border-left: 3px solid var(--sec-400);
-  border-radius: var(--r-md);
-  background: linear-gradient(180deg, var(--sec-50), var(--surface));
-}
-  /* Judul ditulis apa adanya di sumbernya: Kapital Di Awal Kata.
-
-     text-transform: uppercase memaksa seluruhnya jadi huruf besar,
-     dan judul yang panjang jadi sulit dibaca — mata kehilangan bentuk
-     kata. Huruf besar disimpan untuk penanda pendek (kode tahap, chip
-     status), bukan untuk judul. */
-.pred-strip-head {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--font-display);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  color: var(--n-500);
-}
-.pred-strip-head i {
-  color: var(--tsec-600);
-}
-.pred-strip-date {
-  font-family: var(--font-mono);
-  font-size: var(--t-base);
-  font-weight: 700;
-  color: var(--n-900);
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
 }
 .pred-strip-src {
-  font-size: var(--t-sm);
-  color: var(--n-600);
+  font-size: 0.74rem;
+  color: var(--n-500);
 }
 .pred-strip-src b {
-  color: var(--n-800);
-}
-.pred-strip--empty {
-  border-color: var(--border);
-  border-left-color: var(--n-300);
-  background: var(--n-50);
+  font-weight: 600;
+  color: var(--n-700);
 }
 .pred-strip-note {
-  font-size: var(--t-sm);
+  font-size: 0.74rem;
+  color: var(--n-500);
+}
+.pred-strip .pred-range {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
   color: var(--n-500);
 }
 
-/* Kotak tanggal yang dikunci: terlihat sebagai hasil hitungan, bukan
-   isian yang kebetulan sedang tidak bisa diklik. */
-.date-field--locked input[readonly] {
-  background: var(--sec-50);
-  border-style: dashed;
-  color: var(--n-700);
-  cursor: default;
-}
+/* Kotak tanggal yang dikunci (kartu selesai, hanya baca): nilai polos
+   bergaya kt-nilai (css/date-input.css). */
 .date-field--locked label i {
   color: var(--tsec-600);
   font-size: 0.66rem;
@@ -235,7 +204,7 @@
   color: var(--n-500);
   padding-bottom: var(--sp-2);
   margin-bottom: var(--sp-3);
-  border-bottom: 1px dashed var(--sec-200);
+  border-bottom: 1px solid var(--sec-200);
 }
 .pred-panel-head i {
   color: var(--tsec-600);
@@ -312,7 +281,7 @@
   list-style: none;
   margin: var(--sp-2) 0 0;
   padding: 0;
-  border-top: 1px dashed var(--sec-200);
+  border-top: 1px solid var(--sec-200);
 }
 .pred-steps li {
   display: flex;
@@ -321,7 +290,7 @@
   gap: var(--sp-3);
   padding: 4px 0;
   font-size: var(--t-sm);
-  border-bottom: 1px dashed var(--n-100);
+  border-bottom: 1px solid var(--n-100);
 }
 .pred-step-src {
   margin-left: 6px;
@@ -431,7 +400,7 @@
   grid-template-columns: 190px 1fr;
   gap: var(--sp-3);
   padding: 6px 0;
-  border-bottom: 1px dashed var(--sec-200);
+  border-bottom: 1px solid var(--sec-200);
 }
 .pred-detail-row:last-child {
   border-bottom: 0;
@@ -483,7 +452,7 @@
 .pred-layer {
   padding: 6px 0 10px;
   margin-bottom: 10px;
-  border-bottom: 1px dashed var(--sec-200);
+  border-bottom: 1px solid var(--sec-200);
 }
 .pred-layer-tag {
   display: inline-block;
@@ -531,12 +500,6 @@
   font-size: var(--t-sm);
   color: var(--tp-600);
 }
-.date-field--pinned input {
-  border-style: solid;
-  border-color: var(--p-300);
-  background: var(--p-50);
-}
-
 /* Asal angka transit & pembanding manual — keterangan, bukan angka
    utama, jadi ukurannya lebih kecil dan warnanya lebih redup. */
 .pred-src-tag {
@@ -567,7 +530,7 @@
   gap: 6px;
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px dashed var(--sec-200);
+  border-top: 1px solid var(--sec-200);
   font-size: var(--t-sm);
 }
 .pred-compare b {
@@ -605,7 +568,7 @@
   gap: 6px;
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px dashed var(--sec-200);
+  border-top: 1px solid var(--sec-200);
   font-size: var(--t-sm);
   color: var(--n-700);
 }
