@@ -435,16 +435,21 @@ table.item-table th,
 /* ==================================================================
    F. FOOTER
 
-   Dulu blok navy setinggi 230px di dasar SETIAP halaman. Isinya (catatan
-   data & pintasan) tetap ada, tapi kini tenang: teks kecil di atas
-   kanvas, dipisah satu garis tipis.
+   Mode terang: navy -- warna yang sama dengan sidebar, keduanya
+   membingkai papan seperti huruf L. Mode gelap: biru bergradasi, karena
+   navy sidebar di sana nyaris sama dengan kanvas dan tampak hitam
+   (--footer-latar, tokens.css). Garis kuningan di atasnya = aksen merek
+   (seperti titik di "EXIM·DDI"). Sempat dibuat transparan di atas
+   kanvas; di mode terang jadi abu-abu pucat tanpa karakter. Isinya tetap
+   ringkas: teks kecil terang (--teks-di-navy), judul kuningan, tuts
+   transparan. Fokusnya memakai cincin untuk permukaan navy (base.css).
 ================================================================== */
 .app-footer {
-  background: transparent;
-  color: var(--n-500);
-  padding: 22px 0 20px;
+  background: var(--footer-latar);
+  color: var(--teks-di-navy);
+  padding: 28px 0 22px;
   margin-top: auto;
-  border-top: 1px solid var(--border);
+  border-top: 2px solid var(--sec-400);
   font-size: var(--t-sm);
 }
 .footer-brand {
@@ -452,17 +457,17 @@ table.item-table th,
   font-weight: 700;
   font-size: 1.2rem;
   letter-spacing: 0.03em;
-  color: var(--tp-700);
+  color: #fff;
   margin-bottom: 4px;
 }
 .footer-brand span {
-  color: var(--sec-500);
+  color: var(--sec-400);
 }
 .footer-heading {
   font-family: var(--font-body);
   font-size: var(--t-sm);
   font-weight: 600;
-  color: var(--n-700);
+  color: var(--sec-300);
   margin-bottom: 6px;
 }
 .footer-text {
@@ -470,7 +475,7 @@ table.item-table th,
   max-width: 62ch;
 }
 .footer-text b {
-  color: var(--n-800);
+  color: #fff;
   font-weight: 600;
 }
 .footer-pintasan {
@@ -480,25 +485,30 @@ table.item-table th,
   grid-template-columns: 70px 1fr;
 }
 .footer-pintasan kbd {
-  border: 1px solid var(--border-control);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-bottom-width: 2px;
-  background: var(--surface);
-  color: var(--n-700);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 0.7rem;
 }
 .footer-divider {
-  border-color: var(--border);
-  margin: 16px 0 12px;
+  border-color: rgba(255, 255, 255, 0.12);
+  margin: 18px 0 12px;
 }
 .footer-bottom {
   font-family: var(--font-body);
   font-size: var(--t-xs);
-  color: var(--n-500);
+  color: var(--teks-di-navy);
 }
-.app-footer :focus-visible {
-  outline-color: var(--focus-ring);
+/* Tombol "kembali ke atas" (.fab-top) mengambang di sudut kanan-bawah:
+   tanggal di ujung kanan baris ini tidak tertutup saat halaman digulir
+   sampai habis. Di ponsel tanggalnya turun ke baris sendiri, rata kiri. */
+@media (min-width: 768px) {
+  .footer-bottom {
+    padding-right: 56px;
+  }
 }
 
 /* ==================================================================
@@ -796,11 +806,12 @@ table.item-table th,
   margin-bottom: 3px;
 }
 /* Kotak tanggalnya: model bergaya nilai bersama (css/date-input.css) */
+/* Tanggal hasil hitungan (.date-field--auto) bertinta SAMA dengan tanggal
+   lain: penandanya chip "Auto" di keterangannya. Dulu biru -- warna yang
+   di aplikasi ini berarti "bisa diklik", dan membuat ETA tampil berbeda
+   sendiri tanpa alasan yang terbaca. */
 .date-caption {
   font-size: var(--t-xs);
-}
-.date-field--auto input.kt-nilai[data-kotak-tanggal] {
-  color: var(--tp-600);
 }
 
 /* Rincian: label biasa yang redup, nilai tegas. Ikon label dilepas --

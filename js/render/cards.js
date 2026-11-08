@@ -363,12 +363,22 @@ function keteranganEtaKartu(s) {
   return `<span class="date-ket" title="${escapeAttr(judul)}">${etaModeChipHtml(mode)} <span class="date-ket-lengkap">ETD + ${n} ${satuan}</span><span class="date-ket-ringkas" aria-hidden="true">+${n} ${satuan}</span></span>`;
 }
 
+/* opsi.diganti = { tanggal, label }: RENCANA AWAL yang sudah diganti
+   tanggal update delay (strip delay di bawahnya). Dicoret & berlabel
+   "rencana awal" -- yang berlaku tanggal di strip itu. Dulu keduanya
+   bergaya sama persis, dan jadwal yang mundur tidak terbedakan dari
+   jadwal biasa (tanggal lama terbaca seperti tanggal yang berlaku). */
 function kotakTanggalKartu(s, kolom, label, opsi) {
   const o = opsi || {};
-  const kelas = ["date-field", o.kelas || ""].filter(Boolean).join(" ");
+  const ganti = o.diganti;
+  const kelas = ["date-field", o.kelas || "", ganti ? "date-field--diganti" : ""].filter(Boolean).join(" ");
+  const ket = ganti ? ` <span class="date-diganti-ket">· ${tt("rencana awal", "original plan")}</span>` : "";
+  const judul = ganti
+    ? ` title="${escapeAttr(tt(`Rencana awal — diganti ${ganti.label} ${fmtDate(ganti.tanggal)}`, `Original plan — replaced by ${ganti.label} ${fmtDate(ganti.tanggal)}`))}"`
+    : "";
   return `<div class="${kelas}">
-        <label for="${idTglKartu(s, kolom)}">${label}</label>
-        <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${atributKendaliKartu("readonly")}>
+        <label for="${idTglKartu(s, kolom)}">${label}${ket}</label>
+        <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${judul}${atributKendaliKartu("readonly")}>
         <div class="date-caption">${hariKartuHtml(s[kolom], o.jam)}${o.keterangan || ""}</div>
       </div>`;
 }
@@ -378,10 +388,17 @@ function dateStripHtml(s) {
   const etaAuto = etaPredictionAppliesTo(s) && etaModeOf(s) === "auto";
   const prediksiDelivery = deliveryPredictionAppliesTo(s);
   const deliveryManual = prediksiDelivery && deliveryModeOf(s) === "manual";
+  // Rencana awal yang sudah diganti Update ETD / Update ETA (delayStripHtml)
+  const diganti = (kolom, revisi, label) => (s[kolom] && s[revisi] && s[revisi] !== s[kolom] ? { tanggal: s[revisi], label } : null);
   return `
     <div class="date-strip">
-      ${kotakTanggalKartu(s, "etd", "ETD", { jam: s.etdTime })}
-      ${kotakTanggalKartu(s, "eta", "ETA", { jam: s.etaTime, keterangan: keteranganEtaKartu(s), kelas: etaAuto ? "date-field--auto" : "" })}
+      ${kotakTanggalKartu(s, "etd", "ETD", { jam: s.etdTime, diganti: diganti("etd", "etdUpdate", tt("Update ETD", "Updated ETD")) })}
+      ${kotakTanggalKartu(s, "eta", "ETA", {
+        jam: s.etaTime,
+        keterangan: keteranganEtaKartu(s),
+        kelas: etaAuto ? "date-field--auto" : "",
+        diganti: diganti("eta", "etaUpdate", tt("Update ETA", "Updated ETA")),
+      })}
       ${
         /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
            sini mengunci tanggalnya ke mode Manual. Kalau terpikir

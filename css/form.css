@@ -1907,11 +1907,12 @@ tr.item-fac-row td {
   line-height: 1.35;
 }
 
-/* Badge lama delay di kartu dashboard. */
+/* Lencana "Mundur N hari" di kartu: merah, warna status Delay -- sama
+   dengan strip Tanggal Update Delay & kotak tanggal yang berlaku. */
 .tag.tag-delay {
-  background: var(--w-bg-fff3e0);
-  color: var(--w-teks-a35a00);
-  border-color: var(--w-garis-ffd8a8);
+  background: var(--s-danger-bg);
+  color: var(--ts-danger);
+  border-color: var(--s-danger-line);
 }
 
 /* Kotak satuan kemasan di sebelah Total Package (mode Import). */

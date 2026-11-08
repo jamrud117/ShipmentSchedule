@@ -33,10 +33,6 @@ const I18N = {
     "menu.theme": "Tampilan",
     "menu.logout": "Keluar",
 
-    // -- Layar masuk
-    "login.note":
-      "Lupa Password? Hubungi admin — password disetel ulang langsung tanpa email.",
-
     // -- Halaman HS Code
     "hscode.list.title": "Daftar HS Code",
     "hscode.reload": "Muat ulang",
@@ -224,7 +220,6 @@ const I18N = {
     "u.daftar.barang.berat.dan.dimensi.diambil.dari.j": "Daftar barang, berat, dan dimensi diambil dari jadwal ini.",
     "u.hapus.semua.import": "Hapus Semua Import",
     "u.hari.ini": "Hari ini",
-    "u.ingat.saya.di.perangkat.ini": "Ingat saya di perangkat ini",
     "u.invoice.delivery.order.permintaan.dana.dan.sur": "Invoice, Delivery Order, Permintaan Dana, dan Surat — satu sumber nomor untuk seluruh tim.",
     "u.isi.otomatis.dari.dokumen": "Isi otomatis dari dokumen",
     "u.kolomnya.sudah.sesuai.lengkap.dengan.baris.con": "Kolomnya sudah sesuai, lengkap dengan baris contoh dan lembar cara mengisi.",
@@ -238,7 +233,6 @@ const I18N = {
     "f.due.date.invoice": "Due Date Invoice",
     "f.customer": "Customer",
     "u.nomor.terbit.berurutan.tercatat": "Nomor terbit berurutan & tercatat",
-    "u.pelacakan.jadwal.internal.gunakan.akun.yang.di": "Pelacakan jadwal internal. Gunakan akun yang diberikan admin.",
     "u.permintaan.nomor.delivery.order": "Permintaan Nomor Delivery Order",
     "u.permintaan.nomor.dokumen": "Permintaan nomor dokumen",
     "u.permintaan.nomor.invoice": "Permintaan Nomor Invoice",
@@ -328,7 +322,6 @@ const I18N = {
     "ph.kota.negara.tujuan.akhir": "Kota, negara tujuan akhir",
     "ph.minimal.8.karakter": "Minimal 8 karakter",
     "ph.pihak.yang.diberi.tahu": "Pihak yang diberi tahu",
-    "ph.username.atau.email": "Username atau email",
     "ti.cari.cepat.lintas.import.export": "Cari Cepat Lintas Import & Export",
     "ti.eta.diisi.manual.dari.forwarder.mesin.tidak.ak": "ETA diisi manual dari forwarder — mesin tidak akan menimpanya",
     "ti.hapus.rentang.tanggal": "Hapus rentang tanggal",
@@ -593,10 +586,6 @@ const I18N = {
     "menu.theme": "Appearance",
     "menu.logout": "Sign out",
 
-    // -- Login screen
-    "login.note":
-      "Forgot your password? Contact an admin — it is reset directly, no email involved.",
-
     "hscode.list.title": "HS Code List",
     "hscode.reload": "Reload",
     "hscode.add.button": "Add HS Code",
@@ -782,7 +771,6 @@ const I18N = {
     "u.daftar.barang.berat.dan.dimensi.diambil.dari.j": "The item list, weight, and dimensions are taken from this schedule.",
     "u.hapus.semua.import": "Delete All Imports",
     "u.hari.ini": "Today",
-    "u.ingat.saya.di.perangkat.ini": "Remember me on this device",
     "u.invoice.delivery.order.permintaan.dana.dan.sur": "Invoice, Delivery Order, Fund Request, and Letter — a single source of numbers for the whole team.",
     "u.isi.otomatis.dari.dokumen": "Auto-fill from a document",
     "u.kolomnya.sudah.sesuai.lengkap.dengan.baris.con": "The columns already match, complete with a sample row and a how-to-fill sheet.",
@@ -796,7 +784,6 @@ const I18N = {
     "f.due.date.invoice": "Invoice Due Date",
     "f.customer": "Customer",
     "u.nomor.terbit.berurutan.tercatat": "Numbers issued in sequence and recorded",
-    "u.pelacakan.jadwal.internal.gunakan.akun.yang.di": "Internal schedule tracking. Please use the account provided by your administrator.",
     "u.permintaan.nomor.delivery.order": "Delivery Order Number Request",
     "u.permintaan.nomor.dokumen": "Document number request",
     "u.permintaan.nomor.invoice": "Invoice Number Request",
@@ -886,7 +873,6 @@ const I18N = {
     "ph.kota.negara.tujuan.akhir": "City, country of the final destination",
     "ph.minimal.8.karakter": "At least 8 characters",
     "ph.pihak.yang.diberi.tahu": "Party to be notified",
-    "ph.username.atau.email": "Username or email",
     "ti.cari.cepat.lintas.import.export": "Quick search across Import & Export",
     "ti.eta.diisi.manual.dari.forwarder.mesin.tidak.ak": "ETA entered manually from the forwarder — the engine will not overwrite it",
     "ti.hapus.rentang.tanggal": "Clear the date range",

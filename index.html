@@ -291,10 +291,10 @@
           </svg>
           <span>EXIM<span>·</span>DDI</span>
         </div>
-        <h1 class="login-judul" data-i18n="c.masuk">Masuk</h1>
+        <h1 class="login-judul" data-en="Login">Masuk</h1>
         <p
           class="login-sub"
-          data-i18n="u.pelacakan.jadwal.internal.gunakan.akun.yang.di"
+          data-en="Internal schedule tracking. Please use the account provided by your administrator."
         >
           Pelacakan jadwal internal. Gunakan akun yang diberikan admin.
         </p>
@@ -309,7 +309,7 @@
             class="login-input"
             autocomplete="username"
             placeholder="Username atau email"
-            data-i18n-ph="ph.username.atau.email"
+            data-en-ph="Username or email"
           />
 
           <label class="login-label" for="loginPassword">Password</label>
@@ -333,7 +333,7 @@
 
           <label class="login-remember">
             <input type="checkbox" id="loginRemember" checked />
-            <span data-i18n="u.ingat.saya.di.perangkat.ini"
+            <span data-en="Remember me on this device"
               >Ingat saya di perangkat ini</span
             >
           </label>
@@ -343,11 +343,11 @@
             id="btnLogin"
           >
             <i class="bi bi-box-arrow-in-right"></i>
-            <span data-i18n="c.masuk">Masuk</span>
+            <span data-en="Login">Masuk</span>
           </button>
         </div>
 
-        <p class="login-note" data-i18n="login.note">
+        <p class="login-note" data-en="Forgot your password? Contact an admin — it is reset directly, no email involved.">
           Lupa Password? Hubungi admin — password disetel ulang langsung tanpa
           email.
         </p>
@@ -357,7 +357,7 @@
              dimengerti. Tombol yang sama juga ada di menu akun untuk
              mengubahnya di tengah jalan. -->
         <div class="login-lang">
-          <span data-i18n="menu.language">Bahasa</span>
+          <span data-en="Language">Bahasa</span>
           <div class="lang-switch">
             <button type="button" data-lang-pick="id">ID</button>
             <button type="button" data-lang-pick="en">EN</button>
@@ -365,6 +365,9 @@
         </div>
       </div>
     </div>
+    <!-- Tanpa sesi tersimpan, layar masuk tampil SEKARANG -- tidak menunggu
+         seluruh skrip aplikasi di ujung halaman (js/auth/login-awal.js). -->
+    <script src="js/auth/login-awal.js"></script>
 
     <!-- KERANGKA NAVIGASI (css/shell.css, js/ui/sidebar.js)
 

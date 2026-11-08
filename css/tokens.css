@@ -215,6 +215,8 @@ body {
   --ts-ok: var(--s-ok);
   /* Teks terang di atas permukaan navy (tetap di kedua tema) */
   --teks-di-navy: #b4cde6;
+  /* Latar footer: navy sidebar. Mode gelap menggantinya (lihat bawah). */
+  --footer-latar: var(--d-900);
   /* Lembar kertas di pratinjau cetak (tetap di kedua tema): yang tampil di layar
      adalah salinan kertas yang keluar dari printer, dan kertas selalu putih --
      bukan permukaan aplikasi yang ikut menggelap. */
@@ -244,7 +246,6 @@ body {
   --w-bg-fdeaea: #fdeaea;
   --w-bg-ffefcc: #ffefcc;
   --w-bg-fff3de: #fff3de;
-  --w-bg-fff3e0: #fff3e0;
   --w-bg-fff6f6: #fff6f6;
   --w-bg-fff7e6: #fff7e6;
   --w-bg-fff7ed: #fff7ed;
@@ -262,7 +263,6 @@ body {
   --w-garis-f6d4cf: #f6d4cf;
   --w-garis-f7e2b8: #f7e2b8;
   --w-garis-fdba74: #fdba74;
-  --w-garis-ffd8a8: #ffd8a8;
   --w-teks-0f6b52: #0f6b52;
   --w-teks-146c43: #146c43;
   --w-teks-15803d: #15803d;
@@ -276,7 +276,6 @@ body {
   --w-teks-8a5a00: #8a5a00;
   --w-teks-95610c: #95610c;
   --w-teks-9a3412: #9a3412;
-  --w-teks-a35a00: #a35a00;
   --w-teks-b26a00: #b26a00;
   --w-teks-b42318: #b42318;
   --w-teks-b45309: #b45309;
@@ -301,6 +300,11 @@ body {
 @media screen {
   :root[data-tema="gelap"] {
     color-scheme: dark;
+
+    /* Footer: navy sidebar nyaris sama dengan kanvas gelap (1,08 : 1) --
+       footernya tampak hitam. Biru yang lebih hidup, bergradasi halus;
+       teks terang & judul kuningan di atasnya tetap ≥ 5,7 : 1. */
+    --footer-latar: linear-gradient(180deg, #1d4473 0%, #142f51 100%);
 
     --n-50: #0d151d;
     --n-100: #131e29;
@@ -381,7 +385,6 @@ body {
     --w-bg-fdeaea: #3a1d1d;
     --w-bg-ffefcc: #423821;
     --w-bg-fff3de: #3d321f;
-    --w-bg-fff3e0: #3c311e;
     --w-bg-fff6f6: #361b1b;
     --w-bg-fff7e6: #3a311d;
     --w-bg-fff7ed: #382c1c;
@@ -399,7 +402,6 @@ body {
     --w-garis-f6d4cf: #653933;
     --w-garis-f7e2b8: #695735;
     --w-garis-fdba74: #73573a;
-    --w-garis-ffd8a8: #6a5235;
     --w-teks-0f6b52: #a5ebd8;
     --w-teks-146c43: #a4e7c8;
     --w-teks-15803d: #93e5b2;
@@ -413,7 +415,6 @@ body {
     --w-teks-8a5a00: #e8cd99;
     --w-teks-95610c: #e5c288;
     --w-teks-9a3412: #e39980;
-    --w-teks-a35a00: #e4bb87;
     --w-teks-b26a00: #e2b97c;
     --w-teks-b42318: #e18179;
     --w-teks-b45309: #e1a679;

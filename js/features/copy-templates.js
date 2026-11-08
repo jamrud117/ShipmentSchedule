@@ -123,6 +123,15 @@ function qtyDenganSatuan(it, formatter) {
   return `${angka} ${satuan}`;
 }
 
+/* KOLOM LCL/FCL: kiriman UDARA ditulis "LCL". Form jadwal udara tidak
+   punya isian Jenis Muatan (muatanKiriman() kosong), tetapi laporan
+   harian mencatat kargo udara sebagai LCL -- kolomnya tidak dibiarkan
+   bolong. Laut tetap isian FCL / LCL-nya. Sheet DAILY IMPORT di berkas
+   Bulk Excel ikut (tidak dibaca balik Bulk Import). */
+function muatanDailyImport(s) {
+  return s && s.transport === "udara" ? "LCL" : muatanKiriman(s);
+}
+
 function buildDailyImportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
@@ -162,7 +171,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.date(s.actual), // 17 ESTIMATE DELIVERY
       formatter.date(s.factoryDate), // 18 IN FACTORY DATE
       formatter.text(s.factoryTime), // 19 IN FACTORY TIME
-      formatter.text(muatanKiriman(s)), // 20 LCL/FCL (udara: kosong)
+      formatter.text(muatanDailyImport(s)), // 20 LCL/FCL (udara: LCL)
       formatter.text(kontainerKiriman(s)), // 21 CONTAINER (udara: kosong)
       formatter.text(s.vehicleNo), // 22 NO. POL — nomor kendaraan
       formatter.text(s.incoterm), // 23 INCOTERM
@@ -259,6 +268,13 @@ function reportItemNames(s) {
 }
 
 
+/* MODE DI REPORT: kiriman udara ditulis bersama bukunya -- "Air Import" /
+   "Air Export"; laut jenis muatannya (FCL / LCL). Kedua buku memuatnya. */
+function modeReport(s, mode) {
+  if (s.transport === "udara") return mode === "export" ? "Air Export" : "Air Import";
+  return dispVal(muatanKiriman(s));
+}
+
 // Baris ke-2 & ke-3 tiap pengiriman
 function reportDetailPairs(s, mode) {
   // Daftar DATAR berisi pasangan [label, nilai]
@@ -266,6 +282,7 @@ function reportDetailPairs(s, mode) {
     const pkg = extractLeadingNumber(s.package);
     return [
       ["Packages", pkg == null ? "0" : String(Math.round(pkg))],
+      ["Mode", modeReport(s, "export")],
       /* effectiveEtd/Eta = tanggal TERBARU: pakai hasil update delay
          kalau ada, kalau tidak jatuh ke jadwal awal. Report dikirim
          supaya penerimanya tahu keadaan sekarang -- melaporkan jadwal
@@ -284,8 +301,7 @@ function reportDetailPairs(s, mode) {
      Memakainya berarti kolom tanggalnya selalu kosong. */
   return [
     ["Incoterm", dispVal(s.incoterm)],
-    // Laut: FCL / LCL; udara tidak bermuatan kontainer -> AIR
-    ["Mode", s.transport === "udara" ? "AIR" : dispVal(muatanKiriman(s))],
+    ["Mode", modeReport(s, "import")],
     ["ETD", fmtTanggalReport(effectiveEtd(s))],
     ["ETA", fmtTanggalReport(effectiveEta(s))],
     ["Estimated Arrival at Factory", fmtTanggalReport(s.actual)],

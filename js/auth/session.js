@@ -202,9 +202,34 @@ async function signIn(masukan, password) {
   return { ok: true };
 }
 
+/* KELUAR = cabut sesi di server, lalu MUAT ULANG halaman: data sesi
+   sebelumnya (jadwal, riwayat nomor, akun, draf) dibuang dari memori
+   seluruhnya, bukan dibersihkan satu per satu.
+
+   Layar masuk tampil SEKETIKA, sebelum server menjawab; sesudah dimuat
+   ulang pun langsung tampil lagi (login-awal.js), tidak menunggu ±130
+   skrip. Server yang tidak menjawab tidak menahan siapa pun: paling lama
+   BATAS_KELUAR_MS, lalu sesi di peramban ini tetap dibuang (supabase-js
+   menghapusnya sesudah server menjawab -- termasuk saat galat). */
+const BATAS_KELUAR_MS = 4000;
 async function signOut() {
   if (typeof hentikanTimerSesi === "function") hentikanTimerSesi();
-  await supabaseClient.auth.signOut();
+  /* Bukan "siap" lagi: Masuk yang ditekan selama menunggu server tidak
+     balapan dengan muat ulang di bawah (handleLoginSubmit menampungnya),
+     dan penangan SIGNED_OUT tidak menggambar layar masuk dua kali. */
+  authState.siap = false;
+  showLoginView();
+  await Promise.race([
+    supabaseClient.auth.signOut().catch((e) => console.error(e)),
+    new Promise((selesai) => setTimeout(selesai, BATAS_KELUAR_MS)),
+  ]);
+  try {
+    Object.keys(localStorage)
+      .filter((k) => /^sb-.+-auth-token$/.test(k))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    /* penyimpanan ditolak: tidak ada yang tersimpan untuk dibuang */
+  }
   authState.user = null;
   authState.profile = null;
   location.hash = "#/";
@@ -329,8 +354,13 @@ function showLoginView() {
   aturKerangka(false);
   const footer = $("#appFooter");
   if (footer) footer.classList.add("d-none");
-  // Kotak yang masih kosong: Username, atau Password kalau username diingat
-  setTimeout(() => fokusIsianPertama($("#viewLogin")), 60);
+  /* Kotak yang masih kosong: Username, atau Password kalau username
+     diingat. Kursor yang sudah di layar masuk dibiarkan: layar ini bisa
+     tampil lebih dulu (login-awal.js) dan penggunanya sedang mengetik. */
+  setTimeout(() => {
+    const layar = $("#viewLogin");
+    if (!layar.contains(document.activeElement)) fokusIsianPertama(layar);
+  }, 60);
 }
 
 function hideLoginView() {
@@ -361,6 +391,14 @@ async function handleLoginSubmit() {
   const sandi = $("#loginPassword").value;
   if (!user.trim() || !sandi) {
     setLoginError(t("s.username.email.dan.kata.sandi.harus.diisi"));
+    return;
+  }
+  /* Layar masuk tampil sebelum initAuth() selesai (login-awal.js): masuk
+     sekarang akan balapan dengan initApp() -- dua kali muat jadwal, dua
+     kali sambungan realtime. Ditampung, dijalankan initAuth() begitu siap. */
+  if (!authState.siap) {
+    window.__masukTertunda = true;
+    setLoginBusy(true);
     return;
   }
   setLoginError("");
@@ -581,6 +619,9 @@ function perambanBaruDibuka() {
 }
 
 function siapkanFormRemember() {
+  /* Sudah disiapkan login-awal.js -- dan isiannya mungkin sudah diketik
+     atau dicentang ulang penggunanya: jangan ditimpa. */
+  if (document.getElementById("viewLogin").dataset.tampilAwal) return;
   const cb = document.getElementById("loginRemember");
   const inp = document.getElementById("loginUsername");
   if (cb) cb.checked = bacaRemember();
@@ -611,6 +652,12 @@ async function initAuth() {
     siapkanFormRemember();
     showLoginView();
     setLoginError(ambilPesanLogin());
+    // Masuk yang ditekan sebelum aplikasi siap (login-awal.js / handleLoginSubmit)
+    if (window.__masukTertunda) {
+      window.__masukTertunda = false;
+      setLoginBusy(false);
+      handleLoginSubmit();
+    }
     return false;
   }
 

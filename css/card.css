@@ -170,17 +170,20 @@
 .info-nilai-invoice {
   font-variant-numeric: tabular-nums;
 }
-/* Tanggal yang pernah diubah (panel detail): rencana awal di atas,
-   jadwal baru di bawahnya dengan panah ke bawah. */
+/* Tanggal yang pernah diubah (panel detail): rencana awal di atas --
+   dicoret, sama seperti di kartu -- jadwal baru di bawahnya dengan panah
+   ke bawah, tegas. */
 .tgl-rencana {
   display: block;
   color: var(--muted);
   font-weight: 500;
+  text-decoration: line-through;
 }
 .tgl-revisi {
   display: flex;
   align-items: center;
   gap: 4px;
+  font-weight: 700;
 }
 .tgl-revisi .bi {
   color: var(--ts-warn);
@@ -801,7 +804,7 @@
 .delay-strip {
   margin-top: 14px;
   padding-top: 10px;
-  border-top: 1px solid var(--s-warn-line);
+  border-top: 1px solid var(--s-danger-line);
 }
 .delay-strip-head {
   display: flex;
@@ -809,8 +812,44 @@
   gap: 6px;
   font-size: 0.76rem;
   font-weight: 600;
-  color: var(--s-warn-ink);
+  color: var(--ts-danger);
   margin-bottom: 8px;
+}
+/* TANGGAL YANG BERLAKU SESUDAH DELAY: merah tegas di kotak bertinta merah
+   muda -- warna status Delay -- supaya jadwal yang mundur terbedakan
+   sekali pandang dari jadwal biasa. Pasangannya, rencana awal di baris
+   tanggal atas, dicoret (.date-field--diganti). Juga bagi peran baca-saja
+   (kotak tanpa bingkai): angkanya tetap bertinta. */
+.delay-strip:not(.delay-strip--sisa) .delay-strip-fields input[data-kotak-tanggal].kt-nilai {
+  color: var(--ts-danger);
+  font-weight: 700;
+  background-color: var(--s-danger-bg);
+}
+.delay-strip:not(.delay-strip--sisa) .delay-strip-fields input[data-kotak-tanggal].kt-nilai:not(:focus):not([readonly]) {
+  border-color: var(--s-danger-line);
+}
+/* Revisi yang tertinggal (status sudah bukan Delay): tetap tanggal yang
+   berlaku -- tegas, tanpa merah */
+.delay-strip--sisa .delay-strip-fields input[data-kotak-tanggal].kt-nilai {
+  font-weight: 700;
+}
+
+/* RENCANA AWAL YANG SUDAH DIGANTI tanggal update delay: dicoret & redup,
+   label "· rencana awal". Tetap bisa diubah (mengubahnya menghapus
+   revisinya); saat diketik coretannya dilepas supaya angkanya terbaca. */
+.date-field--diganti input[data-kotak-tanggal].kt-nilai {
+  color: var(--n-500);
+  font-weight: 500;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.date-field--diganti input[data-kotak-tanggal].kt-nilai:focus:not([readonly]) {
+  color: var(--n-900);
+  text-decoration: none;
+}
+.date-diganti-ket {
+  font-weight: 500;
+  color: var(--n-500);
 }
 /* Revisi yang tertinggal di jadwal yang sudah bukan Delay: tetap
    tampil (tanggal itulah yang berlaku), kalimatnya lebih tenang. */
@@ -848,7 +887,7 @@
   white-space: nowrap;
 }
 .delay-delta--late {
-  color: var(--s-warn-ink);
+  color: var(--ts-danger);
 }
 .delay-delta--early {
   color: var(--tsec-700);
