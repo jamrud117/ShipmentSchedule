@@ -1048,7 +1048,7 @@ const I18N = {
     "x.gagal.menyetel.nomor": "Failed to set the number: {err}",
     "x.gagal.menyimpan.perubahan.err": "Failed to save the changes: {err}",
     "x.gagal.menyusun.excel": "Failed to build the Excel file: {err}",
-    "x.hal.perlu.ditindak": "{n} item(s) need action today",
+    "x.hal.perlu.ditindak": "{n} item(s) to act on today",
     "x.hari.lebih.maju": "{n} day(s) earlier than the engine's calculation",
     "x.hari.lebih.mundur": "{n} day(s) later than the engine's calculation",
     "x.harus.berupa.angka": "{label} must be a number (it cannot be negative).",
@@ -1162,7 +1162,17 @@ function t(kunci, ganti) {
       teks = teks.split("{" + k + "}").join(ganti[k]);
     });
   }
-  return teks;
+  return jamakEn(teks);
+}
+
+/* JAMAK INGGRIS: "5 schedule(s)" -> "5 schedules", "1 schedule(s)" ->
+   "1 schedule". Penentunya angka terdekat di depan kata itu (diselingi
+   paling banyak tiga kata: "2 import schedule(s)", "3 cost line(s)");
+   tanpa angka di depannya "(s)" dibiarkan. Hanya teks Inggris -- teks
+   Indonesia tidak mengenal bentuk jamak ini. */
+function jamakEn(teks) {
+  if (activeLang !== "en" || typeof teks !== "string" || teks.indexOf("(s)") < 0) return teks;
+  return teks.replace(/(\d[\d.,]*)((?:\s+[A-Za-z][\w-]*){0,3}?)\s+([A-Za-z]+)\(s\)/g, (_, n, antara, kata) => n + antara + " " + kata + (n === "1" ? "" : "s"));
 }
 
 /* TERJEMAHAN SEBARIS: tt("Simpan", "Save").
@@ -1182,7 +1192,7 @@ function tt(id, en, ganti) {
       teks = String(teks).split("{" + k + "}").join(ganti[k]);
     });
   }
-  return teks;
+  return jamakEn(teks);
 }
 
 /* Padanan tt() untuk HTML: atribut data-en berisi terjemahan Inggris,

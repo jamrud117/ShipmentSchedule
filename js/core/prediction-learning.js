@@ -316,7 +316,7 @@ function kunciForwarder(nama) {
    kalau kolom rutenya atau jumlah aturan rute berubah. */
 const PRIOR_SAMPEL = new WeakMap();
 function priorKonfigurasiSampel(s, ctx) {
-  const tanda = [s.origin, s.destination, s.transport, s.muatan, s.routeType, s.vessel, s.voyage, s.forwarder, s.mode,
+  const tanda = [s.origin, s.destination, s.transport, s.muatan, s.routeType, s.vessel, s.voyage, s.masterBL, s.forwarder, s.mode,
     (PREDICTION_CONFIG.routes || []).length].join("|");
   const ada = PRIOR_SAMPEL.get(s);
   if (ada && ada.tanda === tanda) return ada.a;
@@ -335,7 +335,7 @@ function sampelKiriman(s) {
   const ctx = predictionContext(s);
   const etdNyata = s.etdUpdate || s.etd || "";
   const out = {
-    gen: GENERASI_BELAJAR, ctx, etdNyata, transit: null, clearance: null, delivery: null,
+    gen: GENERASI_BELAJAR, ctx, etdNyata, transit: null, clearance: null, delivery: null, pibWait: null,
     fwd: kunciForwarder(s.forwarder), jalur: ctx.jalur || "",
     tAcuan: msTanggal(s.etd || s.eta), tEtd: msTanggal(etdNyata), tSppb: null, tPabrik: null,
   };
@@ -363,14 +363,10 @@ function sampelKiriman(s) {
   if (s.mode !== "export") {
     const sppb = tgl("sppb");
     const ops = configuredOpsDays(ctx);
-    // Barang siap diurus: kedatangan, + stripping di CFS untuk LCL
-    const siap = tibaNyata
-      ? predictionStrippingApplies(ctx)
-        ? advanceLeg(tibaNyata, ops.stripping, "stripping", ctx)
-        : tibaNyata
-      : "";
+    // Barang siap diurus: kedatangan, + PLP & stripping di CFS untuk LCL (sama dengan mesinnya)
+    const siap = siapDiurusSesudahTiba(tibaNyata, ops, ctx);
+    const pib = tgl("pib");
     if (siap && sppb) {
-      const pib = tgl("pib");
       const dari = pib && pib > siap ? pib : siap;
       const n = workingDaysBetweenISO(dari, sppb);
       /* SPPB yang terbit SEBELUM barang siap (udara, PIB yang diajukan
@@ -378,6 +374,15 @@ function sampelKiriman(s) {
          dibuang. Dulu dibuang -- yang tersisa justru kiriman yang
          lambat, dan angka belajarnya condong ke atas. */
       if (n != null && n >= -20 && n <= 60) out.clearance = Math.max(0, n);
+    }
+    /* MENUNGGU PIB: barang siap -> PIB diajukan (hari kerja), 0 bila PIB
+       sudah masuk lebih dulu. Clearance di atas diukur dari yang PALING
+       BELAKANG di antara keduanya, jadi jeda ini TIDAK ada di angka mana
+       pun -- tanpa langkahnya sendiri, kiriman yang PIB-nya biasa
+       diajukan sesudah barang tiba selalu diperkirakan terlalu cepat. */
+    if (siap && pib) {
+      const n = workingDaysBetweenISO(siap, pib);
+      if (n != null && n >= -60 && n <= 30) out.pibWait = Math.max(0, n);
     }
     if (sppb && s.factoryDate) {
       /* Antar ke pabrik diukur dari yang PALING BELAKANG di antara SPPB
@@ -674,13 +679,13 @@ function hitungOpsDariRiwayat(ctx, leg, prior) {
   const sampel = [];
   sampelRelevan().forEach(({ s, k }) => {
     if (s.mode === "export") return;
-    const n = leg === "clearance" ? k.clearance : leg === "delivery" ? k.delivery : null;
+    const n = leg === "clearance" ? k.clearance : leg === "delivery" ? k.delivery : leg === "pibWait" ? k.pibWait : null;
     if (n == null) return;
     if (jalur && k.jalur !== jalur) return;
     const c = k.ctx;
     if (c.shipmentType !== ctx.shipmentType) return;
     if (tujuan && (c.toMetro || c.toPort || c.toCountry) !== tujuan) return;
-    sampel.push({ n, w: bobotKebaruan(leg === "clearance" ? k.tSppb : k.tPabrik), fwd: k.fwd });
+    sampel.push({ n, w: bobotKebaruan(leg === "delivery" ? k.tPabrik : k.tSppb), fwd: k.fwd });
   });
 
   /* DUA TINGKAT, seperti lama transit per pelayaran: rute (semua

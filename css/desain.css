@@ -1566,14 +1566,24 @@ html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
 /* ==================================================================
    K2. LOGIN -- papan pelabuhan
 
-   Layar lebar dibelah dua: kiri papan navy dengan lajur status
-   (kosakata yang sama dengan kartu jadwal), kanan formulir tanpa
-   kartu. Penanda kuningan berjalan SATU kali dari "Diproses" ke
-   "Transit" lalu diam -- satu-satunya gerak otomatis di layar ini.
-   Di bawah 900px hanya formulir (kartu di atas navy, seperti semula).
+   Layar lebar dibelah dua: kiri papan navy, kanan formulir tanpa kartu.
+   Isi papan SATU KOLOM DI TENGAHNYA (merek, judul, pratinjau kartu
+   jadwal, kaki; paling lebar 620px) -- di layar 2000px dulu semua isi
+   menempel di kiri dan dua pertiga papan kosong. Pratinjau memakai
+   kosakata kartu jadwal (rute, status, ETA, Estimated Delivery, lajur
+   status). Penanda kuningan berjalan SATU kali lalu diam -- satu-satunya
+   gerak otomatis di layar ini. Bahasa di pojok kanan atas kolom
+   formulir, hak cipta di dasarnya. Di bawah 900px hanya formulir (kartu
+   di atas navy).
 ================================================================== */
 .login-papan {
   display: none;
+}
+.login-hak {
+  margin: var(--sp-4) 0 0;
+  text-align: center;
+  font-size: var(--t-xs);
+  color: var(--n-400);
 }
 .login-judul {
   margin: 0 0 var(--sp-1);
@@ -1585,7 +1595,7 @@ html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
 }
 @media (min-width: 900px) {
   .login-screen {
-    grid-template-columns: minmax(0, 1.2fr) minmax(400px, 0.8fr);
+    grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
     place-items: stretch;
     padding: 0;
     background: var(--surface);
@@ -1594,13 +1604,42 @@ html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
     display: none;
   }
   .login-papan {
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    padding: 44px clamp(40px, 5vw, 80px) 36px;
+    background: var(--d-900);
+    color: #fff;
+  }
+  /* Cahaya biru & kuningan + garis tipis papan: mengisi bidang lebar tanpa gambar */
+  .login-papan::before,
+  .login-papan::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .login-papan::before {
+    background:
+      radial-gradient(55% 45% at 82% 18%, rgba(74, 131, 209, 0.26), transparent 72%),
+      radial-gradient(45% 35% at 12% 96%, rgba(199, 154, 62, 0.13), transparent 72%);
+  }
+  .login-papan::after {
+    background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 12px);
+    -webkit-mask-image: radial-gradient(70% 60% at 70% 42%, #000, transparent);
+    mask-image: radial-gradient(70% 60% at 70% 42%, #000, transparent);
+  }
+  .login-papan-kolom {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: var(--sp-8);
-    padding: 44px clamp(40px, 6vw, 88px) 56px;
-    background: var(--d-900);
-    color: #fff;
+    gap: var(--sp-6);
+    width: 100%;
+    max-width: 620px;
+    min-height: 100%;
+    margin-inline: auto;
   }
   .login-papan-merek {
     display: inline-flex;
@@ -1623,96 +1662,186 @@ html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
     color: #dcb45f;
   }
   .login-papan-judul {
-    max-width: 15ch;
+    max-width: 14ch;
     text-wrap: balance;
     margin: 0;
     font-family: var(--font-board);
     font-weight: 600;
-    font-size: clamp(3.4rem, 6.4vw, 5.6rem);
+    font-size: clamp(3rem, 4.6vw, 4.6rem);
     line-height: 0.98;
     letter-spacing: -0.005em;
   }
   .login-papan-ket {
-    max-width: 44ch;
-    margin: var(--sp-5) 0 0;
+    max-width: 46ch;
+    margin: var(--sp-4) 0 0;
     font-size: var(--t-md);
     line-height: 1.6;
     color: rgba(255, 255, 255, 0.74);
   }
-
-  /* Lajur: garis dengan empat perhentian, penanda di salah satunya */
-  .login-lajur {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .login-papan-kaki {
     margin: 0;
-    padding: 28px 0 0;
-    list-style: none;
-    max-width: 640px;
+    font-size: var(--t-xs);
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.46);
   }
-  .login-lajur::before {
-    content: "";
-    position: absolute;
-    top: 7px;
-    left: 5px;
-    right: 5px;
+
+  /* Pratinjau kartu jadwal: rute, sarana angkut, lintasan, tiga angka, lajur status */
+  .login-pratinjau {
+    max-width: 470px;
+    margin-top: clamp(24px, 4.5vh, 44px);
+    padding: 18px 20px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.055);
+    box-shadow: 0 26px 60px -30px rgba(0, 0, 0, 0.65);
+  }
+  .lp-kepala {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .lp-rute {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: var(--t-md);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .lp-rute i {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .lp-status {
+    padding: 2px 10px;
+    border: 1px solid rgba(220, 180, 95, 0.4);
+    border-radius: 999px;
+    background: rgba(220, 180, 95, 0.14);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: #f0cf86;
+  }
+  .lp-kapal {
+    margin-top: 3px;
+    font-size: var(--t-sm);
+    color: rgba(255, 255, 255, 0.58);
+  }
+  .lp-lintasan {
+    position: relative;
     height: 3px;
+    margin: 24px 5px 9px;
     border-radius: 2px;
     background: rgba(255, 255, 255, 0.16);
   }
-  .login-lajur li {
-    position: relative;
-    padding-top: 14px;
-    font-size: var(--t-sm);
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.62);
-  }
-  .login-lajur li::before {
+  .lp-lintasan::before,
+  .lp-lintasan::after {
     content: "";
     position: absolute;
-    top: -28px;
-    left: 0;
-    width: 11px;
-    height: 11px;
+    top: 50%;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background: var(--d-900);
-    border: 3px solid rgba(255, 255, 255, 0.34);
-    transform: translateY(0);
+    transform: translate(-50%, -50%);
   }
-  .login-lajur li.is-lewat::before {
+  .lp-lintasan::before {
+    left: 0;
     background: var(--p-400);
-    border-color: var(--p-400);
   }
-  .login-lajur li.is-kini {
-    color: #fff;
+  .lp-lintasan::after {
+    left: 100%;
+    background: var(--d-900);
+    border: 2px solid rgba(255, 255, 255, 0.4);
   }
-  .login-lajur li.is-kini::before {
-    background: #dcb45f;
-    border-color: #dcb45f;
-    animation: login-laju 1.1s cubic-bezier(0.22, 0.8, 0.3, 1) 0.35s both;
+  .lp-lintasan-isi {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 68%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--p-400), #dcb45f);
+    transform-origin: left center;
+    animation: login-isi 1.1s cubic-bezier(0.22, 0.8, 0.3, 1) 0.35s both;
   }
-  @keyframes login-laju {
+  .lp-lintasan-ikon {
+    position: absolute;
+    top: 50%;
+    left: 68%;
+    width: 28px;
+    height: 28px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    background: var(--d-800);
+    color: #f2f5f9;
+    transform: translate(-50%, -50%);
+    animation: login-kapal 1.1s cubic-bezier(0.22, 0.8, 0.3, 1) 0.35s both;
+  }
+  @keyframes login-kapal {
     from {
-      transform: translateX(-100%);
+      left: 37.4%;
       opacity: 0;
     }
     to {
-      transform: translateX(0);
+      left: 68%;
       opacity: 1;
     }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .login-lajur li.is-kini::before {
-      animation: none;
+  .lp-pelabuhan {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: var(--t-xs);
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .lp-angka {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .lp-angka span {
+    display: block;
+    font-size: var(--t-xs);
+    color: rgba(255, 255, 255, 0.55);
+  }
+  .lp-angka b {
+    font-size: var(--t-md);
+    font-weight: 600;
+  }
+  @keyframes login-isi {
+    from {
+      transform: scaleX(0.55);
+    }
+    to {
+      transform: scaleX(1);
     }
   }
 
-  /* Formulir tanpa kartu di kolom kanan */
+  @media (prefers-reduced-motion: reduce) {
+    .lp-lintasan-isi,
+    .lp-lintasan-ikon {
+      animation: none;
+    }
+  }
+  /* Layar pendek (laptop 1366x768 dengan bilah peramban): pratinjau
+     dilepas dulu supaya judul & kaki tidak berdesakan. */
+  @media (max-height: 700px) {
+    .login-pratinjau {
+      display: none;
+    }
+  }
+
+  /* Formulir tanpa kartu di kolom kanan. position: static -- pemilih
+     bahasa & hak cipta diletakkan terhadap layar masuk (pojok kolom ini). */
   .login-card {
+    position: static;
     align-self: center;
     justify-self: center;
-    width: min(380px, calc(100% - 48px));
-    padding: var(--sp-8) 0;
+    width: min(400px, calc(100% - 64px));
+    padding: 72px 0;
     background: transparent;
     border-radius: 0;
     box-shadow: none;
@@ -1723,6 +1852,25 @@ html[data-kepadatan="ringkas"] .ship-card .ship-dokumen .docsteps-track {
   .login-card .login-sub {
     margin-top: 0;
     font-size: var(--t-base);
+  }
+  .login-card .login-lang {
+    position: absolute;
+    top: 22px;
+    right: 28px;
+    margin: 0;
+  }
+  .login-card .login-hak {
+    position: absolute;
+    right: 28px;
+    bottom: 20px;
+    margin: 0;
+    text-align: right;
+  }
+}
+/* Mode gelap: dua bidang gelap berdampingan dipisah garis tipis */
+@media screen and (min-width: 900px) {
+  :root[data-tema="gelap"] .login-papan {
+    box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.06);
   }
 }
 

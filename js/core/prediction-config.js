@@ -55,8 +55,143 @@
    lebih rinci di ATAS aturan yang lebih umum.
 ================================================================== */
 
+/* ==================================================================
+   JADWAL LAYANAN PELAYARAN — hasil riset, dicek November 2026
+
+   Lama berlayar PER LAYANAN, dibaca dari rotasi resminya: hari kapal
+   BERANGKAT dari pelabuhan asal sampai hari TIBA di tujuan -- selisih
+   hari jadwal, bukan tebakan. Hari kalender, pelabuhan ke pelabuhan;
+   proses darat sesudah tiba ada di operations[].
+
+   Sumber:
+     Flexport Atlas, rotasi per layanan (atlas.flexport.com/service/
+       code:<SCAC>:<layanan>): HDMU:KIS, ONEY:CKI, PCIU:KCI,
+       CHNL:KI8CNC, 12AT:KCI, GOSU:KCI, LNLU:KCI, ONEY:JID
+     MSC Intra-Asia Network 2025 (tabel transit time resmi MSC):
+       Seagull, Seahorse, Dolphin, Bayan Ko, Pertiwi
+     Fluent Cargo (fluentcargo.com/routes/busan-kr/jakarta-id):
+       pelayaran mana saja yang berbagi kapal di tiap layanan
+
+   Satu pelayaran di beberapa layanan (ONE ikut KIS, CKI & KCI) menjadi
+   RENTANG: kapal mana yang dipakai baru terbaca dari riwayat.
+
+   SEARAH. Layanan ini putaran, jadi arah baliknya bisa jauh berbeda:
+   HMM KIS Busan → Priok 11 hari tapi Priok → Busan 15; KCI kebalikannya
+   (15 & 11). Ekspor punya barisnya sendiri, dan baris impor tidak
+   dipakai terbalik (searah: true).
+
+   Yang SENGAJA tidak dimasukkan:
+     - Sinokor, Heung-A, Evergreen, Dongjin (PCI, PCI2, KI1) & Namsung
+       ANX: hari per pelabuhannya tidak terbit. Busan → Priok tercepat
+       ±9 hari (Fluent Cargo) -- itulah "pelayaran lain" (sea-pus-tpp).
+     - Pelabuhan Tiongkok untuk pelayaran yang punya banyak layanan
+       Tiongkok–Indonesia lain (PIL, CNC, KMTC, ONE, SITC, TS Lines, ...):
+       kapal mana yang dipakai tidak bisa ditebak, jadi tetap aturan
+       pelabuhan/negara + riwayat. HMM & MSC dimasukkan (jaringannya
+       terbit lengkap).
+     - MSC Pertiwi ke Priok (Busan 31, Incheon 22, Qingdao 20 hari):
+       satu-satunya layanan MSC yang menyinggahi keduanya, tapi memutar
+       lewat Vietnam, Thailand & Singapura. Busan → Priok MSC memakai
+       perkiraan lewat Ningbo (baris terakhir).
+
+   Riwayat DDI tetap yang terakhir bicara: dua kiriman di rute &
+   pelayaran yang sama sudah ikut menarik angka ini (learning di bawah).
+================================================================== */
+const LAYANAN_PELAYARAN = [
+  {
+    layanan: "KIS",
+    carrier: ["HMM", "CKLINE", "ONE"],
+    hari: {
+      "PUS>TPP": 11, "PUS>SUB": 13, "INC>TPP": 14, "INC>SUB": 16,
+      "TPP>PUS": 15, "SUB>PUS": 14, "TPP>INC": 12, "SUB>INC": 11,
+    },
+  },
+  { layanan: "KIS", carrier: ["HMM"], hari: { "SHA>TPP": 8, "NGB>TPP": 7, "SHA>SUB": 10, "NGB>SUB": 9 } },
+  { layanan: "CKI", carrier: ["KMTC", "COSCO", "ONE"], hari: { "PUS>TPP": 12, "KAN>TPP": 11, "TPP>PUS": 14, "SUB>PUS": 12 } },
+  {
+    layanan: "KCI",
+    carrier: ["INTERASIA", "GOLDSTAR", "TSLINES", "ZIM", "SITC", "NAMSUNG", "ONE"],
+    hari: {
+      "PUS>TPP": 15, "PUS>SUB": 18, "INC>TPP": 13, "INC>SUB": 16,
+      "TPP>PUS": 11, "SUB>PUS": 9, "TPP>INC": 14, "SUB>INC": 12,
+    },
+  },
+  {
+    layanan: "KCI",
+    carrier: ["PIL"],
+    hari: {
+      "PUS>TPP": 14, "PUS>SRG": 16, "INC>TPP": 12, "INC>SRG": 14,
+      "TPP>PUS": 11, "SRG>PUS": 9, "TPP>INC": 13, "SRG>INC": 11,
+    },
+  },
+  {
+    layanan: "KI8",
+    carrier: ["CNC", "CKLINE"],
+    hari: {
+      "PUS>TPP": 14, "PUS>SRG": 16, "INC>TPP": 12, "INC>SRG": 14,
+      "TPP>PUS": 11, "SRG>PUS": 10, "TPP>INC": 14, "SRG>INC": 13,
+    },
+  },
+  { layanan: "JID", carrier: ["ONE"], hari: { "UKB>TPP": 18, "TYO>TPP": 16, "YOK>TPP": 15, "NGO>TPP": 12, "TPP>UKB": 17 } },
+  { layanan: "Seagull", carrier: ["MSC"], hari: { "SHA>TPP": 12, "NGB>TPP": 9, "XMN>TPP": 5 } },
+  {
+    layanan: "Seahorse",
+    carrier: ["MSC"],
+    hari: {
+      "SHA>SUB": 16, "NGB>SUB": 15, "XMN>SUB": 13,
+      "TPP>SHA": 13, "TPP>NGB": 14, "TPP>XMN": 16, "SUB>SHA": 16, "SUB>NGB": 18, "SUB>XMN": 20,
+    },
+  },
+  { layanan: "Dolphin", carrier: ["MSC"], hari: { "TAO>SRG": 22, "TAO>SUB": 23, "KHH>SRG": 14, "KHH>SUB": 16, "SRG>PUS": 20, "SUB>PUS": 18 } },
+  { layanan: "Bayan Ko", carrier: ["MSC"], hari: { "SHK>TPP": 12, "YTN>TPP": 13, "HKG>TPP": 14, "TPP>SHK": 18, "TPP>HKG": 19, "TPP>YTN": 20 } },
+  { layanan: "Pertiwi", carrier: ["MSC"], hari: { "TPP>PUS": 15 } },
+  /* PERKIRAAN dari dua kaki berjadwal, bukan satu layanan: Busan → Ningbo
+     3 hari (rotasi CKI) + tunggu kapal mingguan 1–5 hari + Seagull Ningbo
+     → Priok 9 hari. Pertiwi langsung 31 hari -- kalau ternyata itu yang
+     dipakai, dua kiriman di riwayat sudah menariknya. */
+  { layanan: "via Ningbo", carrier: ["MSC"], hari: { "PUS>TPP": [13, 17] } },
+];
+
+/* Satu aturan rute per PELAYARAN per ARAH: hari dari semua layanan yang
+   diikutinya digabung jadi rentang (satu angka bila hanya satu).
+   Label dirangkai saat dibaca (getter) -- nama pelayaran & pelabuhan
+   datang dari carrier-master.js & unlocode.js yang dimuat kemudian. */
+function aturanLayananPelayaran(daftar) {
+  const per = new Map();
+  daftar.forEach((l) =>
+    l.carrier.forEach((carrier) =>
+      Object.entries(l.hari).forEach(([rute, hari]) => {
+        const k = `${carrier}|${rute}`;
+        const x = per.get(k) || { carrier, rute, hari: [], layanan: [] };
+        x.hari.push(...[].concat(hari));
+        if (!x.layanan.includes(l.layanan)) x.layanan.push(l.layanan);
+        per.set(k, x);
+      }),
+    ),
+  );
+  const namaPelabuhan = (kode) => String((typeof resolvePortEntry === "function" && resolvePortEntry(kode).name) || kode).split(",")[0];
+  const namaPelayaran = (kode) => {
+    const c = typeof CARRIER_MASTER !== "undefined" && CARRIER_MASTER.shippingLines.find((x) => x.code === kode);
+    return c && c.name.length <= 18 ? c.name : kode;
+  };
+  return [...per.values()].map(({ carrier, rute, hari, layanan }) => {
+    const [asal, tujuan] = rute.split(">");
+    const min = Math.min(...hari);
+    const max = Math.max(...hari);
+    return {
+      id: `sea-${asal}-${tujuan}-${carrier}`.toLowerCase(),
+      get label() {
+        return `${namaPelayaran(carrier)} · ${namaPelabuhan(asal)} → ${namaPelabuhan(tujuan)} · ${layanan.join(" / ")}`;
+      },
+      match: { carrier, fromPort: asal, toPort: tujuan },
+      days: { SEA_FCL: min === max ? min : [min, max] },
+      searah: true,
+    };
+  });
+}
+
 const PREDICTION_CONFIG = {
-  version: "1.1.0",
+  version: "1.2.0",
 
   /* ----------------------------------------------------------------
      KALENDER
@@ -345,9 +480,10 @@ const PREDICTION_CONFIG = {
 
     /* ---- PER CARRIER (paling rinci) ----
 
-       Angka contoh dari spesifikasi. Berlaku apa pun Tipe Rutenya —
-       pelayaran yang sama pada rute yang sama punya jadwal yang sama,
-       terlepas dari apakah kapalnya singgah. */
+       Berlaku apa pun Tipe Rutenya — pelayaran yang sama pada rute yang
+       sama punya jadwal yang sama, terlepas dari apakah kapalnya
+       singgah. Udara: angka contoh dari spesifikasi. Laut: jadwal
+       layanan resmi (LAYANAN_PELAYARAN di atas). */
     {
       id: "air-pvg-cgk-ke",
       label: "Korean Air · Shanghai Pudong → Jakarta",
@@ -360,29 +496,69 @@ const PREDICTION_CONFIG = {
       match: { fromPort: "PVG", toPort: "CGK", carrier: "CI" },
       days: { AIR: 3 },
     },
-    {
-      id: "sea-pus-tpp-hmm",
-      label: "HMM · Busan → Tanjung Priok",
-      match: { fromPort: "PUS", toPort: "TPP", carrier: "HMM" },
-      days: { SEA_FCL: 9 },
-    },
-    {
-      id: "sea-pus-tpp-one",
-      label: "ONE · Busan → Tanjung Priok",
-      match: { fromPort: "PUS", toPort: "TPP", carrier: "ONE" },
-      days: { SEA_FCL: 10 },
-    },
-    {
-      id: "sea-pus-tpp-msc",
-      label: "MSC · Busan → Tanjung Priok",
-      match: { fromPort: "PUS", toPort: "TPP", carrier: "MSC" },
-      days: { SEA_FCL: 11 },
-    },
+    ...aturanLayananPelayaran(LAYANAN_PELAYARAN),
+
+    /* ---- KOREA ↔ INDONESIA, PELAYARAN LAIN ----
+
+       Rentang seluruh layanan langsung yang terbit di jalur itu
+       (LAYANAN_PELAYARAN), untuk pelayaran yang tidak dikenali atau
+       tidak berjadwal terbit. Busan → Priok tetap 10: layanan tercepat
+       (PCI Sinokor/Heung-A/Evergreen) ±9 hari menurut Fluent Cargo. */
     {
       id: "sea-pus-tpp",
       get label() { return tt("Busan → Tanjung Priok (pelayaran lain)", "Busan → Tanjung Priok (other carriers)"); },
       match: { fromPort: "PUS", toPort: "TPP" },
       days: { SEA_FCL: 10, SEA_LCL: 13 },
+    },
+    {
+      id: "sea-inc-tpp",
+      get label() { return tt("Incheon → Tanjung Priok (pelayaran lain)", "Incheon → Tanjung Priok (other carriers)"); },
+      match: { fromPort: "INC", toPort: "TPP" },
+      days: { SEA_FCL: [12, 14] },
+      searah: true,
+    },
+    {
+      id: "sea-kan-tpp",
+      get label() { return tt("Gwangyang → Tanjung Priok (pelayaran lain)", "Gwangyang → Tanjung Priok (other carriers)"); },
+      match: { fromPort: "KAN", toPort: "TPP" },
+      days: { SEA_FCL: [9, 11] },
+      searah: true,
+    },
+    {
+      id: "sea-pus-sub",
+      get label() { return tt("Busan → Tanjung Perak (pelayaran lain)", "Busan → Tanjung Perak (other carriers)"); },
+      match: { fromPort: "PUS", toPort: "SUB" },
+      days: { SEA_FCL: [13, 18] },
+      searah: true,
+    },
+    {
+      id: "sea-pus-srg",
+      get label() { return tt("Busan → Tanjung Emas (pelayaran lain)", "Busan → Tanjung Emas (other carriers)"); },
+      match: { fromPort: "PUS", toPort: "SRG" },
+      days: { SEA_FCL: 16 },
+      searah: true,
+    },
+    {
+      // Ekspor: Fluent Cargo menyebut tercepat ±12 hari
+      id: "sea-tpp-pus",
+      get label() { return tt("Tanjung Priok → Busan (pelayaran lain)", "Tanjung Priok → Busan (other carriers)"); },
+      match: { fromPort: "TPP", toPort: "PUS" },
+      days: { SEA_FCL: [11, 15] },
+      searah: true,
+    },
+    {
+      id: "sea-tpp-inc",
+      get label() { return tt("Tanjung Priok → Incheon (pelayaran lain)", "Tanjung Priok → Incheon (other carriers)"); },
+      match: { fromPort: "TPP", toPort: "INC" },
+      days: { SEA_FCL: [12, 14] },
+      searah: true,
+    },
+    {
+      id: "sea-sub-pus",
+      get label() { return tt("Tanjung Perak → Busan (pelayaran lain)", "Tanjung Perak → Busan (other carriers)"); },
+      match: { fromPort: "SUB", toPort: "PUS" },
+      days: { SEA_FCL: [9, 14] },
+      searah: true,
     },
 
     /* ---- LAUT FCL → Tanjung Priok ---- */
@@ -703,24 +879,45 @@ const PREDICTION_CONFIG = {
   ],
 
   /* ----------------------------------------------------------------
-     LAMA PROSES DARAT — HARI KERJA
+     LAMA PROSES DARAT — sesudah kapal / pesawat tiba
 
-     stripping        bongkar muatan gabungan di CFS. HANYA berlaku
-                      untuk SEA LCL (lihat strippingAppliesTo). Sengaja
-                      TIDAK digabung ke clearance: ia proses tersendiri,
-                      dikerjakan pihak lain, dan lamanya berubah-ubah
-                      mengikuti antrean CFS — bukan mengikuti Bea Cukai.
+     Urutan di lapangan (riset November 2026, lihat README "Mesin
+     prediksi"):
 
-     stripping        bongkar muatan gabungan di CFS. HARI KALENDER.
+       FCL   kapal sandar -> kontainer dibongkar & ditumpuk di TPS
+             terminal (lini 1) -> PIB / billing / jalur -> SPPB ->
+             DO pelayaran + SP2 (gate pass) -> truk keluar ke pabrik.
+             Dwelling time Priok 2,73 hari (LNSW, 2024; nasional 3,02
+             hari di 2025, customs clearance-nya sendiri 0,42 hari --
+             APBN Kita Jan 2026): bagian terbesar justru SEBELUM PIB
+             (pra-clearance) dan SESUDAH SPPB (DO, SP2, angkut).
+       LCL   kapal sandar -> kontainer gabungan dibongkar -> PLP:
+             dipindah ke CFS konsolidator (TPS lini 2) -> stripping /
+             devanning & pemecahan pos per House B/L -> PIB -> SPPB ->
+             DO forwarder + bayar CFS -> barang keluar ke pabrik.
+             LCL menambah ±2–4 hari dibanding FCL di Priok.
+       UDARA pesawat mendarat -> breakdown di gudang (biasanya hari yang
+             sama) -> PIB -> SPPB -> antar.
 
-     clearance        dari barang SIAP DIURUS sampai SPPB terbit.
+     plp              pindah lokasi penumpukan ke CFS (lini 2): kontainer
+                      gabungan baru bisa dibongkar sesudah sampai di
+                      gudang konsolidator. HANYA SEA LCL, HARI KALENDER
+                      (TPS & angkutan pelabuhan jalan terus).
+
+     stripping        bongkar muatan gabungan di CFS. HANYA SEA LCL
+                      (strippingAppliesTo), HARI KALENDER. Sengaja TIDAK
+                      digabung ke clearance: dikerjakan pihak lain, dan
+                      lamanya mengikuti antrean CFS — bukan Bea Cukai.
+
+     clearance        dari barang SIAP DIURUS sampai SPPB terbit, HARI
+                      KERJA. FCL: sudah termasuk bongkar dari kapal.
                       Bukan dari PIB diajukan: PIB kerap masuk jauh
                       sebelum kapal sandar, dan mengajukan dokumen
                       lebih awal tidak membuat barangnya keluar lebih
                       cepat.
 
-     delivery         trucking dari pelabuhan/bandara ke pabrik,
-                      setelah SPPB terbit.
+     delivery         sesudah SPPB: DO, SP2 / gate pass, lalu truk ke
+                      pabrik. HARI KERJA.
   ---------------------------------------------------------------- */
   operations: [
     {
@@ -728,14 +925,14 @@ const PREDICTION_CONFIG = {
       get label() { return tt("Bawaan", "Default"); },
       match: {},
       days: {
-        AIR: { stripping: 0, clearance: 1, delivery: 1 },
-        SEA_FCL: { stripping: 0, clearance: 1, delivery: 1 },
-        SEA_LCL: { stripping: 2, clearance: 1, delivery: 1 },
+        AIR: { plp: 0, stripping: 0, clearance: 1, delivery: 1 },
+        SEA_FCL: { plp: 0, stripping: 0, clearance: 1, delivery: 1 },
+        SEA_LCL: { plp: 1, stripping: 2, clearance: 1, delivery: 1 },
       },
     },
   ],
 
-  // Stripping hanya masuk hitungan untuk tipe pengiriman di daftar ini.
+  // PLP & stripping (proses CFS) hanya masuk hitungan untuk tipe di daftar ini.
   strippingAppliesTo: ["SEA_LCL"],
 
   /* ----------------------------------------------------------------
@@ -783,12 +980,13 @@ const PREDICTION_CONFIG = {
      Stripping masuk daftar karena CFS membongkar terus — Sabtu, Minggu,
      hari libur nasional. Menghitungnya sebagai hari kerja membuat
      kontainer yang sandar hari Jumat seolah baru selesai dibongkar hari
-     Selasa, padahal sudah kelar Minggu.
+     Selasa, padahal sudah kelar Minggu. PLP (pindah ke CFS) sama: TPS &
+     angkutan dalam pelabuhan beroperasi 24/7.
 
      Clearance TIDAK di daftar ini: Bea Cukai tutup. Begitu pula
      trucking ke pabrik.
   ---------------------------------------------------------------- */
-  calendarDayLegs: ["stripping"],
+  calendarDayLegs: ["plp", "stripping"],
 
   /* ----------------------------------------------------------------
      TIDAK ADA SETELAN "DI MANA STRIPPING TERJADI" — DAN MEMANG TIDAK

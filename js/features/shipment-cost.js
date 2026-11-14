@@ -31,6 +31,8 @@ function bkLupakan() {
 
 async function bkAmbilDana(paksa) {
   if (!paksa && bkCache && Date.now() - bkCache.waktu < BK_TTL_MS) return bkCache.rows;
+  // Pengajuan Dana (fund-*.js) termasuk modul tunda: ditunggu dulu bila panel dibuka sangat awal
+  await muatModulTunda();
   const rows = await fsumAmbilSemua();
   bkCache = { waktu: Date.now(), rows };
   return rows;

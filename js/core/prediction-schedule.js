@@ -5,7 +5,7 @@
 
    Menyusun jadwal proses darat dari kedatangan sampai pabrik.
 
-   LAPIS 2  stripping (LCL) -> clearance -> antar ke pabrik
+   LAPIS 2  PLP & stripping (LCL) -> clearance -> antar ke pabrik
    LAPIS 3  milestone yang dikonfirmasi menggantikan tebakan pada tahap
             yang sama; PIB & Billing berlaku sebagai GERBANG
    LAPIS 4  perkiraan yang tanggalnya sudah lewat dihitung ulang dari
@@ -45,7 +45,10 @@ function configuredOpsDays(ctx) {
   const jalur = ctx.jalur ? jalurInfo(ctx.jalur) : null;
   const clrJalur = jalur && jalur.clearance ? jalur.clearance[ctx.shipmentType] : null;
   return {
+    plp: Math.max(0, Number(d.plp) || 0),
     stripping: Math.max(0, Number(d.stripping) || 0),
+    // Barang siap -> PIB diajukan; bawaan 0 (PIB lazim masuk sebelum/saat tiba), riwayat yang menentukan
+    pibWait: Math.max(0, Number(d.pibWait) || 0),
     clearance: Math.max(0, Number(clrJalur != null ? clrJalur : d.clearance) || 0),
     delivery: Math.max(0, Number(d.delivery) || 0),
     jalur: clrJalur != null ? ctx.jalur : "",
@@ -60,9 +63,15 @@ function predictionOpsDays(ctx) {
   const dasar = configuredOpsDays(ctx);
   let clearance = dasar.clearance;
   let delivery = dasar.delivery;
+  let pibWait = dasar.pibWait;
   const dipelajari = [];
 
   if (typeof learnedOpsDays === "function") {
+    const bPib = learnedOpsDays(ctx, "pibWait", dasar.pibWait);
+    if (bPib && bPib.cukup) {
+      pibWait = bPib.days;
+      if (bPib.days > 0) dipelajari.push({ leg: "pibWait", ...bPib });
+    }
     const bClr = learnedOpsDays(ctx, "clearance", dasar.clearance);
     if (bClr && bClr.cukup) {
       clearance = bClr.days;
@@ -76,7 +85,9 @@ function predictionOpsDays(ctx) {
   }
 
   return {
+    plp: dasar.plp,
     stripping: dasar.stripping,
+    pibWait: pibWait,
     clearance: clearance,
     delivery: delivery,
     jalur: dasar.jalur,
@@ -89,6 +100,15 @@ function predictionStrippingApplies(ctx) {
   return (
     (PREDICTION_CONFIG.strippingAppliesTo || []).indexOf(ctx.shipmentType) >= 0
   );
+}
+/* LCL: barang baru siap diurus sesudah kontainer gabungannya dipindah ke
+   CFS (PLP) lalu dibongkar (stripping) -- dua-duanya hari kalender,
+   berjangkar pada KEDATANGAN. FCL & udara: kedatangan itu sendiri.
+   Dipakai mesin (buildDeliverySchedule) & lapis belajar (sampelKiriman)
+   supaya "barang siap" keduanya sama persis. */
+function siapDiurusSesudahTiba(tiba, ops, ctx) {
+  if (!tiba || !predictionStrippingApplies(ctx)) return tiba;
+  return advanceLeg(advanceLeg(tiba, ops.plp || 0, "plp", ctx), ops.stripping || 0, "stripping", ctx);
 }
 /* ==================================================================
    MESIN 2 — PREDIKSI ESTIMATED DELIVERY
@@ -108,7 +128,7 @@ function predictionStrippingApplies(ctx) {
    Urutannya di lapangan:
 
      kapal sandar
-       -> LCL: stripping di CFS         (FCL & udara langsung lewat)
+       -> LCL: PLP ke CFS, stripping    (FCL & udara langsung lewat)
        -> customs clearance             (butuh PIB sudah masuk)
        -> SPPB terbit
        -> antar ke pabrik
@@ -261,7 +281,7 @@ function advanceLeg(dari, hari, key, ctx) {
    Mengembalikan tanggal akhir + rincian langkahnya. */
 
 function buildDeliverySchedule(s, ops, ctx) {
-  const pakaiStripping = predictionStrippingApplies(ctx) && ops.stripping > 0;
+  const pakaiCfs = predictionStrippingApplies(ctx) && (ops.stripping > 0 || ops.plp > 0);
   const sppb = milestoneDateOf(s, "sppb");
   const kedatangan = arrivalInfoOf(s);
   const langkah = [];
@@ -317,9 +337,9 @@ function buildDeliverySchedule(s, ops, ctx) {
      dan kedatangan. Kalau tidak, papan akan menjanjikan barang sampai
      pabrik sebelum pesawatnya menyentuh landasan.
 
-     LCL juga menunggu STRIPPING: SPPB boleh terbit lebih dulu, tapi
-     barangnya baru bisa diambil setelah dibongkar dari kontainer
-     gabungan di CFS. */
+     LCL juga menunggu PLP & STRIPPING: SPPB boleh terbit lebih dulu,
+     tapi barangnya baru bisa diambil setelah kontainer gabungannya
+     sampai di CFS dan dibongkar. */
   if (sppb) {
     let mulai = sppb;
     if (kedatangan.date && kedatangan.date > mulai) {
@@ -332,12 +352,12 @@ function buildDeliverySchedule(s, ops, ctx) {
       });
       mulai = kedatangan.date;
     }
-    if (pakaiStripping && kedatangan.date) {
-      const selesaiStripping = advanceLeg(kedatangan.date, ops.stripping, "stripping", ctx);
+    if (pakaiCfs && kedatangan.date) {
+      const selesaiStripping = siapDiurusSesudahTiba(kedatangan.date, ops, ctx);
       if (selesaiStripping > mulai) {
         langkah.push({
           key: "waitStripping",
-          label: tt("Menunggu stripping di CFS selesai", "Waiting for CFS stripping to finish"),
+          label: tt("Menunggu PLP & stripping di CFS selesai", "Waiting for CFS transfer & stripping to finish"),
           days: null,
           from: mulai,
           to: selesaiStripping,
@@ -372,16 +392,48 @@ function buildDeliverySchedule(s, ops, ctx) {
 
   let cur = tiba;
 
-  // LCL: bongkar muatan gabungan di CFS, baru bisa diurus.
-  /* Stripping memakai HARI KALENDER: CFS membongkar terus, termasuk
-     akhir pekan dan hari libur. */
-  if (pakaiStripping) {
+  /* LCL: kontainer gabungan dipindah ke CFS konsolidator (PLP), lalu
+     dibongkar -- baru barangnya bisa diurus. Keduanya HARI KALENDER:
+     TPS & CFS bekerja terus, termasuk akhir pekan dan hari libur. */
+  if (pakaiCfs && ops.plp > 0) {
+    const sesudah = advanceLeg(cur, ops.plp, "plp", ctx);
+    langkah.push({
+      key: "plp",
+      label: tt("Pindah ke CFS (PLP)", "Transfer to CFS (PLP)"),
+      days: ops.plp,
+      unit: legUnitLabel("plp"),
+      from: cur,
+      to: sesudah,
+    });
+    cur = sesudah;
+  }
+  if (pakaiCfs && ops.stripping > 0) {
     const sesudah = advanceLeg(cur, ops.stripping, "stripping", ctx);
     langkah.push({
       key: "stripping",
       label: tt("Stripping di CFS", "Stripping at CFS"),
       days: ops.stripping,
       unit: legUnitLabel("stripping"),
+      from: cur,
+      to: sesudah,
+    });
+    cur = sesudah;
+  }
+
+  /* PIB BELUM DIAJUKAN: jeda yang biasa terjadi antara barang siap dan
+     PIB diajukan, dipelajari dari riwayat (per forwarder, lalu rute;
+     sampelKiriman.pibWait). Clearance yang dipelajari diukur dari yang
+     PALING BELAKANG di antara barang siap & PIB -- jedanya tidak ada di
+     angka clearance, jadi tanpa langkah ini kiriman yang PIB-nya biasa
+     menyusul sesudah barang tiba selalu diperkirakan terlalu cepat.
+     Begitu PIB dicatat, gerbang di bawah yang berlaku (tanggal nyatanya). */
+  if (ops.pibWait > 0 && !milestoneDateOf(s, "pib") && !milestoneDateOf(s, "billing")) {
+    const sesudah = advanceLeg(cur, ops.pibWait, "pibWait", ctx);
+    langkah.push({
+      key: "pibWait",
+      label: tt("Menunggu PIB diajukan (perkiraan)", "Waiting for the PIB to be filed (estimated)"),
+      days: ops.pibWait,
+      unit: legUnitLabel("pibWait"),
       from: cur,
       to: sesudah,
     });

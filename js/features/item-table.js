@@ -171,8 +171,9 @@ function terlihat(el) {
 }
 
 /* Peramban yang menumbuhkan textarea sendiri (field-sizing: content,
-   form.css) tidak perlu diukur sama sekali. */
-const TINGGI_ISIAN_OLEH_CSS = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("field-sizing", "content");
+   form.css) tidak perlu diukur sama sekali. `let`, bukan const: uji jalur
+   cadangan (peramban tanpa field-sizing) mematikannya sementara. */
+let TINGGI_ISIAN_OLEH_CSS = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("field-sizing", "content");
 
 /* scrollHeight = isi + padding, TANPA garis tepi; dengan box-sizing
    border-box garis tepinya harus ditambahkan, kalau tidak 2px terbawah

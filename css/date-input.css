@@ -121,14 +121,20 @@ input[data-kotak-tanggal].kt-nilai:where(:not(.date-field > input)) {
   --kt-kiri: 12px;
   padding-top: 6px;
   padding-bottom: 6px;
+  /* Sebesar huruf kotak isian di sebelahnya (0,86rem). Dulu 0,98rem tebal
+     600 di mana pun: di form tanggal tampak lebih besar & lebih tebal dari
+     nomor dokumen sebarisnya. Huruf tegas tetap milik tanggal di kartu. */
+  font-size: 0.86rem;
+  font-weight: 500;
 }
 input[data-kotak-tanggal].kt-nilai.form-control-sm:where(:not(.date-field > input)) {
   --kt-kiri: 8px;
   padding-top: 3px;
   padding-bottom: 3px;
 }
+/* Petunjuk format lebih tipis dari tanggal yang terisi, seperti petunjuk isian lain */
 input[data-kotak-tanggal].kt-nilai::placeholder {
-  font-weight: 500;
+  font-weight: 400;
   color: var(--text-placeholder);
 }
 /* IKON KALENDER: gambar, ulang, posisi & ukurannya ditulis di SATU aturan

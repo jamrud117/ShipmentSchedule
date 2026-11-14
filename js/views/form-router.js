@@ -125,6 +125,26 @@ function router() {
     return;
   }
 
+  /* Halaman dari MODUL TUNDA (js/core/modul.js) menunggu modulnya --
+     biasanya sudah siap: dimuat di latar sejak aplikasi dibuka. Halaman
+     yang sedang tampil dibiarkan sampai siap; router dijalankan ulang
+     untuk alamat yang BERLAKU saat itu (pengguna bisa sudah pindah). */
+  if (MODUL_TUNDA_HALAMAN.has(halaman) && !modulTundaTermuat()) {
+    muatModulTunda().then(
+      () => {
+        if (halamanDariHash(location.hash || "#/") === halaman) router();
+      },
+      () =>
+        showToast(
+          tt("Bagian aplikasi ini gagal dimuat (koneksi terputus?). Muat ulang halaman untuk mencoba lagi.",
+            "This part of the app failed to load (connection lost?). Reload the page to try again."),
+          "danger",
+          { tetap: true },
+        ),
+    );
+    return;
+  }
+
   // Ringkasan harian
   if (hash === "#/ringkasan") {
     showOverviewView();
@@ -309,8 +329,8 @@ $("#btnFormRemoteMuat")?.addEventListener("click", () => {
 function renderFormPage(id) {
   const lbl = ML();
   lepasTandaFormDiubahLain();
-  // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka
-  resetImportFieldOrigins();
+  // Riwayat "field ini diisi oleh sumber mana" direset tiap form dibuka (pembaca dokumen = modul tunda)
+  if (typeof resetImportFieldOrigins === "function") resetImportFieldOrigins();
   // Dropdown status hanya menampilkan status yang berlaku di section ini (requirement D)
   const curStatus = id
     ? (currentList().find((x) => x.id === id) || {}).status || "process"

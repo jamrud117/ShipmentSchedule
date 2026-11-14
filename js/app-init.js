@@ -2,6 +2,19 @@
 
 let boardStampDay = "";
 
+/* MODUL TUNDA (js/core/modul.js) dimuat SESUDAH papan jadwal tergambar
+   (atau selagi layar masuk menunggu diisi), saat peramban senggang --
+   bukan di awal: penguraiannya merebut utas utama dari pengolahan &
+   penggambaran jadwal (terukur: kartu pertama sama lambatnya dengan
+   memuat semuanya sekaligus). Halaman yang membutuhkannya lebih dulu
+   (alamat #/cek, #/docnum, ... dibuka langsung) memuatnya sendiri lewat
+   router(). Gagal dimuat: halaman yang memakainya memberi tahu saat dibuka. */
+function muatModulTundaLatar() {
+  const mulai = () => muatModulTunda().catch((e) => console.error("Modul tunda gagal dimuat:", e));
+  if (typeof requestIdleCallback === "function") requestIdleCallback(mulai, { timeout: 2000 });
+  else setTimeout(mulai, 300);
+}
+
 async function initApp() {
   restoreActiveMode();
   // Penanda tanggal disiapkan sebelum router() menggambar
@@ -27,6 +40,8 @@ async function initApp() {
   if (!masuk) {
     // Jadwal yang sempat diambil dengan sesi yang ternyata ditolak
     if (typeof buangAmbilAwalShipments === "function") buangAmbilAwalShipments();
+    // Selagi username & sandi diketik
+    muatModulTundaLatar();
     return;
   }
 
@@ -42,6 +57,7 @@ async function initApp() {
   router();
 
   await loadShipments();
+  muatModulTundaLatar();
 
   routerSesudahMuat();
 

@@ -71,10 +71,10 @@ function siarkanHsCodeBerubah() {
    sesudah migration-lampiran-lartas-kebutuhan.sql, dan meminta kolom
    yang belum ada menggagalkan seluruh muatnya. */
 async function ambilHsCodes() {
-  const { data, error } = await supabaseClient
-    .from("hs_code_master")
-    .select("*")
-    .order("item_name", { ascending: true });
+  // Per halaman: lewat dari 1000 HS Code tidak terpotong diam-diam (ambilSemuaBaris, api.js)
+  const { data, error } = await ambilSemuaBaris((opsi) =>
+    supabaseClient.from("hs_code_master").select("*", opsi).order("item_name", { ascending: true }).order("id", { ascending: true }),
+  );
   if (error) throw error;
   hsCodeRows = data || [];
   versiHsCode++;

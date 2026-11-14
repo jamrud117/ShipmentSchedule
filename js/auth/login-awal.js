@@ -27,6 +27,8 @@
 (function () {
   const login = document.getElementById("viewLogin");
   if (!login) return;
+  // Tahun hak cipta di kaki layar masuk mengikuti tahun berjalan
+  login.querySelectorAll(".login-tahun").forEach((el) => (el.textContent = String(new Date().getFullYear())));
   let adaSesi = true;
   let bahasa = "id";
   let ingat = true;

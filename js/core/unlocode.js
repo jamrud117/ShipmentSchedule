@@ -286,7 +286,7 @@ const UNLOCODES_RAW = [
   { unlocode: "CNCGO", name: "Xinzheng Intl Airport, Zhengzhou", country: "CN", type: "udara", aliases: ["zhengzhou", "cgo"] },
   { unlocode: "CNEHU", name: "Huahu Airport, Ezhou", country: "CN", type: "udara", aliases: ["ezhou", "huahu", "ehu"] },
   { unlocode: "CNKMG", name: "Changshui Intl Airport, Kunming", country: "CN", type: "udara", aliases: ["kunming", "kmg"] },
-  { unlocode: "CNXIY", name: "Xianyang Intl Airport, Xi'an", country: "CN", type: "udara", aliases: ["xi'an", "xian", "xiy"] },
+  { unlocode: "CNXIY", name: "Xianyang Intl Airport, Xi'an", country: "CN", type: "udara", aliases: ["xi'an", "xian", "xianyang", "xiy"] },
   { unlocode: "CNFOC", name: "Changle Intl Airport, Fuzhou", country: "CN", type: "udara", aliases: ["fuzhou airport", "changle"] },
   { unlocode: "CNNNG", name: "Wuxu Intl Airport, Nanning", country: "CN", type: "udara", aliases: ["nanning", "nng"] },
   { unlocode: "CNHAK", name: "Meilan Intl Airport, Haikou", country: "CN", type: "udara", aliases: ["haikou airport", "meilan"] },
@@ -377,13 +377,16 @@ const UNLOCODE_COUNTRIES = new Set([
      2. CGK    bentuk pendek            (dari layar & jadwal baru)
      3. nama & alias                    ("Soekarno-Hatta", "priok")
      4. kode di ujung teks              ("TANJUNG PRIOK IDTPP")
+     5. data dunia, bila sudah dimuat   ("Santos", "BRSSZ", "HAM" --
+                                         core/data-dunia.js)
 
    Langkah 3 memilih alias TERPANJANG yang cocok, supaya "tanjung
    pelepas" tidak kalah oleh "tanjung" yang lebih pendek. */
 /* Hasil pencocokan diingat per teks masukan.
 
-   Tabel referensinya tetap selama aplikasi berjalan, jadi teks yang
-   sama selalu menghasilkan entri yang sama. Nama pelabuhan berulang
+   Tabel referensinya tetap selama aplikasi berjalan (kecuali sekali,
+   saat data dunia selesai dimuat -- ingatan ini dikosongkan di sana),
+   jadi teks yang sama selalu menghasilkan entri yang sama. Nama pelabuhan berulang
    sangat banyak — satu papan berisi ratusan kartu kerap hanya memakai
    segelintir pelabuhan — sementara pencocokan alias menyapu seluruh
    tabel tiap kali dipanggil. */
@@ -398,11 +401,26 @@ function resolvePortEntry(raw) {
   return hasil;
 }
 
+/* Nama & alias untuk langkah 3, disusun sekali. Alias sampai 4 huruf
+   ("sin", "can", "vict", "kobe") adalah KODE / singkatan, jadi harus
+   berdiri sebagai kata -- angka boleh menempel ("KLIA2", "CGK3"): MERSIN
+   & SINES bukan Singapura, SHARJAH bukan Shanghai, VICTORIA bukan VICT,
+   KOBENHAVN bukan Kobe. Yang lebih panjang tetap dicari sebagai potongan
+   teks ("TANJUNG PRIOK, JAKARTA"). */
+const polaSekata = (alias) => new RegExp(`(^|[^a-z0-9])${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z])`);
+const PORT_ALIASES = UNLOCODES.flatMap((u) =>
+  [u.name.toLowerCase(), ...(u.aliases || [])]
+    .filter(Boolean)
+    .map((alias) => ({ entry: u, alias, kata: alias.length <= 4 ? polaSekata(alias) : null })),
+);
+
 function cariPortEntry(s) {
   const upper = s.toUpperCase();
 
+  /* Kode UN/LOCODE polos dicari di data dunia SEBELUM alias: VICTD
+     (Christiansted) bukan alias "vict", DOHAI (Rio Haina) bukan "doha". */
   if (UNLOCODE_PATTERN.test(upper)) {
-    const e = PORT_BY_UNLOCODE.get(upper);
+    const e = PORT_BY_UNLOCODE.get(upper) || (typeof cariKodeDunia === "function" && cariKodeDunia(upper));
     if (e) return e;
   }
   if (PORTCODE_PATTERN.test(upper)) {
@@ -412,24 +430,20 @@ function cariPortEntry(s) {
 
   const hay = s.toLowerCase();
   let best = null;
-  UNLOCODES.forEach((u) => {
-    [u.name.toLowerCase(), ...(u.aliases || [])].forEach((alias) => {
-      if (!alias) return;
-      if (hay.includes(alias)) {
-        if (!best || alias.length > best.len) best = { entry: u, len: alias.length };
-      }
-    });
+  PORT_ALIASES.forEach(({ entry, alias, kata }) => {
+    if (kata ? !kata.test(hay) : !hay.includes(alias)) return;
+    if (!best || alias.length > best.len) best = { entry, len: alias.length };
   });
   if (best) return best.entry;
 
   const lastToken = (upper.match(/\b([A-Z]{2}[A-Z0-9]{3})\s*$/) || [])[1];
-  if (lastToken && UNLOCODE_COUNTRIES.has(lastToken.slice(0, 2))) {
-    // Harus ada teks lain di depannya (format "<nama> <kode>")
-    if (upper.replace(lastToken, "").trim()) {
-      return PORT_BY_UNLOCODE.get(lastToken) || null;
-    }
+  // Harus ada teks lain di depannya (format "<nama> <kode>")
+  if (lastToken && UNLOCODE_COUNTRIES.has(lastToken.slice(0, 2)) && upper.replace(lastToken, "").trim()) {
+    const e = PORT_BY_UNLOCODE.get(lastToken);
+    if (e) return e;
   }
-  return "";
+  // Di luar daftar ini: seluruh pelabuhan & bandara dunia (core/data-dunia.js), bila sudah dimuat
+  return (typeof cariEntriDunia === "function" && cariEntriDunia(s)) || "";
 }
 
 // Teks bebas -> kode pendek gaya IATA ("CGK"). Kosong kalau tak dikenali.
@@ -492,16 +506,12 @@ function portCodeLabel(raw) {
 
      Yang DISIMPAN tidak diubah: bentuk pendek maupun panjang sama-sama
      dikenali resolvePortCode(), jadi jadwal lama tetap terbaca dan
-     aturan rutenya tetap cocok. */
-  if (UNLOCODE_PATTERN.test(upper)) {
-    const e = PORT_BY_UNLOCODE.get(upper);
-    if (e) return e.unlocode;
-  }
-  if (PORTCODE_PATTERN.test(upper)) {
-    const e = PORT_BY_CODE.get(upper);
-    if (e) return e.unlocode;
-  }
-  return s;
+     aturan rutenya tetap cocok. Kode di luar daftar ini (HAM, JFK,
+     brssz) memakai LOCODE dari data dunia bila sudah dimuat. */
+  const panjang = UNLOCODE_PATTERN.test(upper);
+  if (!panjang && !PORTCODE_PATTERN.test(upper)) return s;
+  const e = (panjang ? PORT_BY_UNLOCODE : PORT_BY_CODE).get(upper) || (typeof cariKodeDunia === "function" && cariKodeDunia(upper));
+  return e ? e.unlocode : s;
 }
 
 /* KOTA, NEGARA untuk DOKUMEN EKSPOR (Port of Loading / Final Destination
@@ -509,8 +519,9 @@ function portCodeLabel(raw) {
    bukan kode pelabuhannya. Terminal & bandara memakai kota induknya
    (Cat Lai -> Ho Chi Minh, Soekarno-Hatta -> Jakarta). Nama kota yang
    lazim ditulis lain di dokumen ada di PORT_KOTA_DOKUMEN; negara dengan
-   nama dagang bahasa Inggrisnya (PORT_NEGARA_DOKUMEN). Teks yang tidak
-   dikenali dikembalikan apa adanya. */
+   nama dagang bahasa Inggrisnya (PORT_NEGARA_DOKUMEN, lainnya nama
+   Inggris dari negara.js). Teks yang tidak dikenali dikembalikan apa
+   adanya. */
 const PORT_KOTA_DOKUMEN = { "HO CHI MINH": "HOCHIMINH" };
 const PORT_NEGARA_DOKUMEN = {
   ID: "INDONESIA", KR: "KOREA", CN: "CHINA", VN: "VIETNAM", JP: "JAPAN", TW: "TAIWAN", HK: "HONG KONG",
@@ -523,16 +534,23 @@ function portKotaNegara(raw) {
   const e = resolvePortEntry(s);
   if (!e) return s;
   const induk = (e.metro && PORT_BY_UNLOCODE.get(e.metro)) || e;
-  // "Soekarno-Hatta Intl Airport, Jakarta" -> "Jakarta"; "Kuala Lumpur Intl Airport" -> "Kuala Lumpur"
-  const bagian = induk.name.split(",");
-  const kota = bagian[bagian.length - 1]
-    .replace(/\b(intl|international)\b|\b(airport|terminal|port)\b|\bcity$/gi, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toUpperCase();
-  const negara = PORT_NEGARA_DOKUMEN[induk.country] || induk.country;
+  const kota = kotaDokumen(induk);
+  const negara = PORT_NEGARA_DOKUMEN[induk.country] || negaraDokumen(induk.country);
   const tulis = PORT_KOTA_DOKUMEN[kota] || kota;
   return !tulis || tulis === negara ? negara : `${tulis}, ${negara}`;
+}
+/* "Soekarno-Hatta Intl Airport, Jakarta" -> "JAKARTA"; "Kuala Lumpur Intl
+   Airport" -> "KUALA LUMPUR". Entri data dunia: kota bandaranya tercatat
+   sendiri, dan nama pelabuhan UN/LOCODE sudah nama tempat ("PORT SAID"
+   tetap utuh). */
+function kotaDokumen(e) {
+  const kota = e.dunia ? e.kota || e.name : e.name.split(",").pop().replace(/\b(intl|international)\b|\b(airport|terminal|port)\b|\bcity$/gi, "");
+  return kota.replace(/\s+/g, " ").trim().toUpperCase();
+}
+// "BRAZIL"; "Bolivia, Plurinational State of" -> "BOLIVIA"
+function negaraDokumen(kode) {
+  const n = typeof NEGARA_PER_KODE !== "undefined" && NEGARA_PER_KODE.get(kode);
+  return n ? String(n[3] || n[2]).split(",")[0].trim().toUpperCase() : kode;
 }
 
 /* Isian dokumen yang berisi UN/LOCODE polos ("VNSGN", "KRPUS") -> alias

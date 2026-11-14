@@ -433,7 +433,8 @@ function mstKolomDariGalat(e) {
 async function mstBacaKolom(tabel, dasar, opsional, susun) {
   let kolom = opsional.filter(mstAdaKolom);
   for (;;) {
-    const { data, error } = await susun(supabaseClient.from(tabel).select([dasar].concat(kolom).join(", ")));
+    // Per halaman: realisasi yang lewat dari 1000 baris tidak terpotong diam-diam (ambilSemuaBaris, api.js)
+    const { data, error } = await ambilSemuaBaris((opsi) => susun(supabaseClient.from(tabel).select([dasar].concat(kolom).join(", "), opsi)));
     const k = error && mstKolomDariGalat(error);
     if (k && kolom.indexOf(k) >= 0) {
       mstKolomBelumAda.add(k);
@@ -1519,10 +1520,10 @@ async function mstAmbil() {
      sudah cukup. */
   mstKolomBelumAda.clear();
   mstBarisDb = await mstBacaKolom("masterlist_items", "id, list_id, no, description, specification, uom, quota, created_at", ["value_quota", "hs_code"], (q) =>
-    q.eq("list_id", mstDok.id).order("no", { ascending: true }),
+    q.eq("list_id", mstDok.id).order("no", { ascending: true }).order("id", { ascending: true }),
   );
   const realisasi = await mstBacaKolom("masterlist_usages", "id, item_id, qty, aju_ref, pib_date, notes, created_at", ["pibs", "invoice_value"], (q) =>
-    q.order("created_at", { ascending: true }),
+    q.order("created_at", { ascending: true }).order("id", { ascending: true }),
   );
   const milik = new Set(mstBarisDb.map((b) => b.id));
   mstRealisasiDb = realisasi.filter((u) => milik.has(u.item_id));

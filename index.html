@@ -181,31 +181,52 @@
 
     <!-- Layar login: menutup seluruh aplikasi sampai sesi sah -->
     <div id="viewLogin" class="login-screen d-none">
-      <!-- Papan pelabuhan: hiasan layar lebar (disembunyikan di ponsel). Lajur
-           di bawahnya memakai kosakata status yang sama dengan kartu jadwal;
-           penanda kuningan berjalan satu kali saat layar dibuka. -->
+      <!-- Papan pelabuhan: hiasan layar lebar (disembunyikan di ponsel).
+           Satu kolom di tengah papan (merek, judul, pratinjau kartu jadwal,
+           kaki) supaya layar selebar apa pun tetap seimbang. Pratinjau
+           memakai kosakata yang sama dengan kartu jadwal; kapalnya berjalan
+           satu kali di lintasan saat layar dibuka. -->
       <aside class="login-papan" aria-hidden="true">
-        <div class="login-papan-merek">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="11.1" y="2" width="1.8" height="5.4" rx="0.6" fill="#c79a3e" />
-            <rect x="7.8" y="3.5" width="8.4" height="1.8" rx="0.6" fill="#c79a3e" />
-            <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
-            <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
-            <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
-            <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="#f2f5f9" />
-          </svg>
-          <span>EXIM<span>·</span>DDI</span>
+        <div class="login-papan-kolom">
+          <div class="login-papan-merek">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="11.1" y="2" width="1.8" height="5.4" rx="0.6" fill="#c79a3e" />
+              <rect x="7.8" y="3.5" width="8.4" height="1.8" rx="0.6" fill="#c79a3e" />
+              <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+              <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
+              <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+              <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="#f2f5f9" />
+            </svg>
+            <span>EXIM<span>·</span>DDI</span>
+          </div>
+          <div class="login-papan-isi">
+            <p class="login-papan-judul" data-en="Every shipment, on one board.">Semua kiriman, satu papan.</p>
+            <p class="login-papan-ket" data-en="Import and export schedules, ETA, customs documents, and PIB/PEB checks in one place.">Jadwal import dan export, ETA, dokumen kepabeanan, dan pengecekan PIB/PEB di satu tempat.</p>
+            <div class="login-pratinjau">
+              <div class="lp-kepala">
+                <span class="lp-rute">KRPUS<i class="bi bi-arrow-right"></i>IDTPP</span>
+                <span class="lp-status" data-en="In transit">Transit</span>
+              </div>
+              <div class="lp-kapal">KMTC JAKARTA · 2614S · FCL</div>
+              <div class="lp-lintasan">
+                <span class="lp-lintasan-isi"></span>
+                <svg class="lp-lintasan-ikon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="5.4" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+                  <rect x="10" y="8.1" width="4" height="4.2" rx="0.6" fill="#dcb45f" />
+                  <rect x="14.6" y="8.1" width="4" height="4.2" rx="0.6" fill="#c79a3e" />
+                  <path d="M3 13.1h18l-3.1 6.4a1 1 0 0 1-.9.5H7a1 1 0 0 1-.9-.5z" fill="currentColor" />
+                </svg>
+              </div>
+              <div class="lp-pelabuhan"><span>Busan</span><span>Tanjung Priok</span></div>
+              <div class="lp-angka">
+                <div><span>ETA</span><b data-en="in 3 days">3 hari lagi</b></div>
+                <div><span>Estimated Delivery</span><b data-en="in 6 days">6 hari lagi</b></div>
+                <div><span data-en="Documents">Dokumen</span><b>6 / 9</b></div>
+              </div>
+            </div>
+          </div>
+          <p class="login-papan-kaki">PT Dynamic Design Indonesia · <span data-en="Import &amp; Export">Ekspor &amp; Impor</span></p>
         </div>
-        <div class="login-papan-isi">
-          <p class="login-papan-judul" data-en="Every shipment, on one board.">Semua kiriman, satu papan.</p>
-          <p class="login-papan-ket" data-en="Import and export schedules, ETA, customs documents, and PIB/PEB checks in one place.">Jadwal import dan export, ETA, dokumen kepabeanan, dan pengecekan PIB/PEB di satu tempat.</p>
-        </div>
-        <ol class="login-lajur">
-          <li class="is-lewat"><span data-en="Processing">Diproses</span></li>
-          <li class="is-kini"><span data-en="In transit">Transit</span></li>
-          <li><span data-en="Arrived">Tiba</span></li>
-          <li><span data-en="Documents complete">Dokumen lengkap</span></li>
-        </ol>
       </aside>
       <div class="login-card">
         <div class="login-brand">
@@ -329,6 +350,7 @@
             <button type="button" data-lang-pick="en">EN</button>
           </div>
         </div>
+        <p class="login-hak">© <span class="login-tahun">2026</span> PT Dynamic Design Indonesia</p>
       </div>
     </div>
     <!-- Tanpa sesi tersimpan, layar masuk tampil SEKARANG -- tidak menunggu
@@ -5218,6 +5240,9 @@
     <!-- CORE -->
     <!-- ========================================= -->
     <script src="js/core/helpers.js"></script>
+    <!-- Pemuat MODUL TUNDA: halaman & fitur yang dimuat di latar sesudah
+         inti (Cek PIB/PEB, Nomor Dokumen, Masterlist, Akun, pembaca dokumen) -->
+    <script src="js/core/modul.js"></script>
     <!-- Pembaca tanggal ketikan (5/11/26, 5 nov 2026, 20261105 -> yyyy-mm-dd) -->
     <script src="js/core/date-parse.js"></script>
     <script src="js/core/num-format.js"></script>
@@ -5229,6 +5254,7 @@
          per negara asal untuk petunjuk COO -->
     <script src="js/core/lartas.js"></script>
     <script src="js/core/unlocode.js"></script>
+    <script src="js/core/data-dunia.js"></script>
     <script src="js/core/status.js"></script>
     <script src="js/core/state.js"></script>
     <script src="js/core/referensi-ceisa.js"></script>
@@ -5318,73 +5344,18 @@
     <!-- ========================================= -->
     <!-- IMPORT -->
     <!-- ========================================= -->
-
-    <!-- Mesin EXIM (CIPL + draft PIB/PEB): berkas yang SAMA dengan
-         exim-engine.js di EXIM Checker. Satu IIFE, keluarnya hanya
-         window.EximEngine -- tidak menambah nama global lain. -->
-    <script src="js/import/exim-engine.js"></script>
-
-    <!-- Shared Helper -->
-    <script src="js/import/pdf-coords.js"></script>
-    <script src="js/import/cipl-common.js"></script>
-    <!-- Data PIB/PEB lengkap dari PDF PIB/PEB & Excel CEISA (core/data-pabean.js) -->
-    <script src="js/import/data-pabean-baca.js"></script>
-
-    <!-- PDF Helper -->
-    <script src="js/import/pdf-cipl.js"></script>
-
-    <!-- Excel -->
+    <!-- Pembaca Excel umum (excelStr / excelNum / tanggal Excel): dipakai
+         Bulk Import & Export di papan jadwal, jadi tetap INTI. Pembaca
+         dokumen lainnya (mesin EXIM, PDF, OCR, CIPL, dispatcher) adalah
+         modul tunda -- js/core/modul.js. -->
     <script src="js/import/excel-bc.js"></script>
-    <script src="js/import/excel-cipl.js"></script>
-
-    <!-- Apply -->
-    <script src="js/import/apply-to-form.js"></script>
-
-    <!-- PDF -->
-    <script src="js/import/pdf.js"></script>
-    <script src="js/import/pdf-peb.js"></script>
-    <!-- OCR untuk PDF hasil scan & foto invoice (Tesseract.js dimuat lazy, hanya saat dibutuhkan) -->
-    <script src="js/import/ocr.js"></script>
-
-    <!-- Dispatcher -->
-    <script src="js/import/dispatch.js"></script>
 
     <!-- ========================================= -->
     <!-- VIEW -->
     <!-- ========================================= -->
-    <script src="js/features/surat-jalan-lokal-print.js"></script>
-    <script src="js/features/surat-jalan-print.js"></script>
     <script src="js/features/po-list.js"></script>
     <script src="js/features/vehicle-list.js"></script>
-    <!-- fund-docno.js & fund-vendor-aturan.js SEBELUM fund-lines.js: berkas
-         itu menggambar tabel rinciannya saat dimuat, dan PPN per item
-         bergantung pada aturan vendor (pencocok nama per kata ada di
-         fund-docno.js). -->
-    <script src="js/features/fund-docno.js"></script>
-    <script src="js/features/fund-vendor-aturan.js"></script>
-    <script src="js/features/fund-lines.js"></script>
-    <script src="js/features/fund-invoice-sama.js"></script>
-    <script src="js/features/do-lines.js"></script>
-    <script src="js/features/fund-request-print.js"></script>
-    <script src="js/features/cipl-tata.js"></script>
-    <script src="js/features/cipl-vn-print.js"></script>
-    <script src="js/features/cipl-print.js"></script>
-    <script src="js/features/cipl-excel.js"></script>
-    <script src="js/views/docnum-view.js"></script>
-    <script src="js/features/docnum-detail.js"></script>
-    <script src="js/features/invoice-pihak.js"></script>
-    <script src="js/features/fund-summary.js"></script>
-    <script src="js/features/fund-report-ledger.js"></script>
-    <script src="js/features/fund-report-blok.js"></script>
-    <script src="js/features/fund-report.js"></script>
     <script src="js/features/shipment-cost.js"></script>
-    <script src="js/features/fund-invoice-import.js"></script>
-    <script src="js/features/fund-vendor.js"></script>
-    <script src="js/features/fund-rincian.js"></script>
-    <script src="js/features/fund-saran-awb.js"></script>
-    <script src="js/features/fund-invoice-summary.js"></script>
-    <script src="js/features/surat-bc.js"></script>
-    <script src="js/features/surat-bc-word.js"></script>
     <script src="js/views/form-router.js"></script>
     <script src="js/features/kurs-sync.js"></script>
     <script src="js/features/cek-duplikat.js"></script>
@@ -5394,14 +5365,8 @@
     <script src="js/features/notifikasi.js"></script>
     <script src="js/views/overview-view.js"></script>
     <script src="js/features/command-palette.js"></script>
-    <script src="js/views/accounts-view.js"></script>
     <script src="js/views/hscode-view.js"></script>
     <script src="js/features/hscode-lookup.js"></script>
-    <script src="js/views/masterlist-view.js"></script>
-    <script src="js/features/masterlist-print.js"></script>
-    <script src="js/views/checker-view.js"></script>
-    <script src="js/features/cek-cetak-templat.js"></script>
-    <script src="js/features/cek-cetak.js"></script>
     <script src="js/auth/session.js"></script>
     <script src="js/auth/session-timeout.js"></script>
 

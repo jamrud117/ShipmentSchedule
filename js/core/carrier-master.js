@@ -366,6 +366,41 @@ const CARRIER_MASTER = {
     { code: "Y7", name: "NordStar Airlines" },
     { code: "GM", name: "Asia Cargo Airlines (d/h Tri-MG)",
       aliases: ["ASIA CARGO", "TRI MG", "TRIMG", "TRILINES"] },
+
+    /* MASKAPAI DUNIA LAINNYA -- Amerika, Eropa, Timur Tengah, Afrika,
+       Oseania & Asia Selatan. Kode IATA yang masih dipakai (dicek
+       November 2026); tiap kode juga dikenali dari No. Flight (LH8400,
+       AF1234) sehingga riwayatnya bisa dipelajari per maskapai. Tidak
+       memakai basis data maskapai terbuka (OpenFlights): penanda
+       "aktif"-nya sudah usang -- CV tercatat Air Chathams, FX & PO
+       maskapai penumpang, padahal Cargolux, FedEx & Polar. */
+    { code: "AA", name: "American Airlines" }, { code: "UA", name: "United Airlines" }, { code: "DL", name: "Delta Air Lines" },
+    { code: "AS", name: "Alaska Airlines" }, { code: "WN", name: "Southwest Airlines" }, { code: "B6", name: "JetBlue" },
+    { code: "AC", name: "Air Canada" }, { code: "WS", name: "WestJet" }, { code: "Y4", name: "Volaris" },
+    { code: "VB", name: "Viva Aerobus" }, { code: "CM", name: "Copa Airlines" }, { code: "AV", name: "Avianca" },
+    { code: "LA", name: "LATAM Airlines" }, { code: "G3", name: "Gol Linhas Aereas" }, { code: "AD", name: "Azul Brazilian Airlines" },
+    { code: "AR", name: "Aerolineas Argentinas" }, { code: "K4", name: "Kalitta Air" }, { code: "GB", name: "ABX Air" },
+    { code: "M6", name: "Amerijet International" }, { code: "NC", name: "Northern Air Cargo" }, { code: "LH", name: "Lufthansa" },
+    { code: "LX", name: "Swiss International Air Lines" }, { code: "OS", name: "Austrian Airlines" }, { code: "SN", name: "Brussels Airlines" },
+    { code: "AF", name: "Air France" }, { code: "KL", name: "KLM Royal Dutch Airlines" }, { code: "BA", name: "British Airways" },
+    { code: "VS", name: "Virgin Atlantic" }, { code: "IB", name: "Iberia" }, { code: "AZ", name: "ITA Airways" },
+    { code: "AY", name: "Finnair" }, { code: "SK", name: "SAS Scandinavian Airlines" }, { code: "LO", name: "LOT Polish Airlines" },
+    { code: "TP", name: "TAP Air Portugal" }, { code: "EI", name: "Aer Lingus" }, { code: "FR", name: "Ryanair" },
+    { code: "U2", name: "easyJet" }, { code: "W6", name: "Wizz Air" }, { code: "LG", name: "Luxair" },
+    { code: "ET", name: "Ethiopian Airlines" }, { code: "KQ", name: "Kenya Airways" }, { code: "SA", name: "South African Airways" },
+    { code: "AT", name: "Royal Air Maroc" }, { code: "MS", name: "EgyptAir" }, { code: "QF", name: "Qantas" },
+    { code: "VA", name: "Virgin Australia" }, { code: "NZ", name: "Air New Zealand" }, { code: "JQ", name: "Jetstar Airways" },
+    { code: "FJ", name: "Fiji Airways" }, { code: "PX", name: "Air Niugini" }, { code: "EY", name: "Etihad Airways" },
+    { code: "SV", name: "Saudia" }, { code: "WY", name: "Oman Air" }, { code: "GF", name: "Gulf Air" },
+    { code: "KU", name: "Kuwait Airways" }, { code: "RJ", name: "Royal Jordanian" }, { code: "FZ", name: "flydubai" },
+    { code: "G9", name: "Air Arabia" }, { code: "PC", name: "Pegasus Airlines" }, { code: "LY", name: "El Al" },
+    { code: "AI", name: "Air India" }, { code: "6E", name: "IndiGo" }, { code: "SG", name: "SpiceJet" },
+    { code: "UL", name: "SriLankan Airlines" }, { code: "BG", name: "Biman Bangladesh Airlines" }, { code: "PK", name: "Pakistan International Airlines" },
+    { code: "BI", name: "Royal Brunei Airlines" }, { code: "8M", name: "Myanmar Airways International" }, { code: "K6", name: "Cambodia Angkor Air" },
+    { code: "QV", name: "Lao Airlines" }, { code: "MM", name: "Peach Aviation" }, { code: "GK", name: "Jetstar Japan" },
+    { code: "PG", name: "Bangkok Airways" }, { code: "Z2", name: "Philippines AirAsia" }, { code: "D7", name: "AirAsia X" },
+    { code: "8B", name: "TransNusa" }, { code: "IW", name: "Wings Air" }, { code: "KC", name: "Air Astana" },
+    { code: "HY", name: "Uzbekistan Airways" },
   ],
 };
 
@@ -418,6 +453,30 @@ const AIRLINE_NETWORK = {
   TK: { country: "TR", hubs: ["IST"] },
   JL: { country: "JP", hubs: ["NRT"] }, NH: { country: "JP", hubs: ["NRT"] },
   KZ: { country: "JP", hubs: ["NRT"] },
+  /* Riset November 2026 (jadwal ICN–CGK, PUS–CGK di Fluent Cargo):
+     langsung ±7 jam hanya Garuda, Korean Air, Asiana & T'way; maskapai
+     lain di rute Korea–Indonesia singgah di hub-nya (Taipei, Manila,
+     Kuala Lumpur, Singapura, Hong Kong, Ho Chi Minh/Hanoi). Kargo
+     langsung tiba H+1; satu kali singgah lazimnya H+2–3. */
+  TW: { country: "KR", hubs: ["ICN"] }, "7C": { country: "KR", hubs: ["ICN"] },
+  LJ: { country: "KR", hubs: ["ICN"] }, ZE: { country: "KR", hubs: ["ICN"] },
+  RS: { country: "KR", hubs: ["ICN"] }, JX: { country: "TW", hubs: ["TPE"] },
+  PR: { country: "PH", hubs: ["MNL"] }, "5J": { country: "PH", hubs: ["MNL"] },
+  Z2: { country: "PH", hubs: ["MNL"] }, AK: { country: "MY", hubs: ["KUL"] },
+  D7: { country: "MY", hubs: ["KUL"] }, OD: { country: "MY", hubs: ["KUL"] },
+  FD: { country: "TH", hubs: ["DMK"] }, SL: { country: "TH", hubs: ["DMK"] },
+  BI: { country: "BN", hubs: ["BWN"] }, QZ: { country: "ID", hubs: ["CGK"] },
+  // Asia Selatan, Timur Tengah, Eropa, Afrika, Oseania: kargo ke Indonesia lewat hub
+  AI: { country: "IN", hubs: ["DEL"] }, "6E": { country: "IN", hubs: ["DEL"] },
+  UL: { country: "LK", hubs: ["CMB"] }, BG: { country: "BD", hubs: ["DAC"] },
+  EY: { country: "AE", hubs: ["AUH"] }, FZ: { country: "AE", hubs: ["DXB"] },
+  SV: { country: "SA", hubs: ["JED"] }, WY: { country: "OM", hubs: ["MCT"] },
+  GF: { country: "BH", hubs: ["BAH"] }, KU: { country: "KW", hubs: ["KWI"] },
+  LH: { country: "DE", hubs: ["FRA"] }, LX: { country: "CH", hubs: ["ZRH"] },
+  AF: { country: "FR", hubs: ["CDG"] }, KL: { country: "NL", hubs: ["AMS"] },
+  BA: { country: "GB", hubs: ["LHR"] }, AY: { country: "FI", hubs: ["HEL"] },
+  CV: { country: "LU", hubs: ["LUX"] }, ET: { country: "ET", hubs: ["ADD"] },
+  QF: { country: "AU", hubs: ["SYD"] }, NZ: { country: "NZ", hubs: ["AKL"] },
 };
 
 function airlineNetwork(code) {
@@ -671,6 +730,25 @@ function detectShippingLine(vesselName) {
   return null;
 }
 
+/* AWALAN NO. MASTER B/L = KODE SCAC PELAYARAN. Nama kapal tidak selalu
+   menyebut operatornya (kapal sewaan, "SINAR ...", "KOTA ..."), tapi
+   No. Master B/L FCL dari pelayaran besar diawali kode SCAC-nya:
+   MEDUJ1234567 (MSC), HDMUSELA1234 (HMM), ONEYSEL0001 (ONE). Hanya kode
+   yang pasti; B/L forwarder / NVOCC tidak cocok dengan apa pun -- dan
+   memang tidak boleh ditebak. Dipakai SESUDAH nama kapal gagal dikenali. */
+const SCAC_PELAYARAN = {
+  MAEU: "MAERSK", MEDU: "MSC", MSCU: "MSC", CMDU: "CMA", HLCU: "HAPAG", ONEY: "ONE", EGLV: "EVERGREEN",
+  COSU: "COSCO", OOLU: "OOCL", YMLU: "YANGMING", HDMU: "HMM", ZIMU: "ZIM", WHLC: "WANHAI", KMTC: "KMTC",
+  PCIU: "PIL", GOSU: "GOLDSTAR",
+};
+function detectShippingLineDariBl(noBl) {
+  const k = kunciAlnum(noBl);
+  const awal = k.slice(0, 4);
+  const kode = k.length >= 8 ? SCAC_PELAYARAN[awal] : "";
+  const line = kode ? CARRIER_MASTER.shippingLines.find((x) => x.code === kode) : null;
+  return line ? { code: line.code, name: line.name, alias: awal, via: "awalan No. Master B/L (SCAC)" } : null;
+}
+
 /* Kurir dicocokkan sebagai KATA UTUH di Nama Kapal. */
 function detectCourier(vesselName) {
   const kata = normalisasiTeksKapal(vesselName).split(" ").filter(Boolean);
@@ -804,7 +882,7 @@ function detectCarrier(s) {
     typeof activeLang !== "undefined" ? activeLang : "",
     udara ? "u" : "l",
     src.vessel || "",
-    udara ? src.voyage || "" : "",
+    udara ? src.voyage || "" : src.masterBL || "",
   ].join("\u0001");
   return { ...ingatDeteksi(CARRIER_INGAT, kunci, () => deteksiCarrier(src, udara)) };
 }
@@ -831,7 +909,7 @@ function deteksiCarrier(src, udara) {
         };
   }
 
-  const hasil = detectShippingLine(src.vessel);
+  const hasil = detectShippingLine(src.vessel) || detectShippingLineDariBl(src.masterBL);
   return hasil
     ? { ...hasil, kind: "shipping", detected: true }
     : {

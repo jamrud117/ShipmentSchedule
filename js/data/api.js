@@ -29,11 +29,49 @@ let shipmentsLoaded = false;
    dengan muatKe = ada muat penuh yang masih di jalan (terapkanJadwalTersimpan). */
 let muatSelesai = 0;
 
-function kueriShipments() {
+function kueriShipments(opsi) {
   return supabaseClient
     .from("shipments")
-    .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)")
+    .select("*, items:shipment_items(*), routeStops:shipment_route_stops(*)", opsi)
     .order("created_at", { ascending: true });
+}
+
+/* SEMUA BARIS, PER HALAMAN. API Supabase (PostgREST) memotong jawaban di
+   batas "Max rows" proyek -- bawaan 1000 baris -- TANPA galat apa pun.
+   Tabel yang terus bertambah (jadwal, realisasi masterlist, HS Code)
+   akan diam-diam kehilangan baris sesudah baris ke-1000: jadwal terbaru
+   tidak muncul di papan, sisa kuota masterlist salah hitung.
+
+   `susun(opsi)` membuat kueri SEGAR tiap halaman (pembangun kueri
+   Supabase hanya bisa dijalankan sekali) dan WAJIB berurutan tetap.
+   Halaman pertama meminta jumlah barisnya (count: "exact"), jadi batas
+   proyek berapa pun (500, 1000, ...) tetap terbaca habis. Kurang dari
+   satu halaman = satu permintaan saja, seperti dulu. */
+const HALAMAN_BARIS = 1000;
+/* Seperti kueri Supabase sendiri, janjinya TIDAK PERNAH ditolak: galat
+   apa pun (termasuk pengecualian) kembali sebagai { data: null, error }. */
+async function ambilSemuaBaris(susun) {
+  const semua = [];
+  let total = null;
+  try {
+    for (let ke = 0; ke < 500; ke++) {
+      const dari = semua.length;
+      const { data, error, count } = await susun(total == null ? { count: "exact" } : undefined).range(dari, dari + HALAMAN_BARIS - 1);
+      if (error) return { data: null, error };
+      if (total == null && typeof count === "number") total = count;
+      const baris = data || [];
+      for (let i = 0; i < baris.length; i++) semua.push(baris[i]);
+      if (!baris.length || (total != null ? semua.length >= total : baris.length < HALAMAN_BARIS)) break;
+    }
+  } catch (e) {
+    return { data: null, error: e };
+  }
+  return { data: semua, error: null };
+}
+
+// Seluruh jadwal (+ barang & terminal transit); id sebagai pengurut kedua supaya halaman tidak bertumpang
+function ambilSemuaShipments() {
+  return ambilSemuaBaris((opsi) => kueriShipments(opsi).order("id", { ascending: true }));
 }
 
 /* AMBIL LEBIH AWAL. Jadwal tidak bergantung pada profil pengguna --
@@ -51,7 +89,7 @@ function mulaiAmbilShipments() {
   /* Ambil lebih awal hanya mempercepat: kalau gagal dimulai, loadShipments()
      meminta sendiri seperti biasa -- jangan sampai menggagalkan login. */
   try {
-    ambilAwalShipments = kueriShipments().then((hasil) => hasil);
+    ambilAwalShipments = ambilSemuaShipments();
   } catch (e) {
     console.error(e);
     ambilAwalShipments = null;
@@ -69,7 +107,7 @@ async function loadShipments(opsi) {
   const diam = !!(opsi && opsi.diam);
   const nomor = ++muatKe;
   if (!diam) showLoadingSkeleton();
-  const permintaan = ambilAwalShipments || kueriShipments();
+  const permintaan = ambilAwalShipments || ambilSemuaShipments();
   ambilAwalShipments = null;
   const { data: rows, error } = await permintaan;
 
@@ -122,6 +160,8 @@ function selaraskanPrediksi() {
   if (typeof applyPredictionToAll === "function") {
     applyPredictionToAll(data.import);
   }
+  // Pelabuhan di luar daftar kurasi -> data dunia diambil saat senggang (core/data-dunia.js)
+  if (typeof siapkanDataDuniaLatar === "function") siapkanDataDuniaLatar();
 }
 
 /* SESUDAH SIMPAN FORM: jadwal yang barusan tersimpan dimasukkan ke papan
@@ -161,11 +201,17 @@ function siapkanLartasLatar() {
   if (typeof hsCodeSiap !== "function" || (typeof hsCodeRows !== "undefined" && hsCodeRows.length)) return;
   hsCodeSiap().then((ok) => {
     if (!ok || !petaLartasHs().size) return;
-    render();
-    const ringkasan = $("#viewOverview");
-    if (ringkasan && !ringkasan.classList.contains("d-none") && typeof renderOverview === "function") renderOverview();
+    gambarUlangSesudahLatar();
     if (typeof segarkanLartasForm === "function") segarkanLartasForm();
   });
+}
+
+/* Papan & Ringkasan (bila sedang tampil) digambar ulang sesudah data latar
+   siap: Database HS Code (di atas) dan data dunia (core/data-dunia.js). */
+function gambarUlangSesudahLatar() {
+  render();
+  const ringkasan = $("#viewOverview");
+  if (ringkasan && !ringkasan.classList.contains("d-none") && typeof renderOverview === "function") renderOverview();
 }
 
 /* ------------------------------------------------------------------

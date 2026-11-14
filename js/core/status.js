@@ -194,6 +194,21 @@ function ringkasAngkaDelay(daftar) {
   };
 }
 
+/* Nama carrier untuk daftar ringkas. Pelayaran memakai kodenya HANYA bila
+   kode itu memang singkatan yang dipakai orang (HMM, MSC, ONE, OOCL --
+   nama diawali kodenya atau kode = huruf depan tiap kata namanya); kode
+   internal lain (YANGMING, WANHAI, HAPAG) diganti namanya (Yang Ming
+   Marine, Wan Hai Lines, Hapag-Lloyd). Maskapai selalu dengan namanya. */
+function namaRingkasCarrier(c) {
+  if (!c) return "";
+  const kode = String(c.code || ""), nama = String(c.name || "");
+  if (c.kind === "airline" || !kode) return nama || kode;
+  if (!nama) return kode;
+  const awalan = nama.split(/[\s(]+/)[0] === kode;
+  const singkatan = nama.split(/[\s-]+/).filter((k) => /^[A-Za-z]/.test(k)).map((k) => k[0].toUpperCase()).join("") === kode;
+  return awalan || singkatan ? kode : nama;
+}
+
 /* Ringkasan per moda + pelayaran/maskapai yang paling telat.
    opsi.basis: "tiba" (bawaan Import) atau "berangkat" (bawaan Export);
    opsi.hari: jendela ke belakang dari hari ini (bawaan 365). */
@@ -213,9 +228,8 @@ function ringkasDelayKapal(list, opsi) {
     const moda = s.transport === "udara" ? "udara" : "laut";
     per[moda].push(d);
 
-    // Pelayaran dengan kodenya yang ringkas (HMM, MSC); maskapai dengan namanya
     const c = typeof detectCarrier === "function" ? detectCarrier(s) : null;
-    const nama = (c && c.detected && (c.kind === "airline" ? c.name || c.code : c.code || c.name)) || "";
+    const nama = (c && c.detected && namaRingkasCarrier(c)) || "";
     if (!nama || (c && c.kind === "courier")) return;
     if (!perCarrier.has(nama)) perCarrier.set(nama, { nama, moda, angka: [] });
     perCarrier.get(nama).angka.push(d);

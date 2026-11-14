@@ -23,6 +23,33 @@ dalam function/arrow function, bukan langsung di top-level). Urutan di
 aman — tapi kalau mau menambah file baru atau mengubah urutan, perhatikan
 dependency-nya dulu.
 
+## Modul tunda: inti dulu, halaman lain di latar (`core/modul.js`)
+
+index.html hanya memuat INTI -- semua yang dibutuhkan papan jadwal,
+kartu, form jadwal, prediksi, Ringkasan, HS Code, sesi (±1,7 MB).
+Sisanya (±1,8 MB, 43 berkas: Cek PIB/PEB + mesin EXIM, Nomor Dokumen &
+Pengajuan Dana, cetak CIPL / surat, Masterlist, Akun, pembaca dokumen
+impor) ada di daftar `MODUL_TUNDA` dan dimuat `muatModulTunda()`:
+sisipan `<script async=false>` -- dijalankan BERURUTAN seperti dulu di
+index.html -- saat peramban senggang SESUDAH papan tergambar
+(`muatModulTundaLatar`, app-init.js; di layar masuk: selagi sandi
+diketik). Skrip yang selesai diurai sebelum aplikasi mulai mengambil
+jadwal turun ±30% (terukur di CPU 4x lebih lambat).
+
+- Halaman tunda (`MODUL_TUNDA_HALAMAN`: form, Cek PIB/PEB, Nomor
+  Dokumen, Masterlist, Akun) MENUNGGU di `router()` sampai modulnya
+  siap; alamat yang dibuka langsung (#/cek) memicu muatnya sendiri.
+- Kode inti TIDAK BOLEH merujuk nama modul tunda di tingkat atas;
+  pemanggilan di dalam fungsi dijaga `typeof ... === "function"` atau
+  menunggu `muatModulTunda()` (biaya kiriman di panel detail,
+  `bkAmbilDana`). Diuji: inti dimuat sendirian + initApp tanpa galat.
+- Berkas js BARU masuk index.html (inti) ATAU daftar modul -- tes
+  menolak berkas yang tidak dimuat di mana pun / dimuat dua kali.
+  Penanda "sudah termuat" (`modulTundaTermuat`) = fungsi dari berkas
+  TERAKHIR di daftar; ganti bila berkas terakhirnya berganti.
+- qa/dom-test.js memuat modul tunda tepat sebelum app-init.js (satu
+  lingkup global lengkap seperti dulu).
+
 Pengecualian: `core/csp.js`, `core/anti-bingkai.js`, lalu `core/tema.js`
 dimuat di `<head>` SEBELUM lembar gaya (tanpa defer): kebijakan konten
 (CSP) dipasang paling awal, penjaga clickjacking sebelum apa pun tampil,
@@ -33,6 +60,47 @@ tanpa sesi tersimpan, layar masuk tampil seketika (bahasa dari `data-en`,
 bukan kamus) sementara skrip lain masih dimuat.
 Tidak ada `<script>` sebaris sama sekali (CSP menolaknya -- lihat
 "Keamanan").
+
+## Data dunia: bandara, pelabuhan, maskapai & pelayaran (`core/data-dunia.js`)
+
+`assets/data/dunia.json` -- 5.333 bandara berkode IATA (OurAirports,
+domain publik; 4.566 dengan UN/LOCODE resminya) & 17.567 pelabuhan
+UN/LOCODE (UNECE). ±1 MB, ±360 KB terkompres. Bangun ulang:
+`python3 qa/bangun-data-dunia.py <folder-unduhan> assets/data/dunia.json`
+(alamat unduhannya di kepala skrip).
+
+- TIDAK dimuat saat aplikasi dibuka. Diambil sekali (`muatDataDunia`,
+  satu janji untuk semua pemanggil) bila ada jadwal yang asal / tujuan /
+  terminal transitnya tak dikenali daftar kurasi -- diperiksa tiap
+  `selaraskanPrediksi`, diambil saat senggang (`siapkanDataDuniaLatar`)
+  -- atau saat kotak pelabuhan/bandara disentuh. Begitu siap: ingatan
+  resolusi dikosongkan, prediksi & papan diselaraskan sekali bila ada
+  jadwal yang jadi dikenali, form yang terbuka dihitung ulang. Gagal
+  (luring) = daftar kurasi saja, diulang saat kotak disentuh lagi.
+- DAFTAR KURASI (`core/unlocode.js`: alias, pelabuhan induk) SELALU
+  menang -- data dunia langkah terakhir `cariPortEntry` (LOCODE polos
+  dicari sebelum alias: VICTD bukan "vict"). Entri kurasi dilewati saat
+  indeks disusun, jadi tidak ada saran ganda. `code` entri dunia kembali
+  ke entri itu sendiri (pelabuhan = LOCODE, bandara = IATA; IATA yang
+  dipakai daftar kurasi -- TPP, HAM -- diganti LOCODE-nya). Diuji untuk
+  SEMUA entri, dan tiap nama/alias kurasi tetap jatuh ke daftar kurasi.
+- Alias kurasi sampai 4 huruf (sin, can, vict, kobe) harus berdiri
+  sebagai kata, angka boleh menempel (KLIA2, CGK3): Mersin, Sines,
+  Sharjah, Victoria, Kobenhavn tidak lagi terbaca Singapura, Shanghai,
+  VICT, Kobe.
+- Saran form: daftar kurasi tetap di datalist; paling banyak 12 entri
+  dunia yang cocok (kode, LOCODE berawalan, nama/kota berawalan, kata di
+  nama; menurut moda) disisipkan selagi mengetik (`isiSaranDunia`,
+  `option[data-dunia]`, value = `code`) -- 23 ribu pilihan sekaligus
+  memberatkan datalist. Indeks ±30-50 ms sekali; saran <1 ms per ketikan.
+- Kartu & dokumen: `portCodeLabel` memakai LOCODE dunia untuk kode
+  (JFK -> USJFK); `portKotaNegara` memakai kota bandara dari datanya,
+  nama pelabuhan UN/LOCODE utuh ("PORT SAID, EGYPT"), dan nama Inggris
+  negara.js untuk negara di luar `PORT_NEGARA_DOKUMEN` (BRAZIL).
+- Maskapai: 184 kode No. Flight di `carrier-master.js`; pelayaran: nama
+  kapal, lalu awalan SCAC No. Master B/L (`SCAC_PELAYARAN`: MEDU -> MSC,
+  MAEU -> MAERSK). Jadwal PENERBANGAN dunia sengaja tidak dimuat: ±100
+  ribu per hari, berubah tiap hari, hanya tersedia lewat layanan berbayar.
 
 ## Tabel di layar sempit: kartu berlabel
 
@@ -155,7 +223,54 @@ Angka & data ada di `core/prediction-config.js`; hitungannya di
   Manifest buku Export (outward) bukan bukti kedatangan.
 - **Riwayat**: clearance diukur dari barang siap (SPPB sebelum tiba = 0),
   antar ke pabrik dari yang terakhir di antara SPPB & barang siap; LCL
-  yang SPPB-nya terbit lebih dulu tetap menunggu stripping.
+  yang SPPB-nya terbit lebih dulu tetap menunggu PLP & stripping.
+- **Menunggu PIB diajukan** (`pibWait`, sampelKiriman / hitungOpsDariRiwayat
+  / buildDeliverySchedule): barang siap -> PIB diajukan (hari kerja, 0 bila
+  PIB duluan), dipelajari per forwarder lalu rute seperti clearance;
+  bawaan 0 (`operations[].days.*.pibWait`). Clearance diukur dari yang
+  PALING BELAKANG di antara barang siap & PIB, jadi jeda ini dulu tidak
+  ada di angka mana pun -- kiriman yang PIB-nya biasa menyusul selalu
+  diperkirakan terlalu cepat. Langkah "Menunggu PIB diajukan (perkiraan)"
+  hanya selama PIB / Billing belum dicatat; sesudahnya gerbang PIB
+  (tanggal nyata) yang berlaku. Uji mundur pada riwayat tiruan realistis
+  (dua set 6 benih, ±380 kiriman/benih, forwarder dengan kebiasaan PIB
+  berbeda): MAE Estimated Delivery laut 2,92 -> 2,72 dan 2,72 -> 2,55
+  hari, udara 2,05 -> 1,80 dan 2,20 -> 2,05; bias ±-1,1 -> ±-0,5 hari;
+  ETA tidak berubah. Riwayat yang PIB-nya selalu duluan: jeda 0, tanpa
+  langkah -- hasilnya sama persis dengan sebelumnya.
+- **Jadwal layanan per pelayaran** (`LAYANAN_PELAYARAN` →
+  `aturanLayananPelayaran()`, core/prediction-config.js; riset November
+  2026): lama berlayar dibaca dari ROTASI RESMI tiap layanan (hari
+  berangkat → hari tiba), bukan tebakan -- Flexport Atlas (HDMU:KIS,
+  ONEY:CKI, PCIU:KCI, CHNL:KI8CNC, 12AT/GOSU/LNLU:KCI, ONEY:JID), MSC
+  Intra-Asia Network 2025, peserta layanan dari Fluent Cargo. Satu
+  aturan per pelayaran per arah (`searah`), rentang bila pelayarannya ikut
+  beberapa layanan. Busan → Priok: HMM 11 (KIS), KMTC/COSCO 12 (CKI),
+  PIL & CNC 14, Interasia/Gold Star/TS Lines/ZIM/SITC/Namsung 15 (KCI),
+  ONE 11–15, CK Line 11–14, MSC 13–17 (lewat Ningbo; Pertiwi langsung 31);
+  pelayaran lain tetap 10 (PCI ±9 hari). Arah balik berbeda: Priok →
+  Busan HMM 15, KCI 11. Juga Incheon/Gwangyang → Priok, Busan →
+  Surabaya/Semarang, Shanghai/Ningbo/Xiamen/Shekou → Priok (HMM, MSC),
+  Jepang → Priok (ONE JID). Angka contoh spesifikasi lama (HMM 9, ONE 10,
+  MSC 11) diganti. Pelayaran tanpa rotasi terbit (Sinokor, Heung-A,
+  Evergreen, Dongjin) memakai aturan pelabuhan/negara. Riwayat DDI tetap
+  menarik angka ini (dua kiriman per rute & pelayaran). Uji: tiap kode
+  pelayaran & pelabuhan di tabel harus dikenali.
+- **Proses sesudah tiba, FCL vs LCL** (`operations`, buildDeliverySchedule):
+  FCL = bongkar & tumpuk di TPS terminal → PIB/billing/jalur → SPPB → DO +
+  SP2 → truk (clearance 1 + antar 1 hari kerja; dwelling time Priok 2,73
+  hari 2024 menurut LNSW, nasional 3,02 hari 2025 dengan customs clearance
+  0,42 hari -- APBN Kita). LCL menambah langkah **PLP** (kontainer gabungan
+  dipindah ke CFS konsolidator di lini 2, 1 hari KALENDER) sebelum
+  stripping 2 hari kalender -- LCL ±2–4 hari lebih lama dari FCL di
+  Priok. `siapDiurusSesudahTiba()` dipakai mesin & lapis belajar
+  (sampelKiriman) supaya "barang siap" keduanya sama; SPPB yang terbit
+  lebih dulu menunggu PLP & stripping.
+- **Jaringan maskapai** (`AIRLINE_NETWORK`, core/carrier-master.js):
+  ICN–CGK langsung ±7 jam hanya Garuda, Korean Air, Asiana & T'way;
+  maskapai lain singgah di hub-nya. Ditambah 40-an maskapai (Asia,
+  Timur Tengah, Eropa, Cargolux, Ethiopian, Qantas) supaya tebakan
+  Transit (`inferRoute`) ikut bekerja untuk mereka.
 - **Delay kapal** di Ringkasan (`ringkasDelayKapal`, core/status.js;
   `rataDelayKapalHtml`, views/overview-view.js): rata-rata telat dari
   ETA rencana (Import) / ETD rencana (Export), 12 bulan, per moda &
@@ -962,13 +1077,15 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `core/kurs.js` | KURS TERBARU DARI GOOGLE SHEET (sheet "KURS", id & gid di `KURS_SHEET_*`). Membaca lewat gviz (JSON, JSONP, CSV, JSON-gid -- berurutan sampai ada yang berhasil), menyimpan salinan di `exim.kurs.sheet` (segar 10 menit, basi 8 hari). `kursMuat({paksa})` -> `{ok, dariCache, galat, data}` (tidak pernah menolak), `kursCari(kode)`, `kursUsd()`, `kursBandingkan(ndpbmDraft, kode)` (JPY: sheet per 100, NDPBM per 1 yen; `skalaMentah` = draft salah skala), `kursPantau(fn)`, `kursPasang(daftar, opsi)` (kait uji). **Dipakai HANYA di Cek PIB/PEB (checker-view.js) dan tombol Sync kurs (features/kurs-sync.js)** -- dijaga qa/dom-test.js; laporan biaya & dana tetap `kursNdpbm` (customs.js, NDPBM jadwal terdekat tanggalnya) karena sheet tidak bertanggal. Dimuat sesudah customs.js |
 | `features/kurs-sync.js` | Tombol "Sync kurs terbaru" di kotak NDPBM form jadwal. NDPBM jadwal TIDAK PERNAH berubah sendiri (membuka / mengedit / menyimpan tidak menyentuhnya); kurs USD sheet hanya masuk ke kotak saat tombol ditekan, lalu berlaku bila jadwal disimpan. Keterangan di bawah kotak (`#kursSyncInfo`, `data-status` = info / sama / beda / kosong), tombol "Kembalikan <nilai lama>" (`#btnSyncKursKembali`); gagal baca / hanya salinan = isian tak diubah + toast. Dimuat sesudah form-router.js (`kursSyncMulai()` dipanggil saat form dibuka: hanya membaca kurs & menggambar keterangan) |
 | `ui/kepadatan.js` | Tombol Ringkas / Nyaman (`#btnKepadatan`): `html[data-kepadatan]` + `aria-pressed`, diingat di `exim.kepadatan` (penyimpanan diblokir: tetap bisa bolak-balik, keadaan dibaca dari `<html>`). Murni tampilan. Dimuat sesudah sidebar.js |
+| `core/modul.js` | MODUL TUNDA: daftar `MODUL_TUNDA` (43 berkas halaman & fitur yang tidak dibutuhkan papan jadwal, urutan asli index.html), `MODUL_TUNDA_HALAMAN` (halaman yang menunggu di router), `muatModulTunda()` (sisipan `<script async=false>` berurutan, satu janji; tolak = halaman diminta dimuat ulang), `modulTundaTermuat()` (penanda: fungsi berkas terakhir daftar). Dimuat sesudah helpers.js; lihat "Modul tunda" di atas |
 | `core/helpers.js` | Formatter tanggal/angka (angka di layar & cetakan koma ribuan, titik desimal: `fmtRp`, `fmtRpPresisi`, `fmtNum`), escapeHtml, factory objek baru (newItem/newSkbEntry/newStop). Kolom barang CEISA & nama barang: `KOLOM_NAMA_BARANG`, `newItem(mode)` (Kode Barang "-", Merek TANPA MEREK, Tipe TANPA TIPE di Import), `itemDisplayName()` = kolom kiri ke kanan tanpa tanda kosong (`rapiBagianNama`: "-", TANPA MEREK/TIPE/...) dan tanpa bagian yang sudah tertulis -- satu aturan untuk kartu, salinan, laporan, surat & CIPL; `barangBerkolomCeisa()` membedakan barang lama (nama utuh di Uraian). Kode CEISA per barang: `KONDISI_BARANG` / `kodeKondisiBarang()` / `labelKondisiBarang()` (1 = BARU, 2 = BUKAN BARU; bawaan Import 1, Export kosong). Peti kemas di Container/Seal Number: `teksKontainer()` = "NOMOR / UKURAN / TIPE" per kontainer, `muatanDariKode()` (KODE JENIS KONTAINER F/L -> FCL/LCL). Jenis muatan & peti kemas hanya untuk kiriman laut (`muatanKiriman`, `kontainerKiriman`; isian lama di jadwal udara tidak ditampilkan / disalin). Pengecualian: kolom LCL/FCL Daily Import menulis LCL untuk kiriman udara (`muatanDailyImport`, features/copy-templates.js). DOKUMEN PELENGKAP: `KODE_DOKUMEN_CEISA` = nama seluruh kode dokumen pelengkap pabean (`namaDokumenCeisa`; kode di luar daftar tetap terbaca "Dokumen kode 123"); `kenaliDokumenPelengkap(dok, opsi)` menentukan peran satu dokumen -- dokumen pengiriman PI 959 / LS 958 / Polis 530 (`DOK_PENGIRIMAN`), fasilitas per barang (456 SKB PPN, 457 SKB PPh, 912 Masterlist, 860/861 COO), atau dokumen lain; kode umum (911, 999) / tak dikenal lewat label PDF, dan lewat nomornya bila `opsi.tebakNomor`. Satu jadwal: `s.dokPelengkap` = `{ pi: [], ls: [], polis: [], lain: [] }` -- tiap dokumen `{ nomor, tanggal }` (dokumen lain + `kode`), nomor yang sama tidak diulang (`tambahDokumenPengiriman`, `rapikanDokPelengkap`, `dokPelengkapKosong`); `dokPelengkapJadwal(s)` membacanya, atau menyusunnya dari kolom lama (`pecahNomorDokumen`: "A, B" -> dua dokumen); `ringkasDokPelengkap()` = kolom lama (nomor "A, B" + tanggal dokumen pertama) untuk templat salin, Bulk Excel & data lama. `semuaKiriman()` = jadwal kedua buku. `tanggalDariAju()`: tanggal di nomor aju CEISA (karakter 13-20 = tahun-bulan-tanggal, `000020POL85820261016024172` -> 2026-10-16; tanda pisah diabaikan, yang tidak sah -> "") -- dipakai sebagai tanggal PIB/PEB BAWAAN, selalu bisa diubah. Format BEROPSI selalu lewat `angkaLokal()` / `tanggalLokal()` (formatter Intl disimpan) -- `toLocaleString(locale, opsi)` membangun formatter baru tiap panggilan. `kunciAlnum(v)` = SATU kunci pembanding nomor & nama (huruf besar, hanya A-Z 0-9: "PT. Abc-1" -> "PTABC1") -- dipakai nomor aju, BL/AWB, nomor invoice, nama pihak/customer, kode sarana angkut; jangan menulis normalisasi serupa lagi di berkas lain |
 | `core/date-parse.js` | Pembaca tanggal yang DIKETIK: `bacaTanggalKetik(teks)` -> "yyyy-mm-dd" atau "" (murni string, tanpa DOM; diuji di qa/engine-test.js). Hari dulu baru bulan ("5/11/2026" = 5 November; bulan-hari hanya bila hari-bulan mustahil), tahun di depan = ISO, nama bulan Indonesia / Inggris / Romawi, lengkap atau singkatan (Agu, Agt, Ags, Agst, Okt, Des, Mei, Sept, ...), nama hari / "tgl" / jam di belakang diabaikan, tahun dua angka = yang terdekat dengan tahun ini, tahun tak ditulis = tahun ini, tanpa pemisah hanya 8 / 6 / 4 angka (panjang lain tidak ditebak), kata hari ini / besok / kemarin / lusa. Tanggal yang tidak ada ("31/04/2026") dan tahun di luar 1900-2100 DITOLAK, tidak digeser ke bulan lain. `tanggalIsoSah(iso)` = syarat penyetel `.value` kotak tanggal (hanya yyyy-mm-dd baku yang tanggalnya ada). "Hari ini" memakai `todayISO()` bila ada, supaya uji bisa membekukannya |
 | `core/lartas.js` | Lartas per barang (buku Import): `kebutuhanLartas(s, items)` = PI / LS / SNI yang wajib beserta sebabnya -- HS Code bertanda di Database HS Code (`lartasHsCode`, peta per HS disusun ulang tiap `versiHsCode` berubah) atau barang bukan baru (PI, Permendag 24/2025 Pasal 5); `lartasKurang(s, items, dok)` = PI / LS yang wajib tapi belum bernomor. `FTA_INDONESIA` (perjanjian dagang yang berlaku untuk impor, form SKA-nya bila baku) & `petunjukFtaCoo(s, items)` = kalimat petunjuk COO menurut negara asal barang |
 | `core/prediction-mundur.js` | Dibutuhkan di Pabrik: `rencanaMundur(s, butuh)` -> ETA paling lambat (pembagian dua atas `buildDeliverySchedule` kiriman "polos" berute sama, tanpa milestone & tanpa kapal) & ETD paling lambat (ETA - transit terpanjang), beserta langkah daratnya; `statusKebutuhan(s)` -> telat / mepet / aman (Estimated Delivery) atau tepat / telat (In Factory) |
 | `core/state.js` | Satu-satunya tempat state mutable app: `data`, `activeMode`, `draftItems`, `draftStops`, `draftDokPelengkap` (PI, LS, Polis & dokumen lain di form), `currentDetailId`, `currentPage`, `pageSize` |
 | `core/negara.js` | Kode negara ISO 3166-1 alpha-2 (Referensi Negara CEISA, KODE NEGARA ASAL): `DAFTAR_NEGARA` 249 negara (nama Indonesia, nama resmi ISO, nama Inggris lazim). `kodeNegara()` teks apa pun -> kode ("kr", "KOREA, REPUBLIC OF (KR)", "Korea Selatan", "South Korea", "KOREA"), `labelNegara()` "KR — Korea Selatan", saran `#negaraList` untuk kotak Kode Negara Asal (bisa diketik: kode atau nama) |
-| `core/unlocode.js` | Referensi pelabuhan & bandara: satu daftar UN/LOCODE (`KRPUS`, `IDCGK`) yang dikenali dua arah dengan kode pendek gaya IATA (`PUS`, `CGK`): `resolvePortCode()`, `resolveUnlocode()`, `resolvePortCountry()`, `portDisplay()`, `portCodeLabel()`. ALIAS DOKUMEN `portKotaNegara()` = "KOTA, NEGARA" untuk isian yang tercetak (VNSGN -> "HOCHIMINH, VIETNAM", KRPUS -> "BUSAN, KOREA", IDJKT -> "JAKARTA, INDONESIA"): kota induk metro, nama tanpa kata Port/Airport/Terminal/International, ejaan dokumen di `PORT_KOTA_DOKUMEN`, nama negara singkat di `PORT_NEGARA_DOKUMEN` (KR -> KOREA, US -> USA); kode tak dikenal dikembalikan apa adanya. Dipakai Port of Loading & Final Destination Permintaan Nomor Invoice dan cetak CIPL/SI. `portKodeKeAlias()` = isian yang berisi UN/LOCODE POLOS (pengajuan lama menyimpan "KRPUS", atau kode yang diketik) -> aliasnya; teks lain apa adanya ("HOCHIMINH CITY, VIETNAM" yang ditulis sendiri tidak disentuh) -- dipakai form (saat isian berubah & saat pengajuan lama dibuka untuk diubah), kolom riwayat, rincian, dan cetak CI/PL/SI |
+| `core/unlocode.js` | Referensi pelabuhan & bandara: satu daftar UN/LOCODE (`KRPUS`, `IDCGK`) yang dikenali dua arah dengan kode pendek gaya IATA (`PUS`, `CGK`): `resolvePortCode()`, `resolveUnlocode()`, `resolvePortCountry()`, `portDisplay()`, `portCodeLabel()`. Alias sampai 4 huruf harus sekata (`PORT_ALIASES`); di luar daftar ini jatuh ke data dunia (`cariKodeDunia` / `cariEntriDunia`, lihat "Data dunia"). ALIAS DOKUMEN `portKotaNegara()` = "KOTA, NEGARA" untuk isian yang tercetak (VNSGN -> "HOCHIMINH, VIETNAM", KRPUS -> "BUSAN, KOREA", IDJKT -> "JAKARTA, INDONESIA"): kota induk metro, nama tanpa kata Port/Airport/Terminal/International, ejaan dokumen di `PORT_KOTA_DOKUMEN`, nama negara singkat di `PORT_NEGARA_DOKUMEN` (KR -> KOREA, US -> USA); kode tak dikenal dikembalikan apa adanya. Dipakai Port of Loading & Final Destination Permintaan Nomor Invoice dan cetak CIPL/SI. `portKodeKeAlias()` = isian yang berisi UN/LOCODE POLOS (pengajuan lama menyimpan "KRPUS", atau kode yang diketik) -> aliasnya; teks lain apa adanya ("HOCHIMINH CITY, VIETNAM" yang ditulis sendiri tidak disentuh) -- dipakai form (saat isian berubah & saat pengajuan lama dibuka untuk diubah), kolom riwayat, rincian, dan cetak CI/PL/SI |
+| `core/data-dunia.js` | DATA DUNIA (assets/data/dunia.json, dimuat bila perlu): `muatDataDunia()` (sekali, satu janji), `siapkanDataDunia(d)` (indeks kode/IATA/nama; entri kurasi dilewati), `cariKodeDunia(kode)`, `cariEntriDunia(teks)` (langkah terakhir `cariPortEntry`), `cariSaranDunia(teks, moda, maks)` + `isiSaranDunia(kotak)` (saran datalist Asal/Tujuan/transit selagi mengetik), `siapkanDataDuniaLatar()` (dipanggil `selaraskanPrediksi`: ambil saat senggang bila ada pelabuhan jadwal tak dikenali). Dimuat sesudah unlocode.js |
 | `core/mapping.js` | Konversi baris Supabase (snake_case) <-> objek JS (camelCase). Barang: kolom CEISA `kode_barang`, `nama_barang` (Uraian), `merek`, `tipe`, `ukuran`, `spesifikasi_lain`, `kode_kondisi_barang`, `kode_negara_asal`; barang lama yang masih punya Pattern / Size / Mold No di kolom lamanya dilebur ke Uraian saat dimuat (`uraianBarangTersimpan`), kolom lama tidak ditulis lagi. Pengiriman: `pi_date`, `ls_date`, `polis_asuransi`, `polis_asuransi_date` (Tanggal PI & LS, Polis Asuransi -- migration-tanggal-pi-ls-polis.sql); `dokumen_pelengkap` jsonb = `s.dokPelengkap` (PI, LS, Polis lebih dari satu + dokumen lain -- migration-dokumen-pelengkap.sql), kolom lama tetap ditulis sebagai ringkasannya; jadwal sebelum kolom itu ada dibaca dari kolom lama. Barang: `pi_nomor` & `pi_no_item` (PI barang ini & nomor urutnya di dokumen PI). Barang dimuat menurut kolom `urutan` (`urutkanBarisBarang`; migration-urutan-barang.sql), bukan urutan jawaban database; baris tanpa urutan di belakang, urutan jawabannya |
 | `core/referensi-ceisa.js` | `REF_CEISA`: tabel Referensi CEISA 4.0 ([kode, NAMA]) untuk pilihan Data PIB/PEB & nama tercetak di cetak draft. Dimuat sebelum core/data-pabean.js |
 | `core/data-pabean.js` | Data PIB/PEB: daftar definisi isian per tab CEISA (`DP_GRUP`, `DP_PIHAK`, `DP_PUNGUTAN_*`, `DP_BARANG`; `dok` pib/peb), daftar pilihan (`DP_PILIHAN` dari `REF_CEISA`), kode <-> tampilan (`dpKodePilihan`, `dpNamaPilihan`), `rapikanDataPabean` (data lama dipindah ke bentuk berkode), nilai bawaan (`dpBawaan`, `terapkanBawaan`, `dpEfektif`; alamat & negara shipper yang dikenal `DP_PEMASOK` / `dpPemasok`), nilai dari jadwal (`dpNilaiHitung`, `dpDokumenJadwal`), baris datar untuk Bulk Excel (`dpKeBaris` / `dpDariBaris`, versi barang `dpBarangKeBaris` / `dpBarangDariBaris`) |
@@ -986,7 +1103,7 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `ui/search-clear.js` | Tombol hapus (×) di setiap kotak cari (`.search-clear[data-cari-hapus]`): mengosongkan lalu mengirim event `input` supaya saringan halamannya berjalan sendiri. Kapan tampil diurus CSS (`:placeholder-shown`) |
 | `ui/date-input.js` | Kotak tanggal yang bisa diketik dengan format apa pun. SEMUA `<input type="date">` -- di index.html, dibuat render() / showPrompt() / baris dinamis, atau muncul belakangan (MutationObserver) -- dijadikan `type="text"` + `data-kotak-tanggal` (placeholder dd-mm-yyyy); kode pemanggil tetap menulis `type="date"`. `el.value` TETAP "yyyy-mm-dd" dibaca maupun ditulis (penyetel ketat seperti kotak bawaan: bentuk lain dikosongkan). Dirapikan saat keluar kotak / Enter / change, bukan tiap ketikan; `input` & `change` hanya menembak SAAT TANGGALNYA BERUBAH (ketikan setengah jalan tidak sampai ke pendengar mana pun, peristiwa buatan kode lewat apa adanya). Tidak terbaca -> dikembalikan ke tanggal sebelumnya (BUKAN dikosongkan) + garis merah + toast; mengosongkan kotak sah. Ikon kalender di ujung kanan (gambar latar, css/date-input.css) atau Alt+Panah-bawah / F4 membuka kalender bawaan peramban lewat `<input type="date">` pembantu sesaat. Pengecualian: `data-kotak-tanggal-off` (#filterDateFrom/To -- sumber kebenaran pemilih rentang, tetap type=date) dan `data-kotak-tanggal-tanpa-ikon` (kotak Dari/Sampai di panel kalender pemilih rentang). Letak kalender: kotak pembantu `position:fixed` DIPATOKKAN ke patokan yang DIUKUR (`ktAsalPatokan` -- penanda sekali pakai di sebelah kotak; leluhur ber-`contain`/`content-visibility:auto` seperti `.ship-card` membuat `fixed` berpatokan pada leluhur itu, bukan layar), gayanya dipasang SEBELUM disisipkan, dan `showPicker()` ditunda dua bingkai (`ktBukaKalenderSetelahTergambar`, penghitung `_bukaKe` membatalkan pembukaan yang basi) supaya peramban menempelkan kalender pada letak yang sudah tergambar. KOTAK YANG DIGAMBAR ULANG DI TENGAH KLIK: merapikan ketikan menembakkan `change` dan daftar jadwal langsung menggambar ulang kartunya (innerHTML), jadi kotak yang diklik sudah dibuang -- kalender dibuka untuk KEMBARANNYA (`ktKembaran`: kunciFokus() di ui/fokus.js, kotak yang belum dirapikan MutationObserver dirapikan saat itu juga), begitu juga pilihan kalender & fokus sesudahnya. Klik yang tak pernah sampai (ketikan di kotak LAIN dirapikan saat fokus berpindah -> kartu digambar ulang di antara pointerdown & click) ditangkap di pointerup bila penunjuk dilepas di atas ikon kembarannya. Dulu kalender baru muncul pada klik kedua. Dicoba di Chromium saja; Safari/Firefox/iOS belum |
 | `core/customs.js` | Perhitungan CIF/FOB/BM+PDRI (satu-satunya sumber kebenaran). `bulatkanBm()` = aturan tunggal BM ke atas ke ribuan, dipakai semua jalan masuk BM (hitungan tarif, draft CEISA, PIB PDF, Bulk Import, form). `hitungPungutanFasilitas()` = tabel pungutan PIB per seri menurut tarif & fasilitas barang (tab Pungutan Data PIB; kolom Dibayar = Bea & Pajak Impor tab Kepabeanan & Biaya) |
-| `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi. `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL. Hasil deteksi diingat per teks (`ingatDeteksi`) |
+| `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi (184 maskapai menurut kode No. Flight; pelayaran dari nama kapal, lalu awalan SCAC No. Master B/L -- `detectShippingLineDariBl`). `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL. Hasil deteksi diingat per teks (`ingatDeteksi`) |
 | `core/route-model.js` | Progres lane pengiriman + rute transit multi-terminal + aturan auto-arrive. Label simpul transit: baris kedua (`assignLabelRows`) hanya untuk label yang berdekatan -- wadahnya setinggi satu baris kecuali ada yang memakai baris kedua (`.port-labels--dua-baris`) |
 | `render/cards.js` | Render kartu pengiriman (expanded & collapsed). Tag PI: "PI × 2" untuk lebih dari satu dokumen PI (`tagPiHtml`); sel peti kemas hanya untuk kiriman laut (`infoKontainerHtml`). Tag Dibutuhkan di Pabrik (`tagKebutuhanHtml`: telat merah / mepet kuning / aman) & lartas yang belum bernomor (`tagLartasHtml`) di baris tag kartu aktif. Baris tanggal (ETD / ETA / Estimated Delivery, `.date-strip`) = kolom selebar isinya (`repeat(auto-fill, minmax(200px, 224px))`, card.css) rata kiri berjarak tetap 28px -- bukan 1fr yang merentangkan tanggal sejauh lebar kartu; isian Delay Update di bawahnya selebar & sejajar kolom yang sama (`.delay-strip-fields`, lebar-isian.css). JADWAL DELAY TERBEDAKAN SEKALI PANDANG: ETD/ETA rencana awal yang sudah diganti Update ETD/ETA dicoret & berlabel "· rencana awal" (`date-field--diganti`, opsi `diganti` di `kotakTanggalKartu`, keterangannya di tooltip), tanggal update merah tegas di kotak bertinta merah muda (status Delay; revisi yang tertinggal cukup tebal), selisih "+N hari" & lencana "Mundur N hari" merah, panel detail mencoret rencana (`.tgl-rencana`). Kartu terkuncup: tanggal tibanya utuh di ponsel (`.collapsed-meta b` nowrap) -- barisnya yang turun. Nama barang untuk tampilan Ringkas di baris tanggal (`barangRingkasHtml`, tersembunyi di Nyaman); lencana + progres dokumen dalam satu wadah `.ship-dokumen` (`cardDokumenHtml`) yang di Ringkas menjadi kisi lencana kiri / hitungan kanan / stepper. |
 | `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch. Teks pencarian (`teksCariJadwal`) hanya dirakit saat ada kata kunci; lebar pil status & kartu di luar layar diurus CSS (`field-sizing`, `content-visibility`). Saat daftar digambar ulang posisi gulir tidak melompat (tinggi kartu diwariskan + penanda gulir) dan fokus/isi kotak yang sedang diketik ikut bertahan. Kembali dari form jadwal (Simpan / Batal): daftar kembali ke posisi gulir sebelum form dibuka (`catatPosisiDaftar` / `pulihkanPosisiDaftar`). Penanda gulir hanya diukur bila halaman SUDAH tergulir (`halamanTergulir`, dari event `scroll` pasif): membaca `scrollY` / `getBoundingClientRect()` di tengah render memaksa tata letak sinkron (dulu terjadi tiap muat halaman) |
