@@ -133,16 +133,25 @@ $("#fBM").addEventListener("change", (e) => {
    yang SAMA dengan hitungan otomatis -- menurut fasilitas & tarif barang,
    atau cara lama tanpa keduanya (jadwal yang disimpan sebelum Bea & Pajak
    Impor mengikuti tab Pungutan Data PIB) -- juga otomatis: ikut dihitung
-   ulang. Selain itu dianggap diketik / diimpor dari dokumen dengan
-   sengaja (mis. angka PIB) dan tidak disentuh. */
+   ulang. Begitu pula hitungan SEBELUM aturan "barang ber-COO = BM 0%"
+   (`abaikanCoo`): jadwal lama yang tersimpan dengan BM 5% untuk barang
+   ber-COO ikut dihitung ulang jadi BM 0% saat dibuka. Selain itu
+   dianggap diketik / diimpor dari dokumen dengan sengaja (mis. angka
+   PIB) dan tidak disentuh. */
 function initAutoDutyFlags() {
   const dasar = dasarPungutanForm();
   const polos = Object.assign({}, dasar, { items: dasar.items.map((it) => ({ qty: it.qty, harga: it.harga })) });
+  const tanpaCoo = Object.assign({}, dasar, { abaikanCoo: true });
   const el = { BM: $("#fBM"), PPN: $("#fPPN"), PPh: $("#fPPH") };
   const isi = (e) => nilaiKotakAngka("#" + e.id);
-  const calon = (bmManual) => [dasar, polos].map((o) => hitungPungutanFasilitas(Object.assign({ bmManual }, o)).tabel);
+  const calon = (bmManual) => [dasar, tanpaCoo, polos].map((o) => hitungPungutanFasilitas(Object.assign({ bmManual }, o)));
+  /* PPN cara lama -- dibulatkan dari jumlahnya, sebelum PPN dibulatkan
+     per seri seperti CEISA: jadwal yang tersimpan dengan angka itu tetap
+     otomatis (ikut dihitung ulang), bukan dianggap diketik. */
+  const ppnLama = (h) => Math.floor(Math.round(h.seri.filter((x) => !x.bebas.PPN).reduce((a, x) => a + (x.nilaiImpor * TARIF_PPN_IMPOR) / 100, 0) * 1e4) / 1e4);
   const otomatis = (j, daftar) =>
-    el[j].value.trim() === "" || daftar.some((tb) => tb[j][PUNGUTAN_KOLOM_DIBAYAR] === isi(el[j]));
+    el[j].value.trim() === "" ||
+    daftar.some((h) => h.tabel[j][PUNGUTAN_KOLOM_DIBAYAR] === isi(el[j]) || (j === "PPN" && ppnLama(h) === isi(el[j])));
   const bmOtomatis = otomatis("BM", calon(null));
   // PPN & PPh otomatis dulu dihitung dari BM yang berlaku -- yang diketik sendiri juga
   const dasarPajak = calon(bmOtomatis ? null : isi(el.BM));

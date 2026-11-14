@@ -38,6 +38,14 @@
    diajukan dan Manifest draft belum menjadi BC 1.1, jadi keduanya bukan
    milestone prediksi (milestoneDateOf melewati entri draft).
 
+   MEKANISME YANG SAMA DIPAKAI untuk dua tahap yang kenyataannya juga
+   berjalan dua langkah, dengan kosakatanya sendiri (`kata`, kataTahap):
+   Billing -- diterima dulu, dibayar menyusul (draft = belum dibayar) --
+   dan Berths / ATA -- jadwal sandar dari forwarder dulu, kejadian aktual
+   menyusul (draft = estimasi). Keduanya bukan milestone prediksi selama
+   masih draft, jadi billing yang belum dibayar dan estimasi sandar tidak
+   menggeser perkiraan siapa pun.
+
    LAMPIRAN. Tiap tahap berkas bisa membawa berkasnya (`berkas`, lihat
    js/data/lampiran.js) -- draft maupun asli, ditandai versinya. */
 
@@ -103,6 +111,68 @@ const DOC_STEP_MANIFEST = {
     ),
 };
 
+/* BILLING — billing diterima belum tentu langsung dibayar.
+
+   Kode billing terbit lebih dulu; bayarnya menyusul, sering menunggu
+   Pengajuan Dana cair. Karena itu tahap ini mengenal DUA keadaan, dengan
+   mekanisme yang sama seperti Draft / Asli (`bisaDraft`):
+     - "Billing diterima — belum dibayar" = `draft: true` (tanggal billing
+       diterima). Dihitung terkumpul & digambar jam pasir, tapi BELUM
+       milestone prediksi (milestoneDateOf melewati entri draft): gerbang
+       Billing baru lewat setelah dibayar;
+     - "Sudah dibayar" = tanggal bayar, milestone prediksi seperti
+       sebelumnya. Entri lama yang tersimpan tanpa status artinya sudah
+       dibayar ("Billing / bukti bayar"), jadi maknanya tidak berubah.
+   Tanggal billing diterima disimpan di `tglDraft` begitu bayarnya dicatat.
+
+   `kata`: kosakata dua keadaan itu -- satu sumber untuk kotak tahap,
+   tooltip, kepala stepper, Ringkasan, dan panel detail (kataTahap()).
+   `perluDikejar`: billing yang belum dibayar jadi tugas di Ringkasan. */
+const DOC_STEP_BILLING = {
+  key: "billing",
+  label: "Billing",
+  full: () => tt("Billing / bukti bayar", "Billing / proof of payment"),
+  bisaDraft: true,
+  perluDikejar: true,
+  kata: () => ({
+    status: tt("Status billing", "Billing status"),
+    opsiDraft: tt("Billing diterima — belum dibayar", "Billing received — not paid yet"),
+    opsiAsli: tt("Sudah dibayar — bukti bayar ada", "Paid — proof of payment in hand"),
+    tglDraft: tt("Tanggal billing diterima", "Billing received date"),
+    tglAsli: tt("Tanggal bayar", "Payment date"),
+    keadaan: tt("belum dibayar", "not paid yet"),
+    detail: tt("belum dibayar", "not paid yet"),
+    draftSaat: tt("billing diterima", "billing received"),
+    asliSaat: tt("dibayar", "paid"),
+    menunggu: tt("menunggu pembayaran", "awaiting payment"),
+    begitu: tt("Begitu billingnya dibayar", "Once the billing is paid"),
+    baru: (nama) =>
+      tt(
+        `${nama}. Billing yang baru diterima dicatat sebagai "belum dibayar"; begitu dibayar, ubah ke "sudah dibayar" dan isi tanggal bayarnya — tanggal itulah yang dipakai mesin prediksi.`,
+        `${nama}. A billing just received is recorded as "not paid yet"; once it is paid, change it to "paid" and enter the payment date — that date is what the prediction engine uses.`,
+      ),
+  }),
+};
+
+/* SPJM — Surat Pemberitahuan Jalur Merah.
+
+   Terbit hanya kalau PIB-nya jatuh ke JALUR MERAH (pemeriksaan fisik &
+   dokumen), sebelum SPPB. Jalur lain tidak punya tahap ini, jadi tahapnya
+   BERSYARAT (`berlaku`, disaring docStepsFor() seperti Asuransi): muncul
+   begitu jalur Merah dicatat di PIB / Billing / SPPB (docIsianJalur,
+   jalurOf), hilang lagi kalau jalurnya dikoreksi. Entri yang sudah
+   tercatat TIDAK dihapus saat hilang -- ia muncul kembali bila jalurnya
+   kembali Merah. Tahap berkas biasa: tanggal diterima + lampiran. */
+function pakaiSpjm(s) {
+  return typeof jalurOf === "function" && jalurOf(s) === "merah";
+}
+const DOC_STEP_SPJM = {
+  key: "spjm",
+  label: "SPJM",
+  full: () => tt("Surat Pemberitahuan Jalur Merah (SPJM)", "Red Lane Notification (SPJM)"),
+  berlaku: pakaiSpjm,
+};
+
 const DOC_STEPS_IMPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
   { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
@@ -122,14 +192,24 @@ const DOC_STEPS_IMPORT = [
      sandar, secepat apa pun dokumennya diurus.
 
      `peristiwa`: bukan berkas yang "diterima" -- tooltip & kotak
-     isiannya cukup menyebut tanggalnya. */
-  { key: "berth", label: berthLabel, full: berthFull, peristiwa: true },
+     isiannya cukup menyebut tanggalnya.
+
+     ESTIMASI ATAU AKTUAL. Jadwal sandar dari forwarder / agen biasanya
+     sudah ada jauh sebelum kapalnya benar-benar sandar, dan belum tentu
+     tepat. Maka tahap ini mengenal dua keadaan (`bisaDraft`, kosakata di
+     kataBerth): "Estimasi" = `draft: true` (tanggalnya boleh ke depan) dan
+     "Aktual" = kejadian yang sudah terjadi. HANYA yang Aktual dipakai
+     mesin prediksi dan kiriman lain di kapal yang sama -- estimasi
+     melewati milestoneDateOf, seperti draft yang lain. Entri lama tanpa
+     status artinya Aktual. */
+  { key: "berth", label: berthLabel, full: berthFull, peristiwa: true, bisaDraft: true, kata: kataBerth },
   /* `full` berupa FUNGSI, bukan teks: daftar ini dibuat sekali saat
      halaman dimuat. Teks biasa -- termasuk hasil t() -- akan terkunci
      di bahasa saat itu, dan ganti bahasa tidak lagi mengubahnya.
      stepText() memanggil fungsinya saat ditampilkan. */
   { key: "pib", label: "PIB", full: () => t("c.pemberitahuan.impor.barang"), bisaDraft: true, labelDraft: labelDraftPabean, labelAsli: labelAsliPabean, keteranganDraft: keteranganDraftPabean },
-  { key: "billing", label: "Billing", full: () => tt("Billing / bukti bayar", "Billing / proof of payment") },
+  DOC_STEP_BILLING,
+  DOC_STEP_SPJM,
   { key: "sppb", label: "SPPB", full: () => tt("Surat Persetujuan Pengeluaran Barang", "Goods Release Approval (SPPB)") },
 ];
 
@@ -197,6 +277,54 @@ function berthFull(s) {
   return s && s.transport === "udara"
     ? tt("Pesawat tiba di bandara tujuan (ATA)", "Aircraft arrived at the destination airport (ATA)")
     : tt("Kapal sandar di pelabuhan tujuan / berths (ATA)", "Vessel berthed at the destination port (ATA)");
+}
+
+/* Kosakata dua keadaan tahap kedatangan: Estimasi (draft) / Aktual.
+   Kalimatnya mengikuti moda -- kapal sandar, pesawat tiba.
+
+   Estimasi adalah perkiraan, bukan kejadian: tanggalnya BOLEH KE DEPAN
+   (`masaDepan`) dan bawaannya ETA jadwal (`bawaan`) -- tinggal disesuaikan
+   dengan kabar terakhir dari forwarder. Tanggal Aktual tetap tanggal
+   kejadiannya (label bawaan tahap: "Tanggal Berths" / "Tanggal ATA"). */
+function kataBerth(s) {
+  const udara = !!(s && s.transport === "udara");
+  return {
+    status: tt("Status kedatangan", "Arrival status"),
+    opsiDraft: udara
+      ? tt("Estimasi — jadwal tiba, belum aktual", "Estimate — scheduled arrival, not actual yet")
+      : tt("Estimasi — jadwal sandar, belum aktual", "Estimate — scheduled berthing, not actual yet"),
+    opsiAsli: udara
+      ? tt("Aktual — pesawat sudah tiba", "Actual — aircraft has arrived")
+      : tt("Aktual — kapal sudah sandar", "Actual — vessel has berthed"),
+    tglDraft: udara
+      ? tt("Tanggal estimasi tiba", "Estimated arrival date")
+      : tt("Tanggal estimasi sandar", "Estimated berthing date"),
+    tglAsli: "",
+    keadaan: tt("estimasi", "estimate"),
+    detail: tt("estimasi, menunggu aktual", "estimate, awaiting the actual date"),
+    draftSaat: tt("estimasi", "estimated"),
+    asliSaat: "",
+    menunggu: tt("menunggu aktual", "awaiting the actual date"),
+    begitu: udara
+      ? tt("Begitu pesawat benar-benar tiba", "Once the aircraft has actually arrived")
+      : tt("Begitu kapal benar-benar sandar", "Once the vessel has actually berthed"),
+    masaDepan: true,
+    bawaan: (status) => (status === "draft" && s ? s.etaUpdate || s.eta || "" : ""),
+    hint: (status, dariBawaan) =>
+      status !== "draft"
+        ? ""
+        : dariBawaan
+          ? tt(
+              "Perkiraan, bukan kejadian — tanggalnya boleh ke depan. Terisi dari ETA jadwal; ubah sesuai kabar terakhir dari forwarder.",
+              "An estimate, not an event — the date may be in the future. Filled from the schedule's ETA; change it to the forwarder's latest news.",
+            )
+          : tt("Perkiraan, bukan kejadian — tanggalnya boleh ke depan.", "An estimate, not an event — the date may be in the future."),
+    baru: (nama) =>
+      tt(
+        `${nama}. Jadwal dari forwarder / agen dicatat sebagai Estimasi (tanggalnya boleh ke depan); begitu benar-benar tiba, ubah ke Aktual dan isi tanggal kejadiannya — hanya yang Aktual dipakai mesin prediksi dan kiriman lain di kapal yang sama.`,
+        `${nama}. A schedule from the forwarder / agent is recorded as an Estimate (the date may be in the future); once it has actually arrived, change it to Actual and enter the real date — only Actual is used by the prediction engine and by other shipments on the same vessel.`,
+      ),
+  };
 }
 
 /* Label & nama panjang B/L mengikuti moda pengangkut. */
@@ -317,6 +445,15 @@ function stepText(nilai, s) {
   return typeof nilai === "function" ? nilai(s) : nilai;
 }
 
+/* Kosakata tahap berstatus yang BUKAN Draft / Asli biasa (`kata`:
+   Billing belum dibayar / dibayar, Berths estimasi / aktual), atau null
+   untuk tahap lain -- yang tetap memakai kalimat Draft / Asli di bawah.
+   Dibaca saat ditampilkan, bukan disimpan: bahasa & moda bisa berubah. */
+function kataTahap(st, s) {
+  return st && typeof st.kata === "function" ? st.kata(s) : null;
+}
+const kapitalAwal = (teks) => String(teks || "").charAt(0).toUpperCase() + String(teks || "").slice(1);
+
 function docProgressOf(s) {
   const p = s && s.docProgress;
   return p && typeof p === "object" && !Array.isArray(p) ? p : {};
@@ -351,9 +488,22 @@ function docStepsDraft(s) {
     .map((st) => ({ st, entri: docStepEntri(s, st) }))
     .filter((x) => x.entri && !x.entri.skipped && x.entri.draft);
 }
-// Label tahap yang masih draft ("B/L", "COO") -- Ringkasan & antrean tindakan
+/* Label berkas yang masih DRAFT ("B/L", "COO") -- Ringkasan & antrean
+   tindakan. Tahap berkosakata sendiri (Billing belum dibayar, Berths
+   estimasi) bukan draft berkas: Billing punya tugasnya di bawah, Berths
+   tidak ada yang bisa "dikejar" (kedatangan terjadi sendiri). */
 function draftDocs(s) {
-  return docStepsDraft(s).map((x) => stepText(x.st.label, s));
+  return docStepsDraft(s)
+    .filter((x) => !kataTahap(x.st, s))
+    .map((x) => stepText(x.st.label, s));
+}
+/* Label tahap yang sudah diterima tapi BELUM DIBAYAR (`perluDikejar`:
+   Billing) -- tugas sendiri di Ringkasan, karena barang tidak bisa
+   keluar sebelum dibayar. */
+function belumDibayarDocs(s) {
+  return docStepsDraft(s)
+    .filter((x) => x.st.perluDikejar)
+    .map((x) => stepText(x.st.label, s));
 }
 
 /* Tahap yang dilewati tidak dihitung sebagai "terkumpul", dan tidak
@@ -400,13 +550,20 @@ function docStepJudul(s, st, entri, kini) {
         (entri.sumber === "ceisa" ? tt(" · dari impor dokumen pabean", " · from the customs document import") : "") +
         (nLampiran ? tt(` · ${nLampiran} lampiran`, ` · ${nLampiran} attachment${nLampiran === 1 ? "" : "s"}`) : "") +
         (by ? tt(` · dicatat oleh ${by}`, ` · recorded by ${by}`) : "");
+      // Billing / Berths: kosakata keadaannya sendiri (belum dibayar, estimasi)
+      const k = kataTahap(st, s);
       if (entri.draft) {
+        if (k) return `${nama} — ${k.draftSaat} ${tgl} · ${k.menunggu}${oleh}`;
         return tt(`${nama} — draft diterima ${tgl} · menunggu asli${oleh}`, `${nama} — draft received ${tgl} · awaiting the original${oleh}`);
       }
-      const draft = entri.tglDraft ? tt(` (draft ${fmtDate(entri.tglDraft)})`, ` (draft ${fmtDate(entri.tglDraft)})`) : "";
-      return st.peristiwa
-        ? `${nama} — ${tgl}${oleh}`
-        : tt(`${nama} — diterima ${tgl}${draft}${oleh}`, `${nama} — received ${tgl}${draft}${oleh}`);
+      const draft = entri.tglDraft
+        ? k
+          ? ` (${k.draftSaat} ${fmtDate(entri.tglDraft)})`
+          : tt(` (draft ${fmtDate(entri.tglDraft)})`, ` (draft ${fmtDate(entri.tglDraft)})`)
+        : "";
+      if (st.peristiwa) return `${nama} — ${tgl}${k ? draft : ""}${oleh}`;
+      if (k) return `${nama} — ${k.asliSaat} ${tgl}${draft}${oleh}`;
+      return tt(`${nama} — diterima ${tgl}${draft}${oleh}`, `${nama} — received ${tgl}${draft}${oleh}`);
     }
     const belum = st.peristiwa
       ? tt("tanggalnya belum dicatat", "date not recorded")
@@ -504,13 +661,19 @@ function docStepHtml(s) {
   const berikut = docNextIndex(s);
 
   let jumlahDraft = 0;
+  // Billing belum dibayar / Berths estimasi: jam pasir juga, tapi penandanya sendiri di kepala
+  const menungguKhusus = [];
   const langkah = docStepsFor(s).map((st, i) => {
     const entri = docStepEntri(s, st);
     const dilewati = !!(entri && entri.skipped);
     const sudah = !!entri && !dilewati;
     // Draft disetujui, aslinya ditunggu: terkumpul, tapi jam pasir -- bukan centang
     const draft = sudah && !!entri.draft;
-    if (draft) jumlahDraft++;
+    if (draft) {
+      const k = kataTahap(st, s);
+      if (k) menungguKhusus.push({ st, k });
+      else jumlahDraft++;
+    }
     const kini = i === berikut;
     const judul = docStepJudul(s, st, entri, kini);
     const nLampiran = sudah ? rapikanBerkas(entri.berkas).length : 0;
@@ -555,7 +718,12 @@ function docStepHtml(s) {
       <span class="docsteps-judul"><i class="bi bi-files" aria-hidden="true"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
       <span class="docsteps-hitung"><span class="docsteps-count">${hitung.selesai} / ${hitung.berlaku}</span>${
         jumlahDraft ? `<span class="docsteps-draft" title="${escapeAttr(tt("Draft sudah disetujui, aslinya masih ditunggu", "Draft approved, the original is still awaited"))}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> ${jumlahDraft} draft</span>` : ""
-      }${
+      }${menungguKhusus
+        .map(
+          ({ st, k }) =>
+            `<span class="docsteps-draft" title="${escapeAttr(`${stepText(st.full, s)} — ${k.menunggu}`)}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> ${escapeHtml(stepText(st.label, s))}: ${escapeHtml(k.keadaan)}</span>`,
+        )
+        .join("")}${
         tahapBerikut ? `<span class="docsteps-next">${tt("Berikutnya", "Next")}: <b>${escapeHtml(stepText(tahapBerikut.label, s))}</b></span>` : ""
       }</span>
     </div>
@@ -569,9 +737,12 @@ function docStepHtml(s) {
    Menekan tahap mana pun membuka SATU kotak yang sama:
      - status (tahap yang mengenal draft / boleh dilewati):
          Draft (disetujui, menunggu asli) / Asli / Tidak dipakai;
+         Billing: diterima belum dibayar / sudah dibayar;
+         Berths: estimasi / aktual (kataTahap);
      - tanggal: tanggal DITERIMA berkasnya (draft: tanggal draftnya;
        Manifest/PIB/Billing/SPPB: tanggal dokumen yang dipakai prediksi;
-       Berths/ATA & Sailing/ATD: tanggal kejadiannya);
+       Billing dibayar: tanggal bayar; Berths/ATA & Sailing/ATD: tanggal
+       kejadiannya, Berths estimasi: tanggal perkiraan -- boleh ke depan);
      - jalur PIB (PIB terdaftar, Billing, SPPB);
      - lampiran berkas (tahap berkas, bukan kejadian).
    Tahap yang sudah terisi dibuka dengan isiannya, plus tombol "Batalkan
@@ -608,7 +779,10 @@ function docIsianJalur(s) {
       { value: "", label: tt("Belum diketahui", "Not known yet") },
       ...(PREDICTION_CONFIG.customsLanes || []).map((l) => ({ value: l.key, label: l.label })),
     ],
-    hint: tt("Dipakai memperkirakan lama clearance sampai SPPB.", "Used to estimate how long clearance takes until SPPB."),
+    hint: tt(
+      "Dipakai memperkirakan lama clearance sampai SPPB. Jalur Merah menambah tahap SPJM sebelum SPPB.",
+      "Used to estimate how long clearance takes until SPPB. The Red lane adds an SPJM step before SPPB.",
+    ),
   };
 }
 
@@ -627,9 +801,11 @@ function docProgresDenganJalur(progres, stepKey, jalur, entri) {
   return baru;
 }
 
-function docPeriksaTanggal(tanggal) {
+/* `bolehMasaDepan`: tanggal PERKIRAAN (estimasi sandar) memang jatuh ke
+   depan; tanggal kejadian & berkas diterima tidak boleh sesudah hari ini. */
+function docPeriksaTanggal(tanggal, bolehMasaDepan) {
   if (!tanggal) return tt("Tanggal wajib diisi.", "The date is required.");
-  if (tanggal > todayISO()) return tt("Tanggal tidak boleh sesudah hari ini.", "The date cannot be later than today.");
+  if (!bolehMasaDepan && tanggal > todayISO()) return tt("Tanggal tidak boleh sesudah hari ini.", "The date cannot be later than today.");
   return "";
 }
 
@@ -642,11 +818,12 @@ function statusEntriTahap(entri) {
 
 /* Pilihan status sebuah tahap. Kosong = tahap tanpa pilihan (hanya
    tanggal): Billing, SPPB, NPE, Tally, kejadian. */
-function opsiStatusTahap(st) {
+function opsiStatusTahap(st, s) {
   const opsi = [];
+  const k = kataTahap(st, s);
   if (st.bisaDraft) {
-    opsi.push({ value: "draft", label: st.labelDraft ? st.labelDraft() : tt("Draft — disetujui, menunggu asli", "Draft — approved, awaiting the original") });
-    opsi.push({ value: "ada", label: st.labelAsli ? st.labelAsli() : tt("Asli / final", "Original / final") });
+    opsi.push({ value: "draft", label: k ? k.opsiDraft : st.labelDraft ? st.labelDraft() : tt("Draft — disetujui, menunggu asli", "Draft — approved, awaiting the original") });
+    opsi.push({ value: "ada", label: k ? k.opsiAsli : st.labelAsli ? st.labelAsli() : tt("Asli / final", "Original / final") });
   } else if (st.optional) {
     opsi.push({ value: "ada", label: tt("Sudah diterima", "Received") });
   }
@@ -663,15 +840,23 @@ function ringkasanEntriTahap(s, st, entri) {
   if (entri.skipped) return tt("Ditandai tidak dipakai untuk pengiriman ini.", "Marked as not used for this shipment.");
   const tgl = entri.date ? fmtDate(entri.date) : "";
   const oleh = entri.by ? tt(` · dicatat oleh ${entri.by}`, ` · recorded by ${entri.by}`) : "";
+  const k = kataTahap(st, s);
   if (entri.draft) {
-    const asli = (opsiStatusTahap(st).find((o) => o.value === "ada") || {}).label || tt("Asli / final", "Original / final");
+    const asli = (opsiStatusTahap(st, s).find((o) => o.value === "ada") || {}).label || tt("Asli / final", "Original / final");
+    if (k) {
+      return tt(
+        `${kapitalAwal(k.draftSaat)} ${tgl}${oleh}. ${k.begitu}, ubah statusnya ke "${asli}".`,
+        `${kapitalAwal(k.draftSaat)} ${tgl}${oleh}. ${k.begitu}, change its status to "${asli}".`,
+      );
+    }
     return tt(
       `Draft diterima ${tgl}${oleh}. Begitu yang asli datang, ubah statusnya ke "${asli}".`,
       `Draft received ${tgl}${oleh}. Once the original arrives, change its status to "${asli}".`,
     );
   }
-  if (st.peristiwa) return `${stepText(st.full, s)} — ${tgl}${oleh}.`;
-  const draft = entri.tglDraft ? ` (draft ${fmtDate(entri.tglDraft)})` : "";
+  const draft = entri.tglDraft ? ` (${k ? k.draftSaat : "draft"} ${fmtDate(entri.tglDraft)})` : "";
+  if (st.peristiwa) return `${stepText(st.full, s)} — ${tgl}${k ? draft : ""}${oleh}.`;
+  if (k && tgl) return `${kapitalAwal(k.asliSaat)} ${tgl}${draft}${oleh}.`;
   return tgl
     ? tt(`Diterima ${tgl}${draft}${oleh}.`, `Received ${tgl}${draft}${oleh}.`)
     : tt(`Sudah dikonfirmasi${oleh}.`, `Already confirmed${oleh}.`);
@@ -728,40 +913,58 @@ function bukaTahapDokumen(s, st) {
   ------------------------------------------------------------------ */
   const milestone = predictionMilestoneForStep(st.key, s);
   const tanyaJalur = !!milestone && TAHAP_PENCATAT_JALUR.indexOf(st.key) >= 0;
-  const opsiStatus = opsiStatusTahap(st);
+  /* Billing (belum dibayar / dibayar) & Berths (estimasi / aktual) punya
+     kosakata sendiri: `kata` menggantikan kalimat Draft / Asli. */
+  const kata = kataTahap(st, s);
+  const opsiStatus = opsiStatusTahap(st, s);
   /* Tahap yang mengenal draft dibuka sebagai Draft: begitulah berkasnya
-     biasa datang lebih dulu. Keadaan tersimpan yang tidak dikenal tahap
-     ini (mis. draft di tahap tanpa draft) dibaca sebagai Asli. */
+     biasa datang lebih dulu -- billing diterima sebelum dibayar, jadwal
+     sandar sebelum kapalnya sandar. Keadaan tersimpan yang tidak dikenal
+     tahap ini (mis. draft di tahap tanpa draft) dibaca sebagai Asli. */
   const statusSah = (v) => v === "ada" || (v === "draft" && !!st.bisaDraft) || (v === "lewati" && !!st.optional);
   const statusAwal = statusSah(statusLama) ? statusLama : !lama && st.bisaDraft ? "draft" : "ada";
   let status = statusAwal;
   // Milestone yang sudah terdaftar: tanggal dokumennya boleh kosong (= hari ini) & tanpa batas
   const tanggalMilestone = (stt) => !!milestone && stt === "ada";
-  const tanggalUntuk = (stt) => (lama && statusLama === stt && lama.date ? lama.date : docTanggalBawaan(st, s));
-  const labelTanggal = (stt) =>
-    stt === "draft"
+  // Estimasi (Berths) adalah perkiraan: tanggalnya boleh jatuh ke depan
+  const masaDepan = (stt) => !!(kata && kata.masaDepan && stt === "draft");
+  const tanggalTersimpan = (stt) => !!(lama && statusLama === stt && lama.date);
+  const tanggalUntuk = (stt) => {
+    if (tanggalTersimpan(stt)) return lama.date;
+    return (kata && kata.bawaan && kata.bawaan(stt)) || docTanggalBawaan(st, s);
+  };
+  const labelTanggal = (stt) => {
+    const khas = kata && (stt === "draft" ? kata.tglDraft : kata.tglAsli);
+    if (khas) return khas;
+    return stt === "draft"
       ? tt("Tanggal draft diterima", "Draft received date")
       : milestone || st.peristiwa
         ? tt(`Tanggal ${label}`, `${label} date`)
         : st.bisaDraft
           ? tt("Tanggal asli diterima", "Original received date")
           : tt("Tanggal diterima", "Date received");
+  };
   const hintTanggal = (stt) =>
-    docHintDariAju(st, s) || (tanggalMilestone(stt) ? t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket") : "");
+    (kata && kata.hint && kata.hint(stt, !tanggalTersimpan(stt) && !!(kata.bawaan && kata.bawaan(stt)))) ||
+    docHintDariAju(st, s) ||
+    (tanggalMilestone(stt) ? t("s.kosongkan.kalau.tanggal.dokumennya.belum.diket") : "");
 
-  // Lampiran: tahap berkas saja (kejadian -- Berths/ATA, Sailing/ATD -- tidak berberkas)
+  /* Lampiran: tahap berkas saja (kejadian -- Berths/ATA, Sailing/ATD --
+     tidak berberkas). Tanda Draft / Asli di berkasnya hanya untuk berkas
+     yang memang punya versi draft; billing bukan -- yang dilampirkan
+     kode billing atau bukti bayarnya. */
   const pengelola = st.peristiwa
     ? null
-    : buatPengelolaBerkas({ berkas: lama && lama.berkas, versi: () => (st.bisaDraft ? (status === "draft" ? "draft" : "asli") : "") });
+    : buatPengelolaBerkas({ berkas: lama && lama.berkas, versi: () => (st.bisaDraft && !kata ? (status === "draft" ? "draft" : "asli") : "") });
 
   const fields = [];
   if (opsiStatus.length) {
-    fields.push({ key: "pilih", label: tt("Status dokumen", "Document status"), type: "select", value: statusAwal, options: opsiStatus });
+    fields.push({ key: "pilih", label: kata ? kata.status : tt("Status dokumen", "Document status"), type: "select", value: statusAwal, options: opsiStatus });
   }
   fields.push(
     Object.assign(
       { key: "tanggal", label: labelTanggal(statusAwal), type: "date", value: tanggalUntuk(statusAwal) },
-      tanggalMilestone(statusAwal) ? {} : { max: todayISO() },
+      tanggalMilestone(statusAwal) || masaDepan(statusAwal) ? {} : { max: todayISO() },
       hintTanggal(statusAwal) ? { hint: hintTanggal(statusAwal) } : {},
     ),
   );
@@ -779,6 +982,8 @@ function bukaTahapDokumen(s, st) {
   const petunjuk = st.petunjuk ? st.petunjuk(s) : "";
   // Keterangan kotak: keadaan tersimpan, atau apa yang ditanyakan untuk tahap ini
   const keteranganBaru = () => {
+    // Billing / Berths: kalimat dua keadaannya sendiri
+    if (kata && kata.baru) return kata.baru(nama);
     // Milestone prediksi yang mengenal draft (PIB, Manifest buku Import): kalimatnya milik tahapnya
     if (milestone && st.bisaDraft) return (st.keteranganDraft || keteranganDraftPabean)(nama);
     if (milestone) return t("x.isi.tanggal.dokumen", { x: nama });
@@ -812,7 +1017,7 @@ function bukaTahapDokumen(s, st) {
       let tanggal = v.tanggal;
       if (tanggalMilestone(pilihan)) tanggal = tanggal || todayISO();
       else {
-        const galat = docPeriksaTanggal(tanggal);
+        const galat = docPeriksaTanggal(tanggal, masaDepan(pilihan));
         if (galat) return galat;
       }
       const susun = (unggahan) => {
@@ -868,7 +1073,7 @@ function bukaTahapDokumen(s, st) {
     if (lewati) return;
     const lbl = bidang("tanggal").querySelector(".prompt-label");
     if (lbl) lbl.textContent = labelTanggal(status);
-    if (tanggalMilestone(status)) kotakTanggal.removeAttribute("max");
+    if (tanggalMilestone(status) || masaDepan(status)) kotakTanggal.removeAttribute("max");
     else kotakTanggal.max = todayISO();
     if (!tanggalDiubah) kotakTanggal.value = tanggalUntuk(status);
     const hint = hintTanggal(status);

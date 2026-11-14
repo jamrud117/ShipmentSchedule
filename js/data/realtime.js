@@ -551,6 +551,11 @@ const RT_PENGATURAN = [
     kunci: () => (typeof FUND_DOCNO_KUNCI !== "undefined" ? FUND_DOCNO_KUNCI : null),
     muat: () => rtDiDocNum() && typeof fundDocNoMuat === "function" && fundDocNoMuat(),
   },
+  // Pola Doc No bawaan Pengajuan Dana (fund-docno.js)
+  {
+    kunci: () => (typeof FUND_DOCNO_POLA_KUNCI !== "undefined" ? FUND_DOCNO_POLA_KUNCI : null),
+    muat: () => rtDiDocNum() && typeof fundDocNoPolaMuat === "function" && fundDocNoPolaMuat(),
+  },
   {
     kunci: () => (typeof FUND_VENDOR_KUNCI !== "undefined" ? FUND_VENDOR_KUNCI : null),
     muat: () => rtDiDocNum() && typeof fundVendorMuat === "function" && fundVendorMuat(),

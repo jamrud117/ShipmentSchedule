@@ -103,15 +103,22 @@ function dpbbPungutan() {
 function dpbbBarisTarifHtml() {
   const { seri, tarifJadwal } = dpbbPungutan();
   const it = draftItems[dpbbIdx];
+  const coo = barangPakaiCoo(it);
   const fasilitas = (jenis) => {
     const sk = (it.skb || []).filter((x) => x && FASILITAS_PUNGUTAN[x.jenis] === jenis);
-    return sk.length
+    const bebas = sk.length
       ? `${tt("Dibebaskan", "Exempted")} 100% · ${sk.map((x) => [dpbNamaFasilitas(x), String(x.nomor || "").trim()].filter(Boolean).join(" ")).join("; ")}`
-      : "—";
+      : "";
+    // COO: tarif preferensi BM 0% (barangPakaiCoo, core/customs.js)
+    if (jenis === "BM" && coo) {
+      const nomor = (it.skb || []).filter((x) => x && x.jenis === "E-COO").map((x) => String(x.nomor || "").trim()).filter(Boolean).join("; ");
+      return [`${tt("Tarif preferensi", "Preferential rate")} 0% · COO${nomor ? ` ${nomor}` : ""}`, bebas].filter(Boolean).join("; ");
+    }
+    return bebas || "—";
   };
   const rp = (x) => formatNumberValue(Math.round(x || 0)) || "0";
   const baris = [
-    ["BM", dpbbIsianTarif("tarifBm", tt(`${formatNumberValue(tarifJadwal) || "0"} (bawaan)`, `${formatNumberValue(tarifJadwal) || "0"} (default)`)), seri ? seri.bm : 0, seri && seri.bebas.BM],
+    ["BM", coo ? dpbbTarifCoo() : dpbbIsianTarif("tarifBm", tt(`${formatNumberValue(tarifJadwal) || "0"} (bawaan)`, `${formatNumberValue(tarifJadwal) || "0"} (default)`)), seri ? seri.bm : 0, seri && seri.bebas.BM],
     ["PPN", `<span class="dpbb-tetap">12% × DPP 11/12</span>`, seri ? seri.ppn : 0, seri && seri.bebas.PPN],
     ["PPh", dpbbIsianTarif("tarifPph", tt("2,5", "2.5")), seri ? seri.pph : 0, seri && seri.bebas.PPh],
   ];
@@ -123,6 +130,12 @@ function dpbbBarisTarifHtml() {
 function dpbbIsianTarif(k, placeholder) {
   return `<input type="text" inputmode="decimal" class="form-control dpb-angka" id="dpbb-${k}" data-dpbb="${k}" data-dpb-jenis="angka" data-num
     value="${dpbEsc(dpbAngkaKotak(dpbbIsi[k]))}" placeholder="${dpbEsc(placeholder)}" aria-label="${dpbEsc(dpLabel(dpbbDef(k).label))}">`;
+}
+/* Tarif BM barang ber-COO: 0%, terkunci. Tanpa data-dpbb, jadi tidak pernah
+   menulis ke isian editor (tarif tersimpannya tidak disentuh). */
+function dpbbTarifCoo() {
+  const judul = typeof judulTarifBmCoo === "function" ? judulTarifBmCoo() : "";
+  return `<input type="text" class="form-control dpb-angka" id="dpbb-tarifBm" value="0" readonly title="${dpbEsc(judul)}" aria-label="${dpbEsc(dpLabel(dpbbDef("tarifBm").label))}">`;
 }
 
 // Angka pungutan & nilai pabean ikut tarif yang sedang diketik, tanpa menggambar ulang kotaknya
@@ -178,8 +191,8 @@ function dpbbRender() {
       + dpbbIsian("metodeNilai", "s6") + dpbbIsian("bedaHargaLevel"))
       + dpbBagian(tt("Tarif & Fasilitas", "Rates & Facilities"), dpbbBarisTarifHtml(), {
         mentah: true,
-        catatan: tt("Tarif kosong = Tarif (%) jadwal untuk BM, 2,5% untuk PPh. Fasilitasnya mengikuti fasilitas barang di Daftar Barang.",
-          "An empty rate uses the schedule's Rate (%) for BM and 2.5% for PPh. Facilities follow the item's facilities on the Item List."),
+        catatan: tt("Tarif kosong = Tarif (%) jadwal untuk BM, 2,5% untuk PPh. Fasilitasnya mengikuti fasilitas barang di Daftar Barang; barang yang memakai COO bertarif BM 0%.",
+          "An empty rate uses the schedule's Rate (%) for BM and 2.5% for PPh. Facilities follow the item's facilities on the Item List; an item that uses a COO has a 0% BM rate."),
       })
       + dpbBagian(tt("Voluntary Declaration", "Voluntary Declaration"), dpbbIsian("jenisVd", "s6") + dpbbIsian("nilaiVd") + dpbbIsian("jatuhTempo"));
   } else {

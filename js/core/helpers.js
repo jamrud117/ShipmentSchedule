@@ -207,6 +207,72 @@ function itemDisplayName(it) {
     .join(" ");
 }
 
+/* KEMIRIPAN NAMA BARANG -- pasangan dua daftar barang yang namanya
+   ditulis sedikit berbeda ("TIRE MOLD : HA52_ 195/65R15 95V (TOE RING)"
+   di draft CEISA vs "TIRE MOLD HA52 195/65 R15" di CIPL).
+
+   Nama dipecah jadi kata huruf & kata angka ("195/65R15" -> 195, 65,
+   R, 15), jadi "65R15" dan "65 R15" sama saja. Tiap kata ditimbang
+   menurut KELANGKAANNYA di kedua daftar: kata yang ada di SEMUA barang
+   ("TIRE", "MOLD", "R") tidak membedakan apa pun (bobot 0); ukuran yang
+   hanya dimiliki satu barang paling menentukan. Skor = bobot kata
+   bersama / bobot nama yang lebih ringkas -- nama yang lebih lengkap
+   (indeks beban "95V", "(TOE RING)") tidak mengurangi kecocokannya.
+   Pasangan dipilih dari skor tertinggi lebih dulu (lalu kata bersama
+   terbanyak, lalu urutan terdekat), tiap barang sekali; skor di bawah
+   `minimal` (bawaan 0,6) tidak dipasangkan -- lebih baik tanpa pasangan
+   daripada menebak. `a`, `b`: daftar teks nama. Hasil: indeks pasangan
+   di `b` untuk tiap barang `a` (-1 = tanpa pasangan). `bolehA` /
+   `bolehB` (opsional): indeks yang boleh dipasangkan. */
+function kataNamaBarang(teks) {
+  const dasar = String(teks == null ? "" : teks)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/([A-Z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Z])/g, "$1 $2")
+    .trim();
+  return new Set(dasar ? dasar.split(" ") : []);
+}
+function pasangkanNamaMirip(a, b, opsi) {
+  const o = opsi || {};
+  const minimal = o.minimal == null ? 0.6 : o.minimal;
+  const kataA = a.map(kataNamaBarang);
+  const kataB = b.map(kataNamaBarang);
+  const hasil = a.map(() => -1);
+  const bolehA = (i) => !o.bolehA || o.bolehA(i);
+  const bolehB = (j) => !o.bolehB || o.bolehB(j);
+  // Bobot kata: 1 / jumlah barang (kedua daftar) yang memuatnya; yang dimuat semua barang = 0
+  const semua = kataA.concat(kataB).filter((k) => k.size);
+  const df = new Map();
+  semua.forEach((k) => k.forEach((x) => df.set(x, (df.get(x) || 0) + 1)));
+  const bobot = (x) => (df.get(x) >= semua.length ? 0 : 1 / (df.get(x) || 1));
+  const berat = (k) => [...k].reduce((n, x) => n + bobot(x), 0);
+  const calon = [];
+  kataA.forEach((ka, i) => {
+    if (!bolehA(i) || !ka.size) return;
+    const wa = berat(ka);
+    kataB.forEach((kb, j) => {
+      if (!bolehB(j) || !kb.size) return;
+      let sama = 0;
+      ka.forEach((x) => {
+        if (kb.has(x)) sama += bobot(x);
+      });
+      const ringkas = Math.min(wa, berat(kb));
+      if (!(sama > 0) || !(ringkas > 0)) return;
+      const skor = sama / ringkas;
+      if (skor >= minimal) calon.push({ i, j, skor, sama });
+    });
+  });
+  calon.sort((x, y) => y.skor - x.skor || y.sama - x.sama || Math.abs(x.i - x.j) - Math.abs(y.i - y.j) || x.i - y.i);
+  const dipakai = new Set();
+  calon.forEach(({ i, j }) => {
+    if (hasil[i] >= 0 || dipakai.has(j)) return;
+    hasil[i] = j;
+    dipakai.add(j);
+  });
+  return hasil;
+}
+
 // Bagian sesudah Uraian: Merek, Tipe, Ukuran, Spesifikasi Lain (yang berisi)
 function rincianNamaBarang(it) {
   return bagianNamaBarang(it)
@@ -638,9 +704,12 @@ function dokPelengkapJadwal(s) {
 }
 
 /* KOLOM PI templat salin All Import (laporan harian) & Bulk Excel memuat
-   SEMUA dokumen pelengkap NON-FASILITAS satu jadwal, satu jenis / dokumen
-   per baris:
-     PI            nomornya apa adanya, "A, B" (sama seperti dulu)
+   SEMUA dokumen pelengkap NON-FASILITAS satu jadwal, SATU DOKUMEN PER
+   BARIS LEMBAR -- seperti kolom FASILITAS / SKB: dokumen ke-n di baris
+   barang ke-n, sisanya di baris tambahan di bawahnya. Bukan satu sel
+   bergaris baru: sel seperti itu menempel sebagai satu sel tinggi di
+   Excel, dan dulu diulang di setiap baris barang. Isi barisnya:
+     PI            nomornya, satu PI per baris
      LS            "LS <nomor>"
      Polis         "POLIS <nomor>"
      Dokumen Lain  "<NAMA DOKUMEN CEISA> <nomor>" -- L/C, sertifikat,
@@ -653,7 +722,8 @@ function dokPelengkapJadwal(s) {
    menunjukkan fasilitas (jenisFasilitasDariNomor), tidak ditulis di sini.
    Invoice, packing list & B/L-AWB punya kolomnya sendiri dan memang
    tidak pernah masuk Dokumen Lain (KODE_DOKUMEN_BERISIAN, dilewati juga
-   di sini). Bulk Import memisahkannya lagi lewat pecahKolomPi(). */
+   di sini). Bulk Import membaca kolomnya di semua baris jadwal lalu
+   memisahkannya lagi lewat pecahKolomPi(). */
 const KOLOM_PI_POLIS = "POLIS";
 // Kode yang namanya bisa tertulis di kolom PI sebagai Dokumen Lain
 const kodeDokLainKolomPi = (kode) =>
@@ -667,19 +737,25 @@ function dokLainKolomPi(d) {
   const nama = KODE_DOKUMEN_CEISA[kode] ? KODE_DOKUMEN_CEISA[kode][0].toUpperCase() : kode ? `DOKUMEN KODE ${kode}` : "DOKUMEN LAIN";
   return [nama, nomor].filter(Boolean).join(" ");
 }
-function kolomPiJadwal(s) {
+function barisKolomPi(s) {
   const dok = dokPelengkapJadwal(s);
-  const nomor = (jenis, kolomLama) => ringkasDokumen(dok[jenis]).nomor || String((s && s[kolomLama]) || "").trim();
+  // Nomor per dokumen; daftar kosong -> isian lamanya ("A, B" dipecah)
+  const nomor = (jenis, kolomLama) => {
+    const daftar = (dok[jenis] || []).map((d) => String(d.nomor || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+    return daftar.length ? daftar : pecahNomorDokumen(s && s[kolomLama]).map((d) => d.nomor);
+  };
   const baris = [
-    nomor("pi", "pi"),
-    nomor("ls", "ls") ? "LS " + nomor("ls", "ls") : "",
-    nomor("polis", "polisAsuransi") ? `${KOLOM_PI_POLIS} ${nomor("polis", "polisAsuransi")}` : "",
-  ].concat((dok.lain || []).map(dokLainKolomPi));
+    ...nomor("pi", "pi"),
+    ...nomor("ls", "ls").map((n) => "LS " + n),
+    ...nomor("polis", "polisAsuransi").map((n) => `${KOLOM_PI_POLIS} ${n}`),
+    ...(dok.lain || []).map(dokLainKolomPi),
+  ];
   const sudah = new Set();
-  return baris.filter((b) => b && !sudah.has(b) && sudah.add(b)).join("\n");
+  return baris.filter((b) => b && !sudah.has(b) && sudah.add(b));
 }
 
-/* Kebalikan kolomPiJadwal: teks kolom PI -> { pi, ls, polis, lain }.
+/* Kebalikan barisKolomPi: teks kolom PI (baris-barisnya digabung baris
+   baru) -> { pi, ls, polis, lain }.
    pi/ls/polis = nomor gabungan "A, B" (dipecah pecahNomorDokumen); lain =
    [{ kode, nomor }]. Baris berawalan "LS" / "POLIS" / nama dokumen CEISA
    (yang TERPANJANG yang cocok, tanpa beda huruf besar-kecil, kedua
@@ -690,7 +766,7 @@ let KOLOM_PI_NAMA_DOKUMEN = null; // [[NAMA, kode]] terpanjang dulu, disusun sek
 function pecahKolomPi(teks) {
   const pi = [], ls = [], polis = [], lain = [];
   if (!KOLOM_PI_NAMA_DOKUMEN) {
-    /* Hanya nama yang memang bisa ditulis kolomPiJadwal: fasilitas,
+    /* Hanya nama yang memang bisa ditulis barisKolomPi: fasilitas,
        invoice / packing list / B/L-AWB, dan PI / LS / Polis (ditulis
        dengan awalannya sendiri) tetap terbaca sebagai teks PI, sama
        seperti sebelum Dokumen Lain ikut di kolom ini. */

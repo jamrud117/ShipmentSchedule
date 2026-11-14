@@ -188,8 +188,23 @@ function tarifRingkasJadwal(items) {
   return daftar.every((n) => n === daftar[0]) ? daftar[0] : null;
 }
 
+/* BARANG BER-COO: BM 0% (tarif preferensi).
+
+   Fasilitas COO di Daftar Barang membuat tarif BM barangnya 0%, apa pun
+   yang tersimpan / diketik di kotak Tarif BM (barangPakaiCoo &
+   hitungPungutanFasilitas, core/customs.js). Kotaknya menampilkan 0
+   dan dikunci -- tarif lain tidak ikut terhitung, jadi tidak ada angka
+   yang tampak berlaku padahal diabaikan. Fasilitas COO dilepas -> kotak
+   kembali ke tarif tersimpannya (tarif tersimpan tidak pernah diubah). */
+const judulTarifBmCoo = () =>
+  tt(
+    "Barang ini memakai COO: BM 0% (tarif preferensi). Lepas fasilitas COO-nya untuk mengisi tarif lain.",
+    "This item uses a COO: 0% import duty (preferential rate). Remove its COO facility to enter another rate.",
+  );
+
 /* Tampilan kotak Tarif BM: angka tersimpan, penanda asalnya. */
 function judulTarifBm(it) {
+  if (barangPakaiCoo(it)) return judulTarifBmCoo();
   const a = it && it._tarifOtomatis;
   if (!a || tarifBmBarang(it) == null) {
     return tarifBmBarang(it) == null
@@ -207,6 +222,7 @@ function judulTarifBm(it) {
 }
 
 const kelasTarifBm = (it) => {
+  if (barangPakaiCoo(it)) return "tarif-otomatis tarif-coo";
   const a = it && it._tarifOtomatis;
   return a && (a.sumber === "database" || a.sumber === "riwayat") && tarifBmBarang(it) != null ? "tarif-otomatis" : "";
 };
@@ -214,16 +230,19 @@ const kelasTarifBm = (it) => {
 // Sel Tarif BM (%) di tabel/kartu barang -- buku Import saja (.import-col)
 function isianTarifBmHtml(it) {
   const label = tt("Tarif BM (%)", "Duty Rate (%)");
-  const n = tarifBmBarang(it);
-  return `<td class="tarif-col import-col" data-k="tarifBm" data-label="${escapeAttr(label)}"><div class="input-affix input-affix--end" data-affix="%"><input type="text" data-f="tarifBm" value="${n == null ? "" : escapeAttr(formatNumberValue(n) || "0")}" inputmode="decimal" placeholder="${TARIF_BM_BAWAAN}" aria-label="${escapeAttr(label)}" title="${escapeAttr(judulTarifBm(it))}" class="${kelasTarifBm(it)}"></div></td>`;
+  const coo = barangPakaiCoo(it);
+  const n = coo ? 0 : tarifBmBarang(it);
+  return `<td class="tarif-col import-col" data-k="tarifBm" data-label="${escapeAttr(label)}"><div class="input-affix input-affix--end" data-affix="%"><input type="text" data-f="tarifBm" value="${n == null ? "" : escapeAttr(formatNumberValue(n) || "0")}" inputmode="decimal" placeholder="${TARIF_BM_BAWAAN}" aria-label="${escapeAttr(label)}" title="${escapeAttr(judulTarifBm(it))}" class="${kelasTarifBm(it)}"${coo ? " readonly" : ""}></div></td>`;
 }
 
 // Tulis ulang kotak Tarif BM satu baris (tanpa menggambar ulang tabel)
 function tulisKotakTarifBm(tr, it) {
   const kotak = tr && tr.querySelector('[data-f="tarifBm"]');
   if (!kotak) return;
-  const n = tarifBmBarang(it);
-  if (document.activeElement !== kotak) kotak.value = n == null ? "" : formatNumberValue(n) || "0";
+  const coo = barangPakaiCoo(it);
+  const n = coo ? 0 : tarifBmBarang(it);
+  if (coo || document.activeElement !== kotak) kotak.value = n == null ? "" : formatNumberValue(n) || "0";
+  kotak.readOnly = coo;
   kotak.title = judulTarifBm(it);
   kotak.className = kelasTarifBm(it);
 }
@@ -247,8 +266,9 @@ function segarkanTarifBaris(tr, it) {
   }
 }
 
-// Kotak Tarif BM diketik: isian sendiri (kosong = bawaan 5%)
+// Kotak Tarif BM diketik: isian sendiri (kosong = bawaan 5%). Barang ber-COO: terkunci di 0%.
 function ketikTarifBm(el, it) {
+  if (barangPakaiCoo(it)) return;
   const teks = String(el.value || "").trim();
   delete it._tarifOtomatis;
   const n = teks === "" ? null : angkaTarifBm(teks);
@@ -257,10 +277,12 @@ function ketikTarifBm(el, it) {
   el.title = teks !== "" && n == null ? tt("Tarif harus angka 0–100.", "The rate must be a number from 0–100.") : judulTarifBm(it);
 }
 
-/* Tarif BM yang BERLAKU untuk satu barang jadwal tersimpan: tarifnya
-   sendiri, tarif jadwal lama (kolom `tarif`), atau bawaan 5% -- urutan
-   yang sama dengan hitungPungutanFasilitas (core/customs.js). */
+/* Tarif BM yang BERLAKU untuk satu barang jadwal tersimpan: 0% bila
+   barangnya memakai COO, selain itu tarifnya sendiri, tarif jadwal lama
+   (kolom `tarif`), atau bawaan 5% -- urutan yang sama dengan
+   hitungPungutanFasilitas (core/customs.js). */
 function tarifBmBerlaku(it, s) {
+  if (barangPakaiCoo(it)) return 0;
   const sendiri = tarifBmBarang(it);
   if (sendiri != null) return sendiri;
   const lama = tarifJadwalLama(s && s.tarif);

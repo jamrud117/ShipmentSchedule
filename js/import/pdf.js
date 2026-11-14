@@ -146,6 +146,32 @@ function extractItemUraianColumn(pagesItems, nItems) {
   return results.length === nItems ? results : [];
 }
 
+/* KOLOM 33 (Keterangan) per barang -> No. Urut dokumen yang DITAUTKAN ke
+   barang itu (padanan sheet BARANGDOKUMEN Excel CEISA). Tiap rujukan
+   ditulis "- <NAMA FASILITAS / DOKUMEN> (<No. Urut>)" -- No. Urut = nomor
+   baris dokumennya di lembar Pemenuhan Persyaratan/Fasilitas:
+     "- KETERANGAN PAJAK (5)"                                 -> "5"
+     "- PREFERENSI TARIF IMPORTASI ASEAN-KOREA (AKFTA) (7)"   -> "7"
+     "- SURAT PERSETUJUAN IMPOR DEP.DAG (8 - 1)"              -> "8"
+   (angka kedua = urutan barang di dokumen izinnya). Kurung berisi huruf
+   ("(AKFTA)") bukan No. Urut. Rujukan yang terpotong dua baris disambung
+   dulu. Jumlah pita tidak sama dengan jumlah barang -> [] (tidak terbaca,
+   bukan tebakan). */
+function extractItemKeteranganColumn(pagesItems, nItems) {
+  const results = pibPitaBarang(pagesItems, nItems, {
+    headerKiri: /^33\.\s*Keterangan/i,
+    headerKanan: /^34\.\s*Tarif/i,
+    geserKiri: 6,
+    xMinCadangan: 204,
+    xMaxCadangan: 292,
+    ambil: (lines) => {
+      const teks = lines.map((l) => l.text.trim()).filter(Boolean).join(" ");
+      return [...teks.matchAll(/\(\s*(\d+)\s*(?:-\s*\d+\s*)?\)/g)].map((m) => String(Number(m[1])));
+    },
+  });
+  return results.length === nItems ? results : [];
+}
+
 function extractItemDetailColumn(pagesItems, nItems) {
   const results = pibPitaBarang(pagesItems, nItems, {
     // Batas kolom field 35 dari posisi header-nya (dulu di-hardcode 393-468)
@@ -246,7 +272,8 @@ function parsePibPdfText(text, pagesItems) {
       .trim()
       .replace(/\s+YA\s*\/\s*TIDAK\s*$/i, "")
       .trim();
-    docRows.push({ kode: m[2], label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
+    // seri = No. Urut dokumen di lembar ini -- dirujuk kolom 33 tiap barang (extractItemKeteranganColumn)
+    docRows.push({ seri: String(Number(m[1])), kode: m[2], label: m[3].trim(), nomor: nomorClean, tanggalDMY: m[5] });
   }
   const findDoc = (re) => docRows.find((r) => re.test(r.label));
   const invoiceRow = findDoc(/^INVOICE$/i);
@@ -269,8 +296,10 @@ function parsePibPdfText(text, pagesItems) {
       if (!KODE_DOKUMEN_BERISIAN.has(kodeDokumen(r.kode))) tambahDokumenPengiriman(dokPelengkap.lain, r.nomor, tanggal, r.kode);
       return;
     }
-    if (skbList.some((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor)) return;
-    skbList.push({ jenis: kenal.jenis, jenisLainnya: kenal.jenisLainnya, nomor: r.nomor, tanggal });
+    // Dokumen yang sama di dua baris: satu entri, kedua No. Urut-nya tetap dikenali
+    const sama = skbList.find((sk) => sk.jenis === kenal.jenis && sk.nomor === r.nomor);
+    if (sama) return sama.seri.push(r.seri);
+    skbList.push({ jenis: kenal.jenis, jenisLainnya: kenal.jenisLainnya, nomor: r.nomor, tanggal, seri: [r.seri] });
   });
 
   // --- Nomor Aju & Nomor/Tanggal Pendaftaran (SPPB): diambil dari baris "Nomor Pengajuan : ..
@@ -564,6 +593,8 @@ function parsePibPdfText(text, pagesItems) {
   );
   // Kolom 33, 34 & 36 per barang -> item.dataPabean (data-pabean-baca.js)
   const dataBarang = pibBarangDataPabean(pagesItems, posTarifMatches.length);
+  // Kolom 33: No. Urut dokumen yang ditautkan ke tiap barang ([] = tidak terbaca)
+  const rujukanBarang = extractItemKeteranganColumn(pagesItems, posTarifMatches.length);
   const rawItems = posTarifMatches
     .map((pt, i) => {
       const blockEnd =
@@ -633,6 +664,8 @@ function parsePibPdfText(text, pagesItems) {
         packageQty: col ? col.packageQty : null,
         packageJenis: col ? col.packageJenis : "",
         dataPabean: dataBarang[i],
+        // No. Urut dokumen di kolom 33 barang ini; undefined = kolomnya tidak terbaca
+        rujukan: rujukanBarang[i],
       };
     })
     .filter((it) => it.namaBarang);
@@ -713,16 +746,40 @@ function parsePibPdfText(text, pagesItems) {
     );
   }
 
-  // Lembar Pemenuhan Persyaratan/Fasilitas cuma nyantumin SATU daftar SKB/E-COO utk 1 dokumen PIB
-  if (skbList.length) {
-    items.forEach((it) => {
-      it.skb = skbList.map((sk) => ({ ...sk }));
+  /* FASILITAS PER BARANG -- lembar Pemenuhan Persyaratan/Fasilitas memuat
+     SATU daftar dokumen untuk seluruh PIB; barang mana memakai dokumen mana
+     tertulis di KOLOM 33 (Keterangan) barangnya, lewat No. Urut dokumen
+     (extractItemKeteranganColumn). Aturannya sama dengan BARANGDOKUMEN
+     Excel CEISA (excel-bc.js):
+       - dokumen yang disebut kolom 33 sebuah barang -> barang itu saja;
+       - tidak disebut barang mana pun -> semua barang (Masterlist, SKB
+         PPN/PPh memang berlaku umum), KECUALI COO: COO selalu per barang
+         dan berarti BM 0% (barangPakaiCoo), jadi tidak dipasang ke barang
+         mana pun -- catatan meminta memasangnya sendiri.
+     Kolom 33 tidak terbaca (jumlah pita tidak sama dengan jumlah barang,
+     atau hanya teks tanpa koordinat): semua dokumen dianggap tidak
+     tertaut -- kecuali PIB SATU barang, yang dokumennya pasti untuk barang
+     itu (COO juga). */
+  if (skbList.length && items.length) {
+    const rujukan = rawItems.map((it) => it.rujukan);
+    const terbaca = rujukan.every(Array.isArray);
+    const disebut = new Set(terbaca ? [].concat(...rujukan) : []);
+    const tertaut = (sk) => sk.seri.some((x) => disebut.has(x));
+    const satuBarang = items.length === 1 && !terbaca;
+    const umum = skbList.filter((sk) => !tertaut(sk));
+    const umumSemua = umum.filter((sk) => sk.jenis !== "E-COO" || satuBarang);
+    const cooTakTertaut = umum.filter((sk) => sk.jenis === "E-COO" && !satuBarang);
+    const isian = (sk) => ({ jenis: sk.jenis, jenisLainnya: sk.jenisLainnya, nomor: sk.nomor, tanggal: sk.tanggal });
+    items.forEach((it, i) => {
+      const milik = terbaca ? skbList.filter((sk) => sk.seri.some((x) => rujukan[i].includes(x))) : [];
+      it.skb = milik.concat(umumSemua.filter((sk) => !milik.includes(sk))).map(isian);
     });
-    if (items.length > 1) {
-      notes.push(
-        t("y.fasilitas.diterapkan.semua.barang"),
-      );
-    }
+    const daftar = (xs) => xs.map((sk) => `${skbEntryLabel(sk)} ${sk.nomor}`.trim()).join(", ");
+    if (disebut.size && skbList.some(tertaut)) notes.push(t("y.fasilitas.pdf.per.barang"));
+    if (umumSemua.length && items.length > 1)
+      notes.push(t(terbaca ? "y.fasilitas.umum.semua.barang" : "y.fasilitas.diterapkan.semua.barang", { daftar: daftar(umumSemua) }));
+    if (cooTakTertaut.length)
+      notes.push(t(terbaca ? "y.coo.pdf.tidak.tertaut.barang" : "y.coo.pdf.kolom33.tidak.terbaca", { daftar: daftar(cooTakTertaut) }));
   }
 
   if (!fields.docNo)

@@ -46,13 +46,15 @@ function detailProgresDokumenHtml(s) {
     .map((st) => ({ st, e: docStepEntri(s, st) }))
     .filter((x) => x.e && !x.e.ikutInduk)
     .map(({ st, e }) => {
+      // Billing (belum dibayar) & Berths (estimasi): kosakata keadaannya sendiri
+      const kata = kataTahap(st, s);
       const status = e.skipped
         ? `<span class="text-muted">${escapeHtml(tt("tidak dipakai", "not used"))}</span>`
         : e.draft
-          ? `<span class="detail-draft"><i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("draft, menunggu asli", "draft, awaiting original"))}</span>`
+          ? `<span class="detail-draft"><i class="bi bi-hourglass-split"></i> ${escapeHtml(kata ? kata.detail : tt("draft, menunggu asli", "draft, awaiting original"))}</span>`
           : "";
       const tgl = e.date && !e.skipped ? `<span class="text-nowrap">${fmtDate(e.date)}</span>` : "";
-      const draftLama = e.tglDraft ? ` <span class="text-muted text-nowrap">(draft ${fmtDate(e.tglDraft)})</span>` : "";
+      const draftLama = e.tglDraft ? ` <span class="text-muted text-nowrap">(${escapeHtml(kata ? kata.draftSaat : "draft")} ${fmtDate(e.tglDraft)})</span>` : "";
       const jalur = e.jalur && jalurInfo(e.jalur) ? ` <span class="text-muted">· ${escapeHtml(tt("jalur", "lane"))} ${escapeHtml(jalurInfo(e.jalur).label)}</span>` : "";
       return `<div class="detail-progres-baris"><b>${escapeHtml(stepText(st.label, s))}</b> ${[tgl + draftLama + jalur, status].filter(Boolean).join(" · ")}${tautanLampiranHtml(e.berkas)}</div>`;
     });
@@ -186,6 +188,8 @@ function buildDetailHtml(s) {
   const udara = s.transport === "udara";
   const jumlahSinggah = routeStopList(s).length;
   const tagButuh = s.mode !== "export" && s.neededDate ? tagKebutuhanHtml(s) : "";
+  // Viewer (orang produksi) & EXIM mengatur Tanggal Dibutuhkan di Pabrik dari sini -- barisnya tampil walau masih kosong
+  const aturButuh = s.mode !== "export" && typeof bolehAturTanggalPabrik === "function" && bolehAturTanggalPabrik();
   return `
     <div class="detail-header">
       <div class="detail-header-isi">
@@ -233,8 +237,15 @@ function buildDetailHtml(s) {
       detailBaris("ETA", tanggalBerlaku(s.eta, s.etaUpdate, s.etaTime)),
       detailBaris(lbl.actual, fmtDate(s.actual)),
       // Tanda kebutuhannya (cadangan / mepet / telat) di bawah tanggalnya
-      s.mode !== "export" && s.neededDate &&
-        detailBaris(tt("Dibutuhkan di Pabrik", "Needed at Factory"), fmtDate(s.neededDate) + (tagButuh ? `<div class="detail-kv-tag">${tagButuh}</div>` : "")),
+      s.mode !== "export" && (s.neededDate || aturButuh) &&
+        detailBaris(
+          tt("Dibutuhkan di Pabrik", "Needed at Factory"),
+          (s.neededDate ? fmtDate(s.neededDate) : "—") +
+            (aturButuh
+              ? ` <button type="button" class="btn-quiet detail-atur-butuh" data-atur-butuh="${escapeAttr(String(s.id))}"><i class="bi bi-pencil" aria-hidden="true"></i> ${s.neededDate ? tt("Ubah", "Change") : tt("Atur", "Set")}</button>`
+              : "") +
+            (tagButuh ? `<div class="detail-kv-tag">${tagButuh}</div>` : ""),
+        ),
     ])}
     ${buildDetailStopsHtml(s)}
     ${predictionDetailHtml(s)}
@@ -387,6 +398,57 @@ function stepDetailView(delta) {
 function isDetailOpen() {
   return detailSheetEl && detailSheetEl.classList.contains("is-open");
 }
+
+/* ATUR TANGGAL DIBUTUHKAN DI PABRIK dari panel Detail -- viewer (orang
+   produksi yang tahu timeline produksinya) & EXIM; jadwal Import saja.
+   Disimpan lewat simpanTanggalPabrik (api.js -> fungsi database
+   set_needed_date). Kotak dikosongkan = tanggalnya dihapus. Daftar kartu
+   (tanda Butuh / Mepet / Telat) & panelnya digambar ulang sesudahnya. */
+function aturTanggalPabrik(id) {
+  const s = kirimanDenganId(id);
+  if (!s || s.mode === "export" || typeof bolehAturTanggalPabrik !== "function" || !bolehAturTanggalPabrik()) return;
+  const barang = (s.items || []).map((it) => itemDisplayName(it)).filter(Boolean);
+  showPrompt({
+    title: tt("Dibutuhkan di Pabrik", "Needed at Factory"),
+    desc: [dispVal(s.party), barang.length ? barang[0] + (barang.length > 1 ? tt(` +${barang.length - 1} lainnya`, ` +${barang.length - 1} more`) : "") : ""].filter(Boolean).join(" · "),
+    icon: "bi-alarm",
+    fields: [
+      {
+        key: "tgl",
+        label: tt("Tanggal barang dibutuhkan di pabrik", "Date the goods are needed at the factory"),
+        type: "date",
+        value: s.neededDate || "",
+        hint: tt("Kosongkan untuk menghapus tanggalnya.", "Leave it empty to remove the date."),
+      },
+    ],
+    okText: tt("Simpan", "Save"),
+    busyText: tt("Menyimpan…", "Saving…"),
+    onSubmit: (v) =>
+      (async () => {
+        const baru = String(v.tgl || "").slice(0, 10);
+        if (baru === String(s.neededDate || "").slice(0, 10)) return true;
+        try {
+          s.neededDate = await simpanTanggalPabrik(s.id, baru);
+        } catch (err) {
+          console.error(err);
+          return t("x.gagal.menyimpan.perubahan.err", { err: (err && err.message) || t("s.kesalahan.tidak.diketahui") });
+        }
+        if (typeof render === "function") render();
+        segarkanDetailView();
+        showToast(
+          s.neededDate
+            ? tt(`Dibutuhkan di pabrik ${fmtDate(s.neededDate)} tersimpan.`, `Needed at the factory ${fmtDate(s.neededDate)} saved.`)
+            : tt("Tanggal dibutuhkan di pabrik dihapus.", "The needed-at-factory date was removed."),
+          "success",
+        );
+        return true;
+      })(),
+  });
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest && e.target.closest("[data-atur-butuh]");
+  if (btn) aturTanggalPabrik(btn.dataset.aturButuh);
+});
 
 $("#btnDetailClose").addEventListener("click", closeDetailView);
 $("#btnDetailCloseFoot").addEventListener("click", closeDetailView);

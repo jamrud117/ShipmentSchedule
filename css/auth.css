@@ -1132,11 +1132,15 @@ body.is-viewer .status-select {
   align-items: center;
   gap: 8px;
 }
+/* min-width 0: tanpa itu daftarnya tidak mau lebih sempit dari nama
+   berkas terpanjang -- di kolom setengah lebar (Tandai Sudah Dibayar)
+   chip-nya meluber keluar kotak dan tombol lepasnya terpotong. */
 .pb-daftar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   flex: 1 1 100%;
+  min-width: 0;
 }
 .pb-daftar:empty {
   display: none;
@@ -1162,6 +1166,11 @@ body.is-viewer .status-select {
 .pb-tambah:hover {
   border-color: var(--p-500);
   background: var(--p-50);
+}
+/* Bersebelahan dengan isian lain (lebar "setengah"): setinggi kotak
+   isiannya (40px), dasar keduanya segaris. */
+.prompt-field--half .pb-tambah {
+  height: 40px;
 }
 .pb-tambah:focus-within {
   outline: 2px solid var(--focus-ring);

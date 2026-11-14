@@ -68,6 +68,7 @@ const DN_LABEL_FIELD = {
   get docNo() { return "Doc No"; },
   get paidAt() { return tt("Tanggal Bayar", "Paid Date"); },
   get paidBy() { return tt("Ditandai Lunas Oleh", "Marked Paid By"); },
+  get paidProof() { return tt("Bukti Bayar", "Payment Proof"); },
   get attachment() { return tt("Lampiran", "Attachment"); },
   get lines() { return tt("Rincian Biaya", "Cost Breakdown"); },
   get feeBm() { return tt("Bea Masuk", "Import Duty"); },
@@ -199,7 +200,7 @@ const DN_DETAIL_SUSUNAN = {
        di tabel pungutan, bukan sebagai isian tersendiri. */
     { khusus: "biaya", memakai: ["lines", "feeBm", "feePpn", "feePph", "amount"] },
     { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role", "cfoName", "cfoRole"] },
-    { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy"] },
+    { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy", { k: "paidProof", lebar: 2 }] },
   ],
   letter: [
     {
@@ -322,6 +323,8 @@ function dndNilai(k, r) {
       ? escapeHtml([dispVal(jadwal.invoice), dispVal(jadwal.party)].filter(Boolean).join(" · "))
       : `<span class="dnd-redup">${escapeHtml(t("s.jadwal.tidak.ditemukan"))}</span>`;
   }
+  // Bukti bayar (Tandai Sudah Dibayar): tautan yang membuka berkasnya -- hanya selama lunas
+  if (k === "paidProof") return p.paidAt && typeof tautanLampiranHtml === "function" ? tautanLampiranHtml(v) : "";
   if (k === "poNo") return dndDaftarPo(p);
   if (k === "vehicle") return dndDaftarKendaraan(p);
   if (k === "polaPihak") return INV_POLA_LABEL[v] ? escapeHtml(tt(...INV_POLA_LABEL[v])) : "";

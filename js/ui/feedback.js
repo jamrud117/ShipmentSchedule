@@ -55,6 +55,13 @@ let toastSisa = 0;
 let toastMulai = 0;
 let toastTetap = false;
 let toastTerakhir = "";
+/* Bertambah tiap toast "Database perlu diperbarui" (pesan yang menyebut
+   migration-*.sql). Penyimpanan yang menutup dengan "berhasil" membacanya
+   sebelum & sesudah menyimpan: "Jadwal tersimpan, tetapi ... Jalankan
+   migration-....sql" (kolom yang belum dikenal database, api.js) sudah
+   mengabarkan simpanannya, dan toast "berhasil" sesudahnya menimpanya
+   sebelum sempat terbaca. */
+let toastMigrasiKe = 0;
 /* Pembukaan toast ditunda satu bingkai (supaya transisinya berjalan). Bila toast
    ditutup SEBELUM bingkai itu tiba, pembukaan tertunda itu dibatalkan -- kalau
    tidak, toast yang sudah ditutup muncul lagi dan tak pernah hilang (toast
@@ -94,6 +101,7 @@ function showToast(msg, type, opsi) {
   if (!el) return;
 
   const migrasi = RE_TOAST_MIGRASI.test(msg);
+  if (migrasi) toastMigrasiKe++;
   const judul = o.judul || (migrasi ? tt("Database perlu diperbarui", "Database update needed") : toastJudulBawaan(type));
   toastTetap = !!o.tetap || migrasi;
   const kunci = type + "|" + judul + "|" + msg;
@@ -268,7 +276,8 @@ if ($("#confirmCancelBtn")) {
    -- Enter di dalamnya membuat baris baru, bukan menyimpan), "checks"
    (beberapa kotak centang dari options; nilainya daftar value yang
    dicentang), "berkas" (lampiran, js/data/lampiran.js -- nilainya dari
-   `pengelola`), atau jenis <input> lain ("date", ...). Bawaannya
+   `pengelola`, tulisan tombolnya `tombol`), atau jenis <input> lain
+   ("date", ...). Bawaannya
    "text". Angka TIDAK memakai
    jenis isian angka bawaan peramban (roda gulir mengubah nilainya
    diam-diam, tombol panahnya sempit, dan pemisah ribuan tidak bisa
@@ -325,7 +334,7 @@ function showPrompt(opsi) {
               )
               .join("")}</div>`
           : f.type === "berkas"
-          ? isianBerkasHtml("prompt_" + f.key).replace('class="prompt-berkas"', `class="prompt-berkas" role="group" aria-labelledby="prompt_${f.key}_label"`)
+          ? isianBerkasHtml("prompt_" + f.key, f.tombol).replace('class="prompt-berkas"', `class="prompt-berkas" role="group" aria-labelledby="prompt_${f.key}_label"`)
           : f.type === "select"
           ? `<select class="login-input" id="prompt_${f.key}">${(f.options || [])
               .map(

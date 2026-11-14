@@ -48,7 +48,14 @@ function kueriShipments() {
 let ambilAwalShipments = null;
 function mulaiAmbilShipments() {
   if (ambilAwalShipments || typeof supabaseClient === "undefined" || !supabaseClient) return;
-  ambilAwalShipments = kueriShipments().then((hasil) => hasil);
+  /* Ambil lebih awal hanya mempercepat: kalau gagal dimulai, loadShipments()
+     meminta sendiri seperti biasa -- jangan sampai menggagalkan login. */
+  try {
+    ambilAwalShipments = kueriShipments().then((hasil) => hasil);
+  } catch (e) {
+    console.error(e);
+    ambilAwalShipments = null;
+  }
 }
 function buangAmbilAwalShipments() {
   ambilAwalShipments = null;
@@ -345,7 +352,7 @@ function kolomBelumDikenal(error, daftar) {
      - Kode Barang s.d. Spesifikasi Lain (migration-barang-ceisa.sql):
        seluruh nama barang dilebur ke Uraian -- nama yang tampil tetap sama;
      - KOLOM_BARANG_OPSIONAL (Kode Kondisi Barang, Kode Negara Asal, PI
-       barang & No. item di PI): HANYA kolom yang ditolak yang ditinggal
+       barang & No. item di PI, Data PIB/PEB, urutan barang): HANYA kolom yang ditolak yang ditinggal
        (database yang sudah mengenal kolom nama barang tidak ikut dilebur).
        Kolom opsional yang kosong di semua barang tidak dikirim sama
        sekali -- nilainya sama dengan bawaan database, dan database yang
@@ -360,6 +367,8 @@ const KOLOM_BARANG_OPSIONAL = {
   pi_nomor: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("PI barang", "Item PI"); } },
   pi_no_item: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("No. item di PI", "Item no. in PI"); } },
   data_pabean: { berkas: "migration-data-pabean.sql", get nama() { return tt("Data PIB/PEB per barang", "Per-item PIB/PEB data"); } },
+  // Tanpa kolomnya barang terbaca dalam urutan fisik baris (urutkanBarisBarang, mapping.js)
+  urutan: { berkas: "migration-urutan-barang.sql", get nama() { return tt("urutan barang (Seri Barang)", "the item order (Seri Barang)"); } },
 };
 
 const isianKolom = (v) => String(v == null ? "" : v).trim() !== "";
@@ -375,7 +384,8 @@ const tanpaKolom = (rows, kolom) =>
 async function sisipkanBarang(items, shipmentId, kirimBaris) {
   if (!items.length) return [];
   const opsional = Object.keys(KOLOM_BARANG_OPSIONAL);
-  let rows = items.map((it) => itemToRow(it, shipmentId));
+  // Urutan di daftar barang ikut tersimpan: 1 = Seri Barang 1 (urutkanBarisBarang, mapping.js)
+  let rows = items.map((it, i) => Object.assign(itemToRow(it, shipmentId), { urutan: i + 1 }));
   rows = tanpaKolom(rows, opsional.filter((k) => !rows.some((r) => isianKolom(r[k]))));
   const kirim = kirimBaris || ((r) => supabaseClient.from("shipment_items").insert(r).select());
   let { data: tersisip, error } = await kirim(rows);
@@ -551,6 +561,40 @@ async function persistFields(id, patch) {
     );
     loadShipments();
   }
+}
+
+/* TANGGAL DIBUTUHKAN DI PABRIK -- satu-satunya isian jadwal yang boleh
+   diatur VIEWER (bolehAturTanggalPabrik, session.js), selain EXIM. Ditulis
+   lewat fungsi database set_needed_date (migration-tanggal-pabrik-
+   viewer.sql): hanya kolom needed_date, hanya jadwal Import, hanya EXIM &
+   viewer -- viewer tetap tanpa izin UPDATE ke tabel shipments.
+   Mengembalikan tanggal yang tersimpan ("" = dikosongkan).
+
+   Fungsinya belum ada di database (migrasinya belum dijalankan): EXIM
+   menulis kolomnya langsung seperti biasa; viewer diberi tahu nama berkas
+   migrasinya. */
+const BERKAS_MIGRASI_TANGGAL_PABRIK = "migration-tanggal-pabrik-viewer.sql";
+const fungsiTanggalPabrikBelumAda = (e) =>
+  !!e && (e.code === "PGRST202" || (/set_needed_date/.test(e.message || "") && /could not find the function|does not exist/i.test(e.message || "")));
+
+async function simpanTanggalPabrik(id, tanggal) {
+  const nilai = tanggal || null;
+  // Gema perubahan ini sendiri tidak memicu pemberitahuan "diubah pengguna lain" (realtime)
+  if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("shipments", id);
+  const { data, error } = await supabaseClient.rpc("set_needed_date", { p_id: String(id), p_tanggal: nilai });
+  if (!error) return data ? String(data).slice(0, 10) : "";
+  if (!fungsiTanggalPabrikBelumAda(error)) throw error;
+  if (typeof canEdit === "function" && canEdit()) {
+    const { error: galat } = await supabaseClient.from("shipments").update({ needed_date: nilai }).eq("id", id);
+    if (galat) throw galat;
+    return nilai || "";
+  }
+  throw new Error(
+    tt(
+      `Mengatur Tanggal Dibutuhkan di Pabrik sebagai viewer butuh pembaruan database: minta admin menjalankan ${BERKAS_MIGRASI_TANGGAL_PABRIK} di Supabase.`,
+      `Setting the Needed at Factory date as a viewer needs a database update: ask an admin to run ${BERKAS_MIGRASI_TANGGAL_PABRIK} in Supabase.`,
+    ),
+  );
 }
 
 /* Tombol "Coba muat ulang" di layar galat sambungan. Dulu onclick="..."

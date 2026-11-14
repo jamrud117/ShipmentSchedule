@@ -4,7 +4,7 @@
    RINCIAN (DETAILS) BAWAAN PENGAJUAN DANA -- Subject surat cetak
 
    Disusun dari isian form supaya tidak diketik ulang tiap kali:
-     Billing         "Payment Request - Billing Import"
+     Billing         "Payment Request - Billing Tax Import Bead Ring etc."
      Freight         "Payment Request - Invoice FedEx Freight Charge Import Bead Ring etc."
      Storage         "Payment Request - Invoice Wide Storage Charge Import ..."
      Tax Advance     "Payment Request - Invoice Wide Tax Advance Export ..."
@@ -49,7 +49,9 @@ function fundArahTransaksi(jenis) {
 function fundRincianBawaan(isian) {
   const x = isian || {};
   const arah = fundArahTransaksi(x.transactionType);
-  if (x.expenseType === "Billing") return `Payment Request - Billing ${arah === "Export" ? "Export" : "Import"}`;
+  // Billing (pajak impor/ekspor ke kas negara): "Billing Tax", lalu barang BL/AWB-nya seperti tagihan lain
+  if (x.expenseType === "Billing")
+    return ["Payment Request - Billing Tax", arah === "Export" ? "Export" : "Import", x.barang].filter(Boolean).join(" ");
   const vendor = String(x.payee || "").trim();
   return ["Payment Request - Invoice", vendor && fundKataJudul(vendor), FUND_RINCIAN_BEBAN[x.expenseType], arah, x.barang]
     .filter(Boolean)

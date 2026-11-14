@@ -528,8 +528,9 @@ function readDocNumForm(typeKey) {
     if (el.disabled && !el.hasAttribute("data-dn-subtype")) return;
     out[el.dataset.dn] = String(el.value || "").trim();
   });
-  /* Doc No bawaan pengajuan dana (EI-<YYMM>-0000) yang 0000-nya belum
-     diganti bukan Doc No: tidak disimpan, tidak dicetak (fund-docno.js). */
+  /* Doc No bawaan pengajuan dana (pola di kotak Aturan Doc No, mis.
+     Distribution-<YYMM>-0000) yang belum diganti bukan Doc No: tidak
+     disimpan, tidak dicetak (fund-docno.js). */
   if (typeKey === "fund" && "docNo" in out && typeof fundDocNoTanpaBawaan === "function") out.docNo = fundDocNoTanpaBawaan(out.docNo);
   /* Rincian biaya bukan isian ber-data-dn (ia tabel tersendiri), jadi
      disisipkan di sini supaya ikut tersimpan lewat jalur yang sama
@@ -905,12 +906,16 @@ function bolehUbahDocNum() {
 /* ------------------------------------------------------------------
    STATUS PEMBAYARAN PENGAJUAN DANA
 
-   Disimpan di payload (paidAt = tanggal bayar, paidBy = yang menandai),
+   Disimpan di payload (paidAt = tanggal bayar, paidBy = yang menandai,
+   paidProof = BUKTI BAYAR opsional -- lampiran { path, nama, ukuran,
+   tipe, at, by } di bucket lampiran-jadwal, folder bukti-bayar/<id>/),
    jadi tidak butuh kolom database baru. Bukan isian form: ditandai
    langsung dari daftar riwayat, dan jalur Ubah Isian membawanya
    (lihat simpanUbahDocNum) supaya tidak terhapus.
 ------------------------------------------------------------------ */
-const DN_FIELD_BAYAR = ["paidAt", "paidBy"];
+const DN_FIELD_BAYAR = ["paidAt", "paidBy", "paidProof"];
+const BUKTI_BAYAR_FOLDER = "bukti-bayar";
+const BERKAS_MIGRASI_BUKTI_BAYAR = "migration-bukti-bayar.sql";
 
 /* NILAI INVOICE di riwayat Invoice Number: angka yang SAMA dengan baris
    Total di Commercial Invoice cetaknya -- dihitung dengan fungsi yang
@@ -935,6 +940,24 @@ function dnSudahBayar(r) {
   return !!(r && r.payload && r.payload.paidAt);
 }
 
+// Bukti bayar pengajuan yang LUNAS (sisa di pengajuan belum lunas tidak dihitung)
+function dnBuktiBayar(r) {
+  return dnSudahBayar(r) && typeof rapikanBerkas === "function" ? rapikanBerkas(r.payload.paidProof) : [];
+}
+
+/* Bukti bayar di sebelah lencana Lunas: satu klip per berkas, klik
+   membukanya (tautan bertanda tangan, penangan [data-buka-lampiran] di
+   lampiran.js) -- untuk semua yang boleh membaca riwayatnya. */
+function dnTautanBuktiBayar(r) {
+  return dnBuktiBayar(r)
+    .map(
+      (b) => `<button type="button" class="dn-bukti" data-buka-lampiran="${escapeAttr(b.path)}" data-nama="${escapeAttr(b.nama)}"
+          title="${escapeAttr(tt(`Bukti bayar: ${b.nama}`, `Payment proof: ${b.nama}`))}"
+          aria-label="${escapeAttr(tt(`Buka bukti bayar ${b.nama}`, `Open payment proof ${b.nama}`))}"><i class="bi bi-paperclip" aria-hidden="true"></i></button>`,
+    )
+    .join("");
+}
+
 /* Yang boleh menandai status bayar: EXIM & Finance (bolehTandaiBayar
    di session.js). Finance HANYA ini -- isian lain tetap bolehUbahDocNum. */
 function dnBolehTandaiBayar() {
@@ -951,43 +974,69 @@ function dnTombolBayar(r) {
     ? `<i class="bi bi-check-circle-fill"></i> ${escapeHtml(tt("Lunas", "Paid"))}<span class="dn-bayar-tgl">${escapeHtml(fmtDate(p.paidAt))}</span>`
     : `<i class="bi bi-hourglass-split"></i> ${escapeHtml(tt("Belum Lunas", "Unpaid"))}`;
   const kelas = `dn-bayar ${lunas ? "dn-bayar--lunas" : "dn-bayar--belum"}`;
-  if (!dnBolehTandaiBayar()) return `<span class="${kelas}">${teks}</span>`;
+  const bukti = dnTautanBuktiBayar(r);
+  if (!dnBolehTandaiBayar()) return `<span class="${kelas}">${teks}</span>${bukti}`;
   const judul = lunas
     ? tt(`Ditandai lunas${p.paidBy ? " oleh " + p.paidBy : ""}. Klik untuk membatalkan.`,
          `Marked paid${p.paidBy ? " by " + p.paidBy : ""}. Click to undo.`)
     : tt("Klik untuk menandai sudah dibayar", "Click to mark as paid");
-  return `<button type="button" class="${kelas}" data-bayar-num="${r.id}" title="${escapeAttr(judul)}">${teks}</button>`;
+  return `<button type="button" class="${kelas}" data-bayar-num="${r.id}" title="${escapeAttr(judul)}">${teks}</button>${bukti}`;
 }
 
 /* Menulis status bayar lewat fungsi database set_fund_paid
-   (migration-finance-tanda-bayar.sql): HANYA paidAt & paidBy yang
-   diubah, langsung di database -- tidak ada salinan payload di layar
-   yang bisa menimpa perubahan orang lain, paidBy diisi nama akun yang
-   menandai, dan Finance tidak butuh izin mengubah tabelnya.
+   (migration-bukti-bayar.sql; versi awalnya migration-finance-tanda-
+   bayar.sql): HANYA paidAt, paidBy & paidProof yang diubah, langsung di
+   database -- tidak ada salinan payload di layar yang bisa menimpa
+   perubahan orang lain, paidBy diisi nama akun yang menandai, dan
+   Finance tidak butuh izin mengubah tabelnya.
 
-   Fungsinya belum ada (migrasinya belum dijalankan): EXIM memakai jalur
-   lama di bawah; Finance diberi tahu berkas migrasinya. */
+   `bukti` = lampiran bukti bayar yang SUDAH diunggah (unggahLampiran).
+   p_bukti selalu dikirim (null kalau tanpa bukti): dengan tiga argumen
+   panggilannya tidak pernah mendua, juga kalau versi dua argumen
+   dihidupkan lagi oleh migrasi lama.
+
+   Database belum mengenal bukti bayar (migration-bukti-bayar.sql belum
+   dijalankan): tanpa bukti, fungsi lama dua argumen dipanggil. Fungsinya
+   belum ada sama sekali: EXIM memakai jalur lama di bawah; Finance diberi
+   tahu berkas migrasinya. */
 const dnFungsiBayarBelumAda = (e) =>
   !!e && (e.code === "PGRST202" || (/set_fund_paid/.test(e.message || "") && /could not find the function|does not exist/i.test(e.message || "")));
 
-async function dnSetelBayar(id, tanggal) {
+async function dnSetelBayar(id, tanggal, bukti) {
+  const daftarBukti = tanggal && typeof rapikanBerkas === "function" ? rapikanBerkas(bukti) : [];
   if (typeof bkLupakan === "function") bkLupakan(); // biaya per kiriman dihitung ulang
   // Gema perubahan ini sendiri tidak memicu pemberitahuan "diubah pengguna lain" (realtime)
   if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
-  const { data, error } = await supabaseClient.rpc("set_fund_paid", { p_id: String(id), p_paid_at: tanggal || null });
+  const dasar = { p_id: String(id), p_paid_at: tanggal || null };
+  let { data, error } = await supabaseClient.rpc("set_fund_paid", Object.assign({}, dasar, { p_bukti: daftarBukti.length ? daftarBukti : null }));
+  if (error && dnFungsiBayarBelumAda(error) && !daftarBukti.length) ({ data, error } = await supabaseClient.rpc("set_fund_paid", dasar));
   let payload;
   if (!error) payload = data || {};
-  else if (dnFungsiBayarBelumAda(error) && bolehUbahDocNum()) payload = await dnSetelBayarLangsung(id, tanggal);
-  else if (dnFungsiBayarBelumAda(error))
+  else if (dnFungsiBayarBelumAda(error) && bolehUbahDocNum()) payload = await dnSetelBayarLangsung(id, tanggal, daftarBukti);
+  else if (dnFungsiBayarBelumAda(error)) {
+    const berkas = daftarBukti.length ? BERKAS_MIGRASI_BUKTI_BAYAR : "migration-finance-tanda-bayar.sql";
     throw new Error(
       tt(
-        "Menandai status bayar sebagai Finance butuh pembaruan database: minta admin menjalankan migration-finance-tanda-bayar.sql di Supabase.",
-        "Marking the payment status as Finance needs a database update: ask an admin to run migration-finance-tanda-bayar.sql in Supabase.",
+        `Menandai status bayar sebagai Finance butuh pembaruan database: minta admin menjalankan ${berkas} di Supabase.`,
+        `Marking the payment status as Finance needs a database update: ask an admin to run ${berkas} in Supabase.`,
       ),
     );
-  else throw error;
+  } else throw error;
   const baris = docNumHistoryRows.find((r) => r.id === id);
   if (baris) baris.payload = payload;
+}
+
+/* Galat unggah bukti bayar -> kalimat. Finance ditolak Storage sebelum
+   migration-bukti-bayar.sql dijalankan (unggah ke bucket dulu khusus
+   EXIM): sebutkan berkas migrasinya, bukan "hanya akun EXIM". */
+function dnPesanGalatBukti(e) {
+  const pesan = String((e && (e.message || e.error)) || e || "");
+  if (!bolehUbahDocNum() && !(e && e.pesanPengguna) && /row-level security|policy|unauthori[sz]ed|403/i.test(pesan))
+    return tt(
+      `Unggah bukti bayar sebagai Finance butuh pembaruan database: minta admin menjalankan ${BERKAS_MIGRASI_BUKTI_BAYAR} di Supabase.`,
+      `Uploading a payment proof as Finance needs a database update: ask an admin to run ${BERKAS_MIGRASI_BUKTI_BAYAR} in Supabase.`,
+    );
+  return pesanGalatLampiran(e);
 }
 
 /* Payload sebuah pengajuan seperti yang ada di database SAAT INI -- bukan
@@ -1005,12 +1054,14 @@ async function dnPayloadTerbaru(id) {
 /* Jalur lama (EXIM, sebelum fungsi database ada): payload TERBARU dibaca
    dulu dari database, baru digabung. Menulis dari salinan di layar akan
    menimpa perubahan yang dibuat orang lain sejak daftar ini dimuat. */
-async function dnSetelBayarLangsung(id, tanggal) {
+async function dnSetelBayarLangsung(id, tanggal, bukti) {
   const payload = Object.assign({}, await dnPayloadTerbaru(id));
   if (tanggal) {
     payload.paidAt = tanggal;
     const pr = (typeof authState !== "undefined" && authState.profile) || {};
     payload.paidBy = pr.full_name || pr.username || "";
+    if (bukti && bukti.length) payload.paidProof = bukti;
+    else delete payload.paidProof;
   } else {
     DN_FIELD_BAYAR.forEach((k) => delete payload[k]);
   }
@@ -1022,43 +1073,91 @@ async function dnSetelBayarLangsung(id, tanggal) {
   return payload;
 }
 
+const dnPesanGagalBayar = (err) => t("x.gagal.menyimpan.perubahan.err", { err: (err && err.message) || t("s.kesalahan.tidak.diketahui") });
+
 function dnKlikBayar(id) {
   const r = docNumHistoryRows.find((x) => x.id === id);
   if (!r || !dnBolehTandaiBayar()) return;
-  const simpan = async (tanggal, pesan) => {
-    try {
-      await dnSetelBayar(id, tanggal);
-      await renderDocNumHistory();
-      showToast(pesan, "success");
-    } catch (err) {
-      console.error(err);
-      showToast(
-        t("x.gagal.menyimpan.perubahan.err", { err: err.message || t("s.kesalahan.tidak.diketahui") }),
-        "danger",
-      );
-    }
-  };
   if (dnSudahBayar(r)) {
     /* Membatalkan butuh konfirmasi: satu klik tak sengaja di daftar
-       tidak boleh menghapus catatan pembayaran. */
+       tidak boleh menghapus catatan pembayaran. Bukti bayarnya ikut
+       dihapus dari tempat lampiran SESUDAH pembatalannya tersimpan. */
+    const bukti = dnBuktiBayar(r);
     showConfirm(
-      tt(`Batalkan status lunas ${r.doc_number}?`, `Undo the paid status of ${r.doc_number}?`),
-      () => simpan(null, tt(`${r.doc_number} ditandai belum lunas.`, `${r.doc_number} marked as unpaid.`)),
+      tt(`Batalkan status lunas ${r.doc_number}?`, `Undo the paid status of ${r.doc_number}?`) +
+        (bukti.length ? tt(` Bukti bayarnya (${bukti.length} berkas) ikut dihapus.`, ` Its payment proof (${bukti.length} file(s)) is deleted too.`) : ""),
+      async () => {
+        try {
+          await dnSetelBayar(id, null);
+          // Usaha terbaik: gagal terhapus = sampah di bucket, bukan data rusak
+          if (bukti.length) await hapusLampiran(bukti.map((b) => b.path));
+          await renderDocNumHistory();
+          showToast(tt(`${r.doc_number} ditandai belum lunas.`, `${r.doc_number} marked as unpaid.`), "success");
+        } catch (err) {
+          console.error(err);
+          showToast(dnPesanGagalBayar(err), "danger");
+        }
+      },
       { confirmText: tt("Ya, batalkan", "Yes, undo"), tone: "primary", icon: "bi-arrow-counterclockwise" },
     );
     return;
   }
   /* Tanggal bayar ditanyakan (bawaan hari ini): pembayaran kerap
      ditandai sehari-dua sesudah uangnya keluar, dan tanggal yang
-     sebenarnya yang dipakai laporan. */
+     sebenarnya yang dipakai laporan. Di sebelahnya BUKTI BAYAR,
+     opsional: berkasnya baru diunggah saat Tandai Lunas ditekan (ke
+     bukti-bayar/<id>/), lalu status & rujukannya tersimpan sekali jalan;
+     simpan gagal -> berkas yang terlanjur terunggah dihapus lagi dan
+     kotaknya tetap terbuka dengan pesannya. */
+  const pengelola = buatPengelolaBerkas({ kosong: "" });
   showPrompt({
     title: tt("Tandai Sudah Dibayar", "Mark as Paid"),
     desc: `${r.doc_number}${r.payload && r.payload.payee ? " · " + r.payload.payee : ""}`,
-    fields: [{ key: "tgl", label: tt("Tanggal bayar", "Payment date"), type: "date", value: todayISO() }],
+    icon: "bi-cash-coin",
+    fields: [
+      { key: "tgl", label: tt("Tanggal bayar", "Payment date"), type: "date", value: todayISO(), lebar: "setengah" },
+      {
+        key: "bukti",
+        label: tt("Bukti bayar (opsional)", "Payment proof (optional)"),
+        type: "berkas",
+        pengelola,
+        lebar: "setengah",
+        tombol: tt("Lampirkan bukti bayar", "Attach payment proof"),
+        hint: tt(`PDF atau gambar · maks. ${LAMPIRAN_MAKS_MB} MB`, `PDF or image · max. ${LAMPIRAN_MAKS_MB} MB`),
+      },
+    ],
     okText: tt("Tandai Lunas", "Mark Paid"),
+    busyText: tt("Menyimpan…", "Saving…"),
     onSubmit: (v) => {
       if (!v.tgl) return tt("Tanggal bayar wajib diisi.", "Payment date is required.");
-      simpan(v.tgl, tt(`${r.doc_number} ditandai lunas.`, `${r.doc_number} marked as paid.`));
+      const baru = (v.bukti && v.bukti.baru) || [];
+      return (async () => {
+        let unggahan = [];
+        if (baru.length) {
+          try {
+            unggahan = await unggahLampiran(baru, `${BUKTI_BAYAR_FOLDER}/${id}`);
+          } catch (e) {
+            console.error(e);
+            return dnPesanGalatBukti(e);
+          }
+        }
+        try {
+          await dnSetelBayar(id, v.tgl, unggahan);
+        } catch (err) {
+          console.error(err);
+          await hapusLampiran(unggahan.map((b) => b.path));
+          return dnPesanGagalBayar(err);
+        }
+        // Kotaknya tertutup sesudah daftarnya sudah menampilkan Lunas (+ klip bukti)
+        await renderDocNumHistory();
+        showToast(
+          unggahan.length
+            ? tt(`${r.doc_number} ditandai lunas, bukti bayar terlampir.`, `${r.doc_number} marked as paid, payment proof attached.`)
+            : tt(`${r.doc_number} ditandai lunas.`, `${r.doc_number} marked as paid.`),
+          "success",
+        );
+        return true;
+      })();
     },
   });
 }
@@ -2287,7 +2386,7 @@ function resetDocNumForm(typeKey, opts) {
     suratIsianOtomatis = {};
     suratPerbaruiLabelAngkut(panel);
   }
-  // Pengajuan dana baru: Doc No bawaan EI-<YYMM>-0000 bulan berjalan (fund-docno.js)
+  // Pengajuan dana baru: Doc No bawaan bulan berjalan, mis. Distribution-<YYMM>-0000 (fund-docno.js)
   if (typeKey === "fund" && typeof fundIsiDocNoBawaan === "function") fundIsiDocNoBawaan(panel, true);
   syncDocNumConditional(panel);
   // Pihak invoice: tanda "= Penjual" & keterangan Skema Invoice mengikuti isian bawaan

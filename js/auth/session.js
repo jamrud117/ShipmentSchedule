@@ -23,7 +23,10 @@ const authState = { user: null, profile: null, siap: false };
                   Pengajuan Dana sudah / belum dibayar (Paid / Unpaid,
                   `tandaiBayar`). Selebihnya di Nomor Dokumen ia sama
                   dengan marketing.
-     viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali
+     viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali --
+                  kecuali SATU isian jadwal: Tanggal Dibutuhkan di Pabrik
+                  (Import, `aturTanggalPabrik`), dari panel Detail. Orang
+                  produksi yang tahu timeline produksinya.
 
    `halaman: null` = semua halaman. Kuncinya sama dengan PAGE_VIEWS di
    form-router.js. "form" (tambah/ubah jadwal), "accounts" dan "checker"
@@ -41,6 +44,7 @@ const PERAN = {
     label: "EXIM",
     ubah: true,
     tandaiBayar: true,
+    aturTanggalPabrik: true,
     halaman: null,
     get ket() { return tt("bisa ubah", "can edit"); },
   },
@@ -62,8 +66,9 @@ const PERAN = {
   viewer: {
     label: "Viewer",
     ubah: false,
+    aturTanggalPabrik: true,
     halaman: ["overview", "schedule", "hscode", "masterlist"],
-    get ket() { return tt("hanya lihat", "read only"); },
+    get ket() { return tt("lihat saja + atur Tanggal Dibutuhkan di Pabrik", "view only + set the Needed at Factory date"); },
   },
   /* BELUM DIAKTIFKAN: setiap akun baru (pemicu handle_new_user,
      migration-keamanan.sql) -- pendaftaran Supabase terbuka untuk umum,
@@ -100,6 +105,15 @@ function canEdit() {
 function bolehTandaiBayar() {
   const a = aturanPeran();
   return !!(a.ubah || a.tandaiBayar);
+}
+/* Selain EXIM, VIEWER boleh mengatur Tanggal Dibutuhkan di Pabrik jadwal
+   Import (panel Detail) -- mereka yang tahu timeline produksi. Di database
+   dijaga fungsi set_needed_date (migration-tanggal-pabrik-viewer.sql),
+   bukan izin UPDATE ke tabel shipments: isian jadwal lainnya tetap
+   tertutup. */
+function bolehAturTanggalPabrik() {
+  const a = aturanPeran();
+  return !!(a.ubah || a.aturTanggalPabrik);
 }
 /* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
 function bolehBuka(halaman) {
@@ -181,19 +195,57 @@ async function resolveLoginEmail(masukan) {
   return emailFromUsername(isian);
 }
 
+/* ALAMAT EMAIL USERNAME YANG DIINGAT. Menukar username -> email (RPC
+   email_for_login) = satu perjalanan ke server SEBELUM sandi bisa
+   diperiksa. Untuk username yang diingat perangkat ini ("Ingat saya"),
+   alamat hasil login terakhirnya disimpan dan dipakai langsung. Alamat
+   itu bisa usang (email akun diganti admin): kalau masuk ditolak,
+   server ditanya sekali lagi dan masuk diulang bila alamatnya berbeda. */
+const REMEMBER_EMAIL_KEY = "exim.remember.email";
+function emailDiingat(isian) {
+  try {
+    const o = JSON.parse(localStorage.getItem(REMEMBER_EMAIL_KEY) || "null");
+    return o && o.user === isian.toLowerCase() && o.email ? o.email : null;
+  } catch (e) {
+    return null;
+  }
+}
+function ingatEmailLogin(isian, email) {
+  try {
+    if (bacaRemember() && !isian.includes("@")) localStorage.setItem(REMEMBER_EMAIL_KEY, JSON.stringify({ user: isian.toLowerCase(), email }));
+    else localStorage.removeItem(REMEMBER_EMAIL_KEY);
+  } catch (e) {
+    /* penyimpanan ditolak: login berikutnya bertanya ke server, seperti biasa */
+  }
+}
+
 async function signIn(masukan, password) {
-  const email = await resolveLoginEmail(masukan);
+  const isian = (masukan || "").trim();
+  const diingat = isian && !isian.includes("@") ? emailDiingat(isian) : null;
+  let email = diingat || (await resolveLoginEmail(isian));
   if (!email) {
     return { ok: false, message: t("s.username.atau.email.itu.tidak.terdaftar") };
   }
-  const { data, error } = await supabaseClient.auth.signInWithPassword({
-    email,
-    password: password || "",
-  });
+  const masukDengan = (alamat) => supabaseClient.auth.signInWithPassword({ email: alamat, password: password || "" });
+  let { data, error } = await masukDengan(email);
+  if (error && diingat) {
+    const terbaru = await resolveLoginEmail(isian);
+    if (terbaru && terbaru !== diingat) {
+      email = terbaru;
+      ({ data, error } = await masukDengan(email));
+    }
+  }
   if (error) return { ok: false, message: pesanLogin(error) };
+  ingatEmailLogin(isian, email);
   authState.user = data.user;
+  /* Jadwal diminta BERSAMAAN dengan profil, bukan sesudahnya (api.js,
+     sama seperti initApp): satu perjalanan ke server lebih sedikit
+     sebelum papan terisi. Akun nonaktif: hasilnya dibuang -- RLS pun
+     tidak memberinya satu baris. */
+  mulaiAmbilShipments();
   authState.profile = await loadProfile(data.user.id);
   if (akunNonaktif(authState.profile)) {
+    buangAmbilAwalShipments();
     await supabaseClient.auth.signOut();
     authState.user = null;
     authState.profile = null;
@@ -601,6 +653,8 @@ function simpanRemember(ingat, username) {
     localStorage.setItem(REMEMBER_KEY, ingat ? "1" : "0");
     if (ingat && username) localStorage.setItem(REMEMBER_USER_KEY, username);
     else localStorage.removeItem(REMEMBER_USER_KEY);
+    // Alamat email username yang tidak diingat lagi ikut dilupakan
+    if (!ingat) localStorage.removeItem(REMEMBER_EMAIL_KEY);
   } catch (e) {
     /* Mode privat memblokir penyimpanan. Login tetap jalan — yang
        hilang cuma kenyamanannya, dan itu bukan alasan untuk gagal. */

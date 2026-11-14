@@ -80,21 +80,32 @@ function itemTotals(shipmentLike) {
    3. BM seri = Nilai Pabean seri x Tarif BM barangnya (Data PIB barang),
       atau Tarif (%) jadwal (kosong = 5%). TOTAL BM dibulatkan KE ATAS ke
       ribuan rupiah (Rp1.506.882,069 -> Rp1.507.000).
+      BARANG YANG MEMAKAI COO (fasilitas COO di Daftar Barang, tersimpan
+      "E-COO") bertarif preferensi: BM 0%, apa pun tarif yang tersimpan
+      di barangnya (barangPakaiCoo). Bukan "dibebaskan": tarifnya nol,
+      jadi BM-nya 0 di kolom Dibayar -- seperti BARANGTARIF draft CEISA
+      yang bertarif BM 0 berfasilitas "Dibayar". PPN & PPh barang itu
+      dihitung dari Nilai Pabean tanpa BM.
    4. Fasilitas barang di jadwal (item.skb) adalah patokannya: SKB BM &
       Masterlist -> BM DIBEBASKAN, SKB PPN -> PPN dibebaskan, SKB PPh ->
       PPh dibebaskan. Yang dibebaskan masuk kolom Dibebaskan, sisanya
       Dibayar (kolom tabel 37-44 PIB).
    5. Nilai Impor seri = Nilai Pabean seri + BM seri yang TIDAK
       dibebaskan, sebelum dibulatkan.
-   6. PPN = Nilai Impor x 11% (12% x DPP nilai lain 11/12, PMK
-      131/2024). TOTAL PPN dibulatkan KE BAWAH ke rupiah penuh.
+   6. PPN seri = Nilai Impor seri x 11% (12% x DPP nilai lain 11/12,
+      PMK 131/2024), DIBULATKAN KE BAWAH ke rupiah penuh PER SERI, lalu
+      dijumlahkan -- seperti NILAI BAYAR PPN tiap seri di sheet
+      BARANGTARIF draft CEISA, yang jumlahnya = sheet PUNGUTAN. Draft
+      14 seri (NDPBM 18.141): per seri 1.596.408 ... 2.003.492, jumlah
+      26.292.835; dihitung dari totalnya 26.292.839 (selisih Rp4).
    7. PPh 22 = Nilai Impor seri DIBULATKAN KE BAWAH ke ribuan x Tarif
       PPh barangnya (bawaan 2,5%: importir ber-API), dijumlahkan.
 
    Diperiksa terhadap PIB sungguhan: CIP USD 4.780, 2 seri, NDPBM 17.707,
-   BM 5% -> BM 4.232.000, PPN 9.775.857, PPh 2.221.750; dan 17 seri (BM
-   5/10/15%, BKPM + SKB PPN & PPh) -> Dibebaskan BM 556.112.000, PPN
-   721.904.414, PPh 164.069.075 -- tepat semuanya, juga per serinya.
+   BM 5% -> BM 4.232.000, PPh 2.221.750; 17 seri (BM 5/10/15%, BKPM +
+   SKB PPN & PPh) -> Dibebaskan BM 556.112.000, PPh 164.069.075; dan
+   draft CEISA 14 seri (BM 0% AKFTA, SKB PPh) -> PPN 26.292.835, PPh
+   dibebaskan 5.975.425 -- tepat, juga per serinya.
 
    bmManual / ppnManual / pphManual: angka yang DIKETIK sendiri di tab
    Kepabeanan & Biaya, tampil apa adanya di kolom Dibayar. BM manual
@@ -137,6 +148,15 @@ function fasilitasPungutanBarang(it) {
   return bebas;
 }
 
+/* Barang ini memakai COO? Fasilitas COO tersimpan sebagai "E-COO"
+   (data lama & hasil impor memakainya; item-table.js menampilkannya
+   "COO"). Satu-satunya tempat yang menentukannya -- hitungan pungutan,
+   kotak Tarif BM, editor barang, dan Cek PIB/PEB semuanya bertanya ke
+   sini, jadi "COO -> BM 0%" tidak bisa berbeda antar-layar. */
+function barangPakaiCoo(it) {
+  return ((it && it.skb) || []).some((sk) => sk && sk.jenis === "E-COO");
+}
+
 const adaAngkaPungutan = (v) => v != null && v !== "" && isFinite(Number(v));
 
 /* Angka Dibayar yang diketik sendiri dibagi ke seri yang tidak
@@ -160,17 +180,23 @@ function hitungPungutanFasilitas(o) {
   const totalBarang = nilai.reduce((a, b) => a + b, 0);
   const nilaiPabean = (totalBarang + (o.freightUsd || 0) + (o.asuransiUsd || 0)) * (o.ndpbm || 0);
   const angka = (v) => (v === "" || v == null ? null : Number(v));
+  /* `abaikanCoo`: hitungan SEBELUM aturan COO -- hanya untuk
+     initAutoDutyFlags (modal-fields.js), supaya BM / PPN / PPh jadwal lama
+     yang tersimpan dengan BM 5% untuk barang ber-COO tetap dikenali
+     sebagai otomatis (ikut dihitung ulang), bukan angka yang diketik. */
   const seri = items.map((it, i) => {
     const dp = it.dataPabean || {};
     const np = totalBarang ? (nilaiPabean * nilai[i]) / totalBarang : 0;
-    const tarifBm = angka(dp.tarifBm) != null ? angka(dp.tarifBm) : o.tarifBm == null ? 5 : o.tarifBm;
+    const coo = !o.abaikanCoo && barangPakaiCoo(it);
+    const tarifBm = coo ? 0 : angka(dp.tarifBm) != null ? angka(dp.tarifBm) : o.tarifBm == null ? 5 : o.tarifBm;
     const tarifPph = angka(dp.tarifPph) != null ? angka(dp.tarifPph) : TARIF_PPH_IMPOR;
-    return { nilaiUsd: nilai[i], nilaiPabean: np, tarifBm, tarifPph, bebas: fasilitasPungutanBarang(it), bm: (np * tarifBm) / 100 };
+    return { nilaiUsd: nilai[i], nilaiPabean: np, tarifBm, tarifPph, coo, bebas: fasilitasPungutanBarang(it), bm: (np * tarifBm) / 100 };
   });
   bagiPungutanManual(seri, "BM", o.bmManual);
   seri.forEach((s) => {
     s.nilaiImpor = bersih(s.nilaiPabean + (s.bebas.BM ? 0 : s.bm));
-    s.ppn = (s.nilaiImpor * TARIF_PPN_IMPOR) / 100;
+    // Dibulatkan ke bawah PER SERI (NILAI BAYAR PPN BARANGTARIF CEISA), baru dijumlahkan
+    s.ppn = Math.floor(bersih((s.nilaiImpor * TARIF_PPN_IMPOR) / 100));
     s.pph = (Math.floor(s.nilaiImpor / 1000) * 1000 * s.tarifPph) / 100;
   });
   bagiPungutanManual(seri, "PPN", o.ppnManual);

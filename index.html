@@ -2,46 +2,12 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <!-- KEBIJAKAN KONTEN (Content-Security-Policy). Lapis kedua melawan XSS:
-         walau suatu hari ada teks yang lolos tanpa di-escape, skrip yang
-         disisipkan (tag skrip, atribut onerror, tautan javascript) TIDAK
-         dijalankan --
-         hanya berkas dari asal di bawah. Sesi login Supabase tersimpan di
-         localStorage, jadi XSS = akun diambil alih; ini penahannya.
-         Tidak ada skrip / penangan sebaris di aplikasi ini; jangan
-         menambahkannya. Pustaka CDN diizinkan per PAKET & VERSI, bukan
-         seluruh jsDelivr (yang memuat paket npm siapa saja). Menaikkan
-         versi pustaka, mengganti proyek Supabase (SUPABASE_URL di
-         config.js), atau lembar kurs (kurs.js) = perbarui daftar di sini.
-         'wasm-unsafe-eval' = WebAssembly pdf.js & Tesseract (OCR). -->
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self';
-      script-src 'self' 'wasm-unsafe-eval'
-        https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/
-        https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/
-        https://cdn.jsdelivr.net/npm/exceljs@4.4.0/
-        https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/
-        https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/
-        https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/
-        https://cdn.jsdelivr.net/npm/tesseract.js-core@v7.0.0/
-        https://cdn.sheetjs.com/xlsx-0.20.3/
-        https://docs.google.com/spreadsheets/d/1SpMXDVeQnG3z9VCBAAqV6s3vzN8slssA3eN3hqUYSaQ/;
-      style-src 'self' 'unsafe-inline'
-        https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/
-        https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/;
-      font-src 'self' data: https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/;
-      img-src 'self' data: blob: https://nigxxpzgunibuotluapv.supabase.co;
-      connect-src 'self' blob: data:
-        https://nigxxpzgunibuotluapv.supabase.co wss://nigxxpzgunibuotluapv.supabase.co
-        https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/
-        https://cdn.jsdelivr.net/npm/@tesseract.js-data/
-        https://docs.google.com/spreadsheets/d/1SpMXDVeQnG3z9VCBAAqV6s3vzN8slssA3eN3hqUYSaQ/;
-      worker-src 'self' blob:;
-      frame-src 'self' blob: data:;
-      object-src 'none';
-      base-uri 'self';
-      form-action 'self'
-    " />
+    <!-- KEBIJAKAN KONTEN (Content-Security-Policy) dipasang oleh
+         js/core/csp.js -- SENGAJA bukan tag meta di sini: tag meta CSP
+         yang tertulis di HTML membuat Chrome mengunduh ±130 skrip satu per
+         satu (login & muat ulang 4–9 detik). Alasan & daftarnya di berkas
+         itu. Skrip ini harus tetap yang PERTAMA. -->
+    <script src="js/core/csp.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-en="EXIM DDI — Import &amp; Export Schedule Board">EXIM DDI — Papan Jadwal Import &amp; Export</title>
     <meta name="color-scheme" content="light dark" />
@@ -1219,15 +1185,17 @@
         <details class="panel cek-aturan">
           <summary data-en="What is checked">Apa saja yang diperiksa</summary>
           <div class="panel-body">
-            <ul data-en="&lt;li&gt;&lt;b&gt;Schedule first, CIPL fills gaps&lt;/b&gt; — the linked schedule is the main reference: aju no., invoice, insurance policy (530), mode, vessel / flight, ports, incoterm, freight, insurance, NDPBM, packages, containers, shipper / buyer &amp;amp; dates are compared from the schedule, each in its own section. CIPL values are used only for fields the schedule leaves empty (marked &quot;CIPL&quot;) and for what the schedule does not record (packing list, TAX ID, currency). Customs office codes and the schedule&#x27;s ETD / ETA are not checked (a PEB still compares ETD with TANGGAL EKSPOR).&lt;/li&gt;&lt;li&gt;&lt;b&gt;Items from the schedule&lt;/b&gt; — when the linked schedule has an item list, each item comes from the schedule: its columns are compared one by one, as in CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), then the goods condition code (PIB), country of origin code, HS Code, quantity, unit, value, net weight, and Facilities &amp;amp; Seq. No. (the documents linked to its Seri Barang). What the schedule leaves empty — and items missing from the schedule — come from the CIPL. Items follow the draft&#x27;s Seri Barang: Item 1 = Seri Barang 1, paired with the same schedule / CIPL item by name, then HS Code — not by position.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Containers&lt;/b&gt; — the number, size &amp;amp; type (FCL / LCL) of each container in the KONTAINER sheet against the schedule&#x27;s Container/Seal Number, written NUMBER / SIZE / TYPE.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — a code that is not 8 digits yet is looked up in the HS Code database by item name, then in the linked schedule&#x27;s items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959) &amp;amp; LS (958) with their dates, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Every field is checked, except two numbers&lt;/b&gt; — the aju no. and the SPPB / registration no. are shown as INFO only and do not affect the result. Every other field printed on the PIB/PEB has its own row; whatever cannot be compared with the schedule or the CIPL appears as INFO instead of being skipped.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Automatic rate (KURS sheet)&lt;/b&gt; — the draft NDPBM is compared with the latest rate from the KURS sheet (JPY is read per 1 yen). This rate is used only for the check: the NDPBM saved in a schedule never changes by itself, and only changes when you press &quot;Sync latest rate&quot; in the schedule form and save.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Rupiah values &amp;amp; duties&lt;/b&gt; — the Customs Value (Rp) and the duties table (BM, PPN, PPh, total) are recalculated from the schedule with the draft NDPBM and compared with the PUNGUTAN sheet. Supporting documents in the DOKUMEN sheet that no other section covers are matched against the schedule documents; those only in the draft appear as INFO.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
-              <li><b>Jadwal dulu, CIPL melengkapi</b> — jadwal terkait adalah rujukan utama: No. Aju, invoice, polis asuransi (530), moda, kapal / penerbangan, pelabuhan, incoterm, freight, asuransi, NDPBM, kemasan, peti kemas, shipper / buyer &amp; tanggal dibandingkan dari jadwal, di bagiannya masing-masing. Nilai CIPL hanya dipakai untuk isian yang belum diisi di jadwal (ditandai "CIPL") dan yang memang tidak dicatat jadwal (packing list, TAX ID, mata uang). Kode kantor dan ETD / ETA jadwal tidak diperiksa (PEB tetap membandingkan ETD dengan TANGGAL EKSPOR).</li>
-              <li><b>Barang dari jadwal</b> — bila jadwal terkait punya daftar barang, tiap barang diambil dari jadwal: kolom barangnya dibandingkan satu per satu seperti di CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), lalu Kode Kondisi Barang (PIB), Kode Negara Asal, HS Code, jumlah, satuan, nilai, netto, serta Fasilitas &amp; No. Urut (dokumen yang ditautkan ke Seri Barang-nya). Yang kosong di jadwal — dan barang yang tidak ada di jadwal — diambil dari CIPL. Rincian barang mengikuti Seri Barang draft: Barang 1 = Seri Barang 1, dipasangkan dengan barang jadwal / CIPL yang sama menurut nama, lalu HS Code — bukan menurut urutannya.</li>
+            <ul data-en="&lt;li&gt;&lt;b&gt;Required PIB / PEB fields&lt;/b&gt; — the fields marked on the PIB &amp;amp; PEB draft printouts must equal the schedule: a difference, a field not filled in on the schedule, or a field the draft does not state is a MISMATCH. The other fields that are checked (customs office, BC 1.1, flag, storage place, freight, insurance, PPJK, PEB other documents, …) are INFO only, even when they differ. Item columns apply to every item.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Schedule first, CIPL fills gaps&lt;/b&gt; — the linked schedule is the main reference: aju no., invoice, insurance policy (530), mode, vessel / flight, ETA / ETD, ports, incoterm, value, freight, insurance, NDPBM, packages, containers, weights, shipper / buyer &amp;amp; dates are compared from the schedule, each in its own section. Flight numbers are compared without leading zeros in the number (OZ0761 = OZ761). CIPL values are used only for fields the schedule leaves empty (marked &quot;CIPL&quot;) and for what the schedule does not record (TAX ID, currency); a packing list not recorded in the schedule&#x27;s PIB/PEB Data is compared with the schedule&#x27;s invoice. Customs office codes are not checked; the schedule&#x27;s ETA is compared with the PIB arrival date, its ETD with the PEB TANGGAL EKSPOR.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Parties&lt;/b&gt; — addresses count as equal when written differently (JALAN = JL, &quot;NO. 01&quot; = &quot;NO.1&quot;, a postal code on one side only). The PEB exporter&#x27;s address is compared with the company address as printed on the CEISA PEB (shorter, without the postal code); the Goods Owner is the same, except for a Third Party Invoice — there the Goods Owner is compared only with the schedule&#x27;s PEB Data.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Items from the schedule&lt;/b&gt; — when the linked schedule has an item list, each item comes from the schedule: its columns are compared one by one, as in CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), then the goods condition code (PIB), country of origin code, HS Code, quantity, unit, value, net weight, packages, and Facilities &amp;amp; Seq. No. (the documents linked to its Seri Barang). What the schedule leaves empty — and items missing from the schedule — come from the CIPL. The schedule order is never changed: item 1 is compared with Seri Barang 1, item 2 with Seri Barang 2, and so on. The draft&#x27;s Seri Barang must run in order from 1 and follow the schedule — the Seri Barang order section lists every item on its own row and points out which seri an item is in when it is out of place.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Containers&lt;/b&gt; — the number, size &amp;amp; type (FCL / LCL) of each container in the KONTAINER sheet against the schedule&#x27;s Container/Seal Number, written NUMBER / SIZE / TYPE.&lt;/li&gt;&lt;li&gt;&lt;b&gt;8-digit HS Code&lt;/b&gt; — a code that is not 8 digits yet is looked up in the HS Code database by item name, then in the linked schedule&#x27;s items, then in earlier schedules. A CIPL that only states 6 digits is completed from there.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Facilities &amp;amp; permits&lt;/b&gt; — PI (959) &amp;amp; LS (958) with their dates, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp;amp; COO (860 / 861) against the schedule.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Aju no. &amp;amp; registration no. are INFO only&lt;/b&gt; — the aju no. and the SPPB / registration no. are shown as INFO and do not affect the result. Every other field printed on the PIB/PEB has its own row; whatever cannot be compared appears as INFO instead of being skipped — except a required field not filled in on the schedule or not stated in the draft, which is a MISMATCH.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Automatic rate (KURS sheet)&lt;/b&gt; — the draft NDPBM is compared with the latest rate from the KURS sheet (JPY is read per 1 yen). This rate is used only for the check: the NDPBM saved in a schedule never changes by itself, and only changes when you press &quot;Sync latest rate&quot; in the schedule form and save.&lt;/li&gt;&lt;li&gt;&lt;b&gt;Duties (BM, PPN, PPh, TOTAL)&lt;/b&gt; — the Paid column is taken from what is filled in on the schedule (Import Duties &amp;amp; Taxes), not recalculated; the Exempted column from the Duties tab of the schedule&#x27;s PIB Data (items with an SKB or Masterlist (912) facility). The draft TOTAL covers all its duty types. Items that use a COO carry a 0% BM rate. A duty not filled in on the schedule while the draft has an amount is a MISMATCH. Supporting documents in the DOKUMEN sheet that no other section covers are matched against the schedule documents; those only in the draft: PIB MISMATCH (every document is required), PEB INFO.&lt;/li&gt;&lt;li&gt;Without a CIPL, the draft is compared with the linked schedule only. Files are read in this browser and never uploaded.&lt;/li&gt;">
+              <li><b>Isian wajib PIB / PEB</b> — isian yang ditandai di cetakan draft PIB &amp; PEB wajib sama dengan jadwal: berbeda, belum diisi di jadwal, atau tidak tercantum di draft tampil MISMATCH. Isian lain yang ikut diperiksa (kantor pabean, BC 1.1, bendera, tempat timbun, freight, asuransi, PPJK, dokumen lainnya PEB, …) hanya INFO walau berbeda. Kolom barang berlaku untuk semua barang.</li>
+              <li><b>Jadwal dulu, CIPL melengkapi</b> — jadwal terkait adalah rujukan utama: No. Aju, invoice, polis asuransi (530), moda, kapal / penerbangan, ETA / ETD, pelabuhan, incoterm, nilai, freight, asuransi, NDPBM, kemasan, peti kemas, berat, shipper / buyer &amp; tanggal dibandingkan dari jadwal, di bagiannya masing-masing. Nomor penerbangan dibandingkan tanpa angka 0 di depan nomornya (OZ0761 = OZ761). Nilai CIPL hanya dipakai untuk isian yang belum diisi di jadwal (ditandai "CIPL") dan yang memang tidak dicatat jadwal (TAX ID, mata uang); packing list yang tidak dicatat di Data PIB/PEB jadwal dibandingkan dengan invoice jadwal. Kode kantor tidak diperiksa; ETA jadwal dibandingkan dengan tanggal tiba PIB, ETD dengan TANGGAL EKSPOR PEB.</li>
+              <li><b>Pihak</b> — alamat dianggap sama walau ditulis lain (JALAN = JL, "NO. 01" = "NO.1", kode pos di salah satunya). Alamat eksportir PEB dibandingkan dengan alamat perusahaan seperti tercetak di PEB CEISA (lebih pendek, tanpa kode pos); Pemilik Barang ikut sama, kecuali Third Party Invoice — di situ Pemilik Barang dibandingkan dengan isian Data PEB jadwal saja.</li>
+              <li><b>Barang dari jadwal</b> — bila jadwal terkait punya daftar barang, tiap barang diambil dari jadwal: kolom barangnya dibandingkan satu per satu seperti di CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran, Spesifikasi Lain), lalu Kode Kondisi Barang (PIB), Kode Negara Asal, HS Code, jumlah, satuan, nilai, netto, kemasan, serta Fasilitas &amp; No. Urut (dokumen yang ditautkan ke Seri Barang-nya). Yang kosong di jadwal — dan barang yang tidak ada di jadwal — diambil dari CIPL. Urutan jadwal tidak diubah: barang 1 dibandingkan dengan Seri Barang 1, barang 2 dengan Seri Barang 2, dan seterusnya. Seri Barang draft harus berurutan mulai 1 dan mengikuti urutan jadwal — seksi Urutan Seri Barang memuat satu baris per barang dan menyebut seri tempat barang yang tidak urut berada.</li>
               <li><b>Peti kemas</b> — nomor, ukuran &amp; tipe (FCL / LCL) tiap kontainer di sheet KONTAINER dibandingkan dengan Container/Seal Number jadwal, ditulis NOMOR / UKURAN / TIPE.</li>
               <li><b>HS Code 8 digit</b> — yang belum 8 digit dicari di Database HS Code menurut nama barang, lalu di barang jadwal terkait, lalu di jadwal sebelumnya. CIPL yang hanya menulis 6 digit dilengkapi dari situ.</li>
               <li><b>Fasilitas &amp; izin</b> — PI (959) &amp; LS (958) beserta tanggalnya, Masterlist (912), SKB PPN (456), SKB PPh (457) &amp; COO (860 / 861) dibandingkan dengan jadwal.</li>
-              <li><b>Semua isian dicek, kecuali dua nomor</b> — No. Aju dan No. SPPB / No. Daftar hanya ditampilkan sebagai INFO dan tidak memengaruhi hasil. Selain itu setiap isian yang tercetak di PIB/PEB punya barisnya sendiri; yang memang tidak bisa dibandingkan dengan jadwal atau CIPL tampil sebagai INFO, bukan dilewati.</li>
+              <li><b>No. Aju &amp; No. Daftar hanya INFO</b> — No. Aju dan No. SPPB / No. Daftar ditampilkan sebagai INFO dan tidak memengaruhi hasil. Setiap isian lain yang tercetak di PIB/PEB punya barisnya sendiri; yang tidak bisa dibandingkan tampil sebagai INFO, bukan dilewati — kecuali isian wajib yang belum diisi di jadwal atau tidak tercantum di draft, yang tampil MISMATCH.</li>
               <li><b>Kurs otomatis (sheet KURS)</b> — NDPBM draft dibandingkan dengan kurs terbaru dari sheet KURS (JPY dihitung per 1 yen). Kurs ini hanya dipakai di pemeriksaan: NDPBM yang tersimpan di jadwal tidak berubah sendiri, dan baru berganti bila Anda menekan "Sync kurs terbaru" di form jadwal lalu menyimpannya.</li>
-              <li><b>Nilai Rupiah &amp; pungutan</b> — Nilai Pabean (Rp) serta tabel pungutan (BM, PPN, PPh, total) dihitung ulang dari jadwal dengan NDPBM draft, lalu dibandingkan dengan sheet PUNGUTAN. Dokumen pelengkap di sheet DOKUMEN yang belum tercakup bagian lain dicocokkan dengan dokumen jadwal; yang hanya ada di draft tampil sebagai INFO.</li>
+              <li><b>Pungutan (BM, PPN, PPh, TOTAL)</b> — kolom Dibayar diambil dari isian jadwal (Bea &amp; Pajak Impor), tidak dihitung ulang; kolom Dibebaskan dari tab Pungutan Data PIB jadwal (barang yang berfasilitas SKB atau Masterlist (912)). TOTAL draft = semua jenis pungutannya. Barang yang memakai COO bertarif BM 0%. Pungutan yang belum diisi di jadwal sementara draft berisi tampil MISMATCH. Dokumen pelengkap di sheet DOKUMEN yang belum tercakup bagian lain dicocokkan dengan dokumen jadwal; yang hanya ada di draft: PIB MISMATCH (seluruh dokumen wajib), PEB INFO.</li>
               <li>Tanpa CIPL, draft dibandingkan dengan jadwal terkait saja. Berkas dibaca di peramban ini dan tidak diunggah.</li>
             </ul>
           </div>
@@ -2609,14 +2577,14 @@
                       data-dn="docNo"
                       autocomplete="off"
                     />
-                    <!-- Doc No BAWAAN "EI-<YYMM>-0000" (bulan berjalan) di form
-                         baru: keterangan ini tampil selama 0000-nya belum
-                         diganti -- isian begitu tidak ikut tersimpan
-                         (fundIsiDocNoBawaan, js/features/fund-docno.js). -->
-                    <div class="form-text-note fund-docno-bawaan d-none" id="fundDocNoBawaanKet"
-                      data-en="Replace 0000 with the Doc No sequence number — left as 0000, no Doc No is saved.">
-                      Ganti 0000 dengan nomor urut Doc No — dibiarkan 0000, Doc No tidak ikut tersimpan.
-                    </div>
+                    <!-- Doc No BAWAAN di form baru (polanya diatur di kotak
+                         Aturan Doc No, mis. Distribution-<YYMM>-0000):
+                         keterangan ini tampil selama bawaannya belum
+                         diganti -- isian begitu tidak ikut tersimpan.
+                         Teksnya dirakit fundDocNoKeterangan (angka yang
+                         harus diganti mengikuti polanya), jadi tanpa
+                         data-en (js/features/fund-docno.js). -->
+                    <div class="form-text-note fund-docno-bawaan d-none" id="fundDocNoBawaanKet"></div>
                     <div class="form-text-note fund-docno-cetak" data-en="Printed under No Surat on the form.">
                       Tercetak di bawah No Surat pada form.
                     </div>
@@ -3113,6 +3081,16 @@
                 <span data-en="<i class=&quot;bi bi-sliders&quot;></i> Doc No Rule"><i class="bi bi-sliders"></i> Aturan Doc No</span>
                 <span class="counter-info" id="fundDocNoInfo">&mdash;</span>
               </div>
+              <!-- DOC NO BAWAAN form pengajuan baru: contoh bulan berjalan
+                   (#fundDocNoPolaNilai, dirakit fundDocNoPolaGambar);
+                   Ubah -> kotak isian polanya (fundDocNoPolaBukaUbah). -->
+              <div class="dn-aturan-isi dn-docno-pola">
+                <span class="dn-aturan-label" data-en="Default Doc No:">Doc No bawaan:</span>
+                <span class="dn-docno-pola-isi">
+                  <span class="dn-docno-pola-nilai" id="fundDocNoPolaNilai">&mdash;</span>
+                  <button type="button" class="dn-tambah-mini" id="btnFundDocNoPola" data-en="<i class=&quot;bi bi-pencil&quot;></i> Change"><i class="bi bi-pencil"></i> Ubah</button>
+                </span>
+              </div>
               <div class="dn-aturan-isi">
                 <span class="dn-aturan-label" data-en="Doc No not printed for:">Doc No tidak dicetak untuk:</span>
                 <div class="dn-aturan-daftar" id="fundDocNoDaftar"></div>
@@ -3135,14 +3113,17 @@
               </div>
               <details class="dn-bantuan">
                 <summary data-en="How it works">Cara kerja</summary>
-                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
-                <i class="bi bi-info-circle"></i> Doc No bisa diisi dan
-                tersimpan untuk semua vendor. Pada form yang dicetak, Doc No
-                tampil di bawah No Surat (beserta tanda tangan CFO) untuk
-                semua vendor <b>kecuali</b> yang ada di daftar ini.
-                Dicocokkan per kata dengan &ldquo;Dibayarkan Kepada&rdquo;:
-                <b>PRIME</b> mengenai &ldquo;PT PRIME CARGO&rdquo;, tidak
-                mengenai &ldquo;PRIMERA&rdquo;.
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> <b>Default Doc No</b> fills the Doc No box of every new request &amp;mdash; its year &amp;amp; month follow the current month, just replace the trailing number; left unchanged, no Doc No is saved. Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+                <i class="bi bi-info-circle"></i> <b>Doc No bawaan</b> mengisi
+                kotak Doc No setiap pengajuan baru &mdash; tahun &amp; bulannya
+                mengikuti bulan berjalan, tinggal angka di ujungnya yang
+                diganti; dibiarkan, Doc No tidak tersimpan. Doc No bisa
+                diisi dan tersimpan untuk semua vendor. Pada form yang
+                dicetak, Doc No tampil di bawah No Surat (beserta tanda
+                tangan CFO) untuk semua vendor <b>kecuali</b> yang ada di
+                daftar ini. Dicocokkan per kata dengan &ldquo;Dibayarkan
+                Kepada&rdquo;: <b>PRIME</b> mengenai &ldquo;PT PRIME
+                CARGO&rdquo;, tidak mengenai &ldquo;PRIMERA&rdquo;.
               </div>
               </details>
             </div>
@@ -3230,32 +3211,37 @@
                       <option value="belum" data-en="Unpaid">Belum Lunas</option>
                     </select>
                   </label>
-                  <!-- Mencari di SELURUH riwayat jenis dokumen yang aktif,
+                  <!-- Kotak cari + muat ulang SATU kelompok: kalau barisnya
+                       tidak muat, keduanya turun bersama -- tombol muat
+                       ulang tidak pernah tertinggal sendirian di baris baru.
+                       Mencari di SELURUH riwayat jenis dokumen yang aktif,
                        bukan cuma halaman yang sedang tampil -- lihat
                        dnFilterCari() di docnum-view.js. -->
-                  <label class="dn-cari">
-                    <i class="bi bi-search"></i>
-                    <input
-                      type="search"
-                      id="docNumSearch"
-                      autocomplete="off"
-                      placeholder="Cari"
-                      data-i18n-ph="ph.cari"
-                      aria-label="Cari di riwayat nomor"
-                      data-en-aria="Search the number history"
-                    />
-                    <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
-                  </label>
-                  <button
-                    type="button"
-                    class="btn btn-light btn-sm"
-                    id="btnDocNumRefresh"
-                    title="Muat Ulang"
-                   data-en-title="Reload"
-                    aria-label="Muat ulang riwayat"
-                    data-en-aria="Reload history">
-                    <i class="bi bi-arrow-clockwise"></i>
-                  </button>
+                  <div class="dn-cari-grup">
+                    <label class="dn-cari">
+                      <i class="bi bi-search"></i>
+                      <input
+                        type="search"
+                        id="docNumSearch"
+                        autocomplete="off"
+                        placeholder="Cari"
+                        data-i18n-ph="ph.cari"
+                        aria-label="Cari di riwayat nomor"
+                        data-en-aria="Search the number history"
+                      />
+                      <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn-light btn-sm"
+                      id="btnDocNumRefresh"
+                      title="Muat Ulang"
+                      data-en-title="Reload"
+                      aria-label="Muat ulang riwayat"
+                      data-en-aria="Reload history">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <!-- Tab sub-jenis riwayat: tampil hanya untuk jenis dokumen
@@ -3408,7 +3394,7 @@
               <span data-en="Documents">Dokumen</span>
             </div>
             <!-- Urutan = urutan dokumen datang, dan urutan Tab:
-                   1. Nama Shipper/Buyer (judul jadwal) | No. Aju
+                   1. Nama Shipper/Buyer (judul jadwal) | Negara | No. Aju
                    2. Invoice (nomor + tanggal)          | Packing List
                    3. Master B/L-AWB                     | House B/L-AWB
                    4. SPPB / PEB (terbit paling akhir)
@@ -3460,12 +3446,34 @@
                   Nama baru — masuk daftar setelah jadwal disimpan.
                 </div>
               </div>
-              <!-- Selebar setengah baris: nomor aju 26 angka. Kiriman kurir
+              <!-- Negara Shipper (Import) / Buyer (Export): kode negara,
+                   kotak ketik + saran #negaraList seperti Negara Asal
+                   barang (dibakukan ke kode saat ditinggalkan / Enter, nama
+                   negaranya redup di dalam kotak). Tersimpan di Data
+                   PIB/PEB -- Negara Pengirim / Pembeli; Penjual / Penerima
+                   mengikutinya (data-pabean-form.js). -->
+              <div class="s2">
+                <label class="form-label" for="fNegaraPihak" data-en="Country">Negara</label>
+                <div class="negara-isian negara-isian--form">
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fNegaraPihak"
+                    list="negaraList"
+                    placeholder="Kode / nama"
+                    data-en-ph="Code / name"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <span class="negara-nama" aria-hidden="true"></span>
+                </div>
+              </div>
+              <!-- Sepertiga baris: nomor aju 26 angka. Kiriman kurir
                    bernilai di bawah USD 1.500 terisi "CONSIGNEE NOTE"
                    sendiri, keterangannya di #ajuKurirKet
                    (aturAjuConsigneeNote, modal-fields.js). Buku Export:
                    Tanggal PEB terisi dari tanggal di nomor aju. -->
-              <div class="s6">
+              <div class="s4">
                 <label class="form-label" for="fNoAju" data-i18n="f.no.aju">No. Aju</label>
                 <input
                   type="text"
@@ -4399,7 +4407,7 @@
                 </div>
               </div>
               <!-- BM, PPN, PPH & PDRI (jumlah ketiganya) sebaris; catatannya selebar baris di bawahnya. Tarif BM kini per barang (Daftar Barang). -->
-              <div class="s12 form-text-note fg-note" data-i18n="form.note.duty">Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif BM barangnya, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. <b>Tarif BM diisi per barang</b> di kolom Tarif BM (%) tab 2. Daftar Barang — terisi otomatis dari HS Code-nya. Barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.</div>
+              <div class="s12 form-text-note fg-note" data-i18n="form.note.duty">Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif BM barangnya, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. <b>Tarif BM diisi per barang</b> di kolom Tarif BM (%) tab 2. Daftar Barang — terisi otomatis dari HS Code-nya. Barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Barang yang memakai COO bertarif BM 0%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.</div>
             </div>
             <div class="form-text-note mt-1">
               <i class="bi bi-info-circle"></i> <span data-en="SKB / Masterlist facilities are now recorded per item — see the">Fasilitas SKB / Masterlist
@@ -5366,6 +5374,8 @@
     <script src="js/features/docnum-detail.js"></script>
     <script src="js/features/invoice-pihak.js"></script>
     <script src="js/features/fund-summary.js"></script>
+    <script src="js/features/fund-report-ledger.js"></script>
+    <script src="js/features/fund-report-blok.js"></script>
     <script src="js/features/fund-report.js"></script>
     <script src="js/features/shipment-cost.js"></script>
     <script src="js/features/fund-invoice-import.js"></script>

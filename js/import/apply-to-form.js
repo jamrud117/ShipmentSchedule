@@ -73,7 +73,13 @@ function isCiplSource(source) {
 
    Dokumen kepabeanan tetap boleh MENGISI harga yang masih kosong:
    angka turunan lebih berguna daripada kolom kosong. Yang dilarang
-   hanya menimpa yang sudah ada. */
+   hanya menimpa yang sudah ada.
+
+   Termasuk draft Excel CEISA: nilai barangnya sudah ditambah freight &
+   asuransi (bila ada), jadi bukan harga satuan invoice. Tetapi harga
+   yang dipertahankan harus milik BARANG YANG SAMA -- dicocokkan menurut
+   nama (sama / mirip), tidak pernah menurut urutan baris: harga seri 5
+   tidak boleh menempel di barang 1 (preserveUnitPrices, `ketat`). */
 function isPriceAuthority(source) {
   return isCiplSource(source);
 }
@@ -103,12 +109,39 @@ function itemMatchKey(it) {
 
    `lama`: barang lama yang boleh dipakai, [{ it, i }] (i = posisinya di
    tabel). `lapisan`: (barangBaru) => uji(barangLama), atau null kalau
-   barang baru itu tidak punya kuncinya. Hasil: barang lama per barang
-   baru (null = tanpa pasangan). */
+   barang baru itu tidak punya kuncinya -- atau lapisan NAMA MIRIP
+   (cocokMirip), yang memasangkan sisa barang sekaligus menurut
+   kemiripan namanya (pasangkanNamaMirip, helpers.js). Hasil: barang
+   lama per barang baru (null = tanpa pasangan). */
 function pasangkanBarangLama(newItems, lama, lapisan) {
   const terpakai = new Set();
   const hasil = newItems.map(() => null);
   lapisan.forEach((ujiUntuk) => {
+    if (ujiUntuk && ujiUntuk.hsTunggal) {
+      const hs = (it) => normalizeHsCodeInput(it && it.hsCode);
+      newItems.forEach((it, posisi) => {
+        const h = hs(it);
+        if (hasil[posisi] || !h) return;
+        const lamaSama = lama.filter((o) => !terpakai.has(o.i) && hs(o.it) === h);
+        const baruSama = newItems.filter((x, k) => !hasil[k] && hs(x) === h);
+        if (lamaSama.length !== 1 || baruSama.length !== 1) return;
+        terpakai.add(lamaSama[0].i);
+        hasil[posisi] = lamaSama[0].it;
+      });
+      return;
+    }
+    if (ujiUntuk && ujiUntuk.mirip) {
+      const sisa = lama.filter((o) => !terpakai.has(o.i));
+      const idx = pasangkanNamaMirip(newItems.map((it) => itemDisplayName(it)), sisa.map((o) => itemDisplayName(o.it)), {
+        bolehA: (posisi) => !hasil[posisi] && ujiUntuk.perlu(newItems[posisi]),
+      });
+      idx.forEach((j, posisi) => {
+        if (j < 0) return;
+        terpakai.add(sisa[j].i);
+        hasil[posisi] = sisa[j].it;
+      });
+      return;
+    }
     newItems.forEach((it, posisi) => {
       if (hasil[posisi]) return;
       const uji = ujiUntuk(it);
@@ -126,7 +159,21 @@ function pasangkanBarangLama(newItems, lama, lapisan) {
   return hasil;
 }
 
-// Lapisan pencocokan yang dipakai bersama: nama lengkap sama, lalu HS Code sama
+/* Lapisan pencocokan yang dipakai bersama: nama lengkap sama, lalu nama
+   MIRIP (kata yang sama, ukuran paling menentukan -- "195/65R15 95V"
+   tetap bertemu "195/65 R15", tidak dengan "195/55R16"), baru HS Code
+   sama. Tanpa lapisan mirip, barang ber-HS sama yang namanya ditulis
+   sedikit lain dipasangkan menurut urutan saja: 14 cetakan 8480.71.90
+   dari CIPL yang urutannya lain dari Seri Barang draft saling
+   bertukar harga. `perlu` (opsional): barang baru yang memang perlu
+   dicarikan pasangan. */
+const cocokMirip = (perlu) => ({ mirip: true, perlu: perlu || (() => true) });
+const COCOK_MIRIP = cocokMirip();
+/* HS Code sama, tetapi HANYA bila pasangannya tidak bisa salah: tinggal
+   satu barang lama ber-HS itu dan satu barang baru ber-HS itu. Beberapa
+   barang ber-HS sama (14 cetakan 8480.71.90) tidak dipasangkan menurut
+   urutan -- tanpa pasangan lebih baik daripada pasangan yang tertukar. */
+const COCOK_HS_TUNGGAL = { hsTunggal: true };
 const COCOK_NAMA = (it) => {
   const nama = itemMatchKey(it);
   return nama ? (o) => itemMatchKey(o) === nama : null;
@@ -158,7 +205,7 @@ function preserveDimensionsForCeisa(newItems, oldItems, src) {
   if (!lama.length || !newItems.length) return newItems;
   // Barang yang dimensinya sudah terisi tidak mencari pasangan (dan tidak memakai jatah barang lama)
   const perlu = (cari) => (it) => (String(it.package || "").trim() ? null : cari(it));
-  const pasangan = pasangkanBarangLama(newItems, lama, [perlu(COCOK_NAMA), perlu(COCOK_HS)]);
+  const pasangan = pasangkanBarangLama(newItems, lama, [perlu(COCOK_NAMA), cocokMirip((it) => !String(it.package || "").trim()), perlu(COCOK_HS)]);
   return newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { package: pasangan[i].package }) : it));
 }
 
@@ -267,11 +314,12 @@ function preserveNamesForCeisa(newItems, oldItems, src) {
    Yang tetap tidak dibawa memakai bawaan buku (newItem); yang dibawa
    kosong tetap kosong (draft memang tidak mengisinya). */
 const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal", "piNomor"];
-function lengkapiKodeBarang(newItems, oldItems) {
+function lengkapiKodeBarang(newItems, oldItems, lapisan) {
   const isi = (it, k) => String((it && it[k]) || "").trim();
   const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => KOLOM_KODE_BARANG.some((k) => isi(o.it, k)));
-  const perlu = (cari) => (it) => (KOLOM_KODE_BARANG.some((k) => !isi(it, k)) ? cari(it) : null);
-  const pasangan = lama.length ? pasangkanBarangLama(newItems, lama, [perlu(COCOK_NAMA), perlu(COCOK_HS)]) : [];
+  const perluKode = (it) => KOLOM_KODE_BARANG.some((k) => !isi(it, k));
+  const perlu = (cari) => (cari && cari.mirip ? cocokMirip(perluKode) : (it) => (perluKode(it) ? cari(it) : null));
+  const pasangan = lama.length ? pasangkanBarangLama(newItems, lama, (lapisan || [COCOK_NAMA, COCOK_MIRIP, COCOK_HS]).map(perlu)) : [];
   const bawaan = newItem(activeMode);
   return newItems.map((it, i) => {
     const out = Object.assign({}, it);
@@ -289,12 +337,14 @@ function lengkapiKodeBarang(newItems, oldItems) {
 /* Data PIB/PEB per barang (item.dataPabean, core/data-pabean.js) ikut
    barang lamanya -- dicocokkan seperti harga satuan di bawah: berkas yang
    tidak membawanya (CIPL, invoice) tidak menghapusnya, dan isian yang
-   dibawa berkas baru hanya menimpa isian yang sama. */
-function pertahankanDataPabeanBarang(newItems, oldItems) {
+   dibawa berkas baru hanya menimpa isian yang sama. `lapisan` (opsional):
+   pencocokan yang boleh dipakai -- draft Excel CEISA hanya nama sama /
+   mirip, tanpa jatuh ke urutan. */
+function pertahankanDataPabeanBarang(newItems, oldItems, lapisan) {
   const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => adaDataPabeanBarang(o.it.dataPabean));
   if (!lama.length) return newItems;
-  let pasangan = pasangkanBarangLama(newItems, lama, [COCOK_NAMA, COCOK_HS]);
-  if (!pasangan.some(Boolean) && newItems.length === lama.length) pasangan = lama.map((o) => o.it);
+  let pasangan = pasangkanBarangLama(newItems, lama, lapisan || [COCOK_NAMA, COCOK_MIRIP, COCOK_HS]);
+  if (!lapisan && !pasangan.some(Boolean) && newItems.length === lama.length) pasangan = lama.map((o) => o.it);
   return newItems.map((it, i) =>
     pasangan[i] ? Object.assign({}, it, { dataPabean: gabungDataPabeanBarang(pasangan[i].dataPabean, it.dataPabean) }) : it,
   );
@@ -302,8 +352,9 @@ function pertahankanDataPabeanBarang(newItems, oldItems) {
 
 /* Mengembalikan harga satuan yang sudah ada ke daftar barang yang baru.
 
-   Dicocokkan berlapis — nama dulu untuk semua barang, baru HS Code
-   untuk sisanya, urutan terdekat (pasangkanBarangLama) — karena satu HS
+   Dicocokkan berlapis — nama sama dulu untuk semua barang, lalu nama
+   mirip, baru HS Code untuk sisanya, urutan terdekat
+   (pasangkanBarangLama) — karena satu HS
    Code kerap dipakai beberapa barang sekaligus, sementara namanya
    jarang sama persis. Tiap barang lama hanya boleh dipakai sekali,
    supaya dua pos yang ber-HS sama tidak sama-sama mewarisi harga dari
@@ -312,12 +363,23 @@ function pertahankanDataPabeanBarang(newItems, oldItems) {
    Kalau tidak ada yang cocok sama sekali TAPI jumlah barangnya persis
    sama, dicocokkan menurut urutan: dokumen kepabeanan hampir selalu
    menyusun barang dalam urutan yang sama dengan invoice-nya. */
-function preserveUnitPrices(newItems, oldItems) {
+function preserveUnitPrices(newItems, oldItems, opsi) {
+  const ketat = !!(opsi && opsi.ketat);
   const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => parseLooseNumber(o.it.harga) > 0);
-  if (!lama.length || !newItems.length) return { items: newItems, kept: 0 };
+  if (!lama.length || !newItems.length) return { items: newItems, kept: 0, tanpaPasangan: [] };
 
-  const pasangan = pasangkanBarangLama(newItems, lama, [COCOK_NAMA, COCOK_HS]);
+  /* `ketat` (draft Excel CEISA): hanya nama sama / mirip / HS tunggal --
+     tanpa urutan terdekat & tanpa pencocokan menurut urutan. Barang yang
+     tidak berpasangan memakai harga draft-nya; nomornya dilaporkan. */
+  const pasangan = pasangkanBarangLama(newItems, lama, ketat ? [COCOK_NAMA, COCOK_MIRIP, COCOK_HS_TUNGGAL] : [COCOK_NAMA, COCOK_MIRIP, COCOK_HS]);
   const kept = pasangan.filter(Boolean).length;
+  if (ketat) {
+    return {
+      items: newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { harga: pasangan[i].harga }) : it)),
+      kept,
+      tanpaPasangan: pasangan.map((o, i) => (o ? 0 : i + 1)).filter(Boolean),
+    };
+  }
   if (!kept && newItems.length === lama.length) {
     return {
       items: newItems.map((it, i) => Object.assign({}, it, { harga: lama[i].it.harga })),
@@ -325,7 +387,7 @@ function preserveUnitPrices(newItems, oldItems) {
       byOrder: true,
     };
   }
-  return { items: newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { harga: pasangan[i].harga }) : it)), kept };
+  return { items: newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { harga: pasangan[i].harga }) : it)), kept, tanpaPasangan: [] };
 }
 
 // Satu-satunya pintu penulisan field form dari hasil import.
@@ -622,13 +684,28 @@ function applyImportedBcData(parsed) {
             }),
           );
         }
-        const jaga = preserveUnitPrices(jagaNama.items, draftItems);
-        draftItems = pertahankanDataPabeanBarang(lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems), draftItems);
+        /* Draft Excel CEISA: barang ke-n = Seri Barang n, dan isiannya
+           (jumlah, kemasan, berat, HS, kode, fasilitas, Data PIB) dari
+           baris seri itu sendiri. Harga satuan barang yang sudah ada
+           (invoice) dipertahankan -- nilai draft sudah ditambah freight &
+           asuransi -- tetapi hanya dari barang YANG SAMA menurut namanya
+           (preserveUnitPrices ketat); barang lama tidak pernah
+           diwariskan ke seri lain menurut urutan baris. */
+        const draftCeisa = src === "excel";
+        const jaga = preserveUnitPrices(jagaNama.items, draftItems, { ketat: draftCeisa });
+        const lapisLama = draftCeisa ? [COCOK_NAMA, COCOK_MIRIP] : undefined;
+        draftItems = pertahankanDataPabeanBarang(
+          lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems, lapisLama),
+          draftItems,
+          lapisLama,
+        );
         if (jaga.kept) {
           notes.push(
             t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),
           );
         }
+        // Barang draft yang tidak ditemukan di daftar sebelumnya: harganya dari draft (bisa termasuk freight & asuransi)
+        if (jaga.kept && jaga.tanpaPasangan.length) notes.push(t("w.harga.dari.draft", { daftar: jaga.tanpaPasangan.join(", ") }));
       }
       importFieldOrigin.__items = prio;
     } else {

@@ -444,6 +444,17 @@ function parseBcExcelWorkbook(wb) {
     } else if (!KODE_DOKUMEN_BERISIAN.has(d.kode)) tambahDokumenPengiriman(dokPelengkap.lain, d.nomor, d.tanggal, d.kode);
   });
   fields.dokPelengkap = dokPelengkap;
+  /* Fasilitas yang tidak ditautkan ke barang mana pun (fasilitasUmum)
+     dipasang ke SEMUA barang -- wajar untuk Masterlist & SKB PPN/PPh yang
+     memang berlaku umum. COO TIDAK: COO selalu per barang (di draft CEISA
+     ia hanya tertaut ke barang yang memakainya, lewat BARANGDOKUMEN) dan
+     kini berarti tarif BM 0% (barangPakaiCoo, core/customs.js), jadi COO
+     yang tak tertaut ke barang mana pun tidak boleh membuat SEMUA barang
+     ber-BM 0%. Ia tidak dipasang ke barang & diberi catatan; tetap ikut di
+     `fasilitasUmum` hasil parse (bahan Cek PIB/PEB, yang membandingkan
+     dokumen draft apa adanya). */
+  const fasilitasUmumSemuaBarang = fasilitasUmum.filter((sk) => sk.jenis !== "E-COO");
+  const cooTakTertaut = fasilitasUmum.filter((sk) => sk.jenis === "E-COO");
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);
@@ -511,7 +522,7 @@ function parseBcExcelWorkbook(wb) {
          harus dibetulkan satu per satu. */
       // PI yang ditautkan ke barang ini; tanpa tautan: undefined -- isian barang lama yang berlaku
       piNomor: piBySeriBarang.get(seriBarang),
-      skb: [...(skbBySeriBarang.get(seriBarang) || []), ...fasilitasUmum]
+      skb: [...(skbBySeriBarang.get(seriBarang) || []), ...fasilitasUmumSemuaBarang]
         .filter(
           (sk, i, semua) =>
             semua.findIndex((x) => x.jenis === sk.jenis && x.nomor === sk.nomor) === i,
@@ -551,12 +562,12 @@ function parseBcExcelWorkbook(wb) {
       t("y.skb.tidak.ditemukan.pemetaan"),
     );
   }
-  if (fasilitasUmum.length && items.length) {
-    notes.push(
-      t("y.fasilitas.umum.semua.barang", {
-        daftar: fasilitasUmum.map((sk) => `${skbEntryLabel(sk)} ${sk.nomor}`.trim()).join(", "),
-      }),
-    );
+  const labelFasilitas = (daftar) => daftar.map((sk) => `${skbEntryLabel(sk)} ${sk.nomor}`.trim()).join(", ");
+  if (fasilitasUmumSemuaBarang.length && items.length) {
+    notes.push(t("y.fasilitas.umum.semua.barang", { daftar: labelFasilitas(fasilitasUmumSemuaBarang) }));
+  }
+  if (cooTakTertaut.length && items.length) {
+    notes.push(t("y.coo.tidak.tertaut.barang", { daftar: labelFasilitas(cooTakTertaut) }));
   }
   if (dokPelengkap.lain.length) {
     notes.push(t("y.dokumen.lain.dicatat", { daftar: dokPelengkap.lain.map((d) => `${namaDokumenCeisa(d.kode)} ${d.nomor}`.trim()).join(", ") }));
@@ -621,7 +632,8 @@ function parseBcExcelWorkbook(wb) {
      Fasilitas & No. Urut per barang di Cek PIB/PEB. Dokumen yang tidak
      ditautkan ke barang mana pun (fasilitasUmum) tidak ikut: di draft ia
      tidak tercantum pada barang mana pun, walau form jadwal
-     menerapkannya ke semua barang. */
+     menerapkannya ke semua barang (kecuali COO: tidak dipasang ke barang
+     mana pun, lihat fasilitasUmumSemuaBarang di atas). */
   const fasilitasBarang = barang.map((row) => {
     const seri = kunciSeri(row["SERI BARANG"]);
     return { seri, dokumen: (skbBySeriBarang.get(seri) || []).map((sk) => ({ ...sk })) };

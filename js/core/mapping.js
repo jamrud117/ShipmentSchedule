@@ -189,12 +189,27 @@ function rowToShipment(row) {
   Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
   s.dataPabean = rapikanDataPabean(row.data_pabean);
   pindahkanPackingList(s);
-  s.items = (row.items || []).map(rowToItem);
+  s.items = urutkanBarisBarang(row.items || []).map(rowToItem);
   // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])
     .map(rowToStop)
     .sort((a, b) => a.seq - b.seq);
   return s;
+}
+
+/* URUTAN BARANG = kolom urutan (migration-urutan-barang.sql), ditulis
+   sisipkanBarang (api.js): 1 = barang pertama = Seri Barang 1. Bukan
+   urutan baris jawaban database -- tanpa ORDER BY itu urutan FISIK
+   baris, dan simpan ulang (hapus semua + sisipkan) memindahkannya:
+   barang yang tersimpan urut Seri 1-14 terbaca kembali 9, 10, ..., 14,
+   1, ..., 8, dan Seri Barang di tabel barang & Cek PIB/PEB ikut kacau.
+   Baris tanpa urutan (tersimpan sebelum migrasinya) di belakang, dalam
+   urutan jawabannya. */
+function urutkanBarisBarang(rows) {
+  return rows
+    .map((r, i) => ({ r, i, n: Number(r && r.urutan) > 0 ? Number(r.urutan) : Infinity }))
+    .sort((a, b) => a.n - b.n || a.i - b.i)
+    .map((x) => x.r);
 }
 
 function itemToRow(it, shipmentId) {

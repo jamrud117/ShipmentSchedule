@@ -15,7 +15,8 @@
    darinya (harga barang, CIF/FOB, nilai pabean, berat, pungutan)
    tampil sebagai hasil hitung (dpNilaiHitung, core/data-pabean.js).
    Selebihnya tersimpan di draftDataPabean (s.dataPabean) -- No. & Tgl
-   Packing List diisi di tab Dokumen & Umum -- dan per barang di
+   Packing List dan Negara Shipper / Buyer diisi di tab Dokumen & Umum
+   -- dan per barang di
    draftItems[i].dataPabean lewat tombol pena tab Barang
    (data-pabean-barang.js).
 
@@ -323,6 +324,8 @@ function dpbTabBarang(c) {
   if (!barang.length) return dpbBagian(tt("Barang", "Items"), `<p class="dpb-kosong">${tt("Belum ada barang di tab Daftar Barang.", "No items on the Item List tab yet.")}</p>`, { mentah: true });
   const tarifJadwal = c.jadwal.tarif == null ? TARIF_BM_BAWAAN : c.jadwal.tarif;
   const persen = (v, cadangan) => (dpAda(v) ? `${formatNumberValue(v) || "0"}%` : `<span class="dpb-redup" title="${dpbEsc(c.jadwal.tarif == null ? tt("Tarif bawaan", "Default rate") : tt("Tarif jadwal", "Schedule rate"))}">${formatNumberValue(cadangan) || "0"}%</span>`);
+  // Barang ber-COO: BM 0% (tarif preferensi), apa pun yang tersimpan (barangPakaiCoo, core/customs.js)
+  const persenBm = (it, dp) => (barangPakaiCoo(it) ? `<span title="${dpbEsc(judulTarifBmCoo())}">0%</span>` : persen(dp.tarifBm, tarifJadwal));
   const kepala = c.pib
     ? [tt("Seri", "Serial"), tt("Pos Tarif / HS", "HS Code"), tt("Uraian Barang", "Description"), tt("Jumlah Satuan", "Quantity"), tt("Nilai (USD)", "Value (USD)"), tt("Fasilitas", "Facility"), "BM", "PPh", ""]
     : [tt("Seri", "Serial"), tt("Pos Tarif / HS", "HS Code"), tt("Uraian Barang", "Description"), tt("Jumlah Satuan", "Quantity"), tt("Nilai (USD)", "Value (USD)"), tt("Jenis Ekspor", "Export Type"), tt("Daerah Asal", "Region of Origin"), ""];
@@ -331,7 +334,7 @@ function dpbTabBarang(c) {
     const nilai = parseLooseNumber(it.qty) * parseLooseNumber(it.harga);
     const jumlah = [formatNumberValue(it.qty) || "0", String(it.satuan || "").trim()].filter(Boolean).join(" ");
     const sel = c.pib
-      ? `<td>${dpbEsc(dpbFasilitasRingkas(it) || "—")}</td><td>${persen(dp.tarifBm, tarifJadwal)}</td><td>${persen(dp.tarifPph, TARIF_PPH_IMPOR)}</td>`
+      ? `<td>${dpbEsc(dpbFasilitasRingkas(it) || "—")}</td><td>${persenBm(it, dp)}</td><td>${persen(dp.tarifPph, TARIF_PPH_IMPOR)}</td>`
       : `<td>${dpbEsc(dpNamaPilihan("jenisEkspor", dp.jenisEkspor) || "—")}</td><td>${dpbEsc(dpNamaPilihan("daerah", dp.daerahAsal) || "—")}</td>`;
     return `<tr><td class="dpb-no">${i + 1}</td><td>${dpbEsc(it.hsCode || "—")}</td><td class="dpb-uraian">${dpbEsc(itemDisplayName(it))}</td>
       <td>${dpbEsc(jumlah)}</td><td>${dpbUsd(nilai) || "0"}</td>${sel}
@@ -343,8 +346,8 @@ function dpbTabBarang(c) {
   return dpbBagian(tt("Barang", "Items"), `<div class="dpb-tabel-gulir"><table class="dpb-tabel dpb-tabel-barang"><thead><tr>${kepalaHtml}</tr></thead><tbody>${baris}</tbody></table></div>`, {
     mentah: true,
     catatan: c.pib
-      ? tt("Uraian, HS, jumlah, harga & fasilitas diisi di tab Daftar Barang. Tombol pena: tarif BM & PPh, metode penentuan nilai, perbedaan harga & voluntary declaration per barang. Tarif kelabu = Tarif (%) jadwal / PPh 2,5%.",
-        "Description, HS, quantity, price & facilities are filled in on the Item List tab. Pencil button: BM & PPh rates, valuation method, price difference & voluntary declaration per item. Grey rates = the schedule's Rate (%) / 2.5% PPh.")
+      ? tt("Uraian, HS, jumlah, harga & fasilitas diisi di tab Daftar Barang. Tombol pena: tarif BM & PPh, metode penentuan nilai, perbedaan harga & voluntary declaration per barang. Tarif kelabu = Tarif (%) jadwal / PPh 2,5%. Barang yang memakai COO bertarif BM 0%.",
+        "Description, HS, quantity, price & facilities are filled in on the Item List tab. Pencil button: BM & PPh rates, valuation method, price difference & voluntary declaration per item. Grey rates = the schedule's Rate (%) / 2.5% PPh. An item that uses a COO has a 0% BM rate.")
       : tt("Uraian, HS, jumlah & harga diisi di tab Daftar Barang. Tombol pena: jenis ekspor, daerah asal, HE & tarif bea keluar per barang.",
         "Description, HS, quantity & price are filled in on the Item List tab. Pencil button: export type, region of origin, HE & export duty rate per item."),
   });
@@ -362,7 +365,7 @@ function dpbTabelPungutanHtml(tabel) {
 function dpbTabPungutan(c) {
   return dpbBagian(tt("Pungutan", "Duties & Taxes"), dpbTabelPungutanHtml(c.nilai.pungutan.tabel), {
     mentah: true,
-    catatan: tt("Dihitung otomatis per seri barang: tarif BM & PPh tiap barang (tab Barang) atau Tarif (%) jadwal, PPN 12% × DPP 11/12. Fasilitas barang di Daftar Barang (SKB BM / Masterlist, SKB PPN, SKB PPh) memindahkan pungutannya ke kolom Dibebaskan. Kolom Dibayar = Bea Masuk, PPN & PPH di tab Kepabeanan &amp; Biaya (yang diketik sendiri di sana tampil apa adanya); NDPBM, Freight & Asuransi juga dari tab itu.",
+    catatan: tt("Dihitung otomatis per seri barang: tarif BM & PPh tiap barang (tab Barang) atau Tarif (%) jadwal, PPN 12% × DPP 11/12; barang yang memakai COO bertarif BM 0%. Fasilitas barang di Daftar Barang (SKB BM / Masterlist, SKB PPN, SKB PPh) memindahkan pungutannya ke kolom Dibebaskan. Kolom Dibayar = Bea Masuk, PPN & PPH di tab Kepabeanan &amp; Biaya (yang diketik sendiri di sana tampil apa adanya); NDPBM, Freight & Asuransi juga dari tab itu.",
       "Calculated per item: each item's BM & PPh rate (Items tab) or the schedule's Rate (%), PPN 12% × 11/12 base. Item facilities on the Item List (SKB BM / Masterlist, SKB PPN, SKB PPh) move the levy to the Exempted column. The Paid column = Import Duty, PPN & PPH on the Customs &amp; Charges tab (values typed there are shown as typed); NDPBM, Freight & Insurance also come from that tab."),
   }) + dpbBagian(tt("Pembayaran & Jaminan", "Payment & Guarantee"), dpbIsian("pembayaran", "s6") + dpbIsian("jaminanJenis", "s6") + dpbPasangTanggal(dpbIsian("jaminanNomor"), dpbIsian("jaminanTanggal")));
 }
@@ -413,6 +416,8 @@ function renderDataPabeanForm() {
     delete wadah.dataset.enterKirim;
     wadah.dataset.enterAkhir = "#btnSaveShipment";
   }
+  // Kotak Negara tab Dokumen & Umum menampilkan isian yang sama (form dibuka, hasil impor, ganti bahasa)
+  isiNegaraPihakForm();
 }
 
 function pilihTabDataPabean(k, fokus) {
@@ -433,10 +438,58 @@ function isiPackingListForm() {
   if (el) el.addEventListener("input", () => (draftDataPabean[k] = el.value));
 });
 
-// Moda & Supplier/Customer menentukan nilai bawaan
+/* ---------------- Negara Shipper / Buyer (tab Dokumen & Umum) ----------------
+
+   Kotak Negara di samping Nama Shipper (Import) / Buyer (Export) =
+   Negara pihak Pengirim (Import) / Pembeli (Export) Data PIB/PEB: satu
+   isian, dua tempat mengubahnya (kotak ini & tab Entitas). Kodenya
+   tersimpan ("KR"), dibakukan seperti Negara Asal barang (kodeNegara --
+   kode, nama Indonesia, atau nama Inggris), nama negaranya redup di dalam
+   kotak. Yang tampil = isian tersimpan, atau bawaannya (shipper yang
+   dikenal, DP_PEMASOK). Penjual / Penerima mengikutinya selama belum
+   diubah sendiri (DP_PIHAK_PASANGAN). */
+const dpbPihakNegara = () => (activeMode === "export" ? "pembeli" : "pengirim");
+function dpbNegaraPihak() {
+  const p = dpbPihakNegara();
+  const tersimpan = ((draftDataPabean.pihak || {})[p] || {}).negara;
+  const v = dpAda(tersimpan) ? tersimpan : ((dpBawaan(dpbKonteksBawaan()).pihak || {})[p] || {}).negara;
+  return String(v == null ? "" : v).trim().toUpperCase();
+}
+function isiNegaraPihakForm() {
+  const el = $("#fNegaraPihak");
+  if (!el) return;
+  const kode = dpbNegaraPihak();
+  // Yang sedang diketik tidak ditimpa
+  if (document.activeElement !== el && el.value !== kode) el.value = kode;
+  if (typeof tulisKeteranganNegara === "function") tulisKeteranganNegara(el, document.activeElement === el ? kodeNegara(el.value) : kode);
+}
+const elNegaraPihak = $("#fNegaraPihak");
+if (elNegaraPihak) {
+  // Selagi diketik: tebakan nama negaranya (tersembunyi selama kotaknya difokus, tampil begitu ditinggalkan)
+  elNegaraPihak.addEventListener("input", () => {
+    if (typeof tulisKeteranganNegara === "function") tulisKeteranganNegara(elNegaraPihak, kodeNegara(elNegaraPihak.value));
+  });
+  elNegaraPihak.addEventListener("change", () => {
+    const teks = elNegaraPihak.value.trim();
+    const kode = kodeNegara(teks) || teks.toUpperCase();
+    const p = dpbPihakNegara();
+    const isi = Object.assign({}, (draftDataPabean.pihak || {})[p]);
+    if (kode) isi.negara = kode;
+    else delete isi.negara;
+    draftDataPabean.pihak = Object.assign({}, draftDataPabean.pihak, { [p]: isi });
+    segarkanBawaanDataPabean(false);
+    elNegaraPihak.value = kode;
+    isiNegaraPihakForm();
+  });
+}
+
+// Moda & Supplier/Customer menentukan nilai bawaan -- Negara Shipper ikut shipper yang dikenal
 ["#fTransport", "#fParty"].forEach((sel) => {
   const el = $(sel);
-  if (el) el.addEventListener("change", () => segarkanBawaanDataPabean(false));
+  if (el) el.addEventListener("change", () => {
+    segarkanBawaanDataPabean(false);
+    isiNegaraPihakForm();
+  });
 });
 
 /* ---------------- ketikan & tombol ---------------- */
@@ -487,6 +540,8 @@ if (wadahDataPabean) {
     if (dpbPihakPenentu(el.dataset.dpbPihak)) {
       segarkanBawaanDataPabean(false);
       dpbSegarkanKotakPihak();
+      // Negara Pengirim / Pembeli yang diubah di sini = kotak Negara tab Dokumen & Umum
+      isiNegaraPihakForm();
     }
   });
   wadahDataPabean.addEventListener("click", (e) => {

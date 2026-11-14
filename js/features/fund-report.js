@@ -115,14 +115,26 @@ function lapBarisDana(row, kurs) {
   let dpp = 0;
   let kenaPpn = 0;
   let ppn = 0;
+  let pph23 = 0;
   if (Array.isArray(p.lines) && p.lines.length) {
     const total = fundLineTotals(p.lines, mata, p.payee, p.dokumen || []);
     dpp = total.totalNet;
     kenaPpn = total.dppPph;
     ppn = total.totalPpn;
+    pph23 = total.pph;
   } else {
     dpp = frTotalPengajuan(p);
   }
+  const jenis = String(p.expenseType || "").trim();
+  /* Sifat uangnya (fund-report-ledger.js): yang diminta dari kantor pusat
+     = biaya + pajak yang bisa dikreditkan - PPh 23 yang ditahan.
+       tahan   PPh 23 dipotong dari vendor -- utang pajak perusahaan
+       pulih   PPN masukan + PPN impor + PPh 22 impor -- bisa dikreditkan
+       biayaEko beban / harga pokok sesungguhnya (sisanya, selalu menutup) */
+  const pajak = lapKomponenPajak(p, jenis, dpp, faktor);
+  const tagihan = frTotalPengajuan(p) * faktor;
+  const tahan = pph23 * faktor;
+  const pulih = ppn * faktor + (pajak ? pajak.ppn + pajak.pph : 0);
   return {
     id: row.id,
     nomor: row.doc_number || "",
@@ -131,20 +143,28 @@ function lapBarisDana(row, kurs) {
     bulan: Number(tanggal.slice(5, 7)) || 0,
     // Dasar tanggal: TANGGAL INVOICE vendor (bukan tanggal bayar)
     tglInvoice: String(p.invoiceDate || ""),
+    // Jatuh tempo tagihan vendor -- dasar umur hutang & disiplin bayar
+    jatuhTempo: String(p.invoiceDueDate || "").slice(0, 10),
     vendor: String(p.payee || "").trim(),
     customer: String(p.customer || "").trim(),
     moda: lapModa(p),
-    jenis: String(p.expenseType || "").trim(),
+    jenis,
     transaksi: fundJenisTransaksiBaku(p.transactionType),
     mata,
+    kurs: faktor,
     // Pembayaran: tanggal lunas & nilai yang dibayar (termasuk PPN, setelah PPh)
     tglBayar: String(p.paidAt || "").slice(0, 10),
-    tagihan: frTotalPengajuan(p) * faktor,
+    tagihan,
+    tahan,
+    pulih,
+    biayaEko: tagihan + tahan - pulih,
+    pajak,
     blAwb: String(p.blAwb || "").trim().toUpperCase(),
-    /* Bagian DPP tiap BL/AWB (IDR): pengajuan untuk beberapa kiriman
-       dipisah per kiriman (fundBagiPerAwb, fund-lines.js) -- biaya per
-       kiriman tidak dobel dan tidak tercampur. */
-    perAwb: fundBagiPerAwb(p).map((b) => ({ kunci: b.kunci, dpp: b.dpp * faktor })),
+    /* Bagian tiap BL/AWB (IDR): pengajuan untuk beberapa kiriman dipisah
+       per kiriman (fundBagiPerAwb, fund-lines.js) -- biaya per kiriman
+       tidak dobel dan tidak tercampur. dpp = sebelum PPN; dibayar = bagian
+       uang yang diminta (menjumlah TEPAT ke `tagihan`). */
+    perAwb: fundBagiPerAwb(p).map((b) => ({ kunci: b.kunci, dpp: b.dpp * faktor, ppn: b.ppn * faktor, pph: b.pph * faktor, dibayar: b.dibayar * faktor })),
     tanpaPpn: (dpp - kenaPpn) * faktor,
     kenaPpn: kenaPpn * faktor,
     ppn: ppn * faktor,
@@ -171,6 +191,8 @@ function lapBarisInvoice(row, kurs) {
     tahun: Number(tanggal.slice(0, 4)) || 0,
     bulan: Number(tanggal.slice(5, 7)) || 0,
     customer: String(p.customer || "").trim(),
+    // Jadwal ekspor yang ditagih invoice ini: penghubung pendapatan -> biaya kirimannya
+    shipmentId: p.shipmentId != null ? String(p.shipmentId) : "",
     syaratTeks: String(p.termsDelivery || "").trim(),
     syarat: lapKelompokSyarat(p.termsDelivery),
     mata,
@@ -526,6 +548,13 @@ function lapPetaKiriman(kiriman) {
   return peta;
 }
 
+/* Layanan yang boleh diperingkat. Freight dan Storage punya harga yang bisa
+   dibandingkan antar vendor; "Lainnya" (biaya dokumen, kurir, handling)
+   campur aduk -- ditampilkan tetapi tidak diberi peringkat. */
+const LAP_LAYANAN_BANDING = ["Freight", "Storage"];
+const LAP_URUT_LAYANAN = ["Freight", "Storage", "Lainnya"];
+const lapNamaLayanan = (l) => (l === "Lainnya" ? "Other" : l || "-");
+
 function lapBandingVendor(baris, Y, M, kiriman) {
   const gwKunci = lapPetaKiriman(kiriman);
   const grup = new Map();
@@ -533,8 +562,11 @@ function lapBandingVendor(baris, Y, M, kiriman) {
     .filter((d) => d.tahun === Y && d.bulan <= M && d.vendor && ["Billing", "Tax Advance"].indexOf(d.jenis) < 0)
     .forEach((d) => {
       const jalur = lapModaArah(d);
-      const kunci = jalur + "|" + fsumKunci(d.vendor);
-      const g = grup.get(kunci) || { jalur, vendor: d.vendor, total: 0, bl: new Set(), tanpaBl: 0, totalCocok: 0, gwKiriman: new Map() };
+      /* Satu kelompok = jalur + layanan: ongkos terminal (storage) tidak
+         dibandingkan per kg dengan ongkos kirim forwarder (freight). */
+      const layanan = d.jenis || "-";
+      const kunci = jalur + "|" + layanan + "|" + fsumKunci(d.vendor);
+      const g = grup.get(kunci) || { jalur, layanan, vendor: d.vendor, total: 0, bl: new Set(), tanpaBl: 0, totalCocok: 0, gwKiriman: new Map() };
       g.total += d.total;
       const bagian = lapBagianAwb(d);
       if (!bagian.length) g.tanpaBl += 1;
@@ -556,17 +588,23 @@ function lapBandingVendor(baris, Y, M, kiriman) {
     const kirimanN = g.bl.size + g.tanpaBl;
     const gw = [...g.gwKiriman.values()].reduce((x, v) => x + v, 0);
     const v = { vendor: g.vendor, kiriman: kirimanN, total: g.total, perKiriman: kirimanN ? g.total / kirimanN : null, gw, perKg: gw ? g.totalCocok / gw : null };
-    if (!perJalur.has(g.jalur)) perJalur.set(g.jalur, []);
-    perJalur.get(g.jalur).push(v);
+    const kunciJalur = g.jalur + "|" + g.layanan;
+    if (!perJalur.has(kunciJalur)) perJalur.set(kunciJalur, { jalur: g.jalur, layanan: g.layanan, vendor: [] });
+    perJalur.get(kunciJalur).vendor.push(v);
   });
-  return [...perJalur.entries()].map(([jalur, vendor]) => {
+  const hasil = [...perJalur.values()].map(({ jalur, layanan, vendor }) => {
     const pakaiKg = vendor.filter((v) => v.perKg != null).length >= 2;
     const ukur = (v) => (pakaiKg ? v.perKg : v.perKiriman);
     vendor.sort((a, b) => (ukur(a) == null) - (ukur(b) == null) || (ukur(a) || 0) - (ukur(b) || 0) || b.total - a.total);
     const banding = vendor.filter((v) => ukur(v) != null);
-    if (banding.length >= 2) banding[0].termurah = true;
-    return { jalur, dasar: pakaiKg ? "kg" : "kiriman", vendor };
-  }).sort((a, b) => b.vendor.reduce((x, v) => x + v.total, 0) - a.vendor.reduce((x, v) => x + v.total, 0));
+    if (banding.length >= 2 && LAP_LAYANAN_BANDING.indexOf(layanan) >= 0) banding[0].termurah = true;
+    return { jalur, layanan, dasar: pakaiKg ? "kg" : "kiriman", vendor };
+  });
+  // Jalur dengan belanja terbesar dulu; di dalam satu jalur: Freight, Storage, lainnya
+  const totalJalur = new Map();
+  hasil.forEach((j) => totalJalur.set(j.jalur, (totalJalur.get(j.jalur) || 0) + j.vendor.reduce((x, v) => x + v.total, 0)));
+  const urutLayanan = (l) => (LAP_URUT_LAYANAN.indexOf(l) >= 0 ? LAP_URUT_LAYANAN.indexOf(l) : 99);
+  return hasil.sort((a, b) => totalJalur.get(b.jalur) - totalJalur.get(a.jalur) || (a.jalur < b.jalur ? -1 : a.jalur > b.jalur ? 1 : 0) || urutLayanan(a.layanan) - urutLayanan(b.layanan));
 }
 
 function hitungAnalisis(dana, opsi) {
@@ -818,6 +856,14 @@ function hitungAnalisis(dana, opsi) {
     pakaiAnggaran: nilaiAnggaran ? ytd / nilaiAnggaran : null,
     proyeksiAnggaran: nilaiAnggaran ? proyeksiIni / nilaiAnggaran : null,
   };
+  /* BUKU BESAR (fund-report-ledger.js): pengajuan, kiriman, invoice, dan PIB
+     dihubungkan. Memakai SEMUA pengajuan, bukan hanya jenis yang
+     dicentang -- jembatan kas, hutang, dan rekonsiliasi bea harus utuh
+     supaya bisa ditutup. */
+  hasil.ledger = lapAnalisisBuku(dana, o.invoice || [], o.kiriman || [], Y, M, {
+    ndpbmUsd: o.ndpbmUsd, hariIni: acuan, bulanan: { pend, pendLalu, ini, lalu },
+  });
+  hasil.ledger.kontrol = lapKontrol(hasil);
   hasil.wawasan = lapWawasan(hasil);
   return hasil;
 }
@@ -849,7 +895,9 @@ function lapCustomerPendapatan(jual, biaya, Y, M) {
     .sort((a, b) => b.pendapatan - a.pendapatan || b.biaya - a.biaya);
 }
 
-/* TEMUAN UTAMA -- paling banyak lima kalimat, bahasa sehari-hari. */
+/* TEMUAN UTAMA -- kalimat bahasa sehari-hari: pendapatan dan
+   pengeluaran dulu, lalu apa yang diperlihatkan buku besar (kas ke biaya,
+   kiriman, bea, hutang, kontrol -- fund-report-blok.js), terakhir anggaran. */
 function lapWawasan(a) {
   const out = [];
   const per = `Jan–${lapBulanPendek(a.M)} ${a.Y}`;
@@ -861,18 +909,13 @@ function lapWawasan(a) {
   } else {
     out.push(`No invoice values recorded for ${per} — revenue comparisons are not available.`);
   }
-  out.push(`EXIM spending ${per}: ${lapFmtUang(a.ytd)}${naikTurun(a.yoy)}.`);
-  if (a.rasio != null) {
-    out.push(`For every IDR 100 of revenue, EXIM spends IDR ${(a.rasio * 100).toFixed(2)}${a.rasioLalu != null ? ` (${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)})` : ""}.`);
-  }
   const top = a.perJenis[0];
-  if (top && top.ini) {
-    out.push(`Largest cost: ${top.nama} (${(top.porsi * 100).toFixed(0)}% of spending). Highest month: ${lapNamaBulan(a.statistik.ini.bulanMax)} (${lapFmtUang(a.statIni.max)}).`);
-  }
-  out.push(`Suggested ${a.Y + 1} budget: ${lapFmtUang(a.rekomendasi)} — about ${lapFmtUang(a.rekomendasi / 12)} per month, including a ${(a.cadangan * 100).toFixed(0)}% buffer.`);
-  if (a.anggaran) {
-    out.push(`${a.Y} budget: ${(a.pakaiAnggaran * 100).toFixed(0)}% used so far; expected ${(a.proyeksiAnggaran * 100).toFixed(0)}% by December${a.proyeksiAnggaran > 1 ? " — likely over budget" : ""}.`);
-  }
+  out.push(`EXIM spending ${per}: ${lapFmtUang(a.ytd)}${naikTurun(a.yoy)}${a.rasio != null
+    ? `, which is IDR ${(a.rasio * 100).toFixed(2)} for every IDR 100 of revenue${a.rasioLalu != null ? ` (${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)})` : ""}` : ""}.${top && top.ini
+    ? ` Largest cost: ${top.nama} (${(top.porsi * 100).toFixed(0)}% of spending); highest month: ${lapNamaBulan(a.statistik.ini.bulanMax)} (${lapFmtUang(a.statIni.max)}).` : ""}`);
+  if (a.ledger && typeof lapWawasanBuku === "function") lapWawasanBuku(a).forEach((x) => out.push(x));
+  out.push(`Suggested ${a.Y + 1} budget: ${lapFmtUang(a.rekomendasi)} — about ${lapFmtUang(a.rekomendasi / 12)} per month, including a ${(a.cadangan * 100).toFixed(0)}% buffer.${a.anggaran
+    ? ` ${a.Y} budget: ${(a.pakaiAnggaran * 100).toFixed(0)}% used so far; expected ${(a.proyeksiAnggaran * 100).toFixed(0)}% by December${a.proyeksiAnggaran > 1 ? " — likely over budget" : ""}.` : ""}`);
   return out;
 }
 
@@ -901,7 +944,10 @@ const lapBulanPendek = (b) => lapNamaBulan(b).slice(0, 3);
 
 /* SEL LAPORAN — satu bentuk untuk layar dan Excel.
    f: "jt" (IDR juta), "rp" (IDR penuh), "pct" (porsi), "chg" (perubahan,
-   bertanda; naik = merah karena ini biaya), "n" (bilangan), "txt". */
+   bertanda; naik = merah karena ini biaya), "n" (bilangan), "dec2" (dua
+   desimal), "hari" (hari, satu desimal), "kali" (kelipatan), "txt".
+   Tambahan: b (tebal), kelas (lap-naik = merah, lap-turun = hijau),
+   teks (kalimat panjang: boleh membungkus baris). */
 const sel = (v, f, tambahan) => Object.assign({ v, f: f || "txt" }, tambahan || {});
 
 function lapTeksSel(c) {
@@ -917,6 +963,9 @@ function lapTeksSel(c) {
     case "rp2": return v ? angkaLokal(Number(v), "en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
     case "chg": return (v > 0 ? "▲ +" : v < 0 ? "▼ −" : "") + Math.abs(v * 100).toFixed(1) + "%";
     case "n": return v ? Math.round(v).toLocaleString("en-US") : "-";
+    case "dec2": return Number(v).toFixed(2);
+    case "hari": return `${Number(v).toFixed(1)} days`;
+    case "kali": return `${Number(v).toFixed(1)}×`;
     default: return String(v);
   }
 }
@@ -976,10 +1025,11 @@ function lapSusunBlok(a, lap, ang) {
   };
   B.bandingVendor = {
     judul: "Which vendor is cheaper",
-    sub: `${per} · vendor charges only (Freight, Storage, Other), before VAT`,
-    kepala: ["Lane", "Vendor", "Shipments", "Total", "Avg per shipment", "Gross weight (kg)", "Per kg (GW)", ""],
-    baris: a.bandingVendor.flatMap((j) => j.vendor.map((v, i) => [
-      sel(i ? "" : j.jalur, "txt", { b: !i }),
+    sub: `${per} · like for like: same lane and same service, vendor charges only, before VAT`,
+    kepala: ["Lane", "Service", "Vendor", "Shipments", "Total", "Avg per shipment", "Gross weight (kg)", "Per kg (GW)", "Result"],
+    baris: a.bandingVendor.flatMap((j, gi, semua) => j.vendor.map((v, i) => [
+      sel(i || (gi && semua[gi - 1].jalur === j.jalur) ? "" : j.jalur, "txt", { b: true }),
+      sel(i ? "" : lapNamaLayanan(j.layanan), "txt"),
       sel(v.vendor, "txt", { b: !!v.termurah }),
       sel(v.kiriman, "n"),
       sel(v.total, "jt"),
@@ -988,7 +1038,7 @@ function lapSusunBlok(a, lap, ang) {
       sel(v.perKg, "jt", { b: !!v.termurah && j.dasar === "kg" }),
       sel(v.termurah ? (j.dasar === "kg" ? "✓ Cheapest per kg" : "✓ Cheapest per shipment") : ""),
     ])),
-    catatan: "Duties & taxes (Billing, Tax Advance) are left out — they are not vendor prices. Per kg = requests whose BL/AWB matches a schedule ÷ that schedule's gross weight (GW, the billed weight). The cheapest is judged per kg when at least two vendors on the lane have it, otherwise per shipment.",
+    catatan: "Duties & taxes (Billing, Tax Advance) are left out — they are not vendor prices. Vendors are only ranked against others doing the same service on the same lane (a terminal's storage charge is never set against a forwarder's freight); Other charges (documents, courier, handling) are listed but not ranked. Per kg = requests whose BL/AWB matches a schedule ÷ that schedule's gross weight (GW, the billed weight). The cheapest is judged per kg when at least two vendors in the group have it, otherwise per shipment.",
   };
   B.perKiriman = {
     judul: "EXIM cost per shipment (by BL/AWB)",
@@ -1243,6 +1293,8 @@ function lapSusunBlok(a, lap, ang) {
         baris: [[sel(ang.tahunan, "rp"), sel(ang.berubah, "rp"), sel(ang.bulanIni, "rp"), sel(ang.total, "rp"), sel(ang.berubah ? ang.sisa : null, "rp"), sel(ang.persen || null, "pct")]],
       }
     : null;
+  // Buku besar: kas -> biaya, ekonomi kiriman, bea & pajak, hutang, kontrol (fund-report-blok.js)
+  if (a.ledger && typeof lapBlokBuku === "function") Object.assign(B, lapBlokBuku(a), { kamus: lapKamusData() });
   return B;
 }
 
@@ -1347,6 +1399,8 @@ function lapGrafik(a) {
     ]),
     moda: lapSvgBatang("Spending by mode & direction (by invoice date)", a.perModa.filter((r) => r.ini > 0).slice(0, 5).map((r, i) => ({
       nama: r.nama, warna: ["#2563eb", "#93c5fd", "#0d9488", "#5eead4", "#d97706"][i], nilai: r.bulan.map((v) => lapJuta(v)) }))),
+    // Buku besar: air terjun kas -> biaya, umur hutang, diagram sebar korelasi
+    ...(a.ledger && typeof lapGrafikBuku === "function" ? lapGrafikBuku(a) : {}),
   };
 }
 
@@ -1389,14 +1443,16 @@ function lapHitungSekarang() {
   const anggaran = lapData.anggaran && !lapData.anggaran.gagal ? lapData.anggaran : null;
   // Jadwal kiriman (gross weight per BL/AWB) untuk perbandingan per kg antar vendor
   const kiriman = semuaKiriman();
-  const a = hitungAnalisis(dana, Object.assign({ anggaran, invoice, kiriman }, opsi));
+  // Nilai barang ekspor: NDPBM terdekat tanggalnya, dicari tanpa menambah hitungan "Exchange rates used"
+  const ndpbmUsd = (tanggal) => cari("USD", tanggal).nilai || 0;
+  const a = hitungAnalisis(dana, Object.assign({ anggaran, invoice, kiriman, ndpbmUsd }, opsi));
   const ang = anggaran ? hitungAnggaran(lap, anggaran) : null;
   return { a, lap, ang, blok: lapSusunBlok(a, lap, ang) };
 }
 
 function lapTabelHtml(b) {
   if (!b) return "";
-  const kelasSel = (c) => [c.f === "chg" && c.v != null ? (c.v > 0.0005 ? "lap-naik" : c.v < -0.0005 ? "lap-turun" : "") : "", c.b ? "lap-tebal" : ""].filter(Boolean).join(" ");
+  const kelasSel = (c) => [c.f === "chg" && c.v != null ? (c.v > 0.0005 ? "lap-naik" : c.v < -0.0005 ? "lap-turun" : "") : "", c.kelas || "", c.b ? "lap-tebal" : "", c.teks ? "lap-teks" : ""].filter(Boolean).join(" ");
   const td = (c) => `<td${kelasSel(c) ? ` class="${kelasSel(c)}"` : ""}>${escapeHtml(lapTeksSel(c))}</td>`;
   const isi = b.baris.length
     ? `<table class="fsum-tabel lap-tabel">
@@ -1417,19 +1473,33 @@ function lapKpi(a) {
     `<span class="lap-kpi-banding ${x > 0.0005 ? "lap-naik" : x < -0.0005 ? "lap-turun" : ""}">${x >= 0 ? "▲ up" : "▼ down"} ${Math.abs(x * 100).toFixed(0)}% ${escapeHtml(label)}</span>`);
   const per = `Jan–${lapBulanPendek(a.M)} ${a.Y}`;
   const naikRasio = a.rasio != null && a.rasioLalu != null ? a.rasio - a.rasioLalu : null;
+  const bulanIni = `<span class="lap-kpi-banding ${a.mom > 0.0005 ? "lap-naik" : a.mom < -0.0005 ? "lap-turun" : ""}">${escapeHtml(lapNamaBulan(a.M))}: ${escapeHtml(lapFmtUang(a.bulanIni))}${a.mom == null ? "" : ` · ${a.mom >= 0 ? "▲" : "▼"} ${Math.abs(a.mom * 100).toFixed(0)}% vs previous month`}</span>`;
+  const buku = a.ledger && typeof lapKartuBuku === "function" ? lapKartuBuku(a) : null;
   const kartu = [
     { k: `Revenue · ${per}`, v: a.pendUsdYtd ? lapFmtUsd(a.pendUsdYtd) : a.pendYtd ? lapFmtUang(a.pendYtd) : "—",
       s: (a.pendUsdYtd ? `<span class="lap-kpi-banding">≈ ${escapeHtml(lapFmtUang(a.pendYtd))} at NDPBM · ${a.jumlahInvoice} invoices</span>` : "") + banding(a.pendYoy, `vs ${a.Y - 1}`) },
-    { k: `EXIM spending · ${per}`, v: lapFmtUang(a.ytd), s: banding(a.yoy, `vs ${a.Y - 1}`) },
+    { k: `EXIM spending · ${per}`, v: lapFmtUang(a.ytd), s: banding(a.yoy, `vs ${a.Y - 1}`) + bulanIni },
+  ];
+  if (buku) kartu.push(buku.kas);
+  /* Rasio ini mencampur dua hal yang berbeda sifatnya: ongkos layanan (biaya)
+     dan pembayaran bea & pajak ke negara (sebagian besar bisa dikreditkan).
+     Dipecah di kartunya supaya angka gabungan tidak disalahbaca. */
+  const bayarNegara = (a.perJenis || []).filter((r) => r.kunci === "Billing" || r.kunci === "Tax Advance").reduce((x, r) => x + r.ini, 0);
+  const pecahRasio = a.rasio != null && a.pendYtd > 0 && bayarNegara > 0 && a.ytd > bayarNegara
+    ? `<span class="lap-kpi-banding">services IDR ${(((a.ytd - bayarNegara) / a.pendYtd) * 100).toFixed(2)} · customs payments IDR ${((bayarNegara / a.pendYtd) * 100).toFixed(2)}</span>` : "";
+  kartu.push(
     { k: "Spending per IDR 100 revenue", v: a.rasio != null ? `IDR ${(a.rasio * 100).toFixed(2)}` : "—",
-      s: naikRasio == null ? `<span class="lap-kpi-banding">${a.Y - 1}: no data</span>`
-        : `<span class="lap-kpi-banding ${naikRasio > 0 ? "lap-naik" : "lap-turun"}">${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)}</span>` },
-    { k: `${lapNamaBulan(a.M)} ${a.Y}`, v: lapFmtUang(a.bulanIni), s: banding(a.mom, "vs previous month") },
+      s: pecahRasio + (naikRasio == null ? `<span class="lap-kpi-banding">${a.Y - 1}: no data</span>`
+        : `<span class="lap-kpi-banding ${naikRasio > 0 ? "lap-naik" : "lap-turun"}">${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)}</span>`) },
+  );
+  if (buku) kartu.push(buku.landed, buku.hutang);
+  kartu.push(
     { k: `${a.Y} full-year estimate`, v: lapFmtUang(a.proyeksiIni),
       s: a.mulai > 1 ? `<span class="lap-kpi-banding">from ${a.bulanEfektif} recorded month${a.bulanEfektif > 1 ? "s" : ""} (since ${escapeHtml(lapBulanPendek(a.mulai))})</span>` : banding(lapPerubahan(a.proyeksiIni, a.totalLalu), `vs ${a.Y - 1}`) },
     { k: `Recommended ${a.Y + 1} budget`, v: lapFmtUang(a.rekomendasi), s: `<span class="lap-kpi-banding">≈ ${escapeHtml(lapFmtUang(a.rekomendasi / 12))} per month</span>`, sorot: true },
-  ];
-  return `<div class="lap-kpi-grid">${kartu.map((c) => `<div class="lap-kpi${c.sorot ? " lap-kpi--sorot" : ""}">
+  );
+  // Kelipatan empat kartu (8) dibagi dua baris rata; jumlah lain menyesuaikan lebar layar
+  return `<div class="lap-kpi-grid${kartu.length % 4 === 0 ? " lap-kpi-grid--empat" : ""}">${kartu.map((c) => `<div class="lap-kpi${c.sorot ? " lap-kpi--sorot" : ""}">
       <div class="lap-kpi-judul">${escapeHtml(c.k)}</div><div class="lap-kpi-nilai">${escapeHtml(c.v)}</div><div class="lap-kpi-sub">${c.s}</div></div>`).join("")}</div>`;
 }
 
@@ -1445,8 +1515,33 @@ function lapGambar(box) {
   const tombolAnggaran = lapData.anggaran && lapData.anggaran.gagal
     ? `<div class="lap-catatan">Budget tracking is enabled once migration-report-settings.sql has been run in Supabase.</div>`
     : bisaUbah ? `<button type="button" class="btn-quiet lap-ubah-anggaran" data-lap-anggaran><i class="bi bi-pencil"></i> Set ${escapeHtml(String(a.Y))} budget</button>` : "";
-  const bagian = (no, judul, isi) => `<section class="lap-bagian"><h3 class="lap-judul"><span class="lap-no">${no}</span>${escapeHtml(judul)}</h3>${isi}</section>`;
-  const grafik = (svg) => `<div class="lap-grafik">${svg}</div>`;
+  const bagian = (no, judul, isi, id) => `<section class="lap-bagian"${id ? ` id="${id}"` : ""}><h3 class="lap-judul"><span class="lap-no">${no}</span>${escapeHtml(judul)}</h3>${isi}</section>`;
+  const grafik = (svg) => (svg ? `<div class="lap-grafik">${svg}</div>` : "");
+  const dua = (x, y) => `<div class="lap-dua-tabel">${lapTabelHtml(x)}${lapTabelHtml(y)}</div>`;
+  const adaBuku = !!(a.ledger && B.jembatan);
+
+  /* Bagian di depan, berurutan. Nomornya dihitung di sini supaya bagian
+     buku besar (yang hanya ada bila datanya tersedia) tidak mengacaukan urutan. */
+  const daftarDepan = [
+    ["Summary", `${lapKpi(a)}
+      <div class="lap-wawasan"><div class="lap-blok-judul">In short</div><ul>${a.wawasan.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+      ${tombolAnggaran}`],
+    adaBuku && ["From cash to true cost", `${lapTabelHtml(B.jembatan)}${grafik(graf.jembatan)}${lapTabelHtml(B.jembatanSifat)}`],
+    ["Month by month", `${lapTabelHtml(B.ringkasBulan)}${grafik(graf.yoy)}`],
+    ["Where the money goes", `<div class="lap-dua-tabel">${lapTabelHtml(B.jenisRingkas)}${lapTabelHtml(B.modaRingkas)}</div>${lapTabelHtml(B.vendorTop)}${lapTabelHtml(B.perKiriman)}`],
+    adaBuku && ["Shipment economics", `${lapTabelHtml(B.ekonomi)}${lapTabelHtml(B.ekonomiSyarat)}${lapTabelHtml(B.eksporPelanggan)}`],
+    adaBuku && ["Duties & taxes", `${lapTabelHtml(B.bea)}${lapTabelHtml(B.beaDaftar)}`],
+    adaBuku && ["Payables & payment discipline", `${dua(B.hutangRingkas, B.hutangUmur)}${grafik(graf.umurHutang)}${dua(B.hutangDisiplin, B.hutangDatang)}${lapTabelHtml(B.hutangVendor)}${lapTabelHtml(B.pph23)}`],
+    ["Vendor comparison & scorecard", `${lapTabelHtml(B.bandingVendor)}${adaBuku ? lapTabelHtml(B.kartuVendor) : ""}`],
+    adaBuku && ["Data quality & controls", `${lapTabelHtml(B.kontrol)}${lapTabelHtml(B.akrual)}${lapTabelHtml(B.pencilan)}`],
+    adaBuku && ["What drives the cost", `${lapTabelHtml(B.penggerak)}${(graf.sebar || []).map(grafik).join("")}${lapTabelHtml(B.jalurBc)}`],
+    [`Budget ${a.Y + 1}`, `${lapTabelHtml(B.anggaranKontrol)}${lapTabelHtml(B.anggaranRingkas)}${lapTabelHtml(B.rencanaBulan)}`],
+  ].filter(Boolean);
+  const depan = daftarDepan.map((x, n) => bagian(n + 1, x[0], x[1], `lap-b${n + 1}`));
+  // Daftar loncat: halaman ini panjang, jadi setiap bagian depan punya tombol
+  const indeks = daftarDepan.length > 6
+    ? `<nav class="lap-indeks" aria-label="Report sections">${daftarDepan.map((x, n) => `<button type="button" class="lap-indeks-butir" data-lap-ke="lap-b${n + 1}"><span>${n + 1}</span>${escapeHtml(x[0])}</button>`).join("")}</nav>`
+    : "";
 
   box.innerHTML = `
     <div class="fsum-saring lap-saring">
@@ -1462,19 +1557,13 @@ function lapGambar(box) {
 
     <div class="lap-kepala">
       <div class="lap-kepala-judul">EXIM Spending Report ${escapeHtml(String(a.Y))}</div>
-      <div class="lap-kepala-sub">January – ${escapeHtml(lapNamaBulan(a.M))} ${escapeHtml(String(a.Y))}, compared with ${escapeHtml(String(a.Y - 1))}. All amounts in rupiah (IDR m = million, bn = billion). Every amount is placed in the month of its INVOICE DATE (not payment date). Revenue = Invoice Number values (USD at the customs rate, NDPBM); spending = Fund Requests before VAT.</div>
+      <div class="lap-kepala-sub">January – ${escapeHtml(lapNamaBulan(a.M))} ${escapeHtml(String(a.Y))}, compared with ${escapeHtml(String(a.Y - 1))}. All amounts in rupiah (IDR m = million, bn = billion). Revenue = Invoice Number values (USD at the customs rate, NDPBM). Bases: “Month by month”, “Where the money goes” and the details count each Fund Request before VAT, in the month of its vendor INVOICE DATE (not payment date); “From cash to true cost” and “Payables” show the full cash requested, taxes included; “Shipment economics” and “Duties & taxes” group shipments by PIB / PEB date and count every cost linked to the shipment, whenever it was invoiced.</div>
     </div>
+    ${indeks}
 
-    ${bagian(1, "Summary", `${lapKpi(a)}
-      <div class="lap-wawasan"><div class="lap-blok-judul">In short</div><ul>${a.wawasan.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
-      ${tombolAnggaran}`)}
-    ${bagian(2, "Month by month", `${lapTabelHtml(B.ringkasBulan)}${grafik(graf.yoy)}`)}
-    ${bagian(3, "Where the money goes", `<div class="lap-dua-tabel">${lapTabelHtml(B.jenisRingkas)}${lapTabelHtml(B.modaRingkas)}</div>${lapTabelHtml(B.vendorTop)}${lapTabelHtml(B.perKiriman)}`)}
-    ${bagian(4, "Vendor comparison", lapTabelHtml(B.bandingVendor))}
-    ${bagian(5, "Payments", `${lapTabelHtml(B.bayarStatus)}<div class="lap-dua-tabel">${lapTabelHtml(B.bayarUmur)}${lapTabelHtml(B.bayarVendor)}</div>`)}
-    ${bagian(6, `Budget ${a.Y + 1}`, `${lapTabelHtml(B.anggaranRingkas)}${lapTabelHtml(B.rencanaBulan)}`)}
+    ${depan.join("\n    ")}
     <details class="lap-detail">
-      <summary><i class="bi bi-chevron-right"></i> More details for analysis <small>revenue by customer, monthly comparison, statistics, forecast methods, transport detail, exchange rates</small></summary>
+      <summary><i class="bi bi-chevron-right"></i> More details for analysis <small>revenue by customer, monthly comparison, cash vs true cost by month, statistics, forecast methods, transport detail, exchange rates</small></summary>
       ${bagian("A", "Revenue vs spending", `${lapTabelHtml(B.pendapatan)}<div class="lap-grafik-dua">${grafik(graf.pendapatan)}${grafik(graf.rasio)}</div>${lapTabelHtml(B.kanal)}${lapTabelHtml(B.custPend)}`)}
       ${bagian("B", "Monthly spending comparison", `${lapTabelHtml(B.bulanan)}${grafik(graf.kumulatif)}`)}
       ${bagian("C", "Breakdown", `${lapTabelHtml(B.jenis)}${lapTabelHtml(B.jenisBulan)}${lapTabelHtml(B.moda)}${grafik(graf.moda)}`)}
@@ -1483,8 +1572,9 @@ function lapGambar(box) {
       ${bagian("F", `Forecast ${a.Y + 1} — methods`, `${lapTabelHtml(B.anggaranSaran)}${lapTabelHtml(B.metode)}${lapTabelHtml(B.ramalPend)}${lapTabelHtml(B.fasing)}${grafik(graf.ramalan)}`)}
       ${bagian("G", "Transport cost detail (DD Korea format)", `${lapTabelHtml(B.modaBulan)}${lapTabelHtml(B.jumlahModa)}${lapTabelHtml(B.vendorPpn)}${lapTabelHtml(B.anggaranPakai)}`)}
       ${bagian("H", "Exchange rates", lapTabelHtml(B.kurs))}
+      ${adaBuku ? bagian("I", "Cash vs true cost by month", lapTabelHtml(B.jembatanBulan)) : ""}
     </details>
-    <p class="lap-catatan">Spending comes from Fund Requests (IDR, before VAT), dated by invoice date. Revenue comes from Invoice Number requests; foreign-currency invoices are converted at the NDPBM (the KMK tax rate on the PIB / PEB) of the shipment closest to the invoice date, local sales are in IDR. Forecasts are statistical estimates from recorded history — review them against planned shipments and sales plans before setting the budget.</p>`;
+    <p class="lap-catatan">Spending comes from Fund Requests (IDR, before VAT unless a section says cash), dated by invoice date. Revenue comes from Invoice Number requests; foreign-currency invoices are converted at the NDPBM (the KMK tax rate on the PIB / PEB) of the shipment closest to the invoice date, local sales are in IDR. Requests are tied to shipments by the BL/AWB typed on the request, and invoices by the shipment chosen on the invoice. Forecasts are statistical estimates from recorded history — review them against planned shipments and sales plans before setting the budget.</p>`;
 }
 
 /* Satu pendengar untuk seluruh panel (isinya digambar ulang terus). */
@@ -1514,6 +1604,12 @@ document.addEventListener("change", (e) => {
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-lap-unduh]")) {
     lapUnduhExcel();
+    return;
+  }
+  const ke = e.target.closest("[data-lap-ke]");
+  if (ke) {
+    const tujuan = document.getElementById(ke.dataset.lapKe);
+    if (tujuan && typeof tujuan.scrollIntoView === "function") tujuan.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
   if (e.target.closest("[data-lap-anggaran]")) {
@@ -1582,7 +1678,7 @@ function lapSvgKePng(svg, lebar, tinggi) {
   });
 }
 
-const LAP_XLS_FMT = { jt: '"IDR "#,##0', usd: '"USD "#,##0', rp: '"IDR "#,##0', rp2: "#,##0.00", pct: "0.0%", pct2: "0.00%", chg: "+0.0%;-0.0%;0.0%", n: "#,##0" };
+const LAP_XLS_FMT = { jt: '"IDR "#,##0', usd: '"USD "#,##0', rp: '"IDR "#,##0', rp2: "#,##0.00", pct: "0.0%", pct2: "0.00%", chg: "+0.0%;-0.0%;0.0%", n: "#,##0", dec2: "0.00", hari: '0.0" days"', kali: '0.0"×"' };
 const LAP_XLS_GARIS = { style: "thin", color: { argb: "FFCBD5E1" } };
 
 /* Nilai sel untuk Excel: angka tetap angka (jt dalam juta, 1 desimal). */
@@ -1594,6 +1690,8 @@ function lapNilaiXls(c) {
   if (c.f === "pct" || c.f === "pct2" || c.f === "chg") return Math.round(c.v * 1000000) / 1000000;
   if (c.f === "rp2") return Math.round(c.v * 100) / 100;
   if (c.f === "n") return Math.round(c.v);
+  if (c.f === "dec2") return Math.round(c.v * 10000) / 10000;
+  if (c.f === "hari" || c.f === "kali") return Math.round(c.v * 100) / 100;
   return String(c.v);
 }
 
@@ -1613,7 +1711,7 @@ function lapXlsBlok(ws, b, r) {
       const x = ws.getCell(r, i + 1);
       x.value = gaya.kepala ? c : lapNilaiXls(c);
       if (!gaya.kepala && LAP_XLS_FMT[c.f]) x.numFmt = LAP_XLS_FMT[c.f];
-      x.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      x.alignment = { horizontal: !gaya.kepala && c.teks ? "left" : "center", vertical: "middle", wrapText: true };
       x.border = { top: LAP_XLS_GARIS, bottom: LAP_XLS_GARIS, left: LAP_XLS_GARIS, right: LAP_XLS_GARIS };
       if (gaya.kepala) {
         x.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -1624,6 +1722,7 @@ function lapXlsBlok(ws, b, r) {
       } else {
         if (c.b) x.font = { bold: true };
         if (c.f === "chg" && c.v != null) x.font = Object.assign({}, x.font || {}, { color: { argb: c.v > 0.0005 ? "FFB91C1C" : c.v < -0.0005 ? "FF15803D" : "FF334155" } });
+        if (c.kelas === "lap-naik" || c.kelas === "lap-turun") x.font = Object.assign({}, x.font || {}, { color: { argb: c.kelas === "lap-naik" ? "FFB91C1C" : "FF15803D" } });
         if (gaya.zebra) x.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
       }
     });
@@ -1673,18 +1772,127 @@ function lapXlsCetak(ws) {
   ws.views = [{ showGridLines: false }];
 }
 
+/* Lembar data mentah yang saling berhubungan lewat kunci (Shipment ID,
+   BL/AWB): dibuat supaya bisa di-pivot / di-VLOOKUP tanpa menebak. */
+const LAP_STATUS_TAUT = {
+  linked: "Linked", partial: "Partly linked", orphan: "BL/AWB not in schedule", none: "No BL/AWB", trucking: "Trucking (no BL/AWB match expected)",
+};
+
+function lapKepalaLembar(row) {
+  row.eachCell((c) => {
+    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+  row.height = 32;
+}
+
+/* Satu lembar data: kolom [judul, lebar, format?], baris = larik nilai. */
+function lapLembarData(wb, nama, kolom, baris) {
+  const ws = wb.addWorksheet(nama);
+  ws.columns = kolom.map((k) => ({ header: k[0], width: k[1] }));
+  lapKepalaLembar(ws.getRow(1));
+  baris.forEach((nilai) => {
+    const row = ws.addRow(nilai);
+    row.eachCell({ includeEmpty: true }, (c, n) => {
+      const fmt = kolom[n - 1] && kolom[n - 1][2];
+      if (fmt) c.numFmt = fmt;
+      c.alignment = { horizontal: kolom[n - 1] && kolom[n - 1][3] === "kiri" ? "left" : "center", vertical: "middle" };
+    });
+  });
+  if (kolom.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: kolom.length } };
+  ws.views = [{ state: "frozen", ySplit: 1 }];
+  return ws;
+}
+
+const LAP_FMT_IDR = "#,##0";
+const lapKosongNull = (v) => (v == null || v === "" || (typeof v === "number" && !isFinite(v)) ? null : v);
+
+function lapLembarKiriman(wb, L) {
+  const kolom = [
+    ["Shipment ID", 14], ["Direction", 10], ["Lane", 12], ["Party (supplier / customer)", 28], ["Forwarder", 22], ["Aju No.", 28], ["BL / AWB", 26],
+    ["Cohort date (PIB / PEB)", 14], ["Year", 7], ["Month", 7], ["Terms (Incoterm)", 10], ["Terms group", 9], ["Customs lane", 14],
+    ["Arrival (ATA / berth)", 13], ["SPPB date", 12], ["Departure", 12], ["Days arrival → SPPB", 11], ["Gross weight (kg)", 13],
+    ["Goods value (IDR)", 18, LAP_FMT_IDR], ["NDPBM", 10, "#,##0.00"], ["PIB: BM (IDR)", 15, LAP_FMT_IDR], ["PIB: PPN (IDR)", 15, LAP_FMT_IDR], ["PIB: PPh (IDR)", 15, LAP_FMT_IDR], ["PIB total (IDR)", 16, LAP_FMT_IDR],
+    ["Requests linked", 10], ["Cash requested (IDR)", 18, LAP_FMT_IDR], ["Services (IDR)", 16, LAP_FMT_IDR], ["Import duty BM (IDR)", 16, LAP_FMT_IDR], ["Other duty-related (IDR)", 16, LAP_FMT_IDR],
+    ["Creditable taxes (IDR)", 16, LAP_FMT_IDR], ["PPh 23 withheld (IDR)", 16, LAP_FMT_IDR], ["Paid to state (IDR)", 16, LAP_FMT_IDR],
+    ["Landed cost add-on (IDR)", 18, LAP_FMT_IDR], ["Cost % of value / revenue", 12, "0.00%"], ["Revenue (IDR)", 18, LAP_FMT_IDR], ["Duty result", 22], ["Cost recorded", 10],
+  ];
+  const baris = lapDaftarKiriman(L.buku).map((r) => {
+    const k = r.k;
+    return [k.id, k.buku === "export" ? "Export" : "Import", k.jalur, k.pihak, k.forwarder, k.noAju, k.blAwb, k.tanggal, k.tahun || null, k.bulan || null, k.incoterm, k.kelompok === "-" ? "" : k.kelompok,
+      LAP_JALUR_BC[k.jalurBc] || "", k.tiba, k.keluar, k.berangkat, k.dwell, lapKosongNull(k.gw), lapKosongNull(Math.round(k.nilaiBarang)), lapKosongNull(k.ndpbm),
+      k.pib.bm, k.pib.ppn, k.pib.pph, k.pib.total, k.biaya.pengajuan.size, Math.round(k.biaya.kas), Math.round(k.biaya.jasa), Math.round(k.biaya.bm), Math.round(k.biaya.lainPajak),
+      Math.round(r.pulih), Math.round(k.biaya.pph23), Math.round(k.biaya.negara), Math.round(r.biaya), r.persen, Math.round(k.pendapatan) || null, r.statusBea, r.ada ? "Yes" : "No"];
+  });
+  return lapLembarData(wb, "Shipment Ledger", kolom, baris);
+}
+
+function lapLembarTautan(wb, L) {
+  const kolom = [
+    ["Request No.", 24], ["Date (invoice date)", 13], ["Vendor", 26], ["Expense type", 13], ["BL/AWB typed on request", 26], ["Matched key", 20],
+    ["Shipment ID", 13], ["Shipment BL / AWB", 26], ["Lane", 12], ["Party", 26], ["Link result", 30], ["Share of request", 11, "0.0%"],
+    ["Cash allocated (IDR)", 18, LAP_FMT_IDR], ["True cost allocated (IDR)", 18, LAP_FMT_IDR], ["Creditable taxes allocated (IDR)", 18, LAP_FMT_IDR],
+  ];
+  const baris = lapDaftarTautan(L.buku, L.dana).map((r) => {
+    const d = r.d;
+    return [d.nomor, d.tanggal, d.vendor, d.jenis === "Lainnya" ? "Other" : d.jenis, d.blAwb, r.kunci, r.k ? r.k.id : "", r.k ? r.k.blAwb : "", r.k ? r.k.jalur : "", r.k ? r.k.pihak : "",
+      LAP_STATUS_TAUT[r.status] || r.status, Math.round(r.porsi * 10000) / 10000, Math.round(r.kas), Math.round(r.biaya), Math.round(r.pulih)];
+  });
+  return lapLembarData(wb, "Request-Shipment Links", kolom, baris);
+}
+
+function lapLembarBiaya(wb, a, lap) {
+  const L = a.ledger;
+  const kolom = [
+    ["Number", 22], ["Date", 12], ["Vendor", 26], ["Customer", 22], ["Mode", 14], ["Transaction Type", 16], ["Expense Type", 14], ["Currency", 10],
+    ["Non-VAT (IDR)", 16, LAP_FMT_IDR], ["VAT-able base (IDR)", 18, LAP_FMT_IDR], ["VAT (IDR)", 14, LAP_FMT_IDR], ["Total before VAT (IDR)", 20, LAP_FMT_IDR],
+    ["Cash requested (IDR)", 18, LAP_FMT_IDR], ["PPh 23 withheld (IDR)", 16, LAP_FMT_IDR], ["Creditable taxes (IDR)", 16, LAP_FMT_IDR], ["True cost (IDR)", 16, LAP_FMT_IDR],
+    ["Invoice date", 12], ["Due date", 12], ["Paid date", 12], ["Days invoice → paid", 11], ["BL / AWB", 26], ["Link result", 28], ["Shipment ID(s)", 18], ["Notes", 40, null, "kiri"],
+  ];
+  const sumber = (L.dana && L.dana.length ? L.dana : lap.biaya || []).filter((x) => lapSaringan.jenis.indexOf(x.jenis) >= 0);
+  const baris = sumber.slice().sort((x, y) => x.tanggal.localeCompare(y.tanggal)).map((x) => {
+    const d = lapLengkapi(x);
+    const h = L.buku.hasil.get(x);
+    const hari = d.tanggal && d.tglBayar && lapIsoSah(d.tanggal) && lapIsoSah(d.tglBayar) ? lapSelisihHari(d.tanggal, d.tglBayar) : null;
+    return [x.nomor, x.tanggal, x.vendor, x.customer, lapNamaModa(x.moda), x.transaksi, x.jenis === "Lainnya" ? "Other" : x.jenis, x.mata, x.tanpaPpn, x.kenaPpn, x.ppn, x.total,
+      Math.round(d.tagihan), Math.round(d.tahan), Math.round(d.pulih), Math.round(d.biayaEko), x.tglInvoice, d.jatuhTempo, d.tglBayar, hari,
+      x.blAwb, h ? LAP_STATUS_TAUT[h.status] : "", h ? [...new Set((h.taut || []).map((bg) => bg.id))].join(", ") : "", x.catatan];
+  });
+  return lapLembarData(wb, "Cost Data", kolom, baris);
+}
+
+function lapLembarPenjualan(wb, a, lap) {
+  const kasus = a.ledger.buku.kasus;
+  const kolom = [
+    ["Invoice No.", 30], ["Date", 12], ["Customer", 28], ["Terms of Delivery", 22], ["Terms group", 14], ["Channel", 12], ["Currency", 10], ["Amount", 14, "#,##0.00"],
+    ["Rate (NDPBM)", 13, "#,##0.00"], ["Amount (IDR)", 18, LAP_FMT_IDR], ["QTY", 8], ["Shipment ID", 13], ["Shipment BL / AWB", 26], ["Landed cost add-on of that shipment (IDR)", 22, LAP_FMT_IDR],
+  ];
+  const baris = lap.jual.slice().sort((x, y) => x.tanggal.localeCompare(y.tanggal)).map((x) => {
+    const k = x.shipmentId ? kasus.get(String(x.shipmentId)) : null;
+    return [x.nomor, x.tanggal, x.customer, x.syaratTeks, x.syarat, x.kanal, x.mata, x.jumlahAsli, x.kurs, x.jumlah, x.qty, x.shipmentId || "", k ? k.blAwb : "", k && lapAdaBiaya(k) ? Math.round(lapBiayaKasus(k)) : null];
+  });
+  return lapLembarData(wb, "Sales Data", kolom, baris);
+}
+
 function lapSusunWorkbook(hasil, gambar) {
   const { a, lap, blok: B } = hasil;
   const wb = new ExcelJS.Workbook();
   wb.creator = "EXIM DDI";
   const g = gambar || {};
+  const L = a.ledger;
+  const buku = !!B.jembatan; // blok buku besar tersedia (fund-report-blok.js dimuat)
 
   // 1. Summary -- versi ringkas, yang dibaca dulu
   const s = wb.addWorksheet("Summary");
   s.getCell(1, 1).value = `EXIM SPENDING REPORT ${a.Y}`;
   s.getCell(1, 1).font = { bold: true, size: 16, color: { argb: "FF0F172A" } };
-  s.getCell(2, 1).value = `January – ${lapNamaBulan(a.M)} ${a.Y}, compared with ${a.Y - 1}. Amounts in rupiah (IDR). Revenue = Invoice Number values (USD at the customs rate, NDPBM); spending = Fund Requests before VAT.`;
+  s.getCell(2, 1).value = `January – ${lapNamaBulan(a.M)} ${a.Y}, compared with ${a.Y - 1}. Amounts in rupiah (IDR). Revenue = Invoice Number values (USD at the customs rate, NDPBM); spending = Fund Requests before VAT, by vendor invoice date. Cash requested, shipment economics, duties and payables are explained on their own sheets.`;
   s.getCell(2, 1).font = { italic: true, color: { argb: "FF64748B" } };
+  const J = buku ? L.jembatan.total : null;
+  const impor = buku ? L.ekonomi.jalur.filter((x) => /Import$/.test(x.nama) && x.nilai > 0) : [];
+  const nilaiImpor = impor.reduce((x, y) => x + y.nilai, 0);
+  const biayaImpor = impor.reduce((x, y) => x + y.biaya, 0);
   let r = lapXlsBlok(s, {
     judul: "Key figures",
     kepala: ["", "Amount", "Compared"],
@@ -1694,9 +1902,14 @@ function lapSusunWorkbook(hasil, gambar) {
       [sel(`EXIM spending Jan–${lapBulanPendek(a.M)} ${a.Y}`), sel(a.ytd, "jt"), sel(a.yoy, "chg")],
       [sel("Spending as % of revenue"), sel(a.rasio, "pct2"), sel(a.rasioLalu != null ? `${a.Y - 1}: ${(a.rasioLalu * 100).toFixed(2)}%` : "")],
       [sel(`${lapNamaBulan(a.M)} ${a.Y} spending`), sel(a.bulanIni, "jt"), sel(a.mom, "chg")],
+    ].concat(buku ? [
+      [sel(`Cash requested Jan–${lapBulanPendek(a.M)} ${a.Y}`), sel(J.kas, "jt"), sel(`true cost ${lapFmtUang(J.biaya)} · creditable tax ${lapFmtUang(J.pulih)}`)],
+      [sel("Import landed-cost add-on"), sel(nilaiImpor ? biayaImpor / nilaiImpor : null, "pct2"), sel("of customs value · services + duty, VAT excluded")],
+      [sel(`Payables at ${lapTgl(L.hutang.acuan)}`), sel(L.hutang.penutup.nilai, "jt"), sel(L.hutang.terlambat.jumlah ? `${lapFmtUang(L.hutang.terlambat.nilai)} overdue` : "none overdue")],
+    ] : []).concat([
       [sel(`${a.Y} full-year estimate`), sel(a.proyeksiIni, "jt"), sel(lapPerubahan(a.proyeksiIni, a.totalLalu), "chg")],
       [sel(`Recommended ${a.Y + 1} budget`, "txt", { b: true }), sel(a.rekomendasi, "jt", { b: true }), sel(`≈ ${lapFmtUang(a.rekomendasi / 12)} per month`)],
-    ],
+    ]),
   }, 4);
   s.getCell(r, 1).value = "In short";
   s.getCell(r, 1).font = { bold: true, size: 12 };
@@ -1709,7 +1922,7 @@ function lapSusunWorkbook(hasil, gambar) {
     r += 1;
   });
   r += 1;
-  [B.ringkasBulan, B.jenisRingkas, B.modaRingkas, B.vendorTop, B.perKiriman, B.bayarStatus, B.anggaranRingkas, B.rencanaBulan].forEach((x) => (r = lapXlsBlok(s, x, r)));
+  [B.ringkasBulan, B.jembatan, B.jenisRingkas, B.modaRingkas, B.vendorTop, B.perKiriman, B.hutangRingkas, B.anggaranRingkas, B.rencanaBulan].forEach((x) => (r = lapXlsBlok(s, x, r)));
   lapXlsLebar(s, 14, 34);
   s.getColumn(1).width = 30;
   lapXlsGambar(wb, s, r + 1, [g.yoy]);
@@ -1724,59 +1937,34 @@ function lapSusunWorkbook(hasil, gambar) {
     lapXlsCetak(ws);
     return ws;
   };
+  // Analisis buku besar: dari uang yang diminta sampai biaya sesungguhnya
+  if (buku) {
+    lembar("Cash Bridge", [B.jembatan, B.jembatanSifat, B.jembatanBulan], [g.jembatan]);
+    lembar("Shipment Economics", [B.ekonomi, B.ekonomiSyarat, B.eksporPelanggan]);
+    lembar("Duties & Taxes", [B.bea, B.beaRinci]);
+    lembar("Payables", [B.hutangRingkas, B.hutangUmur, B.hutangDisiplin, B.hutangDatang, B.hutangVendor, B.pph23], [g.umurHutang]);
+    lembar("Vendor Scorecard", [B.kartuVendor]);
+    lembar("Controls", [B.kontrol, B.akrualSemua, B.pencilanSemua]);
+    lembar("Cost Drivers", [B.penggerak, B.jalurBc], g.sebar);
+  }
   lembar("Revenue vs Spending", [B.pendapatan, B.kanal, B.custPend], [g.pendapatan, g.rasio]);
   lembar("Monthly Comparison", [B.bulanan], [g.kumulatif]);
   lembar("Breakdown", [B.jenis, B.jenisBulan, B.moda], [g.moda]);
   lembar("Vendors & Customers", [B.vendor, B.customer, B.perKiriman]);
   lembar("Vendor Comparison", [B.bandingVendor]);
-  lembar("Payments", [B.bayarStatus, B.bayarUmur, B.bayarVendor]);
   lembar("Statistics", [B.statistik]);
   lembar(`Forecast ${a.Y + 1}`, [B.anggaranSaran, B.metode].concat(B.ramalPend ? [B.ramalPend] : []).concat([B.fasing]), [g.ramalan]);
   lembar("Transport Detail", [B.modaBulan, B.jumlahModa]);
   lembar("Vendor Settlement", [B.vendorPpn].concat(B.anggaranPakai ? [B.anggaranPakai] : []));
   lembar("Exchange Rates", [B.kurs]);
 
-  // Data mentah
-  const d = wb.addWorksheet("Cost Data");
-  d.columns = [
-    { header: "Number", width: 22 }, { header: "Date", width: 12 }, { header: "Vendor", width: 26 }, { header: "Customer", width: 22 },
-    { header: "Mode", width: 14 }, { header: "Transaction Type", width: 16 }, { header: "Expense Type", width: 14 }, { header: "Currency", width: 10 },
-    { header: "Non-VAT (IDR)", width: 16 }, { header: "VAT-able base (IDR)", width: 18 }, { header: "VAT (IDR)", width: 14 },
-    { header: "Total before VAT (IDR)", width: 20 }, { header: "Notes", width: 40 },
-  ];
-  const kepala = (row) => row.eachCell((c) => {
-    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
-    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E3A5F" } };
-    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-  });
-  kepala(d.getRow(1));
-  (lapData && lapData.dana ? lapData.dana.map((x) => lapBarisDana(x, lap.kurs)) : lap.biaya)
-    .filter((x) => lapSaringan.jenis.indexOf(x.jenis) >= 0)
-    .sort((x, y) => x.tanggal.localeCompare(y.tanggal))
-    .forEach((x) => {
-      const row = d.addRow([x.nomor, x.tanggal, x.vendor, x.customer, lapNamaModa(x.moda), x.transaksi, x.jenis === "Lainnya" ? "Other" : x.jenis, x.mata, x.tanpaPpn, x.kenaPpn, x.ppn, x.total, x.catatan]);
-      [9, 10, 11, 12].forEach((k) => (row.getCell(k).numFmt = "#,##0"));
-      row.eachCell((c, k) => (c.alignment = { horizontal: k === 13 ? "left" : "center", vertical: "middle" }));
-    });
-  d.autoFilter = { from: "A1", to: "M1" };
-  d.views = [{ state: "frozen", ySplit: 1 }];
-
-  const p = wb.addWorksheet("Sales Data");
-  p.columns = [
-    { header: "Invoice No.", width: 30 }, { header: "Date", width: 12 }, { header: "Customer", width: 28 }, { header: "Terms of Delivery", width: 22 },
-    { header: "Terms group", width: 14 }, { header: "Channel", width: 12 }, { header: "Currency", width: 10 }, { header: "Amount", width: 14 },
-    { header: "Rate (NDPBM)", width: 13 }, { header: "Amount (IDR)", width: 18 }, { header: "QTY", width: 8 },
-  ];
-  kepala(p.getRow(1));
-  lap.jual.slice().sort((x, y) => x.tanggal.localeCompare(y.tanggal)).forEach((x) => {
-    const row = p.addRow([x.nomor, x.tanggal, x.customer, x.syaratTeks, x.syarat, x.kanal, x.mata, x.jumlahAsli, x.kurs, x.jumlah, x.qty]);
-    row.getCell(8).numFmt = "#,##0.00";
-    row.getCell(9).numFmt = "#,##0.00";
-    row.getCell(10).numFmt = "#,##0";
-    row.eachCell((c) => (c.alignment = { horizontal: "center", vertical: "middle" }));
-  });
-  p.autoFilter = { from: "A1", to: "K1" };
-  p.views = [{ state: "frozen", ySplit: 1 }];
+  // Data yang saling berhubungan (kunci: Shipment ID, BL/AWB)
+  lapLembarKiriman(wb, L);
+  lapLembarTautan(wb, L);
+  lapLembarBiaya(wb, a, lap);
+  lapLembarPenjualan(wb, a, lap);
+  const kamus = lembar("Data Dictionary", [B.kamus]);
+  [22, 30, 70, 44].forEach((w, n) => (kamus.getColumn(n + 1).width = w));
   return wb;
 }
 
@@ -1786,9 +1974,11 @@ async function lapUnduhExcel() {
     await ensureExcelJS();
     const hasil = lapHitungSekarang();
     const graf = lapGrafik(hasil.a);
-    const [yoy, kumulatif, ramalan, moda, pendapatan, rasio] = await Promise.all(
-      [graf.yoy, graf.kumulatif, graf.ramalan, graf.moda, graf.pendapatan, graf.rasio].map((svg) => lapSvgKePng(svg, LAP_GRAFIK.W, LAP_GRAFIK.H)));
-    const wb = lapSusunWorkbook(hasil, { yoy, kumulatif, ramalan, moda, pendapatan, rasio });
+    const png = (svg) => (svg ? lapSvgKePng(svg, LAP_GRAFIK.W, LAP_GRAFIK.H) : Promise.resolve(null));
+    const [yoy, kumulatif, ramalan, moda, pendapatan, rasio, jembatan, umurHutang] = await Promise.all(
+      [graf.yoy, graf.kumulatif, graf.ramalan, graf.moda, graf.pendapatan, graf.rasio, graf.jembatan, graf.umurHutang].map(png));
+    const sebar = await Promise.all((graf.sebar || []).map(png));
+    const wb = lapSusunWorkbook(hasil, { yoy, kumulatif, ramalan, moda, pendapatan, rasio, jembatan, umurHutang, sebar });
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     const tautan = document.createElement("a");

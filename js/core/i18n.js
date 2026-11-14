@@ -51,7 +51,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Kemasan diisi per barang. <b>Import</b>: jumlah + jenis (cth. “5 BOX”), Total Package terjumlah otomatis. <b>Export</b>: dimensi P×L×T cm, CBM otomatis — kolom Kemasan-nya sendiri tetap diisi seperti Import, dan Total Package-nya ikut terjumlah otomatis. Barang yang berbagi satu box: isi pada baris pertama, kosongkan sisanya — di surat jalan baris itu tercetak menyatu.",
     "form.note.duty":
-      "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif BM barangnya, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. <b>Tarif BM diisi per barang</b> di kolom Tarif BM (%) tab 2. Daftar Barang — terisi otomatis dari HS Code-nya. Barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
+      "Terisi otomatis sama dengan kolom Dibayar tab Pungutan Data PIB, dihitung per barang. <b>BM</b> = Nilai Pabean × Tarif BM barangnya, dibulatkan ke atas ke ribuan · <b>PPN</b> = (Nilai Pabean + BM) × 11% · <b>PPH</b> = (Nilai Pabean + BM) × 2,5%. <b>Tarif BM diisi per barang</b> di kolom Tarif BM (%) tab 2. Daftar Barang — terisi otomatis dari HS Code-nya. Barang ber-SKB BM / Masterlist, SKB PPN atau SKB PPh tidak ikut dibayar pungutan itu. Barang yang memakai COO bertarif BM 0%. Ketik sendiri untuk mengganti; kosongkan untuk kembali otomatis.",
     "form.note.fundSubject":
       "Dipakai sebagai <b>Subject</b> pada Form Pengajuan Dana yang dicetak. Terisi otomatis dari Jenis Pengeluaran, vendor, Jenis Transaksi & barang BL/AWB-nya selama belum diubah sendiri.",
     "form.note.totalValue":
@@ -453,6 +453,7 @@ const I18N = {
     "w.barang.qty.tidak.terbaca": "Barang #{n} (\"{nama}\"): qty/satuan/berat tidak terbaca otomatis dari PDF — isi manual.",
     "w.digabung.otomatis.dari.2.berkas": "Digabung otomatis dari 2 berkas yang dipilih sekaligus (Commercial Invoice + Packing List) — harga & qty dari CI, berat dari PL.",
     "w.harga.satuan.dipertahankan": "Harga satuan {n} barang dipertahankan dari data sebelumnya{urut} — dokumen kepabeanan tidak menimpa harga invoice.",
+    "w.harga.dari.draft": "Barang {daftar} tidak ditemukan di daftar barang sebelumnya menurut namanya, jadi harga satuannya dari draft (bisa sudah termasuk freight & asuransi) — periksa harganya.",
     "w.nama.barang.dipertahankan": "Kolom barang {n} barang (Kode Barang s.d. Spesifikasi Lain) dipertahankan dari isian sebelumnya{urut} — nama barang Export di jadwal adalah rujukannya, jadi tidak ditimpa draft CEISA.",
     "w.jumlah.kemasan.tidak.terbaca": "Jumlah kemasan tidak terbaca — awali dengan angka, mis. \"5 BOX\".",
     "w.nilai.tidak.ada.di.dropdown": "{label} \"{nilai}\" dari berkas tidak ada di pilihan dropdown — pilih manual.",
@@ -527,7 +528,10 @@ const I18N = {
     "y.cipl.invoice.packing.beda.form": "Sesudah impor, Invoice & Packing List di form tidak sama: {beda}. Seharusnya nomor dan tanggal Invoice dan Packing List sama — periksa dokumennya sebelum disimpan.",
     "y.bukan.format.dikenali": "\"{nama}\" sepertinya bukan format PIB BC 2.0, PEB BC 3.0, Packing List, atau Commercial Invoice yang dikenali, atau teksnya tidak terbaca (mis. hasil pindaian/gambar).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" tidak terbaca sebagai dokumen BC (sheet HEADER/BARANG) maupun CIPL mana pun yang dikenali.",
-    "y.fasilitas.diterapkan.semua.barang": "Fasilitas SKB/COO dari PDF diterapkan ke SEMUA barang secara bawaan (lembar Pemenuhan Persyaratan tidak memisahkan per barang) — periksa tiap barang lewat tombol Fasilitas, hapus yang tidak seharusnya mendapatkannya (COO biasanya hanya berlaku untuk barang tertentu, bukan semuanya).",
+    "y.fasilitas.diterapkan.semua.barang": "Kolom 33 (Keterangan) per barang tidak terbaca, jadi fasilitas dari PDF diterapkan ke SEMUA barang: {daftar}. Periksa tiap barang lewat tombol Fasilitas dan hapus yang tidak seharusnya mendapatkannya.",
+    "y.fasilitas.pdf.per.barang": "Fasilitas (Masterlist, SKB PPN/PPH, COO) diisi per barang menurut kolom 33 (Keterangan) PDF — No. Urut di kolom itu menunjuk dokumen di lembar Pemenuhan Persyaratan/Fasilitas. Periksa tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
+    "y.coo.pdf.tidak.tertaut.barang": "COO ada di lembar Pemenuhan Persyaratan/Fasilitas tetapi tidak disebut di kolom 33 (Keterangan) barang mana pun, jadi TIDAK dipasang ke barang: {daftar}. COO berlaku per barang dan membuat BM-nya 0% — pasang lewat tombol Fasilitas pada barang yang memakai COO ini.",
+    "y.coo.pdf.kolom33.tidak.terbaca": "Kolom 33 (Keterangan) per barang tidak terbaca, jadi COO tidak bisa dipasangkan ke barangnya dan TIDAK dipasang: {daftar}. COO membuat BM barangnya 0% — pasang lewat tombol Fasilitas pada barang yang memakai COO ini.",
     "y.harga.satuan.tidak.dihitung": "Harga satuan (USD) tidak dihitung otomatis untuk PDF dengan lebih dari 1 barang (nilai pabean per barang tidak diambil) — isi manual per barang di tab Daftar Barang.",
     "y.hasil.baca.pdf.best.effort": "Hasil baca PDF ini sebaik yang bisa dilakukan (posisi teks di PDF tidak selalu berurutan) — mohon periksa ulang semua isian sebelum menyimpan, terutama Vessel, Freight/Insurance/NDPBM, dan berat per barang.",
     "y.berkas.mode.berbeda": "Berkas ini sepertinya dokumen {dokumen}, tapi form yang terbuka sekarang mode {form} — periksa lagi sebelum menyimpan.",
@@ -541,6 +545,7 @@ const I18N = {
     "y.bruto.per.barang.tidak.ada": "Bruto per barang tidak ada di berkas ini — total Bruto dari HEADER ({n} Kg) ditaruh di baris barang pertama, sesuaikan manual per barang kalau perlu.",
     "y.fasilitas.diisi.per.barang": "Fasilitas (Masterlist, SKB PPN/PPH, COO) diisi per barang sesuai lembar BARANGDOKUMEN, lengkap dengan nomor dokumennya — periksa tiap barang lewat tombol Fasilitas kalau ada yang perlu disesuaikan.",
     "y.fasilitas.umum.semua.barang": "Dokumen fasilitas yang tidak ditautkan ke barang tertentu diterapkan ke semua barang: {daftar}. Hapus dari barang yang tidak mendapatkannya.",
+    "y.coo.tidak.tertaut.barang": "COO ada di sheet DOKUMEN tetapi tidak ditautkan ke barang mana pun (BARANGDOKUMEN), jadi TIDAK dipasang ke barang: {daftar}. COO berlaku per barang dan membuat BM-nya 0% — pasang lewat tombol Fasilitas pada barang yang memakai COO ini.",
     "y.dokumen.lain.dicatat": "Dokumen lain dicatat di Dokumen Pelengkap Pabean: {daftar}.",
     "y.eta.dari.perkiraan.tiba": "ETA dari perkiraan tanggal tiba dokumen: {tgl} (mode ETA Manual).",
     "y.eta.revisi.dari.perkiraan.tiba": "ETA revisi dari perkiraan tanggal tiba dokumen: {tgl}.",
@@ -602,7 +607,7 @@ const I18N = {
     "form.note.itemPackaging":
       "Packaging is filled per item. <b>Import</b>: quantity + type (e.g. “5 BOX”), Total Package is summed automatically. <b>Export</b>: L×W×H dimensions in cm, CBM automatic — its own Packaging column is still filled like Import, and Total Package is summed automatically too. Items sharing one box: fill the first row and leave the rest empty — on the delivery note those rows print merged.",
     "form.note.duty":
-      "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × the item's Duty Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. <b>The duty rate is set per item</b> in the Duty Rate (%) column on tab 2. Item List — filled automatically from its HS Code. Items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Type your own value to override; clear it to return to automatic.",
+      "Filled automatically, equal to the Paid column of the PIB Data Duties tab, calculated per item. <b>BM</b> = Customs Value × the item's Duty Rate, rounded up to the thousand · <b>PPN</b> = (Customs Value + BM) × 11% · <b>PPH</b> = (Customs Value + BM) × 2.5%. <b>The duty rate is set per item</b> in the Duty Rate (%) column on tab 2. Item List — filled automatically from its HS Code. Items with SKB BM / Masterlist, SKB PPN or SKB PPh do not pay that levy. Items that use a COO carry a 0% duty rate. Type your own value to override; clear it to return to automatic.",
     "form.note.fundSubject":
       "Used as the <b>Subject</b> on the printed Fund Request form. Filled automatically from the Expense Type, vendor, Transaction Type & the B/L/AWB's goods until you edit it.",
     "form.note.totalValue":
@@ -1005,6 +1010,7 @@ const I18N = {
     "w.barang.qty.tidak.terbaca": "Item #{n} (\"{nama}\"): qty/unit/weight could not be read automatically from the PDF — please fill them in manually.",
     "w.digabung.otomatis.dari.2.berkas": "Merged automatically from the 2 files selected together (Commercial Invoice + Packing List) — price & qty from the CI, weight from the PL.",
     "w.harga.satuan.dipertahankan": "The unit price of {n} item(s) was kept from the previous data{urut} — the customs document does not overwrite invoice prices.",
+    "w.harga.dari.draft": "Item {daftar} could not be found by name in the previous item list, so its unit price comes from the draft (it may include freight & insurance) — please check the price.",
     "w.nama.barang.dipertahankan": "The item columns of {n} item(s) (Item Code to Other Specification) were kept from the previous entry{urut} — an export schedule's item names are the reference, so the CEISA draft does not overwrite them.",
     "w.jumlah.kemasan.tidak.terbaca": "The package count could not be read — start with a number, e.g. \"5 BOX\".",
     "w.nilai.tidak.ada.di.dropdown": "{label} \"{nilai}\" from the file is not in the dropdown options — please choose it manually.",
@@ -1079,7 +1085,10 @@ const I18N = {
     "y.cipl.invoice.packing.beda.form": "After the import, the Invoice & Packing List on the form do not match: {beda}. The Invoice and Packing List number and date should be the same — check the documents before saving.",
     "y.bukan.format.dikenali": "\"{nama}\" does not appear to be a recognised PIB BC 2.0, PEB BC 3.0, Packing List, or Commercial Invoice, or its text could not be read (e.g. a scan/image).",
     "y.tidak.terbaca.bc.maupun.cipl": "\"{nama}\" could not be read as a BC document (HEADER/BARANG sheets) or as any recognised CIPL.",
-    "y.fasilitas.diterapkan.semua.barang": "The SKB/COO facilities from the PDF are applied to ALL items by default (the requirements sheet does not separate them per item) — check each item via the Facilities button and remove any that should not have it (COO usually applies only to certain items, not all of them).",
+    "y.fasilitas.diterapkan.semua.barang": "Column 33 (Keterangan) could not be read per item, so the facilities from the PDF were applied to ALL items: {daftar}. Check each item via the Facility button and remove any that should not have them.",
+    "y.fasilitas.pdf.per.barang": "Facilities (Masterlist, SKB PPN/PPH, COO) were filled in per item from column 33 (Keterangan) of the PDF — the sequence numbers there point to documents in the requirements/facilities sheet. Check each item via the Facility button if anything needs adjusting.",
+    "y.coo.pdf.tidak.tertaut.barang": "A COO is in the requirements/facilities sheet but no item mentions it in column 33 (Keterangan), so it was NOT applied to the items: {daftar}. A COO applies per item and makes its import duty (BM) 0% — add it via the Facility button on the items that use it.",
+    "y.coo.pdf.kolom33.tidak.terbaca": "Column 33 (Keterangan) could not be read per item, so the COO could not be matched to its items and was NOT applied: {daftar}. A COO makes its items' import duty (BM) 0% — add it via the Facility button on the items that use it.",
     "y.harga.satuan.tidak.dihitung": "The unit price (USD) is not calculated automatically for PDFs with more than one item (the per-item customs value is not extracted) — fill it in per item on the Item List tab.",
     "y.hasil.baca.pdf.best.effort": "This PDF was read on a best-effort basis (text positions in a PDF are not always in order) — please double-check every field before saving, especially the Vessel, Freight/Insurance/NDPBM, and the per-item weights.",
     "y.berkas.mode.berbeda": "This file appears to be a {dokumen} document, but the form currently open is in {form} mode — please check again before saving.",
@@ -1093,6 +1102,7 @@ const I18N = {
     "y.bruto.per.barang.tidak.ada": "This file has no per-item gross weight — the HEADER total ({n} Kg) was placed on the first item row; adjust it per item if needed.",
     "y.fasilitas.diisi.per.barang": "Facilities (Masterlist, SKB PPN/PPH, COO) were filled in per item from the BARANGDOKUMEN sheet, with their document numbers — check each item via the Facility button if anything needs adjusting.",
     "y.fasilitas.umum.semua.barang": "Facility documents not linked to a specific item were applied to all items: {daftar}. Remove them from items that do not get them.",
+    "y.coo.tidak.tertaut.barang": "A COO is in the DOKUMEN sheet but is not linked to any item (BARANGDOKUMEN), so it was NOT applied to the items: {daftar}. A COO applies per item and makes its import duty (BM) 0% — add it via the Facility button on the items that use it.",
     "y.dokumen.lain.dicatat": "Other documents were recorded under Supporting Customs Documents: {daftar}.",
     "y.eta.dari.perkiraan.tiba": "ETA taken from the document's estimated arrival date: {tgl} (ETA mode Manual).",
     "y.eta.revisi.dari.perkiraan.tiba": "Revised ETA taken from the document's estimated arrival date: {tgl}.",
@@ -1306,9 +1316,7 @@ function setLang(kode) {
     // Label ber-moda di form Surat (Flight/Sail & Tanggal Tiba) ikut bahasa
     if (typeof suratPerbaruiLabelAngkut === "function" && typeof docNumPanelEl === "function")
       suratPerbaruiLabelAngkut(docNumPanelEl("letter"));
-    // Kotak "Aturan Doc No": jumlah vendor & keterangan tombolnya dirakit JS
-    if (typeof fundDocNoGambar === "function") fundDocNoGambar();
-    // Kotak "Aturan No. Invoice": idem
+    // Kotak "Aturan No. Invoice": jumlah vendor & keterangan tombolnya dirakit JS
     if (typeof fundInvoiceGambar === "function") fundInvoiceGambar();
     // Keterangan skema pihak invoice & tanda "= Penjual/Penerima"
     if (typeof invSegarkanTanda === "function" && typeof invPanel === "function" && invPanel())
@@ -1319,6 +1327,11 @@ function setLang(kode) {
      tersembunyi: membukanya nanti tidak menggambarnya ulang. */
   if (typeof renderFundDokumen === "function") renderFundDokumen();
   if (typeof renderFundLines === "function") renderFundLines();
+  /* Aturan Doc No (jumlah vendor, keterangan tombol, contoh Doc No
+     bawaan) & keterangan Doc No bawaan di bawah kotak Doc No -- dirakit
+     fund-docno.js; juga saat halamannya tersembunyi. */
+  if (typeof fundDocNoGambar === "function") fundDocNoGambar();
+  if (typeof fundDocNoKeterangan === "function" && typeof docNumPanelEl === "function") fundDocNoKeterangan(docNumPanelEl("fund"));
   if (typeof renderDoLines === "function") renderDoLines();
   if (typeof renderSuratBarang === "function") renderSuratBarang();
   /* Tombol rentang tanggal riwayat Pengajuan Dana ("Pilih Rentang

@@ -787,6 +787,44 @@ table.item-table input.negara-salah {
   border-color: var(--coral);
   background: var(--w-bg-fff6f6);
 }
+/* Negara Shipper / Buyer (tab Dokumen & Umum, #fNegaraPihak): pola yang
+   sama dengan Kode Negara Asal barang -- kode di kiri, nama negaranya
+   redup di dalam kotak, disembunyikan selagi diketik. */
+.negara-isian--form {
+  position: relative;
+}
+.negara-isian--form > input {
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+.negara-isian--form > input::placeholder {
+  text-transform: none;
+  font-family: var(--font-body);
+  letter-spacing: 0;
+}
+.negara-isian--form > .negara-nama {
+  position: absolute;
+  top: 50%;
+  left: 2.85rem;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  font-size: 0.78rem;
+  line-height: 1;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.negara-isian--form > .negara-nama:empty,
+.negara-isian--form > input:focus + .negara-nama {
+  display: none;
+}
+.negara-isian--form > input.negara-salah {
+  border-color: var(--coral);
+  background: var(--w-bg-fff6f6);
+}
 /* Kolom Seri Barang — angka referensi saja (dari posisi baris, lihat
    item-table.js), bukan isian. Sengaja sempit & senada warna muted,
    supaya tidak terbaca seperti field yang perlu diisi. */
@@ -2325,6 +2363,10 @@ table.item-table input.tarif-otomatis {
   border-color: var(--s-ok-line);
   background: var(--s-ok-bg);
   color: var(--ts-ok);
+}
+/* Barang ber-COO: tarif BM terkunci 0% (tarif-hs.js) */
+table.item-table input.tarif-coo {
+  cursor: default;
 }
 
 @container barang-isi (min-width: 0px) {

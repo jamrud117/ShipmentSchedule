@@ -1151,6 +1151,7 @@ async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
     }
     const progres = progresSimpanForm(id);
     if (progres) payload.docProgress = progres;
+    const migrasiAwal = toastMigrasiKe;
     const tersimpan = id
       ? await updateShipmentRecord(id, payload, cleanItems, cleanStops, sidikAsalForm)
       : await createShipment(payload, cleanItems, cleanStops);
@@ -1158,7 +1159,8 @@ async function simpanJadwalForm(id, payload, cleanItems, cleanStops) {
     berkasDilepasForm = [];
     await terapkanJadwalTersimpan(tersimpan);
     goBackToList();
-    showToast(t("m.jadwal.berhasil.disimpan"), "success");
+    // "Jadwal tersimpan, tetapi ... migration-....sql" tidak ditimpa (toastMigrasiKe, feedback.js)
+    if (toastMigrasiKe === migrasiAwal) showToast(t("m.jadwal.berhasil.disimpan"), "success");
   } catch (err) {
     console.error(err);
     showToast(t("m.gagal.menyimpan.jadwal.ke.database"), "danger");

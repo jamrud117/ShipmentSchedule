@@ -114,8 +114,8 @@ const PP_NAMA_PIHAK = {
 const PP_KUNCI_JADWAL = {
   aju: ["aju"], docNo: ["daftar"], invoice: ["invoice"], invoiceDate: ["invoice"], polis: ["dok:530"], polisDate: ["dok:530"],
   moda: ["moda"], kapal: ["kapal"], muat: ["muat"], tujuan: ["tujuan"], negaraTujuan: ["negaraTujuan"], incoterm: ["incoterm"],
-  freight: ["freight"], asuransi: ["asuransi"], ndpbm: ["ndpbm"], nilaiPabeanRp: ["nilaiPabeanRp"], kemasan: ["kemasan"], kontainer: ["kontainer"],
-  netto: ["netto"], bruto: ["bruto"], etd: ["tglEkspor"], packingList: ["packingList"],
+  freight: ["freight"], asuransi: ["asuransi"], ndpbm: ["ndpbm"], kemasan: ["kemasan"], kontainer: ["kontainer"],
+  netto: ["netto"], bruto: ["bruto"], etd: ["tglEkspor"], eta: ["tglTiba"], nilai: ["nilai"], packingList: ["packingList"],
 };
 const PP_KUNCI_MESIN = {
   "Invoice Number": ["invoice"], "Invoice Date": ["invoice"], "Packing List Number": ["packingList"], "Packing List Date": ["packingList"],
@@ -128,7 +128,7 @@ const PP_KOLOM_BARANG = [
   [/^(?:existence|not found in CIPL)?$/, ""], [/^HS Code$/, "hs"], [/^(?:Description|Uraian)$/, "uraian"], [/^(?:Type \/ Specification|Tipe)$/, "tipe"],
   [/^(?:Brand|Merek)$/, "merek"], [/^Ukuran$/, "ukuran"], [/^Spesifikasi Lain$/, "spek"], [/^Kode Barang$/, "kode"], [/^Quantity$/, "qty"],
   [/^Unit$/, "satuan"], [/^Amount \//, "nilai"], [/^Net Weight$/, "netto"], [/^Kode Kondisi Barang$/, "kondisi"], [/^Kode Negara Asal$/, "negara"],
-  [/^Fasilitas/, "fasilitas"],
+  [/^Fasilitas/, "fasilitas"], [/^Kemasan$/, "kemasan"],
 ];
 
 function ppSlot(x, isPeb) {
@@ -164,7 +164,7 @@ function ppSlot(x, isPeb) {
 const PP_LABEL = {
   pib: {
     aju: "Nomor Pengajuan", daftar: "G. Nomor dan Tanggal Pendaftaran", kantor: "Kantor Pabean", moda: "9. Cara Pengangkutan",
-    kapal: "10. Nama Sarana Pengangkutan & No. Voy/Flight", muat: "12. Pelabuhan Muat", tujuan: "14. Pelabuhan Tujuan", negaraTujuan: "Negara Tujuan",
+    kapal: "10. Nama Sarana Pengangkutan & No. Voy/Flight", tglTiba: "11. Perkiraan Tanggal Tiba", muat: "12. Pelabuhan Muat", tujuan: "14. Pelabuhan Tujuan", negaraTujuan: "Negara Tujuan",
     invoice: "15. Invoice", "bl:house": "17. House-BL/AWB", "bl:master": "17. Master-BL/AWB", valuta: "21. Valuta", ndpbm: "22. NDPBM",
     incoterm: "23. Nilai (dasar nilai)", nilai: "23. Nilai", nilaiPabeanRp: "26. Nilai Pabean (Rp)", asuransi: "24. Asuransi/LDN", freight: "25. Freight",
     kontainer: "27. Nomor, Ukuran, dan Tipe Peti Kemas", kemasan: "28. Jumlah, Jenis, dan Merek Kemasan", bruto: "29. Berat Kotor (Kg)",
@@ -184,7 +184,7 @@ const PP_LABEL_BARANG = {
   pib: {
     hs: "32. Pos Tarif HS", kode: "32. Kode Barang", uraian: "32. Uraian", merek: "32. Merk", tipe: "32. Tipe", ukuran: "32. Ukuran",
     spek: "32. Spesifikasi lain", kondisi: "32. Kondisi Barang", negara: "32. Negara Asal Barang", fasilitas: "33. Fasilitas & No. Urut",
-    qty: "35. Jumlah Satuan Barang", satuan: "35. Jenis Satuan Barang", netto: "35. Berat Bersih (Kg)", nilai: "36. Nilai Pabean",
+    qty: "35. Jumlah Satuan Barang", satuan: "35. Jenis Satuan Barang", netto: "35. Berat Bersih (Kg)", kemasan: "35. Jumlah & Jenis Kemasan", nilai: "36. Nilai Pabean",
     tarifBm: "34. Tarif BM", tarifPph: "34. Tarif PPh", metodeNilai: "36. Metode Penentuan Nilai Pabean",
     bedaHargaLevel: "36. Perbedaan Harga terkait Level Perdagangan", jenisVd: "36. Jenis V D", nilaiVd: "36. Nilai yang Ditambahkan",
     jatuhTempo: "36. Jatuh Tempo",
@@ -192,7 +192,7 @@ const PP_LABEL_BARANG = {
   peb: {
     hs: "48. Pos Tarif/HS", kode: "48. Kode Barang", uraian: "48. Uraian", merek: "48. Merk", tipe: "48. Tipe", ukuran: "48. Ukuran",
     spek: "48. Spesifikasi Wajib", kondisi: "Kondisi Barang", negara: "52. Negara Asal Barang", fasilitas: "49. Perizinan Ekspor & No. Urut",
-    qty: "51. Jumlah Satuan Barang", satuan: "51. Jenis Satuan Barang", netto: "51. Berat Bersih (kg)", nilai: "54. Nilai Ekspor",
+    qty: "51. Jumlah Satuan Barang", satuan: "51. Jenis Satuan Barang", netto: "51. Berat Bersih (kg)", kemasan: "51. Kemasan", nilai: "54. Nilai Ekspor",
     jenisEkspor: "48. Jenis Ekspor", he: "50. HE Barang", tarifBk: "50. Tarif Bea Keluar", daerahAsal: "53. Daerah Asal Barang",
   },
 };
@@ -652,8 +652,8 @@ function ppBarisPib(kv, it, top, kol) {
   kv.isian(kol.c35, top + 0.81, 6, ppAngka(it.qty, 4), { slot: s("qty") });
   kv.isian(kol.c35, top + 9.81, 6, PP_SATUAN[it.satuan] || it.satuan, { slot: s("satuan"), w: kol.w35, maks: 1 });
   kv.isian(kol.c35, top + 24.81, 6, ppAngka(it.netto, 4), { slot: s("netto") });
-  kv.isian(kol.c35, top + 38.81, 6, ppAngka(it.kemasanJumlah, 2));
-  kv.isian(kol.c35, top + 48.81, 6, it.kemasanKode ? `${ppNamaKemasan(it.kemasanKode)} (${it.kemasanKode})` : "", { w: kol.w35, maks: 1 });
+  kv.isian(kol.c35, top + 38.81, 6, ppAngka(it.kemasanJumlah, 2), { slot: s("kemasan") });
+  kv.isian(kol.c35, top + 48.81, 6, it.kemasanKode ? `${ppNamaKemasan(it.kemasanKode)} (${it.kemasanKode})` : "", { slot: s("kemasan"), w: kol.w35, maks: 1 });
   kv.paragraf(kol.c36, top + 0.81, 6, [{ t: "- " }, { t: ppAngka(it.nilaiPabean, 2), slot: s("nilai") }]);
   kv.isian(kol.c36, top + 10.81, 6, it.metode, { slot: s("metodeNilai") });
   kv.isian(kol.c36, top + 20.81, 6, it.beda, { slot: s("bedaHargaLevel") });
@@ -716,7 +716,7 @@ function ppPibHal1(m, pn, jumlahHal) {
   kv.isian(343, 141.95, 7, m.kapal, { slot: "kapal", w: 230, maks: 1 });
   kv.isian(343, 150.95, 7, m.voyage, { slot: "kapal", w: 140, maks: 1 });
   kv.isian(489, 150.95, 7, m.bendera ? ppNamaNegara(m.bendera) : "", { w: 84, maks: 1 });
-  kv.isian(422, 161.95, 7, ppTgl(m.tglTiba));
+  kv.isian(422, 161.95, 7, ppTgl(m.tglTiba), { slot: "tglTiba" });
   kv.isian(410, 174.95, 7, m.muat.nama, { slot: "muat", w: 108, maks: 1 });
   kv.isian(548, 175.87, 7, m.muat.kode, { slot: "muat", rata: "tengah" });
   kv.isian(410, 186.95, 7, m.transit.nama, { slot: "dp:pelabuhanTransit", w: 108, maks: 1 });
@@ -909,7 +909,7 @@ function ppBarisPeb(kv, it, top, kol) {
   kv.paragraf(kol.c51, top + 2.67, 5, [{ t: "- " }, { t: ppAngka(it.qty, 4), slot: s("qty") }, { t: " " },
     { t: it.satuan ? `${PP_SATUAN[it.satuan] || it.satuan} (${it.satuan})` : "", slot: s("satuan") }], { w: kol.w51, maks: 1 });
   kv.paragraf(kol.c51, top + 8.5, 5, [{ t: "- " }, { t: ppAngka(it.netto, 4), slot: s("netto") }, { t: " Kg" }]);
-  kv.paragraf(kol.c51, top + 14.31, 5, [{ t: "- Kemasan: " }, { t: `${ppAngkaBebas(it.kemasanJumlah, 4)} ${it.kemasanKode}`.trim() }], { w: kol.w51, maks: 1 });
+  kv.paragraf(kol.c51, top + 14.31, 5, [{ t: "- Kemasan: " }, { t: `${ppAngkaBebas(it.kemasanJumlah, 4)} ${it.kemasanKode}`.trim(), slot: s("kemasan") }], { w: kol.w51, maks: 1 });
   kv.paragraf(kol.c52, top + 2.67, 5, [{ t: "- " }, { t: it.negara ? `${ppNamaNegara(it.negara)} (${it.negara})` : "", slot: s("negara") }], { w: kol.w52, maks: 1 });
   kv.paragraf(kol.c52, top + 8.5, 5, [{ t: "- " }, { t: it.daerah, slot: s("daerahAsal") }], { w: kol.w52, maks: 1 });
   kv.isian(kol.c54, top + 2.67, 5, ppAngkaBebas(it.fob, 2), { slot: s("nilai"), rata: "kanan" });

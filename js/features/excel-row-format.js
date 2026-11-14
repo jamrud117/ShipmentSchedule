@@ -140,6 +140,7 @@ function buildExcelCopyRows(s, formatter) {
   const calc = computeCustoms(s);
   const items = s.items || [];
   const facilitiesSummary = shipmentFacilitiesSummary(items).split("\n");
+  const piBaris = barisKolomPi(s);
 
   const masterBL = (s.masterBL || "").trim();
   const houseBL = (s.houseBL || "").trim();
@@ -223,11 +224,12 @@ function buildExcelCopyRows(s, formatter) {
       formatter.num(ppnVal, 2), // 20 PPN 11%
       formatter.num(pphVal, 2), // 21 PPH
       formatter.num(bmPdriVal, 2), // 22 TOTAL BM+PDRI
-      /* 23 PI -- SEMUA dokumen pelengkap non-fasilitas, satu per baris:
-         PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>"
-         (kolomPiJadwal, core/helpers.js); fasilitas tetap di kolom 24 */
-      formatter.text(kolomPiJadwal(s)),
-      formatter.text(facilitiesSummary[idx] || ""), // 24
+      /* 23 PI -- SEMUA dokumen pelengkap non-fasilitas, SATU DOKUMEN PER
+         BARIS LEMBAR (bukan satu sel bergaris baru): PI, "LS <nomor>",
+         "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>" (barisKolomPi,
+         core/helpers.js); fasilitas tetap di kolom 24 */
+      formatter.text(piBaris[idx] || ""),
+      formatter.text(facilitiesSummary[idx] || ""), // 24 -- satu dokumen per baris juga
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
       formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
       formatter.vessel(s), // 27 VESSEL (salin: udara No Flight saja; Bulk: nama + nomor)
@@ -239,11 +241,11 @@ function buildExcelCopyRows(s, formatter) {
   }
 
   const rows = items.map((it, idx) => buildRowForItem(it, idx));
-  while (rows.length < facilitiesSummary.length) {
+  // Dokumen PI / fasilitas lebih banyak dari barangnya: baris tambahan berisi kolom itu saja
+  while (rows.length < Math.max(facilitiesSummary.length, piBaris.length)) {
     const blankRow = new Array(29).fill(formatter.blank);
-
-    blankRow[24] = formatter.text(facilitiesSummary[rows.length]);
-
+    blankRow[23] = formatter.text(piBaris[rows.length] || "");
+    blankRow[24] = formatter.text(facilitiesSummary[rows.length] || "");
     rows.push(blankRow);
   }
 

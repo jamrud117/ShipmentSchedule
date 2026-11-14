@@ -214,6 +214,15 @@
 .detail-kv-tag {
   margin-top: 4px;
 }
+/* Tombol Atur / Ubah Tanggal Dibutuhkan di Pabrik (viewer & EXIM) --
+   kecil, sebaris dengan tanggalnya, tidak menyaingi nilainya. */
+.detail-kv dd .detail-atur-butuh {
+  height: 26px;
+  margin-left: 8px;
+  padding: 0 10px;
+  font-size: var(--t-sm, 0.8125rem);
+  vertical-align: baseline;
+}
 .detail-kv-catatan {
   margin: calc(var(--sp-2) * -1) 0 var(--sp-4);
 }

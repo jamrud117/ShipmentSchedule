@@ -16,7 +16,12 @@ function buildTaskQueue() {
     /* Draft yang sudah disetujui tapi aslinya belum datang (doc-steps.js)
        -- bukan berkas yang kurang, tapi tetap harus dikejar. */
     const draft = draftDocs(s);
-    const ekorDraft = draft.length ? tt(` · masih draft: ${draft.join(", ")}`, ` · still draft: ${draft.join(", ")}`) : "";
+    /* Billing yang sudah diterima tapi belum dibayar (doc-steps.js):
+       barang tidak bisa keluar sebelum dibayar, jadi ini juga harus dikejar. */
+    const bayar = belumDibayarDocs(s);
+    const ekorDraft =
+      (draft.length ? tt(` · masih draft: ${draft.join(", ")}`, ` · still draft: ${draft.join(", ")}`) : "") +
+      (bayar.length ? tt(` · belum dibayar: ${bayar.join(", ")}`, ` · not paid yet: ${bayar.join(", ")}`) : "");
     /* Dibutuhkan di pabrik (prediction-mundur.js): Estimated Delivery
        melewati tanggal itu = produksi menunggu. */
     const butuh = statusKebutuhan(s);
@@ -90,13 +95,23 @@ function buildTaskQueue() {
       });
       return;
     }
-    if (draft.length) {
+    if (draft.length || bayar.length) {
       out.push({
         kind: "asli",
-        reason: tt("Menunggu asli", "Awaiting original"),
+        // Hanya draft berkas: kalimat lamanya. Billing belum dibayar punya kalimatnya sendiri.
+        reason: !bayar.length
+          ? tt("Menunggu asli", "Awaiting original")
+          : draft.length
+            ? tt("Menunggu", "Pending")
+            : tt("Belum dibayar", "Not paid yet"),
         rank: 50 - (st.days ?? 49),
         s,
-        detail: tt(`Draft sudah disetujui, aslinya belum: ${draft.join(", ")}`, `Draft approved, original not yet in: ${draft.join(", ")}`),
+        detail: [
+          draft.length ? tt(`Draft sudah disetujui, aslinya belum: ${draft.join(", ")}`, `Draft approved, original not yet in: ${draft.join(", ")}`) : "",
+          bayar.length ? tt(`Sudah diterima, belum dibayar: ${bayar.join(", ")}`, `Received, not paid yet: ${bayar.join(", ")}`) : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
       });
     }
   });
@@ -370,6 +385,8 @@ function renderDocCompleteness() {
 
   // Jadwal yang berkasnya masih draft -- aslinya ditunggu
   const menungguAsli = aktif.filter((s) => draftDocs(s).length).length;
+  // Jadwal yang billing-nya sudah diterima tapi belum dibayar
+  const belumDibayar = aktif.filter((s) => belumDibayarDocs(s).length).length;
 
   box.innerHTML = `
     <div class="stat-line" style="border-bottom:0;padding-bottom:2px">
@@ -382,6 +399,13 @@ function renderDocCompleteness() {
         ? `<div class="stat-line ov-asli">
             <span class="stat-line-label"><i class="bi bi-hourglass-split"></i> ${tt("Draft, menunggu asli", "Draft, awaiting original")}</span>
             <span class="stat-line-value">${tt(`${menungguAsli} jadwal`, `${menungguAsli} schedule${menungguAsli === 1 ? "" : "s"}`)}</span>
+          </div>`
+        : ""
+    }${
+      belumDibayar
+        ? `<div class="stat-line ov-asli">
+            <span class="stat-line-label"><i class="bi bi-hourglass-split"></i> ${tt("Billing belum dibayar", "Billing not paid yet")}</span>
+            <span class="stat-line-value">${tt(`${belumDibayar} jadwal`, `${belumDibayar} schedule${belumDibayar === 1 ? "" : "s"}`)}</span>
           </div>`
         : ""
     }

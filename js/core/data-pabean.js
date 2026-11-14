@@ -84,24 +84,47 @@ const DP_SARAN = {
 
 /* Data perusahaan untuk nilai bawaan pihak (Importir / Pemilik Barang /
    NPWP Pemusatan di PIB, Eksportir / Pemilik Barang di PEB) -- seperti
-   tersimpan di Referensi CEISA perusahaan. */
+   tersimpan di Referensi CEISA perusahaan. Jenis API bawaan: PIB "1"
+   (API U), PEB "2" (API P). */
 const DP_PERUSAHAAN = {
   npwp: "0656319779061000",
   nitku: "0656319779061000000000",
   pib: {
     nama: "PT DYNAMIC DESIGN INDONESIA",
     alamat: "JALAN MAYJEND SUTOYO NO. 1, DESA/KELURAHAN PABEDILAN KULON, KEC. PABEDILAN, KAB. CIREBON, PROVINSI JAWA BARAT, 45193",
-    api: "2", nib: "0607220070822", status: "LAINNYA",
+    api: "1", nib: "0607220070822", status: "LAINNYA",
   },
-  // Seperti terisi di draft PEB CEISA (ENTITAS eksportir & pemilik barang)
+  /* Persis seperti tercetak di PEB CEISA (ENTITAS eksportir & pemilik
+     barang): alamatnya lebih pendek dari PIB -- tanpa kode pos -- karena
+     batas jumlah huruf isian PEB. Itulah pembanding alamat shipper di Cek
+     PIB/PEB; Pemilik Barang ikut sama kecuali Third Party Invoice
+     (cekPebPihakKetiga, checker-view.js). */
   peb: {
     nama: "PT. DYNAMIC DESIGN INDONESIA",
-    alamat: "JL MAYJEND SUTOYO NO.1, PABEDILAN KULON, PABEDILAN, KABUPATEN CIREBON, JAWA BARAT 45193",
-    status: "LAINNYA",
+    alamat: "JL MAYJEND SUTOYO NO.1, PABEDILAN KULON, PABEDILAN, KABUPATEN CIREBON, JAWA BARAT",
+    api: "2", status: "LAINNYA",
   },
 };
 // Pengirim / penjual impor yang berafiliasi: Pemilik Barang "AFL", selain itu "TAH"
 const DP_PEMASOK_AFILIASI = /DYNAMIC\s*DESIGN\s*CO\b/i;
+
+/* SHIPPER IMPOR YANG DIKENAL: alamat & negaranya jadi bawaan Pengirim --
+   dan Penjual, pasangannya -- di Data PIB, menurut Nama Shipper jadwal
+   (huruf besar/kecil, spasi & tanda baca diabaikan: "Dynamic Design Co.,
+   LTD." = "DYNAMIC DESIGN CO.,LTD"). Bawaan, bukan isian tetap: yang
+   diubah sendiri di Data PIB atau di kotak Negara tab Dokumen & Umum
+   tidak ditimpa. */
+const DP_PEMASOK = [
+  { nama: "DYNAMIC DESIGN CO., LTD.", negara: "KR", alamat: "12, CHEOMDANYEONSIN-RO 29BEON-GIL, BUK-GU 61089, GWANGJU, KOREA" },
+  { nama: "QINGDAO JIASONG MACHINERY TECHNOLOGY CO., LTD.", negara: "CN", alamat: "NO.188-2 XIANSHAN WEST ROAD,LIUTING SUBDISTRICT, CHENGYANG DISTRICT,QINGDAO SHANDONG,CHINA" },
+  { nama: "QINGDAO SAEHWA MOLD CO., LTD.", negara: "CN", alamat: "MEISHAN ROAD, WENZHOU ROAD LAIXI ECONOMIC DEVELOPMENT ZONE, QINGDAO, CHINA" },
+  { nama: "CHANGYOUNG TOOLING CO., LTD.", negara: "KR", alamat: "A-110,992-9 JANGDUCKDONG GWANGSANGU GWANGJU KOREA" },
+];
+// Shipper yang dikenal menurut namanya, atau null
+function dpPemasok(nama) {
+  const k = kunciAlnum(nama);
+  return (k && DP_PEMASOK.find((p) => kunciAlnum(p.nama) === k)) || null;
+}
 
 const DP_GRUP = [
   {
@@ -191,7 +214,7 @@ const DP_PIHAK = [
   { k: "pengirim", label: ["Pengirim", "Shipper"], dok: "pib", isian: ["nama", "alamat", "negara"] },
   { k: "penjual", label: ["Penjual", "Seller"], dok: "pib", isian: ["nama", "alamat", "negara"] },
   { k: "ppjk", label: ["PPJK", "Customs Broker (PPJK)"], isian: ["npwp", "nitku", "nama", "alamat", "npPpjk"] },
-  { k: "eksportir", label: ["Eksportir", "Exporter"], dok: "peb", isian: ["identitas", "nitku", "nama", "alamat", "status"] },
+  { k: "eksportir", label: ["Eksportir", "Exporter"], dok: "peb", isian: ["identitas", "nitku", "nama", "alamat", "api", "status"] },
   { k: "penerima", label: ["Penerima", "Consignee"], dok: "peb", isian: ["nama", "alamat", "negara"] },
   { k: "pembeli", label: ["Pembeli", "Buyer"], dok: "peb", isian: ["nama", "alamat", "negara"] },
   { k: "konsolidator", label: ["Pihak yang Melakukan Konsolidasi", "Consolidator"], dok: "peb", isian: ["kategori", "npwp", "nitku", "nama", "alamat"] },
@@ -394,7 +417,8 @@ function gabungDataPabeanBarang(lama, baru) {
    konteks: { mode, transport, party, pihak }. Header per moda (laut /
    udara, impor / ekspor), pihak perusahaan, Transaksi: valuta USD &
    jenis transaksi LAI. Pengirim (impor) & pembeli (ekspor) bernama sama
-   dengan Shipper / Buyer jadwal; pihak pengikut DP_PIHAK_PASANGAN
+   dengan Shipper / Buyer jadwal -- shipper impor yang dikenal
+   (DP_PEMASOK) membawa alamat & negaranya; pihak pengikut DP_PIHAK_PASANGAN
    menyalin sumbernya -- konteks.pihak = pihak yang tersimpan / sedang
    diisi, jadi yang diketik di sumber ikut jadi bawaan pengikutnya. */
 const dpUdara = (transport) => /^(udara|kurir)$/i.test(String(transport || ""));
@@ -414,7 +438,7 @@ function dpBawaan(konteks) {
         : { kantorMuat: "040300", pelabuhanEkspor: "IDTPP", kantorEkspor: "040300", jenisEkspor: "1", caraBayar: "9", keteranganBayar: "LAINNYA" });
       Object.assign(d, { kategoriEkspor: "10", caraDagang: "15", komoditas: "2", barangKiriman: "T", curah: "2" });
     }
-    d.pihak.eksportir = { identitas: perusahaan.identitas, nitku: perusahaan.nitku, nama: perusahaan.nama, alamat: perusahaan.alamat, status: perusahaan.status };
+    d.pihak.eksportir = { identitas: perusahaan.identitas, nitku: perusahaan.nitku, nama: perusahaan.nama, alamat: perusahaan.alamat, api: perusahaan.api, status: perusahaan.status };
     d.pihak.pemilik = { identitas: perusahaan.identitas, nitku: perusahaan.nitku, nama: perusahaan.nama, alamat: perusahaan.alamat };
   } else {
     if (udara || laut) d.kodeKantor = udara ? "050100" : "040300";
@@ -425,7 +449,12 @@ function dpBawaan(konteks) {
     d.pihak.pemilik = Object.assign({}, dasar, { hubungan: DP_PEMASOK_AFILIASI.test(pemasok) ? "AFL" : "TAH" });
     d.pihak.pemusatan = Object.assign({}, dasar);
   }
-  if (party) d.pihak[ekspor ? "pembeli" : "pengirim"] = { nama: party };
+  if (party) {
+    d.pihak[ekspor ? "pembeli" : "pengirim"] = { nama: party };
+    // Shipper impor yang dikenal: alamat & negaranya (DP_PEMASOK); Penjual ikut lewat DP_PIHAK_PASANGAN
+    const dikenal = !ekspor && dpPemasok(party);
+    if (dikenal) Object.assign(d.pihak.pengirim, { alamat: dikenal.alamat, negara: dikenal.negara });
+  }
   const tersimpan = k.pihak || {};
   const isianPihak = (p) => DP_PIHAK.find((x) => x.k === p).isian;
   DP_PIHAK_PASANGAN[dpDok(k.mode)].forEach(([sumber, pengikut]) => {
@@ -462,13 +491,26 @@ function terapkanBawaan(dp, bawaanBaru, bawaanLama) {
   });
   const pihak = Object.assign({}, d.pihak);
   const lamaPihak = lama.pihak || {};
-  Object.keys(baru.pihak || {}).forEach((p) => {
+  const baruPihak = baru.pihak || {};
+  Object.keys(baruPihak).forEach((p) => {
     const isi = Object.assign({}, pihak[p]);
-    Object.keys(baru.pihak[p]).forEach((f) => {
-      const v = pakai(isi[f], baru.pihak[p][f], (lamaPihak[p] || {})[f]);
+    Object.keys(baruPihak[p]).forEach((f) => {
+      const v = pakai(isi[f], baruPihak[p][f], (lamaPihak[p] || {})[f]);
       if (dpAda(v)) isi[f] = v;
+      else delete isi[f];
     });
     pihak[p] = isi;
+  });
+  /* Bawaan lama yang kini tidak punya pengganti (shipper dikenal diganti
+     shipper lain: alamat & negaranya) ikut hilang selama belum diubah. */
+  Object.keys(lamaPihak).forEach((p) => {
+    if (!pihak[p]) return;
+    const isi = Object.assign({}, pihak[p]);
+    Object.keys(lamaPihak[p] || {}).forEach((f) => {
+      if (!((baruPihak[p] || {})[f] !== undefined) && dpAda(lamaPihak[p][f]) && isi[f] === lamaPihak[p][f]) delete isi[f];
+    });
+    if (Object.keys(isi).length) pihak[p] = isi;
+    else delete pihak[p];
   });
   d.pihak = pihak;
   return rapikanDataPabean(d);

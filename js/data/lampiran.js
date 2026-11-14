@@ -246,11 +246,13 @@ function bukaBerkasLokal(file) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-/* PENGELOLA LAMPIRAN SATU WADAH -- dipakai kotak tahap dokumen
-   (showPrompt, isian `type: "berkas"`). Lampiran lama bisa dibuka &
-   dilepas; berkas baru ditampung sebagai File sampai Simpan.
-   `opsi`: { berkas, versi: () => "draft" | "asli" | "" } -- versi berkas
-   baru mengikuti status yang sedang dipilih di kotaknya. */
+/* PENGELOLA LAMPIRAN SATU WADAH -- dipakai kotak tahap dokumen & kotak
+   Tandai Sudah Dibayar (showPrompt, isian `type: "berkas"`). Lampiran
+   lama bisa dibuka & dilepas; berkas baru ditampung sebagai File sampai
+   Simpan.
+   `opsi`: { berkas, versi: () => "draft" | "asli" | "", kosong } -- versi
+   berkas baru mengikuti status yang sedang dipilih di kotaknya; `kosong`
+   = teks saat belum ada lampiran ("" = tanpa teks, tombolnya saja). */
 function buatPengelolaBerkas(opsi) {
   const o = opsi || {};
   const lama = rapikanBerkas(o.berkas);
@@ -258,6 +260,7 @@ function buatPengelolaBerkas(opsi) {
   const dilepas = [];
   let wadah = null;
   const versiKini = () => (typeof o.versi === "function" ? o.versi() : "") || "";
+  const teksKosong = () => (o.kosong != null ? o.kosong : tt("Belum ada lampiran.", "No attachments yet."));
 
   const gambar = () => {
     if (!wadah) return;
@@ -265,7 +268,8 @@ function buatPengelolaBerkas(opsi) {
     const isi = lama
       .map((b, i) => chipBerkasHtml(b, { i }))
       .concat(baru.map((b, i) => chipBerkasHtml(Object.assign({}, b, { versi: versiKini() || undefined }), { i, baru: true })));
-    daftar.innerHTML = isi.length ? isi.join("") : `<span class="pb-kosong">${escapeHtml(tt("Belum ada lampiran.", "No attachments yet."))}</span>`;
+    const kosong = teksKosong();
+    daftar.innerHTML = isi.length ? isi.join("") : kosong ? `<span class="pb-kosong">${escapeHtml(kosong)}</span>` : "";
   };
 
   return {
@@ -321,12 +325,13 @@ function buatPengelolaBerkas(opsi) {
 }
 
 /* Isian `type: "berkas"` untuk showPrompt (feedback.js): daftar chip +
-   tombol Lampirkan. Nilainya dibaca lewat pengelolanya (`f.pengelola`). */
-function isianBerkasHtml(id) {
+   tombol Lampirkan (`tombol` = tulisan tombolnya, bawaan "Lampirkan
+   berkas"). Nilainya dibaca lewat pengelolanya (`f.pengelola`). */
+function isianBerkasHtml(id, tombol) {
   return `<div class="prompt-berkas" id="${id}">
       <div class="pb-daftar"></div>
       <label class="pb-tambah">
-        <i class="bi bi-paperclip" aria-hidden="true"></i> ${escapeHtml(tt("Lampirkan berkas", "Attach files"))}
+        <i class="bi bi-paperclip" aria-hidden="true"></i> ${escapeHtml(tombol || tt("Lampirkan berkas", "Attach files"))}
         <input type="file" multiple accept="${escapeAttr(LAMPIRAN_TERIMA)}" class="visually-hidden">
       </label>
     </div>`;

@@ -418,10 +418,13 @@ function reconstructShipmentFromGroup(group, mode) {
        Berkas lama hanya mengisinya di baris pertama: angka itu jadi tarif
        jadwal -- cadangan untuk barang yang barisnya kosong. */
     s.tarif = excelStr(first[idx.TARIF]) === "" ? null : roundNum(excelNum(first[idx.TARIF]) * 100, 4); // pecahan (0.05) -> persen (5)
-    /* Kolom PI memuat semua dokumen pelengkap non-fasilitas (kolomPiJadwal):
-       PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA> <nomor>";
-       nomor "A, B" jadi daftarnya */
-    const kolomPi = pecahKolomPi(excelStr(first[idx.PI]));
+    /* Kolom PI memuat semua dokumen pelengkap non-fasilitas, satu per
+       baris lembar (barisKolomPi): PI, "LS <nomor>", "POLIS <nomor>",
+       Dokumen Lain "<NAMA> <nomor>" -- semua baris jadwal dibaca. Berkas
+       lama: satu sel bergaris baru yang diulang di setiap baris barang
+       (baris kembar dibuang), nomor "A, B" jadi daftarnya. */
+    const teksPi = [...new Set(rows.flatMap((row) => excelStr(row[idx.PI]).split(/\n+/)).map((x) => x.trim()).filter(Boolean))];
+    const kolomPi = pecahKolomPi(teksPi.join("\n"));
     const lain = [];
     kolomPi.lain.forEach((d) => tambahDokumenPengiriman(lain, d.nomor, "", d.kode));
     s.dokPelengkap = Object.assign(dokPelengkapKosong(), {
@@ -562,6 +565,7 @@ async function handleBulkImport(mode, file) {
           if (delErr) throw delErr;
           hapusLampiran(lampiranLama);
           const baru = [];
+          const migrasiAwal = toastMigrasiKe;
           for (const r of reconstructed) {
             const baris = await createShipment(r.shipment, r.items, undefined, { tanpaSiaran: true });
             if (baris && baris.id) baru.push(baris.id);
@@ -569,10 +573,12 @@ async function handleBulkImport(mode, file) {
           // Satu siaran untuk seluruh berkas: pengguna lain memuat ulang papannya sekali (realtime.js)
           if (typeof realtimeSiarkanJadwal === "function") realtimeSiarkanJadwal(baru);
           await loadShipments();
-          showToast(
-            t("x.jadwal.berhasil.diimpor", { n: reconstructed.length, mode: modeLabel }),
-            "success",
-          );
+          // "Jadwal tersimpan, tetapi ... migration-....sql" tidak ditimpa (toastMigrasiKe, feedback.js)
+          if (toastMigrasiKe === migrasiAwal)
+            showToast(
+              t("x.jadwal.berhasil.diimpor", { n: reconstructed.length, mode: modeLabel }),
+              "success",
+            );
         } catch (err) {
           console.error(err);
           showToast(t("m.gagal.mengimpor.data.ke.database"), "danger");

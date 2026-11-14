@@ -775,6 +775,35 @@ table.fund-lines select {
   font-size: var(--t-sm);
   color: var(--n-500);
 }
+/* Baris "Doc No bawaan" (kotak Aturan Doc No): contoh bulan berjalan +
+   tombol Ubah, dipisah garis putus dari daftar vendor di bawahnya. */
+.dn-docno-pola {
+  align-items: center;
+  padding-bottom: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  border-bottom: 1px dashed var(--n-300);
+}
+/* Contoh + Ubah sekelompok: di kotak yang sempit keduanya turun
+   bersama ke bawah labelnya, tombolnya tidak tertinggal sendirian. */
+.dn-docno-pola-isi {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.dn-docno-pola-nilai {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--tp-600);
+  overflow-wrap: anywhere;
+}
+.dn-docno-pola-nilai.is-kosong {
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--n-500);
+}
 /* Kotak ketik + tombol Tambah, sama tinggi dengan isian Atur Nomor Urut. */
 .dn-aturan-tambah {
   display: flex;
@@ -1031,9 +1060,13 @@ table.fund-lines select {
     padding-right: 10px;
   }
   /* Tombolnya 30px di sini, jadi kolomnya boleh lebih sempit (Status
-     Bayar yang menempel di kirinya ikut bergeser, lihat di bawah). */
-  .docnum-table td.dn-act,
-  .docnum-table th.dn-act {
+     Bayar yang menempel di kirinya ikut bergeser, lihat di bawah).
+     Berawalan .docnum-history: aturan dasarnya (min-width 205px) ditulis
+     LEBIH BAWAH dengan kekhususan yang sama dan dulu selalu menang --
+     kolom aksi tetap 205px sementara Status Bayar menempel di 186px,
+     19px ujung kanannya (klip bukti bayar) tertindih kolom aksi. */
+  .docnum-history .docnum-table td.dn-act,
+  .docnum-history .docnum-table th.dn-act {
     min-width: 186px;
   }
   /* Nama customer TIDAK lagi dipotong dengan elipsis.
@@ -1699,8 +1732,10 @@ table.fund-lines select {
     width: 100%;
     border-radius: 8px;
   }
-  .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal .date-range-trigger {
+  .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal {
     margin-left: 0;
+  }
+  .docnum-history-aksi .dn-saring-grup .dn-saring-tanggal .date-range-trigger {
     border-radius: 8px;
   }
   .dn-edit-dialog .dnd-kepala,
@@ -1940,6 +1975,31 @@ button.dn-bayar--lunas:hover {
   margin-left: 2px;
   white-space: nowrap; /* "Lunas 03-11-" / "2026": tanggalnya utuh */
 }
+/* Bukti bayar di sebelah lencana Lunas: klip bulat kecil, satu per
+   berkas, membuka berkasnya (dnTautanBuktiBayar). */
+.dn-bukti {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid var(--w-garis-b7e0c8);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--w-teks-146c43);
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+.dn-bukti:hover {
+  background: var(--w-bg-e8f5ee);
+}
+@media (pointer: coarse) {
+  .dn-bukti {
+    width: 32px;
+    height: 32px;
+  }
+}
 
 /* ------------------------------------------------------------------
    TABEL RINCIAN (tab Summary): seluruhnya rata tengah
@@ -2027,8 +2087,13 @@ button.dn-bayar--lunas:hover {
   align-items: center;
   min-width: 0;
 }
+/* Pemicu rentang bertumpuk 1px dengan tanggal dasar (garisnya satu).
+   Margin negatifnya di WADAH, bukan di tombolnya: di tombol, wadahnya
+   jadi 1px lebih sempit dari tombol, max-width 100% memotong tombol 1px,
+   dan teksnya berelipsis ("Choose Date Ran…") padahal muat. */
 .dn-saring-grup .dn-saring-tanggal {
   flex: 1 1 auto;
+  margin-left: -1px;
 }
 .dn-saring-dasar select {
   border-top-right-radius: 0;
@@ -2037,7 +2102,6 @@ button.dn-bayar--lunas:hover {
   font-weight: 600;
 }
 .dn-saring-grup .dn-saring-tanggal .date-range-trigger {
-  margin-left: -1px;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
@@ -2049,6 +2113,16 @@ button.dn-bayar--lunas:hover {
   gap: 5px;
   color: var(--ts-danger);
   font-weight: 600;
+}
+/* Kotak cari + tombol muat ulang: satu kelompok yang tidak terpisah. */
+.dn-cari-grup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.dn-cari-grup > button {
+  flex-shrink: 0;
 }
 .dn-cari {
   position: relative;
@@ -2312,6 +2386,20 @@ button.dn-bayar--lunas:hover {
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 12px;
 }
+/* Delapan kartu: dua baris empat -- bukan lima di atas dan tiga di bawah */
+.lap-kpi-grid--empat {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .lap-kpi-grid--empat {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 460px) {
+  .lap-kpi-grid--empat {
+    grid-template-columns: 1fr;
+  }
+}
 .lap-kpi {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -2403,6 +2491,12 @@ button.dn-bayar--lunas:hover {
   white-space: nowrap;
   vertical-align: middle;
 }
+/* Judul kolom boleh turun baris (angkanya tetap satu baris): tabel lebar
+   dengan sebelas kolom muat tanpa tergulung ke samping. */
+.fsum-tabel.lap-tabel thead th {
+  white-space: normal;
+  line-height: 1.3;
+}
 .lap-tabel tbody tr:nth-child(even) td {
   background: var(--w-bg-f8fafc);
 }
@@ -2411,6 +2505,52 @@ button.dn-bayar--lunas:hover {
 }
 .lap-tebal {
   font-weight: 600;
+}
+/* Sel berisi kalimat (arti, saran, tafsir): boleh membungkus baris dan
+   rata kiri; sel angka tetap satu baris rata tengah. */
+.fsum-tabel.lap-tabel td.lap-teks {
+  min-width: 240px;
+  max-width: 440px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+/* Daftar loncat ke bagian depan laporan (halamannya panjang) */
+.lap-indeks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+.lap-indeks-butir {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px 4px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.lap-indeks-butir span {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1e3a5f;
+  color: #fff;
+  font-size: 0.68rem;
+}
+.lap-indeks-butir:hover,
+.lap-indeks-butir:focus-visible {
+  border-color: #1e3a5f;
+}
+.lap-bagian {
+  scroll-margin-top: 12px;
 }
 .lap-grafik {
   margin-top: 12px;
@@ -2656,9 +2796,14 @@ button.dn-bayar--lunas:hover {
   }
 }
 
-/* KEPALA RIWAYAT yang sempit: judulnya sebaris sendiri, saringannya di
-   bawahnya selebar riwayat -- rentang tanggal & status bayar sebaris
-   kalau muat, kotak cari + muat ulang menyusul. */
+/* KEPALA RIWAYAT yang sempit: judulnya sebaris sendiri, SEMUA saringannya
+   SEBARIS di bawahnya -- tanggal dasar + rentang dan status bayar selebar
+   isinya, kotak cari mengisi sisa baris, muat ulang di ujung. Dulu
+   kelompok rentang dipaksa minimal 340px dan pemicunya direntang
+   selebar itu: ruang kosong sesudah panahnya, dan tombol muat ulang
+   terdorong sendirian ke baris kedua. Baru kalau memang tidak muat,
+   kotak cari + muat ulang (.dn-cari-grup) turun BERSAMA ke baris
+   berikutnya dan mengisi baris itu. */
 @container dn-riwayat (max-width: 1080px) {
   .docnum-history-head {
     flex-wrap: wrap;
@@ -2672,6 +2817,15 @@ button.dn-bayar--lunas:hover {
     flex: 1 1 100%;
     flex-wrap: wrap;
   }
+  .docnum-history-aksi .dn-saring-grup,
+  .docnum-history-aksi .dn-saring-bayar {
+    flex: 0 0 auto;
+  }
+  /* 180px = kotak cari paling sempit (~140) + muat ulang sebelum
+     keduanya turun ke baris baru. */
+  .docnum-history-aksi .dn-cari-grup {
+    flex: 1 1 180px;
+  }
   /* Berawalan .docnum-history-head: aturan dasarnya (.dn-cari input
      { width: 300px }) ditulis di atas dengan kekhususan lebih rendah.
      min-width 0: tanpa itu kotak cari tidak mau menyusut di bawah lebar
@@ -2683,37 +2837,30 @@ button.dn-bayar--lunas:hover {
   .docnum-history-head .dn-cari input {
     width: 100%;
   }
-  .docnum-history-head .docnum-history-aksi > button {
-    flex-shrink: 0;
-  }
-  .docnum-history-aksi .dn-saring-grup {
-    flex: 1 1 340px;
-  }
-  .docnum-history-aksi .dn-saring-bayar {
-    flex: 0 1 auto;
-  }
-  .docnum-history-head .docnum-history-aksi .dn-cari {
-    flex: 1 1 220px;
-  }
   .dn-saring-tanggal .date-range-trigger {
-    width: 100%;
     /* setinggi kotak status bayar & kotak cari di sebelahnya (32px),
        bukan target sentuh 44px bilah utama (dashboard.css) */
     min-height: 0;
   }
 }
 /* Riwayat sesempit ponsel: tiap saringan selebar baris, kotak cari +
-   muat ulang berdua di baris terakhir. */
+   muat ulang berdua di baris terakhir. Pemicu rentang ikut selebar
+   baris dengan panah di ujung kanan -- sama dengan kotak pilihan di
+   bawahnya -- bukan menggantung sesudah teks dengan ruang kosong. */
 @container dn-riwayat (max-width: 560px) {
   .docnum-history-aksi .dn-saring-grup,
-  .docnum-history-aksi .dn-saring-bayar {
+  .docnum-history-aksi .dn-saring-bayar,
+  .docnum-history-aksi .dn-cari-grup {
     flex: 1 1 100%;
   }
   .dn-saring-bayar select {
     width: 100%;
   }
-  .docnum-history-head .docnum-history-aksi .dn-cari {
-    flex: 1 1 calc(100% - 44px);
+  .dn-saring-tanggal .date-range-trigger {
+    width: 100%;
+  }
+  .dn-saring-tanggal .date-range-trigger-caret {
+    margin-left: auto;
   }
 }
 
