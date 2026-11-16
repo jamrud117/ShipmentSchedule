@@ -690,13 +690,13 @@ button.site-nav-link {
   gap: 2px;
 }
 
-/* Sisi kanan kepala papan: sakelar buku (Ringkasan). Tanggal hari ini
-   ada di atas judul (.board-today, css/desain.css). */
+/* Sakelar buku Ringkasan (.board-aside): di kanan kepala papan sebelum
+   kartu tanggal bila kepalanya lebar; lebih sempit, di bawah kalimat
+   ringkas (kisi .board-head di bawah). */
 .board-aside {
   display: flex;
   align-items: center;
   gap: var(--sp-5);
-  flex-shrink: 0;
 }
 .mode-tabs button {
   border: none;
@@ -739,36 +739,85 @@ button.site-nav-link {
 .board-inner {
   position: relative;
   z-index: 1;
+  /* Susunan kepala ikut LEBAR KEPALA itu sendiri, bukan lebar layar:
+     di laptop 1.024-1.279px ia bisa selebar tablet bila sidebar dibuka penuh. */
+  container: papan / inline-size;
 }
+/* KEPALA PAPAN: kisi bersel nama yang susunannya beda per ukuran, karena
+   ruangnya beda (tampilan tanggalnya: .board-today, css/desain.css).
+   Ambangnya lebar kepala (@container papan):
+     sempit  (< 560px, ponsel)        satu kolom: tanggal (baris kecil) /
+                                      judul / kalimat ringkas / sakelar buku
+     sedang  (560-819px, tablet,      judul + kalimat ringkas di kiri, kartu
+              laptop bersidebar)      tanggal di KANAN; sakelar buku
+                                      Ringkasan turun ke bawah kalimat
+                                      ringkas (kalau ikut ke kanan, judulnya
+                                      terjepit jadi dua-tiga baris)
+     lebar   (>= 820px, desktop)      ruang kanan: sakelar buku lalu kartu
+                                      tanggal, tengah-tengah tinggi kepala
+   Pembungkus judul (anak pertama) display: contents -- tanggal, judul &
+   kalimat ringkas jadi sel kisi ini langsung tanpa mengubah urutan DOM.
+   Kolom judul minmax(0, 1fr): judul & kalimat ringkasnya yang MENYUSUT
+   dulu (kalimatnya membungkus), bukan sisi kanan yang terlempar ke bawah. */
 .board-head {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-5);
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "tanggal"
+    "judul"
+    "sub"
+    "aside";
+  align-items: center;
 }
-/* Judul & kalimat ringkasnya yang MENYUSUT dulu (kalimatnya membungkus
-   ke baris kedua) -- bukan blok tanggal di kanan yang terlempar ke
-   bawah, seperti di Masterlist yang kalimat ringkasnya panjang. */
 .board-head > :first-child {
-  flex: 1 1 24rem;
-  min-width: 0;
+  display: contents;
+}
+.board-head .board-today {
+  grid-area: tanggal;
+}
+.board-head .board-title {
+  grid-area: judul;
+}
+.board-head .board-sub {
+  grid-area: sub;
+}
+.board-head .board-aside {
+  grid-area: aside;
+  justify-self: start;
+  margin-top: var(--sp-5);
+}
+
+@container papan (min-width: 560px) {
+  .board-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "judul tanggal"
+      "sub tanggal"
+      "aside aside";
+    column-gap: var(--sp-6);
+  }
+  .board-head .board-aside {
+    margin-top: var(--sp-4);
+  }
+}
+@container papan (min-width: 820px) {
+  .board-head {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "judul aside tanggal"
+      "sub aside tanggal";
+  }
+  .board-head .board-aside {
+    margin-top: 0;
+  }
 }
 
 @media (max-width: 767px) {
   .board {
     padding: var(--sp-5) 0 var(--sp-4);
   }
-  .board-head {
-    align-items: flex-start;
-  }
   .board-title {
     font-size: var(--t-xl);
-  }
-  .board-aside {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--sp-3);
-    width: 100%;
   }
 }
 

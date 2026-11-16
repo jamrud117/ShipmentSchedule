@@ -79,17 +79,33 @@ function fmtDateBoard(iso) {
   });
 }
 
-/* Isi semua penanda "hari ini" di seluruh halaman sekaligus: baris
-   tanggal di atas judul (<time class="board-today-date">, index.html) --
-   teks panjang untuk dibaca, atribut datetime (ISO) untuk mesin. */
+/* Isi semua penanda "hari ini" di seluruh halaman sekaligus. Satu
+   <p class="board-today"> per halaman (index.html) yang tampil beda per
+   ukuran layar (css/desain.css):
+     <time class="board-today-date"> = tanggal panjang "Selasa, 17 November
+       2026" (atribut datetime ISO untuk mesin); bagian "Selasa, 17 " dalam
+       .bt-panjang -- di kartu kalender tablet/desktop disembunyikan dari
+       mata (hari & tanggalnya sudah di kartu) tapi tetap dibacakan
+     .bt-kartu = kartu kalender: hari singkat ("Sel") + tanggal ("17") */
 function paintTodayStamps() {
   const iso = todayISO();
   const teks = fmtDateBoard(iso);
+  const dt = parseLocalDate(iso);
+  const loc = activeLang === "en" ? "en-GB" : "id-ID";
+  const hari = dt ? tanggalLokal(dt, loc, { weekday: "short" }).replace(/\.$/, "") : "—";
+  const bulan = dt ? tanggalLokal(dt, loc, { month: "long" }) : "";
+  const potong = bulan ? teks.indexOf(bulan) : -1;
   ["#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
     const el = $(sel);
     if (!el) return;
-    el.textContent = teks;
+    if (potong > 0) el.innerHTML = `<span class="bt-panjang">${escapeHtml(teks.slice(0, potong))}</span>${escapeHtml(teks.slice(potong))}`;
+    else el.textContent = teks;
     if (el.tagName === "TIME") el.setAttribute("datetime", iso);
+    const kartu = el.parentElement && el.parentElement.querySelector(".bt-kartu");
+    if (kartu) {
+      kartu.querySelector(".bt-hari").textContent = hari;
+      kartu.querySelector(".bt-tgl").textContent = dt ? String(dt.getDate()) : "—";
+    }
   });
   const stamp = $("#footerStamp");
   if (stamp) stamp.textContent = teks;

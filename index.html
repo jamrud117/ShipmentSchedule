@@ -567,11 +567,14 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
-              <!-- Tanggal hari ini (acuan semua hitung mundur): baris kecil di atas
-                   judul, sama di setiap halaman yang memilikinya. Diisi
-                   paintTodayStamps (js/ui/board.js); gayanya .board-today di
-                   css/desain.css. -->
+              <!-- Tanggal hari ini (acuan semua hitung mundur). Satu elemen, tampilannya
+                   beda per ukuran layar (css/desain.css .board-today, css/shell.css
+                   .board-head): ponsel = baris kecil di atas judul (ikon + "Hari ini ·
+                   Selasa, 17 November 2026"); tablet & desktop = kartu kalender di ruang
+                   kanan kepala ([SEL / 17] + "Hari ini" / "November 2026"). Diisi
+                   paintTodayStamps (js/ui/board.js). -->
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="ovToday">—</time>
@@ -720,6 +723,7 @@
           <div class="board-head">
             <div>
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="accountToday">—</time>
@@ -854,6 +858,7 @@
           <div class="board-head">
             <div>
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="hsCodeToday">—</time>
@@ -935,6 +940,7 @@
           <div class="board-head">
             <div>
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="mstToday">—</time>
@@ -1062,6 +1068,7 @@
           <div class="board-head">
             <div>
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="cekToday">—</time>
@@ -1603,6 +1610,7 @@
           <div class="board-head">
             <div>
               <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
                 <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
                 <time class="board-today-date" id="docnumToday">—</time>

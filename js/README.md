@@ -674,15 +674,28 @@ sidebar, biru sinyal untuk aksi (`--p-600`), kuningan hanya untuk "hari
 ini / sekarang" dan merek, merah-ambar-hijau hanya untuk status.
 
 - **Tanggal hari ini di kepala halaman** (Ringkasan, No. Dokumen, Akun,
-  HS Code, Masterlist, Cek PIB/PEB): satu baris kecil DI ATAS judul, rata
-  kiri dengan judulnya, sama di desktop & ponsel -- `<p class="board-today">`
-  berisi ikon kalender, "Hari ini" (kuningan, `data-i18n="u.hari.ini"`) dan
-  `<time class="board-today-date" id="...Today">` yang diisi
-  `paintTodayStamps()` (ui/board.js: teks panjang + atribut `datetime`
-  ISO). Tanpa garis: dulu blok dua baris bergaris kuningan di ujung kanan
-  kepala, yang di ponsel turun ke bawah sakelar buku dengan garis siku
-  (atas + kiri). Sisi kanan kepala (`.board-aside`) kini hanya untuk
-  sakelar buku Ringkasan; di ponsel ia turun ke bawah kalimat ringkas.
+  HS Code, Masterlist, Cek PIB/PEB): SATU `<p class="board-today">` per
+  halaman (di blok judul, sebelum `<h1>`), tampilannya beda per ukuran
+  karena ruangnya beda. Ambangnya lebar kepala itu sendiri
+  (`container: papan` di `.board-inner`, `@container papan`), bukan lebar
+  layar -- laptop bersidebar penuh bisa sesempit tablet:
+  - sempit (< 560px, ponsel): baris kecil DI ATAS judul -- ikon kalender,
+    "Hari ini" (kuningan) · "Selasa, 17 November 2026"; sakelar buku
+    Ringkasan di bawah kalimat ringkas.
+  - sedang (560-819px, tablet / laptop bersidebar): KARTU KALENDER di ruang
+    kanan kepala -- kartu kecil [SEL / 17] (hari singkat di pita kuningan,
+    tanggal berhuruf papan) + "Hari ini" / "November 2026"; sakelar buku
+    tetap di bawah kalimat ringkas supaya judulnya tidak terjepit.
+  - lebar (>= 820px, desktop): ruang kanan berisi sakelar buku lalu kartu
+    kalender, tengah-tengah tinggi kepala.
+  Letaknya diatur kisi `.board-head` (css/shell.css; pembungkus judul
+  `display: contents`, jadi urutan DOM sama di semua ukuran), rupanya oleh
+  `.board-today` / `.bt-kartu` (css/desain.css). `paintTodayStamps()`
+  (ui/board.js) mengisi `<time>` dengan tanggal panjang + `datetime` ISO;
+  bagian "Selasa, 17 " dibungkus `.bt-panjang` yang di kartu kalender
+  disembunyikan dari mata (sudah tampil di kartu) tapi tetap dibacakan;
+  kartunya `aria-hidden`. Tanpa garis: dulu blok bergaris kuningan di ujung
+  kanan yang di ponsel jadi garis siku (atas + kiri).
 
 - **Berkas CSS & urutannya** (index.html): `tokens.css` (warna, huruf,
   jarak, sudut, bayangan -- NAMA token tidak berubah, hanya nilainya) ->

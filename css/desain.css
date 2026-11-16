@@ -249,9 +249,6 @@ button.site-nav-link {
 .board::after {
   display: none;
 }
-.board-head {
-  align-items: center;
-}
 .board-title {
   font-family: var(--font-board);
   font-weight: 600;
@@ -278,13 +275,23 @@ button.site-nav-link {
   color: var(--ink);
   font-weight: 600;
 }
-/* Tanggal hari ini -- acuan semua hitung mundur (H-1, Telat 2h).
-   Satu baris kecil DI ATAS JUDUL, rata kiri dengan judulnya, sama di
-   desktop & ponsel: "[kalender] Hari ini · Selasa, 17 November 2026".
-   Dulu blok dua baris bergaris kuningan di ujung kanan kepala; di ponsel
-   blok itu turun ke bawah sakelar buku dan garisnya jadi siku (atas +
-   kiri). Kuningan tetap berarti "sekarang", kini hanya di ikon & kata
-   "Hari ini" -- tanpa garis. */
+/* TANGGAL HARI INI -- acuan semua hitung mundur (H-1, Telat 2h). Satu
+   elemen per halaman (<p class="board-today">, diisi paintTodayStamps),
+   tampilannya beda per ukuran layar karena ruangnya beda; letaknya diatur
+   kisi .board-head (css/shell.css). Kuningan = "sekarang", tanpa garis.
+     kepala sempit      baris kecil DI ATAS judul, selebar isinya:
+     (< 560px, ponsel)  [kalender] Hari ini · Selasa, 17 November 2026
+     kepala >= 560px    KARTU KALENDER di ruang kanan kepala
+     (tablet, desktop)  (@container papan, css/shell.css):
+                        +-----+
+                        | SEL |  Hari ini
+                        |  17 |  November 2026
+                        +-----+
+                        hari & tanggal di kartu; "Selasa, 17 " pada
+                        teksnya (.bt-panjang) disembunyikan dari mata
+                        tapi tetap dibacakan pembaca layar.
+   Dulu: blok dua baris bergaris kuningan di ujung kanan; di ponsel turun
+   ke bawah sakelar buku dengan garis siku (atas + kiri). */
 .board-today {
   display: flex;
   flex-wrap: wrap;
@@ -305,18 +312,92 @@ button.site-nav-link {
   color: var(--tsec-600);
 }
 .board-today-date {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
   font-weight: 500;
 }
 /* Titik pemisah digambar, bukan karakter "·" -- tidak ikut dibacakan */
 .board-today-date::before {
   content: "";
+  display: inline-block;
   width: 3px;
   height: 3px;
+  margin: 0 7px 0 0;
   border-radius: 50%;
   background: var(--n-400);
+  vertical-align: middle;
+}
+.bt-kartu {
+  display: none;
+}
+@container papan (min-width: 560px) {
+  .board-today {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      "kartu label"
+      "kartu isi";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 1px;
+    margin: 0;
+  }
+  .board-today > .bi,
+  .board-today-date::before {
+    display: none;
+  }
+  .bt-kartu {
+    grid-area: kartu;
+    display: flex;
+    flex-direction: column;
+    width: 3.375rem;
+    overflow: hidden;
+    text-align: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--sh-xs);
+  }
+  .bt-hari {
+    padding: 3px 0 2px;
+    background: var(--sec-100);
+    color: var(--tsec-700);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.3;
+    text-transform: uppercase;
+  }
+  .bt-tgl {
+    padding: 3px 0 5px;
+    font-family: var(--font-board);
+    font-size: 1.625rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--tp-700);
+  }
+  .board-today-label {
+    grid-area: label;
+    align-self: end;
+  }
+  .board-today-date {
+    grid-area: isi;
+    align-self: start;
+    font-size: var(--t-base);
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  /* "Selasa, 17 " -- sudah tampil di kartu; tetap dibacakan */
+  .bt-panjang {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 }
 .board :focus-visible {
   outline-color: var(--focus-ring);
