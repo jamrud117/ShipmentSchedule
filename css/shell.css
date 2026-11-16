@@ -690,7 +690,8 @@ button.site-nav-link {
   gap: 2px;
 }
 
-/* Sisi kanan kepala papan: sakelar buku + blok tanggal, sebaris. */
+/* Sisi kanan kepala papan: sakelar buku (Ringkasan). Tanggal hari ini
+   ada di atas judul (.board-today, css/desain.css). */
 .board-aside {
   display: flex;
   align-items: center;
@@ -753,14 +754,6 @@ button.site-nav-link {
   min-width: 0;
 }
 
-/* Tanggal hari ini — acuan semua hitung mundur. Sengaja dibuat */
-.board-today {
-  flex-shrink: 0;
-}
-.board-today-date {
-  line-height: 1.2;
-}
-
 @media (max-width: 767px) {
   .board {
     padding: var(--sp-5) 0 var(--sp-4);
@@ -776,12 +769,6 @@ button.site-nav-link {
     align-items: flex-start;
     gap: var(--sp-3);
     width: 100%;
-  }
-  .board-today {
-    text-align: left;
-    border-left: 0;
-    border-top: 2px solid var(--sec-500);
-    padding: 8px 0 0;
   }
 }
 

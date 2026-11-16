@@ -79,12 +79,17 @@ function fmtDateBoard(iso) {
   });
 }
 
-// Isi semua penanda "hari ini" di seluruh halaman sekaligus.
+/* Isi semua penanda "hari ini" di seluruh halaman sekaligus: baris
+   tanggal di atas judul (<time class="board-today-date">, index.html) --
+   teks panjang untuk dibaca, atribut datetime (ISO) untuk mesin. */
 function paintTodayStamps() {
-  const teks = fmtDateBoard(todayISO());
-  ["#boardToday", "#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
+  const iso = todayISO();
+  const teks = fmtDateBoard(iso);
+  ["#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
     const el = $(sel);
-    if (el) el.textContent = teks;
+    if (!el) return;
+    el.textContent = teks;
+    if (el.tagName === "TIME") el.setAttribute("datetime", iso);
   });
   const stamp = $("#footerStamp");
   if (stamp) stamp.textContent = teks;

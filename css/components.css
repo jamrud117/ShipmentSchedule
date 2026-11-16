@@ -1041,6 +1041,64 @@ table.item-table .is-disamakan {
   flex: 0 0 auto;
 }
 
+/* PONSEL (< 768px): TANGGAL SELEBAR BARIS. Di layar ini semua isian
+   bertumpuk satu per baris dan selebar baris; kotak tanggal yang selebar
+   isinya menyisakan separuh layar kosong di kanannya -- di baris tanggal
+   (ETD, ETA, Estimated Delivery, In Factory, Update ETA/ETD, terminal
+   transit), di bawah nomor dokumennya (.fl-bertanggal: Invoice Date,
+   B/L Date, ...), dan Dibutuhkan di Pabrik (.rencana-isian).
+     - kotak tanggal mengisi sisa baris; kotak jam tetap di sampingnya
+     - .fl-bertanggal: nomornya satu baris sendiri, tanggal-tanggalnya
+       BERBAGI baris di bawahnya -- satu tanggal selebar baris, dua tanggal
+       (Tanggal Invoice + Due Date Invoice di Permintaan Dana) berdampingan
+       sama lebar. min-width = lebar alami kotak tanggal: di layar yang
+       terlalu sempit untuk dua kotak, keduanya bertumpuk lagi.
+     - pengalih Auto/Manual naik ke ujung kanan baris label (.fl-bermode):
+       di ponsel tidak ada kelompok lain yang labelnya harus sejajar,
+       dan baris label itulah ruang kosongnya.
+   Sesudah aturan .fl-bertanggal di atas dengan sengaja: kekhususannya
+   sama, yang belakangan menang. */
+@media (max-width: 767.98px) {
+  .fl-tanggal > *,
+  .fl-bertanggal > * {
+    flex: 1 1 100%;
+  }
+  .fl-bertanggal > :has(> input[data-kotak-tanggal], > input[type="date"]) {
+    flex: 1 1 0;
+    min-width: 8rem;
+  }
+  .fl-tanggal input[data-kotak-tanggal].kt-nilai,
+  .fl-bertanggal input[data-kotak-tanggal].kt-nilai,
+  .rencana-isian input[data-kotak-tanggal].kt-nilai {
+    width: 100%;
+    field-sizing: fixed;
+  }
+  .fl-tanggal .fl-pair > :first-child {
+    flex: 1 1 auto;
+  }
+  .fl-tanggal .fl-pair > .fl-jam {
+    flex-basis: 96px;
+  }
+  .fl-bermode {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+  }
+  .fl-bermode > * {
+    grid-column: 1 / -1;
+  }
+  .fl-bermode > .form-label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .fl-bermode > .fl-mode {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0 0 6px;
+  }
+}
+
 .fgrid .form-text-note {
   margin-top: 5px;
   line-height: 1.4;

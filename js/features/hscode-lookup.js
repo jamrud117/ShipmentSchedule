@@ -35,11 +35,18 @@ function renderHscodeLookupResults(daftar) {
     .join("");
 }
 
+/* Nama barang ATAU HS Code ("84", "8471.30") -- aturannya nilaiCariHs
+   (hscode-view.js), sama dengan halaman HS Code. Yang paling cocok di
+   atas (kode yang awalnya sama lebih dulu). Sesama nilai: dicari dengan
+   ANGKA -> urut HS Code; dengan nama -> tetap A-Z. */
 function saringHscodeLookup() {
-  const q = ($("#hscodeLookupInput").value || "").trim().toLowerCase();
-  const daftar = !q
-    ? hsCodeRows
-    : hsCodeRows.filter((r) => (r.item_name || "").toLowerCase().includes(q));
+  const q = $("#hscodeLookupInput").value || "";
+  const pakaiKode = /\d/.test(q) && !/[a-z]/i.test(q);
+  const daftar = hsCodeRows
+    .map((r) => ({ r, nilai: nilaiCariHs(r, q), kode: angkaHs(r.hs_code) }))
+    .filter((x) => x.nilai > 0)
+    .sort((a, b) => b.nilai - a.nilai || (pakaiKode ? a.kode.localeCompare(b.kode) : 0))
+    .map((x) => x.r);
   renderHscodeLookupResults(daftar);
 }
 

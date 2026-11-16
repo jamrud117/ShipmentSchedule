@@ -235,16 +235,41 @@ if (typeof realtimeDaftar === "function") {
 let hsCodePage = 1;
 let hsCodePageSize = 10;
 
+/* PENCARIAN HS CODE -- satu aturan untuk halaman ini dan tombol cari di
+   Daftar Barang (hscode-lookup.js).
+
+   ANGKA dicari di HS Code dengan tanda baca diabaikan: "84", "8471",
+   "8471.30", "8471 30 20" semua menemukan 8471.30.20, tersimpan bertitik
+   maupun tidak. Yang AWALNYA sama didahulukan -- HS Code berjenjang (84
+   bab, 8471 pos, 8471.30 subpos); mulai 4 angka, potongan di tengah kode
+   ikut ditemukan. Angka di nama barang ("225/45R17") juga.
+   Ketikan berhuruf dicari di nama barang per kata ("side plate 225");
+   kata berupa angka boleh cocok dengan HS Code-nya ("plate 8708").
+
+   Hasil: 0 = tidak cocok; makin besar makin cocok. */
+const angkaHs = (v) => String(v == null ? "" : v).replace(/\D/g, "");
+function nilaiCariHs(r, teks) {
+  const q = String(teks == null ? "" : teks).trim().toLowerCase();
+  if (!q) return 1;
+  const nama = String(r.item_name || "").toLowerCase();
+  const kode = angkaHs(r.hs_code);
+  if (/^[\d\s.\-/]+$/.test(q)) {
+    const d = angkaHs(q);
+    if (kode.startsWith(d)) return 4;
+    if (nama.includes(q)) return 2;
+    return d.length >= 4 && kode.includes(d) ? 1 : 0;
+  }
+  const kata = q.split(/\s+/);
+  const cocok = kata.every((k) => nama.includes(k) || (/^[\d.\-/]+$/.test(k) && kode.startsWith(angkaHs(k))));
+  if (!cocok) return 0;
+  return nama.startsWith(q) ? 3 : 2;
+}
+
 function renderHsCodes() {
   const box = $("#hsCodeList");
   if (!box) return;
-  const q = (($("#hsCodeSearch") || {}).value || "").trim().toLowerCase();
-  const cocok = hsCodeRows.filter(
-    (r) =>
-      !q ||
-      (r.item_name || "").toLowerCase().includes(q) ||
-      (r.hs_code || "").toLowerCase().includes(q),
-  );
+  const q = ($("#hsCodeSearch") || {}).value || "";
+  const cocok = hsCodeRows.filter((r) => nilaiCariHs(r, q) > 0);
   /* Selalu A-Z menurut Nama Barang. Tidak ada pilihan urutan: daftar
      ini dipakai untuk MENCARI satu barang, dan abjad satu-satunya
      urutan yang bisa ditebak tanpa membacanya dulu. */

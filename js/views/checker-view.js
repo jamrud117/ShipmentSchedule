@@ -3110,24 +3110,29 @@ function cekGambarKurs() {
   else if (status === "salinan") ket = tt(`Sheet tidak terbaca; memakai salinan tersimpan (${umur}).`, `The sheet could not be read; using the saved copy (${umur}).`);
   else ket = tt(`Dari sheet KURS, diambil ${umur}.`, `From the KURS sheet, read ${umur}.`);
   const catatan = tt("Hanya dipakai untuk memeriksa NDPBM draft. NDPBM di jadwal tidak berubah sendiri.", "Used only to check the draft NDPBM. The NDPBM saved in a schedule never changes by itself.");
+  // "Semua kurs" yang sedang dibuka tetap terbuka saat kepingan digambar ulang (Perbarui, berkas baru)
+  const semuaLama = el.querySelector(".cek-kurs-semua");
   const semua = k.data && k.data.daftar.length
-    ? `<details class="cek-kurs-semua"><summary>${escapeHtml(tt(`Semua kurs (${k.data.daftar.length})`, `All rates (${k.data.daftar.length})`))}</summary><div class="cek-kurs-kisi">${k.data.daftar
+    ? `<details class="cek-kurs-semua"${semuaLama && semuaLama.open ? " open" : ""}><summary>${escapeHtml(tt(`Semua kurs (${k.data.daftar.length})`, `All rates (${k.data.daftar.length})`))}</summary><div class="cek-kurs-kisi">${k.data.daftar
         .map((r) => `<div class="cek-kurs-baris${r.kode === draft ? " is-dipakai" : ""}"><span class="cek-kurs-kode">${escapeHtml(r.kode)}</span><span class="cek-kurs-nama">${escapeHtml(r.nama || "")}</span><b>${escapeHtml(kursFormat(r.nilai))}${r.satuan > 1 ? ` <small>/ ${escapeHtml(String(r.satuan))}</small>` : ""}</b>${cekKursSelisihHtml(r)}</div>`)
         .join("")}</div></details>`
     : "";
+  /* Anak-anaknya langsung sel kisi .cek-kurs (css/desain.css, L. KURS):
+     desktop  [titik][judul][kurs ......][Perbarui]
+              keterangan
+              Semua kurs ............ Buka sheet
+     ponsel   [titik][judul .....][Perbarui] / kurs / keterangan / kaki */
   el.dataset.status = status;
   el.innerHTML = `
-    <div class="cek-kurs-kepala">
-      <span class="cek-kurs-titik" aria-hidden="true"></span>
-      <div class="cek-kurs-judul"><b>${escapeHtml(tt("Kurs otomatis", "Automatic rate"))}</b></div>
-      <div class="cek-kurs-nilai">${dipakai.map(chip).join("")}</div>
-      <div class="cek-kurs-aksi">
-        <button type="button" class="cek-kurs-tombol" id="btnCekKursSegarkan"${k.memuat ? " disabled" : ""}><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>${escapeHtml(k.memuat ? tt("Membaca…", "Reading…") : tt("Perbarui", "Refresh"))}</span></button>
-        <a class="cek-kurs-tautan" href="${escapeAttr(KURS_SHEET_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(tt("Buka sheet", "Open sheet"))}</a>
-      </div>
-    </div>
-    <p class="cek-kurs-ket" role="status">${escapeHtml(ket)} ${escapeHtml(catatan)}</p>
-    ${semua}`;
+    <span class="cek-kurs-titik" aria-hidden="true"></span>
+    <div class="cek-kurs-judul"><b>${escapeHtml(tt("Kurs otomatis", "Automatic rate"))}</b></div>
+    <div class="cek-kurs-nilai">${dipakai.map(chip).join("")}</div>
+    <button type="button" class="btn-quiet cek-kurs-tombol${k.memuat ? " is-sibuk" : ""}" id="btnCekKursSegarkan"${k.memuat ? ' disabled aria-busy="true"' : ""}><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span>${escapeHtml(k.memuat ? tt("Membaca…", "Reading…") : tt("Perbarui", "Refresh"))}</span></button>
+    <p class="cek-kurs-ket" role="status"><span class="cek-kurs-keadaan">${escapeHtml(ket)}</span> <span>${escapeHtml(catatan)}</span></p>
+    <div class="cek-kurs-kaki">
+      ${semua}
+      <a class="cek-kurs-tautan" href="${escapeAttr(KURS_SHEET_URL)}" target="_blank" rel="noopener noreferrer"><span>${escapeHtml(tt("Buka sheet", "Open sheet"))}</span><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+    </div>`;
 }
 
 async function cekSegarkanKurs() {

@@ -567,6 +567,15 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <!-- Tanggal hari ini (acuan semua hitung mundur): baris kecil di atas
+                   judul, sama di setiap halaman yang memilikinya. Diisi
+                   paintTodayStamps (js/ui/board.js); gayanya .board-today di
+                   css/desain.css. -->
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="ovToday">—</time>
+              </p>
               <h1
                 class="board-title"
                 id="ovTitle"
@@ -576,7 +585,7 @@
               </h1>
               <div class="board-sub" id="ovSub" data-en="Loading…">Memuat…</div>
             </div>
-            <!-- Sakelar buku ditaruh di sisi kanan, sebaris dengan blok -->
+            <!-- Sakelar buku di sisi kanan kepala; di ponsel turun ke bawah kalimat ringkas -->
             <div class="board-aside">
               <div
                 class="mode-tabs mode-tabs--board"
@@ -595,12 +604,6 @@
                 <button data-mode="export" role="tab" aria-selected="false">
                   <i class="bi bi-box-arrow-up-right"></i><span>Export</span>
                 </button>
-              </div>
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="ovToday">—</div>
               </div>
             </div>
           </div>
@@ -716,6 +719,11 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="accountToday">—</time>
+              </p>
               <h1 class="board-title" data-i18n="u.kelola.akun.hak.akses">
                 Kelola akun &amp; hak akses
               </h1>
@@ -729,14 +737,6 @@
                 <span id="accountNonaktifWrap" class="acct-nonaktif-hitung" hidden>
                   · <b id="accountCountNonaktif">0</b> <span data-en="inactive (awaiting a role)">nonaktif (menunggu peran)</span>
                 </span>
-              </div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="accountToday">—</div>
               </div>
             </div>
           </div>
@@ -853,18 +853,15 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="hsCodeToday">—</time>
+              </p>
               <h1 class="board-title">Database HS Code</h1>
               <div class="board-sub">
                 <b id="hsCodeCount">0</b>
                 <span data-i18n="hscode.count">HS Code tersimpan</span>
-              </div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="hsCodeToday">—</div>
               </div>
             </div>
           </div>
@@ -937,16 +934,13 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="mstToday">—</time>
+              </p>
               <h1 class="board-title" id="mstJudul">Masterlist</h1>
               <div class="board-sub" id="mstSub" data-en="Loading…">Memuat…</div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="mstToday">—</div>
-              </div>
             </div>
           </div>
         </div>
@@ -1067,16 +1061,13 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="cekToday">—</time>
+              </p>
               <h1 class="board-title" data-en="PIB/PEB Check">Cek PIB/PEB</h1>
               <div class="board-sub" data-en="The CIPL against the CEISA draft, backed by the schedule, the HS Code database &amp;amp; the masterlist">CIPL dibandingkan dengan draft CEISA, dibantu data jadwal, Database HS Code &amp; masterlist</div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="cekToday">—</div>
-              </div>
             </div>
           </div>
         </div>
@@ -1611,6 +1602,11 @@
         <div class="container board-inner">
           <div class="board-head">
             <div>
+              <p class="board-today">
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="docnumToday">—</time>
+              </p>
               <div class="board-label" data-i18n="u.permintaan.nomor.dokumen">
                 Permintaan nomor dokumen
               </div>
@@ -1626,14 +1622,6 @@
               >
                 Invoice, Delivery Order, Permintaan Dana, dan Surat — satu
                 sumber nomor untuk seluruh tim.
-              </div>
-            </div>
-            <div class="board-aside">
-              <div class="board-today">
-                <div class="board-today-label" data-i18n="u.hari.ini">
-                  Hari ini
-                </div>
-                <div class="board-today-date" id="docnumToday">—</div>
               </div>
             </div>
           </div>
@@ -3840,8 +3828,11 @@
                      bukan di samping label: sekecil penanda Auto/Manual di
                      kartu dan tidak lebih lebar daripada kotaknya, jadi
                      kelompok ETA & Estimated Delivery tetap selebar kotaknya
-                     dan labelnya sebaris rapi dengan ETD & In Factory. -->
-                <div>
+                     dan labelnya sebaris rapi dengan ETD & In Factory.
+                     Di ponsel (.fl-bermode, components.css) pengalihnya naik
+                     ke ujung kanan baris label -- tiap kelompok sebaris
+                     sendiri, jadi tidak ada label lain yang harus sejajar. -->
+                <div class="fl-bermode">
                   <label class="form-label" for="fEta">ETA</label>
                   <label class="visually-hidden" for="fEtaTime" data-i18n="f.jam.eta">Jam ETA</label>
                   <div class="fl-pair">
@@ -3878,7 +3869,7 @@
                     ><i class="bi bi-pin-angle-fill" aria-hidden="true"></i>Manual</button>
                   </div>
                 </div>
-                <div>
+                <div class="fl-bermode">
                   <!-- Teksnya ditulis terapkanLabelForm() per buku
                        (Estimated Delivery / Stuffing). -->
                   <label class="form-label" id="lblActual" for="fActual">Estimated Delivery</label>
@@ -4200,8 +4191,10 @@
                 <input
                   type="text"
                   id="hscodeLookupInput"
-                  placeholder="Ketik nama barang…"
+                  placeholder="Nama barang atau HS Code…"
                   data-i18n-ph="ph.ketik.nama.barang"
+                  aria-label="Cari nama barang atau HS Code"
+                  data-en-aria="Search item name or HS Code"
                   autocomplete="off"
                 />
                 <button type="button" class="search-clear" data-cari-hapus title="Kosongkan Pencarian" data-en-title="Clear search" aria-label="Kosongkan pencarian" data-en-aria="Clear search"><i class="bi bi-x-lg"></i></button>
