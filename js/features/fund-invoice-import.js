@@ -377,7 +377,8 @@ function bacaBillingDjbc(teks) {
    160 1981 5294 Chargeable Weight : 300.00 KG" terbaca "16019815294Chargeable".
    AWB IATA (11 angka) ditulis baku: "160-19815294". */
 function danaNomorBlTabel(teks) {
-  const m = String(teks || "").match(/\b(B\/L|BL|AWB|MAWB|HAWB)\s*(?:(?:No\.?|Number)\s*:?|:)\s*(.+)$/m);
+  // garis miring "B/L" pada hasil OCR kerap terbaca huruf / angka tipis: "BIL", "BlL", "B1L", "B|L"
+  const m = String(teks || "").match(/\b(B[\/Il1|]L|BL|AWB|MAWB|HAWB)\s*(?:(?:No\.?|Number)\s*:?|:)\s*(.+)$/m);
   if (!m) return "";
   const kata = [];
   for (const k of m[2].trim().split(/\s+/)) {
@@ -388,50 +389,215 @@ function danaNomorBlTabel(teks) {
   return /AWB/.test(m[1]) && /^\d{11}$/.test(nomor) ? nomor.replace(/^(\d{3})(\d{8})$/, "$1-$2") : nomor;
 }
 
+/* ------------------------------------------------------------------
+   TABEL FORWARDER (WIDE dan sejenisnya) -- teks PDF digital ATAU hasil OCR
+
+   Kepala tabel pada scan sering berlatar abu-abu bertekstur; hasil OCR-nya
+   sampah ("- ED Desctip - ) aol Qty. . Rate."), padahal barisnya terbaca
+   sempurna. Maka kepala tidak lagi diwajibkan: baris rincian dikenali dari
+   BENTUKNYA sendiri -- Uraian | Qty | kode mata uang | Rate | angka-angka.
+------------------------------------------------------------------ */
+
+/* Kepala tabel (hanya penanda awal; boleh tidak terbaca): sedikitnya 3 kata kuncinya */
+const danaKepalaTabel = (l) =>
+  [/Descrip/i, /\bQty\b/i, /\bCURR?\b/i, /\bRate\b/i, /Amount/i, /\bVAT\b/i, /\bPPH\b/i, /\bTotal\s*\(/i].filter((re) => re.test(String(l || ""))).length >= 3;
+
+/* Baris SUB TOTAL / TOTAL; noda OCR di depannya (". TOTAL") diabaikan */
+const DANA_RE_SUBTOTAL = /^[^A-Za-z0-9]{0,3}SUB\s*-?\s*TOTAL\b/i;
+const DANA_RE_TOTAL = /^[^A-Za-z0-9]{0,3}(?:GRAND\s+)?TOTAL\b/i;
+
+/* Satu baris rincian -> { uraian, qty, mata, rate, token } atau null. Kode mata uang
+   yang rusak hasil OCR ("lDR", "1DR") dipulihkan. Letak "Qty KODE Rate" yang pertama
+   dengan kode mata uang yang sah dipakai -- angka + 3 huruf di dalam uraian
+   ("Lift Off 2 X20 1.000 IDR ...") bukan kolomnya. */
+function danaBarisTabel(l) {
+  const s = String(l || "");
+  const re = /\s(\d[\d,.]*)\s+([A-Za-z0-9|]{3})\.?\s+(\d[\d,.]*)\s+(?=\S)/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const mata = danaMataUangBaris(m[2]);
+    const uraian = s.slice(0, m.index).trim();
+    if (mata && uraian) {
+      const token = s.slice(re.lastIndex).match(/\(?-?\d[\d,.]*\)?/g) || [];
+      return token.length ? { uraian, qty: danaAngka(m[1]), mata, rate: danaAngka(m[3]), token } : null;
+    }
+    re.lastIndex = m.index + 1;
+  }
+  /* Kode mata uang hilang dari hasil baca ("Agency Fee 1.000 400,000.00 400,000 ..."):
+     Qty berdesimal tiga lalu Rate berdesimal dua tetap bentuk kolom tabel ini. Amount
+     selalu kolom rupiah, jadi bacaannya sama dengan baris ber-IDR. */
+  const tanpaKode = s.match(/^(.*?[A-Za-z)].*?)\s(\d{1,3}[.,]\d{3})\s+(\d{1,3}(?:,\d{3})*\.\d{2})\s+(?=\d)/);
+  if (tanpaKode) {
+    const token = s.slice(tanpaKode[0].length).match(/\(?-?\d[\d,.]*\)?/g) || [];
+    if (token.length) return { uraian: tanpaKode[1].trim(), qty: danaAngka(tanpaKode[2]), mata: "IDR", rate: danaAngka(tanpaKode[3]), token };
+  }
+  return null;
+}
+
+/* Uraian panjang yang terpotong ke baris berikutnya: kata-kata sungguhan, bukan
+   sisa garis / noda OCR ("D", ". -", "a ow mu A)") */
+function danaLanjutanUraian(l) {
+  const s = String(l || "").trim();
+  if (s.length < 3 || s.length > 60 || /\d{1,3},\d{3}/.test(s) || !/^[A-Za-z(]/.test(s) || /[^A-Za-z0-9 &().,\/'-]/.test(s) || !/[AEIOUaeiou]/.test(s)) return false;
+  const kata = s.split(/\s+/);
+  return kata.filter((k) => k.replace(/[^A-Za-z]/g, "").length >= 3).length * 2 >= kata.length;
+}
+
+/* Nilai yang MUNGKIN dari satu angka. Pada scan, koma ribuan kerap terbaca titik:
+   "7.000" bisa 7 atau 7.000 -- satu titik diikuti tepat tiga angka itu ambigu, dan
+   hitungan barisnya yang memutuskan. Bentuk lain hanya satu tafsiran (danaAngka). */
+function danaTafsirAngka(tok) {
+  const s = String(tok || "").trim();
+  const m = /^(\(?-?)(\d{1,3})\.(\d{3})(\)?)$/.exec(s);
+  return m ? [danaAngka(s), danaAngka(`${m[1]}${m[2]}${m[3]}${m[4]}`)] : [danaAngka(s)];
+}
+
+/* Angka-angka sesudah Rate. Kolom yang kosong tidak tercetak:
+     4 angka  Amount, VAT, PPH 23, Total   (Amount + VAT - PPH = Total)
+     3 angka  Amount, VAT, Total  atau  Amount, PPH 23, Total
+     2 angka  Amount, Total
+   Dari semua tafsiran angka yang ambigu dipilih yang hitungannya benar (selisih
+   pembulatan <= 1); Qty x Rate = Amount menguatkan bila beberapa sama-sama benar.
+   Tidak ada yang benar -> tafsiran biasa, `cocok` false. */
+function danaAngkaBarisTabel(token, qty, rate) {
+  let kombinasi = [[]];
+  token.map(danaTafsirAngka).forEach((c) => { kombinasi = kombinasi.flatMap((k) => c.map((v) => k.concat([v]))).slice(0, 64); });
+  const urai = (a) => {
+    const n = a.length, total = a[n - 1];
+    if (n >= 4) return { amount: a[0], ppn: a[1], pph: a[2], total, cocok: Math.abs(a[0] + a[1] - a[2] - total) <= 1 };
+    if (n === 3) {
+      if (Math.abs(a[0] + a[1] - total) <= 1) return { amount: a[0], ppn: a[1], pph: 0, total, cocok: true };
+      if (Math.abs(a[0] - a[1] - total) <= 1) return { amount: a[0], ppn: 0, pph: a[1], total, cocok: true };
+      return { amount: a[0], ppn: 0, pph: 0, total, cocok: false };
+    }
+    return { amount: a[0], ppn: 0, pph: 0, total, cocok: n === 1 || Math.abs(a[0] - total) <= 1 };
+  };
+  const hasil = kombinasi.map(urai);
+  const kali = qty > 0 && rate > 0 ? Math.round(qty * rate * 100) / 100 : 0;
+  const pilih = hasil.find((h) => h.cocok && kali && Math.abs(h.amount - kali) <= 1) || hasil.find((h) => h.cocok);
+  if (pilih) return pilih;
+  /* Tak ada tafsiran yang benar, tetapi Qty x Rate membuat hitungan baris benar: kolom
+     Rate dan kolom Total (+ VAT / PPh) saling menguatkan, hanya Amount yang salah baca
+     ("5,556,443.00 5,656,443 5,556,443") -> Amount = Qty x Rate, dicatat `pulih`.
+     Bila Rate ikut salah (sama dengan Amount yang salah), tidak ada yang ditebak. */
+  if (kali && token.length >= 2) {
+    const coba = kombinasi.map((a) => urai([kali].concat(a.slice(1)))).find((h) => h.cocok);
+    if (coba && Math.abs(coba.amount - hasil[0].amount) > 1) return Object.assign(coba, { dariAmount: hasil[0].amount });
+  }
+  return hasil[0];
+}
+
+/* Baris SUB TOTAL / TOTAL -> { dpp, ppn, pph, total, angka, sendiri }. `sendiri` = baris itu
+   tidak bertentangan dengan dirinya (Amount + VAT - PPH = Total). Total invoice
+   forwarder dibulatkan KE ATAS sekali dari PPh 23 yang tepat (fund-lines.js), jadi
+   bisa 1 rupiah di atas Amount + VAT - PPH yang tertulis -- itu masih "sendiri". */
+function danaAngkaTotalTabel(l) {
+  const token = (String(l || "").replace(/^[^A-Za-z0-9]*(?:SUB\s*-?\s*|GRAND\s+)?TOTAL\b/i, "").match(/\d[\d,.]*\d|\d/g) || []);
+  let kombinasi = [[]];
+  token.map(danaTafsirAngka).forEach((c) => { kombinasi = kombinasi.flatMap((k) => c.map((v) => k.concat([v]))).slice(0, 64); });
+  const urai = (a) => {
+    const n = a.length;
+    if (n >= 4) return { dpp: a[0], ppn: a[1], pph: a[2], total: a[n - 1], angka: a, sendiri: Math.abs(a[0] + a[1] - a[2] - a[n - 1]) <= 1 };
+    if (n === 3 && Math.abs(a[0] - a[1] - a[2]) <= 1) return { dpp: a[0], ppn: 0, pph: a[1], total: a[2], angka: a, sendiri: true };
+    if (n === 3) return { dpp: a[0], ppn: a[1], pph: 0, total: a[2], angka: a, sendiri: Math.abs(a[0] + a[1] - a[2]) <= 1 };
+    return { dpp: a[0] || 0, ppn: 0, pph: 0, total: n ? a[n - 1] : 0, angka: a, sendiri: n >= 2 && Math.abs(a[0] - a[n - 1]) <= 1 };
+  };
+  const hasil = kombinasi.map(urai);
+  return hasil.find((h) => h.sendiri) || hasil[0];
+}
+
+/* Nomor invoice di samping labelnya. Hasil OCR: label rusak ("Involce", "lnvoice"),
+   titik dua terbaca "1" / ";" / "i", dan nomor terpenggal spasi ("IN-WL 2611-00016").
+   Potongan yang belum memuat angka, atau berujung / berawalan pemisah, disambung
+   dengan potongan berikutnya. Nomor WIDE dirapikan ke bentuk bakunya IN-WL<TTBB>-<urut>
+   (O/I/l/S/B di bagian angka = 0/1/1/5/8). */
+function danaNomorInvoiceLabel(teks) {
+  for (const m of String(teks || "").matchAll(/(?:^|[^A-Za-z])[Il1|]n[vy]o[il1|!]?c[ea][ \t]*(?:No\b\.?|Number\b|Nbr\b\.?)[ \t]*([^\n]*)/gi)) {
+    const kata = m[1].trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < kata.length && /^[:;.,|!1lIi]$/.test(kata[i])) i++;
+    let nomor = "";
+    for (; i < kata.length && nomor.length < 30; i++) {
+      const k = kata[i].replace(/^[:;]+/, "");
+      if (!/^[A-Za-z0-9\/.\-|]+$/.test(k) || (!nomor && /^[\/.\-]/.test(k))) break;
+      if (nomor && /\d/.test(nomor) && !/[\/.\-]$/.test(nomor) && !/^[\/.\-]/.test(k)) break;
+      nomor += k;
+    }
+    nomor = nomor.replace(/[.\/-]+$/, "");
+    const wide = /^IN-?WL-?([0-9OoIlSB]{4})-?([0-9OoIlSB]{5})$/i.exec(nomor);
+    if (wide) {
+      const angka = (x) => x.replace(/[Oo]/g, "0").replace(/[Il]/g, "1").replace(/S/g, "5").replace(/B/g, "8");
+      return `IN-WL${angka(wide[1])}-${angka(wide[2])}`;
+    }
+    if (/\d/.test(nomor)) return nomor;
+  }
+  return "";
+}
+
+/* Tanggal di samping label ("Invoice Date", "Due Date"); label OCR yang rusak
+   ("Involce Date") & titik dua yang hilang dimaafkan */
+function danaTanggalLabel(teks, reLabel) {
+  const m = String(teks || "").match(new RegExp(`${reLabel.source}[ \\t]*[:;.]?[ \\t]*([^\\n]+?)(?:\\s{2,}|$)`, "im"));
+  return m ? danaTanggalIso(m[1]) : "";
+}
+
+/* Jenis transaksi invoice forwarder: "Shipment Type : Sea Import". Hasil OCR merekatkan /
+   merusaknya ("Sealmport", "Sea |mport"); bagian yang tak terbaca sama sekali diambil dari
+   label dokumennya: B/L / Port of Loading = laut, AWB / Chargeable Weight = udara;
+   Arrive Date = impor, Onboard Date = ekspor (format WIDE). */
+function danaJenisKirimanTabel(teks) {
+  const isi = String(teks || "");
+  const nilai = (isi.match(/Sh[il1|]pment[ \t]*Typ[eo][ \t]*[:;.]?[ \t]*([^\n]*)/i) || [])[1] || "";
+  const inti = nilai.toUpperCase().replace(/[|!1]/g, "I").replace(/0/g, "O").replace(/[^A-Z]+/g, " ");
+  let moda = (inti.match(/\b(SEA|AIR)/) || [])[1] || "";
+  let arah = /\b(?:SEA|AIR)?\s*[IL]?MPORT/.test(inti) ? "Import" : /\b(?:SEA|AIR)?\s*E?XPORT/.test(inti) ? "Export" : "";
+  if (!moda) {
+    const laut = /\bB\/L\s*No\b|Port\s*of\s*Loading|Port\s*of\s*Discharge|\bCBM\b/i.test(isi), udara = /\bAWB\s*No\b|Chargeable\s*Weight|Flight\s*No/i.test(isi);
+    moda = laut !== udara ? (laut ? "SEA" : "AIR") : "";
+  }
+  if (!arah) {
+    const masuk = /\bArr?[il1|]v[ae]\s*Date\b/i.test(isi), keluar = /\bOnboard\s*Date\b/i.test(isi);
+    arah = masuk !== keluar ? (masuk ? "Import" : "Export") : "";
+  }
+  return moda && arah ? `${moda === "SEA" ? "Sea" : "Air"} ${arah}` : "";
+}
+
 /* Tabel forwarder: Description | Qty | CURR | Rate | Amount | VAT | PPH 23 | Total */
 function bacaInvoiceTabel(teks) {
   const baris = String(teks).split(/\r?\n/);
-  const ambil = (re) => (String(teks).match(re) || [])[1] || "";
-  const awal = baris.findIndex((l) => /Description/i.test(l) && /Qty|Rate|Amount/i.test(l));
+  const awal = baris.findIndex(danaKepalaTabel);
   const rincian = [];
-  if (awal >= 0) {
-    for (let i = awal + 1; i < baris.length; i++) {
-      const l = baris[i].trim();
-      if (/^(SUB ?TOTAL|TOTAL|GRAND TOTAL)\b/i.test(l)) break;
-      if (/Amount|VAT \(|PPH 23/i.test(l) && !/\d{1,3},\d{3}/.test(l)) continue; // baris kepala kedua
-      const m = l.match(/^(.+?)\s+(\d[\d,.]*)\s+([A-Z]{3})\s+(\d[\d,.]*)\s+(.+)$/);
-      if (!m) {
-        if (rincian.length && l && !/\d{1,3},\d{3}/.test(l)) rincian[rincian.length - 1].desc += " " + l;
-        continue;
-      }
-      const angka = (m[5].match(/\(?-?[\d,.]+\)?/g) || []).map(danaAngka);
-      if (!angka.length) continue;
-      const amount = angka[0];
-      const total = angka[angka.length - 1];
-      let ppn = 0;
-      if (angka.length === 3) {
-        if (Math.abs(amount + angka[1] - total) < 2) ppn = angka[1];
-      } else if (angka.length >= 4) ppn = angka[1];
-      rincian.push({ desc: danaRapikanUraian(m[1]), amount, ppn });
+  const pulihBaris = [];
+  for (let i = awal + 1; i < baris.length; i++) {
+    const l = baris[i].trim();
+    // SUB TOTAL / TOTAL menutup tabel -- tanpa kepala, hanya sesudah baris rincian pertama
+    if ((DANA_RE_SUBTOTAL.test(l) || DANA_RE_TOTAL.test(l)) && (rincian.length || awal >= 0)) break;
+    const r = danaBarisTabel(l);
+    if (!r) {
+      if (rincian.length && danaLanjutanUraian(l)) rincian[rincian.length - 1].desc += " " + l;
+      continue;
     }
+    const a = danaAngkaBarisTabel(r.token, r.qty, r.rate);
+    rincian.push({ desc: danaRapikanUraian(r.uraian), amount: a.amount, ppn: a.ppn });
+    if (a.dariAmount != null) pulihBaris.push({ uraian: rincian[rincian.length - 1].desc, dari: a.dariAmount, ke: a.amount, alasan: "baris" });
   }
   const jenis = danaJenisInvoice(rincian);
-  const tipe = ambil(/Shipment Type\s*:\s*((?:Sea|Air)\s+(?:Import|Export))/i).replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\s+/g, " ");
-  /* Baris TOTAL: Amount | VAT | PPH 23 | Total. Empat angka -> invoice
-     sudah memotong PPh 23 (angka ketiga); total akhirnya angka terakhir. */
-  const totalBaris = baris.find((l) => /^TOTAL\b/i.test(l.trim())) || baris.find((l) => /^SUB ?TOTAL\b/i.test(l.trim()));
-  const angkaTotal = totalBaris ? (totalBaris.match(/[\d,]+(?:\.\d+)?/g) || []).map(danaAngka) : [];
-  let pphInvoice = 0;
-  if (angkaTotal.length >= 4) pphInvoice = angkaTotal[2];
-  else if (angkaTotal.length === 3 && Math.abs(angkaTotal[0] - angkaTotal[1] - angkaTotal[2]) < 2) pphInvoice = angkaTotal[1];
+  /* Baris TOTAL: Amount | VAT | PPH 23 | Total. Empat angka -> invoice sudah memotong
+     PPh 23 (angka ketiga); total akhirnya angka terakhir. SUB TOTAL & TOTAL memuat
+     angka yang sama -- dua pembacaan: yang tidak bertentangan dengan dirinya dipakai
+     ("TOTAL 9,604,184 ..." salah baca satu digit, "SUB TOTAL 9,694,184 ..." benar). */
+  const totalBaris = baris.find((l) => DANA_RE_TOTAL.test(l.trim()) && !DANA_RE_SUBTOTAL.test(l.trim()));
+  const subBaris = baris.find((l) => DANA_RE_SUBTOTAL.test(l.trim()));
+  const tTotal = totalBaris ? danaAngkaTotalTabel(totalBaris) : null;
+  const tSub = subBaris ? danaAngkaTotalTabel(subBaris) : null;
+  const jumlahAkhir = [tTotal, tSub].find((x) => x && x.sendiri && x.angka.length >= 2) || tTotal || tSub;
+  const angkaTotal = jumlahAkhir ? jumlahAkhir.angka : [];
+  const pphInvoice = jumlahAkhir ? jumlahAkhir.pph : 0;
   /* Baris TOTAL yang tidak bertentangan dengan dirinya (Amount + VAT - PPH = Total)
      = dua pembacaan yang saling menguatkan; jumlah baris harus sama dengan Amount-nya. */
-  const pulih = [];
-  if (rincian.length && angkaTotal.length >= 2) {
-    const dpp = angkaTotal[0];
-    const akhir = angkaTotal[angkaTotal.length - 1];
-    const sendiri = angkaTotal.length >= 4 ? Math.abs(dpp + angkaTotal[1] - angkaTotal[2] - akhir) < 1 : Math.abs(dpp - akhir) < 1;
-    const r = sendiri ? danaPulihJumlahBaris(rincian.map((x) => x.amount), dpp) : null;
+  const pulih = pulihBaris.slice();
+  if (rincian.length && angkaTotal.length >= 2 && jumlahAkhir.sendiri) {
+    const r = danaPulihJumlahBaris(rincian.map((x) => x.amount), jumlahAkhir.dpp);
     if (r) {
       pulih.push({ uraian: rincian[r.i].desc, dari: r.dari, ke: r.ke });
       rincian[r.i].amount = r.ke;
@@ -440,15 +606,17 @@ function bacaInvoiceTabel(teks) {
   return {
     sumber: "Tabel",
     pulih,
-    invoiceNo: ambil(/Invoice\s*(?:No\.?|Number)\s*:?\s*([A-Z0-9][A-Z0-9\/.-]+)/i),
-    invoiceDate: danaTanggalIso(ambil(/Invoice Date\s*:\s*([^\n]+?)(?:\s{2,}|$)/im)),
-    invoiceDueDate: danaTanggalIso(ambil(/Due Date\s*:\s*([^\n]+?)(?:\s{2,}|$)/im)),
+    invoiceNo: danaNomorInvoiceLabel(teks),
+    invoiceDate: danaTanggalLabel(teks, /[Il1|]n[vy]o[il1|!]?c[ea][ \t]*Dat[ea]/) ||
+      // label "Invoice" terpisah dari "Date" (OCR merangkai "45193 Date : 05 November 2026")
+      danaTanggalIso((String(teks).match(/(?:^|[^A-Za-z\s]\s*)\bDate\s*[:;]\s*(\d{1,2}\s*-?\s*[A-Za-z]{3,}\.?\s*-?\s*\d{4})/m) || [])[1] || ""),
+    invoiceDueDate: danaTanggalLabel(teks, /Due[ \t]*Dat[ea]/),
     blAwb: danaNomorBlTabel(teks),
     expenseType: jenis,
-    transactionType: tipe,
+    transactionType: danaJenisKirimanTabel(teks),
     currency: "IDR",
     lines: rincian.map((r) => ({ desc: r.desc, amount: String(Math.round(r.amount)), ppnRate: danaTarifPpn(r.ppn, r.amount) })),
-    totalInvoice: angkaTotal.length ? angkaTotal[angkaTotal.length - 1] : 0,
+    totalInvoice: jumlahAkhir ? jumlahAkhir.total : 0,
     pphInvoice,
   };
 }
@@ -463,8 +631,15 @@ function bacaInvoiceTabel(teks) {
 ------------------------------------------------------------------ */
 
 /* "P.1.B Charge" -> "P.I.B Charge" (singkatan bertitik: angka 1 di antara huruf);
-   kode biaya "7B FEE" -> "ZB FEE" (Z dibaca 7 pada scan) */
-const danaRapikanUraian = (d) => String(d || "").replace(/\b([A-Z])\.1\.([A-Z])\b/g, "$1.I.$2").replace(/^7([A-Z])(?=\s|$)/, "Z$1").replace(/\s+/g, " ").trim();
+   P.I.B yang "I"-nya hilang / jadi huruf lain ("P..B", "P.l.B", "P.L.B") -> "P.I.B";
+   kode biaya "7B FEE" -> "ZB FEE" (Z dibaca 7 pada scan); noda tanda baca lepas di
+   ujung uraian hasil OCR ("Insurance Fee :") dibuang -- kurung tutup tetap */
+const danaRapikanUraian = (d) => String(d || "")
+  .replace(/\b([A-Z])\.1\.([A-Z])\b/g, "$1.I.$2")
+  .replace(/\bP\s?[.,]\s?[lLI|!]?\s?[.,]\s?B\b/g, "P.I.B")
+  .replace(/^7([A-Z])(?=\s|$)/, "Z$1")
+  .replace(/(?:\s+[:;.,'"`~_|\-—–=*•·]{1,2})+\s*$/, "")
+  .replace(/\s+/g, " ").trim();
 
 /* Nomor invoice Prime = 2 huruf + 7 angka (jenis + tahun-bulan + urut):
    "AI2602950", "AO2607101". Hasil OCR: "Al2602950", "A02606744". */
@@ -812,6 +987,8 @@ function danaIsiForm(h) {
 ================================================================== */
 
 const DANA_MAKS_BERKAS = 10;
+/* Berkas yang dibaca bersamaan: yang sedang ditunggu + satu yang disiapkan (lihat danaDariBerkasPdf) */
+const DANA_BACA_SERENTAK = 2;
 let danaSedangMembaca = false;
 
 const danaAdalahPdf = (f) => !!f && (/^application\/pdf$/i.test(f.type || "") || /\.pdf$/i.test(f.name || ""));
@@ -856,8 +1033,8 @@ async function danaDaftarVendor() {
 /* Nomor invoice yang tercetak di sebuah halaman -- hanya untuk memutuskan halaman itu
    dokumen BARU atau lanjutan; nilai akhirnya tetap dibaca pembaca vendornya. */
 function danaNomorHalaman(teks) {
-  const m = String(teks || "").match(/\bInvoice\s*(?:No\.?|Number)\s*:?\s*([A-Za-z0-9|][A-Za-z0-9|\/.-]{3,})/i);
-  return m ? danaNomorKunci(danaPulihNoPrime(m[1].replace(/[.\/-]+$/, ""))) : "";
+  const nomor = danaNomorInvoiceLabel(teks);
+  return nomor.length >= 4 ? danaNomorKunci(danaPulihNoPrime(nomor)) : "";
 }
 
 /* Teks per halaman -> dokumen [{ halaman: [nomor halaman], teks }]; null = satu dokumen
@@ -958,28 +1135,28 @@ async function danaBacaBerkasBanyak(file, vendor, progres) {
   return { dokumen: unik, catatan: catatan.concat(kembar) };
 }
 
-/* Pelapor kemajuan OCR -> toast tetap (OCR 10-12 detik per halaman; toast biasa
-   hilang sebelum selesai). `urutan`/`jumlah` = berkas ke-berapa dari berapa. */
+/* Pelapor kemajuan OCR -> toast tetap (OCR beberapa detik per halaman; toast biasa
+   hilang sebelum selesai). `urutan`/`jumlah` = berkas ke-berapa dari berapa.
+   `bolehTampil()` (pilihan): pelapor tetap MENCATAT tahapnya, tetapi hanya menampilkan
+   bila diizinkan -- berkas yang disiapkan di belakang berkas yang sedang ditunggu
+   (danaDariBerkasPdf) diam dulu, lalu `.tampilkan()` begitu gilirannya tiba. */
 const DANA_TAHAP_OCR = {
   render: ["Menyiapkan halaman", "Preparing the page"],
   olah: ["Membersihkan gambar", "Cleaning the image"],
   baca: ["Membaca tulisan (1/3)", "Reading the text (1/3)"],
   baca2: ["Membaca tulisan (2/3)", "Reading the text (2/3)"],
   baca3: ["Membaca tulisan (3/3)", "Reading the text (3/3)"],
+  // tiga pembacaan sekaligus di beberapa pekerja (ocr.js, ocrTigaBacaan)
+  bacaSerentak: ["Membaca tulisan (3 cara sekaligus)", "Reading the text (3 passes at once)"],
   angka: ["Memeriksa angka", "Checking the numbers"],
 };
-function danaLaporOcr(nama, urutan, jumlah) {
+function danaLaporOcr(nama, urutan, jumlah, bolehTampil) {
   let kini = { tahap: "siap", halaman: 1, dari: 1, persen: 0 };
   let terakhir = 0;
-  return (m) => {
-    if (m.tahap === "mesin") {
-      // status Tesseract: unduhan / persiapan mesin (sebelum halaman pertama) atau kemajuan membaca
-      if (/recogniz/i.test(m.status || "")) kini = Object.assign({}, kini, { persen: m.persen });
-      else kini = Object.assign({}, kini, { tahap: "siap", persen: m.persen });
-    } else kini = Object.assign({}, kini, m, { persen: 0 });
-    const sekarang = Date.now();
-    if (sekarang - terakhir < 150 && kini.tahap !== "siap") return;
-    terakhir = sekarang;
+  let dicatat = false;
+  const tampilkan = () => {
+    if (!dicatat) return;
+    terakhir = Date.now();
     const awalan = jumlah > 1 ? `[${urutan}/${jumlah}] ` : "";
     const hal = kini.dari > 1 && kini.tahap !== "siap" ? ` — ${tt("hal.", "p.")} ${kini.halaman}/${kini.dari}` : "";
     const tahap = DANA_TAHAP_OCR[kini.tahap];
@@ -989,6 +1166,19 @@ function danaLaporOcr(nama, urutan, jumlah) {
     const persen = kini.persen > 0 && kini.persen < 1 ? ` ${Math.round(kini.persen * 100)}%` : "";
     showToast(`${awalan}${nama}${hal}: ${uraian}${persen}…`, "info", { tetap: true, judul: tt("Membaca hasil scan (OCR)", "Reading the scan (OCR)") });
   };
+  const lapor = (m) => {
+    dicatat = true;
+    if (m.tahap === "mesin") {
+      // status Tesseract: unduhan / persiapan mesin (sebelum halaman pertama) atau kemajuan membaca
+      if (/recogniz/i.test(m.status || "")) kini = Object.assign({}, kini, { persen: m.persen });
+      else kini = Object.assign({}, kini, { tahap: "siap", persen: m.persen });
+    } else kini = Object.assign({}, kini, m, { persen: 0 });
+    if (bolehTampil && !bolehTampil()) return;
+    if (Date.now() - terakhir < 150 && kini.tahap !== "siap") return;
+    tampilkan();
+  };
+  lapor.tampilkan = tampilkan;
+  return lapor;
 }
 
 /* Jarak sunting dua teks (jumlah huruf yang harus diganti / disisipkan / dibuang) */
@@ -1003,19 +1193,45 @@ function danaJarakSunting(a, b) {
   return sebelum[y.length];
 }
 
+/* Dua nomor yang bedanya BISA berasal dari salah baca OCR: paling banyak 2 suntingan,
+   dan tiap suntingan memang kekeliruan OCR -- huruf <-> angka yang mirip (O/0, I/1/l,
+   S/5, B/8, Z/2, G/6), I/J/U yang tertukar, atau huruf tipis yang muncul / hilang
+   ("PFIJKT" vs "PFUKT"). ANGKA <-> ANGKA bukan: nomor B/L berurutan satu vendor
+   ("SREBUS45076JKT" vs "SREBUS45083JKT") memang kiriman yang berbeda -- dulu
+   delapan invoice WIDE sekaligus disamakan jadi dua nomor B/L. */
+const DANA_OCR_MIRIP = ["0OQD", "1ILJU|!", "5S", "8B", "2Z", "6G"];
+const DANA_OCR_TIPIS = "1ILJ|!.-' ";
+function danaBedaBacaan(a, b) {
+  const x = String(a || "").toUpperCase(), y = String(b || "").toUpperCase();
+  const mirip = (p, q) => DANA_OCR_MIRIP.some((g) => g.includes(p) && g.includes(q));
+  const tipis = (c) => DANA_OCR_TIPIS.includes(c);
+  let sebelum = [0];
+  for (let j = 1; j <= y.length; j++) sebelum[j] = sebelum[j - 1] + (tipis(y[j - 1]) ? 1 : Infinity);
+  for (let i = 1; i <= x.length; i++) {
+    const kini = [sebelum[0] + (tipis(x[i - 1]) ? 1 : Infinity)];
+    for (let j = 1; j <= y.length; j++) {
+      const ganti = x[i - 1] === y[j - 1] ? 0 : mirip(x[i - 1], y[j - 1]) ? 1 : Infinity;
+      kini[j] = Math.min(sebelum[j - 1] + ganti, sebelum[j] + (tipis(x[i - 1]) ? 1 : Infinity), kini[j - 1] + (tipis(y[j - 1]) ? 1 : Infinity));
+    }
+    sebelum = kini;
+  }
+  return sebelum[y.length] <= 2;
+}
+
 /* Dokumen satu kiriman memuat nomor BL/AWB yang sama. Pembacaan OCR bisa salah di
    satu dokumen saja ("PFUKT006824" vs "PFIJKT006824") dan nomor yang sedikit berbeda
-   akan membagi biaya jadi dua kiriman (fundBagiPerAwb). Nomor yang BEDA TIPIS
-   (selisih <= 2 huruf) dianggap satu nomor: yang dipakai nomor yang muncul di paling
+   akan membagi biaya jadi dua kiriman (fundBagiPerAwb). Nomor yang beda tipis KARENA
+   OCR (danaBedaBacaan) dianggap satu nomor: yang dipakai nomor yang muncul di paling
    banyak dokumen, lalu yang paling panjang. Nomor yang benar-benar berbeda dibiarkan
-   (satu MAWB bisa membawa beberapa HAWB). Hanya untuk dokumen hasil OCR. */
+   (satu MAWB bisa membawa beberapa HAWB; satu vendor menagih banyak kiriman). Hanya
+   untuk dokumen hasil OCR. */
 function danaSamakanBl(terbaca) {
   const catatan = [];
   const ocr = terbaca.filter((h) => h.ocr && h.blAwb && !/[/]/.test(h.blAwb));
   const nomor = [...new Set(ocr.map((h) => h.blAwb))];
   nomor.forEach((n) => {
     if (!ocr.some((h) => h.blAwb === n)) return; // sudah diganti di putaran ini
-    const dekat = nomor.filter((m) => m !== n && ocr.some((h) => h.blAwb === m) && danaJarakSunting(n, m) <= 2);
+    const dekat = nomor.filter((m) => m !== n && ocr.some((h) => h.blAwb === m) && danaBedaBacaan(n, m));
     if (!dekat.length) return;
     const kelompok = [n].concat(dekat);
     const hitung = (x) => ocr.filter((h) => h.blAwb === x).length;
@@ -1084,8 +1300,11 @@ function danaTerapkanDokumen(terbaca, catatan) {
   /* Peringatan per dokumen yang baru saja dimasukkan, lalu satu pemberitahuan */
   const selesai = (pesan, dokumen) => {
     dokumen.forEach((h) => {
-      (h.pulih || []).forEach((p) => peringatan.push(tt(`Angka diperbaiki otomatis agar jumlahnya sesuai SUB TOTAL: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`,
-        `Number corrected automatically to match the SUB TOTAL: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`)));
+      (h.pulih || []).forEach((p) => peringatan.push(p.alasan === "baris"
+        ? tt(`Amount diperbaiki otomatis dari Qty × Rate karena Total barisnya cocok dengan itu: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`,
+          `Amount corrected automatically from Qty × Rate, which the line's Total confirms: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`)
+        : tt(`Angka diperbaiki otomatis agar jumlahnya sesuai SUB TOTAL: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`,
+          `Number corrected automatically to match the SUB TOTAL: ${p.uraian} ${rp(p.dari)} → ${rp(p.ke)}.`)));
       if (h.akunLain && h.akunLain.length) {
         peringatan.push(tt(`Akun lain tidak punya isian: ${h.akunLain.map((a) => a.nama).join(", ")} — cek totalnya.`,
           `Other accounts have no field: ${h.akunLain.map((a) => a.nama).join(", ")} — check the total.`));
@@ -1192,23 +1411,45 @@ async function danaDariBerkasPdf(berkas) {
     let galat = 0;
     let galatOcr = 0;
     let ocrJalan = false;
-    for (let i = 0; i < dipakai.length; i++) {
-      const f = dipakai[i];
-      const lapor = danaLaporOcr(f.name || "?", i + 1, dipakai.length);
-      try {
-        const hasil = await danaBacaBerkasBanyak(f, vendor, (m) => {
-          ocrJalan = true;
-          lapor(m);
-        });
-        hasil.catatan.forEach((c) => catatan.push(c));
-        if (hasil.dokumen.length) hasil.dokumen.forEach((h) => terbaca.push(h));
-        else tidakTerbaca.push(f.name || "?");
-      } catch (e) {
+    /* BERKAS BERIKUTNYA DISIAPKAN SELAGI YANG INI DIBACA. Begitu halaman sebuah berkas
+       sudah di tangan pekerja OCR (tahap baca), berkas sesudahnya mulai dibuka, digambar
+       & dibersihkan di utas halaman -- yang dulu menunggu menganggur. Paling banyak
+       DANA_BACA_SERENTAK berkas sekaligus; pembacaannya mengantre di kolam pekerja yang
+       sama dengan berkas yang lebih dulu didahulukan (ocr.js). Hasil tetap diolah
+       menurut urutan berkas, dan toast kemajuan hanya mengikuti berkas yang sedang
+       ditunggu (pesan terakhir berkas berikutnya diulang begitu gilirannya tiba). */
+    const n = dipakai.length;
+    const janji = [];
+    const sudahBaca = [];
+    let depan = 0;
+    const pelapor = dipakai.map((f, i) => danaLaporOcr(f.name || "?", i + 1, n, () => i === depan));
+    const mulai = (i) => {
+      if (i >= n || janji[i] || i - depan >= DANA_BACA_SERENTAK) return;
+      janji[i] = danaBacaBerkasBanyak(dipakai[i], vendor, (m) => {
+        ocrJalan = true;
+        pelapor[i](m);
+        if (/^baca/.test(m.tahap || "") && !sudahBaca[i]) {
+          sudahBaca[i] = true;
+          mulai(i + 1);
+        }
+      }).then((hasil) => ({ hasil }), (galatBaca) => ({ galatBaca }));
+    };
+    for (let i = 0; i < n; i++) {
+      depan = i;
+      mulai(i);
+      if (sudahBaca[i]) mulai(i + 1);
+      pelapor[i].tampilkan(); // berkas yang disiapkan di belakang: tahap terakhirnya tampil sekarang
+      const { hasil, galatBaca: e } = await janji[i];
+      if (e) {
         console.warn("Invoice vendor tidak terbaca:", e);
         galat++;
         if (e && e.galatOcr) galatOcr++;
-        tidakTerbaca.push(f.name || "?");
+        tidakTerbaca.push(dipakai[i].name || "?");
+        continue;
       }
+      hasil.catatan.forEach((c) => catatan.push(c));
+      if (hasil.dokumen.length) hasil.dokumen.forEach((h) => terbaca.push(h));
+      else tidakTerbaca.push(dipakai[i].name || "?");
     }
     if (ocrJalan && typeof hideToast === "function") hideToast(); // toast kemajuan OCR bersifat tetap
     if (!terbaca.length) {
