@@ -36,6 +36,37 @@ const dokumenHtml = (d) =>
   `<div>${escapeHtml(dispVal(d.nomor))}${d.tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(d.tanggal)}</span>` : ""}${tautanLampiranHtml(d.berkas)}</div>`;
 const daftarDokumenHtml = (daftar) => (daftar || []).map(dokumenHtml).join("") || "—";
 
+/* No. Invoice & No. Packing List. Satu invoice: dua baris seperti dulu.
+   Beberapa invoice (dokInvoiceJadwal, helpers.js): tiap invoice satu
+   baris -- nomor · tanggal, Packing List-nya di bawahnya bila nomor /
+   tanggalnya tidak sama dengan invoicenya -- beserta barang miliknya. */
+function detailBarisInvoice(s) {
+  const nomorTanggal = (nomor, tanggal) =>
+    escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(tanggal)}</span>` : "");
+  const daftar = dokInvoiceJadwal(s);
+  if (daftar.filter((d) => d.nomor).length < 2) {
+    const d = daftar[0] || {};
+    return [detailBaris("No. Invoice", nomorTanggal(d.nomor, d.tanggal)), detailBaris("No. Packing List", nomorTanggal(d.pl, d.plTanggal))];
+  }
+  const tanda = kunciInvoiceBarang(s.items || [], daftar);
+  const rentang = (k) => {
+    const no = tanda.map((x, i) => (x === k ? i + 1 : 0)).filter(Boolean);
+    if (!no.length) return "";
+    const potong = [];
+    no.forEach((n, i) => (i && n === no[i - 1] + 1 ? (potong[potong.length - 1][1] = n) : potong.push([n, n])));
+    return tt("Barang ", "Items ") + potong.map(([a, b]) => (a === b ? a : `${a}–${b}`)).join(", ");
+  };
+  return daftar.map((d, i) => {
+    const plSendiri = d.pl && (kunciInvoice(d.pl) !== kunciInvoice(d.nomor) || (d.plTanggal && d.plTanggal !== d.tanggal));
+    const isi = [
+      `<div>${nomorTanggal(d.nomor, d.tanggal)}</div>`,
+      plSendiri ? `<div class="text-muted">PL ${nomorTanggal(d.pl, d.plTanggal)}</div>` : "",
+      rentang(kunciInvoice(d.nomor)) ? `<div class="text-muted">${escapeHtml(rentang(kunciInvoice(d.nomor)))}</div>` : "",
+    ].join("");
+    return detailBaris(`Invoice ${i + 1} & Packing List`, isi);
+  });
+}
+
 /* PROGRES DOKUMEN, HANYA BACA. Stepper di kartu disembunyikan dari akun
    yang tidak boleh mengubah (doc-steps.js) -- di panel ini semua akun
    bisa membaca tahap yang sudah dicatat, statusnya (draft menunggu asli
@@ -206,8 +237,7 @@ function buildDetailHtml(s) {
     <div class="subsection-title"><i class="bi bi-file-earmark-text"></i> ${tt("Dokumen &amp; Umum", "Documents &amp; General")}</div>
     ${detailDaftar([
       detailBaris("No. Aju", escapeHtml(dispVal(s.noAju))),
-      detailBaris("No. Invoice", nomorTanggal(s.invoice, s.invoiceDate)),
-      detailBaris("No. Packing List", nomorTanggal((s.dataPabean || {}).packingListNomor, (s.dataPabean || {}).packingListTanggal)),
+      ...detailBarisInvoice(s),
       detailBaris(udara ? "Master AWB" : "Master B/L", nomorTanggal(s.masterBL, s.masterBLDate)),
       detailBaris(udara ? "House AWB" : "House B/L", nomorTanggal(s.houseBL, s.houseBLDate)),
       /* Hanya Import. Di Export kolom ini tidak dipakai lagi — muatan

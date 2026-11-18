@@ -401,6 +401,10 @@ function newItem(mode) {
        urut barang ini di dokumen PI itu -- buku Import. */
     piNomor: "",
     piNoItem: "",
+    /* Invoice barang ini (nomor dari daftar invoice jadwal) -- hanya
+       berarti kalau jadwalnya memakai lebih dari satu invoice
+       (kunciInvoiceBarang). */
+    invoiceNomor: "",
     /* Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 daftar yang
        sama (skb). Buku Import: barang baru langsung membawa SKB PPh
        bawaan (nomor & tanggal yang diatur di tab Daftar Barang,
@@ -794,6 +798,265 @@ function pecahKolomPi(teks) {
       pi.push(baris);
     });
   return { pi: pi.join(", "), ls: ls.join(", "), polis: polis.join(", "), lain };
+}
+
+/* ------------------------------------------------------------------
+   INVOICE & PACKING LIST -- SATU PIB / PEB BISA MEMAKAI BEBERAPA.
+
+   s.dokInvoice = [{ nomor, tanggal, pl, plTanggal }]: tiap invoice
+   beserta Packing List-nya, urutan = urutan invoice di dokumennya
+   (barang invoice pertama = Seri Barang awal). Sepasang, bukan dua
+   daftar lepas: Packing List satu kiriman bernomor & bertanggal sama
+   dengan invoicenya (kebiasaan CIPL), dan Cek PIB/PEB memasangkan
+   dokumen 217 dengan 380-nya.
+
+   PENYIMPANAN. Jadwal satu invoice tetap seperti dulu, hanya di kolom
+   lama: invoice / invoice_date, Packing List di data_pabean. Daftarnya
+   baru ditulis ke kolom jsonb dokumen_invoice (migration-dokumen-
+   invoice.sql) kalau invoicenya LEBIH DARI SATU -- kolom lama tetap
+   diisi RINGKASANNYA (ringkasDokInvoice): nomor "A, B", tanggal invoice
+   pertama, Packing List "PL-A, PL-B". Kartu, pencarian, Surat BC, Cek
+   PIB/PEB versi lama & versi aplikasi yang belum mengenal daftarnya
+   tetap membaca semua nomornya.
+
+   Barang ditandai invoicenya di item.invoiceNomor (kolom barang
+   invoice_nomor); kunciInvoiceBarang merapikannya.
+------------------------------------------------------------------ */
+const kunciInvoice = (v) => kunciAlnum(v);
+const teksInvoice = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
+const tanggalInvoice = (v) => (/^\d{4}-\d{2}-\d{2}/.test(String(v || "")) ? String(v).slice(0, 10) : "");
+
+function entriInvoiceRapi(d) {
+  const x = d && typeof d === "object" ? d : {};
+  return { nomor: teksInvoice(x.nomor), tanggal: tanggalInvoice(x.tanggal), pl: teksInvoice(x.pl), plTanggal: tanggalInvoice(x.plTanggal) };
+}
+
+/* Daftar yang dirapikan: entri tanpa isian dibuang; nomor invoice yang
+   sama (tanpa beda tanda baca & huruf besar) tidak diulang -- isian yang
+   kosong dilengkapi entri kembarannya. */
+function rapikanDokInvoice(x) {
+  const out = [];
+  (Array.isArray(x) ? x : []).forEach((d) => {
+    const e = entriInvoiceRapi(d);
+    if (!e.nomor && !e.tanggal && !e.pl && !e.plTanggal) return;
+    const k = kunciInvoice(e.nomor);
+    const sama = k && out.find((o) => kunciInvoice(o.nomor) === k);
+    if (!sama) return void out.push(e);
+    ["tanggal", "pl", "plTanggal"].forEach((f) => {
+      if (!sama[f]) sama[f] = e[f];
+    });
+  });
+  return out;
+}
+
+/* Ringkasan untuk kolom lama: nomor "A, B"; tanggal milik invoice PERTAMA
+   (bukan yang pertama bertanggal -- dokInvoiceDariKolomLama
+   mengembalikannya ke invoice pertama); Packing List "PL-A, PL-B" (satu
+   PL untuk dua invoice ditulis sekali) & tanggal PL pertama. */
+function ringkasDokInvoice(daftar) {
+  const ada = rapikanDokInvoice(daftar);
+  const sekali = (nilai) => {
+    const sudah = new Set();
+    return nilai.filter((n) => n && !sudah.has(kunciInvoice(n)) && sudah.add(kunciInvoice(n))).join(", ");
+  };
+  return {
+    invoice: sekali(ada.map((d) => d.nomor)),
+    invoiceDate: ada.length ? ada[0].tanggal : "",
+    pl: sekali(ada.map((d) => d.pl)),
+    plTanggal: ada.length ? ada[0].plTanggal : "",
+  };
+}
+
+/* Nomor gabungan kolom lama -> nomor-nomornya. Pemisahnya sama dengan
+   pecahNomorDokumen & Cek PIB/PEB: koma, titik koma, baris baru, " / ",
+   " & ", " DAN ". */
+function pecahNomorInvoice(teks) {
+  const out = [];
+  String(teks == null ? "" : teks)
+    .split(/[,;\n]+|\s+\/\s+|\s+&\s+|\s+DAN\s+/i)
+    .map(teksInvoice)
+    .forEach((n) => {
+      if (n && !out.some((x) => kunciInvoice(x) === kunciInvoice(n))) out.push(n);
+    });
+  return out;
+}
+
+/* Daftar dari kolom lama (jadwal satu invoice, data sebelum daftarnya
+   ada, Bulk Excel): nomor ke-n berpasangan dengan Packing List ke-n;
+   tanggal yang hanya satu milik invoice pertama. */
+function dokInvoiceDariKolomLama(invoice, invoiceDate, pl, plTanggal) {
+  const nomor = pecahNomorInvoice(invoice);
+  const daftarPl = pecahNomorInvoice(pl);
+  const n = Math.max(nomor.length, daftarPl.length, invoiceDate || plTanggal ? 1 : 0);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ nomor: nomor[i] || "", tanggal: i ? "" : invoiceDate, pl: daftarPl[i] || "", plTanggal: i ? "" : plTanggal });
+  }
+  return rapikanDokInvoice(out);
+}
+
+/* Daftar invoice jadwal yang dimuat (rowToShipment): kolom dokumen_invoice
+   selama ringkasannya masih sama dengan kolom lama. Berbeda = kolom lama
+   diubah dari luar -- versi aplikasi lama yang masih termuat di peramban
+   pengguna lain, atau Bulk Excel -- dan kolom lama yang menang: nomornya
+   dari sana; tanggal & Packing List nomor yang masih sama tetap dari
+   daftarnya, kecuali yang memang ikut diubah di kolom lama. */
+function susunDokInvoice(tersimpan, s) {
+  const dp = (s && s.dataPabean) || {};
+  const lama = {
+    invoice: teksInvoice(s && s.invoice),
+    invoiceDate: tanggalInvoice(s && s.invoiceDate),
+    pl: teksInvoice(dp.packingListNomor),
+    plTanggal: tanggalInvoice(dp.packingListTanggal),
+  };
+  const dariLama = dokInvoiceDariKolomLama(lama.invoice, lama.invoiceDate, lama.pl, lama.plTanggal);
+  const daftar = rapikanDokInvoice(tersimpan);
+  if (!daftar.length) return dariLama;
+  const r = ringkasDokInvoice(daftar);
+  if (["invoice", "invoiceDate", "pl", "plTanggal"].every((k) => r[k] === lama[k])) return daftar;
+  const tglSama = r.invoiceDate === lama.invoiceDate;
+  const plSama = r.pl === lama.pl;
+  const plTglSama = r.plTanggal === lama.plTanggal;
+  return dariLama.map((d, i) => {
+    const x = d.nomor && daftar.find((o) => kunciInvoice(o.nomor) === kunciInvoice(d.nomor));
+    if (!x) return d;
+    return {
+      nomor: d.nomor,
+      tanggal: tglSama || i ? x.tanggal : d.tanggal,
+      pl: plSama ? x.pl : d.pl || x.pl,
+      plTanggal: plTglSama || i ? x.plTanggal : d.plTanggal,
+    };
+  });
+}
+
+// Daftar invoice sebuah jadwal: s.dokInvoice (disusun saat dimuat / dari form), atau dari kolom lama
+function dokInvoiceJadwal(s) {
+  if (s && Array.isArray(s.dokInvoice)) return rapikanDokInvoice(s.dokInvoice);
+  return susunDokInvoice(null, s);
+}
+
+/* Dokumen 380 & 217 satu berkas (draft CEISA, PIB / PEB) -> pasangan:
+   Packing List bernomor sama dengan invoicenya dulu, sisanya menurut
+   urutan; Packing List yang tersisa jadi baris sendiri. */
+function pasangkanInvoicePl(invoices, pls) {
+  const isi = (d) => d && (teksInvoice(d.nomor) || tanggalInvoice(d.tanggal));
+  const daftarPl = (pls || []).filter(isi);
+  const out = (invoices || []).filter(isi).map((d) => ({ nomor: d.nomor, tanggal: d.tanggal, pl: "", plTanggal: "" }));
+  const terpakai = new Set();
+  const pasang = (o, j) => {
+    terpakai.add(j);
+    o.pl = daftarPl[j].nomor;
+    o.plTanggal = daftarPl[j].tanggal;
+  };
+  out.forEach((o) => {
+    const k = kunciInvoice(o.nomor);
+    const j = k ? daftarPl.findIndex((p, x) => !terpakai.has(x) && kunciInvoice(p.nomor) === k) : -1;
+    if (j >= 0) pasang(o, j);
+  });
+  out.forEach((o) => {
+    if (o.pl) return;
+    const j = daftarPl.findIndex((p, x) => !terpakai.has(x));
+    if (j >= 0) pasang(o, j);
+  });
+  daftarPl.forEach((p, x) => {
+    if (!terpakai.has(x)) out.push({ nomor: "", tanggal: "", pl: p.nomor, plTanggal: p.tanggal });
+  });
+  return rapikanDokInvoice(out);
+}
+
+/* INVOICE TIAP BARANG: kunci invoice per barang menurut daftar invoice
+   (dokInvoiceJadwal / form). Barang satu invoice berurutan -- Seri Barang
+   mengikuti urutan invoice -- jadi barang yang belum ditandai mengikuti
+   tetangganya:
+     - satu invoice (atau tanpa daftar): tidak ada yang ditandai ("");
+     - tidak satu pun barang ditandai: semuanya "" (pembagiannya belum
+       diketahui -- templat salin menulis nomornya satu per baris);
+     - sekelompok barang tanpa tanda: invoice YANG BELUM PUNYA BARANG di
+       antara kedua tetangganya menurut urutan daftar (barang invoice
+       ke-2 yang datang dari draft CEISA sesudah barang invoice ke-1 dari
+       CIPL); kalau tidak ada, invoice barang sebelumnya (barang tambahan
+       di tengah kelompok) -- atau sesudahnya, untuk kelompok paling awal.
+   Tanda yang bukan nomor di daftar dianggap belum ditandai. */
+function kunciInvoiceBarang(items, daftar) {
+  const kunci = [];
+  (daftar || []).forEach((d) => {
+    const k = kunciInvoice(d && d.nomor);
+    if (k && !kunci.includes(k)) kunci.push(k);
+  });
+  const barang = items || [];
+  if (kunci.length < 2) return barang.map(() => "");
+  const tanda = barang.map((it) => {
+    const k = kunciInvoice(it && it.invoiceNomor);
+    return kunci.includes(k) ? k : "";
+  });
+  if (!tanda.some(Boolean)) return tanda;
+  const punya = new Set(tanda.filter(Boolean));
+  const hasil = tanda.slice();
+  for (let i = 0; i < hasil.length; ) {
+    if (hasil[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < tanda.length && !tanda[j]) j++;
+    const sebelum = i > 0 ? hasil[i - 1] : "";
+    const sesudah = j < tanda.length ? tanda[j] : "";
+    const dari = sebelum ? kunci.indexOf(sebelum) + 1 : 0;
+    const sampai = sesudah ? kunci.indexOf(sesudah) : kunci.length;
+    const calon = kunci.slice(dari, Math.max(dari, sampai)).find((k) => !punya.has(k));
+    if (calon) punya.add(calon);
+    const isi = calon || sebelum || sesudah;
+    for (let x = i; x < j; x++) hasil[x] = isi;
+    i = j;
+  }
+  return hasil;
+}
+
+// Nomor invoice (seperti tertulis di daftar) untuk sebuah kunci
+function nomorInvoiceDariKunci(daftar, k) {
+  const d = k && (daftar || []).find((x) => kunciInvoice(x.nomor) === k);
+  return d ? d.nomor : "";
+}
+
+/* Barang yang disimpan: tanda invoicenya dirapikan (kunciInvoiceBarang)
+   dan ditulis sebagai nomor seperti di daftar. Jadwal satu invoice tidak
+   menandai barangnya -- kolom invoice_nomor tetap kosong, jadi database
+   yang belum dimigrasi pun tidak perlu menolaknya. */
+function tandaiInvoiceBarang(items, daftar) {
+  const tanda = kunciInvoiceBarang(items, daftar);
+  return (items || []).map((it, i) => Object.assign({}, it, { invoiceNomor: nomorInvoiceDariKunci(daftar, tanda[i]) }));
+}
+
+/* KOLOM NO. INVOICE TEMPLAT SALIN & BULK EXCEL -- satu nomor per sel,
+   tanpa baris baru di dalam sel:
+     - satu invoice: nomornya di baris barang pertama (seperti dulu);
+     - beberapa invoice: nomor tiap invoice HANYA di baris barang pertama
+       kelompoknya (kunciInvoiceBarang), baris lain kosong. Invoice yang
+       barangnya belum ditandai ditulis di baris kosong berikutnya, satu
+       per baris -- baris tambahan kalau barangnya kurang.
+   Hasil: teks per baris lembar (bisa lebih panjang dari daftar barang). */
+function kolomInvoiceSalin(s, items) {
+  const daftar = dokInvoiceJadwal(s).filter((d) => d.nomor);
+  const barang = items || [];
+  // Satu invoice: baris barang pertama saja (tanpa barang: tidak ada baris, seperti dulu)
+  if (daftar.length < 2) return barang.length ? [daftar.length ? daftar[0].nomor : teksInvoice(s && s.invoice)] : [];
+  const tanda = kunciInvoiceBarang(barang, daftar);
+  const out = barang.map(() => "");
+  const tertulis = new Set();
+  tanda.forEach((k, i) => {
+    if (!k || (i > 0 && tanda[i - 1] === k)) return;
+    out[i] = nomorInvoiceDariKunci(daftar, k);
+    tertulis.add(k);
+  });
+  let j = 0;
+  daftar.forEach((d) => {
+    const k = kunciInvoice(d.nomor);
+    if (tertulis.has(k)) return;
+    while (j < out.length && out[j]) j++;
+    out[j] = d.nomor;
+    tertulis.add(k);
+  });
+  return out;
 }
 
 /* Satu baris kolom FASILITAS / SKB (templat salin & Bulk Excel) kembali

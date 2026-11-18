@@ -472,6 +472,8 @@ function renderItemTable() {
   if (typeof perbaruiTawaranSamakan === "function") perbaruiTawaranSamakan();
   // Bilah SKB PPh bawaan: tombol "Pasang ke semua barang" mengikuti isi daftar (skb-bawaan.js)
   if (typeof skbBawaanGambar === "function") skbBawaanGambar();
+  // Barang tiap invoice di tab Dokumen & Umum (invoice-form.js) mengikuti isi tabel
+  if (typeof segarkanRentangInvoice === "function") segarkanRentangInvoice();
 }
 $("#itemTableBody").addEventListener("input", (e) => {
   const tr = e.target.closest("tr");

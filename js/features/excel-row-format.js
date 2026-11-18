@@ -141,6 +141,10 @@ function buildExcelCopyRows(s, formatter) {
   const items = s.items || [];
   const facilitiesSummary = shipmentFacilitiesSummary(items).split("\n");
   const piBaris = barisKolomPi(s);
+  /* Kolom 26 NO. INVOICE: satu invoice di baris pertama; beberapa invoice
+     -- nomor tiap invoice di baris barang PERTAMA kelompoknya, satu nomor
+     per sel tanpa baris baru (kolomInvoiceSalin, helpers.js). */
+  const invoiceBaris = kolomInvoiceSalin(s, items);
 
   const masterBL = (s.masterBL || "").trim();
   const houseBL = (s.houseBL || "").trim();
@@ -167,9 +171,9 @@ function buildExcelCopyRows(s, formatter) {
     21,
     22, // BEA MASUK, PPN, PPH, TOTAL BM+PDRI
     // 24 (FASILITAS/SKB) SENGAJA TIDAK di sini lagi — SKB sekarang per barang
-    26,
+    // 26 (NO. INVOICE) juga tidak: per kelompok barang invoicenya (invoiceBaris)
     27,
-    28, // NO. INVOICE, VESSEL, PACKAGE
+    28, // VESSEL, PACKAGE
   ];
 
   function buildRowForItem(it, idx) {
@@ -231,7 +235,7 @@ function buildExcelCopyRows(s, formatter) {
       formatter.text(piBaris[idx] || ""),
       formatter.text(facilitiesSummary[idx] || ""), // 24 -- satu dokumen per baris juga
       formatter.blank, // 25 BL/AWB — diisi terpisah di bawah
-      formatter.text(s.invoice), // 26 NO. INVOICE / DEL.NOTE
+      formatter.text(invoiceBaris[idx] || ""), // 26 NO. INVOICE / DEL.NOTE -- invoice kelompok barang ini
       formatter.vessel(s), // 27 VESSEL (salin: udara No Flight saja; Bulk: nama + nomor)
       formatter.packageNum(s.package), // 28 PACKAGE
     ];
@@ -241,11 +245,12 @@ function buildExcelCopyRows(s, formatter) {
   }
 
   const rows = items.map((it, idx) => buildRowForItem(it, idx));
-  // Dokumen PI / fasilitas lebih banyak dari barangnya: baris tambahan berisi kolom itu saja
-  while (rows.length < Math.max(facilitiesSummary.length, piBaris.length)) {
+  // Dokumen PI / fasilitas / invoice lebih banyak dari barangnya: baris tambahan berisi kolom itu saja
+  while (rows.length < Math.max(facilitiesSummary.length, piBaris.length, invoiceBaris.length)) {
     const blankRow = new Array(29).fill(formatter.blank);
     blankRow[23] = formatter.text(piBaris[rows.length] || "");
     blankRow[24] = formatter.text(facilitiesSummary[rows.length] || "");
+    blankRow[26] = formatter.text(invoiceBaris[rows.length] || "");
     rows.push(blankRow);
   }
 

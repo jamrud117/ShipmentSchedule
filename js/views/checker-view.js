@@ -161,8 +161,10 @@ async function cekTerimaBerkas(daftar, kotak) {
   const jenis = await Promise.all(files.map(cekJenisBerkas));
   const draft = files.filter((f, i) => jenis[i] === "draft");
   const cipl = files.filter((f, i) => jenis[i] === "cipl");
-  if (cipl.length > 2) {
-    showToast(tt("CIPL paling banyak dua berkas (CI dan PL). Dipakai dua yang pertama.", "A CIPL takes at most two files (CI and PL). The first two are used."), "warning");
+  /* Beberapa CIPL = beberapa invoice untuk satu PIB/PEB: dikelompokkan per
+     invoice lalu digabung (cekBacaCipl). Batasnya hanya penjaga. */
+  if (cipl.length > CEK_CIPL_MAKS) {
+    showToast(tt(`CIPL paling banyak ${CEK_CIPL_MAKS} berkas. Dipakai ${CEK_CIPL_MAKS} yang pertama.`, `At most ${CEK_CIPL_MAKS} CIPL files. The first ${CEK_CIPL_MAKS} are used.`), "warning");
   }
   if (draft.length > 1) {
     showToast(tt(`Satu draft saja yang dibandingkan: ${draft[draft.length - 1].name}.`, `Only one draft is compared: ${draft[draft.length - 1].name}.`), "warning");
@@ -173,7 +175,7 @@ async function cekTerimaBerkas(daftar, kotak) {
   if (kotak === "draft" && !draft.length && cipl.length) {
     showToast(tt("Berkas itu bukan draft CEISA (tanpa sheet HEADER & BARANG), jadi dipasang sebagai CIPL.", "That file is not a CEISA draft (no HEADER & BARANG sheets), so it was set as the CIPL."), "info");
   }
-  if (cipl.length) cekKeadaan.berkasCipl = cipl.slice(0, 2);
+  if (cipl.length) cekKeadaan.berkasCipl = cipl.slice(0, CEK_CIPL_MAKS);
   if (draft.length) {
     const baru = draft[draft.length - 1];
     // Draft lain = kiriman lain: pilihan jadwal yang lama tidak berlaku lagi
@@ -183,6 +185,13 @@ async function cekTerimaBerkas(daftar, kotak) {
   await cekProses();
 }
 
+const CEK_CIPL_MAKS = 12;
+
+/* Berkas CIPL -> satu CIPL pembanding. Satu berkas, atau CI & PL di dua
+   berkas: satu CIPL seperti dulu. Beberapa invoice untuk satu PIB/PEB:
+   dikelompokkan per invoice (kelompokCipl, import/dispatch.js -- aturan
+   yang sama dengan impor ke form), tiap kelompok dibaca, lalu digabung
+   (cekGabungCipl). */
 async function cekBacaCipl(files) {
   await ensureXLSX();
   const sumber = [];
@@ -195,7 +204,91 @@ async function cekBacaCipl(files) {
       sumber.push({ wb: XLSX.read(await f.arrayBuffer(), EximEngine.XLSX_READ_OPTS), name: f.name });
     }
   }
-  return EximEngine.readCiplSources(sumber);
+  if (sumber.length < 3 && !(sumber.length === 2 && typeof ciplSisiMesin === "function" && sumber.every((s) => ciplSisiMesin(s) === "CIPL"))) {
+    return EximEngine.readCiplSources(sumber);
+  }
+  const sisi = sumber.map((s) => (typeof ciplSisiMesin === "function" ? ciplSisiMesin(s) : ""));
+  const kelompok = typeof kelompokCipl === "function" ? kelompokCipl(sumber, sisi) : sumber.map((s) => [s]);
+  return cekGabungCipl(kelompok.map((grup) => EximEngine.readCiplSources(grup)));
+}
+
+/* BEBERAPA CIPL (beberapa invoice satu PIB/PEB) -> SATU CIPL pembanding:
+   barang disambung menurut urutan invoicenya (nomor barang 1, 2, 3, ...
+   lanjut), total nilai / NW / GW / kemasan dijumlahkan -- aturan yang
+   sama dengan satu CIPL: total = jumlah barangnya. Isian kepala dari CIPL
+   pertama. Nomor & tanggal Invoice dan Packing List dibandingkan per
+   invoice (_grup, cekGantiBarisDokumenCipl). */
+function cekGabungCipl(daftar) {
+  if (daftar.length < 2) return daftar[0];
+  const [a] = daftar;
+  const jumlah = (k) => (daftar.every((c) => c[k] != null && isFinite(Number(c[k]))) ? roundNum(daftar.reduce((n, c) => n + Number(c[k]), 0), 4) : null);
+  let no = 0;
+  const items = [].concat(...daftar.map((c) => (c.items || []).map((it) => Object.assign({}, it, { no: String(++no), _invoice: c.invoice_no }))));
+  const satuan = [...new Set(daftar.map((c) => String(c.package_unit || "").trim().toUpperCase()).filter(Boolean))];
+  const hasil = Object.assign({}, a, {
+    invoice_no: daftar.map((c) => c.invoice_no).filter(Boolean).join(", "),
+    packing_no: daftar.map((c) => c.packing_no).filter(Boolean).join(", "),
+    total_amount: jumlah("total_amount"),
+    total_net: jumlah("total_net"),
+    total_gross: jumlah("total_gross"),
+    packages: satuan.length <= 1 ? jumlah("packages") : null,
+    items,
+    warnings: [].concat(...daftar.map((c) => c.warnings || [])),
+    sourceFormat: [...new Set(daftar.map((c) => c.sourceFormat).filter(Boolean))].join(" + "),
+    _grup: daftar,
+  });
+  ["net", "gross"].forEach((k) => {
+    if (daftar.some((c) => c[`total_${k}_source`] === "PRINTED_TOTAL")) hasil[`total_${k}_source`] = "PRINTED_TOTAL";
+    hasil[`total_${k}_printed`] = jumlah(`total_${k}_printed`);
+  });
+  return hasil;
+}
+
+/* Baris Invoice & Packing List mesin untuk CIPL gabungan: satu set per
+   invoice, dokumen 380 / 217 dicari menurut NOMOR-nya (bukan dokumen
+   pertama), lalu dokumen draft yang tidak dimiliki CIPL mana pun. Nama
+   isiannya tetap ("Invoice Number", ...) supaya isian jadwal tetap
+   menggantikannya (cekRujukJadwal). */
+const CEK_ISIAN_DOK_CIPL = ["Invoice Number", "Invoice Date", "Packing List Number", "Packing List Date"];
+function cekGantiBarisDokumenCipl(checks, cipl, decl) {
+  const grup = cipl && cipl._grup;
+  if (!grup || grup.length < 2) return checks;
+  const E = EximEngine;
+  const dok = (kode) => (decl.documents || []).filter((d) => String(d.code == null ? "" : d.code).trim() === kode);
+  const terpakai = { 380: new Set(), 217: new Set() };
+  const cari = (kode, nomor) => {
+    const i = dok(kode).findIndex((d, k) => !terpakai[kode].has(k) && kunciAlnum(d.number) && kunciAlnum(d.number) === kunciAlnum(nomor));
+    if (i < 0) return null;
+    terpakai[kode].add(i);
+    return dok(kode)[i];
+  };
+  const baris = (field, kiri, kanan, catatan) => Object.assign(E.compareText(field, kiri || "", kanan || "", "DOCUMENT"), { expected_note: catatan });
+  const rows = [];
+  grup.forEach((g, i) => {
+    const ke = tt(`Invoice ${i + 1} dari ${grup.length}.`, `Invoice ${i + 1} of ${grup.length}.`);
+    const inv = cari("380", g.invoice_no);
+    const pl = cari("217", g.packing_no);
+    const ket = (d, kode, label) => (d ? `CEISA kode dokumen ${kode}.` : tt(`Dokumen kode ${kode} (${label}) bernomor ini tidak ada di sheet DOKUMEN draft.`, `No document code ${kode} (${label}) with this number in the draft's DOKUMEN sheet.`));
+    const plCadangan = g.packing_source === "INVOICE_FALLBACK" ? tt("Sheet PL tidak mencantumkan nomor dan tanggal sendiri; dipakai nomor dan tanggal invoice dari CI.", "The PL sheet states no number and date of its own; the CI's invoice number and date are used.") : "";
+    rows.push(
+      baris("Invoice Number", g.invoice_no, inv && inv.number, [ke, ket(inv, "380", "Invoice")].join(" ")),
+      baris("Invoice Date", g.invoice_date, inv ? E.normalizeDate(inv.date || "") : "", [ke, ket(inv, "380", "Invoice")].join(" ")),
+      baris("Packing List Number", g.packing_no, pl && pl.number, [ke, ket(pl, "217", "Packing List"), plCadangan].filter(Boolean).join(" ")),
+      baris("Packing List Date", g.packing_date, pl ? E.normalizeDate(pl.date || "") : "", [ke, ket(pl, "217", "Packing List"), plCadangan].filter(Boolean).join(" ")),
+    );
+  });
+  [
+    ["380", "Invoice Number"],
+    ["217", "Packing List Number"],
+  ].forEach(([kode, field]) =>
+    dok(kode).forEach((d, k) => {
+      if (!terpakai[kode].has(k)) rows.push(baris(field, "", d.number, tt("Ada di draft, tidak ada di CIPL yang dipilih.", "In the draft, not in the selected CIPLs.")));
+    }),
+  );
+  const awal = checks.findIndex((x) => CEK_ISIAN_DOK_CIPL.includes(x.field));
+  const sisa = checks.filter((x) => !CEK_ISIAN_DOK_CIPL.includes(x.field));
+  sisa.splice(awal < 0 ? 0 : awal, 0, ...rows);
+  return sisa;
 }
 
 /* Draft dibaca DUA kali dari workbook yang sama: oleh mesin (aturan
@@ -321,7 +414,8 @@ function cekPetunjuk() {
     if (kunci.length >= 4) set.add(kunci);
   };
   if (cipl) {
-    tambah(p.invoice, cipl.invoice_no);
+    // CIPL gabungan (beberapa invoice): tiap nomor invoicenya
+    (cipl._grup || [cipl]).forEach((c) => tambah(p.invoice, c.invoice_no));
     [cipl.master_bl, cipl.house_bl, cipl.bl_no].forEach((v) => tambah(p.bl, v));
   }
   if (decl) {
@@ -1155,7 +1249,67 @@ function cekPebPihakKetiga(s) {
    pos); Pemilik Barang sama dengan Eksportir, KECUALI Third Party
    Invoice: Pemilik Barang hanya dari isian Data PEB jadwal (tanpa data
    bawaan perusahaan). Isian Data PEB yang tersimpan selalu menang. */
-function cekBarisDataPabean(s, bc, isPeb) {
+/* PACKING LIST SEBAGAI DAFTAR -- jadwal berinvoice lebih dari satu, atau
+   draft dengan lebih dari satu dokumen 217. Tiap Packing List jadwal
+   (yang dipakai dua invoice sekali saja) harus ada di draft, dan
+   sebaliknya; tanggalnya dibandingkan per nomor (cekBarisTanggalDokumen).
+   Invoice tanpa Packing List sendiri: nomor & tanggal invoicenya --
+   HANYA DUGAAN (kebiasaan CIPL): yang tidak ada di draft cukup disebut,
+   bukan MISMATCH. null = cukup satu isian Data PIB/PEB seperti dulu. */
+function cekBarisDaftarPackingList(s, decl, pembuat) {
+  const daftar = dokInvoiceJadwal(s);
+  const dok217 = cekDokumenKode(decl, "217");
+  if (daftar.filter((d) => d.nomor).length < 2 && dok217.length < 2) return null;
+  const pl = [];
+  daftar.forEach((d) => {
+    const dugaan = !d.pl;
+    const nomor = d.pl || d.nomor;
+    if (kunciAlnum(nomor).length < 3 || pl.some((x) => kunciAlnum(x.nomor) === kunciAlnum(nomor))) return;
+    pl.push({ nomor, tanggal: d.pl ? d.plTanggal : d.tanggal, dugaan });
+  });
+  const tegas = pl.filter((x) => !x.dugaan);
+  const draft = dok217.map((d) => ({ teks: d.number, kunci: kunciAlnum(d.number) })).filter((x) => x.kunci);
+  const teksJadwal = pl.map((x) => x.nomor).join(", ");
+  const teksDraft = draft.map((x) => x.teks).join(", ");
+  const rows = [];
+  const baris = (field, status, kiri, kanan, catatan) => {
+    const r = pembuat("DOCUMENT", "packingList", field)(status, kiri, kanan, catatan);
+    // Hanya dugaan: Packing List yang tercetak di CIPL tetap didahulukan (cekRujukJadwal)
+    r.dariJadwal = tegas.length > 0;
+    rows.push(r);
+  };
+  const fieldNomor = tt("No. Packing List", "Packing List No.");
+  const catatanDugaan = pl.some((x) => x.dugaan)
+    ? tt("Invoice tanpa Packing List sendiri di jadwal dibandingkan dengan nomor & tanggal invoicenya.", "Invoices without their own Packing List on the schedule are compared with the invoice number & date.")
+    : "";
+  if (pl.length || draft.length) {
+    if (!pl.length) baris(fieldNomor, "INFO", "", teksDraft, tt("Belum diisi di jadwal.", "Not filled in on the schedule."));
+    else if (!draft.length) baris(fieldNomor, "INFO", teksJadwal, "", tt("Draft tidak mencantumkan packing list (kode dokumen 217).", "The draft does not state the packing list (document code 217)."));
+    else {
+      const ada = (x) => draft.some((y) => y.kunci === kunciAlnum(x.nomor));
+      const kurang = tegas.filter((x) => !ada(x));
+      const dugaanKurang = pl.filter((x) => x.dugaan && !ada(x));
+      const lebih = draft.filter((y) => !pl.some((x) => kunciAlnum(x.nomor) === y.kunci));
+      const catatan = [];
+      if (kurang.length) catatan.push(tt(`Tidak ada di draft: ${kurang.map((x) => x.nomor).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.nomor).join(", ")}.`));
+      if (lebih.length) catatan.push(tt(`Tidak ada di jadwal: ${lebih.map((x) => x.teks).join(", ")}.`, `Not on the schedule: ${lebih.map((x) => x.teks).join(", ")}.`));
+      if (dugaanKurang.length)
+        catatan.push(
+          tt(
+            `${dugaanKurang.map((x) => x.nomor).join(", ")} tidak dicatat sebagai Packing List di jadwal dan tidak ada di draft — tidak dihitung beda.`,
+            `${dugaanKurang.map((x) => x.nomor).join(", ")} is not recorded as a Packing List on the schedule and is not in the draft — not counted as a difference.`,
+          ),
+        );
+      if (catatanDugaan) catatan.push(catatanDugaan);
+      baris(fieldNomor, kurang.length || lebih.length ? "MISMATCH" : "MATCH", teksJadwal, teksDraft, catatan.join(" ") || tt("Kode dokumen 217.", "Document code 217."));
+    }
+  }
+  const tanggal = cekBarisTanggalDokumen(pl.filter((x) => !x.dugaan || draft.some((y) => y.kunci === kunciAlnum(x.nomor))), dok217, "217");
+  if (tanggal) baris(tt("Tanggal Packing List", "Packing List Date"), tanggal[0], tanggal[1], tanggal[2], [tanggal[3], catatanDugaan].filter(Boolean).join(" "));
+  return rows;
+}
+
+function cekBarisDataPabean(s, bc, isPeb, decl) {
   if (!bc || !bc.lembar) return [];
   const mode = isPeb ? "export" : "import";
   const jadwal = dpEfektif(Object.assign({}, s, { mode }));
@@ -1176,8 +1330,13 @@ function cekBarisDataPabean(s, bc, isPeb) {
      dengan CIPL tanpa nomor Packing List sendiri (mesin EXIM). */
   const invoiceTunggal = cekPecahNomor(s.invoice).length === 1;
   const plDariInvoice = { packingListNomor: invoiceTunggal ? String(s.invoice).trim() : "", packingListTanggal: invoiceTunggal ? String(s.invoiceDate || "").slice(0, 10) : "" };
+  /* Beberapa invoice (jadwal) atau beberapa dokumen 217 (draft): Packing
+     List dibandingkan sebagai DAFTAR (cekBarisDaftarPackingList), bukan
+     satu isian Data PIB/PEB. */
+  const daftarPl = decl ? cekBarisDaftarPackingList(s, decl, pembuat) : null;
   DP_GRUP.forEach((g) => g.isian.forEach((f) => {
     if (!dpBerlaku(g, mode) || !dpBerlaku(f, mode) || CEK_DP_TANPA.has(f.k)) return;
+    if (daftarPl && /^packingList/.test(f.k)) return;
     const kunci = /^packingList/.test(f.k) ? "packingList" : `dp:${f.k}`;
     const pl = f.k in plDariInvoice && !dpAda(jadwal[f.k]) && dpAda(plDariInvoice[f.k]);
     const n = rows.length;
@@ -1190,6 +1349,7 @@ function cekBarisDataPabean(s, bc, isPeb) {
       expected_note: [rows[n].expected_note, tt("Packing List tidak dicatat sendiri di jadwal: dibandingkan dengan invoice jadwal.", "The schedule records no Packing List of its own: compared with the schedule's invoice.")].filter(Boolean).join(" "),
     });
   }));
+  if (daftarPl) rows.push(...daftarPl);
   // Nama pengirim/penjual (Import) & penerima/pembeli (Export) yang sama dengan Supplier/Customer sudah diperiksa baris pihak
   const namaParty = EximEngine.normName(s.party || "");
   const samaNama = (x, y) => EximEngine.normName(x) === EximEngine.normName(y);
@@ -1618,36 +1778,48 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     else infoSaja("docNo", field, s.docNo, f.docNo, kunciAlnum(f.docNo) === kunciAlnum(s.docNo));
   }
 
-  // Invoice: semua nomor di jadwal harus ada sebagai dokumen 380, dan sebaliknya
+  /* Invoice: semua nomor di jadwal -- satu PIB/PEB bisa memakai beberapa
+     invoice (dokInvoiceJadwal, helpers.js) -- harus ada sebagai dokumen
+     380, dan sebaliknya. */
+  const daftarInvoice = dokInvoiceJadwal(s);
   {
     const field = tt("No. Invoice", "Invoice No.");
-    const jadwal = cekPecahNomor(s.invoice);
+    const jadwal = cekNomorDokumen(daftarInvoice);
+    const teksJadwal = jadwal.map((x) => x.teks).join(", ");
     const draft = (decl.documents || []).filter((d) => String(d.code).trim() === "380").map((d) => ({ teks: d.number, kunci: kunciAlnum(d.number) }));
     const teksDraft = draft.map((x) => x.teks).join(", ");
     if (jadwal.length || draft.length) {
       if (!jadwal.length) kosong("DOCUMENT", "invoice", field, teksDraft);
-      else if (!draft.length) tanpaDraft("DOCUMENT", "invoice", field, s.invoice, tt("invoice (kode dokumen 380)", "invoice (document code 380)"));
+      else if (!draft.length) tanpaDraft("DOCUMENT", "invoice", field, teksJadwal, tt("invoice (kode dokumen 380)", "invoice (document code 380)"));
       else {
         const kurang = jadwal.filter((x) => !draft.some((y) => y.kunci === x.kunci));
         const lebih = draft.filter((y) => !jadwal.some((x) => x.kunci === y.kunci));
         const catatan = [];
         if (kurang.length) catatan.push(tt(`Tidak ada di draft: ${kurang.map((x) => x.teks).join(", ")}.`, `Not in the draft: ${kurang.map((x) => x.teks).join(", ")}.`));
         if (lebih.length) catatan.push(tt(`Tidak ada di jadwal: ${lebih.map((x) => x.teks).join(", ")}.`, `Not on the schedule: ${lebih.map((x) => x.teks).join(", ")}.`));
-        tambah("DOCUMENT", "invoice", field, catatan.length ? "MISMATCH" : "MATCH", s.invoice, teksDraft, catatan.join(" ") || tt("Kode dokumen 380.", "Document code 380."));
+        tambah("DOCUMENT", "invoice", field, catatan.length ? "MISMATCH" : "MATCH", teksJadwal, teksDraft, catatan.join(" ") || tt("Kode dokumen 380.", "Document code 380."));
       }
     }
   }
 
-  // Tanggal invoice: jadwal vs tanggal dokumen 380
+  /* Tanggal invoice: tiap invoice jadwal yang bertanggal vs dokumen 380
+     bernomor sama (cekBarisTanggalDokumen -- aturan yang sama dengan PI &
+     LS). Satu invoice: tanggalnya vs dokumen 380 pertama, seperti dulu. */
   {
     const field = tt("Tanggal Invoice", "Invoice Date");
-    const dok = (decl.documents || []).find((d) => String(d.code).trim() === "380");
-    const draft = dok ? E.normalizeDate(dok.date || "") : "";
-    const jadwal = String(s.invoiceDate || "").slice(0, 10);
-    if (jadwal || draft) {
-      if (!jadwal) kosong("DOCUMENT", "invoiceDate", field, draft);
-      else if (!draft) tanpaDraft("DOCUMENT", "invoiceDate", field, jadwal, tt("tanggal invoice (dokumen 380)", "invoice date (document 380)"));
-      else tambah("DOCUMENT", "invoiceDate", field, jadwal === draft ? "MATCH" : "MISMATCH", jadwal, draft, tt("Kode dokumen 380.", "Document code 380."));
+    const dok380 = cekDokumenKode(decl, "380");
+    if (daftarInvoice.filter((d) => d.nomor).length > 1 || dok380.length > 1) {
+      const hasil = cekBarisTanggalDokumen(daftarInvoice.map((d) => ({ nomor: d.nomor, tanggal: d.tanggal })), dok380, "380");
+      if (hasil) tambah("DOCUMENT", "invoiceDate", field, hasil[0], hasil[1], hasil[2], hasil[3]);
+    } else {
+      const dok = dok380[0];
+      const draft = dok ? E.normalizeDate(dok.date || "") : "";
+      const jadwal = String((daftarInvoice[0] || {}).tanggal || s.invoiceDate || "").slice(0, 10);
+      if (jadwal || draft) {
+        if (!jadwal) kosong("DOCUMENT", "invoiceDate", field, draft);
+        else if (!draft) tanpaDraft("DOCUMENT", "invoiceDate", field, jadwal, tt("tanggal invoice (dokumen 380)", "invoice date (document 380)"));
+        else tambah("DOCUMENT", "invoiceDate", field, jadwal === draft ? "MATCH" : "MISMATCH", jadwal, draft, tt("Kode dokumen 380.", "Document code 380."));
+      }
     }
   }
 
@@ -1872,7 +2044,7 @@ function cekBarisJadwal(s, decl, bc, opsi) {
     else if (etd) tanpaDraft("TRANSPORT", "etd", field, etd, tt("tanggal ekspor", "export date"));
   }
   // Pungutan BM, PPN & PPh (isian jadwal, tidak dihitung ulang), dokumen lain, lalu Data PIB/PEB (halaman Data PIB/PEB form jadwal, termasuk nilai bawaannya)
-  return rows.concat(cekBarisRupiah(s, bc, isPeb), cekBarisDokumenLain(s, decl), cekBarisDataPabean(s, bc, isPeb));
+  return rows.concat(cekBarisRupiah(s, bc, isPeb), cekBarisDokumenLain(s, decl), cekBarisDataPabean(s, bc, isPeb, decl));
 }
 
 /* PUNGUTAN PIB (37 BM, 41 PPN, 43 PPh, 44 TOTAL) -- kolom Dibayar &
@@ -2581,6 +2753,8 @@ async function cekJalankan() {
       // Barang ke-n jadwal / CIPL vs Seri Barang n draft -- urutan acuan tidak diubah
       const pembanding = gabung ? gabung.cipl : cipl;
       res = E.runCheck(pembanding, decl, extra);
+      // Beberapa CIPL: Invoice & Packing List per invoice, bukan gabungan nomornya (cekGabungCipl)
+      res.checks = cekGantiBarisDokumenCipl(res.checks, cipl, decl);
       if (gabung) cekTandaiBarangJadwal(res, gabung, decl, bc);
       res.checks = cekRujukJadwal(res.checks, barisJadwal, pembanding, !!s);
     } else res = { type: decl.type, checks: E.blChecks(decl, extra, decl.type === "PEB").concat(cekBarisBarangJadwal(s, decl, resolve, bc), barisJadwal), cipl: null, decl };

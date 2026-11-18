@@ -165,6 +165,22 @@ function shipmentToRow(payload, mode) {
     const dp = rapikanDataPabean(payload.dataPabean);
     row.data_pabean = Object.keys(dp).length ? dp : null;
   }
+  /* INVOICE & PACKING LIST (core/helpers.js: rapikanDokInvoice) -- daftar
+     di kolom jsonb dokumen_invoice (migration-dokumen-invoice.sql;
+     KOLOM_OPSIONAL) hanya bila invoicenya lebih dari satu; satu invoice =
+     NULL, seperti sebelum daftarnya ada. Kolom lama invoice / invoice_date
+     & Packing List di data_pabean selalu ditulis dari ringkasannya. */
+  if ("dokInvoice" in payload) {
+    const daftar = rapikanDokInvoice(payload.dokInvoice);
+    const r = ringkasDokInvoice(daftar);
+    row.dokumen_invoice = daftar.length > 1 ? daftar : null;
+    row.invoice = r.invoice || null;
+    row.invoice_date = r.invoiceDate || null;
+    if ("dataPabean" in payload) {
+      const dp = rapikanDataPabean(Object.assign({}, row.data_pabean, { packingListNomor: r.pl, packingListTanggal: r.plTanggal }));
+      row.data_pabean = Object.keys(dp).length ? dp : null;
+    }
+  }
   return row;
 }
 
@@ -189,6 +205,10 @@ function rowToShipment(row) {
   Object.assign(s, ringkasDokPelengkap(s.dokPelengkap));
   s.dataPabean = rapikanDataPabean(row.data_pabean);
   pindahkanPackingList(s);
+  /* Daftar invoice & Packing List: kolom dokumen_invoice (dua invoice
+     atau lebih), atau dari kolom lama -- yang menang kalau diubah dari
+     luar (susunDokInvoice, helpers.js). */
+  s.dokInvoice = susunDokInvoice(row.dokumen_invoice, s);
   s.items = urutkanBarisBarang(row.items || []).map(rowToItem);
   // Terminal transit diurutkan berdasar "seq" di sini
   s.routeStops = (row.routeStops || [])
@@ -244,6 +264,9 @@ function itemToRow(it, shipmentId) {
     // PI barang ini & nomor urutnya di dokumen PI (migration-dokumen-pelengkap.sql)
     pi_nomor: String(it.piNomor || "").trim(),
     pi_no_item: String(it.piNoItem || "").trim(),
+    /* Invoice barang ini -- hanya jadwal berinvoice lebih dari satu
+       (tandaiInvoiceBarang, helpers.js; migration-dokumen-invoice.sql) */
+    invoice_nomor: String(it.invoiceNomor || "").trim(),
     // Fasilitas per barang — SKB & COO (tersimpan "E-COO") 1 array yang sama
     skb: sanitizeSkbList(it.skb),
     // Data PIB/PEB per barang (core/data-pabean.js; migration-data-pabean.sql)
@@ -297,6 +320,7 @@ function rowToItem(row) {
     packingUnit: row.packing_unit || "",
     piNomor: row.pi_nomor || "",
     piNoItem: row.pi_no_item || "",
+    invoiceNomor: row.invoice_nomor || "",
     skb: sanitizeSkbList(row.skb),
     dataPabean: rapikanDataPabeanBarang(row.data_pabean),
     _facOpen: false,

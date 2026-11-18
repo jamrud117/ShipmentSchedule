@@ -316,6 +316,14 @@ function parsePebPdfText(text, pagesItems) {
     houseBLDate = "";
   }
   const invoiceDate = invoiceRow ? pebDateToISO(invoiceRow.tanggalDMY) : "";
+  /* Semua invoice & Packing List di daftar dokumen PEB -> baris Invoice &
+     Packing List form (pasangkanInvoicePl, helpers.js). Tanpa baris invoice
+     di daftarnya: invoice dari field 30 saja. */
+  const barisInvoice = docRows.filter((r) => /^INVOICE$/i.test(r.label)).map((r) => ({ nomor: r.nomor, tanggal: pebDateToISO(r.tanggalDMY) }));
+  const dokInvoice = pasangkanInvoicePl(
+    barisInvoice.length ? barisInvoice : [{ nomor: invoice, tanggal: invoiceDate }],
+    docRows.filter((r) => /PACKING\s*LIST/i.test(r.label)).map((r) => ({ nomor: r.nomor, tanggal: pebDateToISO(r.tanggalDMY) })),
+  );
 
   const skbList = skbRows.map((r) => {
     const tm = /\(SKB\)\s*([A-Z%0-9]*)/i.exec(r.label);
@@ -412,6 +420,7 @@ function parsePebPdfText(text, pagesItems) {
       forwarder,
       invoice,
       invoiceDate,
+      dokInvoice,
       masterBL,
       masterBLDate,
       houseBL,

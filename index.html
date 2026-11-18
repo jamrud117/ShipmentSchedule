@@ -1107,7 +1107,7 @@
                 <span class="cek-drop-teks">
                   <span class="cek-drop-judul">CIPL</span>
                   <span class="cek-drop-nama">Commercial Invoice &amp; Packing List</span>
-                  <span class="cek-drop-ket">Excel atau PDF — satu berkas, atau dua (CI dan PL).</span>
+                  <span class="cek-drop-ket" data-en="Excel or PDF — one file, or CI and PL separately; several invoices for one PIB/PEB at once.">Excel atau PDF — satu berkas, atau CI dan PL terpisah; beberapa invoice satu PIB/PEB sekaligus.</span>
                 </span>
               </label>
               <label class="cek-drop" id="cekDropDraft" for="cekFileDraft" data-cek-kotak="draft">
@@ -3538,6 +3538,18 @@
                    selebar baris tepat di bawah pasangannya (tandaiCiplBeda,
                    form-router.js). Tidak mencegah simpan. -->
               <div class="s12 form-text-note fg-note cipl-beda-ket" id="ciplBedaKet" role="status" hidden></div>
+              <!-- Satu PIB/PEB bisa memakai beberapa invoice (js/features/invoice-form.js):
+                   barang milik invoice di atas -- tampil bila invoicenya lebih dari satu -- lalu
+                   Invoice & Packing List ke-2 dst. Barisnya bertambah sendiri saat impor membawa
+                   lebih dari satu invoice (draft CEISA, PIB/PEB, beberapa CIPL sekaligus). -->
+              <div class="s12 form-text-note fg-note inv-rentang-1" id="invoiceRentang1" role="status" hidden></div>
+              <div class="s12 inv-lain" id="invoiceLain">
+                <div id="invoiceLainIsi"></div>
+                <button type="button" class="dp-tambah inv-tambah" id="btnTambahInvoice">
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                  <span data-en="Add Invoice &amp; Packing List">Tambah Invoice &amp; Packing List</span>
+                </button>
+              </div>
               <div class="s6 fl-bertanggal">
                 <div>
                   <label class="form-label" id="lblMasterBL" for="fMasterBL"
@@ -5333,6 +5345,7 @@
     <script src="js/features/skb-bawaan.js"></script>
     <script src="js/features/item-samakan.js"></script>
     <script src="js/features/dok-pelengkap.js"></script>
+    <script src="js/features/invoice-form.js"></script>
     <script src="js/features/data-pabean-form.js"></script>
     <script src="js/features/data-pabean-barang.js"></script>
     <script src="js/features/notes-log.js"></script>

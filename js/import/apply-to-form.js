@@ -313,7 +313,10 @@ function preserveNamesForCeisa(newItems, oldItems, src) {
    diimpor belakangan tidak memuatnya. Yang dibawa berkas tetap dipakai.
    Yang tetap tidak dibawa memakai bawaan buku (newItem); yang dibawa
    kosong tetap kosong (draft memang tidak mengisinya). */
-const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal", "piNomor"];
+/* Invoice barang (item.invoiceNomor, jadwal berinvoice lebih dari satu)
+   juga: draft CEISA jarang menautkan 380 ke barang, jadi barang draft
+   mewarisi invoice barang lamanya yang sama namanya (dari CIPL). */
+const KOLOM_KODE_BARANG = ["kondisiBarang", "negaraAsal", "piNomor", "invoiceNomor"];
 function lengkapiKodeBarang(newItems, oldItems, lapisan) {
   const isi = (it, k) => String((it && it[k]) || "").trim();
   const lama = (oldItems || []).map((it, i) => ({ it, i })).filter((o) => KOLOM_KODE_BARANG.some((k) => isi(o.it, k)));
@@ -388,6 +391,81 @@ function preserveUnitPrices(newItems, oldItems, opsi) {
     };
   }
   return { items: newItems.map((it, i) => (pasangan[i] ? Object.assign({}, it, { harga: pasangan[i].harga }) : it)), kept, tanpaPasangan: [] };
+}
+
+/* BARANG CIPL UNTUK SEBAGIAN INVOICE JADWAL (rencana dispatch.js):
+     "tambah"   -- barang invoice baru di bawah barang yang sudah ada;
+     "perbarui" -- barang invoice CIPL ini diganti, di tempat barang
+                   pertamanya; barang invoice lain tidak disentuh.
+   Barang lama yang belum bertanda invoice (jadwal satu invoice yang
+   tersimpan, isian tangan): milik satu-satunya invoice lain bila hanya
+   ada satu; untuk "perbarui" barang lama yang namanya sama dengan barang
+   CIPL ini milik invoicenya. Kode & Data PIB/PEB per barang diwarisi
+   barang lama invoice yang sama (lengkapiKodeBarang /
+   pertahankanDataPabeanBarang); barang invoice baru hanya mewarisi kode
+   barang lain yang namanya persis sama. */
+function gabungBarangCiplInvoice(baru, lama, rencana, notes) {
+  const daftar = (typeof dokInvoiceForm === "function" ? dokInvoiceForm() : []).filter((d) => d.nomor);
+  const lamaNyata = lama.filter((it) => String(it.namaBarang || "").trim() !== "");
+  const kunciCipl = new Set(baru.map((it) => kunciInvoice(it.invoiceNomor)).filter(Boolean));
+  const lain = daftar.map((d) => kunciInvoice(d.nomor)).filter((k) => !kunciCipl.has(k));
+  let tanda = kunciInvoiceBarang(lamaNyata, daftar);
+  if (!tanda.some(Boolean)) {
+    if (rencana === "tambah") tanda = lamaNyata.map(() => (lain.length === 1 ? lain[0] : ""));
+    else {
+      const pasangan = pasangkanBarangLama(baru, lamaNyata.map((it, i) => ({ it, i })), [COCOK_NAMA, COCOK_MIRIP]);
+      tanda = lamaNyata.map((it) => {
+        const j = pasangan.indexOf(it);
+        return j >= 0 ? kunciInvoice(baru[j].invoiceNomor) : lain.length === 1 ? lain[0] : "";
+      });
+    }
+  }
+  const lamaDitandai = lamaNyata.map((it, i) => (tanda[i] ? Object.assign({}, it, { invoiceNomor: nomorInvoiceDariKunci(daftar, tanda[i]) || it.invoiceNomor }) : it));
+  const nomorCipl = [...kunciCipl].map((k) => nomorInvoiceDariKunci(daftar, k) || k).join(", ");
+  if (rencana === "tambah") {
+    const dari = lamaDitandai.length + 1;
+    const sampai = lamaDitandai.length + baru.length;
+    const rentang = dari === sampai ? String(dari) : dari + "–" + sampai;
+    notes.push(t("y.barang.invoice.ditambahkan", { nomor: nomorCipl, n: baru.length, rentang }));
+    return lamaDitandai.concat(lengkapiKodeBarang(baru, lamaDitandai, [COCOK_NAMA]));
+  }
+  const diganti = lamaDitandai.filter((it, i) => kunciCipl.has(tanda[i]));
+  const sudahAda = new Set(tanda.filter(Boolean));
+  const baruRapi = diganti.length ? pertahankanDataPabeanBarang(lengkapiKodeBarang(baru, diganti), diganti) : lengkapiKodeBarang(baru, lamaDitandai, [COCOK_NAMA]);
+  const diTempat = baruRapi.filter((it) => sudahAda.has(kunciInvoice(it.invoiceNomor)));
+  const tambahan = baruRapi.filter((it) => !sudahAda.has(kunciInvoice(it.invoiceNomor)));
+  const out = [];
+  let disisip = false;
+  lamaDitandai.forEach((it, i) => {
+    if (!kunciCipl.has(tanda[i])) return void out.push(it);
+    if (!disisip) out.push(...diTempat);
+    disisip = true;
+  });
+  if (!disisip) out.push(...diTempat);
+  out.push(...tambahan);
+  notes.push(t("y.barang.invoice.diganti", { nomor: nomorCipl, lama: diganti.length, baru: baru.length }));
+  return out;
+}
+
+/* CIPL yang barangnya tidak diterapkan (daftar barang sudah dari dokumen
+   berprioritas lebih tinggi, mis. draft CEISA): invoicenya tetap
+   ditandaikan ke barang yang sama namanya -- jadwal berinvoice lebih dari
+   satu -- supaya pembagian barang per invoice tidak perlu diisi tangan.
+   Hasil: jumlah barang yang ditandai. */
+function tandaiInvoiceDariCipl(baru) {
+  const daftar = (typeof dokInvoiceForm === "function" ? dokInvoiceForm() : []).filter((d) => d.nomor);
+  if (daftar.length < 2) return 0;
+  const lama = draftItems.map((it, i) => ({ it, i })).filter((o) => String(o.it.namaBarang || "").trim() !== "");
+  const pasangan = pasangkanBarangLama(baru, lama, [COCOK_NAMA, COCOK_MIRIP]);
+  let n = 0;
+  pasangan.forEach((o, j) => {
+    const nomor = nomorInvoiceDariKunci(daftar, kunciInvoice(baru[j].invoiceNomor));
+    if (!o || !nomor || o.invoiceNomor === nomor) return;
+    o.invoiceNomor = nomor;
+    n++;
+  });
+  if (n && typeof segarkanRentangInvoice === "function") segarkanRentangInvoice();
+  return n;
 }
 
 // Satu-satunya pintu penulisan field form dari hasil import.
@@ -490,7 +568,14 @@ function applyImportedBcData(parsed) {
   const notes = (parsed.notes || []).slice();
   const src = parsed.source;
   let filled = 0;
+  /* CIPL untuk SEBAGIAN invoice jadwal (rencana "tambah" / "perbarui",
+     dispatch.js): isian kepala jadwal yang sudah terisi tidak ditimpa --
+     satu PIB/PEB, satu kapal, satu pihak; CIPL invoice berikutnya hanya
+     melengkapi yang masih kosong. */
+  const isiKosongSaja = parsed.rencanaInvoice === "tambah" || parsed.rencanaInvoice === "perbarui";
+  const sudahTerisi = (id) => isiKosongSaja && !!$("#" + id) && String($("#" + id).value || "").trim() !== "";
   const put = (id, val, opts) => {
+    if (sudahTerisi(id)) return;
     if (setImportField(id, val, src, opts)) filled++;
   };
 
@@ -500,11 +585,9 @@ function applyImportedBcData(parsed) {
   put("fParty", resolvePartyForActiveMode(f));
   // Ejaan lain dari nama yang sudah ada di daftar Shipper/Buyer disamakan (pilih-pihak.js)
   if (typeof samakanNamaPihakForm === "function") samakanNamaPihakForm();
-  put("fInvoice", f.invoice);
-  /* Tanggal invoice: dari CIPL (pembaca lama menamainya docDate --
-     tanggal invoice, bukan tanggal SPPB), dokumen 380 draft CEISA, atau
-     lembar dokumen PIB/PEB. */
-  put("fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : ""));
+  /* Invoice & Packing List -- satu atau beberapa (entriInvoiceImpor);
+     diterapkan di bawah, sesudah Data PIB/PEB (terapkanInvoiceImpor). */
+  const entriInvoice = entriInvoiceImpor(f, src);
   /* Dokumen pelengkap: PI (959), LS (958) & Polis Asuransi (530) --
      buku Import saja, buku Export tidak diisi diam-diam -- dan dokumen
      lain ber-kode CEISA, digabung ke kartu Dokumen Pelengkap Pabean per
@@ -513,27 +596,23 @@ function applyImportedBcData(parsed) {
   /* Data PIB/PEB lengkap (kartu "Data PIB/PEB Lengkap", data-pabean-form.js):
      isian dokumen yang tidak punya kotak sendiri. Data per barang ikut di
      barangnya (item.dataPabean). */
-  if (f.dataPabean && typeof terapkanDataPabeanImpor === "function" && adaDataPabean(f.dataPabean)) {
-    terapkanDataPabeanImpor(f.dataPabean);
+  /* Packing List-nya TIDAK lewat sini: tiap PL milik invoicenya, dan
+     invoice pertama berkas belum tentu baris ke-1 form (terapkanInvoiceImpor). */
+  const dpTanpaPl = Object.assign({}, f.dataPabean);
+  delete dpTanpaPl.packingListNomor;
+  delete dpTanpaPl.packingListTanggal;
+  if (f.dataPabean && typeof terapkanDataPabeanImpor === "function" && adaDataPabean(dpTanpaPl)) {
+    terapkanDataPabeanImpor(dpTanpaPl);
     filled++;
   }
   /* INVOICE & PACKING LIST: nomor & tanggal yang dibawa berkas = isian
      MANUAL (bukan ikutan); yang kosong pasangannya mengikuti (aturan yang
-     sama dengan mengetik, form-router.js). Berkas yang membawa keduanya
-     dengan nomor / tanggal BERBEDA diberi peringatan -- CI & PL satu
+     sama dengan mengetik, form-router.js). Invoice kedua dst. jadi baris
+     berikutnya (invoice-form.js). Berkas yang membawa Invoice & Packing
+     List dengan nomor / tanggal BERBEDA diberi peringatan -- CI & PL satu
      kiriman seharusnya sama (bedaCiplDiBerkas). */
-  const bedaCipl = bedaCiplDiBerkas(f, src);
-  const dpBerkas = f.dataPabean || {};
-  [
-    ["fInvoice", f.invoice],
-    ["fInvoiceDate", f.invoiceDate || (isCiplSource(src) ? f.docDate : "")],
-    ["fPackingList", dpBerkas.packingListNomor],
-    ["fPackingListDate", dpBerkas.packingListTanggal],
-  ].forEach(([id, nilai]) => {
-    const el = $("#" + id);
-    if (el && nilai && el.value === String(nilai).trim()) delete el.dataset.ikut;
-  });
-  if (typeof lengkapiPasangan === "function") lengkapiPasangan(PASANGAN_CI_PL);
+  const bedaCipl = bedaCiplDiBerkas(f, src, entriInvoice);
+  filled += terapkanInvoiceImpor(entriInvoice, src, parsed.rencanaInvoice);
   if (bedaCipl.length) notes.unshift(t("y.cipl.invoice.packing.beda", { dok: labelDokumenImpor(src), beda: kalimatBedaCipl(bedaCipl) }));
   put("fMasterBL", f.masterBL);
   put("fHouseBL", f.houseBL);
@@ -626,13 +705,13 @@ function applyImportedBcData(parsed) {
     el.dataset.auto = "0";
   });
 
-  if (f.transport) {
+  if (f.transport && !sudahTerisi("fTransport")) {
     if (setImportSelect("fTransport", f.transport, src)) filled++;
   }
-  if (f.muatan) {
+  if (f.muatan && !sudahTerisi("fMuatan")) {
     if (setImportSelect("fMuatan", f.muatan, src)) filled++;
   }
-  if (f.incoterm) {
+  if (f.incoterm && !sudahTerisi("fIncoterm")) {
     if (setImportSelect("fIncoterm", f.incoterm, src, notes, "Kode incoterm"))
       filled++;
   }
@@ -668,7 +747,10 @@ function applyImportedBcData(parsed) {
       (it) => (it.namaBarang || "").trim() !== "",
     );
     if (!hasRealItems || prevPrio == null || prio >= prevPrio) {
-      if (isPriceAuthority(src)) {
+      if (isPriceAuthority(src) && hasRealItems && (parsed.rencanaInvoice === "tambah" || parsed.rencanaInvoice === "perbarui")) {
+        // CIPL satu invoice di jadwal berinvoice lebih dari satu: barang invoice lain tetap (gabungBarangCiplInvoice)
+        draftItems = gabungBarangCiplInvoice(cleaned, draftItems, parsed.rencanaInvoice, notes);
+      } else if (isPriceAuthority(src)) {
         draftItems = pertahankanDataPabeanBarang(lengkapiKodeBarang(cleaned, draftItems), draftItems);
       } else {
         /* Nama dipertahankan LEBIH DULU: pencocokan harga & dimensi di
@@ -712,6 +794,11 @@ function applyImportedBcData(parsed) {
       notes.push(
         t("y.daftar.barang.tidak.diterapkan"),
       );
+      // Barangnya tidak diganti, tetapi invoicenya tetap ditandaikan ke barang yang sama namanya
+      if (isPriceAuthority(src)) {
+        const n = tandaiInvoiceDariCipl(cleaned);
+        if (n) notes.push(t("y.barang.invoice.ditandai", { n }));
+      }
     }
   }
 
@@ -773,17 +860,96 @@ function labelDokumenImpor(src) {
    CIPL tanpa sheet PL memakai nomor invoice sebagai nomor PL -- selalu
    sama, tidak pernah diperingatkan. Bentuknya sama dengan
    bedaInvoicePackingList (form-router.js). */
-function bedaCiplDiBerkas(f, src) {
-  const dp = (f && f.dataPabean) || {};
-  const inv = String(f.invoice || "").trim();
-  const pl = String(dp.packingListNomor || "").trim();
-  const tglInv = String(f.invoiceDate || (isCiplSource(src) ? f.docDate || "" : "")).trim();
-  const tglPl = String(dp.packingListTanggal || "").trim();
+function bedaCiplDiBerkas(f, src, entri) {
   const kunci = (x) => x.replace(/\s+/g, "").toUpperCase();
   const beda = [];
-  if (inv && pl && kunci(inv) !== kunci(pl)) beda.push({ jenis: "nomor", invoice: inv, pl });
-  if (tglInv && tglPl && tglInv !== tglPl) beda.push({ jenis: "tanggal", invoice: tglInv, pl: tglPl });
+  // Tiap invoice berkas dengan Packing List-nya sendiri (entriInvoiceImpor)
+  (entri || entriInvoiceImpor(f || {}, src)).forEach((e) => {
+    if (e.nomor && e.pl && kunci(e.nomor) !== kunci(e.pl)) beda.push({ jenis: "nomor", invoice: e.nomor, pl: e.pl });
+    if (e.tanggal && e.plTanggal && e.tanggal !== e.plTanggal) beda.push({ jenis: "tanggal", invoice: e.tanggal, pl: e.plTanggal });
+  });
   return beda;
+}
+
+/* INVOICE & PACKING LIST SATU BERKAS: f.dokInvoice -- draft CEISA / PIB /
+   PEB dengan beberapa dokumen 380, beberapa CIPL yang digabung -- atau,
+   berkas yang tidak memuatnya, invoice tunggalnya. Tanggal invoice CIPL:
+   pembaca lama menamainya docDate (tanggal invoice, bukan tanggal SPPB).
+   Packing List yang hanya terbaca di kotak PL dokumennya (field 31 PEB,
+   sheet PL CIPL) melengkapi invoice yang sama -- atau yang pertama. */
+function entriInvoiceImpor(f, src) {
+  const dp = f.dataPabean || {};
+  const tunggal = { nomor: f.invoice, tanggal: f.invoiceDate || (isCiplSource(src) ? f.docDate : ""), pl: dp.packingListNomor, plTanggal: dp.packingListTanggal };
+  const entri = rapikanDokInvoice(Array.isArray(f.dokInvoice) && f.dokInvoice.length ? f.dokInvoice : [tunggal]);
+  const pl = teksInvoice(dp.packingListNomor);
+  if (pl && !entri.some((e) => kunciInvoice(e.pl) === kunciInvoice(pl))) {
+    const sasaran = entri.find((e) => e.nomor && kunciInvoice(e.nomor) === kunciInvoice(f.invoice)) || entri[0];
+    if (sasaran && !sasaran.pl) {
+      sasaran.pl = pl;
+      sasaran.plTanggal = sasaran.plTanggal || tanggalInvoice(dp.packingListTanggal);
+    }
+  }
+  return entri;
+}
+
+/* Packing List baris ke-1 (Data PIB/PEB form): seperti isian Data PIB/PEB
+   lain, yang dibawa berkas menimpa (gabungDataPabean). */
+function setelPackingListBaris1(pl, tanggal) {
+  if (typeof draftDataPabean !== "object" || !draftDataPabean) return false;
+  if (pl) draftDataPabean.packingListNomor = pl;
+  if (tanggal) draftDataPabean.packingListTanggal = tanggal;
+  if (typeof isiPackingListForm === "function") isiPackingListForm();
+  return !!(pl || tanggal);
+}
+
+/* Invoice berkas ke form. Baris ke-1 diisi entri yang nomornya sama
+   dengan baris ke-1 -- atau, kalau baris ke-1 masih kosong (atau
+   rencananya mengganti), entri pertama -- lewat setImportField:
+   prioritas sumber berlaku seperti dulu. Entri lainnya jadi baris ke-2
+   dst. (tambahInvoiceLainImpor, invoice-form.js). rencana "gantiSemua"
+   (pengguna memilih mengganti invoice lama, dispatch.js): baris ke-1
+   ditimpa paksa, baris lainnya dibuang. Hasil: jumlah isian. */
+function terapkanInvoiceImpor(entri, src, rencana) {
+  if (!entri.length) return 0;
+  let n = 0;
+  const gantiSemua = rencana === "gantiSemua";
+  const k1 = kunciInvoice($("#fInvoice") && $("#fInvoice").value);
+  let utama = k1 && !gantiSemua ? entri.find((e) => kunciInvoice(e.nomor) === k1) : null;
+  if (!utama && (!k1 || gantiSemua || !rencana || rencana === "ganti")) utama = entri[0];
+  if (gantiSemua) {
+    // Invoice lama diganti: baris ke-1 dikosongkan dulu (isian yang tidak dibawa CIPL baru tidak tertinggal), baris lain dibuang
+    ["fInvoice", "fInvoiceDate"].forEach((id) => {
+      if ($("#" + id)) $("#" + id).value = "";
+      delete importFieldOrigin[id];
+    });
+    if (typeof draftDataPabean === "object" && draftDataPabean) {
+      delete draftDataPabean.packingListNomor;
+      delete draftDataPabean.packingListTanggal;
+      if (typeof isiPackingListForm === "function") isiPackingListForm();
+    }
+    if (typeof bukaInvoiceForm === "function") bukaInvoiceForm([]);
+  }
+  if (utama) {
+    const opsi = gantiSemua ? { force: true } : undefined;
+    if (setImportField("fInvoice", utama.nomor, src, opsi)) n++;
+    if (setImportField("fInvoiceDate", utama.tanggal, src, opsi)) n++;
+    if (setelPackingListBaris1(utama.pl, utama.plTanggal)) n++;
+    [
+      ["fInvoice", utama.nomor],
+      ["fInvoiceDate", utama.tanggal],
+      ["fPackingList", utama.pl],
+      ["fPackingListDate", utama.plTanggal],
+    ].forEach(([id, nilai]) => {
+      const el = $("#" + id);
+      if (el && nilai && el.value === String(nilai).trim()) delete el.dataset.ikut;
+    });
+    if (typeof catatTandaInvoiceBaris1 === "function") catatTandaInvoiceBaris1();
+  }
+  if (typeof lengkapiPasangan === "function") lengkapiPasangan(PASANGAN_CI_PL);
+  const lain = entri.filter((e) => e !== utama && !(k1 && !gantiSemua && kunciInvoice(e.nomor) === k1));
+  if (lain.length && typeof tambahInvoiceLainImpor === "function") n += tambahInvoiceLainImpor(lain);
+  else if (typeof segarkanRentangInvoice === "function") segarkanRentangInvoice();
+  return n;
 }
 
 function showImportNotes(summary, notes) {

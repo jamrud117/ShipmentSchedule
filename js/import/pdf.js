@@ -533,6 +533,13 @@ function parsePibPdfText(text, pagesItems) {
     muatan: petiKemas.muatan,
     invoice: invoiceRow ? invoiceRow.nomor : "",
     invoiceDate: invoiceRow ? pibDateToISO(invoiceRow.tanggalDMY) : "",
+    /* Semua invoice (380) & Packing List (217) di lembar dokumen --
+       dipasangkan jadi baris Invoice & Packing List form (helpers.js:
+       pasangkanInvoicePl). invoice / invoiceDate = yang pertama. */
+    dokInvoice: pasangkanInvoicePl(
+      docRows.filter((r) => kodeDokumen(r.kode) === "380" || /^INVOICE$/i.test(r.label)).map((r) => ({ nomor: r.nomor, tanggal: pibDateToISO(r.tanggalDMY) })),
+      docRows.filter((r) => kodeDokumen(r.kode) === "217").map((r) => ({ nomor: r.nomor, tanggal: pibDateToISO(r.tanggalDMY) })),
+    ),
     dokPelengkap,
     masterBL: masterRow ? masterRow.nomor : (masterBlM ? masterBlM[1] : ""),
     houseBL: houseRow ? houseRow.nomor : (houseBlM ? houseBlM[1] : ""),

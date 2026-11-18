@@ -368,6 +368,14 @@ const KOLOM_OPSIONAL = {
   data_pabean: Object.assign(kolomOpsional("migration-data-pabean.sql", "Data PIB/PEB lengkap", "Full PIB/PEB data"), {
     hilang: (d) => !!d && Object.keys(d).length > 0,
   }),
+  /* Invoice & Packing List kedua dst. (rapikanDokInvoice, helpers.js).
+     Yang pertama & ringkasan semuanya ("A, B") tetap di kolom invoice /
+     invoice_date & data_pabean, jadi tanpa kolom ini yang hilang hanya
+     tanggal & pasangan PL invoice kedua dst. */
+  dokumen_invoice: Object.assign(
+    kolomOpsional("migration-dokumen-invoice.sql", "tanggal & Packing List invoice kedua dst.", "the dates & Packing Lists of the second and further invoices"),
+    { hilang: (d) => Array.isArray(d) && d.length > 1 },
+  ),
 };
 
 /* Kolom opsional mana yang TIDAK DIKENAL database -- dan hanya itu.
@@ -398,7 +406,7 @@ function kolomBelumDikenal(error, daftar) {
      - Kode Barang s.d. Spesifikasi Lain (migration-barang-ceisa.sql):
        seluruh nama barang dilebur ke Uraian -- nama yang tampil tetap sama;
      - KOLOM_BARANG_OPSIONAL (Kode Kondisi Barang, Kode Negara Asal, PI
-       barang & No. item di PI, Data PIB/PEB, urutan barang): HANYA kolom yang ditolak yang ditinggal
+       barang & No. item di PI, invoice barang, Data PIB/PEB, urutan barang): HANYA kolom yang ditolak yang ditinggal
        (database yang sudah mengenal kolom nama barang tidak ikut dilebur).
        Kolom opsional yang kosong di semua barang tidak dikirim sama
        sekali -- nilainya sama dengan bawaan database, dan database yang
@@ -412,6 +420,8 @@ const KOLOM_BARANG_OPSIONAL = {
   kode_negara_asal: { berkas: BERKAS_BARANG_CEISA, get nama() { return tt("Negara Asal", "Country of Origin"); } },
   pi_nomor: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("PI barang", "Item PI"); } },
   pi_no_item: { berkas: "migration-dokumen-pelengkap.sql", get nama() { return tt("No. item di PI", "Item no. in PI"); } },
+  // Hanya terisi di jadwal berinvoice lebih dari satu (tandaiInvoiceBarang, helpers.js)
+  invoice_nomor: { berkas: "migration-dokumen-invoice.sql", get nama() { return tt("invoice tiap barang", "each item's invoice"); } },
   data_pabean: { berkas: "migration-data-pabean.sql", get nama() { return tt("Data PIB/PEB per barang", "Per-item PIB/PEB data"); } },
   // Tanpa kolomnya barang terbaca dalam urutan fisik baris (urutkanBarisBarang, mapping.js)
   urutan: { berkas: "migration-urutan-barang.sql", get nama() { return tt("urutan barang (Seri Barang)", "the item order (Seri Barang)"); } },

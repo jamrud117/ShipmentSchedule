@@ -3077,6 +3077,75 @@ table.item-table input.tarif-coo {
 }
 
 /* ------------------------------------------------------------------
+   INVOICE & PACKING LIST KEDUA DST. (js/features/invoice-form.js)
+   Tiap invoice tambahan = sebaris isian yang sama dengan baris ke-1
+   (kisi .fgrid di dalam sel selebar baris, jadi lajurnya sejajar dengan
+   baris ke-1), lalu satu baris keterangan: barang miliknya + "Barang
+   mulai ke-" di kiri, Hapus di kanan. Tombol Tambah di bawahnya.
+------------------------------------------------------------------ */
+.inv-lain {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+#invoiceLainIsi {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+#invoiceLainIsi:empty {
+  display: none;
+}
+.inv-lain > .inv-tambah {
+  align-self: flex-start;
+}
+.inv-rentang-1,
+.inv-rentang-ket {
+  color: var(--muted);
+}
+.inv-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-height: 30px;
+}
+.inv-rentang {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 0.8rem;
+}
+.inv-rentang[hidden] {
+  display: none;
+}
+.inv-mulai-label {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+.form-control.inv-mulai {
+  width: 4.25rem;
+  height: 30px;
+  padding: 2px 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dp-hapus.inv-hapus {
+  width: auto;
+  height: 30px;
+  margin-left: auto;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------
    SKB PPh BAWAAN (bilah di tab Daftar Barang, js/features/skb-bawaan.js)
    Satu baris tenang di atas daftar barang: nomor & tanggal yang dipasang
    ke tiap barang baru + tombol Ubah. Kuning bila belum diatur atau masa

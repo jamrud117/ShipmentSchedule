@@ -174,9 +174,13 @@ function dpbBagian(judul, isi, opsi) {
 
 // Jadwal dalam bentuk tersimpan dari isian form -- untuk dpNilaiHitung & dpDokumenJadwal
 function dpbJadwalForm() {
+  // Semua Invoice & Packing List form (invoice-form.js): satu 380 / 217 per invoice di tab Dokumen
+  const dokInvoice = typeof dokInvoiceForm === "function" ? dokInvoiceForm() : null;
+  const ringkas = dokInvoice ? ringkasDokInvoice(dokInvoice) : null;
   return {
     mode: activeMode, transport: $("#fTransport").value, party: $("#fParty").value.trim(), noAju: $("#fNoAju").value.trim(),
-    invoice: $("#fInvoice").value.trim(), invoiceDate: $("#fInvoiceDate").value,
+    invoice: ringkas ? ringkas.invoice : $("#fInvoice").value.trim(), invoiceDate: ringkas ? ringkas.invoiceDate : $("#fInvoiceDate").value,
+    ...(dokInvoice ? { dokInvoice } : {}),
     masterBL: $("#fMasterBL").value.trim(), masterBLDate: $("#fMasterBLDate").value,
     houseBL: $("#fHouseBL").value.trim(), houseBLDate: $("#fHouseBLDate").value,
     incoterm: $("#fIncoterm").value, freight: parseInputNumber($("#fFreight").value), insurance: parseInputNumber($("#fInsurance").value),

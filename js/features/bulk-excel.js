@@ -406,7 +406,15 @@ function reconstructShipmentFromGroup(group, mode) {
     incoterm: excelStr(first[idx.INCOTERM]),
     freight: excelNum(first[idx.FREIGHT]),
     insurance: excelNum(first[idx.INSURANCE]),
-    invoice: excelStr(first[idx.INVOICE]),
+    /* Kolom INVOICE: satu nomor per baris, di baris barang pertama tiap
+       kelompok invoicenya (kolomInvoiceSalin, helpers.js) -- semua baris
+       jadwal dibaca; berkas lama berisi "A, B" di baris pertama. Disimpan
+       sebagai ringkasan "A, B" di kolom invoice; daftarnya (beserta
+       Packing List dari sheet DATA PIB-PEB) disusun dari situ saat dimuat
+       (susunDokInvoice). Barangnya ditandai invoicenya di bawah. */
+    invoice: ringkasDokInvoice(
+      [].concat(...rows.map((row) => pecahNomorInvoice(excelStr(row[idx.INVOICE])))).map((nomor) => ({ nomor })),
+    ).invoice,
     // Kolom VESSEL berisi gabungan carrierNameFromShipment(): "<Nama> <Nomor>", kedua moda (nativeFormatter.vessel)
     ...splitVesselCell(excelStr(first[idx.VESSEL])),
     package: excelStr(first[idx.PACKAGE]),
@@ -454,14 +462,20 @@ function reconstructShipmentFromGroup(group, mode) {
 
   // ITEMS: baris yang punya data barang asli (deskripsi/HS/qty tidak kosong semua)
   const items = [];
+  // Invoice berjalan: nomor di baris barang = awal kelompok invoice itu (hanya bila invoicenya lebih dari satu)
+  const banyakInvoice = pecahNomorInvoice(s.invoice).length > 1;
+  let invoiceKini = "";
   rows.forEach((row) => {
     const desc = excelStr(row[idx.DESC]);
     const hs = excelStr(row[idx.HS]);
     const qty = excelNum(row[idx.QTY]);
     if (!desc && !hs && !qty) return;
+    const nomorBaris = pecahNomorInvoice(excelStr(row[idx.INVOICE]));
+    if (nomorBaris.length === 1) invoiceKini = nomorBaris[0];
     const amount = excelNum(row[idx.AMOUNT]);
     items.push({
       ...newItem(mode),
+      invoiceNomor: banyakInvoice ? invoiceKini : "",
       /* DESCRIPTION berkas massal = nama barang UTUH (templat salin,
          itemDisplayName), bukan kolom CEISA yang terpisah: seluruhnya
          masuk Uraian dan kolom CEISA lainnya dikosongkan -- sama seperti

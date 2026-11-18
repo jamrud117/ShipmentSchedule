@@ -571,9 +571,17 @@ function dpDokumenJadwal(s) {
     out.push({ kode, nama: nama || ref || (typeof namaDokumenCeisa === "function" ? namaDokumenCeisa(kode) : kode), nomor: n, tanggal: tanggal || "", asal });
   };
   const udara = dpUdara(s.transport);
-  const dp = s.dataPabean || {};
-  tambah("380", s.invoice, s.invoiceDate, "umum");
-  tambah("217", dp.packingListNomor, dp.packingListTanggal, "umum");
+  /* Invoice & Packing List: satu 380 per invoice, satu 217 per Packing
+     List (yang dipakai dua invoice sekali saja) -- dokInvoiceJadwal,
+     helpers.js. */
+  const plTercatat = new Set();
+  dokInvoiceJadwal(s).forEach((d) => tambah("380", d.nomor, d.tanggal, "umum"));
+  dokInvoiceJadwal(s).forEach((d) => {
+    const k = kunciAlnum(d.pl);
+    if (k && plTercatat.has(k)) return;
+    if (k) plTercatat.add(k);
+    tambah("217", d.pl, d.plTanggal, "umum");
+  });
   const master = dpTeks(s.masterBL);
   const house = dpTeks(s.houseBL);
   if (master && house && alnum(master) !== alnum(house)) {

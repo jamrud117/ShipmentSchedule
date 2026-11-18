@@ -409,6 +409,8 @@ function parseBcExcelWorkbook(wb) {
   };
   const skbBySeriBarang = new Map();
   const piBySeriBarang = new Map();
+  // Invoice (380) yang ditautkan ke barang -- PIB berinvoice lebih dari satu (item.invoiceNomor)
+  const invoiceBySeriBarang = new Map();
   const seriTertaut = new Set();
   barangDokumen.forEach((row) => {
     const seriBarang = row["SERI BARANG"];
@@ -419,6 +421,10 @@ function parseBcExcelWorkbook(wb) {
     if (!docRow) return;
     seriTertaut.add(seriDok);
     const key = kunciSeri(seriBarang);
+    if (excelStr(docRow["KODE DOKUMEN"]) === "380") {
+      if (!invoiceBySeriBarang.has(key)) invoiceBySeriBarang.set(key, nomorDokumen(docRow));
+      return;
+    }
     const kenal = kenaliDokumenPelengkap(isiDokumen(docRow), { tebakNomor: true });
     if (!kenal) return;
     if (kenal.pengiriman) {
@@ -444,6 +450,12 @@ function parseBcExcelWorkbook(wb) {
     } else if (!KODE_DOKUMEN_BERISIAN.has(d.kode)) tambahDokumenPengiriman(dokPelengkap.lain, d.nomor, d.tanggal, d.kode);
   });
   fields.dokPelengkap = dokPelengkap;
+  /* SEMUA invoice (380) & Packing List (217) -- satu PIB/PEB bisa memakai
+     beberapa: dipasangkan (pasangkanInvoicePl, helpers.js) dan jadi baris
+     Invoice & Packing List form (terapkanInvoiceImpor, apply-to-form.js).
+     invoice / invoiceDate di atas tetap invoice pertama. */
+  const dokKode = (kode) => dokumen.filter((r) => excelStr(r["KODE DOKUMEN"]) === kode).map((r) => ({ nomor: nomorDokumen(r), tanggal: tanggalDokumen(r) }));
+  fields.dokInvoice = pasangkanInvoicePl(dokKode("380"), dokKode("217"));
   /* Fasilitas yang tidak ditautkan ke barang mana pun (fasilitasUmum)
      dipasang ke SEMUA barang -- wajar untuk Masterlist & SKB PPN/PPh yang
      memang berlaku umum. COO TIDAK: COO selalu per barang (di draft CEISA
@@ -522,6 +534,8 @@ function parseBcExcelWorkbook(wb) {
          harus dibetulkan satu per satu. */
       // PI yang ditautkan ke barang ini; tanpa tautan: undefined -- isian barang lama yang berlaku
       piNomor: piBySeriBarang.get(seriBarang),
+      // Invoice barang ini (tautan BARANGDOKUMEN ke dokumen 380); tanpa tautan: undefined, sama seperti PI
+      invoiceNomor: invoiceBySeriBarang.get(seriBarang),
       skb: [...(skbBySeriBarang.get(seriBarang) || []), ...fasilitasUmumSemuaBarang]
         .filter(
           (sk, i, semua) =>

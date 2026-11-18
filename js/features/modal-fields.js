@@ -13,6 +13,8 @@ function pilihTabForm(nama) {
     segarkanBawaanDataPabean(false);
     renderDataPabeanForm();
   }
+  // Barang tiap invoice (invoice-form.js): nama barang yang baru diketik ikut terhitung
+  if (nama === "umum" && typeof segarkanRentangInvoice === "function") segarkanRentangInvoice();
   return $(`.tab-pane[data-tabpane="${nama}"]`);
 }
 

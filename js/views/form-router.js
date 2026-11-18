@@ -362,16 +362,23 @@ function renderFormPage(id) {
   $$(".tab-pane").forEach((p, i) => p.classList.toggle("d-none", i !== 0));
   syncFormStep();
 
+  /* Invoice & Packing List: baris ke-1 di isian tetapnya, ke-2 dst. di
+     invoice-form.js (bukaInvoiceForm, sesudah tabel barang digambar).
+     Kolom lama invoice berisi ringkasan "A, B" -- yang ditulis ke kotak
+     baris ke-1 hanya invoice pertama. */
+  let dokInvoiceDibuka = [];
   if (id) {
     const s = currentList().find((x) => x.id === id);
+    dokInvoiceDibuka = dokInvoiceJadwal(s);
+    const invoice1 = dokInvoiceDibuka[0] || {};
     $("#modalTitle").textContent = lbl.modalTitleEdit;
     $("#fId").value = s.id;
     $("#fDocNo").value = s.docNo || "";
     $("#fDocDate").value = s.docDate || "";
     $("#fNoAju").value = s.noAju || "";
     $("#fParty").value = s.party || "";
-    $("#fInvoice").value = s.invoice || "";
-    $("#fInvoiceDate").value = s.invoiceDate || "";
+    $("#fInvoice").value = invoice1.nomor || "";
+    $("#fInvoiceDate").value = invoice1.tanggal || "";
     $("#fMasterBL").value = s.masterBL || "";
     $("#fMasterBLDate").value = s.masterBLDate || "";
     $("#fHouseBL").value = s.houseBL || "";
@@ -417,7 +424,10 @@ function renderFormPage(id) {
     $("#fPPN").value = nilaiPungutan(s.ppn);
     $("#fPPH").value = nilaiPungutan(s.pph);
     draftDokPelengkap = rapikanDokPelengkap(dokPelengkapJadwal(s));
-    draftDataPabean = rapikanDataPabean(s.dataPabean);
+    // Packing List di Data PIB/PEB tersimpan sebagai ringkasan semua invoice: kotaknya = PL invoice pertama
+    draftDataPabean = rapikanDataPabean(
+      Object.assign({}, s.dataPabean, { packingListNomor: invoice1.pl || "", packingListTanggal: invoice1.plTanggal || "" }),
+    );
     setPackageFields(s.package || "");
     $("#fRouteType").value = s.routeType || "direct";
     draftItems = JSON.parse(
@@ -509,6 +519,8 @@ function renderFormPage(id) {
   $("#fNoteDraft").value = "";
   renderItemTable();
   renderDokPelengkapForm();
+  // Invoice & Packing List ke-2 dst. + barang tiap invoice (invoice-form.js)
+  bukaInvoiceForm(dokInvoiceDibuka);
   // Nama Shipper/Buyer: daftarnya tertutup, keterangan "nama baru" mengikuti isinya (pilih-pihak.js)
   if (typeof siapkanPilihPihak === "function") siapkanPilihPihak();
   // Data PIB/PEB: nilai bawaan diisikan sesudah moda & Supplier/Customer terpasang
@@ -1124,8 +1136,17 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     dokPelengkap: dokPelengkapForm(),
     // Data PIB/PEB lengkap (data-pabean-form.js); per barang ikut di item.dataPabean
     dataPabean: dataPabeanForm(),
+    /* Semua Invoice & Packing List (invoice-form.js). Kolom lama invoice /
+       invoice_date & Packing List Data PIB/PEB ditulis dari ringkasannya
+       (shipmentToRow). */
+    dokInvoice: dokInvoiceForm(),
     package: joinPackageFields(),
   };
+  const ringkasInvoice = ringkasDokInvoice(payload.dokInvoice);
+  payload.invoice = ringkasInvoice.invoice;
+  payload.invoiceDate = ringkasInvoice.invoiceDate;
+  // Invoice tiap barang dirapikan (barang tanpa tanda ikut tetangganya); satu invoice = tanpa tanda
+  const barangSimpan = tandaiInvoiceBarang(cleanItems, payload.dokInvoice);
 
   /* NOMOR GANDA (cek-duplikat.js): hanya House B/L-AWB yang sudah
      dipakai jadwal lain yang ditanyakan dulu -- jadwal yang sama tidak
@@ -1133,7 +1154,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
      invoice & Master B/L-AWB boleh sama ("CONSIGNEE NOTE", konsolidasi). */
   const ganda = periksaNomorGandaForm();
   if (ganda.length) {
-    showConfirm(pesanNomorGanda(ganda), () => simpanJadwalForm(id, payload, cleanItems, cleanStops), {
+    showConfirm(pesanNomorGanda(ganda), () => simpanJadwalForm(id, payload, barangSimpan, cleanStops), {
       title: tt("Nomor Sudah Dipakai Jadwal Lain", "Number Already Used by Another Schedule"),
       confirmText: tt("Tetap Simpan", "Save Anyway"),
       cancelText: tt("Periksa Lagi", "Review"),
@@ -1142,7 +1163,7 @@ $("#btnSaveShipment").addEventListener("click", async () => {
     });
     return;
   }
-  await simpanJadwalForm(id, payload, cleanItems, cleanStops);
+  await simpanJadwalForm(id, payload, barangSimpan, cleanStops);
 });
 
 /* LAMPIRAN & PROGRES IKUT TERSIMPAN BERSAMA JADWAL.

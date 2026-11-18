@@ -189,6 +189,8 @@ function ciplDariMesin(c, sumber, lama) {
     origin: origin ? portDisplay(origin) : f.origin || "",
     destination: destination ? portDisplay(destination) : f.destination || "",
     incoterm: c.incoterm || f.incoterm || "",
+    // Hanya pembanding antar-CIPL (gabungHasilCipl): satu PIB/PEB satu valuta
+    valuta: c.currency || "",
     transport: origin || destination ? guessTransportFromText(origin, destination) : f.transport || "",
     voyage: c.vessel || f.voyage || "",
     etd: c.etd || f.etd || "",
@@ -237,14 +239,126 @@ function ciplTanpaCatatanHs(hasilCipl, hasilDokumen) {
   }));
 }
 
-/* Satu atau dua berkas CIPL -> hasil impor. Dua berkas yang satu CI dan
-   satunya PL dibaca sebagai SATU CIPL; berkas yang masing-masing sudah
-   memuat CI & PL (dua invoice) tetap diterapkan sendiri-sendiri. */
+/* BERKAS CIPL -> KELOMPOK PER INVOICE. Dua berkas yang satu CI dan
+   satunya PL = SATU CIPL (seperti dulu). Lebih dari itu (beberapa invoice
+   untuk satu PIB/PEB): berkas CI saja dipasangkan dengan berkas PL saja
+   yang memuat nomor invoice yang sama -- tanpa nomor yang cocok, menurut
+   urutan berkasnya; berkas yang memuat CI & PL sekaligus berdiri sendiri.
+   Urutan kelompok = urutan berkas CI / CIPL-nya. */
+function kelompokCipl(sumber, sisi) {
+  if (sumber.length === 2 && sisi.includes("CI") && sisi.includes("PL")) return [sumber];
+  const ci = sumber.filter((s, i) => sisi[i] === "CI");
+  const pl = sumber.filter((s, i) => sisi[i] === "PL");
+  if (!ci.length || !pl.length) return sumber.map((s) => [s]);
+  const nomor = (s) => {
+    try {
+      const c = EximEngine.readCiplSources([s.wb ? { wb: s.wb, name: s.name } : { pages: s.pages, name: s.name }]);
+      return kunciAlnum(c && c.invoice_no);
+    } catch (e) {
+      return "";
+    }
+  };
+  const nomorCi = ci.map(nomor);
+  const nomorPl = pl.map(nomor);
+  const terpakai = new Set();
+  const pasangan = new Map(); // urutan CI -> urutan PL
+  // Nomor invoice yang sama dulu untuk SEMUA CI, baru sisanya menurut urutan -- PL milik CI lain tidak terambil
+  ci.forEach((s, i) => {
+    const j = nomorCi[i] ? nomorPl.findIndex((x, k) => !terpakai.has(k) && x === nomorCi[i]) : -1;
+    if (j < 0) return;
+    terpakai.add(j);
+    pasangan.set(i, j);
+  });
+  ci.forEach((s, i) => {
+    if (pasangan.has(i)) return;
+    const j = nomorPl.findIndex((x, k) => !terpakai.has(k));
+    if (j < 0) return;
+    terpakai.add(j);
+    pasangan.set(i, j);
+  });
+  const kelompok = [];
+  sumber.forEach((s, i) => {
+    if (sisi[i] === "CI") {
+      const k = ci.indexOf(s);
+      kelompok.push(pasangan.has(k) ? [s, pl[pasangan.get(k)]] : [s]);
+    } else if (sisi[i] !== "PL" || !terpakai.has(pl.indexOf(s))) kelompok.push([s]);
+  });
+  return kelompok;
+}
+
+/* Satu hasil CIPL = satu invoice: nomor & tanggal invoice beserta Packing
+   List-nya jadi fields.dokInvoice, dan tiap barangnya ditandai invoice itu
+   (item.invoiceNomor) -- dasar gabungHasilCipl & penambahan invoice ke
+   jadwal yang sudah berisi barang (apply-to-form.js). */
+function tandaiHasilCipl(r) {
+  const f = r.fields || (r.fields = {});
+  const dp = f.dataPabean || {};
+  f.dokInvoice = rapikanDokInvoice([{ nomor: f.invoice, tanggal: f.invoiceDate || f.docDate, pl: dp.packingListNomor, plTanggal: dp.packingListTanggal }]);
+  const nomor = f.dokInvoice.length ? f.dokInvoice[0].nomor : "";
+  (r.items || []).forEach((it) => (it.invoiceNomor = nomor));
+  return r;
+}
+
+// "10 PALLET" + "5 PALLET" -> "15 PALLET"; jenis berbeda ditulis berdampingan
+function gabungKemasanCipl(daftar) {
+  const ada = daftar.map((x) => String(x || "").trim()).filter(Boolean);
+  const urai = ada.map((x) => /^(\d+(?:[.,]\d+)?)\s*(.*)$/.exec(x));
+  if (urai.length && urai.every((m) => m && m[2].toUpperCase() === urai[0][2].toUpperCase())) {
+    const jumlah = urai.reduce((n, m) => n + parseLooseNumber(m[1]), 0);
+    return `${roundNum(jumlah, 3)} ${urai[0][2]}`.trim();
+  }
+  return [...new Set(ada)].join(", ");
+}
+
+/* BEBERAPA CIPL (beberapa invoice untuk satu PIB/PEB) SEKALIGUS -> SATU
+   hasil impor: barang disambung menurut urutan invoicenya (tiap barang
+   ditandai invoicenya), semua invoice + Packing List-nya jadi baris
+   Invoice & Packing List form (fields.dokInvoice), isian kepala dari CIPL
+   pertama, kemasan dijumlahkan. Dulu tiap CIPL diterapkan bergantian dan
+   CIPL terakhir mengganti seluruh barang & nomor invoice CIPL sebelumnya.
+   Incoterm, valuta atau penjual yang berbeda diberi catatan -- satu
+   PIB/PEB hanya punya satu. */
+function gabungHasilCipl(daftar) {
+  if (daftar.length < 2) return daftar;
+  const [a] = daftar;
+  const isian = (r, k) => String(((r && r.fields) || {})[k] || "").trim();
+  const fields = Object.assign({}, a.fields, {
+    dokInvoice: rapikanDokInvoice(daftar.flatMap((r) => (r.fields && r.fields.dokInvoice) || [])),
+    package: gabungKemasanCipl(daftar.map((r) => isian(r, "package"))),
+  });
+  const notes = [
+    t("y.cipl.digabung", {
+      n: daftar.length,
+      daftar: daftar.map((r) => t("y.cipl.digabung.satu", { nomor: isian(r, "invoice") || "?", n: (r.items || []).length })).join(", "),
+    }),
+  ];
+  [
+    ["incoterm", "Incoterm", "Incoterm"],
+    ["valuta", "Valuta", "Currency"],
+    ["seller", "Penjual", "Seller"],
+  ].forEach(([k, id, en]) => {
+    const nilai = [...new Set(daftar.map((r) => isian(r, k).toUpperCase()).filter(Boolean))];
+    if (nilai.length > 1) notes.push(t("y.cipl.beda.antar", { isian: tt(id, en), nilai: nilai.join(" / ") }));
+  });
+  return [
+    {
+      fields,
+      items: daftar.flatMap((r) => r.items || []),
+      notes: notes.concat(...daftar.map((r) => r.notes || [])),
+      notesHs: [].concat(...daftar.map((r) => r.notesHs || [])),
+      modeHint: a.modeHint,
+      source: a.source,
+    },
+  ];
+}
+
+/* Satu atau beberapa berkas CIPL -> hasil impor, satu per invoice
+   (kelompokCipl). Beberapa invoice digabung prosesBerkasImport
+   (gabungHasilCipl). */
 function hasilCipl(sumber) {
   const mesinAda = typeof EximEngine !== "undefined";
   const sisi = sumber.map((s) => (mesinAda ? ciplSisiMesin(s) : ""));
-  const pasangan = sumber.length === 2 && sisi.includes("CI") && sisi.includes("PL");
-  const kelompok = pasangan ? [sumber] : sumber.map((s) => [s]);
+  const kelompok = mesinAda ? kelompokCipl(sumber, sisi) : sumber.map((s) => [s]);
   const hasil = [];
   kelompok.forEach((grup) => {
     const lama = grup.map((s) => {
@@ -280,7 +394,63 @@ function hasilCipl(sumber) {
       hasil.push(r.rawItems ? { ...r, items: ciplRawItemsToFinalItems(r.rawItems) } : r);
     });
   });
-  return hasil;
+  return hasil.map(tandaiHasilCipl);
+}
+
+/* RENCANA BARANG & INVOICE SATU HASIL CIPL (applyImportedBcData,
+   apply-to-form.js), dari invoice CIPL (K) dan invoice di form (F):
+     "ganti"      form belum berbarang / belum berinvoice, atau CIPL memuat
+                  semua invoice form -- seperti biasa, barang diganti;
+     "perbarui"   CIPL untuk SEBAGIAN invoice form (revisi satu invoice):
+                  hanya barang invoice itu yang diganti, di tempatnya;
+     "tambah"     CIPL untuk invoice BARU di jadwal yang sudah berisi barang
+                  invoice lain: barangnya ditambahkan di bawah, invoicenya
+                  jadi baris berikutnya;
+     "gantiSemua" invoice lama diganti CIPL ini beserta barangnya.
+   Tambah / ganti yang tidak bisa disimpulkan ditanyakan -- kecuali dokumen
+   pabean di impor yang sama mencantumkan invoice-invoicenya. "batal" =
+   kotak tanyanya ditutup tanpa memilih. */
+async function rencanaInvoiceCipl(cipl, hasilDokumen) {
+  const kunciDari = (daftar) => rapikanDokInvoice(daftar).map((d) => kunciInvoice(d.nomor)).filter(Boolean);
+  const K = kunciDari(cipl && cipl.fields && cipl.fields.dokInvoice);
+  const F = typeof dokInvoiceForm === "function" ? kunciDari(dokInvoiceForm()) : [];
+  const adaBarang = draftItems.some((it) => String(it.namaBarang || "").trim());
+  if (!K.length || !F.length || !adaBarang || F.every((k) => K.includes(k))) return "ganti";
+  if (K.some((k) => F.includes(k))) return "perbarui";
+  const dariDokumen = new Set([].concat(...(hasilDokumen || []).map((r) => kunciDari((r.fields || {}).dokInvoice))));
+  if (dariDokumen.size && K.every((k) => dariDokumen.has(k))) return F.some((k) => dariDokumen.has(k)) ? "tambah" : "gantiSemua";
+  return tanyaRencanaCipl(cipl);
+}
+
+function tanyaRencanaCipl(cipl) {
+  const lama = dokInvoiceForm().filter((d) => d.nomor);
+  const nomorLama = lama.map((d) => d.nomor).join(", ");
+  const nomorBaru = rapikanDokInvoice(cipl.fields.dokInvoice).map((d) => d.nomor).join(", ");
+  const nBarang = draftItems.filter((it) => String(it.namaBarang || "").trim()).length;
+  const ke = lama.length + 1;
+  return new Promise((selesai) => {
+    let dijawab = false;
+    const jawab = (r) => {
+      if (dijawab) return;
+      dijawab = true;
+      selesai(r);
+    };
+    showConfirm(
+      t("y.cipl.tanya.invoice.lain", { lama: nomorLama, n: nBarang, baru: nomorBaru, ke }),
+      () => jawab("tambah"),
+      {
+        title: t("y.cipl.tanya.invoice.lain.judul"),
+        confirmText: t("y.cipl.tanya.tambah", { ke }),
+        cancelText: t("y.cipl.tanya.ganti", { lama: nomorLama }),
+        onCancel: () => jawab("gantiSemua"),
+        tone: "primary",
+        icon: "bi-files",
+      },
+    );
+    // Ditutup tanpa memilih (X, Esc, klik di luar kotak): CIPL tidak diterapkan
+    const kotak = $("#confirmModal");
+    if (kotak) kotak.addEventListener("hidden.bs.modal", () => jawab("batal"), { once: true });
+  });
 }
 
 /* Satu berkas -> { hasil } (PIB / PEB / draft CEISA, sudah dibaca) atau
@@ -429,10 +599,23 @@ async function prosesBerkasImport(files) {
     const sumberCipl = dibaca.filter((x) => x.cipl).map((x) => x.cipl);
     if (sumberCipl.length && typeof hsCodeSiap === "function") await hsCodeSiap();
     const hasilDokumen = dibaca.filter((x) => x.hasil).map((x) => x.hasil);
-    const toApply = ciplTanpaCatatanHs(sumberCipl.length ? hasilCipl(sumberCipl) : [], hasilDokumen).concat(hasilDokumen);
+    /* Beberapa CIPL (beberapa invoice satu PIB/PEB) = SATU hasil, barangnya
+       disambung (gabungHasilCipl). Ke jadwal yang sudah berisi barang
+       invoice lain: ditambahkan, menggantikan, atau hanya memperbarui
+       invoicenya (rencanaInvoiceCipl -- bisa ditanyakan dulu). */
+    const cipl = gabungHasilCipl(ciplTanpaCatatanHs(sumberCipl.length ? hasilCipl(sumberCipl) : [], hasilDokumen));
+    const catatanAwal = [];
+    if (cipl.length) {
+      const rencana = await rencanaInvoiceCipl(cipl[0], hasilDokumen);
+      if (rencana === "batal") {
+        cipl.length = 0;
+        catatanAwal.push(t("y.cipl.batal.invoice"));
+      } else cipl[0].rencanaInvoice = rencana;
+    }
+    const toApply = cipl.concat(hasilDokumen);
 
     const summaries = [];
-    let allNotes = [];
+    let allNotes = catatanAwal.slice();
     let bedaCiplDicatat = false;
     toApply.forEach((parsed) => {
       const { summary, notes, bedaCipl } = applyImportedBcData(parsed);
@@ -443,7 +626,9 @@ async function prosesBerkasImport(files) {
     /* Invoice & Packing List yang berbeda karena datang dari DUA berkas
        (mis. CIPL + draft CEISA) -- tiap berkasnya sendiri konsisten. */
     if (!bedaCiplDicatat && typeof bedaInvoicePackingList === "function") {
-      const beda = bedaInvoicePackingList();
+      // Baris ke-1 & invoice ke-2 dst. (invoice-form.js)
+      const lain = typeof bedaInvoicePackingListLain === "function" ? [].concat(...bedaInvoicePackingListLain().map((x) => x.beda)) : [];
+      const beda = bedaInvoicePackingList().concat(lain);
       if (beda.length) allNotes.unshift(t("y.cipl.invoice.packing.beda.form", { beda: kalimatBedaCipl(beda) }));
     }
     allNotes = [...new Set(allNotes)];

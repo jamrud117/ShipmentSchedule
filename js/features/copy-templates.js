@@ -28,6 +28,19 @@ function applyMasterHouseBL(rows, masterBL, houseBL, colIdx, totalCols, formatte
   }
 }
 
+/* KOLOM INVOICE SEMUA TEMPLAT SALIN: nomor tiap invoice di baris barang
+   PERTAMA kelompok invoicenya, satu nomor per sel -- tidak pernah dua
+   nomor bergaris baru dalam satu sel (kolomInvoiceSalin, helpers.js).
+   Nomor yang tidak kebagian baris barang (invoicenya lebih banyak dari
+   barangnya) mendapat baris tambahan berisi kolom itu saja. */
+function tambahBarisInvoice(rows, invoiceBaris, colIdx, totalCols, formatter) {
+  while (rows.length < invoiceBaris.length) {
+    const blankRow = new Array(totalCols).fill(formatter.blank);
+    blankRow[colIdx] = formatter.text(invoiceBaris[rows.length] || "");
+    rows.push(blankRow);
+  }
+}
+
 /* KOLOM "NO" DIBUANG SAAT DISALIN — TAPI HANYA SAAT DISALIN.
 
    Kolom itu selalu kosong di hasil salin, dan sel kosong yang ditempel
@@ -59,8 +72,9 @@ const ALL_EXPORT_COLS = 18;
 function buildAllExportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
-  // Kolom yang hanya diisi di BARIS PERTAMA (data tingkat pengiriman)
-  const FIRST_ROW_ONLY_IDX = [1, 2, 3, 4, 5, 10, 11, 12, 14, 15, 17];
+  // Kolom yang hanya diisi di BARIS PERTAMA (data tingkat pengiriman); 14 NO. INVOICE per kelompok invoice
+  const FIRST_ROW_ONLY_IDX = [1, 2, 3, 4, 5, 10, 11, 12, 15, 17];
+  const invoiceBaris = kolomInvoiceSalin(s, items);
 
   const rows = items.map((it, idx) => {
     const cols = [
@@ -79,7 +93,7 @@ function buildAllExportCopyRows(s, formatter) {
       formatter.num(s.freight, 2), // 11 FREIGHT
       formatter.num(s.insurance, 2), // 12 INSURANCE
       formatter.blank, // 13 BL/AWB — diisi terpisah
-      formatter.text(s.invoice), // 14 NO. INVOICE
+      formatter.text(invoiceBaris[idx] || ""), // 14 NO. INVOICE -- invoice kelompok barang ini
       formatter.vessel(s), // 15 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(it.package), // 16 PACKAGE — dimensi per barang
       formatter.text(s.notes), // 17 REMARK
@@ -88,6 +102,7 @@ function buildAllExportCopyRows(s, formatter) {
     return cols;
   });
 
+  tambahBarisInvoice(rows, invoiceBaris, 14, ALL_EXPORT_COLS, formatter);
   applyMasterHouseBL(rows, s.masterBL, s.houseBL, 13, ALL_EXPORT_COLS, formatter);
   return rows;
 }
@@ -145,9 +160,11 @@ function buildDailyImportCopyRows(s, formatter) {
      pengiriman lain (SPPB, AJU, dst.): sekali tampil di baris pertama,
      bukan diulang di semua baris. */
   const totalKgs = computeCustoms(s).totalBruto;
+  // 12 INVOICE tidak di sini: per kelompok invoice (tambahBarisInvoice)
   const FIRST_ROW_ONLY_IDX = [
-    1, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    1, 2, 3, 4, 5, 6, 9, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
   ];
+  const invoiceBaris = kolomInvoiceSalin(s, items);
 
   const rows = items.map((it, idx) => {
     const cols = [
@@ -163,7 +180,7 @@ function buildDailyImportCopyRows(s, formatter) {
       formatter.num(totalKgs, 2), // 9  BRUTO / KGS (Total Bruto se-pengiriman)
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC — tidak ada field-nya
-      formatter.text(s.invoice), // 12 INVOICE
+      formatter.text(invoiceBaris[idx] || ""), // 12 INVOICE -- invoice kelompok barang ini
       formatter.vessel(s), // 13 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru, lihat di atas)
@@ -181,6 +198,7 @@ function buildDailyImportCopyRows(s, formatter) {
     return cols;
   });
 
+  tambahBarisInvoice(rows, invoiceBaris, 12, DAILY_IMPORT_COLS, formatter);
   applyMasterHouseBL(rows, s.masterBL, s.houseBL, 10, DAILY_IMPORT_COLS, formatter);
   return rows;
 }
@@ -190,7 +208,9 @@ const DAILY_EXPORT_COLS = 19;
 function buildDailyExportCopyRows(s, formatter) {
   formatter = formatter || clipboardFormatter;
   const items = s.items || [];
-  const FIRST_ROW_ONLY_IDX = [1, 2, 3, 4, 5, 6, 12, 13, 14, 15, 16, 17, 18];
+  // 12 INVOICE tidak di sini: per kelompok invoice (tambahBarisInvoice)
+  const FIRST_ROW_ONLY_IDX = [1, 2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18];
+  const invoiceBaris = kolomInvoiceSalin(s, items);
 
   const rows = items.map((it, idx) => {
     const cols = [
@@ -206,7 +226,7 @@ function buildDailyExportCopyRows(s, formatter) {
       formatter.num(it.bruto, 2), // 9  GROSS WEIGHT
       formatter.blank, // 10 BL/AWB — diisi terpisah
       formatter.blank, // 11 SHIPPER DOC
-      formatter.text(s.invoice), // 12 INVOICE
+      formatter.text(invoiceBaris[idx] || ""), // 12 INVOICE -- invoice kelompok barang ini
       formatter.vessel(s), // 13 VESSEL NAME (salin: udara No Flight saja)
       formatter.text(s.forwarder), // 14 FORWARDER
       formatter.date(effectiveEtd(s)), // 15 ETD (terbaru)
@@ -218,6 +238,7 @@ function buildDailyExportCopyRows(s, formatter) {
     return cols;
   });
 
+  tambahBarisInvoice(rows, invoiceBaris, 12, DAILY_EXPORT_COLS, formatter);
   applyMasterHouseBL(rows, s.masterBL, s.houseBL, 10, DAILY_EXPORT_COLS, formatter);
   return rows;
 }
