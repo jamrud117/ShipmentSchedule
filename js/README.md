@@ -728,9 +728,12 @@ ini / sekarang" dan merek, merah-ambar-hijau hanya untuk status.
   menyembunyikan rincian & catatan kartu lewat CSS
   (`html[data-kepadatan="ringkas"]`) -- murni tampilan, data tak berubah.
   NAMA BARANG tetap tampil di Ringkas, di KANAN baris tanggal
-  (`barangRingkasHtml`: kolom keempat bergaris kiri; panel < 900px kisi
-  2x2 ETD | ETA, Estimated Delivery | Nama Barang; paling banyak dua nama +
-  "+n lainnya", daftar utuh di tooltip; kartu selesai juga). Lencana &
+  (`barangRingkasHtml`: kolom keempat bergaris kiri; panel 560-900px
+  ketiga tanggal tetap sebaris dan nama barang turun ke baris sendiri
+  selebar panel, nama-namanya berderet "A · B · +n lainnya"; panel
+  < 560px kisi 2x2 ETD | ETA, Estimated Delivery | Nama Barang; paling
+  banyak dua nama + "+n lainnya", daftar utuh di tooltip; kartu selesai
+  juga). Lencana &
   progres dokumen satu wadah (`cardDokumenHtml`, `.ship-dokumen`): di
   Ringkas lencana kiri, hitungan progres kanan, stepper di bawahnya;
   garis tipis di atas baris lencana DAN di atas stepper (ponsel < 576px:
@@ -784,7 +787,25 @@ ini / sekarang" dan merek, merah-ambar-hijau hanya untuk status.
   fasilitas → progres dokumen ("Berikutnya: …") → kronologi. Garis
   pemisah selalu garis penuh tipis, tidak putus-putus.
   Kolom tanggal mengikuti lebar PANEL (kueri wadah `perjalanan`), bukan
-  layar.
+  layar: >= 812px ETD & ETA 200-224px + Estimated Delivery >= 300px;
+  560-812px (jendela terbelah dua, tablet) TETAP TIGA KOLOM yang menyusut
+  (`minmax(136px, 1fr) minmax(150px, 1fr) minmax(196px, 1.5fr)`) --
+  Estimated Delivery di kanan ETA, bukan turun ke bawah; < 560px (ponsel)
+  ETD | ETA berdampingan, Estimated Delivery selebar panel. Strip delay
+  memakai kisi yang sama di tiap lebar. Tiap kotak tanggal TIGA baris di
+  semua lebar: JUDUL + lencana Auto/Manual sebaris ("ETA [Auto]",
+  `.date-kepala`; lencananya setinggi baris label, jadi ketiga tanggal
+  tetap segaris; tooltip menjelaskan modenya), TANGGAL, lalu SATU baris
+  keterangan berbutir dipisah titik tengah: nama hari UTUH (+ jam) --
+  "Rabu", "Wednesday" -- lalu bagi akun penyunting rinciannya: ETA "ETD +
+  10 hari" (< 700px "+10 hari"); Estimated Delivery "dari PIB · ▮▮▮▮▯ 85%
+  · Tinggi" (Manual tanpa "dari"; perkiraan terlewat "◷ Telat n hari",
+  kalimat "dihitung ulang dari hari ini" di tooltip; 560-812px tanpa kata
+  tingkat). Butir yang tidak muat turun utuh tanpa titik menggantung
+  (titiknya di celah kiri butir, dipotong di awal baris). Rencana awal
+  yang dicoret tanpa lencana & rincian. `lencanaJudulTanggalHtml`,
+  `butirKeteranganHtml`, `deliveryKartuHtml` (render/prediction-view.js),
+  `etaKartuHtml` (render/cards.js). Uji: qa/kartu-tanggal-test.js.
 - **Satu model kotak tanggal** (`kt-nilai`, css/date-input.css): SEMUA
   kotak tanggal -- kartu, form jadwal, No. Dokumen, kotak dialog, tabel
   isian -- diberi kelas `kt-nilai` oleh js/ui/date-input.js (kecuali
@@ -814,7 +835,7 @@ ini / sekarang" dan merek, merah-ambar-hijau hanya untuk status.
   ada shorthand `background:` di antaranya). Tetap
   bisa diketik format apa pun & tetap punya kalender. Di kartu, di
   bawahnya keterangan SEBARIS dengan harinya (`hariTanggalKartu`,
-  `keteranganEtaKartu`, `predictionStripHtml`).
+  `etaKartuHtml`, `predictionStripHtml`); lencana Auto/Manual di judulnya.
 - **Kerangka muat** (`showLoadingSkeleton`, data/api.js; css/dashboard.css):
   kartu kerangka berbentuk kartu jadwal (judul & status, jalur, tiga
   tanggal, progres) yang MENGISI LAYAR sampai tepi bawah -- wadahnya
@@ -1140,7 +1161,7 @@ hanya dibutuhkan uji (halaman CIPL tunggal, riwayat prediksi tiruan,
 | `core/customs.js` | Perhitungan CIF/FOB/BM+PDRI (satu-satunya sumber kebenaran). `bulatkanBm()` = aturan tunggal BM ke atas ke ribuan, dipakai semua jalan masuk BM (hitungan tarif, draft CEISA, PIB PDF, Bulk Import, form). `hitungPungutanFasilitas()` = tabel pungutan PIB per seri menurut tarif & fasilitas barang (tab Pungutan Data PIB; kolom Dibayar = Bea & Pajak Impor tab Kepabeanan & Biaya) |
 | `core/carrier-master.js` | Deteksi pelayaran/maskapai/kurir untuk prediksi (184 maskapai menurut kode No. Flight; pelayaran dari nama kapal, lalu awalan SCAC No. Master B/L -- `detectShippingLineDariBl`). `carrierNameFromShipment()` = nama sarana angkut yang ditampilkan (kartu, detail, Bulk Excel, surat BC: Nama Vessel/Voyager + No. Voyage/Flight); `carrierVesselFlight()` = satu kolom Vessel/Flight di CIPL & kolom VESSEL templat salin (udara cukup No Flight); `carrierCipl()` = carrier yang dicetak di CIPL. Hasil deteksi diingat per teks (`ingatDeteksi`) |
 | `core/route-model.js` | Progres lane pengiriman + rute transit multi-terminal + aturan auto-arrive. Label simpul transit: baris kedua (`assignLabelRows`) hanya untuk label yang berdekatan -- wadahnya setinggi satu baris kecuali ada yang memakai baris kedua (`.port-labels--dua-baris`) |
-| `render/cards.js` | Render kartu pengiriman (expanded & collapsed). Tag PI: "PI × 2" untuk lebih dari satu dokumen PI (`tagPiHtml`); sel peti kemas hanya untuk kiriman laut (`infoKontainerHtml`). Tag Dibutuhkan di Pabrik (`tagKebutuhanHtml`: telat merah / mepet kuning / aman) & lartas yang belum bernomor (`tagLartasHtml`) di baris tag kartu aktif. Baris tanggal (ETD / ETA / Estimated Delivery, `.date-strip`) = kolom selebar isinya (`repeat(auto-fill, minmax(200px, 224px))`, card.css) rata kiri berjarak tetap 28px -- bukan 1fr yang merentangkan tanggal sejauh lebar kartu; isian Delay Update di bawahnya selebar & sejajar kolom yang sama (`.delay-strip-fields`, lebar-isian.css). JADWAL DELAY TERBEDAKAN SEKALI PANDANG: ETD/ETA rencana awal yang sudah diganti Update ETD/ETA dicoret & berlabel "· rencana awal" (`date-field--diganti`, opsi `diganti` di `kotakTanggalKartu`, keterangannya di tooltip), tanggal update merah tegas di kotak bertinta merah muda (status Delay; revisi yang tertinggal cukup tebal), selisih "+N hari" & lencana "Mundur N hari" merah, panel detail mencoret rencana (`.tgl-rencana`). Kartu terkuncup: tanggal tibanya utuh di ponsel (`.collapsed-meta b` nowrap) -- barisnya yang turun. Nama barang untuk tampilan Ringkas di baris tanggal (`barangRingkasHtml`, tersembunyi di Nyaman); lencana + progres dokumen dalam satu wadah `.ship-dokumen` (`cardDokumenHtml`) yang di Ringkas menjadi kisi lencana kiri / hitungan kanan / stepper. |
+| `render/cards.js` | Render kartu pengiriman (expanded & collapsed). Tag PI: "PI × 2" untuk lebih dari satu dokumen PI (`tagPiHtml`); sel peti kemas hanya untuk kiriman laut (`infoKontainerHtml`). Tag Dibutuhkan di Pabrik (`tagKebutuhanHtml`: telat merah / mepet kuning / aman) & lartas yang belum bernomor (`tagLartasHtml`) di baris tag kartu aktif. Baris tanggal (ETD / ETA / Estimated Delivery, `.date-strip`, card.css) = kisi rata kiri (ETD & ETA 200-224px -- bukan 1fr yang merentangkan tanggal sejauh lebar kartu); di panel 560-812px tetap tiga kolom yang menyusut, baru di panel ponsel (< 560px) Estimated Delivery turun ke bawah; isian Delay Update di bawahnya memakai kisi yang sama (`.delay-strip-fields`). Tiap tanggal: judul + lencana Auto/Manual sebaris, tanggal, lalu satu baris keterangan "hari · rincian · keyakinan" (`etaKartuHtml`; `lencanaJudulTanggalHtml`, `butirKeteranganHtml` & `deliveryKartuHtml` di render/prediction-view.js). JADWAL DELAY TERBEDAKAN SEKALI PANDANG: ETD/ETA rencana awal yang sudah diganti Update ETD/ETA dicoret & berlabel "· rencana awal" (`date-field--diganti`, opsi `diganti` di `kotakTanggalKartu`, keterangannya di tooltip), tanggal update merah tegas di kotak bertinta merah muda (status Delay; revisi yang tertinggal cukup tebal), selisih "+N hari" & lencana "Mundur N hari" merah, panel detail mencoret rencana (`.tgl-rencana`). Kartu terkuncup: tanggal tibanya utuh di ponsel (`.collapsed-meta b` nowrap) -- barisnya yang turun. Nama barang untuk tampilan Ringkas di baris tanggal (`barangRingkasHtml`, tersembunyi di Nyaman); lencana + progres dokumen dalam satu wadah `.ship-dokumen` (`cardDokumenHtml`) yang di Ringkas menjadi kisi lencana kiri / hitungan kanan / stepper. |
 | `render/list.js` | Filter, group by tanggal, sort, render list, paginasi, mode switch. Teks pencarian (`teksCariJadwal`) hanya dirakit saat ada kata kunci; lebar pil status & kartu di luar layar diurus CSS (`field-sizing`, `content-visibility`). Saat daftar digambar ulang posisi gulir tidak melompat (tinggi kartu diwariskan + penanda gulir) dan fokus/isi kotak yang sedang diketik ikut bertahan. Kembali dari form jadwal (Simpan / Batal): daftar kembali ke posisi gulir sebelum form dibuka (`catatPosisiDaftar` / `pulihkanPosisiDaftar`). Penanda gulir hanya diukur bila halaman SUDAH tergulir (`halamanTergulir`, dari event `scroll` pasif): membaca `scrollY` / `getBoundingClientRect()` di tengah render memaksa tata letak sinkron (dulu terjadi tiap muat halaman) |
 | `features/excel-row-format.js` | Format baris Excel (clipboard & native) utk mode Import & Export. Kolom TARIF ditulis PER BARIS (Tarif BM barang itu, `tarifBmBerlaku`; 0% tertulis "0%"), bukan lagi baris pertama saja; Bulk Import membacanya balik per baris ke `dataPabean.tarifBm` (berkas lama berisi baris pertama saja -> tarif jadwal cadangan). Kotak FOB (USD) di tab Kepabeanan sudah tidak ada: FOB Rupiah (Incoterm FOB) & CIF Rupiah (Incoterm CIF) = Total Nilai Barang (USD) × NDPBM, sama dengan jumlah kolom FOB/CIF RUPIAH per baris di sini. Kolom PI (All Import / laporan harian) memuat SEMUA dokumen pelengkap non-fasilitas, SATU DOKUMEN PER BARIS LEMBAR seperti kolom FASILITAS / SKB (`barisKolomPi`, core/helpers.js; dokumen ke-n di baris barang ke-n, sisanya di baris tambahan -- bukan satu sel bergaris baru yang diulang di tiap baris barang): tiap nomor PI, "LS <nomor>", "POLIS <nomor>", Dokumen Lain "<NAMA DOKUMEN CEISA> <nomor>" (kode di luar daftar "DOKUMEN KODE <kode> <nomor>", tanpa kode "DOKUMEN LAIN <nomor>"); SKB PPN/PPh, Masterlist & COO tetap di kolom FASILITAS / SKB. Bulk Import membaca kolom PI di semua baris jadwal (berkas lama bersel bergaris baru: baris kembar dibuang) lalu memisahkannya lewat `pecahKolomPi` (PI, LS, Polis & Dokumen Lain kembali ke daftarnya masing-masing). Kolom FASILITAS / SKB: satu dokumen per baris, label + nomor ("MASTER LIST 72/PABEAN-PB/..."), dibaca balik Bulk Import lewat `skbTextToEntries()`. `formatter.vessel`: salinan (clipboard) menulis No Flight saja untuk kiriman udara; Bulk Excel (native) tetap nama + nomor supaya Bulk Import tidak kehilangan nama maskapai |
 | `features/copy-templates.js` | Dropdown pilihan template di tombol Copy (All Import/Export, Daily Import/Export, Report) — builder & dispatcher-nya, TANPA mengubah excel-row-format.js. Report: baris Mode di kedua buku (`modeReport`) -- udara "Air Import" / "Air Export", laut FCL / LCL. Kolom INVOICE semua templat (All Import kolom 26, All Export 14, Daily Import/Export 12): jadwal berinvoice lebih dari satu menulis nomor tiap invoice HANYA di baris barang pertama kelompoknya, satu nomor per sel -- tidak pernah bergaris baru dalam satu sel (`kolomInvoiceSalin`, core/helpers.js; baris tambahan bila invoicenya lebih banyak dari barangnya, `tambahBarisInvoice`); hanya nomor invoice -- No. Packing List sama dengan invoicenya. Bulk Import membaca kolom itu di semua baris jadwal dan menandai barangnya. |

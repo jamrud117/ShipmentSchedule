@@ -318,49 +318,80 @@ function cardBodySplitHtml(s, totals) {
    saat diketik. Tetap bisa diketik dalam format apa pun dan tetap punya
    kalender (js/ui/date-input.js).
 
-   Di bawah tiap tanggal satu baris keterangan: hari (dan jam), lalu --
-   khusus akun penyunting -- dari mana angkanya: "Auto · ETD + 11 hari",
-   "Manual", sumber & keyakinan Estimated Delivery. Dulu keterangan itu
-   lencana AUTO ETA / MANUAL berwarna di label dan pita kuningan
-   tersendiri yang mengulang Estimated Delivery sekali lagi.
+   Tiap kotak tanggal TIGA baris, sama di semua lebar panel:
+
+     ETA [Auto]                  <- judul + lencana mode (akun penyunting)
+     [20-11-2026 📅]             <- tanggal
+     Jumat · ETD + 10 hari       <- hari (& jam) · rinciannya
+
+   Lencana Auto / Manual menumpang di BARIS JUDUL, yang memang sudah ada
+   dan hampir kosong ("ETA" cuma tiga huruf), bukan menambah baris di
+   bawah tanggal. Keterangannya SATU baris butir dipisah titik tengah:
+   ETA "ETD + 10 hari"; Estimated Delivery "dari PIB · ▮▮▮▮▯ 85% ·
+   Tinggi" (Manual tanpa "dari", perkiraan yang terlewat "◷ Telat 36
+   hari"). Di panel yang lebih sempit teksnya dipadatkan ("+10 hari",
+   tanpa kata "Tinggi") supaya tetap sebaris; butir yang tetap tidak muat
+   turun UTUH tanpa titik menggantung (css/card.css).
+   Riwayat: lencana AUTO ETA / MANUAL berwarna dulu di label (labelnya
+   patah dua baris), lalu berderet di satu baris keterangan yang patah di
+   sembarang tempat, lalu bertumpuk tiga baris (hari / lencana + sumber /
+   keyakinan) di kolom sempit. Kini lencananya di judul berukuran sebaris
+   label, jadi ketiga tanggal tetap mulai di garis yang sama.
 ------------------------------------------------------------------ */
 
-/* "Sel" / "Tue", dengan jam kalau terisi: "Sel · 09:15". Hari penting
-   bagi orang yang merencanakan: ETA hari Sabtu berarti clearance Senin. */
+/* "Selasa" / "Tuesday" -- nama hari utuh, bukan "Sel" / "Tue" yang harus
+   ditebak -- dengan jam kalau terisi: "Selasa · 09:15". Hari penting bagi
+   orang yang merencanakan: ETA hari Sabtu berarti clearance Senin. */
 function hariTanggalKartu(iso, jam) {
   const d = iso ? parseLocalDate(iso) : null;
   if (!d) return "";
-  const hari = tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", { weekday: "short" });
+  const hari = tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", { weekday: "long" });
   return jam ? `${hari} · ${jam}` : hari;
 }
 
+/* Di kartu hari & jam dua butir ("Selasa · 09:15"): titik di antaranya
+   sama dengan titik pemisah butir lain di baris itu. */
 function hariKartuHtml(iso, jam) {
-  const teks = hariTanggalKartu(iso, jam);
-  return teks ? `<span class="date-hari">${escapeHtml(teks)}</span>` : "";
+  const hari = hariTanggalKartu(iso);
+  if (!hari) return "";
+  return butirKeteranganHtml(escapeHtml(hari), "date-hari") + (jam ? butirKeteranganHtml(escapeHtml(jam), "date-hari date-jam") : "");
 }
 
-/* ETA: Auto = ETD + lama transit dari mesin; Manual = angka yang diketik
-   (biasanya dari forwarder). */
-function keteranganEtaKartu(s) {
-  if (!etaPredictionAppliesTo(s) || !tampilkanMekanikaPrediksi()) return "";
+/* ETA: lencana untuk baris judulnya + butir keterangannya. Auto = ETD +
+   lama transit dari mesin; Manual = angka yang diketik (biasanya dari
+   forwarder). Rencana awal yang sudah diganti Update ETA (dicoret, "·
+   rencana awal") tidak diberi keduanya -- yang berlaku tanggal di strip
+   delay, dan judulnya sudah cukup panjang. */
+function etaKartuHtml(s, diganti) {
+  const kosong = { lencana: "", keterangan: "" };
+  if (diganti || !etaPredictionAppliesTo(s) || !tampilkanMekanikaPrediksi()) return kosong;
   const mode = etaModeOf(s);
-  if (mode === "manual") return `<span class="date-ket">${etaModeChipHtml(mode)}</span>`;
+  const lencana = lencanaJudulTanggalHtml(etaModeChipHtml(mode), judulModeEta(mode));
+  if (mode === "manual") return { lencana, keterangan: "" };
   const e = predictEta(s);
-  if (!e.ok) return `<span class="date-ket">${etaModeChipHtml(mode)} ${escapeHtml(e.reason)}</span>`;
+  if (!e.ok) return { lencana, keterangan: butirKeteranganHtml(escapeHtml(e.reason), "date-butir--alasan") };
   /* ETA ikut kiriman lain di kapal yang sama (etaSekapal): disebut, dan
      dari kiriman mana, supaya angka yang "beda dari tabel" bisa
      ditelusuri. */
   if (e.sekapal) {
     const asal = e.sekapal.sumber || {};
     const judul = `${e.ruleLabel}: ${[asal.party, carrierNameFromShipment(asal)].filter(Boolean).join(" · ")}`;
-    return `<span class="date-ket" title="${escapeAttr(judul)}">${etaModeChipHtml(mode)} ${escapeHtml(tt("ikut kapal yang sama", "same vessel"))}</span>`;
+    return { lencana, keterangan: butirKeteranganHtml(escapeHtml(tt("ikut kapal yang sama", "same vessel")), "", judul) };
   }
-  /* "ETD + 10 hari", di panel sempit cukup "+10 hari" (css/card.css) --
-     keterangan tetap sebaris dengan harinya. */
+  /* "ETD + 10 hari"; di panel < 700px cukup "+10 hari" (css/card.css)
+     supaya tetap sebaris dengan harinya. Hanya satu yang tampil, jadi
+     pembaca layar pun membaca yang tampil itu saja. */
   const n = e.hasRange ? `${e.daysMin}–${e.daysMax}` : `${e.days}`;
   const satuan = e.days === 1 && !e.hasRange ? tt("hari", "day") : tt("hari", "days");
   const judul = tt(`ETA = ETD + ${n} hari perjalanan`, `ETA = ETD + ${n} ${satuan} in transit`);
-  return `<span class="date-ket" title="${escapeAttr(judul)}">${etaModeChipHtml(mode)} <span class="date-ket-lengkap">ETD + ${n} ${satuan}</span><span class="date-ket-ringkas" aria-hidden="true">+${n} ${satuan}</span></span>`;
+  return {
+    lencana,
+    keterangan: butirKeteranganHtml(
+      `<span class="date-ket-lengkap">ETD + ${n} ${satuan}</span><span class="date-ket-ringkas">+${n} ${satuan}</span>`,
+      "",
+      judul,
+    ),
+  };
 }
 
 /* opsi.diganti = { tanggal, label }: RENCANA AWAL yang sudah diganti
@@ -376,10 +407,13 @@ function kotakTanggalKartu(s, kolom, label, opsi) {
   const judul = ganti
     ? ` title="${escapeAttr(tt(`Rencana awal — diganti ${ganti.label} ${fmtDate(ganti.tanggal)}`, `Original plan — replaced by ${ganti.label} ${fmtDate(ganti.tanggal)}`))}"`
     : "";
+  /* Judul + lencana mode sebaris (.date-kepala); keterangan satu baris
+     butir (.date-caption-isi) -- hanya digambar kalau ada isinya. */
+  const butir = `${hariKartuHtml(s[kolom], o.jam)}${o.keterangan || ""}`;
   return `<div class="${kelas}">
-        <label for="${idTglKartu(s, kolom)}">${label}${ket}</label>
+        <div class="date-kepala"><label for="${idTglKartu(s, kolom)}">${label}${ket}</label>${o.lencana || ""}</div>
         <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${judul}${atributKendaliKartu("readonly")}>
-        <div class="date-caption">${hariKartuHtml(s[kolom], o.jam)}${o.keterangan || ""}</div>
+        ${butir ? `<div class="date-caption"><div class="date-caption-isi">${butir}</div></div>` : ""}
       </div>`;
 }
 
@@ -390,14 +424,18 @@ function dateStripHtml(s) {
   const deliveryManual = prediksiDelivery && deliveryModeOf(s) === "manual";
   // Rencana awal yang sudah diganti Update ETD / Update ETA (delayStripHtml)
   const diganti = (kolom, revisi, label) => (s[kolom] && s[revisi] && s[revisi] !== s[kolom] ? { tanggal: s[revisi], label } : null);
+  const etaDiganti = diganti("eta", "etaUpdate", tt("Update ETA", "Updated ETA"));
+  const eta = etaKartuHtml(s, etaDiganti);
+  const delivery = prediksiDelivery ? deliveryKartuHtml(s) : { lencana: "", keterangan: "" };
   return `
     <div class="date-strip">
       ${kotakTanggalKartu(s, "etd", "ETD", { jam: s.etdTime, diganti: diganti("etd", "etdUpdate", tt("Update ETD", "Updated ETD")) })}
       ${kotakTanggalKartu(s, "eta", "ETA", {
         jam: s.etaTime,
-        keterangan: keteranganEtaKartu(s),
+        lencana: eta.lencana,
+        keterangan: eta.keterangan,
         kelas: etaAuto ? "date-field--auto" : "",
-        diganti: diganti("eta", "etaUpdate", tt("Update ETA", "Updated ETA")),
+        diganti: etaDiganti,
       })}
       ${
         /* Estimated Delivery sengaja tetap BISA DIKETIK; mengetik di
@@ -407,7 +445,8 @@ function dateStripHtml(s) {
            jawabannya. Di Export kolom ini Stuffing -- fakta milik
            pengguna, tanpa keterangan mesin. */
         kotakTanggalKartu(s, "actual", lbl.actual, {
-          keterangan: prediksiDelivery ? predictionStripHtml(s) : "",
+          lencana: delivery.lencana,
+          keterangan: delivery.keterangan,
           kelas: deliveryManual ? "date-field--pinned" : prediksiDelivery ? "date-field--auto" : "",
         })
       }

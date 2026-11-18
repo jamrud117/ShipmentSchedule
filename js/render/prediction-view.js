@@ -68,6 +68,36 @@ function deliveryModeChipHtml(mode) {
   if (!tampilkanMekanikaPrediksi()) return "";
   return modeChipHtml(mode === "manual", deliveryModeLabel(mode));
 }
+/* KOTAK TANGGAL DI KARTU -- potongan bersama render/cards.js.
+
+   Lencana mode Auto / Manual duduk di BARIS JUDUL kotak tanggalnya
+   ("ETA [Auto]", "Estimated Delivery [Manual]"): baris itu memang sudah
+   ada dan hampir kosong, jadi lencananya tidak menambah baris di bawah
+   tanggal. Penjelasannya di tooltip. */
+function lencanaJudulTanggalHtml(lencana, judul) {
+  if (!lencana) return "";
+  const atributJudul = judul ? ` title="${escapeAttr(judul)}"` : "";
+  return `<span class="date-mode"${atributJudul}>${lencana}</span>`;
+}
+/* Satu BUTIR keterangan di bawah tanggal: hari ("Jumat"), rincian ("ETD +
+   10 hari", "dari PIB", "Telat 3 hari"), keyakinan. Butir-butir berderet
+   SATU baris dipisah titik tengah; butir yang tidak muat turun utuh ke
+   baris berikutnya dan titik di depannya ikut hilang (css/card.css). */
+function butirKeteranganHtml(isi, kelas, judul) {
+  if (!isi) return "";
+  const atributJudul = judul ? ` title="${escapeAttr(judul)}"` : "";
+  return `<span class="date-butir${kelas ? ` ${kelas}` : ""}"${atributJudul}>${isi}</span>`;
+}
+function judulModeEta(mode) {
+  return mode === "manual"
+    ? tt("Manual — diisi sendiri (biasanya dari forwarder), mesin tidak menggesernya", "Manual — entered by hand (usually from the forwarder), the engine won't move it")
+    : tt("Auto — dihitung mesin: ETD + lama perjalanan rute ini", "Auto — calculated by the engine: ETD + this route's transit time");
+}
+function judulModeDelivery(mode) {
+  return mode === "manual"
+    ? tt("Manual — dikunci untuk laporan, mesin tidak menggesernya", "Manual — locked for reports, the engine won't move it")
+    : tt("Auto — dihitung mesin dari tahap dokumen terakhir yang dikonfirmasi", "Auto — calculated by the engine from the latest confirmed document step");
+}
 /* Ringkasan Lapis 0. Kalau ETA terlihat aneh, pertanyaan pertamanya
    selalu "rutenya kebaca benar tidak" — dan ini yang menjawabnya. */
 
@@ -255,28 +285,37 @@ function predStepsHtml(d) {
    BARIS RINGKAS DI KARTU
 ------------------------------------------------------------------ */
 
-/* Keterangan Estimated Delivery di kartu -- duduk di BAWAH tanggalnya,
-   SEBARIS dengan harinya (dateStripHtml, js/render/cards.js), bukan lagi
-   pita tersendiri yang menulis Estimated Delivery & tanggalnya sekali
-   lagi:
+/* Estimated Delivery di kartu (dateStripHtml, js/render/cards.js):
+   lencana mode untuk BARIS JUDULNYA + butir keterangan di bawah
+   tanggalnya, dari SATU kali predictDelivery -- fungsi itu dipanggil
+   sekali per kartu tiap papan digambar ulang.
 
-     Sen  [Auto] dari PIB  ▮▮▮▮▯ 90% · Sangat Tinggi
-     Sen  [Manual]  ▮▮▯▯▯ 60% · Sedang
+     Estimated Delivery [Auto]             Estimated Delivery [Manual]
+     [24-11-2026]                          [18-11-2026]
+     Selasa · dari PIB · ▮▮▮▮▯ 85% · Tinggi  Rabu · ▮▮▯▯▯ 60% · Sedang
 
    Sumber disebut hanya untuk Auto ("dari ETA", "dari PIB"); Manual
-   sumbernya memang orang yang mengetiknya. Rentang tanggalnya di
-   tooltip keyakinan -- sebagai teks ia memaksa keterangan pecah dua
-   baris di kolom tanggal. */
-function predictionStripHtml(s) {
-  if (!tampilkanMekanikaPrediksi()) return "";
+   sumbernya memang orang yang mengetiknya. Perkiraan yang sudah terlewat
+   dan dihitung ulang dari hari ini: "◷ Telat 36 hari" menggantikan
+   sumbernya -- kalimat lengkapnya di tooltip -- bukan baris tersendiri,
+   dan bukan "dari Hari Ini (dari ETA)". Rentang tanggalnya di tooltip
+   keyakinan. Bukan pita tersendiri yang menulis Estimated Delivery &
+   tanggalnya sekali lagi. */
+function deliveryKartuHtml(s) {
+  const kosong = { lencana: "", keterangan: "" };
+  if (!tampilkanMekanikaPrediksi()) return kosong;
   /* Seluruhnya tentang Estimated Delivery, yang tidak berlaku di
      Export. ETA otomatis Export tetap jalan (keterangannya di bawah
      tanggal ETA). */
-  if (!deliveryPredictionAppliesTo(s)) return "";
+  if (!deliveryPredictionAppliesTo(s)) return kosong;
   const d = predictDelivery(s);
+  const lencanaMode = (mode) => lencanaJudulTanggalHtml(deliveryModeChipHtml(mode), judulModeDelivery(mode));
 
   if (!d.ok) {
-    return `<span class="pred-strip pred-strip--empty"><span class="pred-strip-note">${escapeHtml(d.reason)}</span></span>`;
+    return {
+      lencana: lencanaMode(deliveryModeOf(s)),
+      keterangan: `<span class="pred-strip pred-strip--empty">${butirKeteranganHtml(escapeHtml(d.reason), "pred-strip-note")}</span>`,
+    };
   }
 
   const manual = d.source === "manual";
@@ -284,11 +323,26 @@ function predictionStripHtml(s) {
     d.range && d.range.earliest && d.range.latest && d.range.earliest !== d.range.latest
       ? `${tt("Rentang", "Range")} ${fmtDate(d.range.earliest)} – ${fmtDate(d.range.latest)}`
       : "";
-  return `<span class="pred-strip">${deliveryModeChipHtml(manual ? "manual" : "auto")}${
-    manual ? "" : `<span class="pred-strip-src">${tt("dari", "from")} <b>${escapeHtml(d.sourceLabel)}</b></span>`
-  }${confidenceChipHtml(d.confidence, "", rentang)}${
-    d.shifted ? `<span class="pred-late"><i class="bi bi-clock-history" aria-hidden="true"></i> ${tt(`Telat ${d.overdueDays} hari — dihitung ulang dari hari ini`, `${d.overdueDays} days late — recalculated from today`)}</span>` : ""
-  }</span>`;
+  const sumber = d.shifted
+    ? butirKeteranganHtml(
+        `<i class="bi bi-clock-history" aria-hidden="true"></i>${escapeHtml(tt(`Telat ${d.overdueDays} hari`, `${d.overdueDays} days late`))}`,
+        "pred-late",
+        tt(
+          `Perkiraan sebelumnya sudah terlewat ${d.overdueDays} hari — tanggal ini dihitung ulang dari hari ini`,
+          `The previous estimate passed ${d.overdueDays} days ago — this date is recalculated from today`,
+        ),
+      )
+    : manual
+      ? ""
+      : butirKeteranganHtml(`${tt("dari", "from")} <b>${escapeHtml(d.sourceLabel)}</b>`, "pred-strip-src");
+  return {
+    lencana: lencanaMode(manual ? "manual" : "auto"),
+    keterangan: `<span class="pred-strip">${sumber}${butirKeteranganHtml(confidenceChipHtml(d.confidence, "", rentang), "date-butir--keyakinan")}</span>`,
+  };
+}
+/* Butir keterangan Estimated Delivery saja (tanpa lencana judul). */
+function predictionStripHtml(s) {
+  return deliveryKartuHtml(s).keterangan;
 }
 /* ------------------------------------------------------------------
    BAGIAN PENUH DI PANEL DETAIL

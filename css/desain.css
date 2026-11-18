@@ -1001,10 +1001,12 @@ table.item-table th,
      [PPH] [COO x 1]        6 / 9 · 1 draft · Berikutnya <- lencana | hitungan
      ────────────────────────────────────────────────── <- garis tipis
      ①──②──③──④──⑤──⑥──⑦──⑧──⑨                          <- stepper
-   Panel sempit (< 900px): tanggal & nama barang jadi kisi 2x2 -- ETD |
-   ETA, lalu Estimated Delivery | Nama Barang. Ponsel (< 576px): lencana,
-   hitungan & stepper bertumpuk berjarak. Dulu lencana, hitungan, dan
-   stepper menumpuk rapat di kiri di bawah ETD dan sisi kanan kosong. */
+   Panel menengah (< 900px): ketiga tanggal tetap sebaris, nama barang
+   turun ke baris sendiri di bawahnya. Panel sempit (< 560px): kisi 2x2
+   -- ETD | ETA, lalu Estimated Delivery | Nama Barang. Ponsel (< 576px):
+   lencana, hitungan & stepper bertumpuk berjarak. Dulu lencana,
+   hitungan, dan stepper menumpuk rapat di kiri di bawah ETD dan sisi
+   kanan kosong. */
 html[data-kepadatan="ringkas"] .ship-card:not(.ship-card--collapsed) {
   padding-top: 14px;
   padding-bottom: 14px;
@@ -1030,18 +1032,61 @@ html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang {
   padding-left: 20px;
   border-left: 1px solid var(--border);
 }
-/* 900px = 180 + 180 + 260 + 200 + tiga jarak 24px + sedikit kelonggaran */
+/* Panel menengah (< 900px, mis. jendela terbelah dua): kolom keempat tidak
+   lagi muat, tapi ketiga tanggal tetap SEBARIS -- Estimated Delivery di
+   kanan ETA, sama dengan Nyaman (kisi menyusut di css/card.css). Nama
+   barang turun ke baris sendiri selebar panel di bawah tanggal. Dulu
+   di sini kisinya 2x2 dan Estimated Delivery turun ke bawah ETD.
+   900px = 180 + 180 + 260 + 200 + tiga jarak 24px + sedikit kelonggaran */
 @container perjalanan (max-width: 899.98px) {
+  html[data-kepadatan="ringkas"] .ship-card :is(.date-strip, .delay-strip-fields) {
+    grid-template-columns: minmax(136px, 1fr) minmax(150px, 1fr) minmax(196px, 1.5fr);
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+/* ...dan di baris selebar panel itu nama-namanya BERDERET sebaris ("MOLD
+   HA52 CAVITY · MOLD INSERT · +5 lainnya"), bukan bertumpuk tiga baris di
+   sisi kiri dengan ruang kosong di kanannya -- Ringkas memang untuk
+   melihat lebih banyak jadwal sekali pandang. Nama yang terlalu panjang
+   dipotong "…"; daftar utuhnya tetap di tooltip blok. */
+@container perjalanan (min-width: 560px) and (max-width: 899.98px) {
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang .date-barang-isi {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: 2px;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang .date-barang-isi > div {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang .date-barang-isi > div + div {
+    margin-top: 0;
+  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang .date-barang-isi > div:not(:last-child)::after {
+    content: "·";
+    margin: 0 8px;
+    font-weight: 400;
+    color: var(--n-400);
+  }
+}
+/* Ponsel (< 560px): kisi 2x2 -- ETD | ETA, lalu Estimated Delivery | Nama
+   Barang (batas yang sama dengan Nyaman di css/card.css). */
+@container perjalanan (max-width: 559.98px) {
   html[data-kepadatan="ringkas"] .ship-card :is(.date-strip, .delay-strip-fields) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px 16px;
   }
-  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-field:nth-child(3) {
-    grid-column: auto;
-  }
+  html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-field:nth-child(3),
   html[data-kepadatan="ringkas"] .ship-card .date-strip > .date-barang {
-    padding-left: 0;
-    border-left: 0;
+    grid-column: auto;
   }
 }
 /* Kartu selesai: baris tanggal hanya-baca berupa baris lentur -- nama

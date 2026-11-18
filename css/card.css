@@ -626,12 +626,8 @@
   grid-template-columns: minmax(200px, 224px) minmax(200px, 224px) minmax(300px, 1fr);
   justify-content: start;
 }
-/* Kotak tanggal: label SATU BARIS (tidak pernah dibungkus), tanggal,
-   lalu keterangannya.
-
-   Labelnya selalu sebaris -- lencana mode yang dulu menumpang di label
-   kini di keterangan bawah -- jadi ketiga tanggal berhenti di garis yang
-   sama berapa pun panjang keterangannya. */
+/* Kotak tanggal TIGA baris: judul (label + lencana mode), tanggal,
+   lalu SATU baris keterangan. Label tidak pernah dibungkus. */
 .date-field {
   display: flex;
   flex-direction: column;
@@ -642,64 +638,144 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Kotak tanggalnya: model bergaya nilai bersama (css/date-input.css) --
-   selebar isinya, ikon tepat di kanan tanggal. */
-/* Keterangan di bawah tanggal: hari (& jam), lalu asal angkanya */
-.date-caption {
+/* JUDUL: label + lencana Auto / Manual sebaris ("ETA [Auto]").
+
+   Lencananya dikecilkan setinggi baris label (1,2rem), jadi judul
+   berlencana sama tinggi dengan judul tanpa lencana (ETD) -- ketiga
+   tanggal tetap mulai di garis yang sama. Dulu lencana di label
+   membuatnya patah dua baris; kini label & lencana dua anak lentur, dan
+   kalau kolomnya terlalu sempit untuk keduanya (Estimated Delivery di
+   kisi 2x2 Ringkas ponsel) lencananya yang turun ke bawah judul -- di
+   baris kisi itu tidak ada tanggal lain yang perlu sejajar. */
+.date-kepala {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
-  margin-top: 3px;
+  gap: 2px 6px;
+  min-width: 0;
+  min-height: 1.2rem;
+  margin-bottom: 3px;
+}
+.date-field .date-kepala > label {
+  min-width: 0;
+  margin-bottom: 0;
+}
+/* Pembungkus lencana lentur, bukan baris teks: tanpa "strut" baris yang
+   membuat judulnya lebih tinggi dari label di kolom sebelahnya. */
+.date-mode {
+  display: inline-flex;
+}
+.date-kepala .eta-mode-chip {
+  font-size: 0.66rem;
+  line-height: 1rem;
+}
+/* Kotak tanggalnya: model bergaya nilai bersama (css/date-input.css) --
+   selebar isinya, ikon tepat di kanan tanggal. */
+/* KETERANGAN DI BAWAH TANGGAL -- SATU baris butir, rata kiri dengan
+   tanggalnya (render/cards.js, render/prediction-view.js):
+
+     Jumat · ETD + 10 hari
+     Selasa · dari PIB · ▮▮▮▮▯ 85% · Tinggi
+     Jumat · ◷ Telat 36 hari · ▮▯▯▯▯ 15%
+
+   Butir yang tidak muat turun UTUH ke baris berikutnya, dan titik
+   pemisah di depannya ikut hilang: titik itu duduk di celah KIRI tiap
+   butir (.date-butir::before), dan isi keterangan digeser 15px ke kiri
+   di dalam wadah yang memotong luapannya -- celah butir pertama tiap
+   baris jatuh di luar tepi yang dipotong. Tidak ada "· " menggantung di
+   awal baris kedua, dan tidak ada kata yang patah di tengah butir. */
+.date-caption {
+  margin-top: 4px;
   min-height: 1.1rem;
   line-height: 1.35;
   color: var(--n-500);
+  overflow: hidden;
 }
 .date-caption:empty {
   display: none;
 }
+.date-caption-isi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 2px;
+  margin-left: -15px;
+}
+.date-butir {
+  position: relative;
+  min-width: 0;
+  margin-left: 15px;
+  white-space: nowrap;
+}
+.date-butir::before {
+  content: "·";
+  position: absolute;
+  left: -10px;
+  color: var(--n-400);
+  font-weight: 400;
+}
+/* Kalimat (alasan prediksi belum bisa dihitung) boleh dibungkus */
+.date-butir--alasan,
+.date-butir.pred-strip-note {
+  white-space: normal;
+}
 .date-hari {
   font-weight: 500;
   color: var(--n-600);
-  white-space: nowrap;
 }
-.date-ket {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-}
-/* Keterangan Estimated Delivery (predictionStripHtml) mengalir bersama
-   hari di depannya: "Sen [Auto] dari ETA" sebaris, keyakinan menyusul
-   kalau tidak muat -- bukan seluruh keterangan turun satu blok. */
-.date-caption > .pred-strip {
+/* Keterangan Estimated Delivery (predictionStripHtml): pembungkusnya
+   lebur, butir-butirnya berderet bersama hari di depannya. */
+.date-caption-isi > .pred-strip {
   display: contents;
+}
+/* Keyakinan "▮▮▯▯▯ 60% · Sedang": persennya yang tegas, tingkatnya
+   pelengkap -- tidak semua kata di baris kecil ini ditebalkan. Butirnya
+   lentur (tanpa "strut" baris) supaya tidak lebih tinggi dari butir teks
+   dan hari di kolom ini tetap segaris dengan hari di kolom sebelahnya. */
+.date-butir--keyakinan {
+  display: inline-flex;
+}
+.date-caption .pred-conf-label {
+  font-weight: 500;
+}
+/* "◷ Telat 36 hari" kabar buruk: sebesar butir lain, tinta & tebalnya
+   yang membuatnya menonjol. Kalimat lengkapnya ("dihitung ulang dari
+   hari ini") di tooltip. */
+.date-caption .pred-late {
+  gap: 4px;
+  margin-top: 0;
+  font-size: inherit;
 }
 .date-ket-ringkas {
   display: none;
 }
-/* Panel sempit (ponsel): keterangan dipadatkan supaya tetap SEBARIS
-   dengan harinya -- "ETD + 10 hari" jadi "+10 hari", label keyakinan
-   ("Sedang") disembunyikan (meteran & title tetap menunjukkannya). */
+/* Ringkas, panel ponsel: Estimated Delivery hanya setengah panel (kisi
+   2x2), jadi label tingkat keyakinan ("Sedang") disembunyikan -- meteran,
+   persen & tooltip tetap menunjukkannya. Di Nyaman Estimated Delivery
+   selebar panel: labelnya tetap tampil. */
 @container perjalanan (max-width: 559.98px) {
-  .date-caption {
-    gap: 4px 6px;
-    font-size: 0.72rem;
+  html[data-kepadatan="ringkas"] .date-caption .pred-conf-label {
+    display: none;
   }
+}
+/* Panel < 700px: "ETD + 10 hari" jadi "+10 hari" (judulnya sudah "ETA
+   [Auto]", tooltip menulis hitungannya utuh) supaya tetap sebaris dengan
+   hari di kolom ETA yang menyempit. */
+@container perjalanan (max-width: 699.98px) {
   .date-ket-lengkap {
     display: none;
   }
   .date-ket-ringkas {
     display: inline;
   }
+}
+/* Panel menengah (560-812px): kolom Estimated Delivery 196-284px -- label
+   tingkat keyakinan disembunyikan supaya "Selasa · dari PIB · ▮▮▮▮▯ 85%"
+   tetap sebaris. */
+@container perjalanan (min-width: 560px) and (max-width: 811.98px) {
   .date-caption .pred-conf-label {
     display: none;
   }
-}
-/* "Telat 3 hari — dihitung ulang" kabar buruk: baris sendiri */
-.date-caption .pred-late {
-  flex-basis: 100%;
-  margin-top: 0;
 }
 /* Nama barang di baris tanggal (barangRingkasHtml, render/cards.js):
    hanya tampil di tampilan Ringkas -- letak & kolomnya di css/desain.css
@@ -865,11 +941,28 @@
   grid-template-columns: minmax(200px, 224px) minmax(200px, 224px) minmax(300px, 1fr);
   justify-content: start;
 }
-/* Panel sempit (tablet, ponsel, kartu di samping bilah sisi): ETD & ETA
-   berdampingan (pasangan), Estimated Delivery selebar panel di bawahnya.
-   Update ETD/ETA di strip delay berdampingan juga -- tepat di bawah ETD
-   & ETA. 812px = 224 + 224 + 300 + dua jarak 28px + sedikit kelonggaran. */
+/* Panel menengah (jendela terbelah dua, tablet, kartu di samping bilah
+   sisi): TETAP TIGA KOLOM -- Estimated Delivery di kanan ETA, sebaris.
+   Dulu di bawah 812px kisinya langsung dua kolom dan Estimated Delivery
+   turun ke baris sendiri, padahal di panel 560-810px ketiga tanggal
+   masih muat berdampingan. Kolomnya kini menyusut bersama panel (fr,
+   bukan lebar tetap 224px) dan Estimated Delivery tetap yang paling
+   lebar (1,5 bagian) -- keterangannya paling panjang. Batas bawah 136px
+   = kotak tanggal (±133px) + kelonggaran; 150px supaya "[Auto] ETD + 10
+   hari" muat sebaris di bawah ETA. Strip delay memakai kisi yang sama:
+   Update ETD/ETA tetap tepat di bawah ETD/ETA.
+   812px = 224 + 224 + 300 + dua jarak 24px + sedikit kelonggaran. */
 @container perjalanan (max-width: 811.98px) {
+  .date-strip,
+  .delay-strip-fields {
+    grid-template-columns: minmax(136px, 1fr) minmax(150px, 1fr) minmax(196px, 1.5fr);
+  }
+}
+/* Panel sempit (ponsel, < 560px): tiga kolom tidak lagi muat. ETD & ETA
+   berdampingan (pasangan), Estimated Delivery selebar panel di bawahnya;
+   Update ETD/ETA di strip delay berdampingan tepat di bawah ETD & ETA.
+   560px = 136 + 150 + 196 + dua jarak 24px + sedikit kelonggaran. */
+@container perjalanan (max-width: 559.98px) {
   .date-strip,
   .delay-strip-fields {
     grid-template-columns: repeat(2, minmax(0, 224px));

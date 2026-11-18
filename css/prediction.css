@@ -437,11 +437,13 @@
   color: var(--n-800);
 }
 
-/* Cetak: panel prediksi tidak ikut — surat jalan memuat FAKTA. */
+/* Cetak: panel prediksi tidak ikut — surat jalan memuat FAKTA. Lencana
+   Auto/Manual di judul tanggal kartu juga. */
 @media print {
   .pred-panel,
   .pred-notice,
-  .pred-strip {
+  .pred-strip,
+  .date-mode {
     display: none !important;
   }
 }
