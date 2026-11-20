@@ -645,6 +645,37 @@
   line-height: 1.45;
   color: var(--n-500);
 }
+/* LETAK ISIAN DI FORM JADWAL (cekLetakHtml): "Isi di jadwal: Dokumen &
+   Umum › Dokumen" -- tautan kecil di bawah nama isian, membuka form
+   jadwal tepat di isiannya. */
+.cek-letak {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--s-info);
+  font-size: var(--t-xs);
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+.cek-letak b {
+  font-weight: 600;
+}
+.cek-letak:hover b,
+.cek-letak:focus-visible b {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cek-letak:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
 .cek-sumber {
   display: inline-block;
   margin-top: 4px;
@@ -853,6 +884,7 @@
   #viewChecker .cek-berkas,
   #viewChecker .cek-alat,
   #viewChecker .cek-saran-panel,
+  #viewChecker .cek-letak,
   #viewChecker .cek-aturan {
     display: none !important;
   }

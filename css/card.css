@@ -571,46 +571,58 @@
   text-align: right;
   align-items: flex-end;
 }
-/* Label simpul transit berposisi mutlak (route-model.js): wadahnya
-   setinggi satu baris label (kode terminal + tanggal), dua baris hanya
-   bila ada label berdekatan yang diturunkan ke baris kedua (top 36px). */
+/* Rute TRANSIT (route-model.js): SATU baris label seperti stepper --
+   satu kolom sama lebar per simpul (--simpul = jumlah simpul). Asal
+   rata kiri, tujuan rata kanan, transit rata tengah tepat di bawah
+   titiknya (posisiSimpulLane menaruh titik di tengah kolom). Kolom tidak
+   pernah bertumpuk; padding-nya menjadi jarak antar label. Kode satu
+   baris, nama boleh dua baris, tanggal singgah transit di baris
+   sendiri -- teks lengkapnya di tooltip simpul & nama. */
 .port-labels--multi {
-  position: relative;
-  min-height: 38px;
-  display: block;
-}
-.port-labels--multi.port-labels--dua-baris {
-  min-height: 74px;
+  display: grid;
+  grid-template-columns: repeat(var(--simpul, 3), minmax(0, 1fr));
+  gap: 0;
 }
 .port-labels--multi .p {
-  position: absolute;
-  transition: top 0.15s ease;
-  white-space: nowrap;
+  max-width: none;
 }
 .port-labels--multi .p--start {
-  transform: translateX(0);
-  text-align: left;
+  padding-right: 6px;
 }
 .port-labels--multi .p--end {
-  transform: translateX(-100%);
+  align-items: flex-end;
   text-align: right;
+  padding-left: 6px;
 }
 .port-labels--multi .p--center {
-  transform: translateX(-50%);
+  align-items: center;
   text-align: center;
+  padding: 0 6px;
 }
-.port-labels--multi .p-term {
-  display: block;
-  max-width: 92px;
+.port-labels--multi .p b {
+  max-width: 100%;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--tp-700);
-  font-weight: 600;
-  font-size: 0.72rem;
 }
-.port-labels--multi .p--start .p-term,
-.port-labels--multi .p--end .p-term {
-  max-width: 120px;
+.port-labels--multi .p-nama {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.port-labels .p-tgl {
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Panel sempit (ponsel): tanggal singgah tanpa tahun ("24-11") --
+   tanggal lengkapnya di tooltip simpulnya. */
+@container perjalanan (max-width: 559.98px) {
+  .port-labels .p-tgl-thn {
+    display: none;
+  }
 }
 /* ---- Date strip ---- */
 /* Di dalam panel perjalanan, dipisah dari jalurnya dengan garis tipis.

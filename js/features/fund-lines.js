@@ -756,6 +756,33 @@ function fundMataForm() {
   const el = document.querySelector('[data-docnum-panel="fund"] [data-dn="currency"]');
   return el ? el.value : "";
 }
+/* Satuan uang form Pengajuan Dana: "Rp" untuk rupiah, kodenya untuk
+   mata uang lain -- judul kolom "Nilai (USD)", jumlah "USD 1,250.00".
+   Dulu "(Rp)" & "Rp." tertulis mati walau Mata Uang-nya USD. */
+function fundSatuanForm() {
+  const kode = String(fundMataForm() || "IDR").toUpperCase();
+  return kode === "IDR" ? "Rp" : kode;
+}
+function fundUangForm(n, minus) {
+  const satuan = fundSatuanForm();
+  return `${minus ? "- " : ""}${satuan === "Rp" ? "Rp." : satuan} ${formatNilai(n)}`;
+}
+function segarkanSatuanDana() {
+  const satuan = fundSatuanForm();
+  document.querySelectorAll("#fundLinesTable [data-mata-dana]").forEach((el) => {
+    if (el.textContent !== satuan) el.textContent = satuan;
+  });
+  // Judul kartu isian di layar sempit (data-label) & label kotak nilai ikut
+  const labelNilai = `${t("f.nilai")} (${satuan})`;
+  document.querySelectorAll("#fundLinesBody td.fl-ppn").forEach((td) => {
+    td.dataset.label = `PPN (${satuan})`;
+  });
+  document.querySelectorAll('#fundLinesBody td.fl-amt:not(.fl-ppn)').forEach((td) => {
+    if (td.dataset.label) td.dataset.label = labelNilai;
+    const kotak = td.querySelector('[data-fl-f="amount"]');
+    if (kotak) kotak.setAttribute("aria-label", labelNilai);
+  });
+}
 
 /* "Dibayarkan Kepada" yang sedang dipilih di form Pengajuan Dana. Pilihan
    "+ Tambah vendor baru…" hanya penanda sesaat (fund-vendor.js) -- bukan nama. */
@@ -796,13 +823,13 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
             <i class="bi bi-x-lg" aria-hidden="true"></i>
           </button>
         </td>`;
-  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0" aria-label="${escapeAttr(t("f.nilai.rp"))}">`;
+  const labelNilai = escapeAttr(`${t("f.nilai")} (${fundSatuanForm()})`);
+  const kotakNilai = `<input type="text" data-fl-f="amount" inputmode="decimal" value="${escapeAttr(isiKotakNilai(b))}" placeholder="0" aria-label="${labelNilai}">`;
   /* data-label: judul kolomnya, tampil di atas isian saat tabel ini jadi
      kartu di layar sempit (docnum.css, @container tabel-isian). */
   const selTarif = `
-        <td class="fl-rate" data-label="PPN"><select data-fl-f="ppnRate" aria-label="${escapeAttr(tt("Tarif PPN", "VAT rate"))}">${pilihanTarifHtml(b)}</select></td>
-        <td class="fl-amt fl-ppn" data-label="PPN (Rp)">${teksPpnSel(ppn)}</td>${tombolHapus}`;
-  const labelNilai = escapeAttr(t("f.nilai.rp"));
+        <td class="fl-rate" data-label="PPN (%)"><select data-fl-f="ppnRate" aria-label="${escapeAttr(tt("Tarif PPN", "VAT rate"))}">${pilihanTarifHtml(b)}</select></td>
+        <td class="fl-amt fl-ppn" data-label="PPN (${escapeAttr(fundSatuanForm())})">${teksPpnSel(ppn)}</td>${tombolHapus}`;
   if (!barisDiskon(b)) {
     return `
       <tr data-fl="${i}">
@@ -986,15 +1013,16 @@ function perbaruiHitunganRincian() {
    muncul dan hilang, dan kaki tabel tidak berisi kotak isian, jadi
    menggambarnya ulang tidak merebut fokus. */
 function gambarKakiRincian() {
+  segarkanSatuanDana();
   const kaki = document.getElementById("fundLinesFoot");
   if (!kaki) return;
   const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), fundDokumen);
   kaki.innerHTML = `
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilai(r.totalNilai)}</b></div>
-      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilai(r.totalDiskon)}</b></div>` : ""}
-      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatNilai(r.totalPpn)}</b></div>
-      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatNilai(r.pph)}</b></div>
-      <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatNilai(r.grandTotal)}</b></div>
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>${fundUangForm(r.totalNilai)}</b></div>
+      ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>${fundUangForm(r.totalDiskon, true)}</b></div>` : ""}
+      <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>${fundUangForm(r.totalPpn)}</b></div>
+      <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>${fundUangForm(r.pph, true)}</b></div>
+      <div class="fl-sum fl-sum--total"><span>GRAND TOTAL</span><b>${fundUangForm(r.grandTotal)}</b></div>
       ${kakiPerDokumenHtml(r)}
       ${kakiPerAwbHtml()}`;
 }
@@ -1016,11 +1044,11 @@ function kakiPerDokumenHtml(r) {
       return `
         <div class="fl-dok-blok" data-fl-dok-total="${escapeAttr(d.id)}">
           <div class="fl-dok-judul">${escapeHtml(fundDokNama(d.jenis))}${nomor ? ` <b>${escapeHtml(nomor)}</b>` : ""}</div>
-          <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>Rp. ${formatNilai(x.totalNilai)}</b></div>
-          ${x.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>- Rp. ${formatNilai(x.totalDiskon)}</b></div>` : ""}
-          <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>Rp. ${formatNilai(x.totalPpn)}</b></div>
-          <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>- Rp. ${formatNilai(x.pph)}</b></div>
-          <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>Rp. ${formatNilai(x.grandTotal)}</b></div>
+          <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>${fundUangForm(x.totalNilai)}</b></div>
+          ${x.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>${fundUangForm(x.totalDiskon, true)}</b></div>` : ""}
+          <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>${fundUangForm(x.totalPpn)}</b></div>
+          <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>${fundUangForm(x.pph, true)}</b></div>
+          <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>${fundUangForm(x.grandTotal)}</b></div>
         </div>`;
     });
   if (blok.length < 2) return "";
@@ -1047,7 +1075,7 @@ function kakiPerAwbHtml() {
       <div class="fl-awb-bagian">
         <div class="fl-awb-judul">${escapeHtml(tt("Bagian per BL/AWB", "Share per BL/AWB"))}</div>
         ${bagian.map((b) => `
-        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>Rp. ${formatNilai(b.dibayar)}</b></div>`).join("")}
+        <div class="fl-sum fl-sum--awb"><span>${escapeHtml(b.teks)}${b.rata ? ` <i class="fl-awb-rata">${escapeHtml(b.tautan ? tt("+ bagian rata", "+ even share") : tt("dibagi rata", "split evenly"))}</i>` : ""}</span><b>${fundUangForm(b.dibayar)}</b></div>`).join("")}
       </div>`;
 }
 

@@ -644,6 +644,7 @@ body.is-viewer .status-select {
   align-items: center;
 }
 .hs-bar-judul {
+  flex: 1 1 280px;
   min-width: 0;
 }
 .hs-bar-sub {
@@ -656,8 +657,8 @@ body.is-viewer .status-select {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 420px;
-  max-width: 560px;
+  flex: 1 1 600px;
+  max-width: 700px;
   justify-content: flex-end;
 }
 /* Berawalan .hs-bar: aturan umum .search-box (dashboard.css) mematok
@@ -666,7 +667,7 @@ body.is-viewer .status-select {
    menyusut dan tombol Tambah terdorong keluar panel. */
 .hs-bar .hs-cari {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 160px;
   max-width: none;
   margin: 0;
 }
@@ -677,6 +678,27 @@ body.is-viewer .status-select {
   padding: 0;
   display: inline-grid;
   place-items: center;
+}
+/* Cetak & Excel (hscode-print.js): tombol tenang ikon + label pendek;
+   di layar sempit tinggal ikonnya (tooltip & aria-label tetap). */
+.hs-alat {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+@media (max-width: 1199.98px) {
+  .hs-alat {
+    width: 38px;
+    padding: 0;
+  }
+  .hs-alat-teks {
+    display: none;
+  }
 }
 .hs-tambah {
   flex-shrink: 0;
@@ -737,8 +759,35 @@ body.is-viewer .status-select {
   color: var(--n-600);
 }
 .hs-tanpa-catatan,
-.hs-tanpa-lartas {
+.hs-tanpa-lartas,
+.hs-tanpa-coo {
   color: var(--text-subtle);
+}
+/* COO per HS Code: "Bisa terbit" hijau, "N/A" kelabu */
+.hs-tabel th.hs-kol-coo,
+.hs-tabel td.hs-kol-coo {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+.hs-coo {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hs-coo--bisa {
+  color: var(--w-teks-146c43);
+  background: var(--w-bg-e8f5ee);
+  border-color: var(--w-garis-b7e0c8);
+}
+.hs-coo--na {
+  color: var(--n-600);
+  background: var(--n-50);
+  border-color: var(--border);
 }
 .hs-tabel th.hs-kol-lartas,
 .hs-tabel td.hs-kol-lartas {
@@ -856,15 +905,17 @@ body.is-viewer .status-select {
   .hs-tabel td {
     display: block;
   }
+  /* Baris = kartu: nama selebar kartu, lalu kode, tarif, COO & lartas
+     MENGALIR (membungkus ke baris berikutnya bila tidak muat), catatan di
+     bawah; tombol aksi di pojok kanan atas, ruangnya disisihkan lewat
+     padding kanan -- tidak pernah terdorong keluar kartu. */
   .hs-tabel tr {
-    display: grid;
-    grid-template-columns: auto auto 1fr auto;
-    grid-template-areas:
-      "nama nama nama aksi"
-      "kode tarif lartas aksi"
-      "catatan catatan catatan catatan";
-    gap: 4px var(--sp-3);
-    padding: 11px var(--sp-4);
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px var(--sp-3);
+    padding: 11px calc(var(--sp-4) + 92px) 11px var(--sp-4);
     border-bottom: 1px solid var(--n-100);
   }
   .hs-tabel tbody tr:last-child {
@@ -877,15 +928,17 @@ body.is-viewer .status-select {
   .hs-tabel tbody tr:hover td {
     background: none;
   }
-  .hs-tabel td.hs-kol-nama { grid-area: nama; }
-  .hs-tabel td.hs-kol-kode { grid-area: kode; width: auto; text-align: left; }
-  .hs-tabel td.hs-kol-catatan { grid-area: catatan; font-size: var(--t-xs); }
-  .hs-tabel td.hs-kol-aksi { grid-area: aksi; align-self: center; width: auto; }
-  .hs-tabel td.hs-kol-lartas { grid-area: lartas; align-self: center; width: auto; }
-  .hs-tabel td.hs-kol-tarif { grid-area: tarif; align-self: center; width: auto; text-align: left; }
+  .hs-tabel td.hs-kol-nama { flex: 1 1 100%; }
+  .hs-tabel td.hs-kol-kode { width: auto; text-align: left; }
+  .hs-tabel td.hs-kol-catatan { flex: 1 1 100%; font-size: var(--t-xs); }
+  .hs-tabel td.hs-kol-aksi { position: absolute; top: 11px; right: var(--sp-4); width: auto; }
+  .hs-tabel td.hs-kol-lartas { width: auto; }
+  .hs-tabel td.hs-kol-tarif { width: auto; text-align: left; }
+  .hs-tabel td.hs-kol-coo { width: auto; }
   .hs-tabel td.hs-kol-tarif::before { content: attr(data-label) " "; color: var(--text-subtle); font-size: var(--t-xs); }
   .hs-tabel td.hs-tanpa-catatan,
   .hs-tabel td.hs-tanpa-lartas,
+  .hs-tabel td.hs-tanpa-coo,
   .hs-tabel td.hs-tanpa-tarif { display: none; }
   .pagination-bar.hs-halaman {
     padding: 10px var(--sp-4);

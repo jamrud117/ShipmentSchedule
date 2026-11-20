@@ -18,6 +18,71 @@ function pilihTabForm(nama) {
   return $(`.tab-pane[data-tabpane="${nama}"]`);
 }
 
+/* LANGSUNG KE SATU ISIAN FORM JADWAL -- dari Cek PIB/PEB ("Isi di
+   jadwal: Dokumen & Umum › Dokumen"). Form jadwal itu dibuka, tab-nya
+   dipilih, isiannya dibawa ke tengah layar, difokus dan disorot sebentar.
+   Kembali / sesudah Simpan, halaman pulang ke asalnya (opsi.kembali).
+
+   letak = { tab, tuju }, tuju salah satu dari:
+     { sel }             isian biasa ("#fInvoice")
+     { dpb, sel }        isian Data PIB/PEB: sub-tab + pemilih
+     { item, f }         kolom f barang ke-item (indeks) di Daftar Barang
+     { fasilitas }       baris fasilitas barang ke-n di Daftar Barang
+     { dpbBarang, k }    editor Data PIB/PEB barang ke-n, isian k */
+let isianTertunda = null;
+function bukaIsianJadwal(id, letak, opsi) {
+  const o = opsi || {};
+  const tujuan = `#/edit/${encodeURIComponent(id)}`;
+  const formTerbuka = location.hash === tujuan && String($("#fId").value) === String(id) && !$("#viewForm").classList.contains("d-none");
+  if (formTerbuka) {
+    tujuIsianForm(letak);
+    return;
+  }
+  isianTertunda = letak;
+  // Router hanya melupakannya bila halaman yang dibuka bukan form
+  kembaliSesudahForm = o.kembali || "";
+  location.hash = tujuan;
+  if (o.kembali)
+    showToast(tt("Isi isiannya lalu Simpan Jadwal — halaman kembali ke Cek PIB/PEB dan diperiksa ulang.", "Fill in the field, then Save Schedule — you return to the PIB/PEB Check and it runs again."), "info");
+}
+
+function tujuIsianForm(letak) {
+  const l = letak || {};
+  const tuju = l.tuju || {};
+  const pane = pilihTabForm(l.tab || "umum");
+  let el = null;
+  if (tuju.dpb && typeof pilihTabDataPabean === "function") {
+    pilihTabDataPabean(tuju.dpb);
+    el = tuju.sel ? $(`#dataPabeanIsi ${tuju.sel}`) : null;
+  } else if (tuju.dpbBarang != null && typeof pilihTabDataPabean === "function") {
+    pilihTabDataPabean("barang");
+    const pena = $(`#dataPabeanIsi [data-dpb-pena="${tuju.dpbBarang}"]`);
+    if (pena) {
+      pena.click();
+      el = $(`#dpbBarangIsi [data-dpbb="${tuju.k}"]`) || pena;
+    }
+  } else if (tuju.item != null) {
+    const baris = $(`#itemTableBody tr[data-idx="${tuju.item}"]${tuju.fasilitas ? ".item-fac-row" : ":not(.item-fac-row)"}`);
+    el = baris && (baris.querySelector(`[data-f="${tuju.f}"]`) || baris.querySelector("input, select, textarea, button"));
+  } else if (tuju.sel) el = $(tuju.sel);
+  // Isian yang tersembunyi (kolom yang sedang tidak ditampilkan): cukup bagiannya
+  const kotak = el && !bisaDiisi(el) ? el.closest(".form-section-card, tr, section") || el : el;
+  sorotIsian(kotak || pane, bisaDiisi(el) ? el : null);
+}
+
+/* Isian tujuan: ke tengah layar, difokus, cincin sorot 2,4 detik
+   (.isian-dituju, css/form.css). */
+function sorotIsian(wadah, isian) {
+  if (!wadah) return;
+  wadah.scrollIntoView({ block: "center", behavior: layarSentuh() ? "auto" : "smooth" });
+  if (isian) fokuskan(isian, { tanpaGulir: true });
+  const sorot = isian ? isian.closest(".input-affix, .negara-isian") || isian : wadah;
+  sorot.classList.remove("isian-dituju");
+  void sorot.offsetWidth; // animasi diulang bila isian yang sama dituju lagi
+  sorot.classList.add("isian-dituju");
+  setTimeout(() => sorot.classList.remove("isian-dituju"), 2400);
+}
+
 /* Isian yang ditunggu di tiap langkah. Daftar Barang bukan "isian kosong
    pertama" -- di tabel barang itu bisa kolom Ukuran baris ketiga --
    melainkan Uraian pertama yang masih kosong (atau Uraian pertama). */

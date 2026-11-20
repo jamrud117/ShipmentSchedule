@@ -974,19 +974,22 @@ function cekBarisKolomBarang(no, it, kd, sumber) {
     const nama = itemDisplayName(it);
     const r = cekBandingNama(nama, draft);
     const lama = tt("Barang lama: seluruh namanya di Uraian, jadi dibandingkan per kata dengan gabungan kolom barang draft.", "Older item: its whole name is in the Description, so it is compared word by word with the draft's item columns combined.");
-    return [baris("Uraian", r.status, nama, r.pib, [lama, r.expected_note].filter(Boolean).join(" "))];
+    return [Object.assign(baris("Uraian", r.status, nama, r.pib, [lama, r.expected_note].filter(Boolean).join(" ")), { kolomBarang: "namaBarang" })];
   }
-  return CEK_KOLOM_BARANG.map(([k, kolom]) => {
-    const j = teks(it[k]);
-    const d = teks(draft[k]);
-    const jKosong = !rapiBagianNama(j);
-    const dKosong = !rapiBagianNama(d);
-    const sama = j.toUpperCase() === d.toUpperCase();
-    // Tanda kosong yang ditulis berbeda di kedua sisi ("-" vs "TANPA MEREK") disebut; isian yang memang kosong tidak
-    if (jKosong && dKosong) return baris(kolom, "MATCH", j, d, sama || !j || !d ? "" : tt("Sama-sama kosong; tanda kosongnya ditulis berbeda.", "Both empty; the empty marker is written differently."));
-    if (sama) return baris(kolom, "MATCH", j, d);
-    return baris(kolom, "MISMATCH", j, d, jKosong ? tt("Kosong di jadwal.", "Empty on the schedule.") : dKosong ? tt("Kosong di draft.", "Empty in the draft.") : "");
-  });
+  // kolomBarang: kolom Daftar Barang tempat mengisinya (letak isian, cekLetakIsian)
+  return CEK_KOLOM_BARANG.map(([k, kolom]) => Object.assign(cekSelKolomBarang(k, kolom, it, draft, baris, teks), { kolomBarang: k }));
+}
+// Satu kolom barang CEISA (Uraian, Merek, Tipe, ...) jadwal vs draft
+function cekSelKolomBarang(k, kolom, it, draft, baris, teks) {
+  const j = teks(it[k]);
+  const d = teks(draft[k]);
+  const jKosong = !rapiBagianNama(j);
+  const dKosong = !rapiBagianNama(d);
+  const sama = j.toUpperCase() === d.toUpperCase();
+  // Tanda kosong yang ditulis berbeda di kedua sisi ("-" vs "TANPA MEREK") disebut; isian yang memang kosong tidak
+  if (jKosong && dKosong) return baris(kolom, "MATCH", j, d, sama || !j || !d ? "" : tt("Sama-sama kosong; tanda kosongnya ditulis berbeda.", "Both empty; the empty marker is written differently."));
+  if (sama) return baris(kolom, "MATCH", j, d);
+  return baris(kolom, "MISMATCH", j, d, jKosong ? tt("Kosong di jadwal.", "Empty on the schedule.") : dKosong ? tt("Kosong di draft.", "Empty in the draft.") : "");
 }
 
 /* Barang lama (satu teks nama) vs kolom barang draft. MATCH bila
@@ -1039,6 +1042,11 @@ function cekBarisKodeBarang(no, it, kd, sumber, isPib) {
     const j = baku(it[kunci]);
     const d = baku(draft[kunci]);
     if (!j && !d) return;
+    const n = rows.length;
+    satuBaris(kolom, kunci, kolomCeisa, label, j, d);
+    if (rows[n]) rows[n].kolomBarang = kunci;
+  };
+  const satuBaris = (kolom, kunci, kolomCeisa, label, j, d) => {
     if (!j) return rows.push(baris(kolom, "INFO", "", label(d), tt("Belum diisi di jadwal.", "Not filled in on the schedule.")));
     // Kolomnya tidak ada sama sekali (format draft lama): tidak bisa diperiksa, tetap INFO walau isian wajib
     if (!(kunci in draft)) return rows.push(Object.assign(baris(kolom, "INFO", label(j), "", tt(`Draft tidak memuat kolom ${kolomCeisa}.`, `The draft has no ${kolomCeisa} column.`)), { tetapInfo: true }));
@@ -1103,6 +1111,7 @@ function cekBarisFasilitasBarang(no, it, bc, sumber) {
     {
       section: "ITEM",
       field: `Item ${no} Fasilitas & No. Urut`,
+      kolomBarang: "fasilitas",
       status,
       severity: status === "MISMATCH" ? "ERROR" : "OK",
       cipl: kiri,
@@ -1130,7 +1139,7 @@ function cekBarisKemasanBarang(no, it, bc, sumber) {
   const jenisD = teks(r["KODE KEMASAN"]);
   if (!jumlahJ && !jumlahD) return [];
   const tulis = (n, j) => [n ? cekAngka(n) : "", j].filter(Boolean).join(" ");
-  const baris = (status, catatan) => cekBarisBaru("ITEM", sumber)(`Item ${no} Kemasan`, status, jumlahJ ? tulis(jumlahJ, jenisJ) : "", jumlahD ? tulis(jumlahD, jenisD) : "", catatan);
+  const baris = (status, catatan) => cekBarisBaru("ITEM", sumber)(`Item ${no} Kemasan`, status, jumlahJ ? tulis(jumlahJ, jenisJ) : "", jumlahD ? tulis(jumlahD, jenisD) : "", catatan, { kolomBarang: "packing" });
   if (!jumlahJ) return [baris("INFO", tt("Belum diisi di jadwal (kolom Kemasan barang).", "Not filled in on the schedule (the item's Packages column)."))];
   if (!jumlahD) return [baris("INFO", tt("Draft tidak mencantumkan kemasan barang ini.", "The draft states no packages for this item."))];
   if (Math.abs(jumlahJ - jumlahD) > 0.001) return [baris("MISMATCH", tt(`Jumlah kemasan berbeda: ${cekAngka(jumlahJ)} di jadwal, ${cekAngka(jumlahD)} di draft.`, `Different package count: ${cekAngka(jumlahJ)} on the schedule, ${cekAngka(jumlahD)} in the draft.`))];
@@ -1462,8 +1471,11 @@ function cekTandaiBarangJadwal(res, gabung, decl, bc) {
      baris CEISA barangnya (cekBlokBarang) -- sesudah baris HS Code-nya,
      atau di baris pertama barang itu kalau mesin tidak memeriksa HS. */
   const blok = new Map();
+  // Baris barang ke-n di form jadwal (letak isian, cekLetakIsian): indeks barang itu di jadwalnya
+  const barangJadwal = (res.jadwal && res.jadwal.items) || [];
+  const idxBarang = (x) => (x && x._barang ? barangJadwal.indexOf(x._barang) : -1);
   gabung.items.forEach((x) => {
-    if (x._barang) blok.set(String(x.no), cekBlokBarang(x.no, x._barang, kolomDraft.get(kunciSeri(x.no)), bc, JADWAL, decl.type === "PIB"));
+    if (x._barang) blok.set(String(x.no), cekTandaiIdxBarang(cekBlokBarang(x.no, x._barang, kolomDraft.get(kunciSeri(x.no)), bc, JADWAL, decl.type === "PIB"), idxBarang(x)));
   });
   const ditaruh = new Set();
   res.checks = res.checks.flatMap((x) => {
@@ -1482,9 +1494,12 @@ function cekTandaiBarangJadwal(res, gabung, decl, bc) {
     return m[2] === "HS Code" ? [x, ...baris] : [...baris, x];
   });
   const KOLOM = [[/ HS Code$/, "hs"], [/ (Description|Type \/ Specification|Brand)$/, "nama"], [/ Quantity$/, "qty"], [/ Unit$/, "unit"], [/ Amount \//, "amount"], [/ Net Weight$/, "net"]];
+  // Kolom Daftar Barang tempat isian mesin itu diisi di jadwal
+  const KOLOM_FORM = { hs: "hsCode", nama: "namaBarang", qty: "qty", unit: "satuan", amount: "harga", net: "netto" };
   res.checks.forEach((x) => {
     if (x.section !== "ITEM") {
       const total = x.field === "Net Weight Total" ? "net" : x.field === "Gross Weight Total" ? "gross" : /^Total Amount \//.test(x.field) ? "amount" : "";
+      if (total) x.kunci = x.kunci || `total:${total}`;
       if (total && gabung.totalJadwal[total]) x.left_source = JADWAL;
       return;
     }
@@ -1504,6 +1519,7 @@ function cekTandaiBarangJadwal(res, gabung, decl, bc) {
     const k = it && KOLOM.find(([re]) => re.test(x.field));
     if (!k) return;
     x.left_source = it._sumber[k[1]] === "cipl" ? "CIPL" : JADWAL;
+    if (it._barang) Object.assign(x, { kolomBarang: KOLOM_FORM[k[1]], idxBarang: idxBarang(it) });
     // Catatan HS mesin menyebut "CIPL"; kodenya dari jadwal
     if (k[1] === "hs" && it._sumber.hs === "jadwal" && x.expected_note) x.expected_note = x.expected_note.replace(/\bCIPL\b/g, "Jadwal");
   });
@@ -1531,6 +1547,12 @@ function cekTandaiBarangJadwal(res, gabung, decl, bc) {
     });
   }
   res.barangDariJadwal = true;
+}
+
+// Baris-baris satu barang jadwal: indeks barangnya di jadwal (baris Daftar Barang di form)
+function cekTandaiIdxBarang(rows, idx) {
+  if (idx >= 0) rows.forEach((r) => (r.idxBarang = idx));
+  return rows;
 }
 
 /* ---------- baris tambahan dari data Shipment Schedule ---------- */
@@ -2338,6 +2360,8 @@ function cekRujukJadwal(checks, barisJadwal, cipl, adaJadwal) {
         return;
       }
       ditaruh.add(kunci); // isian jadwal kosong, CIPL mencantumkannya: baris CIPL yang dipakai
+      // ...dan isiannya tetap ditunjukkan di form jadwal (letak isian)
+      x.kunci = kunci;
     }
     if (adaJadwal && !x.left_source) x.left_source = "CIPL";
     out.push(x);
@@ -2397,7 +2421,10 @@ function cekBarisTanggalDokumen(daftar, docs, kode) {
 function cekBarisFasilitas(s, decl) {
   if (!s) return [];
   const rows = [];
-  const baris = cekBarisBaru("FACILITY", tt("Jadwal", "Schedule"));
+  const buat = cekBarisBaru("FACILITY", tt("Jadwal", "Schedule"));
+  // kunci = letak isiannya di form jadwal: PI & LS di Dokumen Pelengkap, fasilitas di barangnya
+  let kunci = "";
+  const baris = (...a) => Object.assign(buat(...a), { kunci });
   const daftarNomor = (docs) => docs.map((d) => d.number).join(", ");
 
   /* PI (959) & LS (958): daftar dokumen jadwal -- tiap nomornya harus
@@ -2408,6 +2435,7 @@ function cekBarisFasilitas(s, decl) {
     ["ls", tt("Tanggal LS", "LS Date")],
   ].forEach(([jenis, fieldTanggal]) => {
     const { kode, label: field } = DOK_PENGIRIMAN[jenis];
+    kunci = `dok:${jenis}`;
     const daftar = dok[jenis] || [];
     const jadwal = cekNomorDokumen(daftar);
     const kiri = ringkasDokumen(daftar).nomor;
@@ -2425,6 +2453,7 @@ function cekBarisFasilitas(s, decl) {
 
   // Fasilitas barang (SKB / Masterlist / COO) di jadwal vs dokumen fasilitas di draft
   const entri = [].concat(...(s.items || []).map((it) => it.skb || []));
+  kunci = "fasilitas";
   CEK_FASILITAS.forEach((fas) => {
     const milikJadwal = entri.filter((sk) => sk.jenis === fas.jenis);
     const docs = cekDokumenKode(decl, fas.kode);
@@ -2449,14 +2478,17 @@ function cekBarisFasilitas(s, decl) {
    membiarkan CIF 0, draft PIB mengisi CIF dan membiarkan FOB kosong --
    yang dipakai kolom yang ada nilainya, bukan kolom yang "seharusnya"
    menurut incoterm. Incoterm hanya menentukan kolom mana yang
-   didahulukan bila keduanya terisi, dan apakah CIF turunan PEB (FOB +
-   Freight + Asuransi dibagi rata) ikut dicoba.
+   didahulukan bila keduanya terisi (dan yang ditampilkan bila tak ada
+   yang cocok), dan apakah CIF turunan PEB (FOB + Freight + Asuransi
+   dibagi rata) ikut dicoba. PIB: terms FOB -> FOB, selain itu CIF --
+   aturan yang sama dengan harga satuan impor draft ke jadwal
+   (excel-bc.js). PEB: FOB / FCA / EXW / FAS -> FOB, selain itu CIF.
    Satu aturan untuk dua jalur: tanpa CIPL (cekBarisBarangJadwal) dan
    dengan CIPL (mesin, runCheck -- nilai barang jadwal menggantikan
    nilai CIPL, cekBarangGabungan). */
 function cekBasisHarga(s, decl) {
-  if (decl.type !== "PEB") return "CIF";
   const term = String((s && s.incoterm) || decl.incoterm || "").trim().toUpperCase();
+  if (decl.type !== "PEB") return term === "FOB" ? "FOB" : "CIF";
   return /^(?:EXW|FCA|FAS|FOB)$/.test(term) ? "FOB" : "CIF";
 }
 
@@ -2548,21 +2580,23 @@ function cekBarisBarangJadwal(s, decl, resolve, bc) {
       return;
     }
     const semu = { no, description: rapiBagianNama(it.namaBarang), type: "", hs: it.hsCode, _sumber: { hs: "jadwal" }, _nama: itemDisplayName(it), _uraian: rapiBagianNama(it.namaBarang) };
-    const tandai = (r) => Object.assign(r, { left_source: sumber });
+    const idx = items.indexOf(it);
+    // kolomBarang & idxBarang: letak isiannya di Daftar Barang form jadwal (cekLetakIsian)
+    const tandai = (r, kolom) => Object.assign(r, { left_source: sumber, idxBarang: idx }, kolom ? { kolomBarang: kolom } : {});
     // Isian yang kosong di salah satu sisi tetap punya baris (INFO) -- HS & satuan isian wajib, jadi cekTerapkanWajib menjadikannya MISMATCH
-    const satuSisi = (kolom, kiri, kanan, apa) =>
-      cekBarisBaru("ITEM", sumber)(`Item ${no} ${kolom}`, "INFO", kiri, kanan, cekAda(kiri) ? tt(`Draft tidak mencantumkan ${apa} barang ini.`, `The draft does not state this item's ${apa}.`) : tt("Belum diisi di jadwal.", "Not filled in on the schedule."));
+    const satuSisi = (kolom, kiri, kanan, apa, kolomForm) =>
+      tandai(cekBarisBaru("ITEM", sumber)(`Item ${no} ${kolom}`, "INFO", kiri, kanan, cekAda(kiri) ? tt(`Draft tidak mencantumkan ${apa} barang ini.`, `The draft does not state this item's ${apa}.`) : tt("Belum diisi di jadwal.", "Not filled in on the schedule.")), kolomForm);
     const hs = E.hsCheckRow(`Item ${no} HS Code`, semu, d, resolve);
     // Catatan mesin menyebut "CIPL"; pembandingnya di sini HS barang jadwal
     if (hs && hs.expected_note) hs.expected_note = hs.expected_note.replace(/\bCIPL\b/g, "Jadwal");
-    if (hs) rows.push(tandai(hs));
-    else if (cekAda(d.hs)) rows.push(satuSisi("HS Code", "", d.hs, "HS"));
-    rows.push(...cekBlokBarang(no, it, kolomDraft.get(kunciSeri(no)), bc, sumber, decl.type === "PIB"));
-    rows.push(tandai(E.compareNum(`Item ${no} Quantity`, it.qty, d.qty, "ITEM")));
-    if (cekAda(it.satuan) && cekAda(d.unit)) rows.push(tandai(E.compareUnit(`Item ${no} Unit`, it.satuan, d.unit, "ITEM")));
-    else if (cekAda(it.satuan) || cekAda(d.unit)) rows.push(satuSisi("Unit", it.satuan || "", d.unit || "", tt("satuan", "unit")));
-    rows.push(tandai(cekBarisHargaBarang(no, it, d, hintHarga)));
-    if (Number(it.netto) > 0 || d.net != null) rows.push(tandai(E.compareNum(`Item ${no} Net Weight`, it.netto, d.net, "ITEM")));
+    if (hs) rows.push(tandai(hs, "hsCode"));
+    else if (cekAda(d.hs)) rows.push(satuSisi("HS Code", "", d.hs, "HS", "hsCode"));
+    rows.push(...cekTandaiIdxBarang(cekBlokBarang(no, it, kolomDraft.get(kunciSeri(no)), bc, sumber, decl.type === "PIB"), idx));
+    rows.push(tandai(E.compareNum(`Item ${no} Quantity`, it.qty, d.qty, "ITEM"), "qty"));
+    if (cekAda(it.satuan) && cekAda(d.unit)) rows.push(tandai(E.compareUnit(`Item ${no} Unit`, it.satuan, d.unit, "ITEM"), "satuan"));
+    else if (cekAda(it.satuan) || cekAda(d.unit)) rows.push(satuSisi("Unit", it.satuan || "", d.unit || "", tt("satuan", "unit"), "satuan"));
+    rows.push(tandai(cekBarisHargaBarang(no, it, d, hintHarga), "harga"));
+    if (Number(it.netto) > 0 || d.net != null) rows.push(tandai(E.compareNum(`Item ${no} Net Weight`, it.netto, d.net, "ITEM"), "netto"));
   });
   return rows;
 }
@@ -2755,7 +2789,10 @@ async function cekJalankan() {
       res = E.runCheck(pembanding, decl, extra);
       // Beberapa CIPL: Invoice & Packing List per invoice, bukan gabungan nomornya (cekGabungCipl)
       res.checks = cekGantiBarisDokumenCipl(res.checks, cipl, decl);
-      if (gabung) cekTandaiBarangJadwal(res, gabung, decl, bc);
+      if (gabung) {
+        res.jadwal = s; // indeks barang jadwal untuk letak isian (cekTandaiBarangJadwal)
+        cekTandaiBarangJadwal(res, gabung, decl, bc);
+      }
       res.checks = cekRujukJadwal(res.checks, barisJadwal, pembanding, !!s);
     } else res = { type: decl.type, checks: E.blChecks(decl, extra, decl.type === "PEB").concat(cekBarisBarangJadwal(s, decl, resolve, bc), barisJadwal), cipl: null, decl };
     // Urutan Seri Barang draft vs urutan jadwal (atau CIPL)
@@ -2913,6 +2950,119 @@ function cekUtuhBilaTanggal(html, nilai) {
   return typeof nilai === "string" && CEK_POLA_TANGGAL.test(nilai) ? `<span class="cek-utuh">${html}</span>` : html;
 }
 
+/* ---------- LETAK ISIAN DI FORM JADWAL ----------
+
+   Baris yang isian jadwalnya BELUM DIISI (atau baru terisi dari CIPL) dan
+   baris yang BERBEDA dengan draft menyebut di mana isian itu di form
+   jadwal -- tab › bagian -- dan bisa diklik: form jadwal terkait terbuka
+   di tab itu dengan kursor di isiannya (bukaIsianJadwal,
+   features/modal-fields.js). Kembali / Simpan pulang ke halaman ini, dan
+   pemeriksaannya diulang (showCheckerView).
+
+   Letak dari kunci baris (cekBarisJadwal & kawan-kawan), kolom barang
+   (kolomBarang + idxBarang: barang ke-n di Daftar Barang), atau kunci
+   Data PIB/PEB ("dp:<isian>", "dp:pihak.<pihak>.<isian>",
+   "barang:<seri>:<isian>"). Tanpa letak yang pasti: tanpa tautan. */
+const CEK_TAB_FORM = { umum: ["Dokumen & Umum", "Documents & General"], barang: ["Daftar Barang", "Item List"], pabean: ["Kepabeanan & Biaya", "Customs & Charges"] };
+const CEK_BAGIAN_FORM = {
+  dokumen: ["Dokumen", "Documents"],
+  angkut: ["Transportasi & Forwarder", "Transport & Forwarder"],
+  rute: ["Rute & Jadwal", "Route & Schedule"],
+  nilai: ["Incoterm & Nilai Barang", "Incoterm & Goods Value"],
+  pajak: ["Bea & Pajak Impor", "Import Duties & Taxes"],
+  pelengkap: ["Dokumen Pelengkap", "Supporting Customs Documents"],
+};
+// kunci baris -> [tab, bagian, isian]
+const CEK_LETAK_JADWAL = {
+  aju: ["umum", "dokumen", "#fNoAju"],
+  docNo: ["umum", "dokumen", "#fDocNo"],
+  invoice: ["umum", "dokumen", "#fInvoice"],
+  invoiceDate: ["umum", "dokumen", "#fInvoiceDate"],
+  packingList: ["umum", "dokumen", "#fPackingList"],
+  pihak: ["umum", "dokumen", "#fParty"],
+  moda: ["umum", "angkut", "#fTransport"],
+  kapal: ["umum", "angkut", "#fVessel"],
+  kontainer: ["umum", "angkut", "#fContainer"],
+  muat: ["umum", "rute", "#fOrigin"],
+  tujuan: ["umum", "rute", "#fDestination"],
+  negaraTujuan: ["umum", "rute", "#fDestination"],
+  etd: ["umum", "rute", "#fEtd"],
+  eta: ["umum", "rute", "#fEta"],
+  incoterm: ["pabean", "nilai", "#fIncoterm"],
+  freight: ["pabean", "nilai", "#fFreight"],
+  asuransi: ["pabean", "nilai", "#fInsurance"],
+  ndpbm: ["pabean", "nilai", "#fNdpbm"],
+  polis: ["pabean", "pelengkap", "#dokPelengkapSection"],
+  polisDate: ["pabean", "pelengkap", "#dokPelengkapSection"],
+  kemasan: ["barang", "", "#fPackage"],
+};
+// Total & jumlah barang: kolomnya di barang pertama Daftar Barang
+const CEK_LETAK_TOTAL = { netto: "netto", bruto: "bruto", nilai: "harga", jumlahBarang: "namaBarang", volume: "package", "total:net": "netto", "total:gross": "bruto", "total:amount": "harga" };
+const CEK_PAJAK_FORM = { BM: "#fBM", PPN: "#fPPN", PPh: "#fPPH", TOTAL: "#fBM" };
+
+function cekLetakIsian(x, res) {
+  const k = String(x.kunci || "");
+  const nama = (pasang) => tt(pasang[0], pasang[1]);
+  const di = (tab, bagian, tuju, lagi) => ({ tab, jalur: [nama(CEK_TAB_FORM[tab]), bagian ? nama(CEK_BAGIAN_FORM[bagian]) : "", lagi || ""].filter(Boolean), tuju });
+  const barangKe = (i) => tt(`Barang ${i + 1}`, `Item ${i + 1}`);
+  const isPeb = res && res.type === "PEB";
+  const mode = isPeb ? "export" : "import";
+  const subTab = (kunciTab) => {
+    const sub = (typeof dpbTabDaftar === "function" ? dpbTabDaftar(mode) : []).find(([kt]) => kt === kunciTab);
+    return { tab: "dpb", jalur: [isPeb ? tt("Data PEB", "PEB Data") : tt("Data PIB", "PIB Data"), sub ? sub[1] : ""].filter(Boolean) };
+  };
+  const biasa = CEK_LETAK_JADWAL[k];
+  if (biasa) return di(biasa[0], biasa[1], { sel: biasa[2] });
+  if (CEK_LETAK_TOTAL[k]) return di("barang", "", { item: 0, f: CEK_LETAK_TOTAL[k] });
+  if (/^dok:/.test(k)) return di("pabean", "pelengkap", { sel: "#dokPelengkapSection" });
+  if (k === "fasilitas") return di("barang", "", { item: 0, fasilitas: true });
+  let m = /^dp:pungutan(?:\.(\w+)\.(\d+))?$/.exec(k);
+  if (m) {
+    // Dibebaskan = fasilitas barang (Daftar Barang); Dibayar = Bea & Pajak Impor
+    if (m[2] != null && Number(m[2]) === PUNGUTAN_KOLOM_DIBEBASKAN) return di("barang", "", { item: 0, fasilitas: true });
+    return di("pabean", isPeb ? "nilai" : "pajak", { sel: CEK_PAJAK_FORM[m[1]] || "#fBM" });
+  }
+  m = /^dp:pihak\.(\w+)\.(\w+)$/.exec(k);
+  if (m) return Object.assign(subTab("entitas"), { tuju: { dpb: "entitas", sel: `[data-dpb-pihak="${m[1]}:${m[2]}"]` } });
+  m = /^dp:(\w+)$/.exec(k);
+  if (m && typeof DP_GRUP !== "undefined") {
+    const g = DP_GRUP.find((grup) => grup.isian.some((f) => f.k === m[1]));
+    const kunciTab = (g && g.tab) || "dokumen";
+    return Object.assign(subTab(kunciTab), { tuju: { dpb: kunciTab, sel: `[data-dpb="${m[1]}"]` } });
+  }
+  const idx = x.idxBarang != null && x.idxBarang >= 0 ? x.idxBarang : null;
+  m = /^barang:([^:]+):(\w+)$/.exec(k);
+  if (m) {
+    const i = idx != null ? idx : Number(m[1]) - 1;
+    if (!(i >= 0)) return null;
+    const l = subTab("barang");
+    l.jalur.push(barangKe(i));
+    return Object.assign(l, { tuju: { dpbBarang: i, k: m[2] } });
+  }
+  if (idx != null && x.kolomBarang) return di("barang", "", x.kolomBarang === "fasilitas" ? { item: idx, fasilitas: true } : { item: idx, f: x.kolomBarang }, barangKe(idx));
+  return null;
+}
+
+/* Tautan letak satu baris: hanya bila ada jadwal terkait, sumber kirinya
+   jadwal (atau CIPL pengganti isian jadwal yang kosong), dan isiannya
+   kosong atau berbeda. No. Aju / No. SPPB yang berbeda hanya informasi.
+   Letaknya disimpan per gambar (cekLetakTerpasang) -- tombolnya cukup
+   membawa nomornya. */
+let cekLetakTerpasang = [];
+const CEK_SUMBER_JADWAL = new Set(["Jadwal", "Schedule", "CIPL"]);
+function cekLetakHtml(x) {
+  const res = cekKeadaan.hasil;
+  if (!res || !res.jadwal || !CEK_SUMBER_JADWAL.has(x.left_source)) return "";
+  const kosong = !cekAda(x.cipl) || x.left_source === "CIPL";
+  if (!kosong && (x.status !== "MISMATCH" || x.infoSaja)) return "";
+  const letak = cekLetakIsian(x, res);
+  if (!letak || !letak.jalur.length) return "";
+  const no = cekLetakTerpasang.push(letak) - 1;
+  const ajakan = kosong ? tt("Isi di jadwal", "Fill in on the schedule") : tt("Periksa di jadwal", "Check on the schedule");
+  const jalur = letak.jalur.join(" › ");
+  return `<button type="button" class="cek-letak" data-cek-letak="${no}" title="${escapeAttr(tt(`Buka form jadwal di ${jalur}`, `Open the schedule form at ${jalur}`))}"><i class="bi bi-box-arrow-in-up-right" aria-hidden="true"></i><span>${escapeHtml(ajakan)}:</span> <b>${escapeHtml(jalur)}</b></button>`;
+}
+
 function cekBarisHtml(x, kiriLabel, kananLabel) {
   const [a, b] = cekSelHtml(x);
   const kelas = x.status === "MISMATCH" ? "is-beda" : x.status === "INFO" ? "is-info" : "";
@@ -2922,7 +3072,7 @@ function cekBarisHtml(x, kiriLabel, kananLabel) {
       : "";
   const sumber = x.left_source && x.left_source !== kiriLabel ? `<span class="cek-sumber">${escapeHtml(x.left_source)}</span>` : "";
   return `<tr class="${kelas}">
-      <td class="cek-kol-isian"><span class="cek-isian">${escapeHtml(x.field)}</span>${x.expected_note ? `<span class="cek-catatan">${escapeHtml(x.expected_note)}</span>` : ""}</td>
+      <td class="cek-kol-isian"><span class="cek-isian">${escapeHtml(x.field)}</span>${x.expected_note ? `<span class="cek-catatan">${escapeHtml(x.expected_note)}</span>` : ""}${cekLetakHtml(x)}</td>
       <td class="cek-kol-nilai" data-label="${escapeAttr(x.left_source || kiriLabel)}">${a}${sumber}</td>
       <td class="cek-kol-nilai" data-label="${escapeAttr(kananLabel)}">${b}</td>
       <td class="cek-kol-hasil">${cekStatusHtml(x.status)}${selisih}</td>
@@ -2964,6 +3114,7 @@ function cekGambarDaftar() {
   const box = $("#cekDaftar");
   const res = cekKeadaan.hasil;
   if (!box || !res) return;
+  cekLetakTerpasang = [];
   const semua = res.checks;
   const f = cekKeadaan.saring;
   const rows = f === "ALL" ? semua : semua.filter((x) => x.status === f);
@@ -3496,6 +3647,12 @@ function showCheckerView() {
       return;
     }
     if (el.dataset.cekTautkan) return void cekTautkan(el.dataset.cekTautkan);
+    if (el.dataset.cekLetak != null) {
+      const s = cekJadwal();
+      const letak = cekLetakTerpasang[Number(el.dataset.cekLetak)];
+      if (s && letak && typeof bukaIsianJadwal === "function") bukaIsianJadwal(s.id, letak, { kembali: "#/cek" });
+      return;
+    }
     if (el.dataset.cekSimpanHs != null) return void cekSimpanHs(Number(el.dataset.cekSimpanHs));
   });
   halaman.addEventListener("input", (e) => {

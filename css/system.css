@@ -399,7 +399,7 @@ input[data-kotak-tanggal][readonly] {
 .counter-box {
   margin-top: var(--sp-6);
   padding: var(--sp-4);
-  border: 1px dashed var(--n-300);
+  border: 1px solid var(--n-200);
   border-radius: var(--r-lg);
   background: var(--n-50);
 }

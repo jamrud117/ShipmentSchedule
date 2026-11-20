@@ -54,4 +54,12 @@
   .prompt-field select {
     max-width: var(--lebar-pilihan);
   }
+  /* Kotak pop-up berkolom (lebar: "setengah" / "sepertiga", maks. 600px):
+     isian selebar kotak mengisi lajurnya penuh -- tepi kanannya sejajar
+     dengan isian setengah lebar di bawah / atasnya, bukan berhenti di
+     520px dan menyisakan tangga. */
+  .prompt-dialog--lebar .prompt-field :where(input.form-control, input.login-input),
+  .prompt-dialog--lebar .prompt-field select {
+    max-width: none;
+  }
 }

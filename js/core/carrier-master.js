@@ -55,19 +55,23 @@ const CARRIER_MASTER = {
   ---------------------------------------------------------------- */
   shippingLines: [
     { code: "MSC", name: "Mediterranean Shipping Company", aliases: ["MSC"] },
-    { code: "MAERSK", name: "Maersk Line", aliases: ["MAERSK", "MSK"] },
+    /* Merek yang sudah dilebur ditulis di induknya: Hamburg Süd, Safmarine,
+       Sealand & Aliança -> Maersk; APL & ANL -> CMA CGM; NYK & MOL (kapal
+       peti kemasnya kini dioperasikan ONE) -> ONE; UASC, CSAV & NileDutch
+       -> Hapag-Lloyd. */
+    { code: "MAERSK", name: "Maersk Line", aliases: ["MAERSK", "MSK", "SAFMARINE", "SEALAND", "HAMBURG SUD", "ALIANCA"] },
     { code: "EVERGREEN", name: "Evergreen Marine", aliases: ["EVER", "EMC", "EVERGREEN"] },
-    { code: "ONE", name: "Ocean Network Express", aliases: ["ONE"] },
+    { code: "ONE", name: "Ocean Network Express", aliases: ["ONE", "NYK", "MOL"] },
     /* Deretan kapal "XIN <kota>" (XIN QIN HUANG DAO, XIN BEIJING)
        memakai penamaan COSCO. Muncul di riwayat DDI. */
     /* "CSCL" ikut ke sini: China Shipping melebur ke COSCO pada 2016,
        tapi namanya masih terpakai di dokumen dan lambung kapal. */
     { code: "COSCO", name: "COSCO Shipping", aliases: ["COSCO", "XIN", "CSCL", "COSCON"] },
     { code: "HMM", name: "HMM (Hyundai Merchant Marine)", aliases: ["HMM", "HYUNDAI"] },
-    { code: "CMA", name: "CMA CGM", aliases: ["CMA", "APL"] },
+    { code: "CMA", name: "CMA CGM", aliases: ["CMA", "APL", "ANL"] },
     { code: "OOCL", name: "Orient Overseas Container Line", aliases: ["OOCL"] },
     { code: "YANGMING", name: "Yang Ming Marine", aliases: ["YM", "YANG", "YANGMING"] },
-    { code: "HAPAG", name: "Hapag-Lloyd", aliases: ["HAPAG", "HLC"] },
+    { code: "HAPAG", name: "Hapag-Lloyd", aliases: ["HAPAG", "HLC", "UASC", "CSAV", "NILEDUTCH"] },
     { code: "ZIM", name: "ZIM Integrated Shipping", aliases: ["ZIM"] },
 
     /* Pelayaran intra-Asia — yang paling sering muncul di rute
@@ -200,6 +204,79 @@ const CARRIER_MASTER = {
     { code: "NBOSCO", name: "Ningbo Ocean Shipping (NBOSCO)", aliases: ["NBOSCO", "NINGBO OCEAN"] },
     { code: "SAMUDERA", name: "Samudera Shipping Line",
       aliases: ["SAMUDERA"], prefix: ["SINAR"] },
+
+    /* ================================================================
+       PELAYARAN DUNIA LAINNYA (2026-11)
+
+       Pelayaran peti kemas 100 besar dunia yang belum ada di atas, plus
+       pelayaran regional, ro-ro (mobil, alat berat) & kargo proyek yang
+       lazim muncul di B/L. Alias hanya kata yang KHAS; nama yang juga
+       kata biasa (GRANDE, JOLLY, TROPIC, MENTARI, BBC) sah sebagai KATA
+       PERTAMA saja (`prefix`) -- armadanya memang selalu diawali nama
+       itu ("GRANDE TEMA", "JOLLY DIAMANTE"). Ditaruh paling belakang:
+       kalau bentrok, pelayaran di atas tetap menang.
+    ================================================================ */
+    // Eropa & Mediterania
+    { code: "ARKAS", name: "Arkas Line", aliases: ["ARKAS"] },
+    { code: "TURKON", name: "Turkon Line", aliases: ["TURKON"] },
+    { code: "AKKON", name: "Akkon Lines", aliases: ["AKKON"] },
+    { code: "MESSINA", name: "Ignazio Messina & C.", aliases: ["MESSINA"], prefix: ["JOLLY"] },
+    { code: "GRIMALDI", name: "Grimaldi Lines", aliases: ["GRIMALDI"], prefix: ["GRANDE"] },
+    { code: "MARFRET", name: "Marfret", aliases: ["MARFRET"] },
+    { code: "CONTAINERSHIPS", name: "Containerships", aliases: ["CONTAINERSHIPS"] },
+    { code: "UNIFEEDER", name: "Unifeeder", aliases: ["UNIFEEDER"] },
+    { code: "SAMSKIP", name: "Samskip", aliases: ["SAMSKIP"] },
+    { code: "EIMSKIP", name: "Eimskip", aliases: ["EIMSKIP"] },
+    { code: "OPDR", name: "OPDR (Oldenburg-Portugiesische)", aliases: ["OPDR"] },
+    { code: "DFDS", name: "DFDS", aliases: ["DFDS"] },
+    { code: "CLDN", name: "CLdN", aliases: ["CLDN"] },
+    { code: "FINNLINES", name: "Finnlines", aliases: ["FINNLINES"] },
+    { code: "SEATRADE", name: "Seatrade", aliases: ["SEATRADE"] },
+    // Ro-ro mobil & alat berat, kargo proyek / breakbulk
+    { code: "WALLENIUS", name: "Wallenius Wilhelmsen", aliases: ["WALLENIUS", "WILHELMSEN"] },
+    { code: "HOEGH", name: "Höegh Autoliners", aliases: ["HOEGH"] },
+    { code: "GLOVIS", name: "Hyundai Glovis", aliases: ["GLOVIS"] },
+    { code: "CHIPOLBROK", name: "Chipolbrok", aliases: ["CHIPOLBROK"] },
+    { code: "SPLIETHOFF", name: "Spliethoff", aliases: ["SPLIETHOFF"] },
+    { code: "BBC", name: "BBC Chartering", aliases: ["BBC CHARTERING"], prefix: ["BBC"] },
+    { code: "AAL", name: "AAL Shipping", aliases: ["AAL SHIPPING"], prefix: ["AAL"] },
+    { code: "JUMBO", name: "Jumbo Shipping", aliases: ["JUMBO SHIPPING"], prefix: ["JUMBO"] },
+    // Amerika
+    { code: "ACL", name: "Atlantic Container Line", aliases: ["ACL"] },
+    { code: "MATSON", name: "Matson", aliases: ["MATSON", "MATSONIA"] },
+    { code: "CROWLEY", name: "Crowley", aliases: ["CROWLEY"] },
+    { code: "TOTE", name: "TOTE Maritime", aliases: ["TOTE MARITIME"] },
+    { code: "PASHA", name: "Pasha Hawaii", aliases: ["PASHA"] },
+    { code: "SEABOARD", name: "Seaboard Marine", aliases: [], prefix: ["SEABOARD"] },
+    { code: "KINGOCEAN", name: "King Ocean Services", aliases: ["KING OCEAN"] },
+    { code: "TROPICAL", name: "Tropical Shipping", aliases: [], prefix: ["TROPIC"] },
+    { code: "NIRINT", name: "Nirint Shipping", aliases: ["NIRINT"] },
+    { code: "MELFI", name: "Melfi Marine", aliases: ["MELFI"] },
+    { code: "LOGIN", name: "Log-In Logística", aliases: ["LOG IN"] },
+    // Oseania & Pasifik
+    { code: "SWIRE", name: "Swire Shipping (China Navigation)", aliases: ["SWIRE"] },
+    { code: "NPDL", name: "Neptune Pacific Direct Line", aliases: ["NPDL"] },
+    { code: "KYOWA", name: "Kyowa Shipping", aliases: ["KYOWA"] },
+    { code: "MELL", name: "Mariana Express Lines", aliases: ["MELL", "MARIANA EXPRESS"] },
+    // Asia Selatan & Timur Tengah
+    { code: "SCI", name: "Shipping Corporation of India", aliases: ["SCI"] },
+    { code: "SHREYAS", name: "Shreyas Shipping", aliases: ["SHREYAS"] },
+    { code: "OEL", name: "Orient Express Lines", aliases: ["OEL"] },
+    { code: "SARJAK", name: "Sarjak Container Lines", aliases: ["SARJAK"] },
+    { code: "BENGALTIGER", name: "Bengal Tiger Line", aliases: ["BENGAL TIGER"] },
+    { code: "PNSC", name: "Pakistan National Shipping (PNSC)", aliases: ["PNSC"] },
+    { code: "GFS", name: "Global Feeder Shipping", aliases: ["GLOBAL FEEDER"], prefix: ["GFS"] },
+    { code: "SIMATECH", name: "Simatech Shipping", aliases: ["SIMATECH"] },
+    { code: "MILAHA", name: "Milaha (Qatar Navigation)", aliases: ["MILAHA", "QATAR NAVIGATION"] },
+    { code: "ASYAD", name: "Asyad Line", aliases: ["ASYAD"] },
+    { code: "IRISL", name: "IRISL", aliases: ["IRISL"] },
+    // Asia Tenggara & Timur
+    { code: "MTT", name: "MTT Shipping", aliases: [], prefix: ["MTT"] },
+    { code: "MENTARI", name: "Mentari Line", aliases: [], prefix: ["MENTARI"] },
+    { code: "TWOGO", name: "2GO", aliases: ["2GO"] },
+    { code: "DONGYOUNG", name: "Dong Young Shipping", aliases: ["DONGYOUNG", "DONG YOUNG"] },
+    { code: "IMOTO", name: "Imoto Lines", aliases: ["IMOTO"] },
+    { code: "KAMBARA", name: "Kambara Kisen", aliases: ["KAMBARA"] },
   ],
 
   /* ----------------------------------------------------------------
@@ -367,13 +444,15 @@ const CARRIER_MASTER = {
     { code: "GM", name: "Asia Cargo Airlines (d/h Tri-MG)",
       aliases: ["ASIA CARGO", "TRI MG", "TRIMG", "TRILINES"] },
 
-    /* MASKAPAI DUNIA LAINNYA -- Amerika, Eropa, Timur Tengah, Afrika,
+    /* MASKAPAI BESAR LAINNYA -- Amerika, Eropa, Timur Tengah, Afrika,
        Oseania & Asia Selatan. Kode IATA yang masih dipakai (dicek
        November 2026); tiap kode juga dikenali dari No. Flight (LH8400,
-       AF1234) sehingga riwayatnya bisa dipelajari per maskapai. Tidak
-       memakai basis data maskapai terbuka (OpenFlights): penanda
-       "aktif"-nya sudah usang -- CV tercatat Air Chathams, FX & PO
-       maskapai penumpang, padahal Cargolux, FedEx & Polar. */
+       AF1234) sehingga riwayatnya bisa dipelajari per maskapai. Sisanya
+       -- ±780 maskapai lain di seluruh dunia -- ada di maskapai-dunia.js
+       dan ditambahkan di bawah (tambahMaskapaiDunia). Daftar pilihan di
+       sini tetap menang: basis data terbuka bisa usang -- OpenFlights
+       mencatat CV sebagai Air Chathams, FX & PO maskapai penumpang,
+       padahal Cargolux, FedEx & Polar. */
     { code: "AA", name: "American Airlines" }, { code: "UA", name: "United Airlines" }, { code: "DL", name: "Delta Air Lines" },
     { code: "AS", name: "Alaska Airlines" }, { code: "WN", name: "Southwest Airlines" }, { code: "B6", name: "JetBlue" },
     { code: "AC", name: "Air Canada" }, { code: "WS", name: "WestJet" }, { code: "Y4", name: "Volaris" },
@@ -403,6 +482,28 @@ const CARRIER_MASTER = {
     { code: "HY", name: "Uzbekistan Airways" },
   ],
 };
+
+/* MASKAPAI DUNIA (js/core/maskapai-dunia.js, dimuat sebelum berkas ini)
+   -- kode IATA lain yang sedang dipegang maskapai, supaya No. Flight
+   maskapai mana pun terbaca dan kotak Nama Pesawat menyarankan semuanya.
+   Ditambahkan di BELAKANG daftar pilihan dan ditandai `dunia: true`:
+     - kode yang sudah ada di atas tidak ditimpa -- pilihan selalu menang;
+     - deteksi mencoba daftar pilihan lebih dulu di SEMUA kolom, baru
+       daftar dunia (detectAirlineDari), supaya kode dua huruf yang juga
+       kata biasa ("FLIGHT NO 123") atau tipe pesawat ("A330", "AN124")
+       tidak mengalahkan kode yang memang sudah dikenal. */
+(function tambahMaskapaiDunia() {
+  if (typeof MASKAPAI_DUNIA !== "string") return;
+  const ada = new Set(CARRIER_MASTER.airlines.map((a) => a.code));
+  MASKAPAI_DUNIA.split("\n").forEach((baris) => {
+    const pisah = baris.indexOf("|");
+    const code = baris.slice(0, pisah).trim();
+    const name = baris.slice(pisah + 1).trim();
+    if (pisah < 2 || !name || ada.has(code)) return;
+    ada.add(code);
+    CARRIER_MASTER.airlines.push({ code, name, dunia: true });
+  });
+})();
 
 /* ------------------------------------------------------------------
    JARINGAN MASKAPAI — negara asal & bandara hub
@@ -548,6 +649,7 @@ function carrierDatalistHtml(mode) {
         ? CARRIER_MASTER.shippingLines
         : CARRIER_MASTER.airlines.concat(CARRIER_MASTER.shippingLines);
   const semua = CARRIER_MASTER.couriers.concat(daftar);
+  const maskapai = new Set(CARRIER_MASTER.airlines);
   const sudah = new Set();
   // Riwayat sendiri lebih dulu: itu sarana yang PASTI pernah dipakai DDI
   return riwayat + semua
@@ -565,7 +667,7 @@ function carrierDatalistHtml(mode) {
            dipakai di No. Flight (OZ761), bukan di kotak nama. Mengetik
            kodenya tetap menemukan sarannya -- keterangan ikut dicari. */
         `<option value="${escapeAttr(c.name)}">${escapeHtml(
-          (CARRIER_MASTER.airlines.indexOf(c) >= 0 ? tt("Kode flight: ", "Flight code: ") : tt("Kode: ", "Code: ")) + c.code,
+          (maskapai.has(c) ? tt("Kode flight: ", "Flight code: ") : tt("Kode: ", "Code: ")) + c.code,
         )}</option>`,
     )
     .join("");
@@ -740,6 +842,9 @@ const SCAC_PELAYARAN = {
   MAEU: "MAERSK", MEDU: "MSC", MSCU: "MSC", CMDU: "CMA", HLCU: "HAPAG", ONEY: "ONE", EGLV: "EVERGREEN",
   COSU: "COSCO", OOLU: "OOCL", YMLU: "YANGMING", HDMU: "HMM", ZIMU: "ZIM", WHLC: "WANHAI", KMTC: "KMTC",
   PCIU: "PIL", GOSU: "GOLDSTAR",
+  // Merek yang dilebur tetap memakai SCAC lamanya di B/L
+  SEAU: "MAERSK", SUDU: "MAERSK", SAFM: "MAERSK", APLU: "CMA", ANNU: "CMA", NYKS: "ONE", MOLU: "ONE", KKLU: "ONE",
+  REGU: "RCL", SMLM: "SMLINE", ESPU: "EMIRATES", MATS: "MATSON", ACLU: "ACL",
 };
 function detectShippingLineDariBl(noBl) {
   const k = kunciAlnum(noBl);
@@ -769,16 +874,25 @@ siapkanAlias(CARRIER_MASTER.shippingLines);
 siapkanAlias(CARRIER_MASTER.couriers);
 siapkanAlias(CARRIER_MASTER.airlines);
 
-/* Maskapai diurut dari kode terpanjang, supaya kode 3 karakter tidak
+/* Indeks kode -> maskapai, dibuat sekali saat dimuat: dengan ±970
+   maskapai, mencari satu per satu untuk tiap kata di tiap kiriman terlalu
+   boros. Kode yang lebih panjang dicoba dulu, supaya kode 3 karakter tidak
    kalah oleh kode 2 karakter yang kebetulan jadi awalannya. */
-/* Diurut sekali, bukan tiap pencocokan. */
-const AIRLINES_BY_CODE_LENGTH = CARRIER_MASTER.airlines
-  .slice()
-  .sort((a, b) => b.code.length - a.code.length);
+const MASKAPAI_PER_KODE = new Map();
+CARRIER_MASTER.airlines.forEach((a) => {
+  if (!MASKAPAI_PER_KODE.has(a.code)) MASKAPAI_PER_KODE.set(a.code, a);
+});
+const PANJANG_KODE_MASKAPAI = [...new Set(CARRIER_MASTER.airlines.map((a) => a.code.length))].sort((a, b) => b - a);
+const MASKAPAI_PILIHAN = CARRIER_MASTER.airlines.filter((a) => !a.dunia);
+const MASKAPAI_DUNIA_LAIN = CARRIER_MASTER.airlines.filter((a) => a.dunia);
 
-function airlinesByCodeLength() {
-  return AIRLINES_BY_CODE_LENGTH;
-}
+/* Tipe pesawat yang bentuknya persis "kode + angka" -- A330 (A3 =
+   Aegean), AN124 (AN = Advanced Air), IL76, B777 (B7 = Uni Air) -- lazim
+   diketik di kolom Nama Pesawat. Itu bukan no. penerbangan. */
+const TIPE_PESAWAT = /^(?:A220|A3[0-8]\d|B7[0-8]7|AN\d{2,3}|IL\d{2}|TU(?:134|154|204|214)|MD(?:11|8\d|90)|Q400|C919)$/;
+/* Kode maskapai DUNIA yang juga kata biasa hanya sah di awal teks: "NO"
+   di "FLIGHT NO 123" bukan Niger Air Cargo, "ON" bukan Nauru Airlines. */
+const KODE_KATA_UMUM = new Set(["NO", "ON", "TO", "OR", "OF", "BY", "DO", "UP", "IS", "AN", "SO", "GO", "ME", "MY", "OH", "UN", "SE", "TU", "HI"]);
 
 /* Kode maskapai dicari DI MANA PUN dalam teks, bukan hanya di awal.
 
@@ -786,38 +900,58 @@ function airlinesByCodeLength() {
    "GARUDA INDONESIA GA0879", "Fedex FX6068", bahkan
    "FRDERAL EXPRESS CORPORATION FX6068" lengkap dengan salah ketik.
    Deteksi yang hanya membaca awal teks melewatkan semuanya kecuali
-   yang pertama. */
-function detectAirline(flightNo) {
-  const teks = String(flightNo || "").toUpperCase();
-  if (!teks.trim()) return null;
-  const kata = teks.replace(/[^A-Z0-9]+/g, " ").trim().split(" ");
-  const daftar = airlinesByCodeLength();
+   yang pertama. `dunia` memilih daftar yang dicari: pilihan atau dunia. */
+function cariMaskapaiDi(teks, dunia) {
+  const kata = String(teks || "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  if (!kata.length) return null;
+  const dariDaftar = (a) => !!a && !a.dunia === !dunia;
 
   // 1. Kode menempel dengan nomornya: GA879, FX6068, TW155
   for (let i = 0; i < kata.length; i++) {
     const tk = kata[i];
-    const m = daftar.find(
-      (a) => tk.indexOf(a.code) === 0 && /^\d{1,5}$/.test(tk.slice(a.code.length)),
-    );
-    if (m) return { code: m.code, name: m.name, alias: tk, via: "no. penerbangan" };
+    if (TIPE_PESAWAT.test(tk)) continue;
+    for (const n of PANJANG_KODE_MASKAPAI) {
+      const a = MASKAPAI_PER_KODE.get(tk.slice(0, n));
+      if (dariDaftar(a) && /^\d{1,5}$/.test(tk.slice(n))) return { code: a.code, name: a.name, alias: tk, via: "no. penerbangan" };
+    }
   }
 
   // 2. Kode terpisah dari nomornya: "GA 879"
   for (let i = 0; i < kata.length - 1; i++) {
     if (!/^\d{1,5}$/.test(kata[i + 1])) continue;
-    const m = daftar.find((a) => a.code === kata[i]);
-    if (m) return { code: m.code, name: m.name, alias: kata[i], via: "no. penerbangan" };
+    const a = MASKAPAI_PER_KODE.get(kata[i]);
+    if (dariDaftar(a) && !(dunia && i > 0 && KODE_KATA_UMUM.has(a.code))) {
+      return { code: a.code, name: a.name, alias: kata[i], via: "no. penerbangan" };
+    }
   }
 
   /* 3. Ditulis dengan NAMA, tanpa nomor sama sekali — "FEDEX",
         "DHL FLIGHT". Dicocokkan sebagai rangkaian kata utuh. */
   const rapat = " " + kata.join(" ") + " ";
+  const daftar = dunia ? MASKAPAI_DUNIA_LAIN : MASKAPAI_PILIHAN;
   for (let i = 0; i < daftar.length; i++) {
     const a = daftar[i];
     const cocok = a._alias.find((al) => rapat.indexOf(" " + al + " ") >= 0);
     if (cocok) return { code: a.code, name: a.name, alias: cocok, via: "nama maskapai" };
   }
   return null;
+}
+
+/* Beberapa kolom sekaligus (Nama Pesawat, lalu No. Flight): daftar
+   pilihan dicari di SEMUA kolom lebih dulu, baru daftar dunia. Nama
+   Pesawat "B777" + No. Flight "KE627" tetap Korean Air. */
+function detectAirlineDari(...teks) {
+  for (const dunia of [false, true]) {
+    for (let i = 0; i < teks.length; i++) {
+      const hasil = cariMaskapaiDi(teks[i], dunia);
+      if (hasil) return hasil;
+    }
+  }
+  return null;
+}
+
+function detectAirline(flightNo) {
+  return detectAirlineDari(flightNo);
 }
 
 /* ------------------------------------------------------------------
@@ -895,7 +1029,7 @@ function deteksiCarrier(src, udara) {
   if (kurir) return { ...kurir, kind: "courier", detected: true };
 
   if (udara) {
-    const hasil = detectAirline(src.vessel) || detectAirline(src.voyage);
+    const hasil = detectAirlineDari(src.vessel, src.voyage);
     return hasil
       ? { ...hasil, kind: "airline", detected: true }
       : {

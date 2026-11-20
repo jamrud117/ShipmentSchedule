@@ -5,7 +5,9 @@ let docNumHistoryRows = [];
 /* HALAMAN: PERMINTAAN NOMOR DOKUMEN */
 
 /* Sebagian jenis dokumen punya SUB-JENIS yang seri nomornya terpisah */
-/* POLA NOMOR */
+/* POLA NOMOR BAWAAN -- bisa diganti per jenis dari kotak Atur Nomor Urut
+   (features/format-nomor.js: formatNomorUntuk, kode {SEQ} {YYYY} {YY}
+   {MM} {ROM} {DD} ...; {ROM} = bulan romawi). */
 const DOCNUM_SUBTYPES = {
   invoice: {
     Commercial: {
@@ -15,12 +17,12 @@ const DOCNUM_SUBTYPES = {
          "DDI - CRBM - VIII - 045". Nomor lama tetap tersimpan tanpa
          spasi; pencarian sudah mengabaikan tanda pisah, jadi kedua
          bentuk itu saling ketemu. */
-      pattern: "DDI - CRBM - {MM} - {SEQ}",
+      pattern: "DDI - CRBM - {ROM} - {SEQ}",
     },
     "Non-Commercial": {
       key: "invoice_nc",
       label: "Non-Commercial Invoice",
-      pattern: "DDI-{SEQ}/{YYYY}-{MM}-EXIM-LOG",
+      pattern: "DDI-{SEQ}/{YYYY}-{ROM}-EXIM-LOG",
     },
   },
   /* Surat jalan punya DUA seri terpisah.
@@ -36,12 +38,12 @@ const DOCNUM_SUBTYPES = {
     Export: {
       key: "do",
       get label() { return tt("Surat Jalan Export", "Export Delivery Note"); },
-      pattern: "{SEQ}/DDI/EXIM-LOG/{MM}/{YYYY}",
+      pattern: "{SEQ}/DDI/EXIM-LOG/{ROM}/{YYYY}",
     },
     Lokal: {
       key: "do_lokal",
       get label() { return tt("Surat Jalan Lokal", "Local Delivery Note"); },
-      pattern: "{SEQ}/EXIM-LOG/{MM}/{YYYY}",
+      pattern: "{SEQ}/EXIM-LOG/{ROM}/{YYYY}",
     },
   },
 };
@@ -51,30 +53,26 @@ const DOCNUM_TYPES = {
     label: "Invoice",
     pad: 3,
     // Cadangan kalau sub-jenisnya tidak terpilih — bentuknya harus sama.
-    pattern: "DDI - CRBM - {MM} - {SEQ}",
+    pattern: "DDI - CRBM - {ROM} - {SEQ}",
   },
   do: {
     get label() { return tt("Delivery Order / Surat Jalan", "Delivery Order / Delivery Note"); },
     pad: 3,
-    pattern: "{SEQ}/DDI/EXIM-LOG/{MM}/{YYYY}",
+    pattern: "{SEQ}/DDI/EXIM-LOG/{ROM}/{YYYY}",
   },
   fund: {
     get label() { return tt("Permintaan Dana", "Fund Request"); },
     pad: 3,
-    pattern: "{SEQ}/EXIM/DDI/{MM}/{YYYY}",
+    pattern: "{SEQ}/EXIM/DDI/{ROM}/{YYYY}",
   },
   letter: {
     get label() { return tt("Surat Keluar", "Outgoing Letter"); },
     pad: 3,
-    pattern: "DDI-{SEQ}/EXIM-LOG/{MM}/{YYYY}",
+    pattern: "DDI-{SEQ}/EXIM-LOG/{ROM}/{YYYY}",
   },
 };
 
 const DOCNUM_DEFAULT_TAB = "invoice";
-const ROMAN_MONTHS = [
-  "I", "II", "III", "IV", "V", "VI",
-  "VII", "VIII", "IX", "X", "XI", "XII",
-];
 
 // Kolom tersendiri di tabel document_numbers
 const DOCNUM_COLUMN_FIELDS = new Set(["docDate", "requester", "department"]);
@@ -441,13 +439,14 @@ function dnTandaiTepiTab(baris) {
 function resolveDocNumType(tabKey) {
   const base = DOCNUM_TYPES[tabKey] || {};
   const subs = DOCNUM_SUBTYPES[tabKey];
+  let jenis = { ...base, key: tabKey };
   if (subs) {
     const panel = docNumPanelEl(tabKey);
     const el = panel && panel.querySelector("[data-dn-subtype]");
     const hit = el && subs[el.value];
     if (hit) {
       // `pattern` WAJIB ikut diteruskan
-      return {
+      jenis = {
         ...base,
         key: hit.key,
         label: hit.label || base.label,
@@ -455,7 +454,10 @@ function resolveDocNumType(tabKey) {
       };
     }
   }
-  return { ...base, key: tabKey };
+  /* Format yang diatur dari kotak Atur Nomor Urut (format-nomor.js)
+     menang atas bawaan kode; bawaannya tetap dibawa untuk keterangan. */
+  const atur = typeof formatNomorUntuk === "function" ? formatNomorUntuk(jenis.key) : null;
+  return Object.assign(jenis, { patternBawaan: jenis.pattern, padBawaan: jenis.pad }, atur ? { pattern: atur.pola, pad: atur.digit } : {});
 }
 
 /* SERI PENOMORAN */
@@ -471,7 +473,7 @@ async function muatSeri(docType) {
   return seri;
 }
 
-/* Pola dengan {MM}, {YYYY} & {YYYYMMDD} sudah terisi.
+/* Pola dengan kode tanggal ({ROM}, {YYYY}, {YYYYMMDD}, ...) sudah terisi.
 
    POLA BISA BERBEDA PER PEMBELI. Sebagian pembeli menuntut bentuk
    nomornya sendiri di invoice -- Kumho memakai
@@ -479,26 +481,28 @@ async function muatSeri(docType) {
    dengan invoice lain (052 melanjutkan 051); yang berbeda cuma cara
    menuliskannya, jadi polanya diambil dari profil, bukan dari
    sub-jenis baru yang akan memecah penomorannya. */
-function docNumTemplate(typeKey, isoDate) {
+function docNumProfilPola(typeKey) {
+  if (typeKey !== "invoice" || typeof ciplProfil !== "function") return null;
+  const prof = ciplProfil(readDocNumForm(typeKey).customer);
+  return prof && prof.invoicePattern ? { id: prof.id, nama: prof.nama, pola: prof.invoicePattern } : null;
+}
+
+/* Pola & digit nomor urut yang BERLAKU untuk form saat ini: bentuk khusus
+   pembeli (diatur, atau bawaan profilnya) > format jenis yang diatur >
+   bawaan kode (resolveDocNumType). */
+function docNumPolaBerlaku(typeKey) {
   const jenis = resolveDocNumType(typeKey);
-  const d = parseLocalDate(isoDate) || new Date();
-
-  let pola = jenis.pattern || "{SEQ}";
-  if (typeKey === "invoice" && typeof ciplProfil === "function") {
-    const isi = readDocNumForm(typeKey);
-    const prof = ciplProfil(isi.customer);
-    if (prof && prof.invoicePattern) pola = prof.invoicePattern;
+  const prof = docNumProfilPola(typeKey);
+  if (prof) {
+    const atur = typeof formatNomorUntuk === "function" ? formatNomorUntuk(`${jenis.key}@${prof.id}`) : null;
+    return atur ? { pola: atur.pola, pad: atur.digit } : { pola: prof.pola, pad: jenis.pad };
   }
+  return { pola: jenis.pattern || "{SEQ}", pad: jenis.pad };
+}
 
-  const yyyymmdd =
-    String(d.getFullYear()) +
-    String(d.getMonth() + 1).padStart(2, "0") +
-    String(d.getDate()).padStart(2, "0");
-
-  return String(pola)
-    .replace(/\{YYYYMMDD\}/g, yyyymmdd)
-    .replace(/\{MM\}/g, ROMAN_MONTHS[d.getMonth()])
-    .replace(/\{YYYY\}/g, String(d.getFullYear()));
+// Kode tanggal terisi menurut tanggal dokumen; {SEQ} diisi database saat terbit
+function docNumTemplate(typeKey, isoDate) {
+  return fnIsiTanggal(docNumPolaBerlaku(typeKey).pola, isoDate);
 }
 
 // Dipakai untuk PRATINJAU di layar
@@ -726,9 +730,10 @@ async function refreshDocNumPreview(typeKey, opsi) {
   const jenis = resolveDocNumType(typeKey);
   const isoDate = readDocNumForm(typeKey).docDate;
   const template = docNumTemplate(typeKey, isoDate);
+  const { pad } = docNumPolaBerlaku(typeKey);
 
   if (!(opsi && opsi.diam)) {
-    el.textContent = docNumFormat(template, 1, jenis.pad); // tampilan sementara
+    el.textContent = docNumFormat(template, 1, pad); // tampilan sementara
     delete el.dataset.pasti; // belum dibaca dari nomor urut database
   }
   try {
@@ -742,9 +747,10 @@ async function refreshDocNumPreview(typeKey, opsi) {
     if (error) throw error;
     if (nomorMinta !== dnPratinjauKe) return; // sub-jenis sudah berganti lagi
     const berikut = (data ? data.last_seq : 0) + 1;
-    el.textContent = docNumFormat(template, berikut, jenis.pad);
+    el.textContent = docNumFormat(template, berikut, pad);
     el.dataset.pasti = "1";
     renderCounterPanel(jenis, periodKey, data ? data.last_seq : 0);
+    if (typeof formatNomorGambar === "function") formatNomorGambar(berikut);
     /* Kotak No. SI dibiarkan KOSONG, bukan diisi otomatis: nomor SI
        bawaannya memang nomor urut CIPL, dan mengisikannya ke kotak
        akan menyimpannya sebagai isian manual — nomor itu lalu ikut
@@ -757,12 +763,13 @@ async function refreshDocNumPreview(typeKey, opsi) {
   } catch (err) {
     console.error(err);
     if (nomorMinta !== dnPratinjauKe) return;
-    el.textContent = docNumFormat(template, 1, jenis.pad);
+    el.textContent = docNumFormat(template, 1, pad);
     /* Panel "Atur Nomor Urut" tetap ditunjuk ke seri yang BENAR walau
        angkanya gagal dibaca. Tanpa ini counterCtx masih menyimpan seri
        yang tadi dibuka, dan tombol Simpan di panel itu akan menyetel
        nomor milik jenis dokumen yang salah. */
     renderCounterPanel(jenis, docNumSeries[jenis.key] || "-", 0);
+    if (typeof formatNomorGambar === "function") formatNomorGambar(1);
   }
 }
 
@@ -1932,7 +1939,6 @@ async function submitDocNumRequest() {
   hint.classList.remove("docnum-hint--error");
 
   const form = readDocNumForm(typeKey);
-  const template = docNumTemplate(typeKey, form.docDate);
 
   const btn = $("#btnDocNumSubmit");
   const htmlAsli = btn.innerHTML;
@@ -1941,6 +1947,10 @@ async function submitDocNumRequest() {
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menerbitkan...", "Issuing...")}`;
 
   try {
+    // Format nomor terbaru (pengguna lain bisa baru saja mengubahnya, format-nomor.js)
+    if (typeof formatNomorSiap === "function") await formatNomorSiap();
+    const template = docNumTemplate(typeKey, form.docDate);
+    const { pad } = docNumPolaBerlaku(typeKey);
     /* Tagihan yang sudah pernah diajukan ditolak SEBELUM nomor urut
        diambil. Menolaknya sesudah itu meninggalkan nomor bolong. */
     if (typeKey === "fund") {
@@ -1979,7 +1989,7 @@ async function submitDocNumRequest() {
           p_doc_type: jenis.key,
           p_period_key: periodKey,
           p_template: template,
-          p_pad: jenis.pad,
+          p_pad: pad,
         },
       );
       if (errSeq) throw errSeq;

@@ -75,8 +75,9 @@ function isCiplSource(source) {
    angka turunan lebih berguna daripada kolom kosong. Yang dilarang
    hanya menimpa yang sudah ada.
 
-   Termasuk draft Excel CEISA: nilai barangnya sudah ditambah freight &
-   asuransi (bila ada), jadi bukan harga satuan invoice. Tetapi harga
+   Termasuk draft Excel CEISA: harga satuannya turunan kolom FOB / CIF
+   sheet BARANG (dibulatkan; kolom CIF bisa sudah ditambah freight &
+   asuransi), jadi bukan harga satuan invoice. Tetapi harga
    yang dipertahankan harus milik BARANG YANG SAMA -- dicocokkan menurut
    nama (sama / mirip), tidak pernah menurut urutan baris: harga seri 5
    tidak boleh menempel di barang 1 (preserveUnitPrices, `ketat`). */
@@ -769,8 +770,8 @@ function applyImportedBcData(parsed) {
         /* Draft Excel CEISA: barang ke-n = Seri Barang n, dan isiannya
            (jumlah, kemasan, berat, HS, kode, fasilitas, Data PIB) dari
            baris seri itu sendiri. Harga satuan barang yang sudah ada
-           (invoice) dipertahankan -- nilai draft sudah ditambah freight &
-           asuransi -- tetapi hanya dari barang YANG SAMA menurut namanya
+           (invoice) dipertahankan -- nilai draft turunan kolom FOB / CIF
+           yang dibulatkan -- tetapi hanya dari barang YANG SAMA menurut namanya
            (preserveUnitPrices ketat); barang lama tidak pernah
            diwariskan ke seri lain menurut urutan baris. */
         const draftCeisa = src === "excel";

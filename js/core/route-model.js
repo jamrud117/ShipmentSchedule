@@ -11,6 +11,10 @@
 
    Tanggal yang dipakai adalah tanggal EFEKTIF: kalau jadwal sudah
    dimundurkan, jalurnya ikut memanjang mengikuti tanggal barunya. */
+/* Posisi penanda setelah ETA lewat (sudah di terminal tujuan, menunggu
+   diantar ke pabrik): sedikit sebelum ujung, ikonnya mobil. */
+const LANE_DI_TERMINAL = 0.96;
+
 function laneProgress(s) {
   if (isArrived(s)) return 1;
 
@@ -39,7 +43,7 @@ function laneProgress(s) {
   // menggantung di tepi, itu urusan CSS — bukan urusan angka ini.
   if (now <= etd) return 0;
   // Sudah sampai terminal, menunggu diantar ke pabrik.
-  if (now >= eta) return 0.96;
+  if (now >= eta) return LANE_DI_TERMINAL;
 
   const total = eta - etd;
   if (total <= 0) return 0.5;
@@ -154,12 +158,14 @@ function buildRouteNodes(s) {
      ada gunanya menulis ulang ribuan baris hanya untuk mengubah
      tampilan, dan resolvePortEntry() tetap mengenali dua-duanya. */
   const nodes = [
-    { kind: "origin", terminal: portCodeLabel(s.origin), date: effectiveEtd(s) },
+    { kind: "origin", terminal: portCodeLabel(s.origin), raw: s.origin, mode: s.transport, date: effectiveEtd(s) },
   ];
   routeStopList(s).forEach((st) => {
     nodes.push({
       kind: "stop",
-      terminal: st.terminal,
+      terminal: portCodeLabel(st.terminal),
+      raw: st.terminal,
+      mode: st.transport || s.transport,
       arrivalDate: st.arrivalDate,
       departureDate: st.departureDate,
       date: st.arrivalDate || st.departureDate || "",
@@ -171,6 +177,8 @@ function buildRouteNodes(s) {
   nodes.push({
     kind: "destination",
     terminal: portCodeLabel(s.destination),
+    raw: s.destination,
+    mode: s.transport,
     date: effectiveEta(s),
   });
   return nodes;
@@ -214,94 +222,28 @@ function computeNodeFractionsRaw(nodes) {
   return fractions;
 }
 
-/* JARAK MINIMUM ANTAR SIMPUL
+/* POSISI GAMBAR SIMPUL RUTE TRANSIT -- seperti stepper.
 
-   Posisi simpul dihitung dari TANGGALNYA, dan itu memang yang
-   diinginkan — transit yang jatuh di akhir perjalanan harus terlihat di
-   akhir. Tapi tanggal transit sering SAMA dengan tanggal berangkat:
-   sambungan hari yang sama, atau tanggal transit yang memang dicatat
-   sama dengan keberangkatan.
+   Label tiap simpul (kode, tanggal singgah, nama bandara / pelabuhan)
+   duduk dalam SATU baris kolom yang sama lebar (.port-labels--multi,
+   card.css): asal rata kiri di kolom pertama, tujuan rata kanan di kolom
+   terakhir, transit rata tengah di kolomnya. Titik transit diletakkan
+   TEPAT di tengah kolom labelnya -- (k + 0,5) / n -- jadi label selalu
+   berada di bawah titiknya dan tidak pernah bertumpuk dengan label lain,
+   sedekat apa pun tanggal singgahnya.
 
-   Waktu tempuhnya nol, jadi pecahannya nol juga — simpul transit
-   mendarat persis di atas simpul asal. Titiknya bertumpuk dan
-   labelnya terpaksa turun ke baris kedua:
-
-     TSN 13-08          <- asal
-     SIN 13-08          <- transit, tertumpuk di bawahnya
-                                            CGK 15-08
-
-   Rute tiga pelabuhan jadi terbaca seperti dua, dan yang paling ingin
-   dilihat orang — DI MANA barangnya sekarang — justru hilang.
-
-   Simpul yang berdempetan didorong terpisah sampai sejauh JARAK_MIN,
-   dari kiri lalu dirapikan dari kanan supaya yang terakhir tidak
-   terdorong melewati 1. Urutannya tidak pernah berubah: yang bergeser
-   hanya jarak antar simpul, bukan siapa mendahului siapa.
-
-   0,14 kira-kira selebar satu label pada kartu tersempit — sedikit di
-   atas ambang 0,12 yang dipakai assignLabelRows() untuk memutuskan
-   penumpukan, jadi label tidak perlu turun baris lagi. */
-const LANE_JARAK_MIN = 0.14;
-
-/* Simpul yang tanggalnya SAMA PERSIS dibagi rata.
-
-   Kalau dua simpul jatuh di pecahan yang identik, tanggalnya tidak
-   memberi tahu apa pun tentang posisi — waktu tempuhnya nol. Mendorong
-   yang belakangan sejauh jarak minimum akan menaruhnya di 0,14: lepas
-   dari tumpukan, tapi mengaku-ngaku bahwa transitnya "di awal
-   perjalanan" padahal datanya tidak berkata begitu.
-
-   Yang jujur adalah membaginya rata di antara simpul berbeda yang
-   mengapitnya: TSN · SIN · CGK jadi 0 · 0,5 · 1. Itu menyatakan
-   "tiga pelabuhan, urutannya begini" tanpa mengarang ketepatan yang
-   tidak ada.
-
-   Simpul yang tanggalnya memang berbeda TIDAK disentuh di sini —
-   posisinya masih membawa keterangan, dan yang dibutuhkannya cuma
-   ruang, yang diberikan beriJarakMinimum() di bawah. */
-function ratakanSimpulSeri(f) {
-  const n = f.length;
-  const out = f.slice();
-  let i = 0;
-  while (i < n) {
-    let j = i;
-    while (j + 1 < n && out[j + 1] === out[i]) j++;
-    if (j > i) {
-      const kiri = out[i];
-      const kanan = j + 1 < n ? out[j + 1] : 1;
-      const langkah = (kanan - kiri) / (j + 1 - i);
-      for (let k = i + 1; k <= j; k++) out[k] = kiri + langkah * (k - i);
-    }
-    i = j + 1;
-  }
-  return out;
+   Dulu titik diletakkan menurut TANGGAL (diberi jarak minimum), lalu
+   labelnya dicarikan tempat: transit yang tanggalnya berdekatan
+   menghasilkan label rata kiri / kanan yang berserakan di baris kedua.
+   Waktu tetap terbaca: penandanya bergerak menurut tanggal di DALAM
+   ruasnya (petakanProgres di bawah), dan tanggal singgah tertulis di
+   labelnya. */
+function posisiSimpulLane(n) {
+  return Array.from({ length: n }, (_, i) => (i === 0 ? 0 : i === n - 1 ? 1 : (i + 0.5) / n));
 }
 
-function beriJarakMinimum(f) {
-  const n = f.length;
-  if (n < 3) return f;
-  /* Yang seri dibagi rata DULU; sisanya tinggal diberi ruang. */
-  const out = ratakanSimpulSeri(f);
-  /* Kalau simpulnya terlalu banyak untuk diberi jarak segitu, jarak
-     dibagi rata — memaksakan 0,14 akan mendorong semuanya keluar. */
-  const jarak = Math.min(LANE_JARAK_MIN, 1 / (n - 1));
-
-  for (let i = 1; i < n; i++) {
-    if (out[i] - out[i - 1] < jarak) out[i] = out[i - 1] + jarak;
-  }
-  /* Dorongan di atas bisa melewati ujung kanan. Dirapikan mundur:
-     simpul terakhir dikembalikan ke 1, lalu yang di kirinya digeser
-     seperlunya. Simpul pertama tetap di 0. */
-  out[n - 1] = 1;
-  for (let i = n - 2; i > 0; i--) {
-    if (out[i + 1] - out[i] < jarak) out[i] = out[i + 1] - jarak;
-    if (out[i] < 0) out[i] = 0;
-  }
-  return out;
-}
-
-/* Memetakan posisi berbasis waktu ke skala simpul yang sudah diberi
-   jarak.
+/* Memetakan posisi berbasis waktu ke skala gambar simpul
+   (posisiSimpulLane).
 
    Tanpa ini penanda kapal dan titik pelabuhan memakai dua skala
    berbeda: kapal yang baru berangkat akan tampak SUDAH MELEWATI
@@ -351,12 +293,27 @@ function transportForLeg(s, nodes, legIndex) {
 function computeLaneModel(s) {
   const nodes = buildRouteNodes(s);
   const asli = computeNodeFractionsRaw(nodes);
-  const fractions = beriJarakMinimum(asli);
+  const fractions = nodes.length > 2 ? posisiSimpulLane(nodes.length) : asli;
   /* Ruas yang sedang dilalui ditentukan dari pecahan ASLI — itu yang
      berbasis waktu. Yang dipetakan hanya posisi gambarnya. */
   const progresWaktu = laneProgress(s);
-  const legIdx = activeLegIndex(asli, progresWaktu);
-  const progress = petakanProgres(progresWaktu, asli, fractions);
+  const terakhir = nodes.length - 2;
+  let legIdx;
+  let progress;
+  if (progresWaktu >= LANE_DI_TERMINAL) {
+    /* SUDAH MELEWATI ETA (0,96 -- menunggu diantar ke pabrik) atau sudah
+       sampai (1): semua transit PASTI sudah dilewati, jadi penandanya di
+       ruas terakhir, dekat tujuan -- bukan dipetakan lewat skala waktu.
+       Transit yang tanggalnya SAMA dengan ETA (NRT 17-11, ETA 17-11)
+       berada di 1,0 skala waktu, sehingga 0,96 terbaca "belum sampai
+       transit": penandanya dulu macet tepat sebelum NRT (82%) padahal
+       barangnya sudah di Jakarta. */
+    legIdx = terakhir;
+    progress = progresWaktu >= 1 ? 1 : Math.max(LANE_DI_TERMINAL, (fractions[terakhir] + 1) / 2);
+  } else {
+    legIdx = activeLegIndex(asli, progresWaktu);
+    progress = petakanProgres(progresWaktu, asli, fractions);
+  }
   const leg = transportForLeg(s, nodes, legIdx);
   // Mobil begitu sudah tiba terminal/bandara — lihat sudahTibaTerminal() di atas.
   const icon = sudahTibaTerminal(s) ? ICON_MOBIL : iconForMode(leg.mode);
@@ -377,7 +334,8 @@ function routeChainText(s) {
 }
 
 function laneNodeTitle(nd) {
-  const parts = [dispVal(nd.terminal)];
+  const nama = namaSimpulLane(nd.raw, nd.mode, nd.terminal);
+  const parts = [dispVal(nd.terminal) + (nama ? ` (${nama})` : "")];
   if (nd.kind === "stop") {
     if (nd.arrivalDate) parts.push(tt("Tiba ", "Arrives ") + fmtDate(nd.arrivalDate));
     if (nd.departureDate) parts.push(tt("Berangkat ", "Departs ") + fmtDate(nd.departureDate));
@@ -390,29 +348,35 @@ function laneNodeTitle(nd) {
   return escapeAttr(parts.join(" · "));
 }
 
-/* Ujung jalur rute langsung: kode pelabuhan dalam bentuk dokumen
-   (portCodeLabel -- KRPUS, IDTPP) dan namanya di bawahnya ("Tanjung
-   Priok, Jakarta"). Nama yang sama dengan kodenya (pelabuhan diketik
-   sebagai nama) tidak diulang. */
-function laneUjungHtml(raw, kelas) {
-  const kode = portCodeLabel(raw);
-  const e = typeof resolvePortEntry === "function" ? resolvePortEntry(raw) : null;
+/* Nama pelabuhan/bandara sebuah simpul ("Narita Intl Airport, Tokyo"),
+   sesuai moda jadwalnya (CNTAO udara = Bandara Jiaodong). Nama yang sama
+   dengan kodenya (pelabuhan diketik sebagai nama) tidak diulang. */
+function namaSimpulLane(raw, mode, kode) {
+  const e = typeof resolvePortEntryMode === "function" ? resolvePortEntryMode(raw, mode) : null;
   const nama = e && e.name ? e.name : "";
-  const beda = nama && nama.toUpperCase() !== String(kode || "").toUpperCase();
-  return `<div class="${kelas}"><b>${escapeHtml(dispVal(kode))}</b>${beda ? `<span class="p-nama" title="${escapeAttr(nama)}">${escapeHtml(nama)}</span>` : ""}</div>`;
+  return nama && nama.toUpperCase() !== String(kode || "").toUpperCase() ? nama : "";
 }
 
-// Render seluruh isi ".lane" (judul + track + label tanggal)
-function assignLabelRows(fractions) {
-  const MIN_GAP = 0.12;
-  const lastInRow = [-Infinity, -Infinity];
-  return fractions.map((f) => {
-    const row = f - lastInRow[0] >= MIN_GAP ? 0 : 1;
-    lastInRow[row] = f;
-    return row;
-  });
+/* Isi label simpul jalur: kode pelabuhan dalam bentuk dokumen
+   (portCodeLabel -- KRPUS, IDTPP), namanya di bawahnya ("Tanjung
+   Priok, Jakarta"), dan untuk simpul transit tanggal singgahnya di baris
+   sendiri -- tidak menempel di kode, yang di kolom sempit terpotong
+   jadi "CNSHA · 05-…". */
+function isiLabelSimpul(kode, nama, tanggal) {
+  /* Tahunnya span sendiri: di panel sempit cukup "24-11" (card.css). */
+  const tgl = tanggal ? fmtDate(tanggal) : "";
+  const pisah = tgl.lastIndexOf("-");
+  return `<b>${escapeHtml(dispVal(kode))}</b>${nama ? `<span class="p-nama" title="${escapeAttr(nama)}">${escapeHtml(nama)}</span>` : ""}${
+    pisah > 0 ? `<span class="p-tgl">${escapeHtml(tgl.slice(0, pisah))}<span class="p-tgl-thn">${escapeHtml(tgl.slice(pisah))}</span></span>` : ""}`;
 }
 
+// Ujung jalur rute langsung
+function laneUjungHtml(raw, kelas, mode) {
+  const kode = portCodeLabel(raw);
+  return `<div class="${kelas}">${isiLabelSimpul(kode, namaSimpulLane(raw, mode, kode))}</div>`;
+}
+
+// Render seluruh isi ".lane" (judul + track + label simpul)
 function buildLaneHtml(s) {
   const lane = computeLaneModel(s);
   const { nodes, fractions, progress, icon } = lane;
@@ -454,11 +418,6 @@ function buildLaneHtml(s) {
     })
     .join("");
 
-  const labelRows = multi ? assignLabelRows(fractions) : [];
-  /* Baris kedua hanya dipakai bila ada label yang berdekatan; tanpa itu
-     wadahnya setinggi SATU baris (dulu selalu dua: celah 35px kosong di
-     atas baris tanggal kartu transit). */
-  const duaBaris = labelRows.some((r) => r > 0);
   const labelsHtml = !multi
     ? `
       <div class="port-labels">
@@ -469,30 +428,19 @@ function buildLaneHtml(s) {
              lengkap dengan jamnya), dan tanggal revisinya di strip
              delay. Yang belum terbaca dari mana pun adalah KE MANA:
              kode pelabuhan seperti di dokumen, dan namanya. -->
-        ${laneUjungHtml(s.origin, "p")}
-        ${laneUjungHtml(s.destination, "p text-end")}
+        ${laneUjungHtml(s.origin, "p", s.transport)}
+        ${laneUjungHtml(s.destination, "p text-end", s.transport)}
       </div>`
     : `
-      <div class="port-labels port-labels--multi${duaBaris ? " port-labels--dua-baris" : ""}">
+      <div class="port-labels port-labels--multi" style="--simpul:${nodes.length}">
+        <!-- RUTE TRANSIT: satu baris kolom sama lebar, satu kolom per
+             simpul (posisiSimpulLane menaruh titiknya di tengah kolom).
+             Asal & tujuan: kode + nama; transit: kode · tanggal singgah +
+             nama. -->
         ${nodes
           .map((nd, i) => {
-            /* Perataan mengikuti POSISI, bukan urutan simpul.
-
-               Meratakan berdasar urutan (pertama kiri, terakhir kanan,
-               sisanya tengah) salah begitu ada transit yang jatuh dekat
-               tepi: label rata-tengah menjorok separuh lebarnya keluar
-               kartu.
-
-               Ambangnya 12% / 88%, kira-kira selebar label pada kartu
-               tersempit. Simpul pertama & terakhir tetap kena aturan
-               yang sama karena posisinya memang 0% dan 100%. */
-            const f = fractions[i];
-            const align = f <= 0.12 ? "start" : f >= 0.88 ? "end" : "center";
-            const top = labelRows[i] * 36;
-            return `<div class="p p--node p--${align}" style="left:${fractions[i] * 100}%; top:${top}px">
-              <span class="p-term" title="${escapeAttr(dispVal(nd.terminal))}">${escapeHtml(dispVal(nd.terminal))}</span>
-              <b>${fmtDate(nd.date)}</b>
-            </div>`;
+            const letak = i === 0 ? "start" : i === nodes.length - 1 ? "end" : "center";
+            return `<div class="p p--${letak}">${isiLabelSimpul(nd.terminal, namaSimpulLane(nd.raw, nd.mode, nd.terminal), letak === "center" ? nd.date : "")}</div>`;
           })
           .join("")}
       </div>`;

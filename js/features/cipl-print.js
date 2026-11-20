@@ -99,9 +99,11 @@ const CIPL_PROFIL = [
       pembeliNegara: "KR",
       penerimaNegara: "VN",
     },
-    /* Bentuk nomor invoice khusus pembeli ini. {SEQ} tetap mengambil
-       urutan yang sama dengan invoice lain -- lihat docNumTemplate(). */
-    invoicePattern: "DDI - CRBM - {MM} - {SEQ} - {YYYYMMDD}",
+    /* Bentuk nomor invoice khusus pembeli ini ({ROM} = bulan romawi). {SEQ}
+       tetap mengambil urutan yang sama dengan invoice lain -- lihat
+       docNumPolaBerlaku(); bisa diganti dari kotak Atur Nomor Urut
+       (format-nomor.js, kunci "invoice@kumho-vn"). */
+    invoicePattern: "DDI - CRBM - {ROM} - {SEQ} - {YYYYMMDD}",
     portLoading: "JAKARTA",
     portDischarge: "HOCHIMINH, VIETNAM",
     finalDestination: "HOCHIMINH CITY, VIETNAM",

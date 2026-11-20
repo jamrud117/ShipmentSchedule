@@ -218,7 +218,7 @@
   justify-content: space-between;
   gap: var(--sp-3);
   padding: 9px 0;
-  border-bottom: 1px dashed var(--n-200);
+  border-bottom: 1px solid var(--n-100);
   font-size: var(--t-base);
 }
 .stat-line:last-child {

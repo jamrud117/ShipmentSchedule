@@ -551,6 +551,11 @@ const RT_PENGATURAN = [
     kunci: () => (typeof FUND_DOCNO_KUNCI !== "undefined" ? FUND_DOCNO_KUNCI : null),
     muat: () => rtDiDocNum() && typeof fundDocNoMuat === "function" && fundDocNoMuat(),
   },
+  // Format nomor tiap jenis dokumen (format-nomor.js)
+  {
+    kunci: () => (typeof FORMAT_NOMOR_KUNCI !== "undefined" ? FORMAT_NOMOR_KUNCI : null),
+    muat: () => rtDiDocNum() && typeof formatNomorMuat === "function" && formatNomorMuat(),
+  },
   // Pola Doc No bawaan Pengajuan Dana (fund-docno.js)
   {
     kunci: () => (typeof FUND_DOCNO_POLA_KUNCI !== "undefined" ? FUND_DOCNO_POLA_KUNCI : null),

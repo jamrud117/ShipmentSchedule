@@ -1370,7 +1370,7 @@ table.item-table input.subtotal {
     justify-content: space-between;
     gap: 12px;
     padding-top: 10px;
-    border-top: 1px dashed var(--border);
+    border-top: 1px solid var(--border);
     font-weight: 700;
     color: var(--ink);
   }
@@ -1422,7 +1422,7 @@ tr.item-fac-row td {
 }
 .item-fac-panel {
   padding: 14px 16px 16px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
 .item-fac-skb-head {
@@ -1507,7 +1507,7 @@ tr.item-fac-row td {
   padding: 4px 0;
 }
 /* PI barang ini (buku Import): [ PI ][ No. item di PI ], di atas daftar
-   fasilitas, dipisah garis putus-putus. */
+   fasilitas, dipisah garis tipis. */
 .item-fac-pi {
   display: flex;
   flex-wrap: wrap;
@@ -1515,7 +1515,7 @@ tr.item-fac-row td {
   gap: 8px 12px;
   padding-bottom: 12px;
   margin-bottom: 12px;
-  border-bottom: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .item-fac-pi label {
   display: flex;
@@ -1568,7 +1568,7 @@ tr.item-fac-row td {
 .dp-grup--lain {
   grid-column: 1 / -1;
   padding-top: 14px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
 }
 .dp-kepala {
   display: flex;
@@ -1722,7 +1722,7 @@ tr.item-fac-row td {
 .lartas-daftar + .lartas-fta {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid var(--border);
 }
 .lartas-fta > i {
   margin-top: 2px;
@@ -1885,7 +1885,7 @@ tr.item-fac-row td {
 /* Blok "Tanggal Update Delay" — tampil saat status DELAY, dan selama
    tanggal revisinya masih terisi (is-sisa, judul & keterangan lain). */
 .delay-box {
-  border: 1px dashed var(--amber);
+  border: 1px solid var(--amber);
   border-radius: 10px;
   padding: 14px 16px;
   background: var(--w-bg-fffaf0);
@@ -2560,7 +2560,7 @@ table.item-table input.tarif-coo {
   }
   .barang-isi .item-fac-panel {
     border: 1px solid var(--border);
-    border-top: 1px dashed var(--border);
+    border-top: 1px solid var(--border);
     border-left: 3px solid var(--n-300);
     border-radius: 0 0 var(--r-lg) var(--r-lg);
     background: var(--n-50);
@@ -3192,4 +3192,25 @@ body.mode-export .skb-bawaan {
 .skb-bawaan.is-sibuk {
   opacity: 0.6;
   pointer-events: none;
+}
+
+/* ISIAN YANG DITUJU dari Cek PIB/PEB (tujuIsianForm, modal-fields.js):
+   cincin warna fokus yang memudar sesudah 2,4 detik -- mata langsung
+   menemukan kotaknya walau formnya panjang. */
+.isian-dituju {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .isian-dituju {
+    animation: isian-dituju 2.4s ease-out forwards;
+  }
+}
+@keyframes isian-dituju {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px var(--focus-ring);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
 }

@@ -257,7 +257,7 @@
 .mst-dok-catatan {
   margin: var(--sp-3) 0 0;
   padding-top: var(--sp-3);
-  border-top: 1px dashed var(--n-200);
+  border-top: 1px solid var(--n-100);
   font-size: var(--t-xs);
   line-height: 1.55;
   color: var(--n-600);
@@ -672,11 +672,10 @@
 .mst-rinci-tabel tbody:last-child td[rowspan] {
   border-bottom: 0;
 }
-/* Antar-PIB dalam satu realisasi parsial: garis putus-putus, supaya
-   terbaca satu kesatuan; garis utuh baru memisahkan realisasi. */
+/* Antar-PIB dalam satu realisasi parsial: garis lebih pucat, supaya
+   terbaca satu kesatuan; garis biasa baru memisahkan realisasi. */
 .mst-rinci-tabel tbody.mst-rinci-parsial tr:not(:last-child) > td:not([rowspan]) {
-  border-bottom-style: dashed;
-  border-bottom-color: var(--n-200);
+  border-bottom-color: var(--n-100);
 }
 .mst-rinci-tabel th:first-child,
 .mst-rinci-tabel td:first-child {
@@ -1212,14 +1211,14 @@
     gap: 6px 18px;
     padding: 4px 0;
   }
-  /* Antarbaris dalam satu kelompok: garis tipis (putus-putus = PIB lain realisasi parsial yang sama) */
+  /* Antarbaris dalam satu kelompok: garis tipis (lebih pucat = PIB lain realisasi parsial yang sama) */
   .mst-rinci-tabel > tbody > tr + tr {
     margin-top: 6px;
     padding-top: 10px;
     border-top: 1px solid var(--n-100);
   }
   .mst-rinci-tabel > tbody.mst-rinci-parsial > tr + tr {
-    border-top-style: dashed;
+    border-top-color: var(--n-50);
   }
   /* width: auto -- kolom angka & tombol berlebar 1% di tabel, dan sebagai
      butir flex lebar itu ikut membatasi ukuran terkecilnya (labelnya

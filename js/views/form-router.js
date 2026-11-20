@@ -56,6 +56,8 @@ function showDocNumView() {
   if (typeof fundDocNoMuat === "function") fundDocNoMuat();
   // Aturan No. Invoice (vendor yang No. Invoice-nya boleh sama) dimuat bersamanya
   if (typeof fundInvoiceMuat === "function") fundInvoiceMuat();
+  // Format nomor tiap jenis dokumen (format-nomor.js)
+  if (typeof formatNomorMuat === "function") formatNomorMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
   // Daftar customer invoice & data pengisiannya (invoice-pihak.js)
   if (typeof invCustomerMuat === "function") invCustomerMuat();
@@ -71,8 +73,14 @@ function showFormView() {
   window.scrollTo(0, 0);
 }
 
+/* Form dibuka dari halaman lain untuk mengisi satu isian (Cek PIB/PEB ->
+   bukaIsianJadwal, modal-fields.js): Kembali / sesudah Simpan pulang ke
+   halaman itu, bukan ke daftar jadwal. */
+let kembaliSesudahForm = "";
 function goBackToList() {
-  location.hash = "#/";
+  const tujuan = kembaliSesudahForm || "#/";
+  kembaliSesudahForm = "";
+  location.hash = tujuan;
 }
 
 /* Alamat -> kunci halaman (kunci yang sama dengan PAGE_VIEWS dan dengan
@@ -112,6 +120,7 @@ function router() {
   // Membuka form dari daftar: posisi gulirnya diingat; halaman lain melupakannya
   if (halaman === "form") catatPosisiDaftar();
   else if (halaman !== "schedule") posisiDaftarSebelumForm = null;
+  if (halaman !== "form") kembaliSesudahForm = "";
   if (!bolehBuka(halaman)) {
     showToast(
       halaman === "form"
@@ -543,6 +552,12 @@ function renderFormPage(id) {
      sana papan ketiknya akan menutupi form padahal yang ingin diubah
      belum tentu isian pertama. */
   if (!id || !layarSentuh()) fokusIsianPertama($('.tab-pane[data-tabpane="umum"]'), { pertama: !!id, tanpaGulir: true });
+  // Dibuka untuk satu isian (Cek PIB/PEB): langsung ke isian itu
+  if (isianTertunda && id) {
+    const letak = isianTertunda;
+    isianTertunda = null;
+    setTimeout(() => tujuIsianForm(letak), 0);
+  }
 }
 
 /* PASANGAN ISIAN YANG SALING MENGIKUTI.

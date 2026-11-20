@@ -13,9 +13,10 @@
    tempat yang sama berapa pun jumlah barisnya. */
 const FR_MIN_BARIS = 9;
 
+/* Nama bulan tanggal surat -- bahasa Inggris, seperti isi suratnya. */
 const FR_BULAN = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
 ];
 
 /* ---------- TERBILANG ----------
@@ -70,9 +71,38 @@ function terbilang(nilai) {
 
 // "Enam Juta Sembilan Ratus Tujuh Puluh Lima Ribu Dua Belas Rupiah"
 function terbilangRupiah(nilai) {
-  const kata = terbilang(nilai);
-  const kapital = kata.replace(/\b[a-z]/g, (c) => c.toUpperCase());
-  return kapital + " Rupiah";
+  return terbilangMataUang(nilai, "IDR");
+}
+
+/* TERBILANG MENGIKUTI MATA UANG PENGAJUANNYA. Pengajuan USD dulu tetap
+   ditutup "... Rupiah" walau seluruh angkanya USD. Kalimatnya tetap
+   bahasa Indonesia (seperti label "Terbilang"-nya); mata uang selain
+   rupiah menyebut sen-nya: USD 18,530.50 = "Delapan Belas Ribu Lima Ratus
+   Tiga Puluh Dolar Amerika Serikat dan Lima Puluh Sen". Rupiah tetap
+   dibulatkan ke rupiah penuh -- surat pengajuan tidak menyebut sen. */
+const FR_NAMA_MATA_UANG = {
+  IDR: "Rupiah",
+  USD: "Dolar Amerika Serikat",
+  EUR: "Euro",
+  SGD: "Dolar Singapura",
+  JPY: "Yen Jepang",
+  CNY: "Yuan Tiongkok",
+};
+function terbilangMataUang(nilai, mataUang) {
+  const kode = String(mataUang || "IDR").toUpperCase();
+  const kapital = (kata) => kata.replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  const mutlak = Math.abs(Number(nilai) || 0);
+  const utuh = Math.floor(mutlak + 1e-9);
+  const sen = kode === "IDR" ? 0 : Math.round((mutlak - utuh) * 100) % 100;
+  const teks = `${kapital(terbilang(utuh))} ${FR_NAMA_MATA_UANG[kode] || kode}`;
+  return sen ? `${teks} dan ${kapital(terbilang(sen))} Sen` : teks;
+}
+
+/* Satuan kolom uang di judul tabel: "(Rp)" untuk rupiah, kodenya untuk
+   mata uang lain -- "AMOUNT (USD)", bukan "(Rp)" di atas angka USD. */
+function frSatuanKolom(mataUang) {
+  const kode = String(mataUang || "IDR").toUpperCase();
+  return kode === "IDR" ? "Rp" : kode;
 }
 
 /* ---------- data ---------- */
@@ -174,9 +204,9 @@ function frTanggalSurat(iso) {
    -> tidak ada barisnya sama sekali, bukan baris kosong menggantung. */
 function frBarisRujukan(p, kolom) {
   const pasangan = p.billingNo
-    ? ["Nomor Billing", p.billingNo]
+    ? ["Billing No.", p.billingNo]
     : p.invoiceNo
-      ? ["Nomor Invoice", p.invoiceNo]
+      ? ["Invoice No.", p.invoiceNo]
       : null;
   if (!pasangan) return "";
   /* colspan = seluruh kolom SISA sesudah kolom NO.
@@ -288,17 +318,19 @@ function buildFundRequestHtml(row) {
     <tbody><tr><td class="isi-halaman">
     ${kopSuratHtml()}
 
-    <div class="judul">FORM PENGAJUAN DANA</div>
+    <div class="judul">FUND REQUEST FORM</div>
 
+    <!-- Surat berbahasa Inggris (judul, label, total, catatan) KECUALI
+         "Terbilang", yang tetap bahasa Indonesia. -->
     <table class="meta">
-      <tr><td class="meta-k">No Surat</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>${
+      <tr><td class="meta-k">Letter No.</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(row.doc_number || "")}</td></tr>${
         fundPakaiDocNo(p.payee)
           ? `
       <tr><td class="meta-k">Doc No</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.docNo || "")}</td></tr>`
           : ""
       }
       <tr><td class="meta-k">Subject</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.notes || "")}</td></tr>
-      <tr><td class="meta-k">Lampiran</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.attachment || "1 Set")}</td></tr>
+      <tr><td class="meta-k">Attachment</td><td class="meta-s">:</td><td class="meta-v">${escapeHtml(p.attachment || "1 Set")}</td></tr>
     </table>
 
     <!-- SATU BARIS SAJA. "Sincerely," sebagai pembuka memang keliru
@@ -315,7 +347,7 @@ function buildFundRequestHtml(row) {
         <tr>
           <th class="c-no">NO.</th>
           <th class="c-desc">D E S C R I P T I O N S</th>
-          <th class="c-amt">AMOUNT</th>
+          <th class="c-amt">AMOUNT (${frSatuanKolom(mataUang)})</th>
         </tr>
       </thead>
       <tbody>
@@ -329,7 +361,7 @@ function buildFundRequestHtml(row) {
         ${barisHtml}
         ${kosongHtml}
         <tr class="baris-total">
-          <td class="c-total" colspan="2">TOTAL</td>
+          <td class="c-total" colspan="2">GRAND TOTAL</td>
           <td class="c-amt">${frSelUang(total, mataUang)}</td>
         </tr>
       </tbody>
@@ -342,7 +374,7 @@ function buildFundRequestHtml(row) {
          sendirian di halaman berikutnya. -->
     <div class="penutup-blok">
       <div class="terbilang">Terbilang : ${escapeHtml(
-        terbilangRupiah(frTotalPengajuan(p)),
+        terbilangMataUang(frTotalPengajuan(p), mataUang),
       )}</div>
 
       <div class="penutup">
@@ -354,19 +386,18 @@ function buildFundRequestHtml(row) {
 
       <table class="ttd${frPakaiTtdCfo(p) ? " ttd--empat" : ""}">
         <tr>
-          ${frKotakTtd("Made by ;", p.requester || row.requester, "Drafter")}
-          ${frKotakTtd("Checked By ;", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
+          ${frKotakTtd("Made by :", p.requester || row.requester, "Drafter")}
+          ${frKotakTtd("Checked by :", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
           ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
           ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
         </tr>
       </table>
 
       <div class="catatan">
-        <b>Notes (PERHATIAN)</b> : pengajuan dana adalah dokumen tertulis yang
-        digunakan untuk meminta dukungan kegiatan, dan menunjukkan dampak positif
-        yang dapat dihasilkan finansial dari individu organisasi, atau lembaga
-        tertentu. Tujuan utama proposal ini adalah untuk menjelaskan kebutuhan
-        dana, menyampaikan rencana.
+        <b>Notes (ATTENTION)</b> : a fund request is a written document used to
+        request support for an activity and to show the positive financial impact
+        it can bring to an individual, organization, or institution. Its main
+        purpose is to explain the funding need and convey the plan.
       </div>
     </div>
     </td></tr></tbody>
@@ -402,11 +433,11 @@ function frBarisPerAwb(p, mataUang, kolom) {
   const bagian = frBagianPerAwb(p);
   if (!bagian.length) return "";
   return `
-      <tr class="baris-rujukan"><td class="c-desc" colspan="${kolom}"><b>BAGIAN PER BL/AWB</b></td></tr>${bagian
+      <tr class="baris-rujukan"><td class="c-desc" colspan="${kolom}"><b>SHARE PER BL/AWB</b></td></tr>${bagian
         .map(
           (b) => `
       <tr class="baris-awb">
-        <td class="c-desc" colspan="${kolom - 1}">${escapeHtml(b.teks)}${b.rata ? " (termasuk bagian rata)" : ""}</td>
+        <td class="c-desc" colspan="${kolom - 1}">${escapeHtml(b.teks)}${b.rata ? " (incl. equal share)" : ""}</td>
         <td class="c-amt">${frSelUang(b.dibayar, mataUang)}</td>
       </tr>`,
         )
@@ -428,6 +459,12 @@ function frTabelRinci(p, mataUang) {
   const r = fundLineTotals(daftar, mataUang, p.payee, dokumen);
   const KOLOM = 6;
   const uang = (v) => frSelUang(v, mataUang);
+  /* TINGKAT JUMLAH, dari kecil ke besar -- supaya tidak ada lima "TOTAL"
+     yang berbeda arti: kolom TOTAL = nilai + PPN per baris; SUBTOTAL =
+     jumlah per kolom (per dokumen bila lebih dari satu); PPH (2%) =
+     potongan PPh 23-nya (cukup "PPH (2%)", baris di bawah SUBTOTAL); TOTAL INVOICE x = yang dibayar untuk satu dokumen;
+     GRAND TOTAL = yang dibayar seluruhnya (= Terbilang). */
+  const satuan = frSatuanKolom(mataUang);
 
   const barisPos = (b, i) => {
     const nilai = nilaiBaris[i];
@@ -457,7 +494,7 @@ function frTabelRinci(p, mataUang) {
   const kelompok = [{ id: "", jenis: "invoice", nomor: p.invoiceNo }].concat(dokumen);
   const adaKelompok = new Set(kelompok.map((d) => d.id));
   const judulKelompok = (d) =>
-    `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}"><b>${escapeHtml(d.jenis === "debit" ? "Nomor Debit Note" : "Nomor Invoice")} : ${escapeHtml(d.nomor || "-")}</b></td></tr>`;
+    `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}"><b>${escapeHtml(d.jenis === "debit" ? "Debit Note No." : "Invoice No.")} : ${escapeHtml(d.nomor || "-")}</b></td></tr>`;
   /* TOTAL PER DOKUMEN, tepat di bawah pos-pos dokumen itu: nilai, PPN
      dan jumlahnya, potongan PPH 23-nya, lalu TOTAL dokumen itu -- supaya
      PPN & PPH 23 invoice pertama dan invoice / debit note kedua bisa
@@ -472,14 +509,14 @@ function frTabelRinci(p, mataUang) {
     return `
       <tr class="baris-subtotal baris-dok">
         <td class="c-no"></td>
-        <td class="c-desc">SUBTOTAL ${escapeHtml(nama)} :</td>
+        <td class="c-desc">SUBTOTAL ${escapeHtml(nama)}</td>
         <td class="c-amt">${uang(x.totalNet)}</td>
         <td class="c-rate"></td>
         <td class="c-amt">${uang(x.totalPpn)}</td>
         <td class="c-amt">${uang(x.totalNet + x.totalPpn)}</td>
       </tr>
       <tr class="baris-potongan baris-dok">
-        <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%) ${escapeHtml(nama)}</td>
+        <td class="c-desc" colspan="4">PPH (${FUND_PPH23_RATE}%)</td>
         <td class="c-amt">${uang(x.pph)}</td>
         <td class="c-amt">${uang(-x.pph)}</td>
       </tr>
@@ -514,14 +551,14 @@ function frTabelRinci(p, mataUang) {
   const subtotal = `
       <tr class="baris-subtotal">
         <td class="c-no"></td>
-        <td class="c-desc">${dokumen.length ? "TOTAL SEMUA DOKUMEN :" : "TOTAL :"}</td>
+        <td class="c-desc">${dokumen.length ? "SUBTOTAL ALL DOCUMENTS" : "SUBTOTAL"}</td>
         <td class="c-amt">${uang(r.totalNet)}</td>
         <td class="c-rate"></td>
         <td class="c-amt">${uang(r.totalPpn)}</td>
         <td class="c-amt">${uang(r.totalNet + r.totalPpn)}</td>
       </tr>
       <tr class="baris-potongan">
-        <td class="c-desc" colspan="4">POTONGAN PPH 23 (${FUND_PPH23_RATE}%)</td>
+        <td class="c-desc" colspan="4">PPH (${FUND_PPH23_RATE}%)</td>
         <td class="c-amt">${uang(r.pph)}</td>
         <td class="c-amt">${
           /* Tanpa potongan, cukup "-" saja. frSelUang() menuliskan nol
@@ -537,10 +574,10 @@ function frTabelRinci(p, mataUang) {
         <tr>
           <th class="c-no">NO.</th>
           <th class="c-desc">D E S C R I P T I O N S</th>
-          <th class="c-amt">AMOUNT (Rp)</th>
-          <th class="c-rate">PPN</th>
-          <th class="c-amt">PPN (Rp)</th>
-          <th class="c-amt">JUMLAH (Rp)</th>
+          <th class="c-amt">AMOUNT (${satuan})</th>
+          <th class="c-rate">PPN (%)</th>
+          <th class="c-amt">PPN (${satuan})</th>
+          <th class="c-amt">TOTAL (${satuan})</th>
         </tr>
       </thead>
       <tbody>
@@ -549,7 +586,7 @@ function frTabelRinci(p, mataUang) {
         ${kosongHtml}
         ${subtotal}
         <tr class="baris-total">
-          <td class="c-total" colspan="${KOLOM - 1}">TOTAL</td>
+          <td class="c-total" colspan="${KOLOM - 1}">GRAND TOTAL</td>
           <td class="c-amt">${uang(r.grandTotal)}</td>
         </tr>
       </tbody>
@@ -785,8 +822,8 @@ ${kopSuratCss()}
      ("Rp. 34,354,345,345") melebarkan kolomnya dan menyempitkan yang
      lain sampai angkanya membungkus.
 
-     Jatah: isi lembar 210mm - 30mm margin = 180mm; 8 + 30x3 + 11 =
-     109mm untuk kolom tetap, sisanya (~71mm) untuk uraian. 30mm pada
+     Jatah: isi lembar 210mm - 30mm margin = 180mm; 8 + 30x3 + 16 =
+     114mm untuk kolom tetap, sisanya (~66mm) untuk uraian. 30mm pada
      8pt memuat sekitar 21 karakter -- cukup untuk "Rp. 34,891,544,405"
      (18) tanpa membungkus. */
   .rincian--detail {
@@ -797,7 +834,10 @@ ${kopSuratCss()}
   .rincian--detail td { padding: 2px 4px; }
   .rincian--detail .c-no { width: 8mm; }
   .rincian--detail .c-amt { width: 30mm; }
-  .rincian--detail .c-rate { width: 11mm; }
+  /* "PPN (%)" muat sebaris di judulnya (dulu "PPN" saja, 11mm) --
+     diukur di Chrome dengan huruf tebal 8pt, tanpa meluber ke kolom
+     sebelahnya. */
+  .rincian--detail .c-rate { width: 16mm; white-space: nowrap; }
 
   .terbilang { margin: 4mm 0 5mm; }
   .penutup { margin-bottom: 6mm; }

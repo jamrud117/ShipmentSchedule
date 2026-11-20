@@ -352,6 +352,17 @@ UNLOCODES.forEach((u) => {
   if (!PORT_BY_UNLOCODE.has(u.unlocode)) PORT_BY_UNLOCODE.set(u.unlocode, u);
 });
 
+/* Kode yang dipakai pelabuhan laut DAN bandara kota yang sama (CNTAO =
+   Pelabuhan Qingdao & Bandara Jiaodong) -- indeks per moda, supaya
+   jadwal udara menyebut bandaranya (resolvePortEntryMode). */
+const PORT_BY_MODE = new Map();
+UNLOCODES.forEach((u) => {
+  [u.unlocode, u.code].forEach((k) => {
+    const kunci = `${u.type}:${k}`;
+    if (!PORT_BY_MODE.has(kunci)) PORT_BY_MODE.set(kunci, u);
+  });
+});
+
 // Bentuk kode UN/LOCODE: 2 huruf negara + 3 huruf/angka lokasi (IDCGK)
 const UNLOCODE_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}$/;
 
@@ -473,6 +484,25 @@ function resolvePortMetro(raw) {
 function resolvePortCountry(raw) {
   const e = resolvePortEntry(raw);
   return e ? e.country : "";
+}
+
+/* Seperti resolvePortEntry, tapi memilih entri yang sesuai MODA
+   jadwalnya ("udara" / "laut") bila kodenya dipakai keduanya: CNTAO di
+   jadwal udara = Bandara Jiaodong, bukan Pelabuhan Qingdao. Di luar
+   daftar kurasi, kode LOCODE jadwal udara dicari sebagai bandara lewat
+   kode IATA-nya (CNXMN -> XMN, Xiamen Gaoqi) di data dunia -- negaranya
+   harus sama. Moda lain / tidak ada padanan: hasil resolvePortEntry. */
+function resolvePortEntryMode(raw, mode) {
+  const e = resolvePortEntry(raw);
+  if (!mode || (e && e.type === mode)) return e;
+  const k = String(raw || "").trim().toUpperCase();
+  const kurasi = PORT_BY_MODE.get(`${mode}:${k}`) || (e && PORT_BY_MODE.get(`${mode}:${e.unlocode}`));
+  if (kurasi) return kurasi;
+  if (mode === "udara" && UNLOCODE_PATTERN.test(k) && typeof cariKodeDunia === "function") {
+    const b = cariKodeDunia(k.slice(2));
+    if (b && b.type === "udara" && b.country === k.slice(0, 2)) return b;
+  }
+  return e;
 }
 
 // Teks bebas -> bentuk UN/LOCODE penuh ("IDCGK"), untuk dokumen ekspor.

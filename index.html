@@ -914,6 +914,16 @@
               >
                 <i class="bi bi-arrow-clockwise"></i>
               </button>
+              <!-- Cetak & Unduh Excel: baris yang sedang tampil (kotak cari ikut berlaku),
+                   semua halamannya -- js/features/hscode-print.js -->
+              <button type="button" class="btn-quiet hs-alat" id="btnHsCodeExcel"
+                      title="Unduh Excel" data-en-title="Download Excel" aria-label="Unduh Excel" data-en-aria="Download Excel">
+                <i class="bi bi-file-earmark-excel" aria-hidden="true"></i><span class="hs-alat-teks" data-en="Excel">Excel</span>
+              </button>
+              <button type="button" class="btn-quiet hs-alat" id="btnHsCodeCetak"
+                      title="Cetak daftar HS Code" data-en-title="Print the HS Code list" aria-label="Cetak" data-en-aria="Print">
+                <i class="bi bi-printer" aria-hidden="true"></i><span class="hs-alat-teks" data-en="Print">Cetak</span>
+              </button>
               <button type="button" class="btn-teal hs-tambah" id="btnHsCodeAdd">
                 <i class="bi bi-plus-lg"></i>
                 <span data-i18n="hscode.add.button">Tambah HS Code</span>
@@ -2573,7 +2583,7 @@
                 </div>
                 <!-- Doc No, Rincian (Subject surat) & Lampiran sebaris --
                      urutannya sama dengan kepala Form Pengajuan Dana yang
-                     dicetak: No Surat, Doc No, Subject, Lampiran.
+                     dicetak: Letter No., Doc No, Subject, Attachment.
 
                      DOC NO diketik manual dan ADA UNTUK SEMUA VENDOR --
                      termasuk PRIME & WIDE. Isinya selalu tersimpan (bisa
@@ -2603,8 +2613,8 @@
                          harus diganti mengikuti polanya), jadi tanpa
                          data-en (js/features/fund-docno.js). -->
                     <div class="form-text-note fund-docno-bawaan d-none" id="fundDocNoBawaanKet"></div>
-                    <div class="form-text-note fund-docno-cetak" data-en="Printed under No Surat on the form.">
-                      Tercetak di bawah No Surat pada form.
+                    <div class="form-text-note fund-docno-cetak" data-en="Printed under Letter No. on the form.">
+                      Tercetak di bawah Letter No. pada form.
                     </div>
                     <div class="form-text-note fund-docno-tak-cetak d-none" data-en="Saved with the request, but not printed on the form for this vendor.">
                       Tersimpan di pengajuan, tetapi tidak dicetak pada form untuk vendor ini.
@@ -2727,11 +2737,11 @@
                           <!-- Hanya saat isian BL/AWB memuat dua nomor atau lebih
                                (.fund-lines--awb): tiap baris ditautkan ke kirimannya. -->
                           <th class="fl-awb">BL/AWB</th>
-                          <th class="fl-amt" data-i18n="f.nilai.rp">
-                            Nilai (Rp)
-                          </th>
-                          <th class="fl-rate">PPN</th>
-                          <th class="fl-amt fl-ppn">PPN (Rp)</th>
+                          <!-- Satuan kolom uang mengikuti Mata Uang pengajuan
+                               ([data-mata-dana], fund-lines.js): (Rp) / (USD). -->
+                          <th class="fl-amt"><span data-i18n="f.nilai">Nilai</span> (<span data-mata-dana>Rp</span>)</th>
+                          <th class="fl-rate">PPN (%)</th>
+                          <th class="fl-amt fl-ppn">PPN (<span data-mata-dana>Rp</span>)</th>
                           <th class="fl-act"></th>
                         </tr>
                       </thead>
@@ -3077,12 +3087,26 @@
                   <i class="bi bi-arrow-counterclockwise"></i> Reset
                 </button>
               </div>
+              <!-- FORMAT NOMOR jenis yang aktif (js/features/format-nomor.js):
+                   kodenya, contoh nomor berikutnya, tombol Ubah. -->
+              <div class="counter-format" id="formatNomorBaris">
+                <span class="counter-format-label" data-en="Number format">Format nomor</span>
+                <code class="counter-format-pola" id="formatNomorPola">&mdash;</code>
+                <span class="counter-format-contoh"><i class="bi bi-arrow-right" aria-hidden="true"></i> <span id="formatNomorContoh">&mdash;</span></span>
+                <button type="button" class="btn-quiet counter-format-ubah" id="btnFormatNomor" data-en="<i class=&quot;bi bi-pencil&quot;></i> Change">
+                  <i class="bi bi-pencil"></i> Ubah
+                </button>
+              </div>
               <details class="dn-bantuan">
                 <summary data-en="How it works">Cara kerja</summary>
-                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the number you want issued <b>next</b> &amp;mdash; e.g. if the last invoice was 035, enter 036. Applies to the active document type &amp;amp; period.">
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> Enter the number you want issued <b>next</b> &amp;mdash; e.g. if the last invoice was 035, enter 036. Applies to the active document type &amp;amp; period. <b>Number format</b>: write it with codes &amp;mdash; {SEQ} sequence, {YYYY} / {YY} year, {MM} month 01&amp;ndash;12, {ROM} Roman month, {DD} day, {YYYYMMDD} &amp;hellip; &amp;mdash; or type today&amp;rsquo;s number as is; changing the format does not restart the sequence.">
                 <i class="bi bi-info-circle"></i> Isi nomor yang ingin terbit
                 <b>berikutnya</b> &mdash; misal invoice terakhir 035, isi 036.
                 Berlaku untuk jenis dokumen &amp; periode yang sedang aktif.
+                <b>Format nomor</b>: tulis dengan kode &mdash; {SEQ} nomor urut,
+                {YYYY} / {YY} tahun, {MM} bulan 01&ndash;12, {ROM} bulan romawi,
+                {DD} tanggal, {YYYYMMDD} &hellip; &mdash; atau ketik nomor hari ini
+                apa adanya; mengganti format tidak memulai ulang nomor urut.
               </div>
               </details>
             </div>
@@ -3131,13 +3155,13 @@
               </div>
               <details class="dn-bantuan">
                 <summary data-en="How it works">Cara kerja</summary>
-                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> <b>Default Doc No</b> fills the Doc No box of every new request &amp;mdash; its year &amp;amp; month follow the current month, just replace the trailing number; left unchanged, no Doc No is saved. Doc No can be filled in and is saved for every vendor. On the printed form it appears under No Surat (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
+                <div class="form-text-note" data-en="<i class=&quot;bi bi-info-circle&quot;></i> <b>Default Doc No</b> fills the Doc No box of every new request &amp;mdash; its year &amp;amp; month follow the current month, just replace the trailing number; left unchanged, no Doc No is saved. Doc No can be filled in and is saved for every vendor. On the printed form it appears under Letter No. (together with the CFO signature) for every vendor <b>except</b> those listed here. Matched per word against &amp;ldquo;Paid To&amp;rdquo;: <b>PRIME</b> covers &amp;ldquo;PT PRIME CARGO&amp;rdquo; but not &amp;ldquo;PRIMERA&amp;rdquo;.">
                 <i class="bi bi-info-circle"></i> <b>Doc No bawaan</b> mengisi
                 kotak Doc No setiap pengajuan baru &mdash; tahun &amp; bulannya
                 mengikuti bulan berjalan, tinggal angka di ujungnya yang
                 diganti; dibiarkan, Doc No tidak tersimpan. Doc No bisa
                 diisi dan tersimpan untuk semua vendor. Pada form yang
-                dicetak, Doc No tampil di bawah No Surat (beserta tanda
+                dicetak, Doc No tampil di bawah Letter No. (beserta tanda
                 tangan CFO) untuk semua vendor <b>kecuali</b> yang ada di
                 daftar ini. Dicocokkan per kata dengan &ldquo;Dibayarkan
                 Kepada&rdquo;: <b>PRIME</b> mengenai &ldquo;PT PRIME
@@ -3893,7 +3917,7 @@
                   <!-- Teksnya ditulis terapkanLabelForm() per buku
                        (Estimated Delivery / Stuffing). -->
                   <label class="form-label" id="lblActual" for="fActual">Estimated Delivery</label>
-                  <input type="date" class="form-control" id="fActual" />
+                  <input type="date" class="form-control" id="fActual" aria-describedby="actualAutoHint" />
                   <div class="eta-mode-switch fl-mode" id="deliveryModeSwitch" role="group" aria-label="Mode Estimated Delivery">
                     <button
                       type="button"
@@ -3912,16 +3936,16 @@
                       data-i18n-title="ti.tanggal.dikunci.dipakai.untuk.laporan.mesin.ti"
                     ><i class="bi bi-pin-angle-fill" aria-hidden="true"></i>Manual</button>
                   </div>
-                  <!-- Keterangan mengikuti mode yang berlaku (setFormDeliveryMode,
-                       prediction-ui.js) -- dulu "Dihitung otomatis" tetap
-                       tampil walau tanggalnya sudah dikunci Manual. -->
-                  <div class="form-text-note pred-inline-hint" id="actualAutoHint">
-                    <span data-ket-mode="auto"
-                      data-en="<i class=&quot;bi bi-magic&quot;></i> Calculated automatically."
-                      ><i class="bi bi-magic"></i> Dihitung otomatis.</span>
-                    <span data-ket-mode="manual" hidden
-                      data-en="<i class=&quot;bi bi-lock-fill&quot;></i> Locked for reporting."
-                      ><i class="bi bi-lock-fill"></i> Dikunci untuk laporan.</span>
+                  <!-- Arti mode yang berlaku (setFormDeliveryMode,
+                       prediction-ui.js) TIDAK lagi ditulis di bawah
+                       sakelar -- cukup tooltip tombol Auto/Manual & kotak
+                       tanggalnya, supaya baris tanggal form rapi. Teksnya
+                       tetap ada bagi pembaca layar (visually-hidden,
+                       aria-describedby kotak tanggal), yang tidak membaca
+                       tooltip. -->
+                  <div class="visually-hidden" id="actualAutoHint">
+                    <span data-ket-mode="auto" data-en="Calculated automatically.">Dihitung otomatis.</span>
+                    <span data-ket-mode="manual" hidden data-en="Locked for reporting.">Dikunci untuk laporan.</span>
                   </div>
                 </div>
                 <!-- Tanggal & jam In Factory (Import). Buku Export tidak
@@ -5284,6 +5308,9 @@
     <script src="js/core/prediction-config.js"></script>
     <script src="js/core/prediction-rules.js"></script>
     <script src="js/core/workdays.js"></script>
+    <!-- Kode IATA seluruh maskapai dunia: ditambahkan ke daftar pilihan
+         di carrier-master.js (yang pilihan selalu menang). -->
+    <script src="js/core/maskapai-dunia.js"></script>
     <script src="js/core/carrier-master.js"></script>
     <script src="js/core/prediction-route.js"></script>
     <script src="js/core/prediction-milestones.js"></script>

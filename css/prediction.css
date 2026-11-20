@@ -334,13 +334,6 @@
   color: var(--tp-600);
 }
 
-.pred-inline-hint {
-  margin-top: 6px;
-}
-.pred-inline-hint i {
-  color: var(--tsec-600);
-}
-
 /* ------------------------------------------------------------------
    SPANDUK "ETA SEDANG MODE MANUAL"
 

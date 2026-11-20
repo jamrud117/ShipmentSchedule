@@ -1181,18 +1181,6 @@ function danaLaporOcr(nama, urutan, jumlah, bolehTampil) {
   return lapor;
 }
 
-/* Jarak sunting dua teks (jumlah huruf yang harus diganti / disisipkan / dibuang) */
-function danaJarakSunting(a, b) {
-  const x = String(a), y = String(b);
-  let sebelum = Array.from({ length: y.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= x.length; i++) {
-    const kini = [i];
-    for (let j = 1; j <= y.length; j++) kini[j] = Math.min(sebelum[j] + 1, kini[j - 1] + 1, sebelum[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
-    sebelum = kini;
-  }
-  return sebelum[y.length];
-}
-
 /* Dua nomor yang bedanya BISA berasal dari salah baca OCR: paling banyak 2 suntingan,
    dan tiap suntingan memang kekeliruan OCR -- huruf <-> angka yang mirip (O/0, I/1/l,
    S/5, B/8, Z/2, G/6), I/J/U yang tertukar, atau huruf tipis yang muncul / hilang

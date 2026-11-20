@@ -180,8 +180,13 @@ function lapBarisInvoice(row, kurs) {
   const tanggal = String(row.doc_date || "");
   const nilai = typeof dnNilaiInvoice === "function" ? dnNilaiInvoice(row) : null;
   const mata = String((nilai && nilai.mata) || p.currency || "USD").toUpperCase();
-  const faktor = lapKursUntuk(kurs, mata, tanggal);
   const jadwal = p.shipmentId && typeof ciplCariShipment === "function" ? ciplCariShipment(p.shipmentId) : null;
+  /* KURS PENDAPATAN: NDPBM yang tertulis di PEB jadwal ekspor yang
+     ditagih invoice ini -- kurs resmi transaksi ekspor itu sendiri. Hanya
+     invoice yang belum ditautkan ke jadwal ber-NDPBM yang memakai NDPBM
+     kiriman terdekat tanggal invoicenya (kurs pajak KMK pekan itu). */
+  const kursPeb = mata === "USD" && jadwal && Number(jadwal.ndpbm) > NDPBM_MINIMAL ? Number(jadwal.ndpbm) : 0;
+  const faktor = kursPeb && kurs && typeof kurs.dariKiriman === "function" ? kurs.dariKiriman(jadwal) : kursPeb || lapKursUntuk(kurs, mata, tanggal);
   const jumlahBarang = jadwal ? (jadwal.items || []).length : 0;
   const jumlah = nilai ? nilai.total : lapAngka(p.amount);
   return {
@@ -199,6 +204,8 @@ function lapBarisInvoice(row, kurs) {
     // Ekspor ditagih dalam valuta asing; Local Sale dalam IDR
     kanal: mata === "IDR" ? "Local Sale" : "Export",
     kurs: faktor,
+    // "peb" = NDPBM PEB jadwalnya sendiri; "terdekat" = NDPBM kiriman terdekat
+    kursDari: kursPeb ? "peb" : "terdekat",
     jumlahAsli: jumlah,
     jumlah: jumlah * faktor,
     // QTY = jumlah baris barang pada jadwal yang ditautkan
@@ -671,6 +678,59 @@ function hitungAnalisis(dana, opsi) {
   const pendUsdLalu = usdPerTahun(Y - 1, false);
   const pendYtd = lapJumlah(pend.slice(0, M));
   const pendUsdYtd = lapJumlah(jual.filter((v) => v.mata === "USD" && v.tahun === Y && v.bulan <= M).map((v) => v.jumlahAsli));
+
+  /* EKSPOR DIBANDINGKAN DENGAN EKSPOR. Penjualan ekspor hanya dibagi
+     dengan biaya yang dibayar untuk EKSPOR (freight, storage, dll. jenis
+     transaksi Export) -- biaya impor (bea masuk, freight bahan baku)
+     tidak ada hubungannya dengan penjualan, dan dulu ikut dijumlah
+     sehingga satu pembayaran bea impor besar membuat rasionya ribuan
+     persen. Biaya impor & lainnya (Trucking, arah belum diisi) tetap
+     ditampilkan, terpisah. */
+  /* Arah tiap pengajuan: dari Jenis Transaksi. Yang tidak menyebut arah
+     (Trucking, belum diisi) mengikuti jadwal yang BL/AWB-nya sama -- truk
+     pabrik -> pelabuhan untuk kiriman ekspor adalah biaya ekspor. Dihitung
+     sekali per baris (dipakai lima kali di bawah). */
+  const arahKirim = new Map();
+  (o.kiriman || []).forEach((s) => bkKunciKiriman(s).forEach((k) => {
+    if (!arahKirim.has(k)) arahKirim.set(k, s.mode === "export" ? "Export" : "Import");
+  }));
+  const arahCache = new Map();
+  const arahDana = (d) => {
+    let x = arahCache.get(d);
+    if (x) return x;
+    x = lapArah(d.transaksi);
+    if (x !== "Export" && x !== "Import") {
+      const dariKirim = [...new Set(bkKunciDana({ blAwb: d.blAwb }).map((k) => arahKirim.get(k)).filter(Boolean))];
+      x = dariKirim.length === 1 ? dariKirim[0] : "Lain";
+    }
+    arahCache.set(d, x);
+    return x;
+  };
+  const perTahunArah = (y, arah) => {
+    const b = Array(12).fill(0);
+    baris.filter((d) => d.tahun === y && arahDana(d) === arah).forEach((d) => (b[d.bulan - 1] += d.total));
+    return b;
+  };
+  const iniEkspor = perTahunArah(Y, "Export");
+  const laluEkspor = perTahunArah(Y - 1, "Export");
+  const iniImpor = perTahunArah(Y, "Import");
+  const iniLain = perTahunArah(Y, "Lain");
+  const pendEksporPerTahun = (y) => {
+    const arr = Array(12).fill(0);
+    jual.filter((v) => v.tahun === y && v.kanal === "Export").forEach((v) => (arr[v.bulan - 1] += v.jumlah));
+    return arr;
+  };
+  const pendEkspor = pendEksporPerTahun(Y);
+  const pendEksporLalu = pendEksporPerTahun(Y - 1);
+  const ytdEkspor = lapJumlah(iniEkspor.slice(0, M));
+  const ytdEksporLalu = lapJumlah(laluEkspor.slice(0, M));
+  const pendEksporYtd = lapJumlah(pendEkspor.slice(0, M));
+  const pendEksporYtdLalu = lapJumlah(pendEksporLalu.slice(0, M));
+  const rasioEkspor = pendEksporYtd ? ytdEkspor / pendEksporYtd : null;
+  const rasioEksporLalu = pendEksporYtdLalu ? ytdEksporLalu / pendEksporYtdLalu : null;
+  // Invoice yang kursnya dari PEB jadwalnya sendiri vs NDPBM kiriman terdekat
+  const kursDariPeb = jual.filter((v) => v.tahun === Y && v.bulan <= M && v.kanal === "Export" && v.kursDari === "peb").length;
+  const kursTerdekat = jual.filter((v) => v.tahun === Y && v.bulan <= M && v.kanal === "Export" && v.kursDari !== "peb").length;
   const pendYtdLalu = lapJumlah(pendLalu.slice(0, M));
   const rasio = pendYtd ? ytd / pendYtd : null;
   const rasioLalu = pendYtdLalu ? ytdLalu / pendYtdLalu : null;
@@ -743,6 +803,12 @@ function hitungAnalisis(dana, opsi) {
   };
   const namaJenis = (j) => (j === "Lainnya" ? "Other" : j || "-");
   const perJenis = rinci((d) => d.jenis || "-", (d) => namaJenis(d.jenis));
+  /* Jenis pengeluaran PER ARAH -- Freight ekspor dan Freight impor dua
+     baris yang berbeda, tidak dijumlah jadi satu "Freight". */
+  const NAMA_ARAH = { Export: "Export", Import: "Import", Lain: "Trucking / no direction" };
+  const perJenisArah = rinci((d) => `${arahDana(d)}|${d.jenis || "-"}`, (d) => namaJenis(d.jenis)).map((r) =>
+    Object.assign(r, { arah: r.kunci.split("|")[0], namaArah: `${NAMA_ARAH[r.kunci.split("|")[0]]} · ${r.nama}` }),
+  );
   const perModa = rinci((d) => lapModaArah(d), (d) => lapModaArah(d));
   const perVendor = rinci((d) => fsumKunci(d.vendor) || "-", (d) => d.vendor || "-");
   const perCustomer = rinci((d) => fsumKunci(d.customer) || "-", (d) => d.customer || "-");
@@ -843,7 +909,9 @@ function hitungAnalisis(dana, opsi) {
     Y, M, ini, lalu, adaLalu, ytd, ytdLalu, totalLalu, yoy, bulanIni, bulanSebelum, mom, yoyBulan,
     rataBulan: ytd / bulanEfektif, medianBulan: statIni.median, statIni, g, runRate, proyeksiIni, mulai, bulanEfektif,
     metode, dasar, rendah: urutM[0], tinggi: urutM[urutM.length - 1], cadangan, rekomendasi, porsiBulan, fasing,
-    perJenis, perModa, perVendor, perCustomer, statistik, bayar, perKiriman,
+    perJenis, perJenisArah, perModa, perVendor, perCustomer, statistik, bayar, perKiriman,
+    iniEkspor, laluEkspor, iniImpor, iniLain, pendEkspor, pendEksporLalu, ytdEkspor, ytdEksporLalu, pendEksporYtd, pendEksporYtdLalu,
+    rasioEkspor, rasioEksporLalu, kursDariPeb, kursTerdekat,
     kirimanJumlah: petaKirim.size, tanpaBlJumlah: tanpaBl.length, tanpaBlNilai: lapJumlah(tanpaBl.map((d) => d.total)),
     bandingVendor: lapBandingVendor(baris, Y, M, o.kiriman || []),
     pend, pendLalu, pendYtd, pendYtdLalu, pendUsdYtd, pendUsd, pendUsdIdr, pendUsdLalu,
@@ -909,9 +977,10 @@ function lapWawasan(a) {
   } else {
     out.push(`No invoice values recorded for ${per} — revenue comparisons are not available.`);
   }
-  const top = a.perJenis[0];
-  out.push(`EXIM spending ${per}: ${lapFmtUang(a.ytd)}${naikTurun(a.yoy)}${a.rasio != null
-    ? `, which is IDR ${(a.rasio * 100).toFixed(2)} for every IDR 100 of revenue${a.rasioLalu != null ? ` (${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)})` : ""}` : ""}.${top && top.ini
+  // Biaya terbesar disebut lengkap dengan arahnya ("Import · Billing")
+  const top = a.perJenisArah[0] && Object.assign({}, a.perJenisArah[0], { nama: a.perJenisArah[0].namaArah });
+  out.push(`EXIM spending ${per}: ${lapFmtUang(a.ytd)}${naikTurun(a.yoy)} — export ${lapFmtUang(a.ytdEkspor)}, import ${lapFmtUang(lapJumlah(a.iniImpor.slice(0, a.M)))}${a.rasioEkspor != null
+    ? `; export costs are IDR ${(a.rasioEkspor * 100).toFixed(2)} for every IDR 100 of export revenue${a.rasioEksporLalu != null ? ` (${a.Y - 1}: IDR ${(a.rasioEksporLalu * 100).toFixed(2)})` : ""}` : ""}.${top && top.ini
     ? ` Largest cost: ${top.nama} (${(top.porsi * 100).toFixed(0)}% of spending); highest month: ${lapNamaBulan(a.statistik.ini.bulanMax)} (${lapFmtUang(a.statIni.max)}).` : ""}`);
   if (a.ledger && typeof lapWawasanBuku === "function") lapWawasanBuku(a).forEach((x) => out.push(x));
   out.push(`Suggested ${a.Y + 1} budget: ${lapFmtUang(a.rekomendasi)} — about ${lapFmtUang(a.rekomendasi / 12)} per month, including a ${(a.cadangan * 100).toFixed(0)}% buffer.${a.anggaran
@@ -987,24 +1056,35 @@ function lapSusunBlok(a, lap, ang) {
      tidak boleh penuh tanda strip. */
   const adaLaluApaPun = a.adaLalu || lapJumlah(a.pendLalu) > 0;
   const bulanAda = Array.from({ length: M }, (_, i) => i).filter((i) => a.pend[i] || a.ini[i] || (adaLaluApaPun && (a.lalu[i] || a.pendLalu[i])));
+  /* BULAN DEMI BULAN: penjualan EKSPOR dibandingkan dengan biaya EKSPOR
+     saja (lihat hitungAnalisis); biaya impor & lainnya kolom tersendiri,
+     total EXIM spending di ujung -- jumlahnya tetap bisa dicocokkan. */
+  const adaLain = a.iniLain.slice(0, M).some((v) => v);
   B.ringkasBulan = {
     judul: `Month by month — ${Y}`,
-    sub: "",
-    kepala: ["Month (invoice date)", "Export revenue (USD)", "Rate used (NDPBM)", `Revenue (IDR)`, `EXIM spending (IDR)`, "Spending as % of revenue"]
-      .concat(adaLaluApaPun ? [`EXIM spending ${Y - 1}`, `Spending change vs ${Y - 1}`] : []),
+    sub: "export revenue vs export spending · IDR",
+    kepala: ["Month (invoice date)", "Export revenue (USD)", "Customs rate (NDPBM)", "Export revenue (IDR)", "Export spending (IDR)", "Export spending % of export revenue", "Import spending (IDR)"]
+      .concat(adaLain ? ["Trucking / no direction (IDR)"] : [])
+      .concat(["Total EXIM spending (IDR)"])
+      .concat(adaLaluApaPun ? [`Total EXIM spending ${Y - 1}`, `Change vs ${Y - 1}`] : []),
     baris: bulanAda.map((i) => [sel(lapNamaBulan(i + 1)), sel(a.pendUsd[i], "usd"),
-      sel(a.pendUsd[i] ? a.pendUsdIdr[i] / a.pendUsd[i] : null, "rp2"), sel(a.pend[i], "jt"), sel(a.ini[i], "jt"),
-      sel(a.pend[i] ? a.ini[i] / a.pend[i] : null, "pct2")]
+      sel(a.pendUsd[i] ? a.pendUsdIdr[i] / a.pendUsd[i] : null, "rp2"), sel(a.pendEkspor[i], "jt"), sel(a.iniEkspor[i], "jt"),
+      sel(a.pendEkspor[i] ? a.iniEkspor[i] / a.pendEkspor[i] : null, "pct2"), sel(a.iniImpor[i], "jt")]
+      .concat(adaLain ? [sel(a.iniLain[i], "jt")] : [])
+      .concat([sel(a.ini[i], "jt")])
       .concat(adaLaluApaPun ? [sel(a.lalu[i], "jt"), sel(lapPerubahan(a.ini[i], a.lalu[i]), "chg")] : [])),
     kaki: [sel(`Total ${per}`), sel(a.pendUsdYtd, "usd"), sel(a.pendUsdYtd ? lapJumlah(a.pendUsdIdr.slice(0, M)) / a.pendUsdYtd : null, "rp2"),
-      sel(a.pendYtd, "jt"), sel(a.ytd, "jt"), sel(a.rasio, "pct2")]
+      sel(a.pendEksporYtd, "jt"), sel(a.ytdEkspor, "jt"), sel(a.rasioEkspor, "pct2"), sel(lapJumlah(a.iniImpor.slice(0, M)), "jt")]
+      .concat(adaLain ? [sel(lapJumlah(a.iniLain.slice(0, M)), "jt")] : [])
+      .concat([sel(a.ytd, "jt")])
       .concat(adaLaluApaPun ? [sel(a.ytdLalu, "jt"), sel(a.yoy, "chg")] : []),
     /* Rekonsiliasi: jumlah & total yang sama dengan tab sumbernya, supaya
        pembaca bisa mencocokkan angka laporan tanpa menebak. */
     catatan: [
+      "Export spending = Fund Requests whose transaction type is an export (Air / Sea Export), plus trucking or undirected requests whose BL/AWB belongs to an export shipment: the costs of selling abroad. Import spending (duties, taxes, freight of incoming goods) is shown beside it but not divided by sales — it is not a cost of the revenue.",
+      `Customs rate: each export invoice is converted at the NDPBM on the PEB of the export shipment it bills${a.kursTerdekat ? `; ${a.kursTerdekat} invoice${a.kursTerdekat === 1 ? " is" : "s are"} not linked to a shipment with an NDPBM and use${a.kursTerdekat === 1 ? "s" : ""} the NDPBM of the shipment dated closest to the invoice date (the same weekly KMK rate)` : ""}. The monthly rate shown is the average weighted by USD.`,
       `Spending is dated by the vendor's invoice date${a.tanpaTglInvoice ? ` (${a.tanpaTglInvoice} request${a.tanpaTglInvoice === 1 ? "" : "s"} without an invoice date use the request date)` : ""}, not by payment date — a bill paid late stays in the month it was invoiced.`,
-      `Check: ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"} (${lapFmtUsd(a.pendUsdYtd)} export${a.pendYtd - lapJumlah(a.pendUsdIdr.slice(0, M)) > 0 ? ` + ${lapFmtUang(a.pendYtd - lapJumlah(a.pendUsdIdr.slice(0, M)))} local sale` : ""}) — same as the Invoice Number tab; ${a.jumlahPengajuan} fund request${a.jumlahPengajuan === 1 ? "" : "s"} (${lapFmtUang(a.ytd)}).`,
-      "Revenue (IDR) = USD × the NDPBM (customs rate) of the shipment closest to each invoice date, plus local sales in IDR.",
+      `Check: ${a.jumlahInvoice} invoice${a.jumlahInvoice === 1 ? "" : "s"} (${lapFmtUsd(a.pendUsdYtd)} export${a.pendYtd - a.pendEksporYtd > 0 ? `; local sales of ${lapFmtUang(a.pendYtd - a.pendEksporYtd)} are not export revenue and are left out` : ""}) — same as the Invoice Number tab; ${a.jumlahPengajuan} fund request${a.jumlahPengajuan === 1 ? "" : "s"} (${lapFmtUang(a.ytd)}).`,
       adaLaluApaPun ? "" : `No ${Y - 1} data recorded yet — year-on-year columns appear once there is.`,
     ].filter(Boolean).join(" "),
   };
@@ -1015,7 +1095,26 @@ function lapSusunBlok(a, lap, ang) {
     baris: daftar.filter((r) => r.ini).map((r) => [sel(r.nama), sel(r.ini, "jt"), sel(r.porsi, "pct"), sel(r.yoy, "chg")]),
     kaki: [sel("Total"), sel(a.ytd, "jt"), sel(a.ytd ? 1 : 0, "pct"), sel(a.yoy, "chg")],
   });
-  B.jenisRingkas = ringkasRinci("By expense type", a.perJenis, "Expense type");
+  /* Jenis pengeluaran DIPISAH per arah: tabel Export dan tabel Import
+     (dan Trucking / tanpa arah bila ada) -- bukan satu "Freight" yang
+     mencampur ongkos kirim penjualan dengan ongkos bahan baku. */
+  const jenisArah = (arah) => a.perJenisArah.filter((r) => r.arah === arah);
+  const ringkasArah = (judul, arah) => {
+    const daftar = jenisArah(arah).filter((r) => r.ini);
+    if (!daftar.length) return null;
+    const total = lapJumlah(daftar.map((r) => r.ini));
+    const totalLalu = lapJumlah(jenisArah(arah).map((r) => r.lalu));
+    return {
+      judul,
+      sub: per,
+      kepala: ["Expense type", `Spending ${Y}`, "Share of EXIM spending", `vs ${Y - 1}`],
+      baris: daftar.map((r) => [sel(r.nama), sel(r.ini, "jt"), sel(a.ytd ? r.ini / a.ytd : 0, "pct"), sel(r.yoy, "chg")]),
+      kaki: [sel("Total"), sel(total, "jt"), sel(a.ytd ? total / a.ytd : 0, "pct"), sel(lapPerubahan(total, totalLalu), "chg")],
+    };
+  };
+  B.jenisEkspor = ringkasArah("Export · by expense type", "Export");
+  B.jenisImpor = ringkasArah("Import · by expense type", "Import");
+  B.jenisLain = ringkasArah("Trucking / no direction · by expense type", "Lain");
   B.modaRingkas = ringkasRinci("By mode & direction", a.perModa, "Mode · direction");
   B.vendorTop = {
     judul: "Top 5 vendors",
@@ -1098,17 +1197,17 @@ function lapSusunBlok(a, lap, ang) {
 
   // 0. Pendapatan vs pengeluaran
   B.pendapatan = {
-    judul: "Revenue vs EXIM spending",
-    sub: `revenue = Invoice Number values, foreign currency at the NDPBM nearest the invoice date`,
-    kepala: ["Month", `Export ${Y - 1} (USD)`, `Export ${Y} (USD)`, `Revenue ${Y - 1} (IDR)`, `Revenue ${Y} (IDR)`, "Revenue YoY %", `Spending ${Y}`, `Spending / revenue ${Y}`, `Spending / revenue ${Y - 1}`],
+    judul: "Export revenue vs export spending",
+    sub: `export invoices at the NDPBM of their own PEB · spending = Fund Requests of export transactions`,
+    kepala: ["Month", `Export ${Y - 1} (USD)`, `Export ${Y} (USD)`, `Export revenue ${Y - 1} (IDR)`, `Export revenue ${Y} (IDR)`, "Revenue YoY %", `Export spending ${Y}`, `Export spending / revenue ${Y}`, `Export spending / revenue ${Y - 1}`],
     baris: Array.from({ length: 12 }, (_, i) => {
       const lewat = i < M;
-      return [sel(lapNamaBulan(i + 1)), sel(a.pendUsdLalu[i], "usd"), sel(lewat ? a.pendUsd[i] : null, "usd"), sel(a.pendLalu[i], "jt"), sel(lewat ? a.pend[i] : null, "jt"),
-        sel(lewat ? lapPerubahan(a.pend[i], a.pendLalu[i]) : null, "chg"), sel(lewat ? a.ini[i] : null, "jt"),
-        sel(lewat && a.pend[i] ? a.ini[i] / a.pend[i] : null, "pct2"), sel(a.pendLalu[i] ? a.lalu[i] / a.pendLalu[i] : null, "pct2")];
+      return [sel(lapNamaBulan(i + 1)), sel(a.pendUsdLalu[i], "usd"), sel(lewat ? a.pendUsd[i] : null, "usd"), sel(a.pendEksporLalu[i], "jt"), sel(lewat ? a.pendEkspor[i] : null, "jt"),
+        sel(lewat ? lapPerubahan(a.pendEkspor[i], a.pendEksporLalu[i]) : null, "chg"), sel(lewat ? a.iniEkspor[i] : null, "jt"),
+        sel(lewat && a.pendEkspor[i] ? a.iniEkspor[i] / a.pendEkspor[i] : null, "pct2"), sel(a.pendEksporLalu[i] ? a.laluEkspor[i] / a.pendEksporLalu[i] : null, "pct2")];
     }),
-    kaki: [sel(`Total (${per})`), sel(a.pendUsdYtdLalu, "usd"), sel(a.pendUsdYtd, "usd"), sel(a.pendYtdLalu, "jt"), sel(a.pendYtd, "jt"), sel(a.pendYoy, "chg"), sel(a.ytd, "jt"), sel(a.rasio, "pct2"), sel(a.rasioLalu, "pct2")],
-    catatan: a.pendYtd ? "" : "No invoice values recorded in this period.",
+    kaki: [sel(`Total (${per})`), sel(a.pendUsdYtdLalu, "usd"), sel(a.pendUsdYtd, "usd"), sel(a.pendEksporYtdLalu, "jt"), sel(a.pendEksporYtd, "jt"), sel(lapPerubahan(a.pendEksporYtd, a.pendEksporYtdLalu), "chg"), sel(a.ytdEkspor, "jt"), sel(a.rasioEkspor, "pct2"), sel(a.rasioEksporLalu, "pct2")],
+    catatan: a.pendEksporYtd ? "Import spending is not part of this comparison — see Month by month." : "No export invoice values recorded in this period.",
   };
   B.kanal = {
     judul: "Revenue by channel",
@@ -1122,7 +1221,12 @@ function lapSusunBlok(a, lap, ang) {
     sub: `${per}`,
     kepala: ["Customer", "Invoices", "Revenue (USD)", "Revenue (IDR)", "Revenue YoY %", "EXIM spending (IDR)", "Spending / revenue"],
     baris: a.perCustomerPend.map((r) => [sel(r.nama), sel(r.invoice, "n"), sel(r.usd, "usd"), sel(r.pendapatan, "jt"), sel(r.yoy, "chg"), sel(r.biaya, "jt"), sel(r.rasio, "pct2")]),
-    kaki: [sel("Total"), sel(lapJumlah(a.perCustomerPend.map((r) => r.invoice)), "n"), sel(a.pendUsdYtd, "usd"), sel(a.pendYtd, "jt"), sel(a.pendYoy, "chg"), sel(a.ytd, "jt"), sel(a.rasio, "pct2")],
+    // Total = jumlah baris di atasnya (biaya yang tercatat atas nama customer), bukan seluruh EXIM spending
+    kaki: (() => {
+      const biaya = lapJumlah(a.perCustomerPend.map((r) => r.biaya || 0));
+      const pendapatan = lapJumlah(a.perCustomerPend.map((r) => r.pendapatan || 0));
+      return [sel("Total"), sel(lapJumlah(a.perCustomerPend.map((r) => r.invoice)), "n"), sel(a.pendUsdYtd, "usd"), sel(pendapatan, "jt"), sel(a.pendYoy, "chg"), sel(biaya, "jt"), sel(pendapatan ? biaya / pendapatan : null, "pct2")];
+    })(),
     catatan: "Customer names are matched between Invoice Number and Fund Request entries; spending without a customer is listed under its own name.",
   };
 
@@ -1165,13 +1269,19 @@ function lapSusunBlok(a, lap, ang) {
     kaki: [sel("Total"), sel(a.ytdLalu, "jt"), sel(a.ytd, "jt"), sel(a.yoy, "chg"), sel(a.ytd ? 1 : 0, "pct"),
       sel(a.rataBulan, "jt"), sel(lapJumlah(daftar.map((r) => r.jumlah)), "n"), sel(a.dasar, "jt")],
   });
-  B.jenis = blokRinci("Spending by expense type", a.perJenis, "Expense type");
+  // Export dulu, lalu Import, lalu sisanya; di dalamnya yang terbesar dulu
+  const URUT_ARAH = { Export: 0, Import: 1, Lain: 2 };
+  const jenisPerArah = a.perJenisArah
+    .slice()
+    .sort((x, y) => URUT_ARAH[x.arah] - URUT_ARAH[y.arah] || y.ini - x.ini)
+    .map((r) => Object.assign({}, r, { nama: r.namaArah }));
+  B.jenis = blokRinci("Spending by expense type (Export / Import separated)", jenisPerArah, "Direction · expense type");
   B.moda = blokRinci("Spending by mode & direction", a.perModa, "Mode · direction");
   B.jenisBulan = {
     judul: `Monthly spending by expense type — ${Y}`,
     sub: "",
-    kepala: ["Expense type"].concat(Array.from({ length: M }, (_, i) => lapBulanPendek(i + 1))).concat(["Total"]),
-    baris: a.perJenis.map((r) => [sel(r.nama)].concat(r.bulan.slice(0, M).map((x) => sel(x, "jt"))).concat([sel(r.ini, "jt")])),
+    kepala: ["Direction · expense type"].concat(Array.from({ length: M }, (_, i) => lapBulanPendek(i + 1))).concat(["Total"]),
+    baris: jenisPerArah.filter((r) => r.ini).map((r) => [sel(r.nama)].concat(r.bulan.slice(0, M).map((x) => sel(x, "jt"))).concat([sel(r.ini, "jt")])),
     kaki: [sel("Total")].concat(a.ini.slice(0, M).map((x) => sel(x, "jt"))).concat([sel(a.ytd, "jt")]),
   };
 
@@ -1389,10 +1499,10 @@ function lapGrafik(a) {
       { nama: `${a.Y} actual`, warna: LAP_WARNA.ini, nilai: jt(a.ini.map((v, i) => (i < a.M ? v : 0))) },
       { nama: `${a.Y + 1} forecast`, warna: LAP_WARNA.ramal, pudar: true, nilai: jt(a.fasing) },
     ]),
-    rasio: lapSvgGaris("Spending as % of revenue", [
-      { nama: `${a.Y - 1}`, warna: LAP_WARNA.lalu, nilai: a.lalu.map((v, i) => (a.pendLalu[i] ? (v / a.pendLalu[i]) * 100 : null)) },
-      { nama: `${a.Y}`, warna: LAP_WARNA.ini, nilai: a.ini.map((v, i) => (i < a.M && a.pend[i] ? (v / a.pend[i]) * 100 : null)) },
-    ], { satuan: "% of revenue" }),
+    rasio: lapSvgGaris("Export spending as % of export revenue", [
+      { nama: `${a.Y - 1}`, warna: LAP_WARNA.lalu, nilai: a.laluEkspor.map((v, i) => (a.pendEksporLalu[i] ? (v / a.pendEksporLalu[i]) * 100 : null)) },
+      { nama: `${a.Y}`, warna: LAP_WARNA.ini, nilai: a.iniEkspor.map((v, i) => (i < a.M && a.pendEkspor[i] ? (v / a.pendEkspor[i]) * 100 : null)) },
+    ], { satuan: "% of export revenue" }),
     pendapatan: lapSvgBatang("Revenue per month", [
       { nama: `Revenue ${a.Y - 1}`, warna: LAP_WARNA.lalu, nilai: jt(a.pendLalu) },
       { nama: `Revenue ${a.Y}`, warna: LAP_WARNA.ini, nilai: jt(a.pend.map((v, i) => (i < a.M ? v : 0))) },
@@ -1429,6 +1539,13 @@ function lapHitungSekarang() {
     if (k.jarak > 7) jauh += 1;
     return k.nilai;
   };
+  // Kurs PEB jadwal ekspor yang ditautkan invoice (lapBarisInvoice)
+  kursFn.dariKiriman = (s) => {
+    const x = pakai.get(s.id) || { tanggal: tanggalNdpbm(s) || "", pihak: s.party || "", aju: s.noAju || "", usd: Number(s.ndpbm), jumlah: 0 };
+    x.jumlah += 1;
+    pakai.set(s.id, x);
+    return Number(s.ndpbm);
+  };
   const dana = (lapData.dana || []).map((r) => lapBarisDana(r, kursFn));
   const invoice = (lapData.invoice || []).map((r) => lapBarisInvoice(r, kursFn));
   const opsi = { tahun: lapSaringan.tahun, bulan: lapSaringan.bulan, jenis: lapSaringan.jenis };
@@ -1436,7 +1553,7 @@ function lapHitungSekarang() {
   lap.kurs = ndpbm;
   lap.kursPakai = [...pakai.values()].sort((x, y) => (x.tanggal < y.tanggal ? 1 : -1));
   lap.kursCatatan = [
-    "NDPBM is the KMK tax rate declared on each PIB / PEB, so a transaction uses the NDPBM of the shipment dated closest to it.",
+    "NDPBM is the KMK customs rate declared on each PIB / PEB. A sales invoice linked to an export shipment uses the NDPBM on that shipment's own PEB; anything else uses the NDPBM of the shipment dated closest to it (the same weekly rate).",
     jauh ? `${jauh} transaction(s) had no shipment within 7 days and used the nearest NDPBM available.` : "",
     tanpaKurs ? `${tanpaKurs} foreign-currency transaction(s) could not be converted: no shipment has an NDPBM for that currency.` : "",
   ].filter(Boolean).join(" ");
@@ -1472,7 +1589,7 @@ function lapKpi(a) {
   const banding = (x, label) => (x == null ? `<span class="lap-kpi-banding">${escapeHtml(label)}: no data</span>` :
     `<span class="lap-kpi-banding ${x > 0.0005 ? "lap-naik" : x < -0.0005 ? "lap-turun" : ""}">${x >= 0 ? "▲ up" : "▼ down"} ${Math.abs(x * 100).toFixed(0)}% ${escapeHtml(label)}</span>`);
   const per = `Jan–${lapBulanPendek(a.M)} ${a.Y}`;
-  const naikRasio = a.rasio != null && a.rasioLalu != null ? a.rasio - a.rasioLalu : null;
+  const naikRasio = a.rasioEkspor != null && a.rasioEksporLalu != null ? a.rasioEkspor - a.rasioEksporLalu : null;
   const bulanIni = `<span class="lap-kpi-banding ${a.mom > 0.0005 ? "lap-naik" : a.mom < -0.0005 ? "lap-turun" : ""}">${escapeHtml(lapNamaBulan(a.M))}: ${escapeHtml(lapFmtUang(a.bulanIni))}${a.mom == null ? "" : ` · ${a.mom >= 0 ? "▲" : "▼"} ${Math.abs(a.mom * 100).toFixed(0)}% vs previous month`}</span>`;
   const buku = a.ledger && typeof lapKartuBuku === "function" ? lapKartuBuku(a) : null;
   const kartu = [
@@ -1481,16 +1598,12 @@ function lapKpi(a) {
     { k: `EXIM spending · ${per}`, v: lapFmtUang(a.ytd), s: banding(a.yoy, `vs ${a.Y - 1}`) + bulanIni },
   ];
   if (buku) kartu.push(buku.kas);
-  /* Rasio ini mencampur dua hal yang berbeda sifatnya: ongkos layanan (biaya)
-     dan pembayaran bea & pajak ke negara (sebagian besar bisa dikreditkan).
-     Dipecah di kartunya supaya angka gabungan tidak disalahbaca. */
-  const bayarNegara = (a.perJenis || []).filter((r) => r.kunci === "Billing" || r.kunci === "Tax Advance").reduce((x, r) => x + r.ini, 0);
-  const pecahRasio = a.rasio != null && a.pendYtd > 0 && bayarNegara > 0 && a.ytd > bayarNegara
-    ? `<span class="lap-kpi-banding">services IDR ${(((a.ytd - bayarNegara) / a.pendYtd) * 100).toFixed(2)} · customs payments IDR ${((bayarNegara / a.pendYtd) * 100).toFixed(2)}</span>` : "";
+  /* Biaya EKSPOR per IDR 100 penjualan ekspor -- biaya impor (bea, pajak,
+     freight bahan baku) bukan biaya penjualan dan tidak ikut dibagi. */
   kartu.push(
-    { k: "Spending per IDR 100 revenue", v: a.rasio != null ? `IDR ${(a.rasio * 100).toFixed(2)}` : "—",
-      s: pecahRasio + (naikRasio == null ? `<span class="lap-kpi-banding">${a.Y - 1}: no data</span>`
-        : `<span class="lap-kpi-banding ${naikRasio > 0 ? "lap-naik" : "lap-turun"}">${a.Y - 1}: IDR ${(a.rasioLalu * 100).toFixed(2)}</span>`) },
+    { k: "Export spending per IDR 100 export revenue", v: a.rasioEkspor != null ? `IDR ${(a.rasioEkspor * 100).toFixed(2)}` : "—",
+      s: `<span class="lap-kpi-banding">export ${escapeHtml(lapFmtUang(a.ytdEkspor))} · import ${escapeHtml(lapFmtUang(lapJumlah(a.iniImpor.slice(0, a.M))))}</span>` + (naikRasio == null ? `<span class="lap-kpi-banding">${a.Y - 1}: no data</span>`
+        : `<span class="lap-kpi-banding ${naikRasio > 0 ? "lap-naik" : "lap-turun"}">${a.Y - 1}: IDR ${(a.rasioEksporLalu * 100).toFixed(2)}</span>`) },
   );
   if (buku) kartu.push(buku.landed, buku.hutang);
   kartu.push(
@@ -1528,7 +1641,7 @@ function lapGambar(box) {
       ${tombolAnggaran}`],
     adaBuku && ["From cash to true cost", `${lapTabelHtml(B.jembatan)}${grafik(graf.jembatan)}${lapTabelHtml(B.jembatanSifat)}`],
     ["Month by month", `${lapTabelHtml(B.ringkasBulan)}${grafik(graf.yoy)}`],
-    ["Where the money goes", `<div class="lap-dua-tabel">${lapTabelHtml(B.jenisRingkas)}${lapTabelHtml(B.modaRingkas)}</div>${lapTabelHtml(B.vendorTop)}${lapTabelHtml(B.perKiriman)}`],
+    ["Where the money goes", `<div class="lap-dua-tabel">${[B.jenisEkspor, B.jenisImpor].filter(Boolean).map(lapTabelHtml).join("")}</div>${B.jenisLain ? lapTabelHtml(B.jenisLain) : ""}${lapTabelHtml(B.modaRingkas)}${lapTabelHtml(B.vendorTop)}${lapTabelHtml(B.perKiriman)}`],
     adaBuku && ["Shipment economics", `${lapTabelHtml(B.ekonomi)}${lapTabelHtml(B.ekonomiSyarat)}${lapTabelHtml(B.eksporPelanggan)}`],
     adaBuku && ["Duties & taxes", `${lapTabelHtml(B.bea)}${lapTabelHtml(B.beaDaftar)}`],
     adaBuku && ["Payables & payment discipline", `${dua(B.hutangRingkas, B.hutangUmur)}${grafik(graf.umurHutang)}${dua(B.hutangDisiplin, B.hutangDatang)}${lapTabelHtml(B.hutangVendor)}${lapTabelHtml(B.pph23)}`],
@@ -1900,7 +2013,9 @@ function lapSusunWorkbook(hasil, gambar) {
       [sel(`Revenue Jan–${lapBulanPendek(a.M)} ${a.Y} (USD, export invoices)`), sel(a.pendUsdYtd, "usd"), sel(`${a.jumlahInvoice} invoices`)],
       [sel(`Revenue Jan–${lapBulanPendek(a.M)} ${a.Y} (IDR, at NDPBM)`), sel(a.pendYtd, "jt"), sel(a.pendYoy, "chg")],
       [sel(`EXIM spending Jan–${lapBulanPendek(a.M)} ${a.Y}`), sel(a.ytd, "jt"), sel(a.yoy, "chg")],
-      [sel("Spending as % of revenue"), sel(a.rasio, "pct2"), sel(a.rasioLalu != null ? `${a.Y - 1}: ${(a.rasioLalu * 100).toFixed(2)}%` : "")],
+      [sel("  of which export spending"), sel(a.ytdEkspor, "jt"), sel("")],
+      [sel("  of which import spending"), sel(lapJumlah(a.iniImpor.slice(0, a.M)), "jt"), sel("")],
+      [sel("Export spending as % of export revenue"), sel(a.rasioEkspor, "pct2"), sel(a.rasioEksporLalu != null ? `${a.Y - 1}: ${(a.rasioEksporLalu * 100).toFixed(2)}%` : "")],
       [sel(`${lapNamaBulan(a.M)} ${a.Y} spending`), sel(a.bulanIni, "jt"), sel(a.mom, "chg")],
     ].concat(buku ? [
       [sel(`Cash requested Jan–${lapBulanPendek(a.M)} ${a.Y}`), sel(J.kas, "jt"), sel(`true cost ${lapFmtUang(J.biaya)} · creditable tax ${lapFmtUang(J.pulih)}`)],
@@ -1922,7 +2037,7 @@ function lapSusunWorkbook(hasil, gambar) {
     r += 1;
   });
   r += 1;
-  [B.ringkasBulan, B.jembatan, B.jenisRingkas, B.modaRingkas, B.vendorTop, B.perKiriman, B.hutangRingkas, B.anggaranRingkas, B.rencanaBulan].forEach((x) => (r = lapXlsBlok(s, x, r)));
+  [B.ringkasBulan, B.jembatan, B.jenisEkspor, B.jenisImpor, B.jenisLain, B.modaRingkas, B.vendorTop, B.perKiriman, B.hutangRingkas, B.anggaranRingkas, B.rencanaBulan].filter(Boolean).forEach((x) => (r = lapXlsBlok(s, x, r)));
   lapXlsLebar(s, 14, 34);
   s.getColumn(1).width = 30;
   lapXlsGambar(wb, s, r + 1, [g.yoy]);

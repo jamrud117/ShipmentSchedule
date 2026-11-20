@@ -350,7 +350,7 @@ function predictionStripHtml(s) {
 
 function predictionDetailHtml(s) {
   if (!tampilkanMekanikaPrediksi()) return "";
-  // Lihat catatan di predictionStripHtml().
+  // Perkiraan Delivery hanya untuk jadwal yang memakainya (deliveryPredictionAppliesTo)
   if (!deliveryPredictionAppliesTo(s)) return "";
   const e = predictEta(s);
   const d = predictDelivery(s);

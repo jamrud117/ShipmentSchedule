@@ -92,6 +92,19 @@ function kunciSeri(v) {
   return s !== "" && Number.isFinite(n) ? String(n) : s.toUpperCase();
 }
 
+/* Seri Barang ringkas untuk catatan: "1–3, 5, 8–10" (berurutan dirangkai) */
+function ringkasSeriBarang(daftar) {
+  const angka = daftar.map(Number);
+  if (angka.some((n) => !Number.isInteger(n))) return daftar.join(", ");
+  const bagian = [];
+  angka.forEach((n, i) => {
+    const akhir = bagian[bagian.length - 1];
+    if (akhir && n === akhir[1] + 1 && i > 0) akhir[1] = n;
+    else bagian.push([n, n]);
+  });
+  return bagian.map(([a, b]) => (a === b ? String(a) : b === a + 1 ? `${a}, ${b}` : `${a}–${b}`)).join(", ");
+}
+
 /* Diurutkan NUMERIK menaik menurut Seri Barang -- bukan urutan baris
    apa adanya. Baris mentah CEISA TIDAK selalu berurutan (nemu di data
    sungguhan: 1, 4, 3, 2, 6, ...). Seri yang bukan angka didorong ke
@@ -470,25 +483,33 @@ function parseBcExcelWorkbook(wb) {
 
   // DAFTAR BARANG
   const headerBruto = excelNum(header["BRUTO"]);
+  /* HARGA SATUAN = nilai TOTAL baris barang dibagi JUMLAH SATUAN baris
+     itu sendiri. Baris sudah diurutkan menurut SERI BARANG (di atas),
+     jadi harga Seri Barang n selalu dari baris seri n. Kolom nilainya
+     menurut terms (KODE INCOTERM) -- sama untuk Import & Export:
+       - terms FOB         -> kolom FOB;
+       - terms selain FOB  -> kolom CIF (termasuk KODE INCOTERM kosong).
+     Kolom FOB pada PIB ber-terms FOB = harga invoice. Kolom CIF draft
+     bisa sudah ditambah freight & asuransi, padahal Nilai Pabean form
+     menambahkan freight & asuransi sendiri (recalcCustoms) -- CIF untuk
+     terms FOB berarti terhitung dua kali.
+     Cadangan bila kolom itu kosong / 0 di baris barang tersebut:
+       - selain FOB: kolom FOB -- draft PEB ber-terms CIF sungguhan mengisi
+         FOB per barang dan membiarkan CIF 0 (Import: + catatan);
+       - FOB, Import: kolom CIF + catatan -- draft PIB kerap hanya mengisi
+         CIF; harganya perlu dicocokkan dengan invoice;
+       - FOB, Export: tidak ada (0 + catatan di bawah) -- PEB selalu
+         mengisi FOB, dan CIF bukan pengganti harga FOB ekspor.
+     Berlaku khusus untuk import Excel CEISA ini; sumber lain (CIPL, dst.)
+     punya jalur sendiri. */
+  const termsFob = fields.incoterm === "FOB";
+  const kolomNilai = termsFob ? (modeHint === "export" ? ["FOB"] : ["FOB", "CIF"]) : ["CIF", "FOB"];
+  const seriCadangan = [];
   const itemsRaw = barang.map((row) => {
     const qty = excelNum(row["JUMLAH SATUAN"]);
-    /* Harga satuan = nilai TOTAL per baris barang dibagi JUMLAH SATUAN.
-       Pembilangnya beda menurut mode:
-         - EXPORT: kolom FOB kalau termsnya FOB, CIF untuk selain itu
-           (termasuk KODE INCOTERM kosong/tidak dikenal).
-         - IMPORT: SELALU kolom CIF, apa pun termsnya — nilai pabean
-           impor dasarnya CIF (lihat recalcCustoms(), PPN/PPH juga
-           dari dasar CIF).
-       Berlaku khusus untuk import Excel CEISA ini; sumber lain (CIPL,
-       dst.) punya jalur sendiri.
-       Export ber-terms selain FOB yang kolom CIF-nya kosong / 0 memakai
-       FOB: draft PEB ber-terms CIF sungguhan mengisi FOB per barang (=
-       Nilai Ekspor di PEB) dan membiarkan CIF 0 -- harga satuannya dulu
-       jadi 0. Terms FOB tanpa kolom FOB tetap 0 + catatan (di bawah):
-       CIF bukan pengganti harga FOB. */
-    const kolomNilai =
-      modeHint !== "export" ? ["CIF"] : fields.incoterm === "FOB" ? ["FOB"] : ["CIF", "FOB"];
-    const nilaiTotal = kolomNilai.map((k) => excelNum(row[k])).find((v) => v > 0) || 0;
+    const kolom = kolomNilai.find((k) => excelNum(row[k]) > 0);
+    const nilaiTotal = kolom ? excelNum(row[kolom]) : 0;
+    if (kolom && kolom !== kolomNilai[0]) seriCadangan.push(kunciSeri(row["SERI BARANG"]));
     return {
       seriBarang: kunciSeri(row["SERI BARANG"]),
       ...kolomBarangDraft(row),
@@ -594,12 +615,21 @@ function parseBcExcelWorkbook(wb) {
   }
   if (
     modeHint === "export" &&
-    fields.incoterm === "FOB" &&
+    termsFob &&
     barang.length &&
     barang.every((row) => row["FOB"] == null || row["FOB"] === "")
   ) {
     notes.push(
       t("w.terms.fob.tapi.kolom.fob.tidak.ditemukan.di.sh"),
+    );
+  }
+  // Harga dari kolom cadangan (lihat HARGA SATUAN di atas) -- Export ber-terms selain FOB itu wajar, tanpa catatan
+  if (seriCadangan.length && modeHint !== "export") {
+    notes.push(
+      t(termsFob ? "w.harga.fob.dari.kolom.cif" : "w.harga.cif.dari.kolom.fob", {
+        terms: fields.incoterm || "-",
+        daftar: ringkasSeriBarang(seriCadangan),
+      }),
     );
   }
   if (!fields.party) {

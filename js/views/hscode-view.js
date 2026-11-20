@@ -96,15 +96,15 @@ function isianLartasHs(nilai) {
   };
 }
 /* Kolom opsional hs_code_master yang mungkin belum dimigrasi: lartas
-   (migration-lampiran-lartas-kebutuhan.sql) & tarif_bm
-   (migration-hs-tarif-bm.sql, tarif-hs.js). Ditolak karena kolomnya
+   (migration-lampiran-lartas-kebutuhan.sql), tarif_bm
+   (migration-hs-tarif-bm.sql, tarif-hs.js) & coo (migration-hs-coo.sql). Ditolak karena kolomnya
    belum ada -> disimpan ulang tanpa kolom itu, dan pengguna diberi tahu
-   berkas migrasinya. Hasil: { data, error, lartasDitinggal, tarifDitinggal }. */
+   berkas migrasinya. Hasil: { data, error, lartasDitinggal, tarifDitinggal, cooDitinggal }. */
 async function simpanHsDenganLartas(kirim, row) {
   let hasil = await kirim(row);
   const ditinggal = {};
-  for (let i = 0; i < 2 && hasil.error; i++) {
-    const kolom = kolomBelumDikenal(hasil.error, ["lartas", "tarif_bm"].filter((k) => k in row));
+  for (let i = 0; i < 3 && hasil.error; i++) {
+    const kolom = kolomBelumDikenal(hasil.error, ["lartas", "tarif_bm", "coo"].filter((k) => k in row));
     if (!kolom) break;
     ditinggal[kolom] = row[kolom];
     delete row[kolom];
@@ -127,6 +127,14 @@ async function simpanHsDenganLartas(kirim, row) {
     );
     hasil.tarifDitinggal = true;
   }
+  if ("coo" in ditinggal && ditinggal.coo) {
+    showToast(
+      tt(`HS Code tersimpan, tetapi COO belum: database belum mengenal kolomnya. Jalankan ${BERKAS_MIGRASI_COO_HS} di Supabase.`,
+        `HS Code saved, but the COO was not: the database does not know the column yet. Run ${BERKAS_MIGRASI_COO_HS} in Supabase.`),
+      "warning",
+    );
+    hasil.cooDitinggal = true;
+  }
   return hasil;
 }
 
@@ -139,6 +147,7 @@ function isianTarifHs(nilai) {
     placeholder: tt("Cth: 5", "e.g. 5"),
     value: n == null ? "" : String(n),
     inputmode: "decimal",
+    lebar: "setengah",
     hint: tt("Mengisi kolom Tarif BM barang ber-HS ini di Daftar Barang secara otomatis.", "Fills the Duty Rate of items with this HS in the Item List automatically."),
   };
 }
@@ -153,6 +162,41 @@ const teksTarifHs = (v) => {
   const n = angkaTarifBm(v);
   return n == null ? "\u2014" : `${formatNumberValue(n) || "0"}%`;
 };
+/* COO PER HS CODE -- apakah Certificate of Origin (SKA / form FTA) bisa
+   terbit untuk barang ber-HS ini: "bisa" = Bisa terbit, "na" = N/A (Not
+   Applicable); kosong = belum diisi. Kolom `coo` dari migration-hs-coo.sql
+   -- database yang belum dimigrasi menyimpan HS Code-nya tanpa COO dan
+   pengguna diberi tahu berkas migrasinya (simpanHsDenganLartas). Ikut
+   dicetak & diunduh (hscode-print.js). */
+const BERKAS_MIGRASI_COO_HS = "migration-hs-coo.sql";
+const HS_COO = { bisa: ["Bisa terbit", "Can be issued"], na: ["N/A (Not Applicable)", "N/A (Not Applicable)"] };
+const cooHs = (v) => {
+  const k = String(v == null ? "" : v).trim().toLowerCase();
+  return HS_COO[k] ? k : "";
+};
+// Teks lengkap ("Bisa terbit", "N/A (Not Applicable)"); id = teks cetak & Excel (bahasa dokumen)
+const labelCooHs = (v, bahasa) => {
+  const k = cooHs(v);
+  if (!k) return "";
+  return bahasa === "id" ? HS_COO[k][0] : tt(HS_COO[k][0], HS_COO[k][1]);
+};
+function isianCooHs(nilai) {
+  return {
+    key: "coo",
+    label: "COO",
+    type: "select",
+    value: cooHs(nilai),
+    lebar: "setengah",
+    options: [{ value: "", label: tt("— Belum diisi", "— Not set") }].concat(Object.keys(HS_COO).map((k) => ({ value: k, label: labelCooHs(k) }))),
+    hint: tt("Certificate of Origin untuk barang ber-HS ini.", "Certificate of Origin for items under this HS."),
+  };
+}
+function chipCooHs(v) {
+  const k = cooHs(v);
+  if (!k) return "\u2014";
+  return `<span class="hs-coo hs-coo--${k}" title="${escapeAttr(labelCooHs(k))}">${escapeHtml(k === "na" ? "N/A" : labelCooHs(k))}</span>`;
+}
+
 function chipLartasHtml(lartas) {
   const daftar = rapikanLartas(lartas);
   return daftar.length
@@ -265,21 +309,22 @@ function nilaiCariHs(r, teks) {
   return nama.startsWith(q) ? 3 : 2;
 }
 
+/* Baris yang tampil menurut kotak cari, selalu A-Z menurut Nama Barang.
+   Tidak ada pilihan urutan: daftar ini dipakai untuk MENCARI satu
+   barang, dan abjad satu-satunya urutan yang bisa ditebak tanpa
+   membacanya dulu. Tabel, cetak & Excel (hscode-print.js) memakai daftar
+   yang sama. */
+function hsCodeTampil() {
+  const q = ($("#hsCodeSearch") || {}).value || "";
+  return hsCodeRows
+    .filter((r) => nilaiCariHs(r, q) > 0)
+    .sort((a, b) => String(a.item_name || "").localeCompare(String(b.item_name || ""), "id", { sensitivity: "base" }));
+}
+
 function renderHsCodes() {
   const box = $("#hsCodeList");
   if (!box) return;
-  const q = ($("#hsCodeSearch") || {}).value || "";
-  const cocok = hsCodeRows.filter((r) => nilaiCariHs(r, q) > 0);
-  /* Selalu A-Z menurut Nama Barang. Tidak ada pilihan urutan: daftar
-     ini dipakai untuk MENCARI satu barang, dan abjad satu-satunya
-     urutan yang bisa ditebak tanpa membacanya dulu. */
-  const terurut = cocok
-    .slice()
-    .sort((a, b) =>
-      String(a.item_name || "").localeCompare(String(b.item_name || ""), "id", {
-        sensitivity: "base",
-      }),
-    );
+  const terurut = hsCodeTampil();
 
   const totalEl = $("#hsCodeCount");
   if (totalEl) totalEl.textContent = hsCodeRows.length;
@@ -299,7 +344,7 @@ function renderHsCodes() {
 
   renderHsCodePagination(terurut.length);
 
-  /* TABEL selebar halaman: nama barang, HS Code, catatan, aksi. Di
+  /* TABEL selebar halaman: nama barang, HS Code, Tarif BM, COO, lartas, catatan, aksi. Di
      ponsel tiap baris jadi kartu ringkas (hs-panel di auth.css). HS Code
      berupa tombol: sekali klik tersalin, siap ditempel ke CEISA atau
      Daftar Barang tanpa memilih teksnya dulu. */
@@ -311,6 +356,7 @@ function renderHsCodes() {
           <th class="hs-kol-nama">${tt("Nama Barang", "Item Name")}</th>
           <th class="hs-kol-kode">HS Code</th>
           <th class="hs-kol-tarif">${tt("Tarif BM", "Duty Rate")}</th>
+          <th class="hs-kol-coo">COO</th>
           <th class="hs-kol-lartas">${tt("Lartas", "Restrictions")}</th>
           <th class="hs-kol-catatan">${tt("Catatan", "Notes")}</th>
           <th class="hs-kol-aksi"></th>
@@ -328,6 +374,7 @@ function renderHsCodes() {
               </button>
             </td>
             <td class="hs-kol-tarif${angkaTarifBm(r.tarif_bm) == null ? " hs-tanpa-tarif" : ""}" data-label="${escapeAttr(tt("Tarif BM", "Duty Rate"))}">${teksTarifHs(r.tarif_bm)}</td>
+            <td class="hs-kol-coo${cooHs(r.coo) ? "" : " hs-tanpa-coo"}" data-label="COO">${chipCooHs(r.coo)}</td>
             <td class="hs-kol-lartas${rapikanLartas(r.lartas).length ? "" : " hs-tanpa-lartas"}" data-label="${escapeAttr(tt("Lartas", "Restrictions"))}">${chipLartasHtml(r.lartas)}</td>
             <td class="hs-kol-catatan${r.notes ? "" : " hs-tanpa-catatan"}">${r.notes ? escapeHtml(r.notes) : "\u2014"}</td>
             <td class="hs-kol-aksi">
@@ -514,6 +561,7 @@ function tambahHsCodeBaru() {
         filter: batasiHsCode,
       },
       isianTarifHs(null),
+      isianCooHs(""),
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), placeholder: tt("Cth: EVA Sole", "e.g. EVA Sole") },
       isianLartasHs([]),
     ],
@@ -523,14 +571,14 @@ function tambahHsCodeBaru() {
       if (galat) return galat;
       const tarif = bacaTarifHs(v.tarif);
       if (tarif.galat) return tarif.galat;
-      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai);
+      simpanHsCodeBaru(v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai, cooHs(v.coo));
       return true;
     },
   });
 }
 
-async function simpanHsCodeBaru(nama, kode, catatan, lartas, tarif) {
-  const { data, error, lartasDitinggal, tarifDitinggal } = await simpanHsDenganLartas(
+async function simpanHsCodeBaru(nama, kode, catatan, lartas, tarif, coo) {
+  const { data, error, lartasDitinggal, tarifDitinggal, cooDitinggal } = await simpanHsDenganLartas(
     (row) => supabaseClient.from("hs_code_master").insert(row).select().single(),
     {
       item_name: nama,
@@ -539,6 +587,7 @@ async function simpanHsCodeBaru(nama, kode, catatan, lartas, tarif) {
       created_by: authState.user ? authState.user.id : null,
       lartas: lartas || [],
       ...(tarif != null ? { tarif_bm: tarif } : {}),
+      ...(coo ? { coo } : {}),
     },
   );
   if (error) {
@@ -550,7 +599,7 @@ async function simpanHsCodeBaru(nama, kode, catatan, lartas, tarif) {
   versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  if (!lartasDitinggal && !tarifDitinggal) showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
+  if (!lartasDitinggal && !tarifDitinggal && !cooDitinggal) showToast(t("w.hs.code.untuk.tersimpan", { x: nama }), "dark");
 }
 
 function editHsCode(id) {
@@ -572,6 +621,7 @@ function editHsCode(id) {
         filter: batasiHsCode,
       },
       isianTarifHs(r.tarif_bm),
+      isianCooHs(r.coo),
       { key: "catatan", label: tt("Catatan (opsional)", "Notes (optional)"), value: r.notes || "" },
       isianLartasHs(r.lartas),
     ],
@@ -581,19 +631,27 @@ function editHsCode(id) {
       if (galat) return galat;
       const tarif = bacaTarifHs(v.tarif);
       if (tarif.galat) return tarif.galat;
-      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai);
+      simpanUbahHsCode(id, v.nama.trim(), batasiHsCode(v.kode), (v.catatan || "").trim(), rapikanLartas(v.lartas), tarif.nilai, cooHs(v.coo));
       return true;
     },
   });
 }
 
-async function simpanUbahHsCode(id, nama, kode, catatan, lartas, tarif) {
+async function simpanUbahHsCode(id, nama, kode, catatan, lartas, tarif, coo) {
   const awal = hsCodeRows.find((x) => x.id === id);
-  // Tarif dikirim bila diisi, atau bila dikosongkan dari nilai yang ada (database lama tanpa kolomnya tidak ikut ditanya)
+  // Tarif & COO dikirim bila diisi, atau bila dikosongkan dari nilai yang ada (database lama tanpa kolomnya tidak ikut ditanya)
   const kirimTarif = tarif != null || (awal && angkaTarifBm(awal.tarif_bm) != null);
-  const { error, lartasDitinggal, tarifDitinggal } = await simpanHsDenganLartas(
+  const kirimCoo = !!coo || !!(awal && cooHs(awal.coo));
+  const { error, lartasDitinggal, tarifDitinggal, cooDitinggal } = await simpanHsDenganLartas(
     (row) => supabaseClient.from("hs_code_master").update(row).eq("id", id),
-    { item_name: nama, hs_code: kode, notes: catatan || null, lartas: lartas || [], ...(kirimTarif ? { tarif_bm: tarif == null ? null : tarif } : {}) },
+    {
+      item_name: nama,
+      hs_code: kode,
+      notes: catatan || null,
+      lartas: lartas || [],
+      ...(kirimTarif ? { tarif_bm: tarif == null ? null : tarif } : {}),
+      ...(kirimCoo ? { coo: coo || null } : {}),
+    },
   );
   if (error) {
     console.error(error);
@@ -607,11 +665,12 @@ async function simpanUbahHsCode(id, nama, kode, catatan, lartas, tarif) {
     r.notes = catatan || null;
     if (!lartasDitinggal) r.lartas = lartas || [];
     if (!tarifDitinggal && kirimTarif) r.tarif_bm = tarif;
+    if (!cooDitinggal && kirimCoo) r.coo = coo || null;
   }
   versiHsCode++;
   renderHsCodes();
   siarkanHsCodeBerubah();
-  if (!lartasDitinggal && !tarifDitinggal) showToast(t("m.perubahan.tersimpan"), "dark");
+  if (!lartasDitinggal && !tarifDitinggal && !cooDitinggal) showToast(t("m.perubahan.tersimpan"), "dark");
 }
 
 function deleteHsCode(id) {
@@ -654,6 +713,19 @@ const btnHsCodeAdd = $("#btnHsCodeAdd");
 if (btnHsCodeAdd) btnHsCodeAdd.addEventListener("click", tambahHsCodeBaru);
 const btnHsCodeRefresh = $("#btnHsCodeRefresh");
 if (btnHsCodeRefresh) btnHsCodeRefresh.addEventListener("click", loadHsCodes);
+/* Cetak & Unduh Excel ada di modul tunda (hscode-print.js) -- ditunggu
+   dulu; biasanya sudah termuat di latar sejak aplikasi dibuka. */
+function hsAlatTunda(nama) {
+  return () =>
+    muatModulTunda().then(
+      () => window[nama](),
+      () => showToast(tt("Bagian aplikasi ini gagal dimuat (koneksi terputus?). Muat ulang halaman untuk mencoba lagi.", "This part of the app failed to load (connection lost?). Reload the page to try again."), "danger"),
+    );
+}
+[["#btnHsCodeCetak", "cetakHsCode"], ["#btnHsCodeExcel", "unduhExcelHsCode"]].forEach(([sel, nama]) => {
+  const el = $(sel);
+  if (el) el.addEventListener("click", hsAlatTunda(nama));
+});
 const hsCodeSearchEl = $("#hsCodeSearch");
 if (hsCodeSearchEl) {
   hsCodeSearchEl.addEventListener("input", () => {
