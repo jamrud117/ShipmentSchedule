@@ -366,6 +366,120 @@ function invCustomerTambah(kotak) {
   });
 }
 
+/* ---------- buku alamat Pembeli & Penerima ---------- */
+
+/* NAMA YANG SUDAH DIKENAL -> ALAMAT & NEGARANYA. Mengetik (atau memilih
+   dari saran) nama Pembeli / Penerima yang pernah dipakai langsung
+   mengisi alamat & negaranya -- tidak diketik ulang tiap invoice, dan
+   tidak berbeda-beda tiap kali diketik. Sumbernya, yang lebih dulu
+   menang:
+     1. pengajuan invoice di riwayat, terbaru dulu (isian pihaknya);
+     2. data pengisian customer tersimpan (report_settings);
+     3. profil pelanggan (CIPL_PROFIL): Kumho Vietnam (penerima, alamat
+        yang tercetak) & pembelinya Dynamic Design Co., Ltd.;
+     4. Data PEB jadwal export (pembeli & penerima hasil impor CEISA).
+   Jadi pihak baru cukup diketik sekali: begitu nomor invoicenya terbit,
+   namanya dikenal di invoice berikutnya.
+   Satu buku per peran; nama yang belum pernah menjadi peran itu dicari
+   di buku peran satunya -- perusahaan yang sama bisa jadi Penerima di
+   Direct Invoice dan Pembeli di Third Party Invoice. Nama dicocokkan
+   dengan huruf & angka saja ("DYNAMIC DESIGN CO., LTD." = "Dynamic Design
+   Co Ltd").
+   Hanya mengisi alamat / negara yang belum diubah sendiri (kosong, atau
+   masih isian mesin). Nama yang diganti ke nama yang tidak dikenal
+   mengosongkan lagi alamat & negara yang tadi diisikan buku ini, supaya
+   alamat perusahaan lain tidak tertinggal. */
+const INV_BUKU_PERAN = {
+  pembeli: { nama: "pembeliNama", alamat: "pembeliAlamat", negara: "pembeliNegara", saran: "dnDaftarPembeli" },
+  penerima: { nama: "penerimaNama", alamat: "consigneeAddress", negara: "penerimaNegara", saran: "dnDaftarPenerima" },
+};
+const invPeranLain = (peran) => (peran === "pembeli" ? "penerima" : "pembeli");
+let invBukuSimpan = null; // dibentuk saat kotak nama difokus, dipakai selama mengetik
+const invDariBuku = {}; // { kunci isian: nilai yang diisikan buku }
+
+function invBentukBuku() {
+  const buku = { pembeli: new Map(), penerima: new Map() };
+  const catat = (peran, nama, alamat, negara) => {
+    const n = String(nama || "").replace(/\s+/g, " ").trim();
+    const a = String(alamat || "").trim();
+    const k = kunciAlnum(n);
+    if (!k || !a || buku[peran].has(k)) return;
+    buku[peran].set(k, { nama: n, alamat: a, negara: String(negara || "").trim() });
+  };
+  const dariIsian = (x) => {
+    if (!x) return;
+    catat("pembeli", x.pembeliNama, x.pembeliAlamat, x.pembeliNegara);
+    catat("penerima", x.penerimaNama || x.customer, x.consigneeAddress, x.penerimaNegara);
+  };
+  invRiwayatInvoice()
+    .slice()
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+    .forEach((r) => dariIsian(r.payload));
+  invCustomerTersimpan.forEach((c) => dariIsian(c.isian));
+  CIPL_PROFIL.forEach((prof) => {
+    const ip = prof.isianPihak || {};
+    catat("penerima", prof.nama, (prof.lines || []).join("\n"), ip.penerimaNegara);
+    catat("pembeli", ip.pembeliNama, ip.pembeliAlamat, ip.pembeliNegara);
+  });
+  ((typeof data !== "undefined" && data.export) || []).forEach((s) => {
+    const pihak = (s && s.dataPabean && s.dataPabean.pihak) || {};
+    ["pembeli", "penerima"].forEach((peran) => {
+      const x = pihak[peran] || {};
+      catat(peran, x.nama, x.alamat, x.negara);
+    });
+  });
+  return buku;
+}
+const invBuku = () => invBukuSimpan || (invBukuSimpan = invBentukBuku());
+
+// Entri buku untuk sebuah nama: peran itu dulu, lalu peran satunya
+function invCariBuku(peran, nama) {
+  const k = kunciAlnum(nama);
+  if (!k) return null;
+  const buku = invBuku();
+  return buku[peran].get(k) || buku[invPeranLain(peran)].get(k) || null;
+}
+
+/* Alamat & negara satu peran menurut namanya. kosongSaja: hanya isian
+   yang masih kosong (sesudah Customer dipilih -- isian dari data
+   customer tidak ditimpa). Hasil: ada yang berubah atau tidak. */
+function invIsiDariBuku(panel, peran, opsi) {
+  const isian = INV_BUKU_PERAN[peran];
+  const hit = invCariBuku(peran, invNilai(invEl(panel, isian.nama)));
+  const diubah = [];
+  [[isian.alamat, hit && hit.alamat], [isian.negara, hit && hit.negara]].forEach(([k, v]) => {
+    const el = invEl(panel, k);
+    if (!el) return;
+    if (v) {
+      if (el.value === v || !invBelumDiubah(el) || (opsi && opsi.kosongSaja && invNilai(el))) return;
+      invIsiOtomatis(el, v);
+      invDariBuku[k] = el.value;
+      diubah.push(k);
+    } else if (invDariBuku[k] != null && el.value === invDariBuku[k]) {
+      el.value = "";
+      delete dnIsianOtomatis[k];
+      delete invDariBuku[k];
+      diubah.push(k);
+    }
+  });
+  // Direct Invoice: Pembeli ikut alamat & negara Penerima yang baru terisi
+  diubah.forEach((k) => invTeruskan(panel, k, new Set()));
+  return diubah.length > 0;
+}
+
+// Saran di kotak Nama Pembeli / Penerima: nama dari kedua buku, baris pertama alamatnya sebagai petunjuk
+function invGambarSaranBuku(peran) {
+  const dl = document.getElementById(INV_BUKU_PERAN[peran].saran);
+  if (!dl) return;
+  const buku = invBuku();
+  const semua = new Map();
+  [buku[peran], buku[invPeranLain(peran)]].forEach((m) => m.forEach((x, k) => semua.has(k) || semua.set(k, x)));
+  dl.innerHTML = [...semua.values()]
+    .sort((a, b) => a.nama.localeCompare(b.nama))
+    .map((x) => `<option value="${escapeAttr(x.nama)}">${escapeHtml(x.alamat.split("\n")[0])}</option>`)
+    .join("");
+}
+
 /* Jadwal export yang ditautkan: pihak dari Data PEB-nya (bila ada) --
    eksportir -> Penjual. set = pengisi isian otomatis docnum-view.js. */
 function invIsiDariJadwal(s, set) {
@@ -406,6 +520,8 @@ function invPasangBawaan(panel) {
 function invPihakSegarkan(opsi) {
   const panel = invPanel();
   if (!panel) return;
+  // Isian form diganti seluruhnya: catatan "diisikan buku" yang lama tidak berlaku lagi
+  Object.keys(invDariBuku).forEach((k) => delete invDariBuku[k]);
   if (opsi && opsi.lengkapi && !invNilai(invEl(panel, "penerimaNama")))
     invIsiDariSumber(panel, invSumberCustomer(invNilai(invEl(panel, "customer")), { profilSaja: true }));
   invTeruskanSemua(panel);
@@ -417,10 +533,13 @@ function invPihakSegarkan(opsi) {
   if (!panel || !invEl(panel, "polaPihak")) return;
   invPasangBawaan(panel);
   invCustomerGambar();
+  const peranNama = (k) => Object.keys(INV_BUKU_PERAN).find((p) => INV_BUKU_PERAN[p].nama === k) || "";
   panel.addEventListener("input", (e) => {
     const k = e.target.dataset && e.target.dataset.dn;
     if (!k || (k !== "customer" && !INV_KUNCI_PIHAK.includes(k))) return;
     invTeruskan(panel, k, new Set());
+    // Nama Pembeli / Penerima yang dikenal -> alamat & negaranya (buku alamat)
+    if (peranNama(k)) invIsiDariBuku(panel, peranNama(k));
     invSegarkanTanda(panel);
   });
   panel.addEventListener("change", (e) => {
@@ -429,7 +548,18 @@ function invPihakSegarkan(opsi) {
     else if (k === "customer" && e.target.value !== INV_CUSTOMER_BARU) {
       invIsiDariSumber(panel, invSumberCustomer(e.target.value));
       invGantiPola(panel);
+      // Nama yang ikut Customer: alamat yang masih kosong dari buku alamat
+      invBukuSimpan = null;
+      ["penerima", "pembeli"].forEach((p) => invIsiDariBuku(panel, p, { kosongSaja: true }));
+      invSegarkanTanda(panel);
     }
+  });
+  // Buku & saran dibentuk ulang tiap kotak nama difokus: riwayat, customer & jadwal bisa sudah bertambah
+  panel.addEventListener("focusin", (e) => {
+    const peran = peranNama(e.target.dataset && e.target.dataset.dn);
+    if (!peran) return;
+    invBukuSimpan = null;
+    invGambarSaranBuku(peran);
   });
   // Pilihan disegarkan tiap dibuka: riwayat & jadwal bisa sudah bertambah
   invCustomerKotak().addEventListener("focus", invCustomerGambar);

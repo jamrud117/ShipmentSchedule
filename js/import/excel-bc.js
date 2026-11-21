@@ -169,14 +169,40 @@ function kodeBarangDraft(row) {
   return out;
 }
 
-/* JALUR & NPE DARI RESPON CEISA (progres dokumen, doc-steps.js).
+/* RESPON CEISA (sheet RESPON: KODE RESPON, NOMOR RESPON, TANGGAL
+   RESPON) -> progres dokumen (doc-steps.js). Kode yang dikenal:
+     2003 = SPPB terbit -- tanggal SPPB. SPPB hanya terbit sesudah billing
+            dibayar, jadi Billing ikut "sudah dibayar" (progresDariDokumen
+            Pabean);
+     2005 = SPJM, JALUR MERAH -- bukan SPPB: tahap SPJM diterima pada
+            tanggalnya dan jalur PIB = merah. SPPB baru dicentang bila
+            respon 2003-nya menyusul (sesudah pemeriksaan fisik).
+   Baris yang kodenya sama lebih dari satu: yang tanggalnya paling akhir.
 
-   Kode respon jalur tidak dibakukan di berkas unduhan, jadi yang dibaca
-   TULISANNYA: SPJM / "JALUR MERAH", SPJH / "JALUR HIJAU", MITA / "JALUR
-   PRIORITAS" -- di kolom mana pun pada baris RESPON, atau isi kolom
-   JALUR HEADER bila ada. Tanpa tulisan itu jalur dibiarkan kosong:
-   menebak jalur lebih buruk daripada tidak tahu. Merah mengalahkan
-   yang lain (SPJM bisa terbit menyusul). */
+   Selain kode, TULISANNYA juga dibaca: SPJM / "JALUR MERAH", SPJH /
+   "JALUR HIJAU", MITA / "JALUR PRIORITAS" -- di kolom mana pun pada baris
+   RESPON, atau isi kolom JALUR HEADER bila ada. Tanpa kode 2005 atau
+   tulisan itu jalur dibiarkan kosong (SPPB saja tidak membedakan hijau
+   dari MITA): menebak jalur lebih buruk daripada tidak tahu. Merah
+   mengalahkan yang lain (SPJM bisa terbit menyusul). */
+const KODE_RESPON_SPPB = "2003";
+const KODE_RESPON_SPJM = "2005";
+const kodeRespon = (r) => excelStr(r && r["KODE RESPON"]);
+function responTerakhir(respon, cocok) {
+  return respon
+    .filter(cocok)
+    .map((r) => ({ r, tgl: excelValueToISODate(r["TANGGAL RESPON"]) }))
+    .sort((a, b) => String(b.tgl).localeCompare(String(a.tgl)))
+    .map((x) => x.r)[0] || null;
+}
+const teksSpjm = (v) => /\bSPJM\b|JALUR MERAH/i.test(String(v == null ? "" : v));
+// Respon SPJM: kode 2005, atau baris yang menyebut SPJM / "Jalur Merah"
+function responSpjm(respon) {
+  return (
+    responTerakhir(respon, (r) => kodeRespon(r) === KODE_RESPON_SPJM) ||
+    responTerakhir(respon, (r) => Object.keys(r).some((k) => k !== "TANGGAL RESPON" && teksSpjm(r[k])))
+  );
+}
 function jalurDariTeks(teks, kolomJalur) {
   const isi = String(teks == null ? "" : teks).toUpperCase().replace(/\s+/g, " ").trim();
   if (!isi) return "";
@@ -187,6 +213,7 @@ function jalurDariTeks(teks, kolomJalur) {
 }
 function jalurDokumenCeisa(respon, header) {
   const temu = new Set();
+  if (respon.some((r) => kodeRespon(r) === KODE_RESPON_SPJM)) temu.add("merah");
   ["JALUR", "KODE JALUR", "NAMA JALUR"].forEach((k) => {
     const j = jalurDariTeks(header[k], true);
     if (j) temu.add(j);
@@ -285,14 +312,21 @@ function parseBcExcelWorkbook(wb) {
   const containerStr = daftarKontainer.map(teksKontainer).join(", ");
   const muatanKontainer = [...new Set(daftarKontainer.map((k) => muatanDariKode(k.jenis)).filter(Boolean))];
 
-  // Tanggal SPPB = TANGGAL RESPON di sheet RESPON, pada baris yang KODE RESPON-nya = 2003
-  const sppbRespon = respon.find(
-    (r) => excelStr(r["KODE RESPON"]) === "2003",
-  );
+  /* Tanggal SPPB = TANGGAL RESPON pada baris KODE RESPON 2003; tanggal
+     SPJM (jalur merah) dari baris 2005 -- lihat RESPON CEISA di atas. */
+  const sppbRespon = responTerakhir(respon, (r) => kodeRespon(r) === KODE_RESPON_SPPB);
   const respTanggal = sppbRespon
     ? excelValueToISODate(sppbRespon["TANGGAL RESPON"])
     : "";
-  if (respon.length && !sppbRespon) {
+  const spjmRespon = responSpjm(respon);
+  const spjmTanggal = spjmRespon ? excelValueToISODate(spjmRespon["TANGGAL RESPON"]) : "";
+  /* Jalur merah tanpa SPPB: barang masih diperiksa -- Tanggal SPPB
+     dibiarkan kosong (bukan diganti Tanggal Daftar seperti berkas tanpa
+     respon SPPB lainnya). */
+  const merahBelumSppb = !sppbRespon && !!spjmRespon;
+  if (merahBelumSppb) {
+    notes.push(t("y.respon.2005.jalur.merah", { tanggal: spjmTanggal ? fmtDate(spjmTanggal) : "-" }));
+  } else if (respon.length && !sppbRespon) {
     notes.push(
       t("y.respon.2003.tidak.ditemukan"),
     );
@@ -349,7 +383,7 @@ function parseBcExcelWorkbook(wb) {
   const fields = {
     noAju: excelStr(header["NOMOR AJU"]),
     docNo: excelStr(header["NOMOR DAFTAR"]),
-    docDate: respTanggal || excelValueToISODate(header["TANGGAL DAFTAR"]),
+    docDate: respTanggal || (merahBelumSppb ? "" : excelValueToISODate(header["TANGGAL DAFTAR"])),
     incoterm: excelStr(header["KODE INCOTERM"]).toUpperCase(),
     party: shipper ? excelStr(shipper["NAMA ENTITAS"]) : "",
     invoice: nomorDokumen(dokInvoice),
@@ -684,12 +718,15 @@ function parseBcExcelWorkbook(wb) {
   });
   /* BAHAN PROGRES DOKUMEN (progresDariDokumenPabean, doc-steps.js):
      pendaftaran PIB/PEB APA ADANYA (docDate di atas bisa tanggal SPPB),
-     SPPB, BC 1.1 HEADER (Manifest), jalur & NPE dari RESPON. */
+     SPPB (respon 2003; Billing dibayar ikut tanggal ini), SPJM (respon
+     2005 / jalur merah), BC 1.1 HEADER (Manifest), jalur & NPE dari
+     RESPON. */
   const headerTeks = (...kolom) => kolom.map((k) => excelStr(header[k])).find(Boolean) || "";
   const progres = {
     nomorDaftar: excelStr(header["NOMOR DAFTAR"]),
     tanggalDaftar: excelValueToISODate(header["TANGGAL DAFTAR"]),
     sppb: respTanggal,
+    spjm: modeHint === "export" ? "" : spjmTanggal,
     bc11: {
       nomor: headerTeks("NOMOR BC11", "NOMOR BC 11", "NO BC11"),
       tanggal: tanggalHeader("TANGGAL BC11", "TANGGAL BC 11", "TGL BC11"),

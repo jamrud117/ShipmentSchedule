@@ -62,9 +62,11 @@ const ciplKapital = (s) => String(s == null ? "" : s).toUpperCase();
 
    Dicocokkan dengan `includes` pada teks yang sudah dinormalkan
    (tanda baca dibuang), jadi "DYNAMIC DESIGN CO., LTD." dan
-   "Dynamic Design Co Ltd" sama-sama ketemu.
-
-   Menambah buyer baru cukup satu entri di sini.
+   "Dynamic Design Co Ltd" sama-sama ketemu (ciplAlamatBuyer, saat
+   Customer dipilih). Nama Pembeli / Penerima yang DIKETIK dicari di buku
+   alamat invoice-pihak.js -- riwayat invoice, data customer, profil di
+   bawah, dan Data PEB jadwal -- jadi pihak baru cukup diketik sekali;
+   profil di sini hanya untuk pelanggan yang bentuk CIPL-nya khusus.
 ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------

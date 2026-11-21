@@ -1865,7 +1865,9 @@
                   </div>
                   <div class="inv-isian">
                     <label class="form-label" for="dn-invoice-pembeliNama" data-en="Name">Nama</label>
-                    <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" />
+                    <input id="dn-invoice-pembeliNama" type="text" class="form-control" data-dn="pembeliNama" aria-label="Nama Pembeli" data-en-aria="Buyer name" autocomplete="off" list="dnDaftarPembeli" />
+                    <!-- Saran nama + buku alamat (invGambarSaranBuku, invoice-pihak.js) -->
+                    <datalist id="dnDaftarPembeli"></datalist>
                   </div>
                   <div class="inv-isian">
                     <label class="form-label" for="dn-invoice-pembeliAlamat" data-en="Address">Alamat</label>
@@ -1883,7 +1885,8 @@
                   </div>
                   <div class="inv-isian">
                     <label class="form-label" for="dn-invoice-penerimaNama" data-en="Name">Nama</label>
-                    <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" />
+                    <input id="dn-invoice-penerimaNama" type="text" class="form-control" data-dn="penerimaNama" aria-label="Nama Penerima" data-en-aria="Consignee name" autocomplete="off" list="dnDaftarPenerima" />
+                    <datalist id="dnDaftarPenerima"></datalist>
                   </div>
                   <div class="inv-isian">
                     <label class="form-label" for="dn-invoice-consigneeAddress" data-en="Address">Alamat</label>

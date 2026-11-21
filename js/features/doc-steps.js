@@ -54,7 +54,8 @@
 
    Alur berkasnya memang tidak sama. Import berakhir di SPPB (izin
    keluar dari kawasan pabean); Export berakhir di Tally (hitung fisik
-   saat muat). Karena itu dua daftar, bukan satu yang dipaksakan.
+   saat muat -- kiriman laut saja) lalu keberangkatan. Karena itu dua
+   daftar, bukan satu yang dipaksakan.
 
    Label AWB/BL ditulis sebagai fungsi, bukan teks mati: yang benar
    tergantung moda pengangkutnya — AWB untuk udara, B/L untuk laut.
@@ -173,6 +174,23 @@ const DOC_STEP_SPJM = {
   berlaku: pakaiSpjm,
 };
 
+/* TALLY -- lembar hitung fisik saat barang dimuat ke kontainer / kapal
+   di pelabuhan / depo. Kiriman UDARA (Air Freight) tidak memakainya:
+   barang diterima & ditimbang gudang kargo bandara, bukti terimanya ikut
+   AWB. Tahapnya tidak digambar sama sekali pada kiriman udara (`berlaku`,
+   disaring docStepsFor() seperti Asuransi) -- bukan strip "tidak
+   dipakai", karena memang bukan bagian dari kiriman itu. Entri yang sudah
+   tercatat tetap tersimpan dan muncul lagi bila modanya diganti ke laut. */
+function pakaiTally(s) {
+  return !(s && s.transport === "udara");
+}
+const DOC_STEP_TALLY = {
+  key: "tally",
+  label: "Tally",
+  full: () => tt("Tally sheet (hitung fisik saat muat)", "Tally sheet (physical count at loading)"),
+  berlaku: pakaiTally,
+};
+
 const DOC_STEPS_IMPORT = [
   { key: "cipl", label: "CI/PL", full: "Commercial Invoice & Packing List", bisaDraft: true },
   { key: "bl", label: blLabel, full: blFull, bisaDraft: true },
@@ -236,15 +254,15 @@ const DOC_STEPS_EXPORT = [
     bisaDraft: true,
     petunjuk: (s) => petunjukFumigasi(s),
   },
-  { key: "tally", label: "Tally", full: () => tt("Tally sheet (hitung fisik saat muat)", "Tally sheet (physical count at loading)") },
+  DOC_STEP_TALLY,
   /* BERANGKAT — seperti Berths/ATA di buku Import, ini tahap yang
      bukan berkas: tanggal kapal/pesawat benar-benar meninggalkan
      pelabuhan muat.
 
      Ditaruh PALING AKHIR karena memang kejadian terakhir yang masih
      diurus tim EXIM; sesudahnya barang dalam perjalanan. Tally
-     (hitung fisik saat muat) mendahuluinya: barang dihitung dulu,
-     baru alat angkutnya berangkat. */
+     (hitung fisik saat muat, kiriman laut) mendahuluinya: barang
+     dihitung dulu, baru kapalnya berangkat. */
   { key: "sailing", label: sailingLabel, full: sailingFull, peristiwa: true },
 ];
 
@@ -434,7 +452,8 @@ function docStepsForDasar(s) {
    keperluan ini sengaja sama). */
 function docStepsFor(s) {
   const kurir = pakaiKurirEkspres(s);
-  /* Tahap bersyarat (`berlaku`: Asuransi hanya untuk CIF / CIP) ikut
+  /* Tahap bersyarat (`berlaku`: Asuransi hanya untuk CIF / CIP, Tally
+     bukan untuk kiriman udara, SPJM hanya jalur merah) ikut
      disaring di sini, satu tempat untuk stepper, hitungan, saran
      berikutnya, "berkas belum ada", dan "menunggu asli". */
   return docStepsForDasar(s).filter((x) => !(kurir && x.key === "manifest") && (!x.berlaku || x.berlaku(s)));
@@ -1126,10 +1145,16 @@ function batalkanTahapDokumen(s, st) {
      - nomor aju tanpa nomor pendaftaran -> PIB / PEB DRAFT (tanggal di
        nomor ajunya; berkas yang belum didaftarkan memang draft);
      - nomor & tanggal pendaftaran      -> PIB / PEB terdaftar;
-     - respon SPPB (KODE RESPON 2003)   -> SPPB, tanggal responnya;
+     - respon SPPB (KODE RESPON 2003)   -> SPPB, tanggal responnya, DAN
+                                           Billing "sudah dibayar" pada
+                                           tanggal yang sama (SPPB hanya
+                                           terbit sesudah billing dibayar);
+     - respon SPJM (KODE RESPON 2005)   -> SPJM diterima, tanggal responnya;
+                                           jalur merah, SPPB TIDAK dicentang
+                                           (baru dari respon 2003-nya);
      - nomor & tanggal BC 1.1 di HEADER -> Manifest (Import);
      - respon NPE                       -> NPE (Export);
-     - jalur yang tertulis di respon    -> Jalur PIB.
+     - jalur di respon (2005 / tulisan) -> Jalur PIB.
    Hanya MENAMBAH atau MENAIKKAN (draft -> terdaftar): tahap yang sudah
    dicatat tangan, atau ditandai tidak dipakai, tidak disentuh. Ditandai
    `sumber: "ceisa"` dan baru tersimpan bersama jadwalnya saat Simpan --
@@ -1155,10 +1180,15 @@ function progresDariDokumenPabean(parsed, mode) {
   if (nomorDaftar && tanggalDaftar) out[tahapDok] = { date: tanggalDaftar };
   else if (String(f.noAju || "").trim() && !nomorDaftar) out[tahapDok] = { date: sah(tanggalDariAju(f.noAju)) || hariIni, draft: true };
   if (mode === "import") {
-    if (sah(p.sppb)) out.sppb = { date: p.sppb };
+    if (sah(p.sppb)) {
+      // SPPB terbit = billing sudah dibayar; tanggal bayarnya tidak ada di berkas -> tanggal SPPB
+      out.billing = { date: sah(p.billing) || p.sppb };
+      out.sppb = { date: p.sppb };
+    }
+    if (sah(p.spjm)) out.spjm = { date: p.spjm };
     if (p.bc11 && sah(p.bc11.tanggal)) out.manifest = { date: p.bc11.tanggal };
     if (p.jalur && (PREDICTION_CONFIG.customsLanes || []).some((l) => l.key === p.jalur)) {
-      ["pib", "sppb"].forEach((k) => out[k] && !out[k].draft && (out[k].jalur = p.jalur));
+      TAHAP_PENCATAT_JALUR.forEach((k) => out[k] && !out[k].draft && (out[k].jalur = p.jalur));
     }
   } else if (sah(p.npe)) out.npe = { date: p.npe };
   return out;
@@ -1215,7 +1245,10 @@ function catatProgresImporForm(parsed) {
     const e = progres[k];
     const nama = st ? stepText(st.label, { transport: $("#fTransport").value }) : k.toUpperCase();
     const jalur = e.jalur ? jalurInfo(e.jalur) : null;
-    return `${nama}${e.draft ? " (draft)" : ""} ${fmtDate(e.date)}${jalur ? tt(` · jalur ${jalur.label}`, ` · ${jalur.label} lane`) : ""}`;
+    // Tahap berkosakata sendiri: "Billing dibayar", bukan sekadar "Billing"
+    const kata = !e.draft ? kataTahap(st, {}) : null;
+    const keadaan = e.draft ? " (draft)" : kata && kata.asliSaat ? " " + kata.asliSaat : "";
+    return `${nama}${keadaan} ${fmtDate(e.date)}${jalur ? tt(` · jalur ${jalur.label}`, ` · ${jalur.label} lane`) : ""}`;
   });
   return tt(
     `Progres Dokumen ikut dicentang dari berkas: ${teks.join(", ")} — tersimpan bersama jadwal saat Simpan.`,
