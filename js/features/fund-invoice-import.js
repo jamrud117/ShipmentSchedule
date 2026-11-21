@@ -26,6 +26,9 @@
        CURR, Rate, Amount, VAT, PPH 23, Total.
      - Prime Freight: Invoice dan Debit Note satu format (kolom CUR, RATE,
        AMT (CUR), AMOUNT (IDR), VAT) -- yang membedakan hanya judul lembarnya.
+     - Bertabel umum (surveyor LS, EMKL, trucking, ...): tabel Item /
+       Description / Quantity / UOM / U/Price / Total + ringkasan Sub Total,
+       VAT, Total (bacaInvoiceRincian).
      - Umum: nomor, tanggal, BL/AWB, dan total saja -- satu baris.
    Teksnya dari extractPdfText() (js/import/pdf.js), pembaca PDF yang
    sama dengan impor PIB/CIPL.
@@ -43,7 +46,9 @@ const DANA_BULAN = {
 /* "28 Sep 2026", "30 September 2026", "30 - September - 2026",
    "18-08-2026" (hari-bulan-tahun, gaya DHL), "2026-09-28" -> ISO.
    Bergaris miring: "09/15/2026" bulan/hari/tahun (FedEx) kecuali
-   urutan = "dmy" ("02/10/2026" DHL = 2 Oktober). */
+   urutan = "dmy" ("02/10/2026" DHL = 2 Oktober). Tafsiran yang mustahil
+   (bulan > 12) tidak pernah dipakai: "17/11/2026" = 17 November apa pun
+   urutan bawaannya. */
 function danaTanggalIso(teks, urutan) {
   const isi = String(teks || "").trim();
   let m = isi.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -57,19 +62,22 @@ function danaTanggalIso(teks, urutan) {
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   m = isi.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (m) {
-    const [hari, bulan] = urutan === "dmy" ? [m[1], m[2]] : [m[2], m[1]];
+    const dmy = +m[1] > 12 ? true : +m[2] > 12 ? false : urutan === "dmy";
+    const [hari, bulan] = dmy ? [m[1], m[2]] : [m[2], m[1]];
     return `${m[3]}-${bulan.padStart(2, "0")}-${hari.padStart(2, "0")}`;
   }
   return "";
 }
 
 /* "8,153,951" / "22,210,551.00" / "(4,503,400)" / "-6,633,550" /
-   "5.688.963,00" -> angka */
+   "5.688.963,00" / "1.250.000" -> angka */
 function danaAngka(teks) {
   let isi = String(teks || "").trim();
   const negatif = /^\(.*\)$/.test(isi) || /^-/.test(isi);
   isi = isi.replace(/[()\s-]/g, "");
   if (/,\d{1,2}$/.test(isi) && isi.indexOf(".") >= 0) isi = isi.replace(/\./g, "").replace(",", ".");
+  // "Rp 1.250.000": dua titik atau lebih tanpa koma = pemisah ribuan (dulu terbaca 1,25)
+  else if (/^\d{1,3}(?:\.\d{3}){2,}$/.test(isi)) isi = isi.replace(/\./g, "");
   else isi = isi.replace(/,/g, "");
   const n = parseFloat(isi);
   return isFinite(n) ? (negatif ? -n : n) : 0;
@@ -125,6 +133,10 @@ function danaVendorDariDaftar(teks, dikenal) {
   return cocok.length ? cocok[0] : "";
 }
 
+/* Nama perusahaan yang BUKAN vendor: kita sendiri (alamat tagihan, nama rekening
+   virtual "Beneficiary Name : Dynamic Design Indonesia PT") dan bank. */
+const danaBukanVendor = (nama) => /DYNAMIC\s+DESIGN|\bBANK\b/i.test(String(nama || ""));
+
 function danaNamaVendor(teks, dikenal) {
   const besar = String(teks || "").toUpperCase();
   const dariDaftar = danaVendorDariDaftar(teks, dikenal);
@@ -132,8 +144,18 @@ function danaNamaVendor(teks, dikenal) {
   if (/FEDEX/.test(besar)) return "FEDEX";
   const bayar = String(teks).match(/PAYABLE TO\s*\n?\s*"?\s*(PT\.?\s+[A-Z0-9 .&-]+?)\s*"?\s*$/im);
   if (bayar) return bayar[1].replace(/\s+/g, " ").trim();
-  const pt = (String(teks).match(/\bPT\.?\s+[A-Z][A-Z0-9 .&-]{2,40}/g) || []).find((x) => !/DYNAMIC DESIGN/i.test(x));
-  return pt ? pt.replace(/\s+/g, " ").trim() : "";
+  // Satu baris: "Dynamic Design Indonesia, PT" di ujung baris tidak boleh merangkai baris sesudahnya
+  const pt = (String(teks).match(/\bPT\.?[ \t]+[A-Z][A-Z0-9 .&-]{2,40}/g) || []).find((x) => !danaBukanVendor(x));
+  if (pt) return pt.replace(/\s+/g, " ").trim();
+  /* Nama berhuruf kapital-awal ("PT Anindya Wiraputra Konsult") -- vendor yang kopnya
+     berupa logo (gambar, tidak ikut lapisan teks; berwarna, jadi hilang di OCR) dan
+     namanya baru tertulis di atas tanda tangan. Satu baris sendiri, atau di ujung baris
+     sesudah ":" (OCR merangkai kolom kanan ke "... Virtual Account : PT ..."). Ditulis
+     kapital seperti nama vendor lain di daftar. */
+  const kata = "[A-Z][A-Za-z0-9&.'-]*";
+  const re = new RegExp(`(?:^|:[ \\t]*)(PT\\.?[ \\t]+${kata}(?:[ \\t]+${kata}){0,5})[ \\t]*$`, "gm");
+  const calon = [...String(teks).matchAll(re)].map((m) => m[1].replace(/\s+/g, " ").trim()).find((x) => !danaBukanVendor(x));
+  return calon ? calon.toUpperCase() : "";
 }
 
 /* Uraian baris invoice kurir: cukup nama komponennya ("Duty & Tax") --
@@ -860,6 +882,219 @@ function bacaInvoiceUmum(teks) {
   };
 }
 
+/* ------------------------------------------------------------------
+   INVOICE BERTABEL BARANG / JASA -- vendor yang belum punya pembaca sendiri
+
+   Banyak tagihan lokal (surveyor, EMKL, trucking, konsultan) berbentuk sama:
+   kepala "No. / Date / Terms / Currency" di kanan atas, tabel "Item |
+   Description | Quantity | UOM | U/Price | Total", dan RINGKASAN di kaki --
+   Sub Total, VAT / PPN, Total. Dulu tagihan seperti ini jatuh ke pembaca Umum:
+   satu baris "Tagihan <nomor>" berisi TOTAL (sudah termasuk PPN) dengan PPN 0,
+   tanpa tanggal & vendor.
+
+   Ringkasan yang menjadi jangkarnya: Sub Total + VAT = Total memastikan ketiga
+   angka (label & angkanya kerap terpisah baris -- kotak nilai sedikit lebih
+   tinggi dari labelnya, dan OCR merangkainya ke kalimat di sebelah). Baris
+   tabel dipakai bila jumlahnya sama dengan Sub Total; kalau baris tabel tak
+   terbaca utuh (angka terpecah spasi pada scan buruk), satu baris seharga Sub
+   Total. Tarif PPN = VAT / Sub Total.
+
+   Tagihan SURVEYOR (LS): rinciannya bukan nama jasa, melainkan nomor-nomor
+   verifikasi -- VR No (permintaan verifikasi), Job / VO No, LS No (Laporan
+   Surveyor). Uraiannya "Surveyor Fee (LS <nomor>)", dan LS No juga dipakai
+   mencari jadwal impornya (dokumen pelengkap LS, danaLengkapiDariJadwal).
+------------------------------------------------------------------ */
+
+// Angka uang berpemisah ribuan: "50,000,000.00", "5.500.000,00", "750,000"
+const DANA_UANG = String.raw`\(?-?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?\)?`;
+const DANA_RE_UANG_EKOR = new RegExp(`(${DANA_UANG})\\s*$`);
+const DANA_RE_UANG_SAJA = new RegExp(`^\\s*(?:Rp\\.?|IDR)?\\s*(${DANA_UANG})\\s*$`, "i");
+// Sesudah label ringkasan: tarif "(11%)" / "11 %", titik dua, "Rp" -- lalu angkanya mengakhiri baris
+const DANA_RE_SESUDAH_LABEL = new RegExp(`^\\s*(?:\\(?\\s*(\\d{1,2}(?:[.,]\\d{1,2})?)\\s*%\\s*\\)?)?\\s*[:;.]?\\s*(?:Rp\\.?|IDR)?\\s*(${DANA_UANG})\\s*$`, "i");
+
+/* Calon nilai sebuah label ringkasan: [{ teks, tarif, dekat }]. Label diikuti angka di
+   baris yang sama ("VAT 5,500,000.00", "... payment date. Total 55,500,000.00") -> dekat 0.
+   Label tanpa angka sesudahnya ("Sub Total", "amount Sub Total"): angka di UJUNG baris
+   sebelumnya, atau baris sesudahnya yang hanya berisi angka -> dekat 1. Label di tengah
+   kalimat ("... before VAT and submit ...", kepala tabel) bukan label ringkasan. */
+function danaCalonRingkasan(baris, cari) {
+  const calon = [];
+  baris.forEach((l, i) => {
+    const s = String(l || "");
+    for (const m of cari(s)) {
+      const sesudah = s.slice(m.index + m[0].length);
+      const n = sesudah.match(DANA_RE_SESUDAH_LABEL);
+      if (n) {
+        calon.push({ teks: n[2], tarif: n[1] ? danaAngka(n[1]) : null, dekat: 0 });
+        continue;
+      }
+      if (/[A-Za-z]{2,}/.test(sesudah)) continue;
+      const sebelum = i > 0 ? String(baris[i - 1]).match(DANA_RE_UANG_EKOR) : null;
+      if (sebelum) calon.push({ teks: sebelum[1], tarif: null, dekat: 1 });
+      const lanjut = i + 1 < baris.length ? String(baris[i + 1]).match(DANA_RE_UANG_SAJA) : null;
+      if (lanjut) calon.push({ teks: lanjut[1], tarif: null, dekat: 1 });
+    }
+  });
+  return calon;
+}
+
+// Kemunculan label di satu baris (label harus kata utuh; "Total" milik "Sub Total" bukan Total)
+const danaCariLabel = (re) => (s) => [...s.matchAll(re)];
+const danaCariTotal = (s) => [...s.matchAll(/\b(?:Grand\s*)?Total\b(?:\s*(?:Amount|Tagihan|Invoice|Due))?/gi)].filter((m) => !/Sub\s*-?\s*$/i.test(s.slice(0, m.index)));
+
+/* Ringkasan kaki invoice -> { dpp, ppn, pph, total, tarif, sendiri } atau null.
+   Dari semua calon (dan tafsiran angka yang ambigu, danaTafsirAngka) dipilih yang
+   Sub Total + VAT - PPh = Total; tidak ada yang cocok -> yang terdekat ke labelnya,
+   `sendiri` false. */
+function danaRingkasanInvoice(baris) {
+  const sub = danaCalonRingkasan(baris, danaCariLabel(/\bSub\s*-?\s*Total\b|\bDPP\b|Dasar\s+Pengenaan\s+Pajak/gi));
+  const vat = danaCalonRingkasan(baris, danaCariLabel(/\b(?:VAT|PPN|V\.A\.T\.?)(?=[\s:(]|$)/gi));
+  const pph = danaCalonRingkasan(baris, danaCariLabel(/\b(?:PPh|WHT|Withholding\s+Tax)\s*(?:Art\.?\s*|Pasal\s*)?(?:23)?(?=[\s:(]|$)/gi));
+  const total = danaCalonRingkasan(baris, danaCariTotal);
+  if (!total.length && !sub.length) return null;
+  const tafsir = (daftar) => daftar.flatMap((c) => danaTafsirAngka(c.teks).map((v) => ({ v, c })));
+  const tTotal = tafsir(total), tSub = tafsir(sub), tVat = tafsir(vat), tPph = tafsir(pph);
+  const kosong = { v: 0, c: { dekat: 0, tarif: null } };
+  let terbaik = null;
+  // jt / js / jv / jp = calon Total / Sub Total / VAT / PPh (nama t & tt milik penerjemah)
+  (tTotal.length ? tTotal : [null]).forEach((jt) => (tSub.length ? tSub : [null]).forEach((js) => [kosong].concat(tVat).forEach((jv) => [kosong].concat(tPph).forEach((jp) => {
+    if (!jt && !js) return;
+    const dpp = js ? js.v : jt.v - jv.v + jp.v;
+    const jumlah = jt ? jt.v : dpp + jv.v - jp.v;
+    if (!(dpp > 0) || !(jumlah > 0)) return;
+    const sendiri = !!(jt && js) && Math.abs(dpp + jv.v - jp.v - jumlah) <= 1;
+    const skor = (sendiri ? 1000 : 0) + (jv.v ? 10 : 0) - [jt, js, jv === kosong ? null : jv, jp === kosong ? null : jp].reduce((x, a) => x + (a ? a.c.dekat : 0), 0);
+    if (!terbaik || skor > terbaik.skor) terbaik = { skor, dpp, ppn: jv.v, pph: jp.v, total: jumlah, tarif: jv.c.tarif, sendiri };
+  }))));
+  return terbaik;
+}
+
+/* Satu baris tabel: [No] Uraian Qty [Satuan] Harga Jumlah. Dua angka uang terakhir =
+   harga satuan & jumlah; Qty x Harga = Jumlah memastikan ("1.000" = 1 berdesimal tiga,
+   "2" = 2). Tanpa Qty / Satuan: Harga = Jumlah (qty 1). */
+function danaBarisBarang(l) {
+  const s = String(l || "").trim();
+  const uang = String.raw`\(?-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?\)?`;
+  const m = s.match(new RegExp(String.raw`^(.*?[A-Za-z].*?)\s+(?:(\d{1,4}(?:[.,]\d{1,3})?)\s+(?:([A-Za-z][A-Za-z.\/]{0,7})\s+)?)?(${uang})\s+(${uang})$`));
+  if (!m) return null;
+  const harga = danaAngka(m[4]), jumlah = danaAngka(m[5]);
+  if (!(jumlah > 0)) return null;
+  const qtyCalon = m[2] ? danaTafsirAngka(m[2]).concat(/^\d+[.,]\d{3}$/.test(m[2]) ? [danaAngka(m[2].replace(/[.,]\d{3}$/, ""))] : []) : [1];
+  const qty = qtyCalon.find((q) => q > 0 && Math.abs(q * harga - jumlah) <= Math.max(1, jumlah * 0.0005));
+  if (qty == null) return null;
+  const uraian = m[1].replace(/^\s*\d{1,3}[.)]?\s+(?=\S)/, "").trim();
+  return uraian ? { uraian, qty, satuan: m[3] || "", harga, jumlah } : null;
+}
+
+/* Kepala tabel barang / jasa: sedikitnya tiga kata kuncinya */
+const danaKepalaBarang = (l) =>
+  [/\bItem\b|\bNo\b/i, /Descrip|Uraian|Keterangan|Particular/i, /\bQ(?:ty|uantity)\b|Kuantitas|\bJml\b/i, /\bUOM\b|\bUnit\b|Satuan/i, /U\s*\/\s*Price|Unit\s*Price|\bPrice\b|Harga|\bRate\b/i, /\bTotal\b|\bAmount\b|\bJumlah\b/i]
+    .filter((re) => re.test(String(l || ""))).length >= 3;
+
+/* Nomor di samping label surveyor ("VR No : TB21G2549"); sisa titik dua hasil OCR ("1",
+   "i", "|", ";") di antara label & nomornya dimaafkan */
+function danaNomorSesudahLabel(teks, reLabel) {
+  const m = String(teks || "").match(new RegExp(String.raw`${reLabel.source}\.?[ \t]*(?:[:;.|>©]|[ \t][1Il|i](?=[ \t]))?[ \t]*([A-Z0-9][A-Z0-9-]{4,})`, "i"));
+  return m ? m[1].toUpperCase() : "";
+}
+
+/* Nomor-nomor invoice surveyor -> { vr, ls, job } atau null */
+function danaSurveyor(teks) {
+  const vr = danaNomorSesudahLabel(teks, /\bVR[ \t]*No/);
+  let ls = danaNomorSesudahLabel(teks, /\bLS[ \t]*No/);
+  if (!vr && !ls) return null;
+  /* LS = "I" + nomor VR + ... ("ITB21G2549826..." untuk VR "TB21G2549"): huruf I
+     di depannya yang terbaca 1 / l pada scan dipulihkan dari VR-nya */
+  if (vr && ls && /^[1lI|i!]/.test(ls) && ls.slice(1).startsWith(vr)) ls = "I" + ls.slice(1);
+  return { vr, ls, job: danaNomorSesudahLabel(teks, /\bJob[ \t]*No(?:[ \t]*\/[ \t]*VO[ \t]*No)?/) };
+}
+
+/* Nomor invoice di kanan judul "INVOICE": label "No." di awal baris, beberapa baris
+   sesudah judulnya ("INVOICE" / "No. : 264163281"). "No." di tempat lain (alamat
+   "No. 1", nomor rekening) tidak dipakai. */
+function danaNomorSesudahJudul(teks) {
+  const baris = String(teks || "").split(/\r?\n/);
+  const j = baris.findIndex((l) => /^\s*(?:TAX\s+)?INVOICE\b/i.test(l));
+  if (j < 0) return "";
+  for (let i = j; i < Math.min(baris.length, j + 8); i++) {
+    const m = baris[i].match(/(?:^|INVOICE\s+)No\.?[ \t]*(?:[:;.|]+[ \t]*)?([A-Z0-9][A-Z0-9\/.\-]{3,})/i);
+    if (m && /\d/.test(m[1])) return m[1].replace(/[.\/-]+$/, "");
+  }
+  return "";
+}
+
+/* Tanggal invoice: "Invoice Date", atau label "Date" / "Tanggal" yang bukan tanggal
+   lain (Due Date, LS Date, Arrive Date, ...). Garis miring = hari/bulan/tahun --
+   tagihan lokal. */
+function danaTanggalInvoiceUmum(teks) {
+  const isi = String(teks || "");
+  const label = danaTanggalLabel(isi, /[Il1|]n[vy]o[il1|!]?c[ea][ \t]*Dat[ea]/);
+  if (label) return label;
+  for (const m of isi.matchAll(/^([^\n]*?)\b(?:Date|Tanggal|Tgl)\b\.?[ \t]*(?:[:;|]|[ \t]1(?=[ \t]))?[ \t]*([^\n]+)/gim)) {
+    if (/\b(?:Due|LS|Arr[il1|]ve|Onboard|Delivery|Shipment|Ship|ETD|ETA|Order|PO|DO|Print|Payment|Jatuh|Tempo|Kirim|Expiry|Valid)\s*$/i.test(m[1])) continue;
+    const tgl = danaTanggalIso(m[2].trim().split(/\s{2,}/)[0], "dmy");
+    if (tgl) return tgl;
+  }
+  return "";
+}
+
+/* Jatuh tempo dari syarat bayar: "Terms : 30 Days", "TOP 14 hari", "Net 30" */
+function danaJatuhTempoTerms(teks, tanggal) {
+  const m = String(teks || "").match(/\b(?:Payment\s+)?(?:Terms?(?:\s+of\s+Payment)?|TOP)\b[ \t]*[:;.]?[ \t]*(?:Net[ \t]*)?(\d{1,3})[ \t]*(?:Days?|Hari)\b/i);
+  const tgl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(tanggal || ""));
+  if (!m || !tgl) return "";
+  const d = new Date(+tgl[1], +tgl[2] - 1, +tgl[3] + Number(m[1]));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function bacaInvoiceRincian(teks) {
+  const isi = String(teks || "");
+  const baris = isi.split(/\r?\n/);
+  const umum = bacaInvoiceUmum(isi);
+  const ringkas = danaRingkasanInvoice(baris);
+  const surveyor = danaSurveyor(isi);
+  // Baris tabel: sesudah kepala (kalau terbaca) sampai ringkasan / kaki
+  const awal = baris.findIndex(danaKepalaBarang);
+  const kaki = /\bSub\s*-?\s*Total\b|\b(?:In\s+Words?|Terbilang|Say)\b|^\s*(?:Grand\s+)?Total\b/i;
+  const barang = [];
+  for (let i = awal + 1; i < baris.length; i++) {
+    if (kaki.test(baris[i]) && (barang.length || awal >= 0)) break;
+    const b = danaBarisBarang(baris[i]);
+    if (b) barang.push(b);
+  }
+  const jumlahBarang = barang.reduce((x, b) => x + b.jumlah, 0);
+  const tarif = ringkas && ringkas.ppn > 0 ? (ringkas.tarif || danaTarifPpn(ringkas.ppn, ringkas.dpp)) : 0;
+  const uraianSurveyor = surveyor ? `Surveyor Fee (${surveyor.ls ? `LS ${surveyor.ls}` : `VR ${surveyor.vr}`})` : "";
+  const nilai = (x) => (Number.isInteger(x) ? String(x) : Math.round(x * 100) / 100);
+  const invoiceNo = danaNomorInvoiceLabel(isi) || danaNomorSesudahJudul(isi) || umum.invoiceNo;
+  let lines = [];
+  if (barang.length && (!ringkas || Math.abs(jumlahBarang - ringkas.dpp) <= 1)) {
+    lines = barang.map((b) => ({ desc: danaRapikanUraian(barang.length === 1 && uraianSurveyor ? uraianSurveyor : b.uraian), amount: nilai(b.jumlah), ppnRate: tarif }));
+  } else if (ringkas && ringkas.sendiri) {
+    /* Baris tabel tak terbaca utuh, tapi ringkasannya pasti: satu baris seharga Sub
+       Total. Uraian satu baris yang TERBACA tidak dipinjam -- jumlahnya bukan Sub Total. */
+    lines = [{ desc: uraianSurveyor || `Tagihan ${invoiceNo || "vendor"}`, amount: nilai(ringkas.dpp), ppnRate: tarif }];
+  }
+  if (!lines.length) return Object.assign(umum, { sumber: "Umum" });
+  const mata = danaMataUangBaris((isi.match(/\bCurrency\b[ \t]*[:;.]?[ \t]*([A-Za-z]{3})\b/i) || [])[1] || "") || "IDR";
+  const invoiceDate = danaTanggalInvoiceUmum(isi) || umum.invoiceDate;
+  return {
+    sumber: "Rincian",
+    invoiceNo,
+    invoiceDate,
+    invoiceDueDate: danaTanggalLabel(isi, /Due[ \t]*Dat[ea]/) || umum.invoiceDueDate || danaJatuhTempoTerms(isi, invoiceDate),
+    // Label B/L / AWB yang utuh saja (pembaca Umum juga menangkap "Bl" di "Blok D6")
+    blAwb: danaNomorBlTabel(isi),
+    expenseType: danaJenisInvoice(lines.map((l) => ({ desc: l.desc, amount: danaAngka(l.amount) }))),
+    transactionType: danaJenisKirimanTabel(isi),
+    currency: mata,
+    surveyor,
+    lines,
+    totalInvoice: ringkas ? ringkas.total : jumlahBarang,
+    pphInvoice: ringkas ? ringkas.pph : 0,
+  };
+}
+
 /* Pilih pembaca, lengkapi vendor, dan periksa: rincian (DPP + PPN)
    harus sama dengan total di invoice. */
 function bacaInvoiceVendor(teks, vendorDikenal) {
@@ -872,7 +1107,14 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
   else if (danaAdalahPrime(isi)) h = bacaInvoicePrime(isi);
   else {
     h = bacaInvoiceTabel(isi);
-    if (!h.lines.length) h = bacaInvoiceUmum(isi);
+    /* Tabel forwarder yang tidak meyakinkan -- tanpa total dan tanpa satu pun angka
+       baris (pada scan buruk "Kurs ... 1 USD 18.135 00" terbaca sebagai baris
+       berkode mata uang) -- diberi kesempatan kedua lewat pembaca bertabel umum. */
+    const yakin = h.totalInvoice > 0 && h.lines.some((l) => danaAngka(l.amount) > 0);
+    if (!yakin) {
+      const r = bacaInvoiceRincian(isi);
+      if (r.lines.length && (r.sumber === "Rincian" || !h.lines.length)) h = r;
+    }
   }
   if (h.jenisDokumen === "billing") {
     // Billing: bukan tagihan vendor -- dibayar ke kas negara, tanpa rincian baris
@@ -1082,6 +1324,54 @@ function danaBuangKembar(dokumen) {
   return { unik, catatan };
 }
 
+/* JADWAL IMPOR TAGIHAN INI -- BL/AWB & jenis transaksinya diambil dari sana:
+     - billing DJBC: nomor aju PIB-nya;
+     - invoice surveyor: LS No (dokumen pelengkap LS jadwal, juga kolom lama `ls`).
+       Nomor LS di invoice kerap lebih PANJANG dari yang tercatat di PIB
+       ("ITB21G2549826168252" vs "ITB21G2549826"): cocok bila yang satu awalan yang
+       lain (sedikitnya 8 karakter), atau nomor LS jadwal memuat nomor VR-nya.
+       Hanya bila tepat SATU jadwal yang cocok.
+   Isian yang sudah terbaca dari dokumennya sendiri tidak ditimpa. */
+function danaJadwalDariLs(sv) {
+  if (!sv || typeof data === "undefined" || !data) return null;
+  const kLs = kunciAlnum(sv.ls), kVr = kunciAlnum(sv.vr);
+  if (kLs.length < 8 && kVr.length < 6) return null;
+  const cocok = (nomor) => {
+    const k = kunciAlnum(nomor);
+    if (k.length < 8) return false;
+    if (kLs.length >= 8 && (k === kLs || kLs.startsWith(k) || k.startsWith(kLs))) return true;
+    return kVr.length >= 6 && k.includes(kVr);
+  };
+  const nomorLs = (s) => {
+    const dp = typeof rapikanDokPelengkap === "function" ? rapikanDokPelengkap(s.dokPelengkap) : { ls: [] };
+    return dp.ls.map((d) => d.nomor).concat(String(s.ls || "").split(/[,;\n]+|\s+\/\s+|\s+&\s+/));
+  };
+  const semua = (data.import || []).filter((s) => nomorLs(s).some(cocok));
+  return semua.length === 1 ? semua[0] : null;
+}
+
+function danaLengkapiDariJadwal(h) {
+  if (!h || typeof data === "undefined" || !data) return h;
+  let kirim = null;
+  if (h.jenisDokumen === "billing" && h.noAju) kirim = (data.import || []).find((s) => kunciAlnum(s.noAju) && kunciAlnum(s.noAju) === kunciAlnum(h.noAju)) || null;
+  else if (h.surveyor) kirim = danaJadwalDariLs(h.surveyor);
+  if (!kirim) return h;
+  if (h.jenisDokumen === "billing" || !h.blAwb) h.blAwb = danaRapatBl([kirim.masterBL, kirim.houseBL].filter(Boolean).join("/"));
+  if (!h.transactionType) h.transactionType = kirim.transport === "udara" ? "Air Import" : "Sea Import";
+  return h;
+}
+
+/* Nomor invoice hasil OCR yang berlebih SATU tanda di depannya -- titik dua yang
+   terbaca "1" ("No. 1264163281" untuk "No. : 264163281") -- dicocokkan dengan nama
+   berkasnya ("264163281 - INV.pdf"): hanya bila nama berkas memuat nomor itu PERSIS
+   sebagai satu potongan, tanpa tanda depannya. */
+function danaNomorDariNamaBerkas(nomor, nama) {
+  const n = String(nomor || "");
+  const potongan = String(nama || "").replace(/\.[A-Za-z0-9]{2,5}$/, "").toUpperCase().split(/[^A-Z0-9-]+/).filter(Boolean);
+  if (n.length < 6 || !/^[1lI|i!:;]/.test(n) || potongan.includes(n.toUpperCase())) return n;
+  return potongan.includes(n.slice(1).toUpperCase()) ? n.slice(1) : n;
+}
+
 /* Satu berkas -> { dokumen: [h], catatan: [pesan] }. Billing dilengkapi dari jadwal impor.
    `progres` = pelapor kemajuan OCR (lihat danaLaporOcr). */
 async function danaBacaBerkasBanyak(file, vendor, progres) {
@@ -1119,13 +1409,8 @@ async function danaBacaBerkasBanyak(file, vendor, progres) {
   bagian.forEach((b) => {
     const h = !potongan && utuh ? utuh : bacaInvoiceVendor(b.teks, vendor);
     if (!danaTerbaca(h)) return;
-    if (h.jenisDokumen === "billing" && h.noAju && typeof data !== "undefined" && data) {
-      const kirim = (data.import || []).find((s) => kunciAlnum(s.noAju) && kunciAlnum(s.noAju) === kunciAlnum(h.noAju));
-      if (kirim) {
-        h.blAwb = danaRapatBl([kirim.masterBL, kirim.houseBL].filter(Boolean).join("/"));
-        if (!h.transactionType) h.transactionType = kirim.transport === "udara" ? "Air Import" : "Sea Import";
-      }
-    }
+    danaLengkapiDariJadwal(h);
+    if (ocr) h.invoiceNo = danaNomorDariNamaBerkas(h.invoiceNo, file.name);
     h.berkas = String(file.name || "");
     h.halaman = b.halaman;
     h.ocr = !!ocr;

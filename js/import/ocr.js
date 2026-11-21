@@ -563,12 +563,82 @@ function ocrAngkaSah(teks) {
   return /^\d+(\.\d{1,4})?$/.test(s) && !/^\d{1,3},/.test(s);
 }
 
+/* TITIK DUA YANG TERBACA "1"
+
+   Di depan angka, Tesseract kerap membaca titik dua pemisah isian sebagai
+   "1" berkepercayaan rendah (kadang "©", ">", "i") -- sendirian ("Date 1
+   17/11/2026", "LS No 1 ITB21G...") atau MENEMPEL di depan nilainya ("No.
+   1264163281" untuk "No. : 264163281"). Dua mode baca yang sama-sama salah
+   begitu lalu mengalahkan mode ketiga yang benar, dan nomor invoice keluar
+   dengan "1" palsu di depannya.
+
+   Bentuk simbolnya membuka kedoknya: titik dua setinggi huruf KECIL --
+   lebih pendek dari angka & huruf besar di sebelahnya, puncaknya lebih
+   rendah, kakinya di garis dasar yang sama -- dan sempit. Angka 1 dan huruf
+   I sungguhan setinggi angka lain. Acuannya simbol angka / huruf besar
+   TERDEKAT di baris yang sama, di KIRI (labelnya) dan di KANAN (nilainya)
+   masing-masing: kolom nilai kerap tercetak beberapa piksel lebih rendah
+   dari labelnya, dan titik dua ikut salah satunya. Cukup cocok dengan satu
+   sisi. Simbol seperti itu yang berdiri sendiri dijadikan ":"; yang di
+   AWAL kata dilepas jadi kata ":" sendiri bila sisanya ANGKA ("1264163281"
+   -> ":" + "264163281") -- huruf besar yang ujungnya rusak ("INTERNATIONAL"
+   di kop berarsir, "IDR") dan "item" yang titik huruf i-nya pudar tidak
+   terbelah. */
+const OCR_RE_MIRIP_TITIK_DUA = /^[1lI|!i:;>©®]$/;
+const OCR_ACUAN_TITIK_DUA = 4; // simbol acuan terdekat per sisi yang ditimbang
+function ocrMiripTitikDua(s, acuanBaris) {
+  if (!s || !s.bbox || !OCR_RE_MIRIP_TITIK_DUA.test(String(s.text || ""))) return false;
+  const cx = (s.bbox.x0 + s.bbox.x1) / 2;
+  const pusat = (a) => (a.bbox.x0 + a.bbox.x1) / 2;
+  const tinggiS = s.bbox.y1 - s.bbox.y0;
+  const cocok = (dekat) => {
+    if (dekat.length < 2) return false;
+    const med = (f) => dekat.map(f).sort((x, y) => x - y)[dekat.length >> 1];
+    const tinggi = med((a) => a.bbox.y1 - a.bbox.y0), atas = med((a) => a.bbox.y0), kaki = med((a) => a.bbox.y1);
+    return tinggi > 0 &&
+      tinggiS >= 0.45 * tinggi && tinggiS <= 0.85 * tinggi &&
+      s.bbox.y0 - atas >= 0.12 * tinggi &&
+      Math.abs(s.bbox.y1 - kaki) <= 0.2 * tinggi &&
+      s.bbox.x1 - s.bbox.x0 <= 0.3 * tinggi;
+  };
+  const sisi = (kiri) => acuanBaris
+    .filter((a) => a !== s && (kiri ? pusat(a) < cx : pusat(a) > cx))
+    .sort((a, b) => Math.abs(pusat(a) - cx) - Math.abs(pusat(b) - cx))
+    .slice(0, OCR_ACUAN_TITIK_DUA);
+  return cocok(sisi(true)) || cocok(sisi(false));
+}
+
 function ocrKataDariBlocks(blocks) {
   const kata = [];
-  (blocks || []).forEach((b) => (b.paragraphs || []).forEach((p) => (p.lines || []).forEach((l) => (l.words || []).forEach((w) => {
-    if (!w || !w.bbox) return;
-    kata.push({ t: String(w.text || ""), c: Number(w.confidence) || 0, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 });
-  }))));
+  (blocks || []).forEach((b) => (b.paragraphs || []).forEach((p) => (p.lines || []).forEach((l) => {
+    // Simbol angka & huruf besar sebaris: acuan tinggi untuk mengenali titik dua
+    const acuan = [];
+    (l.words || []).forEach((w) => (w && Array.isArray(w.symbols) ? w.symbols : []).forEach((s) => {
+      if (s && s.bbox && /^[0-9A-Z]$/.test(String(s.text || ""))) acuan.push(s);
+    }));
+    (l.words || []).forEach((w) => {
+      if (!w || !w.bbox) return;
+      const k = { t: String(w.text || ""), c: Number(w.confidence) || 0, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 };
+      const sim = Array.isArray(w.symbols) ? w.symbols.filter((s) => s && s.bbox) : [];
+      const utuh = sim.length && sim.map((s) => String(s.text || "")).join("") === k.t;
+      // Yang menempel hanya dilepas dari ANGKA: huruf besar yang ujungnya rusak ("INTERNATIONAL" di kop) bukan titik dua
+      const nilaiSesudah = sim.length >= 3 && /^[0-9(]/.test(String(sim[1].text || ""));
+      if (utuh && (sim.length === 1 || nilaiSesudah) && ocrMiripTitikDua(sim[0], acuan)) {
+        const [a, ...sisa] = sim;
+        // Bentuknya yang memastikan: titik dua ini diberi kepercayaan tinggi supaya menang di pemungutan suara
+        kata.push({ t: ":", c: Math.max(k.c, 90), x0: a.bbox.x0, y0: a.bbox.y0, x1: a.bbox.x1, y1: a.bbox.y1 });
+        if (sisa.length) {
+          const c = sisa.reduce((x, s) => x + (Number(s.confidence) || 0), 0) / sisa.length;
+          kata.push({
+            t: k.t.slice(String(a.text).length), c: Math.round(c) || k.c,
+            x0: sisa[0].bbox.x0, y0: Math.min(...sisa.map((s) => s.bbox.y0)), x1: k.x1, y1: Math.max(...sisa.map((s) => s.bbox.y1)),
+          });
+        }
+        return;
+      }
+      kata.push(k);
+    });
+  })));
   return kata;
 }
 
