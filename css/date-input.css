@@ -58,8 +58,9 @@ input[data-kotak-tanggal].kt-salah {
      baca-saja tanpa bingkai & ikon: memang nilai, bukan isian (tanggal
                kartu selesai, kartu bagi akun Viewer)
 
-   LEBARNYA SELEBAR TANGGALNYA (field-sizing) di mana pun: kartu, form,
-   kotak dialog, tabel isian -- ikonnya menempel di ujung tanggal. Sempat
+   LEBARNYA SELEBAR TANGGALNYA (field-sizing) di mana pun: form, kotak
+   dialog, tabel isian -- ikonnya menempel di ujung tanggal. Di kartu
+   lebarnya tetap, tapi sama persis (lihat KARTU JADWAL di bawah). Sempat
    dibuat mengisi sel di form: kotak tanggal selebar 300-an px untuk
    sepuluh angka. Ruang sisanya bukan diisi kotak, tapi diatur TATA
    LETAKNYA: baris tanggal di form jadwal merapat (.fl-tanggal,
@@ -108,6 +109,19 @@ input[data-kotak-tanggal].kt-nilai {
   input[data-kotak-tanggal].kt-nilai {
     width: calc(9.7ch + var(--kt-kiri) + var(--kt-kanan) + 2px);
   }
+}
+/* KARTU JADWAL: lebar TETAP selebar batas minimum di atas, bukan
+   field-sizing. Isinya di sana hanya tanggal utuh (8,3ch) atau petunjuk
+   "dd-mm-yyyy" (9,5ch), dan keduanya muat di 9,7ch -- jadi lebarnya sama
+   persis dengan field-sizing, diukur di semua lebar panel. Bedanya,
+   lebar kotak tidak lagi bergantung pada tata letak teks di dalamnya:
+   tanggal kartu dilaporkan kadang tidak tergambar (kosong, baru muncul
+   saat disorot tetikus), dan kotak yang ukurannya mengikuti isinya ikut
+   dicurigai, bersama pergantian jenis kotak sesudah kartu ditata
+   (atributKotakTanggal, js/ui/date-input.js). */
+.date-field > input[data-kotak-tanggal].kt-nilai {
+  field-sizing: fixed;
+  width: calc(9.7ch + var(--kt-kiri) + var(--kt-kanan) + 2px);
 }
 /* DI LUAR KARTU JADWAL (form, kotak dialog, tabel isian): setinggi kotak
    isian di sebelahnya (--ctl-h 38px; 32px di kotak kecil

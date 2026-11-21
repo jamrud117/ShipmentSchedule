@@ -12,7 +12,9 @@
    tertulis di index.html, yang dibuat render()/showPrompt()/baris-baris
    dinamis, dan yang baru muncul belakangan -- diubah menjadi kotak teks
    begitu masuk ke halaman (MutationObserver di bawah). Kode pemanggil
-   tidak perlu diubah dan tetap menulis `type="date"`.
+   tidak perlu diubah dan tetap menulis `type="date"`. Kecuali kartu
+   jadwal, yang digambar ulang terus-menerus: kotaknya ditulis langsung
+   dalam bentuk akhirnya (atributKotakTanggal -- lihat di sana kenapa).
 
    YANG TETAP SAMA BAGI KODE LAIN
 
@@ -187,26 +189,58 @@ function ktKomit(el, jalur) {
   return true;
 }
 
+/* KOTAK YANG SUDAH BERBENTUK AKHIR SEJAK DITULIS -- untuk markup yang
+   digambar ulang terus-menerus (kartu jadwal, js/render/cards.js).
+
+   Kotak `type="date"` baru diubah jadi kotak teks SESUDAH masuk ke
+   halaman (pengamat di bawah) -- di daftar jadwal, sesudah render()
+   memaksa peramban menata seluruh kartu (pewarisan tinggi, penanda
+   gulir). Tiap kotak sempat dibuat sebagai kotak tanggal bawaan lalu
+   diganti jenisnya. Tanggal di kartu dilaporkan kadang tidak tergambar
+   (kosong, baru muncul saat disorot tetikus), dan pergantian jenis di
+   tengah jalan itu salah satu yang dicurigai. Atribut di sini SAMA
+   dengan yang dipasang pasangKotakTanggal (teks dd-mm-yyyy, petunjuk,
+   size, tanpa isi otomatis & periksa ejaan): saat dirapikan tidak ada
+   yang berubah di layar, hanya pembaca/penyetel `value` ISO yang
+   dipasang. Bukan ISO baku -> kosong, seperti kotak bawaan. */
+function atributKotakTanggal(iso) {
+  const tampil = tanggalIsoSah(iso) ? fmtDate(iso) : "";
+  return `type="text" data-kotak-tanggal value="${tampil}" placeholder="dd-mm-yyyy" size="10" autocomplete="off" spellcheck="false"`;
+}
+
+/* Tanggal awal kotak yang datang sudah bertipe teks: kebalikan persis
+   fmtDate ("06-11-2026") atau ISO apa adanya -- keduanya tanpa batas
+   tahun 1900-2100 milik pembaca ketikan, supaya tanggal lama bertahun
+   lain tidak tampil kosong. Bentuk lain lewat pembaca ketikan. */
+function ktIsoAwal(teks) {
+  const s = String(teks == null ? "" : teks).trim();
+  if (tanggalIsoSah(s)) return s;
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(s);
+  if (m && tanggalIsoSah(`${m[3]}-${m[2]}-${m[1]}`)) return `${m[3]}-${m[2]}-${m[1]}`;
+  return bacaTanggalKetik(s);
+}
+
 function pasangKotakTanggal(el) {
   if (!el || el.nodeType !== 1 || KT_KEADAAN.has(el) || el.hasAttribute("data-kotak-tanggal-off")) return;
   if (el.tagName !== "INPUT") return;
-  /* Salinan (cloneNode) kotak yang sudah dirapikan datang sebagai teks
-     ber-data-kotak-tanggal tanpa keadaan: nilai awalnya dari atribut
-     value, yang selalu ISO. */
+  /* Datang sudah bertipe teks ber-data-kotak-tanggal tanpa keadaan --
+     markup atributKotakTanggal, atau salinan (cloneNode) kotak yang
+     sudah dirapikan: nilai awalnya dibaca dari teksnya. */
   const salinan = el.type !== "date";
   if (salinan && !el.hasAttribute("data-kotak-tanggal")) return;
-  const awal = salinan ? bacaTanggalKetik(ktMentah(el)) : ktMentah(el);
+  const awal = salinan ? ktIsoAwal(ktMentah(el)) : ktMentah(el);
 
   const k = { iso: "", tampil: "", judulAsli: el.getAttribute("title") || "", menungguChange: false, pewaktuSalah: 0 };
   KT_KEADAAN.set(el, k);
-  el.type = "text";
-  el.setAttribute("data-kotak-tanggal", "");
+  // Yang sudah benar tidak ditulis ulang (markup atributKotakTanggal: tidak ada yang berubah sama sekali)
+  if (el.type !== "text") el.type = "text";
+  if (!el.hasAttribute("data-kotak-tanggal")) el.setAttribute("data-kotak-tanggal", "");
   // Satu model untuk semua tanggal (lihat SATU MODEL di atas); kotak Dari/Sampai pemilih rentang tetap kotak biasa
-  if (!el.hasAttribute("data-kotak-tanggal-tanpa-ikon")) el.classList.add("kt-nilai");
+  if (!el.hasAttribute("data-kotak-tanggal-tanpa-ikon") && !el.classList.contains("kt-nilai")) el.classList.add("kt-nilai");
   if (!el.hasAttribute("placeholder")) el.placeholder = "dd-mm-yyyy";
   if (!el.hasAttribute("size")) el.size = 10;
-  el.setAttribute("autocomplete", "off");
-  el.setAttribute("spellcheck", "false");
+  if (el.getAttribute("autocomplete") !== "off") el.setAttribute("autocomplete", "off");
+  if (el.getAttribute("spellcheck") !== "false") el.setAttribute("spellcheck", "false");
 
   Object.defineProperty(el, "value", {
     configurable: true,

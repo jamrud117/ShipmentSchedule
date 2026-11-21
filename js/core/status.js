@@ -272,7 +272,7 @@ function ringkasDelayKapal(list, opsi) {
 
    IMPORT — yang menentukan tanggal IN FACTORY.
 
-     Kolom `actual` di buku Import berlabel "Estimated Delivery": itu
+     Kolom `actual` di buku Import berlabel "Est. Delivery": itu
      PERKIRAAN, dan perkiraan yang terlewati tidak berarti barangnya
      sudah sampai. Yang menyatakan barang benar-benar diterima cuma
      tanggal masuk pabrik.

@@ -145,7 +145,7 @@ function getFiltered() {
 
 /* Label opsi dropdown basis, dipakai juga oleh catatan saringan di
    bawah — supaya teksnya PERSIS sama dengan yang tertulis di
-   dropdown-nya sendiri (termasuk "Estimasi Delivery" vs "Stuffing"
+   dropdown-nya sendiri (termasuk "Est. Delivery" vs "Stuffing"
    yang berbeda per mode lewat ML().actual). */
 function dateRangeBasisLabel(basis) {
   if (basis === "etd") return "ETD";
@@ -501,6 +501,12 @@ function render() {
     lastKey = entry.key;
   });
   cardContainer.innerHTML = html;
+  /* Kotak tanggal kartu dirapikan SEKARANG, sebelum kartunya ditata
+     (wariskanTinggiKartu, pulihkanPenandaGulir) atau dibaca
+     (pulihkanFokusDaftar) -- bukan menunggu pengamat DOM sesudah tugas
+     ini selesai. Markupnya sudah berbentuk akhir (atributKotakTanggal),
+     jadi yang dipasang hanya pembaca/penyetel `value` ISO-nya. */
+  if (typeof pasangSemuaKotakTanggal === "function") pasangSemuaKotakTanggal(cardContainer);
   wariskanTinggiKartu(penanda);
 
   renderPaginationBar(flat.length);
@@ -646,7 +652,7 @@ function applyModeLabels() {
     : nilaiFilterStatusBawaan();
   filterStatusPernahDisetel = true;
   /* Opsi ke-3 dropdown rentang tanggal mengikuti label `actual` per
-     mode: "Estimated Delivery" (Import) / "Stuffing" (Export). ETA/ETD
+     mode: "Est. Delivery" (Import) / "Stuffing" (Export). ETA/ETD
      tidak berubah nama antar mode, jadi cukup opsi ini saja. */
   const optActual = $('#filterDateBasis option[value="actual"]');
   if (optActual) optActual.textContent = lbl.actual;

@@ -34,7 +34,7 @@
    Mesin ini menulis DUA kolom saja:
 
      eta     hanya saat Mode ETA = auto
-     actual  kolom "Estimated Delivery", hanya saat modenya auto
+     actual  kolom "Est. Delivery", hanya saat modenya auto
 
    Dan tidak pernah menulis:
 

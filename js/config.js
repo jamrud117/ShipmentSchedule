@@ -62,7 +62,7 @@ function buildModeLabels() {
     // Versi moda udara — dipakai applyTransportLabels() (requirement B: "kalau moda udara
     originAir: t("f.terminal.asal"),
     destinationAir: t("f.terminal.tujuan"),
-    actual: "Estimated Delivery",
+    actual: "Est. Delivery",
     showDuty: true,
     modalTitleNew: t("f.tambah.jadwal.import"),
     modalTitleEdit: t("f.edit.jadwal.import"),

@@ -315,7 +315,7 @@ function syncPredictionForm() {
       </div>
       <div class="pred-panel-col">
         <div class="pred-panel-label">
-          <span class="pred-layer-tag">${tt("Lapis 2–4", "Layers 2–4")}</span> Estimated Delivery
+          <span class="pred-layer-tag">${tt("Lapis 2–4", "Layers 2–4")}</span> Est. Delivery
           ${deliveryModeChipHtml(formDeliveryMode)}
           ${d && d.ok ? confidenceChipHtml(d.confidence, "") : ""}
         </div>
@@ -399,10 +399,10 @@ function renderRencanaMundurForm() {
   } else if (k && k.sampai) {
     baris.push(
       k.kind === "telat"
-        ? { kelas: "telat", ikon: "bi-exclamation-triangle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} lewat dari kebutuhan.`, `Estimated Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} past the need date.`) }
+        ? { kelas: "telat", ikon: "bi-exclamation-triangle-fill", teks: tt(`Est. Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} lewat dari kebutuhan.`, `Est. Delivery ${fmtDate(k.sampai)} — ${hari(-k.selisih)} past the need date.`) }
         : k.kind === "mepet"
-          ? { kelas: "mepet", ikon: "bi-exclamation-circle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — cadangan hanya ${hari(k.selisih)}.`, `Estimated Delivery ${fmtDate(k.sampai)} — only a ${hari(k.selisih)} margin.`) }
-          : { kelas: "aman", ikon: "bi-check-circle-fill", teks: tt(`Estimated Delivery ${fmtDate(k.sampai)} — cadangan ${hari(k.selisih)}.`, `Estimated Delivery ${fmtDate(k.sampai)} — ${hari(k.selisih)} margin.`) },
+          ? { kelas: "mepet", ikon: "bi-exclamation-circle-fill", teks: tt(`Est. Delivery ${fmtDate(k.sampai)} — cadangan hanya ${hari(k.selisih)}.`, `Est. Delivery ${fmtDate(k.sampai)} — only a ${hari(k.selisih)} margin.`) }
+          : { kelas: "aman", ikon: "bi-check-circle-fill", teks: tt(`Est. Delivery ${fmtDate(k.sampai)} — cadangan ${hari(k.selisih)}.`, `Est. Delivery ${fmtDate(k.sampai)} — ${hari(k.selisih)} margin.`) },
     );
   }
   // ETD yang berlaku vs batasnya -- selama barangnya belum sampai

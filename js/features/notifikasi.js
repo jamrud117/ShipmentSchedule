@@ -319,7 +319,7 @@ function tandaiNotifDibaca(kunciDaftar) {
 const NOTIF_JENIS_TAMPIL = {
   etd: { ikon: "bi-arrow-up-right", acuan: "ETD", label: () => tt("Berangkat", "Departs") },
   eta: { ikon: "bi-arrow-down-left", acuan: "ETA", label: () => tt("Tiba", "Arrives") },
-  delivery: { ikon: "bi-truck", acuan: "Estimated Delivery", label: () => tt("Dikirim ke pabrik", "Delivery to factory") },
+  delivery: { ikon: "bi-truck", acuan: "Est. Delivery", label: () => tt("Dikirim ke pabrik", "Delivery to factory") },
 };
 
 function notifJudul(n) {

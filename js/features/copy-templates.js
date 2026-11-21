@@ -315,7 +315,7 @@ function reportDetailPairs(s, mode) {
     ];
   }
   /* Import: yang dilaporkan PERKIRAAN tiba di pabrik — kolom `actual`
-     yang di buku ini berlabel "Estimated Delivery".
+     yang di buku ini berlabel "Est. Delivery".
 
      Sengaja BUKAN In Factory: kolom itu baru terisi setelah barangnya
      benar-benar masuk, sementara Report justru daftar yang BELUM tiba.

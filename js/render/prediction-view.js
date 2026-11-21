@@ -378,7 +378,7 @@ function predictionDetailHtml(s) {
         <div class="pred-detail-val">${fmtDate(predictionEtaBasis(s))} ${etaModeChipHtml(mode)}</div>
       </div>
       <div class="pred-detail-row">
-        <div class="pred-detail-key">Estimated Delivery</div>
+        <div class="pred-detail-key">Est. Delivery</div>
         <div class="pred-detail-val">
           ${d.ok ? `<b>${fmtDate(d.date)}</b>` : `<span class="pred-muted">${escapeHtml(d.reason)}</span>`}
           ${d.ok ? `<span class="pred-muted">${tt("Sumber", "Source")}: ${escapeHtml(d.sourceLabel)}</span> ${confidenceChipHtml(d.confidence, tt("Keyakinan: ", "Confidence: "))}` : ""}

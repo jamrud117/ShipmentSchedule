@@ -92,7 +92,7 @@ function delayStripHtml(s) {
   const kotak = (kolom, label, rencana, basis) => `
         <div class="date-field">
           <label for="${idTglKartu(s, kolom)}">${label}</label>
-          <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${atributKendaliKartu("readonly")}>
+          <input ${atributKotakTanggal(s[kolom])} class="kt-nilai" id="${idTglKartu(s, kolom)}" data-action="date" data-field="${kolom}" data-id="${s.id}"${atributKendaliKartu("readonly")}>
           <div class="date-caption">${delayDeltaText(rencana, s[kolom], basis)}</div>
         </div>`;
   return `
@@ -141,8 +141,8 @@ function tagKebutuhanHtml(s) {
   const tgl = fmtDate(k.butuh);
   const judul = escapeAttr(
     k.sampai
-      ? tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`, `Needed at the factory ${tgl} · Estimated Delivery ${fmtDate(k.sampai)}`)
-      : tt(`Dibutuhkan di pabrik ${tgl} · Estimated Delivery belum bisa dihitung`, `Needed at the factory ${tgl} · Estimated Delivery not available yet`),
+      ? tt(`Dibutuhkan di pabrik ${tgl} · Est. Delivery ${fmtDate(k.sampai)}`, `Needed at the factory ${tgl} · Est. Delivery ${fmtDate(k.sampai)}`)
+      : tt(`Dibutuhkan di pabrik ${tgl} · Est. Delivery belum bisa dihitung`, `Needed at the factory ${tgl} · Est. Delivery not available yet`),
   );
   if (k.kind === "telat")
     return `<span class="tag tag-butuh tag-butuh--telat" title="${judul}"><i class="bi bi-alarm"></i> ${tt(`Telat ${-k.selisih} hari dari kebutuhan ${tgl}`, `${-k.selisih} day${k.selisih === -1 ? "" : "s"} past the need date ${tgl}`)}</span>`;
@@ -412,7 +412,7 @@ function kotakTanggalKartu(s, kolom, label, opsi) {
   const butir = `${hariKartuHtml(s[kolom], o.jam)}${o.keterangan || ""}`;
   return `<div class="${kelas}">
         <div class="date-kepala"><label for="${idTglKartu(s, kolom)}">${label}${ket}</label>${o.lencana || ""}</div>
-        <input type="date" class="kt-nilai" id="${idTglKartu(s, kolom)}" value="${s[kolom] || ""}" data-action="date" data-field="${kolom}" data-id="${s.id}"${judul}${atributKendaliKartu("readonly")}>
+        <input ${atributKotakTanggal(s[kolom])} class="kt-nilai" id="${idTglKartu(s, kolom)}" data-action="date" data-field="${kolom}" data-id="${s.id}"${judul}${atributKendaliKartu("readonly")}>
         ${butir ? `<div class="date-caption"><div class="date-caption-isi">${butir}</div></div>` : ""}
       </div>`;
 }
@@ -577,7 +577,7 @@ function collapsedDatesHtml(s) {
   const kotak = (label, nilai) => `
       <div class="date-field date-field--locked">
         <label for="${idTglKartu(s, "kunci-" + label)}">${label}</label>
-        <input type="date" class="kt-nilai" id="${idTglKartu(s, "kunci-" + label)}" value="${nilai || ""}" readonly tabindex="-1"
+        <input ${atributKotakTanggal(nilai)} class="kt-nilai" id="${idTglKartu(s, "kunci-" + label)}" readonly tabindex="-1"
                title="${tt("Hanya baca. Tekan tombol pensil untuk mengubahnya.", "Read-only. Press the pencil button to change it.")}${catatan}">
       </div>`;
 

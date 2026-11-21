@@ -1331,7 +1331,7 @@ async function simpanDocStep(s, progresBaru, lampiran) {
     const berubah = await refreshShipmentPrediction(s);
     if (berubah.includes("actual")) {
       const d = predictDelivery(s);
-      pesanPrediksi = ` Estimated Delivery → ${fmtDate(s.actual)} (${d.sourceLabel}).`;
+      pesanPrediksi = ` Est. Delivery → ${fmtDate(s.actual)} (${d.sourceLabel}).`;
     }
     // Sandar/Manifest di kiriman ini juga kedatangan kiriman lain di kapal yang sama
     const ikut = await segarkanKirimanSekapal(s);
