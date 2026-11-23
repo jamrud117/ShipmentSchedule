@@ -338,6 +338,39 @@ function lengkapiKodeBarang(newItems, oldItems, lapisan) {
   });
 }
 
+/* GOODS CATEGORY (Jenis Barang) TIDAK DISENTUH IMPOR DRAFT EXCEL CEISA.
+
+   Draft CEISA tidak memuat kategori ini: yang tertulis di barangnya hanya
+   bawaan buku (newItem: BAHAN BAKU / BARANG JADI), dan bawaan itu dulu
+   menimpa pilihan di form -- SPAREPART, BARANG MODAL, dst. harus dipilih
+   ulang tiap kali draft diimpor. Barang draft kini memakai Jenis Barang
+   barang lamanya: nama sama, lalu nama mirip; sisanya menurut urutan bila
+   jumlah barangnya sama (draft disusun dari invoice yang sama). Barang
+   yang tetap tanpa pasangan memakai jenis yang dipakai SEMUA barang lama
+   bila seragam -- juga baris yang belum diisi, yang jenisnya dipilih lebih
+   dulu --, selain itu bawaan buku. */
+function pertahankanJenisBarang(newItems, oldItems) {
+  const semua = (oldItems || []).filter(Boolean);
+  if (!semua.length || !newItems.length) return newItems;
+  const jenis = (it) => normalisasiJenisBarang(it && it.jenisBarang);
+  const terisi = semua.filter(barisBarangTerisi);
+  let pasangan = terisi.length
+    ? pasangkanBarangLama(newItems, terisi.map((it) => ({ it, i: semua.indexOf(it) })), [COCOK_NAMA, COCOK_MIRIP])
+    : newItems.map(() => null);
+  if (terisi.length === newItems.length) {
+    const dipakai = new Set(pasangan.filter(Boolean));
+    const sisa = terisi.filter((it) => !dipakai.has(it));
+    let k = 0;
+    pasangan = pasangan.map((o) => o || sisa[k++] || null);
+  }
+  const ragam = [...new Set((terisi.length ? terisi : semua).map(jenis))];
+  const seragam = ragam.length === 1 ? ragam[0] : "";
+  return newItems.map((it, i) => {
+    const pilih = (pasangan[i] && jenis(pasangan[i])) || seragam;
+    return pilih ? Object.assign({}, it, { jenisBarang: pilih }) : it;
+  });
+}
+
 /* Data PIB/PEB per barang (item.dataPabean, core/data-pabean.js) ikut
    barang lamanya -- dicocokkan seperti harga satuan di bawah: berkas yang
    tidak membawanya (CIPL, invoice) tidak menghapusnya, dan isian yang
@@ -777,11 +810,14 @@ function applyImportedBcData(parsed) {
         const draftCeisa = src === "excel";
         const jaga = preserveUnitPrices(jagaNama.items, draftItems, { ketat: draftCeisa });
         const lapisLama = draftCeisa ? [COCOK_NAMA, COCOK_MIRIP] : undefined;
-        draftItems = pertahankanDataPabeanBarang(
-          lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, draftItems, src), draftItems, lapisLama),
-          draftItems,
+        const barangLama = draftItems;
+        const barangBaru = pertahankanDataPabeanBarang(
+          lengkapiKodeBarang(preserveDimensionsForCeisa(jaga.items, barangLama, src), barangLama, lapisLama),
+          barangLama,
           lapisLama,
         );
+        // Goods Category (Jenis Barang) tidak disentuh draft Excel CEISA
+        draftItems = draftCeisa ? pertahankanJenisBarang(barangBaru, barangLama) : barangBaru;
         if (jaga.kept) {
           notes.push(
             t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),
