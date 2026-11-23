@@ -396,6 +396,32 @@ function rapikanDataPabeanBarang(dp) {
 const adaDataPabean = (dp) => Object.keys(rapikanDataPabean(dp)).length > 0;
 const adaDataPabeanBarang = (dp) => Object.keys(rapikanDataPabeanBarang(dp)).length > 0;
 
+/* NILAI BAWAAN PER BARANG. PIB: Metode Penentuan Nilai Pabean METODE 1
+   (nilai transaksi barang yang bersangkutan) & Statement Perbedaan Harga
+   T (tidak) -- isian hampir setiap PIB. Seperti nilai bawaan header:
+   isian barang yang KOSONG berlaku sebagai nilai ini (editor pena barang
+   menampilkannya terpilih, Cek PIB/PEB membandingkannya dengan draft);
+   isian lain yang dipilih tetap menang. Yang tersimpan di barang hanya
+   isian yang BERBEDA dari bawaan (dpBarangTanpaBawaan), jadi barang lama
+   ikut memakainya tanpa diubah satu per satu. */
+const DP_BARANG_BAWAAN = { pib: { metodeNilai: "METODE 1", bedaHargaLevel: "T" }, peb: {} };
+function dpBarangEfektif(dp, mode) {
+  const d = rapikanDataPabeanBarang(dp);
+  const bawaan = DP_BARANG_BAWAAN[dpDok(mode)] || {};
+  Object.keys(bawaan).forEach((k) => {
+    if (!dpAda(d[k])) d[k] = bawaan[k];
+  });
+  return d;
+}
+function dpBarangTanpaBawaan(dp, mode) {
+  const d = rapikanDataPabeanBarang(dp);
+  const bawaan = DP_BARANG_BAWAAN[dpDok(mode)] || {};
+  Object.keys(bawaan).forEach((k) => {
+    if (d[k] === bawaan[k]) delete d[k];
+  });
+  return d;
+}
+
 /* Gabung hasil baca dokumen ke data yang ada: isian dokumen yang BERISI
    menang (dokumen pabean adalah sumber resminya), isian yang tidak
    terbaca tidak menghapus yang sudah ada. */

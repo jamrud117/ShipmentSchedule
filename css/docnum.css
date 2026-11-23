@@ -3349,6 +3349,23 @@ button.dn-bayar--lunas:hover {
 }
 /* Dasar tanggal selebar pilihannya; pemicu rentang mengisi sisanya dan
    turun ke baris sendiri kalau dialognya sempit. */
+/* Format + Tahun rekap (Invoice Summary) sebaris; petunjuknya di bawah
+   keduanya. Tanpa tahun (Payment Plan) Format mengisi barisnya. */
+.fex-format-baris {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+.fex-format-baris > .fex-bidang-format {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.fex-format-baris > .fex-bidang-tahun {
+  flex: 0 0 150px;
+}
+.fex-format-baris > .fex-petunjuk-tahun {
+  flex: 1 1 100%;
+}
 .fex-tanggal {
   display: flex;
   flex-wrap: wrap;
@@ -3450,6 +3467,16 @@ button.dn-bayar--lunas:hover {
 @media (max-width: 479.98px) {
   .fex-tanggal .fex-dasar {
     flex: 1 1 100%;
+  }
+  /* ponsel: Tahun rekap turun ke bawah Format, selebar barisnya */
+  .fex-format-baris {
+    row-gap: 14px;
+  }
+  .fex-format-baris > .fex-bidang-tahun {
+    flex: 1 1 100%;
+  }
+  .fex-format-baris > .fex-petunjuk-tahun {
+    margin-top: -9px;
   }
 }
 /* Ponsel sempit: Reset turun ke baris sendiri di bawah Batal & Unduh

@@ -13,6 +13,8 @@
    fasilitasnya. Yang diisi di sini item.dataPabean (DP_BARANG): PIB
    tarif BM & PPh, metode penentuan nilai, perbedaan harga & voluntary
    declaration; PEB jenis ekspor, daerah asal, HE & tarif bea keluar.
+   Isian kosong tampil dengan nilai bawaan barang (DP_BARANG_BAWAAN: PIB
+   METODE 1 & T); yang disimpan hanya isian yang berbeda darinya.
    Pungutan barang ini dihitung ulang setiap tarifnya diketik.
 ================================================================== */
 
@@ -34,7 +36,8 @@ function bukaEditorBarangDp(idx) {
 
 function dpbbMuat(idx) {
   dpbbIdx = idx;
-  dpbbIsi = rapikanDataPabeanBarang(draftItems[idx].dataPabean);
+  // Isian kosong tampil dengan nilai bawaannya (PIB: METODE 1, T -- dpBarangEfektif)
+  dpbbIsi = dpBarangEfektif(draftItems[idx].dataPabean, activeMode);
   dpbbAwal = JSON.stringify(dpbbIsi);
   dpbbTanyaTutup = false;
   dpbbRender();
@@ -43,12 +46,15 @@ function dpbbMuat(idx) {
 function dpbbSimpan() {
   const it = draftItems[dpbbIdx];
   if (!it) return;
-  const d = rapikanDataPabeanBarang(dpbbIsi);
+  // Tidak ada yang diubah: barang tidak disentuh (nilai bawaan yang tampil tidak ikut tertulis)
+  if (!dpbbBerubah()) return;
+  // Yang disimpan hanya isian yang berbeda dari nilai bawaan barang
+  const d = dpBarangTanpaBawaan(dpbbIsi, activeMode);
   // Tarif BM yang diganti di sini = isian sendiri (tarif-hs.js), sama dengan kolom Tarif BM di Daftar Barang
   if (String(d.tarifBm) !== String(rapikanDataPabeanBarang(it.dataPabean).tarifBm)) delete it._tarifOtomatis;
   if (Object.keys(d).length) it.dataPabean = d;
   else delete it.dataPabean;
-  dpbbAwal = JSON.stringify(d);
+  dpbbAwal = JSON.stringify(rapikanDataPabeanBarang(dpbbIsi));
   const baris = $(`#itemTableBody tr[data-idx="${dpbbIdx}"]:not(.item-fac-row)`);
   if (baris && typeof tulisKotakTarifBm === "function") tulisKotakTarifBm(baris, it);
   // Tarif BM / PPh barang ikut menentukan Bea & Pajak Impor di Kepabeanan & Biaya

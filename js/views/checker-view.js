@@ -1400,7 +1400,9 @@ function cekBarisDataPabean(s, bc, isPeb, decl) {
 function cekBarisDataPabeanBarang(no, it, bc, sumber, isPib) {
   if (!bc || !bc.lembar) return [];
   const mode = isPib ? "import" : "export";
-  const a = rapikanDataPabeanBarang(it.dataPabean);
+  const tersimpan = rapikanDataPabeanBarang(it.dataPabean);
+  // Isian barang yang kosong = nilai bawaan barang (PIB: METODE 1, T -- DP_BARANG_BAWAAN)
+  const a = dpBarangEfektif(it.dataPabean, mode);
   const coo = isPib && barangPakaiCoo(it);
   if (coo) a.tarifBm = 0;
   const b = cekDpDraft(bc, mode).perSeri.get(kunciSeri(no)) || {};
@@ -1426,6 +1428,10 @@ function cekBarisDataPabeanBarang(no, it, bc, sumber, isPib) {
       if (pref) r.expected_note = [r.expected_note, pref].filter(Boolean).join(" ");
       if (coo && f.k === "tarifBm" && r && r.status === "MISMATCH")
         r.expected_note = [r.expected_note, tt("Barang ini memakai COO di jadwal, jadi BM 0%.", "This item uses a COO on the schedule, so its BM is 0%.")].filter(Boolean).join(" ");
+      // Jadwal memakai nilai bawaan barang yang berbeda dengan draft: sebut asalnya & cara mengubahnya
+      if (r && r.status === "MISMATCH" && !dpAda(tersimpan[f.k]) && dpAda(a[f.k]))
+        r.expected_note = [r.expected_note, tt("Jadwal memakai nilai bawaan (belum diisi). Ubah di tombol pena barang ini bila nilai draft yang benar.",
+          "The schedule uses the default value (not filled in). Change it with this item's pencil button if the draft's value is right.")].filter(Boolean).join(" ");
       return;
     }
     const sama = cekSamaDp(berlaku, b[f.k], "angka");

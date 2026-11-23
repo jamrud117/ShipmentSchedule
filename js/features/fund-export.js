@@ -6,7 +6,8 @@
    Tombol Export di riwayat Pengajuan Dana (juga di tab Summary; tab
    Report punya unduhan sendiri) membuka kotak dialog dengan SARINGANNYA
    SENDIRI -- data yang diekspor dipilih di sana, lepas dari saringan
-   riwayat di belakangnya:
+   riwayat di belakangnya -- dan pilihan FORMAT berkasnya (Payment Plan /
+   Invoice Summary, lihat di bawah):
      - Status bayar: Semua / Lunas / Belum Lunas (payload.paidAt);
      - Vendor ("Dibayarkan Kepada"): ejaan yang hanya beda huruf besar /
        tanda baca ("PT. WIDE LOGISTICS", "PT WIDE LOGISTICS") satu vendor;
@@ -25,40 +26,101 @@
    batas satu permintaan Supabase) -- pengajuan yang baru terbit langsung
    ikut; saringan dihitung di aplikasi, jadi mengganti pilihan instan.
 
-   BERKAS: satu lembar "Fund Request", kolom berurutan seperti diminta:
-     No | Subject | Nominal | PIC | Vendor Name | Invoice No. | Invoice Date | Invoice Due Date
-   No = nomor urut baris; Subject = Rincian (Subject pada surat cetak);
-   Nominal = jumlah akhir pengajuan (frTotalPengajuan: angka yang sama
-   dengan "Terbilang" di surat, kolom Nilai di riwayat, Cost di Summary);
-   PIC = pembuat pengajuan (Drafter / "Made by" di surat); Invoice No. =
-   isi kolom Nomor Billing/Invoice di riwayat (Billing -> Nomor Billing;
-   selainnya No. Invoice + invoice / debit note tambahan, satu nomor per
-   baris di selnya); Invoice Due Date = Jatuh Tempo invoice. Tanggal =
-   tanggal Excel sungguhan (dd-mm-yyyy), Nominal = angka, nomor = TEKS
-   (nomor billing 15 angka tidak berubah jadi 6,4E+14). Judul & isi rata
-   tengah, kecuali Subject (rata kiri, tidak dibungkus, kolom selebar
-   kalimatnya). Urut menurut tanggal yang dipakai saringan, terlama dulu.
-   Langsung di bawah tabel baris TOTAL: SUBTOTAL(109) -- ikut menyusut
-   kalau tabelnya disaring lagi di Excel; mata uang campuran dijumlah per
-   mata uang dan tiap nominal berawalan kodenya ("USD 1,250.00").
+   FORMAT (pilihan "Format" di dialog, bertahan selama halaman terbuka;
+   Reset saringan tidak mengubahnya):
+
+   1. PAYMENT PLAN (format Payment Plan finance) -- lembar "Payment Plan":
+        NO | SUBJECT | NOMINAL | INVOICE DUE DATE | PIC | VENDOR NAME | INVOICE NO. | INVOICE DATE
+      Semua judul kolom (kedua format) HURUF KAPITAL.
+      No = nomor urut; Subject = Rincian (Subject surat cetak); Nominal =
+      jumlah akhir pengajuan (frTotalPengajuan: angka "Terbilang" di surat,
+      Nilai di riwayat, Cost di Summary); Invoice Due Date = jatuh tempo
+      invoice, tepat di kanan Nominal; PIC = pembuat pengajuan (Drafter /
+      "Made by" di surat); Invoice No. = kolom Nomor Billing/Invoice riwayat
+      (Billing -> Nomor Billing; selainnya No. Invoice + invoice / debit
+      note tambahan, satu nomor per baris di selnya). Tanggal = tanggal
+      Excel sungguhan (dd-mm-yyyy), Nominal = angka, nomor = TEKS (nomor
+      billing 15 angka tidak jadi 6,4E+14). Judul & isi rata tengah, kecuali
+      Subject (rata kiri, tidak dibungkus, kolom selebar kalimatnya).
+      Langsung di bawah tabel baris TOTAL: SUBTOTAL(109) -- ikut menyusut
+      kalau tabelnya disaring di Excel; mata uang campuran dijumlah per mata
+      uang dan tiap nominal berawalan kodenya ("USD 1,250.00").
+
+   2. INVOICE SUMMARY (format lembar akunting INVOICE SUMMARY) -- lihat
+      fexSusunInvoiceSummary.
+
+   Kedua format diurutkan menurut tanggal yang dipakai saringan, terlama
+   dulu.
 ------------------------------------------------------------------ */
 
-/* Kolom berkas, kiri ke kanan. Judul & isi RATA TENGAH, kecuali Subject:
-   rata kiri dan TIDAK dibungkus -- kolomnya selebar kalimat terpanjang
-   (fexLebarKolom), seperti contoh berkas pengguna. Vendor Name & Invoice
-   No. dibungkus: invoice / debit note tambahan masing-masing di baris sendiri
-   dalam selnya (" / " membuat Excel memotong di tanda hubung nomornya:
-   "DN-" | "77/XI/2026"). `maks` = batas lebar kolom. */
+/* PAYMENT PLAN: kolom kiri ke kanan. Judul & isi RATA TENGAH, kecuali
+   Subject: rata kiri dan TIDAK dibungkus -- kolomnya selebar kalimat
+   terpanjang (fexLebarKolom), seperti contoh berkas pengguna. Invoice Due
+   Date tepat di kanan Nominal (format Payment Plan finance). Vendor Name &
+   Invoice No. dibungkus: invoice / debit note tambahan masing-masing di
+   baris sendiri dalam selnya (" / " membuat Excel memotong di tanda hubung
+   nomornya: "DN-" | "77/XI/2026"). `maks` = batas lebar kolom. */
 const FEX_KOLOM = [
-  { judul: "No", ambil: (b, i) => i + 1 },
-  { judul: "Subject", ambil: (b) => b.subject, kiri: true, maks: 150 },
-  { judul: "Nominal", ambil: (b) => b.nominal, uang: true },
+  { judul: "NO", ambil: (b, i) => i + 1 },
+  { judul: "SUBJECT", ambil: (b) => b.subject, kiri: true, maks: 150 },
+  { judul: "NOMINAL", ambil: (b) => b.nominal, uang: true },
+  { judul: "INVOICE DUE DATE", ambil: (b) => b.jatuhTempo, tanggal: true },
   { judul: "PIC", ambil: (b) => b.drafter, maks: 30 },
-  { judul: "Vendor Name", ambil: (b) => b.vendor, bungkus: true, maks: 40 },
-  { judul: "Invoice No.", ambil: (b) => b.nomorDaftar.join("\n"), bungkus: true, maks: 40 },
-  { judul: "Invoice Date", ambil: (b) => b.tglInvoice, tanggal: true },
-  { judul: "Invoice Due Date", ambil: (b) => b.jatuhTempo, tanggal: true },
+  { judul: "VENDOR NAME", ambil: (b) => b.vendor, bungkus: true, maks: 40 },
+  { judul: "INVOICE NO.", ambil: (b) => b.nomorDaftar.join("\n"), bungkus: true, maks: 40 },
+  { judul: "INVOICE DATE", ambil: (b) => b.tglInvoice, tanggal: true },
 ];
+
+/* INVOICE SUMMARY: kolom A-K tabel lembar akunting, urutan & lebar PERSIS
+   lembar contohnya; judulnya kapital semua ("Paid Date" lembar aslinya ->
+   PAID DATE), seperti judul rekap per bulannya; "COST(RP)" -> COST (bisa
+   rupiah atau USD). Isinya = salinan "Salin ke Invoice Summary" (invsumSel,
+   fund-invoice-summary.js), jadi keduanya selalu sama; COST = Nominal
+   Payment Plan (sama dengan total dibayar invsumSel untuk rupiah, dan tetap
+   bersen untuk mata uang lain). */
+const FEX_INVSUM_KOLOM = [
+  { judul: "NO", lebar: 6.29 },
+  { judul: "INVOICE DATE", lebar: 16.29, tanggal: true },
+  { judul: "DUE DATE", lebar: 12.43, tanggal: true },
+  { judul: "PAID DATE", lebar: 12.43, tanggal: true },
+  { judul: "INVOICE NUMBER", lebar: 23.43, teks: true, bungkus: true },
+  { judul: "COMPANY", lebar: 28.43 },
+  { judul: "CUSTOMER", lebar: 13.57 },
+  { judul: "DETAILS", lebar: 37.86, bungkus: true },
+  { judul: "COST", lebar: 18.29, uang: true },
+  { judul: "EXPENSES CATEGORY", lebar: 28.29, daftar: "EXPENSES_CATEGORY" },
+  { judul: "TRANSPORT MODE", lebar: 20.71, daftar: "TRANSPORT_MODE" },
+];
+/* Kolom L CURRENCY (IDR / USD) -- HANYA bila pengajuan yang diekspor
+   bermata uang campuran: rekap per bulan menjumlah per mata uang dengan
+   rumus, dan rumus butuh mata uang tiap baris (format sel COST tidak bisa
+   dibaca rumus). Ikut tabel, jadi tetap benar walau tabelnya diurutkan /
+   disaring di Excel; kolom A-K tetap sejajar lembar aslinya. */
+const FEX_INVSUM_MATA_UANG = { judul: "CURRENCY", lebar: 12.43 };
+// Mata uang: rupiah dulu, lainnya abjad
+const fexUrutMataUang = (daftar) => [...new Set(daftar)].sort((a, b) => (a === "IDR" ? -1 : b === "IDR" ? 1 : a.localeCompare(b)));
+
+// Lembar CATEGORY: pilihan kolom J & K (urutan seperti lembar contohnya)
+const FEX_INVSUM_DAFTAR = [
+  ["EXPENSES CATEGORY", "EXPENSES_CATEGORY", ["IMPORT DUTY TAX", "IMPORT DUTY TAX + STORAGE", "FREIGHT CHARGE", "STORAGE", "OTHER"]],
+  ["TRANSPORT MODE", "TRANSPORT_MODE", ["AIR EXPORT", "SEA EXPORT", "AIR IMPORT", "SEA IMPORT", "TRUCKING"]],
+];
+const FEX_INVSUM_NAVY = "FF002060";
+const FEX_INVSUM_TEPI = "FF7F7F7F"; // tema "Text 1" 50% -- garis tabel lembar contohnya
+// Format akuntansi rupiah lembar contohnya: COST bersen, rekap bulanan tanpa sen
+const FEX_RP = '_-[$Rp-3809]* #,##0.00_-;\\-[$Rp-3809]* #,##0.00_-;_-[$Rp-3809]* "-"??_-;_-@_-';
+const FEX_RP_BULAT = '_-[$Rp-421]* #,##0_-;\\-[$Rp-421]* #,##0_-;_-[$Rp-421]* "-"??_-;_-@_-';
+const FEX_BULAN = ["JAN.", "FEB.", "MAR.", "APR.", "MAY", "JUNE", "JULY", "AUG.", "SEPT.", "OCT.", "NOV.", "DEC."];
+
+const FEX_FORMAT = {
+  paymentPlan: { label: "Payment Plan", berkas: "Payment_Plan", kolom: () => FEX_KOLOM.map((k) => k.judul) },
+  invoiceSummary: { label: "Invoice Summary", berkas: "Invoice_Summary", kolom: () => FEX_INVSUM_KOLOM.map((k) => k.judul) },
+};
+let fexFormatPilih = "paymentPlan";
+const fexFormatSah = (f) => (FEX_FORMAT[f] ? f : "paymentPlan");
+/* Tahun rekap bulanan Invoice Summary: "" = otomatis (fexTahunOtomatis);
+   pilihan pengguna bertahan sampai rentang tanggal diubah atau Reset. */
+let fexTahunPilih = "";
 const FEX_SARINGAN_AWAL = { bayar: "", vendor: "", dasar: "invoice", dari: "", sampai: "" };
 const fexSaringan = Object.assign({}, FEX_SARINGAN_AWAL);
 const FEX_PRATINJAU = 5; // baris contoh di dialog
@@ -86,6 +148,7 @@ function fexBaris(r) {
   const mataUang = String(p.currency || "IDR").trim().toUpperCase() || "IDR";
   return {
     id: r.id,
+    asli: r, // baris document_numbers -- sumber kolom Invoice Summary (invsumSel)
     nomorSurat: String(r.doc_number || ""),
     subject: String(p.notes || "").trim(),
     nominal: fexBulat(typeof frTotalPengajuan === "function" ? frTotalPengajuan(p) : 0, mataUang),
@@ -97,6 +160,7 @@ function fexBaris(r) {
     nomorDaftar: fexNomorTagihan(p),
     nomor: fexNomorTagihan(p).join(" / "), // pratinjau dialog, seperti di riwayat
     tglInvoice: fexIso(p.invoiceDate),
+    tglBayar: fexIso(p.paidAt), // Paid Date -- dasar rekap bulanan Invoice Summary
     lunas: !!p.paidAt,
   };
 }
@@ -155,11 +219,12 @@ function fexTotal(baris) {
     .sort((a, b) => (a[0] === "IDR" ? -1 : b[0] === "IDR" ? 1 : a[0].localeCompare(b[0])));
 }
 
-/* Nama berkas menyebut saringannya: Fund_Request_Unpaid_PT_WIDE_LOGISTICS_Due_2026-11-01_2026-11-30.xlsx.
-   Tanpa rentang tanggal: tanggal ekspor. */
-function fexNamaBerkas(f, daftarVendor, hariIni) {
+/* Nama berkas menyebut format & saringannya:
+   Payment_Plan_Unpaid_PT_WIDE_LOGISTICS_Due_2026-11-01_2026-11-30.xlsx,
+   Invoice_Summary_Paid_2026-11-24.xlsx. Tanpa rentang tanggal: tanggal ekspor. */
+function fexNamaBerkas(f, daftarVendor, hariIni, format) {
   const s = f || {};
-  const bagian = ["Fund_Request"];
+  const bagian = [FEX_FORMAT[fexFormatSah(format)].berkas];
   if (s.bayar) bagian.push(s.bayar === "lunas" ? "Paid" : "Unpaid");
   if (s.vendor) {
     const v = (daftarVendor || []).find((x) => x.kunci === s.vendor);
@@ -168,6 +233,30 @@ function fexNamaBerkas(f, daftarVendor, hariIni) {
   if (s.dari || s.sampai) bagian.push(`${s.dasar === "jatuhTempo" ? "Due" : "Inv"}_${s.dari || s.sampai}_${s.sampai || s.dari}`);
   else bagian.push(hariIni || todayISO());
   return bagian.filter(Boolean).join("_") + ".xlsx";
+}
+
+/* PILIHAN TAHUN rekap bulanan: tahun Paid Date yang ada di seluruh
+   Pengajuan Dana (rekap menjumlah menurut Paid Date, seperti lembar
+   INVOICE SUMMARY) + tahun berjalan -- tahun baru otomatis muncul begitu
+   ada pembayaran di tahun itu. Terbaru dulu. */
+function fexDaftarTahun(baris, tambahan) {
+  const th = new Set([String(new Date().getFullYear())]);
+  (baris || []).forEach((b) => b.tglBayar && th.add(b.tglBayar.slice(0, 4)));
+  if (tambahan) th.add(String(tambahan));
+  return [...th].sort().reverse();
+}
+
+/* Tahun bawaan: rentang tanggal saringan yang berada dalam SATU tahun ->
+   tahun itu (ekspor Desember 2026 di bulan Januari tetap merekap 2026);
+   selain itu tahun Paid Date terbaru di baris yang diekspor; tanpa
+   pembayaran sama sekali -> tahun berjalan. */
+function fexTahunOtomatis(hasil, f) {
+  const s = f || {};
+  const a = String(s.dari || s.sampai || "").slice(0, 4);
+  const z = String(s.sampai || s.dari || "").slice(0, 4);
+  if (a && a === z) return a;
+  const bayar = (hasil || []).map((b) => b.tglBayar).filter(Boolean).sort();
+  return bayar.length ? bayar[bayar.length - 1].slice(0, 4) : String(new Date().getFullYear());
 }
 
 async function fexAmbilSemua() {
@@ -224,14 +313,19 @@ function fexLebarKolom(k, baris, campur) {
   return Math.min(Math.max(k.judul.length + 5, isi, 6), k.maks || 60);
 }
 
-function fexSusunWorkbook(baris) {
+// Berkas menurut format pilihan dialog; opsi.tahun = tahun rekap bulanan Invoice Summary
+function fexSusunWorkbook(baris, format, opsi) {
+  return fexFormatSah(format) === "invoiceSummary" ? fexSusunInvoiceSummary(baris, opsi) : fexSusunPaymentPlan(baris);
+}
+
+function fexSusunPaymentPlan(baris) {
   const NAVY = typeof XL_NAVY !== "undefined" ? XL_NAVY : "FF0A1B33";
   const TEPI = typeof XL_TEPI !== "undefined" ? XL_TEPI : "FFDFE5ED";
   const TINTA = "FF1C2B45";
   const wb = new ExcelJS.Workbook();
   wb.creator = "EXIM DDI";
   wb.created = new Date();
-  const ws = wb.addWorksheet("Fund Request", {
+  const ws = wb.addWorksheet("Payment Plan", {
     views: [{ state: "frozen", ySplit: 1 }],
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
@@ -296,6 +390,188 @@ function fexSusunWorkbook(baris) {
   return wb;
 }
 
+/* Format akuntansi COST: rupiah seperti lembar contohnya; mata uang lain
+   (USD) memakai kodenya sendiri supaya tidak terbaca rupiah. */
+function fexFormatBiaya(mataUang) {
+  if (mataUang === "IDR") return FEX_RP;
+  const kode = `"${String(mataUang).replace(/"/g, "")} "`;
+  return `_-${kode}* #,##0.00_-;\\-${kode}* #,##0.00_-;_-${kode}* "-"??_-;_-@_-`;
+}
+
+/* Satu pengajuan -> 11 sel tabel INVOICE SUMMARY. NO = ROW()-1: tetap urut
+   1, 2, 3 ... walau tabelnya diurutkan ulang di Excel (lembar aslinya juga
+   memakai rumus ROW). */
+function fexInvsumIsi(b, n) {
+  if (typeof invsumSel !== "function") throw new Error(tt("Modul Invoice Summary belum dimuat.", "The Invoice Summary module is not loaded."));
+  const sel = invsumSel(b.asli || { payload: {} });
+  const tgl = (c) => fexTanggalExcel(fexIso(c && c.v));
+  const teks = (c) => (c && String(c.v || "").trim()) || null;
+  return [
+    { formula: "ROW()-1", result: n + 1 },
+    tgl(sel[0]), tgl(sel[1]), tgl(sel[2]),
+    teks(sel[3]), teks(sel[4]), teks(sel[5]), teks(sel[6]),
+    b.nominal,
+    teks(sel[8]), teks(sel[9]),
+  ];
+}
+
+/* Rekap biaya per bulan PAID DATE di kanan tabel, seperti lembar
+   contohnya: JAN. sampai DEC. TAHUN PILIHAN dialog + TOTAL(FY<tahun>).
+   Rumusnya SUMPRODUCT atas kolom Paid Date (D) & COST (I) tabel, sama
+   dengan lembar aslinya -- ditambah syarat tahun, supaya Desember 2026
+   tidak tercampur Desember 2027. Bulan tanpa pembayaran = "Rp -".
+
+   MATA UANG: satu baris rekap per mata uang yang DIBAYAR di tahun itu --
+   rupiah saja (bawaan) -> satu baris seperti lembar aslinya (M1:Y2);
+   rupiah & USD -> baris IDR lalu USD di bawahnya, berlabel kolom
+   CURRENCY di kirinya, masing-masing berformat mata uangnya. Tanpa
+   pembayaran di tahun itu: satu baris rupiah (atau satu-satunya mata
+   uang tabel). `kolomMataUang` = huruf kolom CURRENCY tabel (ada bila
+   pengajuannya campuran): rumus tiap baris menjumlah mata uangnya saja. */
+function fexInvsumRekap(ws, baris, isi, tahun, kolomTabel, kolomMataUang) {
+  const th = Number(tahun) || new Date().getFullYear();
+  const akhir = Math.max(baris.length + 1, 2);
+  const tglBayar = (j) => isi[j] && isi[j][3];
+  const diTahun = (j) => !!tglBayar(j) && tglBayar(j).getUTCFullYear() === th;
+  const dibayar = fexUrutMataUang(baris.filter((b, j) => diTahun(j)).map((b) => b.mataUang));
+  const tabel = fexUrutMataUang(baris.map((b) => b.mataUang));
+  const daftar = dibayar.length ? dibayar : [tabel.length === 1 ? tabel[0] : "IDR"];
+  const berlabel = daftar.length > 1;
+  const garis = { style: "thin", color: { argb: FEX_INVSUM_TEPI } };
+  const tepi = { top: garis, left: garis, bottom: garis, right: garis };
+  const kolomAwal = kolomTabel + 2; // satu kolom kosong sebagai jeda
+  const cBulan = kolomAwal + (berlabel ? 1 : 0);
+  const cTotal = cBulan + FEX_BULAN.length;
+  ws.getColumn(kolomAwal - 1).width = 9.14;
+  if (berlabel) {
+    ws.getColumn(kolomAwal).width = 12.43;
+    ws.getCell(1, kolomAwal).value = "CURRENCY";
+  }
+  FEX_BULAN.forEach((label, i) => {
+    ws.getColumn(cBulan + i).width = 17;
+    ws.getCell(1, cBulan + i).value = label;
+  });
+  ws.getColumn(cTotal).width = 18.29;
+  ws.getCell(1, cTotal).value = `TOTAL(FY${th})`;
+  const syaratMataUang = (m) => (kolomMataUang ? `*($${kolomMataUang}$2:$${kolomMataUang}$${akhir}="${m}")` : "");
+  daftar.forEach((m, r) => {
+    const row = 2 + r;
+    const format = m === "IDR" ? FEX_RP_BULAT : fexFormatBiaya(m);
+    if (berlabel) ws.getCell(row, kolomAwal).value = m;
+    const perBulan = FEX_BULAN.map((_, i) => fexBulat(baris.reduce((n, b, j) =>
+      (b.mataUang === m && diTahun(j) && tglBayar(j).getUTCMonth() === i ? n + (Number(b.nominal) || 0) : n), 0), m));
+    perBulan.forEach((jumlah, i) => {
+      const sel = ws.getCell(row, cBulan + i);
+      sel.value = { formula: `SUMPRODUCT((YEAR($D$2:$D$${akhir})=${th})*(MONTH($D$2:$D$${akhir})=${i + 1})${syaratMataUang(m)}*($I$2:$I$${akhir}))`, result: jumlah };
+      sel.numFmt = format;
+    });
+    const total = ws.getCell(row, cTotal);
+    total.value = { formula: `SUM(${ws.getColumn(cBulan).letter}${row}:${ws.getColumn(cTotal - 1).letter}${row})`, result: fexBulat(perBulan.reduce((a, b) => a + b, 0), m) };
+    total.numFmt = format;
+  });
+  for (let c = kolomAwal; c <= cTotal; c++) {
+    for (let r = 1; r <= 1 + daftar.length; r++) {
+      const sel = ws.getCell(r, c);
+      sel.border = tepi;
+      sel.alignment = { horizontal: "center", vertical: "middle" };
+      sel.font = { name: "Calibri", size: 11 };
+    }
+  }
+}
+
+/* INVOICE SUMMARY -- format lembar akunting (contoh pengguna INVOICE_SUMMARY.xlsx):
+   - lembar "INVOICE SUMMARY": tabel Excel "Table1" (gaya TableStyleLight11,
+     baris berselang, tombol saring) berkolom A-K persis lembar itu; judul
+     biru tua 002060 huruf putih tebal; semua sel rata tengah & bergaris
+     tipis abu-abu; tanggal "mmm-dd" (Sep-25); INVOICE NUMBER teks &
+     dibungkus; DETAILS dibungkus; COST format akuntansi Rp (USD -> kodenya);
+     mata uang campuran -> kolom CURRENCY di ujung tabel;
+   - nomor invoice kembar ditandai merah (seperti "Duplicate Values" lembar
+     aslinya);
+   - kolom EXPENSES CATEGORY & TRANSPORT MODE bertombol pilihan dari lembar
+     "CATEGORY" (nama EXPENSES_CATEGORY / TRANSPORT_MODE);
+   - rekap biaya per bulan Paid Date di kanan tabel, Jan.-Dec. tahun
+     pilihan dialog (fexInvsumRekap). */
+function fexSusunInvoiceSummary(baris, opsi) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "EXIM DDI";
+  wb.created = new Date();
+  // Tanpa kepala dibekukan, seperti lembar aslinya: judul tabel Excel menggantikan huruf kolom saat digulir
+  const ws = wb.addWorksheet("INVOICE SUMMARY", {
+    pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const kat = wb.addWorksheet("CATEGORY");
+  const isi = baris.map((b, n) => fexInvsumIsi(b, n));
+  // Mata uang campuran: kolom CURRENCY di ujung tabel (lihat FEX_INVSUM_MATA_UANG)
+  const campur = fexUrutMataUang(baris.map((b) => b.mataUang)).length > 1;
+  const kolom = campur ? FEX_INVSUM_KOLOM.concat([FEX_INVSUM_MATA_UANG]) : FEX_INVSUM_KOLOM;
+  kolom.forEach((k, i) => (ws.getColumn(i + 1).width = k.lebar));
+  ws.addTable({
+    name: "Table1",
+    ref: "A1",
+    headerRow: true,
+    totalsRow: false,
+    style: { theme: "TableStyleLight11", showRowStripes: true },
+    columns: kolom.map((k) => ({ name: k.judul, filterButton: true })),
+    rows: isi.map((r, n) => (campur ? r.concat([baris[n].mataUang]) : r)),
+  });
+  const garis = { style: "thin", color: { argb: FEX_INVSUM_TEPI } };
+  const tepi = { top: garis, left: garis, bottom: garis, right: garis };
+  kolom.forEach((k, i) => {
+    const kepala = ws.getCell(1, i + 1);
+    kepala.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+    kepala.fill = { type: "pattern", pattern: "solid", fgColor: { argb: FEX_INVSUM_NAVY } };
+    kepala.alignment = { horizontal: "center", vertical: "middle", wrapText: !!k.bungkus };
+    kepala.border = tepi;
+    baris.forEach((b, n) => {
+      const sel = ws.getCell(n + 2, i + 1);
+      sel.font = { name: "Calibri", size: 11 };
+      sel.border = tepi;
+      sel.alignment = { horizontal: "center", vertical: "middle", wrapText: !!k.bungkus };
+      if (k.tanggal) sel.numFmt = "mmm\\-dd";
+      if (k.teks) sel.numFmt = "@";
+      if (k.uang) sel.numFmt = fexFormatBiaya(b.mataUang);
+      if (k.daftar) sel.dataValidation = { type: "list", allowBlank: true, showErrorMessage: true, formulae: [k.daftar] };
+    });
+  });
+  const akhir = baris.length + 1;
+  if (baris.length) {
+    // Nomor invoice kembar: merah muda berhuruf merah tua ("Light Red Fill with Dark Red Text")
+    ws.addConditionalFormatting({
+      ref: `E2:E${akhir}`,
+      rules: [{
+        type: "expression",
+        priority: 1,
+        formulae: [`AND(E2<>"",COUNTIF($E$2:$E$${akhir},E2)>1)`],
+        style: { font: { color: { argb: "FF9C0006" } }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFC7CE" } } },
+      }],
+    });
+  }
+  fexInvsumRekap(ws, baris, isi, (opsi && opsi.tahun) || new Date().getFullYear(), kolom.length, campur ? ws.getColumn(kolom.length).letter : "");
+  /* Cetak tabelnya saja, tanpa rekap. ExcelJS menulis "$" + teks ini, jadi
+     "A$1" menjadi $A$1 (acuan mutlak, bentuk yang ditulis Excel sendiri). */
+  ws.pageSetup.printArea = `A$1:${ws.getColumn(kolom.length).letter}$${akhir}`;
+
+  // Lembar CATEGORY: sumber tombol pilihan kolom J & K
+  FEX_INVSUM_DAFTAR.forEach(([judul, nama, daftar], i) => {
+    const c = i + 1;
+    kat.getColumn(c).width = i ? 18.14 : 28.29;
+    const kepala = kat.getCell(1, c);
+    kepala.value = judul;
+    kepala.font = { name: "Calibri", size: 11, color: { argb: "FFFFFFFF" } };
+    kepala.fill = { type: "pattern", pattern: "solid", fgColor: { argb: i ? "FF0B2261" : FEX_INVSUM_NAVY } };
+    kepala.alignment = { horizontal: "center", vertical: "middle" };
+    daftar.forEach((v, j) => {
+      const sel = kat.getCell(j + 2, c);
+      sel.value = v;
+      sel.alignment = { horizontal: "center", vertical: "middle" };
+    });
+    const huruf = kat.getColumn(c).letter;
+    wb.definedNames.add(`CATEGORY!$${huruf}$2:$${huruf}$${daftar.length + 1}`, nama);
+  });
+  return wb;
+}
+
 // Diunduh lewat tautan sementara (sama dengan Bulk Export / laporan); dipisah supaya bisa diganti di uji
 function fexSimpanBerkas(blob, nama) {
   const tautan = document.createElement("a");
@@ -307,9 +583,9 @@ function fexSimpanBerkas(blob, nama) {
   setTimeout(() => URL.revokeObjectURL(tautan.href), 1000);
 }
 
-async function fexUnduh(baris, nama) {
+async function fexUnduh(baris, nama, format, opsi) {
   await ensureExcelJS(); // pustaka Excel diunduh saat dibutuhkan saja
-  const buf = await fexSusunWorkbook(baris).xlsx.writeBuffer();
+  const buf = await fexSusunWorkbook(baris, format, opsi).xlsx.writeBuffer();
   fexSimpanBerkas(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), nama);
 }
 
@@ -324,10 +600,22 @@ let fexSibuk = false;
 
 const fexDialog = () => document.getElementById("danaEksporModal");
 const fexHasil = () => (fexSemua ? fexUrut(fexSaring(fexSemua, fexSaringan), fexSaringan.dasar) : []);
+const fexTahun = () => fexTahunPilih || fexTahunOtomatis(fexHasil(), fexSaringan);
 const fexTeksTotal = (baris) => fexTotal(baris).map(([m, n]) => escapeHtml(typeof frNilai === "function" ? frNilai(n, m) : `${m} ${n}`)).join(" + ");
+
+// Kalimat pembuka dialog: kolom berkas menurut format yang dipilih
+function fexTeksKolom() {
+  const format = fexFormatSah(fexFormatPilih);
+  const kolom = FEX_FORMAT[format].kolom().join(", ");
+  const tambahan = format === "invoiceSummary"
+    ? tt(" Ada USD di antaranya: ditambah kolom CURRENCY.", " If some are in USD, a CURRENCY column is added.")
+    : "";
+  return tt(`Pilih pengajuan yang diekspor. Kolom: ${kolom}.`, `Choose the requests to export. Columns: ${kolom}.`) + tambahan;
+}
 
 function fexIsiDialogHtml() {
   const f = fexSaringan;
+  const denganTahun = fexFormatSah(fexFormatPilih) === "invoiceSummary";
   const bayar = [["", tt("Semua", "All")], ["lunas", tt("Lunas", "Paid")], ["belum", tt("Belum Lunas", "Unpaid")]];
   return `
     <div class="dialog-head">
@@ -336,10 +624,23 @@ function fexIsiDialogHtml() {
       <button type="button" class="dialog-tutup" data-bs-dismiss="modal" aria-label="${escapeAttr(tt("Tutup", "Close"))}" title="${escapeAttr(tt("Tutup (Esc)", "Close (Esc)"))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
     </div>
     <div class="modal-body dialog-body">
-      <p class="dialog-text">${escapeHtml(tt(
-        "Pilih pengajuan yang diekspor. Kolom: No, Subject, Nominal, PIC, Vendor Name, Invoice No., Invoice Date, Invoice Due Date.",
-        "Choose the requests to export. Columns: No, Subject, Nominal, PIC, Vendor Name, Invoice No., Invoice Date, Invoice Due Date."))}</p>
+      <p class="dialog-text" id="fexKolomTeks">${escapeHtml(fexTeksKolom())}</p>
       <div class="fex-saring">
+        <div class="fex-format-baris">
+          <div class="prompt-field fex-bidang-format">
+            <label class="prompt-label" for="fexFormat">Format</label>
+            <select class="login-input" id="fexFormat" data-fex="format">${Object.keys(FEX_FORMAT)
+              .map((k) => `<option value="${k}"${k === fexFormatPilih ? " selected" : ""}>${escapeHtml(FEX_FORMAT[k].label)}</option>`)
+              .join("")}</select>
+          </div>
+          <div class="prompt-field fex-bidang-tahun${denganTahun ? "" : " d-none"}">
+            <label class="prompt-label" for="fexTahun">${escapeHtml(tt("Tahun rekap", "Recap year"))}</label>
+            <select class="login-input fex-tahun" id="fexTahun" data-fex="tahun"></select>
+          </div>
+          <div class="prompt-hint fex-petunjuk-tahun${denganTahun ? "" : " d-none"}">${escapeHtml(tt(
+            "Rekap total per bulan (Januari–Desember) di kanan tabel, menurut Paid Date — seperti lembar INVOICE SUMMARY. Ada USD: rekap Rupiah & USD dipisah.",
+            "Monthly totals (January–December) to the right of the table, by Paid Date — as in the INVOICE SUMMARY sheet. With USD: separate Rupiah & USD recaps."))}</div>
+        </div>
         <div class="prompt-field">
           <span class="prompt-label" id="fexLabelBayar">${escapeHtml(tt("Status bayar", "Payment status"))}</span>
           <div class="fex-seg" role="radiogroup" aria-labelledby="fexLabelBayar">${bayar
@@ -368,6 +669,17 @@ function fexIsiDialogHtml() {
       <button type="button" class="btn-quiet" data-bs-dismiss="modal">${escapeHtml(tt("Batal", "Cancel"))}</button>
       <button type="button" class="btn-primary-navy fex-unduh" id="danaEksporUnduh" data-fex-unduh disabled><i class="bi bi-download"></i> ${escapeHtml(tt("Unduh Excel", "Download Excel"))}</button>
     </div>`;
+}
+
+// Pilihan tahun rekap: dari seluruh Pengajuan Dana; yang terpilih = fexTahun()
+function fexIsiTahun() {
+  const sel = document.getElementById("fexTahun");
+  if (!sel) return;
+  const aktif = fexTahun();
+  const daftar = fexDaftarTahun(fexSemua, aktif);
+  if (fexTahunPilih && !daftar.includes(fexTahunPilih)) fexTahunPilih = "";
+  sel.innerHTML = daftar.map((th) => `<option value="${th}"${th === aktif ? " selected" : ""}>${th}</option>`).join("");
+  sel.disabled = !fexSemua;
 }
 
 // Pilihan vendor dari seluruh Pengajuan Dana (bukan yang sudah tersaring: memilih satu tidak menghilangkan yang lain)
@@ -445,11 +757,14 @@ function fexGambarDialog() {
         onApply: (a, b) => {
           fexSaringan.dari = a;
           fexSaringan.sampai = b;
+          fexTahunPilih = ""; // tahun rekap ikut rentang yang baru
+          fexIsiTahun();
           fexGambarPratinjau();
         },
       })
     : null;
   fexIsiVendor();
+  fexIsiTahun();
   fexGambarPratinjau();
 }
 
@@ -458,6 +773,7 @@ async function fexMuat() {
   fexSemua = null;
   fexGalat = null;
   fexIsiVendor();
+  fexIsiTahun();
   fexGambarPratinjau();
   try {
     const baris = (await fexAmbilSemua()).map(fexBaris);
@@ -469,6 +785,7 @@ async function fexMuat() {
     fexGalat = e;
   }
   fexIsiVendor();
+  fexIsiTahun();
   fexGambarPratinjau();
 }
 
@@ -490,9 +807,11 @@ async function fexKlikUnduh() {
   tombol.disabled = true;
   tombol.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${escapeHtml(tt("Menyiapkan…", "Preparing…"))}`;
   try {
-    await fexUnduh(hasil, fexNamaBerkas(fexSaringan, fexDaftarVendor(fexSemua)));
+    const format = fexFormatSah(fexFormatPilih);
+    const label = FEX_FORMAT[format].label;
+    await fexUnduh(hasil, fexNamaBerkas(fexSaringan, fexDaftarVendor(fexSemua), undefined, format), format, { tahun: Number(fexTahun()) });
     if (fexModal) fexModal.hide();
-    showToast(tt(`Excel Pengajuan Dana diunduh: ${hasil.length} pengajuan.`, `Fund request Excel downloaded: ${hasil.length} request${hasil.length === 1 ? "" : "s"}.`), "success");
+    showToast(tt(`Excel ${label} diunduh: ${hasil.length} pengajuan.`, `${label} Excel downloaded: ${hasil.length} request${hasil.length === 1 ? "" : "s"}.`), "success");
   } catch (e) {
     console.error(e);
     // Sebabnya disebut -- satu-satunya petunjuk untuk yang memperbaikinya
@@ -518,17 +837,34 @@ document.addEventListener("click", (e) => {
   if (el.closest("[data-fex-unduh]")) fexKlikUnduh();
   else if (el.closest("[data-fex-ulang]")) fexMuat();
   else if (el.closest("[data-fex-reset]")) {
+    // Reset = saringan (dan tahun rekap kembali otomatis); format yang dipilih tetap
     Object.assign(fexSaringan, FEX_SARINGAN_AWAL);
+    fexTahunPilih = "";
     fexGambarDialog();
   }
 });
 document.addEventListener("change", (e) => {
   const el = e.target;
   if (!el || !el.closest || !el.closest("#danaEksporModal")) return;
+  if (el.dataset.fex === "format") {
+    fexFormatPilih = fexFormatSah(el.value);
+    const teks = document.getElementById("fexKolomTeks");
+    if (teks) teks.textContent = fexTeksKolom();
+    // Tahun rekap & petunjuknya hanya untuk Invoice Summary
+    document.querySelectorAll("#danaEksporModal :is(.fex-bidang-tahun, .fex-petunjuk-tahun)").forEach((x) => x.classList.toggle("d-none", fexFormatPilih !== "invoiceSummary"));
+    fexIsiTahun();
+    fexGambarPratinjau();
+    return;
+  }
+  if (el.dataset.fex === "tahun") {
+    fexTahunPilih = el.value;
+    return;
+  }
   if (el.name === "fexBayar") fexSaringan.bayar = el.value;
   else if (el.dataset.fex === "vendor") fexSaringan.vendor = el.value;
   else if (el.dataset.fex === "dasar") fexSaringan.dasar = el.value === "jatuhTempo" ? "jatuhTempo" : "invoice";
   else return;
+  fexIsiTahun(); // tahun otomatis bisa bergeser bersama baris yang tersaring
   fexGambarPratinjau();
 });
 /* Esc saat kalender rentang terbuka menutup KALENDERNYA saja, bukan

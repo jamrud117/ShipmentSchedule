@@ -11,8 +11,10 @@
      B INVOICE DATE      Tanggal Invoice (kosong -> tanggal pengajuan)
      C DUE DATE          Due Date Invoice (kosong -> Tanggal Invoice)
      D Paid Date         tanggal ditandai lunas (kosong selama belum lunas)
-     E INVOICE NUMBER    No. Invoice; Billing -> Nomor Billing (sebagai TEKS:
-                         kode billing 15 angka tidak boleh jadi 6.4E+14)
+     E INVOICE NUMBER    No. Invoice + invoice / debit note tambahan, dipisah
+                         ", " seperti lembar itu; Billing -> Nomor Billing
+                         (sebagai TEKS: kode billing 15 angka tidak boleh
+                         jadi 6.4E+14)
      F COMPANY           Dibayarkan Kepada; KAS NEGARA -> STATE TREASURY
      G CUSTOMER          Customer
      H DETAILS           nama barang jadwal yang BL/AWB-nya cocok
@@ -63,11 +65,21 @@ function invsumBarang(blAwb) {
   return nama.join(" - ");
 }
 
+/* INVOICE NUMBER: Billing -> Nomor Billing; selainnya No. Invoice + invoice /
+   debit note tambahan, dipisah ", " (cara lembar INVOICE SUMMARY menulis
+   beberapa nomor dalam satu sel: "IN-WL2607-00005, IN-WL2607-00016"). */
+function invsumNomor(p) {
+  if (p.expenseType === "Billing") return String(p.billingNo || p.invoiceNo || "").trim();
+  const semua = typeof fundSemuaNomor === "function" ? fundSemuaNomor(p) : [String(p.invoiceNo || "").trim()].filter(Boolean);
+  const unik = [...new Set(semua)];
+  return unik.length ? unik.join(", ") : String(p.billingNo || "").trim();
+}
+
 /* Satu pengajuan (baris riwayat) -> 10 sel { v, jenis: teks|tanggal|angka } */
 function invsumSel(r) {
   const p = (r && r.payload) || {};
   const tglInvoice = p.invoiceDate || (r && r.doc_date) || "";
-  const nomor = p.expenseType === "Billing" ? p.billingNo || p.invoiceNo : p.invoiceNo || p.billingNo;
+  const nomor = invsumNomor(p);
   const vendor = String(p.payee || "").trim().toUpperCase();
   const rincian = String(p.notes || "").replace(/^payment request\s*-\s*/i, "").trim().toUpperCase();
   const total = typeof fundTotalKomponen === "function" ? fundTotalKomponen(p).dibayar : 0;
