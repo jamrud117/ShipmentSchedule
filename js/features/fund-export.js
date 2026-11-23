@@ -10,42 +10,54 @@
      - Status bayar: Semua / Lunas / Belum Lunas (payload.paidAt);
      - Vendor ("Dibayarkan Kepada"): ejaan yang hanya beda huruf besar /
        tanda baca ("PT. WIDE LOGISTICS", "PT WIDE LOGISTICS") satu vendor;
-     - Rentang tanggal menurut Tanggal Invoice ATAU Jatuh Tempo.
+     - Rentang tanggal menurut Tanggal Invoice ATAU Jatuh Tempo invoice.
    Jumlah pengajuan, totalnya, dan beberapa baris pertama tampil langsung
    setiap saringan diubah: yang diunduh persis yang terlihat. Pilihan
    saringan bertahan selama halaman terbuka.
+
+   PERAN: terbuka untuk setiap peran yang bisa membuka riwayat Pengajuan
+   Dana -- EXIM, FINANCE, Marketing. Export hanya MEMBACA (tidak ada data
+   yang diubah), jadi tidak dijaga canEdit() dan tombolnya tidak masuk
+   aturan hanya-lihat body.is-viewer (auth.css); datanya dibaca dengan
+   izin baca yang sama dengan riwayat.
 
    Seluruh Pengajuan Dana dimuat sekali tiap dialog dibuka (per 1.000,
    batas satu permintaan Supabase) -- pengajuan yang baru terbit langsung
    ikut; saringan dihitung di aplikasi, jadi mengganti pilihan instan.
 
    BERKAS: satu lembar "Fund Request", kolom berurutan seperti diminta:
-     Subject | Nominal | Due Date | Drafter | Vendor Name | Invoice No. | Invoice Date
-   Subject = Rincian (Subject pada surat cetak); Nominal = jumlah akhir
-   pengajuan (frTotalPengajuan: angka yang sama dengan "Terbilang" di
-   surat, kolom Nilai di riwayat, Cost di Summary); Drafter = pembuat
-   pengajuan; Invoice No. = isi kolom Nomor Billing/Invoice di riwayat
-   (Billing -> Nomor Billing; selainnya No. Invoice + invoice / debit
-   note tambahan, satu nomor per baris di selnya). Tanggal = tanggal
-   Excel sungguhan (dd-mm-yyyy),
-   Nominal = angka, nomor = TEKS (nomor billing 15 angka tidak berubah
-   jadi 6,4E+14). Urut menurut tanggal yang dipakai saringan, terlama
-   dulu. Di bawahnya baris TOTAL: SUBTOTAL(109) -- ikut menyusut kalau
-   tabelnya disaring lagi di Excel; mata uang campuran dijumlah per mata
-   uang dan tiap nominal berawalan kodenya ("USD 1,250.00").
+     No | Subject | Nominal | PIC | Vendor Name | Invoice No. | Invoice Date | Invoice Due Date
+   No = nomor urut baris; Subject = Rincian (Subject pada surat cetak);
+   Nominal = jumlah akhir pengajuan (frTotalPengajuan: angka yang sama
+   dengan "Terbilang" di surat, kolom Nilai di riwayat, Cost di Summary);
+   PIC = pembuat pengajuan (Drafter / "Made by" di surat); Invoice No. =
+   isi kolom Nomor Billing/Invoice di riwayat (Billing -> Nomor Billing;
+   selainnya No. Invoice + invoice / debit note tambahan, satu nomor per
+   baris di selnya); Invoice Due Date = Jatuh Tempo invoice. Tanggal =
+   tanggal Excel sungguhan (dd-mm-yyyy), Nominal = angka, nomor = TEKS
+   (nomor billing 15 angka tidak berubah jadi 6,4E+14). Judul & isi rata
+   tengah, kecuali Subject (rata kiri, tidak dibungkus, kolom selebar
+   kalimatnya). Urut menurut tanggal yang dipakai saringan, terlama dulu.
+   Langsung di bawah tabel baris TOTAL: SUBTOTAL(109) -- ikut menyusut
+   kalau tabelnya disaring lagi di Excel; mata uang campuran dijumlah per
+   mata uang dan tiap nominal berawalan kodenya ("USD 1,250.00").
 ------------------------------------------------------------------ */
 
+/* Kolom berkas, kiri ke kanan. Judul & isi RATA TENGAH, kecuali Subject:
+   rata kiri dan TIDAK dibungkus -- kolomnya selebar kalimat terpanjang
+   (fexLebarKolom), seperti contoh berkas pengguna. Vendor Name & Invoice
+   No. dibungkus: invoice / debit note tambahan masing-masing di baris sendiri
+   dalam selnya (" / " membuat Excel memotong di tanda hubung nomornya:
+   "DN-" | "77/XI/2026"). `maks` = batas lebar kolom. */
 const FEX_KOLOM = [
-  { judul: "Subject", lebar: 46, ambil: (b) => b.subject, kiri: true, bungkus: true },
-  { judul: "Nominal", lebar: 18, ambil: (b) => b.nominal, uang: true },
-  { judul: "Due Date", lebar: 13, ambil: (b) => b.jatuhTempo, tanggal: true },
-  { judul: "Drafter", lebar: 16, ambil: (b) => b.drafter, kiri: true },
-  // Dibungkus: nama vendor panjang tidak terpotong oleh sel di sebelahnya; invoice /
-  // debit note tambahan masing-masing di baris sendiri dalam selnya -- " / " membuat
-  // Excel memotong di tanda hubung nomornya ("DN-" | "77/XI/2026")
-  { judul: "Vendor Name", lebar: 30, ambil: (b) => b.vendor, kiri: true, bungkus: true },
-  { judul: "Invoice No.", lebar: 24, ambil: (b) => b.nomorDaftar.join("\n"), kiri: true, bungkus: true },
-  { judul: "Invoice Date", lebar: 13, ambil: (b) => b.tglInvoice, tanggal: true },
+  { judul: "No", ambil: (b, i) => i + 1 },
+  { judul: "Subject", ambil: (b) => b.subject, kiri: true, maks: 150 },
+  { judul: "Nominal", ambil: (b) => b.nominal, uang: true },
+  { judul: "PIC", ambil: (b) => b.drafter, maks: 30 },
+  { judul: "Vendor Name", ambil: (b) => b.vendor, bungkus: true, maks: 40 },
+  { judul: "Invoice No.", ambil: (b) => b.nomorDaftar.join("\n"), bungkus: true, maks: 40 },
+  { judul: "Invoice Date", ambil: (b) => b.tglInvoice, tanggal: true },
+  { judul: "Invoice Due Date", ambil: (b) => b.jatuhTempo, tanggal: true },
 ];
 const FEX_SARINGAN_AWAL = { bayar: "", vendor: "", dasar: "invoice", dari: "", sampai: "" };
 const fexSaringan = Object.assign({}, FEX_SARINGAN_AWAL);
@@ -187,9 +199,35 @@ function fexFormatUang(mataUang, campur) {
   return campur ? `"${mataUang} "${pola}` : pola;
 }
 
+// Teks yang tampil di sel -- dasar lebar kolom
+function fexTeksSel(k, b, i, campur) {
+  const v = k.ambil(b, i);
+  if (k.tanggal) return v ? "00-00-0000" : "";
+  if (k.uang) {
+    const d = b.mataUang === "IDR" ? 0 : 2;
+    return (campur ? `${b.mataUang} ` : "") + angkaLokal(Number(v) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  return v == null ? "" : String(v);
+}
+
+/* Lebar kolom menurut isinya (satuan Excel = lebar satu angka "0"): baris
+   terpanjang di kolom itu -- huruf proporsional ~0,95, angka & tanggal 1 --
+   paling sedikit selebar judul + tombol saringan Excel, paling lebar `maks`. */
+function fexLebarKolom(k, baris, campur) {
+  let isi = 0;
+  baris.forEach((b, i) => {
+    fexTeksSel(k, b, i, campur).split("\n").forEach((teks) => {
+      const angka = /^[\d\s.,:/-]*$/.test(teks) || k.uang || k.tanggal;
+      isi = Math.max(isi, Math.ceil(teks.length * (angka ? 1 : 0.95)) + 3);
+    });
+  });
+  return Math.min(Math.max(k.judul.length + 5, isi, 6), k.maks || 60);
+}
+
 function fexSusunWorkbook(baris) {
   const NAVY = typeof XL_NAVY !== "undefined" ? XL_NAVY : "FF0A1B33";
   const TEPI = typeof XL_TEPI !== "undefined" ? XL_TEPI : "FFDFE5ED";
+  const TINTA = "FF1C2B45";
   const wb = new ExcelJS.Workbook();
   wb.creator = "EXIM DDI";
   wb.created = new Date();
@@ -197,11 +235,12 @@ function fexSusunWorkbook(baris) {
     views: [{ state: "frozen", ySplit: 1 }],
     pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
-  ws.columns = FEX_KOLOM.map((k) => ({ width: k.lebar }));
   const total = fexTotal(baris);
   const campur = total.length > 1;
+  ws.columns = FEX_KOLOM.map((k) => ({ width: fexLebarKolom(k, baris, campur) }));
   const garis = { style: "thin", color: { argb: TEPI } };
   const tepi = { top: garis, left: garis, bottom: garis, right: garis };
+  const huruf = (tebal) => ({ name: "Calibri", size: 11, bold: !!tebal, color: { argb: TINTA } });
 
   const kepala = ws.addRow(FEX_KOLOM.map((k) => k.judul));
   kepala.height = 22;
@@ -211,18 +250,20 @@ function fexSusunWorkbook(baris) {
     sel.alignment = { horizontal: "center", vertical: "middle" };
     sel.border = tepi;
   });
-  baris.forEach((b) => {
+  baris.forEach((b, n) => {
     const row = ws.addRow(FEX_KOLOM.map((k) => {
-      const v = k.ambil(b);
+      const v = k.ambil(b, n);
       if (k.tanggal) return fexTanggalExcel(v);
-      if (k.uang) return v;
+      if (k.uang || typeof v === "number") return v;
       return v ? String(v) : null;
     }));
     FEX_KOLOM.forEach((k, i) => {
       const sel = row.getCell(i + 1);
-      sel.font = { name: "Calibri", size: 11, color: { argb: "FF1C2B45" } };
+      sel.font = huruf(false);
       sel.border = tepi;
-      sel.alignment = { horizontal: k.uang ? "right" : k.tanggal ? "center" : "left", vertical: "middle", wrapText: !!k.bungkus };
+      sel.alignment = k.kiri
+        ? { horizontal: "left", vertical: "middle", wrapText: false }
+        : { horizontal: "center", vertical: "middle", wrapText: !!k.bungkus };
       if (k.uang) sel.numFmt = fexFormatUang(b.mataUang, campur);
       if (k.tanggal) sel.numFmt = "dd-mm-yyyy";
     });
@@ -231,21 +272,26 @@ function fexSusunWorkbook(baris) {
   const akhir = baris.length + 1;
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: akhir, column: FEX_KOLOM.length } };
   if (!baris.length) return wb;
-  /* TOTAL satu baris kosong di bawah tabel (di luar jangkauan saringan
-     Excel). Satu mata uang: SUBTOTAL(109) -- hanya baris yang terlihat,
-     jadi ikut menyusut saat tabelnya disaring; hasilnya ikut disimpan
-     supaya pratinjau tanpa hitung ulang pun benar. */
+  /* TOTAL langsung di bawah tabel, berbingkai seperti barisnya (contoh
+     pengguna): label di kolom Subject, jumlah di kolom Nominal, rata tengah.
+     Satu mata uang: SUBTOTAL(109) -- hanya baris yang terlihat, jadi ikut
+     menyusut saat tabelnya disaring; hasilnya ikut disimpan supaya
+     pratinjau tanpa hitung ulang pun benar. Mata uang campuran: satu baris
+     TOTAL per mata uang, angka tetap. */
+  const cLabel = FEX_KOLOM.findIndex((k) => k.kiri) + 1;
   const cUang = FEX_KOLOM.findIndex((k) => k.uang) + 1;
-  const huruf = ws.getColumn(cUang).letter;
+  const kolomUang = ws.getColumn(cUang).letter;
   total.forEach(([m, n], i) => {
-    const row = ws.getRow(akhir + 2 + i);
-    row.getCell(1).value = campur ? `TOTAL ${m}` : "TOTAL";
+    const row = ws.getRow(akhir + 1 + i);
+    for (let c = 1; c <= cUang; c++) row.getCell(c).border = tepi;
+    const label = row.getCell(cLabel);
+    label.value = campur ? `TOTAL ${m}` : "TOTAL";
+    label.alignment = { horizontal: "left", vertical: "middle" };
     const sel = row.getCell(cUang);
-    sel.value = campur ? n : { formula: `SUBTOTAL(109,${huruf}2:${huruf}${akhir})`, result: n };
+    sel.value = campur ? n : { formula: `SUBTOTAL(109,${kolomUang}2:${kolomUang}${akhir})`, result: n };
     sel.numFmt = fexFormatUang(m, campur);
-    sel.alignment = { horizontal: "right", vertical: "middle" };
-    sel.border = { top: { style: "thin", color: { argb: "FF1C2B45" } }, bottom: { style: "double", color: { argb: "FF1C2B45" } } };
-    [row.getCell(1), sel].forEach((c) => (c.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF1C2B45" } }));
+    sel.alignment = { horizontal: "center", vertical: "middle" };
+    [label, sel].forEach((c) => (c.font = huruf(true)));
   });
   return wb;
 }
@@ -291,8 +337,8 @@ function fexIsiDialogHtml() {
     </div>
     <div class="modal-body dialog-body">
       <p class="dialog-text">${escapeHtml(tt(
-        "Pilih pengajuan yang diekspor. Kolom: Subject, Nominal, Due Date, Drafter, Vendor Name, Invoice No., Invoice Date.",
-        "Choose the requests to export. Columns: Subject, Nominal, Due Date, Drafter, Vendor Name, Invoice No., Invoice Date."))}</p>
+        "Pilih pengajuan yang diekspor. Kolom: No, Subject, Nominal, PIC, Vendor Name, Invoice No., Invoice Date, Invoice Due Date.",
+        "Choose the requests to export. Columns: No, Subject, Nominal, PIC, Vendor Name, Invoice No., Invoice Date, Invoice Due Date."))}</p>
       <div class="fex-saring">
         <div class="prompt-field">
           <span class="prompt-label" id="fexLabelBayar">${escapeHtml(tt("Status bayar", "Payment status"))}</span>
@@ -309,7 +355,7 @@ function fexIsiDialogHtml() {
           <div class="fex-tanggal" role="group" aria-labelledby="fexLabelTanggal">
             <select class="login-input fex-dasar" id="fexDasar" data-fex="dasar" aria-label="${escapeAttr(tt("Rentang tanggal menurut", "Date range by"))}">
               <option value="invoice"${f.dasar === "invoice" ? " selected" : ""}>${escapeHtml(tt("Tanggal Invoice", "Invoice Date"))}</option>
-              <option value="jatuhTempo"${f.dasar === "jatuhTempo" ? " selected" : ""}>${escapeHtml(tt("Jatuh Tempo", "Due Date"))}</option>
+              <option value="jatuhTempo"${f.dasar === "jatuhTempo" ? " selected" : ""}>${escapeHtml(tt("Jatuh Tempo Invoice", "Invoice Due Date"))}</option>
             </select>
             <div class="fex-rentang" id="fexRentang"></div>
           </div>
@@ -369,7 +415,7 @@ function fexGambarPratinjau() {
       `<b>${hasil.length}</b> pengajuan · Total <b>${fexTeksTotal(hasil)}</b>`,
       `<b>${hasil.length}</b> request${hasil.length === 1 ? "" : "s"} · Total <b>${fexTeksTotal(hasil)}</b>`)}</div>
     <table class="fex-tabel">
-      <thead><tr><th>Vendor · Invoice No.</th><th>${escapeHtml(jatuh ? "Due Date" : "Invoice Date")}</th><th class="fex-angka">Nominal</th></tr></thead>
+      <thead><tr><th>Vendor · Invoice No.</th><th>${escapeHtml(jatuh ? "Invoice Due Date" : "Invoice Date")}</th><th class="fex-angka">Nominal</th></tr></thead>
       <tbody>${contoh}</tbody>
     </table>
     ${sisa > 0 ? `<div class="fex-lagi">${escapeHtml(tt(`… dan ${sisa} pengajuan lainnya`, `… and ${sisa} more`))}</div>` : ""}`;
