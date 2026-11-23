@@ -62,4 +62,11 @@
   .prompt-dialog--lebar .prompt-field select {
     max-width: none;
   }
+  /* Dialog Export Excel Pengajuan Dana (fund-export.js): pilihan Vendor
+     selebar baris Rentang tanggal di bawahnya (dasar + pemicu mengisi
+     dialog) -- tepinya sejajar, bukan tangga di 400px; nama vendor bisa
+     panjang ("PT ANINDYA WIRAPUTRA KONSULT (12)"). */
+  .fex-dialog #fexVendor {
+    max-width: none;
+  }
 }

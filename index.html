@@ -3286,6 +3286,20 @@
                       data-en-aria="Reload history">
                       <i class="bi bi-arrow-clockwise"></i>
                     </button>
+                    <!-- Export Excel Pengajuan Dana (js/features/fund-export.js):
+                         dialog bersaringan sendiri -- status bayar, vendor, rentang
+                         Tanggal Invoice / Jatuh Tempo. Hanya Pengajuan Dana (juga
+                         tab Summary); tab Report punya unduhan Excel sendiri. -->
+                    <button
+                      type="button"
+                      class="btn btn-light btn-sm dn-ekspor d-none"
+                      id="btnDnEkspor"
+                      title="Export Excel Pengajuan Dana"
+                      data-en-title="Export fund requests to Excel"
+                      aria-label="Export Excel Pengajuan Dana"
+                      data-en-aria="Export fund requests to Excel">
+                      <i class="bi bi-file-earmark-excel" aria-hidden="true"></i><span>Export</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4991,6 +5005,15 @@
          tempat; hanya badannya yang digulir bila isiannya lebih tinggi
          dari layar (modal-dialog-scrollable) -- tombol Simpan selalu
          terjangkau tanpa menggulir. -->
+    <!-- EXPORT EXCEL PENGAJUAN DANA: isinya (saringan status bayar, vendor,
+         rentang tanggal + pratinjau) digambar js/features/fund-export.js
+         setiap dibuka, dalam bahasa yang sedang aktif. -->
+    <div class="modal fade" id="danaEksporModal" tabindex="-1" aria-labelledby="danaEksporJudul">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable fex-dialog">
+        <div class="modal-content"></div>
+      </div>
+    </div>
+
     <div class="modal fade" id="promptModal" tabindex="-1" aria-labelledby="promptTitle" aria-describedby="promptDesc">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">

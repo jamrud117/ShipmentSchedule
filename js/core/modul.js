@@ -59,6 +59,7 @@ const MODUL_TUNDA = [
   "js/features/fund-rincian.js",
   "js/features/fund-saran-awb.js",
   "js/features/fund-invoice-summary.js",
+  "js/features/fund-export.js",
   "js/features/surat-bc.js",
   "js/features/surat-bc-word.js",
   "js/views/accounts-view.js",

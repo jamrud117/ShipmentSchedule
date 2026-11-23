@@ -3279,3 +3279,185 @@ button.dn-bayar--lunas:hover {
 .inv-pola-ket {
   margin-top: 6px;
 }
+
+/* ------------------------------------------------------------------
+   EXPORT EXCEL PENGAJUAN DANA (fund-export.js)
+   Tombol di samping Muat Ulang; dialog: status bayar (pil), vendor,
+   rentang tanggal menurut Tanggal Invoice / Jatuh Tempo, lalu pratinjau
+   jumlah, total & beberapa baris pertama.
+------------------------------------------------------------------ */
+.dn-ekspor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.dn-ekspor .bi {
+  color: #1d6f42; /* hijau Excel */
+}
+.fex-dialog {
+  max-width: 560px;
+}
+.fex-saring {
+  display: grid;
+  gap: 14px;
+  margin-top: var(--sp-3);
+}
+/* Status bayar: tiga pil selebar isinya, bukan dropdown -- ketiganya
+   terlihat sekaligus dan satu klik cukup. */
+.fex-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fex-seg-pilih {
+  position: relative;
+  margin: 0;
+}
+.fex-seg-pilih input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.fex-seg-pilih span {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-600);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fex-seg-pilih input:checked + span {
+  background: var(--p-50);
+  border-color: var(--p-300);
+  color: var(--tp-700);
+}
+.fex-seg-pilih input:focus-visible + span {
+  outline: 2px solid var(--p-400);
+  outline-offset: 2px;
+}
+.fex-saring .login-input {
+  height: 40px;
+  margin-bottom: 0;
+  font-size: var(--t-base);
+}
+/* Dasar tanggal selebar pilihannya; pemicu rentang mengisi sisanya dan
+   turun ke baris sendiri kalau dialognya sempit. */
+.fex-tanggal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.fex-tanggal .fex-dasar {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 160px;
+}
+.fex-rentang {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.fex-rentang .date-range-trigger {
+  width: 100%;
+  height: 40px;
+}
+.fex-pratinjau {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.fex-ringkas {
+  margin-bottom: 10px;
+  font-size: var(--t-sm);
+  color: var(--n-700);
+}
+.fex-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-xs);
+}
+.fex-tabel th {
+  padding: 4px 10px 6px 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--n-500);
+}
+.fex-tabel td {
+  padding: 6px 10px 6px 0;
+  border-bottom: 1px solid var(--n-100);
+  color: var(--n-700);
+  vertical-align: top;
+}
+.fex-tabel .fex-angka {
+  padding-right: 0;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.fex-tabel .fex-nowrap {
+  white-space: nowrap;
+}
+/* No. Invoice di bawah nama vendor: baris kedua yang lebih redup; nomor
+   panjang tanpa spasi boleh patah supaya tidak mendorong tabel melebar. */
+.fex-tabel .fex-nomor {
+  display: block;
+  margin-top: 1px;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.fex-lagi {
+  margin-top: 8px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.fex-pesan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.fex-pesan--galat .bi {
+  color: var(--ts-danger);
+}
+/* Reset (saringan) di kiri, terpisah dari Batal / Unduh di kanan. Pemilih
+   sekhusus ini perlu: `.dialog-foot .btn-quiet { margin: 0 }` (auth.css)
+   mengalahkan `.fex-reset` saja. */
+.dialog-foot > .btn-quiet.fex-reset {
+  margin-right: auto;
+}
+/* Ponsel: dasar tanggal & pemicu rentang masing-masing selebar baris, dan
+   kotak pilihannya setinggi pemicu & tombol (target sentuh 44px,
+   dashboard.css). */
+@media (max-width: 767.98px) {
+  .fex-saring .login-input {
+    height: 44px;
+  }
+}
+@media (max-width: 479.98px) {
+  .fex-tanggal .fex-dasar {
+    flex: 1 1 100%;
+  }
+}
+/* Ponsel sempit: Reset turun ke baris sendiri di bawah Batal & Unduh
+   (sama dengan aksi ketiga kotak isian, auth.css). */
+@media (max-width: 419.98px) {
+  .dialog-foot > .btn-quiet.fex-reset {
+    flex-basis: 100%;
+    order: 2;
+    margin-right: 0;
+  }
+}

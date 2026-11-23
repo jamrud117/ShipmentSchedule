@@ -238,6 +238,14 @@ function dnTampilkanSaringBayar() {
   // Tanggal dasar + pemilih rentangnya satu kelompok
   const grup = document.querySelector(".dn-saring-grup");
   if (grup) grup.classList.toggle("d-none", sembunyi);
+  /* Export Excel (fund-export.js): saringannya di dialognya sendiri, jadi
+     tampil juga di tab Summary -- tidak di Report, yang punya unduhan Excel
+     sendiri, dan tidak di jenis dokumen lain. */
+  const ekspor = document.getElementById("btnDnEkspor");
+  if (ekspor) {
+    const laporan = typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB;
+    ekspor.classList.toggle("d-none", docNumActiveTab !== "fund" || laporan || typeof fexBuka !== "function");
+  }
 }
 /* `payload->>docNo` = isian "Doc No" di Form Pengajuan Dana (diketik
    manual, fund-docno.js): mencari Doc No sama saja dengan mencari nomor
