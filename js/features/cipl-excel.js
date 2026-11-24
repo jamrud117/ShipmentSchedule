@@ -463,7 +463,9 @@ function ciplXlFormal(wb, spek, mdw) {
      yang deskripsinya paling banyak baris (dibungkus selebar kolom Excel),
      teks yang lebih pendek di tengah barisnya. */
   const padIsi = tb.padBaris == null ? ttPx(8) : tb.padBaris;
-  // GOODS DESCRIPTION (tb.rataKiri) rata kiri berjarak satu indent, seperti cetakannya
+  /* Kolom tb.rataKiri (GOODS DESCRIPTION) rata kiri berjarak satu indent, seperti cetakannya.
+     Uang (angka.uang) rata tengah: formatnya (ciplRapikanUang) sudah membuat angka sekolom
+     selebar yang terlebar -- "USD" & digit sejajar, bloknya di tengah seperti cetakannya. */
   const rataKiri = new Set(tb.rataKiri || []);
   const indentBarang = (k) => (rataKiri.has(k) ? 1 : 0);
   const nBarisBarang = Math.max(1, ...tb.baris.map((sel) => Math.max(1, ...sel.map((x, k) => (x && x.teks && !x.nilaiExcel
@@ -475,10 +477,13 @@ function ciplXlFormal(wb, spek, mdw) {
     sel.forEach((x, k) => {
       const c = k + 1;
       if (x && x.angka) {
-        const s = ttUkuranPas([x.angka.teks], ukur(8.5), ruang(c, c, 0), 5) || 8.5;
+        const inden = x.angka.uang ? 0 : indentBarang(k);
+        // Uang diukur dari yang terlebar sekolom (a.ukur): sekolom sama ukuran hurufnya, tetap sejajar
+        const s = ttUkuranPas([x.angka.ukur || x.angka.teks], ukur(8.5), ruang(c, c, inden), 5) || 8.5;
         const kali = tb.kali && tb.kali[k];
         const nilai = kali ? { formula: `${huruf(kali[0] + 1)}${r}*${huruf(kali[1] + 1)}${r}`, result: x.angka.v } : x.angka.v;
-        ciplXlSel(ws, r, c, r, c, nilai, { numFmt: x.angka.fmt, font: A(s), ha: "center", va: "middle" });
+        ciplXlSel(ws, r, c, r, c, nilai,
+          { numFmt: x.angka.fmt, font: A(s), ha: !x.angka.uang && rataKiri.has(k) ? "left" : "center", indent: inden, va: "middle" });
       } else if (x && x.nilaiExcel) {
         ciplXlSel(ws, r, c, r, c, x.nilaiExcel.v, { numFmt: x.nilaiExcel.fmt, font: A(8.5), ha: "center", va: "middle" });
       } else {
@@ -506,9 +511,13 @@ function ciplXlFormal(wb, spek, mdw) {
     const [c1, c2] = x.rentang ? kolomRentang(x.rentang) : [x.kolom + 1, x.kolom + 1];
     if (x.angka) {
       const kol = huruf(c1);
-      const s = ttUkuranPas([x.angka.teks], ukur(9, { b: true }), ruang(c1, c2, 0), 5) || 9;
+      const uang = !!x.angka.uang;
+      const inden = x.kiri && !uang ? 1 : 0;
+      // Uang TOTAL seukuran uang barang (8,5 pt, tebal) seperti cetakannya: digitnya segaris dengan angka di atasnya
+      const dasar = uang ? 8.5 : 9;
+      const s = ttUkuranPas([x.angka.ukur || x.angka.teks, x.angka.teks], ukur(dasar, { b: true }), ruang(c1, c2, inden), 5) || dasar;
       ciplXlSel(ws, rTotal, c1, rTotal, c2, { formula: `SUM(${kol}${rKepala}:INDEX(${kol}:${kol},ROW()-1))`, result: x.angka.v },
-        { numFmt: x.angka.fmt, font: A(s, { b: true }), ha: "center", va: "middle", fill: W.total });
+        { numFmt: x.angka.fmt, font: A(s, { b: true }), ha: x.kiri && !uang ? "left" : "center", indent: inden, va: "middle", fill: W.total });
     } else {
       ciplXlSel(ws, rTotal, c1, rTotal, c2, x.teks || "", x.kiri
         ? { font: A(9, { b: true }), ha: "left", va: "middle", indent: 1, fill: W.total }

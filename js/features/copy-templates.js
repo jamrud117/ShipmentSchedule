@@ -431,6 +431,19 @@ function buildReportCopyText() {
   return [REPORT_SAPAAN, "", REPORT_PENGANTAR, "", blocks.join("\n\n")].join("\n");
 }
 
+/* JALUR MERAH DI REPORT: nama barang jadwal yang PIB-nya jalur merah
+   (jalurOf) diberi fill merah -- sama dengan sorotan "Text Highlight
+   Color: Red" di Outlook, jadi penerima langsung melihat barang mana
+   yang diperiksa fisik. background-color dibaca Outlook baru/web,
+   mso-highlight dibaca Outlook desktop (Word). Warna teksnya sengaja
+   tidak diatur: ikut teks surel, jadi mode gelap Outlook tetap
+   menuliskannya terang di atas merah, seperti sorotan bawaannya. Versi
+   teks polos tidak berubah -- tidak ada warna di sana. */
+const REPORT_GAYA_JALUR_MERAH = "background-color:#ff0000;mso-highlight:red";
+function reportJalurMerah(s) {
+  return typeof jalurOf === "function" && jalurOf(s) === "merah";
+}
+
 /* ---- versi HTML (yang dipakai email) ---- */
 function buildReportCopyHtml() {
   const sections = [];
@@ -443,11 +456,14 @@ function buildReportCopyHtml() {
         const detail = reportDetailPairs(s, mode)
           .map(([k, v]) => `<b>${escapeHtml(k)}:</b> ${escapeHtml(v)}`)
           .join(' <span style="color:#94a3b8">|</span> ');
-        // SEMUA barang, satu butir per barang
+        // SEMUA barang, satu butir per barang; jalur merah: ber-fill merah
         const barang = reportItemNames(s);
+        const merah = reportJalurMerah(s);
+        const namaHtml = (nama) =>
+          merah ? `<span style="${REPORT_GAYA_JALUR_MERAH}">${escapeHtml(nama)}</span>` : escapeHtml(nama);
         const daftar = barang.length
           ? `<ul style="margin:4px 0 0;padding-left:18px;list-style:circle">
-               ${barang.map((nama) => `<li style="margin:1px 0">${escapeHtml(nama)}</li>`).join("")}
+               ${barang.map((nama) => `<li style="margin:1px 0">${namaHtml(nama)}</li>`).join("")}
              </ul>`
           : "";
         return `<li style="margin-bottom:10px">

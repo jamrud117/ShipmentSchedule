@@ -7,6 +7,9 @@
 
      kolom  lebar dalam mm          baris  tinggi dalam pt
      sel    rentang (gabungan), isi per baris teks, rata, warna latar
+            -- baris teks `sebar`: potongan pertama di tepi kiri, sisanya
+            di tepi kanan ("USD" ... "11,043"); potongan `samar` mengisi
+            tempat tanpa terlihat (".00" angka bulat di kolom bersen)
      garis  per sisi sel: tebal (1/2 px), gaya, warna
 
    lalu digambar:
@@ -263,8 +266,16 @@ function ttHtml(T) {
       `padding:0 ${ttN(s.padR || 0)}pt 0 ${ttN(s.padL || 0)}pt`,
     ];
     if (s.fill) gaya.push(`background:${s.fill}`);
-    const isi = (s.isi || []).map((b) => `<div class="tt-l" style="height:${ttN(b.pitch)}pt;line-height:${ttN(b.pitch)}pt">` +
-      b.runs.map((r) => `<span style="${ttGayaHuruf(r.h)}">${ttEsc(r.t)}</span>`).join("") + "</div>").join("");
+    const potongan = (r) => `<span style="${ttGayaHuruf(r.h)}${r.samar ? "visibility:hidden;" : ""}">${ttEsc(r.t)}</span>`;
+    /* Baris `sebar`: potongan pertama & sisanya masing-masing dibungkus span
+       polos (butir flex) yang mewarisi huruf & jarak baris sel -- garis
+       dasar teksnya sama persis dengan sel lain di baris itu, tidak naik
+       ~2 px seperti butir flex yang langsung berhuruf kecil. */
+    const isiBaris = (b) => (b.sebar
+      ? `<span>${potongan(b.runs[0])}</span><span>${b.runs.slice(1).map(potongan).join("")}</span>`
+      : b.runs.map(potongan).join(""));
+    const isi = (s.isi || []).map((b) => `<div class="tt-l" style="height:${ttN(b.pitch)}pt;line-height:${ttN(b.pitch)}pt` +
+      `${b.sebar ? ";display:flex;justify-content:space-between" : ""}">${isiBaris(b)}</div>`).join("");
     return `<td${span} style="${gaya.join(";")}">${isi}</td>`;
   };
   let isiTabel = "";

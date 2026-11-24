@@ -516,13 +516,74 @@ function ciplNamaDuaBaris(nama) {
    sel Excel tiap angka diformat sama dengan teks cetaknya. */
 const ciplAdaSen = (n) => Math.round((Number(n) || 0) * 100) % 100 !== 0;
 function ciplFormatUang(mata) {
-  return {
-    f: (n) => `"${mata} "#,##0${ciplAdaSen(n) ? ".00" : ""}`,
-    teks: (n) => {
-      const d = ciplAdaSen(n) ? 2 : 0;
-      return `${mata} ${angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}`;
-    },
+  const sen = (n) => (ciplAdaSen(n) ? ".00" : "");
+  const angka = (n) => {
+    const d = ciplAdaSen(n) ? 2 : 0;
+    return angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   };
+  return {
+    // Satu angka saja; sekolom dirapikan ciplRapikanUang (jarak digit / koma yang kurang)
+    f: (n) => `"${mata} "#,##0${sen(n)}`,
+    teks: (n) => `${mata} ${angka(n)}`,
+    // Potongan untuk baris `sebar` cetakan: kode di kiri, angka di kanan
+    bagian: (n) => ({ kode: mata, angka: angka(n) }),
+  };
+}
+
+/* UANG CI RAPI SEKOLOM -- UNIT PRICE & AMOUNT.
+   Angka di baris barang dibuat SELEBAR yang terlebar di kolomnya: "USD"
+   sejajar di kiri, digit sejajar di kanan, dan bloknya di TENGAH kolom
+   seperti kepala tabel. Rapat: "USD" hanya bergeser sebanyak digit yang
+   kurang dari angka terlebar (bukan melebar sampai tepi sel seperti
+   format Accounting). Angka bulat di kolom yang ada sennya diberi ".00"
+   tak terlihat supaya titik desimalnya sejajar.
+   Angka TOTAL rata kanan pada tepi kanan blok kolomnya: digitnya segaris
+   dengan angka di atasnya, "USD"-nya menempel (angka TOTAL biasanya lebih
+   panjang -- tidak ikut melebarkan blok barang).
+     a.ukur          teks terlebar barang sekolom: patokan lebar blok & huruf
+     a.uang.samar    ".00" tak terlihat (angka bulat di kolom bersen)
+     a.uang.kanan    angka TOTAL (rata kanan pada blok)
+     a.fmt           Excel, rata tengah: barang diberi jarak _0 / _, sebanyak
+                     digit / koma yang kurang di depan angkanya; TOTAL diberi
+                     jarak sebanyak kelebihannya di BELAKANG, jadi tepi
+                     kanannya segaris -- tampil sama dengan cetakannya */
+function ciplRapikanUang(tb) {
+  const urai = (a) => {
+    const [bulat, pecahan] = String(a.uang.angka).split(".");
+    return { a, pecahan: pecahan || "", digit: (bulat.match(/\d/g) || []).length, koma: (bulat.match(/,/g) || []).length };
+  };
+  const kolom = {};
+  tb.baris.forEach((sel) => sel.forEach((x, k) => {
+    const a = x && x.angka;
+    if (a && a.uang) (kolom[k] = kolom[k] || []).push(urai(a));
+  }));
+  const blok = {};
+  Object.keys(kolom).forEach((k) => {
+    const daftar = kolom[k];
+    const D = Math.max(...daftar.map((x) => x.digit));
+    const C = Math.max(...daftar.map((x) => x.koma));
+    const sen = daftar.some((x) => x.pecahan);
+    const minus = daftar.some((x) => String(x.a.uang.angka).startsWith("-"));
+    // Angka Arial / Times sama lebar: "0" mewakili digit apa pun
+    const terlebar = (minus ? "-" : "") + "0".repeat(D).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (sen ? ".00" : "");
+    blok[k] = { D, C, sen, terlebar };
+    daftar.forEach((x) => {
+      x.a.ukur = `${x.a.uang.kode} ${terlebar}`;
+      x.a.uang.samar = sen && !x.pecahan ? ".00" : "";
+      x.a.fmt = `"${x.a.uang.kode} "${"_0".repeat(D - x.digit)}${"_,".repeat(C - x.koma)}#,##0${x.pecahan ? ".00" : sen ? "_._0_0" : ""}`;
+    });
+  });
+  tb.total.forEach((x) => {
+    const b = x.kolom != null && blok[x.kolom];
+    if (!b || !x.angka || !x.angka.uang) return;
+    const jml = urai(x.angka);
+    x.angka.ukur = `${x.angka.uang.kode} ${b.terlebar}`;
+    x.angka.uang.kanan = true;
+    x.angka.uang.samar = b.sen && !jml.pecahan ? ".00" : "";
+    x.angka.fmt = `"${x.angka.uang.kode} "#,##0${jml.pecahan ? ".00" : b.sen ? "_._0_0" : ""}` +
+      "_0".repeat(Math.max(0, jml.digit - b.D)) + "_,".repeat(Math.max(0, jml.koma - b.C));
+  });
+  return tb;
 }
 /* Angka bersatuan (berat KG, jumlah): desimal mengikuti nilainya
    (170 -> "170", 1,275.5 -> "1,275.5"). */
@@ -643,11 +704,40 @@ function ddIsiRinci(label, nilai, lebar, satuBaris) {
 }
 
 /* Sel angka (rata tengah, satu baris): dikecilkan seperlunya kalau tak muat */
-function ddSelAngka(T, r, c1, c2, nilai, fmt, teks, h, gaya) {
-  const lebar = ttLebarIsi(T, c1, c2, ttPx(5), ttPx(5));
-  const s = ttUkuranPas([teks], h, lebar, 5) || h.s;
-  return ttSel(T, r, c1, r, c2, [ttBaris(teks, Object.assign({}, h, { s }), h.s * 1.3)],
-    Object.assign({ ha: "center", va: "middle", angka: { v: nilai, fmt } }, gaya || {}));
+/* Sel angka a = { v, fmt, teks, uang?, ukur? }. Huruf dikecilkan bila
+   teksnya tidak muat satu baris.
+   Uang (a.uang, CI: UNIT PRICE & AMOUNT): blok selebar a.ukur -- teks
+   terlebar barang sekolom (ciplRapikanUang) -- di TENGAH sel, satu baris
+   `sebar` (cipl-tata.js): "USD" di tepi kiri blok, angka di tepi kanan.
+   Blok sekolom sama lebar, jadi "USD" & digitnya sejajar dan bloknya
+   segaris dengan kepala kolom. Angka TOTAL (a.uang.kanan) rata kanan pada
+   tepi kanan blok itu: digitnya segaris dengan angka di atasnya. */
+function ddSelAngka(T, r, c1, c2, a, h, gaya) {
+  if (a.uang) {
+    const lebarSel = ttLebarSel(T, c1, c2);
+    const patokan = a.ukur || a.teks;
+    const s = ttUkuranPas([patokan], h, ttLebarIsi(T, c1, c2, ttPx(5), ttPx(5)), 5) || h.s;
+    const blok = Math.min(lebarSel - 2 * ttPx(5), ttLebar(patokan, Object.assign({}, h, { s })) / TT_LONGGAR);
+    const pad = (lebarSel - blok) / 2;
+    const samar = a.uang.samar ? [{ t: a.uang.samar, samar: true }] : [];
+    const dasar = Object.assign({ va: "middle" }, gaya || {}, { angka: { v: a.v, fmt: a.fmt } });
+    if (a.uang.kanan) {
+      // TOTAL: muat di sebelah kiri tepi kanan blok (huruf dikecilkan bila perlu)
+      const sT = Math.min(s, ttUkuranPas([a.teks + (a.uang.samar || "")], h, ttLebarIsi(T, c1, c2, ttPx(5), pad), 5) || s);
+      const hT = Object.assign({}, h, { s: sT });
+      return ttSel(T, r, c1, r, c2, [{ runs: [{ t: a.teks }].concat(samar).map((x) => Object.assign(x, { h: hT })), pitch: h.s * 1.3 }],
+        Object.assign(dasar, { ha: "right", padL: 0, padR: pad }));
+    }
+    const hs = Object.assign({}, h, { s });
+    const runs = [{ t: a.uang.kode + " " }, { t: a.uang.angka }].concat(samar).map((x) => Object.assign(x, { h: hs }));
+    return ttSel(T, r, c1, r, c2, [{ runs, pitch: h.s * 1.3, sebar: true }], Object.assign(dasar, { ha: "left", padL: pad, padR: pad }));
+  }
+  const g = Object.assign({ ha: "center", va: "middle" }, gaya || {});
+  // Ruang angka = lebar sel dikurangi padding-nya, minimal 5 px tiap sisi
+  const pad = (k) => (g[k] > ttPx(5) ? g[k] : ttPx(5));
+  const lebar = ttLebarIsi(T, c1, c2, pad("padL"), pad("padR"));
+  const hs = Object.assign({}, h, { s: ttUkuranPas([a.teks], h, lebar, 5) || h.s });
+  return ttSel(T, r, c1, r, c2, [ttBaris(a.teks, hs, h.s * 1.3)], Object.assign(g, { angka: { v: a.v, fmt: a.fmt } }));
 }
 
 /* ---------------- LEMBAR BERGAYA FORMAL (CI / PL) ----------------
@@ -664,9 +754,13 @@ function ddSelAngka(T, r, c1, c2, nilai, fmt, teks, h, gaya) {
                     | { judul, referensi(lebarNo, lebarLabel) -> { no, tgl } } }]
      rinci        8 x [label, nilai] dalam 2 pita x 4 kotak
      tabel        { kolom: [[k1, k2] ...] (indeks kisi 0..7), kepala: [[judul, sub?]],
-                    baris: [[sel ...]], total: [sel ...] }
-                  sel = { teks: [baris...] } | { angka: { v, fmt, teks } } | null,
-                  sel total boleh { rentang: [k1, k2], teks, kiri }
+                    baris: [[sel ...]], total: [sel ...], rataKiri: [k ...] }
+                  sel = { teks: [baris...] } | { angka: { v, fmt, teks, uang? } } | null,
+                  sel total boleh { rentang: [k1, k2], teks, kiri }; rataKiri =
+                  kolom yang rata kiri di baris barang, kiri = sel total rata
+                  kiri -- keduanya berlaku untuk teks maupun angka; angka
+                  ber-uang ({ kode, angka }) dirapikan sekolom (ciplRapikanUang,
+                  ddSelAngka)
      kiriBawah    [{ judul, baris: [[teks, tebal]] }] kotak bertumpuk, selebar isinya
      ttd          { atas: [teks...] } -- kotak tanda tangan 50 mm di kanan bawah
 */
@@ -766,8 +860,8 @@ function ciplTataFormal(spek) {
   ttKotak(T, rRinci[0], cKiri1, rRinci[1], cKanan2, { warna: W.garisRinci });
   tambah(ttPx(10));
 
-  // TABEL BARANG
-  const tb = spek.tabel;
+  // TABEL BARANG (uang sekolom dirapikan dulu: dipakai cetakan & Excel lewat T.spek)
+  const tb = ciplRapikanUang(spek.tabel);
   const kol = tb.kolom.map(rentang);
   const lebarKol = (i) => ttLebarIsi(T, kol[i][0], kol[i][1], ttPx(5), ttPx(5));
   const hKepala = ddH(7, { b: true, c: W.putih });
@@ -786,7 +880,9 @@ function ciplTataFormal(spek) {
      rata); teks yang lebih pendek berada di tengah barisnya (va: middle).
      Kolom di tb.rataKiri (GOODS DESCRIPTION) RATA KIRI, berjarak 9 px
      seperti TOTAL: nama barang yang panjang-pendek / turun baris berbaris
-     lurus di tepi kiri. Kepala tabel & kolom lain tetap rata tengah. */
+     lurus di tepi kiri. Uang CI: blok rapi di tengah kolom
+     (ciplRapikanUang, ddSelAngka). Kepala tabel & kolom lain tetap rata
+     tengah. */
   const rataKiri = new Set(tb.rataKiri || []);
   const padKiri = ttPx(9);
   const lebarBarang = (k) => (rataKiri.has(k) ? ttLebarIsi(T, kol[k][0], kol[k][1], padKiri, ttPx(5)) : lebarKol(k));
@@ -798,9 +894,9 @@ function ciplTataFormal(spek) {
     const g = { ha: "center", va: "middle", fill: i % 2 === 1 ? W.zebra : null };
     sel.forEach((x, k) => {
       const [c1, c2] = kol[k];
-      if (x && x.angka) ddSelAngka(T, r, c1, c2, x.angka.v, x.angka.fmt, x.angka.teks, hIsi, g);
+      const gaya = rataKiri.has(k) ? Object.assign({}, g, { ha: "left", padL: padKiri, padR: ttPx(5) }) : g;
+      if (x && x.angka) ddSelAngka(T, r, c1, c2, x.angka, hIsi, gaya);
       else {
-        const gaya = rataKiri.has(k) ? Object.assign({}, g, { ha: "left", padL: padKiri, padR: ttPx(5) }) : g;
         const s = ttSel(T, r, c1, r, c2, (teks[k] || [""]).map((tx) => ttBaris(tx, hIsi, pitchIsi)), gaya);
         if (x && x.nilaiExcel) s.angka = x.nilaiExcel;
       }
@@ -814,9 +910,10 @@ function ciplTataFormal(spek) {
   const gT = { ha: "center", va: "middle", fill: W.total };
   tb.total.forEach((x) => {
     const [c1, c2] = x.rentang ? rentang(x.rentang) : kol[x.kolom];
-    if (x.angka) ddSelAngka(T, rTotal, c1, c2, x.angka.v, x.angka.fmt, x.angka.teks, hT, gT);
-    else ttSel(T, rTotal, c1, rTotal, c2, x.teks ? [ttBaris(x.teks, hT, 9 * 1.15)] : [],
-      Object.assign({}, gT, x.kiri ? { ha: "left", padL: ttPx(9) } : {}));
+    const gaya = Object.assign({}, gT, x.kiri ? { ha: "left", padL: ttPx(9) } : {});
+    // Uang TOTAL seukuran uang barang (8,5 pt, tebal): digitnya segaris dengan angka di atasnya
+    if (x.angka) ddSelAngka(T, rTotal, c1, c2, x.angka, x.angka.uang ? ddH(8.5, { b: true }) : hT, gaya);
+    else ttSel(T, rTotal, c1, rTotal, c2, x.teks ? [ttBaris(x.teks, hT, 9 * 1.15)] : [], gaya);
   });
   ttGaris(T, rTotal, cKiri1, rTotal, cKanan2, "atas bawah", { w: 2, warna: W.navy });
 
@@ -923,7 +1020,8 @@ function ciplDdTata(jenis, row, shipment, baris) {
     const f = ciplFormatAngka(n, satuan);
     return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
   };
-  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n) } });
+  // Uang bergaya akuntansi (ddSelAngka): "USD" di kiri, angka di kanan
+  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n), uang: uang.bagian(n) } });
   const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
   const kemasan = ci ? [] : ciplRincianKemasan(p, shipment, baris);
   return ciplTataFormal({

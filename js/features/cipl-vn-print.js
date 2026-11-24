@@ -150,7 +150,8 @@ function ciplVnTata(jenis, row, shipment) {
     const f = ciplFormatAngka(n, satuan);
     return { angka: { v: f.v, fmt: f.f, teks: f.teks } };
   };
-  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n) } });
+  // Uang bergaya akuntansi (ddSelAngka, cipl-print.js): "USD" di kiri, angka di kanan
+  const duit = (n) => ({ angka: { v: Number(n) || 0, fmt: uang.f(n), teks: uang.teks(n), uang: uang.bagian(n) } });
   // Consignee = Penerima (alamat profil bila belum diisi); Seller = Pembeli; Shipper = Penjual
   const consignee = ciplPihakBaris(p.penerimaNama || p.customer || (shipment && shipment.party) || "",
     p.consigneeAddress || (prof.lines || []).join("\n"));
