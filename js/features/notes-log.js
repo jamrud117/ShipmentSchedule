@@ -137,8 +137,11 @@ function editDraftNote(noteId) {
   if (!entri) return;
 
   const asal = entri.ts ? new Date(entri.ts) : null;
-  const tglAwal =
-    asal && !isNaN(asal) ? asal.toISOString().slice(0, 10) : todayISO();
+  /* Tanggal LOKAL entri, sama dengan yang tertulis di kronologi
+     (fmtNoteStamp). toISOString() memakai UTC: catatan pukul 00.00-06.59
+     WIB dulu tampil sehari mundur di sini -- dan ikut mundur kalau isinya
+     saja yang diubah lalu disimpan. */
+  const tglAwal = asal && !isNaN(asal) ? toISODate(asal) : todayISO();
 
   showPrompt({
     title: t("c.ubah.kronologi"),

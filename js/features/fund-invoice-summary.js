@@ -17,8 +17,10 @@
                          jadi 6.4E+14)
      F COMPANY           Dibayarkan Kepada; KAS NEGARA -> STATE TREASURY
      G CUSTOMER          Customer
-     H DETAILS           nama barang jadwal yang BL/AWB-nya cocok
-                         ("SPRING VENT - MINI PLUG"); tanpa jadwal -> Rincian
+     H DETAILS           nama barang jadwal yang BL/AWB-nya cocok, SATU
+                         BARANG PER BARIS di dalam satu sel (pemisah baris
+                         "\n"; di salinan HTML <br mso-data-placement:
+                         same-cell>), rata kiri-atas; tanpa jadwal -> Rincian
      I COST(RP)          TOTAL yang dibayar (sesudah potongan PPh 23)
      J EXPENSES CATEGORY daftar CATEGORY lembar itu: IMPORT DUTY TAX,
                          IMPORT DUTY TAX + STORAGE, FREIGHT CHARGE, STORAGE,
@@ -49,7 +51,8 @@ function invsumModa(p) {
   return j.toUpperCase();
 }
 
-/* Nama barang (huruf besar, tanpa kembar) jadwal yang BL/AWB-nya cocok */
+/* Nama barang (huruf besar, tanpa kembar) jadwal yang BL/AWB-nya cocok --
+   satu barang per baris di dalam satu sel DETAILS ("MOTOR\nMOBIL"). */
 function invsumBarang(blAwb) {
   const daftar = typeof fundDaftarAwb === "function" ? fundDaftarAwb(blAwb) : [];
   const kunci = new Set(daftar.map((a) => a.kunci).filter((k) => k.length >= 5));
@@ -62,7 +65,7 @@ function invsumBarang(blAwb) {
       if (n && !nama.includes(n)) nama.push(n);
     });
   });
-  return nama.join(" - ");
+  return nama.join("\n");
 }
 
 /* INVOICE NUMBER: Billing -> Nomor Billing; selainnya No. Invoice + invoice /
@@ -75,14 +78,18 @@ function invsumNomor(p) {
   return unik.length ? unik.join(", ") : String(p.billingNo || "").trim();
 }
 
-/* Satu pengajuan (baris riwayat) -> 10 sel { v, jenis: teks|tanggal|angka } */
+/* Satu pengajuan (baris riwayat) -> 10 sel { v, jenis: teks|tanggal|angka, sen? } */
 function invsumSel(r) {
   const p = (r && r.payload) || {};
   const tglInvoice = p.invoiceDate || (r && r.doc_date) || "";
   const nomor = invsumNomor(p);
   const vendor = String(p.payee || "").trim().toUpperCase();
   const rincian = String(p.notes || "").replace(/^payment request\s*-\s*/i, "").trim().toUpperCase();
-  const total = typeof fundTotalKomponen === "function" ? fundTotalKomponen(p).dibayar : 0;
+  const total = Number(typeof fundTotalKomponen === "function" ? fundTotalKomponen(p).dibayar : 0) || 0;
+  /* Rupiah tanpa sen (lembar akunting); mata uang lain tetap bersen --
+     1.213,71 dolar tidak jadi 1.214 -- sama dengan Export (fexBulat). */
+  const mata = String(p.currency || "").trim().toUpperCase();
+  const rupiah = !mata || mata === "IDR";
   return [
     { v: tglInvoice, jenis: "tanggal" },
     { v: p.invoiceDueDate || tglInvoice, jenis: "tanggal" },
@@ -90,8 +97,8 @@ function invsumSel(r) {
     { v: String(nomor || "").trim(), jenis: "teks" },
     { v: INVSUM_NAMA_VENDOR[vendor] || vendor, jenis: "teks" },
     { v: String(p.customer || "").trim().toUpperCase(), jenis: "teks" },
-    { v: invsumBarang(p.blAwb) || rincian, jenis: "teks" },
-    { v: Math.round(Number(total) || 0), jenis: "angka" },
+    { v: invsumBarang(p.blAwb) || rincian, jenis: "teks", rinci: true },
+    rupiah ? { v: Math.round(total), jenis: "angka" } : { v: Math.round(total * 100) / 100, jenis: "angka", sen: true },
     { v: invsumKategori(p), jenis: "teks" },
     { v: invsumModa(p), jenis: "teks" },
   ];
@@ -108,8 +115,17 @@ function invsumSalinan(r) {
   const sel = invsumSel(r);
   const teks = sel.map((c) => tsvField(invsumTeksSel(c))).join("\t");
   const gaya = { teks: "mso-number-format:'\\@'", tanggal: "mso-number-format:'d\\-mmm\\-yy'", angka: "mso-number-format:'\\#\\,\\#\\#0'" };
+  const gayaSen = "mso-number-format:'\\#\\,\\#\\#0\\.00'";
+  /* DETAILS: tiap barang di baris sendiri DALAM SATU SEL -- <br> bergaya
+     mso-data-placement:same-cell (tanpa itu Excel memecahnya ke baris
+     berikutnya); rata kiri-atas seperti kolom DETAILS di Export. Teks
+     polosnya: sel berisi baris baru dikutip (tsvField). */
+  const isiSel = (c) => (c.rinci
+    ? String(invsumTeksSel(c)).split("\n").map(escapeHtml).join('<br style="mso-data-placement:same-cell">')
+    : escapeHtml(invsumTeksSel(c)));
+  const gayaSel = (c) => (c.sen ? gayaSen : gaya[c.jenis]) + (c.rinci ? ";text-align:left;vertical-align:top;white-space:normal" : "");
   const html = `<table><tr>${sel
-    .map((c) => `<td style="${gaya[c.jenis]}">${escapeHtml(invsumTeksSel(c))}</td>`)
+    .map((c) => `<td style="${gayaSel(c)}">${isiSel(c)}</td>`)
     .join("")}</tr></table>`;
   return { teks, html, sel };
 }

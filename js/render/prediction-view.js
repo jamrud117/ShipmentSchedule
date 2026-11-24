@@ -367,7 +367,7 @@ function predictionDetailHtml(s) {
     <div class="pred-detail">
       <div class="pred-detail-row">
         <div class="pred-detail-key">${tt("Tipe Pengiriman", "Shipment Type")}</div>
-        <div class="pred-detail-val">${escapeHtml(tipe)}${predictionTypeIsAssumed(s) ? ' <span class="pred-muted">${t("c.jenis.muatan.belum.diisi.dianggap.fcl")}</span>' : ""}</div>
+        <div class="pred-detail-val">${escapeHtml(tipe)}${predictionTypeIsAssumed(s) ? ` <span class="pred-muted">${escapeHtml(t("c.jenis.muatan.belum.diisi.dianggap.fcl"))}</span>` : ""}</div>
       </div>
       <div class="pred-detail-row">
         <div class="pred-detail-key">${tt("ETA Hitungan Mesin", "Engine-calculated ETA")}</div>

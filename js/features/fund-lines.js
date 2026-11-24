@@ -380,8 +380,8 @@ function fundLinePpnDaftar(daftar, nilai, mata, payee) {
    `mata` = mata uang pengajuan. IDR (juga kosong): Total PPN dibulatkan ke
    rupiah penuh ke atas, Total Diskon & PPH 23 ke rupiah terdekat, dan TOTAL
    ke atas dari hitungan tepatnya (lihat FUND_PPH23_RATE) -- lihat
-   fundRupiahPenuh. Mata uang lain: PPN sampai sen, PPH 23 ke satuan
-   terdekat, seperti sebelumnya.
+   fundRupiahPenuh. Mata uang lain: Total Nilai, Diskon, DPP, PPN dan TOTAL
+   sampai sen; PPH 23 ke satuan terdekat, seperti sebelumnya.
 
    `payee` = "Dibayarkan Kepada": menentukan PPN per baris 2 desimal (PRIME)
    atau rupiah penuh (selain itu) -- fundPpnSen.
@@ -428,11 +428,11 @@ function fundLineTotals(lines, mata, payee, dokumen) {
   const rupiah = fundRupiahPenuh(mata);
   const rapi = (v) => (rupiah ? v : fundBulatSen(v));
   return {
-    totalNilai: jumlah("totalNilai"),
+    totalNilai: rapi(jumlah("totalNilai")),
     totalDiskon: rapi(jumlah("totalDiskon")),
     totalNet: rapi(jumlah("totalNet")),
     totalPpn: rapi(jumlah("totalPpn")),
-    dppPph: jumlah("dppPph"),
+    dppPph: rapi(jumlah("dppPph")),
     pph: jumlah("pph"),
     grandTotal: rapi(jumlah("grandTotal")),
     perDokumen,
@@ -459,9 +459,14 @@ function fundTotalKelompok(daftar, nilai, ppnBaris, indeks, mata) {
     if (fundLineRate(b) > 0) dppPph += v;
   });
   const rupiah = fundRupiahPenuh(mata);
+  /* IDR: rupiah penuh. Mata uang lain tetap bersen -- Total Nilai, Diskon
+     dan DPP juga, bukan hanya PPN: 1.213,71 dolar tidak boleh menjadi
+     1.214 (fundRupiahPenuh). PPh 23-nya tetap ke satuan terdekat. */
+  const rapi = (v) => (rupiah ? Math.round(v) : fundBulatSen(v));
+  const nilaiTotal = rapi(totalNilai);
   const totalPpn = rupiah ? fundNaikRupiah(totalPpnSen) : totalPpnSen / FUND_SEN;
-  const diskon = rupiah ? Math.round(totalDiskon) : totalDiskon;
-  const totalNet = Math.round(totalNilai) - diskon;
+  const diskon = rapi(totalDiskon);
+  const totalNet = rupiah ? nilaiTotal - diskon : fundBulatSen(nilaiTotal - diskon);
   const pph = Math.max(0, Math.round((dppPph * FUND_PPH23_RATE) / 100));
   let grandTotal;
   if (rupiah) {
@@ -476,11 +481,11 @@ function fundTotalKelompok(daftar, nilai, ppnBaris, indeks, mata) {
     grandTotal = fundBulatSen(totalNet + totalPpn - pph);
   }
   return {
-    totalNilai: Math.round(totalNilai), // pos biaya, SEBELUM diskon
+    totalNilai: nilaiTotal, // pos biaya, SEBELUM diskon
     totalDiskon: diskon,
     totalNet, // setelah diskon, sebelum pajak
     totalPpn,
-    dppPph: Math.round(dppPph),
+    dppPph: rapi(dppPph),
     pph,
     /* PPH 23 MEMOTONG, bukan menambah: ia dipungut pemberi kerja dan
        disetor atas nama penyedia jasa, jadi yang dibayarkan ke
@@ -628,10 +633,11 @@ function fundBagiPerAwb(p) {
     };
   });
   const rupiah = fundRupiahPenuh(d.currency);
-  const dpp = fundBulatkanBagian(mentah.map((m) => m.dpp), total.dpp);
-  /* Total PPN bulat (IDR): bagiannya juga rupiah penuh, seperti DPP & PPH,
-     dan menjumlah tepat ke total. Mata uang lain: sampai sen. */
-  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn, rupiah ? 1 : FUND_SEN);
+  /* IDR: DPP & PPN tiap bagian rupiah penuh, seperti PPH, dan menjumlah
+     tepat ke totalnya. Mata uang lain: DPP & PPN sampai sen. */
+  const skala = rupiah ? 1 : FUND_SEN;
+  const dpp = fundBulatkanBagian(mentah.map((m) => m.dpp), total.dpp, skala);
+  const ppnBagian = fundBulatkanBagian(mentah.map((m) => m.ppn), total.ppn, skala);
   const pph = fundBulatkanBagian(mentah.map((m) => m.pph), total.pph);
   const dibayar = awb.map((a, i) => fundBulatSen(dpp[i] + ppnBagian[i] - pph[i]));
   /* IDR: TOTAL dihitung dari nilai tepatnya dan dibulatkan ke atas

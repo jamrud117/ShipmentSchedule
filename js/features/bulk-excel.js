@@ -342,7 +342,8 @@ async function handleBulkExport(mode) {
   });
   const tautan = document.createElement("a");
   tautan.href = URL.createObjectURL(blob);
-  tautan.download = `bulk-${mode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  // Tanggal lokal (todayISO): toISOString() = UTC, sehari mundur pukul 00.00-06.59 WIB
+  tautan.download = `bulk-${mode}-${todayISO()}.xlsx`;
   document.body.appendChild(tautan);
   tautan.click();
   document.body.removeChild(tautan);

@@ -416,12 +416,12 @@ function renderItemTable() {
       ${isianBarangHtml(it, "marks", "Marks", tt("otomatis", "auto"), "export-col")}
       <td class="jenis-col" data-k="jenisBarang" data-label="${escapeAttr(t("f.jenis.barang"))}">
         <select data-f="jenisBarang" aria-label="${escapeAttr(t("f.jenis.barang"))}">
-          ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${o}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
+          ${jenisOptionsUntuk(it.jenisBarang).map((o) => `<option value="${escapeAttr(o)}" ${o === normalisasiJenisBarang(it.jenisBarang) ? "selected" : ""}>${escapeHtml(labelJenisBarang(o))}</option>`).join("")}
         </select>
       </td>
       <td data-k="fasilitas" data-label="${escapeAttr(t("f.fasilitas"))}">
         <button type="button" class="btn-facilities ${(it.skb || []).length || piBarangBerlaku(it) ? "has-value" : ""}" data-act="toggle-fac" data-idx="${idx}">
-          <span>${facilitiesButtonLabel(it)}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
+          <span>${escapeHtml(facilitiesButtonLabel(it))}</span> <i class="bi bi-chevron-${it._facOpen ? "up" : "down"}"></i>
         </button>
       </td>
       ${grupKartuHtml("jumlah")}

@@ -338,17 +338,19 @@ function lengkapiKodeBarang(newItems, oldItems, lapisan) {
   });
 }
 
-/* GOODS CATEGORY (Jenis Barang) TIDAK DISENTUH IMPOR DRAFT EXCEL CEISA.
+/* GOODS CATEGORY (Jenis Barang) TIDAK DISENTUH IMPOR.
 
-   Draft CEISA tidak memuat kategori ini: yang tertulis di barangnya hanya
-   bawaan buku (newItem: BAHAN BAKU / BARANG JADI), dan bawaan itu dulu
-   menimpa pilihan di form -- SPAREPART, BARANG MODAL, dst. harus dipilih
-   ulang tiap kali draft diimpor. Barang draft kini memakai Jenis Barang
-   barang lamanya: nama sama, lalu nama mirip; sisanya menurut urutan bila
-   jumlah barangnya sama (draft disusun dari invoice yang sama). Barang
-   yang tetap tanpa pasangan memakai jenis yang dipakai SEMUA barang lama
-   bila seragam -- juga baris yang belum diisi, yang jenisnya dipilih lebih
-   dulu --, selain itu bawaan buku. */
+   Tidak satu pun berkas impor memuat kategori ini -- draft Excel CEISA,
+   PDF PIB/PEB, maupun CIPL: yang tertulis di barangnya hanya bawaan buku
+   (BAHAN BAKU / BARANG JADI), dan bawaan itu dulu menimpa pilihan di
+   form -- SPAREPART, BARANG MODAL, dst. harus dipilih ulang tiap kali
+   berkas diimpor. Barang berkas kini memakai Jenis Barang barang lamanya:
+   nama sama, lalu nama mirip; sisanya menurut urutan bila jumlah barangnya
+   sama (berkas disusun dari invoice yang sama). Barang yang tetap tanpa
+   pasangan memakai jenis yang dipakai SEMUA barang lama bila seragam --
+   juga baris yang belum diisi, yang jenisnya dipilih lebih dulu --, selain
+   itu bawaan buku. Barang invoice BARU (CIPL "tambah") memang barang lain:
+   bawaan buku. */
 function pertahankanJenisBarang(newItems, oldItems) {
   const semua = (oldItems || []).filter(Boolean);
   if (!semua.length || !newItems.length) return newItems;
@@ -465,7 +467,9 @@ function gabungBarangCiplInvoice(baru, lama, rencana, notes) {
   }
   const diganti = lamaDitandai.filter((it, i) => kunciCipl.has(tanda[i]));
   const sudahAda = new Set(tanda.filter(Boolean));
-  const baruRapi = diganti.length ? pertahankanDataPabeanBarang(lengkapiKodeBarang(baru, diganti), diganti) : lengkapiKodeBarang(baru, lamaDitandai, [COCOK_NAMA]);
+  const baruRapi = diganti.length
+    ? pertahankanJenisBarang(pertahankanDataPabeanBarang(lengkapiKodeBarang(baru, diganti), diganti), diganti)
+    : lengkapiKodeBarang(baru, lamaDitandai, [COCOK_NAMA]);
   const diTempat = baruRapi.filter((it) => sudahAda.has(kunciInvoice(it.invoiceNomor)));
   const tambahan = baruRapi.filter((it) => !sudahAda.has(kunciInvoice(it.invoiceNomor)));
   const out = [];
@@ -785,7 +789,7 @@ function applyImportedBcData(parsed) {
         // CIPL satu invoice di jadwal berinvoice lebih dari satu: barang invoice lain tetap (gabungBarangCiplInvoice)
         draftItems = gabungBarangCiplInvoice(cleaned, draftItems, parsed.rencanaInvoice, notes);
       } else if (isPriceAuthority(src)) {
-        draftItems = pertahankanDataPabeanBarang(lengkapiKodeBarang(cleaned, draftItems), draftItems);
+        draftItems = pertahankanJenisBarang(pertahankanDataPabeanBarang(lengkapiKodeBarang(cleaned, draftItems), draftItems), draftItems);
       } else {
         /* Nama dipertahankan LEBIH DULU: pencocokan harga & dimensi di
            bawah memakai nama sebagai kunci, jadi urutannya penting --
@@ -816,8 +820,8 @@ function applyImportedBcData(parsed) {
           barangLama,
           lapisLama,
         );
-        // Goods Category (Jenis Barang) tidak disentuh draft Excel CEISA
-        draftItems = draftCeisa ? pertahankanJenisBarang(barangBaru, barangLama) : barangBaru;
+        // Goods Category (Jenis Barang) tidak disentuh draft Excel CEISA maupun PDF PIB/PEB
+        draftItems = pertahankanJenisBarang(barangBaru, barangLama);
         if (jaga.kept) {
           notes.push(
             t("w.harga.satuan.dipertahankan", { n: jaga.kept, urut: jaga.byOrder ? tt(" (dicocokkan menurut urutan)", " (matched by order)") : "" }),

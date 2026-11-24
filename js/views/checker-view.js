@@ -1403,6 +1403,11 @@ function cekBarisDataPabeanBarang(no, it, bc, sumber, isPib) {
   const tersimpan = rapikanDataPabeanBarang(it.dataPabean);
   // Isian barang yang kosong = nilai bawaan barang (PIB: METODE 1, T -- DP_BARANG_BAWAAN)
   const a = dpBarangEfektif(it.dataPabean, mode);
+  /* Nilai bawaan hanya dibandingkan dengan draft yang MENCANTUMKAN isiannya:
+     bawaan ada supaya draft METODE 1 / T tidak jadi "belum diisi di jadwal",
+     bukan untuk menambah temuan pada draft yang tidak memuat kolomnya. */
+  const bawaanBarang = DP_BARANG_BAWAAN[dpDok(mode)] || {};
+  const hanyaBawaan = (k, draft) => k in bawaanBarang && !dpAda(tersimpan[k]) && !dpAda(draft);
   const coo = isPib && barangPakaiCoo(it);
   if (coo) a.tarifBm = 0;
   const b = cekDpDraft(bc, mode).perSeri.get(kunciSeri(no)) || {};
@@ -1411,6 +1416,7 @@ function cekBarisDataPabeanBarang(no, it, bc, sumber, isPib) {
     ? { tarifBm: () => (typeof tarifBmBerlaku === "function" ? tarifBmBerlaku(it, cekJadwal()) : null), tarifPph: () => (typeof TARIF_PPH_IMPOR !== "undefined" ? TARIF_PPH_IMPOR : null) }
     : {};
   DP_BARANG.filter((f) => dpBerlaku(f, mode)).forEach((f) => {
+    if (hanyaBawaan(f.k, b[f.k])) return;
     const pembuat = (status, kiri, kanan, catatan) =>
       Object.assign(cekBarisBaru("ITEM", sumber)(`Item ${no} ${dpLabel(f.label)}`, status, kiri, kanan, catatan), { kunci: `barang:${kunciSeri(no)}:${f.k}` });
     const berlaku = BERLAKU[f.k] && !dpAda(a[f.k]) && dpAda(b[f.k]) ? BERLAKU[f.k]() : null;

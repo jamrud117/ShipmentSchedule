@@ -261,9 +261,53 @@ function balikKonteksRute(ctx) {
   };
 }
 
+/* PERINGKAT ATURAN RUTE DIINGAT SELAMA SATU HITUNGAN MASSAL.
+
+   applyPredictionToAll menghitung seluruh papan sekaligus, dan kiriman
+   yang rutenya sama (asal, tujuan, moda, pelayaran, forwarder) menjalani
+   pencocokan SEMUA aturan rute -- dua arah -- berulang-ulang dengan hasil
+   yang sama: bagian terberat menyelaraskan prediksi saat papan dimuat.
+   Di dalam denganMemoAturanRute() hasilnya diingat per kunci konteks
+   (hanya kunci yang dibaca pencocokan). Ingatannya dibuang begitu
+   hitungan massalnya selesai: di luar itu (form, kartu, uji yang
+   mengubah PREDICTION_CONFIG) peringkat selalu dihitung baru, jadi
+   aturan yang diubah tidak pernah terbaca basi. */
+let memoAturanRute = null; // Map(rules -> { kunci: [...], hasil: Map }) atau null
+function denganMemoAturanRute(fn) {
+  if (memoAturanRute) return fn();
+  memoAturanRute = new Map();
+  try {
+    return fn();
+  } finally {
+    memoAturanRute = null;
+  }
+}
+function memoPeringkatRute(rules) {
+  let m = memoAturanRute.get(rules);
+  if (!m) {
+    // Kunci konteks yang dibaca: semua kunci `match` aturannya + pelabuhan induk (arah sebaliknya ikut darinya)
+    const kunci = new Set(["fromPort", "toPort", "fromMetro", "toMetro", "fromCountry", "toCountry"]);
+    rules.forEach((r) => {
+      for (const k in (r && r.match) || {}) kunci.add(k);
+    });
+    m = { kunci: [...kunci], hasil: new Map() };
+    memoAturanRute.set(rules, m);
+  }
+  return m;
+}
+
 /* [{ r, skor, i, balik }] berperingkat; `balik` = cocok lewat arah
-   sebaliknya. */
+   sebaliknya. Hasilnya hanya DIBACA pemanggil (di dalam hitungan massal
+   larik yang sama dipakai bersama). */
 function rankRouteRules(rules, ctx) {
+  if (!memoAturanRute || !Array.isArray(rules) || !ctx) return rankRouteRulesBaru(rules, ctx);
+  const m = memoPeringkatRute(rules);
+  const kunci = m.kunci.map((k) => (ctx[k] == null ? "" : String(ctx[k]))).join("\u0001");
+  let hasil = m.hasil.get(kunci);
+  if (!hasil) m.hasil.set(kunci, (hasil = rankRouteRulesBaru(rules, ctx)));
+  return hasil;
+}
+function rankRouteRulesBaru(rules, ctx) {
   const maju = rankPredictionRulesBerskor(rules, ctx).map((x) => ({ r: x.r, skor: x.skor, i: x.i, balik: false }));
   if (!ctx || (!ctx.fromPort && !ctx.fromCountry) || (!ctx.toPort && !ctx.toCountry)) return maju;
   const balik = rankPredictionRulesBerskor(rules, balikKonteksRute(ctx))

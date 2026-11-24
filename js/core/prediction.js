@@ -111,9 +111,13 @@ function applyPredictionToShipment(s) {
 
 function applyPredictionToAll(list) {
   let n = 0;
-  (list || []).forEach((s) => {
-    if (applyPredictionToShipment(s).length) n++;
-  });
+  // Peringkat aturan rute diingat selama hitungan ini saja (prediction-rules.js)
+  const jalankan = () =>
+    (list || []).forEach((s) => {
+      if (applyPredictionToShipment(s).length) n++;
+    });
+  if (typeof denganMemoAturanRute === "function") denganMemoAturanRute(jalankan);
+  else jalankan();
   return n;
 }
 

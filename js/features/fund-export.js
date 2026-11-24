@@ -86,7 +86,8 @@ const FEX_INVSUM_KOLOM = [
   { judul: "INVOICE NUMBER", lebar: 23.43, teks: true, bungkus: true },
   { judul: "COMPANY", lebar: 28.43 },
   { judul: "CUSTOMER", lebar: 13.57 },
-  { judul: "DETAILS", lebar: 37.86, bungkus: true },
+  // DETAILS: satu barang per baris dalam satu sel (invsumBarang), rata kiri-atas
+  { judul: "DETAILS", lebar: 37.86, bungkus: true, kiriAtas: true },
   { judul: "COST", lebar: 18.29, uang: true },
   { judul: "EXPENSES CATEGORY", lebar: 28.29, daftar: "EXPENSES_CATEGORY" },
   { judul: "TRANSPORT MODE", lebar: 20.71, daftar: "TRANSPORT_MODE" },
@@ -484,7 +485,8 @@ function fexInvsumRekap(ws, baris, isi, tahun, kolomTabel, kolomMataUang) {
      baris berselang, tombol saring) berkolom A-K persis lembar itu; judul
      biru tua 002060 huruf putih tebal; semua sel rata tengah & bergaris
      tipis abu-abu; tanggal "mmm-dd" (Sep-25); INVOICE NUMBER teks &
-     dibungkus; DETAILS dibungkus; COST format akuntansi Rp (USD -> kodenya);
+     dibungkus; DETAILS = barang kiriman satu per baris dalam satu sel, rata
+     kiri-atas; COST format akuntansi Rp (USD -> kodenya);
      mata uang campuran -> kolom CURRENCY di ujung tabel;
    - nomor invoice kembar ditandai merah (seperti "Duplicate Values" lembar
      aslinya);
@@ -527,7 +529,9 @@ function fexSusunInvoiceSummary(baris, opsi) {
       const sel = ws.getCell(n + 2, i + 1);
       sel.font = { name: "Calibri", size: 11 };
       sel.border = tepi;
-      sel.alignment = { horizontal: "center", vertical: "middle", wrapText: !!k.bungkus };
+      sel.alignment = k.kiriAtas
+        ? { horizontal: "left", vertical: "top", wrapText: true }
+        : { horizontal: "center", vertical: "middle", wrapText: !!k.bungkus };
       if (k.tanggal) sel.numFmt = "mmm\\-dd";
       if (k.teks) sel.numFmt = "@";
       if (k.uang) sel.numFmt = fexFormatBiaya(b.mataUang);

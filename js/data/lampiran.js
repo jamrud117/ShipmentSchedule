@@ -237,10 +237,15 @@ function chipBerkasHtml(b, opsi) {
     </span>`;
 }
 
-// Membuka berkas yang belum diunggah langsung dari memori peramban
+/* Membuka berkas yang belum diunggah langsung dari memori peramban.
+   Tautan blob: berasal dari asal APLIKASI ini, jadi jenis isinya
+   ditetapkan dari daftar ekstensi yang diterima (LAMPIRAN_JENIS) --
+   bukan jenis laporan peramban/OS: berkas yang dilaporkan text/html
+   tidak pernah tampil sebagai halaman di asal aplikasi. */
 function bukaBerkasLokal(file) {
   if (!file || typeof URL === "undefined" || !URL.createObjectURL) return;
-  const url = URL.createObjectURL(file);
+  const jenis = LAMPIRAN_JENIS[ekstensiLampiran(file.name)] || "application/octet-stream";
+  const url = URL.createObjectURL(new Blob([file], { type: jenis }));
   const jendela = window.open(url, "_blank");
   if (jendela) jendela.opener = null;
   setTimeout(() => URL.revokeObjectURL(url), 60000);
