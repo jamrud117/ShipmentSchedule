@@ -524,6 +524,8 @@ function rtSegarkanTampilanJadwal(berubah, penuh) {
     if (typeof isiPilihanJadwal === "function") isiPilihanJadwal();
     if (typeof isiPilihanAju === "function") isiPilihanAju();
   }
+  // Name Plate & Berat: barang / Netto-Bruto jadwal yang ditautkan berubah (name-plate-view.js)
+  if (halaman === "nameplate" && typeof npJadwalBerubah === "function") npJadwalBerubah(berubah, penuh);
   if (typeof isDetailOpen === "function" && isDetailOpen() && currentDetailId != null && kena(currentDetailId) && typeof segarkanDetailView === "function") {
     segarkanDetailView();
   }

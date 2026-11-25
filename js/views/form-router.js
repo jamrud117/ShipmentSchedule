@@ -10,8 +10,16 @@ const PAGE_VIEWS = {
   overview: "#viewOverview",
   schedule: "#viewList",
   docnum: "#viewDocNum",
+  nameplate: "#viewNamePlate",
   form: "#viewForm",
 };
+
+/* SUB-HALAMAN: halaman yang dibuka DARI halaman lain dan berbagi izin &
+   tanda menu dengan induknya -- Name Plate & Berat (#/nameplate/<id>)
+   dibuka dari riwayat invoice Nomor Dokumen: siapa pun yang boleh membuka
+   Nomor Dokumen boleh membukanya (bolehBuka, session.js), dan menu yang
+   menyala tetap Nomor Dokumen. */
+const HALAMAN_INDUK = { nameplate: "docnum" };
 
 function showPage(page) {
   Object.entries(PAGE_VIEWS).forEach(([key, sel]) => {
@@ -30,7 +38,7 @@ function showPage(page) {
   // tetap menggantung terbuka di atas halaman yang baru.
   if (typeof tutupUserMenu === "function") tutupUserMenu();
   if (typeof setActivePageNav === "function" && page !== "form") {
-    setActivePageNav(page);
+    setActivePageNav(HALAMAN_INDUK[page] || page);
   }
 }
 
@@ -97,6 +105,7 @@ const HALAMAN_HASH = {
 };
 function halamanDariHash(hash) {
   if (/^#\/edit\/.+/.test(hash)) return "form";
+  if (/^#\/nameplate\/.+/.test(hash)) return "nameplate";
   return HALAMAN_HASH[hash] || "schedule";
 }
 
@@ -184,6 +193,13 @@ function router() {
   // Cek PIB/PEB: CIPL vs draft CEISA, dibantu data jadwal (khusus EXIM)
   if (hash === "#/cek") {
     showCheckerView();
+    return;
+  }
+
+  // Name Plate & Berat per box sebuah invoice Kumho (views/name-plate-view.js)
+  const npMatch = hash.match(/^#\/nameplate\/(.+)$/);
+  if (npMatch) {
+    if (typeof bukaHalamanNamePlate === "function") bukaHalamanNamePlate(decodeURIComponent(npMatch[1]));
     return;
   }
 

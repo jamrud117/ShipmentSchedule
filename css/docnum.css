@@ -3363,7 +3363,9 @@ button.dn-bayar--lunas:hover {
 .fex-format-baris > .fex-bidang-tahun {
   flex: 0 0 150px;
 }
-.fex-format-baris > .fex-petunjuk-tahun {
+/* Petunjuk di bawah Format: rekap per bulan (Invoice Summary) / judul
+   berkas (Groupware) -- selebar barisnya. */
+.fex-format-baris > :is(.fex-petunjuk-tahun, .fex-petunjuk-gw) {
   flex: 1 1 100%;
 }
 .fex-tanggal {
@@ -3475,16 +3477,754 @@ button.dn-bayar--lunas:hover {
   .fex-format-baris > .fex-bidang-tahun {
     flex: 1 1 100%;
   }
-  .fex-format-baris > .fex-petunjuk-tahun {
+  .fex-format-baris > :is(.fex-petunjuk-tahun, .fex-petunjuk-gw) {
     margin-top: -9px;
   }
 }
 /* Ponsel sempit: Reset turun ke baris sendiri di bawah Batal & Unduh
-   (sama dengan aksi ketiga kotak isian, auth.css). */
+   (sama dengan aksi ketiga kotak isian, auth.css). Bilah Simpan halaman
+   name plate: "Cetak name plate" cukup "Cetak" supaya tidak patah dua baris. */
 @media (max-width: 419.98px) {
   .dialog-foot > .btn-quiet.fex-reset {
     flex-basis: 100%;
     order: 2;
     margin-right: 0;
   }
+  .np-cetak-ekor {
+    display: none;
+  }
+}
+
+/* ==================================================================
+   BERAT PER BOX & NAME PLATE (CIPL Kumho) -- #viewNamePlate,
+   js/views/name-plate-view.js
+
+   Satu tabel seperti tabel bantu buku kerja Kumho (Carton No. ...
+   FINISHED DATE), kotak isian hanya di kolom yang diisi (Tread, Side,
+   B/R, BOX, tanggal); judul & isi tabel RATA TENGAH semua, angka tabular.
+   Kepala panelnya: Upload Excel + tombol ? (pop-up Cara kerja). Di bawahnya
+   pengaturan name plate + contohnya, lalu bilah Simpan yang menempel
+   seperti form jadwal. Di wadah di bawah 1080px tiap box jadi kartu
+   berlabel (container query, letak lewat grid-area).
+================================================================== */
+.np-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-6);
+}
+/* Judul = nomor invoice ("DDI - CRBM - XI - 073 - 20261124"): lebih kecil
+   dari judul halaman lain -- nomornya panjang, dan dengan ukuran judul biasa
+   ia terpecah dua baris di ponsel. Tetap boleh patah bila memang tidak muat. */
+.page-nameplate .board-title.np-judul {
+  font-size: clamp(1.15rem, 0.9rem + 1.15vw, 1.6rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+/* Sub judul: tujuan halaman (tebal, baris sendiri) lalu keterangan berikon
+   -- customer, tanggal invoice, kapal, ETD. Tiap keterangan utuh; di layar
+   sempit yang turun baris satu keterangan, tanpa titik pemisah menggantung. */
+.np-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 8px;
+}
+.np-sub-judul {
+  flex: 1 1 100%;
+  color: var(--ink);
+  font-weight: 600;
+}
+.np-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--t-sm);
+  overflow-wrap: anywhere;
+}
+.np-meta > .bi {
+  flex: none;
+  color: var(--n-400);
+  font-size: 0.85em;
+}
+.np-kembali {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--tp-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+.np-kembali:hover {
+  background: var(--p-50);
+  border-color: var(--p-200);
+  color: var(--tp-700);
+}
+.np-kabar-daftar:empty {
+  display: none;
+}
+.np-kabar-daftar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.np-kabar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--s-info-line);
+  border-radius: var(--r-md);
+  background: var(--s-info-bg);
+  color: var(--n-800);
+  font-size: var(--t-sm);
+}
+.np-kabar > .bi {
+  flex: none;
+  color: var(--ts-info);
+  font-size: 1rem;
+}
+.np-kabar-teks {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.np-kabar--peringatan {
+  border-color: var(--s-warn-line);
+  background: var(--s-warn-bg);
+}
+.np-kabar--peringatan > .bi {
+  color: var(--s-warn);
+}
+.np-kabar--bahaya {
+  border-color: var(--s-danger-line);
+  background: var(--s-danger-bg);
+}
+.np-kabar--bahaya > .bi {
+  color: var(--ts-danger);
+}
+#npIsi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+#npIsi[hidden] {
+  display: none;
+}
+.np-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px var(--sp-4);
+}
+.np-bar h2 {
+  margin: 0;
+}
+/* Upload Excel + tombol ? (Cara kerja) di kanan judul panel */
+.np-bar-aksi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.np-unggah {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.np-unggah > .bi {
+  color: #1d6f42; /* hijau Excel, seperti tombol Export Pengajuan Dana */
+}
+.np-unggah[hidden] {
+  display: none;
+}
+.np-bantuan {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--tp-600);
+  font-size: 1rem;
+  line-height: 1;
+}
+.np-bantuan:hover {
+  border-color: var(--p-300);
+  background: var(--p-50);
+  color: var(--tp-700);
+}
+.np-bantuan:focus-visible {
+  outline: 2px solid var(--p-400);
+  outline-offset: 2px;
+}
+/* Berkas Excel diseret ke panel tabel: tepi panel menyala (garis utuh) */
+.np-panel.is-seret {
+  box-shadow: 0 0 0 2px var(--p-400);
+}
+
+/* ---------- tabel berat ---------- */
+/* Tabel lebar: judul & isi RATA TENGAH semua (permintaan pengguna) --
+   teks, kotak isian, hasil rumus, hitungan & Packing List. Teks yang
+   sebaris dengan kotak isian diberi jarak atas supaya tingginya sejajar
+   dengan isi kotak di sebelahnya. */
+.np-tabel-wrap {
+  container: np-tabel / inline-size;
+  overflow-x: auto;
+}
+.np-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+.np-tabel th {
+  padding: 8px 6px;
+  background: var(--n-50);
+  color: var(--n-600);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.np-tabel th small {
+  display: block;
+  font-weight: 400;
+  color: var(--text-subtle);
+}
+.np-th {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.np-tabel td {
+  padding: 6px 6px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  vertical-align: top;
+}
+.np-tabel tbody tr:hover > td {
+  background: color-mix(in srgb, var(--p-50) 45%, transparent);
+}
+.np-c-no {
+  color: var(--n-500);
+  font-family: var(--font-mono);
+}
+.np-tabel td.np-c-no,
+.np-tabel td.np-c-marks,
+.np-tabel td.np-c-id,
+.np-tabel td.np-c-hit,
+.np-tabel td.np-c-pl {
+  padding-top: 13px;
+}
+.np-marks {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.np-c-id {
+  white-space: nowrap;
+}
+.np-c-hit,
+.np-c-pl {
+  white-space: nowrap;
+}
+/* Lebar kolom -- HANYA bentuk tabel (di kartu tiap isian selebar areanya).
+   Tread biasanya rumus 8 segmen: kotaknya paling lebar, dan makin lebar
+   bila wadahnya lapang. */
+@container np-tabel (min-width: 1080px) {
+  .np-c-no {
+    width: 36px;
+  }
+  .np-c-isi {
+    width: 84px;
+  }
+  .np-c-isi.np-a-tread {
+    width: 156px;
+  }
+  .np-c-isi.np-a-box {
+    width: 72px;
+  }
+  .np-c-hit {
+    width: 76px;
+  }
+  .np-c-tgl {
+    width: 146px;
+  }
+  .np-c-pl {
+    width: 120px;
+  }
+}
+@container np-tabel (min-width: 1280px) {
+  .np-c-isi.np-a-tread {
+    width: 220px;
+  }
+}
+.np-in {
+  width: 100%;
+  min-width: 64px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.np-in:focus {
+  outline: none;
+  border-color: var(--p-500);
+  box-shadow: var(--sh-focus);
+}
+.np-in[readonly] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.np-in.is-salah {
+  border-color: var(--s-danger);
+  background: var(--s-danger-bg);
+}
+.np-hasil {
+  display: block;
+  min-height: 0;
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: var(--t-xs);
+  text-align: center;
+  white-space: nowrap;
+}
+.np-hasil:empty {
+  display: none;
+}
+.np-hasil.is-salah {
+  color: var(--ts-danger);
+}
+.np-samakan {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--tp-600);
+  font-size: 0.85rem;
+}
+.np-samakan:hover {
+  border-color: var(--p-200);
+  background: var(--p-50);
+}
+/* Deret "Samakan baris 1 ke semua" di atas kartu -- hanya bentuk kartu,
+   tempat judul kolom (dengan tombol samakannya) tidak tampil */
+.np-samakan-baris {
+  display: none;
+}
+.np-ket {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.np-ket--beda {
+  color: var(--s-warn-ink);
+}
+.np-redup {
+  color: var(--n-400);
+}
+.np-pl-jadwal b {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.np-tabel tfoot td,
+.np-tabel tfoot th {
+  padding: 10px 6px;
+  border-top: 2px solid var(--n-300);
+  background: var(--n-50);
+  color: var(--ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-align: center;
+}
+.np-kaki-ket {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* KARTU -- wadah di bawah 1080px (ponsel, tablet, laptop berlayar sempit
+   dengan menu terbuka): tabel selebar itu harus digeser ke samping, jadi
+   tiap box jadi satu kartu. Letak tiap isian ditentukan NAMA AREANYA
+   (kelas np-a-<kolom> di tiap sel, name-plate-view.js) -- tidak bergantung
+   pada urutan sel atau sel yang disembunyikan.
+
+   Sempit (< 560px), 6 lajur:            Sedang (560-1079px), 12 lajur:
+     Carton No.                            Carton No. | Pattern | Size | Mold
+     Pattern | Size | Mold No              Tread           | Side | B/R | BOX
+     Tread                                 Tanggal | N/W | GW | Packing List
+     Side | B/R | BOX
+     Tanggal produksi
+     N/W | GW | Packing List
+   Kartu rata kiri (label di atas isinya, seperti isian form); N/W, GW &
+   Packing List = kotak hitungan berlatar. */
+@container np-tabel (max-width: 1079.98px) {
+  .np-tabel,
+  .np-tabel tbody,
+  .np-tabel tfoot,
+  .np-tabel tr {
+    display: block;
+    width: 100%;
+  }
+  .np-tabel thead {
+    display: none;
+  }
+  .np-tabel tbody tr {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "carton carton carton carton carton carton"
+      "pattern pattern size size mold mold"
+      "tread tread tread tread tread tread"
+      "side side br br box box"
+      "tgl tgl tgl tgl tgl tgl"
+      "nw nw gw gw pl pl";
+    gap: 12px 12px;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .np-tabel tbody tr:first-child {
+    border-top: 0;
+  }
+  .np-tabel tbody tr:hover > td {
+    background: transparent;
+  }
+  .np-tabel tbody td,
+  .np-tabel tfoot td,
+  .np-tabel tfoot th {
+    border-top: 0;
+    padding: 0;
+    width: auto;
+    min-width: 0;
+    text-align: left;
+  }
+  .np-tabel td.np-c-no {
+    display: none;
+  }
+  .np-tabel .np-a-carton { grid-area: carton; }
+  .np-tabel .np-a-pattern { grid-area: pattern; }
+  .np-tabel .np-a-size { grid-area: size; }
+  .np-tabel .np-a-mold { grid-area: mold; }
+  .np-tabel .np-a-tread { grid-area: tread; }
+  .np-tabel .np-a-side { grid-area: side; }
+  .np-tabel .np-a-br { grid-area: br; }
+  .np-tabel .np-a-box { grid-area: box; }
+  .np-tabel .np-a-tgl { grid-area: tgl; }
+  .np-tabel .np-a-nw { grid-area: nw; }
+  .np-tabel .np-a-gw { grid-area: gw; }
+  .np-tabel .np-a-pl { grid-area: pl; }
+  /* Jarak atas penyejajar teks dengan kotak isian di mode tabel -- di kartu tidak perlu */
+  .np-tabel tbody td:is(.np-c-no, .np-c-marks, .np-c-id, .np-c-hit, .np-c-pl) {
+    padding-top: 0;
+  }
+  .np-tabel td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-subtle);
+    font-size: var(--t-xs);
+    font-weight: 600;
+  }
+  /* Kepala kartu: Carton No. besar tanpa label, jumlah box di sebelahnya */
+  .np-tabel tbody td.np-c-marks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+  }
+  .np-tabel tbody td.np-c-marks::before {
+    content: none;
+  }
+  .np-tabel tbody .np-marks {
+    font-size: var(--t-base);
+  }
+  .np-tabel tbody td.np-c-marks .np-ket {
+    margin-top: 0;
+  }
+  .np-tabel .np-c-id {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .np-tabel .np-in {
+    text-align: left;
+  }
+  .np-tabel .np-hasil {
+    text-align: left;
+  }
+  .np-tabel .np-a-tgl .np-in {
+    max-width: 200px;
+  }
+  /* Hitungan: kotak kecil berlatar, angka tebal */
+  .np-tabel tbody td:is(.np-c-hit, .np-c-pl) {
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    background: var(--n-50);
+    font-weight: 600;
+    white-space: normal;
+  }
+  .np-tabel tbody td.np-c-pl .np-ket {
+    white-space: normal;
+  }
+  .np-samakan-baris {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--n-50);
+    color: var(--text-muted);
+    font-size: var(--t-xs);
+    font-weight: 600;
+  }
+  /* Kartu sempit: kalimatnya sebaris sendiri, kedua tombol sebaris di bawahnya */
+  .np-samakan-baris > span {
+    flex: 1 1 100%;
+  }
+  .np-samakan-pil {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+    padding: 4px 12px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    color: var(--tp-600);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .np-samakan-pil:hover {
+    border-color: var(--p-300);
+    background: var(--p-50);
+  }
+  .np-tabel tfoot tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px 12px;
+    padding: 12px 16px;
+    border-top: 2px solid var(--n-300);
+    background: var(--n-50);
+  }
+  .np-tabel tfoot th {
+    grid-column: 1 / -1;
+    background: transparent;
+  }
+  .np-tabel tfoot td {
+    background: transparent;
+  }
+  /* Kelas np-a-* sel kaki: kisi kaki tidak bernama area -- letaknya urut saja */
+  .np-tabel tfoot td:is(.np-a-nw, .np-a-gw, .np-a-pl) {
+    grid-area: auto;
+  }
+  .np-tabel tfoot .np-kaki-kosong {
+    display: none;
+  }
+}
+@container np-tabel (min-width: 560px) and (max-width: 1079.98px) {
+  .np-tabel tbody tr {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+      "carton carton carton pattern pattern pattern size size size mold mold mold"
+      "tread tread tread tread tread tread side side br br box box"
+      "tgl tgl tgl tgl nw nw gw gw pl pl pl pl";
+    gap: 12px 14px;
+    padding: 14px 18px;
+  }
+  .np-tabel tbody td.np-c-marks {
+    align-self: center;
+  }
+  .np-samakan-baris > span {
+    flex: 0 1 auto;
+    margin-right: 2px;
+  }
+}
+
+/* ---------- name plate: pengaturan & contoh ---------- */
+/* Dua kolom selama masing-masing muat 420px, selain itu bertumpuk --
+   tanpa media query (ambang halaman ini sudah dipakai bagian lain). */
+.np-bawah {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+/* Panel berdampingan: aturan umum `.panel + .panel { margin-top }` (panel
+   yang ditumpuk) menurunkan panel kedua -- di kisi ini keduanya sejajar. */
+.np-bawah > .panel + .panel {
+  margin-top: 0;
+}
+.np-atur {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--sp-3) var(--sp-4);
+}
+.np-isian {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.np-isian-label {
+  color: var(--text-muted);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+.np-isian .form-control {
+  min-height: var(--ctl-h);
+}
+.np-isian--sempit .form-control {
+  max-width: 120px;
+}
+.np-isian-tetap {
+  display: flex;
+  align-items: center;
+  min-height: var(--ctl-h);
+  color: var(--ink);
+  font-weight: 600;
+}
+/* Contoh = kertas putih seperti cetakannya (juga di mode gelap) */
+.np-contoh {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--kertas-cetak);
+  color: #000;
+  overflow-x: auto;
+  font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+}
+.np-contoh-plat {
+  flex: none;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.np-contoh-plat td {
+  padding: 5px 8px;
+  border: 1px solid #000;
+  white-space: nowrap;
+}
+.np-contoh-tag {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 84px;
+  padding: 0 8px;
+  border: 1px solid #000;
+  font-size: 11px;
+}
+.np-contoh-tag small {
+  color: #555;
+  font-size: 9px;
+}
+.np-contoh-ket {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: var(--t-sm);
+}
+.np-aksi-baris .form-validity {
+  min-width: 0;
+}
+/* Tombol "kembali ke atas" naik ke atas bilah Simpan yang menempel --
+   di sudut bawah ia menutupi tombol Simpan. */
+html[data-halaman="nameplate"] .fab-top {
+  bottom: calc(var(--sp-5) + 72px);
+}
+
+/* Pop-up CARA KERJA (tombol ? di kepala tabel berat): langkah bernomor,
+   judul tebal & penjelasannya di bawah; deret pintasan papan ketik. */
+.np-panduan {
+  --bs-modal-width: 560px;
+}
+.np-langkah {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: np-langkah;
+}
+.np-langkah > li {
+  position: relative;
+  padding-left: 36px;
+  color: var(--n-600);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  counter-increment: np-langkah;
+}
+.np-langkah > li::before {
+  content: counter(np-langkah);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--p-50);
+  color: var(--tp-600);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+.np-langkah > li > b {
+  display: block;
+  color: var(--ink);
+  font-size: var(--t-base);
+}
+.np-tuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--n-100);
+  color: var(--text-muted);
+  font-size: var(--t-xs);
+}
+.np-tuts kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  box-shadow: none;
 }

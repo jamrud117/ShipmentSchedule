@@ -2763,8 +2763,8 @@
                       <span data-en="Add Discount">Tambah Diskon</span>
                     </button>
                   </div>
-                  <div class="fl-petunjuk" data-en="Amounts use a comma for thousands and a dot for decimals (1,250,000.50) and accept formulas: start with = , e.g. =1,000+500 or =2,200,000*10%, then press Enter.">
-                    Nilai memakai koma ribuan &amp; titik desimal (1,250,000.50) dan menerima rumus: awali dengan = , mis. =1,000+500 atau =2,200,000*10%, lalu tekan Enter.
+                  <div class="fl-petunjuk" data-en="Amounts use a comma for thousands and a dot for decimals (1,250,000.50) and accept formulas: start with = , e.g. =1,000+500 or =2,200,000*10%, then press Enter. Ctrl+Enter inserts a new row below the active row.">
+                    Nilai memakai koma ribuan &amp; titik desimal (1,250,000.50) dan menerima rumus: awali dengan = , mis. =1,000+500 atau =2,200,000*10%, lalu tekan Enter. Ctrl+Enter menyisipkan baris baru di bawah baris yang aktif.
                   </div>
                   <div class="fund-lines-foot" id="fundLinesFoot"></div>
                 </div>
@@ -3313,6 +3313,125 @@
               <div id="docNumPagination"></div>
             </div>
           </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ HALAMAN: BERAT PER BOX & NAME PLATE (CIPL Kumho) ============
+         #/nameplate/<id nomor invoice>, dibuka dari riwayat invoice Nomor
+         Dokumen (tombol label). Tabel berat per box -- Tread + Side + B/R =
+         N/W, + BOX = GW -- yang menentukan Net/Gross Wt. Packing List
+         (dibulatkan per barang), lalu name plate 4 copy per box di A4.
+         js/views/name-plate-view.js (halaman), js/features/name-plate.js
+         (hitungan, cetak, Excel), css/docnum.css (BERAT PER BOX & NAME PLATE). -->
+    <div id="viewNamePlate" class="page-nameplate d-none">
+      <header class="board">
+        <div class="container board-inner">
+          <div class="board-head">
+            <div>
+              <p class="board-today">
+                <span class="bt-kartu" aria-hidden="true"><span class="bt-hari">—</span><span class="bt-tgl">—</span></span>
+                <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                <span class="board-today-label" data-i18n="u.hari.ini">Hari ini</span>
+                <time class="board-today-date" id="npToday">—</time>
+              </p>
+              <h1 class="board-title np-judul" id="npJudul">—</h1>
+              <div class="board-sub np-sub" id="npSub"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="container page-main np-main">
+        <a class="np-kembali" href="#/docnum" id="npKembali">
+          <i class="bi bi-arrow-left" aria-hidden="true"></i>
+          <span data-en="Back to Document Numbers">Kembali ke Nomor Dokumen</span>
+        </a>
+        <div class="np-kabar-daftar" id="npKabar" role="status"></div>
+
+        <div id="npIsi" hidden>
+          <section class="panel np-panel">
+            <div class="panel-head np-bar">
+              <h2>
+                <i class="bi bi-box-seam" aria-hidden="true"></i>
+                <span data-en="Weight per box">Berat per box</span>
+              </h2>
+              <!-- Upload Excel (khusus EXIM, name-plate-view.js) & tombol ?
+                   pembuka "Cara kerja" -- pengganti kalimat petunjuk panjang. -->
+              <div class="np-bar-aksi">
+                <button type="button" class="btn btn-form-cancel btn-sm np-unggah" id="btnNpUnggah"
+                        title="Isi tabel dari buku kerja CIPL Kumho / tabel berat produksi (.xlsx)"
+                        data-en-title="Fill the table from the Kumho CIPL workbook / production weight table (.xlsx)">
+                  <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>
+                  <span>Upload Excel</span>
+                </button>
+                <input type="file" id="npBerkas" class="d-none" tabindex="-1" aria-hidden="true"
+                       accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" />
+                <button type="button" class="np-bantuan" id="btnNpBantuan"
+                        aria-label="Cara kerja" data-en-aria="How it works"
+                        title="Cara kerja" data-en-title="How it works"
+                        aria-haspopup="dialog" aria-controls="npPanduanModal">
+                  <i class="bi bi-question-lg" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+            <div class="np-tabel-wrap" id="npTabel"></div>
+          </section>
+
+          <div class="np-bawah">
+            <section class="panel np-panel">
+              <div class="panel-head np-bar">
+                <h2>
+                  <i class="bi bi-tags" aria-hidden="true"></i>
+                  <span>Name plate</span>
+                </h2>
+                <span class="panel-head-note" id="npJumlahPlat"></span>
+              </div>
+              <div class="panel-body np-atur">
+                <label class="np-isian">
+                  <span class="np-isian-label">Material</span>
+                  <input type="text" id="npMaterial" class="form-control" autocomplete="off" spellcheck="false" />
+                </label>
+                <label class="np-isian">
+                  <span class="np-isian-label">Edition / CAV</span>
+                  <input type="text" id="npEdisi" class="form-control" autocomplete="off" spellcheck="false" />
+                </label>
+                <label class="np-isian np-isian--sempit">
+                  <span class="np-isian-label" data-en="Copies per box">Copy per box</span>
+                  <input type="text" id="npSisi" class="form-control" inputmode="numeric" maxlength="1" autocomplete="off" />
+                </label>
+                <div class="np-isian">
+                  <span class="np-isian-label">Maker</span>
+                  <span class="np-isian-tetap">PT. DYNAMIC DESIGN INDONESIA</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel np-panel">
+              <div class="panel-head np-bar">
+                <h2>
+                  <i class="bi bi-eye" aria-hidden="true"></i>
+                  <span data-en="Sample">Contoh</span>
+                </h2>
+              </div>
+              <div class="panel-body" id="npContoh"></div>
+            </section>
+          </div>
+        </div>
+      </main>
+
+      <!-- Bilah Simpan menempel di bawah, sama dengan form jadwal -->
+      <div class="page-form-actions-row np-aksi-baris">
+        <div class="page-form-actions-inner">
+          <span class="form-validity" id="npStatus"></span>
+          <div class="page-form-actions-btns">
+            <button type="button" class="btn btn-form-cancel" id="btnNpCetak">
+              <i class="bi bi-printer" aria-hidden="true"></i> <span data-en="Print">Cetak</span><span class="np-cetak-ekor" data-en=" name plates"> name plate</span>
+            </button>
+            <button type="button" class="btn-primary-navy btn-save-primary" id="btnNpSimpan">
+              <i class="bi bi-check2" aria-hidden="true"></i> <span data-en="Save">Simpan</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -5040,6 +5159,52 @@
     <div class="modal fade" id="danaEksporModal" tabindex="-1" aria-labelledby="danaEksporJudul">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable fex-dialog">
         <div class="modal-content"></div>
+      </div>
+    </div>
+
+    <!-- CARA KERJA halaman Berat per box & name plate (tombol ? di kepala
+         tabel, name-plate-view.js). Isinya tetap, dua bahasa lewat data-en. -->
+    <div class="modal fade" id="npPanduanModal" tabindex="-1" aria-labelledby="npPanduanJudul">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable np-panduan">
+        <div class="modal-content">
+          <div class="dialog-head">
+            <div class="dialog-icon" aria-hidden="true"><i class="bi bi-lightbulb"></i></div>
+            <h6 class="dialog-title" id="npPanduanJudul" data-en="How it works">Cara kerja</h6>
+            <button type="button" class="dialog-tutup" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close" title="Tutup (Esc)" data-en-title="Close (Esc)"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+          </div>
+          <div class="modal-body dialog-body">
+            <ol class="np-langkah">
+              <li>
+                <b data-en="Fill in the weight of each box">Isi berat tiap box</b>
+                <span data-en="Tread, Side, B/R &amp; BOX in kg — a sum such as 126+127 is fine. N/W = Tread + Side + B/R, GW = N/W + BOX.">Tread, Side, B/R &amp; BOX dalam kg — boleh penjumlahan seperti 126+127. N/W = Tread + Side + B/R, GW = N/W + BOX.</span>
+              </li>
+              <li>
+                <b data-en="Faster: Upload Excel">Lebih cepat: Upload Excel</b>
+                <span data-en="Choose the Kumho CIPL workbook (PL sheet) or the production weight table — or drop it onto the table, or copy the table in Excel and paste it (Ctrl+V). Rows are matched by Carton No.">Pilih buku kerja CIPL Kumho (lembar PL) atau tabel berat produksi — bisa juga diseret ke tabel, atau salin tabelnya di Excel lalu tempel (Ctrl+V). Baris dicocokkan lewat Carton No.</span>
+              </li>
+              <li>
+                <b data-en="Same for every box">Sama untuk semua box</b>
+                <span data-en="The arrow button at BOX &amp; Production date copies row 1 to every row.">Tombol panah di BOX &amp; Tanggal produksi menyalin baris 1 ke semua baris.</span>
+              </li>
+              <li>
+                <b data-en="Save">Simpan</b>
+                <span data-en="The Packing List uses these weights, rounded without decimals; the schedule's Net / Gross follow.">Packing List memakai berat ini, dibulatkan tanpa desimal; Netto / Bruto di jadwal ikut disamakan.</span>
+              </li>
+              <li>
+                <b data-en="Print name plates">Cetak name plate</b>
+                <span data-en="A4, 8 per sheet, 4 copies per box — one for each side (Copies per box can be changed).">A4, 8 per lembar, 4 copy per box — satu untuk tiap sisi (Copy per box bisa diubah).</span>
+              </li>
+            </ol>
+            <p class="np-tuts">
+              <span><kbd>Enter</kbd> <span data-en="next row">baris berikutnya</span></span>
+              <span><kbd>Shift</kbd>+<kbd>Enter</kbd> <span data-en="row above">baris di atasnya</span></span>
+              <span><kbd>Ctrl</kbd>+<kbd>S</kbd> <span data-en="save">simpan</span></span>
+            </p>
+          </div>
+          <div class="modal-footer dialog-foot">
+            <button type="button" class="btn-primary-navy" data-bs-dismiss="modal" data-en="Got it">Mengerti</button>
+          </div>
+        </div>
       </div>
     </div>
 

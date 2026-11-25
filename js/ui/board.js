@@ -95,7 +95,7 @@ function paintTodayStamps() {
   const hari = dt ? tanggalLokal(dt, loc, { weekday: "short" }).replace(/\.$/, "") : "—";
   const bulan = dt ? tanggalLokal(dt, loc, { month: "long" }) : "";
   const potong = bulan ? teks.indexOf(bulan) : -1;
-  ["#ovToday", "#docnumToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
+  ["#ovToday", "#docnumToday", "#npToday", "#accountToday", "#hsCodeToday", "#mstToday", "#cekToday"].forEach((sel) => {
     const el = $(sel);
     if (!el) return;
     if (potong > 0) el.innerHTML = `<span class="bt-panjang">${escapeHtml(teks.slice(0, potong))}</span>${escapeHtml(teks.slice(potong))}`;

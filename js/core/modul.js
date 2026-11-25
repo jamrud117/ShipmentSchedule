@@ -46,9 +46,11 @@ const MODUL_TUNDA = [
   "js/features/cipl-vn-print.js",
   "js/features/cipl-print.js",
   "js/features/cipl-excel.js",
+  "js/features/name-plate.js",
   "js/features/format-nomor.js",
   "js/views/docnum-view.js",
   "js/features/docnum-detail.js",
+  "js/views/name-plate-view.js",
   "js/features/invoice-pihak.js",
   "js/features/fund-summary.js",
   "js/features/fund-report-ledger.js",
@@ -71,7 +73,7 @@ const MODUL_TUNDA = [
   "js/features/cek-cetak.js",
 ];
 // Halaman yang baru boleh digambar sesudah modul tunda siap (router, form-router.js)
-const MODUL_TUNDA_HALAMAN = new Set(["form", "checker", "docnum", "masterlist", "accounts"]);
+const MODUL_TUNDA_HALAMAN = new Set(["form", "checker", "docnum", "nameplate", "masterlist", "accounts"]);
 
 let modulTundaJanji = null;
 /* Sudah termuat? Penanda: fungsi dari berkas TERAKHIR di daftar (dijalankan

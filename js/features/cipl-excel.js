@@ -693,6 +693,8 @@ function ciplBukuKerja(row, shipment) {
   wb.calcProperties.fullCalcOnLoad = true;
   const lebarAngka = ttExcelHurufNormal(wb);
   ciplDaftarTata(row, shipment).forEach((T) => ciplXlLembar(wb, T, lebarAngka));
+  // Kumho: lembar NAME PLATE (4 copy per box) begitu tabel beratnya pernah diisi (name-plate.js)
+  if (typeof npXlLembar === "function") npXlLembar(wb, row, shipment, lebarAngka);
   return wb;
 }
 

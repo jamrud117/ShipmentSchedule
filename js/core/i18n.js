@@ -1335,6 +1335,7 @@ function setLang(kode) {
   if (tampil("viewOverview") && typeof renderOverview === "function") renderOverview();
   if (tampil("viewAccounts") && typeof renderAccounts === "function") renderAccounts();
   if (tampil("viewMasterlist") && typeof renderMasterlist === "function") renderMasterlist();
+  if (tampil("viewNamePlate") && typeof npGambar === "function") npGambar();
   // Cek PIB/PEB: pemeriksaannya dijalankan ulang -- baris dari data jadwal ikut bahasa
   if (tampil("viewChecker") && typeof cekJalankan === "function") cekJalankan();
   /* Tanggal "Hari ini" di kepala tiap halaman ikut nama hari & bulan

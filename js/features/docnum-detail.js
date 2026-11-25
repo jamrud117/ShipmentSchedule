@@ -93,6 +93,7 @@ const DN_LABEL_FIELD = {
   // Isian CIPL
   get invoiceKind() { return tt("Jenis Invoice", "Invoice Type"); },
   get consigneeAddress() { return tt("Alamat Penerima (Consignee)", "Consignee Address"); },
+  get namePlate() { return tt("Berat per Box & Name Plate", "Weight per Box & Name Plate"); },
   // Pihak invoice (invoice-pihak.js)
   get polaPihak() { return tt("Skema Invoice", "Invoice Scheme"); },
   get penjualNama() { return tt("Penjual / Shipper", "Seller / Shipper"); },
@@ -164,6 +165,7 @@ const DN_DETAIL_SUSUNAN = {
         "termsDelivery", "termPayment", "portLoading", "finalDestination", "carrier",
         "sailingDate", "siTo", "siNo", "blType", "oceanFreight",
         { k: "specialInstruction", lebar: true }, { k: "remarks", lebar: true },
+        { k: "namePlate", lebar: true },
       ],
     },
   ],
@@ -326,6 +328,8 @@ function dndNilai(k, r) {
   // Bukti bayar (Tandai Sudah Dibayar): tautan yang membuka berkasnya -- hanya selama lunas
   if (k === "paidProof") return p.paidAt && typeof tautanLampiranHtml === "function" ? tautanLampiranHtml(v) : "";
   if (k === "poNo") return dndDaftarPo(p);
+  // Tabel berat per box & name plate (invoice Kumho): ringkasan, rinciannya di halamannya sendiri
+  if (k === "namePlate") return typeof npRingkasPayload === "function" ? escapeHtml(npRingkasPayload(r)) : "";
   if (k === "vehicle") return dndDaftarKendaraan(p);
   if (k === "polaPihak") return INV_POLA_LABEL[v] ? escapeHtml(tt(...INV_POLA_LABEL[v])) : "";
   if (k === "portLoading" || k === "finalDestination") return escapeHtml(portKodeKeAlias(v));

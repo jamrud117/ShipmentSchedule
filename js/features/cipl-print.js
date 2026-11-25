@@ -106,6 +106,12 @@ const CIPL_PROFIL = [
        docNumPolaBerlaku(); bisa diganti dari kotak Atur Nomor Urut
        (format-nomor.js, kunci "invoice@kumho-vn"). */
     invoicePattern: "DDI - CRBM - {ROM} - {SEQ} - {YYYYMMDD}",
+    /* Name plate 4 copy per box + tabel berat per box (Tread, Side, B/R,
+       BOX, tanggal produksi) -- halaman #/nameplate/<id>, name-plate.js. */
+    namePlate: true,
+    /* Net & Gross Wt. Packing List dibulatkan PER BARANG, TOTAL = jumlah
+       angka bulatnya -- =ROUND(U*F,0) & =SUM(H) buku kerja Kumho (npBeratPl). */
+    beratPlBulat: true,
     portLoading: "JAKARTA",
     portDischarge: "HOCHIMINH, VIETNAM",
     finalDestination: "HOCHIMINH CITY, VIETNAM",

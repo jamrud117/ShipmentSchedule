@@ -144,6 +144,17 @@ function ciplVnTata(jenis, row, shipment) {
   const p = row.payload || {};
   const prof = ciplProfil(p.customer || (shipment && shipment.party));
   const baris = ciplVnBaris(shipment);
+  /* BERAT PL: dari tabel berat per box (halaman Name Plate & Berat) bila
+     barisnya sudah diisi, selain itu Netto/Bruto barang -- dibulatkan per
+     barang untuk profil `beratPlBulat` (Kumho), jadi TOTAL di bawahnya =
+     jumlah angka bulat yang tercetak (npBeratPl, name-plate.js). */
+  if (typeof npBeratPl === "function") {
+    npBeratPl(row, shipment).forEach((b, i) => {
+      if (!baris[i]) return;
+      baris[i].netto = b.netto;
+      baris[i].bruto = b.bruto;
+    });
+  }
   const total = ciplVnTotal(baris);
   const uang = ciplFormatUang(p.currency || "USD");
   const angka = (n, satuan) => {
@@ -188,7 +199,7 @@ function ciplVnTata(jenis, row, shipment) {
       ["Port of Discharge", p.portDischarge || prof.portDischarge || ""],
       ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
       ["Vessel / Flight", carrierCipl(p, shipment)],
-      ["Price Term", p.termsDelivery || ""],
+      ["Terms of Delivery", p.termsDelivery || ""],
       ["Terms of Payment", p.termPayment || "T/T 60 days after B/L date"],
       ["Country of Origin", CIPL_ASAL_BARANG],
     ],

@@ -929,6 +929,13 @@ function bolehUbahDocNum() {
    (lihat simpanUbahDocNum) supaya tidak terhapus.
 ------------------------------------------------------------------ */
 const DN_FIELD_BAYAR = ["paidAt", "paidBy", "paidProof"];
+/* ISIAN PAYLOAD DI LUAR FORM -- dibawa apa adanya saat isian pengajuan
+   diubah (simpanUbahDocNum), dibaca dari database tepat sebelum menyimpan:
+   status bayar (di atas) dan tabel berat & name plate invoice Kumho
+   (`namePlate`, diisi di halaman Name Plate -- name-plate-view.js).
+   Tanpa ini membetulkan satu salah ketik di form invoice menghapus berat
+   14 box yang sudah diketik. */
+const DN_FIELD_LUAR_FORM = DN_FIELD_BAYAR.concat(["namePlate"]);
 const BUKTI_BAYAR_FOLDER = "bukti-bayar";
 const BERKAS_MIGRASI_BUKTI_BAYAR = "migration-bukti-bayar.sql";
 
@@ -1865,7 +1872,7 @@ async function simpanUbahDocNum() {
        tanda lunas yang baru dibuat, atau menghidupkan lagi yang baru
        dibatalkan. */
     const terbaru = await dnPayloadTerbaru(id);
-    DN_FIELD_BAYAR.forEach((k) => {
+    DN_FIELD_LUAR_FORM.forEach((k) => {
       if (terbaru[k] != null && terbaru[k] !== "") payload[k] = terbaru[k];
     });
     if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
@@ -2761,6 +2768,14 @@ async function renderDocNumHistory(opsi) {
                                  title="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}" aria-label="${tt("Unduh Excel (Invoice, PL, SI)", "Download Excel (Invoice, PL, SI)")}"><i class="bi bi-file-earmark-excel"></i></button>`
                       : ""
                   }
+                  ${
+                    /* Kumho: berat per box (Tread, Side, B/R, BOX) & name plate
+                       4 copy per box -- halaman tersendiri (name-plate-view.js). */
+                    /^invoice/.test(jenis.key) && ciplBolehCetak(r) && typeof npBolehDibuat === "function" && npBolehDibuat(r)
+                      ? `<button type="button" class="icon-btn" data-name-plate="${r.id}"
+                                 title="${tt("Berat per box & name plate", "Weight per box & name plate")}" aria-label="${tt("Berat per box & name plate", "Weight per box & name plate")}"><i class="bi bi-tags"></i></button>`
+                      : ""
+                  }
                   <button type="button" class="icon-btn danger" data-del-num="${r.id}"
                           data-num-label="${escapeHtml(r.doc_number)}" title="${tt("Hapus nomor ini", "Delete this number")}" aria-label="${tt("Hapus nomor ini", "Delete this number")}">
                     <i class="bi bi-trash3"></i>
@@ -2877,6 +2892,12 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
   const xlsCi = e.target.closest("[data-xls-cipl]");
   if (xlsCi) {
     unduhCiplExcel(xlsCi.dataset.xlsCipl);
+    return;
+  }
+  // Name Plate & Berat: halaman sendiri -- semua yang boleh melihat riwayat boleh membukanya (Simpan khusus EXIM)
+  const namePlate = e.target.closest("[data-name-plate]");
+  if (namePlate) {
+    location.hash = "#/nameplate/" + encodeURIComponent(namePlate.dataset.namePlate);
     return;
   }
   if (e.target.closest("[data-del-num]") && !requireEdit()) return;
@@ -3195,6 +3216,9 @@ async function dnRtProses() {
       !ubahan.baris,
     );
   }
+
+  // Halaman Name Plate & Berat yang sedang membuka nomor itu (name-plate-view.js)
+  if (typeof npNomorBerubah === "function") terkena.forEach((x) => npNomorBerubah(x));
 
   if (!dnRtHalamanTampil()) return;
 

@@ -7,7 +7,7 @@
    Report punya unduhan sendiri) membuka kotak dialog dengan SARINGANNYA
    SENDIRI -- data yang diekspor dipilih di sana, lepas dari saringan
    riwayat di belakangnya -- dan pilihan FORMAT berkasnya (Payment Plan /
-   Invoice Summary, lihat di bawah):
+   Invoice Summary / Groupware, lihat di bawah):
      - Status bayar: Semua / Lunas / Belum Lunas (payload.paidAt);
      - Vendor ("Dibayarkan Kepada"): ejaan yang hanya beda huruf besar /
        tanda baca ("PT. WIDE LOGISTICS", "PT WIDE LOGISTICS") satu vendor;
@@ -49,7 +49,13 @@
    2. INVOICE SUMMARY (format lembar akunting INVOICE SUMMARY) -- lihat
       fexSusunInvoiceSummary.
 
-   Kedua format diurutkan menurut tanggal yang dipakai saringan, terlama
+   3. GROUPWARE (ringkasan tagihan untuk pengajuan di Groupware, contoh
+      pengguna GROUPWARE_SUMMARY_INVOICE.xlsx) -- lihat fexSusunGroupware:
+      judul INVOICE SUMMARY <vendor>, SATU BARIS PER INVOICE / DEBIT NOTE
+      (Value, PPN, PPH23 masing-masing dokumen), Total Payment = yang harus
+      dibayar untuk pengajuan itu.
+
+   Ketiga format diurutkan menurut tanggal yang dipakai saringan, terlama
    dulu.
 ------------------------------------------------------------------ */
 
@@ -113,9 +119,38 @@ const FEX_RP = '_-[$Rp-3809]* #,##0.00_-;\\-[$Rp-3809]* #,##0.00_-;_-[$Rp-3809]*
 const FEX_RP_BULAT = '_-[$Rp-421]* #,##0_-;\\-[$Rp-421]* #,##0_-;_-[$Rp-421]* "-"??_-;_-@_-';
 const FEX_BULAN = ["JAN.", "FEB.", "MAR.", "APR.", "MAY", "JUNE", "JULY", "AUG.", "SEPT.", "OCT.", "NOV.", "DEC."];
 
+/* GROUPWARE: kolom A-J lembar contoh pengguna (GROUPWARE_SUMMARY_INVOICE.xlsx),
+   judul ditulis APA ADANYA seperti lembar itu (bukan kapital semua) dan
+   lebarnya persis -- Detail Job & kolom uang boleh melebar bila isinya
+   lebih panjang (fexGwLebar). Kolom bertanda `gabung` digabung ke bawah
+   sepanjang dokumen satu pengajuan (A-E & Total Payment); kolom lain satu
+   sel per invoice / debit note. */
+const FEX_GW_KOLOM = [
+  { judul: "No", lebar: 5, gabung: true },
+  { judul: "Invoice Date", lebar: 18.71, gabung: true, tanggal: true },
+  { judul: "Due Date", lebar: 16.86, gabung: true, tanggal: true },
+  { judul: "Terms", lebar: 8.29, gabung: true },
+  { judul: "Detail Job", lebar: 62, gabung: true, bungkus: true, subjek: true, maks: 100 },
+  { judul: "Invoice / Debit Note Number", lebar: 28.57, bungkus: true },
+  { judul: "Value", lebar: 18.71, uang: "nilai" },
+  { judul: "PPN", lebar: 19.43, uang: "ppn" },
+  { judul: "PPH23", lebar: 15.86, uang: "pph" },
+  { judul: "Total Payment", lebar: 23, gabung: true, uang: "total" },
+];
+/* Rupiah tanpa sen seperti lembar contohnya (akuntansi "Rp" Indonesia, 3809);
+   huruf Abadi 11 di seluruh tabel, judul putih di biru tua 002060. Tanggal
+   memakai format tanggal pendek bawaan Excel (nomor 14, "mm-dd-yy" di
+   ExcelJS) seperti lembar itu: tampil menurut pengaturan wilayah komputernya
+   (dd/mm/yyyy di Windows berbahasa Indonesia). */
+const FEX_GW_RP = '_-[$Rp-3809]* #,##0_-;\\-[$Rp-3809]* #,##0_-;_-[$Rp-3809]* "-"??_-;_-@_-';
+const FEX_GW_TANGGAL = "mm-dd-yy";
+const FEX_GW_HURUF = "Abadi";
+const FEX_GW_BARIS_AWAL = 5; // judul A1:J2, kepala A3:J4
+
 const FEX_FORMAT = {
   paymentPlan: { label: "Payment Plan", berkas: "Payment_Plan", kolom: () => FEX_KOLOM.map((k) => k.judul) },
   invoiceSummary: { label: "Invoice Summary", berkas: "Invoice_Summary", kolom: () => FEX_INVSUM_KOLOM.map((k) => k.judul) },
+  groupware: { label: "Groupware", berkas: "Groupware_Summary_Invoice", kolom: () => FEX_GW_KOLOM.map((k) => k.judul) },
 };
 let fexFormatPilih = "paymentPlan";
 const fexFormatSah = (f) => (FEX_FORMAT[f] ? f : "paymentPlan");
@@ -316,7 +351,10 @@ function fexLebarKolom(k, baris, campur) {
 
 // Berkas menurut format pilihan dialog; opsi.tahun = tahun rekap bulanan Invoice Summary
 function fexSusunWorkbook(baris, format, opsi) {
-  return fexFormatSah(format) === "invoiceSummary" ? fexSusunInvoiceSummary(baris, opsi) : fexSusunPaymentPlan(baris);
+  const f = fexFormatSah(format);
+  if (f === "invoiceSummary") return fexSusunInvoiceSummary(baris, opsi);
+  if (f === "groupware") return fexSusunGroupware(baris);
+  return fexSusunPaymentPlan(baris);
 }
 
 function fexSusunPaymentPlan(baris) {
@@ -576,6 +614,237 @@ function fexSusunInvoiceSummary(baris, opsi) {
   return wb;
 }
 
+/* --------------------------- Groupware --------------------------- */
+
+/* Nama vendor di judul: nama pendek vendor yang dikenal aplikasi
+   (FUND_VENDOR_ATURAN, dicocokkan per kata: "PT. WIDE LOGISTICS" -> WIDE,
+   seperti judul contoh pengguna "INVOICE SUMMARY WIDE"); vendor lain =
+   namanya tanpa bentuk badan usaha di depan / belakang ("PT. DHL GLOBAL
+   FORWARDING" -> DHL GLOBAL FORWARDING), huruf kapital. */
+function fexGwNamaVendor(nama) {
+  const teks = String(nama || "").replace(/\s+/g, " ").trim();
+  if (!teks) return "";
+  const aturan = typeof fundVendorAturan === "function" ? fundVendorAturan(teks) : null;
+  if (aturan && aturan.vendor) return String(aturan.vendor).toUpperCase();
+  const umum = typeof FUND_DOCNO_KATA_UMUM !== "undefined" ? FUND_DOCNO_KATA_UMUM : [];
+  const bentukUsaha = (k) => umum.indexOf(k.replace(/[^A-Z0-9]/g, "")) >= 0;
+  const kata = teks.toUpperCase().split(" ");
+  while (kata.length > 1 && bentukUsaha(kata[0])) kata.shift();
+  while (kata.length > 1 && bentukUsaha(kata[kata.length - 1])) kata.pop();
+  return kata.join(" ").replace(/^[\s.,;:-]+|[\s.,;:-]+$/g, "");
+}
+
+/* Judul lembar: "INVOICE SUMMARY <vendor>" bila semua pengajuan yang
+   diekspor milik SATU vendor -- vendor dipilih di dialog, atau saringan
+   lain kebetulan hanya menyisakan satu vendor; nama = ejaan tersering
+   (fexDaftarVendor). Vendor campuran / tanpa vendor -> "INVOICE SUMMARY". */
+function fexGwJudul(baris) {
+  const kunci = new Set((baris || []).map((b) => fexKunciVendor(b.vendor)));
+  const vendor = kunci.size === 1 && !kunci.has("") ? fexDaftarVendor(baris)[0] : null;
+  const nama = vendor ? fexGwNamaVendor(vendor.nama) : "";
+  return nama ? `INVOICE SUMMARY ${nama}` : "INVOICE SUMMARY";
+}
+
+/* Terms: incoterm jadwal yang BL/AWB-nya (Master / House) cocok dengan
+   isian BL/AWB pengajuan (fundJadwalDariAwb, sama dengan Rincian bawaan) --
+   "CIF", "FOB"; kiriman berlainan -> "CIF / FOB"; tanpa jadwal -> kosong. */
+function fexGwSyarat(p) {
+  if (typeof fundJadwalDariAwb !== "function") return "";
+  const daftar = fundJadwalDariAwb(p && p.blAwb)
+    .map(({ s }) => String((s && s.incoterm) || "").trim().toUpperCase())
+    .filter(Boolean);
+  return [...new Set(daftar)].join(" / ");
+}
+
+/* Dokumen tagihan satu pengajuan, urut seperti di form (dokumen utama
+   dulu): [{ nomor, nilai, ppn, pph }] dalam mata uang pengajuannya.
+     - Rincian per baris (p.lines): angka PER DOKUMEN dari
+       fundLineTotals().perDokumen -- nilai = Total Nilai sesudah diskon,
+       SEBELUM PPN & PPH 23 (totalNet); ppn = Total PPN; pph = potongan
+       PPH 23 dokumen itu -- dibulatkan sendiri-sendiri, persis seperti
+       tertulis di tiap dokumen vendor. Dokumen yang belum punya baris
+       tidak ikut (sama dengan "Total per dokumen" di form).
+     - Billing / format lama tanpa rincian: satu baris, seluruh jumlahnya
+       Value -- Bea Masuk + PPN + PPH impor semuanya disetor, bukan PPN
+       jasa atau potongan PPH 23 (sama dengan fundTotalKomponen).
+   Nomor dokumen utama: Nomor Billing bila ada, selainnya No. Invoice. */
+function fexGwDokumen(p) {
+  const d = p || {};
+  const mata = String(d.currency || "IDR").trim().toUpperCase() || "IDR";
+  const utama = String(d.billingNo || "").trim() || String(d.invoiceNo || "").trim();
+  if (Array.isArray(d.lines) && d.lines.length && typeof fundLineTotals === "function") {
+    const daftar = Array.isArray(d.dokumen) ? d.dokumen.filter((x) => x && x.id) : [];
+    const r = fundLineTotals(d.lines, d.currency, d.payee, daftar);
+    return (r.perDokumen || []).map((x) => {
+      const dok = x.id ? daftar.find((y) => String(y.id) === x.id) : null;
+      return {
+        nomor: dok ? String(dok.nomor || "").trim() : utama,
+        nilai: fexBulat(x.totalNet, mata),
+        ppn: fexBulat(x.totalPpn, mata),
+        pph: fexBulat(x.pph, mata),
+      };
+    });
+  }
+  const total = typeof frTotalPengajuan === "function" ? frTotalPengajuan(d) : 0;
+  return [{ nomor: utama, nilai: fexBulat(total, mata), ppn: 0, pph: 0 }];
+}
+
+/* Rumus Total Payment PERSIS cara lembar contohnya:
+     satu dokumen    (G7+H7)-I7
+     dua dokumen     (G5+G6+H5+H6)-(I5+I6) */
+function fexGwRumus(awal, jumlah) {
+  const sel = (k) => Array.from({ length: jumlah }, (_, i) => `${k}${awal + i}`);
+  return jumlah > 1 ? `(${sel("G").concat(sel("H")).join("+")})-(${sel("I").join("+")})` : `(G${awal}+H${awal})-I${awal}`;
+}
+
+// Rupiah seperti lembar contohnya (tanpa sen); mata uang lain akuntansi berkode, dua desimal (tidak terbaca rupiah)
+const fexGwFormatUang = (m) => (m === "IDR" ? FEX_GW_RP : fexFormatBiaya(m));
+// Teks yang tampil di sel uang -- dasar lebar kolom
+function fexGwTeksUang(v, m) {
+  const d = m === "IDR" ? 0 : 2;
+  return `${m === "IDR" ? "Rp" : m} ` + angkaLokal(Number(v) || 0, "en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+/* Lebar kolom: lebar lembar contohnya; melebar bila isinya lebih panjang --
+   Detail Job menurut kalimat terpanjang (sampai `maks`, selebihnya
+   dibungkus), kolom uang menurut angka terpanjang supaya tidak tampil ####. */
+function fexGwLebar(k, isi) {
+  let perlu = 0;
+  isi.forEach(({ b, dok }) => {
+    if (k.subjek) perlu = Math.max(perlu, String(b.subject || "").length + 2); // 60 huruf muat di 62 (lembar contohnya)
+    if (k.uang) {
+      const angka = k.uang === "total" ? [b.nominal] : dok.map((d) => d[k.uang]);
+      angka.forEach((v) => (perlu = Math.max(perlu, fexGwTeksUang(v, b.mataUang).length + 5)));
+    }
+  });
+  return Math.min(Math.max(k.lebar, perlu), k.maks || 60);
+}
+
+/* GROUPWARE -- ringkasan tagihan untuk pengajuan pembayaran di Groupware,
+   format contoh pengguna GROUPWARE_SUMMARY_INVOICE.xlsx (lembar ini tidak
+   memakai tabel Excel, rumus NO, atau kepala dibekukan -- lembar aslinya
+   juga tidak):
+     - A1:J2 digabung: "INVOICE SUMMARY <vendor>" (fexGwJudul);
+     - A3:J4: judul kolom, tiap judul digabung dua baris; biru tua 002060,
+       huruf putih; "Invoice / Debit Note Number" dibungkus;
+     - mulai baris 5, satu pengajuan = SATU BARIS PER INVOICE / DEBIT NOTE
+       (fexGwDokumen): No, Invoice Date, Due Date, Terms (incoterm jadwal),
+       Detail Job (= Subject / Rincian) dan Total Payment digabung ke bawah
+       sepanjang dokumennya; nomor, Value, PPN, PPH23 per dokumen;
+     - Total Payment = yang HARUS DIBAYAR untuk pengajuan itu = Nominal /
+       Terbilang surat (frTotalPengajuan): semua dokumen + PPN - PPH 23.
+       Ditulis sebagai rumus lembar contohnya ((G5+G6+H5+H6)-(I5+I6)) selama
+       hasilnya sama persis. Vendor yang membulatkan TOTAL invoicenya ke
+       atas dari PPN & PPH 23 tepat (lihat FUND_PPH23_RATE) bisa berselisih
+       Rp 1 dari Value + PPN - PPH23 yang tertulis -- sel itu berisi angka
+       TOTAL invoice yang sebenarnya, dengan catatan sel yang menjelaskannya,
+       supaya yang dibayar tidak pernah salah satu rupiah pun;
+     - seluruh sel Abadi 11, rata tengah (tengah-tengah), bergaris tipis
+       hitam; tanggal = tanggal Excel (format tanggal pendek); uang format
+       akuntansi Rp tanpa sen (USD -> format berkode USD dua desimal);
+     - lebar kolom persis lembar contohnya, zoom 70% seperti lembar itu;
+       dicetak mendatar selebar kertas A4, judul kolom berulang tiap halaman. */
+function fexSusunGroupware(baris) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "EXIM DDI";
+  wb.created = new Date();
+  const ws = wb.addWorksheet("INVOICE SUMMARY", {
+    views: [{ zoomScale: 70, zoomScaleNormal: 70 }],
+    pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true },
+  });
+  const jumlahKolom = FEX_GW_KOLOM.length;
+  const huruf = (putih) => Object.assign({ name: FEX_GW_HURUF, size: 11, family: 2 }, putih ? { color: { argb: "FFFFFFFF" } } : {});
+  const rata = (bungkus) => Object.assign({ horizontal: "center", vertical: "middle" }, bungkus ? { wrapText: true } : {});
+  const garis = () => ({ style: "thin", color: { indexed: 64 } });
+  const tepi = () => ({ top: garis(), left: garis(), bottom: garis(), right: garis() });
+  const isi = baris.map((b) => {
+    const p = (b.asli && b.asli.payload) || {};
+    const dok = fexGwDokumen(p);
+    return { b, dok: dok.length ? dok : [{ nomor: "", nilai: 0, ppn: 0, pph: 0 }], syarat: fexGwSyarat(p) };
+  });
+
+  /* Gaya kolom (seperti <col style> lembar contohnya): baris yang diketik
+     sendiri di bawah tabel ikut Abadi rata tengah, kolom uang ikut format Rp. */
+  FEX_GW_KOLOM.forEach((k, i) => {
+    const kolom = ws.getColumn(i + 1);
+    kolom.width = fexGwLebar(k, isi);
+    kolom.font = huruf(false);
+    kolom.alignment = rata(false);
+    if (k.uang) kolom.numFmt = FEX_GW_RP;
+  });
+
+  // Judul A1:J2 -- gaya ditulis sesudah digabung (sel gabungan berbagi gaya sel utamanya)
+  ws.mergeCells(1, 1, 2, jumlahKolom);
+  ws.getCell(1, 1).value = fexGwJudul(baris);
+  for (let r = 1; r <= 2; r++) {
+    for (let c = 1; c <= jumlahKolom; c++) {
+      const sel = ws.getCell(r, c);
+      sel.style = { font: huruf(false), alignment: rata(false), border: tepi() };
+    }
+  }
+  // Judul kolom A3:J4, tiap judul digabung dua baris
+  FEX_GW_KOLOM.forEach((k, i) => {
+    ws.mergeCells(3, i + 1, 4, i + 1);
+    ws.getCell(3, i + 1).value = k.judul;
+    [3, 4].forEach((r) => {
+      ws.getCell(r, i + 1).style = {
+        font: huruf(true),
+        fill: { type: "pattern", pattern: "solid", fgColor: { argb: FEX_INVSUM_NAVY } },
+        alignment: rata(i === 5), // "Invoice / Debit Note Number" dibungkus, seperti lembar contohnya
+        border: tepi(),
+      };
+    });
+  });
+
+  let r = FEX_GW_BARIS_AWAL;
+  isi.forEach(({ b, dok, syarat }, n) => {
+    const awal = r;
+    const akhir = awal + dok.length - 1;
+    const uang = fexGwFormatUang(b.mataUang);
+    [n + 1, fexTanggalExcel(b.tglInvoice), fexTanggalExcel(b.jatuhTempo), syarat || null, b.subject || null]
+      .forEach((v, c) => (ws.getCell(awal, c + 1).value = v));
+    dok.forEach((d, i) => {
+      const row = ws.getRow(awal + i);
+      row.getCell(6).value = d.nomor || null;
+      row.getCell(7).value = d.nilai;
+      row.getCell(8).value = d.ppn;
+      row.getCell(9).value = d.pph;
+    });
+    // Total Payment: rumus lembar contohnya selama hasilnya = yang harus dibayar (dibandingkan dalam sen)
+    const sen = (v) => Math.round((Number(v) || 0) * 100);
+    const tertulis = dok.reduce((x, d) => x + sen(d.nilai) + sen(d.ppn) - sen(d.pph), 0);
+    const total = ws.getCell(awal, jumlahKolom);
+    if (tertulis === sen(b.nominal)) {
+      total.value = { formula: fexGwRumus(awal, dok.length), result: b.nominal };
+    } else {
+      total.value = b.nominal;
+      const selisih = typeof frNilai === "function" ? frNilai(Math.abs(sen(b.nominal) - tertulis) / 100, b.mataUang) : String(Math.abs(sen(b.nominal) - tertulis) / 100);
+      total.note = tt(
+        `Total Payment = TOTAL invoice vendor (sama dengan surat Pengajuan Dana). Vendor menghitung PPN & PPH 23 tepat (bersen), lalu TOTAL-nya dibulatkan ke atas -- karena itu berselisih ${selisih} dari Value + PPN - PPH23 yang tertulis.`,
+        `Total Payment = the vendor's invoice TOTAL (same as the fund request letter). The vendor works out VAT & PPH 23 exactly (with cents), then rounds the TOTAL up -- hence ${selisih} away from Value + VAT - PPH23 as written.`,
+      );
+    }
+    if (dok.length > 1) FEX_GW_KOLOM.forEach((k, c) => k.gabung && ws.mergeCells(awal, c + 1, akhir, c + 1));
+    for (let y = awal; y <= akhir; y++) {
+      FEX_GW_KOLOM.forEach((k, c) => {
+        const sel = ws.getCell(y, c + 1);
+        sel.font = huruf(false);
+        sel.alignment = rata(k.bungkus);
+        sel.border = tepi();
+        if (k.tanggal) sel.numFmt = FEX_GW_TANGGAL;
+        if (k.uang) sel.numFmt = uang;
+      });
+    }
+    r = akhir + 1;
+  });
+
+  /* Dicetak: judul & tabelnya saja, judul kolom (baris 3-4) berulang di tiap
+     halaman. ExcelJS menulis "$" + teks ini, jadi "A$1" menjadi $A$1. */
+  ws.pageSetup.printArea = `A$1:${ws.getColumn(jumlahKolom).letter}$${Math.max(r - 1, 4)}`;
+  ws.pageSetup.printTitlesRow = "3:4";
+  return wb;
+}
+
 // Diunduh lewat tautan sementara (sama dengan Bulk Export / laporan); dipisah supaya bisa diganti di uji
 function fexSimpanBerkas(blob, nama) {
   const tautan = document.createElement("a");
@@ -620,6 +889,7 @@ function fexTeksKolom() {
 function fexIsiDialogHtml() {
   const f = fexSaringan;
   const denganTahun = fexFormatSah(fexFormatPilih) === "invoiceSummary";
+  const denganGw = fexFormatSah(fexFormatPilih) === "groupware";
   const bayar = [["", tt("Semua", "All")], ["lunas", tt("Lunas", "Paid")], ["belum", tt("Belum Lunas", "Unpaid")]];
   return `
     <div class="dialog-head">
@@ -644,6 +914,7 @@ function fexIsiDialogHtml() {
           <div class="prompt-hint fex-petunjuk-tahun${denganTahun ? "" : " d-none"}">${escapeHtml(tt(
             "Rekap total per bulan (Januari–Desember) di kanan tabel, menurut Paid Date — seperti lembar INVOICE SUMMARY. Ada USD: rekap Rupiah & USD dipisah.",
             "Monthly totals (January–December) to the right of the table, by Paid Date — as in the INVOICE SUMMARY sheet. With USD: separate Rupiah & USD recaps."))}</div>
+          <div class="prompt-hint fex-petunjuk-gw${denganGw ? "" : " d-none"}" id="fexPetunjukGw"></div>
         </div>
         <div class="prompt-field">
           <span class="prompt-label" id="fexLabelBayar">${escapeHtml(tt("Status bayar", "Payment status"))}</span>
@@ -697,9 +968,30 @@ function fexIsiVendor() {
   sel.disabled = !fexSemua;
 }
 
+/* Petunjuk format Groupware (di bawah Format): judul berkas yang akan
+   terbentuk dari saringan saat ini -- "INVOICE SUMMARY WIDE" -- atau ajakan
+   memilih vendor selama pengajuannya bercampur vendor. */
+function fexIsiPetunjukGw() {
+  const el = document.getElementById("fexPetunjukGw");
+  if (!el) return;
+  const hasil = fexHasil();
+  const judul = hasil.length ? fexGwJudul(hasil) : "";
+  const baris = tt(
+    "Invoice & debit note satu pengajuan masing-masing satu baris (Value, PPN, PPH23); Total Payment = yang harus dibayar.",
+    "Each invoice & debit note of a request gets its own row (Value, VAT, PPH23); Total Payment = the amount to pay.");
+  let kepala;
+  if (!judul) kepala = escapeHtml(tt("Judul mengikuti vendor yang dipilih: INVOICE SUMMARY <VENDOR>.", "The title follows the chosen vendor: INVOICE SUMMARY <VENDOR>."));
+  else if (judul === "INVOICE SUMMARY") kepala = tt(
+    `Judul: <b>${escapeHtml(judul)}</b> — pilih Vendor supaya namanya ikut di judul.`,
+    `Title: <b>${escapeHtml(judul)}</b> — choose a Vendor to put its name in the title.`);
+  else kepala = tt(`Judul: <b>${escapeHtml(judul)}</b>.`, `Title: <b>${escapeHtml(judul)}</b>.`);
+  el.innerHTML = `${kepala} ${escapeHtml(baris)}`;
+}
+
 function fexGambarPratinjau() {
   const box = document.getElementById("fexPratinjau");
   const tombol = document.querySelector("[data-fex-unduh]");
+  fexIsiPetunjukGw();
   if (!box) return;
   const hasil = fexHasil();
   if (tombol && !fexSibuk) tombol.disabled = !hasil.length;
@@ -854,8 +1146,9 @@ document.addEventListener("change", (e) => {
     fexFormatPilih = fexFormatSah(el.value);
     const teks = document.getElementById("fexKolomTeks");
     if (teks) teks.textContent = fexTeksKolom();
-    // Tahun rekap & petunjuknya hanya untuk Invoice Summary
+    // Tahun rekap & petunjuknya hanya untuk Invoice Summary; petunjuk judul hanya untuk Groupware
     document.querySelectorAll("#danaEksporModal :is(.fex-bidang-tahun, .fex-petunjuk-tahun)").forEach((x) => x.classList.toggle("d-none", fexFormatPilih !== "invoiceSummary"));
+    document.querySelectorAll("#danaEksporModal .fex-petunjuk-gw").forEach((x) => x.classList.toggle("d-none", fexFormatPilih !== "groupware"));
     fexIsiTahun();
     fexGambarPratinjau();
     return;

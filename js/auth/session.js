@@ -118,7 +118,9 @@ function bolehAturTanggalPabrik() {
 /* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
 function bolehBuka(halaman) {
   const daftar = aturanPeran().halaman;
-  return !daftar || daftar.indexOf(halaman) >= 0;
+  // Sub-halaman ikut izin induknya (HALAMAN_INDUK, form-router.js): Name Plate = Nomor Dokumen
+  const kunci = (typeof HALAMAN_INDUK !== "undefined" && HALAMAN_INDUK[halaman]) || halaman;
+  return !daftar || daftar.indexOf(kunci) >= 0;
 }
 
 function currentRoleLabel() {

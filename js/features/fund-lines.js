@@ -1154,12 +1154,20 @@ if (fundLinesBodyEl) {
    yang TIDAK valid menahan kursor di kotaknya supaya bisa langsung
    diperbaiki.
 
+   CTRL+ENTER (⌘+Enter di Mac) = SISIPKAN baris kosong TEPAT DI BAWAH baris
+   yang sedang aktif -- di baris mana pun, juga di tengah kelompok -- lalu
+   kursor ke Uraian baris baru itu. Untuk pos yang terlewat saat menyalin
+   tagihan: tidak perlu menambah di ujung lalu memindahkannya. Baris barunya
+   ikut dokumen (kelompok) baris aktif, berbentuk sama dengan baris baru
+   lain (fundLineBaru). Rumus di kotak Jumlah dihitung dulu; rumus salah
+   menahan kursor tanpa menyisipkan apa pun.
+
    Enter DICEGAH mengirim form: kotak-kotak ini hidup di dalam <form>
    penerbitan nomor, dan tanpa preventDefault satu ketukan Enter akan
    menerbitkan nomor sebelum rinciannya selesai diisi. */
 if (fundLinesBodyEl) {
   fundLinesBodyEl.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter") return;
+    if (e.key !== "Enter" || e.isComposing) return;
     const tr = e.target.closest("[data-fl]");
     const f = e.target.dataset.flF;
     if (!tr || !f) return;
@@ -1172,6 +1180,14 @@ if (fundLinesBodyEl) {
       baris.amount = nilaiKotakDana(e.target.value, kotakPersen(baris, f));
       perbaruiHitunganRincian();
       if (!ok) return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      const dok = fundKelompokBaris(fundLines[idx]);
+      fundLines.splice(idx + 1, 0, Object.assign(fundLineBaru(), dok ? { dok } : {}));
+      renderFundLines();
+      const uraian = fundLinesBodyEl.querySelector(`[data-fl="${idx + 1}"] [data-fl-f="desc"]`);
+      if (uraian) uraian.focus();
+      return;
     }
     /* Baris terakhir KELOMPOKNYA, bukan terakhir seluruh tabel. Dulu yang
        dilihat hanya baris terakhir tabel, dan baris barunya tanpa dokumen
