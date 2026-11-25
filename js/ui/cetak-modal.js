@@ -28,6 +28,21 @@
                   sudah jadi), sebelum tombol Cetak menyala -- untuk surat
                   yang menata dirinya dengan mengukur (Surat Jalan mengisi
                   kertas, Masterlist memecah halaman). Boleh async.
+     ubah         (opsional) { diubah(dok, blok), rapikan(dok), petunjuk }
+                  untuk mode UBAH TEKS (lihat di bawah): diubah dipanggil
+                  tiap kali isi surat diketik -- mis. Form Pengajuan Dana
+                  menghitung ulang TOTAL & Terbilang --, rapikan sebelum
+                  mencetak & saat mode ubah dimatikan, petunjuk = kalimat
+                  tambahan di bilah petunjuk.
+
+   UBAH TEKS SEBELUM CETAK (tombol "Ubah teks" di kaki kotak): isi surat
+   di pratinjau bisa diketik langsung -- angka yang selisih Rp1 dengan
+   tagihan aslinya, salah ketik, dsb. Hanya untuk cetakan ini: data
+   aslinya tidak berubah dan tidak ada yang tersimpan. Yang diketik
+   ditandai kuning (data-ubah="manual"), yang ikut dihitung ulang biru
+   (data-ubah="hitung") -- keduanya hanya di layar, tidak ikut tercetak.
+   "Kembalikan" memulihkan surat persis seperti saat pertama tampil; Esc
+   di dalam surat keluar dari mode ubah (bukan menutup kotak).
 
    Semua cetak di aplikasi lewat kotak ini: Form Pengajuan Dana, Surat
    Jalan (Export & Lokal), CI/PL/SI, Surat BC, Stock Opname Masterlist,
@@ -51,6 +66,19 @@ const cetakUkuranKertas = (sesi) => CETAK_KERTAS[(sesi && sesi.kertas) || "a4"] 
 const CETAK_KUNCI_TUTUP = "cetak-tutup-otomatis";
 const CETAK_BATAS_GAMBAR = 1500; // ms: gambar surat yang lambat tidak boleh menahan pratinjau
 const CETAK_BATAS_TAMPIL = 1000; // ms: kotak yang tak kunjung tampil tidak boleh menahan siapkan()
+
+/* Gaya di DALAM surat selama/sesudah diubah -- hanya layar (@media
+   screen), jadi tidak pernah ikut tercetak. Sorotan arahan hanya pada sel
+   / blok TERDALAM (:has), bukan seluruh pembungkus halaman. */
+const CETAK_GAYA_UBAH = `@media screen {
+  body[contenteditable="true"] { outline: none; caret-color: #1d4ed8; cursor: text; }
+  [data-ubah="manual"] { background-color: rgba(250, 204, 21, 0.34) !important; }
+  [data-ubah="hitung"] { background-color: rgba(59, 130, 246, 0.16) !important; }
+}
+@media screen {
+  body[contenteditable="true"] :is(td, th):not(:has(td, th)):hover,
+  body[contenteditable="true"] :is(div, p, li):not(:has(div, p, li, table)):hover { background-color: rgba(250, 204, 21, 0.16); }
+}`;
 
 const cetakModalEl = document.getElementById("cetakModal");
 let cetakSesi = null; // sesi yang sedang tampil -- null = kotak tertutup
@@ -162,6 +190,10 @@ function cetakKeadaanMemuat(o) {
   cetakEl("cetakUkur").hidden = true;
   cetakEl("cetakTombol").disabled = true;
   cetakEl("cetakTutupOtomatis").checked = cetakTutupOtomatisAktif();
+  cetakTampilUbah(false);
+  cetakEl("cetakUbah").disabled = true;
+  cetakEl("cetakKembalikan").disabled = true;
+  cetakEl("cetakUbahPetunjuk").textContent = o.ubah && o.ubah.petunjuk ? " " + o.ubah.petunjuk : "";
 }
 
 function bukaModalCetak(opsi) {
@@ -175,6 +207,10 @@ function bukaModalCetak(opsi) {
     pulihJudul: null,
     kertas: CETAK_KERTAS[o.kertas] ? o.kertas : "a4",
     siapkan: typeof o.siapkan === "function" ? o.siapkan : null,
+    ubahOpsi: o.ubah || null,
+    ubah: false, // mode Ubah teks menyala
+    berubah: false, // isi surat sudah diketik
+    htmlAsli: "", // surat seperti saat pertama tampil -- untuk "Kembalikan"
   };
   cetakSesi = sesi;
   cetakKeadaanMemuat(o);
@@ -191,8 +227,7 @@ async function cetakSiapkanIsi(sesi, muat) {
     dok.open();
     dok.write(html);
     dok.close();
-    // Ctrl+P & Esc juga ditangkap bila kursor sempat masuk ke bingkai (open() membuang pendengar lama)
-    dok.addEventListener("keydown", cetakTekanTombolBingkai);
+    cetakPasangPendengar(dok);
     await cetakTungguGambar(dok);
     if (cetakSesi !== sesi) return false;
     cetakEl("cetakStatus").hidden = true;
@@ -207,7 +242,10 @@ async function cetakSiapkanIsi(sesi, muat) {
       if (cetakSesi !== sesi) return false;
     }
     sesi.siap = true;
+    // Salinan surat yang sudah jadi (sesudah siapkan): "Kembalikan" memulihkannya persis
+    sesi.htmlAsli = "<!doctype html>\n" + dok.documentElement.outerHTML;
     cetakUkurKertas();
+    cetakEl("cetakUbah").disabled = false;
     const tombol = cetakEl("cetakTombol");
     tombol.disabled = false;
     /* Enter langsung mencetak: kursor ke tombol Cetak -- kecuali pengguna
@@ -235,6 +273,14 @@ function cetakModalCetak() {
   const jendela = bingkai && bingkai.contentWindow;
   if (!sesi || !sesi.siap || sesi.mencetak || !jendela) return;
   sesi.mencetak = true;
+  cetakRapikanUbahan(sesi);
+  try {
+    // Kursor ketik & sorotan seleksi tidak ikut terbawa ke dialog cetak
+    const pilih = jendela.getSelection && jendela.getSelection();
+    if (pilih) pilih.removeAllRanges();
+  } catch (err) {
+    /* Seleksi tak terbaca: tidak tercetak juga */
+  }
 
   /* Nama berkas bawaan "Save as PDF" diambil peramban dari judul HALAMAN
      -- untuk iframe itu judul halaman induk, bukan judul isi iframe. Judul
@@ -280,16 +326,137 @@ function cetakTekanCetak(e) {
   cetakModalCetak();
 }
 /* Di dalam bingkai Esc tidak sampai ke Bootstrap (dokumennya lain),
-   jadi kotak ditutup dari sini. */
+   jadi kotak ditutup dari sini -- kecuali selagi mengubah teks: Esc
+   keluar dari mode ubah, ketikannya tetap (bukan hilang bersama kotak). */
 function cetakTekanTombolBingkai(e) {
   cetakTekanCetak(e);
-  if (cetakSesi && e.key === "Escape") cetakTutup();
+  if (!cetakSesi || e.key !== "Escape") return;
+  if (cetakSesi.ubah) {
+    e.preventDefault();
+    cetakAturUbah(false);
+    cetakEl("cetakUbah").focus();
+  } else cetakTutup();
+}
+
+/* ---------- ubah teks sebelum cetak ---------- */
+
+// Pendengar di dokumen bingkai -- dipasang ulang tiap kali isinya ditulis (open() membuang yang lama)
+function cetakPasangPendengar(dok) {
+  // Ctrl+P & Esc juga ditangkap bila kursor sempat masuk ke bingkai
+  dok.addEventListener("keydown", cetakTekanTombolBingkai);
+  dok.addEventListener("input", cetakSaatDiketik);
+  dok.addEventListener("paste", cetakTempelTeks);
+  dok.addEventListener("drop", cetakTolakSeret);
+}
+
+/* Tempelan masuk sebagai TEKS BIASA: angka yang disalin dari Excel atau
+   PDF tagihan tidak membawa tabel, warna & hurufnya ke dalam surat. Baris
+   baru di ujung salinan sel Excel dibuang. */
+function cetakTempelTeks(e) {
+  if (!cetakSesi || !cetakSesi.ubah || !e.clipboardData) return;
+  e.preventDefault();
+  const teks = String(e.clipboardData.getData("text/plain") || "").replace(/\r\n?/g, "\n").replace(/\s+$/, "");
+  const dok = e.currentTarget;
+  if (teks && dok && typeof dok.execCommand === "function") dok.execCommand("insertText", false, teks);
+}
+// Menyeret teks/berkas ke dalam surat tidak memindahkan isi sel diam-diam
+function cetakTolakSeret(e) {
+  if (cetakSesi && cetakSesi.ubah) e.preventDefault();
+}
+
+// Tampilan kotak untuk mode ubah: bingkai bisa diklik, tombol tertekan, bilah petunjuk
+function cetakTampilUbah(nyala) {
+  if (!cetakModalEl) return;
+  cetakModalEl.classList.toggle("cetak-mode-ubah", nyala);
+  cetakEl("cetakUbah").setAttribute("aria-pressed", nyala ? "true" : "false");
+  cetakEl("cetakUbahInfo").hidden = !nyala;
+}
+
+function cetakAturUbah(nyala) {
+  const sesi = cetakSesi;
+  const bingkai = cetakEl("cetakBingkai");
+  const dok = bingkai && bingkai.contentDocument;
+  if (!sesi || !sesi.siap || !dok || !dok.body) return;
+  sesi.ubah = !!nyala;
+  if (sesi.ubah) {
+    if (!dok.getElementById("cetak-gaya-ubah")) {
+      const gaya = dok.createElement("style");
+      gaya.id = "cetak-gaya-ubah";
+      gaya.textContent = CETAK_GAYA_UBAH;
+      (dok.head || dok.documentElement).appendChild(gaya);
+    }
+    dok.body.setAttribute("contenteditable", "true");
+    dok.body.setAttribute("spellcheck", "false");
+  } else {
+    dok.body.removeAttribute("contenteditable");
+    cetakRapikanUbahan(sesi);
+  }
+  cetakTampilUbah(sesi.ubah);
+  if (sesi.ubah) {
+    try {
+      bingkai.contentWindow.focus();
+    } catch (err) {
+      /* Fokus hanya kenyamanan: klik di surat tetap bisa */
+    }
+  }
+}
+
+/* Isi surat diketik: blok terdalam yang diketik ditandai "manual"
+   (kuning di layar), lalu surat diberi kesempatan menyesuaikan angka
+   turunannya (opsi ubah.diubah). */
+function cetakSaatDiketik() {
+  const sesi = cetakSesi;
+  const dok = cetakEl("cetakBingkai").contentDocument;
+  if (!sesi || !sesi.ubah || !dok) return;
+  const pilih = dok.getSelection && dok.getSelection();
+  const simpul = pilih && pilih.anchorNode;
+  const el = simpul && (simpul.nodeType === 1 ? simpul : simpul.parentElement);
+  const blok = el && el.closest && el.closest("td, th, li, p, div");
+  if (blok && blok !== dok.body) blok.dataset.ubah = "manual";
+  if (sesi.ubahOpsi && typeof sesi.ubahOpsi.diubah === "function") {
+    try {
+      sesi.ubahOpsi.diubah(dok, blok || null);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  sesi.berubah = true;
+  cetakEl("cetakKembalikan").disabled = false;
+  cetakUkurKertas();
+}
+
+function cetakRapikanUbahan(sesi) {
+  if (!sesi || !sesi.berubah || !sesi.ubahOpsi || typeof sesi.ubahOpsi.rapikan !== "function") return;
+  try {
+    sesi.ubahOpsi.rapikan(cetakEl("cetakBingkai").contentDocument);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// "Kembalikan": surat ditulis ulang persis seperti saat pertama tampil; mode ubah tetap seperti sebelumnya
+async function cetakKembalikanAsli() {
+  const sesi = cetakSesi;
+  if (!sesi || !sesi.siap || !sesi.htmlAsli || sesi.mencetak) return;
+  const dok = cetakEl("cetakBingkai").contentDocument;
+  dok.open();
+  dok.write(sesi.htmlAsli);
+  dok.close();
+  cetakPasangPendengar(dok);
+  sesi.berubah = false;
+  cetakEl("cetakKembalikan").disabled = true;
+  // Gaya penanda & contenteditable ikut terbuang bersama isi lama: dipasang lagi bila mode ubah menyala
+  if (sesi.ubah) cetakAturUbah(true);
+  await cetakTungguGambar(dok);
+  if (cetakSesi === sesi) cetakUkurKertas();
 }
 
 /* ---------- pemasangan ---------- */
 
 if (cetakModalEl) {
   cetakEl("cetakTombol").addEventListener("click", cetakModalCetak);
+  cetakEl("cetakUbah").addEventListener("click", () => cetakAturUbah(!(cetakSesi && cetakSesi.ubah)));
+  cetakEl("cetakKembalikan").addEventListener("click", cetakKembalikanAsli);
   cetakEl("cetakTutupOtomatis").addEventListener("change", (e) => {
     try {
       localStorage.setItem(CETAK_KUNCI_TUTUP, e.target.checked ? "1" : "0");
@@ -314,6 +481,7 @@ if (cetakModalEl) {
   cetakModalEl.addEventListener("hidden.bs.modal", () => {
     const sesi = cetakSesi;
     cetakSesi = null;
+    cetakTampilUbah(false);
     if (!sesi) return;
     if (sesi.pulihJudul) sesi.pulihJudul();
     // Isi dibuang: surat yang sudah ditutup tidak boleh tampak sekejap di pembukaan berikutnya

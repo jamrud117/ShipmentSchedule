@@ -1424,6 +1424,52 @@ table.item-table .is-disamakan {
 .cetak-kaki {
   align-items: center;
 }
+/* MODE UBAH TEKS (cetak-modal.js): surat di bingkai bisa diklik & diketik
+   -- di luar mode ini pratinjau sengaja tidak menangkap tetikus. */
+.cetak-mode-ubah .cetak-bingkai {
+  pointer-events: auto;
+}
+.cetak-ubah[aria-pressed="true"] {
+  background: var(--p-50);
+  border-color: var(--p-400);
+  color: var(--tp-700);
+}
+/* Bilah petunjuk di atas kertas, tetap terlihat selagi surat digulir */
+.cetak-ubah-info {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 794px;
+  margin: 0 auto var(--sp-4);
+  padding: 10px 12px;
+  border: 1px solid var(--s-warn-line);
+  border-radius: var(--r-md);
+  background: var(--s-warn-bg);
+  box-shadow: var(--sh-sm);
+  color: var(--s-warn-ink);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+.cetak-ubah-info[hidden] {
+  display: none;
+}
+.cetak-ubah-info > .bi {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+.cetak-ubah-teks {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.cetak-kembalikan {
+  flex: 0 0 auto;
+}
 .cetak-otomatis {
   display: flex;
   align-items: center;
@@ -1459,12 +1505,24 @@ table.item-table .is-disamakan {
   .cetak-kaki {
     padding: var(--sp-3) var(--sp-4) var(--sp-4);
   }
+  /* Petunjuk Ubah teks ikut tergulung bersama surat: di layar ponsel
+     bilah yang menempel di atas menutupi sebagian besar kertas */
+  .cetak-ubah-info {
+    position: static;
+  }
 }
 @media (max-width: 419.98px) {
   /* Kotak centang di barisnya sendiri, di atas tombol-tombol */
   .cetak-otomatis {
     flex-basis: 100%;
     margin-bottom: var(--sp-1);
+  }
+  /* Petunjuk Ubah teks: tombol Kembalikan turun ke barisnya sendiri */
+  .cetak-ubah-info {
+    flex-wrap: wrap;
+  }
+  .cetak-kembalikan {
+    margin-left: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {

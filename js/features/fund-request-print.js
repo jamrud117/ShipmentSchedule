@@ -281,12 +281,13 @@ function buildFundRequestHtml(row) {
   const total = frTotal(baris);
   const mataUang = p.currency || "IDR";
 
+  // data-fr*: peran angka untuk Ubah teks sebelum cetak (frHitungUlangCetakan)
   const barisHtml = baris
     .map(
-      (b, i) => `<tr class="baris-pos">
+      (b, i) => `<tr class="baris-pos" data-fr-baris="pos">
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.label)}</td>
-        <td class="c-amt">${frSelUang(b.nilai, mataUang)}</td>
+        <td class="c-amt"${frPeran("nilai", b.nilai)}>${frSelUang(b.nilai, mataUang)}</td>
       </tr>`,
     )
     .join("");
@@ -295,7 +296,7 @@ function buildFundRequestHtml(row) {
   const kosong = Math.max(0, FR_MIN_BARIS - baris.length);
   const kosongHtml = Array.from(
     { length: kosong },
-    () => `<tr class="baris-pos"><td class="c-no">&nbsp;</td><td class="c-desc"></td><td class="c-amt"></td></tr>`,
+    () => `<tr class="baris-pos" data-fr-baris="pos"><td class="c-no">&nbsp;</td><td class="c-desc"></td><td class="c-amt"${frPeranKosong("nilai")}></td></tr>`,
   ).join("");
 
   /* DOC NO: kotaknya ada di form untuk SEMUA vendor dan isinya tersimpan
@@ -362,7 +363,7 @@ function buildFundRequestHtml(row) {
         ${kosongHtml}
         <tr class="baris-total">
           <td class="c-total" colspan="2">GRAND TOTAL</td>
-          <td class="c-amt">${frSelUang(total, mataUang)}</td>
+          <td class="c-amt"${frPeran("grand", total)}>${frSelUang(total, mataUang)}</td>
         </tr>
       </tbody>
       ${frKakiTutup(3)}
@@ -373,7 +374,7 @@ function buildFundRequestHtml(row) {
          dari nama penanda tangannya, dan catatan kaki tidak tertinggal
          sendirian di halaman berikutnya. -->
     <div class="penutup-blok">
-      <div class="terbilang">Terbilang : ${escapeHtml(
+      <div class="terbilang" data-fr="terbilang">Terbilang : ${escapeHtml(
         terbilangMataUang(frTotalPengajuan(p), mataUang),
       )}</div>
 
@@ -466,7 +467,7 @@ function frTabelRinci(p, mataUang) {
      GRAND TOTAL = yang dibayar seluruhnya (= Terbilang). */
   const satuan = frSatuanKolom(mataUang);
 
-  const barisPos = (b, i) => {
+  const barisPos = (b, i, dokId) => {
     const nilai = nilaiBaris[i];
     const ppn = ppnBaris[i];
     const tarif = fundLineRate(b);
@@ -478,13 +479,13 @@ function frTabelRinci(p, mataUang) {
        ke rupiah penuh (PRIME), jumlah per baris memakai PPN per baris
        apa adanya -- sama dengan kolom PPN di sebelahnya. */
     const jumlah = Math.round((nilai + ppn) * 100) / 100;
-    return `<tr class="baris-pos">
+    return `<tr class="baris-pos" data-fr-baris="pos"${frDok(dokId)}>
         <td class="c-no">${i + 1}</td>
         <td class="c-desc">${escapeHtml(b.desc || "")}</td>
-        <td class="c-amt">${uang(nilai)}</td>
+        <td class="c-amt"${frPeran("nilai", nilai)}>${uang(nilai)}</td>
         <td class="c-rate">${tarif ? tarif + "%" : "-"}</td>
-        <td class="c-amt">${uang(ppn)}</td>
-        <td class="c-amt">${uang(jumlah)}</td>
+        <td class="c-amt"${frPeran("ppn", ppn)}>${uang(ppn)}</td>
+        <td class="c-amt"${frPeran("jumlah", jumlah)}>${uang(jumlah)}</td>
       </tr>`;
   };
   /* BEBERAPA DOKUMEN (invoice + invoice / debit note): pos dicetak per
@@ -507,29 +508,29 @@ function frTabelRinci(p, mataUang) {
     if (!x) return "";
     const nama = `${d.jenis === "debit" ? "DEBIT NOTE" : "INVOICE"}${String(d.nomor || "").trim() ? " " + String(d.nomor).trim() : ""}`;
     return `
-      <tr class="baris-subtotal baris-dok">
+      <tr class="baris-subtotal baris-dok" data-fr-baris="sub"${frDok(d.id)}>
         <td class="c-no"></td>
         <td class="c-desc">SUBTOTAL ${escapeHtml(nama)}</td>
-        <td class="c-amt">${uang(x.totalNet)}</td>
+        <td class="c-amt"${frPeran("nilai", x.totalNet)}>${uang(x.totalNet)}</td>
         <td class="c-rate"></td>
-        <td class="c-amt">${uang(x.totalPpn)}</td>
-        <td class="c-amt">${uang(x.totalNet + x.totalPpn)}</td>
+        <td class="c-amt"${frPeran("ppn", x.totalPpn)}>${uang(x.totalPpn)}</td>
+        <td class="c-amt"${frPeran("jumlah", x.totalNet + x.totalPpn)}>${uang(x.totalNet + x.totalPpn)}</td>
       </tr>
-      <tr class="baris-potongan baris-dok">
+      <tr class="baris-potongan baris-dok" data-fr-baris="pph"${frDok(d.id)}>
         <td class="c-desc" colspan="4">PPH (${FUND_PPH23_RATE}%)</td>
-        <td class="c-amt">${uang(x.pph)}</td>
-        <td class="c-amt">${uang(-x.pph)}</td>
+        <td class="c-amt"${frPeran("pph", x.pph)}>${uang(x.pph)}</td>
+        <td class="c-amt"${frPeran("pph-neg", -x.pph)}>${uang(-x.pph)}</td>
       </tr>
-      <tr class="baris-total-dok baris-dok">
+      <tr class="baris-total-dok baris-dok" data-fr-baris="total"${frDok(d.id)}>
         <td class="c-total" colspan="${KOLOM - 1}">TOTAL ${escapeHtml(nama)}</td>
-        <td class="c-amt">${uang(x.grandTotal)}</td>
+        <td class="c-amt"${frPeran("total", x.grandTotal)}>${uang(x.grandTotal)}</td>
       </tr>`;
   };
   const baris = dokumen.length
     ? kelompok.map((d) => judulKelompok(d) + daftar
-      .map((b, i) => (String(b.dok || "") === d.id || (!d.id && !adaKelompok.has(String(b.dok || ""))) ? barisPos(b, i) : ""))
+      .map((b, i) => (String(b.dok || "") === d.id || (!d.id && !adaKelompok.has(String(b.dok || ""))) ? barisPos(b, i, d.id) : ""))
       .join("") + totalDokumen(d)).join("")
-    : daftar.map(barisPos).join("");
+    : daftar.map((b, i) => barisPos(b, i)).join("");
 
   /* Penambal dibatasi: tabel rinci bisa berisi belasan pos, dan
      menambahkan baris kosong di atasnya membuat lembarnya tumbuh
@@ -540,7 +541,7 @@ function frTabelRinci(p, mataUang) {
   const kosongHtml = Array.from(
     { length: kosong },
     () =>
-      `<tr class="baris-pos"><td class="c-no">&nbsp;</td><td class="c-desc"></td><td class="c-amt"></td><td class="c-rate"></td><td class="c-amt"></td><td class="c-amt"></td></tr>`,
+      `<tr class="baris-pos" data-fr-baris="pos"><td class="c-no">&nbsp;</td><td class="c-desc"></td><td class="c-amt"${frPeranKosong("nilai")}></td><td class="c-rate"></td><td class="c-amt"${frPeranKosong("ppn")}></td><td class="c-amt"${frPeranKosong("jumlah")}></td></tr>`,
   ).join("");
 
   /* SUBTOTAL & POTONGAN ADA DI BADAN TABEL, bukan di kaki.
@@ -549,18 +550,18 @@ function frTabelRinci(p, mataUang) {
      pengurangnya. Yang di kaki hanya angka yang benar-benar dibayarkan
      — itulah satu-satunya baris yang perlu dibaca cepat. */
   const subtotal = `
-      <tr class="baris-subtotal">
+      <tr class="baris-subtotal" data-fr-baris="sub">
         <td class="c-no"></td>
         <td class="c-desc">${dokumen.length ? "SUBTOTAL ALL DOCUMENTS" : "SUBTOTAL"}</td>
-        <td class="c-amt">${uang(r.totalNet)}</td>
+        <td class="c-amt"${frPeran("nilai", r.totalNet)}>${uang(r.totalNet)}</td>
         <td class="c-rate"></td>
-        <td class="c-amt">${uang(r.totalPpn)}</td>
-        <td class="c-amt">${uang(r.totalNet + r.totalPpn)}</td>
+        <td class="c-amt"${frPeran("ppn", r.totalPpn)}>${uang(r.totalPpn)}</td>
+        <td class="c-amt"${frPeran("jumlah", r.totalNet + r.totalPpn)}>${uang(r.totalNet + r.totalPpn)}</td>
       </tr>
-      <tr class="baris-potongan">
+      <tr class="baris-potongan" data-fr-baris="pph">
         <td class="c-desc" colspan="4">PPH (${FUND_PPH23_RATE}%)</td>
-        <td class="c-amt">${uang(r.pph)}</td>
-        <td class="c-amt">${
+        <td class="c-amt"${frPeran("pph", r.pph)}>${uang(r.pph)}</td>
+        <td class="c-amt"${frPeran("pph-neg", -r.pph)}>${
           /* Tanpa potongan, cukup "-" saja. frSelUang() menuliskan nol
              sebagai "-", jadi tidak ada "- -" yang terbaca seperti salah
              cetak; potongannya sendiri bertanda minus di sisi kiri. */
@@ -587,11 +588,194 @@ function frTabelRinci(p, mataUang) {
         ${subtotal}
         <tr class="baris-total">
           <td class="c-total" colspan="${KOLOM - 1}">GRAND TOTAL</td>
-          <td class="c-amt">${uang(r.grandTotal)}</td>
+          <td class="c-amt"${frPeran("grand", r.grandTotal)}>${uang(r.grandTotal)}</td>
         </tr>
       </tbody>
       ${frKakiTutup(KOLOM)}
     </table>`;
+}
+
+/* ---------- UBAH TEKS SEBELUM CETAK (ui/cetak-modal.js) ----------
+
+   Tiap angka di tabel membawa perannya (data-fr) dan nilai awalnya
+   (data-fr-v0, persis angka yang tertulis); baris membawa jenisnya
+   (data-fr-baris: pos, sub, pph, total) dan dokumennya (data-fr-dok,
+   bila lebih dari satu dokumen). Baris kosong penambal ikut berperan
+   (bernilai nol), jadi pos yang terlewat bisa diketik di situ.
+
+   Angka yang diubah di pratinjau -- mis. PPN yang selisih Rp1 dengan
+   tagihan aslinya -- ikut mengubah angka turunannya, supaya surat tetap
+   menjumlah benar:
+     TOTAL baris          <- AMOUNT + PPN baris itu
+     SUBTOTAL             <- AMOUNT & PPN baris-barisnya (per dokumen; ALL
+                             DOCUMENTS dari subtotal tiap dokumen); kolom
+                             TOTAL-nya <- AMOUNT + PPN subtotal itu
+     potongan PPH         <- PPH di sebelahnya (PPH semua dokumen <- PPH
+                             tiap dokumen)
+     TOTAL dokumen        <- SUBTOTAL TOTAL - PPH dokumen itu
+     GRAND TOTAL          <- SUBTOTAL TOTAL - PPH (format lama: AMOUNT
+                             tiap baris)
+     Terbilang            <- GRAND TOTAL
+   Angka turunan yang diketik langsung (mis. TOTAL satu invoice) juga
+   diteruskan selisihnya ke jumlah di atasnya, tanpa terhitung dua kali.
+
+   Turunan = nilai AWALNYA + perubahan sumbernya, bukan dijumlah ulang dari
+   nol: pembulatan aturan vendor di angka awal (Total PPN dibulatkan ke
+   atas, dsb.) tetap utuh -- angka yang sumbernya tidak berubah tidak ikut
+   bergeser. Sel yang diketik sendiri (data-ubah="manual") tidak pernah
+   ditimpa; yang ikut berubah ditandai data-ubah="hitung" (biru di layar),
+   dan kembali polos bila nilainya kembali seperti semula. PPN & PPH TIDAK
+   dihitung ulang dari AMOUNT -- pembulatannya aturan vendor; ketik sendiri
+   bila perlu. Data pengajuannya tidak berubah: hanya cetakan ini. */
+const frNilaiTampil = (v) => {
+  const n = Number(v) || 0;
+  return (n < 0 ? -1 : 1) * parseLooseNumber(formatNilai(Math.abs(n)));
+};
+const frPeran = (peran, v) => ` data-fr="${peran}" data-fr-v0="${frNilaiTampil(v)}"`;
+const frPeranKosong = (peran) => ` data-fr="${peran}" data-fr-v0="0" data-fr-kosong=""`;
+const frDok = (id) => (id == null ? "" : ` data-fr-dok="${escapeAttr(String(id))}"`);
+
+/* Angka dari teks sel uang: bentuk cetakan ("Rp. 1,000", "- Rp. 1,000",
+   "-") maupun yang diketik ("1000", "Rp 1.000", "Rp. -1.000", "(1,000)",
+   "Rp 1.000,-", "USD 1,213.71"). */
+function frBacaUang(teks) {
+  let s = String(teks == null ? "" : teks).replace(/\u00a0/g, " ").trim();
+  let negatif = /^\(.*\)$/.test(s);
+  s = s.replace(/^\(|\)$/g, "").trim();
+  if (/^-/.test(s)) {
+    negatif = true;
+    s = s.slice(1).trim();
+  }
+  s = s.replace(/^[A-Za-z]{2,3}\.?/, "").trim();
+  if (/^-/.test(s)) {
+    negatif = true;
+    s = s.slice(1).trim();
+  }
+  const n = Math.abs(parseLooseNumber(s));
+  return negatif && n ? -n : n;
+}
+/* Teksnya sudah berupa angka utuh (boleh berkode mata uang, minus, ",-" di
+   ujung) -- atau kosong / "-" (= nol)? Kelompok ribuan yang belum lengkap
+   BELUM dihitung sebagai angka: "Rp. 53,55" sesaat sesudah angka terakhir
+   "53,554" dihapus untuk diganti bukan 53.55, jadi totalnya tidak melompat
+   jauh selagi diketik. */
+function frTeksBerangka(teks) {
+  const s = String(teks == null ? "" : teks).replace(/\u00a0/g, " ").trim();
+  if (!/\d/.test(s) && !/^-?$/.test(s)) return false;
+  if (!/^\(?-?\s*(?:[A-Za-z]{2,3}\.?)?\s*-?\s*[\d.,]*(?:,-|\.-)?\)?$/.test(s)) return false;
+  let angka = (s.match(/\d[\d.,]*/) || [""])[0];
+  if (/[.,]-\)?$/.test(s)) angka = angka.replace(/[.,]$/, ""); // "Rp 1.000,-"
+  if (!angka) return true;
+  if (/[.,]$/.test(angka)) return false; // "53," -- masih diketik
+  const koma = angka.lastIndexOf(","), titik = angka.lastIndexOf(".");
+  if (koma > -1 && titik > -1) {
+    // Pemisah yang terakhir = desimal; sebelum itu kelompok ribuan tiga angka
+    const bulat = angka.slice(0, Math.max(koma, titik));
+    return (koma < titik ? /^\d{1,3}(,\d{3})*$/ : /^\d{1,3}(\.\d{3})*$/).test(bulat);
+  }
+  if (koma > -1) return /^\d{1,3}(,\d{3})+$/.test(angka);
+  if (titik > -1 && angka.indexOf(".") !== titik) return /^\d{1,3}(\.\d{3})+$/.test(angka); // "4.824.659"
+  return true;
+}
+
+function frHitungUlangCetakan(dok, mataUang) {
+  if (!dok) return;
+  const sen = (x) => Math.round(x * 100) / 100;
+  const awal = (el) => Number(el.getAttribute("data-fr-v0")) || 0;
+  const manual = (el) => el.getAttribute("data-ubah") === "manual";
+  const harap = new Map(); // sel turunan -> nilai hitungannya
+  /* Nilai sekarang: turunan = hasil hitungnya; isian & yang diketik = isinya.
+     Teks yang bukan angka (sedang diketik, mis. "Rp") dianggap belum berubah. */
+  const kini = (el) => {
+    if (!el) return 0;
+    if (!manual(el) && harap.has(el)) return harap.get(el);
+    return frTeksBerangka(el.textContent) ? frBacaUang(el.textContent) : awal(el);
+  };
+  const geser = (el) => (el ? kini(el) - awal(el) : 0);
+  // Turunan yang diketik langsung: selisihnya dengan hasil hitungannya
+  const selisih = (el) => (el && manual(el) && harap.has(el) ? kini(el) - harap.get(el) : 0);
+  const turunan = (el, perubahan) => {
+    if (!el) return;
+    const v = sen(awal(el) + perubahan);
+    harap.set(el, v);
+    if (manual(el)) return;
+    if (v === awal(el)) {
+      if (el.hasAttribute("data-ubah")) {
+        el.innerHTML = el.hasAttribute("data-fr-kosong") ? "" : frSelUang(v, mataUang);
+        el.removeAttribute("data-ubah");
+      }
+      return;
+    }
+    const isi = frSelUang(v, mataUang);
+    if (el.innerHTML !== isi) el.innerHTML = isi;
+    el.setAttribute("data-ubah", "hitung");
+  };
+  const sel = (tr, peran) => (tr ? tr.querySelector(`[data-fr="${peran}"]`) : null);
+  const kolom = (daftar, peran) => daftar.map((tr) => sel(tr, peran));
+  const jumlahGeser = (sels) => sels.reduce((s, el) => s + geser(el), 0);
+  const jumlahSelisih = (sels) => sels.reduce((s, el) => s + selisih(el), 0);
+  const baris = (jenis) => Array.from(dok.querySelectorAll(`tr[data-fr-baris="${jenis}"]`));
+  const dokDari = (tr) => tr.getAttribute("data-fr-dok"); // null = di luar dokumen mana pun
+  // Satu baris SUBTOTAL dari baris-baris di bawahnya (+ TOTAL anak yang diketik langsung)
+  const subtotal = (tr, anak) => {
+    if (!tr) return;
+    turunan(sel(tr, "nilai"), jumlahGeser(kolom(anak, "nilai")));
+    turunan(sel(tr, "ppn"), jumlahGeser(kolom(anak, "ppn")));
+    turunan(sel(tr, "jumlah"), geser(sel(tr, "nilai")) + geser(sel(tr, "ppn")) + jumlahSelisih(kolom(anak, "jumlah")));
+  };
+  const potongan = (tr) => {
+    if (tr) turunan(sel(tr, "pph-neg"), -geser(sel(tr, "pph")));
+  };
+
+  const pos = baris("pos");
+  pos.forEach((tr) => turunan(sel(tr, "jumlah"), geser(sel(tr, "nilai")) + geser(sel(tr, "ppn"))));
+  const subDok = baris("sub").filter((tr) => dokDari(tr) != null);
+  const pphDok = baris("pph").filter((tr) => dokDari(tr) != null);
+  const totalDok = baris("total");
+  subDok.forEach((sub) => {
+    const id = dokDari(sub);
+    const pph = pphDok.find((tr) => dokDari(tr) === id);
+    subtotal(sub, pos.filter((tr) => dokDari(tr) === id));
+    potongan(pph);
+    turunan(sel(totalDok.find((tr) => dokDari(tr) === id), "total"), geser(sel(sub, "jumlah")) - geser(sel(pph, "pph")));
+  });
+  const adaSub = new Set(subDok.map(dokDari));
+  const lepas = pos.filter((tr) => !adaSub.has(dokDari(tr))); // tanpa SUBTOTAL dokumen (format satu dokumen, baris penambal)
+  const subSemua = baris("sub").find((tr) => dokDari(tr) == null);
+  const pphSemua = baris("pph").find((tr) => dokDari(tr) == null);
+  subtotal(subSemua, subDok.concat(lepas));
+  if (pphSemua && pphDok.length) turunan(sel(pphSemua, "pph"), jumlahGeser(kolom(pphDok, "pph")));
+  potongan(pphSemua);
+  const grand = dok.querySelector('[data-fr="grand"]');
+  turunan(
+    grand,
+    subSemua
+      ? geser(sel(subSemua, "jumlah")) - geser(sel(pphSemua, "pph")) + jumlahSelisih(kolom(totalDok, "total"))
+      : jumlahGeser(kolom(pos, "nilai")),
+  );
+  // Terbilang mengikuti GRAND TOTAL -- kecuali kalimatnya diketik sendiri
+  const kata = dok.querySelector('[data-fr="terbilang"]');
+  if (kata && grand && !manual(kata)) {
+    const v = kini(grand);
+    const teks = `Terbilang : ${terbilangMataUang(v, mataUang)}`;
+    if (kata.textContent !== teks) kata.textContent = teks;
+    if (v === awal(grand)) kata.removeAttribute("data-ubah");
+    else kata.setAttribute("data-ubah", "hitung");
+  }
+}
+
+/* Sebelum mencetak: angka yang diketik ditulis ulang dalam bentuk sel
+   uang biasa ("Rp." di kiri, angka di kanan, ribuan berkoma) -- mis.
+   "4936171" menjadi "Rp. 4,936,171". Teks yang bukan angka dan sel yang
+   dikosongkan dibiarkan apa adanya. */
+function frRapikanUangCetakan(dok, mataUang) {
+  if (!dok) return;
+  dok.querySelectorAll('[data-fr][data-ubah="manual"]').forEach((el) => {
+    const teks = String(el.textContent || "").replace(/\u00a0/g, " ").trim();
+    if (el.getAttribute("data-fr") === "terbilang" || !teks || !frTeksBerangka(teks)) return;
+    const baru = frSelUang(frBacaUang(teks), mataUang);
+    if (el.innerHTML !== baru) el.innerHTML = baru;
+  });
 }
 
 /* Tombol cetak di riwayat: surat tampil sebagai pratinjau di kotak cetak
@@ -604,10 +788,20 @@ async function cetakFundRequest(rowId) {
     return;
   }
   const nomor = row.doc_number || "";
+  const mataUang = (row.payload || {}).currency || "IDR";
   return bukaModalCetak({
     jenis: tt("Form Pengajuan Dana", "Fund Request Form"),
     nomor,
     judulBerkas: `Form Pengajuan Dana ${nomor}`,
+    // Ubah teks sebelum cetak: angka turunan & Terbilang ikut menyesuaikan
+    ubah: {
+      diubah: (dok) => frHitungUlangCetakan(dok, mataUang),
+      rapikan: (dok) => frRapikanUangCetakan(dok, mataUang),
+      petunjuk: tt(
+        "Angka yang diubah ikut menghitung ulang SUBTOTAL, TOTAL, GRAND TOTAL & Terbilang (biru). PPN & PPH tidak dihitung ulang dari AMOUNT.",
+        "Changed amounts also update SUBTOTAL, TOTAL, GRAND TOTAL & Terbilang (blue). PPN & PPH are not recalculated from AMOUNT.",
+      ),
+    },
     muat: async () => {
       /* Baris Doc No bergantung pada aturan vendor (fund-docno.js) yang
          dimuat saat halaman dibuka: ditunggu dulu, supaya surat yang

@@ -4836,6 +4836,25 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
           </div>
           <div class="modal-body cetak-badan">
+            <!-- Mode Ubah teks (cetak-modal.js): petunjuk & tombol Kembalikan -->
+            <div class="cetak-ubah-info" id="cetakUbahInfo" hidden>
+              <i class="bi bi-pencil-square" aria-hidden="true"></i>
+              <p class="cetak-ubah-teks">
+                <span
+                  data-en="Click any text on the document to change it &mdash; for this print only, nothing is saved. Changed text is marked yellow on screen (not printed)."
+                  >Klik teks di surat untuk mengubahnya &mdash; hanya untuk cetakan ini, tidak ada yang tersimpan. Yang diubah ditandai kuning di layar (tidak ikut tercetak).</span
+                ><span id="cetakUbahPetunjuk"></span>
+              </p>
+              <button
+                type="button"
+                class="btn-quiet cetak-kembalikan"
+                id="cetakKembalikan"
+                disabled
+                data-en="<i class=&quot;bi bi-arrow-counterclockwise&quot;></i> Revert"
+              >
+                <i class="bi bi-arrow-counterclockwise"></i> Kembalikan
+              </button>
+            </div>
             <div class="cetak-meja" id="cetakMeja">
               <div class="cetak-status" id="cetakStatus" role="status">
                 <span class="cetak-putar" aria-hidden="true"></span>
@@ -4860,6 +4879,16 @@
               <input type="checkbox" id="cetakTutupOtomatis" />
               <span data-en="Close automatically after printing">Tutup otomatis setelah dicetak</span>
             </label>
+            <button
+              type="button"
+              class="btn-quiet cetak-ubah"
+              id="cetakUbah"
+              aria-pressed="false"
+              disabled
+              data-en="<i class=&quot;bi bi-pencil-square&quot;></i> Edit text"
+            >
+              <i class="bi bi-pencil-square"></i> Ubah teks
+            </button>
             <button type="button" class="btn-quiet" data-bs-dismiss="modal" data-i18n="a.tutup">Tutup</button>
             <button
               type="button"
