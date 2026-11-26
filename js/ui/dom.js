@@ -12,6 +12,52 @@ document.addEventListener("submit", (e) => {
   if (e.target && e.target.matches && e.target.matches("form[data-tanpa-kirim]")) e.preventDefault();
 });
 
+/* SERET & LEPAS BERKAS KE SELURUH FORM -- form jadwal (import/dispatch.js),
+   Pengajuan Dana (features/fund-invoice-import.js) & PO / PR (features/pr-ocr.js).
+   Hanya seretan BERKAS yang ditangani: menyeret teks antar kotak isian tetap
+   bekerja seperti biasa. Selagi berkas di atas zona: .is-dragover + petunjuk
+   melayang dari data-drop-teks dalam bahasa yang sedang dipakai (gayanya satu,
+   css/components.css). Berkas yang dilepas masuk penangan yang sama dengan
+   tombol pilih berkasnya.
+     opsi.teks()         petunjuk yang tampil
+     opsi.lepas(berkas)  menerima daftar berkas yang dilepas
+     opsi.boleh()        (pilihan) false = seretan tidak disambut (hak akses)
+     opsi.mulai()        (pilihan) begitu berkas mulai diseret di atas zona --
+                         mis. menyiapkan mesin OCR selagi pengguna mengarahkan */
+function pasangZonaLepas(zona, opsi) {
+  if (!zona) return;
+  const bawaBerkas = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+  const boleh = () => !opsi.boleh || opsi.boleh();
+  const sorot = (hidup) => {
+    if (hidup && !zona.classList.contains("is-dragover")) {
+      zona.setAttribute("data-drop-teks", opsi.teks());
+      if (opsi.mulai) opsi.mulai();
+    }
+    zona.classList.toggle("is-dragover", hidup);
+  };
+  ["dragenter", "dragover"].forEach((jenis) =>
+    zona.addEventListener(jenis, (e) => {
+      if (!bawaBerkas(e) || !boleh()) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      sorot(true);
+    }),
+  );
+  zona.addEventListener("dragleave", (e) => {
+    /* dragleave juga menyala saat kursor melintas ke elemen ANAK */
+    if (!bawaBerkas(e) || zona.contains(e.relatedTarget)) return;
+    sorot(false);
+  });
+  zona.addEventListener("drop", (e) => {
+    if (!bawaBerkas(e)) return;
+    /* Selalu dicegah: tanpa ini peramban membuka berkasnya dan isian form hilang */
+    e.preventDefault();
+    sorot(false);
+    const berkas = Array.from(e.dataTransfer.files || []);
+    if (berkas.length && boleh()) opsi.lepas(berkas);
+  });
+}
+
 /* PUSTAKA EXCEL DIMUAT SAAT DIBUTUHKAN
 
    SheetJS (MEMBACA berkas impor: CIPL vendor, Bulk Import, draft CEISA)

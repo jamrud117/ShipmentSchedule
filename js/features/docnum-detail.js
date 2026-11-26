@@ -123,12 +123,53 @@ const DN_LABEL_FIELD = {
   get oceanFreight() { return "Ocean Freight"; },
   get specialInstruction() { return "Special Instruction"; },
   get remarks() { return tt("Remarks", "Remarks"); },
+  // PO & PR (po-form.js)
+  get prNo() { return tt("No. Pembelian", "Purchase No."); },
+  get prProduk() { return tt("Nama Produk", "Product Name"); },
+  get prPemasok() { return tt("Pemasok / Supplier", "Supplier"); },
+  get prKategori() { return tt("Kategori Barang", "Goods Category"); },
+  get prTujuan() { return tt("Tujuan Penggunaan", "Purpose of Use"); },
+  get prTanggal() { return tt("Tanggal Permintaan", "Request Date"); },
+  get prTglMasuk() { return tt("Tgl. Permintaan Barang Masuk", "Requested Goods-In Date"); },
+  get prTenggat() { return tt("Tenggat Waktu", "Lead Time"); },
+  get prTglKirim() { return tt("Tgl. Permintaan Pengiriman", "Requested Shipping Date"); },
+  get prMataUang() { return tt("Mata Uang Perkiraan", "Est. Price Currency"); },
+  get prDepartemen() { return tt("Nama Departemen", "Department Name"); },
+  get prKepalaDept() { return tt("Kepala Departemen", "Head of Department"); },
+  get prPenanggungJawab() { return tt("Penanggung Jawab", "Person in Charge"); },
+  get prDisusun() { return tt("Disusun", "Prepared By"); },
+  get prDisusunTgl() { return tt("Tanggal Disusun", "Prepared Date"); },
+  get prDisesuaikan() { return tt("Disesuaikan", "Adjusted By"); },
+  get prDiperiksa() { return tt("Diperiksa", "Checked By"); },
+  get prDisetujui() { return tt("Disetujui", "Approved By"); },
+  get prCatatan() { return tt("Catatan PR", "PR Notes"); },
+  get prItems() { return tt("Daftar Barang PR", "PR Items"); },
+  get poPenjualNama() { return tt("Nama Penjual", "Seller Name"); },
+  get poPenjualAlamat() { return tt("Alamat Penjual", "Seller Address"); },
+  get poPenjualAttn() { return "ATTN"; },
+  get poPenjualTel() { return "TEL"; },
+  get poPembeliNama() { return tt("Nama Pembeli", "Buyer Name"); },
+  get poPembeliAlamat() { return tt("Alamat Pembeli", "Buyer Address"); },
+  get poPembeliAttn() { return "ATTN"; },
+  get poPembeliTel() { return tt("Telepon", "Phone"); },
+  get poDelivery() { return "Delivery"; },
+  get poPayment() { return "Payment Term"; },
+  get poPortLoading() { return "Port of Loading"; },
+  get poFinalDest() { return "Final Destination"; },
+  get poShipment() { return "Shipment"; },
+  get poCarrier() { return "Carrier"; },
+  get poNotify() { return "Notify Party"; },
+  get poRemarks() { return "Remarks"; },
+  get poItems() { return tt("Daftar Barang PO", "PO Items"); },
+  get poTtdNama() { return tt("Signed By — Nama", "Signed By — Name"); },
+  get poTtdJabatan() { return tt("Signed By — Jabatan", "Signed By — Position"); },
 };
 
 /* Isian bertipe tanggal: disimpan ISO ("2026-09-20"), ditampilkan
    sebagai tanggal biasa. */
 const DN_FIELD_TANGGAL = new Set([
   "poDate", "sailingDate", "invoiceDate", "invoiceDueDate", "tglBayar", "paidAt",
+  "prTanggal", "prTglMasuk", "prTglKirim", "prDisusunTgl",
 ]);
 
 /* SUSUNAN PER JENIS DOKUMEN.
@@ -204,6 +245,30 @@ const DN_DETAIL_SUSUNAN = {
     { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role", "cfoName", "cfoRole"] },
     { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy", { k: "paidProof", lebar: 2 }] },
   ],
+  /* PO & PR: `grup` = dokumen bagiannya -- kotak Detail menampilkan satu
+     dokumen sekaligus, dipilih lewat pilihan bergeser PO | PR (dndGrupHtml). */
+  po: [
+    { grup: "po", judul: () => "Shipper / Seller", isian: ["poPenjualNama", "poPenjualAttn", "poPenjualTel", { k: "poPenjualAlamat", lebar: true }] },
+    { grup: "po", judul: () => "Consignee / Buyer", isian: ["poPembeliNama", "poPembeliAttn", "poPembeliTel", { k: "poPembeliAlamat", lebar: true }] },
+    {
+      grup: "po",
+      judul: () => tt("Syarat & Pengiriman", "Terms & Shipping"),
+      isian: ["currency", "poDelivery", "poPayment", "poShipment", "poPortLoading", "poFinalDest", "poCarrier", "poNotify", { k: "poRemarks", lebar: true }],
+    },
+    { grup: "po", khusus: "barangPo", memakai: ["poItems", "poManual"] },
+    { grup: "po", judul: () => tt("Tanda Tangan & Groupware", "Signature & Groupware"), isian: ["docNo", "poTtdNama", "poTtdJabatan"] },
+    {
+      grup: "pr",
+      judul: () => tt("Pengajuan Pembelian (PR)", "Purchase Request (PR)"),
+      isian: ["prNo", "prProduk", "prPemasok", "prKategori", { k: "prTujuan", lebar: 2 }, "prTanggal", "prTglMasuk", "prTenggat", "prTglKirim", "prMataUang"],
+    },
+    { grup: "pr", khusus: "barangPr", memakai: ["prItems"] },
+    {
+      grup: "pr",
+      judul: () => tt("Pemohon & Persetujuan", "Requester & Approval"),
+      isian: ["prDepartemen", "prKepalaDept", "prPenanggungJawab", "prDisusun", "prDisusunTgl", "prDisesuaikan", "prDiperiksa", "prDisetujui", { k: "prCatatan", lebar: true }],
+    },
+  ],
   letter: [
     {
       judul: () => tt("Surat", "Letter"),
@@ -232,12 +297,15 @@ const DN_DETAIL_TERPAKAI = new Set([
   "vehicleExtra",
   // penanda internal: moda kiriman surat, isian moda yang sudah dihapus
   "moda", "transportMode",
+  // PO & PR: daftar PO diubah sendiri (tampil sebagai keterangan tabelnya)
+  "poManual",
 ]);
 
 const DND_IKON = {
   invoice: "bi-receipt",
   do: "bi-truck",
   fund: "bi-cash-coin",
+  po: "bi-cart3",
   letter: "bi-envelope-paper",
 };
 
@@ -433,6 +501,15 @@ function dndTotalPerDokumenHtml(kelompok, tot, mata, jumlah) {
   return `<div class="fl-dok-bagian"><div class="fl-dok-kepala">${escapeHtml(tt("Total per dokumen", "Totals per document"))}</div><div class="fl-dok-daftar">${blok.join("")}</div></div>`;
 }
 
+/* TOTAL yang disesuaikan manual di form (fundSesuaikanManual): hitungan
+   rumusnya disebut, supaya selisih Rp 1-nya tidak membingungkan. */
+function dndCatatanManualHtml(tot, mata) {
+  const selisih = fundBulatSen(tot.grandTotal - tot.grandTotalHitung);
+  return `<div class="fl-total-catatan"><span><i class="bi bi-pencil-square" aria-hidden="true"></i> ${escapeHtml(tt(
+    `TOTAL disesuaikan manual · hitungan sistem ${frNilai(tot.grandTotalHitung, mata)} (selisih ${selisih > 0 ? "+" : "−"}${frNilai(Math.abs(selisih), mata)})`,
+    `TOTAL adjusted manually · system total ${frNilai(tot.grandTotalHitung, mata)} (difference ${selisih > 0 ? "+" : "−"}${frNilai(Math.abs(selisih), mata)})`))}</span></div>`;
+}
+
 function dndBiayaHtml(r) {
   const p = r.payload || {};
   const mata = String(p.currency || "IDR").toUpperCase();
@@ -449,7 +526,7 @@ function dndBiayaHtml(r) {
     const daftar = normalisasiBarisDana(p.lines);
     const nilai = fundLineValues(daftar);
     const ppn = fundLinePpnDaftar(daftar, nilai, mata, p.payee);
-    const tot = fundLineTotals(daftar, mata, p.payee, p.dokumen || []);
+    const tot = fundLineTotals(daftar, mata, p.payee, p.dokumen || [], p.totalManual);
     /* Pengajuan untuk beberapa BL/AWB: kolom BL/AWB per baris dan bagian
        tiap BL/AWB di bawah TOTAL -- sama dengan form & surat cetaknya. */
     const awb = fundDaftarAwb(p.blAwb);
@@ -510,6 +587,7 @@ function dndBiayaHtml(r) {
         ${jumlah(tt("Total PPN", "Total PPN"), frNilai(tot.totalPpn, mata))}
         ${jumlah(tt(`Potongan PPH 23 (${FUND_PPH23_RATE}%)`, `PPH 23 deduction (${FUND_PPH23_RATE}%)`), tot.pph ? "- " + frNilai(tot.pph, mata) : "-", "fl-sum--minus")}
         ${jumlah("TOTAL", frNilai(tot.grandTotal, mata), "fl-sum--total")}
+        ${tot.manual ? dndCatatanManualHtml(tot, mata) : ""}
         ${dndTotalPerDokumenHtml(kelompok, tot, mata, jumlah)}
         ${
           pakaiAwb
@@ -634,11 +712,59 @@ function dndBarangFungsiHtml(r) {
   );
 }
 
+/* Daftar barang PO & PR (po-form.js): tabel + totalnya. PO yang belum
+   punya daftar sendiri menampilkan turunan PR-nya -- yang juga dicetak. */
+function dndBarangPoPrHtml(r, jenis) {
+  const p = r.payload || {};
+  const daftar = jenis === "pr" ? poBarisBersih("pr", p.prItems) : poBarangCetak(p);
+  if (!daftar.length) return "";
+  const mata = jenis === "pr" ? p.prMataUang || "IDR" : p.currency || "USD";
+  const angka = (n) => (n ? escapeHtml(formatNilai(n)) : "");
+  let kolom = jenis === "pr"
+    ? [["nama", tt("Nama Produk", "Product Name")], ["spek", tt("Spesifikasi", "Specification")], ["qty", "QTY"], ["harga", tt("Perk. Harga Satuan", "Est. Unit Price")], ["jumlah", tt("Perk. Jumlah", "Est. Amount")], ["pemasok", "Supplier"], ["catatan", tt("Catatan", "Notes")]]
+    : [["produk", "Product"], ["spek", "Spec / Model"], ["qty", "Qty"], ["satuan", "Unit"], ["harga", "Unit Price"], ["jumlah", "Amount"], ["catatan", tt("Catatan", "Notes")]];
+  const uang = new Set(["harga", "jumlah"].concat(jenis === "po" ? ["qty"] : []));
+  // QTY & Unit rata tengah (kepala & isinya), sama dengan form & cetakannya
+  const kelas = (k) => (k === "qty" || k === "satuan" ? ' class="dnd-tengah"' : uang.has(k) ? ' class="dnd-angka"' : "");
+  const total = poTotal(jenis, daftar);
+  // Kolom yang kosong di SEMUA barang tidak ditampilkan (harga PR yang belum diperkirakan, catatan)
+  const adaIsi = (k) => (k === "jumlah" ? !!total : daftar.some((b) => (uang.has(k) ? poAngka(b[k]) : String(b[k] == null ? "" : b[k]).trim())));
+  kolom = kolom.filter(([k]) => k === "nama" || k === "produk" || adaIsi(k));
+  const turunan = jenis === "po" && !poBarisBersih("po", p.poItems).length;
+  return dndBagianHtml(
+    jenis === "pr" ? tt("Daftar Barang PR", "PR Items") : tt("Daftar Barang PO", "PO Items"),
+    `${turunan ? `<p class="dnd-redup dnd-po-turunan">${escapeHtml(tt("Dari daftar barang PR (PO belum diubah sendiri).", "From the PR item list (the PO has not been edited by hand)."))}</p>` : ""}
+    <div class="dnd-tabel-wrap">
+      <table class="dnd-tabel dnd-tabel--po">
+        <thead><tr><th class="dnd-no">No.</th>${kolom.map(([k, label]) => `<th${kelas(k)}>${escapeHtml(label)}${k === "harga" || k === "jumlah" ? ` (${escapeHtml(mata)})` : ""}</th>`).join("")}</tr></thead>
+        <tbody>${daftar
+          .map(
+            (b, i) => `<tr><td class="dnd-no">${i + 1}</td>${kolom
+              .map(([k]) => {
+                if (k === "jumlah") return `<td class="dnd-angka">${angka(poJumlahBaris(jenis, b))}</td>`;
+                if (uang.has(k)) return `<td${kelas(k)}>${angka(poAngka(b[k]))}</td>`;
+                return `<td${kelas(k)}>${escapeHtml(String(b[k] == null ? "" : b[k]))}</td>`;
+              })
+              .join("")}</tr>`,
+          )
+          .join("")}</tbody>
+        ${total ? (() => {
+          // TOTAL tepat di bawah kolom jumlahnya
+          const iJumlah = kolom.findIndex(([k]) => k === "jumlah");
+          return `<tfoot><tr><th colspan="${iJumlah + 1}" class="dnd-angka">${escapeHtml(jenis === "pr" ? tt("Total Harga", "Total Price") : "TOTAL")}</th><td class="dnd-angka"><b>${escapeHtml(`${mata} ${formatNilai(total)}`)}</b></td>${kolom.length - iJumlah - 1 > 0 ? `<td colspan="${kolom.length - iJumlah - 1}"></td>` : ""}</tr></tfoot>`;
+        })() : ""}
+      </table>
+    </div>`,
+  );
+}
+
 const DND_BLOK_KHUSUS = {
   biaya: dndBiayaHtml,
   penandaTangan: dndPenandaTanganHtml,
   barangSuratJalan: dndBarangSuratJalanHtml,
   barangFungsi: dndBarangFungsiHtml,
+  barangPo: (r) => dndBarangPoPrHtml(r, "po"),
+  barangPr: (r) => dndBarangPoPrHtml(r, "pr"),
 };
 
 /* ---------- kepala ---------- */
@@ -679,6 +805,12 @@ function dndKepalaHtml(r, tab) {
         <span class="dnd-sisi-label">${escapeHtml(tt("Total pengajuan", "Request total"))}</span>
         <span class="dnd-sisi-nilai">${escapeHtml(frNilai(frTotalPengajuan(p), p.currency || "IDR"))}</span>
       </div>`;
+  } else if (tab === "po") {
+    const teks = typeof dnTeksNilaiPo === "function" ? dnTeksNilaiPo(p) : "";
+    sisi = `<div class="dnd-sisi">
+        <span class="dnd-sisi-label">${escapeHtml(p.docNo ? `Doc No ${p.docNo}` : tt("Doc No Groupware belum diisi", "Groupware Doc No not filled yet"))}</span>
+        ${teks ? `<span class="dnd-sisi-nilai">${escapeHtml(teks)}</span>` : ""}
+      </div>`;
   } else if (tab === "invoice") {
     /* Nilai invoice = baris Total di Commercial Invoice cetaknya (dari
        jadwal yang ditautkan); belum ditautkan -> isian Nilai. */
@@ -706,22 +838,31 @@ function dndKepalaHtml(r, tab) {
 
 /* ---------- badan ---------- */
 
+let dndGrupAktif = "po"; // PO & PR: dokumen yang sedang ditampilkan kotak Detail
+
 function dndBadanHtml(r, tab) {
   const p = r.payload || {};
   const tampil = new Set(DN_DETAIL_TERPAKAI);
-  const bagian = (DN_DETAIL_SUSUNAN[tab] || []).map((b) => {
+  const grup = {}; // grup -> html bagian-bagiannya (PO & PR)
+  const bagian = [];
+  (DN_DETAIL_SUSUNAN[tab] || []).forEach((b) => {
+    let html;
     if (b.khusus) {
       (b.memakai || []).forEach((k) => tampil.add(k));
-      return DND_BLOK_KHUSUS[b.khusus](r);
+      html = DND_BLOK_KHUSUS[b.khusus](r);
+    } else {
+      const butir = b.isian.map((x) => (typeof x === "string" ? { k: x } : x));
+      butir.forEach((x) => tampil.add(x.k));
+      const isi = butir
+        .filter((x) => !(x.k === "amount" && dndNilaiDariIsian(r, tab)))
+        .map((x) => dndIsianHtml(x, r))
+        .join("");
+      html = dndBagianHtml(b.judul(), isi ? `<dl class="dnd-kisi">${isi}</dl>` : "");
     }
-    const butir = b.isian.map((x) => (typeof x === "string" ? { k: x } : x));
-    butir.forEach((x) => tampil.add(x.k));
-    const isi = butir
-      .filter((x) => !(x.k === "amount" && dndNilaiDariIsian(r, tab)))
-      .map((x) => dndIsianHtml(x, r))
-      .join("");
-    return dndBagianHtml(b.judul(), isi ? `<dl class="dnd-kisi">${isi}</dl>` : "");
+    if (b.grup) grup[b.grup] = (grup[b.grup] || "") + html;
+    else bagian.push(html);
   });
+  if (Object.keys(grup).length) bagian.unshift(dndGrupHtml(grup));
 
   // Isian yang belum punya tempat di susunan jenis ini
   const lain = Object.keys(p)
@@ -733,6 +874,35 @@ function dndBadanHtml(r, tab) {
   const html = bagian.join("");
   return html || `<div class="dnd-kosong">${escapeHtml(tt("Pengajuan ini tidak membawa isian lain.", "This request carries no other fields."))}</div>`;
 }
+
+/* Pilihan bergeser PO | PR di atas isi kotak Detail -- gaya yang sama dengan
+   pilihan dokumen pratinjau cetak (.cetak-varian). Dokumen tanpa isi tetap
+   bisa dipilih: "belum diisi". */
+function dndGrupHtml(grup) {
+  const daftar = [["po", "PO"], ["pr", "PR"]];
+  if (!daftar.some(([k]) => k === dndGrupAktif)) dndGrupAktif = "po";
+  const ke = daftar.findIndex(([k]) => k === dndGrupAktif);
+  const kosong = `<div class="dnd-kosong">${escapeHtml(tt("Bagian ini belum diisi.", "This part has not been filled in yet."))}</div>`;
+  return `<div class="dnd-grup-pilih"><div class="cetak-varian" role="tablist" aria-label="${escapeAttr(tt("Dokumen", "Document"))}" style="--varian-n:2;--varian-ke:${ke}">${daftar
+    .map(([k, label]) => `<button type="button" role="tab" class="cetak-varian-btn${k === dndGrupAktif ? " is-aktif" : ""}" data-dnd-grup="${k}" aria-selected="${k === dndGrupAktif}">${label}</button>`)
+    .join("")}</div></div>${daftar.map(([k]) => `<div data-dnd-isi-grup="${k}"${k === dndGrupAktif ? "" : " hidden"}>${grup[k] || kosong}</div>`).join("")}`;
+}
+
+document.addEventListener("click", (e) => {
+  const tombol = e.target.closest && e.target.closest("[data-dnd-grup]");
+  if (!tombol) return;
+  dndGrupAktif = tombol.dataset.dndGrup;
+  const badan = tombol.closest("#dnDetailBadan");
+  if (!badan) return;
+  const pilih = tombol.closest(".cetak-varian");
+  pilih.querySelectorAll("[data-dnd-grup]").forEach((b, i) => {
+    const aktif = b === tombol;
+    b.classList.toggle("is-aktif", aktif);
+    b.setAttribute("aria-selected", String(aktif));
+    if (aktif) pilih.style.setProperty("--varian-ke", String(i));
+  });
+  badan.querySelectorAll("[data-dnd-isi-grup]").forEach((isi) => (isi.hidden = isi.dataset.dndIsiGrup !== dndGrupAktif));
+});
 
 let dndTerbuka = null; // id nomor yang sedang dibuka di pop-up Detail
 
@@ -748,6 +918,7 @@ function dndGambar(r) {
 function tampilkanDetailNomor(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
   if (!r) return;
+  dndGrupAktif = "po";
   dndGambar(r);
   dndTerbuka = r.id;
   bootstrap.Modal.getOrCreateInstance($("#dnDetailModal")).show();

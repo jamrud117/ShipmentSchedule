@@ -53,10 +53,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Import Excel/PDF & aksi Batal/Simpan: BUKAN bar mengambang lagi */
-.page-form-import-row {
-  border-bottom: 1px solid var(--border);
-}
 .page-form-body {
   /* Mengisi penuh lebar layar — tabel Daftar Barang belasan kolom
      terlalu sesak kalau dikurung lebar tetap. */
@@ -79,9 +75,10 @@
     height: 30px;
     font-size: 0.85rem;
   }
-  .page-form-import-row .btn-import-excel {
+  /* Bilah isi otomatis: tombolnya turun ke baris sendiri, selebar layar */
+  .page-form-import-row .import-zone-btn {
+    grid-column: 1 / -1;
     width: 100%;
-    justify-content: center;
   }
   /* Di layar sempit kedua tombol berbagi lebar penuh — keterangan */
   .page-form-actions-btns {
@@ -1986,18 +1983,30 @@ table.item-table input.pkg-invalid {
   border-radius: 50%;
 }
 
-/* Zona isi otomatis dari dokumen */
+/* ISI OTOMATIS DARI DOKUMEN -- ikon | judul + jenis dokumen | tombol.
+   Area seret-lepasnya seluruh halaman form (pasangZonaLepas), jadi bilah
+   ini bukan "kotak lepas" lagi: garis penuh, bukan putus-putus. */
 .page-form-import-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-4);
-  justify-content: space-between;
-  flex-wrap: wrap;
-  padding: 13px var(--sp-4);
+  gap: 12px var(--sp-4);
+  padding: 14px var(--sp-4);
   margin-bottom: var(--sp-4);
-  border: 1px dashed var(--p-200);
+  border: 1px solid var(--p-200);
   border-radius: var(--r-lg);
-  background: var(--p-50);
+  background: linear-gradient(100deg, var(--p-50) 0%, var(--surface) 100%);
+}
+.import-zone-ikon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-md);
+  background: var(--p-600);
+  color: #fff;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(29, 81, 136, 0.22);
 }
 .import-zone-copy {
   min-width: 0;
@@ -2005,18 +2014,61 @@ table.item-table input.pkg-invalid {
 .import-zone-copy b {
   display: block;
   font-size: var(--t-base);
+  font-weight: 700;
+  color: var(--tp-700);
+}
+.import-zone-jenis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.import-zone-jenis li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 9px;
+  border: 1px solid var(--p-200);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--t-xs);
   font-weight: 600;
   color: var(--tp-700);
 }
+.import-zone-jenis em {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--p-50);
+  font-style: normal;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tp-600);
+}
 .import-zone-copy small {
   display: block;
+  margin-top: 6px;
   font-size: var(--t-xs);
   color: var(--n-500);
-  margin-top: 1px;
 }
-.page-form-import-row.is-dragover {
-  border-color: var(--p-500);
-  background: var(--p-100);
+/* Tombolnya tombol UTAMA bilah ini: navy pekat, setinggi baris isian */
+.page-form-import-row .import-zone-btn {
+  min-height: 40px;
+  padding: 0 18px;
+  border-color: var(--p-600);
+  background: var(--p-600);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(29, 81, 136, 0.2);
+}
+.page-form-import-row .import-zone-btn:hover:not(:disabled) {
+  border-color: var(--p-700);
+  background: var(--p-700);
+  color: #fff;
+}
+.page-form-import-row .import-zone-btn i {
+  font-size: 1rem;
 }
 
 /* Bilah simpan yang menempel di dasar layar */

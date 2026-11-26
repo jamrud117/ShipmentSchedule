@@ -188,6 +188,8 @@ function fexBaris(r) {
     nomorSurat: String(r.doc_number || ""),
     subject: String(p.notes || "").trim(),
     nominal: fexBulat(typeof frTotalPengajuan === "function" ? frTotalPengajuan(p) : 0, mataUang),
+    // GRAND TOTAL disesuaikan manual di form (fundSesuaikanManual) -- catatan sel Total Payment menyebutnya
+    totalManual: typeof fundTotalAdaManual === "function" && fundTotalAdaManual(p),
     mataUang,
     jatuhTempo: fexIso(p.invoiceDueDate),
     // kolom requester (yang diubah Ubah Isian); payload.requester untuk data lama -- "Made by" surat cetak
@@ -674,7 +676,7 @@ function fexGwDokumen(p) {
   const utama = String(d.billingNo || "").trim() || String(d.invoiceNo || "").trim();
   if (Array.isArray(d.lines) && d.lines.length && typeof fundLineTotals === "function") {
     const daftar = Array.isArray(d.dokumen) ? d.dokumen.filter((x) => x && x.id) : [];
-    const r = fundLineTotals(d.lines, d.currency, d.payee, daftar);
+    const r = fundLineTotals(d.lines, d.currency, d.payee, daftar, d.totalManual);
     return (r.perDokumen || []).map((x) => {
       const dok = x.id ? daftar.find((y) => String(y.id) === x.id) : null;
       return {
@@ -819,10 +821,15 @@ function fexSusunGroupware(baris) {
     } else {
       total.value = b.nominal;
       const selisih = typeof frNilai === "function" ? frNilai(Math.abs(sen(b.nominal) - tertulis) / 100, b.mataUang) : String(Math.abs(sen(b.nominal) - tertulis) / 100);
-      total.note = tt(
-        `Total Payment = TOTAL invoice vendor (sama dengan surat Pengajuan Dana). Vendor menghitung PPN & PPH 23 tepat (bersen), lalu TOTAL-nya dibulatkan ke atas -- karena itu berselisih ${selisih} dari Value + PPN - PPH23 yang tertulis.`,
-        `Total Payment = the vendor's invoice TOTAL (same as the fund request letter). The vendor works out VAT & PPH 23 exactly (with cents), then rounds the TOTAL up -- hence ${selisih} away from Value + VAT - PPH23 as written.`,
-      );
+      total.note = b.totalManual
+        ? tt(
+          `Total Payment = GRAND TOTAL yang disesuaikan manual di Pengajuan Dana (mengikuti TOTAL invoice / hitungan finance, sama dengan surat pengajuannya) -- berselisih ${selisih} dari Value + PPN - PPH23 yang tertulis.`,
+          `Total Payment = the GRAND TOTAL adjusted manually in the fund request (following the invoice TOTAL / finance, same as the request letter) -- ${selisih} away from Value + VAT - PPH23 as written.`,
+        )
+        : tt(
+          `Total Payment = TOTAL invoice vendor (sama dengan surat Pengajuan Dana). Vendor menghitung PPN & PPH 23 tepat (bersen), lalu TOTAL-nya dibulatkan ke atas -- karena itu berselisih ${selisih} dari Value + PPN - PPH23 yang tertulis.`,
+          `Total Payment = the vendor's invoice TOTAL (same as the fund request letter). The vendor works out VAT & PPH 23 exactly (with cents), then rounds the TOTAL up -- hence ${selisih} away from Value + VAT - PPH23 as written.`,
+        );
     }
     if (dok.length > 1) FEX_GW_KOLOM.forEach((k, c) => k.gabung && ws.mergeCells(awal, c + 1, akhir, c + 1));
     for (let y = awal; y <= akhir; y++) {

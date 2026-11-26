@@ -124,6 +124,7 @@
       <symbol id="ik-invoice" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /> <path d="M14 8H8" /> <path d="M16 12H8" /> <path d="M13 16H8" /></symbol>
       <symbol id="ik-truk" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /> <path d="M15 18H9" /> <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" /> <circle cx="17" cy="18" r="2" /> <circle cx="7" cy="18" r="2" /></symbol>
       <symbol id="ik-dana" viewBox="0 0 24 24"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" /> <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9" /> <path d="m2 16 6 6" /> <circle cx="16" cy="9" r="2.9" /> <circle cx="6" cy="5" r="3" /></symbol>
+      <symbol id="ik-po" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1" /> <circle cx="19" cy="21" r="1" /> <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /> <path d="M11 8.5h6" /> <path d="M14 5.5v6" /></symbol>
       <symbol id="ik-surat" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
     </svg>
     <!-- Layar sambutan. Tampil sejak gambar pertama, sebelum satu baris
@@ -735,6 +736,8 @@
                 <b id="accountCountExim">0</b> <span data-en="EXIM accounts ·">akun EXIM ·</span>
                 <b id="accountCountMarketing">0</b> <span data-en="Marketing accounts ·">akun Marketing ·</span>
                 <b id="accountCountFinance">0</b> <span data-en="Finance accounts ·">akun Finance ·</span>
+                <b id="accountCountPurchasing">0</b> <span data-en="Purchasing accounts ·">akun Purchasing ·</span>
+                <b id="accountCountEngineering">0</b> <span data-en="Engineering accounts ·">akun Engineering ·</span>
                 <b id="accountCountViewer">0</b> <span data-en="Viewer accounts">akun Viewer</span>
                 <!-- Akun baru / hasil daftar sendiri yang belum diberi peran
                      (migration-keamanan.sql) -- hanya tampil bila ada. -->
@@ -1638,8 +1641,8 @@
                 class="board-sub"
                 data-i18n="u.invoice.delivery.order.permintaan.dana.dan.sur"
               >
-                Invoice, Delivery Order, Permintaan Dana, dan Surat — satu
-                sumber nomor untuk seluruh tim.
+                Invoice, Delivery Order, Permintaan Dana, PO &amp; PR, dan
+                Surat — satu sumber nomor untuk seluruh tim.
               </div>
             </div>
           </div>
@@ -1672,6 +1675,13 @@
               <span class="docnum-tab-text">
                 <b data-en="Fund Request Number">Nomor Permintaan Dana</b>
                 <small data-en="Payment fund requests">Pengajuan dana pembayaran</small>
+              </span>
+            </button>
+            <button class="docnum-tab" data-docnum-tab="po" type="button">
+              <span class="docnum-tab-icon"><svg class="ic" aria-hidden="true" focusable="false"><use href="#ik-po"></use></svg></span>
+              <span class="docnum-tab-text">
+                <b data-en="PO &amp; PR Number">Nomor PO &amp; PR</b>
+                <small data-en="Purchase order &amp; request">Pesanan &amp; pengajuan pembelian</small>
               </span>
             </button>
             <button class="docnum-tab" data-docnum-tab="letter" type="button">
@@ -1741,6 +1751,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
+                    <option>M Thorik Maulana</option>
                     <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
@@ -2185,6 +2196,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
+                    <option>M Thorik Maulana</option>
                     <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
@@ -2390,13 +2402,43 @@
                 </h6>
                 <!-- Unggah PDF tagihan vendor -> form terisi otomatis
                      (js/features/fund-invoice-import.js). Tetap diperiksa
-                     dulu sebelum disimpan. -->
-                <button type="button" class="btn-import-excel dn-dari-invoice" id="btnDanaDariInvoice"
-                  title="Pilih satu atau beberapa PDF atau gambar scan/foto (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini. PDF hasil scan dibaca dengan OCR."
-                  data-en-title="Choose one or more PDFs or scanned images / photos (Invoice, Debit Note, Billing) — or drag the files onto this form. Scanned PDFs are read with OCR."
-                  data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Fill from invoice / billing (PDF / scan)">
-                  <i class="bi bi-file-earmark-arrow-up"></i> Isi dari Invoice / Billing (PDF / scan)
-                </button>
+                     dulu sebelum disimpan. Menu dua pilihan:
+                       Split Invoice  tiap invoice jadi pengajuan sendiri,
+                                      direview satu per satu di pop-up
+                                      (js/features/fund-invoice-review.js);
+                       Merge Invoice  semuanya ke form ini (satu pengajuan).
+                     Seret-lepas ke form: merge, ditanya bila invoicenya banyak. -->
+                <div class="dropdown dn-dari-invoice dn-impor">
+                  <button type="button" class="btn-import-excel dn-impor-tombol" id="btnDanaDariInvoice" data-bs-toggle="dropdown" aria-expanded="false"
+                    title="Pilih satu atau beberapa PDF atau gambar scan/foto (Invoice, Debit Note, Billing) — atau seret berkasnya ke form ini. PDF hasil scan dibaca dengan OCR."
+                    data-en-title="Choose one or more PDFs or scanned images / photos (Invoice, Debit Note, Billing) — or drag the files onto this form. Scanned PDFs are read with OCR.">
+                    <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>
+                    <span class="dn-impor-label" data-en="Fill from invoice / billing<span class=&quot;dn-impor-ekor&quot;> (PDF / scan)</span>">Isi dari Invoice / Billing<span class="dn-impor-ekor"> (PDF / scan)</span></span>
+                    <i class="bi bi-chevron-down dn-impor-panah" aria-hidden="true"></i>
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end dn-impor-menu">
+                    <li>
+                      <button type="button" class="dropdown-item dn-impor-pilih" data-dana-mode="split">
+                        <i class="bi bi-layout-split" aria-hidden="true"></i>
+                        <span class="dn-impor-teks">
+                          <b>Split Invoice</b>
+                          <small data-en="Each invoice becomes its own request — reviewed one by one before saving">Tiap invoice jadi pengajuan sendiri — direview satu per satu sebelum disimpan</small>
+                        </span>
+                      </button>
+                    </li>
+                    <li>
+                      <button type="button" class="dropdown-item dn-impor-pilih" data-dana-mode="merge">
+                        <i class="bi bi-intersect" aria-hidden="true"></i>
+                        <span class="dn-impor-teks">
+                          <b>Merge Invoice</b>
+                          <small data-en="All invoices into this one request (same vendor)">Semua invoice masuk ke satu pengajuan ini (vendor sama)</small>
+                        </span>
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                <!-- Review Split Invoice yang ditutup sebelum selesai: dibuka lagi dari sini -->
+                <button type="button" class="btn-quiet dn-review-lanjut d-none" id="btnDanaLanjutReview"></button>
                 <input type="file" id="inpDanaDariInvoice" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" multiple hidden />
                 <span class="docnum-preview">
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="fund">&mdash;</b>
@@ -2646,6 +2688,7 @@
                   >
                     <option value="" data-i18n="f.pilih">— pilih —</option>
                     <option>Ahmad Riyan</option>
+                    <option>M Thorik Maulana</option>
                     <option selected>Yogi Firgiawan</option>
                   </select>
                 </div>
@@ -2763,8 +2806,8 @@
                       <span data-en="Add Discount">Tambah Diskon</span>
                     </button>
                   </div>
-                  <div class="fl-petunjuk" data-en="Amounts use a comma for thousands and a dot for decimals (1,250,000.50) and accept formulas: start with = , e.g. =1,000+500 or =2,200,000*10%, then press Enter. Ctrl+Enter inserts a new row below the active row.">
-                    Nilai memakai koma ribuan &amp; titik desimal (1,250,000.50) dan menerima rumus: awali dengan = , mis. =1,000+500 atau =2,200,000*10%, lalu tekan Enter. Ctrl+Enter menyisipkan baris baru di bawah baris yang aktif.
+                  <div class="fl-petunjuk" data-en="Amounts use a comma for thousands and a dot for decimals (1,250,000.50) and accept formulas: start with = , e.g. =1,000+500 or =2,200,000*10%, then press Enter. Ctrl+Enter inserts a new row below the active row; Ctrl+D copies the active box down to the last row of that invoice.">
+                    Nilai memakai koma ribuan &amp; titik desimal (1,250,000.50) dan menerima rumus: awali dengan = , mis. =1,000+500 atau =2,200,000*10%, lalu tekan Enter. Ctrl+Enter menyisipkan baris baru di bawah baris yang aktif; Ctrl+D menyalin isian kotak aktif ke bawah sampai baris terakhir invoice itu.
                   </div>
                   <div class="fund-lines-foot" id="fundLinesFoot"></div>
                 </div>
@@ -2844,6 +2887,373 @@
                     data-dn="cfoRole"
                     value="Chief Financial Officer"
                   />
+                </div>
+              </div>
+            </form>
+
+            <!-- ---------- PO & PR ---------- -->
+            <!-- PURCHASE ORDER + PURCHASE REQUEST (js/features/po-form.js).
+                 SATU nomor (pola DDI-YYYYMMDD-SEQ) membawa DUA dokumen: PR
+                 (Formulir Pengajuan Pembelian -- sumbernya) dan PO yang
+                 terbentuk OTOMATIS dari PR itu (barang, qty, pemasok), lalu
+                 dilengkapi data supplier & harga. Isiannya dibagi dua bagian
+                 bertab (.po-bagian); bagian yang tersembunyi tetap ikut
+                 tersimpan. "Isi dari PR" membaca PDF / scan PR (OCR,
+                 js/features/pr-ocr.js). Cetak: tombol printer di riwayat ->
+                 pratinjau dengan pilihan PO / PR (js/features/po-print.js).
+                 Purchasing & Engineering hanya bisa membuka tab ini. -->
+            <form
+              class="docnum-panel"
+              data-docnum-panel="po"
+              data-enter-lanjut
+              data-enter-akhir="#btnDnEditSimpan, #btnDocNumSubmit"
+              data-tanpa-kirim
+            >
+              <div class="docnum-panel-head">
+                <h6 data-en="PO &amp; PR Number Request">Permintaan Nomor PO &amp; PR</h6>
+                <button type="button" class="btn-import-excel dn-dari-invoice dn-impor-tombol" id="btnPoDariPr"
+                  title="Pilih PDF atau gambar scan / foto Formulir Pengajuan Pembelian (PR) — PR & PO terisi otomatis. PDF hasil scan dibaca dengan OCR."
+                  data-en-title="Choose the Purchase Request form (PR) PDF or scanned image / photo — the PR & PO fill in automatically. Scanned PDFs are read with OCR.">
+                  <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>
+                  <span class="dn-impor-label" data-en="Fill from PR<span class=&quot;dn-impor-ekor&quot;> (PDF / scan)</span>">Isi dari PR<span class="dn-impor-ekor"> (PDF / scan)</span></span>
+                </button>
+                <input type="file" id="inpPoDariPr" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden />
+                <span class="docnum-preview">
+                  <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="po">&mdash;</b>
+                </span>
+              </div>
+              <div class="fgrid">
+                <!-- Baris bersama PO & PR: tanggal PO (menentukan nomornya),
+                     pembuat, departemen pembuat, mata uang PO. -->
+                <div>
+                  <label class="form-label" data-en="PO Date <span class=&quot;req&quot;>*</span>" for="dn-po-docDate">Tanggal PO <span class="req">*</span></label>
+                  <input id="dn-po-docDate" type="date" class="form-control" data-dn="docDate" data-dn-required />
+                </div>
+                <div>
+                  <!-- Pilihannya: akun yang boleh mengubah PO/PR (EXIM, Purchasing,
+                       Engineering) + nama bawaan (js/features/pemohon-akun.js) -->
+                  <label class="form-label" data-en="Drafter <span class=&quot;req&quot;>*</span>" for="dn-po-requester">Drafter / Pembuat <span class="req">*</span></label>
+                  <select id="dn-po-requester" class="form-select" data-dn="requester" data-dn-required data-pemohon="po">
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option>Ahmad Riyan</option>
+                    <option>M Thorik Maulana</option>
+                    <option selected>Yogi Firgiawan</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label" data-en="Department <span class=&quot;req&quot;>*</span>" for="dn-po-department">Departemen <span class="req">*</span></label>
+                  <select id="dn-po-department" class="form-select" data-dn="department" data-dn-required>
+                    <option value="" data-i18n="f.pilih">— pilih —</option>
+                    <option selected>EXIM</option>
+                    <option>Purchasing</option>
+                    <option>Engineering</option>
+                    <option value="Produksi" data-en="Production">Produksi</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label" data-en="PO Currency" for="dn-po-currency">Mata Uang PO</label>
+                  <select id="dn-po-currency" class="form-select" data-dn="currency">
+                    <option selected>USD</option>
+                    <option>IDR</option>
+                    <option>CNY</option>
+                    <option>EUR</option>
+                    <option>JPY</option>
+                    <option>KRW</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- DUA BAGIAN: PR dulu (sumber), PO sesudahnya. Tab bergaya
+                   langkah; Ctrl+[ / ] tidak dipakai -- cukup klik / Enter. -->
+              <div class="po-langkah" role="tablist" aria-label="Bagian PR / PO" data-en-aria="PR / PO section">
+                <button type="button" class="po-langkah-tab is-aktif" role="tab" id="poTabPr" aria-controls="poBagianPr" aria-selected="true" data-po-bagian="pr">
+                  <span class="po-langkah-no" aria-hidden="true">1</span>
+                  <span class="po-langkah-teks"><b>PR</b><small data-en="Purchase Request">Pengajuan Pembelian</small></span>
+                  <span class="po-langkah-hitung" data-po-hitung="pr"></span>
+                </button>
+                <span class="po-langkah-panah" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+                <button type="button" class="po-langkah-tab" role="tab" id="poTabPo" aria-controls="poBagianPo" aria-selected="false" data-po-bagian="po" tabindex="-1">
+                  <span class="po-langkah-no" aria-hidden="true">2</span>
+                  <span class="po-langkah-teks"><b>PO</b><small>Purchase Order</small></span>
+                  <span class="po-langkah-hitung" data-po-hitung="po"></span>
+                </button>
+              </div>
+
+              <!-- ===== BAGIAN PR ===== -->
+              <div class="po-bagian" id="poBagianPr" role="tabpanel" aria-labelledby="poTabPr" data-po-isi="pr">
+                <div class="fgrid">
+                  <div>
+                    <label class="form-label" data-en="Purchase No." for="dn-po-prNo">No. Pembelian</label>
+                    <input id="dn-po-prNo" type="text" class="form-control" data-dn="prNo" placeholder="DDI-MPD-301026-39" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Product Name" for="dn-po-prProduk">Nama Produk</label>
+                    <input id="dn-po-prProduk" type="text" class="form-control" data-dn="prProduk" placeholder="Master Model" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Supplier" for="dn-po-prPemasok">Pemasok / Supplier</label>
+                    <input id="dn-po-prPemasok" type="text" class="form-control" data-dn="prPemasok" list="poPemasokList" placeholder="Overseas" data-en-ph="Overseas" />
+                    <datalist id="poPemasokList"><option value="Overseas"></option><option value="Lokal"></option></datalist>
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Goods Category" for="dn-po-prKategori">Kategori Barang</label>
+                    <input id="dn-po-prKategori" type="text" class="form-control" data-dn="prKategori" list="poKategoriList" placeholder="Sub Material" />
+                    <datalist id="poKategoriList">
+                      <option value="Sub Material"></option>
+                      <option value="Bahan Baku"></option>
+                      <option value="Sparepart"></option>
+                      <option value="Consumable"></option>
+                      <option value="Tools"></option>
+                      <option value="Aset"></option>
+                    </datalist>
+                  </div>
+                  <div class="s6">
+                    <label class="form-label" data-en="Purpose of Use" for="dn-po-prTujuan">Tujuan Penggunaan</label>
+                    <input id="dn-po-prTujuan" type="text" class="form-control" data-dn="prTujuan" placeholder="Produksi Mold KHV" />
+                  </div>
+                  <div class="s2">
+                    <label class="form-label" data-en="Request Date" for="dn-po-prTanggal">Tanggal Permintaan</label>
+                    <input id="dn-po-prTanggal" type="date" class="form-control" data-dn="prTanggal" />
+                  </div>
+                  <div class="s2">
+                    <label class="form-label" data-en="Goods-In Date" for="dn-po-prTglMasuk">Tgl. Barang Masuk</label>
+                    <input id="dn-po-prTglMasuk" type="date" class="form-control" data-dn="prTglMasuk" title="Tgl. Permintaan Barang Masuk" data-en-title="Requested goods-in date" />
+                  </div>
+                  <div class="s2">
+                    <label class="form-label" data-en="Lead Time" for="dn-po-prTenggat">Tenggat Waktu</label>
+                    <!-- Terisi sendiri dari Tanggal Permintaan s.d. Tgl. Barang
+                         Masuk ("19 Hari") selama belum diketik sendiri -->
+                    <input id="dn-po-prTenggat" type="text" class="form-control" data-dn="prTenggat" placeholder="19 Hari" data-en-ph="19 Days" />
+                  </div>
+                  <div class="s2">
+                    <label class="form-label" data-en="Shipping Date" for="dn-po-prTglKirim">Tgl. Pengiriman</label>
+                    <input id="dn-po-prTglKirim" type="date" class="form-control" data-dn="prTglKirim" title="Tgl. Permintaan Pengiriman" data-en-title="Requested shipping date" />
+                  </div>
+                  <div class="s2">
+                    <label class="form-label" data-en="Est. Price Currency" for="dn-po-prMataUang">Mata Uang Perkiraan</label>
+                    <select id="dn-po-prMataUang" class="form-select" data-dn="prMataUang">
+                      <option selected>IDR</option>
+                      <option>USD</option>
+                      <option>CNY</option>
+                      <option>EUR</option>
+                      <option>JPY</option>
+                      <option>KRW</option>
+                    </select>
+                  </div>
+
+                  <div class="s12 tabel-isian">
+                    <div class="form-subhead" data-en="PR Items">Daftar Barang PR</div>
+                    <div class="fund-lines-wrap">
+                      <table class="fund-lines po-lines po-lines--pr" id="poPrTable">
+                        <thead>
+                          <tr>
+                            <th class="fl-no">No.</th>
+                            <th class="pl-nama" data-en="Product Name">Nama Produk</th>
+                            <th class="pl-spek" data-en="Specification">Spesifikasi</th>
+                            <th class="pl-qty">QTY</th>
+                            <th class="pl-harga" data-en="Est. Unit Price">Perk. Harga Satuan</th>
+                            <th class="pl-jumlah" data-en="Est. Amount">Perk. Jumlah Harga</th>
+                            <th class="pl-pemasok" data-en="Supplier">Pemasok / Supplier</th>
+                            <th class="pl-catatan" data-en="Notes">Catatan</th>
+                            <th class="fl-act"><span class="visually-hidden" data-en="Actions">Aksi</span></th>
+                          </tr>
+                        </thead>
+                        <tbody id="poPrBody" data-enter-sendiri></tbody>
+                      </table>
+                    </div>
+                    <div class="fl-aksi">
+                      <button type="button" class="btn-quiet" id="btnPoPrTambah">
+                        <i class="bi bi-plus-lg"></i>
+                        <span data-i18n="f.tambah.baris">Tambah Baris</span>
+                      </button>
+                    </div>
+                    <div class="fl-petunjuk" data-en="QTY includes its unit, e.g. 1 SET or 20 PCS. Enter moves down a row, Ctrl+Enter inserts a new row below the active row.">
+                      QTY ditulis bersama satuannya, mis. 1 SET atau 20 PCS. Enter turun ke baris berikutnya, Ctrl+Enter menyisipkan baris baru di bawah baris yang aktif.
+                    </div>
+                    <div class="fund-lines-foot po-lines-foot" id="poPrFoot"></div>
+                  </div>
+
+                  <div class="s12">
+                    <div class="form-subhead" data-en="Requester &amp; Approval <span class=&quot;muted&quot;>&mdash; approval names are optional; the PR boxes stay open for signatures</span>">
+                      Pemohon &amp; Persetujuan <span class="muted">&mdash; nama persetujuan opsional; kotaknya di PR tetap lapang untuk tanda tangan</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Department Name" for="dn-po-prDepartemen">Nama Departemen</label>
+                    <input id="dn-po-prDepartemen" type="text" class="form-control" data-dn="prDepartemen" placeholder="PRODUKSI" data-en-ph="PRODUCTION" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Head of Department" for="dn-po-prKepalaDept">Kepala Departemen</label>
+                    <input id="dn-po-prKepalaDept" type="text" class="form-control" data-dn="prKepalaDept" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Person in Charge" for="dn-po-prPenanggungJawab">Penanggung Jawab</label>
+                    <input id="dn-po-prPenanggungJawab" type="text" class="form-control" data-dn="prPenanggungJawab" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Prepared Date" for="dn-po-prDisusunTgl">Tanggal Disusun</label>
+                    <input id="dn-po-prDisusunTgl" type="date" class="form-control" data-dn="prDisusunTgl" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Prepared By" for="dn-po-prDisusun">Disusun</label>
+                    <input id="dn-po-prDisusun" type="text" class="form-control" data-dn="prDisusun" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Adjusted By" for="dn-po-prDisesuaikan">Disesuaikan</label>
+                    <input id="dn-po-prDisesuaikan" type="text" class="form-control" data-dn="prDisesuaikan" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Checked By" for="dn-po-prDiperiksa">Diperiksa</label>
+                    <input id="dn-po-prDiperiksa" type="text" class="form-control" data-dn="prDiperiksa" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Approved By" for="dn-po-prDisetujui">Disetujui</label>
+                    <input id="dn-po-prDisetujui" type="text" class="form-control" data-dn="prDisetujui" />
+                  </div>
+                  <div class="s12">
+                    <label class="form-label" data-en="PR Notes" for="dn-po-prCatatan">Catatan PR</label>
+                    <textarea id="dn-po-prCatatan" class="form-control" rows="2" data-dn="prCatatan"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ===== BAGIAN PO ===== -->
+              <div class="po-bagian" id="poBagianPo" role="tabpanel" aria-labelledby="poTabPo" data-po-isi="po" hidden>
+                <div class="fgrid">
+                  <div class="s6 fgrid po-pihak">
+                    <div class="s12"><div class="form-subhead">Shipper / Seller</div></div>
+                    <div class="s12">
+                      <label class="form-label" data-en="Seller Name" for="dn-po-poPenjualNama">Nama Penjual</label>
+                      <input id="dn-po-poPenjualNama" type="text" class="form-control" data-dn="poPenjualNama" placeholder="Qingdao Jiasong Machinery Technology Co.,Ltd." />
+                    </div>
+                    <div class="s12">
+                      <label class="form-label" data-en="Seller Address" for="dn-po-poPenjualAlamat">Alamat Penjual</label>
+                      <textarea id="dn-po-poPenjualAlamat" class="form-control" rows="4" data-dn="poPenjualAlamat"></textarea>
+                    </div>
+                    <div class="s6">
+                      <label class="form-label" for="dn-po-poPenjualAttn">ATTN</label>
+                      <input id="dn-po-poPenjualAttn" type="text" class="form-control" data-dn="poPenjualAttn" />
+                    </div>
+                    <div class="s6">
+                      <label class="form-label" for="dn-po-poPenjualTel">TEL</label>
+                      <input id="dn-po-poPenjualTel" type="text" class="form-control" data-dn="poPenjualTel" inputmode="tel" />
+                    </div>
+                  </div>
+                  <div class="s6 fgrid po-pihak">
+                    <div class="s12"><div class="form-subhead">Consignee / Buyer</div></div>
+                    <div class="s12">
+                      <label class="form-label" data-en="Buyer Name" for="dn-po-poPembeliNama">Nama Pembeli</label>
+                      <input id="dn-po-poPembeliNama" type="text" class="form-control" data-dn="poPembeliNama" value="PT Dynamic Design Indonesia" />
+                    </div>
+                    <div class="s12">
+                      <label class="form-label" data-en="Buyer Address" for="dn-po-poPembeliAlamat">Alamat Pembeli</label>
+                      <textarea id="dn-po-poPembeliAlamat" class="form-control" rows="4" data-dn="poPembeliAlamat">Jalan Mayjend Sutoyo No. 1
+Desa/Kelurahan Pabedilan Kulon, Kec. Pabedilan, Kab. Cirebon,
+Provinsi Jawa Barat
+Kode Pos: 45193</textarea>
+                    </div>
+                    <div class="s6">
+                      <label class="form-label" for="dn-po-poPembeliAttn">ATTN</label>
+                      <input id="dn-po-poPembeliAttn" type="text" class="form-control" data-dn="poPembeliAttn" value="Jeongho Jeon" />
+                    </div>
+                    <div class="s6">
+                      <label class="form-label" data-en="Phone" for="dn-po-poPembeliTel">Telepon</label>
+                      <input id="dn-po-poPembeliTel" type="text" class="form-control" data-dn="poPembeliTel" inputmode="tel" value="+62 823-1960-8346" />
+                    </div>
+                  </div>
+
+                  <div class="s12"><div class="form-subhead" data-en="Terms &amp; Shipping">Syarat &amp; Pengiriman</div></div>
+                  <div>
+                    <label class="form-label" for="dn-po-poDelivery">Delivery</label>
+                    <input id="dn-po-poDelivery" type="text" class="form-control" data-dn="poDelivery" list="poIncotermList" placeholder="CIF, Qingdao, China" />
+                    <datalist id="poIncotermList"><option value="CIF"></option><option value="FOB"></option><option value="CFR"></option><option value="EXW"></option><option value="DAP"></option><option value="DDP"></option></datalist>
+                  </div>
+                  <div>
+                    <label class="form-label" for="dn-po-poPayment">Payment Term</label>
+                    <input id="dn-po-poPayment" type="text" class="form-control" data-dn="poPayment" list="poPaymentList" placeholder="T/T Advance" />
+                    <datalist id="poPaymentList"><option value="T/T Advance"></option><option value="T/T 30 Days"></option><option value="L/C at Sight"></option><option value="CAD"></option></datalist>
+                  </div>
+                  <div>
+                    <label class="form-label" for="dn-po-poPortLoading">Port of Loading</label>
+                    <input id="dn-po-poPortLoading" type="text" class="form-control" data-dn="poPortLoading" placeholder="Qingdao, China" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="dn-po-poFinalDest">Final Destination</label>
+                    <input id="dn-po-poFinalDest" type="text" class="form-control" data-dn="poFinalDest" placeholder="Jakarta, Indonesia" />
+                  </div>
+                  <div>
+                    <label class="form-label" for="dn-po-poShipment">Shipment</label>
+                    <input id="dn-po-poShipment" type="text" class="form-control" data-dn="poShipment" list="poShipmentList" placeholder="By Sea" />
+                    <datalist id="poShipmentList"><option value="By Sea"></option><option value="By Air"></option><option value="By Courier"></option><option value="By Land"></option></datalist>
+                  </div>
+                  <div>
+                    <label class="form-label" for="dn-po-poCarrier">Carrier</label>
+                    <input id="dn-po-poCarrier" type="text" class="form-control" data-dn="poCarrier" />
+                  </div>
+                  <div class="s6">
+                    <label class="form-label" for="dn-po-poNotify">Notify Party</label>
+                    <input id="dn-po-poNotify" type="text" class="form-control" data-dn="poNotify" />
+                  </div>
+                  <div class="s12">
+                    <label class="form-label" for="dn-po-poRemarks">Remarks</label>
+                    <textarea id="dn-po-poRemarks" class="form-control" rows="2" data-dn="poRemarks"></textarea>
+                  </div>
+
+                  <div class="s12 tabel-isian">
+                    <div class="form-subhead po-subhead-aksi">
+                      <span data-en="PO Items">Daftar Barang PO</span>
+                      <!-- PO mengikuti PR sendiri selama barisnya belum diubah;
+                           sesudah diubah tombol ini menyalin ulang (po-form.js) -->
+                      <span class="po-ikut-pr" id="poIkutPr" role="status"></span>
+                      <button type="button" class="btn-quiet po-salin-pr" id="btnPoSalinPr">
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                        <span data-en="Copy again from PR">Salin ulang dari PR</span>
+                      </button>
+                    </div>
+                    <div class="fund-lines-wrap">
+                      <table class="fund-lines po-lines po-lines--po" id="poPoTable">
+                        <thead>
+                          <tr>
+                            <th class="fl-no">No.</th>
+                            <th class="pl-nama">Product</th>
+                            <th class="pl-spek">Spec / Model</th>
+                            <th class="pl-qty">Qty</th>
+                            <th class="pl-sat">Unit</th>
+                            <th class="pl-harga">Unit Price (<span data-mata-po>USD</span>)</th>
+                            <th class="pl-jumlah">Amount (<span data-mata-po>USD</span>)</th>
+                            <th class="pl-catatan" data-en="Notes">Catatan</th>
+                            <th class="fl-act"><span class="visually-hidden" data-en="Actions">Aksi</span></th>
+                          </tr>
+                        </thead>
+                        <tbody id="poPoBody" data-enter-sendiri></tbody>
+                      </table>
+                    </div>
+                    <div class="fl-aksi">
+                      <button type="button" class="btn-quiet" id="btnPoPoTambah">
+                        <i class="bi bi-plus-lg"></i>
+                        <span data-i18n="f.tambah.baris">Tambah Baris</span>
+                      </button>
+                    </div>
+                    <div class="fund-lines-foot po-lines-foot" id="poPoFoot"></div>
+                  </div>
+
+                  <div class="s12"><div class="form-subhead" data-en="Signature &amp; Groupware">Tanda Tangan &amp; Groupware</div></div>
+                  <div>
+                    <!-- Doc No Groupware: bawaan DST-<YYMM>-0000 (bulan Tanggal
+                         PO); selama 0000 belum diganti tidak ikut tersimpan,
+                         dan PO mencetak bawaannya itu (po-form.js) -->
+                    <label class="form-label" for="dn-po-docNo">Doc No (Groupware)</label>
+                    <input id="dn-po-docNo" type="text" class="form-control" data-dn="docNo" autocomplete="off" spellcheck="false" />
+                    <div class="form-text-note po-docno-ket" id="poDocNoKet"></div>
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Signed By — Name" for="dn-po-poTtdNama">Signed By — Nama</label>
+                    <input id="dn-po-poTtdNama" type="text" class="form-control" data-dn="poTtdNama" value="Kim Taewan" />
+                  </div>
+                  <div>
+                    <label class="form-label" data-en="Signed By — Position" for="dn-po-poTtdJabatan">Signed By — Jabatan</label>
+                    <input id="dn-po-poTtdJabatan" type="text" class="form-control" data-dn="poTtdJabatan" value="General Manager" />
+                  </div>
                 </div>
               </div>
             </form>
@@ -3061,7 +3471,7 @@
             <div class="dn-pengaturan">
             <div class="counter-box">
               <div class="counter-head">
-                <span data-en="<i class=&quot;bi bi-123&quot;></i> Set Sequence Number"><i class="bi bi-123"></i> Atur Nomor Urut</span>
+                <span class="counter-judul" data-en="<i class=&quot;bi bi-hash&quot;></i> Set Sequence Number"><i class="bi bi-hash"></i> Atur Nomor Urut</span>
                 <span class="counter-info" id="counterInfo">&mdash;</span>
               </div>
               <div class="counter-body">
@@ -3086,8 +3496,10 @@
                   id="btnCounterReset"
                   title="Reset ke 001"
                   data-en-title="Reset to 001"
-                 data-en="<i class=&quot;bi bi-arrow-counterclockwise&quot;></i> Reset">
-                  <i class="bi bi-arrow-counterclockwise"></i> Reset
+                  aria-label="Reset ke 001"
+                  data-en-aria="Reset to 001"
+                 data-en="<i class=&quot;bi bi-arrow-counterclockwise&quot; aria-hidden=&quot;true&quot;></i><span class=&quot;counter-teks&quot;> Reset</span>">
+                  <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span class="counter-teks"> Reset</span>
                 </button>
               </div>
               <!-- FORMAT NOMOR jenis yang aktif (js/features/format-nomor.js):
@@ -3491,19 +3903,23 @@
           <button type="button" class="btn btn-form-cancel btn-sm" id="btnFormRemoteMuat" data-en="Load latest version">Muat versi terbaru</button>
         </div>
 
-        <div class="page-form-import-row" id="importZone">
+        <!-- ISI OTOMATIS DARI DOKUMEN. Seluruh halaman form adalah area
+             seret-lepasnya (pasangZonaLepas, js/import/dispatch.js) --
+             bilah ini cukup tombol + jenis dokumen yang bisa dibaca. -->
+        <div class="page-form-import-row">
+          <span class="import-zone-ikon" aria-hidden="true"><i class="bi bi-stars"></i></span>
           <div class="import-zone-copy">
-            <b data-i18n="u.isi.otomatis.dari.dokumen"
-              >Isi otomatis dari dokumen</b
-            >
-            <small
-               data-en="PIB BC 2.0 / PEB BC 3.0 PDF, Commercial Invoice &amp;amp; Packing List PDF, CEISA draft Excel, or supplier CIPL Excel. Several files at once is fine — or drag them here.">PDF PIB BC 2.0 / PEB BC 3.0, PDF Commercial Invoice &amp; Packing
-              List, Excel draft CEISA, atau Excel CIPL supplier. Boleh beberapa
-              file sekaligus — atau seret ke sini.</small
-            >
+            <b data-i18n="u.isi.otomatis.dari.dokumen">Isi otomatis dari dokumen</b>
+            <ul class="import-zone-jenis" aria-label="Dokumen yang bisa dibaca" data-en-aria="Documents that can be read">
+              <li>PIB BC 2.0 / PEB BC 3.0 <em>PDF</em></li>
+              <li>Commercial Invoice &amp; Packing List <em>PDF</em></li>
+              <li data-en="CEISA draft &lt;em&gt;Excel&lt;/em&gt;">Draft CEISA <em>Excel</em></li>
+              <li data-en="Supplier CIPL &lt;em&gt;Excel&lt;/em&gt;">CIPL supplier <em>Excel</em></li>
+            </ul>
+            <small data-en="Several files at once is fine — or drag them anywhere onto this form.">Boleh beberapa file sekaligus — atau seret ke mana saja di form ini.</small>
           </div>
-          <button type="button" class="btn-import-excel" id="btnImportExcel" data-en="<i class=&quot;bi bi-file-earmark-arrow-up&quot;></i> Choose File">
-            <i class="bi bi-file-earmark-arrow-up"></i> Pilih File
+          <button type="button" class="btn-import-excel import-zone-btn" id="btnImportExcel" data-en="&lt;i class=&quot;bi bi-upload&quot;&gt;&lt;/i&gt; Choose Files">
+            <i class="bi bi-upload"></i> Pilih File
           </button>
           <input
             type="file"
@@ -4952,6 +5368,9 @@
               <div class="dnd-jenis"><i class="bi bi-printer" aria-hidden="true"></i><span id="cetakJenis"></span></div>
               <div class="dnd-nomor"><span id="cetakNomor">&mdash;</span></div>
             </div>
+            <!-- Pilihan dokumen bergeser (opsi `varian` bukaModalCetak) -- mis.
+                 PO | PR di cetak PO & PR. Tersembunyi bila hanya satu dokumen. -->
+            <div class="cetak-varian" id="cetakVarian" role="tablist" aria-label="Dokumen" data-en-aria="Document" hidden></div>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close"></button>
           </div>
           <div class="modal-body cetak-badan">
@@ -5159,6 +5578,31 @@
     <div class="modal fade" id="danaEksporModal" tabindex="-1" aria-labelledby="danaEksporJudul">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable fex-dialog">
         <div class="modal-content"></div>
+      </div>
+    </div>
+
+    <!-- REVIEW SPLIT INVOICE (js/features/fund-invoice-review.js): tiap invoice
+         hasil baca PDF / scan jadi pengajuan sendiri -- direview satu per satu
+         (gambar scan di kiri, isian di kanan) lalu disimpan. Isinya digambar JS. -->
+    <div class="modal fade" id="danaReviewModal" tabindex="-1" aria-labelledby="danaReviewJudul" data-bs-backdrop="static">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-lg-down dr-dialog">
+        <div class="modal-content">
+          <div class="dialog-head dr-kepala">
+            <div class="dialog-icon" aria-hidden="true"><i class="bi bi-layout-split"></i></div>
+            <div class="dr-judul-wrap">
+              <h6 class="dialog-title" id="danaReviewJudul" data-en="Review Split Invoice">Review Split Invoice</h6>
+              <div class="dr-sub" id="danaReviewSub"></div>
+            </div>
+            <button type="button" class="dialog-tutup" data-bs-dismiss="modal" aria-label="Tutup" data-en-aria="Close" title="Tutup (Esc) — invoice yang belum disimpan tetap menunggu" data-en-title="Close (Esc) — unsaved invoices keep waiting"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+          </div>
+          <nav class="dr-langkah" id="danaReviewLangkah" aria-label="Daftar invoice" data-en-aria="Invoice list"></nav>
+          <div class="modal-body dr-badan" id="danaReviewBadan"></div>
+          <div class="modal-footer dialog-foot dr-kaki">
+            <div class="dr-pesan" id="danaReviewPesan" role="status" aria-live="polite"></div>
+            <button type="button" class="btn-quiet" id="btnDrLewati" data-en="Skip">Lewati</button>
+            <button type="button" class="btn btn-primary-navy" id="btnDrSimpan"></button>
+          </div>
+        </div>
       </div>
     </div>
 

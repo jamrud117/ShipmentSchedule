@@ -170,6 +170,11 @@ function ciplVnTata(jenis, row, shipment) {
   const packing = p.packing || "WOODEN PACKING";
   const satuan = [...new Set(baris.map((b) => b.satuan).filter(Boolean))];
   const berangkat = p.sailingDate || (shipment ? shipment.etd : "") || "";
+  const pelabuhan = {
+    muat: portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : ""),
+    bongkar: p.portDischarge || prof.portDischarge || "",
+    tujuan: portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : ""),
+  };
   const penanda = ciplVnPenanda(row, shipment);
   const kemasan = ciplRincianKemasan(Object.assign({}, p, { packing }), shipment, ciplBarisBarang(shipment));
   if (!ciplTotalKoli(shipment) && total.qty) {
@@ -195,11 +200,12 @@ function ciplVnTata(jenis, row, shipment) {
     rinci: [
       // Elemen ke-3 { iso }: sel tanggal sungguhan di Excel (cetakan hanya membaca [label, nilai])
       ["Departure Date", ciplTanggal(berangkat), { iso: berangkat }],
-      ["Port of Loading", portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "")],
-      ["Port of Discharge", p.portDischarge || prof.portDischarge || ""],
-      ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
+      ["Port of Loading", pelabuhan.muat],
+      ["Port of Discharge", pelabuhan.bongkar],
+      ["Final Destination", pelabuhan.tujuan],
       ["Vessel / Flight", carrierCipl(p, shipment)],
-      ["Terms of Delivery", p.termsDelivery || ""],
+      // "CIF - HOCHIMINH": tempatnya pelabuhan bongkar (ciplSyaratKirim, cipl-print.js)
+      ["Terms of Delivery", ciplSyaratKirim(p.termsDelivery, pelabuhan.bongkar || pelabuhan.tujuan, pelabuhan.muat)],
       ["Terms of Payment", p.termPayment || "T/T 60 days after B/L date"],
       ["Country of Origin", CIPL_ASAL_BARANG],
     ],

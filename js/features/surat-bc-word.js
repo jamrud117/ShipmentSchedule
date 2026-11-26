@@ -184,7 +184,7 @@ const wordDaftar = (baris) => wordTabel([50, 6, 102], baris.map(([k, v]) => [wor
    baris terpanjangnya (Times 12pt, ±1,9 mm per huruf) -- seperti versi
    cetak yang selebar isinya. */
 function wordTtd(p, tanggal) {
-  const baris = [`${SURAT_BC_PERUSAHAAN.kota}, ${suratTanggalPanjang(tanggal)}`, "Hormat kami,", String(p.signer || "").toUpperCase(), String(p.signerTitle || "")];
+  const baris = [`${SURAT_BC_PERUSAHAAN.kota}, ${suratTanggalPanjang(tanggal)}`, "Hormat kami,", suratNamaPenanda(p.signer).toUpperCase(), String(p.signerTitle || "")];
   const lebar = Math.min(85, Math.max(42, Math.max(...baris.map((x) => x.length)) * 1.9 + 3));
   return wordTabel([lebar], [[[
     wordPar(wordRun(baris[0])),
@@ -208,7 +208,7 @@ function suratBcDocxXml(row) {
       wordPar(wordRun("SURAT PERNYATAAN TANPA BUKTI BAYAR", { b: true, u: true, sz: 13 }), { jc: "center", sebelum: 4 }),
       wordPar(wordRun(`Nomor : ${nomor}`), { jc: "center", sesudah: 5 }),
       wordPar(wordRun("Yang bertanda tangan di bawah ini :"), { sesudah: 1 }),
-      wordDaftar([["Nama", String(p.signer || "").toUpperCase()], ["Jabatan", String(p.signerTitle || "").toUpperCase()],
+      wordDaftar([["Nama", suratNamaPenanda(p.signer).toUpperCase()], ["Jabatan", String(p.signerTitle || "").toUpperCase()],
         ["Nama Perusahaan", SURAT_BC_PERUSAHAAN.nama], ["Alamat", SURAT_BC_PERUSAHAAN.alamat.toUpperCase()]]),
       wordPar(wordRun("Dengan ini menyatakan bahwa barang kiriman kami dengan data sebagai berikut :"), { sebelum: 3.6, sesudah: 1 }),
       wordDaftar([["Nomor Aju", p.noAju], ["MAWB / HAWB", p.awb], ["Nama Barang", p.namaBarang], ["Koli / Berat", p.koliBerat],

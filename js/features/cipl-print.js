@@ -616,6 +616,21 @@ function ciplRincianKemasan(p, shipment, baris) {
     .concat(koli ? [[`${ciplAngka(koli)} PACKAGE${koli > 1 ? "S" : ""}`, true]] : []);
 }
 
+/* TERMS OF DELIVERY bertempat: "CIF - BUSAN", "CIF - HOCHIMINH" -- incoterm saja
+   ("CIF") belum lengkap. Kelompok C & D menyebut pelabuhan / tempat TUJUAN, kelompok
+   E & F (EXW, FCA, FAS, FOB) tempat MUAT ("FOB - JAKARTA"). Isian yang sudah lebih
+   dari kode incoterm ("CIF BUSAN", "FOB Jakarta port") dibiarkan apa adanya. Nama
+   tempat = bagian sebelum koma ("BUSAN, KOREA" -> BUSAN). */
+const CIPL_INCOTERM = new Set(["EXW", "FCA", "FAS", "FOB", "CFR", "CNF", "CIF", "CPT", "CIP", "DAP", "DPU", "DAT", "DDP", "DDU"]);
+const CIPL_INCOTERM_MUAT = new Set(["EXW", "FCA", "FAS", "FOB"]);
+function ciplSyaratKirim(syarat, tujuan, muat) {
+  const isi = String(syarat || "").trim();
+  const kode = isi.toUpperCase();
+  if (!CIPL_INCOTERM.has(kode)) return isi;
+  const tempat = String((CIPL_INCOTERM_MUAT.has(kode) ? muat : tujuan) || "").split(",")[0].trim().toUpperCase();
+  return tempat ? `${kode} - ${tempat}` : isi;
+}
+
 /* Rincian pengiriman [label, isi] -- cetak & Excel.
    Urutan sumber pelabuhan: ketikan pengguna -> profil pembeli ->
    pelabuhan jadwal. Tanggal berlayar TIDAK diambil dari ETD jadwal:
@@ -623,14 +638,16 @@ function ciplRincianKemasan(p, shipment, baris) {
 function ciplDdRincianData(row, shipment) {
   const p = row.payload || {};
   const prof = ciplProfilCocok(p.customer || (shipment && shipment.party)) || {};
+  const muat = portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "");
+  const tujuan = portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "");
   return [
-    ["Port of Loading", portKodeKeAlias(p.portLoading) || prof.portLoading || (shipment ? portKotaNegara(shipment.origin) : "")],
-    ["Final Destination", portKodeKeAlias(p.finalDestination) || prof.finalDestination || (shipment ? portKotaNegara(shipment.destination) : "")],
+    ["Port of Loading", muat],
+    ["Final Destination", tujuan],
     // Udara: No Flight saja; laut: kapal + voyage (carrierCipl, core/carrier-master.js)
     ["Vessel / Flight", carrierCipl(p, shipment)],
     // Elemen ke-3 { iso }: unduhan Excel menulis sel tanggal sungguhan (cetakan hanya membaca [label, nilai])
     ["Sailing on or About", ciplTanggal(p.sailingDate || ""), { iso: p.sailingDate || "" }],
-    ["Terms of Delivery", p.termsDelivery || ""],
+    ["Terms of Delivery", ciplSyaratKirim(p.termsDelivery, tujuan, muat)],
     ["Terms of Payment", p.termPayment || ""],
     ["Country of Origin", CIPL_ASAL_BARANG],
     ["Remarks", p.remarks || ""],

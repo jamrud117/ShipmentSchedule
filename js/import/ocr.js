@@ -229,7 +229,100 @@ function ocrTinta(abu, w, h) {
     }
   }
   for (let i = 0; i < n; i++) ink[i] = baris1[i] && abu[i] <= tinggi ? 1 : 0;
+  ocrSelamatkanTitik(abu, ink, w, h, tinggi);
   return ink;
+}
+
+/* TITIK DESIMAL YANG PUDAR. Pada foto / scan beresolusi rendah (±200 dpi,
+   JPEG, lalu diperbesar ke 300 dpi) titik "400,000.00" & "1.000" tinggal
+   bintik abu-abu tanpa satu pun piksel "pasti tinta" -- ambang ganda di atas
+   menghapusnya, dan OCR membaca "400,000 00" / "1 000" (Amount jadi 0).
+   Bintik "mungkin tinta" yang hilang diselamatkan bila bentuknya titik:
+     - kecil & padat (3-12 px, isi >= 45% kotaknya, hampir bulat), intinya
+       cukup gelap (<= ambang tinggi - 25);
+     - DUDUK DI ANTARA HURUF / ANGKA: ada tinta di kiri DAN kanannya (<= 14 px)
+       yang menjulang lebih tinggi dari bintik itu -- titik desimal berada di
+       kaki angka. Bintik di area kosong (noda kertas) tidak tersentuh. */
+const OCR_TITIK_MIN = 3, OCR_TITIK_MAKS = 12, OCR_TITIK_JANGKAU = 14;
+function ocrSelamatkanTitik(abu, ink, w, h, tinggi) {
+  const gelapInti = tinggi - 25;
+  const x0 = [], x1 = [], yy = [];
+  const barisAwal = new Int32Array(h + 1);
+  for (let y = 0; y < h; y++) {
+    barisAwal[y] = x0.length;
+    const baris = y * w;
+    let x = 0;
+    while (x < w) {
+      const i = baris + x;
+      if (ink[i] || abu[i] > tinggi) { x++; continue; }
+      const mulai = x;
+      while (x < w && !ink[baris + x] && abu[baris + x] <= tinggi) x++;
+      // rentetan lebar = bayangan / garis, bukan titik -- tidak perlu dilacak
+      if (x - mulai <= OCR_TITIK_MAKS) { x0.push(mulai); x1.push(x); yy.push(y); }
+    }
+  }
+  barisAwal[h] = x0.length;
+  const nRun = x0.length;
+  if (!nRun) return;
+  const induk = new Int32Array(nRun);
+  for (let i = 0; i < nRun; i++) induk[i] = i;
+  const cari = (a) => {
+    while (induk[a] !== a) { induk[a] = induk[induk[a]]; a = induk[a]; }
+    return a;
+  };
+  for (let y = 1; y < h; y++) {
+    let p = barisAwal[y - 1];
+    const pAkhir = barisAwal[y];
+    for (let c = barisAwal[y]; c < barisAwal[y + 1]; c++) {
+      while (p < pAkhir && x1[p] < x0[c]) p++;
+      for (let q = p; q < pAkhir && x0[q] <= x1[c]; q++) {
+        const a = cari(c), b = cari(q);
+        if (a !== b) induk[a < b ? b : a] = a < b ? a : b;
+      }
+    }
+  }
+  const luas = new Int32Array(nRun), minX = new Int32Array(nRun).fill(1e9), maksX = new Int32Array(nRun), minY = new Int32Array(nRun).fill(1e9), maksY = new Int32Array(nRun);
+  const gelap = new Uint8Array(nRun).fill(255);
+  for (let i = 0; i < nRun; i++) {
+    const r = cari(i);
+    luas[r] += x1[i] - x0[i];
+    if (x0[i] < minX[r]) minX[r] = x0[i];
+    if (x1[i] > maksX[r]) maksX[r] = x1[i];
+    if (yy[i] < minY[r]) minY[r] = yy[i];
+    if (yy[i] > maksY[r]) maksY[r] = yy[i];
+    const baris = yy[i] * w;
+    for (let x = x0[i]; x < x1[i]; x++) if (abu[baris + x] < gelap[r]) gelap[r] = abu[baris + x];
+  }
+  // Tinta tetangga di kotak [xa, xb] x [ya, yb] yang menjulang di atas `atas`?
+  const adaTetangga = (xa, xb, ya, yb, atas) => {
+    let ada = false, menjulang = false;
+    for (let y = Math.max(0, ya); y <= Math.min(h - 1, yb); y++) {
+      const baris = y * w;
+      for (let x = Math.max(0, xa); x <= Math.min(w - 1, xb); x++) {
+        if (!ink[baris + x]) continue;
+        ada = true;
+        if (y < atas) { menjulang = true; break; }
+      }
+      if (menjulang) break;
+    }
+    return ada && menjulang;
+  };
+  const selamat = new Uint8Array(nRun);
+  for (let r = 0; r < nRun; r++) {
+    if (cari(r) !== r) continue;
+    const lebar = maksX[r] - minX[r], tg = maksY[r] - minY[r] + 1;
+    if (lebar < OCR_TITIK_MIN || tg < OCR_TITIK_MIN || lebar > OCR_TITIK_MAKS || tg > OCR_TITIK_MAKS) continue;
+    if (Math.abs(lebar - tg) > 4 || luas[r] < 0.45 * lebar * tg || gelap[r] > gelapInti) continue;
+    const ya = minY[r] - 3 * tg, yb = maksY[r];
+    if (!adaTetangga(minX[r] - OCR_TITIK_JANGKAU, minX[r] - 1, ya, yb, minY[r] - 2)) continue;
+    if (!adaTetangga(maksX[r], maksX[r] + OCR_TITIK_JANGKAU, ya, yb, minY[r] - 2)) continue;
+    selamat[r] = 1;
+  }
+  for (let i = 0; i < nRun; i++) {
+    if (!selamat[cari(i)]) continue;
+    const baris = yy[i] * w;
+    for (let x = x0[i]; x < x1[i]; x++) ink[baris + x] = 1;
+  }
 }
 
 /* Buang garis tabel: rentetan tinta mendatar / tegak yang panjang. Huruf
@@ -488,13 +581,89 @@ function ocrPutar(abu, w, h, derajat) {
   return hasil;
 }
 
+/* ARAH TEKS: halaman yang dipindai / difoto MIRING 90° (invoice potret di halaman
+   lanskap -- pemindai ponsel tidak memutarnya) dibaca Tesseract sebagai sampah.
+   Profil proyeksi tinta yang memutuskan: baris teks MENDATAR membuat jumlah
+   tinta per baris piksel naik-turun tajam (baris teks / celah) sementara per
+   kolom datar; teks TEGAK sebaliknya. Ukurannya "kepuncakan" profil:
+   n * jumlah(p^2) / jumlah(p)^2 (1 = rata). Pada 13 halaman uji: mendatar
+   baris 2,5-3,2 / kolom 1,6; tegak baris 1,6 / kolom 3,1. Tegak bila kolom
+   >= 1,4x baris; selain itu dianggap mendatar (halaman yang sudah benar
+   tidak pernah diputar karena keraguan).
+   Halaman yang sedikit MIRING (1-5°) melunturkan puncak profil barisnya --
+   halaman uji miring 1,5° sempat terbaca "tegak" dan diputar. Maka tiap profil
+   diukur pada sudut terbaiknya (geser -5° s.d. 5°, langkah 0,5°), di atas titik
+   tinta yang diperkecil (sisi terpanjang ±700 titik) supaya tetap cepat. */
+const OCR_ARAH_RASIO = 1.4;
+function ocrArahTeks(ink, w, h) {
+  const f = Math.max(1, Math.floor(Math.max(w, h) / 700));
+  const sw = Math.floor(w / f), sh = Math.floor(h / f);
+  const xs = [], ys = [];
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      let ada = 0;
+      for (let dy = 0; dy < f && !ada; dy++) {
+        const awal = (y * f + dy) * w + x * f;
+        for (let dx = 0; dx < f; dx++) if (ink[awal + dx]) { ada = 1; break; }
+      }
+      if (ada) { xs.push(x); ys.push(y); }
+    }
+  }
+  const n = xs.length;
+  if (n < 400) return "datar";
+  /* kepuncakan proyeksi ke sumbu `utama` (panjang L) sesudah digeser sebesar tg x sumbu lain */
+  const puncak = (utama, lain, L, panjangLain, tg) => {
+    const geser = Math.ceil(panjangLain * Math.abs(tg)) + 1;
+    const histo = new Float64Array(L + 2 * geser + 2);
+    for (let i = 0; i < n; i++) histo[Math.round(utama[i] - lain[i] * tg) + geser]++;
+    let s2 = 0;
+    for (let i = 0; i < histo.length; i++) s2 += histo[i] * histo[i];
+    return (L * s2) / (n * n);
+  };
+  let baris = 0, kolom = 0;
+  for (let d = -OCR_MIRING_MAKS; d <= OCR_MIRING_MAKS + 1e-9; d += 0.5) {
+    const tg = Math.tan((d * Math.PI) / 180);
+    baris = Math.max(baris, puncak(ys, xs, sh, sw, tg));
+    kolom = Math.max(kolom, puncak(xs, ys, sw, sh, tg));
+  }
+  return kolom >= OCR_ARAH_RASIO * baris ? "tegak" : "datar";
+}
+
+/* Putar 90° searah jarum jam: (x, y) -> (h - 1 - y, x); lebar & tinggi bertukar. */
+function ocrPutar90(abu, w, h) {
+  const hasil = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const awal = y * w, xb = h - 1 - y;
+    for (let x = 0; x < w; x++) hasil[x * h + xb] = abu[awal + x];
+  }
+  return hasil;
+}
+
+/* Putar 180°: urutan piksel dibalik (gambar 1-bit / abu-abu sama saja). */
+function ocrBalik180(arr) {
+  const hasil = new Uint8Array(arr.length);
+  for (let i = 0, j = arr.length - 1; j >= 0; i++, j--) hasil[i] = arr[j];
+  return hasil;
+}
+
 /* RGBA halaman -> gambar hitam-putih bersih untuk Tesseract.
-   Hasil: { bw (0 = tinta, 255 = kertas), w, h, miring (derajat yang diluruskan) } */
-function ocrPraolah(rgba, w, h) {
+   Hasil: { bw (0 = tinta, 255 = kertas), w, h, miring (derajat yang diluruskan),
+   putar (0 / 90: teks tegak sudah diputar searah jarum jam), arahRagu (90 atau
+   270 belum dipastikan -- ocrPastikanArah, di pekerja) } */
+function ocrPraolah(rgba, wAsli, hAsli) {
+  let w = wAsli, h = hAsli;
   let abu = ocrAbuAbu(rgba, w * h);
   ocrRataiLatar(abu, w, h);
   let ink = ocrTinta(abu, w, h);
   ocrBuangGaris(ink, w, h);
+  let putar = 0;
+  if (ocrArahTeks(ink, w, h) === "tegak") {
+    abu = ocrPutar90(abu, w, h);
+    [w, h] = [h, w];
+    putar = 90;
+    ink = ocrTinta(abu, w, h);
+    ocrBuangGaris(ink, w, h);
+  }
   const miring = ocrMiring(ink, w, h);
   if (miring) {
     /* Halaman yang miring `miring` derajat diluruskan dengan memutarnya ke arah
@@ -507,7 +676,7 @@ function ocrPraolah(rgba, w, h) {
   ocrBuangNoda(ink, w, h, abu);
   const bw = new Uint8Array(w * h);
   for (let i = 0; i < bw.length; i++) bw[i] = ink[i] ? 0 : 255;
-  return { bw, w, h, miring };
+  return { bw, w, h, miring, putar, arahRagu: putar === 90 };
 }
 
 /* ------------------------------------------------------------------
@@ -882,6 +1051,7 @@ function ocrJadwalLepas() {
 
 async function ocrLepas() {
   clearTimeout(ocrLepasTimer);
+  ocrLepasPekerjaOlah();
   const daftar = [ocrPekerjaPromise, ocrTambahanPromise];
   ocrPekerjaPromise = null;
   ocrTambahanPromise = null;
@@ -1143,7 +1313,7 @@ const OCR_PECAH_YAKIN = 80;
    pemenggalan kata pembacaan lain (kata utuh menggantikan serpihan, atau potongan
    menggantikan gabungan) */
 function ocrGabungBacaan(bacaan) {
-  const gugus = []; // { a: kotak wakil, anggota: [kata + { r }], mati, pecahan }
+  const gugus = []; // { a: kotak wakil, anggota: [kata + { r }], mati, pecahan, pengganti }
   let diganti = 0;
   (bacaan || []).forEach((daftar, r) => {
     const sudah = new Set(); // satu kata dari satu pembacaan = satu gugus
@@ -1196,10 +1366,13 @@ function ocrGabungBacaan(bacaan) {
         sudah.add(cocok[0]);
         return;
       }
-      // satu kata menimpa beberapa gugus (kata yang terpecah di pembacaan sebelumnya): ganti bila semuanya buruk
+      /* satu kata menimpa beberapa gugus (kata yang terpecah di pembacaan sebelumnya): ganti bila
+         semuanya buruk. Penggantinya BUKAN kata yang hanya ditemukan pembacaan pelengkap -- di
+         tempatnya pembacaan utama juga melihat kata (yang buruk): nomor invoice "IN-WL" 0% +
+         "2611-00023" 0% diganti "IN-WL2611-00023" 89% dan dulu ikut dibuang (syarat 90%). */
       if (kata.c >= 80 && cocok.every((i) => gugus[i].anggota.length === 1 && gugus[i].anggota[0].c < 55)) {
         cocok.forEach((i) => { gugus[i].mati = true; });
-        sudah.add(gugus.push({ a: kata, anggota: [kata] }) - 1);
+        sudah.add(gugus.push({ a: kata, anggota: [kata], pengganti: true }) - 1);
         diganti++;
       }
     });
@@ -1208,8 +1381,8 @@ function ocrGabungBacaan(bacaan) {
   let diisi = 0, sengketa = 0;
   gugus.forEach((g) => {
     if (g.mati) return;
-    // potongan kata gabungan yang lemah sudah lolos syarat yakin saat dipecah
-    if (g.anggota[0].r !== 0 && !g.pecahan) {
+    // potongan kata gabungan yang lemah & pengganti serpihan sudah lolos syarat yakin saat menggantikan
+    if (g.anggota[0].r !== 0 && !g.pecahan && !g.pengganti) {
       /* Hanya ditemukan pembacaan pelengkap -- paling sering serpihan garis tabel
          ("4", "000,") yang dibaca yakin. Diterima bila DUA pembacaan sepakat, atau
          satu pembacaan sangat yakin dan bentuknya kata / angka uang, bukan serpihan. */
@@ -1315,10 +1488,145 @@ async function ocrTigaBacaan(gambar, kolam, ganda, lapor, urutan) {
    disiapkan selagi halaman ini dibaca pekerja (ocrBacaBerkas). */
 async function ocrSiapkanPiksel(rgba, w, h, lapor) {
   (lapor || (() => {}))({ tahap: "olah" });
+  // Di utas sendiri bila bisa (ocr-pekerja-olah.js): layar tidak membeku ±1 detik per halaman
+  const dariPekerja = await ocrOlahDiPekerja(rgba, w, h);
+  if (dariPekerja) return dariPekerja;
   await ocrJeda();
   const pra = ocrPraolah(rgba, w, h);
   await ocrJeda();
   return { pra, gambar: ocrBwKePbm(pra.bw, pra.w, pra.h) };
+}
+
+/* ------------------------------------------------------------------
+   PRA-PROSES DI WEB WORKER (js/import/ocr-pekerja-olah.js)
+   Satu pekerja, dibuat saat pertama dibutuhkan dan dilepas bersama pekerja
+   Tesseract (ocrLepas). Tanpa Worker (jsdom / peramban tua) atau pekerja
+   gagal dimuat -> null: pemanggil membersihkan di utas halaman seperti dulu,
+   dan pekerja tidak dicoba lagi selama halaman terbuka. Hasil = { pra, gambar }
+   yang sama dengan ocrPraolah + ocrBwKePbm di utas halaman.
+------------------------------------------------------------------ */
+const OCR_PEKERJA_OLAH = "js/import/ocr-pekerja-olah.js";
+let ocrOlah = null; // { pekerja, janji: Map(id -> { beres, gagal }), id }
+let ocrOlahMati = false;
+
+function ocrPekerjaOlah() {
+  if (ocrOlah || ocrOlahMati) return ocrOlah;
+  if (typeof Worker !== "function" || typeof document === "undefined") {
+    ocrOlahMati = true;
+    return null;
+  }
+  try {
+    const pekerja = new Worker(OCR_PEKERJA_OLAH);
+    const kini = { pekerja, janji: new Map(), id: 0 };
+    pekerja.onmessage = (e) => {
+      const d = e.data || {};
+      const tunggu = kini.janji.get(d.id);
+      if (!tunggu) return;
+      kini.janji.delete(d.id);
+      if (d.galat) tunggu.gagal(new Error(d.galat));
+      else tunggu.beres({ pra: d.pra, gambar: d.gambar });
+    };
+    // Gagal dimuat (berkas hilang, kebijakan peramban): semua yang menunggu jatuh ke utas halaman
+    pekerja.onerror = (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      ocrOlahMati = true;
+      kini.janji.forEach((x) => x.gagal(new Error("pekerja pra-proses gagal")));
+      kini.janji.clear();
+      try { pekerja.terminate(); } catch (x) { /* sudah mati */ }
+      if (ocrOlah === kini) ocrOlah = null;
+    };
+    ocrOlah = kini;
+  } catch (e) {
+    ocrOlahMati = true;
+    ocrOlah = null;
+  }
+  return ocrOlah;
+}
+
+async function ocrOlahDiPekerja(rgba, w, h) {
+  const kini = ocrPekerjaOlah();
+  if (!kini) return null;
+  const id = ++kini.id;
+  // salinan: kalau pekerja gagal, gambar aslinya masih utuh untuk utas halaman
+  const salinan = new Uint8ClampedArray(rgba);
+  try {
+    return await new Promise((beres, gagal) => {
+      kini.janji.set(id, { beres, gagal });
+      kini.pekerja.postMessage({ id, rgba: salinan.buffer, w, h }, [salinan.buffer]);
+    });
+  } catch (e) {
+    console.warn("Pra-proses OCR di utas halaman:", e && e.message);
+    return null;
+  }
+}
+
+function ocrLepasPekerjaOlah() {
+  if (!ocrOlah) return;
+  try { ocrOlah.pekerja.terminate(); } catch (e) { /* sudah mati */ }
+  ocrOlah.janji.forEach((x) => x.gagal(new Error("dilepas")));
+  ocrOlah = null;
+}
+
+/* ------------------------------------------------------------------
+   ARAH HALAMAN: 90 ATAU 270, TEGAK ATAU TERBALIK
+   Profil proyeksi (ocrArahTeks) hanya tahu teksnya tegak, bukan ke mana
+   kepalanya. Kedua kemungkinan dibaca CEPAT -- setengah ukuran, satu mode --
+   dan yang menghasilkan lebih banyak kata yakin dipakai. Halaman yang tidak
+   diputar tetapi bacaannya buruk sekali (kepercayaan < 55) juga diuji
+   terbalik 180° (scan terbalik).
+------------------------------------------------------------------ */
+
+/* Gambar 1-bit setengah ukuran: satu piksel = tinta bila >= 2 dari 4 piksel asalnya tinta.
+   Hanya PITA TENGAH halaman (OCR_ARAH_PITA dari tinggi, simetris terhadap tengahnya)
+   -- cukup banyak baris teks untuk memutuskan arahnya, dan versi terbaliknya berisi
+   piksel yang sama persis. Dulu seluruh halaman: dua bacaan cepat menambah ±4 detik
+   per halaman lanskap. Diukur pada 5 halaman scan WIDE: skor arah yang benar 8-15x
+   arah yang salah pada pita 15%, 25% dan 100% sama-sama; pita 25% ±0,9 detik
+   (seluruh halaman ±2,9 detik). */
+const OCR_ARAH_PITA = 0.25;
+function ocrPerkecilBw(bw, w, h, pita) {
+  const bagian = pita > 0 && pita < 1 ? pita : 1;
+  const awalY = Math.floor((h * (1 - bagian)) / 4) * 2; // genap: pasangan baris tetap utuh
+  const tinggi = Math.min(h - awalY, Math.ceil(h * bagian));
+  const sw = w >> 1, sh = tinggi >> 1;
+  const hasil = new Uint8Array(sw * sh).fill(255);
+  for (let y = 0; y < sh; y++) {
+    const a = (awalY + 2 * y) * w, b = a + w;
+    for (let x = 0; x < sw; x++) {
+      const i = 2 * x;
+      const tinta = (bw[a + i] === 0) + (bw[a + i + 1] === 0) + (bw[b + i] === 0) + (bw[b + i + 1] === 0);
+      if (tinta >= 2) hasil[y * sw + x] = 0;
+    }
+  }
+  return { bw: hasil, w: sw, h: sh };
+}
+
+/* Skor sebuah bacaan cepat: jumlah kepercayaan kata yang YAKIN (>= 60) dan
+   berbentuk kata / angka sungguhan (3 huruf atau 3 angka beruntun). Halaman
+   terbalik menghasilkan banyak "kata" berkepercayaan rendah -- skornya kecil. */
+function ocrSkorBacaan(kata) {
+  return (kata || []).reduce((x, k) => x + (k.c >= 60 && /[A-Za-z]{3}|\d{3}/.test(String(k.t || "")) ? k.c : 0), 0);
+}
+
+async function ocrBacaCepat(g, kolam, urutan) {
+  const hasil = await ocrBaca(ocrBwKePbm(g.bw, g.w, g.h), OCR_PARAM_HALAMAN, kolam, { urutan });
+  return ocrSkorBacaan(ocrKataDariBlocks(hasil.data.blocks));
+}
+
+/* siap.pra berarah ragu (teks tegak, sudah diputar 90°): bandingkan dengan 270°
+   (= diputar 180° lagi); yang lebih baik dipakai. Mengubah `siap` di tempat. */
+async function ocrPastikanArah(siap, kolam, urutan) {
+  const pra = siap.pra;
+  if (!pra.arahRagu) return;
+  const kecil = ocrPerkecilBw(pra.bw, pra.w, pra.h, OCR_ARAH_PITA);
+  const balik = { bw: ocrBalik180(kecil.bw), w: kecil.w, h: kecil.h };
+  const [skorIni, skorBalik] = await Promise.all([ocrBacaCepat(kecil, kolam, urutan), ocrBacaCepat(balik, kolam, urutan)]);
+  pra.arahRagu = false;
+  if (skorBalik > skorIni * 1.2) {
+    pra.bw = ocrBalik180(pra.bw);
+    pra.putar = 270;
+    siap.gambar = ocrBwKePbm(pra.bw, pra.w, pra.h);
+  }
 }
 
 /* Bagian PEKERJA: tiga pembacaan -> gabung -> baca ulang angka -> baris teks.
@@ -1326,8 +1634,34 @@ async function ocrSiapkanPiksel(rgba, w, h, lapor) {
 async function ocrBacaSiap(siap, opsi) {
   const o = opsi || {};
   const lapor = typeof o.progres === "function" ? o.progres : () => {};
-  const { pra, gambar } = siap;
   const kolam = await ocrKolam();
+  if (siap.pra && siap.pra.arahRagu) {
+    lapor({ tahap: "arah" });
+    await ocrPastikanArah(siap, kolam, o.urutan);
+  }
+  const hasil = await ocrBacaSiapArah(siap, o, lapor, kolam);
+  /* Halaman yang TIDAK diputar tetapi hampir tak terbaca: mungkin terbalik 180°. Diuji
+     cepat; bila versi terbaliknya jelas lebih baik, halaman dibaca ulang terbalik. */
+  const pra = siap.pra;
+  if (pra && !pra.putar && hasil.jumlahKata >= 20 && hasil.kepercayaan < 55 && o.ujiTerbalik !== false) {
+    lapor({ tahap: "arah" });
+    const kecil = ocrPerkecilBw(pra.bw, pra.w, pra.h, OCR_ARAH_PITA);
+    const [skorIni, skorBalik] = await Promise.all([
+      ocrBacaCepat(kecil, kolam, o.urutan),
+      ocrBacaCepat({ bw: ocrBalik180(kecil.bw), w: kecil.w, h: kecil.h }, kolam, o.urutan),
+    ]);
+    if (skorBalik > skorIni * 1.5) {
+      const bw = ocrBalik180(pra.bw);
+      const terbalik = { pra: Object.assign({}, pra, { bw, putar: 180 }), gambar: ocrBwKePbm(bw, pra.w, pra.h) };
+      const ulang = await ocrBacaSiapArah(terbalik, o, lapor, kolam);
+      if (ulang.kepercayaan > hasil.kepercayaan) return ulang;
+    }
+  }
+  return hasil;
+}
+
+async function ocrBacaSiapArah(siap, o, lapor, kolam) {
+  const { pra, gambar } = siap;
   const bacaan = await ocrTigaBacaan(gambar, kolam, o.bacaGanda !== false, lapor, o.urutan);
   const gabung = ocrGabungBacaan(bacaan);
   let kata = gabung.kata;
@@ -1343,7 +1677,11 @@ async function ocrBacaSiap(siap, opsi) {
     baris,
     teks: baris.map((b) => b.teks).join("\n"),
     kepercayaan: Math.round(ocrRata2(kata)),
+    // Ukuran gambar yang dibaca (sesudah diputar): koordinat kata di `baris` relatif terhadapnya
+    lebar: pra.w,
+    tinggi: pra.h,
     miring: pra.miring,
+    putar: pra.putar || 0,
     jumlahKata: kata.length,
     angkaRagu: angka.filter((k) => !k.pasti && (k.c < OCR_RAGU || !ocrAngkaSah(ocrNorm(k.t)))).map((k) => ocrNorm(k.t)),
     angkaDiulang: ulang.diulang,
@@ -1371,6 +1709,25 @@ async function ocrBacaPiksel(rgba, w, h, opsi) {
 ------------------------------------------------------------------ */
 
 const OCR_MAKS_HALAMAN = 20;
+
+/* Berapa halaman PDF dibaca BERSAMAAN: dua bila prosesornya cukup (>= 4 inti logis)
+   -- ketiga pembacaan satu halaman tidak selesai serentak dan pembacaan ulang angka
+   hanya potongan kecil, jadi pekerja yang sudah bebas langsung mengerjakan halaman
+   berikutnya alih-alih menganggur. CPU dua inti sudah penuh oleh satu halaman: tetap
+   satu per satu, supaya halaman pertama (pop-up review Split) secepat mungkin. */
+function ocrHalamanSerentak() {
+  const nav = typeof navigator !== "undefined" ? navigator : {};
+  return Number(nav.hardwareConcurrency) >= 4 && ocrJumlahPekerja() > 1 ? 2 : 1;
+}
+
+/* PANASKAN MESIN lebih awal: dipanggil saat pengguna membuka pemilih berkas atau
+   menyeret berkas ke form (fund-invoice-import.js, pr-ocr.js) -- unduhan Tesseract &
+   pembuatan pekerja berjalan selagi ia memilih berkas, bukan sesudahnya. Tidak jadi
+   dipakai = dilepas seperti biasa (ocrJadwalLepas); gagal = diam (dicoba lagi saat
+   benar-benar membaca). */
+function ocrPanaskan() {
+  ocrKolam().then(ocrJadwalLepas, () => {});
+}
 const ocrAdalahGambar = (f) => !!f && (/^image\/(png|jpe?g|webp|bmp|gif|tiff?)$/i.test(f.type || "") || /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i.test(f.name || ""));
 
 /* Halaman PDF -> { pra, gambar } (render pdf.js lalu pembersihan); `lapor` per halaman */
@@ -1384,6 +1741,19 @@ async function ocrSiapkanHalamanPdf(dok, p, lapor) {
     if (hal.cleanup) hal.cleanup();
   }
   return ocrSiapkanPiksel(r.rgba, r.w, r.h, lapor);
+}
+
+/* opsi.halamanSiap(i, hasilHalaman, jumlahHalaman): tiap halaman yang SELESAI dibaca
+   dikabarkan segera -- pemanggil bisa mulai memakai dokumen yang sudah lengkap selagi
+   halaman berikutnya masih dibaca (review Split Invoice). Galat di pemanggil tidak
+   menghentikan OCR. */
+function ocrKabariHalaman(o, halaman, n) {
+  if (typeof o.halamanSiap !== "function") return;
+  try {
+    o.halamanSiap(halaman.length - 1, halaman[halaman.length - 1], n);
+  } catch (e) {
+    console.warn("halamanSiap:", e);
+  }
 }
 
 async function ocrBacaBerkas(berkas, opsi) {
@@ -1404,6 +1774,7 @@ async function ocrBacaBerkas(berkas, opsi) {
       info({ tahap: "render" });
       const g = await ocrMuatGambar(berkas);
       halaman.push(await ocrBacaPiksel(g.rgba, g.w, g.h, Object.assign({ progres: info }, baca)));
+      ocrKabariHalaman(o, halaman, 1);
     } else {
       let dok = o.pdf;
       if (!dok) {
@@ -1414,29 +1785,42 @@ async function ocrBacaBerkas(berkas, opsi) {
       const n = Math.min(dok.numPages, maks);
       terpotong = dok.numPages > n;
       /* Halaman BERIKUTNYA digambar & dibersihkan di utas halaman selagi halaman ini
-         dibaca pekerja. Kemajuannya baru ditampilkan begitu halaman itu yang
-         ditunggu (pesan terakhirnya diulang saat gilirannya tiba). */
+         dibaca pekerja -- di prosesor yang cukup (ocrHalamanSerentak) juga langsung
+         DIBACA. Kemajuannya baru ditampilkan begitu halaman itu yang ditunggu (pesan
+         terakhirnya diulang saat gilirannya tiba). Hasil tetap urut halaman. */
+      const serentak = ocrHalamanSerentak();
       const siapkan = (p) => {
         const info = (m) => lapor(Object.assign({ halaman: p, dari: n }, m));
         const jejak = { aktif: p === 1, pesan: null };
-        const janji = ocrSiapkanHalamanPdf(dok, p, (m) => {
+        const kabar = (m) => {
           jejak.pesan = m;
           if (jejak.aktif) info(m);
-        });
+        };
+        const janji = ocrSiapkanHalamanPdf(dok, p, kabar);
         janji.catch(() => {}); // galatnya diteruskan saat ditunggu, bukan "unhandled"
-        return { janji, info, jejak };
+        return { p, janji, info, jejak, kabar, baca: null };
       };
-      let berikut = siapkan(1);
+      /* Antrean pekerja (ocrPinjam) mendahulukan halaman yang lebih awal: pembacaan ulang
+         angka halaman ini tidak tertahan di belakang pembacaan halaman berikutnya. */
+      const mulaiBaca = (x) => {
+        x.baca = x.janji.then((siap) => ocrBacaSiap(siap, Object.assign({ progres: x.kabar }, baca, { urutan: urutan + x.p / 1000 })));
+        x.baca.catch(() => {});
+      };
+      const antre = [siapkan(1)];
       for (let p = 1; p <= n; p++) {
-        const kini = berikut;
+        const kini = antre[0];
         if (!kini.jejak.aktif) {
           kini.jejak.aktif = true;
           if (kini.jejak.pesan) kini.info(kini.jejak.pesan);
         }
-        const siap = await kini.janji;
-        const hasil = ocrBacaSiap(siap, Object.assign({ progres: kini.info }, baca));
-        berikut = p < n ? siapkan(p + 1) : null;
-        halaman.push(await hasil);
+        if (!kini.baca) mulaiBaca(kini);
+        // halaman berikutnya baru disiapkan sesudah gambar halaman ini siap -- tidak berebut dengannya
+        await kini.janji;
+        while (antre.length <= serentak && p + antre.length <= n) antre.push(siapkan(p + antre.length));
+        for (let j = 1; j < serentak && j < antre.length; j++) if (!antre[j].baca) mulaiBaca(antre[j]);
+        halaman.push(await kini.baca);
+        antre.shift();
+        ocrKabariHalaman(o, halaman, n);
       }
     }
   } finally {

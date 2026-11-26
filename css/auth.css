@@ -169,6 +169,12 @@ body.is-locked {
 .user-chip-role.is-finance {
   color: #8fd8c0;
 }
+.user-chip-role.is-purchasing {
+  color: #f3cf8e;
+}
+.user-chip-role.is-engineering {
+  color: #c4b1f2;
+}
 /* Inisial nama (session.js), bukan ikon orang generik -- sama dengan
    avatar di halaman Akun. */
 .user-chip-avatar {
@@ -369,6 +375,19 @@ body.is-viewer .docnum-actions,
 body.is-viewer .counter-box {
   display: none !important;
 }
+/* PURCHASING & ENGINEERING (body.hanya-popr, session.js): Nomor Dokumen
+   hanya tab PO & PR -- tab jenis lain disembunyikan, dan form PO & PR
+   beserta tombol Ajukan-nya TETAP terbuka walau mereka .is-viewer. Atur
+   Nomor Urut & hapus nomor tetap tersembunyi (khusus EXIM). */
+body.hanya-popr .docnum-tab:not([data-docnum-tab="po"]) {
+  display: none !important;
+}
+body.hanya-popr [data-docnum-panel="po"].active {
+  display: block !important;
+}
+body.hanya-popr .docnum-actions {
+  display: flex !important;
+}
 
 /* Dropdown status di kartu: tetap terlihat supaya isinya terbaca, tapi
    tidak bisa disentuh -- digambar disabled bagi peran baca-saja
@@ -437,6 +456,14 @@ body.is-viewer .status-select {
 .acct-avatar.is-finance {
   background: var(--w-bg-e3f4ee);
   color: var(--w-teks-0f6b52);
+}
+.acct-avatar.is-purchasing {
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-8a5a00);
+}
+.acct-avatar.is-engineering {
+  background: var(--w-bg-f3eefe);
+  color: var(--w-teks-6a3fc2);
 }
 /* Hitungan akun nonaktif di kepala halaman Akun: warna peringatan --
    akun yang belum dibuka EXIM bisa saja didaftarkan orang luar. */
@@ -538,6 +565,14 @@ body.is-viewer .status-select {
 .acct-legend-peran.is-finance {
   background: var(--w-bg-e3f4ee);
   color: var(--w-teks-0f6b52);
+}
+.acct-legend-peran.is-purchasing {
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-8a5a00);
+}
+.acct-legend-peran.is-engineering {
+  background: var(--w-bg-f3eefe);
+  color: var(--w-teks-6a3fc2);
 }
 
 /* Pemilih bahasa — dipakai di layar masuk & menu akun. */

@@ -1352,6 +1352,70 @@ table.item-table .is-disamakan {
   flex: 0 0 auto;
   margin: 2px -4px 0 0;
 }
+/* PILIHAN DOKUMEN BERGESER (bukaModalCetak opsi `varian`, mis. PO | PR):
+   satu "jempol" putih yang meluncur ke tombol aktif -- posisinya dari
+   --varian-ke / --varian-n yang ditulis cetakGambarVarian(). */
+.cetak-varian {
+  --varian-n: 2;
+  --varian-ke: 0;
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(64px, 1fr);
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--n-200);
+  box-shadow: inset 0 1px 2px rgba(10, 27, 51, 0.12);
+}
+.cetak-varian[hidden] {
+  display: none;
+}
+.cetak-varian::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--varian-n));
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(10, 27, 51, 0.22);
+  transform: translateX(calc(100% * var(--varian-ke)));
+  transition: transform 0.22s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+.cetak-varian-btn {
+  position: relative;
+  z-index: 1;
+  min-height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--n-600);
+  font-family: var(--font-display);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+.cetak-varian-btn:hover {
+  color: var(--tp-700);
+}
+.cetak-varian-btn.is-aktif {
+  color: var(--tp-700);
+}
+.cetak-varian-btn:focus-visible {
+  outline: 2px solid var(--p-500);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cetak-varian::before {
+    transition: none;
+  }
+}
 /* Kartu kotak selalu setinggi dialognya (layar dikurangi margin), baik saat
    "Menyiapkan surat" maupun sesudah suratnya tampil -- tanpa ini kartu
    memendek di tengah layar selagi memuat lalu melompat membesar. Surat
@@ -1529,4 +1593,45 @@ table.item-table .is-disamakan {
   .cetak-putar {
     animation-duration: 2.4s;
   }
+}
+
+/* ==================================================================
+   SERET & LEPAS BERKAS KE SELURUH FORM (pasangZonaLepas, js/ui/dom.js)
+   Form jadwal, Pengajuan Dana & PO / PR: selagi berkas diseret di
+   atasnya, seluruh form dibingkai + diberi selaput tipis, dan
+   petunjuknya melayang di tengah layar (teks dari data-drop-teks, sudah
+   dalam bahasa yang dipakai). Semuanya pointer-events: none -- sorotan
+   tidak boleh menghalangi pelepasan.
+================================================================== */
+[data-drop-teks].is-dragover {
+  position: relative;
+}
+[data-drop-teks].is-dragover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  border: 2px solid var(--p-500);
+  border-radius: var(--r-lg);
+  background: rgba(29, 81, 136, 0.07);
+  box-shadow: inset 0 0 0 4px rgba(29, 81, 136, 0.12);
+  pointer-events: none;
+}
+[data-drop-teks].is-dragover::after {
+  content: attr(data-drop-teks);
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 20;
+  transform: translate(-50%, -50%);
+  max-width: min(90vw, 420px);
+  padding: 14px 22px;
+  border-radius: var(--r-lg);
+  background: var(--p-500);
+  color: #fff;
+  font-size: var(--t-base);
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(10, 27, 51, 0.28);
+  pointer-events: none;
 }

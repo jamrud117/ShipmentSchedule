@@ -65,6 +65,14 @@ const DOCNUM_TYPES = {
     pad: 3,
     pattern: "{SEQ}/EXIM/DDI/{ROM}/{YYYY}",
   },
+  /* PO & PR (js/features/po-form.js): satu nomor PO membawa PO + PR-nya.
+     Nomor urut tetap satu seri yang berlanjut (seperti jenis lain) --
+     tanggal di nomornya = Tanggal PO. */
+  po: {
+    get label() { return tt("PO & PR", "PO & PR"); },
+    pad: 3,
+    pattern: "DDI-{YYYYMMDD}-{SEQ}",
+  },
   letter: {
     get label() { return tt("Surat Keluar", "Outgoing Letter"); },
     pad: 3,
@@ -89,12 +97,18 @@ const DOCNUM_TAB_KEY = "exim.docnumTab";
 function bacaDocNumTabTersimpan() {
   try {
     const v = localStorage.getItem(DOCNUM_TAB_KEY);
-    return v && DOCNUM_TYPES[v] ? v : DOCNUM_DEFAULT_TAB;
+    return dnTabBoleh(v) ? v : dnTabBawaan();
   } catch (e) {
     // Penyimpanan bisa dimatikan peramban; bukan alasan untuk gagal.
-    return DOCNUM_DEFAULT_TAB;
+    return dnTabBawaan();
   }
 }
+
+/* PURCHASING & ENGINEERING hanya membuka tab PO & PR (session.js:
+   hanyaPoPr). Peran lain membuka semua jenis. */
+const dnHanyaPoPr = () => typeof hanyaPoPr === "function" && hanyaPoPr();
+const dnTabBoleh = (v) => !!v && !!DOCNUM_TYPES[v] && (!dnHanyaPoPr() || v === "po");
+const dnTabBawaan = () => (dnHanyaPoPr() ? "po" : DOCNUM_DEFAULT_TAB);
 
 let docNumActiveTab = bacaDocNumTabTersimpan();
 /* Sub-jenis yang sedang DITELUSURI di riwayat. null = ikut pilihan di
@@ -259,6 +273,8 @@ const DN_KOLOM_CARI = [
   "payload->>termsDelivery", "payload->>termPayment",
   "payload->>finalDestination", "payload->>carrier",
   "payload->>transactionType",
+  // PO & PR: supplier, No. Pembelian PR, nama produk, departemen peminta
+  "payload->>poPenjualNama", "payload->>prNo", "payload->>prProduk", "payload->>prDepartemen",
 ];
 /* Filter `or` PostgREST untuk kata kunci, atau null. Tanda yang punya
    arti khusus di sintaks filter -- koma, kurung, kutip, garis miring
@@ -317,7 +333,17 @@ function dnTeksNilaiBaris(r, jenisKey) {
   const p = r.payload || {};
   if (jenisKey === "fund") return frNilai(frTotalPengajuan(p), p.currency || "IDR");
   if (jenisKey === "invoice") return dnTeksNilaiInvoice(r);
+  if (jenisKey === "po") return dnTeksNilaiPo(p);
   return "";
+}
+
+// TOTAL PO (atau perkiraan PR bila PO belum berharga) seperti tampil di riwayat; "" bila tanpa harga
+function dnTeksNilaiPo(p) {
+  if (typeof poTotal !== "function") return "";
+  const po = poTotal("po", p.poItems || []);
+  if (po) return `${p.currency || "USD"} ${formatNilai(po)}`;
+  const pr = poTotal("pr", p.prItems || []);
+  return pr ? `${p.prMataUang || "IDR"} ${formatNilai(pr)}` : "";
 }
 
 /* Cocok = isian teks yang sama dengan filter database (DN_KOLOM_CARI,
@@ -601,11 +627,16 @@ function readDocNumForm(typeKey) {
     if (bersih.length) out.lines = bersih;
     // Invoice / debit note tambahan dalam pengajuan yang sama
     if (pakaiRinci && typeof fundDokumenBersih === "function" && fundDokumen.length) out.dokumen = fundDokumenBersih();
+    // GRAND TOTAL / TOTAL dokumen yang disesuaikan manual -- hanya yang masih berlaku pada rincian ini
+    const manual = pakaiRinci && bersih.length && typeof fundTotalManualBersih === "function" ? fundTotalManualBersih(bersih) : null;
+    if (manual) out.totalManual = manual;
   }
   // Surat Keterangan Fungsi Barang: daftar barang, fungsi & fotonya
   if (typeKey === "letter" && typeof suratBarangBersih === "function" && out.letterType === SURAT_BC_FUNGSI) {
     out.itemsFungsi = suratBarangBersih();
   }
+  // PO & PR: daftar barang PR & PO, Doc No bawaan tidak disimpan (po-form.js)
+  if (typeKey === "po" && typeof poBacaForm === "function") poBacaForm(out);
   return out;
 }
 
@@ -627,6 +658,8 @@ function validateDocNumForm(typeKey) {
       "A formula in the Cost Breakdown is not valid yet (red box).",
     ));
   }
+  // PO & PR: sedikitnya satu barang di daftar PR atau PO
+  if (typeKey === "po" && typeof poValidasi === "function") errors.push(...poValidasi());
   /* Baris yang ditautkan ke BL/AWB yang sudah dihapus dari isian BL/AWB:
      biayanya tidak akan sampai ke kiriman mana pun. Ditolak supaya
      dipilih ulang -- bukan diam-diam dibagi rata. */
@@ -802,9 +835,11 @@ function renderCounterPanel(jenis, periodKey, lastSeq) {
      namanya tertulis, tidak ada cara membedakan sedang menyetel yang
      mana, dan angka yang diketik gampang mendarat di deret sebelah. */
   const terakhir = lastSeq ? String(lastSeq).padStart(jenis.pad, "0") : t("w.belum.ada.nomor");
-  info.textContent = tt(
-    `${jenis.label} · seri ${periodKey} · nomor terakhir terbit: ${terakhir}`,
-    `${jenis.label} · series ${periodKey} · last issued number: ${terakhir}`,
+  // Angka terakhirnya ditebalkan berhuruf tetap-lebar; kalimatnya huruf biasa (.counter-info)
+  const angka = `<b class="counter-angka${lastSeq ? "" : " is-kosong"}">${escapeHtml(terakhir)}</b>`;
+  info.innerHTML = tt(
+    `${escapeHtml(jenis.label)} · seri ${escapeHtml(periodKey)} · terakhir terbit ${angka}`,
+    `${escapeHtml(jenis.label)} · series ${escapeHtml(periodKey)} · last issued ${angka}`,
   );
   // Angka yang sedang diketik tidak ditimpa (penyegaran realtime saat nomor lain terbit)
   if (document.activeElement !== input) input.value = String((lastSeq || 0) + 1);
@@ -913,9 +948,17 @@ $("#btnCounterReset")?.addEventListener("click", () => {
 let dnEditingId = null;
 
 /* Mengubah apa pun di Nomor Dokumen -- mengajukan, memperbaiki isian,
-   menandai status bayar -- khusus EXIM. Marketing hanya membaca. */
-function bolehUbahDocNum() {
-  return typeof canEdit !== "function" || canEdit();
+   menandai status bayar -- khusus EXIM. Marketing hanya membaca.
+   PENGECUALIAN: PO & PR juga boleh diajukan & diubah Purchasing dan
+   Engineering (bolehPoPr, session.js) -- `tab` = jenis yang diubah. */
+function bolehUbahDocNum(tab) {
+  if (typeof canEdit !== "function" || canEdit()) return true;
+  return tab === "po" && typeof bolehPoPr === "function" && bolehPoPr();
+}
+// Tombol Ajukan / Simpan: penjaga hak yang sama, dengan pesan bila ditolak
+function dnPeriksaHakUbah(tab) {
+  if (bolehUbahDocNum(tab)) return true;
+  return requireEdit();
 }
 
 /* ------------------------------------------------------------------
@@ -1284,9 +1327,12 @@ function dnFotoDraf(panel, tab) {
       : null,
     fundLines: tab === "fund" && typeof fundLines !== "undefined" ? salin(fundLines) : null,
     fundDokumen: tab === "fund" && typeof fundDokumen !== "undefined" ? salin(fundDokumen) : null,
+    fundTotalManual: tab === "fund" && typeof fundTotalManual !== "undefined" ? salin(fundTotalManual) : null,
     doLines: tab === "do" && typeof doLines !== "undefined" ? salin(doLines) : null,
     suratBarang: tab === "letter" && typeof suratBarang !== "undefined" ? salin(suratBarang) : null,
     suratOtomatis: tab === "letter" && typeof suratIsianOtomatis !== "undefined" ? salin(suratIsianOtomatis) : null,
+    // Tab PO & PR (features/po-form.js) -- bukan `po` di atas (No. PO tambahan form Invoice)
+    poPr: tab === "po" && typeof poFotoDraf === "function" ? poFotoDraf() : null,
     isianOtomatis: salin(dnIsianOtomatis),
   };
 }
@@ -1310,10 +1356,12 @@ function dnPulihkanDraf(panel, tab, draf) {
     // Dokumen dulu: pengelompokan baris rincian bergantung padanya
     setFundDokumen(draf.fundDokumen || []);
     setFundLines(draf.fundLines);
+    if (typeof setFundTotalManual === "function") setFundTotalManual(draf.fundTotalManual || {});
   }
   if (draf.doLines) setDoLines(draf.doLines);
   if (draf.suratBarang) setSuratBarang(draf.suratBarang);
   if (draf.suratOtomatis) suratIsianOtomatis = draf.suratOtomatis;
+  if (draf.poPr && typeof poPulihkanDraf === "function") poPulihkanDraf(draf.poPr);
   dnIsianOtomatis = draf.isianOtomatis || {};
   syncDocNumConditional(panel);
   if (tab === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
@@ -1334,7 +1382,7 @@ function dnTulisHint(pesan, galat) {
 function mulaiUbahDocNum(id) {
   const r = (docNumHistoryRows || []).find((x) => String(x.id) === String(id));
   if (!r) return;
-  if (!bolehUbahDocNum()) {
+  if (!bolehUbahDocNum(docNumTabKeyFor(r.doc_type || docNumActiveTab))) {
     showToast(t("m.akun.viewer.tidak.bisa.mengubah.data"), "danger", { judul: tt("Tidak diizinkan", "Not allowed") });
     return;
   }
@@ -1413,11 +1461,14 @@ function mulaiUbahDocNum(id) {
     // Dokumen dulu: pengelompokan baris rincian bergantung padanya
     if (typeof setFundDokumen === "function") setFundDokumen((r.payload && r.payload.dokumen) || []);
     setFundLines((r.payload && r.payload.lines) || []);
+    if (typeof setFundTotalManual === "function") setFundTotalManual((r.payload && r.payload.totalManual) || {});
   }
   if (typeof setSuratBarang === "function" && r.doc_type === "letter") {
     setSuratBarang((r.payload && r.payload.itemsFungsi) || []);
     suratPerbaruiLabelAngkut(panel);
   }
+  // PO & PR: daftar barang PR & PO, bagian PR terbuka, Doc No bawaan bila kosong
+  if (typeof poMuatPayload === "function" && r.doc_type === "po") poMuatPayload(r.payload);
 
   /* Dijalankan SESUDAH semuanya terisi: isian mana yang tampil
      bergantung pada Jenis Pengeluaran yang baru saja dimuat. Dipanggil
@@ -1876,7 +1927,7 @@ async function simpanUbahDocNum() {
       if (terbaru[k] != null && terbaru[k] !== "") payload[k] = terbaru[k];
     });
     if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
-    const { error } = await supabaseClient
+    let kueriUbah = supabaseClient
       .from("document_numbers")
       .update({
         doc_date: form.docDate || null,
@@ -1885,6 +1936,13 @@ async function simpanUbahDocNum() {
         payload,
       })
       .eq("id", id);
+    /* Purchasing / Engineering: RLS yang belum mengizinkan (migration-po-pr.sql
+       belum dijalankan) MENOLAK DIAM-DIAM -- tidak ada galat, nol baris
+       berubah. Barisnya diminta kembali supaya penolakan itu terbaca. */
+    const cekBaris = typeKey === "po" && !canEdit();
+    if (cekBaris) kueriUbah = kueriUbah.select("id");
+    const { data: barisUbah, error } = await kueriUbah;
+    if (!error && cekBaris && !(Array.isArray(barisUbah) && barisUbah.length)) throw dnGalatMigrasiPo({ code: "42501" }, typeKey);
     if (error && typeKey === "fund" && dnTolakanTagihanGanda(error)) {
       // Tagihan yang sama baru saja diajukan orang lain
       const ganda = await dnCariTagihanGanda(form, id);
@@ -1918,24 +1976,47 @@ async function simpanUbahDocNum() {
   showToast(t("m.isian.nomor.berhasil.diperbarui"), "success");
 }
 
+/* Purchasing / Engineering di database yang belum menjalankan
+   migration-po-pr.sql: fungsi nomornya belum ada, atau tulisannya
+   ditolak RLS. Pesannya menyebut berkas migrasinya (ui/feedback.js
+   menampilkannya sebagai "Database perlu diperbarui"). */
+function dnGalatMigrasiPo(err, typeKey) {
+  if (typeKey !== "po" || (typeof canEdit === "function" && canEdit())) return err;
+  const pesan = String((err && err.message) || "");
+  const kode = String((err && err.code) || "");
+  if (/next_po_number|row-level security|permission denied|42501|PGRST202|42883/i.test(pesan + " " + kode)) {
+    return new Error(tt("database belum mengizinkan Purchasing / Engineering — jalankan migration-po-pr.sql di Supabase.",
+      "the database does not allow Purchasing / Engineering yet — run migration-po-pr.sql in Supabase."));
+  }
+  return err;
+}
+
 /* ---------- penerbitan nomor ---------- */
 
-async function submitDocNumRequest() {
-  if (docNumBusy) return;
+/* Hasil (dipakai Split Invoice, fund-invoice-review.js): { nomor } bila
+   terbit; { galat } / { ganda } bila tidak. `opsi.review` = dipanggil dari
+   pop-up review: kesalahan & tagihan ganda TIDAK ditampilkan di sini (pop-up
+   itu yang menyebutnya), kursor tidak dipindah ke tombol Salin di balik
+   pop-up, dan tanpa toast berhasil. */
+async function submitDocNumRequest(opsi) {
+  const review = !!(opsi && opsi.review);
+  if (docNumBusy) return { galat: tt("Masih menyimpan pengajuan sebelumnya.", "Still saving the previous request.") };
   // Form yang sedang dipakai memperbaiki tidak boleh menerbitkan nomor baru.
   if (dnEditingId) {
+    if (review) return { galat: tt("Form sedang dipakai mengubah pengajuan lain.", "The form is being used to edit another request.") };
     await simpanUbahDocNum();
-    return;
+    return null;
   }
   const typeKey = docNumActiveTab;
   /* Bukan `t`: nama itu menutupi fungsi terjemahan global, dan setiap
      t("...") di bawah -- termasuk pesan "Nomor ... berhasil diterbitkan"
      -- melempar TypeError. */
   const jenis = resolveDocNumType(typeKey);
-  if (!jenis.key) return;
+  if (!jenis.key) return { galat: tt("Jenis dokumen tidak dikenal.", "Unknown document type.") };
 
   const errors = validateDocNumForm(typeKey);
   const hint = $("#docNumHint");
+  if (errors.length && review) return { galat: errors[0] };
   if (errors.length) {
     hint.textContent = errors[0];
     hint.classList.add("docnum-hint--error");
@@ -1947,8 +2028,10 @@ async function submitDocNumRequest() {
     );
     // Kursor dibawa ke kotak bertanda merah yang pertama, siap dibetulkan
     const salah = docNumPanelEl(typeKey) && docNumPanelEl(typeKey).querySelector(".is-invalid");
+    // PO & PR: kotaknya bisa di bagian (PR / PO) yang sedang tersembunyi
+    if (salah && typeof poTampilkanBagianDari === "function") poTampilkanBagianDari(salah);
     if (salah) tandaiIsianKurang(salah);
-    return;
+    return { galat: errors[0] };
   }
   hint.textContent = "";
   hint.classList.remove("docnum-hint--error");
@@ -1971,8 +2054,8 @@ async function submitDocNumRequest() {
     if (typeKey === "fund") {
       const ganda = await dnCariTagihanGanda(form);
       if (ganda) {
-        dnTolakTagihanGanda(ganda);
-        return;
+        if (!review) dnTolakTagihanGanda(ganda);
+        return { ganda };
       }
     }
 
@@ -1998,16 +2081,22 @@ async function submitDocNumRequest() {
        banyak DN_COBA_NOMOR kali. */
     let baris = null;
     for (let coba = 1; ; coba++) {
+      /* Purchasing & Engineering menerbitkan nomor PO lewat fungsi
+         sendiri (next_po_number, migration-po-pr.sql): next_document_number
+         khusus EXIM. EXIM tetap lewat jalur lama. */
+      const lewatPo = typeKey === "po" && !canEdit();
       const { data: hasil, error: errSeq } = await supabaseClient.rpc(
-        "next_document_number",
-        {
-          p_doc_type: jenis.key,
-          p_period_key: periodKey,
-          p_template: template,
-          p_pad: pad,
-        },
+        lewatPo ? "next_po_number" : "next_document_number",
+        lewatPo
+          ? { p_period_key: periodKey, p_template: template, p_pad: pad }
+          : {
+              p_doc_type: jenis.key,
+              p_period_key: periodKey,
+              p_template: template,
+              p_pad: pad,
+            },
       );
-      if (errSeq) throw errSeq;
+      if (errSeq) throw dnGalatMigrasiPo(errSeq, typeKey);
       baris = Array.isArray(hasil) ? hasil[0] : hasil;
       if (!baris || !baris.out_number) {
         throw new Error(t("s.database.tidak.mengembalikan.nomor"));
@@ -2029,10 +2118,10 @@ async function submitDocNumRequest() {
         // Tagihan yang sama baru saja diajukan orang lain
         const ganda = await dnCariTagihanGanda(form);
         if (!ganda) throw dnGalatInvoiceSama(errInsert, form);
-        dnTolakTagihanGanda(ganda);
-        return;
+        if (!review) dnTolakTagihanGanda(ganda);
+        return { ganda };
       }
-      if (!dnTolakanNomorKembar(errInsert)) throw errInsert;
+      if (!dnTolakanNomorKembar(errInsert)) throw dnGalatMigrasiPo(errInsert, typeKey);
       if (coba >= DN_COBA_NOMOR) {
         throw new Error(tt("nomor-nomor urut berikutnya sudah terpakai — periksa Atur Nomor Urut.",
           "the next sequence numbers are already taken — check Set Sequence Number."));
@@ -2048,18 +2137,18 @@ async function submitDocNumRequest() {
     }
     /* Langkah berikutnya hampir selalu menyalin nomornya: tombol Salin
        langsung difokus -- Enter menyalin. */
-    fokuskan($("#btnCopyDocNum"));
+    if (!review) fokuskan($("#btnCopyDocNum"));
     resetDocNumForm(typeKey, { keepIdentity: true });
     docNumPage = 1;
     await Promise.all([refreshDocNumPreview(typeKey), renderDocNumHistory()]);
-    showToast(t("x.nomor.berhasil.diterbitkan", { nomor: baris.out_number }), "success");
+    if (!review) showToast(t("x.nomor.berhasil.diterbitkan", { nomor: baris.out_number }), "success");
+    return { nomor: baris.out_number, payload };
   } catch (err) {
     console.error(err);
     // Nomor urut mungkin SUDAH terpakai walau penyimpanan gagal — itu disengaja
-    showToast(
-      t("w.gagal.menerbitkan.nomor", { err: err.message || t("s.kesalahan.tidak.diketahui") }),
-      "danger",
-    );
+    const pesan = t("w.gagal.menerbitkan.nomor", { err: err.message || t("s.kesalahan.tidak.diketahui") });
+    if (!review) showToast(pesan, "danger");
+    return { galat: pesan };
   } finally {
     docNumBusy = false;
     btn.disabled = false;
@@ -2405,6 +2494,7 @@ function resetDocNumForm(typeKey, opts) {
   if (typeof setFundLines === "function" && typeKey === "fund") {
     if (typeof setFundDokumen === "function") setFundDokumen([]);
     setFundLines([]);
+    if (typeof setFundTotalManual === "function") setFundTotalManual({});
   }
   if (typeof setSuratBarang === "function" && typeKey === "letter") {
     setSuratBarang([]);
@@ -2413,6 +2503,8 @@ function resetDocNumForm(typeKey, opts) {
   }
   // Pengajuan dana baru: Doc No bawaan bulan berjalan, mis. Distribution-<YYMM>-0000 (fund-docno.js)
   if (typeKey === "fund" && typeof fundIsiDocNoBawaan === "function") fundIsiDocNoBawaan(panel, true);
+  // PO & PR: daftar barang kosong, bagian PR, Doc No DST-<YYMM>-0000 (po-form.js)
+  if (typeKey === "po" && typeof poReset === "function") poReset();
   syncDocNumConditional(panel);
   // Pihak invoice: tanda "= Penjual" & keterangan Skema Invoice mengikuti isian bawaan
   if (typeKey === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan();
@@ -2472,7 +2564,7 @@ document.addEventListener("input", (e) => {
 /* Kolom No (nomor baris, berlanjut antarhalaman) di riwayat Invoice &
    Pengajuan Dana -- daftar yang paling sering dicocokkan baris demi
    baris dengan rekap di luar aplikasi. */
-const DN_TAB_KOLOM_NO = ["invoice", "fund"];
+const DN_TAB_KOLOM_NO = ["invoice", "fund", "po"];
 const dnPakaiKolomNo = (tab) => DN_TAB_KOLOM_NO.indexOf(tab) >= 0;
 
 /* Jatuh tempo: tagihan yang BELUM lunas dan sudah lewat jatuh temponya
@@ -2519,6 +2611,30 @@ const DN_KOLOM_DANA = [
   { kelas: "dn-col-pemohon", judul: () => "Drafter",
     isi: (r) => `${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}` },
   { kelas: "dn-col-bayar", judul: () => tt("Status Bayar", "Payment Status"), isi: (r) => dnTombolBayar(r) },
+];
+
+/* KOLOM RIWAYAT PO & PR: nomor & tanggal PO, supplier, PR asalnya (No.
+   Pembelian, barang, departemen peminta), nilai PO, Doc No Groupware --
+   "belum" selama nomor Groupware-nya belum diisi -- dan pembuatnya. */
+function dnBarangPo(p) {
+  const daftar = p.prItems && p.prItems.length ? p.prItems.map((b) => b.nama) : (p.poItems || []).map((b) => b.produk);
+  const utama = p.prProduk || daftar.find(Boolean) || "";
+  if (!utama) return "\u2014";
+  const n = daftar.length;
+  return `${escapeHtml(utama)}${n > 1 ? ` <span class="dn-dept">${escapeHtml(tt(`${n} barang`, `${n} items`))}</span>` : ""}`;
+}
+const DN_KOLOM_PO = [
+  { kelas: "dn-col-no", judul: () => "No", isi: (r, p, x) => String(x.urut) },
+  { kelas: "", kelasSel: "dn-num", judul: () => tt("Nomor PO", "PO Number"), isi: (r) => escapeHtml(r.doc_number) },
+  { kelas: "dn-col-tgl", judul: () => tt("Tanggal PO", "PO Date"), isi: (r) => escapeHtml(fmtDate(r.doc_date)) },
+  { kelas: "dn-col-vendor", judul: () => "Supplier", isi: (r, p) => escapeHtml(String(p.poPenjualNama || p.prPemasok || "\u2014").slice(0, 60)) },
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => tt("No. PR", "PR No."), isi: (r, p) => escapeHtml(p.prNo || "\u2014") },
+  { kelas: "dn-col-ket", judul: () => tt("Barang", "Items"), atribut: (r, p) => ` title="${escapeAttr(p.prTujuan || "")}"`, isi: (r, p) => `<div class="dn-ket-isi">${dnBarangPo(p)}</div>` },
+  { kelas: "dn-col-nilai", judul: () => tt("Nilai", "Value"), isi: (r, p) => escapeHtml(dnTeksNilaiPo(p) || "\u2014") },
+  { kelas: "dn-col-billing", kelasSel: "dn-col-billing dn-num", judul: () => "Doc No",
+    isi: (r, p) => (p.docNo ? escapeHtml(p.docNo) : `<span class="dn-po-belum">${escapeHtml(tt("belum", "pending"))}</span>`) },
+  { kelas: "dn-col-pemohon", judul: () => "Drafter",
+    isi: (r, p) => `${escapeHtml(r.requester || "—")}${r.department ? ` <span class="dn-dept">${escapeHtml(r.department)}</span>` : ""}${p.prDepartemen ? ` <span class="dn-dept">PR: ${escapeHtml(p.prDepartemen)}</span>` : ""}` },
 ];
 
 /* Halaman & jumlah baris riwayat. Riwayat nomor tumbuh terus tiap hari */
@@ -2588,7 +2704,7 @@ async function renderDocNumHistory(opsi) {
     };
     let data;
     let count;
-    if ((jenis.key === "fund" || jenis.key === "invoice") && dnAngkaCari(docNumCari).length) {
+    if ((jenis.key === "fund" || jenis.key === "invoice" || jenis.key === "po") && dnAngkaCari(docNumCari).length) {
       /* Nominal: nilainya dihitung di aplikasi -- seluruh riwayat (saringan
          lain tetap berlaku) dicocokkan di sini, lalu dibagi per halaman. */
       const cocok = (await dnAmbilSemuaRiwayat(kueriDasar)).filter((r) => dnCocokCari(r, jenis.key, docNumCari));
@@ -2640,13 +2756,15 @@ async function renderDocNumHistory(opsi) {
     }
 
     const dana = jenis.key === "fund";
+    // Jenis bersusunan kolom sendiri: Pengajuan Dana & PO / PR
+    const kolomKhusus = dana ? DN_KOLOM_DANA : jenis.key === "po" ? DN_KOLOM_PO : null;
     box.innerHTML = `
       <div class="docnum-history-wrap">
       <table class="docnum-table docnum-table--${escapeAttr(jenis.key)}${dana ? " docnum-table--dana" : ""}">
         <thead>
           <tr>${
-            dana
-              ? DN_KOLOM_DANA.map((k) => `<th class="${k.kelas}">${escapeHtml(k.judul())}</th>`).join("")
+            kolomKhusus
+              ? kolomKhusus.map((k) => `<th class="${k.kelas}">${escapeHtml(k.judul())}</th>`).join("")
               : `${dnPakaiKolomNo(jenis.key) ? `<th class="dn-col-no">No</th>` : ""}<th>${jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number")}</th><th class="dn-col-tgl">${tt("Tanggal", "Date")}</th><th class="dn-col-pemohon">${tt("Pemohon", "Requester")}</th><th>${escapeHtml(DN_KOLOM_UTAMA[jenis.key] || tt("Keterangan", "Notes"))}</th>${
                   /* Invoice: syarat & tujuan pengiriman yang dicetak di CIPL,
                      supaya tiap invoice bisa dikenali tanpa membuka Detail. */
@@ -2687,8 +2805,8 @@ async function renderDocNumHistory(opsi) {
               const urut = (docNumPage - 1) * docNumPageSize + idx + 1;
               return `<tr>
                 ${
-                  dana
-                    ? DN_KOLOM_DANA.map((k) => `<td class="${k.kelasSel || k.kelas}" data-label="${escapeAttr(k.judul())}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
+                  kolomKhusus
+                    ? kolomKhusus.map((k) => `<td class="${k.kelasSel || k.kelas}" data-label="${escapeAttr(k.judul())}"${k.atribut ? k.atribut(r, p) : ""}>${k.isi(r, p, { urut, ringkas })}</td>`).join("")
                     : `${dnPakaiKolomNo(jenis.key) ? `<td class="dn-col-no" data-label="No">${urut}</td>` : ""}
                 <td class="dn-num" data-label="${escapeAttr(jenis.key === "invoice" ? tt("No. Invoice", "Invoice No.") : tt("Nomor", "Number"))}">${escapeHtml(r.doc_number)}</td>
                 <!-- Kelas yang sama dengan kepalanya: menyembunyikan
@@ -2717,7 +2835,7 @@ async function renderDocNumHistory(opsi) {
                        urutannya tidak ikut diubah. Nomor yang sudah
                        terbit sudah beredar di dokumen lain; menariknya
                        kembali menciptakan dua kebenaran. */
-                    bolehUbahDocNum()
+                    bolehUbahDocNum(jenis.key)
                       ? `<button type="button" class="icon-btn" data-edit-num="${r.id}"
                                  title="${tt("Perbaiki isian", "Edit fields")}" aria-label="${tt("Perbaiki isian", "Edit fields")}"><i class="bi bi-pencil"></i></button>`
                       : ""
@@ -2745,6 +2863,13 @@ async function renderDocNumHistory(opsi) {
                                  title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>
                          <button type="button" class="icon-btn" data-copy-invsum="${r.id}"
                                  title="${tt("Salin untuk Invoice Summary (tempel di kolom INVOICE DATE)", "Copy for Invoice Summary (paste into the INVOICE DATE column)")}" aria-label="${tt("Salin untuk Invoice Summary", "Copy for Invoice Summary")}"><i class="bi bi-clipboard-data"></i></button>`
+                      : ""
+                  }
+                  ${
+                    /* PO & PR: satu tombol, pratinjaunya bisa berganti PO / PR (po-print.js) */
+                    jenis.key === "po" && typeof cetakPoPr === "function"
+                      ? `<button type="button" class="icon-btn" data-print-po="${r.id}"
+                                 title="${tt("Cetak PO / PR", "Print PO / PR")}" aria-label="${tt("Cetak PO / PR", "Print PO / PR")}"><i class="bi bi-printer"></i></button>`
                       : ""
                   }
                   ${
@@ -2872,6 +2997,11 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
     cetakFundRequest(cetakFund.dataset.printFund);
     return;
   }
+  const cetakPo = e.target.closest("[data-print-po]");
+  if (cetakPo) {
+    cetakPoPr(cetakPo.dataset.printPo);
+    return;
+  }
 
   const cetakSurat = e.target.closest("[data-print-surat]");
   if (cetakSurat) {
@@ -2937,9 +3067,9 @@ function showDocNumTab(key) {
   const panels = document.querySelectorAll("[data-docnum-panel]");
   if (!tabs.length) return;
 
-  // Kalau kunci tidak dikenal (mis
+  // Kalau kunci tidak dikenal (mis. tab lama yang sudah dihapus) -- atau tertutup bagi peran ini (dnTabBoleh)
   const known = Array.from(tabs).some((tab) => tab.dataset.docnumTab === key);
-  const active = known ? key : DOCNUM_DEFAULT_TAB;
+  const active = known && dnTabBoleh(key) ? key : dnTabBawaan();
   /* Berpindah jenis dokumen menutup pop-up Ubah Isian yang masih
      terbuka (tanpa menyimpan) -- membiarkan dnEditingId hidup membuat
      simpanan berikutnya diam-diam menimpa nomor yang tadi dibuka. */
@@ -2993,6 +3123,10 @@ function showDocNumTab(key) {
      bahasa). Tanpa disegarkan saat panel dibuka, form surat yang baru
      tampil dengan teks HTML-nya -- berbahasa Indonesia di mode Inggris. */
   if (active === "letter" && typeof suratPerbaruiLabelAngkut === "function") suratPerbaruiLabelAngkut(panel);
+  // PO & PR: Tanggal Permintaan PR hari ini & Doc No bawaan bulan Tanggal PO
+  if (active === "po" && typeof poSaatDibuka === "function") poSaatDibuka();
+  // Pilihan Drafter / Pemohon dari akun ber-hak ubah (pemohon-akun.js; dibaca sekali)
+  if (typeof pemohonMuat === "function") pemohonMuat();
 
   docNumPage = 1;
   refreshDocNumPreview(active);
@@ -3038,11 +3172,11 @@ document.querySelectorAll("[data-dn-subtype]").forEach((el) => {
 });
 
 $("#btnDocNumSubmit")?.addEventListener("click", () => {
-  if (!requireEdit()) return;
+  if (!dnPeriksaHakUbah(docNumActiveTab)) return;
   submitDocNumRequest();
 });
 $("#btnDnEditSimpan")?.addEventListener("click", () => {
-  if (!requireEdit()) return;
+  if (!dnPeriksaHakUbah(dnUbahSesi ? dnUbahSesi.tab : docNumActiveTab)) return;
   simpanUbahDocNum();
 });
 $("#btnDocNumReset")?.addEventListener("click", () => {
@@ -3078,6 +3212,7 @@ const DN_KOLOM_UTAMA = {
   get do() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get invoice() { return tt("Customer", "Customer"); },
   get fund() { return "Vendor"; },
+  get po() { return "Supplier"; },
   get letter() { return tt("Perihal", "Subject"); },
 };
 

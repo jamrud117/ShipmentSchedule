@@ -23,6 +23,13 @@ const authState = { user: null, profile: null, siap: false };
                   Pengajuan Dana sudah / belum dibayar (Paid / Unpaid,
                   `tandaiBayar`). Selebihnya di Nomor Dokumen ia sama
                   dengan marketing.
+     purchasing / engineering
+               -- hanya MELIHAT Ringkasan, Jadwal, HS Code & Masterlist; di
+                  Nomor Dokumen HANYA tab PO & PR yang terbuka, dan di sana
+                  mereka MEMBUAT & MENGUBAH PO / PR (`poPr`, bolehPoPr).
+                  Menghapus nomor & Atur Nomor Urut tetap khusus EXIM. Di
+                  database dijaga migration-po-pr.sql (RLS doc_type 'po' &
+                  fungsi next_po_number).
      viewer    -- hanya melihat; Nomor Dokumen tidak terbuka sama sekali --
                   kecuali SATU isian jadwal: Tanggal Dibutuhkan di Pabrik
                   (Import, `aturTanggalPabrik`), dari panel Detail. Orang
@@ -62,6 +69,20 @@ const PERAN = {
     get ket() {
       return tt("lihat saja: Jadwal, No. Dokumen & Masterlist + tandai Paid/Unpaid", "view only: Schedule, Doc. Number & Masterlist + mark Paid/Unpaid");
     },
+  },
+  purchasing: {
+    label: "Purchasing",
+    ubah: false,
+    poPr: true,
+    halaman: ["overview", "schedule", "docnum", "hscode", "masterlist"],
+    get ket() { return tt("lihat saja + buat & ubah PO/PR", "view only + create & edit PO/PR"); },
+  },
+  engineering: {
+    label: "Engineering",
+    ubah: false,
+    poPr: true,
+    halaman: ["overview", "schedule", "docnum", "hscode", "masterlist"],
+    get ket() { return tt("lihat saja + buat & ubah PO/PR", "view only + create & edit PO/PR"); },
   },
   viewer: {
     label: "Viewer",
@@ -114,6 +135,17 @@ function bolehTandaiBayar() {
 function bolehAturTanggalPabrik() {
   const a = aturanPeran();
   return !!(a.ubah || a.aturTanggalPabrik);
+}
+/* PO & PR (tab Nomor Dokumen) boleh diajukan & diubah: EXIM, Purchasing,
+   Engineering. hanyaPoPr = peran yang di Nomor Dokumen HANYA membuka tab
+   itu (Purchasing & Engineering) -- tab lain disembunyikan. */
+function bolehPoPr() {
+  const a = aturanPeran();
+  return !!(a.ubah || a.poPr);
+}
+function hanyaPoPr() {
+  const a = aturanPeran();
+  return !!(a.poPr && !a.ubah);
 }
 /* Boleh MEMBUKA sebuah halaman? (membuka, bukan mengubah) */
 function bolehBuka(halaman) {
@@ -321,6 +353,9 @@ function applyPermissions() {
   /* Peran hanya-baca selain viewer membawa penandanya sendiri
      (is-marketing, is-finance) di samping is-viewer. */
   PERAN_BERPENANDA.forEach((p) => document.body.classList.toggle("is-" + p, peran === p));
+  /* Purchasing & Engineering: hanya tab PO & PR di Nomor Dokumen -- dan
+     form + tombol Ajukan-nya tetap terbuka walau .is-viewer (auth.css). */
+  document.body.classList.toggle("hanya-popr", hanyaPoPr());
   /* Halaman yang TERTUTUP untuk peran ini: body.tutup-<halaman>
      menyembunyikan tautannya (auth.css). Dari tabel PERAN, jadi peran
      baru tidak butuh aturan CSS baru. */
@@ -355,11 +390,14 @@ function lockInputs() {
      membuka halaman itu untuk membaca, dan kotak cari riwayat serta
      penyaring tab Summary justru alat membacanya; dulu seluruh
      #viewDocNum dikunci, dan kotak cari ikut mati. */
+  /* Panel PO & PR tetap terbuka bagi yang boleh mengisinya (Purchasing,
+     Engineering -- bolehPoPr). */
+  const panel = bolehPoPr() ? '[data-docnum-panel]:not([data-docnum-panel="po"])' : "[data-docnum-panel]";
   document
     .querySelectorAll(
       "#cardContainer input, #cardContainer select, #cardContainer textarea," +
-        " #viewDocNum [data-docnum-panel] input, #viewDocNum [data-docnum-panel] select," +
-        " #viewDocNum [data-docnum-panel] textarea, #viewDocNum .counter-box input",
+        ` #viewDocNum ${panel} input, #viewDocNum ${panel} select,` +
+        ` #viewDocNum ${panel} textarea, #viewDocNum .counter-box input`,
     )
     .forEach((el) => {
       if (el.dataset.viewerLocked) return;

@@ -144,7 +144,8 @@ function frTotal(baris) {
    tertulis di surat pengajuannya sendiri. */
 function frTotalPengajuan(p) {
   const d = p || {};
-  if (Array.isArray(d.lines) && d.lines.length) return fundLineTotals(d.lines, d.currency, d.payee, d.dokumen || []).grandTotal;
+  // TOTAL manual (fundSesuaikanManual) ikut: angka Terbilang = GRAND TOTAL surat = yang dibayar
+  if (Array.isArray(d.lines) && d.lines.length) return fundTotalsPengajuan(d).grandTotal;
   return frTotal(frBarisRincian(d));
 }
 
@@ -457,7 +458,7 @@ function frTabelRinci(p, mataUang) {
   const nilaiBaris = fundLineValues(daftar);
   const ppnBaris = fundLinePpnDaftar(daftar, nilaiBaris, mataUang, p.payee);
   const dokumen = (Array.isArray(p.dokumen) ? p.dokumen : []).filter((d) => d && d.id);
-  const r = fundLineTotals(daftar, mataUang, p.payee, dokumen);
+  const r = fundLineTotals(daftar, mataUang, p.payee, dokumen, p.totalManual);
   const KOLOM = 6;
   const uang = (v) => frSelUang(v, mataUang);
   /* TINGKAT JUMLAH, dari kecil ke besar -- supaya tidak ada lima "TOTAL"

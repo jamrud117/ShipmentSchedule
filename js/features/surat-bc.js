@@ -159,11 +159,17 @@ function suratPerihalBawaan(jenis) {
   return "";
 }
 
+/* Ejaan resmi penanda tangan -- arsip lama yang masih "Shin Nara" ikut tampil "Shin Na Ra" */
+function suratNamaPenanda(nama) {
+  const isi = String(nama || "").trim();
+  return /^shin\s*nara$/i.test(isi) ? "Shin Na Ra" : isi;
+}
+
 /* Penanda tangan & jabatan bawaan surat bea cukai -- hanya kalau kosong */
 function suratBawaanPenandaTangan(panel) {
   const nama = panel.querySelector('[data-dn="signer"]');
   const jabatan = panel.querySelector('[data-dn="signerTitle"]');
-  if (nama && !nama.value.trim()) nama.value = "Shin Nara";
+  if (nama) nama.value = suratNamaPenanda(nama.value) || "Shin Na Ra";
   if (jabatan && !jabatan.value.trim()) jabatan.value = "Chief Marketing Officer";
   const kepada = panel.querySelector('[data-dn="recipient"]');
   if (kepada && !kepada.value.trim()) kepada.value = "Kantor Pelayanan Utama Bea dan Cukai Tipe C Soekarno-Hatta";
@@ -304,7 +310,7 @@ function suratTtdHtml(p, tanggal) {
     <div>Hormat kami,</div>
     <!-- Ruang tanda tangan, cap & meterai -- dibiarkan kosong -->
     <div class="ttd-ruang"></div>
-    <div class="ttd-nama">${escapeHtml(String(p.signer || "").toUpperCase())}</div>
+    <div class="ttd-nama">${escapeHtml(suratNamaPenanda(p.signer).toUpperCase())}</div>
     <div class="ttd-jabatan">${escapeHtml(p.signerTitle || "")}</div>
   </div>`;
 }
@@ -331,7 +337,7 @@ function suratBcHtml(row) {
     <div class="judul">SURAT PERNYATAAN TANPA BUKTI BAYAR</div>
     <div class="nomor">Nomor : ${escapeHtml(nomor)}</div>
     <p>Yang bertanda tangan di bawah ini :</p>
-    ${suratDaftarHtml([["Nama", String(p.signer || "").toUpperCase()], ["Jabatan", String(p.signerTitle || "").toUpperCase()],
+    ${suratDaftarHtml([["Nama", suratNamaPenanda(p.signer).toUpperCase()], ["Jabatan", String(p.signerTitle || "").toUpperCase()],
       ["Nama Perusahaan", SURAT_BC_PERUSAHAAN.nama], ["Alamat", SURAT_BC_PERUSAHAAN.alamat.toUpperCase()]])}
     <p>Dengan ini menyatakan bahwa barang kiriman kami dengan data sebagai berikut :</p>
     ${suratDaftarHtml([["Nomor Aju", p.noAju], ["MAWB / HAWB", p.awb], ["Nama Barang", p.namaBarang], ["Koli / Berat", p.koliBerat],

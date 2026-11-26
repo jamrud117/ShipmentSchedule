@@ -405,7 +405,11 @@ const fundDokBaris = (b, idSah) => {
   return dok && (!idSah || idSah.has(dok)) ? dok : "";
 };
 
-function fundLineTotals(lines, mata, payee, dokumen) {
+/* `manual` (opsional) = TOTAL yang disesuaikan pengguna per dokumen
+   (payload.totalManual, lihat fundSesuaikanManual): grandTotal dokumen itu
+   memakai angka manualnya selama rinciannya belum berubah. Hasilnya juga
+   membawa grandTotalHitung (hitungan rumus) dan `manual` (ada penyesuaian). */
+function fundLineTotals(lines, mata, payee, dokumen, manual) {
   const daftar = normalisasiBarisDana(lines);
   const nilai = fundLineValues(daftar);
   const ppnBaris = fundLinePpnDaftar(daftar, nilai, mata, payee);
@@ -419,7 +423,8 @@ function fundLineTotals(lines, mata, payee, dokumen) {
   });
   if (!kelompok.get("").length && kelompok.size > 1) kelompok.delete("");
   const urutan = [...kelompok.keys()].sort((a, b) => (a === "" ? -1 : b === "" ? 1 : 0) || (daftarDok.indexOf(a) - daftarDok.indexOf(b)));
-  const perDokumen = urutan.map((id) => Object.assign({ id }, fundTotalKelompok(daftar, nilai, ppnBaris, kelompok.get(id), mata)));
+  const perSen = fundPpnSen(mata, payee);
+  const perDokumen = urutan.map((id) => fundSesuaikanManual(Object.assign({ id }, fundTotalKelompok(daftar, nilai, ppnBaris, kelompok.get(id), mata, perSen)), manual, mata));
   if (perDokumen.length === 1) {
     const { id, ...satu } = perDokumen[0];
     return Object.assign(satu, { perDokumen });
@@ -435,15 +440,59 @@ function fundLineTotals(lines, mata, payee, dokumen) {
     dppPph: rapi(jumlah("dppPph")),
     pph: jumlah("pph"),
     grandTotal: rapi(jumlah("grandTotal")),
+    grandTotalHitung: rapi(jumlah("grandTotalHitung")),
+    manual: perDokumen.some((d) => d.manual),
     perDokumen,
   };
 }
+
+/* Total seluruh pengajuan dari payload-nya -- rincian, mata uang, vendor,
+   dokumen tambahan DAN total manualnya. Pemakai payload (surat cetak, detail,
+   ekspor, laporan, biaya kiriman) memanggil ini supaya angka TOTAL-nya sama
+   di mana-mana. */
+function fundTotalsPengajuan(p) {
+  const d = p || {};
+  return fundLineTotals(d.lines, d.currency, d.payee, d.dokumen || [], d.totalManual);
+}
+
+/* ==================================================================
+   TOTAL MANUAL (GRAND TOTAL YANG BISA DIUBAH)
+
+   TOTAL hitungan form kadang berselisih Rp 1 dari TOTAL invoice / hitungan
+   finance: vendor membulatkan PPN & PPH 23 per baris, form membulatkan
+   sekali dari hitungan tepatnya (lihat FUND_PPH23_RATE). Pengguna boleh
+   menyesuaikan TOTAL tiap dokumen -- pengajuan satu dokumen: GRAND TOTAL-nya.
+   Disimpan di payload.totalManual:
+     { [id dokumen; "" = dokumen utama]: { nilai, hitung } }
+   `hitung` = TOTAL hitungan rumus SAAT disesuaikan. Begitu rinciannya
+   berubah (hitungan baru != hitung) penyesuaian itu tidak berlaku lagi:
+   angka manual untuk rincian lama tidak pernah diam-diam terbawa ke rincian
+   yang sudah lain. PPN & PPH 23 tetap hitungan rumus -- yang disesuaikan
+   hanya jumlah yang dibayarkan (Terbilang surat, ekspor, laporan).
+================================================================== */
+function fundSesuaikanManual(d, manual, mata) {
+  d.grandTotalHitung = d.grandTotal;
+  d.manual = false;
+  const m = manual && typeof manual === "object" ? manual[d.id] : null;
+  if (!m || typeof m !== "object") return d;
+  const nilai = Number(m.nilai);
+  if (!isFinite(nilai) || nilai < 0 || fundSen(m.hitung) !== fundSen(d.grandTotal) || fundSen(nilai) === fundSen(d.grandTotal)) return d;
+  d.grandTotal = fundRupiahPenuh(mata) ? Math.round(nilai) : fundBulatSen(nilai);
+  d.manual = true;
+  return d;
+}
+
+/* Pengajuan ini memakai TOTAL manual yang masih berlaku? */
+const fundTotalAdaManual = (p) => {
+  const d = p || {};
+  return !!(Array.isArray(d.lines) && d.lines.length && d.totalManual && fundTotalsPengajuan(d).perDokumen.some((x) => x.manual));
+};
 
 /* Total SATU kelompok baris (seluruh pengajuan, atau satu dokumennya):
    `indeks` = nomor baris di `daftar` yang masuk kelompok ini. Nilai &
    PPN per baris dihitung sekali untuk seluruh tabel (diskon persen
    memakai pos di atasnya), lalu dijumlah di sini. */
-function fundTotalKelompok(daftar, nilai, ppnBaris, indeks, mata) {
+function fundTotalKelompok(daftar, nilai, ppnBaris, indeks, mata, ppnBersen) {
   let totalNilai = 0;
   let totalDiskon = 0;
   let totalPpnSen = 0; // dijumlah dalam sen: tanpa derau pecahan biner
@@ -470,13 +519,19 @@ function fundTotalKelompok(daftar, nilai, ppnBaris, indeks, mata) {
   const pph = Math.max(0, Math.round((dppPph * FUND_PPH23_RATE) / 100));
   let grandTotal;
   if (rupiah) {
-    /* TOTAL dari hitungan TEPAT, dibulatkan ke atas sekali (FUND_PPH23_RATE).
-       Total Nilai sudah bilangan bulat, jadi yang dibulatkan cukup PPN -
-       PPH 23 -- keduanya dalam 1/10.000 rupiah, bilangan bulat tanpa derau
-       pecahan biner: PPN (sen x 100), PPH 23 (dasar dalam sen x tarif). */
+    /* TOTAL dari hitungan TEPAT, dibulatkan ke atas sekali (FUND_PPH23_RATE),
+       dalam 1/10.000 rupiah -- bilangan bulat tanpa derau pecahan biner: nilai &
+       PPN (sen x 100), PPH 23 (dasar dalam sen x tarif).
+       Nilai baris yang bersen (Qty x Rate tepat dari invoice, mis. 312,2 kg x
+       18.138 = 5.662.683,60 tercetak 5.662.684) ikut TEPAT: WIDE menjumlah TOTAL
+       dari nilai tepatnya (IN-WL2611-00037: 9.996.264,6 + 103.540 - 188.253,67 =
+       9.911.550,93 -> 9.911.551). Vendor ber-PPN bersen (PRIME) menjumlah dari
+       Total Nilai yang sudah dibulatkan (23.592.860,74 -> 23.592.861). Nilai bulat:
+       keduanya sama. */
     const satuan = FUND_SEN * 100;
     const pphTepat = Math.max(0, fundSen(dppPph) * FUND_PPH23_RATE);
-    grandTotal = totalNet + (Math.ceil((totalPpnSen * 100 - pphTepat) / satuan) || 0);
+    const netTepat = ppnBersen ? totalNet * satuan : (fundSen(totalNilai) - fundSen(totalDiskon)) * 100;
+    grandTotal = Math.ceil((netTepat + totalPpnSen * 100 - pphTepat) / satuan) || 0;
   } else {
     grandTotal = fundBulatSen(totalNet + totalPpn - pph);
   }
@@ -549,8 +604,8 @@ function fundDaftarAwb(teks) {
 function fundTotalKomponen(p) {
   const d = p || {};
   if (Array.isArray(d.lines) && d.lines.length) {
-    const jumlah = fundLineTotals(d.lines, d.currency, d.payee, d.dokumen || []);
-    return { dpp: jumlah.totalNet, ppn: jumlah.totalPpn, pph: jumlah.pph, dibayar: jumlah.grandTotal };
+    const jumlah = fundTotalsPengajuan(d);
+    return { dpp: jumlah.totalNet, ppn: jumlah.totalPpn, pph: jumlah.pph, dibayar: jumlah.grandTotal, manual: !!jumlah.manual };
   }
   const total = typeof frTotalPengajuan === "function" ? frTotalPengajuan(d) : 0;
   return { dpp: total, ppn: 0, pph: 0, dibayar: total };
@@ -644,12 +699,16 @@ function fundBagiPerAwb(p) {
      (fundLineTotals), jadi bisa 1 rupiah di atas DPP + PPN - PPH yang
      tertulis. Selisih itu diberikan ke bagian yang paling jauh di bawah
      bagian tepatnya, supaya jumlah bagian tetap TEPAT TOTAL pengajuan. */
-  let sisa = rupiah ? total.dibayar - dibayar.reduce((x, v) => x + v, 0) : 0;
+  /* TOTAL yang disesuaikan manual (fundSesuaikanManual) juga dibagi habis --
+     mata uang lain per sen. */
+  const satuanSisa = rupiah ? 1 : FUND_SEN;
+  let sisa = rupiah || total.manual ? Math.round(total.dibayar * satuanSisa) - dibayar.reduce((x, v) => x + Math.round(v * satuanSisa), 0) : 0;
   const kurang = mentah
     .map((m, i) => ({ i, v: m.dpp + m.ppn - m.pph - dibayar[i] }))
     .sort((x, y) => y.v - x.v || dibayar[y.i] - dibayar[x.i] || y.i - x.i);
-  for (let k = 0; sisa > 0; k++, sisa--) dibayar[kurang[k % kurang.length].i] += 1;
-  for (let k = 0; sisa < 0; k++, sisa++) dibayar[kurang[kurang.length - 1 - (k % kurang.length)].i] -= 1;
+  const geser = (i, arah) => (dibayar[i] = rupiah ? dibayar[i] + arah : fundBulatSen(dibayar[i] + arah / FUND_SEN));
+  for (let k = 0; sisa > 0; k++, sisa--) geser(kurang[k % kurang.length].i, 1);
+  for (let k = 0; sisa < 0; k++, sisa++) geser(kurang[kurang.length - 1 - (k % kurang.length)].i, -1);
   return awb.map((a, i) => ({
     kunci: a.kunci,
     teks: a.teks,
@@ -879,6 +938,8 @@ function barisRincianHtml(b, i, v, ppn, daftarAwb) {
    per dokumen ("Nomor Invoice : AI2602094" lalu pos-posnya).
 ================================================================== */
 let fundDokumen = [];
+// TOTAL yang disesuaikan pengguna per dokumen -- lihat fundSesuaikanManual
+let fundTotalManual = {};
 
 const fundDokJudul = (jenis) => (jenis === "debit" ? "Nomor Debit Note" : "Nomor Invoice");
 const fundDokNama = (jenis) => (jenis === "debit" ? "Debit Note" : "Invoice");
@@ -1022,15 +1083,97 @@ function gambarKakiRincian() {
   segarkanSatuanDana();
   const kaki = document.getElementById("fundLinesFoot");
   if (!kaki) return;
-  const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), fundDokumen);
+  const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), fundDokumen, fundTotalManual);
+  // Satu dokumen berisi pos: GRAND TOTAL-nya yang bisa diubah. Beberapa: TOTAL tiap dokumen (di bawah).
+  const satu = r.perDokumen.length === 1 ? r.perDokumen[0] : null;
   kaki.innerHTML = `
       <div class="fl-sum"><span>${escapeHtml(t("f.total.nilai"))}</span><b>${fundUangForm(r.totalNilai)}</b></div>
       ${r.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>${fundUangForm(r.totalDiskon, true)}</b></div>` : ""}
       <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>${fundUangForm(r.totalPpn)}</b></div>
       <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>${fundUangForm(r.pph, true)}</b></div>
-      <div class="fl-sum fl-sum--total"><span>GRAND TOTAL</span><b>${fundUangForm(r.grandTotal)}</b></div>
+      <div class="fl-sum fl-sum--total${satu ? " fl-sum--ubah" : ""}"><span>GRAND TOTAL</span>${satu ? kotakTotalHtml(satu, "GRAND TOTAL") : `<b${r.manual ? ` title="${escapeAttr(tt("Termasuk TOTAL dokumen yang disesuaikan manual", "Includes manually adjusted document totals"))}"` : ""}>${fundUangForm(r.grandTotal)}</b>`}</div>
+      ${satu ? catatanTotalHtml(satu) : ""}
       ${kakiPerDokumenHtml(r)}
       ${kakiPerAwbHtml()}`;
+}
+
+/* Kotak TOTAL yang bisa diubah (lihat fundSesuaikanManual): tampil seperti
+   angka tebal biasa dengan ikon pensil; diklik = kotak isian. Nilainya
+   disimpan saat Enter / pindah kotak (fundSimpanTotalManual). */
+function kotakTotalHtml(x, label) {
+  const satuan = fundSatuanForm();
+  const teks = formatNilai(x.grandTotal);
+  const judul = tt(`${label} bisa diubah bila berbeda pembulatan dengan invoice / hitungan finance`, `${label} can be changed when its rounding differs from the invoice / finance`);
+  // rapat tanpa spasi di tepi: teks kakinya tetap "GRAND TOTALRp. 1,234" seperti angka tebal dulu
+  return `<label class="fl-total-ubah${x.manual ? " is-manual" : ""}" title="${escapeAttr(judul)}"><span class="fl-total-satuan">${escapeHtml(satuan === "Rp" ? "Rp." : satuan)}</span> `
+    + `<input type="text" inputmode="decimal" autocomplete="off" class="fl-total-input" data-fl-total="${escapeAttr(x.id)}" size="${teks.length + 1}" value="${escapeAttr(teks)}" aria-label="${escapeAttr(tt(`${label} (bisa diubah)`, `${label} (editable)`))}">`
+    + `<i class="bi bi-pencil fl-total-pensil" aria-hidden="true"></i></label>`;
+}
+
+/* Keterangan di bawah TOTAL yang disesuaikan: hitungan rumusnya, selisihnya,
+   tombol Kembalikan. Penyesuaian yang tidak berlaku lagi karena rinciannya
+   berubah juga diberitahukan (lalu tidak ikut tersimpan). */
+function catatanTotalHtml(x) {
+  const id = escapeAttr(x.id);
+  if (x.manual) {
+    const selisih = fundBulatSen(x.grandTotal - x.grandTotalHitung);
+    const besar = Math.abs(selisih) > (fundRupiahPenuh(fundMataForm()) ? 100 : 1);
+    const teksSelisih = `${selisih > 0 ? "+" : "−"}${formatNilai(Math.abs(selisih))}`;
+    return `<div class="fl-total-catatan${besar ? " is-besar" : ""}" data-fl-total-catatan="${id}">
+        <span><i class="bi ${besar ? "bi-exclamation-triangle" : "bi-pencil-square"}" aria-hidden="true"></i> ${escapeHtml(tt(`Disesuaikan manual · hitungan sistem ${fundUangForm(x.grandTotalHitung)} (selisih ${teksSelisih})${besar ? " — selisihnya besar, periksa lagi" : ""}`,
+          `Adjusted manually · system total ${fundUangForm(x.grandTotalHitung)} (difference ${teksSelisih})${besar ? " — a large difference, double-check" : ""}`))}</span>
+        <button type="button" class="btn-quiet fl-total-kembali" data-fl-total-kembali="${id}"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> ${escapeHtml(tt("Kembalikan", "Reset"))}</button>
+      </div>`;
+  }
+  const lama = fundTotalManual[x.id];
+  if (lama && fundSen(lama.hitung) !== fundSen(x.grandTotalHitung)) {
+    return `<div class="fl-total-catatan is-lepas" data-fl-total-catatan="${id}">
+        <span><i class="bi bi-info-circle" aria-hidden="true"></i> ${escapeHtml(tt(`TOTAL manual ${fundUangForm(lama.nilai)} dilepas karena rinciannya berubah — ubah lagi bila perlu.`,
+          `Manual TOTAL ${fundUangForm(lama.nilai)} released because the lines changed — adjust again if needed.`))}</span>
+      </div>`;
+  }
+  return "";
+}
+
+/* Simpan isi kotak TOTAL dokumen `id`: kosong / sama dengan hitungan rumus =
+   penyesuaiannya dihapus. */
+function fundSimpanTotalManual(id, teks) {
+  const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), fundDokumen, null);
+  const x = r.perDokumen.find((d) => d.id === id);
+  if (!x) return;
+  // rumus ("=32950915-1") dihitung seperti di kotak Nilai; kosong = kembali ke hitungan
+  const v = adalahRumus(teks) ? hitungRumus(teks) : nilaiKotakDana(teks, false);
+  if (v === "") delete fundTotalManual[id];
+  else if (typeof v === "number" && isFinite(v) && v >= 0) {
+    const nilai = fundRupiahPenuh(fundMataForm()) ? Math.round(v) : fundBulatSen(v);
+    if (fundSen(nilai) === fundSen(x.grandTotal)) delete fundTotalManual[id];
+    else fundTotalManual[id] = { nilai, hitung: x.grandTotal };
+  }
+  gambarKakiRincian(); // isian yang tidak bisa dibaca kembali ke angka yang berlaku
+}
+
+/* TOTAL manual dari payload (memuat pengajuan / draf / impor) */
+function setFundTotalManual(m) {
+  fundTotalManual = {};
+  if (m && typeof m === "object") {
+    Object.keys(m).forEach((k) => {
+      const x = m[k];
+      if (x && typeof x === "object" && isFinite(Number(x.nilai)) && isFinite(Number(x.hitung))) fundTotalManual[k] = { nilai: Number(x.nilai), hitung: Number(x.hitung) };
+    });
+  }
+  gambarKakiRincian();
+}
+
+/* Untuk payload: hanya penyesuaian yang MASIH berlaku pada rincian `lines`
+   (null = tidak ada) */
+function fundTotalManualBersih(lines) {
+  if (!Object.keys(fundTotalManual).length) return null;
+  const r = fundLineTotals(lines, fundMataForm(), fundPayeeForm(), fundDokumen, fundTotalManual);
+  const hasil = {};
+  r.perDokumen.forEach((d) => {
+    if (d.manual) hasil[d.id] = { nilai: d.grandTotal, hitung: d.grandTotalHitung };
+  });
+  return Object.keys(hasil).length ? hasil : null;
 }
 
 /* TOTAL PER DOKUMEN di bawah TOTAL -- hanya kalau pengajuan memuat lebih
@@ -1054,7 +1197,8 @@ function kakiPerDokumenHtml(r) {
           ${x.totalDiskon ? `<div class="fl-sum fl-sum--minus"><span>${escapeHtml(tt("Total Diskon", "Total Discount"))}</span><b>${fundUangForm(x.totalDiskon, true)}</b></div>` : ""}
           <div class="fl-sum"><span>${escapeHtml(t("f.total.ppn"))}</span><b>${fundUangForm(x.totalPpn)}</b></div>
           <div class="fl-sum fl-sum--minus"><span>${escapeHtml(t("f.potongan.pph23"))}</span><b>${fundUangForm(x.pph, true)}</b></div>
-          <div class="fl-sum fl-sum--total"><span>TOTAL</span><b>${fundUangForm(x.grandTotal)}</b></div>
+          <div class="fl-sum fl-sum--total fl-sum--ubah"><span>TOTAL</span>${kotakTotalHtml(x, "TOTAL")}</div>
+          ${catatanTotalHtml(x)}
         </div>`;
     });
   if (blok.length < 2) return "";
@@ -1092,7 +1236,56 @@ function setFundLines(lines) {
 
 const kotakPersen = (b, f) => f === "amount" && barisDiskon(b) && b.discType === "pct";
 
+/* Kotak TOTAL di kaki tabel (kotakTotalHtml): koma ribuan saat diketik,
+   Enter = simpan, Esc = batal, pindah kotak = simpan. */
+const fundKakiEl = document.getElementById("fundLinesFoot");
+if (fundKakiEl) {
+  fundKakiEl.addEventListener("input", (e) => {
+    if (e.target.matches("[data-fl-total]") && !adalahRumus(e.target.value)) formatKotakRupiah(e.target);
+  });
+  fundKakiEl.addEventListener("keydown", (e) => {
+    if (!e.target.matches("[data-fl-total]")) return;
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      e.target.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation(); // pop-up ubah tidak ikut tertutup
+      e.target.dataset.flBatal = "1";
+      e.target.blur();
+    }
+  });
+  fundKakiEl.addEventListener("focusin", (e) => {
+    if (e.target.matches("[data-fl-total]")) e.target.select();
+  });
+  fundKakiEl.addEventListener("focusout", (e) => {
+    const el = e.target;
+    if (!el.matches("[data-fl-total]")) return;
+    if (el.dataset.flBatal) return gambarKakiRincian();
+    fundSimpanTotalManual(el.dataset.flTotal, el.value);
+  });
+  fundKakiEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-fl-total-kembali]");
+    if (!b) return;
+    delete fundTotalManual[b.dataset.flTotalKembali];
+    gambarKakiRincian();
+  });
+}
+
 const fundLinesBodyEl = document.getElementById("fundLinesBody");
+
+/* Pilihan sebuah baris berubah (tarif PPN, jenis diskon, BL/AWB): disimpan,
+   tabel digambar ulang, lalu -- BL/AWB & PPN -- tawaran menyamakannya ke baris
+   di bawahnya dalam invoice yang sama (fundSalinTawarkan). Dipanggil dari
+   "input" DAN "change": peramban memicu "input" lebih dulu, dan tabel yang
+   digambar ulang di sana membuat "change" jatuh ke <select> yang sudah lepas. */
+function fundPilihanBerubah(tr, f, nilai) {
+  const idx = Number(tr.dataset.fl);
+  if (!fundLines[idx]) return;
+  fundLines[idx][f] = nilai;
+  renderFundLines();
+  if (f === "awb" || f === "ppnRate") fundSalinTawarkan(idx, f);
+}
 if (fundLinesBodyEl) {
   fundLinesBodyEl.addEventListener("input", (e) => {
     const tr = e.target.closest("[data-fl]");
@@ -1108,10 +1301,10 @@ if (fundLinesBodyEl) {
         e.target.removeAttribute("title");
       }
     }
+    // Tarif / jenis diskon / BL/AWB: digambar ulang (fundPilihanBerubah). Selain itu
+    // hanya sel hitungan, supaya fokus tidak direbut dari kotak yang sedang diketik.
+    if (f === "ppnRate" || f === "discType" || f === "awb") return fundPilihanBerubah(tr, f, e.target.value);
     baris[f] = f === "amount" ? nilaiKotakDana(e.target.value, kotakPersen(baris, f)) : e.target.value;
-    // Tarif / jenis diskon / BL/AWB: digambar ulang. Selain itu hanya sel
-    // hitungan, supaya fokus tidak direbut dari kotak yang sedang diketik.
-    if (f === "ppnRate" || f === "discType" || f === "awb") return renderFundLines();
     perbaruiHitunganRincian();
   });
   /* Pilihan (tarif PPN, jenis diskon) DISIMPAN di sini juga sebelum
@@ -1121,8 +1314,7 @@ if (fundLinesBodyEl) {
     const f = e.target.dataset.flF;
     if (f !== "ppnRate" && f !== "discType" && f !== "awb") return;
     const tr = e.target.closest("[data-fl]");
-    if (tr) fundLines[Number(tr.dataset.fl)][f] = e.target.value;
-    renderFundLines();
+    if (tr) fundPilihanBerubah(tr, f, e.target.value);
   });
   // Pindah kotak = rumus dihitung, seperti menekan Enter.
   fundLinesBodyEl.addEventListener("focusout", (e) => {
@@ -1139,6 +1331,178 @@ if (fundLinesBodyEl) {
     if (!del) return;
     fundLines.splice(Number(del.dataset.flDel), 1);
     renderFundLines();
+  });
+}
+
+/* ==================================================================
+   SALIN KE BAWAH -- DALAM SATU INVOICE / DEBIT NOTE SAJA
+
+   Seperti "Samakan baris 1" di Daftar Barang jadwal (item-samakan.js),
+   tetapi sumbernya BARIS AKTIF dan sasarannya baris-baris DI BAWAHNYA
+   SAMPAI AKHIR KELOMPOK DOKUMENNYA -- invoice / debit note lain di bawahnya
+   (Merge Invoice) tidak tersentuh. Pengajuan satu invoice: sampai baris
+   terakhir.
+
+   Jalannya:
+     - memilih BL/AWB atau PPN di sebuah baris memunculkan TAWARAN tepat di
+       bawah baris itu (hanya bila ada baris di bawahnya yang berbeda):
+         ⤓ Samakan BL/AWB SRE454292 ke baris 2–8 (Invoice IN-WL2611-00037)?
+       [Samakan] menyalinnya, x menutup tawaran;
+     - Ctrl/⌘+D di kotak mana pun (Uraian, BL/AWB, Nilai, PPN) langsung
+       menyalin isian kotak itu ke bawah -- seperti "isi ke bawah" Excel;
+     - sesudah menyalin, keterangan di tempat yang sama + [Urungkan]
+       (mengembalikan isian lama tiap baris -- kecuali yang sudah diubah lagi).
+   Tawaran & keterangan hilang begitu tabel digambar ulang.
+================================================================== */
+const FUND_SALIN_LABEL = {
+  awb: () => "BL/AWB",
+  ppnRate: () => "PPN",
+  desc: () => tt("Uraian", "Description"),
+  amount: () => tt("Nilai", "Amount"),
+};
+/* Penyalinan terakhir: { perubahan: [{ i, f, lama, baru, desc }] }. Dicatat per
+   NOMOR baris + uraiannya, bukan objek barisnya: renderFundLines membuat
+   objek baris baru setiap kali (normalisasiBarisDana). */
+let fundSalinUrung = null;
+
+// Baris sasaran: di bawah `idx`, sampai baris terakhir kelompok dokumennya
+function fundSalinSasaran(idx) {
+  const kelompok = fundKelompokBaris(fundLines[idx]);
+  const hasil = [];
+  for (let i = idx + 1; i < fundLines.length && fundKelompokBaris(fundLines[i]) === kelompok; i++) hasil.push(i);
+  return hasil;
+}
+
+// Nilai pembanding sebuah isian (sama = tidak perlu disalin)
+function fundSalinNilai(b, f) {
+  if (f === "awb") return kunciAlnum(b.awb);
+  if (f === "ppnRate") return String(fundLineRate(b));
+  return String(b[f] == null ? "" : b[f]).trim();
+}
+
+// Nilai sel seperti tampil di tabel -- untuk kalimat tawaran
+function fundSalinTeks(b, f) {
+  if (f === "awb") {
+    const kunci = kunciAlnum(b.awb);
+    const a = fundAwbForm().find((x) => x.kunci === kunci);
+    return kunci ? (a ? a.teks : kunci) : tt("Dibagi rata", "Split evenly");
+  }
+  if (f === "ppnRate") return fundLineRate(b) ? `${fundLineRate(b)}%` : tt("tanpa PPN", "no VAT");
+  if (f === "amount") return isiKotakNilai(b) || "0";
+  return String(b[f] || "").trim() || tt("(kosong)", "(empty)");
+}
+
+// Nama kelompok dokumen baris `idx` ("Invoice IN-WL2611-00037"), "" bila pengajuannya satu dokumen
+function fundSalinNamaDokumen(idx) {
+  if (!fundDokumen.length) return "";
+  const id = fundKelompokBaris(fundLines[idx]);
+  const d = fundDokKelompok().find((x) => x.id === id);
+  return d ? `${fundDokNama(d.jenis)}${d.nomor ? " " + d.nomor : ""}` : "";
+}
+
+const fundSalinRentang = (sasaran) => (sasaran.length === 1 ? `${sasaran[0] + 1}` : `${sasaran[0] + 1}–${sasaran[sasaran.length - 1] + 1}`);
+
+// Baris tawaran / keterangan tepat di bawah baris `idx`
+function fundSalinBarisInfo(idx, isi) {
+  const body = document.getElementById("fundLinesBody");
+  const tr = body && body.querySelector(`[data-fl="${idx}"]`);
+  if (!tr) return;
+  body.querySelectorAll("tr.fl-salin").forEach((x) => x.remove());
+  const kolom = tr.closest("table").classList.contains("fund-lines--awb") ? 7 : 6;
+  tr.insertAdjacentHTML("afterend", `<tr class="fl-salin" role="status"><td colspan="${kolom}"><div class="fl-salin-isi">${isi}</div></td></tr>`);
+}
+
+function fundSalinTawarkan(idx, f) {
+  const b = fundLines[idx];
+  const sasaran = fundSalinSasaran(idx);
+  const nilai = fundSalinNilai(b, f);
+  if (!sasaran.length || sasaran.every((i) => fundSalinNilai(fundLines[i], f) === nilai)) return;
+  const dok = fundSalinNamaDokumen(idx);
+  const kalimat = tt(
+    `Samakan ${FUND_SALIN_LABEL[f]()} <b>${escapeHtml(fundSalinTeks(b, f))}</b> ke baris ${fundSalinRentang(sasaran)}${dok ? ` (${escapeHtml(dok)})` : ""}?`,
+    `Copy ${FUND_SALIN_LABEL[f]()} <b>${escapeHtml(fundSalinTeks(b, f))}</b> down to line${sasaran.length > 1 ? "s" : ""} ${fundSalinRentang(sasaran)}${dok ? ` (${escapeHtml(dok)})` : ""}?`,
+  );
+  fundSalinBarisInfo(idx, `<i class="bi bi-arrow-bar-down" aria-hidden="true"></i>
+    <span class="fl-salin-teks">${kalimat}</span>
+    <button type="button" class="btn-quiet fl-salin-ya" data-fl-salin="${idx}" data-fl-salin-f="${f}">${escapeHtml(tt("Samakan", "Copy down"))} <kbd>Ctrl+D</kbd></button>
+    <button type="button" class="rm-row fl-salin-tutup" data-fl-salin-tutup title="${escapeAttr(tt("Tutup", "Dismiss"))}" aria-label="${escapeAttr(tt("Tutup tawaran", "Dismiss"))}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>`);
+}
+
+/* Menyalin isian `f` baris `idx` ke baris di bawahnya dalam kelompok yang
+   sama. Hasil: jumlah baris yang berubah. */
+function fundSalinKeBawah(idx, f) {
+  const sumber = fundLines[idx];
+  const sasaran = fundSalinSasaran(idx);
+  if (!sumber || !FUND_SALIN_LABEL[f]) return 0;
+  const perubahan = [];
+  sasaran.forEach((i) => {
+    const b = fundLines[i];
+    if (fundSalinNilai(b, f) === fundSalinNilai(sumber, f)) return;
+    perubahan.push({ i, f, lama: b[f], baru: sumber[f], desc: String(b.desc || "") });
+    b[f] = sumber[f];
+  });
+  renderFundLines();
+  if (!perubahan.length) {
+    fundSalinBarisInfo(idx, `<i class="bi bi-check2" aria-hidden="true"></i> <span class="fl-salin-teks">${escapeHtml(
+      sasaran.length ? tt("Baris di bawahnya sudah sama.", "The lines below already match.") : tt("Tidak ada baris di bawahnya dalam dokumen ini.", "No lines below in this document."),
+    )}</span>`);
+    return 0;
+  }
+  fundSalinUrung = { perubahan };
+  const dok = fundSalinNamaDokumen(idx);
+  fundSalinBarisInfo(idx, `<i class="bi bi-check2-circle" aria-hidden="true"></i>
+    <span class="fl-salin-teks">${escapeHtml(tt(
+      `${FUND_SALIN_LABEL[f]()} disalin ke ${perubahan.length} baris${dok ? ` ${dok}` : ""}.`,
+      `${FUND_SALIN_LABEL[f]()} copied to ${perubahan.length} line${perubahan.length === 1 ? "" : "s"}${dok ? ` of ${dok}` : ""}.`,
+    ))}</span>
+    <button type="button" class="btn-quiet fl-salin-urung" data-fl-salin-urung><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> ${escapeHtml(tt("Urungkan", "Undo"))}</button>`);
+  return perubahan.length;
+}
+
+// Urungkan penyalinan terakhir -- baris yang sudah diubah lagi sesudahnya dibiarkan
+function fundSalinUrungkan() {
+  const u = fundSalinUrung;
+  fundSalinUrung = null;
+  if (!u) return 0;
+  let n = 0;
+  u.perubahan.forEach((c) => {
+    const b = fundLines[c.i];
+    if (!b || String(b.desc || "") !== c.desc || String(b[c.f]) !== String(c.baru)) return;
+    b[c.f] = c.lama;
+    n++;
+  });
+  renderFundLines();
+  return n;
+}
+
+if (fundLinesBodyEl) {
+  fundLinesBodyEl.addEventListener("click", (e) => {
+    const ya = e.target.closest("[data-fl-salin]");
+    if (ya) {
+      const idx = Number(ya.dataset.flSalin);
+      fundSalinKeBawah(idx, ya.dataset.flSalinF);
+      const kotak = fundLinesBodyEl.querySelector(`[data-fl="${idx}"] [data-fl-f="${ya.dataset.flSalinF}"]`);
+      if (kotak) kotak.focus();
+    } else if (e.target.closest("[data-fl-salin-urung]")) fundSalinUrungkan();
+    else if (e.target.closest("[data-fl-salin-tutup]")) e.target.closest("tr.fl-salin").remove();
+  });
+  // Ctrl/⌘+D di kotak rincian = salin isian kotak itu ke baris di bawahnya (invoice ini saja)
+  fundLinesBodyEl.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || (e.key !== "d" && e.key !== "D")) return;
+    const tr = e.target.closest("[data-fl]");
+    const f = e.target.dataset.flF;
+    if (!tr || !FUND_SALIN_LABEL[f]) return;
+    e.preventDefault();
+    const idx = Number(tr.dataset.fl);
+    // Rumus / ketikan yang belum diterapkan dihitung dulu
+    if (f === "amount") {
+      if (adalahRumus(e.target.value) && !terapkanRumusKotak(e.target, kotakPersen(fundLines[idx], f))) return;
+      fundLines[idx].amount = nilaiKotakDana(e.target.value, kotakPersen(fundLines[idx], f));
+    } else if (f === "desc") fundLines[idx].desc = e.target.value;
+    else fundLines[idx][f] = e.target.value;
+    fundSalinKeBawah(idx, f);
+    const kotak = fundLinesBodyEl.querySelector(`[data-fl="${idx}"] [data-fl-f="${f}"]`);
+    if (kotak) kotak.focus();
   });
 }
 

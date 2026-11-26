@@ -534,42 +534,14 @@ function combineCiplPair(results) {
   };
 }
 
-/* SERET & LEPAS BERKAS.
-
-   Teks di layar sudah menjanjikannya ("atau seret ke sini") dan CSS
-   .is-dragover sudah ada — tapi tidak ada satu pun pendengar yang
-   memasangnya. Janji yang tidak ditepati lebih buruk daripada tidak
-   dijanjikan: orang mencoba sekali, gagal, lalu berhenti percaya pada
-   petunjuk lain di layar yang sama.
-
-   Berkas yang dilepas diproses lewat jalur yang sama persis dengan
-   yang dipilih lewat tombol — satu penangan, satu perilaku. */
-const importZone = $("#importZone");
-if (importZone) {
-  const tahan = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  ["dragenter", "dragover"].forEach((ev) =>
-    importZone.addEventListener(ev, (e) => {
-      tahan(e);
-      importZone.classList.add("is-dragover");
-    }),
-  );
-  ["dragleave", "drop"].forEach((ev) =>
-    importZone.addEventListener(ev, (e) => {
-      tahan(e);
-      /* dragleave juga menyala saat kursor melintas ke elemen ANAK.
-         Tanpa penjaga ini sorotannya berkedip-kedip saat menyeret. */
-      if (ev === "dragleave" && importZone.contains(e.relatedTarget)) return;
-      importZone.classList.remove("is-dragover");
-    }),
-  );
-  importZone.addEventListener("drop", (e) => {
-    const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
-    if (files.length) prosesBerkasImport(files);
-  });
-}
+/* SERET & LEPAS BERKAS: seluruh halaman form jadwal adalah area lepasnya --
+   sama dengan form Pengajuan Dana (pasangZonaLepas, ui/dom.js). Berkas yang
+   dilepas diproses lewat jalur yang sama persis dengan yang dipilih lewat
+   tombol: satu penangan, satu perilaku. */
+pasangZonaLepas($("#viewForm"), {
+  teks: () => t("y.lepas.dokumen.isi.form"),
+  lepas: (files) => prosesBerkasImport(files),
+});
 
 $("#fileImportExcel").addEventListener("change", async (e) => {
   const files = Array.from(e.target.files || []);
@@ -583,10 +555,16 @@ async function prosesBerkasImport(files) {
      berubah. */
   $("#fileImportExcel").value = "";
   const btn = $("#btnImportExcel");
+  /* Berkas yang dilepas selagi berkas sebelumnya masih dibaca: ditolak dengan
+     kabar, bukan dibaca bersamaan (isian form saling menimpa). */
+  if (btn.classList.contains("is-loading")) {
+    showToast(t("y.berkas.sebelumnya.masih.dibaca"), "warning");
+    return;
+  }
   const originalHtml = btn.innerHTML;
   btn.classList.add("is-loading");
   btn.disabled = true;
-  btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> Membaca ${files.length > 1 ? "file-file" : "file"}...`;
+  btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${escapeHtml(files.length > 1 ? t("y.membaca.n.file", { n: files.length }) : t("y.membaca.file"))}`;
   try {
     const dibaca = [];
     for (const f of files) dibaca.push(await bacaBerkasImport(f));

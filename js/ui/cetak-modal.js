@@ -28,6 +28,14 @@
                   sudah jadi), sebelum tombol Cetak menyala -- untuk surat
                   yang menata dirinya dengan mengukur (Surat Jalan mengisi
                   kertas, Masterlist memecah halaman). Boleh async.
+     varian       (opsional) [{ kunci, label, jenis, judulBerkas, muat,
+                  siapkan }] -- BEBERAPA DOKUMEN dalam satu kotak, dipilih
+                  lewat pilihan bergeser di kepalanya (PO | PR di cetak PO &
+                  PR). Tiap varian membawa muat-nya sendiri (menggantikan
+                  `muat`), dan jenis / judulBerkas / siapkan-nya bila ada.
+                  `awal` = kunci varian yang tampil pertama. Teks yang sudah
+                  diubah (Ubah teks) di satu varian disimpan selama kotak
+                  terbuka: berpindah lalu kembali tidak menghapusnya.
      ubah         (opsional) { diubah(dok, blok), rapikan(dok), petunjuk }
                   untuk mode UBAH TEKS (lihat di bawah): diubah dipanggil
                   tiap kali isi surat diketik -- mis. Form Pengajuan Dana
@@ -198,7 +206,10 @@ function cetakKeadaanMemuat(o) {
 
 function bukaModalCetak(opsi) {
   const o = opsi || {};
-  if (!cetakModalEl || typeof bootstrap === "undefined" || typeof o.muat !== "function") return Promise.resolve(false);
+  const varian = Array.isArray(o.varian) ? o.varian.filter((v) => v && typeof v.muat === "function") : [];
+  const awal = varian.find((v) => v.kunci === o.awal) || varian[0] || null;
+  const muat = awal ? awal.muat : o.muat;
+  if (!cetakModalEl || typeof bootstrap === "undefined" || typeof muat !== "function") return Promise.resolve(false);
   const sesi = {
     asal: document.activeElement,
     judulBerkas: String(o.judulBerkas || o.nomor || ""),
@@ -211,25 +222,94 @@ function bukaModalCetak(opsi) {
     ubah: false, // mode Ubah teks menyala
     berubah: false, // isi surat sudah diketik
     htmlAsli: "", // surat seperti saat pertama tampil -- untuk "Kembalikan"
+    muatKe: 0, // pemuatan terakhir -- yang lebih lama (varian sebelumnya) dibuang
+    varian: varian.length > 1 ? varian : null,
+    varianAktif: awal ? awal.kunci : null,
+    simpanVarian: {}, // kunci -> { html, asli } teks varian yang sudah diubah
   };
+  if (awal) {
+    if (awal.judulBerkas) sesi.judulBerkas = String(awal.judulBerkas);
+    if (typeof awal.siapkan === "function") sesi.siapkan = awal.siapkan;
+  }
   cetakSesi = sesi;
-  cetakKeadaanMemuat(o);
+  cetakKeadaanMemuat(Object.assign({}, o, awal && awal.jenis ? { jenis: awal.jenis } : {}));
+  cetakGambarVarian(sesi);
   cetakPasangKertas(sesi);
   bootstrap.Modal.getOrCreateInstance(cetakModalEl).show();
-  return cetakSiapkanIsi(sesi, o.muat);
+  return cetakSiapkanIsi(sesi, muat);
 }
 
-async function cetakSiapkanIsi(sesi, muat) {
+/* ---------- beberapa dokumen dalam satu kotak (opsi varian) ---------- */
+
+function cetakGambarVarian(sesi) {
+  const wadah = cetakEl("cetakVarian");
+  if (!wadah) return;
+  const v = sesi && sesi.varian;
+  wadah.hidden = !v;
+  if (!v) {
+    wadah.innerHTML = "";
+    return;
+  }
+  const i = Math.max(0, v.findIndex((x) => x.kunci === sesi.varianAktif));
+  // Penggeser di belakang tombol yang aktif (docnum.css / components.css: --varian-ke, --varian-n)
+  wadah.style.setProperty("--varian-n", String(v.length));
+  wadah.style.setProperty("--varian-ke", String(i));
+  wadah.innerHTML = v
+    .map((x, k) => `<button type="button" role="tab" class="cetak-varian-btn${k === i ? " is-aktif" : ""}" data-cetak-varian="${escapeAttr(x.kunci)}"
+        aria-selected="${k === i ? "true" : "false"}" tabindex="${k === i ? "0" : "-1"}">${escapeHtml(x.label || x.kunci)}</button>`)
+    .join("");
+}
+
+async function cetakPilihVarian(kunci, fokus) {
+  const sesi = cetakSesi;
+  if (!sesi || !sesi.varian || sesi.mencetak || kunci === sesi.varianAktif) return;
+  const v = sesi.varian.find((x) => x.kunci === kunci);
+  if (!v) return;
+  // Teks yang sudah diubah di varian ini disimpan dulu -- kembali ke sini, ubahannya masih ada
+  const dok = cetakEl("cetakBingkai").contentDocument;
+  if (sesi.siap && sesi.berubah && dok && dok.documentElement) {
+    cetakRapikanUbahan(sesi);
+    const ubah = dok.getElementById("cetak-gaya-ubah");
+    if (ubah) ubah.remove();
+    if (dok.body) dok.body.removeAttribute("contenteditable");
+    sesi.simpanVarian[sesi.varianAktif] = { html: "<!doctype html>\n" + dok.documentElement.outerHTML, asli: sesi.htmlAsli };
+  }
+  sesi.varianAktif = kunci;
+  sesi.siap = false;
+  sesi.ubah = false;
+  sesi.berubah = false;
+  sesi.judulBerkas = String(v.judulBerkas || sesi.judulBerkas);
+  sesi.siapkan = typeof v.siapkan === "function" ? v.siapkan : null;
+  cetakKeadaanMemuat({ jenis: v.jenis || cetakEl("cetakJenis").textContent, nomor: cetakEl("cetakNomor").textContent, ubah: sesi.ubahOpsi });
+  cetakGambarVarian(sesi);
+  if (fokus) {
+    const tombol = [...cetakEl("cetakVarian").querySelectorAll("[data-cetak-varian]")].find((b) => b.dataset.cetakVarian === kunci);
+    if (tombol) tombol.focus();
+  }
+  const simpan = sesi.simpanVarian[kunci];
+  const ok = await cetakSiapkanIsi(sesi, simpan ? async () => simpan.html : v.muat, !!fokus);
+  if (ok && simpan && cetakSesi === sesi && sesi.varianAktif === kunci) {
+    sesi.htmlAsli = simpan.asli;
+    sesi.berubah = true;
+    cetakEl("cetakKembalikan").disabled = false;
+  }
+}
+
+/* `tetapFokus`: kursor sedang di pilihan dokumen -- jangan dipindah ke Cetak */
+async function cetakSiapkanIsi(sesi, muat, tetapFokus) {
+  const ke = ++sesi.muatKe;
+  // Ditutup selagi menunggu, atau dokumen lain sudah dipilih sementara ini dimuat
+  const usang = () => cetakSesi !== sesi || sesi.muatKe !== ke;
   try {
     const html = await muat();
-    if (cetakSesi !== sesi) return false; // ditutup selagi menunggu
+    if (usang()) return false;
     const dok = cetakEl("cetakBingkai").contentDocument;
     dok.open();
     dok.write(html);
     dok.close();
     cetakPasangPendengar(dok);
     await cetakTungguGambar(dok);
-    if (cetakSesi !== sesi) return false;
+    if (usang()) return false;
     cetakEl("cetakStatus").hidden = true;
     cetakEl("cetakUkur").hidden = false;
     /* Surat yang menata dirinya dengan mengukur: bingkainya sudah tampil
@@ -237,9 +317,9 @@ async function cetakSiapkanIsi(sesi, muat) {
        sesudahnya -- yang dicetak selalu hasil akhirnya. */
     if (sesi.siapkan) {
       await cetakTungguTampil();
-      if (cetakSesi !== sesi) return false;
+      if (usang()) return false;
       await sesi.siapkan(dok);
-      if (cetakSesi !== sesi) return false;
+      if (usang()) return false;
     }
     sesi.siap = true;
     // Salinan surat yang sudah jadi (sesudah siapkan): "Kembalikan" memulihkannya persis
@@ -253,11 +333,11 @@ async function cetakSiapkanIsi(sesi, muat) {
        kotaknya belum selesai tampil, shown.bs.modal yang mengulanginya
        (Bootstrap memindahkan kursor ke kotaknya saat itu). */
     const aktif = document.activeElement;
-    if (aktif === cetakModalEl || !cetakModalEl.contains(aktif)) tombol.focus();
+    if (!tetapFokus && (aktif === cetakModalEl || !cetakModalEl.contains(aktif))) tombol.focus();
     return true;
   } catch (err) {
     console.error(err);
-    if (cetakSesi === sesi) {
+    if (!usang()) {
       cetakTutup();
       showToast(tt("Surat tidak bisa disiapkan. Coba lagi.", "The document could not be prepared. Please try again."), "danger");
     }
@@ -455,6 +535,22 @@ async function cetakKembalikanAsli() {
 
 if (cetakModalEl) {
   cetakEl("cetakTombol").addEventListener("click", cetakModalCetak);
+  const varianEl = cetakEl("cetakVarian");
+  if (varianEl) {
+    varianEl.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-cetak-varian]");
+      if (b) cetakPilihVarian(b.dataset.cetakVarian);
+    });
+    // Panah kiri / kanan berpindah dokumen, seperti tablist biasa
+    varianEl.addEventListener("keydown", (e) => {
+      if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || !cetakSesi || !cetakSesi.varian) return;
+      e.preventDefault();
+      const v = cetakSesi.varian;
+      const i = v.findIndex((x) => x.kunci === cetakSesi.varianAktif);
+      const j = (i + (e.key === "ArrowRight" ? 1 : -1) + v.length) % v.length;
+      cetakPilihVarian(v[j].kunci, true);
+    });
+  }
   cetakEl("cetakUbah").addEventListener("click", () => cetakAturUbah(!(cetakSesi && cetakSesi.ubah)));
   cetakEl("cetakKembalikan").addEventListener("click", cetakKembalikanAsli);
   cetakEl("cetakTutupOtomatis").addEventListener("change", (e) => {
@@ -482,6 +578,7 @@ if (cetakModalEl) {
     const sesi = cetakSesi;
     cetakSesi = null;
     cetakTampilUbah(false);
+    cetakGambarVarian(null);
     if (!sesi) return;
     if (sesi.pulihJudul) sesi.pulihJudul();
     // Isi dibuang: surat yang sudah ditutup tidak boleh tampak sekejap di pembukaan berikutnya

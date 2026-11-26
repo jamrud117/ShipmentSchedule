@@ -365,6 +365,105 @@ table.fund-lines select {
   border-top: 1px solid var(--border);
   font-size: var(--t-base);
 }
+/* GRAND TOTAL / TOTAL dokumen yang BISA DIUBAH (fund-lines.js, kotakTotalHtml):
+   tampak seperti angka tebal biasa + ikon pensil; garis bawah tipis saat
+   disorot, kotak penuh saat diketik. Disesuaikan manual = warna aksen. */
+.fl-sum--ubah {
+  align-items: center;
+}
+.fl-total-ubah {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 1px 4px 1px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: text;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.fl-total-ubah:hover {
+  border-color: var(--border);
+  background: var(--n-50);
+}
+.fl-total-ubah:focus-within {
+  border-color: var(--p-500);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-500) 18%, transparent);
+}
+.fl-total-satuan {
+  font-weight: 700;
+  color: inherit;
+}
+.fl-sum .fl-total-satuan {
+  color: inherit;
+}
+/* Lebar mengikuti angkanya (atribut size; field-sizing bila peramban mendukung).
+   Berawalan .fl-total-ubah + input: aturan isian umum `input[type="text"]` (0,1,1)
+   dan cincin fokusnya (0,2,1) di css/system.css tidak boleh memberinya kotak --
+   bingkainya milik label pembungkusnya. */
+.fl-total-ubah input.fl-total-input,
+.fl-total-ubah input.fl-total-input:focus {
+  field-sizing: content;
+  min-width: 6ch;
+  max-width: 20ch;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: inherit;
+  outline: none;
+}
+.fl-total-pensil {
+  font-size: 0.8em;
+  color: var(--n-400);
+}
+.fl-total-ubah.is-manual {
+  color: var(--tp-600);
+}
+.fl-total-ubah.is-manual .fl-total-pensil {
+  color: var(--tp-600);
+}
+.fl-total-catatan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px 6px;
+  max-width: 420px;
+  font-size: var(--t-xs);
+  line-height: 1.4;
+  text-align: right;
+  color: var(--tp-600);
+}
+.fl-total-catatan.is-besar {
+  color: var(--s-warn-ink);
+}
+.fl-total-catatan.is-lepas {
+  color: var(--n-500);
+}
+/* "Kembalikan": tombol teks sebaris, bukan tombol berbingkai */
+.fl-total-catatan .fl-total-kembali {
+  height: auto;
+  min-height: 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fl-total-catatan .fl-total-kembali:hover:not(:disabled) {
+  background: none;
+  text-decoration: underline;
+}
 
 /* Tab sub-jenis pada riwayat nomor (Export|Lokal, Commercial|Non-Commercial) */
 .docnum-subtabs {
@@ -575,42 +674,6 @@ table.fund-lines select {
   height: 34px;
   padding: 0 12px;
 }
-/* SERET & LEPAS PDF ke form Pengajuan Dana (js/features/fund-invoice-import.js).
-   Selagi berkas diseret di atas form: bingkai putus-putus + selaput tipis
-   di seluruh form, dan petunjuknya melayang di tengah layar (teks dari
-   data-drop-teks, sudah dalam bahasa yang dipakai). Semuanya
-   pointer-events: none -- sorotan tidak boleh menghalangi pelepasan. */
-.docnum-panel.is-dragover {
-  position: relative;
-}
-.docnum-panel.is-dragover::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 19;
-  border: 2px dashed var(--p-500);
-  border-radius: var(--r-lg);
-  background: rgba(29, 81, 136, 0.07);
-  pointer-events: none;
-}
-.docnum-panel.is-dragover::after {
-  content: attr(data-drop-teks);
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  z-index: 20;
-  transform: translate(-50%, -50%);
-  max-width: min(90vw, 420px);
-  padding: 14px 22px;
-  border-radius: var(--r-lg);
-  background: var(--p-500);
-  color: #fff;
-  font-size: var(--t-base);
-  font-weight: 700;
-  text-align: center;
-  box-shadow: 0 10px 30px rgba(10, 27, 51, 0.28);
-  pointer-events: none;
-}
 .docnum-panel-head h6 {
   margin: 0;
   font-family: var(--font-display);
@@ -675,31 +738,119 @@ table.fund-lines select {
   align-items: start;
 }
 .dn-pengaturan > .counter-box {
-  padding: var(--sp-3);
+  container: kotak-atur / inline-size;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3);
 }
 .dn-pengaturan > .counter-box + .counter-box {
   margin-top: var(--sp-3);
 }
+/* KEPALA: judul, lalu keterangan seri di bawahnya dengan huruf biasa (dulu
+   huruf tetap-lebar yang terlipat dua baris di kotak sepertiga lebar). Kotak
+   lebar (tab selain Pengajuan Dana): keterangannya di kanan judul. */
 .dn-pengaturan .counter-head {
-  margin-bottom: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: var(--sp-3);
 }
-/* Atur Nomor Urut sebaris di kotak sepertiga lebar: nomor maks. 6 angka */
+.dn-pengaturan .counter-head .bi {
+  margin-right: 2px;
+  color: var(--tp-600);
+}
+.dn-pengaturan .counter-info {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--n-500);
+}
+.counter-angka {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--n-700);
+}
+.counter-angka.is-kosong {
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: var(--n-500);
+}
+@container kotak-atur (min-width: 640px) {
+  .dn-pengaturan .counter-head {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--sp-3);
+  }
+}
+/* Atur Nomor Urut: [ nomor ][ Simpan ][ Reset ] SELALU sebaris -- kotak nomor
+   mengisi sisa lebar (dulu 90px tetap, dan di kotak sepertiga lebar tombol
+   Reset turun sendirian ke baris berikutnya). Kotak sangat sempit: Reset
+   tinggal ikonnya (judul & aria-label tetap menyebutnya). */
+.dn-pengaturan .counter-body {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) auto auto;
+  align-items: center;
+  gap: 6px var(--sp-2);
+}
+.dn-pengaturan .counter-body .form-label {
+  grid-column: 1 / -1;
+}
 .dn-pengaturan .counter-body .form-control {
-  width: 90px;
+  width: 100%;
+  min-width: 0;
 }
 .dn-pengaturan .counter-body .btn,
 .dn-pengaturan .dn-aturan-tambah .btn {
   padding: 0 12px;
 }
+@container kotak-atur (min-width: 640px) {
+  .dn-pengaturan .counter-body {
+    grid-template-columns: 140px auto auto 1fr;
+  }
+}
+@container kotak-atur (max-width: 299.98px) {
+  .dn-pengaturan #btnCounterReset .counter-teks {
+    display: none;
+  }
+}
 /* Baris "Format nomor" (format-nomor.js): kode | contoh nomor berikutnya
-   | Ubah. Kode & contohnya huruf tetap-lebar seperti nomor di riwayat. */
+   | Ubah. Kode & contohnya huruf tetap-lebar seperti nomor di riwayat.
+   Kotak sempit (sepertiga lebar): judul + Ubah sebaris, kode di bawahnya,
+   contohnya di bawah lagi -- tidak ada yang terlipat di tengah. Garis tipis
+   memisahkannya dari isian nomor. */
 .counter-format {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label ubah"
+    "pola pola"
+    "contoh contoh";
   align-items: center;
-  flex-wrap: wrap;
   gap: 4px var(--sp-2);
-  margin-top: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--n-200);
   font-size: var(--t-sm);
+}
+.counter-format-label {
+  grid-area: label;
+}
+.counter-format-pola {
+  grid-area: pola;
+  justify-self: start;
+}
+.counter-format-contoh {
+  grid-area: contoh;
+}
+.counter-format-ubah {
+  grid-area: ubah;
+}
+@container kotak-atur (min-width: 640px) {
+  .counter-format {
+    display: flex;
+    flex-wrap: wrap;
+  }
 }
 .counter-format-label {
   font-weight: 600;
@@ -1628,6 +1779,11 @@ table.fund-lines select {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+/* QTY & Unit barang PO / PR: rata tengah, kepala dan isinya */
+.dnd-tabel .dnd-tengah {
+  text-align: center;
+  white-space: nowrap;
+}
 /* Satuan di kepala kolom, "Nilai (Rp)": tidak ikut dikapitalkan --
    "(RP)" bukan cara orang menulis rupiah. */
 .dnd-satuan {
@@ -2314,6 +2470,43 @@ button.dn-bayar--lunas:hover {
   box-shadow: none;
 }
 /* Tambah Baris & Tambah Diskon berdampingan dalam satu baris. */
+/* SALIN KE BAWAH (fund-lines.js): tawaran / keterangan tepat di bawah baris
+   sumbernya -- hanya sampai akhir invoice / debit note baris itu. */
+.fund-lines tr.fl-salin > td {
+  padding: 0 10px 8px;
+  border-top: 0;
+}
+.fl-salin-isi {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--p-200);
+  border-radius: var(--r-md);
+  background: var(--p-50);
+  font-size: var(--t-sm);
+  color: var(--tp-700);
+}
+.fl-salin-teks {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.fl-salin-isi .btn-quiet {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: var(--t-xs);
+}
+.fl-salin-isi kbd {
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--p-200);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--n-600);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
 .fl-aksi {
   display: flex;
   flex-wrap: wrap;
@@ -2837,6 +3030,10 @@ button.dn-bayar--lunas:hover {
   .docnum-tab-text b {
     font-size: 0.8rem;
   }
+  /* Lima jenis dokumen: yang kelima (ganjil di ujung) selebar baris */
+  .docnum-tab:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 
 /* KEPALA RIWAYAT yang sempit: judulnya sebaris sendiri, SEMUA saringannya
@@ -3144,6 +3341,47 @@ button.dn-bayar--lunas:hover {
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     background: var(--n-50);
+  }
+  /* PO & PR: baris barang jadi kartu seperti Rincian Biaya */
+  .tabel-isian :is(#poPrTable, #poPoTable) {
+    min-width: 0;
+  }
+  .tabel-isian table.po-lines > tbody > tr[data-pl] {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 30px;
+    gap: 8px;
+    align-items: start;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+  }
+  .tabel-isian table.po-lines td.pl-nama {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+  .tabel-isian table.po-lines td:is(.pl-spek, .pl-pemasok, .pl-catatan) {
+    grid-column: 2 / -1;
+  }
+  .tabel-isian table.po-lines td:is(.pl-qty, .pl-harga) {
+    grid-column: 2;
+  }
+  .tabel-isian table.po-lines td:is(.pl-sat, .pl-jumlah) {
+    grid-column: 3 / -1;
+  }
+  .tabel-isian table.po-lines td.pl-jumlah {
+    text-align: left;
+    line-height: 34px;
+  }
+  .tabel-isian table.po-lines td.pl-jumlah:empty {
+    display: none;
+  }
+  .po-langkah {
+    flex-wrap: wrap;
+  }
+  .po-langkah-panah {
+    display: none;
   }
 }
 /* Kartu selebar tablet: isian di bawah uraian / nama barang sebaris,
@@ -4228,3 +4466,626 @@ html[data-halaman="nameplate"] .fab-top {
   font-size: 0.95em;
   box-shadow: none;
 }
+
+/* ==================================================================
+   ISI DARI INVOICE: MENU SPLIT / MERGE (index.html .dn-impor,
+   js/features/fund-invoice-import.js)
+================================================================== */
+.docnum-panel-head .dn-impor {
+  margin-left: auto;
+}
+.docnum-panel-head .dn-impor .dn-impor-tombol {
+  height: 34px;
+  padding: 0 10px 0 12px;
+}
+.dn-impor-tombol {
+  white-space: nowrap;
+}
+/* Layar sempit: "(PDF / scan)" disembunyikan supaya tombolnya tetap satu baris */
+@container dn-shell (max-width: 520px) {
+  .dn-impor-ekor {
+    display: none;
+  }
+}
+.dn-impor-panah {
+  margin-left: 2px;
+  font-size: 0.7rem;
+  transition: transform var(--dur-1) var(--ease);
+}
+.dn-impor-tombol[aria-expanded="true"] .dn-impor-panah {
+  transform: rotate(180deg);
+}
+.dn-impor-menu {
+  width: min(360px, calc(100vw - 32px));
+}
+.dn-impor-pilih {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  white-space: normal;
+}
+.dn-impor-pilih > .bi {
+  margin-top: 2px;
+  font-size: 1.05rem;
+  color: var(--tp-600);
+}
+.dn-impor-teks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.dn-impor-teks b {
+  font-weight: 650;
+  color: var(--ink);
+}
+.dn-impor-teks small {
+  font-size: var(--t-xs);
+  line-height: 1.35;
+  color: var(--n-500);
+}
+.dn-review-lanjut {
+  height: 34px;
+  padding: 0 10px;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--tp-600);
+  white-space: nowrap;
+}
+
+/* ==================================================================
+   POP-UP REVIEW SPLIT INVOICE (#danaReviewModal, fund-invoice-review.js)
+   Gambar scan di kiri, isian di kanan (berdampingan bila badan pop-up
+   >= 860px -- container query, bukan lebar layar); di layar sempit
+   gambarnya di atas, setinggi separuh layar dan bisa digulir.
+================================================================== */
+.dr-dialog {
+  --bs-modal-width: 1240px;
+}
+.dr-kepala .dr-judul-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.dr-sub {
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  line-height: 1.35;
+  color: var(--n-500);
+}
+.dr-langkah {
+  display: flex;
+  gap: 6px;
+  padding: 0 var(--sp-6) var(--sp-3);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+}
+.dr-langkah-butir {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--n-200);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-600);
+  transition: border-color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
+}
+.dr-langkah-butir:hover {
+  border-color: var(--p-300);
+}
+.dr-langkah-butir.is-aktif {
+  border-color: var(--p-500);
+  background: var(--p-50);
+  color: var(--tp-600);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-500) 20%, transparent);
+}
+.dr-langkah-butir.is-simpan .bi {
+  color: var(--ts-ok);
+}
+.dr-langkah-butir.is-lewat {
+  color: var(--n-400);
+  text-decoration: line-through;
+}
+.dr-langkah-butir.is-tahan .bi {
+  color: var(--s-warn);
+}
+.dr-badan {
+  container: dr-badan / inline-size;
+  padding-top: var(--sp-2);
+}
+.dr-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+}
+@container dr-badan (min-width: 860px) {
+  .dr-grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: start;
+  }
+  .dr-pratinjau {
+    position: sticky;
+    top: 0;
+  }
+  .dr-pratinjau .dr-halaman {
+    max-height: calc(100dvh - 260px);
+  }
+}
+.dr-pratinjau {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.dr-pratinjau-alat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+/* nama berkas panjang dipatahkan, tidak dipotong (tanpa elipsis -- lihat riwayat nomor) */
+.dr-berkas {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dr-zoom {
+  flex-shrink: 0;
+  font-size: var(--t-sm);
+}
+.dr-halaman {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50dvh;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--n-200);
+  border-radius: var(--r-md);
+  background: var(--n-50);
+}
+.dr-kanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+  box-shadow: 0 1px 4px rgba(10, 27, 51, 0.12);
+  -webkit-user-drag: none;
+}
+.dr-pratinjau.is-zoom .dr-kanvas {
+  width: 200%;
+  max-width: none;
+}
+/* Diperbesar: seret untuk menggeser (fund-invoice-review.js, drPasangGeser) */
+.dr-pratinjau.is-zoom .dr-halaman {
+  cursor: grab;
+  user-select: none;
+}
+.dr-pratinjau.is-zoom .dr-halaman.is-geser {
+  cursor: grabbing;
+}
+.dr-memuat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.dr-isi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.dr-periksa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dr-cek {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+}
+.dr-cek > .bi {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.dr-cek--galat {
+  background: var(--s-danger-bg);
+  color: var(--ts-danger);
+}
+.dr-cek--awas {
+  background: var(--s-warn-bg);
+  color: var(--s-warn-ink);
+}
+.dr-cek--ok {
+  background: var(--s-ok-bg);
+  color: var(--ts-ok);
+}
+.dr-cek--info {
+  background: var(--n-50);
+  color: var(--n-600);
+}
+.dr-kolom {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 12px;
+}
+.dr-bidang {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.dr-bidang.dr-lebar {
+  grid-column: span 2;
+}
+.dr-bidang.dr-penuh {
+  grid-column: 1 / -1;
+}
+.dr-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-500);
+}
+.dr-tabel {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+.dr-tabel th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--n-500);
+  text-align: left;
+  white-space: nowrap;
+}
+.dr-tabel td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--n-100);
+  vertical-align: middle;
+}
+.dr-tabel .dr-no {
+  width: 34px;
+  color: var(--n-500);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.dr-tabel .dr-angka {
+  width: 150px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dr-tabel .dr-angka input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dr-tabel .dr-tarif {
+  width: 92px;
+}
+.dr-tabel .dr-hapus {
+  width: 64px;
+  text-align: center;
+}
+/* Sisipkan (+) & hapus (x) sebaris; tombol + hanya menonjol di baris yang
+   sedang disentuh / diisi supaya tabelnya tetap tenang dibaca */
+.dr-baris-aksi {
+  display: inline-flex;
+  gap: 2px;
+}
+.dr-tabel .dr-sisip {
+  color: var(--tp-600);
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+.dr-tabel tr:is(:hover, :focus-within) .dr-sisip,
+.dr-tabel .dr-sisip:focus-visible {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .dr-tabel .dr-sisip {
+    opacity: 1;
+  }
+}
+.dr-tambah {
+  align-self: flex-start;
+  font-size: var(--t-sm);
+}
+.dr-jumlah {
+  margin-top: 0;
+}
+.dr-total-invoice {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  min-width: 260px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
+.dr-kaki {
+  flex-wrap: wrap;
+}
+.dr-pesan {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+.dr-pesan.is-galat {
+  color: var(--ts-danger);
+  font-weight: 600;
+}
+.dr-ringkasan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: 760px;
+  margin: 0 auto;
+}
+.dr-ringkasan-judul {
+  margin: 0;
+  font-size: var(--t-base);
+  font-weight: 650;
+  color: var(--ink);
+}
+.dr-ringkasan-judul .bi {
+  color: var(--ts-ok);
+}
+.dr-ringkasan tr.is-lewat td {
+  color: var(--n-400);
+}
+.dr-catatan {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--n-500);
+}
+/* Review dialirkan: butir "membaca" di ujung deret langkah, dan layar tunggu
+   bila semua yang sudah terbaca selesai direview */
+.dr-langkah-baca {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--p-200);
+  border-radius: 999px;
+  background: var(--p-50);
+  font-size: var(--t-xs);
+  color: var(--tp-600);
+  white-space: nowrap;
+}
+.dr-tunggu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 280px;
+  text-align: center;
+  color: var(--n-600);
+}
+.dr-tunggu p {
+  max-width: 420px;
+  margin: var(--sp-2) 0 0;
+}
+.dr-tunggu small {
+  color: var(--n-500);
+}
+.dr-tunggu .spinner-border {
+  color: var(--tp-600);
+}
+
+
+/* ==================================================================
+   PO & PR (js/features/po-form.js)
+
+   Dua bagian bertab di dalam form -- PR (sumber) lalu PO -- bergaya
+   langkah: nomor bulat, judul + keterangan, jumlah barang terisi.
+   Tabel barangnya memakai gaya Rincian Biaya (table.fund-lines) dengan
+   kolomnya sendiri (.pl-*); di bawah 860px tiap baris jadi kartu.
+================================================================== */
+.po-langkah {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin: 22px 0 18px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--w-bg-f7fafd);
+}
+.po-langkah-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--n-600);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.po-langkah-tab:hover {
+  background: var(--surface);
+}
+.po-langkah-tab.is-aktif {
+  background: var(--surface);
+  border-color: rgba(20, 73, 122, 0.32);
+  box-shadow: 0 8px 20px -14px rgba(20, 73, 122, 0.6);
+  color: var(--tp-700);
+}
+.po-langkah-no {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.16);
+  font-family: var(--font-display);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+.po-langkah-tab.is-aktif .po-langkah-no {
+  background: linear-gradient(135deg, var(--ocean), var(--navy));
+  color: #fff;
+}
+.po-langkah-teks {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.po-langkah-teks b {
+  font-size: 0.86rem;
+}
+.po-langkah-teks small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.po-langkah-hitung {
+  margin-left: auto;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--tp-600);
+  white-space: nowrap;
+}
+.po-langkah-panah {
+  display: flex;
+  align-items: center;
+  color: var(--n-400);
+}
+/* Kotak pihak (Shipper / Consignee) berkisi sendiri di dalam kisi form */
+.fgrid > .po-pihak {
+  align-items: start;
+}
+/* Kepala daftar barang PO: judul, keterangan "ikut PR", tombol salin ulang */
+.po-subhead-aksi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.po-ikut-pr {
+  font-size: var(--t-xs);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--s-ok);
+}
+.po-ikut-pr.is-manual {
+  color: var(--n-500);
+}
+.po-salin-pr {
+  margin-left: auto;
+  font-size: var(--t-xs);
+}
+.po-salin-pr[hidden] {
+  display: none;
+}
+#poPrTable,
+#poPoTable {
+  min-width: 980px;
+}
+.po-lines th.pl-qty,
+.po-lines th.pl-harga,
+.po-lines th.pl-jumlah,
+.po-lines th.pl-sat {
+  text-align: center;
+}
+/* Lebar kolom dalam persen: nama produk & supplier (teks panjang) paling lebar */
+.po-lines--pr .pl-nama {
+  width: 21%;
+}
+.po-lines--pr .pl-spek {
+  width: 13%;
+}
+.po-lines--pr .pl-qty {
+  width: 9%;
+}
+.po-lines--pr :is(.pl-harga, .pl-jumlah) {
+  width: 11%;
+}
+.po-lines--pr .pl-pemasok {
+  width: 19%;
+}
+.po-lines--pr .pl-catatan {
+  width: 11%;
+}
+.po-lines--po .pl-nama {
+  width: 24%;
+}
+.po-lines--po .pl-spek {
+  width: 16%;
+}
+.po-lines--po :is(.pl-qty, .pl-sat) {
+  width: 8%;
+}
+.po-lines--po :is(.pl-harga, .pl-jumlah) {
+  width: 13%;
+}
+.po-lines--po .pl-catatan {
+  width: 13%;
+}
+/* QTY & Unit rata TENGAH -- kepala dan isinya (PR: "1 SET"); harga rata kanan */
+.po-lines td:is(.pl-qty, .pl-sat) input {
+  text-align: center;
+}
+.po-lines td.pl-harga input {
+  text-align: right;
+}
+.po-lines td.pl-jumlah {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--n-600);
+  white-space: nowrap;
+}
+.po-docno-ket {
+  min-height: 1em;
+}
+/* Riwayat: Doc No Groupware yang belum diisi */
+.dn-po-belum {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--w-bg-fff3de);
+  color: var(--w-teks-8a5a00);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+/* Kotak Detail: pilihan PO | PR di atas isinya */
+.dnd-grup-pilih {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--sp-4);
+}
+.dnd-po-turunan {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--t-sm);
+}
+
