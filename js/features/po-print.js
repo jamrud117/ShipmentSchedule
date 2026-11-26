@@ -7,41 +7,54 @@
    bergeser PO | PR di kepalanya (opsi `varian`): satu pengajuan membawa
    dua dokumen, keduanya dicetak dari kotak yang sama.
 
-   KEDUA LEMBAR A4 TEGAK, MARGIN "NORMAL" 25,4 mm di keempat sisi, dan
-   isinya PENUH selebar & setinggi bidang cetak: bingkainya selalu sampai
-   ke margin bawah -- bagian yang lentur (ruang kosong tabel barang PO,
-   kotak Catatan PR) yang memanjang, bukan lembar yang berhenti di tengah
-   kertas. Margin kertas (@page) nol supaya kop & kaki bawaan peramban
-   tidak ikut tercetak; jaraknya ditanggung tabel .halaman yang kepala &
-   kakinya berulang di tiap halaman (sama dengan Form Pengajuan Dana),
-   jadi PO berbarang banyak yang berlanjut ke halaman 2 tetap bermargin.
+   KEDUA LEMBAR A4 TEGAK. Margin atas & bawah 25,4 mm ("Normal"), kiri &
+   kanan 12,7 mm ("Narrow") -- bidang cetak selebar 184,6 mm, cukup untuk
+   huruf yang sedikit lebih besar (lebih jelas) tanpa sisi kertas yang
+   lapang kosong. Isinya PENUH selebar & setinggi bidang cetak: bingkainya
+   selalu sampai ke margin bawah -- bagian yang lentur (ruang kosong tabel
+   barang PO, kotak Catatan PR) yang memanjang, bukan lembar yang berhenti
+   di tengah kertas. Margin kertas (@page) nol supaya kop & kaki bawaan
+   peramban tidak ikut tercetak; jaraknya ditanggung tabel .halaman yang
+   kepala & kakinya berulang di tiap halaman (sama dengan Form Pengajuan
+   Dana), jadi PO berbarang banyak yang berlanjut ke halaman 2 tetap
+   bermargin.
 
    PO (dirancang ulang dari PO Purchasing): KEPALA DOKUMEN di dalam
    bingkai -- perusahaan (logo, nama, alamat; rata kiri, bukan kop surat
    yang di tengah) | judul PURCHASE ORDER + PO No. & PO Date --, kotak
-   Shipper / Seller + syarat, Consignee / Buyer + Notify Party & Remarks,
-   baris pengiriman (semua garis tengahnya segaris, 58 : 42), tabel barang
-   (Qty & Unit terpisah, Unit Price & Amount) yang garis kolomnya
-   memanjang sampai TOTAL, SAY (jumlah dalam kata), Doc No Groupware --
-   bawaan DST-<YYMM>-0000 bila belum diisi (poDocNoCetak) -- dan kotak
-   Signed by SETINGGI 50 mm: cukup untuk tanda tangan + cap perusahaan
-   tanpa terpotong.
+   Shipper / Seller (ATTN & telepon sebaris) + syarat, Consignee / Buyer +
+   Notify Party & Remarks, baris pengiriman (semua garis tengahnya segaris,
+   58 : 42), tabel barang (Qty BERSATUAN satu kolom "1 SET" -- isiannya
+   tetap dua kotak Qty & Unit; Unit Price & Amount) yang garis kolomnya
+   memanjang LURUS sampai TOTAL, SAY (jumlah dalam kata, bahasa
+   Indonesia), Doc No Groupware -- bawaan DST-<YYMM>-0000 bila belum diisi
+   (poDocNoCetak) -- dan kotak Signed by SETINGGI 50 mm: cukup untuk tanda
+   tangan + cap perusahaan tanpa terpotong.
 
    PR (Formulir Pengajuan Pembelian CF-702-03, seperti aslinya): kolom
-   Satuan TIDAK ADA -- QTY memuat satuannya ("1 SET"); NO hanya untuk
-   baris berisi; baris yang seluruhnya kosong tidak diberi "-" (sel
-   kosong di baris berisi tetap "-", seperti formulir aslinya). Paling
-   sedikit 10 baris supaya bentuk formulirnya tetap.
+   Satuan TIDAK ADA -- QTY dicetak bersama satuannya ("1 SET"; di form
+   dua kotak seperti PO); NO hanya untuk baris berisi; baris yang
+   seluruhnya kosong tidak diberi "-" (sel kosong di baris berisi tetap
+   "-", seperti formulir aslinya). Paling sedikit 10 baris supaya bentuk
+   formulirnya tetap.
 ================================================================== */
 
-const PO_CETAK_MARGIN = 25.4; // mm, keempat sisi (margin "Normal" A4)
+// Margin kertas (mm): atas & bawah "Normal", kiri & kanan "Narrow" -- lihat kepala berkas
+const PO_MARGIN_TEGAK = 25.4;
+const PO_MARGIN_SISI = 12.7;
 const PR_MIN_BARIS = 10;
-const PO_KOLOM_MM = [9, 33, 30, 13, 13, 22, 24, 15.2]; // No..Catatan = 159,2 mm
+/* Lebar kolom tabel = PERBANDINGAN (poPersen), bukan mm mutlak. PO:
+   No | Product | Spec / Model | Qty ("1 SET") | Unit Price | Amount | Catatan
+   = 184,6 mm; Amount cukup untuk "USD 1,234,567.89" tebal. */
+const PO_KOLOM_MM = [9, 40, 33, 19, 27, 30, 26.6];
 // Pemasok paling lebar: nama supplier luar negeri panjang ("Qingdao Jiasong Machinery Technology")
 const PR_KOLOM_MM = [9, 27, 22, 14, 18, 19, 36, 14.2];
 const PO_BULAN_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const PO_NAMA_MATA = { USD: "US DOLLARS", IDR: "INDONESIAN RUPIAH", CNY: "CHINESE YUAN", EUR: "EURO", JPY: "JAPANESE YEN", KRW: "KOREAN WON" };
 const PO_TANPA_SEN = new Set(["IDR", "JPY", "KRW"]);
+/* Alamat kantor pusat di kepala PO, DUA BARIS persis: jalan & desa |
+   kecamatan, kabupaten, provinsi & kode pos. Kop surat lain (Surat Jalan,
+   Form Pengajuan Dana, ...) tetap memakai SJ_PERUSAHAAN. */
+const PO_ALAMAT_PUSAT = ["JL. Mayjend Sutoyo No. 1 Pabedilan Kulon,", "Pabedilan, Kabupaten Cirebon, Jawa Barat 45193"];
 
 const poCetakTeks = (v) => escapeHtml(String(v == null ? "" : v).trim());
 // Teks banyak baris (alamat): baris baru tetap baris baru
@@ -63,44 +76,15 @@ function poUangCetak(n, mata) {
   return angkaLokal(Number(n) || 0, "en-US", { minimumFractionDigits: desimal, maximumFractionDigits: desimal });
 }
 
-/* JUMLAH DALAM KATA (bahasa Inggris, huruf besar) untuk baris SAY:
-   11250 USD -> "US DOLLARS ELEVEN THOUSAND TWO HUNDRED FIFTY ONLY". */
-const PO_SATUAN_EN = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE",
-  "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
-const PO_PULUHAN_EN = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
-const PO_SKALA_EN = ["", "THOUSAND", "MILLION", "BILLION", "TRILLION"];
-
-function poKataRatusan(n) {
-  const kata = [];
-  if (n >= 100) {
-    kata.push(PO_SATUAN_EN[Math.floor(n / 100)], "HUNDRED");
-    n %= 100;
-  }
-  if (n >= 20) {
-    kata.push(PO_PULUHAN_EN[Math.floor(n / 10)] + (n % 10 ? "-" + PO_SATUAN_EN[n % 10] : ""));
-  } else if (n > 0) kata.push(PO_SATUAN_EN[n]);
-  return kata.join(" ");
-}
-
-function poKataInggris(n) {
-  let sisa = Math.floor(Math.abs(n));
-  if (!sisa) return "ZERO";
-  const bagian = [];
-  for (let i = 0; sisa > 0 && i < PO_SKALA_EN.length; i++) {
-    const tiga = sisa % 1000;
-    if (tiga) bagian.unshift([poKataRatusan(tiga), PO_SKALA_EN[i]].filter(Boolean).join(" "));
-    sisa = Math.floor(sisa / 1000);
-  }
-  return bagian.join(" ");
-}
-
+/* SAY: jumlah dalam kata BAHASA INDONESIA, huruf besar -- terbilang yang
+   sama dengan Form Pengajuan Dana (terbilangMataUang, fund-request-print.js):
+   IDR 9.000.000 -> "SEMBILAN JUTA RUPIAH"; USD 7,500.50 -> "TUJUH RIBU LIMA
+   RATUS DOLAR AMERIKA SERIKAT DAN LIMA PULUH SEN". Mata uang tanpa sen
+   (IDR / JPY / KRW) dibulatkan seperti angka TOTAL-nya. */
 function poSay(n, mata) {
-  const total = Math.round((Number(n) || 0) * 100);
+  const total = Math.round((Number(n) || 0) * 100) / 100;
   if (total <= 0) return "";
-  const utuh = Math.floor(total / 100);
-  const sen = PO_TANPA_SEN.has(mata) ? 0 : total % 100;
-  const nama = PO_NAMA_MATA[mata] || mata;
-  return `${nama} ${poKataInggris(utuh)}${sen ? ` AND CENTS ${poKataInggris(sen)}` : ""} ONLY`;
+  return terbilangMataUang(PO_TANPA_SEN.has(mata) ? Math.round(total) : total, mata).toUpperCase();
 }
 
 /* ---------- data ---------- */
@@ -113,7 +97,7 @@ function poBarangCetak(p) {
 
 const poPerusahaan = () => ({
   nama: "PT. DYNAMIC DESIGN INDONESIA",
-  pusat: String(SJ_PERUSAHAAN.pusat).replace(/^\s*pusat\s*:\s*/i, ""),
+  pusat: PO_ALAMAT_PUSAT,
   cabang: String(SJ_PERUSAHAAN.cabang).replace(/^\s*cabang\s*:\s*/i, ""),
 });
 
@@ -134,12 +118,16 @@ function buildPoHtml(row) {
   const total = poTotal("po", barang);
   const usaha = poPerusahaan();
   const ada = (v) => String(v == null ? "" : v).trim() !== "";
-  const blokPihak = (judul, nama, alamat, attn, tel, labelTel) => `
+  const blokPihak = (judul, nama, alamat, attn, tel) => {
+    /* ATTN & TEL SEBARIS -- turun ke baris berikutnya hanya bila tidak muat.
+       Label telepon kedua pihak sama: "TEL", seperti di form-nya. */
+    const kontak = [ada(attn) ? `<span>ATTN : ${poCetakTeks(attn)}</span>` : "", ada(tel) ? `<span>TEL : ${poCetakTeks(tel)}</span>` : ""].filter(Boolean);
+    return `
       <div class="po-label">${judul}</div>
       ${ada(nama) ? `<div class="po-pihak-nama">${poCetakTeks(nama)}</div>` : ""}
       ${ada(alamat) ? `<div>${poCetakBaris(alamat)}</div>` : ""}
-      ${ada(attn) ? `<div>ATTN : ${poCetakTeks(attn)}</div>` : ""}
-      ${ada(tel) ? `<div>${labelTel} : ${poCetakTeks(tel)}</div>` : ""}`;
+      ${kontak.length ? `<div class="po-kontak">${kontak.join("")}</div>` : ""}`;
+  };
   const kv = (k, v) => `<tr><th>${k}</th><td>${poCetakBaris(v) || "&nbsp;"}</td></tr>`;
   const barisBarang = barang
     .map((b, i) => {
@@ -148,8 +136,7 @@ function buildPoHtml(row) {
         <td class="po-c">${i + 1}</td>
         <td>${poCetakTeks(b.produk)}</td>
         <td class="po-c">${poCetakTeks(b.spek)}</td>
-        <td class="po-c">${b.qty ? poCetakTeks(formatNilai(b.qty)) : ""}</td>
-        <td class="po-c">${poCetakTeks(b.satuan)}</td>
+        <td class="po-c">${poCetakTeks(poQtyTeks(b))}</td>
         <td class="po-r">${b.harga ? poCetakTeks(poUangCetak(b.harga, mata)) : ""}</td>
         <td class="po-r">${jumlah ? poCetakTeks(poUangCetak(jumlah, mata)) : ""}</td>
         <td>${poCetakTeks(b.catatan)}</td>
@@ -168,7 +155,7 @@ function buildPoHtml(row) {
           <img src="${SJ_LOGO}" alt="">
           <div>
             <div class="po-kop-nama">${poCetakTeks(usaha.nama)}</div>
-            <div class="po-kop-alamat"><b>Headquarters :</b> ${poCetakTeks(usaha.pusat)}</div>
+            <div class="po-kop-alamat"><b>Headquarters :</b> ${usaha.pusat.map(poCetakTeks).join("<br>")}</div>
             <div class="po-kop-alamat"><b>Branch Office :</b> ${poCetakTeks(usaha.cabang)}</div>
           </div>
         </div>
@@ -181,7 +168,7 @@ function buildPoHtml(row) {
         </div>
       </div>
       <div class="po-kisi">
-        <div class="po-sel">${blokPihak("Shipper / Seller", p.poPenjualNama, p.poPenjualAlamat, p.poPenjualAttn, p.poPenjualTel, "TEL")}</div>
+        <div class="po-sel">${blokPihak("Shipper / Seller", p.poPenjualNama, p.poPenjualAlamat, p.poPenjualAttn, p.poPenjualTel)}</div>
         <div class="po-sel po-sel--kv">
           <table class="po-kv">
             ${kv("Delivery", p.poDelivery)}
@@ -189,7 +176,7 @@ function buildPoHtml(row) {
             ${ada(p.prNo) ? kv("PR No.", p.prNo) : ""}
           </table>
         </div>
-        <div class="po-sel">${blokPihak("Consignee / Buyer", p.poPembeliNama, p.poPembeliAlamat, p.poPembeliAttn, p.poPembeliTel, "Phone")}</div>
+        <div class="po-sel">${blokPihak("Consignee / Buyer", p.poPembeliNama, p.poPembeliAlamat, p.poPembeliAttn, p.poPembeliTel)}</div>
         <!-- Notify Party | Remarks: dua bagian bergaris pemisah, berbagi tinggi kotaknya -->
         <div class="po-sel po-sel--dua">
           <div class="po-sub">
@@ -212,18 +199,24 @@ function buildPoHtml(row) {
         <table class="po-tabel">
           ${poColgroup(PO_KOLOM_MM)}
           <thead><tr>
-            <th>No</th><th>Product</th><th>Spec / Model</th><th>Qty</th><th>Unit</th>
+            <th>No</th><th>Product</th><th>Spec / Model</th><th>Qty</th>
             <th>Unit Price<br><span>(${poCetakTeks(mata)})</span></th><th>Amount<br><span>(${poCetakTeks(mata)})</span></th><th>Catatan</th>
           </tr></thead>
           <tbody>${barisBarang}</tbody>
         </table>
-        <!-- Garis kolom memanjang sampai TOTAL: ruang lentur selebar kolom yang sama -->
-        <div class="po-pengisi" aria-hidden="true">${PO_KOLOM_MM.map((mm) => `<span style="width:${poPersen(PO_KOLOM_MM, mm)}"></span>`).join("")}</div>
+        <!-- Garis kolom memanjang sampai TOTAL: ruang lentur berisi TABEL berkolom
+             & bergaris sama persis dengan tabel barang, jadi garisnya menyambung
+             lurus. Dulu deretan span: garisnya di tepi kiri tiap span, sedangkan
+             garis tabel berpusat di batas kolom -- bergeser setengah tebal garis
+             dan tampak bengkok tepat di bawah baris barang terakhir. -->
+        <div class="po-pengisi" aria-hidden="true">
+          <table class="po-tabel po-tabel--sisa">${poColgroup(PO_KOLOM_MM)}<tr>${"<td></td>".repeat(PO_KOLOM_MM.length)}</tr></table>
+        </div>
         <div class="po-total-wadah">
           <table class="po-tabel po-tabel--total">
             ${poColgroup(PO_KOLOM_MM)}
             <tr>
-              <td colspan="5" class="po-say">${say ? `<b>SAY :</b> ${poCetakTeks(say)}` : ""}</td>
+              <td colspan="4" class="po-say">${say ? `<b>SAY :</b> ${poCetakTeks(say)}` : ""}</td>
               <th>TOTAL</th>
               <td class="po-r po-total">${total ? `${poCetakTeks(mata)} ${poCetakTeks(poUangCetak(total, mata))}` : ""}</td>
               <td></td>
@@ -258,17 +251,12 @@ function buildPrHtml(row) {
   const strip = (v) => poCetakTeks(v) || "-";
   // Angka saja di sel -- mata uangnya di judul kolom (sel sempit tidak terpecah dua baris)
   const uang = (n) => (n ? poCetakTeks(formatNilai(n)) : "-");
-  const qty = (v) => {
-    const teks = String(v == null ? "" : v).trim();
-    // "1 set" -> "1 SET": satuan di QTY ditulis kapital seperti formulirnya
-    return teks ? poCetakTeks(teks.replace(/^(\s*\d[\d.,]*\s*)(.+)$/, (_, a, b) => a + b.toUpperCase())) : "-";
-  };
   const baris = barang.map(
     (b, i) => `<tr>
       <td class="po-c">${i + 1}</td>
       <td class="po-c">${strip(b.nama)}</td>
       <td class="po-c">${strip(b.spek)}</td>
-      <td class="po-c">${qty(b.qty)}</td>
+      <td class="po-c">${strip(poQtyTeks(b))}</td>
       <td class="po-c">${uang(poAngka(b.harga))}</td>
       <td class="po-c">${uang(poJumlahBaris("pr", b))}</td>
       <td class="po-c pr-pemasok">${strip(b.pemasok)}</td>
@@ -336,19 +324,20 @@ function buildPrHtml(row) {
 /* ---------- gaya ---------- */
 
 function poCetakCss() {
-  const m = PO_CETAK_MARGIN;
+  const tegak = PO_MARGIN_TEGAK;
+  const sisi = PO_MARGIN_SISI;
   return `
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; color: #000; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 9pt; }
+  body { margin: 0; color: #000; font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; font-size: 10pt; }
   /* Margin berulang di tiap halaman: kepala & kaki tabel kosong setinggi
      margin atas & bawah, kiri-kanan di sel badannya (lihat kepala berkas). */
   .halaman { width: 100%; border-collapse: collapse; }
-  .halaman > thead > tr > td { height: ${m}mm; padding: 0; }
-  .halaman > tfoot > tr > td { height: ${m}mm; padding: 0; }
-  .halaman > tbody > tr > td { padding: 0 ${m}mm; vertical-align: top; }
-  /* Satu bidang cetak penuh (297 - 2 x margin; 1 mm cadangan pembulatan) */
-  .lembar { display: flex; flex-direction: column; min-height: ${(297 - 2 * m - 1).toFixed(1)}mm; }
+  .halaman > thead > tr > td { height: ${tegak}mm; padding: 0; }
+  .halaman > tfoot > tr > td { height: ${tegak}mm; padding: 0; }
+  .halaman > tbody > tr > td { padding: 0 ${sisi}mm; vertical-align: top; }
+  /* Satu bidang cetak penuh (297 - 2 x margin atas/bawah; 1 mm cadangan pembulatan) */
+  .lembar { display: flex; flex-direction: column; min-height: ${(297 - 2 * tegak - 1).toFixed(1)}mm; }
   table { border-collapse: collapse; width: 100%; }
   th, td { padding: 0; }
   .po-c { text-align: center; }
@@ -360,17 +349,18 @@ function poCetakCss() {
      di bawahnya (pihak beralamat panjang di kiri), jadi garis tengahnya segaris. */
   .po-kepala, .po-kisi { display: grid; grid-template-columns: minmax(0, 58fr) minmax(0, 42fr); }
   .po-kepala { border-bottom: .35mm solid #000; }
-  .po-kepala-usaha { display: flex; align-items: center; gap: 3mm; padding: 3mm 3mm 3mm 2.5mm; border-right: .25mm solid #000; }
-  .po-kepala-usaha img { flex: none; height: 14mm; width: auto; }
-  .po-kop-nama { font-size: 11pt; font-weight: 700; letter-spacing: .1px; line-height: 1.15; margin-bottom: 1.2mm; white-space: nowrap; }
-  .po-kop-alamat { font-size: 6.8pt; line-height: 1.4; color: #333; }
+  .po-kepala-usaha { display: flex; align-items: center; gap: 3.5mm; padding: 3mm 3mm 3mm 2.5mm; border-right: .25mm solid #000; }
+  .po-kepala-usaha img { flex: none; height: 16mm; width: auto; }
+  .po-kop-nama { font-size: 12pt; font-weight: 700; letter-spacing: .1px; line-height: 1.15; margin-bottom: 1.2mm; white-space: nowrap; }
+  /* text-wrap: pretty -- baris terakhir alamat tidak tersisa satu kata ("Kota / Bandung") */
+  .po-kop-alamat { font-size: 7.8pt; line-height: 1.4; color: #333; text-wrap: pretty; }
   .po-kop-alamat b { color: #000; }
   .po-kepala-dok { display: flex; flex-direction: column; justify-content: center; padding: 2.5mm 3mm;
     background: #eef1f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .po-kop-judul { font-size: 15pt; font-weight: 700; letter-spacing: 1.5px; line-height: 1; text-align: center; margin-bottom: 2.5mm; }
+  .po-kop-judul { font-size: 17pt; font-weight: 700; letter-spacing: 1.5px; line-height: 1; text-align: center; margin-bottom: 2.5mm; }
   /* Label kecil & isinya segaris dasar (bukan rata atas) */
-  .po-kop-kv th { width: 19mm; padding: .7mm 0; text-align: left; font-size: 7pt; text-transform: uppercase; letter-spacing: .3px; color: #333; vertical-align: baseline; }
-  .po-kop-kv td { padding: .7mm 0; font-size: 9.5pt; font-weight: 700; white-space: nowrap; vertical-align: baseline; }
+  .po-kop-kv th { width: 21mm; padding: .7mm 0; text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: .3px; color: #333; vertical-align: baseline; }
+  .po-kop-kv td { padding: .7mm 0; font-size: 10.5pt; font-weight: 700; white-space: nowrap; vertical-align: baseline; }
   /* Bingkai luar tebal; tabel di dalamnya hanya menggambar garis DALAM
      (border-style: hidden memadamkan garis tepinya) -- garis pemisah
      antarbagian datang dari pembungkusnya, jadi tidak ada garis dobel. */
@@ -378,40 +368,43 @@ function poCetakCss() {
   .po-bingkai table { border-style: hidden; }
   .po-sel { padding: 2mm 2.5mm; border-bottom: .25mm solid #000; line-height: 1.4; min-height: 24mm; overflow-wrap: anywhere; }
   .po-sel:nth-child(odd) { border-right: .25mm solid #000; }
-  .po-label { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #333; margin-bottom: .8mm; }
+  .po-label { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #333; margin-bottom: .8mm; }
   .po-sel--dua { display: flex; flex-direction: column; padding: 0; }
   .po-sub { flex: 1 1 0; padding: 2mm 2.5mm; }
   .po-sub + .po-sub { border-top: .25mm solid #000; }
   .po-pihak-nama { font-weight: 700; }
+  /* ATTN & telepon sebaris; yang tidak muat turun utuh ke baris berikutnya */
+  .po-kontak { display: flex; flex-wrap: wrap; column-gap: 6mm; }
   .po-sel--kv { padding: 1.5mm 2.5mm; }
-  .po-kv th { width: 27mm; text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; color: #333; padding: .9mm 0; vertical-align: baseline; }
+  .po-kv th { width: 30mm; text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .3px; color: #333; padding: .9mm 0; vertical-align: baseline; }
   .po-kv td { padding: .9mm 0; font-weight: 700; vertical-align: baseline; }
   .po-kirim-wadah { border-bottom: .25mm solid #000; }
   /* 29 + 29 | 21 + 21: garis tengahnya di 58%, segaris dengan kotak di atasnya */
   .po-kirim { table-layout: fixed; }
   .po-kirim th, .po-kirim td { width: 29%; padding: 1.2mm 2.5mm; text-align: left; border-left: .25mm solid #000; }
   .po-kirim :is(th, td):nth-child(n + 3) { width: 21%; }
-  .po-kirim th { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; color: #333; padding-bottom: 0; }
+  .po-kirim th { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .3px; color: #333; padding-bottom: 0; }
   .po-kirim td { padding-top: .5mm; }
   /* Tabel barang + ruang lentur + TOTAL: bagian yang memanjang sampai margin bawah */
   .po-barang { flex: 1 1 auto; display: flex; flex-direction: column; }
   .po-tabel { table-layout: fixed; }
-  .po-tabel th { font-size: 8pt; font-weight: 700; padding: 1.5mm 1mm; border: .25mm solid #000;
+  .po-tabel th { font-size: 9pt; font-weight: 700; padding: 1.5mm 1mm; border: .25mm solid #000;
     background: #eef1f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .po-tabel th span { font-weight: 400; font-size: 7pt; }
+  .po-tabel th span { font-weight: 400; font-size: 8pt; }
   .po-tabel td { padding: 1.6mm 1.2mm; border-left: .25mm solid #000; border-right: .25mm solid #000; vertical-align: middle; overflow-wrap: anywhere; }
   .po-tabel tbody tr + tr td { border-top: .15mm solid #9aa3ad; }
-  .po-pengisi { flex: 1 1 auto; display: flex; min-height: 4mm; }
-  .po-pengisi span { flex: none; border-left: .25mm solid #000; }
-  .po-pengisi span:first-child { border-left: 0; }
+  /* Ruang lentur: tabel berkolom sama (.po-tabel--sisa) setinggi sisa ruangnya --
+     garis kolomnya dihitung persis seperti tabel barang di atasnya */
+  .po-pengisi { flex: 1 1 auto; position: relative; min-height: 4mm; }
+  .po-tabel--sisa { position: absolute; inset: 0; height: 100%; }
   .po-total-wadah { border-top: .35mm solid #000; }
   .po-tabel--total td, .po-tabel--total th { padding: 2mm 1.2mm; }
-  .po-tabel--total th { background: none; font-size: 9pt; border-top: 0; border-bottom: 0; }
-  .po-say { font-size: 7.5pt; line-height: 1.35; text-align: left; }
+  .po-tabel--total th { background: none; font-size: 10pt; border-top: 0; border-bottom: 0; }
+  .po-say { font-size: 8.5pt; line-height: 1.35; text-align: left; }
   .po-total { font-weight: 700; white-space: nowrap; }
   .po-kaki { display: flex; border-top: .35mm solid #000; }
   .po-docno { flex: 1; padding: 2.5mm; }
-  .po-docno-nilai { font-size: 11pt; font-weight: 700; letter-spacing: .3px; }
+  .po-docno-nilai { font-size: 12pt; font-weight: 700; letter-spacing: .3px; }
   /* Signed by: 42% (±66 mm, garis kirinya segaris dengan kotak-kotak di atas) x
      50 mm -- tanda tangan + cap perusahaan (diameter ±40 mm) muat utuh, tidak
      terpotong garis bingkai. */
@@ -419,37 +412,38 @@ function poCetakCss() {
   .po-ttd .po-label { text-align: left; }
   .po-ttd-ruang { flex: 1; }
   .po-ttd-nama { font-weight: 700; text-decoration: underline; }
-  .po-ttd-jabatan { font-size: 8.5pt; }
+  .po-ttd-jabatan { font-size: 9.5pt; }
   .po-isi-bebas { min-height: 4mm; }
 
   /* ===== PR ===== */
-  .pr { font-family: Calibri, Carlito, Arial, sans-serif; font-size: 9.5pt; }
+  .pr { font-family: Calibri, Carlito, Arial, sans-serif; font-size: 10.5pt; }
   .pr-bingkai { flex: 1 1 auto; display: flex; flex-direction: column; border: .35mm solid #000; }
   .pr-bingkai table { border-style: hidden; table-layout: fixed; }
   .pr-bingkai th, .pr-bingkai td { border: .25mm solid #000; padding: 1.2mm 1.5mm; vertical-align: middle; }
   .pr-bagian { border-bottom: .25mm solid #000; }
-  .pr-logo { text-align: center; font-size: 7pt; font-style: italic; line-height: 1.2; }
-  .pr-logo img { height: 11mm; width: auto; display: block; margin: 0 auto 1mm; }
-  .pr-judul { text-align: center; font-size: 14.5pt; font-weight: 700; line-height: 1.25; }
+  .pr-logo { text-align: center; font-size: 8pt; font-style: italic; line-height: 1.2; }
+  .pr-logo img { height: 12.5mm; width: auto; display: block; margin: 0 auto 1mm; }
+  .pr-judul { text-align: center; font-size: 16pt; font-weight: 700; line-height: 1.25; }
   .pr-persetujuan { padding: 1mm 0; text-align: center; }
-  .pr-persetujuan span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8.5pt; font-weight: 700; }
-  .pr-kepala th { text-align: center; font-size: 8.5pt; height: 6.5mm; }
-  .pr-ttd { height: 16mm; text-align: center; vertical-align: bottom; font-size: 8.5pt; line-height: 1.3; }
-  .pr-info th { text-align: center; font-size: 8.5pt; line-height: 1.15; height: 8.5mm; padding-top: .6mm; padding-bottom: .6mm; }
+  .pr-persetujuan span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 9.5pt; font-weight: 700; }
+  .pr-kepala th { text-align: center; font-size: 9.5pt; height: 7mm; }
+  .pr-ttd { height: 17mm; text-align: center; vertical-align: bottom; font-size: 9.5pt; line-height: 1.3; }
+  .pr-info th { text-align: center; font-size: 9.5pt; line-height: 1.15; height: 9mm; padding-top: .6mm; padding-bottom: .6mm; }
   .pr-info td { text-align: center; }
-  .pr-tabel thead th { text-align: center; font-size: 8pt; line-height: 1.15; padding: 1mm .8mm; }
-  .pr-tabel tbody td { height: 9mm; padding-top: .8mm; padding-bottom: .8mm; font-size: 8.5pt; line-height: 1.2; overflow-wrap: anywhere; }
-  .pr-pemasok { font-size: 7.5pt; }
-  .pr-tabel tfoot th, .pr-tabel tfoot td { height: 7mm; }
+  .pr-tabel thead th { text-align: center; font-size: 9pt; line-height: 1.15; padding: 1mm .8mm; }
+  .pr-tabel tbody td { height: 9.5mm; padding-top: .8mm; padding-bottom: .8mm; font-size: 9.5pt; line-height: 1.2; overflow-wrap: anywhere; }
+  .pr-pemasok { font-size: 8.5pt; }
+  .pr-tabel tfoot th, .pr-tabel tfoot td { height: 7.5mm; }
   .pr-tabel tfoot th { text-align: left; }
   .pr-pernyataan { border-top: .35mm solid #000; padding: 2mm 2.5mm 2.5mm; }
   .pr-pernyataan p { margin: 0 0 2mm; font-weight: 700; }
-  .pr-bingkai table.pr-pemohon { width: auto; margin-left: 28mm; table-layout: auto; }
+  /* Rincian pemohon SEJAJAR dengan kalimat di atasnya -- tanpa menjorok ke kanan */
+  .pr-bingkai table.pr-pemohon { width: auto; table-layout: auto; }
   .pr-bingkai .pr-pemohon th, .pr-bingkai .pr-pemohon td { border: 0; padding: .4mm 0; text-align: left; font-weight: 400; }
   .pr-bingkai .pr-pemohon th { padding-right: 1.5mm; white-space: nowrap; }
   /* Catatan: bagian yang memanjang sampai margin bawah */
   .pr-catatan { flex: 1 1 auto; min-height: 14mm; border-top: .25mm solid #000; padding: 2mm 2.5mm; }
-  .pr-kaki { display: flex; align-items: flex-end; gap: 10mm; padding-top: 2mm; font-family: Arial, sans-serif; font-size: 8pt; line-height: 1.3; }
+  .pr-kaki { display: flex; align-items: flex-end; gap: 10mm; padding-top: 2mm; font-family: Arial, sans-serif; font-size: 8.5pt; line-height: 1.3; }
   .pr-kaki-pt { flex: 1; text-align: center; padding-right: 30mm; }
   `;
 }

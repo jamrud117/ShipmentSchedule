@@ -16,11 +16,14 @@
 
    Isiannya kotak ber-data-dn biasa (readDocNumForm) ditambah dua daftar
    barang yang disisipkan poBacaForm():
-     prItems [{ nama, spek, qty, harga, pemasok, catatan }]
-       qty TEKS bersama satuannya ("1 SET") -- PR tidak punya kolom
-       Satuan; harga = angka perkiraan (prMataUang).
+     prItems [{ nama, spek, qty, satuan, harga, pemasok, catatan }]
+       qty & harga angka (harga = perkiraan, prMataUang).
      poItems [{ produk, spek, qty, satuan, harga, catatan }]
        qty & harga angka (currency); Amount = qty x harga.
+     QTY & SATUAN: dua kotak di form (PR & PO), TAMPIL BERSAMA di cetakan
+     & Detail -- "1 SET" (poQtyTeks). PR lama menyimpan qty TEKS bersama
+     satuannya ("1 SET"); baris begitu dipecah saat dibaca (poPrBaku),
+     jadi data di database tidak perlu diubah.
      poManual  true = daftar PO diubah sendiri (tidak lagi ikut PR).
 
    DOC NO (Groupware): bawaan "DST-<YYMM>-0000" menurut bulan Tanggal PO.
@@ -35,17 +38,18 @@
 
 const PO_DOCNO_RE = /^DST-\d{4}-0000$/i;
 const PO_FIELD = {
-  pr: ["nama", "spek", "qty", "harga", "pemasok", "catatan"],
+  pr: ["nama", "spek", "qty", "satuan", "harga", "pemasok", "catatan"],
   po: ["produk", "spek", "qty", "satuan", "harga", "catatan"],
 };
 // Isian angka (disimpan sebagai angka; kosong = "")
-const PO_ANGKA = { pr: new Set(["harga"]), po: new Set(["qty", "harga"]) };
+const PO_ANGKA = { pr: new Set(["qty", "harga"]), po: new Set(["qty", "harga"]) };
 
 const PO_LABEL = {
   pr: {
     nama: () => tt("Nama Produk", "Product Name"),
     spek: () => tt("Spesifikasi", "Specification"),
     qty: () => "QTY",
+    satuan: () => tt("Satuan", "Unit"),
     harga: () => tt("Perk. Harga Satuan", "Est. Unit Price"),
     jumlah: () => tt("Perk. Jumlah Harga", "Est. Amount"),
     pemasok: () => tt("Pemasok / Supplier", "Supplier"),
@@ -86,7 +90,7 @@ function poAngka(v) {
   return teks ? parseInputNumber(teks) : 0;
 }
 
-// "1 SET" -> 1 & "SET"; "1.000 PCS" (ribuan) -> 1000 -- teks PR datang dari orang / OCR
+// "1 SET" -> 1 & "SET"; "1.000 PCS" (ribuan) -> 1000 -- QTY PR lama (satu teks bersatuan)
 function poQtyAngka(teks) {
   const m = /^\s*(\d[\d.,]*)/.exec(String(teks == null ? "" : teks));
   return m ? parseLooseNumber(m[1]) : 0;
@@ -95,9 +99,27 @@ function poQtySatuan(teks) {
   return String(teks == null ? "" : teks).replace(/^\s*\d[\d.,]*\s*/, "").trim();
 }
 
+/* Baris PR lama -- qty TEKS bersama satuannya ("1 SET", satu kotak) --
+   dipecah jadi qty angka + satuan seperti baris sekarang. Baris yang sudah
+   berbentuk baru (qty angka / satuan terisi / qty angka saja) apa adanya. */
+function poPrBaku(b) {
+  if (!b || typeof b !== "object" || typeof b.qty === "number") return b;
+  if (String(b.satuan == null ? "" : b.satuan).trim()) return b;
+  const teks = String(b.qty == null ? "" : b.qty).trim();
+  if (!/[^\d.,\s]/.test(teks)) return b;
+  return Object.assign({}, b, { qty: poQtyAngka(teks) || "", satuan: poQtySatuan(teks) });
+}
+
+// Qty & satuan sebagai SATU teks tampilan: "1 SET" (satuan kapital) -- isiannya tetap dua kotak
+function poQtyTeks(b) {
+  const x = poPrBaku(b) || {};
+  const n = poAngka(x.qty);
+  return [n ? formatNilai(n) : "", String(x.satuan == null ? "" : x.satuan).trim().toUpperCase()].filter(Boolean).join(" ");
+}
+
 function poJumlahBaris(jenis, b) {
   if (!b) return 0;
-  const qty = jenis === "pr" ? poQtyAngka(b.qty) : poAngka(b.qty);
+  const qty = poAngka((jenis === "pr" ? poPrBaku(b) : b).qty);
   const harga = poAngka(b.harga);
   return qty && harga ? Math.round(qty * harga * 100) / 100 : 0;
 }
@@ -113,6 +135,7 @@ function poBarisTerisi(jenis, b) {
 // Baris kosong dibuang; teks dirapikan, angka tetap angka ("" bila kosong)
 function poBarisBersih(jenis, daftar) {
   return (Array.isArray(daftar) ? daftar : [])
+    .map((b) => (jenis === "pr" ? poPrBaku(b) : b))
     .filter((b) => poBarisTerisi(jenis, b))
     .map((b) => {
       const o = {};
@@ -138,8 +161,8 @@ function poDariPr(prItems, mataPr, mataPo) {
   return poBarisBersih("pr", prItems).map((b) => ({
     produk: b.nama,
     spek: b.spek,
-    qty: poQtyAngka(b.qty) || "",
-    satuan: poQtySatuan(b.qty),
+    qty: b.qty,
+    satuan: b.satuan,
     harga: hargaIkut && b.harga ? b.harga : "",
     catatan: b.catatan,
   }));
@@ -190,7 +213,8 @@ function poBarisHtml(jenis, b, i) {
       ? [
           kotak("nama", "pl-nama"),
           kotak("spek", "pl-spek"),
-          kotak("qty", "pl-qty", ' placeholder="1 SET" autocomplete="off" spellcheck="false"'),
+          kotak("qty", "pl-qty", angka),
+          kotak("satuan", "pl-sat", ' placeholder="SET" autocomplete="off" spellcheck="false"'),
           kotak("harga", "pl-harga", angka),
           jumlah,
           kotak("pemasok", "pl-pemasok"),
@@ -235,6 +259,13 @@ function poGambarKaki(jenis) {
 function poGambar(jenis) {
   const body = document.getElementById(jenis === "pr" ? "poPrBody" : "poPoBody");
   if (!poBaris[jenis].length) poBaris[jenis] = [poBarisBaru(jenis)];
+  // Baris PR lama ("1 SET" satu teks) dari payload / draf: dipecah ke kotak Qty & Satuan
+  if (jenis === "pr") {
+    poBaris.pr = poBaris.pr.map((b) => {
+      const x = poPrBaku(b);
+      return x === b ? b : Object.assign(poBarisBaru("pr"), x);
+    });
+  }
   if (body) body.innerHTML = poBaris[jenis].map((b, i) => poBarisHtml(jenis, b, i)).join("");
   poGambarKaki(jenis);
 }

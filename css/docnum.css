@@ -1172,6 +1172,23 @@ table.fund-lines select {
      layarnya lebar (@container dn-riwayat di ujung berkas). */
   container: dn-riwayat / inline-size;
 }
+/* Riwayat yang dimuat ulang (renderDocNumHistory): tabel lama TETAP di
+   tempatnya -- redup & tak bisa diklik -- sampai data barunya tiba, jadi
+   halaman tidak melompat. Redupnya menunggu 250 ms: muatan biasa (terbit
+   nomor, halaman berikut, kabar realtime) tidak berkedip sama sekali;
+   tabel jenis / sub-tab lain (.is-ganti) diredupkan seketika. */
+#docNumHistory {
+  transition: opacity 0.12s ease;
+}
+#docNumHistory.is-memuat {
+  opacity: 0.55;
+  pointer-events: none;
+  transition-delay: 0.25s;
+}
+#docNumHistory.is-memuat.is-ganti {
+  opacity: 0.4;
+  transition-delay: 0s;
+}
 .docnum-history-head {
   display: flex;
   align-items: center;
@@ -3671,6 +3688,8 @@ button.dn-bayar--lunas:hover {
 .fex-rentang .date-range-trigger {
   width: 100%;
   height: 40px;
+  /* panah di ujung kanan (dashboard.css) berjarak sedikit dari tepi lengkungnya */
+  padding-right: 16px;
 }
 .fex-pratinjau {
   margin-top: 18px;
@@ -5077,22 +5096,22 @@ html[data-halaman="nameplate"] .fab-top {
 }
 /* Lebar kolom dalam persen: nama produk & supplier (teks panjang) paling lebar */
 .po-lines--pr .pl-nama {
-  width: 21%;
+  width: 20%;
 }
 .po-lines--pr .pl-spek {
-  width: 13%;
+  width: 12%;
 }
-.po-lines--pr .pl-qty {
-  width: 9%;
+.po-lines--pr :is(.pl-qty, .pl-sat) {
+  width: 7%;
 }
 .po-lines--pr :is(.pl-harga, .pl-jumlah) {
   width: 11%;
 }
 .po-lines--pr .pl-pemasok {
-  width: 19%;
+  width: 18%;
 }
 .po-lines--pr .pl-catatan {
-  width: 11%;
+  width: 9%;
 }
 .po-lines--po .pl-nama {
   width: 24%;
@@ -5109,7 +5128,8 @@ html[data-halaman="nameplate"] .fab-top {
 .po-lines--po .pl-catatan {
   width: 13%;
 }
-/* QTY & Unit rata TENGAH -- kepala dan isinya (PR: "1 SET"); harga rata kanan */
+/* QTY & Unit rata TENGAH -- kepala dan isinya, dua kotak di PR & PO (tampil
+   bersama "1 SET" di cetakan & Detail); harga rata kanan */
 .po-lines td:is(.pl-qty, .pl-sat) input {
   text-align: center;
 }

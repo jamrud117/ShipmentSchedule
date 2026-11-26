@@ -245,7 +245,13 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   font-size: 0.85rem;
   flex: 0 0 auto;
 }
+/* Panah di UJUNG KANAN pemicunya (margin-left: auto): pemicu yang
+   direntang selebar wadahnya (dialog Export Excel, ponsel) tidak lagi
+   menyisakan panah menempel di teksnya dengan ruang kosong di kanan.
+   Jaraknya dari tepi = padding kanan pemicu; pemicu selebar isinya tidak
+   berubah (tidak ada ruang sisa untuk didorong). */
 .date-range-trigger-caret {
+  margin-left: auto;
   color: var(--n-400);
   font-size: 0.7rem;
   transition: transform var(--dur-1) var(--ease);

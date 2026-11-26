@@ -724,13 +724,14 @@ function dndBarangPoPrHtml(r, jenis) {
   const angka = (n) => (n ? escapeHtml(formatNilai(n)) : "");
   let kolom = jenis === "pr"
     ? [["nama", tt("Nama Produk", "Product Name")], ["spek", tt("Spesifikasi", "Specification")], ["qty", "QTY"], ["harga", tt("Perk. Harga Satuan", "Est. Unit Price")], ["jumlah", tt("Perk. Jumlah", "Est. Amount")], ["pemasok", "Supplier"], ["catatan", tt("Catatan", "Notes")]]
-    : [["produk", "Product"], ["spek", "Spec / Model"], ["qty", "Qty"], ["satuan", "Unit"], ["harga", "Unit Price"], ["jumlah", "Amount"], ["catatan", tt("Catatan", "Notes")]];
-  const uang = new Set(["harga", "jumlah"].concat(jenis === "po" ? ["qty"] : []));
-  // QTY & Unit rata tengah (kepala & isinya), sama dengan form & cetakannya
-  const kelas = (k) => (k === "qty" || k === "satuan" ? ' class="dnd-tengah"' : uang.has(k) ? ' class="dnd-angka"' : "");
+    : [["produk", "Product"], ["spek", "Spec / Model"], ["qty", "Qty"], ["harga", "Unit Price"], ["jumlah", "Amount"], ["catatan", tt("Catatan", "Notes")]];
+  const uang = new Set(["harga", "jumlah"]);
+  /* Qty & satuan SATU kolom ("1 SET", rata tengah) -- sama dengan cetakan PO
+     & PR; di form tetap dua kotak */
+  const kelas = (k) => (k === "qty" ? ' class="dnd-tengah"' : uang.has(k) ? ' class="dnd-angka"' : "");
   const total = poTotal(jenis, daftar);
   // Kolom yang kosong di SEMUA barang tidak ditampilkan (harga PR yang belum diperkirakan, catatan)
-  const adaIsi = (k) => (k === "jumlah" ? !!total : daftar.some((b) => (uang.has(k) ? poAngka(b[k]) : String(b[k] == null ? "" : b[k]).trim())));
+  const adaIsi = (k) => (k === "jumlah" ? !!total : k === "qty" ? daftar.some((b) => poQtyTeks(b)) : daftar.some((b) => (uang.has(k) ? poAngka(b[k]) : String(b[k] == null ? "" : b[k]).trim())));
   kolom = kolom.filter(([k]) => k === "nama" || k === "produk" || adaIsi(k));
   const turunan = jenis === "po" && !poBarisBersih("po", p.poItems).length;
   return dndBagianHtml(
@@ -744,6 +745,7 @@ function dndBarangPoPrHtml(r, jenis) {
             (b, i) => `<tr><td class="dnd-no">${i + 1}</td>${kolom
               .map(([k]) => {
                 if (k === "jumlah") return `<td class="dnd-angka">${angka(poJumlahBaris(jenis, b))}</td>`;
+                if (k === "qty") return `<td${kelas(k)}>${escapeHtml(poQtyTeks(b))}</td>`;
                 if (uang.has(k)) return `<td${kelas(k)}>${angka(poAngka(b[k]))}</td>`;
                 return `<td${kelas(k)}>${escapeHtml(String(b[k] == null ? "" : b[k]))}</td>`;
               })

@@ -87,6 +87,7 @@ const FR_NAMA_MATA_UANG = {
   SGD: "Dolar Singapura",
   JPY: "Yen Jepang",
   CNY: "Yuan Tiongkok",
+  KRW: "Won Korea Selatan", // mata uang PO juga (SAY di cetakan PO, po-print.js)
 };
 function terbilangMataUang(nilai, mataUang) {
   const kode = String(mataUang || "IDR").toUpperCase();

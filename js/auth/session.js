@@ -455,13 +455,30 @@ function showLoginView() {
   }, 60);
 }
 
+/* Halaman yang dibuka (alamatnya) masih menunggu MODUL TUNDA (#/docnum,
+   #/cek, ... dibuka langsung / dimuat ulang): router() baru menggambarnya
+   sesudah modulnya siap (form-router.js). */
+function halamanMenungguModul() {
+  return (
+    typeof MODUL_TUNDA_HALAMAN !== "undefined" &&
+    typeof halamanDariHash === "function" &&
+    typeof modulTundaTermuat === "function" &&
+    MODUL_TUNDA_HALAMAN.has(halamanDariHash(location.hash || "#/")) &&
+    !modulTundaTermuat()
+  );
+}
+
 function hideLoginView() {
-  hideBootScreen();
+  /* Layar pembuka DIBIARKAN sampai halamannya tampil (showPage) bila
+     halaman itu masih menunggu modul tunda. Dulu layar pembuka langsung
+     hilang & footer langsung tampil: selama modul dimuat yang terlihat
+     kerangka kosong dengan footer di tengah layar, lalu footer melompat
+     ke bawah begitu halaman Nomor Dokumen muncul. Footer kini ikut
+     ditampilkan showPage, bersama halamannya. */
+  if (!halamanMenungguModul()) hideBootScreen();
   $("#viewLogin").classList.add("d-none");
   document.body.classList.remove("is-locked");
   aturKerangka(true);
-  const footer = $("#appFooter");
-  if (footer) footer.classList.remove("d-none");
 }
 
 function setLoginError(pesan) {

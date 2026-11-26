@@ -761,9 +761,40 @@ let dnPratinjauKe = 0;
    melempar TypeError yang -- karena fungsinya asinkron -- cuma muncul
    di konsol. Persis jebakan yang sudah pernah kena di
    renderCounterPanel(). */
+/* Nomor urut terakhir yang DIKETAHUI per jenis ({ seri, terakhir }): dari
+   bacaan database terakhir, nomor yang baru diterbitkan tab ini, atau
+   kabar realtime nomor urutnya. Dipakai sebagai tampilan sementara saat
+   pratinjau dibaca ulang -- dulu "001" berkedip sebelum nomor sebenarnya. */
+const dnNomorUrutTahu = {};
+
+/* "Nomor berikutnya" dari nomor urut terakhir yang sudah pasti (database /
+   nomor yang baru terbit) -- tanpa membaca database lagi. */
+function dnTampilkanNomorBerikut(typeKey, jenis, periodKey, lastSeq) {
+  const el = document.querySelector(`[data-dn-preview="${typeKey}"]`);
+  if (!el) return;
+  const terakhir = Number(lastSeq) || 0;
+  dnNomorUrutTahu[jenis.key] = { seri: String(periodKey), terakhir };
+  const template = docNumTemplate(typeKey, readDocNumForm(typeKey).docDate);
+  const { pad } = docNumPolaBerlaku(typeKey);
+  const berikut = terakhir + 1;
+  el.textContent = docNumFormat(template, berikut, pad);
+  el.dataset.pasti = "1";
+  renderCounterPanel(jenis, periodKey, terakhir);
+  if (typeof formatNomorGambar === "function") formatNomorGambar(berikut);
+  /* Kotak No. SI dibiarkan KOSONG, bukan diisi otomatis: nomor SI
+     bawaannya memang nomor urut CIPL, dan mengisikannya ke kotak
+     akan menyimpannya sebagai isian manual — nomor itu lalu ikut
+     terbawa ke pengajuan berikutnya. Yang ditulis cuma ancar-ancar
+     di placeholder-nya. */
+  if (typeKey === "invoice") {
+    const elSi = docNumPanelEl("invoice")?.querySelector('[data-dn="siNo"]');
+    if (elSi) elSi.placeholder = t("ph.no.si.otomatis", { n: berikut });
+  }
+}
+
 /* opsi.diam: dibaca ulang karena pengguna lain baru menerbitkan nomor
    (realtime) -- nomor yang sedang tampil tidak diganti tampilan
-   sementara dulu, jadi tidak berkedip "001" sebelum nomor sebenarnya. */
+   sementara dulu, jadi tidak berkedip sebelum nomor sebenarnya. */
 async function refreshDocNumPreview(typeKey, opsi) {
   const el = document.querySelector(`[data-dn-preview="${typeKey}"]`);
   if (!el) return;
@@ -774,7 +805,11 @@ async function refreshDocNumPreview(typeKey, opsi) {
   const { pad } = docNumPolaBerlaku(typeKey);
 
   if (!(opsi && opsi.diam)) {
-    el.textContent = docNumFormat(template, 1, pad); // tampilan sementara
+    /* Tampilan sementara: nomor berikut menurut nomor urut terakhir yang
+       diketahui (biasanya sudah benar), atau titik-titik selebar nomor
+       urutnya -- bukan "001" yang keliru lalu berganti. */
+    const tahu = dnNomorUrutTahu[jenis.key];
+    el.textContent = docNumFormat(template, tahu ? tahu.terakhir + 1 : "·".repeat(pad || 3), pad);
     delete el.dataset.pasti; // belum dibaca dari nomor urut database
   }
   try {
@@ -787,30 +822,20 @@ async function refreshDocNumPreview(typeKey, opsi) {
       .maybeSingle();
     if (error) throw error;
     if (nomorMinta !== dnPratinjauKe) return; // sub-jenis sudah berganti lagi
-    const berikut = (data ? data.last_seq : 0) + 1;
-    el.textContent = docNumFormat(template, berikut, pad);
-    el.dataset.pasti = "1";
-    renderCounterPanel(jenis, periodKey, data ? data.last_seq : 0);
-    if (typeof formatNomorGambar === "function") formatNomorGambar(berikut);
-    /* Kotak No. SI dibiarkan KOSONG, bukan diisi otomatis: nomor SI
-       bawaannya memang nomor urut CIPL, dan mengisikannya ke kotak
-       akan menyimpannya sebagai isian manual — nomor itu lalu ikut
-       terbawa ke pengajuan berikutnya. Yang ditulis cuma ancar-ancar
-       di placeholder-nya. */
-    if (typeKey === "invoice") {
-      const elSi = docNumPanelEl("invoice")?.querySelector('[data-dn="siNo"]');
-      if (elSi) elSi.placeholder = t("ph.no.si.otomatis", { n: berikut });
-    }
+    dnTampilkanNomorBerikut(typeKey, jenis, periodKey, data ? data.last_seq : 0);
   } catch (err) {
     console.error(err);
     if (nomorMinta !== dnPratinjauKe) return;
-    el.textContent = docNumFormat(template, 1, pad);
+    // Gagal dibaca: nomor urut terakhir yang diketahui di seri yang sama (bila ada), bukan "001"
+    const tahu = dnNomorUrutTahu[jenis.key];
+    const terakhir = tahu && tahu.seri === String(docNumSeries[jenis.key] || "") ? tahu.terakhir : 0;
+    el.textContent = docNumFormat(template, terakhir + 1, pad);
     /* Panel "Atur Nomor Urut" tetap ditunjuk ke seri yang BENAR walau
        angkanya gagal dibaca. Tanpa ini counterCtx masih menyimpan seri
        yang tadi dibuka, dan tombol Simpan di panel itu akan menyetel
        nomor milik jenis dokumen yang salah. */
-    renderCounterPanel(jenis, docNumSeries[jenis.key] || "-", 0);
-    if (typeof formatNomorGambar === "function") formatNomorGambar(1);
+    renderCounterPanel(jenis, docNumSeries[jenis.key] || "-", terakhir);
+    if (typeof formatNomorGambar === "function") formatNomorGambar(terakhir + 1);
   }
 }
 
@@ -2045,22 +2070,26 @@ async function submitDocNumRequest(opsi) {
   btn.innerHTML = `<i class="bi bi-arrow-repeat spin"></i> ${tt("Menerbitkan...", "Issuing...")}`;
 
   try {
-    // Format nomor terbaru (pengguna lain bisa baru saja mengubahnya, format-nomor.js)
-    if (typeof formatNomorSiap === "function") await formatNomorSiap();
+    /* Tiga bacaan sebelum nomor urut diambil, DIJALANKAN BERSAMAAN (dulu
+       bergiliran -- tiap giliran satu perjalanan ke database):
+         - format nomor terbaru (pengguna lain bisa baru saja mengubahnya,
+           format-nomor.js);
+         - Pengajuan Dana: tagihan yang sudah pernah diajukan ditolak
+           SEBELUM nomor urut diambil (menolaknya sesudah itu meninggalkan
+           nomor bolong);
+         - seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang
+           mereset dari perangkat lain. */
+    const [, ganda, periodKey] = await Promise.all([
+      typeof formatNomorSiap === "function" ? formatNomorSiap() : null,
+      typeKey === "fund" ? dnCariTagihanGanda(form) : null,
+      muatSeri(jenis.key),
+    ]);
+    if (ganda) {
+      if (!review) dnTolakTagihanGanda(ganda);
+      return { ganda };
+    }
     const template = docNumTemplate(typeKey, form.docDate);
     const { pad } = docNumPolaBerlaku(typeKey);
-    /* Tagihan yang sudah pernah diajukan ditolak SEBELUM nomor urut
-       diambil. Menolaknya sesudah itu meninggalkan nomor bolong. */
-    if (typeKey === "fund") {
-      const ganda = await dnCariTagihanGanda(form);
-      if (ganda) {
-        if (!review) dnTolakTagihanGanda(ganda);
-        return { ganda };
-      }
-    }
-
-    // Seri dibaca ULANG tepat sebelum menerbitkan: kalau ada yang mereset dari perangkat lain
-    const periodKey = await muatSeri(jenis.key);
     /* "Nomor berikutnya" yang tadi tampil -- hanya perkiraan (dibaca dari
        nomor urut database, bukan tampilan sementaranya). */
     const elPratinjau = document.querySelector(`[data-dn-preview="${typeKey}"]`);
@@ -2128,9 +2157,20 @@ async function submitDocNumRequest(opsi) {
       }
     }
 
-    tampilkanHasilDocNum(baris.out_number);
+    // Kabar realtime nomor ini gema tab ini sendiri -- riwayatnya sudah digambar ulang di bawah
+    dnNomorSendiri.forEach((pada, nomor) => {
+      if (Date.now() - pada > RT_JEDA.tulisSendiri) dnNomorSendiri.delete(nomor);
+    });
+    dnNomorSendiri.set(baris.out_number, Date.now());
     // Data pengisian customer invoice diperbarui -- tidak ditunggu (invoice-pihak.js)
     if (typeKey === "invoice" && typeof invCustomerIngat === "function") invCustomerIngat(payload);
+    /* Form dikosongkan LEBIH DULU, baru kotak hasil tampil & tombol Salin
+       difokus. Dulu terbalik: fokus menggulir ke tombol Salin, lalu form
+       yang dikosongkan mengerut (daftar barang / rincian kembali satu
+       baris) -- kotak hasil & tombolnya melompat lagi sesudah digulir. */
+    resetDocNumForm(typeKey, { keepIdentity: true });
+    docNumPage = 1;
+    tampilkanHasilDocNum(baris.out_number);
     if (perkiraan && perkiraan !== baris.out_number) {
       dnTulisHint(tt(`Nomor ${perkiraan} sudah lebih dulu dipakai pengajuan lain — pengajuan ini mendapat ${baris.out_number}.`,
         `Number ${perkiraan} was taken by another request first — this request got ${baris.out_number}.`));
@@ -2138,9 +2178,16 @@ async function submitDocNumRequest(opsi) {
     /* Langkah berikutnya hampir selalu menyalin nomornya: tombol Salin
        langsung difokus -- Enter menyalin. */
     if (!review) fokuskan($("#btnCopyDocNum"));
-    resetDocNumForm(typeKey, { keepIdentity: true });
-    docNumPage = 1;
-    await Promise.all([refreshDocNumPreview(typeKey), renderDocNumHistory()]);
+    /* SELESAI di sini -- tombol & toast tidak lagi menunggu dua bacaan
+       tambahan (dulu ±2 perjalanan ke database sesudah nomornya tersimpan):
+         - "nomor berikutnya" langsung dari nomor urut yang baru dipakai,
+           tanpa tampilan sementara "001";
+         - riwayat dimuat ulang di belakang; tabel lama tetap tampil (redup)
+           sampai yang baru tiba, jadi halaman tidak melompat. Pratinjaunya
+           dicocokkan sekali lagi dengan database, diam-diam. */
+    dnTampilkanNomorBerikut(typeKey, jenis, periodKey, baris.out_seq);
+    renderDocNumHistory();
+    refreshDocNumPreview(typeKey, { diam: true });
     if (!review) showToast(t("x.nomor.berhasil.diterbitkan", { nomor: baris.out_number }), "success");
     return { nomor: baris.out_number, payload };
   } catch (err) {
@@ -2649,27 +2696,55 @@ let docNumPageSize = 10;
    akhir berkas ini) -- tanpa "Memuat…" dan tanpa mengosongkan halaman
    dulu. Summary & Report cukup dihitung ulang dari salinannya yang sudah
    dipasangi baris barunya, bukan memuat ulang seluruh pengajuan. */
+/* Nomor permintaan riwayat: hanya jawaban permintaan TERAKHIR yang
+   digambar. Dua permintaan beruntun (terbit nomor + kabar realtime, ganti
+   halaman cepat) bisa dijawab terbalik -- yang lama menimpa yang baru. */
+let dnRiwayatKe = 0;
+
 async function renderDocNumHistory(opsi) {
   const diam = !!(opsi && opsi.diam);
   const box = $("#docNumHistory");
   const bar = $("#docNumPagination");
   if (!box) return;
+  const ke = ++dnRiwayatKe;
+  const selesaiMemuat = () => {
+    if (ke !== dnRiwayatKe) return;
+    box.classList.remove("is-memuat", "is-ganti");
+    box.removeAttribute("aria-busy");
+  };
+  // Jenis / sub-tab riwayat yang diminta -- tabel jenis lain yang masih tampil langsung diredupkan
+  const kunciIsi = `${docNumActiveTab}|${docNumHistoryKey()}|${docNumHistorySub || ""}`;
   renderDocNumSubTabs();
   dnTampilkanSaringBayar();
   /* Tab Summary TIDAK memakai kueri berhalaman di bawah: ia butuh
      seluruh pengajuan, dan penanda tab-nya bukan jenis pengeluaran --
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
   if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
+    selesaiMemuat();
     if (diam && typeof fsumGambarUlangDiam === "function" && fsumGambarUlangDiam()) return;
     return renderRingkasanDana(box, bar);
   }
   if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) {
+    selesaiMemuat();
     if (diam && typeof lapGambarUlangDiam === "function" && lapGambarUlangDiam()) return;
     return renderLaporanBiaya(box, bar);
   }
   if (!diam) {
-    box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
-    if (bar) bar.innerHTML = "";
+    /* Tabel yang sedang tampil DIPERTAHANKAN -- redup & tak bisa diklik
+       (.is-memuat, docnum.css) -- sampai data barunya tiba. Dulu diganti
+       satu baris "Memuat…": kotaknya mengempis dari ±1.500px ke 40px lalu
+       memanjang lagi, seluruh halaman melompat (paling terasa sesudah
+       menerbitkan nomor, ganti halaman, ganti tab). Kotak yang masih
+       kosong (pertama dibuka) tetap bertuliskan Memuat…. */
+    if (box.querySelector(".docnum-history-wrap")) {
+      box.classList.add("is-memuat");
+      // Tabel jenis / sub-tab LAIN: redup seketika (bukan data jenis ini)
+      box.classList.toggle("is-ganti", box.dataset.isi !== kunciIsi);
+    } else {
+      box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
+      if (bar) bar.innerHTML = "";
+    }
+    box.setAttribute("aria-busy", "true");
   }
 
   const jenis = resolveDocNumType(docNumActiveTab);
@@ -2723,12 +2798,13 @@ async function renderDocNumHistory(opsi) {
       if (hasil.error) throw hasil.error;
       ({ data, count } = hasil);
     }
-    if (keadaan() !== keadaanKirim) return;
+    if (keadaan() !== keadaanKirim || ke !== dnRiwayatKe) return;
 
     /* Disimpan supaya tombol cetak tidak perlu memanggil database lagi —
        barisnya sudah ada di layar. Sengaja dipastikan berupa LARIK:
        kalau kueri mengembalikan null, .find() akan meledak saat ditekan. */
     docNumHistoryRows = Array.isArray(data) ? data : [];
+    box.dataset.isi = kunciIsi;
 
     const total = count || 0;
     // Halaman terakhir bisa jadi kosong setelah data dihapus
@@ -2919,7 +2995,10 @@ async function renderDocNumHistory(opsi) {
     renderDocNumPagination(total);
   } catch (err) {
     console.error(err);
+    if (ke !== dnRiwayatKe) return;
     box.innerHTML = `<div class="docnum-empty">${tt("Gagal memuat riwayat", "Failed to load history")}: ${escapeHtml(err.message || t("s.kesalahan.tidak.diketahui"))}</div>`;
+  } finally {
+    selesaiMemuat();
   }
 }
 
@@ -3273,6 +3352,16 @@ document.addEventListener("change", (e) => {
      - pop-up Ubah isian / Detail yang sedang membuka nomor itu ikut tahu.
 ------------------------------------------------------------------ */
 const dnRtKabar = new Map(); // String(id) -> kabar terakhir
+/* Nomor yang baru diterbitkan tab ini (nomor -> waktu): kabar INSERT-nya
+   hanya gema -- riwayat & pratinjaunya sudah diperbarui saat terbit. */
+const dnNomorSendiri = new Map();
+const dnGemaSendiri = (x) => {
+  if (!x.baris || x.kabar.jenis !== "INSERT") return false;
+  const pada = dnNomorSendiri.get(x.baris.doc_number);
+  if (pada == null) return false;
+  dnNomorSendiri.delete(x.baris.doc_number);
+  return Date.now() - pada < RT_JEDA.tulisSendiri;
+};
 let dnRtSambung = false;
 let dnRtTunda = null;
 let dnRtTundaSeri = null;
@@ -3287,9 +3376,18 @@ if (typeof realtimeDaftar === "function") {
     clearTimeout(dnRtTunda);
     dnRtTunda = setTimeout(dnRtProses, RT_JEDA.umum);
   });
-  // Nomor urut berubah (nomor terbit, Atur Nomor Urut): "nomor berikutnya" dibaca ulang
-  realtimeDaftar("document_number_counters", () => {
+  /* Nomor urut berubah (nomor terbit, Atur Nomor Urut): "nomor berikutnya"
+     LANGSUNG dari kabarnya bila barisnya utuh & jenis-serinya yang sedang
+     tampil -- tanpa membaca database; selain itu dibaca ulang. */
+  realtimeDaftar("document_number_counters", (k) => {
     if (!dnRtHalamanTampil()) return;
+    const jenis = resolveDocNumType(docNumActiveTab);
+    const baru = k && k.utuh ? k.baru : null;
+    if (baru && baru.doc_type === jenis.key && docNumSeries[jenis.key] != null && String(baru.period_key) === String(docNumSeries[jenis.key]) && baru.last_seq != null) {
+      clearTimeout(dnRtTundaSeri);
+      dnTampilkanNomorBerikut(docNumActiveTab, jenis, baru.period_key, baru.last_seq);
+      return;
+    }
     clearTimeout(dnRtTundaSeri);
     dnRtTundaSeri = setTimeout(() => refreshDocNumPreview(docNumActiveTab, { diam: true }), RT_JEDA.umum);
   });
@@ -3367,10 +3465,11 @@ async function dnRtProses() {
     if (panel) dnPeriksaTagihanGandaLangsung(panel, sambung);
   }
 
-  // 5. Riwayat jenis yang sedang dilihat & nomor berikutnya
+  // 5. Riwayat jenis yang sedang dilihat & nomor berikutnya (gema nomor terbitan tab ini dilewati)
+  const lain = terkena.filter((x) => !dnGemaSendiri(x));
   const tabKena =
     sambung ||
-    terkena.some((x) =>
+    lain.some((x) =>
       x.docType
         ? docNumTabKeyFor(x.docType) === docNumActiveTab
         : (docNumHistoryRows || []).some((r) => String(r.id) === String(x.id)) || docNumActiveTab === "fund",

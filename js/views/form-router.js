@@ -32,8 +32,11 @@ function showPage(page) {
   if (typeof aturKerangka === "function") aturKerangka(page !== "form");
   // Laci navigasi (ponsel) tertutup begitu halamannya berganti
   if (typeof sbTutup === "function") sbTutup(false);
+  // Footer tampil BERSAMA halamannya (bukan saat layar masuk ditutup, session.js)
   const footer = $("#appFooter");
   if (footer) footer.classList.toggle("d-none", page === "form");
+  // Layar pembuka yang menunggu modul tunda (hideLoginView) ditutup begitu halaman pertama tampil
+  if (typeof hideBootScreen === "function") hideBootScreen();
   // Menu akun ikut ditutup saat berpindah halaman -- kalau tidak, ia
   // tetap menggantung terbuka di atas halaman yang baru.
   if (typeof tutupUserMenu === "function") tutupUserMenu();
@@ -152,13 +155,16 @@ function router() {
       () => {
         if (halamanDariHash(location.hash || "#/") === halaman) router();
       },
-      () =>
+      () => {
+        // Layar pembuka yang menunggu modulnya ditutup supaya pesannya terbaca
+        if (typeof hideBootScreen === "function") hideBootScreen();
         showToast(
           tt("Bagian aplikasi ini gagal dimuat (koneksi terputus?). Muat ulang halaman untuk mencoba lagi.",
             "This part of the app failed to load (connection lost?). Reload the page to try again."),
           "danger",
           { tetap: true },
-        ),
+        );
+      },
     );
     return;
   }

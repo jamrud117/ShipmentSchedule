@@ -251,7 +251,9 @@ function bacaPrHalaman(hal) {
       items.push({
         nama,
         spek,
-        qty: [qtyAngka, satuan].filter(Boolean).join(" "),
+        // Qty & Satuan dua kotak, seperti form PR & PO ("1" | "SET"); tampil bersama: 1 SET
+        qty: /\d/.test(qtyAngka) ? parseLooseNumber(qtyAngka) || "" : "",
+        satuan,
         harga: uang(teks("harga")),
         pemasok: teks("pemasok"),
         catatan: teks("catatan"),
