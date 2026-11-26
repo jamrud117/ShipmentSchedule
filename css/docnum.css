@@ -1058,6 +1058,43 @@ table.fund-lines select {
   .dn-pengaturan:has(> .dn-aturan:not(.d-none)) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  /* PO & PR -- KISI RAPAT (.po-rapat, index.html): kisi bersarang dengan
+     lajurnya sendiri. Isian pendek & tanggal di lajur sempit yang sama
+     lebar (sejajar dari baris ke baris), isian teks panjang mengisi
+     sisanya -- tidak ada isian pendek yang melebar seperempat baris dan
+     tidak ada lubang di samping kotak tanggal. Di bawah 1080px aturan ini
+     tidak berlaku: kisi biasa, dua / satu per baris. */
+  .fgrid.po-rapat > * {
+    grid-column: auto;
+  }
+  .fgrid.po-rapat > .po-r2 {
+    grid-column: span 2;
+  }
+  /* Baris bersama: Tanggal PO (selebar tanggalnya) | Drafter | Departemen |
+     Mata Uang PO -- selajur dengan Mata Uang Perkiraan PR di bawahnya. */
+  .fgrid.po-rapat--umum {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) minmax(8rem, 9rem);
+  }
+  /* Kepala PR, dua baris:
+       No. Pembelian | Nama Produk (.po-r2) | Pemasok | Kategori | Mata Uang
+       Tujuan (.po-r2) | Tgl. Permintaan | Tgl. Barang Masuk | Tenggat | Tgl. Kirim
+     No. Pembelian cukup untuk "DDI-MPD-301026-39"; lajur sempit 8-9rem
+     memuat tanggal, "Sub Material", "19 Hari" & kode mata uang. */
+  .fgrid.po-rapat--pr {
+    grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr) repeat(4, minmax(8rem, 9rem));
+  }
+  /* Kotak tanggal di lajur sempit kepala PR selebar lajurnya (paling 9rem,
+     hanya sedikit di atas lebar tanggalnya sendiri) -- tepinya sejajar
+     dengan isian pendek di atasnya. */
+  .po-rapat--pr input[data-kotak-tanggal].kt-nilai {
+    width: 100%;
+    field-sizing: fixed;
+  }
+  /* Persetujuan PR: Disusun | Tanggal Disusun (selebar tanggalnya) |
+     Disesuaikan | Diperiksa | Disetujui. */
+  .fgrid.po-rapat--setuju {
+    grid-template-columns: minmax(0, 1fr) auto repeat(3, minmax(0, 1fr));
+  }
   .dn-pengaturan > .counter-box + .counter-box {
     margin-top: var(--sp-6);
   }
@@ -4989,6 +5026,16 @@ html[data-halaman="nameplate"] .fab-top {
   display: flex;
   align-items: center;
   color: var(--n-400);
+}
+/* KISI RAPAT PO & PR (.po-rapat): lajurnya sendiri hanya di layar lebar
+   (blok min-width: 1080px di atas). Di layar sedang & ponsel kisi
+   bersarangnya "dilebur" ke kisi form: isiannya ikut berpasangan dengan
+   isian di luar kelompoknya, jadi tidak ada isian yang tertinggal sendirian
+   di baris (Penanggung Jawab + Disusun, Disesuaikan + Diperiksa, ...). */
+@media (max-width: 1079.98px) {
+  .fgrid > .po-rapat {
+    display: contents;
+  }
 }
 /* Kotak pihak (Shipper / Consignee) berkisi sendiri di dalam kisi form */
 .fgrid > .po-pihak {

@@ -2929,9 +2929,13 @@
                   <span data-en="Next number:">Nomor berikutnya:</span> <b data-dn-preview="po">&mdash;</b>
                 </span>
               </div>
-              <div class="fgrid">
+              <div class="fgrid po-rapat po-rapat--umum">
                 <!-- Baris bersama PO & PR: tanggal PO (menentukan nomornya),
-                     pembuat, departemen pembuat, mata uang PO. -->
+                     pembuat, departemen pembuat, mata uang PO. Kisi rapat
+                     (.po-rapat--umum, css/docnum.css): Tanggal PO selebar
+                     tanggalnya, Mata Uang PO selajur dengan Mata Uang
+                     Perkiraan PR di bawahnya, Drafter & Departemen mengisi
+                     sisanya -- tanpa lubang di samping kotak tanggal. -->
                 <div>
                   <label class="form-label" data-en="PO Date <span class=&quot;req&quot;>*</span>" for="dn-po-docDate">Tanggal PO <span class="req">*</span></label>
                   <input id="dn-po-docDate" type="date" class="form-control" data-dn="docDate" data-dn-required />
@@ -2989,63 +2993,72 @@
               <!-- ===== BAGIAN PR ===== -->
               <div class="po-bagian" id="poBagianPr" role="tabpanel" aria-labelledby="poTabPr" data-po-isi="pr">
                 <div class="fgrid">
-                  <div>
-                    <label class="form-label" data-en="Purchase No." for="dn-po-prNo">No. Pembelian</label>
-                    <input id="dn-po-prNo" type="text" class="form-control" data-dn="prNo" placeholder="DDI-MPD-301026-39" autocomplete="off" spellcheck="false" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Product Name" for="dn-po-prProduk">Nama Produk</label>
-                    <input id="dn-po-prProduk" type="text" class="form-control" data-dn="prProduk" placeholder="Master Model" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Supplier" for="dn-po-prPemasok">Pemasok / Supplier</label>
-                    <input id="dn-po-prPemasok" type="text" class="form-control" data-dn="prPemasok" list="poPemasokList" placeholder="Overseas" data-en-ph="Overseas" />
-                    <datalist id="poPemasokList"><option value="Overseas"></option><option value="Lokal"></option></datalist>
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Goods Category" for="dn-po-prKategori">Kategori Barang</label>
-                    <input id="dn-po-prKategori" type="text" class="form-control" data-dn="prKategori" list="poKategoriList" placeholder="Sub Material" />
-                    <datalist id="poKategoriList">
-                      <option value="Sub Material"></option>
-                      <option value="Bahan Baku"></option>
-                      <option value="Sparepart"></option>
-                      <option value="Consumable"></option>
-                      <option value="Tools"></option>
-                      <option value="Aset"></option>
-                    </datalist>
-                  </div>
-                  <div class="s6">
-                    <label class="form-label" data-en="Purpose of Use" for="dn-po-prTujuan">Tujuan Penggunaan</label>
-                    <input id="dn-po-prTujuan" type="text" class="form-control" data-dn="prTujuan" placeholder="Produksi Mold KHV" />
-                  </div>
-                  <div class="s2">
-                    <label class="form-label" data-en="Request Date" for="dn-po-prTanggal">Tanggal Permintaan</label>
-                    <input id="dn-po-prTanggal" type="date" class="form-control" data-dn="prTanggal" />
-                  </div>
-                  <div class="s2">
-                    <label class="form-label" data-en="Goods-In Date" for="dn-po-prTglMasuk">Tgl. Barang Masuk</label>
-                    <input id="dn-po-prTglMasuk" type="date" class="form-control" data-dn="prTglMasuk" title="Tgl. Permintaan Barang Masuk" data-en-title="Requested goods-in date" />
-                  </div>
-                  <div class="s2">
-                    <label class="form-label" data-en="Lead Time" for="dn-po-prTenggat">Tenggat Waktu</label>
-                    <!-- Terisi sendiri dari Tanggal Permintaan s.d. Tgl. Barang
-                         Masuk ("19 Hari") selama belum diketik sendiri -->
-                    <input id="dn-po-prTenggat" type="text" class="form-control" data-dn="prTenggat" placeholder="19 Hari" data-en-ph="19 Days" />
-                  </div>
-                  <div class="s2">
-                    <label class="form-label" data-en="Shipping Date" for="dn-po-prTglKirim">Tgl. Pengiriman</label>
-                    <input id="dn-po-prTglKirim" type="date" class="form-control" data-dn="prTglKirim" title="Tgl. Permintaan Pengiriman" data-en-title="Requested shipping date" />
-                  </div>
-                  <div class="s2">
-                    <label class="form-label" data-en="Est. Price Currency" for="dn-po-prMataUang">Mata Uang Perkiraan</label>
-                    <select id="dn-po-prMataUang" class="form-select" data-dn="prMataUang">
-                      <option selected>IDR</option>
-                      <option>USD</option>
-                      <option>CNY</option>
-                      <option>EUR</option>
-                      <option>JPY</option>
-                      <option>KRW</option>
-                    </select>
+                  <!-- KEPALA PR -- dua baris rapat (.po-rapat--pr, css/docnum.css):
+                         1. No. Pembelian | Nama Produk | Pemasok | Kategori | Mata Uang Perkiraan
+                         2. Tujuan Penggunaan | Tgl. Permintaan | Tgl. Barang Masuk | Tenggat | Tgl. Pengiriman
+                       Isian pendek & tanggal di lajur sempit yang sama lebar,
+                       jadi tepinya sejajar dari baris ke baris; Nama Produk &
+                       Tujuan Penggunaan (.po-r2, dua lajur) mengisi sisanya.
+                       Di bawah 1080px kisi biasa: dua / satu per baris. -->
+                  <div class="s12 fgrid po-rapat po-rapat--pr">
+                    <div>
+                      <label class="form-label" data-en="Purchase No." for="dn-po-prNo">No. Pembelian</label>
+                      <input id="dn-po-prNo" type="text" class="form-control" data-dn="prNo" placeholder="DDI-MPD-301026-39" autocomplete="off" spellcheck="false" />
+                    </div>
+                    <div class="po-r2">
+                      <label class="form-label" data-en="Product Name" for="dn-po-prProduk">Nama Produk</label>
+                      <input id="dn-po-prProduk" type="text" class="form-control" data-dn="prProduk" placeholder="Master Model" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Supplier" for="dn-po-prPemasok">Pemasok / Supplier</label>
+                      <input id="dn-po-prPemasok" type="text" class="form-control" data-dn="prPemasok" list="poPemasokList" placeholder="Overseas" data-en-ph="Overseas" />
+                      <datalist id="poPemasokList"><option value="Overseas"></option><option value="Lokal"></option></datalist>
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Goods Category" for="dn-po-prKategori">Kategori Barang</label>
+                      <input id="dn-po-prKategori" type="text" class="form-control" data-dn="prKategori" list="poKategoriList" placeholder="Sub Material" />
+                      <datalist id="poKategoriList">
+                        <option value="Sub Material"></option>
+                        <option value="Bahan Baku"></option>
+                        <option value="Sparepart"></option>
+                        <option value="Consumable"></option>
+                        <option value="Tools"></option>
+                        <option value="Aset"></option>
+                      </datalist>
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Est. Price Currency" for="dn-po-prMataUang">Mata Uang Perkiraan</label>
+                      <select id="dn-po-prMataUang" class="form-select" data-dn="prMataUang">
+                        <option selected>IDR</option>
+                        <option>USD</option>
+                        <option>CNY</option>
+                        <option>EUR</option>
+                        <option>JPY</option>
+                        <option>KRW</option>
+                      </select>
+                    </div>
+                    <div class="po-r2">
+                      <label class="form-label" data-en="Purpose of Use" for="dn-po-prTujuan">Tujuan Penggunaan</label>
+                      <input id="dn-po-prTujuan" type="text" class="form-control" data-dn="prTujuan" placeholder="Produksi Mold KHV" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Request Date" for="dn-po-prTanggal">Tanggal Permintaan</label>
+                      <input id="dn-po-prTanggal" type="date" class="form-control" data-dn="prTanggal" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Goods-In Date" for="dn-po-prTglMasuk">Tgl. Barang Masuk</label>
+                      <input id="dn-po-prTglMasuk" type="date" class="form-control" data-dn="prTglMasuk" title="Tgl. Permintaan Barang Masuk" data-en-title="Requested goods-in date" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Lead Time" for="dn-po-prTenggat">Tenggat Waktu</label>
+                      <!-- Terisi sendiri dari Tanggal Permintaan s.d. Tgl. Barang
+                           Masuk ("19 Hari") selama belum diketik sendiri -->
+                      <input id="dn-po-prTenggat" type="text" class="form-control" data-dn="prTenggat" placeholder="19 Hari" data-en-ph="19 Days" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Shipping Date" for="dn-po-prTglKirim">Tgl. Pengiriman</label>
+                      <input id="dn-po-prTglKirim" type="date" class="form-control" data-dn="prTglKirim" title="Tgl. Permintaan Pengiriman" data-en-title="Requested shipping date" />
+                    </div>
                   </div>
 
                   <div class="s12 tabel-isian">
@@ -3085,37 +3098,44 @@
                       Pemohon &amp; Persetujuan <span class="muted">&mdash; nama persetujuan opsional; kotaknya di PR tetap lapang untuk tanda tangan</span>
                     </div>
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" data-en="Department Name" for="dn-po-prDepartemen">Nama Departemen</label>
                     <input id="dn-po-prDepartemen" type="text" class="form-control" data-dn="prDepartemen" placeholder="PRODUKSI" data-en-ph="PRODUCTION" />
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" data-en="Head of Department" for="dn-po-prKepalaDept">Kepala Departemen</label>
                     <input id="dn-po-prKepalaDept" type="text" class="form-control" data-dn="prKepalaDept" />
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" data-en="Person in Charge" for="dn-po-prPenanggungJawab">Penanggung Jawab</label>
                     <input id="dn-po-prPenanggungJawab" type="text" class="form-control" data-dn="prPenanggungJawab" />
                   </div>
-                  <div>
-                    <label class="form-label" data-en="Prepared Date" for="dn-po-prDisusunTgl">Tanggal Disusun</label>
-                    <input id="dn-po-prDisusunTgl" type="date" class="form-control" data-dn="prDisusunTgl" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Prepared By" for="dn-po-prDisusun">Disusun</label>
-                    <input id="dn-po-prDisusun" type="text" class="form-control" data-dn="prDisusun" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Adjusted By" for="dn-po-prDisesuaikan">Disesuaikan</label>
-                    <input id="dn-po-prDisesuaikan" type="text" class="form-control" data-dn="prDisesuaikan" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Checked By" for="dn-po-prDiperiksa">Diperiksa</label>
-                    <input id="dn-po-prDiperiksa" type="text" class="form-control" data-dn="prDiperiksa" />
-                  </div>
-                  <div>
-                    <label class="form-label" data-en="Approved By" for="dn-po-prDisetujui">Disetujui</label>
-                    <input id="dn-po-prDisetujui" type="text" class="form-control" data-dn="prDisetujui" />
+                  <!-- Jalur persetujuan sebaris (.po-rapat--setuju, css/docnum.css):
+                       Disusun + tanggalnya berdampingan (tanggal selebar
+                       tanggalnya), lalu Disesuaikan, Diperiksa, Disetujui.
+                       Dulu Tanggal Disusun mendapat seperempat baris sendiri
+                       dan menyisakan lubang di sampingnya. -->
+                  <div class="s12 fgrid po-rapat po-rapat--setuju">
+                    <div>
+                      <label class="form-label" data-en="Prepared By" for="dn-po-prDisusun">Disusun</label>
+                      <input id="dn-po-prDisusun" type="text" class="form-control" data-dn="prDisusun" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Prepared Date" for="dn-po-prDisusunTgl">Tanggal Disusun</label>
+                      <input id="dn-po-prDisusunTgl" type="date" class="form-control" data-dn="prDisusunTgl" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Adjusted By" for="dn-po-prDisesuaikan">Disesuaikan</label>
+                      <input id="dn-po-prDisesuaikan" type="text" class="form-control" data-dn="prDisesuaikan" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Checked By" for="dn-po-prDiperiksa">Diperiksa</label>
+                      <input id="dn-po-prDiperiksa" type="text" class="form-control" data-dn="prDiperiksa" />
+                    </div>
+                    <div>
+                      <label class="form-label" data-en="Approved By" for="dn-po-prDisetujui">Disetujui</label>
+                      <input id="dn-po-prDisetujui" type="text" class="form-control" data-dn="prDisetujui" />
+                    </div>
                   </div>
                   <div class="s12">
                     <label class="form-label" data-en="PR Notes" for="dn-po-prCatatan">Catatan PR</label>
@@ -3188,12 +3208,15 @@ Kode Pos: 45193</textarea>
                     <label class="form-label" for="dn-po-poFinalDest">Final Destination</label>
                     <input id="dn-po-poFinalDest" type="text" class="form-control" data-dn="poFinalDest" placeholder="Jakarta, Indonesia" />
                   </div>
-                  <div>
+                  <!-- Shipment cuma "By Sea / Air / Courier / Land": sel pendek
+                       (.s2); Carrier menerima sisanya (.s4) -- tetap 12 lajur
+                       bersama Notify Party (.s6). -->
+                  <div class="s2">
                     <label class="form-label" for="dn-po-poShipment">Shipment</label>
                     <input id="dn-po-poShipment" type="text" class="form-control" data-dn="poShipment" list="poShipmentList" placeholder="By Sea" />
                     <datalist id="poShipmentList"><option value="By Sea"></option><option value="By Air"></option><option value="By Courier"></option><option value="By Land"></option></datalist>
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" for="dn-po-poCarrier">Carrier</label>
                     <input id="dn-po-poCarrier" type="text" class="form-control" data-dn="poCarrier" />
                   </div>
@@ -3245,7 +3268,9 @@ Kode Pos: 45193</textarea>
                   </div>
 
                   <div class="s12"><div class="form-subhead" data-en="Signature &amp; Groupware">Tanda Tangan &amp; Groupware</div></div>
-                  <div>
+                  <!-- Tiga isian, masing-masing sepertiga baris (.s4) -- baris
+                       penuh, tidak menyisakan seperempat kosong di ujungnya -->
+                  <div class="s4">
                     <!-- Doc No Groupware: bawaan DST-<YYMM>-0000 (bulan Tanggal
                          PO); selama 0000 belum diganti tidak ikut tersimpan,
                          dan PO mencetak bawaannya itu (po-form.js) -->
@@ -3253,11 +3278,11 @@ Kode Pos: 45193</textarea>
                     <input id="dn-po-docNo" type="text" class="form-control" data-dn="docNo" autocomplete="off" spellcheck="false" />
                     <div class="form-text-note po-docno-ket" id="poDocNoKet"></div>
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" data-en="Signed By — Name" for="dn-po-poTtdNama">Signed By — Nama</label>
                     <input id="dn-po-poTtdNama" type="text" class="form-control" data-dn="poTtdNama" value="Kim Taewan" />
                   </div>
-                  <div>
+                  <div class="s4">
                     <label class="form-label" data-en="Signed By — Position" for="dn-po-poTtdJabatan">Signed By — Jabatan</label>
                     <input id="dn-po-poTtdJabatan" type="text" class="form-control" data-dn="poTtdJabatan" value="General Manager" />
                   </div>
