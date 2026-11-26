@@ -1446,9 +1446,10 @@ function danaTambahSebagaiDokumen(h) {
 function danaIsiForm(h) {
   const panel = typeof docNumPanelEl === "function" ? docNumPanelEl("fund") : null;
   if (!panel) return false;
-  const setel = (kunci, nilai) => {
+  // kosongPun: nilai kosong ikut ditulis (mengosongkan kotaknya), bukan dilewati
+  const setel = (kunci, nilai, kosongPun) => {
     const el = panel.querySelector(`[data-dn="${kunci}"]`);
-    if (!el || nilai == null || nilai === "") return;
+    if (!el || nilai == null || (nilai === "" && !kosongPun)) return;
     // Vendor dari invoice: masuk ke dropdown vendor (nama yang sama memakai tulisan yang sudah ada)
     if (kunci === "payee" && typeof fundVendorPastikan === "function") nilai = fundVendorPastikan(nilai, el);
     if (el.tagName === "SELECT" && ![...el.options].some((o) => o.value === nilai)) return;
@@ -1464,7 +1465,9 @@ function danaIsiForm(h) {
   setel("invoiceNo", h.invoiceNo);
   if (h.jenisDokumen === "billing") {
     setel("billingNo", h.billingNo);
-    ["feeBm", "feePpn", "feePph"].forEach((k) => setel(k, h.fee[k] ? String(Math.round(h.fee[k])) : ""));
+    /* Ketiga pungutan DIGANTI, yang nol pun (dikosongkan): angka form
+       sebelumnya tidak boleh tertinggal dan ikut terjumlah ke Total PDRI. */
+    ["feeBm", "feePpn", "feePph"].forEach((k) => setel(k, h.fee[k] ? String(Math.round(h.fee[k])) : "", true));
   }
   setel("invoiceDate", h.invoiceDate);
   setel("invoiceDueDate", h.invoiceDueDate);

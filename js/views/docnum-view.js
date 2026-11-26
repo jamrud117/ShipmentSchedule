@@ -2441,7 +2441,11 @@ function syncDocNumConditional(panel) {
      tidak boleh mendadak mendapat nomor bawaan (fund-vendor-aturan.js). */
   fundNoInvoiceKeterangan(panel);
   // Isian nomor tagihan yang tampil bisa berganti (Billing / invoice), dan form bisa baru dikosongkan / dibuka
-  if (panel.matches && panel.matches('[data-docnum-panel="fund"]')) dnPeriksaTagihanGandaLangsung(panel);
+  if (panel.matches && panel.matches('[data-docnum-panel="fund"]')) {
+    dnPeriksaTagihanGandaLangsung(panel);
+    // Total PDRI Billing: kotak pungutannya bisa baru diisi tanpa peristiwa input (draf, buka untuk diubah, kosongkan)
+    if (typeof gambarTotalPdri === "function") gambarTotalPdri();
+  }
 }
 
 function dnPunyaPilihan(sel, nilai) {

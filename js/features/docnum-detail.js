@@ -602,6 +602,8 @@ function dndBiayaHtml(r) {
 
   const baris = frBarisRincian(p).filter((b) => b.nilai);
   if (!baris.length) return "";
+  // Bea Masuk + PPN + PPH = Total PDRI, seperti di form Billing (gambarTotalPdri); Nominal format lama tetap TOTAL
+  const pungutan = [p.feeBm, p.feePpn, p.feePph].some((v) => frAngka(v) > 0);
   return dndBagianHtml(
     tt("Rincian Pungutan", "Charge Breakdown"),
     `<div class="dnd-tabel-wrap">
@@ -623,7 +625,7 @@ function dndBiayaHtml(r) {
       </table>
     </div>
     <div class="fund-lines-foot dnd-jumlah">
-      ${jumlah("TOTAL", frNilai(frTotal(baris), mata), "fl-sum--total")}
+      ${jumlah(pungutan ? "Total PDRI" : "TOTAL", frNilai(frTotal(baris), mata), "fl-sum--total")}
     </div>`,
   );
 }

@@ -222,20 +222,20 @@ function frBarisRujukan(p, kolom) {
 }
 
 function frKotakTtd(label, nama, jabatan) {
-  /* Nama & jabatan dibungkus SATU blok (.ttd-blok), bukan dua baris
-     lepas. Blok itu menempel di tepi kiri selnya -- sejajar dengan
-     labelnya ("Made by ;") -- sementara di DALAM blok keduanya rata
-     tengah satu sama lain, jadi jabatan tetap duduk di tengah nama.
+  /* Label ("Made by :"), nama & jabatan RATA KIRI pada tepi yang sama --
+     tiap kolom tanda tangan punya satu garis kiri yang lurus.
 
-     Merata-tengahkan keduanya terhadap SEL membuat nama melayang jauh
-     dari labelnya: label di tepi kiri, nama di tengah kolom. */
+     Dulu nama & jabatan rata tengah SATU SAMA LAIN di dalam bloknya: yang
+     lebih pendek menjorok sendiri-sendiri ("Drafter" di bawah "Yogi
+     Firgiawan", "Mr. Shin Na Ra" di atas "Chief Marketing Officer"), jadi
+     tepi kirinya bergerigi dan tiap kolom berbeda. Merata-tengahkan
+     keduanya terhadap SEL juga bukan jawabannya: nama melayang jauh dari
+     labelnya (label di tepi kiri, nama di tengah kolom). */
   return `<td class="ttd-cell">
     <div class="ttd-label">${escapeHtml(label)}</div>
     <div class="ttd-ruang"></div>
-    <div class="ttd-blok">
-      <div class="ttd-nama"><span>${escapeHtml(nama || "")}</span></div>
-      <div class="ttd-jabatan">${escapeHtml(jabatan || "")}</div>
-    </div>
+    <div class="ttd-nama"><span>${escapeHtml(nama || "")}</span></div>
+    <div class="ttd-jabatan">${escapeHtml(jabatan || "")}</div>
   </td>`;
 }
 
@@ -1048,16 +1048,15 @@ ${kopSuratCss()}
      terpanjang ("Chief Marketing Officer") merebut ruang dari
      tetangganya -- jaraknya jadi tidak rata. */
   .ttd { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  .ttd-cell { width: 33.33%; vertical-align: top; }
+  .ttd-cell { width: 33.33%; vertical-align: top; text-align: left; }
   .ttd--empat .ttd-cell { width: 25%; }
   .ttd-label { margin-bottom: 1.5mm; }
   /* Ruang tanda tangan basah. */
   .ttd-ruang { height: 24mm; }
-  /* Blok nama+jabatan SEJAJAR DENGAN LABELNYA (rata kiri sel), dan di
-     dalamnya keduanya rata tengah satu sama lain. Garis bawah ikut
-     selebar namanya saja -- garis yang memanjang sampai tepi kolom
-     terbaca seperti garis tabel, bukan garis tanda tangan. */
-  .ttd-blok { display: inline-block; text-align: center; }
+  /* Label, nama & jabatan rata kiri pada tepi yang sama (frKotakTtd, rata
+     kiri di .ttd-cell). Garis bawah selebar namanya saja -- garis yang
+     memanjang sampai tepi kolom terbaca seperti garis tabel, bukan garis
+     tanda tangan. */
   .ttd-nama { font-weight: 700; }
   .ttd-nama span { text-decoration: underline; }
   .ttd-jabatan { font-size: 9pt; }

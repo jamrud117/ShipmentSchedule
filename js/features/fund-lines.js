@@ -1081,6 +1081,7 @@ function perbaruiHitunganRincian() {
    menggambarnya ulang tidak merebut fokus. */
 function gambarKakiRincian() {
   segarkanSatuanDana();
+  gambarTotalPdri(); // kaki format Billing: mata uang & bahasanya ikut
   const kaki = document.getElementById("fundLinesFoot");
   if (!kaki) return;
   const r = fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), fundDokumen, fundTotalManual);
@@ -1271,6 +1272,47 @@ if (fundKakiEl) {
     gambarKakiRincian();
   });
 }
+
+/* ==================================================================
+   TOTAL PDRI -- FORMAT BILLING
+
+   Rincian Pungutan Billing cuma tiga kotak (Bea Masuk, PPN Import, PPH
+   Import); di bawahnya Total PDRI = BM + PPN + PPH. Dibaca dengan
+   parseLooseNumber, pembaca yang sama dengan surat cetaknya (frAngka di
+   frBarisRincian, fund-request-print.js -- berkas itu dimuat SESUDAH
+   berkas ini, jadi tidak dipanggil langsung), sehingga angkanya sama
+   dengan TOTAL & Terbilang surat itu. Hanya tampilan: yang tersimpan
+   tetap ketiga isiannya.
+
+   Digambar ulang saat salah satu kotak diketik atau diisi pembaca billing
+   (peristiwa "input", danaIsiForm), bersama kaki Rincian Biaya
+   (gambarKakiRincian: mata uang berganti, ganti bahasa), dan saat form
+   diisi tanpa peristiwa -- dipulihkan dari draf, dibuka untuk diubah,
+   dikosongkan (syncDocNumConditional).
+================================================================== */
+const FUND_PUNGUTAN = ["feeBm", "feePpn", "feePph"];
+
+function fundTotalPdriForm() {
+  const panel = document.querySelector('[data-docnum-panel="fund"]');
+  if (!panel) return 0;
+  const jumlah = FUND_PUNGUTAN.reduce((n, k) => {
+    const el = panel.querySelector(`[data-dn="${k}"]`);
+    return n + (el ? parseLooseNumber(el.value) : 0);
+  }, 0);
+  return fundBulatSen(jumlah);
+}
+
+function gambarTotalPdri() {
+  const kaki = document.getElementById("fundPdriFoot");
+  if (!kaki) return;
+  const rumus = tt("BM + PPN + PPH", "Import Duty + PPN + PPH");
+  kaki.innerHTML = `<div class="fl-sum fl-sum--total"><span>Total PDRI <small class="fl-pdri-rumus">(${escapeHtml(rumus)})</small></span><b>${escapeHtml(fundUangForm(fundTotalPdriForm()))}</b></div>`;
+}
+
+const FUND_PUNGUTAN_KOTAK = FUND_PUNGUTAN.map((k) => `[data-docnum-panel="fund"] [data-dn="${k}"]`).join(", ");
+document.addEventListener("input", (e) => {
+  if (e.target.closest && e.target.closest(FUND_PUNGUTAN_KOTAK)) gambarTotalPdri();
+});
 
 const fundLinesBodyEl = document.getElementById("fundLinesBody");
 

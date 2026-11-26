@@ -365,6 +365,16 @@ table.fund-lines select {
   border-top: 1px solid var(--border);
   font-size: var(--t-base);
 }
+/* Total PDRI format Billing (fund-lines.js, gambarTotalPdri): tepat di bawah
+   tiga kotak pungutan -- jarak kisinya sudah cukup. */
+.fund-pdri-foot {
+  margin-top: 0;
+}
+.fl-pdri-rumus {
+  margin-left: 4px;
+  font-size: var(--t-xs);
+  color: var(--n-500);
+}
 /* GRAND TOTAL / TOTAL dokumen yang BISA DIUBAH (fund-lines.js, kotakTotalHtml):
    tampak seperti angka tebal biasa + ikon pensil; garis bawah tipis saat
    disorot, kotak penuh saat diketik. Disesuaikan manual = warna aksen. */
