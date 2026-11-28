@@ -61,6 +61,17 @@ function fundInvoiceBolehSama(payee) {
   return fundInvoiceSama.some((vendor) => fundDocNoCocok(kata, fundDocNoKata(vendor)));
 }
 
+/* PENGAJUAN BEREKENING: vendor di daftar ini (JNE) dan BUKAN Billing --
+   isian No. Invoice-nya nomor rekening (JNE tidak memakai nomor invoice
+   lagi), Nama Bank & No. Resi ikut. Satu penentu untuk form
+   (dnSelaraskanRekening), cetakan (Bank No. / Tracking No.), Detail &
+   Groupware. */
+function fundPakaiRekening(p) {
+  const x = p || {};
+  if (typeof danaJenisBilling === "function" && danaJenisBilling(x.expenseType)) return false;
+  return fundInvoiceBolehSama(x.payee);
+}
+
 /* Pesan galat untuk entri baru, atau "" kalau boleh ditambahkan. */
 function fundInvoicePeriksa(teks) {
   const rapi = fundDocNoRapikan(teks);

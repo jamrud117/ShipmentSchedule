@@ -132,13 +132,8 @@ body.is-locked {
   gap: 10px;
   min-width: 0;
   padding: 8px 10px;
-  border-radius: var(--r-md);
   cursor: pointer;
   transition: background var(--dur-1) var(--ease);
-}
-.user-chip:hover,
-.user-chip.is-open {
-  background: rgba(255, 255, 255, 0.08);
 }
 .user-chip-main {
   flex: 1;
@@ -150,44 +145,22 @@ body.is-locked {
 }
 .user-chip-name {
   font-size: var(--t-sm);
-  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.user-chip-role {
-  color: rgba(255, 255, 255, 0.55);
-}
-.user-chip-role.is-exim {
-  color: var(--sec-300);
-}
 /* Marketing & Finance: warna sendiri, supaya langsung terbaca bahwa
    akun ini bukan EXIM walau bisa membuka Nomor Dokumen. */
-.user-chip-role.is-marketing {
-  color: #9ec5fe;
-}
-.user-chip-role.is-finance {
-  color: #8fd8c0;
-}
-.user-chip-role.is-purchasing {
-  color: #f3cf8e;
-}
-.user-chip-role.is-engineering {
-  color: #c4b1f2;
-}
 /* Inisial nama (session.js), bukan ikon orang generik -- sama dengan
    avatar di halaman Akun. */
 .user-chip-avatar {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: var(--sec-400);
-  color: var(--navy);
   display: grid;
   place-items: center;
   font-family: var(--font-display);
   font-size: 0.85rem;
-  font-weight: 800;
   flex-shrink: 0;
 }
 
@@ -396,7 +369,6 @@ body.hanya-popr .docnum-actions {
    -- dulu disamarkan di sini dan tetap bisa difokus lewat labelnya. */
 body.is-viewer .status-select {
   pointer-events: none;
-  opacity: 0.72;
   background: var(--n-50);
 }
 
@@ -440,28 +412,47 @@ body.is-viewer .status-select {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--n-100);
-  color: var(--n-600);
   font-family: var(--font-display);
   font-weight: 700;
 }
-.acct-avatar.is-exim {
+/* WARNA PERAN -- satu sumber untuk avatar di daftar Akun, avatar chip
+   pengguna di kaki sidebar, dan pil peran di keterangan "Hak Tiap
+   Peran": avatar seseorang selalu berwarna sama dengan perannya.
+   Viewer abu (--peran-abu: di mode gelap satu tingkat lebih terang,
+   karena --n-100 nyaris sama dengan permukaan kartu). */
+.acct-avatar,
+.acct-legend-peran,
+.user-chip-avatar.is-viewer {
+  background: var(--peran-abu);
+  color: var(--n-600);
+}
+.acct-avatar.is-exim,
+.acct-legend-peran.is-exim,
+.user-chip-avatar.is-exim {
   background: var(--p-600);
   color: #fff;
 }
-.acct-avatar.is-marketing {
+.acct-avatar.is-marketing,
+.acct-legend-peran.is-marketing,
+.user-chip-avatar.is-marketing {
   background: var(--w-bg-e7f0ff);
   color: var(--w-teks-1d4ed8);
 }
-.acct-avatar.is-finance {
+.acct-avatar.is-finance,
+.acct-legend-peran.is-finance,
+.user-chip-avatar.is-finance {
   background: var(--w-bg-e3f4ee);
   color: var(--w-teks-0f6b52);
 }
-.acct-avatar.is-purchasing {
+.acct-avatar.is-purchasing,
+.acct-legend-peran.is-purchasing,
+.user-chip-avatar.is-purchasing {
   background: var(--w-bg-fff3de);
   color: var(--w-teks-8a5a00);
 }
-.acct-avatar.is-engineering {
+.acct-avatar.is-engineering,
+.acct-legend-peran.is-engineering,
+.user-chip-avatar.is-engineering {
   background: var(--w-bg-f3eefe);
   color: var(--w-teks-6a3fc2);
 }
@@ -472,7 +463,8 @@ body.is-viewer .status-select {
 }
 /* Nonaktif: belum dibuka EXIM -- hanya garis tepi, tanpa warna peran. */
 .acct-avatar.is-nonaktif,
-.acct-legend-peran.is-nonaktif {
+.acct-legend-peran.is-nonaktif,
+.user-chip-avatar.is-nonaktif {
   background: transparent;
   color: var(--n-500);
   box-shadow: inset 0 0 0 1px var(--n-300);
@@ -551,28 +543,6 @@ body.is-viewer .status-select {
 .acct-legend-peran {
   justify-self: start;
   border-radius: 999px;
-  background: var(--n-100);
-  color: var(--n-600);
-}
-.acct-legend-peran.is-exim {
-  background: var(--p-600);
-  color: #fff;
-}
-.acct-legend-peran.is-marketing {
-  background: var(--w-bg-e7f0ff);
-  color: var(--w-teks-1d4ed8);
-}
-.acct-legend-peran.is-finance {
-  background: var(--w-bg-e3f4ee);
-  color: var(--w-teks-0f6b52);
-}
-.acct-legend-peran.is-purchasing {
-  background: var(--w-bg-fff3de);
-  color: var(--w-teks-8a5a00);
-}
-.acct-legend-peran.is-engineering {
-  background: var(--w-bg-f3eefe);
-  color: var(--w-teks-6a3fc2);
 }
 
 /* Pemilih bahasa — dipakai di layar masuk & menu akun. */

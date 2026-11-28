@@ -15,9 +15,8 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: #edf1f4;
-  color: #0f1b27;
-  font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #0b1d33;
+  font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 :root {
@@ -104,8 +103,6 @@ body {
   --r-xs: 4px;
   --r-sm: 6px;
   --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 14px;
   --r-pill: 999px;
 
   /* ---- Jarak, kelipatan 4 ---- */
@@ -139,16 +136,20 @@ body {
   --dur-2: 190ms;
   --dur-3: 280ms;
 
-  /* Tipografi (css/fonts.css memuat berkasnya).
-     --font-display : judul komponen & tombol (Plex Sans, tebal)
-     --font-board   : papan penunjuk -- judul halaman, angka besar
-                      (Barlow Condensed)
+  /* Tipografi (css/fonts.css memuat berkasnya). Satu keluarga, Archivo
+     variabel: lebar huruf yang membedakan peran (css/peta-laut.css) --
+     judul melebar, angka & pengenal menyempit dan rata lebar.
+     --font-display : judul komponen & tombol
+     --font-board   : judul halaman & angka besar (dilebarkan 118%)
      --font-body    : seluruh isi
-     --font-mono    : HANYA pengenal (no. aju, B/L, invoice, HS Code) */
-  --font-display: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-board: "Barlow Condensed", "IBM Plex Sans", "Arial Narrow", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+     --font-mono    : pengenal (no. aju, B/L, invoice, HS Code) -- bukan
+                      lagi huruf monospace: Archivo menyempit + tabular
+     --font-merek   : HANYA logo tulisan EXIM·DDI (Barlow Condensed) */
+  --font-display: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-board: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-merek: "Barlow Condensed", "Archivo", "Arial Narrow", sans-serif;
 
   /* Plex bertubuh sedikit lebih kecil dari Inter pada ukuran yang sama:
      skala dinaikkan setengah langkah supaya teks tabel tetap enak dibaca. */
@@ -173,16 +174,16 @@ body {
   --coral: var(--s-danger);
   --green: var(--s-ok);
   --violet: var(--s-info);
-  --bg: #edf1f4;
   --surface: #ffffff;
   --ink: var(--n-900);
   --muted: var(--n-500);
-  --border: var(--n-200);
   /* Kerangka muat (css/dashboard.css): balok abu & kilau yang menyapu.
      Di mode gelap --n-100 hampir sama dengan --surface, jadi baloknya
      memakai pasangan tersendiri. */
   --kerangka: var(--n-100);
   --kerangka-kilau: var(--n-200);
+  /* Warna peran Viewer (avatar & pil peran, css/auth.css). */
+  --peran-abu: var(--n-100);
 
   /* ---- Garis tepi KONTROL ---------------------------------------
      --border (#dfe5ed) hanya 1,27:1 terhadap putih. Untuk garis
@@ -194,7 +195,6 @@ body {
      meminta minimal 3:1 untuk batas seperti itu. #7d8b9f mencapai
      3,46:1 di atas putih dan 3,23:1 di atas kertas — cukup terlihat
      tanpa berubah jadi kotak bergaris tebal. */
-  --border-control: #7a8795;
 
   /* ---- TEKS BERAKSEN --------------------------------------------
      Aksen kuat (--p-500..700, navy, kuningan, warna status) dipakai
@@ -205,7 +205,6 @@ body {
   --tp-500: var(--p-500);
   --tp-600: var(--p-600);
   /* Teks judul tetap tinta navy, bukan biru aksi: biru hanya untuk yang bisa diklik */
-  --tp-700: #0b1d33;
   --tsec-600: var(--sec-600);
   --tsec-700: var(--sec-700);
   --ts-danger: var(--s-danger);
@@ -306,10 +305,6 @@ body {
        teks terang & judul kuningan di atasnya tetap ≥ 5,7 : 1. */
     --footer-latar: linear-gradient(180deg, #1d4473 0%, #142f51 100%);
 
-    --n-50: #0d151d;
-    --n-100: #131e29;
-    --n-200: #243241;
-    --n-300: #354558;
     --n-400: #6c7c8f;
     --n-500: #98a8b9;
     --n-600: #b2bfcd;
@@ -351,10 +346,9 @@ body {
     --ts-ok: #a9cbf1;
 
     --text-placeholder: #7d8b9d;
-    --surface: #121d29;
-    --bg: var(--n-50);
     --border-control: #5f7186;
     --kerangka: var(--n-200);
+    --peran-abu: var(--n-200);
     --kerangka-kilau: var(--n-300);
 
     --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -437,7 +431,6 @@ body {
   }
   :root[data-tema="gelap"],
   :root[data-tema="gelap"] body {
-    background: var(--n-50);
     color: var(--n-900);
   }
   /* Kotak yang Bootstrap beri latar sendiri */

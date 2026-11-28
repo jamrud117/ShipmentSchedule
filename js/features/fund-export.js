@@ -12,9 +12,13 @@
      - Vendor ("Dibayarkan Kepada"): ejaan yang hanya beda huruf besar /
        tanda baca ("PT. WIDE LOGISTICS", "PT WIDE LOGISTICS") satu vendor;
      - Rentang tanggal menurut Tanggal Invoice ATAU Jatuh Tempo invoice.
-   Jumlah pengajuan, totalnya, dan beberapa baris pertama tampil langsung
-   setiap saringan diubah: yang diunduh persis yang terlihat. Pilihan
-   saringan bertahan selama halaman terbuka.
+   Hasil saringannya tampil langsung sebagai DAFTAR BERCENTANG (semua
+   tercentang): lepas centang yang tidak ikut, atau "Pilih semua" lalu
+   centang beberapa saja -- kotak cari membantu menemukan satu invoice.
+   Yang diunduh persis yang tercentang (fexDipilih); jumlah & totalnya
+   di atas daftar, jumlahnya juga di tombol Unduh. Pilihan saringan
+   bertahan selama halaman terbuka; centangnya kembali penuh tiap dialog
+   dibuka & saat Reset.
 
    PERAN: terbuka untuk setiap peran yang bisa membuka riwayat Pengajuan
    Dana -- EXIM, FINANCE, Marketing. Export hanya MEMBACA (tidak ada data
@@ -159,7 +163,6 @@ const fexFormatSah = (f) => (FEX_FORMAT[f] ? f : "paymentPlan");
 let fexTahunPilih = "";
 const FEX_SARINGAN_AWAL = { bayar: "", vendor: "", dasar: "invoice", dari: "", sampai: "" };
 const fexSaringan = Object.assign({}, FEX_SARINGAN_AWAL);
-const FEX_PRATINJAU = 5; // baris contoh di dialog
 const FEX_PER_AMBIL = 1000;
 
 /* ----------------------------- data ------------------------------ */
@@ -880,6 +883,26 @@ let fexSibuk = false;
 
 const fexDialog = () => document.getElementById("danaEksporModal");
 const fexHasil = () => (fexSemua ? fexUrut(fexSaring(fexSemua, fexSaringan), fexSaringan.dasar) : []);
+
+/* PILIH PENGAJUAN YANG DIEKSPOR
+
+   Daftar di dialog = SEMUA pengajuan hasil saringan (status bayar,
+   vendor, rentang tanggal), tiap baris bercentang -- bawaannya
+   tercentang semua, jadi tanpa menyentuhnya hasilnya sama dengan dulu.
+   Yang DILEPAS dicatat per id (fexTidakDipilih): mengganti saringan tidak
+   mengembalikannya; Reset & membuka dialog lagi mengosongkannya. Kotak
+   cari hanya menyaring DAFTAR (mencari satu invoice di antara ratusan),
+   "Pilih semua" memilih / melepas yang sedang tampil. Yang diunduh =
+   yang tercentang (fexDipilih), tombol Unduh menyebut jumlahnya. */
+const fexTidakDipilih = new Set();
+let fexCariDaftar = "";
+const fexKunciBaris = (b) => String(b.id);
+const fexDipilih = () => fexHasil().filter((b) => !fexTidakDipilih.has(fexKunciBaris(b)));
+const fexCocokCari = (b, kata) => !kata || [b.vendor, b.nomor, b.nomorSurat, b.subject].some((x) => String(x || "").toUpperCase().includes(kata));
+const fexTampil = () => {
+  const kata = fexCariDaftar.trim().toUpperCase();
+  return fexHasil().filter((b) => fexCocokCari(b, kata));
+};
 const fexTahun = () => fexTahunPilih || fexTahunOtomatis(fexHasil(), fexSaringan);
 const fexTeksTotal = (baris) => fexTotal(baris).map(([m, n]) => escapeHtml(typeof frNilai === "function" ? frNilai(n, m) : `${m} ${n}`)).join(" + ");
 
@@ -949,7 +972,7 @@ function fexIsiDialogHtml() {
     <div class="modal-footer dialog-foot">
       <button type="button" class="btn-quiet fex-reset" data-fex-reset><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
       <button type="button" class="btn-quiet" data-bs-dismiss="modal">${escapeHtml(tt("Batal", "Cancel"))}</button>
-      <button type="button" class="btn-primary-navy fex-unduh" id="danaEksporUnduh" data-fex-unduh disabled><i class="bi bi-download"></i> ${escapeHtml(tt("Unduh Excel", "Download Excel"))}</button>
+      <button type="button" class="btn-primary-navy fex-unduh" id="danaEksporUnduh" data-fex-unduh disabled><i class="bi bi-download"></i> ${escapeHtml(tt("Unduh Excel", "Download Excel"))} <span class="fex-unduh-n"></span></button>
     </div>`;
 }
 
@@ -997,43 +1020,113 @@ function fexIsiPetunjukGw() {
 
 function fexGambarPratinjau() {
   const box = document.getElementById("fexPratinjau");
-  const tombol = document.querySelector("[data-fex-unduh]");
   fexIsiPetunjukGw();
   if (!box) return;
   const hasil = fexHasil();
-  if (tombol && !fexSibuk) tombol.disabled = !hasil.length;
   if (fexGalat) {
     box.innerHTML = `<div class="fex-pesan fex-pesan--galat"><i class="bi bi-exclamation-triangle"></i> ${escapeHtml(tt("Data Pengajuan Dana gagal dimuat.", "The fund requests could not be loaded."))}
       <button type="button" class="btn-quiet fex-ulang" data-fex-ulang>${escapeHtml(tt("Coba lagi", "Try again"))}</button></div>`;
-    return;
-  }
-  if (!fexSemua) {
+  } else if (!fexSemua) {
     box.innerHTML = `<div class="fex-pesan"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${escapeHtml(tt("Memuat Pengajuan Dana…", "Loading fund requests…"))}</div>`;
-    return;
-  }
-  if (!hasil.length) {
+  } else if (!hasil.length) {
     box.innerHTML = `<div class="fex-pesan"><i class="bi bi-inbox"></i> ${escapeHtml(tt("Tidak ada pengajuan yang cocok dengan saringan ini.", "No requests match these filters."))}</div>`;
+  } else {
+    /* Kerangka (ringkasan, Pilih semua + cari, tabel) dibuat sekali; daftar
+       barisnya digambar ulang sendiri -- kotak cari tidak kehilangan fokus. */
+    if (!box.querySelector("#fexDaftarIsi")) {
+      box.innerHTML = `
+        <div class="fex-ringkas" id="fexRingkas"></div>
+        <div class="fex-alat">
+          <label class="fex-semua"><input type="checkbox" class="form-check-input" data-fex-semua><span>${escapeHtml(tt("Pilih semua", "Select all"))}</span></label>
+          <div class="fex-cari">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" class="login-input" data-fex-cari value="${escapeAttr(fexCariDaftar)}" autocomplete="off" spellcheck="false"
+              placeholder="${escapeAttr(tt("Cari vendor / no. invoice", "Search vendor / invoice no."))}" aria-label="${escapeAttr(tt("Cari di daftar pengajuan", "Search the request list"))}">
+          </div>
+        </div>
+        <div class="fex-daftar">
+          <table class="fex-tabel">
+            <thead><tr><th class="fex-cek"><span class="visually-hidden">${escapeHtml(tt("Diekspor", "Exported"))}</span></th><th>Vendor · Invoice No.</th><th id="fexKolomTgl"></th><th class="fex-angka">Nominal</th></tr></thead>
+            <tbody id="fexDaftarIsi"></tbody>
+          </table>
+        </div>`;
+    }
+    fexGambarDaftar();
     return;
   }
+  fexPerbaruiPilihan();
+}
+
+/* Baris daftar (yang cocok dengan kotak cari). Tiga kolom isi: No.
+   Invoice di bawah nama vendor (bukan kolom sendiri) -- tabelnya tetap
+   muat di ponsel 360px tanpa menggeser Nominal keluar. */
+function fexGambarDaftar() {
+  const isi = document.getElementById("fexDaftarIsi");
+  if (!isi) return;
   const jatuh = fexSaringan.dasar === "jatuhTempo";
-  /* Tiga kolom: No. Invoice di bawah nama vendor (bukan kolom sendiri) --
-     tabelnya tetap muat di ponsel 360px tanpa menggeser Nominal keluar. */
-  const contoh = hasil.slice(0, FEX_PRATINJAU).map((b) => `
-    <tr>
+  const th = document.getElementById("fexKolomTgl");
+  if (th) th.textContent = jatuh ? "Invoice Due Date" : "Invoice Date";
+  const tampil = fexTampil();
+  isi.innerHTML = tampil.length
+    ? tampil
+        .map((b) => {
+          const id = fexKunciBaris(b);
+          const pilih = !fexTidakDipilih.has(id);
+          const nama = [b.vendor || "—", b.nomor].filter(Boolean).join(" ");
+          return `
+    <tr class="fex-baris${pilih ? "" : " is-lepas"}" data-fex-baris="${escapeAttr(id)}">
+      <td class="fex-cek"><input type="checkbox" class="form-check-input" data-fex-pilih="${escapeAttr(id)}"${pilih ? " checked" : ""} aria-label="${escapeAttr(tt(`Ekspor ${nama}`, `Export ${nama}`))}"></td>
       <td class="fex-vendor">${escapeHtml(b.vendor || "—")}${b.nomor ? `<span class="fex-nomor">${escapeHtml(b.nomor)}</span>` : ""}</td>
       <td class="fex-nowrap">${escapeHtml(fmtDate(jatuh ? b.jatuhTempo : b.tglInvoice) || "—")}</td>
       <td class="fex-angka">${escapeHtml(typeof frNilai === "function" ? frNilai(b.nominal, b.mataUang) : String(b.nominal))}</td>
-    </tr>`).join("");
-  const sisa = hasil.length - FEX_PRATINJAU;
-  box.innerHTML = `
-    <div class="fex-ringkas">${tt(
-      `<b>${hasil.length}</b> pengajuan · Total <b>${fexTeksTotal(hasil)}</b>`,
-      `<b>${hasil.length}</b> request${hasil.length === 1 ? "" : "s"} · Total <b>${fexTeksTotal(hasil)}</b>`)}</div>
-    <table class="fex-tabel">
-      <thead><tr><th>Vendor · Invoice No.</th><th>${escapeHtml(jatuh ? "Invoice Due Date" : "Invoice Date")}</th><th class="fex-angka">Nominal</th></tr></thead>
-      <tbody>${contoh}</tbody>
-    </table>
-    ${sisa > 0 ? `<div class="fex-lagi">${escapeHtml(tt(`… dan ${sisa} pengajuan lainnya`, `… and ${sisa} more`))}</div>` : ""}`;
+    </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" class="fex-kosong">${escapeHtml(tt("Tidak ada pengajuan yang cocok dengan pencarian.", "No request matches the search."))}</td></tr>`;
+  fexPerbaruiPilihan();
+}
+
+/* Ringkasan, centang "Pilih semua" & tombol Unduh mengikuti pilihan --
+   tanpa menggambar ulang daftarnya (mencentang 1 dari 300 baris). */
+function fexPerbaruiPilihan() {
+  const hasil = fexHasil();
+  const dipilih = hasil.filter((b) => !fexTidakDipilih.has(fexKunciBaris(b)));
+  const tombol = document.querySelector("[data-fex-unduh]");
+  if (tombol && !fexSibuk) {
+    tombol.disabled = !dipilih.length;
+    const n = tombol.querySelector(".fex-unduh-n");
+    if (n) n.textContent = dipilih.length ? `(${dipilih.length})` : "";
+  }
+  const ringkas = document.getElementById("fexRingkas");
+  if (ringkas) {
+    ringkas.innerHTML = !dipilih.length
+      ? escapeHtml(tt(`Belum ada yang dipilih dari ${hasil.length} pengajuan — centang yang akan diekspor.`, `Nothing selected from ${hasil.length} request${hasil.length === 1 ? "" : "s"} — tick the ones to export.`))
+      : dipilih.length === hasil.length
+        ? tt(`<b>${hasil.length}</b> pengajuan · Total <b>${fexTeksTotal(hasil)}</b>`,
+            `<b>${hasil.length}</b> request${hasil.length === 1 ? "" : "s"} · Total <b>${fexTeksTotal(hasil)}</b>`)
+        : tt(`<b>${dipilih.length}</b> dari ${hasil.length} pengajuan dipilih · Total <b>${fexTeksTotal(dipilih)}</b>`,
+            `<b>${dipilih.length}</b> of ${hasil.length} requests selected · Total <b>${fexTeksTotal(dipilih)}</b>`);
+  }
+  const semua = document.querySelector("[data-fex-semua]");
+  if (semua) {
+    const tampil = fexTampil();
+    const n = tampil.filter((b) => !fexTidakDipilih.has(fexKunciBaris(b))).length;
+    semua.checked = tampil.length > 0 && n === tampil.length;
+    semua.indeterminate = n > 0 && n < tampil.length;
+    semua.disabled = !tampil.length;
+  }
+}
+
+// Centang satu baris: catatan pilihan, redupnya baris, lalu ringkasan
+function fexAturPilih(id, pilih) {
+  if (pilih) fexTidakDipilih.delete(id);
+  else fexTidakDipilih.add(id);
+  const tr = [...document.querySelectorAll("#fexDaftarIsi [data-fex-baris]")].find((x) => x.dataset.fexBaris === id);
+  if (tr) {
+    tr.classList.toggle("is-lepas", !pilih);
+    const cb = tr.querySelector("[data-fex-pilih]");
+    if (cb && cb.checked !== pilih) cb.checked = pilih;
+  }
 }
 
 // Isi dialog digambar ulang tiap dibuka (bahasa saat itu) & saat Reset; data yang sudah dimuat dipakai lagi
@@ -1096,13 +1189,16 @@ function fexBuka() {
   const el = fexDialog();
   if (!el || typeof bootstrap === "undefined") return;
   fexModal = fexModal || bootstrap.Modal.getOrCreateInstance(el);
+  // Dibuka lagi = pilihan baru: semua tercentang, tanpa pencarian
+  fexTidakDipilih.clear();
+  fexCariDaftar = "";
   fexGambarDialog();
   fexModal.show();
   return fexMuat();
 }
 
 async function fexKlikUnduh() {
-  const hasil = fexHasil();
+  const hasil = fexDipilih();
   const tombol = document.querySelector("[data-fex-unduh]");
   if (!hasil.length || fexSibuk || !tombol) return;
   fexSibuk = true;
@@ -1123,7 +1219,7 @@ async function fexKlikUnduh() {
     fexSibuk = false;
     if (tombol.isConnected) {
       tombol.innerHTML = isiAsli;
-      tombol.disabled = !fexHasil().length;
+      fexPerbaruiPilihan();
     }
   }
 }
@@ -1140,15 +1236,43 @@ document.addEventListener("click", (e) => {
   if (el.closest("[data-fex-unduh]")) fexKlikUnduh();
   else if (el.closest("[data-fex-ulang]")) fexMuat();
   else if (el.closest("[data-fex-reset]")) {
-    // Reset = saringan (dan tahun rekap kembali otomatis); format yang dipilih tetap
+    // Reset = saringan, pilihan & pencarian (dan tahun rekap kembali otomatis); format yang dipilih tetap
     Object.assign(fexSaringan, FEX_SARINGAN_AWAL);
     fexTahunPilih = "";
+    fexTidakDipilih.clear();
+    fexCariDaftar = "";
     fexGambarDialog();
+  } else if (!el.closest("input, label, button, a")) {
+    // Klik di mana saja pada baris = centangnya
+    const tr = el.closest("[data-fex-baris]");
+    const cb = tr && tr.querySelector("[data-fex-pilih]");
+    if (cb) {
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   }
+});
+document.addEventListener("input", (e) => {
+  const el = e.target;
+  if (!el || !el.matches || !el.matches("#danaEksporModal [data-fex-cari]")) return;
+  fexCariDaftar = el.value;
+  fexGambarDaftar();
 });
 document.addEventListener("change", (e) => {
   const el = e.target;
   if (!el || !el.closest || !el.closest("#danaEksporModal")) return;
+  if (el.matches("[data-fex-pilih]")) {
+    fexAturPilih(el.dataset.fexPilih, el.checked);
+    fexPerbaruiPilihan();
+    return;
+  }
+  if (el.matches("[data-fex-semua]")) {
+    // Pilih / lepas semua yang sedang TAMPIL (hasil pencarian)
+    fexTampil().forEach((b) => fexAturPilih(fexKunciBaris(b), el.checked));
+    fexPerbaruiPilihan();
+    return;
+  }
+  if (el.matches("[data-fex-cari]")) return;
   if (el.dataset.fex === "format") {
     fexFormatPilih = fexFormatSah(el.value);
     const teks = document.getElementById("fexKolomTeks");

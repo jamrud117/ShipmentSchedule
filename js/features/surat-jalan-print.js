@@ -151,6 +151,31 @@ function sjDaftarKendaraan(p) {
     });
 }
 
+/* MOBIL + SOPIRNYA. Dua mobil = dua sopir: tiap nomor mobil berpasangan
+   dengan sopirnya -- yang pertama `vehicle` + `receivedBy` (sopir =
+   "Diterima oleh" surat jalan: dialah yang menerima barang dari PPIC),
+   berikutnya `vehicleExtra` + `driverExtra` sejajar
+   (js/features/vehicle-list.js). Pasangan yang dua-duanya kosong dibuang;
+   nomor yang sama diketik dua kali dihitung sekali (pasangan pertama yang
+   dipakai). Dasar cetak per sopir (cetakSuratJalan), detail & form. */
+function sjDaftarMobil(p) {
+  const sumber = p || {};
+  const rapi = (v) => String(v == null ? "" : v).trim();
+  const nopol = [].concat(sumber.vehicle == null ? "" : sumber.vehicle, sumber.vehicleExtra || []);
+  const sopir = [].concat(sumber.receivedBy == null ? "" : sumber.receivedBy, sumber.driverExtra || []);
+  const lihat = new Set();
+  return nopol
+    .map((v, i) => ({ nopol: rapi(v), sopir: rapi(sopir[i]) }))
+    .filter((m) => {
+      if (!m.nopol && !m.sopir) return false;
+      if (!m.nopol) return true;
+      const kunci = m.nopol.replace(/\s+/g, "").toUpperCase();
+      if (lihat.has(kunci)) return false;
+      lihat.add(kunci);
+      return true;
+    });
+}
+
 /* Qty & kemasan dijumlahkan per SATUAN, bukan ditotal buta.
    "3 SET" dan "2 BOX" tidak bisa dijumlahkan jadi 5 apa pun. */
 function sjTotalPerSatuan(nilaiList) {
@@ -283,10 +308,10 @@ function sjKotakTtd(label, nama) {
         </td>`;
 }
 
-/* SARAN NAMA PENANDA TANGAN (Mengetahui / Dikirim oleh / Diterima oleh):
-   nama yang pernah dipakai di surat jalan yang sudah termuat, ditambah
-   daftar Pemohon. Disusun saat kotaknya difokus -- bukan tiap riwayat
-   digambar. */
+/* SARAN NAMA PENANDA TANGAN (Mengetahui / Dikirim oleh / sopir = Diterima
+   oleh): nama yang pernah dipakai di surat jalan yang sudah termuat --
+   termasuk sopir mobil kedua dst. (driverExtra) -- ditambah daftar
+   Pemohon. Disusun saat kotaknya difokus -- bukan tiap riwayat digambar. */
 const SJ_KOLOM_TTD = ["knownBy", "sentBy", "receivedBy"];
 function sjIsiSaranTtd() {
   const daftar = document.getElementById("dnTtdList");
@@ -295,6 +320,7 @@ function sjIsiSaranTtd() {
   (typeof docNumHistoryRows !== "undefined" ? docNumHistoryRows : []).forEach((r) => {
     const p = (r && r.payload) || {};
     SJ_KOLOM_TTD.forEach((k) => p[k] && nama.add(String(p[k]).trim()));
+    (Array.isArray(p.driverExtra) ? p.driverExtra : []).forEach((n) => n && nama.add(String(n).trim()));
   });
   document.querySelectorAll('[data-docnum-panel="do"] [data-dn="requester"] option').forEach((o) => o.value && nama.add(o.value));
   daftar.innerHTML = [...nama]
@@ -326,8 +352,14 @@ function sjSelNopol(mobil, rentang) {
   return `<td class="sj-nopol" rowspan="${rentang}"><div class="sj-nopol-bagi">${isi}</div></td>`;
 }
 
-function buildSuratJalanHtml(row, shipment) {
+/* `ke` (opsional): lembar untuk SOPIR ke-`ke` (sjDaftarMobil). Lembarnya
+   SAMA untuk semua sopir -- semua barang, semua nopol di kolomnya --
+   hanya "Diterima oleh" yang berganti: nama sopir itu. "Dikirim oleh" =
+   PPIC (`sentBy`). Tanpa `ke`: "Diterima oleh" = `receivedBy` (sopir
+   mobil pertama). */
+function buildSuratJalanHtml(row, shipment, ke) {
   const p = (row && row.payload) || {};
+  const satu = ke != null ? sjDaftarMobil(p)[ke] || null : null;
   /* Sumber daftar barang: jadwal kalau ada yang ditautkan (Export),
      ketikan sendiri kalau tidak (Lokal). Dipilih di SATU tempat supaya
      bagian pencetak di bawah tidak perlu tahu asalnya. */
@@ -343,6 +375,7 @@ function buildSuratJalanHtml(row, shipment) {
      Mobil yang lebih banyak daripada barang menambah baris pelengkap
      kosong -- tiap mobil butuh tinggi minimum supaya nomornya terbaca. */
   const mobil = sjDaftarKendaraan(p);
+  const diterimaOleh = satu ? satu.sopir : p.receivedBy;
   const jumlahBarisNopol = Math.max(baris.length, mobil.length);
   const selNopol = sjSelNopol(mobil, jumlahBarisNopol);
   const barisPelengkap = Array.from(
@@ -468,7 +501,7 @@ function buildSuratJalanHtml(row, shipment) {
         ${sjKotakTtd("Dibuat oleh :", row.requester)}
         ${sjKotakTtd("Mengetahui :", p.knownBy)}
         ${sjKotakTtd("Dikirim oleh :", p.sentBy)}
-        ${sjKotakTtd("Diterima oleh :", p.receivedBy)}
+        ${sjKotakTtd("Diterima oleh :", diterimaOleh)}
       </tr>
     </table>
 
@@ -509,20 +542,45 @@ function cetakSuratJalan(rowId) {
   }
 
   const nomor = row.doc_number || "";
-  return bukaModalCetak({
-    jenis: lokal ? tt("Surat Jalan Lokal", "Local Delivery Order") : tt("Surat Jalan Export", "Export Delivery Order"),
-    nomor,
-    judulBerkas: `Surat Jalan ${nomor}`.trim(),
-    muat: async () => `<!doctype html>
+  const jenis = lokal ? tt("Surat Jalan Lokal", "Local Delivery Order") : tt("Surat Jalan Export", "Export Delivery Order");
+  const dokumen = (ke) => `<!doctype html>
 <html lang="id"><head><meta charset="utf-8">
 <title>Surat Jalan ${escapeHtml(nomor)}</title>
 <style>${lokal ? suratJalanLokalCss() : suratJalanCss()}</style></head>
-<body>${lokal ? buildSuratJalanLokalHtml(row) : buildSuratJalanHtml(row, shipment)}</body></html>`,
-    /* Surat jalan memenuhi kertas A4: ruang kosong tabel dilebarkan
-       (Export; daftar yang panjang dirapatkan dulu) / baris kosong
-       ditambah (Lokal) sampai tanda tangan jatuh di dasar halaman. Harus
-       SESUDAH tata letak jadi -- ia mengukur -- jadi lewat siapkan(). */
-    siapkan: (dok) => (lokal ? sjlIsiKertas(dok) : sjIsiKertas(dok)),
+<body>${lokal ? buildSuratJalanLokalHtml(row) : buildSuratJalanHtml(row, shipment, ke)}</body></html>`;
+  /* Surat jalan memenuhi kertas A4: ruang kosong tabel dilebarkan
+     (Export; daftar yang panjang dirapatkan dulu) / baris kosong
+     ditambah (Lokal) sampai tanda tangan jatuh di dasar halaman. Harus
+     SESUDAH tata letak jadi -- ia mengukur -- jadi lewat siapkan(). */
+  const siapkan = (dok) => (lokal ? sjlIsiKertas(dok) : sjIsiKertas(dok));
+  /* DUA MOBIL ATAU LEBIH (Export): satu surat jalan PER SOPIR -- lembar
+     yang sama (semua barang & nopol), "Diterima oleh" = sopir itu; tiap
+     sopir menandatangani lembarnya sendiri. Dipilih di kepala kotak
+     cetak: Sopir 1 | Sopir 2 (penggeser, seperti PO | PR), tiga ke atas
+     penomoran ‹ 1 2 3 › seperti tinjauan OCR. */
+  const mobil = lokal ? [] : sjDaftarMobil(row.payload);
+  const varian =
+    mobil.length > 1
+      ? mobil.map((m, i) => {
+          const urut = tt(`Sopir ${i + 1}`, `Driver ${i + 1}`);
+          return {
+            kunci: "mobil-" + i,
+            label: urut,
+            judul: [urut, m.nopol, m.sopir].filter(Boolean).join(" · "),
+            jenis: `${jenis} · ${urut}${m.nopol ? " · " + m.nopol : ""}`,
+            judulBerkas: `Surat Jalan ${nomor} ${m.sopir || m.nopol || urut}`.trim(),
+            muat: async () => dokumen(i),
+            siapkan,
+          };
+        })
+      : null;
+  return bukaModalCetak({
+    jenis,
+    nomor,
+    judulBerkas: `Surat Jalan ${nomor}`.trim(),
+    muat: async () => dokumen(),
+    varian,
+    siapkan,
   });
 }
 

@@ -46,15 +46,33 @@ async function loadAccounts(opsi) {
   renderAccounts();
 }
 
+/* URUTAN DAFTAR AKUN: dikelompokkan per peran -- hak paling luas di
+   atas (urutan yang sama dengan keterangan "Hak Tiap Peran": Exim,
+   Engineering, Purchasing, Marketing, Finance, Viewer, Nonaktif) --
+   lalu abjad nama di dalam tiap peran. Nama kosong memakai username /
+   email. Database cukup mengirim apa adanya; urutan email dari
+   .order() tidak lagi dipakai karena orang mencari NAMA, bukan email. */
+function urutkanAkun(rows) {
+  const urutan = urutanPilihanPeran().slice().reverse();
+  const peringkat = (r) => {
+    const i = urutan.indexOf(peranAkun(r));
+    return i < 0 ? urutan.length : i;
+  };
+  const nama = (r) => String(r.full_name || r.username || r.email || "").trim();
+  return rows.slice().sort((a, b) => peringkat(a) - peringkat(b) || nama(a).localeCompare(nama(b), "id", { sensitivity: "base", numeric: true }));
+}
+
 function renderAccounts() {
   const box = $("#accountList");
   const q = ($("#accountSearch").value || "").trim().toLowerCase();
-  const rows = accountRows.filter(
-    (r) =>
-      !q ||
-      (r.email || "").toLowerCase().includes(q) ||
-      (r.username || "").toLowerCase().includes(q) ||
-      (r.full_name || "").toLowerCase().includes(q),
+  const rows = urutkanAkun(
+    accountRows.filter(
+      (r) =>
+        !q ||
+        (r.email || "").toLowerCase().includes(q) ||
+        (r.username || "").toLowerCase().includes(q) ||
+        (r.full_name || "").toLowerCase().includes(q),
+    ),
   );
 
   /* Hitungan per peran. Peran yang tidak dikenal (lama/kosong) dihitung
@@ -86,7 +104,7 @@ function renderAccounts() {
       const peran = peranAkun(r);
       return `
       <div class="acct-row" data-acct="${r.id}">
-        <div class="acct-avatar ${peran === "viewer" ? "" : "is-" + peran}">${escapeHtml(
+        <div class="acct-avatar is-${peran}">${escapeHtml(
           (r.full_name || r.email || "?").trim().charAt(0).toUpperCase(),
         )}</div>
         <div class="acct-main">

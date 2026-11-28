@@ -28,10 +28,13 @@
                   sudah jadi), sebelum tombol Cetak menyala -- untuk surat
                   yang menata dirinya dengan mengukur (Surat Jalan mengisi
                   kertas, Masterlist memecah halaman). Boleh async.
-     varian       (opsional) [{ kunci, label, jenis, judulBerkas, muat,
+     varian       (opsional) [{ kunci, label, judul, jenis, judulBerkas, muat,
                   siapkan }] -- BEBERAPA DOKUMEN dalam satu kotak, dipilih
                   lewat pilihan bergeser di kepalanya (PO | PR di cetak PO &
-                  PR). Tiap varian membawa muat-nya sendiri (menggantikan
+                  PR, Sopir 1 | Sopir 2 di Surat Jalan dua mobil). LEBIH DARI
+                  DUA: penomoran ‹ 1 2 3 › seperti tinjauan OCR -- `judul`
+                  (nama lengkap) di tooltip tiap nomor. Tiap varian membawa
+                  muat-nya sendiri (menggantikan
                   `muat`), dan jenis / judulBerkas / siapkan-nya bila ada.
                   `awal` = kunci varian yang tampil pertama. Teks yang sudah
                   diubah (Ubah teks) di satu varian disimpan selama kotak
@@ -248,15 +251,40 @@ function cetakGambarVarian(sesi) {
   wadah.hidden = !v;
   if (!v) {
     wadah.innerHTML = "";
+    wadah.classList.remove("cetak-varian--halaman");
     return;
   }
   const i = Math.max(0, v.findIndex((x) => x.kunci === sesi.varianAktif));
+  /* LEBIH DARI DUA DOKUMEN (Surat Jalan tiga mobil = tiga sopir):
+     penomoran seperti tinjauan OCR -- ‹ 1 2 3 › -- bukan penggeser yang
+     tombolnya makin sempit. Nama lengkap tiap dokumen (Sopir 2 · nopol ·
+     nama) di tooltip & nama tombolnya. */
+  const halaman = v.length > 2;
+  wadah.classList.toggle("cetak-varian--halaman", halaman);
+  wadah.setAttribute("role", halaman ? "group" : "tablist");
+  if (halaman) {
+    wadah.style.removeProperty("--varian-n");
+    wadah.style.removeProperty("--varian-ke");
+    const geser = (arah, ikon, label, mati) =>
+      `<button type="button" class="cetak-varian-geser" data-cetak-varian-geser="${arah}" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}"${mati ? " disabled" : ""}><i class="bi ${ikon}" aria-hidden="true"></i></button>`;
+    wadah.innerHTML =
+      geser(-1, "bi-chevron-left", tt("Sebelumnya", "Previous"), i === 0) +
+      v
+        .map((x, k) => {
+          const nama = x.judul || x.label || x.kunci;
+          return `<button type="button" class="cetak-varian-no${k === i ? " is-aktif" : ""}" data-cetak-varian="${escapeAttr(x.kunci)}"${k === i ? ' aria-current="page"' : ""}
+        title="${escapeAttr(nama)}" aria-label="${escapeAttr(nama)}">${k + 1}</button>`;
+        })
+        .join("") +
+      geser(1, "bi-chevron-right", tt("Berikutnya", "Next"), i === v.length - 1);
+    return;
+  }
   // Penggeser di belakang tombol yang aktif (docnum.css / components.css: --varian-ke, --varian-n)
   wadah.style.setProperty("--varian-n", String(v.length));
   wadah.style.setProperty("--varian-ke", String(i));
   wadah.innerHTML = v
     .map((x, k) => `<button type="button" role="tab" class="cetak-varian-btn${k === i ? " is-aktif" : ""}" data-cetak-varian="${escapeAttr(x.kunci)}"
-        aria-selected="${k === i ? "true" : "false"}" tabindex="${k === i ? "0" : "-1"}">${escapeHtml(x.label || x.kunci)}</button>`)
+        aria-selected="${k === i ? "true" : "false"}" tabindex="${k === i ? "0" : "-1"}"${x.judul ? ` title="${escapeAttr(x.judul)}"` : ""}>${escapeHtml(x.label || x.kunci)}</button>`)
     .join("");
 }
 
@@ -421,7 +449,23 @@ function cetakTekanTombolBingkai(e) {
 /* ---------- ubah teks sebelum cetak ---------- */
 
 // Pendengar di dokumen bingkai -- dipasang ulang tiap kali isinya ditulis (open() membuang yang lama)
+/* BILAH GULIR KERTAS PRATINJAU disembunyikan (hanya di layar, tidak ikut
+   tercetak). Bingkainya setinggi isinya, jadi tidak ada yang perlu
+   digulir di dalamnya -- tetapi bilah gulir klasik (Windows) sempat
+   muncul saat bingkai diukur dari tinggi 0, memakan 17px lebar kertas
+   dan memicu bilah gulir mendatar & tegak DI DALAM kertas. Tanpa bilah,
+   isinya selebar kertas dan tetap bisa digulir bila memang melebihi. */
+const CETAK_GAYA_LAYAR = "@media screen { html, body { scrollbar-width: none; } html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; } }";
+function cetakSembunyikanBilahGulir(dok) {
+  if (!dok || !dok.documentElement || dok.getElementById("cetak-gaya-layar")) return;
+  const gaya = dok.createElement("style");
+  gaya.id = "cetak-gaya-layar";
+  gaya.textContent = CETAK_GAYA_LAYAR;
+  (dok.head || dok.documentElement).appendChild(gaya);
+}
+
 function cetakPasangPendengar(dok) {
+  cetakSembunyikanBilahGulir(dok);
   // Ctrl+P & Esc juga ditangkap bila kursor sempat masuk ke bingkai
   dok.addEventListener("keydown", cetakTekanTombolBingkai);
   dok.addEventListener("input", cetakSaatDiketik);
@@ -539,7 +583,17 @@ if (cetakModalEl) {
   if (varianEl) {
     varianEl.addEventListener("click", (e) => {
       const b = e.target.closest("[data-cetak-varian]");
-      if (b) cetakPilihVarian(b.dataset.cetakVarian);
+      if (b) {
+        cetakPilihVarian(b.dataset.cetakVarian);
+        return;
+      }
+      // Penomoran (> 2 dokumen): ‹ sebelumnya / berikutnya ›
+      const g = e.target.closest("[data-cetak-varian-geser]");
+      if (!g || !cetakSesi || !cetakSesi.varian) return;
+      const v = cetakSesi.varian;
+      const i = v.findIndex((x) => x.kunci === cetakSesi.varianAktif);
+      const j = i + Number(g.dataset.cetakVarianGeser);
+      if (j >= 0 && j < v.length) cetakPilihVarian(v[j].kunci, true);
     });
     // Panah kiri / kanan berpindah dokumen, seperti tablist biasa
     varianEl.addEventListener("keydown", (e) => {

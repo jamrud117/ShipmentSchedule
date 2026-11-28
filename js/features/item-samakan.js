@@ -167,7 +167,7 @@ const SAMAKAN_KOLOM = {
   },
   // Tarif BM per barang (tarif-hs.js, item.dataPabean.tarifBm): disamakan = isian sendiri
   tarifBm: {
-    label: () => tt("Tarif BM (%)", "Duty Rate (%)"),
+    label: () => tt("Tarif", "Tariff"),
     otomatis: false,
     ada: bukuImport,
     kunci: (it) => {

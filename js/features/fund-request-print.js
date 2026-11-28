@@ -121,6 +121,8 @@ function frBarisRincian(p) {
     { label: "PPN Import", nilai: frAngka(p.feePpn) },
     { label: "PPH Import", nilai: frAngka(p.feePph) },
   ];
+  // Billing SPTNP: denda administrasi pabean jadi baris keempat (ikut TOTAL & Terbilang)
+  if (danaJenisSptnp(p.expenseType)) rinci.push({ label: "Penalty", nilai: frAngka(p.feePenalty) });
   const adaRincian = rinci.some((r) => r.nilai > 0);
   if (adaRincian) return rinci;
   return [
@@ -201,16 +203,31 @@ function frTanggalSurat(iso) {
   return `${d.getDate()} ${FR_BULAN[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/* Isi sel baris rujukan: "Invoice No. : X". Vendor berekening (JNE --
+   tidak memakai nomor invoice lagi): nomornya NOMOR REKENING, jadi
+   "Bank No. : X", disusul "Tracking No. : Y" bila resinya terisi. */
+function frIsiRujukan(label, nomor, p) {
+  const rekening = typeof fundPakaiRekening === "function" && fundPakaiRekening(p) && label === "Invoice No.";
+  const resi = rekening ? String((p && p.trackingNo) || "").trim() : "";
+  const bagian = [];
+  if (String(nomor || "").trim()) bagian.push(`<b>${escapeHtml(rekening ? "Bank No." : label)} : ${escapeHtml(nomor)}</b>`);
+  if (resi) bagian.push(`<b class="rujukan-resi">Tracking No. : ${escapeHtml(resi)}</b>`);
+  return bagian.join("");
+}
+
 /* Baris judul di dalam tabel: "Nomor Billing : ..." atau
-   "Nomor Invoice : ...", mengikuti mana yang terisi. Kosong keduanya
-   -> tidak ada barisnya sama sekali, bukan baris kosong menggantung. */
+   "Nomor Invoice : ...", mengikuti mana yang terisi (JNE: "Bank No."
+   + "Tracking No."). Kosong semuanya -> tidak ada barisnya sama sekali,
+   bukan baris kosong menggantung. */
 function frBarisRujukan(p, kolom) {
   const pasangan = p.billingNo
     ? ["Billing No.", p.billingNo]
-    : p.invoiceNo
+    : p.invoiceNo || p.trackingNo
       ? ["Invoice No.", p.invoiceNo]
       : null;
   if (!pasangan) return "";
+  const isi = frIsiRujukan(pasangan[0], pasangan[1], p);
+  if (!isi) return "";
   /* colspan = seluruh kolom SISA sesudah kolom NO.
 
      Sempat salah hitung (kolom-2), sehingga pada tabel 3 kolom baris
@@ -219,7 +236,7 @@ function frBarisRujukan(p, kolom) {
   /* SATU sel melintang penuh, tanpa sekat di dalamnya -- bentuk yang
      sama dengan baris TOTAL di kaki tabel. Memecahnya jadi beberapa sel
      menyisakan garis tegak pendek yang tidak memisahkan apa pun. */
-  return `<tr class="baris-rujukan"><td class="c-desc" colspan="${kolom || 3}"><b>${escapeHtml(pasangan[0])} : ${escapeHtml(pasangan[1])}</b></td></tr>`;
+  return `<tr class="baris-rujukan"><td class="c-desc" colspan="${kolom || 3}">${isi}</td></tr>`;
 }
 
 function frKotakTtd(label, nama, jabatan) {
@@ -228,7 +245,7 @@ function frKotakTtd(label, nama, jabatan) {
 
      Dulu nama & jabatan rata tengah SATU SAMA LAIN di dalam bloknya: yang
      lebih pendek menjorok sendiri-sendiri ("Drafter" di bawah "Yogi
-     Firgiawan", "Mr. Shin Na Ra" di atas "Chief Marketing Officer"), jadi
+     Firgiawan", "Shin Na Ra" di atas "Chief Marketing Officer"), jadi
      tepi kirinya bergerigi dan tiap kolom berbeda. Merata-tengahkan
      keduanya terhadap SEL juga bukan jawabannya: nama melayang jauh dari
      labelnya (label di tepi kiri, nama di tengah kolom). */
@@ -245,7 +262,18 @@ function frKotakTtd(label, nama, jabatan) {
 /* Penanda tangan keempat: Chief Financial Officer. Nilai bawaan yang
    SAMA dengan isian di form (cfoName/cfoRole di index.html), dipakai
    cetakan & kotak Detail kalau isiannya kosong. */
-const FR_TTD_CFO = { nama: "Mr. Kim Taewan", jabatan: "Chief Financial Officer" };
+const FR_TTD_CFO = { nama: "Kim Taewan", jabatan: "Chief Financial Officer" };
+const FR_TTD_APPROVER = { nama: "Shin Na Ra", jabatan: "Chief Marketing Officer" };
+
+/* Nama penanda tangan TANPA sapaan: "Shin Na Ra", "Kim Taewan" -- bukan
+   "Mr. Shin Na Ra". Pengajuan lama yang tersimpan dengan sapaan ("Mr.
+   Shin Na Ra", "MR KIM TAEWAN") ikut tampil & tercetak tanpa sapaan, dan
+   tersimpan tanpa sapaan begitu dibuka & disimpan lagi (docnum-view.js).
+   Hanya kedua nama itu: nama lain yang diketik pengguna apa adanya. */
+function frNamaTtd(nama) {
+  const isi = String(nama == null ? "" : nama).trim();
+  return isi.replace(/^mr\.?\s+(?=(?:shin\s*na\s*ra|kim\s*tae\s*wan)$)/i, "");
+}
 
 /* Penanda tangan keempat (CFO) hanya untuk vendor yang Doc No-nya
    dicetak -- aturan yang sama dengan baris Doc No (fundPakaiDocNo). */
@@ -391,8 +419,8 @@ function buildFundRequestHtml(row) {
         <tr>
           ${frKotakTtd("Made by :", p.requester || row.requester, "Drafter")}
           ${frKotakTtd("Checked by :", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
-          ${frKotakTtd("Approved by :", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
-          ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
+          ${frKotakTtd("Approved by :", frNamaTtd(p.approver1Name) || FR_TTD_APPROVER.nama, p.approver1Role || FR_TTD_APPROVER.jabatan)}
+          ${frPakaiTtdCfo(p) ? frKotakTtd("Approved by :", frNamaTtd(p.cfoName) || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
         </tr>
       </table>
 
@@ -497,7 +525,9 @@ function frTabelRinci(p, mataUang) {
   const kelompok = [{ id: "", jenis: "invoice", nomor: p.invoiceNo }].concat(dokumen);
   const adaKelompok = new Set(kelompok.map((d) => d.id));
   const judulKelompok = (d) =>
-    `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}"><b>${escapeHtml(d.jenis === "debit" ? "Debit Note No." : "Invoice No.")} : ${escapeHtml(d.nomor || "-")}</b></td></tr>`;
+    `<tr class="baris-rujukan"><td class="c-desc" colspan="${KOLOM}">${
+      d.id === "" ? frIsiRujukan("Invoice No.", d.nomor || "-", p) : `<b>${escapeHtml(d.jenis === "debit" ? "Debit Note No." : "Invoice No.")} : ${escapeHtml(d.nomor || "-")}</b>`
+    }</td></tr>`;
   /* TOTAL PER DOKUMEN, tepat di bawah pos-pos dokumen itu: nilai, PPN
      dan jumlahnya, potongan PPH 23-nya, lalu TOTAL dokumen itu -- supaya
      PPN & PPH 23 invoice pertama dan invoice / debit note kedua bisa
@@ -970,6 +1000,7 @@ ${kopSuratCss()}
   .rincian tr { break-inside: avoid; }
   .rincian thead { break-after: avoid; }
   .rincian .baris-rujukan { break-after: avoid; }
+  .rincian .rujukan-resi { margin-left: 28px; }
   .rincian .baris-subtotal,
   .rincian .baris-potongan,
   .rincian .baris-total-dok,

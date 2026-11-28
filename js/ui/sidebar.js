@@ -106,6 +106,13 @@ document.getElementById("btnSidebarBuka")?.addEventListener("click", () => {
   else sbBuka();
 });
 document.getElementById("btnSidebarTutup")?.addEventListener("click", () => sbTutup(true));
+/* "Lainnya" di menu bawah ponsel (css/peta-laut.css) membuka laci yang sama */
+document.querySelectorAll("[data-sb-buka]").forEach((el) =>
+  el.addEventListener("click", () => {
+    if (sbTerbuka()) sbTutup(true);
+    else sbBuka();
+  }),
+);
 document.getElementById("sbLatar")?.addEventListener("click", () => sbTutup(true));
 document.getElementById("btnSidebarCiut")?.addEventListener("click", sbCiutkan);
 document.addEventListener("keydown", (e) => {

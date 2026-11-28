@@ -153,10 +153,13 @@ function buildDetailHtml(s) {
     escapeHtml(dispVal(nomor)) + (tanggal ? ` <span class="text-muted text-nowrap">· ${fmtDate(tanggal)}</span>` : "");
 
   /* Kolom Daftar Barang: judulnya dipakai <th> sekaligus label tiap sel
-     (data-label) saat panelnya sempit dan tiap barang jadi kartu. */
+     (data-label) saat panelnya sempit dan tiap barang jadi kartu. HS Code
+     PALING KIRI, lalu Nama Barang -- urutan dokumen pabean (PIB/PEB per
+     pos tarif); di kartu (panel sempit) nama barang tetap judulnya
+     (form.css, order). */
   const kolomBarang = [
+    { judul: "HS Code", kelas: "db-hs", isi: (it) => escapeHtml(it.hsCode || "—") },
     { judul: tt("Nama Barang", "Item Name"), kelas: "db-nama", isi: (it) => escapeHtml(itemDisplayName(it)) },
-    { judul: "HS Code", isi: (it) => escapeHtml(it.hsCode || "—") },
     { judul: tt("Jenis Barang", "Goods Type"), isi: (it) => escapeHtml(it.jenisBarang || "—") },
     { judul: tt("Fasilitas", "Facility"), kelas: "db-fasilitas", isi: (it) => itemFacilitiesCellHtml(it, mode) },
     { judul: "Qty", isi: (it) => fmtNum(it.qty) },
@@ -221,19 +224,88 @@ function buildDetailHtml(s) {
   const tagButuh = s.mode !== "export" && s.neededDate ? tagKebutuhanHtml(s) : "";
   // Viewer (orang produksi) & EXIM mengatur Tanggal Dibutuhkan di Pabrik dari sini -- barisnya tampil walau masih kosong
   const aturButuh = s.mode !== "export" && typeof bolehAturTanggalPabrik === "function" && bolehAturTanggalPabrik();
-  return `
-    <div class="detail-header">
-      <div class="detail-header-isi">
-        <div class="detail-header-label">${escapeHtml(lbl.party)}</div>
-        <div class="item-name">${escapeHtml(dispVal(s.party))}</div>
-        <div class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} · ${lbl.docDate}: ${fmtDate(s.docDate)}</div>
-      </div>
-      <div class="detail-header-tanda">
-        <span class="detail-badge-mode">${mode === "import" ? "Import" : "Export"}</span>
-        <span class="status-select ${statusClass(statusBerlaku)}" style="pointer-events:none; padding-right:14px; background-image:none;">${escapeHtml(statusLabel(statusBerlaku, s.mode))}</span>
-      </div>
-    </div>
 
+  /* PITA ATAS: buku, status & nomor dokumen pabean, lalu empat angka yang
+     paling sering dicari -- ETD, ETA, Est. Delivery / Stuffing, progres
+     dokumen -- dalam petak besar. Nama pihak ada di kepala pop-up
+     (#detailSheetTitle), tidak diulang di sini. Tanggal yang pernah
+     diubah menyebut asalnya ("Dari 9 Nov"), merah bila dimundurkan --
+     seperti di papan. */
+  const petak = (label, nilai, ket, kelas) =>
+    `<div class="dv-petak${kelas ? " " + kelas : ""}"><span class="dv-petak-label">${escapeHtml(label)}</span><b class="dv-petak-nilai">${nilai}</b>${
+      ket ? `<span class="dv-petak-ket">${ket}</span>` : ""
+    }</div>`;
+  const petakTanggal = (label, rencana, revisi, jam) => {
+    const berlaku = revisi || rencana;
+    if (!berlaku) return petak(label, "—", "");
+    // Pernah diubah: "Dari 9 Nov" seperti di papan -- merah bila MUNDUR (lebih lambat dari rencana)
+    const diubah = !!(revisi && rencana && revisi !== rencana);
+    const ket = diubah ? escapeHtml(tt(`Dari ${tglPapan(rencana)}`, `From ${tglPapan(rencana)}`)) : escapeHtml(ketTanggalPapan(s, berlaku));
+    return petak(label, escapeHtml(tglPapan(berlaku)) + (jam ? ` <small>${escapeHtml(jam)}</small>` : ""), ket, diubah && revisi > rencana ? "dv-petak--mundur" : "");
+  };
+  const hitungDok = typeof docStepCount === "function" && !isKurirNilaiRendah(s) ? docStepCount(s) : null;
+  const langkahDok = hitungDok && typeof docStepsFor === "function" ? docStepsFor(s) : [];
+  const idxDok = hitungDok && typeof docNextIndex === "function" ? docNextIndex(s) : -1;
+  const ketDok = !hitungDok
+    ? ""
+    : hitungDok.berlaku && hitungDok.selesai >= hitungDok.berlaku
+      ? escapeHtml(tt("Lengkap", "Complete"))
+      : idxDok >= 0 && langkahDok[idxDok]
+        ? escapeHtml(tt(`Berikutnya: ${stepText(langkahDok[idxDok].label, s)}`, `Next: ${stepText(langkahDok[idxDok].label, s)}`))
+        : "";
+  const pita = `
+    <div class="detail-header dv-pita">
+      <div class="dv-pita-tanda">
+        <span class="detail-badge-mode">${mode === "import" ? "Import" : "Export"}</span>
+        <span class="status-select ${statusClass(statusBerlaku)} detail-status">${escapeHtml(statusLabel(statusBerlaku, s.mode))}</span>
+        <span class="po-code">${lbl.docNo}: ${escapeHtml(dispVal(s.docNo))} · ${lbl.docDate}: ${fmtDate(s.docDate)}</span>
+      </div>
+      <div class="dv-petak-baris">
+        ${petakTanggal("ETD", s.etd, s.etdUpdate, s.etdTime)}
+        ${petakTanggal("ETA", s.eta, s.etaUpdate, s.etaTime)}
+        ${petakTanggal(lbl.actual, s.actual, "", "")}
+        ${hitungDok ? petak(tt("Dokumen", "Documents"), `${hitungDok.selesai}<small>/${hitungDok.berlaku}</small>`, ketDok, hitungDok.berlaku && hitungDok.selesai >= hitungDok.berlaku ? "dv-petak--lengkap" : "") : ""}
+      </div>
+    </div>`;
+
+  /* Satu kartu bagian: judul berikon + isi; kartu kosong tidak digambar.
+     Hanya Dokumen & Umum dan Transportasi & Rute yang berdampingan
+     (tingginya mirip); yang lain selebar isi -- daftar label-nilainya
+     dua lajur, tanpa ruang kosong di samping kartu yang panjang. */
+  const kartu = (isi, lebar) => (isi && isi.trim() ? `<section class="dv-kartu${lebar ? " dv-kartu--lebar" : ""}">${isi}</section>` : "");
+  const log = normalizeNotesLog(s.notesLog, s.notes);
+  const catatanHtml = log.length
+    ? `<div class="subsection-title"><i class="bi bi-chat-left-text"></i> ${tt("Kronologi &amp; Catatan", "Timeline &amp; Notes")} <span class="text-muted fw-normal">${log.length}</span></div>
+      <div class="detail-notes">
+        ${[...log]
+          .reverse()
+          .map((e) => `<div class="card-note"><div class="card-note-stamp">${escapeHtml(fmtNoteStamp(e.ts))}</div><div class="card-note-text">${escapeHtml(e.text)}</div></div>`)
+          .join("")}
+      </div>`
+    : "";
+  const jumlahBarang = (s.items || []).length;
+  return `
+    ${pita}
+    <div class="dv-kisi">
+    ${kartu(`
+    <div class="subsection-title"><i class="bi bi-boxes"></i> ${tt("Daftar Barang", "Item List")} <span class="text-muted fw-normal">${jumlahBarang}</span></div>
+    <div class="detail-barang"><div class="item-table-wrap mb-2">
+      <table class="item-table item-table--detail">
+        <thead><tr>${kolomBarang.map((k) => `<th${kelasKolom(k)}>${escapeHtml(k.judul)}</th>`).join("")}</tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+    </div></div>
+    <div class="item-table-foot item-table-foot--split">
+      <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
+      <div class="foot-totals">
+        <div>Total Qty: <b>${escapeHtml(fmtQtyBySatuan(calc.qtyBySatuan))}</b></div>
+        <div>${t("f.total.netto")}: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
+        <div>${t("f.total.bruto")}: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
+        <div>${tt("Total Nilai", "Total Value")}: <b>${fmtUSD(calc.totalUSD)}</b></div>
+        ${mode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
+      </div>
+    </div>`, true)}
+    ${kartu(`
     <div class="subsection-title"><i class="bi bi-file-earmark-text"></i> ${tt("Dokumen &amp; Umum", "Documents &amp; General")}</div>
     ${detailDaftar([
       detailBaris("No. Aju", escapeHtml(dispVal(s.noAju))),
@@ -248,8 +320,8 @@ function buildDetailHtml(s) {
       detailBaris(tt("Nama Forwarder", "Forwarder Name"), escapeHtml(dispVal(s.forwarder))),
       detailBaris("PIC Forwarder", escapeHtml(dispVal(s.forwarderPic))),
     ])}
-    ${detailProgresDokumenHtml(s)}
-
+    ${detailProgresDokumenHtml(s)}`)}
+    ${kartu(`
     <div class="subsection-title"><i class="bi bi-compass"></i> ${tt("Transportasi &amp; Rute", "Transport &amp; Route")}</div>
     ${detailDaftar([
       detailBaris(tt("Moda Transportasi", "Transport Mode"), udara ? tt("Udara", "Air") : tt("Laut", "Sea")),
@@ -277,44 +349,12 @@ function buildDetailHtml(s) {
             (tagButuh ? `<div class="detail-kv-tag">${tagButuh}</div>` : ""),
         ),
     ])}
-    ${buildDetailStopsHtml(s)}
-    ${predictionDetailHtml(s)}
-    ${(() => {
-      const log = normalizeNotesLog(s.notesLog, s.notes);
-      if (!log.length) return "";
-      // Judul bergaya sama dengan bagian lain, jumlah catatannya redup seperti Progres Dokumen
-      return `<div class="subsection-title"><i class="bi bi-chat-left-text"></i> ${tt("Kronologi &amp; Catatan", "Timeline &amp; Notes")} <span class="text-muted fw-normal">${log.length}</span></div>
-      <div class="detail-notes mb-3">
-        ${[...log]
-          .reverse()
-          .map(
-            (e) =>
-              `<div class="card-note"><div class="card-note-stamp">${escapeHtml(fmtNoteStamp(e.ts))}</div><div class="card-note-text">${escapeHtml(e.text)}</div></div>`,
-          )
-          .join("")}
-      </div>`;
-    })()}
-
-    <div class="subsection-title"><i class="bi bi-boxes"></i> ${tt("Daftar Barang", "Item List")}</div>
-    <div class="detail-barang"><div class="item-table-wrap mb-2">
-      <table class="item-table item-table--detail">
-        <thead><tr>${kolomBarang.map((k) => `<th${kelasKolom(k)}>${escapeHtml(k.judul)}</th>`).join("")}</tr></thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-    </div></div>
-    <div class="item-table-foot item-table-foot--split mb-3">
-      <div class="foot-package">${hasMeaningfulValue(s.package) ? `<i class="bi bi-box-seam"></i> Total Package: <b>${escapeHtml(s.package)}</b>` : ""}</div>
-      <div class="foot-totals">
-        <div>Total Qty: <b>${escapeHtml(fmtQtyBySatuan(calc.qtyBySatuan))}</b></div>
-        <div>${t("f.total.netto")}: <b>${fmtNum(calc.totalNetto)}</b> Kg</div>
-        <div>${t("f.total.bruto")}: <b>${fmtNum(calc.totalBruto)}</b> Kg</div>
-        <div>${tt("Total Nilai", "Total Value")}: <b>${fmtUSD(calc.totalUSD)}</b></div>
-        ${mode === "export" ? `<div>Total CBM: <b>${fmtNum(calc.totalCbm)}</b> m³</div>` : ""}
-      </div>
+    ${buildDetailStopsHtml(s)}`)}
+    ${kartu(predictionDetailHtml(s), true)}
+    ${kartu(customsHtml, true)}
+    ${kartu(catatanHtml, true)}
+    ${kartu(typeof biayaKirimanKerangka === "function" ? biayaKirimanKerangka(s) : "", true)}
     </div>
-
-    ${customsHtml}
-    ${typeof biayaKirimanKerangka === "function" ? biayaKirimanKerangka(s) : ""}
   `;
 }
 
@@ -338,25 +378,53 @@ function kirimanDenganId(id) {
    kembali ke sana saat panel ditutup -- bukan ke awal halaman. Dicatat
    hanya saat panel BARU dibuka, bukan saat berpindah kiriman di dalamnya. */
 let detailPemicu = null;
-function openDetailView(id) {
+/* Baris kedua kepala pop-up: rute (kota, seperti di papan), kapal /
+   penerbangan, nomor invoice -- cukup untuk mengenali kiriman tanpa
+   menggulir. */
+function detailSubJudul(s) {
+  const kota = (kode) => (typeof pelabuhanPapan === "function" ? pelabuhanPapan(kode, s.transport).teks : dispVal(portCodeLabel(kode)));
+  const kapal = carrierNameFromShipment(s);
+  return [
+    `${kota(s.origin)} → ${kota(s.destination)}`,
+    hasMeaningfulValue(kapal) ? kapal : "",
+    hasMeaningfulValue(s.invoice) ? `Inv ${s.invoice}` : "",
+  ].filter(Boolean).join(" · ");
+}
+// Kepala pop-up: pihak, baris kedua, posisi & tombol pindah
+function detailIsiKepala(s) {
+  $("#detailSheetTitle").textContent = dispVal(s.party);
+  const sub = $("#detailSheetSub");
+  if (sub) sub.textContent = detailSubJudul(s);
+  const list = detailNavList();
+  const idx = list.findIndex((x) => x.id === s.id);
+  $("#detailSheetPos").textContent = idx >= 0 ? `${idx + 1} / ${list.length}` : "";
+  $("#btnDetailPrev").disabled = idx <= 0;
+  $("#btnDetailNext").disabled = idx < 0 || idx >= list.length - 1;
+}
+function openDetailView(id, arah) {
   const s = kirimanDenganId(id);
   if (!s) return;
   const aktif = document.activeElement;
   if (!isDetailOpen() && aktif && aktif !== document.body && !detailSheetEl.contains(aktif))
     detailPemicu = { el: aktif, kunci: kunciFokus(aktif) };
+  // Pop-up sudah tampil (hidden dilepas seketika; kelas is-open menyusul sebingkai kemudian)
+  const pindah = !detailSheetEl.hidden && currentDetailId != null && String(currentDetailId) !== String(id);
   currentDetailId = id;
 
-  $("#detailViewBody").innerHTML = buildDetailHtml(s);
+  const badan = $("#detailViewBody");
+  badan.innerHTML = buildDetailHtml(s);
   // Biaya per kiriman dari Pengajuan Dana -- dimuat menyusul (database)
   if (typeof isiBiayaKiriman === "function") isiBiayaKiriman(s);
-  $("#detailSheetTitle").textContent = dispVal(s.party);
-
-  const list = detailNavList();
-  const idx = list.findIndex((x) => x.id === id);
-  $("#detailSheetPos").textContent =
-    idx >= 0 ? `${idx + 1} / ${list.length}` : "";
-  $("#btnDetailPrev").disabled = idx <= 0;
-  $("#btnDetailNext").disabled = idx < 0 || idx >= list.length - 1;
+  detailIsiKepala(s);
+  /* Pindah pengiriman di dalam pop-up: isinya mulai dari atas lagi dan
+     bergeser masuk dari arah tombolnya (→ dari kanan, ← dari kiri) --
+     terlihat bahwa isinya berganti, bukan halaman yang sama. */
+  if (pindah) {
+    badan.scrollTop = 0;
+    badan.classList.remove("dv-masuk-kanan", "dv-masuk-kiri");
+    void badan.offsetWidth;
+    badan.classList.add(arah < 0 ? "dv-masuk-kiri" : "dv-masuk-kanan");
+  }
 
   detailScrimEl.hidden = false;
   detailSheetEl.hidden = false;
@@ -387,12 +455,7 @@ function segarkanDetailView() {
   const gulir = badan.scrollTop;
   badan.innerHTML = buildDetailHtml(s);
   if (typeof isiBiayaKiriman === "function") isiBiayaKiriman(s);
-  $("#detailSheetTitle").textContent = dispVal(s.party);
-  const list = detailNavList();
-  const idx = list.findIndex((x) => x.id === s.id);
-  $("#detailSheetPos").textContent = idx >= 0 ? `${idx + 1} / ${list.length}` : "";
-  $("#btnDetailPrev").disabled = idx <= 0;
-  $("#btnDetailNext").disabled = idx < 0 || idx >= list.length - 1;
+  detailIsiKepala(s);
   badan.scrollTop = gulir;
   const kembali = kunci ? badan.querySelector(kunci) : null;
   if (kembali) fokuskan(kembali, { tanpaGulir: true });
@@ -422,7 +485,7 @@ function stepDetailView(delta) {
   // Dibuka dari luar daftar (notifikasi, buku lain): tidak ada urutan telusur
   if (idx < 0) return;
   const next = list[idx + delta];
-  if (next) openDetailView(next.id);
+  if (next) openDetailView(next.id, delta);
 }
 
 function isDetailOpen() {
@@ -488,6 +551,24 @@ $("#btnDetailNext").addEventListener("click", () => stepDetailView(1));
 
 document.addEventListener("keydown", (e) => {
   if (!isDetailOpen()) return;
+  /* Tab berputar DI DALAM pop-up (aria-modal): tidak tersesat ke halaman
+     di belakang selubungnya. */
+  if (e.key === "Tab") {
+    const bisa = [...detailSheetEl.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')].filter(
+      (el) => el.getClientRects().length > 0,
+    );
+    if (!bisa.length) return;
+    const aktif = document.activeElement;
+    const di = detailSheetEl.contains(aktif);
+    if (e.shiftKey && (!di || aktif === bisa[0])) {
+      e.preventDefault();
+      bisa[bisa.length - 1].focus();
+    } else if (!e.shiftKey && (!di || aktif === bisa[bisa.length - 1])) {
+      e.preventDefault();
+      bisa[0].focus();
+    }
+    return;
+  }
   if (e.key === "Escape") {
     e.preventDefault();
     closeDetailView();

@@ -67,6 +67,16 @@ const LAP_JENIS_AWAL = ["Freight", "Storage", "Lainnya"];
    ANGGARAN EXIM, bukan hanya biaya angkut; centang untuk mengecualikan. */
 const lapSaringan = { tahun: "", bulan: "", jenis: LAP_JENIS.slice() };
 let lapData = null;
+let lapWaktu = 0; // kapan lapData terakhir dibaca dari database
+let lapVersi = 0; // naik tiap lapLupakan()
+const LAP_SEGAR_MS = 15000;
+/* Pengajuan / invoice ditulis dari aplikasi ini (docnum-view.js,
+   dnSimpananBersih): laporan berikutnya membaca ulang. */
+function lapLupakan() {
+  lapData = null;
+  lapWaktu = 0;
+  lapVersi++;
+}
 
 /* ---------------------------- pemetaan ---------------------------- */
 
@@ -125,7 +135,8 @@ function lapBarisDana(row, kurs) {
   } else {
     dpp = frTotalPengajuan(p);
   }
-  const jenis = String(p.expenseType || "").trim();
+  // Billing SPTNP masuk kelompok Billing (setoran ke kas negara; Penalty = lainPajak)
+  const jenis = danaJenisBilling(p.expenseType) ? "Billing" : String(p.expenseType || "").trim();
   /* Sifat uangnya (fund-report-ledger.js): yang diminta dari kantor pusat
      = biaya + pajak yang bisa dikreditkan - PPh 23 yang ditahan.
        tahan   PPh 23 dipotong dari vendor -- utang pajak perusahaan
@@ -406,22 +417,42 @@ function lapGambarUlangDiam() {
   return true;
 }
 
+/* SEKETIKA dari data laporan yang sudah dimuat (dipasangi realtime lewat
+   lapTerapkanBaris), lalu dibaca ulang di belakang bila lewat
+   LAP_SEGAR_MS -- digambar ulang hanya kalau datanya berubah. */
+const lapTampil = () =>
+  typeof docNumActiveTab !== "undefined" && docNumActiveTab === "fund" && typeof docNumHistorySub !== "undefined" && docNumHistorySub === LAPORAN_TAB;
 async function renderLaporanBiaya(box, bar) {
   if (bar) bar.innerHTML = "";
-  box.innerHTML = `<div class="docnum-empty">Loading report…</div>`;
+  // Sakelar simpanan mati (docnum-view.js): selalu membaca ulang, seperti dulu
+  const ada = typeof dnSimpananMati !== "undefined" && dnSimpananMati ? null : lapData;
+  if (ada) lapGambar(box);
+  else box.innerHTML = `<div class="docnum-empty">Loading report…</div>`;
+  if (ada && Date.now() - lapWaktu < LAP_SEGAR_MS) return;
+  const versi = lapVersi;
+  let baru;
   try {
-    const [dana, invoice] = await Promise.all([fsumAmbilSemua(), lapAmbilInvoice()]);
-    lapData = { dana, invoice, anggaran: null };
+    const [dana, invoice] = await Promise.all([typeof fsumAmbilBersama === "function" ? fsumAmbilBersama() : fsumAmbilSemua(), lapAmbilInvoice()]);
+    baru = { dana, invoice, anggaran: null };
   } catch (e) {
     console.error(e);
-    box.innerHTML = `<div class="docnum-empty">The report failed to load. Please try again.</div>`;
+    if (!ada && lapTampil()) box.innerHTML = `<div class="docnum-empty">The report failed to load. Please try again.</div>`;
     return;
   }
   const hariIni = todayISO();
   if (!lapSaringan.tahun) lapSaringan.tahun = hariIni.slice(0, 4);
   if (!lapSaringan.bulan) lapSaringan.bulan = String(Number(hariIni.slice(5, 7)));
-  lapData.anggaran = await lapAmbilAnggaran(lapSaringan.tahun).catch(() => ({ gagal: true }));
-  lapGambar(box);
+  baru.anggaran = await lapAmbilAnggaran(lapSaringan.tahun).catch(() => ({ gagal: true }));
+  // Ada penulisan selama menunggu: dibaca sekali lagi
+  if (versi !== lapVersi) {
+    if (lapTampil()) renderLaporanBiaya(box, bar);
+    return;
+  }
+  const sama = ada && JSON.stringify(ada) === JSON.stringify(baru);
+  lapData = baru;
+  lapWaktu = Date.now();
+  // Pindah tab selama menunggu: tabel tab itu tidak ditimpa
+  if (!sama && lapTampil()) lapGambar(box);
 }
 
 /* ---------------------------- statistik ---------------------------- */

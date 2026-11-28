@@ -48,7 +48,7 @@ const authState = { user: null, profile: null, siap: false };
    bukan exim. */
 const PERAN = {
   exim: {
-    label: "EXIM",
+    label: "Exim",
     ubah: true,
     tandaiBayar: true,
     aturTanggalPabrik: true,
@@ -372,6 +372,9 @@ function applyPermissions() {
     const avatar = $("#userChipAvatar");
     if (avatar) {
       avatar.textContent = (authState.profile.full_name || authState.profile.username || "?").trim().charAt(0).toUpperCase() || "?";
+      /* Avatar berwarna peran -- sama dengan avatar & pil peran di
+         halaman Akun (css/auth.css, "WARNA PERAN"). */
+      avatar.className = "user-chip-avatar is-" + peran;
     }
     const badge = $("#userChipRole");
     badge.textContent = currentRoleLabel();
@@ -635,6 +638,12 @@ if (userChipEl) {
   });
   userChipEl.addEventListener("mouseleave", () => {
     clearTimeout(tundaTutup);
+    /* Pergantian tema terang / gelap dari menu ini (core/tema.js): lapisan
+       View Transitions sesaat menutupi halaman dan terbaca sebagai kursor
+       yang keluar -- padahal kursornya masih di tombol tema. Menu tetap
+       terbuka; ditutup lewat klik di luar / Esc / kursor yang benar-benar
+       pergi sesudahnya. */
+    if (document.documentElement.dataset.temaBerganti) return;
     tundaTutup = setTimeout(tutupUserMenu, 220);
   });
 

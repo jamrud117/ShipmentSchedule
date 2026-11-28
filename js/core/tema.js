@@ -50,15 +50,51 @@ function gambarPilihanTema() {
   });
 }
 
-function setTema(pilihan) {
+/* titik = { x, y } tempat pengguna menekan pilihan tema (opsional).
+
+   Kalau temanya benar-benar berganti, gantinya dibungkus View
+   Transitions: peramban memotret layar lama & baru, lalu yang baru
+   dibuka sebagai lingkaran dari titik yang ditekan (css/peta-laut.css,
+   bagian H) -- satu animasi di GPU, bukan transisi warna di ribuan
+   elemen. Tanpa dukungan atau bila gerak diminta dikurangi: langsung
+   berganti seperti biasa. */
+function setTema(pilihan, titik) {
   if (!TEMA_PILIHAN.includes(pilihan)) return;
   try {
     localStorage.setItem(TEMA_KUNCI, pilihan);
   } catch (e) {
     /* Tidak tersimpan: berlaku untuk sesi ini saja. */
   }
-  terapkanTema(pilihan);
-  gambarPilihanTema();
+  const ganti = () => {
+    terapkanTema(pilihan);
+    gambarPilihanTema();
+  };
+  const html = document.documentElement;
+  const berganti = temaAktif(pilihan) !== html.getAttribute("data-tema");
+  const kurangiGerak = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!berganti || kurangiGerak || typeof document.startViewTransition !== "function") {
+    ganti();
+    return;
+  }
+  const x = titik && titik.x != null ? titik.x : window.innerWidth / 2;
+  const y = titik && titik.y != null ? titik.y : 0;
+  html.style.setProperty("--tema-x", x + "px");
+  html.style.setProperty("--tema-y", y + "px");
+  html.style.setProperty("--tema-r", Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y)) + "px");
+  /* Selama transisi berjalan (`data-tema-berganti`), menu akun yang
+     memuat tombol ini tidak boleh menutup sendiri: lapisan transisi
+     menutupi halaman sesaat, dan peramban melaporkannya sebagai kursor
+     yang keluar dari menu (js/auth/session.js). */
+  try {
+    html.dataset.temaBerganti = "1";
+    const transisi = document.startViewTransition(ganti);
+    const selesai = () => delete html.dataset.temaBerganti;
+    if (transisi && transisi.finished) transisi.finished.then(selesai, selesai);
+    else selesai();
+  } catch (e) {
+    delete html.dataset.temaBerganti;
+    ganti();
+  }
 }
 
 terapkanTema();
@@ -76,6 +112,6 @@ document.addEventListener("click", (e) => {
   const tombol = e.target.closest && e.target.closest("[data-tema-pick]");
   if (!tombol) return;
   e.preventDefault();
-  setTema(tombol.dataset.temaPick);
+  setTema(tombol.dataset.temaPick, { x: e.clientX, y: e.clientY });
 });
 document.addEventListener("DOMContentLoaded", gambarPilihanTema);

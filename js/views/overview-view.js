@@ -157,23 +157,27 @@ function renderTaskQueue() {
            salah saat menghubungi forwarder. */
         const labelHouse = tugas.s.transport === "udara" ? "HAWB" : "HBL";
         const punyaHouse = hasMeaningfulValue(tugas.s.houseBL);
-        /* Nama barang di baris ketiga: satu nama saja. Baris ini untuk
-           mengenali "kiriman yang mana", bukan menampilkan isi
-           lengkapnya -- daftar penuhnya ada di kartunya sendiri. */
-        const barang = itemNamesSummary(tugas.s, 1)[0];
+        /* NAMA BARANG DULU (desain Peta Laut, sama dengan papan jadwal):
+           orang mengenali kiriman dari barangnya -- paling banyak dua
+           nama, sisanya "+N Lainnya". Pemasok di bawahnya, lalu apa yang
+           harus dikerjakan. Jadwal tanpa barang memakai nama pihaknya. */
+        const semua = (tugas.s.items || []).map((it) => itemDisplayName(it)).filter(Boolean);
+        const barang = semua.length
+          ? semua.slice(0, 2).join(", ") + (semua.length > 2 ? tt(` +${semua.length - 2} Lainnya`, ` +${semua.length - 2} More`) : "")
+          : dispVal(tugas.s.party);
         return `
       <button type="button" class="task task--${tugas.kind}" data-ov-open="${tugas.s.id}"${
           punyaHouse ? ` data-ov-house="${escapeAttr(tugas.s.houseBL)}"` : ""
         }>
         <span class="task-reason">${escapeHtml(tugas.reason)}</span>
         <span class="task-main">
-          <span class="task-party">${escapeHtml(dispVal(tugas.s.party))}</span>
+          <span class="task-goods">${escapeHtml(barang)}</span>
+          <span class="task-party${semua.length ? "" : " is-sama"}">${escapeHtml(dispVal(tugas.s.party))}</span>
           <span class="task-detail">${escapeHtml(tugas.detail)}${
             punyaHouse
               ? ` · ${labelHouse} <span class="mono">${escapeHtml(tugas.s.houseBL)}</span>`
               : ""
           }</span>
-          <span class="task-goods">${escapeHtml(barang)}</span>
         </span>
         <i class="bi bi-chevron-right task-go"></i>
       </button>`;
@@ -334,13 +338,13 @@ function renderDelayWatch() {
     </div>
     <div class="stat-line">
       <span class="stat-line-label"><i class="bi bi-calendar-x"></i> ${tt("Total hari mundur", "Total days delayed")}</span>
-      <span class="stat-line-value">${tt(`${total} hari`, `${total} days`)}</span>
+      <span class="stat-line-value">${tt(`${total} hari`, `${total} day(s)`)}</span>
     </div>
     ${
       terparah
         ? `<div class="stat-line stat-line--lead">
              <span class="stat-line-label"><i class="bi bi-arrow-down-right"></i> ${tt("Paling lama", "Longest")}</span>
-             <span class="stat-line-value">${tt(`${terparah.info.days} hari`, `${terparah.info.days} days`)}</span>
+             <span class="stat-line-value">${tt(`${terparah.info.days} hari`, `${terparah.info.days} day(s)`)}</span>
            </div>
            <div class="stat-callout">
              <span class="task-party">${escapeHtml(dispVal(terparah.s.party))}</span>

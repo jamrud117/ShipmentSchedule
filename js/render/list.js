@@ -119,7 +119,7 @@ function getFiltered() {
         matchQ = c.rapat.includes(qRapat);
       }
     }
-    const matchStatus = !statusFilter || s.status === statusFilter;
+    const matchStatus = cocokSaringanStatus(s, statusFilter);
 
     /* Rentang tanggal. Perbandingan memakai teks ISO (yyyy-mm-dd), yang
        sudah urut secara alfabet, jadi tidak perlu mengurai Date sama
@@ -443,6 +443,44 @@ function pulihkanFokusDaftar(lama) {
   }
 }
 
+/* Pemisah kelompok di papan: "Selasa, 1 Desember" + "2 Jadwal". Tahun
+   hanya ditulis kalau bukan tahun ini; hari ini / besok / kemarin
+   disebut. Kelompok yang seluruhnya sudah tiba diredupkan. Dasar
+   pengelompokannya (Est. Delivery / Stuffing, sortBasis) di tooltip. */
+function judulGrupPapanHtml(iso, jumlah, semuaTiba) {
+  const d = iso ? parseLocalDate(iso) : null;
+  let label = t("s.tanggal.tidak.diketahui");
+  let rel = "";
+  if (d) {
+    const opsi = { weekday: "long", day: "numeric", month: "long" };
+    if (String(d.getFullYear()) !== todayISO().slice(0, 4)) opsi.year = "numeric";
+    label = tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", opsi);
+    const n = delayDaysBetween(todayISO(), iso);
+    if (n != null && Math.abs(n) <= 1) rel = hariRelatifPapan(iso);
+  }
+  const dasar = sortBasis() === "stuffing" ? "Stuffing" : "Est. Delivery";
+  return `
+        <h2 class="papan-grup${semuaTiba ? " is-tiba" : ""}" title="${escapeAttr(tt(`Dikelompokkan menurut ${dasar}`, `Grouped by ${dasar}`))}">
+          <span class="papan-grup-tgl">${escapeHtml(label)}</span>${rel ? `<span class="papan-grup-rel">${escapeHtml(rel)}</span>` : ""}
+          <span class="papan-grup-n">${escapeHtml(tt(`${jumlah} Jadwal`, `${jumlah} Schedule${jumlah === 1 ? "" : "s"}`))}</span>
+        </h2>`;
+}
+
+/* SATU MOMEN SAAT PAPAN PERTAMA KALI TERISI: baris muncul berurutan dan
+   garis rute "berlayar" dari pelabuhan asal ke posisinya (css/peta-
+   laut.css, .papan--berlayar). Hanya sekali per halaman dibuka --
+   penggambaran ulang sesudahnya (ubah status, realtime, saringan) tidak
+   menganimasikan apa pun, supaya yang bergerak selalu jawaban atas aksi
+   pengguna. */
+let papanSudahBerlayar = false;
+function berlayarkanPapan() {
+  if (papanSudahBerlayar) return;
+  papanSudahBerlayar = true;
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  cardContainer.classList.add("papan--berlayar");
+  setTimeout(() => cardContainer.classList.remove("papan--berlayar"), 1600);
+}
+
 function render() {
   if (!renderDariCari) teksCariIngat = new WeakMap();
   renderDariCari = false;
@@ -457,6 +495,7 @@ function render() {
 
   if (filtered.length === 0) {
     cardContainer.innerHTML = "";
+    papanSegarkanKepala();
     emptyState.classList.remove("d-none");
     renderPaginationBar(0);
     updateStats(0);
@@ -487,20 +526,13 @@ function render() {
         ? g.items.every((s) => isArrived(s))
         : false;
       const jumlah = g ? g.items.length : 0;
-      const label = entry.key
-        ? fmtDateLong(entry.key)
-        : t("s.tanggal.tidak.diketahui");
-      html += `
-        <div class="date-section">
-          <span class="date-section-badge ${anyArrived ? "is-arrived-group" : ""}"><i class="bi ${anyArrived ? "bi-check-circle" : "bi-calendar-event"}"></i> ${label}</span>
-          <span class="date-section-line"></span>
-          <span class="date-section-count">${tt(`${jumlah} pengiriman`, `${jumlah} shipment${jumlah === 1 ? "" : "s"}`)} · ${sortBasisLabel().toUpperCase()}</span>
-        </div>`;
+      html += judulGrupPapanHtml(entry.key, jumlah, anyArrived);
     }
     html += renderCard(entry.shipment);
     lastKey = entry.key;
   });
   cardContainer.innerHTML = html;
+  papanSegarkanKepala();
   /* Kotak tanggal kartu dirapikan SEKARANG, sebelum kartunya ditata
      (wariskanTinggiKartu, pulihkanPenandaGulir) atau dibaca
      (pulihkanFokusDaftar) -- bukan menunggu pengamat DOM sesudah tugas
@@ -514,6 +546,8 @@ function render() {
   renderFilterNote(flat.length, totalInBook);
   pulihkanPenandaGulir(penanda);
   pulihkanFokusDaftar(fokusLama);
+  // Data sungguhan sudah ada (bukan kerangka muat): momen pembukaan papan
+  if (totalInBook) berlayarkanPapan();
 }
 
 /* PAGINATION */
@@ -641,7 +675,13 @@ function applyModeLabels() {
   const cur = $("#filterStatus").value;
   $("#filterStatus").innerHTML =
     `<option value="">${tt("Semua Status", "All Statuses")}</option>` +
+    `<option value="${FILTER_BERJALAN}">${tt("Berjalan", "In Progress")}</option>` +
     statusOptionsHtml(activeMode, "").replace(/ selected/g, "");
+  // Judul papan ("Jadwal Import" / "Jadwal Export") & label tab Arrived/Delivered
+  const judulPapan = $("#papanJudul");
+  if (judulPapan) judulPapan.textContent = activeMode === "export" ? tt("Jadwal Export", "Export Schedule") : tt("Jadwal Import", "Import Schedule");
+  const tabTiba = document.querySelector('[data-status-tab="arrived"] .status-tab-label');
+  if (tabTiba) tabTiba.textContent = statusLabel("arrived", activeMode);
   /* Pilihan yang sedang aktif dikembalikan setelah daftarnya diisi
      ulang — KECUALI pada gambar pertama, yang dimulai dari nilai
      bawaan. Sesudah itu pilihan pengguna dihormati; kalau tidak,
@@ -656,6 +696,10 @@ function applyModeLabels() {
      tidak berubah nama antar mode, jadi cukup opsi ini saja. */
   const optActual = $('#filterDateBasis option[value="actual"]');
   if (optActual) optActual.textContent = lbl.actual;
+  const kolomActual = $("#papanKolomActual");
+  if (kolomActual) kolomActual.textContent = lbl.actual;
+  const kolomPihak = $("#papanKolomPihak");
+  if (kolomPihak) kolomPihak.textContent = lbl.kolomPapan;
 }
 
 /* Nilai bawaan hanya dipakai kalau memang ADA pilihannya di buku ini.
@@ -663,6 +707,7 @@ function applyModeLabels() {
    jatuh ke "Semua Status" daripada menyetel nilai yang tidak ada —
    <select> yang nilainya asing akan diam-diam jadi kosong. */
 function nilaiFilterStatusBawaan() {
+  if (FILTER_STATUS_DEFAULT === FILTER_BERJALAN) return FILTER_BERJALAN;
   const ada = (STATUS_OPTIONS_BY_MODE[activeMode] || []).includes(
     FILTER_STATUS_DEFAULT,
   );
@@ -671,10 +716,22 @@ function nilaiFilterStatusBawaan() {
 
 /* Penyegaran ringan: hanya geser penanda, DOM & fokus tidak disentuh */
 function refreshLanePositions() {
-  currentList().forEach((s) => {
-    const card = cardContainer.querySelector(`.ship-card[data-id="${s.id}"]`);
-    if (!card) return;
+  /* Hanya baris yang sedang tergambar (paling banyak satu halaman),
+     bukan seisi buku dengan querySelector per jadwal. */
+  const kartu = cardContainer.querySelectorAll(":scope > .ship-card[data-id]");
+  if (!kartu.length) return;
+  const peta = new Map(currentList().map((s) => [String(s.id), s]));
+  kartu.forEach((card) => {
+    const s = peta.get(card.dataset.id);
+    if (!s) return;
     const lane = computeLaneModel(s);
+    // Garis rute baris ringkas (papanRuteHtml)
+    const rute = card.querySelector(".pr-rute");
+    if (rute) {
+      const maju = Math.round(Math.max(0, Math.min(1, laneProgress(s))) * 1000) / 10;
+      rute.style.setProperty("--maju", maju + "%");
+      rute.style.setProperty("--maju-n", String(maju / 100));
+    }
     const fill = card.querySelector(".lane-fill");
     const marker = card.querySelector(".ship-marker");
     if (fill) fill.style.width = lane.progress * 100 + "%";
@@ -708,6 +765,32 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.mode !== activeMode) switchMode(btn.dataset.mode);
 });
+
+/* SAKELAR BUKU DI BILAH PAPAN (layar besar). Papan selebar AMBANG ke
+   atas: bilah papannya sebaris dan cukup lega, jadi sakelar Export /
+   Import dipindah dari samping judul ke bilah itu -- di TENGAH antara
+   tab status & rentang tanggal (margin auto, peta-laut.css
+   .ada-sakelar). Lebih sempit: kembali tepat sesudah judul. Satu elemen
+   yang dipindah (bukan dua salinan): klik & syncModeTabs tetap satu
+   jalur, pembaca layar hanya menemukan satu sakelar. Papan tersembunyi
+   (lebar 0, halaman lain) tidak memindahkan apa pun. */
+const SAKELAR_BUKU_AMBANG = 1120;
+function aturSakelarBukuPapan(lebarPapan) {
+  const sakelar = document.getElementById("sakelarBuku");
+  const baris = document.querySelector("#papan .controlbar-row--bottom");
+  const judul = document.getElementById("papanJudul");
+  const rentang = document.getElementById("dateRangePicker");
+  if (!sakelar || !baris || !judul || !rentang || !(lebarPapan > 0)) return;
+  const diPapan = lebarPapan >= SAKELAR_BUKU_AMBANG;
+  if (diPapan && sakelar.parentElement !== baris) baris.insertBefore(sakelar, rentang);
+  else if (!diPapan && sakelar.parentElement === baris) judul.after(sakelar);
+  baris.classList.toggle("ada-sakelar", diPapan);
+}
+(function pasangSakelarBukuPapan() {
+  const papan = document.getElementById("papan");
+  if (!papan || typeof ResizeObserver !== "function") return;
+  new ResizeObserver((entri) => aturSakelarBukuPapan(entri[entri.length - 1].contentRect.width)).observe(papan);
+})();
 
 function syncModeTabs(mode) {
   $$(".mode-tabs [data-mode]").forEach((b) => {
@@ -776,6 +859,18 @@ $("#filterStatus").addEventListener("change", () => {
   currentPage = 1;
   render();
 });
+/* TAB STATUS papan (Semua / Berjalan -- bawaan / Delay / Arrived):
+   menyetel #filterStatus -- tetap satu sumber nilai saringan -- lalu
+   memicu "change" yang sama dengan dropdown lamanya. */
+const tabStatus = $("#statusTab");
+if (tabStatus)
+  tabStatus.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-status-tab]");
+    const st = $("#filterStatus");
+    if (!b || st.value === b.dataset.statusTab) return;
+    st.value = b.dataset.statusTab;
+    st.dispatchEvent(new Event("change"));
+  });
 
 // Rentang tanggal: ganti basis atau tanggal -> saring ulang dari halaman 1
 ["filterDateBasis", "filterDateFrom", "filterDateTo"].forEach((id) => {

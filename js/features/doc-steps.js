@@ -54,7 +54,7 @@
 
    Alur berkasnya memang tidak sama. Import berakhir di SPPB (izin
    keluar dari kawasan pabean); Export berakhir di Tally (hitung fisik
-   saat muat -- kiriman laut saja) lalu keberangkatan. Karena itu dua
+   saat muat -- kiriman laut LCL saja) lalu keberangkatan. Karena itu dua
    daftar, bukan satu yang dipaksakan.
 
    Label AWB/BL ditulis sebagai fungsi, bukan teks mati: yang benar
@@ -174,15 +174,17 @@ const DOC_STEP_SPJM = {
   berlaku: pakaiSpjm,
 };
 
-/* TALLY -- lembar hitung fisik saat barang dimuat ke kontainer / kapal
-   di pelabuhan / depo. Kiriman UDARA (Air Freight) tidak memakainya:
-   barang diterima & ditimbang gudang kargo bandara, bukti terimanya ikut
-   AWB. Tahapnya tidak digambar sama sekali pada kiriman udara (`berlaku`,
-   disaring docStepsFor() seperti Asuransi) -- bukan strip "tidak
-   dipakai", karena memang bukan bagian dari kiriman itu. Entri yang sudah
-   tercatat tetap tersimpan dan muncul lagi bila modanya diganti ke laut. */
+/* TALLY -- lembar hitung fisik saat barang LCL digabung ke kontainer di
+   gudang konsolidasi (CFS). Hanya kiriman laut ber-Jenis Muatan LCL yang
+   memakainya: FCL distuffing & disegel sendiri di gudang pengirim, dan
+   kiriman UDARA ditimbang gudang kargo bandara (bukti terimanya ikut AWB).
+   Selama Jenis Muatan belum diisi, tahapnya belum digambar. Tahapnya
+   tidak digambar sama sekali di luar LCL (`berlaku`, disaring
+   docStepsFor() seperti Asuransi) -- bukan strip "tidak dipakai", karena
+   memang bukan bagian dari kiriman itu. Entri yang sudah tercatat tetap
+   tersimpan dan muncul lagi bila muatannya diganti ke LCL. */
 function pakaiTally(s) {
-  return !(s && s.transport === "udara");
+  return muatanDariKode(muatanKiriman(s)) === "LCL";
 }
 const DOC_STEP_TALLY = {
   key: "tally",
@@ -670,12 +672,44 @@ function pakaiKurirEkspres(s) {
   return isKurirEkspres(s.forwarder) || isKurirEkspres(s.vessel);
 }
 
-function docStepHtml(s) {
+/* BALOK PROGRES DOKUMEN: satu balok per tahap yang berlaku (terisi =
+   ada, jam pasir = draft; yang tidak dipakai tidak dihitung). Dipakai
+   sel Dokumen baris papan (papanDokHtml) dan -- selama barisnya dibuka
+   -- kepala "Progres Dokumen" di samping stepper-nya. */
+function docBalok(s) {
+  let selesai = 0;
+  const balok = [];
+  docStepsFor(s).forEach((st) => {
+    const e = docStepEntri(s, st);
+    if (e && e.skipped) return;
+    if (e) selesai++;
+    balok.push(e ? (e.draft ? '<i class="is-draft"></i>' : '<i class="is-ok"></i>') : "<i></i>");
+  });
+  return { html: balok.join(""), selesai, total: balok.length };
+}
+
+/* opsi.bilah (baris papan yang dibuka): balok progres dokumen ikut di
+   kepala stepper -- di baris ringkas sel Dokumen-nya disembunyikan
+   selama baris terbuka (pindah ke sini, dekat tahapnya), "Lengkap"
+   bila semua tahap ada. Viewer & kurir tanpa PIB tidak punya stepper:
+   dengan opsi.bilah mereka tetap mendapat kepalanya saja (balok +
+   hitungan, atau "Kurir, Tanpa PIB"), supaya keterangan dokumennya
+   tidak hilang saat baris dibuka. Tanpa opsi: seperti dulu. */
+function docStepHtml(s, opsi) {
+  const bilah = !!(opsi && opsi.bilah);
+  const judulKepala = `<span class="docsteps-judul"><i class="bi bi-files" aria-hidden="true"></i> ${tt("Progres Dokumen", "Document Progress")}</span>`;
   /* Kiriman kurir bernilai rendah tidak lewat PIB — lihat
      isKurirNilaiRendah(). Diperiksa PALING DULU, sebelum tahap apa pun
      dihitung: yang disembunyikan seluruh baloknya, bukan lingkarannya
      saja. */
-  if (isKurirNilaiRendah(s)) return "";
+  if (isKurirNilaiRendah(s)) {
+    return bilah
+      ? `
+  <div class="docsteps docsteps--baca">
+    <div class="docsteps-head">${judulKepala}<span class="docsteps-hitung"><span class="docsteps-next">${escapeHtml(tt("Kurir, Tanpa PIB", "Courier, No PIB"))}</span></span></div>
+  </div>`
+      : "";
+  }
 
   const berikut = docNextIndex(s);
 
@@ -725,17 +759,22 @@ function docStepHtml(s) {
      Yang disembunyikan seluruh baloknya, bukan tombolnya saja.
      Menyisakan judul "Progres Dokumen" dengan isi kosong justru
      terbaca seperti data yang gagal dimuat. */
-  if (typeof canEdit === "function" && !canEdit()) return "";
+  const bolehUbah = typeof canEdit !== "function" || canEdit();
+  if (!bolehUbah && !bilah) return "";
 
   /* Tahap berikutnya disebut dengan kata-kata, bukan hanya cincin
      kuningan di deretannya: "Berikutnya: Billing". */
   const tahapBerikut = berikut >= 0 ? docStepsFor(s)[berikut] : null;
   const hitung = docStepCount(s);
+  const balok = bilah ? docBalok(s) : null;
+  const lengkap = bilah && hitung.berlaku > 0 && hitung.selesai === hitung.berlaku;
   return `
-  <div class="docsteps">
+  <div class="docsteps${bolehUbah ? "" : " docsteps--baca"}">
     <div class="docsteps-head">
-      <span class="docsteps-judul"><i class="bi bi-files" aria-hidden="true"></i> ${tt("Progres Dokumen", "Document Progress")}</span>
-      <span class="docsteps-hitung"><span class="docsteps-count">${hitung.selesai} / ${hitung.berlaku}</span>${
+      ${judulKepala}
+      <span class="docsteps-hitung">${balok && balok.total ? `<span class="pr-blok docsteps-blok" aria-hidden="true">${balok.html}</span>` : ""}<span class="docsteps-count">${hitung.selesai} / ${hitung.berlaku}</span>${
+        lengkap ? `<span class="docsteps-lengkap">${escapeHtml(tt("Lengkap", "Complete"))}</span>` : ""
+      }${
         jumlahDraft ? `<span class="docsteps-draft" title="${escapeAttr(tt("Draft sudah disetujui, aslinya masih ditunggu", "Draft approved, the original is still awaited"))}"><i class="bi bi-hourglass-split" aria-hidden="true"></i> ${jumlahDraft} draft</span>` : ""
       }${menungguKhusus
         .map(
@@ -746,7 +785,7 @@ function docStepHtml(s) {
         tahapBerikut ? `<span class="docsteps-next">${tt("Berikutnya", "Next")}: <b>${escapeHtml(stepText(tahapBerikut.label, s))}</b></span>` : ""
       }</span>
     </div>
-    <div class="docsteps-track">${langkah}</div>
+    ${bolehUbah ? `<div class="docsteps-track">${langkah}</div>` : ""}
   </div>`;
 }
 
@@ -976,13 +1015,19 @@ function bukaTahapDokumen(s, st) {
     ? null
     : buatPengelolaBerkas({ berkas: lama && lama.berkas, versi: () => (st.bisaDraft && !kata ? (status === "draft" ? "draft" : "asli") : "") });
 
+  /* Status dokumen & tanggalnya SEBARIS (lebar "setengah"): pilihan
+     pendek & kotak tanggal tidak perlu dua baris penuh. Di bawahnya jalur
+     (PIB terdaftar), lalu Lampiran selebar kotak, rata kiri. Tanpa
+     pilihan status: tanggalnya selebar kotak seperti biasa. */
+  const sebaris = opsiStatus.length ? { lebar: "setengah" } : {};
   const fields = [];
   if (opsiStatus.length) {
-    fields.push({ key: "pilih", label: kata ? kata.status : tt("Status dokumen", "Document status"), type: "select", value: statusAwal, options: opsiStatus });
+    fields.push(Object.assign({ key: "pilih", label: kata ? kata.status : tt("Status dokumen", "Document status"), type: "select", value: statusAwal, options: opsiStatus }, sebaris));
   }
   fields.push(
     Object.assign(
       { key: "tanggal", label: labelTanggal(statusAwal), type: "date", value: tanggalUntuk(statusAwal) },
+      sebaris,
       tanggalMilestone(statusAwal) || masaDepan(statusAwal) ? {} : { max: todayISO() },
       hintTanggal(statusAwal) ? { hint: hintTanggal(statusAwal) } : {},
     ),
@@ -1299,6 +1344,7 @@ async function simpanDocStep(s, progresBaru, lampiran) {
   const l = lampiran || {};
   const sebelum = s.docProgress;
   s.docProgress = progresBaru; // layar berubah lebih dulu
+  if (typeof tandaiBarisBerubah === "function") tandaiBarisBerubah(s.id);
   render();
 
   // Gema perubahan ini dari realtime dilewati: layarnya sudah berubah

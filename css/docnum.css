@@ -28,29 +28,21 @@
 .docnum-tabs {
   display: flex;
   flex-direction: row;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--w-bg-f7fafd);
-  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
 }
 .docnum-tabs::-webkit-scrollbar {
   display: none;
 }
-/* Di layar lebar keempatnya berbagi lebar sama rata, lengkap dengan
-   keterangannya; di bawah 1200px menyusut ke lebar isinya (lihat
-   media query di bawah). */
+/* Tab ringkas: satu kata per jenis dokumen (Invoice, Delivery Order,
+   Pengajuan Dana, PO & PR, Surat) -- ukuran, warna & keadaan aktifnya
+   di css/peta-laut.css (bagian I). Kartu sempit: tabnya tetap sebaris
+   dan bisa digeser, tidak terpotong. */
 .docnum-tab {
-  flex: 1 1 0;
   min-width: 0;
   display: flex;
-  align-items: flex-start;
   gap: 11px;
   text-align: left;
-  padding: 11px 12px;
-  border: 1px solid transparent;
-  border-radius: 11px;
   background: transparent;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -59,32 +51,6 @@
   background: var(--surface);
   border-color: var(--border);
 }
-.docnum-tab.active {
-  background: var(--surface);
-  border-color: rgba(20, 73, 122, 0.32);
-  box-shadow: 0 8px 20px -14px rgba(20, 73, 122, 0.6);
-}
-.docnum-tab-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(100, 116, 139, 0.14);
-  color: var(--muted);
-  font-size: 0.9rem;
-  transition: all 0.18s ease;
-}
-.docnum-tab-icon .ic {
-  width: 17px;
-  height: 17px;
-}
-.docnum-tab.active .docnum-tab-icon {
-  background: linear-gradient(135deg, var(--ocean), var(--navy));
-  color: #fff;
-}
 .docnum-tab-text {
   display: flex;
   flex-direction: column;
@@ -92,14 +58,7 @@
   min-width: 0;
 }
 .docnum-tab-text b {
-  font-size: 0.84rem;
-  color: var(--tp-700);
   line-height: 1.25;
-}
-.docnum-tab-text small {
-  font-size: 0.72rem;
-  color: var(--muted);
-  line-height: 1.3;
 }
 /* Jarak isi kolom kanan. Disimpan sebagai variabel karena paginasi
    riwayat (di bawah) membatalkannya untuk menempel ke tepi kartu. */
@@ -357,6 +316,10 @@ table.fund-lines select {
 .fl-sum span {
   color: var(--n-600);
 }
+/* Angka tidak terbelah ("Rp." / "41,069,348"): labelnya yang pindah baris */
+.fl-sum b {
+  white-space: nowrap;
+}
 .fl-sum--minus b {
   color: var(--ts-danger);
 }
@@ -374,6 +337,14 @@ table.fund-lines select {
   margin-left: 4px;
   font-size: var(--t-xs);
   color: var(--n-500);
+}
+/* Billing SPTNP: Penalty jadi kotak keempat -- di layar lebar keempatnya
+   sebaris (seperempat lebar), bukan Penalty sendirian di baris kedua.
+   Layar sempit tetap mengikuti kisi .fgrid (dua kolom, lalu satu). */
+@media (min-width: 1080px) {
+  .dn-pungutan:has(> .dn-penalty:not(.d-none)) > .s4 {
+    grid-column: span 3;
+  }
 }
 /* GRAND TOTAL / TOTAL dokumen yang BISA DIUBAH (fund-lines.js, kotakTotalHtml):
    tampak seperti angka tebal biasa + ikon pensil; garis bawah tipis saat
@@ -599,22 +570,24 @@ table.fund-lines select {
   margin-top: 6px;
 }
 
-/* NOMOR MOBIL (Delivery Order): satu kotak per kendaraan. Sama dengan
-   baris PO di atas: baris tambahan membawa tombol hapus di lajur kedua,
-   dan begitu ada baris tambahan lajurnya ikut disisihkan di baris
-   pertama, supaya semua kotak sama lebar. */
+/* KENDARAAN & SOPIR (Delivery Order): satu baris per mobil -- [nomor
+   mobil][nama sopir] -- di bawah kepala berlabel dua (No. Kendaraan |
+   Sopir + tombol "+ Nomor Mobil"). Begitu ada mobil tambahan
+   (.ada-extra, vehicle-list.js), lajur tombol hapus disisihkan di SEMUA
+   baris & kepalanya, supaya kotak-kotaknya tetap lurus ke bawah. */
+.veh-kepala,
 .veh-baris {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 6px 10px;
   align-items: center;
+}
+.dn-kendaraan.ada-extra .veh-kepala,
+.dn-kendaraan.ada-extra .veh-baris {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) 30px;
 }
 .veh-baris input {
   min-width: 0;
-}
-.veh-baris-extra,
-#vehicleList:has(.veh-baris-extra) > .veh-baris {
-  grid-template-columns: minmax(0, 1fr) 30px;
 }
 .veh-baris-extra {
   margin-top: 6px;
@@ -734,7 +707,8 @@ table.fund-lines select {
    Pengajuan Dana ketiganya TIGA SEBARIS di layar lebar (dulu dua kolom,
    kotak ketiga turun ke baris baru dan riwayat nomor terdorong jauh ke
    bawah untuk pengaturan yang jarang disentuh). Penjelasan panjangnya
-   dilipat di "Cara kerja" (.dn-bantuan). Di tab lain kotak aturan
+   dilipat ke tombol "?" Cara kerja di judul kotak (ui/cara-kerja.js).
+   Di tab lain kotak aturan
    tersembunyi dan Atur Nomor Urut selebar panel seperti biasa.
 
    Pembungkusnya TANPA jarak sendiri: untuk peran hanya-baca kotaknya
@@ -742,7 +716,6 @@ table.fund-lines select {
    celah kosong di atas riwayat.
 ------------------------------------------------------------------ */
 .dn-pengaturan {
-  display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: var(--sp-3);
   align-items: start;
@@ -895,34 +868,14 @@ table.fund-lines select {
   gap: 5px;
   font-size: var(--t-sm);
 }
-/* "Cara kerja": penjelasan dilipat, satu baris kecil saat tertutup */
-.dn-bantuan {
-  margin-top: var(--sp-2);
-}
-.dn-bantuan > summary {
+/* Judul kotak + tombol "?" Cara kerja (ui/cara-kerja.js) sebaris. */
+.counter-judul {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: var(--t-xs);
-  color: var(--n-500);
-  cursor: pointer;
-  list-style: none;
 }
-.dn-bantuan > summary::-webkit-details-marker {
-  display: none;
-}
-.dn-bantuan > summary::before {
-  content: "\F431"; /* bi-info-circle */
-  font-family: "bootstrap-icons";
-}
-.dn-bantuan > summary:hover {
-  color: var(--n-700);
-}
-.dn-bantuan .form-text-note {
-  margin-top: var(--sp-1);
-}
-.dn-bantuan .form-text-note > .bi-info-circle:first-child {
-  display: none;
+.dn-pengaturan .counter-head .ck-tombol .bi {
+  margin: 0;
+  color: inherit;
 }
 /* Vendor di daftar: label, lalu cip yang bisa dihapus. */
 .dn-aturan-isi {
@@ -1161,6 +1114,65 @@ table.fund-lines select {
 .dn-bawaan-ket {
   margin-top: 3px;
 }
+/* VENDOR BEREKENING (JNE, dnSelaraskanRekening): isian No. Invoice
+   berlabel No. Rekening; Nama Bank (bawaan BWS) & No. Resi tampil di
+   sampingnya. */
+.dn-lbl-rekening {
+  display: none;
+}
+.dn-tagihan.is-rekening .dn-lbl-rekening {
+  display: inline;
+}
+.dn-tagihan.is-rekening .dn-lbl-invoice {
+  display: none;
+}
+/* BARIS TAGIHAN SATU BARIS (.dn-tagihan-baris): nomor tagihan &
+   Customer (.dn-tagihan) lalu Tanggal Invoice, Due Date, Mata Uang &
+   Lampiran (.dn-tagihan-tanggal) -- No. Rekening sampai Lampiran muat
+   sebaris (form selebar ±960px ke atas; vendor tanpa rekening ±750px).
+   Isiannya dipersempit secukupnya: nomor & resi 120px, Customer 150px,
+   Nama Bank 72px (BWS, BCA, Mandiri), Mata Uang 84px (IDR/USD), Lampiran
+   88px ("1 Set") -- sisa baris dibagi ke nomor, resi & Customer.
+   Dasar kelompok nomor = jumlah dasar isiannya, jadi isiannya tidak
+   terlipat di dalam kelompok; kelompok tanggal selebar isinya (lebar
+   TETAP, bukan flex-basis, supaya lebar alaminya pasti). Tidak muat:
+   kelompok tanggal turun UTUH ke baris kedua. */
+.dn-tagihan-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 12px;
+}
+.dn-tagihan {
+  flex: 1 1 282px;
+  min-width: 0;
+}
+.dn-tagihan.is-rekening {
+  flex-basis: 498px;
+}
+.dn-tagihan > * {
+  flex: 1 1 120px;
+}
+.dn-tagihan > .dn-bank {
+  flex: 0 0 72px;
+}
+.dn-tagihan > .dn-tagihan-customer {
+  flex-basis: 150px;
+}
+.dn-tagihan-tanggal {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.dn-tagihan-tanggal > .dn-tagihan-uang {
+  flex: 0 0 auto;
+  width: 84px;
+}
+.dn-tagihan-tanggal > .dn-tagihan-lampiran {
+  flex: 0 0 auto;
+  width: 88px;
+}
+/* Ponsel (< 768px): aturannya di blok ambang itu di ujung berkas -- satu
+   blok per ambang. */
 
 /* Riwayat nomor terbit. */
 .docnum-history {
@@ -1503,6 +1515,13 @@ table.fund-lines select {
   }
   .docnum-table thead th.dn-act {
     z-index: 3;
+  }
+  /* Menu salin (Inv Sum / Groupware) yang terbuka: selnya naik di atas
+     sel aksi baris lain & kepala tabel -- semuanya menempel ber-z-index,
+     jadi tanpa ini menunya tertutup baris di bawahnya. Lewat kelas
+     (docnum-view.js), bukan :has(.dropdown-menu.show) yang mahal. */
+  .docnum-table td.dn-act.is-menu-buka {
+    z-index: 4;
   }
   /* Bayang tipis di tepi kiri kolom menempel paling kiri: tanda ada
      kolom lain yang tergeser di baliknya. */
@@ -2575,17 +2594,12 @@ button.dn-bayar--lunas:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 /* Rumus yang tidak bisa dihitung: kotaknya ditandai, teksnya dibiarkan. */
 .fl-rumus-salah {
   border-color: #d92d20 !important;
   box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.12) !important;
-}
-.fl-petunjuk {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--n-500);
 }
 
 /* Pilihan dasar tanggal & tahun rekap, berdampingan di kanan judulnya. */
@@ -3029,9 +3043,8 @@ button.dn-bayar--lunas:hover {
   align-items: center;
   gap: 8px;
 }
-.fd-petunjuk {
-  font-size: var(--t-xs);
-  color: var(--n-500);
+.fd-aksi > .ck {
+  margin-left: 0;
 }
 .fund-lines tr.fl-grup td {
   background: var(--n-50);
@@ -3060,45 +3073,6 @@ button.dn-bayar--lunas:hover {
    meluber keluar kartu. Ditulis paling bawah: menang atas aturan
    dasarnya yang setara.
 ================================================================== */
-
-/* JENIS DOKUMEN: selalu selebar kartu (berbagi rata). Kartu menengah
-   menyembunyikan keterangannya; kartu sempit menyusunnya 2 x 2 --
-   keempatnya muat utuh tanpa ada yang terpotong di tepi. */
-@container dn-shell (max-width: 1100px) {
-  .docnum-tabs {
-    padding: 10px 12px;
-  }
-  .docnum-tab {
-    align-items: center;
-  }
-  .docnum-tab-text small,
-  .docnum-tab-text span:not(:first-child) {
-    display: none;
-  }
-}
-@container dn-shell (max-width: 820px) {
-  .docnum-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    overflow: visible;
-  }
-  .docnum-tab {
-    gap: 9px;
-    padding: 9px 10px;
-  }
-  .docnum-tab-icon {
-    width: 30px;
-    height: 30px;
-  }
-  .docnum-tab-text b {
-    font-size: 0.8rem;
-  }
-  /* Lima jenis dokumen: yang kelima (ganjil di ujung) selebar baris */
-  .docnum-tab:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-}
 
 /* KEPALA RIWAYAT yang sempit: judulnya sebaris sendiri, SEMUA saringannya
    SEBARIS di bawahnya -- tanggal dasar + rentang dan status bayar selebar
@@ -3585,8 +3559,8 @@ button.dn-bayar--lunas:hover {
 /* ------------------------------------------------------------------
    EXPORT EXCEL PENGAJUAN DANA (fund-export.js)
    Tombol di samping Muat Ulang; dialog: status bayar (pil), vendor,
-   rentang tanggal menurut Tanggal Invoice / Jatuh Tempo, lalu pratinjau
-   jumlah, total & beberapa baris pertama.
+   rentang tanggal menurut Tanggal Invoice / Jatuh Tempo, lalu jumlah,
+   total & DAFTAR BERCENTANG pengajuan yang akan diekspor.
 ------------------------------------------------------------------ */
 .dn-ekspor {
   display: inline-flex;
@@ -3740,9 +3714,89 @@ button.dn-bayar--lunas:hover {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.fex-lagi {
-  margin-top: 8px;
-  font-size: var(--t-xs);
+/* PILIH PENGAJUAN (fund-export.js, fexGambarDaftar): [Pilih semua] +
+   kotak cari, lalu daftar bercentang yang bergulir sendiri -- kepala
+   tabelnya menempel. Baris yang dilepas meredup (tidak ikut diekspor);
+   klik di mana saja pada baris = centangnya. */
+.fex-alat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.fex-semua {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-700);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fex-semua .form-check-input,
+.fex-tabel .form-check-input {
+  margin: 0;
+  cursor: pointer;
+}
+.fex-cari {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.fex-cari .bi {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  color: var(--n-400);
+  pointer-events: none;
+}
+.fex-cari .login-input {
+  height: 36px;
+  margin: 0;
+  padding-left: 32px;
+  font-size: var(--t-sm);
+}
+.fex-daftar {
+  max-height: min(44vh, 340px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.fex-daftar .fex-tabel th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-top: 8px;
+  background: var(--surface);
+}
+.fex-daftar .fex-tabel :is(th, td):first-child {
+  padding-left: 12px;
+}
+.fex-daftar .fex-tabel :is(th, td):last-child {
+  padding-right: 12px;
+}
+.fex-tabel .fex-cek {
+  width: 34px;
+  padding-right: 4px;
+}
+.fex-baris {
+  cursor: pointer;
+}
+.fex-baris:hover td {
+  background: var(--n-50);
+}
+.fex-baris.is-lepas td:not(.fex-cek) {
+  opacity: 0.5;
+}
+.fex-tabel .fex-kosong {
+  padding: 14px 12px;
+  text-align: center;
   color: var(--n-500);
 }
 .fex-pesan {
@@ -3762,12 +3816,35 @@ button.dn-bayar--lunas:hover {
 .dialog-foot > .btn-quiet.fex-reset {
   margin-right: auto;
 }
-/* Ponsel: dasar tanggal & pemicu rentang masing-masing selebar baris, dan
-   kotak pilihannya setinggi pemicu & tombol (target sentuh 44px,
-   dashboard.css). */
+/* PONSEL (< 768px) -- satu blok untuk ambang ini:
+   - Export Excel: kotak pilihannya setinggi pemicu & tombol (target
+     sentuh 44px, dashboard.css).
+   - Baris tagihan Pengajuan Dana (.dn-tagihan-baris): tiap isian selebar
+     baris lagi (.fl-bertanggal); Nama Bank & No. Resi berdampingan, Mata
+     Uang & Lampiran berdampingan. */
 @media (max-width: 767.98px) {
   .fex-saring .login-input {
     height: 44px;
+  }
+  .dn-tagihan,
+  .dn-tagihan.is-rekening,
+  .dn-tagihan-tanggal {
+    flex-basis: 100%;
+  }
+  .dn-tagihan > *,
+  .dn-tagihan > .dn-tagihan-customer {
+    flex: 1 1 100%;
+  }
+  .dn-tagihan > .dn-bank {
+    flex: 0 0 96px;
+  }
+  .dn-tagihan > .dn-resi {
+    flex: 1 1 0;
+  }
+  .dn-tagihan-tanggal > .dn-tagihan-uang,
+  .dn-tagihan-tanggal > .dn-tagihan-lampiran {
+    flex: 1 1 40%;
+    width: auto;
   }
 }
 @media (max-width: 479.98px) {
@@ -4623,7 +4700,7 @@ html[data-halaman="nameplate"] .fab-top {
   gap: 6px;
   padding: 0 var(--sp-6) var(--sp-3);
   overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-y: hidden;
   flex-shrink: 0;
 }
 .dr-langkah-butir {
@@ -4872,8 +4949,11 @@ html[data-halaman="nameplate"] .fab-top {
     opacity: 1;
   }
 }
+/* "+ Tambah baris" berjarak dari baris terakhir tabel (dulu menempel di
+   garis bawahnya) -- juga bisa lewat Enter di baris terakhir. */
 .dr-tambah {
   align-self: flex-start;
+  margin-top: 12px;
   font-size: var(--t-sm);
 }
 .dr-jumlah {
@@ -5164,5 +5244,103 @@ html[data-halaman="nameplate"] .fab-top {
 .dnd-po-turunan {
   margin: 0 0 var(--sp-2);
   font-size: var(--t-sm);
+}
+
+/* ==================================================================
+   DELIVERY ORDER -- TATA LETAK RINGKAS (#109)
+
+   Isian surat jalan pendek-pendek (Export / Lokal, tanggal, nama, nomor
+   mobil), jadi tiap isian selebar isinya -- bukan seperempat / setengah
+   baris yang di panel 1.278px membentang 300-600px untuk lima huruf.
+   Diukur dari lebar PANELNYA (@container dn-do), bukan layar: panel ini
+   duduk di samping rel kanan, jadi di layar 1.440px pun lebarnya ~800px.
+     >= 1080px  24 lajur: baris 1 Jenis + Tanggal | Pemohon | Penerima |
+                Jadwal Terkait (Lokal: PO No. + Category Work); baris 2
+                Kendaraan & Sopir | Alamat Tujuan (satu-satunya yang lebar).
+     600-1079   12 lajur: Jenis + Tanggal | Pemohon | Penerima; Jadwal |
+                Kendaraan & Sopir; Alamat selebar baris.
+     < 600      satu kolom.
+================================================================== */
+.dn-do {
+  container: dn-do / inline-size;
+}
+@container dn-do (max-width: 599.98px) {
+  .dn-do-kisi.fgrid > * {
+    grid-column: 1 / -1;
+  }
+}
+@container dn-do (min-width: 600px) {
+  .dn-do-kisi.fgrid > .dn-do-jenis,
+  .dn-do-kisi.fgrid > .dn-do-jadwal {
+    grid-column: span 5;
+  }
+  .dn-do-kisi.fgrid > .dn-do-pemohon,
+  .dn-do-kisi.fgrid > .dn-do-kategori {
+    grid-column: span 3;
+  }
+  .dn-do-kisi.fgrid > .dn-do-penerima {
+    grid-column: span 4;
+  }
+  .dn-do-kisi.fgrid > .dn-do-po {
+    grid-column: span 2;
+  }
+  .dn-do-kisi.fgrid > .dn-do-kendaraan {
+    grid-column: span 7;
+  }
+  .dn-do-kisi.fgrid > .dn-do-alamat {
+    grid-column: 1 / -1;
+  }
+}
+@container dn-do (min-width: 1080px) {
+  .dn-do-kisi.fgrid {
+    grid-template-columns: repeat(24, minmax(0, 1fr));
+  }
+  .dn-do-kisi.fgrid > * {
+    grid-column: span 6;
+  }
+  .dn-do-kisi.fgrid > .s12 {
+    grid-column: 1 / -1;
+  }
+  .dn-do-kisi.fgrid > .dn-do-pemohon,
+  .dn-do-kisi.fgrid > .dn-do-kategori {
+    grid-column: span 4;
+  }
+  .dn-do-kisi.fgrid > .dn-do-penerima,
+  .dn-do-kisi.fgrid > .dn-do-jadwal {
+    grid-column: span 7;
+  }
+  .dn-do-kisi.fgrid > .dn-do-po {
+    grid-column: span 3;
+  }
+  .dn-do-kisi.fgrid > .dn-do-kendaraan {
+    grid-column: span 9;
+  }
+  .dn-do-kisi.fgrid > .dn-do-alamat {
+    grid-column: span 15;
+  }
+  /* Lokal: Keterangan Total berbagi baris dengan Alamat & Kendaraan */
+  .dn-do-kisi.fgrid:has(> .dn-total:not(.d-none)) > .dn-do-alamat {
+    grid-column: span 9;
+  }
+}
+/* Penanda tangan surat jalan: dua nama selebar namanya, bukan dua kotak
+   setengah panel. */
+.dn-do .dn-ttd-isian {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 260px));
+}
+
+/* JUDUL BAGIAN + TOMBOL di kanannya ("Simpan penanda tangan",
+   js/features/ttd-bawaan.js): tombolnya di garis judul, bukan baris baru. */
+.dn-subhead-aksi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ttd-simpan.is-tersimpan {
+  color: var(--n-500);
+}
+.ttd-simpan.is-tersimpan .bi {
+  color: var(--ts-success);
 }
 

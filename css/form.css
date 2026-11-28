@@ -104,8 +104,6 @@
   gap: 6px;
   min-height: var(--ctl-h);
   border: 1px solid var(--p-200);
-  color: var(--tp-700);
-  background: var(--p-50);
   padding: 0 14px;
   font-size: var(--t-base);
 }
@@ -144,15 +142,8 @@
   gap: 6px;
   min-height: var(--ctl-h);
   border: 1px solid var(--border-control);
-  background: var(--surface);
-  color: var(--tp-600);
   font-size: var(--t-base);
   padding: 0 16px;
-}
-.btn-form-cancel:hover:not(:disabled) {
-  background: var(--p-50);
-  color: var(--tp-700);
-  border-color: var(--p-300);
 }
 /* Tombol simpan utama: navy pekat (system.css) dengan bayangan tipis
    sebagai penanda aksi utama di bilah simpan -- tanpa melompat saat
@@ -428,6 +419,11 @@
   padding: 0;
   margin: 0;
 }
+/* Tombol "?" Cara kerja (ui/cara-kerja.js) menempel di teks judul:
+   jarak kisi judul 10px dikurangi jadi 6px. */
+.subsection-title > .ck {
+  margin-left: -4px;
+}
 .subsection-title:first-child {
   margin-top: 0;
 }
@@ -576,6 +572,47 @@
     height: 36px;
   }
 }
+/* KARTU TRANSIT SATU BARIS (.route-stop-baris, route-stops.js): Nama
+   Terminal | Tiba | Berangkat | Moda | Nama Vessel/Pesawat | No.
+   Voyage/Flight. Tanggal selebar tanggalnya, Moda selebar pilihannya
+   (Laut/Udara), No. Voyage/Flight pendek; nama terminal & vessel berbagi
+   sisa baris. Kartu yang terlalu sempit: isiannya turun ke baris
+   berikutnya. Ponsel: tiap isian selebar baris, kedua tanggal
+   berdampingan. */
+.route-stop-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 12px;
+}
+.route-stop-baris > * {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.route-stop-baris > .rs-tanggal {
+  flex: 0 0 auto;
+}
+.route-stop-baris > .rs-moda {
+  flex: 0 0 104px;
+}
+.route-stop-baris > .rs-voyage {
+  flex: 0 1 150px;
+}
+@media (max-width: 767.98px) {
+  .route-stop-baris > *,
+  .route-stop-baris > .rs-moda,
+  .route-stop-baris > .rs-voyage {
+    flex: 1 1 100%;
+  }
+  .route-stop-baris > .rs-tanggal {
+    flex: 1 1 0;
+    min-width: 8rem;
+  }
+  .route-stop-baris input[data-kotak-tanggal].kt-nilai {
+    width: 100%;
+    field-sizing: fixed;
+  }
+}
 
 /* ---- Terminal Transit (read-only, detail view) ---- */
 .detail-stop-list {
@@ -663,7 +700,7 @@ table.item-table th {
    10-11 (Kode Kondisi Barang, Kode Negara Asal) lewat .kolom-kode. */
 table.item-table--form th:nth-child(1) { width: 3%; }   /* Seri */
 table.item-table--form th:nth-child(2) { width: 7%; }   /* HS Code */
-table.item-table--form th:nth-child(3) { width: 5%; }   /* Tarif BM (Import) */
+table.item-table--form th:nth-child(3) { width: 1%; }   /* Tarif (Import): selebar kotak angkanya */
 table.item-table--form th:nth-child(13) { width: 8%; }  /* Jenis Barang */
 table.item-table--form th:nth-child(14) { width: 6%; }  /* Fasilitas */
 table.item-table--form th:nth-child(15) { width: 5%; }  /* Qty */
@@ -699,18 +736,29 @@ table.item-table--detail th,
 table.item-table--detail td {
   white-space: nowrap;
 }
+/* HS Code (kolom pertama) & Nama Barang rata kiri -- angka & satuan di
+   kanannya tetap rata tengah */
 table.item-table--detail th:first-child,
-table.item-table--detail td:first-child {
+table.item-table--detail td:first-child,
+table.item-table--detail .db-nama {
   text-align: left;
 }
 
 /* KOLOM BARANG CEISA (Kode Barang, Uraian, Merek, Tipe, Ukuran,
-   Spesifikasi Lain, Marks): LEBAR SAMA semuanya, isinya membungkus &
-   kotaknya tumbuh ke bawah (textarea.isian-barang). Lebar sel dan
-   lebar kotaknya dipasangkan lewat --lebar-kolom-ceisa -- kalau salah
-   satu diubah sendirian, kolomnya jadi selebar yang terbesar. */
+   Spesifikasi Lain, Marks): isinya membungkus & kotaknya tumbuh ke bawah
+   (textarea.isian-barang). Lebar sel dan lebar kotaknya dipasangkan
+   lewat --lebar-kolom-ceisa -- kalau salah satu diubah sendirian,
+   kolomnya jadi selebar yang terbesar. Bawaan 200px; Kode Barang
+   (biasanya "-" atau kode pendek) separuhnya, Uraian -- isian terpanjang
+   yang diketik pengguna -- paling lebar, supaya jarang terlipat. */
 table.item-table--form {
   --lebar-kolom-ceisa: 200px;
+}
+table.item-table--form td[data-k="kodeBarang"] {
+  --lebar-kolom-ceisa: 100px;
+}
+table.item-table--form td[data-k="namaBarang"] {
+  --lebar-kolom-ceisa: 340px;
 }
 table.item-table th.kolom-ceisa {
   text-align: left;
@@ -744,10 +792,14 @@ table.item-table td.kolom-kode {
    kepabeanan / ERP. Satu baris setinggi isian lain: tidak ada teks di
    bawah kotak yang mendorongnya naik dari garis baris. Nama panjang
    terpotong "…" (lengkapnya di tooltip); disembunyikan selagi kotaknya
-   diketik, karena saat itu daftar sarannya yang bicara. */
+   diketik, karena saat itu daftar sarannya yang bicara. Nama negara
+   SEUKURAN kodenya (huruf sama, ukuran sama): keduanya ditengahkan di
+   kotak yang sama, jadi garis dasarnya persis sejajar -- "KR South
+   Korea" terbaca satu baris, bukan kode besar + keterangan kecil yang
+   mengambang. Bedanya hanya warna. */
 table.item-table .negara-isian {
   position: relative;
-  width: 8.5rem;
+  width: 9.5rem;
 }
 table.item-table input[data-f="negaraAsal"] {
   width: 100%;
@@ -765,11 +817,11 @@ table.item-table input[data-f="negaraAsal"]::placeholder {
 table.item-table .negara-nama {
   position: absolute;
   top: 50%;
-  left: 2.15rem;
+  left: 2.25rem;
   right: 0.5rem;
   transform: translateY(-50%);
-  font-size: 0.74rem;
-  line-height: 1;
+  font-size: 0.82rem; /* = table.item-table input */
+  line-height: 1.45;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -803,11 +855,11 @@ table.item-table input.negara-salah {
 .negara-isian--form > .negara-nama {
   position: absolute;
   top: 50%;
-  left: 2.85rem;
+  left: 2.75rem;
   right: 0.75rem;
   transform: translateY(-50%);
-  font-size: 0.78rem;
-  line-height: 1;
+  font-size: 0.86rem; /* = .page-form .form-control: garis dasar sejajar kodenya */
+  line-height: 1.45;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1345,6 +1397,7 @@ table.item-table input.subtotal {
      kaki kartu: label di kiri, nilainya di kanan. */
   .detail-barang table.item-table--detail tbody td.db-nama {
     grid-column: 1 / -1;
+    order: -1; /* HS Code lebih dulu di tabel; di kartu nama tetap judul */
     font-size: var(--t-base);
     font-weight: 700;
     color: var(--ink);
@@ -1438,7 +1491,6 @@ tr.item-fac-row td {
   align-items: center;
   gap: 5px;
   border: 1px solid var(--p-600);
-  border-radius: 7px;
   padding: 5px 10px;
   font-size: 0.73rem;
   font-weight: 600;
@@ -1896,17 +1948,26 @@ tr.item-fac-row td {
 #delayBlock.is-sisa .delay-judul-sisa {
   display: inline;
 }
+/* Keterangan tiap keadaan = tombol "?" di judul (ui/cara-kerja.js);
+   tombol Kosongkan (keadaan is-sisa) di ujung kanan judul. */
 #delayBlock.is-sisa .delay-ket-sisa {
-  display: flex;
+  display: inline-flex;
+}
+.delay-kepala {
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+  row-gap: 4px;
 }
 .delay-hapus-revisi {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
   border: 0;
   background: none;
   padding: 0;
   color: var(--ts-danger);
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -2057,15 +2118,7 @@ table.item-table input.pkg-invalid {
 .page-form-import-row .import-zone-btn {
   min-height: 40px;
   padding: 0 18px;
-  border-color: var(--p-600);
-  background: var(--p-600);
-  color: #fff;
   box-shadow: 0 2px 6px rgba(29, 81, 136, 0.2);
-}
-.page-form-import-row .import-zone-btn:hover:not(:disabled) {
-  border-color: var(--p-700);
-  background: var(--p-700);
-  color: #fff;
 }
 .page-form-import-row .import-zone-btn i {
   font-size: 1rem;
@@ -2405,7 +2458,7 @@ table.item-table td.tarif-col .input-affix--end::before {
   font-size: 0.72rem;
 }
 .page-form table.item-table td.tarif-col .input-affix--end > input {
-  min-width: 64px;
+  min-width: 60px;
   padding-left: 7px;
   padding-right: 22px;
   text-align: right;
@@ -2658,12 +2711,36 @@ table.item-table input.tarif-coo {
     grid-column: span 2;
   }
 }
-/* ---- 8 kolom (tablet datar, laptop, monitor) ---- */
+/* ---- 8 kolom (tablet datar, laptop, monitor) ----
+   Ditulis sebagai 24 lajur (tiap "kolom" = 3 lajur): bagian Jumlah,
+   nilai & kemasan buku Export punya 9 isian (Qty, Satuan, Harga, Netto,
+   Bruto, Dimensi, Kemasan, Jenis Kemasan, CBM) yang tidak bisa dibagi
+   ke 8 kolom utuh -- di 24 lajur kesembilannya muat SATU BARIS (isian
+   pendek 2 lajur, Netto/Bruto 3, Harga & Dimensi 4). Bagian lain tetap
+   berbanding 8 kolom: lajur bawaan 3, isian "dua kolom" 6. */
 @container barang-isi (min-width: 760px) {
   .barang-isi table.item-table--form > tbody > tr:not(.item-fac-row) {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-columns: repeat(24, minmax(0, 1fr));
     gap: 12px 14px;
     padding: 0 18px 16px;
+  }
+  .barang-isi table.item-table--form > tbody > tr > td {
+    grid-column: span 3;
+  }
+  .barang-isi table.item-table--form > tbody > tr > td:is([data-k="hsCode"], [data-k="kondisiBarang"], [data-k="negaraAsal"], [data-k="marks"], [data-k="jenisBarang"], [data-k="fasilitas"], [data-k="harga"], [data-k="package"]) {
+    grid-column: span 6;
+  }
+  body.mode-import .barang-isi table.item-table--form > tbody > tr > td[data-k="kodeBarang"] {
+    grid-column: span 3;
+  }
+  body.mode-export .barang-isi table.item-table--form > tbody > tr > td[data-k="kodeBarang"] {
+    grid-column: span 6;
+  }
+  body.mode-export .barang-isi table.item-table--form > tbody > tr > td:is([data-k="qty"], [data-k="satuan"], [data-k="packing"], [data-k="packingUnit"], [data-k="cbm"]) {
+    grid-column: span 2;
+  }
+  body.mode-export .barang-isi table.item-table--form > tbody > tr > td:is([data-k="harga"], [data-k="package"]) {
+    grid-column: span 4;
   }
   .barang-isi table.item-table--form > tbody > tr > td.seri-col {
     margin: 0 -18px 2px;
@@ -2676,10 +2753,10 @@ table.item-table input.tarif-coo {
     right: 14px;
   }
   .barang-isi table.item-table--form > tbody > tr > td[data-k="namaBarang"] {
-    grid-column: span 4;
+    grid-column: span 12;
   }
   .barang-isi table.item-table--form > tbody > tr > td:is([data-k="merek"], [data-k="tipe"], [data-k="ukuran"], [data-k="spesifikasiLain"]) {
-    grid-column: span 2;
+    grid-column: span 6;
   }
 }
 /* Pengalih Kartu / Tabel di kepala Daftar Barang. Bentuknya sama dengan
@@ -2719,13 +2796,18 @@ table.item-table input.tarif-coo {
    bagian berjudul dalam bingkai tipis, isian hanya-baca kelabu dengan
    tombol "Ubah" menuju kotak asalnya, hasil hitung bertanda "otomatis".
 ================================================================== */
+/* Deret tab menggulir MENDATAR bila tidak muat (ponsel) -- tanpa batang
+   gulir yang tampil (css/base.css) -- dan TIDAK PERNAH tegak. Garis
+   dasarnya bayangan di DALAM kotak, bukan border + tab bermargin -1px:
+   tab itu menonjol 1px melewati kotak gulirnya, dan peramban Windows
+   menggambar batang gulir tegak untuk 1px itu. */
 .dpb-tabs {
   display: flex;
   gap: 2px;
   margin: 0 0 var(--sp-4);
-  border-bottom: 1px solid var(--n-200);
+  box-shadow: inset 0 -1px 0 var(--n-200);
   overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-y: hidden;
 }
 .dpb-tab {
   flex: none;
@@ -2733,7 +2815,6 @@ table.item-table input.tarif-coo {
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  margin-bottom: -1px;
   padding: 8px 14px;
   border: 0;
   border-bottom: 3px solid transparent;
@@ -2777,10 +2858,68 @@ table.item-table input.tarif-coo {
 .dpb-bagian:last-child {
   margin-bottom: 0;
 }
+/* DUA BAGIAN BERDAMPINGAN (dpbBerdampingan, data-pabean-form.js):
+   Pengajuan & Kantor Pabean, Kemasan & Peti Kemas sebaris dua kolom
+   sama tinggi -- bukan dua kartu selebar halaman yang setengahnya
+   kosong. Isian di dalamnya memakai kisi 12 lajur SETENGAH halaman.
+   Di bawah 1.080px bertumpuk lagi (kisi isian pun dua per baris). */
+.dpb-berdampingan {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.dpb-berdampingan:last-child {
+  margin-bottom: 0;
+}
+.dpb-berdampingan > .dpb-bagian {
+  margin-bottom: 0;
+}
+@media (max-width: 1079.98px) {
+  .dpb-berdampingan {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Dua pertiga + sepertiga (Transaksi Perdagangan + Berat), mulai 1280px:
+   bagian kiri berisi tiga isian sebaris, bagian kanan hanya dua angka
+   pendek -- dua per baris (.dpb-bagian--dua), bukan seperempat lajur
+   bagian yang lebarnya sepertiga layar. Di bawah 1280px keduanya
+   bertumpuk selebar halaman (sepertiga layar 1080px terlalu sempit
+   untuk label "Berat Kotor (Kg)" + "Otomatis"). */
+.dpb-berdampingan--2-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1280px) {
+  .dpb-berdampingan--2-1 {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+  .dpb-berdampingan--2-1 > .dpb-bagian--dua > .fgrid > * {
+    grid-column: span 6;
+  }
+}
+/* Transaksi Perdagangan PIB SEBARIS: Jenis Transaksi (nama panjang)
+   mengisi, Nomor + Tanggal Transaksi, IKB (ADA / TIDAK ADA) 132px. */
+.dpb-baris-transaksi {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 132px;
+  gap: 16px 18px;
+  align-items: start;
+}
+.dpb-baris-transaksi > * {
+  min-width: 0;
+}
+@media (max-width: 767.98px) {
+  .dpb-baris-transaksi {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .dpb-bagian-judul {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  /* Setinggi kepala yang membawa tombol "?" (Cara kerja): dua bagian
+     berdampingan -- satu bertombol, satu tidak -- tetap sejajar. */
+  min-height: 41px;
   margin: 0;
   padding: 10px 14px;
   border-bottom: 1px solid var(--n-200);
@@ -2795,6 +2934,9 @@ table.item-table input.tarif-coo {
 .dpb-bagian-judul h3 {
   margin: 0;
   font: inherit;
+}
+.dpb-bagian-judul > .ck {
+  margin-left: -2px;
 }
 .dpb-bagian > .fgrid,
 .dpb-bagian > .dpb-tabel-gulir,
@@ -2843,6 +2985,28 @@ table.item-table input.tarif-coo {
   white-space: pre-line;
   overflow-wrap: anywhere;
   cursor: default;
+}
+/* KOTAK HANYA-BACA SEBARIS SAMA TINGGI, ISINYA DI TENGAH: sel kisi
+   Data PIB direntang setinggi barisnya, kotak hanya-baca mengisi sel di
+   bawah labelnya, dan isinya di tengah atas-bawah -- "MODEL: M2-5AX" di
+   samping merek dua baris tidak lagi menempel di atas kotak yang lebih
+   pendek. Kotak isian biasa di baris itu tetap setinggi dirinya. */
+.dpb-bagian > .fgrid {
+  align-items: stretch;
+}
+.dpb-sel-baca {
+  display: flex;
+  flex-direction: column;
+}
+.page-form .dpb-sel-baca > .dpb-baca.form-control,
+.modal .dpb-sel-baca > .dpb-baca.form-control {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+}
+.page-form .dpb-sel-baca > .dpb-baca.dpb-angka,
+.modal .dpb-sel-baca > .dpb-baca.dpb-angka {
+  justify-content: flex-end;
 }
 .dpb-baca.is-kosong {
   color: var(--text-subtle);

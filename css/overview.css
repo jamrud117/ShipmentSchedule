@@ -88,16 +88,7 @@
 .task:last-child {
   border-bottom: 0;
 }
-.task--late {
-  border-left-color: var(--s-danger);
-}
-.task--soon {
-  border-left-color: var(--s-warn);
-}
 /* Draft sudah disetujui, aslinya belum datang */
-.task--asli {
-  border-left-color: var(--p-300);
-}
 .ov-asli .stat-line-label i {
   color: var(--tp-500);
 }
@@ -132,7 +123,6 @@
 /* Dibungkus, bukan dipotong satu baris: "belum ada CI/PL, AWB, COO…"
    terpotong tepat di daftar yang perlu dibaca. Paling banyak dua baris. */
 .task-party {
-  color: var(--ink);
   overflow-wrap: anywhere;
 }
 .task-detail,
@@ -143,7 +133,6 @@
   overflow: hidden;
 }
 .task-detail {
-  color: var(--n-500);
   margin-top: 1px;
 }
 .task-detail .mono {

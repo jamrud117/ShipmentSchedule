@@ -70,6 +70,8 @@ function showDocNumView() {
   // Format nomor tiap jenis dokumen (format-nomor.js)
   if (typeof formatNomorMuat === "function") formatNomorMuat();
   if (typeof fundVendorMuat === "function") fundVendorMuat();
+  // Penanda tangan bawaan Pengajuan Dana & Surat Jalan (ttd-bawaan.js)
+  if (typeof ttdBawaanMuat === "function") ttdBawaanMuat();
   // Daftar customer invoice & data pengisiannya (invoice-pihak.js)
   if (typeof invCustomerMuat === "function") invCustomerMuat();
   /* Halaman ini untuk mengisi permintaan nomor: kursor langsung di isian
@@ -1027,18 +1029,26 @@ function syncStatusTibaHint() {
     el.innerHTML = "";
     return;
   }
+  /* SINGKAT di bawah Status (rute & tanggal sebaris, selnya sempit);
+     kalimat lengkapnya di tooltip (title, .tip-ringkas) & untuk pembaca
+     layar (teks tersembunyi). */
   const ikon = `<i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> `;
-  el.innerHTML =
-    ikon +
-    (activeMode === "export"
-      ? tt(
-          `${sumber.etdUpdate ? "ETD revisi" : "ETD"} ${fmtDate(effectiveEtd(sumber))} sudah lewat, jadi jadwal ini tetap terbaca <b>Delivered</b>. Kalau kapalnya belum berangkat, ubah tanggal itu.`,
-          `${sumber.etdUpdate ? "Revised ETD" : "ETD"} ${fmtDate(effectiveEtd(sumber))} has passed, so this schedule still reads as <b>Delivered</b>. If it has not departed, change that date.`,
-        )
-      : tt(
-          `In Factory ${fmtDate(sumber.factoryDate)} sudah terisi, jadi jadwal ini tetap terbaca <b>Arrived</b>. Kosongkan In Factory kalau barangnya belum sampai.`,
-          `In Factory ${fmtDate(sumber.factoryDate)} is filled in, so this schedule still reads as <b>Arrived</b>. Clear In Factory if the goods have not arrived.`,
-        ));
+  const ekspor = activeMode === "export";
+  const lengkap = ekspor
+    ? tt(
+        `${sumber.etdUpdate ? "ETD revisi" : "ETD"} ${fmtDate(effectiveEtd(sumber))} sudah lewat, jadi jadwal ini tetap terbaca Delivered. Kalau kapalnya belum berangkat, ubah tanggal itu.`,
+        `${sumber.etdUpdate ? "Revised ETD" : "ETD"} ${fmtDate(effectiveEtd(sumber))} has passed, so this schedule still reads as Delivered. If it has not departed, change that date.`,
+      )
+    : tt(
+        `In Factory ${fmtDate(sumber.factoryDate)} sudah terisi, jadi jadwal ini tetap terbaca Arrived. Kosongkan In Factory kalau barangnya belum sampai.`,
+        `In Factory ${fmtDate(sumber.factoryDate)} is filled in, so this schedule still reads as Arrived. Clear In Factory if the goods have not arrived.`,
+      );
+  const singkat = ekspor
+    ? tt(`${sumber.etdUpdate ? "ETD revisi" : "ETD"} lewat: tetap <b>Delivered</b>`, `${sumber.etdUpdate ? "Revised ETD" : "ETD"} passed: still <b>Delivered</b>`)
+    : tt("In Factory terisi: tetap <b>Arrived</b>", "In Factory filled: still <b>Arrived</b>");
+  el.classList.add("tip-ringkas");
+  el.title = lengkap;
+  el.innerHTML = `${ikon}<span aria-hidden="true">${singkat}</span><span class="visually-hidden">${escapeHtml(lengkap)}</span>`;
 }
 
 $("#btnSaveShipment").addEventListener("click", async () => {

@@ -113,15 +113,6 @@
   flex: 1 1 0;
   min-width: 0;
 }
-.info-names {
-  /* Selebar kira-kira seperempat kartu, dibatasi supaya nama barang
-     yang panjang tidak menggencet rincian di kirinya. Garis tipis di
-     kirinya: daftar barang adalah isi kiriman, bukan rincian kelima. */
-  flex: 0 0 clamp(240px, 26%, 400px);
-  min-width: 0;
-  padding-left: 20px;
-  border-left: 1px solid var(--n-200);
-}
 .info-item {
   min-width: 0;
 }
@@ -139,12 +130,6 @@
   .info-grid > .info-item > .info-label {
     align-self: end;
   }
-}
-.info-value--list div {
-  padding: 3px 0;
-}
-.info-value--list div + div {
-  border-top: 1px solid var(--n-100);
 }
 .info-label {
   display: flex;
@@ -288,22 +273,6 @@
   max-width: 100%;
   background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E");
 }
-.status-process {
-  background-color: var(--w-bg-fff3de);
-  color: var(--w-teks-95610c);
-}
-.status-transit {
-  background-color: var(--sec-50);
-  color: var(--tsec-700);
-}
-.status-arrived {
-  background-color: var(--p-50);
-  color: var(--tp-700);
-}
-.status-delayed {
-  background-color: var(--s-danger-bg);
-  color: var(--ts-danger);
-}
 .status-select option {
   color: var(--w-teks-1b2a41);
   background: var(--surface);
@@ -335,12 +304,6 @@
 }
 .icon-btn:active:not(:disabled) {
   background: var(--p-100);
-}
-.icon-btn.primary {
-  color: #fff;
-}
-.icon-btn.primary:hover:not(:disabled) {
-  color: #fff;
 }
 .icon-btn.danger:hover:not(:disabled) {
   background: var(--s-danger-bg);
@@ -1144,15 +1107,6 @@
   .info-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
-  }
-  /* Ditumpuk: garis pemisahnya pindah ke atas daftar barang */
-  .info-names {
-    flex: 1 1 auto;
-    width: 100%;
-    padding-left: 0;
-    border-left: 0;
-    padding-top: 14px;
-    border-top: 1px solid var(--n-100);
   }
 }
 

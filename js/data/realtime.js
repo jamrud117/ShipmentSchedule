@@ -558,6 +558,15 @@ const RT_PENGATURAN = [
     kunci: () => (typeof FORMAT_NOMOR_KUNCI !== "undefined" ? FORMAT_NOMOR_KUNCI : null),
     muat: () => rtDiDocNum() && typeof formatNomorMuat === "function" && formatNomorMuat(),
   },
+  // Penanda tangan bawaan Pengajuan Dana & Surat Jalan (ttd-bawaan.js)
+  {
+    kunci: () => (typeof TTD_BAWAAN_KUNCI !== "undefined" ? TTD_BAWAAN_KUNCI.fund : null),
+    muat: () => rtDiDocNum() && typeof ttdBawaanMuat === "function" && ttdBawaanMuat(),
+  },
+  {
+    kunci: () => (typeof TTD_BAWAAN_KUNCI !== "undefined" ? TTD_BAWAAN_KUNCI.do : null),
+    muat: () => rtDiDocNum() && typeof ttdBawaanMuat === "function" && ttdBawaanMuat(),
+  },
   // Pola Doc No bawaan Pengajuan Dana (fund-docno.js)
   {
     kunci: () => (typeof FUND_DOCNO_POLA_KUNCI !== "undefined" ? FUND_DOCNO_POLA_KUNCI : null),

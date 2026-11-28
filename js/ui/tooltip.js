@@ -24,8 +24,106 @@
    tidak disentuh, dan tooltip ini sendiri aria-hidden (keterangannya
    sudah dibacakan dari title / aria-label tombolnya).
 ------------------------------------------------------------------ */
-const TIP_SASARAN = 'button[title], a[title], [role="button"][title], summary[title]';
+/* .tip-ringkas[title]: keterangan teks yang ditampilkan SINGKAT, kalimat
+   lengkapnya di title (keterangan kurs NDPBM, petunjuk status form). */
+const TIP_SASARAN =
+  'button[title], a[title], [role="button"][title], summary[title], .tip-ringkas[title], [data-pintasan], .modal [data-bs-dismiss="modal"]';
 const TIP_TUNDA_SOROT = 350;
+
+/* ------------------------------------------------------------------
+   PINTASAN PAPAN KETIK DI TOOLTIP
+
+   Tombol yang punya pintasan menampilkan tombol papan ketiknya sebagai
+   <kbd> di tooltip-nya: "Terbitkan Nomor  [Ctrl] [S]". Sumbernya:
+
+     - data-pintasan="Mod+S" -- Mod = Ctrl (⌘ di Mac; semua pendengar
+       pintasan menerima Ctrl maupun ⌘). Beberapa pilihan dipisah " / ".
+       Keterangan singkat opsional: data-pintasan-ket (+ data-pintasan-
+       ket-en), mis. "di baris terakhir" untuk Enter yang menambah baris.
+     - keterangan lama yang sudah tertulis di title: "Tutup (Esc)",
+       "Simpan (Ctrl+S)" -- tanda kurungnya diangkat jadi <kbd>.
+
+   Tombol yang hanya ber-data-pintasan (tanpa title) tetap bertooltip:
+   teksnya label tombol itu sendiri. aria-keyshortcuts dipasang supaya
+   pembaca layar ikut menyebut pintasannya.
+------------------------------------------------------------------ */
+const PINTASAN_MAC = /Mac|iPhone|iPad|iPod/i.test(
+  (typeof navigator !== "undefined" && ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform)) || "",
+);
+const PINTASAN_NAMA = { mod: PINTASAN_MAC ? "⌘" : "Ctrl", ctrl: PINTASAN_MAC ? "⌘" : "Ctrl", shift: "Shift", alt: PINTASAN_MAC ? "⌥" : "Alt", esc: "Esc", escape: "Esc", enter: "Enter", tab: "Tab", space: "Spasi" };
+const PINTASAN_ARIA = { mod: PINTASAN_MAC ? "Meta" : "Control", ctrl: PINTASAN_MAC ? "Meta" : "Control", shift: "Shift", alt: "Alt", esc: "Escape", escape: "Escape", enter: "Enter", tab: "Tab", "←": "ArrowLeft", "→": "ArrowRight", "↑": "ArrowUp", "↓": "ArrowDown", space: "Space" };
+/* Satu tombol papan ketik yang dikenali di dalam tanda kurung title */
+const PINTASAN_DI_JUDUL =
+  /\s*\(((?:(?:Ctrl|⌘|Cmd|Shift|Alt|Mod)\+)+(?:Esc|Enter|Tab|←|→|↑|↓|F\d{1,2}|[A-Z0-9/?])|Esc|Enter|Tab|←|→|↑|↓|F\d{1,2}|[/?])\)/;
+
+// "Mod+S / Enter" -> [["Mod","S"],["Enter"]]
+function pintasanUrai(spec) {
+  return String(spec || "")
+    .split(" / ")
+    .map((alt) => alt.split("+").map((k) => k.trim()).filter(Boolean))
+    .filter((alt) => alt.length);
+}
+const pintasanNama = (k) => PINTASAN_NAMA[k.toLowerCase()] || (k.length === 1 ? k.toUpperCase() : k);
+const pintasanAriaDari = (spec) =>
+  pintasanUrai(spec)
+    .map((alt) => alt.map((k) => PINTASAN_ARIA[k.toLowerCase()] || (k.length === 1 ? k.toUpperCase() : k)).join("+"))
+    .join(" ");
+
+/* Isi tooltip: teks + pintasan (+ keterangannya). */
+function tipIsi(el) {
+  let teks = (el.getAttribute("title") || el.dataset.tipJudul || "").trim();
+  let spec = el.dataset.pintasan || "";
+  if (!spec && teks) {
+    const m = teks.match(PINTASAN_DI_JUDUL);
+    if (m) {
+      spec = m[1].replace(/^Cmd\+|^⌘\+/, "Mod+");
+      teks = teks.replace(m[0], "").replace(/\s{2,}/g, " ").trim();
+    }
+  }
+  /* Tombol penutup pop-up (X, Batal, Tutup): Esc menutup pop-up yang
+     sama -- kecuali pop-up yang sengaja tidak bisa ditutup dengan Esc
+     (data-bs-keyboard="false"). */
+  if (!spec && el.matches('.modal [data-bs-dismiss="modal"]')) {
+    const kotak = el.closest(".modal");
+    if (kotak && kotak.getAttribute("data-bs-keyboard") !== "false") spec = "Esc";
+  }
+  if (!teks && spec) teks = (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim();
+  const en = typeof activeLang !== "undefined" && activeLang === "en";
+  const ket = (en && el.dataset.pintasanKetEn) || el.dataset.pintasanKet || "";
+  return { teks, spec, ket };
+}
+
+/* Pintasan sebagai elemen <span class="app-tip-kunci"><kbd>Ctrl</kbd><kbd>S</kbd></span> */
+function pintasanEl(spec, ket) {
+  const wadah = document.createElement("span");
+  wadah.className = "app-tip-kunci";
+  pintasanUrai(spec).forEach((alt, i) => {
+    if (i) wadah.appendChild(document.createTextNode("/"));
+    alt.forEach((k) => {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = pintasanNama(k);
+      wadah.appendChild(kbd);
+    });
+  });
+  if (ket) {
+    const k = document.createElement("span");
+    k.className = "app-tip-ket";
+    k.textContent = ket;
+    wadah.appendChild(k);
+  }
+  return wadah;
+}
+
+/* aria-keyshortcuts untuk tombol ber-data-pintasan (sekali sapu saat
+   dimuat; tombol yang digambar kemudian mendapatkannya saat tooltip-nya
+   pertama tampil). */
+function pintasanPasangAria(akar) {
+  (akar || document).querySelectorAll("[data-pintasan]:not([aria-keyshortcuts])").forEach((el) => {
+    el.setAttribute("aria-keyshortcuts", pintasanAriaDari(el.dataset.pintasan));
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => pintasanPasangAria());
+else pintasanPasangAria();
 
 let tipEl = null;
 let tipTarget = null; // tombol yang tooltipnya sedang tampil
@@ -42,7 +140,7 @@ function tipElemen() {
 }
 
 function tipTeks(el) {
-  return (el.getAttribute("title") || el.dataset.tipJudul || "").trim();
+  return tipIsi(el).teks;
 }
 
 function tipFokusPapanKetik(el) {
@@ -85,9 +183,33 @@ function tipLetakkan(el) {
   if (arah !== "kanan") tip.style.setProperty("--tip-panah", Math.round(r.left + r.width / 2 - xJepit) + "px");
 }
 
+/* TOOLTIP DI ATAS PERMUKAAN GELAP. Tooltipnya navy: di atas kartu navy
+   (Nomor Berikutnya di Nomor Dokumen, menu & pita navy lain) ia nyaru
+   dengan latarnya. Yang dilihat warna permukaan TEPAT di bawah tooltip
+   (tooltipnya pointer-events: none, jadi elementFromPoint menembusnya)
+   -- bukan warna tombolnya sendiri, yang bisa terang di atas kartu
+   gelap. Permukaan gelap -> tooltip terang (.app-tip--kontras); di tema
+   gelap kebalikannya (tooltip terang bawaannya, navy di atas permukaan
+   terang). Tanpa tata letak (uji DOM): bukan gelap. */
+function tipDiAtasGelap(tip) {
+  if (typeof document.elementFromPoint !== "function") return false;
+  const r = tip.getBoundingClientRect();
+  if (!r.width) return false;
+  for (let x = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); x && x.nodeType === 1; x = x.parentElement) {
+    const m = /rgba?\(([^)]+)\)/.exec(getComputedStyle(x).backgroundColor || "");
+    if (!m) continue;
+    const [merah, hijau, biru, alfa = 1] = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    if (!(alfa > 0.5)) continue;
+    return (0.2126 * merah + 0.7152 * hijau + 0.0722 * biru) / 255 < 0.45;
+  }
+  return false;
+}
+
 function tipTampilkan(el, dariSorot) {
-  const teks = tipTeks(el);
+  const isi = tipIsi(el);
+  const teks = isi.teks;
   if (!teks || !el.isConnected) return;
+  if (isi.spec && !el.hasAttribute("aria-keyshortcuts")) el.setAttribute("aria-keyshortcuts", pintasanAriaDari(isi.spec));
   tipSembunyikan();
   tipTarget = el;
   if (dariSorot && el.hasAttribute("title")) {
@@ -102,8 +224,12 @@ function tipTampilkan(el, dariSorot) {
   }
   const tip = tipElemen();
   tip.textContent = teks;
+  if (isi.spec) tip.appendChild(pintasanEl(isi.spec, isi.ket));
   tip.classList.add("is-siap");
   tipLetakkan(el);
+  const temaGelap = document.documentElement.dataset.tema === "gelap";
+  const bawahGelap = tipDiAtasGelap(tip);
+  tip.classList.toggle("app-tip--kontras", temaGelap ? !bawahGelap : bawahGelap);
   tip.classList.add("is-open");
 }
 

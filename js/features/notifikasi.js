@@ -260,6 +260,9 @@ function notifMasaStatus(n) {
   return tt(`Berakhir dalam ${n.sisa} hari`, `Expires in ${n.sisa} ${n.sisa === 1 ? "day" : "days"}`);
 }
 
+/* Kartu masa berlaku: statusnya JUDUL kartu ("Berakhir dalam 12 hari" /
+   "Sudah berakhir 3 hari lalu" -- merah), nama dokumennya di bawah, lalu
+   tanggal berlaku & tindakannya. */
 function notifMasaItemHtml(n) {
   const aksi =
     n.buka === "masterlist"
@@ -267,10 +270,12 @@ function notifMasaItemHtml(n) {
       : typeof canEdit !== "function" || canEdit()
         ? tt("Perbarui SKB PPh bawaan", "Update the default SKB PPh")
         : "";
-  return `<button type="button" class="notif-item${n.dibaca ? "" : " is-baru"}${n.lewat ? " is-lewat" : ""}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-masa="${escapeAttr(n.buka)}">
+  return `<button type="button" class="notif-item notif-item--masa${n.dibaca ? "" : " is-baru"}${n.lewat ? " is-lewat" : ""}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-masa="${escapeAttr(n.buka)}" data-notif-jenis="masa">
+    <span class="notif-ikon notif-ikon--masa${n.lewat ? " notif-ikon--merah" : ""}" aria-hidden="true"><i class="bi bi-shield-exclamation"></i></span>
     <span class="notif-teks">
-      <span class="notif-pihak">${escapeHtml(n.nama)}</span>
-      <span class="notif-meta"><span class="notif-masa-status">${escapeHtml(notifMasaStatus(n))}</span> · ${escapeHtml(tt("berlaku s.d.", "valid until"))} ${escapeHtml(fmtDate(n.tgl))}</span>
+      <span class="notif-aksi notif-masa-status">${escapeHtml(notifMasaStatus(n))}</span>
+      <span class="notif-dokumen-nama">${escapeHtml(n.nama)}</span>
+      <span class="notif-meta">${escapeHtml(tt("Berlaku sampai", "Valid until"))} ${escapeHtml(fmtDate(n.tgl))}</span>
       ${aksi ? `<span class="notif-masa-aksi">${escapeHtml(aksi)} <i class="bi bi-arrow-right" aria-hidden="true"></i></span>` : ""}
     </span>
     ${n.dibaca ? "" : `<span class="notif-titik"><span class="visually-hidden">${escapeHtml(tt("Belum dibaca", "Unread"))}</span></span>`}
@@ -280,17 +285,9 @@ function notifMasaItemHtml(n) {
 function notifMasaHtml(daftar) {
   if (!daftar.length) return "";
   const judul = tt("Masa berlaku", "Validity");
-  return `<section class="notif-hari" aria-label="${escapeAttr(judul)}">
-    <h3 class="notif-kelompok"><span class="notif-kelompok-judul">${escapeHtml(judul)}</span><span class="notif-kelompok-tgl">${escapeHtml(tt("SKB & Masterlist", "SKB & Masterlist"))}</span></h3>
-    <div class="notif-jenis notif-jenis--masa" role="group" aria-label="${escapeAttr(`${tt("Dokumen yang segera berakhir", "Documents expiring soon")} (${daftar.length})`)}">
-      <div class="notif-jenis-kepala" aria-hidden="true">
-        <span class="notif-ikon notif-ikon--masa"><i class="bi bi-shield-exclamation"></i></span>
-        <span class="notif-jenis-nama">${escapeHtml(tt("Segera berakhir", "Expiring soon"))}</span>
-        <span class="notif-jenis-acuan">${escapeHtml(tt(`≤ ${NOTIF_MASA_BULAN} bulan`, `≤ ${NOTIF_MASA_BULAN} months`))}</span>
-        <span class="notif-jenis-jumlah">${daftar.length}</span>
-      </div>
-      ${daftar.map(notifMasaItemHtml).join("")}
-    </div>
+  return `<section class="notif-hari notif-hari--masa" aria-label="${escapeAttr(`${judul} (${daftar.length})`)}">
+    <h3 class="notif-kelompok"><span class="notif-kelompok-judul">${escapeHtml(judul)}</span><span class="notif-kelompok-tgl">${escapeHtml(tt(`SKB PPh & Masterlist · ≤ ${NOTIF_MASA_BULAN} bulan`, `SKB PPh & Masterlist · ≤ ${NOTIF_MASA_BULAN} months`))}</span><span class="notif-kelompok-n">${daftar.length}</span></h3>
+    ${daftar.map(notifMasaItemHtml).join("")}
   </section>`;
 }
 
@@ -310,12 +307,23 @@ function tandaiNotifDibaca(kunciDaftar) {
 
 /* ---------- tampilan ----------
 
-   Dikelompokkan dua tingkat: HARI (Hari ini / Besok, kepala menempel
-   saat digulir) lalu JENIS -- Berangkat, Tiba, Dikirim ke pabrik --
-   masing-masing satu kotak berkepala ikon, nama, tanggal acuannya &
-   jumlahnya. Karena jenis & harinya sudah tertulis di kepala, tiap
-   notifikasi cukup nama pihak + rute/angkutan; judul lengkapnya
-   (notifJudul) tetap dibacakan pembaca layar. */
+   Tiap notifikasi SATU KARTU yang terbaca sebagai kalimat:
+
+     [ikon]  Tiba di Tanjung Priok                          ●
+             SUMITOMO CHEMICAL ASIA  Import  [Delay 8 Hari]
+             Antioxidant 6PPD +1 lainnya
+             Dari Singapore · ONE COMMITMENT 071W · B/L ...
+             ▬▬▬───── Dokumen 3/10 · Berikutnya: PIB
+
+   Apa yang terjadi & di mana = judul kartu (dulu kotak jenis terpisah
+   + nama pihak saja); siapa & barang apa = baris berikutnya (pemasok
+   oranye seperti di papan); dari mana / kapal / B/L, lalu progres
+   dokumen -- yang menentukan barang bisa langsung keluar pelabuhan.
+   Ikonnya berwarna KEADAAN jadwal: biru sesuai jadwal, merah delay.
+   Dikelompokkan per HARI (Hari ini / Besok: kepala menempel berisi
+   tanggal & jumlahnya); kepala panel meringkas semuanya dalam satu
+   kalimat (notifRingkasan). Judul lengkap (notifJudul) tetap dibacakan
+   pembaca layar. */
 const NOTIF_JENIS_TAMPIL = {
   etd: { ikon: "bi-arrow-up-right", acuan: "ETD", label: () => tt("Berangkat", "Departs") },
   eta: { ikon: "bi-arrow-down-left", acuan: "ETA", label: () => tt("Tiba", "Arrives") },
@@ -328,44 +336,120 @@ function notifJudul(n) {
   return `${j.label()} ${kapan} · ${j.acuan} ${fmtDate(n.tgl)}`;
 }
 
+// Nama pelabuhan yang terbaca ("Tanjung Priok", bukan IDTPP) -- sama dengan ujung garis rute papan
+function notifPelabuhan(raw, s) {
+  if (!hasMeaningfulValue(raw)) return "";
+  return typeof pelabuhanPapan === "function" ? pelabuhanPapan(raw, s.transport).teks : String(raw).trim();
+}
+
+/* Judul kartu: apa yang terjadi + di mana. */
+function notifAksi(n) {
+  const s = n.s;
+  if (n.jenis === "etd") {
+    const asal = notifPelabuhan(s.origin, s);
+    return asal ? tt(`Berangkat dari ${asal}`, `Departs ${asal}`) : tt("Berangkat", "Departs");
+  }
+  if (n.jenis === "eta") {
+    const tujuan = notifPelabuhan(s.destination, s);
+    return tujuan ? tt(`Tiba di ${tujuan}`, `Arrives at ${tujuan}`) : tt("Tiba", "Arrives");
+  }
+  return tt("Diantar ke pabrik", "Delivery to the factory");
+}
+
+/* Baris keterangan: arah lawannya (dari / menuju), angkutan & nomor
+   dokumen angkutnya -- Delivery: dari pelabuhan, forwarder, kendaraan,
+   kontainer. */
 function notifMeta(n) {
   const s = n.s;
   if (n.jenis === "delivery") {
-    // Dari pelabuhan tujuan ke pabrik: siapa yang mengantar & kendaraannya
-    const dari = hasMeaningfulValue(s.destination) ? `${s.destination} → ${tt("Pabrik", "Factory")}` : "";
-    return ["Import", dari, s.forwarder, s.vehicleNo, kontainerKiriman(s)].filter(hasMeaningfulValue).join(" · ");
+    const dari = notifPelabuhan(s.destination, s);
+    return [dari ? tt(`Dari ${dari}`, `From ${dari}`) : "", s.forwarder, s.vehicleNo, kontainerKiriman(s)].filter(hasMeaningfulValue).join(" · ");
   }
-  const rute = [s.origin, s.destination].filter(hasMeaningfulValue).join(" → ");
+  const lawan = n.jenis === "etd" ? notifPelabuhan(s.destination, s) : notifPelabuhan(s.origin, s);
+  const arah = lawan ? (n.jenis === "etd" ? tt(`Menuju ${lawan}`, `To ${lawan}`) : tt(`Dari ${lawan}`, `From ${lawan}`)) : "";
   const angkut = carrierNameFromShipment(s);
   const bl = [s.houseBL, s.masterBL].find(hasMeaningfulValue) || "";
-  return [s.mode === "export" ? "Export" : "Import", rute, angkut, bl].filter(Boolean).join(" · ");
+  return [arah, angkut, bl ? `${s.transport === "udara" ? "AWB" : "B/L"} ${bl}` : ""].filter(hasMeaningfulValue).join(" · ");
+}
+
+// Barang: dua nama pertama (tanpa kembar) + "+N lainnya"
+function notifBarang(s) {
+  const semua = typeof namaBarangUnik === "function" ? namaBarangUnik(s) : (s.items || []).map((it) => itemDisplayName(it)).filter(Boolean);
+  if (!semua.length) return "";
+  const sisa = semua.length - 2;
+  return semua.slice(0, 2).join(", ") + (sisa > 0 ? " " + tt(`+${sisa} lainnya`, `+${sisa} more`) : "");
+}
+
+// Progres dokumen: { selesai, total, berikut } -- null untuk kurir tanpa PIB / tanpa tahap
+function notifDokumen(s) {
+  if (typeof docStepsFor !== "function" || (typeof isKurirNilaiRendah === "function" && isKurirNilaiRendah(s))) return null;
+  const langkah = docStepsFor(s);
+  let total = 0;
+  let selesai = 0;
+  langkah.forEach((st) => {
+    const e = docStepEntri(s, st);
+    if (e && e.skipped) return;
+    total++;
+    if (e) selesai++;
+  });
+  if (!total) return null;
+  const idx = docNextIndex(s);
+  return { selesai, total, berikut: idx >= 0 ? stepText(langkah[idx].label, s) : "" };
+}
+
+function notifDelayTeks(s) {
+  if (effectiveStatus(s) !== "delayed") return "";
+  const info = shipmentDelayInfo(s);
+  return info && info.days > 0 ? tt(`Delay ${info.days} Hari`, `Delayed ${info.days} ${info.days === 1 ? "Day" : "Days"}`) : "Delay";
 }
 
 function notifItemHtml(n) {
-  return `<button type="button" class="notif-item${n.dibaca ? "" : " is-baru"}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-jadwal="${escapeAttr(n.s.id)}">
+  const s = n.s;
+  const j = NOTIF_JENIS_TAMPIL[n.jenis];
+  const delay = notifDelayTeks(s);
+  const barang = notifBarang(s);
+  const meta = notifMeta(n);
+  const dok = notifDokumen(s);
+  const dokTeks = dok
+    ? dok.selesai === dok.total
+      ? tt(`Dokumen lengkap ${dok.selesai}/${dok.total}`, `Documents complete ${dok.selesai}/${dok.total}`)
+      : tt(`Dokumen ${dok.selesai}/${dok.total}`, `Documents ${dok.selesai}/${dok.total}`) + (dok.berikut ? " · " + tt(`Berikutnya: ${dok.berikut}`, `Next: ${dok.berikut}`) : "")
+    : "";
+  return `<button type="button" class="notif-item notif-item--${n.jenis}${n.dibaca ? "" : " is-baru"}${delay ? " is-telat" : ""}" data-notif-kunci="${escapeAttr(n.kunci)}" data-notif-jadwal="${escapeAttr(s.id)}" data-notif-jenis="${n.jenis}">
+    <span class="notif-ikon notif-ikon--${n.jenis}${delay ? " notif-ikon--merah" : ""}" aria-hidden="true"><i class="bi ${j.ikon}"></i></span>
     <span class="notif-teks">
       <span class="visually-hidden">${escapeHtml(notifJudul(n))}: </span>
-      <span class="notif-pihak">${escapeHtml(dispVal(n.s.party))}</span>
-      <span class="notif-meta">${escapeHtml(notifMeta(n))}</span>
+      <span class="notif-aksi">${escapeHtml(notifAksi(n))}</span>
+      <span class="notif-pihak-baris">
+        <span class="notif-pihak">${escapeHtml(dispVal(s.party))}</span>
+        <span class="notif-buku">${s.mode === "export" ? "Export" : "Import"}</span>
+        ${delay ? `<span class="notif-delay">${escapeHtml(delay)}</span>` : ""}
+      </span>
+      ${barang ? `<span class="notif-barang">${escapeHtml(barang)}</span>` : ""}
+      ${meta ? `<span class="notif-meta">${escapeHtml(meta)}</span>` : ""}
+      ${dok ? `<span class="notif-dok${dok.selesai === dok.total ? " is-lengkap" : ""}"><span class="notif-dok-meter" style="--isi:${Math.round((dok.selesai / dok.total) * 100)}%" aria-hidden="true"></span>${escapeHtml(dokTeks)}</span>` : ""}
       ${n.dulu ? `<span class="notif-ubah"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> ${escapeHtml(tt(`Jadwal diubah dari ${fmtDate(n.dulu)}`, `Rescheduled from ${fmtDate(n.dulu)}`))}</span>` : ""}
     </span>
     ${n.dibaca ? "" : `<span class="notif-titik"><span class="visually-hidden">${escapeHtml(tt("Belum dibaca", "Unread"))}</span></span>`}
   </button>`;
 }
 
-/* Satu kotak jenis: kepala (ikon, nama, tanggal acuan, jumlah) + notifikasinya. */
-function notifGrupHtml(jenis, daftar) {
-  if (!daftar.length) return "";
-  const j = NOTIF_JENIS_TAMPIL[jenis];
-  return `<div class="notif-jenis notif-jenis--${jenis}" role="group" aria-label="${escapeAttr(`${j.label()} (${daftar.length})`)}">
-    <div class="notif-jenis-kepala" aria-hidden="true">
-      <span class="notif-ikon notif-ikon--${jenis}"><i class="bi ${j.ikon}"></i></span>
-      <span class="notif-jenis-nama">${escapeHtml(j.label())}</span>
-      <span class="notif-jenis-acuan">${escapeHtml(j.acuan)} ${escapeHtml(fmtDate(daftar[0].tgl))}</span>
-      <span class="notif-jenis-jumlah">${daftar.length}</span>
-    </div>
-    ${daftar.map(notifItemHtml).join("")}
-  </div>`;
+/* Satu baris di kepala panel: "2 belum dibaca · 3 hari ini · 1 besok ·
+   1 masa berlaku". Rinciannya per jenis ada di judul tiap kartu. */
+function notifRingkasan(daftar) {
+  const belum = daftar.filter((n) => !n.dibaca).length;
+  const jadwal = daftar.filter((n) => n.jenis !== "masa");
+  const hariIni = jadwal.filter((n) => n.hariIni).length;
+  const besok = jadwal.length - hariIni;
+  const masa = daftar.length - jadwal.length;
+  return [
+    belum ? tt(`${belum} belum dibaca`, `${belum} unread`) : tt("Semua sudah dibaca", "All read"),
+    hariIni ? tt(`${hariIni} hari ini`, `${hariIni} today`) : "",
+    besok ? tt(`${besok} besok`, `${besok} tomorrow`) : "",
+    masa ? tt(`${masa} masa berlaku`, `${masa} expiring`) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function gambarPanelNotif() {
@@ -374,8 +458,13 @@ function gambarPanelNotif() {
   const belum = notifDaftar.filter((n) => !n.dibaca).length;
   const tombolSemua = document.getElementById("btnNotifBacaSemua");
   if (tombolSemua) tombolSemua.hidden = belum === 0;
+  const ringkas = document.getElementById("notifRingkas");
+  if (ringkas) {
+    ringkas.textContent = notifDaftar.length ? notifRingkasan(notifDaftar) : "";
+    ringkas.hidden = !notifDaftar.length;
+  }
   if (!notifDaftar.length) {
-    isi.innerHTML = `<div class="notif-kosong"><i class="bi bi-bell-slash" aria-hidden="true"></i><p>${escapeHtml(
+    isi.innerHTML = `<div class="notif-kosong"><span class="notif-kosong-ikon" aria-hidden="true"><i class="bi bi-bell-slash"></i></span><p>${escapeHtml(
       tt(
         "Belum ada notifikasi. Jadwal yang berangkat, tiba, atau dikirim ke pabrik besok — serta SKB PPh & Masterlist yang masa berlakunya tinggal 2 bulan — akan muncul di sini.",
         "No notifications yet. Schedules departing, arriving or being delivered to the factory tomorrow — and an SKB PPh or Masterlist within 2 months of expiry — will appear here.",
@@ -390,9 +479,12 @@ function gambarPanelNotif() {
   ]
     .filter(([, daftar]) => daftar.length)
     .map(
-      ([judul, daftar]) => `<section class="notif-hari" aria-label="${escapeAttr(judul)}">
-        <h3 class="notif-kelompok"><span class="notif-kelompok-judul">${escapeHtml(judul)}</span><span class="notif-kelompok-tgl">${escapeHtml(fmtDateLong(daftar[0].tgl))}</span></h3>
-        ${NOTIF_JENIS.map((jenis) => notifGrupHtml(jenis, daftar.filter((n) => n.jenis === jenis))).join("")}
+      ([judul, daftar]) => `<section class="notif-hari" aria-label="${escapeAttr(`${judul} (${daftar.length})`)}">
+        <h3 class="notif-kelompok"><span class="notif-kelompok-judul">${escapeHtml(judul)}</span><span class="notif-kelompok-tgl">${escapeHtml(fmtDateLong(daftar[0].tgl))}</span><span class="notif-kelompok-n">${daftar.length}</span></h3>
+        ${
+          /* Berangkat, tiba, lalu diantar ke pabrik; yang belum dibaca lebih dulu di tiap jenis */
+          NOTIF_JENIS.flatMap((jenis) => daftar.filter((n) => n.jenis === jenis)).map(notifItemHtml).join("")
+        }
       </section>`,
     )
     .join("");

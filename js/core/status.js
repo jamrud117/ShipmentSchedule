@@ -17,7 +17,24 @@ const STATUS_OPTIONS_BY_MODE = {
    Bukan berarti saringannya disembunyikan — catatan "disaring: status
    Process" tetap muncul di atas daftar, supaya jelas kenapa ada
    kiriman yang tidak terlihat. */
-const FILTER_STATUS_DEFAULT = "process";
+const FILTER_STATUS_DEFAULT = "berjalan";
+
+/* "BERJALAN" = semua yang belum tiba: Process + Delay. Bukan status
+   tersimpan, hanya nilai saringan (tab bawaan papan jadwal, desain
+   Peta Laut). Kiriman yang delay justru paling perlu ditindak -- dulu
+   saringan bawaan "Process" menyembunyikannya. */
+const FILTER_BERJALAN = "berjalan";
+/* Semua tab memakai status EFEKTIF -- yang juga tertulis di pil status
+   baris papan -- supaya angka di tab = jumlah baris yang tampil, dan
+   Berjalan = Process + Delay persis. Jadwal yang tanggal kejadiannya
+   sudah lewat tapi kolom statusnya belum diperbarui sudah terbaca
+   Arrived di barisnya; ia ikut tab Arrived, bukan Process. */
+function cocokSaringanStatus(s, saringan) {
+  if (!saringan) return true;
+  const st = effectiveStatus(s);
+  if (saringan === FILTER_BERJALAN) return st !== "arrived";
+  return st === saringan;
+}
 
 // Label per key, dibedakan per mode HANYA untuk "arrived".
 function statusLabel(statusKey, mode) {

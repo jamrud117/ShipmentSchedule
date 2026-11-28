@@ -163,6 +163,7 @@ cardContainer.addEventListener("change", (e) => {
   if (!id) return;
   const s = currentList().find((x) => x.id === id);
   if (!s) return;
+  tandaiBarisBerubah(id);
 
   if (el.dataset.action === "status") {
     /* Statusnya bebas diubah. Tapi selama tanggal KEJADIAN masih
@@ -262,6 +263,44 @@ cardContainer.addEventListener("keydown", (e) => {
   e.preventDefault();
   if (!requireEdit()) return;
   addNoteFromCard(input.dataset.noteInput);
+});
+
+/* BUKA / TUTUP RINCIAN BARIS PAPAN (cards.js, papanTerbuka).
+
+   Lewat tombol panah, atau klik di mana saja pada baris ringkas --
+   kecuali pada kendali di dalamnya (pil status, pensil) dan kecuali
+   pengguna sedang menyeleksi teks (menyalin nomor invoice). Yang berubah
+   hanya kelas & aria; tidak ada yang digambar ulang. Gerak buka/tutupnya
+   di CSS (peta-laut.css, .papan-rincian). */
+function bukaTutupBarisPapan(baris, buka) {
+  if (!baris) return;
+  const jadi = buka != null ? !!buka : !baris.classList.contains("is-buka");
+  baris.classList.toggle("is-buka", jadi);
+  // Panelnya naik berurutan sekali saat dibuka (css/peta-laut.css, bagian H)
+  if (jadi) {
+    baris.classList.add("baru-dibuka");
+    setTimeout(() => baris.classList.remove("baru-dibuka"), 700);
+  }
+  if (jadi) papanTerbuka.add(baris.dataset.id);
+  else papanTerbuka.delete(baris.dataset.id);
+  papanSegarkanKepala();
+  const tombol = baris.querySelector("[data-papan-buka]");
+  if (!tombol) return;
+  const teks = jadi ? tt("Tutup Rincian", "Hide Details") : tt("Buka Rincian", "Show Details");
+  const nama = (tombol.getAttribute("aria-label") || "").split(": ").slice(1).join(": ");
+  tombol.setAttribute("aria-expanded", String(jadi));
+  tombol.setAttribute("aria-label", nama ? `${teks}: ${nama}` : teks);
+  tombol.title = teks;
+}
+cardContainer.addEventListener("click", (e) => {
+  const tombol = e.target.closest("[data-papan-buka]");
+  const ringkas = !tombol && e.target.closest(".papan-ringkas");
+  if (!tombol && !ringkas) return;
+  if (ringkas) {
+    if (e.target.closest("button, a, select, input, textarea, label, [data-action], .dropdown")) return;
+    if (window.getSelection && String(window.getSelection()).trim()) return;
+  }
+  bukaTutupBarisPapan((tombol || ringkas).closest(".papan-baris"));
 });
 
 cardContainer.addEventListener("click", (e) => {

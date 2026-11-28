@@ -54,6 +54,24 @@ function updateStats(shown) {
   const lblArr = $("#lblStatArrived");
   if (lblArr) lblArr.textContent = statusLabel("arrived", activeMode);
 
+  /* TAB STATUS papan jadwal (desain Peta Laut): jumlah per tab dari
+     SELURUH buku aktif, tab yang menyala = nilai #filterStatus. */
+  const aktif = ($("#filterStatus") || {}).value || "";
+  document.querySelectorAll("[data-status-tab]").forEach((b) => {
+    const k = b.dataset.statusTab;
+    const n = b.querySelector(".status-tab-n");
+    // Dihitung dengan aturan yang SAMA dengan saringannya (getFiltered)
+    if (n) {
+      const jumlahTab = list.filter((s) => cocokSaringanStatus(s, k)).length;
+      n.textContent = jumlahTab;
+      n.toggleAttribute("data-nol", jumlahTab === 0); // angka Delay merah hanya kalau ada
+    }
+    const nyala = k === aktif;
+    b.classList.toggle("active", nyala);
+    b.setAttribute("aria-pressed", String(nyala));
+  });
+  geserPenandaTab();
+
   syncQuickDateActive();
   /* Tombol Hari Ini/Minggu Ini/Minggu Depan & resetDateRangeFilter()
      mengubah #filterDateFrom/To lewat .value langsung tanpa memicu
@@ -63,6 +81,39 @@ function updateStats(shown) {
      benar dari jalur mana pun asalnya. */
   if (typeof drpSyncTriggerFromFilter === "function") drpSyncTriggerFromFilter();
 }
+
+/* PENANDA TAB STATUS YANG MENGGESER (css/peta-laut.css, .status-tab::before).
+
+   Diukur pada bingkai berikutnya (requestAnimationFrame), bukan di
+   tengah render(): tidak memaksa tata letak tambahan. Peletakan pertama
+   langsung di tempatnya -- baru sesudahnya penanda meluncur dari tab ke
+   tab. Diukur ulang kalau lebar tabnya berubah (huruf selesai dimuat,
+   ganti bahasa, angka bertambah digit). Tersembunyi (halaman lain):
+   penanda dilepas, tombol aktif memakai latarnya sendiri. */
+let penandaTabRaf = 0;
+function geserPenandaTab() {
+  const grup = document.getElementById("statusTab");
+  if (!grup || penandaTabRaf) return;
+  penandaTabRaf = requestAnimationFrame(() => {
+    penandaTabRaf = 0;
+    const aktif = grup.querySelector("button.active");
+    if (!aktif || !grup.offsetParent || !aktif.offsetWidth) {
+      grup.classList.remove("punya-penanda", "penanda-gerak");
+      return;
+    }
+    grup.style.setProperty("--penanda-x", aktif.offsetLeft + "px");
+    grup.style.setProperty("--penanda-w", aktif.offsetWidth + "px");
+    if (!grup.classList.contains("punya-penanda")) {
+      grup.classList.add("punya-penanda");
+      requestAnimationFrame(() => grup.classList.add("penanda-gerak"));
+    }
+  });
+}
+(function pasangPenandaTab() {
+  const grup = document.getElementById("statusTab");
+  if (!grup || typeof ResizeObserver !== "function") return;
+  new ResizeObserver(() => geserPenandaTab()).observe(grup);
+})();
 
 /* Menyalakan tombol Hari Ini/Minggu Ini/Minggu Depan kalau rentang
    tanggal yang SEDANG AKTIF persis sama dengan yang akan tombol itu
@@ -104,8 +155,9 @@ function activeFilterSummary() {
   if (onlyNeedsAction) bits.push(tt("Perlu tindakan", "Needs action"));
   const q = ($("#searchInput") || {}).value || "";
   if (q.trim()) bits.push(tt(`pencarian “${q.trim()}”`, `search “${q.trim()}”`));
-  const st = ($("#filterStatus") || {}).value || "";
-  if (st) bits.push(`status ${statusLabel(st, activeMode)}`);
+  /* Saringan STATUS tidak disebut lagi: tab status di atas papan
+     (Berjalan / Process / Delay / Arrived / Semua) sudah menunjukkannya
+     beserta jumlahnya. Catatan ini hanya untuk pencarian & rentang. */
   const rentang = dateRangeSummaryBit();
   if (rentang) bits.push(rentang);
   return bits;

@@ -16,13 +16,14 @@ function stopCardHtml(st, idx, total) {
           <button type="button" class="rm-stop" data-idx="${idx}" title="${tt("Hapus terminal ini", "Remove this terminal")}" aria-label="${tt("Hapus terminal ini", "Remove this terminal")}"><i class="bi bi-trash3" aria-hidden="true"></i></button>
         </div>
       </div>
-      <!-- Kisi isian yang sama dengan form (.fgrid): terminal & tanggalnya
-           di baris pertama, alat angkut yang MEMBAWA barang tiba di
-           terminal ini di baris kedua. Kedua baris penuh 12 lajur.
-           Di layar sedang tiga isian alat angkut tetap sebaris (.m4),
-           tidak terpecah jadi Moda sendirian lalu Vessel selebar kartu. -->
-      <div class="fgrid">
-        <div class="s6">
+      <!-- SATU BARIS (.route-stop-baris, form.css): Nama Terminal | Tiba |
+           Berangkat | Moda | Nama Vessel/Pesawat | No. Voyage/Flight.
+           Moda/Vessel/Voyage = alat angkut yang MEMBAWA barang tiba di
+           terminal ini. Tanggal selebar tanggalnya, Moda selebar
+           pilihannya; nama terminal & vessel berbagi sisa baris. Kartu
+           yang terlalu sempit: isiannya turun ke baris berikutnya. -->
+      <div class="route-stop-baris">
+        <div class="rs-terminal">
           <label class="form-label" for="${idIsian("terminal")}">${tt("Nama Terminal", "Terminal Name")}</label>
           <!-- Saran pelabuhan mengikuti moda BARIS INI, bukan moda
                pengiriman di atas: satu perjalanan bisa laut sampai
@@ -32,28 +33,28 @@ function stopCardHtml(st, idx, total) {
                modanya diganti, jadi daftarnya ikut berganti. -->
           <input type="text" class="form-control form-control-sm" id="${idIsian("terminal")}" data-f="terminal" list="unlocodeList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.terminal)}" placeholder="${air ? tt("Nama bandara transit", "Transit airport name") : tt("Nama pelabuhan transit", "Transit port name")}">
         </div>
-        <div class="s6 fl-tanggal">
-          <div>
-            <label class="form-label" for="${idIsian("tiba")}">${tt("Tiba di Terminal Ini", "Arrival at This Terminal")}</label>
-            <input type="date" class="form-control form-control-sm" id="${idIsian("tiba")}" data-f="arrivalDate" value="${st.arrivalDate || ""}">
-          </div>
-          <div>
-            <label class="form-label" for="${idIsian("berangkat")}">${tt("Berangkat dari Terminal Ini", "Departure from This Terminal")}</label>
-            <input type="date" class="form-control form-control-sm" id="${idIsian("berangkat")}" data-f="departureDate" value="${st.departureDate || ""}">
-          </div>
+        <!-- Label cukup "Tiba" / "Berangkat": kartunya sudah tentang
+             terminal ini; keterangan lengkapnya di tooltip. -->
+        <div class="rs-tanggal">
+          <label class="form-label" for="${idIsian("tiba")}" title="${tt("Tanggal tiba di terminal transit ini", "Arrival date at this transit terminal")}">${tt("Tiba", "Arrival")}</label>
+          <input type="date" class="form-control form-control-sm" id="${idIsian("tiba")}" data-f="arrivalDate" value="${st.arrivalDate || ""}">
         </div>
-        <div class="m4">
+        <div class="rs-tanggal">
+          <label class="form-label" for="${idIsian("berangkat")}" title="${tt("Tanggal berangkat dari terminal transit ini", "Departure date from this transit terminal")}">${tt("Berangkat", "Departure")}</label>
+          <input type="date" class="form-control form-control-sm" id="${idIsian("berangkat")}" data-f="departureDate" value="${st.departureDate || ""}">
+        </div>
+        <div class="rs-moda">
           <label class="form-label" for="${idIsian("moda")}">${tt("Moda", "Mode")}</label>
           <select class="form-select form-select-sm" id="${idIsian("moda")}" data-f="transport">
             <option value="laut" ${!air ? "selected" : ""}>${tt("Laut", "Sea")}</option>
             <option value="udara" ${air ? "selected" : ""}>${tt("Udara", "Air")}</option>
           </select>
         </div>
-        <div class="s6 m4">
+        <div class="rs-vessel">
           <label class="form-label" for="${idIsian("vessel")}">${air ? tt("Nama Pesawat/Maskapai", "Aircraft/Airline Name") : tt("Nama Vessel", "Vessel Name")}</label>
           <input type="text" class="form-control form-control-sm" id="${idIsian("vessel")}" data-f="vessel" list="carrierList${air ? "Udara" : "Laut"}" value="${escapeAttr(st.vessel)}" placeholder="${air ? tt("Nama maskapai", "Airline name") : tt("Nama pelayaran", "Shipping line name")}">
         </div>
-        <div class="m4">
+        <div class="rs-voyage">
           <label class="form-label" for="${idIsian("voyage")}">${air ? "No. Flight" : "No. Voyage"}</label>
           <input type="text" class="form-control form-control-sm" id="${idIsian("voyage")}" data-f="voyage" value="${escapeAttr(st.voyage)}">
         </div>

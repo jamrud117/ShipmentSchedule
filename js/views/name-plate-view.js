@@ -902,6 +902,8 @@ async function npSimpanPayload(simpan) {
   if (typeof realtimeCatatTulis === "function") realtimeCatatTulis("document_numbers", id);
   const { error } = await supabaseClient.from("document_numbers").update({ payload }).eq("id", id);
   if (error) throw error;
+  // Riwayat Nomor Dokumen yang tersimpan di memori ikut basi (docnum-view.js)
+  if (typeof dnSimpananBersih === "function") dnSimpananBersih();
   npHal.row = Object.assign({}, npHal.row, { payload });
   // Salinan riwayat di layar (tombol cetak & Excel membacanya tanpa ke database)
   const r = (typeof docNumHistoryRows !== "undefined" && Array.isArray(docNumHistoryRows) ? docNumHistoryRows : []).find((x) => String(x.id) === id);

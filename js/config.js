@@ -55,6 +55,8 @@ function buildModeLabels() {
     docNo: t("f.no.sppb"),
     docDate: t("f.tanggal.sppb"),
     party: t("f.nama.shipper"),
+    // Kepala kolom pertama papan: pemasok paling atas, nama barang di bawahnya
+    kolomPapan: tt("Supplier & Barang", "Supplier & Items"),
     factoryDate: t("f.tanggal.in.factory"),
     factoryTime: t("f.jam.in.factory"),
     origin: t("f.pelabuhan.asal"),
@@ -75,6 +77,7 @@ function buildModeLabels() {
     docNo: "No. PEB",
     docDate: tt("Tanggal PEB", "PEB Date"),
     party: t("f.nama.buyer.consignee"),
+    kolomPapan: tt("Pembeli & Barang", "Buyer & Items"),
     factoryDate: t("f.tanggal.stuffing"),
     factoryTime: t("f.jam.stuffing"),
     origin: t("f.pelabuhan.muat"),

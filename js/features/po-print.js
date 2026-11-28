@@ -173,6 +173,7 @@ function buildPoHtml(row) {
           <table class="po-kv">
             ${kv("Delivery", p.poDelivery)}
             ${kv("Payment Term", p.poPayment)}
+            ${kv("Currency", mata)}
             ${ada(p.prNo) ? kv("PR No.", p.prNo) : ""}
           </table>
         </div>
@@ -200,7 +201,7 @@ function buildPoHtml(row) {
           ${poColgroup(PO_KOLOM_MM)}
           <thead><tr>
             <th>No</th><th>Product</th><th>Spec / Model</th><th>Qty</th>
-            <th>Unit Price<br><span>(${poCetakTeks(mata)})</span></th><th>Amount<br><span>(${poCetakTeks(mata)})</span></th><th>Catatan</th>
+            <th>Unit Price</th><th>Amount</th><th>Catatan</th>
           </tr></thead>
           <tbody>${barisBarang}</tbody>
         </table>

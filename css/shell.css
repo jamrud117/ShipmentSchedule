@@ -42,7 +42,6 @@
   align-items: center;
   gap: var(--sp-2);
   padding: 0 var(--sp-3) 0 var(--sp-2);
-  color: #fff;
 }
 .topbar-spacer {
   flex: 1;
@@ -58,7 +57,6 @@
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.82);
   font-size: 1.4rem;
   transition:
     background var(--dur-1) var(--ease),
@@ -72,11 +70,6 @@
   width: 20px;
   height: 20px;
 }
-.sb-pemicu:hover,
-.sb-tutup:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
 
 /* ---- Merek ---- */
 .brand {
@@ -85,7 +78,6 @@
   gap: 10px;
   min-width: 0;
   text-decoration: none;
-  color: #fff;
   flex-shrink: 0;
 }
 .brand-mark {
@@ -95,9 +87,6 @@
 .brand-name {
   line-height: 1;
   white-space: nowrap;
-}
-.brand:hover .brand-name {
-  color: var(--teks-di-navy);
 }
 
 /* ---- Sidebar ---- */
@@ -110,7 +99,6 @@
   width: var(--sb-lebar);
   display: flex;
   flex-direction: column;
-  color: #fff;
 }
 .sb-kepala {
   flex-shrink: 0;
@@ -216,77 +204,101 @@ button.site-nav-link {
 }
 .notif-lencana {
   display: inline-block;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: var(--r-pill);
-  color: #fff;
-  line-height: 20px;
+  line-height: 18px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .site-nav-link.notif-pemicu .notif-lencana {
   margin-left: auto;
+  min-width: 18px;
   overflow: visible;
 }
-/* Ikon di bilah atas & rel ikon: lencana kecil di pojok kanan atas ikon */
+/* Ikon di bilah atas & rel ikon: lencana KECIL (14px) di pojok kanan
+   atas ikon -- hanya menindih sudut loncengnya, bukan menutupinya. */
 .cmd-trigger--ikon.notif-pemicu .notif-lencana {
   position: absolute;
-  top: 2px;
-  right: 1px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  font-size: 0.69rem;
-  line-height: 18px;
-  box-shadow: 0 0 0 2px var(--d-900);
+  top: 4px;
+  right: 3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 0.6rem;
+  line-height: 14px;
 }
 
-/* ---- Panel notifikasi ---- */
+/* ---- Panel notifikasi ----
+
+   Kartu per notifikasi di atas latar kabut, dikelompokkan per hari
+   (js/features/notifikasi.js). Judul kartu = apa yang terjadi & di mana;
+   pemasok oranye seperti di papan; ikon berwarna keadaan jadwal (biru
+   sesuai jadwal, merah delay); yang belum dibaca bergaris kiri biru +
+   titik. Warna selalu disertai kata (Delay 8 Hari, Sudah berakhir). */
 .notif-panel {
   position: fixed;
   z-index: 1050; /* di atas sidebar (1045), di bawah panel detail (1055+) */
   top: 12px;
   left: calc(var(--sb-w, 0px) + 12px);
-  width: min(400px, calc(100vw - 24px));
+  width: min(420px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--sh-lg);
+  background: var(--pl-kabut-2);
+  border: 1px solid var(--pl-garis);
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -20px rgba(11, 29, 51, 0.45), 0 2px 6px rgba(11, 29, 51, 0.08);
   overflow: hidden;
-  color: var(--ink);
+  color: var(--pl-navy);
 }
 .notif-panel:focus {
   outline: none;
 }
+/* Kepala: judul | Tandai semua dibaca | tutup, lalu ringkasan selebar panel */
 .notif-kepala {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 10px 10px 10px 16px;
-  border-bottom: 1px solid var(--border);
+  column-gap: 4px;
+  padding: 12px 10px 12px 16px;
+  border-bottom: 1px solid var(--pl-garis);
+  background: var(--pl-permukaan);
 }
 .notif-judul-panel {
-  flex: 1;
+  min-width: 0;
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--t-md);
+  font-size: 1.05rem;
   font-weight: 700;
+  line-height: 1.3;
+}
+/* "2 belum dibaca · 3 hari ini · 1 besok" */
+.notif-ringkas {
+  grid-column: 1 / -1;
+  margin: 1px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--pl-arus);
 }
 .notif-baca-semua {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  height: 32px;
   border: 0;
   background: transparent;
-  padding: 4px 8px;
-  border-radius: var(--r-xs);
-  color: var(--tp-600);
-  font-size: var(--t-sm);
-  font-weight: 600;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--pl-biru-teks);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 .notif-baca-semua:hover {
-  background: var(--p-50);
+  background: var(--pl-biru-muda);
 }
 @media (pointer: coarse) {
   .notif-baca-semua {
@@ -296,16 +308,17 @@ button.site-nav-link {
 .notif-tutup {
   display: grid;
   place-items: center;
+  flex-shrink: 0;
   width: 32px;
   height: 32px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: 8px;
   background: transparent;
-  color: var(--n-500);
+  color: var(--pl-arus);
 }
 .notif-tutup:hover {
-  background: var(--n-100);
-  color: var(--ink);
+  background: var(--pl-kabut);
+  color: var(--pl-navy);
 }
 .notif-tutup .ic {
   width: 18px;
@@ -314,13 +327,9 @@ button.site-nav-link {
 .notif-isi {
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
 }
-/* HARI (Hari ini / Besok): kepalanya menempel di atas saat digulir. */
-.notif-hari + .notif-hari {
-  margin-top: 4px;
-  border-top: 1px solid var(--border);
-}
+/* HARI (Hari ini / Besok) & Masa berlaku: kepalanya menempel saat digulir */
 .notif-kelompok {
   position: sticky;
   top: 0;
@@ -330,180 +339,236 @@ button.site-nav-link {
   gap: 8px;
   margin: 0;
   padding: 12px 16px 8px;
-  background: var(--surface);
-  font-size: 0.72rem;
+  background: var(--pl-kabut-2);
+  font-size: 13px;
   font-weight: 700;
-  color: var(--n-600);
+  color: var(--pl-navy);
 }
 .notif-kelompok-tgl {
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--text-subtle);
-}
-/* JENIS (Berangkat / Tiba / Dikirim ke pabrik): satu kotak berkepala. */
-.notif-jenis {
-  margin: 0 12px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  min-width: 0;
   overflow: hidden;
-  background: var(--surface);
-}
-.notif-jenis-kepala {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--n-100);
-  background: var(--n-50);
-}
-.notif-jenis-nama {
-  font-size: var(--t-sm);
-  font-weight: 700;
-  color: var(--ink);
-}
-.notif-jenis-acuan {
-  font-size: 0.72rem;
-  color: var(--muted);
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pl-arus);
 }
-.notif-jenis-jumlah {
-  min-width: 22px;
-  height: 20px;
+.notif-kelompok-n {
   margin-left: auto;
+  min-width: 22px;
   padding: 0 7px;
-  border-radius: var(--r-pill);
-  background: var(--n-200);
-  color: var(--n-700);
-  font-size: 0.7rem;
+  border-radius: 999px;
+  background: var(--pl-kabut);
+  font-size: 11.5px;
   font-weight: 700;
   line-height: 20px;
   text-align: center;
+  color: var(--pl-arus);
   font-variant-numeric: tabular-nums;
 }
+/* KARTU: ikon | teks | titik belum dibaca */
 .notif-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 12px;
-  border: 0;
-  background: transparent;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 8px;
+  align-items: start;
+  column-gap: 12px;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  padding: 12px 12px 12px 12px;
+  border: 1px solid var(--pl-garis-tipis);
+  border-radius: 12px;
+  background: var(--pl-permukaan);
   text-align: left;
   color: inherit;
-}
-.notif-item + .notif-item {
-  border-top: 1px solid var(--n-100);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .notif-item:hover {
-  background: var(--n-50);
+  border-color: var(--pl-garis-kontrol);
+  box-shadow: 0 6px 16px -10px rgba(11, 29, 51, 0.35);
 }
 .notif-item.is-baru {
-  background: var(--p-50);
+  border-color: var(--pl-garis);
+  box-shadow: inset 3px 0 0 var(--pl-biru);
 }
 .notif-item.is-baru:hover {
-  background: var(--p-100);
+  box-shadow:
+    inset 3px 0 0 var(--pl-biru),
+    0 6px 16px -10px rgba(11, 29, 51, 0.35);
 }
 .notif-item:focus-visible {
-  outline: 2px solid var(--p-500);
-  outline-offset: -2px;
+  outline: 2px solid var(--pl-biru);
+  outline-offset: 1px;
 }
 .notif-ikon {
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--pl-biru-muda);
+  color: var(--pl-biru-teks);
+  font-size: 0.95rem;
 }
-.notif-ikon--etd {
-  background: var(--w-bg-fff3de);
-  color: var(--w-teks-95610c);
+.notif-ikon--merah {
+  background: var(--pl-merah-muda);
+  color: var(--pl-merah);
 }
-.notif-ikon--eta {
-  background: var(--sec-100);
-  color: var(--tsec-700);
-}
-.notif-ikon--delivery {
-  background: var(--p-100);
-  color: var(--tp-600);
-}
-/* MASA BERLAKU (SKB PPh & Masterlist): kuning peringatan; yang sudah
-   berakhir statusnya merah. Warna selalu disertai kalimat statusnya. */
-.notif-ikon--masa {
-  background: var(--w-bg-fff3de);
-  color: var(--w-teks-95610c);
-}
-.notif-masa-status {
-  font-weight: 700;
-  color: var(--w-teks-95610c);
-}
-.notif-item.is-lewat .notif-masa-status {
-  color: var(--ts-danger);
-}
-.notif-masa-aksi {
-  margin-top: 2px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--tp-600);
+/* Masa berlaku: pasir kuningan; sudah berakhir: merah */
+.notif-ikon--masa:not(.notif-ikon--merah) {
+  background: var(--pl-pasir);
+  color: var(--pl-kuningan-tua);
 }
 .notif-teks {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
 }
-/* Dibungkus, tidak dipotong: kapal / nomor penerbangan di ujung
-   keterangan justru yang membedakan dua kiriman pihak yang sama. */
+/* Dibungkus, tidak dipotong: kapal / B/L di ujung keterangan justru
+   yang membedakan dua kiriman pemasok yang sama. */
+.notif-aksi,
 .notif-pihak,
-.notif-meta {
+.notif-barang,
+.notif-meta,
+.notif-dokumen-nama {
   overflow-wrap: anywhere;
 }
-.notif-pihak {
-  font-size: var(--t-sm);
+.notif-aksi {
+  font-size: 14px;
   font-weight: 700;
-  color: var(--ink);
+  line-height: 1.3;
+  color: var(--pl-navy);
 }
-.notif-meta {
-  font-size: 0.72rem;
-  color: var(--muted);
+.notif-item:not(.is-baru) .notif-aksi {
+  font-weight: 600;
+}
+.notif-pihak-baris {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.notif-pihak {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--pl-pemasok);
+}
+.notif-buku {
+  padding: 0 7px;
+  border: 1px solid var(--pl-garis);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 17px;
+  color: var(--pl-arus);
+}
+.notif-delay {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--pl-merah-muda);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--pl-merah);
+}
+.notif-barang {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--pl-navy);
+}
+.notif-meta,
+.notif-dokumen-nama {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--pl-arus);
+}
+.notif-dokumen-nama {
+  font-weight: 650;
+  color: var(--pl-navy);
+}
+/* Progres dokumen: batang kecil + "Dokumen 3/10 · Berikutnya: PIB" */
+.notif-dok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pl-arus);
+}
+.notif-dok-meter {
+  flex: 0 0 56px;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--pl-navy) var(--isi, 0%), var(--pl-garis) var(--isi, 0%));
+}
+.notif-dok.is-lengkap {
+  color: var(--pl-hijau);
+}
+.notif-dok.is-lengkap .notif-dok-meter {
+  background: var(--pl-hijau);
 }
 .notif-ubah {
   margin-top: 2px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--w-teks-95610c);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--pl-kuningan-tua);
+}
+/* Masa berlaku: status = judul kartu */
+.notif-masa-status {
+  color: var(--pl-kuningan-tua);
+}
+.notif-item.is-lewat .notif-masa-status {
+  color: var(--pl-merah);
+}
+.notif-masa-aksi {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--pl-biru-teks);
 }
 .notif-titik {
-  flex-shrink: 0;
   width: 8px;
   height: 8px;
   margin-top: 6px;
   border-radius: 50%;
-  background: var(--p-500);
+  background: var(--pl-biru);
 }
 .notif-kosong {
-  padding: 30px 24px;
+  padding: 34px 28px;
   text-align: center;
-  color: var(--muted);
-  font-size: var(--t-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--pl-arus);
 }
-.notif-kosong i {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 1.6rem;
-  color: var(--n-300);
+.notif-kosong-ikon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--pl-kabut);
+  font-size: 1.35rem;
+  color: var(--pl-arus);
 }
 .notif-kosong p {
   margin: 0;
 }
 .notif-kaki {
-  padding: 8px 16px;
-  border-top: 1px solid var(--border);
-  font-size: 0.7rem;
-  color: var(--muted);
+  padding: 10px 16px;
+  border-top: 1px solid var(--pl-garis);
+  background: var(--pl-permukaan);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pl-arus);
 }
 
 /* ---- Kaki: ciutkan + akun ---- */
@@ -523,7 +588,6 @@ button.site-nav-link {
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
   text-align: left;
   white-space: nowrap;
   transition:
@@ -534,10 +598,6 @@ button.site-nav-link {
   width: 18px;
   height: 18px;
   margin: 0 2px;
-}
-.sb-ciut:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
 }
 
 /* ---- Desktop: sidebar menempel, halaman bergeser ---- */
@@ -602,17 +662,18 @@ button.site-nav-link {
      menyembunyikan semua <span> tautan), menempel di pojok ikonnya. */
   body.sb-rel .notif-pemicu .notif-lencana {
     position: absolute;
-    top: 4px;
-    right: 10px;
+    top: 5px;
+    right: 6px;
     width: auto;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
     clip: auto;
     overflow: visible;
-    font-size: 0.69rem;
-    line-height: 18px;
-    box-shadow: 0 0 0 2px var(--d-900);
+    font-size: 0.6rem;
+    line-height: 14px;
+    /* Cincin selatar rel, memisahkan lencana dari loncengnya */
+    box-shadow: 0 0 0 2px var(--pl-kabut);
   }
 }
 

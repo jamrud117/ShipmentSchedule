@@ -20,7 +20,8 @@
      - DHL Inbound Charges Invoice: baris Billing Details (Non-Routine
        Entry, bea, ...) dengan PPN masing-masing.
      - Billing DJBC (struk billing bea cukai): Nomor Billing, tanggal &
-       jatuh tempo, akun Bea Masuk / PPN Impor / PPh Impor -> isian Billing;
+       jatuh tempo, akun Bea Masuk / PPN Impor / PPh Impor -> isian Billing
+       (Dokumen 22-SPTNP -> Billing SPTNP, akun Denda / Bunga -> Penalty);
        jadwal impornya dicari lewat nomor aju PIB (BL/AWB & jenis transaksi).
      - Tabel forwarder (WIDE dan sejenisnya): kolom Description, Qty,
        CURR, Rate, Amount, VAT, PPH 23, Total.
@@ -395,11 +396,19 @@ function bacaInvoiceDhlCharges(teks) {
 /* BILLING DJBC: struk billing pembayaran bea & pajak impor.
    Akun dipetakan ke isian Billing di form: Bea Masuk -> feeBm, PPN Impor
    -> feePpn, PPh Impor -> feePph. Akun lain (PPnBM, denda, cukai, ...)
-   tidak punya isian -- dicatat di `akunLain` supaya pengguna diingatkan. */
+   tidak punya isian -- dicatat di `akunLain` supaya pengguna diingatkan.
+
+   BILLING SPTNP: struk yang sama untuk "Dokumen : 22-SPTNP" (kekurangan
+   bayar hasil penetapan tarif / nilai pabean) -> Jenis Pengeluaran
+   "Billing SPTNP"; akun Denda (412113 Denda Administrasi Pabean) & Bunga
+   -> feePenalty. Akun PPh yang tidak disebut billing = 0 -> isian PPH
+   Import dikosongkan (danaIsiForm). Nomor & tanggal surat SPTNP-nya
+   (`sptnpNo`, `sptnpTanggal`) ikut disebut di pemberitahuan. */
 function bacaBillingDjbc(teks) {
   const isi = String(teks);
   const ambil = (re) => (isi.match(re) || [])[1] || "";
-  const fee = { feeBm: 0, feePpn: 0, feePph: 0 };
+  const sptnp = /Dokumen\s*:\s*(?:\d+\s*-\s*)?SPTNP\b/i.test(isi);
+  const fee = { feeBm: 0, feePpn: 0, feePph: 0, feePenalty: 0 };
   const akunLain = [];
   isi.split(/\r?\n/).forEach((l) => {
     const m = l.match(/^(\d{6})\s*-\s*(.+?)\s+[\d/]{10,}\s+([\d,.]+)\s*$/);
@@ -409,8 +418,11 @@ function bacaBillingDjbc(teks) {
     if (/Bea Masuk/i.test(nama)) fee.feeBm += nilai;
     else if (/^PPN\b/i.test(nama)) fee.feePpn += nilai;
     else if (/^PPh/i.test(nama)) fee.feePph += nilai;
+    else if (sptnp && /Denda|Bunga|Sanksi/i.test(nama)) fee.feePenalty += nilai;
     else akunLain.push({ nama: `${m[1]} - ${nama}`, nilai });
   });
+  // Nomor & tanggal surat SPTNP: baris "Nomor :" / "Tanggal :" sesudah "Dokumen : 22-SPTNP"
+  const blokSptnp = sptnp ? (isi.match(/Dokumen\s*:[^\n]*SPTNP[^\n]*\n([\s\S]{0,200})/i) || [])[1] || "" : "";
   const kantor = (ambil(/Kantor\s*:\s*([^\n]+(?:\n(?![A-Z][a-z]+\s*:)[^\n]+)?)/) || "").replace(/\s+/g, " ");
   // Kantor pelabuhan laut / bandara -> jenis transaksi impor
   const transaksi = /PRIOK|TANJUNG|PELABUHAN|BELAWAN|EMAS|PERAK|MERAK/i.test(kantor) ? "Sea Import"
@@ -425,7 +437,9 @@ function bacaBillingDjbc(teks) {
     invoiceDate: danaTanggalIso(ambil(/^Tanggal\s*:\s*([^\n]+)/m)),
     invoiceDueDate: danaTanggalIso(ambil(/Tgl Jt Tempo\s*:\s*([^\n]+)/)),
     blAwb: "",
-    expenseType: "Billing",
+    expenseType: sptnp ? DANA_JENIS_SPTNP : "Billing",
+    sptnpNo: ((blokSptnp.match(/Nomor\s*:\s*([^\n]+)/i) || [])[1] || "").trim(),
+    sptnpTanggal: danaTanggalIso(((blokSptnp.match(/Tanggal\s*:\s*([^\n]+)/i) || [])[1] || "").trim()),
     transactionType: transaksi,
     currency: "IDR",
     fee,
@@ -1391,7 +1405,7 @@ function bacaInvoiceVendor(teks, vendorDikenal) {
   }
   if (h.jenisDokumen === "billing") {
     // Billing: bukan tagihan vendor -- dibayar ke kas negara, tanpa rincian baris
-    const jumlah = h.fee.feeBm + h.fee.feePpn + h.fee.feePph + h.akunLain.reduce((x, a) => x + a.nilai, 0);
+    const jumlah = h.fee.feeBm + h.fee.feePpn + h.fee.feePph + (h.fee.feePenalty || 0) + h.akunLain.reduce((x, a) => x + a.nilai, 0);
     h.dpp = jumlah;
     h.ppn = 0;
     h.pphInvoice = 0;
@@ -1465,9 +1479,11 @@ function danaIsiForm(h) {
   setel("invoiceNo", h.invoiceNo);
   if (h.jenisDokumen === "billing") {
     setel("billingNo", h.billingNo);
-    /* Ketiga pungutan DIGANTI, yang nol pun (dikosongkan): angka form
-       sebelumnya tidak boleh tertinggal dan ikut terjumlah ke Total PDRI. */
-    ["feeBm", "feePpn", "feePph"].forEach((k) => setel(k, h.fee[k] ? String(Math.round(h.fee[k])) : "", true));
+    /* Semua pungutan DIGANTI, yang nol pun (dikosongkan): angka form
+       sebelumnya tidak boleh tertinggal dan ikut terjumlah ke Total PDRI.
+       Billing SPTNP tanpa akun PPh -> PPH Import kosong; Penalty hanya
+       terisi (dan terkirim) untuk Billing SPTNP. */
+    ["feeBm", "feePpn", "feePph", "feePenalty"].forEach((k) => setel(k, h.fee[k] ? String(Math.round(h.fee[k])) : "", true));
   }
   setel("invoiceDate", h.invoiceDate);
   setel("invoiceDueDate", h.invoiceDueDate);
@@ -2029,8 +2045,9 @@ function danaTerapkanDokumen(terbaca, catatan) {
         ? tt(`Form diganti dengan ${pakai.length} dokumen: ${danaRingkasDokumen(pakai)}. Periksa lalu simpan.`, `Form replaced with ${pakai.length} documents: ${danaRingkasDokumen(pakai)}. Check, then save.`)
         : tt(`Form diganti dengan ${danaNamaJenis(utama)} ${utama.invoiceNo}. Periksa lalu simpan.`, `Form replaced with ${danaNamaJenis(utama)} ${utama.invoiceNo}. Check, then save.`);
     } else if (utama.jenisDokumen === "billing") {
-      pesan = tt(`Terisi dari billing ${utama.billingNo}: total ${rp(utama.dpp)}${utama.blAwb ? `, BL/AWB ${utama.blAwb}` : ""}. Periksa lalu simpan.`,
-        `Filled from billing ${utama.billingNo}: total ${rp(utama.dpp)}${utama.blAwb ? `, B/L/AWB ${utama.blAwb}` : ""}. Check, then save.`);
+      const sptnp = danaJenisSptnp(utama.expenseType) ? ` (SPTNP${utama.sptnpNo ? " " + utama.sptnpNo : ""})` : "";
+      pesan = tt(`Terisi dari billing ${utama.billingNo}${sptnp}: total ${rp(utama.dpp)}${utama.blAwb ? `, BL/AWB ${utama.blAwb}` : ""}. Periksa lalu simpan.`,
+        `Filled from billing ${utama.billingNo}${sptnp}: total ${rp(utama.dpp)}${utama.blAwb ? `, B/L/AWB ${utama.blAwb}` : ""}. Check, then save.`);
     } else if (banyak) {
       // Total gabungan, dihitung form sendiri: jumlah total per dokumen (tiap dokumen dibulatkan sendiri, lihat fundLineTotals)
       const tl = typeof fundLineTotals === "function" ? fundLineTotals(fundLines, fundMataForm(), fundPayeeForm(), typeof fundDokumen !== "undefined" ? fundDokumen : []) : null;

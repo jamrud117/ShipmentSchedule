@@ -408,10 +408,6 @@
   background: var(--surface);
   color: var(--tp-600);
 }
-.mst-seg button.active {
-  background: var(--p-600);
-  color: #fff;
-}
 
 /* ---------- tabel ---------- */
 .mst-tabel-wrap {
@@ -963,8 +959,11 @@
   margin-right: 5px;
   color: var(--ts-warn);
 }
-.mst-pib-saran {
-  margin-top: 8px;
+/* Tambah PIB + tombol "?" Cara kerja (saran unit per PIB) sebaris. */
+.mst-pib-aksi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Sedang menyimpan (lihat mstSimpanRealisasi: ditandai, bukan dinonaktifkan). */

@@ -34,25 +34,29 @@ html {
   overflow-y: scroll; /* Firefox */
   -ms-overflow-style: none; /* Edge lama */
 }
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}
 
-/* Wadah gulir di dalam halaman ikut disamakan */
+/* Wadah gulir di dalam halaman ikut disamakan -- termasuk deret tab /
+   pilihan yang bisa digeser mendatar (Data PIB, filter status, langkah
+   tinjauan OCR). Tabel data lebar SENGAJA dikecualikan (batang gulir
+   tipisnya penanda bahwa ada kolom di kanan): .item-table-wrap,
+   .docnum-history-wrap. */
 .sheet-body,
 .cmdk-list,
 .sb-isi,
-.docnum-tabs {
+.docnum-tabs,
+.dpb-tabs,
+.status-tab,
+.dr-langkah {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .sheet-body::-webkit-scrollbar,
 .cmdk-list::-webkit-scrollbar,
 .sb-isi::-webkit-scrollbar,
-.docnum-tabs::-webkit-scrollbar {
+.docnum-tabs::-webkit-scrollbar,
+.dpb-tabs::-webkit-scrollbar,
+.status-tab::-webkit-scrollbar,
+.dr-langkah::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
@@ -93,10 +97,6 @@ body {
    status) berganti bentuk jadi kotak bersudut begitu difokus. Kotak
    isian memakai cincin bayangan, bukan garis luar -- lihat FOKUS di
    css/system.css. */
-:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
 /* Di atas permukaan navy, garis navy tidak terlihat: kuningan muda. */
 .app-topbar :focus-visible,
 .app-sidebar :focus-visible,
@@ -197,14 +197,6 @@ body {
    dengan .btn-outline-danger dan ikut merah, sehingga "Tambah Baris"
    dan "Batal" terbaca seperti tombol hapus. Merah hanya untuk yang
    merusak (.btn-outline-danger: Reset ke 001). */
-.btn-quiet {
-  color: var(--tp-600);
-}
-.btn-quiet:hover:not(:disabled) {
-  background: var(--p-50);
-  border-color: var(--p-300);
-  color: var(--tp-700);
-}
 .btn-outline-danger {
   border-color: var(--s-danger-line);
   color: var(--ts-danger);
@@ -226,8 +218,6 @@ body {
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--n-600);
 }
 .btn-more:hover {
   border-color: var(--p-400);

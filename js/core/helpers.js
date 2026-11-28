@@ -1125,3 +1125,22 @@ function newStop() {
     departureDate: "",
   };
 }
+
+/* JENIS PENGELUARAN BERFORMAT BILLING (Pengajuan Dana).
+
+   "Billing SPTNP" -- tagihan kekurangan bea & pajak impor dari Surat
+   Penetapan Tarif dan/atau Nilai Pabean (SPTNP, struk Billing DJBC
+   "Dokumen : 22-SPTNP"), sering ditambah denda administrasi pabean --
+   diperlakukan SAMA dengan Billing di mana-mana: disetor ke KAS NEGARA,
+   dirujuk lewat Nomor Billing, rinciannya isian pungutan (BM, PPN Import,
+   PPH Import) -- bukan baris Rincian Biaya -- dan masuk kelompok Billing
+   di laporan. Bedanya hanya satu isian tambahan: Penalty (feePenalty),
+   khusus SPTNP. */
+const DANA_JENIS_SPTNP = "Billing SPTNP";
+function danaJenisBilling(jenis) {
+  const j = String(jenis == null ? "" : jenis).trim();
+  return j === "Billing" || j === DANA_JENIS_SPTNP;
+}
+function danaJenisSptnp(jenis) {
+  return String(jenis == null ? "" : jenis).trim() === DANA_JENIS_SPTNP;
+}

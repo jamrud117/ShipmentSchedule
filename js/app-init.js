@@ -106,7 +106,8 @@ if (btnScrollTop) {
    sampai dasar layar (kotak putihnya + jarak di bawahnya). */
 if (typeof ResizeObserver === "function") {
   const ukurLengket = {
-    "--lengket-kendali": () => $(".controlbar"),
+    // Yang menempel di daftar jadwal kini bilah atas papan (tab status & kepala kolom)
+    "--lengket-kendali": () => $(".papan-atas"),
     "--lengket-form-atas": () => $(".page-form-header"),
     "--lengket-form-bawah": () => $(".page-form-actions-inner"),
   };

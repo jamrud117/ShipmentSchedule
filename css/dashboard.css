@@ -89,10 +89,41 @@
   border: 1px solid var(--border);
   font-size: var(--t-base);
   background: var(--surface);
-  color: var(--ink);
 }
 .search-box input[type="text"]::placeholder {
   color: var(--text-placeholder);
+}
+/* Pintasan "/" (dan Ctrl+F) ke kotak cari papan Jadwal, di ujung
+   kanannya -- seperti "Ctrl K" di tombol Cari Cepat. Hilang begitu
+   kotaknya difokus atau berisi (tombol x memakai tempat yang sama), dan
+   di layar sentuh / ponsel yang tidak punya papan ketik. */
+.search-kbd {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  min-width: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--n-100);
+  box-shadow: none;
+  color: var(--n-600);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.search-box:focus-within .search-kbd,
+.search-box.has-query .search-kbd {
+  display: none;
+}
+@media (hover: none), (max-width: 767.98px) {
+  .search-kbd {
+    display: none;
+  }
 }
 .search-clear {
   position: absolute;
@@ -149,7 +180,6 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   border: 1px solid var(--border);
   background: var(--surface);
   font-size: var(--t-base);
-  color: var(--ink);
   padding: 0 30px 0 11px;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2364748b'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E");
@@ -307,14 +337,20 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
    diketik langsung (format apa pun), tidak harus diklik satu per satu.
    Kotaknya bertipe teks ber-data-kotak-tanggal (js/ui/date-input.js);
    tanpa ikon kalender karena kalendernya terbuka tepat di bawahnya. */
+/* Kotak Dari & Sampai SELEBAR KALENDERNYA (190px, .drp-grid) dan
+   berjarak sama (--sp-5): Dari tepat di atas bulan pertama, Sampai di
+   atas bulan kedua, tanda "–" di tengah celahnya. Dulu lebar alami
+   kotak isian (±240px) yang menentukan lebar panel -- panelnya melebar
+   & tumpah keluar layar. */
 .drp-typed {
+  position: relative;
   display: flex;
   align-items: flex-end;
-  gap: var(--sp-2);
+  gap: var(--sp-5);
   margin-bottom: var(--sp-3);
 }
 .drp-typed-field {
-  flex: 1 1 0;
+  flex: 0 0 190px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -346,16 +382,30 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   font-weight: 400;
 }
 .drp-typed-sep {
-  flex: 0 0 auto;
-  padding-bottom: 6px;
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  transform: translateX(-50%);
   color: var(--n-400);
 }
+/* Nama bulan TEPAT DI TENGAH KALENDERNYA: deret label bersusun sama
+   persis dengan deret kalender (190px + celah --sp-5); tombol bulan
+   sebelum / sesudah menempel di ujung kiri & kanan baris (absolut), di
+   ruang kosong samping nama bulan -- bukan lagi kotak sendiri yang
+   mendorong label menjauh dari kalendernya. */
 .drp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
+  position: relative;
   margin-bottom: var(--sp-3);
+}
+.drp-header > .drp-nav {
+  position: absolute;
+  top: 0;
+}
+.drp-header > .drp-nav:first-child {
+  left: 0;
+}
+.drp-header > .drp-nav:last-child {
+  right: 0;
 }
 .drp-nav {
   width: 30px;
@@ -374,12 +424,13 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
 }
 .drp-months {
   display: flex;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
 .drp-month-label {
+  flex: 0 0 190px;
   font-weight: 700;
   color: var(--ink);
-  min-width: 190px;
+  line-height: 30px;
   text-align: center;
 }
 .drp-grids {
@@ -863,12 +914,18 @@ input:not(:placeholder-shown) ~ .search-clear[data-cari-hapus] {
   .drp-month-label--second {
     display: none;
   }
-  .drp-months {
-    flex: 1;
-    justify-content: center;
-  }
+  /* Satu bulan: namanya di tengah panel (= di tengah kalendernya),
+     kotak Dari & Sampai berbagi lebar panel. */
   .drp-month-label {
-    min-width: 0;
+    flex: 1 1 auto;
+    line-height: 44px;
+  }
+  .drp-typed-field {
+    flex: 1 1 0;
+  }
+  /* Kotak ketiknya 44px di sini: tanda "–" ikut di tengah tingginya */
+  .drp-typed-sep {
+    bottom: 12px;
   }
   .drp-grid {
     width: 100%;

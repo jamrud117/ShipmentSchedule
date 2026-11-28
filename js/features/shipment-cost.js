@@ -75,7 +75,7 @@ function bkCocokkan(s, rows) {
 
 /* Hitungan biaya satu kiriman. `kursFn(mata, tanggal)` untuk pengajuan
    non-IDR & nilai barang ekspor; impor memakai NDPBM kirimannya. */
-const BK_JENIS_PAJAK = ["Billing", "Tax Advance"];
+const BK_JENIS_PAJAK = ["Billing", "Billing SPTNP", "Tax Advance"];
 function hitungBiayaKiriman(s, rows, kursFn) {
   const kurs = (mata, tgl) => (String(mata || "IDR").toUpperCase() === "IDR" ? 1 : Number(kursFn && kursFn(mata, tgl)) || bkAngka(s.ndpbm) || 0);
   const milikKiriman = new Set(bkKunciKiriman(s));

@@ -205,7 +205,7 @@ function cardNotesHtml(s) {
       <input type="text" class="card-note-input" data-note-input="${s.id}" enterkeyhint="send"
              aria-label="${tt("Tambah kronologi — tanggal &amp; jam dicatat otomatis", "Add a timeline note — date &amp; time are recorded automatically")}"
              placeholder="${tt("Tulis kronologi, Enter untuk kirim", "Write a timeline note, Enter to send")}" />
-      <button type="button" class="btn-note-send" data-action="addNote" data-id="${s.id}"
+      <button type="button" class="btn-note-send" data-action="addNote" data-id="${s.id}" data-pintasan="Enter"
               title="${tt("Kirim kronologi", "Send timeline note")}" aria-label="${tt("Kirim kronologi", "Send timeline note")}">
         <i class="bi bi-send"></i>
       </button>

@@ -227,12 +227,12 @@ const kelasTarifBm = (it) => {
   return a && (a.sumber === "database" || a.sumber === "riwayat") && tarifBmBarang(it) != null ? "tarif-otomatis" : "";
 };
 
-// Sel Tarif BM (%) di tabel/kartu barang -- buku Import saja (.import-col)
+// Sel Tarif (Bea Masuk, %) di tabel/kartu barang -- buku Import saja (.import-col)
 function isianTarifBmHtml(it) {
-  const label = tt("Tarif BM (%)", "Duty Rate (%)");
+  const label = tt("Tarif", "Tariff");
   const coo = barangPakaiCoo(it);
   const n = coo ? 0 : tarifBmBarang(it);
-  return `<td class="tarif-col import-col" data-k="tarifBm" data-label="${escapeAttr(label)}"><div class="input-affix input-affix--end" data-affix="%"><input type="text" data-f="tarifBm" value="${n == null ? "" : escapeAttr(formatNumberValue(n) || "0")}" inputmode="decimal" placeholder="${TARIF_BM_BAWAAN}" aria-label="${escapeAttr(label)}" title="${escapeAttr(judulTarifBm(it))}" class="${kelasTarifBm(it)}"${coo ? " readonly" : ""}></div></td>`;
+  return `<td class="tarif-col import-col" data-k="tarifBm" data-label="${escapeAttr(label)}"><div class="input-affix input-affix--end" data-affix="%"><input type="text" data-f="tarifBm" value="${n == null ? "" : escapeAttr(formatNumberValue(n) || "0")}" inputmode="decimal" placeholder="${TARIF_BM_BAWAAN}" aria-label="${escapeAttr(tt("Tarif Bea Masuk (%)", "Import duty rate (%)"))}" title="${escapeAttr(judulTarifBm(it))}" class="${kelasTarifBm(it)}"${coo ? " readonly" : ""}></div></td>`;
 }
 
 // Tulis ulang kotak Tarif BM satu baris (tanpa menggambar ulang tabel)

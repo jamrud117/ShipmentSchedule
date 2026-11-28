@@ -385,7 +385,7 @@ function drRincianHtml(butir) {
   const h = butir.h;
   if (h.jenisDokumen === "billing") {
     const f = h.fee || {};
-    const baris = [["Bea Masuk", f.feeBm], ["PPN", f.feePpn], ["PPh", f.feePph]].concat((h.akunLain || []).map((a) => [a.nama, a.nilai]));
+    const baris = [["Bea Masuk", f.feeBm], ["PPN", f.feePpn], ["PPh", f.feePph], ["Penalty", f.feePenalty]].concat((h.akunLain || []).map((a) => [a.nama, a.nilai]));
     return `<table class="dr-tabel"><thead><tr><th>${escapeHtml(tt("Pungutan", "Levy"))}</th><th class="dr-angka">${escapeHtml(tt("Nilai", "Amount"))}</th></tr></thead>
       <tbody>${baris.filter(([, v]) => v).map(([n, v]) => `<tr><td>${escapeHtml(n)}</td><td class="dr-angka">${escapeHtml(drUang(v, "IDR"))}</td></tr>`).join("")}</tbody></table>`;
   }
@@ -413,7 +413,7 @@ function drRincianHtml(butir) {
       </tr></thead>
       <tbody>${baris}</tbody>
     </table>
-    ${kunci ? "" : `<button type="button" class="btn-quiet dr-tambah" data-dr-tambah><i class="bi bi-plus-lg" aria-hidden="true"></i> ${escapeHtml(tt("Tambah baris", "Add line"))}</button>`}`;
+    ${kunci ? "" : `<button type="button" class="btn-quiet dr-tambah" data-dr-tambah data-pintasan="Enter" data-pintasan-ket="di baris terakhir" data-pintasan-ket-en="on the last row"><i class="bi bi-plus-lg" aria-hidden="true"></i> ${escapeHtml(tt("Tambah baris", "Add line"))}</button>`}`;
 }
 
 function drGambarJumlah() {
@@ -901,6 +901,28 @@ function drSetelahUbahIsian(k) {
       e.preventDefault();
       e.stopPropagation();
       drSisipBaris(butir, Number(tr.dataset.drBaris));
+      return;
+    }
+    /* ENTER di kotak Uraian / Nilai = turun ke kotak yang sama di baris
+       berikutnya; di BARIS TERAKHIR menambah baris baru (seperti Rincian
+       Biaya form Pengajuan Dana) -- tanpa meraih tombol "Tambah baris". */
+    if (tr && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && butir && butir.status === "tunggu" && e.target.matches("input[data-dr-l]")) {
+      e.preventDefault();
+      const idx = Number(tr.dataset.drBaris);
+      const f = e.target.dataset.drL;
+      if (idx === butir.h.lines.length - 1) {
+        butir.h.lines.push({ desc: "", amount: 0, ppnRate: (butir.h.lines[idx] || {}).ppnRate || 0 });
+        drEl("drRincian").innerHTML = drRincianHtml(butir);
+        drSelaraskanTotal(butir);
+        drGambarJumlah();
+        drGambarPeriksa();
+        drGambarKaki();
+      }
+      const tuju = drEl("drRincian").querySelector(`[data-dr-baris="${idx + 1}"] [data-dr-l="${f}"]`);
+      if (tuju) {
+        tuju.focus();
+        if (typeof tuju.select === "function") tuju.select();
+      }
     }
   });
   drPasangGeser(badan);

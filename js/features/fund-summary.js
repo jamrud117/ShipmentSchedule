@@ -32,7 +32,11 @@
 const FSUM_TAB = "__ringkasan__";
 const FSUM_PER_AMBIL = 1000;
 
-let fsumBaris = null;   // baris pengajuan dana; dimuat ulang tiap tab dibuka
+let fsumBaris = null;   // baris pengajuan dana (salinan; dijaga realtime lewat fsumTerapkanBaris)
+let fsumWaktu = 0;      // kapan fsumBaris terakhir dibaca dari database
+let fsumVersi = 0;      // naik tiap fsumLupakan(): bacaan yang dikirim sebelumnya tidak dipakai
+let fsumJanji = null;   // bacaan seluruh pengajuan yang sedang berjalan -- dipakai bersama
+const FSUM_SEGAR_MS = 15000;
 let fsumPemilih = null; // pemilih rentang tanggal milik tab ini
 /* Penyaring bertahan selama halaman terbuka: pindah ke tab lain lalu
    kembali tidak mengulang pilihan dari awal. Bawaannya SEMUA data,
@@ -538,21 +542,72 @@ function fsumGambarUlangDiam() {
   return true;
 }
 
-/* Dipanggil renderDocNumHistory() saat tab Summary aktif. Datanya
-   dimuat ulang tiap tab ini digambar -- pengajuan yang baru terbit
-   harus langsung terhitung. Mengganti penyaring TIDAK memuat ulang:
-   cukup menghitung ulang dari yang sudah ada. */
+/* Pengajuan ditulis dari aplikasi ini (docnum-view.js, dnSimpananBersih):
+   salinan dilupakan -- Summary berikutnya membaca ulang. */
+function fsumLupakan() {
+  fsumBaris = null;
+  fsumWaktu = 0;
+  fsumVersi++;
+}
+// Seluruh pengajuan dana; bacaan yang sedang berjalan dipakai bersama (prefetch, Summary, Report)
+function fsumAmbilBersama() {
+  if (!fsumJanji) fsumJanji = fsumAmbilSemua().finally(() => (fsumJanji = null));
+  return fsumJanji;
+}
+const fsumTampil = () =>
+  typeof docNumActiveTab !== "undefined" && docNumActiveTab === "fund" && typeof docNumHistorySub !== "undefined" && docNumHistorySub === FSUM_TAB;
+/* Diambil lebih dulu (kursor di tab Summary / Report, docnum-view.js):
+   salinannya disiapkan di belakang. Tidak menyentuh Summary yang sedang
+   tampil -- angkanya tidak boleh berubah tanpa digambar ulang. */
+function fsumAmbilDiam() {
+  if (fsumBaris && Date.now() - fsumWaktu < FSUM_SEGAR_MS) return;
+  const versi = fsumVersi;
+  fsumAmbilBersama()
+    .then((baris) => {
+      if (versi !== fsumVersi || $("#fsumHasil")) return;
+      fsumBaris = baris;
+      fsumWaktu = Date.now();
+    })
+    .catch(() => {});
+}
+
+/* Dipanggil renderDocNumHistory() saat tab Summary aktif. SEKETIKA dari
+   salinan yang sudah ada (pengajuan baru / berubah dari pengguna lain
+   sudah dipasangi realtime), lalu dibaca ulang di belakang bila salinannya
+   lewat FSUM_SEGAR_MS -- digambar ulang hanya kalau isinya berubah.
+   Belum pernah dimuat: Memuat… seperti biasa. Mengganti penyaring TIDAK
+   memuat ulang: cukup menghitung ulang dari yang sudah ada. */
 async function renderRingkasanDana(box, bar) {
   if (bar) bar.innerHTML = "";
-  box.innerHTML = `<div class="docnum-empty">${escapeHtml(tt("Memuat…", "Loading…"))}</div>`;
+  // Sakelar simpanan mati (docnum-view.js): selalu membaca ulang, seperti dulu
+  const ada = typeof dnSimpananMati !== "undefined" && dnSimpananMati ? null : fsumBaris;
+  if (ada) fsumGambarPanel(box);
+  else box.innerHTML = `<div class="docnum-empty">${escapeHtml(tt("Memuat…", "Loading…"))}</div>`;
+  if (ada && Date.now() - fsumWaktu < FSUM_SEGAR_MS) return;
+  const versi = fsumVersi;
+  let baru;
   try {
-    fsumBaris = await fsumAmbilSemua();
+    baru = await fsumAmbilBersama();
   } catch (e) {
     console.error(e);
-    box.innerHTML = `<div class="docnum-empty">${escapeHtml(tt("Ringkasan gagal dimuat. Coba lagi.", "The summary failed to load. Please try again."))}</div>`;
+    if (!ada && fsumTampil()) box.innerHTML = `<div class="docnum-empty">${escapeHtml(tt("Ringkasan gagal dimuat. Coba lagi.", "The summary failed to load. Please try again."))}</div>`;
     return;
   }
-  fsumGambarPanel(box);
+  // Ada penulisan selama menunggu: bacaan ini sudah basi -- dibaca sekali lagi
+  if (versi !== fsumVersi) {
+    if (fsumTampil()) renderRingkasanDana(box, bar);
+    return;
+  }
+  // Pengguna sudah pindah tab selama menunggu: tabel tab itu tidak ditimpa
+  if (!fsumTampil()) {
+    fsumBaris = baru;
+    fsumWaktu = Date.now();
+    return;
+  }
+  const sama = ada && ada.length === baru.length && JSON.stringify(ada) === JSON.stringify(baru);
+  fsumBaris = baru;
+  fsumWaktu = Date.now();
+  if (!sama) fsumGambarPanel(box);
 }
 
 /* Satu pendengar untuk seluruh panel -- isinya digambar ulang terus,

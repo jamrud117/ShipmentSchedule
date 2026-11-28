@@ -133,7 +133,7 @@ function pesanGalatLampiran(error) {
     return tt(`Tempat lampiran belum disiapkan. Jalankan ${BERKAS_MIGRASI_LAMPIRAN} di Supabase.`,
       `The attachment storage is not set up yet. Run ${BERKAS_MIGRASI_LAMPIRAN} in Supabase.`);
   if (/row-level security|policy|unauthori[sz]ed|403/i.test(pesan))
-    return tt("Hanya akun EXIM yang boleh mengunggah atau menghapus lampiran.", "Only EXIM accounts can upload or delete attachments.");
+    return tt("Hanya akun Exim yang boleh mengunggah atau menghapus lampiran.", "Only Exim accounts can upload or delete attachments.");
   if (/payload too large|exceeded|413|maximum allowed size/i.test(pesan))
     return tt(`Berkas lebih dari ${LAMPIRAN_MAKS_MB} MB.`, `The file is larger than ${LAMPIRAN_MAKS_MB} MB.`);
   return tt("Lampiran gagal diunggah. Periksa sambungan lalu coba lagi.", "The attachment failed to upload. Check the connection and try again.");

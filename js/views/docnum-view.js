@@ -144,7 +144,7 @@ function docNumHistoryKey() {
 const DOCNUM_HISTORY_FILTERS = {
   fund: {
     field: "expenseType",
-    options: ["Billing", "Freight", "Storage", "Tax Advance", "Lainnya"],
+    options: ["Billing", "Billing SPTNP", "Freight", "Storage", "Tax Advance", "Lainnya"],
   },
 };
 
@@ -608,21 +608,31 @@ function readDocNumForm(typeKey) {
   if (
     typeKey === "do" &&
     typeof kendaraanKotakTambahan === "function" &&
-    typeof sjDaftarKendaraan === "function"
+    typeof sjDaftarMobil === "function"
   ) {
-    const semua = sjDaftarKendaraan({
+    /* Tiap mobil berpasangan dengan SOPIRNYA (receivedBy = sopir mobil
+       pertama = "Diterima oleh", driverExtra sejajar vehicleExtra) --
+       sjDaftarMobil membuang pasangan kosong & nomor kembar tanpa
+       memisahkan pasangannya. */
+    const semua = sjDaftarMobil({
       vehicle: out.vehicle,
+      receivedBy: out.receivedBy,
       vehicleExtra: kendaraanKotakTambahan().map((el) => el.value),
+      driverExtra: typeof kendaraanSopirTambahan === "function" ? kendaraanSopirTambahan().map((el) => el.value) : [],
     });
-    out.vehicle = semua[0] || "";
-    if (semua.length > 1) out.vehicleExtra = semua.slice(1);
+    out.vehicle = semua[0] ? semua[0].nopol : "";
+    out.receivedBy = semua[0] ? semua[0].sopir : "";
+    if (semua.length > 1) {
+      out.vehicleExtra = semua.slice(1).map((m) => m.nopol);
+      if (semua.slice(1).some((m) => m.sopir)) out.driverExtra = semua.slice(1).map((m) => m.sopir);
+    }
   }
   if (typeof doLines !== "undefined" && typeKey === "do" && out.doKind === "Lokal") {
     const bersih = doLinesBersih(doLines);
     if (bersih.length) out.items = bersih;
   }
   if (typeof fundLines !== "undefined" && typeKey === "fund") {
-    const pakaiRinci = out.expenseType && out.expenseType !== "Billing";
+    const pakaiRinci = out.expenseType && !danaJenisBilling(out.expenseType);
     const bersih = pakaiRinci ? fundRapikanTautanAwb(fundLinesBersih(fundLines), out.blAwb, out.transactionType) : [];
     if (bersih.length) out.lines = bersih;
     // Invoice / debit note tambahan dalam pengajuan yang sama
@@ -666,7 +676,7 @@ function validateDocNumForm(typeKey) {
   if (typeKey === "fund" && typeof fundTautanAwbHilang === "function") {
     const isianAwb = panel.querySelector('[data-dn="blAwb"]');
     const nilaiAwb = isianAwb && !isianAwb.disabled ? isianAwb.value : "";
-    const pakaiRinci = (panel.querySelector('[data-dn="expenseType"]') || {}).value !== "Billing";
+    const pakaiRinci = !danaJenisBilling((panel.querySelector('[data-dn="expenseType"]') || {}).value);
     // Trucking tidak dipecah per BL/AWB: tautan barisnya tidak dipakai
     const darat = fundTanpaPecahAwb({ transactionType: (panel.querySelector('[data-dn="transactionType"]') || {}).value });
     const hilang = pakaiRinci && !darat && fundDaftarAwb(nilaiAwb).length > 1 ? fundTautanAwbHilang(fundLines, nilaiAwb) : [];
@@ -1112,6 +1122,7 @@ async function dnSetelBayar(id, tanggal, bukti) {
       ),
     );
   } else throw error;
+  dnSimpananBersih(); // riwayat yang tersimpan di memori tidak lagi benar
   const baris = docNumHistoryRows.find((r) => r.id === id);
   if (baris) baris.payload = payload;
 }
@@ -1457,8 +1468,16 @@ function mulaiUbahDocNum(id) {
   isi("requester", r.requester);
   isi("department", r.department);
   Object.keys(r.payload || {}).forEach((k) =>
-    // Nama lama "Local Sale" / "Inland Trucking" dibuka dengan nama barunya (Trucking)
-    isi(k, k === "transactionType" ? fundJenisTransaksiBaku(r.payload[k]) : r.payload[k]),
+    // Nama lama "Local Sale" / "Inland Trucking" dibuka dengan nama barunya (Trucking);
+    // penanda tangan lama "Mr. Shin Na Ra" / "Mr. Kim Taewan" tanpa sapaannya
+    isi(
+      k,
+      k === "transactionType"
+        ? fundJenisTransaksiBaku(r.payload[k])
+        : (k === "approver1Name" || k === "cfoName") && typeof frNamaTtd === "function"
+          ? frNamaTtd(r.payload[k])
+          : r.payload[k],
+    ),
   );
   /* Kotak tersembunyi sudah terisi id-nya oleh isi() di atas, tapi
      kotak yang DITERLIHAT pengguna masih kosong — tanpa baris ini,
@@ -1476,8 +1495,13 @@ function mulaiUbahDocNum(id) {
     );
   }
   if (typeof setKendaraanExtra === "function" && String(r.doc_type || "").startsWith("do")) {
-    // Mobil kedua dst.; yang pertama sudah terisi lewat isi("vehicle") di atas
-    setKendaraanExtra((r.payload && r.payload.vehicleExtra) || []);
+    // Mobil kedua dst. + sopirnya; yang pertama sudah terisi lewat isi("vehicle") & isi("receivedBy") di atas
+    setKendaraanExtra((r.payload && r.payload.vehicleExtra) || [], (r.payload && r.payload.driverExtra) || []);
+  }
+  // Penanda tangan nomor lama vs bawaan: ikon tombol "Simpan penanda tangan" mengikuti
+  if (typeof ttdBawaanSegarkan === "function" && typeof TTD_BAWAAN_ISIAN !== "undefined") {
+    const jenisTtd = String(r.doc_type || "").startsWith("do") ? "do" : r.doc_type;
+    if (TTD_BAWAAN_ISIAN[jenisTtd]) ttdBawaanSegarkan(jenisTtd);
   }
   if (typeof setDoLines === "function" && String(r.doc_type || "").startsWith("do")) {
     setDoLines((r.payload && r.payload.items) || []);
@@ -1613,6 +1637,31 @@ const DN_NOMOR_TAGIHAN = [
    Billing tetap diperiksa, dan pengajuan vendor lain tetap diperiksa
    (juga terhadap nomor yang dipakai pengajuan vendor di daftar). */
 const dnTagihanBolehSama = (payee) => typeof fundInvoiceBolehSama === "function" && fundInvoiceBolehSama(payee);
+
+/* VENDOR BEREKENING -- vendor yang sama (daftar Aturan No. Invoice,
+   bawaannya JNE; JNE kini tidak memakai nomor invoice): isian No.
+   Invoice-nya NOMOR REKENING tujuan bayar. Labelnya jadi "No. Rekening"
+   dan isian Nama Bank (bawaan BWS, Bank Woori Saudara -- nilai HTML-nya,
+   jadi form yang dikosongkan kembali ke BWS) & No. Resi tampil di
+   sampingnya -- ketiganya ikut ke cetakan (Bank No. / Tracking No.),
+   Detail, dan kode Groupware (Bank Number / Bank Name / Tracking Number).
+   Vendor lain: keduanya tersembunyi & nonaktif, jadi tidak tersimpan
+   (readDocNumForm melewati isian nonaktif). */
+function dnSelaraskanRekening(panel) {
+  if (!panel || !panel.matches('[data-docnum-panel="fund"]')) return;
+  const payee = (panel.querySelector('[data-dn="payee"]') || {}).value || "";
+  // Billing dirujuk lewat Nomor Billing (isian No. Invoice tersembunyi): tanpa rekening
+  const jenis = (panel.querySelector('[data-dn="expenseType"]') || {}).value || "";
+  const rekening = dnTagihanBolehSama(payee) && !(typeof danaJenisBilling === "function" && danaJenisBilling(jenis));
+  const wadah = panel.querySelector(".dn-tagihan");
+  if (wadah) wadah.classList.toggle("is-rekening", rekening);
+  panel.querySelectorAll("[data-dn-rekening]").forEach((sel) => {
+    sel.hidden = !rekening;
+    sel.querySelectorAll("[data-dn]").forEach((isian) => {
+      isian.disabled = !rekening;
+    });
+  });
+}
 const dnTagihanDikecualikan = (form, field) => field === "invoiceNo" && dnTagihanBolehSama(form && form.payee);
 // Isian tagihan yang diperiksa untuk form ini: yang terisi dan tidak dikecualikan
 const dnJenisTagihan = (form) => DN_NOMOR_TAGIHAN.find((j) => dnNomorTagihan(form, j.field).length && !dnTagihanDikecualikan(form, j.field));
@@ -1817,7 +1866,7 @@ function dnPeriksaTagihanGandaLangsung(panel, muat) {
        memang diperiksa (kotaknya tidak tersembunyi). */
     const jenisBiaya = (panel.querySelector('[data-dn="expenseType"]') || {}).value;
     const kotakInvoice = panel.querySelector('[data-dn="invoiceNo"]');
-    if (jenisBiaya && jenisBiaya !== "Billing" && kotakInvoice && !kotakInvoice.disabled && typeof fundDokumenBersih === "function") {
+    if (jenisBiaya && !danaJenisBilling(jenisBiaya) && kotakInvoice && !kotakInvoice.disabled && typeof fundDokumenBersih === "function") {
       form.dokumen = fundDokumenBersih();
     }
     if (!dnJenisTagihan(form)) {
@@ -1978,6 +2027,7 @@ async function simpanUbahDocNum() {
     }
     if (error) throw dnGalatInvoiceSama(error, form);
     tersimpan = true;
+    dnSimpananBersih(); // riwayat yang tersimpan di memori tidak lagi benar
   } catch (err) {
     console.error(err);
     showToast(
@@ -2157,6 +2207,7 @@ async function submitDocNumRequest(opsi) {
       }
     }
 
+    dnSimpananBersih(); // nomor baru: halaman riwayat yang tersimpan di memori tidak lagi benar
     // Kabar realtime nomor ini gema tab ini sendiri -- riwayatnya sudah digambar ulang di bawah
     dnNomorSendiri.forEach((pada, nomor) => {
       if (Date.now() - pada > RT_JEDA.tulisSendiri) dnNomorSendiri.delete(nomor);
@@ -2429,6 +2480,9 @@ function isiOtomatisDariJadwal() {
 
    data-dn-when="Billing"  -> tampil hanya saat Jenis Pengeluaran Billing
    data-dn-when="!Billing" -> tampil untuk pilihan SELAIN itu
+   data-dn-when="A|B"      -> tampil bila pilihannya A atau B ("!A|B":
+                              selain keduanya) -- Billing & Billing SPTNP
+                              berbagi isian Nomor Billing & pungutan
 
    Yang disembunyikan juga di-disable, bukan cuma ditutup: isian
    tersembunyi yang tetap aktif akan ikut terkirim saat nomor
@@ -2445,13 +2499,13 @@ function syncDocNumConditional(panel) {
   if (!pilih) return;
   const nilai = pilih.value;
 
-  /* Billing selalu disetor ke kas negara -- diisikan otomatis supaya
+  /* Billing (juga Billing SPTNP) selalu disetor ke kas negara -- diisikan otomatis supaya
      tidak diketik ulang tiap kali. Hanya diisi kalau kotaknya KOSONG
      atau masih berisi isian otomatis sebelumnya: begitu pengguna
      mengetik sendiri, ketikannya tidak diganggu. */
   const kotakPayee = panel.querySelector('[data-dn="payee"]');
   if (kotakPayee) {
-    if (nilai === "Billing") {
+    if (danaJenisBilling(nilai)) {
       if (!kotakPayee.value.trim() || kotakPayee.dataset.autoFill === "1") {
         // Dropdown vendor: pilihannya dipastikan ada dulu (fund-vendor.js)
         kotakPayee.value = typeof fundVendorPastikan === "function" ? fundVendorPastikan("KAS NEGARA", kotakPayee) : "KAS NEGARA";
@@ -2479,6 +2533,7 @@ function syncDocNumConditional(panel) {
      vendornya (fund-docno.js), Rincian bawaan pada jenis & vendornya
      (fund-rincian.js). */
   fundSelaraskanDocNo(panel);
+  dnSelaraskanRekening(panel);
   // Doc No bawaan yang masih utuh ikut bulan berjalan; keterangannya ikut isi kotak
   if (typeof fundIsiDocNoBawaan === "function") fundIsiDocNoBawaan(panel, false);
   if (typeof fundSelaraskanRincian === "function") fundSelaraskanRincian(panel);
@@ -2559,6 +2614,8 @@ function resetDocNumForm(typeKey, opts) {
   syncDocNumConditional(panel);
   // Pihak invoice: tanda "= Penjual" & keterangan Skema Invoice mengikuti isian bawaan
   if (typeKey === "invoice" && typeof invPihakSegarkan === "function") invPihakSegarkan();
+  // Tombol "Simpan penanda tangan": isian kembali = bawaan (ttd-bawaan.js)
+  if (typeof ttdBawaanSegarkan === "function" && typeof TTD_BAWAAN_ISIAN !== "undefined" && TTD_BAWAAN_ISIAN[typeKey]) ttdBawaanSegarkan(typeKey);
 }
 
 /* Pilihan jenis pengeluaran menentukan isian mana yang tampil. */
@@ -2604,6 +2661,8 @@ document.addEventListener("input", (e) => {
   // Nama vendor berubah -> keterangan Doc No (dicetak / hanya tersimpan) & isian CFO ikut menyesuaikan
   const panelVendor = el.closest("[data-docnum-panel]");
   fundSelaraskanDocNo(panelVendor);
+  // Vendor berekening (JNE): label No. Rekening & isian Nama Bank
+  dnSelaraskanRekening(panelVendor);
   /* ... dan tanda "sudah diajukan" dihitung ulang: No. Invoice JNE tidak
      diperiksa (dnTagihanBolehSama), jadi berganti ke atau dari JNE
      melepas atau memasang tandanya -- tanpa harus mengetik ulang nomornya. */
@@ -2692,6 +2751,233 @@ const DN_KOLOM_PO = [
 let docNumPage = 1;
 let docNumPageSize = 10;
 
+/* ==================================================================
+   PERPINDAHAN DATA SECEPAT KILAT (riwayat Nomor Dokumen)
+
+   Tiap pindah tab, sub-tab, halaman, kata kunci, atau saringan dulu
+   SELALU menunggu satu perjalanan ke database (±250-800 ms) sebelum
+   apa pun berubah di layar. Sekarang tiga lapis:
+
+   1. SIMPANAN (dnSimpanan) -- tiap halaman yang pernah dimuat disimpan
+      per KEADAAN (tab|deret|sub-tab|kata kunci|halaman|ukuran|status
+      bayar|rentang|tanggal dasar). Kembali ke keadaan itu = digambar
+      SEKETIKA dari memori, lalu dibaca ulang diam-diam bila umurnya
+      sudah lewat DN_SIMPANAN_SEGAR_MS -- digambar ulang hanya kalau
+      isinya memang berubah (stale-while-revalidate).
+   2. DIAMBIL LEBIH DULU (prefetch) -- halaman berikutnya diambil saat
+      peramban senggang; tab / sub-tab / tombol halaman diambil begitu
+      kursor menyentuhnya (pointerover, fokus keyboard, sentuhan) --
+      ±150-300 ms sebelum klik, biasanya cukup untuk menutup seluruh
+      waktu tunggunya. Tab jenis lain halaman 1-nya diambil sekali saat
+      halaman ini pertama dibuka.
+   3. PERMINTAAN DIPAKAI BERSAMA (dnSedangDiambil) -- klik yang jatuh saat
+      prefetch untuk keadaan yang sama masih berjalan menunggu jawaban
+      itu, bukan mengirim permintaan kedua.
+
+   KEBENARAN DATA: simpanan DIKOSONGKAN setiap kali nomor ditulis dari
+   aplikasi ini (terbit, ubah isian, tandai lunas, hapus, name plate) dan
+   setiap kabar realtime dari pengguna lain (dnSimpananBersih) -- data
+   yang sudah berubah tidak pernah digambar dari simpanan. Versi simpanan
+   ikut naik: jawaban permintaan yang dikirim SEBELUM penulisan tidak
+   disimpan dan tidak dipakai bersama. Tombol Muat Ulang melewati
+   simpanan (opsi.segar).
+================================================================== */
+const DN_SIMPANAN_MAKS = 60; // halaman yang disimpan (yang paling lama tak dipakai dibuang)
+const DN_SIMPANAN_SEGAR_MS = 15000; // lebih muda dari ini: dipercaya tanpa dibaca ulang
+const dnSimpanan = new Map(); // kunci keadaan -> { data, count, waktu, versi }
+const dnSedangDiambil = new Map(); // kunci#versi -> janji jawaban
+let dnSimpananVersi = 0;
+/* Sakelar: simpanan & prefetch dimatikan -- tiap gambar membaca database
+   (uji DOM yang mengganti isi database tiruan di tengah tes). */
+let dnSimpananMati = false;
+
+// Keadaan riwayat yang menentukan isi tabel -- juga kunci simpanannya
+function dnKunciRiwayat() {
+  return [docNumActiveTab, docNumHistoryKey(), docNumHistorySub || "", docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang.join("~"), docNumDasarTanggal].join("|");
+}
+// Pencarian nominal (angka) dihitung di aplikasi atas seluruh riwayat -- tidak disimpan
+const dnRiwayatNominal = (jenisKey) => (jenisKey === "fund" || jenisKey === "invoice" || jenisKey === "po") && dnAngkaCari(docNumCari).length > 0;
+const dnTandaData = (data, count) => `${count || 0}|${JSON.stringify(data || [])}`;
+
+function dnSimpananAmbil(kunci) {
+  if (dnSimpananMati) return null;
+  const isi = dnSimpanan.get(kunci);
+  if (!isi || isi.versi !== dnSimpananVersi) return null;
+  // Dipakai lagi = paling baru (urutan Map = urutan pakai, yang terdepan dibuang lebih dulu)
+  dnSimpanan.delete(kunci);
+  dnSimpanan.set(kunci, isi);
+  return isi;
+}
+function dnSimpananTaruh(kunci, isi) {
+  if (dnSimpananMati) return;
+  dnSimpanan.delete(kunci);
+  dnSimpanan.set(kunci, isi);
+  while (dnSimpanan.size > DN_SIMPANAN_MAKS) dnSimpanan.delete(dnSimpanan.keys().next().value);
+}
+/* Dipanggil tiap penulisan & kabar realtime. `lunak`: kabar realtime --
+   salinan Summary & Report sudah dipasangi baris barunya
+   (fsumTerapkanBaris / lapTerapkanBaris), jadi cukup halaman riwayatnya. */
+function dnSimpananBersih(lunak) {
+  dnSimpanan.clear();
+  dnSimpananVersi++;
+  // Tab & sub-tab lain diambil lagi saat senggang sesudah gambar berikutnya
+  dnTabLainDiambil = false;
+  dnSubTabDiambil.clear();
+  if (lunak) return;
+  if (typeof fsumLupakan === "function") fsumLupakan();
+  if (typeof lapLupakan === "function") lapLupakan();
+}
+
+// Kueri riwayat dengan semua saringan kecuali kata kunci & halaman -- dibuat baru tiap dipakai
+function dnKueriDasar() {
+  const kueri = supabaseClient
+    .from("document_numbers")
+    .select(
+      /* doc_type WAJIB ikut diambil.
+
+         Tanpanya, tiap baris di layar punya doc_type undefined —
+         dan siapa pun yang menanyakannya akan mendapat jawaban yang
+         kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
+         undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
+         melompat ke panel Invoice dan mengisi form yang keliru.
+
+         Baris ini memang sudah disaring per jenis di kueri, tapi
+         datanya tetap harus membawa jenisnya sendiri — yang menyaring
+         dan yang membaca bukan bagian kode yang sama. */
+      /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
+         lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
+         tebakan dari ekor nomor invoice, yang untuk pola Kumho
+         menghasilkan tanggalnya. */
+      "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
+      { count: "exact" },
+    )
+    .eq("doc_type", docNumHistoryKey())
+    .filter(...docNumPayloadFilter());
+  return dnTerapkanSaringTanggal(dnTerapkanSaringBayar(kueri));
+}
+
+/* Satu halaman untuk keadaan yang SEDANG berlaku di variabel riwayat.
+   Kuerinya disusun SEGERA (sinkron) -- dnDenganKeadaan bergantung pada
+   itu untuk prefetch keadaan lain. Jawabannya disimpan bila tidak ada
+   penulisan selama menunggu (versi sama). */
+function dnAmbilHalaman(kunci) {
+  const versi = dnSimpananVersi;
+  const kunciJalan = `${kunci}#${versi}`;
+  if (!dnSimpananMati && dnSedangDiambil.has(kunciJalan)) return dnSedangDiambil.get(kunciJalan);
+  const dari = (docNumPage - 1) * docNumPageSize;
+  let kueri = dnKueriDasar();
+  const saringCari = dnFilterCari(docNumCari);
+  if (saringCari) kueri = kueri.or(saringCari);
+  const janji = Promise.resolve(kueri.order("created_at", { ascending: false }).range(dari, dari + docNumPageSize - 1))
+    .then((hasil) => {
+      if (hasil.error) throw hasil.error;
+      const isi = { data: Array.isArray(hasil.data) ? hasil.data : [], count: hasil.count || 0, waktu: Date.now(), versi };
+      if (versi === dnSimpananVersi) dnSimpananTaruh(kunci, isi);
+      return isi;
+    })
+    .finally(() => dnSedangDiambil.delete(kunciJalan));
+  if (!dnSimpananMati) dnSedangDiambil.set(kunciJalan, janji);
+  return janji;
+}
+
+/* Menjalankan fn dengan variabel riwayat diganti sementara -- untuk
+   menyusun kunci & kueri keadaan LAIN (prefetch). Penyusunan kueri
+   sinkron, jadi tidak ada kode lain yang sempat melihat nilai pinjaman. */
+function dnDenganKeadaan(ubah, fn) {
+  const lama = [docNumActiveTab, docNumHistorySub, docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang, docNumDasarTanggal];
+  ({ tab: docNumActiveTab = docNumActiveTab, sub: docNumHistorySub = docNumHistorySub, cari: docNumCari = docNumCari, hal: docNumPage = docNumPage,
+    bayar: docNumSaringBayar = docNumSaringBayar, rentang: docNumRentang = docNumRentang, dasar: docNumDasarTanggal = docNumDasarTanggal } = ubah);
+  try {
+    return fn();
+  } finally {
+    [docNumActiveTab, docNumHistorySub, docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang, docNumDasarTanggal] = lama;
+  }
+}
+
+/* Sakelar: prefetch saja yang dimatikan (uji DOM -- database tiruannya
+   mencatat kueri TERAKHIR, prefetch di latar akan menimpa catatan itu). */
+let dnPrefetchMati = false;
+// Peramban senggang (requestIdleCallback; Safari: jeda pendek)
+const dnSaatSenggang = (fn) => (typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 1200 }) : setTimeout(fn, 150));
+
+/* Mengambil lebih dulu satu keadaan (perubahan atas keadaan sekarang).
+   Summary & Report: seluruh pengajuan (fsumAmbilDiam). Yang sudah ada &
+   masih segar, atau pencarian nominal, dilewati. */
+function dnPrefetch(ubah) {
+  if (dnPrefetchMati || dnSimpananMati || typeof supabaseClient === "undefined" || !supabaseClient) return;
+  if (typeof navigator !== "undefined" && navigator.connection && navigator.connection.saveData) return;
+  try {
+    dnDenganKeadaan(ubah, () => {
+      if (docNumActiveTab === "fund" && ((typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) || (typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB))) {
+        if (typeof fsumAmbilDiam === "function") fsumAmbilDiam();
+        return;
+      }
+      if (dnRiwayatNominal(resolveDocNumType(docNumActiveTab).key)) return;
+      const kunci = dnKunciRiwayat();
+      const ada = dnSimpanan.get(kunci);
+      if (ada && ada.versi === dnSimpananVersi && Date.now() - ada.waktu < DN_SIMPANAN_SEGAR_MS) return;
+      dnAmbilHalaman(kunci).catch(() => {});
+    });
+  } catch (e) {
+    /* Prefetch hanya mempercepat -- gagal menyusunnya tidak mengganggu apa pun */
+  }
+}
+
+/* Sesudah satu halaman tergambar: halaman berikutnya diambil saat senggang.
+   Halaman 1 tanpa saringan: sub-tab jenis ini juga (sekali per jenis).
+   Pertama kali halaman ini dibuka: halaman 1 tab jenis lain juga. */
+let dnTabLainDiambil = false;
+const dnSubTabDiambil = new Set();
+function dnPrefetchLanjutan(total) {
+  const hal = docNumPage;
+  const tab = docNumActiveTab;
+  if (hal * docNumPageSize < (total || 0)) dnSaatSenggang(() => { if (docNumPage === hal && docNumActiveTab === tab) dnPrefetch({ hal: hal + 1 }); });
+  const tanpaSaringan = hal === 1 && !docNumHistorySub && !docNumCari && !docNumSaringBayar && !docNumRentang[0] && !docNumRentang[1];
+  if (tanpaSaringan && !dnSubTabDiambil.has(tab)) {
+    dnSubTabDiambil.add(tab);
+    dnSaatSenggang(() => {
+      if (docNumActiveTab !== tab) return;
+      document.querySelectorAll("#docNumSubTabs [data-dn-subtab]").forEach((el) => {
+        const sub = el.dataset.dnSubtab;
+        // Summary & Report = seluruh pengajuan (berat): hanya saat kursor menyentuhnya
+        if (!sub || (typeof FSUM_TAB !== "undefined" && sub === FSUM_TAB) || (typeof LAPORAN_TAB !== "undefined" && sub === LAPORAN_TAB)) return;
+        dnPrefetch({ sub, hal: 1 });
+      });
+    });
+  }
+  if (dnTabLainDiambil) return;
+  dnTabLainDiambil = true;
+  dnSaatSenggang(() => {
+    document.querySelectorAll("[data-docnum-tab]").forEach((tab) => {
+      const kunciTab = tab.dataset.docnumTab;
+      if (kunciTab !== docNumActiveTab && dnTabBoleh(kunciTab)) dnPrefetch(dnKeadaanTabBaru(kunciTab));
+    });
+  });
+}
+// Keadaan riwayat sesudah pindah ke tab jenis lain -- sama dengan showDocNumTab
+const dnKeadaanTabBaru = (tab) => ({ tab, sub: null, cari: "", hal: 1, bayar: "", rentang: ["", ""], dasar: "terbit" });
+
+/* Niat menekan: kursor menyentuh / fokus keyboard / jari menyentuh tab,
+   sub-tab, atau tombol halaman -- keadaan tujuannya diambil saat itu. */
+let dnNiatTerakhir = null;
+function dnPrefetchNiat(e) {
+  const el = e.target && e.target.closest && e.target.closest("[data-docnum-tab], [data-dn-subtab], [data-dnpage], #dnPagePrev, #dnPageNext");
+  if (!el || el === dnNiatTerakhir || el.disabled) return;
+  dnNiatTerakhir = el;
+  if (el.dataset.docnumTab) {
+    if (el.dataset.docnumTab !== docNumActiveTab && dnTabBoleh(el.dataset.docnumTab)) dnPrefetch(dnKeadaanTabBaru(el.dataset.docnumTab));
+  } else if (el.dataset.dnSubtab != null) {
+    if ((el.dataset.dnSubtab || null) !== (docNumHistorySub || null)) dnPrefetch({ sub: el.dataset.dnSubtab, hal: 1 });
+  } else if (el.dataset.dnpage) {
+    dnPrefetch({ hal: parseInt(el.dataset.dnpage, 10) || 1 });
+  } else {
+    dnPrefetch({ hal: el.id === "dnPagePrev" ? Math.max(1, docNumPage - 1) : docNumPage + 1 });
+  }
+}
+document.addEventListener("pointerover", dnPrefetchNiat, { passive: true });
+document.addEventListener("focusin", dnPrefetchNiat);
+document.addEventListener("touchstart", dnPrefetchNiat, { passive: true });
+
 /* opsi.diam: digambar ulang DI LATAR (pembaruan realtime, lihat bagian
    akhir berkas ini) -- tanpa "Memuat…" dan tanpa mengosongkan halaman
    dulu. Summary & Report cukup dihitung ulang dari salinannya yang sudah
@@ -2703,6 +2989,8 @@ let dnRiwayatKe = 0;
 
 async function renderDocNumHistory(opsi) {
   const diam = !!(opsi && opsi.diam);
+  // segar: lewati simpanan (tombol Muat Ulang)
+  const segar = !!(opsi && opsi.segar);
   const box = $("#docNumHistory");
   const bar = $("#docNumPagination");
   if (!box) return;
@@ -2716,6 +3004,12 @@ async function renderDocNumHistory(opsi) {
   const kunciIsi = `${docNumActiveTab}|${docNumHistoryKey()}|${docNumHistorySub || ""}`;
   renderDocNumSubTabs();
   dnTampilkanSaringBayar();
+  const tabelLain = docNumActiveTab === "fund" && ((typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) || (typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB));
+  // Summary / Report menggambar panelnya sendiri di kotak ini: catatan "tabel yang tampil" tidak berlaku lagi
+  if (tabelLain) {
+    dnTergambar = null;
+    delete box.dataset.keadaan;
+  }
   /* Tab Summary TIDAK memakai kueri berhalaman di bawah: ia butuh
      seluruh pengajuan, dan penanda tab-nya bukan jenis pengeluaran --
      dipakai sebagai saringan payload, hasilnya akan selalu kosong. */
@@ -2729,7 +3023,24 @@ async function renderDocNumHistory(opsi) {
     if (diam && typeof lapGambarUlangDiam === "function" && lapGambarUlangDiam()) return;
     return renderLaporanBiaya(box, bar);
   }
-  if (!diam) {
+  const jenis = resolveDocNumType(docNumActiveTab);
+  const kunci = dnKunciRiwayat();
+  /* SIMPANAN (stale-while-revalidate, dnSimpanan): keadaan yang pernah
+     dimuat -- tab, sub-tab, halaman, kata kunci, saringan -- langsung
+     digambar dari memori TANPA menunggu database; sesudahnya dibaca ulang
+     diam-diam bila sudah lewat DN_SIMPANAN_SEGAR_MS, dan digambar ulang
+     hanya kalau isinya memang berubah. Kabar realtime (`diam`) selalu
+     membaca ulang. Pencarian nominal tidak disimpan (dihitung di aplikasi
+     atas seluruh riwayat). */
+  const nominal = dnRiwayatNominal(jenis.key);
+  const simpan = !nominal && !segar ? dnSimpananAmbil(kunci) : null;
+  if (simpan) {
+    // Yang tampil sudah persis ini (keadaan, isi & bahasa sama): tidak digambar ulang
+    if (!dnSudahTergambar(box, kunci, simpan) && dnGambarRiwayat(box, jenis, simpan.data, simpan.count, kunciIsi, kunci) === "ulang") return;
+    selesaiMemuat();
+    dnPrefetchLanjutan(simpan.count);
+    if (!diam && Date.now() - simpan.waktu < DN_SIMPANAN_SEGAR_MS) return;
+  } else if (!diam) {
     /* Tabel yang sedang tampil DIPERTAHANKAN -- redup & tak bisa diklik
        (.is-memuat, docnum.css) -- sampai data barunya tiba. Dulu diganti
        satu baris "Memuat…": kotaknya mengempis dari ±1.500px ke 40px lalu
@@ -2743,74 +3054,72 @@ async function renderDocNumHistory(opsi) {
     } else {
       box.innerHTML = `<div class="docnum-empty">${tt("Memuat…", "Loading…")}</div>`;
       if (bar) bar.innerHTML = "";
+      dnTergambar = null;
     }
     box.setAttribute("aria-busy", "true");
   }
 
-  const jenis = resolveDocNumType(docNumActiveTab);
   try {
-    // Saringan saat kueri dikirim: jawaban yang datang sesudah saringannya berubah dibuang
-    const keadaan = () =>
-      [docNumActiveTab, docNumHistorySub, docNumCari, docNumPage, docNumPageSize, docNumSaringBayar, docNumRentang.join("~"), docNumDasarTanggal].join("|");
-    const keadaanKirim = keadaan();
-    const dari = (docNumPage - 1) * docNumPageSize;
-    // Kueri dengan semua saringan kecuali kata kunci & halaman -- dibuat baru tiap dipakai
-    const kueriDasar = () => {
-      const kueri = supabaseClient
-        .from("document_numbers")
-        .select(
-          /* doc_type WAJIB ikut diambil.
-
-             Tanpanya, tiap baris di layar punya doc_type undefined —
-             dan siapa pun yang menanyakannya akan mendapat jawaban yang
-             kelihatan masuk akal tapi salah. Tombol Perbaiki memetakan
-             undefined ke tab bawaan, jadi menekan edit pada Surat Jalan
-             melompat ke panel Invoice dan mengisi form yang keliru.
-
-             Baris ini memang sudah disaring per jenis di kueri, tapi
-             datanya tetap harus membawa jenisnya sendiri — yang menyaring
-             dan yang membaca bukan bagian kode yang sama. */
-          /* `seq` dipakai sebagai bawaan Nomor SI pada cetak CIPL —
-             lihat ciplNoSiBawaan(). Tanpa kolom ini nomor SI jatuh ke
-             tebakan dari ekor nomor invoice, yang untuk pola Kumho
-             menghasilkan tanggalnya. */
-          "id, doc_type, doc_number, doc_date, requester, department, seq, payload, created_at",
-          { count: "exact" },
-        )
-        .eq("doc_type", docNumHistoryKey())
-        .filter(...docNumPayloadFilter());
-      return dnTerapkanSaringTanggal(dnTerapkanSaringBayar(kueri));
-    };
     let data;
     let count;
-    if ((jenis.key === "fund" || jenis.key === "invoice" || jenis.key === "po") && dnAngkaCari(docNumCari).length) {
+    if (nominal) {
       /* Nominal: nilainya dihitung di aplikasi -- seluruh riwayat (saringan
          lain tetap berlaku) dicocokkan di sini, lalu dibagi per halaman. */
-      const cocok = (await dnAmbilSemuaRiwayat(kueriDasar)).filter((r) => dnCocokCari(r, jenis.key, docNumCari));
+      const dari = (docNumPage - 1) * docNumPageSize;
+      const cocok = (await dnAmbilSemuaRiwayat(dnKueriDasar)).filter((r) => dnCocokCari(r, jenis.key, docNumCari));
       count = cocok.length;
       data = cocok.slice(dari, dari + docNumPageSize);
     } else {
-      // Ambil HANYA sebanyak satu halaman
-      let kueri = kueriDasar();
-      const saringCari = dnFilterCari(docNumCari);
-      if (saringCari) kueri = kueri.or(saringCari);
-      const hasil = await kueri.order("created_at", { ascending: false }).range(dari, dari + docNumPageSize - 1);
-      if (hasil.error) throw hasil.error;
-      ({ data, count } = hasil);
+      // Ambil HANYA sebanyak satu halaman (permintaan yang sama sedang jalan -- mis. dari prefetch -- dipakai bersama)
+      ({ data, count } = await dnAmbilHalaman(kunci));
     }
-    if (keadaan() !== keadaanKirim || ke !== dnRiwayatKe) return;
+    // Saringan berubah selama menunggu / ada permintaan yang lebih baru: jawaban ini dibuang
+    if (dnKunciRiwayat() !== kunci || ke !== dnRiwayatKe) return;
+    // Sama persis dengan yang sudah tergambar dari simpanan: tidak digambar ulang (tanpa kedip)
+    if (simpan && dnTandaData(data, count) === dnTandaData(simpan.data, simpan.count)) return;
+    if (dnGambarRiwayat(box, jenis, data, count, kunciIsi, kunci) === "ulang") return;
+    if (!simpan) dnPrefetchLanjutan(count);
+  } catch (err) {
+    console.error(err);
+    if (ke !== dnRiwayatKe) return;
+    // Tabel dari simpanan tetap tampil: gagal membaca ulang diam-diam bukan alasan menghapusnya
+    if (simpan) return;
+    dnTergambar = null;
+    box.innerHTML = `<div class="docnum-empty">${tt("Gagal memuat riwayat", "Failed to load history")}: ${escapeHtml(err.message || t("s.kesalahan.tidak.diketahui"))}</div>`;
+  } finally {
+    selesaiMemuat();
+  }
+}
 
+/* Menggambar tabel riwayat dari baris yang sudah ada -- dari database
+   atau dari simpanan. "ulang" = halaman terakhir ternyata kosong (data
+   terhapus): halamannya diganti & riwayat digambar ulang. */
+let dnTergambar = null; // { kunci, tanda, bahasa } isi tabel yang sedang tampil
+const dnBahasa = () => (typeof activeLang !== "undefined" ? activeLang : "");
+const dnSudahTergambar = (box, kunci, isi) =>
+  !!dnTergambar && dnTergambar.kunci === kunci && dnTergambar.bahasa === dnBahasa() && box.dataset.keadaan === kunci &&
+  !!box.querySelector(".docnum-history-wrap, .docnum-empty") && dnTergambar.tanda === dnTandaData(isi.data, isi.count);
+function dnGambarRiwayat(box, jenis, data, count, kunciIsi, kunci) {
+  data = Array.isArray(data) ? data : [];
+  dnTergambar = { kunci, tanda: dnTandaData(data, count), bahasa: dnBahasa() };
+  {
     /* Disimpan supaya tombol cetak tidak perlu memanggil database lagi —
        barisnya sudah ada di layar. Sengaja dipastikan berupa LARIK:
-       kalau kueri mengembalikan null, .find() akan meledak saat ditekan. */
-    docNumHistoryRows = Array.isArray(data) ? data : [];
+       kalau kueri mengembalikan null, .find() akan meledak saat ditekan.
+       Salinan larik: simpanan tidak ikut berubah bila daftar ini disentuh. */
+    docNumHistoryRows = data.slice();
     box.dataset.isi = kunciIsi;
+    box.dataset.keadaan = kunci;
+    // Rel "Terakhir Terbit": empat nomor teratas -- hanya dari bacaan tanpa saringan
+    if (docNumPage === 1 && !docNumCari && !docNumSaringBayar && !docNumRentang[0] && !docNumRentang[1])
+      dnRelTerakhirGambar(docNumHistoryRows.slice(0, 4), jenis);
 
     const total = count || 0;
     // Halaman terakhir bisa jadi kosong setelah data dihapus
     if (total > 0 && (!data || !data.length) && docNumPage > 1) {
       docNumPage = Math.max(1, Math.ceil(total / docNumPageSize));
-      return renderDocNumHistory();
+      renderDocNumHistory();
+      return "ulang";
     }
 
     if (!total) {
@@ -2941,8 +3250,16 @@ async function renderDocNumHistory(opsi) {
                     jenis.key === "fund"
                       ? `<button type="button" class="icon-btn" data-print-fund="${r.id}"
                                  title="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}" aria-label="${tt("Cetak Form Pengajuan Dana", "Print Fund Request Form")}"><i class="bi bi-printer"></i></button>
-                         <button type="button" class="icon-btn" data-copy-invsum="${r.id}"
-                                 title="${tt("Salin untuk Invoice Summary (tempel di kolom INVOICE DATE)", "Copy for Invoice Summary (paste into the INVOICE DATE column)")}" aria-label="${tt("Salin untuk Invoice Summary", "Copy for Invoice Summary")}"><i class="bi bi-clipboard-data"></i></button>`
+                         <div class="dropdown dn-salin-ringkas">
+                           <button type="button" class="icon-btn" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
+                                   title="${tt("Salin ringkasan invoice", "Copy invoice summary")}" aria-label="${tt("Salin ringkasan invoice", "Copy invoice summary")}"><i class="bi bi-clipboard-data"></i></button>
+                           <ul class="dropdown-menu dropdown-menu-end copy-template-menu">
+                             <li><button type="button" class="dropdown-item" data-copy-invsum="${r.id}"
+                                         title="${tt("Baris INVOICE SUMMARY -- tempel di kolom INVOICE DATE", "INVOICE SUMMARY row -- paste into the INVOICE DATE column")}"><i class="bi bi-table" aria-hidden="true"></i> Inv Sum</button></li>
+                             <li><button type="button" class="dropdown-item" data-copy-groupware="${r.id}"
+                                         title="${tt("Kode HTML untuk ditempel di Groupware", "HTML code to paste into Groupware")}"><i class="bi bi-code-slash" aria-hidden="true"></i> Groupware</button></li>
+                           </ul>
+                         </div>`
                       : ""
                   }
                   ${
@@ -2993,13 +3310,8 @@ async function renderDocNumHistory(opsi) {
       </table>
       </div>`;
     renderDocNumPagination(total);
-  } catch (err) {
-    console.error(err);
-    if (ke !== dnRiwayatKe) return;
-    box.innerHTML = `<div class="docnum-empty">${tt("Gagal memuat riwayat", "Failed to load history")}: ${escapeHtml(err.message || t("s.kesalahan.tidak.diketahui"))}</div>`;
-  } finally {
-    selesaiMemuat();
   }
+  return "";
 }
 
 // Memakai kelas & susunan yang SAMA dengan paginasi daftar jadwal (.pagination-bar
@@ -3057,6 +3369,16 @@ $("#docNumPagination")?.addEventListener("change", (e) => {
 });
 
 /* HAPUS SATU NOMOR */
+/* Menu salin Inv Sum / Groupware terbuka: sel aksinya (menempel, ber-z-index)
+   naik di atas baris lain -- lewat kelas, bukan :has(.dropdown-menu.show). */
+$("#docNumHistory")?.addEventListener("show.bs.dropdown", (e) => {
+  const sel = e.target.closest && e.target.closest("td.dn-act");
+  if (sel) sel.classList.add("is-menu-buka");
+});
+$("#docNumHistory")?.addEventListener("hidden.bs.dropdown", (e) => {
+  const sel = e.target.closest && e.target.closest("td.dn-act");
+  if (sel) sel.classList.remove("is-menu-buka");
+});
 $("#docNumHistory")?.addEventListener("click", (e) => {
   const ubah = e.target.closest("[data-edit-num]");
   if (ubah) {
@@ -3127,6 +3449,7 @@ $("#docNumHistory")?.addEventListener("click", (e) => {
           p_id: id,
         });
         if (error) throw error;
+        dnSimpananBersih();
         showToast(t("w.nomor.dihapus", { label }), "success");
         refreshDocNumPreview(docNumActiveTab);
         renderDocNumHistory();
@@ -3189,6 +3512,7 @@ function showDocNumTab(key) {
 
   $("#docNumResult").classList.add("d-none");
   $("#docNumHint").textContent = "";
+  dnRelSalin();
   // Kotak "Aturan Doc No" & "Aturan No. Invoice" hanya milik Pengajuan Dana
   fundDocNoTampilkanKotak(active);
   if (typeof fundInvoiceTampilkanKotak === "function") fundInvoiceTampilkanKotak(active);
@@ -3269,7 +3593,9 @@ $("#btnDocNumReset")?.addEventListener("click", () => {
 });
 $("#btnDocNumRefresh")?.addEventListener("click", () => {
   refreshDocNumPreview(docNumActiveTab);
-  renderDocNumHistory();
+  // Muat Ulang = minta yang terbaru dari database: simpanan dilewati & dikosongkan
+  dnSimpananBersih();
+  renderDocNumHistory({ segar: true });
 });
 $("#btnCopyDocNum")?.addEventListener("click", async () => {
   const nomor = $("#docNumResultNumber").textContent.trim();
@@ -3299,25 +3625,69 @@ const DN_KOLOM_UTAMA = {
   get letter() { return tt("Perihal", "Subject"); },
 };
 
-/* Ketikan di kotak cari: ditunda 300ms supaya tiap huruf tidak
-   memanggil database. Di tab Summary datanya sudah termuat semua, jadi
+/* Ketikan di kotak cari: ditunda 250ms supaya tiap huruf tidak
+   memanggil database (kata kunci yang pernah dicari langsung dari
+   simpanan). Di tab Summary datanya sudah termuat semua, jadi
    cukup menyaring ulang di tempat -- tanpa memuat ulang. */
 let dnCariTunda = null;
+function dnCariJalankan(nilai) {
+  docNumCari = String(nilai || "").trim();
+  if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
+    if (typeof fsumGambarHasil === "function") fsumGambarHasil();
+    return;
+  }
+  // Laporan tidak memakai kotak cari: angkanya selalu seluruh pengajuan
+  if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) return;
+  docNumPage = 1;
+  renderDocNumHistory();
+}
 document.addEventListener("input", (e) => {
   if (!e.target || e.target.id !== "docNumSearch") return;
   clearTimeout(dnCariTunda);
-  dnCariTunda = setTimeout(() => {
-    docNumCari = e.target.value.trim();
-    if (docNumActiveTab === "fund" && typeof FSUM_TAB !== "undefined" && docNumHistorySub === FSUM_TAB) {
-      if (typeof fsumGambarHasil === "function") fsumGambarHasil();
-      return;
-    }
-    // Laporan tidak memakai kotak cari: angkanya selalu seluruh pengajuan
-    if (docNumActiveTab === "fund" && typeof LAPORAN_TAB !== "undefined" && docNumHistorySub === LAPORAN_TAB) return;
-    docNumPage = 1;
-    renderDocNumHistory();
-  }, 300);
+  /* Tanpa jeda: kotak dikosongkan (kembali ke daftar biasa -- biasanya
+     sudah di simpanan) atau kata kuncinya sudah pernah dicari. */
+  const kata = e.target.value.trim();
+  const segera = !kata || dnDenganKeadaan({ cari: kata, hal: 1 }, () => !!dnSimpananAmbil(dnKunciRiwayat()));
+  dnCariTunda = setTimeout(() => dnCariJalankan(e.target.value), segera ? 0 : 250);
 });
+// Enter di kotak cari: dicari SEKARANG, tanpa menunggu jeda ketikan
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || !e.target || e.target.id !== "docNumSearch" || e.isComposing) return;
+  e.preventDefault();
+  clearTimeout(dnCariTunda);
+  dnCariJalankan(e.target.value);
+});
+
+/* Ctrl/⌘ + S di halaman Nomor Dokumen = TERBITKAN NOMOR (tampilan
+   Ajukan), atau SIMPAN PERUBAHAN selama pop-up Ubah Isian terbuka --
+   pintasan Simpan yang sama dengan form jadwal (modal-fields.js) & Name
+   Plate. Tiap pendengar hanya bertindak di halamannya sendiri, jadi
+   tidak saling mengganggu; Ctrl+Enter (sisip baris rincian) & Enter
+   (baris berikutnya) tetap milik tabelnya.
+
+   Sama persis dengan menekan tombolnya: pemeriksaan hak, isian wajib,
+   dan tagihan ganda tetap berjalan. Tombol yang DITAHAN (e.repeat)
+   tidak menerbitkan dua kali, dan selama nomor sedang diterbitkan
+   tombolnya nonaktif (docNumBusy) -- tekanan berikutnya diabaikan.
+   Kotak dialog lain yang terbuka (konfirmasi, cetak): tidak terjadi
+   apa-apa. Tanpa pintasan ini peramban menawarkan menyimpan halaman. */
+function dnPintasanSimpan(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || (e.key !== "s" && e.key !== "S")) return;
+  if (document.documentElement.dataset.halaman !== "docnum") return;
+  const halaman = document.getElementById("viewDocNum");
+  if (!halaman || halaman.classList.contains("d-none")) return;
+  e.preventDefault();
+  if (e.repeat || e.isComposing) return;
+  const ubah = document.getElementById("dnEditModal");
+  const tombol = ubah && ubah.classList.contains("show")
+    ? document.getElementById("btnDnEditSimpan")
+    : document.querySelector(".modal.show") || halaman.classList.contains("dn-lihat-riwayat")
+      ? null
+      : document.getElementById("btnDocNumSubmit");
+  if (!tombol || tombol.disabled || docNumBusy) return;
+  tombol.click();
+}
+document.addEventListener("keydown", dnPintasanSimpan);
 
 document.addEventListener("change", (e) => {
   if (!e.target || e.target.id !== "docNumBayar") return;
@@ -3433,6 +3803,10 @@ async function dnRtProses() {
     terkena.push({ id: k.id, docType, baris, kabar: k });
   }
   if (!sambung && !terkena.length) return;
+  /* Ada nomor yang berubah (atau kabar selama terputus hilang): halaman
+     riwayat di simpanan tidak lagi bisa dipercaya. Summary & Report sudah
+     dipasangi barisnya di atas -- cukup halaman riwayatnya (lunak). */
+  dnSimpananBersih(!sambung);
   const kenaDana = sambung || terkena.some((x) => x.docType === "fund" || x.docType == null);
 
   // 2. Biaya per kiriman di panel detail jadwal yang sedang terbuka
@@ -3483,3 +3857,90 @@ async function dnRtProses() {
   if (typeof dndSegarkan === "function") terkena.forEach((x) => dndSegarkan(x.id, !x.baris));
 }
 
+/* ==================================================================
+   DESAIN PETA LAUT: TAMPILAN AJUKAN / RIWAYAT, PENGATURAN NOMOR, REL
+
+   Ajukan  = form jenis yang aktif + rel penerbitan di kanannya (di
+             ponsel: bilah nomor & tombol Terbitkan menempel di bawah).
+   Riwayat = seluruh nomor terbit, selebar halaman (komponen riwayat
+             yang sama, renderDocNumHistory).
+   Pengaturan Nomor (Atur Nomor Urut & aturan Doc No / No. Invoice)
+   dilipat di balik tombolnya -- jarang diubah, dulu memakan setengah
+   layar di bawah tiap form.
+   Hanya kelas di #viewDocNum yang berubah; tidak ada yang digambar ulang.
+   ================================================================== */
+function dnAturTampilan(tampilan) {
+  const halaman = document.getElementById("viewDocNum");
+  if (!halaman) return;
+  const riwayat = tampilan === "riwayat";
+  halaman.classList.toggle("dn-lihat-riwayat", riwayat);
+  document.querySelectorAll(".dn-tampilan [data-dn-tampilan]").forEach((b) => {
+    const nyala = b.dataset.dnTampilan === (riwayat ? "riwayat" : "ajukan");
+    b.classList.toggle("active", nyala);
+    b.setAttribute("aria-pressed", String(nyala));
+  });
+}
+function dnAturPengaturan(buka) {
+  const halaman = document.getElementById("viewDocNum");
+  const tombol = document.getElementById("btnDnPengaturan");
+  if (!halaman || !tombol) return;
+  const jadi = buka != null ? !!buka : !halaman.classList.contains("dn-buka-pengaturan");
+  halaman.classList.toggle("dn-buka-pengaturan", jadi);
+  tombol.setAttribute("aria-expanded", String(jadi));
+  if (jadi) {
+    dnAturTampilan("ajukan");
+    const kotak = document.getElementById("dnPengaturan");
+    if (kotak) requestAnimationFrame(() => kotak.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+  }
+}
+document.addEventListener("click", (e) => {
+  const pilih = e.target.closest && e.target.closest("[data-dn-tampilan]");
+  if (pilih) {
+    dnAturTampilan(pilih.dataset.dnTampilan);
+    return;
+  }
+  if (e.target.closest && e.target.closest("#btnDnPengaturan")) dnAturPengaturan();
+});
+
+/* "Nomor Berikutnya" di rel = salinan pratinjau di kepala panel jenis
+   yang aktif ([data-dn-preview]); diikuti lewat pengamat DOM, jadi
+   semua jalur yang memperbaruinya (bacaan database, nomor baru terbit,
+   realtime, Atur Nomor Urut) ikut tanpa disentuh satu per satu. */
+function dnRelSalin() {
+  const tujuan = document.getElementById("dnRelNomor");
+  if (!tujuan) return;
+  const sumber = document.querySelector(`[data-dn-preview="${docNumActiveTab}"]`);
+  const teks = (sumber ? sumber.textContent.trim() : "") || "\u2014";
+  if (tujuan.textContent === teks) return;
+  /* Pindah baris hanya sesudah "/" & "-" (<wbr>, teksnya tetap sama):
+     di tiket sempit ponsel nomor tidak terpotong di tengah angka
+     ("001/EXIM/DDI/XI/2" + "026"). */
+  tujuan.replaceChildren(...teks.split(/(?<=[/-])/).flatMap((bagian, i) => (i ? [document.createElement("wbr"), bagian] : [bagian])));
+}
+(function pasangRelSalin() {
+  if (typeof MutationObserver !== "function") return;
+  const amati = new MutationObserver(dnRelSalin);
+  document.querySelectorAll("[data-dn-preview]").forEach((el) =>
+    amati.observe(el, { childList: true, characterData: true, subtree: true }),
+  );
+})();
+
+/* Empat nomor terakhir jenis (& sub-tab riwayat) yang aktif. */
+function dnRelTerakhirGambar(rows, jenis) {
+  const box = document.getElementById("dnTerakhir");
+  if (!box) return;
+  if (!rows.length) {
+    box.innerHTML = `<li class="dn-terakhir-kosong">${escapeHtml(tt("Belum Ada Nomor yang Terbit.", "No Numbers Issued Yet."))}</li>`;
+    return;
+  }
+  box.innerHTML = rows
+    .map((r) => {
+      const p = r.payload || {};
+      // Urutan yang sama dengan kolom Keterangan riwayat (Pengajuan Dana: vendor dulu)
+      const ket = (jenis.key === "fund" ? p.payee : "") || p.customer || p.receiver || p.payee || p.recipient || p.subject || p.notes || "";
+      return `<li><b>${escapeHtml(r.doc_number)}</b><span class="dn-terakhir-tgl">${escapeHtml(fmtDate(r.doc_date))}</span>${
+        ket ? `<span class="dn-terakhir-ket">${escapeHtml(String(ket).slice(0, 60))}</span>` : ""
+      }</li>`;
+    })
+    .join("");
+}

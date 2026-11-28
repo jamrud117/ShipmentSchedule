@@ -236,7 +236,6 @@
 }
 .btn-note-send {
   border: none;
-  border-radius: 8px;
   padding: 0 12px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -937,6 +936,12 @@ table.item-table .is-disamakan {
   margin: 0;
   min-width: 0;
 }
+/* Label + tombol "?" Cara kerja: tombolnya menempel di label, bukan
+   terdorong ke kanan seperti tombol aksi kepala isian. */
+.fl-head > .ck {
+  margin-left: 0;
+  margin-right: auto;
+}
 /* Tanggal + jam dalam satu sel: [ tanggal ][ jam ] -- keduanya selebar
    isinya, jam menempel di samping tanggal. */
 .fl-pair {
@@ -974,6 +979,47 @@ table.item-table .is-disamakan {
    kelompoknya -- tidak ikut melebarkannya. */
 .fl-tanggal .form-text-note {
   contain: inline-size;
+}
+
+/* RUTE & JADWAL SATU BARIS (.fl-rute, form jadwal): Pelabuhan Asal,
+   Tujuan, Tipe Rute & Status (.fl-rute-isian) lalu kelompok tanggal
+   (.fl-tanggal) berdampingan. Dasar kelompok isian = jumlah dasar
+   isiannya (pelabuhan 140px, Tipe Rute 160px, Status 140px), jadi
+   isiannya tidak terlipat di dalam kelompok; kelompok tanggal selebar
+   isinya, jarak antartanggalnya disamakan dengan antarisian (18px, bukan
+   40px). Form yang terlalu sempit: kelompok tanggal turun UTUH ke baris
+   kedua. Keterangan di bawah Status (petunjuk DELAY, peringatan status
+   yang tidak berlaku) dilipat selebar selnya. */
+.fl-rute {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 18px;
+}
+.fl-rute-isian {
+  display: flex;
+  flex: 1 1 634px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 18px;
+  min-width: 0;
+}
+.fl-rute-isian > * {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.fl-rute-isian > .fl-rute-tipe {
+  flex: 0 1 160px;
+}
+.fl-rute-isian > .fl-rute-status {
+  flex: 0 1 140px;
+}
+.fl-rute-status > :is(.form-text-note, .status-tiba-hint) {
+  contain: inline-size;
+}
+.fl-rute > .fl-tanggal {
+  flex: 0 1 auto;
+  column-gap: 18px;
 }
 
 /* PENGALIH AUTO / MANUAL (.fl-mode) -- di bawah kotak ETA & Estimated
@@ -1040,6 +1086,11 @@ table.item-table .is-disamakan {
 .fl-bertanggal > :has(> input[data-kotak-tanggal], > input[type="date"]) {
   flex: 0 0 auto;
 }
+/* Pasangan di sel sempit (Nomor + Tanggal Transaksi PIB): nomornya boleh
+   menyempit sampai 100px sebelum tanggalnya turun ke bawah. */
+.fl-bertanggal--rapat > * {
+  flex-basis: 100px;
+}
 
 /* PONSEL (< 768px): TANGGAL SELEBAR BARIS. Di layar ini semua isian
    bertumpuk satu per baris dan selebar baris; kotak tanggal yang selebar
@@ -1060,7 +1111,10 @@ table.item-table .is-disamakan {
    sama, yang belakangan menang. */
 @media (max-width: 767.98px) {
   .fl-tanggal > *,
-  .fl-bertanggal > * {
+  .fl-bertanggal > *,
+  .fl-rute > :is(.fl-rute-isian, .fl-tanggal),
+  .fl-rute-isian > *,
+  .fl-rute-isian > :is(.fl-rute-tipe, .fl-rute-status) {
     flex: 1 1 100%;
   }
   .fl-bertanggal > :has(> input[data-kotak-tanggal], > input[type="date"]) {
@@ -1322,6 +1376,49 @@ table.item-table .is-disamakan {
   top: 50%;
   margin: -4px 0 0;
 }
+/* Pintasan papan ketik di ujung tooltip: "Terbitkan Nomor [Ctrl] [S]".
+   Satu kelompok yang tidak dipatah; kalau teksnya panjang kelompok ini
+   turun utuh ke baris berikutnya. */
+.app-tip-kunci {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.app-tip-kunci kbd {
+  min-width: 19px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  color: inherit;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 17px;
+  text-align: center;
+}
+.app-tip-ket {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+/* Di atas permukaan GELAP (kartu Nomor Berikutnya, pita navy): tooltip
+   TERANG -- navy di atas navy nyaru (tooltip.js, tipDiAtasGelap). Tema
+   gelap membaliknya di peta-laut.css. */
+.app-tip.app-tip--kontras {
+  background: #eef2f6;
+  color: #0b1d33;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.55);
+}
+.app-tip.app-tip--kontras .app-tip-kunci kbd {
+  border-color: rgba(11, 29, 51, 0.28);
+  background: rgba(11, 29, 51, 0.07);
+}
 
 /* ------------------------------------------------------------------
    MODAL CETAK (js/ui/cetak-modal.js)
@@ -1416,6 +1513,61 @@ table.item-table .is-disamakan {
     transition: none;
   }
 }
+/* LEBIH DARI DUA DOKUMEN (Surat Jalan tiga mobil): penomoran ‹ 1 2 3 ›
+   berbentuk pil seperti langkah tinjauan OCR (.dr-langkah-butir). */
+.cetak-varian.cetak-varian--halaman {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.cetak-varian--halaman::before {
+  display: none;
+}
+.cetak-varian-no,
+.cetak-varian-geser {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--n-200);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--n-600);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background-color var(--dur-1) var(--ease);
+}
+.cetak-varian-geser {
+  padding: 0;
+}
+.cetak-varian-no:hover,
+.cetak-varian-geser:hover:not(:disabled) {
+  border-color: var(--p-300);
+}
+.cetak-varian-no.is-aktif {
+  border-color: var(--p-500);
+  background: var(--p-50);
+  color: var(--tp-600);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-500) 20%, transparent);
+}
+.cetak-varian-geser:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cetak-varian-no:focus-visible,
+.cetak-varian-geser:focus-visible {
+  outline: 2px solid var(--p-500);
+  outline-offset: 1px;
+}
 /* Kartu kotak selalu setinggi dialognya (layar dikurangi margin), baik saat
    "Menyiapkan surat" maupun sesudah suratnya tampil -- tanpa ini kartu
    memendek di tengah layar selagi memuat lalu melompat membesar. Surat
@@ -1428,6 +1580,13 @@ table.item-table .is-disamakan {
   flex-direction: column;
   padding: var(--sp-6);
   background: var(--n-100);
+  /* Bilah gulir disembunyikan, gulirnya tetap (seperti halaman) */
+  scrollbar-width: none;
+}
+.cetak-badan::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .cetak-meja {
   display: flex;
@@ -1634,4 +1793,144 @@ table.item-table .is-disamakan {
   text-align: center;
   box-shadow: 0 10px 30px rgba(10, 27, 51, 0.28);
   pointer-events: none;
+}
+
+/* ==================================================================
+   "CARA KERJA" (?) -- js/ui/cara-kerja.js
+
+   Penjelasan panjang dilipat ke tombol "?" kecil (biasanya di judul
+   bagiannya); panel bersama #ckPanel di <body> menampilkan kalimat
+   lengkapnya. Sumber teksnya (.ck-isi) tidak pernah tampil di tempat.
+================================================================== */
+.ck {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  margin-left: 6px;
+}
+.ck-isi {
+  display: none;
+}
+.ck-tombol {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tp-600);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease);
+}
+.ck-tombol:hover {
+  background: var(--p-50);
+  border-color: var(--p-400);
+}
+.ck-tombol[aria-expanded="true"] {
+  background: var(--p-600);
+  border-color: var(--p-600);
+  color: #fff;
+}
+.ck-tombol .bi {
+  font-size: 0.72rem;
+}
+/* Di kepala panel (judul + tombol di kanan) & baris tombol aksi */
+.panel-head > .ck {
+  margin-left: calc(6px - var(--sp-3));
+  margin-right: auto;
+}
+.fl-aksi > .ck {
+  align-self: center;
+  margin-left: 0;
+}
+/* Di label isian (huruf kecil) tombolnya ikut lebih kecil */
+.form-label .ck-tombol,
+.form-subhead .ck-tombol,
+.prompt-label .ck-tombol {
+  width: 18px;
+  height: 18px;
+}
+
+.ck-panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 2045;
+  width: max-content;
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 12px 14px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--sh-lg);
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  scrollbar-width: none;
+}
+.ck-panel::-webkit-scrollbar {
+  display: none;
+}
+.ck-panel[hidden] {
+  display: none;
+}
+.ck-panel:focus {
+  outline: none;
+}
+.ck-panel-kepala {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.ck-panel-judul {
+  font-weight: 700;
+  color: var(--tp-700);
+}
+.ck-panel-tutup {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -4px -6px -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--n-500);
+}
+.ck-panel-tutup:hover {
+  background: var(--n-100);
+  color: var(--ink);
+}
+.ck-panel-isi .ck-p {
+  display: block;
+  margin: 0;
+  color: var(--n-700);
+}
+.ck-panel-isi .ck-p + .ck-p {
+  margin-top: 8px;
+}
+.ck-panel-isi b {
+  color: var(--ink);
+  font-weight: 650;
+}
+.ck-panel-isi .bi-info-circle {
+  display: none;
 }

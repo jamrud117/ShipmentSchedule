@@ -1,11 +1,6 @@
 /* LAPISAN SISTEM DESAIN */
 
 /* ---- Dasar ---- */
-body {
-  font-family: var(--font-body);
-  color: var(--n-800);
-  background: var(--bg);
-}
 h1, h2, h3, h4, h5, h6,
 .page-form-title,
 .modal-title,
@@ -92,10 +87,6 @@ button[aria-busy="true"],
 button:disabled:has(.spinner-border) {
   cursor: progress;
 }
-.btn-teal:hover:not(:disabled),
-.btn-save-primary:hover:not(:disabled) {
-  color: #fff;
-}
 /* Ditekan: satu tingkat lebih gelap dari hover */
 .btn-primary-navy:active:not(:disabled),
 .btn-teal:active:not(:disabled),
@@ -171,9 +162,7 @@ input[readonly]::placeholder,
 }
 .form-label {
   font-size: var(--t-xs);
-  font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--n-600);
 }
 
 /* PANAH DROPDOWN SERAGAM.
@@ -312,12 +301,6 @@ table.item-table thead th,
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--n-100);
-  color: var(--n-600);
-  font-size: var(--t-xs);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--n-200);
 }
 table.item-table tbody tr:nth-child(even),
 .docnum-table tbody tr:nth-child(even) {
@@ -354,22 +337,6 @@ table.item-table tbody tr,
 /* Bilah navigasi sekarang navy pekat (lihat shell.css), jadi penanda */
 
 /* Tombol utama & aksi: navy pekat, teks putih. */
-.btn-teal,
-.btn-primary-navy,
-.btn-save-primary,
-.btn-note-send,
-.btn-add-skb {
-  background: var(--p-600);
-  border-color: var(--p-600);
-  color: #fff;
-}
-.btn-teal:hover:not(:disabled),
-.btn-primary-navy:hover:not(:disabled),
-.btn-save-primary:hover:not(:disabled),
-.btn-note-send:hover:not(:disabled) {
-  background: var(--p-700);
-  border-color: var(--p-700);
-}
 
 /* Sorotan baris tabel & menu: tint navy paling muda, bukan teal. */
 table.item-table tbody tr:hover,

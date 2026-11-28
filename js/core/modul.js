@@ -50,6 +50,7 @@ const MODUL_TUNDA = [
   "js/features/name-plate.js",
   "js/features/format-nomor.js",
   "js/views/docnum-view.js",
+  "js/features/ttd-bawaan.js",
   "js/features/docnum-detail.js",
   "js/features/po-form.js",
   "js/features/pemohon-akun.js",

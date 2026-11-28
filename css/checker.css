@@ -27,23 +27,13 @@
 }
 .cek-drop {
   display: flex;
-  align-items: flex-start;
   gap: var(--sp-3);
   min-width: 0;
   margin: 0;
-  padding: 14px var(--sp-4);
-  border: 1px dashed var(--p-200);
-  border-radius: var(--r-lg);
-  background: var(--p-50);
   cursor: pointer;
   transition:
     border-color var(--dur-1) var(--ease),
     background var(--dur-1) var(--ease);
-}
-.cek-drop:hover,
-.cek-drop.is-dragover {
-  border-color: var(--p-500);
-  background: var(--p-100);
 }
 .cek-drop:focus-within {
   outline: 2px solid var(--focus-ring);
@@ -51,19 +41,13 @@
 }
 .cek-drop.has-file {
   border-style: solid;
-  border-color: var(--cek-sama-line);
-  background: var(--cek-sama-bg);
 }
 .cek-drop.has-galat {
   border-style: solid;
-  border-color: var(--s-danger-line);
-  background: var(--s-danger-bg);
 }
 .cek-drop-ikon {
   flex: 0 0 auto;
-  font-size: 1.35rem;
   line-height: 1;
-  color: var(--tp-500);
 }
 .cek-drop.has-file .cek-drop-ikon {
   color: var(--cek-sama);
@@ -211,19 +195,17 @@
   border: 0;
   min-width: 0;
 }
+/* Asal nomor pembanding: tombol "?" Cara kerja di legend-nya. */
 .cek-bl legend {
   float: none;
+  display: flex;
+  align-items: center;
   width: auto;
-  margin: 0;
+  margin: 0 0 var(--sp-3);
   font-family: var(--font-display);
   font-size: var(--t-sm);
   font-weight: 700;
   color: var(--tp-700);
-}
-.cek-bl-ket {
-  margin: 2px 0 var(--sp-3);
-  font-size: var(--t-xs);
-  color: var(--n-500);
 }
 /* [ nomor Master ][ tanggal ]  [ nomor House ][ tanggal ]: nomornya
    mengisi, kotak tanggalnya selebar tanggalnya (css/date-input.css);
@@ -298,19 +280,7 @@
   --vonis: var(--ts-warn);
   --vonis-bg: var(--s-warn-bg);
   display: flex;
-  align-items: flex-start;
   gap: var(--sp-4);
-  padding: var(--sp-5);
-  border-bottom: 1px solid var(--n-100);
-  box-shadow: inset 4px 0 0 var(--vonis);
-}
-.cek-vonis--lulus {
-  --vonis: var(--cek-sama);
-  --vonis-bg: var(--cek-sama-bg);
-}
-.cek-vonis--gagal {
-  --vonis: var(--ts-danger);
-  --vonis-bg: var(--s-danger-bg);
 }
 .cek-vonis-ikon {
   display: grid;
@@ -331,12 +301,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.cek-vonis-judul b {
-  font-family: var(--font-display);
-  font-size: var(--t-xl);
-  letter-spacing: 0.02em;
-  color: var(--vonis);
 }
 .cek-jenis {
   padding: 2px 8px;
@@ -420,22 +384,11 @@
 
 /* ---------- ringkasan per bagian ---------- */
 .cek-bagian {
-  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px var(--sp-6);
-  padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--n-100);
 }
 .cek-bagian-baris {
-  display: grid;
   grid-template-columns: 9.5rem minmax(60px, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--t-xs);
-}
-.cek-bagian-nama {
-  font-weight: 600;
-  color: var(--n-700);
 }
 .cek-bagian-baris.has-beda .cek-bagian-nama {
   color: var(--ts-danger);
@@ -446,15 +399,6 @@
   overflow: hidden;
   border-radius: var(--r-pill);
   background: var(--n-100);
-}
-.cek-batang .is-sama {
-  background: var(--cek-sama);
-}
-.cek-batang .is-beda {
-  background: var(--s-danger);
-}
-.cek-batang .is-info {
-  background: var(--cek-info);
 }
 .cek-bagian-angka {
   color: var(--n-500);
@@ -491,7 +435,6 @@
 }
 .cek-grup {
   border: 1px solid var(--n-200);
-  border-radius: var(--r-lg);
   background: var(--surface);
 }
 .cek-grup + .cek-grup {
@@ -574,18 +517,12 @@
 }
 .cek-st--sama {
   border-color: var(--cek-sama-line);
-  background: var(--cek-sama-bg);
-  color: var(--cek-sama);
 }
 .cek-st--beda {
   border-color: var(--s-danger-line);
-  background: var(--s-danger-bg);
-  color: var(--ts-danger);
 }
 .cek-st--info {
   border-color: var(--cek-info-line);
-  background: var(--cek-info-bg);
-  color: var(--cek-info);
 }
 .cek-tabel-wrap {
   overflow-x: auto;
@@ -697,12 +634,6 @@
   font-weight: 600;
   color: var(--ts-danger);
   white-space: nowrap;
-}
-.cek-tanda {
-  padding: 0 1px;
-  border-radius: 2px;
-  background: var(--w-bg-fde2de);
-  color: var(--ts-danger);
 }
 .cek-redup {
   color: var(--text-subtle);

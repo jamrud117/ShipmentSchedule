@@ -104,19 +104,23 @@ const ktTulisMentah = (el, teks) => KT_NATIF.set.call(el, teks);
 const ktKotor = (el) => ktMentah(el) !== KT_KEADAAN.get(el).tampil;
 
 /* Tooltip: hari + tanggal panjang ("Rabu, 04 November 2026") kalau terisi,
-   atau petunjuk mengetik kalau kosong. Dilewati bila penulis markup sudah
-   memberi title sendiri ("Hanya baca. Tekan tombol pensil ..."). */
+   atau petunjuk mengetik kalau kosong -- lalu pintasan kalendernya (F4 /
+   Alt+↓) bagi kotak yang berikon kalender. Dilewati bila penulis markup
+   sudah memberi title sendiri ("Hanya baca. Tekan tombol pensil ..."). */
 function ktSegarkanJudul(el) {
   const k = KT_KEADAAN.get(el);
   if (!k || k.judulAsli) return;
+  let judul;
   if (k.iso) {
     const dt = parseLocalDate(k.iso);
-    el.title = dt
+    judul = dt
       ? tanggalLokal(dt, activeLang === "en" ? "en-GB" : "id-ID", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })
       : "";
   } else {
-    el.title = el.readOnly || el.disabled ? "" : tt("Ketik tanggal dalam format apa saja, mis. 5/11/26 atau 5 nov 2026", "Type a date in any format, e.g. 5/11/26 or 5 Nov 2026");
+    judul = el.readOnly || el.disabled ? "" : tt("Ketik tanggal dalam format apa saja, mis. 5/11/26 atau 5 nov 2026", "Type a date in any format, e.g. 5/11/26 or 5 Nov 2026");
   }
+  if (judul && ktPunyaIkon(el)) judul += tt(" · Kalender: F4 / Alt+↓", " · Calendar: F4 / Alt+↓");
+  el.title = judul;
 }
 
 /* Isi kotak dari tanggal ISO TANPA menembakkan peristiwa apa pun (sama

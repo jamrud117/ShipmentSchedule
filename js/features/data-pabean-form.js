@@ -115,7 +115,11 @@ function dpbKotakHtml(o) {
   } else {
     kotak = `<input type="text" class="form-control" id="${id}" value="${dpbEsc(v)}" ${o.alamat}${o.saran ? ` list="${dpbDaftarSaran(o.saran)}" autocomplete="off"` : ""}>`;
   }
-  return `<div${o.lebar ? ` class="${o.lebar}"` : ""}><label class="form-label" for="${id}">${dpbEsc(o.label)}</label>${kotak}</div>`;
+  /* Label singkat di sel sempit (IKB): nama lengkapnya di tooltip label
+     & di nama yang dibacakan untuk kotaknya. */
+  const judul = o.labelPenuh ? ` class="form-label tip-ringkas" title="${dpbEsc(o.labelPenuh)}"` : ' class="form-label"';
+  const namaKotak = o.labelPenuh ? kotak.replace(/^<(input|select)\b/, `<$1 aria-label="${dpbEsc(o.labelPenuh)}"`) : kotak;
+  return `<div${o.lebar ? ` class="${o.lebar}"` : ""}><label${judul} for="${id}">${dpbEsc(o.label)}</label>${namaKotak}</div>`;
 }
 
 function dpbRapikanPilihan(el) {
@@ -141,7 +145,8 @@ function dpbBacaHtml(o) {
     : o.hitung ? `<span class="dpb-chip">${tt("otomatis", "auto")}</span>` : "";
   // Blok, bukan <input>: nilai panjang (uraian, daftar kontainer) membungkus, tidak terpotong
   const kosong = !String(o.nilai || "").trim();
-  return `<div${o.lebar ? ` class="${o.lebar}"` : ""}><div class="form-label dpb-label-baca"><span id="${o.id}-l">${dpbEsc(o.label)}</span>${tombol}</div>
+  // .dpb-sel-baca: kotaknya setinggi kotak tertinggi di barisnya, isinya di tengah (form.css)
+  return `<div class="dpb-sel-baca${o.lebar ? ` ${o.lebar}` : ""}"><div class="form-label dpb-label-baca"><span id="${o.id}-l">${dpbEsc(o.label)}</span>${tombol}</div>
     <div class="form-control dpb-baca${o.kanan ? " dpb-angka" : ""}${kosong ? " is-kosong" : ""}" id="${o.id}" role="textbox" aria-readonly="true" aria-labelledby="${o.id}-l">${kosong ? "—" : dpbEsc(o.nilai)}</div></div>`;
 }
 
@@ -150,24 +155,39 @@ function dpbDef(k) {
   if (!DPB_DEF) DPB_DEF = new Map(DP_GRUP.flatMap((g) => g.isian).map((f) => [f.k, f]));
   return DPB_DEF.get(k);
 }
-// Isian tersimpan menurut kuncinya (kosong bila bukan isian buku ini)
-function dpbIsian(k, lebar) {
+/* Isian tersimpan menurut kuncinya (kosong bila bukan isian buku ini).
+   labelSingkat: label di sel sempit; nama lengkapnya jadi tooltip. */
+function dpbIsian(k, lebar, labelSingkat) {
   const f = dpbDef(k);
   if (!f || !dpBerlaku(f, activeMode)) return "";
-  return dpbKotakHtml({ id: `dpb-${k}`, label: dpLabel(f.label), nilai: draftDataPabean[k], jenis: f.jenis, pilihan: dpPilihanIsian(f, activeMode), saran: f.saran, alamat: `data-dpb="${k}"`, lebar });
+  const label = dpLabel(f.label);
+  return dpbKotakHtml({ id: `dpb-${k}`, label: labelSingkat || label, labelPenuh: labelSingkat ? label : "", nilai: draftDataPabean[k], jenis: f.jenis, pilihan: dpPilihanIsian(f, activeMode), saran: f.saran, alamat: `data-dpb="${k}"`, lebar });
 }
 
 /* Isian + tanggalnya sepasang setengah baris (.fl-bertanggal, components.css):
    isiannya mengisi sisa sel, kotak tanggalnya selebar tanggalnya -- bukan
    dua sel seperempat baris dengan celah kosong di samping kotak tanggal.
    Salah satunya bukan isian buku ini (dpbIsian kosong): tanpa pasangan. */
-const dpbPasangTanggal = (isian, tanggal) => (isian && tanggal ? `<div class="s6 fl-bertanggal">${isian}${tanggal}</div>` : isian + tanggal);
+const dpbPasangTanggal = (isian, tanggal, lebar) => (isian && tanggal ? `<div class="${lebar == null ? "s6 " : lebar ? lebar + " " : ""}fl-bertanggal">${isian}${tanggal}</div>` : isian + tanggal);
 
+/* DUA BAGIAN BERDAMPINGAN (.dpb-berdampingan, form.css): bagian yang
+   isinya sedikit (Pengajuan & Kantor Pabean, Kemasan & Peti Kemas)
+   sebaris dua kolom, bukan dua kartu selebar halaman yang setengahnya
+   kosong. Layar sempit: bertumpuk lagi. Salah satunya kosong: yang ada
+   selebar halaman. */
+const dpbBerdampingan = (a, b, kelas) => (a && b ? `<div class="dpb-berdampingan${kelas ? " " + kelas : ""}">${a}${b}</div>` : a + b);
+
+/* Catatan bagian (penjelasan cara hitung, asal nilai) = tombol "?" Cara
+   kerja di kepala bagian (ui/cara-kerja.js), bukan paragraf di atas
+   isiannya. textContent .dpb-bagian-judul tetap judulnya saja. */
 function dpbBagian(judul, isi, opsi) {
   if (!isi) return "";
   const o = opsi || {};
-  return `<section class="dpb-bagian"><h3 class="dpb-bagian-judul">${dpbEsc(judul)}</h3>${o.catatan ? `<p class="dpb-catatan">${o.catatan}</p>` : ""}${
-    o.mentah ? isi : `<div class="fgrid">${isi}</div>`}</section>`;
+  const ck = o.catatan && typeof caraKerjaHtml === "function" ? caraKerjaHtml(o.catatan) : "";
+  const kepala = ck
+    ? `<div class="dpb-bagian-judul"><h3>${dpbEsc(judul)}</h3>${ck}</div>`
+    : `<h3 class="dpb-bagian-judul">${dpbEsc(judul)}</h3>${o.catatan ? `<p class="dpb-catatan">${o.catatan}</p>` : ""}`;
+  return `<section class="dpb-bagian${o.kelas ? " " + o.kelas : ""}">${kepala}${o.mentah ? isi : `<div class="fgrid">${isi}</div>`}</section>`;
 }
 
 /* ---------------- isi form lain (hanya-baca) ---------------- */
@@ -205,15 +225,15 @@ const dpbBarangAda = (it) => !!String((it && it.namaBarang) || "").trim();
 function dpbTabHeader(c) {
   const aju = dpbKotakIsi("#fNoAju");
   const tglAju = typeof tanggalDariAju === "function" ? tanggalDariAju(aju) : "";
-  const pengajuan = dpbBacaHtml({ id: "dpbr-aju", label: tt("Nomor Pengajuan", "Submission No."), nilai: aju, ke: "#fNoAju", tab: "umum", lebar: "s6" })
-    + dpbBacaHtml({ id: "dpbr-tglaju", label: tt("Tanggal Pengajuan", "Submission Date"), nilai: tglAju ? fmtDate(tglAju) : "", hitung: true });
+  // Pengajuan & Kantor Pabean berdampingan: lebar isiannya dihitung dalam SETENGAH halaman
+  const pengajuan = dpbBacaHtml({ id: "dpbr-aju", label: tt("Nomor Pengajuan", "Submission No."), nilai: aju, ke: "#fNoAju", tab: "umum", lebar: "s8" })
+    + dpbBacaHtml({ id: "dpbr-tglaju", label: tt("Tanggal Pengajuan", "Submission Date"), nilai: tglAju ? fmtDate(tglAju) : "", hitung: true, lebar: "s4" });
   if (c.pib) {
-    return dpbBagian(tt("Pengajuan", "Submission"), pengajuan)
-      + dpbBagian(tt("Kantor Pabean", "Customs Office"), dpbIsian("kodeKantor", "s6"))
+    return dpbBerdampingan(dpbBagian(tt("Pengajuan", "Submission"), pengajuan), dpbBagian(tt("Kantor Pabean", "Customs Office"), dpbIsian("kodeKantor", "s12")))
       + dpbBagian(tt("Keterangan Lain", "Other Details"), dpbIsian("jenisPib") + dpbIsian("jenisImpor") + dpbIsian("caraBayar", "s6"));
   }
-  return dpbBagian(tt("Pengajuan", "Submission"), pengajuan)
-    + dpbBagian(tt("Kantor Pabean", "Customs Office"), dpbIsian("kantorMuat", "s6") + dpbIsian("pelabuhanEkspor", "s6") + dpbIsian("kantorEkspor", "s6") + dpbIsian("kantorDaftar", "s6"))
+  return dpbBerdampingan(dpbBagian(tt("Pengajuan", "Submission"), pengajuan),
+    dpbBagian(tt("Kantor Pabean", "Customs Office"), dpbIsian("kantorMuat", "s6") + dpbIsian("pelabuhanEkspor", "s6") + dpbIsian("kantorEkspor", "s6") + dpbIsian("kantorDaftar", "s6")))
     + dpbBagian(tt("Keterangan Lain", "Other Details"), dpbIsian("jenisEkspor", "s6") + dpbIsian("kategoriEkspor", "s6") + dpbIsian("caraDagang") + dpbIsian("caraBayar", "s6")
       + dpbIsian("keteranganBayar") + dpbIsian("komoditas") + dpbIsian("barangKiriman", "s6") + dpbIsian("curah"));
 }
@@ -281,35 +301,49 @@ function dpbTabKemasan() {
   const kemasan = dpbBacaHtml({ id: "dpbr-kemasan", label: tt("Jumlah & Jenis Kemasan", "Package Count & Type"), nilai: dpbKotakIsi("#fPackage"), ke: "#fPackage", tab: "barang", lebar: "s6" })
     + dpbIsian("merekKemasan", "s6");
   const peti = laut
-    ? dpbBacaHtml({ id: "dpbr-muatan", label: tt("Jenis Muatan", "Load Type"), nilai: dpbKotakIsi("#fMuatan"), ke: "#fMuatan", tab: "umum" })
-      + dpbBacaHtml({ id: "dpbr-kontainer", label: tt("Nomor Peti Kemas", "Container No."), nilai: dpbKotakIsi("#fContainer"), ke: "#fContainer", tab: "umum", lebar: "s9" })
+    ? dpbBacaHtml({ id: "dpbr-muatan", label: tt("Jenis Muatan", "Load Type"), nilai: dpbKotakIsi("#fMuatan"), ke: "#fMuatan", tab: "umum", lebar: "s4" })
+      + dpbBacaHtml({ id: "dpbr-kontainer", label: tt("Nomor Peti Kemas", "Container No."), nilai: dpbKotakIsi("#fContainer"), ke: "#fContainer", tab: "umum", lebar: "s8" })
     : `<p class="dpb-kosong s12">${tt("Kiriman udara tanpa peti kemas.", "Air shipments carry no containers.")}</p>`;
-  return dpbBagian(tt("Kemasan", "Packages"), kemasan) + dpbBagian(tt("Peti Kemas", "Containers"), peti);
+  return dpbBerdampingan(dpbBagian(tt("Kemasan", "Packages"), kemasan), dpbBagian(tt("Peti Kemas", "Containers"), peti));
 }
 
+/* TAB TRANSAKSI. Harga: baris 1 Valuta / NDPBM / Incoterm / Harga Barang
+   seperempat baris; baris 2 Freight, Asuransi, Nilai Asuransi, Nilai CIF
+   (FOB di PEB) & Nilai Pabean (Nilai Maklon di PEB) SEBARIS -- angka
+   pendek sel 2 lajur, Asuransi (pilihan) & Nilai Pabean 3 lajur.
+   PIB: Transaksi Perdagangan (dua pertiga) & Berat (sepertiga)
+   BERDAMPINGAN (>= 1280px); di dalamnya Jenis Transaksi, Nomor +
+   Tanggal Transaksi & IKB SEBARIS (.dpb-baris-transaksi, form.css):
+   Jenis Transaksi mengisi, IKB (hanya ADA / TIDAK ADA) 132px berlabel
+   "IKB" -- nama lengkapnya di tooltip label. */
 function dpbTabTransaksi(c) {
   const n = c.nilai;
   const baca = (id, label, nilai, ke, lebar) => dpbBacaHtml({ id, label, nilai, ke, tab: "pabean", lebar, kanan: true });
   const hitung = (id, label, nilai, lebar) => dpbBacaHtml({ id, label, nilai, hitung: true, lebar, kanan: true });
   const ndpbm = baca("dpbr-ndpbm", "NDPBM", dpbKotakIsi("#fNdpbm"), "#fNdpbm");
   const incoterm = dpbBacaHtml({ id: "dpbr-incoterm", label: tt("Cara Penyerahan (Incoterm)", "Delivery Terms (Incoterm)"), nilai: dpbKotakIsi("#fIncoterm"), ke: "#fIncoterm", tab: "pabean" });
-  const freight = baca("dpbr-freight", "Freight", dpbKotakIsi("#fFreight"), "#fFreight");
-  const asuransi = baca("dpbr-asuransi", tt("Nilai Asuransi", "Insurance Value"), dpbKotakIsi("#fInsurance"), "#fInsurance");
+  const freight = baca("dpbr-freight", "Freight", dpbKotakIsi("#fFreight"), "#fFreight", "s2");
+  const asuransi = baca("dpbr-asuransi", tt("Nilai Asuransi", "Insurance Value"), dpbKotakIsi("#fInsurance"), "#fInsurance", "s2");
   const berat = hitung("dpbr-bruto", tt("Berat Kotor (kg)", "Gross Weight (kg)"), dpbKg(n.bruto)) + hitung("dpbr-netto", tt("Berat Bersih (kg)", "Net Weight (kg)"), dpbKg(n.netto));
   const catatanBerat = tt("Jumlah berat tiap barang di tab Daftar Barang.", "Sum of each item's weight on the Item List tab.");
+  // Bagian Berat di samping bagian lain: dua isian per baris (.dpb-bagian--dua)
+  const bagianBerat = dpbBagian(tt("Berat", "Weight"), berat, { catatan: catatanBerat, kelas: "dpb-bagian--dua" });
   if (c.pib) {
     return dpbBagian(tt("Harga", "Price"), dpbIsian("valuta") + ndpbm + incoterm + hitung("dpbr-harga", tt("Harga Barang", "Goods Price"), dpbUsd(n.harga))
-        + freight + dpbIsian("kodeAsuransi") + asuransi + hitung("dpbr-cif", tt("Nilai CIF", "CIF Value"), dpbUsd(n.cif))
-        + hitung("dpbr-pabean", tt("Nilai Pabean (Rp)", "Customs Value (IDR)"), dpbRp(n.nilaiPabean), "s6"),
+        + freight + dpbIsian("kodeAsuransi", "s3") + asuransi + hitung("dpbr-cif", tt("Nilai CIF", "CIF Value"), dpbUsd(n.cif), "s2")
+        + hitung("dpbr-pabean", tt("Nilai Pabean (Rp)", "Customs Value (IDR)"), dpbRp(n.nilaiPabean), "s3"),
       { catatan: tt("Harga Barang = jumlah Amount barang; Nilai CIF = Harga Barang + Freight + Asuransi; Nilai Pabean = CIF × NDPBM.", "Goods Price = sum of item Amounts; CIF = Goods Price + Freight + Insurance; Customs Value = CIF × NDPBM.") })
-      + dpbBagian(tt("Transaksi Perdagangan", "Trade Transaction"), dpbIsian("transaksiJenis", "s6") + dpbPasangTanggal(dpbIsian("transaksiNomor"), dpbIsian("transaksiTanggal")) + dpbIsian("ikb", "s6"))
-      + dpbBagian(tt("Berat", "Weight"), berat, { catatan: catatanBerat });
+      + dpbBerdampingan(
+        dpbBagian(tt("Transaksi Perdagangan", "Trade Transaction"), `<div class="s12 dpb-baris-transaksi">${dpbIsian("transaksiJenis")}${dpbPasangTanggal(dpbIsian("transaksiNomor"), dpbIsian("transaksiTanggal"), "fl-bertanggal--rapat")}${dpbIsian("ikb", "", "IKB")}</div>`),
+        bagianBerat,
+        "dpb-berdampingan--2-1",
+      );
   }
   return dpbBagian(tt("Harga", "Price"), dpbIsian("valuta") + ndpbm + incoterm + hitung("dpbr-harga", tt("Harga Penyerahan", "Delivery Price"), dpbUsd(n.harga))
-      + freight + dpbIsian("kodeAsuransi") + asuransi + hitung("dpbr-fob", tt("Nilai Ekspor (FOB)", "Export Value (FOB)"), dpbUsd(n.fob)) + dpbIsian("nilaiMaklon"),
+      + freight + dpbIsian("kodeAsuransi", "s3") + asuransi + hitung("dpbr-fob", tt("Nilai Ekspor (FOB)", "Export Value (FOB)"), dpbUsd(n.fob), "s2") + dpbIsian("nilaiMaklon", "s3"),
     { catatan: tt("Harga Penyerahan = jumlah Amount barang; FOB = Harga Penyerahan dikurangi Freight (CFR/CPT) atau Freight + Asuransi (CIF/CIP).", "Delivery Price = sum of item Amounts; FOB = Delivery Price less Freight (CFR/CPT) or Freight + Insurance (CIF/CIP).") })
     + dpbBagian(tt("Bank Devisa & Penerimaan Negara", "Proceeds Bank & State Revenue"), dpbIsian("bankDevisa", "s6") + dpbIsian("beaKeluar") + dpbIsian("pph22") + dpbIsian("danaPerkebunan", "s6"))
-    + dpbBagian(tt("Berat", "Weight"), berat, { catatan: catatanBerat });
+    + bagianBerat;
 }
 
 // Nama fasilitas barang seperti di dokumen pabean: "SKB PPh", "Masterlist", "COO"
@@ -371,7 +405,8 @@ function dpbTabPungutan(c) {
     mentah: true,
     catatan: tt("Dihitung otomatis per seri barang: tarif BM & PPh tiap barang (tab Barang) atau Tarif (%) jadwal, PPN 12% × DPP 11/12; barang yang memakai COO bertarif BM 0%. Fasilitas barang di Daftar Barang (SKB BM / Masterlist, SKB PPN, SKB PPh) memindahkan pungutannya ke kolom Dibebaskan. Kolom Dibayar = Bea Masuk, PPN & PPH di tab Kepabeanan &amp; Biaya (yang diketik sendiri di sana tampil apa adanya); NDPBM, Freight & Asuransi juga dari tab itu.",
       "Calculated per item: each item's BM & PPh rate (Items tab) or the schedule's Rate (%), PPN 12% × 11/12 base. Item facilities on the Item List (SKB BM / Masterlist, SKB PPN, SKB PPh) move the levy to the Exempted column. The Paid column = Import Duty, PPN & PPH on the Customs &amp; Charges tab (values typed there are shown as typed); NDPBM, Freight & Insurance also come from that tab."),
-  }) + dpbBagian(tt("Pembayaran & Jaminan", "Payment & Guarantee"), dpbIsian("pembayaran", "s6") + dpbIsian("jaminanJenis", "s6") + dpbPasangTanggal(dpbIsian("jaminanNomor"), dpbIsian("jaminanTanggal")));
+  // Sebaris: Pembayaran, Jenis Jaminan, Nomor + Tanggal Jaminan masing-masing sepertiga baris
+  }) + dpbBagian(tt("Pembayaran & Jaminan", "Payment & Guarantee"), dpbIsian("pembayaran", "s4") + dpbIsian("jaminanJenis", "s4") + dpbPasangTanggal(dpbIsian("jaminanNomor"), dpbIsian("jaminanTanggal"), "s4"));
 }
 
 const dpbTabPernyataan = () => dpbBagian(tt("Pernyataan", "Declaration"), dpbPasangTanggal(dpbIsian("kotaPernyataan"), dpbIsian("tanggalPernyataan")) + dpbIsian("namaPernyataan") + dpbIsian("jabatanPernyataan"));

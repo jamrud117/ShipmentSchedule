@@ -1050,7 +1050,7 @@ function renderFundLines() {
         <td colspan="${pakaiAwb ? 7 : 6}">
           <span class="fl-grup-judul">${escapeHtml(fundDokJudul(d.jenis))} :</span>
           <b class="fl-grup-nomor">${escapeHtml(d.nomor || tt("(nomor belum diisi)", "(number not filled)"))}</b>
-          <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-tambah="${escapeAttr(d.id)}"><i class="bi bi-plus-lg"></i> ${escapeHtml(tt("Baris", "Row"))}</button>
+          <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-tambah="${escapeAttr(d.id)}" data-pintasan="Enter" data-pintasan-ket="di baris terakhir" data-pintasan-ket-en="on the last row"><i class="bi bi-plus-lg"></i> ${escapeHtml(tt("Baris", "Row"))}</button>
           <button type="button" class="btn-quiet fl-grup-tambah" data-fl-grup-diskon="${escapeAttr(d.id)}"><i class="bi bi-dash-lg"></i> ${escapeHtml(tt("Diskon", "Discount"))}</button>
         </td>
       </tr>${fundLines.map((b, i) => (String(b.dok || "") === d.id || (!d.id && !ada.has(String(b.dok || ""))) ? baris(b, i) : "")).join("")}`).join("");
@@ -1277,7 +1277,8 @@ if (fundKakiEl) {
    TOTAL PDRI -- FORMAT BILLING
 
    Rincian Pungutan Billing cuma tiga kotak (Bea Masuk, PPN Import, PPH
-   Import); di bawahnya Total PDRI = BM + PPN + PPH. Dibaca dengan
+   Import) -- Billing SPTNP ditambah Penalty; di bawahnya Total PDRI =
+   BM + PPN + PPH (+ Penalty). Dibaca dengan
    parseLooseNumber, pembaca yang sama dengan surat cetaknya (frAngka di
    frBarisRincian, fund-request-print.js -- berkas itu dimuat SESUDAH
    berkas ini, jadi tidak dipanggil langsung), sehingga angkanya sama
@@ -1290,14 +1291,16 @@ if (fundKakiEl) {
    diisi tanpa peristiwa -- dipulihkan dari draf, dibuka untuk diubah,
    dikosongkan (syncDocNumConditional).
 ================================================================== */
-const FUND_PUNGUTAN = ["feeBm", "feePpn", "feePph"];
+/* Penalty (feePenalty) khusus Billing SPTNP: kotaknya ter-disable di jenis
+   lain (syncDocNumConditional), jadi tidak ikut dijumlah. */
+const FUND_PUNGUTAN = ["feeBm", "feePpn", "feePph", "feePenalty"];
 
 function fundTotalPdriForm() {
   const panel = document.querySelector('[data-docnum-panel="fund"]');
   if (!panel) return 0;
   const jumlah = FUND_PUNGUTAN.reduce((n, k) => {
     const el = panel.querySelector(`[data-dn="${k}"]`);
-    return n + (el ? parseLooseNumber(el.value) : 0);
+    return n + (el && !el.disabled ? parseLooseNumber(el.value) : 0);
   }, 0);
   return fundBulatSen(jumlah);
 }
@@ -1305,7 +1308,9 @@ function fundTotalPdriForm() {
 function gambarTotalPdri() {
   const kaki = document.getElementById("fundPdriFoot");
   if (!kaki) return;
-  const rumus = tt("BM + PPN + PPH", "Import Duty + PPN + PPH");
+  const penalty = document.querySelector('[data-docnum-panel="fund"] [data-dn="feePenalty"]');
+  const sptnp = !!(penalty && !penalty.disabled);
+  const rumus = sptnp ? tt("BM + PPN + PPH + Penalty", "Import Duty + PPN + PPH + Penalty") : tt("BM + PPN + PPH", "Import Duty + PPN + PPH");
   kaki.innerHTML = `<div class="fl-sum fl-sum--total"><span>Total PDRI <small class="fl-pdri-rumus">(${escapeHtml(rumus)})</small></span><b>${escapeHtml(fundUangForm(fundTotalPdriForm()))}</b></div>`;
 }
 

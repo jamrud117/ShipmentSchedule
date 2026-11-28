@@ -1,9 +1,12 @@
-/* PANEL GESER (detail read-only) */
+/* POP-UP DETAIL PENGIRIMAN (read-only) -- di tengah layar, dulu panel
+   geser dari kanan. Tingginya TETAP (bukan mengikuti isi): berpindah
+   pengiriman dengan ← → tidak membuat kotak & tombolnya melompat. */
 .sheet-scrim {
   position: fixed;
   inset: 0;
   z-index: 1055;
-  background: rgba(10, 27, 51, 0.42);
+  background: rgba(10, 27, 51, 0.5);
+  backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--dur-3) var(--ease);
@@ -15,22 +18,35 @@
 
 .sheet {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: 50%;
+  left: 50%;
   z-index: 1060;
-  width: min(1000px, 96vw);
+  width: min(1120px, calc(100vw - 48px));
+  height: min(900px, calc(100dvh - 48px));
+  border-radius: 18px;
+  overflow: hidden;
   background: var(--surface);
-  box-shadow: var(--sh-panel);
+  box-shadow:
+    0 32px 80px -28px rgba(10, 27, 51, 0.6),
+    0 0 0 1px rgba(10, 27, 51, 0.08);
   display: flex;
   flex-direction: column;
-  transform: translateX(100%);
-  transition: transform var(--dur-3) var(--ease);
+  opacity: 0;
+  transform: translate(-50%, -47%) scale(0.98);
+  transition:
+    transform var(--dur-3) var(--ease),
+    opacity var(--dur-2) var(--ease),
+    visibility 0s linear var(--dur-3);
   visibility: hidden;
 }
 .sheet.is-open {
-  transform: none;
+  opacity: 1;
+  transform: translate(-50%, -50%);
   visibility: visible;
+  transition:
+    transform var(--dur-3) var(--ease),
+    opacity var(--dur-2) var(--ease),
+    visibility 0s;
 }
 
 .sheet-head {
@@ -47,11 +63,36 @@
   color: var(--sec-300);
   display: block;
 }
+/* Pihak (pemasok / pembeli) disorot oranye logo DDI, seperti di papan */
 .sheet-title {
-  margin-top: 1px;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.sheet-title > .bi {
+  flex: none;
+  font-size: 1.05rem;
+  color: var(--pl-oranye);
+}
+#detailSheetTitle {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sheet-sub {
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--n-600);
+}
+.sheet-sub:empty {
+  display: none;
 }
 .sheet-nav {
   display: inline-flex;
@@ -66,8 +107,9 @@
   border-radius: var(--r-sm);
   font-size: 0.85rem;
 }
+/* Pengiriman pertama / terakhir: redup tapi masih terlihat (dulu 0,32 -- nyaru) */
 .sheet-btn:disabled {
-  opacity: 0.32;
+  opacity: 0.5;
 }
 .sheet-pos {
   font-family: var(--font-mono);
@@ -80,7 +122,21 @@
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--sp-5);
+  padding: 18px 22px 22px;
+  background: var(--pl-kabut);
+}
+/* Pindah pengiriman (← →): isi baru bergeser masuk dari arah tombolnya */
+.sheet-body.dv-masuk-kanan {
+  animation: dv-masuk-kanan 0.24s var(--ease) both;
+}
+.sheet-body.dv-masuk-kiri {
+  animation: dv-masuk-kiri 0.24s var(--ease) both;
+}
+@keyframes dv-masuk-kanan {
+  from { opacity: 0.25; transform: translateX(18px); }
+}
+@keyframes dv-masuk-kiri {
+  from { opacity: 0.25; transform: translateX(-18px); }
 }
 .sheet-foot {
   flex-shrink: 0;
@@ -120,32 +176,130 @@
   }
 }
 
-/* Kepala isi panel: label pihak (Nama Shipper / Buyer), namanya, nomor
-   & tanggal dokumen; buku & status di kanan. Nama pihak hanya di sini --
-   tidak diulang di daftar Dokumen & Umum. */
+/* PITA ATAS ISI POP-UP (buildDetailHtml): buku, status & nomor dokumen
+   pabean, lalu empat petak -- ETD, ETA, Est. Delivery / Stuffing,
+   progres dokumen. Nama pihak di kepala pop-up, tidak diulang. */
 .detail-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--sp-3) var(--sp-4);
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.dv-pita-tanda {
+  display: flex;
   flex-wrap: wrap;
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: var(--sp-2);
+  align-items: center;
+  gap: 6px 10px;
 }
-.detail-header-isi {
-  flex: 1 1 320px;
+.dv-pita-tanda .po-code {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--n-600);
+}
+.dv-petak-baris {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.dv-petak {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+  padding: 11px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
 }
-.detail-header-label {
-  margin-bottom: 2px;
+.dv-petak-label {
+  font-size: var(--t-xs);
+  font-weight: 600;
   color: var(--n-500);
 }
-.detail-header-tanda {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-shrink: 0;
+.dv-petak-nilai {
+  font-family: var(--font-board);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dv-petak-nilai small {
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--n-500);
+}
+.dv-petak-ket {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--n-600);
+}
+/* Dimundurkan dari rencana: merah, seperti tanggal delay di papan */
+.dv-petak--mundur .dv-petak-nilai,
+.dv-petak--mundur .dv-petak-ket {
+  color: var(--pl-merah);
+}
+.dv-petak--lengkap .dv-petak-nilai,
+.dv-petak--lengkap .dv-petak-ket {
+  color: var(--pl-hijau);
+}
+
+/* KARTU BAGIAN: Daftar Barang & Prediksi selebar isi, sisanya dua
+   sejajar. Tiap kartu wadah kueri detail-isi: daftar label-nilai di
+   kartu setengah lebar jadi satu lajur (label kiri, nilai kanan). */
+.dv-kisi {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.dv-kartu {
+  container: detail-isi / inline-size;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.dv-kartu--lebar {
+  grid-column: 1 / -1;
+}
+.dv-kartu .subsection-title {
+  margin: 14px 0 8px;
+  font-size: var(--t-base);
+}
+.dv-kartu > .subsection-title:first-child {
+  margin-top: 0;
+}
+/* Di dalam kartu, daftar label-nilai tanpa kotak sendiri (kartunya kotaknya) */
+.dv-kartu .detail-kv {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.dv-kartu .detail-kv-baris {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+/* Kartu selebar isi: dua lajur -- jarak di kedua sisi garis tengahnya */
+@container detail-isi (min-width: 760px) {
+  .dv-kartu .detail-kv:not(.detail-kv--satu) > .detail-kv-baris:nth-child(odd):not(:last-child) {
+    padding-right: 16px;
+  }
+  .dv-kartu .detail-kv:not(.detail-kv--satu) > .detail-kv-baris:nth-child(even) {
+    padding-left: 16px;
+  }
+}
+.dv-kartu .detail-kv-catatan {
+  margin: 8px 0 0;
+}
+.dv-kartu .item-table-foot {
+  margin-bottom: 0;
 }
 
 /* DAFTAR LABEL-NILAI PANEL DETAIL (detailBaris / detailDaftar,
@@ -264,22 +418,39 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Layar sempit: kartu bertumpuk, petak tanggal 2 x 2 */
+@media (max-width: 899.98px) {
+  .dv-kisi {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dv-petak-baris {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Ponsel: pop-up hampir selayar (tepi 8px), tetap di tengah */
 @media (max-width: 767px) {
   .sheet {
-    width: 100%;
-    top: auto;
-    height: 92vh;
-    border-radius: var(--r-xl) var(--r-xl) 0 0;
-    transform: translateY(100%);
-  }
-  .sheet.is-open {
-    transform: none;
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    border-radius: 16px;
   }
   .sheet-body {
-    padding: var(--sp-4);
+    padding: 14px 12px 18px;
   }
   .sheet-pos {
     display: none;
+  }
+  /* Nama pihak boleh dua baris di samping tombol-tombolnya */
+  #detailSheetTitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  /* .sheet-head: menang atas ukuran kepala di desain.css (dimuat sesudahnya) */
+  .sheet-head .sheet-title {
+    font-size: 1.2rem;
   }
 }
 
@@ -287,6 +458,10 @@
   .sheet,
   .sheet-scrim {
     transition: none;
+  }
+  .sheet-body.dv-masuk-kanan,
+  .sheet-body.dv-masuk-kiri {
+    animation: none;
   }
 }
 

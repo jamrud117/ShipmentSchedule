@@ -2824,6 +2824,15 @@ async function cekJalankan() {
     res.jadwal = s;
     res.saranHs = cekSaranHs(res);
     cekKeadaan.hasil = res;
+    /* Berkas / jadwal baru: hasil dibuka di MISMATCH (yang harus
+       diperbaiki), atau Semua kalau tidak ada. Hitung ulang untuk
+       berkas yang sama (B/L diketik, kurs diperbarui) menghormati
+       saringan yang sudah dipilih pengguna. */
+    const kunciSaring = [cekKeadaan.kunciCipl, cekKeadaan.kunciDraft, (s && s.id) || ""].join("#");
+    if (cekKeadaan.kunciSaring !== kunciSaring) {
+      cekKeadaan.kunciSaring = kunciSaring;
+      cekKeadaan.saring = res.summary && res.summary.mismatches ? "MISMATCH" : "ALL";
+    }
   } catch (e) {
     console.error(e);
     cekKeadaan.hasil = null;
@@ -3177,7 +3186,7 @@ function cekGambarDaftar() {
 function cekVonisTeks(res) {
   const s = res.summary;
   if (res.overall === "PASS") return tt(`Seluruh isian yang diperiksa sesuai dengan draft ${res.type}.`, `Every field checked matches the ${res.type} draft.`);
-  return tt(`${s.mismatches} mismatch ditemukan. Periksa rinciannya sebelum ${res.type} diajukan.`, `${s.mismatches} ${s.mismatches === 1 ? "mismatch" : "mismatches"} found. Review the details before the ${res.type} is submitted.`);
+  return tt(`${s.mismatches} MISMATCH ditemukan. Perbaiki sebelum ${res.type} diajukan.`, `${s.mismatches} MISMATCH found. Fix ${s.mismatches === 1 ? "it" : "them"} before the ${res.type} is submitted.`);
 }
 
 function cekGambarHasil() {
@@ -3197,8 +3206,8 @@ function cekGambarHasil() {
   $("#cekVonis").innerHTML = `
     <div class="cek-vonis-ikon" aria-hidden="true"><i class="bi ${v[1]}"></i></div>
     <div class="cek-vonis-isi">
-      <div class="cek-vonis-judul"><b>${escapeHtml(res.overall)}</b><span class="cek-jenis">${escapeHtml(res.type)}</span></div>
-      <p>${escapeHtml(cekVonisTeks(res))}</p>
+      <div class="cek-vonis-judul"><b>${escapeHtml(s.mismatches ? `${s.mismatches} MISMATCH` : res.overall)}</b><span class="cek-jenis">${escapeHtml(s.mismatches ? `${res.overall} · ${res.type}` : res.type)}</span></div>
+      <p>${escapeHtml(cekVonisTeks(res))} ${escapeHtml(tt(`${s.total} Isian Diperiksa, ${s.matches} Sesuai, ${s.infos} INFO.`, `${s.total} Fields Checked, ${s.matches} Match, ${s.infos} INFO.`))}</p>
       <div class="cek-meta">${meta.join("")}</div>
     </div>
     <div class="cek-angka">
@@ -3218,14 +3227,14 @@ function cekGambarHasil() {
       const x = res.sections[k];
       const total = x.total || 1;
       const teks = [tt(`${x.match} sesuai`, `${x.match} match`)];
-      if (x.mismatch) teks.push(`${x.mismatch} mismatch`);
-      if (x.info) teks.push(`${x.info} info`);
+      if (x.mismatch) teks.push(`${x.mismatch} MISMATCH`);
+      if (x.info) teks.push(`${x.info} INFO`);
       const ruas = (n, kelas) => (n ? `<span class="${kelas}" style="width:${(n / total) * 100}%"></span>` : "");
-      return `<div class="cek-bagian-baris${x.mismatch ? " has-beda" : ""}">
+      return `<button type="button" class="cek-bagian-baris${x.mismatch ? " has-beda" : ""}" data-cek-bagian="${escapeAttr(k)}">
           <span class="cek-bagian-nama">${escapeHtml(cekLabelSeksi(k))}</span>
           <span class="cek-batang" role="img" aria-label="${escapeAttr(cekLabelSeksi(k) + ": " + teks.join(", "))}">${ruas(x.match, "is-sama")}${ruas(x.mismatch, "is-beda")}${ruas(x.info, "is-info")}</span>
           <span class="cek-bagian-angka">${escapeHtml(teks.join(", "))}</span>
-        </div>`;
+        </button>`;
     })
     .join("");
 
@@ -3460,6 +3469,8 @@ function cekGambarKurs() {
               Semua kurs ............ Buka sheet
      ponsel   [titik][judul .....][Perbarui] / kurs / keterangan / kaki */
   el.dataset.status = status;
+  // Kepingan ringkas di kepala halaman: kalimat keadaannya juga di tooltip
+  el.title = `${ket} ${catatan}`;
   el.innerHTML = `
     <span class="cek-kurs-titik" aria-hidden="true"></span>
     <div class="cek-kurs-judul"><b>${escapeHtml(tt("Kurs otomatis", "Automatic rate"))}</b></div>
@@ -3642,6 +3653,27 @@ function showCheckerView() {
     if (el.dataset.cekSaring) {
       cekKeadaan.saring = el.dataset.cekSaring;
       cekGambarHasil();
+      return;
+    }
+    /* Peta bagian: lompat ke bagiannya. Bagian yang tersaring keluar
+       (mis. hanya MATCH saat saringan MISMATCH) membuka saringan Semua
+       dulu. Barang: ke barang pertama. */
+    if (el.dataset.cekBagian) {
+      const k = el.dataset.cekBagian;
+      const cari = () =>
+        k === "ITEM" ? $('#cekDaftar details[data-cek-grup^="ITEM"]') : $(`#cekDaftar details[data-cek-grup="${k}"]`);
+      if (!cari() && cekKeadaan.saring !== "ALL") {
+        cekKeadaan.saring = "ALL";
+        cekGambarHasil();
+      }
+      const grup = cari();
+      if (grup) {
+        grup.open = true;
+        grup.scrollIntoView({ block: "start", behavior: "smooth" });
+        grup.classList.remove("cek-grup--disorot");
+        void grup.offsetWidth; // ulangi sorotannya
+        grup.classList.add("cek-grup--disorot");
+      }
       return;
     }
     if (el.hasAttribute("data-cek-jadwal-ganti")) {

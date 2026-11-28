@@ -33,7 +33,7 @@ const DN_LABEL_FIELD = {
   get packages() { return tt("Jumlah Koli", "Number of Packages"); },
   get receiver() { return tt("Tujuan / Penerima", "Destination / Recipient"); },
   get address() { return tt("Alamat Tujuan", "Destination Address"); },
-  get vehicle() { return tt("No. Kendaraan", "Vehicle No."); },
+  get vehicle() { return tt("Kendaraan & Sopir", "Vehicles & Drivers"); },
   get shipmentId() { return tt("Jadwal Terkait", "Linked Schedule"); },
   get customer() { return tt("Customer", "Customer"); },
   get payee() { return tt("Dibayarkan Kepada", "Paid To"); },
@@ -61,6 +61,8 @@ const DN_LABEL_FIELD = {
   // Isian Form Pengajuan Dana
   get billingNo() { return tt("Nomor Billing", "Billing Number"); },
   get invoiceNo() { return tt("Nomor Invoice", "Invoice Number"); },
+  get bankName() { return tt("Nama Bank", "Bank Name"); },
+  get trackingNo() { return tt("No. Resi", "Tracking Number"); },
   get dokumen() { return tt("Invoice / Debit Note Tambahan", "Additional Invoice / Debit Note"); },
   get invoiceDate() { return tt("Tanggal Invoice", "Invoice Date"); },
   get invoiceDueDate() { return tt("Due Date Invoice", "Invoice Due Date"); },
@@ -74,6 +76,7 @@ const DN_LABEL_FIELD = {
   get feeBm() { return tt("Bea Masuk", "Import Duty"); },
   get feePpn() { return tt("PPN Import", "Import VAT (PPN)"); },
   get feePph() { return tt("PPH Import", "Import Income Tax (PPH)"); },
+  get feePenalty() { return "Penalty"; },
   get checkedByName() { return tt("Checked By", "Checked By"); },
   get checkedByRole() { return tt("Jabatan Checked By", "Checked By Position"); },
   get approver1Name() { return tt("Approved By", "Approved By"); },
@@ -220,7 +223,8 @@ const DN_DETAIL_SUSUNAN = {
     },
     {
       judul: () => tt("Tanda Tangan", "Signatures"),
-      isian: ["knownBy", "sentBy", "receivedBy"],
+      // Diterima oleh = sopir tiap mobil: tampil bersama Kendaraan & Sopir
+      isian: ["knownBy", "sentBy"],
     },
     { khusus: "barangSuratJalan", memakai: ["items"] },
   ],
@@ -228,7 +232,7 @@ const DN_DETAIL_SUSUNAN = {
     {
       judul: () => tt("Tagihan", "Bill"),
       isian: [
-        "payee", "customer", "invoiceNo", "billingNo", "invoiceDate", "invoiceDueDate",
+        "payee", "customer", "invoiceNo", "bankName", "trackingNo", "billingNo", "invoiceDate", "invoiceDueDate",
         "blAwb", "docNo", "currency", { k: "dokumen", lebar: true },
       ],
     },
@@ -241,7 +245,7 @@ const DN_DETAIL_SUSUNAN = {
     },
     /* `amount` = Nominal pengajuan format lama: tampil sebagai satu baris
        di tabel pungutan, bukan sebagai isian tersendiri. */
-    { khusus: "biaya", memakai: ["lines", "feeBm", "feePpn", "feePph", "amount"] },
+    { khusus: "biaya", memakai: ["lines", "feeBm", "feePpn", "feePph", "feePenalty", "amount"] },
     { khusus: "penandaTangan", memakai: ["checkedByName", "checkedByRole", "approver1Name", "approver1Role", "cfoName", "cfoRole"] },
     { judul: () => tt("Pembayaran", "Payment"), isian: ["paidAt", "paidBy", { k: "paidProof", lebar: 2 }] },
   ],
@@ -293,8 +297,8 @@ const DN_DETAIL_TERPAKAI = new Set([
   "expenseType", "transactionType",
   // tampil bersama PO No. (nomor & tanggalnya berpasangan)
   "poDate", "poNoExtra", "poDateExtra",
-  // mobil kedua dst. tampil bersama No. Kendaraan (vehicle-list.js)
-  "vehicleExtra",
+  // mobil kedua dst. & sopir tiap mobil tampil bersama Kendaraan & Sopir (vehicle-list.js)
+  "vehicleExtra", "driverExtra", "receivedBy",
   // penanda internal: moda kiriman surat, isian moda yang sudah dihapus
   "moda", "transportMode",
   // PO & PR: daftar PO diubah sendiri (tampil sebagai keterangan tabelnya)
@@ -374,9 +378,10 @@ function dndDaftarPo(p) {
 /* Nomor mobil -- yang pertama dan yang tambahan, satu butir per mobil.
    Disaring sjDaftarKendaraan (surat-jalan-print.js), aturan yang sama
    dengan cetakan surat jalannya. */
+// Satu butir per mobil: "B 1234 XY · Budi" (nomor · sopirnya)
 function dndDaftarKendaraan(p) {
-  return sjDaftarKendaraan(p)
-    .map((v) => `<span class="dnd-butir">${escapeHtml(v)}</span>`)
+  return sjDaftarMobil(p)
+    .map((m) => `<span class="dnd-butir">${escapeHtml([m.nopol || "—", m.sopir].filter(Boolean).join(" · "))}</span>`)
     .join("");
 }
 
@@ -447,6 +452,9 @@ function dndLabelIsian(butir, r) {
     const moda = (r.payload || {}).moda === "laut" ? "laut" : "udara";
     return suratLabelAngkut(moda, tt(" & Tanggal Tiba", " & Arrival Date"));
   }
+  // Vendor berekening (JNE): isian No. Invoice-nya nomor rekening tujuan bayar
+  if (butir.k === "invoiceNo" && typeof fundInvoiceBolehSama === "function" && fundInvoiceBolehSama((r.payload || {}).payee))
+    return tt("Nomor Rekening", "Account Number");
   return dndLabel(butir.k);
 }
 
@@ -603,7 +611,7 @@ function dndBiayaHtml(r) {
   const baris = frBarisRincian(p).filter((b) => b.nilai);
   if (!baris.length) return "";
   // Bea Masuk + PPN + PPH = Total PDRI, seperti di form Billing (gambarTotalPdri); Nominal format lama tetap TOTAL
-  const pungutan = [p.feeBm, p.feePpn, p.feePph].some((v) => frAngka(v) > 0);
+  const pungutan = [p.feeBm, p.feePpn, p.feePph, p.feePenalty].some((v) => frAngka(v) > 0);
   return dndBagianHtml(
     tt("Rincian Pungutan", "Charge Breakdown"),
     `<div class="dnd-tabel-wrap">
@@ -646,8 +654,8 @@ function dndPenandaTanganHtml(r) {
     `<div class="dnd-ttd${cfo ? " dnd-ttd--empat" : ""}">
       ${kotak("Made by", p.requester || r.requester, "Drafter")}
       ${kotak("Checked by", p.checkedByName || "M. Rangga", p.checkedByRole || "Accounting")}
-      ${kotak("Approved by", p.approver1Name || "Mr. Shin Na Ra", p.approver1Role || "Chief Marketing Officer")}
-      ${cfo ? kotak("Approved by", p.cfoName || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
+      ${kotak("Approved by", frNamaTtd(p.approver1Name) || FR_TTD_APPROVER.nama, p.approver1Role || FR_TTD_APPROVER.jabatan)}
+      ${cfo ? kotak("Approved by", frNamaTtd(p.cfoName) || FR_TTD_CFO.nama, p.cfoRole || FR_TTD_CFO.jabatan) : ""}
     </div>`,
   );
 }

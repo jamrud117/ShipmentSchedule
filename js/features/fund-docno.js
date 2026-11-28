@@ -25,7 +25,7 @@
 
    SATU fungsi, fundPakaiDocNo(), dipakai form DAN cetakannya -- jadi
    keduanya tidak mungkin berbeda pendapat. Artinya: "pengajuan vendor
-   ini mencetak Doc No (dan penanda tangan keempat, CFO -- bawaan Mr. Kim
+   ini mencetak Doc No (dan penanda tangan keempat, CFO -- bawaan Kim
    Taewan, Chief Financial Officer, isian cfoName/cfoRole)". Namanya
    tetap `Pakai` walau kotak Doc No di form kini selalu ada.
 ------------------------------------------------------------------ */

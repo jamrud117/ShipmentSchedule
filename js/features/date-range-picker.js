@@ -199,9 +199,32 @@ function drpOpen() {
   drpViewMonth = acuan.getMonth();
   drpRenderCalendars();
   $("#dateRangePopover").classList.remove("d-none");
+  drpPasLayar();
   $("#dateRangeTrigger").setAttribute("aria-expanded", "true");
   $("#dateRangeTrigger").classList.add("is-open");
 }
+/* PANEL TIDAK KELUAR LAYAR: panelnya menempel di tepi kiri pemicu
+   (dashboard.css), dan pemicu di layar lebar ada di ujung KANAN bilah
+   kendali -- panel dua bulan melewati tepi kanan layar. Yang melewati
+   digeser ke kiri secukupnya (tetap 12px dari tepi), tidak lebih jauh
+   dari tepi kiri layar. Dihitung ulang saat jendela diubah ukurannya. */
+function drpPasLayar() {
+  const pop = $("#dateRangePopover");
+  pop.style.left = "";
+  if (pop.classList.contains("d-none")) return;
+  const TEPI = 12;
+  const layar = document.documentElement.clientWidth;
+  if (!layar) return; // tanpa tata letak (uji DOM)
+  const r = pop.getBoundingClientRect();
+  const lebih = r.right - (layar - TEPI);
+  if (lebih <= 0) return;
+  const kiri = parseFloat(getComputedStyle(pop).left) || 0;
+  const wadahKiri = r.left - kiri;
+  pop.style.left = Math.round(Math.max(kiri - lebih, TEPI - wadahKiri)) + "px";
+}
+addEventListener("resize", () => {
+  if (drpIsOpen()) drpPasLayar();
+});
 function drpClose() {
   $("#dateRangePopover").classList.add("d-none");
   $("#dateRangeTrigger").setAttribute("aria-expanded", "false");

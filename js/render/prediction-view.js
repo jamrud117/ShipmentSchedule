@@ -301,14 +301,16 @@ function predStepsHtml(d) {
    dan bukan "dari Hari Ini (dari ETA)". Rentang tanggalnya di tooltip
    keyakinan. Bukan pita tersendiri yang menulis Estimated Delivery &
    tanggalnya sekali lagi. */
-function deliveryKartuHtml(s) {
+/* dSiap: hasil predictDelivery(s) yang sudah dihitung baris papan
+   (cards.js, prediksiPapan) -- tidak dihitung dua kali per baris. */
+function deliveryKartuHtml(s, dSiap) {
   const kosong = { lencana: "", keterangan: "" };
   if (!tampilkanMekanikaPrediksi()) return kosong;
   /* Seluruhnya tentang Estimated Delivery, yang tidak berlaku di
      Export. ETA otomatis Export tetap jalan (keterangannya di bawah
      tanggal ETA). */
   if (!deliveryPredictionAppliesTo(s)) return kosong;
-  const d = predictDelivery(s);
+  const d = dSiap || predictDelivery(s);
   const lencanaMode = (mode) => lencanaJudulTanggalHtml(deliveryModeChipHtml(mode), judulModeDelivery(mode));
 
   if (!d.ok) {
@@ -325,11 +327,11 @@ function deliveryKartuHtml(s) {
       : "";
   const sumber = d.shifted
     ? butirKeteranganHtml(
-        `<i class="bi bi-clock-history" aria-hidden="true"></i>${escapeHtml(tt(`Telat ${d.overdueDays} hari`, `${d.overdueDays} days late`))}`,
+        `<i class="bi bi-clock-history" aria-hidden="true"></i>${escapeHtml(tt(`Telat ${d.overdueDays} hari`, `${d.overdueDays} day(s) late`))}`,
         "pred-late",
         tt(
           `Perkiraan sebelumnya sudah terlewat ${d.overdueDays} hari — tanggal ini dihitung ulang dari hari ini`,
-          `The previous estimate passed ${d.overdueDays} days ago — this date is recalculated from today`,
+          `The previous estimate passed ${d.overdueDays} day(s) ago — this date is recalculated from today`,
         ),
       )
     : manual

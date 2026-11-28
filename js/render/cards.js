@@ -66,7 +66,7 @@ function delayBadgeHtml(s) {
   if (s.status !== "delayed") return "";
   const info = shipmentDelayInfo(s);
   if (!info || info.days <= 0) return "";
-  return `<span class="tag tag-delay"><i class="bi bi-clock-history"></i> ${tt(`Mundur ${info.days} hari dari ${info.basis}`, `Delayed ${info.days} days from ${info.basis}`)}</span>`;
+  return `<span class="tag tag-delay"><i class="bi bi-clock-history"></i> ${tt(`Mundur ${info.days} hari dari ${info.basis}`, `Delayed ${info.days} day(s) from ${info.basis}`)}</span>`;
 }
 
 /* STRIP TANGGAL UPDATE DELAY (hanya saat status DELAY) */
@@ -195,25 +195,6 @@ function buildTags(s) {
     .join("");
 }
 
-/* Tombol ikon kartu: keterangannya di title (tooltip, js/ui/tooltip.js)
-   DAN aria-label (nama yang dibacakan) -- ikon saja tidak cukup. */
-function actionButtons(s) {
-  const lihat = tt("Lihat Detail", "View Details");
-  const ubah = tt("Ubah Jadwal", "Edit Schedule");
-  const salin = t("v.salin.ke.excel");
-  const hapus = tt("Hapus Jadwal", "Delete Schedule");
-  return `
-    <div class="actions-col">
-      <button type="button" class="icon-btn" data-action="viewDetail" data-id="${s.id}" title="${lihat}" aria-label="${lihat}"><i class="bi bi-eye" aria-hidden="true"></i></button>
-      <button type="button" class="icon-btn primary" data-action="edit" data-id="${s.id}" title="${ubah}" aria-label="${ubah}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
-      <div class="dropdown copy-template-dropdown">
-        <button type="button" class="icon-btn" data-bs-toggle="dropdown" aria-expanded="false" title="${escapeAttr(salin)}" aria-label="${escapeAttr(salin)}"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
-        <ul class="dropdown-menu dropdown-menu-end copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
-      </div>
-      <button type="button" class="icon-btn danger" data-action="delete" data-id="${s.id}" title="${hapus}" aria-label="${hapus}"><i class="bi bi-trash3" aria-hidden="true"></i></button>
-    </div>`;
-}
-
 /* Id kotak tanggal di kartu -- supaya <label>-nya benar-benar terhubung
    (diklik membuka isiannya, dibacakan pembaca layar). Id jadwal unik,
    dan tiap jadwal hanya punya satu kartu di halaman. */
@@ -302,12 +283,26 @@ function cardBodySplitHtml(s, totals) {
           : ""
       }
     </div>
-    <div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${itemNamesSummary(
-      s,
-    )
-      .map((n) => `<div>${escapeHtml(n)}</div>`)
-      .join("")}</div></div>
+    ${namaBarangInfoHtml(s)}
     </div>`;
+}
+
+/* Kolom NAMA BARANG di kanan rincian (bergaris kiri): selama baris papan
+   terbuka, inilah tempat nama barang -- sel pertama baris ringkas
+   menyembunyikannya (papanBarangHtml) supaya tidak tertulis dua kali.
+   Paling banyak empat nama; sisanya "+2 Lainnya", tombol yang membuka
+   Lihat Detail (daftar barang lengkap) dan tooltip-nya menyebut sisanya. */
+const NAMA_INFO_MAKS = 4;
+function namaBarangInfoHtml(s) {
+  const semua = namaBarangUnik(s);
+  const sisa = semua.length - NAMA_INFO_MAKS;
+  const isi = semua.length
+    ? semua.slice(0, NAMA_INFO_MAKS).map((n) => `<div>${escapeHtml(n)}</div>`).join("") +
+      (sisa > 0
+        ? `<button type="button" class="info-names-lagi" data-action="viewDetail" data-id="${s.id}" title="${escapeAttr(semua.slice(NAMA_INFO_MAKS).join("\n"))}">${escapeHtml(tt(`+${sisa} Lainnya`, `+${sisa} More`))}</button>`
+        : "")
+    : "<div>—</div>";
+  return `<div class="info-item info-names"><div class="info-label"><i class="bi bi-boxes"></i> ${t("f.nama.barang")}</div><div class="info-value info-value--list">${isi}</div></div>`;
 }
 
 /* ------------------------------------------------------------------
@@ -417,7 +412,7 @@ function kotakTanggalKartu(s, kolom, label, opsi) {
       </div>`;
 }
 
-function dateStripHtml(s) {
+function dateStripHtml(s, dSiap) {
   const lbl = ML();
   const etaAuto = etaPredictionAppliesTo(s) && etaModeOf(s) === "auto";
   const prediksiDelivery = deliveryPredictionAppliesTo(s);
@@ -426,7 +421,7 @@ function dateStripHtml(s) {
   const diganti = (kolom, revisi, label) => (s[kolom] && s[revisi] && s[revisi] !== s[kolom] ? { tanggal: s[revisi], label } : null);
   const etaDiganti = diganti("eta", "etaUpdate", tt("Update ETA", "Updated ETA"));
   const eta = etaKartuHtml(s, etaDiganti);
-  const delivery = prediksiDelivery ? deliveryKartuHtml(s) : { lencana: "", keterangan: "" };
+  const delivery = prediksiDelivery ? deliveryKartuHtml(s, dSiap) : { lencana: "", keterangan: "" };
   return `
     <div class="date-strip">
       ${kotakTanggalKartu(s, "etd", "ETD", { jam: s.etdTime, diganti: diganti("etd", "etdUpdate", tt("Update ETD", "Updated ETD")) })}
@@ -483,13 +478,13 @@ function barangRingkasHtml(s) {
 
 /* PERJALANAN — jalur, tanggal kunci, keberangkatan hari ini, revisi
    delay dalam SATU panel: semuanya menjawab "kapan & di mana". */
-function shipJourneyHtml(s) {
+function shipJourneyHtml(s, dSiap) {
   return `
     <div class="ship-journey">
       <div class="lane">
         ${buildLaneHtml(s)}
       </div>
-      ${dateStripHtml(s)}
+      ${dateStripHtml(s, dSiap)}
       ${departingTodayHtml(s)}
       ${delayStripHtml(s)}
     </div>`;
@@ -511,7 +506,8 @@ function cardAlertsHtml(s) {
    tanggal dan dari stepper. Dulu keduanya menumpuk rapat di kiri di bawah
    ETD. */
 function cardDokumenHtml(s, lencana, kelasLencana) {
-  const progres = docStepHtml(s);
+  // bilah: balok progres dokumen di kepala stepper (sel Dokumen baris ringkas tersembunyi selama dibuka)
+  const progres = docStepHtml(s, { bilah: true });
   if (!lencana && !progres) return "";
   return `<div class="ship-dokumen">${lencana ? `<div class="${kelasLencana}">${lencana}</div>` : ""}${progres}</div>`;
 }
@@ -522,31 +518,329 @@ function cardRefsHtml(s) {
   return `<div class="po-code"><span class="po-ref"><span class="po-ref-label">${lbl.docNo}:</span> ${escapeHtml(dispVal(s.docNo))}</span><span class="po-ref"><span class="po-ref-label">No. Aju:</span> ${escapeHtml(dispVal(s.noAju))}</span></div>`;
 }
 
-function renderExpandedCard(s) {
-  const totals = itemTotals(s);
-  const itemCount = (s.items || []).length;
-  const lencana = buildTags(s);
+/* ==================================================================
+   PAPAN JADWAL (desain Peta Laut) -- satu jadwal = satu baris
 
-  return `
-  <div class="ship-card ship-card--${effectiveStatus(s)}" data-id="${s.id}">
-    <div class="ship-card-top">
-      <div class="ship-title-block">
-        <div class="ship-title-text">
-          <div class="item-name">${escapeHtml(dispVal(s.party))}<span class="item-count"> · ${itemCount} ${itemCount === 1 ? tt("Barang", "Item") : t("f.barang")}</span></div>
-          ${cardRefsHtml(s)}
-        </div>
+   Baris ringkas selalu tampil dan dibaca dari kiri: NAMA BARANG dulu --
+   orang mencari "SBR 1502 tiba kapan", bukan "yang KUMHO" -- lalu rute &
+   kapal, ETD, ETA, Est. Delivery / Stuffing, progres dokumen, status.
+   Garis rute berwarna menurut keadaannya: biru = sesuai jadwal, merah =
+   delay, hijau = sudah tiba.
+
+   Rincian (perjalanan dengan kotak tanggal yang bisa diketik, tahap
+   dokumen, rincian kiriman, kronologi, tombol aksi) dilipat di bawahnya,
+   dibuka dengan tombol panah atau klik di mana saja pada baris ringkas
+   (card-events.js). Rinciannya SELALU digambar dan hanya disembunyikan
+   CSS saat terlipat: membuka/menutup tidak menggambar ulang apa pun,
+   kotak tanggalnya sudah dipasang render(), dan pencarian di halaman,
+   fokus, serta tes yang membaca isi kartu tetap menemukannya.
+   ================================================================== */
+
+/* Baris yang sedang terbuka, per id: tetap terbuka setelah render()
+   menggambar ulang (ubah status, simpan tanggal, pindah halaman). */
+const papanTerbuka = new Set();
+
+/* KEPALA KOLOM PAPAN (Supplier & Barang, Rute, ETD, ETA, Est. Delivery,
+   Dokumen, Status) DISEMBUNYIKAN selama ada baris yang dibuka: baris
+   yang dibuka tidak memakai kolom-kolom itu -- rute, tanggal & dokumennya
+   ada di rinciannya sendiri -- jadi kepalanya hanya membingungkan.
+   Semua baris tertutup lagi -> kepalanya kembali (.ada-buka,
+   peta-laut.css). Dipanggil sesudah daftar digambar (render) & tiap
+   baris dibuka / ditutup (card-events.js). */
+function papanSegarkanKepala() {
+  const papan = document.getElementById("papan");
+  if (papan) papan.classList.toggle("ada-buka", !!papan.querySelector(".papan-baris.is-buka"));
+}
+
+const idRincianPapan = (s) => "rincian-" + String(s.id).replace(/[^\w-]/g, "");
+
+/* "18 Nov"; tahun hanya ditulis kalau bukan tahun ini ("18 Nov 2025").
+   Nama bulan pendek bahasa aktif, tanpa titik singkatan. */
+function tglPapan(iso) {
+  const d = iso ? parseLocalDate(iso) : null;
+  if (!d) return "";
+  const opsi = { day: "numeric", month: "short" };
+  if (String(d.getFullYear()) !== todayISO().slice(0, 4)) opsi.year = "numeric";
+  return tanggalLokal(d, activeLang === "en" ? "en-GB" : "id-ID", opsi).replace(/\./g, "");
+}
+
+/* Jarak dari hari ini, seperti orang menyebutnya. */
+function hariRelatifPapan(iso) {
+  const n = iso ? delayDaysBetween(todayISO(), iso) : null;
+  if (n == null) return "";
+  if (n === 0) return tt("Hari Ini", "Today");
+  if (n === 1) return tt("Besok", "Tomorrow");
+  if (n === -1) return tt("Kemarin", "Yesterday");
+  return n > 1 ? tt(`${n} Hari Lagi`, `In ${n} Days`) : tt(`${-n} Hari Lalu`, `${-n} Days Ago`);
+}
+
+/* Keterangan di bawah tanggal: yang masih akan terjadi ditulis jaraknya
+   ("2 Hari Lagi"), yang sudah lewat -- atau jadwal yang sudah selesai --
+   nama harinya ("Jumat"). */
+function ketTanggalPapan(s, iso) {
+  if (!iso) return "";
+  const n = delayDaysBetween(todayISO(), iso);
+  if (!isArrived(s) && n != null && n >= 0) return hariRelatifPapan(iso);
+  return hariTanggalKartu(iso);
+}
+
+/* Satu sel tanggal. Labelnya hanya terlihat di tata letak ponsel; di
+   layar lebar kepala kolom yang menyebutnya (bagi pembaca layar label
+   tetap dibacakan). `asal` = rencana awal yang sudah diganti tanggal
+   revisi delay: "Dari 20 Nov", merah. */
+function selTanggalPapan(kelas, label, iso, ket, ketKelas, asal) {
+  return `<div class="pr-tgl ${kelas}">
+        <span class="pr-label">${label}</span>
+        <b class="pr-tgl-nilai">${iso ? escapeHtml(tglPapan(iso)) : "—"}</b>${
+          ket ? `<span class="pr-ket${ketKelas ? " " + ketKelas : ""}">${escapeHtml(ket)}</span>` : ""
+        }${
+          asal
+            ? `<span class="pr-ket pr-ket--dari" title="${escapeAttr(tt(`Rencana awal ${fmtDate(asal)}`, `Original plan ${fmtDate(asal)}`))}">${escapeHtml(tt(`Dari ${tglPapan(asal)}`, `From ${tglPapan(asal)}`))}</span>`
+            : ""
+        }
+      </div>`;
+}
+
+const asalRevisiPapan = (s, kolom, revisi) => (s[kolom] && s[revisi] && s[revisi] !== s[kolom] ? s[kolom] : "");
+
+/* Est. Delivery (Import) / Stuffing (Export). Import yang masih jalan
+   menyebut asal angkanya: "Auto · 68%" (keyakinan mesin prediksi),
+   "Manual", atau "Telat 3 Hari" kalau perkiraannya sudah terlewat. Yang
+   sudah tiba menyebut In Factory. */
+function selActualPapan(s, d) {
+  const lbl = ML();
+  let ket = "";
+  let kelas = "";
+  if (s.mode !== "export" && isArrived(s)) {
+    ket = "In Factory" + (s.factoryDate && s.factoryDate !== s.actual ? " " + tglPapan(s.factoryDate) : "");
+  } else if (d) {
+    if (!d.ok) ket = "Auto";
+    else if (d.shifted) {
+      ket = tt(`Telat ${d.overdueDays} Hari`, `${d.overdueDays} Days Late`);
+      kelas = "pr-ket--merah";
+    } else if (d.source === "manual") ket = "Manual";
+    else ket = `Auto · ${d.confidence && d.confidence.percent != null ? d.confidence.percent + "%" : ""}`.replace(/ · $/, "");
+  } else ket = ketTanggalPapan(s, s.actual);
+  return selTanggalPapan("pr-actual", lbl.actual, s.actual, ket, kelas);
+}
+
+/* Nama pelabuhan pendek untuk ujung garis rute: "Busan", "Tanjung
+   Priok" -- bagian sebelum koma, tanpa "Intl Airport". Kode dokumennya
+   (KRPUS) di tooltip; kalau namanya tidak dikenal, kodenya yang tampil. */
+function pelabuhanPapan(raw, moda) {
+  const kode = portCodeLabel(raw) || String(raw || "").trim();
+  const e = typeof resolvePortEntryMode === "function" ? resolvePortEntryMode(raw, moda) : null;
+  const nama = e && e.name
+    ? e.name.split(",")[0].replace(/\s+(Intl\.?|International)?\s*Airport$/i, "").trim()
+    : "";
+  return { teks: nama || kode || "—", judul: [kode, e && e.name].filter(Boolean).join(" · ") };
+}
+
+function papanRuteHtml(s) {
+  const asal = pelabuhanPapan(s.origin, s.transport);
+  const tujuan = pelabuhanPapan(s.destination, s.transport);
+  const maju = Math.round(Math.max(0, Math.min(1, laneProgress(s))) * 1000) / 10;
+  const keadaan = isArrived(s) ? "tiba" : effectiveStatus(s) === "delayed" ? "delay" : "tepat";
+  const transit = isTransitRoute(s) ? routeStopList(s).length : 0;
+  const kapal = carrierNameFromShipment(s);
+  const ketGaris = isArrived(s)
+    ? tt("Sudah tiba", "Arrived")
+    : tt(`Perjalanan ${Math.round(maju)}%`, `Journey ${Math.round(maju)}%`);
+  return `<div class="pr-rute pr-rute--${keadaan}" style="--maju:${maju}%;--maju-n:${maju / 100}">
+        <div class="pr-rute-ujung"><span title="${escapeAttr(asal.judul)}">${escapeHtml(asal.teks)}</span><span title="${escapeAttr(tujuan.judul)}">${escapeHtml(tujuan.teks)}</span></div>
+        <div class="pr-rute-garis" role="img" aria-label="${escapeAttr(ketGaris)}"><span class="pr-rute-isi"></span><span class="pr-rute-penanda"><span class="pr-rute-titik"></span></span></div>
+        <div class="pr-sub">${transit ? `<span class="pr-transit">Transit ${transit} Stop</span>` : ""}${
+          hasMeaningfulValue(kapal) ? `<span class="pr-kapal">${escapeHtml(kapal)}</span>` : ""
+        }</div>
+      </div>`;
+}
+
+/* Tanda yang menuntut perhatian, pendek, di bawah nama barang: telat
+   atau mepet dari kebutuhan pabrik, PI / LS lartas yang belum ada.
+   Kalimat lengkapnya di tooltip dan di rincian (cardAlertsHtml). */
+function papanTandaHtml(s) {
+  const isi = [];
+  const k = typeof statusKebutuhan === "function" ? statusKebutuhan(s) : null;
+  if (k && !k.fakta && (k.kind === "telat" || k.kind === "mepet")) {
+    const judul = tt(`Dibutuhkan di pabrik ${fmtDate(k.butuh)}`, `Needed at the factory ${fmtDate(k.butuh)}`);
+    isi.push(
+      k.kind === "telat"
+        ? `<span class="pr-tanda pr-tanda--merah" title="${escapeAttr(judul)}"><i class="bi bi-alarm" aria-hidden="true"></i>${escapeHtml(tt(`Telat ${-k.selisih} Hari dari Kebutuhan`, `${-k.selisih} Days Past Need Date`))}</span>`
+        : `<span class="pr-tanda pr-tanda--kuning" title="${escapeAttr(judul)}"><i class="bi bi-alarm" aria-hidden="true"></i>${escapeHtml(tt("Mepet Kebutuhan", "Tight for Need Date"))}</span>`,
+    );
+  }
+  const kurang = typeof lartasKurang === "function" ? lartasKurang(s) : [];
+  if (kurang.length)
+    isi.push(`<span class="pr-tanda pr-tanda--merah"><i class="bi bi-shield-exclamation" aria-hidden="true"></i>${escapeHtml(tt(`${kurang.join(" & ")} Belum Ada`, `${kurang.join(" & ")} Missing`))}</span>`);
+  return isi.length ? `<div class="pr-tandaan">${isi.join("")}</div>` : "";
+}
+
+/* Sel pertama: PEMASOK / PEMBELI paling atas (sorotan oranye khas logo
+   DDI), lalu nama barang (paling banyak dua, "+3 Lainnya") dan nomor
+   invoice. Dibuka: nama barang pindah ke kolom Nama Barang rincian. */
+const NAMA_PAPAN_MAKS = 2;
+/* Nama barang tanpa kembar (huruf besar-kecil & spasi diabaikan): dua
+   baris barang bernama sama ditulis sekali. */
+function namaBarangUnik(s) {
+  const lihat = new Set();
+  return (s.items || []).map((it) => itemDisplayName(it)).filter((n) => {
+    const k = String(n || "").replace(/\s+/g, " ").trim().toUpperCase();
+    if (!k || lihat.has(k)) return false;
+    lihat.add(k);
+    return true;
+  });
+}
+
+/* Sel pertama baris papan:
+     1. PEMASOK (Import) / PEMBELI (Export) PALING ATAS -- disorot warna
+        oranye khas logo Dynamic Design Indonesia, ikon gedung. Itulah
+        yang pertama dicari di papan ("kiriman Sheng Guang yang mana?").
+     2. NAMA BARANG: dua pertama + "+N Lainnya" -- HANYA selama baris
+        tertutup. Dibuka: daftarnya pindah ke kolom Nama Barang di kanan
+        rincian (namaBarangInfoHtml), jadi sel ini tinggal pemasok &
+        invoice dan sorotannya tidak terhalang.
+     3. Nomor invoice (redup) & tanda kebutuhan / lartas.
+   Tanpa pemasok: nama barang yang jadi judul; tanpa keduanya: "—". */
+function papanBarangHtml(s) {
+  const semua = namaBarangUnik(s);
+  const sisa = semua.length - NAMA_PAPAN_MAKS;
+  const adaPihak = hasMeaningfulValue(s.party);
+  const pihak = adaPihak
+    ? `<div class="pr-pihak"><i class="bi bi-buildings" aria-hidden="true"></i><span class="pr-pihak-nama">${escapeHtml(s.party)}</span></div>`
+    : "";
+  const nama = semua.length
+    ? semua.slice(0, NAMA_PAPAN_MAKS).map((n) => `<span class="pr-nama">${escapeHtml(n)}</span>`).join("") +
+      (sisa > 0 ? `<span class="pr-lagi">${escapeHtml(tt(`+${sisa} Lainnya`, `+${sisa} More`))}</span>` : "")
+    : adaPihak
+      ? ""
+      : `<span class="pr-nama">${escapeHtml(dispVal(s.party))}</span>`;
+  const inv = hasMeaningfulValue(s.invoice) ? `<div class="pr-sub"><span class="pr-inv">${escapeHtml(s.invoice)}</span></div>` : "";
+  return `<div class="pr-barang${adaPihak ? "" : " pr-barang--tanpa-pihak"}"${sisa > 0 ? ` title="${escapeAttr(semua.join("\n"))}"` : ""}>
+        ${pihak}
+        ${nama ? `<div class="pr-nama-wadah">${nama}</div>` : ""}
+        ${inv}
+        ${papanTandaHtml(s)}
+      </div>`;
+}
+
+/* Progres dokumen sebagai balok: satu balok per tahap yang berlaku
+   (navy = terkumpul, kuning = baru draft), "4/10", dan tahap berikutnya. */
+function papanDokHtml(s) {
+  if (isKurirNilaiRendah(s)) return `<div class="pr-dok"><span class="pr-ket">${escapeHtml(tt("Kurir, Tanpa PIB", "Courier, No PIB"))}</span></div>`;
+  const langkah = docStepsFor(s);
+  const balok = docBalok(s);
+  if (!balok.total) return '<div class="pr-dok"></div>';
+  const selesai = balok.selesai;
+  const idx = docNextIndex(s);
+  const berikut = idx >= 0 ? stepText(langkah[idx].label, s) : "";
+  const lengkap = selesai === balok.total;
+  return `<div class="pr-dok">
+        <span class="pr-label">${escapeHtml(tt("Dokumen", "Documents"))}</span>
+        <div class="pr-dok-baris"><span class="pr-blok" aria-hidden="true">${balok.html}</span><b class="pr-dok-n">${selesai}/${balok.total}</b></div>
+        <span class="pr-ket${lengkap ? " pr-ket--hijau" : ""}">${
+          lengkap ? escapeHtml(tt("Lengkap", "Complete")) : berikut ? escapeHtml(tt(`Berikutnya: ${berikut}`, `Next: ${berikut}`)) : ""
+        }</span>
+      </div>`;
+}
+
+/* Baris ringkas: selalu tampil. */
+function papanRingkasHtml(s, d) {
+  const terbuka = papanTerbuka.has(String(s.id));
+  const namaUtama = itemNamesSummary(s, 1)[0];
+  const buka = terbuka ? tt("Tutup Rincian", "Hide Details") : tt("Buka Rincian", "Show Details");
+  const ubah = tt("Ubah", "Edit");
+  const etd = effectiveEtd(s);
+  const eta = effectiveEta(s);
+  const etdKet = ketTanggalPapan(s, etd);
+  return `<div class="papan-ringkas">
+      ${papanBarangHtml(s)}
+      ${papanRuteHtml(s)}
+      ${selTanggalPapan("pr-etd", "ETD", etd, etdKet, !isArrived(s) && etd === todayISO() ? "pr-ket--status" : "", asalRevisiPapan(s, "etd", "etdUpdate"))}
+      ${selTanggalPapan("pr-eta", "ETA", eta, ketTanggalPapan(s, eta), isArrived(s) ? "" : "pr-ket--status", asalRevisiPapan(s, "eta", "etaUpdate"))}
+      ${selActualPapan(s, d)}
+      ${papanDokHtml(s)}
+      <div class="pr-status pr-status--${effectiveStatus(s)}">${statusSelectHtml(s)}</div>
+      <div class="pr-aksi">
+        <button type="button" class="pr-tombol" data-action="edit" data-id="${s.id}" title="${ubah}" aria-label="${escapeAttr(`${ubah}: ${namaUtama}`)}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+        <button type="button" class="pr-tombol pr-buka" data-papan-buka aria-expanded="${terbuka}" aria-controls="${idRincianPapan(s)}" title="${buka}" aria-label="${escapeAttr(`${buka}: ${namaUtama}`)}"><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
       </div>
-      <div class="ship-actions-block">
-        ${statusSelectHtml(s)}
-        ${actionButtons(s)}
+    </div>`;
+}
+
+/* Bilah aksi di kepala rincian (papanBarisHtml) -- tombol berlabel
+   pendek: Lihat, Salin, Hapus. UBAH tidak ada di sini: tombol pensil di
+   baris ringkas, tepat di atasnya, sudah melakukannya -- satu tombol per
+   aksi. Menu Salin (templat Excel) memakai posisi fixed: rincian yang
+   dilipat ber-overflow hidden, menu yang membalik ke atas (dekat dasar
+   layar) tidak terpotong olehnya. */
+function papanAksiHtml(s) {
+  return `<div class="pr-aksi-bilah">
+        <button type="button" class="pr-tombol-teks" data-action="viewDetail" data-id="${s.id}" title="${escapeAttr(tt("Lihat Detail Lengkap", "View Full Details"))}"><i class="bi bi-eye" aria-hidden="true"></i>${escapeHtml(tt("Lihat", "View"))}</button>
+        <div class="dropdown copy-template-dropdown">
+          <button type="button" class="pr-tombol-teks" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" title="${escapeAttr(t("v.salin.ke.excel"))}"><i class="bi bi-clipboard" aria-hidden="true"></i>${escapeHtml(tt("Salin", "Copy"))}<i class="bi bi-chevron-down pr-caret" aria-hidden="true"></i></button>
+          <ul class="dropdown-menu copy-template-menu">${copyTemplateMenuHtml(s.id)}</ul>
+        </div>
+        <button type="button" class="pr-tombol-teks pr-tombol-teks--hapus" data-action="delete" data-id="${s.id}"><i class="bi bi-trash3" aria-hidden="true"></i>${escapeHtml(tt("Hapus", "Delete"))}</button>
+      </div>`;
+}
+
+/* Baris yang baru diubah dari papan (status, tanggal, tahap dokumen):
+   disorot sekejap pada penggambaran berikutnya (css/peta-laut.css,
+   .baru-berubah) supaya mudah ditemukan lagi kalau urutannya berpindah.
+   Hanya selama 1,2 detik -- penggambaran sesudahnya tidak menyorot. */
+let papanBerubah = null;
+function tandaiBarisBerubah(id) {
+  papanBerubah = { id: String(id), sampai: Date.now() + 1200 };
+}
+const barisBaruBerubah = (s) => !!papanBerubah && papanBerubah.id === String(s.id) && Date.now() < papanBerubah.sampai;
+
+/* Kerangka satu baris: ringkas + rincian.
+
+   Rincian MENGALIR dari atas ke bawah, seperti kartu jadwal sebelum
+   papan -- bukan tiga panel berdampingan:
+     kepala   No. dokumen · No. Aju · peringatan     [Lihat][Salin][Hapus]
+     perjalanan (judul keadaan, jalur selebar baris), ETD / ETA / Est.
+     ────────
+     rincian (Rute, Forwarder, ...)                  | Nama Barang
+     lencana (PPH, COO, ...)
+     ────────
+     Progres Dokumen  ①──②──③──...                              9 / 9
+     ────────
+     Kronologi & Catatan
+   Aksi lebih dulu di DOM (urutan Tab sesudah tombol buka); tampilannya
+   di kanan (css/peta-laut.css, flex row-reverse). `meta` = keterangan
+   tambahan di depan nomor dokumen (tanggal tiba jadwal selesai). */
+function papanBarisHtml(s, kelasKartu, d, rincian, meta) {
+  const terbuka = papanTerbuka.has(String(s.id));
+  return `
+  <div class="ship-card ${kelasKartu} papan-baris${terbuka ? " is-buka" : ""}${barisBaruBerubah(s) ? " baru-berubah" : ""}" data-id="${s.id}">
+    ${papanRingkasHtml(s, d)}
+    <div class="papan-rincian" id="${idRincianPapan(s)}">
+      <div class="papan-rincian-isi">
+      <div class="pr-rincian-kepala">
+        ${papanAksiHtml(s)}
+        <div class="pr-rincian-ref">${meta || ""}${cardRefsHtml(s)}${cardAlertsHtml(s)}</div>
+      </div>
+      ${rincian}
+      ${cardNotesHtml(s)}
       </div>
     </div>
-    ${cardAlertsHtml(s)}
-    ${shipJourneyHtml(s)}
-    ${cardBodySplitHtml(s, totals)}
-    ${cardDokumenHtml(s, lencana, "tag-row")}
-    ${cardNotesHtml(s)}
   </div>`;
+}
+
+/* Prediksi Est. Delivery dihitung SEKALI per baris: sel ringkas ("Auto
+   · 68%") dan keterangan kotak tanggal di rincian membaca hasil yang
+   sama. */
+const prediksiPapan = (s) =>
+  deliveryPredictionAppliesTo(s) && tampilkanMekanikaPrediksi() ? predictDelivery(s) : null;
+
+function renderExpandedCard(s) {
+  const d = prediksiPapan(s);
+  const rincian = `
+      ${shipJourneyHtml(s, d)}
+      ${cardBodySplitHtml(s, itemTotals(s))}
+      ${cardDokumenHtml(s, buildTags(s), "tag-row")}`;
+  return papanBarisHtml(s, `ship-card--${effectiveStatus(s)}`, d, rincian);
 }
 
 /* ETD & ETA pada kartu yang sudah Arrived / Delivered.
@@ -596,47 +890,20 @@ function collapsedDatesHtml(s) {
     </div>`;
 }
 
+/* Jadwal yang sudah Arrived / Delivered: baris ringkas yang sama; di
+   rinciannya tanggal HANYA BISA DIBACA (collapsedDatesHtml) -- mengubah
+   tanggal kiriman yang sudah beres harus disengaja, lewat tombol pensil. */
 function renderCollapsedCard(s) {
   const lbl = ML();
-  const totals = itemTotals(s);
-  const lencana = buildTags(s);
-  const n = (s.items || []).length;
-  return `
-  <div class="ship-card ship-card--arrived ship-card--collapsed" data-id="${s.id}">
-    <div class="collapsed-row">
-      <div class="collapsed-check"><i class="bi bi-check-circle-fill"></i></div>
-      <div class="collapsed-main">
-        <div class="collapsed-party">${escapeHtml(dispVal(s.party))}<span class="item-count"> · ${n} ${n === 1 ? tt("Barang", "Item") : t("f.barang")}</span></div>
-        <div class="collapsed-meta"><span class="po-ref"><span class="po-ref-label">${lbl.docNo}:</span> ${escapeHtml(dispVal(s.docNo))}</span><span class="po-ref"><span class="po-ref-label">No. Aju:</span> ${escapeHtml(dispVal(s.noAju))}</span><span class="po-ref po-ref--tiba"><span class="po-ref-label">${lbl.arrivedStat}:</span> <b>${
-          /* Tanggal yang MEMBUATNYA selesai (kolomPenyebabTiba): Export =
-             ETD yang berlaku (kapal berangkat), bukan tanggal Stuffing;
-             Import = In Factory. */
-          fmtDate(s.mode === "export" ? effectiveEtd(s) : s.factoryDate)
-        }</b></span></div>
-      </div>
-      <div class="ship-actions-block">
-        ${statusSelectHtml(s)}
-        ${actionButtons(s)}
-      </div>
-    </div>
-
-    <div class="collapsed-extra">
-      ${collapsedDatesHtml(s)}
-      ${
-        /* Rincian LENGKAP, sama dengan kartu berjalan: rute, forwarder,
-           sarana angkut, kontainer, invoice (dengan incoterm & nilainya),
-           House B/L, dan nama barang. Kiriman yang sudah tiba paling
-           sering dibuka lagi justru untuk angka-angka itu --
-           menyembunyikannya memaksa membuka panel detail hanya untuk
-           membaca satu nomor. */
-        cardBodySplitHtml(s, totals)
-      }
-      ${
-        /* Lencana fasilitas yang sama dengan kartu aktif (PI, SKB, COO,
-           transit) -- hanya kalau ada -- bersama progres dokumennya. */
-        cardDokumenHtml(s, lencana, "tag-row tag-row--collapsed")
-      }
-      ${cardNotesHtml(s)}
-    </div>
-  </div>`;
+  const d = prediksiPapan(s);
+  /* Tanggal yang MEMBUATNYA selesai (kolomPenyebabTiba): Export = ETD
+     yang berlaku (kapal berangkat), bukan Stuffing; Import = In Factory. */
+  const tiba = `<div class="collapsed-meta"><span class="po-ref po-ref--tiba"><span class="po-ref-label">${lbl.arrivedStat}:</span> <b>${fmtDate(
+    s.mode === "export" ? effectiveEtd(s) : s.factoryDate,
+  )}</b></span></div>`;
+  const rincian = `
+      <div class="ship-journey ship-journey--selesai"><div class="lane">${buildLaneHtml(s)}</div>${collapsedDatesHtml(s)}</div>
+      ${cardBodySplitHtml(s, itemTotals(s))}
+      ${cardDokumenHtml(s, buildTags(s), "tag-row tag-row--collapsed")}`;
+  return papanBarisHtml(s, "ship-card--arrived ship-card--collapsed", d, rincian, tiba);
 }

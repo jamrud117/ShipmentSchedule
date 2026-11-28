@@ -41,8 +41,14 @@ function kepadatanGanti() {
   return kepadatanTerapkan(baru);
 }
 
+/* DESAIN PETA LAUT: papan jadwal sudah ringkas dengan sendirinya -- tiap
+   jadwal satu baris, rinciannya dilipat (js/render/cards.js). Tombol
+   Ringkas tidak ditampilkan lagi, dan rincian yang dibuka selalu
+   lengkap: pilihan "ringkas" yang pernah tersimpan TIDAK diterapkan
+   (kalau diterapkan, rincian yang sengaja dibuka malah kehilangan
+   isinya). Fungsinya tetap ada untuk kode & tes yang memanggilnya. */
 (function pasangKepadatan() {
-  kepadatanTerapkan(kepadatanBaca());
+  kepadatanTerapkan("nyaman");
   const tombol = document.getElementById("btnKepadatan");
   if (tombol) tombol.addEventListener("click", kepadatanGanti);
 })();
